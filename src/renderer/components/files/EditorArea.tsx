@@ -204,6 +204,9 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   const hasPendingAutoSaveRef = useRef(false);
   const blurDisposableRef = useRef<monaco.IDisposable | null>(null);
   const activeTabPathRef = useRef<string | null>(null);
+  // Keep a ref to the latest tabs so the file-change listener never goes stale
+  // without needing to re-register on every tab state update.
+  const tabsRef = useRef<EditorTab[]>(tabs);
   const sessionIdRef = useRef<string | null>(null);
   const pendingCursorRef = useRef<PendingCursor | null>(null);
   const editorForPathRef = useRef<string | null>(null);
@@ -259,6 +262,10 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   useEffect(() => {
     activeTabPathRef.current = activeTabPath;
   }, [activeTabPath]);
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   useEffect(() => {
     sessionIdRef.current = sessionId ?? null;
@@ -327,47 +334,83 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
 
   // Listen for external file changes and update open tabs
   useEffect(() => {
+    // Debounce timers keyed by file path to prevent concurrent reloads of the same file.
+    // Needed because Claude CLI atomic writes (tmp + rename) can fire multiple rapid events.
+    const reloadTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+    const scheduleReload = (tab: EditorTab) => {
+      // Capture only the stable path to avoid stale closure over the full tab object.
+      const tabPath = tab.path;
+      const existing = reloadTimers.get(tabPath);
+      if (existing) clearTimeout(existing);
+      reloadTimers.set(
+        tabPath,
+        setTimeout(async () => {
+          reloadTimers.delete(tabPath);
+          try {
+            const { content: latestContent, isBinary } =
+              await window.electronAPI.file.read(tabPath);
+            if (isBinary) return;
+
+            // Re-fetch latest tab state from store to avoid using stale closure values
+            // (e.g. isDirty or activeTabPath may have changed during the 100ms debounce window).
+            const { tabs: currentTabs, activeTabPath: currentActiveTabPath } =
+              useEditorStore.getState();
+            const currentTab = currentTabs.find((t) => t.path === tabPath);
+            // Tab was closed during the debounce window — nothing to do.
+            if (!currentTab) return;
+
+            if (currentTab.isDirty) {
+              // User has unsaved edits: avoid overwriting — mark as conflict for user to decide.
+              // Compare against externalContent (not user's content) so consecutive external
+              // modifications always update externalContent to the latest value.
+              if (latestContent !== currentTab.externalContent) {
+                markExternalChange(tabPath, latestContent);
+              }
+            } else {
+              // No unsaved edits: silent auto-reload
+              onContentChange(tabPath, latestContent, false);
+
+              // Sync Monaco editor content if this is the active tab
+              if (tabPath === currentActiveTabPath && editorRef.current) {
+                const editor = editorRef.current;
+                if (editor.getValue() !== latestContent) {
+                  setEditorValueProgrammatically(editor, latestContent);
+                }
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to reload file ${tabPath}:`, error);
+          }
+        }, 100)
+      );
+    };
+
     const unsubscribe = window.electronAPI.file.onChange(async (event) => {
-      // Only handle update events (create/delete don't need tab updates)
-      if (event.type !== 'update') return;
+      // Skip delete events; handle both 'update' and 'create'.
+      // Claude CLI uses atomic writes (write to .tmp + rename), which @parcel/watcher
+      // reports as 'create' for the destination file rather than 'update'.
+      if (event.type === 'delete') return;
+
+      // Bulk mode: agent modified too many files at once, reload all open tabs
+      if (event.path.endsWith('/.enso-bulk')) {
+        for (const tab of tabsRef.current) scheduleReload(tab);
+        return;
+      }
 
       // Check if the changed file is open in any tab
-      const changedTab = tabs.find((tab) => tab.path === event.path);
+      const changedTab = tabsRef.current.find((tab) => tab.path === event.path);
       if (!changedTab) return;
-
-      try {
-        const { content: latestContent, isBinary } = await window.electronAPI.file.read(event.path);
-        // Skip content update for binary files (they have no text content)
-        if (isBinary) return;
-
-        if (changedTab.isDirty) {
-          // User has unsaved edits: avoid overwriting — mark as conflict for user to decide.
-          // Compare against externalContent (not user's content) so consecutive external
-          // modifications always update externalContent to the latest value.
-          if (latestContent !== changedTab.externalContent) {
-            markExternalChange(event.path, latestContent);
-          }
-        } else {
-          // No unsaved edits: silent auto-reload
-          onContentChange(event.path, latestContent, false);
-
-          // Sync Monaco editor content if this is the active tab
-          if (event.path === activeTabPath && editorRef.current) {
-            const editor = editorRef.current;
-            if (editor.getValue() !== latestContent) {
-              setEditorValueProgrammatically(editor, latestContent);
-            }
-          }
-        }
-      } catch (error) {
-        console.warn(`Failed to reload file ${event.path}:`, error);
-      }
+      scheduleReload(changedTab);
     });
 
     return () => {
       unsubscribe();
+      // Clear any pending debounce timers on cleanup
+      for (const timer of reloadTimers.values()) clearTimeout(timer);
+      reloadTimers.clear();
     };
-  }, [tabs, activeTabPath, onContentChange, markExternalChange, setEditorValueProgrammatically]);
+  }, [onContentChange, markExternalChange, setEditorValueProgrammatically]);
 
   // Define custom theme on mount and when terminal theme / background image settings change
   useEffect(() => {
