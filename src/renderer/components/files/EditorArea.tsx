@@ -335,12 +335,13 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   );
 
   // Line comment feature
+  // Use sessionIdRef.current instead of sessionId state to avoid race conditions
   useEditorLineComment({
     editor: editorInstance,
     monacoInstance: monacoInstance,
     filePath: activeTabPath,
     rootPath: rootPath ?? null,
-    enabled: editorReady && !!sessionId,
+    enabled: editorReady && !!sessionIdRef.current,
   });
 
   // Inline git blame
@@ -818,17 +819,6 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       setCurrentCursorLine(e.selection.startLineNumber);
     });
 
-    // If no sessionId, only track cursor line
-    if (!sessionId) {
-      if (selectionWidgetRef.current) {
-        editor.removeContentWidget(selectionWidgetRef.current);
-        selectionWidgetRef.current = null;
-      }
-      return () => {
-        cursorDisposable.dispose();
-      };
-    }
-
     // Clean up any stale widget from previous effect run
     if (selectionWidgetRef.current) {
       try {
@@ -967,7 +957,9 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     };
 
     const selectionDisposable = editor.onDidChangeCursorSelection((e) => {
-      if (!activeTabPath) return;
+      // Use ref to get current value, not stale closure value
+      const currentTabPath = activeTabPathRef.current;
+      if (!currentTabPath) return;
 
       const selection = e.selection;
       const model = editor.getModel();
@@ -1010,8 +1002,8 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
         selectionDebounceRef.current = setTimeout(() => {
           window.electronAPI.mcp.sendSelectionChanged({
             text: selectedText,
-            filePath: activeTabPath,
-            fileUrl: toMonacoFileUri(activeTabPath),
+            filePath: currentTabPath,
+            fileUrl: toMonacoFileUri(currentTabPath),
             selection: {
               start: {
                 line: selection.startLineNumber,
@@ -1062,8 +1054,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     };
   }, [
     editorReady,
-    sessionId,
-    activeTabPath,
+    // activeTabPath, // Not needed - we use activeTabPathRef.current instead
     getRelativePath,
     formatLineRef,
     t,
@@ -1406,7 +1397,6 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
                 <PdfPreview path={activeTab.path} />
               ) : (
                 <Editor
-                  key={activeTab.path}
                   width="100%"
                   height="100%"
                   path={toMonacoFileUri(activeTab.path)}
