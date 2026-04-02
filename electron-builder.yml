@@ -1,5 +1,5 @@
 appId: com.ensoai.app
-productName: EnsoAI
+productName: ArrayTester
 copyright: Copyright © 2025
 
 directories:
@@ -76,8 +76,11 @@ files:
 
 asar: true
 asarUnpack:
-  - "node_modules/@vscode/ripgrep/bin/**"
+  - "node_modules/@vscode/ripgrep/**"
   - "node_modules/sqlite3/**"
+  - "node_modules/@parcel/watcher/**"
+  - "node_modules/@parcel/watcher-win32-x64/**"
+  - "node_modules/node-pty/**"
 compression: maximum
 
 mac:
@@ -109,6 +112,7 @@ dmg:
       path: /Applications
 
 win:
+  executableName: ArrayTester
   target:
     # NSIS supports delta updates automatically
     - target: nsis
@@ -141,6 +145,8 @@ linux:
   # Register enso:// URL scheme
   mimeTypes:
     - x-scheme-handler/enso
+
+afterPack: scripts/afterPack.mjs
 
 publish:
   provider: github

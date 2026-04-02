@@ -1,5 +1,11 @@
+import { createRequire } from 'node:module';
 import iconv from 'iconv-lite';
-import { isBinaryFile } from 'isbinaryfile';
+
+// isbinaryfile is CJS; use createRequire to bypass ESM linker in ASAR
+const { isBinaryFile } = createRequire(import.meta.url)('isbinaryfile') as {
+  isBinaryFile: typeof import('isbinaryfile')['isBinaryFile'];
+};
+
 import jschardet from 'jschardet';
 import { spawnGit } from './runtime';
 

@@ -1,11 +1,47 @@
+import { execFile } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { promisify } from 'node:util';
 import { type FileEntry, type FileReadResult, IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, ipcMain, shell, type WebContents } from 'electron';
 import iconv from 'iconv-lite';
-import { isBinaryFile } from 'isbinaryfile';
+
+// isbinaryfile is CJS; use createRequire to bypass ESM linker in ASAR
+const { isBinaryFile } = createRequire(import.meta.url)('isbinaryfile') as {
+  isBinaryFile: typeof import('isbinaryfile')['isBinaryFile'];
+};
+
 import jschardet from 'jschardet';
+
+const execFileAsync = promisify(execFile);
+
+// TEC Solutions OCular Agent (TSD) encrypts files written by Node.js processes.
+// The packaged exe is not in TEC's whitelist, so it reads raw encrypted bytes.
+// Detect TSD header and fall back to system node.exe (which IS whitelisted).
+const TSD_MAGIC = Buffer.from('%TSD-Header-###%');
+
+async function readFileSafe(filePath: string): Promise<Buffer> {
+  const buf = await readFile(filePath);
+  if (
+    buf.length >= TSD_MAGIC.length &&
+    buf.compare(TSD_MAGIC, 0, TSD_MAGIC.length, 0, TSD_MAGIC.length) === 0
+  ) {
+    return readViaNodeExe(filePath);
+  }
+  return buf;
+}
+
+async function readViaNodeExe(filePath: string): Promise<Buffer> {
+  const script = "process.stdout.write(require('fs').readFileSync(process.argv[1]))";
+  const { stdout } = await execFileAsync('node', ['-e', script, '--', filePath], {
+    encoding: 'buffer',
+    maxBuffer: 50 * 1024 * 1024,
+  });
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout as unknown as Uint8Array);
+}
+
 import { FileWatcher } from '../services/files/FileWatcher';
 import {
   registerAllowedLocalFileRoot,
@@ -443,9 +479,13 @@ export function registerFileHandlers(): void {
     // If detection fails, we fall back to treating it as a text file.
     // The renderer decides whether to show "unsupported" message based on
     // file extension (images/PDFs have dedicated preview components).
+    // Read file first (with TSD decryption fallback for packaged app)
+    const buffer = await readFileSafe(filePath);
+
     let isBinary = false;
     try {
-      isBinary = await isBinaryFile(filePath);
+      // Pass buffer directly to avoid a second file read
+      isBinary = await isBinaryFile(buffer, buffer.length);
     } catch {
       // If binary detection fails, assume it's a text file and continue
     }
@@ -460,8 +500,7 @@ export function registerFileHandlers(): void {
       };
     }
 
-    // Only read full file content for non-binary files
-    const buffer = await readFile(filePath);
+    // buffer already read above
     const { encoding: detectedEncoding, confidence } = detectEncoding(buffer);
 
     let content: string;

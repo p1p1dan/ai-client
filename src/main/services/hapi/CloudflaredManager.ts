@@ -1,9 +1,16 @@
 import { execFile } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { install, Tunnel, use } from 'cloudflared';
+import type { Tunnel as TunnelClass } from 'cloudflared';
+
+// cloudflared is CJS; use createRequire to bypass ESM linker in ASAR
+const { install, use, Tunnel } = createRequire(import.meta.url)(
+  'cloudflared'
+) as typeof import('cloudflared');
+
 import { app } from 'electron';
 import { killProcessTree } from '../../utils/processUtils';
 
@@ -39,7 +46,7 @@ export interface CloudflaredConfig {
 }
 
 class CloudflaredManager extends EventEmitter {
-  private tunnel: Tunnel | null = null;
+  private tunnel: TunnelClass | null = null;
   private status: CloudflaredStatus = { installed: false, running: false };
 
   async checkInstalled(): Promise<{ installed: boolean; version?: string }> {

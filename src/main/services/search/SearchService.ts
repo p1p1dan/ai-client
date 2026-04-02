@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { basename, relative } from 'node:path';
 import type {
   ContentSearchMatch,
@@ -7,7 +8,12 @@ import type {
   FileSearchParams,
   FileSearchResult,
 } from '@shared/types';
-import { rgPath as originalRgPath } from '@vscode/ripgrep';
+
+// @vscode/ripgrep is CJS; ESM linker cannot resolve named exports from CJS inside ASAR
+const { rgPath: originalRgPath } = createRequire(import.meta.url)('@vscode/ripgrep') as {
+  rgPath: string;
+};
+
 import { killProcessTree } from '../../utils/processUtils';
 
 const MAX_FILE_RESULTS = 100;

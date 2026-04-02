@@ -1,7 +1,14 @@
 import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { type AsyncSubscription, subscribe } from '@parcel/watcher';
+import type { AsyncSubscription } from '@parcel/watcher';
+
+// @parcel/watcher is CJS with native addon; use createRequire to bypass ESM linker in ASAR
+const { subscribe } = createRequire(import.meta.url)('@parcel/watcher') as {
+  subscribe: typeof import('@parcel/watcher')['subscribe'];
+};
+
 import type { ClaudeSlashCompletionItem, ClaudeSlashCompletionsSnapshot } from '@shared/types';
 
 function getClaudeConfigDir(): string {

@@ -1,4 +1,10 @@
-import { type AsyncSubscription, type Event, subscribe } from '@parcel/watcher';
+import { createRequire } from 'node:module';
+import type { AsyncSubscription, Event } from '@parcel/watcher';
+
+// @parcel/watcher is CJS with native addon; use createRequire to bypass ESM linker in ASAR
+const { subscribe } = createRequire(import.meta.url)('@parcel/watcher') as {
+  subscribe: typeof import('@parcel/watcher')['subscribe'];
+};
 
 export type FileChangeCallback = (type: 'create' | 'update' | 'delete', path: string) => void;
 
