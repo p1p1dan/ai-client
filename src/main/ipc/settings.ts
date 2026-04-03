@@ -48,10 +48,7 @@ function atomicWriteSettings(data: Record<string, unknown>): boolean {
   }
 }
 
-/**
- * 强制落盘（在退出前调用）
- */
-export function flushSettings(): boolean {
+function clearPendingTimers(): void {
   if (pendingWrite) {
     clearTimeout(pendingWrite);
     pendingWrite = null;
@@ -60,6 +57,28 @@ export function flushSettings(): boolean {
     clearTimeout(maxWaitTimer);
     maxWaitTimer = null;
   }
+}
+
+export function writeSettingsNow(data: Record<string, unknown>): boolean {
+  clearPendingTimers();
+  cachedSettings = data;
+  isDirty = false;
+  return atomicWriteSettings(data);
+}
+
+export function mergeSettingsPatch(patch: Record<string, unknown>): boolean {
+  const baseSettings = cachedSettings ?? readSharedSettings();
+  return writeSettingsNow({
+    ...baseSettings,
+    ...patch,
+  });
+}
+
+/**
+ * 强制落盘（在退出前调用）
+ */
+export function flushSettings(): boolean {
+  clearPendingTimers();
 
   if (isDirty && cachedSettings !== null) {
     isDirty = false;

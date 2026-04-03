@@ -7,10 +7,13 @@ import type {
   OnboardingRegisterResponse,
   OnboardingState,
 } from '@shared/types';
+import { mergeSettingsPatch } from '../../ipc/settings';
 import { cliDetector } from '../cli/CliDetector';
 import { applyProvider } from '../claude/ClaudeProviderManager';
 
 const ALLOWED_EMAIL_SUFFIX = '@jcdz.cc';
+const LOCAL_CONFIG_VALIDATION_ERROR = 'Local Claude/Codex configuration validation failed';
+const CLAUDE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
 
 class OnboardingService {
   /**
@@ -82,22 +85,45 @@ class OnboardingService {
         return { ok: false, error: result.error || 'Registration failed' };
       }
 
-      // Apply Claude Code CLI configuration
-      this.applyClaudeConfig(
+      const normalizedServerUrl = this.normalizeServerUrl(serverUrl);
+      const claudeBaseUrl = this.resolveClaudeBaseUrl(
         result.data.config.claude.baseUrl,
-        result.data.config.claude.authToken
+        normalizedServerUrl
+      );
+      const codexBaseUrl = this.resolveCodexBaseUrl(
+        result.data.config.codex.baseUrl,
+        normalizedServerUrl
       );
 
+      // Apply Claude Code CLI configuration
+      const claudeConfigured = this.applyClaudeConfig(claudeBaseUrl, result.data.config.claude.authToken);
+
       // Apply Codex CLI configuration
-      this.applyCodexConfig(result.data.config.codex.baseUrl, result.data.config.codex.apiKey);
+      const codexConfigured = this.applyCodexConfig(codexBaseUrl, result.data.config.codex.apiKey);
 
       // Save onboarding state
-      this.saveOnboardingState({
+      const onboardingState = {
         registered: true,
         email: email.trim().toLowerCase(),
-        serverUrl,
+        serverUrl: normalizedServerUrl,
         registeredAt: new Date().toISOString(),
-      });
+      };
+      const onboardingSaved = this.saveOnboardingState(onboardingState);
+
+      if (
+        !claudeConfigured ||
+        !codexConfigured ||
+        !onboardingSaved ||
+        !this.validateLocalConfiguration(
+          onboardingState,
+          claudeBaseUrl,
+          result.data.config.claude.authToken,
+          codexBaseUrl,
+          result.data.config.codex.apiKey
+        )
+      ) {
+        return { ok: false, error: LOCAL_CONFIG_VALIDATION_ERROR };
+      }
 
       return result;
     } catch (error) {
@@ -109,8 +135,8 @@ class OnboardingService {
   /**
    * Apply Claude Code CLI configuration by writing to ~/.claude/settings.json
    */
-  private applyClaudeConfig(baseUrl: string, authToken: string): void {
-    applyProvider({
+  private applyClaudeConfig(baseUrl: string, authToken: string): boolean {
+    return applyProvider({
       id: 'jyw-hub',
       name: 'JYW Hub',
       baseUrl,
@@ -119,43 +145,176 @@ class OnboardingService {
   }
 
   /**
-   * Apply Codex CLI configuration by writing env vars to ~/.codex/env.json
+   * Apply Codex CLI configuration by writing config.toml and auth.json.
    */
-  private applyCodexConfig(baseUrl: string, apiKey: string): void {
+  private applyCodexConfig(baseUrl: string, apiKey: string): boolean {
     try {
+      if (!apiKey) {
+        return false;
+      }
       const codexDir = path.join(os.homedir(), '.codex');
       if (!fs.existsSync(codexDir)) {
         fs.mkdirSync(codexDir, { recursive: true, mode: 0o700 });
       }
-      const configPath = path.join(codexDir, 'env.json');
-      const config = { OPENAI_API_KEY: apiKey, OPENAI_BASE_URL: baseUrl };
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+
+      const configPath = path.join(codexDir, 'config.toml');
+      const authPath = path.join(codexDir, 'auth.json');
+      const envPath = path.join(codexDir, 'env.json');
+
+      this.backupFileIfExists(configPath);
+      this.backupFileIfExists(authPath);
+      this.backupFileIfExists(envPath);
+
+      fs.writeFileSync(configPath, this.buildCodexConfigToml(baseUrl), { mode: 0o600 });
+      fs.writeFileSync(authPath, JSON.stringify({ OPENAI_API_KEY: apiKey }, null, 2), {
+        mode: 0o600,
+      });
+
+      if (fs.existsSync(envPath)) {
+        fs.rmSync(envPath);
+      }
+      return true;
     } catch (error) {
       console.error('[OnboardingService] Failed to apply Codex config:', error);
+      return false;
     }
   }
 
   /**
    * Save onboarding state to ~/.ensoai/settings.json
    */
-  private saveOnboardingState(state: OnboardingState): void {
+  private saveOnboardingState(state: OnboardingState): boolean {
     try {
-      const settingsDir = path.join(os.homedir(), '.ensoai');
-      const settingsPath = path.join(settingsDir, 'settings.json');
-
-      let settings: Record<string, unknown> = {};
-      if (fs.existsSync(settingsPath)) {
-        const content = fs.readFileSync(settingsPath, 'utf-8');
-        settings = JSON.parse(content);
-      } else if (!fs.existsSync(settingsDir)) {
-        fs.mkdirSync(settingsDir, { recursive: true, mode: 0o700 });
-      }
-
-      settings.onboarding = state;
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
+      return mergeSettingsPatch({ onboarding: state });
     } catch (error) {
       console.error('[OnboardingService] Failed to save state:', error);
+      return false;
     }
+  }
+
+  private validateLocalConfiguration(
+    onboardingState: OnboardingState,
+    claudeBaseUrl: string,
+    claudeAuthToken: string,
+    codexBaseUrl: string,
+    codexApiKey: string
+  ): boolean {
+    const savedOnboardingState = this.checkRegistration();
+    return (
+      savedOnboardingState.registered === true &&
+      savedOnboardingState.email === onboardingState.email &&
+      this.validateClaudeConfig(claudeBaseUrl, claudeAuthToken) &&
+      this.validateCodexConfig(codexBaseUrl, codexApiKey)
+    );
+  }
+
+  private validateClaudeConfig(baseUrl: string, authToken: string): boolean {
+    if (!authToken) {
+      return false;
+    }
+    try {
+      const settingsPath = this.getClaudeSettingsPath();
+      if (!fs.existsSync(settingsPath)) {
+        return false;
+      }
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+        env?: Record<string, string | undefined>;
+      };
+      return (
+        settings.env?.ANTHROPIC_BASE_URL === baseUrl &&
+        settings.env?.ANTHROPIC_AUTH_TOKEN === authToken &&
+        settings.env?.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC ===
+          CLAUDE_DISABLE_NONESSENTIAL_TRAFFIC
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private validateCodexConfig(baseUrl: string, apiKey: string): boolean {
+    if (!apiKey) {
+      return false;
+    }
+    try {
+      const codexDir = path.join(os.homedir(), '.codex');
+      const configPath = path.join(codexDir, 'config.toml');
+      const authPath = path.join(codexDir, 'auth.json');
+      if (!fs.existsSync(configPath) || !fs.existsSync(authPath)) {
+        return false;
+      }
+
+      const configContent = fs.readFileSync(configPath, 'utf-8');
+      const authContent = JSON.parse(fs.readFileSync(authPath, 'utf-8')) as {
+        OPENAI_API_KEY?: string;
+      };
+
+      return (
+        configContent.includes('model_provider = "cch"') &&
+        configContent.includes('model = "gpt-5.2"') &&
+        configContent.includes(`base_url = "${baseUrl}"`) &&
+        authContent.OPENAI_API_KEY === apiKey
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private normalizeServerUrl(serverUrl: string): string {
+    return serverUrl.trim().replace(/\/+$/, '');
+  }
+
+  private resolveClaudeBaseUrl(baseUrl: string | undefined, fallbackServerUrl: string): string {
+    return this.normalizeServerUrl(baseUrl || fallbackServerUrl);
+  }
+
+  private resolveCodexBaseUrl(baseUrl: string | undefined, fallbackServerUrl: string): string {
+    return this.normalizeServerUrl(baseUrl || `${fallbackServerUrl}/v1`);
+  }
+
+  private getClaudeSettingsPath(): string {
+    const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+    return path.join(configDir, 'settings.json');
+  }
+
+  private buildCodexConfigToml(baseUrl: string): string {
+    return [
+      'model_provider = "cch"',
+      'model = "gpt-5.2"',
+      'model_reasoning_effort = "xhigh"',
+      'disable_response_storage = true',
+      'sandbox_mode = "workspace-write"',
+      'windows_wsl_setup_acknowledged = true',
+      '',
+      '[features]',
+      'plan_tool = true',
+      'apply_patch_freeform = true',
+      'view_image_tool = true',
+      'web_search_request = true',
+      'unified_exec = false',
+      'streamable_shell = false',
+      'rmcp_client = true',
+      '',
+      '[model_providers.cch]',
+      'name = "cch"',
+      `base_url = "${baseUrl}"`,
+      'wire_api = "responses"',
+      'requires_openai_auth = true',
+      '',
+      '[sandbox_workspace_write]',
+      'network_access = true',
+      '',
+    ].join('\n');
+  }
+
+  private backupFileIfExists(filePath: string): void {
+    if (!fs.existsSync(filePath)) {
+      return;
+    }
+    const backupsDir = path.join(path.dirname(filePath), 'backups');
+    fs.mkdirSync(backupsDir, { recursive: true, mode: 0o700 });
+    const timestamp = new Date().toISOString().replaceAll(':', '-');
+    const backupPath = path.join(backupsDir, `${path.basename(filePath)}.${timestamp}.bak`);
+    fs.copyFileSync(filePath, backupPath);
   }
 
   /**

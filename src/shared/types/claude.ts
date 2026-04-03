@@ -22,6 +22,7 @@ export interface ClaudeProvider {
 export interface ClaudeSettingsEnv {
   ANTHROPIC_BASE_URL?: string;
   ANTHROPIC_AUTH_TOKEN?: string;
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC?: string;
   ANTHROPIC_SMALL_FAST_MODEL?: string;
   ANTHROPIC_DEFAULT_SONNET_MODEL?: string;
   ANTHROPIC_DEFAULT_OPUS_MODEL?: string;

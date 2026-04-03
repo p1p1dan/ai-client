@@ -16,6 +16,17 @@ function getClaudeSettingsPath(): string {
   return path.join(getClaudeConfigDir(), 'settings.json');
 }
 
+function backupClaudeSettings(settingsPath: string): void {
+  if (!fs.existsSync(settingsPath)) {
+    return;
+  }
+  const backupsDir = path.join(getClaudeConfigDir(), 'backups');
+  fs.mkdirSync(backupsDir, { recursive: true, mode: 0o700 });
+  const timestamp = new Date().toISOString().replaceAll(':', '-');
+  const backupPath = path.join(backupsDir, `settings.${timestamp}.json.bak`);
+  fs.copyFileSync(settingsPath, backupPath);
+}
+
 let settingsWatcher: fs.FSWatcher | null = null;
 let debounceTimer: NodeJS.Timeout | null = null;
 let maxWaitTimer: NodeJS.Timeout | null = null;
@@ -247,6 +258,8 @@ export function applyProvider(provider: ClaudeProvider): boolean {
       fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
 
+    backupClaudeSettings(settingsPath);
+
     // 写入配置
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
       mode: 0o600,
@@ -277,6 +290,7 @@ export function applyProviderToClaudeSettings(
   const providerEnv: Record<string, string> = {
     ANTHROPIC_BASE_URL: provider.baseUrl,
     ANTHROPIC_AUTH_TOKEN: provider.authToken,
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
   };
 
   if (provider.smallFastModel) {
