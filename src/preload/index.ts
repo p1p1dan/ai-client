@@ -712,6 +712,18 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TODO_AI_POLISH, options),
   },
 
+  // Onboarding
+  onboarding: {
+    check: (): Promise<import('@shared/types').OnboardingState> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK),
+    register: (
+      request: import('@shared/types').OnboardingRegisterRequest
+    ): Promise<import('@shared/types').OnboardingRegisterResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_REGISTER, request),
+    detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),
+  },
+
   // Environment
   env: {
     HOME: process.env.HOME || process.env.USERPROFILE || '',

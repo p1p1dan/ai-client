@@ -27,6 +27,7 @@ export { autoStartHapi };
 
 import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { registerLogHandlers } from './log';
+import { registerOnboardingHandlers } from './onboarding';
 import { registerNotificationHandlers } from './notification';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
@@ -70,6 +71,7 @@ export function registerIpcHandlers(): void {
   registerTempWorkspaceHandlers();
   registerTmuxHandlers();
   registerTodoHandlers();
+  registerOnboardingHandlers();
 }
 
 export async function cleanupAllResources(): Promise<void> {

@@ -309,6 +309,11 @@ export const IPC_CHANNELS = {
   TODO_MIGRATE: 'todo:migrate',
   TODO_AI_POLISH: 'todo:aiPolish',
 
+  // Onboarding
+  ONBOARDING_CHECK: 'onboarding:check',
+  ONBOARDING_REGISTER: 'onboarding:register',
+  ONBOARDING_DETECT_CLI: 'onboarding:detectCli',
+
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',
   LOG_OPEN_FOLDER: 'log:open-folder',

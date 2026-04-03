@@ -74,6 +74,7 @@ import {
   DialogTitle,
 } from './components/ui/dialog';
 import { addToast, toastManager } from './components/ui/toast';
+import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import { MergeEditor, MergeWorktreeDialog } from './components/worktree';
 import { useAutoFetchListener, useGitBranches, useGitInit } from './hooks/useGit';
 import { useWebInspector } from './hooks/useWebInspector';
@@ -100,6 +101,16 @@ initCloneProgressListener();
 
 export default function App() {
   const { t } = useI18n();
+
+  // Onboarding check
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  useEffect(() => {
+    window.electronAPI.onboarding.check().then((state) => {
+      if (!state.registered) {
+        setShowOnboarding(true);
+      }
+    });
+  }, []);
 
   // Initialize agent activity listener for tree sidebar status display
   useEffect(() => {
@@ -1550,6 +1561,12 @@ export default function App() {
             scrollToProvider={scrollToProvider}
           />
         )}
+
+        {/* Onboarding Dialog */}
+        <OnboardingDialog
+          open={showOnboarding}
+          onComplete={() => setShowOnboarding(false)}
+        />
       </div>
     </div>
   );
