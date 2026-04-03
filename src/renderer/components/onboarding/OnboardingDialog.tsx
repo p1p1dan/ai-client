@@ -36,8 +36,8 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
   const [cliStatus, setCliStatus] = useState<OnboardingCliStatus | null>(null);
   const [cliLoading, setCliLoading] = useState(false);
 
-  const [serverUrl, setServerUrl] = useState('');
-  const [onboardingSecret, setOnboardingSecret] = useState('');
+  const [serverUrl] = useState('https://cch-jyw.pipidan.qzz.io');
+  const [verificationCode, setVerificationCode] = useState('');
   const [email, setEmail] = useState('');
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
@@ -67,12 +67,16 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
   const handleRegister = async () => {
     setRegisterError(null);
+    if (verificationCode.trim() !== 'jyw123456') {
+      setRegisterError('Invalid verification code');
+      return;
+    }
     setRegistering(true);
     try {
       const result = await window.electronAPI.onboarding.register({
         email: email.trim(),
         serverUrl: serverUrl.trim(),
-        onboardingSecret: onboardingSecret.trim(),
+        onboardingSecret: '990421dan',
       });
       setRegisterResult(result);
       if (result.ok) {
@@ -89,8 +93,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
   const canRegister =
     email.trim().length > 0 &&
-    serverUrl.trim().length > 0 &&
-    onboardingSecret.trim().length > 0 &&
+    verificationCode.trim().length > 0 &&
     !registering;
 
   return (
@@ -152,19 +155,9 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
                   <Label htmlFor="onboarding-server">Server URL</Label>
                   <Input
                     id="onboarding-server"
-                    placeholder="https://hub.example.com"
                     value={serverUrl}
-                    onChange={(e) => setServerUrl(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="onboarding-secret">Onboarding Secret</Label>
-                  <Input
-                    id="onboarding-secret"
-                    type="password"
-                    placeholder="Provided by your admin"
-                    value={onboardingSecret}
-                    onChange={(e) => setOnboardingSecret(e.target.value)}
+                    disabled
+                    className="text-muted-foreground"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -179,6 +172,16 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
                   <p className="text-xs text-muted-foreground">
                     Only @jcdz.cc emails are accepted.
                   </p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="onboarding-code">Verification Code</Label>
+                  <Input
+                    id="onboarding-code"
+                    type="password"
+                    placeholder="Enter the code provided by admin"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                  />
                 </div>
                 {registerError && (
                   <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive-foreground">
