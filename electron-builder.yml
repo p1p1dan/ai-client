@@ -1,5 +1,5 @@
 appId: com.ensoai.app
-productName: ArrayTester
+productName: AI client
 copyright: Copyright © 2025
 
 directories:
@@ -81,6 +81,53 @@ asarUnpack:
   - "node_modules/@parcel/watcher/**"
   - "node_modules/@parcel/watcher-win32-x64/**"
   - "node_modules/node-pty/**"
+npmRebuild: false
+extraResources:
+  - from: node_modules/node-pty
+    to: node_modules/node-pty
+    filter:
+      - "package.json"
+      - "lib/**/*"
+      - "prebuilds/win32-x64/**/*"
+  - from: node_modules/sqlite3
+    to: node_modules/sqlite3
+    filter:
+      - "package.json"
+      - "lib/**/*"
+      - "build/Release/**/*"
+  - from: node_modules/bindings
+    to: node_modules/bindings
+    filter:
+      - "package.json"
+      - "bindings.js"
+  - from: node_modules/file-uri-to-path
+    to: node_modules/file-uri-to-path
+    filter:
+      - "package.json"
+      - "index.js"
+  - from: node_modules/@parcel/watcher
+    to: node_modules/@parcel/watcher
+    filter:
+      - "package.json"
+      - "index.js"
+      - "wrapper.js"
+      - "build/Release/**/*"
+  - from: node_modules/@vscode/ripgrep
+    to: node_modules/@vscode/ripgrep
+    filter:
+      - "package.json"
+      - "lib/index.js"
+      - "bin/**/*"
+  - from: node_modules/isbinaryfile
+    to: node_modules/isbinaryfile
+    filter:
+      - "package.json"
+      - "lib/**/*"
+  - from: node_modules/cloudflared
+    to: node_modules/cloudflared
+    filter:
+      - "package.json"
+      - "lib/**/*"
 compression: maximum
 
 mac:
@@ -112,7 +159,7 @@ dmg:
       path: /Applications
 
 win:
-  executableName: ArrayTester
+  executableName: AI client
   target:
     # NSIS supports delta updates automatically
     - target: nsis

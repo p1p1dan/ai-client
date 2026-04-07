@@ -6,6 +6,9 @@ import { promisify } from 'node:util';
 import { app } from 'electron';
 
 const execAsync = promisify(exec);
+const APP_DISPLAY_NAME = 'AI client';
+const WINDOWS_EXECUTABLE_NAME = `${APP_DISPLAY_NAME}.exe`;
+const MAC_APP_BUNDLE_NAME = `${APP_DISPLAY_NAME}.app`;
 
 // Check if a command exists
 async function commandExists(cmd: string): Promise<boolean> {
@@ -164,7 +167,7 @@ class CliInstaller {
         return match[1];
       }
       // Fallback for dev mode
-      return '/Applications/EnsoAI.app';
+      return `/Applications/${MAC_APP_BUNDLE_NAME}`;
     }
     if (isWindows) {
       return app.getPath('exe');
@@ -175,7 +178,7 @@ class CliInstaller {
   private generateMacScript(): string {
     const appPath = this.getAppPath();
     return `#!/bin/bash
-# EnsoAI CLI - Open directories in EnsoAI
+# ${APP_DISPLAY_NAME} CLI - Open directories in ${APP_DISPLAY_NAME}
 
 # Get the target path
 if [ -z "$1" ]; then
@@ -193,12 +196,12 @@ else
   fi
 fi
 
-# Check if EnsoAI is running (production or dev mode)
-if pgrep -x "EnsoAI" > /dev/null 2>&1 || pgrep -f "electron.*EnsoAI" > /dev/null 2>&1; then
+# Check if ${APP_DISPLAY_NAME} is running (production or dev mode)
+if pgrep -x "${APP_DISPLAY_NAME}" > /dev/null 2>&1 || pgrep -f "electron.*${APP_DISPLAY_NAME}" > /dev/null 2>&1; then
   # App is running, use AppleScript to send message directly
   osascript -e "
     tell application \\"System Events\\"
-      set frontmost of (first process whose name contains \\"EnsoAI\\" or name is \\"Electron\\") to true
+      set frontmost of (first process whose name contains \\"${APP_DISPLAY_NAME}\\" or name is \\"Electron\\") to true
     end tell
   " 2>/dev/null
 
@@ -209,7 +212,7 @@ else
   if [ -d "${appPath}" ]; then
     open -a "${appPath}" --args "--open-path=$TARGET_PATH"
   else
-    echo "EnsoAI not found at ${appPath}"
+    echo "${APP_DISPLAY_NAME} not found at ${appPath}"
     exit 1
   fi
 fi
@@ -222,7 +225,7 @@ fi
     return `@echo off
 setlocal enabledelayedexpansion
 
-:: EnsoAI CLI - Open directories in EnsoAI
+:: ${APP_DISPLAY_NAME} CLI - Open directories in ${APP_DISPLAY_NAME}
 
 :: Get the target path
 if "%~1"=="" (
@@ -231,8 +234,8 @@ if "%~1"=="" (
   set "TARGET_PATH=%~f1"
 )
 
-:: Check if EnsoAI is running
-tasklist /FI "IMAGENAME eq EnsoAI.exe" 2>NUL | find /I /N "EnsoAI.exe">NUL
+:: Check if ${APP_DISPLAY_NAME} is running
+tasklist /FI "IMAGENAME eq ${WINDOWS_EXECUTABLE_NAME}" 2>NUL | find /I /N "${WINDOWS_EXECUTABLE_NAME}">NUL
 if %ERRORLEVEL%==0 (
   :: App is running, use URL scheme with PowerShell for proper URL encoding
   for /f "usebackq delims=" %%i in (\`powershell -NoProfile -Command "[uri]::EscapeDataString('%TARGET_PATH%')"\`) do set "ENCODED_PATH=%%i"
@@ -247,7 +250,7 @@ if %ERRORLEVEL%==0 (
   private generateLinuxScript(): string {
     const exePath = this.getAppPath();
     return `#!/bin/bash
-# EnsoAI CLI - Open directories in EnsoAI
+# ${APP_DISPLAY_NAME} CLI - Open directories in ${APP_DISPLAY_NAME}
 
 # Get the target path
 if [ -z "$1" ]; then
@@ -265,8 +268,8 @@ else
   fi
 fi
 
-# Check if EnsoAI is running
-if pgrep -x "ensoai" > /dev/null 2>&1 || pgrep -f "EnsoAI" > /dev/null 2>&1; then
+# Check if ${APP_DISPLAY_NAME} is running
+if pgrep -x "${APP_DISPLAY_NAME}" > /dev/null 2>&1 || pgrep -f "${APP_DISPLAY_NAME}" > /dev/null 2>&1; then
   # App is running, use xdg-open with URL scheme
   ENCODED_PATH=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")
   xdg-open "enso://open?path=$ENCODED_PATH" 2>/dev/null || \\
@@ -276,7 +279,7 @@ else
   if [ -x "${exePath}" ]; then
     "${exePath}" --open-path="$TARGET_PATH" &
   else
-    echo "EnsoAI not found at ${exePath}"
+    echo "${APP_DISPLAY_NAME} not found at ${exePath}"
     exit 1
   fi
 fi

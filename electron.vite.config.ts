@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { defineConfig } from 'electron-vite';
+
+export const runtimeNativePackages = ['node-pty', 'sqlite3'] as const;
 
 // On Windows, TEC Solutions OCular Agent encrypts .js files written by Node.js.
 // This plugin rewrites output files via a .bin intermediate + PowerShell copy
@@ -44,26 +46,28 @@ function winTsdFixPlugin(outSubDir: string) {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin(), winTsdFixPlugin('main')],
+    plugins: [winTsdFixPlugin('main')],
     resolve: {
       alias: {
         '@shared': path.resolve(__dirname, 'src/shared'),
       },
     },
     build: {
+      externalizeDeps: false,
       rollupOptions: {
-        external: ['node-pty', '@parcel/watcher'],
+        external: [...runtimeNativePackages],
       },
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin(), winTsdFixPlugin('preload')],
+    plugins: [winTsdFixPlugin('preload')],
     resolve: {
       alias: {
         '@shared': path.resolve(__dirname, 'src/shared'),
       },
     },
     build: {
+      externalizeDeps: false,
       rollupOptions: {
         output: {
           format: 'cjs',

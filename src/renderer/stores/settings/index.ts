@@ -17,13 +17,16 @@ import {
   defaultCommitMessageGeneratorSettings,
   defaultEditorKeybindings,
   defaultEditorSettings,
+  defaultFileTreeDisplayMode,
   defaultGitCloneSettings,
   defaultGlobalKeybindings,
   defaultHapiSettings,
+  defaultLayoutMode,
   defaultMainTabKeybindings,
   defaultProxySettings,
   defaultQuickTerminalSettings,
   defaultRemoteSettings,
+  defaultRepositoryListDisplayMode,
   defaultSearchKeybindings,
   defaultSourceControlKeybindings,
   defaultTodoPolishSettings,
@@ -96,13 +99,13 @@ function applyInitialSettings(state: {
 }
 
 // Get initial state values
-function getInitialState() {
+export function getInitialState() {
   return {
     // UI Settings
     theme: 'system' as Theme,
-    layoutMode: 'tree' as const,
-    fileTreeDisplayMode: 'legacy' as const,
-    repositoryListDisplayMode: 'list' as const,
+    layoutMode: defaultLayoutMode,
+    fileTreeDisplayMode: defaultFileTreeDisplayMode,
+    repositoryListDisplayMode: defaultRepositoryListDisplayMode,
     language: getDefaultLocale(),
     fontSize: 14,
     fontFamily: 'Inter',

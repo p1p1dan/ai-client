@@ -9,12 +9,15 @@ import type {
   CommitMessageGeneratorSettings,
   EditorKeybindings,
   EditorSettings,
+  FileTreeDisplayMode,
   GitCloneSettings,
   GlobalKeybindings,
   HapiSettings,
+  LayoutMode,
   MainTabKeybindings,
   QuickTerminalSettings,
   RemoteSettings,
+  RepositoryListDisplayMode,
   SearchKeybindings,
   SourceControlKeybindings,
   StatusLineFieldSettings,
@@ -22,6 +25,10 @@ import type {
   WorkspaceKeybindings,
   XtermKeybindings,
 } from './types';
+
+export const defaultLayoutMode: LayoutMode = 'tree';
+export const defaultFileTreeDisplayMode: FileTreeDisplayMode = 'current';
+export const defaultRepositoryListDisplayMode: RepositoryListDisplayMode = 'list';
 
 // Default prompts for different languages
 export const defaultCommitPromptZh = `你是一个 Git commit message 生成助手。请根据以下信息生成规范的 commit message。
