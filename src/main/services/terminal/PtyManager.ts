@@ -8,6 +8,7 @@ import pidtree from 'pidtree';
 import pidusage from 'pidusage';
 import { killProcessTree } from '../../utils/processUtils';
 import { getProxyEnvVars } from '../proxy/ProxyConfig';
+import { getLiveCredentials } from '../onboarding';
 import { detectShell, shellDetector } from './ShellDetector';
 
 const isWindows = process.platform === 'win32';
@@ -374,22 +375,36 @@ export class PtyManager {
 
     let ptyProcess: pty.IPty;
 
+    const liveCredentials = getLiveCredentials();
+    const credentialEnv = liveCredentials
+      ? {
+          ANTHROPIC_API_KEY: liveCredentials.claudeAuthToken,
+          ANTHROPIC_BASE_URL: liveCredentials.claudeBaseUrl,
+          OPENAI_API_KEY: liveCredentials.codexApiKey,
+          OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
+          CLAUDE_CONFIG_DIR: join(home, '.ensoai', 'claude-null'),
+        }
+      : {};
+
+    const finalEnv = {
+      ...process.env,
+      ...getProxyEnvVars(),
+      ...options.env,
+      ...credentialEnv,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      // Ensure proper locale for UTF-8 support (GUI apps may not inherit LANG)
+      LANG: process.env.LANG || 'en_US.UTF-8',
+      LC_ALL: process.env.LC_ALL || process.env.LANG || 'en_US.UTF-8',
+    } as Record<string, string>;
+
     try {
       ptyProcess = pty.spawn(shell, args, {
         name: 'xterm-256color',
         cols: options.cols || 80,
         rows: options.rows || 24,
         cwd: spawnCwd,
-        env: {
-          ...process.env,
-          ...getProxyEnvVars(),
-          ...options.env,
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-          // Ensure proper locale for UTF-8 support (GUI apps may not inherit LANG)
-          LANG: process.env.LANG || 'en_US.UTF-8',
-          LC_ALL: process.env.LC_ALL || process.env.LANG || 'en_US.UTF-8',
-        } as Record<string, string>,
+        env: finalEnv,
       });
     } catch (error) {
       if (!isWindows) {
@@ -402,16 +417,7 @@ export class PtyManager {
             cols: options.cols || 80,
             rows: options.rows || 24,
             cwd: spawnCwd,
-            env: {
-              ...process.env,
-              ...getProxyEnvVars(),
-              ...options.env,
-              TERM: 'xterm-256color',
-              COLORTERM: 'truecolor',
-              // Ensure proper locale for UTF-8 support (GUI apps may not inherit LANG)
-              LANG: process.env.LANG || 'en_US.UTF-8',
-              LC_ALL: process.env.LC_ALL || process.env.LANG || 'en_US.UTF-8',
-            } as Record<string, string>,
+            env: finalEnv,
           });
           shell = fallbackShell;
           args = fallbackArgs;
