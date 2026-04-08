@@ -343,7 +343,7 @@ async function init(): Promise<void> {
   const logLevel = (ensoSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';
   const logRetentionDays = (ensoSettings?.state?.logRetentionDays as number) ?? 7;
   initLogger(loggingEnabled, logLevel, logRetentionDays);
-  log.info('EnsoAI started');
+  log.info('AI Client started');
 
   // Check Git installation
   const gitInstalled = await checkGitInstalled();

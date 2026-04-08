@@ -16,6 +16,7 @@ export function buildAppMenu(options: MenuOptions = {}): Menu {
   const isMac = process.platform === 'darwin';
   const locale = getCurrentLocale();
   const t = (key: string) => translate(locale, key);
+  const appDisplayName = 'AI Client';
 
   const sendAction = (action: MenuAction) => {
     getActiveWindow()?.webContents.send('menu-action', action);
@@ -26,9 +27,9 @@ export function buildAppMenu(options: MenuOptions = {}): Menu {
     ...(isMac
       ? [
           {
-            label: app.name,
+            label: appDisplayName,
             submenu: [
-              { role: 'about' as const },
+              { label: `About ${appDisplayName}`, role: 'about' as const },
               { type: 'separator' as const },
               {
                 label: t('Settings...'),
@@ -38,11 +39,11 @@ export function buildAppMenu(options: MenuOptions = {}): Menu {
               { type: 'separator' as const },
               { role: 'services' as const },
               { type: 'separator' as const },
-              { role: 'hide' as const },
+              { label: `Hide ${appDisplayName}`, role: 'hide' as const },
               { role: 'hideOthers' as const },
               { role: 'unhide' as const },
               { type: 'separator' as const },
-              { role: 'quit' as const },
+              { label: `Quit ${appDisplayName}`, role: 'quit' as const },
             ],
           },
         ]

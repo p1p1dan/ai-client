@@ -825,7 +825,7 @@ export const zhTranslations: Record<string, string> = {
   'Claude Code Integration': 'Claude Code 集成',
   'Connect to Claude Code CLI for enhanced IDE features':
     '连接 Claude Code CLI 以获得增强的 IDE 功能',
-  'Enable Integration': '启动 Claude-EnsoAI 集成',
+  'Enable Integration': '启动 Claude-AI Client 集成',
   'Start WebSocket server for Claude Code connection': '启动 WebSocket 服务器以连接 Claude Code',
   'Debounce Time': '防抖时间',
   'Delay before sending selection changes to Claude Code':
