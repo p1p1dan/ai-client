@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { homedir } from 'node:os';
 import 'electron-log/preload.js';
 import type { Locale } from '@shared/i18n';
 import type {
@@ -7,6 +8,8 @@ import type {
   AppCloseRequestPayload,
   CloneProgress,
   CloneResult,
+  ClaudeProject,
+  ClaudeSessionMeta,
   CommitFileChange,
   ConflictResolution,
   ConnectionProfile,
@@ -23,6 +26,7 @@ import type {
   FileReadResult,
   FileSearchParams,
   FileSearchResult,
+  FolderCheckTypeResult,
   GhCliStatus,
   GitBranch,
   GitLogEntry,
@@ -60,6 +64,7 @@ import type {
   TempWorkspaceRemoveResult,
   TerminalCreateOptions,
   TerminalResizeOptions,
+  UsageStatsResult,
   ValidateLocalPathResult,
   ValidateUrlResult,
   WorktreeCreateOptions,
@@ -331,6 +336,12 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TEMP_WORKSPACE_REMOVE, dirPath, basePath),
     checkPath: (dirPath: string): Promise<TempWorkspaceCheckResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.TEMP_WORKSPACE_CHECK_PATH, dirPath),
+  },
+
+  // Folder
+  folder: {
+    checkType: (dirPath: string): Promise<FolderCheckTypeResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FOLDER_CHECK_TYPE, dirPath),
   },
 
   // Files
@@ -712,6 +723,11 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TODO_AI_POLISH, options),
   },
 
+  // Usage
+  usage: {
+    getStats: (): Promise<UsageStatsResult> => ipcRenderer.invoke(IPC_CHANNELS.USAGE_GET_STATS),
+  },
+
   // Onboarding
   onboarding: {
     check: (): Promise<import('@shared/types').OnboardingState> =>
@@ -722,11 +738,20 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_REGISTER, request),
     detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),
+    logout: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_LOGOUT),
+    onLiveCredentialsStatus: (
+      callback: (status: { available: boolean }) => void
+    ): (() => void) => {
+      const handler = (_: unknown, status: Parameters<typeof callback>[0]) => callback(status);
+      ipcRenderer.on(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, handler);
+    },
   },
 
   // Environment
   env: {
-    HOME: process.env.HOME || process.env.USERPROFILE || '',
+    // In some Windows environments USERPROFILE may be missing, while os.homedir() still resolves.
+    HOME: process.env.HOME || process.env.USERPROFILE || homedir() || '',
     platform: process.platform as 'darwin' | 'win32' | 'linux',
     appVersion: pkg.version,
   },
@@ -1030,6 +1055,14 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.CLAUDE_COMPLETIONS_UPDATED, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.CLAUDE_COMPLETIONS_UPDATED, handler);
     },
+  },
+
+  // Claude Sessions (session history)
+  claudeSessions: {
+    listProjects: (): Promise<ClaudeProject[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_SESSIONS_LIST_PROJECTS),
+    getProjectSessions: (projectId: string): Promise<ClaudeSessionMeta[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_SESSIONS_GET_PROJECT_SESSIONS, projectId),
   },
 
   // Search

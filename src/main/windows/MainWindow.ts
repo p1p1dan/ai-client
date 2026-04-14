@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { is } from '@electron-toolkit/utils';
 import { translate } from '@shared/i18n';
 import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
@@ -22,6 +23,7 @@ const TRAFFIC_LIGHTS_DEFAULT_POSITION = { x: 16, y: 16 };
  * may not be perfectly aligned.
  */
 const TRAFFIC_LIGHTS_DEVTOOLS_POSITION = { x: 240, y: 16 };
+const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 interface WindowState {
   width: number;
@@ -131,7 +133,7 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
       webSecurity: true,
       allowRunningInsecureContent: false,
       partition: options.partition,
-      preload: join(__dirname, '../preload/index.cjs'),
+      preload: join(moduleDir, '../preload/index.cjs'),
     },
   });
 
@@ -394,7 +396,7 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'));
+    win.loadFile(join(moduleDir, '../renderer/index.html'));
   }
 
   win.on('closed', () => {

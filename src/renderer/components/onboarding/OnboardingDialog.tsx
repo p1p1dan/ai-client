@@ -10,7 +10,7 @@ import {
   ServerIcon,
   TerminalIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,12 +37,29 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
   const [cliLoading, setCliLoading] = useState(false);
 
   const [serverUrl] = useState('https://cch-jyw.pipidan.qzz.io');
-  const [verificationCode, setVerificationCode] = useState('');
   const [email, setEmail] = useState('');
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registerResult, setRegisterResult] =
     useState<OnboardingRegisterResponse | null>(null);
+
+  const wasOpenRef = useRef(open);
+  useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!open || wasOpen) {
+      return;
+    }
+
+    // Reset state when dialog is opened (e.g. after logout).
+    setStep('cli-check');
+    setCliStatus(null);
+    setCliLoading(false);
+    setRegisterError(null);
+    setRegisterResult(null);
+    setRegistering(false);
+    setEmail('');
+  }, [open]);
 
   const detectCli = useCallback(async () => {
     setCliLoading(true);
@@ -67,16 +84,12 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
   const handleRegister = async () => {
     setRegisterError(null);
-    if (verificationCode.trim() !== 'jyw123456') {
-      setRegisterError('Invalid verification code');
-      return;
-    }
     setRegistering(true);
     try {
       const result = await window.electronAPI.onboarding.register({
         email: email.trim(),
         serverUrl: serverUrl.trim(),
-        onboardingSecret: '990421dan',
+        onboardingSecret: __ONBOARDING_SECRET__,
       });
       setRegisterResult(result);
       if (result.ok) {
@@ -92,9 +105,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
   };
 
   const canRegister =
-    email.trim().length > 0 &&
-    verificationCode.trim().length > 0 &&
-    !registering;
+    email.trim().length > 0 && !registering;
 
   return (
     <Dialog open={open}>
@@ -173,16 +184,6 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
                     Only @jcdz.cc emails are accepted.
                   </p>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="onboarding-code">Verification Code</Label>
-                  <Input
-                    id="onboarding-code"
-                    type="password"
-                    placeholder="Enter the code provided by admin"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                  />
-                </div>
                 {registerError && (
                   <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive-foreground">
                     <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
@@ -230,7 +231,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
                     Welcome, <span className="font-medium text-foreground">{registerResult.data.user.name}</span>.
                   </p>
                 )}
-                <p>Claude Code and Codex CLI configs have been applied.</p>
+                <p>Claude Code and Codex credentials are now available for this app session.</p>
               </div>
             </DialogPanel>
             <DialogFooter variant="bare">

@@ -7,6 +7,13 @@ import { defineConfig } from 'electron-vite';
 
 export const runtimeNativePackages = ['node-pty', 'sqlite3'] as const;
 
+const onboardingSecret = process.env.ONBOARDING_SECRET ?? '';
+if (!onboardingSecret) {
+  console.warn(
+    '[build] ONBOARDING_SECRET is not set; __ONBOARDING_SECRET__ will be an empty string'
+  );
+}
+
 // On Windows, TEC Solutions OCular Agent encrypts .js files written by Node.js.
 // This plugin rewrites output files via a .bin intermediate + PowerShell copy
 // to produce unencrypted files that Electron can load.
@@ -52,6 +59,9 @@ export default defineConfig({
         '@shared': path.resolve(__dirname, 'src/shared'),
       },
     },
+    define: {
+      __ONBOARDING_SECRET__: JSON.stringify(onboardingSecret),
+    },
     build: {
       externalizeDeps: false,
       rollupOptions: {
@@ -83,6 +93,9 @@ export default defineConfig({
         '@': path.resolve(__dirname, 'src/renderer'),
         '@shared': path.resolve(__dirname, 'src/shared'),
       },
+    },
+    define: {
+      __ONBOARDING_SECRET__: JSON.stringify(onboardingSecret),
     },
     build: {
       rollupOptions: {

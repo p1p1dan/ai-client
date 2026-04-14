@@ -55,6 +55,7 @@ export const zhTranslations: Record<string, string> = {
   'Beta Features': 'Beta 功能',
   'Binary file not supported for diff preview': '二进制文件不支持差异预览',
   'Temp Session': '临时会话',
+  'Session History': '会话历史',
   'Temp Session settings': '临时会话设置',
   'Show Temp Session entry for quick scratch sessions': '显示临时会话入口，用于快速临时会话',
   'Default directory for new temp sessions. Leave empty to use ~/ensoai/temporary':
@@ -395,6 +396,7 @@ export const zhTranslations: Record<string, string> = {
   'Select a workspace': '选择工作区',
   'Select a Worktree to start using AI coding assistant':
     '选择一个 Worktree 以开始使用 AI 编码助手',
+  'Select a folder to start using AI coding assistant': '选择一个文件夹以开始使用 AI 编码助手',
   'Select a Worktree to view changes': '选择一个 Worktree 以查看更改',
   'Select a file to view changes': '选择一个文件以查看更改',
   'Select file to view diff': '从左侧选择文件以查看更改',
@@ -1280,6 +1282,8 @@ export const zhTranslations: Record<string, string> = {
   'The remote host could not be prepared for repository attachment. Review the failure details below.':
     '无法为挂载远程仓库准备该主机。请查看下面的失败详情。',
   'Error details': '错误详情',
+  'The app encountered an unexpected error.': '应用遇到了意外错误。',
+  'You can try again, or reload the app.': '你可以尝试重试，或重新加载应用。',
   'Unknown remote profile: {{connectionId}}': '未知的远程配置：{{connectionId}}',
   'Remote platform unavailable for {{connectionId}}':
     '无法获取连接 {{connectionId}} 的远程平台信息',
@@ -1684,6 +1688,12 @@ export const zhTranslations: Record<string, string> = {
     '这将恢复待办润色的默认 AI 提示词，自定义提示词将会丢失。',
   'Enter a prompt template.\nAvailable variables:\n• {text} - Raw requirement text':
     '输入提示词模板。\n可用变量：\n• {text} - 原始需求文本',
+  // Usage
+  'Today calls': '今日调用次数',
+  'Today cost': '今日费用',
+  'This month calls': '本月调用次数',
+  'This month cost': '本月费用',
+  'Refresh usage': '刷新用量',
 };
 
 export function normalizeLocale(input?: string): Locale {

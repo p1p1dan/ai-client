@@ -378,11 +378,13 @@ export class PtyManager {
     const liveCredentials = getLiveCredentials();
     const credentialEnv = liveCredentials
       ? {
-          ANTHROPIC_API_KEY: liveCredentials.claudeAuthToken,
+          ANTHROPIC_AUTH_TOKEN: liveCredentials.claudeAuthToken,
           ANTHROPIC_BASE_URL: liveCredentials.claudeBaseUrl,
           OPENAI_API_KEY: liveCredentials.codexApiKey,
           OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
-          CLAUDE_CONFIG_DIR: join(home, '.ensoai', 'claude-null'),
+          ...(options.env?.CLAUDE_CONFIG_DIR
+            ? {}
+            : { CLAUDE_CONFIG_DIR: join(home, '.ensoai', 'claude-null') }),
         }
       : {};
 

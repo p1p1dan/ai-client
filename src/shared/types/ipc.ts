@@ -84,6 +84,9 @@ export const IPC_CHANNELS = {
   TEMP_WORKSPACE_REMOVE: 'temp:workspace:remove',
   TEMP_WORKSPACE_CHECK_PATH: 'temp:workspace:checkPath',
 
+  // Folder
+  FOLDER_CHECK_TYPE: 'folder:checkType',
+
   // Files
   FILE_READ: 'file:read',
   FILE_WRITE: 'file:write',
@@ -261,6 +264,10 @@ export const IPC_CHANNELS = {
   CLAUDE_COMPLETIONS_LEARN: 'claude:completions:learn',
   CLAUDE_COMPLETIONS_UPDATED: 'claude:completions:updated',
 
+  // Claude Sessions (session history)
+  CLAUDE_SESSIONS_LIST_PROJECTS: 'claude:listProjects',
+  CLAUDE_SESSIONS_GET_PROJECT_SESSIONS: 'claude:getProjectSessions',
+
   // Claude Plugins Management
   CLAUDE_PLUGINS_LIST: 'claude:plugins:list',
   CLAUDE_PLUGINS_SET_ENABLED: 'claude:plugins:setEnabled',
@@ -309,10 +316,15 @@ export const IPC_CHANNELS = {
   TODO_MIGRATE: 'todo:migrate',
   TODO_AI_POLISH: 'todo:aiPolish',
 
+  // Usage
+  USAGE_GET_STATS: 'usage:getStats',
+
   // Onboarding
   ONBOARDING_CHECK: 'onboarding:check',
   ONBOARDING_REGISTER: 'onboarding:register',
   ONBOARDING_DETECT_CLI: 'onboarding:detectCli',
+  ONBOARDING_LOGOUT: 'onboarding:logout',
+  ONBOARDING_LIVE_CREDENTIALS_STATUS: 'onboarding:liveCredentialsStatus',
 
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',

@@ -56,6 +56,13 @@ interface AgentSessionsState {
 
   // Actions
   addSession: (session: Session) => void;
+  resumeClaudeSession: (options: {
+    repoPath: string;
+    cwd: string;
+    claudeSessionId: string;
+    name?: string | null;
+    claudeConfigDir?: string;
+  }) => string;
   removeSession: (id: string) => void;
   updateSession: (id: string, updates: Partial<Session>) => void;
   setActiveId: (cwd: string, sessionId: string | null) => void;
@@ -199,6 +206,39 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
           },
         };
       }),
+
+    resumeClaudeSession: ({ repoPath, cwd, claudeSessionId, name, claudeConfigDir }) => {
+      const existing = get().sessions.find(
+        (s) =>
+          s.agentCommand?.startsWith('claude') &&
+          s.sessionId === claudeSessionId &&
+          s.repoPath === repoPath &&
+          pathsEqual(s.cwd, cwd)
+      );
+      if (existing) {
+        get().setActiveId(cwd, existing.id);
+        return existing.id;
+      }
+
+      const id = crypto.randomUUID();
+      const sessionName = name?.trim() || '恢复的会话';
+
+      get().addSession({
+        id,
+        sessionId: claudeSessionId,
+        claudeConfigDir,
+        name: sessionName,
+        agentId: 'claude',
+        agentCommand: 'claude',
+        initialized: true,
+        activated: true,
+        userRenamed: !!name?.trim(),
+        repoPath,
+        cwd,
+      });
+
+      return id;
+    },
 
     removeSession: (id) =>
       set((state) => {

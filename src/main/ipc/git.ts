@@ -1,6 +1,14 @@
 import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { type FileChangeStatus, IPC_CHANNELS } from '@shared/types';
+import {
+  type CommitDetail,
+  type FileChangesResult,
+  type FileDiff,
+  type GhCliStatus,
+  type GitStatus,
+  IPC_CHANNELS,
+  type FileChangeStatus,
+} from '@shared/types';
 import type { ClaudeEffort } from '@shared/types/ai';
 import { ipcMain } from 'electron';
 import {
@@ -41,31 +49,74 @@ export function clearAllGitServices(): void {
   authorizedWorkdirs.clear();
 }
 
-function validateWorkdir(workdir: string): string {
-  const resolved = path.resolve(workdir);
+type ValidatedWorkdir = {
+  path: string;
+  isGitRepo: boolean;
+};
 
-  // Check if workdir is authorized
-  if (!authorizedWorkdirs.has(resolved)) {
-    // Fallback: check if it's a valid git directory
-    if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
-      throw new Error('Invalid workdir: path does not exist or is not a directory');
-    }
-    // Check for .git folder
-    const gitDir = path.join(resolved, '.git');
-    if (!existsSync(gitDir)) {
-      throw new Error('Invalid workdir: not a git repository');
-    }
-  }
+const EMPTY_GIT_STATUS: GitStatus = {
+  isClean: true,
+  current: null,
+  tracking: null,
+  ahead: 0,
+  behind: 0,
+  staged: [],
+  modified: [],
+  deleted: [],
+  untracked: [],
+  conflicted: [],
+  truncated: false,
+};
 
-  return resolved;
+const EMPTY_FILE_CHANGES: FileChangesResult = { changes: [] };
+
+const EMPTY_DIFF_STATS = { insertions: 0, deletions: 0 };
+
+const EMPTY_GH_CLI_STATUS: GhCliStatus = { installed: false, authenticated: false };
+
+function emptyCommitDetail(hash: string): CommitDetail {
+  return {
+    hash,
+    date: '',
+    message: '',
+    author_name: '',
+    author_email: '',
+    files: [],
+    fullDiff: '',
+  };
 }
 
-function getGitService(workdir: string): GitService {
-  const resolved = validateWorkdir(workdir);
-  if (!gitServices.has(resolved)) {
-    gitServices.set(resolved, new GitService(resolved));
+function emptyFileDiff(filePath: string): FileDiff {
+  return { path: filePath, original: '', modified: '' };
+}
+
+function validateWorkdir(workdir: string): ValidatedWorkdir {
+  const resolved = path.resolve(workdir);
+
+  if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+    throw new Error('Invalid workdir: path does not exist or is not a directory');
   }
-  return gitServices.get(resolved)!;
+
+  // Treat registered worktrees as git repositories even if `.git` is not present (should be rare).
+  const isGitRepo =
+    authorizedWorkdirs.has(resolved) || existsSync(path.join(resolved, '.git'));
+
+  return { path: resolved, isGitRepo };
+}
+
+function getGitServiceForPath(resolvedWorkdir: string): GitService {
+  if (!gitServices.has(resolvedWorkdir)) {
+    gitServices.set(resolvedWorkdir, new GitService(resolvedWorkdir));
+  }
+  return gitServices.get(resolvedWorkdir)!;
+}
+
+function getGitRepoService(workdir: string): GitService | null {
+  const validated = validateWorkdir(workdir);
+  if (!validated.isGitRepo) {
+    return null;
+  }
+  return getGitServiceForPath(validated.path);
 }
 
 function isRemoteWorkdir(workdir: string): boolean {
@@ -85,7 +136,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       return remoteRepositoryBackend.getStatus(workdir);
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return EMPTY_GIT_STATUS;
+    }
     return git.getStatus();
   });
 
@@ -98,7 +152,10 @@ export function registerGitHandlers(): void {
         }
         return remoteRepositoryBackend.getLog(workdir, maxCount, skip);
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return [];
+      }
       return git.getLog(maxCount, skip, submodulePath);
     }
   );
@@ -107,7 +164,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       return remoteRepositoryBackend.getBranches(workdir);
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return [];
+    }
     return git.getBranches();
   });
 
@@ -118,7 +178,10 @@ export function registerGitHandlers(): void {
         await remoteRepositoryBackend.createBranch(workdir, name, startPoint);
         return;
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.createBranch(name, startPoint);
     }
   );
@@ -128,7 +191,10 @@ export function registerGitHandlers(): void {
       await remoteRepositoryBackend.checkout(workdir, branch);
       return;
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return;
+    }
     await git.checkout(branch);
   });
 
@@ -141,7 +207,10 @@ export function registerGitHandlers(): void {
         }
         return remoteRepositoryBackend.commit(workdir, message);
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return '';
+      }
       return git.commit(message, files);
     }
   );
@@ -153,7 +222,10 @@ export function registerGitHandlers(): void {
         await remoteRepositoryBackend.push(workdir, remote, branch, setUpstream);
         return;
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.push(remote, branch, setUpstream);
     }
   );
@@ -165,7 +237,10 @@ export function registerGitHandlers(): void {
         await remoteRepositoryBackend.pull(workdir, remote, branch);
         return;
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.pull(remote, branch);
     }
   );
@@ -175,7 +250,10 @@ export function registerGitHandlers(): void {
       await remoteRepositoryBackend.fetch(workdir, remote);
       return;
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return;
+    }
     await git.fetch(remote);
   });
 
@@ -185,7 +263,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         return remoteRepositoryBackend.getDiff(workdir, options?.staged);
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return '';
+      }
       return git.getDiff(options);
     }
   );
@@ -214,7 +295,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       return remoteRepositoryBackend.getFileChanges(workdir);
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return EMPTY_FILE_CHANGES;
+    }
     return git.getFileChanges();
   });
 
@@ -224,7 +308,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         return remoteRepositoryBackend.getFileDiff(workdir, filePath, staged);
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return emptyFileDiff(filePath);
+      }
       return git.getFileDiff(filePath, staged);
     }
   );
@@ -234,7 +321,10 @@ export function registerGitHandlers(): void {
       await remoteRepositoryBackend.stage(workdir, paths);
       return;
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return;
+    }
     await git.stage(paths);
   });
 
@@ -243,7 +333,10 @@ export function registerGitHandlers(): void {
       await remoteRepositoryBackend.unstage(workdir, paths);
       return;
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return;
+    }
     await git.unstage(paths);
   });
 
@@ -252,7 +345,10 @@ export function registerGitHandlers(): void {
       await remoteRepositoryBackend.discard(workdir, paths);
       return;
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return;
+    }
     await git.discard(paths);
   });
 
@@ -260,7 +356,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       return remoteRepositoryBackend.showCommit(workdir, hash);
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return emptyCommitDetail(hash);
+    }
     return git.showCommit(hash);
   });
 
@@ -273,7 +372,10 @@ export function registerGitHandlers(): void {
         }
         return remoteRepositoryBackend.getCommitFiles(workdir, hash);
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return [];
+      }
       return git.getCommitFiles(hash, submodulePath);
     }
   );
@@ -294,7 +396,10 @@ export function registerGitHandlers(): void {
         }
         return remoteRepositoryBackend.getCommitDiff(workdir, hash, filePath);
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return '';
+      }
       return git.getCommitDiff(hash, filePath, status, submodulePath);
     }
   );
@@ -303,7 +408,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       return remoteRepositoryBackend.getDiffStats(workdir);
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return EMPTY_DIFF_STATS;
+    }
     return git.getDiffStats();
   });
 
@@ -328,7 +436,7 @@ export function registerGitHandlers(): void {
       }
       const resolved = validateWorkdir(workdir);
       return generateCommitMessage({
-        workdir: resolved,
+        workdir: resolved.path,
         maxDiffLines: options.maxDiffLines,
         timeout: options.timeout,
         provider: (options.provider ?? 'claude-code') as AIProvider,
@@ -366,7 +474,7 @@ export function registerGitHandlers(): void {
       const sender = event.sender;
 
       startCodeReviewService({
-        workdir: resolved,
+        workdir: resolved.path,
         provider: (options.provider ?? 'claude-code') as AIProvider,
         model: options.model as ModelId,
         reasoningEffort: options.reasoningEffort as ReasoningEffort | undefined,
@@ -419,7 +527,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       assertRemoteUnsupported('githubCliIntegration');
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return EMPTY_GH_CLI_STATUS;
+    }
     return git.getGhCliStatus();
   });
 
@@ -428,7 +539,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       assertRemoteUnsupported('pullRequestListing');
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return [];
+    }
     return git.listPullRequests();
   });
 
@@ -439,7 +553,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('pullRequestFetch');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       return git.fetchPullRequest(prNumber, localBranch);
     }
   );
@@ -475,7 +592,7 @@ export function registerGitHandlers(): void {
       }
       const resolved = validateWorkdir(workdir);
       return generateBranchName({
-        workdir: resolved,
+        workdir: resolved.path,
         prompt: options.prompt,
         provider: (options.provider ?? 'claude-code') as AIProvider,
         model: options.model as ModelId,
@@ -521,7 +638,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       assertRemoteGitMutationUnsupported();
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return [];
+    }
     return git.blame(filePath);
   });
 
@@ -530,7 +650,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       assertRemoteGitMutationUnsupported();
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return;
+    }
     await git.revert(commitHash);
   });
 
@@ -541,7 +664,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteGitMutationUnsupported();
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.reset(commitHash, mode);
     }
   );
@@ -556,7 +682,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       assertRemoteUnsupported('submodules');
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return [];
+    }
     return git.listSubmodules();
   });
 
@@ -567,7 +696,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.initSubmodules(recursive);
     }
   );
@@ -579,7 +711,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.updateSubmodules(recursive);
     }
   );
@@ -589,7 +724,10 @@ export function registerGitHandlers(): void {
     if (isRemoteWorkdir(workdir)) {
       assertRemoteUnsupported('submodules');
     }
-    const git = getGitService(workdir);
+    const git = getGitRepoService(workdir);
+    if (!git) {
+      return;
+    }
     await git.syncSubmodules();
   });
 
@@ -600,7 +738,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.fetchSubmodule(submodulePath);
     }
   );
@@ -612,7 +753,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.pullSubmodule(submodulePath);
     }
   );
@@ -624,7 +768,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.pushSubmodule(submodulePath);
     }
   );
@@ -636,7 +783,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return '';
+      }
       return git.commitSubmodule(submodulePath, message);
     }
   );
@@ -648,7 +798,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.stageSubmodule(submodulePath, paths);
     }
   );
@@ -660,7 +813,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.unstageSubmodule(submodulePath, paths);
     }
   );
@@ -672,7 +828,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.discardSubmodule(submodulePath, paths);
     }
   );
@@ -684,7 +843,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return [];
+      }
       return git.getSubmoduleChanges(submodulePath);
     }
   );
@@ -696,7 +858,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return emptyFileDiff(filePath);
+      }
       return git.getSubmoduleFileDiff(submodulePath, filePath, staged);
     }
   );
@@ -708,7 +873,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return [];
+      }
       return git.getSubmoduleBranches(submodulePath);
     }
   );
@@ -720,7 +888,10 @@ export function registerGitHandlers(): void {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('submodules');
       }
-      const git = getGitService(workdir);
+      const git = getGitRepoService(workdir);
+      if (!git) {
+        return;
+      }
       await git.checkoutSubmoduleBranch(submodulePath, branch);
     }
   );

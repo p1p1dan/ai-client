@@ -11,6 +11,7 @@ import {
 } from './claudeCompletions';
 import { registerClaudeConfigHandlers } from './claudeConfig';
 import { registerClaudeProviderHandlers } from './claudeProvider';
+import { registerClaudeSessionsHandlers } from './claudeSessions';
 import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
 import {
@@ -20,6 +21,7 @@ import {
   stopAllFileWatchers,
   stopAllFileWatchersSync,
 } from './files';
+import { registerFolderHandlers } from './folder';
 import { clearAllGitServices, registerGitHandlers } from './git';
 import { autoStartHapi, cleanupHapi, cleanupHapiSync, registerHapiHandlers } from './hapi';
 
@@ -43,12 +45,14 @@ import { registerTempWorkspaceHandlers } from './tempWorkspace';
 import { cleanupTmuxSync, registerTmuxHandlers } from './tmux';
 import { cleanupTodo, cleanupTodoSync, registerTodoHandlers } from './todo';
 import { registerUpdaterHandlers } from './updater';
+import { registerUsageHandlers } from './usage';
 import { registerWebInspectorHandlers } from './webInspector';
 import { clearAllWorktreeServices, registerWorktreeHandlers } from './worktree';
 
 export function registerIpcHandlers(): void {
   registerGitHandlers();
   registerWorktreeHandlers();
+  registerFolderHandlers();
   registerFileHandlers();
   registerSessionHandlers();
   registerSessionStorageHandlers();
@@ -67,11 +71,13 @@ export function registerIpcHandlers(): void {
   registerClaudeProviderHandlers();
   registerClaudeConfigHandlers();
   registerClaudeCompletionsHandlers();
+  registerClaudeSessionsHandlers();
   registerWebInspectorHandlers();
   registerTempWorkspaceHandlers();
   registerTmuxHandlers();
   registerTodoHandlers();
   registerOnboardingHandlers();
+  registerUsageHandlers();
 }
 
 export async function cleanupAllResources(): Promise<void> {

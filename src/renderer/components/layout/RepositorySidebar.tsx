@@ -5,6 +5,7 @@ import {
   Clock,
   FolderGit2,
   FolderMinus,
+  History,
   PanelLeftClose,
   Plus,
   Search,
@@ -87,6 +88,8 @@ interface RepositorySidebarProps {
   onSwitchWorktreeByPath?: (path: string) => Promise<void> | void;
   /** Whether a file is being dragged over the sidebar (from App.tsx global handler) */
   isFileDragOver?: boolean;
+  isHomeActive?: boolean;
+  onSelectHome?: () => void;
   temporaryWorkspaceEnabled?: boolean;
   tempBasePath?: string;
 }
@@ -114,6 +117,8 @@ export function RepositorySidebar({
   onSwitchTab,
   onSwitchWorktreeByPath,
   isFileDragOver,
+  isHomeActive = false,
+  onSelectHome,
   temporaryWorkspaceEnabled = false,
   tempBasePath = '',
 }: RepositorySidebarProps) {
@@ -375,7 +380,7 @@ export function RepositorySidebar({
   }, [showSections, groups, repositories, t]);
 
   const renderRepoItem = (repo: Repository, originalIndex: number, sectionGroupId?: string) => {
-    const isSelected = selectedRepo === repo.path;
+    const isSelected = !isHomeActive && selectedRepo === repo.path;
     const displayRepoPath = getDisplayPath(repo.path);
     const useLtrPathDisplay = isWslUncPath(displayRepoPath);
     return (
@@ -536,6 +541,28 @@ export function RepositorySidebar({
 
       {/* Repository List */}
       <div className="flex-1 overflow-auto px-2 pb-2">
+        {onSelectHome && (
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => onSelectHome()}
+              className={cn(
+                'group relative flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left transition-colors',
+                isHomeActive ? 'text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+              )}
+            >
+              {isHomeActive && (
+                <motion.div
+                  layoutId="repo-sidebar-home-highlight"
+                  className="absolute inset-0 rounded-lg bg-accent"
+                  transition={springFast}
+                />
+              )}
+              <History className="relative z-10 h-4 w-4 shrink-0" />
+              <span className="relative z-10 truncate text-sm font-medium">{t('Session History')}</span>
+            </button>
+          </div>
+        )}
         {temporaryWorkspaceEnabled && (
           <div className="mb-2">
             <RepoItemWithGlow repoPath={TEMP_REPO_ID}>
@@ -544,10 +571,12 @@ export function RepositorySidebar({
                 onClick={() => onSelectRepo(TEMP_REPO_ID)}
                 className={cn(
                   'group relative flex w-full flex-col items-start gap-1 rounded-lg p-3 text-left transition-colors',
-                  selectedRepo === TEMP_REPO_ID ? 'text-accent-foreground' : 'hover:bg-accent/50'
+                  !isHomeActive && selectedRepo === TEMP_REPO_ID
+                    ? 'text-accent-foreground'
+                    : 'hover:bg-accent/50'
                 )}
               >
-                {selectedRepo === TEMP_REPO_ID && (
+                {!isHomeActive && selectedRepo === TEMP_REPO_ID && (
                   <motion.div
                     layoutId="repo-sidebar-temp-highlight"
                     className="absolute inset-0 rounded-lg bg-accent"

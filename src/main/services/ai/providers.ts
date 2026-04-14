@@ -1,5 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn, spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type {
   AIProvider,
   ClaudeEffort,
@@ -12,6 +14,7 @@ import type {
 } from '@shared/types';
 import type { CommonAICLIOptions } from '@shared/types/ai';
 import { getEnvForCommand, getShellForCommand } from '../../utils/shell';
+import { getLiveCredentials } from '../onboarding';
 
 export type {
   AIProvider,
@@ -207,7 +210,21 @@ function buildCursorArgs(options: CLISpawnOptions): string[] {
 
 export function spawnCLI(options: CLISpawnOptions): CLISpawnResult {
   const { shell, args: shellArgs } = getShellForCommand();
-  const env = getEnvForCommand();
+  const liveCredentials = getLiveCredentials();
+  const credentialEnv = liveCredentials
+    ? (() => {
+        const home = process.env.HOME || process.env.USERPROFILE || homedir();
+        return {
+          ANTHROPIC_AUTH_TOKEN: liveCredentials.claudeAuthToken,
+          ANTHROPIC_BASE_URL: liveCredentials.claudeBaseUrl,
+          OPENAI_API_KEY: liveCredentials.codexApiKey,
+          OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
+          // Prevent spawned CLI sessions from mutating user's real Claude settings.
+          CLAUDE_CONFIG_DIR: join(home, '.ensoai', 'claude-null'),
+        };
+      })()
+    : undefined;
+  const env = getEnvForCommand(credentialEnv);
 
   let cliCommand: string;
   let cliArgs: string[];

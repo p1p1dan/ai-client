@@ -1,6 +1,8 @@
 import { ExternalLink, MoreHorizontal, RefreshCw, Settings, Terminal, X } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import logoImage from '@/assets/logo.png';
+import { UserProfileCard } from '@/components/user/UserProfileCard';
 import {
   Menu,
   MenuItem,
@@ -9,6 +11,9 @@ import {
   MenuTrigger,
   TitleBarMenuPopup,
 } from '@/components/ui/menu';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
+import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { WindowControls } from './WindowControls';
@@ -20,12 +25,45 @@ interface WindowTitleBarProps {
   onOpenSettings?: () => void;
 }
 
+function formatCostUsd(usd: number): string {
+  if (usd < 0.01) {
+    return `$${usd.toFixed(4)}`;
+  }
+  if (usd < 1) {
+    return `$${usd.toFixed(4)}`;
+  }
+  return `$${usd.toFixed(2)}`;
+}
+
 /**
  * Custom title bar for frameless windows (Windows/Linux)
  * Modern minimal design with settings button and more menu
  */
 export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
   const { t } = useI18n();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const onboarding = useQuery({
+    queryKey: ['onboardingState'],
+    queryFn: async () => {
+      return await window.electronAPI.onboarding.check();
+    },
+  });
+
+  const isRegistered = onboarding.data?.registered === true;
+  const email = isRegistered ? (onboarding.data?.email ?? null) : null;
+  const initial = (email?.trim()?.[0] ?? '?').toUpperCase();
+  const usage = useUsageStats({ enabled: isRegistered });
+
+  const todayCostUsd =
+    usage.data && 'error' in usage.data ? null : (usage.data?.todayCostUsd ?? null);
+  const todayCostText = usage.isLoading || todayCostUsd === null ? '--' : formatCostUsd(todayCostUsd);
+
+  useEffect(() => {
+    if (isRegistered) {
+      return;
+    }
+    setProfileOpen(false);
+  }, [isRegistered]);
 
   // 所有 hooks 必须在条件返回之前调用，遵循 React Hooks 规则
   const handleReload = useCallback(() => {
@@ -52,6 +90,13 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
     'transition-colors duration-150'
   );
 
+  const userPillClass = cn(
+    'flex h-7 items-center gap-2 rounded-full border px-2',
+    'bg-background/80 backdrop-blur-sm shadow-sm',
+    'text-muted-foreground hover:text-foreground hover:bg-muted/80',
+    'transition-colors duration-150'
+  );
+
   return (
     <div className="relative z-50 flex h-8 shrink-0 items-center justify-between border-b bg-background drag-region select-none">
       {/* Left: App icon and name (clickable to open settings) */}
@@ -64,12 +109,39 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
         )}
         title={`${t('Settings')} (Ctrl+,)`}
       >
-        <img src={logoImage} alt="Enso AI" className="h-5 w-5" />
-        <span className="text-xs font-medium text-muted-foreground">Enso AI</span>
+        <img src={logoImage} alt="AI Client" className="h-5 w-5" />
+        <span className="text-xs font-medium text-muted-foreground">AI Client</span>
       </button>
 
       {/* Right: Actions and window controls */}
       <div className="flex items-center no-drag">
+        {/* User Profile */}
+        {isRegistered && (
+          <Popover open={profileOpen} onOpenChange={setProfileOpen}>
+            <PopoverTrigger
+              className={userPillClass}
+              aria-label={t('User profile')}
+              title={email ?? t('User profile')}
+            >
+              <Avatar className="size-6 bg-transparent">
+                <AvatarFallback className="bg-muted text-foreground text-xs">{initial}</AvatarFallback>
+              </Avatar>
+              <div className="h-4 w-px bg-border/70" />
+              <span
+                className={cn(
+                  'text-xs font-medium tabular-nums',
+                  (usage.isLoading || todayCostUsd === null) && 'text-muted-foreground/70'
+                )}
+              >
+                {todayCostText}
+              </span>
+            </PopoverTrigger>
+            <PopoverPopup align="end" sideOffset={8} className="w-[280px]">
+              <UserProfileCard email={email} onRequestClose={() => setProfileOpen(false)} />
+            </PopoverPopup>
+          </Popover>
+        )}
+
         {/* Settings Button */}
         <button
           type="button"

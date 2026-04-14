@@ -51,6 +51,8 @@ import { checkGitInstalled } from './services/git/checkGit';
 import { gitAutoFetchService } from './services/git/GitAutoFetchService';
 import { setCurrentLocale } from './services/i18n';
 import { buildAppMenu } from './services/MenuBuilder';
+import { ensureClaudeNullConfigDir } from './services/onboarding/claudeNullConfig';
+import { clearLiveCredentials, onboardingService, setLiveCredentials } from './services/onboarding';
 import {
   getSharedStatePaths,
   isLegacySettingsMigrated,
@@ -376,6 +378,50 @@ app.whenReady().then(async () => {
   migrateLegacySettingsIfNeeded();
   await migrateLegacyTodoIfNeeded();
 
+  // Ensure CLAUDE_CONFIG_DIR points to an empty config directory (created once, never overwritten).
+  ensureClaudeNullConfigDir();
+
+  const onboardingState = onboardingService.checkRegistration();
+  const shouldFetchCredentials = onboardingState.registered && !!onboardingState.email;
+
+  let liveCredentialsAvailable: boolean | null = null;
+  let liveCredentialsStatusSent = false;
+  let windowFinishedLoading = false;
+
+  const maybeSendLiveCredentialsStatus = () => {
+    if (!shouldFetchCredentials) return;
+    if (!windowFinishedLoading) return;
+    if (liveCredentialsAvailable === null) return;
+    if (liveCredentialsStatusSent) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    liveCredentialsStatusSent = true;
+    mainWindow.webContents.send(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, {
+      available: liveCredentialsAvailable,
+    });
+  };
+
+  if (shouldFetchCredentials) {
+    onboardingService
+      .fetchLiveCredentials(onboardingState.email!)
+      .then((credentials) => {
+        if (credentials) {
+          setLiveCredentials(credentials);
+          liveCredentialsAvailable = true;
+        } else {
+          clearLiveCredentials();
+          liveCredentialsAvailable = false;
+        }
+      })
+      .catch(() => {
+        clearLiveCredentials();
+        liveCredentialsAvailable = false;
+      })
+      .finally(() => {
+        maybeSendLiveCredentialsStatus();
+      });
+  }
+
   // Register protocol to handle local file:// URLs for markdown images
   protocol.handle('local-file', (request) => {
     try {
@@ -699,10 +745,12 @@ app.whenReady().then(async () => {
   // IMPORTANT: Set up did-finish-load handler BEFORE handling command line args
   // to avoid race condition where page loads before handler is registered
   mainWindow.webContents.once('did-finish-load', () => {
+    windowFinishedLoading = true;
     if (pendingOpenPath) {
       mainWindow?.webContents.send(IPC_CHANNELS.APP_OPEN_PATH, pendingOpenPath);
       pendingOpenPath = null;
     }
+    maybeSendLiveCredentialsStatus();
   });
 
   // Initialize auto-updater
@@ -742,6 +790,9 @@ app.whenReady().then(async () => {
     mainWindow = window;
     webInspectorServer.setMainWindow(window);
   });
+}).catch((err) => {
+  log.error('[app] Fatal startup error', err);
+  app.exit(1);
 });
 
 app.on('window-all-closed', () => {
@@ -793,10 +844,12 @@ app.on('will-quit', (event) => {
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
+  app.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
+  app.exit(1);
 });
 
 // Handle SIGINT (Ctrl+C) and SIGTERM

@@ -323,7 +323,11 @@ export async function startCodeReview(options: CodeReviewOptions): Promise<void>
     gitLog = await runGit(['--no-pager', 'log', '-10', '--oneline'], workdir);
   }
 
-  if (!gitDiff && !gitLog) {
+  const hasGitContext = Boolean(gitDiff || gitLog);
+
+  // In non-git folders, git commands return empty output. Allow starting the agent when a custom
+  // prompt is provided (folder mode can drive the review via tools and prompt).
+  if (!hasGitContext && !customPrompt) {
     onError('No changes to review');
     return;
   }

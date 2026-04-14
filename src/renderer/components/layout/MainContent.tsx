@@ -48,6 +48,7 @@ interface MainContentProps {
   onTabReorder?: (fromIndex: number, toIndex: number) => void;
   repoPath?: string; // repository path for session storage
   worktreePath?: string;
+  isGitRepo?: boolean;
   sourceControlRootPath?: string;
   reviewRootPath?: string;
   openInPath?: string;
@@ -77,6 +78,7 @@ export function MainContent({
   onTabReorder,
   repoPath,
   worktreePath,
+  isGitRepo = true,
   sourceControlRootPath,
   reviewRootPath,
   openInPath,
@@ -145,6 +147,7 @@ export function MainContent({
     .filter(
       (id): id is Exclude<TabId, 'settings'> => id !== 'settings' && (id !== 'todo' || todoEnabled)
     )
+    .filter((id) => id !== 'source-control' || isGitRepo)
     .map(
       (id) =>
         ({ id, ...tabConfigMap[id] }) as {
@@ -485,7 +488,7 @@ export function MainContent({
                 <EmptyHeader>
                   <EmptyTitle>{t('Start using AI Agent')}</EmptyTitle>
                   <EmptyDescription>
-                    {t('Select a Worktree to start using AI coding assistant')}
+                    {t('Select a folder to start using AI coding assistant')}
                   </EmptyDescription>
                 </EmptyHeader>
                 {onExpandWorktree && worktreeCollapsed && (
@@ -527,22 +530,24 @@ export function MainContent({
           )}
         </div>
         {/* Source Control tab - keep mounted to preserve selection state */}
-        <div
-          className={cn(
-            'absolute inset-0',
-            innerBg,
-            activeTab === 'source-control' ? 'z-10' : 'invisible pointer-events-none z-0'
-          )}
-        >
-          <SourceControlPanel
-            rootPath={effectiveSourceControlRootPath}
-            isActive={activeTab === 'source-control'}
-            onExpandWorktree={onExpandWorktree}
-            worktreeCollapsed={worktreeCollapsed}
-            emptyTitle={sourceControlEmptyTitle}
-            emptyDescription={sourceControlEmptyDescription}
-          />
-        </div>
+        {isGitRepo && (
+          <div
+            className={cn(
+              'absolute inset-0',
+              innerBg,
+              activeTab === 'source-control' ? 'z-10' : 'invisible pointer-events-none z-0'
+            )}
+          >
+            <SourceControlPanel
+              rootPath={effectiveSourceControlRootPath}
+              isActive={activeTab === 'source-control'}
+              onExpandWorktree={onExpandWorktree}
+              worktreeCollapsed={worktreeCollapsed}
+              emptyTitle={sourceControlEmptyTitle}
+              emptyDescription={sourceControlEmptyDescription}
+            />
+          </div>
+        )}
         {/* Todo tab */}
         {todoEnabled && (
           <div

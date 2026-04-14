@@ -4,6 +4,7 @@ import {
   TerminalSearchBar,
   type TerminalSearchBarRef,
 } from '@/components/terminal/TerminalSearchBar';
+import { toastManager } from '@/components/ui/toast';
 import { useFileDrop } from '@/hooks/useFileDrop';
 import { useRepositoryRuntimeContext } from '@/hooks/useRepositoryRuntimeContext';
 import { useTerminalScrollToBottom } from '@/hooks/useTerminalScrollToBottom';
@@ -21,6 +22,7 @@ interface AgentTerminalProps {
   backendSessionId?: string; // Unified backend session ID for attach/resume
   agentId?: string; // Agent ID (e.g., 'claude', 'codex', 'gemini')
   agentCommand?: string;
+  claudeConfigDir?: string; // Optional CLAUDE_CONFIG_DIR override (e.g. resume sessions from user ~/.claude)
   customPath?: string; // custom absolute path to the agent CLI
   customArgs?: string; // additional arguments to pass to the agent
   environment?: 'native' | 'hapi' | 'happy';
@@ -67,6 +69,7 @@ export function AgentTerminal({
   backendSessionId,
   agentId = 'claude',
   agentCommand = 'claude',
+  claudeConfigDir,
   customPath,
   customArgs,
   environment = 'native',
@@ -358,6 +361,10 @@ export function AgentTerminal({
     }
     let envVars: Record<string, string> | undefined;
 
+    if (claudeConfigDir && agentCommand?.startsWith('claude')) {
+      envVars = { ...(envVars ?? {}), CLAUDE_CONFIG_DIR: claudeConfigDir };
+    }
+
     // Hapi environment: run through hapi (global) or npx @twsxtd/hapi with CLI_API_TOKEN
     if (environment === 'hapi') {
       // Wait for hapi global check to complete - return undefined to delay terminal init
@@ -373,7 +380,7 @@ export function AgentTerminal({
 
       // Pass CLI_API_TOKEN from hapiSettings
       if (hapiSettings.cliApiToken) {
-        envVars = { CLI_API_TOKEN: hapiSettings.cliApiToken };
+        envVars = { ...(envVars ?? {}), CLI_API_TOKEN: hapiSettings.cliApiToken };
       }
 
       if (isRemoteExecution) {
@@ -489,6 +496,7 @@ export function AgentTerminal({
     };
   }, [
     agentCommand,
+    claudeConfigDir,
     customPath,
     customArgs,
     initialPrompt,
@@ -510,6 +518,15 @@ export function AgentTerminal({
     const isSessionNotFound = outputBufferRef.current.includes(
       'No conversation found with session ID'
     );
+
+    if (isSessionNotFound) {
+      toastManager.add({
+        type: 'error',
+        title: 'Claude 会话恢复失败',
+        description:
+          '未找到对应的会话记录。请检查会话是否仍存在，或确认运行时使用的 CLAUDE_CONFIG_DIR 与会话来源一致。',
+      });
+    }
 
     if (runtime >= MIN_RUNTIME_FOR_AUTO_CLOSE || isSessionNotFound) {
       onExit?.();

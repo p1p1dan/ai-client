@@ -1,11 +1,11 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
+import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
 import { BrowserWindow, ipcMain } from 'electron';
-import { type RawData, type WebSocket, WebSocketServer } from 'ws';
 import {
   ensurePermissionRequestHook,
   ensureStatusLineHook,
@@ -20,6 +20,14 @@ import {
 } from './ClaudeHookManager';
 import { MCP_TOOLS } from './mcpTools';
 import { checkTaskCompletion, readLastAssistantMessages } from './sessionLogReader';
+
+type RawData = import('ws').RawData;
+type WebSocket = import('ws').WebSocket;
+
+// Load ws via runtime require so packaged builds keep ws's optional native deps behavior intact.
+process.env.WS_NO_BUFFER_UTIL = '1';
+process.env.WS_NO_UTF_8_VALIDATE = '1';
+const { WebSocketServer } = createRequire(import.meta.url)('ws') as typeof import('ws');
 
 interface LockFilePayload {
   pid: number;

@@ -335,9 +335,11 @@ export function useXterm({
     terminal.open(containerRef.current);
     fitAddon.fit();
 
-    // IME compositionend 兜底：清空 textarea 防止旧内容残留导致输入异常
+    // 清空 textarea，防止 open() 后残留内容在首次获得焦点时被当作输入发送（例如自动出现 '\'）
+    // 同时保留 IME compositionend 兜底逻辑，避免输入法提交后残留文本影响后续输入。
     const textarea = terminal.textarea;
     if (textarea) {
+      textarea.value = '';
       textarea.addEventListener('compositionend', () => {
         // 延迟清空，确保 xterm 先读取最终文本
         setTimeout(() => {
@@ -884,6 +886,7 @@ export function useXterm({
   useEffect(() => {
     if (isActive && terminalRef.current && !isLoading) {
       requestAnimationFrame(() => {
+        // biome-ignore lint/suspicious/noFocusedTests: xterm fit() helper, not a focused test
         fit();
         terminalRef.current?.focus();
       });
@@ -906,6 +909,7 @@ export function useXterm({
           }
           terminalRef.current?.refresh(0, terminalRef.current.rows - 1);
           if (isActive) {
+            // biome-ignore lint/suspicious/noFocusedTests: xterm fit() helper, not a focused test
             fit();
           }
         });
@@ -923,6 +927,7 @@ export function useXterm({
         requestAnimationFrame(() => {
           terminalRef.current?.refresh(0, terminalRef.current.rows - 1);
           if (isActive) {
+            // biome-ignore lint/suspicious/noFocusedTests: xterm fit() helper, not a focused test
             fit();
           }
         });

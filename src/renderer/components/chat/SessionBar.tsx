@@ -32,6 +32,7 @@ const EDGE_THRESHOLD = 20; // pixels from edge
 export interface Session {
   id: string; // Session's own unique ID
   sessionId?: string; // Optional Claude session ID for --session-id/--resume (defaults to id if not set)
+  claudeConfigDir?: string; // Optional CLAUDE_CONFIG_DIR override (e.g. resume sessions from user ~/.claude)
   backendSessionId?: string; // Backend session host ID used by the unified session API
   name: string;
   agentId: string; // which agent CLI to use (e.g., 'claude', 'codex', 'gemini', 'claude-hapi', 'claude-happy')

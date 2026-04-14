@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import log from 'electron-log/renderer.js';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui/toast';
 import './styles/globals.css';
 
@@ -28,11 +29,13 @@ async function startApp(): Promise<void> {
 
   createRoot(root).render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
     </StrictMode>
   );
 }

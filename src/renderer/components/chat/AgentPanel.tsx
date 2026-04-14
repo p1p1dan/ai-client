@@ -1724,6 +1724,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 backendSessionId={session.backendSessionId}
                 agentId={session.agentId}
                 agentCommand={session.agentCommand || 'claude'}
+                claudeConfigDir={session.claudeConfigDir}
                 customPath={session.customPath}
                 customArgs={session.customArgs}
                 environment={session.environment || 'native'}

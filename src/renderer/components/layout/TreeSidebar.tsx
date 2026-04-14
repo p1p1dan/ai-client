@@ -16,6 +16,7 @@ import {
   FolderOpen,
   GitBranch,
   GitMerge,
+  History,
   List,
   PanelLeftClose,
   Plus,
@@ -138,6 +139,8 @@ interface TreeSidebarProps {
   toggleSelectedRepoExpandedRef?: React.MutableRefObject<(() => void) | null>;
   /** Whether a file is being dragged over the sidebar (from App.tsx global handler) */
   isFileDragOver?: boolean;
+  isHomeActive?: boolean;
+  onSelectHome?: () => void;
 }
 
 export function TreeSidebar({
@@ -185,6 +188,8 @@ export function TreeSidebar({
   onRequestTempDelete,
   toggleSelectedRepoExpandedRef,
   isFileDragOver,
+  isHomeActive = false,
+  onSelectHome,
 }: TreeSidebarProps) {
   const { t, tNode } = useI18n();
   const _settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
@@ -744,7 +749,7 @@ export function TreeSidebar({
   );
 
   const renderRepoItem = (repo: Repository, originalIndex: number, sectionGroupId?: string) => {
-    const isSelected = selectedRepo === repo.path;
+    const isSelected = !isHomeActive && selectedRepo === repo.path;
     const isExpanded = expandedRepos.has(repo.path);
     const repoCanLoad = canLoadRepo(repo.path);
     const repoWorktrees = getFilteredWorktrees(repo.path);
@@ -757,6 +762,14 @@ export function TreeSidebar({
     const workdir = repoMainWorktree?.path || repo.path;
     const displayRepoPath = getDisplayPath(repo.path);
     const useLtrPathDisplay = isWslUncPath(displayRepoPath);
+    const placeholderWorktree: GitWorktree = {
+      path: repo.path,
+      head: '',
+      branch: null,
+      isMainWorktree: true,
+      isLocked: false,
+      prunable: false,
+    };
 
     return (
       <div key={repo.path} className={cn('relative rounded-lg', isSelected && 'pb-2')}>
@@ -785,19 +798,25 @@ export function TreeSidebar({
             onDragOver={(e) => handleRepoDragOver(e, originalIndex, sectionGroupId)}
             onDragLeave={handleRepoDragLeave}
             onDrop={(e) => handleRepoDrop(e, originalIndex, sectionGroupId)}
-            onContextMenu={(e) => handleRepoContextMenu(e, repo)}
-            onClick={() => {
-              toggleRepoExpanded(repo.path);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleRepoExpanded(repo.path);
+             onContextMenu={(e) => handleRepoContextMenu(e, repo)}
+             onClick={() => {
+              if (!isSelected) {
+                onSelectRepo(repo.path);
               }
-            }}
-            className={cn(
-              'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
-              !isSelected && 'hover:bg-accent/30',
+              toggleRepoExpanded(repo.path);
+             }}
+             onKeyDown={(e) => {
+               if (e.key === 'Enter' || e.key === ' ') {
+                 e.preventDefault();
+                 if (!isSelected) {
+                   onSelectRepo(repo.path);
+                 }
+                 toggleRepoExpanded(repo.path);
+               }
+             }}
+             className={cn(
+               'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
+               !isSelected && 'hover:bg-accent/30',
               draggedRepoIndexRef.current === originalIndex && 'opacity-50'
             )}
           >
@@ -907,33 +926,68 @@ export function TreeSidebar({
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="ml-2 mr-2 mt-1 flex flex-col gap-y-0.5 overflow-hidden"
             >
-              {!repoCanLoad ? (
-                <div className="py-2 px-2 text-xs text-muted-foreground">
-                  {t('Click to load worktrees')}
-                </div>
-              ) : repoError ? (
-                <div className="py-2 px-2 text-xs text-muted-foreground flex flex-col items-center gap-1.5">
-                  <span className="text-destructive">{t('Not a Git repository')}</span>
-                  {onInitGit && isSelected && (
-                    <Button
-                      onClick={async () => {
-                        await onInitGit();
-                        refetchExpandedWorktrees();
+               {!repoCanLoad ? (
+                 <div className="py-2 px-2 text-xs text-muted-foreground">
+                   {t('Click to load worktrees')}
+                 </div>
+               ) : repoError ? (
+                <div className="py-2 px-2 flex flex-col gap-1.5">
+                  {isSelected && (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectWorktree(placeholderWorktree);
                       }}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 text-xs w-fit"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onSelectWorktree(placeholderWorktree);
+                        }
+                      }}
+                      className={cn(
+                        'relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors text-sm cursor-pointer',
+                        !isHomeActive && activeWorktree?.path === repo.path
+                          ? 'border border-primary bg-primary/10'
+                          : 'border border-transparent hover:bg-accent/50'
+                      )}
                     >
-                      <GitBranch className="mr-1 h-3 w-3" />
-                      {t('Init')}
-                    </Button>
+                      <FolderOpen
+                        className={cn(
+                          'h-3.5 w-3.5 shrink-0',
+                          !isHomeActive && activeWorktree?.path === repo.path
+                            ? 'text-primary'
+                            : 'text-muted-foreground'
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{repo.name}</span>
+                    </div>
                   )}
+                  <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="text-muted-foreground">{t('Not a Git repository')}</span>
+                    {onInitGit && isSelected && (
+                      <Button
+                        onClick={async () => {
+                          await onInitGit();
+                          refetchExpandedWorktrees();
+                        }}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs w-fit"
+                      >
+                        <GitBranch className="mr-1 h-3 w-3" />
+                        {t('Init')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              ) : repoLoading ? (
-                <div className="space-y-1">
-                  {[0, 1].map((i) => (
-                    <div key={`skeleton-${i}`} className="h-8 animate-pulse rounded-lg bg-muted" />
-                  ))}
+               ) : repoLoading ? (
+                 <div className="space-y-1">
+                   {[0, 1].map((i) => (
+                     <div key={`skeleton-${i}`} className="h-8 animate-pulse rounded-lg bg-muted" />
+                   ))}
                 </div>
               ) : repoWorktrees.length === 0 ? (
                 <div className="py-2 px-2 text-xs text-muted-foreground">
@@ -948,7 +1002,7 @@ export function TreeSidebar({
                     worktree={worktree}
                     repoPath={repo.path}
                     branches={branches}
-                    isActive={activeWorktree?.path === worktree.path}
+                    isActive={!isHomeActive && activeWorktree?.path === worktree.path}
                     onClick={() => {
                       if (!isSelected) {
                         onSelectRepo(repo.path, { activateRemote: true });
@@ -1071,6 +1125,40 @@ export function TreeSidebar({
 
       {/* Tree List */}
       <div className="flex-1 overflow-auto px-2 pb-2">
+        {onSelectHome && (
+          <div className="mb-2">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectHome()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectHome();
+                }
+              }}
+              className={cn(
+                'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
+                isHomeActive ? 'text-accent-foreground' : 'hover:bg-accent/30'
+              )}
+            >
+              {isHomeActive && (
+                <motion.div
+                  layoutId="home-root-highlight"
+                  className="absolute inset-0 rounded-lg bg-accent/50"
+                  transition={springFast}
+                />
+              )}
+              <div className="relative z-10 flex w-full items-center gap-1">
+                <span className="shrink-0 w-5 h-5 flex items-center justify-center" />
+                <History className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate font-medium text-sm text-left">
+                  {t('Session History')}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
         {temporaryWorkspaceEnabled && (
           <div className="mb-2">
             <div
@@ -1085,10 +1173,12 @@ export function TreeSidebar({
               }}
               className={cn(
                 'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
-                selectedRepo === TEMP_REPO_ID ? 'text-accent-foreground' : 'hover:bg-accent/30'
+                !isHomeActive && selectedRepo === TEMP_REPO_ID
+                  ? 'text-accent-foreground'
+                  : 'hover:bg-accent/30'
               )}
             >
-              {selectedRepo === TEMP_REPO_ID && (
+              {!isHomeActive && selectedRepo === TEMP_REPO_ID && (
                 <motion.div
                   layoutId="temp-root-highlight"
                   className="absolute inset-0 rounded-lg bg-accent/50"
@@ -1153,7 +1243,9 @@ export function TreeSidebar({
                         key={item.id}
                         item={item}
                         isActive={
-                          selectedRepo === TEMP_REPO_ID && activeWorktree?.path === item.path
+                          !isHomeActive &&
+                          selectedRepo === TEMP_REPO_ID &&
+                          activeWorktree?.path === item.path
                         }
                         onSelect={() => onSelectTempWorkspace?.(item.path)}
                         onRequestRename={() => onRequestTempRename?.(item.id)}
