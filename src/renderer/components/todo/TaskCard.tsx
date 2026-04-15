@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Pencil, Play, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { normalizePath } from '@/App/storage';
+import { normalizePath, pathsEqual } from '@/App/storage';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
@@ -104,7 +104,7 @@ export function TaskCard({
       useAgentSessionsStore.setState((state) => {
         // Calculate displayOrder: max order in same worktree + 1
         const worktreeSessions = state.sessions.filter(
-          (s) => s.repoPath === repoPath && s.cwd === worktreePath
+          (s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, worktreePath)
         );
         const maxOrder = worktreeSessions.reduce(
           (max, s) => Math.max(max, s.displayOrder ?? 0),

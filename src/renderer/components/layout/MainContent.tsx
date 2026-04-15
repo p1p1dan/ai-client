@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TAB_ORDER, type TabId } from '@/App/constants';
-import { normalizePath } from '@/App/storage';
+import { normalizePath, pathsEqual } from '@/App/storage';
 import { OpenInMenu } from '@/components/app/OpenInMenu';
 import { AgentPanel } from '@/components/chat/AgentPanel';
 import { CurrentFilePanel, FilePanel } from '@/components/files';
@@ -120,7 +120,7 @@ export function MainContent({
       const session = sessions.find((s) => s.id === activeId);
       if (session) return activeId;
     }
-    const firstSession = sessions.find((s) => s.repoPath === repoPath && s.cwd === worktreePath);
+    const firstSession = sessions.find((s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, worktreePath));
     return firstSession?.id ?? null;
   }, [repoPath, worktreePath, sessions, activeIds]);
 

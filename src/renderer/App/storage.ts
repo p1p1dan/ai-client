@@ -151,6 +151,7 @@ const getPlatform = (): string => {
 export const normalizePath = (path: string): string => {
   // Remove trailing slashes/backslashes
   let normalized = path.replace(/[\\/]+$/, '');
+  normalized = normalized.replace(/\\/g, '/');
   // On Windows and macOS, normalize to lowercase for case-insensitive comparison
   // Linux is case-sensitive, so we don't lowercase there
   const platform = getPlatform();

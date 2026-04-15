@@ -1670,7 +1670,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
           if (!session) return null;
 
           // Check if this session belongs to current repo
-          const isCurrentRepo = session.repoPath === repoPath;
+          const isCurrentRepo = pathsEqual(session.repoPath, repoPath);
 
           // Find session's group info for positioning
           const info = findSessionInfo(sessionId);
