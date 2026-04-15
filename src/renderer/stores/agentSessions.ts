@@ -189,7 +189,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
 
         // Calculate displayOrder: max order in same worktree + 1
         const worktreeSessions = state.sessions.filter(
-          (s) => s.repoPath === session.repoPath && pathsEqual(s.cwd, session.cwd)
+          (s) => pathsEqual(s.repoPath, session.repoPath) && pathsEqual(s.cwd, session.cwd)
         );
         const maxOrder = worktreeSessions.reduce(
           (max, s) => Math.max(max, s.displayOrder ?? 0),
@@ -212,7 +212,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         (s) =>
           s.agentCommand?.startsWith('claude') &&
           s.sessionId === claudeSessionId &&
-          s.repoPath === repoPath &&
+          pathsEqual(s.repoPath, repoPath) &&
           pathsEqual(s.cwd, cwd)
       );
       if (existing) {
@@ -290,7 +290,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
       set((state) => {
         // Get sessions for current worktree, sorted by displayOrder
         const worktreeSessions = state.sessions
-          .filter((s) => s.repoPath === repoPath && pathsEqual(s.cwd, cwd))
+          .filter((s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, cwd))
           .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
         if (fromIndex < 0 || fromIndex >= worktreeSessions.length) return state;
@@ -310,7 +310,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
         // Update displayOrder for affected sessions only (don't reorder array)
         return {
           sessions: state.sessions.map((s) => {
-            if (s.repoPath === repoPath && pathsEqual(s.cwd, cwd)) {
+            if (pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, cwd)) {
               const newOrder = newOrderMap.get(s.id);
               if (newOrder !== undefined && newOrder !== s.displayOrder) {
                 return { ...s, displayOrder: newOrder };
@@ -323,7 +323,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
 
     getSessions: (repoPath, cwd) => {
       return get()
-        .sessions.filter((s) => s.repoPath === repoPath && pathsEqual(s.cwd, cwd))
+        .sessions.filter((s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, cwd))
         .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
     },
 
@@ -333,13 +333,13 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
       if (activeId) {
         // Verify the session exists and matches repoPath
         const session = state.sessions.find((s) => s.id === activeId);
-        if (session && session.repoPath === repoPath) {
+        if (session && pathsEqual(session.repoPath, repoPath)) {
           return activeId;
         }
       }
       // Fallback to first session for this repo+cwd
       const firstSession = state.sessions.find(
-        (s) => s.repoPath === repoPath && pathsEqual(s.cwd, cwd)
+        (s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, cwd)
       );
       return firstSession?.id || null;
     },
@@ -508,7 +508,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
 
     getAggregatedByRepo: (repoPath) => {
       const state = get();
-      const repoSessions = state.sessions.filter((s) => s.repoPath === repoPath);
+      const repoSessions = state.sessions.filter((s) => pathsEqual(s.repoPath, repoPath));
       return computeAggregatedState(repoSessions, state.runtimeStates);
     },
 

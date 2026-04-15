@@ -431,7 +431,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   // Filter sessions for current repo+worktree (for SessionBar display, sorted by displayOrder)
   const currentWorktreeSessions = useMemo(() => {
     return allSessions
-      .filter((s) => s.repoPath === repoPath && pathsEqual(s.cwd, cwd))
+      .filter((s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, cwd))
       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
   }, [allSessions, repoPath, cwd]);
 

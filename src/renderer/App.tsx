@@ -46,6 +46,7 @@ import {
   getRepositorySettings,
   getStoredBoolean,
   getStoredWorktreeMap,
+  pathsEqual,
   STORAGE_KEYS,
   saveActiveGroupId,
 } from './App/storage';
@@ -1044,7 +1045,7 @@ export default function App() {
 
   const findExistingRepository = useCallback(
     (candidate: Repository) =>
-      repositories.find((repo) => repo.id === candidate.id || repo.path === candidate.path),
+      repositories.find((repo) => repo.id === candidate.id || pathsEqual(repo.path, candidate.path)),
     [repositories]
   );
 
