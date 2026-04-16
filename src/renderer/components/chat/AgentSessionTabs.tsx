@@ -1,8 +1,9 @@
 import { Plus, Terminal, X } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
+import { AgentPickerMenu } from './AgentPickerMenu';
 import type { Session } from './SessionBar';
 import type { AgentGroup as AgentGroupType } from './types';
 
@@ -13,6 +14,7 @@ interface AgentSessionTabsProps {
   onSelectSession: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => void;
   onNewSession: () => void;
+  onNewSessionWithAgent?: (agentId: string, agentCommand: string) => void;
   showQuickTerminal?: boolean;
   quickTerminalOpen?: boolean;
   quickTerminalHasProcess?: boolean;
@@ -26,6 +28,7 @@ export function AgentSessionTabs({
   onSelectSession,
   onCloseSession,
   onNewSession,
+  onNewSessionWithAgent,
   showQuickTerminal = false,
   quickTerminalOpen,
   quickTerminalHasProcess,
@@ -33,6 +36,7 @@ export function AgentSessionTabs({
 }: AgentSessionTabsProps) {
   const { t } = useI18n();
   const bgImageEnabled = useSettingsStore((s) => s.backgroundImageEnabled);
+  const [showAgentMenu, setShowAgentMenu] = useState(false);
 
   const groupSessions = useMemo(() => {
     const sessionMap = new Map(sessions.map((s) => [s.id, s]));
@@ -132,18 +136,36 @@ export function AgentSessionTabs({
             )}
           </button>
         )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onNewSession();
-          }}
-          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          title={t('New Session')}
-          aria-label={t('New Session')}
+        <div
+          className="relative"
+          onMouseEnter={onNewSessionWithAgent ? () => setShowAgentMenu(true) : undefined}
+          onMouseLeave={onNewSessionWithAgent ? () => setShowAgentMenu(false) : undefined}
         >
-          <Plus className="h-4 w-4" />
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewSession();
+            }}
+            className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            title={t('New Session')}
+            aria-label={t('New Session')}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          {onNewSessionWithAgent && (
+            <AgentPickerMenu
+              show={showAgentMenu}
+              onClose={() => setShowAgentMenu(false)}
+              onSelectAgent={(agentId, agentCommand) => {
+                onNewSessionWithAgent?.(agentId, agentCommand);
+                setShowAgentMenu(false);
+              }}
+              position="bottom"
+              align="right"
+            />
+          )}
+        </div>
       </div>
     </div>
   );

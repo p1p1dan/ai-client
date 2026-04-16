@@ -23,6 +23,7 @@ import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
 import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
+import { AGENT_INFO, createSession } from '@/utils/agentSession';
 import { AgentGroup } from './AgentGroup';
 import { AgentSessionTabs } from './AgentSessionTabs';
 import { AgentTerminal } from './AgentTerminal';
@@ -39,17 +40,6 @@ interface AgentPanelProps {
   isActive?: boolean;
   onSwitchWorktree?: (worktreePath: string) => void;
 }
-
-// Agent display names and commands
-const AGENT_INFO: Record<string, { name: string; command: string }> = {
-  claude: { name: 'Claude', command: 'claude' },
-  codex: { name: 'Codex', command: 'codex' },
-  droid: { name: 'Droid', command: 'droid' },
-  gemini: { name: 'Gemini', command: 'gemini' },
-  auggie: { name: 'Auggie', command: 'auggie' },
-  cursor: { name: 'Cursor', command: 'cursor-agent' },
-  opencode: { name: 'OpenCode', command: 'opencode' },
-};
 
 /**
  * Whether the session uses Cursor CLI. Session name from terminal title / first line
@@ -100,55 +90,6 @@ function getDefaultAgentId(
   }
   // Ultimate fallback
   return 'claude';
-}
-
-function createSession(
-  repoPath: string,
-  cwd: string,
-  agentId: string,
-  customAgents: Array<{ id: string; name: string; command: string }>,
-  agentSettings: Record<
-    string,
-    { enabled: boolean; isDefault: boolean; customPath?: string; customArgs?: string }
-  >
-): Session {
-  // Handle Hapi and Happy agent IDs
-  // e.g., 'claude-hapi' -> base is 'claude', 'claude-happy' -> base is 'claude'
-  const isHapi = agentId.endsWith('-hapi');
-  const isHappy = agentId.endsWith('-happy');
-  const baseId = isHapi ? agentId.slice(0, -5) : isHappy ? agentId.slice(0, -6) : agentId;
-
-  // Check if it's a custom agent
-  const customAgent = customAgents.find((a) => a.id === baseId);
-  const info = customAgent
-    ? { name: customAgent.name, command: customAgent.command }
-    : AGENT_INFO[baseId] || { name: 'Claude', command: 'claude' };
-
-  // Build display name with environment suffix
-  const displayName = isHapi ? `${info.name} (Hapi)` : isHappy ? `${info.name} (Happy)` : info.name;
-
-  // Determine environment
-  const environment = isHapi ? 'hapi' : isHappy ? 'happy' : 'native';
-
-  // Get custom path and args from settings (for builtin agents)
-  const agentConfig = agentSettings[baseId];
-  const customPath = agentConfig?.customPath;
-  const customArgs = agentConfig?.customArgs;
-
-  const id = crypto.randomUUID();
-  return {
-    id,
-    sessionId: id, // Initialize sessionId with same value as id
-    name: displayName,
-    agentId,
-    agentCommand: info.command,
-    customPath,
-    customArgs,
-    initialized: false,
-    repoPath,
-    cwd,
-    environment,
-  };
 }
 
 /**
@@ -648,6 +589,66 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       repoPath,
       cwd,
       defaultAgentId,
+      customAgents,
+      agentSettings,
+      addSession,
+      updateCurrentGroupState,
+      claudeCodeIntegration.enhancedInputEnabled,
+      claudeCodeIntegration.enhancedInputAutoPopup,
+      setEnhancedInputOpen,
+    ]
+  );
+
+  const handleNewSessionWithAgent = useCallback(
+    (targetGroupId: string, agentId: string, _agentCommand: string) => {
+      const newSession = createSession(repoPath, cwd, agentId, customAgents, agentSettings);
+      addSession(newSession);
+
+      // Auto open enhanced input for new Claude session if enabled
+      const baseAgentId = agentId.replace(/-hapi$/, '').replace(/-happy$/, '');
+      const autoPopupMode = claudeCodeIntegration.enhancedInputAutoPopup;
+      if (
+        baseAgentId === 'claude' &&
+        claudeCodeIntegration.enhancedInputEnabled &&
+        (autoPopupMode === 'always' || autoPopupMode === 'hideWhileRunning')
+      ) {
+        setEnhancedInputOpen(newSession.id, true);
+      }
+
+      // Add session to group
+      updateCurrentGroupState((state) => {
+        const groupId = targetGroupId || state.activeGroupId || state.groups[0]?.id;
+        if (!groupId) {
+          // No groups exist - create first group with this session
+          const newGroup: AgentGroupType = {
+            id: crypto.randomUUID(),
+            sessionIds: [newSession.id],
+            activeSessionId: newSession.id,
+          };
+          return {
+            groups: [newGroup],
+            activeGroupId: newGroup.id,
+            flexPercents: [100],
+          };
+        }
+
+        return {
+          ...state,
+          groups: state.groups.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  sessionIds: [...g.sessionIds, newSession.id],
+                  activeSessionId: newSession.id,
+                }
+              : g
+          ),
+        };
+      });
+    },
+    [
+      repoPath,
+      cwd,
       customAgents,
       agentSettings,
       addSession,
@@ -1545,6 +1546,10 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                   onNewSession={() => {
                     handleGroupClick(group.id);
                     handleNewSession(group.id);
+                  }}
+                  onNewSessionWithAgent={(agentId, agentCommand) => {
+                    handleGroupClick(group.id);
+                    handleNewSessionWithAgent(group.id, agentId, agentCommand);
                   }}
                   showQuickTerminal
                   quickTerminalOpen={quickTerminalOpen}

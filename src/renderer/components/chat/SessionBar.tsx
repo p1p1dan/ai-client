@@ -25,6 +25,7 @@ import {
 } from '@/lib/claudeProvider';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
+import { AGENT_INFO } from '@/utils/agentSession';
 
 const STORAGE_KEY = 'enso-session-bar';
 const EDGE_THRESHOLD = 20; // pixels from edge
@@ -80,17 +81,6 @@ function loadState(): BarState {
   } catch {}
   return { x: 50, y: 16, collapsed: false, edge: null };
 }
-
-// Agent display names and commands
-const AGENT_INFO: Record<string, { name: string; command: string }> = {
-  claude: { name: 'Claude', command: 'claude' },
-  codex: { name: 'Codex', command: 'codex' },
-  droid: { name: 'Droid', command: 'droid' },
-  gemini: { name: 'Gemini', command: 'gemini' },
-  auggie: { name: 'Auggie', command: 'auggie' },
-  cursor: { name: 'Cursor', command: 'cursor-agent' },
-  opencode: { name: 'OpenCode', command: 'opencode' },
-};
 
 // Session tab with glow effect
 interface SessionTabProps {

@@ -35,3 +35,4 @@ build/cer.p12
 .worktrees
 .claude/
 .serena/
+.ace-tool/
