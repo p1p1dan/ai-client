@@ -75,6 +75,24 @@ function truncatePreview(text: string, maxChars: number): string {
   return `${compact.slice(0, maxChars).trimEnd()}…`;
 }
 
+/** Strip known Claude Code system/command wrapper tags, returning only user-authored text. */
+function stripSystemTags(text: string): string {
+  return text
+    .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, '')
+    .replace(/<command-message>[\s\S]*?<\/command-message>/g, '')
+    .replace(/<command-name>[\s\S]*?<\/command-name>/g, '')
+    .replace(/<command-args>[\s\S]*?<\/command-args>/g, '')
+    .replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, '')
+    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+    .trim();
+}
+
+/** Extract slash-command name from system tags as a display fallback. */
+function extractCommandLabel(text: string): string | null {
+  const match = text.match(/<command-name>\/?([^<]+)<\/command-name>/);
+  return match ? `/${match[1].trim()}` : null;
+}
+
 function decodeProjectDirNameFallback(dirName: string): string {
   const raw = dirName.startsWith('-') ? dirName.slice(1) : dirName;
   const parts = raw.split('-').filter(Boolean);
@@ -285,6 +303,7 @@ export class ClaudeSessionScanner {
     const lastAtFallback = toUnixSeconds(stat.mtimeMs);
 
     let firstMessage: string | null = null;
+    let commandFallback: string | null = null;
     let model: string | null = null;
     let createdAt: number | null = null;
 
@@ -319,7 +338,14 @@ export class ClaudeSessionScanner {
 
         if (firstMessage === null && entry.type === 'user') {
           const text = extractText(entry.message);
-          if (text) firstMessage = truncatePreview(text, 80);
+          if (text) {
+            const cleaned = stripSystemTags(text);
+            if (cleaned) {
+              firstMessage = truncatePreview(cleaned, 80);
+            } else if (commandFallback === null) {
+              commandFallback = extractCommandLabel(text);
+            }
+          }
         }
 
         if (createdAt !== null && model !== null && firstMessage !== null) {
@@ -351,7 +377,7 @@ export class ClaudeSessionScanner {
     return {
       id: sessionId,
       projectId,
-      firstMessage,
+      firstMessage: firstMessage ?? commandFallback,
       createdAt: createdAt ?? createdAtFallback,
       lastMessageAt: lastMessageAt ?? lastAtFallback,
       model,
