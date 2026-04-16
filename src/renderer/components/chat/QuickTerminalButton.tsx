@@ -88,7 +88,7 @@ export function QuickTerminalButton({
         'shadow-[0_2px_8px_rgba(0,0,0,0.12)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.16)]',
         // 拖动时状态
         isDragging && 'cursor-grabbing opacity-70 scale-95',
-        !isDragging && 'cursor-grab transition-all duration-200', // 只在非拖动时启用过渡
+        !isDragging && 'cursor-grab transition-all duration-150', // 只在非拖动时启用过渡
         // 根据状态设置背景和文字颜色
         isOpen
           ? 'bg-accent text-accent-foreground border-accent/50'

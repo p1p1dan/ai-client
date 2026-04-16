@@ -1,5 +1,5 @@
 import type { AIProvider } from '@shared/types';
-import { Plus, Settings, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
 import { normalizePath, pathsEqual } from '@/App/storage';
@@ -12,7 +12,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { pauseFocusLock, restoreFocusIfLocked } from '@/lib/focusLock';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
@@ -25,6 +24,7 @@ import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { AgentGroup } from './AgentGroup';
+import { AgentSessionTabs } from './AgentSessionTabs';
 import { AgentTerminal } from './AgentTerminal';
 import { EnhancedInputContainer } from './EnhancedInputContainer';
 import { QuickTerminalModal } from './QuickTerminalModal';
@@ -199,10 +199,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   const panelRef = useRef<HTMLDivElement>(null); // 容器引用
   const {
     agentSettings,
-    agentDetectionStatus,
     customAgents,
     xtermKeybindings,
-    hapiSettings,
     autoCreateSessionOnActivate,
     autoCreateSessionOnTempActivate,
     claudeCodeIntegration,
@@ -477,60 +475,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
 
     return unsubscribe;
   }, [cwd, groups, updateCurrentGroupState]);
-
-  // Empty state agent menu
-  const [showAgentMenu, setShowAgentMenu] = useState(false);
-  const [installedAgents, setInstalledAgents] = useState<Set<string>>(new Set());
-
-  // Build installed agents set from persisted detection status
-  useEffect(() => {
-    const enabledAgentIds = Object.keys(agentSettings).filter((id) => agentSettings[id]?.enabled);
-    const newInstalled = new Set<string>();
-
-    for (const agentId of enabledAgentIds) {
-      // Default agent is always considered installed (no detection needed)
-      // This ensures the default agent shows in menu even if user never ran detection
-      if (agentSettings[agentId]?.isDefault) {
-        newInstalled.add(agentId);
-        continue;
-      }
-
-      // Handle Hapi agents: check if base CLI is detected as installed
-      if (agentId.endsWith('-hapi')) {
-        if (!hapiSettings.enabled) continue;
-        const baseId = agentId.slice(0, -5);
-        if (agentDetectionStatus[baseId]?.installed) {
-          newInstalled.add(agentId);
-        }
-        continue;
-      }
-
-      // Handle Happy agents: check if base CLI is detected as installed
-      if (agentId.endsWith('-happy')) {
-        const baseId = agentId.slice(0, -6);
-        if (agentDetectionStatus[baseId]?.installed) {
-          newInstalled.add(agentId);
-        }
-        continue;
-      }
-
-      // Regular agents: use persisted detection status
-      if (agentDetectionStatus[agentId]?.installed) {
-        newInstalled.add(agentId);
-      }
-    }
-
-    setInstalledAgents(newInstalled);
-  }, [agentSettings, agentDetectionStatus, hapiSettings.enabled]);
-
-  // Filter to only enabled AND installed agents
-  const enabledAgents = useMemo(() => {
-    return Object.keys(agentSettings).filter((id) => {
-      if (!agentSettings[id]?.enabled || !installedAgents.has(id)) return false;
-      if (id.endsWith('-hapi') && !hapiSettings.enabled) return false;
-      return true;
-    });
-  }, [agentSettings, installedAgents, hapiSettings.enabled]);
 
   // Sync initialized agent session counts to worktree activity store
   useEffect(() => {
@@ -998,128 +942,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     [allSessions, updateSession]
   );
 
-  const handleRenameSession = useCallback(
-    (id: string, name: string) => {
-      updateSession(id, { name, terminalTitle: undefined, userRenamed: true });
-    },
-    [updateSession]
-  );
-
-  const handleReorderSessions = useCallback(
-    (groupId: string, fromIndex: number, toIndex: number) => {
-      const group = groups.find((g) => g.id === groupId);
-      if (!group) return;
-
-      const newSessionIds = [...group.sessionIds];
-      const [removed] = newSessionIds.splice(fromIndex, 1);
-      newSessionIds.splice(toIndex, 0, removed);
-
-      // Update group.sessionIds order (immediate visual)
-      updateCurrentGroupState((state) => ({
-        ...state,
-        groups: state.groups.map((g) =>
-          g.id === groupId ? { ...g, sessionIds: newSessionIds } : g
-        ),
-      }));
-
-      // Update displayOrder in store for persistence
-      for (let i = 0; i < newSessionIds.length; i++) {
-        updateSession(newSessionIds[i], { displayOrder: i });
-      }
-    },
-    [groups, updateCurrentGroupState, updateSession]
-  );
-
-  const handleNewSessionWithAgent = useCallback(
-    (agentId: string, agentCommand: string, targetGroupId?: string) => {
-      // Handle Hapi and Happy agent IDs
-      const isHapi = agentId.endsWith('-hapi');
-      const isHappy = agentId.endsWith('-happy');
-      const baseId = isHapi ? agentId.slice(0, -5) : isHappy ? agentId.slice(0, -6) : agentId;
-
-      // Get agent name for display
-      const customAgent = customAgents.find((a) => a.id === baseId);
-      const baseName = customAgent?.name ?? AGENT_INFO[baseId]?.name ?? 'Agent';
-      const name = isHapi ? `${baseName} (Hapi)` : isHappy ? `${baseName} (Happy)` : baseName;
-
-      // Determine environment
-      const environment = isHapi ? 'hapi' : isHappy ? 'happy' : 'native';
-
-      // Get custom path and args from settings (for builtin agents)
-      const agentConfig = agentSettings[baseId];
-      const customPath = agentConfig?.customPath;
-      const customArgs = agentConfig?.customArgs;
-
-      const id = crypto.randomUUID();
-      const newSession: Session = {
-        id,
-        sessionId: id, // Initialize sessionId with same value as id
-        name,
-        agentId,
-        agentCommand,
-        customPath,
-        customArgs,
-        initialized: false,
-        repoPath,
-        cwd,
-        environment,
-      };
-
-      addSession(newSession);
-
-      // Auto open enhanced input for new Claude session if enabled
-      const autoPopupMode = claudeCodeIntegration.enhancedInputAutoPopup;
-      if (
-        baseId === 'claude' &&
-        claudeCodeIntegration.enhancedInputEnabled &&
-        (autoPopupMode === 'always' || autoPopupMode === 'hideWhileRunning')
-      ) {
-        setEnhancedInputOpen(newSession.id, true);
-      }
-
-      // Add to target group or active group
-      updateCurrentGroupState((state) => {
-        const groupId = targetGroupId || state.activeGroupId || state.groups[0]?.id;
-        if (!groupId) {
-          const newGroup: AgentGroupType = {
-            id: crypto.randomUUID(),
-            sessionIds: [newSession.id],
-            activeSessionId: newSession.id,
-          };
-          return {
-            groups: [newGroup],
-            activeGroupId: newGroup.id,
-            flexPercents: [100],
-          };
-        }
-
-        return {
-          ...state,
-          groups: state.groups.map((g) =>
-            g.id === groupId
-              ? {
-                  ...g,
-                  sessionIds: [...g.sessionIds, newSession.id],
-                  activeSessionId: newSession.id,
-                }
-              : g
-          ),
-        };
-      });
-    },
-    [
-      repoPath,
-      cwd,
-      customAgents,
-      agentSettings,
-      addSession,
-      updateCurrentGroupState,
-      claudeCodeIntegration.enhancedInputEnabled,
-      claudeCodeIntegration.enhancedInputAutoPopup,
-      setEnhancedInputOpen,
-    ]
-  );
-
   // Handle group click
   const handleGroupClick = useCallback(
     (groupId: string) => {
@@ -1552,92 +1374,10 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
               <EmptyTitle>{t('No agent sessions')}</EmptyTitle>
               <EmptyDescription>{t('Create a session to start using AI Agent')}</EmptyDescription>
             </EmptyHeader>
-            <div
-              className="relative"
-              onMouseEnter={() => setShowAgentMenu(true)}
-              onMouseLeave={() => setShowAgentMenu(false)}
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  handleNewSession();
-                  setShowAgentMenu(false);
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t('New Session')}
-              </Button>
-              {showAgentMenu && enabledAgents.length > 0 && (
-                <div className="absolute left-0 top-full pt-1 z-50 min-w-40 text-left">
-                  <div className="rounded-lg border bg-popover p-1 shadow-lg">
-                    <div className="flex items-center justify-between px-2 py-1">
-                      <span className="text-xs text-muted-foreground">{t('Select Agent')}</span>
-                      <Tooltip>
-                        <TooltipTrigger render={<span />}>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowAgentMenu(false);
-                              window.dispatchEvent(new CustomEvent('open-settings-agent'));
-                            }}
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                          >
-                            <Settings className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipPopup side="right">{t('Manage Agents')}</TooltipPopup>
-                      </Tooltip>
-                    </div>
-                    {[...enabledAgents]
-                      .sort((a, b) => {
-                        const aDefault = agentSettings[a]?.isDefault ? 1 : 0;
-                        const bDefault = agentSettings[b]?.isDefault ? 1 : 0;
-                        return bDefault - aDefault;
-                      })
-                      .map((agentId) => {
-                        const isHapi = agentId.endsWith('-hapi');
-                        const isHappy = agentId.endsWith('-happy');
-                        const baseId = isHapi
-                          ? agentId.slice(0, -5)
-                          : isHappy
-                            ? agentId.slice(0, -6)
-                            : agentId;
-                        const customAgent = customAgents.find((a) => a.id === baseId);
-                        const baseName = customAgent?.name ?? AGENT_INFO[baseId]?.name ?? baseId;
-                        const name = isHapi
-                          ? `${baseName} (Hapi)`
-                          : isHappy
-                            ? `${baseName} (Happy)`
-                            : baseName;
-                        const isDefault = agentSettings[agentId]?.isDefault;
-                        return (
-                          <button
-                            type="button"
-                            key={agentId}
-                            onClick={() => {
-                              handleNewSessionWithAgent(
-                                agentId,
-                                customAgent?.command ?? AGENT_INFO[baseId]?.command ?? 'claude'
-                              );
-                              setShowAgentMenu(false);
-                            }}
-                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground whitespace-nowrap"
-                          >
-                            <span>{name}</span>
-                            {isDefault && (
-                              <span className="shrink-0 text-xs text-muted-foreground">
-                                {t('(default)')}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-            </div>
+            <Button variant="outline" size="sm" onClick={() => handleNewSession()}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t('New Session')}
+            </Button>
           </Empty>
         </div>
       )}
@@ -1662,7 +1402,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       {/* All sessions across ALL repos are rendered here to keep them mounted */}
       {/* bottom is dynamically set based on StatusLine height */}
       <div
-        className="absolute top-2 left-2 right-2 z-0"
+        className="absolute top-11 left-2 right-2 z-0"
         style={{ bottom: maxStatusLineHeight + 8 }}
       >
         {Array.from(globalSessionIds).map((sessionId) => {
@@ -1773,65 +1513,69 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         })}
       </div>
 
-      {/* Session bars (floating) - rendered for each group in current worktree */}
-      {/* pointer-events-none on container, AgentGroup handles its own pointer-events */}
-      {currentGroupState.groups.map((group, index) => {
-        const position = currentGroupPositions[index];
-        if (!position) return null;
+      {/* Group UI (fixed tabs + bottom bar) - rendered for each group in current worktree */}
+      {/* pointer-events-none on container, tabs & bottom bar are pointer-events-auto */}
+      <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
+        {currentGroupState.groups.map((group, index) => {
+          const position = currentGroupPositions[index];
+          if (!position) return null;
 
-        const isActiveGroup = group.id === activeGroupId;
-        const sender =
-          isActiveGroup && group.activeSessionId
-            ? enhancedInputSenderRef.current.get(group.activeSessionId)
-            : undefined;
+          const isActiveGroup = group.id === activeGroupId;
+          const sender =
+            isActiveGroup && group.activeSessionId
+              ? enhancedInputSenderRef.current.get(group.activeSessionId)
+              : undefined;
 
-        return (
-          <div
-            key={`group-ui-${group.id}`}
-            className="absolute top-0 bottom-0 z-10 pointer-events-none overflow-hidden flex flex-col"
-            style={{
-              left: `${position.left}%`,
-              width: `${position.width}%`,
-            }}
-          >
-            <AgentGroup
-              group={group}
-              sessions={currentWorktreeSessions}
-              enabledAgents={enabledAgents}
-              customAgents={customAgents}
-              agentSettings={agentSettings}
-              agentInfo={AGENT_INFO}
-              onSessionSelect={(id) => handleSelectSession(id, group.id)}
-              onSessionClose={(id) => handleCloseSession(id, group.id)}
-              onSessionNew={() => handleNewSession(group.id)}
-              onSessionNewWithAgent={(agentId, cmd) =>
-                handleNewSessionWithAgent(agentId, cmd, group.id)
-              }
-              onSessionRename={handleRenameSession}
-              onSessionReorder={(from, to) => handleReorderSessions(group.id, from, to)}
-              onGroupClick={() => handleGroupClick(group.id)}
-              quickTerminalOpen={quickTerminalOpen}
-              quickTerminalHasProcess={hasRunningProcess}
-              onToggleQuickTerminal={quickTerminalEnabled ? handleToggleQuickTerminal : undefined}
-            />
-            {/* Bottom bar: Enhanced Input + Status Line, height measured for terminal offset */}
-            <GroupBottomBar groupId={group.id} onHeightChange={setStatusLineHeightsByGroupId}>
-              {isActiveGroup &&
-                claudeCodeIntegration.enhancedInputEnabled &&
-                group.activeSessionId != null && (
-                  <EnhancedInputContainer
-                    sessionId={group.activeSessionId}
-                    onSend={(content, imagePaths) => {
-                      sender?.(content, imagePaths);
-                    }}
-                    isActive={isActive}
-                  />
-                )}
-              {statusLineEnabled && <StatusLine sessionId={group.activeSessionId} />}
-            </GroupBottomBar>
-          </div>
-        );
-      })}
+          return (
+            <div
+              key={`group-ui-${group.id}`}
+              className="absolute top-0 bottom-0 pointer-events-none overflow-hidden flex flex-col"
+              style={{
+                left: `${position.left}%`,
+                width: `${position.width}%`,
+              }}
+            >
+              <div className="pointer-events-auto">
+                <AgentSessionTabs
+                  group={group}
+                  sessions={currentWorktreeSessions}
+                  isGroupActive={isActiveGroup}
+                  onSelectSession={(id) => handleSelectSession(id, group.id)}
+                  onCloseSession={(id) => handleCloseSession(id, group.id)}
+                  onNewSession={() => {
+                    handleGroupClick(group.id);
+                    handleNewSession(group.id);
+                  }}
+                  showQuickTerminal
+                  quickTerminalOpen={quickTerminalOpen}
+                  quickTerminalHasProcess={hasRunningProcess}
+                  onToggleQuickTerminal={quickTerminalEnabled ? handleToggleQuickTerminal : undefined}
+                />
+              </div>
+              <AgentGroup
+                group={group}
+                sessions={currentWorktreeSessions}
+                onGroupClick={() => handleGroupClick(group.id)}
+              />
+              {/* Bottom bar: Enhanced Input + Status Line, height measured for terminal offset */}
+              <GroupBottomBar groupId={group.id} onHeightChange={setStatusLineHeightsByGroupId}>
+                {isActiveGroup &&
+                  claudeCodeIntegration.enhancedInputEnabled &&
+                  group.activeSessionId != null && (
+                    <EnhancedInputContainer
+                      sessionId={group.activeSessionId}
+                      onSend={(content, imagePaths) => {
+                        sender?.(content, imagePaths);
+                      }}
+                      isActive={isActive}
+                    />
+                  )}
+                {statusLineEnabled && <StatusLine sessionId={group.activeSessionId} />}
+              </GroupBottomBar>
+            </div>
+          );
+        })}
+      </div>
       {/* Quick Terminal Modal - 始终挂载以保持 terminal 运行状态 */}
       {quickTerminalEnabled && (
         <QuickTerminalModal
