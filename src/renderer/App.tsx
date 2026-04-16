@@ -101,9 +101,11 @@ import { useEditorStore } from './stores/editor';
 import { useInitScriptStore } from './stores/initScript';
 import { useSettingsStore } from './stores/settings';
 import { useTempWorkspaceStore } from './stores/tempWorkspace';
+import { useTerminalStore } from './stores/terminal';
 import { useWorkspaceModeStore } from './stores/workspaceMode';
 import { useWorktreeStore } from './stores/worktree';
 import { initAgentActivityListener, useWorktreeActivityStore } from './stores/worktreeActivity';
+import { createSession } from './utils/agentSession';
 
 function createPlaceholderWorktree(path: string): GitWorktree {
   return {
@@ -859,6 +861,83 @@ export default function App() {
     ]
   );
 
+  const handleLaunchAgent = useCallback(
+    (repoPath: string, agentId: string) => {
+      const { customAgents, agentSettings } = useSettingsStore.getState();
+      const session = createSession(repoPath, repoPath, agentId, customAgents, agentSettings);
+
+      const store = useAgentSessionsStore.getState();
+      store.addSession(session);
+
+      const groupState = store.getGroupState(repoPath);
+      const activeGroupId = groupState.activeGroupId || groupState.groups[0]?.id;
+
+      if (!activeGroupId) {
+        const newGroupId = crypto.randomUUID();
+        store.setGroupState(repoPath, {
+          groups: [
+            {
+              id: newGroupId,
+              sessionIds: [session.id],
+              activeSessionId: session.id,
+            },
+          ],
+          activeGroupId: newGroupId,
+          flexPercents: [100],
+        });
+      } else {
+        store.updateGroupState(repoPath, (state) => ({
+          ...state,
+          groups: state.groups.map((g) =>
+            g.id === activeGroupId
+              ? {
+                  ...g,
+                  sessionIds: [...g.sessionIds, session.id],
+                  activeSessionId: session.id,
+                }
+              : g
+          ),
+        }));
+      }
+
+      store.setActiveId(repoPath, session.id);
+      setActiveTab('chat');
+    },
+    [setActiveTab]
+  );
+
+  const handleOpenTerminal = useCallback(
+    async (repoPath: string) => {
+      try {
+        const { shellConfig } = useSettingsStore.getState();
+        const created = await window.electronAPI.session.create({
+          kind: 'terminal',
+          cwd: repoPath,
+          shellConfig,
+        });
+        const sessionId = created.session.sessionId;
+        if (!isRemoteVirtualPath(repoPath)) {
+          await window.electronAPI.session.attach({ sessionId, cwd: repoPath });
+        }
+        useTerminalStore.getState().addSession({
+          id: sessionId,
+          title: 'Terminal',
+          cwd: repoPath || window.electronAPI.env.HOME || '/',
+        });
+        setActiveTab('terminal');
+      } catch (error) {
+        console.error('[App] Failed to open terminal', error);
+        toastManager.add({
+          type: 'error',
+          title: t('Failed'),
+          description: error instanceof Error ? error.message : String(error),
+          timeout: 3000,
+        });
+      }
+    },
+    [setActiveTab, t]
+  );
+
   const handleSelectTempWorkspace = useCallback(
     async (path: string) => {
       await handleSelectWorktree({ path } as GitWorktree, TEMP_REPO_ID);
@@ -1589,13 +1668,15 @@ export default function App() {
                       onUpdateGroup={handleUpdateGroup}
                       onDeleteGroup={handleDeleteGroup}
                       onMoveToGroup={handleMoveToGroup}
-                      onSwitchTab={setActiveTab}
-                      onSwitchWorktreeByPath={handleSwitchWorktreePath}
-                      isSettingsActive={activeTab === 'settings'}
-                      onToggleSettings={toggleSettings}
-                      isFileDragOver={isFileDragOver}
-                      temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
-                      tempBasePath={tempBasePathDisplay}
+                        onSwitchTab={setActiveTab}
+                        onSwitchWorktreeByPath={handleSwitchWorktreePath}
+                        onLaunchAgent={handleLaunchAgent}
+                        onOpenTerminal={handleOpenTerminal}
+                        isSettingsActive={activeTab === 'settings'}
+                        onToggleSettings={toggleSettings}
+                        isFileDragOver={isFileDragOver}
+                        temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
+                        tempBasePath={tempBasePathDisplay}
                     />
                   </div>
                   {showWorktreePanel && (
@@ -1681,13 +1762,15 @@ export default function App() {
                     onUpdateGroup={handleUpdateGroup}
                     onDeleteGroup={handleDeleteGroup}
                     onMoveToGroup={handleMoveToGroup}
-                    onSwitchTab={setActiveTab}
-                    onSwitchWorktreeByPath={handleSwitchWorktreePath}
-                    isSettingsActive={activeTab === 'settings'}
-                    onToggleSettings={toggleSettings}
-                    isFileDragOver={isFileDragOver}
-                    temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
-                    tempBasePath={tempBasePathDisplay}
+                      onSwitchTab={setActiveTab}
+                      onSwitchWorktreeByPath={handleSwitchWorktreePath}
+                      onLaunchAgent={handleLaunchAgent}
+                      onOpenTerminal={handleOpenTerminal}
+                      isSettingsActive={activeTab === 'settings'}
+                      onToggleSettings={toggleSettings}
+                      isFileDragOver={isFileDragOver}
+                      temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
+                      tempBasePath={tempBasePathDisplay}
                   />
                   {/* Resize handle */}
                   <div

@@ -3,16 +3,21 @@ import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import {
   ChevronRight,
   Clock,
+  Copy,
   FolderGit2,
   FolderMinus,
+  FolderOpen,
   History,
   PanelLeftClose,
   Plus,
   Search,
+  Settings,
   Settings2,
+  Sparkles,
+  Terminal,
   X,
 } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ALL_GROUP_ID,
   type RepositoryGroup,
@@ -50,12 +55,15 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { RepoItemWithGlow } from '@/components/ui/glow-wrappers';
+import { toastManager } from '@/components/ui/toast';
+import { BUILTIN_AGENTS } from '@/components/settings/constants';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { useI18n } from '@/i18n';
 import { heightVariants, springFast, springStandard } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
+import { AGENT_INFO } from '@/utils/agentSession';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
 
 interface Repository {
@@ -86,6 +94,8 @@ interface RepositorySidebarProps {
   onMoveToGroup?: (repoPath: string, groupId: string | null) => void;
   onSwitchTab?: (tab: TabId) => void;
   onSwitchWorktreeByPath?: (path: string) => Promise<void> | void;
+  onLaunchAgent?: (repoPath: string, agentId: string) => void;
+  onOpenTerminal?: (repoPath: string) => void;
   /** Whether a file is being dragged over the sidebar (from App.tsx global handler) */
   isFileDragOver?: boolean;
   isHomeActive?: boolean;
@@ -116,6 +126,8 @@ export function RepositorySidebar({
   onMoveToGroup,
   onSwitchTab,
   onSwitchWorktreeByPath,
+  onLaunchAgent,
+  onOpenTerminal,
   isFileDragOver,
   isHomeActive = false,
   onSelectHome,
@@ -125,9 +137,15 @@ export function RepositorySidebar({
   const { t, tNode } = useI18n();
   const _settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
   const hideGroups = useSettingsStore((s) => s.hideGroups);
+  const agentSettings = useSettingsStore((s) => s.agentSettings);
+  const customAgents = useSettingsStore((s) => s.customAgents);
+  const agentDetectionStatus = useSettingsStore((s) => s.agentDetectionStatus);
+  const hapiSettings = useSettingsStore((s) => s.hapiSettings);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchorPosition, setMenuAnchorPosition] = useState({ x: 0, y: 0 });
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [menuRepo, setMenuRepo] = useState<Repository | null>(null);
   const [repoToRemove, setRepoToRemove] = useState<Repository | null>(null);
@@ -139,6 +157,99 @@ export function RepositorySidebar({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() =>
     getStoredGroupCollapsedState()
   );
+
+  const enabledAgents = useMemo(() => {
+    const enabledAgentIds = Object.keys(agentSettings).filter((id) => agentSettings[id]?.enabled);
+    const candidates: string[] = [];
+
+    for (const agentId of enabledAgentIds) {
+      // Default agent is always considered installed (no detection needed).
+      // This ensures the default agent shows in the menu even if user never ran detection.
+      if (agentSettings[agentId]?.isDefault) {
+        candidates.push(agentId);
+        continue;
+      }
+
+      // Handle Hapi agents: check if base CLI is detected as installed.
+      if (agentId.endsWith('-hapi')) {
+        if (!hapiSettings.enabled) continue;
+        const baseId = agentId.slice(0, -5);
+        if (agentDetectionStatus[baseId]?.installed) {
+          candidates.push(agentId);
+        }
+        continue;
+      }
+
+      // Handle Happy agents: check if base CLI is detected as installed.
+      if (agentId.endsWith('-happy')) {
+        const baseId = agentId.slice(0, -6);
+        if (agentDetectionStatus[baseId]?.installed) {
+          candidates.push(agentId);
+        }
+        continue;
+      }
+
+      // Regular agents: use persisted detection status.
+      if (agentDetectionStatus[agentId]?.installed) {
+        candidates.push(agentId);
+      }
+    }
+
+    const builtinAgentOrder = new Map<string, number>();
+    for (let i = 0; i < BUILTIN_AGENTS.length; i++) {
+      builtinAgentOrder.set(BUILTIN_AGENTS[i], i);
+    }
+    const customAgentIds = new Set(customAgents.map((agent) => agent.id));
+
+    const getBaseId = (id: string) => {
+      if (id.endsWith('-hapi')) return id.slice(0, -5);
+      if (id.endsWith('-happy')) return id.slice(0, -6);
+      return id;
+    };
+
+    const getEnvironmentRank = (id: string) => {
+      if (id.endsWith('-hapi')) return 1;
+      if (id.endsWith('-happy')) return 2;
+      return 0;
+    };
+
+    return candidates.sort((a, b) => {
+      const aIsDefault = agentSettings[a]?.isDefault ?? false;
+      const bIsDefault = agentSettings[b]?.isDefault ?? false;
+      if (aIsDefault !== bIsDefault) return aIsDefault ? -1 : 1;
+
+      const aBaseId = getBaseId(a);
+      const bBaseId = getBaseId(b);
+      const aIsCustom = customAgentIds.has(aBaseId);
+      const bIsCustom = customAgentIds.has(bBaseId);
+      if (aIsCustom !== bIsCustom) return aIsCustom ? 1 : -1;
+
+      const aBuiltinIndex = builtinAgentOrder.get(aBaseId) ?? Number.MAX_SAFE_INTEGER;
+      const bBuiltinIndex = builtinAgentOrder.get(bBaseId) ?? Number.MAX_SAFE_INTEGER;
+      if (aBuiltinIndex !== bBuiltinIndex) return aBuiltinIndex - bBuiltinIndex;
+
+      const aEnvRank = getEnvironmentRank(a);
+      const bEnvRank = getEnvironmentRank(b);
+      if (aEnvRank !== bEnvRank) return aEnvRank - bEnvRank;
+
+      return a.localeCompare(b);
+    });
+  }, [agentDetectionStatus, agentSettings, customAgents, hapiSettings.enabled]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    let { x, y } = menuAnchorPosition;
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    if (y + rect.height > viewportHeight - 8) {
+      y = Math.max(8, viewportHeight - rect.height - 8);
+    }
+    if (x + rect.width > viewportWidth - 8) {
+      x = Math.max(8, viewportWidth - rect.width - 8);
+    }
+    setMenuPosition({ x, y });
+  }, [menuAnchorPosition, menuOpen]);
 
   const toggleGroupCollapsed = useCallback((groupId: string) => {
     setCollapsedGroups((prev) => {
@@ -241,10 +352,35 @@ export function RepositorySidebar({
 
   const handleContextMenu = (e: React.MouseEvent, repo: Repository) => {
     e.preventDefault();
-    setMenuPosition({ x: e.clientX, y: e.clientY });
+    const nextPosition = { x: e.clientX, y: e.clientY };
+    setMenuAnchorPosition(nextPosition);
+    setMenuPosition(nextPosition);
     setMenuRepo(repo);
     setMenuOpen(true);
   };
+
+  const handleCopyPath = useCallback(
+    async (path: string) => {
+      try {
+        await navigator.clipboard.writeText(path);
+        toastManager.add({
+          title: t('Copied'),
+          description: t('Path copied to clipboard'),
+          type: 'success',
+          timeout: 2000,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toastManager.add({
+          title: t('Copy failed'),
+          description: message || t('Failed to copy content'),
+          type: 'error',
+          timeout: 3000,
+        });
+      }
+    },
+    [t]
+  );
 
   const handleRemoveClick = () => {
     if (menuRepo) {
@@ -711,7 +847,7 @@ export function RepositorySidebar({
       </div>
 
       {/* Context Menu */}
-      {menuOpen && (
+      {menuOpen && menuRepo && (
         <>
           <div
             className="fixed inset-0 z-50"
@@ -724,18 +860,96 @@ export function RepositorySidebar({
             role="presentation"
           />
           <div
-            className="fixed z-50 min-w-32 rounded-lg border bg-popover p-1 shadow-lg"
+            ref={menuRef}
+            className="fixed z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-lg"
             style={{ left: menuPosition.x, top: menuPosition.y }}
           >
+            {/* Agents */}
+            {enabledAgents.map((agentId) => {
+              const isHapi = agentId.endsWith('-hapi');
+              const isHappy = agentId.endsWith('-happy');
+              const baseId = isHapi ? agentId.slice(0, -5) : isHappy ? agentId.slice(0, -6) : agentId;
+              const customAgent = customAgents.find((a) => a.id === baseId);
+              const baseName = customAgent?.name ?? AGENT_INFO[baseId]?.name ?? baseId;
+              const name = isHapi ? `${baseName} (Hapi)` : isHappy ? `${baseName} (Happy)` : baseName;
+              return (
+                <button
+                  key={agentId}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onLaunchAgent?.(menuRepo.path, agentId);
+                  }}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {name}
+                </button>
+              );
+            })}
+
+            {enabledAgents.length > 0 && <div className="my-1 h-px bg-border" />}
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setMenuOpen(false);
+                onOpenTerminal?.(menuRepo.path);
+              }}
+            >
+              <Terminal className="h-4 w-4" />
+              {t('Open terminal')}
+            </button>
+
+            <div className="my-1 h-px bg-border" />
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setMenuOpen(false);
+                window.electronAPI.shell.openPath(menuRepo.path);
+              }}
+            >
+              <FolderOpen className="h-4 w-4" />
+              {t('Open folder')}
+            </button>
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setMenuOpen(false);
+                handleCopyPath(menuRepo.path);
+              }}
+            >
+              <Copy className="h-4 w-4" />
+              {t('Copy Path')}
+            </button>
+
+            <div className="my-1 h-px bg-border" />
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setMenuOpen(false);
+                setRepoSettingsTarget(menuRepo);
+                setRepoSettingsOpen(true);
+              }}
+            >
+              <Settings className="h-4 w-4" />
+              {t('Repository Settings')}
+            </button>
+
             {/* Move to Group - only show when groups are not hidden */}
             {!hideGroups && onMoveToGroup && groups.length > 0 && (
               <MoveToGroupSubmenu
                 groups={groups}
-                currentGroupId={menuRepo?.groupId}
+                currentGroupId={menuRepo.groupId}
                 onMove={(groupId) => {
-                  if (menuRepo) {
-                    onMoveToGroup(menuRepo.path, groupId);
-                  }
+                  onMoveToGroup(menuRepo.path, groupId);
                 }}
                 onClose={() => setMenuOpen(false)}
               />
@@ -747,7 +961,7 @@ export function RepositorySidebar({
 
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-accent"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
               onClick={handleRemoveClick}
             >
               <FolderMinus className="h-4 w-4" />
