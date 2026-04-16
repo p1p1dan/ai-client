@@ -728,7 +728,7 @@ export function FilePanel({ rootPath, isActive = false }: FilePanelProps) {
   }
 
   return (
-    <div ref={containerRef} className={`flex h-full ${isResizing ? 'select-none' : ''}`}>
+    <div ref={containerRef} className={`flex h-full min-w-0 ${isResizing ? 'select-none' : ''}`}>
       {/* File Tree - left panel - conditionally rendered */}
       <AnimatePresence initial={false}>
         {!isFileTreeCollapsed && (
@@ -776,7 +776,7 @@ export function FilePanel({ rootPath, isActive = false }: FilePanelProps) {
       </AnimatePresence>
 
       {/* Editor Area - right panel */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-w-0 overflow-hidden">
         <EditorArea
           ref={editorAreaRef}
           tabs={tabs}

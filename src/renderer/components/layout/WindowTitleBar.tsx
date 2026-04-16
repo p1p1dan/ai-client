@@ -85,13 +85,13 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
 
   // 更多按钮样式
   const iconButtonClass = cn(
-    'flex h-7 w-7 items-center justify-center rounded-sm',
+    'flex h-7 w-7 items-center justify-center rounded-lg',
     'text-muted-foreground hover:text-foreground hover:bg-muted/80',
     'transition-colors duration-150'
   );
 
   const userPillClass = cn(
-    'flex h-7 items-center gap-2 rounded-full border px-2',
+    'flex h-6 items-center gap-2 rounded-full border px-2',
     'bg-background/80 backdrop-blur-sm shadow-sm',
     'text-muted-foreground hover:text-foreground hover:bg-muted/80',
     'transition-colors duration-150'
@@ -105,7 +105,7 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
         onClick={onOpenSettings}
         className={cn(
           'flex h-8 items-center gap-1.5 px-2 no-drag',
-          'transition-opacity duration-200 hover:opacity-80 active:opacity-60'
+          'transition-opacity duration-150 hover:opacity-80 active:opacity-60'
         )}
         title={`${t('Settings')} (Ctrl+,)`}
       >
@@ -123,13 +123,13 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
               aria-label={t('User profile')}
               title={email ?? t('User profile')}
             >
-              <Avatar className="size-6 bg-transparent">
+              <Avatar className="size-5 bg-transparent">
                 <AvatarFallback className="bg-muted text-foreground text-xs">{initial}</AvatarFallback>
               </Avatar>
-              <div className="h-4 w-px bg-border/70" />
+              <div className="h-3 w-px bg-border/70" />
               <span
                 className={cn(
-                  'text-xs font-medium tabular-nums',
+                  'shrink-0 text-xs font-medium tabular-nums',
                   (usage.isLoading || todayCostUsd === null) && 'text-muted-foreground/70'
                 )}
               >

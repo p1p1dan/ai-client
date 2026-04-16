@@ -6,8 +6,10 @@ const DEFAULT_BREAKPOINT_PX = 768;
  * Observe a container's width and derive a compact-layout boolean.
  * Uses ResizeObserver so it works with split panes and non-window resize changes.
  */
-export function useCompactLayout(breakpointPx: number = DEFAULT_BREAKPOINT_PX) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export function useCompactLayout<T extends HTMLElement = HTMLDivElement>(
+  breakpointPx: number = DEFAULT_BREAKPOINT_PX
+) {
+  const containerRef = useRef<T>(null);
   const [containerWidth, setContainerWidth] = useState<number>(() =>
     typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth
   );
@@ -42,4 +44,3 @@ export function useCompactLayout(breakpointPx: number = DEFAULT_BREAKPOINT_PX) {
     isCompact,
   };
 }
-

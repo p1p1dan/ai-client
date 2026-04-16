@@ -110,7 +110,7 @@ export function SettingsDialog({
         <div className="flex items-center justify-between border-b px-4 py-3">
           <DialogTitle className="text-lg font-medium">{t('Settings')}</DialogTitle>
         </div>
-        <div className="flex min-h-[600px] max-h-[600px] flex-1">
+        <div className="flex min-h-[400px] max-h-[min(600px,80vh)] flex-1">
           {/* Left: Category List */}
           <nav className="w-48 shrink-0 space-y-1 border-r p-2">
             {categories.map((category) => (

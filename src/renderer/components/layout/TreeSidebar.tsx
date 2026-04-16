@@ -825,7 +825,7 @@ export function TreeSidebar({
               <span className="shrink-0 w-5 h-5 flex items-center justify-center">
                 <ChevronRight
                   className={cn(
-                    'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+                    'h-3.5 w-3.5 text-muted-foreground transition-transform duration-150',
                     isExpanded && 'rotate-90'
                   )}
                 />
@@ -1189,7 +1189,7 @@ export function TreeSidebar({
                 <span className="shrink-0 w-5 h-5 flex items-center justify-center">
                   <ChevronRight
                     className={cn(
-                      'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
+                      'h-3.5 w-3.5 text-muted-foreground transition-transform duration-150',
                       tempExpanded && 'rotate-90'
                     )}
                   />
@@ -1714,7 +1714,7 @@ function TempWorkspaceTreeItem({
           )}
           <GitBranch className="relative z-10 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="relative z-10 min-w-0 flex-1 truncate text-sm">{item.title}</span>
-          <span className="relative z-10 shrink-0 rounded bg-emerald-500/20 px-1 py-0.5 text-[9px] font-medium uppercase text-emerald-600 dark:text-emerald-400">
+          <span className="relative z-10 shrink-0 rounded bg-emerald-500/20 px-1 py-0.5 text-[10px] font-medium uppercase text-emerald-600 dark:text-emerald-400">
             {t('Main')}
           </span>
           {hasActivity && (
@@ -1938,15 +1938,15 @@ function WorktreeTreeItem({
           {branchDisplay}
         </span>
         {isPrunable ? (
-          <span className="shrink-0 rounded bg-destructive/20 px-1 py-0.5 text-[9px] font-medium uppercase text-destructive">
+          <span className="shrink-0 rounded bg-destructive/20 px-1 py-0.5 text-[10px] font-medium uppercase text-destructive">
             {t('Deleted')}
           </span>
         ) : isMain ? (
-          <span className="shrink-0 rounded bg-emerald-500/20 px-1 py-0.5 text-[9px] font-medium uppercase text-emerald-600 dark:text-emerald-400">
+          <span className="shrink-0 rounded bg-emerald-500/20 px-1 py-0.5 text-[10px] font-medium uppercase text-emerald-600 dark:text-emerald-400">
             {t('Main')}
           </span>
         ) : isMerged ? (
-          <span className="shrink-0 rounded bg-success/20 px-1 py-0.5 text-[9px] font-medium uppercase text-success-foreground">
+          <span className="shrink-0 rounded bg-success/20 px-1 py-0.5 text-[10px] font-medium uppercase text-success-foreground">
             {t('Merged')}
           </span>
         ) : null}

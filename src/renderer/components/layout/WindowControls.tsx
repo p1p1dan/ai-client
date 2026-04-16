@@ -53,14 +53,14 @@ export function WindowControls() {
         onMouseLeave={() => setHoveredButton(null)}
         className={cn(
           'relative flex h-8 w-11 items-center justify-center no-drag',
-          'transition-colors duration-200 ease-out',
+          'transition-colors duration-150 ease-out',
           'hover:bg-foreground/10 active:bg-foreground/15'
         )}
         aria-label="Minimize"
       >
         <Minus
           className={cn(
-            'h-4 w-4 transition-all duration-200',
+            'h-4 w-4 transition-all duration-150',
             hoveredButton === 'min' ? 'opacity-100' : 'opacity-60'
           )}
           strokeWidth={1.5}
@@ -75,14 +75,14 @@ export function WindowControls() {
         onMouseLeave={() => setHoveredButton(null)}
         className={cn(
           'relative flex h-8 w-11 items-center justify-center no-drag',
-          'transition-colors duration-200 ease-out',
+          'transition-colors duration-150 ease-out',
           'hover:bg-foreground/10 active:bg-foreground/15'
         )}
         aria-label={isMaximized ? 'Restore' : 'Maximize'}
       >
         <div
           className={cn(
-            'transition-all duration-200',
+            'transition-all duration-150',
             hoveredButton === 'max' ? 'opacity-100' : 'opacity-60'
           )}
         >
@@ -114,14 +114,14 @@ export function WindowControls() {
         onMouseLeave={() => setHoveredButton(null)}
         className={cn(
           'relative flex h-8 w-11 items-center justify-center no-drag',
-          'transition-colors duration-200 ease-out',
+          'transition-colors duration-150 ease-out',
           'hover:bg-red-500 active:bg-red-600'
         )}
         aria-label="Close"
       >
         <X
           className={cn(
-            'h-4 w-4 transition-all duration-200',
+            'h-4 w-4 transition-all duration-150',
             hoveredButton === 'close' ? 'opacity-100 text-white' : 'opacity-60'
           )}
           strokeWidth={1.5}

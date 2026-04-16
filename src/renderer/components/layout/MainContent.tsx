@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TAB_ORDER, type TabId } from '@/App/constants';
+import { useCompactLayout } from '@/App/useCompactLayout';
 import { normalizePath, pathsEqual } from '@/App/storage';
 import { OpenInMenu } from '@/components/app/OpenInMenu';
 import { AgentPanel } from '@/components/chat/AgentPanel';
@@ -31,6 +32,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -238,6 +240,8 @@ export function MainContent({
   const isMac = window.electronAPI.env.platform === 'darwin';
   const needsTrafficLightPadding = isMac && repositoryCollapsed && worktreeCollapsed;
 
+  const { containerRef: headerRef, isCompact: isTabBarCompact } = useCompactLayout<HTMLElement>(600);
+
   // Remember the last valid repo/worktree pair to keep AgentPanel mounted
   // without mixing a new repoPath with an old worktreePath.
   const lastValidContextRef = useRef<{ repoPath: string; worktreePath: string } | null>(null);
@@ -265,9 +269,10 @@ export function MainContent({
   const innerBg = bgImageEnabled ? '' : 'bg-background';
 
   return (
-    <main className={cn('flex min-w-[535px] flex-1 flex-col overflow-hidden bg-background')}>
+    <main className={cn('flex min-w-0 flex-1 flex-col overflow-hidden bg-background')}>
       {/* Header with tabs */}
       <header
+        ref={headerRef}
         className={cn(
           'flex h-12 shrink-0 items-center justify-between border-b px-4 drag-region',
           innerBg,
@@ -275,7 +280,7 @@ export function MainContent({
         )}
       >
         {/* Left: Expand buttons + Tabs */}
-        <div className="flex items-center gap-1 no-drag">
+        <div className="flex min-w-0 items-center gap-1 no-drag">
           {/* Expand buttons when panels are collapsed */}
           <AnimatePresence mode="popLayout">
             {(worktreeCollapsed || fileSidebarCollapsed) && (
@@ -344,37 +349,16 @@ export function MainContent({
               </motion.div>
             )}
           </AnimatePresence>
-          {tabs.map((tab, index) => {
-            const isDropTarget = dropTargetIndex === index;
-            const isDragging = draggedIndex === index;
-            const isActive = activeTab === tab.id;
-            return (
-              <div
-                key={tab.id}
-                draggable={!!onTabReorder}
-                onDragStart={onTabReorder ? (e) => handleDragStart(e, index, tab.label) : undefined}
-                onDragEnd={onTabReorder ? handleDragEnd : undefined}
-                onDragOver={onTabReorder ? (e) => handleDragOver(e, index) : undefined}
-                onDragLeave={onTabReorder ? handleDragLeave : undefined}
-                onDrop={onTabReorder ? (e) => handleDrop(e, index) : undefined}
-                aria-grabbed={isDragging}
-                aria-disabled={!onTabReorder}
-                className={cn(
-                  'relative flex items-center',
-                  isDragging && 'opacity-50',
-                  onTabReorder && 'cursor-grab active:cursor-grabbing'
-                )}
-              >
-                {/* Drop indicator */}
-                {isDropTarget && !isDragging && (
-                  <motion.div
-                    layoutId="tab-drop-indicator"
-                    className="absolute -top-0.5 left-0 right-0 h-0.5 bg-primary rounded-full"
-                    transition={springFast}
-                  />
-                )}
+          <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+            {tabs.map((tab, index) => {
+              const isDropTarget = dropTargetIndex === index;
+              const isDragging = draggedIndex === index;
+              const isActive = activeTab === tab.id;
+
+              const tabButton = (
                 <button
                   type="button"
+                  aria-label={tab.label}
                   onClick={() => {
                     if (tab.id === 'file' && fileSidebarCollapsed) {
                       onExpandFileSidebar?.();
@@ -397,11 +381,60 @@ export function MainContent({
                     />
                   )}
                   <tab.icon className="relative z-10 h-4 w-4" />
-                  <span className="relative z-10">{tab.label}</span>
+                  <span
+                    className={cn(
+                      'relative z-10 whitespace-nowrap',
+                      isTabBarCompact && 'sr-only'
+                    )}
+                  >
+                    {tab.label}
+                  </span>
                 </button>
-              </div>
-            );
-          })}
+              );
+
+              const maybeTabButton = isTabBarCompact ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={tabButton as React.ReactElement<Record<string, unknown>>}
+                  />
+                  <TooltipPopup side="bottom">{tab.label}</TooltipPopup>
+                </Tooltip>
+              ) : (
+                tabButton
+              );
+
+              return (
+                <div
+                  key={tab.id}
+                  draggable={!!onTabReorder}
+                  onDragStart={
+                    onTabReorder ? (e) => handleDragStart(e, index, tab.label) : undefined
+                  }
+                  onDragEnd={onTabReorder ? handleDragEnd : undefined}
+                  onDragOver={onTabReorder ? (e) => handleDragOver(e, index) : undefined}
+                  onDragLeave={onTabReorder ? handleDragLeave : undefined}
+                  onDrop={onTabReorder ? (e) => handleDrop(e, index) : undefined}
+                  aria-grabbed={isDragging}
+                  aria-disabled={!onTabReorder}
+                  className={cn(
+                    'relative flex items-center',
+                    isDragging && 'opacity-50',
+                    onTabReorder && 'cursor-grab active:cursor-grabbing'
+                  )}
+                >
+                  {/* Drop indicator */}
+                  {isDropTarget && !isDragging && (
+                    <motion.div
+                      layoutId="tab-drop-indicator"
+                      className="absolute -top-0.5 left-0 right-0 h-0.5 bg-primary rounded-full"
+                      transition={springFast}
+                    />
+                  )}
+                  {maybeTabButton}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Right: Settings + Review button + Open In Menu */}
