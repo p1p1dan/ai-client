@@ -607,7 +607,7 @@ export function AppearanceSettings() {
             >
               <ChevronDown
                 className={cn(
-                  'h-4 w-4 transition-transform duration-200',
+                  'h-4 w-4 transition-transform duration-150',
                   bgSettingsOpen ? 'rotate-180' : ''
                 )}
               />
@@ -693,7 +693,7 @@ export function AppearanceSettings() {
                       : 'text-muted-foreground/40 cursor-not-allowed'
                   )}
                 >
-                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150 [[data-state=open]>&]:rotate-180" />
                   {t('Auto Random')}
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-3 pl-5">
@@ -796,7 +796,7 @@ export function AppearanceSettings() {
           {/* More - Brightness & Saturation */}
           <Collapsible className="space-y-3">
             <CollapsibleTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-              <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+              <ChevronDown className="h-3.5 w-3.5 transition-transform duration-150 [[data-state=open]>&]:rotate-180" />
               {t('More Options')}
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-4">

@@ -27,9 +27,13 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xs: 0.25rem;
+  --radius-sm: var(--radius);
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+
+  --text-2xs: 10px;
+  --text-2xs--line-height: 14px;
 
   --font-sans: var(--font-family-sans, "Inter", system-ui, sans-serif);
   --font-mono: var(--font-family-mono, "JetBrains Mono", "Menlo", monospace);

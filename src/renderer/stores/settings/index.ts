@@ -111,7 +111,7 @@ export function getInitialState() {
     fontFamily: 'Inter',
 
     // Terminal Settings
-    terminalFontSize: 18,
+    terminalFontSize: 16,
     terminalFontFamily: 'ui-monospace, SF Mono, Menlo, Monaco, Consolas, monospace',
     terminalFontWeight: 'normal' as FontWeight,
     terminalFontWeightBold: '500' as FontWeight,

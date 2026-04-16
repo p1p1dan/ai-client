@@ -682,7 +682,7 @@ export function GeneralSettings() {
           <Collapsible>
             <div className="flex h-8 items-center justify-between">
               <CollapsibleTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 [[data-panel-open]_&]:rotate-90" />
+                <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150 [[data-panel-open]_&]:rotate-90" />
                 {t('Configure apps shown in the quick open menu')}
               </CollapsibleTrigger>
               <Switch

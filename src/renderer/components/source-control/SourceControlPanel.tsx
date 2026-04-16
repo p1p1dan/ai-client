@@ -885,7 +885,7 @@ export function SourceControlPanel({
           type="button"
           onClick={() => setSidebarCollapsed(false)}
           className={cn(
-            'flex h-full shrink-0 items-center justify-center border-r text-muted-foreground/60 hover:bg-accent/50 hover:text-foreground transition-all duration-200 ease-out overflow-hidden',
+            'flex h-full shrink-0 items-center justify-center border-r text-muted-foreground/60 hover:bg-accent/50 hover:text-foreground transition-all duration-150 ease-out overflow-hidden',
             sidebarCollapsed ? 'w-6 opacity-100' : 'w-0 opacity-0'
           )}
           title={t('Show sidebar')}
@@ -896,7 +896,7 @@ export function SourceControlPanel({
         {/* Left: Changes List */}
         <div
           className={cn(
-            'flex shrink-0 min-h-0 flex-col border-r overflow-hidden transition-[width,opacity] duration-200 ease-out',
+            'flex shrink-0 min-h-0 flex-col border-r overflow-hidden transition-[width,opacity] duration-150 ease-out',
             sidebarCollapsed ? 'w-0 opacity-0' : 'opacity-100'
           )}
           style={{ width: sidebarCollapsed ? 0 : panelWidth }}
@@ -918,7 +918,7 @@ export function SourceControlPanel({
           {/* Changes Section (Collapsible) */}
           <div
             className={cn(
-              'flex min-h-0 flex-col overflow-hidden border-b transition-[flex-grow] duration-200 ease-out',
+              'flex min-h-0 flex-col overflow-hidden border-b transition-[flex-grow] duration-150 ease-out',
               changesExpanded ? 'flex-1 basis-0' : 'flex-none'
             )}
           >
@@ -934,7 +934,7 @@ export function SourceControlPanel({
               >
                 <ChevronDown
                   className={cn(
-                    'h-4 w-4 text-muted-foreground/60 group-hover:text-foreground transition-all duration-200',
+                    'h-4 w-4 text-muted-foreground/60 group-hover:text-foreground transition-all duration-150',
                     !changesExpanded && '-rotate-90'
                   )}
                 />
@@ -1040,7 +1040,7 @@ export function SourceControlPanel({
           {/* History Section (Collapsible) */}
           <div
             className={cn(
-              'flex min-h-0 flex-col overflow-hidden transition-[flex-grow] duration-200 ease-out',
+              'flex min-h-0 flex-col overflow-hidden transition-[flex-grow] duration-150 ease-out',
               historyExpanded ? 'flex-1 basis-0' : 'flex-none'
             )}
           >
@@ -1056,7 +1056,7 @@ export function SourceControlPanel({
               >
                 <ChevronDown
                   className={cn(
-                    'h-4 w-4 text-muted-foreground/60 group-hover:text-foreground transition-all duration-200',
+                    'h-4 w-4 text-muted-foreground/60 group-hover:text-foreground transition-all duration-150',
                     !historyExpanded && '-rotate-90'
                   )}
                 />

@@ -17,7 +17,7 @@ export function SmoothCollapse({ open, children, className }: SmoothCollapseProp
   return (
     <div
       className={cn(
-        'grid min-h-0 transition-[grid-template-rows,opacity] duration-200 ease-out',
+        'grid min-h-0 transition-[grid-template-rows,opacity] duration-150 ease-out',
         open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
       )}
     >
