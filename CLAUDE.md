@@ -6,6 +6,7 @@ UI 开发必须遵循 `docs/design-system.md`，核心要点：
 
 - **组件优先**：优先使用 [@coss/ui](https://coss.com/ui) 组件，禁止手动实现已有组件
 - **颜色**：使用 CSS 变量（`text-primary`、`bg-accent`、`text-muted-foreground`）
+- **Design Tokens**：圆角/阴影/字号/字重/动画时长遵循 `docs/design-system.md` 的 Token 分档（避免任意值）
 - **尺寸**：Tab 栏 `h-9`、树节点 `h-7`、小按钮 `h-6`
 - **间距**：紧凑 `gap-1`、标准 `gap-2`、缩进 `depth * 12 + 8px`
 - **图标**：Lucide React，目录黄色、TS 蓝色、JS 黄色

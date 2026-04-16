@@ -53,6 +53,76 @@ className="bg-accent text-accent-foreground"
 variant="destructive"
 ```
 
+## Design Tokens
+
+设计 Token 统一在 `src/renderer/styles/globals.css` 的 `@theme` 中定义（CSS 变量），组件样式应优先使用这些层级化的 Token，而不是写任意值。
+
+### Border Radius（圆角）
+
+| Level | Token | Value | 典型场景 |
+|------|------|------|---------|
+| xs | `--radius-xs` | 4px | checkbox、badge、kbd 等内嵌元素 |
+| sm | `--radius-sm` | 8px | button、input、tab、tooltip 等交互元素 |
+| md | `--radius-md` | 12px | card、alert、toolbar 等容器 |
+| lg | `--radius-lg` | 16px | dialog、sheet 等顶层容器 |
+
+**使用建议**：
+- 小内嵌元素：优先 `rounded-xs`
+- 交互元素：优先 `rounded-sm` / `rounded-md`
+- 顶层覆盖层：优先 `rounded-lg` / `rounded-2xl`
+
+### Shadow（阴影）
+
+阴影遵循 5 级层次，层级越高，阴影越强：
+
+| Level | Tailwind | 典型场景 |
+|------|---------|---------|
+| none | `shadow-none` | 平面内嵌元素 |
+| xs | `shadow-xs` | button、input、card（紧贴背景） |
+| sm | `shadow-sm` | 浮起工具栏、轻量下拉菜单 |
+| md | `shadow-md` | popover、tooltip |
+| lg | `shadow-lg` | dialog、sheet、command palette |
+
+### Typography（字号）
+
+建议统一采用 6 级字号层次（与 UI 语义绑定，而不是“看起来差不多就行”）：
+
+| Level | Size | 典型场景 |
+|------|------|---------|
+| 2xs | 10px | 极小标注（替代 `text-[9px]` / `text-[10px]`） |
+| xs | 12px | 辅助信息、badge、kbd、timestamp |
+| sm | 14px | 主要 UI 文本基准（默认） |
+| md | 16px | 次级标题、强调文字 |
+| lg | 18px | 组件标题（CardTitle、Section 标题） |
+| xl | 22px | 页面/对话框标题 |
+
+其中 `2xs` 通过 `--text-2xs` 定义，推荐写法：
+- `text-[var(--text-2xs)]`（优先）
+- 或 `text-[10px]`（过渡期）
+
+### Font Weight（字重）
+
+| Level | Tailwind | 场景 |
+|------|---------|------|
+| normal | `font-normal` | 正文、描述、占位文本 |
+| medium | `font-medium` | button、label、导航项、表头 |
+| semibold | `font-semibold` | 标题（card/dialog/sheet/section title） |
+
+### Motion（动画时长）
+
+过渡动画统一为 3 档（Progress/Meter 指示器除外）：
+
+| Tier | Duration | 场景 |
+|------|----------|------|
+| Fast | 100ms | 纯颜色变化（hover color、focus ring 出现） |
+| Normal | 150ms | 交互反馈（button press、tooltip enter、toggle） |
+| Slow | 250ms | 布局变化（面板展开/收起、对话框切换） |
+
+**实现规范**：
+- hover / focus：优先 `duration-150`
+- 布局变化：使用 `duration-[250ms]`
+- `Progress` / `Meter`：允许使用 `duration-500` 表达连续变化
+
 ## Spacing & Sizing
 
 ### 高度规范
@@ -361,7 +431,7 @@ className="min-w-0 flex-1 truncate"
 
 ### 设计原则
 
-- **快速响应**：动画时长控制在 150-200ms，保持操作效率
+- **时长分档**：过渡动画遵循 100 / 150 / 250ms 三档（见上方 Motion Token），默认使用 `duration-150`
 - **Spring 物理**：使用 Spring 弹性动画，带来自然的物理感
 - **GPU 加速**：优先使用 `transform`、`opacity` 属性，启用硬件加速
 
