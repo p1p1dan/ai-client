@@ -9,6 +9,7 @@ import pidusage from 'pidusage';
 import { killProcessTree } from '../../utils/processUtils';
 import { getProxyEnvVars } from '../proxy/ProxyConfig';
 import { getLiveCredentials } from '../onboarding';
+import { prepareShadowClaudeConfig } from '../onboarding/claudeNullConfig';
 import { detectShell, shellDetector } from './ShellDetector';
 
 const isWindows = process.platform === 'win32';
@@ -382,9 +383,11 @@ export class PtyManager {
           ANTHROPIC_BASE_URL: liveCredentials.claudeBaseUrl,
           OPENAI_API_KEY: liveCredentials.codexApiKey,
           OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
+          // Shadow config preserves user's settings.json but strips BASE_URL/AUTH_TOKEN
+          // so the process-env values above take effect for Claude CLI.
           ...(options.env?.CLAUDE_CONFIG_DIR
             ? {}
-            : { CLAUDE_CONFIG_DIR: join(home, '.ensoai', 'claude-null') }),
+            : { CLAUDE_CONFIG_DIR: prepareShadowClaudeConfig() }),
         }
       : {};
 
