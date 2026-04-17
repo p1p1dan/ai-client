@@ -25,6 +25,7 @@ import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { AGENT_INFO, createSession } from '@/utils/agentSession';
 import { AgentGroup } from './AgentGroup';
+import { AgentPickerMenu } from './AgentPickerMenu';
 import { AgentSessionTabs } from './AgentSessionTabs';
 import { AgentTerminal } from './AgentTerminal';
 import { EnhancedInputContainer } from './EnhancedInputContainer';
@@ -91,6 +92,40 @@ function getDefaultAgentId(
   // Ultimate fallback
   return 'claude';
 }
+
+/** Empty-state "New Session" button with agent picker on hover. */
+const NewSessionButton = memo(function NewSessionButton({
+  onNewSession,
+  onNewSessionWithAgent,
+}: {
+  onNewSession: () => void;
+  onNewSessionWithAgent: (agentId: string, agentCommand: string) => void;
+}) {
+  const { t } = useI18n();
+  const [showMenu, setShowMenu] = useState(false);
+  return (
+    <div
+      className="relative inline-block"
+      onMouseEnter={() => setShowMenu(true)}
+      onMouseLeave={() => setShowMenu(false)}
+    >
+      <Button variant="outline" size="sm" onClick={onNewSession}>
+        <Plus className="mr-2 h-4 w-4" />
+        {t('New Session')}
+      </Button>
+      <AgentPickerMenu
+        show={showMenu}
+        onClose={() => setShowMenu(false)}
+        onSelectAgent={(agentId, agentCommand) => {
+          onNewSessionWithAgent(agentId, agentCommand);
+          setShowMenu(false);
+        }}
+        position="bottom"
+        align="left"
+      />
+    </div>
+  );
+});
 
 /**
  * Measures the combined height of the bottom bar (EnhancedInput + StatusLine)
@@ -1375,10 +1410,12 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
               <EmptyTitle>{t('No agent sessions')}</EmptyTitle>
               <EmptyDescription>{t('Create a session to start using AI Agent')}</EmptyDescription>
             </EmptyHeader>
-            <Button variant="outline" size="sm" onClick={() => handleNewSession()}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('New Session')}
-            </Button>
+            <NewSessionButton
+              onNewSession={() => handleNewSession()}
+              onNewSessionWithAgent={(agentId, agentCommand) =>
+                handleNewSessionWithAgent('', agentId, agentCommand)
+              }
+            />
           </Empty>
         </div>
       )}
