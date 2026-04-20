@@ -11,9 +11,9 @@ import type {
 import { getDisplayPath, getDisplayPathBasename } from '@shared/utils/path';
 import { isRemoteVirtualPath, toRemoteVirtualPath } from '@shared/utils/remotePath';
 import { buildRepositoryId } from '@shared/utils/workspace';
+import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PanelLeft } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ALL_GROUP_ID,
@@ -63,12 +63,13 @@ import { ActionPanel } from './components/layout/ActionPanel';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
 import { MainContent } from './components/layout/MainContent';
 import { RepositorySidebar } from './components/layout/RepositorySidebar';
-import { SessionManagerView } from './components/sessions';
 import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspacePanel';
 import { TreeSidebar } from './components/layout/TreeSidebar';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { WorktreePanel } from './components/layout/WorktreePanel';
+import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import { RemoteAuthPromptHost } from './components/remote/RemoteAuthPromptHost';
+import { SessionManagerView } from './components/sessions';
 import { DraggableSettingsWindow } from './components/settings/DraggableSettingsWindow';
 import { TempWorkspaceDialogs } from './components/temp-workspace/TempWorkspaceDialogs';
 import { UpdateNotification } from './components/UpdateNotification';
@@ -82,7 +83,6 @@ import {
   DialogTitle,
 } from './components/ui/dialog';
 import { addToast, toastManager } from './components/ui/toast';
-import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import { MergeEditor, MergeWorktreeDialog } from './components/worktree';
 import { useAutoFetchListener, useGitBranches, useGitInit } from './hooks/useGit';
 import { useWebInspector } from './hooks/useWebInspector';
@@ -1612,6 +1612,8 @@ export default function App() {
                   onMoveToGroup={handleMoveToGroup}
                   onSwitchTab={setActiveTab}
                   onSwitchWorktreeByPath={handleSwitchWorktreePath}
+                  onLaunchAgent={handleLaunchAgent}
+                  onOpenTerminal={handleOpenTerminal}
                   temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
                   tempWorkspaces={tempWorkspaces}
                   tempBasePath={tempBasePathDisplay}
