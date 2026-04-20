@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ALL_GROUP_ID,
   type RepositoryGroup,
@@ -56,14 +57,13 @@ import {
 } from '@/components/ui/empty';
 import { RepoItemWithGlow } from '@/components/ui/glow-wrappers';
 import { toastManager } from '@/components/ui/toast';
-import { BUILTIN_AGENTS } from '@/components/settings/constants';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { useI18n } from '@/i18n';
 import { heightVariants, springFast, springStandard } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
-import { AGENT_INFO } from '@/utils/agentSession';
+import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
 
 interface Repository {
@@ -158,83 +158,17 @@ export function RepositorySidebar({
     getStoredGroupCollapsedState()
   );
 
-  const enabledAgents = useMemo(() => {
-    const enabledAgentIds = Object.keys(agentSettings).filter((id) => agentSettings[id]?.enabled);
-    const candidates: string[] = [];
-
-    for (const agentId of enabledAgentIds) {
-      // Default agent is always considered installed (no detection needed).
-      // This ensures the default agent shows in the menu even if user never ran detection.
-      if (agentSettings[agentId]?.isDefault) {
-        candidates.push(agentId);
-        continue;
-      }
-
-      // Handle Hapi agents: check if base CLI is detected as installed.
-      if (agentId.endsWith('-hapi')) {
-        if (!hapiSettings.enabled) continue;
-        const baseId = agentId.slice(0, -5);
-        if (agentDetectionStatus[baseId]?.installed) {
-          candidates.push(agentId);
-        }
-        continue;
-      }
-
-      // Handle Happy agents: check if base CLI is detected as installed.
-      if (agentId.endsWith('-happy')) {
-        const baseId = agentId.slice(0, -6);
-        if (agentDetectionStatus[baseId]?.installed) {
-          candidates.push(agentId);
-        }
-        continue;
-      }
-
-      // Regular agents: use persisted detection status.
-      if (agentDetectionStatus[agentId]?.installed) {
-        candidates.push(agentId);
-      }
-    }
-
-    const builtinAgentOrder = new Map<string, number>();
-    for (let i = 0; i < BUILTIN_AGENTS.length; i++) {
-      builtinAgentOrder.set(BUILTIN_AGENTS[i], i);
-    }
-    const customAgentIds = new Set(customAgents.map((agent) => agent.id));
-
-    const getBaseId = (id: string) => {
-      if (id.endsWith('-hapi')) return id.slice(0, -5);
-      if (id.endsWith('-happy')) return id.slice(0, -6);
-      return id;
-    };
-
-    const getEnvironmentRank = (id: string) => {
-      if (id.endsWith('-hapi')) return 1;
-      if (id.endsWith('-happy')) return 2;
-      return 0;
-    };
-
-    return candidates.sort((a, b) => {
-      const aIsDefault = agentSettings[a]?.isDefault ?? false;
-      const bIsDefault = agentSettings[b]?.isDefault ?? false;
-      if (aIsDefault !== bIsDefault) return aIsDefault ? -1 : 1;
-
-      const aBaseId = getBaseId(a);
-      const bBaseId = getBaseId(b);
-      const aIsCustom = customAgentIds.has(aBaseId);
-      const bIsCustom = customAgentIds.has(bBaseId);
-      if (aIsCustom !== bIsCustom) return aIsCustom ? 1 : -1;
-
-      const aBuiltinIndex = builtinAgentOrder.get(aBaseId) ?? Number.MAX_SAFE_INTEGER;
-      const bBuiltinIndex = builtinAgentOrder.get(bBaseId) ?? Number.MAX_SAFE_INTEGER;
-      if (aBuiltinIndex !== bBuiltinIndex) return aBuiltinIndex - bBuiltinIndex;
-
-      const aEnvRank = getEnvironmentRank(a);
-      const bEnvRank = getEnvironmentRank(b);
-      if (aEnvRank !== bEnvRank) return aEnvRank - bEnvRank;
-
-      return a.localeCompare(b);
-    });
-  }, [agentDetectionStatus, agentSettings, customAgents, hapiSettings.enabled]);
+  const repositoryMenuModel = useMemo(
+    () =>
+      buildRepositoryContextMenuModel({
+        t,
+        agentSettings,
+        customAgents,
+        agentDetectionStatus,
+        hapiEnabled: hapiSettings.enabled,
+      }),
+    [agentDetectionStatus, agentSettings, customAgents, hapiSettings.enabled, t]
+  );
 
   useLayoutEffect(() => {
     if (!menuOpen || !menuRef.current) return;
@@ -846,8 +780,8 @@ export function RepositorySidebar({
         </div>
       </div>
 
-      {/* Context Menu */}
-      {menuOpen && menuRepo && (
+      {/* Context Menu - portal to escape motion.div stacking context */}
+      {menuOpen && menuRepo && createPortal(
         <>
           <div
             className="fixed inset-0 z-50"
@@ -861,49 +795,9 @@ export function RepositorySidebar({
           />
           <div
             ref={menuRef}
-            className="fixed z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-lg"
+            className="fixed z-50 min-w-44 max-h-[80vh] overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg"
             style={{ left: menuPosition.x, top: menuPosition.y }}
           >
-            {/* Agents */}
-            {enabledAgents.map((agentId) => {
-              const isHapi = agentId.endsWith('-hapi');
-              const isHappy = agentId.endsWith('-happy');
-              const baseId = isHapi ? agentId.slice(0, -5) : isHappy ? agentId.slice(0, -6) : agentId;
-              const customAgent = customAgents.find((a) => a.id === baseId);
-              const baseName = customAgent?.name ?? AGENT_INFO[baseId]?.name ?? baseId;
-              const name = isHapi ? `${baseName} (Hapi)` : isHappy ? `${baseName} (Happy)` : baseName;
-              return (
-                <button
-                  key={agentId}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onLaunchAgent?.(menuRepo.path, agentId);
-                  }}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {name}
-                </button>
-              );
-            })}
-
-            {enabledAgents.length > 0 && <div className="my-1 h-px bg-border" />}
-
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
-              onClick={() => {
-                setMenuOpen(false);
-                onOpenTerminal?.(menuRepo.path);
-              }}
-            >
-              <Terminal className="h-4 w-4" />
-              {t('Open terminal')}
-            </button>
-
-            <div className="my-1 h-px bg-border" />
-
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
@@ -913,7 +807,7 @@ export function RepositorySidebar({
               }}
             >
               <FolderOpen className="h-4 w-4" />
-              {t('Open folder')}
+              {repositoryMenuModel.primaryActions[0].label}
             </button>
 
             <button
@@ -925,8 +819,40 @@ export function RepositorySidebar({
               }}
             >
               <Copy className="h-4 w-4" />
-              {t('Copy Path')}
+              {repositoryMenuModel.primaryActions[1].label}
             </button>
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setMenuOpen(false);
+                onOpenTerminal?.(menuRepo.path);
+              }}
+            >
+              <Terminal className="h-4 w-4" />
+              {repositoryMenuModel.primaryActions[2].label}
+            </button>
+
+            {repositoryMenuModel.agentActions.length > 0 && <div className="my-1 h-px bg-border" />}
+
+            {/* Agents */}
+            {repositoryMenuModel.agentActions.map((agent) => {
+              return (
+                <button
+                  key={agent.agentId}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onLaunchAgent?.(menuRepo.path, agent.agentId);
+                  }}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {agent.label}
+                </button>
+              );
+            })}
 
             <div className="my-1 h-px bg-border" />
 
@@ -940,7 +866,7 @@ export function RepositorySidebar({
               }}
             >
               <Settings className="h-4 w-4" />
-              {t('Repository Settings')}
+              {repositoryMenuModel.secondaryActions[0].label}
             </button>
 
             {/* Move to Group - only show when groups are not hidden */}
@@ -955,9 +881,7 @@ export function RepositorySidebar({
               />
             )}
 
-            {!hideGroups && onMoveToGroup && groups.length > 0 && (
-              <div className="my-1 h-px bg-border" />
-            )}
+            <div className="my-1 h-px bg-border" />
 
             <button
               type="button"
@@ -965,10 +889,11 @@ export function RepositorySidebar({
               onClick={handleRemoveClick}
             >
               <FolderMinus className="h-4 w-4" />
-              {t('Remove repository')}
+              {repositoryMenuModel.destructiveAction.label}
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {/* Remove confirmation dialog */}

@@ -87,6 +87,7 @@ import { heightVariants, springFast, springStandard } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
+import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
 
 interface TreeSidebarProps {
@@ -128,6 +129,8 @@ interface TreeSidebarProps {
   onMoveToGroup?: (repoPath: string, groupId: string | null) => void;
   onSwitchTab?: (tab: TabId) => void;
   onSwitchWorktreeByPath?: (path: string) => Promise<void> | void;
+  onLaunchAgent?: (repoPath: string, agentId: string) => void;
+  onOpenTerminal?: (repoPath: string) => void;
   temporaryWorkspaceEnabled?: boolean;
   tempWorkspaces?: TempWorkspaceItem[];
   tempBasePath?: string;
@@ -179,6 +182,8 @@ export function TreeSidebar({
   onMoveToGroup,
   onSwitchTab,
   onSwitchWorktreeByPath,
+  onLaunchAgent,
+  onOpenTerminal,
   temporaryWorkspaceEnabled = false,
   tempWorkspaces = [],
   tempBasePath = '',
@@ -194,6 +199,10 @@ export function TreeSidebar({
   const { t, tNode } = useI18n();
   const _settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
   const hideGroups = useSettingsStore((s) => s.hideGroups);
+  const agentSettings = useSettingsStore((s) => s.agentSettings);
+  const customAgents = useSettingsStore((s) => s.customAgents);
+  const agentDetectionStatus = useSettingsStore((s) => s.agentDetectionStatus);
+  const hapiSettings = useSettingsStore((s) => s.hapiSettings);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [tempExpanded, setTempExpanded] = useState(true);
@@ -225,6 +234,17 @@ export function TreeSidebar({
   const sortedTempWorkspaces = useMemo(
     () => [...tempWorkspaces].sort((a, b) => b.createdAt - a.createdAt),
     [tempWorkspaces]
+  );
+  const repositoryMenuModel = useMemo(
+    () =>
+      buildRepositoryContextMenuModel({
+        t,
+        agentSettings,
+        customAgents,
+        agentDetectionStatus,
+        hapiEnabled: hapiSettings.enabled,
+      }),
+    [agentDetectionStatus, agentSettings, customAgents, hapiSettings.enabled, t]
   );
 
   // Convert list to set for fast lookups
@@ -562,6 +582,29 @@ export function TreeSidebar({
     setRepoMenuTarget(repo);
     setRepoMenuOpen(true);
   };
+
+  const handleCopyRepoPath = useCallback(
+    async (path: string) => {
+      try {
+        await navigator.clipboard.writeText(path);
+        toastManager.add({
+          title: t('Copied'),
+          description: t('Path copied to clipboard'),
+          type: 'success',
+          timeout: 2000,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toastManager.add({
+          title: t('Copy failed'),
+          description: message || t('Failed to copy content'),
+          type: 'error',
+          timeout: 3000,
+        });
+      }
+    },
+    [t]
+  );
 
   // Adjust repo menu position if it overflows viewport
   useEffect(() => {
@@ -1390,13 +1433,13 @@ export function TreeSidebar({
           />
           <div
             ref={repoMenuRef}
-            className="fixed z-50 min-w-32 rounded-lg border bg-popover p-1 shadow-lg"
+            className="fixed z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-lg"
             style={{ left: repoMenuPosition.x, top: repoMenuPosition.y }}
           >
             {/* New Worktree button */}
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
               onClick={() => {
                 setRepoMenuOpen(false);
                 // Switch to the right-clicked repo first, then wait for state update
@@ -1418,10 +1461,74 @@ export function TreeSidebar({
               {t('New Worktree')}
             </button>
 
-            {/* Repository Settings */}
+            <div className="my-1 h-px bg-border" />
+
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setRepoMenuOpen(false);
+                if (repoMenuTarget) {
+                  window.electronAPI.shell.openPath(repoMenuTarget.path);
+                }
+              }}
+            >
+              <FolderOpen className="h-4 w-4" />
+              {repositoryMenuModel.primaryActions[0].label}
+            </button>
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setRepoMenuOpen(false);
+                if (repoMenuTarget) {
+                  handleCopyRepoPath(repoMenuTarget.path);
+                }
+              }}
+            >
+              <Copy className="h-4 w-4" />
+              {repositoryMenuModel.primaryActions[1].label}
+            </button>
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+              onClick={() => {
+                setRepoMenuOpen(false);
+                if (repoMenuTarget) {
+                  onOpenTerminal?.(repoMenuTarget.path);
+                }
+              }}
+            >
+              <Terminal className="h-4 w-4" />
+              {repositoryMenuModel.primaryActions[2].label}
+            </button>
+
+            {repositoryMenuModel.agentActions.length > 0 && <div className="my-1 h-px bg-border" />}
+
+            {repositoryMenuModel.agentActions.map((agent) => (
+              <button
+                key={agent.agentId}
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                onClick={() => {
+                  setRepoMenuOpen(false);
+                  if (repoMenuTarget) {
+                    onLaunchAgent?.(repoMenuTarget.path, agent.agentId);
+                  }
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+                {agent.label}
+              </button>
+            ))}
+
+            <div className="my-1 h-px bg-border" />
+
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
               onClick={() => {
                 setRepoMenuOpen(false);
                 if (repoMenuTarget) {
@@ -1431,13 +1538,13 @@ export function TreeSidebar({
               }}
             >
               <Settings2 className="h-4 w-4" />
-              {t('Repository Settings')}
+              {repositoryMenuModel.secondaryActions[0].label}
             </button>
 
             {/* Hide Repository */}
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
               onClick={() => {
                 setRepoMenuOpen(false);
                 if (repoMenuTarget) {
@@ -1488,11 +1595,11 @@ export function TreeSidebar({
             {/* Remove repository button */}
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-accent"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
               onClick={handleRemoveRepoClick}
             >
               <FolderMinus className="h-4 w-4" />
-              {t('Remove repository')}
+              {repositoryMenuModel.destructiveAction.label}
             </button>
           </div>
         </>
