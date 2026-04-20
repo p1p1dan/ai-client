@@ -58,8 +58,8 @@ export const zhTranslations: Record<string, string> = {
   'Session History': '会话历史',
   'Temp Session settings': '临时会话设置',
   'Show Temp Session entry for quick scratch sessions': '显示临时会话入口，用于快速临时会话',
-  'Default directory for new temp sessions. Leave empty to use ~/ensoai/temporary':
-    '新建临时会话的默认目录。留空则使用 ~/ensoai/temporary',
+  'Default directory for new temp sessions. Leave empty to use ~/JYWAI/temporary':
+    '新建临时会话的默认目录。留空则使用 ~/JYWAI/temporary',
   'Automatically create Agent/Terminal Session when activating a temp session':
     '激活临时会话时自动创建 Agent/Terminal Session',
   'No temp sessions': '暂无临时会话',
@@ -1403,8 +1403,8 @@ export const zhTranslations: Record<string, string> = {
   'Git worktree save location settings': 'Git Worktree 保存位置设置',
   'Git auto refresh': 'Git 自动刷新',
   'Automatically fetch and refresh git status': '自动拉取远程更新并刷新 Git 状态',
-  'Default directory for new worktrees. Leave empty to use ~/ensoai/workspaces':
-    '新建 Worktree 的默认目录，留空则使用 ~/ensoai/workspaces',
+  'Default directory for new worktrees. Leave empty to use ~/JYWAI/workspaces':
+    '新建 Worktree 的默认目录，留空则使用 ~/JYWAI/workspaces',
   // Claude Provider
   'Claude Provider': 'Claude Provider',
   'Add Provider': '添加配置',
@@ -1656,8 +1656,8 @@ export const zhTranslations: Record<string, string> = {
   'Repository domains': '仓库域名',
   'Built-in mappings': '内置映射',
   'Settings for cloning remote Git repositories': '远程 Git 仓库克隆设置',
-  'Base directory for cloned repositories. Leave empty to use ~/ensoai/repos':
-    '克隆仓库的基础目录。留空则使用 ~/ensoai/repos',
+  'Base directory for cloned repositories. Leave empty to use ~/JYWAI/repos':
+    '克隆仓库的基础目录。留空则使用 ~/JYWAI/repos',
   'Clone to organized structure (baseDir/host/owner/repo) or flat (baseDir/repo)':
     '克隆到组织结构（baseDir/host/owner/repo）或扁平结构（baseDir/repo）',
   'Host-to-directory mappings for organizing cloned repositories':

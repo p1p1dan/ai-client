@@ -4,6 +4,7 @@ import type {
   PullRequest,
   WorktreeCreateOptions,
 } from '@shared/types';
+import { buildWorktreePath } from '@shared/defaultPaths';
 import { AlertCircle, GitBranch, GitPullRequest, Loader2, Plus, Sparkles } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
@@ -101,19 +102,18 @@ export function CreateWorktreeDialog({
   const [selectedPr, setSelectedPr] = React.useState<PullRequest | null>(null);
 
   // Worktree path: {defaultWorktreePath}/{projectName}/{branchName}
-  // Falls back to ~/ensoai/workspaces if not configured
+  // Falls back to ~/JYWAI/workspaces if not configured
   const home = window.electronAPI?.env?.HOME || '';
   const isWindows = window.electronAPI?.env?.platform === 'win32';
   const pathSep = isWindows ? '\\' : '/';
   const getWorktreePath = (branchName: string) => {
-    if (!home) return '';
-    // Extract last directory name from projectName when a full path is passed in.
-    const normalizedName = projectName.replace(/\\/g, '/');
-    const projectBaseName = normalizedName.split('/').filter(Boolean).pop() || projectName;
-
-    // Use configured path or default to ~/ensoai/workspaces
-    const basePath = defaultWorktreePath || [home, 'ensoai', 'workspaces'].join(pathSep);
-    return [basePath, projectBaseName, branchName].join(pathSep);
+    return buildWorktreePath({
+      branchName,
+      configuredBasePath: defaultWorktreePath,
+      homeDir: home,
+      pathSep,
+      projectName,
+    });
   };
 
   // Branch item type for combobox

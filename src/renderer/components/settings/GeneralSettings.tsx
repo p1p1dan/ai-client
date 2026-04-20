@@ -30,7 +30,6 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
-  DialogClose,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -645,7 +644,7 @@ export function GeneralSettings() {
             <Input
               value={defaultTemporaryPath}
               onChange={(e) => setDefaultTemporaryPath(e.target.value)}
-              placeholder="~/ensoai/temporary"
+              placeholder="~/JYWAI/temporary"
               className="flex-1"
               disabled={!temporaryWorkspaceEnabled}
             />
@@ -659,7 +658,7 @@ export function GeneralSettings() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t('Default directory for new temp sessions. Leave empty to use ~/ensoai/temporary')}
+            {t('Default directory for new temp sessions. Leave empty to use ~/JYWAI/temporary')}
           </p>
         </div>
       </div>
@@ -763,12 +762,12 @@ export function GeneralSettings() {
         <span className="text-sm font-medium mt-2">{t('Save location')}</span>
         <div className="space-y-1.5">
           <div className="flex gap-2">
-            <Input
-              value={defaultWorktreePath}
-              onChange={(e) => setDefaultWorktreePath(e.target.value)}
-              placeholder="~/ensoai/workspaces"
-              className="flex-1"
-            />
+              <Input
+                value={defaultWorktreePath}
+                onChange={(e) => setDefaultWorktreePath(e.target.value)}
+                placeholder="~/JYWAI/workspaces"
+                className="flex-1"
+              />
             <Button
               variant="outline"
               size="icon"
@@ -783,7 +782,7 @@ export function GeneralSettings() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t('Default directory for new worktrees. Leave empty to use ~/ensoai/workspaces')}
+            {t('Default directory for new worktrees. Leave empty to use ~/JYWAI/workspaces')}
           </p>
         </div>
       </div>
@@ -811,12 +810,12 @@ export function GeneralSettings() {
         <span className="text-sm font-medium mt-2">{t('Base directory')}</span>
         <div className="space-y-1.5">
           <div className="flex gap-2">
-            <Input
-              value={gitClone.baseDir}
-              onChange={(e) => setGitClone({ baseDir: e.target.value })}
-              placeholder="~/ensoai/repos"
-              className="flex-1"
-            />
+              <Input
+                value={gitClone.baseDir}
+                onChange={(e) => setGitClone({ baseDir: e.target.value })}
+                placeholder="~/JYWAI/repos"
+                className="flex-1"
+              />
             <Button
               variant="outline"
               size="icon"
@@ -831,7 +830,7 @@ export function GeneralSettings() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t('Base directory for cloned repositories. Leave empty to use ~/ensoai/repos')}
+            {t('Base directory for cloned repositories. Leave empty to use ~/JYWAI/repos')}
           </p>
         </div>
       </div>

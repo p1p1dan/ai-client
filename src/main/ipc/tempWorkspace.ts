@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { access, lstat, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { expandHomePath, getDefaultTemporaryBasePath } from '@shared/defaultPaths';
 import {
   IPC_CHANNELS,
   type TempWorkspaceCheckResult,
@@ -14,15 +15,6 @@ import { GitService } from '../services/git/GitService';
 import { sessionManager } from '../services/session/SessionManager';
 import { stopWatchersInDirectory } from './files';
 import { unregisterAuthorizedWorkdir } from './git';
-
-function expandHome(inputPath: string): string {
-  if (!inputPath) return inputPath;
-  if (inputPath === '~') return homedir();
-  if (inputPath.startsWith('~/') || inputPath.startsWith('~\\')) {
-    return path.join(homedir(), inputPath.slice(2));
-  }
-  return inputPath;
-}
 
 function formatTimestamp(date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, '0');
@@ -51,9 +43,11 @@ function mapError(err: unknown, fallbackCode = 'UNKNOWN'): { code: string; messa
 }
 
 function resolveBasePath(rawBasePath?: string): string {
-  return rawBasePath?.trim()
-    ? path.resolve(expandHome(rawBasePath.trim()))
-    : path.join(homedir(), 'ensoai', 'temporary');
+  const home = homedir();
+  if (rawBasePath?.trim()) {
+    return path.resolve(expandHomePath(rawBasePath.trim(), home, path.sep));
+  }
+  return getDefaultTemporaryBasePath(home, path.sep);
 }
 
 function isSubPath(basePath: string, targetPath: string): boolean {
@@ -63,7 +57,7 @@ function isSubPath(basePath: string, targetPath: string): boolean {
 }
 
 async function resolveSafePath(rawPath: string): Promise<string> {
-  const resolved = path.resolve(expandHome(rawPath));
+  const resolved = path.resolve(expandHomePath(rawPath, homedir(), path.sep));
   try {
     return await realpath(resolved);
   } catch {
@@ -111,7 +105,7 @@ export function registerTempWorkspaceHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TEMP_WORKSPACE_CHECK_PATH,
     async (_event, rawPath: string): Promise<TempWorkspaceCheckResult> => {
-      const resolved = path.resolve(expandHome(rawPath));
+      const resolved = path.resolve(expandHomePath(rawPath, homedir(), path.sep));
       return checkPathWritable(resolved);
     }
   );

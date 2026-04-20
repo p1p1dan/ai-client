@@ -463,7 +463,7 @@ export function getDefaultShellConfig(): import('@shared/types').ShellConfig {
  * Default Git clone settings
  */
 export const defaultGitCloneSettings: GitCloneSettings = {
-  // Default to ~/ensoai/repos or similar
+  // Default to ~/JYWAI/repos or similar
   baseDir: '',
   // Built-in host mappings for popular Git hosts
   hostMappings: [

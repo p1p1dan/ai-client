@@ -1,3 +1,4 @@
+import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import type {
   ClaudeProject,
   ClaudeSessionMeta,
@@ -465,7 +466,7 @@ export default function App() {
   const pathSep = isWindows ? '\\' : '/';
   const homeDir = window.electronAPI?.env.HOME || '';
   const effectiveTempBasePath = useMemo(
-    () => defaultTemporaryPath || [homeDir, 'ensoai', 'temporary'].join(pathSep),
+    () => getEffectiveTemporaryBasePath(defaultTemporaryPath, homeDir, pathSep),
     [defaultTemporaryPath, homeDir, pathSep]
   );
   const tempBasePathDisplay = useMemo(() => {
