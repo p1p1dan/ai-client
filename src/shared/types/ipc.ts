@@ -323,6 +323,10 @@ export const IPC_CHANNELS = {
   ONBOARDING_CHECK: 'onboarding:check',
   ONBOARDING_REGISTER: 'onboarding:register',
   ONBOARDING_DETECT_CLI: 'onboarding:detectCli',
+  ONBOARDING_CHECK_PREREQUISITES: 'onboarding:checkPrerequisites',
+  ONBOARDING_INSTALL_AGENTS: 'onboarding:installAgents',
+  ONBOARDING_INSTALL_PROGRESS: 'onboarding:installProgress',
+  ONBOARDING_CANCEL_INSTALL: 'onboarding:cancelInstall',
   ONBOARDING_LOGOUT: 'onboarding:logout',
   ONBOARDING_LIVE_CREDENTIALS_STATUS: 'onboarding:liveCredentialsStatus',
 

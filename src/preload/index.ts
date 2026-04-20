@@ -6,10 +6,10 @@ import type {
   AgentCliInfo,
   AgentMetadata,
   AppCloseRequestPayload,
-  CloneProgress,
-  CloneResult,
   ClaudeProject,
   ClaudeSessionMeta,
+  CloneProgress,
+  CloneResult,
   CommitFileChange,
   ConflictResolution,
   ConnectionProfile,
@@ -738,10 +738,23 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_REGISTER, request),
     detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),
-    logout: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_LOGOUT),
-    onLiveCredentialsStatus: (
-      callback: (status: { available: boolean }) => void
+    checkPrerequisites: (): Promise<import('@shared/types').OnboardingPrerequisiteStatus> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK_PREREQUISITES),
+    installAgents: (
+      agents: import('@shared/types').InstallAgentId[]
+    ): Promise<import('@shared/types').InstallResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_INSTALL_AGENTS, agents),
+    cancelInstall: (): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CANCEL_INSTALL),
+    onInstallProgress: (
+      callback: (progress: import('@shared/types').InstallProgress) => void
     ): (() => void) => {
+      const handler = (_: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
+      ipcRenderer.on(IPC_CHANNELS.ONBOARDING_INSTALL_PROGRESS, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.ONBOARDING_INSTALL_PROGRESS, handler);
+    },
+    logout: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_LOGOUT),
+    onLiveCredentialsStatus: (callback: (status: { available: boolean }) => void): (() => void) => {
       const handler = (_: unknown, status: Parameters<typeof callback>[0]) => callback(status);
       ipcRenderer.on(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, handler);

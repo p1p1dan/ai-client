@@ -24,7 +24,33 @@ export interface OnboardingRegisterResponse {
   };
 }
 
-export interface OnboardingCliStatus {
+export interface OnboardingPrerequisiteStatus {
+  gitInstalled: boolean;
+  gitVersion?: string;
+  nodeInstalled: boolean;
+  nodeVersion?: string;
+  wingetAvailable: boolean;
+}
+
+export type InstallAgentId = 'claude' | 'codex';
+
+export type InstallStepId = 'git' | 'node' | 'claude' | 'codex';
+
+export type InstallStepStatus = 'pending' | 'installing' | 'done' | 'skipped' | 'error';
+
+export interface InstallProgress {
+  step: InstallStepId;
+  status: InstallStepStatus;
+  message?: string;
+}
+
+export interface InstallResult {
+  success: boolean;
+  cancelled?: boolean;
+  errors: string[];
+}
+
+export interface OnboardingCliStatus extends OnboardingPrerequisiteStatus {
   claudeInstalled: boolean;
   claudeVersion?: string;
   codexInstalled: boolean;

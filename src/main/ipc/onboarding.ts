@@ -1,8 +1,11 @@
-import type { OnboardingRegisterRequest } from '@shared/types';
+import type { InstallAgentId, OnboardingRegisterRequest } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { BrowserWindow, ipcMain, session } from 'electron';
+import { AgentInstaller } from '../services/cli/AgentInstaller';
 import { onboardingService } from '../services/onboarding/OnboardingService';
 import { sessionManager } from '../services/session/SessionManager';
+
+let activeInstaller: AgentInstaller | null = null;
 
 async function terminateAllSessions(): Promise<void> {
   const remoteSessionIds = new Set<string>();
@@ -20,7 +23,9 @@ async function terminateAllSessions(): Promise<void> {
   }
 
   // Best-effort: kill remote sessions before tearing down local PTYs.
-  await Promise.allSettled([...remoteSessionIds].map((sessionId) => sessionManager.kill(sessionId)));
+  await Promise.allSettled(
+    [...remoteSessionIds].map((sessionId) => sessionManager.kill(sessionId))
+  );
 
   // Local PTYs must be awaited to avoid native resource crashes on some platforms.
   await sessionManager.destroyAllLocalAndWait();
@@ -43,16 +48,53 @@ export function registerOnboardingHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.ONBOARDING_REGISTER,
     async (_, request: OnboardingRegisterRequest) => {
-      return onboardingService.register(
-        request.email,
-        request.serverUrl,
-        request.onboardingSecret
-      );
+      return onboardingService.register(request.email, request.serverUrl, request.onboardingSecret);
     }
   );
 
   ipcMain.handle(IPC_CHANNELS.ONBOARDING_DETECT_CLI, async () => {
     return onboardingService.detectCli();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ONBOARDING_CHECK_PREREQUISITES, async () => {
+    const installer = new AgentInstaller();
+    return await installer.checkPrerequisites();
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.ONBOARDING_INSTALL_AGENTS,
+    async (event, agents: InstallAgentId[]) => {
+      if (activeInstaller) {
+        return {
+          success: false,
+          errors: ['Another onboarding installation is already in progress.'],
+        };
+      }
+
+      const installer = new AgentInstaller();
+      activeInstaller = installer;
+
+      try {
+        return await installer.installAll(agents, (progress) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send(IPC_CHANNELS.ONBOARDING_INSTALL_PROGRESS, progress);
+          }
+        });
+      } finally {
+        if (activeInstaller === installer) {
+          activeInstaller = null;
+        }
+      }
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.ONBOARDING_CANCEL_INSTALL, async () => {
+    if (!activeInstaller) {
+      return false;
+    }
+
+    activeInstaller.cancel();
+    return true;
   });
 
   ipcMain.handle(IPC_CHANNELS.ONBOARDING_LOGOUT, async () => {

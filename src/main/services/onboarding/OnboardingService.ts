@@ -1,4 +1,3 @@
-import { net } from 'electron';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -7,7 +6,9 @@ import type {
   OnboardingRegisterResponse,
   OnboardingState,
 } from '@shared/types';
+import { net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
+import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
 import type { LiveCredentials } from './credentialStore';
 import { clearLiveCredentials, setLiveCredentials } from './credentialStore';
@@ -245,12 +246,15 @@ class OnboardingService {
    * Check CLI installation status for Claude and Codex.
    */
   async detectCli(): Promise<OnboardingCliStatus> {
-    const [claude, codex] = await Promise.all([
+    const installer = new AgentInstaller();
+    const [prerequisites, claude, codex] = await Promise.all([
+      installer.checkPrerequisites(),
       cliDetector.detectOne('claude'),
       cliDetector.detectOne('codex'),
     ]);
 
     return {
+      ...prerequisites,
       claudeInstalled: claude.installed,
       claudeVersion: claude.version,
       codexInstalled: codex.installed,
