@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { exec, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
 import type { ShellConfig, ShellInfo } from '@shared/types';
@@ -110,6 +110,20 @@ class ShellDetector {
   private cachedShells: ShellInfo[] | null = null;
   private wslAvailable: boolean | null = null;
 
+  private commandExists(command: string): boolean {
+    try {
+      if (isWindows) {
+        const result = spawnSync('where', [command], { encoding: 'utf8', windowsHide: true });
+        return result.status === 0 && Boolean(result.stdout?.trim());
+      }
+
+      const result = spawnSync('which', [command], { encoding: 'utf8' });
+      return result.status === 0 && Boolean(result.stdout?.trim());
+    } catch {
+      return false;
+    }
+  }
+
   private async isWslAvailable(): Promise<boolean> {
     if (this.wslAvailable !== null) {
       return this.wslAvailable;
@@ -134,7 +148,7 @@ class ShellDetector {
         if (existsSync(p)) {
           return p;
         }
-      } else {
+      } else if (this.commandExists(p)) {
         return p;
       }
     }

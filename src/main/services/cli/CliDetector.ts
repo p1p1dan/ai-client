@@ -1,5 +1,7 @@
+import { spawn } from 'node:child_process';
 import type { AgentCliInfo, BuiltinAgentId, CustomAgent } from '@shared/types';
-import { execInPty } from '../../utils/shell';
+import { killProcessTree } from '../../utils/processUtils';
+import { execInPty, getEnvForCommand } from '../../utils/shell';
 
 const isWindows = process.platform === 'win32';
 
@@ -74,7 +76,87 @@ const BUILTIN_AGENT_CONFIGS: BuiltinAgentConfig[] = [
   },
 ];
 
+function quoteWindowsCommand(command: string): string {
+  return /\s/.test(command) ? `"${command}"` : command;
+}
+
 class CliDetector {
+  private async runDirectWindowsDetection(command: string, versionFlag: string): Promise<string> {
+    const commandLine = `${quoteWindowsCommand(command)} ${versionFlag}`;
+
+    return await new Promise((resolve, reject) => {
+      const child = spawn('cmd.exe', ['/d', '/s', '/c', commandLine], {
+        env: getEnvForCommand(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+
+      const timeoutId = setTimeout(
+        () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          killProcessTree(child);
+          reject(new Error('Detection timeout'));
+        },
+        isWindows ? 60000 : 15000
+      );
+
+      const finish = (callback: () => void) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutId);
+        callback();
+      };
+
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      child.on('error', (error) => {
+        finish(() => reject(error));
+      });
+
+      child.on('close', (code) => {
+        finish(() => {
+          if (code === 0) {
+            resolve(stdout.trim());
+            return;
+          }
+
+          reject(new Error(stderr.trim() || stdout.trim() || `Command exited with code ${code}`));
+        });
+      });
+    });
+  }
+
+  private async detectWithFallback(
+    command: string,
+    versionFlag: string,
+    timeout: number
+  ): Promise<string> {
+    if (isWindows) {
+      try {
+        return await this.runDirectWindowsDetection(command, versionFlag);
+      } catch {
+        // Fall back to the configured interactive shell for version-manager based setups.
+      }
+    }
+
+    return await execInPty(`${command} ${versionFlag}`, { timeout });
+  }
+
   private async detectBuiltin(
     config: BuiltinAgentConfig,
     customPath?: string
@@ -84,7 +166,7 @@ class CliDetector {
       const effectiveCommand = customPath || config.command;
       // Windows: use 60s timeout due to slower shell initialization (PowerShell, WSL)
       const timeout = isWindows ? 60000 : 15000;
-      const stdout = await execInPty(`${effectiveCommand} ${config.versionFlag}`, { timeout });
+      const stdout = await this.detectWithFallback(effectiveCommand, config.versionFlag, timeout);
 
       let version: string | undefined;
       if (config.versionRegex) {
@@ -117,7 +199,7 @@ class CliDetector {
     try {
       // Windows: use 60s timeout due to slower shell initialization (PowerShell, WSL)
       const timeout = isWindows ? 60000 : 15000;
-      const stdout = await execInPty(`${agent.command} --version`, { timeout });
+      const stdout = await this.detectWithFallback(agent.command, '--version', timeout);
 
       const match = stdout.match(/(\d+\.\d+\.\d+)/);
       const version = match ? match[1] : undefined;
