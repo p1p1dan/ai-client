@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchMock = vi.fn();
+const checkPrerequisitesMock = vi.fn();
 
 vi.mock('electron', () => ({
   net: {
@@ -24,6 +25,12 @@ vi.mock('../../cli/CliDetector', () => ({
   },
 }));
 
+vi.mock('../../cli/AgentInstaller', () => ({
+  AgentInstaller: vi.fn().mockImplementation(() => ({
+    checkPrerequisites: checkPrerequisitesMock,
+  })),
+}));
+
 describe('OnboardingService', () => {
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;
@@ -40,6 +47,7 @@ describe('OnboardingService', () => {
     process.env.USERPROFILE = tempHome;
     process.env.CLAUDE_CONFIG_DIR = join(tempHome, '.claude');
     fetchMock.mockReset();
+    checkPrerequisitesMock.mockReset();
   });
 
   afterEach(() => {
@@ -236,6 +244,50 @@ describe('OnboardingService', () => {
       claudeBaseUrl: 'https://cch-jyw.pipidan.qzz.io',
       codexApiKey: 'codex-key',
       codexBaseUrl: 'https://cch-jyw.pipidan.qzz.io/v1',
+    });
+  });
+
+  it('detectCli merges prerequisite status with CLI detection results', async () => {
+    checkPrerequisitesMock.mockResolvedValue({
+      gitInstalled: true,
+      gitVersion: 'git version 2.43.0.windows.1',
+      nodeInstalled: false,
+      nodeVersion: 'v16.20.0',
+      wingetAvailable: true,
+    });
+
+    const { cliDetector } = await import('../../cli/CliDetector');
+    vi.mocked(cliDetector.detectOne)
+      .mockResolvedValueOnce({
+        id: 'claude',
+        name: 'Claude',
+        command: 'claude',
+        installed: true,
+        version: '1.0.0',
+        isBuiltin: true,
+        environment: 'native',
+      })
+      .mockResolvedValueOnce({
+        id: 'codex',
+        name: 'Codex',
+        command: 'codex',
+        installed: false,
+        isBuiltin: true,
+      });
+
+    const { onboardingService } = await import('../OnboardingService');
+    const status = await onboardingService.detectCli();
+
+    expect(status).toEqual({
+      gitInstalled: true,
+      gitVersion: 'git version 2.43.0.windows.1',
+      nodeInstalled: false,
+      nodeVersion: 'v16.20.0',
+      wingetAvailable: true,
+      claudeInstalled: true,
+      claudeVersion: '1.0.0',
+      codexInstalled: false,
+      codexVersion: undefined,
     });
   });
 });
