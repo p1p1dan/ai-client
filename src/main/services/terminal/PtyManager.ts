@@ -382,7 +382,7 @@ export class PtyManager {
           ANTHROPIC_AUTH_TOKEN: liveCredentials.claudeAuthToken,
           ANTHROPIC_BASE_URL: liveCredentials.claudeBaseUrl,
           OPENAI_API_KEY: liveCredentials.codexApiKey,
-          OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
+          CODEX_OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
           // Shadow config preserves user's settings.json but strips BASE_URL/AUTH_TOKEN
           // so the process-env values above take effect for Claude CLI.
           ...(options.env?.CLAUDE_CONFIG_DIR

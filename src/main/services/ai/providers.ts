@@ -238,7 +238,7 @@ export function spawnCLI(options: CLISpawnOptions): CLISpawnResult {
       if (liveCredentials) {
         credentialEnv = {
           OPENAI_API_KEY: liveCredentials.codexApiKey,
-          OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
+          CODEX_OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
         };
       }
       break;
