@@ -14,8 +14,6 @@ import type {
 } from '@shared/types';
 import type { CommonAICLIOptions } from '@shared/types/ai';
 import { getEnvForCommand, getShellForCommand } from '../../utils/shell';
-import { getLiveCredentials } from '../onboarding';
-import { prepareShadowClaudeConfig } from '../onboarding/claudeNullConfig';
 
 export type {
   AIProvider,
@@ -211,36 +209,18 @@ function buildCursorArgs(options: CLISpawnOptions): string[] {
 
 export function spawnCLI(options: CLISpawnOptions): CLISpawnResult {
   const { shell, args: shellArgs } = getShellForCommand();
-  const liveCredentials = getLiveCredentials();
 
   let cliCommand: string;
   let cliArgs: string[];
-  let credentialEnv: Record<string, string> | undefined;
 
   switch (options.provider) {
     case 'claude-code':
       cliCommand = 'claude';
       cliArgs = buildClaudeArgs(options);
-      if (liveCredentials) {
-        // Shadow config = user's settings.json minus BASE_URL/AUTH_TOKEN.
-        // These two fields are injected via process env instead.
-        const shadowDir = prepareShadowClaudeConfig();
-        credentialEnv = {
-          ANTHROPIC_AUTH_TOKEN: liveCredentials.claudeAuthToken,
-          ANTHROPIC_BASE_URL: liveCredentials.claudeBaseUrl,
-          CLAUDE_CONFIG_DIR: shadowDir,
-        };
-      }
       break;
     case 'codex-cli':
       cliCommand = 'codex';
       cliArgs = buildCodexArgs(options);
-      if (liveCredentials) {
-        credentialEnv = {
-          OPENAI_API_KEY: liveCredentials.codexApiKey,
-          CODEX_OPENAI_BASE_URL: liveCredentials.codexBaseUrl,
-        };
-      }
       break;
     case 'gemini-cli':
       cliCommand = 'gemini';
@@ -253,17 +233,9 @@ export function spawnCLI(options: CLISpawnOptions): CLISpawnResult {
     default:
       cliCommand = 'claude';
       cliArgs = buildClaudeArgs(options);
-      if (liveCredentials) {
-        const shadowDir = prepareShadowClaudeConfig();
-        credentialEnv = {
-          ANTHROPIC_AUTH_TOKEN: liveCredentials.claudeAuthToken,
-          ANTHROPIC_BASE_URL: liveCredentials.claudeBaseUrl,
-          CLAUDE_CONFIG_DIR: shadowDir,
-        };
-      }
   }
 
-  const env = getEnvForCommand(credentialEnv);
+  const env = getEnvForCommand();
   const fullCommand = `${cliCommand} ${cliArgs.join(' ')}`;
 
   const proc = spawn(shell, [...shellArgs, fullCommand], {
