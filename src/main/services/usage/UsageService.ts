@@ -1,6 +1,9 @@
 import type { UsageStatsResult } from '@shared/types';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { net } from 'electron';
-import { getLiveCredentials, onboardingService } from '../onboarding';
+import { onboardingService } from '../onboarding';
 
 function coerceFiniteNumber(value: unknown): number | null {
   if (typeof value !== 'number') {
@@ -93,6 +96,24 @@ function extractCookieValue(setCookieHeader: string, cookieName: string): string
   return rawValue || null;
 }
 
+function readCodexApiKey(): string | null {
+  try {
+    const authPath = path.join(os.homedir(), '.codex', 'auth.json');
+    if (!fs.existsSync(authPath)) {
+      return null;
+    }
+    const raw = fs.readFileSync(authPath, 'utf-8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    const apiKey = (parsed as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY;
+    return typeof apiKey === 'string' && apiKey.trim() ? apiKey : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loginForActionsSession(
   serverUrl: string,
   apiKey: string
@@ -160,13 +181,12 @@ class UsageService {
         return { error: 'Not registered' };
       }
 
-      const liveCredentials = getLiveCredentials();
-      if (!liveCredentials?.codexApiKey) {
+      const apiKey = readCodexApiKey();
+      if (!apiKey) {
         return { error: 'Credentials not available' };
       }
 
       const serverUrl = onboarding.serverUrl.trim().replace(/\/+$/, '');
-      const apiKey = liveCredentials.codexApiKey;
 
       // Preferred: dedicated API endpoint for usage stats (stable contract for desktop clients).
       // If the server does not implement it, fallback to the Actions API below.
