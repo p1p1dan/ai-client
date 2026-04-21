@@ -45,14 +45,12 @@ describe('OnboardingService', () => {
     mkdirSync(tempHome, { recursive: true });
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
-    process.env.CLAUDE_CONFIG_DIR = join(tempHome, '.claude');
     fetchMock.mockReset();
     checkPrerequisitesMock.mockReset();
   });
 
   afterEach(() => {
     vi.resetModules();
-    delete process.env.CLAUDE_CONFIG_DIR;
     if (originalHome === undefined) {
       delete process.env.HOME;
     } else {
@@ -66,7 +64,7 @@ describe('OnboardingService', () => {
     rmSync(tempHome, { recursive: true, force: true });
   });
 
-  it('saves onboarding state without modifying local Claude/Codex config files', async () => {
+  it('persists credentials to CLI config files and preserves existing settings', async () => {
     const settingsPath = join(tempHome, '.ensoai', 'settings.json');
     mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
     writeFileSync(
@@ -101,6 +99,7 @@ describe('OnboardingService', () => {
           env: {
             ANTHROPIC_BASE_URL: 'https://old.example.com/v1',
             ANTHROPIC_AUTH_TOKEN: 'old-token',
+            SOME_EXISTING_ENV: 'keep-me',
           },
         },
         null,
@@ -112,12 +111,22 @@ describe('OnboardingService', () => {
     mkdirSync(codexDir, { recursive: true });
     const codexConfigPath = join(codexDir, 'config.toml');
     const codexAuthPath = join(codexDir, 'auth.json');
-    writeFileSync(codexConfigPath, 'model_provider = "old"\n');
-    writeFileSync(codexAuthPath, JSON.stringify({ OPENAI_API_KEY: 'old-key' }, null, 2));
+    writeFileSync(
+      codexConfigPath,
+      '# user comments top\nmodel = "user-custom-model"\nmodel_provider = "old"\n\n[profiles.custom]\nname = "my-profile"\nextra = 42\n'
+    );
+    writeFileSync(
+      codexAuthPath,
+      JSON.stringify({ OPENAI_API_KEY: 'old-key', OPENAI_ORG: 'org1' }, null, 2)
+    );
+
+    const claudeJsonPath = join(tempHome, '.claude.json');
+    writeFileSync(claudeJsonPath, JSON.stringify({ mcpServers: { test: { command: 'node' } } }, null, 2));
 
     const originalClaudeSettings = readFileSync(claudeSettingsPath, 'utf-8');
     const originalCodexConfig = readFileSync(codexConfigPath, 'utf-8');
     const originalCodexAuth = readFileSync(codexAuthPath, 'utf-8');
+    const originalClaudeJson = readFileSync(claudeJsonPath, 'utf-8');
 
     fetchMock.mockResolvedValue({
       json: async () => ({
@@ -141,7 +150,6 @@ describe('OnboardingService', () => {
 
     const { readSettings } = await import('../../../ipc/settings');
     const { onboardingService } = await import('../OnboardingService');
-    const { getLiveCredentials } = await import('../credentialStore');
 
     expect(readSettings()).toEqual({
       'enso-settings': {
@@ -175,33 +183,94 @@ describe('OnboardingService', () => {
       email: 'user@jcdz.cc',
     });
 
-    expect(getLiveCredentials()).toEqual({
-      claudeAuthToken: 'claude-token',
-      claudeBaseUrl: 'https://cch-jyw.pipidan.qzz.io',
-      codexApiKey: 'codex-key',
-      codexBaseUrl: 'https://cch-jyw.pipidan.qzz.io/v1',
+    expect(existsSync(`${claudeSettingsPath}.bak`)).toBe(true);
+    expect(readFileSync(`${claudeSettingsPath}.bak`, 'utf-8')).toBe(originalClaudeSettings);
+
+    const updatedClaudeSettings = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as {
+      env?: Record<string, unknown>;
+      hooks?: unknown;
+      permissions?: unknown;
+    };
+    expect(updatedClaudeSettings.hooks).toEqual({ Stop: [{ command: 'echo stop' }] });
+    expect(updatedClaudeSettings.permissions).toEqual({ allow: ['Read'], deny: [] });
+    expect(updatedClaudeSettings.env).toMatchObject({
+      ANTHROPIC_BASE_URL: 'https://cch-jyw.pipidan.qzz.io',
+      ANTHROPIC_AUTH_TOKEN: 'claude-token',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      SOME_EXISTING_ENV: 'keep-me',
     });
 
-    // No local CLI config mutation.
-    expect(readFileSync(claudeSettingsPath, 'utf-8')).toBe(originalClaudeSettings);
-    expect(existsSync(join(claudeDir, 'backups'))).toBe(false);
+    expect(existsSync(`${codexConfigPath}.bak`)).toBe(true);
+    expect(readFileSync(`${codexConfigPath}.bak`, 'utf-8')).toBe(originalCodexConfig);
+    expect(existsSync(`${codexAuthPath}.bak`)).toBe(true);
+    expect(readFileSync(`${codexAuthPath}.bak`, 'utf-8')).toBe(originalCodexAuth);
 
-    expect(readFileSync(codexConfigPath, 'utf-8')).toBe(originalCodexConfig);
-    expect(readFileSync(codexAuthPath, 'utf-8')).toBe(originalCodexAuth);
-    expect(existsSync(join(codexDir, 'backups'))).toBe(false);
+    const updatedCodexConfig = readFileSync(codexConfigPath, 'utf-8');
+    expect(updatedCodexConfig).toMatch(/# user comments top/);
+    expect(updatedCodexConfig).toMatch(/model = "user-custom-model"/);
+    expect(updatedCodexConfig).toMatch(/model_provider = "jyw"/);
+    expect(updatedCodexConfig).not.toMatch(/model_provider = "old"/);
+    expect(updatedCodexConfig).toMatch(/\[profiles\.custom\]/);
+    expect(updatedCodexConfig).toMatch(/name = "my-profile"/);
+    expect(updatedCodexConfig).toMatch(/extra = 42/);
+    expect(updatedCodexConfig).toMatch(/\[model_providers\.jyw\]/);
+    expect(updatedCodexConfig).toMatch(/base_url = "https:\/\/cch-jyw\.pipidan\.qzz\.io\/v1"/);
+    expect(updatedCodexConfig).toMatch(/wire_api = "responses"/);
+    expect(JSON.parse(readFileSync(codexAuthPath, 'utf-8'))).toEqual({
+      OPENAI_API_KEY: 'codex-key',
+      OPENAI_ORG: 'org1',
+    });
+
+    const updatedClaudeJson = JSON.parse(readFileSync(claudeJsonPath, 'utf-8')) as Record<string, unknown>;
+    expect(updatedClaudeJson).toMatchObject({
+      mcpServers: { test: { command: 'node' } },
+      hasCompletedOnboarding: true,
+    });
+    expect(readFileSync(claudeJsonPath, 'utf-8')).not.toBe(originalClaudeJson);
   });
 
-  it('fetchLiveCredentials returns null when not registered', async () => {
+  it('logout removes local CLI credentials', async () => {
     const { onboardingService } = await import('../OnboardingService');
-    const creds = await onboardingService.fetchLiveCredentials('user@jcdz.cc');
-    expect(creds).toBeNull();
+
+    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    writeFileSync(join(tempHome, '.ensoai', 'settings.json'), JSON.stringify({ onboarding: { registered: true } }));
+
+    const claudeSettingsPath = join(tempHome, '.claude', 'settings.json');
+    mkdirSync(join(tempHome, '.claude'), { recursive: true });
+    writeFileSync(
+      claudeSettingsPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_BASE_URL: 'https://cch.example.com',
+            ANTHROPIC_AUTH_TOKEN: 'token',
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+            KEEP: 'x',
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    mkdirSync(join(tempHome, '.codex'), { recursive: true });
+    writeFileSync(join(tempHome, '.codex', 'config.toml'), 'model_provider = "jyw"\n');
+    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'k' }, null, 2));
+
+    expect(onboardingService.logout()).toBe(true);
+
+    const updatedClaudeSettings = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as {
+      env?: Record<string, unknown>;
+    };
+    expect(updatedClaudeSettings.env).toEqual({ KEEP: 'x' });
+    expect(existsSync(join(tempHome, '.codex', 'config.toml'))).toBe(false);
+    expect(existsSync(join(tempHome, '.codex', 'auth.json'))).toBe(false);
   });
 
-  it('fetchLiveCredentials returns credentials when registered', async () => {
-    const settingsPath = join(tempHome, '.ensoai', 'settings.json');
+  it('refreshes stale local CLI credentials for an already registered user', async () => {
     mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
     writeFileSync(
-      settingsPath,
+      join(tempHome, '.ensoai', 'settings.json'),
       JSON.stringify(
         {
           onboarding: {
@@ -214,6 +283,81 @@ describe('OnboardingService', () => {
         null,
         2
       )
+    );
+
+    const claudeDir = join(tempHome, '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    const claudeSettingsPath = join(claudeDir, 'settings.json');
+    writeFileSync(
+      claudeSettingsPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_BASE_URL: 'https://old.example.com',
+            ANTHROPIC_AUTH_TOKEN: 'old-token',
+            KEEP: 'keep-me',
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    const codexDir = join(tempHome, '.codex');
+    mkdirSync(codexDir, { recursive: true });
+    writeFileSync(join(codexDir, 'config.toml'), 'model_provider = "old"\n');
+    writeFileSync(join(codexDir, 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'old-key' }, null, 2));
+
+    fetchMock.mockResolvedValue({
+      json: async () => ({
+        ok: true,
+        data: {
+          user: { id: 1, name: 'Test User' },
+          apiKey: 'unused-top-level-key',
+          config: {
+            claude: {
+              baseUrl: 'https://unused.example.com/v1',
+              authToken: 'new-claude-token',
+            },
+            codex: {
+              baseUrl: 'https://unused.example.com/v1',
+              apiKey: 'new-codex-key',
+            },
+          },
+        },
+      }),
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+
+    await expect(onboardingService.refreshRegisteredCredentialFiles()).resolves.toBe(true);
+
+    const updatedClaudeSettings = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as {
+      env?: Record<string, unknown>;
+    };
+    expect(updatedClaudeSettings.env).toMatchObject({
+      ANTHROPIC_BASE_URL: 'https://cch-jyw.pipidan.qzz.io',
+      ANTHROPIC_AUTH_TOKEN: 'new-claude-token',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      KEEP: 'keep-me',
+    });
+    expect(JSON.parse(readFileSync(join(codexDir, 'auth.json'), 'utf-8'))).toEqual({
+      OPENAI_API_KEY: 'new-codex-key',
+    });
+    const refreshedCodexConfig = readFileSync(join(codexDir, 'config.toml'), 'utf-8');
+    expect(refreshedCodexConfig).toMatch(/model_provider = "jyw"/);
+    expect(refreshedCodexConfig).not.toMatch(/model_provider = "old"/);
+    expect(refreshedCodexConfig).toMatch(/base_url = "https:\/\/cch-jyw\.pipidan\.qzz\.io\/v1"/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('upserts base_url but preserves custom keys inside existing [model_providers.jyw] block', async () => {
+    const codexDir = join(tempHome, '.codex');
+    mkdirSync(codexDir, { recursive: true });
+    const codexConfigPath = join(codexDir, 'config.toml');
+    writeFileSync(
+      codexConfigPath,
+      '[model_providers.jyw]\nname = "custom-name"\nbase_url = "https://other.example.com/v1"\ncustom_extra = "keep-me"\n'
     );
 
     fetchMock.mockResolvedValue({
@@ -237,13 +381,61 @@ describe('OnboardingService', () => {
     });
 
     const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.register(
+      'user@jcdz.cc',
+      'https://cch-jyw.pipidan.qzz.io',
+      'secret'
+    );
+    expect(result.ok).toBe(true);
 
-    const creds = await onboardingService.fetchLiveCredentials('user@jcdz.cc');
-    expect(creds).toEqual({
-      claudeAuthToken: 'claude-token',
-      claudeBaseUrl: 'https://cch-jyw.pipidan.qzz.io',
-      codexApiKey: 'codex-key',
-      codexBaseUrl: 'https://cch-jyw.pipidan.qzz.io/v1',
+    const updated = readFileSync(codexConfigPath, 'utf-8');
+    expect(updated).toMatch(/name = "custom-name"/);
+    expect(updated).toMatch(/base_url = "https:\/\/cch-jyw\.pipidan\.qzz\.io\/v1"/);
+    expect(updated).not.toMatch(/base_url = "https:\/\/other\.example\.com/);
+    expect(updated).toMatch(/custom_extra = "keep-me"/);
+  });
+
+  it('merges auth.json preserving unrelated keys', async () => {
+    const codexDir = join(tempHome, '.codex');
+    mkdirSync(codexDir, { recursive: true });
+    const codexAuthPath = join(codexDir, 'auth.json');
+    writeFileSync(
+      codexAuthPath,
+      JSON.stringify({ OPENAI_API_KEY: 'old', OPENAI_ORG: 'org1', custom: true }, null, 2)
+    );
+
+    fetchMock.mockResolvedValue({
+      json: async () => ({
+        ok: true,
+        data: {
+          user: { id: 1, name: 'Test User' },
+          apiKey: 'unused-top-level-key',
+          config: {
+            claude: {
+              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              authToken: 'claude-token',
+            },
+            codex: {
+              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              apiKey: 'codex-key',
+            },
+          },
+        },
+      }),
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.register(
+      'user@jcdz.cc',
+      'https://cch-jyw.pipidan.qzz.io',
+      'secret'
+    );
+    expect(result.ok).toBe(true);
+
+    expect(JSON.parse(readFileSync(codexAuthPath, 'utf-8'))).toEqual({
+      OPENAI_API_KEY: 'codex-key',
+      OPENAI_ORG: 'org1',
+      custom: true,
     });
   });
 

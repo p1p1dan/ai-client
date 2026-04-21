@@ -87,13 +87,8 @@ describe('UsageService', () => {
       )
     );
 
-    const { setLiveCredentials } = await import('../../onboarding/credentialStore');
-    setLiveCredentials({
-      claudeAuthToken: 'unused',
-      claudeBaseUrl: 'unused',
-      codexApiKey: 'api-key',
-      codexBaseUrl: 'unused',
-    });
+    mkdirSync(join(tempHome, '.codex'), { recursive: true });
+    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
 
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -133,13 +128,8 @@ describe('UsageService', () => {
       )
     );
 
-    const { setLiveCredentials } = await import('../../onboarding/credentialStore');
-    setLiveCredentials({
-      claudeAuthToken: 'unused',
-      claudeBaseUrl: 'unused',
-      codexApiKey: 'api-key',
-      codexBaseUrl: 'unused',
-    });
+    mkdirSync(join(tempHome, '.codex'), { recursive: true });
+    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
@@ -213,13 +203,8 @@ describe('UsageService', () => {
       )
     );
 
-    const { setLiveCredentials } = await import('../../onboarding/credentialStore');
-    setLiveCredentials({
-      claudeAuthToken: 'unused',
-      claudeBaseUrl: 'unused',
-      codexApiKey: 'api-key',
-      codexBaseUrl: 'unused',
-    });
+    mkdirSync(join(tempHome, '.codex'), { recursive: true });
+    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
 
     fetchMock.mockResolvedValueOnce({
       ok: false,
@@ -262,13 +247,8 @@ describe('UsageService', () => {
       )
     );
 
-    const { setLiveCredentials } = await import('../../onboarding/credentialStore');
-    setLiveCredentials({
-      claudeAuthToken: 'unused',
-      claudeBaseUrl: 'unused',
-      codexApiKey: 'api-key',
-      codexBaseUrl: 'unused',
-    });
+    mkdirSync(join(tempHome, '.codex'), { recursive: true });
+    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));

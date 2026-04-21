@@ -1,4 +1,5 @@
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { extname, join } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
@@ -51,8 +52,7 @@ import { checkGitInstalled } from './services/git/checkGit';
 import { gitAutoFetchService } from './services/git/GitAutoFetchService';
 import { setCurrentLocale } from './services/i18n';
 import { buildAppMenu } from './services/MenuBuilder';
-import { ensureClaudeNullConfigDir } from './services/onboarding/claudeNullConfig';
-import { clearLiveCredentials, onboardingService, setLiveCredentials } from './services/onboarding';
+import { onboardingService } from './services/onboarding';
 import {
   getSharedStatePaths,
   isLegacySettingsMigrated,
@@ -378,48 +378,49 @@ app.whenReady().then(async () => {
   migrateLegacySettingsIfNeeded();
   await migrateLegacyTodoIfNeeded();
 
-  // Ensure CLAUDE_CONFIG_DIR points to an empty config directory (created once, never overwritten).
-  ensureClaudeNullConfigDir();
-
   const onboardingState = onboardingService.checkRegistration();
-  const shouldFetchCredentials = onboardingState.registered && !!onboardingState.email;
-
-  let liveCredentialsAvailable: boolean | null = null;
-  let liveCredentialsStatusSent = false;
+  const shouldSendCredentialStatus = onboardingState.registered;
+  const shouldRefreshCredentialFiles = onboardingState.registered && !!onboardingState.email;
+  let credentialStatusSent = false;
   let windowFinishedLoading = false;
+  let credentialFilesAvailable: boolean | null = shouldSendCredentialStatus ? null : false;
+
+  const detectCredentialFilesAvailable = (): boolean => {
+    if (!onboardingState.registered) {
+      return false;
+    }
+    const codexAuthPath = join(homedir(), '.codex', 'auth.json');
+    const claudeSettingsPath = join(homedir(), '.claude', 'settings.json');
+    return existsSync(codexAuthPath) && existsSync(claudeSettingsPath);
+  };
 
   const maybeSendLiveCredentialsStatus = () => {
-    if (!shouldFetchCredentials) return;
+    if (!shouldSendCredentialStatus) return;
     if (!windowFinishedLoading) return;
-    if (liveCredentialsAvailable === null) return;
-    if (liveCredentialsStatusSent) return;
+    if (credentialFilesAvailable === null) return;
+    if (credentialStatusSent) return;
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
-    liveCredentialsStatusSent = true;
+    credentialStatusSent = true;
     mainWindow.webContents.send(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, {
-      available: liveCredentialsAvailable,
+      available: credentialFilesAvailable,
     });
   };
 
-  if (shouldFetchCredentials) {
+  if (shouldRefreshCredentialFiles) {
     onboardingService
-      .fetchLiveCredentials(onboardingState.email!)
-      .then((credentials) => {
-        if (credentials) {
-          setLiveCredentials(credentials);
-          liveCredentialsAvailable = true;
-        } else {
-          clearLiveCredentials();
-          liveCredentialsAvailable = false;
-        }
+      .refreshRegisteredCredentialFiles()
+      .then((refreshed) => {
+        credentialFilesAvailable = refreshed || detectCredentialFilesAvailable();
       })
       .catch(() => {
-        clearLiveCredentials();
-        liveCredentialsAvailable = false;
+        credentialFilesAvailable = detectCredentialFilesAvailable();
       })
       .finally(() => {
         maybeSendLiveCredentialsStatus();
       });
+  } else if (shouldSendCredentialStatus) {
+    credentialFilesAvailable = detectCredentialFilesAvailable();
   }
 
   // Register protocol to handle local file:// URLs for markdown images
