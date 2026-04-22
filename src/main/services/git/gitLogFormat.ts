@@ -7,7 +7,12 @@ export const GIT_LOG_PRETTY_FORMAT = '%H%x1f%ai%x1f%an%x1f%ae%x1f%s%x1f%B%x1f%D%
 export function parseGitLogOutput(output: string): GitLogEntry[] {
   return output
     .split(GIT_LOG_RECORD_SEPARATOR)
-    .filter((record) => record.trim().length > 0)
+    // Trim each record: git emits a newline between records that otherwise
+    // leaks into the next record's first field (the hash), breaking any
+    // downstream ref lookup (cat-file, diff-tree, show) for all but the
+    // first record.
+    .map((record) => record.trim())
+    .filter((record) => record.length > 0)
     .map((record) => {
       const parts = record.split(GIT_LOG_FIELD_SEPARATOR);
       const message = (parts[4] || '').trim();

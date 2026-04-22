@@ -41,6 +41,24 @@ describe('parseGitLogOutput', () => {
     ]);
   });
 
+  it('strips the newline that git emits between records from the next hash', () => {
+    // Git prints `<record>\x1e\n<record>\x1e\n...`, so splitting by \x1e leaves
+    // every record after the first with a leading \n that would otherwise end
+    // up in the hash field and break downstream ref lookups.
+    const recordA = ['abc123', '2026-03-24 10:00:00 +0800', 'A', 'a@x', 'msg A', 'msg A', ''].join(
+      GIT_LOG_FIELD_SEPARATOR
+    );
+    const recordB = ['def456', '2026-03-24 11:00:00 +0800', 'B', 'b@x', 'msg B', 'msg B', ''].join(
+      GIT_LOG_FIELD_SEPARATOR
+    );
+    const output = `${recordA}${GIT_LOG_RECORD_SEPARATOR}\n${recordB}${GIT_LOG_RECORD_SEPARATOR}\n`;
+
+    const parsed = parseGitLogOutput(output);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].hash).toBe('abc123');
+    expect(parsed[1].hash).toBe('def456');
+  });
+
   it('falls back to subject when full message is empty', () => {
     const output =
       [
