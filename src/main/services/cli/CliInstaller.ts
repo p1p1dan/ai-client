@@ -206,7 +206,7 @@ if pgrep -x "${APP_DISPLAY_NAME}" > /dev/null 2>&1 || pgrep -f "electron.*${APP_
   " 2>/dev/null
 
   # Use open with URL scheme
-  open "enso://open?path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")"
+  open "aiclient://open?path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")"
 else
   # App not running, launch it with the path
   if [ -d "${appPath}" ]; then
@@ -239,7 +239,7 @@ tasklist /FI "IMAGENAME eq ${WINDOWS_EXECUTABLE_NAME}" 2>NUL | find /I /N "${WIN
 if %ERRORLEVEL%==0 (
   :: App is running, use URL scheme with PowerShell for proper URL encoding
   for /f "usebackq delims=" %%i in (\`powershell -NoProfile -Command "[uri]::EscapeDataString('%TARGET_PATH%')"\`) do set "ENCODED_PATH=%%i"
-  start "" "enso://open?path=!ENCODED_PATH!"
+  start "" "aiclient://open?path=!ENCODED_PATH!"
 ) else (
   :: App not running, launch with path (use caret to escape special chars, no extra quotes)
   "${exePath}" --open-path=!TARGET_PATH!
@@ -272,8 +272,8 @@ fi
 if pgrep -x "${APP_DISPLAY_NAME}" > /dev/null 2>&1 || pgrep -f "${APP_DISPLAY_NAME}" > /dev/null 2>&1; then
   # App is running, use xdg-open with URL scheme
   ENCODED_PATH=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")
-  xdg-open "enso://open?path=$ENCODED_PATH" 2>/dev/null || \\
-    gio open "enso://open?path=$ENCODED_PATH" 2>/dev/null
+  xdg-open "aiclient://open?path=$ENCODED_PATH" 2>/dev/null || \\
+    gio open "aiclient://open?path=$ENCODED_PATH" 2>/dev/null
 else
   # App not running, launch it with the path
   if [ -x "${exePath}" ]; then

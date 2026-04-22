@@ -1,4 +1,4 @@
-appId: com.ensoai.app
+appId: com.aiclient.app
 productName: AiClient
 copyright: Copyright © 2025
 
@@ -164,12 +164,12 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: true
-  # Register enso:// URL scheme
+  # Register aiclient:// URL scheme
   extendInfo:
     CFBundleURLTypes:
-      - CFBundleURLName: EnsoAI
+      - CFBundleURLName: AiClient
         CFBundleURLSchemes:
-          - enso
+          - aiclient
 
 dmg:
   sign: true
@@ -200,7 +200,7 @@ nsis:
   deleteAppDataOnUninstall: false
   # Enable differential download for NSIS
   differentialPackage: true
-  # Register enso:// URL scheme
+  # Register aiclient:// URL scheme
   include: build/installer.nsh
 
 linux:
@@ -209,17 +209,17 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  executableName: enso-ai
+  executableName: aiclient
   maintainer: baseOnEnso <admin@123.com>
   category: Development
-  # Register enso:// URL scheme
+  # Register aiclient:// URL scheme
   mimeTypes:
-    - x-scheme-handler/enso
+    - x-scheme-handler/aiclient
 
 afterPack: scripts/afterPack.mjs
 
 publish:
   provider: github
-  owner: J3n5en
-  repo: EnsoAI
+  owner: jyw-ai
+  repo: jyw-ai-client
   releaseType: draft

@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Enso Web Inspector
+// @name         AiClient Web Inspector
 // @namespace    http://tampermonkey.net/
 // @version      1.8
-// @description  选中页面元素并发送到 Enso，具备现代化的 UI 界面
-// @author       Enso
+// @description  选中页面元素并发送到 AiClient，具备现代化的 UI 界面
+// @author       baseOnEnso
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
@@ -11,8 +11,8 @@
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @connect      127.0.0.1
-// @updateURL    https://raw.githubusercontent.com/J3n5en/EnsoAI/main/scripts/web-inspector.user.js
-// @downloadURL  https://raw.githubusercontent.com/J3n5en/EnsoAI/main/scripts/web-inspector.user.js
+// @updateURL    https://raw.githubusercontent.com/jyw-ai/jyw-ai-client/main/scripts/web-inspector.user.js
+// @downloadURL  https://raw.githubusercontent.com/jyw-ai/jyw-ai-client/main/scripts/web-inspector.user.js
 // ==/UserScript==
 
 (() => {

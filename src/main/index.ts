@@ -137,17 +137,17 @@ if (isDev) {
 // Register URL scheme handler (must be done before app is ready)
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('enso', process.execPath, [process.argv[1]]);
+    app.setAsDefaultProtocolClient('aiclient', process.execPath, [process.argv[1]]);
   }
 } else {
-  app.setAsDefaultProtocolClient('enso');
+  app.setAsDefaultProtocolClient('aiclient');
 }
 
 // Parse URL and extract path
-function parseEnsoUrl(url: string): string | null {
+function parseAppUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'enso:') {
+    if (parsed.protocol === 'aiclient:') {
       const path = parsed.searchParams.get('path');
       if (path) {
         return decodeURIComponent(path);
@@ -192,8 +192,8 @@ function handleCommandLineArgs(argv: string[]): void {
       }
       return;
     }
-    if (arg.startsWith('enso://')) {
-      const rawPath = parseEnsoUrl(arg);
+    if (arg.startsWith('aiclient://')) {
+      const rawPath = parseAppUrl(arg);
       const path = rawPath ? sanitizePath(rawPath) : null;
       if (path) {
         sendOpenPath(path);
@@ -206,7 +206,7 @@ function handleCommandLineArgs(argv: string[]): void {
 // macOS: Handle open-url event
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  const path = parseEnsoUrl(url);
+  const path = parseAppUrl(url);
   if (path) {
     if (app.isReady()) {
       sendOpenPath(path);
@@ -362,7 +362,7 @@ async function init(): Promise<void> {
 
 app.whenReady().then(async () => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.ensoai.app');
+  electronApp.setAppUserModelId('com.aiclient.app');
 
   // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
   // NOTE: This is registered here (in the same module as the protocol handler)

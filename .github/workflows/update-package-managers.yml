@@ -47,13 +47,13 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
 
           echo "Downloading ARM64 DMG..."
-          curl -sLO "https://github.com/J3n5en/EnsoAI/releases/download/${TAG}/EnsoAI-${VERSION}-arm64.dmg"
-          ARM64_SHA=$(shasum -a 256 "EnsoAI-${VERSION}-arm64.dmg" | cut -d' ' -f1)
+          curl -sLO "https://github.com/jyw-ai/jyw-ai-client/releases/download/${TAG}/AiClient-${VERSION}-arm64.dmg"
+          ARM64_SHA=$(shasum -a 256 "AiClient-${VERSION}-arm64.dmg" | cut -d' ' -f1)
           echo "ARM64 SHA256: $ARM64_SHA"
 
           echo "Downloading x64 DMG..."
-          curl -sLO "https://github.com/J3n5en/EnsoAI/releases/download/${TAG}/EnsoAI-${VERSION}.dmg"
-          X64_SHA=$(shasum -a 256 "EnsoAI-${VERSION}.dmg" | cut -d' ' -f1)
+          curl -sLO "https://github.com/jyw-ai/jyw-ai-client/releases/download/${TAG}/AiClient-${VERSION}.dmg"
+          X64_SHA=$(shasum -a 256 "AiClient-${VERSION}.dmg" | cut -d' ' -f1)
           echo "x64 SHA256: $X64_SHA"
 
           echo "arm64=$ARM64_SHA" >> $GITHUB_OUTPUT
@@ -62,7 +62,7 @@ jobs:
       - name: Checkout Homebrew Tap
         uses: actions/checkout@v4
         with:
-          repository: J3n5en/homebrew-ensoai
+          repository: jyw-ai/homebrew-aiclient
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
@@ -72,50 +72,50 @@ jobs:
           ARM64_SHA="${{ steps.sha.outputs.arm64 }}"
           X64_SHA="${{ steps.sha.outputs.x64 }}"
 
-          cat > homebrew-tap/Casks/ensoai.rb << 'EOF'
-          cask "ensoai" do
+          cat > homebrew-tap/Casks/aiclient.rb << 'EOF'
+          cask "aiclient" do
             version "VERSION_PLACEHOLDER"
             sha256 arm: "ARM64_SHA_PLACEHOLDER",
                    intel: "X64_SHA_PLACEHOLDER"
 
             on_arm do
-              url "https://github.com/J3n5en/EnsoAI/releases/download/v#{version}/EnsoAI-#{version}-arm64.dmg"
+              url "https://github.com/jyw-ai/jyw-ai-client/releases/download/v#{version}/AiClient-#{version}-arm64.dmg"
             end
             on_intel do
-              url "https://github.com/J3n5en/EnsoAI/releases/download/v#{version}/EnsoAI-#{version}.dmg"
+              url "https://github.com/jyw-ai/jyw-ai-client/releases/download/v#{version}/AiClient-#{version}.dmg"
             end
 
-            name "EnsoAI"
+            name "AiClient"
             desc "Git Worktree Manager with AI Agent"
-            homepage "https://github.com/J3n5en/EnsoAI"
+            homepage "https://github.com/jyw-ai/jyw-ai-client"
 
             livecheck do
               url :url
               strategy :github_latest
             end
 
-            app "EnsoAI.app"
+            app "AiClient.app"
 
             zap trash: [
-              "~/Library/Application Support/EnsoAI",
-              "~/Library/Preferences/com.ensoai.app.plist",
-              "~/Library/Caches/com.ensoai.app",
-              "~/Library/Saved Application State/com.ensoai.app.savedState",
+              "~/Library/Application Support/AiClient",
+              "~/Library/Preferences/com.aiclient.app.plist",
+              "~/Library/Caches/com.aiclient.app",
+              "~/Library/Saved Application State/com.aiclient.app.savedState",
             ]
           end
           EOF
 
-          sed -i '' "s/VERSION_PLACEHOLDER/${VERSION}/" homebrew-tap/Casks/ensoai.rb
-          sed -i '' "s/ARM64_SHA_PLACEHOLDER/${ARM64_SHA}/" homebrew-tap/Casks/ensoai.rb
-          sed -i '' "s/X64_SHA_PLACEHOLDER/${X64_SHA}/" homebrew-tap/Casks/ensoai.rb
+          sed -i '' "s/VERSION_PLACEHOLDER/${VERSION}/" homebrew-tap/Casks/aiclient.rb
+          sed -i '' "s/ARM64_SHA_PLACEHOLDER/${ARM64_SHA}/" homebrew-tap/Casks/aiclient.rb
+          sed -i '' "s/X64_SHA_PLACEHOLDER/${X64_SHA}/" homebrew-tap/Casks/aiclient.rb
 
       - name: Commit and Push
         working-directory: homebrew-tap
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/ensoai.rb
-          git diff --cached --quiet || git commit -m "Update EnsoAI to ${{ steps.version.outputs.tag }}"
+          git add Casks/aiclient.rb
+          git diff --cached --quiet || git commit -m "Update AiClient to ${{ steps.version.outputs.tag }}"
           git push
 
   update-scoop:
@@ -146,15 +146,15 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
 
           echo "Downloading Setup exe..."
-          curl -sLO "https://github.com/J3n5en/EnsoAI/releases/download/${TAG}/EnsoAI-Setup-${VERSION}.exe"
-          HASH=$(sha256sum "EnsoAI-Setup-${VERSION}.exe" | cut -d' ' -f1)
+          curl -sLO "https://github.com/jyw-ai/jyw-ai-client/releases/download/${TAG}/AiClient-Setup-${VERSION}.exe"
+          HASH=$(sha256sum "AiClient-Setup-${VERSION}.exe" | cut -d' ' -f1)
           echo "SHA256: $HASH"
           echo "hash=$HASH" >> $GITHUB_OUTPUT
 
       - name: Checkout Scoop Bucket
         uses: actions/checkout@v4
         with:
-          repository: J3n5en/scoop-ensoai
+          repository: jyw-ai/scoop-aiclient
           token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           path: scoop-bucket
 
@@ -169,11 +169,11 @@ jobs:
             '{
               version: $version,
               description: "Git Worktree Manager with AI Agent",
-              homepage: "https://github.com/J3n5en/EnsoAI",
+              homepage: "https://github.com/jyw-ai/jyw-ai-client",
               license: "MIT",
               architecture: {
                 "64bit": {
-                  url: "https://github.com/J3n5en/EnsoAI/releases/download/v\($version)/EnsoAI-Setup-\($version).exe#/setup.exe",
+                  url: "https://github.com/jyw-ai/jyw-ai-client/releases/download/v\($version)/AiClient-Setup-\($version).exe#/setup.exe",
                   hash: $hash
                 }
               },
@@ -185,35 +185,35 @@ jobs:
               post_install: [
                 "Remove-Item \"$dir\\setup.exe\" -Force"
               ],
-              bin: "EnsoAI.exe",
+              bin: "AiClient.exe",
               shortcuts: [
-                ["EnsoAI.exe", "EnsoAI"]
+                ["AiClient.exe", "AiClient"]
               ],
               uninstaller: {
                 script: [
-                  "Stop-Process -Name '"'"'EnsoAI'"'"' -Force -ErrorAction SilentlyContinue",
+                  "Stop-Process -Name '"'"'AiClient'"'"' -Force -ErrorAction SilentlyContinue",
                   "Start-Sleep -Seconds 2"
                 ]
               },
               checkver: {
-                github: "https://github.com/J3n5en/EnsoAI"
+                github: "https://github.com/jyw-ai/jyw-ai-client"
               },
               autoupdate: {
                 architecture: {
                   "64bit": {
-                    url: "https://github.com/J3n5en/EnsoAI/releases/download/v$version/EnsoAI-Setup-$version.exe#/setup.exe"
+                    url: "https://github.com/jyw-ai/jyw-ai-client/releases/download/v$version/AiClient-Setup-$version.exe#/setup.exe"
                   }
                 }
               }
-            }' > scoop-bucket/bucket/ensoai.json
+            }' > scoop-bucket/bucket/aiclient.json
 
       - name: Commit and Push
         working-directory: scoop-bucket
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add bucket/ensoai.json
-          git diff --cached --quiet || git commit -m "Update EnsoAI to ${{ steps.version.outputs.tag }}"
+          git add bucket/aiclient.json
+          git diff --cached --quiet || git commit -m "Update AiClient to ${{ steps.version.outputs.tag }}"
           git push
 
   update-winget:
@@ -242,14 +242,14 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
-          curl -sLO "https://github.com/J3n5en/EnsoAI/releases/download/${TAG}/EnsoAI-Setup-${VERSION}.exe"
-          HASH=$(sha256sum "EnsoAI-Setup-${VERSION}.exe" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
+          curl -sLO "https://github.com/jyw-ai/jyw-ai-client/releases/download/${TAG}/AiClient-Setup-${VERSION}.exe"
+          HASH=$(sha256sum "AiClient-Setup-${VERSION}.exe" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
           echo "hash=$HASH" >> $GITHUB_OUTPUT
 
       - name: Checkout winget-pkgs fork
         uses: actions/checkout@v4
         with:
-          repository: J3n5en/winget-pkgs
+          repository: jyw-ai/winget-pkgs
           token: ${{ secrets.WINGET_TOKEN }}
           path: winget-pkgs
 
@@ -266,14 +266,14 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
           HASH: ${{ steps.sha.outputs.hash }}
         run: |
-          MANIFEST_DIR="winget-pkgs/manifests/j/J3n5en/EnsoAI/${VERSION}"
+          MANIFEST_DIR="winget-pkgs/manifests/j/jyw-ai/jyw-ai-client/${VERSION}"
           mkdir -p "$MANIFEST_DIR"
 
           # installer.yaml - explicitly set Architecture: x64 (komac bug workaround)
-          cat > "$MANIFEST_DIR/J3n5en.EnsoAI.installer.yaml" << EOF
+          cat > "$MANIFEST_DIR/JywAi.AiClient.installer.yaml" << EOF
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
-          PackageIdentifier: J3n5en.EnsoAI
+          PackageIdentifier: JywAi.AiClient
           PackageVersion: ${VERSION}
           InstallerType: nullsoft
           Scope: user
@@ -284,7 +284,7 @@ jobs:
           UpgradeBehavior: install
           Installers:
             - Architecture: x64
-              InstallerUrl: https://github.com/J3n5en/EnsoAI/releases/download/${TAG}/EnsoAI-Setup-${VERSION}.exe
+              InstallerUrl: https://github.com/jyw-ai/jyw-ai-client/releases/download/${TAG}/AiClient-Setup-${VERSION}.exe
               InstallerSha256: ${HASH}
               InstallerSwitches:
                 Silent: /S
@@ -294,22 +294,22 @@ jobs:
           EOF
 
           # locale.yaml
-          cat > "$MANIFEST_DIR/J3n5en.EnsoAI.locale.en-US.yaml" << EOF
+          cat > "$MANIFEST_DIR/JywAi.AiClient.locale.en-US.yaml" << EOF
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
-          PackageIdentifier: J3n5en.EnsoAI
+          PackageIdentifier: JywAi.AiClient
           PackageVersion: ${VERSION}
           PackageLocale: en-US
-          Publisher: J3n5en
-          PublisherUrl: https://github.com/J3n5en
-          PublisherSupportUrl: https://github.com/J3n5en/EnsoAI/issues
-          Author: EnsoAI Team
-          PackageName: EnsoAI
-          PackageUrl: https://github.com/J3n5en/EnsoAI
+          Publisher: jyw-ai
+          PublisherUrl: https://github.com/jyw-ai
+          PublisherSupportUrl: https://github.com/jyw-ai/jyw-ai-client/issues
+          Author: baseOnEnso
+          PackageName: AiClient
+          PackageUrl: https://github.com/jyw-ai/jyw-ai-client
           License: MIT
-          LicenseUrl: https://github.com/J3n5en/EnsoAI/blob/main/LICENSE
+          LicenseUrl: https://github.com/jyw-ai/jyw-ai-client/blob/main/LICENSE
           ShortDescription: Git Worktree Manager with AI Agent
-          Description: EnsoAI is a desktop application that combines Git Worktree management with AI coding agents. It provides a unified workspace where you can manage multiple git worktrees while leveraging AI assistants like Claude, Codex, and Gemini to help with your development tasks.
+          Description: AiClient is a desktop application that combines Git Worktree management with AI coding agents. It provides a unified workspace where you can manage multiple git worktrees while leveraging AI assistants like Claude, Codex, and Gemini to help with your development tasks.
           Tags:
             - ai
             - claude
@@ -321,16 +321,16 @@ jobs:
             - git-worktree
             - productivity
             - worktree
-          ReleaseNotesUrl: https://github.com/J3n5en/EnsoAI/releases/tag/${TAG}
+          ReleaseNotesUrl: https://github.com/jyw-ai/jyw-ai-client/releases/tag/${TAG}
           ManifestType: defaultLocale
           ManifestVersion: 1.12.0
           EOF
 
           # version.yaml
-          cat > "$MANIFEST_DIR/J3n5en.EnsoAI.yaml" << EOF
+          cat > "$MANIFEST_DIR/JywAi.AiClient.yaml" << EOF
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
 
-          PackageIdentifier: J3n5en.EnsoAI
+          PackageIdentifier: JywAi.AiClient
           PackageVersion: ${VERSION}
           DefaultLocale: en-US
           ManifestType: version
@@ -345,12 +345,12 @@ jobs:
         working-directory: winget-pkgs
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="ensoai-${VERSION}"
+          BRANCH="aiclient-${VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add manifests/j/J3n5en/EnsoAI/
-          git commit -m "New version: J3n5en.EnsoAI version ${VERSION}"
+          git add manifests/j/jyw-ai/jyw-ai-client/
+          git commit -m "New version: JywAi.AiClient version ${VERSION}"
           git push -u origin "$BRANCH" --force
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
@@ -362,8 +362,8 @@ jobs:
           BRANCH="${{ steps.branch.outputs.branch }}"
           gh pr create \
             --repo microsoft/winget-pkgs \
-            --head "J3n5en:${BRANCH}" \
-            --title "New version: J3n5en.EnsoAI version ${VERSION}" \
+            --head "jyw-ai:${BRANCH}" \
+            --title "New version: JywAi.AiClient version ${VERSION}" \
             --body "" || echo "PR may already exist"
 
   update-aur:
@@ -393,7 +393,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
           echo "Downloading source tarball..."
-          curl -sLO "https://github.com/J3n5en/EnsoAI/archive/refs/tags/${TAG}.tar.gz"
+          curl -sLO "https://github.com/jyw-ai/jyw-ai-client/archive/refs/tags/${TAG}.tar.gz"
           SHA=$(sha256sum "${TAG}.tar.gz" | cut -d' ' -f1)
           echo "SHA256: $SHA"
           echo "sha256=$SHA" >> $GITHUB_OUTPUT
@@ -404,12 +404,12 @@ jobs:
           SHA256: ${{ steps.sha.outputs.sha256 }}
         run: |
           cat > PKGBUILD << 'PKGBUILD_EOF'
-          pkgname=ensoai
+          pkgname=aiclient
           pkgver=PKGVER_PLACEHOLDER
           pkgrel=1
           pkgdesc="Multiple AI Agents, Parallel Workflow - Git worktree manager with AI integration"
           arch=('x86_64')
-          url="https://github.com/J3n5en/EnsoAI"
+          url="https://github.com/jyw-ai/jyw-ai-client"
           license=('MIT')
           depends=('electron39')
           makedepends=('nodejs>=20' 'pnpm>=10' 'git' 'libxcrypt-compat')
@@ -422,20 +422,20 @@ jobs:
           sha256sums=('SHA256_PLACEHOLDER')
 
           prepare() {
-              cd "$srcdir/EnsoAI-$pkgver"
-              sed -i '/"name":/a\  "homepage": "https://github.com/J3n5en/EnsoAI",' package.json
+              cd "$srcdir/AiClient-$pkgver"
+              sed -i '/"name":/a\  "homepage": "https://github.com/jyw-ai/jyw-ai-client",' package.json
               export ELECTRON_SKIP_BINARY_DOWNLOAD=1
               pnpm install --frozen-lockfile
           }
 
           build() {
-              cd "$srcdir/EnsoAI-$pkgver"
+              cd "$srcdir/AiClient-$pkgver"
               export NODE_ENV=production
               pnpm build:linux
           }
 
           package() {
-              cd "$srcdir/EnsoAI-$pkgver"
+              cd "$srcdir/AiClient-$pkgver"
               install -dm755 "$pkgdir/usr/lib/$pkgname"
               if [ -d "dist/linux-unpacked/resources" ]; then
                   cp -r dist/linux-unpacked/resources "$pkgdir/usr/lib/$pkgname/"
@@ -443,21 +443,21 @@ jobs:
               install -dm755 "$pkgdir/usr/bin"
               cat > "$pkgdir/usr/bin/$pkgname" << 'EOF'
           #!/bin/sh
-          exec electron39 /usr/lib/ensoai/resources/app.asar "$@"
+          exec electron39 /usr/lib/aiclient/resources/app.asar "$@"
           EOF
               chmod +x "$pkgdir/usr/bin/$pkgname"
               install -dm755 "$pkgdir/usr/share/applications"
               cat > "$pkgdir/usr/share/applications/$pkgname.desktop" << EOF
           [Desktop Entry]
-          Name=EnsoAI
+          Name=AiClient
           Comment=Multiple AI Agents, Parallel Workflow
           Exec=$pkgname %U
           Icon=$pkgname
           Type=Application
           Categories=Development;Utility;IDE;
           Terminal=false
-          StartupWMClass=EnsoAI
-          StartupWMClass=enso-ai
+          StartupWMClass=AiClient
+          StartupWMClass=aiclient
           EOF
               if [ -f "build/icon.png" ]; then
                   install -Dm644 build/icon.png "$pkgdir/usr/share/pixmaps/$pkgname.png"
@@ -474,7 +474,7 @@ jobs:
       - name: Publish to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
-          pkgname: ensoai
+          pkgname: aiclient
           pkgbuild: ./PKGBUILD
           updpkgsums: true
           commit_username: github-actions[bot]

@@ -1,14 +1,14 @@
-; Custom NSIS script for AI client
-; Register enso:// URL scheme
+; Custom NSIS script for AiClient
+; Register aiclient:// URL scheme
 
 !macro customInstall
   ; Register URL protocol
-  WriteRegStr HKCU "Software\Classes\enso" "" "URL:AI client Protocol"
-  WriteRegStr HKCU "Software\Classes\enso" "URL Protocol" ""
-  WriteRegStr HKCU "Software\Classes\enso\shell\open\command" "" '"$INSTDIR\AI client.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\aiclient" "" "URL:AiClient Protocol"
+  WriteRegStr HKCU "Software\Classes\aiclient" "URL Protocol" ""
+  WriteRegStr HKCU "Software\Classes\aiclient\shell\open\command" "" '"$INSTDIR\AiClient.exe" "%1"'
 !macroend
 
 !macro customUnInstall
   ; Remove URL protocol registration
-  DeleteRegKey HKCU "Software\Classes\enso"
+  DeleteRegKey HKCU "Software\Classes\aiclient"
 !macroend

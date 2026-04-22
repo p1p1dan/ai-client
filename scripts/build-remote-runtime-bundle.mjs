@@ -43,7 +43,7 @@ async function sha256File(filePath) {
 async function downloadFile(url, destinationPath) {
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'EnsoAI Remote Runtime Builder',
+      'User-Agent': 'AiClient Remote Runtime Builder',
     },
   });
 

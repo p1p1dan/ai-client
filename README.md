@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="EnsoAI Logo" width="120" />
+  <img src="docs/assets/logo.png" alt="AiClient Logo" width="120" />
 </p>
 
-<h1 align="center">EnsoAI</h1>
+<h1 align="center">AiClient</h1>
 
 <p align="center">
   <strong>Multiple Agents, Parallel Flow</strong>
@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/J3n5en/EnsoAI/releases/latest"><img src="https://img.shields.io/github/v/release/J3n5en/EnsoAI?style=flat&color=blue" alt="Release" /></a>
+  <a href="https://github.com/jyw-ai/jyw-ai-client/releases/latest"><img src="https://img.shields.io/github/v/release/jyw-ai/jyw-ai-client?style=flat&color=blue" alt="Release" /></a>
   <img src="https://img.shields.io/badge/Electron-39+-47848F?logo=electron&logoColor=white" alt="Electron" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" alt="React" />
   <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
@@ -25,21 +25,21 @@
 </p>
 
 <p align="center">
-  <a href="https://t.me/EnsoAI_news"><img src="https://img.shields.io/badge/Updates-Telegram-26A5E4?logo=telegram&logoColor=white" alt="Telegram Channel" /></a>
+  <a href="https://t.me/AiClient_news"><img src="https://img.shields.io/badge/Updates-Telegram-26A5E4?logo=telegram&logoColor=white" alt="Telegram Channel" /></a>
   <a href="https://t.me/EnsoAi_Offical"><img src="https://img.shields.io/badge/Community-Telegram-26A5E4?logo=telegram&logoColor=white" alt="Telegram Group" /></a>
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/ensoai?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-ensoai" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057621&theme=light" alt="EnsoAI - Multiple AI Agents, Parallel Workflow in Git Worktrees | Product Hunt" width="250" height="54" /></a>
+  <a href="https://www.producthunt.com/products/aiclient?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-aiclient" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057621&theme=light" alt="AiClient - Multiple AI Agents, Parallel Workflow in Git Worktrees | Product Hunt" width="250" height="54" /></a>
 </p>
 
 ---
 
 ## Workflow, Reimagined.
 
-Stop stashing and popping. EnsoAI treats every branch as a first-class workspace with its own dedicated AI context.
+Stop stashing and popping. AiClient treats every branch as a first-class workspace with its own dedicated AI context.
 
-![EnsoAI Terminal](docs/assets/feature-terminal.png)
+![AiClient Terminal](docs/assets/feature-terminal.png)
 
 ---
 
@@ -50,42 +50,42 @@ Stop stashing and popping. EnsoAI treats every branch as a first-class workspace
 **macOS (Homebrew)**
 
 ```bash
-brew tap j3n5en/ensoai
-brew install --cask ensoai
+brew tap jyw-ai/aiclient
+brew install --cask aiclient
 ```
 
 **Windows (Scoop)**
 
 ```powershell
-scoop bucket add ensoai https://github.com/J3n5en/scoop-ensoai
-scoop install ensoai
+scoop bucket add aiclient https://github.com/jyw-ai/scoop-aiclient
+scoop install aiclient
 ```
 
 **Windows (Winget)**
 
 ```powershell
-winget install J3n5en.EnsoAI
+winget install JywAi.AiClient
 ```
 
 ### Manual Download
 
-Download the installer for your platform from [GitHub Releases](https://github.com/J3n5en/EnsoAI/releases/latest):
+Download the installer for your platform from [GitHub Releases](https://github.com/jyw-ai/jyw-ai-client/releases/latest):
 
 | Platform | File |
 |----------|------|
-| macOS (Apple Silicon) | `EnsoAI-x.x.x-arm64.dmg` |
-| macOS (Intel) | `EnsoAI-x.x.x.dmg` |
-| Windows (Installer) | `EnsoAI-Setup-x.x.x.exe` |
-| Windows (Portable) | `EnsoAI-x.x.x-portable.exe` |
-| Linux (AppImage) | `EnsoAI-x.x.x.AppImage` |
-| Linux (deb) | `ensoai_x.x.x_amd64.deb` |
+| macOS (Apple Silicon) | `AiClient-x.x.x-arm64.dmg` |
+| macOS (Intel) | `AiClient-x.x.x.dmg` |
+| Windows (Installer) | `AiClient-Setup-x.x.x.exe` |
+| Windows (Portable) | `AiClient-x.x.x-portable.exe` |
+| Linux (AppImage) | `AiClient-x.x.x.AppImage` |
+| Linux (deb) | `aiclient_x.x.x_amd64.deb` |
 
 ### Build from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/J3n5en/EnsoAI.git
-cd EnsoAI
+git clone https://github.com/jyw-ai/jyw-ai-client.git
+cd AiClient
 
 # Install dependencies (requires Node.js 20+, pnpm 10+)
 pnpm install
@@ -176,7 +176,7 @@ Create, switch, and manage Git worktrees instantly. No more context switching co
 
 ### IDE Bridge
 
-Use EnsoAI for orchestration, then jump into VS Code or Cursor for deep diving with a single click.
+Use AiClient for orchestration, then jump into VS Code or Cursor for deep diving with a single click.
 
 Quick access to all actions via `Cmd+Shift+P`:
 - **Panel Control** - Toggle Workspace/Worktree sidebar visibility
@@ -210,9 +210,9 @@ Quick access to all actions via `Cmd+Shift+P`:
 ### Basic Usage
 
 <details>
-<summary><strong>How is EnsoAI different from a regular IDE?</strong></summary>
+<summary><strong>How is AiClient different from a regular IDE?</strong></summary>
 
-EnsoAI focuses on **Git Worktree + AI Agent** collaboration. It's not meant to replace VS Code or Cursor, but rather serves as a lightweight workspace manager that allows you to:
+AiClient focuses on **Git Worktree + AI Agent** collaboration. It's not meant to replace VS Code or Cursor, but rather serves as a lightweight workspace manager that allows you to:
 - Quickly switch between multiple worktrees, each running an independent AI Agent
 - Develop multiple feature branches simultaneously without interference
 - Jump to your preferred IDE anytime via "Open In" for deeper development
@@ -238,7 +238,7 @@ Yes. Each worktree's Agent session is saved independently. When you switch back 
 ### Use Cases
 
 <details>
-<summary><strong>When should I use EnsoAI?</strong></summary>
+<summary><strong>When should I use AiClient?</strong></summary>
 
 | Scenario | Description |
 |----------|-------------|
@@ -257,9 +257,9 @@ While ACP can unify core capabilities across different Agents, it's limited to j
 </details>
 
 <details>
-<summary><strong>What project size is EnsoAI suitable for?</strong></summary>
+<summary><strong>What project size is AiClient suitable for?</strong></summary>
 
-Best suited for small to medium projects. For large monorepos, we recommend using it alongside VS Code or similar full-featured IDEs — EnsoAI handles worktree management and AI interaction, while the IDE handles deep development.
+Best suited for small to medium projects. For large monorepos, we recommend using it alongside VS Code or similar full-featured IDEs — AiClient handles worktree management and AI interaction, while the IDE handles deep development.
 
 </details>
 
@@ -268,7 +268,7 @@ Best suited for small to medium projects. For large monorepos, we recommend usin
 ### Development Workflow
 
 <details>
-<summary><strong>What's a typical development workflow with EnsoAI?</strong></summary>
+<summary><strong>What's a typical development workflow with AiClient?</strong></summary>
 
 ```
 1. Open Workspace
