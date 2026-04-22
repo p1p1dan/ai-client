@@ -71,6 +71,112 @@ function getDefaultModel(provider: AIProvider): string {
   return models[0]?.value ?? 'haiku';
 }
 
+// Sentinel for the "Custom model" menu item. Must not collide with any real
+// provider model id — the leading underscores make that effectively impossible.
+const CUSTOM_MODEL_OPTION = '__custom__';
+
+// Provider model selector: Select dropdown of presets + a "Custom model" option
+// that reveals a text input. Presets are hints, not a whitelist — model IDs
+// evolve faster than this file, so any string is accepted as a final value.
+// Typing is buffered in local state; the global settings store is written only
+// on preset pick, Enter, or blur — not on every keystroke. Empty custom input
+// falls back to the provider default rather than persisting "".
+function ModelSelector({
+  provider,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  provider: AIProvider;
+  value: string;
+  onChange: (model: string) => void;
+  ariaLabel?: string;
+}) {
+  const { t } = useI18n();
+  const presets = MODELS_BY_PROVIDER[provider] ?? [];
+  const valueMatchesPreset = presets.some((m) => m.value === value);
+
+  const [customMode, setCustomMode] = useState(!valueMatchesPreset);
+  const [draft, setDraft] = useState(value);
+
+  // Re-sync to the committed value when it changes externally (e.g. provider switch).
+  useEffect(() => {
+    setDraft(value);
+    setCustomMode(!presets.some((m) => m.value === value));
+    // `presets` is derived from `provider`, so depending on it is sufficient.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: derived from provider
+  }, [value, provider]);
+
+  const commit = (next: string) => {
+    const trimmed = next.trim();
+    const finalValue = trimmed.length > 0 ? trimmed : getDefaultModel(provider);
+    setDraft(finalValue);
+    if (finalValue !== value) {
+      onChange(finalValue);
+    }
+    // Committed value is a preset → collapse the custom input back to the dropdown.
+    if (presets.some((m) => m.value === finalValue)) {
+      setCustomMode(false);
+    }
+  };
+
+  const selectValue = customMode ? CUSTOM_MODEL_OPTION : value;
+  const selectLabel = customMode
+    ? t('Custom model')
+    : (presets.find((m) => m.value === value)?.label ?? value);
+
+  const handleSelectChange = (next: string | null) => {
+    if (!next) return;
+    if (next === CUSTOM_MODEL_OPTION) {
+      setCustomMode(true);
+      // Keep the current value as the starting draft so users can tweak it.
+      setDraft(value);
+      return;
+    }
+    setCustomMode(false);
+    if (next !== value) {
+      onChange(next);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Select value={selectValue} onValueChange={handleSelectChange}>
+        <SelectTrigger aria-label={ariaLabel} className="w-40">
+          <SelectValue>{selectLabel}</SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          {presets.map((m) => (
+            <SelectItem key={m.value} value={m.value}>
+              {m.label}
+            </SelectItem>
+          ))}
+          <SelectItem value={CUSTOM_MODEL_OPTION}>{t('Custom model')}</SelectItem>
+        </SelectPopup>
+      </Select>
+      {customMode && (
+        <Input
+          aria-label={ariaLabel}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => commit(draft)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+            } else if (e.key === 'Escape') {
+              setDraft(value);
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder={t('Enter model id (e.g. gpt-5.4)')}
+          className="w-56"
+        />
+      )}
+    </div>
+  );
+}
+
 export function AISettings() {
   const { t, locale } = useI18n();
   const {
@@ -194,30 +300,15 @@ export function AISettings() {
             </div>
 
             {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Model')}</span>
+            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
+              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
               <div className="space-y-1.5">
-                <Select
+                <ModelSelector
+                  provider={commitMessageGenerator.provider ?? 'claude-code'}
                   value={commitMessageGenerator.model}
-                  onValueChange={(v) => v && setCommitMessageGenerator({ model: v })}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {MODELS_BY_PROVIDER[commitMessageGenerator.provider ?? 'claude-code']?.find(
-                        (m) => m.value === commitMessageGenerator.model
-                      )?.label ?? commitMessageGenerator.model}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {MODELS_BY_PROVIDER[commitMessageGenerator.provider ?? 'claude-code']?.map(
-                      (m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          {m.label}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectPopup>
-                </Select>
+                  onChange={(v) => setCommitMessageGenerator({ model: v })}
+                  ariaLabel={t('Model for generating commit messages')}
+                />
                 <p className="text-xs text-muted-foreground">
                   {t('Model for generating commit messages')}
                 </p>
@@ -399,28 +490,15 @@ export function AISettings() {
             </div>
 
             {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Model')}</span>
+            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
+              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
               <div className="space-y-1.5">
-                <Select
+                <ModelSelector
+                  provider={codeReview.provider ?? 'claude-code'}
                   value={codeReview.model}
-                  onValueChange={(v) => v && setCodeReview({ model: v })}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {MODELS_BY_PROVIDER[codeReview.provider ?? 'claude-code']?.find(
-                        (m) => m.value === codeReview.model
-                      )?.label ?? codeReview.model}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {MODELS_BY_PROVIDER[codeReview.provider ?? 'claude-code']?.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
+                  onChange={(v) => setCodeReview({ model: v })}
+                  ariaLabel={t('Model for code review')}
+                />
                 <p className="text-xs text-muted-foreground">{t('Model for code review')}</p>
               </div>
             </div>
@@ -590,28 +668,15 @@ export function AISettings() {
             </div>
 
             {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Model')}</span>
+            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
+              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
               <div className="space-y-1.5">
-                <Select
+                <ModelSelector
+                  provider={branchNameGenerator.provider ?? 'claude-code'}
                   value={branchNameGenerator.model}
-                  onValueChange={(v) => v && setBranchNameGenerator({ model: v })}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {MODELS_BY_PROVIDER[branchNameGenerator.provider ?? 'claude-code']?.find(
-                        (m) => m.value === branchNameGenerator.model
-                      )?.label ?? branchNameGenerator.model}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {MODELS_BY_PROVIDER[branchNameGenerator.provider ?? 'claude-code']?.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
+                  onChange={(v) => setBranchNameGenerator({ model: v })}
+                  ariaLabel={t('Model for generating branch names')}
+                />
                 <p className="text-xs text-muted-foreground">
                   {t('Model for generating branch names')}
                 </p>
@@ -743,28 +808,15 @@ export function AISettings() {
             </div>
 
             {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Model')}</span>
+            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
+              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
               <div className="space-y-1.5">
-                <Select
+                <ModelSelector
+                  provider={todoPolish.provider ?? 'claude-code'}
                   value={todoPolish.model}
-                  onValueChange={(v) => v && setTodoPolish({ model: v })}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {MODELS_BY_PROVIDER[todoPolish.provider ?? 'claude-code']?.find(
-                        (m) => m.value === todoPolish.model
-                      )?.label ?? todoPolish.model}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {MODELS_BY_PROVIDER[todoPolish.provider ?? 'claude-code']?.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
+                  onChange={(v) => setTodoPolish({ model: v })}
+                  ariaLabel={t('Model for polishing task content')}
+                />
                 <p className="text-xs text-muted-foreground">
                   {t('Model for polishing task content')}
                 </p>

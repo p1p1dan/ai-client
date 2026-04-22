@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  CheckCircle,
   FileCode,
   FolderOpen,
   GitBranch,
   KanbanSquare,
+  Loader2,
   MessageSquare,
   PanelLeft,
   RectangleEllipsis,
@@ -22,6 +24,7 @@ import { RunningProjectsPopover } from '@/components/layout/RunningProjectsPopov
 import { SettingsContent } from '@/components/settings';
 import type { SettingsCategory } from '@/components/settings/constants';
 import { SourceControlPanel } from '@/components/source-control';
+import { CodeReviewModal } from '@/components/source-control/CodeReviewModal';
 import { DiffReviewModal } from '@/components/source-control/DiffReviewModal';
 import { TodoPanel } from '@/components/todo';
 import { Button } from '@/components/ui/button';
@@ -37,6 +40,7 @@ import { useI18n } from '@/i18n';
 import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
+import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { TerminalPanel } from '../terminal';
@@ -110,6 +114,19 @@ export function MainContent({
 
   // Diff Review Modal state
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  // AI Code Review Modal state
+  const [isAIReviewModalOpen, setIsAIReviewModalOpen] = useState(false);
+  const codeReviewEnabled = useSettingsStore((s) => s.codeReview.enabled);
+  const isCodeReviewMinimized = useCodeReviewContinueStore((s) => s.isMinimized);
+  const codeReviewRepoPath = useCodeReviewContinueStore((s) => s.review.repoPath);
+  const codeReviewStatus = useCodeReviewContinueStore((s) => s.review.status);
+  const isAIReviewMinimizedForThisRepo =
+    isCodeReviewMinimized && codeReviewRepoPath === repoPath;
+  const isAIReviewMinimizedInProgress =
+    isAIReviewMinimizedForThisRepo &&
+    (codeReviewStatus === 'streaming' || codeReviewStatus === 'initializing');
+  const isAIReviewMinimizedComplete =
+    isAIReviewMinimizedForThisRepo && codeReviewStatus === 'complete';
 
   // Subscribe to sessions and activeIds for reactivity
   const sessions = useAgentSessionsStore((s) => s.sessions);
@@ -453,7 +470,7 @@ export function MainContent({
           >
             <Settings className="h-4 w-4" />
           </button>
-          {activeSessionId && effectiveReviewRootPath && (
+          {isGitRepo && activeSessionId && effectiveReviewRootPath && (
             <Button
               variant="outline"
               size="sm"
@@ -461,7 +478,33 @@ export function MainContent({
               className="h-8"
             >
               <MessageSquare className="h-4 w-4 mr-1.5" />
-              {t('Review')}
+              {t('Diff Review')}
+            </Button>
+          )}
+          {isGitRepo && activeSessionId && effectiveReviewRootPath && codeReviewEnabled && (
+            <Button
+              variant={isAIReviewMinimizedForThisRepo ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setIsAIReviewModalOpen(true)}
+              className="h-8"
+              title={
+                isAIReviewMinimizedForThisRepo
+                  ? t('View code review')
+                  : t('Start code review')
+              }
+            >
+              {isAIReviewMinimizedInProgress ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : isAIReviewMinimizedComplete ? (
+                <CheckCircle className="h-4 w-4 mr-1.5 text-green-500" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-1.5" />
+              )}
+              {isAIReviewMinimizedInProgress
+                ? t('Reviewing...')
+                : isAIReviewMinimizedComplete
+                  ? t('Review complete')
+                  : t('AI Review')}
             </Button>
           )}
           {showOpenInMenu && <OpenInMenu path={effectiveOpenInPath} activeTab={activeTab} />}
@@ -638,6 +681,13 @@ export function MainContent({
         onOpenChange={setIsReviewModalOpen}
         rootPath={effectiveReviewRootPath}
         onSend={() => onTabChange('chat')}
+      />
+
+      {/* AI Code Review Modal */}
+      <CodeReviewModal
+        open={isAIReviewModalOpen}
+        onOpenChange={setIsAIReviewModalOpen}
+        repoPath={repoPath}
       />
     </main>
   );

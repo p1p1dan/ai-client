@@ -890,6 +890,8 @@ export const zhTranslations: Record<string, string> = {
   'Auto-generate commit messages using AI': '使用 AI 自动生成提交信息',
   'Model for generating commit messages': '生成提交信息使用的模型',
   'Model for code review': '代码审查使用的模型',
+  'Custom model': '自定义模型',
+  'Enter model id (e.g. gpt-5.4)': '输入模型 ID（例如 gpt-5.4）',
   'Auto-generate branch names using AI': '使用 AI 自动生成分支名',
   'Model for generating branch names': '生成分支名使用的模型',
   'Reasoning Level': '推理深度',
@@ -920,6 +922,12 @@ export const zhTranslations: Record<string, string> = {
   'Review complete': '审查完成',
   'Review failed': '审查失败',
   'Starting code review...': '正在启动代码审查...',
+  'Review may take a while. You can minimize this window and continue other work — results will be here when done.':
+    '审查可能需要一段时间。你可以最小化此窗口继续其他工作，完成后回来查看结果。',
+  'AI Review': 'AI 审查',
+  'Ready to start AI code review': '准备启动 AI 代码审查',
+  'Click Start to analyze your changes. This will consume API credits.':
+    '点击"开始审查"分析你的改动，此操作会消耗 API 额度。',
   'Review content copied to clipboard': '审查内容已复制到剪贴板',
   'Commit ID copied to clipboard': 'Commit ID 已复制到剪贴板',
   'Copy failed': '复制失败',

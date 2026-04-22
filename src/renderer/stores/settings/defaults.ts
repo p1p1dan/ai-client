@@ -368,7 +368,7 @@ export const defaultAgentSettings: AgentSettings = {
 export const defaultAgentDetectionStatus: AgentDetectionStatus = {};
 
 // Default todo settings
-export const defaultTodoEnabled = false;
+export const defaultTodoEnabled = true;
 
 // Default quick terminal settings
 export const defaultQuickTerminalSettings: QuickTerminalSettings = {

@@ -6,9 +6,11 @@ import {
   Loader2,
   MessageSquare,
   Minimize2,
+  Play,
   RefreshCw,
   Send,
   Shrink,
+  Sparkles,
   Square,
   XCircle,
 } from 'lucide-react';
@@ -161,12 +163,6 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
       useCodeReviewContinueStore.getState().restore();
     }
   }, [open, isMinimized]);
-
-  useEffect(() => {
-    if (open && status === 'idle' && !isMinimized) {
-      startReview();
-    }
-  }, [open, status, isMinimized, startReview]);
 
   useEffect(() => {
     if (!open && !isMinimized) {
@@ -359,9 +355,30 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                     </Markdown>
                   </div>
                 ) : status === 'initializing' ? (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    <span>{t('Starting code review...')}</span>
+                  <div className="flex flex-col items-center justify-center gap-2 py-8">
+                    <div className="flex items-center text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                      <span>{t('Starting code review...')}</span>
+                    </div>
+                    <span className="max-w-md text-center text-xs text-muted-foreground/70">
+                      {t(
+                        'Review may take a while. You can minimize this window and continue other work — results will be here when done.'
+                      )}
+                    </span>
+                  </div>
+                ) : status === 'idle' ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-12">
+                    <Sparkles className="h-10 w-10 text-primary/60" />
+                    <div className="text-center">
+                      <p className="text-sm text-foreground">
+                        {t('Ready to start AI code review')}
+                      </p>
+                      <p className="mt-1 max-w-md text-xs text-muted-foreground/70">
+                        {t(
+                          'Click Start to analyze your changes. This will consume API credits.'
+                        )}
+                      </p>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -402,10 +419,17 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                 {t('Stop')}
               </Button>
             )}
-            <Button onClick={handleRestart}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              {t('Re-review')}
-            </Button>
+            {status === 'idle' ? (
+              <Button onClick={startReview}>
+                <Play className="h-4 w-4 mr-2" />
+                {t('Start code review')}
+              </Button>
+            ) : (
+              <Button onClick={handleRestart}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                {t('Re-review')}
+              </Button>
+            )}
           </DialogFooter>
         </DialogPopup>
       </Dialog>

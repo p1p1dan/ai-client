@@ -29,6 +29,7 @@ import {
   defaultRepositoryListDisplayMode,
   defaultSearchKeybindings,
   defaultSourceControlKeybindings,
+  defaultTodoEnabled,
   defaultTodoPolishSettings,
   defaultWorkspaceKeybindings,
   defaultXtermKeybindings,
@@ -166,7 +167,7 @@ export function getInitialState() {
     gitClone: defaultGitCloneSettings,
 
     // Beta features
-    todoEnabled: false,
+    todoEnabled: defaultTodoEnabled,
     glowEffectEnabled: false,
     temporaryWorkspaceEnabled: false,
     defaultTemporaryPath: '',

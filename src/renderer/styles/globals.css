@@ -189,6 +189,28 @@
     pointer-events: auto !important;
   }
 
+  /**
+   * Popover 组件 no-drag 覆盖规则
+   *
+   * 与菜单同理：标题栏与面板头部的 drag-region 会导致 Portal 渲染的 Popover 部分区域被识别为窗口拖拽区，
+   * 造成内部按钮（如用户卡片中的刷新按钮）只有部分区域可点击。
+   */
+  [data-slot="popover-positioner"],
+  [data-slot="popover-popup"],
+  [data-slot="popover-viewport"] {
+    -webkit-app-region: no-drag !important;
+    pointer-events: auto !important;
+  }
+
+  /**
+   * 将 no-drag 覆盖限定在 viewport（实际渲染用户内容的子树）内。
+   * -webkit-app-region 在 Chromium 中并非可继承属性，每个后代都需要显式设置；
+   * 但无需延伸到 popup 层的装饰性伪元素，缩小选择器以降低副作用面。
+   */
+  [data-slot="popover-viewport"] * {
+    -webkit-app-region: no-drag !important;
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar {
     width: 8px;
