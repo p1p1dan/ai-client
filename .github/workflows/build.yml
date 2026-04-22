@@ -385,7 +385,7 @@ jobs:
           );
 
           for (const arch of ['x64', 'arm64']) {
-            const archive = `enso-remote-runtime-v${serverVersion}-node-v${nodeVersion}-linux-${arch}.tar.gz`;
+            const archive = `aiclient-remote-runtime-v${serverVersion}-node-v${nodeVersion}-linux-${arch}.tar.gz`;
             console.log(archive);
             console.log(`${archive}.sha256`);
           }

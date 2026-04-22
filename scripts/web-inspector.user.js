@@ -20,7 +20,7 @@
     PORT: 18765,
     MAX_WALK_UP_DEPTH: 15, // Limit depth to avoid performance issues on deeply nested DOM
     THEME: {
-      PRIMARY: '#4F46E5', // Enso Indigo
+      PRIMARY: '#4F46E5', // AiClient Indigo
       DANGER: '#EF4444',
       SUCCESS: '#10B981',
       BG: '#ffffff',
@@ -96,7 +96,7 @@
       if (this.elements.style) return;
       const style = document.createElement('style');
       style.textContent = `
-        .enso-fab {
+        .aiclient-fab {
           position: fixed; bottom: 24px; right: 24px;
           width: 56px; height: 56px;
           background: ${CONFIG.THEME.BG};
@@ -112,11 +112,11 @@
           user-select: none; touch-action: none;
           will-change: left, top;
         }
-        .enso-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
-        .enso-fab:active { cursor: grabbing; transform: scale(0.95); }
-        .enso-fab.active { background: ${CONFIG.THEME.PRIMARY}; color: white; transform: rotate(90deg); }
+        .aiclient-fab:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+        .aiclient-fab:active { cursor: grabbing; transform: scale(0.95); }
+        .aiclient-fab.active { background: ${CONFIG.THEME.PRIMARY}; color: white; transform: rotate(90deg); }
         
-        .enso-overlay {
+        .aiclient-overlay {
           position: fixed; pointer-events: none;
           border: 1.5px solid ${CONFIG.THEME.PRIMARY};
           background: ${CONFIG.THEME.OVERLAY};
@@ -125,7 +125,7 @@
           border-radius: 2px;
         }
         
-        .enso-label {
+        .aiclient-label {
           position: fixed; background: ${CONFIG.THEME.PRIMARY};
           color: white; padding: 4px 10px; font-size: 11px;
           font-family: 'SF Mono', SFMono-Regular, ui-monospace, 'DejaVu Sans Mono', monospace;
@@ -134,7 +134,7 @@
           box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
-        .enso-toast {
+        .aiclient-toast {
           position: fixed; top: 24px; left: 50%;
           transform: translateX(-50%) translateY(-20px);
           background: rgba(31, 41, 55, 0.95);
@@ -146,40 +146,40 @@
           transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
           display: flex; align-items: center; gap: 8px;
         }
-        .enso-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .aiclient-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-        .enso-shortcut-dialog {
+        .aiclient-shortcut-dialog {
           position: fixed; top: 0; left: 0; right: 0; bottom: 0;
           background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
           z-index: 2147483647; display: flex;
           align-items: center; justify-content: center;
         }
-        .enso-shortcut-box {
+        .aiclient-shortcut-box {
           background: white; border-radius: 16px; padding: 28px 32px;
           box-shadow: 0 20px 60px rgba(0,0,0,0.3);
           text-align: center; min-width: 340px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
-        .enso-shortcut-box h3 {
+        .aiclient-shortcut-box h3 {
           margin: 0 0 16px; font-size: 16px; color: #1F2937;
         }
-        .enso-shortcut-box p {
+        .aiclient-shortcut-box p {
           margin: 0 0 16px; font-size: 13px; color: #6B7280;
         }
-        .enso-shortcut-tabs {
+        .aiclient-shortcut-tabs {
           display: flex; gap: 0; margin-bottom: 20px;
           border: 1px solid #E5E7EB; border-radius: 10px; overflow: hidden;
         }
-        .enso-shortcut-tab {
+        .aiclient-shortcut-tab {
           flex: 1; padding: 8px 12px; font-size: 13px; font-weight: 500;
           border: none; cursor: pointer; transition: all 0.2s;
           background: #F9FAFB; color: #6B7280;
         }
-        .enso-shortcut-tab + .enso-shortcut-tab { border-left: 1px solid #E5E7EB; }
-        .enso-shortcut-tab.active {
+        .aiclient-shortcut-tab + .aiclient-shortcut-tab { border-left: 1px solid #E5E7EB; }
+        .aiclient-shortcut-tab.active {
           background: ${CONFIG.THEME.PRIMARY}; color: white;
         }
-        .enso-shortcut-kbd {
+        .aiclient-shortcut-kbd {
           display: inline-block; padding: 12px 24px;
           background: #F3F4F6; border: 2px dashed #D1D5DB;
           border-radius: 12px; font-size: 18px; font-weight: 600;
@@ -187,25 +187,25 @@
           font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
           transition: all 0.2s;
         }
-        .enso-shortcut-kbd.recording {
+        .aiclient-shortcut-kbd.recording {
           border-color: ${CONFIG.THEME.PRIMARY};
           background: rgba(79, 70, 229, 0.05);
         }
-        .enso-shortcut-actions {
+        .aiclient-shortcut-actions {
           margin-top: 20px; display: flex; gap: 8px; justify-content: center;
         }
-        .enso-shortcut-actions button {
+        .aiclient-shortcut-actions button {
           padding: 8px 20px; border-radius: 8px; border: none;
           font-size: 13px; font-weight: 500; cursor: pointer;
           transition: all 0.2s;
         }
-        .enso-shortcut-actions .cancel {
+        .aiclient-shortcut-actions .cancel {
           background: #F3F4F6; color: #374151;
         }
-        .enso-shortcut-actions .confirm {
+        .aiclient-shortcut-actions .confirm {
           background: ${CONFIG.THEME.PRIMARY}; color: white;
         }
-        .enso-shortcut-actions .confirm:disabled {
+        .aiclient-shortcut-actions .confirm:disabled {
           opacity: 0.4; cursor: not-allowed;
         }
       `;
@@ -217,7 +217,7 @@
       if (this.elements.btn) return;
 
       const btn = document.createElement('div');
-      btn.className = 'enso-fab';
+      btn.className = 'aiclient-fab';
       btn.innerHTML = CONFIG.ICONS.TARGET;
       const shortcuts = this.getShortcuts();
       btn.title = `开启元素选择 (可拖动) | ${this.formatShortcut(shortcuts.toggle)} 切换 | ${this.formatShortcut(shortcuts.reset)} 复位`;
@@ -235,12 +235,12 @@
       this.elements.btn = btn;
 
       const overlay = document.createElement('div');
-      overlay.className = 'enso-overlay';
+      overlay.className = 'aiclient-overlay';
       document.body.appendChild(overlay);
       this.elements.overlay = overlay;
 
       const label = document.createElement('div');
-      label.className = 'enso-label';
+      label.className = 'aiclient-label';
       document.body.appendChild(label);
       this.elements.label = label;
 
@@ -386,16 +386,16 @@
       const pendings = {};
 
       const dialog = document.createElement('div');
-      dialog.className = 'enso-shortcut-dialog';
+      dialog.className = 'aiclient-shortcut-dialog';
       dialog.innerHTML = `
-        <div class="enso-shortcut-box">
+        <div class="aiclient-shortcut-box">
           <h3>快捷键设置</h3>
-          <div class="enso-shortcut-tabs">
-            ${names.map((n, i) => `<button class="enso-shortcut-tab${i === 0 ? ' active' : ''}" data-name="${n}">${EnsoInspector.SHORTCUT_LABELS[n]}</button>`).join('')}
+          <div class="aiclient-shortcut-tabs">
+            ${names.map((n, i) => `<button class="aiclient-shortcut-tab${i === 0 ? ' active' : ''}" data-name="${n}">${EnsoInspector.SHORTCUT_LABELS[n]}</button>`).join('')}
           </div>
           <p>请按下新的快捷键组合（需包含修饰键）</p>
-          <div class="enso-shortcut-kbd">${this.formatShortcut(shortcuts[names[0]])}</div>
-          <div class="enso-shortcut-actions">
+          <div class="aiclient-shortcut-kbd">${this.formatShortcut(shortcuts[names[0]])}</div>
+          <div class="aiclient-shortcut-actions">
             <button class="cancel">取消</button>
             <button class="confirm" disabled>保存</button>
           </div>
@@ -403,10 +403,10 @@
       `;
       document.body.appendChild(dialog);
 
-      const kbd = dialog.querySelector('.enso-shortcut-kbd');
+      const kbd = dialog.querySelector('.aiclient-shortcut-kbd');
       const confirmBtn = dialog.querySelector('.confirm');
       const cancelBtn = dialog.querySelector('.cancel');
-      const tabs = dialog.querySelectorAll('.enso-shortcut-tab');
+      const tabs = dialog.querySelectorAll('.aiclient-shortcut-tab');
       let activeName = names[0];
 
       const switchTab = (name) => {
@@ -535,7 +535,7 @@
 
     handleInspectorClick(e) {
       if (!this.isActive) return;
-      if (e.target.closest('.enso-fab')) return;
+      if (e.target.closest('.aiclient-fab')) return;
 
       e.preventDefault();
       e.stopPropagation();
@@ -729,22 +729,22 @@
         data: JSON.stringify(payload),
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
-            this.showToast('✨ 已发送至 Enso', 'success');
+            this.showToast('✨ 已发送至 AiClient', 'success');
           } else {
-            this.showToast('连接失败，请检查 Enso 是否运行', 'error');
-            console.warn('Enso Inspector Error:', payload);
+            this.showToast('连接失败，请检查 AiClient 是否运行', 'error');
+            console.warn('AiClient Inspector Error:', payload);
           }
         },
         onerror: () => {
-          this.showToast('无法连接到 Enso 服务', 'error');
-          console.warn('Enso Inspector Error:', payload);
+          this.showToast('无法连接到 AiClient 服务', 'error');
+          console.warn('AiClient Inspector Error:', payload);
         },
       });
     }
 
     showToast(message, type = 'info') {
       const toast = document.createElement('div');
-      toast.className = 'enso-toast';
+      toast.className = 'aiclient-toast';
       const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
       toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
 
@@ -765,7 +765,7 @@
 
       const isEnabled = this.isEnabledForSite();
       const shortcuts = this.getShortcuts();
-      const label = isEnabled ? `关闭 Enso Web Inspector` : `开启 Enso Web Inspector`;
+      const label = isEnabled ? `关闭 AiClient Web Inspector` : `开启 AiClient Web Inspector`;
       this.menuCommandId = GM_registerMenuCommand(label, () => {
         if (isEnabled) {
           this.setEnabledForSite(false);

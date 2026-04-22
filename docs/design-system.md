@@ -364,7 +364,7 @@ self.MonacoEnvironment = {
 Monaco 主题从终端主题 (Ghostty) 生成：
 
 ```tsx
-monaco.editor.defineTheme('enso-theme', {
+monaco.editor.defineTheme('aiclient-theme', {
   base: isDark ? 'vs-dark' : 'vs',
   inherit: true,
   rules: [
