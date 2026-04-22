@@ -18,7 +18,7 @@ describe('UsageService', () => {
   let tempHome: string;
 
   beforeEach(() => {
-    tempHome = join(tmpdir(), `enso-usage-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    tempHome = join(tmpdir(), `aiclient-usage-${Date.now()}-${Math.random().toString(16).slice(2)}`);
     mkdirSync(tempHome, { recursive: true });
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
@@ -48,9 +48,9 @@ describe('UsageService', () => {
   });
 
   it('returns { error } when credentials are not available', async () => {
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
-      join(tempHome, '.ensoai', 'settings.json'),
+      join(tempHome, '.aiclient', 'settings.json'),
       JSON.stringify(
         {
           onboarding: {
@@ -71,9 +71,9 @@ describe('UsageService', () => {
   });
 
   it('prefers /api/usage/stats when available', async () => {
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
-      join(tempHome, '.ensoai', 'settings.json'),
+      join(tempHome, '.aiclient', 'settings.json'),
       JSON.stringify(
         {
           onboarding: {
@@ -112,9 +112,9 @@ describe('UsageService', () => {
   });
 
   it('falls back to actions API when /api/usage/stats is not implemented', async () => {
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
-      join(tempHome, '.ensoai', 'settings.json'),
+      join(tempHome, '.aiclient', 'settings.json'),
       JSON.stringify(
         {
           onboarding: {
@@ -187,9 +187,9 @@ describe('UsageService', () => {
   });
 
   it('returns { error } when actions API is unauthorized and login fails', async () => {
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
-      join(tempHome, '.ensoai', 'settings.json'),
+      join(tempHome, '.aiclient', 'settings.json'),
       JSON.stringify(
         {
           onboarding: {
@@ -231,9 +231,9 @@ describe('UsageService', () => {
   });
 
   it('logs in and retries actions API when session token mode is opaque', async () => {
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
-      join(tempHome, '.ensoai', 'settings.json'),
+      join(tempHome, '.aiclient', 'settings.json'),
       JSON.stringify(
         {
           onboarding: {

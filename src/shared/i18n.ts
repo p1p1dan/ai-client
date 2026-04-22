@@ -1075,10 +1075,10 @@ export const zhTranslations: Record<string, string> = {
     '填写与 ssh 命令相同的目标字符串。',
   'Helper install directory': '助手安装目录',
   'Runtime install directory': '运行时安装目录',
-  'Optional override, for example ~/.ensoai/remote-helper':
-    '可选覆盖目录，例如 ~/.ensoai/remote-helper',
-  'Optional override, for example ~/.ensoai/remote-runtime':
-    '可选覆盖目录，例如 ~/.ensoai/remote-runtime',
+  'Optional override, for example ~/.aiclient/remote-helper':
+    '可选覆盖目录，例如 ~/.aiclient/remote-helper',
+  'Optional override, for example ~/.aiclient/remote-runtime':
+    '可选覆盖目录，例如 ~/.aiclient/remote-runtime',
   'Remote Helper': '远程助手',
   'Managed Remote Runtime': '托管远程运行时',
   'Install, refresh, update, or remove the helper on the selected remote host.':
@@ -1363,10 +1363,10 @@ export const zhTranslations: Record<string, string> = {
   'CLI install failed': 'CLI 安装失败',
   'CLI uninstall success': 'CLI 卸载成功',
   'CLI uninstall failed': 'CLI 卸载失败',
-  "'enso' command installed to {{path}}": "'enso' 命令已安装到 {{path}}",
-  "'enso' command uninstalled": "'enso' 命令已卸载",
-  "Uninstall 'enso' command": "卸载 'enso' 命令",
-  "Install 'enso' command to PATH": "安装 'enso' 命令到 PATH",
+  "'aiclient' command installed to {{path}}": "'aiclient' 命令已安装到 {{path}}",
+  "'aiclient' command uninstalled": "'aiclient' 命令已卸载",
+  "Uninstall 'aiclient' command": "卸载 'aiclient' 命令",
+  "Install 'aiclient' command to PATH": "安装 'aiclient' 命令到 PATH",
   'Quick Tunnel': '快速隧道',
   'Auth Tunnel': '认证隧道',
   'Create a temporary tunnel with auto-generated URL. No authentication required.':

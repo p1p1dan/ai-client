@@ -153,7 +153,7 @@ export function cleanupAllResourcesSync(): void {
   // Kill Hapi/Cloudflared processes (sync)
   cleanupHapiSync();
 
-  // Kill tmux enso server (sync)
+  // Kill tmux aiclient server (sync)
   cleanupTmuxSync();
 
   // Stop Web Inspector server (sync)

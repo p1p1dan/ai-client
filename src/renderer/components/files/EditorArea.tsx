@@ -523,7 +523,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       if (event.type === 'delete') return;
 
       // Bulk mode: agent modified too many files at once, reload all open tabs
-      if (event.path.endsWith('/.enso-bulk')) {
+      if (event.path.endsWith('/.aiclient-bulk')) {
         for (const tab of tabsRef.current) scheduleReload(tab);
         return;
       }

@@ -7,7 +7,7 @@ import { useSettingsStore } from '@/stores/settings';
 
 const WEB_INSPECTOR_PORT = 18765;
 const SCRIPT_INSTALL_URL =
-  'https://raw.githubusercontent.com/J3n5en/EnsoAI/refs/heads/main/scripts/web-inspector.user.js';
+  'https://raw.githubusercontent.com/jyw-ai/jyw-ai-client/refs/heads/main/scripts/web-inspector.user.js';
 
 export function WebInspectorSettings() {
   const { webInspectorEnabled, setWebInspectorEnabled } = useSettingsStore();

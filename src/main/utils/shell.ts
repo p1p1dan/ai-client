@@ -116,8 +116,8 @@ export function stripAnsi(str: string): string {
  */
 export function getShellForCommand(): { shell: string; args: string[] } {
   const settings = readSettings();
-  // zustand stores settings under 'enso-settings.state'
-  const zustandState = (settings?.['enso-settings'] as { state?: Record<string, unknown> })?.state;
+  // zustand stores settings under 'aiclient-settings.state'
+  const zustandState = (settings?.['aiclient-settings'] as { state?: Record<string, unknown> })?.state;
   const shellConfig = zustandState?.shellConfig as ShellConfig | undefined;
 
   if (shellConfig) {

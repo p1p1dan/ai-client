@@ -41,7 +41,7 @@ export function OpenInMenu({ path, activeTab }: OpenInMenuProps) {
   const openWith = useOpenWith();
   const [lastUsedApp, setLastUsedApp] = useState<string>('');
   const { activeTabPath, tabs, currentCursorLine } = useEditorStore();
-  const isRemotePath = path?.startsWith('/__enso_remote__/') ?? false;
+  const isRemotePath = path?.startsWith('/__aiclient_remote__/') ?? false;
   const hiddenOpenInApps = useSettingsStore((s) => s.hiddenOpenInApps);
   const openInMenuFilterEnabled = useSettingsStore((s) => s.openInMenuFilterEnabled);
   const hiddenSet = useMemo(() => new Set(hiddenOpenInApps), [hiddenOpenInApps]);
@@ -50,7 +50,7 @@ export function OpenInMenu({ path, activeTab }: OpenInMenuProps) {
     : apps;
 
   useEffect(() => {
-    const saved = localStorage.getItem('enso-last-opened-app');
+    const saved = localStorage.getItem('aiclient-last-opened-app');
     if (saved) {
       setLastUsedApp(saved);
     }
@@ -60,7 +60,7 @@ export function OpenInMenu({ path, activeTab }: OpenInMenuProps) {
     if (!bundleId || !path) return;
 
     setLastUsedApp(bundleId);
-    localStorage.setItem('enso-last-opened-app', bundleId);
+    localStorage.setItem('aiclient-last-opened-app', bundleId);
 
     // If in file editor tab and files are open, sync all open files
     if (activeTab === 'file' && tabs.length > 0) {

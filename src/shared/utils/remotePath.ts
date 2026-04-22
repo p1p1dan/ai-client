@@ -1,4 +1,4 @@
-export const REMOTE_PATH_PREFIX = '/__enso_remote__';
+export const REMOTE_PATH_PREFIX = '/__aiclient_remote__';
 
 function encodeSegment(value: string): string {
   return encodeURIComponent(value);

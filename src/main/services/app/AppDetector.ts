@@ -664,7 +664,7 @@ export class AppDetector {
       if (!existsSync(icnsPath)) return undefined;
 
       // Convert icns to png using sips (required for ic13 format on macOS 26+)
-      const tmpPng = join(tmpdir(), `enso-icon-${bundleId.replace(/\./g, '-')}.png`);
+      const tmpPng = join(tmpdir(), `aiclient-icon-${bundleId.replace(/\./g, '-')}.png`);
       await execAsync(`sips -s format png -z 128 128 "${icnsPath}" --out "${tmpPng}" 2>/dev/null`);
 
       const pngData = await readFile(tmpPng);

@@ -126,7 +126,7 @@ function getLanguageFromPath(filePath: string): string {
   return languageMap[ext] || 'plaintext';
 }
 
-const CUSTOM_THEME_NAME = 'enso-review-diff-theme';
+const CUSTOM_THEME_NAME = 'aiclient-review-diff-theme';
 
 function defineMonacoDiffTheme(terminalThemeName: string) {
   const xtermTheme = getXtermTheme(terminalThemeName);

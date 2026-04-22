@@ -338,17 +338,17 @@ export async function cleanupLegacyFields(): Promise<void> {
   const data = await window.electronAPI.settings.read();
   if (data && typeof data === 'object') {
     const settingsData = data as Record<string, unknown>;
-    const ensoSettings = settingsData['enso-settings'] as
+    const aiclientSettings = settingsData['aiclient-settings'] as
       | { state?: Record<string, unknown> }
       | undefined;
 
-    if (ensoSettings?.state) {
+    if (aiclientSettings?.state) {
       const legacyFields = ['terminalKeybindings', 'agentKeybindings', 'terminalPaneKeybindings'];
-      const hasLegacy = legacyFields.some((f) => f in ensoSettings.state!);
+      const hasLegacy = legacyFields.some((f) => f in aiclientSettings.state!);
 
       if (hasLegacy) {
         for (const field of legacyFields) {
-          delete ensoSettings.state[field];
+          delete aiclientSettings.state[field];
         }
         await window.electronAPI.settings.write(settingsData);
       }

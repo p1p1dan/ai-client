@@ -174,7 +174,7 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
               <MenuShortcut>F12</MenuShortcut>
             </MenuItem>
             <MenuSeparator />
-            <MenuItem onClick={() => handleOpenExternal('https://github.com/J3n5en/EnsoAI')}>
+            <MenuItem onClick={() => handleOpenExternal('https://github.com/jyw-ai/jyw-ai-client')}>
               <ExternalLink className="h-3.5 w-3.5" />
               {t('GitHub')}
             </MenuItem>

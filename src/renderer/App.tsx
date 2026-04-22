@@ -128,7 +128,7 @@ async function resolveClaudeConfigDirForResumeSession(options: {
   const { homeDir, pathSep, projectId, sessionId } = options;
   if (!homeDir) return null;
 
-  const nullConfigDir = `${homeDir}${pathSep}.ensoai${pathSep}claude-null`;
+  const nullConfigDir = `${homeDir}${pathSep}.aiclient${pathSep}claude-null`;
   const userConfigDir = `${homeDir}${pathSep}.claude`;
   const candidates = [nullConfigDir, userConfigDir];
 
@@ -171,8 +171,8 @@ export default function App() {
 
   useEffect(() => {
     const handleOpenOnboarding = () => setShowOnboarding(true);
-    window.addEventListener('ensoai:onboarding:open', handleOpenOnboarding);
-    return () => window.removeEventListener('ensoai:onboarding:open', handleOpenOnboarding);
+    window.addEventListener('aiclient:onboarding:open', handleOpenOnboarding);
+    return () => window.removeEventListener('aiclient:onboarding:open', handleOpenOnboarding);
   }, []);
 
   useEffect(() => {
@@ -1177,7 +1177,7 @@ export default function App() {
 
       if (!claudeConfigDir) {
         const diagnostic = homeDir
-          ? `\n(诊断) 已检查以下路径是否存在：\n${homeDir}${pathSep}.ensoai${pathSep}claude-null${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl\n${homeDir}${pathSep}.claude${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl`
+          ? `\n(诊断) 已检查以下路径是否存在：\n${homeDir}${pathSep}.aiclient${pathSep}claude-null${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl\n${homeDir}${pathSep}.claude${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl`
           : '\n(诊断) 未能获取 HOME 目录，请确认系统环境变量 USERPROFILE/HOME 是否可用。';
         addToast({
           type: 'error',

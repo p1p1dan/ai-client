@@ -46,8 +46,8 @@ describe('parseGitLogOutput', () => {
       [
         'def456',
         '2026-03-24 11:00:00 +0800',
-        'EnsoAI Team',
-        'admin@j3n5en.com',
+        'baseOnEnso',
+        'admin@123.com',
         'fix(editor): 修复路径解析错误',
         '',
         '',
@@ -57,8 +57,8 @@ describe('parseGitLogOutput', () => {
       {
         hash: 'def456',
         date: '2026-03-24 11:00:00 +0800',
-        author_name: 'EnsoAI Team',
-        author_email: 'admin@j3n5en.com',
+        author_name: 'baseOnEnso',
+        author_email: 'admin@123.com',
         message: 'fix(editor): 修复路径解析错误',
         fullMessage: 'fix(editor): 修复路径解析错误',
         refs: undefined,

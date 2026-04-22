@@ -429,12 +429,12 @@ export function registerFileHandlers(): void {
     ): Promise<{ success: boolean; path?: string; error?: string }> => {
       try {
         const tempDir = app.getPath('temp');
-        const ensoaiInputDir = join(tempDir, 'ensoai-input');
+        const aiclientInputDir = join(tempDir, 'aiclient-input');
         ensureFileOwnerCleanup(event.sender);
         // Allow renderer to preview saved temp images via local-file:// protocol.
         // Without this, local-file access is denied by default.
-        registerAllowedLocalFileRoot(ensoaiInputDir, event.sender.id);
-        await mkdir(ensoaiInputDir, { recursive: true });
+        registerAllowedLocalFileRoot(aiclientInputDir, event.sender.id);
+        await mkdir(aiclientInputDir, { recursive: true });
 
         // Defense-in-depth: never trust renderer-controlled path segments.
         const safeName = basename(filename);
@@ -442,11 +442,11 @@ export function registerFileHandlers(): void {
           return { success: false, error: 'Invalid filename' };
         }
 
-        const filePath = join(ensoaiInputDir, safeName);
+        const filePath = join(aiclientInputDir, safeName);
 
         // Double-check resolved path stays within the allowed directory.
         const resolvedPath = resolve(filePath);
-        const allowedRoot = resolve(ensoaiInputDir) + sep;
+        const allowedRoot = resolve(aiclientInputDir) + sep;
         if (!resolvedPath.startsWith(allowedRoot)) {
           return { success: false, error: 'Invalid filename' };
         }
@@ -711,7 +711,7 @@ export function registerFileHandlers(): void {
           const normalizedDir = dirPath.replace(/\\/g, '/');
           event.sender.send(IPC_CHANNELS.FILE_CHANGE, {
             type: 'update',
-            path: `${normalizedDir}/.enso-bulk`,
+            path: `${normalizedDir}/.aiclient-bulk`,
           });
         } else {
           for (const [path, type] of pendingEvents) {
@@ -1072,25 +1072,25 @@ export function stopAllFileWatchersSync(): void {
 }
 
 /**
- * Clean up temporary files from ensoai-input directory
+ * Clean up temporary files from aiclient-input directory
  * Cross-platform compatible with retry logic for Windows file locks
  */
 export async function cleanupTempFiles(): Promise<void> {
   try {
     const tempDir = app.getPath('temp');
-    const ensoaiInputDir = join(tempDir, 'ensoai-input');
+    const aiclientInputDir = join(tempDir, 'aiclient-input');
 
     // Use recursive and force options for cross-platform compatibility
     // force: true - ignore errors if directory doesn't exist
     // recursive: true - delete directory and all contents
-    await rm(ensoaiInputDir, {
+    await rm(aiclientInputDir, {
       recursive: true,
       force: true,
       maxRetries: 3, // Retry on Windows file lock issues
       retryDelay: 100, // Wait 100ms between retries
     });
 
-    console.log('[files] Cleaned up temp directory:', ensoaiInputDir);
+    console.log('[files] Cleaned up temp directory:', aiclientInputDir);
   } catch (error) {
     // Don't throw - cleanup failure shouldn't block app startup/shutdown
     console.warn('[files] Failed to cleanup temp files:', error);
@@ -1104,17 +1104,17 @@ export async function cleanupTempFiles(): Promise<void> {
 export function cleanupTempFilesSync(): void {
   try {
     const tempDir = app.getPath('temp');
-    const ensoaiInputDir = join(tempDir, 'ensoai-input');
+    const aiclientInputDir = join(tempDir, 'aiclient-input');
 
     // Sync version with same options
-    rmSync(ensoaiInputDir, {
+    rmSync(aiclientInputDir, {
       recursive: true,
       force: true,
       maxRetries: 3,
       retryDelay: 100,
     });
 
-    console.log('[files] Cleaned up temp directory (sync):', ensoaiInputDir);
+    console.log('[files] Cleaned up temp directory (sync):', aiclientInputDir);
   } catch (error) {
     console.warn('[files] Failed to cleanup temp files (sync):', error);
   }

@@ -42,7 +42,7 @@ import type { UnsavedChangesChoice } from './UnsavedChangesDialog';
 const PANEL_MIN_WIDTH = 180;
 const PANEL_MAX_WIDTH = 500;
 const PANEL_DEFAULT_WIDTH = 256;
-const STORAGE_KEY = 'enso-file-panel-width';
+const STORAGE_KEY = 'aiclient-file-panel-width';
 
 // Helper to check if a keyboard event matches a keybinding
 function matchesKeybinding(e: KeyboardEvent, binding: TerminalKeybinding): boolean {
@@ -214,13 +214,13 @@ export function FilePanel({ rootPath, isActive = false }: FilePanelProps) {
 
   // File tree collapse state
   const [isFileTreeCollapsed, setIsFileTreeCollapsed] = useState(() => {
-    const saved = localStorage.getItem('enso-file-tree-collapsed');
+    const saved = localStorage.getItem('aiclient-file-tree-collapsed');
     return saved === 'true';
   });
 
   // Persist file tree collapse state
   useEffect(() => {
-    localStorage.setItem('enso-file-tree-collapsed', String(isFileTreeCollapsed));
+    localStorage.setItem('aiclient-file-tree-collapsed', String(isFileTreeCollapsed));
   }, [isFileTreeCollapsed]);
 
   // Toggle file tree collapse

@@ -1,7 +1,7 @@
 import { getXtermTheme, isTerminalThemeDark } from '@/lib/ghosttyTheme';
 import { monaco } from './monacoSetup';
 
-export const CUSTOM_THEME_NAME = 'enso-theme';
+export const CUSTOM_THEME_NAME = 'aiclient-theme';
 
 export interface MonacoThemeOptions {
   /** Whether a custom background image is active */

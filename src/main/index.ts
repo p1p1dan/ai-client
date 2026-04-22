@@ -1,4 +1,3 @@
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { extname, join } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
@@ -130,7 +129,7 @@ function sanitizeProfileName(input: string): string {
 // In dev mode, use an isolated userData dir to avoid clashing with the packaged app.
 // This prevents Chromium/Electron profile locking from causing an "empty" localStorage in later instances.
 if (isDev) {
-  const profile = sanitizeProfileName(process.env.ENSOAI_PROFILE || '') || 'dev';
+  const profile = sanitizeProfileName(process.env.AICLIENT_PROFILE || '') || 'dev';
   app.setPath('userData', join(app.getPath('appData'), `${app.getName()}-${profile}`));
 }
 
@@ -217,7 +216,7 @@ app.on('open-url', (event, url) => {
 });
 
 // Handle second instance (single-instance per userData profile).
-// In dev mode, set `ENSOAI_PROFILE` to run multiple isolated instances.
+// In dev mode, set `AICLIENT_PROFILE` to run multiple isolated instances.
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -237,7 +236,7 @@ if (!gotTheLock) {
 function readStoredLanguage(): Locale {
   try {
     const data = readSharedSettings();
-    const persisted = data['enso-settings'];
+    const persisted = data['aiclient-settings'];
     if (persisted && typeof persisted === 'object') {
       const state = (persisted as { state?: Record<string, unknown> }).state;
       const language = state?.language;
@@ -251,7 +250,7 @@ function readStoredLanguage(): Locale {
 
 // Linux: avoid GTK3/GTK4 mixed symbols crash by forcing GTK3 unless explicitly overridden.
 if (process.platform === 'linux') {
-  const gtkVersion = process.env.ENSOAI_GTK_VERSION || '3';
+  const gtkVersion = process.env.AICLIENT_GTK_VERSION || '3';
   app.commandLine.appendSwitch('gtk-version', gtkVersion);
 }
 
@@ -264,11 +263,11 @@ async function initAutoUpdater(window: BrowserWindow): Promise<void> {
 
   const { readSettings } = await import('./ipc/settings');
   const settings = readSettings();
-  const ensoSettings = settings?.['enso-settings'] as
+  const aiclientSettings = settings?.['aiclient-settings'] as
     | { state?: { autoUpdateEnabled?: boolean; proxySettings?: ProxySettings } }
     | undefined;
-  const autoUpdateEnabled = ensoSettings?.state?.autoUpdateEnabled ?? true;
-  const proxySettings = ensoSettings?.state?.proxySettings ?? null;
+  const autoUpdateEnabled = aiclientSettings?.state?.autoUpdateEnabled ?? true;
+  const proxySettings = aiclientSettings?.state?.proxySettings ?? null;
 
   const { autoUpdaterService } = await import('./services/updater/AutoUpdater');
   autoUpdaterService.init(window, autoUpdateEnabled, proxySettings);
@@ -332,7 +331,7 @@ async function migrateLegacyTodoIfNeeded(): Promise<void> {
 async function init(): Promise<void> {
   // Initialize logger from settings
   const settings = readSettings();
-  const ensoSettings = settings?.['enso-settings'] as
+  const aiclientSettings = settings?.['aiclient-settings'] as
     | {
         state?: {
           loggingEnabled?: boolean;
@@ -341,9 +340,9 @@ async function init(): Promise<void> {
         };
       }
     | undefined;
-  const loggingEnabled = (ensoSettings?.state?.loggingEnabled as boolean) ?? false;
-  const logLevel = (ensoSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';
-  const logRetentionDays = (ensoSettings?.state?.logRetentionDays as number) ?? 7;
+  const loggingEnabled = (aiclientSettings?.state?.loggingEnabled as boolean) ?? false;
+  const logLevel = (aiclientSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';
+  const logRetentionDays = (aiclientSettings?.state?.logRetentionDays as number) ?? 7;
   initLogger(loggingEnabled, logLevel, logRetentionDays);
   log.info('AI Client started');
 
@@ -367,8 +366,8 @@ app.whenReady().then(async () => {
   // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
   // NOTE: This is registered here (in the same module as the protocol handler)
   // to avoid any potential issues with module-level state not being shared.
-  const ensoaiInputDir = join(app.getPath('temp'), 'ensoai-input');
-  registerAllowedLocalFileRoot(ensoaiInputDir);
+  const aiclientInputDir = join(app.getPath('temp'), 'aiclient-input');
+  registerAllowedLocalFileRoot(aiclientInputDir);
 
   // Clean up temp files from previous sessions
   await cleanupTempFiles();

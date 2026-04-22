@@ -87,7 +87,7 @@ async function checkPathWritable(dirPath: string): Promise<TempWorkspaceCheckRes
   let testFile: string | null = null;
   try {
     await mkdir(dirPath, { recursive: true });
-    testFile = path.join(dirPath, `.ensoai-permission-${randomUUID()}.tmp`);
+    testFile = path.join(dirPath, `.aiclient-permission-${randomUUID()}.tmp`);
     await writeFile(testFile, 'test', { encoding: 'utf-8' });
     await access(testFile, constants.R_OK | constants.W_OK);
     return { ok: true };

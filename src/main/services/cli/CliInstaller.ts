@@ -56,7 +56,7 @@ async function runWithAdminPrivileges(shellCommand: string): Promise<void> {
   // Linux: use terminal emulator to run sudo
   // This is more reliable than zenity/kdialog which may have compatibility issues
 
-  const successMarker = `/tmp/enso-cli-install-success-${Date.now()}`;
+  const successMarker = `/tmp/aiclient-cli-install-success-${Date.now()}`;
   const escapedCmd = shellCommand.replace(/'/g, "'\\''");
   const sudoScript = `sudo sh -c '${escapedCmd}' && touch "${successMarker}"; echo ""; read -p "安装完成，按 Enter 关闭此窗口..."`;
 
@@ -150,10 +150,10 @@ class CliInstaller {
     if (isWindows) {
       // Windows: install to user's local bin
       const localAppData = process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local');
-      return join(localAppData, 'Programs', 'enso', 'enso.cmd');
+      return join(localAppData, 'Programs', 'aiclient', 'aiclient.cmd');
     }
     // macOS/Linux: install to /usr/local/bin
-    return '/usr/local/bin/enso';
+    return '/usr/local/bin/aiclient';
   }
 
   private getAppPath(): string {
@@ -324,7 +324,7 @@ fi
       } else {
         // macOS/Linux: need admin privileges to write to /usr/local/bin
         const script = isLinux ? this.generateLinuxScript() : this.generateMacScript();
-        const tempPath = join(app.getPath('temp'), 'enso-cli-script');
+        const tempPath = join(app.getPath('temp'), 'aiclient-cli-script');
         writeFileSync(tempPath, script, { mode: 0o755 });
 
         const escapedTempPath = tempPath.replace(/"/g, '\\"');

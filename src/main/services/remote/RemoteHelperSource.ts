@@ -27,14 +27,14 @@ const REMOTE_SERVER_VERSION = ${JSON.stringify(REMOTE_SERVER_VERSION)};
 const GIT_LOG_FIELD_SEPARATOR = ${JSON.stringify(GIT_LOG_FIELD_SEPARATOR)};
 const GIT_LOG_RECORD_SEPARATOR = ${JSON.stringify(GIT_LOG_RECORD_SEPARATOR)};
 const GIT_LOG_PRETTY_FORMAT = ${JSON.stringify(GIT_LOG_PRETTY_FORMAT)};
-const DAEMON_INFO_FILE = 'enso-remote-daemon.json';
+const DAEMON_INFO_FILE = 'aiclient-remote-daemon.json';
 const MAX_SESSION_REPLAY_CHARS = 65536;
 const EXEC_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const EXEC_COMMAND_OUTPUT_LIMIT_CHARS = 2 * 1024 * 1024;
 const REMOTE_PTY_UNAVAILABLE = 'REMOTE_PTY_UNAVAILABLE';
-const REMOTE_SETTINGS_PATH = '.ensoai/settings.json';
-const REMOTE_SESSION_STATE_PATH = '.ensoai/session-state.json';
-const RUNTIME_MANIFEST_FILENAME = 'enso-remote-runtime-manifest.json';
+const REMOTE_SETTINGS_PATH = '.aiclient/settings.json';
+const REMOTE_SESSION_STATE_PATH = '.aiclient/session-state.json';
+const RUNTIME_MANIFEST_FILENAME = 'aiclient-remote-runtime-manifest.json';
 const GLOBAL_STATUS_CACHE_TTL = 300000;
 const AUTH_TOKEN_BYTES = 36;
 let cachedNodePty = undefined;
@@ -1603,10 +1603,10 @@ async function readStoredSettings() {
 
 async function readStoredShellConfig() {
   const settings = await readStoredSettings();
-  const ensoSettings =
-    settings && typeof settings === 'object' ? settings['enso-settings'] : undefined;
+  const aiclientSettings =
+    settings && typeof settings === 'object' ? settings['aiclient-settings'] : undefined;
   const state =
-    ensoSettings && typeof ensoSettings === 'object' ? ensoSettings.state : undefined;
+    aiclientSettings && typeof aiclientSettings === 'object' ? aiclientSettings.state : undefined;
   const shellConfig = state && typeof state === 'object' ? state.shellConfig : undefined;
   return shellConfig && typeof shellConfig === 'object' ? shellConfig : undefined;
 }
@@ -2079,7 +2079,7 @@ async function checkTmux({ forceRefresh }) {
 
 async function killTmuxSession({ name }) {
   try {
-    await execInConfiguredShell('tmux -L enso kill-session -t ' + shellQuote(name), {
+    await execInConfiguredShell('tmux -L aiclient kill-session -t ' + shellQuote(name), {
       timeout: 5000,
     });
   } catch {

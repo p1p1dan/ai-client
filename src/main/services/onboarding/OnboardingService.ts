@@ -20,11 +20,11 @@ function getInjectedOnboardingSecret(): string {
 class OnboardingService {
   /**
    * Check if user has already completed onboarding.
-   * Reads the onboarding field from ~/.ensoai/settings.json.
+   * Reads the onboarding field from ~/.aiclient/settings.json.
    */
   checkRegistration(): OnboardingState {
     try {
-      const settingsPath = path.join(os.homedir(), '.ensoai', 'settings.json');
+      const settingsPath = path.join(os.homedir(), '.aiclient', 'settings.json');
       if (!fs.existsSync(settingsPath)) {
         return { registered: false };
       }
@@ -444,7 +444,7 @@ class OnboardingService {
   }
 
   /**
-   * Save onboarding state to ~/.ensoai/settings.json
+   * Save onboarding state to ~/.aiclient/settings.json
    */
   private saveOnboardingState(state: OnboardingState): boolean {
     try {

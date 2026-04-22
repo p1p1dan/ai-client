@@ -24,14 +24,14 @@ export interface RemoteRuntimeAsset {
 }
 
 export const MANAGED_REMOTE_NODE_VERSION = '20.19.0';
-export const MANAGED_REMOTE_RUNTIME_DIR = '.ensoai/remote-runtime';
+export const MANAGED_REMOTE_RUNTIME_DIR = '.aiclient/remote-runtime';
 
 const GITHUB_RELEASE_TAG = `v${pkg.version}`;
-const GITHUB_RELEASE_ASSET_BASE_URL = `https://github.com/J3n5en/EnsoAI/releases/download/${GITHUB_RELEASE_TAG}`;
+const GITHUB_RELEASE_ASSET_BASE_URL = `https://github.com/jyw-ai/jyw-ai-client/releases/download/${GITHUB_RELEASE_TAG}`;
 const REMOTE_RUNTIME_DEV_SCRIPT = join(process.cwd(), 'scripts', 'build-remote-runtime-bundle.mjs');
 
 function buildManagedLinuxRuntimeArchiveName(arch: RemoteRuntimeArch): string {
-  return `enso-remote-runtime-v${REMOTE_SERVER_VERSION}-node-v${MANAGED_REMOTE_NODE_VERSION}-linux-${arch}.tar.gz`;
+  return `aiclient-remote-runtime-v${REMOTE_SERVER_VERSION}-node-v${MANAGED_REMOTE_NODE_VERSION}-linux-${arch}.tar.gz`;
 }
 
 function buildReleaseAssetUrl(fileName: string): string {
@@ -161,7 +161,7 @@ async function writeResponseBodyToFile(
 ): Promise<void> {
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'EnsoAI Remote Runtime Installer',
+      'User-Agent': 'AiClient Remote Runtime Installer',
     },
   });
 

@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { AGENT_INFO } from '@/utils/agentSession';
 
-const STORAGE_KEY = 'enso-session-bar';
+const STORAGE_KEY = 'aiclient-session-bar';
 const EDGE_THRESHOLD = 20; // pixels from edge
 
 export interface Session {

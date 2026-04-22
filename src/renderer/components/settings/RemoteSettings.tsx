@@ -564,7 +564,7 @@ export function RemoteSettings() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, runtimeInstallDir: event.target.value }))
                 }
-                placeholder={t('Optional override, for example ~/.ensoai/remote-runtime')}
+                placeholder={t('Optional override, for example ~/.aiclient/remote-runtime')}
               />
             </Field>
           </div>

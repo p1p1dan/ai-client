@@ -97,7 +97,7 @@ function normalizePromptSignature(promptText: string): string {
 }
 
 function getBrokerRoot(): string {
-  return join(process.env.HOME || process.env.USERPROFILE || homedir(), '.ensoai', 'remote-auth');
+  return join(process.env.HOME || process.env.USERPROFILE || homedir(), '.aiclient', 'remote-auth');
 }
 
 function normalizePromptText(promptText: string): string {
@@ -112,11 +112,11 @@ function fail(code = 1) {
   process.exit(code);
 }
 
-const port = Number(process.env.ENSO_REMOTE_PROMPT_PORT || '');
-const token = process.env.ENSO_REMOTE_PROMPT_TOKEN || '';
-const profileId = process.env.ENSO_REMOTE_PROFILE_ID || '';
-const sessionId = process.env.ENSO_REMOTE_PROMPT_SESSION_ID || '';
-const hostPort = Number(process.env.ENSO_REMOTE_HOST_PORT || '');
+const port = Number(process.env.AICLIENT_REMOTE_PROMPT_PORT || '');
+const token = process.env.AICLIENT_REMOTE_PROMPT_TOKEN || '';
+const profileId = process.env.AICLIENT_REMOTE_PROFILE_ID || '';
+const sessionId = process.env.AICLIENT_REMOTE_PROMPT_SESSION_ID || '';
+const hostPort = Number(process.env.AICLIENT_REMOTE_HOST_PORT || '');
 const prompt = process.argv.slice(2).join(' ');
 
 if (!port || !token || !profileId) {
@@ -206,22 +206,22 @@ export class RemoteAuthBroker {
     this.profiles.set(profile.id, profile);
 
     const env: Record<string, string> = {
-      ENSO_REMOTE_PROMPT_PORT: String(this.port),
-      ENSO_REMOTE_PROMPT_TOKEN: this.token,
-      ENSO_REMOTE_PROFILE_ID: profile.id,
+      AICLIENT_REMOTE_PROMPT_PORT: String(this.port),
+      AICLIENT_REMOTE_PROMPT_TOKEN: this.token,
+      AICLIENT_REMOTE_PROFILE_ID: profile.id,
       SSH_ASKPASS: artifacts.wrapperPath,
       SSH_ASKPASS_REQUIRE: 'force',
     };
 
     if (sessionId) {
-      env.ENSO_REMOTE_PROMPT_SESSION_ID = sessionId;
+      env.AICLIENT_REMOTE_PROMPT_SESSION_ID = sessionId;
     }
     if (hostPort && Number.isFinite(hostPort) && hostPort > 0) {
-      env.ENSO_REMOTE_HOST_PORT = String(hostPort);
+      env.AICLIENT_REMOTE_HOST_PORT = String(hostPort);
     }
 
     if (process.platform !== 'win32' && !process.env.DISPLAY) {
-      env.DISPLAY = 'ensoai-askpass:0';
+      env.DISPLAY = 'aiclient-askpass:0';
     }
 
     return env;

@@ -10,30 +10,30 @@ import {
 
 // Storage keys
 export const STORAGE_KEYS = {
-  REPOSITORIES: 'enso-repositories',
-  SELECTED_REPO: 'enso-selected-repo',
-  REMOTE_PROFILES: 'enso-remote-profiles',
-  ACTIVE_WORKTREE: 'enso-active-worktree', // deprecated, kept for migration
-  ACTIVE_WORKTREES: 'enso-active-worktrees', // per-repo worktree map
-  WORKTREE_TABS: 'enso-worktree-tabs',
-  WORKTREE_ORDER: 'enso-worktree-order', // per-repo worktree display order map
-  TAB_ORDER: 'enso-tab-order', // panel tab order
-  REPOSITORY_WIDTH: 'enso-repository-width',
-  WORKTREE_WIDTH: 'enso-worktree-width',
-  FILE_SIDEBAR_WIDTH: 'enso-file-sidebar-width',
-  TREE_SIDEBAR_WIDTH: 'enso-tree-sidebar-width',
-  REPOSITORY_COLLAPSED: 'enso-repository-collapsed',
-  WORKTREE_COLLAPSED: 'enso-worktree-collapsed',
-  FILE_SIDEBAR_COLLAPSED: 'enso-file-sidebar-collapsed',
-  REPOSITORY_SETTINGS: 'enso-repository-settings', // per-repo settings (init script, etc.)
-  REPOSITORY_GROUPS: 'enso-repository-groups',
-  ACTIVE_GROUP: 'enso-active-group',
-  GROUP_COLLAPSED_STATE: 'enso-group-collapsed-state',
-  TODO_BOARDS: 'enso-todo-boards',
-  FILE_TREE_EXPANDED_PREFIX: 'enso-file-tree-expanded',
-  SC_REPO_LIST_EXPANDED: 'enso-sc-repo-list-expanded',
-  SC_CHANGES_EXPANDED: 'enso-sc-changes-expanded',
-  SC_HISTORY_EXPANDED: 'enso-sc-history-expanded',
+  REPOSITORIES: 'aiclient-repositories',
+  SELECTED_REPO: 'aiclient-selected-repo',
+  REMOTE_PROFILES: 'aiclient-remote-profiles',
+  ACTIVE_WORKTREE: 'aiclient-active-worktree', // deprecated, kept for migration
+  ACTIVE_WORKTREES: 'aiclient-active-worktrees', // per-repo worktree map
+  WORKTREE_TABS: 'aiclient-worktree-tabs',
+  WORKTREE_ORDER: 'aiclient-worktree-order', // per-repo worktree display order map
+  TAB_ORDER: 'aiclient-tab-order', // panel tab order
+  REPOSITORY_WIDTH: 'aiclient-repository-width',
+  WORKTREE_WIDTH: 'aiclient-worktree-width',
+  FILE_SIDEBAR_WIDTH: 'aiclient-file-sidebar-width',
+  TREE_SIDEBAR_WIDTH: 'aiclient-tree-sidebar-width',
+  REPOSITORY_COLLAPSED: 'aiclient-repository-collapsed',
+  WORKTREE_COLLAPSED: 'aiclient-worktree-collapsed',
+  FILE_SIDEBAR_COLLAPSED: 'aiclient-file-sidebar-collapsed',
+  REPOSITORY_SETTINGS: 'aiclient-repository-settings', // per-repo settings (init script, etc.)
+  REPOSITORY_GROUPS: 'aiclient-repository-groups',
+  ACTIVE_GROUP: 'aiclient-active-group',
+  GROUP_COLLAPSED_STATE: 'aiclient-group-collapsed-state',
+  TODO_BOARDS: 'aiclient-todo-boards',
+  FILE_TREE_EXPANDED_PREFIX: 'aiclient-file-tree-expanded',
+  SC_REPO_LIST_EXPANDED: 'aiclient-sc-repo-list-expanded',
+  SC_CHANGES_EXPANDED: 'aiclient-sc-changes-expanded',
+  SC_HISTORY_EXPANDED: 'aiclient-sc-history-expanded',
 } as const;
 
 // Helper to get initial value from localStorage

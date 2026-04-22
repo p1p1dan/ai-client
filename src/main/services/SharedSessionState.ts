@@ -4,7 +4,7 @@ import type { SessionStorageDocument, SessionTodoTask } from '@shared/types';
 import { app } from 'electron';
 
 const STORAGE_VERSION = 2;
-const SHARED_STATE_DIR = '.ensoai';
+const SHARED_STATE_DIR = '.aiclient';
 const SETTINGS_FILENAME = 'settings.json';
 const SESSION_FILENAME = 'session-state.json';
 const SETTINGS_MIGRATION_MARKER = '.local-settings-migrated';

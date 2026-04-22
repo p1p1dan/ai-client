@@ -18,7 +18,7 @@ import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
-const ONBOARDING_OPEN_EVENT = 'ensoai:onboarding:open';
+const ONBOARDING_OPEN_EVENT = 'aiclient:onboarding:open';
 
 const usageNumberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 });
 

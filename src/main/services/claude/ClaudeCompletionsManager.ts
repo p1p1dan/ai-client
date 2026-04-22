@@ -54,7 +54,7 @@ function getClaudeSkillsDirs(): string[] {
 
 function getLearnedCacheFilePath(): string {
   // The learned cache follows CLAUDE_CONFIG_DIR (if set); otherwise it defaults to ~/.claude.
-  return path.join(getPrimaryClaudeConfigDir(), 'cache', 'ensoai-slash-learned.json');
+  return path.join(getPrimaryClaudeConfigDir(), 'cache', 'aiclient-slash-learned.json');
 }
 
 let snapshot: ClaudeSlashCompletionsSnapshot = { items: [], updatedAt: 0 };

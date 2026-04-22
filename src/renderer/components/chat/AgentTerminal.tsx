@@ -436,7 +436,7 @@ export function AgentTerminal({
     // Build tmux session name from terminal session ID
     const tmuxSessionName =
       shouldUseTmux && terminalSessionId
-        ? `enso-${terminalSessionId}`.replace(/[^a-zA-Z0-9_-]/g, '_')
+        ? `aiclient-${terminalSessionId}`.replace(/[^a-zA-Z0-9_-]/g, '_')
         : null;
     tmuxSessionNameRef.current = tmuxSessionName;
 
@@ -444,7 +444,7 @@ export function AgentTerminal({
     let finalCommand = fullCommand;
     if (tmuxSessionName) {
       const escaped = fullCommand.replace(/'/g, "'\\''");
-      finalCommand = `env -u TMUX tmux -L enso -f /dev/null new-session -A -s ${tmuxSessionName} '${escaped}'`;
+      finalCommand = `env -u TMUX tmux -L aiclient -f /dev/null new-session -A -s ${tmuxSessionName} '${escaped}'`;
     }
 
     if (isRemoteExecution) {

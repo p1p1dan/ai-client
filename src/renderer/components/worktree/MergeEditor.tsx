@@ -14,7 +14,7 @@ loader.config({ monaco });
 
 type EditorInstance = monaco.editor.IStandaloneCodeEditor;
 
-const MERGE_THEME_NAME = 'enso-merge-theme';
+const MERGE_THEME_NAME = 'aiclient-merge-theme';
 
 // Diff region types
 interface DiffRegion {

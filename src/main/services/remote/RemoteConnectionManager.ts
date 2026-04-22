@@ -181,7 +181,7 @@ interface RemoteDirectoryEntry {
 type RemoteEventListener = (payload: unknown) => void;
 
 const DEFAULT_RUNTIME_DIR = MANAGED_REMOTE_RUNTIME_DIR;
-const SERVER_FILENAME = 'enso-remote-server.cjs';
+const SERVER_FILENAME = 'aiclient-remote-server.cjs';
 const BOOTSTRAP_TIMEOUT_MS = 5_000;
 const REMOTE_SETTINGS_PATH = 'remote-connections.json';
 const REMOTE_KNOWN_HOSTS_PATH = 'remote-known_hosts';
@@ -190,7 +190,7 @@ const SSH_HOST_VERIFICATION_PROMPT_TIMEOUT_MS = 15_000;
 const MAX_REMOTE_DIAGNOSTIC_LINES = 40;
 const MAX_REMOTE_DIAGNOSTIC_CHARS = 8_192;
 const REMOTE_PTY_UNAVAILABLE_PREFIX = 'REMOTE_PTY_UNAVAILABLE:';
-const RUNTIME_MANIFEST_FILENAME = 'enso-remote-runtime-manifest.json';
+const RUNTIME_MANIFEST_FILENAME = 'aiclient-remote-runtime-manifest.json';
 const LINUX_ONLY_REMOTE_ERROR = 'Only glibc-based Linux x64 and arm64 remote hosts are supported';
 const REMOTE_SHARED_SETTINGS_FILENAME = 'settings.json';
 const REMOTE_SHARED_SESSION_STATE_FILENAME = 'session-state.json';
@@ -201,7 +201,7 @@ const SSH_COMMAND_TIMEOUT_MS = 10 * 60_000;
 const SERVER_SHUTDOWN_GRACE_MS = 5_000;
 const REMOTE_SERVER_BUFFER_LIMIT_CHARS = 10 * 1024 * 1024;
 const COMMAND_OUTPUT_LIMIT_CHARS = 2 * 1024 * 1024;
-const REMOTE_ENV_INFO_PREFIX = '__ENSO_REMOTE_ENV__';
+const REMOTE_ENV_INFO_PREFIX = '__AICLIENT_REMOTE_ENV__';
 const RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 8_000];
 const SCP_CONNECT_TIMEOUT_SECONDS = 30;
 const SCP_UPLOAD_TIMEOUT_MS = 10 * 60_000;
@@ -417,7 +417,7 @@ function getRemoteSettingsPath(): string {
 }
 
 function getRemoteStateRoot(): string {
-  return join(process.env.HOME || process.env.USERPROFILE || app.getPath('home'), '.ensoai');
+  return join(process.env.HOME || process.env.USERPROFILE || app.getPath('home'), '.aiclient');
 }
 
 function getAppKnownHostsPath(): string {
@@ -1371,7 +1371,7 @@ export class RemoteConnectionManager {
     settingsPath: string;
     sessionStatePath: string;
   } {
-    const rootDir = normalizeRemotePath(`${runtime.homeDir}/.ensoai`);
+    const rootDir = normalizeRemotePath(`${runtime.homeDir}/.aiclient`);
     return {
       rootDir,
       settingsPath: normalizeRemotePath(`${rootDir}/${REMOTE_SHARED_SETTINGS_FILENAME}`),
@@ -1469,7 +1469,7 @@ export class RemoteConnectionManager {
     const source = getNormalizedRemoteServerSource();
     const tempPath = join(
       app.getPath('temp'),
-      `enso-remote-server-${profile.id}-${randomUUID()}.cjs`
+      `aiclient-remote-server-${profile.id}-${randomUUID()}.cjs`
     );
     try {
       await this.validateRemoteServerSource(source);
@@ -1546,7 +1546,7 @@ export class RemoteConnectionManager {
   ): Promise<void> {
     const tempPath = join(
       app.getPath('temp'),
-      `enso-remote-runtime-manifest-${profile.id}-${randomUUID()}.json`
+      `aiclient-remote-runtime-manifest-${profile.id}-${randomUUID()}.json`
     );
     const manifest = this.buildExpectedRuntimeManifest(runtime, runtimeAsset);
 
@@ -2830,7 +2830,7 @@ export class RemoteConnectionManager {
   ): Promise<RemoteHostFingerprint[]> {
     const tempPath = join(
       app.getPath('temp'),
-      `enso-remote-host-${host.replace(/[^a-z0-9_.-]/gi, '_')}-${port}-${randomUUID()}.keys`
+      `aiclient-remote-host-${host.replace(/[^a-z0-9_.-]/gi, '_')}-${port}-${randomUUID()}.keys`
     );
 
     try {

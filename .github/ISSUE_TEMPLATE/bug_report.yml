@@ -1,5 +1,4 @@
-name: Bug Report
-description: 报告 EnsoAI 的问题
+description: 报告 AiClient 的问题
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -9,9 +8,9 @@ body:
         感谢你提交 Bug 报告！请填写以下信息以帮助我们定位问题。
 
   - type: input
-    id: ensoai-version
+    id: aiclient-version
     attributes:
-      label: EnsoAI 版本号
+      label: AiClient 版本号
       description: 可在应用设置中查看
       placeholder: "例如: 0.2.27"
     validations:
@@ -41,7 +40,7 @@ body:
       label: 复现步骤
       description: 详细描述如何复现此问题
       placeholder: |
-        1. 打开 EnsoAI
+        1. 打开 AiClient
         2. 点击 ...
         3. 执行 ...
         4. 出现错误

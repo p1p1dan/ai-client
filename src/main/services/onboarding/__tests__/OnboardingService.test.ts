@@ -40,7 +40,7 @@ describe('OnboardingService', () => {
   beforeEach(() => {
     tempHome = join(
       tmpdir(),
-      `enso-onboarding-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      `aiclient-onboarding-${Date.now()}-${Math.random().toString(16).slice(2)}`
     );
     mkdirSync(tempHome, { recursive: true });
     process.env.HOME = tempHome;
@@ -65,13 +65,13 @@ describe('OnboardingService', () => {
   });
 
   it('persists credentials to CLI config files and preserves existing settings', async () => {
-    const settingsPath = join(tempHome, '.ensoai', 'settings.json');
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    const settingsPath = join(tempHome, '.aiclient', 'settings.json');
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
       settingsPath,
       JSON.stringify(
         {
-          'enso-settings': {
+          'aiclient-settings': {
             state: {
               language: 'zh',
             },
@@ -152,7 +152,7 @@ describe('OnboardingService', () => {
     const { onboardingService } = await import('../OnboardingService');
 
     expect(readSettings()).toEqual({
-      'enso-settings': {
+      'aiclient-settings': {
         state: {
           language: 'zh',
         },
@@ -167,7 +167,7 @@ describe('OnboardingService', () => {
 
     expect(result.ok).toBe(true);
     expect(readSettings()).toMatchObject({
-      'enso-settings': {
+      'aiclient-settings': {
         state: {
           language: 'zh',
         },
@@ -232,8 +232,8 @@ describe('OnboardingService', () => {
   it('logout removes local CLI credentials', async () => {
     const { onboardingService } = await import('../OnboardingService');
 
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
-    writeFileSync(join(tempHome, '.ensoai', 'settings.json'), JSON.stringify({ onboarding: { registered: true } }));
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
+    writeFileSync(join(tempHome, '.aiclient', 'settings.json'), JSON.stringify({ onboarding: { registered: true } }));
 
     const claudeSettingsPath = join(tempHome, '.claude', 'settings.json');
     mkdirSync(join(tempHome, '.claude'), { recursive: true });
@@ -268,9 +268,9 @@ describe('OnboardingService', () => {
   });
 
   it('refreshes stale local CLI credentials for an already registered user', async () => {
-    mkdirSync(join(tempHome, '.ensoai'), { recursive: true });
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
-      join(tempHome, '.ensoai', 'settings.json'),
+      join(tempHome, '.aiclient', 'settings.json'),
       JSON.stringify(
         {
           onboarding: {

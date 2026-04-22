@@ -539,7 +539,7 @@ export function EnhancedInput({
         const timestamp = Date.now();
         const random = Math.random().toString(36).substring(2, 8);
         const extension = getImageExtension(file);
-        const filename = `ensoai-input-${timestamp}-${random}.${extension}`;
+        const filename = `aiclient-input-${timestamp}-${random}.${extension}`;
 
         // Save to temp directory via electron API
         const result = await window.electronAPI.file.saveToTemp(filename, buffer);

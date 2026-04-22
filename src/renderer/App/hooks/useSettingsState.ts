@@ -11,7 +11,7 @@ export function useSettingsState(
 ) {
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>(() => {
     try {
-      const saved = localStorage.getItem('enso-settings-active-category');
+      const saved = localStorage.getItem('aiclient-settings-active-category');
       const validCategories: SettingsCategory[] = [
         'general',
         'appearance',
@@ -43,7 +43,7 @@ export function useSettingsState(
   // Persist settings category
   useEffect(() => {
     try {
-      localStorage.setItem('enso-settings-active-category', settingsCategory);
+      localStorage.setItem('aiclient-settings-active-category', settingsCategory);
     } catch (error) {
       console.warn('Failed to save settings category:', error);
     }

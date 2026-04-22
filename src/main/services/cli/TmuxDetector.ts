@@ -40,7 +40,7 @@ class TmuxDetector {
   async killSession(name: string): Promise<void> {
     if (isWindows) return;
     try {
-      await execInPty(`tmux -L enso kill-session -t ${name}`, { timeout: 5000 });
+      await execInPty(`tmux -L aiclient kill-session -t ${name}`, { timeout: 5000 });
     } catch {
       // Session may already be gone — ignore errors
     }
@@ -49,7 +49,7 @@ class TmuxDetector {
   async killServer(): Promise<void> {
     if (isWindows) return;
     try {
-      await execInPty('tmux -L enso kill-server', { timeout: 5000 });
+      await execInPty('tmux -L aiclient kill-server', { timeout: 5000 });
     } catch {
       // Server may already be gone — ignore errors
     }
@@ -58,7 +58,7 @@ class TmuxDetector {
   killServerSync(): void {
     if (isWindows) return;
     try {
-      spawnSync('tmux', ['-L', 'enso', 'kill-server'], {
+      spawnSync('tmux', ['-L', 'aiclient', 'kill-server'], {
         timeout: 3000,
         stdio: 'ignore',
       });

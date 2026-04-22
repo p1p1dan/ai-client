@@ -79,7 +79,7 @@ import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspec
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
 import pkg from '../../package.json';
 
-const REMOTE_PATH_PREFIX = '/__enso_remote__';
+const REMOTE_PATH_PREFIX = '/__aiclient_remote__';
 
 const electronAPI = {
   // Git

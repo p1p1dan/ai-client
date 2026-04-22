@@ -770,7 +770,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
     }),
     {
-      name: 'enso-settings',
+      name: 'aiclient-settings',
       storage: createJSONStorage(() => electronStorage),
       // Exclude transient fields from persistence
       partialize: (state) => {
@@ -821,7 +821,7 @@ export const useSettingsStore = create<SettingsState>()(
           });
 
           // Auto-detect best shell on Windows for new users
-          const shellAutoDetectKey = 'enso-shell-auto-detected';
+          const shellAutoDetectKey = 'aiclient-shell-auto-detected';
           const executionPlatform = window.electronAPI?.env?.platform;
           if (executionPlatform === 'win32' && !localStorage.getItem(shellAutoDetectKey)) {
             localStorage.setItem(shellAutoDetectKey, 'true');

@@ -237,7 +237,7 @@ export function cleanupHapiSync(): void {
 export async function autoStartHapi(): Promise<void> {
   try {
     const data = readSharedSettings();
-    const persisted = data['enso-settings'];
+    const persisted = data['aiclient-settings'];
     const state =
       persisted && typeof persisted === 'object'
         ? (persisted as { state?: { hapiSettings?: StoredHapiSettings } }).state

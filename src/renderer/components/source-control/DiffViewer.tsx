@@ -39,7 +39,7 @@ import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
 type DiffEditorInstance = ReturnType<typeof monaco.editor.createDiffEditor>;
 
-const CUSTOM_THEME_NAME = 'enso-diff-theme';
+const CUSTOM_THEME_NAME = 'aiclient-diff-theme';
 
 function defineMonacoDiffTheme(terminalThemeName: string) {
   const xtermTheme = getXtermTheme(terminalThemeName);

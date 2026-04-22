@@ -1,7 +1,7 @@
 import type { TempWorkspaceItem } from '@shared/types';
 import { create } from 'zustand';
 
-const TEMP_WORKSPACES_KEY = 'enso-temp-workspaces';
+const TEMP_WORKSPACES_KEY = 'aiclient-temp-workspaces';
 
 function loadFromStorage(): TempWorkspaceItem[] {
   try {

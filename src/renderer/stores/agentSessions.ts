@@ -7,7 +7,7 @@ import { createInitialGroupState } from '@/components/chat/types';
 import { useAgentStatusStore } from './agentStatus';
 
 // Global storage key for all sessions across all repos
-export const SESSIONS_STORAGE_KEY = 'enso-agent-sessions';
+export const SESSIONS_STORAGE_KEY = 'aiclient-agent-sessions';
 
 // Runtime output state for each session (not persisted)
 export type OutputState = 'idle' | 'outputting' | 'unread';

@@ -159,7 +159,7 @@ export function buildAppMenu(options: MenuOptions = {}): Menu {
       submenu: [
         {
           label: t('Learn More'),
-          click: () => shell.openExternal('https://github.com/J3n5en/EnsoAI'),
+          click: () => shell.openExternal('https://github.com/jyw-ai/jyw-ai-client'),
         },
       ],
     },

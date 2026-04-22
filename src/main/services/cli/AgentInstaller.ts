@@ -252,7 +252,7 @@ export class AgentInstaller {
     await this.refreshPath();
     let gitStatus = await this.detectGit();
     if (!gitStatus.installed || !gitStatus.bashPath) {
-      const installerPath = path.join(os.tmpdir(), 'enso-onboarding-git-installer.exe');
+      const installerPath = path.join(os.tmpdir(), 'aiclient-onboarding-git-installer.exe');
       onUpdate?.('Downloading Git installer...');
       await runPowerShell(
         `Invoke-WebRequest -Uri ${quotePowerShell(GIT_INSTALLER_URL)} -OutFile ${quotePowerShell(installerPath)} -UseBasicParsing -ErrorAction Stop`,
@@ -299,7 +299,7 @@ export class AgentInstaller {
     await this.refreshPath();
     let nodeStatus = await this.detectNode();
     if (!nodeStatus.installed) {
-      const installerPath = path.join(os.tmpdir(), 'enso-onboarding-node-installer.msi');
+      const installerPath = path.join(os.tmpdir(), 'aiclient-onboarding-node-installer.msi');
       onUpdate?.('Downloading Node.js installer...');
       await runPowerShell(
         `Invoke-WebRequest -Uri ${quotePowerShell(NODE_INSTALLER_URL)} -OutFile ${quotePowerShell(installerPath)} -UseBasicParsing -ErrorAction Stop`,
