@@ -1,3 +1,4 @@
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { extname, join } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
