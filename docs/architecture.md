@@ -1,8 +1,8 @@
-# EnsoAI Architecture
+# AiClient Architecture
 
 ## Overview
 
-EnsoAI 是一个基于 Electron 的增强型 Git Worktree 管理器，核心理念是 **"多 Agent 并行流"**。通过 Git Worktree 技术，让每个功能分支拥有独立的物理目录、编辑器状态、终端会话和 AI Agent 上下文。
+AiClient 是一个基于 Electron 的增强型 Git Worktree 管理器，核心理念是 **"多 Agent 并行流"**。通过 Git Worktree 技术，让每个功能分支拥有独立的物理目录、编辑器状态、终端会话和 AI Agent 上下文。
 
 ## Tech Stack
 

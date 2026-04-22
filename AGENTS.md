@@ -6,12 +6,12 @@
 
 ## OVERVIEW
 
-EnsoAI - Git Worktree 管理器 + 多 AI Agent 集成。Electron 39 + React 19 + TypeScript 5.9 + Tailwind 4。
+AiClient - Git Worktree 管理器 + 多 AI Agent 集成。Electron 39 + React 19 + TypeScript 5.9 + Tailwind 4。
 
 ## STRUCTURE
 
 ```
-EnsoAI/
+jyw-ai-client/
 ├── src/
 │   ├── main/          # Electron 主进程 (IPC, Services, Menu)
 │   ├── preload/       # Electron 预加载脚本 (Context Bridge)

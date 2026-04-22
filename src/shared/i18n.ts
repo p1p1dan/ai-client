@@ -1162,8 +1162,8 @@ export const zhTranslations: Record<string, string> = {
   'Fill in the profile name and SSH target before testing the connection.':
     '请先填写配置名称和 SSH 目标，再测试连接。',
   'Connection succeeded': '连接成功',
-  'The remote host is reachable and ready for Enso remote helper setup.':
-    '远程主机可访问，已可继续安装 Enso 远程助手。',
+  'The remote host is reachable and ready for AiClient remote helper setup.':
+    '远程主机可访问，已可继续安装 AiClient 远程助手。',
   'The remote host is reachable and ready for managed runtime setup.':
     '远程主机可访问，已可继续安装托管远程运行时。',
   'Connection failed': '连接失败',
@@ -1600,7 +1600,7 @@ export const zhTranslations: Record<string, string> = {
   'Open any webpage with the userscript installed': '打开任意已安装用户脚本的网页',
   'Click the userscript manager icon and select "Enable Web Inspector"':
     '点击油猴图标，选择「启用 Web Inspector」',
-  'Click the Enso button on the webpage': '点击网页上的 Enso 按钮',
+  'Click the AiClient button on the webpage': '点击网页上的 AiClient 按钮',
   'Click on any element to inspect': '点击任意元素进行检查',
   'Element info will be sent to your active agent session': '元素信息将发送到当前活跃的 Agent 会话',
   'Copy on Selection': '选中即复制',

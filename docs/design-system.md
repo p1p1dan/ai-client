@@ -1,4 +1,4 @@
-# EnsoAI Design System
+# AiClient Design System
 
 ## Tech Stack
 
