@@ -201,6 +201,11 @@ export class SessionManager {
       return;
     }
 
+    if (session.persistOnDisconnect) {
+      session.streamState = 'buffering';
+      return;
+    }
+
     this.localPtyManager.destroy(sessionId);
     this.sessions.delete(sessionId);
   }
