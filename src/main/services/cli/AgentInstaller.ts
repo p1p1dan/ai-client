@@ -300,6 +300,7 @@ export class AgentInstaller {
     let nodeStatus = await this.detectNode();
     if (!nodeStatus.installed) {
       const installerPath = path.join(os.tmpdir(), 'aiclient-onboarding-node-installer.msi');
+      const installerLogPath = path.join(os.tmpdir(), 'aiclient-onboarding-node-installer.log');
       onUpdate?.('Downloading Node.js installer...');
       await runPowerShell(
         `Invoke-WebRequest -Uri ${quotePowerShell(NODE_INSTALLER_URL)} -OutFile ${quotePowerShell(installerPath)} -UseBasicParsing -ErrorAction Stop`,
@@ -307,12 +308,20 @@ export class AgentInstaller {
       );
 
       try {
-        onUpdate?.('Running Node.js installer...');
-        await runCommand(
-          'msiexec.exe',
-          ['/i', installerPath, '/quiet', '/norestart', 'ADDLOCAL=ALL'],
-          { signal: this.abortController.signal }
-        );
+        onUpdate?.('Running Node.js installer (please approve the UAC prompt)...');
+        // Per-machine MSI installs require admin; running msiexec unelevated with
+        // /quiet fails silently with exit code 1603. Start-Process -Verb RunAs
+        // triggers UAC so msiexec gets the elevated token. Drop ADDLOCAL=ALL —
+        // the default feature set already includes Node+npm, and forcing every
+        // optional feature can itself surface as 1603 on some Windows hosts.
+        const psCommand = [
+          `$installerPath = ${quotePowerShell(installerPath)}`,
+          `$logPath = ${quotePowerShell(installerLogPath)}`,
+          `$msiArgs = @('/i', $installerPath, '/qn', '/norestart', '/l*v', $logPath)`,
+          `try { $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList $msiArgs -Verb RunAs -Wait -PassThru -ErrorAction Stop } catch { throw "Elevation denied or failed: $($_.Exception.Message)" }`,
+          `if ($proc.ExitCode -ne 0) { throw "msiexec exited with code $($proc.ExitCode). Log: $logPath" }`,
+        ].join('; ');
+        await runPowerShell(psCommand, { signal: this.abortController.signal });
       } finally {
         safeUnlink(installerPath);
       }
