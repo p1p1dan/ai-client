@@ -70,48 +70,7 @@ describe('UsageService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('prefers /api/usage/stats when available', async () => {
-    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
-    writeFileSync(
-      join(tempHome, '.aiclient', 'settings.json'),
-      JSON.stringify(
-        {
-          onboarding: {
-            registered: true,
-            email: 'user@jcdz.cc',
-            serverUrl: 'https://cch.example.com/',
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    mkdirSync(join(tempHome, '.codex'), { recursive: true });
-    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
-
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ todayCount: 3, todayCostUsd: 0.069, monthCount: 9, monthCostUsd: 0.132 }),
-    });
-
-    const { usageService } = await import('../UsageService');
-    const result = await usageService.getStats();
-
-    expect(result).toEqual({ todayCount: 3, todayCostUsd: 0.069, monthCount: 9, monthCostUsd: 0.132 });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('https://cch.example.com/api/usage/stats', {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer api-key',
-      },
-      credentials: 'include',
-    });
-  });
-
-  it('falls back to actions API when /api/usage/stats is not implemented', async () => {
+  it('fetches usage stats from the actions API', async () => {
     mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
     writeFileSync(
       join(tempHome, '.aiclient', 'settings.json'),
@@ -135,11 +94,6 @@ describe('UsageService', () => {
     vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
 
     fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      json: async () => ({ error: 'Not Found' }),
-    });
-    fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ ok: true, data: { calls: 3, costUsd: 0.0696284 } }),
@@ -156,15 +110,7 @@ describe('UsageService', () => {
     vi.useRealTimers();
 
     expect(result).toEqual({ todayCount: 3, todayCostUsd: 0.0696284, monthCount: 9, monthCostUsd: 0.1324964 });
-    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://cch.example.com/api/usage/stats', {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer api-key',
-      },
-      credentials: 'include',
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://cch.example.com/api/actions/my-usage/getMyTodayStats', {
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://cch.example.com/api/actions/my-usage/getMyTodayStats', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -174,7 +120,7 @@ describe('UsageService', () => {
       body: '{}',
       credentials: 'include',
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, 'https://cch.example.com/api/actions/my-usage/getMyStatsSummary', {
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://cch.example.com/api/actions/my-usage/getMyStatsSummary', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -208,11 +154,6 @@ describe('UsageService', () => {
 
     fetchMock.mockResolvedValueOnce({
       ok: false,
-      status: 404,
-      json: async () => ({ error: 'Not Found' }),
-    });
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
       status: 401,
       json: async () => ({ ok: false, error: 'Unauthorized' }),
     });
@@ -227,7 +168,7 @@ describe('UsageService', () => {
     const result = await usageService.getStats();
 
     expect(result).toEqual({ error: 'Unauthorized' });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('logs in and retries actions API when session token mode is opaque', async () => {
@@ -253,11 +194,6 @@ describe('UsageService', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
 
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      json: async () => ({ error: 'Not Found' }),
-    });
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 401,
@@ -289,8 +225,8 @@ describe('UsageService', () => {
     vi.useRealTimers();
 
     expect(result).toEqual({ todayCount: 3, todayCostUsd: 0.0696284, monthCount: 9, monthCostUsd: 0.1324964 });
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(fetchMock).toHaveBeenNthCalledWith(3, 'https://cch.example.com/api/auth/login', {
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://cch.example.com/api/auth/login', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -299,7 +235,7 @@ describe('UsageService', () => {
       body: JSON.stringify({ key: 'api-key' }),
       credentials: 'include',
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, 'https://cch.example.com/api/actions/my-usage/getMyTodayStats', {
+    expect(fetchMock).toHaveBeenNthCalledWith(3, 'https://cch.example.com/api/actions/my-usage/getMyTodayStats', {
       method: 'POST',
       headers: {
         Accept: 'application/json',

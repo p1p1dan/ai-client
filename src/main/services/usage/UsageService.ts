@@ -16,44 +16,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
 }
 
-function readLegacyUsageStats(value: unknown): {
-  todayCount: number;
-  todayCostUsd: number;
-  monthCount: number;
-  monthCostUsd: number;
-} | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const todayCount = coerceFiniteNumber(value.todayCount);
-  const monthCount = coerceFiniteNumber(value.monthCount);
-
-  // Keep the stable endpoint flexible: accept both dedicated keys (todayCostUsd/monthCostUsd)
-  // and legacy keys used by Actions responses (costUsd/totalCost).
-  const todayCostUsd = coerceFiniteNumber(value.todayCostUsd ?? value.costUsd);
-  const monthCostUsd = coerceFiniteNumber(value.monthCostUsd ?? value.totalCost ?? value.totalCostUsd);
-
-  if (todayCount === null || monthCount === null || todayCostUsd === null || monthCostUsd === null) {
-    return null;
-  }
-
-  return { todayCount, todayCostUsd, monthCount, monthCostUsd };
-}
-
-function parseLegacyUsageStatsResponse(
-  payload: unknown
-): { todayCount: number; todayCostUsd: number; monthCount: number; monthCostUsd: number } | null {
-  const direct = readLegacyUsageStats(payload);
-  if (direct) {
-    return direct;
-  }
-  if (!isRecord(payload)) {
-    return null;
-  }
-  return readLegacyUsageStats(payload.data);
-}
-
 function extractErrorMessage(payload: unknown): string | null {
   if (!isRecord(payload)) {
     return null;
@@ -187,25 +149,6 @@ class UsageService {
       }
 
       const serverUrl = onboarding.serverUrl.trim().replace(/\/+$/, '');
-
-      // Preferred: dedicated API endpoint for usage stats (stable contract for desktop clients).
-      // If the server does not implement it, fallback to the Actions API below.
-      const legacyUrl = `${serverUrl}/api/usage/stats`;
-      const legacyResponse = await net.fetch(legacyUrl, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        credentials: 'include',
-      });
-      const legacyPayload = (await legacyResponse.json().catch(() => null)) as unknown;
-      if (legacyResponse.ok) {
-        const legacyStats = parseLegacyUsageStatsResponse(legacyPayload);
-        if (legacyStats) {
-          return legacyStats;
-        }
-      }
 
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
