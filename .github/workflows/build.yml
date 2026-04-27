@@ -10,7 +10,6 @@ permissions:
   contents: write
 
 jobs:
-  # 先构建 Vite 产物，共享给所有平台
   build-app:
     runs-on: ubuntu-latest
     steps:
@@ -48,93 +47,6 @@ jobs:
         with:
           name: app-build
           path: out/
-          retention-days: 1
-
-  build-mac:
-    needs: build-app
-    strategy:
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-15
-          - arch: x64
-            runner: macos-15-intel
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download build output
-        uses: actions/download-artifact@v4
-        with:
-          name: app-build
-          path: out/
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Get pnpm store directory
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-pnpm-
-
-      - name: Cache Electron
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: ${{ runner.os }}-${{ matrix.arch }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-electron-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Import Apple Certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          if [ -z "$APPLE_CERTIFICATE" ]; then
-            echo "No certificate configured, skipping..."
-            exit 0
-          fi
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
-          rm $RUNNER_TEMP/certificate.p12
-
-      - name: Build macOS (${{ matrix.arch }})
-        run: npx electron-builder --mac --${{ matrix.arch }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      - name: Upload latest-mac.yml
-        uses: actions/upload-artifact@v4
-        with:
-          name: latest-mac-${{ matrix.arch }}
-          path: dist/latest-mac.yml
           retention-days: 1
 
   build-windows:
@@ -282,11 +194,8 @@ jobs:
           path: dist/remote-runtime/*
           retention-days: 1
 
-      # Remote runtime assets are uploaded to Release in the generate-release-notes job
-      # after electron-builder has created the draft release
-
   generate-release-notes:
-    needs: [build-mac, build-windows, build-linux, build-remote-runtime-linux]
+    needs: [build-windows, build-linux, build-remote-runtime-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     timeout-minutes: 10
@@ -295,44 +204,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Download latest-mac.yml artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: latest-mac-*
-          path: mac-yml-artifacts
-
-      - name: Merge latest-mac.yml
-        run: |
-          ARM64_YML="mac-yml-artifacts/latest-mac-arm64/latest-mac.yml"
-          X64_YML="mac-yml-artifacts/latest-mac-x64/latest-mac.yml"
-
-          echo "=== ARM64 YML ===" && cat "$ARM64_YML"
-          echo -e "\n=== X64 YML ===" && cat "$X64_YML"
-
-          # 安装 yq
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
-          # 转换为 JSON，用 jq 合并，再转回 YAML
-          ARM64_JSON=$(yq -o=json "$ARM64_YML")
-          X64_JSON=$(yq -o=json "$X64_YML")
-
-          # 使用 jq 合并 files 数组，保留 arm64 的其他字段
-          echo "$ARM64_JSON" | jq --argjson x64 "$(echo "$X64_JSON" | jq '.files')" \
-            '.files = .files + $x64' | yq -P > latest-mac.yml
-
-          echo -e "\n=== MERGED YML ===" && cat latest-mac.yml
-
-      - name: Upload merged latest-mac.yml to Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ github.ref_name }}"
-          # 删除旧的 latest-mac.yml（如果存在）
-          gh release delete-asset "$TAG" latest-mac.yml --yes 2>/dev/null || true
-          # 上传合并后的 yml
-          gh release upload "$TAG" latest-mac.yml --clobber
 
       - name: Set Tag
         id: tag
@@ -478,8 +349,6 @@ jobs:
             echo ""
             echo "| 平台 | 文件 |"
             echo "|------|------|"
-            echo "| macOS (Apple Silicon) | [AiClient-${VERSION}-arm64.dmg](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}-arm64.dmg) |"
-            echo "| macOS (Intel) | [AiClient-${VERSION}.dmg](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}.dmg) |"
             echo "| Windows (x64 安装版) | [AiClient-Setup-${VERSION}.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-Setup-${VERSION}.exe) |"
             echo "| Windows (x64 便携版) | [AiClient-${VERSION}-portable.exe](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}-portable.exe) |"
             echo "| Linux (x64 AppImage) | [AiClient-${VERSION}.AppImage](https://github.com/${{ github.repository }}/releases/download/${TAG}/AiClient-${VERSION}.AppImage) |"
@@ -497,11 +366,3 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release edit ${{ steps.tag.outputs.name }} --draft=false --notes-file release-notes.md --latest
-
-  update-package-managers:
-    name: Update Package Managers
-    needs: generate-release-notes
-    uses: ./.github/workflows/update-package-managers.yml
-    with:
-      tag: ${{ github.ref_name }}
-    secrets: inherit

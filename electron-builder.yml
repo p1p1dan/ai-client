@@ -220,6 +220,6 @@ afterPack: scripts/afterPack.mjs
 
 publish:
   provider: github
-  owner: jyw-ai
-  repo: jyw-ai-client
+  owner: p1p1dan
+  repo: ai-client
   releaseType: draft

@@ -27,7 +27,7 @@ export const MANAGED_REMOTE_NODE_VERSION = '20.19.0';
 export const MANAGED_REMOTE_RUNTIME_DIR = '.aiclient/remote-runtime';
 
 const GITHUB_RELEASE_TAG = `v${pkg.version}`;
-const GITHUB_RELEASE_ASSET_BASE_URL = `https://github.com/jyw-ai/jyw-ai-client/releases/download/${GITHUB_RELEASE_TAG}`;
+const GITHUB_RELEASE_ASSET_BASE_URL = `https://github.com/p1p1dan/ai-client/releases/download/${GITHUB_RELEASE_TAG}`;
 const REMOTE_RUNTIME_DEV_SCRIPT = join(process.cwd(), 'scripts', 'build-remote-runtime-bundle.mjs');
 
 function buildManagedLinuxRuntimeArchiveName(arch: RemoteRuntimeArch): string {
