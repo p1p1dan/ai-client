@@ -12,9 +12,16 @@ import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
 
 const ALLOWED_EMAIL_SUFFIX = '@jcdz.cc';
+const DEFAULT_ONBOARDING_SERVICE_URL = 'https://onboarding-jyw.pipidan.qzz.io';
 
 function getInjectedOnboardingSecret(): string {
   return typeof __ONBOARDING_SECRET__ === 'string' ? __ONBOARDING_SECRET__ : '';
+}
+
+function getInjectedOnboardingServiceUrl(): string {
+  const injected =
+    typeof __ONBOARDING_SERVICE_URL__ === 'string' ? __ONBOARDING_SERVICE_URL__ : '';
+  return injected || DEFAULT_ONBOARDING_SERVICE_URL;
 }
 
 class OnboardingService {
@@ -88,11 +95,16 @@ class OnboardingService {
         return { ok: false, error: 'Failed to write CLI credentials' };
       }
 
+      const cchServerUrl = this.deriveCchBaseUrl(
+        result.data.config.claude.baseUrl,
+        normalizedServerUrl
+      );
+
       // Save onboarding state
       const onboardingState: OnboardingState = {
         registered: true,
         email: normalizedEmail,
-        serverUrl: normalizedServerUrl,
+        serverUrl: cchServerUrl,
         registeredAt: new Date().toISOString(),
       };
       const onboardingSaved = this.saveOnboardingState(onboardingState);
@@ -119,7 +131,7 @@ class OnboardingService {
     }
 
     const normalizedEmail = this.normalizeEmail(onboardingState.email);
-    const normalizedServerUrl = this.normalizeServerUrl(onboardingState.serverUrl);
+    const normalizedServerUrl = this.normalizeServerUrl(getInjectedOnboardingServiceUrl());
 
     try {
       const result = await this.requestRegistration(normalizedEmail, normalizedServerUrl, '');
@@ -172,7 +184,7 @@ class OnboardingService {
       return null;
     }
 
-    const claudeBaseUrl = this.buildClaudeBaseUrl(normalizedServerUrl);
+    const claudeBaseUrl = this.buildApiBaseUrl(data.config.claude.baseUrl, normalizedServerUrl);
     const codexBaseUrl = this.buildApiBaseUrl(data.config.codex.baseUrl, normalizedServerUrl);
     return {
       claudeAuthToken,
@@ -187,7 +199,7 @@ class OnboardingService {
     normalizedServerUrl: string,
     onboardingSecret: string
   ): Promise<OnboardingRegisterResponse> {
-    const url = `${normalizedServerUrl}/api/onboarding/register`;
+    const url = `${normalizedServerUrl}/register`;
     const secret = getInjectedOnboardingSecret() || onboardingSecret;
     const response = await net.fetch(url, {
       method: 'POST',
@@ -239,7 +251,13 @@ class OnboardingService {
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       };
 
-      const nextSettings = { ...existingSettings, env: nextEnv };
+      // Bypass the WebFetch preflight check — its upstream request often fails
+      // behind the JYW proxy and blocks users from browsing pages.
+      const nextSettings = {
+        ...existingSettings,
+        env: nextEnv,
+        skipWebFetchPreflight: true,
+      };
       fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + '\n', {
         encoding: 'utf-8',
         mode: 0o600,
@@ -459,25 +477,24 @@ class OnboardingService {
     return serverUrl.trim().replace(/\/+$/, '');
   }
 
-  private buildClaudeBaseUrl(fallbackServerUrl: string): string {
-    const serverOrigin = new URL(fallbackServerUrl).origin;
-    return this.normalizeServerUrl(serverOrigin);
-  }
-
   private buildApiBaseUrl(baseUrl: string | undefined, fallbackServerUrl: string): string {
-    const serverOrigin = new URL(fallbackServerUrl).origin;
-
     if (!baseUrl) {
-      return this.normalizeServerUrl(`${serverOrigin}/v1`);
+      return this.normalizeServerUrl(`${fallbackServerUrl}/v1`);
     }
 
     try {
       const parsed = new URL(baseUrl);
-      return this.normalizeServerUrl(`${serverOrigin}${parsed.pathname}`);
+      return this.normalizeServerUrl(`${parsed.origin}${parsed.pathname}`);
     } catch {
+      const serverOrigin = new URL(fallbackServerUrl).origin;
       const normalizedPath = baseUrl.startsWith('/') ? baseUrl : `/${baseUrl}`;
       return this.normalizeServerUrl(`${serverOrigin}${normalizedPath}`);
     }
+  }
+
+  private deriveCchBaseUrl(responseClaudeBaseUrl: string | undefined, fallbackServerUrl: string): string {
+    const baseUrl = responseClaudeBaseUrl?.trim() || fallbackServerUrl;
+    return this.normalizeServerUrl(baseUrl).replace(/\/v1$/i, '');
   }
 
   /**

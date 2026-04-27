@@ -47,10 +47,12 @@ describe('OnboardingService', () => {
     process.env.USERPROFILE = tempHome;
     fetchMock.mockReset();
     checkPrerequisitesMock.mockReset();
+    vi.stubGlobal('__ONBOARDING_SERVICE_URL__', 'https://onboarding-test.example.com');
   });
 
   afterEach(() => {
     vi.resetModules();
+    vi.unstubAllGlobals();
     if (originalHome === undefined) {
       delete process.env.HOME;
     } else {
@@ -136,11 +138,11 @@ describe('OnboardingService', () => {
           apiKey: 'unused-top-level-key',
           config: {
             claude: {
-              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               authToken: 'claude-token',
             },
             codex: {
-              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               apiKey: 'codex-key',
             },
           },
@@ -161,11 +163,19 @@ describe('OnboardingService', () => {
 
     const result = await onboardingService.register(
       'user@jcdz.cc',
-      'https://cch-jyw.pipidan.qzz.io',
+      'https://onboarding-test.example.com',
       'secret'
     );
 
     expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('https://onboarding-test.example.com/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Onboarding-Secret': 'secret',
+      },
+      body: JSON.stringify({ email: 'user@jcdz.cc' }),
+    });
     expect(readSettings()).toMatchObject({
       'aiclient-settings': {
         state: {
@@ -175,7 +185,7 @@ describe('OnboardingService', () => {
       onboarding: {
         registered: true,
         email: 'user@jcdz.cc',
-        serverUrl: 'https://cch-jyw.pipidan.qzz.io',
+        serverUrl: 'https://cch-test.example.com',
       },
     });
     expect(onboardingService.checkRegistration()).toMatchObject({
@@ -190,15 +200,17 @@ describe('OnboardingService', () => {
       env?: Record<string, unknown>;
       hooks?: unknown;
       permissions?: unknown;
+      skipWebFetchPreflight?: unknown;
     };
     expect(updatedClaudeSettings.hooks).toEqual({ Stop: [{ command: 'echo stop' }] });
     expect(updatedClaudeSettings.permissions).toEqual({ allow: ['Read'], deny: [] });
     expect(updatedClaudeSettings.env).toMatchObject({
-      ANTHROPIC_BASE_URL: 'https://cch-jyw.pipidan.qzz.io',
+      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
       ANTHROPIC_AUTH_TOKEN: 'claude-token',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       SOME_EXISTING_ENV: 'keep-me',
     });
+    expect(updatedClaudeSettings.skipWebFetchPreflight).toBe(true);
 
     expect(existsSync(`${codexConfigPath}.bak`)).toBe(true);
     expect(readFileSync(`${codexConfigPath}.bak`, 'utf-8')).toBe(originalCodexConfig);
@@ -214,7 +226,7 @@ describe('OnboardingService', () => {
     expect(updatedCodexConfig).toMatch(/name = "my-profile"/);
     expect(updatedCodexConfig).toMatch(/extra = 42/);
     expect(updatedCodexConfig).toMatch(/\[model_providers\.jyw\]/);
-    expect(updatedCodexConfig).toMatch(/base_url = "https:\/\/cch-jyw\.pipidan\.qzz\.io\/v1"/);
+    expect(updatedCodexConfig).toMatch(/base_url = "https:\/\/cch-test\.example\.com\/v1"/);
     expect(updatedCodexConfig).toMatch(/wire_api = "responses"/);
     expect(JSON.parse(readFileSync(codexAuthPath, 'utf-8'))).toEqual({
       OPENAI_API_KEY: 'codex-key',
@@ -276,7 +288,7 @@ describe('OnboardingService', () => {
           onboarding: {
             registered: true,
             email: 'user@jcdz.cc',
-            serverUrl: 'https://cch-jyw.pipidan.qzz.io',
+            serverUrl: 'https://cch-test.example.com',
             registeredAt: new Date().toISOString(),
           },
         },
@@ -316,11 +328,11 @@ describe('OnboardingService', () => {
           apiKey: 'unused-top-level-key',
           config: {
             claude: {
-              baseUrl: 'https://unused.example.com/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               authToken: 'new-claude-token',
             },
             codex: {
-              baseUrl: 'https://unused.example.com/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               apiKey: 'new-codex-key',
             },
           },
@@ -336,7 +348,7 @@ describe('OnboardingService', () => {
       env?: Record<string, unknown>;
     };
     expect(updatedClaudeSettings.env).toMatchObject({
-      ANTHROPIC_BASE_URL: 'https://cch-jyw.pipidan.qzz.io',
+      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
       ANTHROPIC_AUTH_TOKEN: 'new-claude-token',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       KEEP: 'keep-me',
@@ -347,8 +359,14 @@ describe('OnboardingService', () => {
     const refreshedCodexConfig = readFileSync(join(codexDir, 'config.toml'), 'utf-8');
     expect(refreshedCodexConfig).toMatch(/model_provider = "jyw"/);
     expect(refreshedCodexConfig).not.toMatch(/model_provider = "old"/);
-    expect(refreshedCodexConfig).toMatch(/base_url = "https:\/\/cch-jyw\.pipidan\.qzz\.io\/v1"/);
+    expect(refreshedCodexConfig).toMatch(/base_url = "https:\/\/cch-test\.example\.com\/v1"/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://onboarding-test.example.com/register',
+      expect.objectContaining({
+        body: JSON.stringify({ email: 'user@jcdz.cc' }),
+      })
+    );
   });
 
   it('upserts base_url but preserves custom keys inside existing [model_providers.jyw] block', async () => {
@@ -368,11 +386,11 @@ describe('OnboardingService', () => {
           apiKey: 'unused-top-level-key',
           config: {
             claude: {
-              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               authToken: 'claude-token',
             },
             codex: {
-              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               apiKey: 'codex-key',
             },
           },
@@ -383,14 +401,14 @@ describe('OnboardingService', () => {
     const { onboardingService } = await import('../OnboardingService');
     const result = await onboardingService.register(
       'user@jcdz.cc',
-      'https://cch-jyw.pipidan.qzz.io',
+      'https://onboarding-test.example.com',
       'secret'
     );
     expect(result.ok).toBe(true);
 
     const updated = readFileSync(codexConfigPath, 'utf-8');
     expect(updated).toMatch(/name = "custom-name"/);
-    expect(updated).toMatch(/base_url = "https:\/\/cch-jyw\.pipidan\.qzz\.io\/v1"/);
+    expect(updated).toMatch(/base_url = "https:\/\/cch-test\.example\.com\/v1"/);
     expect(updated).not.toMatch(/base_url = "https:\/\/other\.example\.com/);
     expect(updated).toMatch(/custom_extra = "keep-me"/);
   });
@@ -412,11 +430,11 @@ describe('OnboardingService', () => {
           apiKey: 'unused-top-level-key',
           config: {
             claude: {
-              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               authToken: 'claude-token',
             },
             codex: {
-              baseUrl: 'https://crs.pipidan.qzz.io/v1',
+              baseUrl: 'https://cch-test.example.com/v1',
               apiKey: 'codex-key',
             },
           },
@@ -427,7 +445,7 @@ describe('OnboardingService', () => {
     const { onboardingService } = await import('../OnboardingService');
     const result = await onboardingService.register(
       'user@jcdz.cc',
-      'https://cch-jyw.pipidan.qzz.io',
+      'https://onboarding-test.example.com',
       'secret'
     );
     expect(result.ok).toBe(true);
