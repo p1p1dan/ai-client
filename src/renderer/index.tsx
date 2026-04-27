@@ -25,14 +25,14 @@ async function startApp(): Promise<void> {
   if (!root) {
     return;
   }
-  const { default: App } = await import('./App');
+  const { default: Root } = await import('./Root');
 
   createRoot(root).render(
     <StrictMode>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ToastProvider>
-            <App />
+            <Root />
           </ToastProvider>
         </QueryClientProvider>
       </ErrorBoundary>

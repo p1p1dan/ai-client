@@ -14,6 +14,13 @@ if (!onboardingSecret) {
   );
 }
 
+const onboardingServiceUrl = process.env.ONBOARDING_SERVICE_URL || 'https://onboarding-jyw.pipidan.qzz.io';
+if (!process.env.ONBOARDING_SERVICE_URL) {
+  console.warn(
+    '[build] ONBOARDING_SERVICE_URL is not set; __ONBOARDING_SERVICE_URL__ will default to https://onboarding-jyw.pipidan.qzz.io'
+  );
+}
+
 // On Windows, TEC Solutions OCular Agent encrypts .js files written by Node.js.
 // This plugin rewrites output files via a .bin intermediate + PowerShell copy
 // to produce unencrypted files that Electron can load.
@@ -61,6 +68,7 @@ export default defineConfig({
     },
     define: {
       __ONBOARDING_SECRET__: JSON.stringify(onboardingSecret),
+      __ONBOARDING_SERVICE_URL__: JSON.stringify(onboardingServiceUrl),
     },
     build: {
       externalizeDeps: false,
@@ -96,6 +104,7 @@ export default defineConfig({
     },
     define: {
       __ONBOARDING_SECRET__: JSON.stringify(onboardingSecret),
+      __ONBOARDING_SERVICE_URL__: JSON.stringify(onboardingServiceUrl),
     },
     build: {
       rollupOptions: {

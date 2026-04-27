@@ -67,7 +67,6 @@ import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspaceP
 import { TreeSidebar } from './components/layout/TreeSidebar';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { WorktreePanel } from './components/layout/WorktreePanel';
-import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import { RemoteAuthPromptHost } from './components/remote/RemoteAuthPromptHost';
 import { SessionManagerView } from './components/sessions';
 import { DraggableSettingsWindow } from './components/settings/DraggableSettingsWindow';
@@ -158,22 +157,6 @@ export default function App() {
   const queryClient = useQueryClient();
   const [isHomeViewActive, setIsHomeViewActive] = useState(false);
   const exitHomeView = useCallback(() => setIsHomeViewActive(false), []);
-
-  // Onboarding check
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  useEffect(() => {
-    window.electronAPI.onboarding.check().then((state) => {
-      if (!state.registered) {
-        setShowOnboarding(true);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    const handleOpenOnboarding = () => setShowOnboarding(true);
-    window.addEventListener('aiclient:onboarding:open', handleOpenOnboarding);
-    return () => window.removeEventListener('aiclient:onboarding:open', handleOpenOnboarding);
-  }, []);
 
   useEffect(() => {
     return window.electronAPI.onboarding.onLiveCredentialsStatus(({ available }) => {
@@ -2039,15 +2022,6 @@ export default function App() {
           />
         )}
 
-        {/* Onboarding Dialog */}
-        <OnboardingDialog
-          open={showOnboarding}
-          onComplete={() => {
-            setShowOnboarding(false);
-            queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
-            queryClient.invalidateQueries({ queryKey: ['usageStats'] });
-          }}
-        />
       </div>
     </div>
   );
