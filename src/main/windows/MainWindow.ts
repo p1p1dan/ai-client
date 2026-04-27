@@ -8,6 +8,7 @@ import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/type
 import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { getCurrentLocale } from '../services/i18n';
+import { onboardingService } from '../services/onboarding';
 import { sessionManager } from '../services/session/SessionManager';
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
 
@@ -372,6 +373,14 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
   win.on('close', (e) => {
     // Skip confirmation if force close, or quitting for update
     if (forceClose || autoUpdaterService.isQuittingForUpdate()) {
+      saveWindowState(win);
+      return;
+    }
+
+    // Before registration, Root.tsx mounts OnboardingShell instead of App, so
+    // no renderer listens for APP_CLOSE_REQUEST. Waiting would timeout after
+    // 30s and leave the window stuck. No editor state exists yet — just close.
+    if (!onboardingService.checkRegistration().registered) {
       saveWindowState(win);
       return;
     }
