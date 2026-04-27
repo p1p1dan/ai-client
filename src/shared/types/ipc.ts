@@ -148,6 +148,7 @@ export const IPC_CHANNELS = {
   APP_SET_LANGUAGE: 'app:setLanguage',
   APP_SET_PROXY: 'app:setProxy',
   APP_TEST_PROXY: 'app:testProxy',
+  APP_QUIT: 'app:quit',
 
   // Window Controls (for frameless window)
   WINDOW_MINIMIZE: 'window:minimize',

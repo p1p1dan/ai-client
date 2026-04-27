@@ -525,6 +525,7 @@ const electronAPI = {
       proxyUrl: string
     ): Promise<{ success: boolean; latency?: number; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_TEST_PROXY, proxyUrl),
+    quit: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.APP_QUIT),
   },
 
   // Dialog
