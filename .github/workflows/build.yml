@@ -16,13 +16,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
 
       - name: Get pnpm store directory
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
@@ -62,13 +64,15 @@ jobs:
           name: app-build
           path: out/
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
 
       - name: Get pnpm store directory
         shell: bash
@@ -113,13 +117,15 @@ jobs:
           name: app-build
           path: out/
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
 
       - name: Get pnpm store directory
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
@@ -163,13 +169,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
 
       - name: Get pnpm store directory
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
