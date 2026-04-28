@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { TASK_COMPLETION_MARKER } from '@shared/types/agent';
+import { isFileTsdEncrypted, readFileTsdSafe } from '../../utils/tsdSafeRead';
 
 /**
  * Get the Claude projects directory path
@@ -44,6 +45,13 @@ interface SessionLogEntry {
  * Avoids loading the entire file into memory.
  */
 async function readTailLines(filePath: string, lineCount: number): Promise<string[]> {
+  // TSD-encrypted files require buffered fallback (positional reads return raw bytes).
+  if (await isFileTsdEncrypted(filePath)) {
+    const decrypted = await readFileTsdSafe(filePath);
+    const lines = decrypted.toString('utf-8').split('\n').filter((l) => l.trim());
+    return lines.slice(-lineCount);
+  }
+
   const CHUNK_SIZE = 8 * 1024; // 8KB per read, enough for ~3 JSONL lines
   const handle = await fs.open(filePath, 'r');
   try {

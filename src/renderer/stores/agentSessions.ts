@@ -103,11 +103,14 @@ function loadFromStorage(): { sessions: Session[]; activeIds: Record<string, str
     if (saved) {
       const data = JSON.parse(saved);
       if (data.sessions?.length > 0) {
-        // Migrate old sessions that don't have repoPath (backwards compatibility)
-        const migratedSessions = data.sessions.map((s: Session) => ({
-          ...s,
-          repoPath: s.repoPath || s.cwd,
-        }));
+        // Migrate old sessions that don't have repoPath (backwards compatibility),
+        // and drop stale transient fields written by older versions.
+        const migratedSessions = data.sessions.map(
+          ({ backendSessionId: _b, pendingCommand: _p, ...s }: Session) => ({
+            ...s,
+            repoPath: s.repoPath || s.cwd,
+          })
+        );
         return { sessions: migratedSessions, activeIds: data.activeIds || {} };
       }
     }
@@ -119,9 +122,12 @@ function saveToStorage(sessions: Session[], activeIds: Record<string, string | n
   // Only persist sessions that are:
   // 1. Using agents that support resumption (e.g., claude)
   // 2. Activated (user has pressed Enter at least once)
-  const persistableSessions = sessions.filter(
-    (s) => isResumableAgent(s.agentCommand) && s.activated
-  );
+  // Strip transient runtime fields (backendSessionId, pendingCommand) — these are
+  // process-scoped and become stale after restart, causing session:attach to fail
+  // with "Session not found: pty-N".
+  const persistableSessions = sessions
+    .filter((s) => isResumableAgent(s.agentCommand) && s.activated)
+    .map(({ backendSessionId: _backendSessionId, pendingCommand: _pendingCommand, ...rest }) => rest);
   const persistableIds = new Set(persistableSessions.map((s) => s.id));
   // Only keep activeIds that reference persistable sessions
   const persistableActiveIds: Record<string, string | null> = {};

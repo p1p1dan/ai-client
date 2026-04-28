@@ -1,9 +1,7 @@
-import { execFile } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { promisify } from 'node:util';
 import { type FileEntry, type FileReadResult, IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, ipcMain, shell, type WebContents } from 'electron';
 import iconv from 'iconv-lite';
@@ -15,32 +13,10 @@ const { isBinaryFile } = createRequire(import.meta.url)('isbinaryfile') as {
 
 import jschardet from 'jschardet';
 
-const execFileAsync = promisify(execFile);
+import { readFileTsdSafe } from '../utils/tsdSafeRead';
 
-// TEC Solutions OCular Agent (TSD) encrypts files written by Node.js processes.
-// The packaged exe is not in TEC's whitelist, so it reads raw encrypted bytes.
-// Detect TSD header and fall back to system node.exe (which IS whitelisted).
-const TSD_MAGIC = Buffer.from('%TSD-Header-###%');
-
-async function readFileSafe(filePath: string): Promise<Buffer> {
-  const buf = await readFile(filePath);
-  if (
-    buf.length >= TSD_MAGIC.length &&
-    buf.compare(TSD_MAGIC, 0, TSD_MAGIC.length, 0, TSD_MAGIC.length) === 0
-  ) {
-    return readViaNodeExe(filePath);
-  }
-  return buf;
-}
-
-async function readViaNodeExe(filePath: string): Promise<Buffer> {
-  const script = "process.stdout.write(require('fs').readFileSync(process.argv[1]))";
-  const { stdout } = await execFileAsync('node', ['-e', script, '--', filePath], {
-    encoding: 'buffer',
-    maxBuffer: 50 * 1024 * 1024,
-  });
-  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout as unknown as Uint8Array);
-}
+// Backwards-compatible alias kept for clarity at call sites.
+const readFileSafe = readFileTsdSafe;
 
 import { FileWatcher } from '../services/files/FileWatcher';
 import {

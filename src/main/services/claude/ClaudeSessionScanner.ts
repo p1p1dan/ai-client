@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 import type { ClaudeProject, ClaudeSessionMeta } from '@shared/types';
+import { isFileTsdEncrypted, readFileTsdSafe } from '../../utils/tsdSafeRead';
 
 type JsonlContentBlock = { type?: string; text?: string };
 type JsonlMessage = { content?: JsonlContentBlock[] | string };
@@ -119,7 +120,66 @@ async function listSessionFiles(projectDir: string): Promise<string[]> {
   return dirents.filter((d) => d.isFile() && isSessionJsonlFile(d.name)).map((d) => d.name);
 }
 
+interface JsonlReader {
+  lines: AsyncIterable<string>;
+  close: () => void;
+}
+
+async function openJsonlReader(filePath: string): Promise<JsonlReader> {
+  // On Windows machines running TEC OCular Agent, JSONL files written by Node
+  // (e.g. claude CLI) are TSD-encrypted on disk. The packaged Electron binary
+  // is not whitelisted, so streaming reads return raw encrypted bytes and JSON
+  // parsing fails. Detect the TSD header and fall back to a buffered read via
+  // system node.exe, which IS whitelisted and yields decrypted bytes.
+  if (await isFileTsdEncrypted(filePath)) {
+    const decrypted = await readFileTsdSafe(filePath);
+    const text = decrypted.toString('utf-8');
+    const splitLines = text.split('\n');
+    return {
+      lines: (async function* () {
+        for (const line of splitLines) yield line;
+      })(),
+      close: () => {
+        // No file handle to release for the buffered/decrypted path.
+      },
+    };
+  }
+
+  const stream = createReadStream(filePath, { encoding: 'utf-8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY });
+  // Both rl and the underlying stream must be torn down on early-exit (e.g.
+  // `for await` only consumes the first 300 lines). Releasing only the
+  // readline interface leaves the file descriptor open — visible as file
+  // locks on Windows.
+  let closed = false;
+  return {
+    lines: rl,
+    close: () => {
+      if (closed) return;
+      closed = true;
+      try {
+        rl.close();
+      } catch {
+        // ignore
+      }
+      try {
+        stream.destroy();
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
 async function readTailLines(filePath: string, lineCount: number): Promise<string[]> {
+  // TSD-encrypted files cannot be read via positional reads, so route through
+  // the buffered TSD-safe path; otherwise stick with the chunked reader.
+  if (await isFileTsdEncrypted(filePath)) {
+    const decrypted = await readFileTsdSafe(filePath);
+    const lines = decrypted.toString('utf-8').split('\n').filter((l) => l.trim());
+    return lines.slice(-lineCount);
+  }
+
   const CHUNK_SIZE = 8 * 1024;
   const handle = await fs.open(filePath, 'r');
   try {
@@ -150,13 +210,13 @@ async function readTailLines(filePath: string, lineCount: number): Promise<strin
 }
 
 async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
-  const stream = createReadStream(filePath, { encoding: 'utf-8' });
-  const rl = readline.createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY });
+  const reader = await openJsonlReader(filePath);
 
   let lineIndex = 0;
   let fallbackCwd: string | null = null;
+  let result: string | null = null;
   try {
-    for await (const line of rl) {
+    for await (const line of reader.lines) {
       lineIndex += 1;
       if (lineIndex > 300) break;
       const trimmed = line.trim();
@@ -171,7 +231,10 @@ async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
 
       if (entry.type === 'system' && entry.subtype === 'init' && typeof entry.cwd === 'string') {
         const cwd = entry.cwd.trim();
-        if (cwd) return cwd;
+        if (cwd) {
+          result = cwd;
+          break;
+        }
       }
 
       if (fallbackCwd === null && typeof entry.cwd === 'string') {
@@ -180,11 +243,10 @@ async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
       }
     }
   } finally {
-    rl.close();
-    stream.close();
+    reader.close();
   }
 
-  return fallbackCwd;
+  return result ?? fallbackCwd;
 }
 
 export class ClaudeSessionScanner {
@@ -307,12 +369,11 @@ export class ClaudeSessionScanner {
     let model: string | null = null;
     let createdAt: number | null = null;
 
-    const stream = createReadStream(filePath, { encoding: 'utf-8' });
-    const rl = readline.createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY });
+    const reader = await openJsonlReader(filePath);
 
     let lineIndex = 0;
     try {
-      for await (const line of rl) {
+      for await (const line of reader.lines) {
         lineIndex += 1;
         if (lineIndex > 300) break;
         const trimmed = line.trim();
@@ -353,8 +414,7 @@ export class ClaudeSessionScanner {
         }
       }
     } finally {
-      rl.close();
-      stream.close();
+      reader.close();
     }
 
     const tailLines = await readTailLines(filePath, 50);

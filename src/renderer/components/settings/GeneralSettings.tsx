@@ -1336,7 +1336,13 @@ export function GeneralSettings() {
               <span className="text-xs text-muted-foreground">({t('Up to date')})</span>
             )}
             {updateStatus?.status === 'error' && (
-              <span className="text-xs text-destructive">({t('Check failed')})</span>
+              <span
+                className="text-xs text-destructive truncate max-w-[420px]"
+                title={updateStatus.error || ''}
+              >
+                ({t('Check failed')}
+                {updateStatus.error ? `: ${updateStatus.error}` : ''})
+              </span>
             )}
           </div>
           <Button
