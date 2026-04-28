@@ -733,10 +733,14 @@ const electronAPI = {
   onboarding: {
     check: (): Promise<import('@shared/types').OnboardingState> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK),
-    register: (
-      request: import('@shared/types').OnboardingRegisterRequest
+    sendCode: (
+      request: import('@shared/types').OnboardingSendCodeRequest
+    ): Promise<import('@shared/types').OnboardingSendCodeResponse> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_SEND_CODE, request),
+    verifyAndRegister: (
+      request: import('@shared/types').OnboardingVerifyRequest
     ): Promise<import('@shared/types').OnboardingRegisterResponse> =>
-      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_REGISTER, request),
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_VERIFY_AND_REGISTER, request),
     detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),
     checkPrerequisites: (): Promise<import('@shared/types').OnboardingPrerequisiteStatus> =>

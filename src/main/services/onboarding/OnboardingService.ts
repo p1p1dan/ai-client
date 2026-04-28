@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import type {
   OnboardingCliStatus,
   OnboardingRegisterResponse,
+  OnboardingSendCodeResponse,
   OnboardingState,
 } from '@shared/types';
 import { net } from 'electron';
@@ -11,16 +12,11 @@ import { mergeSettingsPatch } from '../../ipc/settings';
 import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
 
-const ALLOWED_EMAIL_SUFFIX = '@jcdz.cc';
+const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
 const DEFAULT_ONBOARDING_SERVICE_URL = 'https://onboarding-jyw.pipidan.qzz.io';
 
-function getInjectedOnboardingSecret(): string {
-  return typeof __ONBOARDING_SECRET__ === 'string' ? __ONBOARDING_SECRET__ : '';
-}
-
 function getInjectedOnboardingServiceUrl(): string {
-  const injected =
-    typeof __ONBOARDING_SERVICE_URL__ === 'string' ? __ONBOARDING_SERVICE_URL__ : '';
+  const injected = typeof __ONBOARDING_SERVICE_URL__ === 'string' ? __ONBOARDING_SERVICE_URL__ : '';
   return injected || DEFAULT_ONBOARDING_SERVICE_URL;
 }
 
@@ -48,7 +44,7 @@ class OnboardingService {
   }
 
   /**
-   * Validate email format and suffix.
+   * Validate email format and suffix against the allow-list.
    */
   validateEmail(email: string): { valid: boolean; error?: string } {
     if (!email || typeof email !== 'string') {
@@ -58,92 +54,99 @@ class OnboardingService {
     if (!trimmed.includes('@')) {
       return { valid: false, error: 'Invalid email format' };
     }
-    if (!trimmed.endsWith(ALLOWED_EMAIL_SUFFIX)) {
-      return { valid: false, error: `Only ${ALLOWED_EMAIL_SUFFIX} emails are allowed` };
+    const ok = ALLOWED_EMAIL_SUFFIXES.some((suffix) => trimmed.endsWith(suffix));
+    if (!ok) {
+      return {
+        valid: false,
+        error: `Only ${ALLOWED_EMAIL_SUFFIXES.join(' / ')} emails are allowed`,
+      };
     }
     return { valid: true };
   }
 
+  getAllowedEmailSuffixes(): readonly string[] {
+    return ALLOWED_EMAIL_SUFFIXES;
+  }
+
   /**
-   * Register user with the server and persist non-sensitive onboarding state only.
+   * Step 1: ask the onboarding service to email a verification code.
+   * Pure RPC; no local state mutation.
    */
-  async register(
-    email: string,
-    serverUrl: string,
-    onboardingSecret: string
-  ): Promise<OnboardingRegisterResponse> {
+  async sendCode(email: string): Promise<OnboardingSendCodeResponse> {
     const validation = this.validateEmail(email);
     if (!validation.valid) {
       return { ok: false, error: validation.error };
     }
 
     const normalizedEmail = this.normalizeEmail(email);
-    const normalizedServerUrl = this.normalizeServerUrl(serverUrl);
+    const serverUrl = this.normalizeServerUrl(getInjectedOnboardingServiceUrl());
 
     try {
-      const result = await this.requestRegistration(
-        normalizedEmail,
-        normalizedServerUrl,
-        onboardingSecret
-      );
-
-      if (!result.ok || !result.data) {
-        return { ok: false, error: result.error || 'Registration failed' };
-      }
-
-      if (!this.persistCredentialFiles(result, normalizedServerUrl)) {
-        return { ok: false, error: 'Failed to write CLI credentials' };
-      }
-
-      const cchServerUrl = this.deriveCchBaseUrl(
-        result.data.config.claude.baseUrl,
-        normalizedServerUrl
-      );
-
-      // Save onboarding state
-      const onboardingState: OnboardingState = {
-        registered: true,
-        email: normalizedEmail,
-        serverUrl: cchServerUrl,
-        registeredAt: new Date().toISOString(),
-      };
-      const onboardingSaved = this.saveOnboardingState(onboardingState);
-      if (!onboardingSaved) {
-        return { ok: false, error: 'Failed to save onboarding state' };
-      }
-
-      return result;
+      const response = await net.fetch(`${serverUrl}/api/onboarding/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+      return (await response.json()) as OnboardingSendCodeResponse;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Network error';
       return { ok: false, error: `Failed to connect to server: ${message}` };
     }
   }
 
-  async refreshRegisteredCredentialFiles(): Promise<boolean> {
-    const onboardingState = this.checkRegistration();
-    if (!onboardingState.registered || !onboardingState.email || !onboardingState.serverUrl) {
-      return false;
-    }
-
-    const validation = this.validateEmail(onboardingState.email);
+  /**
+   * Step 2: verify the code and persist credentials returned by the server.
+   * On success the user is considered onboarded and CLI config files are written.
+   */
+  async verifyAndRegister(email: string, code: string): Promise<OnboardingRegisterResponse> {
+    const validation = this.validateEmail(email);
     if (!validation.valid) {
-      return false;
+      return { ok: false, error: validation.error };
     }
 
-    const normalizedEmail = this.normalizeEmail(onboardingState.email);
+    const normalizedEmail = this.normalizeEmail(email);
     const normalizedServerUrl = this.normalizeServerUrl(getInjectedOnboardingServiceUrl());
 
+    let result: OnboardingRegisterResponse;
     try {
-      const result = await this.requestRegistration(normalizedEmail, normalizedServerUrl, '');
-      if (!result.ok || !result.data) {
-        return false;
-      }
-
-      return this.persistCredentialFiles(result, normalizedServerUrl);
+      const response = await net.fetch(
+        `${normalizedServerUrl}/api/onboarding/verify-and-register`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalizedEmail, code: code.trim() }),
+        }
+      );
+      result = (await response.json()) as OnboardingRegisterResponse;
     } catch (error) {
-      console.warn('[OnboardingService] Failed to refresh registered credentials:', error);
-      return false;
+      const message = error instanceof Error ? error.message : 'Network error';
+      return { ok: false, error: `Failed to connect to server: ${message}` };
     }
+
+    if (!result.ok || !result.data) {
+      return result;
+    }
+
+    if (!this.persistCredentialFiles(result, normalizedServerUrl)) {
+      return { ok: false, error: 'Failed to write CLI credentials' };
+    }
+
+    const cchServerUrl = this.deriveCchBaseUrl(
+      result.data.config.claude.baseUrl,
+      normalizedServerUrl
+    );
+
+    const onboardingState: OnboardingState = {
+      registered: true,
+      email: normalizedEmail,
+      serverUrl: cchServerUrl,
+      registeredAt: new Date().toISOString(),
+    };
+    if (!this.saveOnboardingState(onboardingState)) {
+      return { ok: false, error: 'Failed to save onboarding state' };
+    }
+
+    return result;
   }
 
   /**
@@ -192,25 +195,6 @@ class OnboardingService {
       codexApiKey,
       codexBaseUrl,
     };
-  }
-
-  private async requestRegistration(
-    normalizedEmail: string,
-    normalizedServerUrl: string,
-    onboardingSecret: string
-  ): Promise<OnboardingRegisterResponse> {
-    const url = `${normalizedServerUrl}/register`;
-    const secret = getInjectedOnboardingSecret() || onboardingSecret;
-    const response = await net.fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Onboarding-Secret': secret,
-      },
-      body: JSON.stringify({ email: normalizedEmail }),
-    });
-
-    return (await response.json()) as OnboardingRegisterResponse;
   }
 
   private persistCredentialFiles(
@@ -492,7 +476,10 @@ class OnboardingService {
     }
   }
 
-  private deriveCchBaseUrl(responseClaudeBaseUrl: string | undefined, fallbackServerUrl: string): string {
+  private deriveCchBaseUrl(
+    responseClaudeBaseUrl: string | undefined,
+    fallbackServerUrl: string
+  ): string {
     const baseUrl = responseClaudeBaseUrl?.trim() || fallbackServerUrl;
     return this.normalizeServerUrl(baseUrl).replace(/\/v1$/i, '');
   }

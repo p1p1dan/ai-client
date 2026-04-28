@@ -7,14 +7,8 @@ import { defineConfig } from 'electron-vite';
 
 export const runtimeNativePackages = ['node-pty', 'sqlite3'] as const;
 
-const onboardingSecret = process.env.ONBOARDING_SECRET ?? '';
-if (!onboardingSecret) {
-  console.warn(
-    '[build] ONBOARDING_SECRET is not set; __ONBOARDING_SECRET__ will be an empty string'
-  );
-}
-
-const onboardingServiceUrl = process.env.ONBOARDING_SERVICE_URL || 'https://onboarding-jyw.pipidan.qzz.io';
+const onboardingServiceUrl =
+  process.env.ONBOARDING_SERVICE_URL || 'https://onboarding-jyw.pipidan.qzz.io';
 if (!process.env.ONBOARDING_SERVICE_URL) {
   console.warn(
     '[build] ONBOARDING_SERVICE_URL is not set; __ONBOARDING_SERVICE_URL__ will default to https://onboarding-jyw.pipidan.qzz.io'
@@ -67,7 +61,6 @@ export default defineConfig({
       },
     },
     define: {
-      __ONBOARDING_SECRET__: JSON.stringify(onboardingSecret),
       __ONBOARDING_SERVICE_URL__: JSON.stringify(onboardingServiceUrl),
     },
     build: {
@@ -103,7 +96,6 @@ export default defineConfig({
       },
     },
     define: {
-      __ONBOARDING_SECRET__: JSON.stringify(onboardingSecret),
       __ONBOARDING_SERVICE_URL__: JSON.stringify(onboardingServiceUrl),
     },
     build: {

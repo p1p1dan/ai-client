@@ -380,7 +380,6 @@ app.whenReady().then(async () => {
 
   const onboardingState = onboardingService.checkRegistration();
   const shouldSendCredentialStatus = onboardingState.registered;
-  const shouldRefreshCredentialFiles = onboardingState.registered && !!onboardingState.email;
   let credentialStatusSent = false;
   let windowFinishedLoading = false;
   let credentialFilesAvailable: boolean | null = shouldSendCredentialStatus ? null : false;
@@ -407,19 +406,10 @@ app.whenReady().then(async () => {
     });
   };
 
-  if (shouldRefreshCredentialFiles) {
-    onboardingService
-      .refreshRegisteredCredentialFiles()
-      .then((refreshed) => {
-        credentialFilesAvailable = refreshed || detectCredentialFilesAvailable();
-      })
-      .catch(() => {
-        credentialFilesAvailable = detectCredentialFilesAvailable();
-      })
-      .finally(() => {
-        maybeSendLiveCredentialsStatus();
-      });
-  } else if (shouldSendCredentialStatus) {
+  // Trust persisted onboarding state for existing users; only check whether the
+  // local CLI credential files are still on disk. Re-onboarding (logout + verify
+  // by email code) is the way back if files are missing or invalid.
+  if (shouldSendCredentialStatus) {
     credentialFilesAvailable = detectCredentialFilesAvailable();
   }
 

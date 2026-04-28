@@ -1,4 +1,8 @@
-import type { InstallAgentId, OnboardingRegisterRequest } from '@shared/types';
+import type {
+  InstallAgentId,
+  OnboardingSendCodeRequest,
+  OnboardingVerifyRequest,
+} from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { BrowserWindow, ipcMain, session } from 'electron';
 import { AgentInstaller } from '../services/cli/AgentInstaller';
@@ -46,9 +50,16 @@ export function registerOnboardingHandlers(): void {
   });
 
   ipcMain.handle(
-    IPC_CHANNELS.ONBOARDING_REGISTER,
-    async (_, request: OnboardingRegisterRequest) => {
-      return onboardingService.register(request.email, request.serverUrl, request.onboardingSecret);
+    IPC_CHANNELS.ONBOARDING_SEND_CODE,
+    async (_, request: OnboardingSendCodeRequest) => {
+      return onboardingService.sendCode(request.email);
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.ONBOARDING_VERIFY_AND_REGISTER,
+    async (_, request: OnboardingVerifyRequest) => {
+      return onboardingService.verifyAndRegister(request.email, request.code);
     }
   );
 

@@ -3,13 +3,16 @@ import type {
   InstallProgress,
   InstallStepId,
   OnboardingCliStatus,
+  OnboardingErrorCode,
   OnboardingRegisterResponse,
+  OnboardingSendCodeResponse,
 } from '@shared/types';
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
   Loader2Icon,
+  MailIcon,
   ServerIcon,
   TerminalIcon,
 } from 'lucide-react';
@@ -19,10 +22,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-type Step = 'cli-check' | 'cli-install' | 'register' | 'result';
+type Step = 'cli-check' | 'cli-install' | 'register-email' | 'register-code' | 'result';
 type OnboardingMode = 'standard' | 'register-only';
 
 const INSTALL_GUIDE_URL = 'https://api-doc.pipidan.xyz/installation.html';
+const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
+const CODE_LENGTH = 6;
 
 const INSTALL_STEP_LABELS: Record<InstallStepId, string> = {
   git: 'Git',
@@ -30,6 +35,50 @@ const INSTALL_STEP_LABELS: Record<InstallStepId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
 };
+
+// Map machine-readable server errors to user-facing Chinese strings.
+function describeOnboardingError(
+  error: OnboardingErrorCode | string | undefined,
+  attemptsLeft?: number
+): string {
+  if (!error) return '操作失败,请重试。';
+  switch (error) {
+    case 'EMAIL_INVALID':
+      return '邮箱格式不正确。';
+    case 'EMAIL_DOMAIN_NOT_ALLOWED':
+      return `仅接受 ${ALLOWED_EMAIL_SUFFIXES.join(' / ')} 后缀。`;
+    case 'INVALID_BODY':
+      return '请求格式错误,请重试。';
+    case 'RATE_LIMITED':
+      return '操作过于频繁,请稍后再试。';
+    case 'CODE_INVALID':
+      return attemptsLeft !== undefined
+        ? `验证码错误,还可重试 ${attemptsLeft} 次。`
+        : '验证码错误。';
+    case 'CODE_EXPIRED':
+      return '验证码已过期,请重新发送。';
+    case 'CODE_USED':
+      return '验证码已被使用,请重新发送。';
+    case 'CODE_LOCKED':
+      return '错误次数过多,请重新发送验证码。';
+    case 'SMTP_FAILED':
+      return '邮件发送失败,请稍后再试。';
+    case 'CCH_FAILED':
+    case 'CCH_UNREACHABLE':
+    case 'KEY_NOT_READY':
+      return '服务暂时不可用,请稍后再试。';
+    case 'INTERNAL_ERROR':
+      return '服务内部错误,请稍后再试。';
+    default:
+      return error;
+  }
+}
+
+function isValidEmailFormat(email: string): boolean {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed.includes('@')) return false;
+  return ALLOWED_EMAIL_SUFFIXES.some((suffix) => trimmed.endsWith(suffix));
+}
 
 function createFallbackCliStatus(): OnboardingCliStatus {
   return {
@@ -81,10 +130,6 @@ export interface OnboardingViewProps {
   alreadyRegistered?: boolean;
 }
 
-/**
- * Onboarding content without Dialog wrapper. Used by OnboardingShell
- * (pre-app initialization gate) so the window title bar remains interactive.
- */
 export function OnboardingView({
   onComplete,
   className,
@@ -106,9 +151,18 @@ export function OnboardingView({
       typeof __ONBOARDING_SERVICE_URL__ === 'string' ? __ONBOARDING_SERVICE_URL__ : '';
     return injected || 'https://onboarding-jyw.pipidan.qzz.io';
   });
+
+  // Step: register-email
   const [email, setEmail] = useState('');
-  const [registering, setRegistering] = useState(false);
-  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [sendCodeError, setSendCodeError] = useState<string | null>(null);
+
+  // Step: register-code
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
+
   const [registerResult, setRegisterResult] = useState<OnboardingRegisterResponse | null>(null);
 
   const detectCli = useCallback(
@@ -121,7 +175,7 @@ export function OnboardingView({
           if (alreadyRegistered) {
             onComplete();
           } else {
-            setStep('register');
+            setStep('register-email');
           }
         }
         return status;
@@ -151,6 +205,13 @@ export function OnboardingView({
     }
   }, [step, detectCli]);
 
+  // Tick down the resend cooldown each second while we're on the code step.
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown((n) => n - 1), 1_000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
+
   const handleInstall = useCallback(async () => {
     setInstallError(null);
     setInstallProgress(createInitialInstallProgress());
@@ -172,7 +233,7 @@ export function OnboardingView({
         if (alreadyRegistered) {
           onComplete();
         } else {
-          setStep('register');
+          setStep('register-email');
         }
         return;
       }
@@ -199,29 +260,62 @@ export function OnboardingView({
     }
   }, [installing]);
 
-  const handleRegister = async () => {
-    setRegisterError(null);
-    setRegistering(true);
+  const handleSendCode = useCallback(
+    async (opts?: { resend?: boolean }) => {
+      setSendCodeError(null);
+      setSendingCode(true);
+      try {
+        const response: OnboardingSendCodeResponse = await window.electronAPI.onboarding.sendCode({
+          email: email.trim(),
+        });
+
+        if (!response.ok) {
+          setSendCodeError(describeOnboardingError(response.error));
+          if (response.data?.retryAfterSec) {
+            setResendCountdown(response.data.retryAfterSec);
+          }
+          return;
+        }
+
+        setResendCountdown(response.data?.resendAfterSec ?? 30);
+        if (!opts?.resend) {
+          setCode('');
+          setVerifyError(null);
+          setStep('register-code');
+        }
+      } catch (err) {
+        setSendCodeError(err instanceof Error ? err.message : '未知错误。');
+      } finally {
+        setSendingCode(false);
+      }
+    },
+    [email]
+  );
+
+  const handleVerify = useCallback(async () => {
+    setVerifyError(null);
+    setVerifying(true);
     try {
-      const result = await window.electronAPI.onboarding.register({
-        email: email.trim(),
-        serverUrl: serverUrl.trim(),
-        onboardingSecret: __ONBOARDING_SECRET__,
-      });
+      const result: OnboardingRegisterResponse =
+        await window.electronAPI.onboarding.verifyAndRegister({
+          email: email.trim(),
+          code: code.trim(),
+        });
       setRegisterResult(result);
       if (result.ok) {
         setStep('result');
       } else {
-        setRegisterError(result.error || '注册失败。');
+        setVerifyError(describeOnboardingError(result.error, result.data?.attemptsLeft));
       }
     } catch (err) {
-      setRegisterError(err instanceof Error ? err.message : '未知错误。');
+      setVerifyError(err instanceof Error ? err.message : '未知错误。');
     } finally {
-      setRegistering(false);
+      setVerifying(false);
     }
-  };
+  }, [email, code]);
 
-  const canRegister = email.trim().length > 0 && !registering;
+  const canSendCode = isValidEmailFormat(email) && !sendingCode;
+  const canVerify = code.trim().length === CODE_LENGTH && !verifying;
   const hasMissingTools = cliStatus
     ? !cliStatus.gitInstalled ||
       !cliStatus.nodeInstalled ||
@@ -235,14 +329,16 @@ export function OnboardingView({
 
   const handleRegisterOnly = () => {
     setMode('register-only');
-    setRegisterError(null);
+    setSendCodeError(null);
+    setVerifyError(null);
     setRegisterResult(null);
-    setStep('register');
+    setStep('register-email');
   };
 
   const handleReturnToInstall = () => {
     setMode('standard');
-    setRegisterError(null);
+    setSendCodeError(null);
+    setVerifyError(null);
     setRegisterResult(null);
     setStep('cli-check');
   };
@@ -263,7 +359,7 @@ export function OnboardingView({
           <SectionHeader
             icon={<TerminalIcon className="h-5 w-5 text-muted-foreground" />}
             title="CLI 环境检查"
-            description="初始化将先校验基础环境，再安装必需的 Claude Code（Codex 为可选）。"
+            description="初始化将先校验基础环境,再安装必需的 Claude Code(Codex 为可选)。"
           />
           <SectionBody>
             <div className="flex flex-col gap-4">
@@ -283,7 +379,7 @@ export function OnboardingView({
                   version={cliStatus?.nodeVersion}
                   loading={cliLoading}
                   missingLabel={
-                    cliStatus?.nodeVersion ? `${cliStatus.nodeVersion}（需 ≥ 18）` : undefined
+                    cliStatus?.nodeVersion ? `${cliStatus.nodeVersion}(需 ≥ 18)` : undefined
                   }
                 />
               </div>
@@ -308,7 +404,7 @@ export function OnboardingView({
 
               {cliStatus && !cliStatus.wingetAvailable && hasMissingTools && (
                 <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  未检测到 `winget`，安装程序将尽量通过直接下载方式完成安装。
+                  未检测到 `winget`,安装程序将尽量通过直接下载方式完成安装。
                 </div>
               )}
 
@@ -321,7 +417,7 @@ export function OnboardingView({
               {cliStatus && hasMissingTools && (
                 <div className="flex flex-col gap-2 rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
                   <span>
-                    自动安装失败？可参考安装指南手动配置（
+                    自动安装失败?可参考安装指南手动配置(
                     <button
                       type="button"
                       onClick={handleOpenInstallGuide}
@@ -329,7 +425,7 @@ export function OnboardingView({
                     >
                       {INSTALL_GUIDE_URL}
                     </button>
-                    ）{alreadyRegistered ? '。' : '，或先仅完成注册和环境配置。'}
+                    ){alreadyRegistered ? '。' : ',或先仅完成注册和环境配置。'}
                   </span>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={handleOpenInstallGuide}>
@@ -356,7 +452,7 @@ export function OnboardingView({
                 if (alreadyRegistered) {
                   onComplete();
                 } else {
-                  setStep('register');
+                  setStep('register-email');
                 }
               }}
               disabled={cliLoading || !cliStatus?.claudeInstalled}
@@ -373,7 +469,7 @@ export function OnboardingView({
           <SectionHeader
             icon={<TerminalIcon className="h-5 w-5 text-muted-foreground" />}
             title="正在安装 CLI 工具"
-            description="将先安装基础环境，随后安装缺失的 Agent CLI。"
+            description="将先安装基础环境,随后安装缺失的 Agent CLI。"
           />
           <SectionBody>
             <div className="flex flex-col gap-3">
@@ -414,15 +510,15 @@ export function OnboardingView({
         </>
       )}
 
-      {step === 'register' && (
+      {step === 'register-email' && (
         <>
           <SectionHeader
             icon={<ServerIcon className="h-5 w-5 text-muted-foreground" />}
             title="注册"
             description={
               mode === 'register-only'
-                ? '当前仅写入本地配置与环境变量，CLI 工具可稍后安装。'
-                : '连接至 JYW Hub 服务以完成初始化。'
+                ? '当前仅写入本地配置与环境变量,CLI 工具可稍后安装。'
+                : '输入邮箱以接收验证码。'
             }
           />
           <SectionBody>
@@ -441,32 +537,118 @@ export function OnboardingView({
                 <Input
                   id="onboarding-email"
                   type="email"
+                  inputMode="email"
+                  autoComplete="email"
                   placeholder="you@jcdz.cc"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && canSendCode) {
+                      void handleSendCode();
+                    }
+                  }}
                 />
-                <p className="text-xs text-muted-foreground">仅接受 @jcdz.cc 后缀的邮箱。</p>
+                <p className="text-xs text-muted-foreground">
+                  仅接受 {ALLOWED_EMAIL_SUFFIXES.join(' / ')} 后缀。
+                </p>
               </div>
               {mode === 'register-only' && (
                 <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  此步骤仅写入本地配置与环境变量，CLI 工具可稍后安装。
+                  此步骤仅写入本地配置与环境变量,CLI 工具可稍后安装。
                 </div>
               )}
-              {registerError && (
+              {sendCodeError && (
                 <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
                   <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{registerError}</span>
+                  <span>{sendCodeError}</span>
                 </div>
               )}
             </div>
           </SectionBody>
           <SectionFooter>
-            <Button variant="outline" onClick={handleReturnToInstall} disabled={registering}>
+            <Button variant="outline" onClick={handleReturnToInstall} disabled={sendingCode}>
               返回
             </Button>
-            <Button onClick={handleRegister} disabled={!canRegister}>
-              {registering && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
-              注册
+            <Button onClick={() => void handleSendCode()} disabled={!canSendCode}>
+              {sendingCode && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
+              发送验证码
+            </Button>
+          </SectionFooter>
+        </>
+      )}
+
+      {step === 'register-code' && (
+        <>
+          <SectionHeader
+            icon={<MailIcon className="h-5 w-5 text-muted-foreground" />}
+            title="输入验证码"
+            description={`已发送至 ${email.trim()},请查收邮件(含垃圾箱)。`}
+          />
+          <SectionBody>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="onboarding-code">验证码</Label>
+                <Input
+                  id="onboarding-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={CODE_LENGTH}
+                  pattern="\d*"
+                  placeholder={'_'.repeat(CODE_LENGTH)}
+                  className="text-center text-lg tracking-[0.5em] font-mono"
+                  value={code}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH);
+                    setCode(digits);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && canVerify) {
+                      void handleVerify();
+                    }
+                  }}
+                  autoFocus
+                />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{CODE_LENGTH} 位数字,15 分钟内有效。</span>
+                  {resendCountdown > 0 ? (
+                    <span>{resendCountdown}s 后可重发</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleSendCode({ resend: true })}
+                      disabled={sendingCode}
+                      className="text-primary underline-offset-2 hover:underline disabled:opacity-50"
+                    >
+                      {sendingCode ? '重发中...' : '重新发送'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {verifyError && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
+                  <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{verifyError}</span>
+                </div>
+              )}
+            </div>
+          </SectionBody>
+          <SectionFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setVerifyError(null);
+                setCode('');
+                setStep('register-email');
+              }}
+              disabled={verifying}
+            >
+              更换邮箱
+            </Button>
+            <Button onClick={() => void handleVerify()} disabled={!canVerify}>
+              {verifying && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
+              验证并注册
             </Button>
           </SectionFooter>
         </>
@@ -479,7 +661,7 @@ export function OnboardingView({
             title={mode === 'register-only' ? '注册信息已保存' : '初始化完成'}
             description={
               mode === 'register-only'
-                ? '本地配置与环境变量已写入，CLI 工具仍需安装后方可使用。'
+                ? '本地配置与环境变量已写入,CLI 工具仍需安装后方可使用。'
                 : '环境配置已全部完成。'
             }
           />
@@ -487,7 +669,7 @@ export function OnboardingView({
             <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               {registerResult.data?.user && (
                 <p>
-                  欢迎，
+                  欢迎,
                   <span className="font-medium text-foreground">
                     {registerResult.data.user.name}
                   </span>
@@ -495,7 +677,7 @@ export function OnboardingView({
                 </p>
               )}
               {mode === 'register-only' ? (
-                <p>凭据已写入本地配置，Claude Code 与 Codex 安装完成后即可使用。</p>
+                <p>凭据已写入本地配置,Claude Code 与 Codex 安装完成后即可使用。</p>
               ) : (
                 <p>Claude Code 与 Codex 的凭据已在本次会话中生效。</p>
               )}

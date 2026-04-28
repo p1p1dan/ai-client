@@ -123,7 +123,10 @@ describe('OnboardingService', () => {
     );
 
     const claudeJsonPath = join(tempHome, '.claude.json');
-    writeFileSync(claudeJsonPath, JSON.stringify({ mcpServers: { test: { command: 'node' } } }, null, 2));
+    writeFileSync(
+      claudeJsonPath,
+      JSON.stringify({ mcpServers: { test: { command: 'node' } } }, null, 2)
+    );
 
     const originalClaudeSettings = readFileSync(claudeSettingsPath, 'utf-8');
     const originalCodexConfig = readFileSync(codexConfigPath, 'utf-8');
@@ -161,21 +164,17 @@ describe('OnboardingService', () => {
       },
     });
 
-    const result = await onboardingService.register(
-      'user@jcdz.cc',
-      'https://onboarding-test.example.com',
-      'secret'
-    );
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
 
     expect(result.ok).toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith('https://onboarding-test.example.com/register', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Onboarding-Secret': 'secret',
-      },
-      body: JSON.stringify({ email: 'user@jcdz.cc' }),
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://onboarding-test.example.com/api/onboarding/verify-and-register',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'user@jcdz.cc', code: '123456' }),
+      }
+    );
     expect(readSettings()).toMatchObject({
       'aiclient-settings': {
         state: {
@@ -233,7 +232,10 @@ describe('OnboardingService', () => {
       OPENAI_ORG: 'org1',
     });
 
-    const updatedClaudeJson = JSON.parse(readFileSync(claudeJsonPath, 'utf-8')) as Record<string, unknown>;
+    const updatedClaudeJson = JSON.parse(readFileSync(claudeJsonPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
     expect(updatedClaudeJson).toMatchObject({
       mcpServers: { test: { command: 'node' } },
       hasCompletedOnboarding: true,
@@ -245,7 +247,10 @@ describe('OnboardingService', () => {
     const { onboardingService } = await import('../OnboardingService');
 
     mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
-    writeFileSync(join(tempHome, '.aiclient', 'settings.json'), JSON.stringify({ onboarding: { registered: true } }));
+    writeFileSync(
+      join(tempHome, '.aiclient', 'settings.json'),
+      JSON.stringify({ onboarding: { registered: true } })
+    );
 
     const claudeSettingsPath = join(tempHome, '.claude', 'settings.json');
     mkdirSync(join(tempHome, '.claude'), { recursive: true });
@@ -267,7 +272,10 @@ describe('OnboardingService', () => {
 
     mkdirSync(join(tempHome, '.codex'), { recursive: true });
     writeFileSync(join(tempHome, '.codex', 'config.toml'), 'model_provider = "jyw"\n');
-    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'k' }, null, 2));
+    writeFileSync(
+      join(tempHome, '.codex', 'auth.json'),
+      JSON.stringify({ OPENAI_API_KEY: 'k' }, null, 2)
+    );
 
     expect(onboardingService.logout()).toBe(true);
 
@@ -279,94 +287,71 @@ describe('OnboardingService', () => {
     expect(existsSync(join(tempHome, '.codex', 'auth.json'))).toBe(false);
   });
 
-  it('refreshes stale local CLI credentials for an already registered user', async () => {
-    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
-    writeFileSync(
-      join(tempHome, '.aiclient', 'settings.json'),
-      JSON.stringify(
-        {
-          onboarding: {
-            registered: true,
-            email: 'user@jcdz.cc',
-            serverUrl: 'https://cch-test.example.com',
-            registeredAt: new Date().toISOString(),
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    const claudeDir = join(tempHome, '.claude');
-    mkdirSync(claudeDir, { recursive: true });
-    const claudeSettingsPath = join(claudeDir, 'settings.json');
-    writeFileSync(
-      claudeSettingsPath,
-      JSON.stringify(
-        {
-          env: {
-            ANTHROPIC_BASE_URL: 'https://old.example.com',
-            ANTHROPIC_AUTH_TOKEN: 'old-token',
-            KEEP: 'keep-me',
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    const codexDir = join(tempHome, '.codex');
-    mkdirSync(codexDir, { recursive: true });
-    writeFileSync(join(codexDir, 'config.toml'), 'model_provider = "old"\n');
-    writeFileSync(join(codexDir, 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'old-key' }, null, 2));
-
+  it('sendCode posts to /api/onboarding/send-code and returns server response', async () => {
     fetchMock.mockResolvedValue({
       json: async () => ({
         ok: true,
-        data: {
-          user: { id: 1, name: 'Test User' },
-          apiKey: 'unused-top-level-key',
-          config: {
-            claude: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              authToken: 'new-claude-token',
-            },
-            codex: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              apiKey: 'new-codex-key',
-            },
-          },
-        },
+        data: { expiresInSec: 900, resendAfterSec: 30 },
       }),
     });
 
     const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.sendCode('User@JCDZ.CC');
 
-    await expect(onboardingService.refreshRegisteredCredentialFiles()).resolves.toBe(true);
-
-    const updatedClaudeSettings = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as {
-      env?: Record<string, unknown>;
-    };
-    expect(updatedClaudeSettings.env).toMatchObject({
-      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
-      ANTHROPIC_AUTH_TOKEN: 'new-claude-token',
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      KEEP: 'keep-me',
+    expect(result).toEqual({
+      ok: true,
+      data: { expiresInSec: 900, resendAfterSec: 30 },
     });
-    expect(JSON.parse(readFileSync(join(codexDir, 'auth.json'), 'utf-8'))).toEqual({
-      OPENAI_API_KEY: 'new-codex-key',
-    });
-    const refreshedCodexConfig = readFileSync(join(codexDir, 'config.toml'), 'utf-8');
-    expect(refreshedCodexConfig).toMatch(/model_provider = "jyw"/);
-    expect(refreshedCodexConfig).not.toMatch(/model_provider = "old"/);
-    expect(refreshedCodexConfig).toMatch(/base_url = "https:\/\/cch-test\.example\.com\/v1"/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://onboarding-test.example.com/register',
-      expect.objectContaining({
+      'https://onboarding-test.example.com/api/onboarding/send-code',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: 'user@jcdz.cc' }),
-      })
+      }
     );
+  });
+
+  it('sendCode rejects email with disallowed suffix without hitting network', async () => {
+    const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.sendCode('user@gmail.com');
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('@jcdz.cc');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sendCode accepts both whitelisted suffixes', async () => {
+    fetchMock.mockResolvedValue({
+      json: async () => ({ ok: true, data: { expiresInSec: 900, resendAfterSec: 30 } }),
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+    const r1 = await onboardingService.sendCode('a@jcdz.cc');
+    const r2 = await onboardingService.sendCode('b@wuhanjingce.com');
+
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('verifyAndRegister surfaces server error responses without writing files', async () => {
+    fetchMock.mockResolvedValue({
+      json: async () => ({
+        ok: false,
+        error: 'CODE_INVALID',
+        data: { attemptsLeft: 4 },
+      }),
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '999999');
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('CODE_INVALID');
+    expect(result.data?.attemptsLeft).toBe(4);
+    // No state should be persisted on failure.
+    expect(onboardingService.checkRegistration().registered).toBe(false);
   });
 
   it('upserts base_url but preserves custom keys inside existing [model_providers.jyw] block', async () => {
@@ -399,11 +384,7 @@ describe('OnboardingService', () => {
     });
 
     const { onboardingService } = await import('../OnboardingService');
-    const result = await onboardingService.register(
-      'user@jcdz.cc',
-      'https://onboarding-test.example.com',
-      'secret'
-    );
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     expect(result.ok).toBe(true);
 
     const updated = readFileSync(codexConfigPath, 'utf-8');
@@ -443,11 +424,7 @@ describe('OnboardingService', () => {
     });
 
     const { onboardingService } = await import('../OnboardingService');
-    const result = await onboardingService.register(
-      'user@jcdz.cc',
-      'https://onboarding-test.example.com',
-      'secret'
-    );
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     expect(result.ok).toBe(true);
 
     expect(JSON.parse(readFileSync(codexAuthPath, 'utf-8'))).toEqual({

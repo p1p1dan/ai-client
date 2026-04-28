@@ -322,7 +322,8 @@ export const IPC_CHANNELS = {
 
   // Onboarding
   ONBOARDING_CHECK: 'onboarding:check',
-  ONBOARDING_REGISTER: 'onboarding:register',
+  ONBOARDING_SEND_CODE: 'onboarding:sendCode',
+  ONBOARDING_VERIFY_AND_REGISTER: 'onboarding:verifyAndRegister',
   ONBOARDING_DETECT_CLI: 'onboarding:detectCli',
   ONBOARDING_CHECK_PREREQUISITES: 'onboarding:checkPrerequisites',
   ONBOARDING_INSTALL_AGENTS: 'onboarding:installAgents',
