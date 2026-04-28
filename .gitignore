@@ -36,3 +36,8 @@ build/cer.p12
 .claude/
 .serena/
 .ace-tool/
+
+# Internal planning / scratch docs (do not commit)
+.task-client.md
+docs/superpowers/
+openspec/
