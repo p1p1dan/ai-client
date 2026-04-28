@@ -85,9 +85,9 @@ async function main() {
 
   const nodeArchiveName = `node-v${nodeVersion}-linux-${arch}.tar.gz`;
   const nodeArchiveUrl = `https://nodejs.org/dist/v${nodeVersion}/${nodeArchiveName}`;
-  const runtimeArchiveName = `enso-remote-runtime-v${serverVersion}-node-v${nodeVersion}-linux-${arch}.tar.gz`;
+  const runtimeArchiveName = `aiclient-remote-runtime-v${serverVersion}-node-v${nodeVersion}-linux-${arch}.tar.gz`;
 
-  const tempRoot = await mkdtemp(join(tmpdir(), `enso-remote-runtime-${arch}-`));
+  const tempRoot = await mkdtemp(join(tmpdir(), `aiclient-remote-runtime-${arch}-`));
   const downloadPath = join(tempRoot, nodeArchiveName);
   const extractRoot = join(tempRoot, 'extract');
   const bundleRoot = join(tempRoot, 'bundle');
