@@ -2,7 +2,11 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { TASK_COMPLETION_MARKER } from '@shared/types/agent';
-import { isFileTsdEncrypted, readFileTsdSafe } from '../../utils/tsdSafeRead';
+import {
+  isFileTsdEncrypted,
+  readFileTsdSafeBounded,
+  TsdFileTooLargeError,
+} from '../../utils/tsdSafeRead';
 
 /**
  * Get the Claude projects directory path
@@ -47,9 +51,27 @@ interface SessionLogEntry {
 async function readTailLines(filePath: string, lineCount: number): Promise<string[]> {
   // TSD-encrypted files require buffered fallback (positional reads return raw bytes).
   if (await isFileTsdEncrypted(filePath)) {
-    const decrypted = await readFileTsdSafe(filePath);
-    const lines = decrypted.toString('utf-8').split('\n').filter((l) => l.trim());
-    return lines.slice(-lineCount);
+    try {
+      const decrypted = await readFileTsdSafeBounded(filePath);
+      const lines = decrypted
+        .toString('utf-8')
+        .split('\n')
+        .filter((l) => l.trim());
+      return lines.slice(-lineCount);
+    } catch (error) {
+      // Only swallow the size guard. Other errors propagate to the caller
+      // (`readLastAssistantMessages` has an outer try/catch) so failures are
+      // logged with file context instead of silently masquerading as "no
+      // assistant messages yet".
+      if (!(error instanceof TsdFileTooLargeError)) {
+        throw error;
+      }
+      console.warn(
+        `[SessionLogReader] Skipping tail of oversized TSD JSONL: ${error.filePath} ` +
+          `(${error.size} bytes > ${error.limit} bytes)`
+      );
+      return [];
+    }
   }
 
   const CHUNK_SIZE = 8 * 1024; // 8KB per read, enough for ~3 JSONL lines
@@ -122,7 +144,10 @@ export async function readLastAssistantMessages(
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code !== 'ENOENT') {
-      console.error('[SessionLogReader] Failed to read session log:', error);
+      console.error(
+        `[SessionLogReader] Failed to read session log (cwd=${cwd}, sessionId=${sessionId}):`,
+        error
+      );
     }
     return [];
   }

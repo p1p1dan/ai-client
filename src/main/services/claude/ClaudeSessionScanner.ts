@@ -4,7 +4,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 import type { ClaudeProject, ClaudeSessionMeta } from '@shared/types';
-import { isFileTsdEncrypted, readFileTsdSafe } from '../../utils/tsdSafeRead';
+import {
+  isFileTsdEncrypted,
+  readFileTsdSafeBounded,
+  TsdFileTooLargeError,
+} from '../../utils/tsdSafeRead';
 
 type JsonlContentBlock = { type?: string; text?: string };
 type JsonlMessage = { content?: JsonlContentBlock[] | string };
@@ -132,9 +136,24 @@ async function openJsonlReader(filePath: string): Promise<JsonlReader> {
   // parsing fails. Detect the TSD header and fall back to a buffered read via
   // system node.exe, which IS whitelisted and yields decrypted bytes.
   if (await isFileTsdEncrypted(filePath)) {
-    const decrypted = await readFileTsdSafe(filePath);
-    const text = decrypted.toString('utf-8');
-    const splitLines = text.split('\n');
+    let splitLines: string[] = [];
+    try {
+      const decrypted = await readFileTsdSafeBounded(filePath);
+      splitLines = decrypted.toString('utf-8').split('\n');
+    } catch (error) {
+      // Only swallow the size guard — that is an intentional degradation for
+      // pathological session logs. Anything else (spawn failure, decrypt
+      // error, fs read fault) is a real problem that should surface to the
+      // caller so it can mark the session as failed instead of silently
+      // returning "no content".
+      if (!(error instanceof TsdFileTooLargeError)) {
+        throw error;
+      }
+      console.warn(
+        `[ClaudeSessionScanner] Skipping oversized TSD JSONL: ${error.filePath} ` +
+          `(${error.size} bytes > ${error.limit} bytes)`
+      );
+    }
     return {
       lines: (async function* () {
         for (const line of splitLines) yield line;
@@ -175,9 +194,26 @@ async function readTailLines(filePath: string, lineCount: number): Promise<strin
   // TSD-encrypted files cannot be read via positional reads, so route through
   // the buffered TSD-safe path; otherwise stick with the chunked reader.
   if (await isFileTsdEncrypted(filePath)) {
-    const decrypted = await readFileTsdSafe(filePath);
-    const lines = decrypted.toString('utf-8').split('\n').filter((l) => l.trim());
-    return lines.slice(-lineCount);
+    try {
+      const decrypted = await readFileTsdSafeBounded(filePath);
+      const lines = decrypted
+        .toString('utf-8')
+        .split('\n')
+        .filter((l) => l.trim());
+      return lines.slice(-lineCount);
+    } catch (error) {
+      // Only swallow the size guard. Other errors (spawn / decrypt / fs)
+      // propagate so the caller can decide how to surface them rather than
+      // silently treating the session as having no content.
+      if (!(error instanceof TsdFileTooLargeError)) {
+        throw error;
+      }
+      console.warn(
+        `[ClaudeSessionScanner] Skipping tail of oversized TSD JSONL: ${error.filePath} ` +
+          `(${error.size} bytes > ${error.limit} bytes)`
+      );
+      return [];
+    }
   }
 
   const CHUNK_SIZE = 8 * 1024;
@@ -210,7 +246,13 @@ async function readTailLines(filePath: string, lineCount: number): Promise<strin
 }
 
 async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
-  const reader = await openJsonlReader(filePath);
+  let reader: JsonlReader;
+  try {
+    reader = await openJsonlReader(filePath);
+  } catch (error) {
+    console.error(`[ClaudeSessionScanner] Failed to open JSONL ${filePath}:`, error);
+    return null;
+  }
 
   let lineIndex = 0;
   let fallbackCwd: string | null = null;
@@ -242,6 +284,9 @@ async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
         if (cwd) fallbackCwd = cwd;
       }
     }
+  } catch (error) {
+    console.error(`[ClaudeSessionScanner] Failed while iterating JSONL ${filePath}:`, error);
+    return null;
   } finally {
     reader.close();
   }
@@ -338,7 +383,19 @@ export class ClaudeSessionScanner {
     }
 
     const sessions = await Promise.all(
-      sessionFiles.map(async (fileName) => this.extractSessionMeta(projectId, projectDir, fileName))
+      sessionFiles.map(async (fileName) => {
+        try {
+          return await this.extractSessionMeta(projectId, projectDir, fileName);
+        } catch (error) {
+          // Per-session failures (e.g. TSD spawn/decrypt error) must not abort
+          // the whole project scan. Drop this session and move on.
+          console.error(
+            `[ClaudeSessionScanner] Failed to extract session meta for ${fileName}:`,
+            error
+          );
+          return null;
+        }
+      })
     );
 
     return sessions

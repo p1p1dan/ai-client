@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { open, readFile } from 'node:fs/promises';
+import { open, readFile, stat } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -58,4 +58,39 @@ export async function isFileTsdEncrypted(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Buffered TSD reads load the whole file into memory via a spawned node.exe;
+// guard against pathologically large session JSONL files OOMing the main
+// process. 32 MB holds thousands of messages — beyond that we degrade.
+export const TSD_BUFFERED_READ_LIMIT = 32 * 1024 * 1024;
+
+export class TsdFileTooLargeError extends Error {
+  constructor(
+    public readonly filePath: string,
+    public readonly size: number,
+    public readonly limit: number
+  ) {
+    super(
+      `TSD-encrypted file exceeds buffered-read limit: ${filePath} ` +
+        `(${size} bytes > ${limit} bytes)`
+    );
+    this.name = 'TsdFileTooLargeError';
+  }
+}
+
+/**
+ * Like {@link readFileTsdSafe} but rejects with {@link TsdFileTooLargeError}
+ * when the file exceeds `maxBytes`. Use this for unbounded inputs (e.g.
+ * user-generated session logs) where loading the whole file is unsafe.
+ */
+export async function readFileTsdSafeBounded(
+  filePath: string,
+  maxBytes: number = TSD_BUFFERED_READ_LIMIT
+): Promise<Buffer> {
+  const info = await stat(filePath);
+  if (info.size > maxBytes) {
+    throw new TsdFileTooLargeError(filePath, info.size, maxBytes);
+  }
+  return readFileTsdSafe(filePath);
 }

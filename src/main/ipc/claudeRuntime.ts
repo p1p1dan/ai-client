@@ -14,7 +14,17 @@ export function registerClaudeRuntimeHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CLAUDE_RUNTIME_CHECK,
     async (_, force = false): Promise<ClaudeRuntimeStatus> => {
-      return claudeRuntimeChecker.detect(Boolean(force));
+      try {
+        return await claudeRuntimeChecker.detect(Boolean(force));
+      } catch (error) {
+        // Surface probe failures (IPC race, fs permission, transient PATH
+        // lookup, etc.) as a structured status instead of throwing. The
+        // renderer would otherwise see a generic IPC rejection and could not
+        // distinguish "no Claude installed" from "we failed to look".
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[claudeRuntime] detect failed:', error);
+        return { kind: 'detection-failed', error: message };
+      }
     }
   );
 
@@ -65,4 +75,3 @@ export function registerClaudeRuntimeHandlers(): void {
     }
   );
 }
-

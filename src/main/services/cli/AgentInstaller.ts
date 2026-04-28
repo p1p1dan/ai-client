@@ -11,8 +11,8 @@ import {
 } from '@shared/types';
 import { killProcessTree } from '../../utils/processUtils';
 import { clearPathCache } from '../terminal/PtyManager';
-import { cliDetector } from './CliDetector';
 import { disableClaudeAutoUpdates } from './ClaudeRuntimeConfig';
+import { cliDetector } from './CliDetector';
 
 const GIT_INSTALLER_URL =
   'https://npmmirror.com/mirrors/git-for-windows/v2.43.0.windows.1/Git-2.43.0-64-bit.exe';
@@ -348,17 +348,14 @@ export class AgentInstaller {
       agentId === 'claude'
         ? `@anthropic-ai/claude-code@${LAST_NODE_CLAUDE_VERSION}`
         : '@openai/codex';
-    let lastError: unknown;
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
         await runCmd(`npm install -g ${packageName} --registry=${NPM_REGISTRY}`, {
           signal: this.abortController.signal,
         });
-        lastError = undefined;
         break;
       } catch (error) {
-        lastError = error;
         if (!isTransientNpmNetworkError(error) || attempt === 2) {
           throw error;
         }
@@ -372,14 +369,6 @@ export class AgentInstaller {
       throw new Error(
         `${agentId} installation finished, but the CLI command is still unavailable.`
       );
-    }
-
-    if (lastError) {
-      // Surface a transient retry that ultimately succeeded as an error so
-      // callers can decide whether to log/report it. We do this BEFORE any
-      // post-install side effects (e.g. disabling Claude auto-updates) to
-      // avoid mutating local config when we're about to throw.
-      throw lastError instanceof Error ? lastError : new Error(String(lastError));
     }
 
     if (agentId === 'claude') {
@@ -398,9 +387,7 @@ export class AgentInstaller {
    * reinstall the pinned Node-compatible version. Used by the renderer's
    * "downgrade from Bun" action so the resulting install state is clean.
    */
-  async downgradeClaudeToNodeVersion(
-    onProgress?: (message: string) => void
-  ): Promise<void> {
+  async downgradeClaudeToNodeVersion(onProgress?: (message: string) => void): Promise<void> {
     this.ensureNotCancelled();
 
     onProgress?.('Removing existing Claude Code build...');

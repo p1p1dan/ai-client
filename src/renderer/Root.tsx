@@ -1,5 +1,6 @@
 import type { ClaudeRuntimeStatus } from '@shared/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { DevToolsOverlay } from './components/DevToolsOverlay';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
@@ -7,6 +8,7 @@ import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { ClaudeRuntimeBanner } from './components/onboarding/ClaudeRuntimeBanner';
 import { ClaudeVsCodeOnlyShell } from './components/onboarding/ClaudeVsCodeOnlyShell';
 import { OnboardingShell } from './components/onboarding/OnboardingShell';
+import { Button } from './components/ui/button';
 
 // Lazy-load the main App so its heavy hooks (session restore, worktree
 // hydration, etc.) do not run until the user is registered.
@@ -21,6 +23,49 @@ function LoadingShell() {
       <WindowTitleBar />
       <DevToolsOverlay />
       <div className="flex-1" />
+    </div>
+  );
+}
+
+interface RuntimeDetectionFailedShellProps {
+  error?: string;
+  retrying: boolean;
+  onRetry: () => void;
+}
+
+function RuntimeDetectionFailedShell({
+  error,
+  retrying,
+  onRetry,
+}: RuntimeDetectionFailedShellProps) {
+  return (
+    <div className="relative z-0 flex h-screen flex-col overflow-hidden">
+      <BackgroundLayer />
+      <WindowTitleBar />
+      <DevToolsOverlay />
+      <div className="flex flex-1 items-center justify-center px-6">
+        <div className="flex max-w-md flex-col items-center gap-3 text-center">
+          <AlertTriangle className="h-8 w-8 text-yellow-500" />
+          <h2 className="text-base font-medium text-primary">无法检测 Claude Code 运行时</h2>
+          <p className="text-xs text-muted-foreground">
+            探测过程出错，可能是
+            IPC、权限或环境问题。请重试；如果反复失败，请查看开发者工具中的错误日志。
+          </p>
+          {error ? (
+            <pre className="max-w-full overflow-x-auto rounded bg-muted px-3 py-2 text-left text-[11px] text-muted-foreground">
+              {error}
+            </pre>
+          ) : null}
+          <Button size="sm" variant="outline" onClick={onRetry} disabled={retrying}>
+            {retrying ? (
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            )}
+            重试
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -73,9 +118,23 @@ export default function Root() {
     queryKey: ['claudeRuntimeStatus'],
     queryFn: async () => window.electronAPI.claudeRuntime.check(false),
     staleTime: 1000 * 30,
+    retry: 1,
   });
   const [runtimeOverride, setRuntimeOverride] = useState<ClaudeRuntimeStatus | null>(null);
-  const runtimeStatus = runtimeOverride ?? runtime.data ?? null;
+  // The main process now wraps detection in try/catch and returns
+  // `{ kind: 'detection-failed', error }` instead of throwing. We still defend
+  // against raw IPC rejections (process crash, channel teardown) by mapping
+  // `runtime.isError` to a detection-failed status so the renderer always has
+  // something explicit to show — never an indefinite LoadingShell.
+  const runtimeStatus: ClaudeRuntimeStatus | null =
+    runtimeOverride ??
+    runtime.data ??
+    (runtime.isError
+      ? {
+          kind: 'detection-failed',
+          error: runtime.error instanceof Error ? runtime.error.message : String(runtime.error),
+        }
+      : null);
 
   // Once we know the CLI is on a Node-compatible build, eagerly disable
   // Claude's bundled auto-updater so the next launch can't silently pull a
@@ -96,8 +155,30 @@ export default function Root() {
     return () => window.removeEventListener(ONBOARDING_OPEN_EVENT, handler);
   }, [queryClient]);
 
-  if (onboarding.isLoading || !onboarding.data || runtime.isLoading || !runtimeStatus) {
+  if (
+    onboarding.isLoading ||
+    !onboarding.data ||
+    (runtime.isLoading && !runtime.isError) ||
+    !runtimeStatus
+  ) {
     return <LoadingShell />;
+  }
+
+  // Runtime probe failed for a non-"missing CLI" reason (IPC crash, fs
+  // permission, transient PATH lookup, etc.). Show an explicit retry surface
+  // instead of routing the user into onboarding — that would suggest "Claude
+  // is not installed" and hide the real problem.
+  if (runtimeStatus.kind === 'detection-failed') {
+    return (
+      <RuntimeDetectionFailedShell
+        error={runtimeStatus.error}
+        retrying={runtime.isFetching}
+        onRetry={() => {
+          setRuntimeOverride(null);
+          void runtime.refetch();
+        }}
+      />
+    );
   }
 
   // VSCode extension is present but CLI is not installed: AiClient main view
