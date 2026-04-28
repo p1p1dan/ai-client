@@ -997,6 +997,35 @@ const electronAPI = {
     },
   },
 
+  // Claude runtime gate (TEC-encrypted environment compatibility)
+  claudeRuntime: {
+    check: (force?: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_RUNTIME_CHECK, force) as Promise<
+        import('@shared/types').ClaudeRuntimeStatus
+      >,
+    downgrade: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_RUNTIME_DOWNGRADE) as Promise<{
+        success: boolean;
+        error?: string;
+        status?: import('@shared/types').ClaudeRuntimeStatus;
+      }>,
+    onDowngradeProgress: (callback: (event: { message: string }) => void): (() => void) => {
+      const handler = (_: unknown, payload: { message: string }) => callback(payload);
+      ipcRenderer.on(IPC_CHANNELS.CLAUDE_RUNTIME_DOWNGRADE_PROGRESS, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.CLAUDE_RUNTIME_DOWNGRADE_PROGRESS, handler);
+    },
+    disableAutoUpdates: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_RUNTIME_DISABLE_AUTO_UPDATES) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+    registerEnv: (env: Record<string, string | null>) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_RUNTIME_REGISTER_ENV, env) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+  },
+
   // Claude Config (MCP, Prompts, Plugins)
   claudeConfig: {
     // MCP Management

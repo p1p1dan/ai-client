@@ -2,15 +2,17 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type {
-  InstallAgentId,
-  InstallProgress,
-  InstallResult,
-  OnboardingPrerequisiteStatus,
+import {
+  type InstallAgentId,
+  type InstallProgress,
+  type InstallResult,
+  LAST_NODE_CLAUDE_VERSION,
+  type OnboardingPrerequisiteStatus,
 } from '@shared/types';
 import { killProcessTree } from '../../utils/processUtils';
 import { clearPathCache } from '../terminal/PtyManager';
 import { cliDetector } from './CliDetector';
+import { disableClaudeAutoUpdates } from './ClaudeRuntimeConfig';
 
 const GIT_INSTALLER_URL =
   'https://npmmirror.com/mirrors/git-for-windows/v2.43.0.windows.1/Git-2.43.0-64-bit.exe';
@@ -338,7 +340,14 @@ export class AgentInstaller {
   async installAgent(agentId: InstallAgentId): Promise<void> {
     this.ensureNotCancelled();
 
-    const packageName = agentId === 'claude' ? '@anthropic-ai/claude-code' : '@openai/codex';
+    // Claude Code 2.1.113+ ships as a Bun binary, which is not in the TEC
+    // OCular Agent whitelist on locked-down corp Windows machines (file reads
+    // come back as raw TSD-encrypted bytes). Pin to the last Node release so
+    // the runtime stays inside the whitelist.
+    const packageName =
+      agentId === 'claude'
+        ? `@anthropic-ai/claude-code@${LAST_NODE_CLAUDE_VERSION}`
+        : '@openai/codex';
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -366,8 +375,48 @@ export class AgentInstaller {
     }
 
     if (lastError) {
+      // Surface a transient retry that ultimately succeeded as an error so
+      // callers can decide whether to log/report it. We do this BEFORE any
+      // post-install side effects (e.g. disabling Claude auto-updates) to
+      // avoid mutating local config when we're about to throw.
       throw lastError instanceof Error ? lastError : new Error(String(lastError));
     }
+
+    if (agentId === 'claude') {
+      // Claude's built-in updater silently pulls the latest Bun build on the
+      // next launch; turn it off so we don't fall back outside the whitelist.
+      try {
+        disableClaudeAutoUpdates();
+      } catch (error) {
+        console.warn('[AgentInstaller] Failed to disable Claude autoUpdates:', error);
+      }
+    }
+  }
+
+  /**
+   * Uninstall a previously-installed Claude Code build (any version), then
+   * reinstall the pinned Node-compatible version. Used by the renderer's
+   * "downgrade from Bun" action so the resulting install state is clean.
+   */
+  async downgradeClaudeToNodeVersion(
+    onProgress?: (message: string) => void
+  ): Promise<void> {
+    this.ensureNotCancelled();
+
+    onProgress?.('Removing existing Claude Code build...');
+    try {
+      await runCmd('npm uninstall -g @anthropic-ai/claude-code', {
+        signal: this.abortController.signal,
+      });
+    } catch (error) {
+      // Uninstall may legitimately fail if the package isn't installed via
+      // the same npm prefix; we still try to install over the top below.
+      console.warn('[AgentInstaller] uninstall failed (continuing):', error);
+    }
+
+    await this.refreshPath();
+    onProgress?.(`Installing Claude Code ${LAST_NODE_CLAUDE_VERSION}...`);
+    await this.installAgent('claude');
   }
 
   async installAll(

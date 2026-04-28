@@ -2,6 +2,7 @@ export * from './agent';
 export * from './ai';
 export * from './app';
 export * from './claude';
+export * from './claudeRuntime';
 export * from './claudeSession';
 export * from './cli';
 export * from './file';

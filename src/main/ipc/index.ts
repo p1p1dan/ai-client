@@ -11,6 +11,7 @@ import {
 } from './claudeCompletions';
 import { registerClaudeConfigHandlers } from './claudeConfig';
 import { registerClaudeProviderHandlers } from './claudeProvider';
+import { registerClaudeRuntimeHandlers } from './claudeRuntime';
 import { registerClaudeSessionsHandlers } from './claudeSessions';
 import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
@@ -72,6 +73,7 @@ export function registerIpcHandlers(): void {
   registerClaudeConfigHandlers();
   registerClaudeCompletionsHandlers();
   registerClaudeSessionsHandlers();
+  registerClaudeRuntimeHandlers();
   registerWebInspectorHandlers();
   registerTempWorkspaceHandlers();
   registerTmuxHandlers();

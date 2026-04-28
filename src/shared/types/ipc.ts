@@ -280,6 +280,13 @@ export const IPC_CHANNELS = {
   CLAUDE_PLUGINS_MARKETPLACES_REMOVE: 'claude:plugins:marketplaces:remove',
   CLAUDE_PLUGINS_MARKETPLACES_REFRESH: 'claude:plugins:marketplaces:refresh',
 
+  // Claude runtime gate (TEC-encrypted environment compatibility)
+  CLAUDE_RUNTIME_CHECK: 'claude:runtime:check',
+  CLAUDE_RUNTIME_DOWNGRADE: 'claude:runtime:downgrade',
+  CLAUDE_RUNTIME_DOWNGRADE_PROGRESS: 'claude:runtime:downgrade:progress',
+  CLAUDE_RUNTIME_DISABLE_AUTO_UPDATES: 'claude:runtime:disableAutoUpdates',
+  CLAUDE_RUNTIME_REGISTER_ENV: 'claude:runtime:registerEnv',
+
   // Search
   SEARCH_FILES: 'search:files',
   SEARCH_CONTENT: 'search:content',
