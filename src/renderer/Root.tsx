@@ -121,6 +121,12 @@ export default function Root() {
     retry: 1,
   });
   const [runtimeOverride, setRuntimeOverride] = useState<ClaudeRuntimeStatus | null>(null);
+  // VSCode-extension-only users who click "start register" should go straight
+  // into the email step instead of being funneled back through CLI detection.
+  // We track this as a separate flag so the runtime query can stay truthful —
+  // the extension is still the only Claude install on the machine, we just
+  // want a different UI for this session.
+  const [vscodeRegisterFlow, setVscodeRegisterFlow] = useState(false);
   // The main process now wraps detection in try/catch and returns
   // `{ kind: 'detection-failed', error }` instead of throwing. We still defend
   // against raw IPC rejections (process crash, channel teardown) by mapping
@@ -142,6 +148,16 @@ export default function Root() {
   useEffect(() => {
     if (runtimeStatus?.kind === 'node-compatible') {
       void window.electronAPI.claudeRuntime.disableAutoUpdates();
+    }
+  }, [runtimeStatus?.kind]);
+
+  // Clear the vscode-register intent whenever we leave the vscode-extension-only
+  // branch. Otherwise the flag would persist across re-detection and a later
+  // return to vscode-extension-only (e.g. user uninstalled CLI) would skip the
+  // shell entry page and jump straight into register-email.
+  useEffect(() => {
+    if (runtimeStatus && runtimeStatus.kind !== 'vscode-extension-only') {
+      setVscodeRegisterFlow(false);
     }
   }, [runtimeStatus?.kind]);
 
@@ -186,16 +202,37 @@ export default function Root() {
   // shell. The user can still finish account registration here — credentials
   // go straight into ~/.claude/settings.json so the VSCode extension picks
   // them up.
+  //
+  // If the user is still unregistered AND has clicked "start register", we
+  // render OnboardingShell directly at the email step with mode='vscode-extension'
+  // so they don't get bounced back through CLI detection/install (the whole
+  // point of the VSCode path is to skip the CLI). Registered users always see
+  // the shell — they're done, just need to go back to VSCode.
   if (runtimeStatus.kind === 'vscode-extension-only') {
+    if (!registered && vscodeRegisterFlow) {
+      return (
+        <OnboardingShell
+          initialStep="register-email"
+          initialMode="vscode-extension"
+          onComplete={() => {
+            setVscodeRegisterFlow(false);
+            queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
+            queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['usageStats'] });
+          }}
+        />
+      );
+    }
     return (
       <ClaudeVsCodeOnlyShell
         status={runtimeStatus}
         registered={registered}
         onStartRegister={() => {
-          // Force the standard onboarding flow to render below.
-          setRuntimeOverride({ ...runtimeStatus, kind: 'not-installed' });
+          setVscodeRegisterFlow(true);
         }}
         onRecheck={async () => {
+          setVscodeRegisterFlow(false);
           setRuntimeOverride(null);
           const refreshed = await window.electronAPI.claudeRuntime.check(true);
           queryClient.setQueryData(['claudeRuntimeStatus'], refreshed);

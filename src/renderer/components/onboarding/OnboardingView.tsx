@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 type Step = 'cli-check' | 'cli-install' | 'register-email' | 'register-code' | 'result';
-type OnboardingMode = 'standard' | 'register-only';
+type OnboardingMode = 'standard' | 'register-only' | 'vscode-extension';
 
 const INSTALL_GUIDE_URL = 'https://api-doc.pipidan.xyz/installation.html';
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
@@ -128,15 +128,29 @@ export interface OnboardingViewProps {
    * stays on the CLI install track and bypasses the registration step.
    */
   alreadyRegistered?: boolean;
+  /**
+   * Override the initial step. Useful for skipping CLI detection when the
+   * caller already knows the user doesn't need it (e.g. VSCode-extension-only
+   * users who just want to register).
+   */
+  initialStep?: Step;
+  /**
+   * Override the initial mode. 'vscode-extension' hides CLI-install prompts in
+   * the registration copy and switches the success page to "return to VSCode"
+   * with an optional "continue installing CLI" button.
+   */
+  initialMode?: OnboardingMode;
 }
 
 export function OnboardingView({
   onComplete,
   className,
   alreadyRegistered = false,
+  initialStep,
+  initialMode,
 }: OnboardingViewProps) {
-  const [step, setStep] = useState<Step>('cli-check');
-  const [mode, setMode] = useState<OnboardingMode>('standard');
+  const [step, setStep] = useState<Step>(initialStep ?? 'cli-check');
+  const [mode, setMode] = useState<OnboardingMode>(initialMode ?? 'standard');
   const [cliStatus, setCliStatus] = useState<OnboardingCliStatus | null>(null);
   const [cliLoading, setCliLoading] = useState(false);
 
@@ -343,6 +357,12 @@ export function OnboardingView({
     setStep('cli-check');
   };
 
+  const handleContinueInstallFromVscode = () => {
+    setMode('standard');
+    setRegisterResult(null);
+    setStep('cli-check');
+  };
+
   const handleQuitApp = () => {
     void window.electronAPI.app.quit();
   };
@@ -417,7 +437,9 @@ export function OnboardingView({
               {cliStatus && hasMissingTools && (
                 <div className="flex flex-col gap-2 rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
                   <span>
-                    自动安装失败?可参考安装指南手动配置(
+                    自动安装可能需要管理员权限。若 Node.js 安装失败,请关闭应用并以
+                    <span className="font-medium text-foreground">管理员身份</span>
+                    重新启动;仍然失败可参考安装指南手动配置(
                     <button
                       type="button"
                       onClick={handleOpenInstallGuide}
@@ -425,23 +447,23 @@ export function OnboardingView({
                     >
                       {INSTALL_GUIDE_URL}
                     </button>
-                    ){alreadyRegistered ? '。' : ',或先仅完成注册和环境配置。'}
+                    ){alreadyRegistered ? '。' : ',或先仅完成注册。'}
                   </span>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={handleOpenInstallGuide}>
                       打开安装指南
                     </Button>
-                    {!alreadyRegistered && (
-                      <Button size="sm" variant="outline" onClick={handleRegisterOnly}>
-                        仅完成注册和环境配置
-                      </Button>
-                    )}
                   </div>
                 </div>
               )}
             </div>
           </SectionBody>
           <SectionFooter>
+            {hasMissingTools && !alreadyRegistered && (
+              <Button variant="outline" onClick={handleRegisterOnly} disabled={cliLoading}>
+                仅完成注册
+              </Button>
+            )}
             {hasMissingTools && (
               <Button variant="outline" onClick={handleInstall} disabled={cliLoading}>
                 一键安装
@@ -518,7 +540,9 @@ export function OnboardingView({
             description={
               mode === 'register-only'
                 ? '当前仅写入本地配置与环境变量,CLI 工具可稍后安装。'
-                : '输入邮箱以接收验证码。'
+                : mode === 'vscode-extension'
+                  ? '检测到 VSCode Claude 扩展,仅需完成邮箱注册即可直接在 VSCode 中使用。'
+                  : '输入邮箱以接收验证码。'
             }
           />
           <SectionBody>
@@ -555,6 +579,11 @@ export function OnboardingView({
               {mode === 'register-only' && (
                 <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
                   此步骤仅写入本地配置与环境变量,CLI 工具可稍后安装。
+                </div>
+              )}
+              {mode === 'vscode-extension' && (
+                <div className="rounded-lg border border-primary/28 bg-primary/6 px-3 py-2 text-sm text-muted-foreground">
+                  凭据将写入 ~/.claude/settings.json,注册完成后请返回 VSCode 直接使用 Claude 扩展。
                 </div>
               )}
               {sendCodeError && (
@@ -658,11 +687,19 @@ export function OnboardingView({
         <>
           <SectionHeader
             icon={<CheckCircle2Icon className="h-5 w-5 text-success" />}
-            title={mode === 'register-only' ? '注册信息已保存' : '初始化完成'}
+            title={
+              mode === 'register-only'
+                ? '注册信息已保存'
+                : mode === 'vscode-extension'
+                  ? '注册完成,环境已生效'
+                  : '初始化完成'
+            }
             description={
               mode === 'register-only'
                 ? '本地配置与环境变量已写入,CLI 工具仍需安装后方可使用。'
-                : '环境配置已全部完成。'
+                : mode === 'vscode-extension'
+                  ? '凭据已写入 ~/.claude/settings.json,请返回 VSCode 使用 Claude 扩展。'
+                  : '环境配置已全部完成。'
             }
           />
           <SectionBody>
@@ -678,6 +715,11 @@ export function OnboardingView({
               )}
               {mode === 'register-only' ? (
                 <p>凭据已写入本地配置,Claude Code 与 Codex 安装完成后即可使用。</p>
+              ) : mode === 'vscode-extension' ? (
+                <p>
+                  返回 VSCode 即可直接使用 Claude 扩展。如需在 AiClient 内使用,可继续安装 CLI
+                  环境。
+                </p>
               ) : (
                 <p>Claude Code 与 Codex 的凭据已在本次会话中生效。</p>
               )}
@@ -690,6 +732,13 @@ export function OnboardingView({
                   退出应用
                 </Button>
                 <Button onClick={handleReturnToInstall}>返回安装</Button>
+              </>
+            ) : mode === 'vscode-extension' ? (
+              <>
+                <Button variant="outline" onClick={handleContinueInstallFromVscode}>
+                  继续安装 CLI 环境
+                </Button>
+                <Button onClick={handleQuitApp}>返回 VSCode 使用</Button>
               </>
             ) : (
               <Button onClick={onComplete}>开始使用</Button>
