@@ -1,6 +1,6 @@
 {
   "name": "jyw-ai-client",
-  "version": "0.2.54",
+  "version": "0.2.55",
   "description": "AiClient - Git Worktree Manager with AI Agent",
   "main": "./out/main/index.js",
   "author": {
