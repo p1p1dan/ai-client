@@ -126,6 +126,13 @@ export const useCodeReviewContinueStore = create<CodeReviewContinueState>((set) 
 
 let cleanupFn: (() => void) | null = null;
 
+export class CodeReviewBusyError extends Error {
+  constructor(public readonly busyRepoPath: string) {
+    super(`Code review already running for ${busyRepoPath}`);
+    this.name = 'CodeReviewBusyError';
+  }
+}
+
 export async function startCodeReview(
   repoPath: string,
   settings: {
@@ -139,6 +146,17 @@ export async function startCodeReview(
   }
 ): Promise<void> {
   const store = useCodeReviewContinueStore.getState();
+  const current = store.review;
+
+  // Guard: refuse to overwrite an in-progress review for a different repo.
+  // Same-repo restart is handled via stopCodeReview()+resetReview() upstream.
+  if (
+    (current.status === 'initializing' || current.status === 'streaming') &&
+    current.repoPath !== null &&
+    current.repoPath !== repoPath
+  ) {
+    throw new CodeReviewBusyError(current.repoPath);
+  }
 
   // Clear previous review state when starting new review
   store.setReviewId(null);

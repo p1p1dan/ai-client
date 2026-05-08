@@ -926,6 +926,9 @@ export const zhTranslations: Record<string, string> = {
     '审查可能需要一段时间。你可以最小化此窗口继续其他工作，完成后回来查看结果。',
   'AI Review': 'AI 审查',
   'Ready to start AI code review': '准备启动 AI 代码审查',
+  'Another repository is being reviewed': '另一个仓库正在审查中',
+  'Wait for the running review to finish, or switch to that repository to manage it.':
+    '请等待当前审查结束，或切换到该仓库进行操作。',
   'Click Start to analyze your changes. This will consume API credits.':
     '点击"开始审查"分析你的改动，此操作会消耗 API 额度。',
   'Review content copied to clipboard': '审查内容已复制到剪贴板',
@@ -1562,7 +1565,7 @@ export const zhTranslations: Record<string, string> = {
   tasks: '个任务',
   'and {{count}} more...': '还有 {{count}} 个...',
   // Diff Review Modal
-  'Diff Review': '差异审查',
+  'Diff Review': '查看更改',
   'Leave a comment...': '留下评论...',
   'Reply...': '回复...',
   'Add reply...': '添加回复...',

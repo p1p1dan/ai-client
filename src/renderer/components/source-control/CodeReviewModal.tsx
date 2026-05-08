@@ -164,12 +164,6 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
     }
   }, [open, isMinimized]);
 
-  useEffect(() => {
-    if (!open && !isMinimized) {
-      reset();
-    }
-  }, [open, isMinimized, reset]);
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: content changes trigger scroll
   useEffect(() => {
     if (autoScrollRef.current && scrollAreaRef.current) {
@@ -192,6 +186,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
   }, []);
 
   const handleCopy = useCallback(async () => {
+    if (reviewRepoPath !== repoPath || !content) return;
     try {
       await navigator.clipboard.writeText(content);
       toastManager.add({
@@ -208,9 +203,16 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
         timeout: 3000,
       });
     }
-  }, [content, t]);
+  }, [content, reviewRepoPath, repoPath, t]);
 
-  const isCurrentRepo = reviewRepoPath === repoPath || reviewRepoPath === null;
+  const isCurrentRepo = reviewRepoPath === repoPath;
+  const isOtherRepoBusy =
+    !isCurrentRepo &&
+    reviewRepoPath !== null &&
+    (status === 'initializing' || status === 'streaming');
+  const displayContent = isCurrentRepo ? content : '';
+  const displayStatus = isCurrentRepo ? status : 'idle';
+  const displayError = isCurrentRepo ? error : null;
 
   const handleMinimize = useCallback(() => {
     minimize();
@@ -258,22 +260,41 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
   );
 
   const handleContinueConversation = useCallback(() => {
+    if (reviewRepoPath !== repoPath) return;
     if (reviewSessionId) {
       requestContinue(reviewSessionId, codeReviewSettings.provider ?? undefined);
       onOpenChange(false);
     }
-  }, [reviewSessionId, codeReviewSettings.provider, requestContinue, onOpenChange]);
+  }, [
+    reviewRepoPath,
+    repoPath,
+    reviewSessionId,
+    codeReviewSettings.provider,
+    requestContinue,
+    onOpenChange,
+  ]);
 
   const handleSendToCurrentSession = useCallback(() => {
+    if (reviewRepoPath !== repoPath) return;
     if (!sessionId || !hasWriter || !content) return;
     write(sessionId, `${content}\r`);
     focus(sessionId);
     requestChatTabSwitch();
     handleMinimize();
-  }, [sessionId, hasWriter, content, write, focus, requestChatTabSwitch, handleMinimize]);
+  }, [
+    reviewRepoPath,
+    repoPath,
+    sessionId,
+    hasWriter,
+    content,
+    write,
+    focus,
+    requestChatTabSwitch,
+    handleMinimize,
+  ]);
 
   const StatusIcon = () => {
-    switch (status) {
+    switch (displayStatus) {
       case 'initializing':
       case 'streaming':
         return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
@@ -287,7 +308,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
   };
 
   const statusText = () => {
-    switch (status) {
+    switch (displayStatus) {
       case 'initializing':
         return t('Initializing...');
       case 'streaming':
@@ -340,21 +361,21 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
           >
             <ScrollArea className="h-full">
               <div className="px-6 py-4">
-                {error ? (
+                {displayError ? (
                   <div className="flex items-center gap-2 text-destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <span>{error}</span>
+                    <span>{displayError}</span>
                   </div>
-                ) : content ? (
+                ) : displayContent ? (
                   <div className="text-sm text-foreground select-text">
                     <Markdown
                       remarkPlugins={[remarkGfm, remarkBreaks]}
                       components={markdownComponents}
                     >
-                      {content}
+                      {displayContent}
                     </Markdown>
                   </div>
-                ) : status === 'initializing' ? (
+                ) : displayStatus === 'initializing' ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-8">
                     <div className="flex items-center text-muted-foreground">
                       <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -366,7 +387,21 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                       )}
                     </span>
                   </div>
-                ) : status === 'idle' ? (
+                ) : isOtherRepoBusy ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <div className="text-center">
+                      <p className="text-sm text-foreground">
+                        {t('Another repository is being reviewed')}
+                      </p>
+                      <p className="mt-1 max-w-md text-xs text-muted-foreground/70">
+                        {t(
+                          'Wait for the running review to finish, or switch to that repository to manage it.'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
                   <div className="flex flex-col items-center justify-center gap-3 py-12">
                     <Sparkles className="h-10 w-10 text-primary/60" />
                     <div className="text-center">
@@ -380,19 +415,19 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                       </p>
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
             </ScrollArea>
           </div>
 
           <DialogFooter className="border-t">
-            {content && (
+            {displayContent && (
               <Button variant="outline" onClick={handleCopy}>
                 <Copy className="h-4 w-4 mr-2" />
                 {t('Copy')}
               </Button>
             )}
-            {status !== 'idle' && status !== 'error' && isCurrentRepo && (
+            {displayStatus !== 'idle' && displayStatus !== 'error' && isCurrentRepo && (
               <Button variant="outline" onClick={handleMinimize}>
                 <Minimize2 className="h-4 w-4 mr-2" />
                 {t('Minimize')}
@@ -400,27 +435,27 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
             )}
             {(codeReviewSettings.provider === 'claude-code' ||
               codeReviewSettings.provider === 'cursor-cli') &&
-              status === 'complete' &&
-              content && (
+              displayStatus === 'complete' &&
+              displayContent && (
                 <Button variant="outline" onClick={handleContinueConversation}>
                   <MessageSquare className="h-4 w-4 mr-2" />
                   {t('Continue Conversation')}
                 </Button>
               )}
-            {content && sessionId && (
+            {isCurrentRepo && displayContent && sessionId && (
               <Button variant="outline" onClick={handleSendToCurrentSession} disabled={!hasWriter}>
                 <Send className="h-4 w-4 mr-2" />
                 {t('Send to Current Session')}
               </Button>
             )}
-            {(status === 'streaming' || status === 'initializing') && (
+            {(displayStatus === 'streaming' || displayStatus === 'initializing') && (
               <Button variant="outline" onClick={handleStop}>
                 <Square className="h-4 w-4 mr-2" />
                 {t('Stop')}
               </Button>
             )}
-            {status === 'idle' ? (
-              <Button onClick={startReview}>
+            {displayStatus === 'idle' ? (
+              <Button onClick={startReview} disabled={isOtherRepoBusy}>
                 <Play className="h-4 w-4 mr-2" />
                 {t('Start code review')}
               </Button>
