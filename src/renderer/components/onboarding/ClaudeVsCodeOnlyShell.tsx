@@ -1,17 +1,23 @@
 import type { ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
-import { ExternalLink, ShieldAlert } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ExternalLink, Loader2, ShieldAlert } from 'lucide-react';
 import { DevToolsOverlay } from '@/components/DevToolsOverlay';
 import { BackgroundLayer } from '@/components/layout/BackgroundLayer';
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
+import { Button } from '@/components/ui/button';
 
 const VSCODE_HELP_URL = 'https://docs.anthropic.com/en/docs/claude-code/vscode';
 
 export interface ClaudeVsCodeOnlyShellProps {
   status: ClaudeRuntimeStatus;
   registered: boolean;
+  /** True while a runtime recheck is in flight; disables the recheck button. */
+  rechecking: boolean;
+  /** Last recheck failed (IPC reject etc.). Surfaced inline so the user knows. */
+  recheckError: string | null;
   onStartRegister: () => void;
+  onStartInstall: () => void;
   onRecheck: () => void;
+  onQuit: () => void;
 }
 
 /**
@@ -24,8 +30,12 @@ export interface ClaudeVsCodeOnlyShellProps {
 export function ClaudeVsCodeOnlyShell({
   status,
   registered,
+  rechecking,
+  recheckError,
   onStartRegister,
+  onStartInstall,
   onRecheck,
+  onQuit,
 }: ClaudeVsCodeOnlyShellProps) {
   const extension: VsCodeExtensionInfo | undefined = status.vscodeExtension;
 
@@ -58,11 +68,13 @@ export function ClaudeVsCodeOnlyShell({
               : '完成注册后，URL 与 Token 会自动写入 ~/.claude/settings.json，VSCode 扩展将直接读取。'}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {!registered && (
-              <Button onClick={onStartRegister}>开始注册</Button>
-            )}
-            <Button variant="outline" onClick={onRecheck}>
-              重新检测
+            {!registered && <Button onClick={onStartRegister}>开始注册</Button>}
+            <Button variant="outline" onClick={onStartInstall} disabled={rechecking}>
+              一键安装 CLI
+            </Button>
+            <Button variant="outline" onClick={onRecheck} disabled={rechecking}>
+              {rechecking ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+              {rechecking ? '检测中…' : '重新检测'}
             </Button>
             <Button
               variant="ghost"
@@ -71,10 +83,16 @@ export function ClaudeVsCodeOnlyShell({
               <ExternalLink className="mr-1 h-3.5 w-3.5" />
               VSCode 使用文档
             </Button>
+            <Button variant="ghost" onClick={onQuit}>
+              退出应用
+            </Button>
           </div>
+          {recheckError ? (
+            <p className="mt-3 text-xs text-destructive">检测失败:{recheckError}</p>
+          ) : null}
           <p className="mt-4 text-xs text-muted-foreground">
-            如果你后续安装了 Claude Code 命令行版本（建议 v2.1.112，Node 版），点击「重新检测」即可进入
-            AiClient 主界面。
+            想在 AiClient 主界面中使用,点击「一键安装 CLI」即可安装 Claude Code 命令行版本(建议
+            v2.1.112,Node 版);若已手动安装,点击「重新检测」即可。
           </p>
         </div>
       </div>

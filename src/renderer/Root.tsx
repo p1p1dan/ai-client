@@ -127,6 +127,16 @@ export default function Root() {
   // the extension is still the only Claude install on the machine, we just
   // want a different UI for this session.
   const [vscodeRegisterFlow, setVscodeRegisterFlow] = useState(false);
+  // Same idea but for "install CLI": render the standard OnboardingShell at
+  // cli-check so the user can run the one-click installer. Once Claude Code
+  // appears, the runtime query flips off vscode-extension-only and the gate
+  // proceeds to the registered/main App flow normally.
+  const [vscodeInstallFlow, setVscodeInstallFlow] = useState(false);
+  // Recheck button on the VSCode-only shell. We track pending state in the
+  // gate (not the shell) so reentrant clicks can be ignored and stale results
+  // can't overwrite a newer detection — only the most recent recheck wins.
+  const [vscodeRecheckPending, setVscodeRecheckPending] = useState(false);
+  const [vscodeRecheckError, setVscodeRecheckError] = useState<string | null>(null);
   // The main process now wraps detection in try/catch and returns
   // `{ kind: 'detection-failed', error }` instead of throwing. We still defend
   // against raw IPC rejections (process crash, channel teardown) by mapping
@@ -151,13 +161,16 @@ export default function Root() {
     }
   }, [runtimeStatus?.kind]);
 
-  // Clear the vscode-register intent whenever we leave the vscode-extension-only
-  // branch. Otherwise the flag would persist across re-detection and a later
-  // return to vscode-extension-only (e.g. user uninstalled CLI) would skip the
-  // shell entry page and jump straight into register-email.
+  // Clear the vscode-register/install intents whenever we leave the
+  // vscode-extension-only branch. Otherwise the flags would persist across
+  // re-detection and a later return to vscode-extension-only (e.g. user
+  // uninstalled CLI) would skip the shell entry page and jump straight into a
+  // sub-flow.
   useEffect(() => {
     if (runtimeStatus && runtimeStatus.kind !== 'vscode-extension-only') {
       setVscodeRegisterFlow(false);
+      setVscodeInstallFlow(false);
+      setVscodeRecheckError(null);
     }
   }, [runtimeStatus?.kind]);
 
@@ -224,18 +237,57 @@ export default function Root() {
         />
       );
     }
+    if (vscodeInstallFlow) {
+      return (
+        <OnboardingShell
+          alreadyRegistered={registered}
+          initialStep="cli-check"
+          onComplete={() => {
+            setVscodeInstallFlow(false);
+            queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
+            queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['usageStats'] });
+          }}
+        />
+      );
+    }
     return (
       <ClaudeVsCodeOnlyShell
         status={runtimeStatus}
         registered={registered}
+        rechecking={vscodeRecheckPending}
+        recheckError={vscodeRecheckError}
         onStartRegister={() => {
           setVscodeRegisterFlow(true);
         }}
+        onStartInstall={() => {
+          setVscodeInstallFlow(true);
+        }}
         onRecheck={async () => {
+          // Guard against reentrant clicks — the Promise from a previous
+          // detection might still be in flight; ignore the new click instead
+          // of letting an older result race in and overwrite the newer one.
+          if (vscodeRecheckPending) return;
+          setVscodeRecheckPending(true);
+          setVscodeRecheckError(null);
           setVscodeRegisterFlow(false);
+          setVscodeInstallFlow(false);
           setRuntimeOverride(null);
-          const refreshed = await window.electronAPI.claudeRuntime.check(true);
-          queryClient.setQueryData(['claudeRuntimeStatus'], refreshed);
+          try {
+            const refreshed = await window.electronAPI.claudeRuntime.check(true);
+            queryClient.setQueryData(['claudeRuntimeStatus'], refreshed);
+          } catch (error) {
+            // IPC reject (channel teardown, main-process crash, etc.) — show
+            // the error inline rather than letting the promise rejection
+            // bubble silently. The user can retry the button.
+            setVscodeRecheckError(error instanceof Error ? error.message : String(error));
+          } finally {
+            setVscodeRecheckPending(false);
+          }
+        }}
+        onQuit={() => {
+          void window.electronAPI.app.quit();
         }}
       />
     );
