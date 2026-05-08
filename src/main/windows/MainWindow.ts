@@ -7,10 +7,24 @@ import { translate } from '@shared/i18n';
 import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+import { claudeRuntimeChecker } from '../services/cli/ClaudeRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
 import { onboardingService } from '../services/onboarding';
 import { sessionManager } from '../services/session/SessionManager';
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
+
+// Runtime kinds where Root.tsx mounts the full <App>. Anything else (vscode-
+// extension-only, not-installed, detection-failed, or no detection yet) means
+// only an onboarding/runtime shell is on screen, with no APP_CLOSE_REQUEST
+// listener — confirming on close would hang for 30s and trap the user.
+const APP_MOUNTABLE_RUNTIME_KINDS = new Set(['node-compatible', 'bun-incompatible']);
+
+function isAppMountedFor(): boolean {
+  if (!onboardingService.checkRegistration().registered) return false;
+  const cached = claudeRuntimeChecker.getCached();
+  if (!cached) return false;
+  return APP_MOUNTABLE_RUNTIME_KINDS.has(cached.kind);
+}
 
 /** Default macOS traffic lights position (matches BrowserWindow trafficLightPosition) */
 const TRAFFIC_LIGHTS_DEFAULT_POSITION = { x: 16, y: 16 };
@@ -377,10 +391,13 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
       return;
     }
 
-    // Before registration, Root.tsx mounts OnboardingShell instead of App, so
-    // no renderer listens for APP_CLOSE_REQUEST. Waiting would timeout after
-    // 30s and leave the window stuck. No editor state exists yet — just close.
-    if (!onboardingService.checkRegistration().registered) {
+    // While Root.tsx is still on a pre-App shell (unregistered, VSCode-only,
+    // CLI-missing, runtime-detect-failed, or detection in flight), nothing on
+    // the renderer side listens for APP_CLOSE_REQUEST. Waiting for a reply
+    // would timeout after 30s and leave the window stuck — title-bar X and
+    // app.quit() both go through here. No editor state exists in any of these
+    // shells, so it's safe to skip the dirty-files dialog entirely.
+    if (!isAppMountedFor()) {
       saveWindowState(win);
       return;
     }

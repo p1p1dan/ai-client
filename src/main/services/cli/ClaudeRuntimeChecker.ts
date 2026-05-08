@@ -10,8 +10,8 @@ import {
 import { getEnvForCommand } from '../../utils/shell';
 import { classifyClaudeCliVersion, compareSemver } from './ClaudeVersion';
 
-export { LAST_NODE_CLAUDE_VERSION } from '@shared/types';
 export type { ClaudeRuntimeKind, ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
+export { LAST_NODE_CLAUDE_VERSION } from '@shared/types';
 export { classifyClaudeCliVersion, compareSemver } from './ClaudeVersion';
 
 const isWindows = process.platform === 'win32';
@@ -105,9 +105,10 @@ function detectVsCodeClaudeExtension(): VsCodeExtensionInfo | undefined {
       try {
         const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as { version?: string };
         // Trust package.json over the directory name — VSCode does the same.
-        const version = typeof pkg.version === 'string' && pkg.version.length > 0
-          ? pkg.version
-          : candidate.folderVersion;
+        const version =
+          typeof pkg.version === 'string' && pkg.version.length > 0
+            ? pkg.version
+            : candidate.folderVersion;
         if (version) {
           return { path: candidate.dir, version };
         }
@@ -149,6 +150,10 @@ export class ClaudeRuntimeChecker {
 
   invalidate(): void {
     this.cached = null;
+  }
+
+  getCached(): ClaudeRuntimeStatus | null {
+    return this.cached;
   }
 }
 
