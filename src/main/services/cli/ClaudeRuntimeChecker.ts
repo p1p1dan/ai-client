@@ -1,63 +1,31 @@
-import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  type ClaudeRuntimeStatus,
-  LAST_NODE_CLAUDE_VERSION,
-  type VsCodeExtensionInfo,
-} from '@shared/types';
-import { getEnvForCommand } from '../../utils/shell';
+import type { ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
 import { classifyClaudeCliVersion, compareSemver } from './ClaudeVersion';
+import { cliDetector } from './CliDetector';
 
 export type { ClaudeRuntimeKind, ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
 export { LAST_NODE_CLAUDE_VERSION } from '@shared/types';
 export { classifyClaudeCliVersion, compareSemver } from './ClaudeVersion';
 
-const isWindows = process.platform === 'win32';
-
-function runVersionCheck(timeoutMs = 8_000): Promise<string | null> {
-  return new Promise((resolve) => {
-    const command = isWindows ? 'cmd.exe' : 'sh';
-    const args = isWindows ? ['/d', '/s', '/c', 'claude --version'] : ['-c', 'claude --version'];
-    const child = spawn(command, args, {
-      env: getEnvForCommand(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-
-    let stdout = '';
-    let settled = false;
-    const finish = (value: string | null) => {
-      if (settled) return;
-      settled = true;
-      try {
-        child.kill();
-      } catch {
-        // ignore
-      }
-      resolve(value);
-    };
-
-    const timer = setTimeout(() => finish(null), timeoutMs);
-
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.on('error', () => {
-      clearTimeout(timer);
-      finish(null);
-    });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code !== 0 && !stdout.trim()) {
-        finish(null);
-        return;
-      }
-      const match = stdout.match(/(\d+\.\d+\.\d+)/);
-      finish(match ? match[1] : null);
-    });
-  });
+// Delegate `claude --version` detection to the same CliDetector used by the
+// post-registration onboarding check. CliDetector gives us: 60s timeout on
+// Windows (vs 8s here, which routinely fired on cold cmd.exe + npm shim +
+// antivirus chains), and an execInPty fallback that loads the user's login
+// shell — picking up nvm / mise / volta / asdf installs that a bare
+// `sh -c claude --version` cannot see. Sharing one detector also guarantees
+// the runtime gate and the registered-state CLI check can never disagree.
+async function runVersionCheck(): Promise<string | null> {
+  try {
+    const info = await cliDetector.detectOne('claude');
+    if (info.installed && info.version) {
+      return info.version;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function getVsCodeExtensionRoots(): string[] {
