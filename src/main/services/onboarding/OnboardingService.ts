@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type {
   OnboardingCliStatus,
+  OnboardingCredentialsHealth,
   OnboardingRegisterResponse,
   OnboardingSendCodeResponse,
   OnboardingState,
@@ -216,42 +217,68 @@ class OnboardingService {
   }
 
   private writeClaudeConfig(baseUrl: string, authToken: string): boolean {
-    try {
-      const claudeDir = path.join(os.homedir(), '.claude');
-      const settingsPath = path.join(claudeDir, 'settings.json');
+    const claudeDir = path.join(os.homedir(), '.claude');
+    const settingsPath = path.join(claudeDir, 'settings.json');
 
-      fs.mkdirSync(claudeDir, { recursive: true, mode: 0o700 });
+    // Retry once: covers the transient case where antivirus / a sibling
+    // settings.json writer (ClaudeHookManager, ClaudeProviderManager) holds
+    // the file for a few ms. We always read-back after writing to verify the
+    // env actually landed — a write that "succeeds" but read-back shows no
+    // env means another writer raced us and lost the data.
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        fs.mkdirSync(claudeDir, { recursive: true, mode: 0o700 });
 
-      const existingSettings = this.readJsonIfExists(settingsPath) as Record<string, unknown>;
-      if (fs.existsSync(settingsPath)) {
-        fs.copyFileSync(settingsPath, `${settingsPath}.bak`);
+        const existingSettings = this.readJsonIfExists(settingsPath) as Record<string, unknown>;
+        if (fs.existsSync(settingsPath)) {
+          fs.copyFileSync(settingsPath, `${settingsPath}.bak`);
+        }
+
+        const existingEnv = this.readEnvRecord(existingSettings.env);
+        const nextEnv = {
+          ...existingEnv,
+          ANTHROPIC_BASE_URL: baseUrl,
+          ANTHROPIC_AUTH_TOKEN: authToken,
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        };
+
+        // Bypass the WebFetch preflight check — its upstream request often fails
+        // behind the JYW proxy and blocks users from browsing pages.
+        const nextSettings = {
+          ...existingSettings,
+          env: nextEnv,
+          skipWebFetchPreflight: true,
+        };
+        fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + '\n', {
+          encoding: 'utf-8',
+          mode: 0o600,
+        });
+
+        // Verify: re-parse the file we just wrote and confirm env survived.
+        const verifyRaw = fs.readFileSync(settingsPath, 'utf-8');
+        const verifyParsed = JSON.parse(verifyRaw) as Record<string, unknown>;
+        const verifyEnv = this.readEnvRecord(verifyParsed.env);
+        if (
+          verifyEnv.ANTHROPIC_BASE_URL === baseUrl &&
+          verifyEnv.ANTHROPIC_AUTH_TOKEN === authToken
+        ) {
+          return true;
+        }
+
+        console.warn(
+          `[OnboardingService] writeClaudeConfig attempt ${attempt} verify failed; topKeys=${Object.keys(
+            verifyParsed
+          ).join(',')}`
+        );
+      } catch (error) {
+        console.error(
+          `[OnboardingService] writeClaudeConfig attempt ${attempt} threw:`,
+          error
+        );
       }
-
-      const existingEnv = this.readEnvRecord(existingSettings.env);
-      const nextEnv = {
-        ...existingEnv,
-        ANTHROPIC_BASE_URL: baseUrl,
-        ANTHROPIC_AUTH_TOKEN: authToken,
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      };
-
-      // Bypass the WebFetch preflight check — its upstream request often fails
-      // behind the JYW proxy and blocks users from browsing pages.
-      const nextSettings = {
-        ...existingSettings,
-        env: nextEnv,
-        skipWebFetchPreflight: true,
-      };
-      fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + '\n', {
-        encoding: 'utf-8',
-        mode: 0o600,
-      });
-
-      return true;
-    } catch (error) {
-      console.error('[OnboardingService] Failed to write Claude config:', error);
-      return false;
     }
+
+    return false;
   }
 
   private writeCodexConfig(apiKey: string, baseUrl: string): boolean {
@@ -482,6 +509,71 @@ class OnboardingService {
   ): string {
     const baseUrl = responseClaudeBaseUrl?.trim() || fallbackServerUrl;
     return this.normalizeServerUrl(baseUrl).replace(/\/v1$/i, '');
+  }
+
+  /**
+   * Verify that the CLI credential files still carry usable Anthropic/OpenAI
+   * keys. We've seen a "settings.json contains only hooks" failure mode on
+   * fresh machines that we cannot reproduce locally — the existing
+   * detectCredentialFilesAvailable check only looks at file existence, so it
+   * misses the case where the file exists but env got dropped. This deeper
+   * check inspects actual content so the renderer can route back to
+   * re-registration before the user hits "无法调用 API" inside the terminal.
+   *
+   * Logs to console (which the renderer's DevTools and the main log can both
+   * capture) so we can post-mortem affected users without shipping a custom
+   * diagnostic build.
+   */
+  checkCredentialsHealth(): OnboardingCredentialsHealth {
+    let claudeEnvOk = false;
+    let codexAuthOk = false;
+    const reasons: string[] = [];
+
+    try {
+      const claudeSettingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+      if (!fs.existsSync(claudeSettingsPath)) {
+        reasons.push('claude:settings.json missing');
+      } else {
+        const settings = this.readJsonIfExists(claudeSettingsPath) as Record<string, unknown>;
+        const env = this.readEnvRecord(settings.env);
+        const baseUrl = typeof env.ANTHROPIC_BASE_URL === 'string' ? env.ANTHROPIC_BASE_URL : '';
+        const authToken =
+          typeof env.ANTHROPIC_AUTH_TOKEN === 'string' ? env.ANTHROPIC_AUTH_TOKEN : '';
+        if (baseUrl && authToken) {
+          claudeEnvOk = true;
+        } else {
+          const topKeys = Object.keys(settings).join(',') || '<empty>';
+          reasons.push(
+            `claude:env incomplete (baseUrl=${baseUrl ? 'set' : 'empty'}, authToken=${authToken ? 'set' : 'empty'}, topKeys=${topKeys})`
+          );
+        }
+      }
+    } catch (error) {
+      reasons.push(`claude:check threw ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    try {
+      const codexAuthPath = path.join(os.homedir(), '.codex', 'auth.json');
+      if (!fs.existsSync(codexAuthPath)) {
+        reasons.push('codex:auth.json missing');
+      } else {
+        const auth = this.readJsonIfExists(codexAuthPath) as Record<string, unknown>;
+        const apiKey = typeof auth.OPENAI_API_KEY === 'string' ? auth.OPENAI_API_KEY : '';
+        if (apiKey) {
+          codexAuthOk = true;
+        } else {
+          reasons.push('codex:OPENAI_API_KEY empty');
+        }
+      }
+    } catch (error) {
+      reasons.push(`codex:check threw ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    const reason = reasons.length > 0 ? reasons.join('; ') : undefined;
+    if (reason) {
+      console.warn('[OnboardingService] credentials health degraded:', reason);
+    }
+    return { claudeEnvOk, codexAuthOk, reason };
   }
 
   /**

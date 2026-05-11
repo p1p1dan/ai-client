@@ -67,6 +67,10 @@ export function registerOnboardingHandlers(): void {
     return onboardingService.detectCli();
   });
 
+  ipcMain.handle(IPC_CHANNELS.ONBOARDING_CHECK_CREDENTIALS_HEALTH, async () => {
+    return onboardingService.checkCredentialsHealth();
+  });
+
   ipcMain.handle(IPC_CHANNELS.ONBOARDING_CHECK_PREREQUISITES, async () => {
     const installer = new AgentInstaller();
     return await installer.checkPrerequisites();

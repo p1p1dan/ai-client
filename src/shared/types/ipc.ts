@@ -338,6 +338,7 @@ export const IPC_CHANNELS = {
   ONBOARDING_CANCEL_INSTALL: 'onboarding:cancelInstall',
   ONBOARDING_LOGOUT: 'onboarding:logout',
   ONBOARDING_LIVE_CREDENTIALS_STATUS: 'onboarding:liveCredentialsStatus',
+  ONBOARDING_CHECK_CREDENTIALS_HEALTH: 'onboarding:checkCredentialsHealth',
 
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',

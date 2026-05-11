@@ -110,6 +110,20 @@ export default function Root() {
     staleTime: 1000 * 60,
   });
 
+  // Credential-content sanity check. checkRegistration() only reads the
+  // ~/.aiclient/settings.json "registered" flag, and the legacy file-existence
+  // probe in main/index.ts is also true-on-existence. Neither catches the
+  // failure mode users reported in 0.2.56 where ~/.claude/settings.json exists
+  // but no longer carries ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN (only
+  // hooks). When that happens the gate must fall back to re-registration
+  // instead of mounting App and letting Claude error out inside the terminal.
+  const credentialsHealth = useQuery({
+    queryKey: ['onboardingCredentialsHealth'],
+    queryFn: async () => window.electronAPI.onboarding.checkCredentialsHealth(),
+    enabled: registered,
+    staleTime: 1000 * 30,
+  });
+
   // Runtime gate: detect CLI version + VSCode extension presence on every
   // launch. We always run this (even before registration) so we can route
   // VSCode-only users through the right onboarding path without forcing them
@@ -178,6 +192,7 @@ export default function Root() {
     const handler = () => {
       queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
       queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
       queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
     };
     window.addEventListener(ONBOARDING_OPEN_EVENT, handler);
@@ -231,6 +246,7 @@ export default function Root() {
             setVscodeRegisterFlow(false);
             queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
             queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
             queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
             queryClient.invalidateQueries({ queryKey: ['usageStats'] });
           }}
@@ -246,6 +262,7 @@ export default function Root() {
             setVscodeInstallFlow(false);
             queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
             queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
             queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
             queryClient.invalidateQueries({ queryKey: ['usageStats'] });
           }}
@@ -299,6 +316,7 @@ export default function Root() {
         onComplete={() => {
           queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
           queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+          queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
           queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
           queryClient.invalidateQueries({ queryKey: ['usageStats'] });
         }}
@@ -322,6 +340,34 @@ export default function Root() {
         onComplete={() => {
           queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
           queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+          queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
+          queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
+          queryClient.invalidateQueries({ queryKey: ['usageStats'] });
+        }}
+      />
+    );
+  }
+
+  // Wait for the credential health probe before deciding whether the env in
+  // ~/.claude/settings.json is intact. Mounting App on an unhealthy probe
+  // would surface as "无法调用 API" inside the terminal — worse UX than a
+  // brief loading shell.
+  if (credentialsHealth.isLoading || !credentialsHealth.data) {
+    return <LoadingShell />;
+  }
+
+  // Self-heal: registered + CLI present, but ~/.claude/settings.json lost its
+  // env (or codex auth.json lost its key). Drop back into the registration
+  // step so the user can re-mint tokens. Skip the CLI install gate by
+  // forcing initialStep='register-email' — they already have the tools.
+  if (!credentialsHealth.data.claudeEnvOk || !credentialsHealth.data.codexAuthOk) {
+    return (
+      <OnboardingShell
+        initialStep="register-email"
+        onComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
+          queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
+          queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
           queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
           queryClient.invalidateQueries({ queryKey: ['usageStats'] });
         }}

@@ -743,6 +743,8 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_VERIFY_AND_REGISTER, request),
     detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),
+    checkCredentialsHealth: (): Promise<import('@shared/types').OnboardingCredentialsHealth> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK_CREDENTIALS_HEALTH),
     checkPrerequisites: (): Promise<import('@shared/types').OnboardingPrerequisiteStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK_PREREQUISITES),
     installAgents: (

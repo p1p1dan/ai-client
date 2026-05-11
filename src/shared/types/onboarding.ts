@@ -89,3 +89,17 @@ export interface OnboardingCliStatus extends OnboardingPrerequisiteStatus {
   codexInstalled: boolean;
   codexVersion?: string;
 }
+
+/**
+ * Outcome of a credential health check. Used by the renderer to decide whether
+ * to mount the main App or pull the user back through registration. The check
+ * inspects the actual file contents (not just existence): a settings.json that
+ * exists but no longer carries ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN is just
+ * as broken as a missing file.
+ */
+export interface OnboardingCredentialsHealth {
+  claudeEnvOk: boolean;
+  codexAuthOk: boolean;
+  /** Free-form reason when something is off — surfaced in logs only. */
+  reason?: string;
+}

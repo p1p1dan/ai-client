@@ -388,9 +388,11 @@ app.whenReady().then(async () => {
     if (!onboardingState.registered) {
       return false;
     }
-    const codexAuthPath = join(homedir(), '.codex', 'auth.json');
-    const claudeSettingsPath = join(homedir(), '.claude', 'settings.json');
-    return existsSync(codexAuthPath) && existsSync(claudeSettingsPath);
+    // Existence is not enough: users have reported settings.json surviving
+    // with hooks-only contents (env stripped somehow). Delegate to the
+    // service-level health check that actually parses both files.
+    const health = onboardingService.checkCredentialsHealth();
+    return health.claudeEnvOk && health.codexAuthOk;
   };
 
   const maybeSendLiveCredentialsStatus = () => {

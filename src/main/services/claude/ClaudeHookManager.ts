@@ -79,6 +79,63 @@ function getClaudeSettingsPath(): string {
   return path.join(getClaudeConfigDir(), 'settings.json');
 }
 
+/**
+ * Read env keys from the current settings.json on disk. Used by
+ * `writeSettingsWithEnvGuard` to detect when a write would silently drop
+ * ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN — the failure mode users hit on
+ * 0.2.56 where the file survives with hooks-only contents.
+ */
+function readEnvSnapshot(settingsPath: string): {
+  baseUrl: string;
+  authToken: string;
+} | null {
+  try {
+    if (!fs.existsSync(settingsPath)) return null;
+    const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      env?: Record<string, unknown>;
+    };
+    const env = parsed.env ?? {};
+    return {
+      baseUrl: typeof env.ANTHROPIC_BASE_URL === 'string' ? env.ANTHROPIC_BASE_URL : '',
+      authToken: typeof env.ANTHROPIC_AUTH_TOKEN === 'string' ? env.ANTHROPIC_AUTH_TOKEN : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist a hook-mutated settings.json and loudly complain if we're about to
+ * drop the user's Anthropic credentials. Returns the env that was on disk
+ * before this write so callers can detect a regression introduced by their
+ * own merge logic. We log instead of refusing because settings.json may
+ * legitimately have empty env (logout, pre-onboarding) — refusing would
+ * break those flows. The signal we want is "env was there and we lost it".
+ */
+function writeSettingsWithEnvGuard(
+  settingsPath: string,
+  settings: ClaudeSettings,
+  callerName: string
+): void {
+  const before = readEnvSnapshot(settingsPath);
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
+  if (before && (before.baseUrl || before.authToken)) {
+    const newEnv = (settings.env as Record<string, unknown> | undefined) ?? {};
+    const newBaseUrl =
+      typeof newEnv.ANTHROPIC_BASE_URL === 'string' ? newEnv.ANTHROPIC_BASE_URL : '';
+    const newAuthToken =
+      typeof newEnv.ANTHROPIC_AUTH_TOKEN === 'string' ? newEnv.ANTHROPIC_AUTH_TOKEN : '';
+    if (newBaseUrl !== before.baseUrl || newAuthToken !== before.authToken) {
+      console.error(
+        `[ClaudeHookManager] ENV REGRESSION in ${callerName}: settings.env Anthropic keys changed during a hook write. ` +
+          `before(baseUrl=${before.baseUrl ? 'set' : 'empty'}, token=${before.authToken ? 'set' : 'empty'}) ` +
+          `after(baseUrl=${newBaseUrl ? 'set' : 'empty'}, token=${newAuthToken ? 'set' : 'empty'}) ` +
+          `topKeys=${Object.keys(settings as object).join(',')}`
+      );
+    }
+  }
+}
+
 function getHooksDir(): string {
   return path.join(getClaudeConfigDir(), 'hooks');
 }
@@ -393,9 +450,7 @@ export function ensureStopHook(): boolean {
     }
 
     // Write settings
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-      mode: 0o600,
-    });
+    writeSettingsWithEnvGuard(settingsPath, settings, 'ensureStopHook');
 
     console.log('[ClaudeHookManager] Stop hook configured successfully');
     return true;
@@ -692,7 +747,7 @@ export function ensureStatusLineHook(): boolean {
       fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
 
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
+    writeSettingsWithEnvGuard(settingsPath, settings, 'ensureStatusLineHook');
     console.log('[ClaudeHookManager] Status line hook configured successfully');
     return true;
   } catch (error) {
@@ -875,9 +930,7 @@ export function ensurePermissionRequestHook(): boolean {
     }
 
     // Write settings
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-      mode: 0o600,
-    });
+    writeSettingsWithEnvGuard(settingsPath, settings, 'ensurePermissionRequestHook');
 
     console.log('[ClaudeHookManager] PermissionRequest hook configured successfully');
     return true;
@@ -945,9 +998,7 @@ export function ensureUserPromptSubmitHook(): boolean {
     }
 
     // Write settings
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-      mode: 0o600,
-    });
+    writeSettingsWithEnvGuard(settingsPath, settings, 'ensureUserPromptSubmitHook');
 
     console.log('[ClaudeHookManager] UserPromptSubmit hook configured successfully');
     return true;
@@ -1015,9 +1066,7 @@ export function ensurePreToolUseHook(): boolean {
     }
 
     // Write settings
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-      mode: 0o600,
-    });
+    writeSettingsWithEnvGuard(settingsPath, settings, 'ensurePreToolUseHook');
 
     console.log('[ClaudeHookManager] PreToolUse hook configured successfully');
     return true;
