@@ -54,7 +54,12 @@ jobs:
 
   build-windows:
     needs: build-app
-    runs-on: windows-latest
+    # Pin to windows-2022: windows-latest 已升级到 windows-2025，仅装 VS 2026 (path \18\),
+    # 而 @electron/rebuild@4.0.1 bundled node-gyp@11.5.0 的 find-visualstudio.js 白名单
+    # 只到 [2019, 2022]，找不到 VS 2026 → "Could not find any Visual Studio installation".
+    # windows-2022 runner 仍由 GitHub 维护，且预装 VS 2022。等 @electron/rebuild 升级
+    # 带新 node-gyp 支持 VS 2026 后再切回 windows-latest。
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v5
