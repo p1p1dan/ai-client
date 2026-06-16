@@ -1,6 +1,6 @@
 {
   "name": "jyw-ai-client",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "AiClient - Git Worktree Manager with AI Agent",
   "main": "./out/main/index.js",
   "author": {
@@ -15,7 +15,7 @@
     "build": "node --max-old-space-size=4096 node_modules/electron-vite/bin/electron-vite.js build",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "node scripts/postinstall.mjs",
     "prepare:vflow": "node scripts/prepare-vflow-resources.mjs",
     "assert:vflow": "node scripts/assert-vflow-resources.mjs",
     "dist:prereq": "pnpm prepare:vflow && pnpm assert:vflow && pnpm build",
