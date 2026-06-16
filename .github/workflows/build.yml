@@ -101,6 +101,12 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # node-gyp on windows-latest (which is windows-2025 as of 2026-06)
+          # can't auto-detect the bundled VS 2022 Enterprise install; tell it
+          # explicitly. @parcel/watcher / node-pty rebuild fails otherwise
+          # during electron-builder install-app-deps in postinstall.
+          npm_config_msvs_version: '2022'
+          npm_config_arch: x64
 
       - name: Prepare vflow offline-fallback resources
         run: node scripts/prepare-vflow-resources.mjs
