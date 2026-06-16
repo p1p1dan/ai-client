@@ -41,3 +41,13 @@ build/cer.p12
 .task-client.md
 docs/superpowers/
 openspec/
+
+# vflow
+.vflow/journal/
+.vflow/.runtime/
+.vflow/tasks/
+resources/vflow/
+resources/vflow-pkg/
+
+# Build / debug artifacts not meant for the repo
+bugOutput/
