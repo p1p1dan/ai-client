@@ -77,6 +77,15 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@p1p1dan'
 
+      # windows-latest is now the windows-2025 image; @electron/rebuild's
+      # bundled node-gyp can't locate VS 2022 without MSBuild on PATH.
+      # microsoft/setup-msbuild wires the MSBuild + vswhere paths so the
+      # @parcel/watcher rebuild inside `electron-builder install-app-deps`
+      # (run via postinstall) succeeds and sqlite3's node-pre-gyp can
+      # download/place node_sqlite3.node into the asarUnpack bundle.
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       - name: Get pnpm store directory
         shell: bash
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
