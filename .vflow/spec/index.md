@@ -21,6 +21,7 @@
 | common/error-handling.md | 错误处理原则：参数检查责任、返回码处理、日志分级 | 5 |
 | common/debugging.md | 调试方法论：根因分析、可证伪假设、失败升级阶梯 | 6 |
 | common/testing.md | 测试要求（领导要求落点）：新增代码必须有测试、目录与命名约定 | 8 |
+| common/release-flow.md | 发布与构建流程：CI 修复策略、tag 前 dry-run、release 急救 | 6 |
 
 ## 语言附录（仅写该语言特有条目）
 
@@ -45,7 +46,7 @@
 
 | 文件 | 内容 | 条目数 |
 | :--- | :--- | :--- |
-| （暂无，随任务沉淀） | | |
+| domain/electron-native-modules.md | sqlite3 / @parcel/watcher / node-pty 三种 native 模式与 electron-builder install-app-deps 副作用 | 文档式 |
 
 ## 已废弃条目（消化裁决记录）
 
