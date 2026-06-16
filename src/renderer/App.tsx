@@ -181,7 +181,7 @@ export default function App() {
     return window.electronAPI.vflow.onProjectInitialized(({ cwd }) => {
       addToast({
         type: 'success',
-        title: '精一微规范化 AI 编码工作流已植入~',
+        title: 'AI 规范化编码工作流已植入',
         description: cwd,
         timeout: 5000,
       });
