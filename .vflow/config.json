@@ -1,0 +1,27 @@
+{
+  "project": "jyw-ai-client",
+  "enabled": true,
+  "language": "typescript",
+  "features": {
+    "qt": false,
+    "embedded": false,
+    "binding": "native"
+  },
+  "build": {
+    "command": "pnpm build",
+    "test_command": "pnpm test"
+  },
+  "core_paths": [
+    "src/main/services/cli/",
+    "src/main/services/onboarding/",
+    "src/main/services/session/",
+    "src/main/services/vflow/",
+    "src/main/ipc/",
+    "src/shared/types/"
+  ],
+  "journal": {
+    "notebook_path": null
+  },
+  "test_required": true,
+  "execution_log": false
+}
