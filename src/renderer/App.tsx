@@ -174,6 +174,20 @@ export default function App() {
     });
   }, [queryClient, t]);
 
+  // Surface a toast when VflowService finishes scaffolding `.vflow/` in a
+  // project directory. The main process broadcasts at most once per cwd, so we
+  // do not need additional dedup here beyond the toast id.
+  useEffect(() => {
+    return window.electronAPI.vflow.onProjectInitialized(({ cwd }) => {
+      addToast({
+        type: 'success',
+        title: '精一微规范化 AI 编码工作流已植入~',
+        description: cwd,
+        timeout: 5000,
+      });
+    });
+  }, []);
+
   // Initialize agent activity listener for tree sidebar status display
   useEffect(() => {
     return initAgentActivityListener();

@@ -151,6 +151,13 @@ extraResources:
     filter:
       - "package.json"
       - "lib/**/*"
+  # Embedded vflow fallback (used when npm install fails)
+  - from: resources/vflow
+    to: vflow
+  # Offline npm tgz of @p1p1dan/vflow — installed via `npm install -g <tgz>` when
+  # the public registry is unreachable (AgentInstaller fallback path).
+  - from: resources/vflow-pkg
+    to: vflow-pkg
 compression: maximum
 
 mac:

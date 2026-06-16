@@ -340,6 +340,9 @@ export const IPC_CHANNELS = {
   ONBOARDING_LIVE_CREDENTIALS_STATUS: 'onboarding:liveCredentialsStatus',
   ONBOARDING_CHECK_CREDENTIALS_HEALTH: 'onboarding:checkCredentialsHealth',
 
+  // vflow workflow tool
+  VFLOW_PROJECT_INITIALIZED: 'vflow:project-initialized',
+
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',
   LOG_OPEN_FOLDER: 'log:open-folder',

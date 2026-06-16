@@ -9,6 +9,7 @@ import {
   LAST_NODE_CLAUDE_VERSION,
   type OnboardingPrerequisiteStatus,
 } from '@shared/types';
+import { app } from 'electron';
 import { killProcessTree } from '../../utils/processUtils';
 import { clearPathCache } from '../terminal/PtyManager';
 import { disableClaudeAutoUpdates } from './ClaudeRuntimeConfig';
@@ -18,6 +19,7 @@ const GIT_INSTALLER_URL =
   'https://npmmirror.com/mirrors/git-for-windows/v2.43.0.windows.1/Git-2.43.0-64-bit.exe';
 const NODE_INSTALLER_URL = 'https://npmmirror.com/mirrors/node/v20.10.0/node-v20.10.0-x64.msi';
 const NPM_REGISTRY = 'https://registry.npmmirror.com';
+const GITHUB_NPM_REGISTRY = 'https://npm.pkg.github.com';
 const POWERSHELL_EXECUTABLE = 'powershell.exe';
 
 interface CommandResult {
@@ -192,6 +194,29 @@ async function runCmd(command: string, options: RunCommandOptions = {}): Promise
   return await runCommand('cmd.exe', ['/d', '/s', '/c', command], options);
 }
 
+/**
+ * Locate the embedded vflow npm tgz produced by scripts/sync-vflow-resources.mjs.
+ * Returns null when the directory or tgz is absent so callers can decide to
+ * propagate the original network error instead of failing with a misleading
+ * "tgz not found" message.
+ */
+export function getEmbeddedVflowTgzPath(): string | null {
+  const baseDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'vflow-pkg')
+    : path.join(app.getAppPath(), 'resources', 'vflow-pkg');
+  if (!fs.existsSync(baseDir)) {
+    return null;
+  }
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(baseDir);
+  } catch {
+    return null;
+  }
+  const tgz = entries.find((name) => name.endsWith('.tgz'));
+  return tgz ? path.join(baseDir, tgz) : null;
+}
+
 export class AgentInstaller {
   private readonly abortController = new AbortController();
 
@@ -347,18 +372,47 @@ export class AgentInstaller {
     const packageName =
       agentId === 'claude'
         ? `@anthropic-ai/claude-code@${LAST_NODE_CLAUDE_VERSION}`
-        : '@openai/codex';
+        : agentId === 'vflow'
+          ? '@p1p1dan/vflow'
+          : '@openai/codex';
+
+    const registry = agentId === 'vflow' ? GITHUB_NPM_REGISTRY : NPM_REGISTRY;
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
-        await runCmd(`npm install -g ${packageName} --registry=${NPM_REGISTRY}`, {
+        await runCmd(`npm install -g ${packageName} --registry=${registry}`, {
           signal: this.abortController.signal,
         });
         break;
       } catch (error) {
-        if (!isTransientNpmNetworkError(error) || attempt === 2) {
-          throw error;
+        // Transient network failure on attempt 1 → retry once. On attempt 2 or
+        // any non-transient error → fall through to the vflow tgz fallback
+        // (other agents just rethrow).
+        if (isTransientNpmNetworkError(error) && attempt < 2) {
+          continue;
         }
+        // Remote install exhausted (non-transient error or 2nd retry failed).
+        // For vflow only, fall back to the offline tgz produced by
+        // scripts/sync-vflow-resources.mjs. The tgz lets the user end up with a
+        // real global `vflow` command on machines that can't reach the registry.
+        if (agentId === 'vflow') {
+          const tgzPath = getEmbeddedVflowTgzPath();
+          if (tgzPath) {
+            console.warn(
+              `[AgentInstaller] vflow remote install failed, falling back to offline tgz: ${tgzPath}`
+            );
+            // Don't pass --registry: the install target is a local file path,
+            // and vflow has no runtime deps so npm won't reach the network.
+            await runCmd(`npm install -g "${tgzPath}"`, {
+              signal: this.abortController.signal,
+            });
+            break;
+          }
+          console.warn(
+            '[AgentInstaller] Offline vflow tgz not found in resources/vflow-pkg/; cannot install vflow on this offline machine. Rethrowing original remote install error.'
+          );
+        }
+        throw error;
       }
     }
 
@@ -494,6 +548,37 @@ export class AgentInstaller {
           status: 'done',
           message: verified.version || `${label} installed.`,
         });
+      }
+
+      // Install vflow workflow tool. Mandatory but tolerant: AgentInstaller
+      // falls back to the embedded npm tgz when the remote registry fails, so
+      // only an offline machine with a missing tgz lands in the error branch.
+      // We still don't throw — registration + claude/codex must reach the user
+      // even if vflow can't be installed at all.
+      {
+        const vflowDetected = await cliDetector.detectOne('vflow');
+        if (vflowDetected.installed) {
+          emit({ step: 'vflow', status: 'done', message: vflowDetected.version || 'vflow already installed.' });
+        } else {
+          emit({ step: 'vflow', status: 'installing', message: 'Installing vflow...' });
+          try {
+            await this.installAgent('vflow');
+            const vflowVerified = await cliDetector.detectOne('vflow');
+            if (vflowVerified.installed) {
+              emit({ step: 'vflow', status: 'done', message: vflowVerified.version || 'vflow installed.' });
+            } else {
+              // installAgent reported success but the CLI is still not on PATH.
+              // Surface as error so the renderer shows a non-blocking warning.
+              const message = 'vflow installation finished but CLI is still unavailable.';
+              console.warn('[AgentInstaller]', message);
+              emit({ step: 'vflow', status: 'error', message });
+            }
+          } catch (vflowError) {
+            const vflowMsg = vflowError instanceof Error ? vflowError.message : String(vflowError);
+            console.warn('[AgentInstaller] vflow installation failed (non-fatal):', vflowMsg);
+            emit({ step: 'vflow', status: 'error', message: vflowMsg });
+          }
+        }
       }
 
       return { success: true, errors: [] };

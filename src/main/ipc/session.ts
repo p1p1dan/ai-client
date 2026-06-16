@@ -8,6 +8,7 @@ import {
 } from '@shared/types';
 import { ipcMain } from 'electron';
 import { sessionManager } from '../services/session/SessionManager';
+import { vflowService } from '../services/vflow/VflowService';
 
 function toSessionCreateOptions(options: TerminalCreateOptions = {}): SessionCreateOptions {
   return {
@@ -26,7 +27,11 @@ export async function destroyAllTerminalsAndWait(): Promise<void> {
 
 export function registerSessionHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.SESSION_CREATE, async (event, options: SessionCreateOptions = {}) => {
-    return sessionManager.create(event.sender, options);
+    const result = sessionManager.create(event.sender, options);
+    if (options.kind === 'agent' && options.cwd) {
+      vflowService.ensureInitialized(options.cwd).catch(() => {});
+    }
+    return result;
   });
 
   ipcMain.handle(IPC_CHANNELS.SESSION_ATTACH, async (event, options: SessionAttachOptions) => {

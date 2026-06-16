@@ -38,6 +38,7 @@ export const BUILTIN_AGENT_INFO: Record<BuiltinAgentId, { name: string; descript
   auggie: { name: 'Auggie', description: 'Augment Code CLI' },
   cursor: { name: 'Cursor', description: 'Cursor Agent CLI' },
   opencode: { name: 'OpenCode', description: 'OpenCode AI CLI' },
+  vflow: { name: 'vflow', description: 'vflow workflow engine' },
 };
 
 export const BUILTIN_AGENTS: BuiltinAgentId[] = [

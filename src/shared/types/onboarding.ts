@@ -65,9 +65,9 @@ export interface OnboardingPrerequisiteStatus {
   wingetAvailable: boolean;
 }
 
-export type InstallAgentId = 'claude' | 'codex';
+export type InstallAgentId = 'claude' | 'codex' | 'vflow';
 
-export type InstallStepId = 'git' | 'node' | 'claude' | 'codex';
+export type InstallStepId = 'git' | 'node' | 'claude' | 'codex' | 'vflow';
 
 export type InstallStepStatus = 'pending' | 'installing' | 'done' | 'skipped' | 'error';
 

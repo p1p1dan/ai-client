@@ -67,6 +67,7 @@ import type {
   UsageStatsResult,
   ValidateLocalPathResult,
   ValidateUrlResult,
+  VflowProjectInitializedEvent,
   WorktreeCreateOptions,
   WorktreeMergeCleanupOptions,
   WorktreeMergeOptions,
@@ -1306,6 +1307,17 @@ const electronAPI = {
   utils: {
     getPathForFile: (file: File): string => {
       return webUtils.getPathForFile(file);
+    },
+  },
+
+  // vflow workflow tool
+  vflow: {
+    onProjectInitialized: (
+      callback: (event: VflowProjectInitializedEvent) => void
+    ): (() => void) => {
+      const handler = (_: unknown, event: VflowProjectInitializedEvent) => callback(event);
+      ipcRenderer.on(IPC_CHANNELS.VFLOW_PROJECT_INITIALIZED, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.VFLOW_PROJECT_INITIALIZED, handler);
     },
   },
 };

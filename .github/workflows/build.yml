@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 jobs:
   build-app:
@@ -73,6 +74,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@p1p1dan'
 
       - name: Get pnpm store directory
         shell: bash
@@ -98,6 +101,14 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare vflow offline-fallback resources
+        run: node scripts/prepare-vflow-resources.mjs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assert vflow offline-fallback resources
+        run: node scripts/assert-vflow-resources.mjs
 
       - name: Build Windows
         run: npx electron-builder --win --x64
@@ -126,6 +137,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@p1p1dan'
 
       - name: Get pnpm store directory
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
@@ -150,6 +163,14 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare vflow offline-fallback resources
+        run: node scripts/prepare-vflow-resources.mjs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assert vflow offline-fallback resources
+        run: node scripts/assert-vflow-resources.mjs
 
       - name: Build Linux
         run: npx electron-builder --linux --x64
