@@ -128,6 +128,29 @@ class OnboardingService {
       return result;
     }
 
+    // Defensive guard: the server may answer ok=true while the response body
+    // is missing required Claude / Codex credentials. Catch that here so we
+    // don't hand a partially-populated payload to writeClaudeConfig and end up
+    // overwriting good local config with garbage.
+    const claudeAuthToken = result.data.config?.claude?.authToken;
+    const codexApiKey = result.data.config?.codex?.apiKey;
+    if (
+      typeof claudeAuthToken !== 'string' ||
+      claudeAuthToken.length === 0 ||
+      typeof codexApiKey !== 'string' ||
+      codexApiKey.length === 0
+    ) {
+      console.error(
+        `[OnboardingService] verifyAndRegister received ok=true but credentials are incomplete; dataKeys=${Object.keys(
+          result.data
+        ).join(',')}`
+      );
+      return {
+        ok: false,
+        error: 'Server returned success without complete credentials',
+      };
+    }
+
     if (!this.persistCredentialFiles(result, normalizedServerUrl)) {
       return { ok: false, error: 'Failed to write CLI credentials' };
     }
@@ -220,6 +243,14 @@ class OnboardingService {
     const claudeDir = path.join(os.homedir(), '.claude');
     const settingsPath = path.join(claudeDir, 'settings.json');
 
+    // Log intent up front. Truncate the token so the full secret never lands
+    // in logs / DevTools output, but keep the baseUrl visible because it's
+    // the most common source of routing confusion.
+    const tokenPreview = authToken.length > 6 ? `${authToken.slice(0, 6)}...` : '***';
+    console.log(
+      `[OnboardingService] writeClaudeConfig intent: baseUrl=${baseUrl}, token=${tokenPreview}`
+    );
+
     // Retry once: covers the transient case where antivirus / a sibling
     // settings.json writer (ClaudeHookManager, ClaudeProviderManager) holds
     // the file for a few ms. We always read-back after writing to verify the
@@ -234,7 +265,17 @@ class OnboardingService {
           fs.copyFileSync(settingsPath, `${settingsPath}.bak`);
         }
 
+        // Drop ANTHROPIC_API_KEY from the existing env: the Anthropic SDK
+        // prefers x-api-key over ANTHROPIC_AUTH_TOKEN, so leaving an old
+        // ANTHROPIC_API_KEY in place would silently shadow the new token we
+        // are about to write.
         const existingEnv = this.readEnvRecord(existingSettings.env);
+        if ('ANTHROPIC_API_KEY' in existingEnv) {
+          console.warn(
+            '[OnboardingService] writeClaudeConfig removing existing ANTHROPIC_API_KEY to avoid shadowing ANTHROPIC_AUTH_TOKEN'
+          );
+          delete existingEnv.ANTHROPIC_API_KEY;
+        }
         const nextEnv = {
           ...existingEnv,
           ANTHROPIC_BASE_URL: baseUrl,
@@ -242,10 +283,22 @@ class OnboardingService {
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         };
 
+        // Strip top-level apiKeyHelper: Claude CLI prefers its dynamic output
+        // over the env block we just wrote, which would bypass the credentials
+        // entirely. The .bak file already exists if the user wants to recover
+        // the original helper command.
+        const sanitizedSettings: Record<string, unknown> = { ...existingSettings };
+        if ('apiKeyHelper' in sanitizedSettings) {
+          console.warn(
+            '[OnboardingService] writeClaudeConfig removing top-level apiKeyHelper to avoid overriding env credentials'
+          );
+          delete sanitizedSettings.apiKeyHelper;
+        }
+
         // Bypass the WebFetch preflight check — its upstream request often fails
         // behind the JYW proxy and blocks users from browsing pages.
         const nextSettings = {
-          ...existingSettings,
+          ...sanitizedSettings,
           env: nextEnv,
           skipWebFetchPreflight: true,
         };
@@ -262,6 +315,9 @@ class OnboardingService {
           verifyEnv.ANTHROPIC_BASE_URL === baseUrl &&
           verifyEnv.ANTHROPIC_AUTH_TOKEN === authToken
         ) {
+          console.log(
+            `[OnboardingService] writeClaudeConfig attempt ${attempt} verified ok`
+          );
           return true;
         }
 

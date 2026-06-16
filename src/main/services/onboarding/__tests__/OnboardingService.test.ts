@@ -434,6 +434,153 @@ describe('OnboardingService', () => {
     });
   });
 
+  it('clears existing ANTHROPIC_API_KEY when registering so it does not shadow ANTHROPIC_AUTH_TOKEN', async () => {
+    const claudeDir = join(tempHome, '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    const claudeSettingsPath = join(claudeDir, 'settings.json');
+    writeFileSync(
+      claudeSettingsPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_API_KEY: 'sk-ant-old-xxx',
+            ANTHROPIC_BASE_URL: 'https://old.example.com/v1',
+            ANTHROPIC_AUTH_TOKEN: 'old-token',
+            SOME_EXISTING_ENV: 'keep-me',
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    fetchMock.mockResolvedValue({
+      json: async () => ({
+        ok: true,
+        data: {
+          user: { id: 1, name: 'Test User' },
+          apiKey: 'unused-top-level-key',
+          config: {
+            claude: {
+              baseUrl: 'https://cch-test.example.com/v1',
+              authToken: 'claude-token',
+            },
+            codex: {
+              baseUrl: 'https://cch-test.example.com/v1',
+              apiKey: 'codex-key',
+            },
+          },
+        },
+      }),
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
+    expect(result.ok).toBe(true);
+
+    const updated = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as {
+      env?: Record<string, unknown>;
+    };
+    expect(updated.env).toBeDefined();
+    expect(updated.env).not.toHaveProperty('ANTHROPIC_API_KEY');
+    expect(updated.env).toMatchObject({
+      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'claude-token',
+      SOME_EXISTING_ENV: 'keep-me',
+    });
+  });
+
+  it('removes top-level apiKeyHelper when registering so it does not override env credentials', async () => {
+    const claudeDir = join(tempHome, '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    const claudeSettingsPath = join(claudeDir, 'settings.json');
+    writeFileSync(
+      claudeSettingsPath,
+      JSON.stringify(
+        {
+          apiKeyHelper: '/bin/echo old-key',
+          permissions: { allow: ['Read'], deny: [] },
+          hooks: { Stop: [{ command: 'echo stop' }] },
+          env: {
+            SOME_EXISTING_ENV: 'keep-me',
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    fetchMock.mockResolvedValue({
+      json: async () => ({
+        ok: true,
+        data: {
+          user: { id: 1, name: 'Test User' },
+          apiKey: 'unused-top-level-key',
+          config: {
+            claude: {
+              baseUrl: 'https://cch-test.example.com/v1',
+              authToken: 'claude-token',
+            },
+            codex: {
+              baseUrl: 'https://cch-test.example.com/v1',
+              apiKey: 'codex-key',
+            },
+          },
+        },
+      }),
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
+    expect(result.ok).toBe(true);
+
+    const updated = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    expect(updated).not.toHaveProperty('apiKeyHelper');
+    expect(updated.permissions).toEqual({ allow: ['Read'], deny: [] });
+    expect(updated.hooks).toEqual({ Stop: [{ command: 'echo stop' }] });
+  });
+
+  it('rejects registration when server returns ok=true but data.config is missing required credentials', async () => {
+    const claudeDir = join(tempHome, '.claude');
+    mkdirSync(claudeDir, { recursive: true });
+    const claudeSettingsPath = join(claudeDir, 'settings.json');
+    const originalClaudeSettings = JSON.stringify(
+      {
+        env: {
+          ANTHROPIC_BASE_URL: 'https://old.example.com/v1',
+          ANTHROPIC_AUTH_TOKEN: 'old-token',
+        },
+      },
+      null,
+      2
+    );
+    writeFileSync(claudeSettingsPath, originalClaudeSettings);
+
+    fetchMock.mockResolvedValue({
+      json: async () => ({
+        ok: true,
+        data: {
+          user: { id: 1, name: 'Test User' },
+          config: {
+            claude: { baseUrl: 'x' },
+            codex: { baseUrl: 'x' },
+          },
+        },
+      }),
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/incomplete|credentials/i);
+    expect(onboardingService.checkRegistration().registered).toBe(false);
+    expect(readFileSync(claudeSettingsPath, 'utf-8')).toBe(originalClaudeSettings);
+  });
+
   it('detectCli merges prerequisite status with CLI detection results', async () => {
     checkPrerequisitesMock.mockResolvedValue({
       gitInstalled: true,
