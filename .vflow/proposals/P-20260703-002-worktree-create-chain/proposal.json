@@ -1,0 +1,18 @@
+{
+  "id": "P-20260703-002",
+  "title": "仓库初始化与 worktree 创建链路修复（零提交仓库无引导 + 分支名反斜杠非法）",
+  "slug": "worktree-create-chain",
+  "lifecycle_status": "active",
+  "blocking": {
+    "status": "none"
+  },
+  "tier": "T2",
+  "type": "bug",
+  "workspace": {
+    "isolate_intent": false,
+    "branch": null
+  },
+  "created_at": "2026-07-03T09:40:31",
+  "updated_at": "2026-07-03T09:40:31",
+  "schema_version": 2
+}

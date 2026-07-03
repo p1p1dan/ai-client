@@ -1,0 +1,22 @@
+{
+  "id": "P-20260703-010",
+  "title": "持久化层最小回归测试:SharedSessionState 路径解析/原子写/读健壮性 + settings 写失败返回 false",
+  "slug": "persistence-regression-tests",
+  "lifecycle_status": "archived",
+  "blocking": {
+    "status": "none"
+  },
+  "tier": "T2",
+  "type": "refactor",
+  "workspace": {
+    "isolate_intent": false,
+    "branch": null
+  },
+  "created_at": "2026-07-03T15:14:12",
+  "updated_at": "2026-07-03T16:32:01",
+  "schema_version": 2,
+  "accepted_at": "2026-07-03T16:32:01",
+  "accepted_by": "ai",
+  "accepted_source": "ai_relay",
+  "knowledge_processed": true
+}

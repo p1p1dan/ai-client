@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "pointer": "done",
+  "history_stack": [
+    "understand",
+    "decide",
+    "build",
+    "check",
+    "done"
+  ],
+  "scope": "FileTree.tsx getCreateTargetPath(:353)与 Ctrl+V 粘贴目标(:967)由裸 substring(0,lastIndexOf('/'))||rootPath 改用 getParentPath()||rootPath,消除 Windows 反斜杠路径塌空落到仓库根;外科式复用 P-001 已测工具",
+  "items": [
+    {
+      "id": "E-001",
+      "title": "外科式替换 getCreateTargetPath(FileTree.tsx:353)与 Ctrl+V 粘贴目标(:967)为 getParentPath()||rootPath",
+      "status": "done"
+    },
+    {
+      "id": "E-002",
+      "title": "跑 path 单测确认 getParentPath 覆盖塌空场景 + typecheck + 自检 diff 外科式",
+      "status": "done"
+    }
+  ],
+  "spec_refs": [
+    {
+      "file": "common/testing.md",
+      "reason": "修 bug 复现证据:根因(反斜杠路径 lastIndexOf('/') 塌空)已由 path.test.ts 9 例覆盖(含红证据);本提案为已测 getParentPath 的外科式复用,不新增组件级测试(与 P-001 对多站点的处置一致)"
+    }
+  ]
+}

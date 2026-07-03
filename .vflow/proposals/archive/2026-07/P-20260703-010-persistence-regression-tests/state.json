@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "pointer": "done",
+  "history_stack": [
+    "understand",
+    "decide",
+    "build",
+    "check",
+    "done"
+  ],
+  "scope": "为 main 既有持久化层补最小回归测试:SharedSessionState 路径解析/原子写(不留.tmp+round-trip)/读健壮性 + settings.ts writeSettingsNow 写失败返回false",
+  "items": [
+    {
+      "id": "E-001",
+      "title": "SharedSessionState.test.ts:路径解析(HOME/USERPROFILE/app.getPath 回退)+ 原子写(内容正确/不留.tmp/清缓存 round-trip)+ 读健壮性(缺失&损坏→{})",
+      "status": "done"
+    },
+    {
+      "id": "E-002",
+      "title": "settings.test.ts:writeSettingsNow 写失败(HOME 指向文件致 ensureDir 抛)返回 false + 成功返回 true 对照",
+      "status": "done"
+    },
+    {
+      "id": "E-003",
+      "title": "跑 vitest 转绿 + typecheck + 自检",
+      "status": "done"
+    }
+  ],
+  "spec_refs": [
+    {
+      "file": "common/testing.md",
+      "reason": "新增代码必须有测试;需求驱动覆盖 happy(正常读写)+edge(缺失/损坏/多 env 回退)+error(写失败)"
+    }
+  ]
+}

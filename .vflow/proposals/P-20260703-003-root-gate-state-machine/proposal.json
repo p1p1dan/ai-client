@@ -1,0 +1,18 @@
+{
+  "id": "P-20260703-003",
+  "title": "Root.tsx 启动门控收敛为单一状态源（消除 vscode/cli 分支抖动）",
+  "slug": "root-gate-state-machine",
+  "lifecycle_status": "active",
+  "blocking": {
+    "status": "none"
+  },
+  "tier": "T2",
+  "type": "refactor",
+  "workspace": {
+    "isolate_intent": false,
+    "branch": null
+  },
+  "created_at": "2026-07-03T09:40:47",
+  "updated_at": "2026-07-03T09:40:47",
+  "schema_version": 2
+}

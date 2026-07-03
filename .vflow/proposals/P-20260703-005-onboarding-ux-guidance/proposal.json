@@ -1,0 +1,18 @@
+{
+  "id": "P-20260703-005",
+  "title": "Onboarding 引导优化：禁用按钮解释、步骤指引、流程简化",
+  "slug": "onboarding-ux-guidance",
+  "lifecycle_status": "active",
+  "blocking": {
+    "status": "none"
+  },
+  "tier": "T2",
+  "type": "feature",
+  "workspace": {
+    "isolate_intent": false,
+    "branch": null
+  },
+  "created_at": "2026-07-03T09:40:48",
+  "updated_at": "2026-07-03T09:40:48",
+  "schema_version": 2
+}

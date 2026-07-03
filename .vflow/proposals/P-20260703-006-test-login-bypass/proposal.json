@@ -1,0 +1,18 @@
+{
+  "id": "P-20260703-006",
+  "title": "测试旁路：admin@jcdz.cc 固定验证码 123456（仅测试构建生效）",
+  "slug": "test-login-bypass",
+  "lifecycle_status": "active",
+  "blocking": {
+    "status": "none"
+  },
+  "tier": "T2",
+  "type": "feature",
+  "workspace": {
+    "isolate_intent": false,
+    "branch": null
+  },
+  "created_at": "2026-07-03T09:40:48",
+  "updated_at": "2026-07-03T09:40:48",
+  "schema_version": 2
+}

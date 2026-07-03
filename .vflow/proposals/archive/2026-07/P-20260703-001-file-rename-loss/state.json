@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "pointer": "done",
+  "history_stack": [
+    "understand",
+    "decide",
+    "build",
+    "check",
+    "done"
+  ],
+  "scope": "Windows 分隔符无关化文件管理路径运算：新增 getParentPath 工具+单测，修复重命名与拖拽移动因 lastIndexOf('/') 在反斜杠路径塌成空父目录导致文件被移到盘符根(数据丢失)",
+  "items": [
+    {
+      "id": "E-001",
+      "title": "新增 getParentPath 分隔符无关工具 + 复现测试(红)",
+      "status": "done",
+      "note": "新增 getParentPath(双 lastIndexOf 取 / 与 \\ 较大索引);path.test.ts 9 用例绿(含旧 lastIndexOf('/') 塌空的 bug 红证据)"
+    },
+    {
+      "id": "E-002",
+      "title": "修复重命名链路(父目录运算+失效键+basename 守卫)",
+      "status": "done",
+      "note": "getParentPath 替换 FilePanel.handleRename 父目录运算(数据丢失根因)+ useFileTree 5 处失效键 + FileTree basename 守卫改 getPathBasename"
+    },
+    {
+      "id": "E-003",
+      "title": "修复拖拽移动 targetDir 同源潜伏漏洞",
+      "status": "done",
+      "note": "拖拽/粘贴全部 targetDir 改 getParentPath:handlePaste(410)、冲突粘贴(655)、drag onInternalDrop(805/865)、节点 drop 落点(1547/1608 拖到文件取父目录)"
+    },
+    {
+      "id": "E-004",
+      "title": "跑测试转绿 + 自检",
+      "status": "done",
+      "note": "vitest 109/109 绿(含新增 path.test.ts 9 例);2 个失败套件为预存在 vflow-resources 脚本(基线复现,与本改动无 import 关系);biome 仅剩全仓库 CRLF format 债务,无 lint/organizeImports 问题"
+    }
+  ],
+  "spec_refs": [
+    {
+      "file": "common/testing.md",
+      "reason": "修 bug 先写复现测试(红)转绿；新增 getParentPath 公共接口需配单测(正常+边界)"
+    },
+    {
+      "file": "common/error-handling.md",
+      "reason": "新工具参数合法性由函数自身负责；rename 目标路径运算需带上下文、不得静默出错"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "P-20260703-009",
+  "title": "选中文件时新建/粘贴落到仓库根(getCreateTargetPath 与 Ctrl+V 未用分隔符无关父目录)",
+  "slug": "file-create-paste-target-loss",
+  "lifecycle_status": "archived",
+  "blocking": {
+    "status": "none"
+  },
+  "tier": "T2",
+  "type": "bug",
+  "workspace": {
+    "isolate_intent": false,
+    "branch": null
+  },
+  "created_at": "2026-07-03T14:17:46",
+  "updated_at": "2026-07-03T16:07:18",
+  "schema_version": 2,
+  "accepted_at": "2026-07-03T16:07:17",
+  "accepted_by": "ai",
+  "accepted_source": "ai_relay",
+  "knowledge_processed": true
+}
