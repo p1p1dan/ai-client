@@ -27,7 +27,7 @@ import type {
 } from './types';
 
 export const defaultLayoutMode: LayoutMode = 'tree';
-export const defaultFileTreeDisplayMode: FileTreeDisplayMode = 'current';
+export const defaultFileTreeDisplayMode: FileTreeDisplayMode = 'legacy';
 export const defaultRepositoryListDisplayMode: RepositoryListDisplayMode = 'list';
 
 // Default prompts for different languages

@@ -103,7 +103,7 @@ function applyInitialSettings(state: {
 export function getInitialState() {
   return {
     // UI Settings
-    theme: 'system' as Theme,
+    theme: 'sync-terminal' as Theme,
     layoutMode: defaultLayoutMode,
     fileTreeDisplayMode: defaultFileTreeDisplayMode,
     repositoryListDisplayMode: defaultRepositoryListDisplayMode,
