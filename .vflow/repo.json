@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "proposals": [
+    {
+      "id": "P-20260703-001",
+      "slug": "file-rename-loss",
+      "dir": "archive/2026-07/P-20260703-001-file-rename-loss",
+      "title": "文件管理重命名确认后文件消失（数据丢失级）",
+      "lifecycle_status": "archived",
+      "type": "bug",
+      "updated_at": "2026-07-03T15:13:33"
+    },
+    {
+      "id": "P-20260703-002",
+      "slug": "worktree-create-chain",
+      "dir": "P-20260703-002-worktree-create-chain",
+      "title": "仓库初始化与 worktree 创建链路修复（零提交仓库无引导 + 分支名反斜杠非法）",
+      "lifecycle_status": "active",
+      "type": "bug",
+      "updated_at": "2026-07-03T09:40:31"
+    },
+    {
+      "id": "P-20260703-003",
+      "slug": "root-gate-state-machine",
+      "dir": "P-20260703-003-root-gate-state-machine",
+      "title": "Root.tsx 启动门控收敛为单一状态源（消除 vscode/cli 分支抖动）",
+      "lifecycle_status": "active",
+      "type": "refactor",
+      "updated_at": "2026-07-03T09:40:47"
+    },
+    {
+      "id": "P-20260703-004",
+      "slug": "ime-shift-commit-loss",
+      "dir": "P-20260703-004-ime-shift-commit-loss",
+      "title": "对话输入框 IME 中英切换（Shift）时组合文本丢失",
+      "lifecycle_status": "active",
+      "type": "bug",
+      "updated_at": "2026-07-03T09:40:48"
+    },
+    {
+      "id": "P-20260703-005",
+      "slug": "onboarding-ux-guidance",
+      "dir": "P-20260703-005-onboarding-ux-guidance",
+      "title": "Onboarding 引导优化：禁用按钮解释、步骤指引、流程简化",
+      "lifecycle_status": "active",
+      "type": "feature",
+      "updated_at": "2026-07-03T09:40:48"
+    },
+    {
+      "id": "P-20260703-006",
+      "slug": "test-login-bypass",
+      "dir": "P-20260703-006-test-login-bypass",
+      "title": "测试旁路：admin@jcdz.cc 固定验证码 123456（仅测试构建生效）",
+      "lifecycle_status": "active",
+      "type": "feature",
+      "updated_at": "2026-07-03T09:40:48"
+    },
+    {
+      "id": "P-20260703-007",
+      "slug": "headless-onboarding-takeover",
+      "dir": "P-20260703-007-headless-onboarding-takeover",
+      "title": "install/init/login 脱离 GUI 的 headless 可接管化改造",
+      "lifecycle_status": "active",
+      "type": "refactor",
+      "updated_at": "2026-07-03T09:41:01"
+    },
+    {
+      "id": "P-20260703-008",
+      "slug": "default-settings-update",
+      "dir": "P-20260703-008-default-settings-update",
+      "title": "默认设置调整：外观同步终端/字号14，通用树状/集成模式/列表",
+      "lifecycle_status": "active",
+      "type": "feature",
+      "updated_at": "2026-07-03T09:41:01"
+    },
+    {
+      "id": "P-20260703-009",
+      "slug": "file-create-paste-target-loss",
+      "dir": "archive/2026-07/P-20260703-009-file-create-paste-target-loss",
+      "title": "选中文件时新建/粘贴落到仓库根(getCreateTargetPath 与 Ctrl+V 未用分隔符无关父目录)",
+      "lifecycle_status": "archived",
+      "type": "bug",
+      "updated_at": "2026-07-03T16:07:18"
+    },
+    {
+      "id": "P-20260703-010",
+      "slug": "persistence-regression-tests",
+      "dir": "archive/2026-07/P-20260703-010-persistence-regression-tests",
+      "title": "持久化层最小回归测试:SharedSessionState 路径解析/原子写/读健壮性 + settings 写失败返回 false",
+      "lifecycle_status": "archived",
+      "type": "refactor",
+      "updated_at": "2026-07-03T16:32:01"
+    }
+  ]
+}

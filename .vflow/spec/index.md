@@ -14,6 +14,7 @@
 
 | 文件 | 内容 | 条目数 |
 | :--- | :--- | :--- |
+| common/basic.md | 全局协作准则（每次会话默认注入）：通讯语言、动手前先想、简洁优先、外科式修改、目标驱动 | 23 |
 | common/general.md | 总体原则：简单优先、禁过早优化、魔数禁令、排版基线（缩进/行宽） | 9 |
 | common/naming.md | 命名原则：自描述、一致性、反义词成对、缩写约束 | 8 |
 | common/structure.md | 结构与复杂度量化阈值：函数行数、嵌套、圈复杂度、参数数 | 8 |
@@ -38,6 +39,7 @@
 | modules/embedded.md | `"embedded": true` | 嵌入式 C：g前缀全局、volatile、GNU C 特性 | 12 |
 | modules/qt.md | `"qt": true` | 占位（待起草：信号槽/父子所有权/UI线程） | - |
 | modules/bindings.md | `"binding": ...` | 占位（首个封装任务起草） | - |
+| common/verification-first.md | `"ai_system": true` | 验证先行开发规范：AI/LLM 系统可观测性、分层验证、回归资产沉淀、工作流顺序 | 14 |
 
 ## 项目领域规范（domain/ · 知识回写主要落点）
 

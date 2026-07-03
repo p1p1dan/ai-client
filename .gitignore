@@ -51,3 +51,8 @@ resources/vflow-pkg/
 
 # Build / debug artifacts not meant for the repo
 bugOutput/
+
+# vflow
+.vflow/runtime/
+.vflow/scripts/node_modules/
+.vflow/scripts/dist/

@@ -1,174 +1,130 @@
-# vflow Workflow Definition
+# vflow3 Workflow Definition
 
-> This file is the single semantic center of vflow: task classification rules,
-> per-state behavioral constraints, and approval gate rules are all defined here.
-> inject.py extracts the matching [workflow-state:*] block based on current task
-> state and injects it into each conversation turn.
-> To change workflow behavior, edit this file — no code changes needed.
+Pipeline: understand → decide → build → check → done (free backward jump to any node already in history)
 
-## Pipeline (v2)
+## Tier Guide
 
-All tasks (T1 and T2) run the same 6-state pipeline. Tier only controls the
-*thickness* of each station's artifact and how often the human is consulted —
-never which stations are skipped.
+- **T0**: Pure Q&A — no proposal created
+- **T1**: Clear, local, low-risk change — 3-line inline plan, zero artifacts beyond a minimal proposal.json (no state.json/ledger.md, no gates)
+- **T2**: Standard feature/fix — full pointer graph (state.json + ledger.md), 2 hard gates apply
+- **T3**: Architecture/core/high-risk — T2 + mandatory design reconfirmation (Hard Gate 1a) before entering build
 
-```
-created -> analyzed -> designed -> implementing -> verified -> archived
-             |            |             |              |           |
-       requirement.md  design.md    worklog.md     verify.md   journal
-       (SWE.1, R-IDs)  (SWE.2/3)   (SWE.4 log)    (SWE.4/5/6) (+spec writeback)
-```
+## Skip Detection
 
-State moves ONLY via `python .vflow/scripts/task.py advance` (checks exit
-conditions mechanically) and `task.py done --summary "..."` (verified ->
-archived). `task.py back` returns verified -> implementing when code must
-change after verification. Bypasses (`advance --skip-check`, `done --force`)
-are recorded in task.json and visible in monthly audits.
+If the user's request is clearly T0 (question, explanation, no code change), do NOT create a proposal. Answer directly.
 
-## Task Classification
+## 常驻规则 (always-on, every node)
 
-| Tier | Criteria | Artifact thickness | Human gates |
-| :--- | :--- | :--- | :--- |
-| T0 Q&A | Explanation / comparison / query, no code changes | None (no task) | — |
-| T1 Quick | Single-file small change, low risk, clear intent | Thin: 1-2 R-IDs, one-line sections | None (AI advances autonomously, report at end) |
-| T2 Standard | New feature / algorithm, cross-file, touches core modules | Full: 3-8 R-IDs, complete sections | Gate 1 (requirement) + Gate 3 (acceptance); high risk adds Gate 2 (design) |
-
-## Risk Determination (controls number of approval gates)
-
-High risk (any one): change touches config.json core_paths | expected changes >3 files | irreversible operation (delete file / change interface signature / change data format)
-Low risk: everything else
-
-## Human Gates
-
-| Risk | Gate 1 (after requirement) | Gate 2 (after design) | Gate 3 (before archive) |
-| :--- | :--- | :--- | :--- |
-| T1 | — | — | — (one-line report after archive) |
-| T2 low | ✅ confirm R-IDs | — | ✅ confirm verify report |
-| T2 high | ✅ | ✅ confirm design | ✅ |
-
-Use AskUserQuestion for gate confirmations whenever possible.
-
-## Skip Detection Rule
-
-ONLY these exact user phrases constitute a skip signal:
-  "skip" | "直接做" | "跳过" | "不用规划" | "不走流程"
-
-### Anti-patterns (these are NOT skip signals)
-
-- Implementation strategy: "use goal mode", "fix file by file", "start from XX"
-- Urgency: "hurry", "快点", "赶紧做"
-- Confirmation: "go ahead", "就这样做", "可以开始了"
-- Scope refinement: "focus on XX first", "先做XX部分"
-
-When uncertain whether the user means to skip: ASK
-"Do you want to skip the planning phase and implement directly, or use this as an implementation strategy within the plan?"
-
-Even when skipping ceremony (`advance --skip-check`), spec/ conventions and
-the test hard rule still apply.
+- **Uncertainty → ask, don't guess.** If a decision is genuinely the user's to make (spec definitions, system boundaries, tech-stack choices, acceptance criteria), present your analysis and trade-offs and wait for user direction rather than inferring.
+- **Stagnation warning.** `inject.js` tracks how many prompts the pointer has sat still. If you see a stagnation warning, either make real progress (a `move`, an `item` transition, a `checkpoint`) or surface the blocker to the user — don't let the warning repeat silently.
+- **PR granularity.** Each execution item must produce a diff the user can fully read and understand in one sitting. If an item would touch too many files or lines, split it into smaller items before starting.
+- **Rubber duck.** When completing each item, explain in plain terms what the code does, what problem it solves, and any trade-off made — aim for the level of a Slack message to a teammate.
+- **Ledger discipline.** Every `move` requires the AI to hand-write the matching transition entry into `ledger.md` (`## [ts] from -> to` + a `- Satisfied:` line) before the *next* move is allowed. The CLI never writes this text — only you do, via Write/Edit.
 
 ---
 
-[workflow-state:no_task]
-No active task. After receiving a user message, classify first, then act.
+[workflow-state:no_proposal]
 
-### Classification [required·once]
-1. Classify and state explicitly using this fixed phrase:
-   "📋 Tier: T{0|1|2} {Q&A|Quick|Standard} (reason: ...). {next action}"
-2. T0 Q&A → answer directly, no archive, no tier output (pure Q&A, don't interrupt)
-3. T1 Quick → output tier statement → run `python .vflow/scripts/task.py create <slug> --title "<title>" --tier T1` → execute per .vflow/skills/vflow-quick/SKILL.md (thin-archive mode, advance autonomously)
-4. T2 Standard → output tier statement → run `python .vflow/scripts/task.py create <slug> --title "<title>"` → execute per .vflow/skills/vflow-task/SKILL.md
+No active proposal. Evaluate the user's request:
 
-### Override and Correction
-- When the user specifies a tier via /vflow:task or /vflow:quick, obey — do not re-classify
-- When the user uses a skip phrase (see Skip Detection Rule above) → bypass workflow ceremony, but still follow spec/ conventions and test hard rules
-- The user can change tier with a single phrase (e.g. "handle this as quick"), switch immediately without argument
+1. If T0 (pure question/explanation): answer directly, no proposal needed.
+2. If T1+ (code change required): create a proposal.
 
-### Prohibited
-- Starting code changes before classification (T0 exempt)
-- Treating "here's a proposed plan" as task completion
-[/workflow-state:no_task]
+Command: `node .vflow/scripts/dist/proposal.js create <slug> --title "..." --type <bug|feature|refactor|reference_build> --tier <T1|T2|T3>`
 
-[workflow-state:created]
-Task created. Current station: requirement analysis (SWE.1).
+[workflow-state:understand]
 
-### Requirement Analysis [required·once]
-1. T2: execute vflow-brainstorm flow (auto-context → gated questions, one at a time, AskUserQuestion preferred → converge). T1: skip questioning if intent is clear.
-2. Fill requirement.md: original request, clarifications, and **R-ID acceptance entries** (lines `- R<n>: ...`). T1: 1-2 R-IDs. T2: 3-8 R-IDs covering edge conditions.
-3. Gate 1 (T2 only): show R-IDs, ask user to confirm requirement understanding (AskUserQuestion).
-4. Run `python .vflow/scripts/task.py advance` (validates requirement.md is filled and defines at least one R-ID).
+Proposal created. Build a shared understanding of the problem before deciding anything.
 
-### Prohibited
-- Advancing with placeholder R-IDs (e.g. "- R1: make it work")
-- Writing any design or implementation before R-IDs are stated
-[/workflow-state:created]
+**Actions:**
+1. Restate the user's request in your own words; surface hidden assumptions.
+2. Investigate the relevant code/config so the problem is grounded in what actually exists, not guesswork.
+3. When you can state the problem and its scope in one paragraph, move forward.
 
-[workflow-state:analyzed]
-Requirement confirmed. Current station: design (SWE.2 architecture + SWE.3 detailed design).
+Command: `node .vflow/scripts/dist/proposal.js move --to decide`
 
-### Design [required·once]
-1. Draft the design in conversation first: architecture impact (one line if none), change list, ADR-lite decisions (T1 may omit), **test plan**, spec manifest (which spec/ files to read, with reasons).
-2. Fill design.md. The task checklist items MUST carry trailing R-ID tags: `- [ ] 1.1 ... (R1)` or `(R1,R3)`. Every R-ID from requirement.md must be covered — advance is mechanically rejected otherwise.
-3. If narrowing machine verification scope, declare it in the test plan and run `task.py set test_scope "<command>"`.
-4. Set risk: `python .vflow/scripts/task.py set risk {low|high}`
-5. Gate 2 (high risk only): 🛑 STOP. Show the design, wait for user confirmation (reply ok/confirm/可以/行) before advancing.
-6. Run `python .vflow/scripts/task.py advance` (validates design.md filled + R-ID coverage).
+[workflow-state:decide]
 
-### Prohibited
-- Writing implementation code in this state (high risk: not before user confirmation)
-- Checklist items without R-ID tags
-- Copying injected <vflow-state>/<vflow-context> content into deliverable files
-[/workflow-state:analyzed]
+Understanding is settled. Make the key design decisions.
 
-[workflow-state:designed]
-Design confirmed. Run `python .vflow/scripts/task.py advance` to enter implementation (creates worklog.md), then implement.
-[/workflow-state:designed]
+**Actions:**
+1. Identify the decision points, alternatives considered, and why you picked what you picked.
+2. **Decision ownership:** decisions involving spec definitions, system boundaries, or tech-stack choices are user-owned — present trade-offs and wait for user direction. AI-inferred decisions are only fine for implementation details within an already-approved design.
+3. Hand-write the decision into `ledger.md` under a `## [ts] understand -> decide` (first entry) or later `## [ts] decide -> decide` heading, with a `- Satisfied:` line summarizing the decision.
 
-[workflow-state:implementing]
-Current station: implementation (SWE.4). Implement checklist items one by one.
+**T3 only — Hard Gate 1a:** before you're allowed to `move --to build`, the *last* decide-related ledger entry must be a self-loop `## [ts] decide -> decide` whose Satisfied line contains the literal marker `confirmed_by_user:true`. Get the user's explicit approval in conversation first, then write that entry yourself — there is no CLI command for it, it's a plain ledger.md edit.
 
-### Implementation [required·repeatable]
-1. Before coding, read the spec files listed in design.md's spec manifest (关联规范); if missing, select .vflow/spec/ files by topic (filter modules by config.json features)
-2. Implement items from design.md checklist one by one: check `[x]` after each, append a row to worklog.md (`| time | file | change |` — **every changed file must be logged; the mtime cross-check at archive depends on it**)
-3. Mirror the checklist into Claude's task list (TaskCreate) right after entering this state; mark tasks completed (TaskUpdate) as you check items. design.md is the source of truth. On cross-session resume, continue from the first unchecked item.
+**Before moving to build — Hard Gate 1 (all tiers):** declare your spec citations now:
+`node .vflow/scripts/dist/proposal.js spec-ref add --file <path> --reason "..."` (repeatable), or `spec-ref none --reason "..."` if nothing applies.
 
-### Scope Change Handling [required·continuous]
-If the user changes scope during implementation:
-- Update requirement.md R-IDs and design.md checklist BEFORE implementing the change (sync Claude task list)
-- Note the scope change in worklog.md
+Command: `node .vflow/scripts/dist/proposal.js move --to build --scope "<one-line problem/scope statement>"`
 
-### Test Hard Rule [required·continuous]
-(Default: enabled. Exempt when config.json test_required=false)
-4. No test directory → create scaffold first per .vflow/skills/vflow-test/SKILL.md (this is REQUIRED: machine verification needs a runnable test_command)
-5. New class / public interface → write test cases (happy path + edge cases)
+[workflow-state:build]
 
-### Verification [required·once]
-6. When all checklist items are checked, fill verify.md §1 (one `- R<n>: ...` result line per R-ID), §2 integration (or "不适用" + reason), then run `python .vflow/scripts/task.py advance`
-   - task.py will EXECUTE config.build.test_command itself (or task.json test_scope): exit≠0 → transition rejected with failure output; exit 0 → machine record appended to verify.md by the script
-   - Do NOT paste test output yourself — the machine record is authoritative
-7. If tests fail: fix code, log files in worklog.md, advance again
+Design settled, gates cleared. Implement.
 
-### Prohibited
-- Skipping test hard rule (exempt only: pure comment/doc changes, or config.test_required=false)
-- Editing the machine execution record in verify.md
-- Deviating from the confirmed design without informing the user
-[/workflow-state:implementing]
+**Loop:**
+1. Add items as you identify them: `node .vflow/scripts/dist/proposal.js item add --title "..."`
+2. Work one at a time (serial): `item start --item E-NNN`
+3. Implement the item's slice of work.
+4. `item complete --item E-NNN --note "..."` (or `item block`/`item cancel` if it can't proceed)
+5. Repeat until the work is done.
 
-[workflow-state:verified]
-Machine verification passed. Current station: review and archive.
+**Guardrails:**
+- If goal/scope/approach changes significantly → stop, confirm with the user before continuing.
+- If a major new problem is discovered → `move --to decide` to rework the design (any node in `history_stack` is reachable backward).
+- Long build sessions: periodically `checkpoint` to leave a recovery trail in ledger.md (已完成/未完成/关键文件/坑/下一步).
+- PR granularity and rubber duck rules apply to every item (see 常驻规则 above).
 
-### Quality Review [required·once]
-1. Run quality check per .vflow/skills/vflow-review/SKILL.md (**high-risk tasks must use independent review mode**: fresh-context sub-agent), fill the review section of verify.md
-2. Spec accumulation: review worklog.md for new conventions/patterns/gotchas → if found, trigger vflow-spec flow (draft → user confirmation → write to spec/)
+Command: `node .vflow/scripts/dist/proposal.js move --to check`
 
-### Gate 3 [required·once]
-3. T2: 🛑 show the verify report (R-ID closure + machine record summary), wait for user confirmation. T1: skip, report one line after archive.
+[workflow-state:check]
 
-### Archive [required·once]
-4. Run `python .vflow/scripts/task.py done --summary "<one-line outcome including new test count>"`
-   - Validates: every R-ID has a result entry in verify.md §1; source files unchanged since machine verification (mtime cross-check)
-   - If code changed after verification: `task.py back` → re-advance (re-runs tests)
+Implementation complete. Self-check before asking for acceptance — there is no machine-run verify command in v3; this is an AI judgment checklist.
 
-### Prohibited
-- Archiving without showing the verify report (T2)
-- Using `done --force` without explicit user confirmation
-[/workflow-state:verified]
+**Self-check (no fixed schema — use judgment):**
+1. **Completeness** — is everything promised in `decide` actually done?
+2. **Correctness** — does it meet the understood problem/scope; are edge cases handled?
+3. **Consistency** — does it violate any cited spec_ref? Cite file:line for anything questionable.
+4. If gaps are found → `move --to build` to reopen items, or `move --to decide` if the design itself needs rework.
+
+**Hard Gate 2 — explicit user acceptance:** once you're confident, PAUSE and hand off to the user — do not proceed silently.
+
+**Actions:**
+1. Report to the user: goal / current state / diff-from-goal / self-check results / known risks.
+2. Explicitly ask whether the result meets their requirements.
+3. ONLY after the user approves in this conversation, relay the acceptance:
+   `node .vflow/scripts/dist/proposal.js accept --user-approved`
+   (logged with `from=ai_relay` — auditable). The user may also accept themselves in a terminal: `accept` (interactive yes/no).
+
+**Guardrail:** Never run `accept --user-approved` without first reporting AND getting the user's explicit in-conversation approval.
+
+[workflow-state:done]
+
+User accepted. Ready for archival.
+
+**Actions:**
+1. Extract knowledge candidates before archiving. Run `knowledge suggest` — it prints the classification guide (Convention / Pattern / Forbidden / Gotcha) for you to apply by hand while reading back through `ledger.md`. Target file: `common/` (language-agnostic) · `lang/<language>.md` · `modules/` (qt/embedded/...) · `domain/<topic>.md`. Persist each with `knowledge save --content "..." --reason "..."`, or `knowledge skip` if nothing is worth keeping.
+2. Archive: `node .vflow/scripts/dist/proposal.js archive` (moves the proposal directory into `archive/<yyyy-mm>/`; requires `lifecycle_status=done`, pointer=done, and knowledge processed).
+3. **Optional — commit** (only if the user asks): the working tree now holds the full change set — code, version bump, docs, AND the proposal's own `ledger.md`/`state.json` under `.vflow/proposals/`. Commit it as ONE unit. `.vflow/proposals/` and `.vflow/knowledge/` are tracked on purpose (the ledger is the decision record); `.vflow/runtime/` is not. Stage an explicit file list — never `git add -A`. Version bumps and CHANGELOG belong in the SAME proposal's `build`, not a follow-up proposal.
+
+Command: `node .vflow/scripts/dist/proposal.js knowledge suggest` then `archive`
+
+[workflow-state:overview]
+
+vflow3 drives every non-trivial code change through a 5-node proposal lifecycle. Read this map BEFORE acting — do not reverse-engineer the process mid-task.
+
+Pipeline: understand → decide → build → check → done. Backward jump to any node already in `history_stack` is always allowed via `move --to <node>`; forward movement must be to the strict next node.
+
+Tier: T0 = pure Q&A, NO proposal (answer directly). T1 = 3-line inline plan only, no state.json/ledger.md, no gates. T2 = full pointer graph. T3 = T2 + mandatory design reconfirmation (Hard Gate 1a) before build.
+
+BEFORE touching code: if the request is T1+, create the proposal FIRST, then understand.
+  `node .vflow/scripts/dist/proposal.js create <slug> --title "..." --type <bug|feature|refactor|reference_build> --tier <T1|T2|T3>`
+
+Two files only (T2/T3): `state.json` is machine-authoritative (pointer/history_stack/scope/items/spec_refs — CLI is the sole writer). `ledger.md` is the human-readable append-only record — the AI hand-writes every transition/checkpoint entry via Write/Edit; the CLI only writes the initial header.
+
+Exactly 2 hard gates: entering `build` requires scope + spec_refs (+ T3 design reconfirmation); entering `done` requires explicit user acceptance via `accept`. Everything else is an AI self-check, not a machine schema.
+
+Acceptance (`check` node): the AI PAUSES and reports goal / current state / diff-from-goal / self-check results / risks, then asks the user. After the user approves in-conversation, the AI runs `accept --user-approved` (logged as ai_relay). The user may also accept themselves in a terminal.
+
+Full step-by-step guide: the `/vflow-proposal` skill.
