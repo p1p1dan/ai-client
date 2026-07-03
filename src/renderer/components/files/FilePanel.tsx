@@ -1,3 +1,4 @@
+import { getParentPath } from '@shared/utils/path';
 import { AnimatePresence, motion } from 'framer-motion';
 import { FileCode } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -673,7 +674,7 @@ export function FilePanel({ rootPath, isActive = false }: FilePanelProps) {
   // Handle rename
   const handleRename = useCallback(
     async (path: string, newName: string) => {
-      const parentPath = path.substring(0, path.lastIndexOf('/'));
+      const parentPath = getParentPath(path);
       const newPath = `${parentPath}/${newName}`;
       await renameItem(path, newPath);
     },

@@ -1,4 +1,5 @@
 import type { FileEntry } from '@shared/types';
+import { getParentPath } from '@shared/utils/path';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadFileTreeExpandedPaths, saveFileTreeExpandedPaths } from '@/App/storage';
@@ -335,7 +336,7 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
 
     // Listen for changes
     const unsubscribe = window.electronAPI.file.onChange(async (event) => {
-      const parentPath = event.path.substring(0, event.path.lastIndexOf('/')) || rootPath;
+      const parentPath = getParentPath(event.path) || rootPath;
 
       // Always invalidate cache regardless of isActive
       if (parentPath !== rootPath) {
@@ -372,7 +373,7 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
   const createFile = useCallback(
     async (path: string, content = '') => {
       await window.electronAPI.file.createFile(path, content);
-      const parentPath = path.substring(0, path.lastIndexOf('/'));
+      const parentPath = getParentPath(path);
       queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
     },
     [queryClient]
@@ -381,7 +382,7 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
   const createDirectory = useCallback(
     async (path: string) => {
       await window.electronAPI.file.createDirectory(path);
-      const parentPath = path.substring(0, path.lastIndexOf('/'));
+      const parentPath = getParentPath(path);
       queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
     },
     [queryClient]
@@ -390,7 +391,7 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
   const renameItem = useCallback(
     async (fromPath: string, toPath: string) => {
       await window.electronAPI.file.rename(fromPath, toPath);
-      const parentPath = fromPath.substring(0, fromPath.lastIndexOf('/'));
+      const parentPath = getParentPath(fromPath);
       queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
     },
     [queryClient]
@@ -399,7 +400,7 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
   const deleteItem = useCallback(
     async (path: string) => {
       await window.electronAPI.file.delete(path);
-      const parentPath = path.substring(0, path.lastIndexOf('/'));
+      const parentPath = getParentPath(path);
       queryClient.invalidateQueries({ queryKey: ['file', 'list', parentPath] });
     },
     [queryClient]

@@ -69,6 +69,23 @@ export function getPathBasename(inputPath: string): string {
 }
 
 /**
+ * Get the parent directory of a filesystem path.
+ * Separator-agnostic: handles both "/" and "\" and ignores trailing separators.
+ * Returns "" when the path has no parent segment (a bare name), so callers must
+ * supply their own fallback (e.g. rootPath) instead of treating "" as a real
+ * directory — building `${""}/name` would target the drive/filesystem root.
+ * @param inputPath Original path
+ * @returns Parent directory without trailing separator, or "" when none
+ */
+export function getParentPath(inputPath: string): string {
+  const trimmed = trimTrailingPathSeparators(inputPath);
+  if (!trimmed) return '';
+  const idx = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  if (idx < 0) return '';
+  return trimmed.slice(0, idx);
+}
+
+/**
  * Convert an internal path into the value that should be shown to users.
  * Remote virtual paths are unwrapped back to their real remote filesystem path.
  * @param inputPath Original path

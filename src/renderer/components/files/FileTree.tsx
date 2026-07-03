@@ -1,4 +1,4 @@
-import { getDisplayPath } from '@shared/utils/path';
+import { getDisplayPath, getParentPath, getPathBasename } from '@shared/utils/path';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChevronRight,
@@ -360,7 +360,7 @@ export function FileTree({
 
   const handleFinishRename = useCallback(
     (path: string) => {
-      if (editValue.trim() && editValue !== path.split('/').pop()) {
+      if (editValue.trim() && editValue !== getPathBasename(path)) {
         onRename(path, editValue.trim());
       }
       setEditingPath(null);
@@ -407,7 +407,7 @@ export function FileTree({
         // Determine target directory
         let targetDir = targetPath;
         if (!targetIsDirectory) {
-          targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
+          targetDir = getParentPath(targetPath);
         }
 
         const newPath = `${targetDir}/${clipboard.name}`;
@@ -652,7 +652,7 @@ export function FileTree({
     try {
       const targetDir = conflictData.targetIsDirectory
         ? conflictData.targetPath
-        : conflictData.targetPath.substring(0, conflictData.targetPath.lastIndexOf('/'));
+        : getParentPath(conflictData.targetPath);
 
       // Get the name to use for renaming
       const sourceName =
@@ -802,7 +802,7 @@ export function FileTree({
       let targetDir = targetPath;
       if (!targetIsDirectory) {
         // If target is a file, use its parent directory
-        targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
+        targetDir = getParentPath(targetPath);
       }
 
       // Build new path
@@ -862,7 +862,7 @@ export function FileTree({
       // Determine target directory
       let targetDir = targetPath;
       if (!targetIsDirectory) {
-        targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
+        targetDir = getParentPath(targetPath);
       }
 
       const newPath = `${targetDir}/${draggingNode.name}`;
@@ -1542,9 +1542,7 @@ function FileTreeNodeComponent({
         targetFolderPath = actualNode.path;
       } else {
         // Hovering over a file - highlight its parent folder
-        const lastSlash = actualNode.path.lastIndexOf('/');
-        targetFolderPath =
-          lastSlash > 0 ? actualNode.path.substring(0, lastSlash) : actualNode.path;
+        targetFolderPath = getParentPath(actualNode.path) || actualNode.path;
       }
 
       console.log('[FileTreeNode] Calculated target folder:', targetFolderPath);
@@ -1604,8 +1602,7 @@ function FileTreeNodeComponent({
         targetDir = actualNode.path;
       } else {
         // Get parent directory of the file
-        const lastSlash = actualNode.path.lastIndexOf('/');
-        targetDir = lastSlash > 0 ? actualNode.path.substring(0, lastSlash) : actualNode.path;
+        targetDir = getParentPath(actualNode.path) || actualNode.path;
       }
 
       // Handle internal drag drop
