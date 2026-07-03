@@ -350,7 +350,7 @@ export function FileTree({
     // 如果选中的是目录，在该目录下创建
     if (selectedNode.isDirectory) return selectedNode.path;
     // 如果选中的是文件，在其父目录下创建
-    return selectedNode.path.substring(0, selectedNode.path.lastIndexOf('/')) || rootPath;
+    return getParentPath(selectedNode.path) || rootPath;
   }, [selectedNode, rootPath]);
 
   const handleStartRename = useCallback((path: string, currentName: string) => {
@@ -964,7 +964,7 @@ export function FileTree({
         // When a directory is selected, paste into that directory
         const targetPath = selectedNode.isDirectory
           ? selectedNode.path
-          : selectedNode.path.substring(0, selectedNode.path.lastIndexOf('/')) || rootPath || '';
+          : getParentPath(selectedNode.path) || rootPath || '';
         const targetIsDirectory = true; // Parent or selected dir is always a directory
         handlePaste(targetPath, targetIsDirectory);
       }
