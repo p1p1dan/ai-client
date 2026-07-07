@@ -76,6 +76,18 @@ export const zhTranslations: Record<string, string> = {
   Branch: '分支',
   'Branch already exists. Choose a different name.': '该分支已存在，请使用其他分支名',
   'Branch name': '新分支名',
+  'Branch name cannot be empty': '分支名不能为空',
+  'Branch name cannot be "@"': '分支名不能是单独的 "@"',
+  'Branch name cannot start with "-"': '分支名不能以 "-" 开头',
+  'Branch name cannot contain spaces or the characters ~ ^ : ? * [ \\':
+    '分支名不能包含空格或 ~ ^ : ? * [ \\ 字符',
+  'Branch name cannot contain ".."': '分支名不能包含 ".."',
+  'Branch name cannot contain "@{"': '分支名不能包含 "@{"',
+  'Branch name cannot start or end with "/" or contain "//"':
+    '分支名不能以 "/" 开头或结尾，且不能包含连续的 "/"',
+  'Branch name cannot end with "."': '分支名不能以 "." 结尾',
+  'Branch name segments cannot start with "."': '分支名的路径段不能以 "." 开头',
+  'Branch name segments cannot end with ".lock"': '分支名的路径段不能以 ".lock" 结尾',
   Cancel: '取消',
   'Cancel staging all': '全部取消暂存',
   'Change list': '更改',

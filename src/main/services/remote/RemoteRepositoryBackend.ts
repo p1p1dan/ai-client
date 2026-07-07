@@ -21,6 +21,7 @@ import type {
   WorktreeMergeResult,
   WorktreeRemoveOptions,
 } from '@shared/types';
+import { ensureValidBranchName } from '@shared/utils/branchName';
 import { remoteConnectionManager } from './RemoteConnectionManager';
 import { createRemoteError } from './RemoteI18n';
 import { isRemoteVirtualPath, parseRemoteVirtualPath, toRemoteVirtualPath } from './RemotePath';
@@ -406,6 +407,7 @@ export class RemoteRepositoryBackend {
     const { connectionId, remotePath } = toRemotePath(workdir);
     const remoteOptions: WorktreeCreateOptions = {
       ...options,
+      newBranch: options.newBranch ? ensureValidBranchName(options.newBranch) : options.newBranch,
       path: this.toRemoteRelativePath(options.path, remotePath, { allowOutsideRoot: true }),
     };
     await remoteConnectionManager.call(connectionId, 'worktree:add', {

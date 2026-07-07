@@ -16,6 +16,7 @@ import type {
   WorktreeMergeResult,
   WorktreeRemoveOptions,
 } from '@shared/types';
+import { ensureValidBranchName } from '@shared/utils/branchName';
 import iconv from 'iconv-lite';
 import jschardet from 'jschardet';
 import type { SimpleGit } from 'simple-git';
@@ -216,7 +217,7 @@ export class WorktreeService {
     const args = ['worktree', 'add'];
 
     if (options.newBranch) {
-      args.push('-b', options.newBranch);
+      args.push('-b', ensureValidBranchName(options.newBranch));
     }
 
     args.push(this.toGitPath(options.path));

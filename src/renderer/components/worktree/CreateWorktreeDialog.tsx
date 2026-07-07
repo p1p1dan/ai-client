@@ -1,10 +1,11 @@
+import { buildWorktreePath } from '@shared/defaultPaths';
 import type {
   GhCliStatus,
   GitBranch as GitBranchType,
   PullRequest,
   WorktreeCreateOptions,
 } from '@shared/types';
-import { buildWorktreePath } from '@shared/defaultPaths';
+import { normalizeBranchName, validateBranchName } from '@shared/utils/branchName';
 import { AlertCircle, GitBranch, GitPullRequest, Loader2, Plus, Sparkles } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useI18n } from '@/i18n';
@@ -93,6 +94,18 @@ export function CreateWorktreeDialog({
   const [newBranchName, setNewBranchName] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [generatingBranchName, setGeneratingBranchName] = React.useState(false);
+
+  // Backslashes are converted to "/" as the user types (habitual on Windows)
+  const updateNewBranchName = React.useCallback((value: string) => {
+    setNewBranchName(value.replace(/\\/g, '/'));
+  }, []);
+
+  // Live validation hint for the (optional in PR mode) new branch name
+  const branchNameError = React.useMemo(() => {
+    if (!newBranchName) return null;
+    const check = validateBranchName(normalizeBranchName(newBranchName));
+    return check.valid ? null : check.error;
+  }, [newBranchName]);
 
   // PR mode state
   const [ghStatus, setGhStatus] = React.useState<GhCliStatus | null>(null);
@@ -242,6 +255,13 @@ export function CreateWorktreeDialog({
         return;
       }
 
+      const branchName = normalizeBranchName(newBranchName);
+      const check = validateBranchName(branchName);
+      if (!check.valid) {
+        setError(t(check.error));
+        return;
+      }
+
       // Use baseBranch state, or fall back to current branch if state wasn't set
       const effectiveBaseBranch = baseBranch || currentBranch?.name;
       if (!effectiveBaseBranch) {
@@ -256,9 +276,9 @@ export function CreateWorktreeDialog({
 
       try {
         await onSubmit({
-          path: getWorktreePath(newBranchName),
+          path: getWorktreePath(branchName),
           branch: effectiveBaseBranch,
-          newBranch: newBranchName,
+          newBranch: branchName,
         });
         setOpen(false);
         resetForm();
@@ -272,7 +292,16 @@ export function CreateWorktreeDialog({
         return;
       }
 
-      const branchName = newBranchName || selectedPr.headRefName;
+      const branchName = newBranchName
+        ? normalizeBranchName(newBranchName)
+        : selectedPr.headRefName;
+      if (newBranchName) {
+        const check = validateBranchName(branchName);
+        if (!check.valid) {
+          setError(t(check.error));
+          return;
+        }
+      }
 
       if (!home) {
         setError(t('Unable to determine your home directory'));
@@ -345,7 +374,7 @@ export function CreateWorktreeDialog({
       });
 
       if (result.success && result.branchName) {
-        setNewBranchName(result.branchName.trim());
+        setNewBranchName(normalizeBranchName(result.branchName));
       } else {
         const errorMessage =
           result.error === 'timeout'
@@ -419,7 +448,7 @@ export function CreateWorktreeDialog({
                   <div className="relative w-full">
                     <Input
                       value={newBranchName}
-                      onChange={(e) => setNewBranchName(e.target.value)}
+                      onChange={(e) => updateNewBranchName(e.target.value)}
                       placeholder="feature/my-feature"
                       autoFocus
                       className="pr-8"
@@ -443,9 +472,13 @@ export function CreateWorktreeDialog({
                       </Button>
                     )}
                   </div>
-                  <FieldDescription>
-                    {t('This branch will be created and checked out in the new worktree.')}
-                  </FieldDescription>
+                  {branchNameError ? (
+                    <FieldError match>{t(branchNameError)}</FieldError>
+                  ) : (
+                    <FieldDescription>
+                      {t('This branch will be created and checked out in the new worktree.')}
+                    </FieldDescription>
+                  )}
                 </Field>
 
                 {/* Base Branch Selection with Search */}
@@ -622,12 +655,16 @@ export function CreateWorktreeDialog({
                         </FieldLabel>
                         <Input
                           value={newBranchName}
-                          onChange={(e) => setNewBranchName(e.target.value)}
+                          onChange={(e) => updateNewBranchName(e.target.value)}
                           placeholder={selectedPr.headRefName}
                         />
-                        <FieldDescription>
-                          {t('Leave empty to use the PR branch name:')} {selectedPr.headRefName}
-                        </FieldDescription>
+                        {branchNameError ? (
+                          <FieldError match>{t(branchNameError)}</FieldError>
+                        ) : (
+                          <FieldDescription>
+                            {t('Leave empty to use the PR branch name:')} {selectedPr.headRefName}
+                          </FieldDescription>
+                        )}
                       </Field>
                     )}
                   </>
@@ -652,6 +689,7 @@ export function CreateWorktreeDialog({
               type="submit"
               disabled={
                 isLoading ||
+                !!branchNameError ||
                 (mode === 'pr' && (!ghStatus?.authenticated || !selectedPr)) ||
                 (mode === 'branch' && !newBranchName)
               }
