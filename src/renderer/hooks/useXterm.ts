@@ -335,16 +335,50 @@ export function useXterm({
     terminal.open(containerRef.current);
     fitAddon.fit();
 
-    // 清空 textarea，防止 open() 后残留内容在首次获得焦点时被当作输入发送（例如自动出现 '\'）
-    // 同时保留 IME compositionend 兜底逻辑，避免输入法提交后残留文本影响后续输入。
+    // Clear residual textarea content once after open(), otherwise it gets
+    // sent as input on first focus (e.g. a stray '\').
+    //
+    // Do NOT clear on compositionend: xterm's CompositionHelper reads the
+    // committed text from the accumulating textarea value via setTimeout(0)
+    // and tracks character offsets into it (upstream never clears this
+    // textarea). An async clear races with those pending reads and corrupts
+    // the offset bookkeeping, dropping IME commits — observed as lost input
+    // when MS Pinyin commits a composition via the Shift CN/EN toggle.
     const textarea = terminal.textarea;
     if (textarea) {
       textarea.value = '';
-      textarea.addEventListener('compositionend', () => {
-        // 延迟清空，确保 xterm 先读取最终文本
-        setTimeout(() => {
-          textarea.value = '';
-        }, 0);
+
+      // Workaround for an upstream xterm bug that loses IME commits delivered
+      // as plain `insertText` while a key is physically held down: xterm's
+      // _inputEvent ignores insertText whenever _keyDownSeen is true, assuming
+      // the keypress path already sent the character. MS Pinyin's Shift CN/EN
+      // toggle commits the pending composition exactly that way (the input
+      // event fires before the Shift keyup, with no composition events), so
+      // the committed text was silently discarded. Forward it ourselves, but
+      // only while the held key is a bare modifier/IME-toggle key — for any
+      // other held key the keypress path really does deliver the character,
+      // and forwarding would duplicate it.
+      const IME_TOGGLE_KEYS = new Set(['Shift', 'Control', 'Alt', 'CapsLock']);
+      let heldImeToggleKey = false;
+      textarea.addEventListener(
+        'keydown',
+        (e) => {
+          heldImeToggleKey = IME_TOGGLE_KEYS.has(e.key);
+        },
+        true
+      );
+      textarea.addEventListener(
+        'keyup',
+        () => {
+          heldImeToggleKey = false;
+        },
+        true
+      );
+      textarea.addEventListener('input', (e) => {
+        const ev = e as InputEvent;
+        if (heldImeToggleKey && ev.data && ev.inputType === 'insertText' && !ev.isComposing) {
+          terminal.input(ev.data, true);
+        }
       });
     }
 
