@@ -286,6 +286,14 @@ export function registerGitHandlers(): void {
     const git = new GitService(resolved);
     await git.init();
 
+    // Worktrees require a HEAD; bootstrap fresh repos with an empty commit.
+    // Best-effort: a failure (e.g. missing git identity) must not fail the init.
+    try {
+      await git.ensureInitialCommit();
+    } catch (error) {
+      console.warn('[git:init] Failed to create initial commit:', error);
+    }
+
     // Register as authorized and cache the service
     authorizedWorkdirs.add(resolved);
     gitServices.set(resolved, git);

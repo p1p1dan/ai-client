@@ -404,7 +404,10 @@ export default function App() {
       return;
     }
 
-    if (activeWorktree?.path !== selectedRepo) {
+    // Path compare must tolerate separator/case differences (git reports
+    // forward slashes on Windows); a strict !== here oscillates with useWorktreeSync.
+    const currentPath = activeWorktree?.path;
+    if (!currentPath || !pathsEqual(currentPath, selectedRepo)) {
       setActiveWorktree(createPlaceholderWorktree(selectedRepo));
     }
   }, [activeTab, activeWorktree?.path, isGitRepo, selectedRepo, setActiveTab, setActiveWorktree]);
@@ -1373,6 +1376,10 @@ export default function App() {
     if (!selectedRepo) return;
     try {
       await gitInitMutation.mutateAsync(selectedRepo);
+      // The folder is a git repo now; flip the mode before refetching so a
+      // stale isGitRepo=false cannot re-arm the placeholder effect while
+      // worktree data arrives.
+      setIsGitRepo(true);
       // Refresh worktrees and branches after init
       await refetch();
       await refetchBranches();

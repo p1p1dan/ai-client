@@ -452,6 +452,40 @@ export class GitService {
     await this.git.init();
   }
 
+  /**
+   * Create an empty initial commit when the repository has no commits yet.
+   * A repository without HEAD cannot create worktrees.
+   * Returns true if a commit was created.
+   */
+  async ensureInitialCommit(): Promise<boolean> {
+    const hasCommits = await this.git
+      .raw(['rev-parse', 'HEAD'])
+      .then(() => true)
+      .catch(() => false);
+    if (hasCommits) {
+      return false;
+    }
+
+    // App-generated bootstrap commit: never stage user files, skip user hooks
+    const args = ['commit', '--allow-empty', '--no-verify', '-m', 'Initial commit'];
+    if (!(await this.hasCommitIdentity())) {
+      // Machines without git identity (common on fresh corporate setups) would
+      // fail the commit; scope a fallback identity to this single commit.
+      args.unshift('-c', 'user.name=AiClient', '-c', 'user.email=aiclient@localhost');
+    }
+    await this.git.raw(args);
+    return true;
+  }
+
+  private async hasCommitIdentity(): Promise<boolean> {
+    const hasConfig = (key: string) =>
+      this.git
+        .raw(['config', key])
+        .then((value) => value.trim().length > 0)
+        .catch(() => false);
+    return (await hasConfig('user.name')) && (await hasConfig('user.email'));
+  }
+
   async getFileChanges(): Promise<FileChangesResult> {
     const ignoredPrefixes = ['node_modules/', '.pnpm/', 'dist/', 'out/', '.next/', 'build/'];
     const skippedDirsSet = new Set<string>();
