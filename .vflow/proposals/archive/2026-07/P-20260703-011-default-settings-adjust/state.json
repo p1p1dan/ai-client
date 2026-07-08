@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "pointer": "done",
+  "history_stack": [
+    "understand",
+    "decide",
+    "build",
+    "check",
+    "done"
+  ],
+  "scope": "getInitialState theme 改 sync-terminal、defaultFileTreeDisplayMode 改 tree,仅 2 处字面量,零逻辑改动",
+  "items": [
+    {
+      "id": "E-001",
+      "title": "index.ts:106 theme 改 'sync-terminal'、defaults.ts:30 defaultFileTreeDisplayMode 改 'tree'",
+      "status": "done"
+    },
+    {
+      "id": "E-002",
+      "title": "验证:getInitialState 赋值正确 + typecheck + 自检外科式",
+      "status": "done"
+    }
+  ],
+  "spec_refs": [
+    {
+      "file": "common/testing.md",
+      "reason": "改默认值字面量,零新增逻辑;P-010 已覆盖 settings 持久化回归,本次仅验证应用侧赋值正确"
+    }
+  ]
+}

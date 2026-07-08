@@ -1,10 +1,28 @@
 {
   "schema_version": 2,
-  "pointer": "understand",
+  "pointer": "check",
   "history_stack": [
-    "understand"
+    "understand",
+    "decide",
+    "build",
+    "check"
   ],
-  "scope": "",
-  "items": [],
-  "spec_refs": []
+  "scope": "src/renderer/components/chat/EnhancedInput.tsx 的 onCompositionEnd 处理器(单点兜底回写)",
+  "items": [
+    {
+      "id": "E-001",
+      "title": "EnhancedInput.onCompositionEnd 兜底回写组合文本(修复Shift中英切换丢字)",
+      "status": "done"
+    }
+  ],
+  "spec_refs": [
+    {
+      "file": ".vflow/spec/common/debugging.md",
+      "reason": "根因分析/可证伪假设指导 IME 提交路径定位"
+    },
+    {
+      "file": ".vflow/spec/common/basic.md",
+      "reason": "外科式单点修改 + 简洁优先(拒绝为2行handler引入DOM测试栈)"
+    }
+  ]
 }

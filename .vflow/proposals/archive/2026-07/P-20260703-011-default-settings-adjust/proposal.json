@@ -1,0 +1,22 @@
+{
+  "id": "P-20260703-011",
+  "title": "默认设置调整:外观同步终端/字号14,通用树状/集成模式/列表",
+  "slug": "default-settings-adjust",
+  "lifecycle_status": "archived",
+  "blocking": {
+    "status": "none"
+  },
+  "tier": "T2",
+  "type": "refactor",
+  "workspace": {
+    "isolate_intent": false,
+    "branch": null
+  },
+  "created_at": "2026-07-03T16:46:40",
+  "updated_at": "2026-07-03T17:17:14",
+  "schema_version": 2,
+  "accepted_at": "2026-07-03T17:17:13",
+  "accepted_by": "ai",
+  "accepted_source": "ai_relay",
+  "knowledge_processed": true
+}

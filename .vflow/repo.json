@@ -67,11 +67,11 @@
     {
       "id": "P-20260703-008",
       "slug": "default-settings-update",
-      "dir": "P-20260703-008-default-settings-update",
+      "dir": "archive/2026-07/P-20260703-008-default-settings-update",
       "title": "默认设置调整：外观同步终端/字号14，通用树状/集成模式/列表",
-      "lifecycle_status": "active",
+      "lifecycle_status": "archived",
       "type": "feature",
-      "updated_at": "2026-07-03T09:41:01"
+      "updated_at": "2026-07-03T17:19:32"
     },
     {
       "id": "P-20260703-009",
@@ -90,6 +90,15 @@
       "lifecycle_status": "archived",
       "type": "refactor",
       "updated_at": "2026-07-03T16:32:01"
+    },
+    {
+      "id": "P-20260703-011",
+      "slug": "default-settings-adjust",
+      "dir": "archive/2026-07/P-20260703-011-default-settings-adjust",
+      "title": "默认设置调整:外观同步终端/字号14,通用树状/集成模式/列表",
+      "lifecycle_status": "archived",
+      "type": "refactor",
+      "updated_at": "2026-07-03T17:17:14"
     }
   ]
 }
