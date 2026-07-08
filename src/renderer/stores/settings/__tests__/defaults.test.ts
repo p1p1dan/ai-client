@@ -6,9 +6,9 @@ import {
 } from '../defaults';
 
 describe('settings defaults', () => {
-  it('uses tree layout with split file tree and list repository view by default', () => {
+  it('uses tree layout with legacy file tree and list repository view by default', () => {
     expect(defaultLayoutMode).toBe('tree');
-    expect(defaultFileTreeDisplayMode).toBe('current');
+    expect(defaultFileTreeDisplayMode).toBe('legacy');
     expect(defaultRepositoryListDisplayMode).toBe('list');
   });
 });
