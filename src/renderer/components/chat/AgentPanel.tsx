@@ -223,7 +223,10 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   }, [terminalTheme, bgImageEnabled]);
   const statusLineEnabled = claudeCodeIntegration.statusLineEnabled;
   const defaultAgentId = useMemo(() => getDefaultAgentId(agentSettings), [agentSettings]);
-  const { setAgentCount, registerAgentCloseHandler } = useWorktreeActivityStore();
+  const setAgentCount = useWorktreeActivityStore((s) => s.setAgentCount);
+  const registerAgentCloseHandler = useWorktreeActivityStore(
+    (s) => s.registerAgentCloseHandler
+  );
 
   const [hasRunningProcess, setHasRunningProcess] = useState(false);
   const quickTerminalFocusLeaseRef = useRef<{
