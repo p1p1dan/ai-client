@@ -1385,6 +1385,14 @@ export default function App() {
       await refetchBranches();
     } catch (error) {
       console.error('Failed to initialize git repository:', error);
+      toastManager.add({
+        type: 'error',
+        title: t('Initialize repository failed'),
+        description:
+          error instanceof Error
+            ? error.message
+            : t('Failed to initialize the git repository. Please try again.'),
+      });
     }
   };
 

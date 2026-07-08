@@ -273,6 +273,9 @@ export const zhTranslations: Record<string, string> = {
   'Idle time': '空闲时间',
   'Immediate restart': '立即重启',
   'Initializing repository': '初始化仓库',
+  'Initialize repository failed': '初始化仓库失败',
+  'Failed to initialize the git repository. Please try again.':
+    '初始化 Git 仓库失败，请重试。',
   Keybindings: '快捷键',
   Language: '语言',
   Layout: '布局',

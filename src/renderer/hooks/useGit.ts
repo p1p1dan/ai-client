@@ -203,10 +203,12 @@ export function useGitInit() {
     },
     onSuccess: (_, workdir) => {
       const normalized = normalizePath(workdir);
-      // Invalidate all git-related queries for this workdir
+      // git status/branches queries key on the normalized workdir (see useGitStatus/useGitBranches)
       queryClient.invalidateQueries({ queryKey: ['git', 'status', normalized] });
       queryClient.invalidateQueries({ queryKey: ['git', 'branches', normalized] });
-      queryClient.invalidateQueries({ queryKey: ['worktree', 'list', normalized] });
+      // worktree list keys on the raw workdir (see useWorktreeList); use it as-is to actually match
+      queryClient.invalidateQueries({ queryKey: ['worktree', 'list', workdir] });
+      queryClient.invalidateQueries({ queryKey: ['worktree', 'listMultiple', workdir] });
     },
   });
 }
