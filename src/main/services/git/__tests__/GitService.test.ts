@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { rawMock } = vi.hoisted(() => ({ rawMock: vi.fn() }));
+const { rawMock, checkoutBranchMock } = vi.hoisted(() => ({
+  rawMock: vi.fn(),
+  checkoutBranchMock: vi.fn(),
+}));
 
 vi.mock('../runtime', () => ({
-  createSimpleGit: () => ({ raw: rawMock }),
+  createSimpleGit: () => ({ raw: rawMock, checkoutBranch: checkoutBranchMock }),
   createGitEnv: () => ({}),
   isWslGitRepository: () => false,
   normalizeGitRelativePath: (inputPath: string) => inputPath,
@@ -118,4 +121,41 @@ describe('GitService.ensureInitialCommit', () => {
     const service = new GitService('/repo');
     await expect(service.ensureInitialCommit()).rejects.toThrow('disk full');
   });
+});
+
+describe('GitService.createBranch branch name handling', () => {
+  beforeEach(() => {
+    checkoutBranchMock.mockReset();
+    checkoutBranchMock.mockResolvedValue(undefined);
+  });
+
+  it('passes valid branch names through, defaulting startPoint to HEAD', async () => {
+    const service = new GitService('/repo');
+    await service.createBranch('feature/my-feature');
+
+    expect(checkoutBranchMock).toHaveBeenCalledWith('feature/my-feature', 'HEAD');
+  });
+
+  it('forwards an explicit startPoint', async () => {
+    const service = new GitService('/repo');
+    await service.createBranch('feature/my-feature', 'origin/main');
+
+    expect(checkoutBranchMock).toHaveBeenCalledWith('feature/my-feature', 'origin/main');
+  });
+
+  it('normalizes backslashes before invoking git', async () => {
+    const service = new GitService('/repo');
+    await service.createBranch('fix\\recentBug');
+
+    expect(checkoutBranchMock).toHaveBeenCalledWith('fix/recentBug', 'HEAD');
+  });
+
+  it.each(['fix bug', '-foo', 'a..b', 'a.lock', '/fix', 'fix/', 'a~b', 'a:b', ''])(
+    'rejects invalid branch name %j without invoking git',
+    async (name) => {
+      const service = new GitService('/repo');
+      await expect(service.createBranch(name)).rejects.toThrow(/无效的分支名|分支名不能为空/);
+      expect(checkoutBranchMock).not.toHaveBeenCalled();
+    }
+  );
 });

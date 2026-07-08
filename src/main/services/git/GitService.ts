@@ -18,6 +18,7 @@ import type {
   PullRequest,
   SubmoduleStatus,
 } from '@shared/types';
+import { ensureValidBranchName } from '@shared/utils/branchName';
 import type { SimpleGit, StatusResult } from 'simple-git';
 import { decodeBuffer, detectBinaryFile, gitShow } from './encoding';
 import { GIT_LOG_PRETTY_FORMAT, parseGitLogOutput } from './gitLogFormat';
@@ -438,7 +439,7 @@ export class GitService {
   }
 
   async createBranch(name: string, startPoint?: string): Promise<void> {
-    await this.git.checkoutBranch(name, startPoint || 'HEAD');
+    await this.git.checkoutBranch(ensureValidBranchName(name), startPoint || 'HEAD');
   }
 
   async getDiff(options?: { staged?: boolean }): Promise<string> {

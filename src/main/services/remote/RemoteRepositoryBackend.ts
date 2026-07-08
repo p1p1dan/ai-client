@@ -573,7 +573,7 @@ export class RemoteRepositoryBackend {
     const { connectionId, remotePath } = toRemotePath(workdir);
     await remoteConnectionManager.call(connectionId, 'git:branchCreate', {
       rootPath: remotePath,
-      name,
+      name: ensureValidBranchName(name),
       startPoint,
     });
   }

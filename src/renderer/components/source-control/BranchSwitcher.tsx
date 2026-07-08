@@ -1,4 +1,5 @@
 import type { GitBranch } from '@shared/types';
+import { normalizeBranchName, validateBranchName } from '@shared/utils/branchName';
 import { GitBranch as GitBranchIcon, Loader2, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -79,9 +80,17 @@ export function BranchSwitcher({
     }
   };
 
+  // Live validation hint; backslashes are already normalized to "/" on input
+  const branchNameError = useMemo(() => {
+    if (!newBranchName) return null;
+    const check = validateBranchName(normalizeBranchName(newBranchName));
+    return check.valid ? null : check.error;
+  }, [newBranchName]);
+
   const handleCreateBranch = async () => {
-    const name = newBranchName.trim();
+    const name = normalizeBranchName(newBranchName);
     if (!name || !onCreateBranch || isCreatingBranch) return;
+    if (!validateBranchName(name).valid) return;
     setIsCreatingBranch(true);
     try {
       await onCreateBranch(name);
@@ -142,25 +151,31 @@ export function BranchSwitcher({
         {onCreateBranch && (
           <div className="px-2 pb-1">
             {isCreating ? (
-              <div className="flex items-center gap-1">
-                <Input
-                  value={newBranchName}
-                  onChange={(e) => setNewBranchName(e.target.value)}
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === 'Enter') handleCreateBranch();
-                    if (e.key === 'Escape') {
-                      setIsCreating(false);
-                      setNewBranchName('');
-                    }
-                  }}
-                  placeholder={t('Branch name...')}
-                  className="text-xs"
-                  disabled={isCreatingBranch}
-                  autoFocus
-                />
-                {isCreatingBranch && (
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={newBranchName}
+                    onChange={(e) => setNewBranchName(e.target.value.replace(/\\/g, '/'))}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter') handleCreateBranch();
+                      if (e.key === 'Escape') {
+                        setIsCreating(false);
+                        setNewBranchName('');
+                      }
+                    }}
+                    placeholder={t('Branch name...')}
+                    className="text-xs"
+                    disabled={isCreatingBranch}
+                    aria-invalid={branchNameError ? true : undefined}
+                    autoFocus
+                  />
+                  {isCreatingBranch && (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {branchNameError && (
+                  <span className="px-1 text-xs text-destructive">{t(branchNameError)}</span>
                 )}
               </div>
             ) : (
