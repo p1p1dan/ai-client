@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
+import type { ClaudeRuntimeKind, ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
+import { app } from 'electron';
 import { classifyClaudeCliVersion, compareSemver } from './ClaudeVersion';
 import { cliDetector } from './CliDetector';
 
@@ -93,6 +94,22 @@ export class ClaudeRuntimeChecker {
 
   async detect(force = false): Promise<ClaudeRuntimeStatus> {
     if (!force && this.cached) {
+      return this.cached;
+    }
+
+    // Dev-only: override the detected runtime kind so we can exercise gate
+    // branches (e.g. vscode-extension-only) on a machine where the CLI is
+    // actually installed. Gated on !app.isPackaged; delete the env to restore.
+    if (!app.isPackaged && process.env.TEST_RUNTIME_KIND) {
+      const kind = process.env.TEST_RUNTIME_KIND as ClaudeRuntimeKind;
+      console.warn(`[ClaudeRuntimeChecker] TEST_RUNTIME_KIND active — forcing kind=${kind}`);
+      this.cached =
+        kind === 'vscode-extension-only'
+          ? {
+              kind,
+              vscodeExtension: { path: '(test-injected)', version: 'test' },
+            }
+          : { kind };
       return this.cached;
     }
 

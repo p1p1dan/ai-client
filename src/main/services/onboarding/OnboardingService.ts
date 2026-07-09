@@ -263,6 +263,18 @@ class OnboardingService {
         },
       },
     };
+
+    // Dev dry-run: return ok WITHOUT persisting credentials or onboarding state.
+    // Lets us walk the register-code -> result screen (all three modes) without
+    // touching ~/.claude / ~/.codex / ~/.aiclient, so a tester's real local env
+    // is never overwritten. Gated on !app.isPackaged so packaged builds ignore it.
+    if (!app.isPackaged && process.env.TEST_LOGIN_DRY_RUN) {
+      console.warn(
+        '[OnboardingService] TEST_LOGIN_DRY_RUN active — returning ok without writing any files'
+      );
+      return result;
+    }
+
     return this.finalizeRegistration(result, normalizedEmail, normalizedServerUrl);
   }
 
@@ -766,6 +778,20 @@ class OnboardingService {
       cliDetector.detectOne('claude'),
       cliDetector.detectOne('codex'),
     ]);
+
+    // Dev-only: force the CLI tools to report as missing so we can exercise the
+    // "缺工具" cli-check UI and the register-only branch on a machine where the
+    // tools are actually installed. git/node stay real. Gated on !app.isPackaged.
+    if (!app.isPackaged && process.env.TEST_CLI_MISSING) {
+      console.warn('[OnboardingService] TEST_CLI_MISSING active — reporting claude/codex as missing');
+      return {
+        ...prerequisites,
+        claudeInstalled: false,
+        claudeVersion: undefined,
+        codexInstalled: false,
+        codexVersion: undefined,
+      };
+    }
 
     return {
       ...prerequisites,
