@@ -8,7 +8,7 @@ import type {
   OnboardingSendCodeResponse,
   OnboardingState,
 } from '@shared/types';
-import { net } from 'electron';
+import { app, net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
 import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
@@ -16,9 +16,52 @@ import { cliDetector } from '../cli/CliDetector';
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
 const DEFAULT_ONBOARDING_SERVICE_URL = 'https://onboarding-jyw.pipidan.qzz.io';
 
+// Test-only login bypass: dev builds accept this fixed account + code offline,
+// writing build-injected credentials instead of hitting the onboarding server.
+const TEST_BYPASS_EMAIL = 'admin@jcdz.cc';
+const TEST_BYPASS_CODE = '123456';
+// Fallback API gateway for the bypass when TEST_CLAUDE_BASE_URL / TEST_CODEX_BASE_URL
+// are not injected. Points at the real CCH gateway so the written credentials
+// route somewhere usable instead of the onboarding service.
+const TEST_BYPASS_DEFAULT_BASE_URL = 'https://cch-jyw.pipidan.qzz.io/v1';
+
 function getInjectedOnboardingServiceUrl(): string {
   const injected = typeof __ONBOARDING_SERVICE_URL__ === 'string' ? __ONBOARDING_SERVICE_URL__ : '';
   return injected || DEFAULT_ONBOARDING_SERVICE_URL;
+}
+
+// typeof guard keeps these ReferenceError-safe when the vite `define` block is
+// absent (e.g. vitest), mirroring getInjectedOnboardingServiceUrl above.
+function readInjected(read: () => string): string {
+  try {
+    return read();
+  } catch {
+    return '';
+  }
+}
+
+interface TestBypassCredentials {
+  claudeBaseUrl: string;
+  claudeToken: string;
+  codexBaseUrl: string;
+  codexKey: string;
+}
+
+function getTestBypassCredentials(): TestBypassCredentials {
+  return {
+    claudeBaseUrl: readInjected(() =>
+      typeof __TEST_CLAUDE_BASE_URL__ === 'string' ? __TEST_CLAUDE_BASE_URL__ : ''
+    ),
+    claudeToken: readInjected(() =>
+      typeof __TEST_CLAUDE_TOKEN__ === 'string' ? __TEST_CLAUDE_TOKEN__ : ''
+    ),
+    codexBaseUrl: readInjected(() =>
+      typeof __TEST_CODEX_BASE_URL__ === 'string' ? __TEST_CODEX_BASE_URL__ : ''
+    ),
+    codexKey: readInjected(() =>
+      typeof __TEST_CODEX_KEY__ === 'string' ? __TEST_CODEX_KEY__ : ''
+    ),
+  };
 }
 
 class OnboardingService {
@@ -80,6 +123,14 @@ class OnboardingService {
     }
 
     const normalizedEmail = this.normalizeEmail(email);
+
+    // Test-only offline bypass: skip the network round-trip for the fixed test
+    // account in dev builds so verifyAndRegister can accept the fixed code.
+    if (this.isTestBypassAccount(normalizedEmail)) {
+      console.warn('[OnboardingService] sendCode using dev test-login bypass (offline)');
+      return { ok: true, data: { expiresInSec: 600, resendAfterSec: 60 } };
+    }
+
     const serverUrl = this.normalizeServerUrl(getInjectedOnboardingServiceUrl());
 
     try {
@@ -107,6 +158,15 @@ class OnboardingService {
 
     const normalizedEmail = this.normalizeEmail(email);
     const normalizedServerUrl = this.normalizeServerUrl(getInjectedOnboardingServiceUrl());
+
+    // Test-only offline bypass: dev build + fixed account + fixed code writes
+    // build-injected credentials without contacting the onboarding server.
+    if (this.isTestBypassAccount(normalizedEmail)) {
+      if (code.trim() !== TEST_BYPASS_CODE) {
+        return { ok: false, error: 'CODE_INVALID' };
+      }
+      return this.registerWithTestBypass(normalizedEmail, normalizedServerUrl);
+    }
 
     let result: OnboardingRegisterResponse;
     try {
@@ -151,12 +211,76 @@ class OnboardingService {
       };
     }
 
+    return this.finalizeRegistration(result, normalizedEmail, normalizedServerUrl);
+  }
+
+  /**
+   * True only in dev builds (never packaged) for the fixed test account.
+   * Gated on !app.isPackaged so any packaged build — including test packages —
+   * can never take the bypass path.
+   */
+  private isTestBypassAccount(normalizedEmail: string): boolean {
+    return !app.isPackaged && normalizedEmail === TEST_BYPASS_EMAIL;
+  }
+
+  /**
+   * Offline registration for the test account: synthesize a server-shaped
+   * response from build-injected credentials and reuse the normal persist +
+   * state-save path. Fails loudly (without writing files) if the build did not
+   * inject a Claude token / Codex key.
+   */
+  private registerWithTestBypass(
+    normalizedEmail: string,
+    normalizedServerUrl: string
+  ): OnboardingRegisterResponse {
+    const injected = getTestBypassCredentials();
+    if (!injected.claudeToken || !injected.codexKey) {
+      console.error(
+        '[OnboardingService] test-login bypass active but credentials not injected ' +
+          '(set TEST_CLAUDE_TOKEN / TEST_CODEX_KEY when starting dev)'
+      );
+      return {
+        ok: false,
+        error:
+          'Test login bypass is enabled but credentials were not injected at build time. ' +
+          'Set TEST_CLAUDE_TOKEN and TEST_CODEX_KEY before starting dev.',
+      };
+    }
+
+    console.warn('[OnboardingService] verifyAndRegister using dev test-login bypass (offline)');
+    // baseUrl is optional: when not injected, fall back to the real CCH gateway
+    // so the written credentials still route somewhere usable.
+    const claudeBaseUrl = injected.claudeBaseUrl || TEST_BYPASS_DEFAULT_BASE_URL;
+    const codexBaseUrl = injected.codexBaseUrl || TEST_BYPASS_DEFAULT_BASE_URL;
+    const result: OnboardingRegisterResponse = {
+      ok: true,
+      data: {
+        user: { id: 0, name: normalizedEmail },
+        apiKey: injected.claudeToken,
+        config: {
+          claude: { baseUrl: claudeBaseUrl, authToken: injected.claudeToken },
+          codex: { baseUrl: codexBaseUrl, apiKey: injected.codexKey },
+        },
+      },
+    };
+    return this.finalizeRegistration(result, normalizedEmail, normalizedServerUrl);
+  }
+
+  /**
+   * Shared tail for both the real and test-bypass flows: write CLI credential
+   * files and persist onboarding state. Returns the original result on success.
+   */
+  private finalizeRegistration(
+    result: OnboardingRegisterResponse,
+    normalizedEmail: string,
+    normalizedServerUrl: string
+  ): OnboardingRegisterResponse {
     if (!this.persistCredentialFiles(result, normalizedServerUrl)) {
       return { ok: false, error: 'Failed to write CLI credentials' };
     }
 
     const cchServerUrl = this.deriveCchBaseUrl(
-      result.data.config.claude.baseUrl,
+      result.data?.config.claude.baseUrl,
       normalizedServerUrl
     );
 

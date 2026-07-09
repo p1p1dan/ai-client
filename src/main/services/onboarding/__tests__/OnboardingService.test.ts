@@ -624,4 +624,127 @@ describe('OnboardingService', () => {
       codexVersion: undefined,
     });
   });
+
+  describe('test-login bypass (dev only)', () => {
+    const stubInjectedCredentials = (overrides?: {
+      claudeToken?: string;
+      codexKey?: string;
+      claudeBaseUrl?: string;
+      codexBaseUrl?: string;
+    }) => {
+      vi.stubGlobal('__TEST_CLAUDE_TOKEN__', overrides?.claudeToken ?? 'test-claude-token');
+      vi.stubGlobal('__TEST_CODEX_KEY__', overrides?.codexKey ?? 'test-codex-key');
+      vi.stubGlobal(
+        '__TEST_CLAUDE_BASE_URL__',
+        overrides?.claudeBaseUrl ?? 'https://test-claude.example.com/v1'
+      );
+      vi.stubGlobal(
+        '__TEST_CODEX_BASE_URL__',
+        overrides?.codexBaseUrl ?? 'https://test-codex.example.com/v1'
+      );
+    };
+
+    it('writes injected credentials + state offline without any network call', async () => {
+      stubInjectedCredentials();
+
+      const { onboardingService } = await import('../OnboardingService');
+      const result = await onboardingService.verifyAndRegister('admin@jcdz.cc', '123456');
+
+      expect(result.ok).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      const claudeSettings = JSON.parse(
+        readFileSync(join(tempHome, '.claude', 'settings.json'), 'utf-8')
+      );
+      expect(claudeSettings.env.ANTHROPIC_AUTH_TOKEN).toBe('test-claude-token');
+      expect(claudeSettings.env.ANTHROPIC_BASE_URL).toBe('https://test-claude.example.com/v1');
+
+      const codexAuth = JSON.parse(readFileSync(join(tempHome, '.codex', 'auth.json'), 'utf-8'));
+      expect(codexAuth.OPENAI_API_KEY).toBe('test-codex-key');
+
+      const state = onboardingService.checkRegistration();
+      expect(state.registered).toBe(true);
+      expect(state.email).toBe('admin@jcdz.cc');
+    });
+
+    it('normalizes the bypass email case-insensitively', async () => {
+      stubInjectedCredentials();
+
+      const { onboardingService } = await import('../OnboardingService');
+      const result = await onboardingService.verifyAndRegister('ADMIN@JCDZ.CC', '123456');
+
+      expect(result.ok).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(onboardingService.checkRegistration().registered).toBe(true);
+    });
+
+    it('rejects a wrong code for the bypass account without any network call', async () => {
+      stubInjectedCredentials();
+
+      const { onboardingService } = await import('../OnboardingService');
+      const result = await onboardingService.verifyAndRegister('admin@jcdz.cc', '000000');
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('CODE_INVALID');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(onboardingService.checkRegistration().registered).toBe(false);
+    });
+
+    it('fails without writing files when credentials were not injected', async () => {
+      // Leave __TEST_CLAUDE_TOKEN__ / __TEST_CODEX_KEY__ unstubbed (empty).
+      const { onboardingService } = await import('../OnboardingService');
+      const result = await onboardingService.verifyAndRegister('admin@jcdz.cc', '123456');
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/inject/i);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(existsSync(join(tempHome, '.claude', 'settings.json'))).toBe(false);
+      expect(onboardingService.checkRegistration().registered).toBe(false);
+    });
+
+    it('falls back to the CCH gateway base URL when only token/key are injected', async () => {
+      // Inject token + key but leave both base URLs empty.
+      vi.stubGlobal('__TEST_CLAUDE_TOKEN__', 'test-claude-token');
+      vi.stubGlobal('__TEST_CODEX_KEY__', 'test-codex-key');
+
+      const { onboardingService } = await import('../OnboardingService');
+      const result = await onboardingService.verifyAndRegister('admin@jcdz.cc', '123456');
+
+      expect(result.ok).toBe(true);
+      const claudeSettings = JSON.parse(
+        readFileSync(join(tempHome, '.claude', 'settings.json'), 'utf-8')
+      );
+      expect(claudeSettings.env.ANTHROPIC_BASE_URL).toBe('https://cch-jyw.pipidan.qzz.io/v1');
+
+      const codexConfig = readFileSync(join(tempHome, '.codex', 'config.toml'), 'utf-8');
+      expect(codexConfig).toMatch(/base_url = "https:\/\/cch-jyw\.pipidan\.qzz\.io\/v1"/);
+    });
+
+    it('sendCode returns ok offline for the bypass account', async () => {
+      const { onboardingService } = await import('../OnboardingService');
+      const result = await onboardingService.sendCode('admin@jcdz.cc');
+
+      expect(result.ok).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('does NOT bypass in a packaged build — falls through to the network', async () => {
+      stubInjectedCredentials();
+      const electron = await import('electron');
+      (electron.app as { isPackaged: boolean }).isPackaged = true;
+
+      fetchMock.mockResolvedValue({ json: async () => ({ ok: false, error: 'CODE_INVALID' }) });
+
+      try {
+        const { onboardingService } = await import('../OnboardingService');
+        const result = await onboardingService.verifyAndRegister('admin@jcdz.cc', '123456');
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result.ok).toBe(false);
+        expect(onboardingService.checkRegistration().registered).toBe(false);
+      } finally {
+        (electron.app as { isPackaged: boolean | undefined }).isPackaged = undefined;
+      }
+    });
+  });
 });

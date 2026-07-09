@@ -15,6 +15,18 @@ if (!process.env.ONBOARDING_SERVICE_URL) {
   );
 }
 
+// Test-only login bypass credentials. These are read from the build env and
+// default to empty strings, so a normal release build bakes in "" — no secret
+// literal, and the bypass branch (gated on !app.isPackaged at runtime) is inert
+// in any packaged build. Set these envs only when starting `electron-vite dev`
+// to exercise the admin@jcdz.cc / 123456 offline login path.
+const testLoginBypass = {
+  claudeBaseUrl: process.env.TEST_CLAUDE_BASE_URL || '',
+  claudeToken: process.env.TEST_CLAUDE_TOKEN || '',
+  codexBaseUrl: process.env.TEST_CODEX_BASE_URL || '',
+  codexKey: process.env.TEST_CODEX_KEY || '',
+};
+
 // On Windows, TEC Solutions OCular Agent encrypts .js files written by Node.js.
 // This plugin rewrites output files via a .bin intermediate + PowerShell copy
 // to produce unencrypted files that Electron can load.
@@ -62,6 +74,10 @@ export default defineConfig({
     },
     define: {
       __ONBOARDING_SERVICE_URL__: JSON.stringify(onboardingServiceUrl),
+      __TEST_CLAUDE_BASE_URL__: JSON.stringify(testLoginBypass.claudeBaseUrl),
+      __TEST_CLAUDE_TOKEN__: JSON.stringify(testLoginBypass.claudeToken),
+      __TEST_CODEX_BASE_URL__: JSON.stringify(testLoginBypass.codexBaseUrl),
+      __TEST_CODEX_KEY__: JSON.stringify(testLoginBypass.codexKey),
     },
     build: {
       externalizeDeps: false,
