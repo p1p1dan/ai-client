@@ -6,6 +6,7 @@ import type {
   OnboardingErrorCode,
   OnboardingRegisterResponse,
   OnboardingSendCodeResponse,
+  VsCodeExtensionInfo,
 } from '@shared/types';
 import {
   AlertCircleIcon,
@@ -13,6 +14,7 @@ import {
   ChevronRightIcon,
   Loader2Icon,
   MailIcon,
+  RocketIcon,
   ServerIcon,
   TerminalIcon,
 } from 'lucide-react';
@@ -20,12 +22,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-type Step = 'cli-check' | 'cli-install' | 'register-email' | 'register-code' | 'result';
-type OnboardingMode = 'standard' | 'register-only' | 'vscode-extension';
-
-const INSTALL_GUIDE_URL = 'https://api-doc.pipidan.xyz/installation.html';
+type Step = 'welcome' | 'cli-install' | 'register-email' | 'register-code' | 'result';
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
 const CODE_LENGTH = 6;
 
@@ -131,17 +131,17 @@ export interface OnboardingViewProps {
    */
   alreadyRegistered?: boolean;
   /**
-   * Override the initial step. Useful for skipping CLI detection when the
-   * caller already knows the user doesn't need it (e.g. VSCode-extension-only
-   * users who just want to register).
+   * Override the initial step. Useful when the caller already knows where the
+   * user should land — e.g. cli-missing callers pass 'result' to jump straight
+   * to the completion / enter-AiClient screen.
    */
   initialStep?: Step;
   /**
-   * Override the initial mode. 'vscode-extension' hides CLI-install prompts in
-   * the registration copy and switches the success page to "return to VSCode"
-   * with an optional "continue installing CLI" button.
+   * VSCode Claude extension detected on this machine. When set, the completion
+   * screen adds a "you can return to VSCode" hint — the extension reads the
+   * same ~/.claude credentials this flow writes.
    */
-  initialMode?: OnboardingMode;
+  vscodeExtension?: VsCodeExtensionInfo;
 }
 
 export function OnboardingView({
@@ -149,10 +149,11 @@ export function OnboardingView({
   className,
   alreadyRegistered = false,
   initialStep,
-  initialMode,
+  vscodeExtension,
 }: OnboardingViewProps) {
-  const [step, setStep] = useState<Step>(initialStep ?? 'cli-check');
-  const [mode, setMode] = useState<OnboardingMode>(initialMode ?? 'standard');
+  // Default entry point: unregistered users start at the welcome screen;
+  // alreadyRegistered (cli-missing) callers pass initialStep='result' explicitly.
+  const [step, setStep] = useState<Step>(initialStep ?? (alreadyRegistered ? 'result' : 'welcome'));
   const [cliStatus, setCliStatus] = useState<OnboardingCliStatus | null>(null);
   const [cliLoading, setCliLoading] = useState(false);
 
@@ -216,8 +217,12 @@ export function OnboardingView({
   }, []);
 
   useEffect(() => {
-    if (step === 'cli-check') {
-      void detectCli({ autoAdvance: true });
+    // Detect CLI in the background on the welcome / result screens so the
+    // completion screen knows whether Claude is installed (drives the "进入
+    // AiClient" vs "需要先安装" branch). Never auto-advances — registration is
+    // the mandatory trunk the user walks manually.
+    if (step === 'welcome' || step === 'result') {
+      void detectCli();
     }
   }, [step, detectCli]);
 
@@ -241,16 +246,17 @@ export function OnboardingView({
       const refreshedStatus = await detectCli();
 
       if (result.cancelled) {
-        setStep('cli-check');
+        // Installation is only reachable from the completion screen's "进入
+        // AiClient" confirm, so a cancel returns there — not to a standalone
+        // cli-check screen (which no longer exists as an entry point).
+        setStep('result');
         return;
       }
 
       if (refreshedStatus.claudeInstalled) {
-        if (alreadyRegistered) {
-          onComplete();
-        } else {
-          setStep('register-email');
-        }
+        // Registration (the mandatory trunk) is always done by the time install
+        // runs, so a successful install means we can enter the app directly.
+        onComplete();
         return;
       }
 
@@ -260,11 +266,11 @@ export function OnboardingView({
     } finally {
       setInstalling(false);
     }
-  }, [cliStatus, detectCli, alreadyRegistered, onComplete]);
+  }, [cliStatus, detectCli, onComplete]);
 
   const handleCancelInstall = useCallback(async () => {
     if (!installing) {
-      setStep('cli-check');
+      setStep('result');
       return;
     }
 
@@ -332,42 +338,45 @@ export function OnboardingView({
 
   const canSendCode = isValidEmailFormat(email) && !sendingCode;
   const canVerify = code.trim().length === CODE_LENGTH && !verifying;
-  const hasMissingTools = cliStatus
-    ? !cliStatus.gitInstalled ||
-      !cliStatus.nodeInstalled ||
-      !cliStatus.claudeInstalled ||
-      !cliStatus.codexInstalled
-    : false;
 
-  const handleOpenInstallGuide = () => {
-    void window.electronAPI.shell.openExternal(INSTALL_GUIDE_URL);
-  };
-
-  const handleRegisterOnly = () => {
-    setMode('register-only');
+  // "返回" from the email step goes back to the welcome screen — the
+  // register-first trunk starts there.
+  const handleBackToWelcome = () => {
     setSendCodeError(null);
     setVerifyError(null);
     setRegisterResult(null);
-    setStep('register-email');
-  };
-
-  const handleReturnToInstall = () => {
-    setMode('standard');
-    setSendCodeError(null);
-    setVerifyError(null);
-    setRegisterResult(null);
-    setStep('cli-check');
-  };
-
-  const handleContinueInstallFromVscode = () => {
-    setMode('standard');
-    setRegisterResult(null);
-    setStep('cli-check');
+    setStep('welcome');
   };
 
   const handleQuitApp = () => {
     void window.electronAPI.app.quit();
   };
+
+  // Completion-screen fork state: entering AiClient requires the CLI. When it's
+  // missing we don't silently install — we show a confirm prompt first.
+  const [showInstallConfirm, setShowInstallConfirm] = useState(false);
+  const [enterChecking, setEnterChecking] = useState(false);
+
+  const handleEnterAiClient = useCallback(async () => {
+    // Re-detect at click time rather than trusting the background cliStatus,
+    // which may still be null/stale if detection hasn't returned yet. This makes
+    // a single click always act on the true CLI state (no swallowed clicks, no
+    // false "needs install" when the CLI is actually present).
+    if (enterChecking) return;
+    setEnterChecking(true);
+    try {
+      const status = await detectCli();
+      if (status.claudeInstalled) {
+        onComplete();
+      } else {
+        // CLI missing: ask before installing rather than kicking off a 1-3 min
+        // download unannounced.
+        setShowInstallConfirm(true);
+      }
+    } finally {
+      setEnterChecking(false);
+    }
+  }, [enterChecking, detectCli, onComplete]);
 
   return (
     <div
@@ -376,112 +385,34 @@ export function OnboardingView({
         className
       )}
     >
-      {step === 'cli-check' && (
+      {step === 'welcome' && (
         <>
           <SectionHeader
-            icon={<TerminalIcon className="h-5 w-5 text-muted-foreground" />}
-            title="CLI 环境检查"
-            description="初始化将先校验基础环境,再安装必需的 Claude Code(Codex 为可选)。"
+            icon={<RocketIcon className="h-5 w-5 text-muted-foreground" />}
+            title="欢迎使用 AiClient"
+            description="完成注册即可写入 Claude Code 与 Codex 的环境配置。注册后可选择进入 AiClient,或返回其他编辑器(如 VSCode)直接使用。"
           />
           <SectionBody>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  基础环境
-                </p>
-                <CliRow
-                  name="Git"
-                  installed={cliStatus?.gitInstalled}
-                  version={cliStatus?.gitVersion}
-                  loading={cliLoading}
-                />
-                <CliRow
-                  name="Node.js"
-                  installed={cliStatus?.nodeInstalled}
-                  version={cliStatus?.nodeVersion}
-                  loading={cliLoading}
-                  missingLabel={
-                    cliStatus?.nodeVersion ? `${cliStatus.nodeVersion}(需 ≥ 18)` : undefined
-                  }
-                />
+            <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+              <div className="flex items-start gap-2">
+                <ServerIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span>
+                  <span className="font-medium text-foreground">注册并配置环境</span>
+                  ——写入 CLI 凭据,所有用户必经。
+                </span>
               </div>
-
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  CLI 工具
-                </p>
-                <CliRow
-                  name="Claude Code"
-                  installed={cliStatus?.claudeInstalled}
-                  version={cliStatus?.claudeVersion}
-                  loading={cliLoading}
-                />
-                <CliRow
-                  name="Codex"
-                  installed={cliStatus?.codexInstalled}
-                  version={cliStatus?.codexVersion}
-                  loading={cliLoading}
-                />
+              <div className="flex items-start gap-2">
+                <RocketIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span>
+                  <span className="font-medium text-foreground">按需进入 AiClient</span>
+                  ——若要在本机使用,再安装 Claude Code CLI 即可。
+                </span>
               </div>
-
-              {cliStatus && !cliStatus.wingetAvailable && hasMissingTools && (
-                <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  未检测到 `winget`,安装程序将尽量通过直接下载方式完成安装。
-                </div>
-              )}
-
-              {cliStatus && !cliStatus.claudeInstalled && (
-                <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  继续注册前需先安装 Claude Code。
-                </div>
-              )}
-
-              {cliStatus && hasMissingTools && (
-                <div className="flex flex-col gap-2 rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  <span>
-                    自动安装可能需要管理员权限。若 Node.js 安装失败,请关闭应用并以
-                    <span className="font-medium text-foreground">管理员身份</span>
-                    重新启动;仍然失败可参考安装指南手动配置(
-                    <button
-                      type="button"
-                      onClick={handleOpenInstallGuide}
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
-                      {INSTALL_GUIDE_URL}
-                    </button>
-                    ){alreadyRegistered ? '。' : ',或先仅完成注册。'}
-                  </span>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={handleOpenInstallGuide}>
-                      打开安装指南
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           </SectionBody>
           <SectionFooter>
-            {hasMissingTools && !alreadyRegistered && (
-              <Button variant="outline" onClick={handleRegisterOnly} disabled={cliLoading}>
-                仅完成注册
-              </Button>
-            )}
-            {hasMissingTools && (
-              <Button variant="outline" onClick={handleInstall} disabled={cliLoading}>
-                一键安装
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                if (alreadyRegistered) {
-                  onComplete();
-                } else {
-                  setStep('register-email');
-                }
-              }}
-              disabled={cliLoading || !cliStatus?.claudeInstalled}
-            >
-              {alreadyRegistered ? '完成' : '继续'}
+            <Button className="btn-flow" onClick={() => setStep('register-email')}>
+              开始注册
               <ChevronRightIcon className="ml-1 h-4 w-4" />
             </Button>
           </SectionFooter>
@@ -520,13 +451,13 @@ export function OnboardingView({
               </Button>
             ) : installError ? (
               <>
-                <Button variant="outline" onClick={() => setStep('cli-check')}>
+                <Button variant="outline" onClick={() => setStep('result')}>
                   返回
                 </Button>
                 <Button onClick={handleInstall}>重试</Button>
               </>
             ) : (
-              <Button variant="outline" onClick={() => setStep('cli-check')}>
+              <Button variant="outline" onClick={() => setStep('result')}>
                 返回
               </Button>
             )}
@@ -539,13 +470,7 @@ export function OnboardingView({
           <SectionHeader
             icon={<ServerIcon className="h-5 w-5 text-muted-foreground" />}
             title="注册"
-            description={
-              mode === 'register-only'
-                ? '当前仅写入本地配置与环境变量,CLI 工具可稍后安装。'
-                : mode === 'vscode-extension'
-                  ? '检测到 VSCode Claude 扩展,仅需完成邮箱注册即可直接在 VSCode 中使用。'
-                  : '输入邮箱以接收验证码。'
-            }
+            description="输入邮箱以接收验证码,注册后写入 Claude 与 Codex 的环境配置。"
           />
           <SectionBody>
             <div className="flex flex-col gap-4">
@@ -578,16 +503,6 @@ export function OnboardingView({
                   仅接受 {ALLOWED_EMAIL_SUFFIXES.join(' / ')} 后缀。
                 </p>
               </div>
-              {mode === 'register-only' && (
-                <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  此步骤仅写入本地配置与环境变量,CLI 工具可稍后安装。
-                </div>
-              )}
-              {mode === 'vscode-extension' && (
-                <div className="rounded-lg border border-primary/28 bg-primary/6 px-3 py-2 text-sm text-muted-foreground">
-                  凭据将写入 ~/.claude/settings.json,注册完成后请返回 VSCode 直接使用 Claude 扩展。
-                </div>
-              )}
               {sendCodeError && (
                 <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
                   <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
@@ -597,7 +512,7 @@ export function OnboardingView({
             </div>
           </SectionBody>
           <SectionFooter>
-            <Button variant="outline" onClick={handleReturnToInstall} disabled={sendingCode}>
+            <Button variant="outline" onClick={handleBackToWelcome} disabled={sendingCode}>
               返回
             </Button>
             <Button onClick={() => void handleSendCode()} disabled={!canSendCode}>
@@ -685,28 +600,16 @@ export function OnboardingView({
         </>
       )}
 
-      {step === 'result' && registerResult?.ok && (
+      {step === 'result' && (registerResult?.ok || alreadyRegistered) && (
         <>
           <SectionHeader
             icon={<CheckCircle2Icon className="h-5 w-5 text-success" />}
-            title={
-              mode === 'register-only'
-                ? '注册信息已保存'
-                : mode === 'vscode-extension'
-                  ? '注册完成,环境已生效'
-                  : '初始化完成'
-            }
-            description={
-              mode === 'register-only'
-                ? '本地配置与环境变量已写入,CLI 工具仍需安装后方可使用。'
-                : mode === 'vscode-extension'
-                  ? '凭据已写入 ~/.claude/settings.json,请返回 VSCode 使用 Claude 扩展。'
-                  : '环境配置已全部完成。'
-            }
+            title="注册完成,环境已配置"
+            description="Claude Code 与 Codex 的凭据已写入本地配置。你可以进入 AiClient 使用,或退出后在其他编辑器中直接使用。"
           />
           <SectionBody>
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-              {registerResult.data?.user && (
+            <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+              {registerResult?.data?.user && (
                 <p>
                   欢迎,
                   <span className="font-medium text-foreground">
@@ -715,41 +618,67 @@ export function OnboardingView({
                   。
                 </p>
               )}
-              {mode === 'register-only' ? (
-                <p>凭据已写入本地配置,Claude Code 与 Codex 安装完成后即可使用。</p>
-              ) : mode === 'vscode-extension' ? (
-                <>
-                  <p>
-                    返回 VSCode 即可直接使用 Claude 扩展。如需在 AiClient 内使用,可继续安装 CLI
-                    环境。
-                  </p>
-                  <p>
-                    如需在项目里启用 vflow 工作流,请在 VSCode 终端运行{' '}
-                    <code className="rounded bg-muted px-1 py-0.5 text-xs">vflow init</code>
-                  </p>
-                </>
-              ) : (
-                <p>Claude Code 与 Codex 的凭据已在本次会话中生效。</p>
+
+              {/* Condition: VSCode extension detected → hint the user can return to it. */}
+              {vscodeExtension && (
+                <div className="rounded-lg border border-primary/28 bg-primary/6 px-3 py-2">
+                  检测到 VSCode Claude 扩展,凭据已写入 ~/.claude/settings.json,可直接返回 VSCode
+                  使用。如需在项目里启用 vflow,请在 VSCode 终端运行{' '}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">vflow init</code>。
+                </div>
+              )}
+
+              {/* Condition: CLI missing → entering AiClient will need an install. */}
+              {!cliStatus?.claudeInstalled && !cliLoading && (
+                <div className="flex items-center gap-2 rounded-lg border border-warning/28 bg-warning/6 px-3 py-2">
+                  <AlertCircleIcon className="h-4 w-4 shrink-0 text-warning" />
+                  <span>未检测到 Claude Code CLI,进入 AiClient 前需先安装。</span>
+                </div>
+              )}
+
+              {installError && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-destructive">
+                  <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{installError}</span>
+                </div>
               )}
             </div>
           </SectionBody>
           <SectionFooter>
-            {mode === 'register-only' ? (
+            {showInstallConfirm ? (
               <>
-                <Button variant="outline" onClick={handleQuitApp}>
-                  退出应用
+                <Button variant="outline" onClick={() => setShowInstallConfirm(false)}>
+                  取消
                 </Button>
-                <Button onClick={handleReturnToInstall}>返回安装</Button>
-              </>
-            ) : mode === 'vscode-extension' ? (
-              <>
-                <Button variant="outline" onClick={handleContinueInstallFromVscode}>
-                  继续安装 CLI 环境
-                </Button>
-                <Button onClick={handleQuitApp}>返回 VSCode 使用</Button>
+                <Tooltip>
+                  <TooltipTrigger render={<span />}>
+                    <Button
+                      onClick={() => {
+                        setShowInstallConfirm(false);
+                        void handleInstall();
+                      }}
+                    >
+                      确认安装
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipPopup side="top">需管理员权限,可能耗时 1-3 分钟</TooltipPopup>
+                </Tooltip>
               </>
             ) : (
-              <Button onClick={onComplete}>开始使用</Button>
+              <>
+                <Button variant="outline" onClick={handleQuitApp} disabled={enterChecking}>
+                  退出
+                </Button>
+                <Button
+                  className="btn-flow"
+                  onClick={() => void handleEnterAiClient()}
+                  disabled={enterChecking}
+                >
+                  {enterChecking && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
+                  进入 AiClient
+                  <ChevronRightIcon className="ml-1 h-4 w-4" />
+                </Button>
+              </>
             )}
           </SectionFooter>
         </>
@@ -786,41 +715,6 @@ function SectionFooter({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col-reverse gap-2 px-6 pt-3 pb-6 sm:flex-row sm:justify-end">
       {children}
-    </div>
-  );
-}
-
-function CliRow({
-  name,
-  installed,
-  version,
-  loading,
-  missingLabel,
-}: {
-  name: string;
-  installed?: boolean;
-  version?: string;
-  loading: boolean;
-  missingLabel?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-      <span className="text-sm font-medium">{name}</span>
-      <div className="flex items-center gap-1.5 text-sm">
-        {loading ? (
-          <Loader2Icon className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : installed ? (
-          <>
-            <CheckCircle2Icon className="h-4 w-4 text-success" />
-            <span className="text-muted-foreground">{version || '已安装'}</span>
-          </>
-        ) : (
-          <>
-            <AlertCircleIcon className="h-4 w-4 text-warning" />
-            <span className="text-muted-foreground">{missingLabel || '未检测到'}</span>
-          </>
-        )}
-      </div>
     </div>
   );
 }

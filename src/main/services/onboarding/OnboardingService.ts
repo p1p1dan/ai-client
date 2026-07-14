@@ -65,11 +65,19 @@ function getTestBypassCredentials(): TestBypassCredentials {
 }
 
 class OnboardingService {
+  // Dry-run registration lives in memory only: TEST_LOGIN_DRY_RUN must never
+  // persist anything, but the gate needs registered=true to mount the main App.
+  // Dies with the process — a restart lands back at the welcome screen.
+  private dryRunState: OnboardingState | null = null;
+
   /**
    * Check if user has already completed onboarding.
    * Reads the onboarding field from ~/.aiclient/settings.json.
    */
   checkRegistration(): OnboardingState {
+    if (this.dryRunState) {
+      return this.dryRunState;
+    }
     try {
       const settingsPath = path.join(os.homedir(), '.aiclient', 'settings.json');
       if (!fs.existsSync(settingsPath)) {
@@ -233,6 +241,43 @@ class OnboardingService {
     normalizedEmail: string,
     normalizedServerUrl: string
   ): OnboardingRegisterResponse {
+    // Dev dry-run: return ok WITHOUT persisting anything. Checked FIRST — since
+    // no files are written, injected credentials are irrelevant here, so we must
+    // not gate on them (that would reject the dry-run when TEST_CLAUDE_TOKEN /
+    // TEST_CODEX_KEY are unset, which is the common tester setup). Synthesize a
+    // placeholder ok-response so the renderer reaches the result screen without
+    // touching ~/.claude / ~/.codex / ~/.aiclient. Gated on !app.isPackaged.
+    if (!app.isPackaged && process.env.TEST_LOGIN_DRY_RUN) {
+      console.warn(
+        '[OnboardingService] TEST_LOGIN_DRY_RUN active — returning ok without writing any files'
+      );
+      // Mark registered in memory (never on disk) so the gate can proceed to
+      // the main App using whatever real credentials already exist locally.
+      this.dryRunState = {
+        registered: true,
+        email: normalizedEmail,
+        registeredAt: new Date().toISOString(),
+      };
+      const injected = getTestBypassCredentials();
+      return {
+        ok: true,
+        data: {
+          user: { id: 0, name: normalizedEmail },
+          apiKey: injected.claudeToken || 'dry-run',
+          config: {
+            claude: {
+              baseUrl: injected.claudeBaseUrl || TEST_BYPASS_DEFAULT_BASE_URL,
+              authToken: injected.claudeToken || 'dry-run',
+            },
+            codex: {
+              baseUrl: injected.codexBaseUrl || TEST_BYPASS_DEFAULT_BASE_URL,
+              apiKey: injected.codexKey || 'dry-run',
+            },
+          },
+        },
+      };
+    }
+
     const injected = getTestBypassCredentials();
     if (!injected.claudeToken || !injected.codexKey) {
       console.error(
@@ -263,17 +308,6 @@ class OnboardingService {
         },
       },
     };
-
-    // Dev dry-run: return ok WITHOUT persisting credentials or onboarding state.
-    // Lets us walk the register-code -> result screen (all three modes) without
-    // touching ~/.claude / ~/.codex / ~/.aiclient, so a tester's real local env
-    // is never overwritten. Gated on !app.isPackaged so packaged builds ignore it.
-    if (!app.isPackaged && process.env.TEST_LOGIN_DRY_RUN) {
-      console.warn(
-        '[OnboardingService] TEST_LOGIN_DRY_RUN active — returning ok without writing any files'
-      );
-      return result;
-    }
 
     return this.finalizeRegistration(result, normalizedEmail, normalizedServerUrl);
   }
@@ -313,6 +347,13 @@ class OnboardingService {
    * Logout current user. Clears non-sensitive onboarding state and removes local CLI credentials.
    */
   logout(): boolean {
+    // Dry-run session: nothing was ever written to disk, so just drop the
+    // in-memory flag — removing real credential files here would destroy the
+    // tester's actual local env, the exact thing dry-run exists to protect.
+    if (this.dryRunState) {
+      this.dryRunState = null;
+      return true;
+    }
     try {
       this.removeClaudeCredentials();
       this.removeCodexConfig();
@@ -717,6 +758,14 @@ class OnboardingService {
    * diagnostic build.
    */
   checkCredentialsHealth(): OnboardingCredentialsHealth {
+    // Dry-run session: registration was simulated without writing anything, so
+    // judging health from the real on-disk files would bounce the tester into
+    // the credentials-unhealthy self-heal (back to register-email) whenever
+    // their actual local config is absent. Simulated registration implies
+    // healthy credentials — report ok.
+    if (this.dryRunState) {
+      return { claudeEnvOk: true, codexAuthOk: true };
+    }
     let claudeEnvOk = false;
     let codexAuthOk = false;
     const reasons: string[] = [];

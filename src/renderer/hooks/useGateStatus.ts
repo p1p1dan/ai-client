@@ -108,21 +108,13 @@ export interface UseGateStatusReturn {
   queryClient: ReturnType<typeof useQueryClient>;
   runtime: ReturnType<typeof useQuery>;
   setRuntimeOverride: (status: ClaudeRuntimeStatus | null) => void;
-  vscodeRegisterFlow: boolean;
-  setVscodeRegisterFlow: (value: boolean) => void;
-  vscodeInstallFlow: boolean;
-  setVscodeInstallFlow: (value: boolean) => void;
-  vscodeRecheckPending: boolean;
-  setVscodeRecheckPending: (value: boolean) => void;
-  vscodeRecheckError: string | null;
-  setVscodeRecheckError: (error: string | null) => void;
   invalidateAll: () => void;
 }
 
 /**
- * Consolidates Root.tsx 4 independent queries + VSCode sub-flow state into a single
- * hook. Returns gate status (loading / runtime-failed / vscode-only / onboarding / ready)
- * plus all render dependencies.
+ * Consolidates Root.tsx 4 independent queries into a single hook. Returns gate
+ * status (loading / runtime-failed / onboarding / ready) plus all render
+ * dependencies.
  */
 export function useGateStatus(): UseGateStatusReturn {
   const queryClient = useQueryClient();
@@ -157,10 +149,6 @@ export function useGateStatus(): UseGateStatusReturn {
   });
 
   const [runtimeOverride, setRuntimeOverride] = useState<ClaudeRuntimeStatus | null>(null);
-  const [vscodeRegisterFlow, setVscodeRegisterFlow] = useState(false);
-  const [vscodeInstallFlow, setVscodeInstallFlow] = useState(false);
-  const [vscodeRecheckPending, setVscodeRecheckPending] = useState(false);
-  const [vscodeRecheckError, setVscodeRecheckError] = useState<string | null>(null);
 
   // Assemble runtime status: override > last stable data > error-mapped detection-failed
   const runtimeStatus: ClaudeRuntimeStatus | null =
@@ -177,15 +165,6 @@ export function useGateStatus(): UseGateStatusReturn {
   useEffect(() => {
     if (runtimeStatus?.kind === 'node-compatible') {
       void window.electronAPI.claudeRuntime.disableAutoUpdates();
-    }
-  }, [runtimeStatus?.kind]);
-
-  // Clear VSCode sub-flow state when leaving vscode-extension-only branch
-  useEffect(() => {
-    if (runtimeStatus && runtimeStatus.kind !== 'vscode-extension-only') {
-      setVscodeRegisterFlow(false);
-      setVscodeInstallFlow(false);
-      setVscodeRecheckError(null);
     }
   }, [runtimeStatus?.kind]);
 
@@ -223,14 +202,6 @@ export function useGateStatus(): UseGateStatusReturn {
     queryClient,
     runtime,
     setRuntimeOverride,
-    vscodeRegisterFlow,
-    setVscodeRegisterFlow,
-    vscodeInstallFlow,
-    setVscodeInstallFlow,
-    vscodeRecheckPending,
-    setVscodeRecheckPending,
-    vscodeRecheckError,
-    setVscodeRecheckError,
     invalidateAll,
   };
 }

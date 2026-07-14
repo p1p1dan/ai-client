@@ -14,8 +14,8 @@ export interface OnboardingShellProps {
   alreadyRegistered?: boolean;
   /** Forwarded to OnboardingView — override the starting step. */
   initialStep?: OnboardingViewProps['initialStep'];
-  /** Forwarded to OnboardingView — override the starting mode. */
-  initialMode?: OnboardingViewProps['initialMode'];
+  /** Forwarded to OnboardingView — VSCode extension info for the completion hint. */
+  vscodeExtension?: OnboardingViewProps['vscodeExtension'];
 }
 
 /**
@@ -30,7 +30,7 @@ export function OnboardingShell({
   onComplete,
   alreadyRegistered,
   initialStep,
-  initialMode,
+  vscodeExtension,
 }: OnboardingShellProps) {
   return (
     <div className="relative z-0 flex h-screen flex-col overflow-hidden">
@@ -42,7 +42,7 @@ export function OnboardingShell({
           onComplete={onComplete}
           alreadyRegistered={alreadyRegistered}
           initialStep={initialStep}
-          initialMode={initialMode}
+          vscodeExtension={vscodeExtension}
         />
       </div>
     </div>
