@@ -120,8 +120,15 @@ export default function Root() {
     case 'onboarding':
       switch (gateStatus.variant) {
         // User never registered — full onboarding from the welcome screen.
+        // vscodeExtension (when set) surfaces the "return to VSCode" hint on
+        // the completion screen right after registering, same as cli-missing.
         case 'register':
-          return <OnboardingShell onComplete={invalidateAll} />;
+          return (
+            <OnboardingShell
+              vscodeExtension={gateStatus.vscodeExtension}
+              onComplete={invalidateAll}
+            />
+          );
         // Registered but Claude CLI is missing (register-only flow, or the
         // machine only has the VSCode extension). Re-enter onboarding at the
         // completion screen; registration is done, credentials are persisted.

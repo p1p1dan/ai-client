@@ -11,9 +11,10 @@ export type GateStatus =
   | {
       stage: 'onboarding';
       variant: 'register' | 'cli-missing' | 'credentials-unhealthy';
-      // Populated only for cli-missing when the machine has the VSCode Claude
-      // extension. The completion screen uses it to add a "you can return to
-      // VSCode" hint — the extension reads the same ~/.claude credentials.
+      // Populated for register/cli-missing when the machine has the VSCode
+      // Claude extension. The completion screen uses it to add a "you can
+      // return to VSCode" hint — the extension reads the same ~/.claude
+      // credentials, and whether to use VSCode or AiClient is the user's call.
       vscodeExtension?: VsCodeExtensionInfo;
     }
   | { stage: 'ready'; runtimeStatus: ClaudeRuntimeStatus };
@@ -60,8 +61,17 @@ export function deriveGateStatus(inputs: GateInputs): GateStatus {
   // run) is a downstream, optional concern surfaced AFTER registration. So an
   // unregistered user always enters the register flow, regardless of runtime kind —
   // including vscode-extension-only, which used to short-circuit to a dedicated shell.
+  // The vscodeExtension tag rides along so the completion screen can show the
+  // "return to VSCode" hint in the same session the user registers.
   if (!registered) {
-    return { stage: 'onboarding', variant: 'register' };
+    return {
+      stage: 'onboarding',
+      variant: 'register',
+      vscodeExtension:
+        runtimeStatus.kind === 'vscode-extension-only'
+          ? runtimeStatus.vscodeExtension
+          : undefined,
+    };
   }
 
   // 4. Registered but CLI status never loaded (first enable after onboarding flip)

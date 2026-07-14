@@ -120,6 +120,9 @@ describe('deriveGateStatus', () => {
       expect(result.stage).toBe('onboarding');
       if (result.stage === 'onboarding') {
         expect(result.variant).toBe('register');
+        // The extension tag rides along so the completion screen can show the
+        // "return to VSCode" hint in the same session the user registers.
+        expect(result.vscodeExtension).toEqual({ path: '/vscode/ext', version: '1.2.3' });
       }
     });
 
@@ -155,6 +158,8 @@ describe('deriveGateStatus', () => {
       expect(result.stage).toBe('onboarding');
       if (result.stage === 'onboarding') {
         expect(result.variant).toBe('register');
+        // No vscode extension on the machine → no hint tag.
+        expect(result.vscodeExtension).toBeUndefined();
       }
     });
 
