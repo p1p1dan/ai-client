@@ -16,6 +16,7 @@ import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { ClaudeRuntimeIndicator } from './ClaudeRuntimeIndicator';
 import { WindowControls } from './WindowControls';
 
 // 平台检查在模块级别进行，避免在组件内部违反 Hooks 规则
@@ -115,6 +116,9 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
 
       {/* Right: Actions and window controls */}
       <div className="flex items-center no-drag">
+        {/* Claude runtime warning (bun-incompatible only) */}
+        <ClaudeRuntimeIndicator />
+
         {/* User Profile */}
         {isRegistered && (
           <Popover open={profileOpen} onOpenChange={setProfileOpen}>

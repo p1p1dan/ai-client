@@ -3,7 +3,6 @@ import { lazy, Suspense } from 'react';
 import { DevToolsOverlay } from './components/DevToolsOverlay';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
-import { ClaudeRuntimeBanner } from './components/onboarding/ClaudeRuntimeBanner';
 import { OnboardingShell } from './components/onboarding/OnboardingShell';
 import { Button } from './components/ui/button';
 import { useGateStatus } from './hooks/useGateStatus';
@@ -93,7 +92,7 @@ function RuntimeDetectionFailedShell({
  * state source, background refetch never regresses to LoadingShell).
  */
 export default function Root() {
-  const { gateStatus, queryClient, runtime, setRuntimeOverride, invalidateAll } = useGateStatus();
+  const { gateStatus, runtime, setRuntimeOverride, invalidateAll } = useGateStatus();
 
   switch (gateStatus.stage) {
     case 'loading':
@@ -157,12 +156,8 @@ export default function Root() {
       return (
         <Suspense fallback={<LoadingShell />}>
           <div className="relative z-0 flex h-screen flex-col overflow-hidden">
-            <ClaudeRuntimeBanner
-              status={gateStatus.runtimeStatus}
-              onStatusChange={(next) => {
-                queryClient.setQueryData(['claudeRuntimeStatus'], next);
-              }}
-            />
+            {/* bun-incompatible runtime warning now lives in the title bar
+                (ClaudeRuntimeIndicator) instead of a full-width banner. */}
             <div className="flex-1 overflow-hidden">
               <App />
             </div>
