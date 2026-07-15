@@ -34,7 +34,6 @@ const INSTALL_STEP_LABELS: Record<InstallStepId, string> = {
   node: 'Node.js',
   claude: 'Claude Code',
   codex: 'Codex',
-  vflow: 'vflow',
 };
 
 // Map machine-readable server errors to user-facing Chinese strings.
@@ -97,7 +96,6 @@ function createInitialInstallProgress(): Record<InstallStepId, InstallProgress> 
     node: { step: 'node', status: 'pending' },
     claude: { step: 'claude', status: 'pending' },
     codex: { step: 'codex', status: 'pending' },
-    vflow: { step: 'vflow', status: 'pending' },
   };
 }
 
@@ -623,8 +621,7 @@ export function OnboardingView({
               {vscodeExtension && (
                 <div className="rounded-lg border border-primary/28 bg-primary/6 px-3 py-2">
                   检测到 VSCode Claude 扩展,凭据已写入 ~/.claude/settings.json,可直接返回 VSCode
-                  使用。如需在项目里启用 vflow,请在 VSCode 终端运行{' '}
-                  <code className="rounded bg-muted px-1 py-0.5 text-xs">vflow init</code>。
+                  使用。
                 </div>
               )}
 

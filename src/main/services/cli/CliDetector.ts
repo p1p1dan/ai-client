@@ -74,13 +74,6 @@ const BUILTIN_AGENT_CONFIGS: BuiltinAgentConfig[] = [
     versionFlag: '--version',
     versionRegex: /(\d+\.\d+\.\d+)/,
   },
-  {
-    id: 'vflow',
-    name: 'vflow',
-    command: 'vflow',
-    versionFlag: '--version',
-    versionRegex: /(\d+\.\d+\.\d+)/,
-  },
 ];
 
 function quoteWindowsCommand(command: string): string {
