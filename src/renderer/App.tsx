@@ -106,6 +106,7 @@ import { useWorkspaceModeStore } from './stores/workspaceMode';
 import { useWorktreeStore } from './stores/worktree';
 import { initAgentActivityListener, useWorktreeActivityStore } from './stores/worktreeActivity';
 import { createSession } from './utils/agentSession';
+import { resolveClaudeConfigDirForSession } from './utils/claudeSessionResume';
 
 function createPlaceholderWorktree(path: string): GitWorktree {
   return {
@@ -116,37 +117,6 @@ function createPlaceholderWorktree(path: string): GitWorktree {
     isLocked: false,
     prunable: false,
   };
-}
-
-async function resolveClaudeConfigDirForResumeSession(options: {
-  homeDir: string;
-  pathSep: string;
-  projectId: string;
-  sessionId: string;
-}): Promise<string | null> {
-  const { homeDir, pathSep, projectId, sessionId } = options;
-  if (!homeDir) return null;
-
-  const nullConfigDir = `${homeDir}${pathSep}.aiclient${pathSep}claude-null`;
-  const userConfigDir = `${homeDir}${pathSep}.claude`;
-  const candidates = [nullConfigDir, userConfigDir];
-
-  const buildSessionPath = (configDir: string) =>
-    `${configDir}${pathSep}projects${pathSep}${projectId}${pathSep}${sessionId}.jsonl`;
-
-  const checks = await Promise.all(
-    candidates.map(async (configDir) => {
-      try {
-        const exists = await window.electronAPI.file.exists(buildSessionPath(configDir));
-        return { configDir, exists };
-      } catch {
-        return { configDir, exists: false };
-      }
-    })
-  );
-
-  const match = checks.find((c) => c.exists);
-  return match?.configDir ?? null;
 }
 
 // Initialize global clone progress listener
@@ -1154,17 +1124,12 @@ export default function App() {
     async (session: ClaudeSessionMeta, project: ClaudeProject) => {
       const targetPath = project.path;
 
-      const claudeConfigDir = await resolveClaudeConfigDirForResumeSession({
-        homeDir,
-        pathSep,
-        projectId: project.id,
-        sessionId: session.id,
-      });
+      const { configDir: claudeConfigDir, diagnostic } = await resolveClaudeConfigDirForSession(
+        project.id,
+        session.id
+      );
 
       if (!claudeConfigDir) {
-        const diagnostic = homeDir
-          ? `\n(诊断) 已检查以下路径是否存在：\n${homeDir}${pathSep}.aiclient${pathSep}claude-null${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl\n${homeDir}${pathSep}.claude${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl`
-          : '\n(诊断) 未能获取 HOME 目录，请确认系统环境变量 USERPROFILE/HOME 是否可用。';
         addToast({
           type: 'error',
           title: 'Claude 会话恢复失败',
@@ -1189,14 +1154,7 @@ export default function App() {
 
       handleTabChange('chat');
     },
-    [
-      handleAddLocalRepository,
-      handleTabChange,
-      homeDir,
-      pathSep,
-      resumeClaudeSession,
-      setActiveWorktree,
-    ]
+    [handleAddLocalRepository, handleTabChange, resumeClaudeSession, setActiveWorktree]
   );
 
   // Handle cloning a remote repository

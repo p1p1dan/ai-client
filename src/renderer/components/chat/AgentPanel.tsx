@@ -1,4 +1,4 @@
-import type { AIProvider } from '@shared/types';
+import type { AIProvider, ClaudeProject, ClaudeSessionMeta } from '@shared/types';
 import { Plus, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
@@ -12,6 +12,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { pauseFocusLock, restoreFocusIfLocked } from '@/lib/focusLock';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
@@ -24,6 +25,7 @@ import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { AGENT_INFO, createSession } from '@/utils/agentSession';
+import { resolveClaudeConfigDirForSession } from '@/utils/claudeSessionResume';
 import { AgentGroup } from './AgentGroup';
 import { AgentPickerMenu } from './AgentPickerMenu';
 import { AgentSessionTabs } from './AgentSessionTabs';
@@ -34,6 +36,7 @@ import type { Session } from './SessionBar';
 import { StatusLine } from './StatusLine';
 import type { AgentGroupState, AgentGroup as AgentGroupType } from './types';
 import { createInitialGroupState } from './types';
+import { WorktreeSessionHistory } from './WorktreeSessionHistory';
 
 interface AgentPanelProps {
   repoPath: string; // repository path (workspace identifier)
@@ -273,6 +276,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   const removeSession = useAgentSessionsStore((state) => state.removeSession);
   const updateSession = useAgentSessionsStore((state) => state.updateSession);
   const setActiveId = useAgentSessionsStore((state) => state.setActiveId);
+  const resumeClaudeSession = useAgentSessionsStore((state) => state.resumeClaudeSession);
 
   // Enhanced input state actions from store
   const setEnhancedInputOpen = useAgentSessionsStore((state) => state.setEnhancedInputOpen);
@@ -695,6 +699,38 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       claudeCodeIntegration.enhancedInputAutoPopup,
       setEnhancedInputOpen,
     ]
+  );
+
+  // Resume a Claude session found in this worktree's history (shown in the
+  // empty state via WorktreeSessionHistory). Unlike Home's resume flow, the
+  // user is already on this worktree, so we skip handleAddLocalRepository /
+  // setActiveWorktree — just locate the CLAUDE_CONFIG_DIR and hand off to the
+  // store, which builds the group via the existing session-sync effect below.
+  const handleResumeHistorySession = useCallback(
+    async (session: ClaudeSessionMeta, project: ClaudeProject) => {
+      const { configDir, diagnostic } = await resolveClaudeConfigDirForSession(
+        project.id,
+        session.id
+      );
+
+      if (!configDir) {
+        addToast({
+          type: 'error',
+          title: 'Claude 会话恢复失败',
+          description: `未找到对应的会话记录：${session.id}\n请确认 CLAUDE_CONFIG_DIR 与会话来源一致。${diagnostic}`,
+        });
+        return;
+      }
+
+      resumeClaudeSession({
+        repoPath,
+        cwd,
+        claudeSessionId: session.id,
+        claudeConfigDir: configDir,
+        name: session.firstMessage,
+      });
+    },
+    [repoPath, cwd, resumeClaudeSession]
   );
 
   const removeSessionFromUi = useCallback(
@@ -1419,6 +1455,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 handleNewSessionWithAgent('', agentId, agentCommand)
               }
             />
+            <WorktreeSessionHistory cwd={cwd} onResumeSession={handleResumeHistorySession} />
           </Empty>
         </div>
       )}

@@ -335,6 +335,7 @@ export const zhTranslations: Record<string, string> = {
   'No terminals open': '暂无终端',
   'Create a terminal to start working': '创建终端以开始工作',
   'Create a session to start using AI Agent': '创建 Session 以开始使用 AI Agent',
+  'Previous sessions in this worktree': '历史会话',
   'File Explorer': '文件浏览器',
   'Select a Worktree': '选择 Worktree',
   'Select a Worktree to browse files': '选择 Worktree 以浏览文件',
