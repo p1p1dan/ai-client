@@ -19,12 +19,21 @@ interface ManagedSessionRecord extends SessionDescriptor {
   attachedWindowIds: Set<number>;
   connectionId?: string;
   runtimeState?: SessionRuntimeState;
-  replayBuffer?: string;
+  replayChunks: string[];
+  replayLength: number;
+  replayStartOffset: number;
   streamState?: 'buffering' | 'attaching' | 'live';
   pendingExit?: SessionExitEvent;
 }
 
+interface PendingSessionData {
+  chunks: string[];
+  windowIds: Set<number>;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 const MAX_SESSION_REPLAY_CHARS = 65_536;
+const SESSION_DATA_BATCH_MS = 16;
 
 function getWindowId(target: BrowserWindow | WebContents | number): number {
   if (typeof target === 'number') {
@@ -62,6 +71,7 @@ export class SessionManager {
   private readonly remoteDisconnectSubscriptions = new Map<string, () => void>();
   private readonly remoteStatusSubscriptions = new Map<string, () => void>();
   private readonly remoteRecoveryPromises = new Map<string, Promise<void>>();
+  private readonly pendingSessionData = new Map<string, PendingSessionData>();
 
   async create(
     target: BrowserWindow | WebContents | number,
@@ -82,10 +92,10 @@ export class SessionManager {
     const existing = this.sessions.get(options.sessionId);
     if (existing?.backend === 'local') {
       existing.attachedWindowIds.add(windowId);
-      const replay = existing.replayBuffer || undefined;
+      const replay = this.readReplayBuffer(existing) || undefined;
       if (existing.streamState === 'buffering') {
         existing.streamState = 'attaching';
-        this.activateLocalStreamAfterAttach(existing.sessionId, existing.replayBuffer?.length ?? 0);
+        this.activateLocalStreamAfterAttach(existing.sessionId, replay?.length ?? 0);
       }
       return {
         session: this.toDescriptor(existing),
@@ -108,7 +118,7 @@ export class SessionManager {
         );
         return {
           session: this.toDescriptor(existing),
-          replay: existing.replayBuffer || undefined,
+          replay: this.readReplayBuffer(existing) || undefined,
         };
       }
 
@@ -123,7 +133,7 @@ export class SessionManager {
         );
         const record = this.registerRemoteSession(windowId, existing.connectionId, result.session);
         this.setSessionRuntimeState(record.sessionId, 'live');
-        record.replayBuffer = result.replay ?? '';
+        this.replaceReplayBuffer(record, result.replay ?? '');
         return {
           session: this.toDescriptor(record),
           replay: result.replay,
@@ -142,7 +152,7 @@ export class SessionManager {
           );
           return {
             session: this.toDescriptor(existing),
-            replay: existing.replayBuffer || undefined,
+            replay: this.readReplayBuffer(existing) || undefined,
           };
         }
         throw error;
@@ -164,7 +174,7 @@ export class SessionManager {
     );
     const record = this.registerRemoteSession(windowId, connectionId, result.session);
     this.setSessionRuntimeState(record.sessionId, 'live');
-    record.replayBuffer = result.replay ?? '';
+    this.replaceReplayBuffer(record, result.replay ?? '');
     return {
       session: this.toDescriptor(record),
       replay: result.replay,
@@ -185,6 +195,7 @@ export class SessionManager {
       return;
     }
 
+    this.flushSessionData(sessionId);
     session.attachedWindowIds.delete(windowId);
     if (session.backend === 'remote' && session.connectionId) {
       await this.ensureRemoteSubscriptions(session.connectionId);
@@ -345,10 +356,20 @@ export class SessionManager {
   }
 
   destroyAllLocal(): void {
+    for (const session of this.sessions.values()) {
+      if (session.backend === 'local') {
+        this.flushSessionData(session.sessionId);
+      }
+    }
     this.localPtyManager.destroyAll();
   }
 
   async destroyAllLocalAndWait(): Promise<void> {
+    for (const session of this.sessions.values()) {
+      if (session.backend === 'local') {
+        this.flushSessionData(session.sessionId);
+      }
+    }
     await this.localPtyManager.destroyAllAndWait();
   }
 
@@ -365,7 +386,9 @@ export class SessionManager {
       createdAt: now(),
       metadata: options.metadata,
       attachedWindowIds: new Set([windowId]),
-      replayBuffer: '',
+      replayChunks: [],
+      replayLength: 0,
+      replayStartOffset: 0,
       streamState: 'buffering',
     };
     this.sessions.set(sessionId, record);
@@ -410,7 +433,7 @@ export class SessionManager {
       }
     );
     const record = this.registerRemoteSession(windowId, connectionId, result.session);
-    record.replayBuffer = result.replay ?? '';
+    this.replaceReplayBuffer(record, result.replay ?? '');
     return {
       session: this.toDescriptor(record),
       replay: result.replay,
@@ -440,6 +463,9 @@ export class SessionManager {
       connectionId,
       runtimeState: 'live',
       attachedWindowIds: new Set([windowId]),
+      replayChunks: [],
+      replayLength: 0,
+      replayStartOffset: 0,
     };
     this.sessions.set(record.sessionId, record);
     return record;
@@ -497,7 +523,7 @@ export class SessionManager {
       }
 
       session.streamState = 'live';
-      const replayBuffer = session.replayBuffer || '';
+      const replayBuffer = this.readReplayBuffer(session);
       const delta = replayBuffer.slice(replayCursor);
       if (delta) {
         this.emitData(sessionId, delta, new Set(session.attachedWindowIds));
@@ -670,8 +696,8 @@ export class SessionManager {
               session.persistOnDisconnect = mergedDescriptor.persistOnDisconnect;
               session.metadata = mergedDescriptor.metadata;
               const replay = restored.replay ?? '';
-              const delta = this.getReplayDelta(session.replayBuffer, replay);
-              session.replayBuffer = replay;
+              const delta = this.getReplayDelta(this.readReplayBuffer(session), replay);
+              this.replaceReplayBuffer(session, replay);
               if (delta) {
                 this.emitData(session.sessionId, delta, new Set(session.attachedWindowIds));
               }
@@ -751,8 +777,45 @@ export class SessionManager {
       return;
     }
 
-    const replay = `${session.replayBuffer || ''}${data}`;
-    session.replayBuffer = replay.slice(-MAX_SESSION_REPLAY_CHARS);
+    if (data.length >= MAX_SESSION_REPLAY_CHARS) {
+      const tail = data.slice(-MAX_SESSION_REPLAY_CHARS);
+      session.replayChunks = [tail];
+      session.replayLength = tail.length;
+      session.replayStartOffset = 0;
+      return;
+    }
+
+    session.replayChunks.push(data);
+    session.replayLength += data.length;
+
+    while (session.replayLength > MAX_SESSION_REPLAY_CHARS) {
+      const firstChunk = session.replayChunks[0];
+      const firstChunkLength = firstChunk.length - session.replayStartOffset;
+      const overflow = session.replayLength - MAX_SESSION_REPLAY_CHARS;
+      if (overflow >= firstChunkLength) {
+        session.replayChunks.shift();
+        session.replayLength -= firstChunkLength;
+        session.replayStartOffset = 0;
+        continue;
+      }
+
+      session.replayStartOffset += overflow;
+      session.replayLength -= overflow;
+    }
+  }
+
+  private readReplayBuffer(session: ManagedSessionRecord): string {
+    if (session.replayLength === 0) {
+      return '';
+    }
+    return session.replayChunks.join('').slice(session.replayStartOffset);
+  }
+
+  private replaceReplayBuffer(session: ManagedSessionRecord, replay: string): void {
+    const tail = replay.slice(-MAX_SESSION_REPLAY_CHARS);
+    session.replayChunks = tail ? [tail] : [];
+    session.replayLength = tail.length;
+    session.replayStartOffset = 0;
   }
 
   private getReplayDelta(previousReplay: string | undefined, nextReplay: string): string {
@@ -851,21 +914,76 @@ export class SessionManager {
       return;
     }
 
-    this.emitToWindows(
-      windowIds ?? this.sessions.get(sessionId)?.attachedWindowIds,
-      'session:data',
-      {
-        sessionId,
-        data,
-      }
+    const resolvedWindowIds = new Set(
+      windowIds ?? this.sessions.get(sessionId)?.attachedWindowIds ?? []
     );
+    if (resolvedWindowIds.size === 0) {
+      return;
+    }
+
+    const pending = this.pendingSessionData.get(sessionId);
+    if (pending && !this.haveSameWindowIds(pending.windowIds, resolvedWindowIds)) {
+      this.flushSessionData(sessionId);
+    }
+
+    const activePending = this.pendingSessionData.get(sessionId);
+    if (activePending) {
+      activePending.chunks.push(data);
+      return;
+    }
+
+    this.emitDataImmediately(sessionId, data, resolvedWindowIds);
+    const timer = setTimeout(() => {
+      this.flushSessionData(sessionId);
+    }, SESSION_DATA_BATCH_MS);
+    this.pendingSessionData.set(sessionId, {
+      chunks: [],
+      windowIds: resolvedWindowIds,
+      timer,
+    });
+  }
+
+  private flushSessionData(sessionId: string): void {
+    const pending = this.pendingSessionData.get(sessionId);
+    if (!pending) {
+      return;
+    }
+
+    clearTimeout(pending.timer);
+    this.pendingSessionData.delete(sessionId);
+    if (pending.chunks.length > 0) {
+      this.emitDataImmediately(sessionId, pending.chunks.join(''), pending.windowIds);
+    }
+  }
+
+  private emitDataImmediately(sessionId: string, data: string, windowIds: Set<number>): void {
+    this.emitToWindows(windowIds, 'session:data', {
+      sessionId,
+      data,
+    });
+  }
+
+  private haveSameWindowIds(left: Set<number>, right: Set<number>): boolean {
+    if (left.size !== right.size) {
+      return false;
+    }
+    for (const windowId of left) {
+      if (!right.has(windowId)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private emitExit(event: SessionExitEvent, windowIds?: Set<number>): void {
+    this.flushSessionData(event.sessionId);
     this.emitToWindows(windowIds, 'session:exit', event);
   }
 
   private emitState(event: SessionStateEvent, windowIds?: Set<number>): void {
+    if (event.state === 'dead') {
+      this.flushSessionData(event.sessionId);
+    }
     this.emitToWindows(
       windowIds ?? this.sessions.get(event.sessionId)?.attachedWindowIds,
       'session:state',

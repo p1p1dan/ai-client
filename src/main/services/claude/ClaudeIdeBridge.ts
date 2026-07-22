@@ -234,47 +234,10 @@ export async function startClaudeIdeBridge(
           const data = JSON.parse(body);
           const sessionId = data.session_id;
 
-          // Debug: Log all hook events to understand Claude's workflow
-          console.log('[ClaudeIdeBridge] Hook received:', {
-            event: data.hook_event_name,
-            tool: data.tool_name,
-            sessionId: sessionId?.slice(0, 8),
-            cwd: data.cwd?.split('/').slice(-2).join('/'),
-          });
-
-          // Log hook data with smart filtering
-          // Only log significant events to reduce noise while maintaining debuggability
-          const shouldLogDetailed =
-            data.hook_event_name === 'PermissionRequest' ||
-            data.hook_event_name === 'Stop' ||
-            data.tool_name === 'AskUserQuestion' ||
-            !sessionId; // Always log if sessionId missing
-
-          // Common read-only tools that don't need detailed logging
-          const quietTools = ['Read', 'Glob', 'Grep', 'Task', 'TaskList', 'TaskOutput'];
-          const isQuietTool = quietTools.includes(data.tool_name);
-
-          if (shouldLogDetailed) {
-            console.log('[ClaudeIdeBridge] Hook:', {
-              event: data.hook_event_name,
-              tool: data.tool_name,
-              sessionId: `${sessionId?.slice(0, 8)}...`,
-              cwd: data.cwd?.split('/').slice(-2).join('/'), // Show last 2 path segments
-            });
-          } else if (!isQuietTool && data.hook_event_name === 'PreToolUse') {
-            // Log write operations (Write, Edit, Bash, etc.) in compact form
-            console.log(
-              `[ClaudeIdeBridge] PreToolUse: ${data.tool_name} (${sessionId?.slice(0, 8)})`
-            );
-          }
-
           if (sessionId) {
             // Handle different hook types
             if (data.hook_event_name === 'UserPromptSubmit' && data.cwd) {
               // UserPromptSubmit event - User submitted a message, Claude starts working
-              console.log(
-                `[ClaudeIdeBridge] → running (UserPromptSubmit) at ${data.cwd?.split('/').slice(-2).join('/')}`
-              );
               for (const window of BrowserWindow.getAllWindows()) {
                 if (!window.isDestroyed()) {
                   window.webContents.send(IPC_CHANNELS.AGENT_PRE_TOOL_USE_NOTIFICATION, {
@@ -288,9 +251,6 @@ export async function startClaudeIdeBridge(
               // AskUserQuestion tool - Claude asking user for input/choices
               // This tool triggers waiting_input in PreToolUse phase (not PermissionRequest)
               // Include cwd if available for session creation fallback
-              console.log(
-                `[ClaudeIdeBridge] → waiting_input (AskUserQuestion) at ${data.cwd?.split('/').slice(-2).join('/')}`
-              );
               for (const window of BrowserWindow.getAllWindows()) {
                 if (!window.isDestroyed()) {
                   window.webContents.send(IPC_CHANNELS.AGENT_ASK_USER_QUESTION_NOTIFICATION, {
@@ -309,9 +269,6 @@ export async function startClaudeIdeBridge(
                 data.tool_name !== 'AskUserQuestion' && !readOnlyTools.includes(data.tool_name);
 
               if (shouldTriggerWaitingInput) {
-                console.log(
-                  `[ClaudeIdeBridge] → waiting_input (${data.tool_name} permission) at ${data.cwd?.split('/').slice(-2).join('/')}`
-                );
                 for (const window of BrowserWindow.getAllWindows()) {
                   if (!window.isDestroyed()) {
                     window.webContents.send(IPC_CHANNELS.AGENT_ASK_USER_QUESTION_NOTIFICATION, {
@@ -325,8 +282,6 @@ export async function startClaudeIdeBridge(
               // Don't log skipped PermissionRequest for read-only tools - too noisy
             } else if (data.hook_event_name === 'Stop') {
               // Stop event - agent has finished or been stopped
-              console.log(`[ClaudeIdeBridge] → completed (Stop) ${sessionId?.slice(0, 8)}`);
-
               // Check for task completion marker in session log (async)
               let taskCompletionStatus: 'completed' | 'unknown' = 'unknown';
 
@@ -337,7 +292,6 @@ export async function startClaudeIdeBridge(
                     const result = checkTaskCompletion(lastMessages);
                     if (result.completed) {
                       taskCompletionStatus = 'completed';
-                      console.log(`[ClaudeIdeBridge] Task completion marker detected`);
                     }
                   }
                 } catch (err) {
@@ -392,10 +346,6 @@ export async function startClaudeIdeBridge(
           const data = JSON.parse(body);
 
           const sessionId = data.session_id;
-          const workspaceInfo = data.workspace?.current_dir?.split('/').slice(-2).join('/');
-          console.log(
-            `[ClaudeIdeBridge] STATUS_UPDATE ${sessionId?.slice(0, 8)} (${data.model || 'unknown'}) at ${workspaceInfo || 'unknown'}`
-          );
 
           if (sessionId) {
             // Broadcast status update to all windows

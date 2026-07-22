@@ -7,6 +7,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/shallow';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { useNavigationStore } from '@/stores/navigation';
@@ -24,6 +25,9 @@ const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 
 // Maximum length for session name derived from terminal current line
 const SESSION_NAME_MAX_LENGTH = 36;
+const XTERM_WRITE_MIN_INTERVAL_MS = 8;
+const XTERM_HIDDEN_FLUSH_MS = 30;
+const XTERM_EXIT_DRAIN_MS = 30;
 
 export interface UseXtermOptions {
   backendSessionId?: string;
@@ -92,7 +96,19 @@ function useTerminalSettings() {
     terminalOptionIsMeta,
     xtermKeybindings,
     backgroundImageEnabled,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((s) => ({
+      terminalTheme: s.terminalTheme,
+      terminalFontSize: s.terminalFontSize,
+      terminalFontFamily: s.terminalFontFamily,
+      terminalFontWeight: s.terminalFontWeight,
+      terminalFontWeightBold: s.terminalFontWeightBold,
+      terminalScrollback: s.terminalScrollback,
+      terminalOptionIsMeta: s.terminalOptionIsMeta,
+      xtermKeybindings: s.xtermKeybindings,
+      backgroundImageEnabled: s.backgroundImageEnabled,
+    }))
+  );
 
   const theme = useMemo(() => {
     const baseTheme = getXtermTheme(terminalTheme) ?? defaultDarkTheme;
@@ -195,7 +211,91 @@ export function useXterm({
   );
   // rAF write buffer for smooth rendering
   const writeBufferRef = useRef('');
-  const isFlushPendingRef = useRef(false);
+  const flushAnimationFrameRef = useRef<number | null>(null);
+  const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitFlushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWriteAtRef = useRef(0);
+
+  const cancelScheduledWriteFlush = useCallback(() => {
+    if (flushAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(flushAnimationFrameRef.current);
+      flushAnimationFrameRef.current = null;
+    }
+    if (flushTimeoutRef.current !== null) {
+      clearTimeout(flushTimeoutRef.current);
+      flushTimeoutRef.current = null;
+    }
+  }, []);
+
+  const flushWriteBuffer = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal || writeBufferRef.current.length === 0) {
+      return;
+    }
+
+    const bufferedData = writeBufferRef.current;
+    writeBufferRef.current = '';
+    terminal.write(bufferedData);
+    onDataRef.current?.(bufferedData);
+    lastWriteAtRef.current = performance.now();
+  }, []);
+
+  const scheduleWriteFlush = useCallback(() => {
+    if (document.hidden) {
+      if (flushAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(flushAnimationFrameRef.current);
+        flushAnimationFrameRef.current = null;
+      }
+      if (flushTimeoutRef.current === null) {
+        flushTimeoutRef.current = setTimeout(() => {
+          flushTimeoutRef.current = null;
+          flushWriteBuffer();
+        }, XTERM_HIDDEN_FLUSH_MS);
+      }
+      return;
+    }
+
+    if (flushAnimationFrameRef.current !== null) {
+      return;
+    }
+    if (flushTimeoutRef.current !== null) {
+      clearTimeout(flushTimeoutRef.current);
+      flushTimeoutRef.current = null;
+    }
+
+    const flushOnAnimationFrame = (timestamp: number) => {
+      flushAnimationFrameRef.current = null;
+      if (document.hidden) {
+        if (flushTimeoutRef.current === null) {
+          flushTimeoutRef.current = setTimeout(() => {
+            flushTimeoutRef.current = null;
+            flushWriteBuffer();
+          }, XTERM_HIDDEN_FLUSH_MS);
+        }
+        return;
+      }
+      if (timestamp - lastWriteAtRef.current < XTERM_WRITE_MIN_INTERVAL_MS) {
+        flushAnimationFrameRef.current = requestAnimationFrame(flushOnAnimationFrame);
+        return;
+      }
+
+      if (flushTimeoutRef.current !== null) {
+        clearTimeout(flushTimeoutRef.current);
+        flushTimeoutRef.current = null;
+      }
+      flushWriteBuffer();
+    };
+
+    flushAnimationFrameRef.current = requestAnimationFrame(flushOnAnimationFrame);
+    flushTimeoutRef.current = setTimeout(() => {
+      flushTimeoutRef.current = null;
+      if (flushAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(flushAnimationFrameRef.current);
+        flushAnimationFrameRef.current = null;
+      }
+      flushWriteBuffer();
+    }, XTERM_HIDDEN_FLUSH_MS);
+  }, [flushWriteBuffer]);
 
   const write = useCallback((data: string) => {
     if (ptyIdRef.current && runtimeStateRef.current === 'live') {
@@ -638,26 +738,11 @@ export function useXterm({
 
     try {
       const createRequestId = ++createRequestIdRef.current;
-      // Handle data from pty with debounced buffering for smooth rendering
-      // 30ms delay merges fragmented TUI packets (clear + write)
+      // Align buffered terminal writes with the frame clock.
       const cleanup = window.electronAPI.session.onData((event) => {
         if (event.sessionId === ptyIdRef.current) {
-          // Buffer data
           writeBufferRef.current += event.data;
-
-          if (!isFlushPendingRef.current) {
-            isFlushPendingRef.current = true;
-            setTimeout(() => {
-              if (writeBufferRef.current.length > 0) {
-                const bufferedData = writeBufferRef.current;
-                terminal.write(bufferedData);
-                // Call onData after write to avoid React re-render storm
-                onDataRef.current?.(bufferedData);
-                writeBufferRef.current = '';
-              }
-              isFlushPendingRef.current = false;
-            }, 30);
-          }
+          scheduleWriteFlush();
         }
       });
       cleanupRef.current = cleanup;
@@ -668,16 +753,15 @@ export function useXterm({
         if (event.sessionId === ptyIdRef.current) {
           setRuntimeState('dead');
           // Wait for any pending data events to arrive (IPC race condition)
-          setTimeout(() => {
-            // Flush any remaining buffered data
-            if (writeBufferRef.current.length > 0) {
-              const bufferedData = writeBufferRef.current;
-              terminal.write(bufferedData);
-              onDataRef.current?.(bufferedData);
-              writeBufferRef.current = '';
-            }
+          if (exitFlushTimeoutRef.current !== null) {
+            clearTimeout(exitFlushTimeoutRef.current);
+          }
+          exitFlushTimeoutRef.current = setTimeout(() => {
+            exitFlushTimeoutRef.current = null;
+            cancelScheduledWriteFlush();
+            flushWriteBuffer();
             onExitRef.current?.();
-          }, 30);
+          }, XTERM_EXIT_DRAIN_MS);
         }
       });
       exitCleanupRef.current = exitCleanup;
@@ -791,6 +875,9 @@ export function useXterm({
     kind,
     persistOnDisconnect,
     write,
+    cancelScheduledWriteFlush,
+    flushWriteBuffer,
+    scheduleWriteFlush,
   ]);
 
   useEffect(() => {
@@ -827,6 +914,13 @@ export function useXterm({
       cleanupRef.current?.();
       exitCleanupRef.current?.();
       stateCleanupRef.current?.();
+      cancelScheduledWriteFlush();
+      if (exitFlushTimeoutRef.current !== null) {
+        clearTimeout(exitFlushTimeoutRef.current);
+        exitFlushTimeoutRef.current = null;
+      }
+      writeBufferRef.current = '';
+      lastWriteAtRef.current = 0;
       if (ptyIdRef.current) {
         window.electronAPI.session.detach(ptyIdRef.current).catch(() => {});
         ptyIdRef.current = null;
@@ -848,7 +942,7 @@ export function useXterm({
       terminalRef.current = null;
       stateCleanupRef.current = null;
     };
-  }, []);
+  }, [cancelScheduledWriteFlush]);
 
   // Update settings dynamically
   useEffect(() => {
