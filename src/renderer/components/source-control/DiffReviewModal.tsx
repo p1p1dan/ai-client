@@ -18,7 +18,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CommentForm } from '@/components/files/EditorLineComment';
-import { monaco } from '@/components/files/monacoSetup';
+import { ensureMonacoReady, monaco } from '@/components/files/monacoSetup';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -379,10 +379,22 @@ export function DiffReviewModal({ open, onOpenChange, rootPath, onSend }: DiffRe
 
   // Define theme on mount
   useEffect(() => {
-    if (open) {
-      defineMonacoDiffTheme(terminalTheme);
-      setIsThemeReady(true);
-    }
+    if (!open) return;
+
+    let cancelled = false;
+    void ensureMonacoReady()
+      .then(() => {
+        if (cancelled) return;
+        defineMonacoDiffTheme(terminalTheme);
+        setIsThemeReady(true);
+      })
+      .catch((error) => {
+        console.error('Failed to initialize Monaco:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, terminalTheme]);
 
   // Auto-select first file

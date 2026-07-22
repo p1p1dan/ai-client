@@ -1,6 +1,7 @@
 import type { AIProvider, ClaudeProject, ClaudeSessionMeta } from '@shared/types';
 import { Plus, Sparkles } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/shallow';
 import { TEMP_REPO_ID } from '@/App/constants';
 import { normalizePath, pathsEqual } from '@/App/storage';
 import { ResizeHandle } from '@/components/terminal/ResizeHandle';
@@ -29,14 +30,21 @@ import { resolveClaudeConfigDirForSession } from '@/utils/claudeSessionResume';
 import { AgentGroup } from './AgentGroup';
 import { AgentPickerMenu } from './AgentPickerMenu';
 import { AgentSessionTabs } from './AgentSessionTabs';
-import { AgentTerminal } from './AgentTerminal';
 import { EnhancedInputContainer } from './EnhancedInputContainer';
-import { QuickTerminalModal } from './QuickTerminalModal';
 import type { Session } from './SessionBar';
 import { StatusLine } from './StatusLine';
 import type { AgentGroupState, AgentGroup as AgentGroupType } from './types';
 import { createInitialGroupState } from './types';
 import { WorktreeSessionHistory } from './WorktreeSessionHistory';
+
+const AgentTerminal = lazy(() =>
+  import('./AgentTerminal').then((module) => ({ default: module.AgentTerminal }))
+);
+const QuickTerminalModal = lazy(() =>
+  import('./QuickTerminalModal').then((module) => ({
+    default: module.QuickTerminalModal,
+  }))
+);
 
 interface AgentPanelProps {
   repoPath: string; // repository path (workspace identifier)
@@ -184,18 +192,36 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     autoCreateSessionOnTempActivate,
     claudeCodeIntegration,
     terminalTheme,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((s) => ({
+      agentSettings: s.agentSettings,
+      customAgents: s.customAgents,
+      xtermKeybindings: s.xtermKeybindings,
+      autoCreateSessionOnActivate: s.autoCreateSessionOnActivate,
+      autoCreateSessionOnTempActivate: s.autoCreateSessionOnTempActivate,
+      claudeCodeIntegration: s.claudeCodeIntegration,
+      terminalTheme: s.terminalTheme,
+    }))
+  );
   // 添加 ?? true 回退，兼容老用户可能没有 enabled 字段的情况
   const quickTerminalEnabled = useSettingsStore((s) => s.quickTerminal.enabled ?? true);
   const quickTerminalOpen = useSettingsStore((s) => s.quickTerminal.isOpen);
   const setQuickTerminalOpen = useSettingsStore((s) => s.setQuickTerminalOpen);
   const { getQuickTerminalSession, setQuickTerminalSession, removeQuickTerminalSession } =
-    useTerminalStore();
+    useTerminalStore(
+      useShallow((s) => ({
+        getQuickTerminalSession: s.getQuickTerminalSession,
+        setQuickTerminalSession: s.setQuickTerminalSession,
+        removeQuickTerminalSession: s.removeQuickTerminalSession,
+      }))
+    );
   const currentQuickTerminalSession = getQuickTerminalSession(cwd);
 
   // 用于强制重新创建 QuickTerminalModal 的 key
   // 当功能被禁用再启用时递增，确保创建全新的 terminal
   const [quickTerminalMountKey, setQuickTerminalMountKey] = useState(0);
+  const hasOpenedQuickTerminalRef = useRef(false);
+  if (quickTerminalOpen) hasOpenedQuickTerminalRef.current = true;
   const prevQuickTerminalEnabled = useRef(quickTerminalEnabled);
   useEffect(() => {
     if (quickTerminalEnabled && !prevQuickTerminalEnabled.current) {
@@ -227,9 +253,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   const statusLineEnabled = claudeCodeIntegration.statusLineEnabled;
   const defaultAgentId = useMemo(() => getDefaultAgentId(agentSettings), [agentSettings]);
   const setAgentCount = useWorktreeActivityStore((s) => s.setAgentCount);
-  const registerAgentCloseHandler = useWorktreeActivityStore(
-    (s) => s.registerAgentCloseHandler
-  );
+  const registerAgentCloseHandler = useWorktreeActivityStore((s) => s.registerAgentCloseHandler);
 
   const [hasRunningProcess, setHasRunningProcess] = useState(false);
   const quickTerminalFocusLeaseRef = useRef<{
@@ -1535,57 +1559,65 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
               {shouldShow && !isGroupActive && (
                 <div className="absolute inset-0 z-10 bg-background/10 pointer-events-none" />
               )}
-              <AgentTerminal
-                id={session.id}
-                cwd={session.cwd}
-                sessionId={session.sessionId || session.id}
-                backendSessionId={session.backendSessionId}
-                agentId={session.agentId}
-                agentCommand={session.agentCommand || 'claude'}
-                claudeConfigDir={session.claudeConfigDir}
-                customPath={session.customPath}
-                customArgs={session.customArgs}
-                environment={session.environment || 'native'}
-                initialized={session.initialized}
-                activated={session.activated}
-                isActive={isTerminalActive}
-                hasPendingCommand={!!session.pendingCommand}
-                initialPrompt={session.pendingCommand}
-                onInitialized={() => handleInitialized(sessionId)}
-                onActivated={() => handleActivated(sessionId)}
-                onActivatedWithFirstLine={(line) => handleActivatedWithFirstLine(sessionId, line)}
-                onExit={() => handleSessionExit(sessionId, groupId || undefined)}
-                onTerminalTitleChange={(title) => {
-                  if (session.userRenamed) return;
-                  const syncName =
-                    title &&
-                    isCursorAgent(session.agentId) &&
-                    session.name === getDefaultSessionName(session.agentId);
-                  updateSession(sessionId, {
-                    terminalTitle: title,
-                    ...(syncName ? { name: title } : {}),
-                  });
-                }}
-                onBackendSessionIdChange={(backendSessionId) => {
-                  if (session.backendSessionId === backendSessionId) return;
-                  updateSession(sessionId, { backendSessionId });
-                }}
-                onSplit={() => groupId && handleSplit(groupId)}
-                canMerge={info ? info.groupIndex > 0 : false}
-                onMerge={() => groupId && handleMerge(groupId)}
-                onFocus={() => groupId && handleSelectSession(sessionId, groupId)}
-                enhancedInputOpen={getEnhancedInputState(sessionId).open}
-                onEnhancedInputOpenChange={(open) => {
-                  // EnhancedInput open state is now stored per-session in the store
-                  setEnhancedInputOpen(sessionId, open);
-                }}
-                onRegisterEnhancedInputSender={(senderSessionId, sender) => {
-                  enhancedInputSenderRef.current.set(senderSessionId, sender);
-                }}
-                onUnregisterEnhancedInputSender={(senderSessionId) => {
-                  enhancedInputSenderRef.current.delete(senderSessionId);
-                }}
-              />
+              <Suspense
+                fallback={
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    {t('Loading...')}
+                  </div>
+                }
+              >
+                <AgentTerminal
+                  id={session.id}
+                  cwd={session.cwd}
+                  sessionId={session.sessionId || session.id}
+                  backendSessionId={session.backendSessionId}
+                  agentId={session.agentId}
+                  agentCommand={session.agentCommand || 'claude'}
+                  claudeConfigDir={session.claudeConfigDir}
+                  customPath={session.customPath}
+                  customArgs={session.customArgs}
+                  environment={session.environment || 'native'}
+                  initialized={session.initialized}
+                  activated={session.activated}
+                  isActive={isTerminalActive}
+                  hasPendingCommand={!!session.pendingCommand}
+                  initialPrompt={session.pendingCommand}
+                  onInitialized={() => handleInitialized(sessionId)}
+                  onActivated={() => handleActivated(sessionId)}
+                  onActivatedWithFirstLine={(line) => handleActivatedWithFirstLine(sessionId, line)}
+                  onExit={() => handleSessionExit(sessionId, groupId || undefined)}
+                  onTerminalTitleChange={(title) => {
+                    if (session.userRenamed) return;
+                    const syncName =
+                      title &&
+                      isCursorAgent(session.agentId) &&
+                      session.name === getDefaultSessionName(session.agentId);
+                    updateSession(sessionId, {
+                      terminalTitle: title,
+                      ...(syncName ? { name: title } : {}),
+                    });
+                  }}
+                  onBackendSessionIdChange={(backendSessionId) => {
+                    if (session.backendSessionId === backendSessionId) return;
+                    updateSession(sessionId, { backendSessionId });
+                  }}
+                  onSplit={() => groupId && handleSplit(groupId)}
+                  canMerge={info ? info.groupIndex > 0 : false}
+                  onMerge={() => groupId && handleMerge(groupId)}
+                  onFocus={() => groupId && handleSelectSession(sessionId, groupId)}
+                  enhancedInputOpen={getEnhancedInputState(sessionId).open}
+                  onEnhancedInputOpenChange={(open) => {
+                    // EnhancedInput open state is now stored per-session in the store
+                    setEnhancedInputOpen(sessionId, open);
+                  }}
+                  onRegisterEnhancedInputSender={(senderSessionId, sender) => {
+                    enhancedInputSenderRef.current.set(senderSessionId, sender);
+                  }}
+                  onUnregisterEnhancedInputSender={(senderSessionId) => {
+                    enhancedInputSenderRef.current.delete(senderSessionId);
+                  }}
+                />
+              </Suspense>
             </div>
           );
         })}
@@ -1631,7 +1663,9 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                   showQuickTerminal
                   quickTerminalOpen={quickTerminalOpen}
                   quickTerminalHasProcess={hasRunningProcess}
-                  onToggleQuickTerminal={quickTerminalEnabled ? handleToggleQuickTerminal : undefined}
+                  onToggleQuickTerminal={
+                    quickTerminalEnabled ? handleToggleQuickTerminal : undefined
+                  }
                 />
               </div>
               <AgentGroup
@@ -1659,16 +1693,24 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         })}
       </div>
       {/* Quick Terminal Modal - 始终挂载以保持 terminal 运行状态 */}
-      {quickTerminalEnabled && (
-        <QuickTerminalModal
-          key={`quick-terminal-${quickTerminalMountKey}`}
-          open={quickTerminalOpen && isActive}
-          onOpenChange={handleQuickTerminalOpenChange}
-          onClose={handleCloseQuickTerminal}
-          cwd={cwd}
-          backendSessionId={currentQuickTerminalSession}
-          onSessionInit={handleQuickTerminalSessionInit}
-        />
+      {quickTerminalEnabled && hasOpenedQuickTerminalRef.current && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 text-sm text-muted-foreground">
+              {t('Loading...')}
+            </div>
+          }
+        >
+          <QuickTerminalModal
+            key={`quick-terminal-${quickTerminalMountKey}`}
+            open={quickTerminalOpen && isActive}
+            onOpenChange={handleQuickTerminalOpenChange}
+            onClose={handleCloseQuickTerminal}
+            cwd={cwd}
+            backendSessionId={currentQuickTerminalSession}
+            onSessionInit={handleQuickTerminalSessionInit}
+          />
+        </Suspense>
       )}
     </div>
   );

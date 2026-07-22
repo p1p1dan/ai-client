@@ -119,6 +119,41 @@ export default defineConfig({
         input: {
           index: path.resolve(__dirname, 'src/renderer/index.html'),
         },
+        output: {
+          manualChunks(id) {
+            if (id === '\0vite/preload-helper.js') return 'vendor-preload';
+
+            const normalizedId = id.replace(/\\/g, '/');
+            if (!normalizedId.includes('/node_modules/')) return undefined;
+
+            if (
+              normalizedId.includes('/monaco-editor/') ||
+              normalizedId.includes('/@monaco-editor/') ||
+              normalizedId.includes('/@shikijs/monaco/')
+            ) {
+              return 'vendor-monaco';
+            }
+            if (normalizedId.includes('/@xterm/')) return 'vendor-xterm';
+            if (
+              normalizedId.includes('/framer-motion/') ||
+              normalizedId.includes('/motion-dom/') ||
+              normalizedId.includes('/motion-utils/')
+            ) {
+              return 'vendor-motion';
+            }
+            if (
+              /\/(?:react-markdown|remark-|rehype-|unified|micromark|mdast-util-|hast-util-|unist-util-|vfile(?:\/|$))/.test(
+                normalizedId
+              )
+            ) {
+              return 'vendor-markdown';
+            }
+            if (normalizedId.includes('/emoji-picker-react/')) return 'vendor-emoji';
+            if (normalizedId.includes('/shiki/')) return 'vendor-shiki';
+
+            return undefined;
+          },
+        },
       },
     },
   },

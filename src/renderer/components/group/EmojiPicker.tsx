@@ -1,10 +1,12 @@
-import EmojiPickerReact, { type EmojiClickData, Theme } from 'emoji-picker-react';
+import type { EmojiClickData, PickerProps } from 'emoji-picker-react';
 import { Smile, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
+
+const EmojiPickerReact = lazy(() => import('emoji-picker-react'));
 
 interface EmojiPickerProps {
   value: string;
@@ -23,10 +25,12 @@ export function EmojiPicker({ value, onChange }: EmojiPickerProps) {
     setIsOpen(false);
   };
 
-  const getTheme = (): Theme => {
-    if (theme === 'dark') return Theme.DARK;
-    if (theme === 'light') return Theme.LIGHT;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? Theme.DARK : Theme.LIGHT;
+  const getTheme = (): PickerProps['theme'] => {
+    if (theme === 'dark') return 'dark' as PickerProps['theme'];
+    if (theme === 'light') return 'light' as PickerProps['theme'];
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? ('dark' as PickerProps['theme'])
+      : ('light' as PickerProps['theme']);
   };
 
   useEffect(() => {
@@ -82,14 +86,22 @@ export function EmojiPicker({ value, onChange }: EmojiPickerProps) {
               className="fixed z-[101] rounded-lg shadow-lg overflow-hidden"
               style={{ top: position.top, left: position.left }}
             >
-              <EmojiPickerReact
-                onEmojiClick={handleEmojiClick}
-                theme={getTheme()}
-                width={320}
-                height={400}
-                searchPlaceHolder={t('Search emoji...')}
-                previewConfig={{ showPreview: false }}
-              />
+              <Suspense
+                fallback={
+                  <div className="flex h-[400px] w-[320px] items-center justify-center bg-popover text-sm text-muted-foreground">
+                    {t('Loading...')}
+                  </div>
+                }
+              >
+                <EmojiPickerReact
+                  onEmojiClick={handleEmojiClick}
+                  theme={getTheme()}
+                  width={320}
+                  height={400}
+                  searchPlaceHolder={t('Search emoji...')}
+                  previewConfig={{ showPreview: false }}
+                />
+              </Suspense>
             </div>
           </>,
           document.body

@@ -16,7 +16,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CommentForm } from '@/components/files/EditorLineComment';
-import { monaco } from '@/components/files/monacoSetup';
+import { ensureMonacoReady, monaco } from '@/components/files/monacoSetup';
 import {
   Empty,
   EmptyDescription,
@@ -212,12 +212,21 @@ export function DiffViewer({
 
   // Define theme on mount and when terminal theme changes
   useEffect(() => {
-    defineMonacoDiffTheme(terminalTheme);
-    // Force re-render after theme is defined
-    if (!isThemeReady) {
-      setIsThemeReady(true);
-    }
-  }, [terminalTheme, isThemeReady]);
+    let cancelled = false;
+    void ensureMonacoReady()
+      .then(() => {
+        if (cancelled) return;
+        defineMonacoDiffTheme(terminalTheme);
+        setIsThemeReady(true);
+      })
+      .catch((error) => {
+        console.error('Failed to initialize Monaco:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [terminalTheme]);
 
   // Handle submit comment
   const handleSubmitComment = useCallback(

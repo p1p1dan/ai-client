@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { useShallow } from 'zustand/shallow';
 import { normalizePath } from '@/App/storage';
 import {
   Breadcrumb,
@@ -40,14 +41,14 @@ import { EditorTabs } from './EditorTabs';
 import { ExternalModificationBanner } from './ExternalModificationBanner';
 import { setupDefinitionNavigation } from './editorDefinitionProvider';
 import { setupDoubleClickScope } from './editorScopeSelection';
+import { setEditorSelectionText } from './editorSelection';
 import { isImageFile, isPdfFile } from './fileIcons';
 import { ImagePreview } from './ImagePreview';
 import { MarkdownPreview } from './MarkdownPreview';
+import { ensureMonacoReady } from './monacoSetup';
 import { CUSTOM_THEME_NAME, defineMonacoTheme } from './monacoTheme';
 import { PdfPreview } from './PdfPreview';
 import { useEditorBlame } from './useEditorBlame';
-// Import for side effects (Monaco setup)
-import './monacoSetup';
 
 type Monaco = typeof monaco;
 
@@ -108,12 +109,6 @@ function bindingToMonacoChord(binding: TerminalKeybinding, m: Monaco): number {
 
   if (keyCode === undefined || keyCode === 0) return 0;
   return chord | keyCode;
-}
-
-let latestSelectionText = '';
-
-export function getEditorSelectionText(): string {
-  return latestSelectionText;
 }
 
 type MarkdownPreviewMode = 'off' | 'split' | 'fullscreen';
@@ -192,7 +187,16 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     claudeCodeIntegration,
     backgroundImageEnabled,
     backgroundOpacity,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((s) => ({
+      terminalTheme: s.terminalTheme,
+      editorSettings: s.editorSettings,
+      editorKeybindings: s.editorKeybindings,
+      claudeCodeIntegration: s.claudeCodeIntegration,
+      backgroundImageEnabled: s.backgroundImageEnabled,
+      backgroundOpacity: s.backgroundOpacity,
+    }))
+  );
   const write = useTerminalWriteStore((state) => state.write);
   const focus = useTerminalWriteStore((state) => state.focus);
 
@@ -241,10 +245,12 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   const isMarkdown = isMarkdownFile(activeTabPath);
   const isImage = isImageFile(activeTabPath);
   const isPdf = isPdfFile(activeTabPath);
+  const shouldLoadMonaco = Boolean(activeTab && !activeTab.isUnsupported && !isImage && !isPdf);
   const [previewMode, setPreviewMode] = useState<MarkdownPreviewMode>('off');
   const previewModeRef = useRef<MarkdownPreviewMode>('off');
   previewModeRef.current = previewMode;
   const [editorReady, setEditorReady] = useState(false);
+  const [monacoReady, setMonacoReady] = useState(false);
   const [previewWidth, setPreviewWidth] = useState(50); // percentage
 
   // Sync preview mode from pendingCursor
@@ -268,6 +274,23 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   const widgetPositionRef = useRef<monaco.IPosition | null>(null);
   const hasPendingAutoSaveRef = useRef(false);
   const blurDisposableRef = useRef<monaco.IDisposable | null>(null);
+
+  useEffect(() => {
+    if (!shouldLoadMonaco || monacoReady) return;
+
+    let cancelled = false;
+    void ensureMonacoReady()
+      .then(() => {
+        if (!cancelled) setMonacoReady(true);
+      })
+      .catch((error) => {
+        console.error('Failed to initialize Monaco:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoadMonaco, monacoReady]);
   const activeTabPathRef = useRef<string | null>(null);
   // Keep a ref to the latest tabs so the file-change listener never goes stale
   // without needing to re-register on every tab state update.
@@ -554,12 +577,13 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
 
   // Define custom theme on mount and when terminal theme / background image settings change
   useEffect(() => {
+    if (!monacoReady) return;
     defineMonacoTheme(terminalTheme, {
       backgroundImageEnabled,
       backgroundOpacity,
     });
     themeDefinedRef.current = true;
-  }, [terminalTheme, backgroundImageEnabled, backgroundOpacity]);
+  }, [monacoReady, terminalTheme, backgroundImageEnabled, backgroundOpacity]);
 
   // Handle pending cursor navigation (jump to line and select match)
   // Only handles same-file search; new file search is handled by handleEditorMount
@@ -988,7 +1012,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       if (!model) return;
 
       const selectedText = model.getValueInRange(selection);
-      latestSelectionText = selectedText;
+      setEditorSelectionText(selectedText);
 
       // Hide comment widget if selection changes
       if (commentWidgetInstance) {
@@ -1417,6 +1441,10 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
                 <ImagePreview path={activeTab.path} />
               ) : isPdf ? (
                 <PdfPreview path={activeTab.path} />
+              ) : !monacoReady ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  {t('Loading...')}
+                </div>
               ) : (
                 <Editor
                   width="100%"

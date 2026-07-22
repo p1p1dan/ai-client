@@ -13,20 +13,14 @@ import {
   Sparkles,
   Terminal,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TAB_ORDER, type TabId } from '@/App/constants';
-import { useCompactLayout } from '@/App/useCompactLayout';
 import { normalizePath, pathsEqual } from '@/App/storage';
+import { useCompactLayout } from '@/App/useCompactLayout';
 import { OpenInMenu } from '@/components/app/OpenInMenu';
 import { AgentPanel } from '@/components/chat/AgentPanel';
-import { CurrentFilePanel, FilePanel } from '@/components/files';
 import { RunningProjectsPopover } from '@/components/layout/RunningProjectsPopover';
-import { SettingsContent } from '@/components/settings';
 import type { SettingsCategory } from '@/components/settings/constants';
-import { SourceControlPanel } from '@/components/source-control';
-import { CodeReviewModal } from '@/components/source-control/CodeReviewModal';
-import { DiffReviewModal } from '@/components/source-control/DiffReviewModal';
-import { TodoPanel } from '@/components/todo';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -41,14 +35,50 @@ import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
+import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
-import { TerminalPanel } from '../terminal';
+
+const CurrentFilePanel = lazy(() =>
+  import('@/components/files/CurrentFilePanel').then((module) => ({
+    default: module.CurrentFilePanel,
+  }))
+);
+const FilePanel = lazy(() =>
+  import('@/components/files/FilePanel').then((module) => ({ default: module.FilePanel }))
+);
+const SettingsContent = lazy(() =>
+  import('@/components/settings/SettingsContent').then((module) => ({
+    default: module.SettingsContent,
+  }))
+);
+const SourceControlPanel = lazy(() =>
+  import('@/components/source-control/SourceControlPanel').then((module) => ({
+    default: module.SourceControlPanel,
+  }))
+);
+const CodeReviewModal = lazy(() =>
+  import('@/components/source-control/CodeReviewModal').then((module) => ({
+    default: module.CodeReviewModal,
+  }))
+);
+const DiffReviewModal = lazy(() =>
+  import('@/components/source-control/DiffReviewModal').then((module) => ({
+    default: module.DiffReviewModal,
+  }))
+);
+const TodoPanel = lazy(() =>
+  import('@/components/todo/TodoPanel').then((module) => ({ default: module.TodoPanel }))
+);
+const TerminalPanel = lazy(() =>
+  import('@/components/terminal/TerminalPanel').then((module) => ({
+    default: module.TerminalPanel,
+  }))
+);
 
 type LayoutMode = 'columns' | 'tree';
 
 interface MainContentProps {
-  activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   tabOrder?: TabId[];
   onTabReorder?: (fromIndex: number, toIndex: number) => void;
@@ -67,7 +97,7 @@ interface MainContentProps {
   onExpandFileSidebar?: () => void;
   onSwitchWorktree?: (worktreePath: string) => void;
   onSwitchTab?: (tab: TabId) => void;
-  isSettingsActive?: boolean;
+  settingsDialogOpen?: boolean;
   settingsCategory?: SettingsCategory;
   onCategoryChange?: (category: SettingsCategory) => void;
   scrollToProvider?: boolean;
@@ -78,7 +108,6 @@ interface MainContentProps {
 }
 
 export function MainContent({
-  activeTab,
   onTabChange,
   tabOrder = DEFAULT_TAB_ORDER,
   onTabReorder,
@@ -97,7 +126,7 @@ export function MainContent({
   onExpandFileSidebar,
   onSwitchWorktree,
   onSwitchTab,
-  isSettingsActive = false,
+  settingsDialogOpen = false,
   settingsCategory,
   onCategoryChange,
   scrollToProvider,
@@ -107,21 +136,26 @@ export function MainContent({
   sourceControlEmptyDescription,
 }: MainContentProps) {
   const { t } = useI18n();
+  const activeTab = useNavigationStore((s) => s.activeTab);
   const settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
   const setSettingsDisplayMode = useSettingsStore((s) => s.setSettingsDisplayMode);
   const fileTreeDisplayMode = useSettingsStore((s) => s.fileTreeDisplayMode);
   const todoEnabled = useSettingsStore((s) => s.todoEnabled);
+  const isSettingsActive =
+    (settingsDisplayMode === 'tab' && activeTab === 'settings') ||
+    (settingsDisplayMode === 'draggable-modal' && settingsDialogOpen);
 
   // Diff Review Modal state
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [hasOpenedReviewModal, setHasOpenedReviewModal] = useState(false);
   // AI Code Review Modal state
   const [isAIReviewModalOpen, setIsAIReviewModalOpen] = useState(false);
+  const [hasOpenedAIReviewModal, setHasOpenedAIReviewModal] = useState(false);
   const codeReviewEnabled = useSettingsStore((s) => s.codeReview.enabled);
   const isCodeReviewMinimized = useCodeReviewContinueStore((s) => s.isMinimized);
   const codeReviewRepoPath = useCodeReviewContinueStore((s) => s.review.repoPath);
   const codeReviewStatus = useCodeReviewContinueStore((s) => s.review.status);
-  const isAIReviewMinimizedForThisRepo =
-    isCodeReviewMinimized && codeReviewRepoPath === repoPath;
+  const isAIReviewMinimizedForThisRepo = isCodeReviewMinimized && codeReviewRepoPath === repoPath;
   const isAIReviewMinimizedInProgress =
     isAIReviewMinimizedForThisRepo &&
     (codeReviewStatus === 'streaming' || codeReviewStatus === 'initializing');
@@ -139,7 +173,9 @@ export function MainContent({
       const session = sessions.find((s) => s.id === activeId);
       if (session) return activeId;
     }
-    const firstSession = sessions.find((s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, worktreePath));
+    const firstSession = sessions.find(
+      (s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, worktreePath)
+    );
     return firstSession?.id ?? null;
   }, [repoPath, worktreePath, sessions, activeIds]);
 
@@ -192,7 +228,7 @@ export function MainContent({
       color: var(--accent-foreground);
       font-size: 14px;
       font-weight: 500;
-      border-radius: 8px;
+      border-radius: 4px;
       white-space: nowrap;
       pointer-events: none;
     `;
@@ -257,7 +293,8 @@ export function MainContent({
   const isMac = window.electronAPI.env.platform === 'darwin';
   const needsTrafficLightPadding = isMac && repositoryCollapsed && worktreeCollapsed;
 
-  const { containerRef: headerRef, isCompact: isTabBarCompact } = useCompactLayout<HTMLElement>(600);
+  const { containerRef: headerRef, isCompact: isTabBarCompact } =
+    useCompactLayout<HTMLElement>(600);
 
   // Remember the last valid repo/worktree pair to keep AgentPanel mounted
   // without mixing a new repoPath with an old worktreePath.
@@ -284,6 +321,28 @@ export function MainContent({
   // Keep bg-background on <main> only (1 layer), remove from all inner elements to prevent double-stacking
   const bgImageEnabled = useSettingsStore((s) => s.backgroundImageEnabled);
   const innerBg = bgImageEnabled ? '' : 'bg-background';
+  const [mountedTabs, setMountedTabs] = useState<Set<TabId>>(() => new Set(['chat', activeTab]));
+  useEffect(() => {
+    setMountedTabs((current) => {
+      if (current.has(activeTab)) return current;
+      const next = new Set(current);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
+  const shouldRenderTab = (tab: TabId) => mountedTabs.has(tab) || activeTab === tab;
+  const panelFallback = (
+    <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      {t('Loading...')}
+    </div>
+  );
+  const modalFallback = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center gap-2 bg-background/80 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      {t('Loading...')}
+    </div>
+  );
 
   return (
     <main className={cn('flex min-w-0 flex-1 flex-col overflow-hidden bg-background')}>
@@ -390,19 +449,10 @@ export function MainContent({
                   )}
                 >
                   {/* Active highlight background */}
-                  {isActive && (
-                    <motion.div
-                      layoutId="main-tab-highlight"
-                      className="absolute inset-0 rounded-md bg-accent"
-                      transition={springFast}
-                    />
-                  )}
+                  {isActive && <div className="absolute inset-0 rounded-md bg-accent" />}
                   <tab.icon className="relative z-10 h-4 w-4" />
                   <span
-                    className={cn(
-                      'relative z-10 whitespace-nowrap',
-                      isTabBarCompact && 'sr-only'
-                    )}
+                    className={cn('relative z-10 whitespace-nowrap', isTabBarCompact && 'sr-only')}
                   >
                     {tab.label}
                   </span>
@@ -474,7 +524,10 @@ export function MainContent({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsReviewModalOpen(true)}
+              onClick={() => {
+                setHasOpenedReviewModal(true);
+                setIsReviewModalOpen(true);
+              }}
               className="h-8"
             >
               <MessageSquare className="h-4 w-4 mr-1.5" />
@@ -485,12 +538,13 @@ export function MainContent({
             <Button
               variant={isAIReviewMinimizedForThisRepo ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setIsAIReviewModalOpen(true)}
+              onClick={() => {
+                setHasOpenedAIReviewModal(true);
+                setIsAIReviewModalOpen(true);
+              }}
               className="h-8"
               title={
-                isAIReviewMinimizedForThisRepo
-                  ? t('View code review')
-                  : t('Start code review')
+                isAIReviewMinimizedForThisRepo ? t('View code review') : t('Start code review')
               }
             >
               {isAIReviewMinimizedInProgress ? (
@@ -507,7 +561,7 @@ export function MainContent({
                   : t('AI Review')}
             </Button>
           )}
-          {showOpenInMenu && <OpenInMenu path={effectiveOpenInPath} activeTab={activeTab} />}
+          {showOpenInMenu && <OpenInMenu path={effectiveOpenInPath} />}
         </div>
       </header>
 
@@ -585,11 +639,15 @@ export function MainContent({
             activeTab === 'terminal' ? 'z-10' : 'invisible pointer-events-none z-0'
           )}
         >
-          <TerminalPanel
-            repoPath={effectiveRepoPath ?? undefined}
-            cwd={effectiveWorktreePath ?? undefined}
-            isActive={activeTab === 'terminal' && hasActiveWorktree}
-          />
+          {shouldRenderTab('terminal') && (
+            <Suspense fallback={panelFallback}>
+              <TerminalPanel
+                repoPath={effectiveRepoPath ?? undefined}
+                cwd={effectiveWorktreePath ?? undefined}
+                isActive={activeTab === 'terminal' && hasActiveWorktree}
+              />
+            </Suspense>
+          )}
         </div>
         {/* File tab - keep mounted to preserve editor state */}
         <div
@@ -599,10 +657,14 @@ export function MainContent({
             activeTab === 'file' ? 'z-10' : 'invisible pointer-events-none z-0'
           )}
         >
-          {fileTreeDisplayMode === 'current' ? (
-            <CurrentFilePanel rootPath={worktreePath} isActive={activeTab === 'file'} />
-          ) : (
-            <FilePanel rootPath={worktreePath} isActive={activeTab === 'file'} />
+          {shouldRenderTab('file') && (
+            <Suspense fallback={panelFallback}>
+              {fileTreeDisplayMode === 'current' ? (
+                <CurrentFilePanel rootPath={worktreePath} isActive={activeTab === 'file'} />
+              ) : (
+                <FilePanel rootPath={worktreePath} isActive={activeTab === 'file'} />
+              )}
+            </Suspense>
           )}
         </div>
         {/* Source Control tab - keep mounted to preserve selection state */}
@@ -614,14 +676,18 @@ export function MainContent({
               activeTab === 'source-control' ? 'z-10' : 'invisible pointer-events-none z-0'
             )}
           >
-            <SourceControlPanel
-              rootPath={effectiveSourceControlRootPath}
-              isActive={activeTab === 'source-control'}
-              onExpandWorktree={onExpandWorktree}
-              worktreeCollapsed={worktreeCollapsed}
-              emptyTitle={sourceControlEmptyTitle}
-              emptyDescription={sourceControlEmptyDescription}
-            />
+            {shouldRenderTab('source-control') && (
+              <Suspense fallback={panelFallback}>
+                <SourceControlPanel
+                  rootPath={effectiveSourceControlRootPath}
+                  isActive={activeTab === 'source-control'}
+                  onExpandWorktree={onExpandWorktree}
+                  worktreeCollapsed={worktreeCollapsed}
+                  emptyTitle={sourceControlEmptyTitle}
+                  emptyDescription={sourceControlEmptyDescription}
+                />
+              </Suspense>
+            )}
           </div>
         )}
         {/* Todo tab */}
@@ -633,12 +699,16 @@ export function MainContent({
               activeTab === 'todo' ? 'z-10' : 'invisible pointer-events-none z-0'
             )}
           >
-            <TodoPanel
-              repoPath={effectiveRepoPath ?? undefined}
-              worktreePath={effectiveWorktreePath ?? undefined}
-              isActive={activeTab === 'todo'}
-              onSwitchToAgent={() => onTabChange('chat')}
-            />
+            {shouldRenderTab('todo') && (
+              <Suspense fallback={panelFallback}>
+                <TodoPanel
+                  repoPath={effectiveRepoPath ?? undefined}
+                  worktreePath={effectiveWorktreePath ?? undefined}
+                  isActive={activeTab === 'todo'}
+                  onSwitchToAgent={() => onTabChange('chat')}
+                />
+              </Suspense>
+            )}
           </div>
         )}
         {/* Settings tab */}
@@ -664,11 +734,15 @@ export function MainContent({
                 </button>
               </div>
               <div className="flex-1 overflow-hidden">
-                <SettingsContent
-                  activeCategory={settingsCategory}
-                  onCategoryChange={onCategoryChange}
-                  scrollToProvider={scrollToProvider}
-                />
+                {shouldRenderTab('settings') && (
+                  <Suspense fallback={panelFallback}>
+                    <SettingsContent
+                      activeCategory={settingsCategory}
+                      onCategoryChange={onCategoryChange}
+                      scrollToProvider={scrollToProvider}
+                    />
+                  </Suspense>
+                )}
               </div>
             </div>
           </div>
@@ -676,19 +750,27 @@ export function MainContent({
       </div>
 
       {/* Diff Review Modal */}
-      <DiffReviewModal
-        open={isReviewModalOpen}
-        onOpenChange={setIsReviewModalOpen}
-        rootPath={effectiveReviewRootPath}
-        onSend={() => onTabChange('chat')}
-      />
+      {hasOpenedReviewModal && (
+        <Suspense fallback={modalFallback}>
+          <DiffReviewModal
+            open={isReviewModalOpen}
+            onOpenChange={setIsReviewModalOpen}
+            rootPath={effectiveReviewRootPath}
+            onSend={() => onTabChange('chat')}
+          />
+        </Suspense>
+      )}
 
       {/* AI Code Review Modal */}
-      <CodeReviewModal
-        open={isAIReviewModalOpen}
-        onOpenChange={setIsAIReviewModalOpen}
-        repoPath={repoPath}
-      />
+      {hasOpenedAIReviewModal && (
+        <Suspense fallback={modalFallback}>
+          <CodeReviewModal
+            open={isAIReviewModalOpen}
+            onOpenChange={setIsAIReviewModalOpen}
+            repoPath={repoPath}
+          />
+        </Suspense>
+      )}
     </main>
   );
 }

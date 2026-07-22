@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { FileCode } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { panelTransition } from '@/App/constants';
 import { normalizePath } from '@/App/storage';
-import { GlobalSearchDialog, type SearchMode } from '@/components/search';
+import type { SearchMode } from '@/components/search';
 import {
   Empty,
   EmptyDescription,
@@ -16,8 +16,9 @@ import { useEditor } from '@/hooks/useEditor';
 import { useFileTree } from '@/hooks/useFileTree';
 import { useI18n } from '@/i18n';
 import { isFocusLocked, pauseFocusLock, restoreFocus } from '@/lib/focusLock';
+import { useNavigationStore } from '@/stores/navigation';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
-import { getEditorSelectionText } from './EditorArea';
+import { getEditorSelectionText } from './editorSelection';
 import {
   type ConflictInfo,
   type ConflictResolution,
@@ -28,7 +29,6 @@ import { NewItemDialog } from './NewItemDialog';
 
 interface FileSidebarProps {
   rootPath: string | undefined;
-  isActive?: boolean;
   sessionId?: string | null;
   width: number;
   collapsed: boolean;
@@ -39,9 +39,14 @@ interface FileSidebarProps {
 
 type NewItemType = 'file' | 'directory' | null;
 
+const GlobalSearchDialog = lazy(() =>
+  import('@/components/search/GlobalSearchDialog').then((module) => ({
+    default: module.GlobalSearchDialog,
+  }))
+);
+
 export function FileSidebar({
   rootPath,
-  isActive = false,
   sessionId,
   width,
   collapsed,
@@ -49,6 +54,7 @@ export function FileSidebar({
   onResizeStart,
   onSwitchTab,
 }: FileSidebarProps) {
+  const isActive = useNavigationStore((s) => s.activeTab === 'file');
   const { t } = useI18n();
   const {
     tree,
@@ -70,6 +76,8 @@ export function FileSidebar({
   const [newItemType, setNewItemType] = useState<NewItemType>(null);
   const [newItemParentPath, setNewItemParentPath] = useState<string>('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const hasOpenedSearchRef = useRef(false);
+  if (searchOpen) hasOpenedSearchRef.current = true;
   const [searchMode, setSearchMode] = useState<SearchMode>('content');
   const addOperationsRef = useRef<((operations: any[]) => void) | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -456,13 +464,23 @@ export function FileSidebar({
             className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
             onMouseDown={onResizeStart}
           />
-          <GlobalSearchDialog
-            open={searchOpen}
-            onOpenChange={setSearchOpen}
-            rootPath={rootPath}
-            initialMode={searchMode}
-            onOpenFile={navigateToFile}
-          />
+          {hasOpenedSearchRef.current && (
+            <Suspense
+              fallback={
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 text-sm text-muted-foreground">
+                  {t('Loading...')}
+                </div>
+              }
+            >
+              <GlobalSearchDialog
+                open={searchOpen}
+                onOpenChange={setSearchOpen}
+                rootPath={rootPath}
+                initialMode={searchMode}
+                onOpenFile={navigateToFile}
+              />
+            </Suspense>
+          )}
           <NewItemDialog
             isOpen={newItemType !== null}
             type={newItemType || 'file'}
