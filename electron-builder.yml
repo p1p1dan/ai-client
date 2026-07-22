@@ -6,6 +6,10 @@ directories:
   output: dist
   buildResources: build
 
+electronLanguages:
+  - en-US
+  - zh-CN
+
 files:
   - "out/**/*"
   - "node_modules/**/*"
@@ -26,28 +30,77 @@ files:
   - "!node_modules/@tailwindcss/**"
   - "!node_modules/tailwindcss/**"
   - "!node_modules/jiti/**"
+  # Monaco and its workers are bundled into out/renderer by Vite.
+  - "!node_modules/monaco-editor/**"
+  # React DOM is bundled into the renderer output by Vite.
+  - "!node_modules/react-dom/**"
+  # React is bundled into the renderer output by Vite.
+  - "!node_modules/react/**"
+  # Framer Motion is bundled into the renderer output by Vite.
+  - "!node_modules/framer-motion/**"
+  # Motion DOM is bundled transitively with Framer Motion by Vite.
+  - "!node_modules/motion-dom/**"
+  # Base UI packages are used only by Vite-bundled renderer components.
+  - "!node_modules/@base-ui/**"
+  # Xterm and its addons are bundled into the renderer output by Vite.
+  - "!node_modules/@xterm/**"
+  # Lucide icons are bundled into the renderer output by Vite.
+  - "!node_modules/lucide-react/**"
+  # The emoji picker is bundled into the renderer output by Vite.
+  - "!node_modules/emoji-picker-react/**"
+  # TanStack packages are used only by the Vite-bundled renderer.
+  - "!node_modules/@tanstack/**"
+  # Shiki support packages are bundled into the renderer output by Vite.
+  - "!node_modules/@shikijs/**"
+  # Shiki is bundled into the renderer output by Vite.
+  - "!node_modules/shiki/**"
+  # Pierre Diffs is used only by the Vite-bundled renderer dependency graph.
+  - "!node_modules/@pierre/diffs/**"
+  # React Markdown is bundled into the renderer output by Vite.
+  - "!node_modules/react-markdown/**"
+  # Remark packages are bundled into the renderer output by Vite.
+  - "!node_modules/remark-*/**"
+  # Rehype packages are bundled into the renderer output by Vite.
+  - "!node_modules/rehype-*/**"
+  # DnD Kit packages are used only by Vite-bundled renderer components.
+  - "!node_modules/@dnd-kit/**"
+  # Class Variance Authority is bundled into the renderer output by Vite.
+  - "!node_modules/class-variance-authority/**"
+  # clsx is bundled into the renderer output by Vite.
+  - "!node_modules/clsx/**"
+  # Tailwind Merge is bundled into the renderer output by Vite.
+  - "!node_modules/tailwind-merge/**"
+  # Match Sorter is bundled into the renderer output by Vite.
+  - "!node_modules/match-sorter/**"
+  # Zustand is bundled into the renderer output by Vite.
+  - "!node_modules/zustand/**"
   # Exclude native module build artifacts (source not needed at runtime)
   - "!node_modules/node-pty/src/**"
   - "!node_modules/node-pty/deps/**"
+  # The Windows x64 package cannot use node-pty's macOS ARM64 prebuild.
+  - "!node_modules/node-pty/prebuilds/darwin-arm64/**"
+  # The Windows x64 package cannot use node-pty's macOS x64 prebuild.
+  - "!node_modules/node-pty/prebuilds/darwin-x64/**"
+  # The Windows x64 package cannot use node-pty's Windows ARM64 prebuild.
+  - "!node_modules/node-pty/prebuilds/win32-arm64/**"
+  # The Windows x64 package cannot use node-pty's ARM64 ConPTY build inputs.
+  - "!node_modules/node-pty/third_party/conpty/**/win10-arm64/**"
+  # The Windows x64 package cannot use Parcel watcher's macOS prebuilds.
+  - "!node_modules/@parcel/watcher-darwin-*/**"
+  # The Windows x64 package cannot use Parcel watcher's Linux prebuilds.
+  - "!node_modules/@parcel/watcher-linux-*/**"
+  # The Windows x64 package cannot use Parcel watcher's Android prebuild.
+  - "!node_modules/@parcel/watcher-android-*/**"
+  # The Windows x64 package cannot use Parcel watcher's FreeBSD prebuild.
+  - "!node_modules/@parcel/watcher-freebsd-*/**"
+  # The Windows x64 package cannot use Parcel watcher's Windows ARM64 prebuild.
+  - "!node_modules/@parcel/watcher-win32-arm64/**"
+  # The Windows x64 package cannot use Parcel watcher's Windows IA32 prebuild.
+  - "!node_modules/@parcel/watcher-win32-ia32/**"
   # sqlite3's native binding is not reliably unpacked from app.asar in this
   # project's pnpm layout; it ships exclusively via extraResources below
   # (see src/main/utils/sqlite3Loader.ts), so drop it from the asar entirely.
   - "!node_modules/sqlite3/**"
-  # Exclude lucide-react source maps and types
-  - "!node_modules/lucide-react/dist/*.mjs.map"
-  - "!node_modules/lucide-react/dist/*.d.ts"
-  - "!node_modules/lucide-react/dist/*.d.mts"
-  # Exclude lucide-react unused formats (keep esm only)
-  - "!node_modules/lucide-react/dist/cjs/**"
-  - "!node_modules/lucide-react/dist/umd/**"
-  # Exclude monaco-editor dev and min versions (keep esm only, saves ~42MB)
-  - "!node_modules/monaco-editor/dev/**"
-  - "!node_modules/monaco-editor/min/**"
-  # Exclude shiki unused themes and languages
-  - "!node_modules/shiki/dist/langs/**"
-  - "!node_modules/shiki/dist/themes/**"
-  - "!node_modules/@shikijs/langs/**"
-  - "!node_modules/@shikijs/themes/**"
   # Exclude AI SDK bundled CLI binaries (we use system-installed CLIs via custom spawn)
   # @openai/codex vendor: ~326MB of pre-built binaries for all platforms
   - "!node_modules/@openai/codex/vendor/**"
