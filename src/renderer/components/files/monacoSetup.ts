@@ -34,7 +34,12 @@ loader.config({ monaco });
 let monacoReadyPromise: Promise<void> | null = null;
 
 export function ensureMonacoReady(): Promise<void> {
-  monacoReadyPromise ??= initializeMonaco();
+  // Reset the cached promise on failure so a later call can retry
+  // instead of being stuck on a permanently rejected promise.
+  monacoReadyPromise ??= initializeMonaco().catch((error) => {
+    monacoReadyPromise = null;
+    throw error;
+  });
   return monacoReadyPromise;
 }
 
