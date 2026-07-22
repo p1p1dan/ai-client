@@ -100,53 +100,36 @@
   }
 
   .dark {
-    --background: oklch(0.145 0.014 285.82);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0.014 285.82);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0.014 285.82);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0.014 285.82);
-    --secondary: oklch(0.269 0.014 285.82);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0.014 285.82);
-    --muted-foreground: oklch(0.708 0.014 285.82);
-    --accent: oklch(0.269 0.014 285.82);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.72);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
-    --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.269 0.014 285.82);
-    --input: oklch(0.269 0.014 285.82);
-    --ring: oklch(0.439 0.014 285.82);
+    /* Cursor-style dark theme: near-black background, soft white text, gentle borders */
+    --background: oklch(0.21 0.005 285);          /* #1e1e1e */
+    --foreground: oklch(0.87 0.005 285);          /* #d4d4d4 */
+    --card: oklch(0.24 0.005 285);                /* #252526 */
+    --card-foreground: oklch(0.87 0.005 285);      /* #d4d4d4 */
+    --popover: oklch(0.27 0.005 285);              /* #2d2d30 */
+    --popover-foreground: oklch(0.87 0.005 285);  /* #d4d4d4 */
+    --primary: oklch(0.55 0.18 245);              /* Cursor blue #007fd4 */
+    --primary-foreground: oklch(0.98 0 0);         /* near-white */
+    --secondary: oklch(0.27 0.005 285);            /* #2a2d2e */
+    --secondary-foreground: oklch(0.87 0.005 285); /* #d4d4d4 */
+    --muted: oklch(0.27 0.005 285);                /* #2a2d2e */
+    --muted-foreground: oklch(0.55 0.005 285);     /* #808080 */
+    --accent: oklch(0.32 0.005 285);                /* #333333 */
+    --accent-foreground: oklch(0.92 0.005 285);    /* #e0e0e0 */
+    --destructive: oklch(0.65 0.18 30);           /* #f48771 */
+    --destructive-foreground: oklch(0.98 0 0);     /* near-white */
+    --success: oklch(0.72 0.13 175);              /* #4ec9b0 */
+    --success-foreground: oklch(0.15 0 0);       /* near-black */
+    --warning: oklch(0.82 0.08 95);               /* #dcdcaa */
+    --warning-foreground: oklch(0.15 0 0);         /* near-black */
+    --info: oklch(0.65 0.15 230);                /* #4ec9e0 */
+    --info-foreground: oklch(0.98 0 0);           /* near-white */
+    --border: oklch(0.32 0.005 285);              /* #3e3e42 */
+    --input: oklch(0.32 0.005 285);               /* #3e3e42 */
+    --ring: oklch(0.55 0.18 245);                 /* Cursor blue #007fd4 */
+    --radius: 3px;
   }
 
-  /* Background Image Support - Light Mode */
-  /* --panel-bg-opacity is set dynamically via JS on <body> to respect slider value */
-  .bg-image-enabled {
-    --background: oklch(1 0 0 / var(--panel-bg-opacity));
-    --card: oklch(1 0 0 / var(--panel-bg-opacity));
-    --popover: oklch(1 0 0 / var(--panel-bg-opacity));
-    --muted: oklch(0.965 0.003 285.82 / var(--panel-bg-opacity));
-    --accent: oklch(0.965 0.003 285.82 / var(--panel-bg-opacity));
-  }
-
-  /* Background Image Support - Dark Mode */
-  .dark .bg-image-enabled {
-    --background: oklch(0.145 0.014 285.82 / var(--panel-bg-opacity));
-    --card: oklch(0.145 0.014 285.82 / var(--panel-bg-opacity));
-    --popover: oklch(0.145 0.014 285.82 / var(--panel-bg-opacity));
-    --muted: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-    --accent: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-    --border: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-    --input: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-  }
+  /* Background image support removed — replaced by solid dark theme */
 }
 
 @layer base {

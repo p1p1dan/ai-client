@@ -34,6 +34,8 @@ interface EnhancedInputProps {
   /** Working directory for file mention search */
   cwd?: string;
   repoPath?: string;
+  /** Display mode: 'floating' renders as a dismissible overlay, 'docked' renders as a fixed bottom bar (ignores open/onOpenChange) */
+  mode?: 'floating' | 'docked';
 }
 
 const MAX_IMAGES = 5;
@@ -53,6 +55,7 @@ export function EnhancedInput({
   isActive = false,
   cwd,
   repoPath,
+  mode = 'floating',
 }: EnhancedInputProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -656,7 +659,7 @@ export function EnhancedInput({
     fileInputRef.current?.click();
   }, []);
 
-  if (!open) return null;
+  if (!open && mode === 'floating') return null;
 
   return (
     <div className="relative">
@@ -788,23 +791,27 @@ export function EnhancedInput({
         />
 
         <div className="relative mx-3 my-2 rounded-lg border border-border bg-muted/30">
-          {/* Close button (top-right) */}
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="absolute top-1 right-1 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors z-10"
-            aria-label={t('Close')}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          {/* Close button (top-right) — floating mode only */}
+          {mode === 'floating' && (
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="absolute top-1 right-1 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors z-10"
+              aria-label={t('Close')}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
 
-          {/* Resize handle */}
-          <div
-            className="h-2 cursor-ns-resize group flex items-center justify-center"
-            onMouseDown={handleResizeStart}
-          >
-            <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-muted-foreground transition-colors" />
-          </div>
+          {/* Resize handle — floating mode only */}
+          {mode === 'floating' && (
+            <div
+              className="h-2 cursor-ns-resize group flex items-center justify-center"
+              onMouseDown={handleResizeStart}
+            >
+              <div className="w-8 h-0.5 rounded-full bg-border group-hover:bg-muted-foreground transition-colors" />
+            </div>
+          )}
 
           {/* Textarea */}
           <div onDrop={handleDrop} onDragOver={handleDragOver} className="flex">
