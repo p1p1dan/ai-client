@@ -1,8 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, MoreHorizontal, RefreshCw, Settings, Terminal, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import logoImage from '@/assets/logo.png';
-import { UserProfileCard } from '@/components/user/UserProfileCard';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Menu,
   MenuItem,
@@ -11,8 +11,8 @@ import {
   MenuTrigger,
   TitleBarMenuPopup,
 } from '@/components/ui/menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
+import { UserProfileCard } from '@/components/user/UserProfileCard';
 import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -57,7 +57,8 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
 
   const todayCostUsd =
     usage.data && 'error' in usage.data ? null : (usage.data?.todayCostUsd ?? null);
-  const todayCostText = usage.isLoading || todayCostUsd === null ? '--' : formatCostUsd(todayCostUsd);
+  const todayCostText =
+    usage.isLoading || todayCostUsd === null ? '--' : formatCostUsd(todayCostUsd);
 
   useEffect(() => {
     if (isRegistered) {
@@ -93,7 +94,7 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
 
   const userPillClass = cn(
     'flex h-6 items-center gap-2 rounded-full border px-2',
-    'bg-background/80 backdrop-blur-sm shadow-sm',
+    'bg-background shadow-sm',
     'text-muted-foreground hover:text-foreground hover:bg-muted/80',
     'transition-colors duration-150'
   );
@@ -128,7 +129,9 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
               title={email ?? t('User profile')}
             >
               <Avatar className="size-5 bg-transparent">
-                <AvatarFallback className="bg-muted text-foreground text-xs">{initial}</AvatarFallback>
+                <AvatarFallback className="bg-muted text-foreground text-xs">
+                  {initial}
+                </AvatarFallback>
               </Avatar>
               <div className="h-3 w-px bg-border/70" />
               <span

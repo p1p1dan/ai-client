@@ -61,15 +61,18 @@ variant="destructive"
 
 | Level | Token | Value | 典型场景 |
 |------|------|------|---------|
-| xs | `--radius-xs` | 4px | checkbox、badge、kbd 等内嵌元素 |
-| sm | `--radius-sm` | 8px | button、input、tab、tooltip 等交互元素 |
-| md | `--radius-md` | 12px | card、alert、toolbar 等容器 |
-| lg | `--radius-lg` | 16px | dialog、sheet 等顶层容器 |
+| xs | `--radius-xs` | 2px | checkbox、badge、kbd 等内嵌元素 |
+| sm | `--radius-sm` | 3px | button、input、tab 等交互元素 |
+| md | `--radius-md` | 4px | card、alert、tooltip 等容器 |
+| lg | `--radius-lg` | 6px | popover、menu 等浮层容器 |
+| xl | `--radius-xl` | 8px | toolbar、frame 等大容器 |
+| 2xl | `--radius-2xl` | 8px | dialog、sheet 等顶层容器 |
 
 **使用建议**：
 - 小内嵌元素：优先 `rounded-xs`
 - 交互元素：优先 `rounded-sm` / `rounded-md`
-- 顶层覆盖层：优先 `rounded-lg` / `rounded-2xl`
+- 普通浮层：优先 `rounded-lg`
+- 顶层覆盖层：优先 `rounded-xl` / `rounded-2xl`
 
 ### Shadow（阴影）
 
@@ -114,11 +117,12 @@ variant="destructive"
 
 | Tier | Duration | 场景 |
 |------|----------|------|
-| Fast | 100ms | 纯颜色变化（hover color、focus ring 出现） |
-| Normal | 150ms | 交互反馈（button press、tooltip enter、toggle） |
+| Fast | 100ms | 高频微交互（button press、transform） |
+| Normal | 150ms | 状态反馈（hover color、focus ring、tooltip、toggle） |
 | Slow | 250ms | 布局变化（面板展开/收起、对话框切换） |
 
 **实现规范**：
+- button press / transform：使用 `duration-100`
 - hover / focus：优先 `duration-150`
 - 布局变化：使用 `duration-[250ms]`
 - `Progress` / `Meter`：允许使用 `duration-500` 表达连续变化
