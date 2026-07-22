@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { RecentEditorProject } from '@shared/types';
 import { fileUriToPath } from '@shared/utils/fileUrl';
-import sqlite3 from 'sqlite3';
+import { getSqlite3 } from '../../utils/sqlite3Loader';
 
 // Cache with TTL (5 minutes)
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -72,8 +72,9 @@ async function readEditorProjects(editor: EditorConfig): Promise<RecentEditorPro
   if (!(await pathExists(dbPath))) return [];
 
   try {
+    const sqlite3Impl = getSqlite3();
     const row = await new Promise<{ value: string } | undefined>((resolve, reject) => {
-      const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
+      const db = new sqlite3Impl.Database(dbPath, sqlite3Impl.OPEN_READONLY, (err) => {
         if (err) return reject(err);
         db.configure('busyTimeout', BUSY_TIMEOUT_MS);
         db.get(

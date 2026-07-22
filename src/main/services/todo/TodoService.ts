@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { app } from 'electron';
-import sqlite3 from 'sqlite3';
+import type sqlite3 from 'sqlite3';
+import { getSqlite3 } from '../../utils/sqlite3Loader';
 
 const BUSY_TIMEOUT_MS = 3000;
 
@@ -21,6 +22,7 @@ function getDbPath(): string {
 }
 
 let db: sqlite3.Database | null = null;
+let initializationPromise: Promise<void> | null = null;
 
 function getDb(): sqlite3.Database {
   if (!db) {
@@ -82,15 +84,20 @@ function rowToTask(row: TodoTaskRow): {
   };
 }
 
-export async function initialize(): Promise<void> {
+async function initializeDatabase(): Promise<void> {
   const dbPath = getDbPath();
+  const sqlite3Impl = getSqlite3();
 
   await new Promise<void>((resolve, reject) => {
-    db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-      if (err) return reject(err);
-      db!.configure('busyTimeout', BUSY_TIMEOUT_MS);
-      resolve();
-    });
+    db = new sqlite3Impl.Database(
+      dbPath,
+      sqlite3Impl.OPEN_READWRITE | sqlite3Impl.OPEN_CREATE,
+      (err) => {
+        if (err) return reject(err);
+        db!.configure('busyTimeout', BUSY_TIMEOUT_MS);
+        resolve();
+      }
+    );
   });
 
   await dbExec(
@@ -112,6 +119,15 @@ export async function initialize(): Promise<void> {
   );
 
   console.log('[TodoService] Database initialized at', dbPath);
+}
+
+export function initialize(): Promise<void> {
+  initializationPromise ??= initializeDatabase().catch((error) => {
+    db = null;
+    initializationPromise = null;
+    throw error;
+  });
+  return initializationPromise;
 }
 
 export async function getTasks(repoPath: string): Promise<ReturnType<typeof rowToTask>[]> {
@@ -343,6 +359,7 @@ export function close(): Promise<void> {
     if (db) {
       const ref = db;
       db = null;
+      initializationPromise = null;
       ref.close((err) => {
         if (err) console.warn('[TodoService] Failed to close database:', err);
         resolve();
@@ -359,4 +376,5 @@ export function closeSync(): void {
   // Calling db.close() with a callback here would leave an async
   // cleanup hook that fires during FreeEnvironment(), causing SIGABRT.
   db = null;
+  initializationPromise = null;
 }
