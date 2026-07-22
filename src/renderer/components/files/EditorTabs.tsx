@@ -1,12 +1,10 @@
 import { getDisplayPath } from '@shared/utils/path';
-import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
-import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type { EditorTab } from '@/stores/editor';
 import { getFileIcon, getFileIconColor } from './fileIcons';
@@ -153,14 +151,8 @@ export function EditorTabs({
                     : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'
                 )}
               >
-                {/* Active indicator - 使用 layoutId 实现平滑滑动 */}
-                {isActive && (
-                  <motion.div
-                    layoutId="editor-tab-indicator"
-                    className="absolute inset-x-0 top-0 h-[2px] bg-primary"
-                    transition={springFast}
-                  />
-                )}
+                {/* Active indicator */}
+                {isActive && <div className="absolute inset-x-0 top-0 h-[2px] bg-primary" />}
 
                 {/* Icon */}
                 <Icon className={cn('h-4 w-4 shrink-0', iconColor)} />

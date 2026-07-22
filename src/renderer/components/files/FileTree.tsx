@@ -1,5 +1,4 @@
 import { getDisplayPath, getParentPath, getPathBasename } from '@shared/utils/path';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChevronRight,
   Clipboard,
@@ -1820,52 +1819,44 @@ function FileTreeNodeComponent({
       </Menu>
 
       {/* Children - 渲染 actualNode 的子节点 */}
-      <AnimatePresence initial={false}>
-        {actualNode.isDirectory && isExpanded && actualNode.children && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
-            {actualNode.children.map((child) => (
-              <FileTreeNodeComponent
-                key={child.path}
-                node={child}
-                depth={depth + 1}
-                expandedPaths={expandedPaths}
-                selectedPath={selectedPath}
-                editingPath={editingPath}
-                editValue={editValue}
-                onToggleExpand={onToggleExpand}
-                onFileClick={onFileClick}
-                onCreateFile={onCreateFile}
-                onCreateDirectory={onCreateDirectory}
-                onStartRename={onStartRename}
-                onFinishRename={onFinishRename}
-                onEditValueChange={onEditValueChange}
-                onDelete={onDelete}
-                onCopyPath={onCopyPath}
-                onCopyRelativePath={onCopyRelativePath}
-                onRevealInFinder={onRevealInFinder}
-                onExternalDrop={onExternalDrop}
-                onInternalDragStart={onInternalDragStart}
-                onInternalDragEnd={onInternalDragEnd}
-                onInternalDrop={onInternalDrop}
-                draggingNode={draggingNode}
-                draggingOverFolderPath={draggingOverFolderPath}
-                onDraggingOverFolderChange={onDraggingOverFolderChange}
-                clipboard={clipboard}
-                onCopy={onCopy}
-                onCut={onCut}
-                onPaste={onPaste}
-                onSendToSession={onSendToSession}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {actualNode.isDirectory && isExpanded && actualNode.children && (
+        <div className="overflow-hidden">
+          {actualNode.children.map((child) => (
+            <FileTreeNodeComponent
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              expandedPaths={expandedPaths}
+              selectedPath={selectedPath}
+              editingPath={editingPath}
+              editValue={editValue}
+              onToggleExpand={onToggleExpand}
+              onFileClick={onFileClick}
+              onCreateFile={onCreateFile}
+              onCreateDirectory={onCreateDirectory}
+              onStartRename={onStartRename}
+              onFinishRename={onFinishRename}
+              onEditValueChange={onEditValueChange}
+              onDelete={onDelete}
+              onCopyPath={onCopyPath}
+              onCopyRelativePath={onCopyRelativePath}
+              onRevealInFinder={onRevealInFinder}
+              onExternalDrop={onExternalDrop}
+              onInternalDragStart={onInternalDragStart}
+              onInternalDragEnd={onInternalDragEnd}
+              onInternalDrop={onInternalDrop}
+              draggingNode={draggingNode}
+              draggingOverFolderPath={draggingOverFolderPath}
+              onDraggingOverFolderChange={onDraggingOverFolderChange}
+              clipboard={clipboard}
+              onCopy={onCopy}
+              onCut={onCut}
+              onPaste={onPaste}
+              onSendToSession={onSendToSession}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

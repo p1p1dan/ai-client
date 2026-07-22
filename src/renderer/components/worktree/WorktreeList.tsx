@@ -61,7 +61,7 @@ export function WorktreeList({
         color: var(--accent-foreground);
         font-size: 14px;
         font-weight: 500;
-        border-radius: 8px;
+        border-radius: 4px;
         white-space: nowrap;
         pointer-events: none;
       `;
