@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFile, execSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -11,12 +11,16 @@ import { getProxyEnvVars } from '../proxy/ProxyConfig';
 import { detectShell, shellDetector } from './ShellDetector';
 
 const isWindows = process.platform === 'win32';
+const WINDOWS_USER_ENV_KEY = 'HKCU\\Environment';
+const WINDOWS_SYSTEM_ENV_KEY =
+  'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment';
 
 // Cache for Windows registry PATH (read once)
 let cachedWindowsPath: string | null = null;
 
 // Cache for Windows registry environment variables
 let cachedRegistryEnvVars: Record<string, string> | null = null;
+let windowsRegistryPrewarmPromise: Promise<void> | null = null;
 
 // Cache for Unix nvm node paths (read once)
 let cachedNvmNodePaths: string[] | null = null;
@@ -27,87 +31,128 @@ let cachedNvmNodePaths: string[] | null = null;
 export function clearPathCache(): void {
   cachedWindowsPath = null;
   cachedRegistryEnvVars = null;
+  windowsRegistryPrewarmPromise = null;
   cachedNvmNodePaths = null;
   console.log('[PtyManager] PATH cache cleared');
 }
 
-/**
- * Read environment variables from Windows registry (user + system level)
- * This is needed because GUI apps don't inherit shell environment variables
- */
-function getWindowsRegistryEnvVars(): Record<string, string> {
-  if (cachedRegistryEnvVars !== null) {
-    return cachedRegistryEnvVars;
-  }
-
-  const envVars: Record<string, string> = {};
-
-  // Parse registry output line by line
-  // Format: "    VAR_NAME    REG_SZ    value" or with tabs
-  const parseRegistryOutput = (output: string): void => {
-    const lines = output.split(/\r?\n/);
-    for (const line of lines) {
-      // Match: whitespace, name, whitespace, REG_SZ or REG_EXPAND_SZ, whitespace, value
-      // Use flexible whitespace matching (\s+) and capture the rest as value
-      const match = line.match(/^\s+(\S+)\s+REG_(EXPAND_)?SZ\s+(.*)$/i);
-      if (match) {
-        const name = match[1];
-        const value = match[3].trim();
-        if (name && value && !envVars[name]) {
-          envVars[name] = value;
-        }
+function parseRegistryEnvOutput(output: string, envVars: Record<string, string>): void {
+  const lines = output.split(/\r?\n/);
+  for (const line of lines) {
+    const match = line.match(/^\s+(\S+)\s+REG_(EXPAND_)?SZ\s+(.*)$/i);
+    if (match) {
+      const name = match[1];
+      const value = match[3].trim();
+      if (name && value && !envVars[name]) {
+        envVars[name] = value;
       }
     }
-  };
-
-  try {
-    // Read user-level environment variables
-    try {
-      const userOutput = execSync('reg query "HKCU\\Environment" 2>nul', {
-        encoding: 'utf8',
-        timeout: 3000,
-      });
-      parseRegistryOutput(userOutput);
-    } catch {
-      // User registry query failed
-    }
-
-    // Read system-level environment variables
-    try {
-      const systemOutput = execSync(
-        'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" 2>nul',
-        { encoding: 'utf8', timeout: 3000 }
-      );
-      parseRegistryOutput(systemOutput);
-    } catch {
-      // System registry query failed
-    }
-  } catch {
-    // Ignore errors
   }
-
-  cachedRegistryEnvVars = envVars;
-  return envVars;
 }
 
-/**
- * Expand Windows environment variables in a string (e.g., %PATH% -> actual value)
- * Reads variable values from registry (GUI apps don't inherit shell environment)
- */
-function expandWindowsEnvVars(str: string): string {
-  const registryEnvVars = getWindowsRegistryEnvVars();
+function parseRegistryPath(output: string): string {
+  const match = output.match(/^\s*Path\s+REG_(?:EXPAND_)?SZ\s+(.+?)\s*$/im);
+  return match ? match[1].trim() : '';
+}
 
-  // Replace %VAR% patterns with their values from registry
+function expandWindowsEnvVarsWith(str: string, envVars: Record<string, string>): string {
   return str.replace(/%([^%]+)%/g, (match, varName) => {
     const upperVarName = varName.toUpperCase();
-    for (const [key, value] of Object.entries(registryEnvVars)) {
+    for (const [key, value] of Object.entries(envVars)) {
       if (key.toUpperCase() === upperVarName) {
         return value;
       }
     }
-    // Keep original if not found
     return match;
   });
+}
+
+function buildWindowsRegistryCache(
+  userOutput: string,
+  systemOutput: string
+): { envVars: Record<string, string>; windowsPath: string } {
+  const envVars: Record<string, string> = {};
+  parseRegistryEnvOutput(userOutput, envVars);
+  parseRegistryEnvOutput(systemOutput, envVars);
+
+  const userPath = parseRegistryPath(userOutput);
+  const systemPath = parseRegistryPath(systemOutput);
+  const combinedPath = expandWindowsEnvVarsWith(
+    [systemPath, userPath].filter(Boolean).join(delimiter),
+    envVars
+  );
+
+  return {
+    envVars,
+    windowsPath: combinedPath || process.env.PATH || '',
+  };
+}
+
+function queryWindowsRegistrySync(key: string): string {
+  try {
+    return execSync(`reg query "${key}" 2>nul`, {
+      encoding: 'utf8',
+      timeout: 3000,
+    });
+  } catch {
+    return '';
+  }
+}
+
+function queryWindowsRegistry(key: string): Promise<string> {
+  return new Promise((resolve) => {
+    execFile(
+      'reg',
+      ['query', key],
+      { encoding: 'utf8', timeout: 3000, windowsHide: true },
+      (error, stdout) => {
+        if (error) {
+          console.warn(`[PtyManager] Registry prewarm query failed for ${key}:`, error.message);
+          resolve('');
+          return;
+        }
+        resolve(stdout);
+      }
+    );
+  });
+}
+
+function populateWindowsRegistryCache(userOutput: string, systemOutput: string): void {
+  const cache = buildWindowsRegistryCache(userOutput, systemOutput);
+  cachedRegistryEnvVars ??= cache.envVars;
+  cachedWindowsPath ??= cache.windowsPath;
+}
+
+function loadWindowsRegistryCacheSync(): void {
+  populateWindowsRegistryCache(
+    queryWindowsRegistrySync(WINDOWS_USER_ENV_KEY),
+    queryWindowsRegistrySync(WINDOWS_SYSTEM_ENV_KEY)
+  );
+}
+
+export function prewarmWindowsRegistryEnvironment(): Promise<void> {
+  if (!isWindows || (cachedRegistryEnvVars !== null && cachedWindowsPath !== null)) {
+    return Promise.resolve();
+  }
+  if (windowsRegistryPrewarmPromise) {
+    return windowsRegistryPrewarmPromise;
+  }
+
+  windowsRegistryPrewarmPromise = Promise.all([
+    queryWindowsRegistry(WINDOWS_USER_ENV_KEY),
+    queryWindowsRegistry(WINDOWS_SYSTEM_ENV_KEY),
+  ])
+    .then(([userOutput, systemOutput]) => {
+      if (!systemOutput) {
+        return;
+      }
+      populateWindowsRegistryCache(userOutput, systemOutput);
+    })
+    .catch((error) => {
+      console.warn('[PtyManager] Failed to prewarm Windows registry environment:', error);
+    });
+
+  return windowsRegistryPrewarmPromise;
 }
 
 /**
@@ -115,50 +160,11 @@ function expandWindowsEnvVars(str: string): string {
  * This ensures GUI apps get the same PATH as terminal apps
  */
 function getWindowsRegistryPath(): string {
-  if (cachedWindowsPath !== null) {
-    return cachedWindowsPath;
+  if (cachedWindowsPath === null) {
+    loadWindowsRegistryCacheSync();
   }
 
-  try {
-    // Read user-level PATH
-    let userPath = '';
-    try {
-      const userOutput = execSync('reg query "HKCU\\Environment" /v Path 2>nul', {
-        encoding: 'utf8',
-        timeout: 3000,
-      });
-      const userMatch = userOutput.match(/Path\s+REG_(?:EXPAND_)?SZ\s+(.+)/i);
-      userPath = userMatch ? userMatch[1].trim() : '';
-    } catch {
-      // User PATH might not exist
-    }
-
-    // Read system-level PATH
-    let systemPath = '';
-    try {
-      const systemOutput = execSync(
-        'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path 2>nul',
-        { encoding: 'utf8', timeout: 3000 }
-      );
-      const systemMatch = systemOutput.match(/Path\s+REG_(?:EXPAND_)?SZ\s+(.+)/i);
-      systemPath = systemMatch ? systemMatch[1].trim() : '';
-    } catch {
-      // System PATH should always exist, but handle error gracefully
-    }
-
-    // Combine: system PATH first, then user PATH (Windows convention)
-    let combinedPath = [systemPath, userPath].filter(Boolean).join(delimiter);
-
-    // Expand environment variables like %NVM_SYMLINK%, %USERPROFILE%, etc.
-    combinedPath = expandWindowsEnvVars(combinedPath);
-
-    cachedWindowsPath = combinedPath || process.env.PATH || '';
-    return cachedWindowsPath;
-  } catch {
-    // Fallback to process.env.PATH
-    cachedWindowsPath = process.env.PATH || '';
-    return cachedWindowsPath;
-  }
+  return cachedWindowsPath ?? process.env.PATH ?? '';
 }
 
 interface PtySession {

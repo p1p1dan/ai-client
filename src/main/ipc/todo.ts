@@ -6,18 +6,17 @@ import { polishTodoTask } from '../services/ai';
 import { localSessionManager } from '../services/LocalSessionManager';
 import * as todoService from '../services/todo/TodoService';
 
-let readyPromise: Promise<void>;
+let readyPromise: Promise<void> | null = null;
 
 /** Ensure DB is ready before processing any IPC call */
 async function ensureReady(): Promise<void> {
+  readyPromise ??= todoService.initialize().catch((err) => {
+    console.error('[Todo IPC] Failed to initialize TodoService:', err);
+  });
   await readyPromise;
 }
 
 export function registerTodoHandlers(): void {
-  readyPromise = todoService.initialize().catch((err) => {
-    console.error('[Todo IPC] Failed to initialize TodoService:', err);
-  });
-
   ipcMain.handle(IPC_CHANNELS.TODO_GET_TASKS, async (_, repoPath: string) => {
     return localSessionManager.getTodoTasks(repoPath);
   });
