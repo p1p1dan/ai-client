@@ -1,14 +1,12 @@
 import { useEffect } from 'react';
 import { useEditor } from '@/hooks/useEditor';
 import { useNavigationStore } from '@/stores/navigation';
-import type { TabId } from '../constants';
 
-export function useTerminalNavigation(
-  activeWorktreePath: string | null,
-  setActiveTab: (tab: TabId) => void,
-  setWorktreeTabMap: (fn: (prev: Record<string, TabId>) => Record<string, TabId>) => void
-) {
-  const { pendingNavigation, clearNavigation } = useNavigationStore();
+export function useTerminalNavigation(activeWorktreePath: string | null) {
+  const pendingNavigation = useNavigationStore((s) => s.pendingNavigation);
+  const clearNavigation = useNavigationStore((s) => s.clearNavigation);
+  const setActiveTab = useNavigationStore((s) => s.setActiveTab);
+  const setWorktreeTab = useNavigationStore((s) => s.setWorktreeTab);
   const { navigateToFile } = useEditor();
 
   useEffect(() => {
@@ -22,10 +20,7 @@ export function useTerminalNavigation(
     // Switch to file tab and update worktree tab map
     setActiveTab('file');
     if (activeWorktreePath) {
-      setWorktreeTabMap((prev) => ({
-        ...prev,
-        [activeWorktreePath]: 'file',
-      }));
+      setWorktreeTab(activeWorktreePath, 'file');
     }
 
     // Clear the navigation request
@@ -36,6 +31,6 @@ export function useTerminalNavigation(
     clearNavigation,
     activeWorktreePath,
     setActiveTab,
-    setWorktreeTabMap,
+    setWorktreeTab,
   ]);
 }

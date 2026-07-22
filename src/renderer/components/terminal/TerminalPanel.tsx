@@ -1,5 +1,6 @@
 import { Plus, Terminal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/shallow';
 import { TEMP_REPO_ID } from '@/App/constants';
 import { cleanPath, normalizePath } from '@/App/storage';
 import { Button } from '@/components/ui/button';
@@ -71,7 +72,12 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
     if (bgImageEnabled) return 'transparent';
     return getXtermTheme(terminalTheme)?.background ?? defaultDarkTheme.background;
   }, [terminalTheme, bgImageEnabled]);
-  const { setTerminalCount, registerTerminalCloseHandler } = useWorktreeActivityStore();
+  const { setTerminalCount, registerTerminalCloseHandler } = useWorktreeActivityStore(
+    useShallow((s) => ({
+      setTerminalCount: s.setTerminalCount,
+      registerTerminalCloseHandler: s.registerTerminalCloseHandler,
+    }))
+  );
   const syncTerminalSessions = useTerminalStore((s) => s.syncSessions);
   const { pendingScript, clearPendingScript } = useInitScriptStore();
   const pendingScriptProcessedRef = useRef<string | null>(null);

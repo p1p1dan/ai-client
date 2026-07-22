@@ -2,7 +2,6 @@ import type { GitWorktree } from '@shared/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TabId } from '../constants';
 import {
-  getStoredTabMap,
   getStoredTabOrder,
   getStoredWorktreeMap,
   getStoredWorktreeOrderMap,
@@ -12,8 +11,6 @@ import {
 } from '../storage';
 
 export function useWorktreeState() {
-  // Per-worktree tab state: { [worktreeId or legacy worktreePath]: TabId }
-  const [worktreeTabMap, setWorktreeTabMap] = useState<Record<string, TabId>>(getStoredTabMap);
   // Per-repo worktree state: { [repoId or legacy repoPath]: worktreePath }
   const [repoWorktreeMap, setRepoWorktreeMap] =
     useState<Record<string, string>>(getStoredWorktreeMap);
@@ -22,17 +19,10 @@ export function useWorktreeState() {
     useState<Record<string, Record<string, number>>>(getStoredWorktreeOrderMap);
   // Panel tab order: custom order of tabs
   const [tabOrder, setTabOrder] = useState<TabId[]>(getStoredTabOrder);
-  const [activeTab, setActiveTab] = useState<TabId>('chat');
-  const [previousTab, setPreviousTab] = useState<TabId | null>(null);
   const [activeWorktree, setActiveWorktree] = useState<GitWorktree | null>(null);
 
   // Ref to track current worktree path for fetch race condition prevention
   const currentWorktreePathRef = useRef<string | null>(null);
-
-  // Persist worktree tab map to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.WORKTREE_TABS, JSON.stringify(worktreeTabMap));
-  }, [worktreeTabMap]);
 
   // Persist panel tab order to localStorage
   useEffect(() => {
@@ -127,19 +117,13 @@ export function useWorktreeState() {
   );
 
   return {
-    worktreeTabMap,
     repoWorktreeMap,
     worktreeOrderMap,
     tabOrder,
-    activeTab,
-    previousTab,
     activeWorktree,
     currentWorktreePathRef,
-    setWorktreeTabMap,
     setRepoWorktreeMap,
     setTabOrder,
-    setActiveTab,
-    setPreviousTab,
     setActiveWorktree,
     saveActiveWorktreeToMap,
     handleReorderWorktrees,

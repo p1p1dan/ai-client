@@ -5,7 +5,7 @@ import type {
   WorktreeCreateOptions,
 } from '@shared/types';
 import { getDisplayPath, getDisplayPathBasename, isWslUncPath } from '@shared/utils/path';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { LayoutGroup, motion } from 'framer-motion';
 import {
   ChevronRight,
   Clock,
@@ -83,12 +83,12 @@ import { useWorktreeOutputState } from '@/hooks/useOutputState';
 import { useShouldPoll } from '@/hooks/useWindowFocus';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { useI18n } from '@/i18n';
-import { heightVariants, springFast, springStandard } from '@/lib/motion';
+import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
-import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
+import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 
 interface TreeSidebarProps {
   repositories: Repository[];
@@ -116,7 +116,6 @@ interface TreeSidebarProps {
   onRefresh: () => void;
   onInitGit?: () => Promise<void>;
   onOpenSettings?: () => void;
-  isSettingsActive?: boolean;
   onToggleSettings?: () => void;
   collapsed?: boolean;
   onCollapse?: () => void;
@@ -169,7 +168,6 @@ export function TreeSidebar({
   onRefresh,
   onInitGit,
   onOpenSettings: _onOpenSettings,
-  isSettingsActive: _isSettingsActive,
   onToggleSettings: _onToggleSettings,
   collapsed: _collapsed = false,
   onCollapse,
@@ -455,7 +453,7 @@ export function TreeSidebar({
       color: var(--accent-foreground);
       font-size: 14px;
       font-weight: 500;
-      border-radius: 8px;
+      border-radius: 4px;
       white-space: nowrap;
       pointer-events: none;
     `;
@@ -531,7 +529,7 @@ export function TreeSidebar({
         color: var(--accent-foreground);
         font-size: 14px;
         font-weight: 500;
-        border-radius: 8px;
+        border-radius: 4px;
         white-space: nowrap;
         pointer-events: none;
       `;
@@ -841,25 +839,25 @@ export function TreeSidebar({
             onDragOver={(e) => handleRepoDragOver(e, originalIndex, sectionGroupId)}
             onDragLeave={handleRepoDragLeave}
             onDrop={(e) => handleRepoDrop(e, originalIndex, sectionGroupId)}
-             onContextMenu={(e) => handleRepoContextMenu(e, repo)}
-             onClick={() => {
+            onContextMenu={(e) => handleRepoContextMenu(e, repo)}
+            onClick={() => {
               if (!isSelected) {
                 onSelectRepo(repo.path);
               }
               toggleRepoExpanded(repo.path);
-             }}
-             onKeyDown={(e) => {
-               if (e.key === 'Enter' || e.key === ' ') {
-                 e.preventDefault();
-                 if (!isSelected) {
-                   onSelectRepo(repo.path);
-                 }
-                 toggleRepoExpanded(repo.path);
-               }
-             }}
-             className={cn(
-               'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
-               !isSelected && 'hover:bg-accent/30',
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (!isSelected) {
+                  onSelectRepo(repo.path);
+                }
+                toggleRepoExpanded(repo.path);
+              }
+            }}
+            className={cn(
+              'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
+              !isSelected && 'hover:bg-accent/30',
               draggedRepoIndexRef.current === originalIndex && 'opacity-50'
             )}
           >
@@ -960,121 +958,112 @@ export function TreeSidebar({
         </div>
 
         {/* Worktrees under this repo */}
-        <AnimatePresence initial={false}>
-          {isExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className="ml-2 mr-2 mt-1 flex flex-col gap-y-0.5 overflow-hidden"
-            >
-               {!repoCanLoad ? (
-                 <div className="py-2 px-2 text-xs text-muted-foreground">
-                   {t('Click to load worktrees')}
-                 </div>
-               ) : repoError ? (
-                <div className="py-2 px-2 flex flex-col gap-1.5">
-                  {isSelected && (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
+        {isExpanded && (
+          <div className="ml-2 mr-2 mt-1 flex flex-col gap-y-0.5 overflow-hidden">
+            {!repoCanLoad ? (
+              <div className="py-2 px-2 text-xs text-muted-foreground">
+                {t('Click to load worktrees')}
+              </div>
+            ) : repoError ? (
+              <div className="py-2 px-2 flex flex-col gap-1.5">
+                {isSelected && (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectWorktree(placeholderWorktree);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
                         e.stopPropagation();
                         onSelectWorktree(placeholderWorktree);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onSelectWorktree(placeholderWorktree);
-                        }
-                      }}
-                      className={cn(
-                        'relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors text-sm cursor-pointer',
-                        !isHomeActive && activeWorktree?.path === repo.path
-                          ? 'border border-primary bg-primary/10'
-                          : 'border border-transparent hover:bg-accent/50'
-                      )}
-                    >
-                      <FolderOpen
-                        className={cn(
-                          'h-3.5 w-3.5 shrink-0',
-                          !isHomeActive && activeWorktree?.path === repo.path
-                            ? 'text-primary'
-                            : 'text-muted-foreground'
-                        )}
-                      />
-                      <span className="min-w-0 flex-1 truncate">{repo.name}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="text-muted-foreground">{t('Not a Git repository')}</span>
-                    {onInitGit && isSelected && (
-                      <Button
-                        onClick={async () => {
-                          await onInitGit();
-                          refetchExpandedWorktrees();
-                        }}
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 text-xs w-fit"
-                      >
-                        <GitBranch className="mr-1 h-3 w-3" />
-                        {t('Init')}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-               ) : repoLoading ? (
-                 <div className="space-y-1">
-                   {[0, 1].map((i) => (
-                     <div key={`skeleton-${i}`} className="h-8 animate-pulse rounded-lg bg-muted" />
-                   ))}
-                </div>
-              ) : repoWorktrees.length === 0 ? (
-                <div className="py-2 px-2 text-xs text-muted-foreground">
-                  {hasSearchFilter
-                    ? t('No matching worktrees')
-                    : t('No worktrees. Create one to get started.')}
-                </div>
-              ) : (
-                repoWorktrees.map((worktree, wtIndex) => (
-                  <WorktreeTreeItem
-                    key={worktree.path}
-                    worktree={worktree}
-                    repoPath={repo.path}
-                    branches={branches}
-                    isActive={!isHomeActive && activeWorktree?.path === worktree.path}
-                    onClick={() => {
-                      if (!isSelected) {
-                        onSelectRepo(repo.path, { activateRemote: true });
                       }
-                      onSelectWorktree(worktree);
                     }}
-                    onDelete={() => setWorktreeToDelete(worktree)}
-                    onMerge={onMergeWorktree ? () => onMergeWorktree(worktree) : undefined}
-                    draggable={!searchQuery && !!onReorderWorktrees && isSelected}
-                    onDragStart={(e) => handleWorktreeDragStart(e, wtIndex, worktree)}
-                    onDragEnd={handleWorktreeDragEnd}
-                    onDragOver={(e) => handleWorktreeDragOver(e, wtIndex)}
-                    onDragLeave={handleWorktreeDragLeave}
-                    onDrop={(e) => handleWorktreeDrop(e, wtIndex)}
-                    showDropIndicator={dropWorktreeTargetIndex === wtIndex}
-                    dropDirection={
-                      dropWorktreeTargetIndex === wtIndex &&
-                      draggedWorktreeIndexRef.current !== null
-                        ? draggedWorktreeIndexRef.current > wtIndex
-                          ? 'top'
-                          : 'bottom'
-                        : null
+                    className={cn(
+                      'relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors text-sm cursor-pointer',
+                      !isHomeActive && activeWorktree?.path === repo.path
+                        ? 'border border-primary bg-primary/10'
+                        : 'border border-transparent hover:bg-accent/50'
+                    )}
+                  >
+                    <FolderOpen
+                      className={cn(
+                        'h-3.5 w-3.5 shrink-0',
+                        !isHomeActive && activeWorktree?.path === repo.path
+                          ? 'text-primary'
+                          : 'text-muted-foreground'
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{repo.name}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="text-muted-foreground">{t('Not a Git repository')}</span>
+                  {onInitGit && isSelected && (
+                    <Button
+                      onClick={async () => {
+                        await onInitGit();
+                        refetchExpandedWorktrees();
+                      }}
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-xs w-fit"
+                    >
+                      <GitBranch className="mr-1 h-3 w-3" />
+                      {t('Init')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : repoLoading ? (
+              <div className="space-y-1">
+                {[0, 1].map((i) => (
+                  <div key={`skeleton-${i}`} className="h-8 animate-pulse rounded-lg bg-muted" />
+                ))}
+              </div>
+            ) : repoWorktrees.length === 0 ? (
+              <div className="py-2 px-2 text-xs text-muted-foreground">
+                {hasSearchFilter
+                  ? t('No matching worktrees')
+                  : t('No worktrees. Create one to get started.')}
+              </div>
+            ) : (
+              repoWorktrees.map((worktree, wtIndex) => (
+                <WorktreeTreeItem
+                  key={worktree.path}
+                  worktree={worktree}
+                  repoPath={repo.path}
+                  branches={branches}
+                  isActive={!isHomeActive && activeWorktree?.path === worktree.path}
+                  onClick={() => {
+                    if (!isSelected) {
+                      onSelectRepo(repo.path, { activateRemote: true });
                     }
-                  />
-                ))
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    onSelectWorktree(worktree);
+                  }}
+                  onDelete={() => setWorktreeToDelete(worktree)}
+                  onMerge={onMergeWorktree ? () => onMergeWorktree(worktree) : undefined}
+                  draggable={!searchQuery && !!onReorderWorktrees && isSelected}
+                  onDragStart={(e) => handleWorktreeDragStart(e, wtIndex, worktree)}
+                  onDragEnd={handleWorktreeDragEnd}
+                  onDragOver={(e) => handleWorktreeDragOver(e, wtIndex)}
+                  onDragLeave={handleWorktreeDragLeave}
+                  onDrop={(e) => handleWorktreeDrop(e, wtIndex)}
+                  showDropIndicator={dropWorktreeTargetIndex === wtIndex}
+                  dropDirection={
+                    dropWorktreeTargetIndex === wtIndex && draggedWorktreeIndexRef.current !== null
+                      ? draggedWorktreeIndexRef.current > wtIndex
+                        ? 'top'
+                        : 'bottom'
+                      : null
+                  }
+                />
+              ))
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -1267,38 +1256,30 @@ export function TreeSidebar({
               )}
             </div>
 
-            <AnimatePresence initial={false}>
-              {tempExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: 'easeInOut' }}
-                  className="ml-2 mr-2 mt-1 flex flex-col gap-y-0.5 overflow-hidden"
-                >
-                  {sortedTempWorkspaces.length === 0 ? (
-                    <div className="py-2 px-2 text-xs text-muted-foreground">
-                      {t('No temp sessions')}
-                    </div>
-                  ) : (
-                    sortedTempWorkspaces.map((item) => (
-                      <TempWorkspaceTreeItem
-                        key={item.id}
-                        item={item}
-                        isActive={
-                          !isHomeActive &&
-                          selectedRepo === TEMP_REPO_ID &&
-                          activeWorktree?.path === item.path
-                        }
-                        onSelect={() => onSelectTempWorkspace?.(item.path)}
-                        onRequestRename={() => onRequestTempRename?.(item.id)}
-                        onRequestDelete={() => onRequestTempDelete?.(item.id)}
-                      />
-                    ))
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {tempExpanded && (
+              <div className="ml-2 mr-2 mt-1 flex flex-col gap-y-0.5 overflow-hidden">
+                {sortedTempWorkspaces.length === 0 ? (
+                  <div className="py-2 px-2 text-xs text-muted-foreground">
+                    {t('No temp sessions')}
+                  </div>
+                ) : (
+                  sortedTempWorkspaces.map((item) => (
+                    <TempWorkspaceTreeItem
+                      key={item.id}
+                      item={item}
+                      isActive={
+                        !isHomeActive &&
+                        selectedRepo === TEMP_REPO_ID &&
+                        activeWorktree?.path === item.path
+                      }
+                      onSelect={() => onSelectTempWorkspace?.(item.path)}
+                      onRequestRename={() => onRequestTempRename?.(item.id)}
+                      onRequestDelete={() => onRequestTempDelete?.(item.id)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1367,25 +1348,15 @@ export function TreeSidebar({
                         </span>
                       </button>
                       {/* Section Content */}
-                      <AnimatePresence initial={false}>
-                        {!isGroupCollapsed && (
-                          <motion.div
-                            key={`group-content-${section.groupId}`}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
-                            variants={heightVariants}
-                            transition={springStandard}
-                            className="overflow-hidden"
-                          >
-                            <div className="space-y-1 pt-0.5">
-                              {section.repos.map(({ repo, originalIndex }) => {
-                                return renderRepoItem(repo, originalIndex, section.groupId);
-                              })}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      {!isGroupCollapsed && (
+                        <div key={`group-content-${section.groupId}`} className="overflow-hidden">
+                          <div className="space-y-1 pt-0.5">
+                            {section.repos.map(({ repo, originalIndex }) => {
+                              return renderRepoItem(repo, originalIndex, section.groupId);
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SettingsCategory } from '@/components/settings/constants';
+import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
-import type { TabId } from '../constants';
 
-export function useSettingsState(
-  activeTab: TabId,
-  previousTab: TabId | null,
-  setActiveTab: (tab: TabId) => void,
-  setPreviousTab: (tab: TabId | null) => void
-) {
+export function useSettingsState() {
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>(() => {
     try {
       const saved = localStorage.getItem('aiclient-settings-active-category');
@@ -38,6 +33,8 @@ export function useSettingsState(
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   const settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
+  const setActiveTab = useNavigationStore((s) => s.setActiveTab);
+  const setPreviousTab = useNavigationStore((s) => s.setPreviousTab);
   const prevSettingsDisplayModeRef = useRef<typeof settingsDisplayMode | null>(null);
 
   // Persist settings category
@@ -51,6 +48,7 @@ export function useSettingsState(
 
   const openSettings = useCallback(() => {
     if (settingsDisplayMode === 'tab') {
+      const { activeTab } = useNavigationStore.getState();
       if (activeTab !== 'settings') {
         setPreviousTab(activeTab);
         setActiveTab('settings');
@@ -58,10 +56,11 @@ export function useSettingsState(
     } else {
       setSettingsDialogOpen(true);
     }
-  }, [settingsDisplayMode, activeTab, setActiveTab, setPreviousTab]);
+  }, [settingsDisplayMode, setActiveTab, setPreviousTab]);
 
   const toggleSettings = useCallback(() => {
     if (settingsDisplayMode === 'tab') {
+      const { activeTab, previousTab } = useNavigationStore.getState();
       if (activeTab === 'settings') {
         setActiveTab(previousTab || 'chat');
         setPreviousTab(null);
@@ -72,7 +71,7 @@ export function useSettingsState(
     } else {
       setSettingsDialogOpen((prev) => !prev);
     }
-  }, [settingsDisplayMode, activeTab, previousTab, setActiveTab, setPreviousTab]);
+  }, [settingsDisplayMode, setActiveTab, setPreviousTab]);
 
   const handleSettingsCategoryChange = useCallback((category: SettingsCategory) => {
     setSettingsCategory(category);
@@ -89,18 +88,20 @@ export function useSettingsState(
 
     if (settingsDisplayMode === 'tab') {
       setSettingsDialogOpen(false);
+      const { activeTab } = useNavigationStore.getState();
       if (activeTab !== 'settings') {
         setPreviousTab(activeTab);
         setActiveTab('settings');
       }
     } else {
+      const { activeTab, previousTab } = useNavigationStore.getState();
       if (activeTab === 'settings') {
         setActiveTab(previousTab || 'chat');
         setPreviousTab(null);
       }
       setSettingsDialogOpen(true);
     }
-  }, [settingsDisplayMode, activeTab, previousTab, setActiveTab, setPreviousTab]);
+  }, [settingsDisplayMode, setActiveTab, setPreviousTab]);
 
   return {
     settingsCategory,

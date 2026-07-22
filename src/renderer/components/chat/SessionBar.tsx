@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/shallow';
 import { GlowCard, useGlowEffectEnabled } from '@/components/ui/glow-card';
 import { toastManager } from '@/components/ui/toast';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
@@ -620,7 +621,14 @@ export function SessionBar({
   );
 
   // Get enabled agents from settings (use persisted detection status, no scanning)
-  const { agentSettings, agentDetectionStatus, customAgents, hapiSettings } = useSettingsStore();
+  const { agentSettings, agentDetectionStatus, customAgents, hapiSettings } = useSettingsStore(
+    useShallow((s) => ({
+      agentSettings: s.agentSettings,
+      agentDetectionStatus: s.agentDetectionStatus,
+      customAgents: s.customAgents,
+      hapiSettings: s.hapiSettings,
+    }))
+  );
 
   // Build installed agents set from persisted detection status
   useEffect(() => {

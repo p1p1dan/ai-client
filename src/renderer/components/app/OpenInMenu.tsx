@@ -1,11 +1,11 @@
 import { AppCategory, type DetectedApp } from '@shared/types';
 import { ChevronDown, FileCode, FolderOpen, Terminal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import type { TabId } from '@/App/constants';
 import { Select, SelectItem, SelectPopup, SelectTrigger } from '@/components/ui/select';
 import { useDetectedApps, useOpenWith } from '@/hooks/useAppDetector';
 import { useI18n } from '@/i18n';
 import { useEditorStore } from '@/stores/editor';
+import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 
 function AppIcon({
@@ -32,11 +32,11 @@ function AppIcon({
 }
 interface OpenInMenuProps {
   path?: string;
-  activeTab?: TabId;
 }
 
-export function OpenInMenu({ path, activeTab }: OpenInMenuProps) {
+export function OpenInMenu({ path }: OpenInMenuProps) {
   const { t } = useI18n();
+  const activeTab = useNavigationStore((s) => s.activeTab);
   const { data: apps = [], isLoading } = useDetectedApps();
   const openWith = useOpenWith();
   const [lastUsedApp, setLastUsedApp] = useState<string>('');

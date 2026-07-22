@@ -169,7 +169,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
   const status = useAgentStatusStore((state) =>
     sessionId ? state.statuses[sessionId] : undefined
   );
-  const { claudeCodeIntegration } = useSettingsStore();
+  const claudeCodeIntegration = useSettingsStore((state) => state.claudeCodeIntegration);
   const { statusLineEnabled, statusLineFields } = claudeCodeIntegration;
 
   const items = useMemo(() => {

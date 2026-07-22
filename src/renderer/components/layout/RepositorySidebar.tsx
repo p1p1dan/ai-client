@@ -1,5 +1,5 @@
 import { getDisplayPath, isWslUncPath } from '@shared/utils/path';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { LayoutGroup, motion } from 'framer-motion';
 import {
   ChevronRight,
   Clock,
@@ -59,12 +59,12 @@ import { RepoItemWithGlow } from '@/components/ui/glow-wrappers';
 import { toastManager } from '@/components/ui/toast';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { useI18n } from '@/i18n';
-import { heightVariants, springFast, springStandard } from '@/lib/motion';
+import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
-import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
+import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 
 interface Repository {
   name: string;
@@ -81,7 +81,6 @@ interface RepositorySidebarProps {
   onRemoveRepository?: (repoPath: string) => void;
   onReorderRepositories?: (fromIndex: number, toIndex: number) => void;
   onOpenSettings?: () => void;
-  isSettingsActive?: boolean;
   onToggleSettings?: () => void;
   collapsed?: boolean;
   onCollapse?: () => void;
@@ -113,7 +112,6 @@ export function RepositorySidebar({
   onRemoveRepository,
   onReorderRepositories,
   onOpenSettings: _onOpenSettings,
-  isSettingsActive: _isSettingsActive,
   onToggleSettings: _onToggleSettings,
   collapsed: _collapsed = false,
   onCollapse,
@@ -226,7 +224,7 @@ export function RepositorySidebar({
         color: var(--accent-foreground);
         font-size: 14px;
         font-weight: 500;
-        border-radius: 8px;
+        border-radius: 4px;
         white-space: nowrap;
         pointer-events: none;
       `;
@@ -629,7 +627,9 @@ export function RepositorySidebar({
                 />
               )}
               <History className="relative z-10 h-4 w-4 shrink-0" />
-              <span className="relative z-10 truncate text-sm font-medium">{t('Session History')}</span>
+              <span className="relative z-10 truncate text-sm font-medium">
+                {t('Session History')}
+              </span>
             </button>
           </div>
         )}
@@ -729,25 +729,15 @@ export function RepositorySidebar({
                         </span>
                       </button>
                       {/* Section Content */}
-                      <AnimatePresence initial={false}>
-                        {!isCollapsed && (
-                          <motion.div
-                            key={`content-${section.groupId}`}
-                            initial="initial"
-                            animate="animate"
-                            exit="exit"
-                            variants={heightVariants}
-                            transition={springStandard}
-                            className="overflow-hidden"
-                          >
-                            <div className="space-y-1 pt-0.5">
-                              {section.repos.map(({ repo, originalIndex }) =>
-                                renderRepoItem(repo, originalIndex, section.groupId)
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      {!isCollapsed && (
+                        <div key={`content-${section.groupId}`} className="overflow-hidden">
+                          <div className="space-y-1 pt-0.5">
+                            {section.repos.map(({ repo, originalIndex }) =>
+                              renderRepoItem(repo, originalIndex, section.groupId)
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -781,120 +771,124 @@ export function RepositorySidebar({
       </div>
 
       {/* Context Menu - portal to escape motion.div stacking context */}
-      {menuOpen && menuRepo && createPortal(
-        <>
-          <div
-            className="fixed inset-0 z-50"
-            onClick={() => setMenuOpen(false)}
-            onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenuOpen(false);
-            }}
-            role="presentation"
-          />
-          <div
-            ref={menuRef}
-            className="fixed z-50 min-w-44 max-h-[80vh] overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg"
-            style={{ left: menuPosition.x, top: menuPosition.y }}
-          >
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
-              onClick={() => {
+      {menuOpen &&
+        menuRepo &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-50"
+              onClick={() => setMenuOpen(false)}
+              onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
+              onContextMenu={(e) => {
+                e.preventDefault();
                 setMenuOpen(false);
-                window.electronAPI.shell.openPath(menuRepo.path);
               }}
+              role="presentation"
+            />
+            <div
+              ref={menuRef}
+              className="fixed z-50 min-w-44 max-h-[80vh] overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg"
+              style={{ left: menuPosition.x, top: menuPosition.y }}
             >
-              <FolderOpen className="h-4 w-4" />
-              {repositoryMenuModel.primaryActions[0].label}
-            </button>
-
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
-              onClick={() => {
-                setMenuOpen(false);
-                handleCopyPath(menuRepo.path);
-              }}
-            >
-              <Copy className="h-4 w-4" />
-              {repositoryMenuModel.primaryActions[1].label}
-            </button>
-
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
-              onClick={() => {
-                setMenuOpen(false);
-                onOpenTerminal?.(menuRepo.path);
-              }}
-            >
-              <Terminal className="h-4 w-4" />
-              {repositoryMenuModel.primaryActions[2].label}
-            </button>
-
-            {repositoryMenuModel.agentActions.length > 0 && <div className="my-1 h-px bg-border" />}
-
-            {/* Agents */}
-            {repositoryMenuModel.agentActions.map((agent) => {
-              return (
-                <button
-                  key={agent.agentId}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onLaunchAgent?.(menuRepo.path, agent.agentId);
-                  }}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {agent.label}
-                </button>
-              );
-            })}
-
-            <div className="my-1 h-px bg-border" />
-
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
-              onClick={() => {
-                setMenuOpen(false);
-                setRepoSettingsTarget(menuRepo);
-                setRepoSettingsOpen(true);
-              }}
-            >
-              <Settings className="h-4 w-4" />
-              {repositoryMenuModel.secondaryActions[0].label}
-            </button>
-
-            {/* Move to Group - only show when groups are not hidden */}
-            {!hideGroups && onMoveToGroup && groups.length > 0 && (
-              <MoveToGroupSubmenu
-                groups={groups}
-                currentGroupId={menuRepo.groupId}
-                onMove={(groupId) => {
-                  onMoveToGroup(menuRepo.path, groupId);
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  window.electronAPI.shell.openPath(menuRepo.path);
                 }}
-                onClose={() => setMenuOpen(false)}
-              />
-            )}
+              >
+                <FolderOpen className="h-4 w-4" />
+                {repositoryMenuModel.primaryActions[0].label}
+              </button>
 
-            <div className="my-1 h-px bg-border" />
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  handleCopyPath(menuRepo.path);
+                }}
+              >
+                <Copy className="h-4 w-4" />
+                {repositoryMenuModel.primaryActions[1].label}
+              </button>
 
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
-              onClick={handleRemoveClick}
-            >
-              <FolderMinus className="h-4 w-4" />
-              {repositoryMenuModel.destructiveAction.label}
-            </button>
-          </div>
-        </>,
-        document.body
-      )}
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenTerminal?.(menuRepo.path);
+                }}
+              >
+                <Terminal className="h-4 w-4" />
+                {repositoryMenuModel.primaryActions[2].label}
+              </button>
+
+              {repositoryMenuModel.agentActions.length > 0 && (
+                <div className="my-1 h-px bg-border" />
+              )}
+
+              {/* Agents */}
+              {repositoryMenuModel.agentActions.map((agent) => {
+                return (
+                  <button
+                    key={agent.agentId}
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onLaunchAgent?.(menuRepo.path, agent.agentId);
+                    }}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {agent.label}
+                  </button>
+                );
+              })}
+
+              <div className="my-1 h-px bg-border" />
+
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setRepoSettingsTarget(menuRepo);
+                  setRepoSettingsOpen(true);
+                }}
+              >
+                <Settings className="h-4 w-4" />
+                {repositoryMenuModel.secondaryActions[0].label}
+              </button>
+
+              {/* Move to Group - only show when groups are not hidden */}
+              {!hideGroups && onMoveToGroup && groups.length > 0 && (
+                <MoveToGroupSubmenu
+                  groups={groups}
+                  currentGroupId={menuRepo.groupId}
+                  onMove={(groupId) => {
+                    onMoveToGroup(menuRepo.path, groupId);
+                  }}
+                  onClose={() => setMenuOpen(false)}
+                />
+              )}
+
+              <div className="my-1 h-px bg-border" />
+
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+                onClick={handleRemoveClick}
+              >
+                <FolderMinus className="h-4 w-4" />
+                {repositoryMenuModel.destructiveAction.label}
+              </button>
+            </div>
+          </>,
+          document.body
+        )}
 
       {/* Remove confirmation dialog */}
       <AlertDialog

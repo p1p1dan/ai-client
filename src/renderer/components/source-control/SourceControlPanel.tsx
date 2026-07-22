@@ -1,7 +1,7 @@
 import { getDisplayPathBasename, joinPath } from '@shared/utils/path';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, GitBranch, GripVertical, History, PanelLeft } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getStoredBoolean, STORAGE_KEYS } from '@/App/storage';
 import { GitSyncButton } from '@/components/git/GitSyncButton';
 import {
@@ -62,6 +62,8 @@ import { RepositoryList } from './RepositoryList';
 import type { Repository } from './types';
 import { usePanelResize } from './usePanelResize';
 
+const SOURCE_CONTROL_REENTRY_STALE_MS = 30_000;
+
 interface SourceControlPanelProps {
   rootPath: string | undefined;
   isActive?: boolean;
@@ -82,6 +84,7 @@ export function SourceControlPanel({
   const { t, tNode } = useI18n();
   const queryClient = useQueryClient();
   const repositoryListDisplayMode = useSettingsStore((s) => s.repositoryListDisplayMode);
+  const lastActivationRefetchRef = useRef<{ rootPath: string; refreshedAt: number } | null>(null);
 
   // Accordion state - collapsible sections (persisted to localStorage)
   const [changesExpanded, setChangesExpanded] = useState(() =>
@@ -264,16 +267,25 @@ export function SourceControlPanel({
     }
   }, [repositories.length, selectedRepo]);
 
-  // Refetch immediately when tab becomes active
+  // Refetch stale data when the tab becomes active.
   useEffect(() => {
-    if (isActive && rootPath) {
-      refetch();
-      refetchCommits();
-      refetchStatus();
-      // Also refresh submodules data
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', rootPath] });
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodule', 'changes', rootPath] });
-    }
+    if (!isActive || !rootPath) return;
+
+    const now = Date.now();
+    const lastRefetch = lastActivationRefetchRef.current;
+    const rootPathChanged = lastRefetch?.rootPath !== rootPath;
+    const isStale =
+      !lastRefetch || now - lastRefetch.refreshedAt >= SOURCE_CONTROL_REENTRY_STALE_MS;
+
+    if (!rootPathChanged && !isStale) return;
+
+    lastActivationRefetchRef.current = { rootPath, refreshedAt: now };
+    refetch();
+    refetchCommits();
+    refetchStatus();
+    // Also refresh submodules data
+    queryClient.invalidateQueries({ queryKey: ['git', 'submodules', rootPath] });
+    queryClient.invalidateQueries({ queryKey: ['git', 'submodule', 'changes', rootPath] });
   }, [isActive, rootPath, refetch, refetchCommits, refetchStatus, queryClient]);
 
   // Wrap sync handlers to add additional refetch calls for SourceControlPanel

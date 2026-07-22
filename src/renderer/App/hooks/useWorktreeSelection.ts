@@ -1,22 +1,20 @@
 import type { GitWorktree } from '@shared/types';
 import { useQueryClient } from '@tanstack/react-query';
 import type { MutableRefObject } from 'react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { useEditorStore } from '@/stores/editor';
+import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 import { requestUnsavedChoice } from '@/stores/unsavedPrompt';
-import type { TabId } from '../constants';
+
+const DEFERRED_GIT_FETCH_MS = 2500;
 
 export function useWorktreeSelection(
   activeWorktree: GitWorktree | null,
   setActiveWorktree: (worktree: GitWorktree | null) => void,
   currentWorktreePathRef: MutableRefObject<string | null>,
-  worktreeTabMap: Record<string, TabId>,
-  setWorktreeTabMap: (fn: (prev: Record<string, TabId>) => Record<string, TabId>) => void,
-  activeTab: TabId,
-  setActiveTab: (tab: TabId) => void,
   selectedRepo: string | null,
   setSelectedRepo: (repo: string) => void
 ) {
@@ -25,6 +23,12 @@ export function useWorktreeSelection(
   const editorSettings = useSettingsStore((s) => s.editorSettings);
   const switchEditorWorktree = useEditorStore((s) => s.switchWorktree);
   const currentEditorWorktree = useEditorStore((s) => s.currentWorktreePath);
+  const setActiveTab = useNavigationStore((s) => s.setActiveTab);
+  const setWorktreeTab = useNavigationStore((s) => s.setWorktreeTab);
+  const pendingGitFetchRef = useRef<{
+    worktreePath: string;
+    timeoutId: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   // Sync editor state with active worktree
   useEffect(() => {
@@ -33,6 +37,14 @@ export function useWorktreeSelection(
       switchEditorWorktree(targetPath);
     }
   }, [activeWorktree, currentEditorWorktree, switchEditorWorktree]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingGitFetchRef.current) {
+        clearTimeout(pendingGitFetchRef.current.timeoutId);
+      }
+    };
+  }, []);
 
   // Helper function to refresh git data for a worktree
   const refreshGitData = useCallback(
@@ -56,23 +68,43 @@ export function useWorktreeSelection(
         queryKey: ['git', 'submodule', 'changes', worktreePath],
       });
 
-      // Fetch remote then refresh branch data (with race condition check)
-      window.electronAPI.git
-        .fetch(worktreePath)
-        .then(() => {
-          // Only refresh if this is still the current worktree
-          if (currentWorktreePathRef.current === worktreePath) {
-            queryClient.invalidateQueries({
-              queryKey: ['git', 'branches', worktreePath],
-            });
-            queryClient.invalidateQueries({
-              queryKey: ['git', 'status', worktreePath],
-            });
-          }
-        })
-        .catch(() => {
-          // Silent fail - fetch errors are not critical
-        });
+      const pendingFetch = pendingGitFetchRef.current;
+      if (pendingFetch?.worktreePath === worktreePath) {
+        return;
+      }
+      if (pendingFetch) {
+        clearTimeout(pendingFetch.timeoutId);
+      }
+
+      const timeoutId = setTimeout(() => {
+        const scheduledFetch = pendingGitFetchRef.current;
+        if (!scheduledFetch || scheduledFetch.worktreePath !== worktreePath) {
+          return;
+        }
+        pendingGitFetchRef.current = null;
+
+        if (currentWorktreePathRef.current !== worktreePath) {
+          return;
+        }
+
+        window.electronAPI.git
+          .fetch(worktreePath)
+          .then(() => {
+            if (currentWorktreePathRef.current === worktreePath) {
+              queryClient.invalidateQueries({
+                queryKey: ['git', 'branches', worktreePath],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ['git', 'status', worktreePath],
+              });
+            }
+          })
+          .catch(() => {
+            // Fetch errors are non-critical and should not block worktree switching.
+          });
+      }, DEFERRED_GIT_FETCH_MS);
+
+      pendingGitFetchRef.current = { worktreePath, timeoutId };
     },
     [queryClient, currentWorktreePathRef]
   );
@@ -129,17 +161,14 @@ export function useWorktreeSelection(
 
       // Save current worktree's tab state before switching
       if (activeWorktree?.path) {
-        setWorktreeTabMap((prev) => ({
-          ...prev,
-          [activeWorktree.path]: activeTab,
-        }));
+        setWorktreeTab(activeWorktree.path, useNavigationStore.getState().activeTab);
       }
 
       // Switch to new worktree
       setActiveWorktree(worktree);
 
       // Restore the new worktree's tab state
-      const savedTab = worktreeTabMap[worktree.path] || 'chat';
+      const savedTab = useNavigationStore.getState().worktreeTabMap[worktree.path] || 'chat';
       setActiveTab(savedTab);
 
       // Refresh git data for the new worktree
@@ -147,16 +176,14 @@ export function useWorktreeSelection(
     },
     [
       activeWorktree,
-      activeTab,
-      worktreeTabMap,
       editorSettings.autoSave,
       t,
       refreshGitData,
       selectedRepo,
       setSelectedRepo,
       setActiveWorktree,
-      setWorktreeTabMap,
       setActiveTab,
+      setWorktreeTab,
     ]
   );
 
