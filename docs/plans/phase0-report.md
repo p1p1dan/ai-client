@@ -86,3 +86,20 @@ TSD 解密与「打包产物在加密机上读文件」**未验证** —— 标�
 在 Stop/Resume/Permission 未测完、且本次无健康 API 证据前：
 - **不要把 stream-json 锁死为主路线**；保持 **双路线可切换**，Normalizer 双适配。
 - Phase 2 先按 stream-json 落地也可以（实现简单），但 SDK 的 resume/abort API 仍值得保留为优先评估对象。
+
+## Addendum 2 — 2026-07-23 API 设置修复后复测
+
+用户更新 `~/.claude/settings.json` 后重跑。Spike 改为显式注入 `settings.env`（`ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL`→`cch-jyw.pipidan.qzz.io`）。
+
+良性多轮（项目代号 `ORANGE-42` → resume 追问）：
+
+| 路线 | Turn1 总耗时 | Turn1 首包 | Turn2 总耗时 | Turn2 首包 | 连续召回 |
+|---|---:|---:|---:|---:|---|
+| stream-json | 13.1s | 10.7s | 12.0s | 9.6s | ✅ `ORANGE-42` |
+| agent-sdk | 12.8s | 10.4s | 11.2s | 8.9s | ✅ `ORANGE-42` |
+
+结论：
+1. **此前 503 / 假“耗时差”主要是 API/凭证问题**，不是路线架构差异。
+2. **两条路都能连续会话**（`--resume` / `options.resume`），耗时同量级。
+3. init 里仍报 `apiKeySource=none`，但实际鉴权已通（CCH AUTH_TOKEN）；Host 侧应继续注入 `settings.env`。
+4. 选型：**双路线并列**；Phase 2 可先落地任一条，Normalizer 预留另一条。SDK 在 abort/permission API 上可能更省事，stream-json 更透明。
