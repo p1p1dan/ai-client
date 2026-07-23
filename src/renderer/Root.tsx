@@ -1,7 +1,8 @@
+import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import type { ClaudeRuntimeStatus } from '@shared/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, type ReactNode, Suspense, useEffect, useState } from 'react';
 import { DevToolsOverlay } from './components/DevToolsOverlay';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
@@ -9,6 +10,7 @@ import { ClaudeRuntimeBanner } from './components/onboarding/ClaudeRuntimeBanner
 import { ClaudeVsCodeOnlyShell } from './components/onboarding/ClaudeVsCodeOnlyShell';
 import { OnboardingShell } from './components/onboarding/OnboardingShell';
 import { Button } from './components/ui/button';
+import { useSettingsStore } from './stores/settings';
 
 // Lazy-load the main App so its heavy hooks (session restore, worktree
 // hydration, etc.) do not run until the user is registered.
@@ -24,6 +26,45 @@ function LoadingShell() {
       <DevToolsOverlay />
       <div className="flex-1" />
     </div>
+  );
+}
+
+function AppShell({ banner }: { banner?: ReactNode }) {
+  return (
+    <Suspense fallback={<LoadingShell />}>
+      <div className="relative z-0 flex h-screen flex-col overflow-hidden">
+        {banner}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <App />
+        </div>
+      </div>
+    </Suspense>
+  );
+}
+
+/**
+ * Team-track bypass: mount App immediately, force OpenChamber shell on,
+ * show a visible strip so you can tell the gate was skipped.
+ */
+function SkippedOnboardingApp() {
+  useEffect(() => {
+    const enableShell = () => {
+      useSettingsStore.getState().setUseOpenChamberShell(true);
+    };
+    enableShell();
+    // Persist rehydrate can overwrite the flag after first paint — re-apply when done.
+    const unsub = useSettingsStore.persist.onFinishHydration(enableShell);
+    if (useSettingsStore.persist.hasHydrated()) {
+      enableShell();
+    }
+    return unsub;
+  }, []);
+
+  // No banner: it stole layout height and clipped the shell. Gate skip is silent.
+  return (
+    <Suspense fallback={<LoadingShell />}>
+      <App />
+    </Suspense>
   );
 }
 
@@ -93,6 +134,14 @@ function RuntimeDetectionFailedShell({
  *     so a future launch doesn't silently pull a Bun build
  */
 export default function Root() {
+  // Temporary: OpenChamber chat-refactor team track — skip detection/login/env rewrite.
+  if (SKIP_ONBOARDING_GATE) {
+    return <SkippedOnboardingApp />;
+  }
+  return <RootWithOnboardingGate />;
+}
+
+function RootWithOnboardingGate() {
   const queryClient = useQueryClient();
 
   const onboarding = useQuery({
@@ -181,7 +230,7 @@ export default function Root() {
   // uninstalled CLI) would skip the shell entry page and jump straight into a
   // sub-flow.
   useEffect(() => {
-    if (runtimeStatus && runtimeStatus.kind !== 'vscode-extension-only') {
+    if (runtimeStatus?.kind && runtimeStatus.kind !== 'vscode-extension-only') {
       setVscodeRegisterFlow(false);
       setVscodeInstallFlow(false);
       setVscodeRecheckError(null);
@@ -376,18 +425,15 @@ export default function Root() {
   }
 
   return (
-    <Suspense fallback={<LoadingShell />}>
-      <div className="relative z-0 flex h-screen flex-col overflow-hidden">
+    <AppShell
+      banner={
         <ClaudeRuntimeBanner
           status={runtimeStatus}
           onStatusChange={(next) => {
             queryClient.setQueryData(['claudeRuntimeStatus'], next);
           }}
         />
-        <div className="flex-1 overflow-hidden">
-          <App />
-        </div>
-      </div>
-    </Suspense>
+      }
+    />
   );
 }

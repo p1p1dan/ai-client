@@ -1,3 +1,4 @@
+import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SettingsCategory } from '@/components/settings/constants';
 import { useSettingsStore } from '@/stores/settings';
@@ -38,6 +39,9 @@ export function useSettingsState(
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   const settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
+  const useOpenChamberShell = useSettingsStore((s) => s.useOpenChamberShell);
+  // OpenChamber shell replaces the main tab surface — force modal settings there.
+  const forceSettingsModal = SKIP_ONBOARDING_GATE || useOpenChamberShell;
   const prevSettingsDisplayModeRef = useRef<typeof settingsDisplayMode | null>(null);
 
   // Persist settings category
@@ -50,18 +54,18 @@ export function useSettingsState(
   }, [settingsCategory]);
 
   const openSettings = useCallback(() => {
-    if (settingsDisplayMode === 'tab') {
+    if (settingsDisplayMode === 'tab' && !forceSettingsModal) {
       if (activeTab !== 'settings') {
         setPreviousTab(activeTab);
         setActiveTab('settings');
       }
-    } else {
-      setSettingsDialogOpen(true);
+      return;
     }
-  }, [settingsDisplayMode, activeTab, setActiveTab, setPreviousTab]);
+    setSettingsDialogOpen(true);
+  }, [settingsDisplayMode, forceSettingsModal, activeTab, setActiveTab, setPreviousTab]);
 
   const toggleSettings = useCallback(() => {
-    if (settingsDisplayMode === 'tab') {
+    if (settingsDisplayMode === 'tab' && !forceSettingsModal) {
       if (activeTab === 'settings') {
         setActiveTab(previousTab || 'chat');
         setPreviousTab(null);
@@ -69,16 +73,23 @@ export function useSettingsState(
         setPreviousTab(activeTab);
         setActiveTab('settings');
       }
-    } else {
-      setSettingsDialogOpen((prev) => !prev);
+      return;
     }
-  }, [settingsDisplayMode, activeTab, previousTab, setActiveTab, setPreviousTab]);
+    setSettingsDialogOpen((prev) => !prev);
+  }, [
+    settingsDisplayMode,
+    forceSettingsModal,
+    activeTab,
+    previousTab,
+    setActiveTab,
+    setPreviousTab,
+  ]);
 
   const handleSettingsCategoryChange = useCallback((category: SettingsCategory) => {
     setSettingsCategory(category);
   }, []);
 
-  // Clean up settings state when display mode changes
+  // Clean up settings state when display mode changes (not when shell forces modal).
   useEffect(() => {
     const prevMode = prevSettingsDisplayModeRef.current;
     prevSettingsDisplayModeRef.current = settingsDisplayMode;
@@ -87,20 +98,28 @@ export function useSettingsState(
       return;
     }
 
-    if (settingsDisplayMode === 'tab') {
+    if (settingsDisplayMode === 'tab' && !forceSettingsModal) {
       setSettingsDialogOpen(false);
       if (activeTab !== 'settings') {
         setPreviousTab(activeTab);
         setActiveTab('settings');
       }
-    } else {
-      if (activeTab === 'settings') {
-        setActiveTab(previousTab || 'chat');
-        setPreviousTab(null);
-      }
-      setSettingsDialogOpen(true);
+      return;
     }
-  }, [settingsDisplayMode, activeTab, previousTab, setActiveTab, setPreviousTab]);
+
+    if (activeTab === 'settings') {
+      setActiveTab(previousTab || 'chat');
+      setPreviousTab(null);
+    }
+    // Do not auto-open the modal on mode switch — user opens Settings explicitly.
+  }, [
+    settingsDisplayMode,
+    forceSettingsModal,
+    activeTab,
+    previousTab,
+    setActiveTab,
+    setPreviousTab,
+  ]);
 
   return {
     settingsCategory,
@@ -108,6 +127,7 @@ export function useSettingsState(
     pendingProviderAction,
     settingsDialogOpen,
     settingsDisplayMode,
+    forceSettingsModal,
     setSettingsCategory,
     setScrollToProvider,
     setPendingProviderAction,

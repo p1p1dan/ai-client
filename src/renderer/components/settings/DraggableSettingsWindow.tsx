@@ -40,6 +40,9 @@ export function DraggableSettingsWindow({
     y: 0,
   });
   const windowRef = useRef<HTMLDivElement>(null);
+  // Position only once per open — writing settingsModalPosition while still
+  // out-of-bounds (e.g. viewport < window size) used to infinite-loop.
+  const didPositionForOpenRef = useRef(false);
 
   // 窗口尺寸常量
   const WINDOW_WIDTH = 896; // max-w-4xl
@@ -52,7 +55,14 @@ export function DraggableSettingsWindow({
 
   // 居中计算和位置验证
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      didPositionForOpenRef.current = false;
+      return;
+    }
+    if (didPositionForOpenRef.current) {
+      return;
+    }
+    didPositionForOpenRef.current = true;
 
     const minX = isMac ? MAC_SAFE_MARGIN_X : 0;
     const minY = isMac ? MAC_SAFE_MARGIN_Y : 0;
@@ -60,23 +70,24 @@ export function DraggableSettingsWindow({
     const centerY = Math.max(minY, (window.innerHeight - WINDOW_HEIGHT) / 2);
 
     if (!savedPosition) {
-      // 首次打开：居中
       setPosition({ x: centerX, y: centerY });
-    } else {
-      // 验证保存的位置是否在安全区域内
-      const isOutOfBounds =
-        savedPosition.x < minX ||
-        savedPosition.y < minY ||
-        savedPosition.x + WINDOW_WIDTH > window.innerWidth ||
-        savedPosition.y + WINDOW_HEIGHT > window.innerHeight;
+      return;
+    }
 
-      if (isOutOfBounds) {
-        // 位置超出安全区域：重置为居中
-        setPosition({ x: centerX, y: centerY });
+    const isOutOfBounds =
+      savedPosition.x < minX ||
+      savedPosition.y < minY ||
+      savedPosition.x + WINDOW_WIDTH > window.innerWidth ||
+      savedPosition.y + WINDOW_HEIGHT > window.innerHeight;
+
+    if (isOutOfBounds) {
+      setPosition({ x: centerX, y: centerY });
+      // Only persist when the centered point actually differs — avoids store churn.
+      if (savedPosition.x !== centerX || savedPosition.y !== centerY) {
         setSettingsModalPosition({ x: centerX, y: centerY });
-      } else {
-        setPosition(savedPosition);
       }
+    } else {
+      setPosition(savedPosition);
     }
   }, [open, savedPosition, setSettingsModalPosition, isMac]);
 

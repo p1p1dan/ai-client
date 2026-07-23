@@ -1,4 +1,5 @@
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
+import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import type {
   ClaudeProject,
   ClaudeSessionMeta,
@@ -67,7 +68,6 @@ import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspaceP
 import { TreeSidebar } from './components/layout/TreeSidebar';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { WorktreePanel } from './components/layout/WorktreePanel';
-import { WorkspaceShell } from './components/workspace-shell';
 import { RemoteAuthPromptHost } from './components/remote/RemoteAuthPromptHost';
 import { SessionManagerView } from './components/sessions';
 import { DraggableSettingsWindow } from './components/settings/DraggableSettingsWindow';
@@ -83,6 +83,7 @@ import {
   DialogTitle,
 } from './components/ui/dialog';
 import { addToast, toastManager } from './components/ui/toast';
+import { WorkspaceShell } from './components/workspace-shell';
 import { MergeEditor, MergeWorktreeDialog } from './components/worktree';
 import { useAutoFetchListener, useGitBranches, useGitInit } from './hooks/useGit';
 import { useWebInspector } from './hooks/useWebInspector';
@@ -251,6 +252,7 @@ export default function App() {
     pendingProviderAction,
     settingsDialogOpen,
     settingsDisplayMode,
+    forceSettingsModal,
     setSettingsCategory,
     setScrollToProvider,
     setPendingProviderAction,
@@ -456,7 +458,9 @@ export default function App() {
   const autoUpdateEnabled = useSettingsStore((s) => s.autoUpdateEnabled);
   const hideGroups = useSettingsStore((s) => s.hideGroups);
   const temporaryWorkspaceEnabled = useSettingsStore((s) => s.temporaryWorkspaceEnabled);
-  const useOpenChamberShell = useSettingsStore((s) => s.useOpenChamberShell);
+  const useOpenChamberShellSetting = useSettingsStore((s) => s.useOpenChamberShell);
+  // Team-track bypass: always show OpenChamber shell while onboarding gate is skipped.
+  const useOpenChamberShell = SKIP_ONBOARDING_GATE || useOpenChamberShellSetting;
   const fileTreeDisplayMode = useSettingsStore((s) => s.fileTreeDisplayMode);
   const hasActiveWorktree = Boolean(activeWorktree?.path);
   const isHomeActive = isHomeViewActive || !selectedRepo;
@@ -1507,7 +1511,11 @@ export default function App() {
         className={`relative flex flex-1 overflow-hidden ${resizing ? 'select-none' : ''}`}
       >
         {useOpenChamberShell ? (
-          <WorkspaceShell onOpenSettings={openSettings} />
+          <WorkspaceShell
+            onOpenSettings={openSettings}
+            repositories={repositories}
+            selectedRepoPath={selectedRepo}
+          />
         ) : (
           <>
         {isCompact && (
@@ -2033,8 +2041,8 @@ export default function App() {
         {/* Clone Progress Float - shows clone progress in bottom right corner */}
         <CloneProgressFloat onCloneComplete={handleCloneRepository} />
 
-        {/* Draggable Settings Window (for draggable-modal mode) */}
-        {settingsDisplayMode === 'draggable-modal' && (
+        {/* Draggable Settings Window (modal mode, or OpenChamber shell where tabs are hidden) */}
+        {(settingsDisplayMode === 'draggable-modal' || forceSettingsModal) && (
           <DraggableSettingsWindow
             open={settingsDialogOpen}
             onOpenChange={setSettingsDialogOpen}

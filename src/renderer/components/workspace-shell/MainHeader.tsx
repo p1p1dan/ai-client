@@ -32,6 +32,8 @@ export function MainHeader({
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const activeProject = projects.find((project) => project.id === activeSession?.projectId);
+  const workspaces = useChatSessionsStore((state) => state.workspaces);
+  const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-3">
@@ -39,7 +41,11 @@ export function MainHeader({
         <p className="truncate text-sm font-medium text-primary">
           {activeSession?.title ?? 'No session selected'}
         </p>
-        <p className="truncate text-xs text-muted-foreground">{activeProject?.name ?? 'Project'}</p>
+        <p className="truncate text-xs text-muted-foreground" title={activeWorkspace?.path}>
+          {activeProject?.name ?? 'Project'}
+          {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
+          {activeWorkspace ? ` · ${activeWorkspace.path}` : ''}
+        </p>
       </div>
 
       <UsageRingPlaceholder />

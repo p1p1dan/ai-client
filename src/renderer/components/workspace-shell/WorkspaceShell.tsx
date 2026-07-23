@@ -1,19 +1,32 @@
 import { useMemo, useState } from 'react';
+import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { BottomDock } from './BottomDock';
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
 import { RightDock } from './RightDock';
+import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 
 interface WorkspaceShellProps {
   onOpenSettings?: () => void;
+  repositories?: Repository[];
+  selectedRepoPath?: string | null;
 }
 
-export function WorkspaceShell({ onOpenSettings }: WorkspaceShellProps) {
+export function WorkspaceShell({
+  onOpenSettings,
+  repositories = [],
+  selectedRepoPath = null,
+}: WorkspaceShellProps) {
   const [leftNavCollapsed, setLeftNavCollapsed] = useState(false);
   const [rightDockOpen, setRightDockOpen] = useState(false);
   const [bottomDockOpen, setBottomDockOpen] = useState(false);
   const [rightDockTab, setRightDockTab] = useState<'git' | 'files' | 'context'>('git');
+
+  useSyncChatWorkspaceTree({
+    repositories,
+    selectedRepoPath,
+  });
 
   const rightDockWidth = useMemo(() => (rightDockOpen ? 320 : 0), [rightDockOpen]);
   const bottomDockHeight = useMemo(() => (bottomDockOpen ? 220 : 0), [bottomDockOpen]);

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { is } from '@electron-toolkit/utils';
+import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import { translate } from '@shared/i18n';
 import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
@@ -20,6 +21,8 @@ import { autoUpdaterService } from '../services/updater/AutoUpdater';
 const APP_MOUNTABLE_RUNTIME_KINDS = new Set(['node-compatible', 'bun-incompatible']);
 
 function isAppMountedFor(): boolean {
+  // Keep Main close-confirm in sync with Root when onboarding gate is skipped.
+  if (SKIP_ONBOARDING_GATE) return true;
   if (!onboardingService.checkRegistration().registered) return false;
   const cached = claudeRuntimeChecker.getCached();
   if (!cached) return false;
