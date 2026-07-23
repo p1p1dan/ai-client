@@ -1,10 +1,5 @@
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { create } from 'zustand';
-import {
-  continueMockAfterPermission,
-  runMockConversation,
-  subscribeMockRuntime,
-} from '@/lib/mockRuntime';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
 
@@ -30,6 +25,8 @@ export interface ChatSession {
   title: string;
   status: SessionRuntimeStatus;
   updatedAt: number;
+  /** Claude runtime / resume identity when known. */
+  runtimeIdentity?: string;
 }
 
 export interface ChatBlock {
@@ -68,57 +65,54 @@ interface ChatSessionsState {
   activeSessionId: string | null;
   recentSessionIds: string[];
   pendingPermission: PendingPermission | null;
-  mockRuntimeReady: boolean;
+  /** Sessions already registered with Agent Host. */
+  hostBoundSessionIds: string[];
+  runtimeReady: boolean;
+  lastError: string | null;
 
   selectSession: (sessionId: string) => void;
-  sendMessage: (text: string) => void;
+  sendMessage: (text: string) => Promise<void>;
+  stopActiveSession: () => Promise<void>;
   respondPermission: (allow: boolean) => void;
-  initMockRuntime: () => () => void;
+  /** Subscribe to Host Runtime Events; returns unsubscribe. */
+  initRuntime: () => () => void;
 }
 
-const MOCK_PROJECT: ChatProject = { id: 'project-demo', name: 'demo' };
+const DEMO_PROJECT: ChatProject = { id: 'project-demo', name: 'demo' };
 
-const MOCK_WORKSPACES: ChatWorkspace[] = [
+const DEMO_WORKSPACES: ChatWorkspace[] = [
   {
     id: 'ws-main',
-    projectId: MOCK_PROJECT.id,
+    projectId: DEMO_PROJECT.id,
     name: 'Main',
     kind: 'main',
     path: 'D:/Code/projects/ai-client',
   },
   {
     id: 'ws-worktree',
-    projectId: MOCK_PROJECT.id,
+    projectId: DEMO_PROJECT.id,
     name: 'feat/openchamber-chat-refactor',
     kind: 'worktree',
-    path: 'D:/Code/projects/ai-client/.worktrees/feat-openchamber',
+    path: 'D:/Code/projects/ai-client',
   },
 ];
 
-const MOCK_SESSIONS: ChatSession[] = [
+const DEMO_SESSIONS: ChatSession[] = [
+  {
+    id: 'session-live',
+    projectId: DEMO_PROJECT.id,
+    workspaceId: 'ws-main',
+    title: 'Live Agent Host',
+    status: 'idle',
+    updatedAt: Date.now(),
+  },
   {
     id: 'session-welcome',
-    projectId: MOCK_PROJECT.id,
+    projectId: DEMO_PROJECT.id,
     workspaceId: 'ws-main',
     title: 'Welcome',
     status: 'idle',
     updatedAt: Date.now() - 86_400_000,
-  },
-  {
-    id: 'session-refactor',
-    projectId: MOCK_PROJECT.id,
-    workspaceId: 'ws-worktree',
-    title: 'OpenChamber shell refactor',
-    status: 'completed',
-    updatedAt: Date.now() - 3_600_000,
-  },
-  {
-    id: 'session-mock-run',
-    projectId: MOCK_PROJECT.id,
-    workspaceId: 'ws-main',
-    title: 'Mock runtime demo',
-    status: 'idle',
-    updatedAt: Date.now(),
   },
 ];
 
@@ -131,7 +125,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
       {
         id: 'block-seed-1',
         type: 'text',
-        text: 'Welcome to the OpenChamber-style workspace shell. Send a message in Mock runtime demo to watch events flow.',
+        text: 'OpenChamber Workspace Shell is wired to the real Agent Host. Select “Live Agent Host” and send a message.',
       },
     ],
   },
@@ -184,10 +178,27 @@ function applyRuntimeEvent(
   }
 
   switch (event.type) {
+    case 'session.created':
+    case 'session.resumed': {
+      const runtimeIdentity = event.payload?.runtimeIdentity;
+      const hostBoundSessionIds = state.hostBoundSessionIds.includes(sessionId)
+        ? state.hostBoundSessionIds
+        : [...state.hostBoundSessionIds, sessionId];
+      return {
+        hostBoundSessionIds,
+        sessions: state.sessions.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                runtimeIdentity: runtimeIdentity ?? session.runtimeIdentity,
+                updatedAt: Date.now(),
+              }
+            : session
+        ),
+      };
+    }
+
     case 'session.status': {
-      if (event.type !== 'session.status') {
-        return {};
-      }
       const recentSessionIds = [
         sessionId,
         ...state.recentSessionIds.filter((id) => id !== sessionId),
@@ -198,10 +209,26 @@ function applyRuntimeEvent(
       };
     }
 
+    case 'session.completed': {
+      return {
+        sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+      };
+    }
+
+    case 'session.failed': {
+      return {
+        sessions: upsertSessionStatus(state.sessions, sessionId, 'failed'),
+        lastError: event.payload?.error ?? 'Session failed',
+      };
+    }
+
+    case 'session.stopped': {
+      return {
+        sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+      };
+    }
+
     case 'message.started': {
-      if (event.type !== 'message.started') {
-        return {};
-      }
       const message: ChatMessage = {
         id: event.payload.messageId,
         sessionId,
@@ -212,9 +239,6 @@ function applyRuntimeEvent(
     }
 
     case 'message.delta': {
-      if (event.type !== 'message.delta') {
-        return {};
-      }
       const existing = state.messages.find((item) => item.id === event.payload.messageId);
       if (!existing) {
         return {};
@@ -224,9 +248,6 @@ function applyRuntimeEvent(
     }
 
     case 'tool.started': {
-      if (event.type !== 'tool.started') {
-        return {};
-      }
       const existing = state.messages.find((item) => item.id === event.payload.messageId);
       if (!existing) {
         return {};
@@ -248,9 +269,6 @@ function applyRuntimeEvent(
     }
 
     case 'tool.completed': {
-      if (event.type !== 'tool.completed') {
-        return {};
-      }
       const existing = state.messages.find((item) => item.id === event.payload.messageId);
       if (!existing) {
         return {};
@@ -273,9 +291,6 @@ function applyRuntimeEvent(
     }
 
     case 'permission.requested': {
-      if (event.type !== 'permission.requested') {
-        return {};
-      }
       const existing = [...state.messages]
         .reverse()
         .find((item) => item.sessionId === sessionId && item.role === 'assistant');
@@ -312,13 +327,11 @@ function applyRuntimeEvent(
           permissionId: event.payload.permissionId,
           messageId,
         },
+        sessions: upsertSessionStatus(state.sessions, sessionId, 'waiting_permission'),
       };
     }
 
     case 'permission.resolved': {
-      if (event.type !== 'permission.resolved') {
-        return {};
-      }
       const { permissionId, allow } = event.payload;
       if (!permissionId) {
         return { pendingPermission: null };
@@ -346,28 +359,104 @@ function applyRuntimeEvent(
   }
 }
 
+function isBusyStatus(status: SessionRuntimeStatus): boolean {
+  return (
+    status === 'starting' ||
+    status === 'running' ||
+    status === 'stopping' ||
+    status === 'waiting_permission' ||
+    status === 'waiting_question'
+  );
+}
+
 export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
-  projects: [MOCK_PROJECT],
-  workspaces: MOCK_WORKSPACES,
-  sessions: MOCK_SESSIONS,
+  projects: [DEMO_PROJECT],
+  workspaces: DEMO_WORKSPACES,
+  sessions: DEMO_SESSIONS,
   messages: INITIAL_MESSAGES,
-  activeSessionId: 'session-mock-run',
-  recentSessionIds: ['session-mock-run', 'session-refactor', 'session-welcome'],
+  activeSessionId: 'session-live',
+  recentSessionIds: ['session-live', 'session-welcome'],
   pendingPermission: null,
-  mockRuntimeReady: false,
+  hostBoundSessionIds: [],
+  runtimeReady: false,
+  lastError: null,
 
   selectSession: (sessionId) => {
     set({ activeSessionId: sessionId });
   },
 
-  sendMessage: (text) => {
+  sendMessage: async (text) => {
     const trimmed = text.trim();
-    const { activeSessionId } = get();
+    const state = get();
+    const { activeSessionId } = state;
     if (!trimmed || !activeSessionId) {
       return;
     }
 
-    void runMockConversation(activeSessionId, trimmed);
+    const session = state.sessions.find((item) => item.id === activeSessionId);
+    const workspace = state.workspaces.find((item) => item.id === session?.workspaceId);
+    if (!session || !workspace) {
+      set({ lastError: 'Active session has no workspace' });
+      return;
+    }
+
+    if (isBusyStatus(session.status)) {
+      set({ lastError: 'Session is busy — stop it first or wait for idle' });
+      return;
+    }
+
+    try {
+      await window.electronAPI.chat.ensureHost();
+
+      if (!get().hostBoundSessionIds.includes(activeSessionId)) {
+        await window.electronAPI.chat.createSession({
+          sessionId: activeSessionId,
+          workspacePath: workspace.path,
+        });
+        set((prev) => ({
+          hostBoundSessionIds: prev.hostBoundSessionIds.includes(activeSessionId)
+            ? prev.hostBoundSessionIds
+            : [...prev.hostBoundSessionIds, activeSessionId],
+          lastError: null,
+        }));
+      }
+
+      await window.electronAPI.chat.send({
+        sessionId: activeSessionId,
+        text: trimmed,
+      });
+      set({ lastError: null });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({
+        lastError: message,
+        sessions: upsertSessionStatus(get().sessions, activeSessionId, 'failed'),
+        messages: [
+          ...get().messages,
+          {
+            id: `msg-error-${Date.now()}`,
+            sessionId: activeSessionId,
+            role: 'error',
+            blocks: [{ id: `err-${Date.now()}`, type: 'text', text: message }],
+          },
+        ],
+      });
+    }
+  },
+
+  stopActiveSession: async () => {
+    const { activeSessionId } = get();
+    if (!activeSessionId) {
+      return;
+    }
+    try {
+      await window.electronAPI.chat.stop({ sessionId: activeSessionId });
+      set({ lastError: null });
+    } catch (err) {
+      set({
+        lastError: err instanceof Error ? err.message : String(err),
+      });
+    }
   },
 
   respondPermission: (allow) => {
@@ -376,24 +465,37 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       return;
     }
 
-    void continueMockAfterPermission(
-      pendingPermission.sessionId,
-      pendingPermission.messageId,
-      allow,
-      pendingPermission.permissionId
-    );
+    void window.electronAPI.chat
+      .respondPermission({
+        sessionId: pendingPermission.sessionId,
+        permissionId: pendingPermission.permissionId,
+        allow,
+      })
+      .catch((err: unknown) => {
+        set({
+          lastError: err instanceof Error ? err.message : String(err),
+        });
+      });
   },
 
-  initMockRuntime: () => {
-    if (get().mockRuntimeReady) {
+  initRuntime: () => {
+    if (get().runtimeReady) {
       return () => {};
     }
 
-    set({ mockRuntimeReady: true });
-    return subscribeMockRuntime((event) => {
+    set({ runtimeReady: true });
+    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event) => {
       set((state) => ({
         ...applyRuntimeEvent(state, event),
       }));
     });
+
+    void window.electronAPI.chat.ensureHost().catch((err: unknown) => {
+      set({
+        lastError: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+    return unsubscribe;
   },
 }));

@@ -16,7 +16,7 @@
 |---|---|---|---|
 | 0 | 技术 Go/No-Go | 🟡 Conditional Go | 开发机项基本完成；TSD / 打包 / Permission 未齐 |
 | 1 | UI Shell（Mock） | ✅ 完成 | 四区壳可交互；Beta 开关接入 |
-| 2 | Runtime Vertical Slice | 🟡 进行中 | Host + Main/IPC 已通；Chat Store / UI 待接真事件 |
+| 2 | Runtime Vertical Slice | 🟡 进行中 | Host + Main/IPC + Chat Store 已接；Permission/Tool UI 待补 |
 | 3 | Chat MVP | ⬜ 未开始 | |
 | 4 | 现有能力重新接线 | ⬜ 未开始 | |
 | 5 | 收口与正式版 | ⬜ 未开始 | |
@@ -56,6 +56,7 @@
 | 2026-07-23 | 本台账落地 | ✅ | `902a9f5` |
 | 2026-07-23 | **Phase 2 节点 1：Host settings + Cometix + SDK Adapter + Normalizer** | ✅ | `c0aaf14` |
 | 2026-07-23 | **Phase 2 节点 2：Main session API + Chat IPC + Runtime Event 推送** | ✅ | `ea0286b` |
+| 2026-07-23 | **Phase 2 节点 3：Chat Store 接真 Runtime + Composer Send/Stop** | ✅ | （本提交） |
 
 ---
 
@@ -91,7 +92,7 @@
 | 底栏 Terminal Dock 占位 | ✅ | |
 | Mock Runtime Event 驱动状态 | ✅ | |
 | Beta 开关 | ✅ | Settings → Appearance |
-| 接真 Runtime | ⬜ | Phase 2 节点 3 |
+| 接真 Runtime | ✅ | Phase 2 节点 3：Chat Store → `electronAPI.chat` |
 
 验证：`pnpm dev` → Appearance → 打开 **OpenChamber Workspace Shell**。
 
@@ -113,9 +114,9 @@
 | 协议 smoke | ✅ | `spikes/phase2-sdk-runtime-smoke.ts` → `PONG` |
 | Main：命令/事件 + IPC 推送 | ✅ | `AgentHostManager` session API；`ipc/chat.ts`；`CHAT_RUNTIME_EVENT` |
 | Preload `electronAPI.chat` | ✅ | create/send/stop/close + `onRuntimeEvent` |
-| Chat Store 接真事件 / Composer Stop | ⬜ | **下一步** |
-| Permission 桥 happy path | ⬜ | |
-| Tool 事件进时间线（UI） | ⬜ | Normalizer 已发 tool.*；UI 未接 |
+| Chat Store 接真事件 / Composer Stop | ✅ | 替换 Mock；`session-live` 发真 Host；Composer 有 Stop |
+| Permission 桥 happy path | ⬜ | **下一步** |
+| Tool 事件进时间线（UI） | 🟡 | Store 已处理 tool.*；需真实 permissionMode 才会出现 |
 | stream-json Adapter | ⬜ | fallback，可后置 |
 | Resume 历史重放 | ⬜ | 顺延 Phase 3 |
 
@@ -135,6 +136,12 @@ node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts
 - Main 将 Host stdout Runtime Event 广播至所有窗口（`chat:runtimeEvent`）
 - Host 生命周期仍可用 `electronAPI.agentHost.*`
 
+### 节点 3 验收要点
+
+- Settings → Appearance → 打开 OpenChamber Workspace Shell
+- 选中 **Live Agent Host**，发送短 prompt（如 `Reply with exactly: PONG`）
+- 时间线出现 user + assistant 流式文本；运行中可 **Stop**
+
 ---
 
 ## 下一步（Phase 2 续）
@@ -143,10 +150,10 @@ node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts
 
 1. ~~Host：加载 settings.env + Cometix；SDK Runtime Adapter~~ ✅ `c0aaf14`  
 2. ~~Event Normalizer → 稳定 Runtime Event~~ ✅  
-3. ~~Main：`AgentHostManager` + Chat IPC + Runtime Event 推送~~ ✅（本节点）  
-4. **Chat Store：替换 Mock，接真事件；Composer 发送 / Stop** ← 当前  
-5. Permission 桥（时间线卡片）至少一条 happy path  
-6. Tool 卡进时间线；Resume 会话身份（历史重放可顺延 Phase 3）
+3. ~~Main：`AgentHostManager` + Chat IPC + Runtime Event 推送~~ ✅ `ea0286b`  
+4. ~~Chat Store：替换 Mock，接真事件；Composer 发送 / Stop~~ ✅（本节点）  
+5. **Permission 桥（时间线卡片）至少一条 happy path** ← 当前  
+6. Tool 卡进时间线（非 bypass 模式）；Resume 会话身份（历史重放可顺延 Phase 3）
 
 完成上述任一可演示切片后，在本台账「检查点」追加一行。
 

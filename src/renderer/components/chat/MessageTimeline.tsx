@@ -43,7 +43,7 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
         <div className="space-y-3 p-3">
           {sessionMessages.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No messages yet. Send a prompt to run the mock runtime pipeline.
+              No messages yet. Send a prompt to stream from the Agent Host.
             </p>
           ) : (
             sessionMessages.map((message) => (

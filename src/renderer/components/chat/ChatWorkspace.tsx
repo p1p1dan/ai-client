@@ -9,15 +9,15 @@ interface ChatWorkspaceProps {
 }
 
 export function ChatWorkspace({ className }: ChatWorkspaceProps) {
-  const initMockRuntime = useChatSessionsStore((state) => state.initMockRuntime);
+  const initRuntime = useChatSessionsStore((state) => state.initRuntime);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
 
   useEffect(() => {
-    return initMockRuntime();
-  }, [initMockRuntime]);
+    return initRuntime();
+  }, [initRuntime]);
 
   return (
     <section className={cn('flex min-h-0 flex-col', className)}>
