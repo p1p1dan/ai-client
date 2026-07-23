@@ -14,9 +14,9 @@
 
 | Phase | 名称 | 状态 | 说明 |
 |---|---|---|---|
-| 0 | 技术 Go/No-Go | 🟡 Conditional Go | 开发机项基本完成；TSD / 打包 / Permission 未齐 |
+| 0 | 技术 Go/No-Go | 🟡 Conditional Go | 开发机项基本完成；TSD / 打包未齐 |
 | 1 | UI Shell（Mock） | ✅ 完成 | 四区壳可交互；Beta 开关接入 |
-| 2 | Runtime Vertical Slice | 🟡 进行中 | Host→UI 主路径已通；Permission 桥已接；Question/Resume 待补 |
+| 2 | Runtime Vertical Slice | 🟡 进行中 | Host→UI 主路径 + Permission 桥已通；Question/Resume 待补 |
 | 3 | Chat MVP | ⬜ 未开始 | |
 | 4 | 现有能力重新接线 | ⬜ 未开始 | |
 | 5 | 收口与正式版 | ⬜ 未开始 | |
@@ -57,6 +57,7 @@
 | 2026-07-23 | **Phase 2 节点 1：Host settings + Cometix + SDK Adapter + Normalizer** | ✅ | `c0aaf14` |
 | 2026-07-23 | **Phase 2 节点 2：Main session API + Chat IPC + Runtime Event 推送** | ✅ | `ea0286b` |
 | 2026-07-23 | **Phase 2 节点 3：Chat Store 接真 Runtime + Composer Send/Stop** | ✅ | `76632cf` |
+| 2026-07-23 | **Phase 2 节点 4：Permission 桥 happy path** | ✅ | `5cd5163` |
 
 ---
 
@@ -70,8 +71,8 @@
 | stream-json spike | ✅ | fallback 保留 |
 | 多轮连续上下文对比 | ✅ | 两边均可召回 `ORANGE-42` |
 | Host 启停无孤儿（开发态） | ✅ | |
-| Stop 成功路径 | 🟡 | Host + Main IPC 已接；UI 未接 |
-| Permission 桥接 | ⬜ | Phase 2 下一节点（Host stub + IPC 已预留） |
+| Stop 成功路径 | ✅ | Host Abort + UI Stop 已接 |
+| Permission 桥接 | ✅ | Phase 2 节点 4；unit smoke 通过 |
 | Resume 进 Host 协议（非仅 spike） | 🟡 | `session.resume` + `chat:resumeSession` 已接；历史重放仍 Phase 3 |
 | Effort/Plan/Build 探测 | ⏳ | 条件性 UI |
 | TSD 解密读 | ⏳ **待加密机** | 开发机不得冒充通过 |
@@ -109,16 +110,17 @@
 | SDK Runtime Adapter | ✅ | `claudeRuntime.ts`：create / resume / send / stop / close |
 | Event Normalizer | ✅ | `eventNormalizer.ts` → 稳定 Runtime Event |
 | Session Registry | ✅ | `sessionRegistry.ts` |
-| Host 协议命令接线 | ✅ | `index.ts` 接 session.*；permission/question 仍 stub |
+| Host 协议命令接线 | ✅ | session.* + `permission.respond`；question 仍 stub |
 | Stop（Host 侧） | ✅ | AbortController；smoke `STOP_AFTER_MS` 通过 |
 | 协议 smoke | ✅ | `spikes/phase2-sdk-runtime-smoke.ts` → `PONG` |
 | Main：命令/事件 + IPC 推送 | ✅ | `AgentHostManager` session API；`ipc/chat.ts`；`CHAT_RUNTIME_EVENT` |
 | Preload `electronAPI.chat` | ✅ | create/send/stop/close + `onRuntimeEvent` |
 | Chat Store 接真事件 / Composer Stop | ✅ | 替换 Mock；`session-live` 发真 Host；Composer 有 Stop |
-| Permission 桥 happy path | ✅ | permissionBridge.ts + canUseTool；unit smoke 通过 |
+| Permission 桥 happy path | ✅ | `permissionBridge.ts` + `canUseTool`；unit smoke 通过 |
 | Tool 事件进时间线（UI） | 🟡 | Store/UI 已支持；依赖模型实际调工具 |
 | stream-json Adapter | ⬜ | fallback，可后置 |
 | Resume 历史重放 | ⬜ | 顺延 Phase 3 |
+| Question 桥 | ⬜ | **下一步** |
 
 ### 节点 1 验收证据
 
@@ -144,16 +146,17 @@ node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts
 
 ### 节点 4 验收要点
 
-`ash
+```bash
 cd src/agent-host
 node --experimental-strip-types spikes/phase2-permission-bridge-unit.ts
 # ok: true — request→respond allow；abort→deny
 
-# 集成（需有效 ~/.claude/settings.json env）：
+# 集成（需有效 Claude settings env）：
 # node --experimental-strip-types spikes/phase2-permission-smoke.ts
-`
+```
 
-UI：Shell 内出现 Permission 卡 → Allow/Deny → chat:respondPermission → Host 继续/拒绝工具。
+UI：时间线 Permission 卡 → Allow/Deny → `chat:respondPermission` → Host 继续/拒绝工具。  
+说明：SDK 现用 `permissionMode: 'default'` + `canUseTool`（不再 bypass）。
 
 ---
 
@@ -164,8 +167,8 @@ UI：Shell 内出现 Permission 卡 → Allow/Deny → chat:respondPermission �
 1. ~~Host：加载 settings.env + Cometix；SDK Runtime Adapter~~ ✅ `c0aaf14`  
 2. ~~Event Normalizer → 稳定 Runtime Event~~ ✅  
 3. ~~Main：`AgentHostManager` + Chat IPC + Runtime Event 推送~~ ✅ `ea0286b`  
-4. ~~Chat Store：替换 Mock，接真事件；Composer 发送 / Stop~~ ✅ 76632cf  
-5. ~~Permission 桥（时间线卡片）happy path~~ ✅（本节点）  
+4. ~~Chat Store：替换 Mock，接真事件；Composer 发送 / Stop~~ ✅ `76632cf`  
+5. ~~Permission 桥（时间线卡片）happy path~~ ✅ `5cd5163`  
 6. **Question 桥 / Resume 会话身份**（历史重放可顺延 Phase 3）；Tool 真实调用验收 ← 当前
 
 完成上述任一可演示切片后，在本台账「检查点」追加一行。
@@ -188,9 +191,10 @@ docs/plans/phase0-report.md                              # Phase 0 证据
 docs/plans/openchamber-chat-refactor-ledger.md           # 本台账
 CONTEXT.md                                               # 术语
 src/agent-host/                                          # Node 24 Host
+  permissionBridge.ts / claudeRuntime.ts / eventNormalizer.ts
 src/main/services/agent-host/AgentHostManager.ts         # Main 侧命令 API
 src/main/ipc/chat.ts                                     # Chat IPC + 事件广播
 src/preload/index.ts                                     # electronAPI.chat
 src/renderer/components/workspace-shell/                 # 四区壳
-src/renderer/stores/chatSessions.ts                      # Chat Store（现 Mock）
+src/renderer/stores/chatSessions.ts                      # Chat Store（真 Runtime）
 ```
