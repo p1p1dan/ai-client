@@ -55,7 +55,7 @@
 | 2026-07-23 | **默认驱动改为 Agent SDK** | ✅ | `7db1424` |
 | 2026-07-23 | 本台账落地 | ✅ | `902a9f5` |
 | 2026-07-23 | **Phase 2 节点 1：Host settings + Cometix + SDK Adapter + Normalizer** | ✅ | `c0aaf14` |
-| 2026-07-23 | **Phase 2 节点 2：Main session API + Chat IPC + Runtime Event 推送** | ✅ | （本提交） |
+| 2026-07-23 | **Phase 2 节点 2：Main session API + Chat IPC + Runtime Event 推送** | ✅ | `ea0286b` |
 
 ---
 
