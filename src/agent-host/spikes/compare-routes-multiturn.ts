@@ -469,11 +469,11 @@ async function main(): Promise<void> {
     `[compare] creds hasAuthToken=${loaded.diagnostics.hasAuthToken} hasApiKey=${loaded.diagnostics.hasApiKey} baseHost=${loaded.diagnostics.baseHost} model=${loaded.diagnostics.model}`
   );
 
-  // Warm order: stream-json first, then SDK (document order). Optionally reverse via env.
+  // Default compare order: Agent SDK first (product default), then stream-json fallback.
   const order =
-    process.env.AICLIENT_COMPARE_ORDER === 'sdk-first'
-      ? (['agent-sdk', 'stream-json'] as const)
-      : (['stream-json', 'agent-sdk'] as const);
+    process.env.AICLIENT_COMPARE_ORDER === 'stream-json-first'
+      ? (['stream-json', 'agent-sdk'] as const)
+      : (['agent-sdk', 'stream-json'] as const);
 
   const reports: RouteReport[] = [];
   for (const route of order) {

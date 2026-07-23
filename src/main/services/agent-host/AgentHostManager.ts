@@ -1,6 +1,10 @@
 import path from 'node:path';
 import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
-import { AGENT_HOST_PROTOCOL_VERSION, type AgentHostDriver } from '@shared/types/agentHost';
+import {
+  AGENT_HOST_PROTOCOL_VERSION,
+  DEFAULT_AGENT_HOST_DRIVER,
+  type AgentHostDriver,
+} from '@shared/types/agentHost';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { app } from 'electron';
 import { AgentHostProcess } from './AgentHostProcess';
@@ -14,7 +18,7 @@ export type AgentHostState = 'stopped' | 'starting' | 'ready' | 'error';
 export class AgentHostManager {
   private process: AgentHostProcess | null = null;
   private state: AgentHostState = 'stopped';
-  private driver: AgentHostDriver = 'stream-json';
+  private driver: AgentHostDriver = DEFAULT_AGENT_HOST_DRIVER;
   private readyPromise: Promise<void> | null = null;
   private eventHandlers = new Set<(event: RuntimeEvent) => void>();
 

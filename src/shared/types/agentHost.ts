@@ -105,6 +105,9 @@ export type AgentHostCommand =
 /** Host driver selected in Phase 0. */
 export type AgentHostDriver = 'agent-sdk' | 'stream-json';
 
+/** Default Host driver — Agent SDK; stream-json remains fallback. */
+export const DEFAULT_AGENT_HOST_DRIVER: AgentHostDriver = 'agent-sdk';
+
 export interface NodeRuntimeInfo {
   /** Absolute path to node.exe / node binary. */
   execPath: string;

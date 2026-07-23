@@ -79,7 +79,7 @@ async function main(): Promise<void> {
         protocolVersion: 1,
         requestId: 'init-1',
         type: 'host.initialize',
-        payload: { driver: 'stream-json' },
+        payload: { driver: 'agent-sdk' },
       })}\n`
     );
     await ready;

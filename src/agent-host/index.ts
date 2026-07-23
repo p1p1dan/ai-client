@@ -10,7 +10,9 @@ import { COMETIX_PIN } from './pin.ts';
 
 const PROTOCOL_VERSION = 1;
 let seq = 0;
-let driver: 'agent-sdk' | 'stream-json' = 'stream-json';
+const envDriver = process.env.AICLIENT_AGENT_HOST_DRIVER;
+let driver: 'agent-sdk' | 'stream-json' =
+  envDriver === 'stream-json' || envDriver === 'agent-sdk' ? envDriver : 'agent-sdk';
 let shuttingDown = false;
 
 function emit(event: Record<string, unknown>): void {

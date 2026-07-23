@@ -7,8 +7,8 @@
 
 ## Verdict: **Conditional Go**
 
-选定主路线：**`stream-json`**（直接 `node cometix/cli.js --output-format stream-json`）。  
-Agent SDK 路线可用作 fallback，本机实测能出结构化事件但首包 assistant 更慢、易超时。
+选定主路线：**`agent-sdk`**（`@anthropic-ai/claude-agent-sdk` 经 Cometix `cli.js`）。  
+**`stream-json` 留作 fallback**。
 
 TSD 解密与「打包产物在加密机上读文件」**未验证** —— 标为 **待加密机**，不得用本机结果冒充通过。
 
@@ -27,18 +27,16 @@ TSD 解密与「打包产物在加密机上读文件」**未验证** —— 标�
 
 ## Route selection
 
-### Primary: `stream-json`
+### Primary: `agent-sdk`
+
+- `@anthropic-ai/claude-agent-sdk@0.3.218` + `pathToClaudeCodeExecutable` → Cometix `cli.js` + `executable: process.execPath`
+- 多轮 resume（`options.resume`）已实测通过；abort/permission API 更完整，作为默认驱动
+
+### Fallback: `stream-json`
 
 - Spawn: `node <cometix>/cli.js -p <prompt> --output-format stream-json --verbose --dangerously-skip-permissions`
 - Cometix version banner: `2.1.212 (Claude Code)`
-- Structured events observed; assistant content present
-- Known noise: SessionEnd hook failure (`Hook cancelled`) → process exit code 1，但不影响 JSONL 事件解析
-
-### Fallback: `agent-sdk`
-
-- `@anthropic-ai/claude-agent-sdk@0.3.218` + `pathToClaudeCodeExecutable` → Cometix `cli.js` + `executable: process.execPath`
-- Import/`query()` 可用；能收到 NDJSON 风格结构化事件
-- 本机冷启动偏慢；需 Abort/timeout；assistant 类型识别需按 SDK 事件形状再校准
+- 结构化事件与 resume（`--resume`）同样可用；SDK 不通时回退
 
 ## Known limitations
 
@@ -102,4 +100,4 @@ TSD 解密与「打包产物在加密机上读文件」**未验证** —— 标�
 1. **此前 503 / 假“耗时差”主要是 API/凭证问题**，不是路线架构差异。
 2. **两条路都能连续会话**（`--resume` / `options.resume`），耗时同量级。
 3. init 里仍报 `apiKeySource=none`，但实际鉴权已通（CCH AUTH_TOKEN）；Host 侧应继续注入 `settings.env`。
-4. 选型：**双路线并列**；Phase 2 可先落地任一条，Normalizer 预留另一条。SDK 在 abort/permission API 上可能更省事，stream-json 更透明。
+4. 选型：**默认 Agent SDK**；`stream-json` 为 fallback。代码常量：`DEFAULT_AGENT_HOST_DRIVER = 'agent-sdk'`。
