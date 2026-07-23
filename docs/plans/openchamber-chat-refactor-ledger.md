@@ -69,6 +69,7 @@
 | 2026-07-23 | **Phase 2 节点 3：Chat Store 接真 Runtime + Composer Send/Stop** | ✅ | `76632cf` |
 | 2026-07-23 | **Phase 2 节点 4：Permission 桥 happy path** | ✅ | `5cd5163` |
 | 2026-07-23 | **CP1：双轨执行计划定稿 + 分账结构落库** | ✅ | 执行计划 + 两条子台账 |
+| 2026-07-23 | **C-01：agent-host 构建产物 + electron-builder 打包配置（M1 前半）** | ✅ | `f21fec7` |
 
 ---
 
@@ -128,6 +129,7 @@
 | Preload `electronAPI.chat` | ✅ | create/send/stop/close + `onRuntimeEvent` |
 | Chat Store 接真事件 / Composer Stop | ✅ | 替换 Mock；`session-live` 发真 Host；Composer 有 Stop |
 | Permission 桥 happy path | ✅ | `permissionBridge.ts` + `canUseTool`；unit smoke 通过 |
+| agent-host 打包产物（C-01） | ✅ | `pnpm build:agent-host` → `out-agent-host/`（87MB）；产物 PONG/permission smoke 通过；打包态整链 → C-02 |
 | Tool 事件进时间线（UI） | 🟡 | Store/UI 已支持；依赖模型实际调工具 |
 | stream-json Adapter | ⬜ | fallback，可后置 |
 | Resume 历史重放 | ⬜ | 顺延 Phase 3 |
@@ -173,7 +175,8 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01 打包链（agent-host 构建产物 + electron-builder 配置）→ C-02 打包态验证（M1/CP2）→ C-07 Session Index → C-06 Resume 历史重放（CP4）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）
+- 🤖 **Claude 主线**：C-01 ✅ → C-02 打包态验证（M1/CP2）→ C-07 Session Index → C-06 Resume 历史重放（CP4）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）
+- 🧪 **测试凭证统一约定**（用户拍板 2026-07-23）：测试不得用本机默认 Claude 登录，统一走网关 `https://cch-jyw.pipidan.qzz.io`；详见执行计划 §4
 - 👥 **团队轨道**：T-17 Tool 真实调用 GUI 验收（立即可做）→ T-01 真实数据树 → 无依赖池 T-06~T-09 → 等主线解锁后 T-02/T-03 → T-10/T-11（M2 加密机，CP5）
 
 过程明细分别记入两条子台账；里程碑达成回填本文件检查点。

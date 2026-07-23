@@ -122,6 +122,24 @@
 2. 破坏性变更 bump `AGENT_HOST_PROTOCOL_VERSION`；
 3. 变更后在总台账记一行并通知对方；CP4（`session.history`）定稿前团队不要动 Resume 数据层。
 
+### 测试凭证统一约定（用户拍板 2026-07-23）
+
+**所有测试（smoke / spike / 打包验证 / GUI 点验）一律不得直接使用本机默认 Claude 登录环境**，统一走共享测试网关：
+
+```json
+"ANTHROPIC_AUTH_TOKEN": "sk-4b0688c61944931297f2aee4ecfa0022",
+"ANTHROPIC_BASE_URL": "https://cch-jyw.pipidan.qzz.io"
+```
+
+| 场景 | 用法 |
+|---|---|
+| Host 侧脚本（`src/agent-host/spikes/*-smoke.ts`） | 已内置：`spikes/testCredentials.ts` 自动生成临时 `CLAUDE_CONFIG_DIR`（网关凭证 + onboarding 种子），零配置直接跑 |
+| 换网关 / 换 token | 环境变量 `AICLIENT_TEST_AUTH_TOKEN` / `AICLIENT_TEST_BASE_URL` 覆盖默认值 |
+| 排查对照需要本机登录 | `AICLIENT_SMOKE_USE_LOCAL_SETTINGS=1`（仅限排查；**验收证据必须走网关**） |
+| GUI 手工点验（开发态 / 打包态） | 当前 GUI 读 `~/.claude/settings.json`：点验前将上述两项写入其 `env` 段；「Host 侧 CLAUDE_CONFIG_DIR 注入」已列主线候选需求（见团队台账 T-17 行） |
+
+> 注：团队台账 T-17 行曾按「token 不入库」执行；2026-07-23 用户拍板改为**统一落文档以本节为准**。如需收紧为脱敏引用，由用户决定后统一调整。
+
 ### 完成定义（DoD，双轨通用）
 
 - 代码 + 验收证据（命令输出或操作记录）+ 对应子台账加行（附提交 hash）；
