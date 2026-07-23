@@ -20,7 +20,7 @@ const NODE24 = process.env.AICLIENT_NODE24 ?? process.execPath;
 const WORKDIR = process.env.AICLIENT_SMOKE_WORKDIR ?? repoRoot;
 const PROMPT =
   process.env.AICLIENT_SMOKE_PROMPT ??
-  'Use the Bash tool to run exactly: echo PERM-OK. After the tool result, reply with the tool output only.';
+  'You MUST call the Write tool to create file .aiclient-perm-smoke.txt with content exactly: PERM-OK. Do not skip the tool. After the tool succeeds, reply with exactly: PERM-OK';
 const TIMEOUT_MS = Number(process.env.AICLIENT_SMOKE_TIMEOUT_MS ?? 120000);
 
 interface SmokeReport {

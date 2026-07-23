@@ -151,12 +151,12 @@ cd src/agent-host
 node --experimental-strip-types spikes/phase2-permission-bridge-unit.ts
 # ok: true — request→respond allow；abort→deny
 
-# 集成（需有效 Claude settings env）：
-# node --experimental-strip-types spikes/phase2-permission-smoke.ts
+node --experimental-strip-types spikes/phase2-permission-smoke.ts
+# ok: true — Write 触发 permission.requested → respond(allow) → tool.completed → PERM-OK
 ```
 
 UI：时间线 Permission 卡 → Allow/Deny → `chat:respondPermission` → Host 继续/拒绝工具。  
-说明：SDK 现用 `permissionMode: 'default'` + `canUseTool`（不再 bypass）。
+Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 settings.allow 阴影 canUseTool）；`thinking: disabled`；勿设 bare `allowedTools`。
 
 ---
 

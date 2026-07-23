@@ -188,6 +188,14 @@ export class ClaudeRuntime {
           cwd: session.workspacePath,
           pathToClaudeCodeExecutable: this.opts.cliPath,
           executable: executablePath,
+          // Expose built-in Claude Code tools so Permission/Tool cards can fire.
+          // Do NOT set bare allowedTools — that auto-approves and shadows canUseTool.
+          tools: { type: 'preset', preset: 'claude_code' },
+          // Isolate from filesystem permission.allow rules that would shadow canUseTool.
+          // Credentials still come from options.env (loaded from settings.json).
+          settingSources: [],
+          // Avoid CCH "invalid thinking block" 400s during Phase 2 smoke.
+          thinking: { type: 'disabled' },
           // Interactive permission bridge (timeline cards) — not bypass.
           permissionMode: 'default',
           canUseTool,
