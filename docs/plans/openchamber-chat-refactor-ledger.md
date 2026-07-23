@@ -1,12 +1,22 @@
-# OpenChamber 气泡对话重构 — 台账
+# OpenChamber 气泡对话重构 — 总台账
 
 > 分支：`feat/openchamber-chat-refactor`  
 > 权威：[`2026-07-23-openchamber-chat-refactor-ard.md`](./2026-07-23-openchamber-chat-refactor-ard.md)  
+> 执行计划：[`2026-07-23-openchamber-chat-refactor-execution-plan.md`](./2026-07-23-openchamber-chat-refactor-execution-plan.md)（双轨任务表 + 协作规则）  
 > 术语：[`../../CONTEXT.md`](../../CONTEXT.md)  
 > Phase 0 证据：[`phase0-report.md`](./phase0-report.md)  
 > 最后更新：2026-07-23
 
 **维护规则**：每完成一个关键节点（可合并的里程碑 / Phase 子目标），更新本台账「状态总览 + 检查点 + 下一步」，并附关键提交 hash。不要把旧 `PROGRESS.md`（bug 清单 / 已废弃拷贝路线）当本主线台账。
+
+**分账规则（自 2026-07-23 起双轨执行）**：本文件只保留 **Phase 状态总览、拍板决策、里程碑级检查点与确认点（CP-x）结果**。过程明细分两条子台账记录：
+
+| 轨道 | 范围 | 台账 | 维护人 |
+|---|---|---|---|
+| 🤖 Claude 主线 | 复杂/架构攸关任务（C-xx：打包链、协议、Host、Store 结构、探测类） | [`ledger-claude-mainline.md`](./ledger-claude-mainline.md) | Claude |
+| 👥 团队轨道 | 常规实现 / GUI 打磨 / 真机与加密机验收（T-xx） | [`ledger-team-track.md`](./ledger-team-track.md) | 用户 / 同事 |
+
+任务归属、依赖与验收标准以执行计划为准；里程碑（M1 打包链通 / M2 加密机验收 / M3 Chat MVP / M4 接线 / M5 收口）完成时回填本文件检查点。
 
 ---
 
@@ -58,6 +68,7 @@
 | 2026-07-23 | **Phase 2 节点 2：Main session API + Chat IPC + Runtime Event 推送** | ✅ | `ea0286b` |
 | 2026-07-23 | **Phase 2 节点 3：Chat Store 接真 Runtime + Composer Send/Stop** | ✅ | `76632cf` |
 | 2026-07-23 | **Phase 2 节点 4：Permission 桥 happy path** | ✅ | `5cd5163` |
+| 2026-07-23 | **CP1：双轨执行计划定稿 + 分账结构落库** | ✅ | 执行计划 + 两条子台账 |
 
 ---
 
@@ -160,18 +171,12 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ---
 
-## 下一步（Phase 2 续）
+## 下一步（双轨并行，详见执行计划）
 
-建议顺序：
+- 🤖 **Claude 主线**：C-01 打包链（agent-host 构建产物 + electron-builder 配置）→ C-02 打包态验证（M1/CP2）→ C-07 Session Index → C-06 Resume 历史重放（CP4）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）
+- 👥 **团队轨道**：T-17 Tool 真实调用 GUI 验收（立即可做）→ T-01 真实数据树 → 无依赖池 T-06~T-09 → 等主线解锁后 T-02/T-03 → T-10/T-11（M2 加密机，CP5）
 
-1. ~~Host：加载 settings.env + Cometix；SDK Runtime Adapter~~ ✅ `c0aaf14`  
-2. ~~Event Normalizer → 稳定 Runtime Event~~ ✅  
-3. ~~Main：`AgentHostManager` + Chat IPC + Runtime Event 推送~~ ✅ `ea0286b`  
-4. ~~Chat Store：替换 Mock，接真事件；Composer 发送 / Stop~~ ✅ `76632cf`  
-5. ~~Permission 桥（时间线卡片）happy path~~ ✅ `5cd5163`  
-6. **Question 桥 / Resume 会话身份**（历史重放可顺延 Phase 3）；Tool 真实调用验收 ← 当前
-
-完成上述任一可演示切片后，在本台账「检查点」追加一行。
+过程明细分别记入两条子台账；里程碑达成回填本文件检查点。
 
 ---
 
@@ -187,8 +192,11 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ```text
 docs/plans/2026-07-23-openchamber-chat-refactor-ard.md   # 权威
+docs/plans/2026-07-23-openchamber-chat-refactor-execution-plan.md  # 双轨执行计划
 docs/plans/phase0-report.md                              # Phase 0 证据
-docs/plans/openchamber-chat-refactor-ledger.md           # 本台账
+docs/plans/openchamber-chat-refactor-ledger.md           # 本总台账
+docs/plans/ledger-claude-mainline.md                     # 🤖 Claude 主线台账
+docs/plans/ledger-team-track.md                          # 👥 团队轨道台账
 CONTEXT.md                                               # 术语
 src/agent-host/                                          # Node 24 Host
   permissionBridge.ts / claudeRuntime.ts / eventNormalizer.ts
