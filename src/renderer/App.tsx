@@ -67,6 +67,7 @@ import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspaceP
 import { TreeSidebar } from './components/layout/TreeSidebar';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { WorktreePanel } from './components/layout/WorktreePanel';
+import { WorkspaceShell } from './components/workspace-shell';
 import { RemoteAuthPromptHost } from './components/remote/RemoteAuthPromptHost';
 import { SessionManagerView } from './components/sessions';
 import { DraggableSettingsWindow } from './components/settings/DraggableSettingsWindow';
@@ -455,6 +456,7 @@ export default function App() {
   const autoUpdateEnabled = useSettingsStore((s) => s.autoUpdateEnabled);
   const hideGroups = useSettingsStore((s) => s.hideGroups);
   const temporaryWorkspaceEnabled = useSettingsStore((s) => s.temporaryWorkspaceEnabled);
+  const useOpenChamberShell = useSettingsStore((s) => s.useOpenChamberShell);
   const fileTreeDisplayMode = useSettingsStore((s) => s.fileTreeDisplayMode);
   const hasActiveWorktree = Boolean(activeWorktree?.path);
   const isHomeActive = isHomeViewActive || !selectedRepo;
@@ -1504,6 +1506,10 @@ export default function App() {
         ref={mainLayoutRef}
         className={`relative flex flex-1 overflow-hidden ${resizing ? 'select-none' : ''}`}
       >
+        {useOpenChamberShell ? (
+          <WorkspaceShell onOpenSettings={openSettings} />
+        ) : (
+          <>
         {isCompact && (
           <div className="absolute left-3 top-3 z-50">
             <Button
@@ -1896,6 +1902,8 @@ export default function App() {
           />
         ) : (
           <SessionManagerView onResumeSession={handleResumeClaudeSession} />
+        )}
+          </>
         )}
 
         <TempWorkspaceDialogs

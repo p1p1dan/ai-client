@@ -355,6 +355,7 @@ export interface SettingsState {
   // Beta features
   todoEnabled: boolean; // Enable Todo kanban board (Beta)
   glowEffectEnabled: boolean; // Enable glow animation effect for AI output states (Beta)
+  useOpenChamberShell: boolean; // Enable OpenChamber-style workspace shell (Beta)
   temporaryWorkspaceEnabled: boolean; // Enable Temp Session (Beta)
   defaultTemporaryPath: string; // Default path for temp sessions
   autoCreateSessionOnTempActivate: boolean; // Auto-create agent/terminal session when temp session becomes active
@@ -494,6 +495,7 @@ export interface SettingsState {
   // Setters - Beta features
   setTodoEnabled: (enabled: boolean) => void;
   setGlowEffectEnabled: (enabled: boolean) => void;
+  setUseOpenChamberShell: (enabled: boolean) => void;
   setTemporaryWorkspaceEnabled: (enabled: boolean) => void;
   setDefaultTemporaryPath: (path: string) => void;
   setAutoCreateSessionOnTempActivate: (enabled: boolean) => void;

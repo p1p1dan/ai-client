@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Heart,
   Image as ImageIcon,
+  LayoutPanelTop,
   Monitor,
   Moon,
   RefreshCw,
@@ -335,6 +336,8 @@ export function AppearanceSettings() {
     setTerminalFontWeightBold,
     glowEffectEnabled,
     setGlowEffectEnabled,
+    useOpenChamberShell,
+    setUseOpenChamberShell,
     backgroundImageEnabled,
     setBackgroundImageEnabled,
     backgroundImagePath,
@@ -581,6 +584,21 @@ export function AppearanceSettings() {
           </div>
         </div>
         <Switch checked={glowEffectEnabled} onCheckedChange={setGlowEffectEnabled} />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+            <LayoutPanelTop className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">{t('OpenChamber Workspace Shell')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('Four-zone chat workspace prototype with mock runtime events')}
+            </p>
+          </div>
+        </div>
+        <Switch checked={useOpenChamberShell} onCheckedChange={setUseOpenChamberShell} />
       </div>
 
       {/* Background Image Settings */}

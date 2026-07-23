@@ -169,6 +169,7 @@ export function getInitialState() {
     // Beta features
     todoEnabled: defaultTodoEnabled,
     glowEffectEnabled: false,
+    useOpenChamberShell: false,
     temporaryWorkspaceEnabled: false,
     defaultTemporaryPath: '',
     autoCreateSessionOnTempActivate: false,
@@ -565,6 +566,7 @@ export const useSettingsStore = create<SettingsState>()(
       // Beta Feature Setters
       setTodoEnabled: (todoEnabled) => set({ todoEnabled }),
       setGlowEffectEnabled: (glowEffectEnabled) => set({ glowEffectEnabled }),
+      setUseOpenChamberShell: (useOpenChamberShell) => set({ useOpenChamberShell }),
       setTemporaryWorkspaceEnabled: (temporaryWorkspaceEnabled) =>
         set({ temporaryWorkspaceEnabled }),
       setDefaultTemporaryPath: (defaultTemporaryPath) => set({ defaultTemporaryPath }),
