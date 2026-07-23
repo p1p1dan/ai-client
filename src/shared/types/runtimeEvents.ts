@@ -57,6 +57,16 @@ export interface HostReadyEvent extends RuntimeEventBase {
     driver: 'agent-sdk' | 'stream-json';
     nodeVersion: string;
     cometixVersion?: string;
+    nodeExecPath?: string;
+    shuttingDown?: boolean;
+    /** Desensitized Claude settings diagnostics from Host initialize. */
+    settings?: {
+      loaded: boolean;
+      hasAuthToken: boolean;
+      hasBaseUrl: boolean;
+      baseHost: string | null;
+      model: string | null;
+    } | null;
   };
 }
 
