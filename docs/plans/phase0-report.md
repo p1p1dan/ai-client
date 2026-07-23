@@ -54,10 +54,35 @@ TSD 解密与「打包产物在加密机上读文件」**未验证** —— 标�
 - 因 TSD + Stop/Resume/Permission + 打包态未齐 → **Conditional Go**。
 - 允许进入 **Phase 1（已并行）** 与 **Phase 2**；Phase 2 开工清单必须含：Permission 桥、Stop、Resume（CC JSONL）、打包 Host 生命周期。
 
-## Artifacts
+## Addendum — 2026-07-23 多轮公平复测
 
-- `src/main/services/agent-host/` — NodeRuntimeResolver / AgentHostProcess / AgentHostManager
-- `src/agent-host/` — Host stub + spikes + pinned Cometix
-- `src/shared/types/agentHost.ts` / `runtimeEvents.ts`
-- `src/main/ipc/agentHost.ts`
-- Phase 1 shell: `src/renderer/components/workspace-shell/` + mock chat store（Settings → Appearance → Beta）
+脚本：`src/agent-host/spikes/compare-routes-multiturn.ts`  
+设定：同机 Node 24 / Cometix 2.1.212；Turn1 记秘密 token → Turn2 `--resume` / `options.resume` 追问；超时 120s。
+
+### 结果（本次）
+
+两条路线 **都失败在同一点**：上游 API 连续 `503 server_error` + `api_retry`（最多 10 次），Turn1 根本没有 `assistant` 文本，因此 **连续会话召回无法判定**。
+
+| 路线 | sessionId | 首包 assistant | 连续召回 |
+|---|---|---|---|
+| stream-json | 有 | 无（卡在 api_retry） | 未测成 |
+| agent-sdk | 有 | 无（同样 api_retry / abort） | 未测成 |
+
+补充：把之前“秒出 PONG”的短 query 重跑，同样只见 `system/init` + `api_retry`，`model=grok-4.5[1m]`，`apiKeySource=none`。
+
+### 纠正此前时间差结论
+
+**不能**用第一次 spike 的耗时差断定「stream-json 比 SDK 快」。更合理的解释是：当时 API 碰巧可用；SDK 那次撞上慢启动/重试/超时截断。底层都是同一个 Cometix `cli.js` + 同一模型网关。
+
+### 连续会话能力（机制层，仍有效）
+
+- stream-json：事件里带 `session_id`；CLI 支持 `--resume <id>` / `-c`
+- Agent SDK：`options.resume`；另有 `listSessions` / `getSessionMessages` 等
+
+→ **长上下文连续聊，两条路机制上都支持**；差在工程封装，不在“能不能”。正式对比需等 API 恢复后再跑同一脚本。
+
+### 选型建议（更新）
+
+在 Stop/Resume/Permission 未测完、且本次无健康 API 证据前：
+- **不要把 stream-json 锁死为主路线**；保持 **双路线可切换**，Normalizer 双适配。
+- Phase 2 先按 stream-json 落地也可以（实现简单），但 SDK 的 resume/abort API 仍值得保留为优先评估对象。
