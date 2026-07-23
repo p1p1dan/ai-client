@@ -48,6 +48,7 @@ import type {
   RemoteHelperStatus,
   RemoteRuntimeStatus,
   RepositoryRuntimeContext,
+  RuntimeEvent,
   SessionAttachOptions,
   SessionAttachResult,
   SessionCreateOptions,
@@ -75,6 +76,7 @@ import type {
   WorktreeRemoveOptions,
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
+import type { AgentHostDriver } from '@shared/types/agentHost';
 import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
@@ -1308,6 +1310,70 @@ const electronAPI = {
     getPathForFile: (file: File): string => {
       return webUtils.getPathForFile(file);
     },
+  },
+
+  // OpenChamber Chat Runtime (Agent Host)
+  chat: {
+    ensureHost: (
+      driver?: AgentHostDriver
+    ): Promise<{
+      state: string;
+      pid?: number;
+      driver: AgentHostDriver;
+      cometixVersion: string;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST, driver),
+    getHostStatus: (): Promise<{
+      state: string;
+      pid?: number;
+      driver: AgentHostDriver;
+      cometixVersion: string;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HOST_STATUS),
+    createSession: (payload: {
+      sessionId: string;
+      workspacePath: string;
+      model?: string;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
+    resumeSession: (payload: {
+      sessionId: string;
+      runtimeIdentity: string;
+      workspacePath: string;
+      model?: string;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
+    send: (payload: { sessionId: string; text: string }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload),
+    stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
+    closeSession: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLOSE_SESSION, payload),
+    respondPermission: (payload: {
+      sessionId: string;
+      permissionId: string;
+      allow: boolean;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_PERMISSION, payload),
+    respondQuestion: (payload: {
+      sessionId: string;
+      questionId: string;
+      answers: string[];
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_QUESTION, payload),
+    onRuntimeEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {
+      const handler = (_: unknown, event: RuntimeEvent) => callback(event);
+      ipcRenderer.on(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
+    },
+  },
+
+  // Agent Host diagnostics
+  agentHost: {
+    resolveNode: (): Promise<unknown> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_RESOLVE_NODE),
+    getStatus: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_GET_STATUS),
+    start: (driver?: AgentHostDriver): Promise<unknown> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_START, driver),
+    stop: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_STOP),
   },
 
   // vflow workflow tool

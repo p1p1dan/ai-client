@@ -1,0 +1,118 @@
+/**
+ * Chat / Runtime IPC — Renderer ↔ Main ↔ Agent Host.
+ * Forwards Host Runtime Events to all BrowserWindows.
+ */
+
+import { IPC_CHANNELS } from '@shared/types';
+import type { AgentHostDriver } from '@shared/types/agentHost';
+import type { RuntimeEvent } from '@shared/types/runtimeEvents';
+import { BrowserWindow, ipcMain } from 'electron';
+import { agentHostManager } from '../services/agent-host/AgentHostManager';
+
+function broadcastRuntimeEvent(event: RuntimeEvent): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    try {
+      win.webContents.send(IPC_CHANNELS.CHAT_RUNTIME_EVENT, event);
+    } catch {
+      // Window may be closing mid-send
+    }
+  }
+}
+
+let eventBridgeAttached = false;
+
+function ensureEventBridge(): void {
+  if (eventBridgeAttached) return;
+  eventBridgeAttached = true;
+  agentHostManager.onEvent(broadcastRuntimeEvent);
+}
+
+export function registerChatHandlers(): void {
+  ensureEventBridge();
+
+  ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async (_e, driver?: AgentHostDriver) => {
+    await agentHostManager.ensureStarted(driver);
+    return agentHostManager.getStatus();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CHAT_GET_HOST_STATUS, async () => {
+    return agentHostManager.getStatus();
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_CREATE_SESSION,
+    async (
+      _e,
+      payload: { sessionId: string; workspacePath: string; model?: string }
+    ): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.createSession(payload);
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RESUME_SESSION,
+    async (
+      _e,
+      payload: {
+        sessionId: string;
+        runtimeIdentity: string;
+        workspacePath: string;
+        model?: string;
+      }
+    ): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.resumeSession(payload);
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_SEND,
+    async (
+      _e,
+      payload: { sessionId: string; text: string }
+    ): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.sendMessage(payload);
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_STOP,
+    async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.stopSession(payload);
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_CLOSE_SESSION,
+    async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.closeSession(payload);
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RESPOND_PERMISSION,
+    async (
+      _e,
+      payload: { sessionId: string; permissionId: string; allow: boolean }
+    ): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.respondPermission(payload);
+      return { requestId };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RESPOND_QUESTION,
+    async (
+      _e,
+      payload: { sessionId: string; questionId: string; answers: string[] }
+    ): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.respondQuestion(payload);
+      return { requestId };
+    }
+  );
+}

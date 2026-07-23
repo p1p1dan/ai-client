@@ -343,6 +343,25 @@ export const IPC_CHANNELS = {
   // vflow workflow tool
   VFLOW_PROJECT_INITIALIZED: 'vflow:project-initialized',
 
+  // OpenChamber Chat / Agent Host Runtime
+  CHAT_ENSURE_HOST: 'chat:ensureHost',
+  CHAT_GET_HOST_STATUS: 'chat:getHostStatus',
+  CHAT_CREATE_SESSION: 'chat:createSession',
+  CHAT_RESUME_SESSION: 'chat:resumeSession',
+  CHAT_SEND: 'chat:send',
+  CHAT_STOP: 'chat:stop',
+  CHAT_CLOSE_SESSION: 'chat:closeSession',
+  CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
+  CHAT_RESPOND_QUESTION: 'chat:respondQuestion',
+  /** Main → Renderer: Agent Host RuntimeEvent push */
+  CHAT_RUNTIME_EVENT: 'chat:runtimeEvent',
+
+  // Agent Host lifecycle (diagnostics / settings)
+  AGENT_HOST_RESOLVE_NODE: 'agentHost:resolveNode',
+  AGENT_HOST_GET_STATUS: 'agentHost:getStatus',
+  AGENT_HOST_START: 'agentHost:start',
+  AGENT_HOST_STOP: 'agentHost:stop',
+
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',
   LOG_OPEN_FOLDER: 'log:open-folder',

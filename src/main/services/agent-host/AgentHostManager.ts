@@ -3,7 +3,15 @@ import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
 import {
   AGENT_HOST_PROTOCOL_VERSION,
   DEFAULT_AGENT_HOST_DRIVER,
+  type AgentHostCommand,
   type AgentHostDriver,
+  type PermissionRespondCommand,
+  type QuestionRespondCommand,
+  type SessionCloseCommand,
+  type SessionCreateCommand,
+  type SessionResumeCommand,
+  type SessionSendCommand,
+  type SessionStopCommand,
 } from '@shared/types/agentHost';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { app } from 'electron';
@@ -11,6 +19,13 @@ import { AgentHostProcess } from './AgentHostProcess';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
 
 export type AgentHostState = 'stopped' | 'starting' | 'ready' | 'error';
+
+let requestSeq = 0;
+
+function nextRequestId(prefix: string): string {
+  requestSeq += 1;
+  return `${prefix}-${Date.now()}-${requestSeq}`;
+}
 
 /**
  * Owns the single Agent Host child process lifecycle for the Electron Main process.
@@ -52,6 +67,111 @@ export class AgentHostManager {
     } finally {
       this.readyPromise = null;
     }
+  }
+
+  /** Send a protocol command; Host must already be ready. */
+  send(command: AgentHostCommand): void {
+    if (!this.process?.isRunning) {
+      throw new Error('Agent Host is not running');
+    }
+    this.process.send(command);
+  }
+
+  /** Ensure Host is up, then send. */
+  async sendReady(command: AgentHostCommand): Promise<void> {
+    await this.ensureStarted();
+    this.send(command);
+  }
+
+  async createSession(
+    payload: SessionCreateCommand['payload'],
+    requestId = nextRequestId('create')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'session.create',
+      payload,
+    });
+    return requestId;
+  }
+
+  async resumeSession(
+    payload: SessionResumeCommand['payload'],
+    requestId = nextRequestId('resume')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'session.resume',
+      payload,
+    });
+    return requestId;
+  }
+
+  async sendMessage(
+    payload: SessionSendCommand['payload'],
+    requestId = nextRequestId('send')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'session.send',
+      payload,
+    });
+    return requestId;
+  }
+
+  async stopSession(
+    payload: SessionStopCommand['payload'],
+    requestId = nextRequestId('stop')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'session.stop',
+      payload,
+    });
+    return requestId;
+  }
+
+  async closeSession(
+    payload: SessionCloseCommand['payload'],
+    requestId = nextRequestId('close')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'session.close',
+      payload,
+    });
+    return requestId;
+  }
+
+  async respondPermission(
+    payload: PermissionRespondCommand['payload'],
+    requestId = nextRequestId('perm')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'permission.respond',
+      payload,
+    });
+    return requestId;
+  }
+
+  async respondQuestion(
+    payload: QuestionRespondCommand['payload'],
+    requestId = nextRequestId('question')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'question.respond',
+      payload,
+    });
+    return requestId;
   }
 
   async shutdown(): Promise<void> {
@@ -115,8 +235,7 @@ export class AgentHostManager {
       payload: { driver: this.driver },
     });
 
-    // Wait briefly for host.ready; Phase 2 will harden with proper handshake timeout.
-    await waitForReady(proc, 5000);
+    await waitForReady(proc, 15000);
     this.state = 'ready';
   }
 }
@@ -134,7 +253,6 @@ function waitForReady(proc: AgentHostProcess, timeoutMs: number): Promise<void> 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
-      // Soft-ready for Phase 0: process is alive even if handshake is stubby.
       if (proc.isRunning) resolve();
       else reject(new Error('Agent Host failed to become ready'));
     }, timeoutMs);
@@ -145,8 +263,13 @@ function waitForReady(proc: AgentHostProcess, timeoutMs: number): Promise<void> 
         resolve();
       }
       if (event.type === 'host.error') {
-        cleanup();
-        reject(new Error(String((event as { payload?: { message?: string } }).payload?.message)));
+        const fatal = (event as { payload?: { fatal?: boolean } }).payload?.fatal;
+        if (fatal) {
+          cleanup();
+          reject(
+            new Error(String((event as { payload?: { message?: string } }).payload?.message))
+          );
+        }
       }
     };
     const onExit = () => {

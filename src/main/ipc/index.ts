@@ -6,6 +6,7 @@ import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentHandlers } from './agent';
 import { registerAgentHostHandlers, cleanupAgentHost, cleanupAgentHostSync } from './agentHost';
 import { registerAppHandlers } from './app';
+import { registerChatHandlers } from './chat';
 import {
   registerClaudeCompletionsHandlers,
   stopClaudeCompletionsWatchers,
@@ -60,6 +61,7 @@ export function registerIpcHandlers(): void {
   registerSessionStorageHandlers();
   registerAgentHandlers();
   registerAgentHostHandlers();
+  registerChatHandlers();
   registerDialogHandlers();
   registerAppHandlers();
   registerCliHandlers();
