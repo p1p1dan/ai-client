@@ -1,6 +1,7 @@
 # CONTEXT — AiClient OpenChamber 风格重构
 
-> 术语表（glossary）。只定义领域术语，不放实现细节、不放决策。决策见 `docs/adr/`。
+> 术语表（glossary）。只定义领域术语，不放实现细节、不放决策。决策见 `docs/adr/` 与 ARD。
+> 实施进度台账：`docs/plans/openchamber-chat-refactor-ledger.md`（按关键节点更新，勿与术语表混写）。
 
 ## 运行时
 

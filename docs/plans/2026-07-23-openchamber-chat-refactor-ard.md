@@ -4,6 +4,7 @@
 > 文档状态：ARD，已与用户达成共识，待按 Phase 0 验证后进入实施
 > 关系：取代 `docs/plans/2026-07-23-openchamber-ui-chat-refactor-feasibility.md` 中与本文冲突的条款；取代 `PROGRESS.md`「OpenChamber UI/功能对齐」主线中「拷贝 OpenChamber UI+sync/store + 升级 Electron + 放弃 Worktree + 丢掉 Ghostty」的方向
 > 术语表：见仓库根 `CONTEXT.md`
+> 实施台账：见 `docs/plans/openchamber-chat-refactor-ledger.md`（每完成关键节点更新）
 > 目标项目：AiClient（`D:\Code\projects\ai-client`）
 
 ## 1. 一句话定义
