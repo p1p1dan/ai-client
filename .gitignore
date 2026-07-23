@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 out/
+out-agent-host/
 dist/
 
 # IDE
@@ -51,3 +52,6 @@ resources/vflow-pkg/
 
 # Build / debug artifacts not meant for the repo
 bugOutput/
+
+# Smoke test byproducts (created by agent-host permission smoke)
+.aiclient-perm-smoke.txt

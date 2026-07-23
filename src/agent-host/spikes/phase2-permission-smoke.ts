@@ -6,15 +6,16 @@
  */
 
 import { spawn } from 'node:child_process';
-import { createInterface } from 'node:readline';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { AGENT_HOST_PROTOCOL_VERSION } from '../../shared/types/agentHost.ts';
+import { testCredentialEnv } from './testCredentials.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const hostRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(hostRoot, '..', '..');
-const hostEntry = path.join(hostRoot, 'index.ts');
+const hostEntry = process.env.AICLIENT_SMOKE_HOST_ENTRY ?? path.join(hostRoot, 'index.ts');
 
 const NODE24 = process.env.AICLIENT_NODE24 ?? process.execPath;
 const WORKDIR = process.env.AICLIENT_SMOKE_WORKDIR ?? repoRoot;
@@ -59,6 +60,7 @@ async function main(): Promise<void> {
     cwd: hostRoot,
     env: {
       ...process.env,
+      ...testCredentialEnv(WORKDIR),
       AICLIENT_AGENT_HOST_DRIVER: 'agent-sdk',
     },
     stdio: ['pipe', 'pipe', 'pipe'],

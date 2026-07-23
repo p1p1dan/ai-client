@@ -8,26 +8,25 @@
  *   AICLIENT_SMOKE_PROMPT="Reply with exactly: PONG. Do not use tools."
  *   AICLIENT_SMOKE_WORKDIR=<path>
  *   AICLIENT_SMOKE_STOP_AFTER_MS=8000   # abort mid-stream to exercise Stop
+ *   AICLIENT_SMOKE_HOST_ENTRY=<path>    # e.g. out-agent-host/index.js (packaged artifact)
+ *   AICLIENT_SMOKE_USE_LOCAL_SETTINGS=1 # keep ~/.claude/settings.json creds
  */
 
 import { spawn } from 'node:child_process';
-import { createInterface } from 'node:readline';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { AGENT_HOST_PROTOCOL_VERSION } from '../../shared/types/agentHost.ts';
+import { testCredentialEnv } from './testCredentials.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const hostRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(hostRoot, '..', '..');
-const hostEntry = path.join(hostRoot, 'index.ts');
+const hostEntry = process.env.AICLIENT_SMOKE_HOST_ENTRY ?? path.join(hostRoot, 'index.ts');
 
-const NODE24 =
-  process.env.AICLIENT_NODE24 ??
-  process.execPath;
+const NODE24 = process.env.AICLIENT_NODE24 ?? process.execPath;
 const WORKDIR = process.env.AICLIENT_SMOKE_WORKDIR ?? repoRoot;
-const PROMPT =
-  process.env.AICLIENT_SMOKE_PROMPT ??
-  'Reply with exactly: PONG. Do not use tools.';
+const PROMPT = process.env.AICLIENT_SMOKE_PROMPT ?? 'Reply with exactly: PONG. Do not use tools.';
 const STOP_AFTER_MS = Number(process.env.AICLIENT_SMOKE_STOP_AFTER_MS ?? 0);
 const TIMEOUT_MS = Number(process.env.AICLIENT_SMOKE_TIMEOUT_MS ?? 90000);
 
@@ -41,13 +40,11 @@ interface SmokeReport {
   sawSessionTerminal: boolean;
   sawStopped: boolean;
   assistantPreview: string;
+  hostReady?: unknown;
   error?: string;
 }
 
-function send(
-  child: ReturnType<typeof spawn>,
-  cmd: Record<string, unknown>
-): void {
+function send(child: ReturnType<typeof spawn>, cmd: Record<string, unknown>): void {
   child.stdin?.write(`${JSON.stringify(cmd)}\n`);
 }
 
@@ -64,19 +61,16 @@ async function main(): Promise<void> {
     assistantPreview: '',
   };
 
-  const child = spawn(
-    NODE24,
-    ['--experimental-strip-types', hostEntry],
-    {
-      cwd: hostRoot,
-      env: {
-        ...process.env,
-        AICLIENT_AGENT_HOST_DRIVER: 'agent-sdk',
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    }
-  );
+  const child = spawn(NODE24, ['--experimental-strip-types', hostEntry], {
+    cwd: hostRoot,
+    env: {
+      ...process.env,
+      ...testCredentialEnv(WORKDIR),
+      AICLIENT_AGENT_HOST_DRIVER: 'agent-sdk',
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
 
   const stderrChunks: string[] = [];
   child.stderr?.on('data', (buf: Buffer) => {
@@ -98,7 +92,9 @@ async function main(): Promise<void> {
       report.sawMessageDelta &&
       (report.sawAssistantText || report.sawStopped) &&
       (report.sawSessionTerminal || report.sawStopped);
-    console.log(JSON.stringify({ ...report, stderrTail: stderrChunks.join('').slice(-800) }, null, 2));
+    console.log(
+      JSON.stringify({ ...report, stderrTail: stderrChunks.join('').slice(-800) }, null, 2)
+    );
     try {
       send(child, {
         protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
@@ -129,7 +125,10 @@ async function main(): Promise<void> {
     const type = String(event.type ?? '');
     if (report.events.length < 40) report.events.push(type);
 
-    if (type === 'host.ready') report.sawHostReady = true;
+    if (type === 'host.ready') {
+      report.sawHostReady = true;
+      report.hostReady = (event as { payload?: unknown }).payload ?? null;
+    }
     if (type === 'session.created') report.sawSessionCreated = true;
     if (type === 'message.delta') {
       report.sawMessageDelta = true;

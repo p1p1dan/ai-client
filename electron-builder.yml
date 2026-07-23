@@ -158,6 +158,11 @@ extraResources:
   # the public registry is unreachable (AgentInstaller fallback path).
   - from: resources/vflow-pkg
     to: vflow-pkg
+  # Agent Host (external Node 24 process), built by scripts/build-agent-host.mjs.
+  # Must stay plain files under resources/agent-host (never asar): on TSD
+  # machines only the whitelisted external node.exe can read these files.
+  - from: out-agent-host
+    to: agent-host
 compression: maximum
 
 mac:
