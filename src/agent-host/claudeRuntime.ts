@@ -5,6 +5,7 @@
 
 import type { AgentHostDriver } from '../shared/types/agentHost.ts';
 import { EventNormalizer, type EmitFn, type LogFn } from './eventNormalizer.ts';
+import { PermissionBridge } from './permissionBridge.ts';
 import type { SessionRegistry } from './sessionRegistry.ts';
 
 export interface ClaudeRuntimeOptions {
@@ -26,10 +27,12 @@ export class ClaudeRuntime {
   private queryFn: SdkQueryFn | null = null;
   private readonly log: LogFn;
   private readonly opts: ClaudeRuntimeOptions;
+  private readonly permissions: PermissionBridge;
 
   constructor(opts: ClaudeRuntimeOptions) {
     this.opts = opts;
     this.log = opts.log ?? ((...args) => console.error('[claude-runtime]', ...args));
+    this.permissions = new PermissionBridge(opts.emit, this.log);
   }
 
   get driver(): AgentHostDriver {
@@ -175,6 +178,8 @@ export class ClaudeRuntime {
       CLAUDE_AGENT_SDK_CLIENT_APP: 'aiclient-agent-host/0.0.1',
     };
 
+    const canUseTool = this.permissions.createCanUseTool(session.sessionId);
+
     let stream: (AsyncIterable<unknown> & { close?: () => void }) | null = null;
     try {
       stream = queryFn({
@@ -183,8 +188,9 @@ export class ClaudeRuntime {
           cwd: session.workspacePath,
           pathToClaudeCodeExecutable: this.opts.cliPath,
           executable: executablePath,
-          permissionMode: 'bypassPermissions',
-          allowDangerouslySkipPermissions: true,
+          // Interactive permission bridge (timeline cards) — not bypass.
+          permissionMode: 'default',
+          canUseTool,
           env: mergedEnv,
           abortController: abort,
           ...(session.model ? { model: session.model } : {}),
@@ -201,15 +207,17 @@ export class ClaudeRuntime {
       }
 
       if (abort.signal.aborted) {
+        this.permissions.rejectSession(session.sessionId, 'Session stopped');
         normalizer.emitStopped(input.requestId);
         session.status = 'idle';
         this.opts.registry.setStatus(session.sessionId, 'idle');
-      } else if (session.status === 'running') {
+      } else if (session.status === 'running' || session.status === 'waiting_permission') {
         // Normalizer may already have emitted completed/idle via result event.
         session.status = 'idle';
         this.opts.registry.setStatus(session.sessionId, 'idle');
       }
     } catch (err) {
+      this.permissions.rejectSession(session.sessionId, 'Query failed');
       if (abort.signal.aborted) {
         normalizer.emitStopped(input.requestId);
         session.status = 'idle';
@@ -243,6 +251,31 @@ export class ClaudeRuntime {
     }
   }
 
+  respondPermission(input: {
+    sessionId: string;
+    permissionId: string;
+    allow: boolean;
+    requestId?: string;
+  }): void {
+    const ok = this.permissions.respond({
+      sessionId: input.sessionId,
+      permissionId: input.permissionId,
+      allow: input.allow,
+    });
+    if (!ok) {
+      this.opts.emit({
+        type: 'host.error',
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        payload: {
+          code: 'permission_not_pending',
+          message: `No pending permission: ${input.permissionId}`,
+          fatal: false,
+        },
+      });
+    }
+  }
+
   stop(input: { sessionId: string; requestId?: string }): void {
     const session = this.opts.registry.get(input.sessionId);
     if (!session) {
@@ -257,6 +290,7 @@ export class ClaudeRuntime {
       });
       return;
     }
+    this.permissions.rejectSession(session.sessionId, 'Session stopped');
     if (!session.running || !session.abort) {
       this.opts.emit({
         type: 'session.status',
@@ -278,6 +312,7 @@ export class ClaudeRuntime {
   }
 
   close(input: { sessionId: string; requestId?: string }): void {
+    this.permissions.rejectSession(input.sessionId, 'Session closed');
     const session = this.opts.registry.get(input.sessionId);
     if (session?.running && session.abort) {
       session.abort.abort();
@@ -289,5 +324,10 @@ export class ClaudeRuntime {
       requestId: input.requestId,
       payload: { status: 'disconnected' },
     });
+  }
+
+  /** Host shutdown — fail-closed on any hanging permission. */
+  dispose(): void {
+    this.permissions.rejectAll('Host shutting down');
   }
 }

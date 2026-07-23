@@ -10,7 +10,9 @@
     "spike:sdk": "node --experimental-strip-types spikes/agent-sdk-spike.ts",
     "spike:stream-json": "node --experimental-strip-types spikes/stream-json-spike.ts",
     "spike:lifecycle": "node --experimental-strip-types spikes/host-lifecycle-spike.ts",
-    "smoke:phase2": "node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts"
+    "smoke:phase2": "node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts",
+    "smoke:permission": "node --experimental-strip-types spikes/phase2-permission-smoke.ts",
+    "smoke:permission-unit": "node --experimental-strip-types spikes/phase2-permission-bridge-unit.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.218",

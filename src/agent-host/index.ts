@@ -149,6 +149,7 @@ async function handleCommand(raw: unknown): Promise<void> {
     }
     case 'host.shutdown': {
       shuttingDown = true;
+      runtime?.dispose();
       registry.abortAll();
       emit({
         type: 'host.ready',
@@ -282,15 +283,38 @@ async function handleCommand(raw: unknown): Promise<void> {
       rt.close({ sessionId, requestId: cmd.requestId });
       return;
     }
-    case 'permission.respond':
+    case 'permission.respond': {
+      const rt = await ensureRuntime();
+      const sessionId = String(cmd.payload?.sessionId ?? '');
+      const permissionId = String(cmd.payload?.permissionId ?? '');
+      const allow = Boolean(cmd.payload?.allow);
+      if (!sessionId || !permissionId) {
+        emit({
+          type: 'host.error',
+          requestId: cmd.requestId,
+          payload: {
+            code: 'invalid_payload',
+            message: 'permission.respond requires sessionId and permissionId',
+            fatal: false,
+          },
+        });
+        return;
+      }
+      rt.respondPermission({
+        sessionId,
+        permissionId,
+        allow,
+        requestId: cmd.requestId,
+      });
+      return;
+    }
     case 'question.respond': {
-      // Bridge lands in the next Phase 2 node; acknowledge without crashing.
       emit({
         type: 'host.error',
         requestId: cmd.requestId,
         payload: {
           code: 'not_implemented',
-          message: `${String(cmd.type)} bridge not wired yet (Phase 2 permission node)`,
+          message: 'question.respond bridge not wired yet',
           fatal: false,
         },
       });

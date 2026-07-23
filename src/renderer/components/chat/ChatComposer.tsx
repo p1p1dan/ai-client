@@ -59,7 +59,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
               ? `Error: ${lastError}`
               : busy
                 ? 'Agent Host running — use Stop to abort'
-                : 'Agent SDK Host · create → send → stream → stop'}
+                : 'Agent SDK Host · Send / Stop · Permission 卡可 Allow/Deny'}
           </p>
           <div className="flex shrink-0 gap-1">
             {busy ? (

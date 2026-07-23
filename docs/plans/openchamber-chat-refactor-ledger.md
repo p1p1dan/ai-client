@@ -16,7 +16,7 @@
 |---|---|---|---|
 | 0 | 技术 Go/No-Go | 🟡 Conditional Go | 开发机项基本完成；TSD / 打包 / Permission 未齐 |
 | 1 | UI Shell（Mock） | ✅ 完成 | 四区壳可交互；Beta 开关接入 |
-| 2 | Runtime Vertical Slice | 🟡 进行中 | Host + Main/IPC + Chat Store 已接；Permission/Tool UI 待补 |
+| 2 | Runtime Vertical Slice | 🟡 进行中 | Host→UI 主路径已通；Permission 桥已接；Question/Resume 待补 |
 | 3 | Chat MVP | ⬜ 未开始 | |
 | 4 | 现有能力重新接线 | ⬜ 未开始 | |
 | 5 | 收口与正式版 | ⬜ 未开始 | |
@@ -115,8 +115,8 @@
 | Main：命令/事件 + IPC 推送 | ✅ | `AgentHostManager` session API；`ipc/chat.ts`；`CHAT_RUNTIME_EVENT` |
 | Preload `electronAPI.chat` | ✅ | create/send/stop/close + `onRuntimeEvent` |
 | Chat Store 接真事件 / Composer Stop | ✅ | 替换 Mock；`session-live` 发真 Host；Composer 有 Stop |
-| Permission 桥 happy path | ⬜ | **下一步** |
-| Tool 事件进时间线（UI） | 🟡 | Store 已处理 tool.*；需真实 permissionMode 才会出现 |
+| Permission 桥 happy path | ✅ | permissionBridge.ts + canUseTool；unit smoke 通过 |
+| Tool 事件进时间线（UI） | 🟡 | Store/UI 已支持；依赖模型实际调工具 |
 | stream-json Adapter | ⬜ | fallback，可后置 |
 | Resume 历史重放 | ⬜ | 顺延 Phase 3 |
 
@@ -142,6 +142,19 @@ node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts
 - 选中 **Live Agent Host**，发送短 prompt（如 `Reply with exactly: PONG`）
 - 时间线出现 user + assistant 流式文本；运行中可 **Stop**
 
+### 节点 4 验收要点
+
+`ash
+cd src/agent-host
+node --experimental-strip-types spikes/phase2-permission-bridge-unit.ts
+# ok: true — request→respond allow；abort→deny
+
+# 集成（需有效 ~/.claude/settings.json env）：
+# node --experimental-strip-types spikes/phase2-permission-smoke.ts
+`
+
+UI：Shell 内出现 Permission 卡 → Allow/Deny → chat:respondPermission → Host 继续/拒绝工具。
+
 ---
 
 ## 下一步（Phase 2 续）
@@ -151,9 +164,9 @@ node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts
 1. ~~Host：加载 settings.env + Cometix；SDK Runtime Adapter~~ ✅ `c0aaf14`  
 2. ~~Event Normalizer → 稳定 Runtime Event~~ ✅  
 3. ~~Main：`AgentHostManager` + Chat IPC + Runtime Event 推送~~ ✅ `ea0286b`  
-4. ~~Chat Store：替换 Mock，接真事件；Composer 发送 / Stop~~ ✅（本节点）  
-5. **Permission 桥（时间线卡片）至少一条 happy path** ← 当前  
-6. Tool 卡进时间线（非 bypass 模式）；Resume 会话身份（历史重放可顺延 Phase 3）
+4. ~~Chat Store：替换 Mock，接真事件；Composer 发送 / Stop~~ ✅ 76632cf  
+5. ~~Permission 桥（时间线卡片）happy path~~ ✅（本节点）  
+6. **Question 桥 / Resume 会话身份**（历史重放可顺延 Phase 3）；Tool 真实调用验收 ← 当前
 
 完成上述任一可演示切片后，在本台账「检查点」追加一行。
 
