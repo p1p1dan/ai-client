@@ -1,4 +1,5 @@
 export * from './agent';
+export * from './agentHost';
 export * from './ai';
 export * from './app';
 export * from './claude';
@@ -15,6 +16,7 @@ export * from './plugins';
 export * from './prompts';
 export * from './remote';
 export * from './repositoryContext';
+export * from './runtimeEvents';
 export * from './search';
 export * from './session';
 export * from './shell';

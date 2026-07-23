@@ -4,6 +4,7 @@ import { autoUpdaterService } from '../services/updater/AutoUpdater';
 import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentHandlers } from './agent';
+import { registerAgentHostHandlers, cleanupAgentHost, cleanupAgentHostSync } from './agentHost';
 import { registerAppHandlers } from './app';
 import {
   registerClaudeCompletionsHandlers,
@@ -58,6 +59,7 @@ export function registerIpcHandlers(): void {
   registerSessionHandlers();
   registerSessionStorageHandlers();
   registerAgentHandlers();
+  registerAgentHostHandlers();
   registerDialogHandlers();
   registerAppHandlers();
   registerCliHandlers();
@@ -139,6 +141,7 @@ export async function cleanupAllResources(): Promise<void> {
   disposeClaudeIdeBridge();
   await remoteConnectionManager.cleanup();
   await cleanupTodo();
+  await cleanupAgentHost();
 }
 
 /**
@@ -183,6 +186,9 @@ export function cleanupAllResourcesSync(): void {
 
   // Close Todo database (sync — just nulls the reference, no async callback)
   cleanupTodoSync();
+
+  // Shut down Agent Host (best-effort sync kickoff)
+  cleanupAgentHostSync();
 
   // Clean up temp files (sync)
   cleanupTempFilesSync();

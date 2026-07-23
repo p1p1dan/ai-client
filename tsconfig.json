@@ -18,5 +18,6 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/**/*", "electron.vite.config.ts"]
+  "include": ["src/**/*", "electron.vite.config.ts"],
+  "exclude": ["src/agent-host/**", "node_modules", "out", "dist"]
 }

@@ -282,7 +282,6 @@ describe('AgentInstaller', () => {
     // missing argument.
     const electron = await import('electron');
     const originalGetAppPath = electron.app.getAppPath;
-    // @ts-expect-error overriding mocked getter for this case
     electron.app.getAppPath = vi.fn(() => 'C:\\Program Files\\AiClient');
 
     existsSyncMock.mockImplementation((p: string) => p.includes('vflow-pkg'));
@@ -327,7 +326,6 @@ describe('AgentInstaller', () => {
       // including the embedded space. If quoting is dropped, the path is split.
       expect(tgzCommand).toContain('"C:\\Program Files\\AiClient\\resources\\vflow-pkg\\p1p1dan-vflow-0.5.1.tgz"');
     } finally {
-      // @ts-expect-error restore mock for later tests
       electron.app.getAppPath = originalGetAppPath;
     }
   });
