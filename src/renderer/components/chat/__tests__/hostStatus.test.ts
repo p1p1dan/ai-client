@@ -91,4 +91,36 @@ describe('reduceHostStatus (T-09)', () => {
     expect(reduceHostStatus(ready, event('session.created'))).toBe(ready);
     expect(reduceHostStatus(ready, event('message.delta', { messageId: 'x' }))).toBe(ready);
   });
+
+  describe('capabilities fold (T-04)', () => {
+    it('records capabilities.thinking=true when host.ready advertises it', () => {
+      const next = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { thinking: true } })
+      );
+      expect(next.capabilities).toEqual({ thinking: true });
+    });
+
+    it('records capabilities.thinking=false when Host explicitly disables thinking', () => {
+      const next = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { thinking: false } })
+      );
+      expect(next.capabilities).toEqual({ thinking: false });
+    });
+
+    it('leaves thinking undefined when capabilities exists but flag is absent (default on)', () => {
+      const next = reduceHostStatus(initialHostStatus, event('host.ready', { capabilities: {} }));
+      expect(next.capabilities).toEqual({ thinking: undefined });
+    });
+
+    it('preserves prior capabilities when host.ready carries none (Host restart without flag)', () => {
+      const prior = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { thinking: true } })
+      );
+      const next = reduceHostStatus(prior, event('host.ready', {}));
+      expect(next.capabilities).toEqual({ thinking: true });
+    });
+  });
 });

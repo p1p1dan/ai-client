@@ -4,6 +4,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { ChatComposer } from './ChatComposer';
 import { HostStatusBanner } from './HostStatusBanner';
 import { MessageTimeline } from './MessageTimeline';
+import { isThinkingCapable } from './thinkingCard';
 import { useHostStatus } from './useHostStatus';
 
 interface ChatWorkspaceProps {
@@ -18,6 +19,7 @@ export function ChatWorkspace({ className }: ChatWorkspaceProps) {
   const { status: hostStatus, retry } = useHostStatus();
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
+  const thinkingEnabled = isThinkingCapable(hostStatus.capabilities);
 
   useEffect(() => {
     // chatSessions.initRuntime() only subscribes once (runtimeReady latch).
@@ -43,7 +45,11 @@ export function ChatWorkspace({ className }: ChatWorkspaceProps) {
   return (
     <section className={cn('flex min-h-0 flex-col', className)}>
       <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
-      <MessageTimeline sessionId={activeSessionId} status={activeSession?.status ?? 'idle'} />
+      <MessageTimeline
+        sessionId={activeSessionId}
+        status={activeSession?.status ?? 'idle'}
+        thinkingEnabled={thinkingEnabled}
+      />
       <ChatComposer disabled={!activeSessionId} />
     </section>
   );

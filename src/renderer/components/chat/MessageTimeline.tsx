@@ -1,20 +1,25 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
-import { useMemo } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
+import { deriveThinkingCard, isTurnActive } from './thinkingCard';
 import { useMessageMetadata } from './useMessageMetadata';
 
 interface MessageTimelineProps {
   sessionId: string | null;
   status: SessionRuntimeStatus;
+  /** Host capability gate (T-04)：thinking-capable 时为 true，UI 渲染折叠卡。 */
+  thinkingEnabled: boolean;
 }
 
-export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
+export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageTimelineProps) {
   const messages = useChatSessionsStore((state) => state.messages);
   const respondPermission = useChatSessionsStore((state) => state.respondPermission);
   const pendingPermission = useChatSessionsStore((state) => state.pendingPermission);
@@ -26,6 +31,8 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
     () => (sessionId ? messages.filter((message) => message.sessionId === sessionId) : []),
     [messages, sessionId]
   );
+
+  const isActiveTurn = isTurnActive(status);
 
   if (!sessionId) {
     return (
@@ -56,6 +63,8 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
                 key={message.id}
                 message={message}
                 metadata={getMeta(message.id)}
+                isActiveTurn={isActiveTurn}
+                thinkingEnabled={thinkingEnabled}
                 canRespondPermission={Boolean(
                   pendingPermission &&
                     pendingPermission.sessionId === sessionId &&
@@ -96,6 +105,8 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
 interface MessageBubbleProps {
   message: ChatMessage;
   metadata?: MessageMetadata;
+  isActiveTurn: boolean;
+  thinkingEnabled: boolean;
   canRespondPermission: boolean;
   onRespondPermission: (allow: boolean) => void;
 }
@@ -103,6 +114,8 @@ interface MessageBubbleProps {
 function MessageBubble({
   message,
   metadata,
+  isActiveTurn,
+  thinkingEnabled,
   canRespondPermission,
   onRespondPermission,
 }: MessageBubbleProps) {
@@ -121,10 +134,14 @@ function MessageBubble({
           {message.role}
         </p>
 
-        {message.blocks.map((block) => (
+        {message.blocks.map((block, index) => (
           <BlockRenderer
             key={block.id}
             block={block}
+            blockIndex={index}
+            message={message}
+            isActiveTurn={isActiveTurn}
+            thinkingEnabled={thinkingEnabled}
             canRespondPermission={canRespondPermission}
             onRespondPermission={onRespondPermission}
           />
@@ -138,14 +155,34 @@ function MessageBubble({
 
 interface BlockRendererProps {
   block: ChatBlock;
+  blockIndex: number;
+  message: ChatMessage;
+  isActiveTurn: boolean;
+  thinkingEnabled: boolean;
   canRespondPermission: boolean;
   onRespondPermission: (allow: boolean) => void;
 }
 
-function BlockRenderer({ block, canRespondPermission, onRespondPermission }: BlockRendererProps) {
+function BlockRenderer({
+  block,
+  blockIndex,
+  message,
+  isActiveTurn,
+  thinkingEnabled,
+  canRespondPermission,
+  onRespondPermission,
+}: BlockRendererProps) {
   switch (block.type) {
     case 'text':
       return <p className="whitespace-pre-wrap text-sm text-primary">{block.text}</p>;
+
+    case 'thinking': {
+      // T-04 能力闸：capability=false 不渲染、不留入口。
+      if (!thinkingEnabled) return null;
+      const vm = deriveThinkingCard(message, blockIndex, isActiveTurn);
+      if (!vm) return null;
+      return <ThinkingCard vm={vm} />;
+    }
 
     case 'tool_call':
       return (
@@ -209,4 +246,58 @@ function BlockRenderer({ block, canRespondPermission, onRespondPermission }: Blo
     default:
       return null;
   }
+}
+
+interface ThinkingCardProps {
+  vm: { state: 'streaming' | 'done'; text: string };
+}
+
+/**
+ * T-04 Thinking 折叠卡：
+ * - streaming：默认折叠 + 轻量指示（pulse 点 + "Thinking…"），不渲染空文本。
+ * - done：默认折叠，可单击展开正文（whitespace-pre-wrap）；空文本显示占位。
+ * 仅在 `thinkingEnabled === true` 时挂载（BlockRenderer 已先过滤）。
+ */
+function ThinkingCard({ vm }: ThinkingCardProps) {
+  const [open, setOpen] = useState(false);
+  const streaming = vm.state === 'streaming';
+  const label = streaming ? 'Thinking' : 'Thought process';
+
+  return (
+    <Collapsible
+      className="rounded-md border border-border bg-muted/20 text-xs"
+      onOpenChange={setOpen}
+      open={open}
+    >
+      <CollapsibleTrigger className="flex h-7 w-full min-w-0 items-center gap-1.5 px-2 text-left text-muted-foreground hover:bg-accent">
+        {streaming ? (
+          <span
+            aria-hidden
+            className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-500"
+          />
+        ) : (
+          <ChevronRight
+            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+          />
+        )}
+        <span className="min-w-0 flex-1 truncate font-medium text-primary">{label}</span>
+        {streaming && vm.text && (
+          <span className="min-w-0 flex-1 truncate opacity-70">{vm.text.slice(-80)}</span>
+        )}
+      </CollapsibleTrigger>
+      {!streaming && (
+        <CollapsibleContent className="px-2 pb-2">
+          {vm.text ? (
+            <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted-foreground">
+              {vm.text}
+            </pre>
+          ) : (
+            <p className="text-[11px] italic text-muted-foreground/70">
+              （thinking 段落为空，可能 Host 未发任何 delta）
+            </p>
+          )}
+        </CollapsibleContent>
+      )}
+    </Collapsible>
+  );
 }

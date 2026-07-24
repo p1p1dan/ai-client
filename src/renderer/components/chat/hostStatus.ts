@@ -24,6 +24,8 @@ export interface HostStatus {
   nodeVersion?: string;
   nodeExecPath?: string;
   settings?: HostSettingsDiagnostics | null;
+  /** Host capability flags (T-04 thinking render gate). Unknown → undefined. */
+  capabilities?: { thinking?: boolean };
   lastFatalError?: string | null;
 }
 
@@ -55,6 +57,16 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
         settingsRaw && typeof settingsRaw === 'object'
           ? (settingsRaw as HostSettingsDiagnostics)
           : null;
+      const capRaw = payload.capabilities;
+      const thinkingRaw =
+        capRaw && typeof capRaw === 'object'
+          ? (capRaw as { thinking?: unknown }).thinking
+          : undefined;
+      // Preserve undefined when the flag is absent (T-04 default-on rendering).
+      const capabilities =
+        capRaw && typeof capRaw === 'object'
+          ? { thinking: typeof thinkingRaw === 'boolean' ? thinkingRaw : undefined }
+          : prev.capabilities;
       return {
         ...prev,
         state: payload.shuttingDown ? 'stopped' : 'ready',
@@ -66,6 +78,7 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
         nodeExecPath:
           typeof payload.nodeExecPath === 'string' ? payload.nodeExecPath : prev.nodeExecPath,
         settings,
+        capabilities,
         lastFatalError: null,
       };
     }
