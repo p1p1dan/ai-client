@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | T-01 | 真实 Project/Workspace 数据树 | ✅ | Cursor | 实现 `a01712a`；GUI pwd 验收通过 `2026-07-24` |
 | T-02 | Session 生命周期 UI | 🟡 | Fable | 接 chat:listSessions 持久化 + LeftNav close/archive/rename 已做，待 GUI 联调；C-07 ✅ 已解锁 |
-| T-03 | Resume UI + 历史时间线 | ⬜ | | 等 C-06（CP4） |
+| T-03 | Resume UI + 历史时间线 | 🟡 | Fable | resume 决策 + 自动触发已做，待 GUI 联调；C-06 ✅ 已解锁 |
 | T-04 | Thinking 折叠卡 UI | ⬜ | | 等 C-05 |
 | T-05 | Tool Card 增强 + Question 卡 | ⬜ | | Question 部分等 C-04 |
 | T-06 | 消息元数据 + 错误/重试 | 🟡 | Fable | assistant 元数据行 + 失败卡 + 重试已做；待 GUI 复验 |
@@ -30,6 +30,7 @@
 | 2026-07-24 | T-06 fix 池：sending 期 Stop + 流异常也显 Retry + retry 重影 | 🟡 已实现待重验 | 提交 `0f3a8da`（canStop=busy||sending + retryablePrompt 取代仅 status=failed 判定）、`4a4f8db`（Stop 红色 destructive）、`2597c76`（runSend 开头清旧 retryablePrompt + 成功分支也清，解 late assistant 气泡导致的 ghost Retry）。三绿。待用户复验：① sending 期 Stop 红色可见；② 禁 key → ~30s 红字 + Retry 显 → 恢复 key → Retry 应正常 send 而不重影。 |
 | 2026-07-24 | T-09 诊断面板（用户暂跳过验收） | 🟡 待补 | 用户场景 A 顺带验证 banner 显/收机制工作；B 因 NodeRuntimeResolver 容错 fallback，`$env:AICLIENT_NODE24_PATH='C:\bad\node.exe'` 坏路径仍能找真 node → 实际未触发 Node 缺失路径。需真正触发：找所有候选都失败的办法暂缺，待日后探（或主线加显式 mock-resolver 容器）。 |
 | 2026-07-24 | T-02 会话生命周期 UI（实现） | 🟡 待 GUI 联调 | Fable 认领（C-07 ✅ `f6807c9` 解锁）。红线 `chatSessions.ts` 不动：`chat/sessionIndex/sessionIndexMerge.ts` 纯函数 `mergeSessionIndex`（按 sessionId 去重、UI 现场 status/runtimeIdentity 不被持久覆盖、title 由持久层权威、archived 让 live 也消失、未知 workspacePath 的归入 orphaned 而非盲目 seed）+ `recentSessionIdsFromIndex`；`__tests__/sessionIndexMerge.test.ts` 8 单测覆盖保留现场态/title 覆盖/runtimeIdentity fallback/archived 滤且并 live 镜像/seed status/orphaned/保留 fresh-new/recent 排序。`chat/sessionIndex/useSessionIndex.ts` hook：mount 调 `chat.listSessions` 灌入 store（外部 setState 桥）；`useSessionIndexMutations({rename,archive,close})` 调 IPC 后自动 refresh。`workspace-shell/LeftNav.tsx` 整合：SessionTreeItem 加 hover X 关闭 + 双击 rename + Archive icon + 右键 archive；WorkspaceBranch 接 onCloseSession/onRenameSession/onArchiveSession props 透传。三绿：typecheck、biome（改 4 文件）、vitest 192 绿（+8）。GUI 待联调：① 重启应用左栏见持久化会话（recent 按 updatedAt desc）；② 双击改名 → 持久；③ 右键 archive → 列表滤；④ 关闭 X → closeSession + refresh。 |
+| 2026-07-24 | T-03 Resume UI + 历史时间线（实现） | 🟡 待 GUI 联调 | Fable 认领（C-06 ✅ `db41f63` 解锁）。红线 `chatSessions.ts` 已 C-06 内置 `session.history` 事件处理（h: 前缀幂等替换灌入时间线 + runtime 不动 + per-session historyErrors），T-03 团队侧只补"用户动作入口 + 决策"。`chat/sessionIndex/resumeIntent.ts` 纯函数 `shouldResumeSession`（runtimeIdentity 缺则不 resume、busy 默认拒、persisted runtimeIdentity 兜底）+ `resumeDisplayTitle`（firstMessage truncate 60）；`__tests__/resumeIntent.test.ts` 11 单测覆盖无 session/workspace/runtimeIdentity/persisted fallback/idle+model/skipBusy 各状态/manual override/显式 title 占位词跳过/firstMessage 截断与不截断。`useResumeSession` hook 调 `chat.resumeSession({sessionId, runtimeIdentity, workspacePath, model})`，成功后切 activeSessionId。`LeftNav` 加 `handleSelectSession` 包装：select 时若存在 runtimeIdentity 且 timeline 还无消息（!hasTimeline）则自动 resume 重放历史。三绿：typecheck、biome（改 4 文件）、vitest 203 绿（+11 无回归）。GUI 待联调：选一条历史 SessionId → timeline 出现 h: 前缀历史消息（user+assistant），后续 send 不丢历史。 |
 | T-18 | Composer 粘贴图片/文件 | ⬜ | | 用户反馈 F2（2026-07-24）；等 C-13 |
 
 图例：✅ 完成 · 🟡 进行中 · ⬜ 未开始 · ❌ 阻塞

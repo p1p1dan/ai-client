@@ -22,6 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import type { ChatWorkspace, WorkspaceKind } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import { createChatSessionOnWorkspace } from './useSyncChatWorkspaceTree';
 
@@ -74,6 +75,22 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
   // renameSession / archiveSession / closeSession).
   const { refresh } = useSessionIndex();
   const { rename, archive, close } = useSessionIndexMutations(refresh);
+  // T-03: replay history when the user opens a session that has a runtime
+  // identity but no timeline yet (Host emits session.history → store folds it
+  // into the timeline; messages carry the `h:` prefix).
+  const { resume } = useResumeSession();
+
+  const handleSelectSession = (sessionId: string, persistedRuntimeIdentity?: string) => {
+    selectSession(sessionId);
+    const state = useChatSessionsStore.getState();
+    const session = state.sessions.find((item) => item.id === sessionId);
+    const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
+    const runtimeIdentity = session?.runtimeIdentity ?? persistedRuntimeIdentity;
+    const hasTimeline = state.messages.some((message) => message.sessionId === sessionId);
+    if (runtimeIdentity && workspace && !hasTimeline) {
+      void resume(sessionId, { persistedRuntimeIdentity: runtimeIdentity });
+    }
+  };
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const effectiveWorkspaceId =
@@ -174,7 +191,7 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
                       key={`recent-${session.id}`}
                       session={session}
                       active={activeSessionId === session.id}
-                      onSelect={() => selectSession(session.id)}
+                      onSelect={() => handleSelectSession(session.id)}
                       onClose={() => void close(session.id)}
                       onRename={(title) => void rename(session.id, title)}
                       onArchive={() => void archive(session.id, true)}
@@ -232,7 +249,7 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
                                 }))
                               }
                               onSelectWorkspace={() => setSelectedWorkspaceId(workspace.id)}
-                              onSelectSession={selectSession}
+                              onSelectSession={(sessionId) => handleSelectSession(sessionId)}
                               onCloseSession={(sessionId) => void close(sessionId)}
                               onRenameSession={(sessionId, title) => void rename(sessionId, title)}
                               onArchiveSession={(sessionId) => void archive(sessionId, true)}
