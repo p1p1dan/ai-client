@@ -76,6 +76,7 @@
 | 2026-07-24 | **C-02：打包态自动化验证 PASS（M1 自动化半边齐）** — portable 产物 + `pnpm verify:packaged` 22 项全绿（含打包产物网关 PONG）；GUI 点验移交 T-10 | ✅ | `dbb20be` |
 | 2026-07-24 | vflow 运行时代码摘除（D16 Phase B 收口，全仓引用清零） | ✅ | `eac23f7` |
 | 2026-07-24 | 用户反馈 F1-F5 映射进计划（§7）；新增 C-13 附件协议 + T-18 Composer 粘贴 | ✅ | 执行计划 §7 |
+| 2026-07-24 | **C-07：Session Index（Main 持久化 + 3 条 chat IPC）完成，T-02 解锁** | ✅ | `f6807c9` |
 
 ---
 
@@ -182,7 +183,8 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01 ✅ C-02 ✅（CP2 待 T-10 GUI 点验合并汇报）→ C-07 Session Index → C-06 Resume 历史重放（CP4）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）；另有 vflow Phase B 待协调
+- 🤖 **Claude 主线**：C-01 ✅ C-02 ✅（CP2 待 T-10 GUI 点验合并汇报）C-07 ✅ → C-06 Resume 历史重放（先协议定稿 CP4）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）→ C-13 附件协议（F2）
+- 👥 **T-02 已解锁**：`chat:listSessions/renameSession/archiveSession` + preload 就绪；store hydrate 建议在 `initRuntime` 接 `listSessions()` 替换 demo 种子（见主线台账 C-07 行）
 - 🧪 **测试凭证统一约定**（用户拍板 2026-07-23）：测试不得用本机默认 Claude 登录，统一走网关 `https://cch-jyw.pipidan.qzz.io`；详见执行计划 §4
 - 👥 **团队轨道**：T-17 Tool 真实调用 GUI 验收（立即可做）→ T-01 真实数据树 → 无依赖池 T-06~T-09 → 等主线解锁后 T-02/T-03 → T-10/T-11（M2 加密机，CP5）
 

@@ -15,7 +15,7 @@
 | C-04 | Question 桥实现 | ⬜ | |
 | C-05 | Thinking 支持度探测 | ⬜ | → CP3 |
 | C-06 | Resume 历史重放（协议+Host+Store） | ⬜ | → CP4 协议定稿 |
-| C-07 | Session Index（Main + IPC） | ⬜ | 解锁 T-02 |
+| C-07 | Session Index（Main + IPC） | ✅ | 2026-07-24 完成，T-02 已解锁 |
 | C-08 | Store 结构优化 + 批处理 | ⬜ | C-09 先行 |
 | C-09 | 测试基建 + lint 恢复绿 | ⬜ | |
 | C-10 | Effort/Plan/Build 探测 | ⬜ | Phase 0 遗留 |
@@ -41,6 +41,7 @@
 | 2026-07-24 | **C-02 验收：完整打包链 + 打包态全量断言 PASS** | ✅ | `pnpm dist:prereq`（build + build:agent-host）→ `electron-builder --win portable` → afterPack 串行拷贝 87.0MB 产物 + TSD 修复 2386 文件 → `dist/AiClient-0.3.4-portable.exe`（约 120MB）。`pnpm verify:packaged` 全绿 22 项：app 壳 / agent-host 结构与剪枝 / TSD header 哨兵 / Node24 寻径（nvm v24.18.0）/ **打包产物直跑网关 PONG 冒烟**（host.ready cometixVersion=2.1.212；产物含当日 stream-end 修复，兼作该修复集成回归）。全量回归：typecheck 绿、`pnpm test` 111/111 绿。GUI 手工点验清单移交 T-10（`t10-packaged-gui-checklist.md`）。hash：`dbb20be`（build 链）/ `6a633d6`（Host 修复） |
 | 2026-07-24 | vflow 移除 Phase B：运行时代码整体摘除（D16 收口） | ✅ | 用户复确认「彻底摘除」后委派 fast-worker：删 VflowService+测试、shared/types/vflow.ts、VFLOW_PROJECT_INITIALIZED 通道、preload 桥、App toast 监听、onboarding vflow 步骤与文案、设置条目、CliDetector 条目、AgentInstaller 安装/离线兜底分支（净 -89 行）及 4 个专属用例、孤儿脚本 sync-vflow-resources.mjs；类型联合收缩（AgentCliType/InstallAgentId/InstallStepId）。验证（先定标准后动手）：src+scripts+配置 grep vflow 清零（抽查复核 exit 1）、typecheck 绿、测试 20 文件/103 用例全绿（-8 例均为 vflow 专属）。累计净删约 -1360 行。hash：`eac23f7` |
 | 2026-07-24 | 用户反馈映射落库（F1-F5）+ 新任务 C-13/T-18 | ✅ | 执行计划新增 §7 映射表：F3/F4/F5 验证重构方向（气泡化/真实文本域/四区并排）、F1 → T-05 验收增强（工具卡路径可点击跳转）+T-13 联动、F2 → 新增 C-13（附件协议 spike+桥接，主线）与 T-18（Composer 粘贴 UI，团队，依赖 C-13）。两条子台账任务表已同步 |
+| 2026-07-24 | C-07 完成：SessionIndexService + 3 条 chat IPC（解锁 T-02） | ✅ | Explore 地形扫描定关键设计：① runtime 事件不带 workspacePath/model → 索引在 `CHAT_CREATE/RESUME_SESSION` IPC 入口捕获，事件仅富化 runtimeIdentity；② 持久化镜像 RemoteConnectionManager 成熟模式（原子写 tmp+rename、懒加载在途去重、串行 flush 队列），存 `userData/session-index.json`；损坏 JSON warn 后空索引启动。fast-worker 按逐文件规格实现，8 项单测（round-trip/损坏容错/updatedAt 降序/事件富化/tmp 无残留）全绿；全套 21 文件/111 用例、typecheck 抽查复核通过。store 侧 hydrate（initRuntime 接 listSessions）按计划归 T-02 联调。hash：`f6807c9` |
 
 ## 委派记录
 
