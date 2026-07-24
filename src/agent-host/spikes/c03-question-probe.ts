@@ -16,8 +16,8 @@
  *   AICLIENT_C03_SCENARIOS=allow-updated node ... (comma list to subset)
  */
 
-import { createRequire } from 'node:module';
 import { access } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TEST_AUTH_TOKEN, TEST_BASE_URL, testCredentialEnv } from './testCredentials.ts';
@@ -105,9 +105,7 @@ function safeJson(value: unknown): unknown {
     const text = JSON.stringify(value);
     if (!text) return value;
     return JSON.parse(
-      text
-        .replaceAll(TEST_AUTH_TOKEN, '<token>')
-        .replaceAll(TEST_BASE_URL, '<base-url>')
+      text.replaceAll(TEST_AUTH_TOKEN, '<token>').replaceAll(TEST_BASE_URL, '<base-url>')
     ) as unknown;
   } catch {
     return String(value);
@@ -116,8 +114,9 @@ function safeJson(value: unknown): unknown {
 
 function buildAnswers(input: unknown): Record<string, string> {
   const answers: Record<string, string> = {};
-  const questions = (input as { questions?: Array<{ question?: string; options?: Array<{ label?: string }> }> })
-    ?.questions;
+  const questions = (
+    input as { questions?: Array<{ question?: string; options?: Array<{ label?: string }> }> }
+  )?.questions;
   if (!Array.isArray(questions)) return answers;
   for (const q of questions) {
     if (typeof q?.question !== 'string') continue;
@@ -270,9 +269,7 @@ async function main(): Promise<void> {
   const requested = (process.env.AICLIENT_C03_SCENARIOS ?? 'allow-updated,deny,allow-raw')
     .split(',')
     .map((s) => s.trim())
-    .filter((s): s is ScenarioName =>
-      ['allow-updated', 'deny', 'allow-raw'].includes(s)
-    );
+    .filter((s): s is ScenarioName => ['allow-updated', 'deny', 'allow-raw'].includes(s));
 
   const cliPath = await resolveCometixCli();
   const queryFn = await loadQuery();

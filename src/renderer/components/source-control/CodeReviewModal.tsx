@@ -409,9 +409,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                         {t('Ready to start AI code review')}
                       </p>
                       <p className="mt-1 max-w-md text-xs text-muted-foreground/70">
-                        {t(
-                          'Click Start to analyze your changes. This will consume API credits.'
-                        )}
+                        {t('Click Start to analyze your changes. This will consume API credits.')}
                       </p>
                     </div>
                   </div>

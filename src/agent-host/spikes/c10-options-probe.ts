@@ -367,7 +367,11 @@ async function main(): Promise<void> {
       group: 'permissionMode',
       desc: "permissionMode='bypassPermissions' WITH allowDangerouslySkipPermissions=true",
       prompt: WRITE_PROMPT,
-      options: { ...baseline(), permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true },
+      options: {
+        ...baseline(),
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
+      },
       wireCanUseTool: true,
     },
     {
@@ -423,7 +427,9 @@ async function main(): Promise<void> {
     // that never even reached `system/init` (no signal at all, not even a hang after
     // output) is inconclusive rather than a real finding — retry once before recording.
     if (!r.systemInit && r.outcome === 'timeout-no-output') {
-      process.stderr.write(`[c10-probe] ${spec.id} inconclusive (no system/init) — retrying once…\n`);
+      process.stderr.write(
+        `[c10-probe] ${spec.id} inconclusive (no system/init) — retrying once…\n`
+      );
       r = await runProbe(queryFn, spec);
     }
     results.push(r);

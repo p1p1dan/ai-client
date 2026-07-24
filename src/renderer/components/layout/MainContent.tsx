@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_TAB_ORDER, type TabId } from '@/App/constants';
-import { useCompactLayout } from '@/App/useCompactLayout';
 import { normalizePath, pathsEqual } from '@/App/storage';
+import { useCompactLayout } from '@/App/useCompactLayout';
 import { OpenInMenu } from '@/components/app/OpenInMenu';
 import { AgentPanel } from '@/components/chat/AgentPanel';
 import { CurrentFilePanel, FilePanel } from '@/components/files';
@@ -120,8 +120,7 @@ export function MainContent({
   const isCodeReviewMinimized = useCodeReviewContinueStore((s) => s.isMinimized);
   const codeReviewRepoPath = useCodeReviewContinueStore((s) => s.review.repoPath);
   const codeReviewStatus = useCodeReviewContinueStore((s) => s.review.status);
-  const isAIReviewMinimizedForThisRepo =
-    isCodeReviewMinimized && codeReviewRepoPath === repoPath;
+  const isAIReviewMinimizedForThisRepo = isCodeReviewMinimized && codeReviewRepoPath === repoPath;
   const isAIReviewMinimizedInProgress =
     isAIReviewMinimizedForThisRepo &&
     (codeReviewStatus === 'streaming' || codeReviewStatus === 'initializing');
@@ -139,7 +138,9 @@ export function MainContent({
       const session = sessions.find((s) => s.id === activeId);
       if (session) return activeId;
     }
-    const firstSession = sessions.find((s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, worktreePath));
+    const firstSession = sessions.find(
+      (s) => pathsEqual(s.repoPath, repoPath) && pathsEqual(s.cwd, worktreePath)
+    );
     return firstSession?.id ?? null;
   }, [repoPath, worktreePath, sessions, activeIds]);
 
@@ -257,7 +258,8 @@ export function MainContent({
   const isMac = window.electronAPI.env.platform === 'darwin';
   const needsTrafficLightPadding = isMac && repositoryCollapsed && worktreeCollapsed;
 
-  const { containerRef: headerRef, isCompact: isTabBarCompact } = useCompactLayout<HTMLElement>(600);
+  const { containerRef: headerRef, isCompact: isTabBarCompact } =
+    useCompactLayout<HTMLElement>(600);
 
   // Remember the last valid repo/worktree pair to keep AgentPanel mounted
   // without mixing a new repoPath with an old worktreePath.
@@ -399,10 +401,7 @@ export function MainContent({
                   )}
                   <tab.icon className="relative z-10 h-4 w-4" />
                   <span
-                    className={cn(
-                      'relative z-10 whitespace-nowrap',
-                      isTabBarCompact && 'sr-only'
-                    )}
+                    className={cn('relative z-10 whitespace-nowrap', isTabBarCompact && 'sr-only')}
                   >
                     {tab.label}
                   </span>
@@ -488,9 +487,7 @@ export function MainContent({
               onClick={() => setIsAIReviewModalOpen(true)}
               className="h-8"
               title={
-                isAIReviewMinimizedForThisRepo
-                  ? t('View code review')
-                  : t('Start code review')
+                isAIReviewMinimizedForThisRepo ? t('View code review') : t('Start code review')
               }
             >
               {isAIReviewMinimizedInProgress ? (

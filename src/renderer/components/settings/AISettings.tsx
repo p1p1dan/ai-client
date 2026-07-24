@@ -100,11 +100,11 @@ function ModelSelector({
   const [draft, setDraft] = useState(value);
 
   // Re-sync to the committed value when it changes externally (e.g. provider switch).
+  // `presets` is derived from `provider`, so depending on it is sufficient.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: presets derived from provider
   useEffect(() => {
     setDraft(value);
     setCustomMode(!presets.some((m) => m.value === value));
-    // `presets` is derived from `provider`, so depending on it is sufficient.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: derived from provider
   }, [value, provider]);
 
   const commit = (next: string) => {

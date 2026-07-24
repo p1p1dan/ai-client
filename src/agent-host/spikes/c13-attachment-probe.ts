@@ -18,8 +18,8 @@
  * (testCredentials.ts), same option shape as claudeRuntime.ts.
  */
 
-import { createRequire } from 'node:module';
 import { access, mkdtemp, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -222,7 +222,8 @@ async function runScenario(input: {
         message?: { content?: Array<{ type?: string; text?: string; name?: string }> };
       };
       const type = String(e.type ?? '');
-      if (report.eventTypes.length < 30) report.eventTypes.push(type + (e.subtype ? `:${e.subtype}` : ''));
+      if (report.eventTypes.length < 30)
+        report.eventTypes.push(type + (e.subtype ? `:${e.subtype}` : ''));
       if (type === 'assistant' && Array.isArray(e.message?.content)) {
         for (const block of e.message.content) {
           if (block.type === 'text' && typeof block.text === 'string') {

@@ -1,16 +1,11 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn, spawnSync } from 'node:child_process';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type {
   AIProvider,
-  ClaudeEffort,
   ClaudeModelId,
   CodexModelId,
   CursorModelId,
   GeminiModelId,
-  ModelId,
-  ReasoningEffort,
 } from '@shared/types';
 import type { CommonAICLIOptions } from '@shared/types/ai';
 import { getEnvForCommand, getShellForCommand } from '../../utils/shell';

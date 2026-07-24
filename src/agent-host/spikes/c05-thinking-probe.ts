@@ -23,12 +23,12 @@
  *   AICLIENT_SMOKE_USE_LOCAL_SETTINGS=1   # keep ~/.claude/settings.json creds instead of shared test gw
  */
 
-import { createRequire } from 'node:module';
 import { access } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
-import { COMETIX_PIN, CLAUDE_AGENT_SDK_PIN_VERSION } from '../pin.ts';
+import { fileURLToPath } from 'node:url';
+import { CLAUDE_AGENT_SDK_PIN_VERSION, COMETIX_PIN } from '../pin.ts';
 import { TEST_AUTH_TOKEN, TEST_BASE_URL, testCredentialEnv } from './testCredentials.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,8 +40,7 @@ const CWD = process.env.AICLIENT_C05_WORKDIR ?? repoRoot;
 const TIMEOUT_MS = Number(process.env.AICLIENT_C05_TIMEOUT_MS ?? 90000);
 const BUDGET_TOKENS = Number(process.env.AICLIENT_C05_BUDGET_TOKENS ?? 4096);
 
-const REASONING_PROMPT =
-  'Think step by step: what is 17 * 23 + 891 / 27? Show your reasoning.';
+const REASONING_PROMPT = 'Think step by step: what is 17 * 23 + 891 / 27? Show your reasoning.';
 const FOLLOWUP_PROMPT =
   'Now take the result from your previous answer and multiply it by 2. Show your reasoning.';
 
@@ -244,7 +243,10 @@ async function runTurn(opts: {
 
       if (type === 'stream_event' && e.event?.type === 'content_block_delta' && e.event.delta) {
         const deltaType = String(e.event.delta.type ?? '');
-        if (result.streamEventDeltaTypes.length < 20 && !result.streamEventDeltaTypes.includes(deltaType)) {
+        if (
+          result.streamEventDeltaTypes.length < 20 &&
+          !result.streamEventDeltaTypes.includes(deltaType)
+        ) {
           result.streamEventDeltaTypes.push(deltaType);
         }
         if (deltaType === 'thinking_delta' || deltaType === 'thinking') {
@@ -262,7 +264,9 @@ async function runTurn(opts: {
       }
     }
     result.ok =
-      !result.isErrorResult && result.eventCount > 0 && (result.assistantTextLen > 0 || result.thinkingTextLen > 0);
+      !result.isErrorResult &&
+      result.eventCount > 0 &&
+      (result.assistantTextLen > 0 || result.thinkingTextLen > 0);
   } catch (err) {
     result.threw = true;
     result.errorMessage = err instanceof Error ? err.message : String(err);
@@ -321,7 +325,9 @@ async function main(): Promise<void> {
   console.error(`[c05] cometix=${COMETIX_PIN.version} sdk=${CLAUDE_AGENT_SDK_PIN_VERSION}`);
   console.error(`[c05] cliPath=${cliPath}`);
   console.error(`[c05] cwd=${CWD}`);
-  console.error(`[c05] baseUrl=${TEST_BASE_URL} usingLocalSettings=${process.env.AICLIENT_SMOKE_USE_LOCAL_SETTINGS === '1'}`);
+  console.error(
+    `[c05] baseUrl=${TEST_BASE_URL} usingLocalSettings=${process.env.AICLIENT_SMOKE_USE_LOCAL_SETTINGS === '1'}`
+  );
   console.error(`[c05] timeoutMs=${TIMEOUT_MS} budgetTokens=${BUDGET_TOKENS}`);
 
   const thinkingEnabled = { type: 'enabled', budgetTokens: BUDGET_TOKENS };
@@ -337,7 +343,9 @@ async function main(): Promise<void> {
     prompt: REASONING_PROMPT,
     thinking: thinkingEnabled,
   });
-  console.error(`[c05] A done ok=${a.ok} threw=${a.threw} isErrorResult=${a.isErrorResult} ms=${a.msTotal}`);
+  console.error(
+    `[c05] A done ok=${a.ok} threw=${a.threw} isErrorResult=${a.isErrorResult} ms=${a.msTotal}`
+  );
 
   // Scenario B: thinking enabled, multi-turn — turn1 same as A's shape (fresh call),
   // turn2 resumes turn1's session_id to see whether replaying a signed thinking
@@ -384,7 +392,9 @@ async function main(): Promise<void> {
     prompt: REASONING_PROMPT,
     thinking: thinkingDisabled,
   });
-  console.error(`[c05] C done ok=${c.ok} threw=${c.threw} isErrorResult=${c.isErrorResult} ms=${c.msTotal}`);
+  console.error(
+    `[c05] C done ok=${c.ok} threw=${c.threw} isErrorResult=${c.isErrorResult} ms=${c.msTotal}`
+  );
 
   const out = {
     baseUrl: TEST_BASE_URL,

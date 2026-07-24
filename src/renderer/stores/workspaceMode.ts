@@ -15,4 +15,3 @@ export const useWorkspaceModeStore = create<WorkspaceModeState>((set) => ({
   isGitRepo: null,
   setIsGitRepo: (isGitRepo) => set({ isGitRepo }),
 }));
-

@@ -1,7 +1,7 @@
-import type { UsageStatsResult } from '@shared/types';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import type { UsageStatsResult } from '@shared/types';
 import { net } from 'electron';
 import { onboardingService } from '../onboarding';
 
@@ -54,7 +54,9 @@ function extractCookieValue(setCookieHeader: string, cookieName: string): string
 
   const start = index + needle.length;
   const end = setCookieHeader.indexOf(';', start);
-  const rawValue = (end === -1 ? setCookieHeader.slice(start) : setCookieHeader.slice(start, end)).trim();
+  const rawValue = (
+    end === -1 ? setCookieHeader.slice(start) : setCookieHeader.slice(start, end)
+  ).trim();
   return rawValue || null;
 }
 
@@ -101,7 +103,8 @@ async function loginForActionsSession(
   }
 
   const setCookie = response.headers.get('set-cookie');
-  const sessionId = typeof setCookie === 'string' ? extractCookieValue(setCookie, 'auth-token') : null;
+  const sessionId =
+    typeof setCookie === 'string' ? extractCookieValue(setCookie, 'auth-token') : null;
   return { ok: true, sessionId };
 }
 
@@ -161,7 +164,13 @@ class UsageService {
       const tryFetchStats = async (
         authToken?: string
       ): Promise<
-        | { ok: true; todayCount: number; todayCostUsd: number; monthCount: number; monthCostUsd: number }
+        | {
+            ok: true;
+            todayCount: number;
+            todayCostUsd: number;
+            monthCount: number;
+            monthCostUsd: number;
+          }
         | { ok: false; error: string; status: number }
       > => {
         const todayResponse = await postAction(todayUrl, {}, authToken);
@@ -183,7 +192,9 @@ class UsageService {
 
         const summaryData = readActionData(summaryResponse.payload);
         const monthCount = coerceFiniteNumber(summaryData?.totalRequests);
-        const monthCostUsd = coerceFiniteNumber(summaryData?.totalCost ?? summaryData?.totalCostUsd);
+        const monthCostUsd = coerceFiniteNumber(
+          summaryData?.totalCost ?? summaryData?.totalCostUsd
+        );
         if (monthCount === null || monthCostUsd === null) {
           return { ok: false, error: 'Invalid usage stats response', status: 200 };
         }

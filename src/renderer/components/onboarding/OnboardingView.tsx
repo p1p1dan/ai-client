@@ -717,8 +717,7 @@ export function OnboardingView({
                 <p>凭据已写入本地配置,Claude Code 与 Codex 安装完成后即可使用。</p>
               ) : mode === 'vscode-extension' ? (
                 <p>
-                  返回 VSCode 即可直接使用 Claude 扩展。如需在 AiClient 内使用,可继续安装 CLI
-                  环境。
+                  返回 VSCode 即可直接使用 Claude 扩展。如需在 AiClient 内使用,可继续安装 CLI 环境。
                 </p>
               ) : (
                 <p>Claude Code 与 Codex 的凭据已在本次会话中生效。</p>

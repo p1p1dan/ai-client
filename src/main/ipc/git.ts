@@ -2,12 +2,12 @@ import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import {
   type CommitDetail,
+  type FileChangeStatus,
   type FileChangesResult,
   type FileDiff,
   type GhCliStatus,
   type GitStatus,
   IPC_CHANNELS,
-  type FileChangeStatus,
 } from '@shared/types';
 import type { ClaudeEffort } from '@shared/types/ai';
 import { ipcMain } from 'electron';
@@ -98,8 +98,7 @@ function validateWorkdir(workdir: string): ValidatedWorkdir {
   }
 
   // Treat registered worktrees as git repositories even if `.git` is not present (should be rare).
-  const isGitRepo =
-    authorizedWorkdirs.has(resolved) || existsSync(path.join(resolved, '.git'));
+  const isGitRepo = authorizedWorkdirs.has(resolved) || existsSync(path.join(resolved, '.git'));
 
   return { path: resolved, isGitRepo };
 }

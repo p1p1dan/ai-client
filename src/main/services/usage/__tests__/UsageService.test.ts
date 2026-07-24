@@ -18,7 +18,10 @@ describe('UsageService', () => {
   let tempHome: string;
 
   beforeEach(() => {
-    tempHome = join(tmpdir(), `aiclient-usage-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    tempHome = join(
+      tmpdir(),
+      `aiclient-usage-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    );
     mkdirSync(tempHome, { recursive: true });
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
@@ -88,7 +91,10 @@ describe('UsageService', () => {
     );
 
     mkdirSync(join(tempHome, '.codex'), { recursive: true });
-    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
+    writeFileSync(
+      join(tempHome, '.codex', 'auth.json'),
+      JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2)
+    );
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
@@ -109,27 +115,40 @@ describe('UsageService', () => {
 
     vi.useRealTimers();
 
-    expect(result).toEqual({ todayCount: 3, todayCostUsd: 0.0696284, monthCount: 9, monthCostUsd: 0.1324964 });
-    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://cch.example.com/api/actions/my-usage/getMyTodayStats', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer api-key',
-      },
-      body: '{}',
-      credentials: 'include',
+    expect(result).toEqual({
+      todayCount: 3,
+      todayCostUsd: 0.0696284,
+      monthCount: 9,
+      monthCostUsd: 0.1324964,
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://cch.example.com/api/actions/my-usage/getMyStatsSummary', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer api-key',
-      },
-      body: JSON.stringify({ startDate: '2026-04-01', endDate: '2026-04-09' }),
-      credentials: 'include',
-    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://cch.example.com/api/actions/my-usage/getMyTodayStats',
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer api-key',
+        },
+        body: '{}',
+        credentials: 'include',
+      }
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://cch.example.com/api/actions/my-usage/getMyStatsSummary',
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer api-key',
+        },
+        body: JSON.stringify({ startDate: '2026-04-01', endDate: '2026-04-09' }),
+        credentials: 'include',
+      }
+    );
   });
 
   it('returns { error } when actions API is unauthorized and login fails', async () => {
@@ -150,7 +169,10 @@ describe('UsageService', () => {
     );
 
     mkdirSync(join(tempHome, '.codex'), { recursive: true });
-    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
+    writeFileSync(
+      join(tempHome, '.codex', 'auth.json'),
+      JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2)
+    );
 
     fetchMock.mockResolvedValueOnce({
       ok: false,
@@ -189,7 +211,10 @@ describe('UsageService', () => {
     );
 
     mkdirSync(join(tempHome, '.codex'), { recursive: true });
-    writeFileSync(join(tempHome, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2));
+    writeFileSync(
+      join(tempHome, '.codex', 'auth.json'),
+      JSON.stringify({ OPENAI_API_KEY: 'api-key' }, null, 2)
+    );
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 9, 10, 0, 0));
@@ -224,7 +249,12 @@ describe('UsageService', () => {
 
     vi.useRealTimers();
 
-    expect(result).toEqual({ todayCount: 3, todayCostUsd: 0.0696284, monthCount: 9, monthCostUsd: 0.1324964 });
+    expect(result).toEqual({
+      todayCount: 3,
+      todayCostUsd: 0.0696284,
+      monthCount: 9,
+      monthCostUsd: 0.1324964,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://cch.example.com/api/auth/login', {
       method: 'POST',
@@ -235,15 +265,19 @@ describe('UsageService', () => {
       body: JSON.stringify({ key: 'api-key' }),
       credentials: 'include',
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, 'https://cch.example.com/api/actions/my-usage/getMyTodayStats', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer opaque-session-1',
-      },
-      body: '{}',
-      credentials: 'include',
-    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'https://cch.example.com/api/actions/my-usage/getMyTodayStats',
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer opaque-session-1',
+        },
+        body: '{}',
+        credentials: 'include',
+      }
+    );
   });
 });

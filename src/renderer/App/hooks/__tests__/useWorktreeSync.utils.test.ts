@@ -58,4 +58,3 @@ describe('useWorktreeSync utils', () => {
     expect(worktreeListBelongsToRepo(worktrees, 'c:/repo2')).toBe(false);
   });
 });
-

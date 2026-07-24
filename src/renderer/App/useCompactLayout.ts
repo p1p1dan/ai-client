@@ -33,10 +33,7 @@ export function useCompactLayout<T extends HTMLElement = HTMLDivElement>(
     return () => observer.disconnect();
   }, []);
 
-  const isCompact = useMemo(
-    () => containerWidth < breakpointPx,
-    [containerWidth, breakpointPx]
-  );
+  const isCompact = useMemo(() => containerWidth < breakpointPx, [containerWidth, breakpointPx]);
 
   return {
     containerRef,

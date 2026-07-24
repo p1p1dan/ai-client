@@ -6,7 +6,9 @@ export function normalizeComparablePath(path: string): string {
 }
 
 export function pathsEqualIncludingSlashes(path1: string, path2: string): boolean {
-  return pathsEqual(path1, path2) || normalizeComparablePath(path1) === normalizeComparablePath(path2);
+  return (
+    pathsEqual(path1, path2) || normalizeComparablePath(path1) === normalizeComparablePath(path2)
+  );
 }
 
 export function worktreeListBelongsToRepo(worktrees: GitWorktree[], selectedRepo: string): boolean {
@@ -19,4 +21,3 @@ export function worktreeListBelongsToRepo(worktrees: GitWorktree[], selectedRepo
     );
   });
 }
-

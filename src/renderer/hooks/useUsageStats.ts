@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
 import type { UsageStatsResult } from '@shared/types';
+import { useQuery } from '@tanstack/react-query';
 
 export function useUsageStats(options?: { enabled?: boolean }) {
   const refetchIntervalMs = 1000 * 60 * 5;

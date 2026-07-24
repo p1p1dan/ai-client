@@ -4,7 +4,7 @@ import { autoUpdaterService } from '../services/updater/AutoUpdater';
 import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentHandlers } from './agent';
-import { registerAgentHostHandlers, cleanupAgentHost, cleanupAgentHostSync } from './agentHost';
+import { cleanupAgentHost, cleanupAgentHostSync, registerAgentHostHandlers } from './agentHost';
 import { registerAppHandlers } from './app';
 import { registerChatHandlers } from './chat';
 import {
@@ -32,8 +32,8 @@ export { autoStartHapi };
 
 import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { registerLogHandlers } from './log';
-import { registerOnboardingHandlers } from './onboarding';
 import { registerNotificationHandlers } from './notification';
+import { registerOnboardingHandlers } from './onboarding';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
 import {

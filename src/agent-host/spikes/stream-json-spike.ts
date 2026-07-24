@@ -6,11 +6,11 @@
  */
 
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { access } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { COMETIX_PIN } from '../pin.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

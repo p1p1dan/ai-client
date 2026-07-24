@@ -1,9 +1,6 @@
 import type { GitWorktree } from '@shared/types';
 import { useEffect } from 'react';
-import {
-  pathsEqualIncludingSlashes,
-  worktreeListBelongsToRepo,
-} from './useWorktreeSync.utils';
+import { pathsEqualIncludingSlashes, worktreeListBelongsToRepo } from './useWorktreeSync.utils';
 
 export function useWorktreeSync(
   worktrees: GitWorktree[],
@@ -22,7 +19,9 @@ export function useWorktreeSync(
         return;
       }
 
-      const found = worktrees.find((wt) => pathsEqualIncludingSlashes(wt.path, activeWorktree.path));
+      const found = worktrees.find((wt) =>
+        pathsEqualIncludingSlashes(wt.path, activeWorktree.path)
+      );
       if (found && found !== activeWorktree) {
         setActiveWorktree(found);
       } else if (!found && !worktreesFetching) {

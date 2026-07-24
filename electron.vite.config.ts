@@ -39,7 +39,7 @@ function winTsdFixPlugin(outSubDir: string) {
       if (files.length === 0) return;
       // Write decoded content to .tmp.bin (node.js reads TSD transparently)
       for (const f of files) {
-        fs.writeFileSync(f + '.tmp.bin', fs.readFileSync(f));
+        fs.writeFileSync(`${f}.tmp.bin`, fs.readFileSync(f));
       }
       // PowerShell copies .tmp.bin -> original path (unencrypted result)
       const psScript =

@@ -20,4 +20,3 @@ export function registerFolderHandlers(): void {
     return isGitRepoRoot(folderPath);
   });
 }
-

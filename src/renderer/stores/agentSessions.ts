@@ -127,7 +127,9 @@ function saveToStorage(sessions: Session[], activeIds: Record<string, string | n
   // with "Session not found: pty-N".
   const persistableSessions = sessions
     .filter((s) => isResumableAgent(s.agentCommand) && s.activated)
-    .map(({ backendSessionId: _backendSessionId, pendingCommand: _pendingCommand, ...rest }) => rest);
+    .map(
+      ({ backendSessionId: _backendSessionId, pendingCommand: _pendingCommand, ...rest }) => rest
+    );
   const persistableIds = new Set(persistableSessions.map((s) => s.id));
   // Only keep activeIds that reference persistable sessions
   const persistableActiveIds: Record<string, string | null> = {};

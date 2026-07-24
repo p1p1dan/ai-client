@@ -9,13 +9,13 @@
  */
 
 import { spawn } from 'node:child_process';
-import { createInterface } from 'node:readline';
-import { createRequire } from 'node:module';
 import { access, readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const hostRoot = path.resolve(__dirname, '..');
@@ -281,7 +281,8 @@ async function runStreamJsonTurn(opts: {
   metrics.recalledSecret = metrics.assistantText.includes(SECRET);
   metrics.ok = metrics.eventCount > 0 && metrics.assistantText.trim().length > 0;
   if (!metrics.ok) {
-    metrics.error = stderr.trim().slice(0, 400) || `no assistant text (exit=${String(metrics.exitCode)})`;
+    metrics.error =
+      stderr.trim().slice(0, 400) || `no assistant text (exit=${String(metrics.exitCode)})`;
   }
   return metrics;
 }
@@ -377,10 +378,7 @@ async function runSdkTurn(opts: {
   return metrics;
 }
 
-async function runRoute(
-  route: 'stream-json' | 'agent-sdk',
-  cliPath: string
-): Promise<RouteReport> {
+async function runRoute(route: 'stream-json' | 'agent-sdk', cliPath: string): Promise<RouteReport> {
   const turn1 =
     route === 'stream-json'
       ? await runStreamJsonTurn({ cliPath, prompt: TURN1 })

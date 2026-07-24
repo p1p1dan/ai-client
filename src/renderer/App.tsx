@@ -1114,7 +1114,9 @@ export default function App() {
 
   const findExistingRepository = useCallback(
     (candidate: Repository) =>
-      repositories.find((repo) => repo.id === candidate.id || pathsEqual(repo.path, candidate.path)),
+      repositories.find(
+        (repo) => repo.id === candidate.id || pathsEqual(repo.path, candidate.path)
+      ),
     [repositories]
   );
 
@@ -1504,163 +1506,104 @@ export default function App() {
           />
         ) : (
           <>
-        {isCompact && (
-          <div className="absolute left-3 top-3 z-50">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={toggleSidebarOverlay}
-              aria-label={t('Toggle Sidebar')}
-              title={t('Toggle Sidebar')}
-            >
-              <PanelLeft className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-
-        <AnimatePresence>
-          {isCompact && sidebarOverlayOpen && (
-            <motion.div
-              key="sidebar-overlay-mask"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="absolute inset-0 z-30 bg-background/60 backdrop-blur-sm"
-              onMouseDown={closeSidebarOverlay}
-            />
-          )}
-        </AnimatePresence>
-
-        {layoutMode === 'tree' ? (
-          // Tree Layout: Single sidebar with repos as root nodes and worktrees as children
-          <AnimatePresence initial={false}>
-            {((!isCompact && !repositoryCollapsed) || (isCompact && sidebarOverlayOpen)) && (
-              <motion.div
-                ref={repositorySidebarRef}
-                key={isCompact ? 'tree-sidebar-overlay' : 'tree-sidebar'}
-                initial={isCompact ? { x: -24, opacity: 0 } : { width: 0, opacity: 0 }}
-                animate={isCompact ? { x: 0, opacity: 1 } : { width: treeSidebarWidth, opacity: 1 }}
-                exit={isCompact ? { x: -24, opacity: 0 } : { width: 0, opacity: 0 }}
-                transition={panelTransition}
-                className={
-                  isCompact
-                    ? 'absolute left-0 top-0 z-40 h-full w-[calc(100vw-3rem)] max-w-[420px] overflow-hidden bg-background shadow-lg'
-                    : 'relative h-full shrink-0 overflow-hidden'
-                }
-              >
-                <TreeSidebar
-                  repositories={repositories}
-                  selectedRepo={selectedRepo}
-                  activeWorktree={activeWorktree}
-                  worktrees={sortedWorktrees}
-                  branches={branches}
-                  isLoading={worktreesLoading}
-                  isCreating={createWorktreeMutation.isPending}
-                  error={worktreeError}
-                  isHomeActive={isHomeActive}
-                  onSelectHome={() => {
-                    handleSelectHome();
-                    if (isCompact) {
-                      closeSidebarOverlay();
-                    }
-                  }}
-                  onSelectRepo={(repoPath, options) => {
-                    handleSelectRepo(repoPath, options);
-                    if (isCompact) {
-                      closeSidebarOverlay();
-                    }
-                  }}
-                  canLoadRepo={(repoPath) => canLoadRepo(repoPath)}
-                  onActivateRemoteRepo={activateRemoteRepo}
-                  onSelectWorktree={(worktree) => {
-                    handleSelectWorktree(worktree);
-                    if (isCompact) {
-                      closeSidebarOverlay();
-                    }
-                  }}
-                  onAddRepository={handleOpenRepositoryDialog}
-                  onRemoveRepository={handleRemoveRepository}
-                  onCreateWorktree={handleCreateWorktree}
-                  onRemoveWorktree={handleRemoveWorktree}
-                  onMergeWorktree={handleOpenMergeDialog}
-                  onReorderRepositories={handleReorderRepositories}
-                  onReorderWorktrees={handleReorderWorktrees}
-                  onRefresh={() => {
-                    refetch();
-                    refetchBranches();
-                  }}
-                  onInitGit={handleInitGit}
-                  onOpenSettings={openSettings}
-                  collapsed={false}
-                  onCollapse={() => {
-                    if (isCompact) {
-                      closeSidebarOverlay();
-                      return;
-                    }
-                    setRepositoryCollapsed(true);
-                  }}
-                  groups={sortedGroups}
-                  activeGroupId={activeGroupId}
-                  onSwitchGroup={handleSwitchGroup}
-                  onCreateGroup={handleCreateGroup}
-                  onUpdateGroup={handleUpdateGroup}
-                  onDeleteGroup={handleDeleteGroup}
-                  onMoveToGroup={handleMoveToGroup}
-                  onSwitchTab={setActiveTab}
-                  onSwitchWorktreeByPath={handleSwitchWorktreePath}
-                  onLaunchAgent={handleLaunchAgent}
-                  onOpenTerminal={handleOpenTerminal}
-                  temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
-                  tempWorkspaces={tempWorkspaces}
-                  tempBasePath={tempBasePathDisplay}
-                  onSelectTempWorkspace={handleSelectTempWorkspace}
-                  onCreateTempWorkspace={handleCreateTempWorkspace}
-                  onRequestTempRename={openTempRename}
-                  onRequestTempDelete={openTempDelete}
-                  toggleSelectedRepoExpandedRef={toggleSelectedRepoExpandedRef}
-                  isSettingsActive={activeTab === 'settings'}
-                  onToggleSettings={toggleSettings}
-                  isFileDragOver={isFileDragOver}
-                />
-                {/* Resize handle */}
-                {!isCompact && (
-                  <div
-                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
-                    onMouseDown={handleResizeStart('repository')}
-                  />
-                )}
-              </motion.div>
+            {isCompact && (
+              <div className="absolute left-3 top-3 z-50">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={toggleSidebarOverlay}
+                  aria-label={t('Toggle Sidebar')}
+                  title={t('Toggle Sidebar')}
+                >
+                  <PanelLeft className="h-4 w-4" />
+                </Button>
+              </div>
             )}
-          </AnimatePresence>
-        ) : (
-          // Columns Layout: Separate repo sidebar and worktree panel
-          <>
-            {isCompact && sidebarOverlayOpen && (
-              <div className="absolute left-0 top-0 z-40 h-full w-[calc(100vw-3rem)] max-w-[420px] overflow-hidden bg-background shadow-lg">
-                <div className="flex h-full flex-col">
-                  <div
-                    className={`flex-1 overflow-hidden ${showWorktreePanel ? 'border-b' : ''}`}
+
+            <AnimatePresence>
+              {isCompact && sidebarOverlayOpen && (
+                <motion.div
+                  key="sidebar-overlay-mask"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 z-30 bg-background/60 backdrop-blur-sm"
+                  onMouseDown={closeSidebarOverlay}
+                />
+              )}
+            </AnimatePresence>
+
+            {layoutMode === 'tree' ? (
+              // Tree Layout: Single sidebar with repos as root nodes and worktrees as children
+              <AnimatePresence initial={false}>
+                {((!isCompact && !repositoryCollapsed) || (isCompact && sidebarOverlayOpen)) && (
+                  <motion.div
+                    ref={repositorySidebarRef}
+                    key={isCompact ? 'tree-sidebar-overlay' : 'tree-sidebar'}
+                    initial={isCompact ? { x: -24, opacity: 0 } : { width: 0, opacity: 0 }}
+                    animate={
+                      isCompact ? { x: 0, opacity: 1 } : { width: treeSidebarWidth, opacity: 1 }
+                    }
+                    exit={isCompact ? { x: -24, opacity: 0 } : { width: 0, opacity: 0 }}
+                    transition={panelTransition}
+                    className={
+                      isCompact
+                        ? 'absolute left-0 top-0 z-40 h-full w-[calc(100vw-3rem)] max-w-[420px] overflow-hidden bg-background shadow-lg'
+                        : 'relative h-full shrink-0 overflow-hidden'
+                    }
                   >
-                    <RepositorySidebar
+                    <TreeSidebar
                       repositories={repositories}
                       selectedRepo={selectedRepo}
+                      activeWorktree={activeWorktree}
+                      worktrees={sortedWorktrees}
+                      branches={branches}
+                      isLoading={worktreesLoading}
+                      isCreating={createWorktreeMutation.isPending}
+                      error={worktreeError}
                       isHomeActive={isHomeActive}
                       onSelectHome={() => {
                         handleSelectHome();
-                        closeSidebarOverlay();
+                        if (isCompact) {
+                          closeSidebarOverlay();
+                        }
                       }}
                       onSelectRepo={(repoPath, options) => {
                         handleSelectRepo(repoPath, options);
-                        closeSidebarOverlay();
+                        if (isCompact) {
+                          closeSidebarOverlay();
+                        }
                       }}
-                      canLoadRepo={canLoadRepo}
+                      canLoadRepo={(repoPath) => canLoadRepo(repoPath)}
+                      onActivateRemoteRepo={activateRemoteRepo}
+                      onSelectWorktree={(worktree) => {
+                        handleSelectWorktree(worktree);
+                        if (isCompact) {
+                          closeSidebarOverlay();
+                        }
+                      }}
                       onAddRepository={handleOpenRepositoryDialog}
                       onRemoveRepository={handleRemoveRepository}
+                      onCreateWorktree={handleCreateWorktree}
+                      onRemoveWorktree={handleRemoveWorktree}
+                      onMergeWorktree={handleOpenMergeDialog}
                       onReorderRepositories={handleReorderRepositories}
+                      onReorderWorktrees={handleReorderWorktrees}
+                      onRefresh={() => {
+                        refetch();
+                        refetchBranches();
+                      }}
+                      onInitGit={handleInitGit}
                       onOpenSettings={openSettings}
                       collapsed={false}
-                      onCollapse={closeSidebarOverlay}
+                      onCollapse={() => {
+                        if (isCompact) {
+                          closeSidebarOverlay();
+                          return;
+                        }
+                        setRepositoryCollapsed(true);
+                      }}
                       groups={sortedGroups}
                       activeGroupId={activeGroupId}
                       onSwitchGroup={handleSwitchGroup}
@@ -1668,6 +1611,161 @@ export default function App() {
                       onUpdateGroup={handleUpdateGroup}
                       onDeleteGroup={handleDeleteGroup}
                       onMoveToGroup={handleMoveToGroup}
+                      onSwitchTab={setActiveTab}
+                      onSwitchWorktreeByPath={handleSwitchWorktreePath}
+                      onLaunchAgent={handleLaunchAgent}
+                      onOpenTerminal={handleOpenTerminal}
+                      temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
+                      tempWorkspaces={tempWorkspaces}
+                      tempBasePath={tempBasePathDisplay}
+                      onSelectTempWorkspace={handleSelectTempWorkspace}
+                      onCreateTempWorkspace={handleCreateTempWorkspace}
+                      onRequestTempRename={openTempRename}
+                      onRequestTempDelete={openTempDelete}
+                      toggleSelectedRepoExpandedRef={toggleSelectedRepoExpandedRef}
+                      isSettingsActive={activeTab === 'settings'}
+                      onToggleSettings={toggleSettings}
+                      isFileDragOver={isFileDragOver}
+                    />
+                    {/* Resize handle */}
+                    {!isCompact && (
+                      <div
+                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
+                        onMouseDown={handleResizeStart('repository')}
+                      />
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            ) : (
+              // Columns Layout: Separate repo sidebar and worktree panel
+              <>
+                {isCompact && sidebarOverlayOpen && (
+                  <div className="absolute left-0 top-0 z-40 h-full w-[calc(100vw-3rem)] max-w-[420px] overflow-hidden bg-background shadow-lg">
+                    <div className="flex h-full flex-col">
+                      <div
+                        className={`flex-1 overflow-hidden ${showWorktreePanel ? 'border-b' : ''}`}
+                      >
+                        <RepositorySidebar
+                          repositories={repositories}
+                          selectedRepo={selectedRepo}
+                          isHomeActive={isHomeActive}
+                          onSelectHome={() => {
+                            handleSelectHome();
+                            closeSidebarOverlay();
+                          }}
+                          onSelectRepo={(repoPath, options) => {
+                            handleSelectRepo(repoPath, options);
+                            closeSidebarOverlay();
+                          }}
+                          canLoadRepo={canLoadRepo}
+                          onAddRepository={handleOpenRepositoryDialog}
+                          onRemoveRepository={handleRemoveRepository}
+                          onReorderRepositories={handleReorderRepositories}
+                          onOpenSettings={openSettings}
+                          collapsed={false}
+                          onCollapse={closeSidebarOverlay}
+                          groups={sortedGroups}
+                          activeGroupId={activeGroupId}
+                          onSwitchGroup={handleSwitchGroup}
+                          onCreateGroup={handleCreateGroup}
+                          onUpdateGroup={handleUpdateGroup}
+                          onDeleteGroup={handleDeleteGroup}
+                          onMoveToGroup={handleMoveToGroup}
+                          onSwitchTab={setActiveTab}
+                          onSwitchWorktreeByPath={handleSwitchWorktreePath}
+                          onLaunchAgent={handleLaunchAgent}
+                          onOpenTerminal={handleOpenTerminal}
+                          isSettingsActive={activeTab === 'settings'}
+                          onToggleSettings={toggleSettings}
+                          isFileDragOver={isFileDragOver}
+                          temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
+                          tempBasePath={tempBasePathDisplay}
+                        />
+                      </div>
+                      {showWorktreePanel && (
+                        <div className="flex-1 overflow-hidden">
+                          {isTempRepo ? (
+                            <TemporaryWorkspacePanel
+                              items={tempWorkspaces}
+                              activePath={activeWorktree?.path ?? null}
+                              onSelect={(item) => {
+                                handleSelectTempWorkspace(item.path);
+                                closeSidebarOverlay();
+                              }}
+                              onCreate={handleCreateTempWorkspace}
+                              onRequestRename={(id) => openTempRename(id)}
+                              onRequestDelete={(id) => openTempDelete(id)}
+                              onRefresh={rehydrateTempWorkspaces}
+                              onCollapse={closeSidebarOverlay}
+                            />
+                          ) : (
+                            <WorktreePanel
+                              worktrees={sortedWorktrees}
+                              activeWorktree={activeWorktree}
+                              branches={branches}
+                              projectName={selectedRepo ? getDisplayPathBasename(selectedRepo) : ''}
+                              inactiveRemote={inactiveSelectedRemoteRepo}
+                              remoteStatus={selectedRemoteStatus}
+                              isLoading={worktreesLoading}
+                              isCreating={createWorktreeMutation.isPending}
+                              error={inactiveSelectedRemoteRepo ? null : worktreeError}
+                              onSelectWorktree={(worktree) => {
+                                handleSelectWorktree(worktree);
+                                closeSidebarOverlay();
+                              }}
+                              onCreateWorktree={handleCreateWorktree}
+                              onRemoveWorktree={handleRemoveWorktree}
+                              onMergeWorktree={handleOpenMergeDialog}
+                              onReorderWorktrees={handleReorderWorktrees}
+                              onInitGit={handleInitGit}
+                              onRefresh={() => {
+                                refetch();
+                                refetchBranches();
+                              }}
+                              collapsed={false}
+                              onCollapse={closeSidebarOverlay}
+                              repositoryCollapsed={false}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Column 1: Repository Sidebar */}
+                <AnimatePresence initial={false}>
+                  {!isCompact && !repositoryCollapsed && (
+                    <motion.div
+                      ref={repositorySidebarRef}
+                      key="repository"
+                      initial={{ width: 0, opacity: 0 }}
+                      animate={{ width: repositoryWidth, opacity: 1 }}
+                      exit={{ width: 0, opacity: 0 }}
+                      transition={panelTransition}
+                      className="relative h-full shrink-0 overflow-hidden"
+                    >
+                      <RepositorySidebar
+                        repositories={repositories}
+                        selectedRepo={selectedRepo}
+                        isHomeActive={isHomeActive}
+                        onSelectHome={handleSelectHome}
+                        onSelectRepo={handleSelectRepo}
+                        canLoadRepo={canLoadRepo}
+                        onAddRepository={handleOpenRepositoryDialog}
+                        onRemoveRepository={handleRemoveRepository}
+                        onReorderRepositories={handleReorderRepositories}
+                        onOpenSettings={openSettings}
+                        collapsed={false}
+                        onCollapse={() => setRepositoryCollapsed(true)}
+                        groups={sortedGroups}
+                        activeGroupId={activeGroupId}
+                        onSwitchGroup={handleSwitchGroup}
+                        onCreateGroup={handleCreateGroup}
+                        onUpdateGroup={handleUpdateGroup}
+                        onDeleteGroup={handleDeleteGroup}
+                        onMoveToGroup={handleMoveToGroup}
                         onSwitchTab={setActiveTab}
                         onSwitchWorktreeByPath={handleSwitchWorktreePath}
                         onLaunchAgent={handleLaunchAgent}
@@ -1677,226 +1775,134 @@ export default function App() {
                         isFileDragOver={isFileDragOver}
                         temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
                         tempBasePath={tempBasePathDisplay}
-                    />
-                  </div>
-                  {showWorktreePanel && (
-                    <div className="flex-1 overflow-hidden">
-                      {isTempRepo ? (
-                        <TemporaryWorkspacePanel
-                          items={tempWorkspaces}
-                          activePath={activeWorktree?.path ?? null}
-                          onSelect={(item) => {
-                            handleSelectTempWorkspace(item.path);
-                            closeSidebarOverlay();
-                          }}
-                          onCreate={handleCreateTempWorkspace}
-                          onRequestRename={(id) => openTempRename(id)}
-                          onRequestDelete={(id) => openTempDelete(id)}
-                          onRefresh={rehydrateTempWorkspaces}
-                          onCollapse={closeSidebarOverlay}
-                        />
-                      ) : (
-                        <WorktreePanel
-                          worktrees={sortedWorktrees}
-                          activeWorktree={activeWorktree}
-                          branches={branches}
-                          projectName={selectedRepo ? getDisplayPathBasename(selectedRepo) : ''}
-                          inactiveRemote={inactiveSelectedRemoteRepo}
-                          remoteStatus={selectedRemoteStatus}
-                          isLoading={worktreesLoading}
-                          isCreating={createWorktreeMutation.isPending}
-                          error={inactiveSelectedRemoteRepo ? null : worktreeError}
-                          onSelectWorktree={(worktree) => {
-                            handleSelectWorktree(worktree);
-                            closeSidebarOverlay();
-                          }}
-                          onCreateWorktree={handleCreateWorktree}
-                          onRemoveWorktree={handleRemoveWorktree}
-                          onMergeWorktree={handleOpenMergeDialog}
-                          onReorderWorktrees={handleReorderWorktrees}
-                          onInitGit={handleInitGit}
-                          onRefresh={() => {
-                            refetch();
-                            refetchBranches();
-                          }}
-                          collapsed={false}
-                          onCollapse={closeSidebarOverlay}
-                          repositoryCollapsed={false}
-                        />
-                      )}
-                    </div>
+                      />
+                      {/* Resize handle */}
+                      <div
+                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
+                        onMouseDown={handleResizeStart('repository')}
+                      />
+                    </motion.div>
                   )}
-                </div>
-              </div>
-            )}
+                </AnimatePresence>
 
-            {/* Column 1: Repository Sidebar */}
-            <AnimatePresence initial={false}>
-              {!isCompact && !repositoryCollapsed && (
-                <motion.div
-                  ref={repositorySidebarRef}
-                  key="repository"
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: repositoryWidth, opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  transition={panelTransition}
-                  className="relative h-full shrink-0 overflow-hidden"
-                >
-                  <RepositorySidebar
-                    repositories={repositories}
-                    selectedRepo={selectedRepo}
-                    isHomeActive={isHomeActive}
-                    onSelectHome={handleSelectHome}
-                    onSelectRepo={handleSelectRepo}
-                    canLoadRepo={canLoadRepo}
-                    onAddRepository={handleOpenRepositoryDialog}
-                    onRemoveRepository={handleRemoveRepository}
-                    onReorderRepositories={handleReorderRepositories}
-                    onOpenSettings={openSettings}
-                    collapsed={false}
-                    onCollapse={() => setRepositoryCollapsed(true)}
-                    groups={sortedGroups}
-                    activeGroupId={activeGroupId}
-                    onSwitchGroup={handleSwitchGroup}
-                    onCreateGroup={handleCreateGroup}
-                    onUpdateGroup={handleUpdateGroup}
-                    onDeleteGroup={handleDeleteGroup}
-                    onMoveToGroup={handleMoveToGroup}
-                      onSwitchTab={setActiveTab}
-                      onSwitchWorktreeByPath={handleSwitchWorktreePath}
-                      onLaunchAgent={handleLaunchAgent}
-                      onOpenTerminal={handleOpenTerminal}
-                      isSettingsActive={activeTab === 'settings'}
-                      onToggleSettings={toggleSettings}
-                      isFileDragOver={isFileDragOver}
-                      temporaryWorkspaceEnabled={effectiveTemporaryWorkspaceEnabled}
-                      tempBasePath={tempBasePathDisplay}
-                  />
-                  {/* Resize handle */}
-                  <div
-                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
-                    onMouseDown={handleResizeStart('repository')}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Column 2: Worktree Panel */}
-            {showWorktreePanel && (
-              <AnimatePresence initial={false}>
-                {!isCompact && !worktreeCollapsed && (
-                  <motion.div
-                    key="worktree"
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: worktreeWidth, opacity: 1 }}
-                    exit={{ width: 0, opacity: 0 }}
-                    transition={panelTransition}
-                    className="relative h-full shrink-0 overflow-hidden"
-                  >
-                    {isTempRepo ? (
-                      <TemporaryWorkspacePanel
-                        items={tempWorkspaces}
-                        activePath={activeWorktree?.path ?? null}
-                        onSelect={(item) => handleSelectTempWorkspace(item.path)}
-                        onCreate={handleCreateTempWorkspace}
-                        onRequestRename={(id) => openTempRename(id)}
-                        onRequestDelete={(id) => openTempDelete(id)}
-                        onRefresh={rehydrateTempWorkspaces}
-                        onCollapse={() => setWorktreeCollapsed(true)}
-                      />
-                    ) : (
-                      <WorktreePanel
-                        worktrees={sortedWorktrees}
-                        activeWorktree={activeWorktree}
-                        branches={branches}
-                        projectName={selectedRepo ? getDisplayPathBasename(selectedRepo) : ''}
-                        inactiveRemote={inactiveSelectedRemoteRepo}
-                        remoteStatus={selectedRemoteStatus}
-                        isLoading={worktreesLoading}
-                        isCreating={createWorktreeMutation.isPending}
-                        error={inactiveSelectedRemoteRepo ? null : worktreeError}
-                        onSelectWorktree={handleSelectWorktree}
-                        onCreateWorktree={handleCreateWorktree}
-                        onRemoveWorktree={handleRemoveWorktree}
-                        onMergeWorktree={handleOpenMergeDialog}
-                        onReorderWorktrees={handleReorderWorktrees}
-                        onInitGit={handleInitGit}
-                        onRefresh={() => {
-                          refetch();
-                          refetchBranches();
-                        }}
-                        width={worktreeWidth}
-                        collapsed={false}
-                        onCollapse={() => setWorktreeCollapsed(true)}
-                        repositoryCollapsed={repositoryCollapsed}
-                        onExpandRepository={() => setRepositoryCollapsed(false)}
-                      />
+                {/* Column 2: Worktree Panel */}
+                {showWorktreePanel && (
+                  <AnimatePresence initial={false}>
+                    {!isCompact && !worktreeCollapsed && (
+                      <motion.div
+                        key="worktree"
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: worktreeWidth, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={panelTransition}
+                        className="relative h-full shrink-0 overflow-hidden"
+                      >
+                        {isTempRepo ? (
+                          <TemporaryWorkspacePanel
+                            items={tempWorkspaces}
+                            activePath={activeWorktree?.path ?? null}
+                            onSelect={(item) => handleSelectTempWorkspace(item.path)}
+                            onCreate={handleCreateTempWorkspace}
+                            onRequestRename={(id) => openTempRename(id)}
+                            onRequestDelete={(id) => openTempDelete(id)}
+                            onRefresh={rehydrateTempWorkspaces}
+                            onCollapse={() => setWorktreeCollapsed(true)}
+                          />
+                        ) : (
+                          <WorktreePanel
+                            worktrees={sortedWorktrees}
+                            activeWorktree={activeWorktree}
+                            branches={branches}
+                            projectName={selectedRepo ? getDisplayPathBasename(selectedRepo) : ''}
+                            inactiveRemote={inactiveSelectedRemoteRepo}
+                            remoteStatus={selectedRemoteStatus}
+                            isLoading={worktreesLoading}
+                            isCreating={createWorktreeMutation.isPending}
+                            error={inactiveSelectedRemoteRepo ? null : worktreeError}
+                            onSelectWorktree={handleSelectWorktree}
+                            onCreateWorktree={handleCreateWorktree}
+                            onRemoveWorktree={handleRemoveWorktree}
+                            onMergeWorktree={handleOpenMergeDialog}
+                            onReorderWorktrees={handleReorderWorktrees}
+                            onInitGit={handleInitGit}
+                            onRefresh={() => {
+                              refetch();
+                              refetchBranches();
+                            }}
+                            width={worktreeWidth}
+                            collapsed={false}
+                            onCollapse={() => setWorktreeCollapsed(true)}
+                            repositoryCollapsed={repositoryCollapsed}
+                            onExpandRepository={() => setRepositoryCollapsed(false)}
+                          />
+                        )}
+                        {/* Resize handle */}
+                        <div
+                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
+                          onMouseDown={handleResizeStart('worktree')}
+                        />
+                      </motion.div>
                     )}
-                    {/* Resize handle */}
-                    <div
-                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors z-10"
-                      onMouseDown={handleResizeStart('worktree')}
-                    />
-                  </motion.div>
+                  </AnimatePresence>
                 )}
-              </AnimatePresence>
+              </>
             )}
-          </>
-        )}
 
-        {/* Main Content */}
-        {fileTreeDisplayMode === 'current' && hasActiveWorktree && !isHomeActive && (
-          <FileSidebar
-            rootPath={activeWorktree?.path}
-            isActive={activeTab === 'file'}
-            width={fileSidebarWidth}
-            collapsed={fileSidebarCollapsed}
-            onCollapse={() => setFileSidebarCollapsed(true)}
-            onResizeStart={handleResizeStart('fileSidebar')}
-            onSwitchTab={() => handleTabChange('file')}
-          />
-        )}
+            {/* Main Content */}
+            {fileTreeDisplayMode === 'current' && hasActiveWorktree && !isHomeActive && (
+              <FileSidebar
+                rootPath={activeWorktree?.path}
+                isActive={activeTab === 'file'}
+                width={fileSidebarWidth}
+                collapsed={fileSidebarCollapsed}
+                onCollapse={() => setFileSidebarCollapsed(true)}
+                onResizeStart={handleResizeStart('fileSidebar')}
+                onSwitchTab={() => handleTabChange('file')}
+              />
+            )}
 
-        {selectedRepo && (!isHomeViewActive || activeTab === 'settings') ? (
-          <MainContent
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-            tabOrder={tabOrder}
-            onTabReorder={handleReorderTabs}
-            repoPath={selectedRepo || undefined}
-            worktreePath={activeWorktree?.path}
-            isGitRepo={isGitRepo === true}
-            repositoryCollapsed={repositoryCollapsed}
-            worktreeCollapsed={layoutMode === 'tree' ? repositoryCollapsed : worktreeCollapsed}
-            fileSidebarCollapsed={
-              fileTreeDisplayMode === 'current' && hasActiveWorktree ? fileSidebarCollapsed : false
-            }
-            layoutMode={layoutMode}
-            onExpandRepository={() => setRepositoryCollapsed(false)}
-            onExpandWorktree={
-              layoutMode === 'tree'
-                ? () => setRepositoryCollapsed(false)
-                : () => setWorktreeCollapsed(false)
-            }
-            onExpandFileSidebar={
-              fileTreeDisplayMode === 'current' && hasActiveWorktree
-                ? () => setFileSidebarCollapsed(false)
-                : undefined
-            }
-            onSwitchWorktree={handleSwitchWorktreePath}
-            onSwitchTab={handleTabChange}
-            isSettingsActive={
-              (settingsDisplayMode === 'tab' && activeTab === 'settings') ||
-              (settingsDisplayMode === 'draggable-modal' && settingsDialogOpen)
-            }
-            settingsCategory={settingsCategory}
-            onCategoryChange={handleSettingsCategoryChange}
-            scrollToProvider={scrollToProvider}
-            onToggleSettings={toggleSettings}
-          />
-        ) : (
-          <SessionManagerView onResumeSession={handleResumeClaudeSession} />
-        )}
+            {selectedRepo && (!isHomeViewActive || activeTab === 'settings') ? (
+              <MainContent
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
+                tabOrder={tabOrder}
+                onTabReorder={handleReorderTabs}
+                repoPath={selectedRepo || undefined}
+                worktreePath={activeWorktree?.path}
+                isGitRepo={isGitRepo === true}
+                repositoryCollapsed={repositoryCollapsed}
+                worktreeCollapsed={layoutMode === 'tree' ? repositoryCollapsed : worktreeCollapsed}
+                fileSidebarCollapsed={
+                  fileTreeDisplayMode === 'current' && hasActiveWorktree
+                    ? fileSidebarCollapsed
+                    : false
+                }
+                layoutMode={layoutMode}
+                onExpandRepository={() => setRepositoryCollapsed(false)}
+                onExpandWorktree={
+                  layoutMode === 'tree'
+                    ? () => setRepositoryCollapsed(false)
+                    : () => setWorktreeCollapsed(false)
+                }
+                onExpandFileSidebar={
+                  fileTreeDisplayMode === 'current' && hasActiveWorktree
+                    ? () => setFileSidebarCollapsed(false)
+                    : undefined
+                }
+                onSwitchWorktree={handleSwitchWorktreePath}
+                onSwitchTab={handleTabChange}
+                isSettingsActive={
+                  (settingsDisplayMode === 'tab' && activeTab === 'settings') ||
+                  (settingsDisplayMode === 'draggable-modal' && settingsDialogOpen)
+                }
+                settingsCategory={settingsCategory}
+                onCategoryChange={handleSettingsCategoryChange}
+                scrollToProvider={scrollToProvider}
+                onToggleSettings={toggleSettings}
+              />
+            ) : (
+              <SessionManagerView onResumeSession={handleResumeClaudeSession} />
+            )}
           </>
         )}
 
@@ -2037,7 +2043,6 @@ export default function App() {
             scrollToProvider={scrollToProvider}
           />
         )}
-
       </div>
     </div>
   );

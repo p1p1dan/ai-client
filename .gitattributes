@@ -1,0 +1,9 @@
+# Biome enforces LF on lintable sources; pin checkout EOL so core.autocrlf=true
+# machines don't re-introduce CRLF and turn `pnpm lint` red (C-09).
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf

@@ -71,4 +71,3 @@ export function mergeClaudeEnvSettings(env: Record<string, string | null>): void
 
   writeJson(settingsPath, { ...current, env: existingEnv });
 }
-

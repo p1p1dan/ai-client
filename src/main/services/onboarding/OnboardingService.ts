@@ -302,7 +302,7 @@ class OnboardingService {
           env: nextEnv,
           skipWebFetchPreflight: true,
         };
-        fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + '\n', {
+        fs.writeFileSync(settingsPath, `${JSON.stringify(nextSettings, null, 2)}\n`, {
           encoding: 'utf-8',
           mode: 0o600,
         });
@@ -315,9 +315,7 @@ class OnboardingService {
           verifyEnv.ANTHROPIC_BASE_URL === baseUrl &&
           verifyEnv.ANTHROPIC_AUTH_TOKEN === authToken
         ) {
-          console.log(
-            `[OnboardingService] writeClaudeConfig attempt ${attempt} verified ok`
-          );
+          console.log(`[OnboardingService] writeClaudeConfig attempt ${attempt} verified ok`);
           return true;
         }
 
@@ -327,10 +325,7 @@ class OnboardingService {
           ).join(',')}`
         );
       } catch (error) {
-        console.error(
-          `[OnboardingService] writeClaudeConfig attempt ${attempt} threw:`,
-          error
-        );
+        console.error(`[OnboardingService] writeClaudeConfig attempt ${attempt} threw:`, error);
       }
     }
 
@@ -359,7 +354,7 @@ class OnboardingService {
 
       const existingAuth = this.readJsonIfExists(authPath) as Record<string, unknown>;
       const nextAuth = { ...existingAuth, OPENAI_API_KEY: apiKey };
-      fs.writeFileSync(authPath, JSON.stringify(nextAuth, null, 2) + '\n', {
+      fs.writeFileSync(authPath, `${JSON.stringify(nextAuth, null, 2)}\n`, {
         encoding: 'utf-8',
         mode: 0o600,
       });
@@ -463,7 +458,7 @@ class OnboardingService {
       }
 
       const next = { ...existing, hasCompletedOnboarding: true };
-      fs.writeFileSync(claudeJsonPath, JSON.stringify(next, null, 2) + '\n', {
+      fs.writeFileSync(claudeJsonPath, `${JSON.stringify(next, null, 2)}\n`, {
         encoding: 'utf-8',
         mode: 0o600,
       });
@@ -488,7 +483,7 @@ class OnboardingService {
     delete env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC;
 
     const next = { ...existing, env };
-    fs.writeFileSync(settingsPath, JSON.stringify(next, null, 2) + '\n', { encoding: 'utf-8' });
+    fs.writeFileSync(settingsPath, `${JSON.stringify(next, null, 2)}\n`, { encoding: 'utf-8' });
   }
 
   private removeCodexConfig(): void {

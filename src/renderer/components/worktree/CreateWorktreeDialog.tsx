@@ -1,10 +1,10 @@
+import { buildWorktreePath } from '@shared/defaultPaths';
 import type {
   GhCliStatus,
   GitBranch as GitBranchType,
   PullRequest,
   WorktreeCreateOptions,
 } from '@shared/types';
-import { buildWorktreePath } from '@shared/defaultPaths';
 import { AlertCircle, GitBranch, GitPullRequest, Loader2, Plus, Sparkles } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';

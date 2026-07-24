@@ -199,4 +199,3 @@ describe('ClaudeSessionScanner', () => {
     expect(sessions[0]?.firstMessage).toBe('Hello World');
   });
 });
-

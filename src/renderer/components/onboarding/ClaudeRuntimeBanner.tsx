@@ -80,8 +80,9 @@ export function ClaudeRuntimeBanner({ status, onStatusChange }: ClaudeRuntimeBan
           </div>
         ) : (
           <>
-            检测到 Claude Code 为 Bun 版本（v{status.cliVersion ?? '?'}），可能与公司加密环境（TEC OCular
-            Agent）不兼容。建议降级到 Node 版（v{LAST_NODE_CLAUDE_VERSION}）以恢复会话历史等功能。
+            检测到 Claude Code 为 Bun 版本（v{status.cliVersion ?? '?'}），可能与公司加密环境（TEC
+            OCular Agent）不兼容。建议降级到 Node 版（v{LAST_NODE_CLAUDE_VERSION}
+            ）以恢复会话历史等功能。
             {error ? <span className="ml-2 text-destructive">{error}</span> : null}
           </>
         )}

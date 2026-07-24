@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { LAST_NODE_CLAUDE_VERSION } from '@shared/types';
+import { describe, expect, it } from 'vitest';
 import { classifyClaudeCliVersion, compareSemver } from '../ClaudeVersion';
 
 describe('compareSemver', () => {

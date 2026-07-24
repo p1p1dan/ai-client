@@ -48,7 +48,11 @@ function UsageMetric({
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
       <div className="text-xs text-muted-foreground">{label}</div>
-      {loading ? <Skeleton className="mt-1 h-4 w-16" /> : <div className="mt-1 text-sm font-medium">{value}</div>}
+      {loading ? (
+        <Skeleton className="mt-1 h-4 w-16" />
+      ) : (
+        <div className="mt-1 text-sm font-medium">{value}</div>
+      )}
     </div>
   );
 }
@@ -179,7 +183,11 @@ export function UserProfileCard({ email, onRequestClose }: UserProfileCardProps)
       <div className="grid grid-cols-2 gap-2">
         <UsageMetric label={t('Today calls')} value={todayCallsText} loading={metricsLoading} />
         <UsageMetric label={t('Today cost')} value={todayCostText} loading={metricsLoading} />
-        <UsageMetric label={t('This month calls')} value={monthCallsText} loading={metricsLoading} />
+        <UsageMetric
+          label={t('This month calls')}
+          value={monthCallsText}
+          loading={metricsLoading}
+        />
         <UsageMetric label={t('This month cost')} value={monthCostText} loading={metricsLoading} />
       </div>
 

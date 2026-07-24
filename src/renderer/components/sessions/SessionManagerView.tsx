@@ -11,7 +11,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useClaudeProjects, useClaudeProjectSessions } from '@/hooks/useClaudeSessions';
+import { useClaudeProjectSessions, useClaudeProjects } from '@/hooks/useClaudeSessions';
 import { cn } from '@/lib/utils';
 import { SessionItem } from './SessionItem';
 import { formatActivityLabel } from './time';
@@ -44,11 +44,7 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
         <>
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
-              <Button
-                onClick={() => setSelectedProjectId(null)}
-                size="sm"
-                variant="secondary"
-              >
+              <Button onClick={() => setSelectedProjectId(null)} size="sm" variant="secondary">
                 <ArrowLeft className="h-4 w-4" />
                 返回
               </Button>
@@ -60,9 +56,7 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                   <span className="min-w-0 flex-1 truncate font-mono" title={selectedProject.path}>
                     {selectedProject.path}
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums">
-                    {sessions.length} 个会话
-                  </span>
+                  <span className="shrink-0 text-xs tabular-nums">{sessions.length} 个会话</span>
                   {formatActivityLabel(selectedProject.lastActivityAt) ? (
                     <span className="shrink-0 text-xs tabular-nums">
                       {formatActivityLabel(selectedProject.lastActivityAt)}
@@ -163,6 +157,7 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
               )}
             >
               {Array.from({ length: 6 }).map((_, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static fixed-length skeleton, never reordered
                 <Skeleton className="h-24 w-full" key={idx} />
               ))}
             </div>
@@ -184,11 +179,8 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
               <div
                 className={cn(
                   'grid gap-3',
-                  viewMode === 'grid'
-                    ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
-                    : 'grid-cols-1'
+                  viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'
                 )}
-                role="list"
               >
                 {projects.map((project) => {
                   const projectName = getDisplayPathBasename(project.path);
@@ -198,11 +190,12 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                     <button
                       className={cn(
                         'group w-full min-w-0 rounded-xl border bg-card text-left shadow-xs transition-colors hover:bg-accent',
-                        viewMode === 'grid' ? 'flex flex-col gap-3 p-4' : 'flex items-center gap-3 p-3'
+                        viewMode === 'grid'
+                          ? 'flex flex-col gap-3 p-4'
+                          : 'flex items-center gap-3 p-3'
                       )}
                       key={project.id}
                       onClick={() => setSelectedProjectId(project.id)}
-                      role="listitem"
                       type="button"
                     >
                       <div
@@ -218,7 +211,10 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                           <div className="truncate font-medium text-foreground group-hover:text-primary transition-colors">
                             {projectName}
                           </div>
-                          <div className="mt-1 truncate font-mono text-xs text-muted-foreground" title={project.path}>
+                          <div
+                            className="mt-1 truncate font-mono text-xs text-muted-foreground"
+                            title={project.path}
+                          >
                             {project.path}
                           </div>
                         </div>
@@ -226,7 +222,9 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
 
                       {viewMode === 'grid' ? (
                         <div className="flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-                          <span className="shrink-0 tabular-nums">{project.sessionCount} 个会话</span>
+                          <span className="shrink-0 tabular-nums">
+                            {project.sessionCount} 个会话
+                          </span>
                           {activityLabel ? (
                             <span className="shrink-0 tabular-nums">{activityLabel}</span>
                           ) : (

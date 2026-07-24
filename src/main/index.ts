@@ -1,5 +1,4 @@
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { extname, join } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
@@ -342,7 +341,8 @@ async function init(): Promise<void> {
       }
     | undefined;
   const loggingEnabled = (aiclientSettings?.state?.loggingEnabled as boolean) ?? false;
-  const logLevel = (aiclientSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';
+  const logLevel =
+    (aiclientSettings?.state?.logLevel as 'error' | 'warn' | 'info' | 'debug') ?? 'info';
   const logRetentionDays = (aiclientSettings?.state?.logRetentionDays as number) ?? 7;
   initLogger(loggingEnabled, logLevel, logRetentionDays);
   log.info('AI Client started');
@@ -360,433 +360,437 @@ async function init(): Promise<void> {
   registerClaudeBridgeIpcHandlers();
 }
 
-app.whenReady().then(async () => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.aiclient.app');
+app
+  .whenReady()
+  .then(async () => {
+    // Set app user model id for windows
+    electronApp.setAppUserModelId('com.aiclient.app');
 
-  // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
-  // NOTE: This is registered here (in the same module as the protocol handler)
-  // to avoid any potential issues with module-level state not being shared.
-  const aiclientInputDir = join(app.getPath('temp'), 'aiclient-input');
-  registerAllowedLocalFileRoot(aiclientInputDir);
+    // Allow EnhancedInput temp images to be previewed via local-file:// protocol.
+    // NOTE: This is registered here (in the same module as the protocol handler)
+    // to avoid any potential issues with module-level state not being shared.
+    const aiclientInputDir = join(app.getPath('temp'), 'aiclient-input');
+    registerAllowedLocalFileRoot(aiclientInputDir);
 
-  // Clean up temp files from previous sessions
-  await cleanupTempFiles();
+    // Clean up temp files from previous sessions
+    await cleanupTempFiles();
 
-  const sharedPaths = getSharedStatePaths();
-  log.info('Shared state paths', sharedPaths);
-  migrateLegacySettingsIfNeeded();
-  await migrateLegacyTodoIfNeeded();
+    const sharedPaths = getSharedStatePaths();
+    log.info('Shared state paths', sharedPaths);
+    migrateLegacySettingsIfNeeded();
+    await migrateLegacyTodoIfNeeded();
 
-  const onboardingState = onboardingService.checkRegistration();
-  const shouldSendCredentialStatus = onboardingState.registered;
-  let credentialStatusSent = false;
-  let windowFinishedLoading = false;
-  let credentialFilesAvailable: boolean | null = shouldSendCredentialStatus ? null : false;
+    const onboardingState = onboardingService.checkRegistration();
+    const shouldSendCredentialStatus = onboardingState.registered;
+    let credentialStatusSent = false;
+    let windowFinishedLoading = false;
+    let credentialFilesAvailable: boolean | null = shouldSendCredentialStatus ? null : false;
 
-  const detectCredentialFilesAvailable = (): boolean => {
-    if (!onboardingState.registered) {
-      return false;
-    }
-    // Existence is not enough: users have reported settings.json surviving
-    // with hooks-only contents (env stripped somehow). Delegate to the
-    // service-level health check that actually parses both files.
-    const health = onboardingService.checkCredentialsHealth();
-    return health.claudeEnvOk && health.codexAuthOk;
-  };
-
-  const maybeSendLiveCredentialsStatus = () => {
-    if (!shouldSendCredentialStatus) return;
-    if (!windowFinishedLoading) return;
-    if (credentialFilesAvailable === null) return;
-    if (credentialStatusSent) return;
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-
-    credentialStatusSent = true;
-    mainWindow.webContents.send(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, {
-      available: credentialFilesAvailable,
-    });
-  };
-
-  // Trust persisted onboarding state for existing users; only check whether the
-  // local CLI credential files are still on disk. Re-onboarding (logout + verify
-  // by email code) is the way back if files are missing or invalid.
-  if (shouldSendCredentialStatus) {
-    credentialFilesAvailable = detectCredentialFilesAvailable();
-  }
-
-  // Register protocol to handle local file:// URLs for markdown images
-  protocol.handle('local-file', (request) => {
-    try {
-      const filePath = customProtocolUriToPath(
-        request.url,
-        'local-file',
-        process.platform as SupportedFileUrlPlatform
-      );
-      if (!filePath) {
-        return new Response('Bad Request', { status: 400 });
+    const detectCredentialFilesAvailable = (): boolean => {
+      if (!onboardingState.registered) {
+        return false;
       }
+      // Existence is not enough: users have reported settings.json surviving
+      // with hooks-only contents (env stripped somehow). Delegate to the
+      // service-level health check that actually parses both files.
+      const health = onboardingService.checkCredentialsHealth();
+      return health.claudeEnvOk && health.codexAuthOk;
+    };
 
-      if (!isAllowedLocalFilePath(filePath)) {
-        return new Response('Forbidden', { status: 403 });
-      }
+    const maybeSendLiveCredentialsStatus = () => {
+      if (!shouldSendCredentialStatus) return;
+      if (!windowFinishedLoading) return;
+      if (credentialFilesAvailable === null) return;
+      if (credentialStatusSent) return;
+      if (!mainWindow || mainWindow.isDestroyed()) return;
 
-      return net.fetch(pathToFileURL(filePath).toString());
-    } catch {
-      return new Response('Bad Request', { status: 400 });
+      credentialStatusSent = true;
+      mainWindow.webContents.send(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, {
+        available: credentialFilesAvailable,
+      });
+    };
+
+    // Trust persisted onboarding state for existing users; only check whether the
+    // local CLI credential files are still on disk. Re-onboarding (logout + verify
+    // by email code) is the way back if files are missing or invalid.
+    if (shouldSendCredentialStatus) {
+      credentialFilesAvailable = detectCredentialFilesAvailable();
     }
-  });
 
-  // Register protocol to handle local background images (no root check, but extension check)
-  protocol.handle('local-image', async (request) => {
-    try {
-      const urlObj = new URL(request.url);
-
-      // Remote image proxy: local-image://remote-fetch?url=<encoded-remote-url>
-      // Uses net.fetch() from the main process to bypass renderer CORS/redirect issues
-      // Use raw URL string check as primary detection (custom protocol hostname parsing can be unreliable)
-      const isRemoteFetch =
-        request.url.startsWith('local-image://remote-fetch') || urlObj.hostname === 'remote-fetch';
-
-      if (isRemoteFetch) {
-        // Extract remote URL: try searchParams first, then manual regex as fallback
-        let fetchUrl = urlObj.searchParams.get('url');
-        if (!fetchUrl) {
-          const match = request.url.match(/[?&]url=([^&]+)/);
-          fetchUrl = match ? decodeURIComponent(match[1]) : null;
+    // Register protocol to handle local file:// URLs for markdown images
+    protocol.handle('local-file', (request) => {
+      try {
+        const filePath = customProtocolUriToPath(
+          request.url,
+          'local-file',
+          process.platform as SupportedFileUrlPlatform
+        );
+        if (!filePath) {
+          return new Response('Bad Request', { status: 400 });
         }
-        if (!fetchUrl) {
-          console.error('[local-image] Remote fetch: missing url parameter');
-          return new Response('Missing url parameter', { status: 400 });
-        }
-        if (!isAllowedRemoteImageUrl(fetchUrl)) {
-          console.warn('[local-image] Blocked remote fetch URL:', fetchUrl);
+
+        if (!isAllowedLocalFilePath(filePath)) {
           return new Response('Forbidden', { status: 403 });
         }
 
-        // Do NOT forward _t cache-busting param to the remote server —
-        // some APIs reject unknown query params (400). The _t on the
-        // local-image:// URL is enough for renderer-side cache invalidation.
-        console.log('[local-image] Proxying remote image:', fetchUrl);
-
-        try {
-          const response = await net.fetch(fetchUrl, { redirect: 'follow' });
-
-          if (!response.ok) {
-            console.error(
-              `[local-image] Remote fetch failed: HTTP ${response.status} for ${fetchUrl}`
-            );
-            return new Response(`Remote fetch failed: ${response.status}`, {
-              status: response.status,
-            });
-          }
-
-          const contentType = response.headers.get('content-type') || 'image/jpeg';
-          console.log(`[local-image] Remote image OK: ${fetchUrl} (${contentType})`);
-
-          return new Response(response.body, {
-            status: 200,
-            headers: {
-              'Content-Type': contentType,
-              'Access-Control-Allow-Origin': '*',
-              'Cache-Control': 'no-cache',
-            },
-          });
-        } catch (fetchErr) {
-          console.error('[local-image] Remote fetch error:', fetchUrl, fetchErr);
-          return new Response('Remote fetch error', { status: 502 });
-        }
-      }
-
-      const filePath = customProtocolUriToPath(
-        request.url,
-        'local-image',
-        process.platform as SupportedFileUrlPlatform
-      );
-      if (!filePath) {
+        return net.fetch(pathToFileURL(filePath).toString());
+      } catch {
         return new Response('Bad Request', { status: 400 });
       }
+    });
 
-      console.log(`[local-image] Request URL: ${request.url}`);
-      console.log(`[local-image] Parsed Path: ${filePath}`);
-
-      // Security check: only allow image/video extensions
-      const ext = extname(filePath).toLowerCase();
-      const allowedExts = [
-        '.png',
-        '.jpg',
-        '.jpeg',
-        '.gif',
-        '.webp',
-        '.bmp',
-        '.svg',
-        '.mp4',
-        '.webm',
-        '.ogg',
-        '.mov',
-        '',
-      ];
-
-      if (!allowedExts.includes(ext) && ext !== '') {
-        console.warn(`[local-image] Blocked extension: ${ext} for path: ${filePath}`);
-        return new Response('Forbidden', { status: 403 });
-      }
-
-      // Reject directory paths (e.g. folder source type before random file is resolved)
+    // Register protocol to handle local background images (no root check, but extension check)
+    protocol.handle('local-image', async (request) => {
       try {
-        if (statSync(filePath).isDirectory()) {
-          return new Response('Not a file', { status: 400 });
-        }
-      } catch {
-        // stat failed → file doesn't exist, will be caught below
-      }
+        const urlObj = new URL(request.url);
 
-      // Video files: stream with Range request support for <video> element
-      const videoExts = new Set(['.mp4', '.webm', '.ogg', '.mov']);
-      const videoMimeTypes: Record<string, string> = {
-        '.mp4': 'video/mp4',
-        '.webm': 'video/webm',
-        '.ogg': 'video/ogg',
-        '.mov': 'video/quicktime',
-      };
-      if (videoExts.has(ext)) {
-        try {
-          const fileStat = statSync(filePath);
-          const fileSize = fileStat.size;
-          const mimeType = videoMimeTypes[ext] || 'application/octet-stream';
-          const rangeHeader = request.headers.get('Range');
+        // Remote image proxy: local-image://remote-fetch?url=<encoded-remote-url>
+        // Uses net.fetch() from the main process to bypass renderer CORS/redirect issues
+        // Use raw URL string check as primary detection (custom protocol hostname parsing can be unreliable)
+        const isRemoteFetch =
+          request.url.startsWith('local-image://remote-fetch') ||
+          urlObj.hostname === 'remote-fetch';
 
-          if (rangeHeader) {
-            const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-            if (match) {
-              const start = parseInt(match[1], 10);
-              const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
-              const chunkSize = end - start + 1;
-
-              const fsStream = createReadStream(filePath, { start, end });
-              let closed = false;
-              const readable = new ReadableStream({
-                start(controller) {
-                  fsStream.on('data', (chunk: Buffer) => {
-                    if (!closed) {
-                      try {
-                        controller.enqueue(chunk);
-                      } catch {
-                        closed = true;
-                      }
-                    }
-                  });
-                  fsStream.on('end', () => {
-                    if (!closed) {
-                      closed = true;
-                      try {
-                        controller.close();
-                      } catch {
-                        /* already closed */
-                      }
-                    }
-                  });
-                  fsStream.on('error', (err) => {
-                    if (!closed) {
-                      closed = true;
-                      try {
-                        controller.error(err);
-                      } catch {
-                        /* already closed */
-                      }
-                    }
-                  });
-                },
-                cancel() {
-                  closed = true;
-                  fsStream.destroy();
-                },
-              });
-
-              return new Response(readable as unknown as BodyInit, {
-                status: 206,
-                headers: {
-                  'Content-Type': mimeType,
-                  'Content-Length': String(chunkSize),
-                  'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                  'Accept-Ranges': 'bytes',
-                  'Access-Control-Allow-Origin': '*',
-                },
-              });
-            }
+        if (isRemoteFetch) {
+          // Extract remote URL: try searchParams first, then manual regex as fallback
+          let fetchUrl = urlObj.searchParams.get('url');
+          if (!fetchUrl) {
+            const match = request.url.match(/[?&]url=([^&]+)/);
+            fetchUrl = match ? decodeURIComponent(match[1]) : null;
+          }
+          if (!fetchUrl) {
+            console.error('[local-image] Remote fetch: missing url parameter');
+            return new Response('Missing url parameter', { status: 400 });
+          }
+          if (!isAllowedRemoteImageUrl(fetchUrl)) {
+            console.warn('[local-image] Blocked remote fetch URL:', fetchUrl);
+            return new Response('Forbidden', { status: 403 });
           }
 
-          // No Range header: serve full file
+          // Do NOT forward _t cache-busting param to the remote server —
+          // some APIs reject unknown query params (400). The _t on the
+          // local-image:// URL is enough for renderer-side cache invalidation.
+          console.log('[local-image] Proxying remote image:', fetchUrl);
+
+          try {
+            const response = await net.fetch(fetchUrl, { redirect: 'follow' });
+
+            if (!response.ok) {
+              console.error(
+                `[local-image] Remote fetch failed: HTTP ${response.status} for ${fetchUrl}`
+              );
+              return new Response(`Remote fetch failed: ${response.status}`, {
+                status: response.status,
+              });
+            }
+
+            const contentType = response.headers.get('content-type') || 'image/jpeg';
+            console.log(`[local-image] Remote image OK: ${fetchUrl} (${contentType})`);
+
+            return new Response(response.body, {
+              status: 200,
+              headers: {
+                'Content-Type': contentType,
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'no-cache',
+              },
+            });
+          } catch (fetchErr) {
+            console.error('[local-image] Remote fetch error:', fetchUrl, fetchErr);
+            return new Response('Remote fetch error', { status: 502 });
+          }
+        }
+
+        const filePath = customProtocolUriToPath(
+          request.url,
+          'local-image',
+          process.platform as SupportedFileUrlPlatform
+        );
+        if (!filePath) {
+          return new Response('Bad Request', { status: 400 });
+        }
+
+        console.log(`[local-image] Request URL: ${request.url}`);
+        console.log(`[local-image] Parsed Path: ${filePath}`);
+
+        // Security check: only allow image/video extensions
+        const ext = extname(filePath).toLowerCase();
+        const allowedExts = [
+          '.png',
+          '.jpg',
+          '.jpeg',
+          '.gif',
+          '.webp',
+          '.bmp',
+          '.svg',
+          '.mp4',
+          '.webm',
+          '.ogg',
+          '.mov',
+          '',
+        ];
+
+        if (!allowedExts.includes(ext) && ext !== '') {
+          console.warn(`[local-image] Blocked extension: ${ext} for path: ${filePath}`);
+          return new Response('Forbidden', { status: 403 });
+        }
+
+        // Reject directory paths (e.g. folder source type before random file is resolved)
+        try {
+          if (statSync(filePath).isDirectory()) {
+            return new Response('Not a file', { status: 400 });
+          }
+        } catch {
+          // stat failed → file doesn't exist, will be caught below
+        }
+
+        // Video files: stream with Range request support for <video> element
+        const videoExts = new Set(['.mp4', '.webm', '.ogg', '.mov']);
+        const videoMimeTypes: Record<string, string> = {
+          '.mp4': 'video/mp4',
+          '.webm': 'video/webm',
+          '.ogg': 'video/ogg',
+          '.mov': 'video/quicktime',
+        };
+        if (videoExts.has(ext)) {
+          try {
+            const fileStat = statSync(filePath);
+            const fileSize = fileStat.size;
+            const mimeType = videoMimeTypes[ext] || 'application/octet-stream';
+            const rangeHeader = request.headers.get('Range');
+
+            if (rangeHeader) {
+              const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+              if (match) {
+                const start = parseInt(match[1], 10);
+                const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+                const chunkSize = end - start + 1;
+
+                const fsStream = createReadStream(filePath, { start, end });
+                let closed = false;
+                const readable = new ReadableStream({
+                  start(controller) {
+                    fsStream.on('data', (chunk: Buffer) => {
+                      if (!closed) {
+                        try {
+                          controller.enqueue(chunk);
+                        } catch {
+                          closed = true;
+                        }
+                      }
+                    });
+                    fsStream.on('end', () => {
+                      if (!closed) {
+                        closed = true;
+                        try {
+                          controller.close();
+                        } catch {
+                          /* already closed */
+                        }
+                      }
+                    });
+                    fsStream.on('error', (err) => {
+                      if (!closed) {
+                        closed = true;
+                        try {
+                          controller.error(err);
+                        } catch {
+                          /* already closed */
+                        }
+                      }
+                    });
+                  },
+                  cancel() {
+                    closed = true;
+                    fsStream.destroy();
+                  },
+                });
+
+                return new Response(readable as unknown as BodyInit, {
+                  status: 206,
+                  headers: {
+                    'Content-Type': mimeType,
+                    'Content-Length': String(chunkSize),
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'Access-Control-Allow-Origin': '*',
+                  },
+                });
+              }
+            }
+
+            // No Range header: serve full file
+            const buffer = readFileSync(filePath);
+            return new Response(buffer, {
+              headers: {
+                'Content-Type': mimeType,
+                'Content-Length': String(fileSize),
+                'Accept-Ranges': 'bytes',
+                'Access-Control-Allow-Origin': '*',
+              },
+            });
+          } catch (e) {
+            console.error(`[local-image] Video serve error for ${filePath}:`, e);
+            return new Response('Not Found', { status: 404 });
+          }
+        }
+
+        // Image files: use readFileSync (simpler, avoids net.fetch quirks with images)
+        try {
           const buffer = readFileSync(filePath);
+
+          const mimeTypes: Record<string, string> = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.bmp': 'image/bmp',
+            '.svg': 'image/svg+xml',
+          };
+
           return new Response(buffer, {
             headers: {
-              'Content-Type': mimeType,
-              'Content-Length': String(fileSize),
-              'Accept-Ranges': 'bytes',
+              'Content-Type': mimeTypes[ext] || 'application/octet-stream',
               'Access-Control-Allow-Origin': '*',
             },
           });
         } catch (e) {
-          console.error(`[local-image] Video serve error for ${filePath}:`, e);
+          console.error(`[local-image] Read error for ${filePath}:`, e);
           return new Response('Not Found', { status: 404 });
+        }
+      } catch (error) {
+        console.error('[local-image] Error handling request:', request.url, error);
+        return new Response('Bad Request', { status: 400 });
+      }
+    });
+
+    // Default open or close DevTools by F12 in development
+    // Also intercept Cmd+- for all windows to bypass Monaco Editor interception
+    app.on('browser-window-created', (_, window) => {
+      // Snapshot listeners before the optimizer adds its own, only needed in production.
+      const listenersBefore = app.isPackaged
+        ? new Set(window.webContents.listeners('before-input-event'))
+        : undefined;
+      optimizer.watchWindowShortcuts(window);
+
+      // In production, allow Ctrl+R to pass through to terminal for reverse
+      // history search. The optimizer blocks it by default via
+      // before-input-event preventDefault.
+      // Depends on @electron-toolkit/utils implementing shortcut blocking via
+      // before-input-event listeners (verified up to v4.x).
+      if (listenersBefore) {
+        const newListeners = window.webContents
+          .listeners('before-input-event')
+          .filter((l) => !listenersBefore.has(l));
+
+        if (newListeners.length === 0) {
+          console.warn(
+            '[ctrl-r-passthrough] watchWindowShortcuts did not add any before-input-event listener'
+          );
+        }
+
+        const isCtrlR = (input: Electron.Input): boolean =>
+          input.code === 'KeyR' && input.control && !input.shift && !input.meta && !input.alt;
+
+        // Remove and re-add each listener with a wrapper. This moves them to
+        // the end of the listener queue, which is acceptable since no other
+        // before-input-event listeners depend on their ordering.
+        for (const listener of newListeners) {
+          const handler = listener as (event: Electron.Event, input: Electron.Input) => void;
+          window.webContents.removeListener('before-input-event', handler);
+          window.webContents.on('before-input-event', (event, input) => {
+            if (isCtrlR(input)) return;
+            handler(event, input);
+          });
         }
       }
 
-      // Image files: use readFileSync (simpler, avoids net.fetch quirks with images)
-      try {
-        const buffer = readFileSync(filePath);
-
-        const mimeTypes: Record<string, string> = {
-          '.png': 'image/png',
-          '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg',
-          '.gif': 'image/gif',
-          '.webp': 'image/webp',
-          '.bmp': 'image/bmp',
-          '.svg': 'image/svg+xml',
-        };
-
-        return new Response(buffer, {
-          headers: {
-            'Content-Type': mimeTypes[ext] || 'application/octet-stream',
-            'Access-Control-Allow-Origin': '*',
-          },
-        });
-      } catch (e) {
-        console.error(`[local-image] Read error for ${filePath}:`, e);
-        return new Response('Not Found', { status: 404 });
-      }
-    } catch (error) {
-      console.error('[local-image] Error handling request:', request.url, error);
-      return new Response('Bad Request', { status: 400 });
-    }
-  });
-
-  // Default open or close DevTools by F12 in development
-  // Also intercept Cmd+- for all windows to bypass Monaco Editor interception
-  app.on('browser-window-created', (_, window) => {
-    // Snapshot listeners before the optimizer adds its own, only needed in production.
-    const listenersBefore = app.isPackaged
-      ? new Set(window.webContents.listeners('before-input-event'))
-      : undefined;
-    optimizer.watchWindowShortcuts(window);
-
-    // In production, allow Ctrl+R to pass through to terminal for reverse
-    // history search. The optimizer blocks it by default via
-    // before-input-event preventDefault.
-    // Depends on @electron-toolkit/utils implementing shortcut blocking via
-    // before-input-event listeners (verified up to v4.x).
-    if (listenersBefore) {
-      const newListeners = window.webContents
-        .listeners('before-input-event')
-        .filter((l) => !listenersBefore.has(l));
-
-      if (newListeners.length === 0) {
-        console.warn(
-          '[ctrl-r-passthrough] watchWindowShortcuts did not add any before-input-event listener'
-        );
-      }
-
-      const isCtrlR = (input: Electron.Input): boolean =>
-        input.code === 'KeyR' && input.control && !input.shift && !input.meta && !input.alt;
-
-      // Remove and re-add each listener with a wrapper. This moves them to
-      // the end of the listener queue, which is acceptable since no other
-      // before-input-event listeners depend on their ordering.
-      for (const listener of newListeners) {
-        const handler = listener as (event: Electron.Event, input: Electron.Input) => void;
-        window.webContents.removeListener('before-input-event', handler);
-        window.webContents.on('before-input-event', (event, input) => {
-          if (isCtrlR(input)) return;
-          handler(event, input);
-        });
-      }
-    }
-
-    // Intercept Cmd+- before renderer process to bypass Monaco Editor interception
-    window.webContents.on('before-input-event', (event, input) => {
-      const isMac = process.platform === 'darwin';
-      const modKey = isMac ? input.meta : input.control;
-      if (modKey && input.key === '-') {
-        event.preventDefault();
-        const currentZoom = window.webContents.getZoomLevel();
-        window.webContents.setZoomLevel(currentZoom - 0.5);
-      }
+      // Intercept Cmd+- before renderer process to bypass Monaco Editor interception
+      window.webContents.on('before-input-event', (event, input) => {
+        const isMac = process.platform === 'darwin';
+        const modKey = isMac ? input.meta : input.control;
+        if (modKey && input.key === '-') {
+          event.preventDefault();
+          const currentZoom = window.webContents.getZoomLevel();
+          window.webContents.setZoomLevel(currentZoom - 0.5);
+        }
+      });
     });
-  });
 
-  await init();
+    await init();
 
-  // Auto-start Hapi server if enabled in settings
-  await autoStartHapi();
+    // Auto-start Hapi server if enabled in settings
+    await autoStartHapi();
 
-  setCurrentLocale(readStoredLanguage());
+    setCurrentLocale(readStoredLanguage());
 
-  cleanupWindowHandlers = registerWindowHandlers();
-  mainWindow = openLocalWindow();
+    cleanupWindowHandlers = registerWindowHandlers();
+    mainWindow = openLocalWindow();
 
-  // Set main window for Web Inspector server (for IPC communication)
-  webInspectorServer.setMainWindow(mainWindow);
+    // Set main window for Web Inspector server (for IPC communication)
+    webInspectorServer.setMainWindow(mainWindow);
 
-  // Initialize Claude Provider Watcher (only when enableProviderWatcher is true)
-  const appSettings = readSettings();
-  const providerWatcherEnabled =
-    (appSettings?.claudeCodeIntegration as Record<string, unknown>)?.enableProviderWatcher !==
-    false;
-  initClaudeProviderWatcher(mainWindow, providerWatcherEnabled);
+    // Initialize Claude Provider Watcher (only when enableProviderWatcher is true)
+    const appSettings = readSettings();
+    const providerWatcherEnabled =
+      (appSettings?.claudeCodeIntegration as Record<string, unknown>)?.enableProviderWatcher !==
+      false;
+    initClaudeProviderWatcher(mainWindow, providerWatcherEnabled);
 
-  // IMPORTANT: Set up did-finish-load handler BEFORE handling command line args
-  // to avoid race condition where page loads before handler is registered
-  mainWindow.webContents.once('did-finish-load', () => {
-    windowFinishedLoading = true;
-    if (pendingOpenPath) {
-      mainWindow?.webContents.send(IPC_CHANNELS.APP_OPEN_PATH, pendingOpenPath);
-      pendingOpenPath = null;
-    }
-    maybeSendLiveCredentialsStatus();
-  });
+    // IMPORTANT: Set up did-finish-load handler BEFORE handling command line args
+    // to avoid race condition where page loads before handler is registered
+    mainWindow.webContents.once('did-finish-load', () => {
+      windowFinishedLoading = true;
+      if (pendingOpenPath) {
+        mainWindow?.webContents.send(IPC_CHANNELS.APP_OPEN_PATH, pendingOpenPath);
+        pendingOpenPath = null;
+      }
+      maybeSendLiveCredentialsStatus();
+    });
 
-  // Initialize auto-updater
-  await initAutoUpdater(mainWindow);
+    // Initialize auto-updater
+    await initAutoUpdater(mainWindow);
 
-  // Initialize git auto-fetch service
-  gitAutoFetchService.init(mainWindow);
+    // Initialize git auto-fetch service
+    gitAutoFetchService.init(mainWindow);
 
-  const handleNewWindow = () => {
-    openLocalWindow();
-  };
+    const handleNewWindow = () => {
+      openLocalWindow();
+    };
 
-  // Build and set application menu
-  const menu = buildAppMenu({
-    onNewWindow: handleNewWindow,
-  });
-  Menu.setApplicationMenu(menu);
-
-  // Handle initial command line args (this may set pendingOpenPath)
-  handleCommandLineArgs(process.argv);
-
-  ipcMain.handle(IPC_CHANNELS.APP_SET_LANGUAGE, (_event, language: Locale) => {
-    setCurrentLocale(language);
-    const updatedMenu = buildAppMenu({
+    // Build and set application menu
+    const menu = buildAppMenu({
       onNewWindow: handleNewWindow,
     });
-    Menu.setApplicationMenu(updatedMenu);
-  });
+    Menu.setApplicationMenu(menu);
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = openLocalWindow();
-    }
-  });
+    // Handle initial command line args (this may set pendingOpenPath)
+    handleCommandLineArgs(process.argv);
 
-  app.on('browser-window-focus', (_, window) => {
-    mainWindow = window;
-    webInspectorServer.setMainWindow(window);
+    ipcMain.handle(IPC_CHANNELS.APP_SET_LANGUAGE, (_event, language: Locale) => {
+      setCurrentLocale(language);
+      const updatedMenu = buildAppMenu({
+        onNewWindow: handleNewWindow,
+      });
+      Menu.setApplicationMenu(updatedMenu);
+    });
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = openLocalWindow();
+      }
+    });
+
+    app.on('browser-window-focus', (_, window) => {
+      mainWindow = window;
+      webInspectorServer.setMainWindow(window);
+    });
+  })
+  .catch((err) => {
+    log.error('[app] Fatal startup error', err);
+    app.exit(1);
   });
-}).catch((err) => {
-  log.error('[app] Fatal startup error', err);
-  app.exit(1);
-});
 
 app.on('window-all-closed', () => {
   app.quit();

@@ -9,11 +9,11 @@
  *   AICLIENT_SPIKE_WORKDIR — cwd for the query (default: repo root)
  */
 
-import { createRequire } from 'node:module';
 import { access } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMETIX_PIN, CLAUDE_AGENT_SDK_PIN_VERSION } from '../pin.ts';
+import { CLAUDE_AGENT_SDK_PIN_VERSION, COMETIX_PIN } from '../pin.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const hostRoot = path.resolve(__dirname, '..');

@@ -87,8 +87,8 @@ import { heightVariants, springFast, springStandard } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
-import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 import { RunningProjectsPopover } from './RunningProjectsPopover';
+import { buildRepositoryContextMenuModel } from './repositoryContextMenuModel';
 
 interface TreeSidebarProps {
   repositories: Repository[];
@@ -841,25 +841,25 @@ export function TreeSidebar({
             onDragOver={(e) => handleRepoDragOver(e, originalIndex, sectionGroupId)}
             onDragLeave={handleRepoDragLeave}
             onDrop={(e) => handleRepoDrop(e, originalIndex, sectionGroupId)}
-             onContextMenu={(e) => handleRepoContextMenu(e, repo)}
-             onClick={() => {
+            onContextMenu={(e) => handleRepoContextMenu(e, repo)}
+            onClick={() => {
               if (!isSelected) {
                 onSelectRepo(repo.path);
               }
               toggleRepoExpanded(repo.path);
-             }}
-             onKeyDown={(e) => {
-               if (e.key === 'Enter' || e.key === ' ') {
-                 e.preventDefault();
-                 if (!isSelected) {
-                   onSelectRepo(repo.path);
-                 }
-                 toggleRepoExpanded(repo.path);
-               }
-             }}
-             className={cn(
-               'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
-               !isSelected && 'hover:bg-accent/30',
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (!isSelected) {
+                  onSelectRepo(repo.path);
+                }
+                toggleRepoExpanded(repo.path);
+              }
+            }}
+            className={cn(
+              'group relative flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer',
+              !isSelected && 'hover:bg-accent/30',
               draggedRepoIndexRef.current === originalIndex && 'opacity-50'
             )}
           >
@@ -969,11 +969,11 @@ export function TreeSidebar({
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="ml-2 mr-2 mt-1 flex flex-col gap-y-0.5 overflow-hidden"
             >
-               {!repoCanLoad ? (
-                 <div className="py-2 px-2 text-xs text-muted-foreground">
-                   {t('Click to load worktrees')}
-                 </div>
-               ) : repoError ? (
+              {!repoCanLoad ? (
+                <div className="py-2 px-2 text-xs text-muted-foreground">
+                  {t('Click to load worktrees')}
+                </div>
+              ) : repoError ? (
                 <div className="py-2 px-2 flex flex-col gap-1.5">
                   {isSelected && (
                     <div
@@ -1026,11 +1026,11 @@ export function TreeSidebar({
                     )}
                   </div>
                 </div>
-               ) : repoLoading ? (
-                 <div className="space-y-1">
-                   {[0, 1].map((i) => (
-                     <div key={`skeleton-${i}`} className="h-8 animate-pulse rounded-lg bg-muted" />
-                   ))}
+              ) : repoLoading ? (
+                <div className="space-y-1">
+                  {[0, 1].map((i) => (
+                    <div key={`skeleton-${i}`} className="h-8 animate-pulse rounded-lg bg-muted" />
+                  ))}
                 </div>
               ) : repoWorktrees.length === 0 ? (
                 <div className="py-2 px-2 text-xs text-muted-foreground">

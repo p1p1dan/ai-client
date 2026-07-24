@@ -762,12 +762,12 @@ export function GeneralSettings() {
         <span className="text-sm font-medium mt-2">{t('Save location')}</span>
         <div className="space-y-1.5">
           <div className="flex gap-2">
-              <Input
-                value={defaultWorktreePath}
-                onChange={(e) => setDefaultWorktreePath(e.target.value)}
-                placeholder="~/JYWAI/workspaces"
-                className="flex-1"
-              />
+            <Input
+              value={defaultWorktreePath}
+              onChange={(e) => setDefaultWorktreePath(e.target.value)}
+              placeholder="~/JYWAI/workspaces"
+              className="flex-1"
+            />
             <Button
               variant="outline"
               size="icon"
@@ -810,12 +810,12 @@ export function GeneralSettings() {
         <span className="text-sm font-medium mt-2">{t('Base directory')}</span>
         <div className="space-y-1.5">
           <div className="flex gap-2">
-              <Input
-                value={gitClone.baseDir}
-                onChange={(e) => setGitClone({ baseDir: e.target.value })}
-                placeholder="~/JYWAI/repos"
-                className="flex-1"
-              />
+            <Input
+              value={gitClone.baseDir}
+              onChange={(e) => setGitClone({ baseDir: e.target.value })}
+              placeholder="~/JYWAI/repos"
+              className="flex-1"
+            />
             <Button
               variant="outline"
               size="icon"

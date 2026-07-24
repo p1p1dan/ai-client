@@ -34,7 +34,9 @@ describe('buildRepositoryContextMenuModel', () => {
         custom: { enabled: true, isDefault: false },
         gemini: { enabled: true, isDefault: false },
       },
-      customAgents: [{ id: 'custom', name: 'My Agent', command: 'custom-agent' } satisfies CustomAgent],
+      customAgents: [
+        { id: 'custom', name: 'My Agent', command: 'custom-agent' } satisfies CustomAgent,
+      ],
       agentDetectionStatus: {
         codex: { installed: true, detectedAt: 1 },
         custom: { installed: true, detectedAt: 1 },

@@ -171,11 +171,7 @@ export class PermissionBridge {
   }
 
   /** Apply Renderer decision. Returns false if unknown / already settled. */
-  respond(input: {
-    sessionId: string;
-    permissionId: string;
-    allow: boolean;
-  }): boolean {
+  respond(input: { sessionId: string; permissionId: string; allow: boolean }): boolean {
     const entry = this.pending.get(input.permissionId);
     if (!entry) {
       this.log('permission.respond: no pending', input.permissionId);
