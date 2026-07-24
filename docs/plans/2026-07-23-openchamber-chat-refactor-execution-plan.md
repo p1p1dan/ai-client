@@ -70,6 +70,7 @@
 | **C-10** | Effort/Plan/Build 支持度探测（Phase 0 遗留） | SDK options 逐项实测（effort / permissionMode:plan 等）在 Cometix 2.1.212 + 当前网关下是否生效；`host.ready.capabilities` 扩展；UI 条件渲染依据交 T-08/T-09 | capability 结论记台账 + 字段落地 | 无 | 0.5d |
 | **C-11** | （机动）stream-json fallback 适配器 | `ClaudeRuntime` stream-json driver（参照 `spikes/stream-json-spike.ts`）。仅当 SDK 路线出现阻塞时提级，否则排后 | `AICLIENT_AGENT_HOST_DRIVER=stream-json` 下 PONG smoke 通过 | 无 | 1.5d |
 | **C-13** | 附件协议探测与桥接（用户反馈 F2） | spike 先行：Agent SDK `query()` prompt 是否支持图像/文件块（形态：base64 / 临时文件路径 / content block）；cli.js 粘贴图像的原生机制；结论定协议——`session.send` payload 扩展 `attachments[]`（Host→SDK 透传）+ Main/preload 链路。协议变更走 CP 纪律 | spike 结论记台账；协议扩展后 Host 侧冒烟：带一张图发送 → 模型能描述图片内容 | 无（UI 归 T-18） | 1d |
+| **C-14** | Host 挂起看门狗（C-10 发现，CP3 立项） | SDK 流「不吐事件也不结束」时无超时防护（非法 model 实测挂死 51s+；`finishTurn` 兜底只覆盖「流结束无 result」）。send 循环加无事件超时（默认 120s 无任何流事件 → abort + `session.failed` 带明确错误；`AICLIENT_HOST_STALL_TIMEOUT_MS` 可配）；单测 + 非法 model 场景复现验证 | 非法 model 场景显性 failed 不挂死；正常长响应（thinking 慢轮）不误杀 | 无（排 C-04 后） | 0.5d |
 | **C-12** | （Phase 5）旧路径收缩 + 性能压测 | AgentPanel Claude 主路径收缩、`App.tsx`/`MainContent.tsx` 清理（App 只装配）；千 block 会话压测→虚拟化决策；确认 ARD §8 清理项（`ai-chat/` 已不存在，验证 `shared/types/ai-chat.ts` 状态） | 旧界面其他 Agent 入口不回归；压测数据记台账 | M3/M4 后 | 2.5d |
 
 **主线推进顺序**：C-01 → C-02（M1/CP2）→ C-07（解锁 T-02）→ C-06（CP4，解锁 T-03）→ C-03 → C-04 → C-05（CP3）→ C-09 → C-08 → C-10 →（机动 C-11）→ C-12。
@@ -100,6 +101,7 @@
 | **T-15** | Phase 4：Terminal Dock 接真终端 | `BottomDock.tsx` 接现有 xterm/node-pty 体系；按 Workspace 恢复终端；与旧终端区并存策略 | Terminal 可用；切 Workspace 恢复对应终端 | M3 主体后 | 1.5d |
 | **T-16** | Phase 4：新旧开关成熟化 | Beta 开关默认策略；旧 AgentPanel 保留其他 Agent 终端入口；新壳缺功能时的回退路径说明 | 用户不必在新旧界面间来回切换核心流程 | T-12~15 | 1d |
 | **T-18** | Composer 粘贴图片/文件（用户反馈 F2） | 粘贴/拖入图片与文件 → chip 预览 → 随消息发送（走 C-13 定的 attachments 协议）；文件类可先降级为 @ 路径引用（复用 T-07） | 粘贴截图发送 → 模型能描述图片内容；粘贴文件 → 模型能读到内容 | C-13 | 1d |
+| **T-19** | Effort 选择器（C-10 承接，CP3 新增） | Composer/Header effort 控件。**开工前先调研官方文档实际档位**（用户指示 2026-07-24：不止 default/xhigh 两档，以官方文档为准，结合 C-10 实测复核——实测仅 xhigh 有可测差异、SDK 对非法值不校验静默吞）；效果说明文案避免暗示各档皆有实证。协议侧 `session.create/send` 传 effort 需主线扩展（提需求给 Claude）。plan 模式 UI **暂缓**：等主线在 canUseTool 侧做 plan 只读约束后再议 | 选 xhigh 后会话行为差异可观测（usage/路由证据）；控件档位与官方文档一致 | C-10 ✅ + 主线协议扩展 | 0.5d |
 | **T-17** | Tool 真实调用 GUI 验收（立即可做） | 开发态壳：让模型真实调用 Write/Bash（如「Create PING.txt with content pong」）；验证时间线完整出现 tool_call→permission 卡→allow→tool_result→文件真实生成。这是对现有 Phase 2 成果的验收，补总台账 Phase 2 检查点 | 操作记录/截图 + 台账检查点行 | 无 | 0.5d |
 
 **团队起步顺序建议**：T-17（半天，先验收现有成果）→ T-01 → T-06/T-07/T-08/T-09（无依赖并行池）→ 等 C-07/C-06 后 T-02/T-03 → T-04/T-05 → T-10 → T-11（M2）→ Phase 4（T-12~16）。
