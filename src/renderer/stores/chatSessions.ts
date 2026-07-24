@@ -612,6 +612,30 @@ export function applyRuntimeEvent(
   }
 }
 
+/**
+ * Fold a batch of runtime events into one combined state patch (C-08a).
+ * Each event sees the effects of earlier events in the batch; the returned
+ * partial is equivalent to applying the events one set() at a time.
+ */
+export function applyRuntimeEvents(
+  state: ChatSessionsState,
+  events: RuntimeEvent[]
+): Partial<ChatSessionsState> {
+  const patch: Partial<ChatSessionsState> = {};
+  let working = state;
+  for (const event of events) {
+    const step = applyRuntimeEvent(working, event);
+    working = { ...working, ...step };
+    Object.assign(patch, step);
+  }
+  return patch;
+}
+
+/** Streaming bursts arrive as one IPC macrotask per event; coalesce per frame. */
+const RUNTIME_EVENT_FLUSH_MS = 16;
+/** Hidden-window timer throttling can delay the flush; cap the backlog. */
+const RUNTIME_EVENT_MAX_QUEUE = 256;
+
 function isBusyStatus(status: SessionRuntimeStatus): boolean {
   return (
     status === 'starting' ||
@@ -759,10 +783,32 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     }
 
     set({ runtimeReady: true });
+
+    let queue: RuntimeEvent[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      flushTimer = null;
+      if (queue.length === 0) {
+        return;
+      }
+      const batch = queue;
+      queue = [];
+      set((state) => ({ ...applyRuntimeEvents(state, batch) }));
+    };
+
     const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event) => {
-      set((state) => ({
-        ...applyRuntimeEvent(state, event),
-      }));
+      queue.push(event);
+      if (queue.length >= RUNTIME_EVENT_MAX_QUEUE) {
+        if (flushTimer !== null) {
+          clearTimeout(flushTimer);
+        }
+        flush();
+        return;
+      }
+      if (flushTimer === null) {
+        flushTimer = setTimeout(flush, RUNTIME_EVENT_FLUSH_MS);
+      }
     });
 
     void window.electronAPI.chat.ensureHost().catch((err: unknown) => {
@@ -771,6 +817,13 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       });
     });
 
-    return unsubscribe;
+    return () => {
+      if (flushTimer !== null) {
+        clearTimeout(flushTimer);
+      }
+      // Drain rather than drop: late events must still land in the store.
+      flush();
+      unsubscribe();
+    };
   },
 }));
