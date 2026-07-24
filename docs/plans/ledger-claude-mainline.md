@@ -13,7 +13,7 @@
 | C-02 | 打包态自动化验证 | ✅ | 2026-07-24 完成；M1 自动化半边齐，GUI 点验 → T-10 → CP2 |
 | C-03 | Question 桥 spike | ✅ | 2026-07-24 完成；官方机制 = permission 流 + updatedInput.answers |
 | C-04 | Question 桥实现 | ⬜ | 设计输入已齐（C-03 行），CP3 后即做 |
-| C-05 | Thinking 支持度探测 | ✅ | 2026-07-24 完成；可开零 400，默认策略待 CP3 |
+| C-05 | Thinking 支持度探测 | ✅ | 2026-07-24 探测+收尾全完成（CP3 拍板默认开，`8449e88`）；T-04 解锁 |
 | C-06 | Resume 历史重放（协议+Host+Store） | ✅ | 2026-07-24 完成；CP4 定稿 + 全链实现 + 网关端到端 smoke 过，T-03 解锁 |
 | C-07 | Session Index（Main + IPC） | ✅ | 2026-07-24 完成，T-02 已解锁 |
 | C-08 | Store 结构优化 + 批处理 | ⬜ | C-09 先行 |
@@ -47,6 +47,7 @@
 
 | 2026-07-24 | **C-06 完成：Resume 历史重放全链落地（解锁 T-03）** | ✅ | 定稿协议全量实现：shared 三文件（sessionHistory.ts 新建 + runtimeEvents 三事件/capabilities + agentHost 新命令）；Host historyReader（922 行：uuid 文件名定位、宽容解析 controlLines/badLines 分账、合并配对、输入 32MB tail + 流式裁剪、TSD magic → encrypted_unreadable）+ runtime 改造（session_busy 拒绝、registry merge、resumed→history→idle 异步时序、session.updated）；Main requestAndWait（exit 即 reject）+ chat:listHistory IPC/preload + 索引富化；store h: 前缀幂等替换 + historyErrors + 权限卡排除。**实现要点**：tsconfig 排除 agent-host → typecheck 不覆盖 Host 侧，端到端 smoke 是 Host 集成的真实门禁。验证：新增 49 单测（A28/B9/C12）→ 全套 27 文件/181 用例绿、typecheck 干净、改动文件 biome 绿；**验收 smoke `spikes/c06-resume-history-smoke.ts` 真实网关 ok:true**——capabilities.history / session.updated 身份发现 / resumed→history→idle 时序 / 历史含码字 + h: 前缀 / running 会话 resume 拒绝 session_busy / resume 后追问召回码字（ORANGE-42 式）逐项断言通过。工作树中团队 ChatComposer 在途改动已避让未混入。hash：`db41f63` |
 
+| 2026-07-24 | C-05 收尾：thinking 默认开 + capabilities + store thinking 块（CP3 拍板执行） | ✅ | claudeRuntime enabled(budget 4096)；host.ready.capabilities `{history, thinking}`；store ChatBlockType 增 thinking + thinking.started/delta 处理 + 历史 thinking 块入渲染数据（T-04 数据面就位）。验证：28 文件/184 用例绿、typecheck 干净；Host smoke 事件链完整（**thinking 事件网关侧非确定**——两跑均未引出，与 C-05 spike 观测一致，管线以单测+spike SDK 层验证为准，GUI 实证归 T-04 验收）。**附**：首跑 90s 停滞复现「答案已到流不收尾」——C-14 看门狗立项依据+1。hash：`8449e88` |
 | 2026-07-24 | 四路支持度探测（C-03/C-05/C-10/C-13 并行，用户要求提并发） | ✅ | **C-03**：AskUserQuestion 走 canUseTool 权限流是**官方机制**（`AskUserQuestionInput.answers` 字段注释即 "User answers collected by the permission component"），三分支实测通过；最大 footgun：bare allow（无 updatedInput）被 cli.js 静默作废重问（仅源码可见）；取消建议映射 allow+空 answers（不产生 denial 记录）；自由文本走 `updatedInput.response`；超时可下沉 SDK `askUserQuestionTimeout`。**C-05**：thinking enabled 单轮+多轮 resume（签名 thinking 历史回放）8 turn 零 400——`claudeRuntime.ts` disable 防御已过时；normalizer 现链路够用（assistant content 路径），stream_event 分支为死代码（未开 includePartialMessages）；注意 disabled 非强保证（对照组一次跑出 thinking 块）+ 延迟上浮（最慢 75s）。**C-10**：effort 仅 xhigh 有可测差异（cache miss + inference_geo=global + 绕过 thinking:disabled），其余档位与非法值签名相同（不校验）；permissionMode 全枚举 default/acceptEdits/auto/bypassPermissions/manual/dontAsk/plan（CLI 层校验）；**plan 非硬只读**——模型照样调 Write，只读约束须 canUseTool 侧识别 plan 自行拒绝；acceptEdits/auto/dontAsk 旁路 canUseTool；bypassPermissions 安全阀非硬约束；**非法 model 不快速失败、会话挂死**（→ 拟立项 C-14 看门狗）。**C-13**：SDK 消息流 prompt 携带 base64 image/document 块全部实测可行（152KB 大图过网关），推荐 `attachments[]={kind:'image'\|'text', mediaType, data, name?}`，path 不进协议；Host 改造是加法（string prompt 包成单元素消息流）；大图延迟显著（152KB→79s），T-18 需发送中状态。四 spike 落库 `9bda9e5`。C-03+C-05+C-10 → CP3 汇报 |
 
 ## 委派记录
