@@ -146,6 +146,12 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     const workspacePath = activeWorkspace.path;
     const model = getSessionModel(sessionId) ?? defaultModelId(null);
 
+    // Starting a fresh send invalidates any prior failure's retryable prompt:
+    // the new prompt is what the user wants now, and a stale ghost Retry would
+    // linger if the prior failed stream happened to settle later (see the
+    // "Retry 重影" bug — flow aborted without result, retryablePrompt stayed,
+    // a late assistant bubble appeared, Retry showed next to Send wrongly).
+    setRetryablePrompt(null);
     useChatSessionsStore.setState((state) => ({
       hostBoundSessionIds: state.hostBoundSessionIds.filter((id) => id !== sessionId),
       lastError: null,
@@ -254,6 +260,10 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
           statusAfter === 'waiting_question' ||
           statusAfter === 'idle')
       ) {
+        // Success — clear any stale failure UI so a ghost Retry can't resurface
+        // later (e.g. prior failed stream settled and pushed an assistant bubble).
+        setRetryablePrompt(null);
+        useChatSessionsStore.setState({ lastError: null });
         return;
       }
 
