@@ -18,12 +18,31 @@ export interface ClaudeRuntimeOptions {
   emit: EmitFn;
   log?: LogFn;
   registry: SessionRegistry;
+  /** Test seam — replaces the lazily imported Agent SDK query(). */
+  queryFn?: SdkQueryFn;
 }
 
 type SdkQueryFn = (params: {
   prompt: string;
   options?: Record<string, unknown>;
 }) => AsyncIterable<unknown> & { close?: () => void };
+
+/**
+ * C-14 stall watchdog default: a turn whose SDK stream produces no events at
+ * all for this long is aborted with an explicit session.failed (invalid model
+ * and gateway hangs otherwise leave the UI in `running` forever). Waiting on
+ * a permission/question prompt or an in-flight local tool never counts as a
+ * stall. 0 (or negative) disables the watchdog.
+ */
+const DEFAULT_STALL_TIMEOUT_MS = 120_000;
+
+function resolveStallTimeoutMs(): number {
+  const raw = process.env.AICLIENT_HOST_STALL_TIMEOUT_MS;
+  if (raw === undefined || raw === '') return DEFAULT_STALL_TIMEOUT_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_STALL_TIMEOUT_MS;
+  return parsed;
+}
 
 export class ClaudeRuntime {
   private queryFn: SdkQueryFn | null = null;
@@ -48,6 +67,7 @@ export class ClaudeRuntime {
     if (this.opts.driver !== 'agent-sdk') {
       throw new Error(`Driver ${this.opts.driver} not implemented in Phase 2 slice 1`);
     }
+    if (this.opts.queryFn) return this.opts.queryFn;
     if (this.queryFn) return this.queryFn;
     const sdk = (await import('@anthropic-ai/claude-agent-sdk')) as {
       query?: SdkQueryFn;
@@ -260,6 +280,48 @@ export class ClaudeRuntime {
       return permissionHandler(toolName, input, options);
     };
 
+    // C-14 stall watchdog: abort a turn whose stream goes fully silent.
+    // Silence is legitimate while a user prompt is parked (permission /
+    // question) or a local tool run is in flight — those re-arm instead.
+    const stallTimeoutMs = resolveStallTimeoutMs();
+    let stalled = false;
+    let stallTimer: NodeJS.Timeout | null = null;
+    const onStall = () => {
+      if (
+        this.permissions.hasPending(session.sessionId) ||
+        this.questions.hasPending(session.sessionId) ||
+        normalizer.hasOpenTools()
+      ) {
+        armStallTimer();
+        return;
+      }
+      stalled = true;
+      this.log(
+        `stall watchdog: no stream events for ${stallTimeoutMs}ms on ${session.sessionId} — aborting turn`
+      );
+      abort.abort();
+    };
+    const armStallTimer = () => {
+      if (stallTimeoutMs <= 0) return;
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(onStall, stallTimeoutMs);
+    };
+    const stallErrorMessage = () =>
+      `Host stall watchdog: no model progress for ${stallTimeoutMs}ms ` +
+      '(model/gateway hang or endless retry — check model name and gateway ' +
+      'health; tune via AICLIENT_HOST_STALL_TIMEOUT_MS, 0 disables)';
+    // Only model-productive events reset the watchdog. `system` events are
+    // control-plane: an invalid model puts the CLI into an endless api_retry
+    // loop that streams system events forever — they must not count as
+    // progress or the hang becomes undetectable (C-14 gateway repro).
+    const PRODUCTIVE_EVENT_TYPES = new Set([
+      'assistant',
+      'user',
+      'result',
+      'tool_progress',
+      'stream_event',
+    ]);
+
     let stream: (AsyncIterable<unknown> & { close?: () => void }) | null = null;
     try {
       stream = queryFn({
@@ -288,8 +350,11 @@ export class ClaudeRuntime {
         },
       });
 
+      armStallTimer();
       for await (const event of stream) {
         if (abort.signal.aborted) break;
+        const eventType = String((event as { type?: string })?.type ?? '');
+        if (PRODUCTIVE_EVENT_TYPES.has(eventType)) armStallTimer();
         const runtimeId = normalizer.ingest(event, input.requestId);
         if (runtimeId && runtimeId !== session.runtimeIdentity) {
           // First discovery (initial send) or a defensive fork cover — without
@@ -305,11 +370,18 @@ export class ClaudeRuntime {
       }
 
       if (abort.signal.aborted) {
-        this.permissions.rejectSession(session.sessionId, 'Session stopped');
-        this.questions.rejectSession(session.sessionId, 'Session stopped');
-        normalizer.emitStopped(input.requestId);
-        session.status = 'idle';
-        this.opts.registry.setStatus(session.sessionId, 'idle');
+        const rejectReason = stalled ? 'Host stall watchdog fired' : 'Session stopped';
+        this.permissions.rejectSession(session.sessionId, rejectReason);
+        this.questions.rejectSession(session.sessionId, rejectReason);
+        if (stalled) {
+          normalizer.emitFailed(stallErrorMessage(), input.requestId);
+          session.status = 'failed';
+          this.opts.registry.setStatus(session.sessionId, 'failed');
+        } else {
+          normalizer.emitStopped(input.requestId);
+          session.status = 'idle';
+          this.opts.registry.setStatus(session.sessionId, 'idle');
+        }
       } else if (
         session.status === 'running' ||
         session.status === 'waiting_permission' ||
@@ -332,9 +404,17 @@ export class ClaudeRuntime {
       this.permissions.rejectSession(session.sessionId, 'Query failed');
       this.questions.rejectSession(session.sessionId, 'Query failed');
       if (abort.signal.aborted) {
-        normalizer.emitStopped(input.requestId);
-        session.status = 'idle';
-        this.opts.registry.setStatus(session.sessionId, 'idle');
+        if (stalled) {
+          // The SDK often surfaces our watchdog abort as a thrown AbortError —
+          // keep the explicit failed terminal instead of a silent "stopped".
+          normalizer.emitFailed(stallErrorMessage(), input.requestId);
+          session.status = 'failed';
+          this.opts.registry.setStatus(session.sessionId, 'failed');
+        } else {
+          normalizer.emitStopped(input.requestId);
+          session.status = 'idle';
+          this.opts.registry.setStatus(session.sessionId, 'idle');
+        }
       } else {
         const message = err instanceof Error ? err.message : String(err);
         this.log('query failed:', message);
@@ -354,6 +434,7 @@ export class ClaudeRuntime {
         this.opts.registry.setStatus(session.sessionId, 'failed');
       }
     } finally {
+      if (stallTimer) clearTimeout(stallTimer);
       session.running = false;
       session.abort = undefined;
       try {

@@ -12,6 +12,8 @@ interface NormalizerState {
   thinkingBlockId: string | null;
   /** tool_use id → started */
   seenTools: Set<string>;
+  /** tool_use id started but no tool_result yet (local execution in flight). */
+  openTools: Set<string>;
   textStarted: boolean;
   thinkingStarted: boolean;
   /** A result event emitted the turn's terminal events. */
@@ -25,6 +27,7 @@ function newState(): NormalizerState {
     textBlockId: null,
     thinkingBlockId: null,
     seenTools: new Set(),
+    openTools: new Set(),
     textStarted: false,
     thinkingStarted: false,
     sawResult: false,
@@ -213,6 +216,7 @@ export class EventNormalizer {
   private emitToolStarted(tool: ToolUseBlock, requestId?: string): void {
     if (this.state.seenTools.has(tool.id)) return;
     this.state.seenTools.add(tool.id);
+    this.state.openTools.add(tool.id);
     const messageId = this.ensureAssistant(requestId);
     this.emit({
       type: 'tool.started',
@@ -233,6 +237,7 @@ export class EventNormalizer {
     output: unknown,
     requestId?: string
   ): void {
+    this.state.openTools.delete(toolUseId);
     const messageId = this.state.assistantMessageId ?? this.ensureAssistant(requestId);
     this.emit({
       type: 'tool.completed',
@@ -436,6 +441,46 @@ export class EventNormalizer {
     }
 
     return runtimeId;
+  }
+
+  /** A tool_use started this turn without a tool_result yet (running locally). */
+  hasOpenTools(): boolean {
+    return this.state.openTools.size > 0;
+  }
+
+  /** Emit a failed terminal (e.g. stall watchdog), closing any open blocks. */
+  emitFailed(error: string, requestId?: string): void {
+    if (this.state.thinkingStarted && this.state.assistantMessageId) {
+      this.emit({
+        type: 'thinking.completed',
+        sessionId: this.sessionId,
+        requestId,
+        payload: {
+          messageId: this.state.assistantMessageId,
+          blockId: this.state.thinkingBlockId,
+        },
+      });
+    }
+    if (this.state.assistantMessageId) {
+      this.emit({
+        type: 'message.completed',
+        sessionId: this.sessionId,
+        requestId,
+        payload: { messageId: this.state.assistantMessageId },
+      });
+    }
+    this.emit({
+      type: 'session.failed',
+      sessionId: this.sessionId,
+      requestId,
+      payload: { error },
+    });
+    this.emit({
+      type: 'session.status',
+      sessionId: this.sessionId,
+      requestId,
+      payload: { status: 'failed' },
+    });
   }
 
   /** Emit stopped terminal after abort. */
