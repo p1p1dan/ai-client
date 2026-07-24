@@ -49,6 +49,7 @@
 | D10 | 其他 Agent | 暂留终端模式；仅 Claude 进气泡 |
 | D11 | 历史 | Host 读 CC JSONL；本地只存索引 |
 | D15 | 右栏 | MVP 单层 `git \| files \| context` |
+| D16 | vflow | **整体移除**（用户拍板 2026-07-24，不再需要）：打包/CI 链已摘（Phase A）；运行时代码（VflowService/IPC/UI）摘除排期 Phase B |
 
 ---
 
@@ -70,6 +71,9 @@
 | 2026-07-23 | **Phase 2 节点 4：Permission 桥 happy path** | ✅ | `5cd5163` |
 | 2026-07-23 | **CP1：双轨执行计划定稿 + 分账结构落库** | ✅ | 执行计划 + 两条子台账 |
 | 2026-07-23 | **C-01：agent-host 构建产物 + electron-builder 打包配置（M1 前半）** | ✅ | `f21fec7` |
+| 2026-07-24 | vflow 打包链摘除（D16 Phase A）+ `pnpm test` 首次全绿 111/111 | ✅ | `dbb20be` |
+| 2026-07-24 | **Host 行为变化通知**：SDK 流结束无 result 时补发终态事件（有输出→completed+idle；无输出→failed）——修团队定位的「UI 永驻 running」；无新事件类型、无协议 bump | ✅ | `6a633d6` |
+| 2026-07-24 | **C-02：打包态自动化验证 PASS（M1 自动化半边齐）** — portable 产物 + `pnpm verify:packaged` 22 项全绿（含打包产物网关 PONG）；GUI 点验移交 T-10 | ✅ | `dbb20be` |
 
 ---
 
@@ -88,7 +92,7 @@
 | Resume 进 Host 协议（非仅 spike） | 🟡 | `session.resume` + `chat:resumeSession` 已接；历史重放仍 Phase 3 |
 | Effort/Plan/Build 探测 | ⏳ | 条件性 UI |
 | TSD 解密读 | ⏳ **待加密机** | 开发机不得冒充通过 |
-| 打包 Electron 启 Host | ⏳ | 打包态未验 |
+| 打包 Electron 启 Host | 🟡 | C-02 自动化冒烟通过（打包产物 Host 直跑 PONG + Node24 寻径）；GUI 启动点验 → T-10 |
 
 详见 [`phase0-report.md`](./phase0-report.md)。
 
@@ -129,7 +133,8 @@
 | Preload `electronAPI.chat` | ✅ | create/send/stop/close + `onRuntimeEvent` |
 | Chat Store 接真事件 / Composer Stop | ✅ | 替换 Mock；`session-live` 发真 Host；Composer 有 Stop |
 | Permission 桥 happy path | ✅ | `permissionBridge.ts` + `canUseTool`；unit smoke 通过 |
-| agent-host 打包产物（C-01） | ✅ | `pnpm build:agent-host` → `out-agent-host/`（87MB）；产物 PONG/permission smoke 通过；打包态整链 → C-02 |
+| agent-host 打包产物（C-01） | ✅ | `pnpm build:agent-host` → `out-agent-host/`（87MB）；产物 PONG/permission smoke 通过 |
+| 打包态整链验证（C-02） | ✅ | afterPack 拷贝产物（extraResources 有 node_modules 排除与 rcedit 竞态两坑，见主线台账）；`pnpm verify:packaged` 22 项全绿；CI 两作业已接 agent-host 构建+断言 |
 | Tool 事件进时间线（UI） | 🟡 | Store/UI 已支持；依赖模型实际调工具 |
 | stream-json Adapter | ⬜ | fallback，可后置 |
 | Resume 历史重放 | ⬜ | 顺延 Phase 3 |
@@ -175,7 +180,7 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01 ✅ → C-02 打包态验证（M1/CP2）→ C-07 Session Index → C-06 Resume 历史重放（CP4）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）
+- 🤖 **Claude 主线**：C-01 ✅ C-02 ✅（CP2 待 T-10 GUI 点验合并汇报）→ C-07 Session Index → C-06 Resume 历史重放（CP4）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）；另有 vflow Phase B 待协调
 - 🧪 **测试凭证统一约定**（用户拍板 2026-07-23）：测试不得用本机默认 Claude 登录，统一走网关 `https://cch-jyw.pipidan.qzz.io`；详见执行计划 §4
 - 👥 **团队轨道**：T-17 Tool 真实调用 GUI 验收（立即可做）→ T-01 真实数据树 → 无依赖池 T-06~T-09 → 等主线解锁后 T-02/T-03 → T-10/T-11（M2 加密机，CP5）
 
