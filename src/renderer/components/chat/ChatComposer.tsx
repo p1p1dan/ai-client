@@ -1,9 +1,12 @@
+import type { FileSearchResult } from '@shared/types/search';
 import { RotateCcw, SendHorizonal, Square } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { classifyAssistantProgress } from './assistantProgress';
+import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { ModelSelect } from './ModelSelect';
 import { defaultModelId } from './models';
 import { useSessionModel } from './useSessionModel';
@@ -77,6 +80,13 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   const [retryablePrompt, setRetryablePrompt] = useState<string | null>(null);
+  // T-07 @ 文件引用：popup 态、搜索结果、选中索引、IME 合成态。delayed 焦点
+  // 恢复通过 setTimeout 在 React 提交后再 setSelectionRange。
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -86,6 +96,9 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
+  const cwd = activeWorkspace?.path;
+  const mentionChips = useMemo(() => parseMentionChips(value), [value]);
+  const mentionOpen = mentionQuery !== null && mentionResults.length > 0;
   const busy = isStoppable(activeSession?.status);
   // A Send in flight must also be abortable: the SDK stream can hang (e.g.
   // gateway revoked key) without ever flipping session.status to running, and
@@ -113,6 +126,54 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     }
     await runSend(trimmed);
     setValue('');
+  };
+
+  // T-07 @ 文件搜索：150ms 防抖，cwd 缺失或 mention 关闭时清空结果。
+  useEffect(() => {
+    if (mentionQuery === null || !cwd) {
+      setMentionResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      window.electronAPI.search
+        .files({ rootPath: cwd, query: mentionQuery, maxResults: 10 })
+        .then(setMentionResults)
+        .catch(() => setMentionResults([]));
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [mentionQuery, cwd]);
+
+  const handleContentChange = (next: string) => {
+    setValue(next);
+    if (composingRef.current || !cwd) {
+      setMentionQuery(null);
+      return;
+    }
+    // setTimeout 读取 React 提交后的 selectionStart（与 EnhancedInput 同套路）。
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) {
+        setMentionQuery(null);
+        return;
+      }
+      setMentionQuery(extractMentionQuery(next, ta.selectionStart));
+      setMentionIndex(0);
+    }, 0);
+  };
+
+  const insertMention = (item: FileSearchResult) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const cursor = ta.selectionStart;
+    const out = replaceMention(value, cursor, item);
+    if (!out) return;
+    setValue(out.text);
+    setMentionQuery(null);
+    setMentionResults([]);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(out.cursor, out.cursor);
+    }, 0);
   };
 
   const lastUserPrompt = activeSessionId
@@ -303,10 +364,79 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
           {statusHint}
         </div>
       )}
-      <div className="rounded-lg border bg-card/40 p-2">
+      <div className="relative rounded-lg border bg-card/40 p-2">
+        {/* T-07 @ 文件搜索 popup——放 textarea 上方，避免被 overflow-hidden 容器裁掉 */}
+        {mentionOpen && (
+          <div className="absolute bottom-full left-2 mb-1 w-72 overflow-hidden rounded-lg border bg-popover shadow-lg">
+            <div className="max-h-[240px] overflow-y-auto py-1">
+              {mentionResults.map((item, i) => {
+                const lastSep = item.relativePath.lastIndexOf('/');
+                const dirPart = lastSep > 0 ? item.relativePath.slice(0, lastSep) : '';
+                const fileName =
+                  lastSep > 0 ? item.relativePath.slice(lastSep + 1) : item.relativePath;
+                return (
+                  <button
+                    type="button"
+                    key={item.path}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      insertMention(item);
+                    }}
+                    onMouseEnter={() => setMentionIndex(i)}
+                    className={cn(
+                      'w-full px-3 py-1.5 text-left text-sm transition-colors',
+                      i === mentionIndex
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground hover:bg-accent/50'
+                    )}
+                  >
+                    <span>{fileName}</span>
+                    {dirPart && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">{dirPart}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                  ↑↓
+                </kbd>
+                Navigate
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                  Enter
+                </kbd>
+                Select
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                  Esc
+                </kbd>
+                Close
+              </span>
+            </div>
+          </div>
+        )}
         <Textarea
+          ref={textareaRef}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => handleContentChange(event.target.value)}
+          onCompositionStart={() => {
+            composingRef.current = true;
+          }}
+          onCompositionEnd={(event) => {
+            composingRef.current = false;
+            const ta = textareaRef.current;
+            if (!cwd || !ta) {
+              setMentionQuery(null);
+              return;
+            }
+            setMentionQuery(extractMentionQuery(event.currentTarget.value, ta.selectionStart));
+            setMentionIndex(0);
+          }}
           placeholder={composerPlaceholder({
             canSend,
             busy,
@@ -317,12 +447,48 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
           className="min-h-20 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
           disabled={disabled || busy || sending || !activeSessionId}
           onKeyDown={(event) => {
+            // T-07 @ popup：popup 开时拦截方向键 / Enter / Esc，避免误发。
+            if (mentionOpen) {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setMentionIndex((i) => (i + 1) % mentionResults.length);
+                return;
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setMentionIndex((i) => (i - 1 + mentionResults.length) % mentionResults.length);
+                return;
+              }
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                insertMention(mentionResults[mentionIndex]);
+                return;
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setMentionQuery(null);
+                setMentionResults([]);
+                return;
+              }
+            }
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
               void handleSend();
             }
           }}
         />
+        {mentionChips.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {mentionChips.map((chip, idx) => (
+              <span
+                key={`${chip.path}-${idx}`}
+                className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+              >
+                {chip.path}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="mt-2 flex items-center justify-between gap-2">
           <p
             className={`min-w-0 flex-1 truncate text-xs ${
