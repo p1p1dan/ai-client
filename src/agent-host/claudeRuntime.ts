@@ -4,7 +4,7 @@
  */
 
 import type { AgentHostDriver } from '../shared/types/agentHost.ts';
-import { EventNormalizer, type EmitFn, type LogFn } from './eventNormalizer.ts';
+import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { PermissionBridge } from './permissionBridge.ts';
 import type { SessionRegistry } from './sessionRegistry.ts';
 
@@ -107,11 +107,7 @@ export class ClaudeRuntime {
     });
   }
 
-  async send(input: {
-    sessionId: string;
-    text: string;
-    requestId?: string;
-  }): Promise<void> {
+  async send(input: { sessionId: string; text: string; requestId?: string }): Promise<void> {
     const session = this.opts.registry.get(input.sessionId);
     if (!session) {
       this.opts.emit({
@@ -220,9 +216,17 @@ export class ClaudeRuntime {
         session.status = 'idle';
         this.opts.registry.setStatus(session.sessionId, 'idle');
       } else if (session.status === 'running' || session.status === 'waiting_permission') {
-        // Normalizer may already have emitted completed/idle via result event.
-        session.status = 'idle';
-        this.opts.registry.setStatus(session.sessionId, 'idle');
+        // The SDK stream can end without a result event (gateway hang /
+        // dropped stream). finishTurn emits synthetic terminals so the UI
+        // leaves `running`; it is a no-op when a result already emitted them.
+        const outcome = normalizer.finishTurn(input.requestId);
+        if (outcome !== 'already') {
+          this.permissions.rejectSession(session.sessionId, 'Stream ended');
+          this.log(`stream ended without result event — synthetic terminal: ${outcome}`);
+        }
+        const status = outcome === 'failed' ? 'failed' : 'idle';
+        session.status = status;
+        this.opts.registry.setStatus(session.sessionId, status);
       }
     } catch (err) {
       this.permissions.rejectSession(session.sessionId, 'Query failed');

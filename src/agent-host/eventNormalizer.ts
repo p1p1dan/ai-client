@@ -14,6 +14,8 @@ interface NormalizerState {
   seenTools: Set<string>;
   textStarted: boolean;
   thinkingStarted: boolean;
+  /** A result event emitted the turn's terminal events. */
+  sawResult: boolean;
   turnIndex: number;
 }
 
@@ -25,6 +27,7 @@ function newState(): NormalizerState {
     seenTools: new Set(),
     textStarted: false,
     thinkingStarted: false,
+    sawResult: false,
     turnIndex: 0,
   };
 }
@@ -332,12 +335,7 @@ export class EventNormalizer {
         case 'user': {
           const content = msg.message?.content;
           for (const result of extractToolResults(content)) {
-            this.emitToolCompleted(
-              result.toolUseId,
-              !result.isError,
-              result.content,
-              requestId
-            );
+            this.emitToolCompleted(result.toolUseId, !result.isError, result.content, requestId);
           }
           // Some SDK builds put structured output on tool_use_result
           if (msg.tool_use_result != null && Array.isArray(content)) {
@@ -364,6 +362,7 @@ export class EventNormalizer {
           break;
         }
         case 'result': {
+          this.state.sawResult = true;
           if (this.state.thinkingStarted && this.state.assistantMessageId) {
             this.emit({
               type: 'thinking.completed',
@@ -408,9 +407,7 @@ export class EventNormalizer {
             type: failed ? 'session.failed' : 'session.completed',
             sessionId: this.sessionId,
             requestId,
-            payload: failed
-              ? { error: msg.error ?? msg.result ?? 'session failed' }
-              : undefined,
+            payload: failed ? { error: msg.error ?? msg.result ?? 'session failed' } : undefined,
           });
           this.emit({
             type: 'session.status',
@@ -473,5 +470,67 @@ export class EventNormalizer {
       requestId,
       payload: { status: 'idle' },
     });
+  }
+
+  /**
+   * Close out a turn when the SDK stream ends. The SDK normally ends a turn
+   * with a result event; when the stream ends silently (gateway hang, dropped
+   * connection), no terminal event reaches the UI and it stays `running`.
+   * Returns:
+   *   'already'   — a result event already emitted terminals (no-op)
+   *   'completed' — assistant produced output but no result arrived; emitted
+   *                 synthetic message/session.completed + status idle
+   *   'failed'    — stream ended with no assistant output at all; emitted
+   *                 session.failed + status failed
+   */
+  finishTurn(requestId?: string): 'already' | 'completed' | 'failed' {
+    if (this.state.sawResult) return 'already';
+    if (this.state.thinkingStarted && this.state.assistantMessageId) {
+      this.emit({
+        type: 'thinking.completed',
+        sessionId: this.sessionId,
+        requestId,
+        payload: {
+          messageId: this.state.assistantMessageId,
+          blockId: this.state.thinkingBlockId,
+        },
+      });
+    }
+    if (this.state.assistantMessageId) {
+      this.emit({
+        type: 'message.completed',
+        sessionId: this.sessionId,
+        requestId,
+        payload: { messageId: this.state.assistantMessageId },
+      });
+      this.emit({
+        type: 'session.completed',
+        sessionId: this.sessionId,
+        requestId,
+      });
+      this.emit({
+        type: 'session.status',
+        sessionId: this.sessionId,
+        requestId,
+        payload: { status: 'idle' },
+      });
+      return 'completed';
+    }
+    this.emit({
+      type: 'session.failed',
+      sessionId: this.sessionId,
+      requestId,
+      payload: {
+        error:
+          'SDK stream ended without assistant output or result event (gateway hang or dropped stream)',
+      },
+    });
+    this.emit({
+      type: 'session.status',
+      sessionId: this.sessionId,
+      requestId,
+      payload: { status: 'failed' },
+    });
+    return 'failed';
   }
 }
