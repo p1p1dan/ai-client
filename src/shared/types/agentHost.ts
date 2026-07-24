@@ -98,7 +98,21 @@ export interface QuestionRespondCommand extends AgentHostCommandBase {
   payload: {
     sessionId: string;
     questionId: string;
-    answers: string[];
+    /**
+     * question text (verbatim key) -> chosen answer; multiSelect answers
+     * joined with ", " (comma+space, matching the CLI separator).
+     * The CLI silently re-asks on a bare allow with no collected answers,
+     * so at least one of answers/response/cancel must be present.
+     */
+    answers?: Record<string, string>;
+    /**
+     * Freeform text typed instead of selecting a structured option.
+     * The CLI surfaces response to the model in preference to answers —
+     * senders should treat the two as mutually exclusive.
+     */
+    response?: string;
+    /** Dismiss the question: resolves with empty answers (no denial record). */
+    cancel?: boolean;
   };
 }
 

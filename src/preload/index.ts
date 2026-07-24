@@ -1357,7 +1357,9 @@ const electronAPI = {
     respondQuestion: (payload: {
       sessionId: string;
       questionId: string;
-      answers: string[];
+      answers?: Record<string, string>;
+      response?: string;
+      cancel?: boolean;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_QUESTION, payload),
     onRuntimeEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {
@@ -1377,8 +1379,7 @@ const electronAPI = {
 
   // Agent Host diagnostics
   agentHost: {
-    resolveNode: (): Promise<unknown> =>
-      ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_RESOLVE_NODE),
+    resolveNode: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_RESOLVE_NODE),
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_GET_STATUS),
     start: (driver?: AgentHostDriver): Promise<unknown> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_START, driver),

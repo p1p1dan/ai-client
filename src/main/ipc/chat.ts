@@ -75,10 +75,7 @@ export function registerChatHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_SEND,
-    async (
-      _e,
-      payload: { sessionId: string; text: string }
-    ): Promise<{ requestId: string }> => {
+    async (_e, payload: { sessionId: string; text: string }): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.sendMessage(payload);
       return { requestId };
     }
@@ -115,7 +112,13 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_RESPOND_QUESTION,
     async (
       _e,
-      payload: { sessionId: string; questionId: string; answers: string[] }
+      payload: {
+        sessionId: string;
+        questionId: string;
+        answers?: Record<string, string>;
+        response?: string;
+        cancel?: boolean;
+      }
     ): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.respondQuestion(payload);
       return { requestId };

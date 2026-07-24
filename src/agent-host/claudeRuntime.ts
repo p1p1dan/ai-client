@@ -7,6 +7,7 @@ import type { AgentHostDriver } from '../shared/types/agentHost.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
+import { QuestionBridge, type QuestionRespondInput } from './questionBridge.ts';
 import type { SessionRegistry } from './sessionRegistry.ts';
 
 export interface ClaudeRuntimeOptions {
@@ -29,11 +30,13 @@ export class ClaudeRuntime {
   private readonly log: LogFn;
   private readonly opts: ClaudeRuntimeOptions;
   private readonly permissions: PermissionBridge;
+  private readonly questions: QuestionBridge;
 
   constructor(opts: ClaudeRuntimeOptions) {
     this.opts = opts;
     this.log = opts.log ?? ((...args) => console.error('[claude-runtime]', ...args));
     this.permissions = new PermissionBridge(opts.emit, this.log);
+    this.questions = new QuestionBridge(opts.emit, this.log);
   }
 
   get driver(): AgentHostDriver {
@@ -242,7 +245,20 @@ export class ClaudeRuntime {
       CLAUDE_AGENT_SDK_CLIENT_APP: 'aiclient-agent-host/0.0.1',
     };
 
-    const canUseTool = this.permissions.createCanUseTool(session.sessionId);
+    // AskUserQuestion parks on the question bridge (interactive answer card);
+    // every other tool keeps the permission bridge flow.
+    const permissionHandler = this.permissions.createCanUseTool(session.sessionId);
+    const canUseTool: typeof permissionHandler = (toolName, input, options) => {
+      if (toolName === 'AskUserQuestion') {
+        return this.questions.request({
+          sessionId: session.sessionId,
+          input,
+          signal: options.signal,
+          toolUseId: options.toolUseID,
+        });
+      }
+      return permissionHandler(toolName, input, options);
+    };
 
     let stream: (AsyncIterable<unknown> & { close?: () => void }) | null = null;
     try {
@@ -290,16 +306,22 @@ export class ClaudeRuntime {
 
       if (abort.signal.aborted) {
         this.permissions.rejectSession(session.sessionId, 'Session stopped');
+        this.questions.rejectSession(session.sessionId, 'Session stopped');
         normalizer.emitStopped(input.requestId);
         session.status = 'idle';
         this.opts.registry.setStatus(session.sessionId, 'idle');
-      } else if (session.status === 'running' || session.status === 'waiting_permission') {
+      } else if (
+        session.status === 'running' ||
+        session.status === 'waiting_permission' ||
+        session.status === 'waiting_question'
+      ) {
         // The SDK stream can end without a result event (gateway hang /
         // dropped stream). finishTurn emits synthetic terminals so the UI
         // leaves `running`; it is a no-op when a result already emitted them.
         const outcome = normalizer.finishTurn(input.requestId);
         if (outcome !== 'already') {
           this.permissions.rejectSession(session.sessionId, 'Stream ended');
+          this.questions.rejectSession(session.sessionId, 'Stream ended');
           this.log(`stream ended without result event — synthetic terminal: ${outcome}`);
         }
         const status = outcome === 'failed' ? 'failed' : 'idle';
@@ -308,6 +330,7 @@ export class ClaudeRuntime {
       }
     } catch (err) {
       this.permissions.rejectSession(session.sessionId, 'Query failed');
+      this.questions.rejectSession(session.sessionId, 'Query failed');
       if (abort.signal.aborted) {
         normalizer.emitStopped(input.requestId);
         session.status = 'idle';
@@ -366,6 +389,23 @@ export class ClaudeRuntime {
     }
   }
 
+  respondQuestion(input: QuestionRespondInput & { requestId?: string }): void {
+    const { requestId, ...respondInput } = input;
+    const ok = this.questions.respond(respondInput);
+    if (!ok) {
+      this.opts.emit({
+        type: 'host.error',
+        sessionId: input.sessionId,
+        requestId,
+        payload: {
+          code: 'question_not_pending',
+          message: `No pending question: ${input.questionId}`,
+          fatal: false,
+        },
+      });
+    }
+  }
+
   stop(input: { sessionId: string; requestId?: string }): void {
     const session = this.opts.registry.get(input.sessionId);
     if (!session) {
@@ -381,6 +421,7 @@ export class ClaudeRuntime {
       return;
     }
     this.permissions.rejectSession(session.sessionId, 'Session stopped');
+    this.questions.rejectSession(session.sessionId, 'Session stopped');
     if (!session.running || !session.abort) {
       this.opts.emit({
         type: 'session.status',
@@ -403,6 +444,7 @@ export class ClaudeRuntime {
 
   close(input: { sessionId: string; requestId?: string }): void {
     this.permissions.rejectSession(input.sessionId, 'Session closed');
+    this.questions.rejectSession(input.sessionId, 'Session closed');
     const session = this.opts.registry.get(input.sessionId);
     if (session?.running && session.abort) {
       session.abort.abort();
@@ -416,8 +458,9 @@ export class ClaudeRuntime {
     });
   }
 
-  /** Host shutdown — fail-closed on any hanging permission. */
+  /** Host shutdown — fail-closed on any hanging permission or question. */
   dispose(): void {
     this.permissions.rejectAll('Host shutting down');
+    this.questions.rejectAll('Host shutting down');
   }
 }

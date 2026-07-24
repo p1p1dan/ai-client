@@ -354,14 +354,40 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'question.respond': {
-      emit({
-        type: 'host.error',
+      const rt = await ensureRuntime();
+      const sessionId = String(cmd.payload?.sessionId ?? '');
+      const questionId = String(cmd.payload?.questionId ?? '');
+      const rawAnswers = cmd.payload?.answers;
+      const answers: Record<string, string> = {};
+      if (rawAnswers && typeof rawAnswers === 'object' && !Array.isArray(rawAnswers)) {
+        for (const [key, value] of Object.entries(rawAnswers)) {
+          if (typeof value === 'string') answers[key] = value;
+        }
+      }
+      const response = typeof cmd.payload?.response === 'string' ? cmd.payload.response : '';
+      const cancel = cmd.payload?.cancel === true;
+      const hasAnswers = Object.keys(answers).length > 0;
+      if (!sessionId || !questionId || (!hasAnswers && !response && !cancel)) {
+        emit({
+          type: 'host.error',
+          requestId: cmd.requestId,
+          payload: {
+            code: 'invalid_payload',
+            message:
+              'question.respond requires sessionId, questionId and one of answers/response/cancel ' +
+              '(a bare allow is silently re-asked by the CLI)',
+            fatal: false,
+          },
+        });
+        return;
+      }
+      rt.respondQuestion({
+        sessionId,
+        questionId,
+        ...(hasAnswers ? { answers } : {}),
+        ...(response ? { response } : {}),
+        ...(cancel ? { cancel } : {}),
         requestId: cmd.requestId,
-        payload: {
-          code: 'not_implemented',
-          message: 'question.respond bridge not wired yet',
-          fatal: false,
-        },
       });
       return;
     }

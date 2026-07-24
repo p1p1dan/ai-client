@@ -170,13 +170,33 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
   };
 }
 
+/** One selectable option within an AskUserQuestion item. */
+export interface QuestionOption {
+  label: string;
+  description?: string;
+  /** Optional preview content rendered when the option is focused. */
+  preview?: string;
+}
+
+/** One question within an AskUserQuestion tool call (SDK contract: 1-4 items). */
+export interface QuestionItem {
+  question: string;
+  /** Short chip/tag label (~12 chars per SDK contract). */
+  header?: string;
+  options: QuestionOption[];
+  multiSelect?: boolean;
+}
+
+/**
+ * Emitted when the model calls AskUserQuestion (parked via canUseTool, same
+ * mechanism as permission.requested). Answered by the question.respond command.
+ */
 export interface QuestionRequestedEvent extends RuntimeEventBase {
   type: 'question.requested';
   sessionId: string;
   payload: {
     questionId: string;
-    prompt: string;
-    options?: string[];
+    questions: QuestionItem[];
   };
 }
 
@@ -200,7 +220,14 @@ export interface QuestionResolvedEvent extends RuntimeEventBase {
   sessionId: string;
   payload: {
     questionId: string;
-    answers: string[];
+    outcome: 'answered' | 'cancelled' | 'rejected';
+    /** question text (verbatim key) -> answer; multiSelect joined with ", ". */
+    answers?: Record<string, string>;
+    /**
+     * Freeform text typed instead of picking a structured option. When both
+     * are sent the CLI shows the model only response — treat as exclusive.
+     */
+    response?: string;
   };
 }
 

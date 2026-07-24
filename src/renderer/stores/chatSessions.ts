@@ -1,4 +1,4 @@
-import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import type { QuestionItem, RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { HISTORY_MESSAGE_ID_PREFIX, type HistoryMessage } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
 
@@ -9,7 +9,8 @@ export type ChatBlockType =
   | 'thinking'
   | 'tool_call'
   | 'tool_result'
-  | 'permission_request';
+  | 'permission_request'
+  | 'question';
 
 export interface ChatProject {
   id: string;
@@ -48,6 +49,11 @@ export interface ChatBlock {
   toolDescription?: string;
   resolved?: boolean;
   allowed?: boolean;
+  questionId?: string;
+  questions?: QuestionItem[];
+  questionOutcome?: 'answered' | 'cancelled' | 'rejected';
+  questionAnswers?: Record<string, string>;
+  questionResponse?: string;
 }
 
 export interface ChatMessage {
@@ -63,6 +69,12 @@ interface PendingPermission {
   messageId: string;
 }
 
+interface PendingQuestion {
+  sessionId: string;
+  questionId: string;
+  messageId: string;
+}
+
 export interface ChatSessionsState {
   projects: ChatProject[];
   workspaces: ChatWorkspace[];
@@ -71,6 +83,7 @@ export interface ChatSessionsState {
   activeSessionId: string | null;
   recentSessionIds: string[];
   pendingPermission: PendingPermission | null;
+  pendingQuestion: PendingQuestion | null;
   /** Sessions already registered with Agent Host. */
   hostBoundSessionIds: string[];
   runtimeReady: boolean;
@@ -82,6 +95,11 @@ export interface ChatSessionsState {
   sendMessage: (text: string) => Promise<void>;
   stopActiveSession: () => Promise<void>;
   respondPermission: (allow: boolean) => void;
+  respondQuestion: (input: {
+    answers?: Record<string, string>;
+    response?: string;
+    cancel?: boolean;
+  }) => void;
   /** Subscribe to Host Runtime Events; returns unsubscribe. */
   initRuntime: () => () => void;
 }
@@ -500,6 +518,84 @@ export function applyRuntimeEvent(
       return { messages, pendingPermission: null };
     }
 
+    case 'question.requested': {
+      const { questionId } = event.payload;
+      if (!questionId) {
+        return {};
+      }
+
+      const existing = [...state.messages]
+        .reverse()
+        .find(
+          (item) =>
+            item.sessionId === sessionId &&
+            item.role === 'assistant' &&
+            !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+        );
+      const messageId = existing?.id ?? `msg-question-${questionId}`;
+      const baseMessage =
+        existing ??
+        ({
+          id: messageId,
+          sessionId,
+          role: 'assistant',
+          blocks: [],
+        } satisfies ChatMessage);
+
+      const updated: ChatMessage = {
+        ...baseMessage,
+        blocks: [
+          ...baseMessage.blocks,
+          {
+            id: questionId,
+            type: 'question',
+            questionId,
+            questions: event.payload.questions,
+            resolved: false,
+          },
+        ],
+      };
+
+      return {
+        messages: upsertMessage(state.messages, updated),
+        pendingQuestion: {
+          sessionId,
+          questionId,
+          messageId,
+        },
+        sessions: upsertSessionStatus(state.sessions, sessionId, 'waiting_question'),
+      };
+    }
+
+    case 'question.resolved': {
+      const { questionId, outcome, answers, response } = event.payload;
+      if (!questionId) {
+        return { pendingQuestion: null };
+      }
+
+      const messages = state.messages.map((message) => {
+        if (message.sessionId !== sessionId) {
+          return message;
+        }
+        return {
+          ...message,
+          blocks: message.blocks.map((block) =>
+            block.questionId === questionId
+              ? {
+                  ...block,
+                  resolved: true,
+                  questionOutcome: outcome,
+                  ...(answers ? { questionAnswers: answers } : {}),
+                  ...(response ? { questionResponse: response } : {}),
+                }
+              : block
+          ),
+        };
+      });
+
+      return { messages, pendingQuestion: null };
+    }
+
     default:
       return {};
   }
@@ -523,6 +619,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   activeSessionId: 'session-live',
   recentSessionIds: ['session-live', 'session-welcome'],
   pendingPermission: null,
+  pendingQuestion: null,
   hostBoundSessionIds: [],
   runtimeReady: false,
   lastError: null,
@@ -617,6 +714,25 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
         sessionId: pendingPermission.sessionId,
         permissionId: pendingPermission.permissionId,
         allow,
+      })
+      .catch((err: unknown) => {
+        set({
+          lastError: err instanceof Error ? err.message : String(err),
+        });
+      });
+  },
+
+  respondQuestion: (input) => {
+    const { pendingQuestion } = get();
+    if (!pendingQuestion) {
+      return;
+    }
+
+    void window.electronAPI.chat
+      .respondQuestion({
+        sessionId: pendingQuestion.sessionId,
+        questionId: pendingQuestion.questionId,
+        ...input,
       })
       .catch((err: unknown) => {
         set({
