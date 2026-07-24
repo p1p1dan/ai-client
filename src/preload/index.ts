@@ -55,6 +55,7 @@ import type {
   SessionDataEvent,
   SessionDescriptor,
   SessionExitEvent,
+  SessionIndexEntry,
   SessionOpenResult,
   SessionResizeOptions,
   SessionStateEvent,
@@ -1363,6 +1364,12 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
     },
+    listSessions: (): Promise<SessionIndexEntry[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSIONS),
+    renameSession: (payload: { sessionId: string; title: string }): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RENAME_SESSION, payload),
+    archiveSession: (payload: { sessionId: string; archived: boolean }): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_ARCHIVE_SESSION, payload),
   },
 
   // Agent Host diagnostics

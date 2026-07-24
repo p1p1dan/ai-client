@@ -6,8 +6,10 @@
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver } from '@shared/types/agentHost';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
+import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, ipcMain } from 'electron';
 import { agentHostManager } from '../services/agent-host/AgentHostManager';
+import { sessionIndexService } from '../services/chat/SessionIndexService';
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -26,6 +28,7 @@ function ensureEventBridge(): void {
   if (eventBridgeAttached) return;
   eventBridgeAttached = true;
   agentHostManager.onEvent(broadcastRuntimeEvent);
+  agentHostManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
 }
 
 export function registerChatHandlers(): void {
@@ -46,6 +49,7 @@ export function registerChatHandlers(): void {
       _e,
       payload: { sessionId: string; workspacePath: string; model?: string }
     ): Promise<{ requestId: string }> => {
+      await sessionIndexService.recordCreated(payload);
       const requestId = await agentHostManager.createSession(payload);
       return { requestId };
     }
@@ -62,6 +66,7 @@ export function registerChatHandlers(): void {
         model?: string;
       }
     ): Promise<{ requestId: string }> => {
+      await sessionIndexService.recordResumed(payload);
       const requestId = await agentHostManager.resumeSession(payload);
       return { requestId };
     }
@@ -113,6 +118,24 @@ export function registerChatHandlers(): void {
     ): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.respondQuestion(payload);
       return { requestId };
+    }
+  );
+
+  ipcMain.handle(IPC_CHANNELS.CHAT_LIST_SESSIONS, async (): Promise<SessionIndexEntry[]> => {
+    return sessionIndexService.list();
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RENAME_SESSION,
+    async (_e, payload: { sessionId: string; title: string }): Promise<boolean> => {
+      return sessionIndexService.rename(payload.sessionId, payload.title);
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_ARCHIVE_SESSION,
+    async (_e, payload: { sessionId: string; archived: boolean }): Promise<boolean> => {
+      return sessionIndexService.setArchived(payload.sessionId, payload.archived);
     }
   );
 }

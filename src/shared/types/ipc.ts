@@ -350,6 +350,9 @@ export const IPC_CHANNELS = {
   CHAT_CLOSE_SESSION: 'chat:closeSession',
   CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
   CHAT_RESPOND_QUESTION: 'chat:respondQuestion',
+  CHAT_LIST_SESSIONS: 'chat:listSessions',
+  CHAT_RENAME_SESSION: 'chat:renameSession',
+  CHAT_ARCHIVE_SESSION: 'chat:archiveSession',
   /** Main → Renderer: Agent Host RuntimeEvent push */
   CHAT_RUNTIME_EVENT: 'chat:runtimeEvent',
 
