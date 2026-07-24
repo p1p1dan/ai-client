@@ -16,8 +16,8 @@
 | T-05 | Tool Card 增强 + Question 卡 | ⬜ | | Question 部分等 C-04 |
 | T-06 | 消息元数据 + 错误/重试 | 🟡 | Fable | assistant 元数据行 + 失败卡 + 重试已做；待 GUI 复验 |
 | T-07 | Composer @ 文件引用 | ⬜ | | 无依赖 |
-| T-08 | Model 选择器 | 🟡 | Fable | 实现完成待 GUI 复验；源：常量短名列表 + `host.ready.settings.model` 默认；`createSession({model})` 已带（Host 接收）；`useSessionModel` 存 session→model 映射 |
-| T-09 | 空/错/断状态 + 诊断面板 | 🟡 | Fable | Agent Host 未就绪/Node 24 缺失/断连 ribbon 已做，待 GUI 复验 |
+| T-08 | Model 选择器 | ✅ | Fable | 实现 `298e3e6`；GUI 复验通过（"切模型和正常回复" 2026-07-24） |
+| T-09 | 空/错/断状态 + 诊断面板 | 🟡 | Fable | impl done `187c783`；用户暂跳过 GUI 验收（场景 A 顺带验证 banner 显/收机制工作；B 因 resolver 容错 fallback 走真 node，未真触发 Node 缺失） |
 | T-10 | 打包版 GUI 手工点验 | ⬜ | | 等 C-02，→ CP2 |
 | T-11 | **M2 加密机验收（现场）** | ⬜ | | 等 T-10，→ CP5 |
 | T-12 | Phase 4：右栏 Git 面板 | ⬜ | | M3 后 |
@@ -26,6 +26,7 @@
 | T-15 | Phase 4：Terminal Dock 接真终端 | ⬜ | | M3 后 |
 | T-16 | Phase 4：新旧开关成熟化 | ⬜ | | T-12~15 后 |
 | T-17 | Tool 真实调用 GUI 验收 | ✅ | Cursor | Host smoke 通；GUI 闭环 `2026-07-24`：PONG 正常（一条 user + assistant）、Write→Allow→`PING.txt`、卡 Running 已解（主线 `6a633d6` 补 stream-end 终态 + 团队 `b55c859` 修 Composer 进度门/双写） |
+| 2026-07-24 | T-08 GUI 复验 | ✅ 通过 | 用户 GUI：选 Opus→send→Host 用 Opus 跑正常回复。"切模型和正常回复"确认 |
 | T-18 | Composer 粘贴图片/文件 | ⬜ | | 用户反馈 F2（2026-07-24）；等 C-13 |
 
 图例：✅ 完成 · 🟡 进行中 · ⬜ 未开始 · ❌ 阻塞
