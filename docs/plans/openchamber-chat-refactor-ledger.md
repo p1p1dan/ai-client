@@ -83,6 +83,7 @@
 | 2026-07-24 | **C-04：Question 桥全链完成，T-05 Question 卡解锁** — AskUserQuestion 走 canUseTool 权限流（CP3 拍板的官方机制）。**团队消费指引**：事件 `question.requested`（payload `questions[]`：question/header/options{label,description,preview}/multiSelect）→ UI 卡收集答案 → `chat.respondQuestion({sessionId, questionId, answers? \| response? \| cancel?})` → 事件 `question.resolved`（outcome answered/cancelled/rejected）冻结卡片。store 已备好 `pendingQuestion` + `respondQuestion` action + question block。**三条硬约束**：① answers 的 key 必须是 question 原文逐字（改动即视为未答）；② multiSelect 多选用 `", "`（逗号+空格）拼接；③ answers 与 response 互斥（并存时模型只见 response）。取消用 `cancel:true`（无 denial 记录），不要发空 answers。协议纯重塑不 bump（question stub 从未发射过）。网关 smoke 三场景绿 | ✅ | `c9522d2` |
 | 2026-07-24 | **C-14：Host 挂起看门狗完成** — 无模型进展默认 120s → abort + 显性 `session.failed`（`AICLIENT_HOST_STALL_TIMEOUT_MS` 可配，0 禁用）。permission/question 挂起与本地工具执行自动豁免（用户思考不限时）；非法 model 的 api_retry 循环照杀（网关实证 51s 显性 failed）。**团队影响**：卡 running 永驻的场景从此会转为 failed + 明确错误文案，T-06 重试卡自然承接 | ✅ | `f87c1cc` |
 | 2026-07-24 | **C-13：附件桥接完成，T-18 解锁** — `session.send` 增 `attachments[]`（`{kind:'image'\|'text', mediaType, data, name?}`，image=base64/text=原文，path 不进协议）。**T-18 消费指引**：store `sendMessage(text, attachments?)` 已就绪（`ChatSendAttachment` 类型自 chatSessions 导出）；attachment-only（text 空）允许；网关实测 8x8 图 24.5s / 文本附件 8s，**大图更慢（spike 152KB→79s），Composer 必须做发送中状态**。网关 smoke 双场景绿（辨色 Red / 召回 kumquat） | ✅ | `d339f70` |
+| 2026-07-24 | **C-15：随包 Node 运行时完成（D17 落地，开发机侧全验）** — 打包产物携带 pinned Node `24.18.0`（`resources/node-runtime/node.exe`，官方 SHA256 校验下载）；Resolver 增 `bundled` 源（explicit/env 逃生口之下、机器发现之上，开发态不变）。**`verify:packaged` 25 项 PASS，PONG smoke 显式跑在随包 node 上**——无用户 Node 的机器可跑通对话。CI build-windows 已接 fetch+cache。**体积交用户过目**：portable 120MB→141MB（+21MB）。⏳ 加密机「白名单按进程名 + 随包 node 读 TSD」实证归 **T-11⑥**，开发机不标注通过 | ✅ | `adc3127` |
 | 2026-07-24 | **C-06：Resume 历史重放全链实现完成，T-03 解锁** — Host historyReader + runtime 时序/session_busy + Main `chat:listHistory` IPC/preload + store `h:` 前缀灌入；新增 49 单测（全套 181 绿）；网关端到端 smoke `spikes/c06-resume-history-smoke.ts` ok:true（含历史召回码字验法）。**T-03 可开工**：数据流 = 点击历史会话 → `chat:resumeSession` → 事件 `session.resumed → session.history → status idle` 自动灌入 store（消息 id `h:*`）；列表合并数据源 = `chat:listSessions`（C-07 索引）+ `chat:listHistory`（盘上 CLI 会话，含 title）；历史读失败看 store `historyErrors[sessionId]`（非阻断） | ✅ | `db41f63` |
 
 ---
@@ -190,7 +191,8 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01 ✅ C-02 ✅（CP2 待 T-10 GUI 点验合并汇报）C-07 ✅ C-06 ✅ C-03 ✅ C-05 ✅ C-10 ✅ C-04 ✅ → C-14 看门狗 → C-13 附件桥接 → C-15 随包 Node
+- 🤖 **Claude 主线**：C-01~C-07、C-10、C-13、C-14、C-15 全 ✅（CP2 待 T-10 GUI 点验合并汇报）→ 剩 C-09 测试基建/lint → C-08 store 结构 →（机动 C-11）→ C-12（Phase 5）
+- 👥 **新解锁**：T-05 Question 卡（C-04 ✅，消费指引见检查点行）、T-18 Composer 粘贴（C-13 ✅，大图需发送中状态）；T-10 点验可用新产物（含随包 Node，141MB）
 - 👥 **T-02 已解锁**：`chat:listSessions/renameSession/archiveSession` + preload 就绪；store hydrate 建议在 `initRuntime` 接 `listSessions()` 替换 demo 种子（见主线台账 C-07 行）
 - 👥 **T-03 已解锁**：resume 数据层全就位（协议文档 = 契约；消费指引见检查点 C-06 行）；注意历史消息无 T-06 元数据行（model/timestamp 在消息体内自带）、thinking 历史协议已携带但渲染等 C-05/T-04
 - 🧪 **测试凭证统一约定**（用户拍板 2026-07-23）：测试不得用本机默认 Claude 登录，统一走网关 `https://cch-jyw.pipidan.qzz.io`；详见执行计划 §4
