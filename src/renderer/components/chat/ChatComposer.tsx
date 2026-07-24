@@ -1,4 +1,4 @@
-import { SendHorizonal, Square } from 'lucide-react';
+import { RotateCcw, SendHorizonal, Square } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -81,6 +81,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const lastError = useChatSessionsStore((state) => state.lastError);
+  const messages = useChatSessionsStore((state) => state.messages);
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
@@ -103,6 +104,32 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   const handleSend = async () => {
     const trimmed = value.trim();
     if (!trimmed || !canSend || !activeSessionId || !activeWorkspace) {
+      return;
+    }
+    await runSend(trimmed);
+    setValue('');
+  };
+
+  const lastUserPrompt = activeSessionId
+    ? [...messages]
+        .reverse()
+        .find((message) => message.sessionId === activeSessionId && message.role === 'user')
+    : undefined;
+  const canRetry =
+    Boolean(lastUserPrompt) &&
+    Boolean(activeSessionId && activeWorkspace) &&
+    activeSession?.status === 'failed' &&
+    !busy &&
+    !sending;
+  const handleRetry = async () => {
+    if (!canRetry || !lastUserPrompt) return;
+    const text = lastUserPrompt.blocks.find((block) => block.type === 'text' && block.text)?.text;
+    if (!text) return;
+    await runSend(text);
+  };
+
+  const runSend = async (trimmed: string) => {
+    if (!canSend || !activeSessionId || !activeWorkspace) {
       return;
     }
 
@@ -302,15 +329,29 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
                 Stop
               </Button>
             ) : (
-              <Button
-                size="sm"
-                className="h-6"
-                disabled={!canSend || !value.trim()}
-                onClick={() => void handleSend()}
-              >
-                <SendHorizonal className="h-3.5 w-3.5" />
-                {sending ? 'Sending…' : 'Send'}
-              </Button>
+              <>
+                {canRetry && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6"
+                    disabled={disabled}
+                    onClick={() => void handleRetry()}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  className="h-6"
+                  disabled={!canSend || !value.trim()}
+                  onClick={() => void handleSend()}
+                >
+                  <SendHorizonal className="h-3.5 w-3.5" />
+                  {sending ? 'Sending…' : 'Send'}
+                </Button>
+              </>
             )}
           </div>
         </div>

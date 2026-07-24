@@ -6,6 +6,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
+import { useMessageMetadata } from './useMessageMetadata';
 
 interface MessageTimelineProps {
   sessionId: string | null;
@@ -16,6 +18,9 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
   const messages = useChatSessionsStore((state) => state.messages);
   const respondPermission = useChatSessionsStore((state) => state.respondPermission);
   const pendingPermission = useChatSessionsStore((state) => state.pendingPermission);
+  const lastError = useChatSessionsStore((state) => state.lastError);
+  const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
+  const { get: getMeta } = useMessageMetadata(sessionId);
 
   const sessionMessages = useMemo(
     () => (sessionId ? messages.filter((message) => message.sessionId === sessionId) : []),
@@ -50,6 +55,7 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
               <MessageBubble
                 key={message.id}
                 message={message}
+                metadata={getMeta(message.id)}
                 canRespondPermission={Boolean(
                   pendingPermission &&
                     pendingPermission.sessionId === sessionId &&
@@ -59,6 +65,28 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
               />
             ))
           )}
+          {status === 'failed' && (
+            <div
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+              role="alert"
+            >
+              <p className="font-medium">Session failed</p>
+              {lastError && (
+                <p className="mt-1 break-words whitespace-pre-wrap opacity-90">{lastError}</p>
+              )}
+              <p className="mt-1 opacity-70">已产内容保留。在下方输入框点 Retry 重发上条消息。</p>
+              {pendingPermission?.sessionId === sessionId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-6 text-xs"
+                  onClick={() => void stopActiveSession()}
+                >
+                  Stop
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </ScrollArea>
     </div>
@@ -67,12 +95,19 @@ export function MessageTimeline({ sessionId, status }: MessageTimelineProps) {
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  metadata?: MessageMetadata;
   canRespondPermission: boolean;
   onRespondPermission: (allow: boolean) => void;
 }
 
-function MessageBubble({ message, canRespondPermission, onRespondPermission }: MessageBubbleProps) {
+function MessageBubble({
+  message,
+  metadata,
+  canRespondPermission,
+  onRespondPermission,
+}: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const metaLine = !isUser ? formatMessageMetadata(metadata) : null;
 
   return (
     <article className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
@@ -94,6 +129,8 @@ function MessageBubble({ message, canRespondPermission, onRespondPermission }: M
             onRespondPermission={onRespondPermission}
           />
         ))}
+
+        {metaLine && <p className="text-[10px] text-muted-foreground/80">{metaLine}</p>}
       </div>
     </article>
   );
