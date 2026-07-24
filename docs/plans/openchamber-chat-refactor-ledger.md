@@ -85,6 +85,8 @@
 | 2026-07-24 | **C-13：附件桥接完成，T-18 解锁** — `session.send` 增 `attachments[]`（`{kind:'image'\|'text', mediaType, data, name?}`，image=base64/text=原文，path 不进协议）。**T-18 消费指引**：store `sendMessage(text, attachments?)` 已就绪（`ChatSendAttachment` 类型自 chatSessions 导出）；attachment-only（text 空）允许；网关实测 8x8 图 24.5s / 文本附件 8s，**大图更慢（spike 152KB→79s），Composer 必须做发送中状态**。网关 smoke 双场景绿（辨色 Red / 召回 kumquat） | ✅ | `d339f70` |
 | 2026-07-24 | **C-15：随包 Node 运行时完成（D17 落地，开发机侧全验）** — 打包产物携带 pinned Node `24.18.0`（`resources/node-runtime/node.exe`，官方 SHA256 校验下载）；Resolver 增 `bundled` 源（explicit/env 逃生口之下、机器发现之上，开发态不变）。**`verify:packaged` 25 项 PASS，PONG smoke 显式跑在随包 node 上**——无用户 Node 的机器可跑通对话。CI build-windows 已接 fetch+cache。**体积交用户过目**：portable 120MB→141MB（+21MB）。⏳ 加密机「白名单按进程名 + 随包 node 读 TSD」实证归 **T-11⑥**，开发机不标注通过 | ✅ | `adc3127` |
 | 2026-07-24 | **C-06：Resume 历史重放全链实现完成，T-03 解锁** — Host historyReader + runtime 时序/session_busy + Main `chat:listHistory` IPC/preload + store `h:` 前缀灌入；新增 49 单测（全套 181 绿）；网关端到端 smoke `spikes/c06-resume-history-smoke.ts` ok:true（含历史召回码字验法）。**T-03 可开工**：数据流 = 点击历史会话 → `chat:resumeSession` → 事件 `session.resumed → session.history → status idle` 自动灌入 store（消息 id `h:*`）；列表合并数据源 = `chat:listSessions`（C-07 索引）+ `chat:listHistory`（盘上 CLI 会话，含 title）；历史读失败看 store `historyErrors[sessionId]`（非阻断） | ✅ | `db41f63` |
+| 2026-07-24 | **C-09：测试基建 + lint 恢复绿** — 全仓 lint 0 诊断（494 CRLF 根因归一 + `.gitattributes` 锁 LF 防回退 + biome 排除构建产物）；+70 单测锁 C-08 行为基线（store reducer / normalizer / permissionBridge / Host 协议错误路径子进程实测）；全套 36 文件 308 例绿。**C-08 解锁** | ✅ | `ce5a577` `1505031` `49a6031` |
+| 2026-07-24 | **双轨合一（用户指示）**：团队轨道同事休假，Claude 主线全权接管全部任务；共树并行纪律（pathspec 提交/避让 components）随之松绑。团队在途未提交 T-04 方向改动（hostStatus/MessageTimeline/ChatWorkspace/thinkingCard 共 6 文件）留存工作树，待接手 T-04 时评估续用或重做 | ✅ | 口头指示 |
 
 ---
 
@@ -191,7 +193,8 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01~C-07、C-10、C-13、C-14、C-15 全 ✅（CP2 待 T-10 GUI 点验合并汇报）→ 剩 C-09 测试基建/lint → C-08 store 结构 →（机动 C-11）→ C-12（Phase 5）
+- 🤖 **Claude 主线**：C-01~C-07、C-09、C-10、C-13、C-14、C-15 全 ✅（CP2 待 T-10 GUI 点验合并汇报）→ 剩 C-08 store 结构（行为基线已锁）→（机动 C-11）→ C-12（Phase 5）
+- ⚠️ **双轨合一（2026-07-24 用户指示）**：同事休假，主线全权接管 T-xx；下方「团队轨道」各条由主线按优先级消化，T-04 在途半成品见工作树未提交文件
 - 👥 **新解锁**：T-05 Question 卡（C-04 ✅，消费指引见检查点行）、T-18 Composer 粘贴（C-13 ✅，大图需发送中状态）；T-10 点验可用新产物（含随包 Node，141MB）
 - 👥 **T-02 已解锁**：`chat:listSessions/renameSession/archiveSession` + preload 就绪；store hydrate 建议在 `initRuntime` 接 `listSessions()` 替换 demo 种子（见主线台账 C-07 行）
 - 👥 **T-03 已解锁**：resume 数据层全就位（协议文档 = 契约；消费指引见检查点 C-06 行）；注意历史消息无 T-06 元数据行（model/timestamp 在消息体内自带）、thinking 历史协议已携带但渲染等 C-05/T-04

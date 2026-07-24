@@ -54,6 +54,7 @@
 
 | 日期 | 节点 | 结果 | 证据 / 提交 |
 |---|---|---|---|
+| 2026-07-24 | **双轨合一**：本轨道维护人休假，全部 T-xx 任务移交 Claude 主线全权接管（用户指示）。在途未提交改动（T-04 方向：hostStatus/MessageTimeline/ChatWorkspace + thinkingCard 新文件）留存工作树待主线接手评估 | ⚠️ 移交 | 口头指示 |
 | 2026-07-23 | T-17 认领 + Host 侧预检 | 🟡 GUI 待点验 | Cursor 认领。约定：**测试走网关** `ANTHROPIC_BASE_URL=https://cch-jyw.pipidan.qzz.io`（token 不入库，临时 `CLAUDE_CONFIG_DIR`）。Node 24 下 `phase2-permission-smoke.ts` → ok:true（Write→permission→allow→tool.completed→PERM-OK；`baseHost: cch-jyw.pipidan.qzz.io`）。GUI 仍读 `~/.claude/settings.json`，点验前需把网关 env 写入该文件（或提需求给主线支持 Host 侧 CLAUDE_CONFIG_DIR 注入）。 |
 | 2026-07-23 | T-01 真实 Project/Workspace 数据树（实现） | 🟡 待 GUI 验收 | Cursor 认领。不改 `chatSessions.ts`：`deriveChatWorkspaceTree` + `useSyncChatWorkspaceTree` 外部 setState 灌真实 repos/worktrees/temp；LeftNav 多 Project 折叠 + New Session 绑 workspace；App 传入 repositories。单测 3 绿；`pnpm typecheck` + biome(workspace-shell/App) 绿。验收：Beta 壳左栏见真实仓库/worktree → 选 worktree → New → 发 `pwd`。 |
 | 2026-07-24 | 解阻启动门 + Settings + Send 诊断（交接） | 🟡 未闭环 | 提交 `a01712a`。开发捷径：`src/shared/devFlags.ts` 的 `SKIP_ONBOARDING_GATE=true`（**开发期默认跳过，仅在专门验证登录/onboarding 功能时手动改 false**；见 `71e7b84`）。OpenChamber 壳强制开启；Settings 在壳下走 modal（修 OOB 死循环）。Composer：close→等 `session.created`→send；Running 不算成功；展示 `host.error` code/message；废弃固定 `session-live` id。现象：Send 可达 Running，但常无 `message.*`/assistant；用户本机勿改 `~/.claude/settings.json`，可用 `node scripts/make-test-claude-config.mjs` + `CLAUDE_CONFIG_DIR` 走网关。下一步：Stop→再发 PONG；若仍无回复贴 `rawEvents`；完成 T-17 Write→Allow→`PING.txt` 与 T-01 pwd 验收后勾台账。 |
