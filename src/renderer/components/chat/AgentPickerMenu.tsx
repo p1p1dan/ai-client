@@ -142,11 +142,7 @@ export function AgentPickerMenu({
             const customAgent = customAgents.find((a) => a.id === baseId);
 
             const baseName = customAgent?.name ?? AGENT_INFO[baseId]?.name ?? baseId;
-            const name = isHapi
-              ? `${baseName} (Hapi)`
-              : isHappy
-                ? `${baseName} (Happy)`
-                : baseName;
+            const name = isHapi ? `${baseName} (Hapi)` : isHappy ? `${baseName} (Happy)` : baseName;
 
             const isDefault = agentSettings[agentId]?.isDefault;
 

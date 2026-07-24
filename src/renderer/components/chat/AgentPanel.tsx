@@ -1591,7 +1591,9 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                   showQuickTerminal
                   quickTerminalOpen={quickTerminalOpen}
                   quickTerminalHasProcess={hasRunningProcess}
-                  onToggleQuickTerminal={quickTerminalEnabled ? handleToggleQuickTerminal : undefined}
+                  onToggleQuickTerminal={
+                    quickTerminalEnabled ? handleToggleQuickTerminal : undefined
+                  }
                 />
               </div>
               <AgentGroup

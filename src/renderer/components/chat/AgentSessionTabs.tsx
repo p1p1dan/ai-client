@@ -107,9 +107,7 @@ export function AgentSessionTabs({
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-              {isActive && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-              )}
+              {isActive && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
             </div>
           );
         })}
