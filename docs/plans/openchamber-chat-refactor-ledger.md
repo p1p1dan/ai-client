@@ -50,6 +50,7 @@
 | D11 | 历史 | Host 读 CC JSONL；本地只存索引 |
 | D15 | 右栏 | MVP 单层 `git \| files \| context` |
 | D16 | vflow | **整体移除**（用户拍板 2026-07-24，不再需要）：Phase A 打包/CI 链 `dbb20be` + Phase B 运行时代码 `eac23f7`，全仓 vflow 引用清零 ✅ |
+| D17 | Host Node 来源 | **随包独立 Node（打包态首选）+ 现有五源解析兜底**（用户拍板 2026-07-24）。依据：TSD 白名单**按进程名**——「只要是 node 就是白名单」（用户口径；注意 Electron 内嵌 node 进程名是 electron.exe **不**匹配，ARD 当年否决内嵌路线的理由依然成立）；随包 node.exe 同时解 T-09「用户自装 Node 24」痛点。→ 立项 **C-15**；加密机实证（白名单口径 + 随包 node 读 TSD）归 T-11，开发机不得标注通过 |
 
 ---
 

@@ -71,6 +71,7 @@
 | **C-11** | （机动）stream-json fallback 适配器 | `ClaudeRuntime` stream-json driver（参照 `spikes/stream-json-spike.ts`）。仅当 SDK 路线出现阻塞时提级，否则排后 | `AICLIENT_AGENT_HOST_DRIVER=stream-json` 下 PONG smoke 通过 | 无 | 1.5d |
 | **C-13** | 附件协议探测与桥接（用户反馈 F2） | spike 先行：Agent SDK `query()` prompt 是否支持图像/文件块（形态：base64 / 临时文件路径 / content block）；cli.js 粘贴图像的原生机制；结论定协议——`session.send` payload 扩展 `attachments[]`（Host→SDK 透传）+ Main/preload 链路。协议变更走 CP 纪律 | spike 结论记台账；协议扩展后 Host 侧冒烟：带一张图发送 → 模型能描述图片内容 | 无（UI 归 T-18） | 1d |
 | **C-14** | Host 挂起看门狗（C-10 发现，CP3 立项） | SDK 流「不吐事件也不结束」时无超时防护（非法 model 实测挂死 51s+；`finishTurn` 兜底只覆盖「流结束无 result」）。send 循环加无事件超时（默认 120s 无任何流事件 → abort + `session.failed` 带明确错误；`AICLIENT_HOST_STALL_TIMEOUT_MS` 可配）；单测 + 非法 model 场景复现验证 | 非法 model 场景显性 failed 不挂死；正常长响应（thinking 慢轮）不误杀 | 无（排 C-04 后） | 0.5d |
+| **C-15** | 随包 Node 运行时（D17，2026-07-24 立项） | dist 打包 pinned Node 24 win-x64 `node.exe` 至 `resources/node-runtime/`（走 afterPack 串行拷贝先例，避 extraResources 竞态坑）；`NodeRuntimeResolver` 增 `bundled` 源，**打包态首选**、五源解析降级为兜底（开发态行为不变）；`verify:packaged` 增断言（node.exe 存在 + 版本 pin + 用它直跑 PONG）；体积评估（node.exe ~80MB，跟 87MB agent-host 同量级，可接受性交用户过目）。**白名单前提（按进程名）是用户口径，加密机实证归 T-11 新增项** | 打包版在无用户 Node 的机器可直接跑通对话；`verify:packaged` 新断言绿 | C-02 先例 | 1d |
 | **C-12** | （Phase 5）旧路径收缩 + 性能压测 | AgentPanel Claude 主路径收缩、`App.tsx`/`MainContent.tsx` 清理（App 只装配）；千 block 会话压测→虚拟化决策；确认 ARD §8 清理项（`ai-chat/` 已不存在，验证 `shared/types/ai-chat.ts` 状态） | 旧界面其他 Agent 入口不回归；压测数据记台账 | M3/M4 后 | 2.5d |
 
 **主线推进顺序**：C-01 → C-02（M1/CP2）→ C-07（解锁 T-02）→ C-06（CP4，解锁 T-03）→ C-03 → C-04 → C-05（CP3）→ C-09 → C-08 → C-10 →（机动 C-11）→ C-12。
@@ -94,7 +95,7 @@
 | **T-08** | Model 选择器 | Composer/Header 模型下拉（源：settings 配置 + `host.ready.settings.model` 默认）；`session.create payload.model` 已支持；会话级固定 | 切换模型新建会话，元数据显示对应模型 | 无（Effort/Plan 控件等 C-10） | 0.5d |
 | **T-09** | 空/错/断状态 + 诊断面板 | Host 未就绪骨架屏；Node 24 未找到引导（`NodeRuntimeResolver` 诊断 + `AICLIENT_NODE24_PATH` 指引）；诊断展示（Node 路径/版本、Cometix 版本、settings 脱敏态——`host.ready` payload 已带）；Host crash 断连提示与恢复 | 改坏 Node 路径场景走通引导；杀 Host 进程有断连提示且可恢复 | 无 | 1d |
 | **T-10** | 打包版 GUI 手工点验（M1 后半） | 按 C-02 移交的清单：安装/便携版启动→Beta 壳→ensureHost→PONG 会话→权限卡 roundtrip→Stop→退出后任务管理器无 node.exe 残留 | 清单全勾 + 记录进团队台账 → CP2 | C-02 | 0.5d |
-| **T-11** | **M2 加密机验收**（现场） | 按 Claude 提供的 checklist：① 白名单 Node 24 `process.execPath` 记录；② 已知 TSD 加密文件 Host 读出解密内容（非 `%TSD-Header-###%`）；③ 打包版启动 Host 在真实加密工作区跑通对话（读文件工具真实可用）；④ 退出无孤儿；⑤ `~/.claude/projects` JSONL Host 侧可读（C-06 前提） | 全项证据回填 `phase0-report.md` + 总台账；Conditional Go → **正式 Go**（CP5） | T-10 | 1d 现场 |
+| **T-11** | **M2 加密机验收**（现场） | 按 Claude 提供的 checklist：① 白名单 Node 24 `process.execPath` 记录；② 已知 TSD 加密文件 Host 读出解密内容（非 `%TSD-Header-###%`）；③ 打包版启动 Host 在真实加密工作区跑通对话（读文件工具真实可用）；④ 退出无孤儿；⑤ `~/.claude/projects` JSONL Host 侧可读（C-06 前提，密文场景应显性报 `encrypted_unreadable` 非静默空）；⑥ **白名单口径实证**（D17 前提）：白名单是否确按进程名（任意路径 node.exe 均可读 TSD），含随包 node（C-15 产物） | 全项证据回填 `phase0-report.md` + 总台账；Conditional Go → **正式 Go**（CP5） | T-10 | 1d 现场 |
 | **T-12** | Phase 4：右栏 Git 面板 | 现有 sourceControl 视图迁入 `RightDock.tsx` tab；当前 Workspace 联动；changed/staged/diff/commit 最小集 | Git 状态来自真实当前 Workspace | M3 主体后 | 1d |
 | **T-13** | Phase 4：右栏 Files 面板 | 现有文件树迁入；打开文件（中央临时切 Monaco 或跳现有编辑区）；与 T-07 @ 引用联动 | Files 可打开编辑；对话引用文件可跳转 | M3 主体后 | 1.5d |
 | **T-14** | Phase 4：右栏 Context 面板 | 真实基础字段：Workspace 路径、分支、模型、权限策略、附加文件、运行状态。**只放真实数据**（ARD：不展示假状态） | 字段与实际会话一致 | M3 主体后 | 0.5d |
@@ -139,6 +140,7 @@
 |---|---|
 | Host 侧脚本（`src/agent-host/spikes/*-smoke.ts`） | 已内置：`spikes/testCredentials.ts` 自动生成临时 `CLAUDE_CONFIG_DIR`（网关凭证 + onboarding 种子），零配置直接跑 |
 | 换网关 / 换 token | 环境变量 `AICLIENT_TEST_AUTH_TOKEN` / `AICLIENT_TEST_BASE_URL` 覆盖默认值 |
+| **备用网关**（用户提供 2026-07-24，PONG 实测通过） | `AICLIENT_TEST_BASE_URL=https://api.vllmproxy.com`，token 经 `AICLIENT_TEST_AUTH_TOKEN` 注入（向用户索取；是否照主网关先例落文档待用户拍板）；延迟/波动与主网关同级（双端点同时刻齐挂实测过——波动是环境性的），主网关不可用时切换 |
 | 排查对照需要本机登录 | `AICLIENT_SMOKE_USE_LOCAL_SETTINGS=1`（仅限排查；**验收证据必须走网关**） |
 | GUI 手工点验（开发态 / 打包态） | 当前 GUI 读 `~/.claude/settings.json`：点验前将上述两项写入其 `env` 段；「Host 侧 CLAUDE_CONFIG_DIR 注入」已列主线候选需求（见团队台账 T-17 行） |
 

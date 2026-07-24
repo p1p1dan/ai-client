@@ -23,6 +23,7 @@
 | C-12 | 旧路径收缩 + 压测 | ⬜ Phase 5 | |
 | C-13 | 附件协议探测与桥接 | 🟡 | spike ✅（协议方向已定）；桥接实现排 CP3 后 |
 | C-14 | Host 挂起看门狗 | ⬜ | CP3 立项（2026-07-24），排 C-04 后；规格见执行计划 §2 |
+| C-15 | 随包 Node 运行时 | ⬜ | D17 立项（2026-07-24）；白名单按进程名（用户口径，T-11⑥ 实证）；规格见执行计划 §2 |
 
 图例：✅ 完成 · 🟡 进行中 · ⬜ 未开始 · ❌ 阻塞
 
@@ -49,6 +50,8 @@
 
 | 2026-07-24 | C-05 收尾：thinking 默认开 + capabilities + store thinking 块（CP3 拍板执行） | ✅ | claudeRuntime enabled(budget 4096)；host.ready.capabilities `{history, thinking}`；store ChatBlockType 增 thinking + thinking.started/delta 处理 + 历史 thinking 块入渲染数据（T-04 数据面就位）。验证：28 文件/184 用例绿、typecheck 干净；Host smoke 事件链完整（**thinking 事件网关侧非确定**——两跑均未引出，与 C-05 spike 观测一致，管线以单测+spike SDK 层验证为准，GUI 实证归 T-04 验收）。**附**：首跑 90s 停滞复现「答案已到流不收尾」——C-14 看门狗立项依据+1。hash：`8449e88` |
 | 2026-07-24 | 四路支持度探测（C-03/C-05/C-10/C-13 并行，用户要求提并发） | ✅ | **C-03**：AskUserQuestion 走 canUseTool 权限流是**官方机制**（`AskUserQuestionInput.answers` 字段注释即 "User answers collected by the permission component"），三分支实测通过；最大 footgun：bare allow（无 updatedInput）被 cli.js 静默作废重问（仅源码可见）；取消建议映射 allow+空 answers（不产生 denial 记录）；自由文本走 `updatedInput.response`；超时可下沉 SDK `askUserQuestionTimeout`。**C-05**：thinking enabled 单轮+多轮 resume（签名 thinking 历史回放）8 turn 零 400——`claudeRuntime.ts` disable 防御已过时；normalizer 现链路够用（assistant content 路径），stream_event 分支为死代码（未开 includePartialMessages）；注意 disabled 非强保证（对照组一次跑出 thinking 块）+ 延迟上浮（最慢 75s）。**C-10**：effort 仅 xhigh 有可测差异（cache miss + inference_geo=global + 绕过 thinking:disabled），其余档位与非法值签名相同（不校验）；permissionMode 全枚举 default/acceptEdits/auto/bypassPermissions/manual/dontAsk/plan（CLI 层校验）；**plan 非硬只读**——模型照样调 Write，只读约束须 canUseTool 侧识别 plan 自行拒绝；acceptEdits/auto/dontAsk 旁路 canUseTool；bypassPermissions 安全阀非硬约束；**非法 model 不快速失败、会话挂死**（→ 拟立项 C-14 看门狗）。**C-13**：SDK 消息流 prompt 携带 base64 image/document 块全部实测可行（152KB 大图过网关），推荐 `attachments[]={kind:'image'\|'text', mediaType, data, name?}`，path 不进协议；Host 改造是加法（string prompt 包成单元素消息流）；大图延迟显著（152KB→79s），T-18 需发送中状态。四 spike 落库 `9bda9e5`。C-03+C-05+C-10 → CP3 汇报 |
+
+| 2026-07-24 | 用户关键信息两条：白名单口径 + 备用网关（风险 #1 降级） | ✅ | ① **TSD 白名单按进程名**——「只要是 node 就是白名单」（待 T-11⑥ 实证）：C-06 加密机风险从「架构级未知」降为「待实证」；据此并依用户意向立项 **C-15 随包 Node**（D17，解 T-09 自装痛点；ARD 查证：D1「独立」原义为独立进程且曾以「白名单未经证明」否决随包路线——该前提已被新口径推翻，Electron 内嵌路线仍不可行因进程名不匹配）。② 备用网关 `api.vllmproxy.com` PONG 实测通过，凭证入执行计划 §4（延迟同级；双端点同时刻齐挂一轮——波动确系环境性，C-14 依据+1）。另：T-19 让号 T-20（`9d37df0`），T-19 留给消息队列提案（内容待用户提供） |
 
 ## 委派记录
 
