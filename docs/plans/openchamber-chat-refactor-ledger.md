@@ -80,6 +80,7 @@
 | 2026-07-24 | **C-07：Session Index（Main 持久化 + 3 条 chat IPC）完成，T-02 解锁** | ✅ | `f6807c9` |
 | 2026-07-24 | **CP4：`session.history` 协议定稿（用户确认）** — 协议文档 [`2026-07-24-c06-session-history-protocol-draft.md`](./2026-07-24-c06-session-history-protocol-draft.md) 即 T-03 接口契约。协议纯增量不 bump：新事件 `session.history`/`session.historyListed`/`session.updated` + 新命令 `session.listHistory` + `host.ready.capabilities.history`。**团队注意**：① T-03 数据层随 C-06 实现落地后解锁（本行仅协议定稿）；② running 会话 resume 将被拒（`session_busy`）；③ 历史消息 id 带 `h:` 前缀为契约。fresh-fable 对抗评审 GO-WITH-CHANGES 12 findings 全采纳（明细见主线台账） | ✅ | 协议文档 |
 | 2026-07-24 | **CP3：Question/Thinking/Effort-Plan/附件 探测结论 + 用户拍板** — ① Question 卡可做（AskUserQuestion 走 canUseTool 权限流是官方机制，答案经 updatedInput.answers 回传）→ C-04 开工；② **Thinking 开启且默认开**（多轮零 400，disable 防御过时；延迟成本已知悉）→ capabilities.thinking=true，**T-04 解锁**；③ Effort/Plan：仅 xhigh 有实证、plan 非硬只读 → **新开 T-20**（原拟 T-19，让位消息队列提案）（effort 控件，开工前按官方文档调研实际档位，不止 default/xhigh 两档；plan UI 暂缓等主线 canUseTool 只读约束）；④ 附件可行 → C-13 桥接实现排队（解锁 T-18 在即）；⑤ **C-14 立项**（Host 无事件超时看门狗，排 C-04 后）。四 spike `9bda9e5`、结论 `a179955` | ✅ | 见左 |
+| 2026-07-24 | **C-04：Question 桥全链完成，T-05 Question 卡解锁** — AskUserQuestion 走 canUseTool 权限流（CP3 拍板的官方机制）。**团队消费指引**：事件 `question.requested`（payload `questions[]`：question/header/options{label,description,preview}/multiSelect）→ UI 卡收集答案 → `chat.respondQuestion({sessionId, questionId, answers? \| response? \| cancel?})` → 事件 `question.resolved`（outcome answered/cancelled/rejected）冻结卡片。store 已备好 `pendingQuestion` + `respondQuestion` action + question block。**三条硬约束**：① answers 的 key 必须是 question 原文逐字（改动即视为未答）；② multiSelect 多选用 `", "`（逗号+空格）拼接；③ answers 与 response 互斥（并存时模型只见 response）。取消用 `cancel:true`（无 denial 记录），不要发空 answers。协议纯重塑不 bump（question stub 从未发射过）。网关 smoke 三场景绿 | ✅ | `c9522d2` |
 | 2026-07-24 | **C-06：Resume 历史重放全链实现完成，T-03 解锁** — Host historyReader + runtime 时序/session_busy + Main `chat:listHistory` IPC/preload + store `h:` 前缀灌入；新增 49 单测（全套 181 绿）；网关端到端 smoke `spikes/c06-resume-history-smoke.ts` ok:true（含历史召回码字验法）。**T-03 可开工**：数据流 = 点击历史会话 → `chat:resumeSession` → 事件 `session.resumed → session.history → status idle` 自动灌入 store（消息 id `h:*`）；列表合并数据源 = `chat:listSessions`（C-07 索引）+ `chat:listHistory`（盘上 CLI 会话，含 title）；历史读失败看 store `historyErrors[sessionId]`（非阻断） | ✅ | `db41f63` |
 
 ---
@@ -145,7 +146,7 @@
 | Tool 事件进时间线（UI） | 🟡 | Store/UI 已支持；依赖模型实际调工具 |
 | stream-json Adapter | ⬜ | fallback，可后置 |
 | Resume 历史重放 | ✅ | C-06（Phase 3 项提前收口）：`session.history` 协议 + Host 读 JSONL + store 灌入，`db41f63` |
-| Question 桥 | ⬜ | **下一步** |
+| Question 桥 | ✅ | C-04：questionBridge + 协议重塑 + store，网关 smoke 三场景绿，`c9522d2` |
 
 ### 节点 1 验收证据
 
@@ -187,7 +188,7 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01 ✅ C-02 ✅（CP2 待 T-10 GUI 点验合并汇报）C-07 ✅ C-06 ✅（CP4 定稿 + 实现）→ C-03/C-04 Question 桥 → C-05 Thinking 探测（CP3）→ C-13 附件协议（F2）
+- 🤖 **Claude 主线**：C-01 ✅ C-02 ✅（CP2 待 T-10 GUI 点验合并汇报）C-07 ✅ C-06 ✅ C-03 ✅ C-05 ✅ C-10 ✅ C-04 ✅ → C-14 看门狗 → C-13 附件桥接 → C-15 随包 Node
 - 👥 **T-02 已解锁**：`chat:listSessions/renameSession/archiveSession` + preload 就绪；store hydrate 建议在 `initRuntime` 接 `listSessions()` 替换 demo 种子（见主线台账 C-07 行）
 - 👥 **T-03 已解锁**：resume 数据层全就位（协议文档 = 契约；消费指引见检查点 C-06 行）；注意历史消息无 T-06 元数据行（model/timestamp 在消息体内自带）、thinking 历史协议已携带但渲染等 C-05/T-04
 - 🧪 **测试凭证统一约定**（用户拍板 2026-07-23）：测试不得用本机默认 Claude 登录，统一走网关 `https://cch-jyw.pipidan.qzz.io`；详见执行计划 §4
