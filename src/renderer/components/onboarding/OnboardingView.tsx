@@ -34,7 +34,6 @@ const INSTALL_STEP_LABELS: Record<InstallStepId, string> = {
   node: 'Node.js',
   claude: 'Claude Code',
   codex: 'Codex',
-  vflow: 'vflow',
 };
 
 // Map machine-readable server errors to user-facing Chinese strings.
@@ -97,7 +96,6 @@ function createInitialInstallProgress(): Record<InstallStepId, InstallProgress> 
     node: { step: 'node', status: 'pending' },
     claude: { step: 'claude', status: 'pending' },
     codex: { step: 'codex', status: 'pending' },
-    vflow: { step: 'vflow', status: 'pending' },
   };
 }
 
@@ -718,16 +716,10 @@ export function OnboardingView({
               {mode === 'register-only' ? (
                 <p>凭据已写入本地配置,Claude Code 与 Codex 安装完成后即可使用。</p>
               ) : mode === 'vscode-extension' ? (
-                <>
-                  <p>
-                    返回 VSCode 即可直接使用 Claude 扩展。如需在 AiClient 内使用,可继续安装 CLI
-                    环境。
-                  </p>
-                  <p>
-                    如需在项目里启用 vflow 工作流,请在 VSCode 终端运行{' '}
-                    <code className="rounded bg-muted px-1 py-0.5 text-xs">vflow init</code>
-                  </p>
-                </>
+                <p>
+                  返回 VSCode 即可直接使用 Claude 扩展。如需在 AiClient 内使用,可继续安装 CLI
+                  环境。
+                </p>
               ) : (
                 <p>Claude Code 与 Codex 的凭据已在本次会话中生效。</p>
               )}

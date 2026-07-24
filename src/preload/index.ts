@@ -68,7 +68,6 @@ import type {
   UsageStatsResult,
   ValidateLocalPathResult,
   ValidateUrlResult,
-  VflowProjectInitializedEvent,
   WorktreeCreateOptions,
   WorktreeMergeCleanupOptions,
   WorktreeMergeOptions,
@@ -1374,17 +1373,6 @@ const electronAPI = {
     start: (driver?: AgentHostDriver): Promise<unknown> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_START, driver),
     stop: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_STOP),
-  },
-
-  // vflow workflow tool
-  vflow: {
-    onProjectInitialized: (
-      callback: (event: VflowProjectInitializedEvent) => void
-    ): (() => void) => {
-      const handler = (_: unknown, event: VflowProjectInitializedEvent) => callback(event);
-      ipcRenderer.on(IPC_CHANNELS.VFLOW_PROJECT_INITIALIZED, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.VFLOW_PROJECT_INITIALIZED, handler);
-    },
   },
 };
 

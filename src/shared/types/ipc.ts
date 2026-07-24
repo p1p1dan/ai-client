@@ -340,9 +340,6 @@ export const IPC_CHANNELS = {
   ONBOARDING_LIVE_CREDENTIALS_STATUS: 'onboarding:liveCredentialsStatus',
   ONBOARDING_CHECK_CREDENTIALS_HEALTH: 'onboarding:checkCredentialsHealth',
 
-  // vflow workflow tool
-  VFLOW_PROJECT_INITIALIZED: 'vflow:project-initialized',
-
   // OpenChamber Chat / Agent Host Runtime
   CHAT_ENSURE_HOST: 'chat:ensureHost',
   CHAT_GET_HOST_STATUS: 'chat:getHostStatus',

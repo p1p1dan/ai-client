@@ -5,8 +5,7 @@ export type BuiltinAgentId =
   | 'gemini'
   | 'auggie'
   | 'cursor'
-  | 'opencode'
-  | 'vflow';
+  | 'opencode';
 
 export type AgentEnvironment = 'native' | 'hapi' | 'happy';
 
