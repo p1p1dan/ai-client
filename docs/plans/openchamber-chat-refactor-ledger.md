@@ -193,8 +193,8 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01~C-07、C-09、C-10、C-13、C-14、C-15 全 ✅（CP2 待 T-10 GUI 点验合并汇报）→ 剩 C-08 store 结构（行为基线已锁）→（机动 C-11）→ C-12（Phase 5）
-- ⚠️ **双轨合一（2026-07-24 用户指示）**：同事休假，主线全权接管 T-xx；下方「团队轨道」各条由主线按优先级消化，T-04 在途半成品见工作树未提交文件
+- 🤖 **Claude 主线**：C-01~C-07、C-09、C-10、C-13、C-14、C-15 全 ✅ + **C-08a 批处理 ✅**（`138ccb3`，16ms 窗口合并 set、形状零变更；CP2 待 T-10 GUI 点验合并汇报）→ 剩 **C-08b 分桶+消费方迁移**（消费方 MessageTimeline 已随 T-04 `22ef2ff` 落地；ChatComposer 待同事 T-07 fileMention 在途收尾后动）→（机动 C-11）→ C-12（Phase 5）
+- ⚠️ **双轨交接中（2026-07-24 用户指示，随后修正）**：同事休假前收尾中（T-04 已落地 `22ef2ff`，T-07 fileMention 在途），收尾完成后主线全权接管 T-xx；接管前照旧 pathspec 提交 + 避让其在途文件
 - 👥 **新解锁**：T-05 Question 卡（C-04 ✅，消费指引见检查点行）、T-18 Composer 粘贴（C-13 ✅，大图需发送中状态）；T-10 点验可用新产物（含随包 Node，141MB）
 - 👥 **T-02 已解锁**：`chat:listSessions/renameSession/archiveSession` + preload 就绪；store hydrate 建议在 `initRuntime` 接 `listSessions()` 替换 demo 种子（见主线台账 C-07 行）
 - 👥 **T-03 已解锁**：resume 数据层全就位（协议文档 = 契约；消费指引见检查点 C-06 行）；注意历史消息无 T-06 元数据行（model/timestamp 在消息体内自带）、thinking 历史协议已携带但渲染等 C-05/T-04
