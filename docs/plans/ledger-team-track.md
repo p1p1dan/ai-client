@@ -25,7 +25,8 @@
 | T-14 | Phase 4：右栏 Context 面板 | ⬜ | | M3 后 |
 | T-15 | Phase 4：Terminal Dock 接真终端 | ⬜ | | M3 后 |
 | T-16 | Phase 4：新旧开关成熟化 | ⬜ | | T-12~15 后 |
-| T-17 | Tool 真实调用 GUI 验收 | 🟡 | Cursor | Host smoke 已通；GUI 卡在 Running 无 assistant，待接手解阻/点验 |
+| T-17 | Tool 真实调用 GUI 验收 | 🟡 | Cursor | Host smoke 已通；GUI 卡在 Running 无 assistant，待接手解阻/点验（主线已修 stream-end 补终态 `6a633d6`，重试时应见 completed 或明确 failed） |
+| T-18 | Composer 粘贴图片/文件 | ⬜ | | 用户反馈 F2（2026-07-24）；等 C-13 |
 
 图例：✅ 完成 · 🟡 进行中 · ⬜ 未开始 · ❌ 阻塞
 

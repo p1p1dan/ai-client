@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { classifyAssistantProgress } from './assistantProgress';
 
 interface ChatComposerProps {
   disabled?: boolean;
@@ -103,24 +104,15 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
 
     const sessionId = activeSessionId;
     const workspacePath = activeWorkspace.path;
-    const localId = `msg-local-${Date.now()}`;
 
     useChatSessionsStore.setState((state) => ({
-      messages: [
-        ...state.messages,
-        {
-          id: localId,
-          sessionId,
-          role: 'user',
-          blocks: [{ id: `${localId}-text`, type: 'text', text: trimmed }],
-        },
-      ],
       hostBoundSessionIds: state.hostBoundSessionIds.filter((id) => id !== sessionId),
       lastError: null,
     }));
 
     setSending(true);
     const seenEvents: string[] = [];
+    const assistantMessageIds = new Set<string>();
     let sawSessionCreated = false;
     let sawAssistantProgress = false;
     let fatalHostError: string | null = null;
@@ -133,21 +125,8 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
       }
 
       if (event.sessionId === sessionId) {
-        if (
-          event.type === 'message.delta' ||
-          event.type === 'message.completed' ||
-          event.type === 'tool.started' ||
-          event.type === 'permission.requested'
-        ) {
+        if (classifyAssistantProgress(event, assistantMessageIds) === 'assistant') {
           sawAssistantProgress = true;
-        } else if (event.type === 'message.started') {
-          const role =
-            event.payload && typeof event.payload === 'object' && 'role' in event.payload
-              ? String((event.payload as { role?: string }).role ?? '')
-              : '';
-          if (role !== 'user') {
-            sawAssistantProgress = true;
-          }
         }
       }
 
