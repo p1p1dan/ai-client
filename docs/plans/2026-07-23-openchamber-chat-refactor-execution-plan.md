@@ -122,6 +122,10 @@
 | `src/renderer/components/workspace-shell/**`、`chat/`（卡片/Timeline/Composer） | 👥 | Claude 不主动改动，需要时提需求给团队 |
 | 现有旧模块（AgentPanel 等） | 👥 日常维护 | Phase 5 收缩由 🤖 主导（C-12） |
 
+### 同树提交纪律（2026-07-24 增，双向对撞事故后）
+
+两个 Agent 会话共用一个工作树时，「`git add` → `git commit`」两步间存在竞态窗口（今日双向各中一次：对方暂存的文件被扫进己方提交）。**双方一律改用 pathspec 提交**：`git commit -m "..." -- <明确文件列表>`——无视暂存区内容，只提交列出的文件，竞态在机制上不可能发生。禁止裸 `git commit`/`git commit -a`。
+
 ### 协议变更纪律
 
 1. 变更 `shared/types/runtimeEvents.ts` / `agentHost.ts` 必须由 Claude 主线发起，先落类型与文档，再动实现；
