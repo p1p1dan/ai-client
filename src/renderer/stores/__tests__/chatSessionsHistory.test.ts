@@ -229,7 +229,7 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     expect(patch.messages).toHaveLength(2);
   });
 
-  it('maps tool_call and tool_result blocks with the same field usage as the live branches, and drops thinking blocks', () => {
+  it('maps tool_call, tool_result and thinking blocks with the same field usage as the live branches', () => {
     const state = baseState({ sessions: [makeSession()] });
     const event = makeHistoryEvent({ messages: [HISTORY_MESSAGES[1]] });
 
@@ -256,11 +256,17 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
       text: undefined,
     });
 
-    // The 4th history block (thinking) has no ChatBlockType counterpart yet and is dropped.
+    // Thinking history maps 1:1 since CP3 enabled thinking (C-05).
+    expect(assistantMessage?.blocks.find((block) => block.id === 'h:uuid-2:3')).toEqual({
+      id: 'h:uuid-2:3',
+      type: 'thinking',
+      text: 'thinking...',
+    });
     expect(assistantMessage?.blocks.map((block) => block.type)).toEqual([
       'text',
       'tool_call',
       'tool_result',
+      'thinking',
     ]);
   });
 });

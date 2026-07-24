@@ -4,7 +4,12 @@ import { create } from 'zustand';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
 
-export type ChatBlockType = 'text' | 'tool_call' | 'tool_result' | 'permission_request';
+export type ChatBlockType =
+  | 'text'
+  | 'thinking'
+  | 'tool_call'
+  | 'tool_result'
+  | 'permission_request';
 
 export interface ChatProject {
   id: string;
@@ -156,13 +161,14 @@ function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessa
 
 /**
  * Maps one HistoryBlock to a ChatBlock using the same field usage as the live
- * runtime branches (tool.started / tool.completed). Thinking blocks are dropped:
- * ChatBlockType has no 'thinking' variant yet (lands with T-04).
+ * runtime branches (tool.started / tool.completed / thinking.delta).
  */
 function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | null {
   switch (block.type) {
     case 'text':
       return { id: block.id, type: 'text', text: block.text };
+    case 'thinking':
+      return { id: block.id, type: 'thinking', text: block.text };
     case 'tool_call':
       return {
         id: block.id,
@@ -180,8 +186,6 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
         toolOutput: block.output,
         text: block.error,
       };
-    case 'thinking':
-      return null;
     default:
       return null;
   }
@@ -202,12 +206,17 @@ function mapHistoryMessageToChatMessage(
   };
 }
 
-function appendTextBlock(message: ChatMessage, blockId: string, text: string): ChatMessage {
+function appendTextBlock(
+  message: ChatMessage,
+  blockId: string,
+  text: string,
+  blockType: 'text' | 'thinking' = 'text'
+): ChatMessage {
   const blocks = [...message.blocks];
   const blockIndex = blocks.findIndex((block) => block.id === blockId);
 
   if (blockIndex === -1) {
-    blocks.push({ id: blockId, type: 'text', text });
+    blocks.push({ id: blockId, type: blockType, text });
   } else {
     const block = blocks[blockIndex];
     blocks[blockIndex] = {
@@ -350,6 +359,32 @@ export function applyRuntimeEvent(
         return {};
       }
       const updated = appendTextBlock(existing, event.payload.blockId, event.payload.text);
+      return { messages: upsertMessage(state.messages, updated) };
+    }
+
+    case 'thinking.started': {
+      const existing = state.messages.find((item) => item.id === event.payload.messageId);
+      if (!existing || existing.blocks.some((block) => block.id === event.payload.blockId)) {
+        return {};
+      }
+      const updated: ChatMessage = {
+        ...existing,
+        blocks: [...existing.blocks, { id: event.payload.blockId, type: 'thinking', text: '' }],
+      };
+      return { messages: upsertMessage(state.messages, updated) };
+    }
+
+    case 'thinking.delta': {
+      const existing = state.messages.find((item) => item.id === event.payload.messageId);
+      if (!existing) {
+        return {};
+      }
+      const updated = appendTextBlock(
+        existing,
+        event.payload.blockId,
+        event.payload.text,
+        'thinking'
+      );
       return { messages: upsertMessage(state.messages, updated) };
     }
 

@@ -133,7 +133,7 @@ async function handleCommand(raw: unknown): Promise<void> {
                   model: settingsDiagnostics.model,
                 }
               : null,
-            capabilities: { history: true },
+            capabilities: { history: true, thinking: true },
           },
         });
       } catch (err) {

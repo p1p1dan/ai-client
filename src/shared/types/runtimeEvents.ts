@@ -80,6 +80,8 @@ export interface HostReadyEvent extends RuntimeEventBase {
     /** Host capability flags — Main degrades gracefully when absent (old Host). */
     capabilities?: {
       history?: boolean;
+      /** Extended thinking enabled on this Host (CP3 decision: default on). */
+      thinking?: boolean;
     };
   };
 }

@@ -258,8 +258,10 @@ export class ClaudeRuntime {
           // Isolate from filesystem permission.allow rules that would shadow canUseTool.
           // Credentials still come from options.env (loaded from settings.json).
           settingSources: [],
-          // Avoid CCH "invalid thinking block" 400s during Phase 2 smoke.
-          thinking: { type: 'disabled' },
+          // CP3 (2026-07-24): thinking on by default. The historical CCH
+          // "invalid thinking block" 400 no longer reproduces — C-05 spike ran
+          // multi-turn resume with signed thinking history clean (8/8 turns).
+          thinking: { type: 'enabled', budgetTokens: 4096 },
           // Interactive permission bridge (timeline cards) — not bypass.
           permissionMode: 'default',
           canUseTool,
