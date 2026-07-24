@@ -1,5 +1,6 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
+  Archive,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -10,6 +11,7 @@ import {
   Plus,
   Search,
   Settings,
+  X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import type { ChatWorkspace, WorkspaceKind } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import { createChatSessionOnWorkspace } from './useSyncChatWorkspaceTree';
 
 interface LeftNavProps {
@@ -66,6 +69,11 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
   const recentSessionIds = useChatSessionsStore((state) => state.recentSessionIds);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const selectSession = useChatSessionsStore((state) => state.selectSession);
+
+  // T-02: hydrate + mutate the persisted session index (chat:listSessions /
+  // renameSession / archiveSession / closeSession).
+  const { refresh } = useSessionIndex();
+  const { rename, archive, close } = useSessionIndexMutations(refresh);
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const effectiveWorkspaceId =
@@ -167,6 +175,10 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
                       session={session}
                       active={activeSessionId === session.id}
                       onSelect={() => selectSession(session.id)}
+                      onClose={() => void close(session.id)}
+                      onRename={(title) => void rename(session.id, title)}
+                      onArchive={() => void archive(session.id, true)}
+                      disabled={false}
                     />
                   ))}
                 </div>
@@ -221,6 +233,9 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
                               }
                               onSelectWorkspace={() => setSelectedWorkspaceId(workspace.id)}
                               onSelectSession={selectSession}
+                              onCloseSession={(sessionId) => void close(sessionId)}
+                              onRenameSession={(sessionId, title) => void rename(sessionId, title)}
+                              onArchiveSession={(sessionId) => void archive(sessionId, true)}
                             />
                           ))}
                         </div>
@@ -264,6 +279,9 @@ interface WorkspaceBranchProps {
   onToggleExpanded: () => void;
   onSelectWorkspace: () => void;
   onSelectSession: (sessionId: string) => void;
+  onCloseSession: (sessionId: string) => void;
+  onRenameSession: (sessionId: string, title: string) => void;
+  onArchiveSession: (sessionId: string) => void;
 }
 
 function WorkspaceBranch({
@@ -275,6 +293,9 @@ function WorkspaceBranch({
   onToggleExpanded,
   onSelectWorkspace,
   onSelectSession,
+  onCloseSession,
+  onRenameSession,
+  onArchiveSession,
 }: WorkspaceBranchProps) {
   return (
     <div>
@@ -318,6 +339,10 @@ function WorkspaceBranch({
                   onSelectWorkspace();
                   onSelectSession(session.id);
                 }}
+                onClose={() => onCloseSession(session.id)}
+                onRename={(title) => onRenameSession(session.id, title)}
+                onArchive={() => onArchiveSession(session.id)}
+                disabled={false}
               />
             ))
           )}
@@ -335,22 +360,115 @@ interface SessionTreeItemProps {
   };
   active: boolean;
   onSelect: () => void;
+  onClose: () => void;
+  onRename: (title: string) => void;
+  onArchive: () => void;
+  disabled: boolean;
 }
 
-function SessionTreeItem({ session, active, onSelect }: SessionTreeItemProps) {
+function SessionTreeItem({
+  session,
+  active,
+  onSelect,
+  onClose,
+  onRename,
+  onArchive,
+  disabled,
+}: SessionTreeItemProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(session.title);
+
+  const commitRename = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== session.title) {
+      onRename(trimmed);
+    } else {
+      setDraft(session.title);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex h-7 w-full items-center gap-1 rounded-md px-1">
+        <Input
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitRename();
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              setDraft(session.title);
+              setEditing(false);
+            }
+          }}
+          className="h-6 flex-1 text-sm"
+        />
+      </div>
+    );
+  }
+
   return (
-    <button
-      type="button"
+    <div
       className={cn(
-        'flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent',
+        'group flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent',
         active && 'bg-accent text-accent-foreground'
       )}
       onClick={onSelect}
+      onDoubleClick={() => setEditing(true)}
+      onContextMenu={(event) => {
+        // Right-click archive keeps the focus row without stealing the click.
+        event.preventDefault();
+        onArchive();
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+      title={session.title}
     >
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
       <Badge variant={STATUS_VARIANT[session.status]} size="sm" className="shrink-0 capitalize">
         {statusLabel(session.status)}
       </Badge>
-    </button>
+      {!disabled && (
+        <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="h-5 w-5"
+            aria-label="Archive session"
+            title="Archive"
+            onClick={(event) => {
+              event.stopPropagation();
+              onArchive();
+            }}
+          >
+            <Archive className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="h-5 w-5"
+            aria-label="Close session"
+            title="Close"
+            onClick={(event) => {
+              event.stopPropagation();
+              onClose();
+            }}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
