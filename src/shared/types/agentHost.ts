@@ -161,7 +161,7 @@ export interface NodeRuntimeInfo {
   source: NodeRuntimeSource;
 }
 
-export type NodeRuntimeSource = 'env' | 'nvm' | 'fnm' | 'volta' | 'path' | 'explicit';
+export type NodeRuntimeSource = 'env' | 'nvm' | 'fnm' | 'volta' | 'path' | 'explicit' | 'bundled';
 
 export interface NodeRuntimeResolveResult {
   ok: boolean;

@@ -126,6 +126,15 @@ jobs:
       - name: Build agent-host artifact
         run: node scripts/build-agent-host.mjs
 
+      - name: Cache bundled Node runtime
+        uses: actions/cache@v4
+        with:
+          path: out-node-runtime
+          key: node-runtime-24.18.0-win-x64
+
+      - name: Fetch bundled Node runtime
+        run: node scripts/fetch-node-runtime.mjs
+
       - name: Build Windows
         run: npx electron-builder --win --x64
         env:

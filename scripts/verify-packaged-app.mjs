@@ -12,7 +12,10 @@
  *   3. Node 24 resolution: light replica of NodeRuntimeResolver's search order
  *      (AICLIENT_NODE24_PATH → nvm roots → PATH), proving a packaged install
  *      on this machine can find a runtime for the Host.
- *   4. PONG smoke against resources/agent-host/index.js — reuses
+ *   4. Bundled Node runtime (win32, C-15): resources/node-runtime/node.exe
+ *      present and --version matches the pin; the PONG smoke below prefers it
+ *      over machine Node, proving a Node-less user machine still works.
+ *   5. PONG smoke against resources/agent-host/index.js — reuses
  *      spikes/phase2-sdk-runtime-smoke.ts (shared test gateway credentials via
  *      testCredentials.ts). Retries once: gateway model flakes ≠ packaging bugs.
  *
@@ -27,6 +30,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { NODE_RUNTIME_PIN } from './node-runtime-pin.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -217,6 +221,33 @@ function resolveNode24() {
 }
 
 // ---------------------------------------------------------------------------
+// 3.5: Bundled Node runtime (C-15) — exists, version-pinned, runnable.
+// ---------------------------------------------------------------------------
+function checkNodeRuntime(appDir) {
+  if (process.platform !== 'win32') return null;
+  const execPath = path.join(appDir, 'resources', 'node-runtime', 'node.exe');
+  if (!check('bundled node.exe present (resources/node-runtime)', fs.existsSync(execPath))) {
+    return null;
+  }
+  let version = '';
+  try {
+    version = execFileSync(execPath, ['--version'], { timeout: 8000, windowsHide: true })
+      .toString()
+      .trim();
+  } catch (err) {
+    check('bundled node.exe runnable', false, String(err));
+    return null;
+  }
+  const expected = `v${NODE_RUNTIME_PIN.version}`;
+  if (!check(`bundled node version ${expected}`, version === expected, `got ${version}`)) {
+    return null;
+  }
+  const mb = (fs.statSync(execPath).size / (1024 * 1024)).toFixed(1);
+  console.log(`[verify-packaged-app] bundled node.exe: ${version}, ${mb}MB`);
+  return { execPath, version, source: 'bundled' };
+}
+
+// ---------------------------------------------------------------------------
 // 4: PONG smoke via the existing spike, pointed at the packaged host entry.
 // ---------------------------------------------------------------------------
 function runSmokeOnce(node24, hostEntry) {
@@ -283,19 +314,30 @@ async function main() {
 
   checkStructure(args.appDir);
 
+  const bundled = checkNodeRuntime(args.appDir);
+
   const node24 = resolveNode24();
   check(
     'Node 24 resolvable (packaged-state search order)',
-    Boolean(node24),
-    node24 ? `${node24.version} via ${node24.source}: ${node24.execPath}` : 'none found'
+    Boolean(node24) || Boolean(bundled),
+    node24
+      ? `${node24.version} via ${node24.source}: ${node24.execPath}`
+      : 'machine none; bundled only'
   );
 
-  if (!args.skipSmoke && node24 && failures.length === 0) {
-    await checkSmoke(args.appDir, node24);
+  // Bundled runtime first (C-15): proves a user machine without Node works.
+  const smokeRuntime = bundled ?? node24;
+  if (!args.skipSmoke && smokeRuntime && failures.length === 0) {
+    console.log(
+      `[verify-packaged-app] smoke runtime: ${smokeRuntime.source} ${smokeRuntime.execPath}`
+    );
+    await checkSmoke(args.appDir, smokeRuntime);
   } else if (args.skipSmoke) {
     console.log('[verify-packaged-app] smoke skipped (--skip-smoke)');
   } else if (failures.length > 0) {
     console.log('[verify-packaged-app] smoke skipped — structure checks failed');
+  } else {
+    console.log('[verify-packaged-app] smoke skipped — no runtime available');
   }
 
   if (failures.length > 0) {

@@ -4,6 +4,7 @@ node_modules/
 # Build output
 out/
 out-agent-host/
+out-node-runtime/
 dist/
 
 # IDE

@@ -17,6 +17,12 @@ export const REQUIRED_NODE_MAJOR = 24;
 export interface ResolveNodeRuntimeOptions {
   /** Explicit path override (settings / env). Highest priority after options.explicitPath. */
   explicitPath?: string;
+  /**
+   * App-bundled node.exe (resources/node-runtime, C-15/D17). Preferred over
+   * machine discovery (nvm/fnm/volta/PATH) but below the explicit / env
+   * escape hatches, so a broken bundled runtime stays overridable.
+   */
+  bundledPath?: string;
   /** Extra candidate paths to probe. */
   extraCandidates?: string[];
   /** Override PATH search (tests). */
@@ -63,6 +69,7 @@ export async function resolveNode24Runtime(
   if (useProcessEnv) {
     pushUnique(process.env.AICLIENT_NODE24_PATH, 'env');
   }
+  pushUnique(options.bundledPath, 'bundled');
 
   for (const p of options.extraCandidates ?? []) {
     pushUnique(p, 'explicit');

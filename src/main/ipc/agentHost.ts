@@ -2,12 +2,15 @@ import { CLAUDE_AGENT_SDK_PIN_VERSION, COMETIX_PIN } from '@shared/agentHost/com
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver } from '@shared/types/agentHost';
 import { ipcMain } from 'electron';
-import { agentHostManager } from '../services/agent-host/AgentHostManager';
+import {
+  agentHostManager,
+  getBundledNodeRuntimePath,
+} from '../services/agent-host/AgentHostManager';
 import { resolveNode24Runtime } from '../services/agent-host/NodeRuntimeResolver';
 
 export function registerAgentHostHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.AGENT_HOST_RESOLVE_NODE, async () => {
-    return resolveNode24Runtime();
+    return resolveNode24Runtime({ bundledPath: getBundledNodeRuntimePath() });
   });
 
   ipcMain.handle(IPC_CHANNELS.AGENT_HOST_GET_STATUS, async () => {

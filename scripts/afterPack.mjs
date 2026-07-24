@@ -16,6 +16,7 @@ import path from 'node:path';
  */
 export default async function afterPack(context) {
   copyAgentHost(context);
+  copyNodeRuntime(context);
 
   if (process.platform !== 'win32') return;
 
@@ -52,6 +53,31 @@ function copyAgentHost(context) {
   fs.rmSync(dest, { recursive: true, force: true });
   fs.cpSync(src, dest, { recursive: true });
   console.log(`[afterPack] Copied agent-host artifact -> ${dest}`);
+}
+
+/**
+ * Copy the bundled Node runtime into resources/node-runtime (C-15 / D17).
+ * Windows targets only — the bundled node.exe exists to satisfy the TSD
+ * whitelist-by-process-name story and the "no user-installed Node" case.
+ * Serial afterPack copy for the same rcedit-race reason as copyAgentHost.
+ */
+function copyNodeRuntime(context) {
+  if (context.electronPlatformName !== 'win32') return;
+  const src = path.join(context.packager.info.projectDir, 'out-node-runtime');
+  if (!fs.existsSync(path.join(src, 'node.exe'))) {
+    throw new Error(
+      `[afterPack] out-node-runtime missing node.exe at ${src} — run "pnpm fetch:node-runtime" first`
+    );
+  }
+  const dest = path.join(context.appOutDir, 'resources', 'node-runtime');
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.mkdirSync(dest, { recursive: true });
+  fs.copyFileSync(path.join(src, 'node.exe'), path.join(dest, 'node.exe'));
+  const pinJson = path.join(src, 'PIN.json');
+  if (fs.existsSync(pinJson)) {
+    fs.copyFileSync(pinJson, path.join(dest, 'PIN.json'));
+  }
+  console.log(`[afterPack] Copied bundled Node runtime -> ${dest}`);
 }
 
 function fixTsdEncryption(rootDir) {

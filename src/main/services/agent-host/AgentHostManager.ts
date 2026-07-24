@@ -280,7 +280,9 @@ export class AgentHostManager {
 
   private async startInternal(): Promise<void> {
     this.state = 'starting';
-    const resolved = await resolveNode24Runtime();
+    const resolved = await resolveNode24Runtime({
+      bundledPath: getBundledNodeRuntimePath(),
+    });
     if (!resolved.ok || !resolved.runtime) {
       this.state = 'error';
       throw new Error(resolved.error ?? 'Node 24 not found');
@@ -335,6 +337,16 @@ export class AgentHostManager {
   }
 }
 
+/**
+ * Packaged builds ship a pinned node.exe under resources/node-runtime
+ * (C-15/D17) — preferred over machine Node discovery. Dev returns undefined
+ * so development behavior is unchanged.
+ */
+export function getBundledNodeRuntimePath(): string | undefined {
+  if (!app.isPackaged) return undefined;
+  return path.join(process.resourcesPath, 'node-runtime', 'node.exe');
+}
+
 function resolveHostEntryPath(): string {
   // Packaged: prebuilt JS under resources/agent-host.
   // Dev: TypeScript entry via Node 24 --experimental-strip-types.
@@ -361,9 +373,7 @@ function waitForReady(proc: AgentHostProcess, timeoutMs: number): Promise<void> 
         const fatal = (event as { payload?: { fatal?: boolean } }).payload?.fatal;
         if (fatal) {
           cleanup();
-          reject(
-            new Error(String((event as { payload?: { message?: string } }).payload?.message))
-          );
+          reject(new Error(String((event as { payload?: { message?: string } }).payload?.message)));
         }
       }
     };
