@@ -21,6 +21,7 @@
 | C-10 | Effort/Plan/Build 探测 | ⬜ | Phase 0 遗留 |
 | C-11 | stream-json fallback | ⬜ 机动 | 阻塞时提级 |
 | C-12 | 旧路径收缩 + 压测 | ⬜ Phase 5 | |
+| C-13 | 附件协议探测与桥接 | ⬜ | 用户反馈 F2（2026-07-24）；解锁 T-18 |
 
 图例：✅ 完成 · 🟡 进行中 · ⬜ 未开始 · ❌ 阻塞
 
@@ -38,6 +39,8 @@
 | 2026-07-24 | Host 修复：SDK 流结束无 result 时补发终态（团队红线需求⑤） | ✅ | 团队（Cursor）定位：`claudeRuntime.ts` 流结束无 result 事件时仅静默改 registry 状态、不发事件 → UI 永驻 running。修复：normalizer 增本轮 `sawResult` 标记 + `finishTurn()`（result 已发终态→no-op；有 assistant 输出→补 message/session.completed + status idle；全程无 assistant 输出→session.failed + status failed，把网关挂起显性化）；runtime 该分支集成并清理孤儿 permission。关键陷阱：正常完成后 `session.status` 仍是 'running'（无回写），该分支每轮必走——靠 sawResult 防重复终态。单元 spike `spikes/phase2-stream-end-unit.ts` 三场景绿。协议影响：无新事件类型、无 bump；行为变化已记总台账并通知团队 |
 | 2026-07-24 | C-02 断言脚本首战立功：打包产物 node_modules 丢失 | ✅ | 首次真打包后 `verify:packaged` 抓到 `resources/agent-host` 仅 0.0MB（index.js+package.json，node_modules 整树缺失）。根因：electron-builder 对每个 extraResources 拷贝强制注入 `!**/node_modules/**`（app-builder-lib fileMatcher.js:126-138），仅当 filter 显式含 `node_modules/` 模式时该排除被插至其前、由后者重新包含。第一版修复（filter 重新包含）引出第二个问题：87MB/万级文件的 extraResources 并行拷贝与 rcedit 改写 AiClient.exe 版本资源发生竞态（"Unable to commit changes"，加 filter 后 0/3 复现，唯一成功恰是无 node_modules 的那次；手动对静止文件跑 rcedit 正常）。**最终方案：撤销 extraResources 条目，改在 afterPack.mjs 钩子串行拷贝 out-agent-host → resources/agent-host**（打包主流程后执行、无并发争抢，同钩子顺路做 TSD 修复；缺产物时 fail loudly 提示先跑 build:agent-host）。C-01 阶段「假 app 壳」自测测不出此层，正是 C-02 打包态验证的价值所在 |
 | 2026-07-24 | **C-02 验收：完整打包链 + 打包态全量断言 PASS** | ✅ | `pnpm dist:prereq`（build + build:agent-host）→ `electron-builder --win portable` → afterPack 串行拷贝 87.0MB 产物 + TSD 修复 2386 文件 → `dist/AiClient-0.3.4-portable.exe`（约 120MB）。`pnpm verify:packaged` 全绿 22 项：app 壳 / agent-host 结构与剪枝 / TSD header 哨兵 / Node24 寻径（nvm v24.18.0）/ **打包产物直跑网关 PONG 冒烟**（host.ready cometixVersion=2.1.212；产物含当日 stream-end 修复，兼作该修复集成回归）。全量回归：typecheck 绿、`pnpm test` 111/111 绿。GUI 手工点验清单移交 T-10（`t10-packaged-gui-checklist.md`）。hash：`dbb20be`（build 链）/ `6a633d6`（Host 修复） |
+| 2026-07-24 | vflow 移除 Phase B：运行时代码整体摘除（D16 收口） | ✅ | 用户复确认「彻底摘除」后委派 fast-worker：删 VflowService+测试、shared/types/vflow.ts、VFLOW_PROJECT_INITIALIZED 通道、preload 桥、App toast 监听、onboarding vflow 步骤与文案、设置条目、CliDetector 条目、AgentInstaller 安装/离线兜底分支（净 -89 行）及 4 个专属用例、孤儿脚本 sync-vflow-resources.mjs；类型联合收缩（AgentCliType/InstallAgentId/InstallStepId）。验证（先定标准后动手）：src+scripts+配置 grep vflow 清零（抽查复核 exit 1）、typecheck 绿、测试 20 文件/103 用例全绿（-8 例均为 vflow 专属）。累计净删约 -1360 行。hash：`eac23f7` |
+| 2026-07-24 | 用户反馈映射落库（F1-F5）+ 新任务 C-13/T-18 | ✅ | 执行计划新增 §7 映射表：F3/F4/F5 验证重构方向（气泡化/真实文本域/四区并排）、F1 → T-05 验收增强（工具卡路径可点击跳转）+T-13 联动、F2 → 新增 C-13（附件协议 spike+桥接，主线）与 T-18（Composer 粘贴 UI，团队，依赖 C-13）。两条子台账任务表已同步 |
 
 ## 委派记录
 

@@ -69,6 +69,7 @@
 | **C-09** | 测试基建 + lint 恢复绿 | ① reducer 测试：delta 追加/未知 messageId/permission 幂等/stop 冻结/乱序容忍；② Host 测试：协议解析错误路径、permissionBridge 单次响应与清理、normalizer 关键映射；③ `pnpm lint:fix` + 手修 `electron.vite.config.ts:42`、`scripts/afterPack.mjs:46`。用例编写委派 fast-worker，用例清单 Claude 定 | `pnpm test` 新增两组测试全绿；`pnpm lint` 恢复绿色 | 无（建议先于 C-08） | 1d |
 | **C-10** | Effort/Plan/Build 支持度探测（Phase 0 遗留） | SDK options 逐项实测（effort / permissionMode:plan 等）在 Cometix 2.1.212 + 当前网关下是否生效；`host.ready.capabilities` 扩展；UI 条件渲染依据交 T-08/T-09 | capability 结论记台账 + 字段落地 | 无 | 0.5d |
 | **C-11** | （机动）stream-json fallback 适配器 | `ClaudeRuntime` stream-json driver（参照 `spikes/stream-json-spike.ts`）。仅当 SDK 路线出现阻塞时提级，否则排后 | `AICLIENT_AGENT_HOST_DRIVER=stream-json` 下 PONG smoke 通过 | 无 | 1.5d |
+| **C-13** | 附件协议探测与桥接（用户反馈 F2） | spike 先行：Agent SDK `query()` prompt 是否支持图像/文件块（形态：base64 / 临时文件路径 / content block）；cli.js 粘贴图像的原生机制；结论定协议——`session.send` payload 扩展 `attachments[]`（Host→SDK 透传）+ Main/preload 链路。协议变更走 CP 纪律 | spike 结论记台账；协议扩展后 Host 侧冒烟：带一张图发送 → 模型能描述图片内容 | 无（UI 归 T-18） | 1d |
 | **C-12** | （Phase 5）旧路径收缩 + 性能压测 | AgentPanel Claude 主路径收缩、`App.tsx`/`MainContent.tsx` 清理（App 只装配）；千 block 会话压测→虚拟化决策；确认 ARD §8 清理项（`ai-chat/` 已不存在，验证 `shared/types/ai-chat.ts` 状态） | 旧界面其他 Agent 入口不回归；压测数据记台账 | M3/M4 后 | 2.5d |
 
 **主线推进顺序**：C-01 → C-02（M1/CP2）→ C-07（解锁 T-02）→ C-06（CP4，解锁 T-03）→ C-03 → C-04 → C-05（CP3）→ C-09 → C-08 → C-10 →（机动 C-11）→ C-12。
@@ -98,6 +99,7 @@
 | **T-14** | Phase 4：右栏 Context 面板 | 真实基础字段：Workspace 路径、分支、模型、权限策略、附加文件、运行状态。**只放真实数据**（ARD：不展示假状态） | 字段与实际会话一致 | M3 主体后 | 0.5d |
 | **T-15** | Phase 4：Terminal Dock 接真终端 | `BottomDock.tsx` 接现有 xterm/node-pty 体系；按 Workspace 恢复终端；与旧终端区并存策略 | Terminal 可用；切 Workspace 恢复对应终端 | M3 主体后 | 1.5d |
 | **T-16** | Phase 4：新旧开关成熟化 | Beta 开关默认策略；旧 AgentPanel 保留其他 Agent 终端入口；新壳缺功能时的回退路径说明 | 用户不必在新旧界面间来回切换核心流程 | T-12~15 | 1d |
+| **T-18** | Composer 粘贴图片/文件（用户反馈 F2） | 粘贴/拖入图片与文件 → chip 预览 → 随消息发送（走 C-13 定的 attachments 协议）；文件类可先降级为 @ 路径引用（复用 T-07） | 粘贴截图发送 → 模型能描述图片内容；粘贴文件 → 模型能读到内容 | C-13 | 1d |
 | **T-17** | Tool 真实调用 GUI 验收（立即可做） | 开发态壳：让模型真实调用 Write/Bash（如「Create PING.txt with content pong」）；验证时间线完整出现 tool_call→permission 卡→allow→tool_result→文件真实生成。这是对现有 Phase 2 成果的验收，补总台账 Phase 2 检查点 | 操作记录/截图 + 台账检查点行 | 无 | 0.5d |
 
 **团队起步顺序建议**：T-17（半天，先验收现有成果）→ T-01 → T-06/T-07/T-08/T-09（无依赖并行池）→ 等 C-07/C-06 后 T-02/T-03 → T-04/T-05 → T-10 → T-11（M2）→ Phase 4（T-12~16）。
@@ -170,7 +172,19 @@
 
 双轨并行、含联调与波动，预计 **4~5 周**到 M5（与可行性报告双人 5~8 周口径一致，因 Phase 0/1/2 已完成大半而缩短）。
 
-## 7. 执行层风险提示
+## 7. 用户反馈 → 任务映射（2026-07-24 收集，对比 VS Code 使用体验）
+
+| # | 反馈 | 映射 | 动作 |
+|---|---|---|---|
+| F1 | 看不到分析了哪些文件，不能点击跳到代码关键位置 | **T-05**（工具卡已含 Read/Edit→路径摘要行）+ **T-13**（Files/编辑器） | T-05 验收增强：工具卡中的文件路径**可点击**，跳转 Files 面板/编辑器并定位；T-13 联动 |
+| F2 | 对话框不能粘贴图像和文件 | 原 T-07 明确不做图片，按反馈提级 | 新增 **C-13**（附件协议 spike + 桥接）→ **T-18**（Composer 粘贴 UI） |
+| F3 | 回复没条理、看着懵；是否要换模型 | 气泡化 + markdown 渲染 + 卡片折叠（Phase 1-3 主体）直接回应；**T-08** 模型选择器让用户可自行换模型 | 无新任务；新壳内测后拿同样问题复评一次，仍懵再议 system prompt/模型默认值 |
+| F4 | 对话框像命令行，不能在任意位置加字/修改 | 旧 AgentPanel 是终端；新壳 Composer 是真实文本域 | 已由重构解决（Phase 1 完成项），T-10/内测确认 |
+| F5 | 对话框和代码框不能并排，无法边看代码边看分析 | 四区壳本身即并排布局；**T-13** 右栏 Files+Monaco | 已在计划内；此反馈作为 T-13 优先级依据（Phase 4 内优先做） |
+
+> 结论：5 条反馈中 3 条（F3/F4/F5）验证了本次重构方向，1 条（F1）是既有任务的验收增强，1 条（F2）新增 C-13/T-18。
+
+## 8. 执行层风险提示
 
 1. **C-01 打包是最大不确定性**：SDK/Cometix 嵌套依赖形态（cli.js 路径解析、wasm、win32-x64 原生包）。超期时优先保「整树拷贝跑通」，瘦身后置。
 2. **C-06 JSONL 格式漂移**：格式属 CC 内部实现；pin 2.1.212 缓解；解析必须宽容（未知行跳过），崩溃兜底 = ARD 后置项「历史快照」。

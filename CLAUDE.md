@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+## 工程规范（Agent 项目）
+
+本项目遵循 **Agent Project Engineering Standard**（可验证 · 可回归 · 可对比 · 可被另一个 Agent 接管开发与测试）。
+**动工前（新建或改造）先完整阅读**：`docs/agent-project-engineering.md`（16 条规范 + 最小落地清单）。
+
 ## 设计规范
 
 UI 开发必须遵循 `docs/design-system.md`，核心要点：

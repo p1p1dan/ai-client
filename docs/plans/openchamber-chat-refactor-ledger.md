@@ -49,7 +49,7 @@
 | D10 | 其他 Agent | 暂留终端模式；仅 Claude 进气泡 |
 | D11 | 历史 | Host 读 CC JSONL；本地只存索引 |
 | D15 | 右栏 | MVP 单层 `git \| files \| context` |
-| D16 | vflow | **整体移除**（用户拍板 2026-07-24，不再需要）：打包/CI 链已摘（Phase A）；运行时代码（VflowService/IPC/UI）摘除排期 Phase B |
+| D16 | vflow | **整体移除**（用户拍板 2026-07-24，不再需要）：Phase A 打包/CI 链 `dbb20be` + Phase B 运行时代码 `eac23f7`，全仓 vflow 引用清零 ✅ |
 
 ---
 
@@ -74,6 +74,8 @@
 | 2026-07-24 | vflow 打包链摘除（D16 Phase A）+ `pnpm test` 首次全绿 111/111 | ✅ | `dbb20be` |
 | 2026-07-24 | **Host 行为变化通知**：SDK 流结束无 result 时补发终态事件（有输出→completed+idle；无输出→failed）——修团队定位的「UI 永驻 running」；无新事件类型、无协议 bump | ✅ | `6a633d6` |
 | 2026-07-24 | **C-02：打包态自动化验证 PASS（M1 自动化半边齐）** — portable 产物 + `pnpm verify:packaged` 22 项全绿（含打包产物网关 PONG）；GUI 点验移交 T-10 | ✅ | `dbb20be` |
+| 2026-07-24 | vflow 运行时代码摘除（D16 Phase B 收口，全仓引用清零） | ✅ | `eac23f7` |
+| 2026-07-24 | 用户反馈 F1-F5 映射进计划（§7）；新增 C-13 附件协议 + T-18 Composer 粘贴 | ✅ | 执行计划 §7 |
 
 ---
 
