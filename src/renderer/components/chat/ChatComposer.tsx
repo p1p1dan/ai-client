@@ -331,7 +331,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
             {canStop ? (
               <Button
                 size="sm"
-                variant="outline"
+                variant="destructive"
                 className="h-6"
                 disabled={disabled}
                 onClick={() => void stopActiveSession()}
