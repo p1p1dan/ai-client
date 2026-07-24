@@ -87,6 +87,8 @@
 | 2026-07-24 | **C-06：Resume 历史重放全链实现完成，T-03 解锁** — Host historyReader + runtime 时序/session_busy + Main `chat:listHistory` IPC/preload + store `h:` 前缀灌入；新增 49 单测（全套 181 绿）；网关端到端 smoke `spikes/c06-resume-history-smoke.ts` ok:true（含历史召回码字验法）。**T-03 可开工**：数据流 = 点击历史会话 → `chat:resumeSession` → 事件 `session.resumed → session.history → status idle` 自动灌入 store（消息 id `h:*`）；列表合并数据源 = `chat:listSessions`（C-07 索引）+ `chat:listHistory`（盘上 CLI 会话，含 title）；历史读失败看 store `historyErrors[sessionId]`（非阻断） | ✅ | `db41f63` |
 | 2026-07-24 | **C-09：测试基建 + lint 恢复绿** — 全仓 lint 0 诊断（494 CRLF 根因归一 + `.gitattributes` 锁 LF 防回退 + biome 排除构建产物）；+70 单测锁 C-08 行为基线（store reducer / normalizer / permissionBridge / Host 协议错误路径子进程实测）；全套 36 文件 308 例绿。**C-08 解锁** | ✅ | `ce5a577` `1505031` `49a6031` |
 | 2026-07-24 | **双轨合一（用户指示）**：团队轨道同事休假，Claude 主线全权接管全部任务；共树并行纪律（pathspec 提交/避让 components）随之松绑。团队在途未提交 T-04 方向改动（hostStatus/MessageTimeline/ChatWorkspace/thinkingCard 共 6 文件）留存工作树，待接手 T-04 时评估续用或重做 | ✅ | 口头指示 |
+| 2026-07-24 | **C-08 收口：Store 结构优化 + 批处理全量完成** — a 批处理（16ms 窗口合并、单次 set 整批应用，`138ccb3`）+ b 分桶（messages 按 sessionId 分桶、3 消费方选择器迁移、时间线只订阅本会话桶，`922d689`）；每 delta 成本 O(全部消息)→O(本会话桶)；59 例测试形状适配数量/语义不变，全套 344 绿 | ✅ | `138ccb3` `922d689` |
+| 2026-07-24 | **双轨交接完成**：同事收尾全部落地（T-04 `22ef2ff`、T-07 `1ff7fc1`，快照见其交接词/团队台账），主线全权接管 T-xx 池 | ✅ | `22ef2ff` `1ff7fc1` |
 
 ---
 
@@ -193,8 +195,9 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ## 下一步（双轨并行，详见执行计划）
 
-- 🤖 **Claude 主线**：C-01~C-07、C-09、C-10、C-13、C-14、C-15 全 ✅ + **C-08a 批处理 ✅**（`138ccb3`，16ms 窗口合并 set、形状零变更；CP2 待 T-10 GUI 点验合并汇报）→ 剩 **C-08b 分桶+消费方迁移**（消费方 MessageTimeline 已随 T-04 `22ef2ff` 落地；ChatComposer 待同事 T-07 fileMention 在途收尾后动）→（机动 C-11）→ C-12（Phase 5）
-- ⚠️ **双轨交接中（2026-07-24 用户指示，随后修正）**：同事休假前收尾中（T-04 已落地 `22ef2ff`，T-07 fileMention 在途），收尾完成后主线全权接管 T-xx；接管前照旧 pathspec 提交 + 避让其在途文件
+- 🤖 **Claude 主线**：**C-01~C-10、C-13、C-14、C-15 全 ✅**（C-08 收口 `922d689`；CP2 待 T-10 GUI 点验合并汇报）→ 剩机动 C-11（stream-json fallback，阻塞时提级）→ C-12（Phase 5）
+- ✅ **双轨交接完成（2026-07-24）**：同事收尾全部落地（T-04 `22ef2ff` / T-07 `1ff7fc1`），主线全权接管 T-xx。**接管后任务池**：T-05 全解锁（Tool 卡无依赖 + Question 卡的 C-04 早已 ✅——同事快照「等 C-04」为过时信息）；T-02/T-03/T-04/T-06/T-07 待用户 GUI 联调复验；T-10 打包点验（C-02 ✅ 已具备）→ CP2；T-18 等位（C-13 ✅）；T-20 等主线协议扩展；T-19 内容仍待落库
+- ℹ️ 同事交接词勘误：「biome 全仓 CRLF 行尾债勿清勿怪」已过时——C-09（`ce5a577`）起全仓 lint 0 诊断，三绿纪律照常执行
 - 👥 **新解锁**：T-05 Question 卡（C-04 ✅，消费指引见检查点行）、T-18 Composer 粘贴（C-13 ✅，大图需发送中状态）；T-10 点验可用新产物（含随包 Node，141MB）
 - 👥 **T-02 已解锁**：`chat:listSessions/renameSession/archiveSession` + preload 就绪；store hydrate 建议在 `initRuntime` 接 `listSessions()` 替换 demo 种子（见主线台账 C-07 行）
 - 👥 **T-03 已解锁**：resume 数据层全就位（协议文档 = 契约；消费指引见检查点 C-06 行）；注意历史消息无 T-06 元数据行（model/timestamp 在消息体内自带）、thinking 历史协议已携带但渲染等 C-05/T-04
