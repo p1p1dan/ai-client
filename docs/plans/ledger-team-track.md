@@ -9,7 +9,7 @@
 
 | ID | 任务 | 状态 | 认领人 | 备注 |
 |---|---|---|---|---|
-| T-01 | 真实 Project/Workspace 数据树 | 🟡 | Cursor | 实现已合入；GUI pwd 验收未完成 |
+| T-01 | 真实 Project/Workspace 数据树 | ✅ | Cursor | 实现 `a01712a`；GUI pwd 验收通过 `2026-07-24` |
 | T-02 | Session 生命周期 UI | ⬜ | | 等 C-07 |
 | T-03 | Resume UI + 历史时间线 | ⬜ | | 等 C-06（CP4） |
 | T-04 | Thinking 折叠卡 UI | ⬜ | | 等 C-05 |
@@ -25,7 +25,7 @@
 | T-14 | Phase 4：右栏 Context 面板 | ⬜ | | M3 后 |
 | T-15 | Phase 4：Terminal Dock 接真终端 | ⬜ | | M3 后 |
 | T-16 | Phase 4：新旧开关成熟化 | ⬜ | | T-12~15 后 |
-| T-17 | Tool 真实调用 GUI 验收 | 🟡 | Cursor | Host smoke 已通；GUI 卡在 Running 无 assistant，待接手解阻/点验（主线已修 stream-end 补终态 `6a633d6`，重试时应见 completed 或明确 failed） |
+| T-17 | Tool 真实调用 GUI 验收 | ✅ | Cursor | Host smoke 通；GUI 闭环 `2026-07-24`：PONG 正常（一条 user + assistant）、Write→Allow→`PING.txt`、卡 Running 已解（主线 `6a633d6` 补 stream-end 终态 + 团队 `b55c859` 修 Composer 进度门/双写） |
 | T-18 | Composer 粘贴图片/文件 | ⬜ | | 用户反馈 F2（2026-07-24）；等 C-13 |
 
 图例：✅ 完成 · 🟡 进行中 · ⬜ 未开始 · ❌ 阻塞
@@ -52,7 +52,8 @@
 | 2026-07-23 | T-17 认领 + Host 侧预检 | 🟡 GUI 待点验 | Cursor 认领。约定：**测试走网关** `ANTHROPIC_BASE_URL=https://cch-jyw.pipidan.qzz.io`（token 不入库，临时 `CLAUDE_CONFIG_DIR`）。Node 24 下 `phase2-permission-smoke.ts` → ok:true（Write→permission→allow→tool.completed→PERM-OK；`baseHost: cch-jyw.pipidan.qzz.io`）。GUI 仍读 `~/.claude/settings.json`，点验前需把网关 env 写入该文件（或提需求给主线支持 Host 侧 CLAUDE_CONFIG_DIR 注入）。 |
 | 2026-07-23 | T-01 真实 Project/Workspace 数据树（实现） | 🟡 待 GUI 验收 | Cursor 认领。不改 `chatSessions.ts`：`deriveChatWorkspaceTree` + `useSyncChatWorkspaceTree` 外部 setState 灌真实 repos/worktrees/temp；LeftNav 多 Project 折叠 + New Session 绑 workspace；App 传入 repositories。单测 3 绿；`pnpm typecheck` + biome(workspace-shell/App) 绿。验收：Beta 壳左栏见真实仓库/worktree → 选 worktree → New → 发 `pwd`。 |
 | 2026-07-24 | 解阻启动门 + Settings + Send 诊断（交接） | 🟡 未闭环 | 提交 `a01712a`。开发捷径：`src/shared/devFlags.ts` 的 `SKIP_ONBOARDING_GATE=true`（**上线前必须改回 false**）。OpenChamber 壳强制开启；Settings 在壳下走 modal（修 OOB 死循环）。Composer：close→等 `session.created`→send；Running 不算成功；展示 `host.error` code/message；废弃固定 `session-live` id。现象：Send 可达 Running，但常无 `message.*`/assistant；用户本机勿改 `~/.claude/settings.json`，可用 `node scripts/make-test-claude-config.mjs` + `CLAUDE_CONFIG_DIR` 走网关。下一步：Stop→再发 PONG；若仍无回复贴 `rawEvents`；完成 T-17 Write→Allow→`PING.txt` 与 T-01 pwd 验收后勾台账。 |
-| 2026-07-24 | 接手解阻：Composer 进度门误触发修复 + 根因定位 | 🟡 待 GUI 闭环 | **未提交**（待 GUI 闭环一并提交）。定位详述见下文。 |
+| 2026-07-24 | 接手解阻：Composer 进度门误触发 + user 消息双写 | ✅ 已闭环 | 提交 `b55c859`。根因详述见下文「接手解阻详述」。三绿：typecheck 绿、biome（改 3 文件）绿、vitest 103 绿（+5 新）。 |
+| 2026-07-24 | T-17 + T-01 GUI 验收 | ✅ 通过 | 凭证 `CLAUDE_CONFIG_DIR=C:\Users\13927\AppData\Local\Temp\aiclient-gui-test-config`（`pnpm prepare:test-config` 等价）。① PONG：一条 user + assistant `PONG`，无重复、无永驻 Running（主线 `6a633d6` 补 stream-end 终态 + 团队 `b55c859` 修 Composer 进度门/双写共同生效）。② Write→Allow→`PING.txt` 落盘。③ T-01 pwd：左栏选真实 worktree→New→发 `pwd`，assistant 返回地址正确。同提交翻转 `SKIP_ONBOARDING_GATE` 回 false（清理提交）。 |
 
 ## 给同事的快速上手
 
