@@ -4,6 +4,9 @@
 > 任务定义：[`2026-07-23-openchamber-chat-refactor-execution-plan.md`](./2026-07-23-openchamber-chat-refactor-execution-plan.md) §2
 > 总台账：[`openchamber-chat-refactor-ledger.md`](./openchamber-chat-refactor-ledger.md)
 > 维护人：Claude（每完成一个 C-xx 任务或重要中间结论加行；里程碑级结果同步总台账）
+>
+> ℹ️ **2026-07-24 起本文件为过程档案（append-only）**；当前任务状态看
+> [`docs/plantree/plans/openchamber-chat-refactor/`](../plantree/plans/openchamber-chat-refactor/README.md)。C-xx 全部完成（C-11 机动 / C-12 Phase 5 除外），后续 T-xx 过程记录亦并入本文件（双轨合一）。
 
 ## 任务状态
 

@@ -5,9 +5,13 @@
 > 执行计划：[`2026-07-23-openchamber-chat-refactor-execution-plan.md`](./2026-07-23-openchamber-chat-refactor-execution-plan.md)（双轨任务表 + 协作规则）  
 > 术语：[`../../CONTEXT.md`](../../CONTEXT.md)  
 > Phase 0 证据：[`phase0-report.md`](./phase0-report.md)  
-> 最后更新：2026-07-23
+> 最后更新：2026-07-24（plantree 规整）
 
-**维护规则**：每完成一个关键节点（可合并的里程碑 / Phase 子目标），更新本台账「状态总览 + 检查点 + 下一步」，并附关键提交 hash。不要把旧 `PROGRESS.md`（bug 清单 / 已废弃拷贝路线）当本主线台账。
+> ℹ️ **2026-07-24 起规划入口迁移**：当前任务状态 / Active TODO / 未决问题看
+> [`docs/plantree/`](../plantree/README.md)（唯一活动状态视图）。本文件保留三样权威内容：
+> **Phase 状态总览、已拍板决策（D1~D17）、里程碑检查点（CP-x）**——均 append-only。
+
+**维护规则**：里程碑（M1~M5）/ 确认点（CP-x）/ Phase 级结果回填本文件检查点表；日常状态更新只动 plantree。不要把旧 `PROGRESS.md`（bug 清单 / 已废弃拷贝路线）当本主线台账。
 
 **分账规则（自 2026-07-23 起双轨执行）**：本文件只保留 **Phase 状态总览、拍板决策、里程碑级检查点与确认点（CP-x）结果**。过程明细分两条子台账记录：
 
@@ -24,10 +28,10 @@
 
 | Phase | 名称 | 状态 | 说明 |
 |---|---|---|---|
-| 0 | 技术 Go/No-Go | 🟡 Conditional Go | 开发机项基本完成；TSD / 打包未齐 |
+| 0 | 技术 Go/No-Go | 🟡 Conditional Go | 开发机项全部完成；仅剩加密机实证（T-11 → CP5 转正式 Go） |
 | 1 | UI Shell（Mock） | ✅ 完成 | 四区壳可交互；Beta 开关接入 |
-| 2 | Runtime Vertical Slice | 🟡 进行中 | Host→UI 主路径 + Permission 桥已通；Question/Resume 待补 |
-| 3 | Chat MVP | ⬜ 未开始 | |
+| 2 | Runtime Vertical Slice | ✅ 完成（2026-07-24） | 主路径 + Permission/Question 桥 + Resume 历史 + 附件 + 看门狗 + 打包链（C-01~C-07/C-13~C-15）全量；唯 stream-json fallback 后置为 C-11 机动 |
+| 3 | Chat MVP | 🟡 进行中 | T-01/T-08/T-17 ✅；T-02/03/04/06/07 实现落地待 GUI 联调；T-05 未开工；store 优化 C-08 ✅ |
 | 4 | 现有能力重新接线 | ⬜ 未开始 | |
 | 5 | 收口与正式版 | ⬜ 未开始 | |
 | 6 | 按需增强 | ⬜ 后置 | |
@@ -193,18 +197,11 @@ Host 选项要点：`tools: claude_code` preset；`settingSources: []`（避免 
 
 ---
 
-## 下一步（双轨并行，详见执行计划）
+## 下一步
 
-- 🤖 **Claude 主线**：**C-01~C-10、C-13、C-14、C-15 全 ✅**（C-08 收口 `922d689`；CP2 待 T-10 GUI 点验合并汇报）→ 剩机动 C-11（stream-json fallback，阻塞时提级）→ C-12（Phase 5）
-- ✅ **双轨交接完成（2026-07-24）**：同事收尾全部落地（T-04 `22ef2ff` / T-07 `1ff7fc1`），主线全权接管 T-xx。**接管后任务池**：T-05 全解锁（Tool 卡无依赖 + Question 卡的 C-04 早已 ✅——同事快照「等 C-04」为过时信息）；T-02/T-03/T-04/T-06/T-07 待用户 GUI 联调复验；T-10 打包点验（C-02 ✅ 已具备）→ CP2；T-18 等位（C-13 ✅）；T-20 等主线协议扩展；T-19 内容仍待落库
-- ℹ️ 同事交接词勘误：「biome 全仓 CRLF 行尾债勿清勿怪」已过时——C-09（`ce5a577`）起全仓 lint 0 诊断，三绿纪律照常执行
-- 👥 **新解锁**：T-05 Question 卡（C-04 ✅，消费指引见检查点行）、T-18 Composer 粘贴（C-13 ✅，大图需发送中状态）；T-10 点验可用新产物（含随包 Node，141MB）
-- 👥 **T-02 已解锁**：`chat:listSessions/renameSession/archiveSession` + preload 就绪；store hydrate 建议在 `initRuntime` 接 `listSessions()` 替换 demo 种子（见主线台账 C-07 行）
-- 👥 **T-03 已解锁**：resume 数据层全就位（协议文档 = 契约；消费指引见检查点 C-06 行）；注意历史消息无 T-06 元数据行（model/timestamp 在消息体内自带）、thinking 历史协议已携带但渲染等 C-05/T-04
-- 🧪 **测试凭证统一约定**（用户拍板 2026-07-23）：测试不得用本机默认 Claude 登录，统一走网关 `https://cch-jyw.pipidan.qzz.io`；详见执行计划 §4
-- 👥 **团队轨道**：T-17 Tool 真实调用 GUI 验收（立即可做）→ T-01 真实数据树 → 无依赖池 T-06~T-09 → 等主线解锁后 T-02/T-03 → T-10/T-11（M2 加密机，CP5）
+**➡️ 当前任务状态、Active TODO、阻塞与未决问题一律看 [`docs/plantree/plans/openchamber-chat-refactor/`](../plantree/plans/openchamber-chat-refactor/implementation-status.md)**（2026-07-24 起唯一活动状态视图；本节不再逐日维护）。
 
-过程明细分别记入两条子台账；里程碑达成回填本文件检查点。
+快照（2026-07-24 规整时点）：主线 C-xx 全 ✅（剩机动 C-11 / Phase 5 C-12）；双轨已合一；下一个开发任务 T-05；等用户的三件事 = GUI 联调五项（T-02/03/04/06/07）、T-10 点验（→CP2）、C-15 体积拍板。测试凭证约定见执行计划 §4。过程明细记两条子台账（档案）；里程碑达成回填本文件检查点。
 
 ---
 

@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+## 规划入口
+
+任务规划与进度状态的唯一入口：`docs/plantree/README.md`（注册表 + baseline + 活动计划）。
+恢复工作时先读 plantree，再按其权威链取台账档案（`docs/plans/` 下 ARD / 执行计划 / 三本台账）。
+
 ## 工程规范（Agent 项目）
 
 本项目遵循 **Agent Project Engineering Standard**（可验证 · 可回归 · 可对比 · 可被另一个 Agent 接管开发与测试）。
