@@ -16,7 +16,7 @@
 | T-05 | Tool Card 增强 + Question 卡 | ⬜ | | Question 部分等 C-04 |
 | T-06 | 消息元数据 + 错误/重试 | ⬜ | | 无依赖 |
 | T-07 | Composer @ 文件引用 | ⬜ | | 无依赖 |
-| T-08 | Model 选择器 | ⬜ | | 无依赖 |
+| T-08 | Model 选择器 | 🟡 | Fable | 实现完成待 GUI 复验；源：常量短名列表 + `host.ready.settings.model` 默认；`createSession({model})` 已带（Host 接收）；`useSessionModel` 存 session→model 映射 |
 | T-09 | 空/错/断状态 + 诊断面板 | ⬜ | | 无依赖 |
 | T-10 | 打包版 GUI 手工点验 | ⬜ | | 等 C-02，→ CP2 |
 | T-11 | **M2 加密机验收（现场）** | ⬜ | | 等 T-10，→ CP5 |
@@ -54,6 +54,7 @@
 | 2026-07-24 | 解阻启动门 + Settings + Send 诊断（交接） | 🟡 未闭环 | 提交 `a01712a`。开发捷径：`src/shared/devFlags.ts` 的 `SKIP_ONBOARDING_GATE=true`（**上线前必须改回 false**）。OpenChamber 壳强制开启；Settings 在壳下走 modal（修 OOB 死循环）。Composer：close→等 `session.created`→send；Running 不算成功；展示 `host.error` code/message；废弃固定 `session-live` id。现象：Send 可达 Running，但常无 `message.*`/assistant；用户本机勿改 `~/.claude/settings.json`，可用 `node scripts/make-test-claude-config.mjs` + `CLAUDE_CONFIG_DIR` 走网关。下一步：Stop→再发 PONG；若仍无回复贴 `rawEvents`；完成 T-17 Write→Allow→`PING.txt` 与 T-01 pwd 验收后勾台账。 |
 | 2026-07-24 | 接手解阻：Composer 进度门误触发 + user 消息双写 | ✅ 已闭环 | 提交 `b55c859`。根因详述见下文「接手解阻详述」。三绿：typecheck 绿、biome（改 3 文件）绿、vitest 103 绿（+5 新）。 |
 | 2026-07-24 | T-17 + T-01 GUI 验收 | ✅ 通过 | 凭证 `CLAUDE_CONFIG_DIR=C:\Users\13927\AppData\Local\Temp\aiclient-gui-test-config`（`pnpm prepare:test-config` 等价）。① PONG：一条 user + assistant `PONG`，无重复、无永驻 Running（主线 `6a633d6` 补 stream-end 终态 + 团队 `b55c859` 修 Composer 进度门/双写共同生效）。② Write→Allow→`PING.txt` 落盘。③ T-01 pwd：左栏选真实 worktree→New→发 `pwd`，assistant 返回地址正确。同提交翻转 `SKIP_ONBOARDING_GATE` 回 false（清理提交）。 |
+| 2026-07-24 | T-08 Model 选择器（实现） | 🟡 待 GUI 复验 | Fable 认领。Composer 加 `<ModelSelect>`（@coss/ui Select h-6 小尺寸）：源 `models.ts` 常量短名列表（sonnet/haiku/opus）+ `host.ready.settings.model` 默认（不在列表则前置）；`useSessionModel`（localStorage `aiclient:chat:session-models`，守卫 JSON.parse）存 `sessionId→modelId` 映射；`ChatComposer.handleSend` 读 `getSessionModel` 传 `createSession({sessionId, workspacePath, model})`（Host `claudeRuntime.ts:187` 已接收 payload.model）。§12 验证先行：`models.test.ts` 6 单测覆盖兜底/首选/前置未知默认；typecheck 绿、biome（改 5 文件）绿、vitest 117 绿（+6）。GUI 复验：选 Opus→send→Host 用 Opus 跑（看 `host.ready`/stream 日志或回包模型）。 |
 
 ## 给同事的快速上手
 

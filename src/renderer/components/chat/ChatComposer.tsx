@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { classifyAssistantProgress } from './assistantProgress';
+import { ModelSelect } from './ModelSelect';
+import { defaultModelId } from './models';
+import { useSessionModel } from './useSessionModel';
 
 interface ChatComposerProps {
   disabled?: boolean;
@@ -83,6 +86,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const busy = isStoppable(activeSession?.status);
   const canSend = Boolean(activeSessionId && activeWorkspace && !disabled && !busy && !sending);
+  const { getSessionModel } = useSessionModel();
 
   const statusHint = !activeSessionId
     ? 'No session selected — pick Live Agent Host in the left nav (or click New).'
@@ -104,6 +108,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
 
     const sessionId = activeSessionId;
     const workspacePath = activeWorkspace.path;
+    const model = getSessionModel(sessionId) ?? defaultModelId(null);
 
     useChatSessionsStore.setState((state) => ({
       hostBoundSessionIds: state.hostBoundSessionIds.filter((id) => id !== sessionId),
@@ -152,7 +157,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
       await sleep(120);
 
       sawSessionCreated = false;
-      await window.electronAPI.chat.createSession({ sessionId, workspacePath });
+      await window.electronAPI.chat.createSession({ sessionId, workspacePath, model });
 
       const created = await waitUntil(() => sawSessionCreated || Boolean(fatalHostError), 5000);
       if (fatalHostError) {
@@ -281,7 +286,10 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
           >
             {sending ? 'Waiting for Agent Host reply (up to 45s)…' : statusHint}
           </p>
-          <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 items-center gap-1">
+            {activeSessionId && (
+              <ModelSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
+            )}
             {busy ? (
               <Button
                 size="sm"
