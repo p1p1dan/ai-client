@@ -76,6 +76,7 @@ async function waitUntil(
 export function ChatComposer({ disabled }: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [retryablePrompt, setRetryablePrompt] = useState<string | null>(null);
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -86,7 +87,11 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const busy = isStoppable(activeSession?.status);
-  const canSend = Boolean(activeSessionId && activeWorkspace && !disabled && !busy && !sending);
+  // A Send in flight must also be abortable: the SDK stream can hang (e.g.
+  // gateway revoked key) without ever flipping session.status to running, and
+  // the user needs Stop during the 45s wait, not just when store says busy.
+  const canStop = busy || sending;
+  const canSend = Boolean(activeSessionId && activeWorkspace && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
 
   const statusHint = !activeSessionId
@@ -115,17 +120,21 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
         .reverse()
         .find((message) => message.sessionId === activeSessionId && message.role === 'user')
     : undefined;
+  // Retry is offered when the last turn ended badly: explicit session.failed
+  // (Host emitted it) OR the Composer fallback set retryablePrompt because the
+  // SDK stream ended with no assistant progress (e.g. gateway revoked key —
+  // Host lands on idle/stopped, not failed, so status check alone misses it).
+  const retryText =
+    retryablePrompt ??
+    (activeSession?.status === 'failed'
+      ? lastUserPrompt?.blocks.find((block) => block.type === 'text' && block.text)?.text
+      : undefined);
   const canRetry =
-    Boolean(lastUserPrompt) &&
-    Boolean(activeSessionId && activeWorkspace) &&
-    activeSession?.status === 'failed' &&
-    !busy &&
-    !sending;
+    Boolean(retryText) && Boolean(activeSessionId && activeWorkspace) && !busy && !sending;
   const handleRetry = async () => {
-    if (!canRetry || !lastUserPrompt) return;
-    const text = lastUserPrompt.blocks.find((block) => block.type === 'text' && block.text)?.text;
-    if (!text) return;
-    await runSend(text);
+    if (!canRetry || !retryText) return;
+    setRetryablePrompt(null);
+    await runSend(retryText);
   };
 
   const runSend = async (trimmed: string) => {
@@ -256,19 +265,21 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
 
       useChatSessionsStore.setState({
         lastError: [
-          'No assistant/tool progress after send (status may still show Running).',
+          'No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event).',
           `status=${session?.status ?? 'n/a'}`,
           `rawEvents=[${seenEvents.join(' ; ') || 'none'}]`,
           `hostAfter=${JSON.stringify(hostAfter)}`,
           `sessionId=${sessionId}`,
           `cwd=${workspacePath}`,
-          'Click Stop, then retry. If still empty, check Claude auth / API in ~/.claude/settings.json.',
+          'Click Retry to resend, or Stop. Check Claude auth / API in your CLAUDE_CONFIG_DIR settings.json.',
         ].join(' | '),
       });
+      setRetryablePrompt(trimmed);
     } catch (err) {
       useChatSessionsStore.setState({
         lastError: err instanceof Error ? err.message : String(err),
       });
+      setRetryablePrompt(trimmed);
     } finally {
       unsubEvents();
       setSending(false);
@@ -317,7 +328,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
             {activeSessionId && (
               <ModelSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
             )}
-            {busy ? (
+            {canStop ? (
               <Button
                 size="sm"
                 variant="outline"
