@@ -102,6 +102,7 @@
 | **T-15** | Phase 4：Terminal Dock 接真终端 | `BottomDock.tsx` 接现有 xterm/node-pty 体系；按 Workspace 恢复终端；与旧终端区并存策略 | Terminal 可用；切 Workspace 恢复对应终端 | M3 主体后 | 1.5d |
 | **T-16** | Phase 4：新旧开关成熟化 | Beta 开关默认策略；旧 AgentPanel 保留其他 Agent 终端入口；新壳缺功能时的回退路径说明 | 用户不必在新旧界面间来回切换核心流程 | T-12~15 | 1d |
 | **T-18** | Composer 粘贴图片/文件（用户反馈 F2） | 粘贴/拖入图片与文件 → chip 预览 → 随消息发送（走 C-13 定的 attachments 协议）；文件类可先降级为 @ 路径引用（复用 T-07） | 粘贴截图发送 → 模型能描述图片内容；粘贴文件 → 模型能读到内容 | C-13 | 1d |
+| **T-19** | 消息队列（占位，内容待团队轨道落库） | 提案出自团队轨道会话（用户转述 2026-07-24），**尚未落库**——请团队会话把提案内容补进本行与团队台账（推测方向：turn 运行中排队后续消息，CC 原生有 `queue-operation` 机制可依托；以团队定稿为准）。落库前不排期 | 待定 | 待定 | 待定 |
 | **T-20** | Effort 选择器（C-10 承接，CP3 新增；原编号 T-19 让位消息队列提案） | Composer/Header effort 控件。**开工前先调研官方文档实际档位**（用户指示 2026-07-24：不止 default/xhigh 两档，以官方文档为准，结合 C-10 实测复核——实测仅 xhigh 有可测差异、SDK 对非法值不校验静默吞）；效果说明文案避免暗示各档皆有实证。协议侧 `session.create/send` 传 effort 需主线扩展（提需求给 Claude）。plan 模式 UI **暂缓**：等主线在 canUseTool 侧做 plan 只读约束后再议 | 选 xhigh 后会话行为差异可观测（usage/路由证据）；控件档位与官方文档一致 | C-10 ✅ + 主线协议扩展 | 0.5d |
 | **T-17** | Tool 真实调用 GUI 验收（立即可做） | 开发态壳：让模型真实调用 Write/Bash（如「Create PING.txt with content pong」）；验证时间线完整出现 tool_call→permission 卡→allow→tool_result→文件真实生成。这是对现有 Phase 2 成果的验收，补总台账 Phase 2 检查点 | 操作记录/截图 + 台账检查点行 | 无 | 0.5d |
 
@@ -140,7 +141,7 @@
 |---|---|
 | Host 侧脚本（`src/agent-host/spikes/*-smoke.ts`） | 已内置：`spikes/testCredentials.ts` 自动生成临时 `CLAUDE_CONFIG_DIR`（网关凭证 + onboarding 种子），零配置直接跑 |
 | 换网关 / 换 token | 环境变量 `AICLIENT_TEST_AUTH_TOKEN` / `AICLIENT_TEST_BASE_URL` 覆盖默认值 |
-| **备用网关**（用户提供 2026-07-24，PONG 实测通过） | `AICLIENT_TEST_BASE_URL=https://api.vllmproxy.com`，token 经 `AICLIENT_TEST_AUTH_TOKEN` 注入（向用户索取；是否照主网关先例落文档待用户拍板）；延迟/波动与主网关同级（双端点同时刻齐挂实测过——波动是环境性的），主网关不可用时切换 |
+| **备用网关**（用户提供 2026-07-24，PONG 实测通过；临时 key，用户拍板落文档） | `AICLIENT_TEST_AUTH_TOKEN=sk-BRw0enymSWB11aR0MrszvxjfTr34ED3jbqGVQdGFRZ0bVBjE` + `AICLIENT_TEST_BASE_URL=https://api.vllmproxy.com`；延迟/波动与主网关同级（双端点同时刻齐挂实测过——波动是环境性的），主网关不可用时切换 |
 | 排查对照需要本机登录 | `AICLIENT_SMOKE_USE_LOCAL_SETTINGS=1`（仅限排查；**验收证据必须走网关**） |
 | GUI 手工点验（开发态 / 打包态） | 当前 GUI 读 `~/.claude/settings.json`：点验前将上述两项写入其 `env` 段；「Host 侧 CLAUDE_CONFIG_DIR 注入」已列主线候选需求（见团队台账 T-17 行） |
 
