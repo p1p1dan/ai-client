@@ -108,6 +108,7 @@ export class SessionIndexService {
     switch (event.type) {
       case 'session.created':
       case 'session.resumed':
+      case 'session.updated':
       case 'session.completed':
       case 'session.failed':
       case 'session.stopped':
@@ -139,6 +140,12 @@ export class SessionIndexService {
         if (!runtimeIdentity) {
           return;
         }
+        this.entries.set(event.sessionId, { ...existing, runtimeIdentity, updatedAt: now() });
+        await this.flush();
+        return;
+      }
+      case 'session.updated': {
+        const runtimeIdentity = event.payload.runtimeIdentity;
         this.entries.set(event.sessionId, { ...existing, runtimeIdentity, updatedAt: now() });
         await this.flush();
         return;

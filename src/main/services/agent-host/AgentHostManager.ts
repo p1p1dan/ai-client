@@ -2,18 +2,24 @@ import path from 'node:path';
 import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
 import {
   AGENT_HOST_PROTOCOL_VERSION,
-  DEFAULT_AGENT_HOST_DRIVER,
   type AgentHostCommand,
   type AgentHostDriver,
+  DEFAULT_AGENT_HOST_DRIVER,
   type PermissionRespondCommand,
   type QuestionRespondCommand,
   type SessionCloseCommand,
   type SessionCreateCommand,
+  type SessionListHistoryCommand,
   type SessionResumeCommand,
   type SessionSendCommand,
   type SessionStopCommand,
 } from '@shared/types/agentHost';
-import type { RuntimeEvent } from '@shared/types/runtimeEvents';
+import type {
+  RuntimeEvent,
+  RuntimeEventType,
+  SessionHistoryListedEvent,
+} from '@shared/types/runtimeEvents';
+import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import { app } from 'electron';
 import { AgentHostProcess } from './AgentHostProcess';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
@@ -172,6 +178,95 @@ export class AgentHostManager {
       payload,
     });
     return requestId;
+  }
+
+  /** List CC session history summaries for a workspace (C-06). */
+  async listHistory(workspacePath: string): Promise<HistorySessionSummary[]> {
+    const command: SessionListHistoryCommand = {
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId: nextRequestId('listHistory'),
+      type: 'session.listHistory',
+      payload: { workspacePath },
+    };
+    const event = (await this.requestAndWait(
+      command,
+      'session.historyListed'
+    )) as SessionHistoryListedEvent;
+    if (event.payload.error) {
+      throw new Error(`${event.payload.error.code}: ${event.payload.error.message}`);
+    }
+    return event.payload.sessions;
+  }
+
+  /**
+   * Send a command and wait for the correlated response event (matched by
+   * requestId + eventType), or a correlated host.error, or Host exit, or timeout.
+   *
+   * This is deliberately NOT the "timeout but still alive → resolve" philosophy of
+   * waitForReady (startup readiness is inherently racy and best-effort). A query
+   * command must always get an answer: if the Host process dies mid-wait we reject
+   * immediately rather than let the caller hang until the timeout fires, and an
+   * old Host that doesn't understand the command replies with a correlated
+   * host.error (code: 'not_implemented'), which also rejects.
+   */
+  private requestAndWait(
+    command: AgentHostCommand,
+    eventType: RuntimeEventType,
+    timeoutMs = 10_000
+  ): Promise<RuntimeEvent> {
+    return new Promise<RuntimeEvent>((resolve, reject) => {
+      void (async () => {
+        try {
+          await this.ensureStarted();
+        } catch (error) {
+          reject(error as Error);
+          return;
+        }
+
+        const proc = this.process;
+        if (!proc?.isRunning) {
+          reject(new Error('Agent Host is not running'));
+          return;
+        }
+
+        const cleanup = () => {
+          clearTimeout(timer);
+          proc.off('event', onEvent);
+          proc.off('exit', onExit);
+        };
+
+        const onEvent = (event: RuntimeEvent) => {
+          if (event.requestId !== command.requestId) return;
+          if (event.type === eventType) {
+            cleanup();
+            resolve(event);
+            return;
+          }
+          if (event.type === 'host.error') {
+            cleanup();
+            reject(new Error(`${event.payload.code}: ${event.payload.message}`));
+          }
+        };
+        const onExit = () => {
+          cleanup();
+          reject(new Error('Agent Host exited while waiting for a response'));
+        };
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error(`Timed out waiting for ${eventType}`));
+        }, timeoutMs);
+
+        proc.on('event', onEvent);
+        proc.on('exit', onExit);
+
+        try {
+          this.send(command);
+        } catch (error) {
+          cleanup();
+          reject(error as Error);
+        }
+      })();
+    });
   }
 
   async shutdown(): Promise<void> {

@@ -76,8 +76,9 @@ import type {
   WorktreeRemoveOptions,
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
-import type { AgentHostDriver } from '@shared/types/agentHost';
 import type { AgentStopNotificationData } from '@shared/types/agent';
+import type { AgentHostDriver } from '@shared/types/agentHost';
+import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
 import pkg from '../../package.json';
@@ -1366,6 +1367,8 @@ const electronAPI = {
     },
     listSessions: (): Promise<SessionIndexEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSIONS),
+    listHistory: (workspacePath: string): Promise<HistorySessionSummary[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_HISTORY, workspacePath),
     renameSession: (payload: { sessionId: string; title: string }): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RENAME_SESSION, payload),
     archiveSession: (payload: { sessionId: string; archived: boolean }): Promise<boolean> =>

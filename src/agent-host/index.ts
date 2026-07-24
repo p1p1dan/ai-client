@@ -6,11 +6,12 @@
  */
 
 import { createInterface } from 'node:readline';
-import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import type { AgentHostDriver } from '../shared/types/agentHost.ts';
-import { loadClaudeSettingsEnv } from './claudeSettings.ts';
+import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import { ClaudeRuntime } from './claudeRuntime.ts';
+import { loadClaudeSettingsEnv } from './claudeSettings.ts';
 import { resolveCometixCli } from './cometix.ts';
+import { listSessionHistory } from './historyReader.ts';
 import { COMETIX_PIN } from './pin.ts';
 import { SessionRegistry } from './sessionRegistry.ts';
 
@@ -132,6 +133,7 @@ async function handleCommand(raw: unknown): Promise<void> {
                   model: settingsDiagnostics.model,
                 }
               : null,
+            capabilities: { history: true },
           },
         });
       } catch (err) {
@@ -223,6 +225,49 @@ async function handleCommand(raw: unknown): Promise<void> {
         runtimeIdentity,
         requestId: cmd.requestId,
       });
+      return;
+    }
+    case 'session.listHistory': {
+      const workspacePath = String(cmd.payload?.workspacePath ?? '');
+      if (!workspacePath) {
+        emit({
+          type: 'host.error',
+          requestId: cmd.requestId,
+          payload: {
+            code: 'invalid_payload',
+            message: 'session.listHistory requires workspacePath',
+            fatal: false,
+          },
+        });
+        return;
+      }
+      // Fire-and-forget: disk scan must not block the command loop.
+      void listSessionHistory({ workspacePath })
+        .then((result) => {
+          emit({
+            type: 'session.historyListed',
+            requestId: cmd.requestId,
+            payload: {
+              workspacePath,
+              sessions: result.sessions,
+              ...(result.error ? { error: result.error } : {}),
+            },
+          });
+        })
+        .catch((err) => {
+          emit({
+            type: 'session.historyListed',
+            requestId: cmd.requestId,
+            payload: {
+              workspacePath,
+              sessions: [],
+              error: {
+                code: 'read_failed',
+                message: err instanceof Error ? err.message : String(err),
+              },
+            },
+          });
+        });
       return;
     }
     case 'session.send': {

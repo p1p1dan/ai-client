@@ -13,6 +13,7 @@ export type AgentHostCommandType =
   | 'session.send'
   | 'session.stop'
   | 'session.close'
+  | 'session.listHistory'
   | 'permission.respond'
   | 'question.respond';
 
@@ -73,6 +74,16 @@ export interface SessionCloseCommand extends AgentHostCommandBase {
   payload: { sessionId: string };
 }
 
+/**
+ * List historical CC sessions for a workspace from ~/.claude/projects/
+ * (includes CLI-created sessions unknown to the app index).
+ * Host replies with a session.historyListed event correlated by requestId.
+ */
+export interface SessionListHistoryCommand extends AgentHostCommandBase {
+  type: 'session.listHistory';
+  payload: { workspacePath: string };
+}
+
 export interface PermissionRespondCommand extends AgentHostCommandBase {
   type: 'permission.respond';
   payload: {
@@ -99,6 +110,7 @@ export type AgentHostCommand =
   | SessionSendCommand
   | SessionStopCommand
   | SessionCloseCommand
+  | SessionListHistoryCommand
   | PermissionRespondCommand
   | QuestionRespondCommand;
 

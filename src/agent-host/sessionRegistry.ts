@@ -23,11 +23,7 @@ export class SessionRegistry {
     return this.sessions.get(sessionId);
   }
 
-  create(input: {
-    sessionId: string;
-    workspacePath: string;
-    model?: string;
-  }): HostSession {
+  create(input: { sessionId: string; workspacePath: string; model?: string }): HostSession {
     const existing = this.sessions.get(input.sessionId);
     if (existing) {
       throw new Error(`Session already exists: ${input.sessionId}`);
@@ -49,6 +45,16 @@ export class SessionRegistry {
     runtimeIdentity: string;
     model?: string;
   }): HostSession {
+    const existing = this.sessions.get(input.sessionId);
+    if (existing) {
+      // Merge semantics (CP4 F-1): never replace the live object — a swap
+      // would orphan an active turn's abort/running state. Callers must
+      // reject resume for running sessions before reaching here.
+      existing.workspacePath = input.workspacePath;
+      existing.runtimeIdentity = input.runtimeIdentity;
+      existing.model = input.model ?? existing.model;
+      return existing;
+    }
     const session: HostSession = {
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,

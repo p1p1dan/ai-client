@@ -85,6 +85,58 @@ describe('SessionIndexService', () => {
     });
   });
 
+  it('enriches an entry with runtimeIdentity and bumps updatedAt on session.updated', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+    const createdAt = (await service.list())[0].updatedAt;
+
+    vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
+    const event: RuntimeEvent = {
+      type: 'session.updated',
+      seq: 1,
+      sessionId: 's1',
+      timestamp: Date.now(),
+      payload: { runtimeIdentity: 'claude-runtime-updated' },
+    };
+    service.handleRuntimeEvent(event);
+
+    // Poll the persisted file so this test only completes once the fire-and-forget
+    // event handler's flush has fully settled (same pattern as the resumed-event test).
+    await vi.waitFor(
+      () => {
+        const raw = readFileSync(join(userDataDir, 'session-index.json'), 'utf8');
+        const parsed = JSON.parse(raw) as SessionIndexEntry[];
+        expect(parsed[0]?.runtimeIdentity).toBe('claude-runtime-updated');
+      },
+      { timeout: 1000 }
+    );
+
+    const [entry] = await service.list();
+    expect(entry.runtimeIdentity).toBe('claude-runtime-updated');
+    expect(entry.updatedAt).toBeGreaterThan(createdAt);
+  });
+
+  it('drops session.updated for an unknown session instead of creating one', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+
+    service.handleRuntimeEvent({
+      type: 'session.updated',
+      seq: 1,
+      sessionId: 'unknown',
+      timestamp: Date.now(),
+      payload: { runtimeIdentity: 'ghost' },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const list = await service.list();
+    expect(list).toEqual([]);
+  });
+
   it('ignores runtime events for unknown sessions and non session-lifecycle event types', async () => {
     const { SessionIndexService } = await import('../SessionIndexService');
     const service = new SessionIndexService();

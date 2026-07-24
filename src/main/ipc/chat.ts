@@ -6,6 +6,7 @@
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver } from '@shared/types/agentHost';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
+import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, ipcMain } from 'electron';
 import { agentHostManager } from '../services/agent-host/AgentHostManager';
@@ -136,6 +137,13 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_ARCHIVE_SESSION,
     async (_e, payload: { sessionId: string; archived: boolean }): Promise<boolean> => {
       return sessionIndexService.setArchived(payload.sessionId, payload.archived);
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_LIST_HISTORY,
+    async (_e, workspacePath: string): Promise<HistorySessionSummary[]> => {
+      return agentHostManager.listHistory(workspacePath);
     }
   );
 }

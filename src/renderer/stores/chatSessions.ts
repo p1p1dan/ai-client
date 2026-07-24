@@ -1,4 +1,5 @@
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import { HISTORY_MESSAGE_ID_PREFIX, type HistoryMessage } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
@@ -57,7 +58,7 @@ interface PendingPermission {
   messageId: string;
 }
 
-interface ChatSessionsState {
+export interface ChatSessionsState {
   projects: ChatProject[];
   workspaces: ChatWorkspace[];
   sessions: ChatSession[];
@@ -69,6 +70,8 @@ interface ChatSessionsState {
   hostBoundSessionIds: string[];
   runtimeReady: boolean;
   lastError: string | null;
+  /** Non-fatal per-session history read errors, keyed by sessionId. Formatted `${code}: ${message}`. */
+  historyErrors: Record<string, string>;
 
   selectSession: (sessionId: string) => void;
   sendMessage: (text: string) => Promise<void>;
@@ -151,6 +154,54 @@ function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessa
   return next;
 }
 
+/**
+ * Maps one HistoryBlock to a ChatBlock using the same field usage as the live
+ * runtime branches (tool.started / tool.completed). Thinking blocks are dropped:
+ * ChatBlockType has no 'thinking' variant yet (lands with T-04).
+ */
+function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | null {
+  switch (block.type) {
+    case 'text':
+      return { id: block.id, type: 'text', text: block.text };
+    case 'tool_call':
+      return {
+        id: block.id,
+        type: 'tool_call',
+        toolCallId: block.toolCallId,
+        toolName: block.name,
+        toolInput: block.input,
+      };
+    case 'tool_result':
+      return {
+        id: block.id,
+        type: 'tool_result',
+        toolCallId: block.toolCallId,
+        toolOk: block.ok,
+        toolOutput: block.output,
+        text: block.error,
+      };
+    case 'thinking':
+      return null;
+    default:
+      return null;
+  }
+}
+
+function mapHistoryMessageToChatMessage(
+  sessionId: string,
+  historyMessage: HistoryMessage
+): ChatMessage {
+  const blocks = historyMessage.blocks
+    .map(mapHistoryBlock)
+    .filter((block): block is ChatBlock => block !== null);
+  return {
+    id: historyMessage.id,
+    sessionId,
+    role: historyMessage.role,
+    blocks,
+  };
+}
+
 function appendTextBlock(message: ChatMessage, blockId: string, text: string): ChatMessage {
   const blocks = [...message.blocks];
   const blockIndex = blocks.findIndex((block) => block.id === blockId);
@@ -168,7 +219,7 @@ function appendTextBlock(message: ChatMessage, blockId: string, text: string): C
   return { ...message, blocks };
 }
 
-function applyRuntimeEvent(
+export function applyRuntimeEvent(
   state: ChatSessionsState,
   event: RuntimeEvent
 ): Partial<ChatSessionsState> {
@@ -196,6 +247,61 @@ function applyRuntimeEvent(
             : session
         ),
       };
+    }
+
+    case 'session.updated': {
+      const { runtimeIdentity } = event.payload;
+      return {
+        sessions: state.sessions.map((session) =>
+          session.id === sessionId ? { ...session, runtimeIdentity } : session
+        ),
+      };
+    }
+
+    case 'session.history': {
+      const { payload } = event;
+
+      // Idempotent prefix replace: drop this session's previously hydrated
+      // `h:*` messages; runtime messages (user-*/asst-*/error) are untouched.
+      const withoutOldHistory = state.messages.filter(
+        (message) =>
+          !(message.sessionId === sessionId && message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX))
+      );
+      const insertIndex = withoutOldHistory.findIndex((message) => message.sessionId === sessionId);
+      const historyMessages = payload.messages.map((historyMessage) =>
+        mapHistoryMessageToChatMessage(sessionId, historyMessage)
+      );
+      const messages =
+        insertIndex === -1
+          ? [...withoutOldHistory, ...historyMessages]
+          : [
+              ...withoutOldHistory.slice(0, insertIndex),
+              ...historyMessages,
+              ...withoutOldHistory.slice(insertIndex),
+            ];
+
+      // Row creation is T-02's responsibility; only enrich an existing row.
+      // updatedAt takes the last history message's timestamp — never Date.now(),
+      // otherwise merely viewing history would bump the session to the top.
+      const lastMessage = payload.messages[payload.messages.length - 1];
+      const sessions = state.sessions.map((session) =>
+        session.id === sessionId
+          ? {
+              ...session,
+              runtimeIdentity: payload.runtimeIdentity,
+              updatedAt: lastMessage?.timestamp ?? session.updatedAt,
+            }
+          : session
+      );
+
+      const historyErrors = { ...state.historyErrors };
+      if (payload.error) {
+        historyErrors[sessionId] = `${payload.error.code}: ${payload.error.message}`;
+      } else {
+        delete historyErrors[sessionId];
+      }
+
+      return { messages, sessions, historyErrors };
     }
 
     case 'session.status': {
@@ -293,7 +399,12 @@ function applyRuntimeEvent(
     case 'permission.requested': {
       const existing = [...state.messages]
         .reverse()
-        .find((item) => item.sessionId === sessionId && item.role === 'assistant');
+        .find(
+          (item) =>
+            item.sessionId === sessionId &&
+            item.role === 'assistant' &&
+            !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+        );
       const messageId = existing?.id ?? `msg-perm-${event.payload.permissionId}`;
       const baseMessage =
         existing ??
@@ -380,6 +491,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   hostBoundSessionIds: [],
   runtimeReady: false,
   lastError: null,
+  historyErrors: {},
 
   selectSession: (sessionId) => {
     set({ activeSessionId: sessionId });

@@ -5,6 +5,7 @@
 
 import type { AgentHostDriver } from '../shared/types/agentHost.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
+import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
 import type { SessionRegistry } from './sessionRegistry.ts';
 
@@ -87,6 +88,22 @@ export class ClaudeRuntime {
     model?: string;
     requestId?: string;
   }): void {
+    // CP4 F-1: resuming a session with an active turn would orphan its
+    // abort/running state — reject instead of re-registering.
+    const current = this.opts.registry.get(input.sessionId);
+    if (current?.running) {
+      this.opts.emit({
+        type: 'host.error',
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        payload: {
+          code: 'session_busy',
+          message: `Cannot resume while a turn is running: ${input.sessionId}`,
+          fatal: false,
+        },
+      });
+      return;
+    }
     const session = this.opts.registry.resume({
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
@@ -99,9 +116,60 @@ export class ClaudeRuntime {
       requestId: input.requestId,
       payload: { runtimeIdentity: session.runtimeIdentity },
     });
+    // Per-session order contract: resumed → session.history → status idle.
+    // The JSONL read runs detached so the command loop stays responsive.
+    void this.replayHistory(input);
+  }
+
+  private async replayHistory(input: {
+    sessionId: string;
+    workspacePath: string;
+    runtimeIdentity: string;
+    requestId?: string;
+  }): Promise<void> {
+    let result: HistoryReadResult;
+    try {
+      result = await readSessionHistory({
+        workspacePath: input.workspacePath,
+        runtimeIdentity: input.runtimeIdentity,
+      });
+    } catch (err) {
+      // readSessionHistory is contract-bound to not throw; belt and braces.
+      result = {
+        messages: [],
+        truncated: false,
+        omittedCount: 0,
+        parseStats: { totalLines: 0, controlLines: 0, badLines: 0 },
+        error: {
+          code: 'read_failed',
+          message: err instanceof Error ? err.message : String(err),
+        },
+      };
+    }
+    // Session may have been closed while reading — drop silently.
+    if (!this.opts.registry.get(input.sessionId)) return;
+    if (result.error) {
+      this.log(
+        `history read for ${input.sessionId}: ${result.error.code} — ${result.error.message}`
+      );
+    }
+    this.opts.emit({
+      type: 'session.history',
+      sessionId: input.sessionId,
+      requestId: input.requestId,
+      payload: {
+        runtimeIdentity: input.runtimeIdentity,
+        workspacePath: input.workspacePath,
+        messages: result.messages,
+        truncated: result.truncated,
+        omittedCount: result.omittedCount,
+        ...(result.error ? { error: result.error } : {}),
+        parseStats: result.parseStats,
+      },
+    });
     this.opts.emit({
       type: 'session.status',
-      sessionId: session.sessionId,
+      sessionId: input.sessionId,
       requestId: input.requestId,
       payload: { status: 'idle' },
     });
@@ -205,8 +273,16 @@ export class ClaudeRuntime {
       for await (const event of stream) {
         if (abort.signal.aborted) break;
         const runtimeId = normalizer.ingest(event, input.requestId);
-        if (runtimeId) {
+        if (runtimeId && runtimeId !== session.runtimeIdentity) {
+          // First discovery (initial send) or a defensive fork cover — without
+          // this event Main's session index never learns the resume identity.
           session.runtimeIdentity = runtimeId;
+          this.opts.emit({
+            type: 'session.updated',
+            sessionId: session.sessionId,
+            requestId: input.requestId,
+            payload: { runtimeIdentity: runtimeId },
+          });
         }
       }
 

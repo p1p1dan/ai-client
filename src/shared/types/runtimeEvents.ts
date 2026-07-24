@@ -4,11 +4,21 @@
  * See docs/plans/2026-07-23-openchamber-chat-refactor-ard.md §5.3 / §6
  */
 
+import type {
+  HistoryMessage,
+  HistoryParseStats,
+  HistoryReadError,
+  HistorySessionSummary,
+} from './sessionHistory';
+
 export type RuntimeEventType =
   | 'host.ready'
   | 'host.error'
   | 'session.created'
   | 'session.resumed'
+  | 'session.updated'
+  | 'session.history'
+  | 'session.historyListed'
   | 'session.status'
   | 'message.started'
   | 'message.delta'
@@ -67,6 +77,10 @@ export interface HostReadyEvent extends RuntimeEventBase {
       baseHost: string | null;
       model: string | null;
     } | null;
+    /** Host capability flags — Main degrades gracefully when absent (old Host). */
+    capabilities?: {
+      history?: boolean;
+    };
   };
 }
 
@@ -194,6 +208,50 @@ export interface SessionCreatedEvent extends RuntimeEventBase {
   payload?: { runtimeIdentity?: string };
 }
 
+/**
+ * Emitted when the SDK-reported session id differs from the session's current
+ * runtimeIdentity (first discovery on initial send; defensively covers forks).
+ */
+export interface SessionUpdatedEvent extends RuntimeEventBase {
+  type: 'session.updated';
+  sessionId: string;
+  payload: { runtimeIdentity: string };
+}
+
+/**
+ * Batch history replay emitted during session.resume handling:
+ * session.resumed → session.history → session.status(idle).
+ * Read failure is non-fatal: empty messages + error, session stays usable.
+ */
+export interface SessionHistoryEvent extends RuntimeEventBase {
+  type: 'session.history';
+  sessionId: string;
+  requestId: string;
+  payload: {
+    runtimeIdentity: string;
+    workspacePath: string;
+    /** Chronological. Message ids carry the `h:` contract prefix. */
+    messages: HistoryMessage[];
+    /** True when messages were dropped by input/output caps. */
+    truncated: boolean;
+    omittedCount: number;
+    error?: HistoryReadError;
+    parseStats?: HistoryParseStats;
+  };
+}
+
+/** Response to the session.listHistory command, correlated by requestId. Not session-scoped. */
+export interface SessionHistoryListedEvent extends RuntimeEventBase {
+  type: 'session.historyListed';
+  requestId: string;
+  payload: {
+    workspacePath: string;
+    /** Sorted lastMessageAt desc. */
+    sessions: HistorySessionSummary[];
+    error?: HistoryReadError;
+  };
+}
+
 export interface ThinkingStartedEvent extends RuntimeEventBase {
   type: 'thinking.started' | 'thinking.completed';
   sessionId: string;
@@ -225,6 +283,9 @@ export type RuntimeEvent =
   | HostErrorEvent
   | SessionStatusEvent
   | SessionCreatedEvent
+  | SessionUpdatedEvent
+  | SessionHistoryEvent
+  | SessionHistoryListedEvent
   | MessageStartedEvent
   | MessageDeltaEvent
   | MessageCompletedEvent
