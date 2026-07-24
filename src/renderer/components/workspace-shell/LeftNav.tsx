@@ -86,7 +86,7 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
     const session = state.sessions.find((item) => item.id === sessionId);
     const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
     const runtimeIdentity = session?.runtimeIdentity ?? persistedRuntimeIdentity;
-    const hasTimeline = state.messages.some((message) => message.sessionId === sessionId);
+    const hasTimeline = (state.messages[sessionId]?.length ?? 0) > 0;
     if (runtimeIdentity && workspace && !hasTimeline) {
       void resume(sessionId, { persistedRuntimeIdentity: runtimeIdentity });
     }

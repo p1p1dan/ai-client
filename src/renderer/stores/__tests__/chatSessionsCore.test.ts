@@ -17,7 +17,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     projects: [],
     workspaces: [],
     sessions: [],
-    messages: [],
+    messages: {},
     activeSessionId: null,
     recentSessionIds: [],
     pendingPermission: null,
@@ -70,9 +70,9 @@ describe('applyRuntimeEvent — message.started', () => {
     };
 
     const patch1 = applyRuntimeEvent(state, started);
-    expect(patch1.messages).toEqual([
-      { id: 'msg-1', sessionId: SESSION_ID, role: 'user', blocks: [] },
-    ]);
+    expect(patch1.messages).toEqual({
+      [SESSION_ID]: [{ id: 'msg-1', sessionId: SESSION_ID, role: 'user', blocks: [] }],
+    });
 
     // Add a block, then re-send message.started with the same messageId — upsert
     // semantics replace the whole message, so the block is lost (blocks reset).
@@ -86,18 +86,20 @@ describe('applyRuntimeEvent — message.started', () => {
     };
     const patch2 = applyRuntimeEvent(state2, delta);
     const state3 = { ...state2, ...patch2 } as ChatSessionsState;
-    expect(state3.messages[0].blocks).toEqual([{ id: 'b1', type: 'text', text: 'hello' }]);
+    expect(state3.messages[SESSION_ID][0].blocks).toEqual([
+      { id: 'b1', type: 'text', text: 'hello' },
+    ]);
 
     const patch3 = applyRuntimeEvent(state3, started);
-    expect(patch3.messages).toEqual([
-      { id: 'msg-1', sessionId: SESSION_ID, role: 'user', blocks: [] },
-    ]);
+    expect(patch3.messages).toEqual({
+      [SESSION_ID]: [{ id: 'msg-1', sessionId: SESSION_ID, role: 'user', blocks: [] }],
+    });
   });
 });
 
 describe('applyRuntimeEvent — message.delta', () => {
   it('concatenates text when two deltas share the same blockId', () => {
-    const state = baseState({ messages: [makeMessage({ blocks: [] })] });
+    const state = baseState({ messages: { [SESSION_ID]: [makeMessage({ blocks: [] })] } });
     const delta1: RuntimeEvent = {
       type: 'message.delta',
       seq: 1,
@@ -115,14 +117,16 @@ describe('applyRuntimeEvent — message.delta', () => {
       payload: { messageId: 'msg-1', blockId: 'b1', text: 'lo' },
     };
     const patch2 = applyRuntimeEvent(state2, delta2);
-    const updated = patch2.messages?.find((message) => message.id === 'msg-1');
+    const updated = patch2.messages?.[SESSION_ID]?.find((message) => message.id === 'msg-1');
 
     expect(updated?.blocks).toEqual([{ id: 'b1', type: 'text', text: 'Hello' }]);
   });
 
   it('pushes a second block when a new blockId targets an existing message', () => {
     const state = baseState({
-      messages: [makeMessage({ blocks: [{ id: 'b1', type: 'text', text: 'first' }] })],
+      messages: {
+        [SESSION_ID]: [makeMessage({ blocks: [{ id: 'b1', type: 'text', text: 'first' }] })],
+      },
     });
     const delta: RuntimeEvent = {
       type: 'message.delta',
@@ -133,7 +137,7 @@ describe('applyRuntimeEvent — message.delta', () => {
     };
 
     const patch = applyRuntimeEvent(state, delta);
-    const updated = patch.messages?.find((message) => message.id === 'msg-1');
+    const updated = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'msg-1');
 
     expect(updated?.blocks).toEqual([
       { id: 'b1', type: 'text', text: 'first' },
@@ -142,7 +146,7 @@ describe('applyRuntimeEvent — message.delta', () => {
   });
 
   it('returns {} for an unknown messageId (state unchanged, no crash)', () => {
-    const state = baseState({ messages: [] });
+    const state = baseState({ messages: {} });
     const delta: RuntimeEvent = {
       type: 'message.delta',
       seq: 1,
@@ -157,7 +161,7 @@ describe('applyRuntimeEvent — message.delta', () => {
 
 describe('applyRuntimeEvent — thinking.started', () => {
   it('adds a thinking block once; a duplicate with the same blockId is a no-op', () => {
-    const state = baseState({ messages: [makeMessage({ blocks: [] })] });
+    const state = baseState({ messages: { [SESSION_ID]: [makeMessage({ blocks: [] })] } });
     const started: RuntimeEvent = {
       type: 'thinking.started',
       seq: 1,
@@ -167,7 +171,7 @@ describe('applyRuntimeEvent — thinking.started', () => {
     };
 
     const patch1 = applyRuntimeEvent(state, started);
-    const updated = patch1.messages?.find((message) => message.id === 'msg-1');
+    const updated = patch1.messages?.[SESSION_ID]?.find((message) => message.id === 'msg-1');
     expect(updated?.blocks).toEqual([{ id: 'th-1', type: 'thinking', text: '' }]);
 
     const state2 = { ...state, ...patch1 } as ChatSessionsState;
@@ -178,7 +182,7 @@ describe('applyRuntimeEvent — thinking.started', () => {
 
 describe('applyRuntimeEvent — thinking.delta', () => {
   it('creates the thinking block even when it arrives before thinking.started (out-of-order)', () => {
-    const state = baseState({ messages: [makeMessage({ blocks: [] })] });
+    const state = baseState({ messages: { [SESSION_ID]: [makeMessage({ blocks: [] })] } });
     const delta: RuntimeEvent = {
       type: 'thinking.delta',
       seq: 1,
@@ -188,13 +192,13 @@ describe('applyRuntimeEvent — thinking.delta', () => {
     };
 
     const patch = applyRuntimeEvent(state, delta);
-    const updated = patch.messages?.find((message) => message.id === 'msg-1');
+    const updated = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'msg-1');
 
     expect(updated?.blocks).toEqual([{ id: 'th-1', type: 'thinking', text: 'pondering' }]);
   });
 
   it('returns {} for an unknown messageId', () => {
-    const state = baseState({ messages: [] });
+    const state = baseState({ messages: {} });
     const delta: RuntimeEvent = {
       type: 'thinking.delta',
       seq: 1,
@@ -209,7 +213,7 @@ describe('applyRuntimeEvent — thinking.delta', () => {
 
 describe('applyRuntimeEvent — tool.started / tool.completed', () => {
   it('tool.started appends a tool_call block; tool.completed appends a tool_result block', () => {
-    const state = baseState({ messages: [makeMessage({ blocks: [] })] });
+    const state = baseState({ messages: { [SESSION_ID]: [makeMessage({ blocks: [] })] } });
     const started: RuntimeEvent = {
       type: 'tool.started',
       seq: 1,
@@ -219,7 +223,7 @@ describe('applyRuntimeEvent — tool.started / tool.completed', () => {
     };
 
     const patch1 = applyRuntimeEvent(state, started);
-    const afterStart = patch1.messages?.find((message) => message.id === 'msg-1');
+    const afterStart = patch1.messages?.[SESSION_ID]?.find((message) => message.id === 'msg-1');
     expect(afterStart?.blocks).toEqual([
       {
         id: 'call-1',
@@ -239,7 +243,7 @@ describe('applyRuntimeEvent — tool.started / tool.completed', () => {
       payload: { messageId: 'msg-1', toolCallId: 'call-1', ok: true, output: 'done' },
     };
     const patch2 = applyRuntimeEvent(state2, completed);
-    const afterComplete = patch2.messages?.find((message) => message.id === 'msg-1');
+    const afterComplete = patch2.messages?.[SESSION_ID]?.find((message) => message.id === 'msg-1');
 
     expect(afterComplete?.blocks[1]).toEqual({
       id: 'call-1-result',
@@ -252,7 +256,7 @@ describe('applyRuntimeEvent — tool.started / tool.completed', () => {
   });
 
   it('tool.completed sets text to the error message only when ok is false', () => {
-    const state = baseState({ messages: [makeMessage({ blocks: [] })] });
+    const state = baseState({ messages: { [SESSION_ID]: [makeMessage({ blocks: [] })] } });
     const completed: RuntimeEvent = {
       type: 'tool.completed',
       seq: 1,
@@ -262,7 +266,7 @@ describe('applyRuntimeEvent — tool.started / tool.completed', () => {
     };
 
     const patch = applyRuntimeEvent(state, completed);
-    const updated = patch.messages?.find((message) => message.id === 'msg-1');
+    const updated = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'msg-1');
 
     expect(updated?.blocks[0]).toEqual({
       id: 'call-2-result',
@@ -275,7 +279,7 @@ describe('applyRuntimeEvent — tool.started / tool.completed', () => {
   });
 
   it('returns {} for an unknown messageId on both tool.started and tool.completed', () => {
-    const state = baseState({ messages: [] });
+    const state = baseState({ messages: {} });
     const started: RuntimeEvent = {
       type: 'tool.started',
       seq: 1,
@@ -303,7 +307,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
     const assistantB = makeMessage({ id: 'asst-2', role: 'assistant', blocks: [] });
     const state = baseState({
       sessions: [makeSession({ status: 'running' })],
-      messages: [assistantA, userMessage, assistantB],
+      messages: { [SESSION_ID]: [assistantA, userMessage, assistantB] },
     });
     const event: RuntimeEvent = {
       type: 'permission.requested',
@@ -319,7 +323,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
     };
 
     const patch = applyRuntimeEvent(state, event);
-    const target = patch.messages?.find((message) => message.id === 'asst-2');
+    const target = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-2');
 
     expect(target?.blocks).toEqual([
       {
@@ -343,7 +347,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
   });
 
   it('creates a synthetic message id when no eligible assistant message exists', () => {
-    const state = baseState({ sessions: [makeSession()], messages: [] });
+    const state = baseState({ sessions: [makeSession()], messages: {} });
     const event: RuntimeEvent = {
       type: 'permission.requested',
       seq: 1,
@@ -353,7 +357,9 @@ describe('applyRuntimeEvent — permission.requested', () => {
     };
 
     const patch = applyRuntimeEvent(state, event);
-    const synthetic = patch.messages?.find((message) => message.id === 'msg-perm-perm-2');
+    const synthetic = patch.messages?.[SESSION_ID]?.find(
+      (message) => message.id === 'msg-perm-perm-2'
+    );
 
     expect(synthetic).toBeDefined();
     expect(synthetic?.role).toBe('assistant');
@@ -386,7 +392,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
         makeSession({ status: 'running' }),
         makeSession({ id: 'session-2', status: 'running' }),
       ],
-      messages: [targetAssistant, decoyAssistant],
+      messages: { [SESSION_ID]: [targetAssistant], 'session-2': [decoyAssistant] },
     });
     const event: RuntimeEvent = {
       type: 'permission.requested',
@@ -397,8 +403,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
     };
 
     const patch = applyRuntimeEvent(state, event);
-    const target = patch.messages?.find((message) => message.id === 'asst-target');
-    const decoy = patch.messages?.find((message) => message.id === 'asst-decoy');
+    const target = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-target');
 
     expect(patch.pendingPermission?.messageId).toBe('asst-target');
     expect(target?.blocks).toEqual([
@@ -412,12 +417,16 @@ describe('applyRuntimeEvent — permission.requested', () => {
         resolved: false,
       },
     ]);
-    expect(decoy?.blocks).toEqual([]);
+    // The other session's bucket is untouched byte-for-byte, not merely its decoy message's blocks.
+    expect(patch.messages?.['session-2']).toEqual([decoyAssistant]);
   });
 
   it('falls back to a synthetic message when only h:-prefixed assistant messages exist', () => {
     const historyAssistant = makeMessage({ id: 'h:asst-1', role: 'assistant', blocks: [] });
-    const state = baseState({ sessions: [makeSession()], messages: [historyAssistant] });
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [historyAssistant] },
+    });
     const event: RuntimeEvent = {
       type: 'permission.requested',
       seq: 1,
@@ -427,8 +436,10 @@ describe('applyRuntimeEvent — permission.requested', () => {
     };
 
     const patch = applyRuntimeEvent(state, event);
-    const historyAfter = patch.messages?.find((message) => message.id === 'h:asst-1');
-    const synthetic = patch.messages?.find((message) => message.id === 'msg-perm-perm-3');
+    const historyAfter = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'h:asst-1');
+    const synthetic = patch.messages?.[SESSION_ID]?.find(
+      (message) => message.id === 'msg-perm-perm-3'
+    );
 
     expect(historyAfter?.blocks).toEqual([]);
     expect(synthetic).toBeDefined();
@@ -447,7 +458,7 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     });
     return baseState({
       sessions: [makeSession({ status: 'waiting_permission' })],
-      messages: [message],
+      messages: { [SESSION_ID]: [message] },
       pendingPermission: { sessionId: SESSION_ID, permissionId: 'perm-1', messageId: 'asst-1' },
     });
   }
@@ -463,7 +474,7 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     };
 
     const patch = applyRuntimeEvent(state, event);
-    const updated = patch.messages?.find((message) => message.id === 'asst-1');
+    const updated = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-1');
 
     expect(updated?.blocks[0]).toEqual({
       id: 'perm-1',
@@ -491,7 +502,7 @@ describe('applyRuntimeEvent — permission.resolved', () => {
 
     expect(patch2.messages).toEqual(patch1.messages);
     expect(patch2.pendingPermission).toBeNull();
-    const finalMessage = patch2.messages?.find((message) => message.id === 'asst-1');
+    const finalMessage = patch2.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-1');
     expect(finalMessage?.blocks).toHaveLength(1);
     expect(finalMessage?.blocks[0]).toEqual({
       id: 'perm-1',
@@ -527,7 +538,7 @@ describe('applyRuntimeEvent — session.stopped (stop freeze)', () => {
     });
     const state = baseState({
       sessions: [makeSession({ status: 'running' })],
-      messages: [message],
+      messages: { [SESSION_ID]: [message] },
     });
     const event: RuntimeEvent = {
       type: 'session.stopped',
@@ -547,7 +558,7 @@ describe('applyRuntimeEvent — session.stopped (stop freeze)', () => {
     const message = makeMessage({ id: 'asst-1', blocks: [] });
     const state = baseState({
       sessions: [makeSession({ status: 'idle' })],
-      messages: [message],
+      messages: { [SESSION_ID]: [message] },
     });
     const delta: RuntimeEvent = {
       type: 'message.delta',
@@ -558,7 +569,7 @@ describe('applyRuntimeEvent — session.stopped (stop freeze)', () => {
     };
 
     const patch = applyRuntimeEvent(state, delta);
-    const updated = patch.messages?.find((item) => item.id === 'asst-1');
+    const updated = patch.messages?.[SESSION_ID]?.find((item) => item.id === 'asst-1');
 
     expect(updated?.blocks).toEqual([{ id: 'b1', type: 'text', text: 'late text' }]);
   });

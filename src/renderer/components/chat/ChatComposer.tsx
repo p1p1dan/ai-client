@@ -92,7 +92,9 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const lastError = useChatSessionsStore((state) => state.lastError);
-  const messages = useChatSessionsStore((state) => state.messages);
+  const activeMessages = useChatSessionsStore((state) =>
+    state.activeSessionId ? state.messages[state.activeSessionId] : undefined
+  );
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
@@ -177,9 +179,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   };
 
   const lastUserPrompt = activeSessionId
-    ? [...messages]
-        .reverse()
-        .find((message) => message.sessionId === activeSessionId && message.role === 'user')
+    ? [...(activeMessages ?? [])].reverse().find((message) => message.role === 'user')
     : undefined;
   // Retry is offered when the last turn ended badly: explicit session.failed
   // (Host emitted it) OR the Composer fallback set retryablePrompt because the
@@ -298,11 +298,8 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
         if (session?.status === 'waiting_permission' || session?.status === 'waiting_question') {
           return true;
         }
-        const hasAssistant = state.messages.some(
-          (message) =>
-            message.sessionId === sessionId &&
-            message.role === 'assistant' &&
-            message.blocks.length > 0
+        const hasAssistant = (state.messages[sessionId] ?? []).some(
+          (message) => message.role === 'assistant' && message.blocks.length > 0
         );
         return hasAssistant;
       }, 45000);

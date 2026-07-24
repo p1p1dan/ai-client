@@ -15,7 +15,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     projects: [],
     workspaces: [],
     sessions: [],
-    messages: [],
+    messages: {},
     activeSessionId: null,
     recentSessionIds: [],
     pendingPermission: null,
@@ -141,41 +141,44 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     };
     const state = baseState({
       sessions: [makeSession()],
-      messages: [
-        otherSessionMessage,
-        staleHistoryMessage,
-        runtimeUserMessage,
-        runtimeAssistantMessage,
-      ],
+      messages: {
+        [SESSION_ID]: [staleHistoryMessage, runtimeUserMessage, runtimeAssistantMessage],
+        'session-other': [otherSessionMessage],
+      },
     });
     const event = makeHistoryEvent({ messages: HISTORY_MESSAGES });
 
     const patch = applyRuntimeEvent(state, event);
-    const messages = patch.messages ?? [];
-    const ids = messages.map((message) => message.id);
+    const bucket = patch.messages?.[SESSION_ID] ?? [];
+    const ids = bucket.map((message) => message.id);
 
     expect(ids).not.toContain('h:stale-uuid');
     expect(ids).toContain('user-1');
     expect(ids).toContain('asst-1');
-    expect(ids).toContain('user-other');
     expect(ids).toContain('h:uuid-1');
     expect(ids).toContain('h:uuid-2');
 
     // History is spliced before this session's remaining (runtime) messages.
     expect(ids.indexOf('h:uuid-1')).toBeLessThan(ids.indexOf('user-1'));
     expect(ids.indexOf('h:uuid-2')).toBeLessThan(ids.indexOf('asst-1'));
+
+    // The other session's bucket is untouched byte-for-byte.
+    expect(patch.messages?.['session-other']).toEqual([otherSessionMessage]);
   });
 
   it('appends history at the array tail when the session has no remaining messages', () => {
     const state = baseState({
       sessions: [makeSession()],
-      messages: [],
+      messages: {},
     });
     const event = makeHistoryEvent({ messages: HISTORY_MESSAGES });
 
     const patch = applyRuntimeEvent(state, event);
 
-    expect(patch.messages?.map((message) => message.id)).toEqual(['h:uuid-1', 'h:uuid-2']);
+    expect(patch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+    ]);
   });
 
   it('records payload.error into historyErrors and clears it on a later successful ingest', () => {
@@ -228,7 +231,7 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     const patch = applyRuntimeEvent(state, event);
 
     expect(patch.sessions).toEqual([]);
-    expect(patch.messages).toHaveLength(2);
+    expect(patch.messages?.[SESSION_ID]).toHaveLength(2);
   });
 
   it('maps tool_call, tool_result and thinking blocks with the same field usage as the live branches', () => {
@@ -236,7 +239,9 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     const event = makeHistoryEvent({ messages: [HISTORY_MESSAGES[1]] });
 
     const patch = applyRuntimeEvent(state, event);
-    const assistantMessage = patch.messages?.find((message) => message.id === 'h:uuid-2');
+    const assistantMessage = patch.messages?.[SESSION_ID]?.find(
+      (message) => message.id === 'h:uuid-2'
+    );
     expect(assistantMessage).toBeDefined();
 
     const toolCallBlock = assistantMessage?.blocks.find((block) => block.type === 'tool_call');
@@ -317,7 +322,7 @@ describe('applyRuntimeEvent — permission.requested excludes history messages (
     };
     const state = baseState({
       sessions: [makeSession()],
-      messages: [historyAssistant],
+      messages: { [SESSION_ID]: [historyAssistant] },
     });
     const event: RuntimeEvent = {
       type: 'permission.requested',
@@ -328,7 +333,7 @@ describe('applyRuntimeEvent — permission.requested excludes history messages (
     };
 
     const patch = applyRuntimeEvent(state, event);
-    const messages = patch.messages ?? [];
+    const messages = patch.messages?.[SESSION_ID] ?? [];
 
     const historyMessageAfter = messages.find((message) => message.id === 'h:asst-hist');
     expect(historyMessageAfter?.blocks.some((block) => block.type === 'permission_request')).toBe(
@@ -365,7 +370,7 @@ describe('applyRuntimeEvent — permission.requested excludes history messages (
     };
     const state = baseState({
       sessions: [makeSession()],
-      messages: [historyAssistant, runtimeAssistant],
+      messages: { [SESSION_ID]: [historyAssistant, runtimeAssistant] },
     });
     const event: RuntimeEvent = {
       type: 'permission.requested',
@@ -376,7 +381,7 @@ describe('applyRuntimeEvent — permission.requested excludes history messages (
     };
 
     const patch = applyRuntimeEvent(state, event);
-    const messages = patch.messages ?? [];
+    const messages = patch.messages?.[SESSION_ID] ?? [];
 
     const runtimeMessageAfter = messages.find((message) => message.id === 'asst-1');
     expect(

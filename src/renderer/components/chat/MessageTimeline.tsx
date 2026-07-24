@@ -20,17 +20,18 @@ interface MessageTimelineProps {
 }
 
 export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageTimelineProps) {
-  const messages = useChatSessionsStore((state) => state.messages);
+  // C-08b: subscribe to this session's bucket only — other sessions' streams
+  // no longer re-render this timeline.
+  const bucket = useChatSessionsStore((state) =>
+    sessionId ? state.messages[sessionId] : undefined
+  );
   const respondPermission = useChatSessionsStore((state) => state.respondPermission);
   const pendingPermission = useChatSessionsStore((state) => state.pendingPermission);
   const lastError = useChatSessionsStore((state) => state.lastError);
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
   const { get: getMeta } = useMessageMetadata(sessionId);
 
-  const sessionMessages = useMemo(
-    () => (sessionId ? messages.filter((message) => message.sessionId === sessionId) : []),
-    [messages, sessionId]
-  );
+  const sessionMessages = useMemo(() => bucket ?? [], [bucket]);
 
   const isActiveTurn = isTurnActive(status);
 

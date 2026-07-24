@@ -19,7 +19,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     projects: [],
     workspaces: [],
     sessions: [],
-    messages: [],
+    messages: {},
     activeSessionId: null,
     recentSessionIds: [],
     pendingPermission: null,
@@ -89,14 +89,16 @@ describe('applyRuntimeEvents — fold semantics', () => {
 
     const patch = applyRuntimeEvents(state, events);
 
-    expect(patch.messages).toEqual([
-      {
-        id: 'msg-1',
-        sessionId: SESSION_ID,
-        role: 'user',
-        blocks: [{ id: 'b1', type: 'text', text: 'Hello' }],
-      },
-    ]);
+    expect(patch.messages).toEqual({
+      [SESSION_ID]: [
+        {
+          id: 'msg-1',
+          sessionId: SESSION_ID,
+          role: 'user',
+          blocks: [{ id: 'b1', type: 'text', text: 'Hello' }],
+        },
+      ],
+    });
   });
 
   it('is equivalent to applying each event one at a time and merging every step', () => {
@@ -105,7 +107,7 @@ describe('applyRuntimeEvents — fold semantics', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_700_000_000_000);
     try {
-      const base = baseState({ sessions: [makeSession({ status: 'idle' })], messages: [] });
+      const base = baseState({ sessions: [makeSession({ status: 'idle' })], messages: {} });
       const events: RuntimeEvent[] = [
         {
           type: 'message.started',
@@ -155,7 +157,7 @@ describe('applyRuntimeEvents — fold semantics', () => {
   it('accumulates changes across independent keys (messages, sessions, pendingPermission) into one patch', () => {
     const base = baseState({
       sessions: [makeSession({ status: 'idle' })],
-      messages: [makeMessage({ id: 'msg-1', role: 'assistant', blocks: [] })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'msg-1', role: 'assistant', blocks: [] })] },
     });
     const events: RuntimeEvent[] = [
       {
@@ -259,7 +261,7 @@ describe('initRuntime — batching (RUNTIME_EVENT_FLUSH_MS / RUNTIME_EVENT_MAX_Q
 
     useChatSessionsStore.setState({
       runtimeReady: false,
-      messages: [],
+      messages: {},
       sessions: [makeSession({ status: 'idle' })],
       activeSessionId: SESSION_ID,
       recentSessionIds: [],
@@ -316,12 +318,14 @@ describe('initRuntime — batching (RUNTIME_EVENT_FLUSH_MS / RUNTIME_EVENT_MAX_Q
 
     // Not flushed yet — queued behind the 16ms timer.
     expect(listener).toHaveBeenCalledTimes(0);
-    expect(useChatSessionsStore.getState().messages).toEqual([]);
+    expect(useChatSessionsStore.getState().messages).toEqual({});
 
     vi.advanceTimersByTime(16);
 
     expect(listener).toHaveBeenCalledTimes(1);
-    const message = useChatSessionsStore.getState().messages.find((item) => item.id === 'msg-1');
+    const message = useChatSessionsStore
+      .getState()
+      .messages[SESSION_ID]?.find((item) => item.id === 'msg-1');
     expect(message?.blocks).toEqual([{ id: 'b1', type: 'text', text: 'Hello' }]);
 
     unsubscribeListener();

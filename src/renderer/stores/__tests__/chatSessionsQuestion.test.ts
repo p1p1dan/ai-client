@@ -9,7 +9,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     sessions: [
       { id: 's1', projectId: 'p1', workspaceId: 'w1', title: 's1', status: 'idle', updatedAt: 0 },
     ],
-    messages: [{ id: 'asst-1', sessionId: 's1', role: 'assistant', blocks: [] }],
+    messages: { s1: [{ id: 'asst-1', sessionId: 's1', role: 'assistant', blocks: [] }] },
     activeSessionId: null,
     recentSessionIds: [],
     pendingPermission: null,
@@ -68,7 +68,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
     const state = baseState();
     const patch = applyRuntimeEvent(state, requestedEvent('q1'));
 
-    const message = patch.messages?.find((item) => item.id === 'asst-1');
+    const message = patch.messages?.s1?.find((item) => item.id === 'asst-1');
     expect(message?.blocks).toEqual([
       {
         id: 'q1',
@@ -90,11 +90,11 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
   });
 
   it('question.requested creates a new msg-question-* message when no assistant message exists', () => {
-    const state = baseState({ messages: [] });
+    const state = baseState({ messages: {} });
     const patch = applyRuntimeEvent(state, requestedEvent('q2'));
 
-    expect(patch.messages).toHaveLength(1);
-    const message = patch.messages?.[0];
+    expect(patch.messages?.s1).toHaveLength(1);
+    const message = patch.messages?.s1?.[0];
     expect(message?.id).toBe('msg-question-q2');
     expect(message?.role).toBe('assistant');
     expect(message?.sessionId).toBe('s1');
@@ -129,7 +129,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       resolvedEvent('q1', 'answered', { answers: { 'Which approach?': 'A' } })
     );
 
-    const message = patch.messages?.find((item) => item.id === 'asst-1');
+    const message = patch.messages?.s1?.find((item) => item.id === 'asst-1');
     const block = message?.blocks.find((item) => item.id === 'q1');
     expect(block).toEqual({
       id: 'q1',
@@ -149,7 +149,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
 
     const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q1', 'cancelled'));
 
-    const message = patch.messages?.find((item) => item.id === 'asst-1');
+    const message = patch.messages?.s1?.find((item) => item.id === 'asst-1');
     const block = message?.blocks.find((item) => item.id === 'q1');
     expect(block).toEqual({
       id: 'q1',
@@ -171,7 +171,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       resolvedEvent('q1', 'rejected', { response: 'no thanks' })
     );
 
-    const message = patch.messages?.find((item) => item.id === 'asst-1');
+    const message = patch.messages?.s1?.find((item) => item.id === 'asst-1');
     const block = message?.blocks.find((item) => item.id === 'q1');
     expect(block).toEqual({
       id: 'q1',
@@ -191,7 +191,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
 
     const patch = applyRuntimeEvent(afterRequested, resolvedEvent('unknown-question', 'answered'));
 
-    const message = patch.messages?.find((item) => item.id === 'asst-1');
+    const message = patch.messages?.s1?.find((item) => item.id === 'asst-1');
     // Block for q1 is untouched — still unresolved — because the resolved event targeted a different id.
     expect(message?.blocks.find((item) => item.id === 'q1')).toEqual({
       id: 'q1',

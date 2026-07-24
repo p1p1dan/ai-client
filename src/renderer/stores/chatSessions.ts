@@ -90,7 +90,9 @@ export interface ChatSessionsState {
   projects: ChatProject[];
   workspaces: ChatWorkspace[];
   sessions: ChatSession[];
-  messages: ChatMessage[];
+  /** Timeline messages bucketed by sessionId (C-08b): delta application and
+   *  consumer selectors touch one bucket, never the whole message set. */
+  messages: Record<string, ChatMessage[]>;
   activeSessionId: string | null;
   recentSessionIds: string[];
   pendingPermission: PendingPermission | null;
@@ -153,20 +155,22 @@ const DEMO_SESSIONS: ChatSession[] = [
   },
 ];
 
-const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    id: 'msg-seed-1',
-    sessionId: 'session-welcome',
-    role: 'assistant',
-    blocks: [
-      {
-        id: 'block-seed-1',
-        type: 'text',
-        text: 'OpenChamber Workspace Shell is wired to the real Agent Host. Select “Live Agent Host” and send a message.',
-      },
-    ],
-  },
-];
+const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
+  'session-welcome': [
+    {
+      id: 'msg-seed-1',
+      sessionId: 'session-welcome',
+      role: 'assistant',
+      blocks: [
+        {
+          id: 'block-seed-1',
+          type: 'text',
+          text: 'OpenChamber Workspace Shell is wired to the real Agent Host. Select “Live Agent Host” and send a message.',
+        },
+      ],
+    },
+  ],
+};
 
 function upsertSessionStatus(
   sessions: ChatSession[],
@@ -178,14 +182,22 @@ function upsertSessionStatus(
   );
 }
 
-function upsertMessage(messages: ChatMessage[], message: ChatMessage): ChatMessage[] {
-  const index = messages.findIndex((item) => item.id === message.id);
+function upsertMessage(bucket: ChatMessage[], message: ChatMessage): ChatMessage[] {
+  const index = bucket.findIndex((item) => item.id === message.id);
   if (index === -1) {
-    return [...messages, message];
+    return [...bucket, message];
   }
-  const next = [...messages];
+  const next = [...bucket];
   next[index] = message;
   return next;
+}
+
+function withBucket(
+  state: ChatSessionsState,
+  sessionId: string,
+  bucket: ChatMessage[]
+): Record<string, ChatMessage[]> {
+  return { ...state.messages, [sessionId]: bucket };
 }
 
 /**
@@ -300,23 +312,16 @@ export function applyRuntimeEvent(
       const { payload } = event;
 
       // Idempotent prefix replace: drop this session's previously hydrated
-      // `h:*` messages; runtime messages (user-*/asst-*/error) are untouched.
-      const withoutOldHistory = state.messages.filter(
-        (message) =>
-          !(message.sessionId === sessionId && message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX))
+      // `h:*` messages; runtime messages (user-*/asst-*/error) are untouched
+      // and history always precedes them in the bucket.
+      const bucket = state.messages[sessionId] ?? [];
+      const withoutOldHistory = bucket.filter(
+        (message) => !message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
       );
-      const insertIndex = withoutOldHistory.findIndex((message) => message.sessionId === sessionId);
       const historyMessages = payload.messages.map((historyMessage) =>
         mapHistoryMessageToChatMessage(sessionId, historyMessage)
       );
-      const messages =
-        insertIndex === -1
-          ? [...withoutOldHistory, ...historyMessages]
-          : [
-              ...withoutOldHistory.slice(0, insertIndex),
-              ...historyMessages,
-              ...withoutOldHistory.slice(insertIndex),
-            ];
+      const messages = withBucket(state, sessionId, [...historyMessages, ...withoutOldHistory]);
 
       // Row creation is T-02's responsibility; only enrich an existing row.
       // updatedAt takes the last history message's timestamp — never Date.now(),
@@ -379,20 +384,23 @@ export function applyRuntimeEvent(
         role: event.payload.role,
         blocks: [],
       };
-      return { messages: upsertMessage(state.messages, message) };
+      const bucket = state.messages[sessionId] ?? [];
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, message)) };
     }
 
     case 'message.delta': {
-      const existing = state.messages.find((item) => item.id === event.payload.messageId);
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing) {
         return {};
       }
       const updated = appendTextBlock(existing, event.payload.blockId, event.payload.text);
-      return { messages: upsertMessage(state.messages, updated) };
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
     }
 
     case 'thinking.started': {
-      const existing = state.messages.find((item) => item.id === event.payload.messageId);
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing || existing.blocks.some((block) => block.id === event.payload.blockId)) {
         return {};
       }
@@ -400,11 +408,12 @@ export function applyRuntimeEvent(
         ...existing,
         blocks: [...existing.blocks, { id: event.payload.blockId, type: 'thinking', text: '' }],
       };
-      return { messages: upsertMessage(state.messages, updated) };
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
     }
 
     case 'thinking.delta': {
-      const existing = state.messages.find((item) => item.id === event.payload.messageId);
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing) {
         return {};
       }
@@ -414,11 +423,12 @@ export function applyRuntimeEvent(
         event.payload.text,
         'thinking'
       );
-      return { messages: upsertMessage(state.messages, updated) };
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
     }
 
     case 'tool.started': {
-      const existing = state.messages.find((item) => item.id === event.payload.messageId);
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing) {
         return {};
       }
@@ -435,11 +445,12 @@ export function applyRuntimeEvent(
           },
         ],
       };
-      return { messages: upsertMessage(state.messages, updated) };
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
     }
 
     case 'tool.completed': {
-      const existing = state.messages.find((item) => item.id === event.payload.messageId);
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing) {
         return {};
       }
@@ -457,17 +468,15 @@ export function applyRuntimeEvent(
           },
         ],
       };
-      return { messages: upsertMessage(state.messages, updated) };
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
     }
 
     case 'permission.requested': {
-      const existing = [...state.messages]
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = [...bucket]
         .reverse()
         .find(
-          (item) =>
-            item.sessionId === sessionId &&
-            item.role === 'assistant' &&
-            !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+          (item) => item.role === 'assistant' && !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
         );
       const messageId = existing?.id ?? `msg-perm-${event.payload.permissionId}`;
       const baseMessage =
@@ -496,7 +505,7 @@ export function applyRuntimeEvent(
       };
 
       return {
-        messages: upsertMessage(state.messages, updated),
+        messages: withBucket(state, sessionId, upsertMessage(bucket, updated)),
         pendingPermission: {
           sessionId,
           permissionId: event.payload.permissionId,
@@ -508,25 +517,19 @@ export function applyRuntimeEvent(
 
     case 'permission.resolved': {
       const { permissionId, allow } = event.payload;
-      if (!permissionId) {
+      const bucket = state.messages[sessionId];
+      if (!permissionId || !bucket) {
         return { pendingPermission: null };
       }
 
-      const messages = state.messages.map((message) => {
-        if (message.sessionId !== sessionId) {
-          return message;
-        }
-        return {
-          ...message,
-          blocks: message.blocks.map((block) =>
-            block.permissionId === permissionId
-              ? { ...block, resolved: true, allowed: allow }
-              : block
-          ),
-        };
-      });
+      const nextBucket = bucket.map((message) => ({
+        ...message,
+        blocks: message.blocks.map((block) =>
+          block.permissionId === permissionId ? { ...block, resolved: true, allowed: allow } : block
+        ),
+      }));
 
-      return { messages, pendingPermission: null };
+      return { messages: withBucket(state, sessionId, nextBucket), pendingPermission: null };
     }
 
     case 'question.requested': {
@@ -535,13 +538,11 @@ export function applyRuntimeEvent(
         return {};
       }
 
-      const existing = [...state.messages]
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = [...bucket]
         .reverse()
         .find(
-          (item) =>
-            item.sessionId === sessionId &&
-            item.role === 'assistant' &&
-            !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+          (item) => item.role === 'assistant' && !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
         );
       const messageId = existing?.id ?? `msg-question-${questionId}`;
       const baseMessage =
@@ -568,7 +569,7 @@ export function applyRuntimeEvent(
       };
 
       return {
-        messages: upsertMessage(state.messages, updated),
+        messages: withBucket(state, sessionId, upsertMessage(bucket, updated)),
         pendingQuestion: {
           sessionId,
           questionId,
@@ -580,31 +581,27 @@ export function applyRuntimeEvent(
 
     case 'question.resolved': {
       const { questionId, outcome, answers, response } = event.payload;
-      if (!questionId) {
+      const bucket = state.messages[sessionId];
+      if (!questionId || !bucket) {
         return { pendingQuestion: null };
       }
 
-      const messages = state.messages.map((message) => {
-        if (message.sessionId !== sessionId) {
-          return message;
-        }
-        return {
-          ...message,
-          blocks: message.blocks.map((block) =>
-            block.questionId === questionId
-              ? {
-                  ...block,
-                  resolved: true,
-                  questionOutcome: outcome,
-                  ...(answers ? { questionAnswers: answers } : {}),
-                  ...(response ? { questionResponse: response } : {}),
-                }
-              : block
-          ),
-        };
-      });
+      const nextBucket = bucket.map((message) => ({
+        ...message,
+        blocks: message.blocks.map((block) =>
+          block.questionId === questionId
+            ? {
+                ...block,
+                resolved: true,
+                questionOutcome: outcome,
+                ...(answers ? { questionAnswers: answers } : {}),
+                ...(response ? { questionResponse: response } : {}),
+              }
+            : block
+        ),
+      }));
 
-      return { messages, pendingQuestion: null };
+      return { messages: withBucket(state, sessionId, nextBucket), pendingQuestion: null };
     }
 
     default:
@@ -711,15 +708,18 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       set({
         lastError: message,
         sessions: upsertSessionStatus(get().sessions, activeSessionId, 'failed'),
-        messages: [
+        messages: {
           ...get().messages,
-          {
-            id: `msg-error-${Date.now()}`,
-            sessionId: activeSessionId,
-            role: 'error',
-            blocks: [{ id: `err-${Date.now()}`, type: 'text', text: message }],
-          },
-        ],
+          [activeSessionId]: [
+            ...(get().messages[activeSessionId] ?? []),
+            {
+              id: `msg-error-${Date.now()}`,
+              sessionId: activeSessionId,
+              role: 'error',
+              blocks: [{ id: `err-${Date.now()}`, type: 'text', text: message }],
+            },
+          ],
+        },
       });
     }
   },
