@@ -116,18 +116,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare vflow offline-fallback resources
-        run: node scripts/prepare-vflow-resources.mjs
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
+      # src/agent-host is a standalone npm project; npm ci must include optional
+      # deps so the cometix postinstall can copy cli.js + vendor/.
+      - name: Install agent-host dependencies
+        run: npm ci
+        working-directory: src/agent-host
 
-      - name: Assert vflow offline-fallback resources
-        run: node scripts/assert-vflow-resources.mjs
+      - name: Build agent-host artifact
+        run: node scripts/build-agent-host.mjs
 
       - name: Build Windows
         run: npx electron-builder --win --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify packaged agent-host (structure)
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --skip-smoke
 
   build-linux:
     needs: build-app
@@ -178,18 +183,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare vflow offline-fallback resources
-        run: node scripts/prepare-vflow-resources.mjs
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
+      - name: Install agent-host dependencies
+        run: npm ci
+        working-directory: src/agent-host
 
-      - name: Assert vflow offline-fallback resources
-        run: node scripts/assert-vflow-resources.mjs
+      - name: Build agent-host artifact
+        run: node scripts/build-agent-host.mjs
 
       - name: Build Linux
         run: npx electron-builder --linux --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify packaged agent-host (structure)
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --skip-smoke
 
   build-remote-runtime-linux:
     strategy:

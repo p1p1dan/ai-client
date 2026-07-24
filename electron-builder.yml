@@ -151,18 +151,11 @@ extraResources:
     filter:
       - "package.json"
       - "lib/**/*"
-  # Embedded vflow fallback (used when npm install fails)
-  - from: resources/vflow
-    to: vflow
-  # Offline npm tgz of @p1p1dan/vflow — installed via `npm install -g <tgz>` when
-  # the public registry is unreachable (AgentInstaller fallback path).
-  - from: resources/vflow-pkg
-    to: vflow-pkg
-  # Agent Host (external Node 24 process), built by scripts/build-agent-host.mjs.
-  # Must stay plain files under resources/agent-host (never asar): on TSD
-  # machines only the whitelisted external node.exe can read these files.
-  - from: out-agent-host
-    to: agent-host
+  # NOTE: the Agent Host artifact (out-agent-host -> resources/agent-host) is
+  # deliberately NOT an extraResources entry — electron-builder drops its
+  # node_modules tree and the parallel copy races rcedit. It is copied by
+  # scripts/afterPack.mjs instead (plain files, never asar: on TSD machines
+  # only the whitelisted external node.exe can read them).
 compression: maximum
 
 mac:

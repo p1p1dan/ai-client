@@ -74,14 +74,18 @@ function preflight() {
     fail('cometix vendor/ missing — broken postinstall copy?');
   }
 
+  // node-pty ships prebuilds only for darwin/win32; on linux it compiles at
+  // install time into build/Release. Accept either layout (loader checks
+  // build/Release first, then prebuilds/<platform>-<arch>).
   const prebuild = path.join(
     hostNodeModules,
     'node-pty',
     'prebuilds',
     `${process.platform}-${process.arch}`
   );
-  if (!fs.existsSync(prebuild)) {
-    fail(`node-pty prebuild missing for ${process.platform}-${process.arch}`);
+  const buildRelease = path.join(hostNodeModules, 'node-pty', 'build', 'Release');
+  if (!fs.existsSync(prebuild) && !fs.existsSync(buildRelease)) {
+    fail(`node-pty native binary missing for ${process.platform}-${process.arch}`);
   }
 
   return pins;
@@ -117,6 +121,10 @@ function topPackage(parts) {
   return parts[0].startsWith('@') && parts.length >= 2 ? `${parts[0]}/${parts[1]}` : parts[0];
 }
 
+const hasPtyPrebuild = fs.existsSync(
+  path.join(hostNodeModules, 'node-pty', 'prebuilds', `${process.platform}-${process.arch}`)
+);
+
 function shouldCopy(rel) {
   if (rel === '') return true;
   const parts = rel.split('/');
@@ -135,6 +143,13 @@ function shouldCopy(rel) {
     if (parts[1] === 'prebuilds') {
       if (parts.length === 2) return true;
       return parts[2] === `${process.platform}-${process.arch}`;
+    }
+    // Linux only: install-time compile lands in build/Release (no prebuilds).
+    // When an official prebuild exists (darwin/win32), skip build/ entirely —
+    // the loader prefers build/Release and must not pick up a local compile.
+    if (parts[1] === 'build' && !hasPtyPrebuild) {
+      if (parts.length === 2) return true;
+      return parts[2] === 'Release';
     }
     return false;
   }
@@ -188,10 +203,16 @@ function verifyArtifact(pins) {
     'node_modules/@cometix/claude-code/cli.js',
     'node_modules/@cometix/claude-code/vendor',
     'node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs',
-    `node_modules/node-pty/prebuilds/${process.platform}-${process.arch}`,
   ];
   for (const rel of mustExist) {
     if (!fs.existsSync(path.join(outDir, rel))) fail(`artifact incomplete: missing ${rel}`);
+  }
+  const ptyBinaries = [
+    `node_modules/node-pty/prebuilds/${process.platform}-${process.arch}`,
+    'node_modules/node-pty/build/Release',
+  ];
+  if (!ptyBinaries.some((rel) => fs.existsSync(path.join(outDir, rel)))) {
+    fail(`artifact incomplete: missing node-pty native binary (${ptyBinaries.join(' or ')})`);
   }
   const mustNotExist = [
     `node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`,

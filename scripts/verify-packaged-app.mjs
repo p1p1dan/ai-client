@@ -108,11 +108,15 @@ function checkStructure(appDir) {
     'node_modules/@cometix/claude-code/cli.js',
     'node_modules/@cometix/claude-code/vendor',
     'node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs',
-    `node_modules/node-pty/prebuilds/${platformArch}`,
   ];
   for (const rel of mustExist) {
     check(`agent-host/${rel}`, fs.existsSync(path.join(hostDir, rel)));
   }
+  check(
+    'agent-host node-pty native binary',
+    fs.existsSync(path.join(hostDir, 'node_modules', 'node-pty', 'prebuilds', platformArch)) ||
+      fs.existsSync(path.join(hostDir, 'node_modules', 'node-pty', 'build', 'Release'))
+  );
   const mustNotExist = [
     `node_modules/@anthropic-ai/claude-agent-sdk-${platformArch}`,
     `node_modules/@cometix/claude-code-${platformArch}`,
@@ -176,7 +180,10 @@ function node24Candidates() {
     } catch {
       continue;
     }
-    const versions = entries.filter((name) => /^v?24\./.test(name)).sort().reverse();
+    const versions = entries
+      .filter((name) => /^v?24\./.test(name))
+      .sort()
+      .reverse();
     for (const v of versions) {
       candidates.push({ path: path.join(root, v, binary), source: 'nvm' });
     }
@@ -292,7 +299,9 @@ async function main() {
   }
 
   if (failures.length > 0) {
-    console.error(`[verify-packaged-app] FAIL — ${failures.length} check(s): ${failures.join('; ')}`);
+    console.error(
+      `[verify-packaged-app] FAIL — ${failures.length} check(s): ${failures.join('; ')}`
+    );
     process.exit(1);
   }
   console.log('[verify-packaged-app] PASS');

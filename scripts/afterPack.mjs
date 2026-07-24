@@ -15,6 +15,8 @@ import path from 'node:path';
  *   2. PowerShell copies .tmp.bin → original path (result is unencrypted)
  */
 export default async function afterPack(context) {
+  copyAgentHost(context);
+
   if (process.platform !== 'win32') return;
 
   const targets = [
@@ -26,6 +28,30 @@ export default async function afterPack(context) {
   for (const dir of targets) {
     fixTsdEncryption(dir);
   }
+}
+
+/**
+ * Copy the Agent Host artifact into resources/agent-host.
+ *
+ * Done here instead of extraResources for two reasons:
+ *   1. electron-builder injects !**\/node_modules\/** into every extraResources
+ *      copy (app-builder-lib fileMatcher), silently dropping the artifact's
+ *      node_modules tree.
+ *   2. The 87MB parallel copy raced rcedit's version-resource rewrite of
+ *      AiClient.exe ("Unable to commit changes"); afterPack runs sequentially
+ *      after packing, so there is no contention.
+ */
+function copyAgentHost(context) {
+  const src = path.join(context.packager.info.projectDir, 'out-agent-host');
+  if (!fs.existsSync(path.join(src, 'index.js'))) {
+    throw new Error(
+      `[afterPack] out-agent-host missing or incomplete at ${src} — run "pnpm build:agent-host" first`
+    );
+  }
+  const dest = path.join(context.appOutDir, 'resources', 'agent-host');
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.cpSync(src, dest, { recursive: true });
+  console.log(`[afterPack] Copied agent-host artifact -> ${dest}`);
 }
 
 function fixTsdEncryption(rootDir) {
