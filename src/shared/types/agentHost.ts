@@ -56,11 +56,27 @@ export interface SessionResumeCommand extends AgentHostCommandBase {
   };
 }
 
+/**
+ * Attachment carried on session.send (C-13, user feedback F2).
+ * kind=image: data is base64-encoded bytes; kind=text: data is the raw text.
+ * File paths never enter the protocol — Renderer reads and encodes locally.
+ */
+export interface SessionAttachment {
+  kind: 'image' | 'text';
+  /** MIME type, e.g. image/png, text/plain. */
+  mediaType: string;
+  data: string;
+  /** Display / document title, e.g. the pasted file name. */
+  name?: string;
+}
+
 export interface SessionSendCommand extends AgentHostCommandBase {
   type: 'session.send';
   payload: {
     sessionId: string;
+    /** May be empty when attachments are present (attachment-only send). */
     text: string;
+    attachments?: SessionAttachment[];
   };
 }
 

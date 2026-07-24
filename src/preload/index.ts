@@ -1342,8 +1342,16 @@ const electronAPI = {
       model?: string;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
-    send: (payload: { sessionId: string; text: string }): Promise<{ requestId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload),
+    send: (payload: {
+      sessionId: string;
+      text: string;
+      attachments?: Array<{
+        kind: 'image' | 'text';
+        mediaType: string;
+        data: string;
+        name?: string;
+      }>;
+    }): Promise<{ requestId: string }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload),
     stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
     closeSession: (payload: { sessionId: string }): Promise<{ requestId: string }> =>

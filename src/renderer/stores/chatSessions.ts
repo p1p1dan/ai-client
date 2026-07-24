@@ -4,6 +4,17 @@ import { create } from 'zustand';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
 
+/**
+ * Attachment accepted by sendMessage (C-13 protocol; T-18 Composer paste).
+ * kind=image: data is base64; kind=text: data is the raw text content.
+ */
+export interface ChatSendAttachment {
+  kind: 'image' | 'text';
+  mediaType: string;
+  data: string;
+  name?: string;
+}
+
 export type ChatBlockType =
   | 'text'
   | 'thinking'
@@ -92,7 +103,7 @@ export interface ChatSessionsState {
   historyErrors: Record<string, string>;
 
   selectSession: (sessionId: string) => void;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
   stopActiveSession: () => Promise<void>;
   respondPermission: (allow: boolean) => void;
   respondQuestion: (input: {
@@ -629,11 +640,11 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     set({ activeSessionId: sessionId });
   },
 
-  sendMessage: async (text) => {
+  sendMessage: async (text, attachments) => {
     const trimmed = text.trim();
     const state = get();
     const { activeSessionId } = state;
-    if (!trimmed || !activeSessionId) {
+    if ((!trimmed && !attachments?.length) || !activeSessionId) {
       return;
     }
 
@@ -668,6 +679,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       await window.electronAPI.chat.send({
         sessionId: activeSessionId,
         text: trimmed,
+        ...(attachments?.length ? { attachments } : {}),
       });
       set({ lastError: null });
     } catch (err) {

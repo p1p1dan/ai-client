@@ -6,7 +6,7 @@
  */
 
 import { createInterface } from 'node:readline';
-import type { AgentHostDriver } from '../shared/types/agentHost.ts';
+import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHost.ts';
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import { ClaudeRuntime } from './claudeRuntime.ts';
 import { loadClaudeSettingsEnv } from './claudeSettings.ts';
@@ -274,20 +274,71 @@ async function handleCommand(raw: unknown): Promise<void> {
       const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
       const text = String(cmd.payload?.text ?? '');
-      if (!sessionId || !text) {
+      const rawAttachments = cmd.payload?.attachments;
+      let attachments: SessionAttachment[] | undefined;
+      if (rawAttachments !== undefined) {
+        if (!Array.isArray(rawAttachments)) {
+          emit({
+            type: 'host.error',
+            requestId: cmd.requestId,
+            payload: {
+              code: 'invalid_payload',
+              message: 'session.send attachments must be an array',
+              fatal: false,
+            },
+          });
+          return;
+        }
+        attachments = [];
+        for (const [index, entry] of rawAttachments.entries()) {
+          const a = entry as {
+            kind?: unknown;
+            mediaType?: unknown;
+            data?: unknown;
+            name?: unknown;
+          } | null;
+          const valid =
+            a &&
+            typeof a === 'object' &&
+            (a.kind === 'image' || a.kind === 'text') &&
+            typeof a.mediaType === 'string' &&
+            a.mediaType.length > 0 &&
+            typeof a.data === 'string' &&
+            a.data.length > 0;
+          if (!valid) {
+            emit({
+              type: 'host.error',
+              requestId: cmd.requestId,
+              payload: {
+                code: 'invalid_payload',
+                message: `session.send attachments[${index}] needs kind image|text, mediaType and data`,
+                fatal: false,
+              },
+            });
+            return;
+          }
+          attachments.push({
+            kind: a.kind as 'image' | 'text',
+            mediaType: a.mediaType as string,
+            data: a.data as string,
+            ...(typeof a.name === 'string' && a.name ? { name: a.name } : {}),
+          });
+        }
+      }
+      if (!sessionId || (!text && !attachments?.length)) {
         emit({
           type: 'host.error',
           requestId: cmd.requestId,
           payload: {
             code: 'invalid_payload',
-            message: 'session.send requires sessionId and text',
+            message: 'session.send requires sessionId and text (or attachments)',
             fatal: false,
           },
         });
         return;
       }
       // Fire-and-forget: events stream on stdout while command loop continues.
-      void rt.send({ sessionId, text, requestId: cmd.requestId }).catch((err) => {
+      void rt.send({ sessionId, text, attachments, requestId: cmd.requestId }).catch((err) => {
         log('session.send unhandled:', err);
       });
       return;

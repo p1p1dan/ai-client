@@ -3,7 +3,7 @@
  * Emits AiClient Runtime Events via EventNormalizer; no Electron deps.
  */
 
-import type { AgentHostDriver } from '../shared/types/agentHost.ts';
+import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHost.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
@@ -23,9 +23,51 @@ export interface ClaudeRuntimeOptions {
 }
 
 type SdkQueryFn = (params: {
-  prompt: string;
+  prompt: string | AsyncIterable<Record<string, unknown>>;
   options?: Record<string, unknown>;
 }) => AsyncIterable<unknown> & { close?: () => void };
+
+/**
+ * C-13: attachments ride as content blocks inside a single-message stream
+ * (query() accepts AsyncIterable<SDKUserMessage>; plain sends keep the
+ * string prompt path untouched). Shapes verified by c13-attachment-probe.
+ */
+function buildPromptWithAttachments(
+  text: string,
+  attachments: SessionAttachment[]
+): AsyncIterable<Record<string, unknown>> {
+  const content: Record<string, unknown>[] = [];
+  if (text) content.push({ type: 'text', text });
+  for (const attachment of attachments) {
+    if (attachment.kind === 'image') {
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: attachment.mediaType,
+          data: attachment.data,
+        },
+      });
+    } else {
+      content.push({
+        type: 'document',
+        source: {
+          type: 'text',
+          media_type: attachment.mediaType || 'text/plain',
+          data: attachment.data,
+        },
+        ...(attachment.name ? { title: attachment.name } : {}),
+      });
+    }
+  }
+  return (async function* oneUserMessage() {
+    yield {
+      type: 'user',
+      message: { role: 'user', content },
+      parent_tool_use_id: null,
+    };
+  })();
+}
 
 /**
  * C-14 stall watchdog default: a turn whose SDK stream produces no events at
@@ -198,7 +240,12 @@ export class ClaudeRuntime {
     });
   }
 
-  async send(input: { sessionId: string; text: string; requestId?: string }): Promise<void> {
+  async send(input: {
+    sessionId: string;
+    text: string;
+    attachments?: SessionAttachment[];
+    requestId?: string;
+  }): Promise<void> {
     const session = this.opts.registry.get(input.sessionId);
     if (!session) {
       this.opts.emit({
@@ -322,10 +369,14 @@ export class ClaudeRuntime {
       'stream_event',
     ]);
 
+    const prompt = input.attachments?.length
+      ? buildPromptWithAttachments(input.text, input.attachments)
+      : input.text;
+
     let stream: (AsyncIterable<unknown> & { close?: () => void }) | null = null;
     try {
       stream = queryFn({
-        prompt: input.text,
+        prompt,
         options: {
           cwd: session.workspacePath,
           pathToClaudeCodeExecutable: this.opts.cliPath,

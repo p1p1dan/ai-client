@@ -75,7 +75,19 @@ export function registerChatHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_SEND,
-    async (_e, payload: { sessionId: string; text: string }): Promise<{ requestId: string }> => {
+    async (
+      _e,
+      payload: {
+        sessionId: string;
+        text: string;
+        attachments?: Array<{
+          kind: 'image' | 'text';
+          mediaType: string;
+          data: string;
+          name?: string;
+        }>;
+      }
+    ): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.sendMessage(payload);
       return { requestId };
     }
