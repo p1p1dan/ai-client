@@ -2,7 +2,9 @@ import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { ChatComposer } from './ChatComposer';
+import { HostStatusBanner } from './HostStatusBanner';
 import { MessageTimeline } from './MessageTimeline';
+import { useHostStatus } from './useHostStatus';
 
 interface ChatWorkspaceProps {
   className?: string;
@@ -13,6 +15,7 @@ export function ChatWorkspace({ className }: ChatWorkspaceProps) {
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const selectSession = useChatSessionsStore((state) => state.selectSession);
+  const { status: hostStatus, retry } = useHostStatus();
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
 
@@ -39,6 +42,7 @@ export function ChatWorkspace({ className }: ChatWorkspaceProps) {
 
   return (
     <section className={cn('flex min-h-0 flex-col', className)}>
+      <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
       <MessageTimeline sessionId={activeSessionId} status={activeSession?.status ?? 'idle'} />
       <ChatComposer disabled={!activeSessionId} />
     </section>

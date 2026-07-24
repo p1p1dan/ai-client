@@ -17,7 +17,7 @@
 | T-06 | 消息元数据 + 错误/重试 | ⬜ | | 无依赖 |
 | T-07 | Composer @ 文件引用 | ⬜ | | 无依赖 |
 | T-08 | Model 选择器 | 🟡 | Fable | 实现完成待 GUI 复验；源：常量短名列表 + `host.ready.settings.model` 默认；`createSession({model})` 已带（Host 接收）；`useSessionModel` 存 session→model 映射 |
-| T-09 | 空/错/断状态 + 诊断面板 | ⬜ | | 无依赖 |
+| T-09 | 空/错/断状态 + 诊断面板 | 🟡 | Fable | Agent Host 未就绪/Node 24 缺失/断连 ribbon 已做，待 GUI 复验 |
 | T-10 | 打包版 GUI 手工点验 | ⬜ | | 等 C-02，→ CP2 |
 | T-11 | **M2 加密机验收（现场）** | ⬜ | | 等 T-10，→ CP5 |
 | T-12 | Phase 4：右栏 Git 面板 | ⬜ | | M3 后 |
@@ -55,6 +55,7 @@
 | 2026-07-24 | 接手解阻：Composer 进度门误触发 + user 消息双写 | ✅ 已闭环 | 提交 `b55c859`。根因详述见下文「接手解阻详述」。三绿：typecheck 绿、biome（改 3 文件）绿、vitest 103 绿（+5 新）。 |
 | 2026-07-24 | T-17 + T-01 GUI 验收 | ✅ 通过 | 凭证 `CLAUDE_CONFIG_DIR=C:\Users\13927\AppData\Local\Temp\aiclient-gui-test-config`（`pnpm prepare:test-config` 等价）。① PONG：一条 user + assistant `PONG`，无重复、无永驻 Running（主线 `6a633d6` 补 stream-end 终态 + 团队 `b55c859` 修 Composer 进度门/双写共同生效）。② Write→Allow→`PING.txt` 落盘。③ T-01 pwd：左栏选真实 worktree→New→发 `pwd`，assistant 返回地址正确。同提交翻转 `SKIP_ONBOARDING_GATE` 回 false（清理提交）。 |
 | 2026-07-24 | T-08 Model 选择器（实现） | 🟡 待 GUI 复验 | Fable 认领。Composer 加 `<ModelSelect>`（@coss/ui Select h-6 小尺寸）：源 `models.ts` 常量短名列表（sonnet/haiku/opus）+ `host.ready.settings.model` 默认（不在列表则前置）；`useSessionModel`（localStorage `aiclient:chat:session-models`，守卫 JSON.parse）存 `sessionId→modelId` 映射；`ChatComposer.handleSend` 读 `getSessionModel` 传 `createSession({sessionId, workspacePath, model})`（Host `claudeRuntime.ts:187` 已接收 payload.model）。§12 验证先行：`models.test.ts` 6 单测覆盖兜底/首选/前置未知默认；typecheck 绿、biome（改 5 文件）绿、vitest 117 绿（+6）。GUI 复验：选 Opus→send→Host 用 Opus 跑（看 `host.ready`/stream 日志或回包模型）。 |
+| 2026-07-24 | T-09 诊断面板（实现） | 🟡 待 GUI 复验 | Fable 认领。`hostStatus.ts` 纯 reducer：`reduceHostStatus` 折 `host.ready`→吸收 nodeVersion/nodeExecPath/cometix/settings 脱敏态；fatal `host.error`→state=error+lastFatalError；非 fatal 忽略（不遮蔽就绪态）。`isNode24ResolutionFailure` 匹配 resolver 错误文案（`/node 24|AICLIENT_NODE24_PATH/i`）。`useHostStatus`：mount 调 `getHostStatus()` 求初值 + 订阅 `onRuntimeEvent` 折叠 + 10s 轮询（主进程清 pid 探 Host 进程死亡）。`HostStatusBanner`：state≠ready 才显示（destructive for error、amber for stopped/starting），Node 24 缺失给「设 `AICLIENT_NODE24_PATH`」指引 + Retry（`ensureHost`）；诊断 inline 行（auth/baseUrl/baseHost/model/pid）。集成 `ChatWorkspace` 时间线之上。§12 验证先行：`hostStatus.test.ts` 7 单测（ready 吸收 / shuttingDown→stopped / fatal→error / 非 fatal 忽略 / Node 失败文案匹配 / 无关事件忽略）。三绿：typecheck、biome（改 5 文件）、vitest 124 绿（+7 无回归）。GUI 复验：① 改坏 `AICLIENT_NODE24_PATH` → 启动后见红 banner+指引→Retry 拉起；② 杀 Host 进程 → amber「已停止」→ Retry 恢复；③ ready 后 banner 自动收回。 |
 
 ## 给同事的快速上手
 
