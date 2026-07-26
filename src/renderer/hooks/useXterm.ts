@@ -426,8 +426,8 @@ export function useXterm({
                     rootPath: basePath,
                     maxResults: 1,
                   });
-                  if (results?.length > 0) {
-                    absolutePath = results[0].path;
+                  if (results.items.length > 0) {
+                    absolutePath = results.items[0].path;
                     exists = true;
                   }
                 } catch (error) {

@@ -168,7 +168,7 @@ export function EnhancedInput({
     const timer = setTimeout(() => {
       window.electronAPI.search
         .files({ rootPath: cwd, query: mentionQuery, maxResults: 10 })
-        .then(setMentionResults)
+        .then((page) => setMentionResults(page.items))
         .catch(() => setMentionResults([]));
     }, 150);
     return () => clearTimeout(timer);

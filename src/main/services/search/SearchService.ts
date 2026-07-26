@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { basename, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import type {
   ContentSearchMatch,
   ContentSearchParams,
   ContentSearchResult,
+  FileSearchPage,
   FileSearchParams,
   FileSearchResult,
 } from '@shared/types';
@@ -42,6 +43,102 @@ const rgPath = originalRgPath.replace(/\.asar([\\/])/, '.asar.unpacked$1');
  */
 export function toPosixRelative(rootPath: string, filePath: string): string {
   return relative(rootPath, filePath).replace(/\\/g, '/');
+}
+
+/** Raw entry (file or derived directory) before fuzzy scoring. */
+export interface SearchFileEntry {
+  path: string;
+  name: string;
+  relativePath: string;
+  isDirectory: boolean;
+}
+
+/**
+ * T-07①: derive selectable directory entries from a file list.
+ *
+ * `rg --files` emits files only, so `@src/renderer` could never be picked even
+ * though it is a valid reference (CC reads the whole subtree). Every ancestor
+ * segment of each file path becomes a directory entry, deduplicated. Derived
+ * rather than statted so this stays a pure function over rg's output — no extra
+ * syscalls, and unit-testable without a fixture tree.
+ */
+export function collectDirectoryEntries(
+  rootPath: string,
+  entries: SearchFileEntry[]
+): SearchFileEntry[] {
+  const seen = new Set<string>();
+  const dirs: SearchFileEntry[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+    const segments = entry.relativePath.split('/');
+    // Last segment is the file itself.
+    for (let i = 1; i < segments.length; i += 1) {
+      const rel = segments.slice(0, i).join('/');
+      if (!rel || seen.has(rel)) continue;
+      seen.add(rel);
+      dirs.push({
+        path: join(rootPath, rel),
+        name: segments[i - 1],
+        relativePath: rel,
+        isDirectory: true,
+      });
+    }
+  }
+  return dirs;
+}
+
+/**
+ * T-07④: total order over scored results.
+ *
+ * Equal fuzzy scores previously fell through to ripgrep's emission order, so the
+ * popup's top hit could differ between identical queries and no test could pin
+ * it. Ties break on path depth (shallower first — `index.ts` beats
+ * `src/renderer/deep/index.ts`), then alphabetically for a total order.
+ */
+export function compareFileResults(a: FileSearchResult, b: FileSearchResult): number {
+  if (b.score !== a.score) return b.score - a.score;
+  const depthA = a.relativePath.split('/').length;
+  const depthB = b.relativePath.split('/').length;
+  if (depthA !== depthB) return depthA - depthB;
+  return a.relativePath.localeCompare(b.relativePath);
+}
+
+/**
+ * T-07③: rank entries into a page that reports its own truncation.
+ *
+ * Searching `chat` in this repo matched 304 files while the popup rendered 10
+ * with no hint the rest existed. `total` is the count *before* slicing.
+ */
+export function rankFileEntries(
+  entries: SearchFileEntry[],
+  query: string,
+  maxResults: number
+): FileSearchPage {
+  if (!query.trim()) {
+    const sorted = entries
+      .map((entry) => ({ ...entry, score: 0 }))
+      .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+    return {
+      items: sorted.slice(0, maxResults),
+      total: sorted.length,
+      truncated: sorted.length > maxResults,
+    };
+  }
+
+  const scored = entries
+    .map((entry) => {
+      const nameScore = fuzzyMatch(query, entry.name);
+      const pathScore = fuzzyMatch(query, entry.relativePath) * 0.8;
+      return { ...entry, score: Math.max(nameScore, pathScore) };
+    })
+    .filter((r) => r.score > 0)
+    .sort(compareFileResults);
+
+  return {
+    items: scored.slice(0, maxResults),
+    total: scored.length,
+    truncated: scored.length > maxResults,
+  };
 }
 
 // 模糊匹配分数计算
@@ -83,13 +180,15 @@ function fuzzyMatch(query: string, target: string): number {
 }
 
 // 使用 ripgrep 获取所有文件列表
-async function getAllFilesWithRipgrep(
-  rootPath: string
-): Promise<{ path: string; name: string; relativePath: string }[]> {
+async function getAllFilesWithRipgrep(rootPath: string): Promise<SearchFileEntry[]> {
   return new Promise((resolve) => {
-    const args = ['--files', ...EXCLUDE_GLOBS.flatMap((g) => ['--glob', g]), rootPath];
+    // T-07②: `--hidden` so dotfiles are reachable via `@` — without it rg skips
+    // every dot-prefixed entry, hiding 55 files in this repo alone (.github/,
+    // .claude/, .gitignore, …). EXCLUDE_GLOBS still carries `!.git/**`, which is
+    // what keeps the object database out now that hidden entries are walked.
+    const args = ['--files', '--hidden', ...EXCLUDE_GLOBS.flatMap((g) => ['--glob', g]), rootPath];
 
-    const files: { path: string; name: string; relativePath: string }[] = [];
+    const files: SearchFileEntry[] = [];
     let buffer = '';
 
     const rg = spawn(rgPath, args);
@@ -107,6 +206,7 @@ async function getAllFilesWithRipgrep(
           path: filePath,
           name: basename(filePath),
           relativePath: toPosixRelative(rootPath, filePath),
+          isDirectory: false,
         });
       }
     });
@@ -129,6 +229,7 @@ async function getAllFilesWithRipgrep(
           path: filePath,
           name: basename(filePath),
           relativePath: toPosixRelative(rootPath, filePath),
+          isDirectory: false,
         });
       }
 
@@ -144,35 +245,19 @@ async function getAllFilesWithRipgrep(
 }
 
 export class SearchService {
-  // 文件名搜索（使用 ripgrep --files）
-  async searchFiles(params: FileSearchParams): Promise<FileSearchResult[]> {
+  /**
+   * 文件名搜索（使用 ripgrep --files）。
+   *
+   * T-07 补强：包含派生目录条目（① `isDirectory`）、隐藏文件（②）、
+   * 报告截断前总数（③）、同分确定性排序（④）。
+   */
+  async searchFiles(params: FileSearchParams): Promise<FileSearchPage> {
     const { rootPath, query, maxResults = MAX_FILE_RESULTS } = params;
 
-    const allFiles = await getAllFilesWithRipgrep(rootPath);
+    const files = await getAllFilesWithRipgrep(rootPath);
+    const entries = [...files, ...collectDirectoryEntries(rootPath, files)];
 
-    // Empty query: return files sorted by path (shallow files first)
-    if (!query.trim()) {
-      return allFiles
-        .map((file) => ({ ...file, score: 0 }))
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-        .slice(0, maxResults);
-    }
-
-    // Fuzzy match and rank
-    const scoredResults = allFiles
-      .map((file) => {
-        const nameScore = fuzzyMatch(query, file.name);
-        const pathScore = fuzzyMatch(query, file.relativePath) * 0.8;
-        return {
-          ...file,
-          score: Math.max(nameScore, pathScore),
-        };
-      })
-      .filter((r) => r.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, maxResults);
-
-    return scoredResults;
+    return rankFileEntries(entries, query, maxResults);
   }
 
   // 内容搜索（使用 ripgrep）
@@ -243,7 +328,7 @@ export class SearchService {
                 const submatch = json.data.submatches?.[0];
                 const match: ContentSearchMatch = {
                   path: json.data.path.text,
-                  relativePath: relative(rootPath, json.data.path.text),
+                  relativePath: toPosixRelative(rootPath, json.data.path.text),
                   line: json.data.line_number,
                   column: submatch?.start || 0,
                   matchLength: submatch ? submatch.end - submatch.start : 0,
@@ -292,7 +377,7 @@ export class SearchService {
                 const submatch = json.data.submatches?.[0];
                 const match: ContentSearchMatch = {
                   path: json.data.path.text,
-                  relativePath: relative(rootPath, json.data.path.text),
+                  relativePath: toPosixRelative(rootPath, json.data.path.text),
                   line: json.data.line_number,
                   column: submatch?.start || 0,
                   matchLength: submatch ? submatch.end - submatch.start : 0,

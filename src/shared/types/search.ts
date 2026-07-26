@@ -24,6 +24,29 @@ export interface FileSearchResult {
   name: string;
   relativePath: string;
   score: number;
+  /**
+   * True for derived directory entries (T-07①). `rg --files` lists files only,
+   * so directories are reconstructed from file paths — `@src/renderer` is a
+   * valid reference because CC reads the whole subtree. Absent/false = file.
+   */
+  isDirectory?: boolean;
+}
+
+/**
+ * `searchFiles` result page (T-07③). Searching `chat` in this repo matched 304
+ * files while the popup rendered 10 and gave no hint the rest existed, so the
+ * pre-truncation count now rides along with the page.
+ *
+ * This is an explicit wrapper rather than extra properties on the array: only
+ * own *enumerable* properties survive structured clone across the IPC bridge,
+ * and relying on that for a bolted-on `total` is a silent-data-loss trap. A
+ * named field is checked by `tsc` at every consumer instead.
+ */
+export interface FileSearchPage {
+  items: FileSearchResult[];
+  /** Match count before `maxResults` truncation. */
+  total: number;
+  truncated: boolean;
 }
 
 // 内容搜索匹配项

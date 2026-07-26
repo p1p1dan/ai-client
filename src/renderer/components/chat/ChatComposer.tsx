@@ -1,5 +1,5 @@
 import type { FileSearchResult } from '@shared/types/search';
-import { RotateCcw, SendHorizonal, Square } from 'lucide-react';
+import { File as FileIcon, Folder, RotateCcw, SendHorizonal, Square } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,9 @@ import { useSessionModel } from './useSessionModel';
 interface ChatComposerProps {
   disabled?: boolean;
 }
+
+/** T-07③: popup page size. Kept next to the truncation hint that reports it. */
+const MENTION_PAGE_SIZE = 10;
 
 function isStoppable(status: string | undefined): boolean {
   return (
@@ -84,6 +87,8 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   // 恢复通过 setTimeout 在 React 提交后再 setSelectionRange。
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
+  /** T-07③ pre-truncation match count, so the popup can say "10 / 304". */
+  const [mentionTotal, setMentionTotal] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
@@ -134,13 +139,20 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   useEffect(() => {
     if (mentionQuery === null || !cwd) {
       setMentionResults([]);
+      setMentionTotal(0);
       return;
     }
     const timer = setTimeout(() => {
       window.electronAPI.search
-        .files({ rootPath: cwd, query: mentionQuery, maxResults: 10 })
-        .then(setMentionResults)
-        .catch(() => setMentionResults([]));
+        .files({ rootPath: cwd, query: mentionQuery, maxResults: MENTION_PAGE_SIZE })
+        .then((page) => {
+          setMentionResults(page.items);
+          setMentionTotal(page.total);
+        })
+        .catch(() => {
+          setMentionResults([]);
+          setMentionTotal(0);
+        });
     }, 150);
     return () => clearTimeout(timer);
   }, [mentionQuery, cwd]);
@@ -387,7 +399,19 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
                         : 'text-foreground hover:bg-accent/50'
                     )}
                   >
-                    <span>{fileName}</span>
+                    {/* T-07①: directories are selectable now — mark them so a
+                        folder is not mistaken for a same-named file. */}
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      {item.isDirectory ? (
+                        <Folder className="size-3.5 shrink-0 text-[#dcb67a]" />
+                      ) : (
+                        <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate">
+                        {fileName}
+                        {item.isDirectory ? '/' : ''}
+                      </span>
+                    </span>
                     {dirPart && (
                       <span className="ml-1.5 text-xs text-muted-foreground">{dirPart}</span>
                     )}
@@ -414,6 +438,13 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
                 </kbd>
                 Close
               </span>
+              {/* T-07③: searching `chat` here matches 304 files but only 10
+                  render — say so instead of truncating silently. */}
+              {mentionTotal > mentionResults.length && (
+                <span className="ml-auto shrink-0 tabular-nums">
+                  {mentionResults.length}/{mentionTotal}
+                </span>
+              )}
             </div>
           </div>
         )}

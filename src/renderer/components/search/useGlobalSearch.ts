@@ -78,7 +78,7 @@ export function useGlobalSearch(rootPath: string | undefined) {
           });
           setState((prev) => ({
             ...prev,
-            fileResults: results,
+            fileResults: results.items,
             contentResults: null,
             selectedIndex: 0,
             isLoading: false,

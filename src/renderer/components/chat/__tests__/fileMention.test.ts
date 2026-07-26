@@ -146,3 +146,30 @@ describe('parseMentionChips (T-07)', () => {
     expect(parseMentionChips('@a\n\n@c')).toEqual([{ path: 'a' }, { path: 'c' }]);
   });
 });
+
+/**
+ * T-07①: directories became selectable in the popup, so a directory pick must
+ * insert the same way a file does. CC resolves `@src/renderer` by reading the
+ * subtree, so no trailing slash is added — the raw relativePath is what goes in.
+ */
+describe('replaceMention with a directory entry (T-07①)', () => {
+  function dir(relativePath: string): FileSearchResult {
+    return {
+      path: `/${relativePath}`,
+      name: relativePath.slice(relativePath.lastIndexOf('/') + 1),
+      relativePath,
+      score: 0,
+      isDirectory: true,
+    };
+  }
+
+  it('inserts a directory path verbatim with a trailing space', () => {
+    const out = replaceMention('see @rend', 9, dir('src/renderer'));
+    expect(out).toEqual({ text: 'see @src/renderer ', cursor: 18 });
+  });
+
+  it('does not append a slash to the inserted directory', () => {
+    const out = replaceMention('@d', 2, dir('docs'));
+    expect(out?.text).toBe('@docs ');
+  });
+});

@@ -24,8 +24,8 @@ import type {
   FileDiff,
   FileEntry,
   FileReadResult,
+  FileSearchPage,
   FileSearchParams,
-  FileSearchResult,
   FolderCheckTypeResult,
   GhCliStatus,
   GitBranch,
@@ -1120,7 +1120,7 @@ const electronAPI = {
 
   // Search
   search: {
-    files: (params: FileSearchParams): Promise<FileSearchResult[]> =>
+    files: (params: FileSearchParams): Promise<FileSearchPage> =>
       ipcRenderer.invoke(IPC_CHANNELS.SEARCH_FILES, params),
     content: (params: ContentSearchParams): Promise<ContentSearchResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.SEARCH_CONTENT, params),
