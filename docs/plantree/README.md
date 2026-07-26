@@ -14,7 +14,7 @@
 
 | Plan | Status | Current Phase | Last Landed | Next Target |
 |---|---|---|---|---|
-| [openchamber-chat-refactor](./plans/openchamber-chat-refactor/README.md) | In Progress | Phase 3 Chat MVP 收口 | T-02/T-07 联调 bug 修复 `db5116a`（2026-07-26，354 例三绿） | 用户复验 → #8 thinking API 形态 |
+| [openchamber-chat-refactor](./plans/openchamber-chat-refactor/README.md) | In Progress | Phase 3 Chat MVP 收口 | T-02/T-07 复验通过转 Done `db5116a`（2026-07-26，354 例三绿） | #8 thinking API 形态修正 |
 
 ## 遗留规划根（保留原位，不迁移不删除）
 
