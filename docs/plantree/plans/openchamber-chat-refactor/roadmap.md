@@ -27,16 +27,22 @@
 
 ## In Progress
 
-- **T-02 / T-03 / T-04 / T-06 / T-07**：实现全部落地（`dc727d2` / `25cb888` / `22ef2ff` / `0f3a8da`等 / `1ff7fc1`），**统一等用户 GUI 联调复验**（要点见团队台账各行；环境见 [baseline 门禁](../../../plantree/baseline/test-and-release-gates.md)）。联调通过项转 Done。
+- **T-02 / T-07**：首轮 GUI 联调 **不通过**——各暴露一枚真 bug，已修复落地 `db5116a`（标题全空守卫 + `@` 引用 Windows 路径归一化），**等用户复验**转 Done。T-07 尚余目录不可选 / 隐藏文件被吞 / 10 条静默截断三项，见 Next。
+- **T-03**：重放机制联调通过（历史 tool 卡正常渲染），但历史读失败的 UI 展示（协议 §7 归 T-03）实现仍缺；thinking 缺失已定性为非本任务问题。
+- **T-04**：代码链逐环验证正确，但本环境 **无可观测对象**——`thinking.display` 默认 `omitted`，文本恒空。GUI 验收阻塞在 #8。
+- **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 
 ## Next
 
-1. **T-05 Tool Card 增强 + Question 卡**——全解锁（Question 依赖 C-04 已 ✅），下一个开发任务。工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。
-2. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
-3. **T-18 Composer 粘贴图片/文件**（C-13 协议就绪；大图 79s 先例，必须做发送中状态）。
-4. **T-20 Effort 选择器**（先做协议扩展 `session.create/send` 传 effort——原「提需求给主线」现同归我们；开工前按官方文档核实档位）。
-5. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
+1. **#8 thinking API 形态修正**——`claudeRuntime.ts:393` 的 `{type:'enabled', budgetTokens:4096}` 在 Opus 4.8/4.7、Sonnet 5、Fable 5 上**已移除、发送即 400**；改 `{type:'adaptive'}` + `output_config.effort`，并设 `display:'summarized'` 让 thinking 可见。**同时解 open-questions #5、解锁 T-04 GUI 验收、且与 T-20 是同一处改动** → 优先级最高。
+2. **T-07 补强**——目录可选（`rg --files` 只列文件，需从文件列表反推目录集 + `isDirectory` 字段）、`--hidden`（本仓因此少 55 个文件）、返回 `total` 并在 popup 提示截断（实测查 `chat` 命中 304 条只显示 10 条）、同分 tie-break。另 `searchContent` 有同款反斜杠问题（`SearchService.ts:246/295`）未修。
+3. **T-05 Tool Card 增强 + Question 卡**——工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。
+4. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
+5. **T-18 Composer 粘贴图片/文件**（C-13 协议就绪；大图 79s 先例，必须做发送中状态）。
+6. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
+
+> T-20 Effort 选择器已并入 #1（协议扩展 `session.create/send` 传 effort 与 thinking 形态修正是同一处改动）。
 
 ## Deferred
 
