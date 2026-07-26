@@ -3,9 +3,20 @@
 > 短操作交接。历史证据勿堆此处，进台账档案。
 
 - **Current Phase**: Phase 3 Chat MVP 收口（2026-07-24 双轨合一，单线推进）
-- **Last Landed**: 2026-07-26 T-02/T-07 联调 bug 修复 `db5116a`（标题全空守卫 + `@` 引用路径归一化）——**用户当日 GUI 复验通过，两任务转 Done**
-- **Last Verified**: 2026-07-26 三绿——typecheck 干净 / lint 583 文件 0 诊断 / vitest **39 文件 354 例**
-- **Next Target**: #8 thinking API 形态修正（一处改动解四件事，见 Active TODO 1）
+- **Last Landed**: 2026-07-27 **#8 thinking 形态修正**（`{type:'adaptive', display:'summarized'}` + 顶层 `effort` 协议底座）——网关实测 thinking 文本 408 字符、真 Host 全链 `thinking.delta` 361 字符非空
+- **Last Verified**: 2026-07-27 三绿——typecheck 干净 / lint 586 文件 0 诊断 / vitest **40 文件 364 例**
+- **Next Target**: T-04 GUI 验收（可观测对象已就位，等用户人工点验）；并行可推 T-06 补测
+
+## #8 结论（2026-07-27）
+
+| 项 | 结论 |
+|---|---|
+| T-04 thinking 空白真凶 | ✅ `display` 默认 `omitted`。实测：裸 `{type:'adaptive'}` → thinking 块 1 个但文本 **0**；加 `display:'summarized'` → 文本 **408** 字符 |
+| C-14「400 thinking 格式无效」根因 | ❌ **原假说被推翻**——`{type:'enabled', budgetTokens}` 实测仍返回 200。open-questions #5 **保持 open** |
+| `effort` 位置 | ✅ SDK 顶层 `Options.effort`，**不是** `output_config.effort`（更正 C-10 台账行） |
+| T-20 协议底座 | ✅ `session.create.effort` / `session.send.effort` 已落（纯可选加法，未 bump 协议版本） |
+
+证据：`spikes/c16-thinking-shape-probe.ts`（SDK 层五场景）+ `spikes/c16-thinking-host-smoke.ts`（真 Host NDJSON 全链）+ `__tests__/claudeRuntimeOptions.test.ts`（10 例钉死 options）。
 
 ## 首轮 GUI 联调结论（2026-07-26）
 
@@ -13,7 +24,7 @@
 |---|---|---|
 | T-02 会话生命周期 | ✅ Done | 标题 bug 已修并复验通过；归档无 un-archive 入口 = 设计缺口，转 open-questions #6 |
 | T-03 Resume 历史 | 🟡 部分通过 | 重放机制通（tool 卡正常渲染），历史读失败的 UI 展示仍缺；thinking 缺失已另案定性 |
-| T-04 Thinking 卡 | ⬜ 阻塞 | 代码链逐环验证正确；`display` 默认 `omitted` → 文本恒空，无可观测对象，等 #8 |
+| T-04 Thinking 卡 | 🟡 **已解除阻塞** | 代码链逐环验证正确；#8 落地后 `display:'summarized'` 使文本非空，**可观测对象已就位**，等 GUI 人工点验 |
 | T-06 元数据/重试 | ⬜ 未测 | 唯一完全未碰的任务，不受上述 bug 影响，可直接补测 |
 | T-07 `@` 引用 | ✅ Done | P0 反斜杠已修并复验通过；目录不返回 / 隐藏文件被吞 / 10 条静默截断三项另列补强 |
 
@@ -21,19 +32,22 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**。
 
 ## Active TODO
 
-1. **#8 thinking API 形态修正**（下一个开发任务）：`claudeRuntime.ts:393` 的 `{type:'enabled', budgetTokens:4096}` 在 Opus 4.8/4.7、Sonnet 5、Fable 5 上已移除、发送即 400 → 改 `{type:'adaptive', display:'summarized'}` + `output_config.effort`。**一处改动解四件事**：消 400 瞬态（open-questions #5 结项）、thinking 卡可见（解锁 T-04 GUI 验收）、T-20 Effort 选择器协议底座、effort 档位对齐官方
+1. **T-04 GUI 验收**（用户人工）：#8 已提供可观测对象，联调环境
+   `CLAUDE_CONFIG_DIR='C:\Users\13927\AppData\Local\Temp\aiclient-gui-test-config' pnpm dev`。
+   注意历史 fixture 的 153 个 thinking 块**文本仍是空串**（旧会话录制时 display=omitted，无法追溯补全）——
+   **thinking 卡只能在新发起的轮次上验证**，resume 旧会话看不到 thinking 属预期。
 2. **T-06 补测**（网关已恢复，元数据行 / 红色 Stop / 失败卡 + Retry 无重影）
 3. T-07 补强：目录可选 / `--hidden` / 返回 `total` 并提示截断 / 同分 tie-break
 4. T-05 开发（工具卡 + Question 卡）
-5. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
-6. C-15 体积 141MB（+21MB）可接受性——等用户拍板
-7. T-19 消息队列提案——等用户落库
+5. **T-20 Effort 选择器 UI**：协议底座已就位（`session.create/send` 的 `effort`），只剩 Renderer 选择器 + 透传
+6. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
+7. C-15 体积 141MB（+21MB）可接受性——等用户拍板
+8. T-19 消息队列提案——等用户落库
 
 ## Blocked By
 
 - GUI/打包点验类均需**用户人工操作**（联调命令见 [baseline 门禁](../../baseline/test-and-release-gates.md)）
 - T-11 需**加密机现场**（→ CP5）
-- T-04 GUI 验收需 `display: 'summarized'` 落地后才有可观测对象（并入 #8）
 
 ## Handoff Notes
 
