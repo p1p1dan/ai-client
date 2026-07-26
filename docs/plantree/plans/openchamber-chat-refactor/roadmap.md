@@ -23,6 +23,7 @@
 - D16 vflow 整体移除 `dbb20be` `eac23f7`
 - **#8 thinking 形态修正 + effort 协议底座** ✅ 2026-07-27（`{type:'adaptive', display:'summarized'}`；网关实测 thinking 文本 408 字符、真 Host 全链 361 字符；`session.create/send` 加可选 `effort`，未 bump 协议版本；40 文件 364 例三绿）
 - **T-07 补强四项 + open-q#7** ✅ 2026-07-27 `0f886a8`（目录可选 +144 条 / `--hidden` 90 条隐藏条目 / 查 `chat` 显示「10/319」/ 同分全序；`searchContent` 反斜杠一并修。含 8 例真跑 ripgrep 集成测试；41 文件 391 例三绿）
+- **T-20 Effort 选择器** ✅ 2026-07-27 `4c3f67e`（Renderer→Main→Host 全链；「Default」= 不发 `effort` 键，与 T-20 前行为一致；顺带把存储逻辑下沉为纯函数以绕开 vitest 无 React 渲染器的限制；44 文件 417 例三绿）
 
 **团队 T-xx 已验收**
 - T-01 真实数据树 `a01712a` · T-08 Model 选择器 `298e3e6` · T-17 Tool 真实调用 GUI 闭环
@@ -38,14 +39,11 @@
 
 ## Next
 
-1. **T-04 GUI 验收**（用户人工，#8 已解除阻塞）+ **T-06 补测**——两项都只需联调，无待写代码。
-2. **T-20 Effort 选择器 UI**——协议底座已由 #8 落地（`session.create.effort` 会话默认 / `session.send.effort` 单轮覆盖，非法值边界丢弃），只剩 Renderer 选择器与透传。
-3. **T-05 Tool Card 增强 + Question 卡**——工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。
-4. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
-5. **T-18 Composer 粘贴图片/文件**（C-13 协议就绪；大图 79s 先例，必须做发送中状态）。
-6. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
-
-> T-20 Effort 选择器的**协议底座已随 #8 落地**（2026-07-27）；剩余 UI 部分见 Next 第 2 项。
+1. **GUI 统一点测**（用户人工）：T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测——**四项均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO 1。
+2. **T-05 Tool Card 增强 + Question 卡**——工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。**当前唯一剩余的纯开发项。**
+3. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
+4. **T-18 Composer 粘贴图片/文件**（C-13 协议就绪；大图 79s 先例，必须做发送中状态）。
+5. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
 
 ## Deferred
 

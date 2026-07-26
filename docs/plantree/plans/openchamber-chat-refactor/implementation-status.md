@@ -3,9 +3,9 @@
 > 短操作交接。历史证据勿堆此处，进台账档案。
 
 - **Current Phase**: Phase 3 Chat MVP 收口（2026-07-24 双轨合一，单线推进）
-- **Last Landed**: 2026-07-27 **T-07 补强四项 + open-q#7** `0f886a8`（目录可选 +144 条 / `--hidden` 90 条隐藏条目 / 查 `chat` 显示「10/319」/ 同分全序）；同日 **#8 thinking 形态修正** `bfd4f6b`
-- **Last Verified**: 2026-07-27 三绿——typecheck 干净 / lint 587 文件 0 诊断 / vitest **41 文件 391 例**
-- **Next Target**: T-04 + T-07 GUI 验收（均已就绪，等用户统一点测）；并行可推 T-05 开发
+- **Last Landed**: 2026-07-27 三连落地——**#8 thinking 形态修正** `bfd4f6b` · **T-07 补强四项 + open-q#7** `0f886a8` · **T-20 Effort 选择器** `4c3f67e`
+- **Last Verified**: 2026-07-27 三绿——typecheck 干净 / lint 594 文件 0 诊断 / vitest **44 文件 417 例**
+- **Next Target**: 用户统一 GUI 点测（T-04 / T-07 / T-20 / T-06 四项均已就绪）；并行可推 T-05（唯一剩余纯开发项）
 
 ## #8 结论（2026-07-27）
 
@@ -14,7 +14,7 @@
 | T-04 thinking 空白真凶 | ✅ `display` 默认 `omitted`。实测：裸 `{type:'adaptive'}` → thinking 块 1 个但文本 **0**；加 `display:'summarized'` → 文本 **408** 字符 |
 | C-14「400 thinking 格式无效」根因 | ❌ **原假说被推翻**——`{type:'enabled', budgetTokens}` 实测仍返回 200。open-questions #5 **保持 open** |
 | `effort` 位置 | ✅ SDK 顶层 `Options.effort`，**不是** `output_config.effort`（更正 C-10 台账行） |
-| T-20 协议底座 | ✅ `session.create.effort` / `session.send.effort` 已落（纯可选加法，未 bump 协议版本） |
+| T-20 协议底座 | ✅ `session.create.effort` / `session.send.effort` 已落（纯可选加法，未 bump 协议版本）；选择器 UI 已于 `4c3f67e` 补齐全链 |
 
 证据：`spikes/c16-thinking-shape-probe.ts`（SDK 层五场景）+ `spikes/c16-thinking-host-smoke.ts`（真 Host NDJSON 全链）+ `__tests__/claudeRuntimeOptions.test.ts`（10 例钉死 options）。
 
@@ -36,12 +36,12 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**。
    `CLAUDE_CONFIG_DIR='C:\Users\13927\AppData\Local\Temp\aiclient-gui-test-config' pnpm dev`
    - **T-04 thinking 卡**：历史 fixture 的 153 个 thinking 块**文本仍是空串**（旧会话录制时 display=omitted，不可追溯补全）——**只能在新发起的轮次上验证**，resume 旧会话看不到 thinking 属预期。
    - **T-07 补强**：`@` 输入 `src/` 应见目录条目（黄色文件夹图标 + 尾随 `/`）；输入 `git` 应见 `.gitignore` 等隐藏文件；输入 `chat` 右下角应显示 `10/319`。
+   - **T-20 Effort 选择器**：Composer 右下角 ModelSelect 旁应见新的档位下拉（默认显示 `Default`）。选 `X-High` 后重启应仍保持；**`Default` 与 `High` 是不同选项**——前者不下发 `effort`、保持模型默认。
 2. **T-06 补测**（网关已恢复，元数据行 / 红色 Stop / 失败卡 + Retry 无重影）
-3. T-05 开发（工具卡 + Question 卡）
-4. **T-20 Effort 选择器 UI**：协议底座已就位（`session.create/send` 的 `effort`），只剩 Renderer 选择器 + 透传
-5. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
-6. C-15 体积 141MB（+21MB）可接受性——等用户拍板
-7. T-19 消息队列提案——等用户落库
+3. T-05 开发（工具卡 + Question 卡）——**当前唯一剩余的纯开发项**
+4. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
+5. C-15 体积 141MB（+21MB）可接受性——等用户拍板
+6. T-19 消息队列提案——等用户落库
 
 ## Blocked By
 
