@@ -97,3 +97,45 @@ describe('mergeSessionIndex (T-02)', () => {
     expect(recentSessionIdsFromIndex(sessions, 2)).toEqual(['b', 'c']);
   });
 });
+
+/**
+ * Regression: `recordCreated` persists `title: ''` until an explicit rename, so
+ * every merge branch has to survive an empty persisted title. Before the guard,
+ * the empty value clobbered the UI seed and every LeftNav row rendered with only
+ * a status badge — and the title-substring search matched nothing.
+ */
+describe('mergeSessionIndex — empty persisted title never blanks a row', () => {
+  it('keeps the UI seed title when the persisted entry has none', () => {
+    const live = [session('s1', { title: 'New chat' })];
+    const entries = [entry('s1', { title: '' })];
+    const { sessions } = mergeSessionIndex(live, entries, { workspaces });
+    expect(sessions[0].title).toBe('New chat');
+  });
+
+  it('falls back to a short-id placeholder when both sides are empty', () => {
+    const live = [session('abcdef123456', { title: '' })];
+    const entries = [entry('abcdef123456', { title: '' })];
+    const { sessions } = mergeSessionIndex(live, entries, { workspaces });
+    expect(sessions[0].title).toBe('Session 123456');
+  });
+
+  it('seeds a restored entry with a placeholder rather than an empty title', () => {
+    const entries = [entry('restored-after-restart', { title: '' })];
+    const { sessions } = mergeSessionIndex([], entries, { workspaces });
+    expect(sessions[0].title).toBe('Session estart');
+    expect(sessions[0].title).not.toBe('');
+  });
+
+  it('gives orphaned entries a placeholder title too', () => {
+    const entries = [entry('ghost1', { title: '', workspacePath: '/somewhere-else' })];
+    const { orphaned } = mergeSessionIndex([], entries, { workspaces });
+    expect(orphaned[0].title).toBe('Session ghost1');
+  });
+
+  it('still lets a real persisted title win over the UI seed', () => {
+    const live = [session('s1', { title: 'New chat' })];
+    const entries = [entry('s1', { title: 'Renamed by user' })];
+    const { sessions } = mergeSessionIndex(live, entries, { workspaces });
+    expect(sessions[0].title).toBe('Renamed by user');
+  });
+});

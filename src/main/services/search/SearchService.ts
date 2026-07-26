@@ -32,6 +32,18 @@ const EXCLUDE_GLOBS = [
 
 const rgPath = originalRgPath.replace(/\.asar([\\/])/, '.asar.unpacked$1');
 
+/**
+ * Relative path with POSIX separators, regardless of host platform.
+ *
+ * `path.relative` yields backslashes on win32, which breaks three consumers at
+ * once: fuzzy queries containing `/` never match the target string, the `@`
+ * mention popup's `lastIndexOf('/')` returns -1 so the directory suffix never
+ * renders, and the inserted `@path` mention carries backslashes downstream.
+ */
+export function toPosixRelative(rootPath: string, filePath: string): string {
+  return relative(rootPath, filePath).replace(/\\/g, '/');
+}
+
 // 模糊匹配分数计算
 function fuzzyMatch(query: string, target: string): number {
   const queryLower = query.toLowerCase();
@@ -94,7 +106,7 @@ async function getAllFilesWithRipgrep(
         files.push({
           path: filePath,
           name: basename(filePath),
-          relativePath: relative(rootPath, filePath),
+          relativePath: toPosixRelative(rootPath, filePath),
         });
       }
     });
@@ -116,7 +128,7 @@ async function getAllFilesWithRipgrep(
         files.push({
           path: filePath,
           name: basename(filePath),
-          relativePath: relative(rootPath, filePath),
+          relativePath: toPosixRelative(rootPath, filePath),
         });
       }
 

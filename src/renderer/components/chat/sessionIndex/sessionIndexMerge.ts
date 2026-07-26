@@ -15,9 +15,11 @@ import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
  *   runtimeIdentity once Host has bound a fresh one) — those are live and
  *   authoritative during a turn. Persisted `runtimeIdentity` is a fallback
  *   used only when the UI sentence has no runtime identity yet.
- * - Persisted title wins over UI title (the user may have renamed it; the UI
- *   seed value is a placeholder). This keeps the persisted source of truth
- *   for the displayed title.
+ * - Persisted title wins over UI title *when non-empty* (the user may have
+ *   renamed it; the UI seed value is a placeholder). `recordCreated` persists
+ *   an empty title until an explicit rename, so an empty persisted value must
+ *   never clobber the UI seed — otherwise every row renders blank after a
+ *   restart and the LeftNav title search matches nothing.
  * - Persisted updatedAt is taken as max(prev, entry.updatedAt) so the recent
  *   ordering hint stays monotonic.
  * - New entries (persisted, no live sentence) seed as `idle` with status
@@ -25,6 +27,15 @@ import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
  * - Archived entries are filtered out of the live list entirely (they live
  *   only in the persisted index and can be un-archived later).
  */
+
+/**
+ * Last-resort display title for a persisted entry that has no title and no UI
+ * sentence to fall back to. Short id suffix keeps rows distinguishable so the
+ * user can locate one and rename it.
+ */
+export function fallbackSessionTitle(sessionId: string): string {
+  return `Session ${sessionId.slice(-6)}`;
+}
 
 export interface MergeResult {
   sessions: ChatSession[];
@@ -66,8 +77,9 @@ export function mergeSessionIndex(
       seenIds.add(existing.id);
       next.push({
         ...existing,
-        // Persisted title is authoritative (rename lives in the index).
-        title: entry.title,
+        // Persisted title is authoritative only when non-empty; an unnamed
+        // persisted entry must not blank out the UI seed title.
+        title: entry.title || existing.title || fallbackSessionTitle(entry.sessionId),
         projectId: projectId || existing.projectId,
         workspaceId: workspaceId || existing.workspaceId,
         runtimeIdentity: existing.runtimeIdentity ?? entry.runtimeIdentity,
@@ -86,7 +98,7 @@ export function mergeSessionIndex(
         id: entry.sessionId,
         projectId,
         workspaceId,
-        title: entry.title,
+        title: entry.title || fallbackSessionTitle(entry.sessionId),
         status: seedStatus,
         updatedAt: entry.updatedAt,
         runtimeIdentity: entry.runtimeIdentity,
@@ -98,7 +110,7 @@ export function mergeSessionIndex(
       id: entry.sessionId,
       projectId,
       workspaceId,
-      title: entry.title,
+      title: entry.title || fallbackSessionTitle(entry.sessionId),
       status: seedStatus,
       updatedAt: entry.updatedAt,
       runtimeIdentity: entry.runtimeIdentity,
