@@ -77,7 +77,7 @@ import type {
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentStopNotificationData } from '@shared/types/agent';
-import type { AgentHostDriver } from '@shared/types/agentHost';
+import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
@@ -1333,6 +1333,8 @@ const electronAPI = {
       sessionId: string;
       workspacePath: string;
       model?: string;
+      /** T-20 session default reasoning effort. */
+      effort?: SessionEffortLevel;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
     resumeSession: (payload: {
@@ -1351,6 +1353,8 @@ const electronAPI = {
         data: string;
         name?: string;
       }>;
+      /** T-20 per-turn override; falls back to the session default. */
+      effort?: SessionEffortLevel;
     }): Promise<{ requestId: string }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload),
     stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),

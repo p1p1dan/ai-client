@@ -4,7 +4,7 @@
  */
 
 import { IPC_CHANNELS } from '@shared/types';
-import type { AgentHostDriver } from '@shared/types/agentHost';
+import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
@@ -48,7 +48,13 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_CREATE_SESSION,
     async (
       _e,
-      payload: { sessionId: string; workspacePath: string; model?: string }
+      payload: {
+        sessionId: string;
+        workspacePath: string;
+        model?: string;
+        /** T-20 reasoning effort; Host drops unknown levels (normalizeEffort). */
+        effort?: SessionEffortLevel;
+      }
     ): Promise<{ requestId: string }> => {
       await sessionIndexService.recordCreated(payload);
       const requestId = await agentHostManager.createSession(payload);
@@ -86,6 +92,8 @@ export function registerChatHandlers(): void {
           data: string;
           name?: string;
         }>;
+        /** T-20 per-turn override; falls back to the session default. */
+        effort?: SessionEffortLevel;
       }
     ): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.sendMessage(payload);

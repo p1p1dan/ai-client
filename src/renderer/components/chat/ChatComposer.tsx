@@ -6,9 +6,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { classifyAssistantProgress } from './assistantProgress';
+import { EffortSelect } from './EffortSelect';
+import { toWireEffort } from './efforts';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { ModelSelect } from './ModelSelect';
 import { defaultModelId } from './models';
+import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
 
 interface ChatComposerProps {
@@ -113,6 +116,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   const canStop = busy || sending;
   const canSend = Boolean(activeSessionId && activeWorkspace && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
+  const { getSessionEffort } = useSessionEffort();
 
   const statusHint = !activeSessionId
     ? 'No session selected — pick Live Agent Host in the left nav (or click New).'
@@ -218,6 +222,9 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     const sessionId = activeSessionId;
     const workspacePath = activeWorkspace.path;
     const model = getSessionModel(sessionId) ?? defaultModelId(null);
+    // T-20: undefined when the user left it on "Default", so the key is dropped
+    // from the payload entirely and the model default applies (≠ pinning high).
+    const effort = toWireEffort(getSessionEffort(sessionId));
 
     // Starting a fresh send invalidates any prior failure's retryable prompt:
     // the new prompt is what the user wants now, and a stale ghost Retry would
@@ -272,7 +279,12 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
       await sleep(120);
 
       sawSessionCreated = false;
-      await window.electronAPI.chat.createSession({ sessionId, workspacePath, model });
+      await window.electronAPI.chat.createSession({
+        sessionId,
+        workspacePath,
+        model,
+        ...(effort ? { effort } : {}),
+      });
 
       const created = await waitUntil(() => sawSessionCreated || Boolean(fatalHostError), 5000);
       if (fatalHostError) {
@@ -530,7 +542,12 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
           </p>
           <div className="flex shrink-0 items-center gap-1">
             {activeSessionId && (
-              <ModelSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
+              <>
+                <ModelSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
+                {/* T-20: effort sits next to the model — both are per-session
+                    generation settings applied at the next createSession. */}
+                <EffortSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
+              </>
             )}
             {canStop ? (
               <Button
