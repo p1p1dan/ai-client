@@ -3,7 +3,11 @@
  * Emits AiClient Runtime Events via EventNormalizer; no Electron deps.
  */
 
-import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHost.ts';
+import type {
+  AgentHostDriver,
+  SessionAttachment,
+  SessionEffortLevel,
+} from '../shared/types/agentHost.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
@@ -86,6 +90,49 @@ function resolveStallTimeoutMs(): number {
   return parsed;
 }
 
+/**
+ * #8 (2026-07-27): thinking config sent to query().
+ *
+ * `display` is the load-bearing field. On Opus 4.8/4.7, Sonnet 5 and Fable 5 it
+ * defaults to `omitted`, which streams thinking blocks whose text is an empty
+ * string — that, not any broken code link, is why T-04's thinking card had
+ * nothing to render. `summarized` puts real text on the wire.
+ *
+ * Evidence — spikes/c16-thinking-shape-probe.ts on the CCH gateway,
+ * model claude-opus-4-8[1m], cometix 2.1.212 / SDK 0.3.218:
+ *   {type:'adaptive'}                        → 1 thinking block, text length 0
+ *   {type:'adaptive', display:'summarized'}  → 1 thinking block, text length 408
+ * The summarized runs also emit system/thinking_tokens events (8–9 per turn)
+ * that the bare-adaptive runs never produced.
+ *
+ * `adaptive` (not the previous `{type:'enabled', budgetTokens}`) is the shape
+ * current models actually document: the fixed-budget form is deprecated on
+ * Opus 4.6/Sonnet 4.6 and removed on Opus 4.8/4.7, Sonnet 5 and Fable 5, so it
+ * is a latent 400 the moment the gateway stops tolerating it. NOTE: the same
+ * probe found the old shape still returns 200 on this gateway today, so it was
+ * NOT the cause of the C-14 "400 thinking 格式无效" transient — that stays open.
+ */
+const THINKING_CONFIG = { type: 'adaptive', display: 'summarized' } as const;
+
+const EFFORT_LEVELS: readonly SessionEffortLevel[] = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+
+/**
+ * Guard the protocol boundary: `effort` arrives as untrusted JSON from Main, and
+ * an unknown value would be forwarded verbatim into query() and rejected by the
+ * API. Drop it instead so the turn still runs at the model default.
+ */
+export function normalizeEffort(value: unknown): SessionEffortLevel | undefined {
+  return typeof value === 'string' && (EFFORT_LEVELS as readonly string[]).includes(value)
+    ? (value as SessionEffortLevel)
+    : undefined;
+}
+
 export class ClaudeRuntime {
   private queryFn: SdkQueryFn | null = null;
   private readonly log: LogFn;
@@ -125,12 +172,15 @@ export class ClaudeRuntime {
     sessionId: string;
     workspacePath: string;
     model?: string;
+    /** Untrusted at this boundary (raw NDJSON payload) — normalized below. */
+    effort?: unknown;
     requestId?: string;
   }): void {
     const session = this.opts.registry.create({
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
       model: input.model,
+      effort: normalizeEffort(input.effort),
     });
     this.opts.emit({
       type: 'session.created',
@@ -151,6 +201,8 @@ export class ClaudeRuntime {
     workspacePath: string;
     runtimeIdentity: string;
     model?: string;
+    /** Untrusted at this boundary (raw NDJSON payload) — normalized below. */
+    effort?: unknown;
     requestId?: string;
   }): void {
     // CP4 F-1: resuming a session with an active turn would orphan its
@@ -174,6 +226,7 @@ export class ClaudeRuntime {
       workspacePath: input.workspacePath,
       runtimeIdentity: input.runtimeIdentity,
       model: input.model,
+      effort: normalizeEffort(input.effort),
     });
     this.opts.emit({
       type: 'session.resumed',
@@ -244,6 +297,11 @@ export class ClaudeRuntime {
     sessionId: string;
     text: string;
     attachments?: SessionAttachment[];
+    /**
+     * Per-turn override; falls back to the session default.
+     * Untrusted at this boundary (raw NDJSON payload) — normalized below.
+     */
+    effort?: unknown;
     requestId?: string;
   }): Promise<void> {
     const session = this.opts.registry.get(input.sessionId);
@@ -288,6 +346,8 @@ export class ClaudeRuntime {
     }
 
     const queryFn = await this.ensureSdk();
+    // Per-turn effort wins; otherwise the session default from create/resume.
+    const effort = normalizeEffort(input.effort) ?? session.effort;
     const abort = new AbortController();
     session.abort = abort;
     session.running = true;
@@ -387,16 +447,19 @@ export class ClaudeRuntime {
           // Isolate from filesystem permission.allow rules that would shadow canUseTool.
           // Credentials still come from options.env (loaded from settings.json).
           settingSources: [],
-          // CP3 (2026-07-24): thinking on by default. The historical CCH
-          // "invalid thinking block" 400 no longer reproduces — C-05 spike ran
-          // multi-turn resume with signed thinking history clean (8/8 turns).
-          thinking: { type: 'enabled', budgetTokens: 4096 },
+          // #8: adaptive thinking with visible summaries. `display:'summarized'`
+          // is required — the default `omitted` streams empty thinking text.
+          // See THINKING_CONFIG above for the probe evidence.
+          thinking: THINKING_CONFIG,
           // Interactive permission bridge (timeline cards) — not bypass.
           permissionMode: 'default',
           canUseTool,
           env: mergedEnv,
           abortController: abort,
           ...(session.model ? { model: session.model } : {}),
+          // Top-level option (NOT output_config.effort) — SDK 0.3.218 sdk.d.ts
+          // Options.effort, confirmed clean by c16 probe scenario D.
+          ...(effort ? { effort } : {}),
           ...(session.runtimeIdentity ? { resume: session.runtimeIdentity } : {}),
         },
       });

@@ -187,6 +187,8 @@ async function handleCommand(raw: unknown): Promise<void> {
           sessionId,
           workspacePath,
           model: typeof cmd.payload?.model === 'string' ? cmd.payload.model : undefined,
+          // Validated in claudeRuntime (normalizeEffort) — unknown values drop.
+          effort: cmd.payload?.effort,
           requestId: cmd.requestId,
         });
       } catch (err) {
@@ -338,9 +340,18 @@ async function handleCommand(raw: unknown): Promise<void> {
         return;
       }
       // Fire-and-forget: events stream on stdout while command loop continues.
-      void rt.send({ sessionId, text, attachments, requestId: cmd.requestId }).catch((err) => {
-        log('session.send unhandled:', err);
-      });
+      void rt
+        .send({
+          sessionId,
+          text,
+          attachments,
+          // Validated in claudeRuntime (normalizeEffort) — unknown values drop.
+          effort: cmd.payload?.effort,
+          requestId: cmd.requestId,
+        })
+        .catch((err) => {
+          log('session.send unhandled:', err);
+        });
       return;
     }
     case 'session.stop': {

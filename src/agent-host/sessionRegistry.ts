@@ -2,12 +2,15 @@
  * In-memory Host session registry — AiClient sessionId ↔ Claude runtime identity.
  */
 
+import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
 
 export interface HostSession {
   sessionId: string;
   workspacePath: string;
   model?: string;
+  /** Session default reasoning effort; a per-send effort overrides it (#8/T-20). */
+  effort?: SessionEffortLevel;
   /** Claude Code session / resume id (from SDK session_id). */
   runtimeIdentity?: string;
   status: SessionRuntimeStatus;
@@ -23,7 +26,12 @@ export class SessionRegistry {
     return this.sessions.get(sessionId);
   }
 
-  create(input: { sessionId: string; workspacePath: string; model?: string }): HostSession {
+  create(input: {
+    sessionId: string;
+    workspacePath: string;
+    model?: string;
+    effort?: SessionEffortLevel;
+  }): HostSession {
     const existing = this.sessions.get(input.sessionId);
     if (existing) {
       throw new Error(`Session already exists: ${input.sessionId}`);
@@ -32,6 +40,7 @@ export class SessionRegistry {
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
       model: input.model,
+      effort: input.effort,
       status: 'idle',
       running: false,
     };
@@ -44,6 +53,7 @@ export class SessionRegistry {
     workspacePath: string;
     runtimeIdentity: string;
     model?: string;
+    effort?: SessionEffortLevel;
   }): HostSession {
     const existing = this.sessions.get(input.sessionId);
     if (existing) {
@@ -53,12 +63,14 @@ export class SessionRegistry {
       existing.workspacePath = input.workspacePath;
       existing.runtimeIdentity = input.runtimeIdentity;
       existing.model = input.model ?? existing.model;
+      existing.effort = input.effort ?? existing.effort;
       return existing;
     }
     const session: HostSession = {
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
       model: input.model,
+      effort: input.effort,
       runtimeIdentity: input.runtimeIdentity,
       status: 'idle',
       running: false,

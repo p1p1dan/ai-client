@@ -37,12 +37,24 @@ export interface HostShutdownCommand extends AgentHostCommandBase {
   type: 'host.shutdown';
 }
 
+/**
+ * Reasoning effort level (T-20 selector base). Mirrors the Agent SDK
+ * `EffortLevel` union — a TOP-LEVEL query() option, not `output_config.effort`.
+ * Verified against SDK 0.3.218 sdk.d.ts and empirically by
+ * spikes/c16-thinking-shape-probe.ts (scenario D, clean turn on the gateway).
+ * `xhigh` needs Opus 4.7+/Sonnet 5/Fable 5 and silently degrades to `high`
+ * elsewhere; `max` is select-models-only. Omit to inherit the model default.
+ */
+export type SessionEffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface SessionCreateCommand extends AgentHostCommandBase {
   type: 'session.create';
   payload: {
     sessionId: string;
     workspacePath: string;
     model?: string;
+    /** Session default effort; per-send effort overrides it for one turn. */
+    effort?: SessionEffortLevel;
   };
 }
 
@@ -77,6 +89,8 @@ export interface SessionSendCommand extends AgentHostCommandBase {
     /** May be empty when attachments are present (attachment-only send). */
     text: string;
     attachments?: SessionAttachment[];
+    /** Per-turn effort override; falls back to the session default. */
+    effort?: SessionEffortLevel;
   };
 }
 
