@@ -40,10 +40,11 @@
 ## Next
 
 1. **GUI 统一点测**（用户人工）：T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测——**四项均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO 1。
-2. **T-05 Tool Card 增强 + Question 卡**——工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。**当前唯一剩余的纯开发项。**
-3. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
+2. **T-03 收尾**——历史读失败的 UI 展示（协议 §7）仍缺。范围小、契约已定稿，可直接做。
+3. **T-05 Tool Card 增强 + Question 卡**——工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。**开工前需用户定交互口径**（默认折叠？截断阈值？路径点击行为？）。
 4. **T-18 Composer 粘贴图片/文件**（C-13 协议就绪；大图 79s 先例，必须做发送中状态）。
-5. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
+5. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
+6. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
 
 ## Deferred
 
