@@ -24,6 +24,7 @@
 - **#8 thinking 形态修正 + effort 协议底座** ✅ 2026-07-27（`{type:'adaptive', display:'summarized'}`；网关实测 thinking 文本 408 字符、真 Host 全链 361 字符；`session.create/send` 加可选 `effort`，未 bump 协议版本；40 文件 364 例三绿）
 - **T-07 补强四项 + open-q#7** ✅ 2026-07-27 `0f886a8`（目录可选 +144 条 / `--hidden` 90 条隐藏条目 / 查 `chat` 显示「10/319」/ 同分全序；`searchContent` 反斜杠一并修。含 8 例真跑 ripgrep 集成测试；41 文件 391 例三绿）
 - **T-20 Effort 选择器** ✅ 2026-07-27 `4c3f67e`（Renderer→Main→Host 全链；「Default」= 不发 `effort` 键，与 T-20 前行为一致；顺带把存储逻辑下沉为纯函数以绕开 vitest 无 React 渲染器的限制；44 文件 417 例三绿）
+- **T-03 收尾：历史读失败 UI** ✅ 2026-07-27 `7a5c2cd`（协议 §7 归口的最后一块。新纯函数 `historyError.ts` 解析 store 的扁平 `code: message` 串，三种契约码给不同 severity/文案——`jsonl_not_found` 黄、`encrypted_unreadable` 红且明写「不代表没有历史」、`read_failed` 红且可 Retry；Alert 渲染在时间线首条随对话滚走，正是协议 §120「非致命」的视觉对应；Retry 复用 `useResumeSession` 零新增 IPC。评审 1 major：`resume()` 的 false 被吞 + 忙时死按钮 → 提取 `isSessionBusy` 与 Host 拒绝条件同源。含 3 例契约往返测试把解析器钉在真实 reducer 上。45 文件 455 例三绿）
 
 **团队 T-xx 已验收**
 - T-01 真实数据树 `a01712a` · T-08 Model 选择器 `298e3e6` · T-17 Tool 真实调用 GUI 闭环
@@ -32,17 +33,16 @@
 
 ## In Progress
 
-- **T-03**：重放机制联调通过（历史 tool 卡正常渲染），但历史读失败的 UI 展示（协议 §7 归 T-03）实现仍缺；thinking 缺失已定性为非本任务问题。
+- **T-18**：Renderer 侧粘贴附件——**进行中**。设计调研已出；上限依据在 2026-07-27 重测后被推翻重建（见下方 Next 第 4 条）。
 - **T-04**：代码链逐环验证正确；#8（2026-07-27）落地 `display:'summarized'` 后 **可观测对象已就位**（真 Host 实测 `thinking.delta` 361 字符非空），阻塞解除，等 GUI 人工点验。**注意**：历史 fixture 的 153 个 thinking 块文本仍是空串（录制时 display=omitted，不可追溯补全）→ 只能在**新发起轮次**验证，resume 旧会话无 thinking 属预期。
 - **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 
 ## Next
 
-1. **GUI 统一点测**（用户人工）：T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测——**四项均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO 1。
-2. **T-03 收尾**——历史读失败的 UI 展示（协议 §7）仍缺。范围小、契约已定稿，可直接做。
-3. **T-05 Tool Card 增强 + Question 卡**——工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。**开工前需用户定交互口径**（默认折叠？截断阈值？路径点击行为？）。
-4. **T-18 Composer 粘贴图片/文件**（C-13 协议就绪；大图 79s 先例，必须做发送中状态）。
+1. **GUI 统一点测**（用户人工）：T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测 / T-03 历史读失败提示——**五项均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO 1。
+2. **T-05 Tool Card 增强 + Question 卡**——工具卡：spinner/折叠/input-output 截断/toolCallId 关联/Read-Write-Edit 路径摘要行 + **F1 反馈：路径可点击**；Question 卡消费指引见总台账 C-04 行。**开工前需用户定交互口径**（默认折叠？截断阈值？路径点击行为？）。
+3. **T-18 Composer 粘贴图片/文件**（进行中）。⚠️ **上限依据已更新，勿沿用旧数**：C-13 记的「152 KB → 79s」不可复现——2026-07-27 同网关重测为 150 KB→11.2s、500 KB→9.5s、1 MB→11~16s（3/3 通过）、2 MB→10.6s、3 MB→13.0s，**延迟与载荷大小基本无关**，据此拟合的 `0.36 s/KB` 模型作废，120s 看门狗在这些尺寸下余量 10 倍以上。改按官方硬限制设上限（单图 10 MB base64 / 8000×8000 px / 单请求 32 MB / 仅 jpeg-png-gif-webp）。另注：`ChatComposer.runSend` 的 45s 等待窗口仍需按附件字节放宽——不是上传耗时模型，而是给网关坏日子留的保险；上界必须低于 120s 看门狗，好让 Host 先给出精确报错。
 5. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
 6. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
 
