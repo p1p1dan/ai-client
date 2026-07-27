@@ -1,6 +1,17 @@
+import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
-import { resumeDisplayTitle, shouldResumeSession } from '../resumeIntent';
+import { isSessionBusy, resumeDisplayTitle, shouldResumeSession } from '../resumeIntent';
+
+const BUSY_STATUSES: SessionRuntimeStatus[] = [
+  'starting',
+  'running',
+  'waiting_permission',
+  'waiting_question',
+  'stopping',
+];
+
+const RESUMABLE_STATUSES: SessionRuntimeStatus[] = ['idle', 'completed', 'failed', 'disconnected'];
 
 function session(extra: Partial<ChatSession> = {}): ChatSession {
   return {
@@ -83,6 +94,28 @@ describe('shouldResumeSession (T-03)', () => {
       { skipBusy: false }
     );
     expect(result.shouldResume).toBe(true);
+  });
+
+  it('skips every busy status the shared predicate reports, with a matching reason', () => {
+    // Pins shouldResumeSession to isSessionBusy: any UI control gated on the
+    // predicate must never enable a resume this function would refuse.
+    for (const status of BUSY_STATUSES) {
+      const result = shouldResumeSession(session({ runtimeIdentity: 'rt', status }), workspace());
+      expect(isSessionBusy(status)).toBe(true);
+      expect(result.shouldResume).toBe(false);
+      expect(result.reason).toBe(`busy:${status}`);
+    }
+  });
+});
+
+describe('isSessionBusy (T-03)', () => {
+  it('reports exactly the statuses where the Host refuses a resume', () => {
+    for (const status of BUSY_STATUSES) {
+      expect(isSessionBusy(status)).toBe(true);
+    }
+    for (const status of RESUMABLE_STATUSES) {
+      expect(isSessionBusy(status)).toBe(false);
+    }
   });
 });
 

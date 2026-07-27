@@ -1,3 +1,4 @@
+import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 
 /**
@@ -22,6 +23,23 @@ export interface ResumeIntent {
   };
   /** Reason the resume was skipped (for telemetry / diags). */
   reason?: string;
+}
+
+/**
+ * Statuses where the Host would reject a resume with `session_busy`.
+ *
+ * Single source of truth: `shouldResumeSession` skips these, and the UI must
+ * disable any resume-backed control for the same set — otherwise the button is
+ * a guaranteed no-op (T-03 review).
+ */
+export function isSessionBusy(status: SessionRuntimeStatus): boolean {
+  return (
+    status === 'starting' ||
+    status === 'running' ||
+    status === 'waiting_permission' ||
+    status === 'waiting_question' ||
+    status === 'stopping'
+  );
 }
 
 export function shouldResumeSession(
@@ -54,17 +72,8 @@ export function shouldResumeSession(
   if (!runtimeIdentity) {
     return { shouldResume: false, reason: 'no-runtime-identity' };
   }
-  if (skipBusy) {
-    const status = session.status;
-    if (
-      status === 'starting' ||
-      status === 'running' ||
-      status === 'waiting_permission' ||
-      status === 'waiting_question' ||
-      status === 'stopping'
-    ) {
-      return { shouldResume: false, reason: `busy:${status}` };
-    }
+  if (skipBusy && isSessionBusy(session.status)) {
+    return { shouldResume: false, reason: `busy:${session.status}` };
   }
   return {
     shouldResume: true,
