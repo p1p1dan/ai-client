@@ -14,7 +14,7 @@
 
 | Plan | Status | Current Phase | Last Landed | Next Target |
 |---|---|---|---|---|
-| [openchamber-chat-refactor](./plans/openchamber-chat-refactor/README.md) | In Progress | Phase 3 Chat MVP 收口 | 2026-07-27 四连：#8 `bfd4f6b` · T-07 补强 `0f886a8` · T-20 Effort `4c3f67e` · T-03 收尾 `7a5c2cd`（45 文件 455 例三绿） | 用户统一 GUI 点测（T-04/T-07/T-20/T-06/T-03）；T-18 进行中；并行 T-05 |
+| [openchamber-chat-refactor](./plans/openchamber-chat-refactor/README.md) | In Progress | Phase 3 Chat MVP 收口 | 2026-07-27 五连：#8 `bfd4f6b` · T-07 补强 `0f886a8` · T-20 Effort `4c3f67e` · T-03 收尾 `7a5c2cd` · T-18 粘贴附件 `703f981`（49 文件 561 例三绿） | 用户统一 GUI 点测（T-04/T-07/T-20/T-06/T-03/T-18 六项）；T-05 是唯一剩余纯开发项 |
 
 ## 遗留规划根（保留原位，不迁移不删除）
 

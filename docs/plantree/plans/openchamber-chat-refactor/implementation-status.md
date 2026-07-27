@@ -3,9 +3,9 @@
 > 短操作交接。历史证据勿堆此处，进台账档案。
 
 - **Current Phase**: Phase 3 Chat MVP 收口（2026-07-24 双轨合一，单线推进）
-- **Last Landed**: 2026-07-27 四连落地——**#8 thinking 形态修正** `bfd4f6b` · **T-07 补强四项 + open-q#7** `0f886a8` · **T-20 Effort 选择器** `4c3f67e` · **T-03 收尾（历史读失败 UI）** `7a5c2cd`
-- **Last Verified**: 2026-07-27 三绿——typecheck 干净 / lint 596 文件 0 诊断 / vitest **45 文件 455 例**
-- **Next Target**: 用户统一 GUI 点测（T-04 / T-07 / T-20 / T-06 / T-03 五项均已就绪）；并行推 T-18（进行中）与 T-05
+- **Last Landed**: 2026-07-27 五连落地——**#8 thinking 形态修正** `bfd4f6b` · **T-07 补强四项 + open-q#7** `0f886a8` · **T-20 Effort 选择器** `4c3f67e` · **T-03 收尾（历史读失败 UI）** `7a5c2cd` · **T-18 粘贴图片/文件** `703f981`
+- **Last Verified**: 2026-07-27 三绿——typecheck 干净 / lint 605 文件 0 诊断 / vitest **49 文件 561 例**
+- **Next Target**: 用户统一 GUI 点测（T-04 / T-07 / T-20 / T-06 / T-03 / T-18 六项均已就绪，**无待写代码**）；唯一剩余纯开发项是 T-05（开工前需用户定交互口径）
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -45,13 +45,20 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**。
    - **T-07 补强**：`@` 输入 `src/` 应见目录条目（黄色文件夹图标 + 尾随 `/`）；输入 `git` 应见 `.gitignore` 等隐藏文件；输入 `chat` 右下角应显示 `10/319`。
    - **T-20 Effort 选择器**：Composer 右下角 ModelSelect 旁应见新的档位下拉（默认显示 `Default`）。选 `X-High` 后重启应仍保持；**`Default` 与 `High` 是不同选项**——前者不下发 `effort`、保持模型默认。
    - **T-03 历史读失败提示**：造错的最快办法是把 `session-index.json` 里某条的 `runtimeIdentity` 改成一个不存在的 uuid 再 resume → 应见黄色告警「History file not found」，且**不再显示** "No messages yet"，输入框仍可用。`read_failed` 档才有 Retry 按钮；会话进行中时 Retry 应为禁用并说明原因。
+   - **T-18 粘贴附件**（`703f981`，**本轮全部为人工待测**，Linux 环境起不了 Electron）：
+     ① **纯文本粘贴回归——最重要**：Ctrl+V 普通文本/多行代码必须还是原生插入，一个字不丢；
+     ② 截图工具粘贴 → 出现带缩略图的 chip；Explorer 复制文件粘贴 → 出现 chip **且路径文本照常插入**；
+     ③ 中文输入法合成态下粘贴不打断候选词；粘贴后 `@` 引用弹窗仍正常；
+     ④ 超限提示：>5 MB 图 / >512 KB 文本 / 第 6 个附件 / bmp-tiff-heic 格式 / 8000px 超限，各自应有可读文案；
+     ⑤ 发送中：Send 变 Stop、秒数在走、45s 后转警告色；**双击 Send 与连按 Enter 都只发一次**；
+     ⑥ **jpeg / gif / webp 至今未过网关实测**（自动化只验了 PNG 与 text/plain），请各发一张确认；
+     ⑦ 失败后 chip 保留且 Retry 带着附件重发；健康会话里粘图**不应**出现 Retry 按钮。
 2. **T-06 补测**（网关已恢复，元数据行 / 红色 Stop / 失败卡 + Retry 无重影）
 3. **T-05 开发**（工具卡 + Question 卡）——**开工前需用户定交互口径**：默认折叠？input/output 截断阈值？路径点击是开编辑器还是定位文件树？
-4. **T-18 Composer 粘贴图片/文件**（C-13 协议已就绪）——**进行中**
 5. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
 6. C-15 体积 141MB（+21MB）可接受性——等用户拍板
 7. T-19 消息队列提案——等用户落库
-8. **给主线的需求（T-03 评审衍生）**：`session.history` 的 `truncated` / `omittedCount` 全链路无展示——store 未保留这两个字段，超长历史被静默裁掉且界面无标记。详见[主线台账](../../../plans/ledger-claude-mainline.md)同日行。
+8. **给主线的需求（T-03 / T-18 衍生，共 5 条）**：① `session.history` 的 `truncated` / `omittedCount` 全链路无展示；② **用户气泡不回显附件**——`beginTurn` 只 emit 文字，用户发完图后时间线上没有任何证据表明图发出去了（Renderer 无法自救）；③ 看门狗把整个上传窗口计入 stall，是未来提高附件上限的硬天花板；④ 协议可选加 `document`(PDF)；⑤ store 的 `sendMessage(text, attachments?)` 无人调用、无覆盖，与 Composer 的 `runSend` 双路径漂移。详见[主线台账](../../../plans/ledger-claude-mainline.md)同日两行。
 
 ## Blocked By
 
