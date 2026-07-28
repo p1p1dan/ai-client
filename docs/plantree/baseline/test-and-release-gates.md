@@ -23,7 +23,17 @@
 
 ## GUI 联调环境
 
+先 `pnpm prepare:test-config` 生成本机 config dir（路径随 OS 的 tmpdir 变化，以脚本输出为准），再带着它启动：
+
 ```powershell
-$env:CLAUDE_CONFIG_DIR='C:\Users\13927\AppData\Local\Temp\aiclient-gui-test-config'; pnpm dev
+# Windows (PowerShell)
+$env:CLAUDE_CONFIG_DIR='<prepare:test-config 输出路径>'; pnpm dev
 ```
-（等价 `pnpm prepare:test-config` 生成；Beta 壳入口：Settings → Appearance → OpenChamber Workspace Shell）
+
+```bash
+# Linux / macOS（Linux 上另需 NODE_USE_ENV_PROXY=1 让 Node fetch 走代理 env）
+CLAUDE_CONFIG_DIR='<prepare:test-config 输出路径>' pnpm dev
+```
+
+首启无仓库时用 `pnpm dev -- --open-path=<仓库绝对路径>` 注册仓库（OpenChamber 壳内无添加仓库 UI）。
+Beta 壳入口：Settings → Appearance → OpenChamber Workspace Shell（`SKIP_ONBOARDING_GATE=true` 时强制开启）。

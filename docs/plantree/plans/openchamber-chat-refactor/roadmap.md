@@ -25,6 +25,7 @@
 - **T-07 补强四项 + open-q#7** ✅ 2026-07-27 `0f886a8`（目录可选 +144 条 / `--hidden` 90 条隐藏条目 / 查 `chat` 显示「10/319」/ 同分全序；`searchContent` 反斜杠一并修。含 8 例真跑 ripgrep 集成测试；41 文件 391 例三绿）
 - **T-20 Effort 选择器** ✅ 2026-07-27 `4c3f67e`（Renderer→Main→Host 全链；「Default」= 不发 `effort` 键，与 T-20 前行为一致；顺带把存储逻辑下沉为纯函数以绕开 vitest 无 React 渲染器的限制；44 文件 417 例三绿）
 - **T-18 Composer 粘贴图片/文件** ✅ 2026-07-27 `703f981`（**上限依据先被实测推翻再重建**：C-13 的「152 KB → 79s」当日复测为 150 KB→11.2s / 500 KB→9.5s / 1 MB→11~16s / 2 MB→10.6s / 3 MB→13.0s，延迟与尺寸基本无关，`0.36 s/KB` 模型作废；改按官方硬限制定为单图 5 MB / 文本 512 KB / 总计 10 MB / 最多 5 个，格式仅 jpeg-png-gif-webp。**不做本地降采样**——服务端本来就会降，本地做只是多一块测不到的有损代码。顺带修掉 `runSend` 硬编码 45s 导致发图必被误判失败的功能性 bug，新上界 115s 压在 120s 看门狗之下。评审 1 blocker：粘图即冒出 Retry 幽灵按钮、点下去抹掉已输入文本。106 例，49 文件 561 例三绿。**GUI 全部待人工点验**）
+- **2026-07-28 GUI 首测暴露链五连修** ✅（用户 Ubuntu 机首次真机点测暴露，全部当日修复；明细见主线台账 07-28 六行）：**多轮上下文继承** `eea2f25`（每次发送 close→create wipe 掉 resume 身份，实证每条消息都是全新对话——`decideSendPreamble` 三分支修复，5 例单测）· **demo 机器路径解绑** `0bd70d5`（写死的 `D:/Code/...` 在无仓库新机器上成为会话 cwd → spawn 必炸）· **Host stderr 可观测性 + 随包 Node win32 守卫** `da9a5da`（stderr/error 双无监听：诊断黑洞 + 潜在主进程崩溃；16 例）· **open-path 首启拉取握手 + gotTheLock 门** `9331d51`（lazy App 竞态推送必丢；被拒二次实例曾跑完整启动体误删粘贴暂存目录）· **dev.js argv 透传 + enso→aiclient 归档名** `576f3bd`（品牌改名最后一处行为性残留，Linux 每次 dev 重下 48MB）
 - **T-03 收尾：历史读失败 UI** ✅ 2026-07-27 `7a5c2cd`（协议 §7 归口的最后一块。新纯函数 `historyError.ts` 解析 store 的扁平 `code: message` 串，三种契约码给不同 severity/文案——`jsonl_not_found` 黄、`encrypted_unreadable` 红且明写「不代表没有历史」、`read_failed` 红且可 Retry；Alert 渲染在时间线首条随对话滚走，正是协议 §120「非致命」的视觉对应；Retry 复用 `useResumeSession` 零新增 IPC。评审 1 major：`resume()` 的 false 被吞 + 忙时死按钮 → 提取 `isSessionBusy` 与 Host 拒绝条件同源。含 3 例契约往返测试把解析器钉在真实 reducer 上。45 文件 455 例三绿）
 
 **团队 T-xx 已验收**
@@ -34,7 +35,7 @@
 
 ## In Progress
 
-- **T-04**：代码链逐环验证正确；#8（2026-07-27）落地 `display:'summarized'` 后 **可观测对象已就位**（真 Host 实测 `thinking.delta` 361 字符非空），阻塞解除，等 GUI 人工点验。**注意**：历史 fixture 的 153 个 thinking 块文本仍是空串（录制时 display=omitted，不可追溯补全）→ 只能在**新发起轮次**验证，resume 旧会话无 thinking 属预期。
+- **T-04**：🔴 **重新阻塞——卡在网关**（2026-07-28 用户实测无卡后探针实证，各 2/2）：GUI 默认 `sonnet` 在本网关返回**空文本 thinking 块**（不理会 `display:'summarized'`）；#8 验证过的网关默认模型今日**确定性 400「thinking 块格式无效」**。渲染链逐门核查无 bug，app 侧无可修。等网关侧处理（open-questions #5/#8），修复后仍须在**新发起轮次**验证（旧 fixture 的 153 个 thinking 块文本为空）。
 - **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 
