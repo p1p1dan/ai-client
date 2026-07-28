@@ -138,6 +138,7 @@ export const IPC_CHANNELS = {
 
   // App
   APP_GET_PATH: 'app:getPath',
+  APP_TAKE_PENDING_OPEN_PATH: 'app:takePendingOpenPath',
   APP_UPDATE_AVAILABLE: 'app:updateAvailable',
   APP_CLOSE_REQUEST: 'app:closeRequest',
   APP_CLOSE_CONFIRM: 'app:closeConfirm',

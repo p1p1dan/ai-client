@@ -199,6 +199,7 @@ export default function App() {
     selectedRepo,
     groups,
     activeGroupId,
+    hydrated,
     setSelectedRepo: setSelectedRepoState,
     setActiveGroupId,
     saveRepositories,
@@ -737,7 +738,10 @@ export default function App() {
   );
 
   useGroupSync(hideGroups, activeGroupId, setActiveGroupId, saveActiveGroupId);
-  useOpenPathListener(true, repositories, saveRepositories, setSelectedRepoState);
+  // Gate on `hydrated` (not a literal `true`): before hydration finishes, this
+  // effect would close over the pre-hydration `repositories === []`, and
+  // `saveRepositories([...[], newRepo])` would wipe out existing repos.
+  useOpenPathListener(hydrated, repositories, saveRepositories, setSelectedRepoState);
   useClaudeIntegration(activeWorktree?.path ?? null, true);
   useCodeReviewContinue(activeWorktree, handleTabChange);
   useWorktreeSync(worktrees, activeWorktree, worktreesFetching, setActiveWorktree, selectedRepo);

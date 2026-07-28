@@ -25,6 +25,7 @@ export function useRepositoryState() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [groups, setGroups] = useState<RepositoryGroup[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string>(ALL_GROUP_ID);
+  const [hydrated, setHydrated] = useState(false);
 
   // Initialize repositories and groups from localStorage
   useEffect(() => {
@@ -69,6 +70,8 @@ export function useRepositoryState() {
     if (savedSelectedRepo) {
       setSelectedRepo(savedSelectedRepo);
     }
+
+    setHydrated(true);
   }, []);
 
   // Save repositories to localStorage
@@ -217,6 +220,7 @@ export function useRepositoryState() {
     selectedRepo,
     groups,
     activeGroupId,
+    hydrated,
     setSelectedRepo,
     setActiveGroupId,
     saveRepositories,

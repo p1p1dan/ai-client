@@ -521,6 +521,8 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.APP_OPEN_PATH, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.APP_OPEN_PATH, handler);
     },
+    takePendingOpenPath: (): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_TAKE_PENDING_OPEN_PATH),
     setLanguage: (language: Locale): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_SET_LANGUAGE, language),
     setProxy: (settings: ProxySettings): Promise<void> =>

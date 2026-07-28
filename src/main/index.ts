@@ -164,10 +164,12 @@ function sendOpenPath(path: string): void {
   if (windows.length > 0) {
     const win = windows[0];
     win.focus();
+    // Always keep the pending value around: even when the renderer is already
+    // mounted, the App's IPC listener may not be registered yet, so the pull
+    // handshake in the renderer still needs something to pull.
+    pendingOpenPath = path;
     // Check if renderer is ready (not loading)
-    if (win.webContents.isLoading()) {
-      pendingOpenPath = path;
-    } else {
+    if (!win.webContents.isLoading()) {
       win.webContents.send(IPC_CHANNELS.APP_OPEN_PATH, path);
     }
   } else {
@@ -363,6 +365,10 @@ async function init(): Promise<void> {
 app
   .whenReady()
   .then(async () => {
+    // Rejected second instance only forwards argv via the 'second-instance'
+    // event on the primary instance; its own startup body must not run.
+    if (!gotTheLock) return;
+
     // Set app user model id for windows
     electronApp.setAppUserModelId('com.aiclient.app');
 
@@ -742,10 +748,6 @@ app
     // to avoid race condition where page loads before handler is registered
     mainWindow.webContents.once('did-finish-load', () => {
       windowFinishedLoading = true;
-      if (pendingOpenPath) {
-        mainWindow?.webContents.send(IPC_CHANNELS.APP_OPEN_PATH, pendingOpenPath);
-        pendingOpenPath = null;
-      }
       maybeSendLiveCredentialsStatus();
     });
 
@@ -764,6 +766,16 @@ app
       onNewWindow: handleNewWindow,
     });
     Menu.setApplicationMenu(menu);
+
+    // Renderer pulls the pending open-path instead of us pushing it: the App
+    // component is lazily imported (Root.tsx `lazy(() => import('./App'))`),
+    // so `did-finish-load` fires before the renderer's IPC listener exists and
+    // a pushed message would be silently dropped (Electron IPC has no replay).
+    ipcMain.handle(IPC_CHANNELS.APP_TAKE_PENDING_OPEN_PATH, () => {
+      const p = pendingOpenPath;
+      pendingOpenPath = null;
+      return p;
+    });
 
     // Handle initial command line args (this may set pendingOpenPath)
     handleCommandLineArgs(process.argv);
