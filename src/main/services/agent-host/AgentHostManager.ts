@@ -21,7 +21,9 @@ import type {
 } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import { app } from 'electron';
+import log from '../../utils/logger';
 import { AgentHostProcess } from './AgentHostProcess';
+import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
 
 export type AgentHostState = 'stopped' | 'starting' | 'ready' | 'error';
@@ -278,6 +280,96 @@ export class AgentHostManager {
     }
   }
 
+  /**
+   * Wire every channel the Host process can speak on.
+   *
+   * Extracted from `startInternal()` so the wiring is reachable from tests —
+   * `startInternal()` spawns a real process and cannot run under vitest.
+   *
+   * `stderr` and `error` were both unhandled before 2026-07-28. That made
+   * Host-side failures invisible (nothing reached main.log, so a bad `cwd`
+   * surfaced only as a generic "Session failed" in the UI), and an unhandled
+   * `error` event on an EventEmitter throws — a spawn failure would have taken
+   * the Main process down instead of degrading to an error state.
+   */
+  private attachProcessHandlers(proc: AgentHostProcess): void {
+    proc.on('event', (event: RuntimeEvent) => {
+      for (const handler of this.eventHandlers) {
+        handler(event);
+      }
+      if (event.type === 'host.ready') {
+        this.state = 'ready';
+      }
+      if (
+        event.type === 'host.error' &&
+        (event as { payload?: { fatal?: boolean } }).payload?.fatal
+      ) {
+        this.state = 'error';
+      }
+    });
+
+    let stderrPending = '';
+    let recentStderr: string[] = [];
+
+    /**
+     * Replay the buffered tail at `error` level. File logging ships at 'error'
+     * only unless the user enables it, so a failure must escalate its own
+     * context or the log stays empty exactly when it is needed.
+     */
+    const dumpRecentStderr = (reason: string) => {
+      if (recentStderr.length === 0) return;
+      log.error(`[agent-host] recent stderr (${reason}), ${recentStderr.length} line(s):`);
+      for (const line of recentStderr) {
+        log.error(`[agent-host:stderr] ${line}`);
+      }
+    };
+
+    proc.on('stderr', (chunk: string) => {
+      const drained = drainStderrLines(stderrPending, chunk);
+      stderrPending = drained.pending;
+      recentStderr = pushRecentStderr(recentStderr, drained.lines);
+      for (const line of drained.lines) {
+        log.info(`[agent-host:stderr] ${line}`);
+      }
+    });
+
+    proc.on('error', (err: Error) => {
+      // Spawn-level failure (bad nodeExecPath, missing entry file, EACCES).
+      // The Host never came up, so no host.error event will ever arrive.
+      log.error('[agent-host] process error', err);
+      dumpRecentStderr('process error');
+      if (this.process === proc) {
+        this.state = 'error';
+      }
+    });
+
+    proc.on('exit', (payload?: { code: number | null; signal: string | null }) => {
+      const trailing = flushStderrPending(stderrPending);
+      recentStderr = pushRecentStderr(recentStderr, trailing);
+      for (const line of trailing) {
+        log.info(`[agent-host:stderr] ${line}`);
+      }
+      stderrPending = '';
+
+      const code = payload?.code ?? null;
+      const signal = payload?.signal ?? null;
+      // code 0 / SIGTERM is our own shutdown() path — not worth an error dump.
+      const clean = code === 0 || signal === 'SIGTERM';
+      if (clean) {
+        log.info(`[agent-host] exited code=${code} signal=${signal}`);
+      } else {
+        log.error(`[agent-host] exited code=${code} signal=${signal}`);
+        dumpRecentStderr('unexpected exit');
+      }
+      recentStderr = [];
+
+      if (this.process === proc) {
+        this.process = null;
+        this.state = 'stopped';
+      }
+    });
+  }
+
   private async startInternal(): Promise<void> {
     this.state = 'starting';
     const resolved = await resolveNode24Runtime({
@@ -300,27 +392,7 @@ export class AgentHostManager {
       },
     });
 
-    proc.on('event', (event: RuntimeEvent) => {
-      for (const handler of this.eventHandlers) {
-        handler(event);
-      }
-      if (event.type === 'host.ready') {
-        this.state = 'ready';
-      }
-      if (
-        event.type === 'host.error' &&
-        (event as { payload?: { fatal?: boolean } }).payload?.fatal
-      ) {
-        this.state = 'error';
-      }
-    });
-
-    proc.on('exit', () => {
-      if (this.process === proc) {
-        this.process = null;
-        this.state = 'stopped';
-      }
-    });
+    this.attachProcessHandlers(proc);
 
     this.process = proc;
     await proc.start();
@@ -338,12 +410,19 @@ export class AgentHostManager {
 }
 
 /**
- * Packaged builds ship a pinned node.exe under resources/node-runtime
+ * Packaged Windows builds ship a pinned node.exe under resources/node-runtime
  * (C-15/D17) — preferred over machine Node discovery. Dev returns undefined
  * so development behavior is unchanged.
+ *
+ * Windows-only on purpose: the whole chain is win-x64 (fetch-node-runtime.mjs
+ * downloads the Windows zip, afterPack.mjs copies node.exe, verify-packaged-app
+ * asserts it). On packaged macOS/Linux there is no bundled runtime to find, so
+ * returning a path here only fed the resolver a candidate that could never
+ * exist; those platforms fall back to machine Node discovery by design.
  */
 export function getBundledNodeRuntimePath(): string | undefined {
   if (!app.isPackaged) return undefined;
+  if (process.platform !== 'win32') return undefined;
   return path.join(process.resourcesPath, 'node-runtime', 'node.exe');
 }
 

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { AgentHostCommand } from '@shared/types/agentHost';
 import type { RuntimeEvent, RuntimeEventType } from '@shared/types/runtimeEvents';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // AgentHostManager only touches `electron.app` inside startInternal() (process spawn path),
 // which these tests never reach — they prime the manager directly into the 'ready' state with
@@ -12,6 +12,16 @@ vi.mock('electron', () => ({
     getAppPath: () => '/app',
   },
 }));
+
+// electron-log touches app paths at import time; the manager only needs a sink.
+// vi.hoisted because vi.mock factories are lifted above plain const declarations.
+const logSpy = vi.hoisted(() => ({
+  info: vi.fn(),
+  error: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+}));
+vi.mock('../../../utils/logger', () => ({ default: logSpy, initLogger: vi.fn() }));
 
 /** Minimal EventEmitter stand-in for AgentHostProcess: 'event' / 'exit' + isRunning + send(). */
 class FakeAgentHostProcess extends EventEmitter {
@@ -201,5 +211,158 @@ describe('AgentHostManager.listHistory', () => {
     } satisfies RuntimeEvent);
 
     await expect(promise).rejects.toThrow('read_failed: boom');
+  });
+});
+
+/**
+ * `stderr` and `error` had no listener before 2026-07-28: Host diagnostics were
+ * dropped on the floor (a bad `cwd` surfaced only as a generic "Session failed"
+ * with nothing in main.log), and an unhandled 'error' event on an EventEmitter
+ * throws — a spawn failure would have crashed the Main process.
+ *
+ * attachProcessHandlers() is exercised directly because startInternal() spawns
+ * a real child process and cannot run under vitest.
+ */
+describe('AgentHostManager.attachProcessHandlers', () => {
+  async function attachedManager() {
+    const { AgentHostManager } = await import('../AgentHostManager');
+    const manager = new AgentHostManager();
+    const proc = new FakeAgentHostProcess();
+    const internals = manager as unknown as {
+      process: FakeAgentHostProcess | null;
+      state: string;
+      attachProcessHandlers(p: FakeAgentHostProcess): void;
+    };
+    internals.attachProcessHandlers(proc);
+    internals.process = proc;
+    internals.state = 'ready';
+    return { proc, internals };
+  }
+
+  beforeEach(() => {
+    logSpy.info.mockClear();
+    logSpy.error.mockClear();
+  });
+
+  it('logs each complete Host stderr line', async () => {
+    const { proc } = await attachedManager();
+
+    proc.emit('stderr', '[agent-host] starting\n[agent-host] cometix resolved\n');
+
+    const logged = logSpy.info.mock.calls.map((c) => c[0] as string);
+    expect(logged).toContain('[agent-host:stderr] [agent-host] starting');
+    expect(logged).toContain('[agent-host:stderr] [agent-host] cometix resolved');
+  });
+
+  it('joins a line split across two stderr chunks instead of logging halves', async () => {
+    const { proc } = await attachedManager();
+
+    proc.emit('stderr', 'cometix reso');
+    expect(logSpy.info).not.toHaveBeenCalled();
+
+    proc.emit('stderr', 'lved\n');
+    expect(logSpy.info).toHaveBeenCalledWith('[agent-host:stderr] cometix resolved');
+  });
+
+  it('flushes an unterminated final stderr line on exit', async () => {
+    const { proc } = await attachedManager();
+
+    proc.emit('stderr', 'fatal: no newline at the end');
+    proc.emit('exit', { code: 1, signal: null });
+
+    const logged = logSpy.info.mock.calls.map((c) => c[0] as string);
+    expect(logged).toContain('[agent-host:stderr] fatal: no newline at the end');
+    // A non-zero exit is escalated to error level (see host-failure diagnostics below).
+    const escalated = logSpy.error.mock.calls.map((c) => String(c[0]));
+    expect(escalated).toContain('[agent-host] exited code=1 signal=null');
+  });
+
+  it('survives an exit emitted without a payload', async () => {
+    const { proc, internals } = await attachedManager();
+
+    expect(() => proc.emit('exit')).not.toThrow();
+    expect(internals.state).toBe('stopped');
+  });
+
+  it('logs a spawn error and degrades to the error state instead of throwing', async () => {
+    const { proc, internals } = await attachedManager();
+    const err = new Error('spawn ENOENT');
+
+    // An unhandled 'error' event would throw here — the listener is the fix.
+    expect(() => proc.emit('error', err)).not.toThrow();
+    expect(logSpy.error).toHaveBeenCalledWith('[agent-host] process error', err);
+    expect(internals.state).toBe('error');
+  });
+});
+
+/**
+ * The stderr wiring is only useful if a failure reaches the log FILE. This app
+ * ships file logging at 'error' unless the user enables it (logger.ts
+ * initLogger defaults enabled=false), so info-level stderr lines are dropped in
+ * the configuration almost everyone runs — a failure must escalate its own
+ * buffered context to 'error' or the log is empty exactly when it matters.
+ */
+describe('AgentHostManager host-failure diagnostics', () => {
+  async function attached() {
+    const { AgentHostManager } = await import('../AgentHostManager');
+    const manager = new AgentHostManager();
+    const proc = new FakeAgentHostProcess();
+    const internals = manager as unknown as {
+      process: FakeAgentHostProcess | null;
+      state: string;
+      attachProcessHandlers(p: FakeAgentHostProcess): void;
+    };
+    internals.attachProcessHandlers(proc);
+    internals.process = proc;
+    internals.state = 'ready';
+    return { proc, internals };
+  }
+
+  beforeEach(() => {
+    logSpy.info.mockClear();
+    logSpy.error.mockClear();
+  });
+
+  const errorText = () => logSpy.error.mock.calls.map((c) => String(c[0]));
+
+  it('replays buffered stderr at error level on a non-zero exit', async () => {
+    const { proc } = await attached();
+
+    proc.emit('stderr', '[agent-host] starting\ncometix resolved\n');
+    expect(errorText()).toHaveLength(0);
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    expect(errorText()).toContain('[agent-host] exited code=1 signal=null');
+    expect(errorText()).toContain('[agent-host:stderr] [agent-host] starting');
+    expect(errorText()).toContain('[agent-host:stderr] cometix resolved');
+  });
+
+  it('replays buffered stderr at error level on a spawn error', async () => {
+    const { proc } = await attached();
+
+    proc.emit('stderr', 'boot banner\n');
+    proc.emit('error', new Error('spawn ENOENT'));
+
+    expect(errorText()).toContain('[agent-host:stderr] boot banner');
+  });
+
+  it('stays quiet at error level on a clean shutdown', async () => {
+    const { proc } = await attached();
+
+    proc.emit('stderr', '[agent-host] starting\n');
+    proc.emit('exit', { code: 0, signal: null });
+
+    expect(logSpy.error).not.toHaveBeenCalled();
+    expect(logSpy.info).toHaveBeenCalledWith('[agent-host] exited code=0 signal=null');
+  });
+
+  it('treats our own SIGTERM shutdown as clean', async () => {
+    const { proc } = await attached();
+
+    proc.emit('stderr', '[agent-host] starting\n');
+    proc.emit('exit', { code: null, signal: 'SIGTERM' });
+
+    expect(logSpy.error).not.toHaveBeenCalled();
   });
 });
