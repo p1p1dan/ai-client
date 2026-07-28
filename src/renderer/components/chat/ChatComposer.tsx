@@ -34,6 +34,7 @@ import { toWireEffort } from './efforts';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { ModelSelect } from './ModelSelect';
 import { defaultModelId } from './models';
+import { decideSendPreamble } from './sendPreamble';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
@@ -215,7 +216,10 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   // gateway revoked key) without ever flipping session.status to running, and
   // the user needs Stop during the 45s wait, not just when store says busy.
   const canStop = busy || sending;
-  const canSend = Boolean(activeSessionId && activeWorkspace && !disabled && !canStop);
+  // `activeWorkspace?.path` (not just presence): the demo placeholder tree
+  // carries empty paths until real repositories are registered, and an empty
+  // path must never become an agent cwd.
+  const canSend = Boolean(activeSessionId && activeWorkspace?.path && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
@@ -241,13 +245,15 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     ? 'No session selected — pick Live Agent Host in the left nav (or click New).'
     : !activeWorkspace
       ? 'Active session has no workspace — re-open a repository and refresh.'
-      : lastError
-        ? `Error: ${lastError}`
-        : sending
-          ? 'Starting Agent Host / sending…'
-          : busy
-            ? 'Agent Host running — use Stop to abort'
-            : `Ready · cwd: ${activeWorkspace.path}`;
+      : !activeWorkspace.path
+        ? 'No repository registered — launch with --open-path=<repo> (or add a repository) first.'
+        : lastError
+          ? `Error: ${lastError}`
+          : sending
+            ? 'Starting Agent Host / sending…'
+            : busy
+              ? 'Agent Host running — use Stop to abort'
+              : `Ready · cwd: ${activeWorkspace.path}`;
 
   const handleSend = async () => {
     const trimmed = value.trim();
@@ -352,7 +358,10 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   };
 
   const runSend = async (trimmed: string, drafts: readonly AttachmentDraft[]) => {
-    if (!canSend || !activeSessionId || !activeWorkspace) {
+    // Explicit `.path` check (independent of canSend): an empty workspace path
+    // is the demo placeholder — creating a session on it would persist a fake
+    // cwd into session-index.json and die in spawn on the Host side.
+    if (!canSend || !activeSessionId || !activeWorkspace?.path) {
       return;
     }
     if (inFlightRef.current) return;
@@ -369,6 +378,18 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     const attachmentBytes = totalAttachmentBytes(drafts);
     const timeoutMs = sendTimeoutMs(attachmentBytes);
 
+    // 2026-07-28 continuity fix: decide, off a store snapshot and BEFORE any
+    // IPC, whether the Host registry entry is still alive (direct send — no
+    // close/create round-trip needed), gone but resumable (we still know its
+    // runtimeIdentity), or genuinely new (create). Closing and recreating the
+    // Host session on every send used to wipe the resume identity each turn,
+    // silently starting a brand-new conversation every time.
+    const preState = useChatSessionsStore.getState();
+    const hostBound = preState.hostBoundSessionIds.includes(sessionId);
+    const knownIdentity =
+      preState.sessions.find((session) => session.id === sessionId)?.runtimeIdentity ?? null;
+    const preamble = decideSendPreamble({ hostBound, runtimeIdentity: knownIdentity });
+
     // Starting a fresh send invalidates any prior failure's retryable prompt:
     // the new prompt is what the user wants now, and a stale ghost Retry would
     // linger if the prior failed stream happened to settle later (see the
@@ -378,10 +399,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     // A skip warning belongs to the paste that produced it, not to the next
     // turn. Sending is one of the three clear triggers (next attach / Send / x).
     dismissAttachmentNotice();
-    useChatSessionsStore.setState((state) => ({
-      hostBoundSessionIds: state.hostBoundSessionIds.filter((id) => id !== sessionId),
-      lastError: null,
-    }));
+    useChatSessionsStore.setState({ lastError: null });
 
     setSending(true);
     setSendBudgetMs(timeoutMs);
@@ -396,14 +414,20 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     const seenEvents: string[] = [];
     const assistantMessageIds = new Set<string>();
     let sawSessionCreated = false;
+    let sawSessionResumed = false;
     let sawAssistantProgress = false;
     let fatalHostError: string | null = null;
+    let fatalHostErrorCode: string | null = null;
 
     const unsubEvents = window.electronAPI.chat.onRuntimeEvent((event) => {
       seenEvents.push(formatRuntimeEvent(event));
 
       if (event.type === 'session.created' && event.sessionId === sessionId) {
         sawSessionCreated = true;
+      }
+
+      if (event.type === 'session.resumed' && event.sessionId === sessionId) {
+        sawSessionResumed = true;
       }
 
       if (event.sessionId === sessionId) {
@@ -421,14 +445,34 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
           event.payload && typeof event.payload === 'object' && 'code' in event.payload
             ? String((event.payload as { code?: string }).code ?? '')
             : '';
+        fatalHostErrorCode = code || null;
         fatalHostError = code ? `${code}: ${message}` : message;
         useChatSessionsStore.setState({ lastError: fatalHostError });
       }
     });
 
-    try {
-      await window.electronAPI.chat.ensureHost();
+    // A broken binding must not be retried as-is next send: the following
+    // send should go through 'resume' (if the runtimeIdentity is still known)
+    // or 'create' fresh, never silently reuse a registry entry the Host
+    // already dropped.
+    const unbindHost = () => {
+      useChatSessionsStore.setState((state) => ({
+        hostBoundSessionIds: state.hostBoundSessionIds.filter((id) => id !== sessionId),
+      }));
+    };
 
+    const setCreateTimeoutError = () => {
+      useChatSessionsStore.setState({
+        lastError: [
+          'Timed out waiting for session.created after createSession.',
+          `rawEvents=[${seenEvents.join(' ; ') || 'none'}]`,
+          `sessionId=${sessionId}`,
+        ].join(' | '),
+      });
+    };
+
+    /** close → sleep(120) → create → wait for session.created. */
+    const runCreateSequence = async (): Promise<'ok' | 'fatal' | 'timeout'> => {
       // Drop Host registry entry so createSession is not "Session already exists".
       await window.electronAPI.chat.closeSession({ sessionId }).catch(() => undefined);
       await sleep(120);
@@ -442,19 +486,8 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
       });
 
       const created = await waitUntil(() => sawSessionCreated || Boolean(fatalHostError), 5000);
-      if (fatalHostError) {
-        return;
-      }
-      if (!created) {
-        useChatSessionsStore.setState({
-          lastError: [
-            'Timed out waiting for session.created after createSession.',
-            `rawEvents=[${seenEvents.join(' ; ') || 'none'}]`,
-            `sessionId=${sessionId}`,
-          ].join(' | '),
-        });
-        return;
-      }
+      if (fatalHostError) return 'fatal';
+      if (!created) return 'timeout';
 
       useChatSessionsStore.setState((state) => ({
         hostBoundSessionIds: state.hostBoundSessionIds.includes(sessionId)
@@ -462,7 +495,11 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
           : [...state.hostBoundSessionIds, sessionId],
         lastError: null,
       }));
+      return 'ok';
+    };
 
+    /** Send the turn, then wait for assistant / tool / permission / terminal progress. */
+    const sendAndWait = async (): Promise<boolean> => {
       await window.electronAPI.chat.send({
         sessionId,
         text: trimmed,
@@ -476,7 +513,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
       setValue('');
 
       // Running alone is not success — wait for assistant / tool / permission / terminal.
-      const ok = await waitUntil(() => {
+      return waitUntil(() => {
         if (fatalHostError) return true;
         if (sawAssistantProgress) return true;
         const state = useChatSessionsStore.getState();
@@ -494,8 +531,89 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
         // Host stall watchdog. sendTimeoutMs(0) is still exactly 45000, so the
         // text-only path waits precisely as long as it did before.
       }, timeoutMs);
+    };
+
+    try {
+      await window.electronAPI.chat.ensureHost();
+
+      if (preamble.action === 'create') {
+        const seq = await runCreateSequence();
+        if (seq === 'fatal') {
+          unbindHost();
+          return;
+        }
+        if (seq === 'timeout') {
+          unbindHost();
+          setCreateTimeoutError();
+          return;
+        }
+      } else if (preamble.action === 'resume') {
+        sawSessionResumed = false;
+        await window.electronAPI.chat
+          .resumeSession({
+            sessionId,
+            runtimeIdentity: preamble.runtimeIdentity,
+            workspacePath,
+            model,
+          })
+          .catch(() => undefined);
+
+        const resumed = await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), 5000);
+        if (!resumed || fatalHostError) {
+          // Resume failed or timed out (stale identity / Host hiccup / etc.)
+          // — fall through ONCE to a fresh session rather than fail the turn.
+          fatalHostError = null;
+          fatalHostErrorCode = null;
+          useChatSessionsStore.setState({ lastError: null });
+
+          const seq = await runCreateSequence();
+          if (seq === 'fatal') {
+            unbindHost();
+            return;
+          }
+          if (seq === 'timeout') {
+            unbindHost();
+            setCreateTimeoutError();
+            return;
+          }
+        } else {
+          useChatSessionsStore.setState((state) => ({
+            hostBoundSessionIds: state.hostBoundSessionIds.includes(sessionId)
+              ? state.hostBoundSessionIds
+              : [...state.hostBoundSessionIds, sessionId],
+            lastError: null,
+          }));
+        }
+      }
+      // 'direct': the Host registry entry is already alive — no close/create
+      // round-trip, straight to send below.
+
+      let ok = await sendAndWait();
+
+      if (preamble.action === 'direct' && fatalHostErrorCode === 'session_not_found') {
+        // The Host dropped the registry entry behind our back (Host restart,
+        // a stale binding, etc.) — fall through ONCE to a fresh session and
+        // resend, instead of failing a turn the user has no way to recover.
+        fatalHostError = null;
+        fatalHostErrorCode = null;
+        unbindHost();
+        useChatSessionsStore.setState({ lastError: null });
+
+        const seq = await runCreateSequence();
+        if (seq === 'fatal') {
+          unbindHost();
+          return;
+        }
+        if (seq === 'timeout') {
+          unbindHost();
+          setCreateTimeoutError();
+          return;
+        }
+        ok = await sendAndWait();
+      }
 
       if (fatalHostError || useChatSessionsStore.getState().lastError) {
+        unbindHost();
         return;
       }
 
@@ -520,6 +638,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
         return;
       }
 
+      unbindHost();
       const state = useChatSessionsStore.getState();
       const session = state.sessions.find((item) => item.id === sessionId);
       const hostAfter = await window.electronAPI.chat.getHostStatus().catch((err: unknown) => ({
@@ -539,6 +658,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
       });
       setRetryable({ text: trimmed });
     } catch (err) {
+      unbindHost();
       useChatSessionsStore.setState({
         lastError: err instanceof Error ? err.message : String(err),
       });
