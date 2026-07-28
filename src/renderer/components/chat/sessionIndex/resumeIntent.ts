@@ -68,6 +68,11 @@ export function shouldResumeSession(
   if (!workspace) {
     return { shouldResume: false, reason: 'no-workspace' };
   }
+  if (!workspace.path) {
+    // Demo placeholder workspace (path '') — resuming against it would hand
+    // the Host an empty cwd. Real workspaces always carry a repository path.
+    return { shouldResume: false, reason: 'no-workspace-path' };
+  }
   const runtimeIdentity = session.runtimeIdentity ?? options.persistedRuntimeIdentity;
   if (!runtimeIdentity) {
     return { shouldResume: false, reason: 'no-runtime-identity' };

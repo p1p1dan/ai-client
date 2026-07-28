@@ -51,6 +51,15 @@ describe('shouldResumeSession (T-03)', () => {
     });
   });
 
+  it('refuses to resume against an empty workspace path (demo placeholder tree)', () => {
+    expect(
+      shouldResumeSession(session({ runtimeIdentity: 'rt' }), workspace({ path: '' }))
+    ).toEqual({
+      shouldResume: false,
+      reason: 'no-workspace-path',
+    });
+  });
+
   it('refuses to resume when the live session has no runtimeIdentity and no persisted fallback', () => {
     const result = shouldResumeSession(session({ runtimeIdentity: undefined }), workspace());
     expect(result.shouldResume).toBe(false);

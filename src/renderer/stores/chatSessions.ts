@@ -119,20 +119,26 @@ export interface ChatSessionsState {
 
 const DEMO_PROJECT: ChatProject = { id: 'project-demo', name: 'demo' };
 
+// Empty path on purpose: the demo tree is a UI placeholder until the T-01
+// sync bridge (useSyncChatWorkspaceTree) delivers real repositories. It used
+// to carry a developer-machine literal ('D:/Code/projects/ai-client'), which
+// silently became the agent cwd on any machine where the bridge had no repo
+// data — every send then died in spawn with "cli.js exists but failed to
+// launch". Composer/resume refuse to run against an empty path instead.
 const DEMO_WORKSPACES: ChatWorkspace[] = [
   {
     id: 'ws-main',
     projectId: DEMO_PROJECT.id,
     name: 'Main',
     kind: 'main',
-    path: 'D:/Code/projects/ai-client',
+    path: '',
   },
   {
     id: 'ws-worktree',
     projectId: DEMO_PROJECT.id,
     name: 'feat/openchamber-chat-refactor',
     kind: 'worktree',
-    path: 'D:/Code/projects/ai-client',
+    path: '',
   },
 ];
 
