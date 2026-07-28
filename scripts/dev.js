@@ -48,7 +48,11 @@ function ensureLocalLinuxRuntimeBundle() {
     /MANAGED_REMOTE_NODE_VERSION = '([^']+)'/
   );
 
-  const archiveName = `enso-remote-runtime-v${serverVersion}-node-v${nodeVersion}-linux-${arch}.tar.gz`;
+  // Must match the producer (build-remote-runtime-bundle.mjs) and the consumer
+  // (RemoteRuntimeAssets.ts remoteRuntimeArchiveName) — both say "aiclient-".
+  // The old "enso-" prefix here never matched either, so this cache check
+  // always missed and every `pnpm dev` on Linux rebuilt the ~48MB bundle.
+  const archiveName = `aiclient-remote-runtime-v${serverVersion}-node-v${nodeVersion}-linux-${arch}.tar.gz`;
   const checksumName = `${archiveName}.sha256`;
   const distRuntimeDir = join(root, 'dist', 'remote-runtime');
   const archivePath = join(distRuntimeDir, archiveName);
@@ -74,10 +78,18 @@ function ensureLocalLinuxRuntimeBundle() {
 ensureLocalLinuxRuntimeBundle();
 
 // Start electron-vite in a new process group so we can kill the entire tree
-// On Linux, --no-sandbox is needed when unprivileged user namespaces are disabled
+// On Linux, --no-sandbox is needed when unprivileged user namespaces are disabled.
+// Also forward our own CLI args to the app (`pnpm dev -- --open-path=<repo>`):
+// electron-vite passes everything after `--` to Electron, and main/index.ts
+// consumes --open-path to register a repository — the only way to do that on a
+// machine where the legacy Add Repository UI is unreachable.
 const electronArgs = ['electron-vite', 'dev'];
-if (process.platform === 'linux') {
-  electronArgs.push('--', '--no-sandbox');
+const passthroughArgs = [
+  ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
+  ...process.argv.slice(2),
+];
+if (passthroughArgs.length > 0) {
+  electronArgs.push('--', ...passthroughArgs);
 }
 const child = spawn('npx', electronArgs, {
   cwd: root,
