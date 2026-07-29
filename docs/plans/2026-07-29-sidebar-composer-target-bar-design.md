@@ -154,3 +154,11 @@ Path A(SDK `forwardSubagentText` 直播)作为后续增强。⚠️ 派生工具
 | D | **超出原二选一**:用户要求**中列整体对齐 Cursor 风格**——空态 Composer 垂直居中+目标栏在上,会话态时间线+Composer 沉底+目标行在下,「不要做成现在这种底部的聊天软件风格」 | 演化为:立项 **A07** 观感基线(Cursor 截图 × Flexoki,用户验收后施工)+ **T-28** 中列状态化布局;工具行/问答卡仍按 T-05 openchamber 口径(D23 边界);会话 Tab 栏是否引入 → A07 出带/不带两版验收时定 |
 
 参照截图已入库:`docs/design/refs/cursor-20260729/`(侧栏样式 / 初始未发消息状态 / 发起对话后状态 / 三个下拉展开态)。
+
+## 10. 追记(2026-07-29 晚,D24):工具行/问答卡形态源改判
+
+§9-D 中「工具行/问答卡仍按 T-05 openchamber 口径(D23 边界)」一句**作废**:用户在 Cursor 中触发两类组件的
+调用演示并存图(refs/cursor-20260729/ 新增五图),拍板改以 Cursor 形态为源(总台账 **D24**)。要点:工具行=
+动词开头无图标灰阶单行 + `Explored N files, M searches` 聚合展开 + `Thought`/`Worked for Ns` 折叠行;问答卡=
+`Questions` 折叠条(多题分页)/ A-B-C-D 字母行选项 / Skip+Continue / **回答后冻结 `Answers` 卡(与 D20 一致)** /
+`Questions skipped` 跳过态。T-05 开工前按 A07 v2 二次重写验收标准;「点击历史消息重新编辑」标注待定仅归档。
