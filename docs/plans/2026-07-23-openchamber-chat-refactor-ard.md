@@ -85,14 +85,23 @@ PROGRESS.md 主张「原样拷贝 OpenChamber UI + sync/store + Cometix 打包�
 
 MVP 对齐策略（2026-07-28 D19 改写）：三列 + 导轨骨架与上述尺寸为 MVP 硬性；surface 本轮先落 `chat / editor / git / terminal / context` 五种，其余 6 种保留注册位后置；Sidebar 与 ContextPanel 均须可拖拽（现状不可拖是缺陷，见 T-22），Rail 的拖拽排序可后置，但 44px 宽度属 MVP；圆点只做 `git` surface 的变更文件指示（照参考实现），其余 surface 不做。
 
-左栏数据层级（映射到 AiClient，对应截图中的 `recent` / `test1` 分组）：
+左栏数据层级（**2026-07-29 D21 改写，随 T-26 落地**；原三层结构见下方存档）：
 
 ```text
-Project（如 test1）
-└── Workspace（工作目录，类型：Main | Worktree | Remote | Temp）
-    └── Session（绑定该 Workspace 的 Claude 对话，可有多个）
-+ 额外分组：recent（按最近活动的跨 Project Session 列表）
+Project（文件夹，如 test1）
+└── Session（平铺该 Project 全部 Workspace 的对话；行内显分支 chip——
+    main/master 也显实际分支名，temp/remote 显 kind 标签，分支未知不显）
++ 额外分组：Recent（跨 Project：busy 或 48h 内活动，7 条 + Show more，可折叠）
 ```
+
+**Workspace 不再是树层级**——它降级为会话的「运行目标属性」（数据模型保留
+`ChatWorkspace`，含 `branch` 派生字段）：不可选中、不承载展开态、不参与键盘导航、
+不作为新建会话落点；「在哪个 Workspace 跑」的选择权唯一归 Composer 目标栏（T-27，D22）。
+参考实现同款且是刻意取舍（openchamber `sidebar/DOCUMENTATION.md:6,13`：worktree
+数据层保留、渲染层刻意移除）。本改写不属 D19 条款，非推翻 D19。
+
+> 原三层结构存档（2026-07-29 前）：`Project → Workspace（Main|Worktree|Remote|Temp）→ Session`
+> + recent 分组。
 
 Session 状态：`idle | starting | running | waiting_permission | waiting_question | stopping | completed | failed | disconnected`。
 

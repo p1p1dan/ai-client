@@ -9,15 +9,17 @@
   - 文档（2026-07-29 四批）：**D24 落库——工具行/问答卡形态源改判为 Cursor**（用户在 Cursor 触发两类组件演示并存图，5 图入库 refs/cursor-20260729/）：工具行=动词开头灰阶单行+聚合展开；问答卡=Questions 折叠条/A-B-C-D 字母行/Skip+Continue/**回答后冻结 Answers 卡（与 D20 合流）**。D23 的「时间线内部不动」边界句作废；**T-05 待二次重写验收标准**（开工前、按 A07 v2）；A07 v2 补两屏制作中。「点击历史消息重新编辑」用户标注待定、仅归档
   - 文档（2026-07-29 三批）：**A07 中列 Cursor 观感基线 ✅ 用户正式定稿(2026-07-29,v3)** [`docs/design/a07-cursor-composer-alignment.html`](../../../design/a07-cursor-composer-alignment.html)——六屏 × Flexoki 亮暗;§08 五件事已全部裁定,工具行交互口径(Read 可点击/Grep 悬浮命中列表)与 main/master chip 已烧入;**T-05 验收标准已按定稿重写(执行计划 §3 T-05 行现行权威段)**，token 与 globals.css 机器校验一致；**待用户浏览器验收**（重点：Tab 栏带/不带、运行位置只读 chip），通过后 T-27/T-28 方可施工
   - 文档（2026-07-29）：**侧栏两层化 + Composer 目标栏合并设计**落库 [`docs/plans/2026-07-29-sidebar-composer-target-bar-design.md`](../../../plans/2026-07-29-sidebar-composer-target-bar-design.md)（双独立方案 Opus/Codex 收敛合并；用户 2026-07-29 拍板方向）——核心裁定：侧栏「文件夹→对话」两层、Workspace 降为运行目标属性、分支下拉=worktree 选择器**禁 in-place checkout**、subagent 后置（Path B 先行）；**T-24 账实不符已更正**（实体随 `b38017b` 夹带落库）。呈现层四点待拍板 → open-q **#16**，拍板后 D21/D22 落总台账、T-26/T-27 立项
+  - 代码（2026-07-29 三批）：**T-26 侧栏两层化落地** `dd23b01` —— 侧栏「文件夹→会话」两层平铺（D21/D21-A）：`sidebarTree.ts` 纯函数断言先行（14 例）、全量分支 chip（main/master 显实际分支名，`ChatWorkspace.branch` 纯可选加法）、Recent 段 48h 口径（7 条+Show more，折叠持久化）、`selectedWorkspaceId` 移除（选择权移交 T-27 目标栏）。对抗复核 1 blocker——sync 桥变更签名缺 `branch`，冷启动 chip 全灭——已修（`workspaceTreeSignature` + 回归测试）；ARD §4 数据层级文字块按 D21 连带改写。**GUI 点验待用户**。明细见主线台账 2026-07-29 T-26 行
   - 代码（2026-07-29 二批）：**缓存排查闭环** `3622c19` —— 对话每条消息全量重写缓存的双根因坐实：**主因网关无会话亲和（app 无可修，open-q #15 待用户找运营方）**；次因 Host `session.resume` 丢 model/effort（Host 重启后静默换回 cli 默认模型）已修，+3 例钉死 resume→query() 下发。故障档案 [`docs/design/BUG-2026-07-29-prompt-cache-rewrite.md`](../../../design/BUG-2026-07-29-prompt-cache-rewrite.md)，探针 `spikes/cache-affinity-probe.mjs` / `capture-proxy.mjs` 入库
   - 代码（2026-07-29）：**窗口链** `d68d3c6` · **凭证隔离** `b18ccac` —— **「不出窗口」故障闭环**——同事的 show 兜底复核有效（本机实际生效路径 = `did-finish-load`，`ready-to-show` 从不触发），**原故障报告根因判错已更正**；连带修 `MainWindow.ts` 窗口状态从未恢复的既有 bug + 兜底日志被 electron-log 静音；顺带修 `McpSection.tsx` 嵌套 `<button>`。**dev 态凭证隔离**——`scripts/dev.js` 读 `dev.env` 剥离/注入/隔离，裸启动不再回落开发者本机 `~/.claude` 登录。明细见主线台账 2026-07-29 两行
 - **Last Verified**: 2026-07-28 Linux 三绿——typecheck 干净 / lint 609 文件 0 诊断 / vitest **51 文件 590 例**（3 失败=Windows-only 基线）
   - **2026-07-29 复核（`d68d3c6` / `b18ccac` / T-21 `b38017b` 合并态）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。**例数未增 = 本轮未补测试**，`dev.js` 凭证逻辑目前零自动化断言（见 open-q **#14**）。
   - **2026-07-29 二批复核（`3622c19` 合并态）**：typecheck 干净 / lint 615 文件 0 诊断 / vitest **54 文件 621 例**（+3，同 3 例 Windows-only 失败）。
+  - **2026-07-29 三批复核（T-26 `dd23b01` 合并态）**：typecheck 干净 / lint **620 文件 0 诊断** / vitest **55 文件 635 例**（+1 文件 +14 例，同 3 例 Windows-only 失败）。
   - **T-21 复核口径（2026-07-28 审查回合，代码已于 2026-07-29 提交 `b38017b`）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。
     lint 文件数从 613 涨到 615 是**新增文件**所致（`docs/design/phase0a-openchamber-alignment.html` 基线产物 + `src/renderer/lib/__tests__/ghosttyTheme.test.ts`），**`biome.json` 未改**——
     施工中一度加过 `"!docs/design"` 排除项来绕开该 HTML 的 13 条诊断，这违反「不得改 lint 配置变绿」，已撤销：改为就地修（9 条 `useArrowFunction` 自动修 + 2 条 `noImportantStyles`、2 条 `noUnknownProperty` 加带理由的 `biome-ignore`，后者是 `corner-shape` 这个 Biome 尚无定义的 CSS Backgrounds 4 属性）。
-- **Next Target**（2026-07-29 二次修订，D21~D23 已拍板落库）: **T-24 收尾**（S0：全新机器 GUI 实测 + 台账补登，代码已随 `b38017b` 落库）→ **T-26**（侧栏两层化 flat+chip）→ **T-22**（三列 + 44px 导轨壳结构，废 BottomDock；与 T-26 都碰 LeftNav，按此序串行）→ **T-27**（Composer 目标栏）→ **T-28**（中列状态化布局）→ **T-05 重做** → **T-23**。**A07 基线（中列 Cursor 观感）与 T-26/T-22 并行制作，用户验收后 T-27/T-28 观感部分方可施工**。T-21 已落库 `b38017b`。用户侧 GUI 点测（含**多轮上下文**必测项）与 **T-04 网关阻塞**、**#15 缓存复测裁定**并行。
+- **Next Target**（2026-07-29 二次修订，D21~D23 已拍板落库）: **T-24 收尾**（S0：全新机器 GUI 实测 + 台账补登，代码已随 `b38017b` 落库）→ **T-22**（三列 + 44px 导轨壳结构，废 BottomDock；**T-26 已落库 `dd23b01`，串行前置已清**）→ **T-27**（Composer 目标栏）→ **T-28**（中列状态化布局）→ **T-05 重做** → **T-23**。**A07 基线（中列 Cursor 观感）与 T-26/T-22 并行制作，用户验收后 T-27/T-28 观感部分方可施工**。T-21 已落库 `b38017b`。用户侧 GUI 点测（含**多轮上下文**必测项）与 **T-04 网关阻塞**、**#15 缓存复测裁定**并行。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -113,7 +115,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 3. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
 4. C-15 体积 141MB（+21MB）可接受性——等用户拍板
 5. T-19 消息队列提案——等用户落库
-5-bis. **布局呈现层四点拍板（2026-07-29 新增，阻塞 T-26/T-27 立项）**：open-q **#16** 的 A（侧栏 worktree 默认 by-worktree 带 还是 flat+chip）/ B（运行位置只读指示器 还是 disabled 下拉）/ C（Recent 段去留）/ D（零新视觉值 还是 先补 A07 基线），均已给建议；另 **#15**（网关缓存亲和）需用户找网关运营方
+5-bis. ~~布局呈现层四点拍板~~（**2026-07-29 已收口**：#16 四点当日拍板 → D21~D23 落总台账，T-26 已落库 `dd23b01`、A07 已定稿）；**#15**（网关缓存亲和）改判「待复测裁定」——GUI 重启连发两条看第二条有无缓存读取，裁定前暂缓联系运营方
 6. **给主线的需求（T-03 / T-18 / 07-28 衍生，共 8 条）**：① `session.history` 的 `truncated` / `omittedCount` 全链路无展示；② **用户气泡不回显附件**——`beginTurn` 只 emit 文字，用户发完图后时间线上没有任何证据表明图发出去了（Renderer 无法自救）；③ 看门狗把整个上传窗口计入 stall，是未来提高附件上限的硬天花板；④ 协议可选加 `document`(PDF)；⑤ store 的 `sendMessage(text, attachments?)` 无人调用、无覆盖，与 Composer 的 `runSend` 双路径漂移；⑥ **`session.create` 应校验 workspacePath 存在性**（坏路径现在 created+idle、到 send 才泛化报错）；⑦ **resume 重放与存活 live 时间线会视觉双份**（h:* 整段排在 live 前，Host 中途重启场景）；⑧ thinking 空块（带签名无文本）要不要渲染「已思考」指示——待用户拍板。详见[主线台账](../../../plans/ledger-claude-mainline.md) 07-27/07-28 各行。
 
 ## Blocked By
