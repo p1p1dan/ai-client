@@ -233,6 +233,25 @@ export function isTerminalThemeDark(themeName: string): boolean {
   return getLuminance(theme.background) < 0.5;
 }
 
+/**
+ * Wraps a panel surface colour in the background-image translucency knob.
+ *
+ * The four panel surfaces (--background / --card / --popover / --muted) are
+ * declared in styles/globals.css as `oklch(L C H / var(--panel-bg-opacity, 1))`
+ * so that App/hooks/useBackgroundImage.ts only has to move one scalar. The
+ * declarations below are inline styles on documentElement, i.e. the very same
+ * element that carries :root, so they win outright - they have to carry the
+ * knob themselves or enabling a background image under theme='sync-terminal'
+ * leaves every panel opaque and hides the wallpaper.
+ *
+ * At the default value (1) the output is the untouched input colour, so this
+ * changes nothing about which palette wins in sync-terminal mode (that boundary
+ * is still open-questions #12).
+ */
+export function withPanelBgOpacity(color: string): string {
+  return `color-mix(in srgb, ${color} calc(var(--panel-bg-opacity, 1) * 100%), transparent)`;
+}
+
 // Apply terminal theme colors to app CSS variables
 // syncDarkMode: if true, toggle dark class based on terminal theme; if false, don't change it
 export function applyTerminalThemeToApp(themeName: string, syncDarkMode = true): void {
@@ -247,16 +266,16 @@ export function applyTerminalThemeToApp(themeName: string, syncDarkMode = true):
     root.classList.toggle('dark', isDark);
   }
 
-  // Base colors
-  root.style.setProperty('--background', theme.background);
+  // Base colors - panel surfaces keep the background-image opacity knob
+  root.style.setProperty('--background', withPanelBgOpacity(theme.background));
   root.style.setProperty('--foreground', theme.foreground);
 
   // Card - same as background or slightly different
-  root.style.setProperty('--card', theme.background);
+  root.style.setProperty('--card', withPanelBgOpacity(theme.background));
   root.style.setProperty('--card-foreground', theme.foreground);
 
   // Popover
-  root.style.setProperty('--popover', theme.background);
+  root.style.setProperty('--popover', withPanelBgOpacity(theme.background));
   root.style.setProperty('--popover-foreground', theme.foreground);
 
   // Primary - use foreground as primary
@@ -277,7 +296,7 @@ export function applyTerminalThemeToApp(themeName: string, syncDarkMode = true):
   const mutedFg = isDark
     ? mixColors(theme.foreground, theme.background, 0.4)
     : mixColors(theme.foreground, theme.background, 0.3);
-  root.style.setProperty('--muted', mutedBg);
+  root.style.setProperty('--muted', withPanelBgOpacity(mutedBg));
   root.style.setProperty('--muted-foreground', mutedFg);
 
   // Accent - use blue mixed with background for softer appearance

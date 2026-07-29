@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleHelp,
   FolderGit2,
+  FolderPlus,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -16,20 +17,34 @@ import {
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatWorkspace, WorkspaceKind } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
+import {
+  canCreateSessionOnWorkspace,
+  shouldShowAddRepositoryEmptyState,
+} from './addRepositoryEntry';
 import { createChatSessionOnWorkspace } from './useSyncChatWorkspaceTree';
 
 interface LeftNavProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onOpenSettings?: () => void;
+  /** T-24: opens the shared AddRepositoryDialog mounted in App. */
+  onAddRepository?: () => void;
 }
 
 const STATUS_VARIANT: Record<
@@ -58,7 +73,13 @@ function statusLabel(status: SessionRuntimeStatus): string {
   return status.replace(/_/g, ' ');
 }
 
-export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNavProps) {
+export function LeftNav({
+  collapsed,
+  onToggleCollapsed,
+  onOpenSettings,
+  onAddRepository,
+}: LeftNavProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({});
@@ -112,11 +133,19 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
     return sessions.filter((session) => session.title.toLowerCase().includes(normalized));
   }, [query, sessions]);
 
+  // T-24: the DEMO seed keeps `projects` non-empty on a fresh machine, so the
+  // tree looks populated while every workspace path is empty. Gate on usable
+  // workspaces instead, otherwise the add entry point is never reachable.
+  const showAddRepositoryEmptyState = shouldShowAddRepositoryEmptyState(projects, workspaces);
+  // The fallback target can be a seed workspace with an empty path, and while
+  // the empty state is up the created session would render nowhere.
+  const canStartNewSession = canCreateSessionOnWorkspace(effectiveWorkspaceId, workspaces);
+
   const isProjectExpanded = (projectId: string) => expandedProjects[projectId] !== false;
   const isWorkspaceExpanded = (workspaceId: string) => expandedWorkspaces[workspaceId] !== false;
 
   const handleNewSession = () => {
-    if (!effectiveWorkspaceId) {
+    if (!effectiveWorkspaceId || !canStartNewSession) {
       return;
     }
     const sessionId = createChatSessionOnWorkspace(effectiveWorkspaceId);
@@ -150,6 +179,22 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
         </Button>
       </div>
 
+      {collapsed && (
+        // The action row below is hidden while collapsed, so keep one rail
+        // button — otherwise adding a repository needs an expand first.
+        <div className="flex flex-col items-center gap-1 border-b py-2">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t('Add Repository')}
+            title={t('Add Repository')}
+            onClick={onAddRepository}
+          >
+            <FolderPlus className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {!collapsed && (
         <>
           <div className="space-y-2 border-b p-2">
@@ -158,15 +203,23 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
                 variant="outline"
                 size="xs"
                 className="h-6"
-                disabled={!effectiveWorkspaceId}
+                disabled={!canStartNewSession}
                 onClick={handleNewSession}
               >
                 <Plus className="h-3.5 w-3.5" />
                 New
               </Button>
-              <Button variant="outline" size="xs" className="h-6" disabled>
-                <FolderGit2 className="h-3.5 w-3.5" />
-                Workspace
+              {/* Replaces a permanently disabled "Workspace" placeholder: the
+                  new shell had no reachable way to register a repository. */}
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-6 min-w-0"
+                title={t('Add Repository')}
+                onClick={onAddRepository}
+              >
+                <FolderPlus className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 truncate">{t('Add Repository')}</span>
               </Button>
             </div>
             <div className="relative">
@@ -183,83 +236,105 @@ export function LeftNav({ collapsed, onToggleCollapsed, onOpenSettings }: LeftNa
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-3 p-2">
-              <section>
-                <p className="px-2 text-xs font-medium text-muted-foreground">Recent</p>
-                <div className="mt-1 space-y-0.5">
-                  {recentSessions.map((session) => (
-                    <SessionTreeItem
-                      key={`recent-${session.id}`}
-                      session={session}
-                      active={activeSessionId === session.id}
-                      onSelect={() => handleSelectSession(session.id)}
-                      onClose={() => void close(session.id)}
-                      onRename={(title) => void rename(session.id, title)}
-                      onArchive={() => void archive(session.id, true)}
-                      disabled={false}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              {projects.length === 0 ? (
-                <p className="px-2 text-xs text-muted-foreground">
-                  还没有可用 Workspace。请先在旧侧栏添加仓库，或确认已打开某个仓库后再回到本壳。
-                </p>
+              {showAddRepositoryEmptyState ? (
+                // Seed sessions point at empty-path workspaces and cannot send,
+                // so surface the entry point instead of a misleading tree.
+                <Empty className="gap-3 border-0 p-2 md:p-2">
+                  <EmptyMedia variant="icon">
+                    <FolderGit2 className="h-4.5 w-4.5" />
+                  </EmptyMedia>
+                  <EmptyHeader>
+                    <EmptyTitle className="text-sm">{t('Add Repository')}</EmptyTitle>
+                    <EmptyDescription className="text-xs">
+                      {t('Add a repository to get started.')}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <Button variant="outline" size="xs" className="h-6" onClick={onAddRepository}>
+                    <Plus className="h-3.5 w-3.5" />
+                    {t('Add Repository')}
+                  </Button>
+                </Empty>
               ) : (
-                projects.map((project) => {
-                  const projectWorkspaces = workspaces.filter((ws) => ws.projectId === project.id);
-                  return (
-                    <section key={project.id}>
-                      <button
-                        type="button"
-                        className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-sm hover:bg-accent"
-                        onClick={() =>
-                          setExpandedProjects((prev) => ({
-                            ...prev,
-                            [project.id]: !isProjectExpanded(project.id),
-                          }))
-                        }
-                      >
-                        {isProjectExpanded(project.id) ? (
-                          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        <span className="min-w-0 flex-1 truncate text-left font-medium">
-                          {project.name}
-                        </span>
-                      </button>
+                <>
+                  <section>
+                    <p className="px-2 text-xs font-medium text-muted-foreground">Recent</p>
+                    <div className="mt-1 space-y-0.5">
+                      {recentSessions.map((session) => (
+                        <SessionTreeItem
+                          key={`recent-${session.id}`}
+                          session={session}
+                          active={activeSessionId === session.id}
+                          onSelect={() => handleSelectSession(session.id)}
+                          onClose={() => void close(session.id)}
+                          onRename={(title) => void rename(session.id, title)}
+                          onArchive={() => void archive(session.id, true)}
+                          disabled={false}
+                        />
+                      ))}
+                    </div>
+                  </section>
 
-                      {isProjectExpanded(project.id) && (
-                        <div className="mt-1 space-y-1 pl-2">
-                          {projectWorkspaces.map((workspace) => (
-                            <WorkspaceBranch
-                              key={workspace.id}
-                              workspace={workspace}
-                              expanded={isWorkspaceExpanded(workspace.id)}
-                              selected={effectiveWorkspaceId === workspace.id}
-                              sessions={filteredSessions.filter(
-                                (session) => session.workspaceId === workspace.id
-                              )}
-                              activeSessionId={activeSessionId}
-                              onToggleExpanded={() =>
-                                setExpandedWorkspaces((prev) => ({
-                                  ...prev,
-                                  [workspace.id]: !isWorkspaceExpanded(workspace.id),
-                                }))
-                              }
-                              onSelectWorkspace={() => setSelectedWorkspaceId(workspace.id)}
-                              onSelectSession={(sessionId) => handleSelectSession(sessionId)}
-                              onCloseSession={(sessionId) => void close(sessionId)}
-                              onRenameSession={(sessionId, title) => void rename(sessionId, title)}
-                              onArchiveSession={(sessionId) => void archive(sessionId, true)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })
+                  {projects.map((project) => {
+                    const projectWorkspaces = workspaces.filter(
+                      (ws) => ws.projectId === project.id
+                    );
+                    return (
+                      <section key={project.id}>
+                        <button
+                          type="button"
+                          // Project headers have no selected state, so the plain
+                          // hover step is enough; --hover is the semantic alias.
+                          className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-sm hover:bg-hover"
+                          onClick={() =>
+                            setExpandedProjects((prev) => ({
+                              ...prev,
+                              [project.id]: !isProjectExpanded(project.id),
+                            }))
+                          }
+                        >
+                          {isProjectExpanded(project.id) ? (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-left font-medium">
+                            {project.name}
+                          </span>
+                        </button>
+
+                        {isProjectExpanded(project.id) && (
+                          <div className="mt-1 space-y-1 pl-2">
+                            {projectWorkspaces.map((workspace) => (
+                              <WorkspaceBranch
+                                key={workspace.id}
+                                workspace={workspace}
+                                expanded={isWorkspaceExpanded(workspace.id)}
+                                selected={effectiveWorkspaceId === workspace.id}
+                                sessions={filteredSessions.filter(
+                                  (session) => session.workspaceId === workspace.id
+                                )}
+                                activeSessionId={activeSessionId}
+                                onToggleExpanded={() =>
+                                  setExpandedWorkspaces((prev) => ({
+                                    ...prev,
+                                    [workspace.id]: !isWorkspaceExpanded(workspace.id),
+                                  }))
+                                }
+                                onSelectWorkspace={() => setSelectedWorkspaceId(workspace.id)}
+                                onSelectSession={(sessionId) => handleSelectSession(sessionId)}
+                                onCloseSession={(sessionId) => void close(sessionId)}
+                                onRenameSession={(sessionId, title) =>
+                                  void rename(sessionId, title)
+                                }
+                                onArchiveSession={(sessionId) => void archive(sessionId, true)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })}
+                </>
               )}
             </div>
           </ScrollArea>
@@ -319,7 +394,9 @@ function WorkspaceBranch({
       <div
         className={cn(
           'flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground',
-          selected && 'bg-accent/60 text-accent-foreground'
+          // --selection is the tree/list "selected row" surface; it is already
+          // opaque, so never add a /N modifier to it.
+          selected && 'bg-selection text-accent-foreground'
         )}
       >
         <button
@@ -432,8 +509,14 @@ function SessionTreeItem({
   return (
     <div
       className={cn(
-        'group flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent',
-        active && 'bg-accent text-accent-foreground'
+        // --hover / --selection are two distinct steps of the same Flexoki
+        // interactive ramp; neither takes a /N modifier.
+        // The two are mutually exclusive on purpose: `hover:bg-hover` compiles to
+        // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
+        // (0,1,0), so pointing at the active row would repaint it as an ordinary
+        // hovered row and erase the selection.
+        'group flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm',
+        active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
       )}
       onClick={onSelect}
       onDoubleClick={() => setEditing(true)}

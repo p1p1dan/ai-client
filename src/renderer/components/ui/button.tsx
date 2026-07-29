@@ -7,7 +7,18 @@ import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
   // 添加 transition-transform 和 active 缩放效果实现微交互
-  "[&_svg]:-mx-0.5 relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium text-sm outline-none transition-[box-shadow,transform] duration-150 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 active:scale-[0.97] [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  //
+  // Squircle (A05 baseline, mirrors openchamber packages/ui/src/components/ui/button.tsx).
+  // Three parts are mandatory and must stay together:
+  //   rounded-[10px]                                  -> fallback for engines without corner-shape
+  //   [corner-shape:squircle]                         -> emitted unconditionally
+  //   supports-[corner-shape:squircle]:rounded-[50px] -> under squircle the radius is a
+  //                                                      superellipse control amount, not an arc
+  //                                                      radius, so it must be far larger
+  // corner-shape does not inherit, so the ::before hairline needs its own pair, otherwise the
+  // outer frame is a squircle while the inner stroke stays a plain rounded rect (double outline).
+  // Every size that overrides the radius must rewrite both pairs (see `xs` / `icon-xs`).
+  "[&_svg]:-mx-0.5 relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border font-medium text-sm lowercase tracking-[0.01em] outline-none transition-[box-shadow,transform] duration-150 [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px] before:pointer-events-none before:absolute before:inset-0 before:rounded-[9px] before:[corner-shape:squircle] supports-[corner-shape:squircle]:before:rounded-[49px] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 active:scale-[0.97] [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     defaultVariants: {
       size: 'default',
@@ -22,17 +33,26 @@ const buttonVariants = cva(
         'icon-xl':
           "size-11 sm:size-10 [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
         'icon-xs':
-          "size-7 rounded-md before:rounded-[calc(var(--radius-md)-1px)] sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
+          "size-7 rounded-[8px] [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px] before:rounded-[7px] before:[corner-shape:squircle] supports-[corner-shape:squircle]:before:rounded-[49px] sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
         lg: 'h-10 px-[calc(--spacing(3.5)-1px)] sm:h-9',
         sm: 'h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] sm:h-7',
         xl: "h-11 px-[calc(--spacing(4)-1px)] text-lg sm:h-10 sm:text-base [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
-        xs: "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-sm before:rounded-[calc(var(--radius-md)-1px)] sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
+        xs: "h-7 gap-1 rounded-[8px] px-[calc(--spacing(2)-1px)] text-sm [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px] before:rounded-[7px] before:[corner-shape:squircle] supports-[corner-shape:squircle]:before:rounded-[49px] sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
       },
       variant: {
+        // hover:border-accent-primary is the sanctioned "hover on primary" use of
+        // primary.emphasis: a rim brightening that never carries text, so its low
+        // light-mode contrast against the page background is irrelevant.
         default:
-          'not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] border-primary bg-primary text-primary-foreground shadow-primary/24 shadow-xs hover:bg-primary/90 [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none',
+          'not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] border-primary bg-primary text-primary-foreground shadow-primary/24 shadow-xs hover:border-accent-primary hover:bg-primary/90 [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none',
+        // text-destructive-foreground instead of a hardcoded text-white: this is token
+        // hygiene, not a contrast win. Measured WCAG on the solid fill: light #fffdf4 on
+        // #AF3029 = 6.29:1 (white would be 6.41:1), dark #171515 on #D14D41 = 4.20:1
+        // (white would be 4.33:1). Dark-mode destructive label text is below AA 4.5:1
+        // either way - a Flexoki property, tracked for a later contrast pass, not a
+        // regression introduced by swapping the literal for the token.
         destructive:
-          'not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] border-destructive bg-destructive text-white shadow-destructive/24 shadow-xs hover:bg-destructive/90 [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none',
+          'not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] border-destructive bg-destructive text-destructive-foreground shadow-destructive/24 shadow-xs hover:bg-destructive/90 [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none',
         'destructive-outline':
           'border-border bg-transparent bg-clip-padding text-destructive shadow-xs not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:bg-input/32 dark:not-in-data-[slot=group]:bg-clip-border dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/4%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/8%)] [:disabled,:active,[data-pressed]]:shadow-none [:hover,[data-pressed]]:border-destructive/32 [:hover,[data-pressed]]:bg-destructive/4',
         ghost: 'border-transparent hover:bg-accent data-pressed:bg-accent',

@@ -1087,6 +1087,9 @@ export function AddRepositoryDialog({
                   <Button
                     key={root}
                     type="button"
+                    // normal-case + font-mono: the label is a case-sensitive remote path;
+                    // the cva base lowercases it, which would misreport the target.
+                    className="normal-case font-mono"
                     variant="outline"
                     size="sm"
                     disabled={isLoadingRoots || isAddingRemoteRepo}

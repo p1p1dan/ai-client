@@ -6,6 +6,7 @@ import {
   Clock,
   ExternalLink,
   FolderOpen,
+  FolderPlus,
   GitBranch,
   Loader2,
   PanelLeftClose,
@@ -163,6 +164,8 @@ interface ActionPanelProps {
   onToggleRepository: () => void;
   onToggleWorktree: () => void;
   onOpenSettings: () => void;
+  /** T-24: keyboard route to AddRepositoryDialog (the new shell has no legacy sidebar). */
+  onAddRepository?: () => void;
   onSwitchRepo?: (repoPath: string) => void;
   onSwitchWorktree?: (worktree: GitWorktree) => void;
 }
@@ -196,6 +199,7 @@ export function ActionPanel({
   onToggleRepository,
   onToggleWorktree,
   onOpenSettings,
+  onAddRepository,
   onSwitchRepo,
   onSwitchWorktree,
 }: ActionPanelProps) {
@@ -298,6 +302,18 @@ export function ActionPanel({
       {
         label: t('General'),
         items: [
+          // T-24: keep this first — on a fresh machine it is the only reachable
+          // way to register a repository outside the `--open-path` argv.
+          ...(onAddRepository
+            ? [
+                {
+                  id: 'add-repository',
+                  label: t('Add Repository'),
+                  icon: FolderPlus,
+                  action: onAddRepository,
+                },
+              ]
+            : []),
           {
             id: 'open-settings',
             label: t('Open settings'),
@@ -425,6 +441,7 @@ export function ActionPanel({
     onToggleRepository,
     onToggleWorktree,
     onOpenSettings,
+    onAddRepository,
     onSwitchRepo,
     onSwitchWorktree,
     openWith,

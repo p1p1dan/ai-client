@@ -1507,6 +1507,9 @@ export default function App() {
             onOpenSettings={openSettings}
             repositories={repositories}
             selectedRepoPath={selectedRepo}
+            onAddRepository={handleOpenRepositoryDialog}
+            dropZoneRef={repositorySidebarRef}
+            fileDragOver={isFileDragOver}
           />
         ) : (
           <>
@@ -1943,6 +1946,7 @@ export default function App() {
           onToggleRepository={() => setRepositoryCollapsed((prev) => !prev)}
           onToggleWorktree={() => setWorktreeCollapsed((prev) => !prev)}
           onOpenSettings={openSettings}
+          onAddRepository={handleOpenRepositoryDialog}
           onSwitchRepo={(repoPath) => handleSelectRepo(repoPath, { activateRemote: true })}
           onSwitchWorktree={handleSelectWorktree}
         />

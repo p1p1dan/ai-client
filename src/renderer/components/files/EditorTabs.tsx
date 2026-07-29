@@ -176,7 +176,7 @@ export function EditorTabs({
                   type="button"
                   onClick={(e) => onTabClose(tab.path, e)}
                   className={cn(
-                    'shrink-0 rounded p-0.5 text-primary opacity-0 transition-opacity hover:bg-primary/20',
+                    'shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground',
                     'group-hover:opacity-100',
                     isActive && 'opacity-60'
                   )}

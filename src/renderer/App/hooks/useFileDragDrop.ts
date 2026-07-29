@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  hasFilePayload,
+  isDragLeavingWindow,
+  isPointInsideDropZone,
+  normalizeDroppedRepositoryPath,
+} from './fileDragDrop';
 
 export function useFileDragDrop(
   enabled: boolean,
@@ -6,6 +12,7 @@ export function useFileDragDrop(
   openAddRepositoryDialog: () => void
 ) {
   const [isFileDragOver, setIsFileDragOver] = useState(false);
+  // Bound by whichever shell is mounted: legacy sidebar or the new shell root.
   const repositorySidebarRef = useRef<HTMLDivElement>(null);
   const isFileDragOverRef = useRef(false);
 
@@ -21,26 +28,36 @@ export function useFileDragDrop(
     }
 
     const handleDragOver = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes('Files')) return;
+      if (!hasFilePayload(e.dataTransfer?.types)) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-
-      const el = repositorySidebarRef.current;
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        const over =
-          e.clientX >= rect.left &&
-          e.clientX <= rect.right &&
-          e.clientY >= rect.top &&
-          e.clientY <= rect.bottom;
-        setIsFileDragOver(over);
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
       }
+
+      const rect = repositorySidebarRef.current?.getBoundingClientRect() ?? null;
+      setIsFileDragOver(isPointInsideDropZone(rect, { x: e.clientX, y: e.clientY }));
     };
 
     const handleDragLeave = (e: DragEvent) => {
-      if (e.clientX <= 0 || e.clientY <= 0) {
+      // Sole reset path for an OS folder drag that leaves without dropping: it
+      // has no source node in this document, so no `dragend` is ever dispatched
+      // here. Missing an edge leaves the highlight armed and the next unrelated
+      // file drop would open the add dialog.
+      if (
+        isDragLeavingWindow(
+          { x: e.clientX, y: e.clientY },
+          { width: window.innerWidth, height: window.innerHeight }
+        )
+      ) {
         setIsFileDragOver(false);
       }
+    };
+
+    const handleDragEnd = () => {
+      // Belt and braces for drags started inside the document (e.g. reordering
+      // session tabs); those do end on a source node. OS file drags are covered
+      // by the `dragleave` edge check above.
+      setIsFileDragOver(false);
     };
 
     const handleDrop = (e: DragEvent) => {
@@ -50,7 +67,7 @@ export function useFileDragDrop(
 
       if (wasOver && e.dataTransfer?.files.length) {
         const file = e.dataTransfer.files[0];
-        const path = window.electronAPI.utils.getPathForFile(file);
+        const path = normalizeDroppedRepositoryPath(window.electronAPI.utils.getPathForFile(file));
         if (path) {
           setInitialLocalPath(path);
           openAddRepositoryDialog();
@@ -60,10 +77,12 @@ export function useFileDragDrop(
 
     document.addEventListener('dragover', handleDragOver);
     document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('dragend', handleDragEnd);
     document.addEventListener('drop', handleDrop);
     return () => {
       document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('dragleave', handleDragLeave);
+      document.removeEventListener('dragend', handleDragEnd);
       document.removeEventListener('drop', handleDrop);
     };
   }, [enabled, openAddRepositoryDialog, setInitialLocalPath]);

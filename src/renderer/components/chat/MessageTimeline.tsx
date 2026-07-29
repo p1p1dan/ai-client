@@ -210,7 +210,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
         )}
         {view.message && (
           <Collapsible open={detailOpen} onOpenChange={setDetailOpen}>
-            <CollapsibleTrigger className="flex h-6 items-center gap-1 rounded-sm hover:text-primary">
+            <CollapsibleTrigger className="flex h-6 items-center gap-1 rounded-sm hover:text-foreground">
               <ChevronRight
                 className={cn(
                   'h-3.5 w-3.5 shrink-0 transition-transform',
@@ -270,7 +270,16 @@ function MessageBubble({
       <div
         className={cn(
           'max-w-[85%] space-y-2 rounded-lg border px-3 py-2',
-          isUser ? 'border-primary/20 bg-primary/10' : 'border-border bg-card/50'
+          // Speaker differentiation is a neutral job, so the bubble is bg-accent, not
+          // the old bg-primary/10 - under Flexoki that low-alpha primary turned the
+          // most-repeated surface in the app into brand orange.
+          // Upstream splits this per scheme (flexoki-*.json colors.chat.
+          // userMessageBackground: light #f7f4ec neutral, dark #27180E brand-tinted);
+          // we deliberately do not, because this repo never registered a class-based
+          // `dark` variant, so `dark:` still compiles to prefers-color-scheme and
+          // would desync from the .dark palette. --accent is the only token that
+          // separates from the assistant's bg-card/50 in *both* schemes.
+          isUser ? 'border-border bg-accent' : 'border-border bg-card/50'
         )}
       >
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -317,7 +326,7 @@ function BlockRenderer({
 }: BlockRendererProps) {
   switch (block.type) {
     case 'text':
-      return <p className="whitespace-pre-wrap text-sm text-primary">{block.text}</p>;
+      return <p className="whitespace-pre-wrap text-sm text-foreground">{block.text}</p>;
 
     case 'thinking': {
       // T-04 能力闸：capability=false 不渲染、不留入口。
@@ -330,7 +339,7 @@ function BlockRenderer({
     case 'tool_call':
       return (
         <div className="rounded-md border border-border bg-muted/30 p-2 text-xs">
-          <p className="font-medium text-primary">Tool: {block.toolName}</p>
+          <p className="font-medium text-foreground">Tool: {block.toolName}</p>
           {block.toolInput ? (
             <pre className="mt-1 overflow-x-auto text-muted-foreground">
               {JSON.stringify(block.toolInput, null, 2)}
@@ -342,7 +351,7 @@ function BlockRenderer({
     case 'tool_result':
       return (
         <div className="rounded-md border border-border bg-muted/20 p-2 text-xs">
-          <p className="font-medium text-primary">
+          <p className="font-medium text-foreground">
             Tool result {block.toolOk ? '(ok)' : '(failed)'}
           </p>
           <pre className="mt-1 overflow-x-auto text-muted-foreground">
@@ -356,7 +365,7 @@ function BlockRenderer({
     case 'permission_request':
       return (
         <div className="space-y-2 rounded-md border border-warning/30 bg-warning/5 p-2 text-xs">
-          <p className="font-medium text-primary">Permission required: {block.toolName}</p>
+          <p className="font-medium text-foreground">Permission required: {block.toolName}</p>
           {block.toolDescription ? (
             <p className="text-muted-foreground">{block.toolDescription}</p>
           ) : null}
@@ -416,14 +425,14 @@ function ThinkingCard({ vm }: ThinkingCardProps) {
         {streaming ? (
           <span
             aria-hidden
-            className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-500"
+            className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-status-running"
           />
         ) : (
           <ChevronRight
             className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')}
           />
         )}
-        <span className="min-w-0 flex-1 truncate font-medium text-primary">{label}</span>
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</span>
         {streaming && vm.text && (
           <span className="min-w-0 flex-1 truncate opacity-70">{vm.text.slice(-80)}</span>
         )}

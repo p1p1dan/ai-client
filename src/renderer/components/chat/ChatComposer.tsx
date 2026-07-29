@@ -733,7 +733,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
                         folder is not mistaken for a same-named file. */}
                     <span className="inline-flex min-w-0 items-center gap-1.5">
                       {item.isDirectory ? (
-                        <Folder className="size-3.5 shrink-0 text-[#dcb67a]" />
+                        <Folder className="size-3.5 shrink-0 text-folder" />
                       ) : (
                         <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       )}

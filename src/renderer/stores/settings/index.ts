@@ -50,12 +50,15 @@ export * from './defaults';
 // Re-export types and defaults for external use
 export * from './types';
 
-// Apply terminal font settings to app CSS variables
-function applyTerminalFont(fontFamily: string, fontSize: number): void {
-  const root = document.documentElement;
-  root.style.setProperty('--font-family-mono', fontFamily);
-  root.style.setProperty('--font-size-base', `${fontSize}px`);
-}
+/*
+ * Terminal font settings intentionally do NOT touch app CSS variables.
+ * xterm reads fontFamily/fontSize as JS options (see useXterm) and Monaco reads
+ * editorSettings, so neither consumes a CSS variable. The former
+ * applyTerminalFont() wrote --font-family-mono and --font-size-base onto
+ * documentElement, which had the side effect of rescaling the entire UI (every
+ * rem) and repointing every font-mono utility whenever the terminal font
+ * changed. The UI font stack now comes from @theme in styles/globals.css.
+ */
 
 // Apply app theme (dark/light mode)
 function applyAppTheme(theme: Theme, terminalTheme: string): void {
@@ -84,8 +87,6 @@ function applyAppTheme(theme: Theme, terminalTheme: string): void {
 function applyInitialSettings(state: {
   theme: Theme;
   terminalTheme: string;
-  terminalFontFamily: string;
-  terminalFontSize: number;
   language: Locale;
 }): void {
   if (state.theme === 'sync-terminal') {
@@ -93,7 +94,6 @@ function applyInitialSettings(state: {
   } else {
     applyAppTheme(state.theme, state.terminalTheme);
   }
-  applyTerminalFont(state.terminalFontFamily, state.terminalFontSize);
   const resolvedLanguage = normalizeLocale(state.language);
   document.documentElement.lang = resolvedLanguage === 'zh' ? 'zh-CN' : 'en';
   window.electronAPI.app.setLanguage(resolvedLanguage);
@@ -254,16 +254,9 @@ export const useSettingsStore = create<SettingsState>()(
       setFontSize: (fontSize) => set({ fontSize }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
 
-      // Terminal Setters
-      setTerminalFontSize: (terminalFontSize) => {
-        applyTerminalFont(get().terminalFontFamily, terminalFontSize);
-        set({ terminalFontSize });
-      },
-
-      setTerminalFontFamily: (terminalFontFamily) => {
-        applyTerminalFont(terminalFontFamily, get().terminalFontSize);
-        set({ terminalFontFamily });
-      },
+      // Terminal Setters - xterm picks these up through its own store subscription
+      setTerminalFontSize: (terminalFontSize) => set({ terminalFontSize }),
+      setTerminalFontFamily: (terminalFontFamily) => set({ terminalFontFamily }),
 
       setTerminalFontWeight: (terminalFontWeight) => set({ terminalFontWeight }),
       setTerminalFontWeightBold: (terminalFontWeightBold) => set({ terminalFontWeightBold }),

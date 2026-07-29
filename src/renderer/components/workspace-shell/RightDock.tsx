@@ -59,7 +59,7 @@ function DockPlaceholder({ title, description }: { title: string; description: s
   return (
     <ScrollArea className="h-full">
       <div className="space-y-2 p-3">
-        <p className="text-sm font-medium text-primary">{title}</p>
+        <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
         <div className="rounded-lg border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
           Mock dock content

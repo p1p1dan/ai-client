@@ -106,7 +106,7 @@ export function CommitBox({
         {commitMessageGenerator.enabled && (
           <button
             type="button"
-            className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+            className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             onClick={handleGenerateMessage}
             disabled={!canGenerate}
             title={t('Generate commit message')}

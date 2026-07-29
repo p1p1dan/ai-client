@@ -62,21 +62,29 @@ export function ClaudeVsCodeOnlyShell({
               <div className="mt-1 break-all font-mono text-[11px]">{extension.path}</div>
             </div>
           ) : null}
-          <div className="mb-4 rounded-md border-l-2 border-primary/60 bg-primary/5 p-3 text-xs text-muted-foreground">
+          <div className="mb-4 rounded-md border-l-2 border-primary bg-muted p-3 text-xs text-muted-foreground">
             {registered
               ? '账号已配置完成，URL 与 Token 已写入 ~/.claude/settings.json，VSCode 扩展将自动读取。'
               : '完成注册后，URL 与 Token 会自动写入 ~/.claude/settings.json，VSCode 扩展将直接读取。'}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!registered && <Button onClick={onStartRegister}>开始注册</Button>}
-            <Button variant="outline" onClick={onStartInstall} disabled={rechecking}>
+            {/* normal-case: mixed zh/en literal, the cva base lowercases "CLI" */}
+            <Button
+              className="normal-case"
+              variant="outline"
+              onClick={onStartInstall}
+              disabled={rechecking}
+            >
               一键安装 CLI
             </Button>
             <Button variant="outline" onClick={onRecheck} disabled={rechecking}>
               {rechecking ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
               {rechecking ? '检测中…' : '重新检测'}
             </Button>
+            {/* normal-case: mixed zh/en literal, the cva base lowercases "VSCode" */}
             <Button
+              className="normal-case"
               variant="ghost"
               onClick={() => window.electronAPI.shell.openExternal(VSCODE_HELP_URL)}
             >

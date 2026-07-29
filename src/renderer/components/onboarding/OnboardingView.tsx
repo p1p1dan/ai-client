@@ -582,7 +582,7 @@ export function OnboardingView({
                 </div>
               )}
               {mode === 'vscode-extension' && (
-                <div className="rounded-lg border border-primary/28 bg-primary/6 px-3 py-2 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
                   凭据将写入 ~/.claude/settings.json,注册完成后请返回 VSCode 直接使用 Claude 扩展。
                 </div>
               )}
@@ -734,10 +734,18 @@ export function OnboardingView({
               </>
             ) : mode === 'vscode-extension' ? (
               <>
-                <Button variant="outline" onClick={handleContinueInstallFromVscode}>
+                {/* normal-case: mixed zh/en literal, the cva base lowercases "CLI" */}
+                <Button
+                  className="normal-case"
+                  variant="outline"
+                  onClick={handleContinueInstallFromVscode}
+                >
                   继续安装 CLI 环境
                 </Button>
-                <Button onClick={handleQuitApp}>返回 VSCode 使用</Button>
+                {/* normal-case: mixed zh/en literal, the cva base lowercases "VSCode" */}
+                <Button className="normal-case" onClick={handleQuitApp}>
+                  返回 VSCode 使用
+                </Button>
               </>
             ) : (
               <Button onClick={onComplete}>开始使用</Button>

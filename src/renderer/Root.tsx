@@ -87,7 +87,7 @@ function RuntimeDetectionFailedShell({
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
           <AlertTriangle className="h-8 w-8 text-yellow-500" />
-          <h2 className="text-base font-medium text-primary">无法检测 Claude Code 运行时</h2>
+          <h2 className="text-base font-medium text-foreground">无法检测 Claude Code 运行时</h2>
           <p className="text-xs text-muted-foreground">
             探测过程出错，可能是
             IPC、权限或环境问题。请重试；如果反复失败，请查看开发者工具中的错误日志。

@@ -754,7 +754,8 @@ export function MergeEditor({
                 size="xs"
                 onClick={() => setCurrentIndex(index)}
                 className={cn(
-                  'shrink-0',
+                  // normal-case: the label is a real filename; the cva base lowercases it
+                  'shrink-0 normal-case',
                   resolvedFiles.has(conflict.file) && 'text-green-600 dark:text-green-400'
                 )}
               >

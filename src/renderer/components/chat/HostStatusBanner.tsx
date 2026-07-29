@@ -52,7 +52,7 @@ export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
       className={`shrink-0 border-b px-3 py-2 text-xs ${
         isError
           ? 'border-destructive/40 bg-destructive/10 text-destructive'
-          : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500'
+          : 'border-status-running/30 bg-status-running/10 text-status-running'
       }`}
       role="status"
     >

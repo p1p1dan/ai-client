@@ -85,7 +85,7 @@ export function QuickTerminalButton({
         'fixed z-30 flex items-center justify-center rounded-full',
         'border backdrop-blur-sm',
         // 阴影效果
-        'shadow-[0_2px_8px_rgba(0,0,0,0.12)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.16)]',
+        'shadow-md hover:shadow-lg',
         // 拖动时状态
         isDragging && 'cursor-grabbing opacity-70 scale-95',
         !isDragging && 'cursor-grab transition-all duration-150', // 只在非拖动时启用过渡

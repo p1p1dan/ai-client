@@ -26,6 +26,12 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* Flexoki additions - must be bridged here or Tailwind v4 emits no utilities */
+  --color-accent-primary: var(--accent-primary);
+  --color-selection: var(--selection);
+  --color-hover: var(--hover);
+  --color-status-running: var(--status-running);
+  --color-folder: var(--folder);
 
   --radius-xs: 0.25rem;
   --radius-sm: var(--radius);
@@ -35,8 +41,16 @@
   --text-2xs: 10px;
   --text-2xs--line-height: 14px;
 
-  --font-sans: var(--font-family-sans, "Inter", system-ui, sans-serif);
-  --font-mono: var(--font-family-mono, "JetBrains Mono", "Menlo", monospace);
+  /*
+   * All-monospace UI stack, mirroring OpenChamber's flexoki-{light,dark}.json
+   * config.fonts (sans / mono / heading are byte-identical upstream).
+   * --font-sans is the single entry point for the whole UI: Tailwind maps it to
+   * --default-font-family, which preflight applies to <html>; no rule in this
+   * repo sets font-family on <body>.
+   */
+  --font-sans: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
+  --font-heading: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-marquee: marquee 4s linear infinite alternate;
@@ -58,86 +72,116 @@
 }
 
 @layer base {
+  /*
+   * Flexoki Light.
+   * Source of truth: openchamber@v1.17.0-6-ga3519141
+   * packages/ui/src/lib/theme/themes/flexoki-light.json (sRGB hex -> OKLCH D65).
+   *
+   * Alpha discipline: every semantic token below is alpha-free, because the
+   * Tailwind `/N` modifier compiles to `color-mix(in oklab, X N%, transparent)`
+   * whose resulting alpha is N x alpha(X) - stacking a pre-baked alpha would
+   * silently halve (or worse) every translucent usage in the app.
+   * Values whose upstream source carries alpha are pre-composited onto the
+   * matching surface instead (see --accent / --hover / --selection).
+   *
+   * The four panel surfaces multiply in --panel-bg-opacity so that the
+   * background-image feature has exactly one knob (set on documentElement by
+   * App/hooks/useBackgroundImage.ts). Nothing else opts in: --accent must stay
+   * opaque or hover states vanish behind a background image, and --border /
+   * --input must stay opaque because in light mode --card is nearly identical
+   * to --background and all panel separation rests on the border.
+   */
   :root {
-    --font-family-mono: "JetBrains Mono", "Menlo", monospace;
-    --font-size-base: 14px;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0.014 285.82);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0.014 285.82);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0.014 285.82);
-    --primary: oklch(0.205 0.014 285.82);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.965 0.003 285.82);
-    --secondary-foreground: oklch(0.205 0.014 285.82);
-    --muted: oklch(0.965 0.003 285.82);
-    --muted-foreground: oklch(0.556 0.014 285.82);
-    --accent: oklch(0.965 0.003 285.82);
-    --accent-foreground: oklch(0.205 0.014 285.82);
-    --destructive: oklch(0.577 0.245 27.33);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
-    --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0.003 285.82);
-    --input: oklch(0.922 0.003 285.82);
-    --ring: oklch(0.708 0.014 285.82);
-    --radius: 0.5rem;
     --panel-bg-opacity: 1;
+    --font-size-base: 16px;
+    --background: oklch(0.9931 0.012 96.42 / var(--panel-bg-opacity, 1));
+    --foreground: oklch(0.1696 0.0017 17.32);
+    --card: oklch(0.9837 0.0106 100.82 / var(--panel-bg-opacity, 1));
+    --card-foreground: oklch(0.1696 0.0017 17.32);
+    --popover: oklch(0.9837 0.0106 100.82 / var(--panel-bg-opacity, 1));
+    --popover-foreground: oklch(0.1696 0.0017 17.32);
+    /* primary is the brand orange (#BC5215), no longer "highest contrast ink" */
+    --primary: oklch(0.5665 0.1523 45.02);
+    --primary-foreground: oklch(0.9931 0.012 96.42);
+    --secondary: oklch(0.9673 0.0111 89.72);
+    --secondary-foreground: oklch(0.1696 0.0017 17.32);
+    --muted: oklch(0.969 0.0093 99.98 / var(--panel-bg-opacity, 1));
+    --muted-foreground: oklch(0.5111 0.0053 78.28);
+    /* interactive.hover #76736f @ 12.55% pre-composited over --background */
+    --accent: oklch(0.9422 0.0122 96.43);
+    --accent-foreground: oklch(0.1696 0.0017 17.32);
+    /* primary.emphasis #F9AE77 - light mode: fills/borders/hover-on-primary only (1.82:1 on bg) */
+    --accent-primary: oklch(0.8109 0.1131 56.61);
+    /* interactive.selection pre-composited; tree/list selected rows, never ::selection. Do not add /N */
+    --selection: oklch(0.9152 0.0109 95.17);
+    /* same source as --accent; semantic alias for new code. Do not add /N */
+    --hover: oklch(0.9422 0.0122 96.43);
+    /* status.info - deliberately not warning: Flexoki warning == primary */
+    --status-running: oklch(0.4818 0.1315 254.79);
+    --destructive: oklch(0.5042 0.1648 27.84);
+    --destructive-foreground: oklch(0.9931 0.012 96.42);
+    --success: oklch(0.5593 0.1335 122.92);
+    --success-foreground: oklch(0.9931 0.012 96.42);
+    /* identical to --primary upstream; do not use it to escape the brand hue */
+    --warning: oklch(0.5665 0.1523 45.02);
+    --warning-foreground: oklch(0.9931 0.012 96.42);
+    --info: oklch(0.4818 0.1315 254.79);
+    --info-foreground: oklch(0.9931 0.012 96.42);
+    /* syntax.base.type - directory/folder affordances */
+    --folder: oklch(0.6333 0.1295 85.81);
+    --border: oklch(0.881 0.0137 97.46);
+    /* interactive.borderHover, not border: this repo uses --input as a fill */
+    --input: oklch(0.8463 0.0137 102.05);
+    /* interactive.focus without alpha (focusRing's own 0.251 would collapse ring-ring/24) */
+    --ring: oklch(0.5665 0.1523 45.02);
+    --radius: 0.5rem;
+    /* Neutral overlay for Monaco decorations; host background is the terminal theme */
+    --editor-current-diff: oklch(0 0 0 / 0.06);
   }
 
+  /* Flexoki Dark - flexoki-dark.json */
   .dark {
-    --background: oklch(0.145 0.014 285.82);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0.014 285.82);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0.014 285.82);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0.014 285.82);
-    --secondary: oklch(0.269 0.014 285.82);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0.014 285.82);
-    --muted-foreground: oklch(0.708 0.014 285.82);
-    --accent: oklch(0.269 0.014 285.82);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.72);
-    --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.527 0.154 150.07);
-    --success-foreground: oklch(0.985 0 0);
-    --warning: oklch(0.769 0.189 70.08);
-    --warning-foreground: oklch(0.205 0.014 285.82);
-    --info: oklch(0.623 0.214 259.81);
-    --info-foreground: oklch(0.985 0 0);
-    --border: oklch(0.269 0.014 285.82);
-    --input: oklch(0.269 0.014 285.82);
-    --ring: oklch(0.439 0.014 285.82);
+    --background: oklch(0.1981 0.0032 17.43 / var(--panel-bg-opacity, 1));
+    --foreground: oklch(0.8463 0.0137 102.05);
+    --card: oklch(0.2197 0.0037 48.55 / var(--panel-bg-opacity, 1));
+    --card-foreground: oklch(0.8463 0.0137 102.05);
+    --popover: oklch(0.2197 0.0037 48.55 / var(--panel-bg-opacity, 1));
+    --popover-foreground: oklch(0.8463 0.0137 102.05);
+    --primary: oklch(0.6576 0.1539 49.3);
+    --primary-foreground: oklch(0.1981 0.0032 17.43);
+    --secondary: oklch(0.2315 0.0024 67.71);
+    --secondary-foreground: oklch(0.8463 0.0137 102.05);
+    --muted: oklch(0.2228 0.0025 67.7 / var(--panel-bg-opacity, 1));
+    --muted-foreground: oklch(0.5933 0.0079 88.68);
+    /* interactive.hover #ffffff @ 9.41% pre-composited over --background */
+    --accent: oklch(0.2912 0.0029 17.32);
+    --accent-foreground: oklch(0.8463 0.0137 102.05);
+    --accent-primary: oklch(0.8109 0.1131 56.61);
+    --selection: oklch(0.3112 0.0029 17.31);
+    --hover: oklch(0.2912 0.0029 17.32);
+    --status-running: oklch(0.5988 0.1104 247);
+    --destructive: oklch(0.597 0.1692 28.38);
+    --destructive-foreground: oklch(0.1981 0.0032 17.43);
+    --success: oklch(0.7227 0.1178 117.2);
+    --success-foreground: oklch(0.1981 0.0032 17.43);
+    --warning: oklch(0.6576 0.1539 49.3);
+    --warning-foreground: oklch(0.1981 0.0032 17.43);
+    --info: oklch(0.5988 0.1104 247);
+    --info-foreground: oklch(0.1981 0.0032 17.43);
+    --folder: oklch(0.7346 0.1462 87.46);
+    --border: oklch(0.3214 0.0038 84.58);
+    --input: oklch(0.3651 0.0044 67.69);
+    --ring: oklch(0.6576 0.1539 49.3);
+    --editor-current-diff: oklch(1 0 0 / 0.08);
   }
 
-  /* Background Image Support - Light Mode */
-  /* --panel-bg-opacity is set dynamically via JS on <body> to respect slider value */
-  .bg-image-enabled {
-    --background: oklch(1 0 0 / var(--panel-bg-opacity));
-    --card: oklch(1 0 0 / var(--panel-bg-opacity));
-    --popover: oklch(1 0 0 / var(--panel-bg-opacity));
-    --muted: oklch(0.965 0.003 285.82 / var(--panel-bg-opacity));
-    --accent: oklch(0.965 0.003 285.82 / var(--panel-bg-opacity));
-  }
-
-  /* Background Image Support - Dark Mode */
-  .dark .bg-image-enabled {
-    --background: oklch(0.145 0.014 285.82 / var(--panel-bg-opacity));
-    --card: oklch(0.145 0.014 285.82 / var(--panel-bg-opacity));
-    --popover: oklch(0.145 0.014 285.82 / var(--panel-bg-opacity));
-    --muted: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-    --accent: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-    --border: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-    --input: oklch(0.269 0.014 285.82 / var(--panel-bg-opacity));
-  }
+  /*
+   * Background image support.
+   * There is no palette duplicate here any more: the light/dark blocks above
+   * already multiply in --panel-bg-opacity, which useBackgroundImage.ts writes
+   * to documentElement. The `.bg-image-enabled` class on <body> is kept purely
+   * as a styling hook for future background-image-only rules.
+   */
 }
 
 @layer base {
@@ -261,21 +305,30 @@
   }
 }
 
-/* Monaco Editor - Current diff highlight */
+/*
+ * Monaco Editor - current diff highlight.
+ * Monaco paints its own background from the *terminal* theme (EditorArea builds
+ * monacoTheme from terminalTheme), not from the Flexoki palette, so the row
+ * highlight has to be a host-agnostic neutral overlay rather than a palette
+ * colour. --editor-current-diff carries that intent; it is declared per scheme
+ * in the :root / .dark blocks above.
+ * (This also fixes the previous three-rule stack, where the .dark override was
+ * dead: `:root .current-diff-highlight` had equal specificity and came later.)
+ */
 .current-diff-highlight {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: var(--editor-current-diff) !important;
 }
 
-.dark .current-diff-highlight {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-:root .current-diff-highlight {
-  background-color: rgba(0, 0, 0, 0.06) !important;
-}
-
+/*
+ * The 3px gutter bar sits against Monaco's terminal-derived background, not
+ * against --background, so --accent-primary (per T-21 spec) is the right source
+ * rather than --primary: it is the one brand tone that keeps a single fixed
+ * value in both schemes and is *not* hijacked by theme='sync-terminal', where
+ * ghosttyTheme repoints --primary at the editor's own foreground ink and the bar
+ * would stop reading as a highlight at all.
+ */
 .current-diff-gutter {
-  background-color: var(--accent) !important;
+  background-color: var(--accent-primary) !important;
   width: 3px !important;
   margin-left: 3px;
 }

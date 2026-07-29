@@ -38,7 +38,7 @@ export function MainHeader({
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-3">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-primary">
+        <p className="truncate text-sm font-medium text-foreground">
           {activeSession?.title ?? 'No session selected'}
         </p>
         <p className="truncate text-xs text-muted-foreground" title={activeWorkspace?.path}>

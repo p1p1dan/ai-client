@@ -19,15 +19,22 @@ const badgeVariants = cva(
         sm: 'h-5 min-w-5 rounded-[calc(var(--radius-sm)-2px)] px-[calc(--spacing(1)-1px)] text-xs sm:h-4 sm:min-w-4 sm:text-[.625rem]',
       },
       variant: {
+        // The four tinted variants below carry the status colour as *text* on a low-alpha
+        // wash of the same hue. They must NOT use -foreground: since T-21 the Flexoki
+        // status.*Foreground tokens are the on-solid-fill inks (near-white in light,
+        // near-black in dark), so pairing them with a wash of their own hue collapsed to
+        // 1.19:1 (light warning) and 1.39:1 (dark success). Same-hue text measures
+        // 3.6:1-5.8:1 instead. -foreground stays reserved for solid fills (default,
+        // destructive, secondary).
         default: 'bg-primary text-primary-foreground [button,a&]:hover:bg-primary/90',
         destructive: 'bg-destructive text-white [button,a&]:hover:bg-destructive/90',
-        error: 'bg-destructive/8 text-destructive-foreground dark:bg-destructive/16',
-        info: 'bg-info/8 text-info-foreground dark:bg-info/16',
+        error: 'bg-destructive/8 text-destructive dark:bg-destructive/16',
+        info: 'bg-info/8 text-info dark:bg-info/16',
         outline:
           'border-border bg-transparent dark:bg-input/32 [button,a&]:hover:bg-accent/50 dark:[button,a&]:hover:bg-input/48',
         secondary: 'bg-secondary text-secondary-foreground [button,a&]:hover:bg-secondary/90',
-        success: 'bg-success/8 text-success-foreground dark:bg-success/16',
-        warning: 'bg-warning/8 text-warning-foreground dark:bg-warning/16',
+        success: 'bg-success/8 text-success dark:bg-success/16',
+        warning: 'bg-warning/8 text-warning dark:bg-warning/16',
       },
     },
   }

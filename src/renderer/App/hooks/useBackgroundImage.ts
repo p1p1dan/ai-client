@@ -1,6 +1,23 @@
 import { useEffect } from 'react';
 import { useSettingsStore } from '@/stores/settings';
 
+/**
+ * Drives panel translucency for the background-image feature.
+ *
+ * The palette itself lives in styles/globals.css: the four panel surfaces
+ * (--background / --card / --popover / --muted) are declared as
+ * `oklch(L C H / var(--panel-bg-opacity, 1))`, so this hook only has to move a
+ * single scalar instead of re-stating every colour.
+ *
+ * --panel-bg-opacity MUST be set on documentElement, not on <body>: a custom
+ * property's var() substitution happens when the *declaring* element computes
+ * its value, and the surfaces are declared in :root / .dark (documentElement).
+ * A value written to <body> would never be seen by them.
+ *
+ * theme='sync-terminal' re-declares those same four surfaces as inline styles on
+ * documentElement (lib/ghosttyTheme.ts), which outranks :root; that path routes
+ * them through withPanelBgOpacity() so this knob keeps working there too.
+ */
 export function useBackgroundImage() {
   const backgroundImageEnabled = useSettingsStore((s) => s.backgroundImageEnabled);
   const backgroundOpacity = useSettingsStore((s) => s.backgroundOpacity);
@@ -9,86 +26,21 @@ export function useBackgroundImage() {
     const body = document.body;
     const html = document.documentElement;
 
+    const reset = () => {
+      body.classList.remove('bg-image-enabled');
+      body.style.backgroundColor = '';
+      html.style.removeProperty('--panel-bg-opacity');
+    };
+
     if (backgroundImageEnabled) {
+      // Styling hook only; the palette no longer branches on this class.
       body.classList.add('bg-image-enabled');
       body.style.backgroundColor = 'transparent';
-
-      const isDark = html.classList.contains('dark');
-      const panelOpacity = 1 - backgroundOpacity;
-
-      if (isDark) {
-        const bg = `oklch(0.145 0.014 285.82 / ${panelOpacity})`;
-        const muted = `oklch(0.269 0.014 285.82 / ${panelOpacity})`;
-        body.style.setProperty('--background', bg);
-        body.style.setProperty('--card', bg);
-        body.style.setProperty('--popover', bg);
-        body.style.setProperty('--muted', muted);
-        body.style.setProperty('--accent', muted);
-        body.style.setProperty('--border', muted);
-        body.style.setProperty('--input', muted);
-        body.style.setProperty('--color-background', bg);
-        body.style.setProperty('--color-card', bg);
-        body.style.setProperty('--color-popover', bg);
-        body.style.setProperty('--color-muted', muted);
-        body.style.setProperty('--color-accent', muted);
-        body.style.setProperty('--color-border', muted);
-        body.style.setProperty('--color-input', muted);
-      } else {
-        const bg = `oklch(1 0 0 / ${panelOpacity})`;
-        const muted = `oklch(0.965 0.003 285.82 / ${panelOpacity})`;
-        body.style.setProperty('--background', bg);
-        body.style.setProperty('--card', bg);
-        body.style.setProperty('--popover', bg);
-        body.style.setProperty('--muted', muted);
-        body.style.setProperty('--accent', muted);
-        body.style.setProperty('--color-background', bg);
-        body.style.setProperty('--color-card', bg);
-        body.style.setProperty('--color-popover', bg);
-        body.style.setProperty('--color-muted', muted);
-        body.style.setProperty('--color-accent', muted);
-      }
+      html.style.setProperty('--panel-bg-opacity', String(1 - backgroundOpacity));
     } else {
-      body.classList.remove('bg-image-enabled');
-      body.style.backgroundColor = '';
-      const varsToRemove = [
-        '--background',
-        '--card',
-        '--popover',
-        '--muted',
-        '--accent',
-        '--border',
-        '--input',
-        '--color-background',
-        '--color-card',
-        '--color-popover',
-        '--color-muted',
-        '--color-accent',
-        '--color-border',
-        '--color-input',
-      ];
-      for (const v of varsToRemove) body.style.removeProperty(v);
+      reset();
     }
 
-    return () => {
-      body.classList.remove('bg-image-enabled');
-      body.style.backgroundColor = '';
-      const varsToRemove = [
-        '--background',
-        '--card',
-        '--popover',
-        '--muted',
-        '--accent',
-        '--border',
-        '--input',
-        '--color-background',
-        '--color-card',
-        '--color-popover',
-        '--color-muted',
-        '--color-accent',
-        '--color-border',
-        '--color-input',
-      ];
-      for (const v of varsToRemove) body.style.removeProperty(v);
-    };
+    return reset;
   }, [backgroundImageEnabled, backgroundOpacity]);
 }
