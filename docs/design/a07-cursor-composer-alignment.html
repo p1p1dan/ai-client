@@ -1,0 +1,2236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A07 · 中列 Cursor 化对齐基线</title>
+
+<style>
+/* 最小 reset —— 本地直开时不依赖任何平台注入 */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+h1, h2, h3, h4, p, ul, figure { margin: 0; }
+ul { list-style: none; padding: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; }
+img, svg { display: block; max-width: 100%; }
+table { border-collapse: collapse; }
+
+/* ============================================================
+   页面外壳 token —— 与 phase0a-openchamber-alignment.html 同一套，
+   暖中性、刻意低调，不与被评估的原型面板抢视觉。
+   注意：外壳 token 与原型内部 token 是两套，不要混用。
+   ============================================================ */
+:root {
+  --page-bg: #faf8f2;
+  --page-fg: #1b1917;
+  --page-dim: #6b6660;
+  --page-faint: #8d877f;
+  --page-rule: #e3ded2;
+  --page-rule-soft: #efeae0;
+  --page-panel: #fffdf7;
+  --page-accent: #a8481a;
+  --page-accent-soft: #a8481a1a;
+  --page-warn: #8a5a10;
+  --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f;
+  --page-stop-soft: #96291f14;
+  --page-go: #4f6410;
+  --page-go-soft: #4f641014;
+
+  --mono: ui-monospace, "SFMono-Regular", Menlo, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  --col: 68rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #141211;
+    --page-fg: #d6d2c8;
+    --page-dim: #918a80;
+    --page-faint: #6f6960;
+    --page-rule: #2f2c28;
+    --page-rule-soft: #232120;
+    --page-panel: #1a1817;
+    --page-accent: #e08a4c;
+    --page-accent-soft: #e08a4c1f;
+    --page-warn: #d0a215;
+    --page-warn-soft: #d0a2151a;
+    --page-stop: #d9584b;
+    --page-stop-soft: #d9584b1a;
+    --page-go: #a9b85e;
+    --page-go-soft: #a9b85e1a;
+  }
+}
+
+:root[data-page="dark"] {
+  --page-bg: #141211;
+  --page-fg: #d6d2c8;
+  --page-dim: #918a80;
+  --page-faint: #6f6960;
+  --page-rule: #2f2c28;
+  --page-rule-soft: #232120;
+  --page-panel: #1a1817;
+  --page-accent: #e08a4c;
+  --page-accent-soft: #e08a4c1f;
+  --page-warn: #d0a215;
+  --page-warn-soft: #d0a2151a;
+  --page-stop: #d9584b;
+  --page-stop-soft: #d9584b1a;
+  --page-go: #a9b85e;
+  --page-go-soft: #a9b85e1a;
+}
+
+:root[data-page="light"] {
+  --page-bg: #faf8f2;
+  --page-fg: #1b1917;
+  --page-dim: #6b6660;
+  --page-faint: #8d877f;
+  --page-rule: #e3ded2;
+  --page-rule-soft: #efeae0;
+  --page-panel: #fffdf7;
+  --page-accent: #a8481a;
+  --page-accent-soft: #a8481a1a;
+  --page-warn: #8a5a10;
+  --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f;
+  --page-stop-soft: #96291f14;
+  --page-go: #4f6410;
+  --page-go-soft: #4f641014;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  padding: 0 1.25rem 6rem;
+}
+
+.wrap { max-width: var(--col); margin-inline: auto; }
+
+/* ---- 页眉 ---- */
+
+.masthead {
+  padding: 3.5rem 0 2rem;
+  border-bottom: 2px solid var(--page-fg);
+  margin-bottom: 0;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--page-accent);
+  margin-bottom: 1rem;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.6rem, 4vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin-bottom: 0.75rem;
+}
+.standfirst { max-width: 46rem; color: var(--page-dim); font-size: 16px; }
+.masthead-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin-top: 1.75rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--page-faint);
+}
+.masthead-meta b { color: var(--page-dim); font-weight: 500; }
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+.status-strip span {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 0.18rem 0.5rem;
+  border-radius: 3px;
+  background: var(--page-warn-soft);
+  color: var(--page-warn);
+}
+.status-strip span.is-ref { background: var(--page-accent-soft); color: var(--page-accent); }
+.status-strip span.is-ask { background: var(--page-stop-soft); color: var(--page-stop); }
+
+/* ---- 吸顶主题条 ---- */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0;
+  margin-bottom: 2.5rem;
+  background: var(--page-bg);
+  border-bottom: 1px solid var(--page-rule);
+}
+.toolbar .tb-label {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+}
+.toolbar nav { margin-left: auto; display: flex; gap: 0.9rem; flex-wrap: wrap; }
+.toolbar nav a {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--page-dim);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.toolbar nav a:hover { color: var(--page-accent); border-bottom-color: var(--page-accent); }
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--page-rule);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.seg button {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 0.22rem 0.65rem;
+  background: transparent;
+  color: var(--page-dim);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.seg button + button { border-left: 1px solid var(--page-rule); }
+.seg button[aria-pressed="true"] { background: var(--page-fg); color: var(--page-bg); }
+.seg button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: -2px; }
+
+/* ---- 章节 ---- */
+
+section { margin-bottom: 4.5rem; scroll-margin-top: 4rem; }
+
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--page-rule);
+  margin-bottom: 1.75rem;
+}
+.sec-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--page-bg);
+  background: var(--page-fg);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+h2 { font-family: var(--mono); font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+.sec-sub { color: var(--page-faint); font-size: 13px; margin-left: auto; font-family: var(--mono); }
+h3 { font-family: var(--mono); font-size: 0.95rem; font-weight: 600; margin: 2.25rem 0 0.85rem; }
+p { margin-bottom: 0.9rem; max-width: 46rem; }
+p:last-child { margin-bottom: 0; }
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--page-rule-soft);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+.src {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--page-faint);
+  line-height: 1.6;
+  margin-top: 0.9rem;
+}
+
+/* ---- 裁定条 / 提问块 ---- */
+
+.verdict-strip {
+  display: grid;
+  gap: 1px;
+  background: var(--page-rule);
+  border: 1px solid var(--page-rule);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+@media (min-width: 700px) { .verdict-strip { grid-template-columns: repeat(4, 1fr); } }
+.verdict-item { background: var(--page-panel); padding: 0.7rem 0.85rem; }
+.v-k {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  font-family: var(--mono);
+  margin-bottom: 0.25rem;
+}
+.v-v { display: block; font-family: var(--mono); font-size: 12.5px; color: var(--page-accent); line-height: 1.4; }
+
+.ask {
+  border: 1px solid var(--page-rule);
+  border-left: 3px solid var(--page-stop);
+  background: var(--page-panel);
+  border-radius: 0 7px 7px 0;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.85rem;
+}
+.ask.decided { border-left-color: var(--page-go); }
+.ask b { font-family: var(--mono); font-size: 12.5px; color: var(--page-stop); display: block; margin-bottom: 0.3rem; }
+.ask.decided b { color: var(--page-go); }
+.ask p { font-size: 13.5px; color: var(--page-dim); margin: 0; max-width: none; }
+.ask p + p { margin-top: 0.45rem; }
+.ask .rec { color: var(--page-fg); }
+
+/* ---- 演示条 / 舞台 ---- */
+
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.demo-cap {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+}
+.demo-bar .hint { font-family: var(--mono); font-size: 11.5px; color: var(--page-accent); margin-left: auto; }
+
+.stage {
+  border: 1px solid var(--page-rule);
+  border-radius: 9px;
+  padding: 0.55rem;
+  background: var(--page-rule-soft);
+  overflow: hidden;
+}
+/* 全宽出血：原型壳需要 1280px 才能同时容下 280 侧栏 + 768 阅读栏 + 44 导轨 */
+.stage-wide {
+  width: min(calc(100vw - 3rem), 1280px);
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ---- 标注卡 ---- */
+
+.notes { display: grid; gap: 0.75rem; margin-top: 1.1rem; }
+@media (min-width: 860px) { .notes { grid-template-columns: repeat(2, 1fr); } }
+.note {
+  border: 1px solid var(--page-rule);
+  border-radius: 7px;
+  padding: 0.8rem 0.95rem;
+  background: var(--page-panel);
+}
+.note h4 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-accent);
+  margin-bottom: 0.5rem;
+}
+.note.is-diff h4 { color: var(--page-stop); }
+.note.is-ref h4 { color: var(--page-go); }
+.note ul { display: flex; flex-direction: column; gap: 0.35rem; }
+.note li {
+  position: relative;
+  padding-left: 0.95rem;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--page-dim);
+}
+.note li::before { content: '·'; position: absolute; left: 0.25rem; color: var(--page-faint); }
+.note b { color: var(--page-fg); font-weight: 500; }
+.note code { font-size: 11.5px; }
+
+/* ---- 表格 ---- */
+
+.tbl-scroll { overflow-x: auto; border: 1px solid var(--page-rule); border-radius: 7px; }
+table { width: 100%; font-size: 13px; }
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--page-rule-soft);
+  vertical-align: top;
+  line-height: 1.5;
+}
+th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  background: var(--page-panel);
+  white-space: nowrap;
+}
+tr:last-child td { border-bottom: 0; }
+td.mono, td b { font-family: var(--mono); }
+td.mono { font-size: 12px; color: var(--page-accent); white-space: nowrap; }
+td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
+
+.footnote {
+  border-top: 2px solid var(--page-fg);
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
+.footnote h3 { margin-top: 0; }
+.footnote ul { list-style: disc; padding-left: 1.15rem; margin-bottom: 0.9rem; max-width: 46rem; }
+.footnote li { margin-bottom: 0.3rem; color: var(--page-dim); font-size: 14px; }
+.footnote b { color: var(--page-fg); }
+
+/* ============================================================
+   原型内部 token —— 逐条取自 src/renderer/styles/globals.css
+   （T-21 已落库的 Flexoki 语义变量，OKLCH 原值，删去
+   `/ var(--panel-bg-opacity)` 只因本页无背景图特性）。
+   变量名与 globals.css 一一对应，便于逐行比对。
+   ★ 本页禁止出现 Cursor 的白底/灰面板配色，也禁止任何十六进制硬编码。
+   ============================================================ */
+
+.fx {
+  /* --- globals.css :root（Flexoki Light）--- */
+  --background: oklch(0.9931 0.012 96.42);        /* #fffdf4 */
+  --foreground: oklch(0.1696 0.0017 17.32);       /* #100F0F */
+  --card: oklch(0.9837 0.0106 100.82);
+  --card-foreground: oklch(0.1696 0.0017 17.32);
+  --popover: oklch(0.9837 0.0106 100.82);
+  --popover-foreground: oklch(0.1696 0.0017 17.32);
+  --primary: oklch(0.5665 0.1523 45.02);          /* #BC5215 品牌橙 */
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --secondary: oklch(0.9673 0.0111 89.72);
+  --secondary-foreground: oklch(0.1696 0.0017 17.32);
+  --muted: oklch(0.969 0.0093 99.98);
+  --muted-foreground: oklch(0.5111 0.0053 78.28);
+  --accent: oklch(0.9422 0.0122 96.43);
+  --accent-foreground: oklch(0.1696 0.0017 17.32);
+  --accent-primary: oklch(0.8109 0.1131 56.61);   /* 亮色红线：只做填充/描边/圆点，不做文字 */
+  --selection: oklch(0.9152 0.0109 95.17);        /* 列表选中行，禁止再叠 /N */
+  --hover: oklch(0.9422 0.0122 96.43);            /* 与 --accent 同源的语义别名 */
+  --status-running: oklch(0.4818 0.1315 254.79);  /* T-21 用它替掉了唯一的 bg-amber-500 */
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --destructive-foreground: oklch(0.9931 0.012 96.42);
+  --success: oklch(0.5593 0.1335 122.92);
+  --success-foreground: oklch(0.9931 0.012 96.42);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --warning-foreground: oklch(0.9931 0.012 96.42);
+  --info: oklch(0.4818 0.1315 254.79);
+  --info-foreground: oklch(0.9931 0.012 96.42);
+  --folder: oklch(0.6333 0.1295 85.81);           /* 目录/文件夹专用 */
+  --border: oklch(0.881 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);           /* = interactive.borderHover，本仓当填充/强边用 */
+  --ring: oklch(0.5665 0.1523 45.02);
+  --radius: 0.5rem;                               /* 根字号 16px ⇒ 真实 8px */
+
+  /* --- A07 派生档位（全部从上面的 token 或 design-system 既有档派生）--- */
+  --r-xs: 0.25rem;                 /* --radius-xs 4px：chip / badge */
+  --r-sm: var(--radius);           /* 8px：行、tab、按钮 */
+  --r-md: 0.75rem;                 /* --radius-md 12px：composer 卡、下拉容器 */
+  --r-lg: 1rem;                    /* --radius-lg 16px：用户气泡外三角 */
+
+  --h-btn: 24px;                   /* design-system 小按钮 h-6 —— 目标栏三控件 + Model/Effort 同档 */
+  --h-row: 28px;                   /* design-system 树节点 h-7 —— 下拉项 / 侧栏会话行 / 圆形发送键 */
+  --h-bar: 36px;                   /* design-system Tab 栏 & 输入框 h-9 —— 会话 Tab、下拉内搜索 */
+  --w-rail: 44px;                  /* D19：ContextPanelRail 固定 w-11 */
+  --w-side: 280px;                 /* D19：Sidebar 默认 280（可拖 280–500） */
+  --w-read: 48rem;                 /* D19：聊天阅读栏 width min(100%, 48rem) */
+  --w-dd: 280px;                   /* 下拉宽度 = --w-side，不另立宽度档 */
+
+  --t-code: 13px;                  /* design-system Typography：code 档（路径/分支/hash/时间） */
+  --t-ui: 14px;                    /* ui 档：绝大多数 UI 文本 */
+  --t-md: 15px;                    /* markdown 档：聊天正文与全部标题 */
+
+  /* 覆盖层阴影：design-system「Shadow 表只覆盖覆盖层与容器，按钮零阴影」 */
+  --shadow-pop: 0 8px 24px oklch(0 0 0 / 0.12);
+
+  background: var(--background);
+  color: var(--foreground);
+  /* D18③：sans / mono / heading 三者统一为 ui-monospace */
+  font-family: var(--mono);
+  font-size: var(--t-ui);
+  line-height: 1.45;
+}
+
+/* 原型内的 <code> 必须走原型 token，否则会把外壳的暖灰底带进 Flexoki 面板 */
+.fx code {
+  font-family: inherit;
+  font-size: 1em;
+  background: var(--muted);
+  color: inherit;
+  padding: 0.05em 0.3em;
+  border-radius: var(--r-xs);
+}
+
+.fx[data-fx="dark"] {
+  /* --- globals.css .dark（Flexoki Dark）--- */
+  --background: oklch(0.1981 0.0032 17.43);       /* #171515 */
+  --foreground: oklch(0.8463 0.0137 102.05);      /* #CECDC3 */
+  --card: oklch(0.2197 0.0037 48.55);
+  --card-foreground: oklch(0.8463 0.0137 102.05);
+  --popover: oklch(0.2197 0.0037 48.55);
+  --popover-foreground: oklch(0.8463 0.0137 102.05);
+  --primary: oklch(0.6576 0.1539 49.3);           /* #DA702C */
+  --primary-foreground: oklch(0.1981 0.0032 17.43);
+  --secondary: oklch(0.2315 0.0024 67.71);
+  --secondary-foreground: oklch(0.8463 0.0137 102.05);
+  --muted: oklch(0.2228 0.0025 67.7);
+  --muted-foreground: oklch(0.5933 0.0079 88.68);
+  --accent: oklch(0.2912 0.0029 17.32);
+  --accent-foreground: oklch(0.8463 0.0137 102.05);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.3112 0.0029 17.31);
+  --hover: oklch(0.2912 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --destructive-foreground: oklch(0.1981 0.0032 17.43);
+  --success: oklch(0.7227 0.1178 117.2);
+  --success-foreground: oklch(0.1981 0.0032 17.43);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --warning-foreground: oklch(0.1981 0.0032 17.43);
+  --info: oklch(0.5988 0.1104 247);
+  --info-foreground: oklch(0.1981 0.0032 17.43);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.3214 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --ring: oklch(0.6576 0.1539 49.3);
+
+  --shadow-pop: 0 8px 24px oklch(0 0 0 / 0.45);
+}
+
+/* ============================================================
+   三列壳（D19：Sidebar 280 + Main + 44px 图标导轨，无底部面板）
+   ============================================================ */
+
+.fx-shell {
+  display: grid;
+  grid-template-columns: var(--w-side) minmax(0, 1fr) var(--w-rail);
+  height: 660px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.fx-shell.is-session { height: 640px; }
+
+.fx-shell svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+/* ---- 侧栏（D21 简化形态：flat 平铺 + 分支 chip + 右对齐相对时间）---- */
+
+.sb {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);   /* 亮色下 --card≈--background，面板分隔全靠这根线 */
+  padding: 0 6px;
+  min-width: 0;
+}
+.sb-top {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+  color: var(--muted-foreground);
+}
+.sb-top .sp { margin-left: auto; }
+.sb-item {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+}
+.sb-item .ic { color: var(--muted-foreground); }
+.sb-item.is-active { background: var(--selection); }
+.sb-item:hover { background: var(--hover); }
+.sb-sec {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  margin-top: 10px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.04em;   /* 分组标题不缩字号，靠 color + letter-spacing 拉层级 */
+}
+.sb-sec .acts { margin-left: auto; display: flex; gap: 8px; }
+.sb-folder {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;           /* 缩进 depth*12+8 → depth 0 = 8px */
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+}
+.sb-folder .ic { color: var(--folder); }
+.sb-row {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 20px;    /* 缩进 depth*12+8 → depth 1 = 20px */
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+}
+.sb-row:hover { background: var(--hover); }
+.sb-row.is-active { background: var(--selection); }
+.sb-row .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-row .chip {
+  flex-shrink: 0;
+  font-size: var(--t-code);
+  line-height: 1;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  color: var(--muted-foreground);
+}
+.sb-row .age {
+  flex-shrink: 0;
+  font-size: var(--t-code);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.sb-row .live { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--status-running); }
+.sb-more { padding: 0 8px 0 20px; height: var(--h-row); display: flex; align-items: center; color: var(--muted-foreground); }
+.sb-foot {
+  margin-top: auto;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+.sb-foot .av {
+  width: var(--h-row); height: var(--h-row);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--foreground);
+  display: grid; place-items: center;
+  font-size: var(--t-code);
+}
+.sb-foot .who { line-height: 1.25; color: var(--foreground); }
+.sb-foot .who small { display: block; font-size: var(--t-code); color: var(--muted-foreground); }
+.sb-foot .sp { margin-left: auto; }
+
+/* ---- 右侧 44px 图标导轨（D19）---- */
+
+.rail {
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+  color: var(--muted-foreground);
+}
+.rail .r-btn {
+  position: relative;
+  width: var(--h-row); height: var(--h-row);
+  display: grid; place-items: center;
+  border-radius: var(--r-sm);
+}
+.rail .r-btn:hover { background: var(--hover); }
+.rail .r-btn.is-on { background: var(--selection); color: var(--foreground); }
+.rail .dot {                              /* D19：surface 有内容时右上角 6px 圆点 */
+  position: absolute; top: 2px; right: 2px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-primary);
+}
+
+/* ---- 中列 ---- */
+
+.mn { display: flex; flex-direction: column; min-width: 0; }
+
+/* 会话 Tab 栏（屏③ 变体，h-9=36px） */
+.mn-tabs {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+.tab {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+  max-width: 220px;
+}
+.tab .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab:hover { background: var(--hover); }
+.tab.is-active { background: var(--selection); color: var(--foreground); }
+.mn-tabs .sp { margin-left: auto; display: flex; gap: 4px; }
+.mn-tabs .t-btn { width: var(--h-btn); height: var(--h-btn); display: grid; place-items: center; border-radius: var(--r-sm); }
+.mn-tabs .t-btn:hover { background: var(--hover); }
+
+/* 空态：Composer 卡垂直居中（略偏上，对齐截图呼吸感） */
+.mn-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0 24px 9%;
+}
+
+/* 会话态：时间线在上、Composer 沉底 */
+.mn-scroll { flex: 1; min-height: 0; overflow: auto; }
+.mn-dock { padding: 6px 24px 14px; }   /* 无 border-t —— 靠卡片自身边框浮起，不用阴影 */
+
+.rc { width: min(100%, var(--w-read)); margin-inline: auto; }
+
+/* ---- 目标栏（D22：文件夹 / 分支 / 运行位置）---- */
+
+.tgt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--h-btn);
+  margin-bottom: 8px;
+}
+.tgt.is-below { margin: 8px 0 0; }
+.tgt-slot { position: relative; }
+.tgt-btn {
+  height: var(--h-btn);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+  font: inherit;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.tgt-btn:hover { background: var(--hover); }
+.tgt-btn[aria-expanded="true"] { background: var(--selection); }
+.tgt-btn .cv { color: var(--muted-foreground); }
+.tgt-btn.is-dim { color: var(--muted-foreground); }
+.tgt-btn.is-dim .ic { color: var(--muted-foreground); }
+.tgt-btn .ic-folder { color: var(--folder); }
+/* 运行位置：只读指示器，无 chevron、无 hover 背景、不可点（D22 拍板方案一） */
+.tgt-ro {
+  height: var(--h-btn);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  color: var(--muted-foreground);
+  cursor: default;
+}
+.tgt-ro .tip { display: none; }
+.tgt-ro:hover .tip { display: block; }
+
+.tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: 264px;
+  padding: 7px 9px;
+  background: var(--popover);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--t-code);
+  line-height: 1.5;
+  text-align: left;
+}
+.tip b { color: var(--popover-foreground); font-weight: 500; }
+
+/* ---- Composer 卡 ---- */
+
+.cmp {
+  background: var(--card);
+  /* 用 --input（interactive.borderHover）而非 --border：让输入区成为中列最强的一条边，
+     这是 Cursor 那张卡「浮起」的观感来源，我们用边框实现而不是加阴影。 */
+  border: 1px solid var(--input);
+  border-radius: var(--r-md);
+  padding: 10px 12px 8px;
+}
+.cmp:focus-within { border-color: var(--ring); }
+.cmp-ta {
+  min-height: 56px;                 /* 空态：现状 textarea min-h-20(80px) 的可视上限内收 */
+  color: var(--muted-foreground);
+  font-size: var(--t-md);
+  padding-top: 2px;
+}
+.cmp-bar { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.icon-btn {
+  width: var(--h-btn); height: var(--h-btn);
+  display: grid; place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.icon-btn:hover { background: var(--hover); }
+.sel {
+  height: var(--h-btn);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.sel:hover { background: var(--hover); }
+.sel .cv { color: var(--muted-foreground); }
+.sel .sub { color: var(--muted-foreground); }
+.send {
+  margin-left: auto;
+  width: var(--h-row); height: var(--h-row);
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.send.is-stop { background: var(--destructive); color: var(--destructive-foreground, var(--background)); }
+
+/* follow-up 形态：单行，输入与底行合并 */
+.cmp.is-follow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+.cmp.is-follow .cmp-ta { min-height: 0; flex: 1; padding: 0; }
+
+/* ---- 时间线（A01 / T-05 openchamber 口径，本屏刻意不 Cursor 化）---- */
+
+.tl {
+  width: min(100%, var(--w-read));
+  margin-inline: auto;
+  padding: 20px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.fx-user { display: flex; justify-content: flex-end; }
+.fx-user-bubble {
+  max-width: 85%;
+  padding: 10px 16px;
+  background: var(--card);
+  border: 1px solid color-mix(in oklab, var(--primary) 8%, transparent);
+  border-radius: var(--r-lg) var(--r-lg) var(--r-xs) var(--r-lg);
+  font-size: var(--t-md);
+  line-height: 1.5;
+}
+.fx-assistant { font-size: var(--t-md); line-height: 1.5; }
+.fx-assistant > p { max-width: none; margin: 0; }
+.fx-assistant > p + p { margin-top: 10px; }
+.fx-tools { display: flex; flex-direction: column; gap: 1px; margin: 8px 0; }
+.fx-row, .fx-static {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  font: inherit;
+  font-size: var(--t-ui);
+  line-height: 1.45;
+  color: var(--foreground);
+  text-align: left;
+}
+.fx-row { cursor: pointer; }
+.fx-glyph { position: relative; width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-foreground); }
+.fx-glyph svg { position: absolute; inset: 0; transition: opacity 100ms; }
+.fx-glyph .chev { opacity: 0; }
+.fx-row:hover .fx-glyph .tool { opacity: 0; }
+.fx-row:hover .fx-glyph .chev { opacity: 1; }
+.fx-row[aria-expanded="true"] .fx-glyph .tool { opacity: 0; }
+.fx-row[aria-expanded="true"] .fx-glyph .chev { opacity: 1; transform: rotate(90deg); }
+.fx-name { flex-shrink: 0; }
+.fx-dur { flex-shrink: 0; color: var(--muted-foreground); font-variant-numeric: tabular-nums; font-size: var(--t-code); }
+.fx-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+}
+.fx-path {
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+  border-bottom: 1px solid transparent;
+}
+.fx-path:hover { color: var(--primary); border-bottom-color: var(--primary); }
+.fx-diff { flex-shrink: 0; font-size: var(--t-code); }
+.fx-diff .add { color: var(--success); }
+.fx-diff .sep { color: var(--muted-foreground); }
+.fx-diff .del { color: var(--destructive); }
+.fx-body { border-left: 1px solid var(--border); margin-left: 6px; padding-left: 14px; }
+.fx-body[hidden] { display: none; }
+.fx-out {
+  font-size: var(--t-code);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--muted-foreground);
+  padding: 4px 0 8px;
+  margin: 0;
+}
+.fx-out .ok { color: var(--success); }
+.fx-out .bad { color: var(--destructive); }
+.fx-out .num { color: var(--info); }
+.fx-running { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: var(--t-md); }
+.fx-running .live { width: 6px; height: 6px; border-radius: 50%; background: var(--status-running); }
+.fx-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: var(--t-code);
+  color: var(--muted-foreground);
+}
+.fx-footer .dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+.fx-pill { padding: 1px 5px; border: 1px solid var(--border); border-radius: var(--r-xs); }
+
+/* ---- 下拉（屏① 可点开；屏④ 常开解剖）---- */
+
+.dd {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  width: var(--w-dd);
+  padding-bottom: 4px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  text-align: left;
+}
+.dd[hidden] { display: none; }
+.dd.is-static { position: static; width: 100%; }
+.dd-search {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+.dd-sec {
+  height: var(--h-btn);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.04em;   /* 同侧栏：分组标题靠 color+字距，不靠字号 */
+}
+.dd-item {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--popover-foreground);
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dd-item .ic { color: var(--muted-foreground); }
+.dd-item .ic-folder { color: var(--folder); }
+.dd-item .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-item .sub { flex-shrink: 0; font-size: var(--t-code); color: var(--muted-foreground); }
+.dd-item .ck { color: var(--primary); margin-left: auto; }
+.dd-item .cv { color: var(--muted-foreground); margin-left: auto; }
+.dd-item:hover { background: var(--hover); }
+.dd-item.is-on { background: var(--selection); }
+.dd-item.is-off { color: var(--muted-foreground); opacity: 0.5; cursor: not-allowed; }
+.dd-item.is-off:hover { background: none; }
+.dd-item.is-act { color: var(--muted-foreground); }
+.dd-item.is-act:hover { color: var(--foreground); }
+.dd-sep { height: 1px; background: var(--border); margin: 5px 0; }
+.dd-path { font-size: var(--t-code); }
+
+/* ---- 屏④ 解剖网格 ---- */
+
+.anat { display: grid; gap: 14px; padding: 14px; }
+@media (min-width: 900px) { .anat { grid-template-columns: repeat(3, 1fr); } }
+.anat-cell { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.anat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.anat-head .n { color: var(--primary); font-size: var(--t-code); }
+.anat-head .h { color: var(--foreground); }
+.anat-head .k { margin-left: auto; font-size: var(--t-code); color: var(--muted-foreground); }
+.anat-anchor { display: flex; }
+.anat-note {
+  font-size: var(--t-code);
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.anat-note b { color: var(--foreground); font-weight: 500; }
+.anat-drop {
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  font-size: var(--t-code);
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.anat-drop .x { color: var(--destructive); }
+.anat-drop b { color: var(--foreground); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">A07 · 观感基线 · 中列 Cursor 化对齐</div>
+  <h1>中列（Main）对齐 Cursor，配色字体守 Flexoki</h1>
+  <p class="standfirst">
+    D23 拍板后立项的观感基线：<b>形态学 Cursor，配色与字体学我们自己</b>。
+    布局节奏、控件形态、状态切换照 <code>docs/design/refs/cursor-20260729/</code> 六张截图；
+    颜色一律取 <code>src/renderer/styles/globals.css</code> 的 Flexoki 语义变量，
+    字体是 D18 的全等宽栈，尺寸尽量落在 <code>docs/design-system.md</code> 的既有档位上。
+    本文件是 <b>T-27 / T-28 施工的前置</b>——用户验收后方可动代码。
+  </p>
+  <div class="status-strip">
+    <span class="is-ref">参照 refs/cursor-20260729（6 张）</span>
+    <span>待用户验收</span>
+    <span class="is-ask">会话 Tab 栏：带 / 不带两版供拍板</span>
+  </div>
+  <div class="masthead-meta">
+    <b>依据</b> D18 · D21 · D22 · D23
+    <b>设计全文</b> plans/2026-07-29-sidebar-composer-target-bar-design.md
+    <b>同族基线</b> design/phase0a-openchamber-alignment.html（A01/A05/A06）
+    <b>日期</b> 2026-07-29
+  </div>
+</header>
+
+<div class="toolbar">
+  <span class="tb-label">Flexoki 主题</span>
+  <div class="seg" role="group" aria-label="原型主题">
+    <button type="button" data-fx-set="light" aria-pressed="true">light</button>
+    <button type="button" data-fx-set="dark" aria-pressed="false">dark</button>
+  </div>
+  <span class="tb-label">页面</span>
+  <div class="seg" role="group" aria-label="页面主题">
+    <button type="button" data-page-set="light" aria-pressed="false">light</button>
+    <button type="button" data-page-set="dark" aria-pressed="false">dark</button>
+  </div>
+  <nav>
+    <a href="#s1">派生表</a>
+    <a href="#s2">① 空态</a>
+    <a href="#s3">② 会话态</a>
+    <a href="#s4">③ +Tab 栏</a>
+    <a href="#s5">④ 下拉解剖</a>
+    <a href="#s6">取舍 / 待拍板</a>
+  </nav>
+</div>
+
+<!-- ============================================================ 00 ============ -->
+<section id="s0">
+  <div class="sec-head">
+    <span class="sec-tag">00</span>
+    <h2>这版基线在定义什么，不定义什么</h2>
+    <span class="sec-sub">D23 边界</span>
+  </div>
+
+  <div class="verdict-strip">
+    <div class="verdict-item"><span class="v-k">中列骨架</span><span class="v-v">两态：空态居中 / 会话态沉底</span></div>
+    <div class="verdict-item"><span class="v-k">目标栏</span><span class="v-v">文件夹 · 分支 · 运行位置（只读）</span></div>
+    <div class="verdict-item"><span class="v-k">时间线内部</span><span class="v-v">不动，仍是 T-05 口径</span></div>
+    <div class="verdict-item"><span class="v-k">颜色 / 字体</span><span class="v-v">Flexoki + 全等宽，零硬编码</span></div>
+  </div>
+
+  <p>
+    <b>定义：</b>中列在「未发消息」与「已有会话」两态下的骨架与呼吸节奏；目标栏三个控件的形态、位置与状态；
+    Composer 卡的边界、圆角、内部分行；三个下拉的宽度、行高、分组方式与文案；侧栏 D21 平铺形态的最简可读样子。
+  </p>
+  <p>
+    <b>不定义（明确不动）：</b>时间线内部的用户气泡 / 助手正文 / 工具行 / 问答卡形态——那是 A01 已验收、
+    T-05 待施工的 openchamber 口径，本页屏②③ 里的工具行是<b>照原样贴进来的对照物</b>，不是新设计；
+    D19 的三列 + 44px 导轨骨架；右栏 surface 的任何内容。
+  </p>
+  <p>
+    <b>刻意不搬的 Cursor 元素：</b>白底浅灰面板与无衬线字体（D18 撤销 D6 后我们走 Flexoki + 等宽）；
+    <code>Connect Your Repos</code> 黑色 CTA；麦克风/语音按钮；<code>Remote Control</code> 卡片；
+    运行位置下拉里的 <code>Cloud</code> / <code>Remote Machines</code> 可点项。
+    理由统一是可行性文档 §6.2 与 T-23 的同一条：<b>没有能力就不摆控件，不做假选项、不做无反馈的可点元素</b>。
+  </p>
+  <p class="src">
+    参照截图 · docs/design/refs/cursor-20260729/{侧栏样式, 初始未发消息状态, 发起对话后状态, 文件夹下拉展开, 分支下拉展开, 运行位置下拉展开}.png
+  </p>
+</section>
+
+<!-- ============================================================ 01 ============ -->
+<section id="s1">
+  <div class="sec-head">
+    <span class="sec-tag">01</span>
+    <h2>Token 派生表</h2>
+    <span class="sec-sub">基线可以立新档，但必须有出处</span>
+  </div>
+
+  <p>
+    本页在 <code>.fx</code> 作用域内把 <code>globals.css</code> 的 Flexoki 语义变量<b>逐条原样搬入</b>
+    （OKLCH 原值、变量名一一对应，只删掉与背景图特性相关的 <code>--panel-bg-opacity</code>），
+    便于逐行比对。中列的新形态确实需要一些新档位，全部按下表从既有 token / design-system 档位派生，
+    CSS 内亦有同文注释。
+  </p>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>A07 派生档</th><th>值</th><th>派生自</th><th>用途与取舍</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">--h-btn</td><td><b>24px</b></td><td>design-system 高度表「小按钮 h-6」</td><td>目标栏三控件与卡内 Model/Effort 同一档——现状 <code>ModelSelect</code> 就是 <code>h-6</code>，目标栏因此零新控件高度</td></tr>
+        <tr><td class="mono">--h-row</td><td><b>28px</b></td><td>design-system「树节点行 h-7」</td><td>下拉项 / 侧栏会话行 / 圆形发送键直径共用；Cursor 发送键目视约 36px，<b>收档到 28</b> 以免与 h-9 混淆</td></tr>
+        <tr><td class="mono">--h-bar</td><td><b>36px</b></td><td>design-system「Tab 栏 h-9 / 输入框 h-9」</td><td>会话 Tab 栏高度 + 下拉内搜索行高度，一个档兼两用</td></tr>
+        <tr><td class="mono">--w-read</td><td><b>48rem / 768px</b></td><td>D19 聊天阅读栏 <code>min(100%, 48rem)</code></td><td>空态 Composer 卡与会话态时间线<b>同宽同轴</b>——发消息后视线不横移，这是两态能连起来的关键</td></tr>
+        <tr><td class="mono">--w-dd</td><td><b>280px</b></td><td>D19 Sidebar 默认宽 280</td><td>三个下拉统一宽度，不另立宽度档；Cursor 三个下拉宽度各不相同，我们统一</td></tr>
+        <tr><td class="mono">--w-side / --w-rail</td><td><b>280 / 44px</b></td><td>D19 原值</td><td>壳尺寸不改，本页只是把它画出来当上下文</td></tr>
+        <tr><td class="mono">--r-md</td><td><b>12px</b></td><td><code>--radius-md</code>（card / 容器档）</td><td>Composer 卡与下拉容器；Cursor 的 follow-up 输入近 pill 圆角，<b>收档到 12</b>，不引入新圆角档</td></tr>
+        <tr><td class="mono">--r-xs / --r-sm / --r-lg</td><td><b>4 / 8 / 16px</b></td><td><code>--radius-xs/-sm/-lg</code></td><td>chip、行与按钮、用户气泡外三角，全部落在既有四档内</td></tr>
+        <tr><td class="mono">Composer 边框</td><td><b>--input</b></td><td>globals.css：<code>--input</code> = interactive.borderHover，本仓当填充/强边用</td><td><b>关键取舍</b>：让输入区成为中列最强的一条边，用它替代 Cursor 靠阴影做出的「浮起」；design-system 明写「需要浮起感优先 border + bg-card 而不是阴影」</td></tr>
+        <tr><td class="mono">--shadow-pop</td><td><b>0 8px 24px oklch(0 0 0/.12)</b>（暗 .45）</td><td>design-system Shadow 表「只覆盖覆盖层与容器」</td><td>只给下拉与 tooltip；按钮、卡片一律零阴影</td></tr>
+        <tr><td class="mono">--t-code / --t-ui / --t-md</td><td><b>13 / 14 / 15px</b></td><td>design-system Typography 四档语义</td><td>路径・分支名・时间戳・diff 走 13；控件与下拉项走 14；聊天正文与气泡走 15</td></tr>
+        <tr><td class="mono">分组标题</td><td><b>14px + muted + 0.04em</b></td><td>design-system Typography「层级不靠字号，靠 weight / letter-spacing / color」</td><td><b>关键取舍</b>：Recents / Repos / Recent 段头<b>不缩字号</b>。等宽字体下缩字号既不省宽也会破坏纵向节拍，层级交给颜色与字距</td></tr>
+        <tr><td class="mono">空态垂直位</td><td><b>居中偏上（padding-bottom 9%）</b></td><td>截图目视测量</td><td>纯居中会显得下坠；Cursor 的卡实际落在约 45% 高度处</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>颜色纪律（照抄时最容易破的三条）</h4>
+      <ul>
+        <li><b>零硬编码</b>：本页原型内一个十六进制值都没有，全是 <code>var(--*)</code>；唯一的 <code>color-mix</code> 用在用户气泡描边（<code>--primary</code> 8%），沿用 A01 已验收写法。</li>
+        <li><b>--selection / --hover 不叠 alpha</b>：globals.css 已把上游的半透明预合成成实色，再叠 <code>/N</code> 会二次衰减。本页选中行/悬停一律裸用。</li>
+        <li><b>--accent-primary 只做填充与圆点</b>：亮色下它对 bg 只有 1.82:1，导轨小圆点可以，文字绝对不行。</li>
+        <li><b>--status-running 不是 warning</b>：Flexoki 的 warning 与 primary 同值，运行态用 info 系的 <code>--status-running</code>（T-21 已替掉全仓唯一的 <code>bg-amber-500</code>）。</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>字体纪律</h4>
+      <ul>
+        <li>D18③：sans / mono / heading 三者同为 <code>ui-monospace</code>，本页原型内<b>没有第二种字族</b>。</li>
+        <li>中英混排宽度节奏是已登记风险（open-q #10）——本页有意在下拉与侧栏里放了中英混排文案（「新建 worktree…」「本机运行」），验收时请重点看这几行的纵向节拍。</li>
+        <li>路径与分支名走 13px code 档 + <code>tabular-nums</code>（时间戳），保证右对齐相对时间列不抖动。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 02 ============ -->
+<section id="s2">
+  <div class="sec-head">
+    <span class="sec-tag">02</span>
+    <h2>屏① 空态 —— Composer 垂直居中，目标栏在卡上方</h2>
+    <span class="sec-sub">初始未发消息状态.png</span>
+  </div>
+
+  <div class="demo-bar">
+    <span class="demo-cap">三列壳 280 / main / 44 · 阅读栏 768 居中 · 目标栏三项</span>
+    <span class="hint">↑ 可点「ai-client」「feat/openchamber-chat-refactor」展开下拉；悬停「This PC」看只读说明</span>
+  </div>
+
+  <div class="stage stage-wide">
+    <div class="fx" data-fx="light">
+      <div class="fx-shell">
+
+        <!-- ================= 侧栏（D21 简化形态） ================= -->
+        <aside class="sb">
+          <div class="sb-top">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+            <span class="sp"></span>
+            <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </div>
+          <div class="sb-item is-active">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            <span>New Agent</span>
+          </div>
+          <div class="sb-item">
+            <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Search</span>
+          </div>
+
+          <div class="sb-sec"><span>Recent</span></div>
+          <div class="sb-row">
+            <span class="t">OpenChamber chat refactor …</span>
+            <span class="chip">fix/recentBug</span>
+            <span class="age">5d</span>
+          </div>
+          <div class="sb-row">
+            <span class="t">Phase 2 execution and ledger</span>
+            <span class="age">6d</span>
+          </div>
+
+          <div class="sb-sec">
+            <span>Repositories</span>
+            <span class="acts">
+              <svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+              <svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/></svg>
+            </span>
+          </div>
+          <div class="sb-folder">
+            <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+            <span>ai-client</span>
+          </div>
+          <div class="sb-row"><span class="t">OpenChamber chat refactor …</span><span class="chip">fix/recentBug</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">OpenChamber chat refactor</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">UI refactor discussion</span><span class="age">6d</span></div>
+          <div class="sb-folder">
+            <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+            <span>root/newhp</span>
+          </div>
+          <div class="sb-row"><span class="t">Task comparison analysis</span><span class="age">6d</span></div>
+
+          <div class="sb-foot">
+            <span class="av">D</span>
+            <span class="who">dan<small>Claude Max</small></span>
+            <span class="sp"></span>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </div>
+        </aside>
+
+        <!-- ================= 中列：空态 ================= -->
+        <main class="mn">
+          <div class="mn-empty">
+            <div class="rc">
+
+              <!-- 目标栏：文件夹 · 分支 · 运行位置（只读） -->
+              <div class="tgt">
+                <div class="tgt-slot">
+                  <button type="button" class="tgt-btn" data-dd="dd-folder" aria-expanded="false">
+                    <svg class="ic ic-folder" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                    <span>ai-client</span>
+                    <svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+
+                  <div class="dd" id="dd-folder" hidden>
+                    <div class="dd-search">
+                      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                      <span>Search folders, repos…</span>
+                    </div>
+                    <div class="dd-sec">Recents</div>
+                    <button type="button" class="dd-item is-on">
+                      <svg class="ic ic-folder" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                      <span class="t dd-path">D:\Code\projects\ai-client</span>
+                      <svg class="ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+                    </button>
+                    <button type="button" class="dd-item">
+                      <svg class="ic ic-folder" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                      <span class="t dd-path">D:\Code\newHP</span>
+                    </button>
+                    <div class="dd-sep"></div>
+                    <div class="dd-sec">Repos · 本机</div>
+                    <button type="button" class="dd-item">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+                      <span class="t">ai-client</span>
+                    </button>
+                    <button type="button" class="dd-item">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+                      <span class="t">newhp</span>
+                    </button>
+                    <div class="dd-sec">Repos · 远程</div>
+                    <button type="button" class="dd-item">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                      <span class="t">enso / plantree</span>
+                      <svg class="cv" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                    <div class="dd-sep"></div>
+                    <button type="button" class="dd-item is-act">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                      <span class="t">Use Existing…</span>
+                      <svg class="cv" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                    <button type="button" class="dd-item is-act">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M20 21H4"/></svg>
+                      <span class="t">Clone…</span>
+                    </button>
+                    <button type="button" class="dd-item is-act">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                      <span class="t">Add Remote…</span>
+                    </button>
+                    <button type="button" class="dd-item is-act">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/></svg>
+                      <span class="t">New Folder</span>
+                      <span class="sub">临时工作区</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="tgt-slot">
+                  <button type="button" class="tgt-btn is-dim" data-dd="dd-branch" aria-expanded="false">
+                    <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                    <span>feat/openchamber-chat-refactor</span>
+                    <svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+
+                  <div class="dd" id="dd-branch" hidden>
+                    <div class="dd-search">
+                      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                      <span>Search branches…</span>
+                    </div>
+                    <button type="button" class="dd-item">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                      <span class="t">main</span>
+                      <span class="sub">主工作树</span>
+                    </button>
+                    <div class="dd-sep"></div>
+                    <div class="dd-sec">Recent</div>
+                    <button type="button" class="dd-item is-on">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                      <span class="t">feat/openchamber-chat-refactor</span>
+                      <svg class="ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+                    </button>
+                    <button type="button" class="dd-item">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                      <span class="t">fix/recentBug</span>
+                      <span class="sub">../wt-fix</span>
+                    </button>
+                    <div class="dd-sep"></div>
+                    <div class="dd-sec">Worktrees</div>
+                    <button type="button" class="dd-item">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                      <span class="t">chore/deps</span>
+                      <span class="sub">../wt-deps</span>
+                    </button>
+                    <button type="button" class="dd-item">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M12 2v20"/><path d="m5 9 7-7 7 7"/></svg>
+                      <span class="t">detached HEAD @ 68f95b3</span>
+                    </button>
+                    <div class="dd-sep"></div>
+                    <button type="button" class="dd-item is-act">
+                      <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                      <span class="t">New worktree…</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="tgt-slot">
+                  <span class="tgt-ro" tabindex="0">
+                    <svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+                    <span>This PC</span>
+                    <span class="tip">
+                      <b>只读指示器，不是下拉。</b>
+                      运行位置由仓库属性派生（<code>useRepositoryRuntimeContext</code>）：本机 → This PC，远程 → 连接名；
+                      数据缺失时整块隐藏，不硬显。远程能力上线后再升级为下拉（D22）。
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- Composer 卡 -->
+              <div class="cmp">
+                <div class="cmp-ta">Message Claude via Agent Host…</div>
+                <div class="cmp-bar">
+                  <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+                  <span class="sel"><span>claude-opus-5</span><svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+                  <span class="sel"><span class="sub">effort</span><span>high</span><svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+                  <span class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </main>
+
+        <!-- ================= 右侧 44px 导轨（D19） ================= -->
+        <nav class="rail">
+          <span class="r-btn is-on"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="r-btn"><svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg><span class="dot"></span></span>
+          <span class="r-btn"><svg viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>
+          <span class="r-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+        </nav>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>关键尺寸</h4>
+      <ul>
+        <li>阅读栏 <b>min(100%, 48rem)</b> 居中；Composer 卡与目标栏共用同一条左边界，卡下无任何常驻元素。</li>
+        <li>目标栏行高 <b>24px（h-6）</b>，控件间距 <b>4px</b>，控件内图标-文字间距 <b>6px</b>；整行到卡片 <b>8px</b>。</li>
+        <li>Composer 卡：圆角 <b>12px</b>，内边距 <b>10/12/8</b>，输入区最小高 <b>56px</b>，底行高 24px + 上间距 6px。</li>
+        <li>发送键 <b>28px 圆形</b>（<code>--h-row</code> + 满圆），实心 <code>--primary</code>。</li>
+        <li>整列垂直居中后再下压 <b>9%</b>，使卡片落在约 45% 高度——与截图一致。</li>
+      </ul>
+    </div>
+    <div class="note is-ref">
+      <h4>用到的 token</h4>
+      <ul>
+        <li>底：<code>--background</code>；卡：<code>--card</code> + <code>--input</code> 边；聚焦：<code>--ring</code>。</li>
+        <li>层级靠颜色：文件夹名 <code>--foreground</code>，分支与运行位置 <code>--muted-foreground</code>——<b>三个控件同字号</b>，当前目标靠色深突出。</li>
+        <li>文件夹图标 <code>--folder</code>（全仓目录专用色）；发送键 <code>--primary</code> / <code>--primary-foreground</code>。</li>
+        <li>悬停 <code>--hover</code>，展开态 <code>--selection</code>（下拉打开时触发按钮保持选中底色）。</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>与 Cursor 截图的对应</h4>
+      <ul>
+        <li>「初始未发消息状态.png」：目标栏一行三项在卡上方、卡垂直居中、卡内底行左模型右发送——<b>逐项对应</b>。</li>
+        <li>Cursor 的 <code>Fable 5 High</code> 是一个合并控件；我们拆回<b>现有的两个 select</b>（ModelSelect + EffortSelect），零新控件。</li>
+        <li>Cursor 卡下的 <code>Connect Your Repos</code> 黑色 CTA 与麦克风键<b>不搬</b>（无对应能力）。</li>
+        <li>占位文案不抄 <code>Plan, Build, / for skills</code>——我们没有 skills，沿用现网 <code>Message Claude via Agent Host…</code>，<code>@</code> 引用能力已有（T-07）。</li>
+      </ul>
+    </div>
+    <div class="note is-diff">
+      <h4>与现状的差异点</h4>
+      <ul>
+        <li>现状 <code>ChatComposer.tsx:701</code> 是 <code>shrink-0 border-t bg-background/80 p-3</code> 的<b>常驻底栏</b>，空态也贴底——本屏改为居中，且<b>去掉 border-t</b>。</li>
+        <li>目标栏是<b>全新一行</b>：现状没有任何仓库/分支选择入口在中列（选择权原本散在侧栏树与 <code>MainHeader</code> 两个死按钮上，T-23 要删）。</li>
+        <li>发送键从 <code>Button size=sm</code> 带 <code>Send</code> 文字改为 <b>28px 圆形图标键</b>，省下一行横向宽度；文字改由 <code>aria-label</code> 承担（待拍板 ③）。</li>
+        <li>侧栏这里已按 D21 画成 <b>flat 平铺 + 分支 chip + 右对齐相对时间</b>，非 main 的会话才带 chip——与现状三层树不同。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 03 ============ -->
+<section id="s3">
+  <div class="sec-head">
+    <span class="sec-tag">03</span>
+    <h2>屏② 会话态 —— 时间线在上，Composer 沉底，目标行在卡下</h2>
+    <span class="sec-sub">发起对话后状态.png（不带 Tab 栏版）</span>
+  </div>
+
+  <div class="demo-bar">
+    <span class="demo-cap">时间线 = A01/T-05 口径原样贴入 · follow-up 单行 · 目标行只剩分支 + 运行位置</span>
+    <span class="hint">↑ 工具行可点开/收起</span>
+  </div>
+
+  <div class="stage stage-wide">
+    <div class="fx" data-fx="light">
+      <div class="fx-shell is-session">
+
+        <aside class="sb">
+          <div class="sb-top">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+            <span class="sp"></span>
+            <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </div>
+          <div class="sb-item">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            <span>New Agent</span>
+          </div>
+          <div class="sb-item">
+            <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Search</span>
+          </div>
+          <div class="sb-sec">
+            <span>Repositories</span>
+            <span class="acts">
+              <svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+              <svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/></svg>
+            </span>
+          </div>
+          <div class="sb-folder">
+            <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+            <span>ai-client</span>
+          </div>
+          <div class="sb-row is-active">
+            <span class="live"></span>
+            <span class="t">composerTarget 三档规则</span>
+            <span class="age">1m</span>
+          </div>
+          <div class="sb-row"><span class="t">OpenChamber chat refactor …</span><span class="chip">fix/recentBug</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">UI refactor discussion</span><span class="age">6d</span></div>
+          <div class="sb-folder">
+            <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+            <span>root/newhp</span>
+          </div>
+          <div class="sb-row"><span class="t">Task comparison analysis</span><span class="age">6d</span></div>
+          <div class="sb-foot">
+            <span class="av">D</span>
+            <span class="who">dan<small>Claude Max</small></span>
+            <span class="sp"></span>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </div>
+        </aside>
+
+        <main class="mn">
+          <div class="mn-scroll">
+            <div class="tl">
+
+              <div class="fx-user">
+                <div class="fx-user-bubble">把 Composer 目标栏的三档规则抽成纯函数 composerTarget.ts，顺手补测试</div>
+              </div>
+
+              <div class="fx-assistant">
+                <p>先确认三档边界：空且未 host-bound → <code>retarget</code>；已有消息或已绑 → <code>fork</code>；运行中 → <code>blocked</code>。我看一下现有的重绑逻辑。</p>
+
+                <div class="fx-tools">
+
+                  <div class="fx-static">
+                    <span class="fx-glyph" aria-hidden="true">
+                      <svg class="tool" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                    </span>
+                    <span class="fx-name">Read File</span>
+                    <span class="fx-path">hooks/useSyncChatWorkspaceTree.ts</span>
+                    <span class="fx-path">chat/ChatComposer.tsx</span>
+                    <span class="fx-path">stores/chatSessions.ts</span>
+                  </div>
+
+                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t1">
+                    <span class="fx-glyph" aria-hidden="true">
+                      <svg class="tool" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                    </span>
+                    <span class="fx-name">Search Files</span>
+                    <span class="fx-desc">"rebindSessionsToTree"</span>
+                  </button>
+                  <div class="fx-body" id="a7t1" hidden>
+<pre class="fx-out"><span class="num">hooks/useSyncChatWorkspaceTree.ts</span>
+  Line 109: <span class="ok">// host-bound sessions are never rebound</span>
+  Line 112: if (session.hostBound) return session;
+<span class="num">hooks/__tests__/useSyncChatWorkspaceTree.test.ts</span>
+  Line 64: it('keeps host-bound sessions on their original workspace')</pre>
+                  </div>
+
+                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t2">
+                    <span class="fx-glyph" aria-hidden="true">
+                      <svg class="tool" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                    </span>
+                    <span class="fx-name">Edit File</span>
+                    <span class="fx-desc">chat/composerTarget.ts</span>
+                    <span class="fx-diff"><span class="add">+62</span><span class="sep">/</span><span class="del">-0</span></span>
+                  </button>
+                  <div class="fx-body" id="a7t2" hidden>
+<pre class="fx-out">+ export type TargetChange = 'retarget' | 'fork' | 'blocked';
++
++ export function resolveTargetChange(s: SessionState): TargetChange {
++   if (RUNNING.has(s.status)) return 'blocked';
++   if (s.messageCount > 0 || s.hostBound) return 'fork';
++   return 'retarget';
++ }</pre>
+                  </div>
+
+                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t3">
+                    <span class="fx-glyph" aria-hidden="true">
+                      <svg class="tool" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                    </span>
+                    <span class="fx-name">Shell Command</span>
+                    <span class="fx-dur">8.1s</span>
+                    <span class="fx-desc">pnpm test -- composerTarget</span>
+                  </button>
+                  <div class="fx-body" id="a7t3" hidden>
+<pre class="fx-out"> <span class="ok">✓</span> chat/__tests__/composerTarget.test.ts <span class="ok">(11 tests)</span> 36ms
+
+ Test Files  <span class="ok">1 passed</span> (1)
+      Tests  <span class="ok">11 passed</span> (11)</pre>
+                  </div>
+
+                </div>
+
+                <p>纯函数与 11 例断言已就位，含「切已有 worktree 时 <code>git.checkout</code> 调用次数为 0」这条。接着把它接到目标栏的三个控件上。</p>
+
+                <div class="fx-footer">
+                  <span>claude-opus-5</span>
+                  <span class="dot"></span>
+                  <span>12.4s</span>
+                  <span class="dot"></span>
+                  <span>07:41</span>
+                  <span class="fx-pill">composerTarget.ts</span>
+                  <span class="fx-pill">composerTarget.test.ts</span>
+                </div>
+              </div>
+
+              <div class="fx-running">
+                <span class="live"></span>
+                <span>Planning next moves…</span>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="mn-dock">
+            <div class="rc">
+              <div class="cmp is-follow">
+                <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+                <span class="cmp-ta">Send follow-up…</span>
+                <span class="sel"><span>claude-opus-5</span><svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+                <span class="sel"><span class="sub">effort</span><span>high</span><svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+                <span class="send is-stop"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></span>
+              </div>
+
+              <!-- 目标行下沉：会话态只剩「分支 + 运行位置」 -->
+              <div class="tgt is-below">
+                <div class="tgt-slot">
+                  <span class="tgt-btn is-dim">
+                    <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                    <span>feat/openchamber-chat-refactor</span>
+                    <svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </span>
+                </div>
+                <div class="tgt-slot">
+                  <span class="tgt-ro" tabindex="0">
+                    <svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+                    <span>This PC</span>
+                    <span class="tip">
+                      <b>会话运行中 → 目标栏 disabled。</b>
+                      三档规则：空且未 host-bound → retarget；有消息或已绑 → fork；starting/running/stopping/waiting_* → blocked（照 Model/Effort 先例）。
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <nav class="rail">
+          <span class="r-btn"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="r-btn is-on"><svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg><span class="dot"></span></span>
+          <span class="r-btn"><svg viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>
+          <span class="r-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+        </nav>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>关键尺寸</h4>
+      <ul>
+        <li>时间线与 Composer <b>共用 768 阅读栏、同一条中轴</b>——从空态发出第一条消息时，卡片只是下移，横向不动。</li>
+        <li>follow-up 单行卡：高 <b>40px</b>（内容 24 + 上下 8），圆角仍是 <b>12px</b>；Cursor 是近 pill，我们收档。</li>
+        <li>目标行在卡下 <b>8px</b>，行高 24px，只剩两项，与空态的三项形成「上下文已固定」的读感。</li>
+        <li>dock 区 <b>无 border-t</b>，上间距 6px、下 14px；时间线自然从卡下缘滚过去。</li>
+      </ul>
+    </div>
+    <div class="note is-ref">
+      <h4>用到的 token</h4>
+      <ul>
+        <li>用户气泡：<code>--card</code> + <code>color-mix(--primary 8%)</code> 描边，圆角 16/16/4/16（A01 已验收写法，原样）。</li>
+        <li>助手正文完全平铺无容器；工具行 <code>--foreground</code> / <code>--muted-foreground</code>，diff 用 <code>--success</code> / <code>--destructive</code>。</li>
+        <li>运行中圆点与侧栏活动指示均为 <code>--status-running</code>（T-21 已替掉全仓唯一 <code>bg-amber-500</code>）。</li>
+        <li>停止键 <code>--destructive</code> 实心圆——与发送键同尺寸同位置，只换色不换形。</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>与 Cursor 截图的对应</h4>
+      <ul>
+        <li>「发起对话后状态.png」：时间线在上、follow-up 沉底、目标行（分支 + This PC）在 Composer <b>下方</b>——结构逐项对应。</li>
+        <li>Cursor 的 <code>Planning next moves</code> 灰字状态行 → 我们的 <code>--status-running</code> 圆点 + 同文案位。</li>
+        <li>Cursor follow-up 右侧的麦克风<b>不搬</b>；停止键位置与形态照搬。</li>
+        <li>Cursor 把用户消息渲染成<b>全宽方框</b>——我们<b>不跟</b>，保留 A01 右对齐气泡（见右下差异卡）。</li>
+      </ul>
+    </div>
+    <div class="note is-diff">
+      <h4>与现状 / 与 Cursor 的差异点</h4>
+      <ul>
+        <li><b>D23 边界的具体体现</b>：本屏时间线里的工具行、气泡、footer 全是从 phase0a 基线搬来的<b>同一套 class</b>，一像素未改。中列 Cursor 化<b>只改骨架</b>。</li>
+        <li>现状没有「目标行」这一层；现状 composer 底行是「状态文案 + Model + Effort + Send」，本屏把状态文案让位给时间线里的运行指示。</li>
+        <li>现状 dock 有 <code>border-t bg-background/80</code>，本屏去掉；浮起感由卡片的 <code>--input</code> 边承担，不加阴影。</li>
+        <li>Cursor 的用户消息框贴顶且全宽，会让长会话里分不清「谁在说」；我们保留右对齐气泡是<b>有据偏离</b>（D23 明写时间线内部按 T-05 不变）。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 04 ============ -->
+<section id="s4">
+  <div class="sec-head">
+    <span class="sec-tag">04</span>
+    <h2>屏③ 会话态 + 会话 Tab 栏（变体，待拍板）</h2>
+    <span class="sec-sub">发起对话后状态.png 顶部 Tab</span>
+  </div>
+
+  <p>
+    与屏② <b>唯一的差别</b>是中列顶部多了一条 36px 的会话 Tab 栏。放在一起看是为了拍板：
+    引入它意味着中列可并行开多个会话，与 D21 侧栏会话列表的职责重叠；不引入则左栏是<b>唯一</b>会话切换入口。
+  </p>
+
+  <div class="demo-bar">
+    <span class="demo-cap">Tab 栏 h-9=36 · Tab 高 26 圆角 8 · 激活 --selection</span>
+    <span class="hint">↑ 只看顶部这一条，其余与屏② 完全相同</span>
+  </div>
+
+  <div class="stage stage-wide">
+    <div class="fx" data-fx="light">
+      <div class="fx-shell is-session">
+
+        <aside class="sb">
+          <div class="sb-top">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+            <span class="sp"></span>
+            <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </div>
+          <div class="sb-item">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            <span>New Agent</span>
+          </div>
+          <div class="sb-item">
+            <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Search</span>
+          </div>
+          <div class="sb-sec">
+            <span>Repositories</span>
+            <span class="acts">
+              <svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+              <svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/></svg>
+            </span>
+          </div>
+          <div class="sb-folder">
+            <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+            <span>ai-client</span>
+          </div>
+          <div class="sb-row is-active">
+            <span class="live"></span>
+            <span class="t">composerTarget 三档规则</span>
+            <span class="age">1m</span>
+          </div>
+          <div class="sb-row"><span class="t">侧栏两层化 T-26</span><span class="chip">fix/recentBug</span><span class="age">2h</span></div>
+          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="age">6d</span></div>
+          <div class="sb-foot">
+            <span class="av">D</span>
+            <span class="who">dan<small>Claude Max</small></span>
+            <span class="sp"></span>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </div>
+        </aside>
+
+        <main class="mn">
+          <!-- ★ 屏③ 唯一新增：会话 Tab 栏 -->
+          <div class="mn-tabs">
+            <span class="tab is-active">
+              <span class="live" style="width:6px;height:6px;border-radius:50%;background:var(--status-running);flex-shrink:0;"></span>
+              <span class="t">composerTarget 三档规则</span>
+            </span>
+            <span class="tab"><span class="t">侧栏两层化 T-26</span></span>
+            <span class="t-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+            <span class="sp">
+              <span class="t-btn"><svg viewBox="0 0 24 24"><path d="M8 3v4H4"/><path d="M16 21v-4h4"/><path d="m3 8 5-5"/><path d="m21 16-5 5"/></svg></span>
+              <span class="t-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></span>
+            </span>
+          </div>
+
+          <div class="mn-scroll">
+            <div class="tl">
+              <div class="fx-user">
+                <div class="fx-user-bubble">把 Composer 目标栏的三档规则抽成纯函数 composerTarget.ts，顺手补测试</div>
+              </div>
+              <div class="fx-assistant">
+                <p>先确认三档边界：空且未 host-bound → <code>retarget</code>；已有消息或已绑 → <code>fork</code>；运行中 → <code>blocked</code>。</p>
+                <div class="fx-tools">
+                  <div class="fx-static">
+                    <span class="fx-glyph" aria-hidden="true">
+                      <svg class="tool" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                    </span>
+                    <span class="fx-name">Read File</span>
+                    <span class="fx-path">hooks/useSyncChatWorkspaceTree.ts</span>
+                    <span class="fx-path">chat/ChatComposer.tsx</span>
+                  </div>
+                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t4">
+                    <span class="fx-glyph" aria-hidden="true">
+                      <svg class="tool" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                    </span>
+                    <span class="fx-name">Shell Command</span>
+                    <span class="fx-dur">8.1s</span>
+                    <span class="fx-desc">pnpm test -- composerTarget</span>
+                  </button>
+                  <div class="fx-body" id="a7t4" hidden>
+<pre class="fx-out"> <span class="ok">✓</span> chat/__tests__/composerTarget.test.ts <span class="ok">(11 tests)</span> 36ms</pre>
+                  </div>
+                </div>
+                <p>11 例全绿，含「切已有 worktree 时 <code>git.checkout</code> 调用次数为 0」。</p>
+                <div class="fx-footer">
+                  <span>claude-opus-5</span><span class="dot"></span><span>12.4s</span><span class="dot"></span><span>07:41</span>
+                  <span class="fx-pill">composerTarget.ts</span>
+                </div>
+              </div>
+              <div class="fx-running">
+                <span class="live"></span>
+                <span>Planning next moves…</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mn-dock">
+            <div class="rc">
+              <div class="cmp is-follow">
+                <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+                <span class="cmp-ta">Send follow-up…</span>
+                <span class="sel"><span>claude-opus-5</span><svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+                <span class="sel"><span class="sub">effort</span><span>high</span><svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+                <span class="send is-stop"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></span>
+              </div>
+              <div class="tgt is-below">
+                <div class="tgt-slot">
+                  <span class="tgt-btn is-dim">
+                    <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                    <span>feat/openchamber-chat-refactor</span>
+                    <svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </span>
+                </div>
+                <div class="tgt-slot">
+                  <span class="tgt-ro"><svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg><span>This PC</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <nav class="rail">
+          <span class="r-btn"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="r-btn is-on"><svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg><span class="dot"></span></span>
+          <span class="r-btn"><svg viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>
+          <span class="r-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+        </nav>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>关键尺寸</h4>
+      <ul>
+        <li>Tab 栏 <b>36px（h-9）</b>，与 design-system「Tab 栏 h-9」完全同档，无新值。</li>
+        <li>单个 Tab 高 <b>26px</b>、圆角 <b>8px（--radius-sm）</b>、内边距 10px、最大宽 220px 后省略号截断。</li>
+        <li>Tab 内运行圆点 6px（与侧栏、导轨圆点同尺寸）；<code>+</code> 新建与右侧两个窗口控制位均为 24px（h-6）。</li>
+        <li>Tab 栏保留 <code>border-bottom</code>——亮色下 <code>--card</code> 与 <code>--background</code> 几乎同色，分隔只能靠线。</li>
+      </ul>
+    </div>
+    <div class="note is-ref">
+      <h4>用到的 token</h4>
+      <ul>
+        <li>激活 Tab：<code>--selection</code> 底 + <code>--foreground</code> 字；非激活：透明底 + <code>--muted-foreground</code>。</li>
+        <li>悬停 <code>--hover</code>；分隔线 <code>--border</code>。整条栏无新 token。</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>与 Cursor 截图的对应</h4>
+      <ul>
+        <li>「发起对话后状态.png」顶部：<code>General chat</code> Tab + <code>+</code> 新建 + 右上两个折叠/面板图标——位置与顺序照搬。</li>
+        <li>Cursor 的 Tab 里带一个小机器图标表示运行位置；我们改成<b>运行态圆点</b>（运行位置已在目标行，不重复表达）。</li>
+      </ul>
+    </div>
+    <div class="note is-diff">
+      <h4>拍板需要权衡的</h4>
+      <ul>
+        <li><b>职责重叠</b>：D21 刚把侧栏定成「文件夹 → 对话」两层，会话切换入口在左栏；再加 Tab 栏就有<b>两个</b>切换入口。</li>
+        <li><b>与 D19 的关系</b>：T-22 会把中列变成可承载 surface 的区域，届时 Tab 栏的语义是「会话」还是「surface」需要先想清楚，否则会二次返工。</li>
+        <li><b>倾向</b>：先<b>不带</b>（屏②），把 Tab 栏留到 T-22 surface 化之后再评——现在引入等于提前锁定一个尚未定义的语义。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 05 ============ -->
+<section id="s5">
+  <div class="sec-head">
+    <span class="sec-tag">05</span>
+    <h2>屏④ 三个下拉的解剖</h2>
+    <span class="sec-sub">文件夹 / 分支 / 运行位置 三张截图</span>
+  </div>
+
+  <p>
+    三个控件<b>不是同一种东西</b>：前两个是真下拉，第三个按 D22 拍板降级为只读指示器。
+    这一屏把三者并排摊开，连「Cursor 有而我们刻意不做」的项也一并列出。
+  </p>
+
+  <div class="demo-bar">
+    <span class="demo-cap">统一宽 280（= Sidebar 默认宽）· 行高 28（h-7）· 搜索行 36（h-9）</span>
+  </div>
+
+  <div class="stage stage-wide">
+    <div class="fx" data-fx="light">
+      <div class="anat" style="background: var(--background); border-radius: var(--r-md);">
+
+        <!-- ---------- 下拉一：文件夹 ---------- -->
+        <div class="anat-cell">
+          <div class="anat-head">
+            <span class="n">01</span><span class="h">文件夹</span><span class="k">真下拉</span>
+          </div>
+          <div class="anat-anchor">
+            <span class="tgt-btn" aria-expanded="true">
+              <svg class="ic ic-folder" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+              <span>ai-client</span>
+              <svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+          </div>
+          <div class="dd is-static">
+            <div class="dd-search">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <span>Search folders, repos…</span>
+            </div>
+            <div class="dd-sec">Recents</div>
+            <button type="button" class="dd-item is-on">
+              <svg class="ic ic-folder" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <span class="t dd-path">D:\Code\projects\ai-client</span>
+              <svg class="ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+            <button type="button" class="dd-item">
+              <svg class="ic ic-folder" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <span class="t dd-path">D:\Code\newHP</span>
+            </button>
+            <div class="dd-sep"></div>
+            <div class="dd-sec">Repos · 本机</div>
+            <button type="button" class="dd-item">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+              <span class="t">ai-client</span>
+            </button>
+            <button type="button" class="dd-item">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+              <span class="t">newhp</span>
+            </button>
+            <div class="dd-sec">Repos · 远程</div>
+            <button type="button" class="dd-item">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+              <span class="t">enso / plantree</span>
+              <svg class="cv" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <div class="dd-sep"></div>
+            <button type="button" class="dd-item is-act">
+              <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+              <span class="t">Use Existing…</span>
+              <svg class="cv" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button type="button" class="dd-item is-act">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M20 21H4"/></svg>
+              <span class="t">Clone…</span>
+            </button>
+            <button type="button" class="dd-item is-act">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+              <span class="t">Add Remote…</span>
+            </button>
+            <button type="button" class="dd-item is-act">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/></svg>
+              <span class="t">New Folder</span>
+              <span class="sub">临时工作区</span>
+            </button>
+          </div>
+          <div class="anat-note">
+            <span><b>结构</b>：搜索 → Recents（session-index 派生，前 5，当前项打勾）→ Repos 按 <code>Repository.kind</code> 分「本机 / 远程」→ 分隔线 → 四个动作。</span>
+            <span><b>与截图差异</b>：Cursor 的 <code>No Repo</code> / <code>On This PC ›</code> / <code>Cloud ›</code> 是「先选类别再选仓库」的两级；我们直接<b>平铺已注册仓库</b>，只有远程组保留二级箭头。</span>
+            <span><b>New Folder</b> = 建 Temp Workspace（复用现成 <code>tempWorkspace</code> IPC），右侧的 <code>临时工作区</code> 二级说明是<b>诚实标注</b>，不是装饰。</span>
+          </div>
+          <div class="anat-drop">
+            <b>不做</b>：<span class="x">✗</span> <code>No Repo</code>（我们的会话必须有 cwd）
+          </div>
+        </div>
+
+        <!-- ---------- 下拉二：分支 ---------- -->
+        <div class="anat-cell">
+          <div class="anat-head">
+            <span class="n">02</span><span class="h">分支 = worktree</span><span class="k">真下拉</span>
+          </div>
+          <div class="anat-anchor">
+            <span class="tgt-btn is-dim" aria-expanded="true">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+              <span>feat/openchamber-chat-refactor</span>
+              <svg class="cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+          </div>
+          <div class="dd is-static">
+            <div class="dd-search">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <span>Search branches…</span>
+            </div>
+            <button type="button" class="dd-item">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+              <span class="t">main</span>
+              <span class="sub">主工作树</span>
+            </button>
+            <div class="dd-sep"></div>
+            <div class="dd-sec">Recent</div>
+            <button type="button" class="dd-item is-on">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+              <span class="t">feat/openchamber-chat-refactor</span>
+              <svg class="ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+            <button type="button" class="dd-item">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+              <span class="t">fix/recentBug</span>
+              <span class="sub">../wt-fix</span>
+            </button>
+            <div class="dd-sep"></div>
+            <div class="dd-sec">Worktrees</div>
+            <button type="button" class="dd-item">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+              <span class="t">chore/deps</span>
+              <span class="sub">../wt-deps</span>
+            </button>
+            <button type="button" class="dd-item">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M12 2v20"/><path d="m5 9 7-7 7 7"/></svg>
+              <span class="t">detached HEAD @ 68f95b3</span>
+            </button>
+            <div class="dd-sep"></div>
+            <button type="button" class="dd-item is-act">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              <span class="t">New worktree…</span>
+            </button>
+          </div>
+          <div class="anat-note">
+            <span><b>语义（D22 最重要的一条）</b>：这是 <b>worktree 选择器</b>，不是 <code>git checkout</code>。选中已有 worktree = 换 cwd；点未物化的分支 = 进 <code>CreateWorktreeDialog</code> 预填。</span>
+            <span><b>结构</b>：搜索 → <code>main</code> 置顶（无段头，与截图一致）→ 分隔线 → Recent（该 project 会话 <code>updatedAt</code> 派生）→ Worktrees（其余）→ 分隔线 → <code>New worktree…</code>。</span>
+            <span><b>比截图多的两样</b>：每行右侧的 <b>worktree 路径二级文本</b>（13px muted，让「换分支 = 换目录」显式可见）；<b>detached HEAD 原样标注</b>不猜名字。</span>
+          </div>
+          <div class="anat-drop">
+            <b>不做</b>：<span class="x">✗</span> in-place <code>checkout</code> · <span class="x">✗</span> 分支名规范化（<code>remotes/</code> 前缀原样透传）
+          </div>
+        </div>
+
+        <!-- ---------- 下拉三：运行位置 ---------- -->
+        <div class="anat-cell">
+          <div class="anat-head">
+            <span class="n">03</span><span class="h">运行位置</span><span class="k">只读指示器</span>
+          </div>
+          <div class="anat-anchor">
+            <span class="tgt-ro">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></svg>
+              <span>This PC</span>
+            </span>
+          </div>
+          <div class="dd is-static" style="padding: 9px 11px;">
+            <div style="font-size: var(--t-code); line-height: 1.6; color: var(--muted-foreground);">
+              <b style="color: var(--popover-foreground); font-weight: 500;">Tooltip 文案（悬停 / 聚焦时出现）</b><br>
+              运行位置由仓库属性派生：本机 → <code>This PC</code>，远程 → 连接名。<br>
+              数据缺失时<b style="color: var(--popover-foreground);">整块隐藏</b>，不硬显 This PC。<br>
+              远程能力上线后再升级为下拉。
+            </div>
+          </div>
+          <div class="anat-note">
+            <span><b>形态</b>：没有 chevron、没有 hover 底色、<code>cursor: default</code>——三条一起才能让人一眼看出它<b>不可点</b>。只有颜色（<code>--muted-foreground</code>）不够。</span>
+            <span><b>数据源</b>：<code>useRepositoryRuntimeContext</code> 的真实 local/remote，不是常量。</span>
+            <span><b>为什么不做成下拉</b>：远程只是仓库属性、不是独立运行维度；参考实现 openchamber 压根没有这个控件。用户拍板取「方案一」。</span>
+          </div>
+          <div class="anat-drop">
+            <b>Cursor 有、我们刻意不做</b><br>
+            <span class="x">✗</span> <code>Cloud</code>（无能力，做成 disabled 也是噪音）<br>
+            <span class="x">✗</span> <code>Remote Machines ›</code>（同上）<br>
+            <span class="x">✗</span> <code>New Worktree</code>（<b>归属错位</b>，已移入分支下拉）<br>
+            <span class="x">✗</span> <code>Remote Control</code> 卡片 + <code>New</code> 徽章 + 开关（整块无能力）
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>三个下拉的共同尺寸</h4>
+      <ul>
+        <li>宽 <b>280px</b>（= Sidebar 默认宽，不另立档）；容器圆角 <b>12px</b>；只在这层用阴影。</li>
+        <li>搜索行 <b>36px（h-9）</b> + 下边框；列表项 <b>28px（h-7）</b>；分组标题 <b>24px（h-6）</b>；分隔线上下 5px。</li>
+        <li>左右内边距 <b>10px</b>，图标-文字 8px；勾选标记右对齐、<code>--primary</code> 色。</li>
+      </ul>
+    </div>
+    <div class="note is-ref">
+      <h4>用到的 token</h4>
+      <ul>
+        <li>容器 <code>--popover</code> + <code>--border</code>；悬停 <code>--hover</code>；当前项 <code>--selection</code> 底 + <code>--primary</code> 勾。</li>
+        <li>分组标题、二级路径、disabled 项全部 <code>--muted-foreground</code>——<b>三种角色同一色，靠位置和字号区分</b>，避免为「更淡的灰」新造 token。</li>
+        <li>文件夹图标 <code>--folder</code>；分支/机器/云图标走 <code>--muted-foreground</code>，不给它们编色。</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>与 Cursor 截图的对应</h4>
+      <ul>
+        <li>「文件夹下拉展开.png」：搜索 + Recents + Repos + 底部动作四段式——段序照搬，段内容按我们的真实数据源重写。</li>
+        <li>「分支下拉展开.png」：搜索 + main 置顶 + Recent + 勾选态——照搬；我们多一条 worktree 路径二级文本。</li>
+        <li>「运行位置下拉展开.png」：<b>整块改形态</b>——下拉 → 只读 chip，四项里三项删除、一项（New Worktree）移位。</li>
+      </ul>
+    </div>
+    <div class="note is-diff">
+      <h4>与现状的差异点</h4>
+      <ul>
+        <li>现状<b>没有任何一个</b>这样的控件：仓库选择在侧栏树、分支只有一个会执行 <code>checkout</code> 的 <code>BranchSelector</code>、运行位置是 <code>MainHeader</code> 上一个死按钮。</li>
+        <li>分支下拉<b>只借 <code>BranchSelector</code> 的视觉</b>，绝不复用它的 <code>onCheckout</code>——这是 T-27 施工时最容易踩的一脚。</li>
+        <li>分支数据一律走 <code>worktree.list</code>；<code>git.getBranches</code> 每次会 shell out <code>gh pr list</code>（5s 超时），<b>只准在新建 worktree 对话框里调</b>。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 06 ============ -->
+<section id="s6">
+  <div class="sec-head">
+    <span class="sec-tag">06</span>
+    <h2>取舍对照与待拍板</h2>
+    <span class="sec-sub">验收时逐条确认</span>
+  </div>
+
+  <h3>Cursor 有什么 · 我们怎么处理</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Cursor 截图里的</th><th>我们的处理</th><th>依据</th></tr></thead>
+      <tbody>
+        <tr><td>白底 + 浅灰面板 + 黑色实心按钮</td><td><b>Flexoki Light/Dark</b>，实心按钮用 <code>--primary</code> 品牌橙</td><td>D18（撤销 D6）</td></tr>
+        <tr><td>系统无衬线字体</td><td><b>全等宽 ui-monospace</b>，UI 内无第二字族</td><td>D18③</td></tr>
+        <tr><td>空态 Composer 垂直居中 + 目标栏在上</td><td><b>照搬</b></td><td>D23</td></tr>
+        <tr><td>会话态时间线在上 + Composer 沉底 + 目标行在下</td><td><b>照搬</b></td><td>D23</td></tr>
+        <tr><td>运行位置下拉（Cloud / This PC / Remote Machines）</td><td><b>降级为只读 chip + tooltip</b></td><td>D22（用户拍板方案一）</td></tr>
+        <tr><td>运行位置下拉里的 <code>New Worktree</code></td><td><b>移入分支下拉</b></td><td>D22（openchamber 同款归属）</td></tr>
+        <tr><td><code>Remote Control</code> 卡片（New 徽章 + 开关）</td><td><b>不做</b></td><td>可行性文档 §6.2 禁假功能</td></tr>
+        <tr><td><code>Connect Your Repos</code> 黑色 CTA</td><td><b>不做</b></td><td>同上</td></tr>
+        <tr><td>麦克风 / 语音输入</td><td><b>不做</b></td><td>同上</td></tr>
+        <tr><td>占位文案 <code>/ for skills</code></td><td><b>不抄</b>，沿用现网 <code>Message Claude via Agent Host…</code></td><td>同上（<code>@</code> 引用已有，T-07）</td></tr>
+        <tr><td>用户消息 = 全宽方框</td><td><b>不跟</b>，保留右对齐气泡</td><td>D23 边界：时间线内部按 T-05 不变</td></tr>
+        <tr><td>follow-up 近 pill 圆角 · 卡片靠阴影浮起</td><td>圆角收到 <code>--radius-md</code> 12；浮起改用 <code>--input</code> 边</td><td>design-system 圆角四档 + Shadow 表</td></tr>
+        <tr><td>会话 Tab 栏</td><td><b>出带 / 不带两版，待拍板</b></td><td>D23 明列未决</td></tr>
+        <tr><td>模型选择合并成 <code>Fable 5 High</code> 一个控件</td><td>拆回<b>现有</b> ModelSelect + EffortSelect 两个 <code>h-6</code></td><td>零新控件原则</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>需要用户拍的四件事</h3>
+
+  <div class="ask">
+    <b>① 会话 Tab 栏：带（屏③）还是不带（屏②）？</b>
+    <p class="rec">建议：<b>先不带</b>。D21 刚把会话切换入口定在左栏，再加 Tab 栏会有两个入口；且 T-22 要把中列 surface 化，届时 Tab 的语义（会话 vs surface）需重新定义，现在引入等于提前锁死。</p>
+    <p>若拍「带」，请一并定：Tab 与左栏选中态是否双向同步、关掉最后一个 Tab 时中列显示什么。</p>
+  </div>
+
+  <div class="ask">
+    <b>② 会话态的目标行要不要也显示「文件夹」？</b>
+    <p class="rec">建议：<b>不显示</b>（照截图，只留分支 + 运行位置）。文件夹在会话已建立后基本不可变（改它等于 fork 新会话），常显是噪音；需要看时鼠标悬停分支即可给出完整路径。</p>
+  </div>
+
+  <div class="ask">
+    <b>③ 发送键：圆形图标（本基线）还是保留现状带 <code>Send</code> 文字的按钮？</b>
+    <p class="rec">建议：<b>圆形图标 + aria-label</b>。等宽字体下 <code>Send</code> 占位偏宽，会把 Model/Effort 挤到换行；运行中变 <code>Stop</code>（<code>--destructive</code> 实心）同位同尺寸，状态切换零位移。</p>
+  </div>
+
+  <div class="ask">
+    <b>④ 空态卡下方要不要放「最近会话」快捷入口？</b>
+    <p class="rec">建议：<b>不放</b>。Cursor 没有，openchamber 没有，左栏 Recent 段（D21 保留）已经是这个入口；卡下留白正是空态呼吸感的来源。</p>
+  </div>
+
+  <div class="ask decided">
+    <b>已经不用问的（本基线按拍板结果直接落）</b>
+    <p>侧栏 flat 平铺 + 分支 chip + 右对齐相对时间（D21-A）；运行位置只读指示器（D21-B / D22）；Recent 段保留（D21-C）；
+      时间线内部形态不动（D23 边界）；三列 + 44px 导轨不动（D19）。</p>
+  </div>
+</section>
+
+<footer class="footnote">
+  <h3>验收通过后要做的事（按权威链顺序，先改文档再动代码）</h3>
+  <ul>
+    <li><b>台账</b>：A07 在总台账 Phase 0A 行补登为已交付，注明本文件为产物；D23 行补「基线已出，Tab 栏拍板结果 = ___」。</li>
+    <li><b>plantree</b>：A07 状态置 Done 并记录验收日期；T-27 / T-28 解除「等基线」前置。</li>
+    <li><b>design-system.md</b>：把本页 §01 派生表里<b>确实新增的档位</b>（下拉宽 280、圆形发送键 28、覆盖层阴影值）补进对应小节，避免下一个人再从头推一遍。</li>
+    <li><b>T-28</b>（中列状态化布局）按屏①②（+ 拍板后的 Tab 决定）施工；<b>T-27</b>（目标栏）按屏④ 三个控件施工，纯函数 <code>composerTarget.ts</code> 断言先行。</li>
+    <li>顺带删除 <code>MainHeader.tsx:57/58</code> 的 Folder / Host: Local 两个死按钮——它们的职责已被目标栏正式接管（T-23 对应子项改为「删除 + 复核」）。</li>
+  </ul>
+  <p class="src">
+    参照 · docs/design/refs/cursor-20260729/（6 张截图，2026-07-29 入库）&nbsp;|&nbsp;
+    token 源 · src/renderer/styles/globals.css（T-21 落库）&nbsp;|&nbsp;
+    档位源 · docs/design-system.md&nbsp;|&nbsp;
+    决策 · docs/plans/openchamber-chat-refactor-ledger.md D18 / D21 / D22 / D23&nbsp;|&nbsp;
+    设计全文 · docs/plans/2026-07-29-sidebar-composer-target-bar-design.md&nbsp;|&nbsp;
+    同族基线 · docs/design/phase0a-openchamber-alignment.html
+  </p>
+</footer>
+
+</div>
+
+<script>
+(() => {
+  // ---- 原型主题：一个开关切换页面上所有 .fx 舞台 ----
+  var stages = document.querySelectorAll('.fx');
+  var fxBtns = document.querySelectorAll('[data-fx-set]');
+  fxBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      var mode = btn.getAttribute('data-fx-set');
+      stages.forEach((s) => s.setAttribute('data-fx', mode));
+      fxBtns.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    });
+  });
+
+  // ---- 页面外壳主题（默认跟随系统）----
+  var pageBtns = document.querySelectorAll('[data-page-set]');
+  pageBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      var mode = btn.getAttribute('data-page-set');
+      document.documentElement.setAttribute('data-page', mode);
+      pageBtns.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    });
+  });
+
+  // ---- 目标栏下拉：点击展开，点外部收起，Esc 收起 ----
+  var triggers = document.querySelectorAll('[data-dd]');
+  function closeAll(except) {
+    triggers.forEach((t) => {
+      if (t === except) return;
+      t.setAttribute('aria-expanded', 'false');
+      var d = document.getElementById(t.getAttribute('data-dd'));
+      if (d) d.hidden = true;
+    });
+  }
+  triggers.forEach((t) => {
+    t.addEventListener('click', (e) => {
+      e.stopPropagation();
+      var d = document.getElementById(t.getAttribute('data-dd'));
+      if (!d) return;
+      var open = t.getAttribute('aria-expanded') === 'true';
+      closeAll(t);
+      t.setAttribute('aria-expanded', String(!open));
+      d.hidden = open;
+    });
+  });
+  document.addEventListener('click', () => closeAll(null));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(null); });
+  document.querySelectorAll('.dd:not(.is-static)').forEach((d) => {
+    d.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+  // ---- 工具行展开 / 收起（与 phase0a 同一份行为）----
+  document.querySelectorAll('.fx-row[data-tool]').forEach((row) => {
+    row.addEventListener('click', () => {
+      var body = document.getElementById(row.getAttribute('data-tool'));
+      if (!body) return;
+      var open = row.getAttribute('aria-expanded') === 'true';
+      row.setAttribute('aria-expanded', String(!open));
+      body.hidden = open;
+    });
+  });
+})();
+</script>
+</body>
+</html>
