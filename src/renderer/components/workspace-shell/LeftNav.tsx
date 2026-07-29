@@ -171,10 +171,9 @@ export function LeftNav({
 
   return (
     <aside
-      className={cn(
-        'flex h-full shrink-0 flex-col border-r bg-card/40 transition-[width] duration-150',
-        collapsed ? 'w-12' : 'w-72'
-      )}
+      // Width is owned by the shell wrapper (T-22): it hosts the drag handle and
+      // writes px directly during a drag, so the aside must not pin its own width.
+      className="flex h-full w-full min-w-0 shrink-0 flex-col border-r bg-card/40"
     >
       <div className="flex h-9 items-center gap-1 border-b px-2">
         <Button variant="ghost" size="icon-xs" aria-label="Menu">

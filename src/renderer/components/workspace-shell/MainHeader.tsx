@@ -6,26 +6,28 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Server,
-  TerminalSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import type { ReadingWidthMode } from './shellLayoutModel';
 
 interface MainHeaderProps {
-  rightDockOpen: boolean;
-  bottomDockOpen: boolean;
-  onToggleRightDock: () => void;
-  onToggleBottomDock: () => void;
+  contextPanelOpen: boolean;
+  onToggleContextPanel: () => void;
+  readingWidthMode: ReadingWidthMode;
+  onToggleReadingWidth: () => void;
 }
 
 export function MainHeader({
-  rightDockOpen,
-  bottomDockOpen,
-  onToggleRightDock,
-  onToggleBottomDock,
+  contextPanelOpen,
+  onToggleContextPanel,
+  readingWidthMode,
+  onToggleReadingWidth,
 }: MainHeaderProps) {
+  const { t } = useI18n();
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const projects = useChatSessionsStore((state) => state.projects);
@@ -53,21 +55,22 @@ export function MainHeader({
       <Separator orientation="vertical" className="h-6" />
 
       <div className="flex items-center gap-1">
-        <HeaderIconButton label="Layout" icon={LayoutGrid} />
+        <HeaderIconButton
+          label={
+            readingWidthMode === 'wide' ? t('Standard reading column') : t('Wide reading column')
+          }
+          icon={LayoutGrid}
+          active={readingWidthMode === 'wide'}
+          onClick={onToggleReadingWidth}
+        />
         <HeaderIconButton label="Folder" icon={FolderOpen} />
         <HeaderIconButton label="Host: Local" icon={Server} />
-        <HeaderIconButton
-          label={bottomDockOpen ? 'Hide terminal dock' : 'Show terminal dock'}
-          icon={TerminalSquare}
-          active={bottomDockOpen}
-          onClick={onToggleBottomDock}
-        />
         <HeaderIconButton label="Browser" icon={Globe} />
         <HeaderIconButton
-          label={rightDockOpen ? 'Hide right panel' : 'Show right panel'}
-          icon={rightDockOpen ? PanelRightClose : PanelRightOpen}
-          active={rightDockOpen}
-          onClick={onToggleRightDock}
+          label={contextPanelOpen ? t('Hide context panel') : t('Show context panel')}
+          icon={contextPanelOpen ? PanelRightClose : PanelRightOpen}
+          active={contextPanelOpen}
+          onClick={onToggleContextPanel}
         />
         <HeaderIconButton label="Window" icon={AppWindow} />
       </div>
@@ -103,6 +106,7 @@ function HeaderIconButton({ label, icon: Icon, active, onClick }: HeaderIconButt
       className={cn('h-6 w-6', active && 'bg-accent')}
       onClick={onClick}
       aria-label={label}
+      aria-pressed={active}
       title={label}
     >
       <Icon className="h-3.5 w-3.5" />

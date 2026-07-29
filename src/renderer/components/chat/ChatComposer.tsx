@@ -34,6 +34,7 @@ import { toWireEffort } from './efforts';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { ModelSelect } from './ModelSelect';
 import { defaultModelId } from './models';
+import { ReadingColumn } from './ReadingColumn';
 import { decideSendPreamble } from './sendPreamble';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useSessionEffort } from './useSessionEffort';
@@ -699,265 +700,275 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
 
   return (
     <div className="shrink-0 border-t bg-background/80 p-3">
-      {(lastError || !activeSessionId || !activeWorkspace) && (
-        <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive whitespace-pre-wrap break-all">
-          {statusHint}
-        </div>
-      )}
-      <div className="relative rounded-lg border bg-card/40 p-2">
-        {/* T-07 @ 文件搜索 popup——放 textarea 上方，避免被 overflow-hidden 容器裁掉 */}
-        {mentionOpen && (
-          <div className="absolute bottom-full left-2 mb-1 w-72 overflow-hidden rounded-lg border bg-popover shadow-lg">
-            <div className="max-h-[240px] overflow-y-auto py-1">
-              {mentionResults.map((item, i) => {
-                const lastSep = item.relativePath.lastIndexOf('/');
-                const dirPart = lastSep > 0 ? item.relativePath.slice(0, lastSep) : '';
-                const fileName =
-                  lastSep > 0 ? item.relativePath.slice(lastSep + 1) : item.relativePath;
-                return (
-                  <button
-                    type="button"
-                    key={item.path}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      insertMention(item);
-                    }}
-                    onMouseEnter={() => setMentionIndex(i)}
-                    className={cn(
-                      'w-full px-3 py-1.5 text-left text-sm transition-colors',
-                      i === mentionIndex
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground hover:bg-accent/50'
-                    )}
-                  >
-                    {/* T-07①: directories are selectable now — mark them so a
-                        folder is not mistaken for a same-named file. */}
-                    <span className="inline-flex min-w-0 items-center gap-1.5">
-                      {item.isDirectory ? (
-                        <Folder className="size-3.5 shrink-0 text-folder" />
-                      ) : (
-                        <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      {/* Wraps both the error banner and the composer card so they share the
+          timeline's reading width (T-22 spec §2.13 — "Composer 同栏宽"). */}
+      <ReadingColumn>
+        {(lastError || !activeSessionId || !activeWorkspace) && (
+          <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive whitespace-pre-wrap break-all">
+            {statusHint}
+          </div>
+        )}
+        <div className="relative rounded-lg border bg-card/40 p-2">
+          {/* T-07 @ 文件搜索 popup——放 textarea 上方，避免被 overflow-hidden 容器裁掉 */}
+          {mentionOpen && (
+            <div className="absolute bottom-full left-2 mb-1 w-72 overflow-hidden rounded-lg border bg-popover shadow-lg">
+              <div className="max-h-[240px] overflow-y-auto py-1">
+                {mentionResults.map((item, i) => {
+                  const lastSep = item.relativePath.lastIndexOf('/');
+                  const dirPart = lastSep > 0 ? item.relativePath.slice(0, lastSep) : '';
+                  const fileName =
+                    lastSep > 0 ? item.relativePath.slice(lastSep + 1) : item.relativePath;
+                  return (
+                    <button
+                      type="button"
+                      key={item.path}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        insertMention(item);
+                      }}
+                      onMouseEnter={() => setMentionIndex(i)}
+                      className={cn(
+                        'w-full px-3 py-1.5 text-left text-sm transition-colors',
+                        i === mentionIndex
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-foreground hover:bg-accent/50'
                       )}
-                      <span className="truncate">
-                        {fileName}
-                        {item.isDirectory ? '/' : ''}
+                    >
+                      {/* T-07①: directories are selectable now — mark them so a
+                          folder is not mistaken for a same-named file. */}
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        {item.isDirectory ? (
+                          <Folder className="size-3.5 shrink-0 text-folder" />
+                        ) : (
+                          <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="truncate">
+                          {fileName}
+                          {item.isDirectory ? '/' : ''}
+                        </span>
                       </span>
-                    </span>
-                    {dirPart && (
-                      <span className="ml-1.5 text-xs text-muted-foreground">{dirPart}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
-                  ↑↓
-                </kbd>
-                Navigate
-              </span>
-              <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
-                  Enter
-                </kbd>
-                Select
-              </span>
-              <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
-                  Esc
-                </kbd>
-                Close
-              </span>
-              {/* T-07③: searching `chat` here matches 304 files but only 10
-                  render — say so instead of truncating silently. */}
-              {mentionTotal > mentionResults.length && (
-                <span className="ml-auto shrink-0 tabular-nums">
-                  {mentionResults.length}/{mentionTotal}
+                      {dirPart && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">{dirPart}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                    ↑↓
+                  </kbd>
+                  Navigate
                 </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                    Enter
+                  </kbd>
+                  Select
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                    Esc
+                  </kbd>
+                  Close
+                </span>
+                {/* T-07③: searching `chat` here matches 304 files but only 10
+                    render — say so instead of truncating silently. */}
+                {mentionTotal > mentionResults.length && (
+                  <span className="ml-auto shrink-0 tabular-nums">
+                    {mentionResults.length}/{mentionTotal}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => handleContentChange(event.target.value)}
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              composingRef.current = false;
+              const ta = textareaRef.current;
+              if (!cwd || !ta) {
+                setMentionQuery(null);
+                return;
+              }
+              setMentionQuery(extractMentionQuery(event.currentTarget.value, ta.selectionStart));
+              setMentionIndex(0);
+            }}
+            // T-18: attachments only. This handler must never write `value` or
+            // move the caret — that is what keeps plain-text paste and IME
+            // composition byte-for-byte native.
+            onPaste={attachments.handlePaste}
+            placeholder={composerPlaceholder({
+              canSend,
+              busy,
+              sending,
+              hasSession: Boolean(activeSessionId),
+              hasWorkspace: Boolean(activeWorkspace),
+              attachmentCount: attachments.drafts.length,
+            })}
+            className="min-h-20 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+            disabled={disabled || busy || sending || !activeSessionId}
+            onKeyDown={(event) => {
+              // T-07 @ popup：popup 开时拦截方向键 / Enter / Esc，避免误发。
+              if (mentionOpen) {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setMentionIndex((i) => (i + 1) % mentionResults.length);
+                  return;
+                }
+                if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setMentionIndex((i) => (i - 1 + mentionResults.length) % mentionResults.length);
+                  return;
+                }
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  insertMention(mentionResults[mentionIndex]);
+                  return;
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setMentionQuery(null);
+                  setMentionResults([]);
+                  return;
+                }
+              }
+              if (event.key === 'Enter' && !event.shiftKey) {
+                // An IME confirming a candidate fires Enter before
+                // compositionend — sending here would fire off a half-typed
+                // message, and with attachments that is an expensive mistake.
+                if (composingRef.current) return;
+                event.preventDefault();
+                void handleSend();
+              }
+            }}
+          />
+          {attachments.notice && (
+            <Alert
+              variant={attachments.notice.tone === 'info' ? 'info' : 'warning'}
+              className="mt-1 items-center gap-x-2 px-2 py-1 text-xs"
+            >
+              <TriangleAlert />
+              <AlertTitle
+                className="min-w-0 truncate font-normal"
+                title={attachments.notice.message}
+              >
+                {attachments.notice.message}
+              </AlertTitle>
+              <AlertAction>
+                <button
+                  type="button"
+                  onClick={attachments.dismissNotice}
+                  aria-label="Dismiss attachment notice"
+                  className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              </AlertAction>
+            </Alert>
+          )}
+          {attachments.drafts.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {attachments.drafts.map((draft) => (
+                <AttachmentChip
+                  key={draft.id}
+                  draft={draft}
+                  sending={sending}
+                  onRemove={attachments.removeDraft}
+                />
+              ))}
+            </div>
+          )}
+          {mentionChips.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {mentionChips.map((chip, idx) => (
+                <span
+                  key={`${chip.path}-${idx}`}
+                  className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                >
+                  {chip.path}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            {/* A send can stay silent for a minute — the spinner and the ticking
+                seconds are what tell the user it is alive rather than hung. */}
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              {(sending || attachments.reading > 0) && (
+                <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <p
+                className={cn('min-w-0 flex-1 truncate text-xs tabular-nums', statusTone)}
+                title={statusLine}
+              >
+                {statusLine}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {activeSessionId && (
+                <>
+                  <ModelSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
+                  {/* T-20: effort sits next to the model — both are per-session
+                      generation settings applied at the next createSession. */}
+                  <EffortSelect
+                    sessionId={activeSessionId}
+                    disabled={disabled || busy || sending}
+                  />
+                </>
+              )}
+              {canStop ? (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-6"
+                  disabled={disabled}
+                  onClick={() => void stopActiveSession()}
+                >
+                  <Square className="h-3.5 w-3.5" />
+                  Stop
+                </Button>
+              ) : (
+                <>
+                  {canRetry && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6"
+                      disabled={disabled}
+                      onClick={() => void handleRetry()}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Retry
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    className="h-6"
+                    // Attachment-only sends are legal; a still-encoding paste is
+                    // not (Enter would send the message without its files).
+                    disabled={
+                      !canSend ||
+                      (!value.trim() && attachments.drafts.length === 0) ||
+                      attachments.reading > 0
+                    }
+                    onClick={() => void handleSend()}
+                  >
+                    <SendHorizonal className="h-3.5 w-3.5" />
+                    Send
+                  </Button>
+                </>
               )}
             </div>
           </div>
-        )}
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(event) => handleContentChange(event.target.value)}
-          onCompositionStart={() => {
-            composingRef.current = true;
-          }}
-          onCompositionEnd={(event) => {
-            composingRef.current = false;
-            const ta = textareaRef.current;
-            if (!cwd || !ta) {
-              setMentionQuery(null);
-              return;
-            }
-            setMentionQuery(extractMentionQuery(event.currentTarget.value, ta.selectionStart));
-            setMentionIndex(0);
-          }}
-          // T-18: attachments only. This handler must never write `value` or
-          // move the caret — that is what keeps plain-text paste and IME
-          // composition byte-for-byte native.
-          onPaste={attachments.handlePaste}
-          placeholder={composerPlaceholder({
-            canSend,
-            busy,
-            sending,
-            hasSession: Boolean(activeSessionId),
-            hasWorkspace: Boolean(activeWorkspace),
-            attachmentCount: attachments.drafts.length,
-          })}
-          className="min-h-20 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
-          disabled={disabled || busy || sending || !activeSessionId}
-          onKeyDown={(event) => {
-            // T-07 @ popup：popup 开时拦截方向键 / Enter / Esc，避免误发。
-            if (mentionOpen) {
-              if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                setMentionIndex((i) => (i + 1) % mentionResults.length);
-                return;
-              }
-              if (event.key === 'ArrowUp') {
-                event.preventDefault();
-                setMentionIndex((i) => (i - 1 + mentionResults.length) % mentionResults.length);
-                return;
-              }
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                insertMention(mentionResults[mentionIndex]);
-                return;
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                setMentionQuery(null);
-                setMentionResults([]);
-                return;
-              }
-            }
-            if (event.key === 'Enter' && !event.shiftKey) {
-              // An IME confirming a candidate fires Enter before
-              // compositionend — sending here would fire off a half-typed
-              // message, and with attachments that is an expensive mistake.
-              if (composingRef.current) return;
-              event.preventDefault();
-              void handleSend();
-            }
-          }}
-        />
-        {attachments.notice && (
-          <Alert
-            variant={attachments.notice.tone === 'info' ? 'info' : 'warning'}
-            className="mt-1 items-center gap-x-2 px-2 py-1 text-xs"
-          >
-            <TriangleAlert />
-            <AlertTitle className="min-w-0 truncate font-normal" title={attachments.notice.message}>
-              {attachments.notice.message}
-            </AlertTitle>
-            <AlertAction>
-              <button
-                type="button"
-                onClick={attachments.dismissNotice}
-                aria-label="Dismiss attachment notice"
-                className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
-              >
-                <X className="size-3" />
-              </button>
-            </AlertAction>
-          </Alert>
-        )}
-        {attachments.drafts.length > 0 && (
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {attachments.drafts.map((draft) => (
-              <AttachmentChip
-                key={draft.id}
-                draft={draft}
-                sending={sending}
-                onRemove={attachments.removeDraft}
-              />
-            ))}
-          </div>
-        )}
-        {mentionChips.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {mentionChips.map((chip, idx) => (
-              <span
-                key={`${chip.path}-${idx}`}
-                className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
-              >
-                {chip.path}
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="mt-2 flex items-center justify-between gap-2">
-          {/* A send can stay silent for a minute — the spinner and the ticking
-              seconds are what tell the user it is alive rather than hung. */}
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            {(sending || attachments.reading > 0) && (
-              <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
-            )}
-            <p
-              className={cn('min-w-0 flex-1 truncate text-xs tabular-nums', statusTone)}
-              title={statusLine}
-            >
-              {statusLine}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {activeSessionId && (
-              <>
-                <ModelSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
-                {/* T-20: effort sits next to the model — both are per-session
-                    generation settings applied at the next createSession. */}
-                <EffortSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
-              </>
-            )}
-            {canStop ? (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-6"
-                disabled={disabled}
-                onClick={() => void stopActiveSession()}
-              >
-                <Square className="h-3.5 w-3.5" />
-                Stop
-              </Button>
-            ) : (
-              <>
-                {canRetry && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6"
-                    disabled={disabled}
-                    onClick={() => void handleRetry()}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Retry
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  className="h-6"
-                  // Attachment-only sends are legal; a still-encoding paste is
-                  // not (Enter would send the message without its files).
-                  disabled={
-                    !canSend ||
-                    (!value.trim() && attachments.drafts.length === 0) ||
-                    attachments.reading > 0
-                  }
-                  onClick={() => void handleSend()}
-                >
-                  <SendHorizonal className="h-3.5 w-3.5" />
-                  Send
-                </Button>
-              </>
-            )}
-          </div>
         </div>
-      </div>
+      </ReadingColumn>
     </div>
   );
 }

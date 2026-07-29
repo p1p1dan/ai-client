@@ -17,6 +17,7 @@ import {
   selectHistoryError,
 } from './historyError';
 import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
+import { ReadingColumn } from './ReadingColumn';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { deriveThinkingCard, isTurnActive } from './thinkingCard';
 import { useMessageMetadata } from './useMessageMetadata';
@@ -79,60 +80,64 @@ export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageT
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-3 p-3">
-          {historyNotice.kind === 'error' && (
-            // Keyed by session: detail/retry state must not follow the user
-            // across sessions when React reuses this slot.
-            <HistoryErrorNotice
-              key={sessionId}
-              view={historyNotice.error}
-              sessionId={sessionId}
-              status={status}
-            />
-          )}
-          {historyNotice.kind === 'empty' ? (
-            <p className="text-sm text-muted-foreground">
-              No messages yet. Send a prompt to stream from the Agent Host.
-            </p>
-          ) : (
-            sessionMessages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                metadata={getMeta(message.id)}
-                isActiveTurn={isActiveTurn}
-                thinkingEnabled={thinkingEnabled}
-                canRespondPermission={Boolean(
-                  pendingPermission &&
-                    pendingPermission.sessionId === sessionId &&
-                    message.id === pendingPermission.messageId
-                )}
-                onRespondPermission={respondPermission}
+        {/* Padding stays outside ReadingColumn — inside it would shave 24px off
+            the documented 48rem/64rem reading width (T-22 spec §2.13). */}
+        <div className="p-3">
+          <ReadingColumn className="space-y-3">
+            {historyNotice.kind === 'error' && (
+              // Keyed by session: detail/retry state must not follow the user
+              // across sessions when React reuses this slot.
+              <HistoryErrorNotice
+                key={sessionId}
+                view={historyNotice.error}
+                sessionId={sessionId}
+                status={status}
               />
-            ))
-          )}
-          {status === 'failed' && (
-            <div
-              className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-              role="alert"
-            >
-              <p className="font-medium">Session failed</p>
-              {lastError && (
-                <p className="mt-1 break-words whitespace-pre-wrap opacity-90">{lastError}</p>
-              )}
-              <p className="mt-1 opacity-70">已产内容保留。在下方输入框点 Retry 重发上条消息。</p>
-              {pendingPermission?.sessionId === sessionId && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 h-6 text-xs"
-                  onClick={() => void stopActiveSession()}
-                >
-                  Stop
-                </Button>
-              )}
-            </div>
-          )}
+            )}
+            {historyNotice.kind === 'empty' ? (
+              <p className="text-sm text-muted-foreground">
+                No messages yet. Send a prompt to stream from the Agent Host.
+              </p>
+            ) : (
+              sessionMessages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  metadata={getMeta(message.id)}
+                  isActiveTurn={isActiveTurn}
+                  thinkingEnabled={thinkingEnabled}
+                  canRespondPermission={Boolean(
+                    pendingPermission &&
+                      pendingPermission.sessionId === sessionId &&
+                      message.id === pendingPermission.messageId
+                  )}
+                  onRespondPermission={respondPermission}
+                />
+              ))
+            )}
+            {status === 'failed' && (
+              <div
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                role="alert"
+              >
+                <p className="font-medium">Session failed</p>
+                {lastError && (
+                  <p className="mt-1 break-words whitespace-pre-wrap opacity-90">{lastError}</p>
+                )}
+                <p className="mt-1 opacity-70">已产内容保留。在下方输入框点 Retry 重发上条消息。</p>
+                {pendingPermission?.sessionId === sessionId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-6 text-xs"
+                    onClick={() => void stopActiveSession()}
+                  >
+                    Stop
+                  </Button>
+                )}
+              </div>
+            )}
+          </ReadingColumn>
         </div>
       </ScrollArea>
     </div>

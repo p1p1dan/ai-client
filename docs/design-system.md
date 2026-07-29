@@ -6,13 +6,14 @@
 > **Color System** / **Border Radius** / **Font Weight** / **字体族** / **根字号结论** 五节，
 > 与 `src/renderer/styles/globals.css` 的 `@theme` + `:root` + `.dark` 逐条对得上。
 >
+> **已撤销（T-22 已写入并与代码对齐）**：**Spacing & Sizing → 新壳布局档位**一节与
+> `components/workspace-shell/shellLayoutModel.ts` 的常量逐条对得上。
+>
 > **仍未撤销**：
 >
 > - **Typography（字号）**：本节已按 OpenChamber 四档语义体系重写为**目标口径**，但 `@theme` 里目前
->   只有 `--text-2xs` 一个自定义字号 token，**调用点迁移未施工（归 T-22）**。写新代码按本节；
+>   只有 `--text-2xs` 一个自定义字号 token，**调用点迁移未施工**（2026-07-29 更正：原写「归 T-22」与执行计划 §3 T-22 任务定义不符——T-22 仅含尺寸段落与新壳组件按四档书写，全仓调用点迁移未立项、待认领）。写新代码按本节；
 >   改旧代码不要单纯为了对齐档位而重排布局。
-> - **Spacing & Sizing（尺寸）**：新壳档位（Rail 44 / Sidebar 280–500 / ContextPanel 380–1400 /
->   阅读栏 48rem·64rem）尚未写入本文件，下方「Spacing & Sizing」只覆盖旧壳。**归 T-22。**
 > - **旧模块彩色硬编码**：`source-control/` 整目录、`layout/`、`ui/activity-indicator.tsx` 等 47 个文件
 >   共 134 处 `text-red-500` 类硬编码尚未迁移到语义 token。**归 T-25。**
 >
@@ -406,6 +407,31 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
 | 标准间距 | 8px | `gap-2` |
 | 宽松间距 | 12px | `gap-3` |
 | 缩进 | 12px/层级 | `depth * 12 + 8px` |
+
+### 新壳布局档位（D19 / T-22）
+
+新壳 `components/workspace-shell/` 的三列 + 导轨为**硬性档位**，权威常量在
+`components/workspace-shell/shellLayoutModel.ts`，改值必须同步本表：
+
+| 区域 | 值 | Tailwind / 常量 |
+|------|-----|----------------|
+| Rail（图标导轨） | 固定 44px | `RAIL_WIDTH`（inline style，44px） |
+| Rail 图标按钮 | 32px（图标 18px） | `size="icon"` · `size-4.5` |
+| Rail 变更圆点 | 6px | `h-1.5 w-1.5` + `bg-info`（**仅 `git` surface**） |
+| Sidebar（左列） | 默认 280px，可拖 280–500 | `SIDEBAR_DEFAULT_WIDTH` / `SIDEBAR_MIN_WIDTH` / `SIDEBAR_MAX_WIDTH` |
+| Sidebar 折叠态 | 48px | `SIDEBAR_COLLAPSED_WIDTH` |
+| ContextPanel（右列） | min 380 / max 1400，默认按 surface 取可用宽度比例 | `CONTEXT_PANEL_MIN_WIDTH` / `CONTEXT_PANEL_MAX_WIDTH` |
+| ContextPanel 未测量兜底 | 600px | `CONTEXT_PANEL_FALLBACK_WIDTH` |
+| ContextPanel 收起 | 宽 0（常驻挂载 + `inert`） | — |
+| 阅读栏（中列） | `min(100%, 48rem)` 居中 | `mx-auto w-full max-w-3xl` |
+| 阅读栏宽模式 | `min(100%, 64rem)` 居中 | `mx-auto w-full max-w-5xl` |
+| 列宽拖拽把手 | 4px | `w-1` + `cursor-col-resize` |
+
+**两条实现约束**：
+
+1. 列宽变化统一 `duration-[250ms]`（Motion 的 Slow 档），**拖拽期间以 `data-resizing` 关掉过渡**——
+   否则每帧过渡与指针位置打架，手感发黏。
+2. 提升为全视图时面板宽度用**测量出的 px**、不用 `100%`：px 与百分比之间无法插值，会瞬跳。
 
 ## 字体族（全等宽 UI）
 

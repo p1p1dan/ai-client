@@ -1712,6 +1712,27 @@ export const zhTranslations: Record<string, string> = {
   'This month calls': '本月调用次数',
   'This month cost': '本月费用',
   'Refresh usage': '刷新用量',
+
+  // T-22: workspace shell — context panel surfaces
+  // (Editor / Terminal already have entries above; reused as-is.)
+  Context: '上下文',
+  'Browse and edit workspace files': '浏览并编辑工作区文件',
+  'Working tree changes': '工作区变更',
+  'Workspace terminal': '工作区终端',
+  'Session context and runtime': '会话上下文与运行时',
+  'Context surfaces': '上下文面板导轨',
+  'Show context panel': '显示上下文面板',
+  'Hide context panel': '隐藏上下文面板',
+  'Expand panel': '展开面板',
+  'Restore panel': '还原面板',
+  'Close panel': '关闭面板',
+  'Wide reading column': '宽阅读栏',
+  'Standard reading column': '标准阅读栏',
+  'Resize sidebar': '调整侧栏宽度',
+  'Resize context panel': '调整上下文面板宽度',
+  'Not connected yet — {{task}} will wire this surface.':
+    '尚未接入 —— 该视图将由 {{task}} 完成接线。',
+  'This surface has no view registered.': '该视图尚未注册。',
 };
 
 export function normalizeLocale(input?: string): Locale {
