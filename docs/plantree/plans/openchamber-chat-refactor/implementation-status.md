@@ -15,7 +15,7 @@
   - **T-21 复核口径（2026-07-28 审查回合，代码已于 2026-07-29 提交 `b38017b`）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。
     lint 文件数从 613 涨到 615 是**新增文件**所致（`docs/design/phase0a-openchamber-alignment.html` 基线产物 + `src/renderer/lib/__tests__/ghosttyTheme.test.ts`），**`biome.json` 未改**——
     施工中一度加过 `"!docs/design"` 排除项来绕开该 HTML 的 13 条诊断，这违反「不得改 lint 配置变绿」，已撤销：改为就地修（9 条 `useArrowFunction` 自动修 + 2 条 `noImportantStyles`、2 条 `noUnknownProperty` 加带理由的 `biome-ignore`，后者是 `corner-shape` 这个 Biome 尚无定义的 CSS Backgrounds 4 属性）。
-- **Next Target**（2026-07-29 修订）: **T-24 收尾**（S0：全新机器 GUI 实测 + 台账补登，代码已随 `b38017b` 落库）→ 布局拍板（open-q **#16** 四点，拍板后 D21/D22 落库、**T-26** 侧栏两层化 / **T-27** Composer 目标栏立项）→ **T-26 → T-22**（三列 + 44px 导轨壳结构，废 BottomDock；两者都碰 LeftNav，按此序串行）→ **T-27** → **T-05 重做** → **T-23**。T-21 已落库 `b38017b`。用户侧 GUI 点测（含**多轮上下文**必测项）与 **T-04 网关阻塞**、**#15 网关缓存亲和**并行。
+- **Next Target**（2026-07-29 二次修订，D21~D23 已拍板落库）: **T-24 收尾**（S0：全新机器 GUI 实测 + 台账补登，代码已随 `b38017b` 落库）→ **T-26**（侧栏两层化 flat+chip）→ **T-22**（三列 + 44px 导轨壳结构，废 BottomDock；与 T-26 都碰 LeftNav，按此序串行）→ **T-27**（Composer 目标栏）→ **T-28**（中列状态化布局）→ **T-05 重做** → **T-23**。**A07 基线（中列 Cursor 观感）与 T-26/T-22 并行制作，用户验收后 T-27/T-28 观感部分方可施工**。T-21 已落库 `b38017b`。用户侧 GUI 点测（含**多轮上下文**必测项）与 **T-04 网关阻塞**、**#15 缓存复测裁定**并行。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
