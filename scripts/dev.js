@@ -4,7 +4,7 @@
  * electron-vite doesn't properly forward SIGINT to Electron subprocess.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -77,16 +77,165 @@ function ensureLocalLinuxRuntimeBundle() {
 
 ensureLocalLinuxRuntimeBundle();
 
+// ---------------------------------------------------------------------------
+// Dev credentials (test/dev phase only)
+//
+// The Agent Host is spawned with {...process.env} and falls back to ~/.claude,
+// so a bare `pnpm dev` silently routes GUI sessions through the developer's own
+// Claude login. During development we pin credentials to `dev.env` instead:
+// every inherited ANTHROPIC_*/Claude credential var is stripped, then only what
+// `dev.env` declares is injected. Edit the file, restart dev — nothing else.
+// ---------------------------------------------------------------------------
+
+const DEV_ENV_FILE = process.env.AICLIENT_DEV_ENV_FILE || join(root, 'dev.env');
+const STRIPPED_PREFIX = 'ANTHROPIC_';
+const STRIPPED_KEYS = [
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+  'AWS_BEARER_TOKEN_BEDROCK',
+  'GOOGLE_APPLICATION_CREDENTIALS',
+  'CLOUD_ML_REGION',
+];
+
+/** Minimal dotenv: `KEY=VALUE`, `#` comments, optional quotes and `export `. */
+function parseEnvFile(text) {
+  const vars = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line
+      .slice(0, eq)
+      .replace(/^export\s+/, '')
+      .trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
+      (value.startsWith("'") && value.endsWith("'") && value.length > 1)
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (key) vars[key] = value;
+  }
+  return vars;
+}
+
+function maskSecret(value) {
+  if (!value) return '(empty)';
+  return value.length <= 8 ? '***' : `${value.slice(0, 6)}…***(${value.length} chars)`;
+}
+
+/**
+ * Isolate CLAUDE_CONFIG_DIR so the CLI cannot reach ~/.claude/settings.json or
+ * the OAuth credentials in ~/.claude/.credentials.json. Seeded from dev.env.
+ */
+function seedIsolatedConfigDir(vars) {
+  const configDir = join(root, 'node_modules', '.cache', 'aiclient-dev-credentials');
+  const settingsEnv = {};
+  for (const key of ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']) {
+    if (vars[key]) settingsEnv[key] = vars[key];
+  }
+  const settings = { env: settingsEnv };
+  if (vars.ANTHROPIC_MODEL) settings.model = vars.ANTHROPIC_MODEL;
+
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, 'settings.json'), `${JSON.stringify(settings, null, 2)}\n`);
+
+  // Pre-trust the workspaces so cli.js does not park on the first-run trust prompt.
+  const claudeJsonPath = join(configDir, '.claude.json');
+  let config = { hasCompletedOnboarding: true, projects: {} };
+  if (existsSync(claudeJsonPath)) {
+    try {
+      const existing = JSON.parse(readFileSync(claudeJsonPath, 'utf8'));
+      config = { ...existing, hasCompletedOnboarding: true, projects: existing.projects ?? {} };
+    } catch {
+      // Unreadable — rewrite from scratch.
+    }
+  }
+  const trusted = (vars.AICLIENT_TRUSTED_WORKSPACES ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  for (const workspace of [root, ...trusted]) {
+    config.projects[workspace] = {
+      ...config.projects[workspace],
+      hasTrustDialogAccepted: true,
+      hasCompletedProjectOnboarding: true,
+    };
+  }
+  writeFileSync(claudeJsonPath, `${JSON.stringify(config, null, 2)}\n`);
+  return configDir;
+}
+
+function buildChildEnv(allowLocal) {
+  const env = { ...process.env };
+
+  const stripped = [];
+  for (const key of Object.keys(env)) {
+    if (key.startsWith(STRIPPED_PREFIX) || STRIPPED_KEYS.includes(key)) {
+      delete env[key];
+      stripped.push(key);
+    }
+  }
+
+  if (!existsSync(DEV_ENV_FILE)) {
+    if (allowLocal) {
+      console.warn(`[dev] ${DEV_ENV_FILE} not found — running with LOCAL credentials (~/.claude).`);
+      return process.env;
+    }
+    console.error(`[dev] Missing credentials file: ${DEV_ENV_FILE}`);
+    console.error('[dev] Refusing to start: the app would fall back to your personal ~/.claude');
+    console.error('[dev]   login and bill your own account.');
+    console.error('[dev] Fix: cp dev.env.example dev.env   # then put your key in it');
+    console.error(
+      '[dev] Override (not recommended): node scripts/dev.js --allow-local-credentials'
+    );
+    process.exit(1);
+  }
+
+  const vars = parseEnvFile(readFileSync(DEV_ENV_FILE, 'utf8'));
+  if (!vars.ANTHROPIC_AUTH_TOKEN && !vars.ANTHROPIC_API_KEY) {
+    console.error(`[dev] ${DEV_ENV_FILE} sets neither ANTHROPIC_AUTH_TOKEN nor ANTHROPIC_API_KEY.`);
+    process.exit(1);
+  }
+  // A stale API key wins over the token in some CLI paths — never send both.
+  if (vars.ANTHROPIC_AUTH_TOKEN) delete vars.ANTHROPIC_API_KEY;
+
+  Object.assign(env, vars);
+  if (!vars.CLAUDE_CONFIG_DIR) {
+    env.CLAUDE_CONFIG_DIR = seedIsolatedConfigDir(vars);
+  }
+
+  console.log(`[dev] credentials: ${DEV_ENV_FILE}`);
+  console.log(
+    `[dev]   ANTHROPIC_BASE_URL = ${env.ANTHROPIC_BASE_URL ?? '(default api.anthropic.com)'}`
+  );
+  console.log(
+    `[dev]   ${env.ANTHROPIC_AUTH_TOKEN ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY'} = ${maskSecret(env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY)}`
+  );
+  console.log(`[dev]   CLAUDE_CONFIG_DIR  = ${env.CLAUDE_CONFIG_DIR}`);
+  if (stripped.length > 0) {
+    console.log(`[dev]   stripped from shell: ${stripped.join(', ')}`);
+  }
+  return env;
+}
+
 // Start electron-vite in a new process group so we can kill the entire tree
 // On Linux, --no-sandbox is needed when unprivileged user namespaces are disabled.
 // Also forward our own CLI args to the app (`pnpm dev -- --open-path=<repo>`):
 // electron-vite passes everything after `--` to Electron, and main/index.ts
 // consumes --open-path to register a repository — the only way to do that on a
 // machine where the legacy Add Repository UI is unreachable.
+const ownArgs = process.argv.slice(2);
+const allowLocalCredentials = ownArgs.includes('--allow-local-credentials');
 const electronArgs = ['electron-vite', 'dev'];
 const passthroughArgs = [
   ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
-  ...process.argv.slice(2),
+  // --allow-local-credentials is ours; everything else goes to Electron.
+  ...ownArgs.filter((arg) => arg !== '--allow-local-credentials'),
 ];
 if (passthroughArgs.length > 0) {
   electronArgs.push('--', ...passthroughArgs);
@@ -94,6 +243,7 @@ if (passthroughArgs.length > 0) {
 const child = spawn('npx', electronArgs, {
   cwd: root,
   stdio: 'inherit',
+  env: buildChildEnv(allowLocalCredentials),
   shell: process.platform === 'win32', // Use shell on Windows to avoid EINVAL errors
   detached: process.platform !== 'win32', // Create new process group on Unix
 });

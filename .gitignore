@@ -56,3 +56,6 @@ bugOutput/
 
 # Smoke test byproducts (created by agent-host permission smoke)
 .aiclient-perm-smoke.txt
+
+# Dev credentials injected by scripts/dev.js (never commit a real key)
+dev.env
