@@ -535,7 +535,10 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
 }
 .fx-shell.is-session { height: 640px; }
 
-.fx-shell svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+/* Scoped to .fx (not .fx-shell): screens 4-6 render dropdown/tool-row/question
+   specimens outside the shell wrapper; without this rule their Lucide paths
+   fall back to fill:black at the SVG default 300x150 box. */
+.fx svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
 
 /* ---- 侧栏（D21 简化形态：flat 平铺 + 分支 chip + 右对齐相对时间）---- */
 
