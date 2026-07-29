@@ -31,6 +31,17 @@ function workspaceName(kind: WorkspaceKind, repoName: string, wt: GitWorktree): 
   return segments[segments.length - 1] || repoName;
 }
 
+/**
+ * Short branch name for the sidebar chip (T-26 / D21-A). Undefined when git
+ * reports no branch (detached HEAD) — the chip is hidden rather than guessed.
+ */
+function workspaceBranch(wt: GitWorktree | undefined): string | undefined {
+  if (!wt?.branch) {
+    return undefined;
+  }
+  return wt.branch.replace(/^refs\/heads\//, '');
+}
+
 export interface DeriveChatWorkspaceTreeInput {
   repositories: Repository[];
   /** repo.path → git worktree list (may be empty while loading) */
@@ -78,6 +89,7 @@ export function deriveChatWorkspaceTree(
     const mainWt = listed.find((wt) => wt.isMainWorktree);
     const mainPath = mainWt?.path ?? repo.path;
     const mainKind: WorkspaceKind = isRemote ? 'remote' : 'main';
+    const mainBranch = isRemote ? undefined : workspaceBranch(mainWt);
 
     pushWorkspace({
       id: workspaceIdFor(mainKind, mainPath),
@@ -85,6 +97,9 @@ export function deriveChatWorkspaceTree(
       name: isRemote ? repo.name : 'Main',
       kind: mainKind,
       path: mainPath,
+      // Conditional spread keeps `branch` truly absent (not an explicit
+      // undefined key) when unknown — `'branch' in ws` stays false.
+      ...(mainBranch ? { branch: mainBranch } : {}),
     });
 
     if (isRemote) {
@@ -98,12 +113,14 @@ export function deriveChatWorkspaceTree(
       if (normalizePath(wt.path).toLowerCase() === normalizePath(mainPath).toLowerCase()) {
         continue;
       }
+      const wtBranch = workspaceBranch(wt);
       pushWorkspace({
         id: workspaceIdFor('worktree', wt.path),
         projectId,
         name: workspaceName('worktree', repo.name, wt),
         kind: 'worktree',
         path: wt.path,
+        ...(wtBranch ? { branch: wtBranch } : {}),
       });
     }
   }
@@ -122,6 +139,31 @@ export function deriveChatWorkspaceTree(
   }
 
   return { projects, workspaces };
+}
+
+/**
+ * Change signature for the sync bridge's early-return guard. Every field that
+ * can alter what the sidebar renders must participate: `branch` was missing
+ * once (T-26 review blocker) and a late-arriving branch on an otherwise
+ * identical tree — the normal cold-start sequence for a repo with no linked
+ * worktrees — produced a byte-identical signature, so the store never learned
+ * the branch and the chip stayed empty for the whole app session.
+ */
+export function workspaceTreeSignature(
+  projects: readonly ChatProject[],
+  workspaces: readonly ChatWorkspace[],
+  preferredWorkspaceId: string | null
+): string {
+  return JSON.stringify({
+    projects,
+    workspaces: workspaces.map((ws) => ({
+      id: ws.id,
+      path: ws.path,
+      kind: ws.kind,
+      branch: ws.branch ?? null,
+    })),
+    preferredWorkspaceId,
+  });
 }
 
 /** Prefer active worktree path, else selected repo main, else first workspace. */

@@ -4,6 +4,7 @@ import {
   deriveChatWorkspaceTree,
   resolvePreferredWorkspaceId,
   workspaceIdFor,
+  workspaceTreeSignature,
 } from '../deriveChatWorkspaceTree';
 
 describe('deriveChatWorkspaceTree', () => {
@@ -41,9 +42,18 @@ describe('deriveChatWorkspaceTree', () => {
     });
 
     expect(projects).toEqual([{ id: 'repo-ai', name: 'ai-client' }]);
-    expect(workspaces.map((ws) => ({ kind: ws.kind, name: ws.name, path: ws.path }))).toEqual([
-      { kind: 'main', name: 'Main', path: 'D:/Code/projects/ai-client' },
-      { kind: 'worktree', name: 'feat/demo', path: 'D:/Code/projects/ai-client-wt' },
+    // T-26 (D21-A): the main workspace carries its actual branch so the
+    // sidebar chip can show main/master instead of the display name "Main".
+    expect(
+      workspaces.map((ws) => ({ kind: ws.kind, name: ws.name, path: ws.path, branch: ws.branch }))
+    ).toEqual([
+      { kind: 'main', name: 'Main', path: 'D:/Code/projects/ai-client', branch: 'main' },
+      {
+        kind: 'worktree',
+        name: 'feat/demo',
+        path: 'D:/Code/projects/ai-client-wt',
+        branch: 'feat/demo',
+      },
     ]);
   });
 
@@ -94,5 +104,23 @@ describe('deriveChatWorkspaceTree', () => {
         activeWorktreePath: 'D:/repo-wt',
       })
     ).toBe(workspaceIdFor('worktree', 'D:/repo-wt'));
+  });
+
+  it('signature changes when only a workspace branch changes (T-26 review blocker)', () => {
+    // Cold-start shape for a repo without linked worktrees: the tree derived
+    // before `worktree.list` resolves differs from the loaded tree only in
+    // `branch`. The sync-bridge guard must treat that as a change, or the
+    // store never learns the branch and the sidebar chip stays empty.
+    const base = {
+      id: workspaceIdFor('main', 'D:/repo'),
+      projectId: 'p1',
+      name: 'Main',
+      kind: 'main' as const,
+      path: 'D:/repo',
+    };
+    const projects = [{ id: 'p1', name: 'repo' }];
+    const before = workspaceTreeSignature(projects, [base], base.id);
+    const after = workspaceTreeSignature(projects, [{ ...base, branch: 'main' }], base.id);
+    expect(before).not.toBe(after);
   });
 });

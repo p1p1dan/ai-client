@@ -34,6 +34,14 @@ export interface ChatWorkspace {
   name: string;
   kind: WorkspaceKind;
   path: string;
+  /**
+   * Actual git branch checked out at `path` when known (T-26 / D21-A: the
+   * sidebar branch chip shows the real branch for main worktrees too, so
+   * "Main" as a display name is not enough). Absent for temp/remote
+   * workspaces, detached HEAD, and while the worktree list is loading —
+   * consumers must hide the chip instead of guessing a branch name.
+   */
+  branch?: string;
 }
 
 export interface ChatSession {

@@ -16,6 +16,7 @@ import {
   projectIdForRepo,
   resolvePreferredWorkspaceId,
   workspaceIdFor,
+  workspaceTreeSignature,
 } from './deriveChatWorkspaceTree';
 
 const LIVE_SESSION_TITLE = 'Live Agent Host';
@@ -262,11 +263,7 @@ export function useSyncChatWorkspaceTree({
       return;
     }
 
-    const signature = JSON.stringify({
-      projects: tree.projects,
-      workspaces: tree.workspaces.map((ws) => ({ id: ws.id, path: ws.path, kind: ws.kind })),
-      preferredWorkspaceId,
-    });
+    const signature = workspaceTreeSignature(tree.projects, tree.workspaces, preferredWorkspaceId);
     if (signature === signatureRef.current) {
       return;
     }

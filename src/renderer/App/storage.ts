@@ -34,6 +34,7 @@ export const STORAGE_KEYS = {
   SC_REPO_LIST_EXPANDED: 'aiclient-sc-repo-list-expanded',
   SC_CHANGES_EXPANDED: 'aiclient-sc-changes-expanded',
   SC_HISTORY_EXPANDED: 'aiclient-sc-history-expanded',
+  SIDEBAR_RECENT_COLLAPSED: 'aiclient-sidebar-recent-collapsed', // T-26 sidebar Recent section
 } as const;
 
 // Helper to get initial value from localStorage

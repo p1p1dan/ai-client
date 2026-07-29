@@ -1,11 +1,13 @@
-import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   Archive,
   ChevronDown,
   ChevronRight,
   CircleHelp,
+  Folder,
   FolderGit2,
+  FolderOpen,
   FolderPlus,
+  ListFilter,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -14,7 +16,8 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
+import { STORAGE_KEYS } from '@/App/storage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,14 +32,21 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import type { ChatWorkspace, WorkspaceKind } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import {
   canCreateSessionOnWorkspace,
+  isUsableWorkspace,
   shouldShowAddRepositoryEmptyState,
 } from './addRepositoryEntry';
+import {
+  buildSidebarFolders,
+  deriveRecentRows,
+  formatRelativeAge,
+  RECENT_DEFAULT_LIMIT,
+  type SidebarSessionRow,
+} from './sidebarTree';
 import { createChatSessionOnWorkspace } from './useSyncChatWorkspaceTree';
 
 interface LeftNavProps {
@@ -45,32 +55,6 @@ interface LeftNavProps {
   onOpenSettings?: () => void;
   /** T-24: opens the shared AddRepositoryDialog mounted in App. */
   onAddRepository?: () => void;
-}
-
-const STATUS_VARIANT: Record<
-  SessionRuntimeStatus,
-  'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline'
-> = {
-  idle: 'secondary',
-  starting: 'warning',
-  running: 'default',
-  waiting_permission: 'warning',
-  waiting_question: 'warning',
-  stopping: 'outline',
-  completed: 'success',
-  failed: 'destructive',
-  disconnected: 'outline',
-};
-
-const KIND_LABEL: Record<WorkspaceKind, string> = {
-  main: 'main',
-  worktree: 'worktree',
-  remote: 'remote',
-  temp: 'temp',
-};
-
-function statusLabel(status: SessionRuntimeStatus): string {
-  return status.replace(/_/g, ' ');
 }
 
 export function LeftNav({
@@ -82,13 +66,19 @@ export function LeftNav({
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Record<string, boolean>>({});
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [recentCollapsed, setRecentCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [recentShowAll, setRecentShowAll] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(true);
 
   const projects = useChatSessionsStore((state) => state.projects);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const sessions = useChatSessionsStore((state) => state.sessions);
-  const recentSessionIds = useChatSessionsStore((state) => state.recentSessionIds);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const selectSession = useChatSessionsStore((state) => state.selectSession);
 
@@ -114,24 +104,10 @@ export function LeftNav({
   };
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
+  // Selection of "where to run" moved to the Composer target bar (T-27); this
+  // is only a fallback target for the sidebar's own "New" / "+ new chat" affordances.
   const effectiveWorkspaceId =
-    selectedWorkspaceId ?? activeSession?.workspaceId ?? workspaces[0]?.id ?? null;
-
-  const recentSessions = useMemo(
-    () =>
-      recentSessionIds
-        .map((id) => sessions.find((session) => session.id === id))
-        .filter((session): session is NonNullable<typeof session> => Boolean(session)),
-    [recentSessionIds, sessions]
-  );
-
-  const filteredSessions = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) {
-      return sessions;
-    }
-    return sessions.filter((session) => session.title.toLowerCase().includes(normalized));
-  }, [query, sessions]);
+    activeSession?.workspaceId ?? workspaces.find((ws) => isUsableWorkspace(ws))?.id ?? null;
 
   // T-24: the DEMO seed keeps `projects` non-empty on a fresh machine, so the
   // tree looks populated while every workspace path is empty. Gate on usable
@@ -142,17 +118,56 @@ export function LeftNav({
   const canStartNewSession = canCreateSessionOnWorkspace(effectiveWorkspaceId, workspaces);
 
   const isProjectExpanded = (projectId: string) => expandedProjects[projectId] !== false;
-  const isWorkspaceExpanded = (workspaceId: string) => expandedWorkspaces[workspaceId] !== false;
 
   const handleNewSession = () => {
     if (!effectiveWorkspaceId || !canStartNewSession) {
       return;
     }
-    const sessionId = createChatSessionOnWorkspace(effectiveWorkspaceId);
-    if (sessionId) {
-      setSelectedWorkspaceId(effectiveWorkspaceId);
-    }
+    createChatSessionOnWorkspace(effectiveWorkspaceId);
   };
+
+  const toggleRecentCollapsed = () => {
+    setRecentCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, String(next));
+      } catch {
+        // Ignore storage errors (private mode / quota exceeded), same as other collapsed flags.
+      }
+      return next;
+    });
+  };
+
+  const toggleSearchVisible = () => {
+    setSearchVisible((prev) => {
+      const next = !prev;
+      if (!next) {
+        // A hidden filter must not silently prune the tree via a stale query.
+        setQuery('');
+      }
+      return next;
+    });
+  };
+
+  // Coarse minute tick: nothing else re-renders an idle sidebar, so without
+  // it the age column freezes and the 48h Recent window never expires.
+  const [, bumpClock] = useReducer((tick: number) => tick + 1, 0);
+  useEffect(() => {
+    const timer = setInterval(bumpClock, 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Cheap at sidebar scale; a useMemo would be defeated by the per-render
+  // `now` anyway (Recent's 48h window needs a fresh clock every render).
+  const now = Date.now();
+  const folders = buildSidebarFolders({ projects, workspaces, sessions, query });
+  const recent = deriveRecentRows({ sessions, workspaces, now, showAll: recentShowAll, query });
+  const queryActive = query.trim().length > 0;
+  // While searching, folders with zero hits collapse away instead of leaving
+  // a wall of empty headers; without a query every folder stays visible so
+  // its "+ new chat" row remains reachable.
+  const visibleFolders = queryActive ? folders.filter((folder) => folder.rows.length > 0) : folders;
+  const noMatches = queryActive && recent.rows.length === 0 && visibleFolders.length === 0;
 
   return (
     <aside
@@ -222,16 +237,18 @@ export function LeftNav({
                 <span className="min-w-0 truncate">{t('Add Repository')}</span>
               </Button>
             </div>
-            <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                size="sm"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search sessions"
-                className="h-7 pl-7"
-              />
-            </div>
+            {searchVisible && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  size="sm"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t('Search sessions')}
+                  className="h-7 pl-7"
+                />
+              </div>
+            )}
           </div>
 
           <ScrollArea className="min-h-0 flex-1">
@@ -257,78 +274,166 @@ export function LeftNav({
               ) : (
                 <>
                   <section>
-                    <p className="px-2 text-xs font-medium text-muted-foreground">Recent</p>
-                    <div className="mt-1 space-y-0.5">
-                      {recentSessions.map((session) => (
-                        <SessionTreeItem
-                          key={`recent-${session.id}`}
-                          session={session}
-                          active={activeSessionId === session.id}
-                          onSelect={() => handleSelectSession(session.id)}
-                          onClose={() => void close(session.id)}
-                          onRename={(title) => void rename(session.id, title)}
-                          onArchive={() => void archive(session.id, true)}
-                          disabled={false}
-                        />
-                      ))}
+                    <div className="flex h-7 items-center px-2">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Recent')}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="ml-auto h-5 w-5"
+                        aria-label={recentCollapsed ? t('Expand Recent') : t('Collapse Recent')}
+                        onClick={toggleRecentCollapsed}
+                      >
+                        {recentCollapsed ? (
+                          <ChevronRight className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                      </Button>
                     </div>
+                    {!recentCollapsed && (
+                      <div className="mt-1 space-y-0.5">
+                        {recent.rows.map((row) => (
+                          <SessionRow
+                            key={`recent-${row.sessionId}`}
+                            row={row}
+                            now={now}
+                            active={activeSessionId === row.sessionId}
+                            onSelect={() => handleSelectSession(row.sessionId)}
+                            onClose={() => void close(row.sessionId)}
+                            onRename={(title) => void rename(row.sessionId, title)}
+                            onArchive={() => void archive(row.sessionId, true)}
+                          />
+                        ))}
+                        {recent.hiddenCount > 0 ? (
+                          <button
+                            type="button"
+                            className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-xs text-muted-foreground hover:bg-hover"
+                            onClick={() => setRecentShowAll(true)}
+                          >
+                            {t('Show more')} ({recent.hiddenCount})
+                          </button>
+                        ) : (
+                          recentShowAll &&
+                          recent.rows.length > RECENT_DEFAULT_LIMIT && (
+                            <button
+                              type="button"
+                              className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-xs text-muted-foreground hover:bg-hover"
+                              onClick={() => setRecentShowAll(false)}
+                            >
+                              {t('Show less')}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
                   </section>
 
-                  {projects.map((project) => {
-                    const projectWorkspaces = workspaces.filter(
-                      (ws) => ws.projectId === project.id
-                    );
+                  <div className="flex h-7 items-center px-2">
+                    <p className="text-xs font-medium text-muted-foreground">{t('Repositories')}</p>
+                    <div className="ml-auto flex items-center">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="h-5 w-5"
+                        aria-label={t('Filter sessions')}
+                        title={t('Filter sessions')}
+                        aria-pressed={searchVisible}
+                        onClick={toggleSearchVisible}
+                      >
+                        <ListFilter className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="h-5 w-5"
+                        aria-label={t('Add Repository')}
+                        title={t('Add Repository')}
+                        onClick={onAddRepository}
+                      >
+                        <FolderPlus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {noMatches && (
+                    <p className="px-2 py-1 text-[11px] text-muted-foreground">
+                      {t('No matching sessions')}
+                    </p>
+                  )}
+
+                  {visibleFolders.map((folder) => {
+                    const expanded = isProjectExpanded(folder.projectId);
+                    const newSessionWorkspaceId = folder.newSessionWorkspaceId;
                     return (
-                      <section key={project.id}>
-                        <button
-                          type="button"
+                      <section key={folder.projectId}>
+                        {/* Toggle and "+ new chat" are sibling buttons in a flex
+                            row — a nested button would be invalid HTML (same
+                            trap as the McpSection fix in d68d3c6). */}
+                        <div
                           // Project headers have no selected state, so the plain
                           // hover step is enough; --hover is the semantic alias.
-                          className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-sm hover:bg-hover"
-                          onClick={() =>
-                            setExpandedProjects((prev) => ({
-                              ...prev,
-                              [project.id]: !isProjectExpanded(project.id),
-                            }))
-                          }
+                          className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-sm hover:bg-hover"
                         >
-                          {isProjectExpanded(project.id) ? (
-                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                            onClick={() =>
+                              setExpandedProjects((prev) => ({
+                                ...prev,
+                                [folder.projectId]: !expanded,
+                              }))
+                            }
+                          >
+                            {expanded ? (
+                              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
+                            ) : (
+                              <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+                            )}
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {folder.name}
+                            </span>
+                          </button>
+                          {newSessionWorkspaceId && (
+                            // The header New button targets the active session's
+                            // workspace only, so a repo that already has sessions
+                            // needs its own entry point (T-26 review should-fix).
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="hidden h-5 w-5 shrink-0 group-hover:flex group-focus-within:flex"
+                              aria-label={t('New chat')}
+                              title={t('New chat')}
+                              onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
                           )}
-                          <span className="min-w-0 flex-1 truncate text-left font-medium">
-                            {project.name}
-                          </span>
-                        </button>
+                        </div>
 
-                        {isProjectExpanded(project.id) && (
-                          <div className="mt-1 space-y-1 pl-2">
-                            {projectWorkspaces.map((workspace) => (
-                              <WorkspaceBranch
-                                key={workspace.id}
-                                workspace={workspace}
-                                expanded={isWorkspaceExpanded(workspace.id)}
-                                selected={effectiveWorkspaceId === workspace.id}
-                                sessions={filteredSessions.filter(
-                                  (session) => session.workspaceId === workspace.id
-                                )}
-                                activeSessionId={activeSessionId}
-                                onToggleExpanded={() =>
-                                  setExpandedWorkspaces((prev) => ({
-                                    ...prev,
-                                    [workspace.id]: !isWorkspaceExpanded(workspace.id),
-                                  }))
-                                }
-                                onSelectWorkspace={() => setSelectedWorkspaceId(workspace.id)}
-                                onSelectSession={(sessionId) => handleSelectSession(sessionId)}
-                                onCloseSession={(sessionId) => void close(sessionId)}
-                                onRenameSession={(sessionId, title) =>
-                                  void rename(sessionId, title)
-                                }
-                                onArchiveSession={(sessionId) => void archive(sessionId, true)}
+                        {expanded && (
+                          <div className="mt-1 space-y-0.5 pl-3">
+                            {folder.rows.map((row) => (
+                              <SessionRow
+                                key={row.sessionId}
+                                row={row}
+                                now={now}
+                                active={activeSessionId === row.sessionId}
+                                onSelect={() => handleSelectSession(row.sessionId)}
+                                onClose={() => void close(row.sessionId)}
+                                onRename={(title) => void rename(row.sessionId, title)}
+                                onArchive={() => void archive(row.sessionId, true)}
                               />
                             ))}
+                            {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
+                              <button
+                                type="button"
+                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-hover"
+                                onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
+                              >
+                                <Plus className="h-3 w-3 shrink-0" />
+                                {t('New chat')}
+                              </button>
+                            )}
                           </div>
                         )}
                       </section>
@@ -362,122 +467,26 @@ export function LeftNav({
   );
 }
 
-interface WorkspaceBranchProps {
-  workspace: ChatWorkspace;
-  expanded: boolean;
-  selected: boolean;
-  sessions: Array<{ id: string; title: string; status: SessionRuntimeStatus }>;
-  activeSessionId: string | null;
-  onToggleExpanded: () => void;
-  onSelectWorkspace: () => void;
-  onSelectSession: (sessionId: string) => void;
-  onCloseSession: (sessionId: string) => void;
-  onRenameSession: (sessionId: string, title: string) => void;
-  onArchiveSession: (sessionId: string) => void;
-}
-
-function WorkspaceBranch({
-  workspace,
-  expanded,
-  selected,
-  sessions,
-  activeSessionId,
-  onToggleExpanded,
-  onSelectWorkspace,
-  onSelectSession,
-  onCloseSession,
-  onRenameSession,
-  onArchiveSession,
-}: WorkspaceBranchProps) {
-  return (
-    <div>
-      <div
-        className={cn(
-          'flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground',
-          // --selection is the tree/list "selected row" surface; it is already
-          // opaque, so never add a /N modifier to it.
-          selected && 'bg-selection text-accent-foreground'
-        )}
-      >
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-1 text-left"
-          onClick={() => {
-            onSelectWorkspace();
-            onToggleExpanded();
-          }}
-          title={workspace.path}
-        >
-          {expanded ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-          )}
-          <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-        </button>
-        <Badge variant="outline" size="sm" className="shrink-0">
-          {KIND_LABEL[workspace.kind]}
-        </Badge>
-      </div>
-      {expanded && (
-        <div className="space-y-0.5 pl-3">
-          {sessions.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-muted-foreground">No sessions</p>
-          ) : (
-            sessions.map((session) => (
-              <SessionTreeItem
-                key={session.id}
-                session={session}
-                active={activeSessionId === session.id}
-                onSelect={() => {
-                  onSelectWorkspace();
-                  onSelectSession(session.id);
-                }}
-                onClose={() => onCloseSession(session.id)}
-                onRename={(title) => onRenameSession(session.id, title)}
-                onArchive={() => onArchiveSession(session.id)}
-                disabled={false}
-              />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface SessionTreeItemProps {
-  session: {
-    id: string;
-    title: string;
-    status: SessionRuntimeStatus;
-  };
+interface SessionRowProps {
+  row: SidebarSessionRow;
+  now: number;
   active: boolean;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
   onArchive: () => void;
-  disabled: boolean;
 }
 
-function SessionTreeItem({
-  session,
-  active,
-  onSelect,
-  onClose,
-  onRename,
-  onArchive,
-  disabled,
-}: SessionTreeItemProps) {
+function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }: SessionRowProps) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(session.title);
+  const [draft, setDraft] = useState(row.title);
 
   const commitRename = () => {
     const trimmed = draft.trim();
-    if (trimmed && trimmed !== session.title) {
+    if (trimmed && trimmed !== row.title) {
       onRename(trimmed);
     } else {
-      setDraft(session.title);
+      setDraft(row.title);
     }
     setEditing(false);
   };
@@ -496,7 +505,7 @@ function SessionTreeItem({
               commitRename();
             } else if (event.key === 'Escape') {
               event.preventDefault();
-              setDraft(session.title);
+              setDraft(row.title);
               setEditing(false);
             }
           }}
@@ -519,7 +528,14 @@ function SessionTreeItem({
         active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
       )}
       onClick={onSelect}
-      onDoubleClick={() => setEditing(true)}
+      onDoubleClick={() => {
+        // Re-seed on entry: the mount-time draft goes stale when the title
+        // changes externally (rename from the Recent twin of this row, or a
+        // persisted title landing via mergeSessionIndex) — committing that
+        // stale draft would silently revert the rename.
+        setDraft(row.title);
+        setEditing(true);
+      }}
       onContextMenu={(event) => {
         // Right-click archive keeps the focus row without stealing the click.
         event.preventDefault();
@@ -533,42 +549,57 @@ function SessionTreeItem({
           onSelect();
         }
       }}
-      title={session.title}
+      title={row.title}
     >
-      <span className="min-w-0 flex-1 truncate">{session.title}</span>
-      <Badge variant={STATUS_VARIANT[session.status]} size="sm" className="shrink-0 capitalize">
-        {statusLabel(session.status)}
-      </Badge>
-      {!disabled && (
-        <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="h-5 w-5"
-            aria-label="Archive session"
-            title="Archive"
-            onClick={(event) => {
-              event.stopPropagation();
-              onArchive();
-            }}
-          >
-            <Archive className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="h-5 w-5"
-            aria-label="Close session"
-            title="Close"
-            onClick={(event) => {
-              event.stopPropagation();
-              onClose();
-            }}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
+      {row.busy && (
+        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running" />
       )}
+      <span className="min-w-0 flex-1 truncate">{row.title}</span>
+      {row.failed && (
+        <Badge variant="destructive" size="sm" className="shrink-0">
+          failed
+        </Badge>
+      )}
+      {row.chip && (
+        <Badge variant="outline" size="sm" className="max-w-28 shrink-0" title={row.chip.label}>
+          <span className="min-w-0 truncate">{row.chip.label}</span>
+        </Badge>
+      )}
+      {/* Age and actions swap on hover so row width never jumps; the row has
+          tabIndex=0, so focus-within also reveals the actions and keeps
+          Archive/Close reachable by keyboard (display:none alone would drop
+          them from the tab order). */}
+      <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
+        {formatRelativeAge(row.updatedAt, now)}
+      </span>
+      <div className="hidden shrink-0 items-center group-hover:flex group-focus-within:flex">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="h-5 w-5"
+          aria-label="Archive session"
+          title="Archive"
+          onClick={(event) => {
+            event.stopPropagation();
+            onArchive();
+          }}
+        >
+          <Archive className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="h-5 w-5"
+          aria-label="Close session"
+          title="Close"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
     </div>
   );
 }
