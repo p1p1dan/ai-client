@@ -455,6 +455,15 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
   --t-ui: 14px;                    /* ui 档：绝大多数 UI 文本 */
   --t-md: 15px;                    /* markdown 档：聊天正文与全部标题 */
 
+  /* --- v2（D24）新增：工具行与问答卡 --- */
+  /* 工具行第二级灰。Cursor 的「动词深 / 参数浅」需要两级灰，我们只有 --muted-foreground 一级，
+     于是让它按 38% 退向当前底色。写成 color-mix 而非固定值，是为了亮暗自动成立：
+     亮色下退向近白 = 变浅，暗色下退向近黑 = 变暗，两边都是「对比更低」。 */
+  --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+  /* 问答卡 A/B/C/D 字母 chip：--h-btn(24) 减一个紧凑间距档(gap-1 = 4)。
+     必须比行矮一截，否则 chip 会读成按钮，而它只是编号。 */
+  --h-chip: 20px;
+
   /* 覆盖层阴影：design-system「Shadow 表只覆盖覆盖层与容器，按钮零阴影」 */
   --shadow-pop: 0 8px 24px oklch(0 0 0 / 0.12);
 
@@ -839,48 +848,49 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
 .fx-assistant { font-size: var(--t-md); line-height: 1.5; }
 .fx-assistant > p { max-width: none; margin: 0; }
 .fx-assistant > p + p { margin-top: 10px; }
-.fx-tools { display: flex; flex-direction: column; gap: 1px; margin: 8px 0; }
-.fx-row, .fx-static {
+/* ------------------------------------------------------------
+   v2 · 工具行（D24：形态源从 openchamber 改为 Cursor）
+   动词开头 · 无图标 · 无边框 · 无底色 · 灰阶单行。
+   ★ 与正文同字号（--t-md 15px）是刻意的：这些行在 Cursor 里读起来像
+     旁白而不是控件，一旦缩到 ui/code 档就立刻退回「组件感」。
+     层级完全交给颜色：正文 --foreground ＞ 动词 --muted-foreground ＞ 参数 --tool-arg。
+   ------------------------------------------------------------ */
+
+.ct { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.ct-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 6px;
   width: 100%;
-  padding: 2px 0;
+  padding: 0;
   font: inherit;
-  font-size: var(--t-ui);
-  line-height: 1.45;
-  color: var(--foreground);
+  font-size: var(--t-md);
+  line-height: 1.5;
   text-align: left;
+  color: var(--muted-foreground);
 }
-.fx-row { cursor: pointer; }
-.fx-glyph { position: relative; width: 14px; height: 14px; flex-shrink: 0; color: var(--muted-foreground); }
-.fx-glyph svg { position: absolute; inset: 0; transition: opacity 100ms; }
-.fx-glyph .chev { opacity: 0; }
-.fx-row:hover .fx-glyph .tool { opacity: 0; }
-.fx-row:hover .fx-glyph .chev { opacity: 1; }
-.fx-row[aria-expanded="true"] .fx-glyph .tool { opacity: 0; }
-.fx-row[aria-expanded="true"] .fx-glyph .chev { opacity: 1; transform: rotate(90deg); }
-.fx-name { flex-shrink: 0; }
-.fx-dur { flex-shrink: 0; color: var(--muted-foreground); font-variant-numeric: tabular-nums; font-size: var(--t-code); }
-.fx-desc {
+button.ct-row { cursor: pointer; }
+.ct-v { flex-shrink: 0; color: var(--muted-foreground); }        /* 动词 */
+.ct-a {                                                          /* 参数 */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--muted-foreground);
-  font-size: var(--t-code);
+  color: var(--tool-arg);
 }
-.fx-path {
-  color: var(--muted-foreground);
-  font-size: var(--t-code);
-  border-bottom: 1px solid transparent;
-}
-.fx-path:hover { color: var(--primary); border-bottom-color: var(--primary); }
-.fx-diff { flex-shrink: 0; font-size: var(--t-code); }
-.fx-diff .add { color: var(--success); }
-.fx-diff .sep { color: var(--muted-foreground); }
-.fx-diff .del { color: var(--destructive); }
-.fx-body { border-left: 1px solid var(--border); margin-left: 6px; padding-left: 14px; }
+.ct-cv { flex-shrink: 0; align-self: center; color: var(--tool-arg); transition: transform 150ms; }
+.ct-cv svg { width: 13px; height: 13px; }
+.ct-row[aria-expanded="true"] .ct-cv { transform: rotate(180deg); }
+.ct-row:hover .ct-v { color: var(--foreground); }
+/* 展开明细：与摘要行同一左边界、同一节拍——不缩进、不加竖线、不换字号 */
+.ct-sub { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.ct-sub[hidden] { display: none; }
+/* Thought 展开体：思考正文，比参数再退一档的行距 */
+.ct-think { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; font-size: var(--t-md); line-height: 1.55; color: var(--tool-arg); }
+.ct-think[hidden] { display: none; }
+
+/* 可选：保留工具输出体（非 Cursor 口径，§08 待拍板 ⑤） */
+.fx-body { border-left: 1px solid var(--border); margin-left: 2px; padding-left: 14px; }
 .fx-body[hidden] { display: none; }
 .fx-out {
   font-size: var(--t-code);
@@ -893,8 +903,103 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
 .fx-out .ok { color: var(--success); }
 .fx-out .bad { color: var(--destructive); }
 .fx-out .num { color: var(--info); }
-.fx-running { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: var(--t-md); }
-.fx-running .live { width: 6px; height: 6px; border-radius: 50%; background: var(--status-running); }
+
+/* ------------------------------------------------------------
+   v2 · 问答卡（D24：折叠条 / 展开卡 / Answers 冻结 / Skipped）
+   回答后就地冻结 = D20 不动；本卡只换形态源。
+   ------------------------------------------------------------ */
+
+.qa {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.qa-head {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--muted-foreground);
+}
+.qa-head .t { flex: 1; min-width: 0; }
+.qa-pager { display: flex; align-items: center; gap: 2px; font-size: var(--t-code); color: var(--muted-foreground); }
+.qa-pager .pg { width: var(--h-btn); height: var(--h-btn); display: grid; place-items: center; border-radius: var(--r-sm); cursor: pointer; }
+.qa-pager .pg:hover { background: var(--hover); }
+.qa-pager .n { padding: 0 4px; font-variant-numeric: tabular-nums; }
+.qa-cv { width: var(--h-btn); height: var(--h-btn); display: grid; place-items: center; border-radius: var(--r-sm); cursor: pointer; }
+.qa-cv:hover { background: var(--hover); }
+
+.qa-body { padding: 0 10px; display: flex; flex-direction: column; gap: 12px; }
+.qa-q { font-size: var(--t-md); line-height: 1.5; color: var(--foreground); padding: 0 4px 4px; }
+.qa-opts { display: flex; flex-direction: column; gap: 2px; }
+.qa-opt {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+  width: 100%;
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--t-md);
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+.qa-opt:hover { background: var(--hover); }
+.qa-opt[aria-checked="true"] { background: var(--selection); }
+.qa-opt.is-other { color: var(--muted-foreground); }
+.qa-letter {
+  width: var(--h-chip); height: var(--h-chip);
+  flex-shrink: 0;
+  display: grid; place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+  line-height: 1;
+}
+.qa-opt[aria-checked="true"] .qa-letter { border-color: var(--primary); color: var(--primary); }
+.qa-opt .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.qa-foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 10px; }
+.qa-skip {
+  height: var(--h-btn);
+  display: inline-flex; align-items: center;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.qa-skip:hover { background: var(--hover); }
+/* Continue = 唯一强调按钮。用 --primary/--primary-foreground 而不是 --accent-primary 本体：
+   design-system 的「--accent-primary 亮色红线」说它在亮色下对 bg 只有 1.82:1、不得承载文字，
+   而且它没有配套的 *-foreground。同一品牌族里只有 --primary 有成对前景色。
+   --accent-primary 仍在这颗按钮上出场——作为 focus 环，那是它的合法用法。 */
+.qa-continue {
+  height: var(--h-btn);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.qa-continue .kbd { opacity: 0.7; font-size: var(--t-code); }
+.qa-continue:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 1px; }
+
+/* 冻结态：Answers / Questions skipped */
+.qa-frozen { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+.qa-pair { display: flex; flex-direction: column; gap: 2px; font-size: var(--t-md); line-height: 1.5; }
+.qa-pair .q { color: var(--foreground); }
+.qa-pair .a { color: var(--foreground); }
+.qa-pair .sk { color: var(--muted-foreground); font-style: italic; }
+
 .fx-footer {
   display: flex;
   align-items: center;
@@ -1006,6 +1111,25 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
 }
 .anat-drop .x { color: var(--destructive); }
 .anat-drop b { color: var(--foreground); font-weight: 500; }
+
+/* ---- v2 · 屏⑤⑥ 标本网格：左说明 / 右等真实宽度的实样 ---- */
+
+.spec { padding: 4px 16px 16px; }
+.spec-row {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.spec-row:first-child { border-top: 0; }
+@media (min-width: 1120px) { .spec-row { grid-template-columns: minmax(220px, 1fr) minmax(0, 48rem); } }
+.spec-cap { display: flex; flex-direction: column; gap: 6px; font-size: var(--t-code); line-height: 1.6; color: var(--muted-foreground); }
+.spec-cap .h { color: var(--foreground); font-size: var(--t-ui); }
+.spec-cap .k { color: var(--primary); }
+.spec-cap b { color: var(--foreground); font-weight: 500; }
+.spec-demo { min-width: 0; }
+.spec-demo.is-pad { padding: 2px 0; }
 </style>
 </head>
 <body>
@@ -1013,22 +1137,28 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
 <div class="wrap">
 
 <header class="masthead">
-  <div class="eyebrow">A07 · 观感基线 · 中列 Cursor 化对齐</div>
+  <div class="eyebrow">A07 v2 · 观感基线 · 中列 Cursor 化对齐</div>
   <h1>中列（Main）对齐 Cursor，配色字体守 Flexoki</h1>
   <p class="standfirst">
     D23 拍板后立项的观感基线：<b>形态学 Cursor，配色与字体学我们自己</b>。
-    布局节奏、控件形态、状态切换照 <code>docs/design/refs/cursor-20260729/</code> 六张截图；
+    布局节奏、控件形态、状态切换照 <code>docs/design/refs/cursor-20260729/</code> 十一张截图；
     颜色一律取 <code>src/renderer/styles/globals.css</code> 的 Flexoki 语义变量，
     字体是 D18 的全等宽栈，尺寸尽量落在 <code>docs/design-system.md</code> 的既有档位上。
-    本文件是 <b>T-27 / T-28 施工的前置</b>——用户验收后方可动代码。
+    本文件是 <b>T-05 / T-27 / T-28 施工的前置</b>——用户验收后方可动代码。
+  </p>
+  <p class="standfirst" style="margin-top:0.6rem;">
+    <b>v2 增补（D24）：</b>工具行与问答卡的形态源<b>从 openchamber 改为 Cursor</b>，
+    v1 那句「时间线内部按 T-05 不变」的边界随之作废。屏② 的工具行示意已重做，
+    并新增 <b>屏⑤ 工具行解剖</b> 与 <b>屏⑥ 问答卡全态</b>。
   </p>
   <div class="status-strip">
-    <span class="is-ref">参照 refs/cursor-20260729（6 张）</span>
+    <span class="is-ref">参照 refs/cursor-20260729（11 张）</span>
     <span>待用户验收</span>
     <span class="is-ask">会话 Tab 栏：带 / 不带两版供拍板</span>
+    <span class="is-ask">工具行是否保留输出体：v2 新问</span>
   </div>
   <div class="masthead-meta">
-    <b>依据</b> D18 · D21 · D22 · D23
+    <b>依据</b> D18 · D21 · D22 · D23 · <b>D24（v2）</b>
     <b>设计全文</b> plans/2026-07-29-sidebar-composer-target-bar-design.md
     <b>同族基线</b> design/phase0a-openchamber-alignment.html（A01/A05/A06）
     <b>日期</b> 2026-07-29
@@ -1052,7 +1182,9 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
     <a href="#s3">② 会话态</a>
     <a href="#s4">③ +Tab 栏</a>
     <a href="#s5">④ 下拉解剖</a>
-    <a href="#s6">取舍 / 待拍板</a>
+    <a href="#s6">⑤ 工具行</a>
+    <a href="#s7">⑥ 问答卡</a>
+    <a href="#s8">取舍 / 待拍板</a>
   </nav>
 </div>
 
@@ -1067,18 +1199,27 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
   <div class="verdict-strip">
     <div class="verdict-item"><span class="v-k">中列骨架</span><span class="v-v">两态：空态居中 / 会话态沉底</span></div>
     <div class="verdict-item"><span class="v-k">目标栏</span><span class="v-v">文件夹 · 分支 · 运行位置（只读）</span></div>
-    <div class="verdict-item"><span class="v-k">时间线内部</span><span class="v-v">不动，仍是 T-05 口径</span></div>
+    <div class="verdict-item"><span class="v-k">工具行 / 问答卡</span><span class="v-v">v2：形态源改判为 Cursor（D24）</span></div>
     <div class="verdict-item"><span class="v-k">颜色 / 字体</span><span class="v-v">Flexoki + 全等宽，零硬编码</span></div>
   </div>
 
   <p>
     <b>定义：</b>中列在「未发消息」与「已有会话」两态下的骨架与呼吸节奏；目标栏三个控件的形态、位置与状态；
-    Composer 卡的边界、圆角、内部分行；三个下拉的宽度、行高、分组方式与文案；侧栏 D21 平铺形态的最简可读样子。
+    Composer 卡的边界、圆角、内部分行；三个下拉的宽度、行高、分组方式与文案；侧栏 D21 平铺形态的最简可读样子；
+    <b>（v2 新增）</b>工具行的四种形态与问答卡的四种状态。
   </p>
   <p>
-    <b>不定义（明确不动）：</b>时间线内部的用户气泡 / 助手正文 / 工具行 / 问答卡形态——那是 A01 已验收、
-    T-05 待施工的 openchamber 口径，本页屏②③ 里的工具行是<b>照原样贴进来的对照物</b>，不是新设计；
-    D19 的三列 + 44px 导轨骨架；右栏 surface 的任何内容。
+    <b>v1 → v2 的边界改判（D24）：</b>v1 曾写「时间线内部的工具行 / 问答卡按 T-05 openchamber 口径不变」——
+    该句<b>已作废</b>。用户在 Cursor 中专门触发了这两类组件的调用演示并存图（五张），拍板<b>形态源改为 Cursor</b>：
+    工具行改成动词开头、无图标、无边框的灰阶单行并支持聚合折叠；问答卡改成
+    折叠条 → 字母选项卡 → <code>Answers</code> 冻结的三段式。
+    <b>D20 不动</b>——「回答后就地冻结」这条恰好与 Cursor 一致，v2 只是换了它的外形。
+    <b>连带</b>：T-05 需第二次改写口径，以本页屏⑤⑥ 为准。
+  </p>
+  <p>
+    <b>仍然不定义（真的不动）：</b>用户气泡与助手正文的排版（A01 已验收）；D19 的三列 + 44px 导轨骨架；
+    右栏 surface 的任何内容；「点击历史消息重新编辑」——该截图用户标注<b>功能待定</b>，仅归档不立项，
+    本页只取其中的 <code>Questions skipped</code> 态作参考。
   </p>
   <p>
     <b>刻意不搬的 Cursor 元素：</b>白底浅灰面板与无衬线字体（D18 撤销 D6 后我们走 Flexoki + 等宽）；
@@ -1087,7 +1228,9 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
     理由统一是可行性文档 §6.2 与 T-23 的同一条：<b>没有能力就不摆控件，不做假选项、不做无反馈的可点元素</b>。
   </p>
   <p class="src">
-    参照截图 · docs/design/refs/cursor-20260729/{侧栏样式, 初始未发消息状态, 发起对话后状态, 文件夹下拉展开, 分支下拉展开, 运行位置下拉展开}.png
+    参照截图 · docs/design/refs/cursor-20260729/<br>
+    v1（6 张）{侧栏样式, 初始未发消息状态, 发起对话后状态, 文件夹下拉展开, 分支下拉展开, 运行位置下拉展开}.png<br>
+    v2（5 张）{工具行-进行中, 工具行-聚合展开+问答折叠条, 问答卡-展开选项, 问答卡-回答后Answers冻结, 待定-点击历史消息重新编辑+问答Skipped态}.png
   </p>
 </section>
 
@@ -1125,6 +1268,12 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
         <tr><td class="mono">--t-code / --t-ui / --t-md</td><td><b>13 / 14 / 15px</b></td><td>design-system Typography 四档语义</td><td>路径・分支名・时间戳・diff 走 13；控件与下拉项走 14；聊天正文与气泡走 15</td></tr>
         <tr><td class="mono">分组标题</td><td><b>14px + muted + 0.04em</b></td><td>design-system Typography「层级不靠字号，靠 weight / letter-spacing / color」</td><td><b>关键取舍</b>：Recents / Repos / Recent 段头<b>不缩字号</b>。等宽字体下缩字号既不省宽也会破坏纵向节拍，层级交给颜色与字距</td></tr>
         <tr><td class="mono">空态垂直位</td><td><b>居中偏上（padding-bottom 9%）</b></td><td>截图目视测量</td><td>纯居中会显得下坠；Cursor 的卡实际落在约 45% 高度处</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v2 · --tool-arg</td><td><b>color-mix(oklab, --muted-foreground 62%, --background)</b></td><td>既有 <code>--muted-foreground</code> 退向当前底色 38%</td><td><b>关键取舍</b>：Cursor 的工具行需要「动词深 / 参数浅」两级灰，我们只有一级。写成 color-mix 而非固定值，亮暗<b>自动都成立</b>（亮色退向近白＝变浅，暗色退向近黑＝变暗，两边都是对比更低），不必维护两份数值</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v2 · 工具行字号</td><td><b>15px（= --t-md 正文档）</b></td><td>design-system Typography markdown 档</td><td><b>关键取舍</b>：工具行<b>不缩字号</b>。Cursor 里它们读起来像旁白而非控件，层级只靠颜色；缩到 ui/code 档会立刻退回「组件感」，也会破坏与正文的同一行距节拍</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v2 · 工具行节拍</td><td><b>行距 1.5 + 行间 4px；展开明细缩进 0</b></td><td>正文段间距 10px 的半档</td><td>展开后的明细行与摘要行<b>同左边界、同节拍、无竖线</b>——这是 Cursor 工具行「不像折叠面板」的原因；v1 的 openchamber 竖线展开体在 v2 里取消</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v2 · --h-chip</td><td><b>20px</b></td><td><code>--h-btn</code>(24) − 紧凑间距档 gap-1(4)</td><td>问答卡 A/B/C/D 字母 chip。必须比 28px 行矮一截，否则 chip 会读成按钮，而它只是编号；Cursor 目视约 16px，我们取 20 以容下 13px code 档字符</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v2 · 问答卡</td><td><b>头/折叠条 36 · 选项行 28 · 卡圆角 12</b></td><td><code>--h-bar</code> / <code>--h-row</code> / <code>--r-md</code></td><td>全部复用既有档；Cursor 选项行目视 30px，收到 h-7 28px</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v2 · Continue 按钮</td><td><b>--primary 实心 + --accent-primary 焦点环</b></td><td>D24 要求「强调色用我们的 token」</td><td><b>关键取舍</b>：不用 <code>--accent-primary</code> 本体做底——design-system「亮色红线」明写它对 bg 仅 1.82:1、不得承载文字，且<b>没有配套 *-foreground</b>；同族里只有 <code>--primary</code> 成对。<code>--accent-primary</code> 改去做焦点环，那是它的合法用法。Cursor 的琥珀 hex 一律不搬</td></tr>
       </tbody>
     </table>
   </div>
@@ -1495,71 +1644,52 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
               </div>
 
               <div class="fx-assistant">
-                <p>先确认三档边界：空且未 host-bound → <code>retarget</code>；已有消息或已绑 → <code>fork</code>；运行中 → <code>blocked</code>。我看一下现有的重绑逻辑。</p>
 
-                <div class="fx-tools">
-
-                  <div class="fx-static">
-                    <span class="fx-glyph" aria-hidden="true">
-                      <svg class="tool" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-                    </span>
-                    <span class="fx-name">Read File</span>
-                    <span class="fx-path">hooks/useSyncChatWorkspaceTree.ts</span>
-                    <span class="fx-path">chat/ChatComposer.tsx</span>
-                    <span class="fx-path">stores/chatSessions.ts</span>
-                  </div>
-
-                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t1">
-                    <span class="fx-glyph" aria-hidden="true">
-                      <svg class="tool" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-                    </span>
-                    <span class="fx-name">Search Files</span>
-                    <span class="fx-desc">"rebindSessionsToTree"</span>
+                <!-- 回合级时长行：Cursor 把它放在回合最上方 -->
+                <div class="ct">
+                  <button type="button" class="ct-row" aria-expanded="false" data-ct="a7w1">
+                    <span class="ct-v">Worked for</span><span class="ct-a">31s</span>
+                    <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
                   </button>
-                  <div class="fx-body" id="a7t1" hidden>
-<pre class="fx-out"><span class="num">hooks/useSyncChatWorkspaceTree.ts</span>
-  Line 109: <span class="ok">// host-bound sessions are never rebound</span>
-  Line 112: if (session.hostBound) return session;
-<span class="num">hooks/__tests__/useSyncChatWorkspaceTree.test.ts</span>
-  Line 64: it('keeps host-bound sessions on their original workspace')</pre>
+                  <div class="ct-think" id="a7w1" hidden>
+                    <span>3 次工具调用 · 11 次搜索 · 1 次编辑 · 首字延迟 1.2s</span>
                   </div>
+                </div>
 
-                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t2">
-                    <span class="fx-glyph" aria-hidden="true">
-                      <svg class="tool" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-                    </span>
-                    <span class="fx-name">Edit File</span>
-                    <span class="fx-desc">chat/composerTarget.ts</span>
-                    <span class="fx-diff"><span class="add">+62</span><span class="sep">/</span><span class="del">-0</span></span>
+                <!-- 思考折叠行 -->
+                <div class="ct">
+                  <button type="button" class="ct-row" aria-expanded="false" data-ct="a7th1">
+                    <span class="ct-v">Thought</span><span class="ct-a">briefly</span>
+                    <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
                   </button>
-                  <div class="fx-body" id="a7t2" hidden>
-<pre class="fx-out">+ export type TargetChange = 'retarget' | 'fork' | 'blocked';
-+
-+ export function resolveTargetChange(s: SessionState): TargetChange {
-+   if (RUNNING.has(s.status)) return 'blocked';
-+   if (s.messageCount > 0 || s.hostBound) return 'fork';
-+   return 'retarget';
-+ }</pre>
+                  <div class="ct-think" id="a7th1" hidden>
+                    <span>用户要的是三档规则的纯函数化，先确认「已绑定」的判定来自哪里。</span>
+                    <span>重绑逻辑应该在 useSyncChatWorkspaceTree 里，先读它再动手。</span>
                   </div>
+                </div>
 
-                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t3">
-                    <span class="fx-glyph" aria-hidden="true">
-                      <svg class="tool" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
-                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-                    </span>
-                    <span class="fx-name">Shell Command</span>
-                    <span class="fx-dur">8.1s</span>
-                    <span class="fx-desc">pnpm test -- composerTarget</span>
+                <p>先确认三档边界：空且未 host-bound → <code>retarget</code>；已有消息或已绑 → <code>fork</code>；运行中 → <code>blocked</code>。</p>
+
+                <!-- 聚合行：多次调用折叠成一行，展开后明细不缩进 -->
+                <div class="ct">
+                  <button type="button" class="ct-row" aria-expanded="false" data-ct="a7ex1">
+                    <span class="ct-v">Explored</span><span class="ct-a">4 files, 11 searches</span>
+                    <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
                   </button>
-                  <div class="fx-body" id="a7t3" hidden>
-<pre class="fx-out"> <span class="ok">✓</span> chat/__tests__/composerTarget.test.ts <span class="ok">(11 tests)</span> 36ms
-
- Test Files  <span class="ok">1 passed</span> (1)
-      Tests  <span class="ok">11 passed</span> (11)</pre>
+                  <div class="ct-sub" id="a7ex1" hidden>
+                    <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">rebindSessionsToTree|hostBound in ai-client</span></div>
+                    <div class="ct-row"><span class="ct-v">Reading</span><span class="ct-a">useSyncChatWorkspaceTree.ts</span></div>
+                    <div class="ct-row"><span class="ct-v">Searched files</span><span class="ct-a">**/*composer* in renderer</span></div>
+                    <div class="ct-row"><span class="ct-v">Thought</span><span class="ct-a">briefly</span></div>
+                    <div class="ct-row"><span class="ct-v">Reading</span><span class="ct-a">stores/chatSessions.ts</span></div>
                   </div>
+                </div>
 
+                <p>重绑那条既有原则可以直接复用：host-bound 的会话永不重绑。我把三档写成纯函数并补测试。</p>
+
+                <div class="ct">
+                  <div class="ct-row"><span class="ct-v">Edited</span><span class="ct-a">chat/composerTarget.ts</span></div>
+                  <div class="ct-row"><span class="ct-v">Ran</span><span class="ct-a">pnpm test -- composerTarget</span></div>
                 </div>
 
                 <p>纯函数与 11 例断言已就位，含「切已有 worktree 时 <code>git.checkout</code> 调用次数为 0」这条。接着把它接到目标栏的三个控件上。</p>
@@ -1567,17 +1697,16 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
                 <div class="fx-footer">
                   <span>claude-opus-5</span>
                   <span class="dot"></span>
-                  <span>12.4s</span>
-                  <span class="dot"></span>
                   <span>07:41</span>
                   <span class="fx-pill">composerTarget.ts</span>
                   <span class="fx-pill">composerTarget.test.ts</span>
                 </div>
               </div>
 
-              <div class="fx-running">
-                <span class="live"></span>
-                <span>Planning next moves…</span>
+              <!-- 运行态：不靠圆点，靠现在进行时动词（Cursor 自带的状态表达） -->
+              <div class="ct">
+                <div class="ct-row"><span class="ct-v">Exploring</span><span class="ct-a">2 files, 10 searches</span></div>
+                <div class="ct-row"><span class="ct-v">Reading</span><span class="ct-a">chat/questionBridge.ts</span></div>
               </div>
 
             </div>
@@ -1642,8 +1771,8 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
       <h4>用到的 token</h4>
       <ul>
         <li>用户气泡：<code>--card</code> + <code>color-mix(--primary 8%)</code> 描边，圆角 16/16/4/16（A01 已验收写法，原样）。</li>
-        <li>助手正文完全平铺无容器；工具行 <code>--foreground</code> / <code>--muted-foreground</code>，diff 用 <code>--success</code> / <code>--destructive</code>。</li>
-        <li>运行中圆点与侧栏活动指示均为 <code>--status-running</code>（T-21 已替掉全仓唯一 <code>bg-amber-500</code>）。</li>
+        <li><b>v2 工具行</b>：动词 <code>--muted-foreground</code>，参数 <code>--tool-arg</code>（= muted-foreground 退向底色 38%），正文 <code>--foreground</code>——<b>三级灰全部同字号</b>，层级只靠颜色。</li>
+        <li><b>运行态不用圆点</b>：靠现在进行时动词（<code>Exploring</code> / <code>Reading</code>）——这是 Cursor 形态自带的状态表达。<code>--status-running</code> 圆点保留给侧栏与 Tab（那里没有动词可用）。</li>
         <li>停止键 <code>--destructive</code> 实心圆——与发送键同尺寸同位置，只换色不换形。</li>
       </ul>
     </div>
@@ -1651,18 +1780,19 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
       <h4>与 Cursor 截图的对应</h4>
       <ul>
         <li>「发起对话后状态.png」：时间线在上、follow-up 沉底、目标行（分支 + This PC）在 Composer <b>下方</b>——结构逐项对应。</li>
-        <li>Cursor 的 <code>Planning next moves</code> 灰字状态行 → 我们的 <code>--status-running</code> 圆点 + 同文案位。</li>
+        <li><b>v2</b>「工具行-进行中.png」：<code>Worked for 1s</code> 在回合最上、<code>Thought briefly</code> 折叠行、<code>Exploring 2 files, 10 searches</code> + 当前动作 <code>Reading …</code>——本屏逐项复现。</li>
+        <li><b>v2</b>「工具行-聚合展开.png」：<code>Explored 4 files, 11 searches ⌄</code> 展开后明细<b>不缩进、无竖线</b>，其中还夹着 <code>Thought briefly</code>——照搬。</li>
         <li>Cursor follow-up 右侧的麦克风<b>不搬</b>；停止键位置与形态照搬。</li>
-        <li>Cursor 把用户消息渲染成<b>全宽方框</b>——我们<b>不跟</b>，保留 A01 右对齐气泡（见右下差异卡）。</li>
       </ul>
     </div>
     <div class="note is-diff">
-      <h4>与现状 / 与 Cursor 的差异点</h4>
+      <h4>与 v1 / 与现状的差异点</h4>
       <ul>
-        <li><b>D23 边界的具体体现</b>：本屏时间线里的工具行、气泡、footer 全是从 phase0a 基线搬来的<b>同一套 class</b>，一像素未改。中列 Cursor 化<b>只改骨架</b>。</li>
-        <li>现状没有「目标行」这一层；现状 composer 底行是「状态文案 + Model + Effort + Send」，本屏把状态文案让位给时间线里的运行指示。</li>
-        <li>现状 dock 有 <code>border-t bg-background/80</code>，本屏去掉；浮起感由卡片的 <code>--input</code> 边承担，不加阴影。</li>
-        <li>Cursor 的用户消息框贴顶且全宽，会让长会话里分不清「谁在说」；我们保留右对齐气泡是<b>有据偏离</b>（D23 明写时间线内部按 T-05 不变）。</li>
+        <li><b>v1 作废的部分</b>：v1 屏② 的工具行是 openchamber 口径（图标 + 名称 + 描述 + diff 统计 + 竖线输出体）。D24 之后<b>整块重做</b>，图标、竖线、diff 统计全部取消。</li>
+        <li><b>回合时长搬家</b>：v1 的 footer 是 <code>模型 · 12.4s · 07:41 · 文件 pill</code>；v2 把时长升为回合顶部的 <code>Worked for 31s ⌄</code>，footer 里的重复时长删掉。</li>
+        <li><b>信息量减少</b>：Cursor 的工具行<b>不展示任何工具输出</b>（五张截图里一次都没有）。这对排障是净损失 → §08 待拍板 ⑤。</li>
+        <li>现状没有「目标行」这一层；现状 dock 有 <code>border-t bg-background/80</code>，本屏去掉，浮起感由卡片的 <code>--input</code> 边承担。</li>
+        <li>用户气泡仍保留 A01 右对齐形态（Cursor 是全宽方框）——D24 只改了工具行与问答卡，气泡不在改判范围内。</li>
       </ul>
     </div>
   </div>
@@ -1753,38 +1883,32 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
                 <div class="fx-user-bubble">把 Composer 目标栏的三档规则抽成纯函数 composerTarget.ts，顺手补测试</div>
               </div>
               <div class="fx-assistant">
+                <div class="ct">
+                  <div class="ct-row"><span class="ct-v">Worked for</span><span class="ct-a">31s</span>
+                    <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                  </div>
+                </div>
                 <p>先确认三档边界：空且未 host-bound → <code>retarget</code>；已有消息或已绑 → <code>fork</code>；运行中 → <code>blocked</code>。</p>
-                <div class="fx-tools">
-                  <div class="fx-static">
-                    <span class="fx-glyph" aria-hidden="true">
-                      <svg class="tool" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-                    </span>
-                    <span class="fx-name">Read File</span>
-                    <span class="fx-path">hooks/useSyncChatWorkspaceTree.ts</span>
-                    <span class="fx-path">chat/ChatComposer.tsx</span>
-                  </div>
-                  <button type="button" class="fx-row" aria-expanded="false" data-tool="a7t4">
-                    <span class="fx-glyph" aria-hidden="true">
-                      <svg class="tool" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
-                      <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
-                    </span>
-                    <span class="fx-name">Shell Command</span>
-                    <span class="fx-dur">8.1s</span>
-                    <span class="fx-desc">pnpm test -- composerTarget</span>
+                <div class="ct">
+                  <button type="button" class="ct-row" aria-expanded="false" data-ct="a7ex2">
+                    <span class="ct-v">Explored</span><span class="ct-a">4 files, 11 searches</span>
+                    <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
                   </button>
-                  <div class="fx-body" id="a7t4" hidden>
-<pre class="fx-out"> <span class="ok">✓</span> chat/__tests__/composerTarget.test.ts <span class="ok">(11 tests)</span> 36ms</pre>
+                  <div class="ct-sub" id="a7ex2" hidden>
+                    <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">rebindSessionsToTree|hostBound in ai-client</span></div>
+                    <div class="ct-row"><span class="ct-v">Reading</span><span class="ct-a">useSyncChatWorkspaceTree.ts</span></div>
+                    <div class="ct-row"><span class="ct-v">Thought</span><span class="ct-a">briefly</span></div>
                   </div>
+                  <div class="ct-row"><span class="ct-v">Ran</span><span class="ct-a">pnpm test -- composerTarget</span></div>
                 </div>
                 <p>11 例全绿，含「切已有 worktree 时 <code>git.checkout</code> 调用次数为 0」。</p>
                 <div class="fx-footer">
-                  <span>claude-opus-5</span><span class="dot"></span><span>12.4s</span><span class="dot"></span><span>07:41</span>
+                  <span>claude-opus-5</span><span class="dot"></span><span>07:41</span>
                   <span class="fx-pill">composerTarget.ts</span>
                 </div>
               </div>
-              <div class="fx-running">
-                <span class="live"></span>
-                <span>Planning next moves…</span>
+              <div class="ct">
+                <div class="ct-row"><span class="ct-v">Planning</span><span class="ct-a">next moves</span></div>
               </div>
             </div>
           </div>
@@ -2088,10 +2212,416 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
   </div>
 </section>
 
-<!-- ============================================================ 06 ============ -->
+<!-- ============================================================ 06 (v2) ======== -->
 <section id="s6">
   <div class="sec-head">
     <span class="sec-tag">06</span>
+    <h2>屏⑤ 工具行解剖 <span style="color:var(--page-go);font-size:0.8em;">v2 · D24</span></h2>
+    <span class="sec-sub">工具行-进行中 / 聚合展开.png</span>
+  </div>
+
+  <p>
+    D24 把工具行的形态源从 openchamber 换成 Cursor。核心是<b>四条同时成立</b>的规则：
+    <b>动词开头</b>（<code>Ran</code> / <code>Grepped</code> / <code>Reading</code> / <code>Searched files</code> / <code>Explored</code>）、
+    <b>无图标无边框无底色</b>、<b>与正文同字号</b>、<b>层级只靠三级灰</b>。
+    少一条都会退回「组件感」——尤其是字号，一缩就前功尽弃。
+  </p>
+
+  <div class="demo-bar">
+    <span class="demo-cap">左说明 / 右实样（实样按真实 768 阅读栏宽度渲染）</span>
+    <span class="hint">↑ 带 ⌄ 的行可点开</span>
+  </div>
+
+  <div class="stage stage-wide">
+    <div class="fx" data-fx="light">
+      <div class="spec" style="background: var(--background); border-radius: var(--r-md);">
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">A · 进行中态</span>
+            <span class="k">Exploring / Reading</span>
+            <span>现在进行时动词 + <b>无 chevron</b>（还没聚合完，展不开）。当前动作单独一行跟在聚合行下方。</span>
+            <span><b>为什么不加圆点</b>：动词本身已经表达「正在进行」。加了圆点等于同一信息说两遍，还会把这行拉回控件感。</span>
+            <span><code>--status-running</code> 因此下岗到侧栏与 Tab——那两处没有动词可用。</span>
+          </div>
+          <div class="spec-demo is-pad">
+            <div class="ct">
+              <div class="ct-row"><span class="ct-v">Exploring</span><span class="ct-a">2 files, 10 searches</span></div>
+              <div class="ct-row"><span class="ct-v">Reading</span><span class="ct-a">chat/questionBridge.ts</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">B · 完成聚合态</span>
+            <span class="k">Explored N files, M searches ⌄</span>
+            <span>过去式 + 计数 + chevron。<b>chevron 紧跟文字</b>，不右对齐到列边——右对齐会让它看起来像列表控件。</span>
+            <span>单次调用不聚合，直接出 <code>Ran …</code> / <code>Edited …</code> 单行（见 D 组）。</span>
+          </div>
+          <div class="spec-demo is-pad">
+            <div class="ct">
+              <button type="button" class="ct-row" aria-expanded="false" data-ct="s5b">
+                <span class="ct-v">Explored</span><span class="ct-a">4 files, 11 searches</span>
+                <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+              </button>
+              <div class="ct-sub" id="s5b" hidden>
+                <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">工具行|问答卡|tool.*row|QACard in ai-client</span></div>
+                <div class="ct-row"><span class="ct-v">Searched files</span><span class="ct-a">**/*Question* in ai-client</span></div>
+                <div class="ct-row"><span class="ct-v">Reading</span><span class="ct-a">chat/MessageTimeline.tsx</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">C · 展开明细态（常开）</span>
+            <span class="k">缩进 0 · 无竖线 · 同节拍</span>
+            <span><b>最容易做错的一处</b>：明细行与摘要行<b>同一条左边界</b>，不缩进、不加竖线、不换字号，行间距与摘要行一模一样（4px）。</span>
+            <span>明细里可以夹 <code>Thought briefly</code>——思考与工具调用在同一条流水里，不分层。</span>
+            <span>v1 那种「竖线 + 缩进 14px 的展开体」是 openchamber 口径，v2 <b>已取消</b>。</span>
+          </div>
+          <div class="spec-demo is-pad">
+            <div class="ct">
+              <button type="button" class="ct-row" aria-expanded="true" data-ct="s5c">
+                <span class="ct-v">Explored</span><span class="ct-a">4 files, 11 searches</span>
+                <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+              </button>
+              <div class="ct-sub" id="s5c">
+                <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">工具行|问答卡|tool.*row|QACard|QuestionCard in ai-client</span></div>
+                <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">cursor.*tool|ToolRow|AskQuestion in ai-client</span></div>
+                <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">问答 in ai-client</span></div>
+                <div class="ct-row"><span class="ct-v">Thought</span><span class="ct-a">briefly</span></div>
+                <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">QuestionCard|PermissionCard|ToolRow|ToolCall in ai-client</span></div>
+                <div class="ct-row"><span class="ct-v">Searched files</span><span class="ct-a">**/*Question* in ai-client</span></div>
+                <div class="ct-row"><span class="ct-v">Searched files</span><span class="ct-a">**/*Tool* in renderer</span></div>
+                <div class="ct-row"><span class="ct-v">Thought</span><span class="ct-a">briefly</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">D · 单次调用 / 思考 / 回合时长</span>
+            <span class="k">Ran · Thought · Worked for</span>
+            <span><code>Thought briefly ⌄</code> 展开的是<b>思考正文</b>（<code>--tool-arg</code> 灰、段间 6px），不是明细行。</span>
+            <span><code>Worked for Ns ⌄</code> 是<b>回合级</b>时长，Cursor 把它放在回合的<b>最上方</b>而不是底部——正好接管了我们 footer 里的时长位。</span>
+            <span>耗时短时文案退化为 <code>Thought briefly</code>，长时为 <code>Thought for 12s</code>；<b>不硬造秒数</b>。</span>
+          </div>
+          <div class="spec-demo is-pad">
+            <div class="ct">
+              <button type="button" class="ct-row" aria-expanded="true" data-ct="s5d1">
+                <span class="ct-v">Thought</span><span class="ct-a">briefly</span>
+                <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+              </button>
+              <div class="ct-think" id="s5d1">
+                <span>用户要求演示 Cursor 工具行与问答卡的调用展示场景。</span>
+                <span>正在代码库中搜索这两个组件的具体定义与调用方式。</span>
+              </div>
+            </div>
+            <p style="font-size:var(--t-md);line-height:1.5;color:var(--foreground);margin:10px 0;">正在查找项目中与工具行和问答卡相关的实现，以便触发展示场景。</p>
+            <div class="ct">
+              <div class="ct-row"><span class="ct-v">Ran</span><span class="ct-a">Demo shell tool call for tool row</span></div>
+              <div class="ct-row"><span class="ct-v">Edited</span><span class="ct-a">chat/composerTarget.ts</span></div>
+              <button type="button" class="ct-row" aria-expanded="false" data-ct="s5d2">
+                <span class="ct-v">Worked for</span><span class="ct-a">31s</span>
+                <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+              </button>
+              <div class="ct-think" id="s5d2" hidden>
+                <span>3 次工具调用 · 11 次搜索 · 1 次编辑 · 首字延迟 1.2s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">E · 输出体（<b>非 Cursor 口径</b>）</span>
+            <span class="k">§08 待拍板 ⑤</span>
+            <span>五张截图里 Cursor <b>一次都没有</b>展示工具输出。而我们现有 T-05 口径里 Read/Grep/Bash 的输出体是有用的排障信息——照搬等于净损失。</span>
+            <span>这里给出一个<b>折中示意</b>：形态仍是 Cursor 单行，只在需要时挂一段输出体。<b>要不要保留由用户拍板</b>。</span>
+          </div>
+          <div class="spec-demo is-pad">
+            <div class="ct">
+              <button type="button" class="ct-row" aria-expanded="true" data-ct="s5e">
+                <span class="ct-v">Ran</span><span class="ct-a">pnpm test -- composerTarget</span>
+                <span class="ct-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+              </button>
+              <div class="fx-body" id="s5e">
+<pre class="fx-out"> <span class="ok">✓</span> chat/__tests__/composerTarget.test.ts <span class="ok">(11 tests)</span> 36ms
+
+ Test Files  <span class="ok">1 passed</span> (1)
+      Tests  <span class="ok">11 passed</span> (11)</pre>
+              </div>
+            </div>
+            <div class="ct">
+              <div class="ct-row" style="color:var(--destructive);"><span class="ct-v" style="color:var(--destructive);">Ran</span><span class="ct-a" style="color:color-mix(in oklab, var(--destructive) 70%, var(--background));">pnpm typecheck — exit 2</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>关键尺寸</h4>
+      <ul>
+        <li>字号 <b>15px</b>（<code>--t-md</code>，与正文同档），行高 1.5，行间 <b>4px</b>，工具组与正文段间 <b>10px</b>。</li>
+        <li>动词与参数之间 <b>6px</b>；chevron 13px、紧跟文字、展开时旋转 180°。</li>
+        <li>展开明细：<b>缩进 0、无竖线、无背景</b>，与摘要行同节拍。</li>
+        <li>参数超长时单行省略号截断（<code>min-w-0 + truncate</code>），不换行——保证纵向节拍不被长路径打乱。</li>
+      </ul>
+    </div>
+    <div class="note is-ref">
+      <h4>用到的 token</h4>
+      <ul>
+        <li>三级灰：正文 <code>--foreground</code> ＞ 动词 <code>--muted-foreground</code> ＞ 参数 <code>--tool-arg</code>。</li>
+        <li><code>--tool-arg</code> 是本页唯一新增的颜色派生：<code>color-mix(in oklab, --muted-foreground 62%, --background)</code>，亮暗自动成立，不维护两份值。</li>
+        <li>悬停时动词升到 <code>--foreground</code>——这是<b>唯一</b>的悬停反馈，不加背景块。</li>
+        <li>失败行整行转 <code>--destructive</code>（动词深、参数浅同样成立），不加徽章、不加图标。</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>与 Cursor 截图的对应</h4>
+      <ul>
+        <li>「工具行-进行中.png」：<code>Worked for 1s</code> / <code>Thought briefly</code> / <code>Exploring 2 files, 10 searches</code> / <code>Reading questionBridge.ts</code>——A、D 两组逐字复现。</li>
+        <li>「工具行-聚合展开.png」：8 条明细含两条 <code>Thought briefly</code>，全部平齐无缩进——C 组照搬。</li>
+        <li>「问答卡-回答后.png」：<code>Ran Demo shell tool call for tool row</code> 与 <code>Planning next moves</code>——D 组与屏③ 底部复现。</li>
+        <li>动词表照抄：<code>Ran</code> / <code>Grepped</code> / <code>Searched files</code> / <code>Reading</code> / <code>Explored</code> / <code>Exploring</code> / <code>Thought</code> / <code>Planning</code> / <code>Worked for</code>；我们补一个 <code>Edited</code>。</li>
+      </ul>
+    </div>
+    <div class="note is-diff">
+      <h4>与 v1（openchamber 口径）的差异</h4>
+      <ul>
+        <li><b>删</b>：工具图标（每行 14px Lucide）、悬停时图标变 chevron 的动画、竖线展开体、<code>+34/-2</code> diff 统计、右侧耗时列。</li>
+        <li><b>改</b>：行文从「名词短语」（<code>Search Files "deriveThinkingCard"</code>）改为「动词句」（<code>Grepped deriveThinkingCard in ai-client</code>）——<b>参数里带上仓库名</b>是 Cursor 的固定尾巴。</li>
+        <li><b>增</b>：聚合行（<code>Explored N files, M searches</code>）、回合时长行（<code>Worked for Ns</code>）、思考折叠行（<code>Thought briefly</code>）三种 v1 没有的行类型。</li>
+        <li><b>连带</b>：T-05 需第二次改写口径；2026-07-28 那版 openchamber 形态细节全部作废。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 07 (v2) ======== -->
+<section id="s7">
+  <div class="sec-head">
+    <span class="sec-tag">07</span>
+    <h2>屏⑥ 问答卡全态 <span style="color:var(--page-go);font-size:0.8em;">v2 · D24</span></h2>
+    <span class="sec-sub">问答卡-展开选项 / 回答后Answers冻结 / Skipped.png</span>
+  </div>
+
+  <p>
+    四态一条链：<b>折叠条 → 展开卡 → Answers 冻结 → （或）Questions skipped</b>。
+    其中「回答后就地冻结」这一条<b>不是新决定</b>——D20 早就拍了，只是当时的参考实现是 openchamber 的「回答后消失」，
+    我们因为 <code>HistoryBlock</code> 协议里没有 question/permission 而选择偏离。
+    现在 Cursor 的做法恰好就是就地冻结，<b>D20 从「有据偏离」变成「与参考实现一致」</b>，条款本身不用动。
+  </p>
+
+  <div class="demo-bar">
+    <span class="demo-cap">卡宽 = 阅读栏 768 · 折叠条/头 36 · 选项行 28 · 字母 chip 20</span>
+    <span class="hint">↑ 展开卡里的选项可点选</span>
+  </div>
+
+  <div class="stage stage-wide">
+    <div class="fx" data-fx="light">
+      <div class="spec" style="background: var(--background); border-radius: var(--r-md);">
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">A · 折叠条</span>
+            <span class="k">Questions · 1 of 2</span>
+            <span>全宽一条，高 <b>36px</b>。左边只写 <code>Questions</code>（<code>--muted-foreground</code>），右边是分页与展开箭头。</span>
+            <span><b>位置很关键</b>：它吸附在 Composer <b>正上方</b>，截图里它盖住了时间线末尾——问题挂起时不允许被滚走。</span>
+            <span>多题才出 <code>‹ 1 of N ›</code>；单题只留展开箭头。</span>
+          </div>
+          <div class="spec-demo">
+            <div class="qa">
+              <div class="qa-head">
+                <span class="t">Questions</span>
+                <span class="qa-pager">
+                  <span class="pg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="m15 18-6-6 6-6"/></svg></span>
+                  <span class="n">1 of 2</span>
+                  <span class="pg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="m9 18 6-6-6-6"/></svg></span>
+                </span>
+                <span class="qa-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="m18 15-6-6-6 6"/></svg></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">B · 展开卡</span>
+            <span class="k">A/B/C/D 字母行 + Other…</span>
+            <span>头部同折叠条；下面按题排列，<b>一张卡装完所有题</b>（超高时卡内滚动，不是一题一卡）。</span>
+            <span>选项 = <b>20px 字母 chip + 文本</b>，整行可点，选中态铺 <code>--selection</code>、chip 转 <code>--primary</code>。</span>
+            <span><code>Other…</code> 恒为最后一项、恒有字母、文本走 <code>--muted-foreground</code>——它是入口不是答案。</span>
+            <span>底部右对齐 <code>Skip</code>（弱） + <code>Continue ⏎</code>（唯一强调按钮）。</span>
+          </div>
+          <div class="spec-demo">
+            <div class="qa">
+              <div class="qa-head">
+                <span class="t">Questions</span>
+                <span class="qa-pager">
+                  <span class="pg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="m15 18-6-6 6-6"/></svg></span>
+                  <span class="n">1 of 2</span>
+                  <span class="pg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><path d="m9 18 6-6-6-6"/></svg></span>
+                </span>
+                <span class="qa-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="m6 9 6 6 6-6"/></svg></span>
+              </div>
+              <div class="qa-body">
+                <div>
+                  <div class="qa-q">你更想先看哪种 UI 展示？</div>
+                  <div class="qa-opts" role="radiogroup" aria-label="q1">
+                    <button type="button" class="qa-opt" role="radio" aria-checked="false" data-qa="q1"><span class="qa-letter">A</span><span class="t">工具行（Tool Call 折叠条）</span></button>
+                    <button type="button" class="qa-opt" role="radio" aria-checked="false" data-qa="q1"><span class="qa-letter">B</span><span class="t">问答卡（AskQuestion 选项卡）</span></button>
+                    <button type="button" class="qa-opt" role="radio" aria-checked="true" data-qa="q1"><span class="qa-letter">C</span><span class="t">两种都要看</span></button>
+                    <button type="button" class="qa-opt is-other" role="radio" aria-checked="false" data-qa="q1"><span class="qa-letter">D</span><span class="t">Other…</span></button>
+                  </div>
+                </div>
+                <div>
+                  <div class="qa-q">这个演示是为 ai-client 的 T-05 开发参考吗？</div>
+                  <div class="qa-opts" role="radiogroup" aria-label="q2">
+                    <button type="button" class="qa-opt" role="radio" aria-checked="true" data-qa="q2"><span class="qa-letter">A</span><span class="t">是，给 MessageTimeline 工具卡 / Question 卡做参考</span></button>
+                    <button type="button" class="qa-opt" role="radio" aria-checked="false" data-qa="q2"><span class="qa-letter">B</span><span class="t">否，只是随手试试</span></button>
+                    <button type="button" class="qa-opt is-other" role="radio" aria-checked="false" data-qa="q2"><span class="qa-letter">C</span><span class="t">Other…</span></button>
+                  </div>
+                </div>
+              </div>
+              <div class="qa-foot">
+                <button type="button" class="qa-skip">Skip</button>
+                <button type="button" class="qa-continue"><span>Continue</span><span class="kbd">⏎</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">C · 回答后冻结</span>
+            <span class="k">Answers（只读）</span>
+            <span>同一张卡就地变成只读：头文案 <code>Questions</code> → <code>Answers</code>，chip / 选项 / 按钮<b>全部消失</b>。</span>
+            <span>Q 与 A 上下两行、<b>同色同字号</b>，靠行序区分——Cursor 没有给答案加任何强调，我们照做。</span>
+            <span><b>D20 不动</b>：store 侧 <code>resolved</code> / <code>questionOutcome</code> / <code>questionAnswers</code> 的冻结逻辑早已实现（含 5 例幂等测试），T-05 缺的只是这个只读渲染，不要重复实现。</span>
+          </div>
+          <div class="spec-demo">
+            <div class="qa">
+              <div class="qa-head"><span class="t">Answers</span></div>
+              <div class="qa-frozen">
+                <div class="qa-pair">
+                  <span class="q">你更想先看哪种 UI 展示？</span>
+                  <span class="a">两种都要看</span>
+                </div>
+                <div class="qa-pair">
+                  <span class="q">这个演示是为 ai-client 的 T-05 开发参考吗？</span>
+                  <span class="a">是，给 MessageTimeline 工具卡 / Question 卡做参考</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">D · 跳过态</span>
+            <span class="k">Questions skipped</span>
+            <span>头文案变 <code>Questions skipped</code>，<b>逐题</b>在下方标 <code>Skipped</code>（斜体 <code>--muted-foreground</code>）。</span>
+            <span>问题文本仍是 <code>--foreground</code>——跳过的是回答，不是问题；把问题也调灰会让人以为它无效。</span>
+            <span>取自「待定-…+问答Skipped态.png」；该图的<b>主体功能（点击历史消息重新编辑）用户标注待定，仅归档不立项</b>，此处只取 Skipped 态。</span>
+          </div>
+          <div class="spec-demo">
+            <div class="qa">
+              <div class="qa-head"><span class="t">Questions skipped</span></div>
+              <div class="qa-frozen">
+                <div class="qa-pair">
+                  <span class="q">你希望 T-05 工具卡默认是什么展示形态？</span>
+                  <span class="sk">Skipped</span>
+                </div>
+                <div class="qa-pair">
+                  <span class="q">问答卡（AskUserQuestion）你希望放在哪里？</span>
+                  <span class="sk">Skipped</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">E · 挂起时的 Composer</span>
+            <span class="k">Add more optional details…</span>
+            <span>问题挂起期间 follow-up 的 placeholder 从 <code>Send follow-up…</code> 变为 <code>Add more optional details…</code>。</span>
+            <span>这一句是<b>语义担保</b>：告诉用户「现在打字是补充，不是回答」，避免有人把答案敲进输入框然后卡住。</span>
+            <span>折叠条 + 这行 placeholder 是一对，必须同时出现同时消失。</span>
+          </div>
+          <div class="spec-demo">
+            <div class="qa" style="margin-bottom:8px;">
+              <div class="qa-head">
+                <span class="t">Questions</span>
+                <span class="qa-cv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="m18 15-6-6-6 6"/></svg></span>
+              </div>
+            </div>
+            <div class="cmp is-follow">
+              <span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" style="width:14px;height:14px;"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+              <span class="cmp-ta">Add more optional details…</span>
+              <span class="sel"><span>claude-opus-5</span><svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" style="width:14px;height:14px;"><path d="m6 9 6 6 6-6"/></svg></span>
+              <span class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h4>关键尺寸</h4>
+      <ul>
+        <li>卡宽 = 阅读栏 <b>768</b>（与时间线、Composer 同轴）；边框 1px <code>--border</code>，圆角 <b>12px</b>，底 <code>--card</code>。</li>
+        <li>折叠条 / 卡头 <b>36px</b>（<code>--h-bar</code>）；选项行 <b>28px</b>（<code>--h-row</code>）；字母 chip <b>20px</b>（<code>--h-chip</code>）。</li>
+        <li>chip 与文本间距 <b>10px</b>；题与题之间 <b>12px</b>；底部按钮区上下 10px、按钮高 24px（<code>--h-btn</code>）。</li>
+        <li>问题文本与选项文本同为 <b>15px</b>——问题靠<b>位置</b>而非字号成为标题。</li>
+      </ul>
+    </div>
+    <div class="note is-ref">
+      <h4>用到的 token</h4>
+      <ul>
+        <li>卡：<code>--card</code> + <code>--border</code>；头文案与 <code>Skipped</code>：<code>--muted-foreground</code>。</li>
+        <li>选中行 <code>--selection</code>（预合成实色，<b>不叠 alpha</b>）；悬停 <code>--hover</code>；chip 常态 <code>--muted</code> 底 + <code>--border</code> 边。</li>
+        <li><b>Continue</b>：<code>--primary</code> 实心 + <code>--primary-foreground</code> 字，焦点环 <code>--accent-primary</code>。<b>没有用 <code>--accent-primary</code> 做底</b>——design-system 的亮色红线说它对 bg 仅 1.82:1 且无配套前景色。Cursor 的琥珀 hex 一律不搬。</li>
+        <li>全卡<b>零阴影</b>：浮起感靠 <code>--border</code> + <code>--card</code>，与 Composer 同一套办法。</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>与 Cursor 截图的对应</h4>
+      <ul>
+        <li>「问答卡-展开选项.png」：头部 <code>Questions ‹ 1 of 2 › ⌄</code>、A/B/C/D 字母行、选中行浅底、<code>Other…</code> 末位、底部 <code>Skip</code> + 实心 <code>Continue ⏎</code>——结构逐项对应。</li>
+        <li>「问答卡-回答后Answers冻结.png」：<code>Answers</code> 头 + Q/A 成对、无按钮——照搬。</li>
+        <li>「待定-…Skipped态.png」：<code>Questions skipped</code> 头 + 逐题斜体 <code>Skipped</code>——只取这一部分。</li>
+        <li>「工具行-聚合展开.png」底部：折叠条压在 Composer 上方、placeholder 已变 <code>Add more optional details…</code>——E 组复现。</li>
+      </ul>
+    </div>
+    <div class="note is-diff">
+      <h4>与 v1 / 与现状的差异点</h4>
+      <ul>
+        <li><b>v1 作废</b>：v1 沿用 phase0a 的 openchamber 问答卡（图标 + 标题 + 徽章 + 单选圆点 + 选项描述行）。v2 全部换掉：圆点 → 字母 chip，描述行 → 无，卡头 → 纯文字。</li>
+        <li><b>D20 状态升级</b>：从「有据可依的偏离」变为「与参考实现一致」——条款不改，但 open-q 里「等 C-17 扩协议后是否改回消失」这条可以关掉了。</li>
+        <li>现状 <code>MessageTimeline</code> 完全没有问答 UI（store 侧冻结逻辑已实现，UI 是 T-05 的缺口）；本屏是它的目标形态。</li>
+        <li><b>Permission 卡未在截图中出现</b>：Cursor 演示里只有 AskQuestion。Permission 卡沿用同一套外形（头文案换 <code>Permission</code>、选项换 允许/拒绝）是本基线的<b>合理外推</b>，不是截图证据——施工时按此执行，若不满意再单独立项。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 08 ============ -->
+<section id="s8">
+  <div class="sec-head">
+    <span class="sec-tag">08</span>
     <h2>取舍对照与待拍板</h2>
     <span class="sec-sub">验收时逐条确认</span>
   </div>
@@ -2111,7 +2641,13 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
         <tr><td><code>Connect Your Repos</code> 黑色 CTA</td><td><b>不做</b></td><td>同上</td></tr>
         <tr><td>麦克风 / 语音输入</td><td><b>不做</b></td><td>同上</td></tr>
         <tr><td>占位文案 <code>/ for skills</code></td><td><b>不抄</b>，沿用现网 <code>Message Claude via Agent Host…</code></td><td>同上（<code>@</code> 引用已有，T-07）</td></tr>
-        <tr><td>用户消息 = 全宽方框</td><td><b>不跟</b>，保留右对齐气泡</td><td>D23 边界：时间线内部按 T-05 不变</td></tr>
+        <tr><td>用户消息 = 全宽方框</td><td><b>不跟</b>，保留右对齐气泡</td><td>D24 只改工具行 / 问答卡，气泡不在改判范围</td></tr>
+        <tr><td><b>v2</b> 工具行：动词开头、无图标无边框的灰阶单行</td><td><b>照搬</b>（含聚合行 / Thought 折叠 / Worked for）</td><td>D24（撤销 D23 的「时间线内部不动」句）</td></tr>
+        <tr><td><b>v2</b> 工具行不展示任何工具输出</td><td><b>待拍板</b>——基线给了「Cursor 纯净版」与「挂输出体」两种（屏⑤ E 组）</td><td>§08 待拍板 ⑤（v2 新问）</td></tr>
+        <tr><td><b>v2</b> 问答卡：折叠条 → 字母选项卡 → Answers 冻结</td><td><b>照搬</b>；<code>Skipped</code> 态一并做</td><td>D24；冻结这条与 D20 一致，D20 不动</td></tr>
+        <tr><td><b>v2</b> Continue 按钮的琥珀色</td><td>换 <code>--primary</code> 实心 + <code>--accent-primary</code> 焦点环</td><td>design-system「--accent-primary 亮色红线」</td></tr>
+        <tr><td><b>v2</b> 助手消息下方的 👍 👎 ⑂ ⧉ 悬停动作条 + <code>41m ago</code></td><td><b>本轮不做</b>，footer 沿用 A01 的 <code>模型 · 时间 · 文件 pill</code></td><td>D24 未涉及；无点赞/分叉能力</td></tr>
+        <tr><td><b>v2</b> 点击历史消息重新编辑</td><td><b>不做</b>，仅归档</td><td>用户在截图上明确标注「此功能待定」</td></tr>
         <tr><td>follow-up 近 pill 圆角 · 卡片靠阴影浮起</td><td>圆角收到 <code>--radius-md</code> 12；浮起改用 <code>--input</code> 边</td><td>design-system 圆角四档 + Shadow 表</td></tr>
         <tr><td>会话 Tab 栏</td><td><b>出带 / 不带两版，待拍板</b></td><td>D23 明列未决</td></tr>
         <tr><td>模型选择合并成 <code>Fable 5 High</code> 一个控件</td><td>拆回<b>现有</b> ModelSelect + EffortSelect 两个 <code>h-6</code></td><td>零新控件原则</td></tr>
@@ -2119,7 +2655,21 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
     </table>
   </div>
 
-  <h3>需要用户拍的四件事</h3>
+  <h3>需要用户拍的五件事</h3>
+
+  <div class="ask">
+    <b>⑤（v2 新问）工具行还要不要能看到工具输出？</b>
+    <p>Cursor 的工具行<b>是终点</b>——五张截图里一次都没有展示 <code>Ran</code> / <code>Grepped</code> 的实际输出，展开聚合行看到的只是更多行标题。
+      我们现有 T-05 口径里 Read/Grep/Bash 的输出体（测试结果、报错栈、diff）是排障主力，照搬等于净损失。</p>
+    <p class="rec">建议：<b>形态照 Cursor，但保留可展开的输出体</b>（屏⑤ E 组）——单行摘要默认收起，只有失败行和显式点开时才展示。
+      这样既拿到 Cursor 的「旁白感」，又不丢排障信息。若用户要纯净版，删掉 E 组即可，其余不受影响。</p>
+  </div>
+
+  <div class="ask">
+    <b>另：Permission 卡沿用问答卡外形（外推，非截图证据）</b>
+    <p>Cursor 演示里只有 AskQuestion，没有 Permission。本基线按「同一套外形，头文案换 <code>Permission</code>、选项换 允许 / 拒绝」外推。
+      施工时按此执行，若验收后不满意再单独立项——此处只做提示，不需要单独拍。</p>
+  </div>
 
   <div class="ask">
     <b>① 会话 Tab 栏：带（屏③）还是不带（屏②）？</b>
@@ -2145,24 +2695,25 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
   <div class="ask decided">
     <b>已经不用问的（本基线按拍板结果直接落）</b>
     <p>侧栏 flat 平铺 + 分支 chip + 右对齐相对时间（D21-A）；运行位置只读指示器（D21-B / D22）；Recent 段保留（D21-C）；
-      时间线内部形态不动（D23 边界）；三列 + 44px 导轨不动（D19）。</p>
+      三列 + 44px 导轨不动（D19）；<b>工具行 / 问答卡形态源 = Cursor</b>（D24）；<b>回答后就地冻结</b>（D20，与 Cursor 一致，不再是偏离）。</p>
   </div>
 </section>
 
 <footer class="footnote">
   <h3>验收通过后要做的事（按权威链顺序，先改文档再动代码）</h3>
   <ul>
-    <li><b>台账</b>：A07 在总台账 Phase 0A 行补登为已交付，注明本文件为产物；D23 行补「基线已出，Tab 栏拍板结果 = ___」。</li>
-    <li><b>plantree</b>：A07 状态置 Done 并记录验收日期；T-27 / T-28 解除「等基线」前置。</li>
-    <li><b>design-system.md</b>：把本页 §01 派生表里<b>确实新增的档位</b>（下拉宽 280、圆形发送键 28、覆盖层阴影值）补进对应小节，避免下一个人再从头推一遍。</li>
-    <li><b>T-28</b>（中列状态化布局）按屏①②（+ 拍板后的 Tab 决定）施工；<b>T-27</b>（目标栏）按屏④ 三个控件施工，纯函数 <code>composerTarget.ts</code> 断言先行。</li>
+    <li><b>台账</b>：A07 在总台账 Phase 0A 行补登为已交付（v2），注明本文件为产物；D23 行补「基线已出，Tab 栏拍板结果 = ___」；D24 行补「A07 v2 已出，工具行输出体拍板结果 = ___」。</li>
+    <li><b>plantree</b>：A07 状态置 Done 并记录验收日期；T-05 / T-27 / T-28 解除「等基线」前置。</li>
+    <li><b>T-05 第二次改写口径</b>（D24 明列的连带动作）：2026-07-28 那版 openchamber 工具行 / 问答卡细节全部作废，改以本页<b>屏⑤ 屏⑥</b>为准；改写完成前不得开工。</li>
+    <li><b>design-system.md</b>：把本页 §01 派生表里<b>确实新增的档位</b>补进对应小节——下拉宽 280、圆形发送键 28、覆盖层阴影值，以及 v2 的 <code>--tool-arg</code> 二级灰、<code>--h-chip</code> 20、「工具行与正文同字号」这条排版规则。<code>--tool-arg</code> 若要进代码需按「新增 token 的强制动作」在 <code>globals.css</code> 与 <code>@theme</code> 两处落桥。</li>
+    <li><b>T-28</b>（中列状态化布局）按屏①②（+ 拍板后的 Tab 决定）施工；<b>T-27</b>（目标栏）按屏④ 三个控件施工，纯函数 <code>composerTarget.ts</code> 断言先行；<b>T-05</b>（时间线）按屏⑤⑥ 施工。</li>
     <li>顺带删除 <code>MainHeader.tsx:57/58</code> 的 Folder / Host: Local 两个死按钮——它们的职责已被目标栏正式接管（T-23 对应子项改为「删除 + 复核」）。</li>
   </ul>
   <p class="src">
-    参照 · docs/design/refs/cursor-20260729/（6 张截图，2026-07-29 入库）&nbsp;|&nbsp;
+    参照 · docs/design/refs/cursor-20260729/（v1 6 张 + v2 5 张，2026-07-29 入库）&nbsp;|&nbsp;
     token 源 · src/renderer/styles/globals.css（T-21 落库）&nbsp;|&nbsp;
     档位源 · docs/design-system.md&nbsp;|&nbsp;
-    决策 · docs/plans/openchamber-chat-refactor-ledger.md D18 / D21 / D22 / D23&nbsp;|&nbsp;
+    决策 · docs/plans/openchamber-chat-refactor-ledger.md D18 / D20 / D21 / D22 / D23 / D24&nbsp;|&nbsp;
     设计全文 · docs/plans/2026-07-29-sidebar-composer-target-bar-design.md&nbsp;|&nbsp;
     同族基线 · docs/design/phase0a-openchamber-alignment.html
   </p>
@@ -2220,14 +2771,24 @@ td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
     d.addEventListener('click', (e) => e.stopPropagation());
   });
 
-  // ---- 工具行展开 / 收起（与 phase0a 同一份行为）----
-  document.querySelectorAll('.fx-row[data-tool]').forEach((row) => {
+  // ---- v2 工具行（Cursor 形态）展开 / 收起 ----
+  document.querySelectorAll('.ct-row[data-ct]').forEach((row) => {
     row.addEventListener('click', () => {
-      var body = document.getElementById(row.getAttribute('data-tool'));
+      var body = document.getElementById(row.getAttribute('data-ct'));
       if (!body) return;
       var open = row.getAttribute('aria-expanded') === 'true';
       row.setAttribute('aria-expanded', String(!open));
       body.hidden = open;
+    });
+  });
+
+  // ---- v2 问答卡：每题单选，组内互斥 ----
+  document.querySelectorAll('.qa-opt[data-qa]').forEach((opt) => {
+    opt.addEventListener('click', () => {
+      var group = opt.getAttribute('data-qa');
+      document.querySelectorAll('.qa-opt[data-qa="' + group + '"]').forEach((o) => {
+        o.setAttribute('aria-checked', String(o === opt));
+      });
     });
   });
 })();
