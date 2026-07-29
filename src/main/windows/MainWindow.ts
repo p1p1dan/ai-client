@@ -117,12 +117,16 @@ export function forceReplaceClose(win: BrowserWindow): void {
 }
 
 export function createMainWindow(options: CreateMainWindowOptions = {}): BrowserWindow {
-  const replacementState = options.replaceWindow?.isDestroyed()
-    ? null
-    : {
-        ...options.replaceWindow?.getBounds(),
-        isMaximized: options.replaceWindow?.isMaximized(),
-      };
+  // Only inherit bounds from a live window being replaced. Without the null
+  // guard the optional chaining yields `{isMaximized: undefined}` — a truthy
+  // object that defeats the `??` fallback, so every plain launch got
+  // `width/height/x/y === undefined` and Electron's 800x600 default instead of
+  // the persisted state.
+  const replaceWindow = options.replaceWindow;
+  const replacementState =
+    replaceWindow && !replaceWindow.isDestroyed()
+      ? { ...replaceWindow.getBounds(), isMaximized: replaceWindow.isMaximized() }
+      : null;
   const state = replacementState ?? loadWindowState();
 
   const isMac = process.platform === 'darwin';
@@ -183,10 +187,45 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
     win.maximize();
   }
 
-  win.once('ready-to-show', () => {
+  let hasShown = false;
+  let showFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const showWindow = (trigger: 'ready-to-show' | 'did-finish-load' | 'timeout') => {
+    if (hasShown || win.isDestroyed()) return;
+
+    hasShown = true;
+    if (showFallbackTimer) {
+      clearTimeout(showFallbackTimer);
+    }
+
+    if (trigger !== 'ready-to-show') {
+      // console.error, not warn/log: electron-log silences lower levels when
+      // logging is disabled (the default), which would hide the one line that
+      // tells us `ready-to-show` never fired — the exact failure this guards.
+      console.error(`[window] Showing main window via ${trigger} fallback`);
+    }
+
     win.show();
     if (options.replaceWindow) {
       forceReplaceClose(options.replaceWindow);
+    }
+  };
+
+  win.once('ready-to-show', () => {
+    showWindow('ready-to-show');
+  });
+
+  win.webContents.once('did-finish-load', () => {
+    showWindow('did-finish-load');
+  });
+
+  showFallbackTimer = setTimeout(() => {
+    showWindow('timeout');
+  }, 5000);
+
+  win.once('closed', () => {
+    if (showFallbackTimer) {
+      clearTimeout(showFallbackTimer);
     }
   });
 
