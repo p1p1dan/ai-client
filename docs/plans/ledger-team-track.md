@@ -10,6 +10,23 @@
 
 ## 任务状态
 
+> ⛔ **2026-07-28 起本表冻结为「2026-07-24 时点快照」，不再反映任务定义，任务名 / 范围 / 依赖一律以[执行计划](./2026-07-23-openchamber-chat-refactor-execution-plan.md) §3 为准**（本表为 append-only 过程档案，就地改写会毁掉「同事交接时看到的是什么」这一档案价值；再抄一份定义只会产生第四份漂移副本——正是本轮要消灭的缺陷）。
+>
+> 已失效的行（读到下表时请直接跳转执行计划 §3，勿按本表口径开工）：
+>
+> | 本表旧写法 | 2026-07-28 现行口径（执行计划 §3） | 依据 |
+> |---|---|---|
+> | T-05 Tool Card 增强 + Question 卡 | **Tool 行 + Question 卡（照 OpenChamber 形态）**——撤销「带边框卡片 + 状态徽章 + 按行数截断 + 展开全部」，改无边框单行 + `ml-2 pl-3` 竖线展开体 | D18 / D20 |
+> | T-12 右栏 Git 面板 | **git surface**（迁入 ContextPanel，不再是右栏 tab），依赖 T-22 | D19 |
+> | T-13 右栏 Files 面板 | **editor surface**（并**解冻**，此前因布局未定冻结），依赖 T-22 | D19 |
+> | T-14 右栏 Context 面板 | **context surface**，依赖 T-22 | D19 |
+> | T-15 Terminal Dock 接真终端 | **终端 surface**（底部 Dock 废弃，`BottomDock.tsx` 随 T-22 删除；参考实现无「有内容」信号源，故**无圆点**） | D19 |
+> | T-16 依赖「T-12~15 后」 | 依赖 **T-12~T-15 + T-24**（T-24 为阻断级、优先于 T-16）；前置条件已查明＝两处强制覆盖须同时改 | 2026-07-28 查明 |
+>
+> 下表**完全没有**的新任务（同日立项，全部见执行计划 §3）：**T-21** Flexoki 主题 + 全等宽字体栈（D18，依赖 A05）· **T-22** 壳结构改造：三列 + 44px 导轨 + surface 模型（D19，依赖 A01）· **T-23** 存量违规清理：死按钮 + 假 usage 环（依赖 A06）· **T-24** 新壳「添加仓库」通路（**阻断级**，无依赖）· **T-25** 旧模块原色硬编码清理（后置，依赖 T-21）。
+>
+> 当前推进状态与顺序看 [plantree](../plantree/plans/openchamber-chat-refactor/implementation-status.md)；决策原文看[总台账](./openchamber-chat-refactor-ledger.md) D18~D20。
+
 | ID | 任务 | 状态 | 认领人 | 备注 |
 |---|---|---|---|---|
 | T-01 | 真实 Project/Workspace 数据树 | ✅ | Cursor | 实现 `a01712a`；GUI pwd 验收通过 `2026-07-24` |
@@ -70,6 +87,7 @@
 | 2026-07-24 | T-03 Resume UI + 历史时间线（实现） | 🟡 待 GUI 联调 | Fable 认领（C-06 ✅ `db41f63` 解锁）。红线 `chatSessions.ts` 已 C-06 内置 `session.history` 事件处理（h: 前缀幂等替换灌入时间线 + runtime 不动 + per-session historyErrors），T-03 团队侧只补"用户动作入口 + 决策"。`chat/sessionIndex/resumeIntent.ts` 纯函数 `shouldResumeSession`（runtimeIdentity 缺则不 resume、busy 默认拒、persisted runtimeIdentity 兜底）+ `resumeDisplayTitle`（firstMessage truncate 60）；`__tests__/resumeIntent.test.ts` 11 单测覆盖无 session/workspace/runtimeIdentity/persisted fallback/idle+model/skipBusy 各状态/manual override/显式 title 占位词跳过/firstMessage 截断与不截断。`useResumeSession` hook 调 `chat.resumeSession({sessionId, runtimeIdentity, workspacePath, model})`，成功后切 activeSessionId。`LeftNav` 加 `handleSelectSession` 包装：select 时若存在 runtimeIdentity 且 timeline 还无消息（!hasTimeline）则自动 resume 重放历史。三绿：typecheck、biome（改 4 文件）、vitest 203 绿（+11 无回归）。GUI 待联调：选一条历史 SessionId → timeline 出现 h: 前缀历史消息（user+assistant），后续 send 不丢历史。 |
 | 2026-07-24 | T-04 Thinking 折叠卡 UI（实现） | 🟡 待 GUI 联调 | Fable 认领（C-05 ✅ `8449e88` 解锁：`capabilities.thinking=true`、thinking 块入 store、`thinking.started/delta` 已处理）。红线 `chatSessions.ts` 不动；团队侧只补"渲染 + 能力闸 + 在途/完成态切分"。`chat/thinkingCard.ts` 纯函数 `deriveThinkingCard`（thinking 为 message 最后一块 且 turn 活跃 → `streaming`，否则 `done`；非 thinking 块 / 越界 → null）+ `isTurnActive`（running/starting 为活，其他为回合结束）+ `isThinkingCapable`（`capabilities?.thinking !== false`，覆盖 undefined/缺失/true 均视为可渲染——C-05 default on 口径）。`__tests__/thinkingCard.test.ts` 21 单测覆盖非 thinking 块/越界/最后块+活跃/最后块+空闲/后续块抵达/文本累积/空前缀兜底 + `isTurnActive` 9 状态 + `isThinkingCapable` 4 能力状态。`MessageTimeline.tsx` `BlockRenderer` 加 `case 'thinking'`：thinkingEnabled=false 直接 return null（不渲染、不留入口、无残留）；true 时走 `Collapsible` 折叠卡——streaming 显示 amber 脉冲点 + "Thinking" 标签 + 末尾 80 字预览；done 用 `ChevronRight` 旋转 + "Thought process" 标题，单击展开正文（`whitespace-pre-wrap` pre）。`ChatWorkspace.tsx` 接线：`useHostStatus` 输出 `hostStatus.capabilities` → `isThinkingCapable` → `thinkingEnabled` prop 传 `MessageTimeline`。`hostStatus.ts` 扩展：`HostStatus` 增 `capabilities?: {thinking?: boolean}`；`reduceHostStatus` 在 `host.ready` 里吸收 `capabilities.thinking`（布尔守卫，非布尔时保留 undefined 语义——default on）；`useHostStatus` 无改动（reducer 透传）。`hostStatus.test.ts` +4 测试覆盖 true/false/undefined/未持 flag 四种能力态。三绿：typecheck、biome（改 6 文件全绿，biome --write 修了行内换行）、vitest 238 绿（+35 含 21 thinkingCard + 4 hostStatus + 既有全保留）。GUI 待联调：capability=true 时发 prompt → 回合中见 amber 脉冲点 + "Thinking" 折叠；回合后脉冲消失、可单击展开看 thinking 正文；老 Host 无 capabilities 也按 default on 渲染（与 C-05 一致）。若后续 Host 显式 capabilities.thinking=false，入口应完全消失（机制：BlockRenderer `if (!thinkingEnabled) return null`）。 |
 | 2026-07-24 | T-07 Composer @ 文件引用（实现） | 🟡 待 GUI 联调 | Fable 认领（无依赖）。任务说明明确"不做拖拽/图片/IPC 附件协议"——CC 原生识别 `@path` 纯文本，团队侧只补"@ 触发 + 文件搜索 popup + chip 预览 + 纯文本拼接"。`chat/fileMention.ts` 纯函数：`extractMentionQuery`（回溯找未被空白/换行/行首前导的 `@`，取其后到 cursor 的 query——mid-token `a@foo` 不算开 mention）；`replaceMention`（找最近的合法 `@`，把 `@<query>` 替换为 `@<relativePath>`，cursor 后已为空白/换行时不重复补尾随空格，文末或后续是普通字符则补一个空格断词——避免双空格但不黏字）；`parseMentionChips`（按一致规则扫整段文本，给 chip row 预览用）。`__tests__/fileMention.test.ts` 28 单测：extractMentionQuery 10（含 mid-token / 跨换行 / 段落首 / 文末）+ replaceMention 10（含双空格避免 / 文末补空格 / 裸 @ 替换 / mid-token 不算开 token / 绝对路径归一）+ parseMentionChips 8（含 @首/多 chip/换行分隔/嵌入中点/token 空）。`ChatComposer.tsx` 接线：`textareaRef` + `composingRef`（IME 合成期跳过 mention 检测，与 EnhancedInput 同套路）；`handleContentChange` 延迟到 React 提交后再读 `selectionStart`；`useEffect` 150ms 防抖调 `window.electronAPI.search.files({rootPath: cwd, query, maxResults: 10})`，cwd 缺失或 mention 关闭时清空结果；`insertMention` 用 `replaceMention` 改写 textarea 文本 + 把光标移到新位置；键盘导航 popup 开时拦截 ArrowUp/Down/Enter/Esc（Enter 替换为插入选中项，不再触发 Send）；popup UI（绝对定位 bottom-full，与 EnhancedInput 视觉一致：fileName 主标 + dirPart 次标 + ↑↓/Enter/Esc 提示行）；chip row：textarea 下方按 mentionChips 渲染 `border-primary/30 bg-primary/10` 圆角 chip，提示用户已引用哪些路径。三绿：typecheck 干净、biome（改 3 文件全绿，biome --write 修了行内换行）、vitest 344 绿（+28 + 既有全保留，无回归）。GUI 待联调：在 Composer 输入 `@read` → 150ms 后见 popup 列出 cwd 下文件名含 read 的项 → ↑↓ 选 / Enter 插入；textarea 下方见 chip；纯文本含 `@docs/readme.md ` 发送后 CC 应能读到该文件内容。 |
+| 2026-07-28 | **任务定义变更通知（D18/D19/D20 落库连带）**：T-05 口径整体重写、T-12~T-15 重定义为 surface、T-16 依赖补 T-24、新增 T-21~T-25 —— 见上方「任务状态」表头的冻结声明与对照表 | ⚠️ 通知 | 本表按 append-only 保持 2026-07-24 快照不改写，定义权威转[执行计划](./2026-07-23-openchamber-chat-refactor-execution-plan.md) §3；决策原文见[总台账](./openchamber-chat-refactor-ledger.md) D18~D20。无代码变更 |
 
 ## 给同事的快速上手（历史背景留档；双轨已合一，现行阅读路径见 plantree）
 

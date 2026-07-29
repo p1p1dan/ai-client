@@ -2,21 +2,48 @@
 
 > 短操作交接。历史证据勿堆此处，进台账档案。
 
-- **Current Phase**: Phase 3 Chat MVP 收口（2026-07-24 双轨合一，单线推进）
-- **Last Landed**: 2026-07-28 GUI 首测暴露链五连修——**多轮上下文继承** `eea2f25` · **demo 机器路径解绑** `0bd70d5` · **Host stderr 可观测性 + win32 守卫** `da9a5da` · **open-path 拉取握手 + 单实例门** `9331d51` · **dev.js argv 透传 + enso 归档名** `576f3bd`（明细见主线台账 2026-07-28 六行）
+- **Current Phase**: **Phase 0A 基线部分补做（A01 / A05 / A06）→ 观感对齐改造**（2026-07-28 转向）。这三项产品设计基线此前只在可行性文档的候选任务池、从未进执行计划或台账，而下游 F05/H01/H09 已按它们施工——这是「观感不到位 + 死按钮泛滥 + 布局反复卡壳」的同一根因，本日补做并落库（D18 / D19 / D20）。⚠️ **Phase 0A 整体仍 🟡 未收口**：A02 / A03 / A04 仍未立项，且已交付的 A06 依赖列写的正是「A01、A02」（口径以总台账 Phase 总览 0A 行为准）。Phase 3 Chat MVP 的剩余点测与网关阻塞并行不变。
+- **Last Landed**:
+  - 文档（2026-07-28）：**A01 / A05 / A06 基线补登交付**，产物统一为 [`docs/design/phase0a-openchamber-alignment.html`](../../../design/phase0a-openchamber-alignment.html)（用户已验收）；三条裁定落库 **[D18](../../../plans/openchamber-chat-refactor-ledger.md)（视觉，撤销 D6）/ D19（布局骨架，撤销 D15）/ D20（问答归宿，偏离登记）**。
+  - 代码（2026-07-28）：GUI 首测暴露链五连修——**多轮上下文继承** `eea2f25` · **demo 机器路径解绑** `0bd70d5` · **Host stderr 可观测性 + win32 守卫** `da9a5da` · **open-path 拉取握手 + 单实例门** `9331d51` · **dev.js argv 透传 + enso 归档名** `576f3bd`（明细见主线台账 2026-07-28 六行）
+  - 代码（2026-07-29）：**窗口链** `d68d3c6` · **凭证隔离** `b18ccac` —— **「不出窗口」故障闭环**——同事的 show 兜底复核有效（本机实际生效路径 = `did-finish-load`，`ready-to-show` 从不触发），**原故障报告根因判错已更正**；连带修 `MainWindow.ts` 窗口状态从未恢复的既有 bug + 兜底日志被 electron-log 静音；顺带修 `McpSection.tsx` 嵌套 `<button>`。**dev 态凭证隔离**——`scripts/dev.js` 读 `dev.env` 剥离/注入/隔离，裸启动不再回落开发者本机 `~/.claude` 登录。明细见主线台账 2026-07-29 两行
 - **Last Verified**: 2026-07-28 Linux 三绿——typecheck 干净 / lint 609 文件 0 诊断 / vitest **51 文件 590 例**（3 失败=Windows-only 基线）
-- **Next Target**: 用户继续 GUI 点测（**多轮上下文**是新增必测项：连发两条验证第二条记得第一条）；**T-04 卡在网关**（见下）；T-05 仍是唯一剩余纯开发项（开工前需用户定交互口径）
+  - **2026-07-29 复核（`d68d3c6` / `b18ccac` / T-21 `b38017b` 合并态）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。**例数未增 = 本轮未补测试**，`dev.js` 凭证逻辑目前零自动化断言（见 open-q **#14**）。
+  - **T-21 复核口径（2026-07-28 审查回合，代码已于 2026-07-29 提交 `b38017b`）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。
+    lint 文件数从 613 涨到 615 是**新增文件**所致（`docs/design/phase0a-openchamber-alignment.html` 基线产物 + `src/renderer/lib/__tests__/ghosttyTheme.test.ts`），**`biome.json` 未改**——
+    施工中一度加过 `"!docs/design"` 排除项来绕开该 HTML 的 13 条诊断，这违反「不得改 lint 配置变绿」，已撤销：改为就地修（9 条 `useArrowFunction` 自动修 + 2 条 `noImportantStyles`、2 条 `noUnknownProperty` 加带理由的 `biome-ignore`，后者是 `corner-shape` 这个 Biome 尚无定义的 CSS Backgrounds 4 属性）。
+- **Next Target**: 落库收尾 → **T-24**（新壳「添加仓库」通路，**阻断级，先于 T-21/T-22**）→ **T-21**（Flexoki 主题 + 全等宽字体栈）→ **T-22**（三列 + 44px 导轨壳结构，废 BottomDock）→ **T-05 重做**（工具行/问答卡新口径）→ **T-23**（存量违规清理）。用户侧 GUI 点测（含**多轮上下文**必测项）与 **T-04 网关阻塞**并行。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
 > `powershell.exe`）、`CliDetector.test.ts` 1 例（cmd fallback）。**Linux 上的三绿口径 =
 > typecheck 干净 / lint 0 诊断 / test 只剩这 3 个失败且总例数只增不减**；Windows 上仍应全绿。
 > **Linux 机每次 `pnpm install` 后必须两步复原**（否则 app 起不来、T-07 集成 6 例红）：
-> ① `npm_config_https_proxy=<可用代理> npx electron-builder install-app-deps`（重建 sqlite3 等
-> Electron ABI；`~/.npmrc` 里的 `127.0.0.1:7890` 是死代理必须覆盖）；② 把
+> ① `npx electron-builder install-app-deps`（重建 sqlite3 等 Electron ABI）；② 把
 > `src/agent-host/node_modules/@cometix/claude-code/vendor/ripgrep/x64-linux/rg` 拷进
 > `node_modules/@vscode/ripgrep/bin/rg`（postinstall 被 GitHub 403 挡）。下载类脚本另需
 > `NODE_USE_ENV_PROXY=1`。联调命令见 [baseline 门禁](../../baseline/test-and-release-gates.md)。
+> **2026-07-29 更正**：第 ① 步原写「必须用可用代理覆盖 `~/.npmrc` 里的 `127.0.0.1:7890`」——
+> **实测不需要代理**，Electron 39.2.7 头文件本就缓存在 `~/.electron-gyp/39.2.7`，直接跑即可。
+>
+> ⚠️ **GUI 启动口径（2026-07-29 变更）**：一律 `node scripts/dev.js`，**不要用 `pnpm dev`**——
+> pnpm 10 的 `verifyDepsBeforeRun` 会在跑脚本前重装依赖，冲掉上面两步复原的成果。
+> 凭证改由仓库根 **`dev.env`**（gitignore，模板 `dev.env.example`）在启动期注入，dev.js 会剥离
+> shell 继承的全部 `ANTHROPIC_*` 并把 `CLAUDE_CONFIG_DIR` 指向隔离目录；**缺文件直接拒绝启动**。
+> 这取代了原先手工 `CLAUDE_CONFIG_DIR=... ` 的做法；`pnpm prepare:test-config` 仍可用但不再是主路径。
+> 覆盖面缺口（打包版 / preview 不经 dev.js）见 open-q **#14**。
+
+## 2026-07-28 观感对齐转向（摘要，正文见台账）
+
+| 编号 | 一行摘要 | 去向 |
+|---|---|---|
+| **D18**（撤销 D6） | 对齐 OpenChamber 观感 = Flexoki 主题 + 全等宽字体 + 卡片形态三者一并对齐 | 代码落地 **T-21**；风险 open-q **#10 / #11 / #12** |
+| **D19**（撤销 D15） | 三列 + 44px 图标导轨 + surface 模型，**废弃底部面板** | 壳改造 **T-22**；连带 T-12/T-13/T-14/T-15 重定义 |
+| **D20** | 问答卡保留「就地冻结」，不照搬 OpenChamber「回答后消失」——登记为偏离 | 解除前置 **C-17**（后置） |
+| **A01 / A05 / A06** | 三项设计基线补登并交付，产物统一为对齐基线 HTML（**A02 / A03 / A04 未立项，Phase 0A 整体仍 🟡**） | 违规清理 **T-23**；新壳添加仓库 **T-24**（阻断级） |
+
+决策原文与依据一律看[总台账](../../../plans/openchamber-chat-refactor-ledger.md) D18~D20，本树不复制。
+架构改口见 ARD 十二节（清单见 [ARD 修订头](../../../plans/2026-07-23-openchamber-chat-refactor-ard.md)，2026-07-28 复验轮更正：原写七节已过期）。
 
 ## #8 结论（2026-07-27）
 
@@ -39,13 +66,32 @@
 | T-06 元数据/重试 | ⬜ 未测 | 唯一完全未碰的任务，不受上述 bug 影响，可直接补测 |
 | T-07 `@` 引用 | ✅ Done | P0 反斜杠已修并复验通过；三项补强（目录 / 隐藏文件 / 截断提示）+ 同分定序已于 2026-07-27 `0f886a8` 落地，等 GUI 点验 |
 
-Tool 卡不折叠 = T-05 未开发，**非 bug**。
+Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07-28 整体重写：工具行改为**无边框无徽章单行**，见下）。
 
 ## Active TODO
 
+> 2026-07-28 重排：开发线按「落库 → **添加仓库通路（阻断级）** → 主题 → 壳结构 → 工具行/问答卡 → 违规清理」推进；
+> 原第 0~2 项及其后的待拍板项并行不变，移入下方「用户线」。
+> **顺序权威 = [执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) §3**（起步顺序 + §8 风险 9：「T-24 是阻断级缺口，**不排进 Phase 4 尾巴**」）。
+> 执行计划全序：**T-24 → T-21 → T-22 → T-05 → T-12/T-13/T-14/T-15 → T-23（与 surface 并行）→ T-16 → T-25**；本表顺序不得晚于该口径。
+> **开发线各项的任务定义、数值与 `file:line` 只存在于执行计划 §3 任务表**，此处只留「ID + 一行目标 + 链接」（用户线的点验步骤不受此限）。
+
+### 开发线（按序）
+
+1. **落库收尾（进行中）**：ARD（十二节连带改口，清单见 [ARD 修订头](../../../plans/2026-07-23-openchamber-chat-refactor-ard.md)）+ 总台账 D18~D20 + 执行计划任务表（T-05 重写、T-12~T-16 重定义、新增 T-21~T-25 / C-17）+ 本树四文件。落完才动代码。
+2. **T-24 新壳「添加仓库」通路**（阻断级，先于 T-21/T-22）：补新壳入口 + 把窗口拖放 ref 绑到新壳，解开「新机器只能靠 `--open-path` argv 注册」的死结；**优先级高于 T-16**。→ 执行计划 §3 T-24 行
+3. **T-21 Flexoki 主题 + 全等宽字体栈**（A05 代码化，D18）：`globals.css` 语义 token 重写 + 四个新 token + `docs/design-system.md` 同步改写（该文件是 `CLAUDE.md` 定的 UI 强制规范，不改就与 D18 对撞）；原色硬编码清理**只覆盖新壳 chat / workspace-shell 两个目录**（**不是全仓唯一**，旧模块归后置的 T-25）。**开工前先结 open-q #11**（根字号 14→16），验收含中英混排实测截图（#10）；终端与 Monaco 边界外（#12）。→ 执行计划 §3 T-21 行
+4. **T-22 壳结构改造**（D19）：三列 + 44px 导轨 + surface 注册表，**删除 `BottomDock.tsx`**；布局与 surface 选择逻辑下沉纯函数。→ 执行计划 §3 T-22 行
+5. **T-05 重做**（口径 2026-07-28 整体重写，原口径作废）：无边框单行工具行 + 就地冻结问答卡（D20）；**store 侧冻结已实现**（含 5 例幂等测试），本任务只补 UI。原「开工前需用户定交互口径」已由本次拍板收口，不再阻塞。→ 执行计划 §3 T-05 行
+6. **T-23 存量违规清理**（A06 矩阵产出）：死按钮与假 usage 环逐项接线，或 `disabled` + Tooltip 明写状态。→ 执行计划 §3 T-23 行
+
+> T-25（旧模块原色硬编码清理，依赖 T-21）与 T-16 同属**后置**，不列入本开发线队列，归类以 [roadmap Deferred](./roadmap.md) 为准（2026-07-28 复验轮更正：此前误列为开发线第 7 项，与 roadmap 的 Deferred 归类相矛盾）。
+
+### 用户线（点测 / 待拍板，与开发线并行）
+
 0. **多轮上下文回归点测（2026-07-28 新增，最优先）**：同一会话连发两条（如「我最喜欢的数字是 47」→「我最喜欢的数字是几？」），第二条必须记得第一条；newapi 面板应显示同一会话续接而非每条新建缓存。修复 `eea2f25`。
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
-   [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（`pnpm prepare:test-config` 按机生成，勿硬编码路径）
+   [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
    - **T-04 thinking 卡**：🔴 **当前无法点验**——卡在网关（sonnet 空文本 / 默认模型 400，见上表）。网关侧修复后再测；仍须在**新发起轮次**验证（旧 fixture 的 153 个 thinking 块文本为空，不可追溯）。
    - **T-07 补强**：`@` 输入 `src/` 应见目录条目（黄色文件夹图标 + 尾随 `/`）；输入 `git` 应见 `.gitignore` 等隐藏文件；输入 `chat` 右下角应显示 `10/319`。
    - **T-20 Effort 选择器**：Composer 右下角 ModelSelect 旁应见新的档位下拉（默认显示 `Default`）。选 `X-High` 后重启应仍保持；**`Default` 与 `High` 是不同选项**——前者不下发 `effort`、保持模型默认。
@@ -59,11 +105,10 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**。
      ⑥ **jpeg / gif / webp 至今未过网关实测**（自动化只验了 PNG 与 text/plain），请各发一张确认；
      ⑦ 失败后 chip 保留且 Retry 带着附件重发；健康会话里粘图**不应**出现 Retry 按钮。
 2. **T-06 补测**（网关已恢复，元数据行 / 红色 Stop / 失败卡 + Retry 无重影）
-3. **T-05 开发**（工具卡 + Question 卡）——**开工前需用户定交互口径**：默认折叠？input/output 截断阈值？路径点击是开编辑器还是定位文件树？
-5. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
-6. C-15 体积 141MB（+21MB）可接受性——等用户拍板
-7. T-19 消息队列提案——等用户落库
-8. **给主线的需求（T-03 / T-18 / 07-28 衍生，共 8 条）**：① `session.history` 的 `truncated` / `omittedCount` 全链路无展示；② **用户气泡不回显附件**——`beginTurn` 只 emit 文字，用户发完图后时间线上没有任何证据表明图发出去了（Renderer 无法自救）；③ 看门狗把整个上传窗口计入 stall，是未来提高附件上限的硬天花板；④ 协议可选加 `document`(PDF)；⑤ store 的 `sendMessage(text, attachments?)` 无人调用、无覆盖，与 Composer 的 `runSend` 双路径漂移；⑥ **`session.create` 应校验 workspacePath 存在性**（坏路径现在 created+idle、到 send 才泛化报错）；⑦ **resume 重放与存活 live 时间线会视觉双份**（h:* 整段排在 live 前，Host 中途重启场景）；⑧ thinking 空块（带签名无文本）要不要渲染「已思考」指示——待用户拍板。详见[主线台账](../../../plans/ledger-claude-mainline.md) 07-27/07-28 各行。
+3. T-10 打包版点验（用户，[清单](../../../plans/t10-packaged-gui-checklist.md)）→ **CP2 汇报**
+4. C-15 体积 141MB（+21MB）可接受性——等用户拍板
+5. T-19 消息队列提案——等用户落库
+6. **给主线的需求（T-03 / T-18 / 07-28 衍生，共 8 条）**：① `session.history` 的 `truncated` / `omittedCount` 全链路无展示；② **用户气泡不回显附件**——`beginTurn` 只 emit 文字，用户发完图后时间线上没有任何证据表明图发出去了（Renderer 无法自救）；③ 看门狗把整个上传窗口计入 stall，是未来提高附件上限的硬天花板；④ 协议可选加 `document`(PDF)；⑤ store 的 `sendMessage(text, attachments?)` 无人调用、无覆盖，与 Composer 的 `runSend` 双路径漂移；⑥ **`session.create` 应校验 workspacePath 存在性**（坏路径现在 created+idle、到 send 才泛化报错）；⑦ **resume 重放与存活 live 时间线会视觉双份**（h:* 整段排在 live 前，Host 中途重启场景）；⑧ thinking 空块（带签名无文本）要不要渲染「已思考」指示——待用户拍板。详见[主线台账](../../../plans/ledger-claude-mainline.md) 07-27/07-28 各行。
 
 ## Blocked By
 
@@ -72,9 +117,11 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**。
 
 ## Handoff Notes
 
+- **观感对齐的唯一基线（2026-07-28 新增）**：[`docs/design/phase0a-openchamber-alignment.html`](../../../design/phase0a-openchamber-alignment.html)（A01 / A05 / A06 统一产物，用户已验收）。颜色、字体、区域尺寸、工具行与问答卡形态一律以它为准，**业务组件不得自行发明视觉值**；与其冲突时先回台账 D18 / D19 核对，不要就地拍脑袋改。
 - 提交习惯：pathspec 提交保留（非强制）；三绿后再提交；台账先行、状态文件随后。
 - 联调 fixture：测试配置 `projects/` 下播了 3 条真实 CLI 会话，索引条目在 `%APPDATA%/jyw-ai-client-dev/session-index.json`（备份 `.bak-before-seed`）。会话列表**只读索引、不扫 JSONL**——播 fixture 必须同时补索引条目。
 - 同事交接词两处过时勿信：「biome CRLF 行尾债」（C-09 后 lint 0 诊断）、「T-05 Question 等 C-04」（C-04 已 ✅）。
 - **`ui/alert.tsx` 的 variant 是 `error` / `warning` / `info` / `success` / `default`，没有 `destructive`**（那个只存在于 button.tsx 与 badge.tsx）。写「借鉴 destructive 错误条」的交接词时要注意这一点，照字面写会编译不过。
 - **UI 逻辑一律下沉纯函数**：vitest 是 `node` 环境且 include 只收 `.ts`，`.tsx` 里的逻辑零覆盖。现成范式 `hostStatus.ts` / `fileMention.ts` / `sessionEffortStore.ts` / `historyError.ts` / `sendPreamble.ts` / `hostStderr.ts`。
-- **新机器首启注册仓库**：OpenChamber 壳内无添加仓库 UI（`SKIP_ONBOARDING_GATE=true` 强制且旧壳不可达，见 open-questions #9）。用 `pnpm dev -- --open-path=<仓库绝对路径>`（`576f3bd` 起 dev.js 透传 argv；`9331d51` 起首启拉取握手保证不丢）。
+- **新机器首启注册仓库**：OpenChamber 壳内**仍**无添加仓库 UI（`SKIP_ONBOARDING_GATE=true` 硬编码 + 两处覆盖使旧壳不可达）。当前唯一通路：`pnpm dev -- --open-path=<仓库绝对路径>`（`576f3bd` 起 dev.js 透传 argv；`9331d51` 起首启拉取握手保证不丢）。**2026-07-28 起归 T-24（阻断级）+ T-16 处理，open-questions #9 已关闭**；T-16 要拆的是 `App.tsx:450` 与 `Root.tsx:52-59` 两处强制覆盖，`devFlags.ts:10` 是两者的**共同开关**——翻 `false` 能一并解除，但会连带恢复 onboarding 闸门，故**不作为达成手段**（验证时保持 `true`）。口径以[执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) §3 T-16 行为准。
+- **T-05 / 布局类交接词已整体过期（2026-07-28）**：凡提到「带边框工具卡 + 状态徽章」「按行数截断 + 展开全部」「四区壳」「底部终端 Dock」「右栏三 tab」的旧描述一律作废，以 D18 / D19 / D20 与对齐基线 HTML 为准。（例外：[baseline/module-map](../../baseline/module-map.md) 里的四区表述是**代码现状**，已就地标注 D19 改造去向，不属过期交接词。）

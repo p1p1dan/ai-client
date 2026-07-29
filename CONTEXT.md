@@ -17,12 +17,19 @@
 - **Worktree**：git worktree。在本重构中保留为 `Workspace` 的一种类型（`Workspace.kind = worktree`），不再作为整个产品的唯一顶层主角。是 AiClient 的招牌能力，不放弃。
 - **Session**：绑定在某个 `Workspace` 上的 Claude 对话。一个 Workspace 可有多个 Session。
 
+## 工作台布局（2026-07-28 D19 起）
+
+- **surface**：可挂进 `ContextPanel` 的一类工作面（OpenChamber `lib/surfaces/registry.ts` 注册 11 种：`editor / git / pr / diff / terminal / plan / notes / context / browser / preview / chat`）。同一时刻只显示一种，可提升为覆盖 Main 的全视图。**终端是一种 surface，不是底部面板。**
+- **ContextPanel**：三列布局中的右列，surface 的容器。宽度 min 380 / max 1400，默认宽度按 surface 类型取可用宽度比例；收起时列宽 0。
+- **ContextPanelRail（导轨 / Rail）**：最右侧固定 44px（OpenChamber `w-11`）的图标竖条，用于单选切换 surface；图标可拖拽排序。**参考实现里只有 `git` surface 在有变更文件时于图标右上角亮 6px 圆点**（`var(--status-info)`），其余 surface 未做内容指示。
+- **阅读栏**：中列 Chat 的内容宽度约束，消息时间线与 Composer 共用一条：`width: min(100%, 48rem)` 居中，宽模式 64rem。
+
 ## 视觉与主题（两层，勿混淆）
 
-- **Ghostty 主题**：AiClient 现有的终端主题源格式（INI 风格，16 ANSI 调色板 + bg/fg/cursor）。`resources/ghostty-themes/` 带 438 个社区主题，`scripts/generate-themes.ts` 解析为 `terminal-themes.json`，驱动 xterm.js 终端 + Monaco 编辑器配色。终端调色板导向。
-- **Flexoki**：Steph Ango（kepano）的完整 UI 语义色板（primary/surface/interactive/status/pr/syntax/markdown/chat/tools），暖中性低对比，橙 `#DA702C`/bg `#171515`/border `#343331`/fg `#CECDC3`。OpenChamber 30 套主题对之一，作为默认/旗舰。应用壳语义导向。
-- **应用壳语义 token**：`globals.css` 里的 OKLCH CSS 变量（`text-primary`/`bg-accent`/`text-muted-foreground` 等），驱动整个 UI 外壳。与 Ghostty 主题是两层，解耦。
-- **对齐 OpenChamber** = 对齐其 **UI 架构与布局**（四区结构、Project/Workspace/Session 导航、对话时间线/卡片/Composer 交互结构），**非色调风格严格一致**。色调沿用 AiClient 现有 OKLCH 设计系统；Flexoki 仅作可选后续主题。
+- **Ghostty 主题**：AiClient 现有的终端主题源格式（INI 风格，16 ANSI 调色板 + bg/fg/cursor）。`resources/ghostty-themes/` 带 438 个社区主题，`scripts/generate-themes.ts` 解析为 `terminal-themes.json`，驱动 xterm.js 终端 + Monaco 编辑器配色。终端调色板导向。**是否随 D18 一并 Flexoki 化尚未裁定（plantree open-questions #12），裁定前原样不动。**
+- **Flexoki**：Steph Ango（kepano）的完整 UI 语义色板（primary/surface/interactive/status/pr/syntax/markdown/chat/tools），暖中性低对比。亮 bg `#fffdf4` / fg `#100F0F` / primary `#BC5215`；暗 bg `#171515` / fg `#CECDC3` / border `#343331` / primary `#DA702C`。OpenChamber 的默认主题；**自 D18 起是 AiClient 应用壳的 MVP 硬性目标，不再是可选后续主题**。应用壳语义导向。
+- **应用壳语义 token**：`globals.css` 里的 OKLCH CSS 变量（`text-primary`/`bg-accent`/`text-muted-foreground` 等），驱动整个 UI 外壳。与 Ghostty 主题是两层，解耦；两层的边界（Monaco 是否继续跟随 Ghostty）待 open-questions #12 收口。
+- **对齐 OpenChamber** = 对齐其 **UI 架构 + 布局 + 观感**三者（2026-07-28 D18 / D19 口径；原「只对齐架构与布局、非色调风格严格一致、Flexoki 仅作可选后续主题」的 D6 口径已撤销）。具体含：三列 + 44px 图标导轨、**无底部面板**的 surface 模型；Project/Workspace/Session 导航；对话时间线/工具行/问答卡/Composer 交互结构；**以及 Flexoki Light/Dark 主题与全等宽字体**（sans / mono / heading 统一 `ui-monospace`）。
 
 ## 数据层（命名对照，避免混淆）
 

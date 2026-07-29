@@ -4,7 +4,9 @@
 
 ## Scope
 
-旧 AgentPanel 终端式聊天 → 四区 Workspace Shell 气泡对话（仅 Claude 进气泡，其他 Agent 暂留终端模式）。里程碑 M1 打包链 ~ M5 收口，见执行计划。
+旧 AgentPanel 终端式聊天 → **三列 + 44px 导轨** Workspace Shell 气泡对话（仅 Claude 进气泡，其他 Agent 暂留终端模式）。里程碑 M1 打包链 ~ M5 收口，见执行计划。
+
+> **2026-07-28 口径变更**：原「四区 Workspace Shell」已被 **D19** 撤销（改为三列 + 导轨 + surface 模型，**无底部面板**）；同时 **D18** 把对齐范围从「仅架构与布局」扩到**观感**（Flexoki 主题 + 全等宽字体 + 卡片形态）。原文见总台账 D18 / D19 / D20，本树不复制。
 
 ## 文件地图与阅读路径
 
@@ -18,11 +20,13 @@
 
 1. [ARD](../../../plans/2026-07-23-openchamber-chat-refactor-ard.md) — 架构权威
 2. [执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) — 任务定义、验收标准、协议变更纪律、**测试凭证（§4）**
-3. [总台账](../../../plans/openchamber-chat-refactor-ledger.md) — 已拍板决策 **D1~D17**、里程碑检查点（CP-x）
+3. [总台账](../../../plans/openchamber-chat-refactor-ledger.md) — 已拍板决策 **D1~D20（含历史空号 D4/D5/D7/D13，实为 16 行，以总台账决策表为准）**（2026-07-28 新增 D18/D19/D20；D6 被 D18 撤销、D15 被 D19 撤销，被撤销行按 append-only 原样保留）、里程碑检查点（CP-x）
 4. 过程记录档案：[主线台账](../../../plans/ledger-claude-mainline.md)（C-xx）/ [团队台账](../../../plans/ledger-team-track.md)（T-xx，已移交）
 5. 本计划三文件 — 当前活动状态唯一视图
 
 专项文档：[session.history 协议](../../../plans/2026-07-24-c06-session-history-protocol-draft.md)（CP4 定稿=T-03 契约）· [T-10 点验清单](../../../plans/t10-packaged-gui-checklist.md) · [Phase 0 报告](../../../plans/phase0-report.md)
+
+**观感对齐基线**：[`docs/design/phase0a-openchamber-alignment.html`](../../../design/phase0a-openchamber-alignment.html) —— A01 / A05 / A06 的统一产物（2026-07-28 用户已验收）。视觉 token、三列 + 导轨骨架、工具行与问答卡形态**以它为唯一基线**，业务组件不得自行发明视觉值。
 
 ## 维护惯例
 

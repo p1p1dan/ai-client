@@ -1,0 +1,1604 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenChamber 观感对齐 · Phase 0A 基线</title>
+
+<style>
+/* 最小 reset —— 本地直开时不依赖任何平台注入 */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+h1, h2, h3, h4, p, ul, figure { margin: 0; }
+ul { list-style: none; padding: 0; }
+button { font: inherit; color: inherit; }
+img, svg { display: block; max-width: 100%; }
+table { border-collapse: collapse; }
+/* ============================================================
+   页面外壳 token —— 暖中性，向 Flexoki 偏，但刻意低调，
+   不与被评估的原型面板抢视觉。
+   ============================================================ */
+:root {
+  --page-bg: #faf8f2;
+  --page-fg: #1b1917;
+  --page-dim: #6b6660;
+  --page-faint: #8d877f;
+  --page-rule: #e3ded2;
+  --page-rule-soft: #efeae0;
+  --page-panel: #fffdf7;
+  --page-accent: #a8481a;
+  --page-accent-soft: #a8481a1a;
+  --page-warn: #8a5a10;
+  --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f;
+  --page-stop-soft: #96291f14;
+  --page-go: #4f6410;
+  --page-go-soft: #4f641014;
+
+  --mono: ui-monospace, "SFMono-Regular", Menlo, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  --col: 68rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #141211;
+    --page-fg: #d6d2c8;
+    --page-dim: #918a80;
+    --page-faint: #6f6960;
+    --page-rule: #2f2c28;
+    --page-rule-soft: #232120;
+    --page-panel: #1a1817;
+    --page-accent: #e08a4c;
+    --page-accent-soft: #e08a4c1f;
+    --page-warn: #d0a215;
+    --page-warn-soft: #d0a2151a;
+    --page-stop: #d9584b;
+    --page-stop-soft: #d9584b1a;
+    --page-go: #a9b85e;
+    --page-go-soft: #a9b85e1a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --page-bg: #141211;
+  --page-fg: #d6d2c8;
+  --page-dim: #918a80;
+  --page-faint: #6f6960;
+  --page-rule: #2f2c28;
+  --page-rule-soft: #232120;
+  --page-panel: #1a1817;
+  --page-accent: #e08a4c;
+  --page-accent-soft: #e08a4c1f;
+  --page-warn: #d0a215;
+  --page-warn-soft: #d0a2151a;
+  --page-stop: #d9584b;
+  --page-stop-soft: #d9584b1a;
+  --page-go: #a9b85e;
+  --page-go-soft: #a9b85e1a;
+}
+
+:root[data-theme="light"] {
+  --page-bg: #faf8f2;
+  --page-fg: #1b1917;
+  --page-dim: #6b6660;
+  --page-faint: #8d877f;
+  --page-rule: #e3ded2;
+  --page-rule-soft: #efeae0;
+  --page-panel: #fffdf7;
+  --page-accent: #a8481a;
+  --page-accent-soft: #a8481a1a;
+  --page-warn: #8a5a10;
+  --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f;
+  --page-stop-soft: #96291f14;
+  --page-go: #4f6410;
+  --page-go-soft: #4f641014;
+}
+
+/* ============================================================ */
+
+body {
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  padding: 0 1.25rem 6rem;
+}
+
+.wrap { max-width: var(--col); margin-inline: auto; }
+
+/* ---- 页眉 ---- */
+
+.masthead {
+  padding: 3.5rem 0 2rem;
+  border-bottom: 2px solid var(--page-fg);
+  margin-bottom: 2.5rem;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--page-accent);
+  margin-bottom: 1rem;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.6rem, 4vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin-bottom: 0.75rem;
+}
+.standfirst {
+  max-width: 46rem;
+  color: var(--page-dim);
+  font-size: 16px;
+}
+.masthead-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin-top: 1.75rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--page-faint);
+}
+.masthead-meta b { color: var(--page-dim); font-weight: 500; }
+
+/* ---- 章节 ---- */
+
+section { margin-bottom: 4.5rem; scroll-margin-top: 1rem; }
+
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--page-rule);
+  margin-bottom: 1.75rem;
+}
+.sec-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--page-bg);
+  background: var(--page-fg);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+h2 {
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.sec-sub { color: var(--page-faint); font-size: 13px; margin-left: auto; font-family: var(--mono); }
+
+h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 2.25rem 0 0.85rem;
+}
+p { margin-bottom: 0.9rem; max-width: 46rem; }
+p:last-child { margin-bottom: 0; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--page-rule-soft);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+/* ---- 决策卡 ---- */
+
+.conflict {
+  border: 1px solid var(--page-rule);
+  border-left: 3px solid var(--page-accent);
+  background: var(--page-panel);
+  border-radius: 0 7px 7px 0;
+  padding: 1.35rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.conflict-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+  flex-wrap: wrap;
+}
+.conflict-n {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--page-accent);
+  letter-spacing: 0.08em;
+}
+.conflict-title { font-family: var(--mono); font-weight: 600; font-size: 0.95rem; }
+.conflict-impact {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 0.12rem 0.45rem;
+  border-radius: 3px;
+  background: var(--page-stop-soft);
+  color: var(--page-stop);
+  white-space: nowrap;
+}
+
+.versus { display: grid; gap: 0.7rem; margin-bottom: 1rem; }
+@media (min-width: 780px) { .versus { grid-template-columns: 1fr 1fr; } }
+
+.vs-side {
+  border: 1px solid var(--page-rule-soft);
+  border-radius: 5px;
+  padding: 0.75rem 0.9rem;
+  background: var(--page-bg);
+}
+.vs-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  margin-bottom: 0.45rem;
+}
+.vs-side p { font-size: 13.5px; line-height: 1.55; margin: 0; color: var(--page-dim); }
+.vs-side.is-ref { border-color: var(--page-accent-soft); background: var(--page-accent-soft); }
+.vs-side.is-ref .vs-label { color: var(--page-accent); }
+
+.ask {
+  font-size: 13.5px;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--page-rule);
+  color: var(--page-fg);
+}
+.ask b { font-family: var(--mono); font-size: 12.5px; color: var(--page-accent); }
+
+/* 裁定摘要条 */
+.verdict-strip {
+  display: grid;
+  gap: 1px;
+  background: var(--page-rule);
+  border: 1px solid var(--page-rule);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-bottom: 1.75rem;
+}
+@media (min-width: 700px) { .verdict-strip { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .verdict-strip { grid-template-columns: repeat(4, 1fr); } }
+.verdict-item { background: var(--page-panel); padding: 0.7rem 0.85rem; }
+.v-k {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  margin-bottom: 0.2rem;
+}
+.v-v { display: block; font-family: var(--mono); font-size: 12.5px; color: var(--page-accent); line-height: 1.4; }
+
+/* 已裁定：.ask 变体 */
+.ask.decided { border-top-style: solid; border-top-color: var(--page-go); }
+.ask.decided b { color: var(--page-go); }
+.conflict.decided { border-left-color: var(--page-go); }
+.conflict.decided .conflict-n { color: var(--page-go); }
+.conflict-impact.done { background: var(--page-go-soft); color: var(--page-go); }
+
+/* ---- 原型面板通用 ---- */
+
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+.demo-cap {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--page-rule);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-left: auto;
+}
+.seg button {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 0.28rem 0.7rem;
+  border: 0;
+  background: transparent;
+  color: var(--page-dim);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.seg button + button { border-left: 1px solid var(--page-rule); }
+.seg button[aria-pressed="true"] { background: var(--page-fg); color: var(--page-bg); }
+.seg button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: -2px; }
+
+.stage {
+  border: 1px solid var(--page-rule);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+/* ============================================================
+   Flexoki 真实 token —— 原型面板内部专用。
+   数值逐条取自 openchamber/packages/ui/src/lib/theme/themes/
+   flexoki-light.json 与 flexoki-dark.json。
+   ============================================================ */
+
+.fx {
+  --s-bg: #fffdf4;
+  --s-fg: #100F0F;
+  --s-muted: #f6f5ee;
+  --s-muted-fg: #686663;
+  --s-elevated: #fbfaf2;
+  --s-subtle: #f7f4ec;
+  --i-border: #DAD8CE;
+  --i-border-hover: #CECDC3;
+  --i-selection: #76736f30;
+  --i-hover: #76736f20;
+  --p-base: #BC5215;
+  --p-fg: #fffdf4;
+  --st-error: #AF3029;
+  --st-warning: #BC5215;
+  --st-success: #66800B;
+  --st-info: #205EA6;
+  --st-error-bg: #D14D4120;
+
+  /* 派生：OpenChamber 的 --tools-* 组 */
+  --t-icon: #686663;
+  --t-title: #100F0F;
+  --t-desc: #686663;
+  --t-border: #DAD8CE;
+
+  --r-sm: 4px;
+  --r-md: 7px;
+  --r-lg: 9px;
+  --r-xl: 12px;
+
+  background: var(--s-bg);
+  color: var(--s-fg);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.fx[data-fx="dark"] {
+  --s-bg: #171515;
+  --s-fg: #CECDC3;
+  --s-muted: #1C1B1A;
+  --s-muted-fg: #807e79;
+  --s-elevated: #1c1a19;
+  --s-subtle: #1e1d1c;
+  --i-border: #343331;
+  --i-border-hover: #403E3C;
+  --i-selection: #f4f4f41f;
+  --i-hover: #ffffff18;
+  --p-base: #DA702C;
+  --p-fg: #171515;
+  --st-error: #D14D41;
+  --st-warning: #DA702C;
+  --st-success: #A0AF54;
+  --st-info: #4385BE;
+  --st-error-bg: #AF302920;
+
+  --t-icon: #807e79;
+  --t-title: #CECDC3;
+  --t-desc: #807e79;
+  --t-border: #343331;
+}
+
+/* 聊天列 —— OpenChamber: width min(100%, 48rem) 居中 */
+.fx-col {
+  width: min(100%, 48rem);
+  margin-inline: auto;
+  padding: 1.25rem clamp(0.75rem, 2.5vw, 1rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* 用户气泡：右对齐, max-w 85%, 圆角 xl 但右下角收 sm */
+.fx-user { display: flex; justify-content: flex-end; }
+.fx-user-bubble {
+  max-width: 85%;
+  padding: 0.75rem 1.25rem;
+  background: var(--s-elevated);
+  border: 1px solid color-mix(in srgb, var(--p-base) 5%, transparent);
+  border-radius: var(--r-xl) var(--r-xl) var(--r-sm) var(--r-xl);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* 助手：完全平铺，无容器 */
+.fx-assistant { font-size: 15px; line-height: 1.5; }
+.fx-assistant > p + p { margin-top: 0.75rem; }
+
+/* 助手底部 footer 元信息 */
+.fx-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+  font-size: 14px;
+  color: var(--s-muted-fg);
+}
+.fx-footer .dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+.fx-pill {
+  font-size: 14px;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--i-border);
+  border-radius: var(--r-sm);
+  color: var(--s-muted-fg);
+}
+
+/* ---- 工具行（OpenChamber 形态）---- */
+
+.fx-tools { display: flex; flex-direction: column; gap: 0.1rem; margin: 0.35rem 0; }
+
+.fx-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.1rem 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--t-title);
+  text-align: left;
+  cursor: pointer;
+}
+.fx-row:hover { color: var(--p-base); }
+.fx-row:focus-visible { outline: 1px solid var(--p-base); outline-offset: 2px; border-radius: 2px; }
+
+.fx-glyph {
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+  color: var(--t-icon);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.fx-glyph svg { width: 14px; height: 14px; transition: opacity 100ms; }
+.fx-glyph .chev { position: absolute; inset: 0; opacity: 0; }
+.fx-row:hover .fx-glyph .tool { opacity: 0; }
+.fx-row:hover .fx-glyph .chev { opacity: 1; }
+.fx-row[aria-expanded="true"] .fx-glyph .tool { opacity: 0; }
+.fx-row[aria-expanded="true"] .fx-glyph .chev { opacity: 1; transform: rotate(90deg); }
+
+.fx-name { flex-shrink: 0; }
+.fx-dur { flex-shrink: 0; color: var(--t-desc); font-variant-numeric: tabular-nums; }
+.fx-desc {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-desc);
+}
+.fx-diff { flex-shrink: 0; font-size: 0.8rem; line-height: 1; }
+.fx-diff .add { color: var(--st-success); }
+.fx-diff .sep { color: var(--t-desc); }
+.fx-diff .del { color: var(--st-error); }
+
+.fx-row.is-error { color: var(--st-error); }
+.fx-row.is-error .fx-glyph { color: var(--st-error); }
+
+/* 静态聚合行（read/skill）—— 多个路径并排，不可展开 */
+.fx-static { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 14px; padding: 0.1rem 0; }
+.fx-static .fx-name { color: var(--t-title); }
+.fx-path {
+  color: var(--t-desc);
+  border-bottom: 1px dotted var(--i-border-hover);
+  cursor: pointer;
+}
+.fx-path:hover { color: var(--p-base); border-bottom-color: var(--p-base); }
+
+/* 展开体：ml-2 pl-3 + 左侧 1px 竖线 */
+.fx-body {
+  margin-left: 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--t-border);
+  overflow: hidden;
+}
+.fx-body[hidden] { display: none; }
+.fx-body-inner { padding: 0.4rem 0 0.6rem; }
+
+.fx-out {
+  background: var(--s-muted);
+  border-radius: var(--r-xl);
+  padding: 0.5rem;
+  max-height: 16rem;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre;
+  color: var(--s-fg);
+}
+.fx-out .cmt { color: var(--s-muted-fg); }
+.fx-out .ok { color: var(--st-success); }
+.fx-out .bad { color: var(--st-error); }
+.fx-out .num { color: var(--st-info); }
+
+.fx-diffline { display: block; }
+.fx-diffline.plus { background: color-mix(in srgb, var(--st-success) 14%, transparent); }
+.fx-diffline.minus { background: color-mix(in srgb, var(--st-error) 14%, transparent); }
+
+/* ---- Question 卡 ---- */
+
+.fx-card {
+  border: 1px solid color-mix(in srgb, var(--i-border) 60%, transparent);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--s-muted) 55%, transparent);
+  overflow: hidden;
+}
+.fx-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  font-size: 14px;
+}
+.fx-card-head .ico { width: 14px; height: 14px; color: var(--p-base); flex-shrink: 0; }
+.fx-card-head .hd { font-weight: 500; }
+.fx-card-head .badge {
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--s-muted-fg);
+  border: 1px solid var(--i-border);
+  border-radius: var(--r-sm);
+  padding: 0 0.35rem;
+}
+.fx-opts { padding: 0 0.4rem 0.4rem; display: flex; flex-direction: column; }
+.fx-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.5rem;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--s-fg);
+  width: 100%;
+}
+.fx-opt:hover { background: var(--i-hover); }
+.fx-opt[aria-checked="true"] { background: var(--i-selection); }
+.fx-opt:focus-visible { outline: 1px solid var(--p-base); outline-offset: -1px; }
+.fx-radio {
+  width: 14px; height: 14px;
+  border: 1px solid var(--i-border-hover);
+  border-radius: 50%;
+  margin-top: 0.18rem;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+.fx-opt[aria-checked="true"] .fx-radio { border-color: var(--p-base); }
+.fx-opt[aria-checked="true"] .fx-radio::after {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--p-base);
+}
+.fx-opt-label { display: block; }
+.fx-opt-desc { display: block; color: var(--s-muted-fg); margin-top: 0.1rem; }
+.fx-rec { color: var(--p-base); opacity: 0.85; }
+.fx-card-foot {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem 0.8rem;
+}
+
+/* 按钮基线取自 OpenChamber 全局 Button 原语（packages/ui/src/components/ui/button.tsx:37）：
+   squircle + 全小写 + 扁平 color-mix 着色。这条基线要照做，故原型保留。
+   注（2026-07-28 复核）：Question 卡自身并未使用该原语——参考实现里它的提交/取消按钮是
+   原生 button + 普通 rounded + status 扁平着色（chat/QuestionCard.tsx:530-556）。 */
+.fx-btn {
+  height: 32px;
+  padding: 0 0.625rem;
+  border-radius: var(--r-lg);
+  /* biome-ignore lint/correctness/noUnknownProperty: corner-shape is CSS Backgrounds 4; Biome has no definition yet */
+  corner-shape: squircle;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: lowercase;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 100ms;
+}
+/* biome-ignore lint/correctness/noUnknownProperty: corner-shape is CSS Backgrounds 4; Biome has no definition yet */
+@supports (corner-shape: squircle) { .fx-btn { border-radius: 50px; } }
+.fx-btn.go {
+  background: color-mix(in srgb, var(--st-success) 10%, var(--s-bg));
+  color: var(--st-success);
+  border-color: color-mix(in srgb, var(--st-success) 12%, transparent);
+}
+.fx-btn.go:hover { background: color-mix(in srgb, var(--st-success) 20%, var(--s-bg)); }
+.fx-btn.quiet {
+  background: color-mix(in srgb, var(--s-muted-fg) 10%, var(--s-bg));
+  color: var(--s-muted-fg);
+}
+.fx-btn.quiet:hover { background: color-mix(in srgb, var(--s-muted-fg) 18%, var(--s-bg)); }
+.fx-btn.stop {
+  background: color-mix(in srgb, var(--st-error) 10%, var(--s-bg));
+  color: var(--st-error);
+  border-color: color-mix(in srgb, var(--st-error) 12%, transparent);
+}
+.fx-btn.stop:hover { background: color-mix(in srgb, var(--st-error) 20%, var(--s-bg)); }
+.fx-btn:focus-visible { outline: 2px solid var(--p-base); outline-offset: 1px; }
+
+/* ============================================================
+   现状面板 —— 复刻 ai-client 当前 MessageTimeline 的真实类名效果
+   ============================================================ */
+
+.now {
+  --n-bg: #0f0f11;
+  --n-fg: #fafafa;
+  --n-card: #0f0f11;
+  --n-muted: #27272a;
+  --n-muted-fg: #a1a1aa;
+  --n-border: #27272a;
+  background: var(--n-bg);
+  color: var(--n-fg);
+  font-family: var(--sans);
+  font-size: 12.25px; /* text-sm 在 14px 根字号下的真实值 */
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.now-row { display: flex; }
+.now-row.u { justify-content: flex-end; }
+.now-bubble {
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--n-border);
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, var(--n-card) 50%, transparent);
+}
+.now-bubble.u {
+  border-color: color-mix(in srgb, var(--n-fg) 20%, transparent);
+  background: color-mix(in srgb, var(--n-fg) 10%, transparent);
+}
+.now-role {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--n-muted-fg);
+}
+.now-tool {
+  border-radius: 7px;
+  border: 1px solid var(--n-border);
+  background: color-mix(in srgb, var(--n-muted) 30%, transparent);
+  padding: 0.5rem;
+  font-size: 10.5px;
+}
+.now-tool .t { font-weight: 500; color: var(--n-fg); }
+.now-tool pre {
+  margin-top: 0.25rem;
+  overflow-x: auto;
+  color: var(--n-muted-fg);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.now-meta { font-size: 10px; color: color-mix(in srgb, var(--n-muted-fg) 80%, transparent); }
+
+/* ---- 表格 ---- */
+
+.tbl-scroll { overflow-x: auto; border: 1px solid var(--page-rule); border-radius: 7px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td {
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--page-rule-soft);
+  vertical-align: top;
+}
+th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  font-weight: 500;
+  background: var(--page-rule-soft);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: 0; }
+td.mono, th.mono { font-family: var(--mono); font-size: 12px; }
+.sw {
+  display: inline-block;
+  width: 11px; height: 11px;
+  border-radius: 2px;
+  border: 1px solid #0002;
+  vertical-align: -1px;
+  margin-right: 0.35rem;
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 0.08rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.tag.live { background: var(--page-go-soft); color: var(--page-go); }
+.tag.part { background: var(--page-warn-soft); color: var(--page-warn); }
+.tag.dead { background: var(--page-stop-soft); color: var(--page-stop); }
+.tag.out { background: var(--page-rule-soft); color: var(--page-faint); }
+
+/* ---- 布局示意 ---- */
+
+.layouts { display: grid; gap: 1rem; }
+@media (min-width: 820px) { .layouts { grid-template-columns: 1fr 1fr; } }
+.layout-card {
+  border: 1px solid var(--page-rule);
+  border-radius: 7px;
+  padding: 1rem;
+  background: var(--page-panel);
+}
+.layout-card h4 {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  margin-bottom: 0.75rem;
+}
+.diagram {
+  display: grid;
+  gap: 3px;
+  height: 190px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+}
+.zone {
+  border: 1px solid var(--page-rule);
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--page-faint);
+  background: var(--page-bg);
+  padding: 0.2rem;
+  line-height: 1.3;
+}
+.zone.hot { border-color: var(--page-accent); color: var(--page-accent); background: var(--page-accent-soft); }
+.zone.chat { color: var(--page-dim); }
+
+.d-now { grid-template-columns: 62px 1fr 74px; grid-template-rows: 26px 1fr 40px; }
+.d-now .z-nav { grid-row: 1 / 4; }
+.d-now .z-hdr { grid-column: 2 / 4; }
+.d-oc { grid-template-columns: 66px 1fr 78px 22px; grid-template-rows: 26px 1fr; }
+.d-oc .z-nav { grid-row: 1 / 3; }
+.d-oc .z-rail { grid-row: 1 / 3; writing-mode: vertical-rl; }
+.d-oc .z-hdr { grid-column: 2 / 4; }
+
+.legend { margin-top: 0.7rem; font-size: 12px; color: var(--page-dim); line-height: 1.5; }
+
+/* ---- 尾注 ---- */
+
+.footnote {
+  border-top: 1px solid var(--page-rule);
+  padding-top: 1.5rem;
+  font-size: 13px;
+  color: var(--page-dim);
+}
+.footnote h3 { margin-top: 0; }
+.footnote ul { list-style: disc; padding-left: 1.15rem; margin-bottom: 0.9rem; max-width: 46rem; }
+li { margin-bottom: 0.35rem; }
+
+.src {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--page-faint);
+  margin-top: 0.55rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* biome-ignore lint/complexity/noImportantStyles: the reduced-motion kill switch is a `*`
+     selector (0,0,0) and must override the class-level transition shorthands above (0,1,0);
+     without !important it has no effect at all. */
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">Phase 0A 基线 · A01 + A05 + A06</div>
+  <h1>对齐 OpenChamber 观感</h1>
+  <p class="standfirst">
+    本页补做被跳过的产品设计基线，把「对齐 OpenChamber」从主观描述转成可验收合同。
+    全部数值取自 OpenChamber 与 ai-client 两侧真实源码，非截图估读、非设计臆造。
+    四条结构裁定已于 2026-07-28 拍板，见下节；落库动作见页尾清单。
+    <br>
+    <b>参考版本冻结</b>：页内全部 openchamber <code>file:line</code> 证据以 commit
+    <code>a3519141635990e3d75d79a7f902f8aa15386060</code>（<code>git describe</code> = <code>v1.17.0-6-ga3519141</code>，
+    工作树 <code>/home/dan/projects/openchamber</code>，取证日期 2026-07-28、取证时无未提交改动）为准。
+    该仓是活动工作树会继续往前走，<b>跨版本核对前先 <code>git checkout a3519141</code></b>，否则行号对不上。
+    Light/Dark 基准 = Flexoki Light / Flexoki Dark；标准窗口尺寸本轮不冻结（裁定只用到与窗口宽度无关的相对尺寸）。
+  </p>
+  <div class="masthead-meta">
+    <span><b>参考（冻结）</b> openchamber <code>a3519141</code> = v1.17.0-6-ga3519141 · packages/ui</span>
+    <span><b>目标</b> ai-client feat/openchamber-chat-refactor</span>
+    <span><b>默认主题</b> Flexoki Light / Dark</span>
+    <span><b>日期</b> 2026-07-28</span>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-tag">00</span>
+    <h2>结构冲突与裁定</h2>
+    <span class="sec-sub">2026-07-28 已拍板</span>
+  </div>
+
+  <p>
+    摸底后发现：ai-client 现有实现与真实 OpenChamber 在三个<strong>结构性</strong>轴上不一致。
+    这不是打磨精度的差别，是形态选择的差别——每一条都会改变后续代码的写法。
+    三条均已于 2026-07-28 拍板，裁定结果记在各卡片底部。
+  </p>
+
+  <div class="verdict-strip">
+    <div class="verdict-item"><span class="v-k">布局骨架</span><span class="v-v">三列 + 44px 导轨，废 BottomDock</span></div>
+    <div class="verdict-item"><span class="v-k">工具调用</span><span class="v-v">单行形态，滚动窗替代行数截断</span></div>
+    <div class="verdict-item"><span class="v-k">问答归宿</span><span class="v-v">就地冻结（有据偏离）</span></div>
+    <div class="verdict-item"><span class="v-k">字体</span><span class="v-v">全等宽 ui-monospace</span></div>
+  </div>
+
+  <div class="conflict decided">
+    <div class="conflict-head">
+      <span class="conflict-n">冲突 1 · 已裁定</span>
+      <span class="conflict-title">布局骨架：四区 vs 三列 + 图标导轨</span>
+      <span class="conflict-impact done">裁定：跟 OpenChamber</span>
+    </div>
+    <div class="versus">
+      <div class="vs-side">
+        <div class="vs-label">ai-client 现状</div>
+        <p>
+          四区：LeftNav + MainHeader + ChatWorkspace + RightDock(320) + BottomDock(220)。
+          右栏三个固定 tab <code>git|files|context</code>，底部是独立终端 Dock。两个 dock 宽高硬编码、不可拖拽。
+        </p>
+      </div>
+      <div class="vs-side is-ref">
+        <div class="vs-label">OpenChamber 真实</div>
+        <p>
+          三列 + 44px 图标导轨，<strong>没有底部面板</strong>。终端只是右栏 ContextPanel 的 11 种 surface 之一
+          （editor / git / pr / diff / terminal / plan / notes / context / browser / preview / chat），
+          可多标签、导轨可拖拽排序、宽度按 surface 类型分别记忆。左栏 280（280–500 可拖），右栏 380–1400。
+          面板内部是 <code>tabs</code> + <code>activeTabId</code> 的<strong>多标签模型</strong>
+          （<code>ContextPanel.tsx:2240-2241</code>）：<b>多个 surface 可同时驻留</b>，同一时刻一个 active。
+        </p>
+      </div>
+    </div>
+    <div class="ask decided">
+      <b>裁定：</b>改成三列 + 44px 导轨，<strong>废掉 BottomDock</strong>。终端从「底部 Dock」重定义为
+      「右栏的一种 surface」，与 git / files / diff / editor 并列，可切换、可多标签。
+      连带动作：ARD §4 目标产品结构图重画、D15（右栏 MVP 单层）作废、T-15 重定义、
+      RightDock 宽度改可拖拽（380–1400）、LeftNav 改可拖拽（280–500）、中央 chat 加 48rem 居中阅读栏。
+      <br>
+      <b>MVP 简化（2026-07-28 标注）</b>：ai-client 本轮先做 <strong>surface 单选</strong>——同一时刻只显示一种、
+      互斥切换（执行计划 T-22 验收② / T-12），<strong>多标签驻留后置</strong>。
+      这是<strong>我们的简化</strong>，不是参考实现的形态（OpenChamber 是 <code>tabs</code> + <code>activeTabId</code>），
+      别把「一次一种」当成对齐结论回读。
+    </div>
+    <div class="src">openchamber: layout/MainLayout.tsx:407-464 · layout/ContextPanelRail.tsx:157 · lib/surfaces/registry.ts &nbsp;|&nbsp; ai-client: workspace-shell/WorkspaceShell.tsx:31-32</div>
+  </div>
+
+  <div class="conflict decided">
+    <div class="conflict-head">
+      <span class="conflict-n">冲突 2 · 已裁定</span>
+      <span class="conflict-title">工具调用：卡片 vs 单行</span>
+      <span class="conflict-impact done">裁定：改单行</span>
+    </div>
+    <div class="versus">
+      <div class="vs-side">
+        <div class="vs-label">T-05 原规格</div>
+        <p>
+          带边框的 Tool Card，含状态徽章、展开后按行数截断、尾部「展开全部 / 复制」。
+          这是本次会话早些时候拍的口径。
+        </p>
+      </div>
+      <div class="vs-side is-ref">
+        <div class="vs-label">OpenChamber 真实</div>
+        <p>
+          <strong>无边框、无背景、无状态徽章的单行</strong>。状态靠颜色（出错整行转 error 色），运行中靠扫光动画。
+          展开体只在左侧加一条 1px 竖线做缩进，不是卡片。没有「展开全部」——用 <code>max-height</code> 滚动窗
+          （输入 240px / bash 输出 46vh / 通用 60vh）。连续多次 <code>read</code> 会聚合成一行并排列出路径。
+        </p>
+      </div>
+    </div>
+    <div class="ask decided">
+      <b>裁定：</b>照做单行形态。<strong>撤销早先拍的两条 T-05 口径</strong>——不再是「带边框卡片 + 状态徽章」，
+      改为无边框单行、状态靠颜色；不再「按行数截断 + 展开全部」，改为 <code>max-height</code> 滚动窗。
+      保留的是：默认折叠、Read/Write/Edit 摘要行显路径、Bash 显命令首行、路径可点击。
+      新增要做的：连续 <code>read</code> 聚合成一行、点图标位切展开而点行体开文件、edit 类显 <code>+N/-M</code>。
+    </div>
+    <div class="src">openchamber: parts/ToolPart.tsx:2306-2430（摘要行）· :2447-2476（竖线展开体）· parts/ProgressiveGroup.tsx:566-773（静态聚合行）</div>
+  </div>
+
+  <div class="conflict decided">
+    <div class="conflict-head">
+      <span class="conflict-n">冲突 3 · 已裁定</span>
+      <span class="conflict-title">Question / Permission 回答后的归宿</span>
+      <span class="conflict-impact done">裁定：就地冻结</span>
+    </div>
+    <div class="versus">
+      <div class="vs-side is-ref">
+        <div class="vs-label">OpenChamber 真实</div>
+        <p>
+          回答后卡片<strong>直接消失</strong>（<code>return null</code>），历史记录里由 ToolPart 的 question 分支
+          重新渲染成只读 Q/A 对。即「冻结」发生在历史侧，不在原地。
+        </p>
+      </div>
+      <div class="vs-side">
+        <div class="vs-label">ai-client 的硬约束</div>
+        <p>
+          <code>HistoryBlock</code> 联合类型里<strong>没有 question / permission</strong>，历史重放必然
+          <code>return null</code>。照搬「消失」会导致回答完全无痕——用户答过什么，时间线上再也看不到。
+        </p>
+      </div>
+    </div>
+    <div class="ask decided">
+      <b>裁定：</b>保留就地冻结，登记为<strong>一处有据可依的偏离</strong>——不是没对齐，是上游协议不支持。
+      要照搬 OpenChamber 的「答完消失」，前置条件是扩 <code>sessionHistory.ts</code> 的 <code>HistoryBlock</code>
+      联合类型并让 Host 把问答写进历史，属于协议变更，本轮不做。
+      视觉上仍照 OpenChamber：单选/多选列表（非按钮组）、<code>Other</code> 自定义行、
+      <code>recommended</code> 标记；提交/取消按钮按实测是<strong>普通圆角 + status 扁平着色</strong>
+      （<code>QuestionCard.tsx:530-556</code>）——<b>2026-07-28 复核更正</b>：此处原写的「squircle 全小写按钮」
+      是<strong>全局 Button 原语</strong>的特征、不是 Question 卡形态，归属说明见 §01 卡片说明。
+    </div>
+    <div class="src">openchamber: chat/QuestionCard.tsx:321-323 · chat/PermissionCard.tsx:121-123 · parts/ToolPart.tsx:1667-1730 &nbsp;|&nbsp; ai-client: shared/types/sessionHistory.ts:11-30 · stores/chatSessions.ts:236-237</div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-tag">01</span>
+    <h2>聊天时间线</h2>
+    <span class="sec-sub">A01 · 可交互实样</span>
+  </div>
+
+  <p>
+    下面是同一段对话的两种渲染。上面是 ai-client 当前的真实样子（裸 JSON dump），
+    下面是按 OpenChamber 形态重做的版本。<strong>工具行可以点开</strong>——点最左侧图标位切换展开，
+    点行的其余部分在真机上是打开文件。
+  </p>
+
+  <h3>现状 · ai-client</h3>
+  <div class="demo-bar">
+    <span class="demo-cap">MessageTimeline.tsx:268-354 实效</span>
+  </div>
+  <div class="stage">
+    <div class="now">
+      <div class="now-row u">
+        <div class="now-bubble u">
+          <div class="now-role">user</div>
+          <div>把 toolCard 的截断逻辑抽成纯函数，加上测试</div>
+        </div>
+      </div>
+      <div class="now-row">
+        <div class="now-bubble">
+          <div class="now-role">assistant</div>
+          <div>我先看一下现有的渲染逻辑。</div>
+          <div class="now-tool">
+            <div class="t">Tool: Read</div>
+            <pre>{
+  "file_path": "/home/dan/projects/ai-client/src/renderer/components/chat/MessageTimeline.tsx",
+  "offset": 299,
+  "limit": 150
+}</pre>
+          </div>
+          <div class="now-tool">
+            <div class="t">Tool result (ok)</div>
+            <pre>   299→interface BlockRendererProps {
+   300→  block: ChatBlock;
+   301→  blockIndex: number;
+   302→  message: ChatMessage;</pre>
+          </div>
+          <div class="now-meta">claude-opus-5 · 4.2s · 18:50</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="src">
+    注意三处：助手也套气泡（OpenChamber 助手是平铺）、工具是带边框的块且永远展开、
+    整条时间线满宽无阅读栏约束。
+  </p>
+
+  <h3>对齐后 · OpenChamber 形态</h3>
+  <div class="demo-bar">
+    <span class="demo-cap">Flexoki · 阅读栏 768px 居中 · 全等宽字体</span>
+    <div class="seg" role="group" aria-label="主题">
+      <button type="button" data-fx-set="light" aria-pressed="true">light</button>
+      <button type="button" data-fx-set="dark" aria-pressed="false">dark</button>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="fx" id="fxStage" data-fx="light">
+      <div class="fx-col">
+
+        <div class="fx-user">
+          <div class="fx-user-bubble">把 toolCard 的截断逻辑抽成纯函数，加上测试</div>
+        </div>
+
+        <div class="fx-assistant">
+          <p>我先看一下现有的渲染逻辑和已有的纯函数范式。</p>
+
+          <div class="fx-tools">
+
+            <!-- 静态聚合行：连续 read 合并成一行 -->
+            <div class="fx-static">
+              <span class="fx-glyph" aria-hidden="true">
+                <svg class="tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              </span>
+              <span class="fx-name">Read File</span>
+              <span class="fx-path">chat/MessageTimeline.tsx</span>
+              <span class="fx-path">chat/thinkingCard.ts</span>
+              <span class="fx-path">chat/historyError.ts</span>
+            </div>
+
+            <!-- 可展开：grep -->
+            <button type="button" class="fx-row" aria-expanded="false" data-tool="t1">
+              <span class="fx-glyph" aria-hidden="true">
+                <svg class="tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+              </span>
+              <span class="fx-name">Search Files</span>
+              <span class="fx-desc">"deriveThinkingCard"</span>
+            </button>
+            <div class="fx-body" id="t1" hidden>
+              <div class="fx-body-inner">
+                <div class="fx-out"><span class="cmt">Found 4 matches</span>
+
+<span class="num">chat/thinkingCard.ts</span>
+  <span class="cmt">Line 40:</span> export function deriveThinkingCard(
+<span class="num">chat/MessageTimeline.tsx</span>
+  <span class="cmt">Line 325:</span> const vm = deriveThinkingCard(message, blockIndex,
+<span class="num">chat/__tests__/thinkingCard.test.ts</span>
+  <span class="cmt">Line 12:</span> import { deriveThinkingCard } from '../thinkingCard';
+  <span class="cmt">Line 31:</span> expect(deriveThinkingCard(msg, 0, true)).toEqual({</div>
+              </div>
+            </div>
+
+            <!-- 可展开：bash，带实时耗时 -->
+            <button type="button" class="fx-row" aria-expanded="false" data-tool="t2">
+              <span class="fx-glyph" aria-hidden="true">
+                <svg class="tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+              </span>
+              <span class="fx-name">Shell Command</span>
+              <span class="fx-dur">15.2s</span>
+              <span class="fx-desc">pnpm test -- toolCard</span>
+            </button>
+            <div class="fx-body" id="t2" hidden>
+              <div class="fx-body-inner">
+                <div class="fx-out"> <span class="ok">✓</span> chat/__tests__/toolCard.test.ts <span class="cmt">(18 tests) 42ms</span>
+
+ Test Files  <span class="ok">1 passed</span> (1)
+      Tests  <span class="ok">18 passed</span> (18)
+   Duration  <span class="cmt">1.24s</span></div>
+              </div>
+            </div>
+
+            <!-- 可展开：edit，带 diff 统计 -->
+            <button type="button" class="fx-row" aria-expanded="false" data-tool="t3">
+              <span class="fx-glyph" aria-hidden="true">
+                <svg class="tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+              </span>
+              <span class="fx-name">Edit File</span>
+              <span class="fx-desc">chat/toolCard.ts</span>
+              <span class="fx-diff"><span class="add">+34</span><span class="sep">/</span><span class="del">-2</span></span>
+            </button>
+            <div class="fx-body" id="t3" hidden>
+              <div class="fx-body-inner">
+                <div class="fx-out"><span class="fx-diffline minus">- export function truncate(s: string) {</span>
+<span class="fx-diffline minus">-   return s.slice(0, 80);</span>
+<span class="fx-diffline plus">+ export interface ToolCardVm {</span>
+<span class="fx-diffline plus">+   state: 'running' | 'ok' | 'failed';</span>
+<span class="fx-diffline plus">+   summary: string;</span>
+<span class="fx-diffline plus">+   path?: string;</span>
+<span class="fx-diffline plus">+ }</span></div>
+              </div>
+            </div>
+
+            <!-- 失败态：整行转 error 色，无徽章 -->
+            <button type="button" class="fx-row is-error" aria-expanded="false" data-tool="t4">
+              <span class="fx-glyph" aria-hidden="true">
+                <svg class="tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+              </span>
+              <span class="fx-name">Shell Command</span>
+              <span class="fx-dur">0.4s</span>
+              <span class="fx-desc">pnpm typecheck</span>
+            </button>
+            <div class="fx-body" id="t4" hidden>
+              <div class="fx-body-inner">
+                <div class="fx-out"><span class="bad">src/renderer/components/chat/toolCard.ts(41,3): error TS2322:</span>
+  Type 'string | undefined' is not assignable to type 'string'.</div>
+              </div>
+            </div>
+
+          </div>
+
+          <p>纯函数已抽好，18 例全绿。typecheck 那处是 <code>path</code> 可选性没收敛，我这就修。</p>
+
+          <div class="fx-footer">
+            <span>claude-opus-5</span>
+            <span class="dot"></span>
+            <span>4.2s</span>
+            <span class="dot"></span>
+            <span>18:50</span>
+            <span class="fx-pill">toolCard.ts</span>
+            <span class="fx-pill">toolCard.test.ts</span>
+          </div>
+        </div>
+
+        <!-- Question 卡 -->
+        <div class="fx-card">
+          <div class="fx-card-head">
+            <span class="ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+            </span>
+            <span class="hd">Input needed</span>
+            <span class="badge">截断策略</span>
+          </div>
+          <div class="fx-opts" role="radiogroup" aria-label="截断策略">
+            <button type="button" class="fx-opt" role="radio" aria-checked="true">
+              <span class="fx-radio" aria-hidden="true"></span>
+              <span>
+                <span class="fx-opt-label">滚动窗口 <span class="fx-rec">recommended</span></span>
+                <span class="fx-opt-desc">照 OpenChamber：不截断文本，容器给 max-height 自带滚动</span>
+              </span>
+            </button>
+            <button type="button" class="fx-opt" role="radio" aria-checked="false">
+              <span class="fx-radio" aria-hidden="true"></span>
+              <span>
+                <span class="fx-opt-label">按行数截断</span>
+                <span class="fx-opt-desc">保留「还有 N 行 · 展开全部」，与 OpenChamber 不一致</span>
+              </span>
+            </button>
+            <button type="button" class="fx-opt" role="radio" aria-checked="false">
+              <span class="fx-radio" aria-hidden="true"></span>
+              <span>
+                <span class="fx-opt-label">Other</span>
+                <span class="fx-opt-desc">自己填</span>
+              </span>
+            </button>
+          </div>
+          <div class="fx-card-foot">
+            <button type="button" class="fx-btn go">Submit</button>
+            <button type="button" class="fx-btn quiet">Next</button>
+            <button type="button" class="fx-btn stop">Dismiss</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <p class="src">
+    Question 卡按 OpenChamber 的单选列表形态（不是按钮组），含 <code>Other</code> 自定义行与
+    <code>recommended</code> 标记。多问题时头部会出现内联 tab 条 + Summary 页，此处只画单题。
+    <b>归属更正（2026-07-28 复核）</b>：图中按钮的 squircle + 全小写 + 扁平 color-mix
+    是 <strong>OpenChamber 全局 Button 原语</strong>的基线（<code>packages/ui/src/components/ui/button.tsx:37</code>），
+    这条基线要照做、故原型视觉保留；但 <strong>Question 卡在参考实现里并未使用该原语</strong>——
+    它既不 import 共享 <code>Button</code>，其提交/取消按钮也是原生 <code>button</code> + 普通
+    <code>rounded</code> + status 扁平着色（<code>chat/QuestionCard.tsx:530-556</code>：
+    <code>bg-[rgb(var(--status-success)/0.1)] text-[var(--status-success)]</code> 与
+    <code>bg-[rgb(var(--status-error)/0.1)] text-[var(--status-error)]</code>，hover 加深到 <code>/0.2</code>），
+    <strong>无 squircle、无 lowercase</strong>。按钮基线归 A05 / T-21，不归 T-05。
+  </p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-tag">02</span>
+    <h2>视觉 Token 映射</h2>
+    <span class="sec-sub">A05 · Flexoki → ai-client</span>
+  </div>
+
+  <p>
+    ai-client 现有配色缺的是<strong>品牌强调色</strong>：中性与品牌梯度整套锁在色相 285.82，
+    <code>--accent</code> / <code>--muted</code> / <code>--secondary</code> 三者色值完全相同，
+    <code>--primary</code> 是中性反色而非品牌色（亮 <code>oklch(0.205 0.014 285.82)</code> 近黑、
+    暗 <code>oklch(0.985 0 0)</code> 近白），满屏 <code>text-primary</code> 实为「最高对比度正文色」。
+    要对齐 Flexoki 的暖纸感，需要新增品牌强调色与运行态色，并把三个同值中性 token 拉开层次。
+  </p>
+  <p>
+    <b>表述更正（2026-07-28 复核）</b>：此处原写「<strong>全部</strong>语义变量锁在色相 285.82」不准确——
+    <code>--success</code> / <code>--warning</code> / <code>--info</code> <strong>既不在该色相、也不是中性</strong>，
+    实测 <code>src/renderer/styles/globals.css:80-85</code>（亮）与 <code>:110-115</code>（暗）为
+    <code>oklch(0.527 0.154 150.07)</code> / <code>oklch(0.769 0.189 70.08)</code> /
+    <code>oklch(0.623 0.214 259.81)</code>，彩度 0.15~0.21，是三个真彩色。
+    它们的实际问题是<strong>亮暗两套完全同值</strong>、未随主题调校（见下表三行的「亮暗同值」列）。
+    所以缺的是<strong>品牌强调色</strong>，不是「全部彩色」；下表的状态三行同样要补上亮暗两套取值。
+  </p>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th class="mono">ai-client 变量</th>
+          <th class="mono">现状（暗）</th>
+          <th class="mono">Flexoki Dark</th>
+          <th class="mono">Flexoki Light</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">--background</td>
+          <td class="mono"><span class="sw" style="background:#171719"></span>oklch(.145 .014 285)</td>
+          <td class="mono"><span class="sw" style="background:#171515"></span>#171515</td>
+          <td class="mono"><span class="sw" style="background:#fffdf4"></span>#fffdf4</td>
+          <td>冷灰紫 → 暖墨 / 暖纸</td>
+        </tr>
+        <tr>
+          <td class="mono">--foreground</td>
+          <td class="mono"><span class="sw" style="background:#fafafa"></span>oklch(.985 0 0)</td>
+          <td class="mono"><span class="sw" style="background:#CECDC3"></span>#CECDC3</td>
+          <td class="mono"><span class="sw" style="background:#100F0F"></span>#100F0F</td>
+          <td>纯白 → 暖白，降低刺目</td>
+        </tr>
+        <tr>
+          <td class="mono">--card / elevated</td>
+          <td class="mono"><span class="sw" style="background:#171719"></span>与 background 同值</td>
+          <td class="mono"><span class="sw" style="background:#1c1a19"></span>#1c1a19</td>
+          <td class="mono"><span class="sw" style="background:#fbfaf2"></span>#fbfaf2</td>
+          <td><b>现状面板与底色无层次差</b>，需拉开</td>
+        </tr>
+        <tr>
+          <td class="mono">--muted</td>
+          <td class="mono"><span class="sw" style="background:#3f3f46"></span>oklch(.269 .014 285)</td>
+          <td class="mono"><span class="sw" style="background:#1C1B1A"></span>#1C1B1A</td>
+          <td class="mono"><span class="sw" style="background:#f6f5ee"></span>#f6f5ee</td>
+          <td>现与 accent/secondary 同值</td>
+        </tr>
+        <tr>
+          <td class="mono">--muted-foreground</td>
+          <td class="mono"><span class="sw" style="background:#a1a1aa"></span>oklch(.708 .014 285)</td>
+          <td class="mono"><span class="sw" style="background:#807e79"></span>#807e79</td>
+          <td class="mono"><span class="sw" style="background:#686663"></span>#686663</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td class="mono">--border</td>
+          <td class="mono"><span class="sw" style="background:#3f3f46"></span>oklch(.269 .014 285)</td>
+          <td class="mono"><span class="sw" style="background:#343331"></span>#343331</td>
+          <td class="mono"><span class="sw" style="background:#DAD8CE"></span>#DAD8CE</td>
+          <td>与 muted 同值 → 需独立</td>
+        </tr>
+        <tr>
+          <td class="mono"><b>--accent-primary</b> 新增</td>
+          <td class="mono">✗ 不存在</td>
+          <td class="mono"><span class="sw" style="background:#DA702C"></span>#DA702C</td>
+          <td class="mono"><span class="sw" style="background:#BC5215"></span>#BC5215</td>
+          <td><b>整套配色唯一的强调色</b></td>
+        </tr>
+        <tr>
+          <td class="mono"><b>--selection</b> 新增</td>
+          <td class="mono">✗ 借用 accent</td>
+          <td class="mono"><span class="sw" style="background:#3a3937"></span>#f4f4f41f</td>
+          <td class="mono"><span class="sw" style="background:#e8e6e0"></span>#76736f30</td>
+          <td>「当前选中」≠「主操作」</td>
+        </tr>
+        <tr>
+          <td class="mono"><b>--hover</b> 新增</td>
+          <td class="mono">✗ 借用 accent</td>
+          <td class="mono"><span class="sw" style="background:#2b2a29"></span>#ffffff18</td>
+          <td class="mono"><span class="sw" style="background:#eeece6"></span>#76736f20</td>
+          <td>只用于可交互元素</td>
+        </tr>
+        <tr>
+          <td class="mono">--destructive → status-error</td>
+          <td class="mono"><span class="sw" style="background:#6b2320"></span>oklch(.396 .141 25)</td>
+          <td class="mono"><span class="sw" style="background:#D14D41"></span>#D14D41</td>
+          <td class="mono"><span class="sw" style="background:#AF3029"></span>#AF3029</td>
+          <td>现状暗色下过暗</td>
+        </tr>
+        <tr>
+          <td class="mono">--warning</td>
+          <td class="mono"><span class="sw" style="background:#e5a13a"></span>亮暗同值</td>
+          <td class="mono"><span class="sw" style="background:#DA702C"></span>#DA702C</td>
+          <td class="mono"><span class="sw" style="background:#BC5215"></span>#BC5215</td>
+          <td>Flexoki 里 warning = primary</td>
+        </tr>
+        <tr>
+          <td class="mono">--success</td>
+          <td class="mono"><span class="sw" style="background:#3f7a4a"></span>亮暗同值</td>
+          <td class="mono"><span class="sw" style="background:#A0AF54"></span>#A0AF54</td>
+          <td class="mono"><span class="sw" style="background:#66800B"></span>#66800B</td>
+          <td>橄榄绿，非蓝绿</td>
+        </tr>
+        <tr>
+          <td class="mono">--info</td>
+          <td class="mono"><span class="sw" style="background:#4c8df6"></span>亮暗同值</td>
+          <td class="mono"><span class="sw" style="background:#4385BE"></span>#4385BE</td>
+          <td class="mono"><span class="sw" style="background:#205EA6"></span>#205EA6</td>
+          <td>降饱和</td>
+        </tr>
+        <tr>
+          <td class="mono"><b>--status-running</b> 新增</td>
+          <td class="mono">✗ 现用 amber-500 硬编码</td>
+          <td class="mono" colspan="2">建议复用 <span class="sw" style="background:#DA702C"></span>accent-primary</td>
+          <td>
+            换掉 Thinking 折叠头的 <code>bg-amber-500</code>（<code>chat/MessageTimeline.tsx:419</code>）。
+            <b>范围更正（2026-07-28 复核）</b>：它不是全仓唯一——<code>src/renderer</code> 下
+            <code>bg-amber-500</code> 5 处，同类原色工具类共 134 处 / 47 文件（集中在
+            <code>source-control/</code>、<code>layout/</code>、<code>ui/</code> 等旧模块）。
+            T-21 只清 <code>chat/**</code> 与 <code>workspace-shell/**</code>（含
+            <code>HostStatusBanner.tsx:55</code>、<code>StatusLine.tsx:233-234</code>），旧模块归 T-25。
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>排版与尺寸</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>项</th><th class="mono">ai-client 现状</th><th class="mono">OpenChamber</th><th>差异后果</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>UI 字体 <span class="tag live">已裁定：照做</span></td>
+          <td class="mono">Inter / system-ui（sans）</td>
+          <td class="mono">ui-monospace（<b>全等宽</b>）</td>
+          <td>OpenChamber 的 sans / mono / heading 三者是同一个等宽栈，这是它观感的最大来源之一。
+            <b>已定为全等宽照做</b>；需注意中文会回退到系统字体，中英混排的宽度节奏需实测</td>
+        </tr>
+        <tr>
+          <td>根字号</td>
+          <td class="mono">14px（html 覆盖）</td>
+          <td class="mono">16px（浏览器默认）</td>
+          <td>ai-client 所有 rem 实际值 ×14/16，<code>--radius: .5rem</code> 真实是 7px 不是 8px</td>
+        </tr>
+        <tr>
+          <td>字号档</td>
+          <td class="mono">2xs/xs/sm/md/lg/xl 六档</td>
+          <td class="mono">markdown 15 / code 13 / label·meta·micro 14</td>
+          <td>OpenChamber 只有三个真实数值，靠颜色与字重区分层级</td>
+        </tr>
+        <tr>
+          <td>圆角</td>
+          <td class="mono">4 / 8 / 12 / 16</td>
+          <td class="mono">4 / 7 / 9 / 12 + squircle</td>
+          <td>按钮走 <code>corner-shape: squircle</code>，支持的浏览器上是超椭圆</td>
+        </tr>
+        <tr>
+          <td>按钮</td>
+          <td class="mono">h-6 / h-8 / h-9，常规着色</td>
+          <td class="mono">24 / 32 / 36 / 40，<b>全小写</b>、扁平 color-mix、无阴影</td>
+          <td>
+            高度档基本一致，观感差在小写与着色方式。此行描述的是<strong>全局 Button 原语</strong>
+            （<code>ui/button.tsx:37</code> 的 squircle + lowercase，<code>:76-81</code> 的 xs/sm/default/lg =
+            h-6/h-8/h-9/h-10）；未使用该原语的局部按钮（如 Question 卡）不带这两个特征（2026-07-28 复核）
+          </td>
+        </tr>
+        <tr>
+          <td>聊天列宽</td>
+          <td class="mono">满宽，气泡 max-w 85%</td>
+          <td class="mono">min(100%, 48rem) 居中；宽模式 64rem</td>
+          <td>需新增居中阅读栏容器</td>
+        </tr>
+        <tr>
+          <td>助手消息</td>
+          <td class="mono">带边框气泡</td>
+          <td class="mono"><b>完全平铺</b>，靠底部 footer 区分</td>
+          <td>去掉容器后信息密度显著提升</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-tag">03</span>
+    <h2>功能接入状态矩阵</h2>
+    <span class="sec-sub">A06 · 新壳逐入口盘点</span>
+  </div>
+
+  <p>
+    可行性文档 §6.2 立过两条硬规矩：<strong>禁止按钮看起来可用但点击无反馈</strong>、
+    <strong>禁止用硬编码数据伪装真实 Runtime 状态</strong>。当前实现各踩一条。
+    下表是逐入口盘点，<code>禁用占位</code> 一列是需要立刻补 disabled 态与 Tooltip 的清单。
+  </p>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>区域</th><th>入口</th><th>状态</th><th class="mono">依据</th></tr>
+      </thead>
+      <tbody>
+        <tr><td rowspan="6">LeftNav</td><td>Project / Workspace / Session 三层树</td><td><span class="tag live">已接入</span></td><td class="mono">LeftNav.tsx:204-263</td></tr>
+        <tr><td>会话 新建 / 重命名 / 归档 / resume</td><td><span class="tag live">已接入</span></td><td class="mono">LeftNav.tsx:76-92, 459-488</td></tr>
+        <tr><td>会话搜索框</td><td><span class="tag part">基础接入</span></td><td class="mono">LeftNav.tsx:107-113 仅按 title 前端过滤</td></tr>
+        <tr><td>Workspace 按钮</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">LeftNav.tsx:167-170 硬编码 disabled，无 handler</td></tr>
+        <tr><td>Menu（汉堡）</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">LeftNav.tsx:136-138 无 onClick</td></tr>
+        <tr><td>Help</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">LeftNav.tsx:279-282 无 onClick</td></tr>
+
+        <tr><td rowspan="4">MainHeader</td><td>项目 / 工作区 / 路径上下文条</td><td><span class="tag live">已接入</span></td><td class="mono">MainHeader.tsx:38-49</td></tr>
+        <tr><td>Usage 环「72%」</td><td><span class="tag dead">违规：假数据</span></td><td class="mono">MainHeader.tsx:78-89 硬编码；真数据已在 WindowTitleBar.tsx:55-60</td></tr>
+        <tr><td>Layout / Folder / Host / Browser / Window 五按钮</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">MainHeader.tsx:56-72 全部无 onClick</td></tr>
+        <tr><td>终端 Dock / 右栏开关</td><td><span class="tag part">基础接入</span></td><td class="mono">开关真实，打开的是占位内容</td></tr>
+
+        <tr><td rowspan="3">ChatWorkspace</td><td>对话全链路（模型 / effort / @引用 / 附件 / Stop / Retry）</td><td><span class="tag live">已接入</span></td><td class="mono">ChatWorkspace.tsx:45-55</td></tr>
+        <tr><td>Thinking 卡</td><td><span class="tag part">基础接入</span></td><td class="mono">网关侧返回空文本，见 open-questions #5/#8</td></tr>
+        <tr><td>Tool 卡 / Question 卡</td><td><span class="tag part">基础接入</span></td><td class="mono">Tool 是裸 JSON；Question 无 case，UI 完全不可见</td></tr>
+
+        <tr><td rowspan="3">RightDock</td><td>Git tab</td><td><span class="tag dead">mock 占位</span></td><td class="mono">RightDock.tsx:38-52 DockPlaceholder</td></tr>
+        <tr><td>Files tab</td><td><span class="tag dead">mock 占位</span></td><td class="mono">同上</td></tr>
+        <tr><td>Context tab</td><td><span class="tag dead">mock 占位</span></td><td class="mono">同上</td></tr>
+
+        <tr><td>BottomDock</td><td>终端</td><td><span class="tag dead">mock 占位</span></td><td class="mono">BottomDock.tsx:21-23 纯文案</td></tr>
+
+        <tr><td rowspan="4">全局（旧壳有 / 新壳无）</td><td><b>添加仓库</b></td><td><span class="tag dead">阻断级缺口</span></td><td class="mono">Dialog 挂载于 App.tsx:1919 但无任何 trigger；唯一通路 --open-path argv</td></tr>
+        <tr><td>建 / 删 / 合并 worktree · git init · 分组</td><td><span class="tag out">暂不纳入</span></td><td class="mono">强绑 TreeSidebar（吃 App.tsx 约 35 个回调）</td></tr>
+        <tr><td>全局搜索（内容 / 文件名）</td><td><span class="tag out">暂不纳入</span></td><td class="mono">GlobalSearchDialog 完全解耦，缺触发入口</td></tr>
+        <tr><td>Diff Review / AI Code Review / OpenInMenu</td><td><span class="tag out">暂不纳入</span></td><td class="mono">组件可复用，无 UI 落点</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-head">
+    <span class="sec-tag">04</span>
+    <h2>布局骨架对比</h2>
+    <span class="sec-sub">A01 · 冲突 1 的图解</span>
+  </div>
+
+  <div class="layouts">
+    <div class="layout-card">
+      <h4>ai-client 现状 · 四区</h4>
+      <div class="diagram d-now">
+        <div class="zone z-nav">LeftNav<br>288 / 48</div>
+        <div class="zone z-hdr">MainHeader h-14</div>
+        <div class="zone chat">ChatWorkspace<br>满宽</div>
+        <div class="zone hot">RightDock<br>320 固定<br>git｜files｜context</div>
+        <div class="zone hot" style="grid-column:2/4">BottomDock 220 固定 · 终端</div>
+      </div>
+      <p class="legend">
+        橙色 = 全 mock。两个 dock 宽高硬编码，无 resize handle，关闭时整体卸载。
+      </p>
+    </div>
+
+    <div class="layout-card">
+      <h4>OpenChamber 真实 · 三列 + 导轨</h4>
+      <div class="diagram d-oc">
+        <div class="zone z-nav">Sidebar<br>280<br>(280–500 可拖)</div>
+        <div class="zone z-hdr">Header · 自测量高度</div>
+        <div class="zone chat">main / ChatView<br>阅读栏 48rem 居中</div>
+        <div class="zone hot">ContextPanel<br>380–1400 可拖<br>11 种 surface</div>
+        <div class="zone z-rail">Rail 44</div>
+      </div>
+      <p class="legend">
+        无底部面板。终端是 ContextPanel 的一种 surface，也可提升为覆盖 main 的全视图。
+        导轨图标可拖拽排序；<b>只有 git surface 在有变更文件时右上角亮 6px 圆点</b>
+        （<code>ContextPanelRail.tsx:166</code> = <code>surface.id === 'git' &amp;&amp; changedFilesCount &gt; 0</code>，
+        圆点本体 <code>:82</code> 为 <code>h-1.5 w-1.5</code> + <code>var(--status-info)</code>），其余 surface 参考实现未做内容指示。
+        <br>
+        面板内部是 <code>tabs</code> + <code>activeTabId</code> 的<strong>多标签模型</strong>
+        （<code>ContextPanel.tsx:2240-2241</code>）：多个 surface 可同时驻留、一个 active。
+        <b>ai-client MVP 简化（2026-07-28 标注）</b>：本轮只做 <strong>surface 单选</strong>（同一时刻一种、互斥切换，
+        T-22 验收② / T-12），多标签驻留后置——这是我们的简化，非参考实现形态。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<footer class="footnote">
+  <h3>落库清单：这次对齐要改 ARD 三处</h3>
+  <p>
+    ARD 的 <b>D6</b> 明写「对齐 OpenChamber 的是 UI 架构与布局，<b>非色调风格严格一致</b>；
+    沿用现有设计系统；Flexoki 仅作可选后续主题，非 MVP 硬性目标」。
+    本次对齐等于<strong>撤销 D6</strong>。按本仓权威链规则（ARD ＞ 执行计划 ＞ 台账 ＞ plantree，「改架构先改它」），
+    以下动作必须在写任何代码之前完成：
+  </p>
+  <ul>
+    <li><b>ARD D6</b> 改写为「对齐 OpenChamber 观感：Flexoki 主题 + 全等宽字体 + 卡片形态」，
+      并在总台账登记推翻依据；</li>
+    <li><b>ARD §4</b> 目标产品结构图重画——四区（含底部终端 Dock）改为三列 + 44px 图标导轨；</li>
+    <li><b>ARD D15</b>（右栏 MVP 做单层 <code>git|files|context</code>）作废，改为 surface + 导轨模型；</li>
+    <li>总台账登记新决策（拟 D18 视觉对齐 / D19 布局骨架 / D20 问答归宿偏离）；</li>
+    <li>把 <b>A01 / A05 / A06</b> 补登为正式任务——它们此前只存在于可行性文档的候选池，从未进入执行计划，
+      而 F05、H01、H09 都声明依赖它们。本文件即三者的产物；</li>
+    <li><b>T-15</b> 从「底部终端 Dock」重定义为「终端 surface」；<b>T-05</b> 口径按冲突 2 裁定重写。</li>
+  </ul>
+  <p>
+    另有两条<strong>违反既有规矩</strong>的存量问题需一并清理（可行性文档 §6.2：禁止死按钮、禁止假数据）：
+    MainHeader 五个无 <code>onClick</code> 的图标按钮与硬编码的 72% usage 环
+    （真实 usage 数据已在 <code>WindowTitleBar.tsx:55-60</code>），
+    以及 LeftNav 的 Workspace / Menu / Help 三个死按钮。
+  </p>
+  <p class="src">
+    数据来源 · openchamber v1.17.0：packages/ui/src/{lib/theme/themes,components/{layout,chat}}／
+    ai-client：src/renderer/{components/{workspace-shell,chat},styles/globals.css}、docs/plans/*.md
+  </p>
+</footer>
+
+</div>
+
+<script>
+(() => {
+  // 主题切换：原型面板的 Flexoki 亮暗，独立于页面主题
+  var stage = document.getElementById('fxStage');
+  var seg = document.querySelectorAll('[data-fx-set]');
+  seg.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      var mode = btn.getAttribute('data-fx-set');
+      stage.setAttribute('data-fx', mode);
+      seg.forEach((b) => {
+        b.setAttribute('aria-pressed', String(b === btn));
+      });
+    });
+  });
+
+  // 工具行展开 / 收起
+  document.querySelectorAll('.fx-row[data-tool]').forEach((row) => {
+    row.addEventListener('click', () => {
+      var body = document.getElementById(row.getAttribute('data-tool'));
+      if (!body) return;
+      var open = row.getAttribute('aria-expanded') === 'true';
+      row.setAttribute('aria-expanded', String(!open));
+      body.hidden = open;
+    });
+  });
+
+  // Question 卡单选
+  var opts = document.querySelectorAll('.fx-opt[role="radio"]');
+  opts.forEach((opt) => {
+    opt.addEventListener('click', () => {
+      opts.forEach((o) => { o.setAttribute('aria-checked', String(o === opt)); });
+    });
+  });
+})();
+</script>
+</body>
+</html>
