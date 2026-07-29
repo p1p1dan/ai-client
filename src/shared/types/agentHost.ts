@@ -65,6 +65,14 @@ export interface SessionResumeCommand extends AgentHostCommandBase {
     /** Claude runtime / resume identity (not AiClient sessionId). */
     runtimeIdentity: string;
     workspacePath: string;
+    /**
+     * Must be re-sent on resume: cli.js is re-spawned per turn, and a resumed
+     * session without an explicit model silently falls back to the CLI default
+     * (a different model than the user picked, and a full prompt-cache rewrite).
+     */
+    model?: string;
+    /** Session default effort; per-send effort overrides it for one turn. */
+    effort?: SessionEffortLevel;
   };
 }
 

@@ -1344,6 +1344,8 @@ const electronAPI = {
       runtimeIdentity: string;
       workspacePath: string;
       model?: string;
+      /** T-20 session default reasoning effort. */
+      effort?: SessionEffortLevel;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
     send: (payload: {

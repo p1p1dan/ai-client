@@ -71,6 +71,8 @@ export function registerChatHandlers(): void {
         runtimeIdentity: string;
         workspacePath: string;
         model?: string;
+        /** T-20 reasoning effort; Host drops unknown levels (normalizeEffort). */
+        effort?: SessionEffortLevel;
       }
     ): Promise<{ requestId: string }> => {
       await sessionIndexService.recordResumed(payload);

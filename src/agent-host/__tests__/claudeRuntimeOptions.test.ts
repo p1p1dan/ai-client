@@ -135,6 +135,62 @@ describe('claudeRuntime query options — effort threading (T-20 base)', () => {
   });
 });
 
+describe('claudeRuntime query options — resume must re-pin model/effort (2026-07-29 cache probe)', () => {
+  // cli.js is re-spawned per turn; a resume without an explicit model falls back
+  // to the CLI default model — a silent model switch AND a guaranteed full
+  // prompt-cache rewrite (captured live: fresh turn carried the context-1m beta
+  // + "(1M context)" inside the Bash tool description, resumed turn did not).
+  it('threads model, effort, and resume identity into query() after resumeSession', async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.resumeSession({
+      sessionId: 's9',
+      workspacePath: process.cwd(),
+      runtimeIdentity: 'rt-uuid-9',
+      model: 'sonnet',
+      effort: 'high',
+    });
+    await rt.send({ sessionId: 's9', text: 'hi' });
+
+    expect(captured[0].model).toBe('sonnet');
+    expect(captured[0].effort).toBe('high');
+    expect(captured[0].resume).toBe('rt-uuid-9');
+  });
+
+  it('merges model/effort onto an existing registry entry on resume', async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 's10', workspacePath: process.cwd() });
+    rt.resumeSession({
+      sessionId: 's10',
+      workspacePath: process.cwd(),
+      runtimeIdentity: 'rt-uuid-10',
+      model: 'opus',
+      effort: 'medium',
+    });
+    await rt.send({ sessionId: 's10', text: 'hi' });
+
+    expect(captured[0].model).toBe('opus');
+    expect(captured[0].effort).toBe('medium');
+  });
+
+  it('drops an invalid effort on resume instead of forwarding it', async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.resumeSession({
+      sessionId: 's11',
+      workspacePath: process.cwd(),
+      runtimeIdentity: 'rt-uuid-11',
+      model: 'sonnet',
+      effort: 'turbo',
+    });
+    await rt.send({ sessionId: 's11', text: 'hi' });
+
+    expect(captured[0].model).toBe('sonnet');
+    expect(captured[0]).not.toHaveProperty('effort');
+  });
+});
+
 describe('normalizeEffort', () => {
   it('accepts every level the SDK declares', () => {
     for (const level of ['low', 'medium', 'high', 'xhigh', 'max'] as const) {

@@ -225,6 +225,9 @@ async function handleCommand(raw: unknown): Promise<void> {
         sessionId,
         workspacePath,
         runtimeIdentity,
+        model: typeof cmd.payload?.model === 'string' ? cmd.payload.model : undefined,
+        // Validated in claudeRuntime (normalizeEffort) — unknown values drop.
+        effort: cmd.payload?.effort,
         requestId: cmd.requestId,
       });
       return;

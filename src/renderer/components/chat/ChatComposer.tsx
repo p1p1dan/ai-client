@@ -555,6 +555,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
             runtimeIdentity: preamble.runtimeIdentity,
             workspacePath,
             model,
+            ...(effort ? { effort } : {}),
           })
           .catch(() => undefined);
 
