@@ -162,3 +162,9 @@ Path A(SDK `forwardSubagentText` 直播)作为后续增强。⚠️ 派生工具
 动词开头无图标灰阶单行 + `Explored N files, M searches` 聚合展开 + `Thought`/`Worked for Ns` 折叠行;问答卡=
 `Questions` 折叠条(多题分页)/ A-B-C-D 字母行选项 / Skip+Continue / **回答后冻结 `Answers` 卡(与 D20 一致)** /
 `Questions skipped` 跳过态。T-05 开工前按 A07 v2 二次重写验收标准;「点击历史消息重新编辑」标注待定仅归档。
+
+## 11. 追记(2026-07-29 晚,D21-A 微调):main/master 也显示分支 chip
+
+§3 的 chip 规则「main worktree 不显 chip 防噪音」被用户追加裁定推翻:**所有会话行均显示分支 chip**
+(main worktree 显其实际分支名 main/master),temp/remote 仍显 kind 标签。已同步总台账 D21 补记、
+执行计划 T-26 行(内容与验收②)、A07 基线屏①②样张。
