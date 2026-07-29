@@ -43,6 +43,7 @@
 - **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 - **T-21 Flexoki 主题 + 全等宽字体栈**：代码已提交 `b38017b`（2026-07-29，31 文件）。按本表口径「impl done 待 GUI 联调」不算 Done —— 用户 2026-07-29 已点测大部分，**中英混排三场景 + 6 处 `normal-case` 豁免的目视验收尚未出截图**（open-q #10），且验收须在**默认主题**下进行（`sync-terminal` 混色属 open-q #12 未裁定边界，不是 T-21 引入的 bug）。截图入台账后转 Done。
+- **T-22 壳结构改造（D19）**：代码已落 `95a5c04`（2026-07-29，23 文件 +2368/-456；三列 + 44px 导轨 + surface 模型，删 BottomDock/RightDock；纯函数 +79 例；Codex 对抗复核采纳 5 项已修）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-ter](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-22 行。
 
 ## Next
 
@@ -54,7 +55,7 @@
 
 1. **T-24 新壳「添加仓库」通路**（阻断级，排第一）——补新壳入口并把窗口拖放 ref 绑到新壳，解开「新机器只能靠 `--open-path` argv 注册」的死结；**优先级高于 T-16 与 T-21 / T-22**。→ 执行计划 §3 T-24 行
 2. ~~**T-21 Flexoki 主题 + 全等宽字体栈**~~ —— **代码已落 `b38017b`，转 In Progress 等 GUI 截图验收**（原文保留供参考）：`globals.css` 语义 token 重写 + 四个新 token + `docs/design-system.md` 同步改写；原色硬编码清理**只覆盖新壳 chat / workspace-shell 两个目录**（**不是全仓唯一**，旧模块归后置的 T-25，清单与实测面见执行计划）。**开工前先结 open-q #11**（根字号 14→16），验收含中英混排实测截图（#10）；终端与 Monaco 边界外（#12）。→ 执行计划 §3 T-21 行
-3. **T-22 壳结构改造：三列 + 44px 导轨 + surface 模型**（D19）——建 surface 注册表并**删除 `BottomDock.tsx`**，布局与 surface 选择逻辑下沉纯函数。→ 执行计划 §3 T-22 行
+3. ~~**T-22 壳结构改造：三列 + 44px 导轨 + surface 模型**（D19）~~ —— **代码已落 `95a5c04`，转 In Progress 等 GUI 点验**（原文保留供参考）：建 surface 注册表并**删除 `BottomDock.tsx`**，布局与 surface 选择逻辑下沉纯函数。→ 执行计划 §3 T-22 行
 4. **T-05 重做：Tool 行 + Question 卡**（口径 2026-07-28 整体重写，原口径作废）——无边框单行工具行 + 就地冻结问答卡（D20）；store 侧冻结已实现，本任务只补 UI。原「开工前需用户定交互口径」已收口，不再阻塞。→ 执行计划 §3 T-05 行
 5. **T-23 存量违规清理**（A06 矩阵产出）——死按钮与假 usage 环逐项接线，或 `disabled` + Tooltip 明写状态。→ 执行计划 §3 T-23 行
 6. **GUI 统一点测**（用户人工）：多轮上下文回归 / T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测 / T-03 历史读失败提示 / **T-18 粘贴附件（本轮 100% 待人工测）**——**均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO「用户线」。

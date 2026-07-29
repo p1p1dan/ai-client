@@ -9,6 +9,7 @@
   - 文档（2026-07-29 四批）：**D24 落库——工具行/问答卡形态源改判为 Cursor**（用户在 Cursor 触发两类组件演示并存图，5 图入库 refs/cursor-20260729/）：工具行=动词开头灰阶单行+聚合展开；问答卡=Questions 折叠条/A-B-C-D 字母行/Skip+Continue/**回答后冻结 Answers 卡（与 D20 合流）**。D23 的「时间线内部不动」边界句作废；**T-05 待二次重写验收标准**（开工前、按 A07 v2）；A07 v2 补两屏制作中。「点击历史消息重新编辑」用户标注待定、仅归档
   - 文档（2026-07-29 三批）：**A07 中列 Cursor 观感基线 ✅ 用户正式定稿(2026-07-29,v3)** [`docs/design/a07-cursor-composer-alignment.html`](../../../design/a07-cursor-composer-alignment.html)——六屏 × Flexoki 亮暗;§08 五件事已全部裁定,工具行交互口径(Read 可点击/Grep 悬浮命中列表)与 main/master chip 已烧入;**T-05 验收标准已按定稿重写(执行计划 §3 T-05 行现行权威段)**，token 与 globals.css 机器校验一致；**待用户浏览器验收**（重点：Tab 栏带/不带、运行位置只读 chip），通过后 T-27/T-28 方可施工
   - 文档（2026-07-29）：**侧栏两层化 + Composer 目标栏合并设计**落库 [`docs/plans/2026-07-29-sidebar-composer-target-bar-design.md`](../../../plans/2026-07-29-sidebar-composer-target-bar-design.md)（双独立方案 Opus/Codex 收敛合并；用户 2026-07-29 拍板方向）——核心裁定：侧栏「文件夹→对话」两层、Workspace 降为运行目标属性、分支下拉=worktree 选择器**禁 in-place checkout**、subagent 后置（Path B 先行）；**T-24 账实不符已更正**（实体随 `b38017b` 夹带落库）。呈现层四点待拍板 → open-q **#16**，拍板后 D21/D22 落总台账、T-26/T-27 立项
+  - 代码（2026-07-29 四批）：**T-22 壳结构改造落地** `95a5c04` —— 四区壳改三列 + 44px 导轨 + surface 模型（D19）：Sidebar 280 可拖 280–500、阅读栏 48/64rem（LayoutGrid 接线，消化一枚 A06 死按钮）、ContextPanel 380–1400 按 surface 记忆宽 + 提升覆盖 Main、Rail 仅 git 圆点（真数据无轮询）、**删 BottomDock/RightDock**；布局纯函数 `shellLayoutModel.ts`/`surfaceRegistry.ts` 断言先行（+79 例）+ persist store `aiclient-shell-layout`。Codex 对抗复核（恢复同行位）1 blocker 驳回（验收⑤口径=代码零引用，docs 历史叙述不改）+ 采纳 5 项当场修（pointer 会话绑定/动画期基线/卸载复位/内层列保宽/NaN 防护）。**GUI 点验待用户**。明细见主线台账 2026-07-29 T-22 行
   - 代码（2026-07-29 三批）：**T-26 侧栏两层化落地** `dd23b01` —— 侧栏「文件夹→会话」两层平铺（D21/D21-A）：`sidebarTree.ts` 纯函数断言先行（14 例）、全量分支 chip（main/master 显实际分支名，`ChatWorkspace.branch` 纯可选加法）、Recent 段 48h 口径（7 条+Show more，折叠持久化）、`selectedWorkspaceId` 移除（选择权移交 T-27 目标栏）。对抗复核 1 blocker——sync 桥变更签名缺 `branch`，冷启动 chip 全灭——已修（`workspaceTreeSignature` + 回归测试）；ARD §4 数据层级文字块按 D21 连带改写。**GUI 点验待用户**。明细见主线台账 2026-07-29 T-26 行
   - 代码（2026-07-29 二批）：**缓存排查闭环** `3622c19` —— 对话每条消息全量重写缓存的双根因坐实：**主因网关无会话亲和（app 无可修，open-q #15 待用户找运营方）**；次因 Host `session.resume` 丢 model/effort（Host 重启后静默换回 cli 默认模型）已修，+3 例钉死 resume→query() 下发。故障档案 [`docs/design/BUG-2026-07-29-prompt-cache-rewrite.md`](../../../design/BUG-2026-07-29-prompt-cache-rewrite.md)，探针 `spikes/cache-affinity-probe.mjs` / `capture-proxy.mjs` 入库
   - 代码（2026-07-29）：**窗口链** `d68d3c6` · **凭证隔离** `b18ccac` —— **「不出窗口」故障闭环**——同事的 show 兜底复核有效（本机实际生效路径 = `did-finish-load`，`ready-to-show` 从不触发），**原故障报告根因判错已更正**；连带修 `MainWindow.ts` 窗口状态从未恢复的既有 bug + 兜底日志被 electron-log 静音；顺带修 `McpSection.tsx` 嵌套 `<button>`。**dev 态凭证隔离**——`scripts/dev.js` 读 `dev.env` 剥离/注入/隔离，裸启动不再回落开发者本机 `~/.claude` 登录。明细见主线台账 2026-07-29 两行
@@ -16,10 +17,11 @@
   - **2026-07-29 复核（`d68d3c6` / `b18ccac` / T-21 `b38017b` 合并态）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。**例数未增 = 本轮未补测试**，`dev.js` 凭证逻辑目前零自动化断言（见 open-q **#14**）。
   - **2026-07-29 二批复核（`3622c19` 合并态）**：typecheck 干净 / lint 615 文件 0 诊断 / vitest **54 文件 621 例**（+3，同 3 例 Windows-only 失败）。
   - **2026-07-29 三批复核（T-26 `dd23b01` 合并态）**：typecheck 干净 / lint **620 文件 0 诊断** / vitest **55 文件 635 例**（+1 文件 +14 例，同 3 例 Windows-only 失败）。
+  - **2026-07-29 四批复核（T-22 `95a5c04` 合并态）**：typecheck 干净 / lint **631 文件 0 诊断** / vitest **57 文件 714 例**（+2 文件 +79 例，同 3 例 Windows-only 失败）。
   - **T-21 复核口径（2026-07-28 审查回合，代码已于 2026-07-29 提交 `b38017b`）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。
     lint 文件数从 613 涨到 615 是**新增文件**所致（`docs/design/phase0a-openchamber-alignment.html` 基线产物 + `src/renderer/lib/__tests__/ghosttyTheme.test.ts`），**`biome.json` 未改**——
     施工中一度加过 `"!docs/design"` 排除项来绕开该 HTML 的 13 条诊断，这违反「不得改 lint 配置变绿」，已撤销：改为就地修（9 条 `useArrowFunction` 自动修 + 2 条 `noImportantStyles`、2 条 `noUnknownProperty` 加带理由的 `biome-ignore`，后者是 `corner-shape` 这个 Biome 尚无定义的 CSS Backgrounds 4 属性）。
-- **Next Target**（2026-07-29 二次修订，D21~D23 已拍板落库）: **T-24 收尾**（S0：全新机器 GUI 实测 + 台账补登，代码已随 `b38017b` 落库）→ **T-22**（三列 + 44px 导轨壳结构，废 BottomDock；**T-26 已落库 `dd23b01`，串行前置已清**）→ **T-27**（Composer 目标栏）→ **T-28**（中列状态化布局）→ **T-05 重做** → **T-23**。**A07 基线（中列 Cursor 观感）与 T-26/T-22 并行制作，用户验收后 T-27/T-28 观感部分方可施工**。T-21 已落库 `b38017b`。用户侧 GUI 点测（含**多轮上下文**必测项）与 **T-04 网关阻塞**、**#15 缓存复测裁定**并行。
+- **Next Target**（2026-07-29 二次修订，D21~D23 已拍板落库）: **T-24 收尾**（S0：全新机器 GUI 实测 + 台账补登，代码已随 `b38017b` 落库）→ **T-27**（Composer 目标栏；**T-22 已落库 `95a5c04`，壳结构前置已清**）→ **T-28**（中列状态化布局）→ **T-05 重做** → **T-23**。**A07 基线（中列 Cursor 观感）与 T-26/T-22 并行制作，用户验收后 T-27/T-28 观感部分方可施工**。T-21 已落库 `b38017b`。用户侧 GUI 点测（含**多轮上下文**必测项）与 **T-04 网关阻塞**、**#15 缓存复测裁定**并行。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -88,7 +90,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 1. **落库收尾（进行中）**：ARD（十二节连带改口，清单见 [ARD 修订头](../../../plans/2026-07-23-openchamber-chat-refactor-ard.md)）+ 总台账 D18~D20 + 执行计划任务表（T-05 重写、T-12~T-16 重定义、新增 T-21~T-25 / C-17）+ 本树四文件。落完才动代码。
 2. **T-24 新壳「添加仓库」通路**（阻断级）——**2026-07-29 账实更正：实体已随 `b38017b` 落库**（名义 T-21 的提交夹带，信息未提本任务；入口/拖放/纯函数+测试俱全，证据见执行计划 §3 T-24 行更正段）。**剩余 = 全新机器 GUI 实测 + 台账补登（S0，不改代码）**；「文件夹下拉」入口是增强，拟归 T-27（open-q #16 拍板后立项）。→ 执行计划 §3 T-24 行
 3. **T-21 Flexoki 主题 + 全等宽字体栈**（A05 代码化，D18）：`globals.css` 语义 token 重写 + 四个新 token + `docs/design-system.md` 同步改写（该文件是 `CLAUDE.md` 定的 UI 强制规范，不改就与 D18 对撞）；原色硬编码清理**只覆盖新壳 chat / workspace-shell 两个目录**（**不是全仓唯一**，旧模块归后置的 T-25）。**开工前先结 open-q #11**（根字号 14→16），验收含中英混排实测截图（#10）；终端与 Monaco 边界外（#12）。→ 执行计划 §3 T-21 行
-4. **T-22 壳结构改造**（D19）：三列 + 44px 导轨 + surface 注册表，**删除 `BottomDock.tsx`**；布局与 surface 选择逻辑下沉纯函数。→ 执行计划 §3 T-22 行
+4. **T-22 壳结构改造**（D19）：三列 + 44px 导轨 + surface 注册表，**删除 `BottomDock.tsx`**；布局与 surface 选择逻辑下沉纯函数。→ 执行计划 §3 T-22 行。**✅ 2026-07-29 已落库 `95a5c04`**（Codex 复核采纳项全修；剩 GUI 点验，清单见用户线 0-bis）
 5. **T-05 重做**（口径 2026-07-28 整体重写，原口径作废）：无边框单行工具行 + 就地冻结问答卡（D20）；**store 侧冻结已实现**（含 5 例幂等测试），本任务只补 UI。原「开工前需用户定交互口径」已由本次拍板收口，不再阻塞。→ 执行计划 §3 T-05 行
 6. **T-23 存量违规清理**（A06 矩阵产出）：死按钮与假 usage 环逐项接线，或 `disabled` + Tooltip 明写状态。→ 执行计划 §3 T-23 行
 
@@ -97,6 +99,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 ### 用户线（点测 / 待拍板，与开发线并行）
 
 0. **多轮上下文回归点测（2026-07-28 新增，最优先）**：同一会话连发两条（如「我最喜欢的数字是 47」→「我最喜欢的数字是几？」），第二条必须记得第一条；newapi 面板应显示同一会话续接而非每条新建缓存。修复 `eea2f25`。**⚠️ 2026-07-29 口径更正**：「缓存读取」一项在网关开会话亲和**之前不会稳定出现**（open-q **#15**，对照实验证实命中随路由随机、与 app 无关）——点测只验记忆连续性，勿再以面板缓存读取为判据。另补一项：**Host 重启后续聊模型不变**（修复 `3622c19`：重启前选非默认模型 → 重启 → 同会话再发一条 → 响应模型应仍是所选模型而非默认）。
+0-bis. **T-22 壳结构点验（2026-07-29 新增）**：① 三列拖拽边界——Sidebar 拖到头停在 280/500、ContextPanel 停在 380/1400、Rail 恒 44（DevTools 量）；② Rail 四枚图标（Context/Git/Editor/Terminal）单选切换、再点同枚收起，未接入 surface 应显「T-1x 接线」诚实空态而非假内容；③ 顶栏 PanelRight 关→开应恢复上次 surface；④ 面板 Maximize 提升覆盖中列（不遮侧栏/导轨）、Minimize 还原；⑤ 顶栏 LayoutGrid 切 48↔64rem，时间线与 Composer 同栏宽居中；⑥ 有未提交改动的仓库 git 图标右上亮 6px 圆点、`git stash` 后熄灭，其余图标恒无圆点；⑦ 重启后侧栏宽/折叠、surface 选择、各 surface 面板宽、宽模式全部保持。
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
    [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
    - **T-04 thinking 卡**：🔴 **当前无法点验**——卡在网关（sonnet 空文本 / 默认模型 400，见上表）。网关侧修复后再测；仍须在**新发起轮次**验证（旧 fixture 的 153 个 thinking 块文本为空，不可追溯）。
