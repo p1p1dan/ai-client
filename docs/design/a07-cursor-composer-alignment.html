@@ -541,7 +541,8 @@ tr:last-child td { border-bottom: 0; }
    fall back to fill:black at the SVG default 300x150 box. */
 .fx svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
 
-/* ---- 侧栏（D21 简化形态：flat 平铺 + 分支 chip + 右对齐相对时间）---- */
+/* ---- 侧栏（D21 简化形态：flat 平铺 + 分支 chip + 右对齐相对时间）
+     v3：chip 规则改为「每行都显」——main / master 显实际分支名，temp / remote 显 kind ---- */
 
 .sb {
   display: flex;
@@ -603,8 +604,14 @@ tr:last-child td { border-bottom: 0; }
 .sb-row:hover { background: var(--hover); }
 .sb-row.is-active { background: var(--selection); }
 .sb-row .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v3：每一行会话都带 chip（main/master 也显示），所以 chip 必须自己封顶宽度，
+   否则一个长分支名就会把标题挤没。上限 = --w-side 的 40%，标题永远拿大头。 */
 .sb-row .chip {
   flex-shrink: 0;
+  max-width: calc(var(--w-side) * 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--t-code);
   line-height: 1;
   padding: 3px 5px;
@@ -892,7 +899,60 @@ button.ct-row { cursor: pointer; }
 .ct-think { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; font-size: var(--t-md); line-height: 1.55; color: var(--tool-arg); }
 .ct-think[hidden] { display: none; }
 
-/* 可选：保留工具输出体（非 Cursor 口径，§08 待拍板 ⑤） */
+/* ------------------------------------------------------------
+   v3 · 工具行的两种行内交互（用户实测 Cursor 补充）
+   ① Read 行：动词后的文件名可点击 → 打开文件（T-13 editor surface）
+   ② Grep / Search 行：悬浮出「命中文件列表」浮层，列表项可点击打开
+   ------------------------------------------------------------ */
+
+/* 静默可点：常态与普通参数完全同色，悬停才现形。
+   与 A01 的 .fx-path 同一套办法，不给工具行引入常驻链接色。 */
+.ct-a.is-link { border-bottom: 1px solid transparent; cursor: pointer; }
+.ct-a.is-link:hover { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* 命中列表浮层：复用 .dd 的 popover 族 token（--popover / --border / --shadow-pop）。
+   宽 = 两倍下拉宽：要同时容下「文件名 + 完整目录路径」两列，单个 --w-dd 装不下。
+   高 = 10 行 + 上下内边距，超出滚动。 */
+.ct-pop {
+  width: min(100%, calc(var(--w-dd) * 2));
+  max-height: calc(var(--h-row) * 10 + 8px);
+  overflow: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+}
+.ct-hit {
+  height: var(--h-row);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  width: 100%;
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--t-md);
+  text-align: left;
+  cursor: pointer;
+}
+.ct-hit:hover, .ct-hit.is-on { background: var(--hover); }
+.ct-hit .ic { color: var(--muted-foreground); }
+.ct-hit .f { flex-shrink: 0; color: var(--foreground); }
+.ct-hit .d {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+}
+
+/* 可选：保留工具输出体（非 Cursor 口径；§08 ⑤ 已裁定保留） */
 .fx-body { border-left: 1px solid var(--border); margin-left: 2px; padding-left: 14px; }
 .fx-body[hidden] { display: none; }
 .fx-out {
@@ -1140,7 +1200,7 @@ button.ct-row { cursor: pointer; }
 <div class="wrap">
 
 <header class="masthead">
-  <div class="eyebrow">A07 v2 · 观感基线 · 中列 Cursor 化对齐</div>
+  <div class="eyebrow">A07 v3 · 观感基线 · 中列 Cursor 化对齐</div>
   <h1>中列（Main）对齐 Cursor，配色字体守 Flexoki</h1>
   <p class="standfirst">
     D23 拍板后立项的观感基线：<b>形态学 Cursor，配色与字体学我们自己</b>。
@@ -1154,14 +1214,20 @@ button.ct-row { cursor: pointer; }
     v1 那句「时间线内部按 T-05 不变」的边界随之作废。屏② 的工具行示意已重做，
     并新增 <b>屏⑤ 工具行解剖</b> 与 <b>屏⑥ 问答卡全态</b>。
   </p>
+  <p class="standfirst" style="margin-top:0.6rem;">
+    <b>v3 增补（2026-07-29 裁定）：</b>§08 五件事<b>逐条裁定完毕，全部采纳基线建议</b>——
+    工具行<b>保留可展开输出体</b>、会话 Tab 栏<b>不采用</b>（屏③ 降级为变体存档）、会话态目标行不显文件夹、
+    圆形发送键、空态不放最近会话。另补<b>工具行交互口径</b>（Read 行文件名可点击 / Grep 行悬浮命中列表 → 屏⑤ F 组）
+    与<b>侧栏 chip 规则变更</b>（每行会话都显分支 chip，main / master 也显）。
+  </p>
   <div class="status-strip">
-    <span class="is-ref">参照 refs/cursor-20260729（11 张）</span>
+    <span class="is-ref">参照 refs/cursor-20260729（12 张）</span>
     <span>待用户验收</span>
-    <span class="is-ask">会话 Tab 栏：带 / 不带两版供拍板</span>
-    <span class="is-ask">工具行是否保留输出体：v2 新问</span>
+    <span class="is-ref">§08 五件事已逐条裁定（v3）</span>
+    <span class="is-ask">屏③ Tab 栏：已裁定不采用 · 变体存档</span>
   </div>
   <div class="masthead-meta">
-    <b>依据</b> D18 · D21 · D22 · D23 · <b>D24（v2）</b>
+    <b>依据</b> D18 · D20 · D21 · D22 · D23 · <b>D24（v2）</b> · <b>§08 裁定（v3）</b>
     <b>设计全文</b> plans/2026-07-29-sidebar-composer-target-bar-design.md
     <b>同族基线</b> design/phase0a-openchamber-alignment.html（A01/A05/A06）
     <b>日期</b> 2026-07-29
@@ -1187,7 +1253,7 @@ button.ct-row { cursor: pointer; }
     <a href="#s5">④ 下拉解剖</a>
     <a href="#s6">⑤ 工具行</a>
     <a href="#s7">⑥ 问答卡</a>
-    <a href="#s8">取舍 / 待拍板</a>
+    <a href="#s8">取舍 / 裁定</a>
   </nav>
 </div>
 
@@ -1233,7 +1299,8 @@ button.ct-row { cursor: pointer; }
   <p class="src">
     参照截图 · docs/design/refs/cursor-20260729/<br>
     v1（6 张）{侧栏样式, 初始未发消息状态, 发起对话后状态, 文件夹下拉展开, 分支下拉展开, 运行位置下拉展开}.png<br>
-    v2（5 张）{工具行-进行中, 工具行-聚合展开+问答折叠条, 问答卡-展开选项, 问答卡-回答后Answers冻结, 待定-点击历史消息重新编辑+问答Skipped态}.png
+    v2（5 张）{工具行-进行中, 工具行-聚合展开+问答折叠条, 问答卡-展开选项, 问答卡-回答后Answers冻结, 待定-点击历史消息重新编辑+问答Skipped态}.png<br>
+    v3（1 张）{工具行-悬浮命中文件列表}.png
   </p>
 </section>
 
@@ -1276,6 +1343,10 @@ button.ct-row { cursor: pointer; }
         <tr><td class="mono" style="color:var(--page-go);">v2 · 工具行节拍</td><td><b>行距 1.5 + 行间 4px；展开明细缩进 0</b></td><td>正文段间距 10px 的半档</td><td>展开后的明细行与摘要行<b>同左边界、同节拍、无竖线</b>——这是 Cursor 工具行「不像折叠面板」的原因；v1 的 openchamber 竖线展开体在 v2 里取消</td></tr>
         <tr><td class="mono" style="color:var(--page-go);">v2 · --h-chip</td><td><b>20px</b></td><td><code>--h-btn</code>(24) − 紧凑间距档 gap-1(4)</td><td>问答卡 A/B/C/D 字母 chip。必须比 28px 行矮一截，否则 chip 会读成按钮，而它只是编号；Cursor 目视约 16px，我们取 20 以容下 13px code 档字符</td></tr>
         <tr><td class="mono" style="color:var(--page-go);">v2 · 问答卡</td><td><b>头/折叠条 36 · 选项行 28 · 卡圆角 12</b></td><td><code>--h-bar</code> / <code>--h-row</code> / <code>--r-md</code></td><td>全部复用既有档；Cursor 选项行目视 30px，收到 h-7 28px</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v3 · 侧栏 chip 封顶宽</td><td><b>112px</b></td><td><code>--w-side</code>(280) × 40%</td><td><b>关键取舍</b>：v3 起每行会话都带分支 chip（main/master 也显），chip 成了常驻列。给它一个「最多占侧栏四成」的硬上限，长分支名省略，标题永远拿大头</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v3 · 命中列表浮层宽</td><td><b>min(100%, 560px)</b></td><td><code>--w-dd</code>(280) × 2</td><td>Grep/Search 悬浮浮层要同时装下「文件名 + 完整目录路径」两列，单个下拉宽装不下；取整倍数而不是另立宽度</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v3 · 浮层最大高</td><td><b>288px</b></td><td><code>--h-row</code>(28) × 10 + 8px 内边距</td><td>「十行封顶，超出滚动」是可数的规则，比拍一个 300 之类的整数更好复述</td></tr>
+        <tr><td class="mono" style="color:var(--page-go);">v3 · 可点击文件名</td><td><b>常态零色差，悬停 --primary + 下划线</b></td><td>A01 <code>.fx-path</code> 同款</td><td><b>关键取舍</b>：不给工具行引入常驻链接色。一屏十几行工具行里若每个文件名都是蓝的，灰阶层级立刻失效</td></tr>
         <tr><td class="mono" style="color:var(--page-go);">v2 · Continue 按钮</td><td><b>--primary 实心 + --accent-primary 焦点环</b></td><td>D24 要求「强调色用我们的 token」</td><td><b>关键取舍</b>：不用 <code>--accent-primary</code> 本体做底——design-system「亮色红线」明写它对 bg 仅 1.82:1、不得承载文字，且<b>没有配套 *-foreground</b>；同族里只有 <code>--primary</code> 成对。<code>--accent-primary</code> 改去做焦点环，那是它的合法用法。Cursor 的琥珀 hex 一律不搬</td></tr>
       </tbody>
     </table>
@@ -1344,6 +1415,7 @@ button.ct-row { cursor: pointer; }
           </div>
           <div class="sb-row">
             <span class="t">Phase 2 execution and ledger</span>
+            <span class="chip">main</span>
             <span class="age">6d</span>
           </div>
 
@@ -1359,15 +1431,16 @@ button.ct-row { cursor: pointer; }
             <span>ai-client</span>
           </div>
           <div class="sb-row"><span class="t">OpenChamber chat refactor …</span><span class="chip">fix/recentBug</span><span class="age">5d</span></div>
-          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="age">5d</span></div>
-          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="age">6d</span></div>
-          <div class="sb-row"><span class="t">OpenChamber chat refactor</span><span class="age">6d</span></div>
-          <div class="sb-row"><span class="t">UI refactor discussion</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="chip">main</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="chip">main</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">OpenChamber chat refactor</span><span class="chip">feat/openchamber-chat-refactor</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">UI refactor discussion</span><span class="chip">main</span><span class="age">6d</span></div>
           <div class="sb-folder">
             <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
             <span>root/newhp</span>
           </div>
-          <div class="sb-row"><span class="t">Task comparison analysis</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">Task comparison analysis</span><span class="chip">master</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">草稿：Host 协议对照</span><span class="chip">temp</span><span class="age">6d</span></div>
 
           <div class="sb-foot">
             <span class="av">D</span>
@@ -1566,8 +1639,10 @@ button.ct-row { cursor: pointer; }
       <ul>
         <li>现状 <code>ChatComposer.tsx:701</code> 是 <code>shrink-0 border-t bg-background/80 p-3</code> 的<b>常驻底栏</b>，空态也贴底——本屏改为居中，且<b>去掉 border-t</b>。</li>
         <li>目标栏是<b>全新一行</b>：现状没有任何仓库/分支选择入口在中列（选择权原本散在侧栏树与 <code>MainHeader</code> 两个死按钮上，T-23 要删）。</li>
-        <li>发送键从 <code>Button size=sm</code> 带 <code>Send</code> 文字改为 <b>28px 圆形图标键</b>，省下一行横向宽度；文字改由 <code>aria-label</code> 承担（待拍板 ③）。</li>
-        <li>侧栏这里已按 D21 画成 <b>flat 平铺 + 分支 chip + 右对齐相对时间</b>，非 main 的会话才带 chip——与现状三层树不同。</li>
+        <li>发送键从 <code>Button size=sm</code> 带 <code>Send</code> 文字改为 <b>28px 圆形图标键</b>，省下一行横向宽度；文字改由 <code>aria-label</code> 承担（§08 ③ 已裁定采纳）。</li>
+        <li>侧栏这里已按 D21 画成 <b>flat 平铺 + 分支 chip + 右对齐相对时间</b>，与现状三层树不同。</li>
+        <li><b>v3 chip 规则变更（用户 2026-07-29 裁定）</b>：<b>每一行会话都带分支 chip</b>，main / master 也照显其实际分支名——推翻原「main 不显 chip 防噪音」。temp / remote 工作区仍显 <b>kind 标签</b>（样张里 <code>temp</code> 那行）。</li>
+        <li><b>代价已画出来</b>：chip 变成常驻列后横向变紧。chip 自封顶 <b>112px</b>（= 侧栏宽 40%），超出省略——样张里 <code>feat/openchamber-chat-refactor</code> 那两行就是被截断的真实样子，标题永远拿大头。</li>
       </ul>
     </div>
   </div>
@@ -1619,17 +1694,18 @@ button.ct-row { cursor: pointer; }
           <div class="sb-row is-active">
             <span class="live"></span>
             <span class="t">composerTarget 三档规则</span>
+            <span class="chip">feat/openchamber-chat-refactor</span>
             <span class="age">1m</span>
           </div>
           <div class="sb-row"><span class="t">OpenChamber chat refactor …</span><span class="chip">fix/recentBug</span><span class="age">5d</span></div>
-          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="age">5d</span></div>
-          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="age">6d</span></div>
-          <div class="sb-row"><span class="t">UI refactor discussion</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="chip">main</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="chip">main</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">UI refactor discussion</span><span class="chip">main</span><span class="age">6d</span></div>
           <div class="sb-folder">
             <svg class="ic" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
             <span>root/newhp</span>
           </div>
-          <div class="sb-row"><span class="t">Task comparison analysis</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">Task comparison analysis</span><span class="chip">master</span><span class="age">6d</span></div>
           <div class="sb-foot">
             <span class="av">D</span>
             <span class="who">dan<small>Claude Max</small></span>
@@ -1793,7 +1869,7 @@ button.ct-row { cursor: pointer; }
       <ul>
         <li><b>v1 作废的部分</b>：v1 屏② 的工具行是 openchamber 口径（图标 + 名称 + 描述 + diff 统计 + 竖线输出体）。D24 之后<b>整块重做</b>，图标、竖线、diff 统计全部取消。</li>
         <li><b>回合时长搬家</b>：v1 的 footer 是 <code>模型 · 12.4s · 07:41 · 文件 pill</code>；v2 把时长升为回合顶部的 <code>Worked for 31s ⌄</code>，footer 里的重复时长删掉。</li>
-        <li><b>信息量减少</b>：Cursor 的工具行<b>不展示任何工具输出</b>（五张截图里一次都没有）。这对排障是净损失 → §08 待拍板 ⑤。</li>
+        <li><b>信息量减少</b>：Cursor 的工具行<b>不展示任何工具输出</b>（五张截图里一次都没有）。这对排障是净损失 → §08 ⑤ 已裁定：<b>保留可展开输出体</b>（默认收起，失败行与显式点开才展示）。</li>
         <li>现状没有「目标行」这一层；现状 dock 有 <code>border-t bg-background/80</code>，本屏去掉，浮起感由卡片的 <code>--input</code> 边承担。</li>
         <li>用户气泡仍保留 A01 右对齐形态（Cursor 是全宽方框）——D24 只改了工具行与问答卡，气泡不在改判范围内。</li>
       </ul>
@@ -1805,12 +1881,19 @@ button.ct-row { cursor: pointer; }
 <section id="s4">
   <div class="sec-head">
     <span class="sec-tag">04</span>
-    <h2>屏③ 会话态 + 会话 Tab 栏（变体，待拍板）</h2>
+    <h2>屏③ 会话态 + 会话 Tab 栏 <span style="color:var(--page-stop);font-size:0.8em;">变体存档 · 已裁定不采用</span></h2>
     <span class="sec-sub">发起对话后状态.png 顶部 Tab</span>
   </div>
 
+  <div class="ask decided">
+    <b>裁定（2026-07-29）：不采用，中列以屏② 为准</b>
+    <p>本屏<b>降级为变体存档</b>，保留在基线里只为留下形态与尺寸记录——T-22 把中列 surface 化之后若需要重开 Tab 栏，
+      直接取用本屏，不必再画一遍。<b>T-28 施工不实现本屏。</b></p>
+    <p>裁定理由见 §08 ①：D21 刚把会话切换入口定在左栏，Tab 栏会造成两个入口；且 Tab 的语义（会话 vs surface）在 T-22 之前无法定义。</p>
+  </div>
+
   <p>
-    与屏② <b>唯一的差别</b>是中列顶部多了一条 36px 的会话 Tab 栏。放在一起看是为了拍板：
+    与屏② <b>唯一的差别</b>是中列顶部多了一条 36px 的会话 Tab 栏。
     引入它意味着中列可并行开多个会话，与 D21 侧栏会话列表的职责重叠；不引入则左栏是<b>唯一</b>会话切换入口。
   </p>
 
@@ -1852,11 +1935,12 @@ button.ct-row { cursor: pointer; }
           <div class="sb-row is-active">
             <span class="live"></span>
             <span class="t">composerTarget 三档规则</span>
+            <span class="chip">feat/openchamber-chat-refactor</span>
             <span class="age">1m</span>
           </div>
           <div class="sb-row"><span class="t">侧栏两层化 T-26</span><span class="chip">fix/recentBug</span><span class="age">2h</span></div>
-          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="age">5d</span></div>
-          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="age">6d</span></div>
+          <div class="sb-row"><span class="t">pnpm command not found e…</span><span class="chip">main</span><span class="age">5d</span></div>
+          <div class="sb-row"><span class="t">Phase 2 execution and ledger</span><span class="chip">main</span><span class="age">6d</span></div>
           <div class="sb-foot">
             <span class="av">D</span>
             <span class="who">dan<small>Claude Max</small></span>
@@ -1977,11 +2061,12 @@ button.ct-row { cursor: pointer; }
       </ul>
     </div>
     <div class="note is-diff">
-      <h4>拍板需要权衡的</h4>
+      <h4>裁定记录（2026-07-29 · 不采用）</h4>
       <ul>
         <li><b>职责重叠</b>：D21 刚把侧栏定成「文件夹 → 对话」两层，会话切换入口在左栏；再加 Tab 栏就有<b>两个</b>切换入口。</li>
         <li><b>与 D19 的关系</b>：T-22 会把中列变成可承载 surface 的区域，届时 Tab 栏的语义是「会话」还是「surface」需要先想清楚，否则会二次返工。</li>
-        <li><b>倾向</b>：先<b>不带</b>（屏②），把 Tab 栏留到 T-22 surface 化之后再评——现在引入等于提前锁定一个尚未定义的语义。</li>
+        <li><b>结论</b>：用户采纳建议，<b>先不带</b>。本屏作为变体存档保留；重开的前置是 T-22 落地并定义清楚 Tab 的语义。</li>
+        <li><b>重开时要一并定的</b>：Tab 与左栏选中态是否双向同步、关掉最后一个 Tab 时中列显示什么——这两条本轮没有答案，留在此处备查。</li>
       </ul>
     </div>
   </div>
@@ -2342,9 +2427,9 @@ button.ct-row { cursor: pointer; }
         <div class="spec-row">
           <div class="spec-cap">
             <span class="h">E · 输出体（<b>非 Cursor 口径</b>）</span>
-            <span class="k">§08 待拍板 ⑤</span>
+            <span class="k">§08 ⑤ 已裁定：保留</span>
             <span>五张截图里 Cursor <b>一次都没有</b>展示工具输出。而我们现有 T-05 口径里 Read/Grep/Bash 的输出体是有用的排障信息——照搬等于净损失。</span>
-            <span>这里给出一个<b>折中示意</b>：形态仍是 Cursor 单行，只在需要时挂一段输出体。<b>要不要保留由用户拍板</b>。</span>
+            <span><b>裁定（2026-07-29）</b>：形态照 Cursor，<b>保留可展开输出体</b>。落地口径：<b>默认收起</b>，<b>失败行</b>与<b>显式点开</b>才展示。本组即最终形态。</span>
           </div>
           <div class="spec-demo is-pad">
             <div class="ct">
@@ -2365,6 +2450,60 @@ button.ct-row { cursor: pointer; }
           </div>
         </div>
 
+        <div class="spec-row">
+          <div class="spec-cap">
+            <span class="h">F · 行内交互 <span style="color:var(--page-go);">v3</span></span>
+            <span class="k">可点击文件名 · 悬浮命中列表</span>
+            <span><b>① Read 行</b>：动词后的文件名<b>可点击</b>，点开对应文件（接 T-13 editor surface）。这与我们原 T-05「路径可点击」本就一致，不是新增诉求。文件名后可跟行号区间 <code>L1-80</code>。</span>
+            <span><b>② Grep / Searched files 行</b>：<b>悬浮</b>在行上时浮出命中文件列表——每行「文件名（<code>--foreground</code>）+ 所在目录（<code>--muted-foreground</code>）」，行 hover 高亮，<b>列表项可点击打开</b>。</span>
+            <span><b>静默可点</b>：可点击的文件名常态与普通参数<b>完全同色</b>，悬停才转 <code>--primary</code> 并出下划线——与 A01 的 <code>.fx-path</code> 同一套办法，不给工具行引入常驻链接色。</span>
+            <span><b>降级许可（用户明确给出）</b>：若悬浮浮层实现代价高，<b>先用我们自己的来</b>——即退回「点击展开明细」（B/C 组那种），列表以明细行形式内联展开。记为<b>实现期可选降级</b>，不是偏离。</span>
+          </div>
+          <div class="spec-demo is-pad">
+            <div class="ct">
+              <div class="ct-row"><span class="ct-v">Read</span><span class="ct-a is-link">2026-07-23-openchamber-chat-refactor-ard.md L1-80</span></div>
+              <div class="ct-row"><span class="ct-v">Searched files</span><span class="ct-a">**/chat/**/*</span></div>
+            </div>
+            <div class="ct-pop" style="margin-top:6px;">
+              <span class="ct-hit">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">QuickTerminalButton.tsx</span><span class="d">src/renderer/components/chat</span>
+              </span>
+              <span class="ct-hit">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">SessionIndexService.ts</span><span class="d">src/main/services/chat</span>
+              </span>
+              <span class="ct-hit">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">index.ts</span><span class="d">src/renderer/components/chat</span>
+              </span>
+              <span class="ct-hit">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">EnhancedInputContainer.tsx</span><span class="d">src/renderer/components/chat</span>
+              </span>
+              <span class="ct-hit">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">fileMention.ts</span><span class="d">src/renderer/components/chat</span>
+              </span>
+              <span class="ct-hit is-on">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">models.test.ts</span><span class="d">src/renderer/components/chat/__tests__</span>
+              </span>
+              <span class="ct-hit">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">sessionEffortStore.test.ts</span><span class="d">src/renderer/components/chat/__tests__</span>
+              </span>
+              <span class="ct-hit">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span class="f">resumeIntent.ts</span><span class="d">src/renderer/components/chat/session</span>
+              </span>
+            </div>
+            <div class="ct" style="margin-top:6px;">
+              <div class="ct-row"><span class="ct-v">Grepped</span><span class="ct-a">问答卡|QuestionCard in ai-client</span></div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -2377,6 +2516,7 @@ button.ct-row { cursor: pointer; }
         <li>动词与参数之间 <b>6px</b>；chevron 13px、紧跟文字、展开时旋转 180°。</li>
         <li>展开明细：<b>缩进 0、无竖线、无背景</b>，与摘要行同节拍。</li>
         <li>参数超长时单行省略号截断（<code>min-w-0 + truncate</code>），不换行——保证纵向节拍不被长路径打乱。</li>
+        <li><b>v3 命中列表浮层</b>：宽 <b>560px</b>（= <code>--w-dd</code> × 2，要装下「文件名 + 完整目录」两列）、最高 <b>288px</b>（10 行 + 内边距，超出滚动）、行高 28px、圆角 12px。</li>
       </ul>
     </div>
     <div class="note is-ref">
@@ -2386,6 +2526,8 @@ button.ct-row { cursor: pointer; }
         <li><code>--tool-arg</code> 是本页唯一新增的颜色派生：<code>color-mix(in oklab, --muted-foreground 62%, --background)</code>，亮暗自动成立，不维护两份值。</li>
         <li>悬停时动词升到 <code>--foreground</code>——这是<b>唯一</b>的悬停反馈，不加背景块。</li>
         <li>失败行整行转 <code>--destructive</code>（动词深、参数浅同样成立），不加徽章、不加图标。</li>
+        <li><b>v3 浮层</b>复用 popover 族：<code>--popover</code> 底 + <code>--border</code> 边 + <code>--shadow-pop</code>，行悬停 <code>--hover</code>——与三个目标栏下拉<b>同一套</b>，不新造浮层样式。</li>
+        <li><b>v3 可点击文件名</b>常态无色差，悬停才 <code>--primary</code> + 下划线，与 A01 的 <code>.fx-path</code> 同款。</li>
       </ul>
     </div>
     <div class="note">
@@ -2394,7 +2536,8 @@ button.ct-row { cursor: pointer; }
         <li>「工具行-进行中.png」：<code>Worked for 1s</code> / <code>Thought briefly</code> / <code>Exploring 2 files, 10 searches</code> / <code>Reading questionBridge.ts</code>——A、D 两组逐字复现。</li>
         <li>「工具行-聚合展开.png」：8 条明细含两条 <code>Thought briefly</code>，全部平齐无缩进——C 组照搬。</li>
         <li>「问答卡-回答后.png」：<code>Ran Demo shell tool call for tool row</code> 与 <code>Planning next moves</code>——D 组与屏③ 底部复现。</li>
-        <li>动词表照抄：<code>Ran</code> / <code>Grepped</code> / <code>Searched files</code> / <code>Reading</code> / <code>Explored</code> / <code>Exploring</code> / <code>Thought</code> / <code>Planning</code> / <code>Worked for</code>；我们补一个 <code>Edited</code>。</li>
+        <li>动词表照抄：<code>Ran</code> / <code>Grepped</code> / <code>Searched files</code> / <code>Read</code> / <code>Reading</code> / <code>Explored</code> / <code>Exploring</code> / <code>Thought</code> / <code>Planning</code> / <code>Worked for</code>；我们补一个 <code>Edited</code>。</li>
+        <li><b>v3</b>「工具行-悬浮命中文件列表.png」：浮层每行「文件名 + 目录」、一行 hover 高亮、下方是 <code>Searched files **/chat/**/*</code> 与 <code>Read …ard.md L1-80</code>——F 组逐项复现。</li>
       </ul>
     </div>
     <div class="note is-diff">
@@ -2404,6 +2547,7 @@ button.ct-row { cursor: pointer; }
         <li><b>改</b>：行文从「名词短语」（<code>Search Files "deriveThinkingCard"</code>）改为「动词句」（<code>Grepped deriveThinkingCard in ai-client</code>）——<b>参数里带上仓库名</b>是 Cursor 的固定尾巴。</li>
         <li><b>增</b>：聚合行（<code>Explored N files, M searches</code>）、回合时长行（<code>Worked for Ns</code>）、思考折叠行（<code>Thought briefly</code>）三种 v1 没有的行类型。</li>
         <li><b>连带</b>：T-05 需第二次改写口径；2026-07-28 那版 openchamber 形态细节全部作废。</li>
+        <li><b>v3 保留的一样东西</b>：输出体（E 组）。这是本基线相对 Cursor <b>唯一有意的加法</b>，已由用户裁定通过；除它之外工具行不再挂任何额外结构。</li>
       </ul>
     </div>
   </div>
@@ -2625,7 +2769,7 @@ button.ct-row { cursor: pointer; }
 <section id="s8">
   <div class="sec-head">
     <span class="sec-tag">08</span>
-    <h2>取舍对照与待拍板</h2>
+    <h2>取舍对照与裁定记录</h2>
     <span class="sec-sub">验收时逐条确认</span>
   </div>
 
@@ -2646,58 +2790,70 @@ button.ct-row { cursor: pointer; }
         <tr><td>占位文案 <code>/ for skills</code></td><td><b>不抄</b>，沿用现网 <code>Message Claude via Agent Host…</code></td><td>同上（<code>@</code> 引用已有，T-07）</td></tr>
         <tr><td>用户消息 = 全宽方框</td><td><b>不跟</b>，保留右对齐气泡</td><td>D24 只改工具行 / 问答卡，气泡不在改判范围</td></tr>
         <tr><td><b>v2</b> 工具行：动词开头、无图标无边框的灰阶单行</td><td><b>照搬</b>（含聚合行 / Thought 折叠 / Worked for）</td><td>D24（撤销 D23 的「时间线内部不动」句）</td></tr>
-        <tr><td><b>v2</b> 工具行不展示任何工具输出</td><td><b>待拍板</b>——基线给了「Cursor 纯净版」与「挂输出体」两种（屏⑤ E 组）</td><td>§08 待拍板 ⑤（v2 新问）</td></tr>
+        <tr><td><b>v2</b> 工具行不展示任何工具输出</td><td><b>已裁定（v3）</b>：形态照 Cursor，但<b>保留可展开输出体</b>——默认收起，失败行与显式点开才展示（屏⑤ E 组）</td><td>§08 ⑤ 裁定 2026-07-29</td></tr>
+        <tr><td><b>v3</b> Read 行的文件名可点击打开</td><td><b>照搬</b>，与 T-13 editor surface 联动（原 T-05「路径可点击」本就一致）</td><td>用户实测补充 · 工具行-悬浮命中文件列表.png</td></tr>
+        <tr><td><b>v3</b> Grep/Search 行悬浮浮层列出命中文件</td><td><b>照搬</b>，浮层复用 <code>.dd</code> popover 族 token；<b>实现期允许降级</b>为点击展开明细</td><td>同上；用户明确给了降级许可</td></tr>
         <tr><td><b>v2</b> 问答卡：折叠条 → 字母选项卡 → Answers 冻结</td><td><b>照搬</b>；<code>Skipped</code> 态一并做</td><td>D24；冻结这条与 D20 一致，D20 不动</td></tr>
         <tr><td><b>v2</b> Continue 按钮的琥珀色</td><td>换 <code>--primary</code> 实心 + <code>--accent-primary</code> 焦点环</td><td>design-system「--accent-primary 亮色红线」</td></tr>
         <tr><td><b>v2</b> 助手消息下方的 👍 👎 ⑂ ⧉ 悬停动作条 + <code>41m ago</code></td><td><b>本轮不做</b>，footer 沿用 A01 的 <code>模型 · 时间 · 文件 pill</code></td><td>D24 未涉及；无点赞/分叉能力</td></tr>
         <tr><td><b>v2</b> 点击历史消息重新编辑</td><td><b>不做</b>，仅归档</td><td>用户在截图上明确标注「此功能待定」</td></tr>
         <tr><td>follow-up 近 pill 圆角 · 卡片靠阴影浮起</td><td>圆角收到 <code>--radius-md</code> 12；浮起改用 <code>--input</code> 边</td><td>design-system 圆角四档 + Shadow 表</td></tr>
-        <tr><td>会话 Tab 栏</td><td><b>出带 / 不带两版，待拍板</b></td><td>D23 明列未决</td></tr>
+        <tr><td><b>v3</b> 侧栏会话行的分支 chip</td><td><b>规则变更</b>：所有行都显（含 main / master 的实际分支名）；temp / remote 显 kind 标签</td><td>用户裁定 2026-07-29，推翻原「main 不显 chip」</td></tr>
+        <tr><td>会话 Tab 栏</td><td><b>已裁定（v3）：不采用</b>——以屏② 为准，屏③ 降级为变体存档；T-22 surface 化后如需再议</td><td>§08 ① 裁定 2026-07-29</td></tr>
         <tr><td>模型选择合并成 <code>Fable 5 High</code> 一个控件</td><td>拆回<b>现有</b> ModelSelect + EffortSelect 两个 <code>h-6</code></td><td>零新控件原则</td></tr>
       </tbody>
     </table>
   </div>
 
-  <h3>需要用户拍的五件事</h3>
+  <h3>五件事：已于 2026-07-29 逐条裁定 <span style="color:var(--page-go);font-size:0.85em;">v3</span></h3>
 
-  <div class="ask">
-    <b>⑤（v2 新问）工具行还要不要能看到工具输出？</b>
-    <p>Cursor 的工具行<b>是终点</b>——五张截图里一次都没有展示 <code>Ran</code> / <code>Grepped</code> 的实际输出，展开聚合行看到的只是更多行标题。
-      我们现有 T-05 口径里 Read/Grep/Bash 的输出体（测试结果、报错栈、diff）是排障主力，照搬等于净损失。</p>
-    <p class="rec">建议：<b>形态照 Cursor，但保留可展开的输出体</b>（屏⑤ E 组）——单行摘要默认收起，只有失败行和显式点开时才展示。
-      这样既拿到 Cursor 的「旁白感」，又不丢排障信息。若用户要纯净版，删掉 E 组即可，其余不受影响。</p>
-  </div>
+  <p>
+    用户逐条裁定，<b>五条全部采纳基线建议</b>。下面保留原建议文字作为<b>裁定依据</b>——
+    施工时若发现建议的前提不成立，回到这里看理由，而不是重新讨论结论。
+  </p>
 
-  <div class="ask">
-    <b>另：Permission 卡沿用问答卡外形（外推，非截图证据）</b>
-    <p>Cursor 演示里只有 AskQuestion，没有 Permission。本基线按「同一套外形，头文案换 <code>Permission</code>、选项换 允许 / 拒绝」外推。
-      施工时按此执行，若验收后不满意再单独立项——此处只做提示，不需要单独拍。</p>
-  </div>
-
-  <div class="ask">
-    <b>① 会话 Tab 栏：带（屏③）还是不带（屏②）？</b>
-    <p class="rec">建议：<b>先不带</b>。D21 刚把会话切换入口定在左栏，再加 Tab 栏会有两个入口；且 T-22 要把中列 surface 化，届时 Tab 的语义（会话 vs surface）需重新定义，现在引入等于提前锁死。</p>
-    <p>若拍「带」，请一并定：Tab 与左栏选中态是否双向同步、关掉最后一个 Tab 时中列显示什么。</p>
-  </div>
-
-  <div class="ask">
-    <b>② 会话态的目标行要不要也显示「文件夹」？</b>
-    <p class="rec">建议：<b>不显示</b>（照截图，只留分支 + 运行位置）。文件夹在会话已建立后基本不可变（改它等于 fork 新会话），常显是噪音；需要看时鼠标悬停分支即可给出完整路径。</p>
-  </div>
-
-  <div class="ask">
-    <b>③ 发送键：圆形图标（本基线）还是保留现状带 <code>Send</code> 文字的按钮？</b>
-    <p class="rec">建议：<b>圆形图标 + aria-label</b>。等宽字体下 <code>Send</code> 占位偏宽，会把 Model/Effort 挤到换行；运行中变 <code>Stop</code>（<code>--destructive</code> 实心）同位同尺寸，状态切换零位移。</p>
-  </div>
-
-  <div class="ask">
-    <b>④ 空态卡下方要不要放「最近会话」快捷入口？</b>
-    <p class="rec">建议：<b>不放</b>。Cursor 没有，openchamber 没有，左栏 Recent 段（D21 保留）已经是这个入口；卡下留白正是空态呼吸感的来源。</p>
+  <div class="ask decided">
+    <b>⑤ 工具行输出体 → 裁定：形态照 Cursor，<b>保留可展开输出体</b>（采纳 E 组）</b>
+    <p>落地口径：单行摘要默认收起；<b>失败行</b>与<b>显式点开</b>才展示输出体。屏⑤ E 组即最终形态。</p>
+    <p>原建议（依据）：Cursor 的工具行<b>是终点</b>——五张截图里一次都没有展示 <code>Ran</code> / <code>Grepped</code> 的实际输出，展开聚合行看到的只是更多行标题。
+      我们现有 T-05 口径里 Read/Grep/Bash 的输出体（测试结果、报错栈、diff）是排障主力，照搬等于净损失。
+      形态照 Cursor、输出体可展开，既拿到「旁白感」又不丢排障信息。</p>
   </div>
 
   <div class="ask decided">
-    <b>已经不用问的（本基线按拍板结果直接落）</b>
-    <p>侧栏 flat 平铺 + 分支 chip + 右对齐相对时间（D21-A）；运行位置只读指示器（D21-B / D22）；Recent 段保留（D21-C）；
+    <b>① 会话 Tab 栏 → 裁定：<b>先不带</b></b>
+    <p>落地口径：以<b>屏②</b>为准。<b>屏③ 降级为变体存档</b>，不采用；T-22 surface 化之后如需再议，届时重开。</p>
+    <p>原建议（依据）：D21 刚把会话切换入口定在左栏，再加 Tab 栏会有两个入口；且 T-22 要把中列 surface 化，
+      届时 Tab 的语义（会话 vs surface）需重新定义，现在引入等于提前锁死一个尚未定义的语义。</p>
+  </div>
+
+  <div class="ask decided">
+    <b>② 会话态目标行 → 裁定：<b>不显示文件夹</b></b>
+    <p>落地口径：会话态目标行只有<b>分支 + 运行位置</b>两项，维持屏②③ 现状。</p>
+    <p>原建议（依据）：文件夹在会话已建立后基本不可变（改它等于 fork 新会话），常显是噪音；需要看时鼠标悬停分支即可给出完整路径。</p>
+  </div>
+
+  <div class="ask decided">
+    <b>③ 发送键 → 裁定：<b>圆形图标 + aria-label</b></b>
+    <p>落地口径：维持基线现状——28px 圆形、<code>--primary</code> 实心，运行中原位换 <code>--destructive</code> 停止键。</p>
+    <p>原建议（依据）：等宽字体下 <code>Send</code> 占位偏宽，会把 Model/Effort 挤到换行；同位同尺寸的 Stop 让状态切换零位移。</p>
+  </div>
+
+  <div class="ask decided">
+    <b>④ 空态「最近会话」快捷入口 → 裁定：<b>不放</b></b>
+    <p>落地口径：维持基线现状，空态卡下留白。</p>
+    <p>原建议（依据）：Cursor 没有，openchamber 没有，左栏 Recent 段（D21 保留）已经是这个入口；卡下留白正是空态呼吸感的来源。</p>
+  </div>
+
+  <div class="ask">
+    <b>提示（不需要拍）：Permission 卡沿用问答卡外形属外推</b>
+    <p>Cursor 演示里只有 AskQuestion，没有 Permission。本基线按「同一套外形，头文案换 <code>Permission</code>、选项换 允许 / 拒绝」外推。
+      施工时按此执行，若验收后不满意再单独立项。</p>
+  </div>
+
+  <div class="ask decided">
+    <b>本基线按既有拍板直接落、无需再问的</b>
+    <p>侧栏 flat 平铺 + 右对齐相对时间（D21-A）；<b>分支 chip 全行常驻</b>（v3 裁定：main / master 也显实际分支名，temp / remote 显 kind 标签，推翻原「main 不显」）；运行位置只读指示器（D21-B / D22）；Recent 段保留（D21-C）；
       三列 + 44px 导轨不动（D19）；<b>工具行 / 问答卡形态源 = Cursor</b>（D24）；<b>回答后就地冻结</b>（D20，与 Cursor 一致，不再是偏离）。</p>
   </div>
 </section>
@@ -2705,15 +2861,16 @@ button.ct-row { cursor: pointer; }
 <footer class="footnote">
   <h3>验收通过后要做的事（按权威链顺序，先改文档再动代码）</h3>
   <ul>
-    <li><b>台账</b>：A07 在总台账 Phase 0A 行补登为已交付（v2），注明本文件为产物；D23 行补「基线已出，Tab 栏拍板结果 = ___」；D24 行补「A07 v2 已出，工具行输出体拍板结果 = ___」。</li>
-    <li><b>plantree</b>：A07 状态置 Done 并记录验收日期；T-05 / T-27 / T-28 解除「等基线」前置。</li>
+    <li><b>台账</b>：A07 在总台账 Phase 0A 行补登为已交付（v3），注明本文件为产物；D23 行补「Tab 栏 = <b>不采用</b>，屏③ 变体存档，T-22 后可再议」；D24 行补「工具行 = <b>保留可展开输出体</b>（默认收起，失败行与显式点开才展示）」；D21 行补「chip 规则变更：<b>每行会话都显分支 chip</b>，main / master 也显，temp / remote 显 kind 标签」。</li>
+    <li><b>plantree</b>：A07 状态置 Done 并记录验收日期；T-05 / T-27 / T-28 解除「等基线」前置。<b>T-28 不实现屏③ Tab 栏</b>。</li>
+    <li><b>T-05 的两条交互</b>：Read 行文件名可点击（接 T-13 editor surface）、Grep/Search 行悬浮命中列表；后者<b>用户已给降级许可</b>——代价高就退回「点击展开明细」，记为实现期可选降级，不作偏离登记。</li>
     <li><b>T-05 第二次改写口径</b>（D24 明列的连带动作）：2026-07-28 那版 openchamber 工具行 / 问答卡细节全部作废，改以本页<b>屏⑤ 屏⑥</b>为准；改写完成前不得开工。</li>
     <li><b>design-system.md</b>：把本页 §01 派生表里<b>确实新增的档位</b>补进对应小节——下拉宽 280、圆形发送键 28、覆盖层阴影值，以及 v2 的 <code>--tool-arg</code> 二级灰、<code>--h-chip</code> 20、「工具行与正文同字号」这条排版规则。<code>--tool-arg</code> 若要进代码需按「新增 token 的强制动作」在 <code>globals.css</code> 与 <code>@theme</code> 两处落桥。</li>
     <li><b>T-28</b>（中列状态化布局）按屏①②（+ 拍板后的 Tab 决定）施工；<b>T-27</b>（目标栏）按屏④ 三个控件施工，纯函数 <code>composerTarget.ts</code> 断言先行；<b>T-05</b>（时间线）按屏⑤⑥ 施工。</li>
     <li>顺带删除 <code>MainHeader.tsx:57/58</code> 的 Folder / Host: Local 两个死按钮——它们的职责已被目标栏正式接管（T-23 对应子项改为「删除 + 复核」）。</li>
   </ul>
   <p class="src">
-    参照 · docs/design/refs/cursor-20260729/（v1 6 张 + v2 5 张，2026-07-29 入库）&nbsp;|&nbsp;
+    参照 · docs/design/refs/cursor-20260729/（v1 6 张 + v2 5 张 + v3 1 张，2026-07-29 入库）&nbsp;|&nbsp;
     token 源 · src/renderer/styles/globals.css（T-21 落库）&nbsp;|&nbsp;
     档位源 · docs/design-system.md&nbsp;|&nbsp;
     决策 · docs/plans/openchamber-chat-refactor-ledger.md D18 / D20 / D21 / D22 / D23 / D24&nbsp;|&nbsp;
