@@ -6,9 +6,11 @@
 - **Last Landed**:
   - 文档（2026-07-28）：**A01 / A05 / A06 基线补登交付**，产物统一为 [`docs/design/phase0a-openchamber-alignment.html`](../../../design/phase0a-openchamber-alignment.html)（用户已验收）；三条裁定落库 **[D18](../../../plans/openchamber-chat-refactor-ledger.md)（视觉，撤销 D6）/ D19（布局骨架，撤销 D15）/ D20（问答归宿，偏离登记）**。
   - 代码（2026-07-28）：GUI 首测暴露链五连修——**多轮上下文继承** `eea2f25` · **demo 机器路径解绑** `0bd70d5` · **Host stderr 可观测性 + win32 守卫** `da9a5da` · **open-path 拉取握手 + 单实例门** `9331d51` · **dev.js argv 透传 + enso 归档名** `576f3bd`（明细见主线台账 2026-07-28 六行）
+  - 代码（2026-07-29 二批）：**缓存排查闭环** `3622c19` —— 对话每条消息全量重写缓存的双根因坐实：**主因网关无会话亲和（app 无可修，open-q #15 待用户找运营方）**；次因 Host `session.resume` 丢 model/effort（Host 重启后静默换回 cli 默认模型）已修，+3 例钉死 resume→query() 下发。故障档案 [`docs/design/BUG-2026-07-29-prompt-cache-rewrite.md`](../../../design/BUG-2026-07-29-prompt-cache-rewrite.md)，探针 `spikes/cache-affinity-probe.mjs` / `capture-proxy.mjs` 入库
   - 代码（2026-07-29）：**窗口链** `d68d3c6` · **凭证隔离** `b18ccac` —— **「不出窗口」故障闭环**——同事的 show 兜底复核有效（本机实际生效路径 = `did-finish-load`，`ready-to-show` 从不触发），**原故障报告根因判错已更正**；连带修 `MainWindow.ts` 窗口状态从未恢复的既有 bug + 兜底日志被 electron-log 静音；顺带修 `McpSection.tsx` 嵌套 `<button>`。**dev 态凭证隔离**——`scripts/dev.js` 读 `dev.env` 剥离/注入/隔离，裸启动不再回落开发者本机 `~/.claude` 登录。明细见主线台账 2026-07-29 两行
 - **Last Verified**: 2026-07-28 Linux 三绿——typecheck 干净 / lint 609 文件 0 诊断 / vitest **51 文件 590 例**（3 失败=Windows-only 基线）
   - **2026-07-29 复核（`d68d3c6` / `b18ccac` / T-21 `b38017b` 合并态）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。**例数未增 = 本轮未补测试**，`dev.js` 凭证逻辑目前零自动化断言（见 open-q **#14**）。
+  - **2026-07-29 二批复核（`3622c19` 合并态）**：typecheck 干净 / lint 615 文件 0 诊断 / vitest **54 文件 621 例**（+3，同 3 例 Windows-only 失败）。
   - **T-21 复核口径（2026-07-28 审查回合，代码已于 2026-07-29 提交 `b38017b`）**：typecheck 干净 / lint **615 文件 0 诊断** / vitest **54 文件 618 例**（同 3 例 Windows-only 失败）。
     lint 文件数从 613 涨到 615 是**新增文件**所致（`docs/design/phase0a-openchamber-alignment.html` 基线产物 + `src/renderer/lib/__tests__/ghosttyTheme.test.ts`），**`biome.json` 未改**——
     施工中一度加过 `"!docs/design"` 排除项来绕开该 HTML 的 13 条诊断，这违反「不得改 lint 配置变绿」，已撤销：改为就地修（9 条 `useArrowFunction` 自动修 + 2 条 `noImportantStyles`、2 条 `noUnknownProperty` 加带理由的 `biome-ignore`，后者是 `corner-shape` 这个 Biome 尚无定义的 CSS Backgrounds 4 属性）。
@@ -89,7 +91,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 
 ### 用户线（点测 / 待拍板，与开发线并行）
 
-0. **多轮上下文回归点测（2026-07-28 新增，最优先）**：同一会话连发两条（如「我最喜欢的数字是 47」→「我最喜欢的数字是几？」），第二条必须记得第一条；newapi 面板应显示同一会话续接而非每条新建缓存。修复 `eea2f25`。
+0. **多轮上下文回归点测（2026-07-28 新增，最优先）**：同一会话连发两条（如「我最喜欢的数字是 47」→「我最喜欢的数字是几？」），第二条必须记得第一条；newapi 面板应显示同一会话续接而非每条新建缓存。修复 `eea2f25`。**⚠️ 2026-07-29 口径更正**：「缓存读取」一项在网关开会话亲和**之前不会稳定出现**（open-q **#15**，对照实验证实命中随路由随机、与 app 无关）——点测只验记忆连续性，勿再以面板缓存读取为判据。另补一项：**Host 重启后续聊模型不变**（修复 `3622c19`：重启前选非默认模型 → 重启 → 同会话再发一条 → 响应模型应仍是所选模型而非默认）。
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
    [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
    - **T-04 thinking 卡**：🔴 **当前无法点验**——卡在网关（sonnet 空文本 / 默认模型 400，见上表）。网关侧修复后再测；仍须在**新发起轮次**验证（旧 fixture 的 153 个 thinking 块文本为空，不可追溯）。
