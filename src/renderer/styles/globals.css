@@ -32,6 +32,7 @@
   --color-hover: var(--hover);
   --color-status-running: var(--status-running);
   --color-folder: var(--folder);
+  --color-tool-arg: var(--tool-arg);
 
   --radius-xs: 0.25rem;
   --radius-sm: var(--radius);
@@ -40,6 +41,9 @@
 
   --text-2xs: 10px;
   --text-2xs--line-height: 14px;
+  /* T-05: first real landing of the design-system.md:335/337 code/markdown tiers into @theme. */
+  --text-code: 0.8125rem;      /* 13px -- A07 --t-code */
+  --text-markdown: 0.9375rem;  /* 15px -- A07 --t-md, tool rows share body copy's tier */
 
   /*
    * All-monospace UI stack, mirroring OpenChamber's flexoki-{light,dark}.json
@@ -137,6 +141,12 @@
     --radius: 0.5rem;
     /* Neutral overlay for Monaco decorations; host background is the terminal theme */
     --editor-current-diff: oklch(0 0 0 / 0.06);
+    /* T-05, A07 screen 5: the only new derived color -- tool row argument tier
+     * (lightest of the three grays). Declared once: color-mix's var()
+     * references resolve against whichever element uses --tool-arg, so
+     * .dark's --muted-foreground/--background overrides are picked up
+     * automatically without a second .dark declaration. */
+    --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
   }
 
   /* Flexoki Dark - flexoki-dark.json */

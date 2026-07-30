@@ -126,15 +126,20 @@ export function reduceMessageMetadata(
  * Build the display line for an assistant bubble from metadata, e.g.
  * "Sonnet · 1.2s · 10:30" or "Sonnet · 10:30" when latency/usage missing.
  * Returns null when nothing useful is available.
+ *
+ * `omitLatency` (T-05): the footer line drops its own latency segment once
+ * the turn-level "Worked for Ns" row (A07 :2398) takes over that duty —
+ * `MessageTimeline` always passes `true` for the new assistant footer, e.g.
+ * "claude-opus-5 · 07:41" (A07 :1776-1782).
  */
 export function formatMessageMetadata(
   metadata: MessageMetadata | undefined,
-  options: { formatTime?: (ms: number) => string } = {}
+  options: { formatTime?: (ms: number) => string; omitLatency?: boolean } = {}
 ): string | null {
   if (!metadata) return null;
   const parts: string[] = [];
   if (metadata.model) parts.push(metadata.model);
-  if (metadata.latencyMs != null && metadata.latencyMs >= 0) {
+  if (!options.omitLatency && metadata.latencyMs != null && metadata.latencyMs >= 0) {
     parts.push(`${(metadata.latencyMs / 1000).toFixed(1)}s`);
   }
   if (metadata.completedAt != null) {

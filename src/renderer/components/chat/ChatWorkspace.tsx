@@ -10,7 +10,9 @@ import {
   middleColumnHostClass,
   rememberSendAttempt,
 } from './middleColumnLayout';
+import { PendingQuestionDock } from './PendingQuestionDock';
 import { isThinkingCapable } from './thinkingCard';
+import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
 
 interface ChatWorkspaceProps {
@@ -23,6 +25,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   const initRuntime = useChatSessionsStore((state) => state.initRuntime);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
+  const workspaces = useChatSessionsStore((state) => state.workspaces);
   const selectSession = useChatSessionsStore((state) => state.selectSession);
   const { status: hostStatus, retry } = useHostStatus();
 
@@ -41,6 +44,9 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
   const thinkingEnabled = isThinkingCapable(hostStatus.capabilities);
+  // T-05: repo name tail for Grep/Glob rows ("… in ai-client").
+  const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
+  const repoName = deriveRepoName(activeWorkspace?.path);
 
   // T-28: sticky latch of sessions that have started a send this app run —
   // deriveMiddleColumnMode needs this to dock the composer the instant Enter
@@ -103,8 +109,10 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           sessionId={activeSessionId}
           status={activeSession?.status ?? 'idle'}
           thinkingEnabled={thinkingEnabled}
+          repoName={repoName}
         />
       )}
+      {mode === 'session' && <PendingQuestionDock sessionId={activeSessionId} />}
       <div className={middleColumnHostClass(mode)}>
         <ChatComposer
           mode={mode}

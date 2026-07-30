@@ -118,4 +118,26 @@ describe('reduceMessageMetadata (T-06)', () => {
     );
     expect(formatMessageMetadata({ latencyMs: -1 })).toBeNull();
   });
+
+  it('formatMessageMetadata with omitLatency: true drops the latency segment (T-05 "model · time")', () => {
+    const meta: MessageMetadata = {
+      startedAt: 1000,
+      completedAt: 2200,
+      latencyMs: 1200,
+      model: 'claude-opus-5',
+    };
+    const line = formatMessageMetadata(meta, { formatTime: () => '07:41', omitLatency: true });
+    expect(line).toBe('claude-opus-5 · 07:41');
+  });
+
+  it('formatMessageMetadata default behavior (no options) is unchanged by the omitLatency addition', () => {
+    const meta: MessageMetadata = {
+      startedAt: 1000,
+      completedAt: 2200,
+      latencyMs: 1200,
+      model: 'sonnet',
+    };
+    const line = formatMessageMetadata(meta, { formatTime: () => '10:30' });
+    expect(line).toBe('sonnet · 1.2s · 10:30');
+  });
 });

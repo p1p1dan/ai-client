@@ -31,8 +31,8 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     selectSession: () => {},
     sendMessage: async () => {},
     stopActiveSession: async () => {},
-    respondPermission: () => {},
-    respondQuestion: () => {},
+    respondPermission: async () => false,
+    respondQuestion: async () => false,
     initRuntime: () => () => {},
     ...overrides,
   };

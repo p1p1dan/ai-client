@@ -197,10 +197,17 @@ export function roundActionButtonClass(): string {
 
 // ---- Placeholder text ----
 
+/** T-05: pending-question follow-up copy (A07 screen 6 group E — same lifecycle as the collapsed dock strip). */
+export const PENDING_QUESTION_PLACEHOLDER = 'Add more optional details…';
+
 /**
  * Composer placeholder text. Sending/busy/no-session/no-workspace states are
  * identical in both modes; only the default "ready to type" copy differs —
  * the docked composer asks for a follow-up instead of the initial prompt.
+ *
+ * `pendingQuestion` must be checked before `busy`: `waiting_question` makes
+ * `isStoppable` (`ChatComposer.tsx:64-71`) true, which makes `busy` true —
+ * if this branch sat after the `busy` check it would never be reached.
  */
 export function composerPlaceholder(input: {
   mode: MiddleColumnMode;
@@ -210,11 +217,16 @@ export function composerPlaceholder(input: {
   hasSession: boolean;
   hasWorkspace: boolean;
   attachmentCount: number;
+  /** T-05: this session has a pending question dock showing. */
+  pendingQuestion?: boolean;
 }): string {
   if (input.sending) {
     return input.attachmentCount > 0
       ? `Sending ${input.attachmentCount} attachment${input.attachmentCount > 1 ? 's' : ''} to Agent Host…`
       : 'Sending to Agent Host…';
+  }
+  if (input.pendingQuestion) {
+    return PENDING_QUESTION_PLACEHOLDER;
   }
   if (input.busy) {
     return 'Agent Host is running — use Stop, then send again…';

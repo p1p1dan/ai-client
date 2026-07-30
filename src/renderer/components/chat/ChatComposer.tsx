@@ -200,6 +200,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const activeMessages = useChatSessionsStore((state) =>
     state.activeSessionId ? state.messages[state.activeSessionId] : undefined
   );
+  // T-05: this session has a pending question dock showing (drives the
+  // "Add more optional details…" placeholder, A07 screen 6 group E).
+  const pendingQuestionHere = useChatSessionsStore(
+    (state) =>
+      state.pendingQuestion?.sessionId != null &&
+      state.pendingQuestion.sessionId === state.activeSessionId
+  );
 
   // T-27: shared with the Composer target bar (§2.6) — this is the same
   // production derivation the target bar's plan/apply flow lands through,
@@ -827,6 +834,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         hasSession: Boolean(activeSessionId),
         hasWorkspace: Boolean(activeWorkspace),
         attachmentCount: attachments.drafts.length,
+        pendingQuestion: pendingQuestionHere,
       })}
       className={composerTextareaClass(mode)}
       disabled={disabled || busy || sending || !activeSessionId}

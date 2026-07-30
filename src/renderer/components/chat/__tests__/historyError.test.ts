@@ -387,8 +387,8 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       selectSession: () => {},
       sendMessage: async () => {},
       stopActiveSession: async () => {},
-      respondPermission: () => {},
-      respondQuestion: () => {},
+      respondPermission: async () => false,
+      respondQuestion: async () => false,
       initRuntime: () => () => {},
     };
   }

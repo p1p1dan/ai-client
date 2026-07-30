@@ -121,12 +121,17 @@ export interface ChatSessionsState {
   selectSession: (sessionId: string) => void;
   sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
   stopActiveSession: () => Promise<void>;
-  respondPermission: (allow: boolean) => void;
+  /**
+   * Resolves `true` on a successful IPC round-trip, `false` when it throws
+   * (and `lastError` is set) — callers use this to unlock a submitting UI on
+   * failure instead of leaving it stuck forever (T-05 adversarial fix #4).
+   */
+  respondPermission: (allow: boolean) => Promise<boolean>;
   respondQuestion: (input: {
     answers?: Record<string, string>;
     response?: string;
     cancel?: boolean;
-  }) => void;
+  }) => Promise<boolean>;
   /** Subscribe to Host Runtime Events; returns unsubscribe. */
   initRuntime: () => () => void;
 }
@@ -759,42 +764,46 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     }
   },
 
-  respondPermission: (allow) => {
+  respondPermission: async (allow) => {
     const { pendingPermission } = get();
     if (!pendingPermission) {
-      return;
+      return false;
     }
 
-    void window.electronAPI.chat
-      .respondPermission({
+    try {
+      await window.electronAPI.chat.respondPermission({
         sessionId: pendingPermission.sessionId,
         permissionId: pendingPermission.permissionId,
         allow,
-      })
-      .catch((err: unknown) => {
-        set({
-          lastError: err instanceof Error ? err.message : String(err),
-        });
       });
+      return true;
+    } catch (err) {
+      set({
+        lastError: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
   },
 
-  respondQuestion: (input) => {
+  respondQuestion: async (input) => {
     const { pendingQuestion } = get();
     if (!pendingQuestion) {
-      return;
+      return false;
     }
 
-    void window.electronAPI.chat
-      .respondQuestion({
+    try {
+      await window.electronAPI.chat.respondQuestion({
         sessionId: pendingQuestion.sessionId,
         questionId: pendingQuestion.questionId,
         ...input,
-      })
-      .catch((err: unknown) => {
-        set({
-          lastError: err instanceof Error ? err.message : String(err),
-        });
       });
+      return true;
+    } catch (err) {
+      set({
+        lastError: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
   },
 
   initRuntime: () => {

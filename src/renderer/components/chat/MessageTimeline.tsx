@@ -2,12 +2,11 @@ import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { ChevronRight, FileSearch, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
+import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import {
   deriveHistoryNotice,
@@ -18,19 +17,37 @@ import {
 } from './historyError';
 import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
+import { QuestionCard } from './QuestionCard';
+import { deriveQuestionCardState } from './questionCard';
 import { ReadingColumn } from './ReadingColumn';
 import { useResumeSession } from './sessionIndex/useResumeSession';
-import { deriveThinkingCard, isTurnActive } from './thinkingCard';
+import { ToolGroup } from './ToolRows';
+import { isTurnActive } from './thinkingCard';
+import {
+  deriveToolGroupRows,
+  groupTimeline,
+  type ToolGroupEntry,
+  type ToolRowView,
+} from './toolCard';
+import { deriveTurnStats, formatWorkedForRow } from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
+import { useTurnTiming } from './useTurnTiming';
 
 interface MessageTimelineProps {
   sessionId: string | null;
   status: SessionRuntimeStatus;
   /** Host capability gate (T-04)：thinking-capable 时为 true，UI 渲染折叠卡。 */
   thinkingEnabled: boolean;
+  /** T-05: repo name tail for Grep/Glob rows ("… in ai-client"); wired by ChatWorkspace in batch 3. */
+  repoName?: string | null;
 }
 
-export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageTimelineProps) {
+export function MessageTimeline({
+  sessionId,
+  status,
+  thinkingEnabled,
+  repoName = null,
+}: MessageTimelineProps) {
   // C-08b: subscribe to this session's bucket only — other sessions' streams
   // no longer re-render this timeline.
   const bucket = useChatSessionsStore((state) =>
@@ -48,6 +65,7 @@ export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageT
     selectHistoryError(state.historyErrors, sessionId)
   );
   const { get: getMeta } = useMessageMetadata(sessionId);
+  const { getThinking } = useTurnTiming(sessionId);
 
   const sessionMessages = useMemo(() => bucket ?? [], [bucket]);
 
@@ -77,7 +95,8 @@ export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageT
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 48rem/64rem reading width (T-22 spec §2.13). */}
         <div className={TIMELINE_PADDING_CLASS}>
-          <ReadingColumn className="space-y-3">
+          {/* T-05 (A07 `.tl` :846): 12px -> 20px turn spacing. */}
+          <ReadingColumn className="space-y-5">
             {historyNotice.kind === 'error' && (
               // Keyed by session: detail/retry state must not follow the user
               // across sessions when React reuses this slot.
@@ -100,6 +119,8 @@ export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageT
                   metadata={getMeta(message.id)}
                   isActiveTurn={isActiveTurn}
                   thinkingEnabled={thinkingEnabled}
+                  repoName={repoName}
+                  getThinkingDurationMs={(blockId) => getThinking(blockId)?.durationMs}
                   canRespondPermission={Boolean(
                     pendingPermission &&
                       pendingPermission.sessionId === sessionId &&
@@ -249,18 +270,43 @@ interface MessageBubbleProps {
   metadata?: MessageMetadata;
   isActiveTurn: boolean;
   thinkingEnabled: boolean;
+  repoName?: string | null;
+  getThinkingDurationMs: (blockId: string) => number | null | undefined;
   canRespondPermission: boolean;
-  onRespondPermission: (allow: boolean) => void;
+  onRespondPermission: (allow: boolean) => Promise<boolean> | undefined;
 }
 
+/**
+ * T-05 (D-1): three role branches.
+ *  - assistant -> bare `AssistantMessage` (no bubble, no role label; A07 `:1725`/`:858`).
+ *  - user -> unchanged bubble (A01 hard boundary).
+ *  - system / error -> unchanged bubble (notices, not turns; A07 left them undefined).
+ */
 function MessageBubble({
   message,
   metadata,
   isActiveTurn,
   thinkingEnabled,
+  repoName,
+  getThinkingDurationMs,
   canRespondPermission,
   onRespondPermission,
 }: MessageBubbleProps) {
+  if (message.role === 'assistant') {
+    return (
+      <AssistantMessage
+        message={message}
+        metadata={metadata}
+        isActiveTurn={isActiveTurn}
+        thinkingEnabled={thinkingEnabled}
+        repoName={repoName}
+        getThinkingDurationMs={getThinkingDurationMs}
+        canRespondPermission={canRespondPermission}
+        onRespondPermission={onRespondPermission}
+      />
+    );
+  }
+
   const isUser = message.role === 'user';
   const metaLine = !isUser ? formatMessageMetadata(metadata) : null;
 
@@ -285,18 +331,16 @@ function MessageBubble({
           {message.role}
         </p>
 
-        {message.blocks.map((block, index) => (
-          <BlockRenderer
-            key={block.id}
-            block={block}
-            blockIndex={index}
-            message={message}
-            isActiveTurn={isActiveTurn}
-            thinkingEnabled={thinkingEnabled}
-            canRespondPermission={canRespondPermission}
-            onRespondPermission={onRespondPermission}
-          />
-        ))}
+        {/* user/system/error messages only ever carry `text` blocks (chatSessions.ts
+            attaches tool_call/tool_result/thinking/permission_request/question
+            exclusively to role: 'assistant' messages, live and replayed alike). */}
+        {message.blocks.map((block) =>
+          block.type === 'text' ? (
+            <p key={block.id} className="whitespace-pre-wrap text-sm text-foreground">
+              {block.text}
+            </p>
+          ) : null
+        )}
 
         {metaLine && <p className="text-[10px] text-muted-foreground/80">{metaLine}</p>}
       </div>
@@ -304,151 +348,135 @@ function MessageBubble({
   );
 }
 
-interface BlockRendererProps {
-  block: ChatBlock;
-  blockIndex: number;
+interface AssistantMessageProps {
   message: ChatMessage;
+  metadata?: MessageMetadata;
   isActiveTurn: boolean;
   thinkingEnabled: boolean;
+  repoName?: string | null;
+  getThinkingDurationMs: (blockId: string) => number | null | undefined;
   canRespondPermission: boolean;
-  onRespondPermission: (allow: boolean) => void;
-}
-
-function BlockRenderer({
-  block,
-  blockIndex,
-  message,
-  isActiveTurn,
-  thinkingEnabled,
-  canRespondPermission,
-  onRespondPermission,
-}: BlockRendererProps) {
-  switch (block.type) {
-    case 'text':
-      return <p className="whitespace-pre-wrap text-sm text-foreground">{block.text}</p>;
-
-    case 'thinking': {
-      // T-04 能力闸：capability=false 不渲染、不留入口。
-      if (!thinkingEnabled) return null;
-      const vm = deriveThinkingCard(message, blockIndex, isActiveTurn);
-      if (!vm) return null;
-      return <ThinkingCard vm={vm} />;
-    }
-
-    case 'tool_call':
-      return (
-        <div className="rounded-md border border-border bg-muted/30 p-2 text-xs">
-          <p className="font-medium text-foreground">Tool: {block.toolName}</p>
-          {block.toolInput ? (
-            <pre className="mt-1 overflow-x-auto text-muted-foreground">
-              {JSON.stringify(block.toolInput, null, 2)}
-            </pre>
-          ) : null}
-        </div>
-      );
-
-    case 'tool_result':
-      return (
-        <div className="rounded-md border border-border bg-muted/20 p-2 text-xs">
-          <p className="font-medium text-foreground">
-            Tool result {block.toolOk ? '(ok)' : '(failed)'}
-          </p>
-          <pre className="mt-1 overflow-x-auto text-muted-foreground">
-            {typeof block.toolOutput === 'string'
-              ? block.toolOutput
-              : JSON.stringify(block.toolOutput ?? block.text, null, 2)}
-          </pre>
-        </div>
-      );
-
-    case 'permission_request':
-      return (
-        <div className="space-y-2 rounded-md border border-warning/30 bg-warning/5 p-2 text-xs">
-          <p className="font-medium text-foreground">Permission required: {block.toolName}</p>
-          {block.toolDescription ? (
-            <p className="text-muted-foreground">{block.toolDescription}</p>
-          ) : null}
-          {block.resolved ? (
-            <Badge variant={block.allowed ? 'success' : 'destructive'} size="sm">
-              {block.allowed ? 'Allowed' : 'Denied'}
-            </Badge>
-          ) : canRespondPermission ? (
-            <div className="flex gap-1">
-              <Button size="xs" className="h-6" onClick={() => onRespondPermission(true)}>
-                Allow
-              </Button>
-              <Button
-                size="xs"
-                variant="outline"
-                className="h-6"
-                onClick={() => onRespondPermission(false)}
-              >
-                Deny
-              </Button>
-            </div>
-          ) : (
-            <Badge variant="warning" size="sm">
-              Waiting
-            </Badge>
-          )}
-        </div>
-      );
-
-    default:
-      return null;
-  }
-}
-
-interface ThinkingCardProps {
-  vm: { state: 'streaming' | 'done'; text: string };
+  onRespondPermission: (allow: boolean) => Promise<boolean> | undefined;
 }
 
 /**
- * T-04 Thinking 折叠卡：
- * - streaming：默认折叠 + 轻量指示（pulse 点 + "Thinking…"），不渲染空文本。
- * - done：默认折叠，可单击展开正文（whitespace-pre-wrap）；空文本显示占位。
- * 仅在 `thinkingEnabled === true` 时挂载（BlockRenderer 已先过滤）。
+ * T-05 (D-1/D-3): bare assistant container — no border, no fill, no role
+ * label. Renders, in order: the turn's "Worked for Ns" row (A07 `:1728`,
+ * top of turn, only when T-06 latency metadata is available), then
+ * `groupTimeline`'s items (text / tool groups / permission / frozen
+ * question), then the footer (`model · time`, latency dropped since the
+ * "Worked for" row took over that duty).
  */
-function ThinkingCard({ vm }: ThinkingCardProps) {
-  const [open, setOpen] = useState(false);
-  const streaming = vm.state === 'streaming';
-  const label = streaming ? 'Thinking' : 'Thought process';
+function AssistantMessage({
+  message,
+  metadata,
+  isActiveTurn,
+  thinkingEnabled,
+  repoName,
+  getThinkingDurationMs,
+  canRespondPermission,
+  onRespondPermission,
+}: AssistantMessageProps) {
+  const workedForRow = buildWorkedForRow(message, metadata);
+  const items = groupTimeline(message);
+  // Mirrors the pre-T-05 `deriveThinkingCard` streaming check: the turn's
+  // active flag gates it, and only the message's own last block can be "in
+  // flight" (thinking blocks that aren't last never match, so this needs no
+  // extra type guard).
+  const isStreamingBlockId =
+    isActiveTurn && message.blocks.length > 0 ? message.blocks[message.blocks.length - 1].id : null;
+  const footerLine = formatMessageMetadata(metadata, { omitLatency: true });
 
   return (
-    <Collapsible
-      className="rounded-md border border-border bg-muted/20 text-xs"
-      onOpenChange={setOpen}
-      open={open}
-    >
-      <CollapsibleTrigger className="flex h-7 w-full min-w-0 items-center gap-1.5 px-2 text-left text-muted-foreground hover:bg-accent">
-        {streaming ? (
-          <span
-            aria-hidden
-            className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-status-running"
-          />
-        ) : (
-          <ChevronRight
-            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')}
-          />
-        )}
-        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</span>
-        {streaming && vm.text && (
-          <span className="min-w-0 flex-1 truncate opacity-70">{vm.text.slice(-80)}</span>
-        )}
-      </CollapsibleTrigger>
-      {!streaming && (
-        <CollapsibleContent className="px-2 pb-2">
-          {vm.text ? (
-            <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted-foreground">
-              {vm.text}
-            </pre>
-          ) : (
-            <p className="text-[11px] italic text-muted-foreground/70">
-              （thinking 段落为空，可能 Host 未发任何 delta）
-            </p>
-          )}
-        </CollapsibleContent>
+    <article className="text-markdown leading-normal [&>p+p]:mt-2.5">
+      {workedForRow && <ToolGroup rows={[workedForRow]} />}
+
+      {items.map((item) => {
+        switch (item.kind) {
+          case 'text':
+            return (
+              <p
+                key={item.block.id}
+                className="text-markdown leading-normal text-foreground whitespace-pre-wrap"
+              >
+                {item.block.text}
+              </p>
+            );
+
+          case 'toolGroup': {
+            const entries = filterThinkingEntries(item.entries, thinkingEnabled);
+            const rows = deriveToolGroupRows(entries, {
+              repoName,
+              thinkingDurationMs: getThinkingDurationMs,
+              isStreamingBlockId,
+            });
+            return <ToolGroup key={`tool-group-${item.blockIndex}`} rows={rows} />;
+          }
+
+          case 'permission':
+            // T-05 (D-5): same `.qa` shell as questions, thin adapter over
+            // `derivePermissionCardView` — position unchanged (block-order,
+            // not the Dock), Allow/Deny behavior preserved verbatim.
+            return (
+              <QuestionCard
+                key={item.block.id}
+                variant="permission"
+                block={item.block}
+                canRespond={canRespondPermission}
+                onRespondPermission={onRespondPermission}
+              />
+            );
+
+          case 'question': {
+            // T-05 (D-4): the live, answerable card lives in
+            // `PendingQuestionDock` (outside ScrollArea, docked above the
+            // Composer) — this branch only renders once the question is
+            // frozen (answered/skipped), in its original block position.
+            const state = deriveQuestionCardState(item.block);
+            if (state === 'pending') return null;
+            return <QuestionCard key={item.block.id} variant="frozen" block={item.block} />;
+          }
+
+          default:
+            return null;
+        }
+      })}
+
+      {footerLine && (
+        <p className="mt-2.5 flex flex-wrap items-center gap-2 text-code text-muted-foreground">
+          {footerLine}
+        </p>
       )}
-    </Collapsible>
+    </article>
   );
+}
+
+/** T-04 capability gate: dropped, not just hidden — no leftover entry point when disabled. */
+function filterThinkingEntries(
+  entries: readonly ToolGroupEntry[],
+  thinkingEnabled: boolean
+): readonly ToolGroupEntry[] {
+  return thinkingEnabled ? entries : entries.filter((entry) => entry.kind !== 'thinking');
+}
+
+/**
+ * Turn-level "Worked for Ns" row (A07 `:1728`/`:2398`): reuses `ToolRow`'s own
+ * rendering pipeline instead of a bespoke component — same verb/arg column,
+ * same `.ct-think` expand body, just a view-model built from `turnTiming.ts`
+ * instead of a tool run.
+ */
+function buildWorkedForRow(message: ChatMessage, metadata?: MessageMetadata): ToolRowView | null {
+  const worked = formatWorkedForRow(metadata?.latencyMs);
+  if (!worked) return null;
+  const stats = deriveTurnStats(message);
+  return {
+    key: `${message.id}~worked-for`,
+    verb: worked.verb,
+    arg: worked.arg,
+    running: false,
+    failed: false,
+    expandable: Boolean(stats),
+    body: stats ? 'stats' : undefined,
+    output: stats ?? undefined,
+  };
 }

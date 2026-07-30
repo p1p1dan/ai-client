@@ -464,4 +464,48 @@ describe('composerPlaceholder', () => {
       ).toBe('Active session has no workspace…');
     }
   });
+
+  it('shows the pending-question follow-up copy even while busy (pendingQuestion must be checked before busy)', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        pendingQuestion: true,
+      })
+    ).toBe('Add more optional details…');
+  });
+
+  it('still prioritizes the sending copy over a pending question', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: false,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        pendingQuestion: true,
+      })
+    ).toBe('Sending to Agent Host…');
+  });
+
+  it('leaves the existing 8 cases unchanged when pendingQuestion is omitted', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: true,
+        busy: false,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+      })
+    ).toBe('Send follow-up…');
+  });
 });
