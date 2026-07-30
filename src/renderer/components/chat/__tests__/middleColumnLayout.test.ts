@@ -211,6 +211,16 @@ describe('composerTextareaClass', () => {
     expect(composerTextareaClass('empty')).toContain('resize-none');
     expect(composerTextareaClass('session')).toContain('resize-none');
   });
+
+  it('drops the border/bg/shadow/ring counters now that <Textarea unstyled> renders no outer chrome to fight', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      const cls = composerTextareaClass(mode);
+      expect(cls).not.toContain('border-0');
+      expect(cls).not.toContain('bg-transparent');
+      expect(cls).not.toContain('shadow-none');
+      expect(cls).not.toContain('focus-visible:ring-0');
+    }
+  });
 });
 
 describe('targetRowClass / targetRowSlots', () => {

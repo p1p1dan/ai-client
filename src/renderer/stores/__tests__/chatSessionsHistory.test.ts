@@ -18,7 +18,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     messages: {},
     activeSessionId: null,
     recentSessionIds: [],
-    pendingPermission: null,
+    pendingPermissions: [],
     pendingQuestion: null,
     hostBoundSessionIds: [],
     runtimeReady: false,
@@ -27,7 +27,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     selectSession: () => {},
     sendMessage: async () => {},
     stopActiveSession: async () => {},
-    respondPermission: async () => false,
+    respondPermission: async (_permissionId: string, _allow: boolean) => false,
     respondQuestion: async () => false,
     initRuntime: () => () => {},
     ...overrides,
@@ -348,11 +348,13 @@ describe('applyRuntimeEvent — permission.requested excludes history messages (
         (block) => block.type === 'permission_request' && block.permissionId === 'perm-1'
       )
     ).toBe(true);
-    expect(patch.pendingPermission).toEqual({
-      sessionId: SESSION_ID,
-      permissionId: 'perm-1',
-      messageId: 'msg-perm-perm-1',
-    });
+    expect(patch.pendingPermissions).toEqual([
+      {
+        sessionId: SESSION_ID,
+        permissionId: 'perm-1',
+        messageId: 'msg-perm-perm-1',
+      },
+    ]);
   });
 
   it('still attaches to the latest runtime assistant message when one exists after history', () => {
@@ -389,6 +391,6 @@ describe('applyRuntimeEvent — permission.requested excludes history messages (
         (block) => block.type === 'permission_request' && block.permissionId === 'perm-2'
       )
     ).toBe(true);
-    expect(patch.pendingPermission?.messageId).toBe('asst-1');
+    expect(patch.pendingPermissions?.[0].messageId).toBe('asst-1');
   });
 });

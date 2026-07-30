@@ -109,7 +109,14 @@ export interface ChatSessionsState {
   messages: Record<string, ChatMessage[]>;
   activeSessionId: string | null;
   recentSessionIds: string[];
-  pendingPermission: PendingPermission | null;
+  /**
+   * All permission prompts the Host still has parked, in arrival order.
+   * Concurrent tool calls park several at once (SDK canUseTool is
+   * concurrent), so this must never collapse to a single slot: whoever
+   * answers card N must not clear card M's ability to answer, and must not
+   * send M's id.
+   */
+  pendingPermissions: PendingPermission[];
   pendingQuestion: PendingQuestion | null;
   /** Sessions already registered with Agent Host. */
   hostBoundSessionIds: string[];
@@ -122,11 +129,15 @@ export interface ChatSessionsState {
   sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
   stopActiveSession: () => Promise<void>;
   /**
-   * Resolves `true` on a successful IPC round-trip, `false` when it throws
-   * (and `lastError` is set) — callers use this to unlock a submitting UI on
-   * failure instead of leaving it stuck forever (T-05 adversarial fix #4).
+   * Answer one specific parked prompt. permissionId is required: several may
+   * be parked at once, and the store must never guess which card the user
+   * clicked.
+   * Resolves `false` (without touching `lastError`) when the id is no longer
+   * parked — a stale click, not a failure — and `false` with `lastError` set
+   * when the IPC call throws, so the card can unlock its submitting state
+   * (T-05 fix #4).
    */
-  respondPermission: (allow: boolean) => Promise<boolean>;
+  respondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
   respondQuestion: (input: {
     answers?: Record<string, string>;
     response?: string;
@@ -215,6 +226,34 @@ function upsertMessage(bucket: ChatMessage[], message: ChatMessage): ChatMessage
   const next = [...bucket];
   next[index] = message;
   return next;
+}
+
+/**
+ * Drop one parked prompt; returns an empty patch when nothing matched, so
+ * unrelated events never hand consumers a fresh array identity (perf: keeps
+ * `session.completed`, which fires every turn, from forcing a full timeline
+ * re-render when nothing was pending).
+ */
+function withoutPermission(
+  state: ChatSessionsState,
+  sessionId: string,
+  permissionId: string
+): Pick<ChatSessionsState, 'pendingPermissions'> | Record<string, never> {
+  const next = state.pendingPermissions.filter(
+    (item) => !(item.sessionId === sessionId && item.permissionId === permissionId)
+  );
+  if (next.length === state.pendingPermissions.length) return {};
+  return { pendingPermissions: next };
+}
+
+/** Drop every parked prompt of one session (terminal events). Same identity rule as {@link withoutPermission}. */
+function withoutSessionPermissions(
+  state: ChatSessionsState,
+  sessionId: string
+): Pick<ChatSessionsState, 'pendingPermissions'> | Record<string, never> {
+  const next = state.pendingPermissions.filter((item) => item.sessionId !== sessionId);
+  if (next.length === state.pendingPermissions.length) return {};
+  return { pendingPermissions: next };
 }
 
 function withBucket(
@@ -384,8 +423,13 @@ export function applyRuntimeEvent(
     }
 
     case 'session.completed': {
+      // Terminal event bailout: a turn can never complete while canUseTool
+      // still has this session parked, so any leftover entries here are
+      // stale (Host crash / dropped event) — clear them so no ghost card
+      // stays clickable forever (see withoutSessionPermissions).
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+        ...withoutSessionPermissions(state, sessionId),
       };
     }
 
@@ -393,12 +437,14 @@ export function applyRuntimeEvent(
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'failed'),
         lastError: event.payload?.error ?? 'Session failed',
+        ...withoutSessionPermissions(state, sessionId),
       };
     }
 
     case 'session.stopped': {
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+        ...withoutSessionPermissions(state, sessionId),
       };
     }
 
@@ -513,39 +559,52 @@ export function applyRuntimeEvent(
           blocks: [],
         } satisfies ChatMessage);
 
-      const updated: ChatMessage = {
-        ...baseMessage,
-        blocks: [
-          ...baseMessage.blocks,
-          {
-            id: event.payload.permissionId,
-            type: 'permission_request',
-            permissionId: event.payload.permissionId,
-            toolName: event.payload.toolName,
-            toolDescription: event.payload.description,
-            toolInput: event.payload.input,
-            resolved: false,
-          },
-        ],
-      };
+      // Idempotent guard: a redelivered event must not duplicate the block
+      // or the queue entry.
+      const blockAlreadyPresent = baseMessage.blocks.some(
+        (block) => block.id === event.payload.permissionId
+      );
+      const queueAlreadyHasEntry = state.pendingPermissions.some(
+        (item) => item.sessionId === sessionId && item.permissionId === event.payload.permissionId
+      );
+
+      const updated: ChatMessage = blockAlreadyPresent
+        ? baseMessage
+        : {
+            ...baseMessage,
+            blocks: [
+              ...baseMessage.blocks,
+              {
+                id: event.payload.permissionId,
+                type: 'permission_request',
+                permissionId: event.payload.permissionId,
+                toolName: event.payload.toolName,
+                toolDescription: event.payload.description,
+                toolInput: event.payload.input,
+                resolved: false,
+              },
+            ],
+          };
 
       return {
         messages: withBucket(state, sessionId, upsertMessage(bucket, updated)),
-        pendingPermission: {
-          sessionId,
-          permissionId: event.payload.permissionId,
-          messageId,
-        },
+        pendingPermissions: queueAlreadyHasEntry
+          ? state.pendingPermissions
+          : [
+              ...state.pendingPermissions,
+              { sessionId, permissionId: event.payload.permissionId, messageId },
+            ],
         sessions: upsertSessionStatus(state.sessions, sessionId, 'waiting_permission'),
       };
     }
 
     case 'permission.resolved': {
       const { permissionId, allow } = event.payload;
+      if (!permissionId) return {};
+
+      const cleared = withoutPermission(state, sessionId, permissionId);
       const bucket = state.messages[sessionId];
-      if (!permissionId || !bucket) {
-        return { pendingPermission: null };
-      }
+      if (!bucket) return cleared;
 
       const nextBucket = bucket.map((message) => ({
         ...message,
@@ -554,7 +613,7 @@ export function applyRuntimeEvent(
         ),
       }));
 
-      return { messages: withBucket(state, sessionId, nextBucket), pendingPermission: null };
+      return { messages: withBucket(state, sessionId, nextBucket), ...cleared };
     }
 
     case 'question.requested': {
@@ -675,7 +734,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   messages: INITIAL_MESSAGES,
   activeSessionId: 'session-live',
   recentSessionIds: ['session-live', 'session-welcome'],
-  pendingPermission: null,
+  pendingPermissions: [],
   pendingQuestion: null,
   hostBoundSessionIds: [],
   runtimeReady: false,
@@ -764,16 +823,19 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     }
   },
 
-  respondPermission: async (allow) => {
-    const { pendingPermission } = get();
-    if (!pendingPermission) {
+  respondPermission: async (permissionId, allow) => {
+    // Find the entry's own sessionId — never activeSessionId — to preserve
+    // existing cross-session behavior; a stale click (id no longer parked)
+    // is not a failure, so it returns false without an IPC call or lastError.
+    const entry = get().pendingPermissions.find((item) => item.permissionId === permissionId);
+    if (!entry) {
       return false;
     }
 
     try {
       await window.electronAPI.chat.respondPermission({
-        sessionId: pendingPermission.sessionId,
-        permissionId: pendingPermission.permissionId,
+        sessionId: entry.sessionId,
+        permissionId: entry.permissionId,
         allow,
       });
       return true;

@@ -807,6 +807,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const textareaEl = (
     <Textarea
       ref={textareaRef}
+      unstyled
       value={value}
       onChange={(event) => handleContentChange(event.target.value)}
       onCompositionStart={() => {

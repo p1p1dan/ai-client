@@ -22,7 +22,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     messages: {},
     activeSessionId: null,
     recentSessionIds: [],
-    pendingPermission: null,
+    pendingPermissions: [],
     pendingQuestion: null,
     hostBoundSessionIds: [],
     runtimeReady: false,
@@ -31,7 +31,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     selectSession: () => {},
     sendMessage: async () => {},
     stopActiveSession: async () => {},
-    respondPermission: async () => false,
+    respondPermission: async (_permissionId: string, _allow: boolean) => false,
     respondQuestion: async () => false,
     initRuntime: () => () => {},
     ...overrides,
@@ -154,7 +154,7 @@ describe('applyRuntimeEvents — fold semantics', () => {
     }
   });
 
-  it('accumulates changes across independent keys (messages, sessions, pendingPermission) into one patch', () => {
+  it('accumulates changes across independent keys (messages, sessions, pendingPermissions) into one patch', () => {
     const base = baseState({
       sessions: [makeSession({ status: 'idle' })],
       messages: { [SESSION_ID]: [makeMessage({ id: 'msg-1', role: 'assistant', blocks: [] })] },
@@ -186,7 +186,7 @@ describe('applyRuntimeEvents — fold semantics', () => {
     const patch = applyRuntimeEvents(base, events);
 
     expect(Object.keys(patch)).toEqual(
-      expect.arrayContaining(['messages', 'sessions', 'pendingPermission'])
+      expect.arrayContaining(['messages', 'sessions', 'pendingPermissions'])
     );
   });
 
@@ -265,7 +265,7 @@ describe('initRuntime — batching (RUNTIME_EVENT_FLUSH_MS / RUNTIME_EVENT_MAX_Q
       sessions: [makeSession({ status: 'idle' })],
       activeSessionId: SESSION_ID,
       recentSessionIds: [],
-      pendingPermission: null,
+      pendingPermissions: [],
       pendingQuestion: null,
       hostBoundSessionIds: [],
       lastError: null,

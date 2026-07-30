@@ -378,7 +378,7 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       messages: {},
       activeSessionId: null,
       recentSessionIds: [],
-      pendingPermission: null,
+      pendingPermissions: [],
       pendingQuestion: null,
       hostBoundSessionIds: [],
       runtimeReady: false,
@@ -387,7 +387,7 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       selectSession: () => {},
       sendMessage: async () => {},
       stopActiveSession: async () => {},
-      respondPermission: async () => false,
+      respondPermission: async (_permissionId: string, _allow: boolean) => false,
       respondQuestion: async () => false,
       initRuntime: () => () => {},
     };

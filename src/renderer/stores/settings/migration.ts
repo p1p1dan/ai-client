@@ -56,6 +56,11 @@ export function migrateSettings(
 
   const persisted = persistedState;
 
+  // Migrate a persisted 'system' theme to 'light': 'system' was the unchosen
+  // default, never an explicit user pick — the product default moved to
+  // light. Users who explicitly want system/dark can re-pick in Settings.
+  const migratedTheme = persisted.theme === 'system' ? 'light' : persisted.theme;
+
   // Sanitize background image settings
   const sanitizedBackgroundOpacity = clampNumber(
     persisted.backgroundOpacity,
@@ -153,6 +158,7 @@ export function migrateSettings(
     ...currentState,
     ...persisted,
     // Override with migrated/sanitized values
+    ...(migratedTheme && { theme: migratedTheme }),
     ...(terminalRenderer && { terminalRenderer }),
     xtermKeybindings: migratedXtermKeybindings,
     mainTabKeybindings: {

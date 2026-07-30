@@ -253,6 +253,23 @@ function derivePermissionPrompt(block: ChatBlock): string {
   return block.toolDescription ? `${toolName} — ${block.toolDescription}` : toolName;
 }
 
+/**
+ * Block-level gate for the permission card's Allow/Deny rows. True only when
+ * the Host still has *this* permissionId parked for the active session — so a
+ * sibling card being answered, a replayed block, or another session's prompt
+ * can never make it answerable.
+ */
+export function canRespondToPermission(
+  pending: readonly { sessionId: string; permissionId: string }[],
+  activeSessionId: string | null,
+  permissionId: string | undefined
+): boolean {
+  if (!activeSessionId || !permissionId) return false;
+  return pending.some(
+    (item) => item.sessionId === activeSessionId && item.permissionId === permissionId
+  );
+}
+
 export function derivePermissionCardView(
   block: ChatBlock,
   canRespond: boolean

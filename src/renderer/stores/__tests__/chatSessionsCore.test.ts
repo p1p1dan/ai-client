@@ -2,6 +2,7 @@ import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import {
   applyRuntimeEvent,
+  applyRuntimeEvents,
   type ChatMessage,
   type ChatSession,
   type ChatSessionsState,
@@ -20,7 +21,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     messages: {},
     activeSessionId: null,
     recentSessionIds: [],
-    pendingPermission: null,
+    pendingPermissions: [],
     pendingQuestion: null,
     hostBoundSessionIds: [],
     runtimeReady: false,
@@ -29,7 +30,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     selectSession: () => {},
     sendMessage: async () => {},
     stopActiveSession: async () => {},
-    respondPermission: async () => false,
+    respondPermission: async (_permissionId: string, _allow: boolean) => false,
     respondQuestion: async () => false,
     initRuntime: () => () => {},
     ...overrides,
@@ -301,7 +302,7 @@ describe('applyRuntimeEvent — tool.started / tool.completed', () => {
 });
 
 describe('applyRuntimeEvent — permission.requested', () => {
-  it('attaches the block to the latest assistant message and sets pendingPermission + status', () => {
+  it('attaches the block to the latest assistant message and sets pendingPermissions + status', () => {
     const assistantA = makeMessage({ id: 'asst-1', role: 'assistant', blocks: [] });
     const userMessage = makeMessage({ id: 'user-1', role: 'user', blocks: [] });
     const assistantB = makeMessage({ id: 'asst-2', role: 'assistant', blocks: [] });
@@ -336,11 +337,13 @@ describe('applyRuntimeEvent — permission.requested', () => {
         resolved: false,
       },
     ]);
-    expect(patch.pendingPermission).toEqual({
-      sessionId: SESSION_ID,
-      permissionId: 'perm-1',
-      messageId: 'asst-2',
-    });
+    expect(patch.pendingPermissions).toEqual([
+      {
+        sessionId: SESSION_ID,
+        permissionId: 'perm-1',
+        messageId: 'asst-2',
+      },
+    ]);
     expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe(
       'waiting_permission'
     );
@@ -363,7 +366,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
 
     expect(synthetic).toBeDefined();
     expect(synthetic?.role).toBe('assistant');
-    expect(patch.pendingPermission?.messageId).toBe('msg-perm-perm-2');
+    expect(patch.pendingPermissions?.[0].messageId).toBe('msg-perm-perm-2');
     expect(synthetic?.blocks).toEqual([
       {
         id: 'perm-2',
@@ -405,7 +408,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
     const patch = applyRuntimeEvent(state, event);
     const target = patch.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-target');
 
-    expect(patch.pendingPermission?.messageId).toBe('asst-target');
+    expect(patch.pendingPermissions?.[0].messageId).toBe('asst-target');
     expect(target?.blocks).toEqual([
       {
         id: 'perm-cross',
@@ -443,7 +446,7 @@ describe('applyRuntimeEvent — permission.requested', () => {
 
     expect(historyAfter?.blocks).toEqual([]);
     expect(synthetic).toBeDefined();
-    expect(patch.pendingPermission?.messageId).toBe('msg-perm-perm-3');
+    expect(patch.pendingPermissions?.[0].messageId).toBe('msg-perm-perm-3');
   });
 });
 
@@ -459,11 +462,11 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     return baseState({
       sessions: [makeSession({ status: 'waiting_permission' })],
       messages: { [SESSION_ID]: [message] },
-      pendingPermission: { sessionId: SESSION_ID, permissionId: 'perm-1', messageId: 'asst-1' },
+      pendingPermissions: [{ sessionId: SESSION_ID, permissionId: 'perm-1', messageId: 'asst-1' }],
     });
   }
 
-  it('marks the matching block resolved/allowed and clears pendingPermission', () => {
+  it('marks the matching block resolved/allowed and dequeues it from pendingPermissions', () => {
     const state = stateWithPermissionBlock();
     const event: RuntimeEvent = {
       type: 'permission.resolved',
@@ -483,7 +486,7 @@ describe('applyRuntimeEvent — permission.resolved', () => {
       resolved: true,
       allowed: true,
     });
-    expect(patch.pendingPermission).toBeNull();
+    expect(patch.pendingPermissions).toEqual([]);
   });
 
   it('is idempotent: applying the same resolved event twice stays consistent, no duplication', () => {
@@ -501,7 +504,10 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     const patch2 = applyRuntimeEvent(state2, event);
 
     expect(patch2.messages).toEqual(patch1.messages);
-    expect(patch2.pendingPermission).toBeNull();
+    // patch2 applies to a state where the entry is already gone, so the
+    // second-round patch carries no pendingPermissions key at all (empty
+    // patch — see withoutPermission's reference-stability contract).
+    expect(patch2.pendingPermissions).toBeUndefined();
     const finalMessage = patch2.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-1');
     expect(finalMessage?.blocks).toHaveLength(1);
     expect(finalMessage?.blocks[0]).toEqual({
@@ -513,7 +519,13 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     });
   });
 
-  it('clears pendingPermission and leaves messages untouched when the permissionId matches no block', () => {
+  // Behavior change (intentional, see design spec §1.3): the old single-slot
+  // pending-permission field was cleared for ANY resolved event, even one
+  // whose permissionId matched nothing — which is exactly the class of bug
+  // this fix closes (a stray/late resolved must not starve a real pending
+  // card). The queue now only dequeues an exact (sessionId, permissionId)
+  // match; an unmatched id leaves it untouched.
+  it('leaves the queue untouched when the permissionId matches no pending entry', () => {
     const state = stateWithPermissionBlock();
     const event: RuntimeEvent = {
       type: 'permission.resolved',
@@ -524,9 +536,306 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     };
 
     const patch = applyRuntimeEvent(state, event);
+    const nextState = { ...state, ...patch } as ChatSessionsState;
 
-    expect(patch.pendingPermission).toBeNull();
+    expect(nextState.pendingPermissions).toEqual(state.pendingPermissions);
     expect(patch.messages).toEqual(state.messages);
+  });
+});
+
+// Regression coverage for the permission-queue concurrency fix: two `canUseTool`
+// prompts can park at once (SDK concurrency), so `pendingPermissions` must behave
+// as a real per-permissionId queue, never a single slot. N1+N2+A1 (see
+// chatSessionsRespond.test.ts) are the minimal recreation of the original bug
+// report (a starved second card, and the more dangerous silent misattribution).
+describe('applyRuntimeEvent — pendingPermissions queue (concurrent park fix)', () => {
+  function twoParkedState(): ChatSessionsState {
+    const assistant = makeMessage({ id: 'asst-1', role: 'assistant', blocks: [] });
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [assistant] },
+    });
+    const eventA: RuntimeEvent = {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-A', toolName: 'Read' },
+    };
+    const eventB: RuntimeEvent = {
+      type: 'permission.requested',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: { permissionId: 'perm-B', toolName: 'Read' },
+    };
+    const patchA = applyRuntimeEvent(state, eventA);
+    const stateAfterA = { ...state, ...patchA } as ChatSessionsState;
+    const patchB = applyRuntimeEvent(stateAfterA, eventB);
+    return { ...stateAfterA, ...patchB } as ChatSessionsState;
+  }
+
+  it('N1: two concurrent requested events queue in arrival order on the same assistant message', () => {
+    const state = twoParkedState();
+
+    expect(state.pendingPermissions).toEqual([
+      { sessionId: SESSION_ID, permissionId: 'perm-A', messageId: 'asst-1' },
+      { sessionId: SESSION_ID, permissionId: 'perm-B', messageId: 'asst-1' },
+    ]);
+    const message = state.messages[SESSION_ID]?.find((item) => item.id === 'asst-1');
+    expect(message?.blocks.map((block) => block.permissionId)).toEqual(['perm-A', 'perm-B']);
+    expect(state.sessions.find((session) => session.id === SESSION_ID)?.status).toBe(
+      'waiting_permission'
+    );
+  });
+
+  it('N2: resolving the first entry only dequeues it — the second stays parked and unresolved', () => {
+    const state = twoParkedState();
+    const event: RuntimeEvent = {
+      type: 'permission.resolved',
+      seq: 3,
+      sessionId: SESSION_ID,
+      timestamp: 3,
+      payload: { permissionId: 'perm-A', allow: true },
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: SESSION_ID, permissionId: 'perm-B', messageId: 'asst-1' },
+    ]);
+    const message = patch.messages?.[SESSION_ID]?.find((item) => item.id === 'asst-1');
+    expect(message?.blocks.find((block) => block.permissionId === 'perm-A')?.resolved).toBe(true);
+    expect(message?.blocks.find((block) => block.permissionId === 'perm-B')?.resolved).toBe(false);
+  });
+
+  it('N3: resolving out of order (the second entry first) only dequeues that entry', () => {
+    const state = twoParkedState();
+    const event: RuntimeEvent = {
+      type: 'permission.resolved',
+      seq: 3,
+      sessionId: SESSION_ID,
+      timestamp: 3,
+      payload: { permissionId: 'perm-B', allow: false },
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: SESSION_ID, permissionId: 'perm-A', messageId: 'asst-1' },
+    ]);
+    const message = patch.messages?.[SESSION_ID]?.find((item) => item.id === 'asst-1');
+    expect(message?.blocks.find((block) => block.permissionId === 'perm-A')?.resolved).toBe(false);
+    expect(message?.blocks.find((block) => block.permissionId === 'perm-B')?.resolved).toBe(true);
+  });
+
+  it('N4: a redelivered permissionId does not duplicate the queue entry or the block (E11)', () => {
+    const assistant = makeMessage({ id: 'asst-1', role: 'assistant', blocks: [] });
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [assistant] },
+    });
+    const event: RuntimeEvent = {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', toolName: 'Bash' },
+    };
+
+    const patch1 = applyRuntimeEvent(state, event);
+    const state2 = { ...state, ...patch1 } as ChatSessionsState;
+    const patch2 = applyRuntimeEvent(state2, event);
+    const state3 = { ...state2, ...patch2 } as ChatSessionsState;
+
+    expect(state3.pendingPermissions).toHaveLength(1);
+    const message = state3.messages[SESSION_ID]?.find((item) => item.id === 'asst-1');
+    expect(message?.blocks).toHaveLength(1);
+  });
+
+  it('N5: resolving session A leaves session B entry untouched (E10)', () => {
+    const assistantA = makeMessage({
+      id: 'asst-a',
+      sessionId: SESSION_ID,
+      role: 'assistant',
+      blocks: [
+        { id: 'perm-a', type: 'permission_request', permissionId: 'perm-a', resolved: false },
+      ],
+    });
+    const assistantB = makeMessage({
+      id: 'asst-b',
+      sessionId: 'session-2',
+      role: 'assistant',
+      blocks: [
+        { id: 'perm-b', type: 'permission_request', permissionId: 'perm-b', resolved: false },
+      ],
+    });
+    const state = baseState({
+      sessions: [
+        makeSession({ status: 'waiting_permission' }),
+        makeSession({ id: 'session-2', status: 'waiting_permission' }),
+      ],
+      messages: { [SESSION_ID]: [assistantA], 'session-2': [assistantB] },
+      pendingPermissions: [
+        { sessionId: SESSION_ID, permissionId: 'perm-a', messageId: 'asst-a' },
+        { sessionId: 'session-2', permissionId: 'perm-b', messageId: 'asst-b' },
+      ],
+    });
+    const event: RuntimeEvent = {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-a', allow: true },
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: 'session-2', permissionId: 'perm-b', messageId: 'asst-b' },
+    ]);
+  });
+
+  function twoSessionQueue(): ChatSessionsState {
+    return baseState({
+      sessions: [
+        makeSession({ status: 'running' }),
+        makeSession({ id: 'session-2', status: 'waiting_permission' }),
+      ],
+      pendingPermissions: [
+        { sessionId: SESSION_ID, permissionId: 'perm-x', messageId: 'm1' },
+        { sessionId: 'session-2', permissionId: 'perm-y', messageId: 'm2' },
+      ],
+    });
+  }
+
+  it('N6a: session.completed clears this session pending, keeps another session queued', () => {
+    const state = twoSessionQueue();
+    const event: RuntimeEvent = {
+      type: 'session.completed',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: 'session-2', permissionId: 'perm-y', messageId: 'm2' },
+    ]);
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
+  });
+
+  it('N6b: session.failed clears this session pending and still sets lastError (no regression)', () => {
+    const state = twoSessionQueue();
+    const event: RuntimeEvent = {
+      type: 'session.failed',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { error: 'boom' },
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: 'session-2', permissionId: 'perm-y', messageId: 'm2' },
+    ]);
+    expect(patch.lastError).toBe('boom');
+  });
+
+  it('N6c: session.stopped clears this session pending and still leaves messages untouched', () => {
+    const state = twoSessionQueue();
+    const event: RuntimeEvent = {
+      type: 'session.stopped',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: 'session-2', permissionId: 'perm-y', messageId: 'm2' },
+    ]);
+    expect(patch.messages).toBeUndefined();
+  });
+
+  it('N7: a terminal event with nothing pending produces no pendingPermissions key (reference stability, §1.5)', () => {
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      pendingPermissions: [],
+    });
+    const terminalEvents: RuntimeEvent[] = [
+      { type: 'session.completed', seq: 1, sessionId: SESSION_ID, timestamp: 1 },
+      { type: 'session.failed', seq: 2, sessionId: SESSION_ID, timestamp: 2 },
+      { type: 'session.stopped', seq: 3, sessionId: SESSION_ID, timestamp: 3 },
+    ];
+
+    for (const event of terminalEvents) {
+      const patch = applyRuntimeEvent(state, event);
+      expect('pendingPermissions' in patch).toBe(false);
+    }
+  });
+
+  it('N8: a single batch [requested A, requested B, resolved A] folds to queue=[B] with A resolved (E13)', () => {
+    const assistant = makeMessage({ id: 'asst-1', role: 'assistant', blocks: [] });
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [assistant] },
+    });
+    const events: RuntimeEvent[] = [
+      {
+        type: 'permission.requested',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { permissionId: 'perm-A', toolName: 'Bash' },
+      },
+      {
+        type: 'permission.requested',
+        seq: 2,
+        sessionId: SESSION_ID,
+        timestamp: 2,
+        payload: { permissionId: 'perm-B', toolName: 'Bash' },
+      },
+      {
+        type: 'permission.resolved',
+        seq: 3,
+        sessionId: SESSION_ID,
+        timestamp: 3,
+        payload: { permissionId: 'perm-A', allow: true },
+      },
+    ];
+
+    const patch = applyRuntimeEvents(state, events);
+
+    expect(patch.pendingPermissions).toEqual([
+      { sessionId: SESSION_ID, permissionId: 'perm-B', messageId: 'asst-1' },
+    ]);
+    const message = patch.messages?.[SESSION_ID]?.find((item) => item.id === 'asst-1');
+    expect(message?.blocks.find((block) => block.permissionId === 'perm-A')?.resolved).toBe(true);
+    expect(message?.blocks.find((block) => block.permissionId === 'perm-B')?.resolved).toBe(false);
+  });
+
+  it('N9: resolved with no messages bucket for the session still dequeues, with no messages key in the patch', () => {
+    const state = baseState({
+      sessions: [makeSession({ status: 'waiting_permission' })],
+      messages: {},
+      pendingPermissions: [{ sessionId: SESSION_ID, permissionId: 'perm-1', messageId: 'asst-1' }],
+    });
+    const event: RuntimeEvent = {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', allow: true },
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.pendingPermissions).toEqual([]);
+    expect(patch.messages).toBeUndefined();
   });
 });
 

@@ -122,8 +122,10 @@ export class PermissionBridge {
           sessionId: input.sessionId,
           payload: { permissionId, allow: result.behavior === 'allow' },
         });
-        // Resume running unless abort already took over.
-        if (!input.signal.aborted) {
+        // Resume running unless abort already took over, and only once this
+        // session has no other permission parked — settling card A while B
+        // is still pending must not announce 'running' out from under B.
+        if (!input.signal.aborted && !this.hasPending(input.sessionId)) {
           this.emit({
             type: 'session.status',
             sessionId: input.sessionId,

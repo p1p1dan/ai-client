@@ -1,6 +1,6 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { ChevronRight, FileSearch, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -16,9 +16,10 @@ import {
   selectHistoryError,
 } from './historyError';
 import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
+import { shouldStickToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { QuestionCard } from './QuestionCard';
-import { deriveQuestionCardState } from './questionCard';
+import { canRespondToPermission, deriveQuestionCardState } from './questionCard';
 import { ReadingColumn } from './ReadingColumn';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';
@@ -32,6 +33,15 @@ import {
 import { deriveTurnStats, formatWorkedForRow } from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useTurnTiming } from './useTurnTiming';
+
+/**
+ * The base-ui `ScrollArea`'s actual scrollable node is the inner Viewport
+ * div (`ui/scroll-area.tsx` tags it `data-slot="scroll-area-viewport"`), not
+ * the `ScrollArea` root — that root is a non-scrolling positioning wrapper.
+ */
+function findViewport(root: HTMLDivElement | null): HTMLDivElement | null {
+  return root?.querySelector<HTMLDivElement>('[data-slot="scroll-area-viewport"]') ?? null;
+}
 
 interface MessageTimelineProps {
   sessionId: string | null;
@@ -54,7 +64,12 @@ export function MessageTimeline({
     sessionId ? state.messages[sessionId] : undefined
   );
   const respondPermission = useChatSessionsStore((state) => state.respondPermission);
-  const pendingPermission = useChatSessionsStore((state) => state.pendingPermission);
+  const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
+  const canRespondPermission = useMemo(
+    () => (permissionId: string | undefined) =>
+      canRespondToPermission(pendingPermissions, sessionId, permissionId),
+    [pendingPermissions, sessionId]
+  );
   const lastError = useChatSessionsStore((state) => state.lastError);
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
   // C-06 / T-03: this session's history read error only. Subscribing to the
@@ -81,6 +96,64 @@ export function MessageTimeline({
 
   const isActiveTurn = isTurnActive(status);
 
+  // Stick-to-bottom scroll following. `scrollRootRef` wraps `ScrollArea` (the
+  // real scrollable viewport is found through it via `findViewport`);
+  // `contentRef` is the rendered content whose height growth we watch.
+  // `stickToBottomRef` is a ref, not state — it is read/written on every
+  // native scroll and resize tick, and must never trigger a re-render.
+  const scrollRootRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+
+  // Track whether the user is anchored to the bottom. Read fresh on every
+  // native scroll event so a manual scroll-up is never fought by auto-scroll,
+  // and scrolling back down re-arms following.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId triggers re-querying the viewport node, which base-ui remounts across the null <-> id transition
+  useEffect(() => {
+    const viewport = findViewport(scrollRootRef.current);
+    if (!viewport) return undefined;
+    const handleScroll = () => {
+      stickToBottomRef.current = shouldStickToBottom(
+        viewport.scrollTop,
+        viewport.scrollHeight,
+        viewport.clientHeight
+      );
+    };
+    viewport.addEventListener('scroll', handleScroll, { passive: true });
+    return () => viewport.removeEventListener('scroll', handleScroll);
+  }, [sessionId]);
+
+  // Session switch: always jump to the bottom of the new session's history
+  // and re-arm following — a previous session's scroll-up must not carry
+  // over to a freshly opened one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId triggers the jump-to-bottom on session switch
+  useEffect(() => {
+    stickToBottomRef.current = true;
+    const viewport = findViewport(scrollRootRef.current);
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+  }, [sessionId]);
+
+  // Follow new content (new messages, streaming token growth) while stuck to
+  // the bottom. A ResizeObserver on the rendered content — rather than an
+  // effect keyed off `sessionMessages.length` — catches both a brand new
+  // message and in-place growth of the last message's text as it streams,
+  // with a single listener.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId triggers re-attaching the observer to the (re)mounted content node
+  useEffect(() => {
+    const viewport = findViewport(scrollRootRef.current);
+    const content = contentRef.current;
+    if (!viewport || !content) return undefined;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [sessionId]);
+
   if (!sessionId) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -90,11 +163,11 @@ export function MessageTimeline({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
       <ScrollArea className="min-h-0 flex-1">
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 48rem/64rem reading width (T-22 spec §2.13). */}
-        <div className={TIMELINE_PADDING_CLASS}>
+        <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
           {/* T-05 (A07 `.tl` :846): 12px -> 20px turn spacing. */}
           <ReadingColumn className="space-y-5">
             {historyNotice.kind === 'error' && (
@@ -121,11 +194,7 @@ export function MessageTimeline({
                   thinkingEnabled={thinkingEnabled}
                   repoName={repoName}
                   getThinkingDurationMs={(blockId) => getThinking(blockId)?.durationMs}
-                  canRespondPermission={Boolean(
-                    pendingPermission &&
-                      pendingPermission.sessionId === sessionId &&
-                      message.id === pendingPermission.messageId
-                  )}
+                  canRespondPermission={canRespondPermission}
                   onRespondPermission={respondPermission}
                 />
               ))
@@ -140,7 +209,7 @@ export function MessageTimeline({
                   <p className="mt-1 break-words whitespace-pre-wrap opacity-90">{lastError}</p>
                 )}
                 <p className="mt-1 opacity-70">已产内容保留。在下方输入框点 Retry 重发上条消息。</p>
-                {pendingPermission?.sessionId === sessionId && (
+                {pendingPermissions.some((item) => item.sessionId === sessionId) && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -272,8 +341,8 @@ interface MessageBubbleProps {
   thinkingEnabled: boolean;
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  canRespondPermission: boolean;
-  onRespondPermission: (allow: boolean) => Promise<boolean> | undefined;
+  canRespondPermission: (permissionId: string | undefined) => boolean;
+  onRespondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
 }
 
 /**
@@ -355,8 +424,8 @@ interface AssistantMessageProps {
   thinkingEnabled: boolean;
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  canRespondPermission: boolean;
-  onRespondPermission: (allow: boolean) => Promise<boolean> | undefined;
+  canRespondPermission: (permissionId: string | undefined) => boolean;
+  onRespondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
 }
 
 /**
@@ -422,8 +491,10 @@ function AssistantMessage({
                 key={item.block.id}
                 variant="permission"
                 block={item.block}
-                canRespond={canRespondPermission}
-                onRespondPermission={onRespondPermission}
+                canRespond={canRespondPermission(item.block.permissionId)}
+                onRespondPermission={(allow) =>
+                  onRespondPermission(item.block.permissionId ?? '', allow)
+                }
               />
             );
 

@@ -248,6 +248,166 @@ describe('PermissionBridge.request', () => {
   });
 });
 
+describe('PermissionBridge — concurrent same-session park (design spec §2.2)', () => {
+  it('B1: two concurrent park in one session — respond(A) only settles A; B stays pending; hasPending stays true', async () => {
+    const { bridge } = createBridge();
+    const controllerA = new AbortController();
+    const controllerB = new AbortController();
+    const promiseA = bridge.request({
+      sessionId: 'sess-14',
+      toolName: 'Read',
+      input: {},
+      signal: controllerA.signal,
+      toolUseId: 'tool-14a',
+    });
+    const promiseB = bridge.request({
+      sessionId: 'sess-14',
+      toolName: 'Read',
+      input: {},
+      signal: controllerB.signal,
+      toolUseId: 'tool-14b',
+    });
+
+    let bSettled = false;
+    void promiseB.then(() => {
+      bSettled = true;
+    });
+
+    bridge.respond({ sessionId: 'sess-14', permissionId: 'tool-14a', allow: true });
+    const resultA = await promiseA;
+
+    expect(resultA).toEqual({ behavior: 'allow', toolUseID: 'tool-14a' });
+    expect(bSettled).toBe(false);
+    expect(bridge.hasPending('sess-14')).toBe(true);
+
+    bridge.respond({ sessionId: 'sess-14', permissionId: 'tool-14b', allow: true });
+    await promiseB;
+  });
+
+  it('B2: B still pending when A settles — no running yet; respond(B) then emits running exactly once (primary case)', async () => {
+    const { events, bridge } = createBridge();
+    const controllerA = new AbortController();
+    const controllerB = new AbortController();
+    const promiseA = bridge.request({
+      sessionId: 'sess-15',
+      toolName: 'Read',
+      input: {},
+      signal: controllerA.signal,
+      toolUseId: 'tool-15a',
+    });
+    const promiseB = bridge.request({
+      sessionId: 'sess-15',
+      toolName: 'Read',
+      input: {},
+      signal: controllerB.signal,
+      toolUseId: 'tool-15b',
+    });
+    const eventsBeforeRespondA = events.length;
+
+    bridge.respond({ sessionId: 'sess-15', permissionId: 'tool-15a', allow: true });
+    await promiseA;
+
+    const newEventsAfterA = events.slice(eventsBeforeRespondA);
+    expect(newEventsAfterA).toHaveLength(1);
+    expect(newEventsAfterA[0]).toMatchObject({
+      type: 'permission.resolved',
+      sessionId: 'sess-15',
+      payload: { permissionId: 'tool-15a', allow: true },
+    });
+    expect(newEventsAfterA.some((event) => event.type === 'session.status')).toBe(false);
+
+    const eventsBeforeRespondB = events.length;
+    bridge.respond({ sessionId: 'sess-15', permissionId: 'tool-15b', allow: true });
+    await promiseB;
+
+    const newEventsAfterB = events.slice(eventsBeforeRespondB);
+    const runningEvents = newEventsAfterB.filter(
+      (event) =>
+        event.type === 'session.status' &&
+        (event as { payload?: { status?: string } }).payload?.status === 'running'
+    );
+    expect(runningEvents).toHaveLength(1);
+  });
+
+  it('B3: a (sessionId, permissionId) mismatch with both entries parked settles neither and emits nothing', async () => {
+    const { events, bridge } = createBridge();
+    const controllerA = new AbortController();
+    const controllerB = new AbortController();
+    const promiseA = bridge.request({
+      sessionId: 'sess-16',
+      toolName: 'Read',
+      input: {},
+      signal: controllerA.signal,
+      toolUseId: 'tool-16a',
+    });
+    const promiseB = bridge.request({
+      sessionId: 'sess-16',
+      toolName: 'Read',
+      input: {},
+      signal: controllerB.signal,
+      toolUseId: 'tool-16b',
+    });
+    const eventsBefore = events.length;
+
+    // tool-16a exists but under the wrong sessionId.
+    const returned = bridge.respond({
+      sessionId: 'wrong-session',
+      permissionId: 'tool-16a',
+      allow: true,
+    });
+
+    expect(returned).toBe(false);
+    expect(events).toHaveLength(eventsBefore);
+    expect(bridge.hasPending('sess-16')).toBe(true);
+
+    // Both entries must still be genuinely present — a false positive on the
+    // mismatch check would show up here as `respond` returning false because
+    // the entry was already (wrongly) settled.
+    const stillA = bridge.respond({ sessionId: 'sess-16', permissionId: 'tool-16a', allow: true });
+    const stillB = bridge.respond({ sessionId: 'sess-16', permissionId: 'tool-16b', allow: true });
+    expect(stillA).toBe(true);
+    expect(stillB).toBe(true);
+    await Promise.all([promiseA, promiseB]);
+  });
+
+  it('B4: rejectSession with two parked in one session settles both, each with its own toolUseID', async () => {
+    const { bridge } = createBridge();
+    const controllerA = new AbortController();
+    const controllerB = new AbortController();
+    const promiseA = bridge.request({
+      sessionId: 'sess-17',
+      toolName: 'Read',
+      input: {},
+      signal: controllerA.signal,
+      toolUseId: 'tool-17a',
+    });
+    const promiseB = bridge.request({
+      sessionId: 'sess-17',
+      toolName: 'Read',
+      input: {},
+      signal: controllerB.signal,
+      toolUseId: 'tool-17b',
+    });
+
+    bridge.rejectSession('sess-17', 'Session stopped');
+    const [resultA, resultB] = await Promise.all([promiseA, promiseB]);
+
+    expect(resultA).toEqual({
+      behavior: 'deny',
+      message: 'Session stopped',
+      interrupt: true,
+      toolUseID: 'tool-17a',
+    });
+    expect(resultB).toEqual({
+      behavior: 'deny',
+      message: 'Session stopped',
+      interrupt: true,
+      toolUseID: 'tool-17b',
+    });
+    expect(bridge.hasPending('sess-17')).toBe(false);
+  });
+});
+
 describe('PermissionBridge.rejectSession / rejectAll', () => {
   it('rejectSession settles only the pending prompts for that session', async () => {
     const { bridge } = createBridge();

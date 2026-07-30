@@ -6,6 +6,7 @@ import {
   buildRespondPayload,
   buildSkipPayload,
   canContinue,
+  canRespondToPermission,
   clampPage,
   deriveCardTitle,
   deriveFrozenPairs,
@@ -291,6 +292,34 @@ describe('derivePermissionCardView', () => {
       false
     );
     expect(view.frozen[0].answer).toBe('Denied');
+  });
+});
+
+describe('canRespondToPermission', () => {
+  const queue = [
+    { sessionId: 's1', permissionId: 'perm-1' },
+    { sessionId: 's2', permissionId: 'perm-2' },
+  ];
+
+  it('G1: true when the permissionId is parked for the active session', () => {
+    expect(canRespondToPermission(queue, 's1', 'perm-1')).toBe(true);
+  });
+
+  it('G2: false when the permissionId is parked but under a different session', () => {
+    // perm-2 is only queued under s2, so asking as s1 must not answer it.
+    expect(canRespondToPermission(queue, 's1', 'perm-2')).toBe(false);
+  });
+
+  it('G3: false when the permissionId is not in the queue at all (already resolved / replayed, E9)', () => {
+    expect(canRespondToPermission(queue, 's1', 'perm-does-not-exist')).toBe(false);
+  });
+
+  it('G4: false when permissionId is undefined', () => {
+    expect(canRespondToPermission(queue, 's1', undefined)).toBe(false);
+  });
+
+  it('G5: false when activeSessionId is null', () => {
+    expect(canRespondToPermission(queue, null, 'perm-1')).toBe(false);
   });
 });
 

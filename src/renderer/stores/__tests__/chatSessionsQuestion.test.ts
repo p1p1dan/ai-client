@@ -12,7 +12,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     messages: { s1: [{ id: 'asst-1', sessionId: 's1', role: 'assistant', blocks: [] }] },
     activeSessionId: null,
     recentSessionIds: [],
-    pendingPermission: null,
+    pendingPermissions: [],
     pendingQuestion: null,
     hostBoundSessionIds: [],
     runtimeReady: false,

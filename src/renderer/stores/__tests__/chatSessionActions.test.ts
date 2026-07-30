@@ -39,7 +39,7 @@ beforeEach(() => {
     hostBoundSessionIds: [],
     lastError: null,
     historyErrors: {},
-    pendingPermission: null,
+    pendingPermissions: [],
     pendingQuestion: null,
   });
 });

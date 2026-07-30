@@ -105,12 +105,19 @@ export function composerCardClass(mode: MiddleColumnMode): string {
   return 'relative rounded-md border border-input bg-card focus-within:border-ring flex min-h-10 items-center gap-2 px-2 py-1';
 }
 
-/** Textarea outer span's class, including the `[&_textarea]:` pierce-through variants for the inner `<textarea>`. */
+/**
+ * Textarea outer span's class, including the `[&_textarea]:` pierce-through
+ * variants for the inner `<textarea>`. The `<Textarea>` is rendered with
+ * `unstyled` (no border/bg/shadow/ring/dark:bg-input chrome on the outer
+ * span at all), so the old `border-0 bg-transparent shadow-none
+ * focus-visible:ring-0` counters against that default chrome are gone —
+ * only size and pierce-through classes remain.
+ */
 export function composerTextareaClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
-    return 'min-h-14 resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 [&_textarea]:min-h-14 [&_textarea]:px-0';
+    return 'min-h-14 resize-none p-0 [&_textarea]:min-h-14 [&_textarea]:px-0';
   }
-  return 'min-w-0 flex-1 resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 [&_textarea]:min-h-6 [&_textarea]:max-h-14 [&_textarea]:px-0 [&_textarea]:py-0';
+  return 'min-w-0 flex-1 resize-none p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-14 [&_textarea]:px-0 [&_textarea]:py-0';
 }
 
 // ---- Target row ----
