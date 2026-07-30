@@ -254,6 +254,7 @@ export default function App() {
     worktreeCollapsed,
     addRepoDialogOpen,
     initialLocalPath,
+    addRepoInitialMode,
     actionPanelOpen,
     closeDialogOpen,
     toggleSelectedRepoExpandedRef,
@@ -262,6 +263,7 @@ export default function App() {
     setWorktreeCollapsed,
     setAddRepoDialogOpen,
     setInitialLocalPath,
+    setAddRepoInitialMode,
     setActionPanelOpen,
     setCloseDialogOpen,
   } = panelState;
@@ -1261,9 +1263,17 @@ export default function App() {
     ]
   );
 
-  const handleOpenRepositoryDialog = useCallback(() => {
-    setAddRepoDialogOpen(true);
-  }, [setAddRepoDialogOpen]);
+  const handleOpenRepositoryDialog = useCallback(
+    (mode?: 'local' | 'remote' | 'ssh') => {
+      // Callers that bind this directly as a DOM handler (e.g. LeftNav's
+      // `onClick={onAddRepository}`) invoke it with the click SyntheticEvent
+      // as the first arg — only accept real mode strings, everything else
+      // (including "no arg") falls back to the dialog's default tab.
+      setAddRepoInitialMode(typeof mode === 'string' ? mode : undefined);
+      setAddRepoDialogOpen(true);
+    },
+    [setAddRepoDialogOpen, setAddRepoInitialMode]
+  );
 
   const handleAddRepoDialogOpenChange = useCallback(
     (open: boolean) => {
@@ -1930,6 +1940,7 @@ export default function App() {
           onCreateGroup={handleCreateGroup}
           initialLocalPath={initialLocalPath ?? undefined}
           onClearInitialLocalPath={() => setInitialLocalPath(null)}
+          initialMode={addRepoInitialMode}
         />
 
         {/* Action Panel */}

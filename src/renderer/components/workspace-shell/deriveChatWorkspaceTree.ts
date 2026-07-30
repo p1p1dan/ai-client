@@ -90,6 +90,12 @@ export function deriveChatWorkspaceTree(
     const mainPath = mainWt?.path ?? repo.path;
     const mainKind: WorkspaceKind = isRemote ? 'remote' : 'main';
     const mainBranch = isRemote ? undefined : workspaceBranch(mainWt);
+    // T-27: gates the Composer target bar's branch/worktree dropdown — true
+    // once `worktree.list` resolved with at least the main entry for this
+    // repo. Remote workspaces never show branch UI regardless of this value
+    // (shouldShowBranchSelect also checks `kind`), so it is only attached to
+    // the main/worktree entries below.
+    const gitEnabled = listed.length > 0;
 
     pushWorkspace({
       id: workspaceIdFor(mainKind, mainPath),
@@ -100,6 +106,7 @@ export function deriveChatWorkspaceTree(
       // Conditional spread keeps `branch` truly absent (not an explicit
       // undefined key) when unknown — `'branch' in ws` stays false.
       ...(mainBranch ? { branch: mainBranch } : {}),
+      ...(isRemote ? {} : { gitEnabled }),
     });
 
     if (isRemote) {
@@ -121,6 +128,7 @@ export function deriveChatWorkspaceTree(
         kind: 'worktree',
         path: wt.path,
         ...(wtBranch ? { branch: wtBranch } : {}),
+        gitEnabled,
       });
     }
   }
@@ -147,7 +155,9 @@ export function deriveChatWorkspaceTree(
  * once (T-26 review blocker) and a late-arriving branch on an otherwise
  * identical tree — the normal cold-start sequence for a repo with no linked
  * worktrees — produced a byte-identical signature, so the store never learned
- * the branch and the chip stayed empty for the whole app session.
+ * the branch and the chip stayed empty for the whole app session. `gitEnabled`
+ * (T-27) is the same failure mode: dropping it here would mean a late
+ * `worktree.list` resolution never flips the Composer branch dropdown on.
  */
 export function workspaceTreeSignature(
   projects: readonly ChatProject[],
@@ -161,6 +171,7 @@ export function workspaceTreeSignature(
       path: ws.path,
       kind: ws.kind,
       branch: ws.branch ?? null,
+      gitEnabled: ws.gitEnabled ?? null,
     })),
     preferredWorkspaceId,
   });

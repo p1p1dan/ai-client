@@ -1733,6 +1733,36 @@ export const zhTranslations: Record<string, string> = {
   'Not connected yet — {{task}} will wire this surface.':
     '尚未接入 —— 该视图将由 {{task}} 完成接线。',
   'This surface has no view registered.': '该视图尚未注册。',
+
+  // T-27: Composer target bar (D22) — data rows (batch 2).
+  'Search folders…': '搜索文件夹…',
+  'Search worktrees…': '搜索 worktree…',
+  Recents: '最近',
+  'On This PC': '本机',
+  'Remote repositories': '远程仓库',
+  // 'Worktrees' already exists above (WorktreePanel title) — reused as-is.
+  'No folders found': '未找到文件夹',
+  'No worktrees found': '未找到 worktree',
+  'This PC': '本机',
+  'Run location': '运行位置',
+  'Read-only indicator. The run location is derived from the repository: local shows This PC, remote shows the connection name; it is hidden entirely when unknown.':
+    '只读指示器，不是下拉。运行位置由仓库属性派生：本机显示 This PC，远程显示连接名；数据缺失时整块隐藏。',
+  'Session is running — stop it before changing the target': '会话运行中——先停止再切换目标',
+  'This chat already has messages — a new chat will start on the new target':
+    '当前会话已有消息——将在新目标下新建对话',
+
+  // T-27: Composer target bar (D22) — footer action rows (batch 3).
+  // 'New Folder' already exists above (worktree/temp-session UI) — reused as-is.
+  'Use Existing…': '使用已有目录…',
+  'Clone…': '克隆…',
+  'Add Remote…': '添加远程…',
+  'Temporary workspace': '临时工作区',
+  'New worktree…': '新建 worktree…',
+  'New worktree "{{name}}"…': '新建 worktree「{{name}}」…',
+  'Worktree created — pick it from the branch list': 'worktree 已创建——请在分支列表中选择',
+  'Temp workspace created — pick it from the folder list': '临时工作区已创建——请在文件夹列表中选择',
+  'Temp workspace created': '临时工作区已创建',
+  'Failed to create temp workspace': '创建临时工作区失败',
 };
 
 export function normalizeLocale(input?: string): Locale {

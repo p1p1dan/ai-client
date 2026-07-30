@@ -111,9 +111,13 @@ function byUpdatedAtDesc(a: SidebarSessionRow, b: SidebarSessionRow): number {
 }
 
 /**
- * Fallback workspace for creating a session from the sidebar while the T-27
- * target bar does not exist yet: the project's main workspace when usable,
- * else its first usable workspace. Empty-path seeds are never a target.
+ * Default workspace for creating a session from the sidebar's own entry
+ * points: the project's main workspace when usable, else its first usable
+ * workspace. Empty-path seeds are never a target. Retargeting an existing
+ * chat to a different workspace is the Composer target bar's job (T-27).
+ *
+ * Same rule as composerTarget.ts's `resolveProjectDefaultWorkspaceId`,
+ * intentionally duplicated across the chat / workspace-shell boundary.
  */
 export function resolveNewSessionWorkspaceId(
   projectId: string,

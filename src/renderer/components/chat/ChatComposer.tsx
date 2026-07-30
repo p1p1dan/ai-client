@@ -29,9 +29,12 @@ import {
   totalAttachmentBytes,
   toWireAttachments,
 } from './attachments';
+import { ComposerTargetBar } from './ComposerTargetBar';
+import { resolveActiveTarget } from './composerTarget';
 import { EffortSelect } from './EffortSelect';
 import { toWireEffort } from './efforts';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
+import { consumeForkDraftCarry } from './forkDraftCarry';
 import { ModelSelect } from './ModelSelect';
 import { defaultModelId } from './models';
 import { ReadingColumn } from './ReadingColumn';
@@ -42,6 +45,8 @@ import { useSessionModel } from './useSessionModel';
 
 interface ChatComposerProps {
   disabled?: boolean;
+  /** Opens the shared AddRepositoryDialog (owned by App) — see ComposerTargetBar. */
+  onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
 }
 
 /** T-07③: popup page size. Kept next to the truncation hint that reports it. */
@@ -172,7 +177,7 @@ async function waitUntil(
   return predicate();
 }
 
-export function ChatComposer({ disabled }: ChatComposerProps) {
+export function ChatComposer({ disabled, onAddRepository }: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   // T-18: an object rather than a plain string because an attachment-only turn
@@ -207,9 +212,14 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     state.activeSessionId ? state.messages[state.activeSessionId] : undefined
   );
 
-  const activeSession = sessions.find((session) => session.id === activeSessionId);
-  const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
-  const cwd = activeWorkspace?.path;
+  // T-27: shared with the Composer target bar (§2.6) — this is the same
+  // production derivation the target bar's plan/apply flow lands through,
+  // not a parallel copy of the lookup logic.
+  const {
+    session: activeSession,
+    workspace: activeWorkspace,
+    cwd,
+  } = resolveActiveTarget({ activeSessionId, sessions, workspaces });
   const mentionChips = useMemo(() => parseMentionChips(value), [value]);
   const mentionOpen = mentionQuery !== null && mentionResults.length > 0;
   const busy = isStoppable(activeSession?.status);
@@ -217,10 +227,12 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   // gateway revoked key) without ever flipping session.status to running, and
   // the user needs Stop during the 45s wait, not just when store says busy.
   const canStop = busy || sending;
-  // `activeWorkspace?.path` (not just presence): the demo placeholder tree
-  // carries empty paths until real repositories are registered, and an empty
-  // path must never become an agent cwd.
-  const canSend = Boolean(activeSessionId && activeWorkspace?.path && !disabled && !canStop);
+  // `cwd` (resolveActiveTarget's derived value, not `activeWorkspace?.path`
+  // directly): it already folds "no workspace" and "workspace present but
+  // not targetable (demo placeholder's empty path)" into a single null, so
+  // every send-gate check below reads that one value instead of re-deriving
+  // "is this path usable" ad hoc.
+  const canSend = Boolean(activeSessionId && cwd && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
@@ -235,8 +247,13 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   // and unrelated visual context, invisible in the timeline either way. The
   // failure state is scoped the same way: session A's Retry must not appear
   // over session B.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: activeSessionId is the reset trigger
   useEffect(() => {
+    // T-27 fix: a fork (useComposerTarget's selectTarget / applyPendingTarget
+    // marking `markForkDraftCarry`) intentionally carries the composer's
+    // in-flight state onto the new session — the textarea `value` state is
+    // never touched here either way, so text + attachments land together on
+    // the forked session instead of being wiped by the switch below.
+    if (activeSessionId && consumeForkDraftCarry(activeSessionId)) return;
     clearAttachmentDrafts();
     dismissAttachmentNotice();
     setRetryable(null);
@@ -246,7 +263,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
     ? 'No session selected — pick Live Agent Host in the left nav (or click New).'
     : !activeWorkspace
       ? 'Active session has no workspace — re-open a repository and refresh.'
-      : !activeWorkspace.path
+      : !cwd
         ? 'No repository registered — launch with --open-path=<repo> (or add a repository) first.'
         : lastError
           ? `Error: ${lastError}`
@@ -254,7 +271,7 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
             ? 'Starting Agent Host / sending…'
             : busy
               ? 'Agent Host running — use Stop to abort'
-              : `Ready · cwd: ${activeWorkspace.path}`;
+              : `Ready · cwd: ${cwd}`;
 
   const handleSend = async () => {
     const trimmed = value.trim();
@@ -359,17 +376,18 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
   };
 
   const runSend = async (trimmed: string, drafts: readonly AttachmentDraft[]) => {
-    // Explicit `.path` check (independent of canSend): an empty workspace path
-    // is the demo placeholder — creating a session on it would persist a fake
-    // cwd into session-index.json and die in spawn on the Host side.
-    if (!canSend || !activeSessionId || !activeWorkspace?.path) {
+    // Explicit `cwd` check (independent of canSend): a null cwd is the demo
+    // placeholder or a target with no path — creating a session against it
+    // would persist a fake cwd into session-index.json and die in spawn on
+    // the Host side.
+    if (!canSend || !activeSessionId || !cwd) {
       return;
     }
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
     const sessionId = activeSessionId;
-    const workspacePath = activeWorkspace.path;
+    const workspacePath = cwd;
     const model = getSessionModel(sessionId) ?? defaultModelId(null);
     // T-20: undefined when the user left it on "Default", so the key is dropped
     // from the payload entirely and the model default applies (≠ pinning high).
@@ -708,6 +726,11 @@ export function ChatComposer({ disabled }: ChatComposerProps) {
             {statusHint}
           </div>
         )}
+        <ComposerTargetBar
+          sending={sending}
+          disabled={disabled}
+          onAddRepository={onAddRepository}
+        />
         <div className="relative rounded-lg border bg-card/40 p-2">
           {/* T-07 @ 文件搜索 popup——放 textarea 上方，避免被 overflow-hidden 容器裁掉 */}
           {mentionOpen && (

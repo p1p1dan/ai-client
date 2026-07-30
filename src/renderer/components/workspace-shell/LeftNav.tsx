@@ -32,6 +32,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
@@ -47,7 +48,6 @@ import {
   RECENT_DEFAULT_LIMIT,
   type SidebarSessionRow,
 } from './sidebarTree';
-import { createChatSessionOnWorkspace } from './useSyncChatWorkspaceTree';
 
 interface LeftNavProps {
   collapsed: boolean;

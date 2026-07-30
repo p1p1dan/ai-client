@@ -71,6 +71,8 @@ interface AddRepositoryDialogProps {
   onCreateGroup: (name: string, emoji: string, color: string) => RepositoryGroup;
   initialLocalPath?: string;
   onClearInitialLocalPath?: () => void;
+  /** T-27: opening tab requested by the caller (e.g. the Composer target bar's footer actions). */
+  initialMode?: AddMode;
 }
 
 function normalizeRemotePathInput(value: string): string {
@@ -116,6 +118,7 @@ export function AddRepositoryDialog({
   onCreateGroup,
   initialLocalPath,
   onClearInitialLocalPath,
+  initialMode,
 }: AddRepositoryDialogProps) {
   const { t } = useI18n();
   const hideGroups = useSettingsStore((s) => s.hideGroups);
@@ -186,7 +189,7 @@ export function AddRepositoryDialog({
     if (!wasOpen && open) {
       groupSelectionTouchedRef.current = false;
       setSelectedGroupId(defaultGroupId || '');
-      setMode('local');
+      setMode(initialMode ?? 'local');
     } else if (
       open &&
       !groupSelectionTouchedRef.current &&
@@ -197,7 +200,7 @@ export function AddRepositoryDialog({
 
     prevOpenRef.current = open;
     prevDefaultGroupIdRef.current = defaultGroupId;
-  }, [defaultGroupId, open, selectedGroupId]);
+  }, [defaultGroupId, open, selectedGroupId, initialMode]);
 
   React.useEffect(() => {
     if (open && initialLocalPath) {

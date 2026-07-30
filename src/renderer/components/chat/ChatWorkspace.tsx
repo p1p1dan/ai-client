@@ -9,9 +9,11 @@ import { useHostStatus } from './useHostStatus';
 
 interface ChatWorkspaceProps {
   className?: string;
+  /** Opens the shared AddRepositoryDialog (owned by App) — threaded down to ComposerTargetBar. */
+  onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
 }
 
-export function ChatWorkspace({ className }: ChatWorkspaceProps) {
+export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps) {
   const initRuntime = useChatSessionsStore((state) => state.initRuntime);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -50,7 +52,7 @@ export function ChatWorkspace({ className }: ChatWorkspaceProps) {
         status={activeSession?.status ?? 'idle'}
         thinkingEnabled={thinkingEnabled}
       />
-      <ChatComposer disabled={!activeSessionId} />
+      <ChatComposer disabled={!activeSessionId} onAddRepository={onAddRepository} />
     </section>
   );
 }

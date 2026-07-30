@@ -13,6 +13,10 @@ export function usePanelState() {
   // Dialog states
   const [addRepoDialogOpen, setAddRepoDialogOpen] = useState(false);
   const [initialLocalPath, setInitialLocalPath] = useState<string | null>(null);
+  // T-27: which AddRepositoryDialog tab to open on (Composer target bar footer actions).
+  const [addRepoInitialMode, setAddRepoInitialMode] = useState<
+    'local' | 'remote' | 'ssh' | undefined
+  >(undefined);
   const [actionPanelOpen, setActionPanelOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
 
@@ -29,7 +33,8 @@ export function usePanelState() {
     localStorage.setItem(STORAGE_KEYS.WORKTREE_COLLAPSED, String(worktreeCollapsed));
   }, [worktreeCollapsed]);
 
-  const handleAddRepository = useCallback(() => {
+  const handleAddRepository = useCallback((mode?: 'local' | 'remote' | 'ssh') => {
+    setAddRepoInitialMode(mode);
     setAddRepoDialogOpen(true);
   }, []);
 
@@ -38,6 +43,7 @@ export function usePanelState() {
     worktreeCollapsed,
     addRepoDialogOpen,
     initialLocalPath,
+    addRepoInitialMode,
     actionPanelOpen,
     closeDialogOpen,
     toggleSelectedRepoExpandedRef,
@@ -46,6 +52,7 @@ export function usePanelState() {
     setWorktreeCollapsed,
     setAddRepoDialogOpen,
     setInitialLocalPath,
+    setAddRepoInitialMode,
     setActionPanelOpen,
     setCloseDialogOpen,
     handleAddRepository,

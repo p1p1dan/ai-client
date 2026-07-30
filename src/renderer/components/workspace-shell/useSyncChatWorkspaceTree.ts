@@ -154,39 +154,6 @@ function rebindSessionsToTree(
   };
 }
 
-export function createChatSessionOnWorkspace(
-  workspaceId: string,
-  title = 'New chat'
-): string | null {
-  const state = useChatSessionsStore.getState();
-  const workspace = state.workspaces.find((item) => item.id === workspaceId);
-  if (!workspace) {
-    return null;
-  }
-
-  const sessionId = `session-${Date.now()}`;
-  const session: ChatSession = {
-    id: sessionId,
-    projectId: workspace.projectId,
-    workspaceId: workspace.id,
-    title,
-    status: 'idle',
-    updatedAt: Date.now(),
-  };
-
-  useChatSessionsStore.setState({
-    sessions: [session, ...state.sessions],
-    activeSessionId: sessionId,
-    recentSessionIds: [sessionId, ...state.recentSessionIds.filter((id) => id !== sessionId)].slice(
-      0,
-      20
-    ),
-    lastError: null,
-  });
-
-  return sessionId;
-}
-
 interface UseSyncChatWorkspaceTreeOptions {
   repositories: Repository[];
   selectedRepoPath: string | null;

@@ -42,6 +42,12 @@ export interface ChatWorkspace {
    * consumers must hide the chip instead of guessing a branch name.
    */
   branch?: string;
+  /**
+   * True when `worktree.list` succeeded for this repo (T-27) — gates the
+   * Composer target bar's branch/worktree dropdown (`shouldShowBranchSelect`).
+   * Absent means unknown or non-git; only `=== true` shows the branch UI.
+   */
+  gitEnabled?: boolean;
 }
 
 export interface ChatSession {

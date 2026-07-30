@@ -53,6 +53,8 @@ interface CreateWorktreeDialogProps {
   // Support controlled mode (for context menu trigger)
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** T-27: prefills the new-branch name (e.g. from a Composer target bar search query). */
+  initialBranchName?: string;
 }
 
 type CreateMode = 'branch' | 'pr';
@@ -66,6 +68,7 @@ export function CreateWorktreeDialog({
   trigger,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
+  initialBranchName,
 }: CreateWorktreeDialogProps) {
   const { t } = useI18n();
   const { defaultWorktreePath, branchNameGenerator } = useSettingsStore();
@@ -176,6 +179,15 @@ export function CreateWorktreeDialog({
       baseBranchInitializedRef.current = false;
     }
   }, [open, currentBranch, getBranchLabel]);
+
+  // T-27: prefill the branch name from the Composer target bar's search query
+  // (the "create worktree <query>" empty-state action) without touching
+  // handleSubmit's "create a new branch" semantics.
+  React.useEffect(() => {
+    if (open && initialBranchName) {
+      setNewBranchName(initialBranchName);
+    }
+  }, [open, initialBranchName]);
 
   // Keep input value in sync when dropdown is closed
   React.useEffect(() => {

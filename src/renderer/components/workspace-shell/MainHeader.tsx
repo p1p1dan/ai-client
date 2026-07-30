@@ -1,12 +1,4 @@
-import {
-  AppWindow,
-  FolderOpen,
-  Globe,
-  LayoutGrid,
-  PanelRightClose,
-  PanelRightOpen,
-  Server,
-} from 'lucide-react';
+import { AppWindow, Globe, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useI18n } from '@/i18n';
@@ -63,8 +55,6 @@ export function MainHeader({
           active={readingWidthMode === 'wide'}
           onClick={onToggleReadingWidth}
         />
-        <HeaderIconButton label="Folder" icon={FolderOpen} />
-        <HeaderIconButton label="Host: Local" icon={Server} />
         <HeaderIconButton label="Browser" icon={Globe} />
         <HeaderIconButton
           label={contextPanelOpen ? t('Hide context panel') : t('Show context panel')}

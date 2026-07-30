@@ -123,4 +123,56 @@ describe('deriveChatWorkspaceTree', () => {
     const after = workspaceTreeSignature(projects, [{ ...base, branch: 'main' }], base.id);
     expect(before).not.toBe(after);
   });
+
+  it('signature changes when only gitEnabled changes (T-27 review blocker — same failure mode as T-26 branch)', () => {
+    // Same cold-start shape as above: `worktree.list` resolving late flips
+    // `gitEnabled` on an otherwise identical tree. Dropping it from the
+    // signature would leave the Composer branch dropdown gated off forever.
+    const base = {
+      id: workspaceIdFor('main', 'D:/repo'),
+      projectId: 'p1',
+      name: 'Main',
+      kind: 'main' as const,
+      path: 'D:/repo',
+    };
+    const projects = [{ id: 'p1', name: 'repo' }];
+    const before = workspaceTreeSignature(projects, [base], base.id);
+    const after = workspaceTreeSignature(projects, [{ ...base, gitEnabled: true }], base.id);
+    expect(before).not.toBe(after);
+  });
+
+  it('sets gitEnabled on main/worktree entries only when worktree.list returned data', () => {
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [repo],
+      worktreesByRepoPath: {
+        [repo.path]: [
+          {
+            path: 'D:/Code/projects/ai-client',
+            head: 'abc',
+            branch: 'main',
+            isMainWorktree: true,
+            isLocked: false,
+            prunable: false,
+          },
+          {
+            path: 'D:/Code/projects/ai-client-wt',
+            head: 'def',
+            branch: 'refs/heads/feat/demo',
+            isMainWorktree: false,
+            isLocked: false,
+            prunable: false,
+          },
+        ],
+      },
+      tempItems: [],
+    });
+    expect(workspaces.map((ws) => ws.gitEnabled)).toEqual([true, true]);
+
+    const { workspaces: loadingWorkspaces } = deriveChatWorkspaceTree({
+      repositories: [repo],
+      worktreesByRepoPath: {},
+      tempItems: [],
+    });
+    expect(loadingWorkspaces[0]?.gitEnabled).toBe(false);
+  });
 });

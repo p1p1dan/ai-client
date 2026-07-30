@@ -116,7 +116,7 @@ export function WorkspaceShell({
             readingWidthMode={readingWidthMode}
             onToggleReadingWidth={toggleReadingWidthMode}
           />
-          <ChatWorkspace className="min-w-0 flex-1" />
+          <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
         </div>
         <ContextPanel availableWidth={availableWidth} />
       </div>
