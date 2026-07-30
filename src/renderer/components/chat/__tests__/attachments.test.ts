@@ -395,6 +395,82 @@ describe('composerSendingLine (T-18 B2)', () => {
       })
     ).toBe('Starting Agent Host… · 61s');
   });
+
+  // a1 (2026-07-30 net-visibility batch): the CLI-side network retry counter
+  // must appear ALONGSIDE the existing "waiting for reply" copy, not replace it.
+  it('appends the retry counter to the text-only waiting line without dropping the base copy', () => {
+    expect(
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds: 12,
+        budgetMs: 45_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+        retry: { attempt: 3, maxRetries: 10 },
+      })
+    ).toBe('Waiting for Agent Host reply · Network retry 3/10 · 12s (up to 45s)');
+  });
+
+  it('appends the retry counter to the attachment-in-flight line too', () => {
+    expect(
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds: 31,
+        budgetMs: 75_000,
+        attachmentCount: 1,
+        attachmentBytes: 155_648,
+        retry: { attempt: 1, maxRetries: 10 },
+      })
+    ).toBe('Sent 152.0 KB · waiting for reply · Network retry 1/10 · 31s (up to 75s)');
+  });
+
+  it('still appends the retry counter past the slow-wait threshold', () => {
+    const line = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 62,
+      budgetMs: 115_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      retry: { attempt: 7, maxRetries: 10 },
+    });
+    expect(line).toBe(
+      'Still waiting · 62s · Network retry 7/10 — gateway latency varies. Stop to abort.'
+    );
+  });
+
+  it('omits the retry suffix entirely when retry is absent or null', () => {
+    const withoutField = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 5,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+    });
+    const withNull = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 5,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      retry: null,
+    });
+    expect(withoutField).not.toContain('Network retry');
+    expect(withNull).not.toContain('Network retry');
+    expect(withoutField).toBe(withNull);
+  });
+
+  it('never shows the retry counter during the handshake phase', () => {
+    const line = composerSendingLine({
+      phase: 'handshake',
+      elapsedSeconds: 3,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      retry: { attempt: 1, maxRetries: 10 },
+    });
+    expect(line).toBe('Starting Agent Host… · 3s');
+    expect(line).not.toContain('Network retry');
+  });
 });
 
 describe('shouldRenderThumbnail (T-18 chip preview budget)', () => {

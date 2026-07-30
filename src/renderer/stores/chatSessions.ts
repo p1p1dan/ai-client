@@ -1,4 +1,9 @@
-import type { QuestionItem, RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import type {
+  QuestionItem,
+  RuntimeEvent,
+  SessionRetryInfo,
+  SessionRuntimeStatus,
+} from '@shared/types/runtimeEvents';
 import { HISTORY_MESSAGE_ID_PREFIX, type HistoryMessage } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
 
@@ -59,6 +64,13 @@ export interface ChatSession {
   updatedAt: number;
   /** Claude runtime / resume identity when known. */
   runtimeIdentity?: string;
+  /**
+   * a1 (2026-07-30 net-visibility batch, optional-field addition): the CLI's
+   * own transport-retry loop, when session.status last carried one. Cleared
+   * (set back to undefined) on every session.status WITHOUT a retry payload
+   * and on every terminal event — see upsertSessionStatus.
+   */
+  retry?: SessionRetryInfo;
 }
 
 export interface ChatBlock {
@@ -81,11 +93,25 @@ export interface ChatBlock {
   questionResponse?: string;
 }
 
+/** Read-only attachment metadata echoed on a user message (round-2 P0). Mirrors
+ * `MessageAttachmentMeta` — no `data`, this is display-only. */
+export interface ChatMessageAttachment {
+  kind: 'image' | 'text';
+  mediaType: string;
+  name?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sessionId: string;
   role: 'user' | 'assistant' | 'system' | 'error';
   blocks: ChatBlock[];
+  /**
+   * Round-2 P0 (optional-field addition, red-line discipline): user turn's
+   * attachment metadata, when the turn carried any. Set once at
+   * `message.started`, never mutated after.
+   */
+  attachments?: ChatMessageAttachment[];
 }
 
 interface PendingPermission {
@@ -211,10 +237,16 @@ const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
 function upsertSessionStatus(
   sessions: ChatSession[],
   sessionId: string,
-  status: SessionRuntimeStatus
+  status: SessionRuntimeStatus,
+  // a1: every call site except the 'session.status' case below omits this,
+  // which explicitly clears any previously stored retry — correct, since
+  // every one of those call sites (waiting_permission/question, completed,
+  // failed, stopped) is itself proof the CLI's retry loop is no longer the
+  // session's current state.
+  retry?: SessionRetryInfo
 ): ChatSession[] {
   return sessions.map((session) =>
-    session.id === sessionId ? { ...session, status, updatedAt: Date.now() } : session
+    session.id === sessionId ? { ...session, status, retry, updatedAt: Date.now() } : session
   );
 }
 
@@ -417,7 +449,12 @@ export function applyRuntimeEvent(
         ...state.recentSessionIds.filter((id) => id !== sessionId),
       ].slice(0, 8);
       return {
-        sessions: upsertSessionStatus(state.sessions, sessionId, event.payload.status),
+        sessions: upsertSessionStatus(
+          state.sessions,
+          sessionId,
+          event.payload.status,
+          event.payload.retry
+        ),
         recentSessionIds,
       };
     }
@@ -454,6 +491,14 @@ export function applyRuntimeEvent(
         sessionId,
         role: event.payload.role,
         blocks: [],
+        // Round-2 P0 (optional-field addition): absent unless the event
+        // actually carries it, so existing exact-shape assertions elsewhere
+        // are unaffected. F11 (round-2 review fix): `event.payload.model` is
+        // deliberately NOT copied onto the message here — it has zero
+        // renderer consumers (the timeline's model display reads the event's
+        // `model` straight off the wire via `messageMetadata.ts`'s own
+        // registry, never this store) — see that file's `reduceMessageMetadata`.
+        ...(event.payload.attachments ? { attachments: event.payload.attachments } : {}),
       };
       const bucket = state.messages[sessionId] ?? [];
       return { messages: withBucket(state, sessionId, upsertMessage(bucket, message)) };
@@ -560,9 +605,15 @@ export function applyRuntimeEvent(
         } satisfies ChatMessage);
 
       // Idempotent guard: a redelivered event must not duplicate the block
-      // or the queue entry.
+      // or the queue entry. Round-2 P0 fix: scoped to permission_request
+      // blocks only — the Host uses the SDK toolUseID as the permissionId,
+      // which is the SAME id `tool.started` already used for that turn's
+      // tool_call block, so comparing against every block id (as introduced
+      // by 4019fed) made this guard true for every real permission request
+      // and suppressed the permission_request block entirely.
       const blockAlreadyPresent = baseMessage.blocks.some(
-        (block) => block.id === event.payload.permissionId
+        (block) =>
+          block.type === 'permission_request' && block.permissionId === event.payload.permissionId
       );
       const queueAlreadyHasEntry = state.pendingPermissions.some(
         (item) => item.sessionId === sessionId && item.permissionId === event.payload.permissionId
@@ -606,12 +657,34 @@ export function applyRuntimeEvent(
       const bucket = state.messages[sessionId];
       if (!bucket) return cleared;
 
-      const nextBucket = bucket.map((message) => ({
-        ...message,
-        blocks: message.blocks.map((block) =>
-          block.permissionId === permissionId ? { ...block, resolved: true, allowed: allow } : block
-        ),
-      }));
+      // R13 (round-2 iteration-2 review, RED-LINE approved): identity-
+      // preserving early return when no block in this bucket matches — the
+      // Host's compensating `permission.resolved` (claudeRuntime.ts
+      // respondPermission's `!ok` branch) now fires for ids that were never
+      // in THIS bucket too (a desynced/Host-restart redelivery), which used
+      // to unconditionally reallocate every message + blocks array for a
+      // no-op event.
+      let matched = false;
+      const nextBucket = bucket.map((message) => {
+        let messageChanged = false;
+        const nextBlocks = message.blocks.map((block) => {
+          if (block.permissionId !== permissionId) return block;
+          // R12 (round-2 iteration-2 review, RED-LINE approved): first
+          // resolution wins — an already-resolved block must not be
+          // overwritten by a later resolved event. Fixes the Stop-race
+          // where an authoritative deny (`rejectSession`) settles the card
+          // first, then a stale/compensating `allow:true` redelivery would
+          // otherwise flip it back to "Allowed" after the Host already told
+          // the CLI no.
+          if (block.resolved) return block;
+          messageChanged = true;
+          return { ...block, resolved: true, allowed: allow };
+        });
+        if (!messageChanged) return message;
+        matched = true;
+        return { ...message, blocks: nextBlocks };
+      });
+      if (!matched) return cleared;
 
       return { messages: withBucket(state, sessionId, nextBucket), ...cleared };
     }

@@ -5,14 +5,20 @@ import {
   type ActionButtonKind,
   type CanStartTurnInput,
   canStartTurn,
+  type DecideRunEntryOutcomeInput,
   type DecideSendActionInput,
   decidePendingResolution,
   decideQueueRelease,
+  decideRunEntryOutcome,
   decideSendAction,
   deriveActionButtons,
   deriveQueueStripModel,
   isRunningStatus,
   QUEUE_PERMISSION_HINT,
+  type RunEntryOutcome,
+  type RunSendOrigin,
+  shouldArmRetryable,
+  shouldPauseQueueOnRejection,
 } from '../queueRelease';
 
 const ALL_STATUSES: readonly SessionRuntimeStatus[] = [
@@ -477,13 +483,26 @@ describe('deriveQueueStripModel', () => {
     expect(model.entries.map((e) => e.index)).toEqual([1, 2, 3]);
   });
 
-  it('shows the paused caption with the waiting count when paused', () => {
+  it('shows the paused caption with the waiting count when paused by the user (Stop)', () => {
     const model = deriveQueueStripModel({
       entries: [entry({ id: 'q-1' }), entry({ id: 'q-2' })],
       paused: 'stopped',
       hasPendingPermissionHere: false,
     });
     expect(model.pausedLabel).toBe('Queue paused — 2 waiting');
+  });
+
+  // S2 (round-2 iteration-3 review): a distinct, factual label for an AUTO
+  // pause (the Host is not accepting this turn) vs a user-initiated Stop —
+  // same `pausedLabel` field, using the existing `QueuePauseReason`.
+  it('shows a distinct caption for an auto pause ("send-rejected") — not the Stop copy', () => {
+    const model = deriveQueueStripModel({
+      entries: [entry({ id: 'q-1' })],
+      paused: 'send-rejected',
+      hasPendingPermissionHere: false,
+    });
+    expect(model.pausedLabel).toBe("Queue paused — Host isn't accepting this turn (1 waiting)");
+    expect(model.pausedLabel).not.toBe('Queue paused — 1 waiting');
   });
 
   it('surfaces the failed variant with its message', () => {
@@ -502,5 +521,166 @@ describe('deriveQueueStripModel', () => {
       hasPendingPermissionHere: true,
     });
     expect(model.permissionHint).toBe(QUEUE_PERMISSION_HINT);
+  });
+});
+
+function baseRunEntryOutcome(
+  overrides: Partial<DecideRunEntryOutcomeInput> = {}
+): DecideRunEntryOutcomeInput {
+  return {
+    fatalHostError: false,
+    sawAssistantProgress: false,
+    sawUserEcho: false,
+    ...overrides,
+  };
+}
+
+describe('decideRunEntryOutcome (round-2 P0 queue-loss hardening)', () => {
+  it('is "committed" when no fatal host.error landed', () => {
+    expect(decideRunEntryOutcome(baseRunEntryOutcome())).toBe('committed');
+  });
+
+  it('is "rejected" when a fatal host.error fired and nothing else happened (session_busy)', () => {
+    expect(decideRunEntryOutcome(baseRunEntryOutcome({ fatalHostError: true }))).toBe('rejected');
+  });
+
+  it('is "committed" when a fatal host.error fired but assistant progress was already observed', () => {
+    expect(
+      decideRunEntryOutcome(
+        baseRunEntryOutcome({ fatalHostError: true, sawAssistantProgress: true })
+      )
+    ).toBe('committed');
+  });
+
+  it('is "committed" when the user echo landed before the fatal host.error (the turn WAS admitted)', () => {
+    expect(
+      decideRunEntryOutcome(baseRunEntryOutcome({ fatalHostError: true, sawUserEcho: true }))
+    ).toBe('committed');
+  });
+
+  it('is "committed" when BOTH the user echo and assistant progress landed before the fatal host.error', () => {
+    expect(
+      decideRunEntryOutcome(
+        baseRunEntryOutcome({ fatalHostError: true, sawAssistantProgress: true, sawUserEcho: true })
+      )
+    ).toBe('committed');
+  });
+
+  // R15 (round-2 iteration-2 review, queue verifier finding): the two tests
+  // this replaced ("...after session.created..." / "...after
+  // session.resumed...") asserted the EXACT SAME input as the base
+  // 'rejected' case above (`{fatalHostError:true, sawAssistantProgress:
+  // false, sawUserEcho:false}`) — none of the three could fail independently
+  // of the others, so together they carried zero more signal than one test.
+  // `decideRunEntryOutcome` has no `sawSessionCreated`/`sawSessionResumed`
+  // fields at all (F4 removed them — create/resume success happens entirely
+  // before the admission gate, see the doc comment above), so "after
+  // session.created" vs "after session.resumed" cannot be distinguished at
+  // this pure layer. The full truth table below is what actually pins the
+  // function's behavior per distinct input combination, so a mutation to
+  // any one branch fails only the row(s) it affects.
+  it('full truth table: "rejected" iff fatalHostError && !sawAssistantProgress && !sawUserEcho', () => {
+    for (const fatalHostError of [true, false]) {
+      for (const sawAssistantProgress of [true, false]) {
+        for (const sawUserEcho of [true, false]) {
+          const outcome = decideRunEntryOutcome({
+            fatalHostError,
+            sawAssistantProgress,
+            sawUserEcho,
+          });
+          const expected =
+            fatalHostError && !sawAssistantProgress && !sawUserEcho ? 'rejected' : 'committed';
+          expect(outcome).toBe(expected);
+        }
+      }
+    }
+  });
+
+  // F4: explicit regression pin for the review's queue-loss scenario — a
+  // create/resume handshake succeeds, then 8 bounded session_busy retries
+  // (ChatComposer.tsx's runSend) all fail with zero user echo. This MUST
+  // requeue the message, never drop it.
+  it('is "rejected" for the session_busy-after-create/resume queue-loss scenario (create → 8× session_busy → no echo)', () => {
+    expect(
+      decideRunEntryOutcome(
+        baseRunEntryOutcome({
+          fatalHostError: true,
+          sawAssistantProgress: false,
+          sawUserEcho: false,
+        })
+      )
+    ).toBe('rejected');
+  });
+});
+
+describe('shouldArmRetryable (R1, round-2 iteration-2 review)', () => {
+  const ORIGINS: readonly RunSendOrigin[] = ['direct', 'retry', 'release'];
+
+  it('is false ONLY for rejected + release — the queue itself is the recovery path there', () => {
+    expect(shouldArmRetryable('rejected', 'release')).toBe(false);
+  });
+
+  it('is true for rejected + direct — no queue entry exists to fall back on', () => {
+    expect(shouldArmRetryable('rejected', 'direct')).toBe(true);
+  });
+
+  it('is true for rejected + retry — no queue entry exists to fall back on', () => {
+    expect(shouldArmRetryable('rejected', 'retry')).toBe(true);
+  });
+
+  it('is true for "committed" regardless of origin — the entry (if any) has already been spent', () => {
+    for (const origin of ORIGINS) {
+      expect(shouldArmRetryable('committed', origin)).toBe(true);
+    }
+  });
+
+  it('is true for "skipped" regardless of origin', () => {
+    for (const origin of ORIGINS) {
+      expect(shouldArmRetryable('skipped', origin)).toBe(true);
+    }
+  });
+});
+
+describe('shouldPauseQueueOnRejection (S1, round-2 iteration-3 review; generalized from R4)', () => {
+  const ORIGINS: readonly RunSendOrigin[] = ['direct', 'retry', 'release'];
+
+  it('is true for EVERY "rejected" outcome on the release path — not just session_busy exhaustion', () => {
+    // No error-code parameter anymore: every evidence-free release-origin
+    // rejection (create timeout, ensureHost() rejection, non-busy
+    // pre-admission host.error, session.failed mid busy-loop, busy-retry
+    // exhaustion itself) must pause, since `finalizeOutcome` funnels ALL of
+    // them through the exact same `decideRunEntryOutcome` -> 'rejected' path
+    // with no way to distinguish the failure class from the outcome alone.
+    expect(shouldPauseQueueOnRejection('rejected', 'release')).toBe(true);
+  });
+
+  it('is false for a "committed" outcome — the entry has already been spent, nothing to pause for', () => {
+    expect(shouldPauseQueueOnRejection('committed', 'release')).toBe(false);
+  });
+
+  it('is false for "direct"/"retry" origins — no queue entry exists to loop against', () => {
+    expect(shouldPauseQueueOnRejection('rejected', 'direct')).toBe(false);
+    expect(shouldPauseQueueOnRejection('rejected', 'retry')).toBe(false);
+  });
+
+  // Iteration-4 fix: the previous version of this test asserted
+  // `shouldPauseQueueOnRejection(outcome, origin) === !shouldArmRetryable(outcome, origin)`
+  // — since the implementation IS `!shouldArmRetryable(...)`, that is
+  // tautological (a mutation to `shouldArmRetryable` moves both sides of the
+  // assertion together and the test still passes). This hardcodes the
+  // expected boolean for all 9 outcome/origin pairs independently of
+  // `shouldArmRetryable`, so it actually pins the function's own behavior:
+  // true ONLY for rejected+release, false everywhere else.
+  it('matches a hardcoded truth table over all 9 outcome/origin pairs — independent of shouldArmRetryable', () => {
+    const expected: Record<RunEntryOutcome, Record<RunSendOrigin, boolean>> = {
+      committed: { direct: false, retry: false, release: false },
+      skipped: { direct: false, retry: false, release: false },
+      rejected: { direct: false, retry: false, release: true },
+    };
+    for (const outcome of Object.keys(expected) as RunEntryOutcome[]) {
+      for (const origin of ORIGINS) {
+        expect(shouldPauseQueueOnRejection(outcome, origin)).toBe(expected[outcome][origin]);
+      }
+    }
   });
 });

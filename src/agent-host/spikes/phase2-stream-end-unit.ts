@@ -35,7 +35,7 @@ function expect(label: string, ok: boolean, detail = ''): void {
 // Scenario 1: result already emitted terminals → finishTurn is a no-op.
 {
   const { events, normalizer } = collect();
-  normalizer.beginTurn('PING', 'req-1');
+  normalizer.beginTurn('PING', undefined, 'req-1');
   normalizer.ingest(
     { type: 'assistant', message: { content: [{ type: 'text', text: 'PONG' }] } },
     'req-1'
@@ -55,7 +55,7 @@ function expect(label: string, ok: boolean, detail = ''): void {
 // Scenario 2: assistant output but stream ended without result.
 {
   const { events, normalizer } = collect();
-  normalizer.beginTurn('PING', 'req-2');
+  normalizer.beginTurn('PING', undefined, 'req-2');
   normalizer.ingest(
     { type: 'assistant', message: { content: [{ type: 'text', text: 'partial…' }] } },
     'req-2'
@@ -79,7 +79,7 @@ function expect(label: string, ok: boolean, detail = ''): void {
 // Scenario 3: nothing assistant-related arrived at all.
 {
   const { events, normalizer } = collect();
-  normalizer.beginTurn('PING', 'req-3');
+  normalizer.beginTurn('PING', undefined, 'req-3');
   const outcome = normalizer.finishTurn('req-3');
   expect('s3 outcome failed', outcome === 'failed', outcome);
   expect('s3 session.failed emitted', types(events).includes('session.failed'));

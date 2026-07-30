@@ -1,6 +1,11 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
-import { initialHostStatus, isNode24ResolutionFailure, reduceHostStatus } from '../hostStatus';
+import {
+  initialHostStatus,
+  isNode24ResolutionFailure,
+  primeHostStatus,
+  reduceHostStatus,
+} from '../hostStatus';
 
 function event(type: string, payload?: Record<string, unknown>): RuntimeEvent {
   return {
@@ -122,5 +127,80 @@ describe('reduceHostStatus (T-09)', () => {
       const next = reduceHostStatus(prior, event('host.ready', {}));
       expect(next.capabilities).toEqual({ thinking: true });
     });
+  });
+});
+
+describe('primeHostStatus (S7, round-2 iteration-3 review)', () => {
+  it('copies settings from the Main-side snapshot onto a placeholder state', () => {
+    const next = primeHostStatus(initialHostStatus, {
+      state: 'ready',
+      driver: 'agent-sdk',
+      cometixVersion: '2.1.212',
+      settings: {
+        loaded: true,
+        hasAuthToken: true,
+        hasBaseUrl: false,
+        baseHost: null,
+        model: 'opus',
+      },
+    });
+    expect(next.state).toBe('ready');
+    expect(next.driver).toBe('agent-sdk');
+    expect(next.settings).toEqual({
+      loaded: true,
+      hasAuthToken: true,
+      hasBaseUrl: false,
+      baseHost: null,
+      model: 'opus',
+    });
+  });
+
+  it('adopts an explicit null settings snapshot (Host confirmed no diagnostics) rather than keeping a stale prior value', () => {
+    const prev = {
+      ...initialHostStatus,
+      settings: {
+        loaded: false,
+        hasAuthToken: false,
+        hasBaseUrl: false,
+        baseHost: null,
+        model: null,
+      },
+    };
+    const next = primeHostStatus(prev, { state: 'ready', settings: null });
+    expect(next.settings).toBeNull();
+  });
+
+  it('preserves the prior settings when the snapshot itself is missing (a failed/unresolved getHostStatus() call)', () => {
+    const prev = {
+      ...initialHostStatus,
+      settings: {
+        loaded: true,
+        hasAuthToken: true,
+        hasBaseUrl: false,
+        baseHost: null,
+        model: 'opus',
+      },
+    };
+    expect(primeHostStatus(prev, undefined).settings).toEqual(prev.settings);
+    expect(primeHostStatus(prev, null).settings).toEqual(prev.settings);
+  });
+
+  it('resets pid to undefined when the snapshot carries no numeric pid (matches the pre-existing prime behavior)', () => {
+    const prev = { ...initialHostStatus, pid: 123 };
+    const next = primeHostStatus(prev, { state: 'ready' });
+    expect(next.pid).toBeUndefined();
+  });
+
+  it('falls back to the prior state/driver/cometixVersion field-by-field when the snapshot omits them', () => {
+    const prev: typeof initialHostStatus = {
+      ...initialHostStatus,
+      state: 'ready',
+      driver: 'agent-sdk',
+      cometixVersion: '2.1.212',
+    };
+    const next = primeHostStatus(prev, {});
+    expect(next.state).toBe('ready');
+    expect(next.driver).toBe('agent-sdk');
+    expect(next.cometixVersion).toBe('2.1.212');
   });
 });

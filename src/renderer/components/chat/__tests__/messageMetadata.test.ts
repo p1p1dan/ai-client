@@ -28,6 +28,35 @@ describe('reduceMessageMetadata (T-06)', () => {
     expect(next.bySessionLastAssistant.s1).toBe('a1');
   });
 
+  // Round-2 P0 (event source real model): the event's own model wins over
+  // the locally-selected sessionModel — fixes "displayed selection masks
+  // the actual model" (P-14).
+  it('prefers the event-sourced actual model over the local session selection', () => {
+    const next = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant', model: 'claude-opus-4-8[1m]' },
+      }),
+      'sonnet'
+    );
+    expect(next.byMessage.a1).toEqual({ startedAt: 1000, model: 'claude-opus-4-8[1m]' });
+  });
+
+  it('falls back to the local session selection when the event carries no model (unchanged fallback chain)', () => {
+    const next = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant' },
+      }),
+      'sonnet'
+    );
+    expect(next.byMessage.a1).toEqual({ startedAt: 1000, model: 'sonnet' });
+  });
+
   it('ignores user message.started (no assistant index, no entry)', () => {
     const next = reduceMessageMetadata(
       initialMetadataRegistry,

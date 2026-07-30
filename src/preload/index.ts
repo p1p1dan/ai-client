@@ -78,6 +78,7 @@ import type {
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
+import type { HostReadyEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
@@ -1324,12 +1325,15 @@ const electronAPI = {
       pid?: number;
       driver: AgentHostDriver;
       cometixVersion: string;
+      // S7 (round-2 iteration-3 review): additive — AgentHostManager.getStatus() now includes it.
+      settings: NonNullable<HostReadyEvent['payload']['settings']> | null;
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST, driver),
     getHostStatus: (): Promise<{
       state: string;
       pid?: number;
       driver: AgentHostDriver;
       cometixVersion: string;
+      settings: NonNullable<HostReadyEvent['payload']['settings']> | null;
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HOST_STATUS),
     createSession: (payload: {
       sessionId: string;
@@ -1359,6 +1363,8 @@ const electronAPI = {
       }>;
       /** T-20 per-turn override; falls back to the session default. */
       effort?: SessionEffortLevel;
+      /** Round-2 P0: per-turn override; falls back to the session default. */
+      model?: string;
     }): Promise<{ requestId: string }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload),
     stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),

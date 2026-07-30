@@ -19,7 +19,7 @@ function types(events: Record<string, unknown>[]): unknown[] {
 describe('EventNormalizer', () => {
   it('beginTurn emits started/delta/completed with a consistent messageId, blockId and requestId', () => {
     const { events, n } = makeNormalizer();
-    n.beginTurn('Hello there', 'req-1');
+    n.beginTurn('Hello there', undefined, 'req-1');
 
     expect(types(events)).toEqual(['message.started', 'message.delta', 'message.completed']);
     const messageId = (events[0].payload as { messageId: string }).messageId;
@@ -30,6 +30,33 @@ describe('EventNormalizer', () => {
       payload: { messageId, blockId: `${messageId}-text`, text: 'Hello there' },
     });
     expect(events[2]).toMatchObject({ requestId: 'req-1', payload: { messageId } });
+  });
+
+  // Round-2 P0 (Chat attachments): beginTurn forwards lightweight attachment
+  // metadata onto the echoed user message.started — never the raw bytes.
+  it('beginTurn with attachments includes their kind/mediaType/name on message.started, with no data field', () => {
+    const { events, n } = makeNormalizer();
+    n.beginTurn('see attached', [
+      { kind: 'image', mediaType: 'image/png', name: 'screenshot.png' },
+      { kind: 'text', mediaType: 'text/plain' },
+    ]);
+
+    const payload = events[0].payload as { attachments?: unknown };
+    expect(payload.attachments).toEqual([
+      { kind: 'image', mediaType: 'image/png', name: 'screenshot.png' },
+      { kind: 'text', mediaType: 'text/plain' },
+    ]);
+    expect(JSON.stringify(payload)).not.toContain('data');
+  });
+
+  it('beginTurn without attachments (or an empty array) omits the attachments key entirely', () => {
+    const { events, n } = makeNormalizer();
+    n.beginTurn('no attachments');
+    expect(events[0].payload).not.toHaveProperty('attachments');
+
+    events.length = 0;
+    n.beginTurn('empty array', []);
+    expect(events[0].payload).not.toHaveProperty('attachments');
   });
 
   it('first assistant text emits message.started once, then a second text ingest emits only message.delta', () => {
@@ -50,6 +77,64 @@ describe('EventNormalizer', () => {
     });
     expect(types(events)).toEqual(['message.delta']);
     expect(events[0]).toMatchObject({ payload: { text: ' there' } });
+  });
+
+  // Round-2 P0 (event source real model): the assistant-side message.started
+  // carries the raw SDK message's actual model id, not the UI's local
+  // selection — the renderer has no other way to learn what really answered.
+  it('assistant message.started carries the real model id read off the raw SDK message', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        model: 'claude-opus-4-8[1m]',
+        content: [{ type: 'text', text: 'Hi' }],
+      },
+    });
+
+    expect(events[0]).toMatchObject({
+      payload: { role: 'assistant', model: 'claude-opus-4-8[1m]' },
+    });
+  });
+
+  it('assistant message.started omits the model key when the raw SDK message carries none', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
+    });
+
+    expect(events[0].payload).not.toHaveProperty('model');
+  });
+
+  it('the first assistant message in a turn wins the model even if a later one in the same turn differs', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        model: 'claude-sonnet-5',
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: {} }],
+      },
+    });
+    n.ingest({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'ok', is_error: false }],
+      },
+    });
+    n.ingest({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        model: 'claude-opus-4-8',
+        content: [{ type: 'text', text: 'done' }],
+      },
+    });
+
+    expect(events[0]).toMatchObject({ payload: { role: 'assistant', model: 'claude-sonnet-5' } });
   });
 
   it('thinking + text in one assistant message: thinking handled before text, thinking.started only once', () => {
@@ -213,15 +298,69 @@ describe('EventNormalizer', () => {
     expect(events[1]).toMatchObject({ payload: { text: 'pondering' } });
   });
 
-  it('system subtype init emits session.status running; other subtypes emit nothing', () => {
+  it('system subtype init emits session.status running; unknown subtypes emit nothing', () => {
     const { events, n } = makeNormalizer();
     n.ingest({ type: 'system', subtype: 'init' });
     expect(types(events)).toEqual(['session.status']);
     expect(events[0]).toMatchObject({ payload: { status: 'running' } });
 
     events.length = 0;
-    n.ingest({ type: 'system', subtype: 'api_retry' });
+    n.ingest({ type: 'system', subtype: 'totally-unknown-subtype' });
     expect(events).toHaveLength(0);
+  });
+
+  // a1 (2026-07-30 net-visibility batch): previously api_retry was silently
+  // dropped here — the ONE data point that explained a "hung" turn as a CLI
+  // transport-retry loop instead of a genuine stall. It must now surface on
+  // session.status (still 'running') with the retry fields passed through.
+  it('system subtype api_retry emits session.status running with the retry payload', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'system',
+      subtype: 'api_retry',
+      attempt: 3,
+      max_retries: 10,
+      retry_delay_ms: 4200.5,
+      error_status: null,
+      error: 'unknown',
+      session_id: 'rt-retry-1',
+    });
+
+    expect(types(events)).toEqual(['session.status']);
+    expect(events[0]).toMatchObject({
+      payload: {
+        status: 'running',
+        retry: {
+          attempt: 3,
+          maxRetries: 10,
+          delayMs: 4200.5,
+          errorStatus: null,
+          error: 'unknown',
+        },
+      },
+    });
+  });
+
+  it('system subtype api_retry with missing/non-numeric fields falls back to safe defaults instead of throwing', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({ type: 'system', subtype: 'api_retry' });
+
+    expect(types(events)).toEqual(['session.status']);
+    expect(events[0]).toMatchObject({
+      payload: {
+        status: 'running',
+        retry: { attempt: 0, maxRetries: 0, delayMs: 0, errorStatus: null, error: 'unknown' },
+      },
+    });
+  });
+
+  it('system subtype api_retry with a numeric error_status stringifies it (HTTP status code case)', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({ type: 'system', subtype: 'api_retry', attempt: 1, error_status: 529 });
+
+    expect((events[0].payload as { retry: { errorStatus: unknown } }).retry.errorStatus).toBe(
+      '529'
+    );
   });
 
   it('result after thinking+text closes the turn in order: thinking.completed, message.completed, usage.updated, session.completed, session.status idle', () => {
@@ -413,7 +552,7 @@ describe('EventNormalizer', () => {
     n.ingest({ type: 'result' });
 
     events.length = 0;
-    n.beginTurn('next question', 'req-2');
+    n.beginTurn('next question', undefined, 'req-2');
 
     events.length = 0;
     n.ingest({

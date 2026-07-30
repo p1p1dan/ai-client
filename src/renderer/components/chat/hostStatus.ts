@@ -96,6 +96,44 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
   }
 }
 
+/** The `ensureHost()` / `getHostStatus()` IPC snapshot shape — NOT a Runtime Event. */
+export interface HostStatusPrimeSnapshot {
+  state?: string;
+  pid?: number;
+  driver?: string;
+  cometixVersion?: string;
+  settings?: HostSettingsDiagnostics | null;
+}
+
+/**
+ * S7 (round-2 iteration-3 review): merges the Main-side snapshot onto the
+ * placeholder/prior state — `useHostStatus.ts`'s prime call on mount.
+ * Extracted so this merge (previously inline in the hook, and therefore
+ * untestable under the node-env vitest config, which cannot render a React
+ * hook) is a pure, unit-tested function. `settings` is now part of it:
+ * `AgentHostManager.getStatus()` gained the field in this same batch, but
+ * nothing copied it here — a consumer mounting after `host.ready` already
+ * fired (e.g. `HistoryErrorNotice`, only ever mounted in session mode) kept
+ * reading `settings: undefined` forever, silently pinning the catalog
+ * default model instead of the Host's own.
+ */
+export function primeHostStatus(
+  prev: HostStatus,
+  snapshot: HostStatusPrimeSnapshot | null | undefined
+): HostStatus {
+  return {
+    ...prev,
+    state: (snapshot?.state as HostStatus['state']) ?? prev.state,
+    pid: typeof snapshot?.pid === 'number' ? snapshot.pid : undefined,
+    driver: snapshot?.driver ?? prev.driver,
+    cometixVersion: snapshot?.cometixVersion ?? prev.cometixVersion,
+    // Adopt verbatim (including a confirmed `null`) whenever a snapshot
+    // object actually arrived — only a failed/not-yet-resolved IPC call
+    // (snapshot itself null/undefined) falls back to the prior value.
+    settings: snapshot ? snapshot.settings : prev.settings,
+  };
+}
+
 /**
  * Node 24 resolution failures are emitted by the Main process throwing inside
  * `ensureHost`. The Renderer treats any `state=error` whose message looks like

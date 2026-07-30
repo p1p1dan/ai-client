@@ -78,9 +78,17 @@ export function reduceMessageMetadata(
       const role = readString(payload, 'role');
       if (!messageId || !sessionId) return prev;
       if (role === 'assistant') {
+        // Round-2 P0 (event source real model): the event's own model —
+        // read off the SDK assistant message by the Host normalizer — wins
+        // over the locally-selected `sessionModel` when present. This closes
+        // "displayed selection masks the actual model": `sessionModel` here
+        // is already `getSessionModel(sessionId) ?? defaultModelId(null)`
+        // (useMessageMetadata.ts), so the fallback chain end to end is
+        // event's real model > session selection > catalog default.
+        const actualModel = readString(payload, 'model');
         const byMessage = {
           ...prev.byMessage,
-          [messageId]: { startedAt: ts ?? null, model: sessionModel ?? null },
+          [messageId]: { startedAt: ts ?? null, model: actualModel ?? sessionModel ?? null },
         };
         return {
           byMessage,

@@ -296,6 +296,113 @@ describe('AgentHostManager.attachProcessHandlers', () => {
 });
 
 /**
+ * S7 (round-2 iteration-3 review): `getStatus()` only ever read state/pid/
+ * driver/cometixVersion — `settings` was never captured off `host.ready` at
+ * all, so a consumer that mounts AFTER the live event already fired (e.g.
+ * `HistoryErrorNotice` in `MessageTimeline.tsx`, which only ever mounts in
+ * session mode, well after boot) read `settings: undefined` forever and
+ * silently fell back to the catalog default model instead of the Host's own.
+ */
+describe('AgentHostManager.getStatus — settings (S7, round-2 iteration-3 review)', () => {
+  async function attached() {
+    const { AgentHostManager } = await import('../AgentHostManager');
+    const manager = new AgentHostManager();
+    const proc = new FakeAgentHostProcess();
+    const internals = manager as unknown as {
+      process: FakeAgentHostProcess | null;
+      state: string;
+      attachProcessHandlers(p: FakeAgentHostProcess): void;
+    };
+    internals.attachProcessHandlers(proc);
+    internals.process = proc;
+    internals.state = 'ready';
+    return { manager, proc };
+  }
+
+  it('is null before any host.ready event has ever landed', async () => {
+    const { manager } = await attached();
+    expect(manager.getStatus().settings).toBeNull();
+  });
+
+  it('captures the settings diagnostics from a live host.ready event', async () => {
+    const { manager, proc } = await attached();
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 1,
+      timestamp: Date.now(),
+      payload: {
+        protocolVersion: 1,
+        driver: 'agent-sdk',
+        nodeVersion: 'v24.0.0',
+        settings: {
+          loaded: true,
+          hasAuthToken: true,
+          hasBaseUrl: false,
+          baseHost: null,
+          model: 'opus',
+        },
+      },
+    } satisfies RuntimeEvent);
+
+    expect(manager.getStatus()).toMatchObject({
+      state: 'ready',
+      settings: {
+        loaded: true,
+        hasAuthToken: true,
+        hasBaseUrl: false,
+        baseHost: null,
+        model: 'opus',
+      },
+    });
+  });
+
+  it('normalizes an absent settings field (old Host build) to null, not undefined', async () => {
+    const { manager, proc } = await attached();
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 1,
+      timestamp: Date.now(),
+      payload: { protocolVersion: 1, driver: 'agent-sdk', nodeVersion: 'v24.0.0' },
+    } satisfies RuntimeEvent);
+
+    expect(manager.getStatus().settings).toBeNull();
+  });
+
+  it('replaces a PRIOR ready event’s settings on a later host.ready (a Host restart reporting different diagnostics)', async () => {
+    const { manager, proc } = await attached();
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 1,
+      timestamp: Date.now(),
+      payload: {
+        protocolVersion: 1,
+        driver: 'agent-sdk',
+        nodeVersion: 'v24.0.0',
+        settings: {
+          loaded: true,
+          hasAuthToken: true,
+          hasBaseUrl: false,
+          baseHost: null,
+          model: 'opus',
+        },
+      },
+    } satisfies RuntimeEvent);
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 2,
+      timestamp: Date.now(),
+      payload: { protocolVersion: 1, driver: 'agent-sdk', nodeVersion: 'v24.0.0', settings: null },
+    } satisfies RuntimeEvent);
+
+    expect(manager.getStatus().settings).toBeNull();
+  });
+});
+
+/**
  * The stderr wiring is only useful if a failure reaches the log FILE. This app
  * ships file logging at 'error' unless the user enables it (logger.ts
  * initLogger defaults enabled=false), so info-level stderr lines are dropped in

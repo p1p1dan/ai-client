@@ -96,6 +96,8 @@ export function registerChatHandlers(): void {
         }>;
         /** T-20 per-turn override; falls back to the session default. */
         effort?: SessionEffortLevel;
+        /** Round-2 P0: per-turn override; falls back to the session default. */
+        model?: string;
       }
     ): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.sendMessage(payload);

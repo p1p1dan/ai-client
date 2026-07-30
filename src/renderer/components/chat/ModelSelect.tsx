@@ -58,7 +58,17 @@ export function ModelSelect({ sessionId, hostDefaultModel, disabled }: ModelSele
 
   return (
     <Select value={selected} onValueChange={handleChange} disabled={disabled}>
-      <SelectTrigger size="sm" className="h-6 w-auto min-w-[6.5rem] gap-1 px-2 text-xs">
+      {/* Round-2 visual fix: `size="sm"` still leaves `min-h-8`/`sm:min-h-7`
+          in the merged class list (different tailwind-merge group from
+          `height`), so the trigger rendered 28px instead of the intended
+          24px `h-6` token shared with its row siblings (TargetBranchSelect,
+          RunLocationIndicator). `min-h-6 sm:min-h-6` reasserts both groups.
+          `min-w-26` (6.5rem, token-scale — matches `w-70` elsewhere in this
+          file, not a bracket-arbitrary literal) keeps the prior width. */}
+      <SelectTrigger
+        size="sm"
+        className="h-6 min-h-6 sm:min-h-6 w-auto min-w-26 gap-1 px-2 text-xs"
+      >
         <SelectValue>{selectedLabel}</SelectValue>
       </SelectTrigger>
       <SelectPopup>

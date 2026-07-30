@@ -317,20 +317,33 @@ export function composerSendingLine(input: {
   budgetMs: number;
   attachmentCount: number;
   attachmentBytes: number;
+  /**
+   * a1 (2026-07-30 net-visibility batch): the CLI's own transport-retry loop
+   * is in progress for this turn (SessionRetryInfo, minus the fields the
+   * status line has no room for). Appended alongside the existing "waiting"
+   * copy rather than replacing it — the user still gets the familiar framing
+   * ("waiting for reply") plus the one new fact that actually explains the
+   * wait, instead of a wording swap that would make every prior screenshot
+   * and design-doc reference stale.
+   */
+  retry?: { attempt: number; maxRetries: number } | null;
 }): string {
   const elapsed = Math.max(0, Math.floor(input.elapsedSeconds));
   if (input.phase === 'handshake') {
     return `Starting Agent Host… · ${elapsed}s`;
   }
   const budgetSeconds = Math.round(input.budgetMs / 1000);
+  const retrySuffix = input.retry
+    ? ` · Network retry ${input.retry.attempt}/${input.retry.maxRetries}`
+    : '';
   if (elapsed >= SLOW_WAIT_HINT_SECONDS) {
-    return `Still waiting · ${elapsed}s — gateway latency varies. Stop to abort.`;
+    return `Still waiting · ${elapsed}s${retrySuffix} — gateway latency varies. Stop to abort.`;
   }
   if (input.attachmentCount > 0) {
     const size = formatAttachmentSize(input.attachmentBytes);
-    return `Sent ${size} · waiting for reply · ${elapsed}s (up to ${budgetSeconds}s)`;
+    return `Sent ${size} · waiting for reply${retrySuffix} · ${elapsed}s (up to ${budgetSeconds}s)`;
   }
-  return `Waiting for Agent Host reply · ${elapsed}s (up to ${budgetSeconds}s)`;
+  return `Waiting for Agent Host reply${retrySuffix} · ${elapsed}s (up to ${budgetSeconds}s)`;
 }
 
 /**

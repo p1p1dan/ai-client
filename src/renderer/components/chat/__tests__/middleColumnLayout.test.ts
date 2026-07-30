@@ -163,11 +163,12 @@ describe('composerCardClass', () => {
     }
   });
 
-  it('stacks the empty card with 10/12/8 padding', () => {
+  it('stacks the empty card with symmetric 12/10px padding (round-2 visual fix: pt-2.5/pb-2 was a 2px asymmetry)', () => {
     const cls = composerCardClass('empty');
     expect(cls).toContain('px-3');
-    expect(cls).toContain('pt-2.5');
-    expect(cls).toContain('pb-2');
+    expect(cls).toContain('py-2.5');
+    expect(cls).not.toContain('pt-2.5');
+    expect(cls).not.toContain('pb-2');
   });
 
   it('rests the follow-up card at exactly 40px via min-h-10 (28px key + borders, centered)', () => {
@@ -207,9 +208,15 @@ describe('composerTextareaClass', () => {
     expect(composerTextareaClass('session')).toContain('[&_textarea]:px-0');
   });
 
-  it('never enables the resize handle', () => {
-    expect(composerTextareaClass('empty')).toContain('resize-none');
-    expect(composerTextareaClass('session')).toContain('resize-none');
+  it('pierces resize-none through to the real inner textarea (round-2 fix: a bare resize-none on the unstyled outer span never reached the native <textarea>)', () => {
+    expect(composerTextareaClass('empty')).toContain('[&_textarea]:resize-none');
+    expect(composerTextareaClass('session')).toContain('[&_textarea]:resize-none');
+  });
+
+  it('gives the follow-up textarea a leading-6 line-height so its resting line fills the 24px floor instead of sitting high (round-2 visual fix)', () => {
+    expect(composerTextareaClass('session')).toContain('[&_textarea]:leading-6');
+    // Empty mode keeps its own symmetric padding-based centering — no floor to fill.
+    expect(composerTextareaClass('empty')).not.toContain('leading-6');
   });
 
   it('drops the border/bg/shadow/ring counters now that <Textarea unstyled> renders no outer chrome to fight', () => {
@@ -616,5 +623,65 @@ describe('composerPlaceholder', () => {
         })
       ).toBe(mode === 'session' ? 'Send follow-up…' : 'Message Claude via Agent Host…');
     }
+  });
+
+  // Round-2 P0: a brand-new session's first message goes through the
+  // create-session handshake — that gets its own copy, distinct from the
+  // ordinary "Sending…" text a steady-state follow-up shows.
+  it('shows the create-session handshake copy when isCreatingSession is true', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: false,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        isCreatingSession: true,
+      })
+    ).toBe('Creating session with Agent Host (first message only)…');
+  });
+
+  it('keeps the ordinary sending copy when isCreatingSession is false or omitted', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: false,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        isCreatingSession: false,
+      })
+    ).toBe('Sending to Agent Host…');
+
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: false,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 1,
+      })
+    ).toBe('Sending 1 attachment to Agent Host…');
+  });
+
+  it('never shows the create-session copy while not sending', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: true,
+        busy: false,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        isCreatingSession: true,
+      })
+    ).not.toMatch(/Creating session/);
   });
 });

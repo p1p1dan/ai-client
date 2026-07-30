@@ -399,6 +399,23 @@ describe('pauseSession / clearPause', () => {
     expect(selectSessionQueue(cleared, 's1').paused).toBeNull();
   });
 
+  // S1 (round-2 iteration-3 review; generalized from R4's `session_busy`-only
+  // version): a distinct pause reason for EVERY evidence-free release-origin
+  // rejection, so the queue does not hammer the Host in an unbounded loop —
+  // see ChatComposer.tsx's `finalizeOutcome` / queueRelease.ts's
+  // `shouldPauseQueueOnRejection`.
+  it('accepts the "send-rejected" reason and reports it distinctly from "stopped"', () => {
+    const state = pauseSession(createEmptyState(), 's1', 'send-rejected');
+    expect(selectSessionQueue(state, 's1').paused).toBe('send-rejected');
+  });
+
+  it('pausing with a DIFFERENT reason while already paused still updates (not idempotent across reasons)', () => {
+    const stopped = pauseSession(createEmptyState(), 's1', 'stopped');
+    const sendRejected = pauseSession(stopped, 's1', 'send-rejected');
+    expect(sendRejected).not.toBe(stopped);
+    expect(selectSessionQueue(sendRejected, 's1').paused).toBe('send-rejected');
+  });
+
   it('clearPause is a no-op (same reference) when already unpaused', () => {
     const state = createEmptyState();
     expect(clearPause(state, 's1')).toBe(state);

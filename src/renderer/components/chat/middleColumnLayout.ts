@@ -95,7 +95,11 @@ export const TIMELINE_PADDING_CLASS = 'px-6 pt-5 pb-2';
 /** Composer card's outer frame class — shared border/fill/radius tokens, mode-specific padding and layout. */
 export function composerCardClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
-    return 'relative rounded-md border border-input bg-card focus-within:border-ring px-3 pt-2.5 pb-2';
+    // Round-2 visual fix: pt-2.5/pb-2 was a literal 2px top/bottom asymmetry
+    // on the empty-state card frame — symmetric py-2.5 matches the 8/10px
+    // spacing tiers already used elsewhere in this file without inventing a
+    // new value.
+    return 'relative rounded-md border border-input bg-card focus-within:border-ring px-3 py-2.5';
   }
   // Resting height contract (A07 :1844): exactly 40px. Border-box math:
   // 28px round key + 2×1px border = 30px content floor; `py-1` alone would
@@ -115,9 +119,21 @@ export function composerCardClass(mode: MiddleColumnMode): string {
  */
 export function composerTextareaClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
-    return 'min-h-14 resize-none p-0 [&_textarea]:min-h-14 [&_textarea]:px-0';
+    // Round-2 visual fix: `<Textarea unstyled>` only applies `className` to
+    // the outer span (textarea.tsx), never to the real inner `<textarea>` —
+    // a bare `resize-none` here was inert (outer span isn't a scroll
+    // container) and left the UA default `resize: both` grip on the real
+    // element. `[&_textarea]:` pierces through like every sizing class next
+    // to it.
+    return 'min-h-14 p-0 [&_textarea]:min-h-14 [&_textarea]:resize-none [&_textarea]:px-0';
   }
-  return 'min-w-0 flex-1 resize-none p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-14 [&_textarea]:px-0 [&_textarea]:py-0';
+  // Round-2 visual fix: same resize pierce-through as the empty branch, plus
+  // `[&_textarea]:leading-6` — the session textarea pins `min-h-6`/`py-0`
+  // (needed for the 40px docked-card contract), and a `<textarea>` never
+  // vertically centers its own content, so with zero padding the resting
+  // line sat high in the 24px box. Matching line-height to the height token
+  // fills the box instead of relying on padding.
+  return 'min-w-0 flex-1 p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-14 [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-6';
 }
 
 // ---- Target row ----
@@ -235,8 +251,19 @@ export function composerPlaceholder(input: {
   pendingQuestion?: boolean;
   /** T-19: messages already queued for this session while a turn runs. */
   queuedCount?: number;
+  /**
+   * Round-2 P0: this send is a brand-new session's first message, going
+   * through the create-session handshake (close → createSession → wait for
+   * session.created, up to ~5s) rather than the instant 'direct' path an
+   * already-bound session takes. Gets its own copy so a slow first message
+   * doesn't read like an ordinary follow-up sitting in flight.
+   */
+  isCreatingSession?: boolean;
 }): string {
   if (input.sending) {
+    if (input.isCreatingSession) {
+      return 'Creating session with Agent Host (first message only)…';
+    }
     return input.attachmentCount > 0
       ? `Sending ${input.attachmentCount} attachment${input.attachmentCount > 1 ? 's' : ''} to Agent Host…`
       : 'Sending to Agent Host…';

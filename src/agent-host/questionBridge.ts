@@ -93,10 +93,19 @@ export class QuestionBridge {
   private pending = new Map<string, PendingQuestion>();
   private readonly emit: EmitFn;
   private readonly log: LogFn;
+  private readonly peerHasPending: (sessionId: string) => boolean;
 
-  constructor(emit: EmitFn, log: LogFn = () => undefined) {
+  constructor(
+    emit: EmitFn,
+    log: LogFn = () => undefined,
+    // S8 (round-2 iteration-3 review): mirrors PermissionBridge's own
+    // constructor param — whether the SIBLING (PermissionBridge) still holds
+    // a pending prompt for a session, supplied by `claudeRuntime.ts`.
+    peerHasPending: (sessionId: string) => boolean = () => false
+  ) {
     this.emit = emit;
     this.log = log;
+    this.peerHasPending = peerHasPending;
   }
 
   /**
@@ -149,12 +158,23 @@ export class QuestionBridge {
             ...(resolved?.response ? { response: resolved.response } : {}),
           },
         });
-        // Resume running unless abort already took over.
-        if (!input.signal.aborted) {
+        // Resume running unless abort already took over, and only once this
+        // session has no OTHER question parked (mirrors PermissionBridge's
+        // own same-bridge check, which this bridge previously lacked
+        // entirely).
+        //
+        // S8 (round-2 iteration-3 review): also check the SIBLING
+        // (PermissionBridge) — a parallel tool_use turn can park a QUESTION
+        // and a PERMISSION on the same session at once; answering this
+        // question must not announce 'running' out from under a still-open
+        // permission card.
+        if (!input.signal.aborted && !this.hasPending(input.sessionId)) {
           this.emit({
             type: 'session.status',
             sessionId: input.sessionId,
-            payload: { status: 'running' },
+            payload: {
+              status: this.peerHasPending(input.sessionId) ? 'waiting_permission' : 'running',
+            },
           });
         }
         resolve(result);

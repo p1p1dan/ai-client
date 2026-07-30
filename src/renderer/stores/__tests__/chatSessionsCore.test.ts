@@ -1,5 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
+import { canRespondToPermission } from '@/components/chat/questionCard';
 import {
   applyRuntimeEvent,
   applyRuntimeEvents,
@@ -95,6 +96,80 @@ describe('applyRuntimeEvent — message.started', () => {
     expect(patch3.messages).toEqual({
       [SESSION_ID]: [{ id: 'msg-1', sessionId: SESSION_ID, role: 'user', blocks: [] }],
     });
+  });
+
+  // Round-2 P0 (Chat attachments): optional-field addition — stores the
+  // event's lightweight attachment metadata on the message, message-level.
+  it('stores attachments metadata on the user message when the event carries any', () => {
+    const state = baseState();
+    const started: RuntimeEvent = {
+      type: 'message.started',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: {
+        messageId: 'msg-1',
+        role: 'user',
+        attachments: [{ kind: 'image', mediaType: 'image/png', name: 'shot.png' }],
+      },
+    };
+
+    const patch = applyRuntimeEvent(state, started);
+    expect(patch.messages).toEqual({
+      [SESSION_ID]: [
+        {
+          id: 'msg-1',
+          sessionId: SESSION_ID,
+          role: 'user',
+          blocks: [],
+          attachments: [{ kind: 'image', mediaType: 'image/png', name: 'shot.png' }],
+        },
+      ],
+    });
+  });
+
+  // F11 (round-2 review fix): `ChatMessage.model` was removed — it had zero
+  // renderer consumers (the timeline's model display reads the event's real
+  // model straight off the wire via messageMetadata.ts's own registry, never
+  // this store). This test now pins the negative: the event's model id must
+  // NOT be copied onto the stored message, even though the event carries one.
+  it("does not store the event's model id on the message (F11: dead field removed, messageMetadata.ts owns model display)", () => {
+    const state = baseState();
+    const started: RuntimeEvent = {
+      type: 'message.started',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { messageId: 'asst-1', role: 'assistant', model: 'claude-opus-4-8[1m]' },
+    };
+
+    const patch = applyRuntimeEvent(state, started);
+    expect(patch.messages).toEqual({
+      [SESSION_ID]: [
+        {
+          id: 'asst-1',
+          sessionId: SESSION_ID,
+          role: 'assistant',
+          blocks: [],
+        },
+      ],
+    });
+  });
+
+  it('omits the attachments key when the event carries none, and never carries a model key at all (F11)', () => {
+    const state = baseState();
+    const started: RuntimeEvent = {
+      type: 'message.started',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { messageId: 'msg-1', role: 'user' },
+    };
+
+    const patch = applyRuntimeEvent(state, started);
+    const message = patch.messages?.[SESSION_ID]?.[0];
+    expect(message).not.toHaveProperty('attachments');
+    expect(message).not.toHaveProperty('model');
   });
 });
 
@@ -448,6 +523,81 @@ describe('applyRuntimeEvent — permission.requested', () => {
     expect(synthetic).toBeDefined();
     expect(patch.pendingPermissions?.[0].messageId).toBe('msg-perm-perm-3');
   });
+
+  // Round-2 P0 regression (4019fed): the Host uses the SDK toolUseID AS the
+  // permissionId, which is the SAME id `tool.started` already used for that
+  // turn's tool_call block. The idempotent-dedupe guard added in 4019fed
+  // compared the incoming permissionId against every block id, not just
+  // permission_request blocks, so it was always true here and the
+  // permission_request block was silently dropped for every real permission
+  // request — this is what the fix scopes the guard against.
+  it('appends a permission_request block even when a tool_call block already shares its id', () => {
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'asst-1', blocks: [] })] },
+    });
+    const toolStarted: RuntimeEvent = {
+      type: 'tool.started',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { messageId: 'asst-1', toolCallId: 'toolu_1', name: 'Bash', input: { cmd: 'ls' } },
+    };
+    const patch1 = applyRuntimeEvent(state, toolStarted);
+    const state2 = { ...state, ...patch1 } as ChatSessionsState;
+
+    const permissionRequested: RuntimeEvent = {
+      type: 'permission.requested',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: {
+        permissionId: 'toolu_1',
+        toolName: 'Bash',
+        description: 'run ls',
+        input: { cmd: 'ls' },
+      },
+    };
+    const patch2 = applyRuntimeEvent(state2, permissionRequested);
+    const target = patch2.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-1');
+
+    expect(target?.blocks.map((block) => block.type)).toEqual(['tool_call', 'permission_request']);
+    expect(target?.blocks[1]).toEqual({
+      id: 'toolu_1',
+      type: 'permission_request',
+      permissionId: 'toolu_1',
+      toolName: 'Bash',
+      toolDescription: 'run ls',
+      toolInput: { cmd: 'ls' },
+      resolved: false,
+    });
+    expect(canRespondToPermission(patch2.pendingPermissions ?? [], SESSION_ID, 'toolu_1')).toBe(
+      true
+    );
+  });
+
+  it('a redelivered permission.requested with the same permissionId stays idempotent', () => {
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'asst-1', blocks: [] })] },
+    });
+    const event: RuntimeEvent = {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-dup', toolName: 'Bash' },
+    };
+    const patch1 = applyRuntimeEvent(state, event);
+    const state2 = { ...state, ...patch1 } as ChatSessionsState;
+    const patch2 = applyRuntimeEvent(state2, { ...event, seq: 2, timestamp: 2 });
+
+    const target = patch2.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-1');
+    expect(target?.blocks.filter((block) => block.type === 'permission_request')).toHaveLength(1);
+    expect(
+      patch2.pendingPermissions?.filter((item) => item.permissionId === 'perm-dup')
+    ).toHaveLength(1);
+  });
 });
 
 describe('applyRuntimeEvent — permission.resolved', () => {
@@ -503,13 +653,52 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     const state2 = { ...state, ...patch1 } as ChatSessionsState;
     const patch2 = applyRuntimeEvent(state2, event);
 
-    expect(patch2.messages).toEqual(patch1.messages);
+    // R12/R13 (round-2 iteration-2 review, RED-LINE approved): the block is
+    // already resolved by the time patch2 runs — first resolution wins, and
+    // a no-op redelivery now preserves object identity (no `messages` key
+    // at all) instead of reallocating an equal-but-new bucket.
+    expect(patch2.messages).toBeUndefined();
     // patch2 applies to a state where the entry is already gone, so the
     // second-round patch carries no pendingPermissions key at all (empty
     // patch — see withoutPermission's reference-stability contract).
     expect(patch2.pendingPermissions).toBeUndefined();
-    const finalMessage = patch2.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-1');
+    const finalMessage = state2.messages[SESSION_ID]?.find((message) => message.id === 'asst-1');
     expect(finalMessage?.blocks).toHaveLength(1);
+    expect(finalMessage?.blocks[0]).toEqual({
+      id: 'perm-1',
+      type: 'permission_request',
+      permissionId: 'perm-1',
+      resolved: true,
+      allowed: false,
+    });
+  });
+
+  it('R12: first resolution wins — a later resolved event with a DIFFERENT allow value must not flip an already-resolved block', () => {
+    const state = stateWithPermissionBlock();
+    const denyEvent: RuntimeEvent = {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', allow: false },
+    };
+    const patch1 = applyRuntimeEvent(state, denyEvent);
+    const state2 = { ...state, ...patch1 } as ChatSessionsState;
+
+    // A stale/compensating redelivery with the OPPOSITE allow value (the
+    // Stop-race: an authoritative deny settles first, then a compensating
+    // `allow:true` arrives for the same id) must not overwrite it.
+    const allowEvent: RuntimeEvent = {
+      type: 'permission.resolved',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: { permissionId: 'perm-1', allow: true },
+    };
+    const patch2 = applyRuntimeEvent(state2, allowEvent);
+
+    expect(patch2.messages).toBeUndefined();
+    const finalMessage = state2.messages[SESSION_ID]?.find((message) => message.id === 'asst-1');
     expect(finalMessage?.blocks[0]).toEqual({
       id: 'perm-1',
       type: 'permission_request',
@@ -539,7 +728,11 @@ describe('applyRuntimeEvent — permission.resolved', () => {
     const nextState = { ...state, ...patch } as ChatSessionsState;
 
     expect(nextState.pendingPermissions).toEqual(state.pendingPermissions);
-    expect(patch.messages).toEqual(state.messages);
+    // R13 (round-2 iteration-2 review, RED-LINE approved): a no-match event
+    // now returns the ORIGINAL state's object identities (no `messages` key
+    // at all), rather than reallocating an equal-but-new bucket for a no-op.
+    expect(patch.messages).toBeUndefined();
+    expect(nextState.messages).toBe(state.messages);
   });
 });
 
@@ -916,6 +1109,99 @@ describe('applyRuntimeEvent — session.status recentSessionIds', () => {
     expect(patch.recentSessionIds).toEqual(['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']);
     expect(patch.recentSessionIds).toHaveLength(8);
     expect(patch.recentSessionIds).not.toContain('s9');
+  });
+});
+
+// a1 (2026-07-30 net-visibility batch): session.status now optionally carries
+// the CLI's own transport-retry loop for this turn.
+describe('applyRuntimeEvent — session.status retry (a1)', () => {
+  it('stores the retry payload on the session when session.status carries one', () => {
+    const state = baseState({ sessions: [makeSession({ status: 'running' })] });
+    const event: RuntimeEvent = {
+      type: 'session.status',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: {
+        status: 'running',
+        retry: { attempt: 3, maxRetries: 10, delayMs: 4200, errorStatus: null, error: 'unknown' },
+      },
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.retry).toEqual({
+      attempt: 3,
+      maxRetries: 10,
+      delayMs: 4200,
+      errorStatus: null,
+      error: 'unknown',
+    });
+  });
+
+  it('clears a previously stored retry when a later session.status carries none', () => {
+    const state = baseState({
+      sessions: [
+        makeSession({
+          status: 'running',
+          retry: { attempt: 2, maxRetries: 10, delayMs: 1000, errorStatus: null, error: 'unknown' },
+        }),
+      ],
+    });
+    const event: RuntimeEvent = {
+      type: 'session.status',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { status: 'running' },
+    };
+
+    const patch = applyRuntimeEvent(state, event);
+
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.retry).toBeUndefined();
+  });
+
+  it('clears a stored retry on session.completed/failed/stopped terminal events', () => {
+    const withRetry = (status: ChatSession['status']) =>
+      baseState({
+        sessions: [
+          makeSession({
+            status,
+            retry: {
+              attempt: 1,
+              maxRetries: 10,
+              delayMs: 500,
+              errorStatus: null,
+              error: 'unknown',
+            },
+          }),
+        ],
+      });
+
+    const completed = applyRuntimeEvent(withRetry('running'), {
+      type: 'session.completed',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+    });
+    expect(completed.sessions?.find((session) => session.id === SESSION_ID)?.retry).toBeUndefined();
+
+    const failed = applyRuntimeEvent(withRetry('running'), {
+      type: 'session.failed',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { error: 'boom' },
+    });
+    expect(failed.sessions?.find((session) => session.id === SESSION_ID)?.retry).toBeUndefined();
+
+    const stopped = applyRuntimeEvent(withRetry('running'), {
+      type: 'session.stopped',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+    });
+    expect(stopped.sessions?.find((session) => session.id === SESSION_ID)?.retry).toBeUndefined();
   });
 });
 

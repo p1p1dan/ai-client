@@ -223,7 +223,11 @@ function ComboboxItem({
           <path d="M5.252 12.7 10.2 18.63 18.748 5.37" />
         </svg>
       </ComboboxPrimitive.ItemIndicator>
-      <div className="col-start-2">{children}</div>
+      {/* min-w-0 lets this grid item shrink below its content's min-content
+          width so the inner `truncate` span can actually ellipsize instead of
+          forcing the popup wider (CSS Grid automatic minimum size); mirrors
+          select.tsx SelectItem's col-start-2 which already carries min-w-0. */}
+      <div className="col-start-2 min-w-0">{children}</div>
       {endAddon && <div className="col-start-3 flex items-center">{endAddon}</div>}
     </ComboboxPrimitive.Item>
   );

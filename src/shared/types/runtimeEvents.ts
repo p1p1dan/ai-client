@@ -95,10 +95,47 @@ export interface HostErrorEvent extends RuntimeEventBase {
   };
 }
 
+/**
+ * a1 (2026-07-30 net-visibility batch): the CLI's OWN transport-retry loop
+ * (Agent SDK query() default max_retries: 10, exponential backoff) for the
+ * in-flight turn. Previously this was the one piece of data that explained a
+ * "hung" turn (see docs — investigation report §4.1 gap C / §0) and
+ * eventNormalizer dropped it entirely on the floor.
+ *
+ * Riding on `SessionStatusEvent.payload.retry` (an optional field) instead of
+ * a new top-level RuntimeEventType: every consumer that already switches on
+ * `session.status` (chatSessions.ts's reducer, ChatComposer's event log)
+ * gets this for free without a new case, and status legitimately stays
+ * `'running'` — the turn has not stalled, the CLI is actively retrying.
+ */
+export interface SessionRetryInfo {
+  /** 1-based attempt number, mirrors the SDK's own `attempt` field. */
+  attempt: number;
+  /** SDK's configured ceiling (currently 10, not configurable by the Host). */
+  maxRetries: number;
+  /** Backoff delay before the NEXT attempt, in ms. */
+  delayMs: number;
+  /** HTTP status when known; `null` for a transport-layer failure (typical). */
+  errorStatus: string | null;
+  /** SDK's own error label, e.g. `"unknown"` for a socket-level failure. */
+  error: string;
+}
+
 export interface SessionStatusEvent extends RuntimeEventBase {
   type: 'session.status';
   sessionId: string;
-  payload: { status: SessionRuntimeStatus };
+  payload: { status: SessionRuntimeStatus; retry?: SessionRetryInfo };
+}
+
+/**
+ * Lightweight attachment metadata for the user-turn echo (round-2 P0).
+ * Deliberately excludes `data` — the timeline chip only needs to say WHAT was
+ * attached, never re-carries the bytes the Host already sent to the model.
+ */
+export interface MessageAttachmentMeta {
+  kind: 'image' | 'text';
+  mediaType: string;
+  name?: string;
 }
 
 export interface MessageStartedEvent extends RuntimeEventBase {
@@ -107,6 +144,20 @@ export interface MessageStartedEvent extends RuntimeEventBase {
   payload: {
     messageId: string;
     role: 'user' | 'assistant' | 'system' | 'error';
+    /**
+     * Round-2 P0 (optional-field addition, protocol version unchanged): user
+     * turn's attachment metadata, when the turn carried any. Old
+     * Renderers/Hosts simply ignore an unknown key — backward compatible.
+     */
+    attachments?: MessageAttachmentMeta[];
+    /**
+     * Round-2 P0 (optional-field addition, protocol version unchanged): the
+     * SDK assistant message's actual model id, when known. Only ever set on
+     * `role: 'assistant'` — lets the renderer show the model that really
+     * answered instead of the locally-selected one it might silently differ
+     * from. Old Renderers/Hosts simply ignore an unknown key.
+     */
+    model?: string;
   };
 }
 

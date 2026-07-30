@@ -180,10 +180,28 @@ export const SEND_MS_PER_MB = 30_000;
 export const HOST_STALL_TIMEOUT_MS = 120_000;
 
 /**
- * INVARIANT: SEND_TIMEOUT_CEILING_MS < HOST_STALL_TIMEOUT_MS.
- * The Host watchdog must always speak first so the user gets its precise
- * message instead of the Composer's generic "no assistant progress" fallback —
- * which, on a slow-but-healthy turn, produces a Retry that kills a live turn.
+ * Documentation mirror of claudeRuntime.ts's a4 (2026-07-30) one-shot TTFT
+ * ("time to first productive event") watchdog default. Same cross-program
+ * constraint as HOST_STALL_TIMEOUT_MS above — cannot import agent-host code —
+ * so this is a second unit-test-locked mirror value.
+ */
+export const HOST_TTFT_TIMEOUT_MS = 32_000;
+
+/**
+ * INVARIANT (corrected 2026-07-30, a4 — the previous wording here claimed
+ * the opposite of what these numbers produce): SEND_TIMEOUT_CEILING_MS
+ * (115s) is LESS than HOST_STALL_TIMEOUT_MS (120s), so for a turn that HAS
+ * already produced a first productive event, the renderer's ceiling elapses
+ * FIRST, not the Host's — the Composer's generic "no assistant progress"
+ * fallback can still win that race on a large-attachment send. That gap is a
+ * known, accepted mid-term item (event-driven budget instead of a fixed wall
+ * clock), not something this constant closes.
+ *
+ * What DOES protect the common case — a turn that never produces a first
+ * productive event at all (api_retry loop, dead spawn) — is the Host's new
+ * TTFT watchdog above: HOST_TTFT_TIMEOUT_MS (32s) is always below
+ * SEND_BASE_TIMEOUT_MS (45s), so for that failure mode the Host speaks first
+ * with its precise message, before the renderer's fallback ever fires.
  */
 export const SEND_TIMEOUT_CEILING_MS = 115_000;
 

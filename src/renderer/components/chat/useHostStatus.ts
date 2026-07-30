@@ -1,6 +1,11 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { useEffect, useState } from 'react';
-import { type HostStatus, initialHostStatus, reduceHostStatus } from './hostStatus';
+import {
+  type HostStatus,
+  initialHostStatus,
+  primeHostStatus,
+  reduceHostStatus,
+} from './hostStatus';
 
 /**
  * Subscribe to Host Runtime Events + poll `getHostStatus` for a display-ready
@@ -25,17 +30,14 @@ export function useHostStatus(): HostStatusSnapshot {
     let cancelled = false;
 
     // Prime from the Main-side snapshot so the pill renders instantly.
+    // S7 (round-2 iteration-3 review): `primeHostStatus` (hostStatus.ts) now
+    // also copies `settings` — a consumer mounting after `host.ready` already
+    // fired otherwise never learns the Host's reported default model.
     void window.electronAPI.chat
       .getHostStatus()
       .then((initial) => {
         if (cancelled) return;
-        setStatus((prev) => ({
-          ...prev,
-          state: (initial?.state as HostStatus['state']) ?? prev.state,
-          pid: typeof initial?.pid === 'number' ? initial.pid : undefined,
-          driver: (initial?.driver as string | undefined) ?? prev.driver,
-          cometixVersion: initial?.cometixVersion ?? prev.cometixVersion,
-        }));
+        setStatus((prev) => primeHostStatus(prev, initial));
       })
       .catch(() => undefined);
 
@@ -59,6 +61,10 @@ export function useHostStatus(): HostStatusSnapshot {
             }
             if (typeof snapshot?.pid === 'number') next.pid = snapshot.pid;
             else if (prev.state !== 'error' && next.state !== 'ready') next.pid = undefined;
+            // S7: same additive copy as the prime above — keeps `settings`
+            // fresh across a Host restart this poll observes without a
+            // runtime event (e.g. the tab was backgrounded when it fired).
+            if (snapshot) next.settings = snapshot.settings;
             return next;
           });
         })

@@ -8,11 +8,13 @@ import type {
   SessionAttachment,
   SessionEffortLevel,
 } from '../shared/types/agentHost.ts';
+import type { SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
 import { QuestionBridge, type QuestionRespondInput } from './questionBridge.ts';
-import type { SessionRegistry } from './sessionRegistry.ts';
+import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
+import { TtftWatchdog } from './ttftWatchdog.ts';
 
 export interface ClaudeRuntimeOptions {
   driver: AgentHostDriver;
@@ -91,6 +93,48 @@ function resolveStallTimeoutMs(): number {
 }
 
 /**
+ * a4 (2026-07-30 net-visibility batch): one-shot "time to first productive
+ * event" budget — deliberately far shorter than DEFAULT_STALL_TIMEOUT_MS
+ * (120s) above, and MUST stay below the renderer's SEND_BASE_TIMEOUT_MS
+ * (45s, src/renderer/components/chat/attachmentLimits.ts) so the Host's
+ * precise failure reaches the UI before the Composer's generic "no progress"
+ * fallback fires. See ttftWatchdog.ts for why this is a separate mechanism
+ * from the stall watchdog rather than just a shorter stall timeout.
+ * <= 0 disables it (mirrors resolveStallTimeoutMs's convention).
+ */
+const DEFAULT_TTFT_TIMEOUT_MS = 32_000;
+
+function resolveTtftTimeoutMs(): number {
+  const raw = process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS;
+  if (raw === undefined || raw === '') return DEFAULT_TTFT_TIMEOUT_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_TTFT_TIMEOUT_MS;
+  return parsed;
+}
+
+/**
+ * F10 (round-2 review fix): once the turn's terminal `result` event lands,
+ * how much longer the SDK stream is allowed to keep draining (CLI transcript
+ * flush, subprocess teardown) before the `finally` teardown forces it. Caps
+ * the "queue admits a new send while the old one tidies up" window so a slow
+ * or hung teardown can never block indefinitely.
+ *
+ * R8 (round-2 iteration-2 review): env-overridable — same pattern as
+ * `resolveStallTimeoutMs`/`resolveTtftTimeoutMs` above — so the deadline
+ * branch (a stream that hangs past the cap after `result`) is exercisable
+ * under `pnpm vitest` without a real 2s wait.
+ */
+const DEFAULT_DRAIN_AFTER_RESULT_MS = 2_000;
+
+function resolveDrainAfterResultMs(): number {
+  const raw = process.env.AICLIENT_HOST_DRAIN_AFTER_RESULT_MS;
+  if (raw === undefined || raw === '') return DEFAULT_DRAIN_AFTER_RESULT_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_DRAIN_AFTER_RESULT_MS;
+  return parsed;
+}
+
+/**
  * #8 (2026-07-27): thinking config sent to query().
  *
  * `display` is the load-bearing field. On Opus 4.8/4.7, Sonnet 5 and Fable 5 it
@@ -133,6 +177,39 @@ export function normalizeEffort(value: unknown): SessionEffortLevel | undefined 
     : undefined;
 }
 
+/**
+ * F8 (round-2 review fix): status to report alongside a compensating
+ * `permission.resolved` (respondPermission's `!ok` branch) — the renderer
+ * must converge on the ACTUAL current state, not stay pinned on
+ * `waiting_permission` just because that used to be true.
+ *
+ * R14 (round-2 iteration-2 review): `HostSession` itself structurally cannot
+ * represent `waiting_permission`/`waiting_question` — neither
+ * `PermissionBridge` nor `QuestionBridge` ever writes into the registry, they
+ * only `emit()` that status directly — so reading `session.status` alone
+ * would report `'running'` (or whatever the registry's own field last held)
+ * even while the renderer is, in fact, correctly parked waiting on a
+ * DIFFERENT pending prompt on this same session (the desync this
+ * compensation path exists to recover from does not imply every OTHER
+ * prompt has also gone stale). `pending` — read from the live bridges at the
+ * call site — is checked first so it wins even while `session.running` is
+ * also true (a turn stays `running` host-side while `canUseTool` awaits the
+ * user; that does not make the renderer's own "waiting" state wrong).
+ * A missing session (e.g. Host restarted, registry is fresh) reports `idle`.
+ */
+export function resolveCompensationStatus(
+  session: HostSession | undefined,
+  pending?: { permission?: boolean; question?: boolean }
+): SessionRuntimeStatus {
+  if (!session) return 'idle';
+  if (pending?.permission) return 'waiting_permission';
+  if (pending?.question) return 'waiting_question';
+  if (session.running) return 'running';
+  return session.status === 'waiting_permission' || session.status === 'waiting_question'
+    ? 'idle'
+    : session.status;
+}
+
 export class ClaudeRuntime {
   private queryFn: SdkQueryFn | null = null;
   private readonly log: LogFn;
@@ -143,8 +220,19 @@ export class ClaudeRuntime {
   constructor(opts: ClaudeRuntimeOptions) {
     this.opts = opts;
     this.log = opts.log ?? ((...args) => console.error('[claude-runtime]', ...args));
-    this.permissions = new PermissionBridge(opts.emit, this.log);
-    this.questions = new QuestionBridge(opts.emit, this.log);
+    // S8 (round-2 iteration-3 review): each bridge's own `settle()` must see
+    // whether the OTHER bridge still holds a pending prompt for the same
+    // session (parallel tool_use can park a permission AND a question at
+    // once) — wired here since ClaudeRuntime is the only place that
+    // constructs both. Safe despite the apparent forward reference: neither
+    // closure is INVOKED until a real request settles, well after both
+    // fields below have been assigned.
+    this.permissions = new PermissionBridge(opts.emit, this.log, (sessionId) =>
+      this.questions.hasPending(sessionId)
+    );
+    this.questions = new QuestionBridge(opts.emit, this.log, (sessionId) =>
+      this.permissions.hasPending(sessionId)
+    );
   }
 
   get driver(): AgentHostDriver {
@@ -302,6 +390,14 @@ export class ClaudeRuntime {
      * Untrusted at this boundary (raw NDJSON payload) — normalized below.
      */
     effort?: unknown;
+    /**
+     * Per-turn model override; falls back to the session default from
+     * create/resume. Purely additive — mirrors `effort` above. Backward
+     * compatible: AGENT_HOST_PROTOCOL_VERSION stays 1, an old Host ignores
+     * this field from a new Renderer.
+     * Untrusted at this boundary (raw NDJSON payload) — normalized below.
+     */
+    model?: unknown;
     requestId?: string;
   }): Promise<void> {
     const session = this.opts.registry.get(input.sessionId);
@@ -348,6 +444,13 @@ export class ClaudeRuntime {
     const queryFn = await this.ensureSdk();
     // Per-turn effort wins; otherwise the session default from create/resume.
     const effort = normalizeEffort(input.effort) ?? session.effort;
+    // Per-turn model wins; otherwise the session default from create/resume.
+    // Re-pin onto the registry entry (mirrors T-19's continuity fix for
+    // effort) so a LATER send that omits it keeps this explicit choice
+    // instead of falling back to whatever the session was created with.
+    const model =
+      typeof input.model === 'string' && input.model.trim() ? input.model.trim() : session.model;
+    if (model) session.model = model;
     const abort = new AbortController();
     session.abort = abort;
     session.running = true;
@@ -355,7 +458,10 @@ export class ClaudeRuntime {
     this.opts.registry.setStatus(session.sessionId, 'starting');
 
     const normalizer = new EventNormalizer(session.sessionId, this.opts.emit, this.log);
-    normalizer.beginTurn(input.text, input.requestId);
+    // Round-2 P0: forward the turn's attachments so the echoed user message
+    // carries their metadata — previously dropped here, before any event
+    // was ever emitted (see eventNormalizer.beginTurn's attachments param).
+    normalizer.beginTurn(input.text, input.attachments, input.requestId);
 
     this.opts.emit({
       type: 'session.status',
@@ -391,9 +497,18 @@ export class ClaudeRuntime {
     // Silence is legitimate while a user prompt is parked (permission /
     // question) or a local tool run is in flight — those re-arm instead.
     const stallTimeoutMs = resolveStallTimeoutMs();
+    const drainAfterResultMs = resolveDrainAfterResultMs();
     let stalled = false;
     let stallTimer: NodeJS.Timeout | null = null;
     const onStall = () => {
+      // S6 (round-2 iteration-3 review): mirrors `ttftWatchdog`'s own
+      // `onTimeout` guard below — a user Stop (or any other abort) may
+      // already be unwinding when this timer fires (the stall timer is only
+      // cleared in the `finally` block once the query loop fully exits, so a
+      // slow-to-unwind stream can outlive an abort that already landed).
+      // Without this, an already-stopped turn gets relabeled `stalled` and
+      // reported as a stall FAILURE instead of an honest `session.stopped`.
+      if (abort.signal.aborted) return;
       if (
         this.permissions.hasPending(session.sessionId) ||
         this.questions.hasPending(session.sessionId) ||
@@ -413,10 +528,89 @@ export class ClaudeRuntime {
       if (stallTimer) clearTimeout(stallTimer);
       stallTimer = setTimeout(onStall, stallTimeoutMs);
     };
+    // a4: one-shot watchdog for the gap between queryFn() returning and the
+    // turn's FIRST productive event — much shorter than the stall watchdog
+    // above (see DEFAULT_TTFT_TIMEOUT_MS doc). Fires the SAME `stalled` path
+    // below (explicit session.failed via emitFailed), but with its own
+    // message so "never started" is distinguishable from "stalled mid-turn".
+    //
+    // F1 (round-2 review fix): a bare timeout is not evidence of a transport
+    // failure — the SDK can legitimately spend the whole budget on a single
+    // adaptive-thinking response with no incremental `stream_event`s (none
+    // are requested), or park on canUseTool/AskUserQuestion before anything
+    // "productive" has happened yet. Firing unconditionally there kills a
+    // healthy turn and, worse, Retry resends the exact same slow prompt into
+    // the exact same timeout (a deterministic failure loop). `onTimeout`
+    // below mirrors the stall watchdog's own pending/open-tool guard, and
+    // additionally requires positive evidence of a transport problem
+    // (`sawApiRetry`) or total silence (`!sawAnySdkEvent` — not even
+    // `system/init` arrived, i.e. a dead spawn/auth failure) before
+    // committing to abort; anything short of that just re-arms for another
+    // window instead of firing.
+    const ttftTimeoutMs = resolveTtftTimeoutMs();
+    let sawAnySdkEvent = false;
+    let sawApiRetry = false;
+    const ttftWatchdog = new TtftWatchdog({
+      timeoutMs: ttftTimeoutMs,
+      onTimeout: () => {
+        // F14 minor m12: a Stop click (or the stall watchdog) may have
+        // already aborted this turn in the same tick this timer fires — do
+        // not relabel an already-stopped turn as a TTFT failure by setting
+        // `stalled`. The main loop's own `abort.signal.aborted` check tears
+        // the turn down correctly either way.
+        //
+        // R7 (round-2 iteration-2 review): the wrapper already set
+        // `firedFlag = true` before calling this — reset it here so a LATER
+        // stall-watchdog failure on this same (already-aborting) turn is not
+        // mislabeled with the TTFT message via `stallErrorMessage()`'s
+        // `hasFired` branch.
+        if (abort.signal.aborted) {
+          ttftWatchdog.resetFired();
+          return;
+        }
+        if (
+          this.permissions.hasPending(session.sessionId) ||
+          this.questions.hasPending(session.sessionId) ||
+          normalizer.hasOpenTools()
+        ) {
+          ttftWatchdog.rearm();
+          return;
+        }
+        // R9 (round-2 iteration-2 review, accepted trade-off — documented,
+        // not loosened): this gate structurally cannot fire for a turn that
+        // emits `system/init` (sawAnySdkEvent becomes true) and then goes
+        // silent forever with no `api_retry` — that shape re-arms
+        // unconditionally below and is left entirely to the much longer
+        // 120s stall watchdog (DEFAULT_STALL_TIMEOUT_MS), which is
+        // indistinguishable, by design, from a healthy long-running turn.
+        // Narrowing the doc invariant above (TTFT always beats the
+        // renderer's 45s budget) to the two shapes this gate DOES cover —
+        // an observed `api_retry`, or total silence — is the honest
+        // framing; a third evidence signal to close this gap is future
+        // work, not this batch's.
+        if (!(sawApiRetry || !sawAnySdkEvent)) {
+          // Evidence does not support a transport failure — a healthy turn
+          // just taking a while. Keep watching (a later api_retry can still
+          // fire it) instead of ever killing a turn on time budget alone.
+          ttftWatchdog.rearm();
+          return;
+        }
+        stalled = true;
+        this.log(
+          `TTFT watchdog: no first productive event within ${ttftTimeoutMs}ms on ${session.sessionId} — aborting turn`
+        );
+        abort.abort();
+      },
+    });
     const stallErrorMessage = () =>
-      `Host stall watchdog: no model progress for ${stallTimeoutMs}ms ` +
-      '(model/gateway hang or endless retry — check model name and gateway ' +
-      'health; tune via AICLIENT_HOST_STALL_TIMEOUT_MS, 0 disables)';
+      ttftWatchdog.hasFired
+        ? `Host TTFT watchdog: no first response within ${ttftTimeoutMs}ms after send ` +
+          '(no assistant/tool progress at all — likely a transport-layer retry ' +
+          "loop (check the Host log's [cli-stderr] lines) or a spawn/auth " +
+          'failure; tune via AICLIENT_HOST_TTFT_TIMEOUT_MS, 0 disables)'
+        : `Host stall watchdog: no model progress for ${stallTimeoutMs}ms ` +
+          '(model/gateway hang or endless retry — check model name and gateway ' +
+          'health; tune via AICLIENT_HOST_STALL_TIMEOUT_MS, 0 disables)';
     // Only model-productive events reset the watchdog. `system` events are
     // control-plane: an invalid model puts the CLI into an endless api_retry
     // loop that streams system events forever — they must not count as
@@ -456,7 +650,14 @@ export class ClaudeRuntime {
           canUseTool,
           env: mergedEnv,
           abortController: abort,
-          ...(session.model ? { model: session.model } : {}),
+          // a2: the SDK only forwards the CLI child's stderr when `stderr` is
+          // explicitly passed (or DEBUG_CLAUDE_AGENT_SDK is set) — otherwise
+          // it is tail-buffered internally (2048 chars) and dropped. Without
+          // this the CLI's own self-diagnosis (e.g. "No conversation found
+          // with session ID: …") never reached Host logs. See investigation
+          // report §1.4.
+          stderr: (line: string) => this.log('[cli-stderr]', line),
+          ...(model ? { model } : {}),
           // Top-level option (NOT output_config.effort) — SDK 0.3.218 sdk.d.ts
           // Options.effort, confirmed clean by c16 probe scenario D.
           ...(effort ? { effort } : {}),
@@ -465,10 +666,49 @@ export class ClaudeRuntime {
       });
 
       armStallTimer();
-      for await (const event of stream) {
+      ttftWatchdog.arm();
+      // F10 (round-2 review fix): a bare `break` on the terminal `result`
+      // event used to tear the SDK generator down immediately
+      // (`return()`), which can race the CLI child's own end-of-turn
+      // transcript flush — the exact write `--resume`/history reads depend
+      // on. `session.running` now clears the INSTANT `result` lands (that
+      // alone is the actual fix for the queue-release admission-window
+      // race this used to chase via `break`) but the stream keeps draining
+      // — up to DRAIN_AFTER_RESULT_MS — so the CLI gets a real chance to
+      // finish on its own before teardown forces the issue. Manual
+      // iteration (not `for await`) so the post-result phase can be capped
+      // with a deadline; behavior before a `result` event is unchanged.
+      const iterator = stream[Symbol.asyncIterator]();
+      let drainDeadline: number | null = null;
+      for (;;) {
         if (abort.signal.aborted) break;
+        let step: IteratorResult<unknown>;
+        if (drainDeadline !== null) {
+          const remainingMs = drainDeadline - Date.now();
+          if (remainingMs <= 0) break;
+          const DRAIN_TIMEOUT = Symbol('ttft-drain-timeout');
+          const raced = await Promise.race([
+            iterator.next(),
+            new Promise<typeof DRAIN_TIMEOUT>((resolve) =>
+              setTimeout(() => resolve(DRAIN_TIMEOUT), remainingMs)
+            ),
+          ]);
+          if (raced === DRAIN_TIMEOUT) break;
+          step = raced as IteratorResult<unknown>;
+        } else {
+          step = await iterator.next();
+        }
+        if (step.done) break;
+        const event = step.value;
         const eventType = String((event as { type?: string })?.type ?? '');
-        if (PRODUCTIVE_EVENT_TYPES.has(eventType)) armStallTimer();
+        sawAnySdkEvent = true;
+        if (eventType === 'system' && (event as { subtype?: string })?.subtype === 'api_retry') {
+          sawApiRetry = true;
+        }
+        if (PRODUCTIVE_EVENT_TYPES.has(eventType)) {
+          armStallTimer();
+          ttftWatchdog.markProductive();
+        }
         const runtimeId = normalizer.ingest(event, input.requestId);
         if (runtimeId && runtimeId !== session.runtimeIdentity) {
           // First discovery (initial send) or a defensive fork cover — without
@@ -481,25 +721,45 @@ export class ClaudeRuntime {
             payload: { runtimeIdentity: runtimeId },
           });
         }
+        if (eventType === 'result' && drainDeadline === null) {
+          // Admission-window fix: unblock the NEXT queued send right away
+          // instead of waiting for the stream to fully close below.
+          session.running = false;
+          drainDeadline = Date.now() + drainAfterResultMs;
+        }
       }
 
+      // F10: once `session.running` clears at `result`, a NEW send() for
+      // this same session is free to start (that is the whole point) and
+      // may finish taking over `session.abort` before THIS invocation's
+      // drain loop above exits. `stillOwnsTurn` guards every remaining
+      // mutation of shared session state so a slow drain can never stomp a
+      // newer turn's status/pending prompts on its way out.
+      const stillOwnsTurn = session.abort === abort;
       if (abort.signal.aborted) {
         const rejectReason = stalled ? 'Host stall watchdog fired' : 'Session stopped';
-        this.permissions.rejectSession(session.sessionId, rejectReason);
-        this.questions.rejectSession(session.sessionId, rejectReason);
+        if (stillOwnsTurn) {
+          this.permissions.rejectSession(session.sessionId, rejectReason);
+          this.questions.rejectSession(session.sessionId, rejectReason);
+        }
         if (stalled) {
           normalizer.emitFailed(stallErrorMessage(), input.requestId);
-          session.status = 'failed';
-          this.opts.registry.setStatus(session.sessionId, 'failed');
+          if (stillOwnsTurn) {
+            session.status = 'failed';
+            this.opts.registry.setStatus(session.sessionId, 'failed');
+          }
         } else {
           normalizer.emitStopped(input.requestId);
-          session.status = 'idle';
-          this.opts.registry.setStatus(session.sessionId, 'idle');
+          if (stillOwnsTurn) {
+            session.status = 'idle';
+            this.opts.registry.setStatus(session.sessionId, 'idle');
+          }
         }
       } else if (
-        session.status === 'running' ||
-        session.status === 'waiting_permission' ||
-        session.status === 'waiting_question'
+        stillOwnsTurn &&
+        (session.status === 'running' ||
+          session.status === 'waiting_permission' ||
+          session.status === 'waiting_question')
       ) {
         // The SDK stream can end without a result event (gateway hang /
         // dropped stream). finishTurn emits synthetic terminals so the UI
@@ -515,42 +775,71 @@ export class ClaudeRuntime {
         this.opts.registry.setStatus(session.sessionId, status);
       }
     } catch (err) {
-      this.permissions.rejectSession(session.sessionId, 'Query failed');
-      this.questions.rejectSession(session.sessionId, 'Query failed');
+      const stillOwnsTurn = session.abort === abort;
+      if (stillOwnsTurn) {
+        this.permissions.rejectSession(session.sessionId, 'Query failed');
+        this.questions.rejectSession(session.sessionId, 'Query failed');
+      }
       if (abort.signal.aborted) {
         if (stalled) {
           // The SDK often surfaces our watchdog abort as a thrown AbortError —
           // keep the explicit failed terminal instead of a silent "stopped".
           normalizer.emitFailed(stallErrorMessage(), input.requestId);
-          session.status = 'failed';
-          this.opts.registry.setStatus(session.sessionId, 'failed');
+          if (stillOwnsTurn) {
+            session.status = 'failed';
+            this.opts.registry.setStatus(session.sessionId, 'failed');
+          }
         } else {
           normalizer.emitStopped(input.requestId);
-          session.status = 'idle';
-          this.opts.registry.setStatus(session.sessionId, 'idle');
+          if (stillOwnsTurn) {
+            session.status = 'idle';
+            this.opts.registry.setStatus(session.sessionId, 'idle');
+          }
         }
       } else {
         const message = err instanceof Error ? err.message : String(err);
         this.log('query failed:', message);
-        this.opts.emit({
-          type: 'session.failed',
-          sessionId: session.sessionId,
-          requestId: input.requestId,
-          payload: { error: message },
-        });
-        this.opts.emit({
-          type: 'session.status',
-          sessionId: session.sessionId,
-          requestId: input.requestId,
-          payload: { status: 'failed' },
-        });
-        session.status = 'failed';
-        this.opts.registry.setStatus(session.sessionId, 'failed');
+        // R5 (round-2 iteration-2 review): gate the WHOLE branch — including
+        // the emits, not just the registry writes — behind `stillOwnsTurn`,
+        // matching the post-loop `else if` path's own style. F10's
+        // post-result drain window means this catch can run for a turn that
+        // has already been superseded by a newer, admitted send() on the
+        // same session (e.g. the CLI child rethrows its exit error AFTER a
+        // `result` already cleared `session.running`); reporting that stale
+        // failure against the session would falsely fail the NEW turn that
+        // now owns it.
+        if (stillOwnsTurn) {
+          this.opts.emit({
+            type: 'session.failed',
+            sessionId: session.sessionId,
+            requestId: input.requestId,
+            payload: { error: message },
+          });
+          this.opts.emit({
+            type: 'session.status',
+            sessionId: session.sessionId,
+            requestId: input.requestId,
+            payload: { status: 'failed' },
+          });
+          session.status = 'failed';
+          this.opts.registry.setStatus(session.sessionId, 'failed');
+        } else {
+          this.log(
+            `post-result drain error for a turn that no longer owns session ${session.sessionId} — logged, not reported: ${message}`
+          );
+        }
       }
     } finally {
       if (stallTimer) clearTimeout(stallTimer);
-      session.running = false;
-      session.abort = undefined;
+      ttftWatchdog.dispose();
+      // F10: only clear fields that still belong to THIS invocation — once
+      // the post-result drain admits a new send() for the same session, that
+      // new turn owns `running`/`abort` now, and this stale invocation must
+      // not tear either down out from under it.
+      if (session.abort === abort) {
+        session.running = false;
+        session.abort = undefined;
+      }
       try {
         stream?.close?.();
       } catch {
@@ -579,6 +868,49 @@ export class ClaudeRuntime {
           code: 'permission_not_pending',
           message: `No pending permission: ${input.permissionId}`,
           fatal: false,
+        },
+      });
+      // Round-2 P0 FIX 2 (permission flow hardening): PermissionBridge.respond
+      // only emits permission.resolved on the path where it actually found
+      // and settled a pending entry — a desynced id (renderer/Host queue
+      // drifted apart, e.g. after a Host restart) leaves the store's
+      // pendingPermissions head permanently parked with no way to dequeue.
+      // Emitting the resolved event here too lets chatSessions.ts's own
+      // `permission.resolved` handler dequeue and unlock the head even
+      // though the Host never had this id parked.
+      //
+      // F7 (round-2 review fix): echo `input.allow` — the value the user
+      // actually clicked — instead of hardcoding `false`. Nothing here was
+      // actually granted on the Host side (there was no pending entry to
+      // grant), but the renderer's card must reflect what the USER chose,
+      // not a synthesized "Denied" the user never picked; hardcoding false
+      // used to flip an approved card to Denied whenever this branch fired
+      // for an `allow:true` response (e.g. a stale double-click/redelivery).
+      this.opts.emit({
+        type: 'permission.resolved',
+        sessionId: input.sessionId,
+        payload: { permissionId: input.permissionId, allow: input.allow },
+      });
+      // F8 (round-2 review fix): the compensating resolved event above only
+      // dequeues the CARD — it does not converge `session.status`. Without
+      // this, a session left on `waiting_permission` by the desync this
+      // branch exists to recover from stays pinned there forever (no more
+      // SDK events are coming for an id the Host never had parked), and the
+      // renderer is stuck reading the session as permanently busy with no
+      // card to show for it. Report the registry's actual current state
+      // instead of guessing.
+      this.opts.emit({
+        type: 'session.status',
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        payload: {
+          // R14: read the live bridges too — a DIFFERENT permission/question
+          // can still be genuinely parked on this same session even though
+          // THIS id was not (see resolveCompensationStatus's doc comment).
+          status: resolveCompensationStatus(this.opts.registry.get(input.sessionId), {
+            permission: this.permissions.hasPending(input.sessionId),
+            question: this.questions.hasPending(input.sessionId),
+          }),
         },
       });
     }
@@ -617,7 +949,21 @@ export class ClaudeRuntime {
     }
     this.permissions.rejectSession(session.sessionId, 'Session stopped');
     this.questions.rejectSession(session.sessionId, 'Session stopped');
-    if (!session.running || !session.abort) {
+    // R6 (round-2 iteration-2 review): `session.abort` alone — NOT
+    // `session.running` — decides whether there is a live turn to abort.
+    // F10's post-result drain clears `running` the INSTANT the terminal
+    // `result` event lands, while `session.abort` (and the stream itself)
+    // stays alive for up to `DRAIN_AFTER_RESULT_MS` more. The old
+    // `!session.running || !session.abort` check treated that whole drain
+    // window as "nothing running" and echoed back `session.status`, which
+    // is still the stale `'running'` value (only corrected AFTER the drain
+    // loop exits) — pinning the renderer busy with no way to recover short
+    // of a second Stop click. Checking `session.abort` alone still early-
+    // returns once a turn has FULLY ended (the `finally` clears `abort`),
+    // and, during the drain, falls through to the abort() call below exactly
+    // like an ordinary running turn — the generic post-loop/aborted-branch
+    // handling already emits an honest `session.stopped` + `idle` for it.
+    if (!session.abort) {
       this.opts.emit({
         type: 'session.status',
         sessionId: session.sessionId,

@@ -34,8 +34,11 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { resolveResumeModel } from '../chat/models';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
+import { useHostStatus } from '../chat/useHostStatus';
+import { useSessionModel } from '../chat/useSessionModel';
 import {
   canCreateSessionOnWorkspace,
   isUsableWorkspace,
@@ -90,6 +93,18 @@ export function LeftNav({
   // identity but no timeline yet (Host emits session.history → store folds it
   // into the timeline; messages carry the `h:` prefix).
   const { resume } = useResumeSession();
+  // Round-2 P0 fix (model directness): a model-less resume left the Host
+  // registry entry's `model` undefined, which every later 'direct' send
+  // silently inherited — the gateway's own default served the turn instead
+  // of whatever the user picked. Closes the gap at its source instead of
+  // only patching the per-send wire path.
+  const { getSessionModel } = useSessionModel();
+  // F9 (round-2 review fix): resolve the SAME way ModelSelect's own initial
+  // value does (explicit selection, else the Host-reported default) instead
+  // of hard-pinning the catalog default via `defaultModelId(null)` — the old
+  // form silently downgraded an unpicked session's resume to `sonnet` even
+  // when the Host reported a different default (e.g. an Opus gateway).
+  const { status: hostStatus } = useHostStatus();
 
   const handleSelectSession = (sessionId: string, persistedRuntimeIdentity?: string) => {
     selectSession(sessionId);
@@ -99,7 +114,10 @@ export function LeftNav({
     const runtimeIdentity = session?.runtimeIdentity ?? persistedRuntimeIdentity;
     const hasTimeline = (state.messages[sessionId]?.length ?? 0) > 0;
     if (runtimeIdentity && workspace && !hasTimeline) {
-      void resume(sessionId, { persistedRuntimeIdentity: runtimeIdentity });
+      void resume(sessionId, {
+        persistedRuntimeIdentity: runtimeIdentity,
+        model: resolveResumeModel(getSessionModel, sessionId, hostStatus.settings?.model),
+      });
     }
   };
 

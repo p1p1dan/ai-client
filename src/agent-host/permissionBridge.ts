@@ -45,10 +45,21 @@ export class PermissionBridge {
   private pending = new Map<string, PendingEntry>();
   private readonly emit: EmitFn;
   private readonly log: LogFn;
+  private readonly peerHasPending: (sessionId: string) => boolean;
 
-  constructor(emit: EmitFn, log: LogFn = () => undefined) {
+  constructor(
+    emit: EmitFn,
+    log: LogFn = () => undefined,
+    // S8 (round-2 iteration-3 review): whether the SIBLING bridge
+    // (QuestionBridge) still holds a pending prompt for a session — supplied
+    // by `claudeRuntime.ts`, the only place that constructs both bridges.
+    // Defaults to "no sibling" so every existing direct-construction call
+    // site (unit tests, spikes) keeps its original single-bridge behavior.
+    peerHasPending: (sessionId: string) => boolean = () => false
+  ) {
     this.emit = emit;
     this.log = log;
+    this.peerHasPending = peerHasPending;
   }
 
   /**
@@ -125,11 +136,20 @@ export class PermissionBridge {
         // Resume running unless abort already took over, and only once this
         // session has no other permission parked — settling card A while B
         // is still pending must not announce 'running' out from under B.
+        //
+        // S8 (round-2 iteration-3 review): a parallel tool_use turn can park
+        // a PERMISSION and a QUESTION on the SAME session at once — this
+        // bridge's own `hasPending` check alone is blind to that sibling.
+        // `peerHasPending` (QuestionBridge.hasPending, wired by
+        // claudeRuntime.ts) reports the sibling's true status instead of
+        // unconditionally announcing 'running' out from under it.
         if (!input.signal.aborted && !this.hasPending(input.sessionId)) {
           this.emit({
             type: 'session.status',
             sessionId: input.sessionId,
-            payload: { status: 'running' },
+            payload: {
+              status: this.peerHasPending(input.sessionId) ? 'waiting_question' : 'running',
+            },
           });
         }
         resolve(result);

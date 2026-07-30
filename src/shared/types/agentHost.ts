@@ -99,6 +99,13 @@ export interface SessionSendCommand extends AgentHostCommandBase {
     attachments?: SessionAttachment[];
     /** Per-turn effort override; falls back to the session default. */
     effort?: SessionEffortLevel;
+    /**
+     * Per-turn model override; falls back to the session default from
+     * create/resume. Round-2 P0 fix: purely additive optional field on an
+     * existing command — AGENT_HOST_PROTOCOL_VERSION stays 1, an old Host
+     * simply ignores this key from a new Renderer (backward compatible).
+     */
+    model?: string;
   };
 }
 

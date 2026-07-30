@@ -15,6 +15,7 @@ import {
   type SessionStopCommand,
 } from '@shared/types/agentHost';
 import type {
+  HostReadyEvent,
   RuntimeEvent,
   RuntimeEventType,
   SessionHistoryListedEvent,
@@ -27,6 +28,9 @@ import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostSt
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
 
 export type AgentHostState = 'stopped' | 'starting' | 'ready' | 'error';
+
+/** S7 (round-2 iteration-3 review): the desensitized settings diagnostics `host.ready` carries — same shape as `HostReadyEvent['payload']['settings']`, normalized to drop `undefined` (only `null`/present). */
+export type AgentHostSettingsInfo = NonNullable<HostReadyEvent['payload']['settings']>;
 
 let requestSeq = 0;
 
@@ -44,18 +48,29 @@ export class AgentHostManager {
   private driver: AgentHostDriver = DEFAULT_AGENT_HOST_DRIVER;
   private readyPromise: Promise<void> | null = null;
   private eventHandlers = new Set<(event: RuntimeEvent) => void>();
+  // S7 (round-2 iteration-3 review): captured off the live `host.ready` event
+  // in `attachProcessHandlers` below — `null` until the Host has reported it
+  // at least once this process lifetime (never yet ready, or reported no
+  // diagnostics).
+  private settings: AgentHostSettingsInfo | null = null;
 
   getStatus(): {
     state: AgentHostState;
     pid?: number;
     driver: AgentHostDriver;
     cometixVersion: string;
+    // S7: additive — a late-mounting consumer (e.g. `useHostStatus.ts`'s
+    // prime/poll, which only otherwise learns `settings` from a LIVE
+    // `host.ready` event) can now read the Host's already-reported default
+    // instead of reading `undefined` forever.
+    settings: AgentHostSettingsInfo | null;
   } {
     return {
       state: this.state,
       pid: this.process?.pid,
       driver: this.driver,
       cometixVersion: COMETIX_PIN.version,
+      settings: this.settings,
     };
   }
 
@@ -299,6 +314,10 @@ export class AgentHostManager {
       }
       if (event.type === 'host.ready') {
         this.state = 'ready';
+        // S7: normalize `undefined` (field absent — an old Host build) to
+        // `null` too, so `settings` always reads as "known: none" rather
+        // than silently keeping a PRIOR ready event's diagnostics around.
+        this.settings = (event as HostReadyEvent).payload.settings ?? null;
       }
       if (
         event.type === 'host.error' &&

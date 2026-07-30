@@ -19,6 +19,12 @@ interface NormalizerState {
   /** A result event emitted the turn's terminal events. */
   sawResult: boolean;
   turnIndex: number;
+  /**
+   * Round-2 P0: the actual model id read off the first raw SDK `assistant`
+   * message this turn (`message.model`), captured before `ensureAssistant`
+   * builds the envelope so it can ride along on the same `message.started`.
+   */
+  assistantModel: string | null;
 }
 
 function newState(): NormalizerState {
@@ -32,7 +38,17 @@ function newState(): NormalizerState {
     thinkingStarted: false,
     sawResult: false,
     turnIndex: 0,
+    assistantModel: null,
   };
+}
+
+/** Lightweight attachment shape `beginTurn` needs — structurally compatible
+ * with `SessionAttachment` (agent-host/../shared/types/agentHost.ts) minus
+ * `data`; kept local so this module stays free of shared-type imports. */
+export interface TurnAttachmentInput {
+  kind: 'image' | 'text';
+  mediaType: string;
+  name?: string;
 }
 
 function extractTextParts(content: unknown): string {
@@ -129,17 +145,36 @@ export class EventNormalizer {
     this.log = log;
   }
 
-  /** Call at the start of each user send turn. */
-  beginTurn(userText: string, requestId?: string): void {
+  /**
+   * Call at the start of each user send turn.
+   *
+   * `attachments` (round-2 P0): the turn's `SessionAttachment[]`, when any.
+   * Only lightweight metadata (kind/mediaType/name) rides on the echoed
+   * `message.started` — never the raw base64/text bytes, which the Host
+   * already folded into the SDK prompt separately (`buildPromptWithAttachments`).
+   */
+  beginTurn(userText: string, attachments?: TurnAttachmentInput[], requestId?: string): void {
     this.state = newState();
     this.state.turnIndex += 1;
     const messageId = `user-${this.sessionId}-${Date.now()}`;
     const blockId = `${messageId}-text`;
+    const attachmentMeta =
+      attachments && attachments.length > 0
+        ? attachments.map((a) => ({
+            kind: a.kind,
+            mediaType: a.mediaType,
+            ...(a.name ? { name: a.name } : {}),
+          }))
+        : undefined;
     this.emit({
       type: 'message.started',
       sessionId: this.sessionId,
       requestId,
-      payload: { messageId, role: 'user' },
+      payload: {
+        messageId,
+        role: 'user',
+        ...(attachmentMeta ? { attachments: attachmentMeta } : {}),
+      },
     });
     this.emit({
       type: 'message.delta',
@@ -165,7 +200,18 @@ export class EventNormalizer {
         type: 'message.started',
         sessionId: this.sessionId,
         requestId,
-        payload: { messageId: this.state.assistantMessageId, role: 'assistant' },
+        payload: {
+          messageId: this.state.assistantMessageId,
+          role: 'assistant',
+          // Round-2 P0: real model id captured off the raw SDK `assistant`
+          // message (BetaMessage.model), when the 'assistant' case saw one
+          // before this envelope was created. Chosen over message.completed
+          // because this is where the message's role/identity is minted —
+          // the model is known by the same raw SDK message that supplies
+          // role, so attaching it here keeps a single source of truth at
+          // message creation instead of a second late-arriving event.
+          ...(this.state.assistantModel ? { model: this.state.assistantModel } : {}),
+        },
       });
     }
     return this.state.assistantMessageId;
@@ -262,7 +308,7 @@ export class EventNormalizer {
       type?: string;
       subtype?: string;
       session_id?: string;
-      message?: { content?: unknown; role?: string };
+      message?: { content?: unknown; role?: string; model?: string };
       event?: {
         type?: string;
         delta?: { type?: string; text?: string; thinking?: string };
@@ -276,6 +322,14 @@ export class EventNormalizer {
       error?: string;
       usage?: Record<string, unknown>;
       tool_use_result?: unknown;
+      // a1: `system/api_retry` fields, passed through verbatim by the SDK
+      // from cli.js. Raw shape confirmed by the investigation report:
+      // {type:'system',subtype:'api_retry',attempt,max_retries,
+      //  retry_delay_ms,error_status,error,session_id}.
+      attempt?: number;
+      max_retries?: number;
+      retry_delay_ms?: number;
+      error_status?: number | string | null;
     };
 
     const runtimeId = typeof msg.session_id === 'string' ? msg.session_id : undefined;
@@ -292,11 +346,44 @@ export class EventNormalizer {
               requestId,
               payload: { status: 'running' },
             });
+          } else if (msg.subtype === 'api_retry') {
+            // a1: surface the CLI's own transport-retry loop instead of
+            // dropping it — see the `attempt`/`max_retries`/etc. fields above.
+            // Status stays 'running': the turn has not stalled, the SDK is
+            // actively retrying underneath it. claudeRuntime.ts's
+            // PRODUCTIVE_EVENT_TYPES deliberately does NOT include 'system',
+            // so this does not reset the stall watchdog — an endless retry
+            // loop must remain detectable as a stall.
+            this.emit({
+              type: 'session.status',
+              sessionId: this.sessionId,
+              requestId,
+              payload: {
+                status: 'running',
+                retry: {
+                  attempt: typeof msg.attempt === 'number' ? msg.attempt : 0,
+                  maxRetries: typeof msg.max_retries === 'number' ? msg.max_retries : 0,
+                  delayMs: typeof msg.retry_delay_ms === 'number' ? msg.retry_delay_ms : 0,
+                  errorStatus:
+                    typeof msg.error_status === 'string' || typeof msg.error_status === 'number'
+                      ? String(msg.error_status)
+                      : null,
+                  error: typeof msg.error === 'string' ? msg.error : 'unknown',
+                },
+              },
+            });
           }
           break;
         }
         case 'assistant': {
           const content = msg.message?.content;
+          // Round-2 P0: capture the real model id off the raw SDK message
+          // (BetaMessage.model) before anything below lazily creates the
+          // assistant envelope via ensureAssistant(). First one wins per
+          // turn — a turn's model does not change mid-turn.
+          if (!this.state.assistantModel && typeof msg.message?.model === 'string') {
+            this.state.assistantModel = msg.message.model;
+          }
           const text = extractTextParts(content);
           const thinking = extractThinkingParts(content);
           if (thinking) this.emitThinkingDelta(thinking, requestId);

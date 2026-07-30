@@ -1,5 +1,13 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
-import { ChevronRight, FileSearch, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
+import {
+  ChevronRight,
+  FileSearch,
+  FileText,
+  Image as ImageIcon,
+  RefreshCw,
+  ShieldAlert,
+  TriangleAlert,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -18,6 +26,7 @@ import {
 import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
 import { shouldStickToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
+import { resolveResumeModel } from './models';
 import { QuestionCard } from './QuestionCard';
 import { canRespondToPermission, deriveQuestionCardState } from './questionCard';
 import { ReadingColumn } from './ReadingColumn';
@@ -31,7 +40,9 @@ import {
   type ToolRowView,
 } from './toolCard';
 import { deriveTurnStats, formatWorkedForRow } from './turnTiming';
+import { useHostStatus } from './useHostStatus';
 import { useMessageMetadata } from './useMessageMetadata';
+import { useSessionModel } from './useSessionModel';
 import { useTurnTiming } from './useTurnTiming';
 
 /**
@@ -164,7 +175,17 @@ export function MessageTimeline({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
-      <ScrollArea className="min-h-0 flex-1">
+      {/* Round-2 V-b: no sticky/fixed/absolute header exists anywhere above
+          this viewport (audited MessageTimeline/ChatWorkspace/HostStatusBanner/
+          WindowTitleBar — none overlap scrolled content), so the "half a row
+          cut off at the top" screenshot is the stick-to-bottom effect below
+          (`viewport.scrollTop = viewport.scrollHeight` on every resize while
+          `stickToBottomRef` is true): a turn taller than the viewport
+          necessarily scrolls its own top ("Worked for Ns" row) above the
+          fold — expected chat-UI behavior, not an overlap bug. `scrollFade`
+          (same prop already used by combobox.tsx/sheet.tsx/autocomplete.tsx)
+          turns that hard clip into the app's established soft edge fade. */}
+      <ScrollArea className="min-h-0 flex-1" scrollFade>
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 48rem/64rem reading width (T-22 spec §2.13). */}
         <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
@@ -267,6 +288,16 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
   const { resume } = useResumeSession();
+  // Round-2 P0 fix (model directness): this Retry re-runs the same resume
+  // path LeftNav's sidebar open does — without a model it leaves the Host
+  // registry entry's `model` undefined, and every later 'direct' send
+  // silently falls back to the gateway default instead of the user's pick.
+  const { getSessionModel } = useSessionModel();
+  // F9 (round-2 review fix): resolve the SAME way ModelSelect's own initial
+  // value does (explicit selection, else the Host-reported default) — see
+  // LeftNav.tsx's identical fix for why `defaultModelId(null)` alone
+  // hard-pins the catalog default regardless of what the Host reported.
+  const { status: hostStatus } = useHostStatus();
   const Icon = HISTORY_ERROR_ICON[view.code];
   const retryControl = deriveRetryControl({
     retryable: view.retryable,
@@ -279,7 +310,9 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
     setRetrying(true);
     setRetryFailed(false);
     try {
-      const resumed = await resume(sessionId);
+      const resumed = await resume(sessionId, {
+        model: resolveResumeModel(getSessionModel, sessionId, hostStatus.settings?.model),
+      });
       // A successful resume replays history and clears the store entry, which
       // unmounts this notice; anything else needs to say it went nowhere.
       if (!resumed) setRetryFailed(true);
@@ -405,6 +438,33 @@ function MessageBubble({
           'rounded-br-xs border-primary/8 bg-card'
         )}
       >
+        {/* Round-2 P0 (Chat attachments): read-only echo of what this turn sent,
+            metadata only (no bytes, no size — never threaded over the wire).
+            Visual language mirrors ChatComposer's AttachmentChip (icon +
+            truncated name), minus the size label and remove button — this
+            chip cannot be edited after the fact. */}
+        {message.attachments && message.attachments.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {message.attachments.map((attachment, index) => (
+              <span
+                key={`${message.id}-attachment-${index}`}
+                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 text-xs text-foreground"
+              >
+                {attachment.kind === 'image' ? (
+                  <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : (
+                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                )}
+                <span
+                  className="min-w-0 flex-1 truncate"
+                  title={attachment.name ?? attachment.mediaType}
+                >
+                  {attachment.name ?? attachment.mediaType}
+                </span>
+              </span>
+            ))}
+          </div>
+        ) : null}
         {/* user messages only ever carry `text` blocks (chatSessions.ts attaches
             tool_call/tool_result/thinking/permission_request/question exclusively
             to role: 'assistant' messages, live and replayed alike). */}

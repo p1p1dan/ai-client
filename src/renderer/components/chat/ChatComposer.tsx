@@ -8,14 +8,22 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageQueueStore } from '@/stores/messageQueue';
-import { classifyAssistantProgress } from './assistantProgress';
+import {
+  classifyAssistantProgress,
+  countAssistantMessagesWithBlocks,
+  isHostErrorForSend,
+  isSessionCompletedForSend,
+  isSessionFailedForSend,
+  isUserEchoForSend,
+  readSessionFailedError,
+} from './assistantProgress';
 import { largeAttachmentHint, sendTimeoutMs } from './attachmentLimits';
 import {
   type AttachmentDraft,
@@ -44,18 +52,24 @@ import {
   mentionPopupPlacementClass,
   shouldShowStatusLine,
 } from './middleColumnLayout';
-import { defaultModelId } from './models';
+import { resolveResumeModel } from './models';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
   decidePendingResolution,
+  decideRunEntryOutcome,
   decideSendAction,
   deriveActionButtons,
   deriveQueueStripModel,
   isRunningStatus,
+  type RunEntryOutcome,
+  type RunSendOrigin,
+  shouldArmRetryable,
+  shouldPauseQueueOnRejection,
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { decideSendPreamble } from './sendPreamble';
 import { useComposerAttachments } from './useComposerAttachments';
+import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
@@ -98,16 +112,28 @@ function sleep(ms: number): Promise<void> {
 function formatRuntimeEvent(event: { type: string; payload?: unknown }): string {
   const payload =
     event.payload && typeof event.payload === 'object'
-      ? (event.payload as { code?: string; message?: string; error?: string; status?: string })
+      ? (event.payload as {
+          code?: string;
+          message?: string;
+          error?: string;
+          status?: string;
+          // a1: surfaced so the diagnostic string this feeds (lastError's
+          // rawEvents=[...] summary) carries the ONE event that actually
+          // explains a "hung" turn — previously eventNormalizer dropped
+          // api_retry entirely, so this event never reached the log.
+          retry?: { attempt?: number; maxRetries?: number };
+        })
       : null;
   const code = payload?.code;
   const message = payload?.message ?? payload?.error;
   const status = payload?.status;
+  const retry = payload?.retry;
   if (code || message) {
     return `${event.type}(${code ?? ''}${code && message ? ': ' : ''}${message ?? ''})`;
   }
   if (status) {
-    return `${event.type}(${status})`;
+    const retrySuffix = retry ? `,retry ${retry.attempt ?? '?'}/${retry.maxRetries ?? '?'}` : '';
+    return `${event.type}(${status}${retrySuffix})`;
   }
   return event.type;
 }
@@ -221,6 +247,33 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // names the session that is actually running. `handleStop`'s queue-pause
   // must target this, not `activeSessionId`.
   const inFlightSessionIdRef = useRef<string | null>(null);
+  // F6 (round-2 review fix): invalidates an in-flight runSend's session_busy
+  // backoff loop the instant the user clicks Stop — without this, a resend
+  // queued up between two 250ms backoff sleeps could still fire AFTER Stop
+  // already told the Host to abort the turn the user was looking at,
+  // silently starting a turn they had just explicitly cancelled.
+  const sendGenerationRef = useRef(0);
+  // R10 (round-2 iteration-2 review): the 45s-abandon branch below (F2) keeps
+  // the turn running server-side instead of stopping it — a correct answer
+  // can still land seconds later. This tracks WHICH session/lastError pair
+  // that branch armed so a small effect (below) can clear the stale banner
+  // + retryable the moment real progress for that same session arrives,
+  // instead of crowning a correct answer with a red failure banner and an
+  // armed Retry that would double-send.
+  //
+  // S4 (round-2 iteration-3 review): `assistantCursor` (count of
+  // assistant-with-blocks messages observed AT ARM TIME) is the monotonic
+  // marker the clearing effect compares against, instead of reading "does
+  // any assistant message exist" off session-wide state — a resumed
+  // session's REPLAYED history already satisfies that unconditional check,
+  // so ANY unrelated status/message change used to wipe this marker (and the
+  // user's payload with it) the instant it fired.
+  const abandonMarkerRef = useRef<{
+    sessionId: string;
+    error: string;
+    committed: { text: string; drafts: readonly AttachmentDraft[] };
+    assistantCursor: number;
+  } | null>(null);
   // T-07 @ 文件引用：popup 态、搜索结果、选中索引、IME 合成态。delayed 焦点
   // 恢复通过 setTimeout 在 React 提交后再 setSelectionRange。
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -279,6 +332,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // gateway revoked key) without ever flipping session.status to running, and
   // the user needs Stop during the 45s wait, not just when store says busy.
   const canStop = busy || sending;
+  // Round-2 P0: THIS session has no live Host registry entry yet, so a send
+  // right now would take runSend's 'create' preamble (close → sleep(120) →
+  // createSession → wait up to 5s for session.created) instead of the
+  // instant 'direct' path an already-bound session takes. Used only to give
+  // that one-time handshake its own placeholder copy (isCreatingSession
+  // below) — distinct from ordinary "Sending to Agent Host…" follow-ups.
+  const hostBound = useChatSessionsStore((state) =>
+    activeSessionId ? state.hostBoundSessionIds.includes(activeSessionId) : false
+  );
+  const isCreatingSession = sending && !hostBound && activeSession?.runtimeIdentity == null;
   // `cwd` (resolveActiveTarget's derived value, not `activeWorkspace?.path`
   // directly): it already folds "no workspace" and "workspace present but
   // not targetable (demo placeholder's empty path)" into a single null, so
@@ -287,6 +350,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const canSend = Boolean(activeSessionId && cwd && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
+  // R11 (round-2 iteration-2 review): the same Host-reported default the
+  // resume paths (LeftNav/MessageTimeline) already resolve through — so the
+  // live send path and ModelSelect's own display never diverge from what a
+  // resume just pinned onto the Host registry entry.
+  const { status: hostStatus } = useHostStatus();
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
   // T-19 decision 2.1: paste unlocks whenever the textarea does — only
@@ -352,7 +420,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (action === 'blocked') return;
 
     if (action === 'send') {
-      await runSend(trimmed, attachments.drafts, { clearComposerValue: true });
+      await runSend(trimmed, attachments.drafts, { clearComposerValue: true, origin: 'direct' });
       return;
     }
 
@@ -506,14 +574,39 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const handleRetry = async () => {
     if (!canRetry) return;
     setRetryable(null);
-    await runSend(retryText ?? '', retryDrafts);
+    await runSend(retryText ?? '', retryDrafts, { origin: 'retry' });
   };
 
+  // S3 (round-2 iteration-3 review, documentation only): the wiring below —
+  // origin passing, `finalizeOutcome` gating, and the queue-pause call — is
+  // structurally untestable under this project's node-env vitest config
+  // (vitest.config.ts: `environment: 'node'`, `include` only `*.test.ts`; no
+  // `.tsx` component ever renders under the suite). The following invariants
+  // are therefore INSPECTION-VERIFIED, not unit-tested, and must be kept true
+  // by inspection on every future edit to this function:
+  //   1. All three call sites state `origin` explicitly: `handleSend` passes
+  //      `'direct'`, `handleRetry` (above) passes `'retry'`, and
+  //      `useQueueRelease`'s `runEntry` (below) passes `'release'` — the type
+  //      has no default, so a fourth call site cannot silently inherit the
+  //      wrong one.
+  //   2. Every non-success `return` in this function funnels through
+  //      `finalizeOutcome(...)` — never `setRetryable`/`pauseSession`
+  //      directly — so `shouldArmRetryable`/`shouldPauseQueueOnRejection`
+  //      (queueRelease.ts, both unit-tested) are the ONLY authorities for
+  //      those two side effects, and the two are complements of each other.
+  //   3. The success path (`return 'committed'` after the admission check)
+  //      is the one deliberate bypass of `finalizeOutcome` — it clears
+  //      `retryable` instead of arming it, and never pauses the queue.
   const runSend = async (
     trimmed: string,
     drafts: readonly AttachmentDraft[],
-    options: { clearComposerValue?: boolean } = {}
-  ): Promise<'committed' | 'skipped'> => {
+    // R1 (round-2 iteration-2 review): every call site now states its
+    // origin explicitly — no default — so a future fourth call site cannot
+    // silently inherit the wrong rejected-outcome ownership semantics (see
+    // `shouldArmRetryable` in queueRelease.ts).
+    options: { clearComposerValue?: boolean; origin: RunSendOrigin }
+  ): Promise<RunEntryOutcome> => {
+    const { origin } = options;
     // Explicit `cwd` check (independent of canSend): a null cwd is the demo
     // placeholder or a target with no path — creating a session against it
     // would persist a fake cwd into session-index.json and die in spawn on
@@ -524,10 +617,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (inFlightRef.current) return 'skipped';
     inFlightRef.current = true;
     inFlightSessionIdRef.current = activeSessionId;
+    // F6: this attempt's cancellation token — handleStop bumps the shared
+    // ref synchronously; the busy-retry loop below compares against its own
+    // snapshot to notice.
+    sendGenerationRef.current += 1;
+    const myGeneration = sendGenerationRef.current;
 
     const sessionId = activeSessionId;
     const workspacePath = cwd;
-    const model = getSessionModel(sessionId) ?? defaultModelId(null);
+    // R11: same formula as the resume paths (LeftNav/MessageTimeline) and
+    // ModelSelect's own initial value — an explicit per-session choice, else
+    // the Host-reported default, never a hard-pinned catalog default that
+    // can drift from what a just-completed resume pinned onto the Host.
+    const model = resolveResumeModel(getSessionModel, sessionId, hostStatus.settings?.model);
     // T-20: undefined when the user left it on "Default", so the key is dropped
     // from the payload entirely and the model default applies (≠ pinning high).
     const effort = toWireEffort(getSessionEffort(sessionId));
@@ -554,6 +656,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // "Retry 重影" bug — flow aborted without result, `retryable` stayed, a
     // late assistant bubble appeared, Retry showed next to Send wrongly).
     setRetryable(null);
+    // S5 (round-2 iteration-3 review): same commit point — a stale marker
+    // from a PRIOR abandoned turn must not survive into this new attempt.
+    // Without this, a marker armed for turn A could still be sitting there
+    // when turn B (a Retry, or an unrelated later send) commits, and the
+    // clearing effect's later "does this match the marker" identity check
+    // (see below) had nothing to anchor to except A's own committed object —
+    // which `handleRetry` deliberately replays, making a fresh B's outcome
+    // look identical to A's by value.
+    abandonMarkerRef.current = null;
     // A skip warning belongs to the paste that produced it, not to the next
     // turn. Sending is one of the three clear triggers (next attach / Send / x).
     dismissAttachmentNotice();
@@ -585,6 +696,32 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // so this is a no-op for that path and only matters for send/Retry.
     useMessageQueueStore.getState().clearPause(sessionId);
     const committed = { text: trimmed, drafts };
+    // R1 (round-2 iteration-2 review): the single place every non-success
+    // return below now funnels through — `shouldArmRetryable` is the ONLY
+    // place that decides whether this outcome should overwrite `retryable`,
+    // so no individual branch can independently (and inconsistently) get
+    // the origin-ownership call wrong.
+    //
+    // S1 (round-2 iteration-3 review): this is now ALSO the single pause
+    // authority — `shouldPauseQueueOnRejection` is the exact complement of
+    // `shouldArmRetryable`, so every non-success outcome either arms the
+    // round Retry button or pauses the queue, never both, never neither.
+    // Living here (not at one specific call site) means EVERY branch that
+    // returns through `finalizeOutcome` — create/resume timeouts, the
+    // `ensureHost()` catch, a non-busy pre-admission `host.error`, the
+    // busy-retry loop exhausting — gets the pause, closing the
+    // restore→re-release livelock for every handshake-failure class, not
+    // just `session_busy` exhaustion (see `shouldPauseQueueOnRejection`'s
+    // header in queueRelease.ts).
+    const finalizeOutcome = (outcome: RunEntryOutcome): RunEntryOutcome => {
+      if (shouldArmRetryable(outcome, origin)) {
+        setRetryable(committed);
+      }
+      if (shouldPauseQueueOnRejection(outcome, origin)) {
+        useMessageQueueStore.getState().pauseSession(sessionId, 'send-rejected');
+      }
+      return outcome;
+    };
 
     setSending(true);
     setSendBudgetMs(timeoutMs);
@@ -601,8 +738,24 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     let sawSessionCreated = false;
     let sawSessionResumed = false;
     let sawAssistantProgress = false;
+    // F4: the user's own echoed message (only EventNormalizer.beginTurn
+    // emits it, past claudeRuntime.send's busy-gate) — the actual proof this
+    // turn's text was admitted. classifyAssistantProgress deliberately
+    // ignores it (it is not assistant progress), so it needs its own flag.
+    let sawUserEcho = false;
+    // F12: structured retry evidence — only ever set from the ONE field that
+    // actually means "the CLI is mid transport-retry" (session.status's
+    // `retry` payload), never by sniffing formatted event strings for the
+    // substring "retry" (which the watchdogs' own failure copy also
+    // contains — see the removed `seenEvents.some(...includes('retry'))`).
+    let sawNetworkRetry = false;
     let fatalHostError: string | null = null;
     let fatalHostErrorCode: string | null = null;
+    // F3: requestId of the IPC call THIS attempt is currently waiting on —
+    // lets the listener correlate a session-less host.error (send()'s
+    // session_not_found, deliberately emitted before the Host knows which
+    // session) to THIS attempt instead of any other in-flight request.
+    let currentRequestId: string | null = null;
 
     const unsubEvents = window.electronAPI.chat.onRuntimeEvent((event) => {
       seenEvents.push(formatRuntimeEvent(event));
@@ -616,12 +769,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }
 
       if (event.sessionId === sessionId) {
+        // R15: pulled out to a pure, unit-tested helper (assistantProgress.ts)
+        // instead of the inline field-poke this used to be.
+        if (isUserEchoForSend(event, sessionId)) {
+          sawUserEcho = true;
+        }
         if (classifyAssistantProgress(event, assistantMessageIds) === 'assistant') {
           sawAssistantProgress = true;
         }
+        if (
+          event.type === 'session.status' &&
+          event.payload &&
+          typeof event.payload === 'object' &&
+          (event.payload as { retry?: unknown }).retry != null
+        ) {
+          sawNetworkRetry = true;
+        }
       }
 
-      if (event.type === 'host.error') {
+      // F3: scope to THIS send attempt — a background session's host.error
+      // (e.g. a DIFFERENT session's resume hitting session_busy) must never
+      // poison this attempt's fatalHostError.
+      if (
+        event.type === 'host.error' &&
+        isHostErrorForSend(event, { sessionId, requestId: currentRequestId })
+      ) {
         const message =
           event.payload && typeof event.payload === 'object' && 'message' in event.payload
             ? String((event.payload as { message?: string }).message ?? 'host.error')
@@ -633,6 +805,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         fatalHostErrorCode = code || null;
         fatalHostError = code ? `${code}: ${message}` : message;
         useChatSessionsStore.setState({ lastError: fatalHostError });
+      }
+
+      // R3 (round-2 iteration-2 review): fold a `session.failed` for THIS
+      // session into `fatalHostError` directly off the wire event, instead
+      // of `sendAndWait`/`waitUntil` reading the process-global
+      // `useChatSessionsStore.lastError` — `chatSessions.ts`'s own
+      // `session.failed` case sets that field for ANY session, so a
+      // background session's failure used to be able to short-circuit (and
+      // misclassify) THIS attempt's wait.
+      if (isSessionFailedForSend(event, sessionId)) {
+        fatalHostErrorCode = null;
+        fatalHostError = readSessionFailedError(event.payload);
       }
     });
 
@@ -663,12 +847,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       await sleep(120);
 
       sawSessionCreated = false;
-      await window.electronAPI.chat.createSession({
+      const createResult = await window.electronAPI.chat.createSession({
         sessionId,
         workspacePath,
         model,
         ...(effort ? { effort } : {}),
       });
+      currentRequestId = createResult?.requestId ?? null;
 
       const created = await waitUntil(() => sawSessionCreated || Boolean(fatalHostError), 5000);
       if (fatalHostError) return 'fatal';
@@ -685,11 +870,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
     /** Send the turn, then wait for assistant / tool / permission / terminal progress. */
     const sendAndWait = async (): Promise<boolean> => {
-      await window.electronAPI.chat.send({
+      const sendResult = await window.electronAPI.chat.send({
         sessionId,
         text: trimmed,
+        model,
+        ...(effort ? { effort } : {}),
         ...(wireAttachments ? { attachments: wireAttachments } : {}),
       });
+      currentRequestId = sendResult?.requestId ?? null;
       // The payload is with the Host now, so the status line may say so — and
       // the clock restarts, because `timeoutMs` budgets this phase alone.
       // T-19: `value`/attachments were already consumed at runSend's commit
@@ -702,8 +890,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return waitUntil(() => {
         if (fatalHostError) return true;
         if (sawAssistantProgress) return true;
+        // R3 (round-2 iteration-2 review): no `state.lastError` read here —
+        // that field is process-global (chatSessions.ts's `session.failed`
+        // case sets it for ANY session), so a background session's failure
+        // used to be able to short-circuit this wait. `fatalHostError`
+        // above already carries THIS session's own `session.failed` (see
+        // the listener's `isSessionFailedForSend` branch); `session?.status`
+        // below stays scoped the same way.
         const state = useChatSessionsStore.getState();
-        if (state.lastError) return true;
         const session = state.sessions.find((item) => item.id === sessionId);
         if (session?.status === 'failed') return true;
         if (session?.status === 'waiting_permission' || session?.status === 'waiting_question') {
@@ -732,19 +926,25 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       if (preamble.action === 'create') {
         const seq = await runCreateSequence();
         if (seq === 'fatal') {
+          // R2: this turn provably never reached the Host — createSession
+          // itself failed, `sendAndWait` was never called, `sawUserEcho`/
+          // `sawAssistantProgress` are both trivially false. Classify
+          // honestly instead of hardcoding 'committed'.
           unbindHost();
-          setRetryable(committed);
-          return 'committed';
+          return finalizeOutcome(
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+          );
         }
         if (seq === 'timeout') {
           unbindHost();
           setCreateTimeoutError();
-          setRetryable(committed);
-          return 'committed';
+          return finalizeOutcome(
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+          );
         }
       } else if (preamble.action === 'resume') {
         sawSessionResumed = false;
-        await window.electronAPI.chat
+        const resumeResult = await window.electronAPI.chat
           .resumeSession({
             sessionId,
             runtimeIdentity: preamble.runtimeIdentity,
@@ -753,6 +953,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             ...(effort ? { effort } : {}),
           })
           .catch(() => undefined);
+        currentRequestId = resumeResult?.requestId ?? null;
 
         const resumed = await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), 5000);
         if (!resumed || fatalHostError) {
@@ -764,15 +965,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
           const seq = await runCreateSequence();
           if (seq === 'fatal') {
+            // R2: resume->create fallback failed too — still nothing was
+            // ever sent to the Host.
             unbindHost();
-            setRetryable(committed);
-            return 'committed';
+            return finalizeOutcome(
+              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            );
           }
           if (seq === 'timeout') {
             unbindHost();
             setCreateTimeoutError();
-            setRetryable(committed);
-            return 'committed';
+            return finalizeOutcome(
+              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            );
           }
         } else {
           useChatSessionsStore.setState((state) => ({
@@ -788,6 +993,46 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
       let ok = await sendAndWait();
 
+      // Round-2 P0 fix (queue-loss): the Host's `session.running` admission
+      // gate can outlive the renderer-visible `idle`/`completed` status by a
+      // full stream-teardown (see claudeRuntime.ts's `for await` break above,
+      // which shrinks but does not eliminate this window) — a queue-release
+      // send that lands inside it gets flatly refused with `session_busy`.
+      // Bounded retry (not a fallback to a fresh session, unlike
+      // `session_not_found` below): the SAME turn just needs a moment for the
+      // Host to finish tearing down the previous one.
+      let busyRetry = 0;
+      let cancelledDuringBusyBackoff = false;
+      while (fatalHostErrorCode === 'session_busy' && busyRetry < 8) {
+        busyRetry += 1;
+        fatalHostError = null;
+        fatalHostErrorCode = null;
+        useChatSessionsStore.setState({ lastError: null });
+        await sleep(250);
+        // F6: check cancellation after every sleep and before every resend —
+        // Stop may have landed while this attempt was backing off.
+        if (sendGenerationRef.current !== myGeneration) {
+          cancelledDuringBusyBackoff = true;
+          break;
+        }
+        ok = await sendAndWait();
+      }
+
+      if (cancelledDuringBusyBackoff) {
+        // F6: the user explicitly cancelled while this attempt was backing
+        // off between session_busy retries — the Host was never told to
+        // start this queued message's turn (no echo, no progress by
+        // definition of being stuck in the busy loop), so this is a clean
+        // 'rejected'. R1: `finalizeOutcome` decides whether Retry gets armed
+        // — a direct/Retry-origin cancellation still needs it (there is no
+        // queue entry to fall back on); only 'release' relies on
+        // `useQueueRelease` restoring the entry to the head handleStop
+        // already paused.
+        return finalizeOutcome(
+          decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+        );
+      }
+
       if (preamble.action === 'direct' && fatalHostErrorCode === 'session_not_found') {
         // The Host dropped the registry entry behind our back (Host restart,
         // a stale binding, etc.) — fall through ONCE to a fresh session and
@@ -800,22 +1045,40 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         const seq = await runCreateSequence();
         if (seq === 'fatal') {
           unbindHost();
-          setRetryable(committed);
-          return 'committed';
+          return finalizeOutcome(
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+          );
         }
         if (seq === 'timeout') {
           unbindHost();
           setCreateTimeoutError();
-          setRetryable(committed);
-          return 'committed';
+          return finalizeOutcome(
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+          );
         }
         ok = await sendAndWait();
       }
 
-      if (fatalHostError || useChatSessionsStore.getState().lastError) {
+      // R3: no `useChatSessionsStore.getState().lastError` read here — see
+      // the listener's `isSessionFailedForSend` branch above, which already
+      // folded THIS session's own `session.failed` into `fatalHostError`.
+      if (fatalHostError) {
         unbindHost();
-        setRetryable(committed);
-        return 'committed';
+        // Round-2 P0 hardening: a fatal host.error the Host raised BEFORE it
+        // ever admitted this turn (no echo, no beginTurn — e.g. session_busy
+        // surviving the bounded retry above) must not be reported the same
+        // as a turn that started and then failed mid-stream. Only the latter
+        // is safe to call 'committed' — the former needs to go back on the
+        // queue (decision 3.3's "never swallow a message").
+        const outcome = decideRunEntryOutcome({
+          fatalHostError: true,
+          sawAssistantProgress,
+          sawUserEcho,
+        });
+        // S1: the queue pause for a release-origin rejection now lives
+        // entirely inside `finalizeOutcome` (one authority for every branch,
+        // not just this one) — see its comment above.
+        return finalizeOutcome(outcome);
       }
 
       const statusAfter = useChatSessionsStore
@@ -842,32 +1105,98 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }
 
       unbindHost();
+      // F2 (round-2 review fix): the renderer is giving up on this turn with
+      // no terminal event, but that alone is not proof the turn is actually
+      // dead — waitUntil's timeout and the event stream race (see the m14
+      // comment above), so a healthy turn can still land right after this
+      // point. This branch used to fire an implicit `chat.stop` here (a5) to
+      // stop the CLI from burning retries/quota in the background — but the
+      // copy below already hands the user an explicit choice ("Click Retry
+      // to resend, or Stop"), and the code must not press Stop FOR them: a5
+      // could kill a turn that was about to succeed. Background-burn loops
+      // are now caught host-side by the TTFT watchdog's evidence-gated abort
+      // (F1) instead of a renderer-side guess.
       const state = useChatSessionsStore.getState();
       const session = state.sessions.find((item) => item.id === sessionId);
+      // S4/iteration-4 fix: snapshot the assistant-cursor HERE — synchronously,
+      // at the same point as the success check above (line ~1094) — instead of
+      // after the `getHostStatus()` await below. A reply that lands INSIDE
+      // that IPC round-trip must not be baked into the marker's own baseline:
+      // reading the cursor after the await would already include it, so the
+      // clearing effect's `currentCursor > marker.assistantCursor` could never
+      // go true and the stale banner + Retry would be permanent, not transient.
+      const assistantCursor = countAssistantMessagesWithBlocks(state.messages[sessionId] ?? []);
       const hostAfter = await window.electronAPI.chat.getHostStatus().catch((err: unknown) => ({
         error: err instanceof Error ? err.message : String(err),
       }));
 
-      useChatSessionsStore.setState({
-        lastError: [
-          'No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event).',
-          `status=${session?.status ?? 'n/a'}`,
-          `rawEvents=[${seenEvents.join(' ; ') || 'none'}]`,
-          `hostAfter=${JSON.stringify(hostAfter)}`,
-          `sessionId=${sessionId}`,
-          `cwd=${workspacePath}`,
-          'Click Retry to resend, or Stop. Check Claude auth / API in your CLAUDE_CONFIG_DIR settings.json.',
-        ].join(' | '),
+      // a3: this used to end with "Check Claude auth / API in your
+      // CLAUDE_CONFIG_DIR settings.json" unconditionally — wrong on this
+      // machine (OAuth via ~/.claude/.credentials.json, settings.json's `env`
+      // is empty) and misleading in general: it sends the user chasing local
+      // config for what the investigation report traced to a CLI-side
+      // transport retry loop. Branch on what rawEvents actually shows instead
+      // — a1 now makes api_retry visible there, so this is often decisive.
+      // F12: `sawNetworkRetry` (tracked structurally in the listener above,
+      // from `session.status.payload.retry`) replaces a prior substring sniff
+      // over formatted event strings, which could false-positive on the
+      // watchdogs' own failure copy (e.g. "transport-layer retry loop") that
+      // also contains the word "retry".
+      const hint = sawNetworkRetry
+        ? 'rawEvents shows a network retry loop — likely a transient upstream connection issue; Retry usually recovers once it stabilizes.'
+        : "no data reached the Host at all — check the Host log's [cli-stderr] lines (now forwarded) for a spawn or connection failure.";
+
+      const abandonError = [
+        'No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event).',
+        `status=${session?.status ?? 'n/a'}`,
+        `rawEvents=[${seenEvents.join(' ; ') || 'none'}]`,
+        `hostAfter=${JSON.stringify(hostAfter)}`,
+        `sessionId=${sessionId}`,
+        `cwd=${workspacePath}`,
+        `Click Retry to resend, or Stop — ${hint}`,
+      ].join(' | ');
+      useChatSessionsStore.setState({ lastError: abandonError });
+      // R2: this is the "post-timeout with zero echo/progress" exit —
+      // classify honestly instead of hardcoding 'committed'. `sawUserEcho`
+      // true still means the Host DID admit the turn (F2's whole premise:
+      // it keeps running server-side), so that case stays 'committed'; a
+      // turn that never even echoed is safe (and necessary) to put back on
+      // the queue.
+      const timeoutOutcome = decideRunEntryOutcome({
+        fatalHostError: true,
+        sawAssistantProgress,
+        sawUserEcho,
       });
-      setRetryable(committed);
-      return 'committed';
+      // R10: only an admitted-but-still-running turn (F2 deliberately does
+      // not stop it) can still land a real answer later — arm the marker so
+      // the effect below can clear this stale banner + retryable once that
+      // happens.
+      if (timeoutOutcome === 'committed') {
+        // S4: `assistantCursor` is the fresh-off-the-store snapshot taken
+        // above (not the `activeMessages` render closure, which may be
+        // stale/for a different session by the time this async branch runs,
+        // and not re-read here — see the comment at its capture site for why
+        // it must predate the `getHostStatus()` await) — the clearing effect
+        // only fires once THIS count advances.
+        abandonMarkerRef.current = {
+          sessionId,
+          error: abandonError,
+          committed,
+          assistantCursor,
+        };
+      }
+      return finalizeOutcome(timeoutOutcome);
     } catch (err) {
       unbindHost();
       useChatSessionsStore.setState({
         lastError: err instanceof Error ? err.message : String(err),
       });
-      setRetryable(committed);
-      return 'committed';
+      // R2: an exception here (e.g. `ensureHost()` rejecting) is, in every
+      // realistic case, thrown before `sendAndWait` ever ran — classify via
+      // the same evidence gate instead of hardcoding 'committed'.
+      return finalizeOutcome(
+        decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+      );
     } finally {
       window.clearInterval(ticker);
       setElapsedSeconds(0);
@@ -889,8 +1218,75 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     sending,
     isInFlight: () => inFlightRef.current,
     status: activeSession?.status ?? 'idle',
-    runEntry: (entry) => runSend(entry.text, entry.attachments),
+    runEntry: (entry) => runSend(entry.text, entry.attachments, { origin: 'release' }),
   });
+
+  // R10 (round-2 iteration-2 review): the 45s-abandon branch above armed
+  // `abandonMarkerRef` for a turn F2 deliberately left running server-side.
+  // Once THIS session shows real NEW progress, clear the stale banner +
+  // retryable it armed, so a correct late answer is not crowned with a red
+  // failure banner and a Retry that would double-send.
+  //
+  // S4 (round-2 iteration-3 review): "real NEW progress" — not just "an
+  // assistant message exists". A resumed session's REPLAYED history already
+  // satisfies the latter unconditionally, so the old check fired on the
+  // FIRST unrelated status/message change (a user Stop, a session switch, a
+  // later unrelated session.failed) and wiped the banner + the armed Retry
+  // snapshot — plus the user's payload — even though the abandoned turn
+  // itself produced nothing. `assistantCursor` (recorded at arm time, see
+  // above) makes the assistant-message branch fire only once the count
+  // ADVANCES past that snapshot. `waiting_permission`/`waiting_question`
+  // stay as unconditional signals — those statuses are only ever set by a
+  // LIVE host event (never by history replay), so they cannot be spuriously
+  // "already true" the way accumulated history can.
+  const clearAbandonMarkerIfMatch = useCallback(
+    (marker: NonNullable<typeof abandonMarkerRef.current>) => {
+      abandonMarkerRef.current = null;
+      useChatSessionsStore.setState((state) =>
+        state.lastError === marker.error ? { lastError: null } : {}
+      );
+      // S5: identity-preserving via the marker's OWN `committed` object
+      // reference (`runSend` builds a fresh `{ text, drafts }` literal every
+      // call — see its own commit point), not text/drafts VALUE equality.
+      // `handleRetry` replays the marker's own text/drafts snapshot, so a
+      // retry attempt's fresh `committed` object always has matching text
+      // and even the SAME `drafts` array reference — value equality let a
+      // genuinely NEW failure's `retryable` snapshot get cleared by a stale
+      // marker from the turn that preceded it.
+      setRetryable((current) => (current === marker.committed ? null : current));
+    },
+    []
+  );
+
+  useEffect(() => {
+    const marker = abandonMarkerRef.current;
+    if (!marker || marker.sessionId !== activeSessionId) return;
+    const currentCursor = countAssistantMessagesWithBlocks(activeMessages ?? []);
+    const landed =
+      currentCursor > marker.assistantCursor ||
+      activeSession?.status === 'waiting_permission' ||
+      activeSession?.status === 'waiting_question';
+    if (!landed) return;
+    clearAbandonMarkerIfMatch(marker);
+  }, [activeSessionId, activeSession?.status, activeMessages, clearAbandonMarkerIfMatch]);
+
+  // S4: the OTHER legitimate clearing signal — a genuine `session.completed`
+  // for the armed session (a turn that lands with zero NEW assistant blocks,
+  // e.g. a completion with only non-block side effects). `chatSessions.ts`
+  // collapses BOTH `session.completed` and `session.stopped` to the same
+  // `'idle'` status, so the effect above (derived store state only) cannot
+  // tell a real completion apart from a user Stop — this listens to the raw
+  // wire event directly instead. Mount-once: every identifier it closes over
+  // (`abandonMarkerRef`, `clearAbandonMarkerIfMatch`, `window.electronAPI`)
+  // is stable, so this never needs to resubscribe.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event) => {
+      const marker = abandonMarkerRef.current;
+      if (!marker || !isSessionCompletedForSend(event, marker.sessionId)) return;
+      clearAbandonMarkerIfMatch(marker);
+    });
+    return unsubscribe;
+  }, [clearAbandonMarkerIfMatch]);
 
   // T-19 fix review (R5): the strip's failed-row Retry/Discard wiring
   // (`retryQueueHead` / `handleStripRetry`) is removed along with batch 3's
@@ -950,10 +1346,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (pauseTarget) {
       useMessageQueueStore.getState().pauseSession(pauseTarget);
     }
+    // F6: invalidate any in-flight runSend's session_busy backoff loop so a
+    // queued resend cannot fire after this explicit Stop already told the
+    // Host to abort the turn the user was looking at.
+    sendGenerationRef.current += 1;
     void stopActiveSession();
   };
 
-  const hasStatusError = Boolean(lastError || !activeSessionId || !activeWorkspace);
+  // F14 minor m2: must mirror the error banner's condition below
+  // (`lastError || !activeSessionId || !activeWorkspace || !cwd`) — without
+  // `!cwd` here, a workspace that is "present" but not targetable (demo
+  // placeholder / empty path) shows the banner while `statusTone` stays the
+  // neutral color and `largeHint` can still win over `statusHint`.
+  const hasStatusError = Boolean(lastError || !activeSessionId || !activeWorkspace || !cwd);
   const readingLine =
     attachments.reading > 0
       ? `Reading ${attachments.reading} file${attachments.reading > 1 ? 's' : ''}…`
@@ -968,6 +1373,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           budgetMs: sendBudgetMs,
           attachmentCount: attachments.drafts.length,
           attachmentBytes: attachments.totalBytes,
+          // a1: `sessions` (source of `activeSession`) already re-renders on
+          // every session.status event, retry included — no extra selector.
+          retry: activeSession?.retry
+            ? {
+                attempt: activeSession.retry.attempt,
+                maxRetries: activeSession.retry.maxRetries,
+              }
+            : null,
         })
       : (!hasStatusError && largeHint) || statusHint);
   const statusTone =
@@ -1119,6 +1532,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         attachmentCount: attachments.drafts.length,
         pendingQuestion: pendingQuestionHere,
         queuedCount,
+        isCreatingSession,
       })}
       className={composerTextareaClass(mode)}
       // T-19 decision 2.1: only "nowhere to put this draft" still locks the
@@ -1170,7 +1584,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // mode).
   const modelEffortControls = activeSessionId ? (
     <>
-      <ModelSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
+      <ModelSelect
+        sessionId={activeSessionId}
+        hostDefaultModel={hostStatus.settings?.model}
+        disabled={disabled || busy || sending}
+      />
       {/* T-20: effort sits next to the model — both are per-session
             generation settings applied at the next createSession. */}
       <EffortSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
@@ -1261,7 +1679,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // div in ChatWorkspace (`middleColumnHostClass`) owns the padding and the
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
-      {(lastError || !activeSessionId || !activeWorkspace) && (
+      {/* Round-2 P0 fix: `!cwd` must gate this banner too — a workspace can be
+            "present" but not targetable (demo placeholder / empty path), and
+            without this the informative `statusHint` text computed for that
+            state (below) never surfaces; Send is silently disabled with no
+            visible reason. */}
+      {(lastError || !activeSessionId || !activeWorkspace || !cwd) && (
         <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive whitespace-pre-wrap break-all">
           {statusHint}
         </div>

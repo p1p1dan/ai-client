@@ -350,6 +350,10 @@ async function handleCommand(raw: unknown): Promise<void> {
           attachments,
           // Validated in claudeRuntime (normalizeEffort) — unknown values drop.
           effort: cmd.payload?.effort,
+          // Round-2 P0: per-turn model override, mirrors session.create/resume
+          // above. Purely additive on the wire — falls back to the session
+          // default in claudeRuntime.send when omitted.
+          model: typeof cmd.payload?.model === 'string' ? cmd.payload.model : undefined,
           requestId: cmd.requestId,
         })
         .catch((err) => {

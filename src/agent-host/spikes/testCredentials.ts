@@ -24,8 +24,20 @@ export const TEST_BASE_URL = process.env.AICLIENT_TEST_BASE_URL ?? 'https://cch-
  * (already honored by claudeSettings.ts) pointed at a temp dir; this also
  * isolates cli.js runtime state (history JSONL etc.) from the local machine.
  *
- * The temp dir is also seeded with .claude.json onboarding/trust state —
- * a fresh config dir otherwise makes cli.js hang on first-run onboarding.
+ * The temp dir is also seeded with .claude.json onboarding/trust state.
+ *
+ * CORRECTED (2026-07-30, new-session-hang investigation): the original claim
+ * here — "a fresh config dir otherwise makes cli.js hang on first-run
+ * onboarding" — does not hold on cometix 2.1.212. A live probe against a
+ * virgin CLAUDE_CONFIG_DIR (no `hasCompletedOnboarding`) returned a fast
+ * `result is_error=true` in ~1.7s, not a hang. It also conflated two
+ * different things: a fresh CONFIG DIR (this function's actual scope) versus
+ * a fresh CWD/workspace (a previously-untrusted repo) — the latter is
+ * unrelated to onboarding state and does not hang either; the real hang the
+ * investigation chased down was a CLI transport-layer `api_retry` loop,
+ * unrelated to onboarding/trust entirely. The seeding below is still worth
+ * keeping — it avoids that fast onboarding error so smokes get a clean run —
+ * it just does not prevent a hang that was never actually happening here.
  */
 export function testCredentialEnv(workspacePath?: string): Record<string, string> {
   if (process.env.AICLIENT_SMOKE_USE_LOCAL_SETTINGS === '1') return {};

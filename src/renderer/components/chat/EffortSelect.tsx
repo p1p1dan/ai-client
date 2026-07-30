@@ -46,9 +46,15 @@ export function EffortSelect({ sessionId, disabled }: EffortSelectProps) {
 
   return (
     <Select value={selected} onValueChange={handleChange} disabled={disabled}>
+      {/* Round-2 visual fix: same min-h-8/sm:min-h-7 leak as ModelSelect —
+          reassert min-h-6/sm:min-h-6 to hit the real 24px h-6 token.
+          V-a: min-w bumped 5.5rem -> 6.5rem (min-w-26, token-scale, matches
+          ModelSelect and `w-70` elsewhere in this file) — "Default" (the
+          widest label incl. the sentinel) was clipping to "Defau…" at the
+          old floor. */}
       <SelectTrigger
         size="sm"
-        className="h-6 w-auto min-w-[5.5rem] gap-1 px-2 text-xs"
+        className="h-6 min-h-6 sm:min-h-6 w-auto min-w-26 gap-1 px-2 text-xs"
         title="Reasoning effort"
       >
         <SelectValue>{effortLabel(selected)}</SelectValue>

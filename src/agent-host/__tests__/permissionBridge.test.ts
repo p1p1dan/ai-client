@@ -480,6 +480,80 @@ describe('PermissionBridge.rejectSession / rejectAll', () => {
   });
 });
 
+describe('PermissionBridge — peer pending (S8, round-2 iteration-3 review)', () => {
+  it('emits waiting_question (not running) when the sibling bridge still holds a pending item for this session', async () => {
+    const events: Record<string, unknown>[] = [];
+    const bridge = new PermissionBridge(
+      (e) => events.push(e),
+      () => undefined,
+      (sessionId) => sessionId === 'sess-peer-1' // sibling still pending on this session
+    );
+    const controller = new AbortController();
+    const promise = bridge.request({
+      sessionId: 'sess-peer-1',
+      toolName: 'Bash',
+      input: {},
+      signal: controller.signal,
+      toolUseId: 'tool-peer-1',
+    });
+
+    bridge.respond({ sessionId: 'sess-peer-1', permissionId: 'tool-peer-1', allow: true });
+    await promise;
+
+    const statusEvents = events.filter((e) => e.type === 'session.status');
+    expect(statusEvents.at(-1)).toMatchObject({ payload: { status: 'waiting_question' } });
+    expect(statusEvents.some((e) => (e.payload as { status?: string }).status === 'running')).toBe(
+      false
+    );
+  });
+
+  it('emits running when the sibling bridge has nothing pending for this session', async () => {
+    const events: Record<string, unknown>[] = [];
+    const bridge = new PermissionBridge(
+      (e) => events.push(e),
+      () => undefined,
+      () => false
+    );
+    const controller = new AbortController();
+    const promise = bridge.request({
+      sessionId: 'sess-peer-2',
+      toolName: 'Bash',
+      input: {},
+      signal: controller.signal,
+      toolUseId: 'tool-peer-2',
+    });
+
+    bridge.respond({ sessionId: 'sess-peer-2', permissionId: 'tool-peer-2', allow: true });
+    await promise;
+
+    const statusEvents = events.filter((e) => e.type === 'session.status');
+    expect(statusEvents.at(-1)).toMatchObject({ payload: { status: 'running' } });
+  });
+
+  it('a peer pending on a DIFFERENT session must not suppress running here', async () => {
+    const events: Record<string, unknown>[] = [];
+    const bridge = new PermissionBridge(
+      (e) => events.push(e),
+      () => undefined,
+      (sessionId) => sessionId === 'sess-other' // pending, but on a different session
+    );
+    const controller = new AbortController();
+    const promise = bridge.request({
+      sessionId: 'sess-peer-3',
+      toolName: 'Bash',
+      input: {},
+      signal: controller.signal,
+      toolUseId: 'tool-peer-3',
+    });
+
+    bridge.respond({ sessionId: 'sess-peer-3', permissionId: 'tool-peer-3', allow: true });
+    await promise;
+
+    const statusEvents = events.filter((e) => e.type === 'session.status');
+    expect(statusEvents.at(-1)).toMatchObject({ payload: { status: 'running' } });
+  });
+});
+
 describe('PermissionBridge.createCanUseTool', () => {
   it('forwards toolName/input/signal/toolUseID and falls back to title for description', async () => {
     const { events, bridge } = createBridge();

@@ -132,6 +132,119 @@ export function decideQueueRelease(input: DecideQueueReleaseInput): QueueRelease
   return { type: 'release', entryId: input.entries[0].id };
 }
 
+// ---- decideRunEntryOutcome (T-19/round-2 P0 hardening) ----
+
+/**
+ * What `runSend`/`useQueueRelease` report for one turn attempt.
+ * `'committed'`: the Host admitted the turn (it may still go on to fail
+ * mid-stream) — never requeue, the entry has already been spent.
+ * `'skipped'`: a pre-commit guard failed before anything was sent — requeue.
+ * `'rejected'`: the Host flatly refused to admit the turn (e.g. `session_busy`
+ * fired before `normalizer.beginTurn`, so nothing was echoed and no turn
+ * started) — requeue, exactly like `'skipped'`.
+ */
+export type RunEntryOutcome = 'committed' | 'skipped' | 'rejected';
+
+export interface DecideRunEntryOutcomeInput {
+  /** A fatal `host.error` landed for this send attempt. */
+  fatalHostError: boolean;
+  /** Any assistant/tool/permission/terminal progress observed on the wire. */
+  sawAssistantProgress: boolean;
+  /**
+   * F4 (round-2 review fix): `message.started{role:'user'}` observed for
+   * THIS session — only `EventNormalizer.beginTurn` (called from inside
+   * `claudeRuntime.send`, past the `session.running` admission gate) ever
+   * emits this. This is the only admission evidence — see below for why
+   * `session.created`/`session.resumed` used to (wrongly) count too.
+   */
+  sawUserEcho: boolean;
+}
+
+/**
+ * Classifies a post-commit `runSend` failure as `'committed'` (the Host DID
+ * start the turn — a duplicate resend would be wrong) or `'rejected'` (the
+ * Host never accepted it — safe, and necessary, to put back on the queue).
+ * Pure so the queue-loss root cause (every post-commit failure used to report
+ * `'committed'` unconditionally) is assertable without a live Host.
+ *
+ * F4 (round-2 review fix, M4/B1 queue-loss finding): `sawSessionCreated`/
+ * `sawSessionResumed` used to also count as admission evidence — wrong,
+ * because create/resume happen entirely BEFORE `claudeRuntime.send`'s own
+ * `session.running` busy-gate and `normalizer.beginTurn`. A `session_busy`
+ * fatal error landing right after a successful create/resume handshake (the
+ * realistic path: 8 bounded busy retries all failing with zero echo) was
+ * being reported `'committed'`, silently dropping the queued message — the
+ * exact bug class this whole batch exists to fix. The only two signals that
+ * actually prove the Host admitted this turn's TEXT are the user echo
+ * (`sawUserEcho`) and any subsequent assistant/tool/terminal progress.
+ */
+export function decideRunEntryOutcome(input: DecideRunEntryOutcomeInput): RunEntryOutcome {
+  if (!input.fatalHostError) return 'committed';
+  if (input.sawAssistantProgress || input.sawUserEcho) {
+    return 'committed';
+  }
+  return 'rejected';
+}
+
+// ---- runSend origin ownership (R1/R2, round-2 iteration-2 review) ----
+
+/**
+ * Which of `runSend`'s three call sites started this attempt — a live Send
+ * click, the round Retry button, or the queue's own release effect. The
+ * ONLY thing this changes is who owns recovering a `'rejected'` outcome:
+ * `'release'` has a queue entry to fall back on (`useQueueRelease.ts`
+ * restores it to the head); `'direct'`/`'retry'` do not, so THEY must arm
+ * the round Retry affordance themselves or the user's text/attachments are
+ * gone with no way back.
+ */
+export type RunSendOrigin = 'direct' | 'retry' | 'release';
+
+/**
+ * R1: whether a `runSend` attempt's outcome should arm the round Retry
+ * button (`ChatComposer`'s local `retryable` state). `'rejected'` +
+ * `origin: 'release'` is the ONLY combination that must NOT — the queue
+ * itself is the recovery path there, and arming Retry too would let two
+ * independent, unaware-of-each-other live-send paths (queue auto-release
+ * AND a user click) send the identical text twice. Every other combination
+ * — any `'committed'` failure (regardless of origin — the entry, if any,
+ * has already been spent), or `'rejected'` from a direct send / Retry click
+ * (no queue entry exists to fall back on) — must arm it.
+ */
+export function shouldArmRetryable(outcome: RunEntryOutcome, origin: RunSendOrigin): boolean {
+  return !(outcome === 'rejected' && origin === 'release');
+}
+
+/**
+ * S1 (round-2 iteration-3 review): whether a `'rejected'` outcome from the
+ * release path must pause the queue. Generalized from the round-2 version
+ * (which only fired for `session_busy` retry exhaustion): EVERY evidence-free
+ * release-origin rejection — a create timeout, a resume→create fallback
+ * timeout, an `ensureHost()` rejection (the "Node 24 missing" catch path), a
+ * non-busy pre-admission `host.error` (`not_implemented`, a post-fallback
+ * `session_not_found`), or a `session.failed` landing mid busy-retry loop —
+ * produces the IDENTICAL restore-then-re-release shape in
+ * `useQueueRelease.ts`: the entry goes back on the queue and
+ * `decideQueueRelease` has nothing (no pause, no counter) stopping it from
+ * releasing the SAME entry again on the very next render — sometimes with no
+ * delay at all (an `ensureHost()` rejection fires before any `sleep`).
+ * Scoping the round-2 pause to one fatal-error code left every OTHER
+ * handshake-failure class free to spin that loop.
+ *
+ * `origin` alone is sufficient, with no error-code narrowing: exactly
+ * `!shouldArmRetryable(outcome, origin)` — the queue pause and the round
+ * Retry armament are two mutually exclusive, jointly exhaustive recovery
+ * paths for the same non-success outcome, never both, never neither.
+ * `'direct'`/`'retry'` have no queue entry to loop against (nothing for
+ * `useQueueRelease` to restore), so only `'release'` can ever produce the
+ * loop this closes.
+ */
+export function shouldPauseQueueOnRejection(
+  outcome: RunEntryOutcome,
+  origin: RunSendOrigin
+): boolean {
+  return !shouldArmRetryable(outcome, origin);
+}
+
 // ---- decidePendingResolution (decision 4) ----
 
 export interface DecidePendingResolutionInput {
@@ -252,6 +365,20 @@ export interface DeriveQueueStripModelInput {
   hasPendingPermissionHere: boolean;
 }
 
+/**
+ * S2 (round-2 iteration-3 review): the paused caption, distinguishing an
+ * AUTO pause (`'send-rejected'` — the Host is not accepting this turn, or
+ * the send failed before admission) from a user-initiated Stop (`'stopped'`)
+ * — short and factual, so the user knows whether Resume is "continue where
+ * you left off" or "try again, the Host may still be refusing it". Resume
+ * itself is unchanged either way (`handleQueueResume`/`clearPause`).
+ */
+function pausedLabelFor(reason: QueuePauseReason, waitingCount: number): string {
+  return reason === 'send-rejected'
+    ? `Queue paused — Host isn't accepting this turn (${waitingCount} waiting)`
+    : `Queue paused — ${waitingCount} waiting`;
+}
+
 /** Pure view model for `QueuedMessageStrip.tsx` (batch 3) — the component renders this and decides nothing itself. */
 export function deriveQueueStripModel(input: DeriveQueueStripModelInput): QueueStripModel {
   if (input.entries.length === 0) {
@@ -267,7 +394,7 @@ export function deriveQueueStripModel(input: DeriveQueueStripModelInput): QueueS
       failed: entry.failure != null,
       ...(entry.failure ? { failureMessage: entry.failure.message } : {}),
     })),
-    pausedLabel: input.paused != null ? `Queue paused — ${input.entries.length} waiting` : null,
+    pausedLabel: input.paused != null ? pausedLabelFor(input.paused, input.entries.length) : null,
     permissionHint: input.hasPendingPermissionHere ? QUEUE_PERMISSION_HINT : null,
   };
 }

@@ -40,8 +40,18 @@ export interface QueuedMessage {
   failure?: { message: string };
 }
 
-/** Only reason a queue can be paused today: the user clicked Stop (decision 3.4). */
-export type QueuePauseReason = 'stopped';
+/**
+ * Reasons a queue can be paused: the user clicked Stop (decision 3.4), or
+ * (S1, round-2 iteration-3 review; generalized from R4's `session_busy`-only
+ * version) the release path's `runSend` attempt came back `'rejected'` — the
+ * Host flatly refused to admit the head entry (busy-retry exhaustion, a
+ * create/resume timeout, an `ensureHost()` rejection, a non-busy
+ * pre-admission `host.error`, or a `session.failed` landing mid busy-loop —
+ * every evidence-free handshake-failure class, not one specific error code).
+ * Pausing here stops `decideQueueRelease` from re-firing the SAME entry
+ * every render forever against a Host that keeps refusing it.
+ */
+export type QueuePauseReason = 'stopped' | 'send-rejected';
 
 export interface SessionQueue {
   entries: readonly QueuedMessage[];
@@ -176,8 +186,10 @@ export function takeHead(
 /**
  * Put an entry back at the front of its own session's queue (`entry.sessionId`
  * — no separate sessionId argument, so a caller can never restore into the
- * wrong bucket). Used when `runSend` reports `'skipped'` after `takeHead`
- * already popped the entry (decision 3.3's "never swallow a message" guarantee).
+ * wrong bucket). Used when `runSend` reports `'skipped'` or `'rejected'`
+ * (round-2 P0: the Host flatly refused to admit the turn, e.g. `session_busy`)
+ * after `takeHead` already popped the entry, or when `runEntry` rejects
+ * outright — decision 3.3's "never swallow a message" guarantee.
  * Works even when the bucket does not exist yet (a prune could have raced it away).
  */
 export function restoreHead(state: MessageQueueState, entry: QueuedMessage): MessageQueueState {
