@@ -1763,6 +1763,11 @@ export const zhTranslations: Record<string, string> = {
   'Temp workspace created — pick it from the folder list': '临时工作区已创建——请在文件夹列表中选择',
   'Temp workspace created': '临时工作区已创建',
   'Failed to create temp workspace': '创建临时工作区失败',
+
+  // T-28: Composer round action button (D23) — aria-label/title (batch 3).
+  'Send message': '发送消息',
+  'Stop the running turn': '停止当前回合',
+  'Retry last message': '重试上一条消息',
 };
 
 export function normalizeLocale(input?: string): Locale {

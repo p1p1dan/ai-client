@@ -1,11 +1,15 @@
 import { useI18n } from '@/i18n';
 import { isTargetableWorkspace } from './composerTarget';
+import type { MiddleColumnMode } from './middleColumnLayout';
+import { shouldRenderTargetRow, targetRowClass, targetRowSlots } from './middleColumnLayout';
 import { RunLocationIndicator } from './RunLocationIndicator';
 import { TargetBranchSelect } from './TargetBranchSelect';
 import { TargetFolderSelect } from './TargetFolderSelect';
 import { useComposerTarget } from './useComposerTarget';
 
 interface ComposerTargetBarProps {
+  /** T-28: empty mode keeps the folder slot; session mode drops it (§3.6). */
+  mode: MiddleColumnMode;
   /** ChatComposer's `sending` — an in-flight send blocks target changes too. */
   sending: boolean;
   disabled?: boolean;
@@ -17,8 +21,19 @@ interface ComposerTargetBarProps {
  * T-27: the target bar — folder / branch / run location rows, plus the
  * folder dropdown's footer actions (Use Existing…/Clone…/Add Remote…/New
  * Folder) and the branch dropdown's New worktree… wiring (batch 3).
+ *
+ * T-28: `mode` picks the row's position (above the card in empty mode, below
+ * it in session mode — ChatComposer renders the same instance in one spot or
+ * the other, never both) and which slots show. The branch dropdown keeps its
+ * full New worktree… wiring in both modes (D23 decision 6) — only the folder
+ * slot is mode-gated.
  */
-export function ComposerTargetBar({ sending, disabled, onAddRepository }: ComposerTargetBarProps) {
+export function ComposerTargetBar({
+  mode,
+  sending,
+  disabled,
+  onAddRepository,
+}: ComposerTargetBarProps) {
   const { t } = useI18n();
   const {
     target,
@@ -35,28 +50,40 @@ export function ComposerTargetBar({ sending, disabled, onAddRepository }: Compos
     worktreeProjectName,
   } = useComposerTarget({ sending, disabled });
 
-  // No assigned target (fresh demo tree with an empty path) — no fake controls.
-  if (!target.workspace || !isTargetableWorkspace(target.workspace)) {
+  const hasTargetableWorkspace = Boolean(
+    target.workspace && isTargetableWorkspace(target.workspace)
+  );
+  if (
+    !shouldRenderTargetRow({
+      mode,
+      hasTargetableWorkspace,
+      showBranchSelect,
+      hasRunLocation: Boolean(runLocation),
+    })
+  ) {
     return null;
   }
 
+  const slots = targetRowSlots(mode);
   const blockedReason = blocked
     ? t('Session is running — stop it before changing the target')
     : undefined;
 
   return (
-    <div className="mb-2 flex h-6 items-center gap-1">
-      <TargetFolderSelect
-        folderMenu={folderMenu}
-        activeWorkspaceId={target.workspace.id}
-        currentLabel={target.project?.name ?? target.workspace.name}
-        disabled={blocked}
-        disabledReason={blockedReason}
-        onSelect={selectTarget}
-        onAddRepository={onAddRepository}
-        onCreateTempTarget={createTempTarget}
-      />
-      {showBranchSelect && (
+    <div className={targetRowClass(mode)}>
+      {slots.folder && target.workspace && (
+        <TargetFolderSelect
+          folderMenu={folderMenu}
+          activeWorkspaceId={target.workspace.id}
+          currentLabel={target.project?.name ?? target.workspace.name}
+          disabled={blocked}
+          disabledReason={blockedReason}
+          onSelect={selectTarget}
+          onAddRepository={onAddRepository}
+          onCreateTempTarget={createTempTarget}
+        />
+      )}
+      {slots.branch && showBranchSelect && target.workspace && (
         <TargetBranchSelect
           branchMenu={branchMenu}
           activeWorkspaceId={target.workspace.id}
@@ -69,7 +96,9 @@ export function ComposerTargetBar({ sending, disabled, onAddRepository }: Compos
           awaitWorkspaceAtPath={awaitWorkspaceAtPath}
         />
       )}
-      {runLocation && <RunLocationIndicator text={t(runLocation.text)} tone={runLocation.tone} />}
+      {slots.runLocation && runLocation && (
+        <RunLocationIndicator text={t(runLocation.text)} tone={runLocation.tone} />
+      )}
     </div>
   );
 }

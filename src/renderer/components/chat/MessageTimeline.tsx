@@ -17,6 +17,7 @@ import {
   selectHistoryError,
 } from './historyError';
 import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
+import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { ReadingColumn } from './ReadingColumn';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { deriveThinkingCard, isTurnActive } from './thinkingCard';
@@ -72,17 +73,10 @@ export function MessageTimeline({ sessionId, status, thinkingEnabled }: MessageT
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-9 items-center gap-2 border-b px-3">
-        <span className="text-xs text-muted-foreground">Session status</span>
-        <Badge variant="outline" size="sm" className="capitalize">
-          {status.replace(/_/g, ' ')}
-        </Badge>
-      </div>
-
       <ScrollArea className="min-h-0 flex-1">
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 48rem/64rem reading width (T-22 spec §2.13). */}
-        <div className="p-3">
+        <div className={TIMELINE_PADDING_CLASS}>
           <ReadingColumn className="space-y-3">
             {historyNotice.kind === 'error' && (
               // Keyed by session: detail/retry state must not follow the user
