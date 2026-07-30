@@ -18,6 +18,7 @@
       ④ 同文件 `:746` 的「返回 VSCode 使用」按钮（与③同在 `mode === 'vscode-extension'` 分支，**初版漏了**）；
       ⑤ `src/renderer/components/worktree/MergeEditor.tsx:751` 冲突文件 Tab 条 —— 渲染 `conflict.file.split('/').pop()`，`README.md` 会显示成 `readme.md`；
       ⑥ `src/renderer/components/git/AddRepositoryDialog.tsx:1087` SSH 根目录快捷 chip —— 渲染远端路径 `{root}`，Linux/macOS 路径大小写敏感，`/home/Dan/Projects` 会显示成 `/home/dan/projects`（另加了 `font-mono`）。
+    - **✅ 2026-07-30 结项（升级为 D25）**：风险坐实且超出原范围——观感审计（`docs/design/polish-audit-20260730.md`）证实全等宽使层级三件套塌维（等宽回退链字重档缺失 / letter-spacing 全仓仅 1 用 / 侧栏字符量 -23%），用户拍板改**分域字体**（UI 比例 + 等宽专供代码/路径/分支），落地归 **T-30**。本条关闭。
       另 4 处纯英文 i18n 文案（AI Polish / Polish with AI / Generate with AI / URL Mode）小写化可接受，不豁免。
       **初版「已确认无任何 Button 渲染动态标识符」的结论是错的**（⑤⑥即反例）。重新用「按 `{}` 深度切开 Button 开标签、只看 children 表达式」的方式穷尽扫描全仓 `.tsx`，除⑤⑥外再无动态标识符（`ClaudeRuntimeBanner.tsx:93` 的 `v{LAST_NODE_CLAUDE_VERSION}` = `2.1.112` 纯数字，`DiffReviewModal.tsx:1241` 的 `(${allComments.length})` 同理，均为 no-op）。复用 `buttonVariants` 的只有 `ui/toast.tsx` 5 处 + `ui/pagination.tsx` 1 处，Select / Menu / Combobox 的 Trigger 不走它。
       **本条的 GUI 首测须同时目视这 6 处**（确认豁免生效、大小写正确），与①②③三个混排场景一并出截图。
@@ -52,3 +53,9 @@
 - **待拍板**：A（解禁：挂起时可打字入草稿，答完题后可发——对齐 Cursor 语义，需拆 busy 判定另立小任务）/ B（不解禁：回退 placeholder 变化，挂起时保持原文案——牺牲验收④一条）/ C（维持现状不自洽）。
 - **✅ 2026-07-30 用户拍板 = A 并扩展**：解禁打字且**后发消息排队**（当前工具调用/回合完成后再处理）→ **T-19 复活**承接（openchamber 队列语义研究已完成，纯客户端可实现，见主线台账 2026-07-30 行）。本问题关闭，后续归 T-19。
 - 出处：主线台账 2026-07-30 T-05 行；A07 :2702-2706。
+
+## #19 model/effort 对 hostBound 会话的 direct 发送不生效（T-19 设计发现，2026-07-30）
+
+- **现象**：`sendPreamble` 在 hostBound 时走 `'direct'` 不经 createSession，ModelSelect/EffortSelect 改值对下一回合不生效（仅重启/新会话生效）。属既存问题非 T-19 引入；T-19 的处置是「运行中不解禁 ModelSelect = 不撒谎」。
+- **待裁定**：给 `session.send` 补 model/effort 下发（协议可选加法，Host 侧 query() 支持与否需探针验证），或明确「模型仅会话级」的产品口径并在 UI 表达。
+- 出处：T-19 设计文档 R3。
