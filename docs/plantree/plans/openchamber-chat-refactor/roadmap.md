@@ -45,6 +45,7 @@
 - **T-21 Flexoki 主题 + 全等宽字体栈**：代码已提交 `b38017b`（2026-07-29，31 文件）。按本表口径「impl done 待 GUI 联调」不算 Done —— 用户 2026-07-29 已点测大部分，**中英混排三场景 + 6 处 `normal-case` 豁免的目视验收尚未出截图**（open-q #10），且验收须在**默认主题**下进行（`sync-terminal` 混色属 open-q #12 未裁定边界，不是 T-21 引入的 bug）。截图入台账后转 Done。
 - **T-22 壳结构改造（D19）**：代码已落 `95a5c04`（2026-07-29，23 文件 +2368/-456；三列 + 44px 导轨 + surface 模型，删 BottomDock/RightDock；纯函数 +79 例；Codex 对抗复核采纳 5 项已修）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-bis](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-22 行。
 - **T-27 Composer 目标栏（D22）**：代码已落 `e8fb36a`（2026-07-29，27 文件 +2790/-74；三下拉/指示器全真实数据、三档规则纯函数、+70 例；Codex 复核 8 项全采纳零驳回）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-ter](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-27 行。
+- **T-28 中列状态化布局（D23）**：代码已落 `4c1e4d7`（2026-07-29，8 文件 +1215/-319；两态骨架+40px follow-up+圆形发送键+49 例；Codex 复核 blocker 卡高已修）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-quater](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-28 行。
 
 ## Next
 
