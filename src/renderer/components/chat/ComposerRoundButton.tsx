@@ -1,16 +1,21 @@
 import type { VariantProps } from 'class-variance-authority';
-import { RotateCcw, SendHorizonal, Square } from 'lucide-react';
+import { ListPlus, RotateCcw, SendHorizonal, Square } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Button, type buttonVariants } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { roundActionButtonClass } from './middleColumnLayout';
 
-type RoundButtonKind = 'send' | 'stop' | 'retry';
+type RoundButtonKind = 'send' | 'stop' | 'retry' | 'enqueue';
 
 interface ComposerRoundButtonProps {
   kind: RoundButtonKind;
   disabled?: boolean;
   onClick: () => void;
+  /** T-19: override the accessible label/tooltip — e.g. Retry appending the
+   *  recovered attachment count once commit-time consumption makes those
+   *  attachments invisible in the draft area (design decision 2.2's
+   *  compensation). Falls back to the kind's default i18n label. */
+  title?: string;
 }
 
 interface RoundButtonKindConfig {
@@ -23,18 +28,28 @@ const KIND_CONFIG: Record<RoundButtonKind, RoundButtonKindConfig> = {
   send: { variant: 'default', Icon: SendHorizonal, label: 'Send message' },
   stop: { variant: 'destructive', Icon: Square, label: 'Stop the running turn' },
   retry: { variant: 'outline', Icon: RotateCcw, label: 'Retry last message' },
+  // T-19 decision 2.5: the fourth kind — "send, only delayed". `variant:
+  // 'default'` on purpose (not a demoted 'secondary'): it IS the send action
+  // for this turn, not an optional extra.
+  enqueue: { variant: 'default', Icon: ListPlus, label: 'Queue message' },
 };
 
 /**
- * T-28 §3.5: 28px true-circle action button shared by Send / Stop / Retry —
- * color comes from the Button variant, shape from `roundActionButtonClass()`.
- * The three kinds occupy the same slot at the same size (D23 decision 5): the
- * running turn's Stop replaces Send in place, it never grows a pill shape.
+ * T-28 §3.5: 28px true-circle action button shared by Send / Stop / Retry /
+ * Enqueue (T-19) — color comes from the Button variant, shape from
+ * `roundActionButtonClass()`. All kinds occupy the same slot at the same
+ * size (D23 decision 5): a running turn's Stop replaces Send in place, it
+ * never grows a pill shape.
  */
-export function ComposerRoundButton({ kind, disabled, onClick }: ComposerRoundButtonProps) {
+export function ComposerRoundButton({
+  kind,
+  disabled,
+  onClick,
+  title: titleOverride,
+}: ComposerRoundButtonProps) {
   const { t } = useI18n();
   const { variant, Icon, label } = KIND_CONFIG[kind];
-  const title = t(label);
+  const title = titleOverride ?? t(label);
 
   return (
     <Button

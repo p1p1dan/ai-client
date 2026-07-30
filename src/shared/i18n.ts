@@ -1768,6 +1768,8 @@ export const zhTranslations: Record<string, string> = {
   'Send message': '发送消息',
   'Stop the running turn': '停止当前回合',
   'Retry last message': '重试上一条消息',
+  // T-19: fourth round-button kind — "send, only delayed" while a turn runs.
+  'Queue message': '加入队列',
 };
 
 export function normalizeLocale(input?: string): Locale {

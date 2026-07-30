@@ -447,7 +447,7 @@ describe('composerPlaceholder', () => {
           hasWorkspace: true,
           attachmentCount: 0,
         })
-      ).toBe('Agent Host is running — use Stop, then send again…');
+      ).toBe('Agent Host is running — your message will be queued…');
 
       expect(
         composerPlaceholder({
@@ -517,5 +517,104 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
       })
     ).toBe('Send follow-up…');
+  });
+
+  // T-19 batch 2: queuedCount additions (decision 2.6).
+  it('T-19: busy with an empty queue uses the new "will be queued" copy', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        queuedCount: 0,
+      })
+    ).toBe('Agent Host is running — your message will be queued…');
+  });
+
+  it('T-19: a non-empty queue reports its count instead of the busy copy', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        queuedCount: 2,
+      })
+    ).toBe('Queued 2 — type another follow-up…');
+  });
+
+  it('T-19: pendingQuestion still outranks a non-empty queue', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        pendingQuestion: true,
+        queuedCount: 3,
+      })
+    ).toBe('Add more optional details…');
+  });
+
+  it('T-19: sending still outranks a non-empty queue', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        queuedCount: 1,
+      })
+    ).toBe('Sending to Agent Host…');
+  });
+
+  // m9 fix: a queue bucket can outlive its workspace (only pruned when the
+  // SESSION disappears — see ChatWorkspace's prune effect), so `queuedCount`
+  // alone is not proof the queue can ever release. Without `hasWorkspace`
+  // gating this branch, the placeholder kept promising delivery for a queue
+  // that no longer can.
+  it('T-19: a non-empty queue does not claim delivery once the workspace is gone', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: false,
+        attachmentCount: 0,
+        queuedCount: 2,
+      })
+    ).not.toMatch(/Queued/);
+  });
+
+  it('T-19: default placeholders are unchanged in both modes when the queue is empty', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      expect(
+        composerPlaceholder({
+          mode,
+          canSend: true,
+          busy: false,
+          sending: false,
+          hasSession: true,
+          hasWorkspace: true,
+          attachmentCount: 0,
+          queuedCount: 0,
+        })
+      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Message Claude via Agent Host…');
+    }
   });
 });

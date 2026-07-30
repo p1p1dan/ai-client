@@ -215,6 +215,13 @@ export const PENDING_QUESTION_PLACEHOLDER = 'Add more optional details…';
  * `pendingQuestion` must be checked before `busy`: `waiting_question` makes
  * `isStoppable` (`ChatComposer.tsx:64-71`) true, which makes `busy` true —
  * if this branch sat after the `busy` check it would never be reached.
+ *
+ * T-19: `queuedCount` must also be checked before `busy` for the same reason
+ * `pendingQuestion` is — a non-empty queue only exists while `busy` is true,
+ * so a branch after `busy` would never fire. Once composer input unlocks
+ * while a turn runs (T-19 decision 2), the old "use Stop, then send again"
+ * copy is simply wrong — it tells the user to do something they no longer
+ * need to.
  */
 export function composerPlaceholder(input: {
   mode: MiddleColumnMode;
@@ -226,6 +233,8 @@ export function composerPlaceholder(input: {
   attachmentCount: number;
   /** T-05: this session has a pending question dock showing. */
   pendingQuestion?: boolean;
+  /** T-19: messages already queued for this session while a turn runs. */
+  queuedCount?: number;
 }): string {
   if (input.sending) {
     return input.attachmentCount > 0
@@ -235,8 +244,16 @@ export function composerPlaceholder(input: {
   if (input.pendingQuestion) {
     return PENDING_QUESTION_PLACEHOLDER;
   }
+  // m9 fix: `hasWorkspace` must gate this branch too — a queue can outlive
+  // its workspace (a bucket is only pruned when its SESSION disappears, not
+  // when the workspace backing it is removed), and without this guard the
+  // placeholder keeps promising delivery ("type another follow-up…") for a
+  // queue that can no longer release at all, masking the real blocker.
+  if ((input.queuedCount ?? 0) > 0 && input.hasWorkspace) {
+    return `Queued ${input.queuedCount} — type another follow-up…`;
+  }
   if (input.busy) {
-    return 'Agent Host is running — use Stop, then send again…';
+    return 'Agent Host is running — your message will be queued…';
   }
   if (!input.hasSession) {
     return 'Select a session in the left nav before sending…';

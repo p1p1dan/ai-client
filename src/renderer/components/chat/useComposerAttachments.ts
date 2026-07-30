@@ -42,6 +42,14 @@ export interface ComposerAttachments {
   totalBytes: number;
   handlePaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   removeDraft: (id: string) => void;
+  /** T-19: bulk remove by id — the commit-point consumption hook uses this to
+   *  drop exactly the drafts a turn just carried off (see ChatComposer's
+   *  `runSend`). A no-op id (already gone, e.g. a queued/retried snapshot)
+   *  is silently ignored rather than treated as an error. */
+  removeDrafts: (ids: readonly string[]) => void;
+  /** T-19: bulk add — feeds the chip "edit"/swap affordance (batch 3), which
+   *  hands a queued entry's attachments back into the live draft list. */
+  addDrafts: (drafts: readonly AttachmentDraft[]) => void;
   clearDrafts: () => void;
   dismissNotice: () => void;
 }
@@ -220,6 +228,27 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
     applyDrafts(() => []);
   }, [applyDrafts]);
 
+  const removeDrafts = useCallback(
+    (ids: readonly string[]) => {
+      if (ids.length === 0) return;
+      const idSet = new Set(ids);
+      // Same no-op guard as clearDrafts: a caller may pass ids that are no
+      // longer live (e.g. a Retry snapshot already consumed at commit time)
+      // without forcing an extra render.
+      if (!draftsRef.current.some((draft) => idSet.has(draft.id))) return;
+      applyDrafts((prev) => prev.filter((draft) => !idSet.has(draft.id)));
+    },
+    [applyDrafts]
+  );
+
+  const addDrafts = useCallback(
+    (newDrafts: readonly AttachmentDraft[]) => {
+      if (newDrafts.length === 0) return;
+      applyDrafts((prev) => [...prev, ...newDrafts]);
+    },
+    [applyDrafts]
+  );
+
   const dismissNotice = useCallback(() => setNotice(null), []);
 
   const totalBytes = useMemo(() => totalAttachmentBytes(drafts), [drafts]);
@@ -231,6 +260,8 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
     totalBytes,
     handlePaste,
     removeDraft,
+    removeDrafts,
+    addDrafts,
     clearDrafts,
     dismissNotice,
   };

@@ -1,3 +1,4 @@
+import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { FileSearchResult } from '@shared/types/search';
 import {
   File as FileIcon,
@@ -13,6 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useMessageQueueStore } from '@/stores/messageQueue';
 import { classifyAssistantProgress } from './assistantProgress';
 import { largeAttachmentHint, sendTimeoutMs } from './attachmentLimits';
 import {
@@ -33,6 +35,7 @@ import { toWireEffort } from './efforts';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
 import { ModelSelect } from './ModelSelect';
+import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
   composerCardClass,
   composerPlaceholder,
@@ -42,9 +45,18 @@ import {
   shouldShowStatusLine,
 } from './middleColumnLayout';
 import { defaultModelId } from './models';
+import { QueuedMessageStrip } from './QueuedMessageStrip';
+import {
+  decidePendingResolution,
+  decideSendAction,
+  deriveActionButtons,
+  deriveQueueStripModel,
+  isRunningStatus,
+} from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { decideSendPreamble } from './sendPreamble';
 import { useComposerAttachments } from './useComposerAttachments';
+import { useQueueRelease } from './useQueueRelease';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
 
@@ -61,13 +73,20 @@ interface ChatComposerProps {
 /** T-07③: popup page size. Kept next to the truncation hint that reports it. */
 const MENTION_PAGE_SIZE = 10;
 
-function isStoppable(status: string | undefined): boolean {
-  return (
-    status === 'starting' ||
-    status === 'running' ||
-    status === 'waiting_permission' ||
-    status === 'waiting_question'
-  );
+// T-19: same id-generation shape as useComposerAttachments' `nextDraftId` —
+// monotonic per-module counter, collision-proof within one renderer session.
+let queuedMessageSeq = 0;
+
+function nextQueuedMessageId(): string {
+  queuedMessageSeq += 1;
+  return `queued-${Date.now().toString(36)}-${queuedMessageSeq}`;
+}
+
+// M6 fix: delegate to queueRelease.ts's exported `isRunningStatus` instead of
+// hand-copying the four-status list — a second copy is exactly the "must be
+// kept in sync by inspection" risk the T-19 fix review flagged.
+function isStoppable(status: SessionRuntimeStatus | undefined): boolean {
+  return status != null && isRunningStatus(status);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -169,10 +188,23 @@ async function waitUntil(
 export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
-  // T-18: an object rather than a plain string because an attachment-only turn
-  // fails with text '' — `retryable !== null` is then the only honest "the last
-  // turn failed" signal, and Boolean(text) would silently hide Retry.
-  const [retryable, setRetryable] = useState<{ text: string } | null>(null);
+  // T-19 fix review (R5): reverted from batch 3's queue-based "failure
+  // payload lives on queueEntries[0].failure" back to a component-local
+  // snapshot — batch 3's form let a swap-edit on a failed head clear
+  // `failure` and auto-release the user's half-typed draft (blocker), and let
+  // a second direct-send failure produce a second, un-retryable queue entry
+  // (major). An object rather than a plain string because an attachment-only
+  // turn fails with text '' — `retryable !== null` is then the only honest
+  // "the last turn failed" signal. Carries `drafts` (T-18's `{ text }`
+  // upgraded per decision 2.2) so Retry replays the EXACT attachments that
+  // failed, not whatever happens to be in the live list.
+  const [retryable, setRetryable] = useState<{
+    text: string;
+    drafts: readonly AttachmentDraft[];
+  } | null>(null);
+  // T-19: rejection message from a failed `enqueue()` (queue full / over the
+  // attachment byte budget) — decision 1/7's "reject, never silently drop".
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
   /** T-18: seconds since the current send phase started — the "still alive" signal. */
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   /** T-18: wait budget of the in-flight send, so the status text cannot lie. */
@@ -183,6 +215,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // Synchronous re-entry latch: `canSend` is a render-closure constant and
   // setSending is async, so two calls in one tick would both pass the checks.
   const inFlightRef = useRef(false);
+  // m10 fix: which session's turn `inFlightRef` actually belongs to — this
+  // component's `sending`/`inFlightRef` are NOT per-session, so if the user
+  // switches sessions while a send is in flight, `activeSessionId` no longer
+  // names the session that is actually running. `handleStop`'s queue-pause
+  // must target this, not `activeSessionId`.
+  const inFlightSessionIdRef = useRef<string | null>(null);
   // T-07 @ 文件引用：popup 态、搜索结果、选中索引、IME 合成态。delayed 焦点
   // 恢复通过 setTimeout 在 React 提交后再 setSelectionRange。
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -193,6 +231,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
+  const respondQuestion = useChatSessionsStore((state) => state.respondQuestion);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
@@ -207,6 +246,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       state.pendingQuestion?.sessionId != null &&
       state.pendingQuestion.sessionId === state.activeSessionId
   );
+  // T-19 decision 4: a pending permission is never auto-answered, only hinted
+  // at — this scopes that hint (and the "don't deny for the user" rule) to
+  // THIS session, same pattern as pendingQuestionHere above.
+  const pendingPermissionHere = useChatSessionsStore((state) =>
+    state.pendingPermissions.some((item) => item.sessionId === state.activeSessionId)
+  );
+  // T-19: this session's live queue — feeds the placeholder copy (decision
+  // 2.6), the release hook, and the strip (batch 3). `selectSessionQueue`
+  // returns a stable empty-array/null sentinel for an unknown session, so
+  // these two selectors never thrash.
+  const queueEntries = useMessageQueueStore(
+    (state) => selectSessionQueue(state.state, activeSessionId).entries
+  );
+  const queuePaused = useMessageQueueStore(
+    (state) => selectSessionQueue(state.state, activeSessionId).paused
+  );
+  const queuedCount = queueEntries.length;
 
   // T-27: shared with the Composer target bar (§2.6) — this is the same
   // production derivation the target bar's plan/apply flow lands through,
@@ -233,7 +289,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const { getSessionEffort } = useSessionEffort();
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
-  const attachments = useComposerAttachments({ disabled: Boolean(disabled) || busy || sending });
+  // T-19 decision 2.1: paste unlocks whenever the textarea does — only
+  // "nowhere to put this draft" (`!activeSessionId`) still locks it. A
+  // running/sending turn no longer does: that draft may need to go on the
+  // queue, and a queued message must be able to carry attachments too.
+  const attachments = useComposerAttachments({ disabled: Boolean(disabled) || !activeSessionId });
   const { clearDrafts: clearAttachmentDrafts, dismissNotice: dismissAttachmentNotice } =
     attachments;
 
@@ -253,6 +313,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     clearAttachmentDrafts();
     dismissAttachmentNotice();
     setRetryable(null);
+    // T-19: a stale "queue full" rejection belongs to the session that
+    // rejected it, not to whatever session is now active.
+    setQueueNotice(null);
   }, [activeSessionId, clearAttachmentDrafts, dismissAttachmentNotice]);
 
   const statusHint = !activeSessionId
@@ -269,16 +332,74 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               ? 'Agent Host running — use Stop to abort'
               : `Ready · cwd: ${cwd}`;
 
+  // T-19 decision 2.3: Enter/Send-click both funnel through the same pure
+  // dispatch — `decideSendAction` is the single place that decides whether
+  // this keystroke starts a turn or joins the queue behind one already
+  // running. `inFlightRef.current` (not `sending`) is read here on purpose:
+  // it is the synchronous latch, `sending` lags a render behind it.
   const handleSend = async () => {
     const trimmed = value.trim();
-    // Attachment-only sends are legal (the Host only rejects "no text AND no
-    // attachments"), so an empty textarea is not a reason to bail.
-    if (!trimmed && attachments.drafts.length === 0) return;
-    if (!canSend || !activeSessionId || !activeWorkspace || attachments.reading > 0) {
+    const action = decideSendAction({
+      hasTarget: Boolean(activeSessionId && cwd),
+      disabled: Boolean(disabled),
+      busy,
+      sending,
+      inFlight: inFlightRef.current,
+      hasContent: Boolean(trimmed) || attachments.drafts.length > 0,
+      reading: attachments.reading,
+    });
+
+    if (action === 'blocked') return;
+
+    if (action === 'send') {
+      await runSend(trimmed, attachments.drafts, { clearComposerValue: true });
       return;
     }
-    await runSend(trimmed, attachments.drafts);
+
+    // action === 'enqueue' (decision 1/2/3): a turn is already running — join
+    // the queue instead of racing it. `decideSendAction`'s `hasTarget` check
+    // already guarantees `activeSessionId` is non-null here.
+    if (!activeSessionId) return;
+    const queued: QueuedMessage = {
+      id: nextQueuedMessageId(),
+      sessionId: activeSessionId,
+      text: trimmed,
+      attachments: attachments.drafts,
+      queuedAt: Date.now(),
+    };
+    const result = useMessageQueueStore.getState().enqueue(queued);
+    if (!result.ok) {
+      // Decision 1/7: reject and keep the draft exactly as typed — never
+      // silently drop it.
+      setQueueNotice(result.message);
+      return;
+    }
+    setQueueNotice(null);
+    // Commit-point consumption for the enqueue path, mirroring runSend's
+    // (decision 2.2): the draft is now owned by the queue entry.
     setValue('');
+    attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
+
+    // Decision 4: a pending question on THIS session must never deadlock the
+    // queue behind an answer the user chose not to give — cancel it
+    // (non-destructive: SDK-side `allow` + empty answers, never a real
+    // rejection). A pending permission is left alone; the strip's hint
+    // (batch 3) explains why nothing sent yet.
+    const resolution = decidePendingResolution({
+      status: activeSession?.status ?? 'idle',
+      hasPendingQuestionHere: pendingQuestionHere,
+      hasPendingPermissionHere: pendingPermissionHere,
+    });
+    if (resolution.cancelQuestion) {
+      // m8 fix: a failed cancel must be visible — otherwise the queue looks
+      // permanently stuck with no explanation (status stays waiting_question,
+      // so decideQueueRelease holds `not-idle` forever with no hint why).
+      void respondQuestion({ cancel: true }).then((ok) => {
+        if (!ok) {
+          setQueueNotice('Could not dismiss the pending question — try answering it directly.');
+        }
+      });
+    }
   };
 
   // T-07 @ 文件搜索：150ms 防抖，cwd 缺失或 mention 关闭时清空结果。
@@ -339,10 +460,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const lastUserPrompt = activeSessionId
     ? [...(activeMessages ?? [])].reverse().find((message) => message.role === 'user')
     : undefined;
-  // Retry is offered when the last turn ended badly: explicit session.failed
-  // (Host emitted it) OR the Composer fallback set `retryable` because the
-  // SDK stream ended with no assistant progress (e.g. gateway revoked key —
-  // Host lands on idle/stopped, not failed, so status check alone misses it).
+  // T-19 fix review (R5): batch 3's "failure payload lives in the queue,
+  // marked `failure` on queueEntries[0]" is reverted (see `retryable` state
+  // above) — it let a swap-edit on a failed head clear `failure` and
+  // auto-release the user's half-typed draft (blocker), and let a second
+  // direct-send failure produce a second, un-retryable queue entry (major).
+  // Retry is offered when the last turn ended badly: `retryable` (this
+  // component caught a failure), OR explicit session.failed (Host emitted it)
+  // with no local `retryable` (a session reopened already-`failed` — the SDK
+  // stream ended with no assistant progress, e.g. gateway revoked key, and
+  // Host lands on idle/stopped rather than `failed`, so status alone would
+  // miss it too).
   const retryText =
     retryable?.text ??
     (activeSession?.status === 'failed'
@@ -353,11 +481,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // moment a screenshot was pasted — and clicking it would have sent the image
   // with an empty text field, then wiped the sentence the user had typed.
   const lastTurnFailed = retryable !== null || activeSession?.status === 'failed';
-  // No second copy of the drafts: they already survive every failure branch
-  // (only the success branch clears them), so the live chips ARE the retry
-  // payload. A snapshot would resurrect chips the user deleted after the
-  // failure and make the status line under-report what is being sent.
-  const retryDrafts = attachments.drafts;
+  // m11 fix: no live-list fallback here. `retryable.drafts` is a snapshot
+  // taken at failure time (decision 2.2) — falling back to the CURRENT
+  // `attachments.drafts` meant a text-only status-'failed' reopen could
+  // silently attach whatever the user has pasted since, and commit-time
+  // consumption would make that chip vanish the instant Retry fired. The
+  // reopened-failed fallback stays text-only; there is no reliable snapshot
+  // to recover attachments from in that case anyway.
+  const retryDrafts = retryable?.drafts ?? [];
+  const retryAttachmentCount = retryDrafts.length;
+  // T-19 decision 2.2: the Retry button's title carries the attachment count
+  // that commit-time consumption made invisible in the draft area.
+  const retryTitle =
+    retryAttachmentCount > 0
+      ? `Retry last message (${retryAttachmentCount} file${retryAttachmentCount > 1 ? 's' : ''})`
+      : undefined;
   const canRetry =
     lastTurnFailed &&
     (Boolean(retryText) || retryDrafts.length > 0) &&
@@ -371,16 +509,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     await runSend(retryText ?? '', retryDrafts);
   };
 
-  const runSend = async (trimmed: string, drafts: readonly AttachmentDraft[]) => {
+  const runSend = async (
+    trimmed: string,
+    drafts: readonly AttachmentDraft[],
+    options: { clearComposerValue?: boolean } = {}
+  ): Promise<'committed' | 'skipped'> => {
     // Explicit `cwd` check (independent of canSend): a null cwd is the demo
     // placeholder or a target with no path — creating a session against it
     // would persist a fake cwd into session-index.json and die in spawn on
     // the Host side.
     if (!canSend || !activeSessionId || !cwd) {
-      return;
+      return 'skipped';
     }
-    if (inFlightRef.current) return;
+    if (inFlightRef.current) return 'skipped';
     inFlightRef.current = true;
+    inFlightSessionIdRef.current = activeSessionId;
 
     const sessionId = activeSessionId;
     const workspacePath = cwd;
@@ -408,8 +551,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Starting a fresh send invalidates any prior failure's retryable prompt:
     // the new prompt is what the user wants now, and a stale ghost Retry would
     // linger if the prior failed stream happened to settle later (see the
-    // "Retry 重影" bug — flow aborted without result, `retryable` stayed,
-    // a late assistant bubble appeared, Retry showed next to Send wrongly).
+    // "Retry 重影" bug — flow aborted without result, `retryable` stayed, a
+    // late assistant bubble appeared, Retry showed next to Send wrongly).
     setRetryable(null);
     // A skip warning belongs to the paste that produced it, not to the next
     // turn. Sending is one of the three clear triggers (next attach / Send / x).
@@ -422,6 +565,26 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // runSend, so a retry re-docks too, which is correct: the column must
     // not bounce back to centered on a failed first send).
     onSendStart?.();
+
+    // T-19 commit point (design decision 2.2): every guard above has passed —
+    // this is the point of no return, still synchronous and still before the
+    // first `await` below. Consume this turn's draft right here, not on
+    // completion: once the composer unlocks while a turn runs, text typed for
+    // the NEXT turn must never be wiped by THIS turn's "clear when done".
+    // `clearComposerValue` is only set by the live handleSend path — a
+    // queued entry being released here carries someone else's snapshot, not
+    // whatever the user is typing right now, so it must never touch `value`.
+    if (options.clearComposerValue) setValue('');
+    // Safe no-op when `drafts` is a retry/queue snapshot whose ids already
+    // left the live list at THEIR OWN commit point.
+    attachments.removeDrafts(drafts.map((draft) => draft.id));
+    // Decision 3.4: any new turn starting — direct send, Retry, or a queued
+    // entry being released — means the user pushed the flow forward again,
+    // so this session's Stop-pause (if any) no longer applies. Release
+    // already implies "not paused" (decideQueueRelease holds on `paused`),
+    // so this is a no-op for that path and only matters for send/Retry.
+    useMessageQueueStore.getState().clearPause(sessionId);
+    const committed = { text: trimmed, drafts };
 
     setSending(true);
     setSendBudgetMs(timeoutMs);
@@ -529,10 +692,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       });
       // The payload is with the Host now, so the status line may say so — and
       // the clock restarts, because `timeoutMs` budgets this phase alone.
+      // T-19: `value`/attachments were already consumed at runSend's commit
+      // point (decision 2.2) — no clearing here.
       phaseStartedAtRef.current = Date.now();
       setElapsedSeconds(0);
       setSendPhase('awaiting');
-      setValue('');
 
       // Running alone is not success — wait for assistant / tool / permission / terminal.
       return waitUntil(() => {
@@ -555,6 +719,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }, timeoutMs);
     };
 
+    // T-19: every non-success path below now calls `setRetryable(committed)`
+    // — previously only the catch block and the final "no progress" branch
+    // set `retryable`, so the `runCreateSequence` timeout/fatal branches lost
+    // the user's text with no way to recover it (design's named bug).
+    // `committed` (built above, right after the drafts it carries were
+    // consumed) is the single snapshot every one of these branches now
+    // reaches for, so none of them can forget it.
     try {
       await window.electronAPI.chat.ensureHost();
 
@@ -562,12 +733,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         const seq = await runCreateSequence();
         if (seq === 'fatal') {
           unbindHost();
-          return;
+          setRetryable(committed);
+          return 'committed';
         }
         if (seq === 'timeout') {
           unbindHost();
           setCreateTimeoutError();
-          return;
+          setRetryable(committed);
+          return 'committed';
         }
       } else if (preamble.action === 'resume') {
         sawSessionResumed = false;
@@ -592,12 +765,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           const seq = await runCreateSequence();
           if (seq === 'fatal') {
             unbindHost();
-            return;
+            setRetryable(committed);
+            return 'committed';
           }
           if (seq === 'timeout') {
             unbindHost();
             setCreateTimeoutError();
-            return;
+            setRetryable(committed);
+            return 'committed';
           }
         } else {
           useChatSessionsStore.setState((state) => ({
@@ -625,40 +800,45 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         const seq = await runCreateSequence();
         if (seq === 'fatal') {
           unbindHost();
-          return;
+          setRetryable(committed);
+          return 'committed';
         }
         if (seq === 'timeout') {
           unbindHost();
           setCreateTimeoutError();
-          return;
+          setRetryable(committed);
+          return 'committed';
         }
         ok = await sendAndWait();
       }
 
       if (fatalHostError || useChatSessionsStore.getState().lastError) {
         unbindHost();
-        return;
+        setRetryable(committed);
+        return 'committed';
       }
 
       const statusAfter = useChatSessionsStore
         .getState()
         .sessions.find((s) => s.id === sessionId)?.status;
       if (
-        ok &&
+        // m14 fix: `sawAssistantProgress` alone must count as success even
+        // when `ok` came back false — `waitUntil`'s timeout check and this
+        // read race against the SAME event stream, so a narrow window exists
+        // where progress lands just after the timeout fires. Without this, an
+        // already-delivered, already-answered turn gets marked failed.
+        (ok || sawAssistantProgress) &&
         (sawAssistantProgress ||
           statusAfter === 'waiting_permission' ||
           statusAfter === 'waiting_question' ||
           statusAfter === 'idle')
       ) {
-        // Success — clear any stale failure UI so a ghost Retry can't resurface
-        // later (e.g. prior failed stream settled and pushed an assistant bubble).
+        // Success — clear any stale failure UI so a ghost Retry can't
+        // resurface later (e.g. prior failed stream settled and pushed an
+        // assistant bubble).
         setRetryable(null);
-        // T-18: attachments are cleared here and nowhere else. On any failure
-        // they stay visible, which is both the Retry payload and the only
-        // evidence of what the turn carried (the timeline does not render them).
-        clearAttachmentDrafts();
         useChatSessionsStore.setState({ lastError: null });
-        return;
+        return 'committed';
       }
 
       unbindHost();
@@ -679,20 +859,98 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           'Click Retry to resend, or Stop. Check Claude auth / API in your CLAUDE_CONFIG_DIR settings.json.',
         ].join(' | '),
       });
-      setRetryable({ text: trimmed });
+      setRetryable(committed);
+      return 'committed';
     } catch (err) {
       unbindHost();
       useChatSessionsStore.setState({
         lastError: err instanceof Error ? err.message : String(err),
       });
-      setRetryable({ text: trimmed });
+      setRetryable(committed);
+      return 'committed';
     } finally {
       window.clearInterval(ticker);
       setElapsedSeconds(0);
       inFlightRef.current = false;
+      inFlightSessionIdRef.current = null;
       unsubEvents();
       setSending(false);
     }
+  };
+
+  // T-19 decision 3.1: releases this session's queue head once a turn ends —
+  // scoped to the active session because `runSend` is this component's own
+  // closure (see the hook's header for why that is a deliberate boundary,
+  // not an oversight).
+  useQueueRelease({
+    sessionId: activeSessionId,
+    hasTarget: Boolean(activeSessionId && cwd),
+    disabled: Boolean(disabled),
+    sending,
+    isInFlight: () => inFlightRef.current,
+    status: activeSession?.status ?? 'idle',
+    runEntry: (entry) => runSend(entry.text, entry.attachments),
+  });
+
+  // T-19 fix review (R5): the strip's failed-row Retry/Discard wiring
+  // (`retryQueueHead` / `handleStripRetry`) is removed along with batch 3's
+  // queue-based failure requeuing above — a queue entry can no longer carry
+  // `failure` in production, so there is nothing for a strip row to retry.
+  // The round Retry button (`handleRetry` above) is the only Retry affordance
+  // now, backed by the component-local `retryable` snapshot.
+
+  // T-19 batch 3 decision 5.3: Pencil / click-row — `takeEntryIntoDraft`
+  // covers both the "draft empty" (move) and "draft non-empty" (in-place
+  // swap) cases; either way the draft area's new content is the entry's OLD
+  // payload, so the UI-side transition is identical: drop whatever is
+  // currently drafted, then adopt the entry's payload. Attachments go through
+  // `removeDrafts`/`addDrafts` (no bulk "replace" primitive exists, nor is
+  // one needed for just these two calls).
+  const handleQueueEntryEdit = (entryId: string) => {
+    if (!activeSessionId) return;
+    const currentDraftIds = attachments.drafts.map((draft) => draft.id);
+    const outcome = useMessageQueueStore.getState().takeEntryIntoDraft(activeSessionId, entryId, {
+      text: value,
+      attachments: attachments.drafts,
+    });
+    if (!outcome) return;
+    setValue(outcome.payload.text);
+    attachments.removeDrafts(currentDraftIds);
+    attachments.addDrafts(outcome.payload.attachments);
+  };
+
+  // X — decision 5.3's delete.
+  const handleQueueEntryRemove = (entryId: string) => {
+    if (!activeSessionId) return;
+    useMessageQueueStore.getState().removeEntry(activeSessionId, entryId);
+  };
+
+  // Pause row's Resume (decision 3.4's explicit exit from `paused`).
+  const handleQueueResume = () => {
+    if (!activeSessionId) return;
+    useMessageQueueStore.getState().clearPause(activeSessionId);
+  };
+
+  // T-19 batch 3 decision 5: pure view model for `QueuedMessageStrip` — the
+  // component renders this and decides nothing itself.
+  const queueStripModel = deriveQueueStripModel({
+    entries: queueEntries,
+    paused: queuePaused,
+    hasPendingPermissionHere: pendingPermissionHere,
+  });
+
+  const handleStop = () => {
+    // T-19 decision 3.4: Stop means "not doing this right now", not "this
+    // turn finished" — pause the queue so it does not auto-fire the next
+    // entry the instant status settles back to idle/stopped. m10 fix: pause
+    // the session actually in flight (`inFlightSessionIdRef`), not
+    // `activeSessionId` — those can diverge when the user switches sessions
+    // mid-send (see the ref's own comment for why).
+    const pauseTarget = inFlightSessionIdRef.current ?? activeSessionId;
+    if (pauseTarget) {
+      useMessageQueueStore.getState().pauseSession(pauseTarget);
+    }
+    void stopActiveSession();
   };
 
   const hasStatusError = Boolean(lastError || !activeSessionId || !activeWorkspace);
@@ -770,6 +1028,28 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     </Alert>
   ) : null;
 
+  // T-19 decision 1/7: a rejected `enqueue()` (queue full / over the attachment
+  // byte budget) reuses the same Alert language as the attachment notice
+  // above — the draft itself is left untouched by the caller (handleSend).
+  const queueNoticeBlock = queueNotice ? (
+    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-xs">
+      <TriangleAlert />
+      <AlertTitle className="min-w-0 truncate font-normal" title={queueNotice}>
+        {queueNotice}
+      </AlertTitle>
+      <AlertAction>
+        <button
+          type="button"
+          onClick={() => setQueueNotice(null)}
+          aria-label="Dismiss queue notice"
+          className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
+        >
+          <X className="size-3" />
+        </button>
+      </AlertAction>
+    </Alert>
+  ) : null;
+
   const attachmentChipsBlock =
     attachments.drafts.length > 0 ? (
       <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -802,7 +1082,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // chips/mention chips must never be silently hidden (that would be the
   // T-18 "invisible attachment" bug again) — they stack as the card's first
   // row, above the single control row, instead of disappearing.
-  const hasComposerExtras = Boolean(noticeBlock || attachmentChipsBlock || mentionChipsBlock);
+  const hasComposerExtras = Boolean(
+    noticeBlock || queueNoticeBlock || attachmentChipsBlock || mentionChipsBlock
+  );
 
   const textareaEl = (
     <Textarea
@@ -836,9 +1118,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         hasWorkspace: Boolean(activeWorkspace),
         attachmentCount: attachments.drafts.length,
         pendingQuestion: pendingQuestionHere,
+        queuedCount,
       })}
       className={composerTextareaClass(mode)}
-      disabled={disabled || busy || sending || !activeSessionId}
+      // T-19 decision 2.1: only "nowhere to put this draft" still locks the
+      // textarea — a running/sending turn no longer does (decision 2's
+      // unlock matrix). Model/Effort selects below keep the OLD gate: they
+      // stay disabled while busy/sending because changing them mid-turn has
+      // no effect on the turn already running (design §2.1④).
+      disabled={disabled || !activeSessionId}
       onKeyDown={(event) => {
         // T-07 @ popup：popup 开时拦截方向键 / Enter / Esc，避免误发。
         if (mentionOpen) {
@@ -889,30 +1177,81 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     </>
   ) : null;
 
+  // T-19 decision 2.5: the button stack is now derived, not hand-assembled —
+  // `deriveActionButtons` is the single source that also decides "Retry and
+  // Stop never share a render" (asserted as a property over all nine
+  // statuses in queueRelease.test.ts), so this component only maps kinds to
+  // click handlers, it does not re-derive when each one shows up.
+  //
+  // M3 fix: gate on `canRetry` (all the guards), not just `lastTurnFailed` —
+  // otherwise this renders a Retry with `disabled: false` in states `canRetry`
+  // itself excludes (attachment mid-encode, `activeWorkspace` missing, …),
+  // and it goes dead the instant it is clicked (`handleRetry`'s own
+  // `if (!canRetry) return`). A button that is visible must be clickable.
+  const actionButtonSpecs = deriveActionButtons({
+    status: activeSession?.status ?? 'idle',
+    sending,
+    hasFailed: canRetry,
+    hasDraftContent: Boolean(value.trim()) || attachments.drafts.length > 0,
+  });
+
   const actionButtons = (
     <>
-      {canRetry && (
-        <ComposerRoundButton kind="retry" disabled={disabled} onClick={() => void handleRetry()} />
-      )}
-      {canStop ? (
-        <ComposerRoundButton
-          kind="stop"
-          disabled={disabled}
-          onClick={() => void stopActiveSession()}
-        />
-      ) : (
-        <ComposerRoundButton
-          kind="send"
-          // Attachment-only sends are legal; a still-encoding paste is not
-          // (Enter would send the message without its files).
-          disabled={
-            !canSend ||
-            (!value.trim() && attachments.drafts.length === 0) ||
-            attachments.reading > 0
-          }
-          onClick={() => void handleSend()}
-        />
-      )}
+      {actionButtonSpecs.map((spec) => {
+        if (spec.kind === 'retry') {
+          return (
+            <ComposerRoundButton
+              key="retry"
+              kind="retry"
+              title={retryTitle}
+              disabled={disabled || spec.disabled}
+              onClick={() => void handleRetry()}
+            />
+          );
+        }
+        if (spec.kind === 'stop') {
+          return (
+            <ComposerRoundButton
+              key="stop"
+              kind="stop"
+              disabled={disabled || spec.disabled}
+              onClick={handleStop}
+            />
+          );
+        }
+        if (spec.kind === 'enqueue') {
+          return (
+            <ComposerRoundButton
+              key="enqueue"
+              kind="enqueue"
+              // m4 fix: match Send's guard breadth (below) — a still-encoding
+              // paste or a torn-down target must disable Enqueue too, not
+              // just an empty draft, or the click is silently swallowed by
+              // `decideSendAction` returning `'blocked'`.
+              disabled={
+                disabled || spec.disabled || !(activeSessionId && cwd) || attachments.reading > 0
+              }
+              onClick={() => void handleSend()}
+            />
+          );
+        }
+        return (
+          <ComposerRoundButton
+            key="send"
+            kind="send"
+            // Attachment-only sends are legal; a still-encoding paste is not
+            // (Enter would send the message without its files).
+            disabled={
+              disabled ||
+              spec.disabled ||
+              !canSend ||
+              (!value.trim() && attachments.drafts.length === 0) ||
+              attachments.reading > 0
+            }
+            onClick={() => void handleSend()}
+          />
+        );
+      })}
     </>
   );
 
@@ -936,6 +1275,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           sending={sending}
           disabled={disabled}
           onAddRepository={onAddRepository}
+        />
+      )}
+      {/* T-19 batch 3 decision 5.1: strip sits after the error banner, before
+            the composer card, and only in session mode (queue-worthy states
+            always imply a session already exists — `onSendStart` marks
+            `sendAttempted` before any turn, including one that goes on to
+            fail, can complete). The component itself no-ops when the derived
+            model has nothing to show. */}
+      {mode === 'session' && (
+        <QueuedMessageStrip
+          model={queueStripModel}
+          onResume={handleQueueResume}
+          onEdit={handleQueueEntryEdit}
+          onRemove={handleQueueEntryRemove}
         />
       )}
       <div className={composerCardClass(mode)}>
@@ -1023,6 +1376,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             {hasComposerExtras && (
               <div className="mb-1 flex flex-col gap-1">
                 {noticeBlock}
+                {queueNoticeBlock}
                 {attachmentChipsBlock}
                 {mentionChipsBlock}
               </div>
@@ -1038,6 +1392,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           <>
             {textareaEl}
             {noticeBlock}
+            {queueNoticeBlock}
             {attachmentChipsBlock}
             {mentionChipsBlock}
             <div className="mt-1.5 flex items-center justify-between gap-2">

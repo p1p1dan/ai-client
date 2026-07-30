@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useMessageQueueStore } from '@/stores/messageQueue';
 import { ChatComposer } from './ChatComposer';
 import { HostStatusBanner } from './HostStatusBanner';
 import { selectHistoryError } from './historyError';
@@ -87,6 +88,13 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
       const next = prev.filter((id) => sessions.some((session) => session.id === id));
       return next.length === prev.length ? prev : next;
     });
+  }, [sessions]);
+
+  // T-19 decision 6/7: drop message-queue buckets for sessions that no
+  // longer exist (deleted / retired by tree sync / fork not followed) —
+  // same rationale and same trigger as the `sendAttempts` prune above.
+  useEffect(() => {
+    useMessageQueueStore.getState().pruneSessions(sessions.map((session) => session.id));
   }, [sessions]);
 
   // After tree sync, activeSessionId can point at a removed demo id — pick a live one.
