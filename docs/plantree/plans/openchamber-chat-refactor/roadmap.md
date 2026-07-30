@@ -47,6 +47,8 @@
 - **T-27 Composer 目标栏（D22）**：代码已落 `e8fb36a`（2026-07-29，27 文件 +2790/-74；三下拉/指示器全真实数据、三档规则纯函数、+70 例；Codex 复核 8 项全采纳零驳回）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-ter](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-27 行。
 - **T-28 中列状态化布局（D23）**：代码已落 `4c1e4d7`（2026-07-29，8 文件 +1215/-319；两态骨架+40px follow-up+圆形发送键+49 例；Codex 复核 blocker 卡高已修）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-quater](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-28 行。
 - **T-05 工具行/问答卡重做（D24）**：代码已落 `340a59a`（2026-07-30，29 文件 +3812/-173；六纯模块 +133 例；Codex 复核 8 项全采纳）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-quinquies](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30 T-05 行。
+- **T-19 消息队列（运行中解禁输入 + FIFO 排队）**：代码已落 `1b350ff`（2026-07-30，14 文件 +2453/-83；三批施工断言先行 + 对抗复核（Codex 两次容量满载改派 deep-reasoner，1 blocker/6 major/17 minor）+ 修复批，+100 例总 1097）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-sexies](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30 T-19 行。
+- **T-30 观感打磨批1（快赢，D25/D26）**：12 项快赢中 10 项已落 `3dcd2dc`（2026-07-30，6 文件 +95/-40；P-19/P-22 让给 T-23）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-septies](./implementation-status.md)，通过后转 Done。**批2**（D25 分域字体施工）尚未开工，施工依据（deep-reasoner 637 行字体规格 + 编排者三条临时裁定）已交付待用户确认。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30 T-30 行。
 
 ## Next
 
@@ -77,5 +79,5 @@
 - **T-25 旧模块原色硬编码清理**（2026-07-28 审查后立项，依赖 T-21）——T-21 覆盖范围之外的旧模块原色工具类，按 Flexoki 语义 token 逐目录分批替换（实测面与目录清单见执行计划 §3 T-25 行）。
 - C-11 stream-json fallback（机动，SDK 路线阻塞时提级）
 - C-12 旧路径收缩 + 千 block 压测（Phase 5；虚拟化决策依赖压测数据）
-- T-19 消息队列（提案内容待用户落库，落库前不排期）
+- ~~T-19 消息队列~~（提案内容待用户落库，落库前不排期）—— **已复活并代码落地 `1b350ff`，转 In Progress**（2026-07-30，open-q #18 拍板 A 触发；原「待用户落库」前提已由用户拍板与团队研究共同满足）
 - T-09 补验：真触发「Node 缺失」场景（想法见 [ideas](../../ideas/inbox.md)）
