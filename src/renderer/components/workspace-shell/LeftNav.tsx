@@ -274,7 +274,9 @@ export function LeftNav({
                 <>
                   <section>
                     <div className="flex h-7 items-center px-2">
-                      <p className="text-xs font-medium text-muted-foreground">{t('Recent')}</p>
+                      <p className="text-sm font-medium tracking-[0.04em] text-muted-foreground">
+                        {t('Recent')}
+                      </p>
                       <Button
                         variant="ghost"
                         size="icon-xs"
@@ -328,7 +330,9 @@ export function LeftNav({
                   </section>
 
                   <div className="flex h-7 items-center px-2">
-                    <p className="text-xs font-medium text-muted-foreground">{t('Repositories')}</p>
+                    <p className="text-sm font-medium tracking-[0.04em] text-muted-foreground">
+                      {t('Repositories')}
+                    </p>
                     <div className="ml-auto flex items-center">
                       <Button
                         variant="ghost"

@@ -201,14 +201,22 @@ export function MessageTimeline({
             )}
             {status === 'failed' && (
               <div
-                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs"
                 role="alert"
               >
-                <p className="font-medium">Session failed</p>
+                {/* T-30 P-06: only the title carries destructive weight — body
+                    and hint fall back to muted-foreground so a session-level
+                    failure doesn't stack a second red block on top of the
+                    already-red failed tool rows above it. */}
+                <p className="font-medium text-destructive">Session failed</p>
                 {lastError && (
-                  <p className="mt-1 break-words whitespace-pre-wrap opacity-90">{lastError}</p>
+                  <p className="mt-1 break-words whitespace-pre-wrap text-muted-foreground">
+                    {lastError}
+                  </p>
                 )}
-                <p className="mt-1 opacity-70">已产内容保留。在下方输入框点 Retry 重发上条消息。</p>
+                <p className="mt-1 text-muted-foreground">
+                  已产内容保留。在下方输入框点 Retry 重发上条消息。
+                </p>
                 {pendingPermissions.some((item) => item.sessionId === sessionId) && (
                   <Button
                     size="sm"
@@ -346,10 +354,13 @@ interface MessageBubbleProps {
 }
 
 /**
- * T-05 (D-1): three role branches.
+ * T-05 (D-1) -> T-30 (P-08/P-09/P-11): three role branches.
  *  - assistant -> bare `AssistantMessage` (no bubble, no role label; A07 `:1725`/`:858`).
- *  - user -> unchanged bubble (A01 hard boundary).
- *  - system / error -> unchanged bubble (notices, not turns; A07 left them undefined).
+ *  - user -> `.fx-user-bubble` shape (A07 `:849-855`); no role label — neither
+ *    A01 (`:1060-1061`) nor A07 (`:1721-1722`) ever put one on the markup.
+ *  - system / error -> `Alert` primitive (same shell as `HistoryErrorNotice`
+ *    below), not a chat bubble — A07 never defined a bubble form for these,
+ *    and reusing the user bubble produced a third, baseline-undefined shape.
  */
 function MessageBubble({
   message,
@@ -376,44 +387,63 @@ function MessageBubble({
     );
   }
 
-  const isUser = message.role === 'user';
-  const metaLine = !isUser ? formatMessageMetadata(metadata) : null;
+  if (message.role === 'system' || message.role === 'error') {
+    return <NoticeMessage message={message} />;
+  }
 
   return (
-    <article className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+    <article className="flex justify-end">
       <div
         className={cn(
-          'max-w-[85%] space-y-2 rounded-lg border px-3 py-2',
-          // Speaker differentiation is a neutral job, so the bubble is bg-accent, not
-          // the old bg-primary/10 - under Flexoki that low-alpha primary turned the
-          // most-repeated surface in the app into brand orange.
-          // Upstream splits this per scheme (flexoki-*.json colors.chat.
-          // userMessageBackground: light #f7f4ec neutral, dark #27180E brand-tinted);
-          // we deliberately do not, because this repo never registered a class-based
-          // `dark` variant, so `dark:` still compiles to prefers-color-scheme and
-          // would desync from the .dark palette. --accent is the only token that
-          // separates from the assistant's bg-card/50 in *both* schemes.
-          isUser ? 'border-border bg-accent' : 'border-border bg-card/50'
+          'max-w-[85%] space-y-2 rounded-lg border px-4 py-2.5',
+          // T-30 P-09: A07 `.fx-user-bubble` (`:849-855`) — 16/16/4/16 corners
+          // (sharp bottom-right "tail" toward the right-aligned edge), --card
+          // fill, primary-8% border. The old note about assistant needing
+          // bg-accent for contrast against `bg-card/50` no longer applies —
+          // T-05 already made assistant bubble-less, so user is free to sit
+          // on the same --card surface as the rest of the shell.
+          'rounded-br-xs border-primary/8 bg-card'
         )}
       >
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {message.role}
-        </p>
-
-        {/* user/system/error messages only ever carry `text` blocks (chatSessions.ts
-            attaches tool_call/tool_result/thinking/permission_request/question
-            exclusively to role: 'assistant' messages, live and replayed alike). */}
+        {/* user messages only ever carry `text` blocks (chatSessions.ts attaches
+            tool_call/tool_result/thinking/permission_request/question exclusively
+            to role: 'assistant' messages, live and replayed alike). */}
         {message.blocks.map((block) =>
           block.type === 'text' ? (
-            <p key={block.id} className="whitespace-pre-wrap text-sm text-foreground">
+            <p
+              key={block.id}
+              className="whitespace-pre-wrap text-markdown leading-normal text-foreground"
+            >
               {block.text}
             </p>
           ) : null
         )}
-
-        {metaLine && <p className="text-[10px] text-muted-foreground/80">{metaLine}</p>}
       </div>
     </article>
+  );
+}
+
+/**
+ * T-30 P-11: system / error notices — not a turn, so they get the same
+ * `Alert` shell as `HistoryErrorNotice` instead of the user bubble. The
+ * `error`/`default` variant is the only role differentiator now that the
+ * uppercase role label is gone (P-08); that matches the color-only signal
+ * every other notice in this file already uses.
+ */
+function NoticeMessage({ message }: { message: ChatMessage }) {
+  const isError = message.role === 'error';
+  return (
+    <Alert variant={isError ? 'error' : 'default'} role={isError ? 'alert' : 'status'}>
+      <AlertDescription>
+        {message.blocks.map((block) =>
+          block.type === 'text' ? (
+            <p key={block.id} className="whitespace-pre-wrap text-foreground">
+              {block.text}
+            </p>
+          ) : null
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -457,7 +487,12 @@ function AssistantMessage({
   const footerLine = formatMessageMetadata(metadata, { omitLatency: true });
 
   return (
-    <article className="text-markdown leading-normal [&>p+p]:mt-2.5">
+    // T-30 P-17: `gap-2.5` (10px) is the single source of the "段间" gap
+    // between every direct item (tool group, paragraph, question/permission
+    // card, footer) — replaces the old per-item `my-2.5`/`[&>p+p]:mt-2.5`
+    // margins, which could collapse into (or stack on top of) ReadingColumn's
+    // turn-to-turn `space-y-5` depending on which item type sat at the edge.
+    <article className="flex flex-col gap-2.5 text-markdown leading-normal">
       {workedForRow && <ToolGroup rows={[workedForRow]} />}
 
       {items.map((item) => {
@@ -514,7 +549,7 @@ function AssistantMessage({
       })}
 
       {footerLine && (
-        <p className="mt-2.5 flex flex-wrap items-center gap-2 text-code text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-2 text-code text-muted-foreground">
           {footerLine}
         </p>
       )}

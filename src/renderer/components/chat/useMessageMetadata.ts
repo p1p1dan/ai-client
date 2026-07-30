@@ -6,6 +6,7 @@ import {
   type MetadataRegistry,
   reduceMessageMetadata,
 } from './messageMetadata';
+import { defaultModelId } from './models';
 import { useSessionModel } from './useSessionModel';
 
 /**
@@ -35,7 +36,13 @@ export function useMessageMetadata(sessionId: string | null): UseMessageMetadata
     const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event: RuntimeEvent) => {
       if (cancelled) return;
       if (event.sessionId && event.sessionId !== sessionId) return;
-      const sessionModel = getSessionModel(sessionId);
+      // T-30 P-14: ModelSelect's initial value never gets persisted until the
+      // user actually changes the dropdown (it only calls `setSessionModel`
+      // from `onValueChange`), so an untouched session's `getSessionModel`
+      // stays null forever and the meta line silently drops the model
+      // segment. Fall back to the same catalog default ModelSelect itself
+      // renders, mirroring ChatComposer's own `?? defaultModelId(null)` guard.
+      const sessionModel = getSessionModel(sessionId) ?? defaultModelId(null);
       setRegistry((prev) => reduceMessageMetadata(prev, event, sessionModel));
     });
     return () => {

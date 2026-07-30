@@ -39,7 +39,11 @@ interface ToolGroupProps {
 export function ToolGroup({ rows, onOpenFile }: ToolGroupProps) {
   if (rows.length === 0) return null;
   return (
-    <div className="my-2.5 flex flex-col gap-1">
+    // T-30 P-17: no own margin — the parent `AssistantMessage` article owns
+    // the 10px item-to-item gap via `gap-2.5`; a margin here would stack on
+    // top of it (and on ReadingColumn's turn-to-turn space-y-5) instead of
+    // replacing it.
+    <div className="flex flex-col gap-1">
       {rows.map((row) => (
         <ToolRow key={row.key} view={row} depth={0} onOpenFile={onOpenFile} />
       ))}
@@ -107,7 +111,12 @@ function ToolRowArg({
   onOpenFile?: (target: FileLinkTarget) => void;
 }) {
   if (!view.arg) return null;
-  const argClass = cn('min-w-0 truncate', view.failed ? 'text-destructive/70' : 'text-tool-arg');
+  const argClass = cn(
+    'min-w-0 truncate',
+    view.failed
+      ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'
+      : 'text-tool-arg'
+  );
 
   if (view.link) {
     const link = view.link;

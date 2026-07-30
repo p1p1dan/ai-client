@@ -98,7 +98,7 @@ interface QaHeadProps {
 function QaHead({ title, pager, onPrev, onNext, collapsed, onToggleCollapsed }: QaHeadProps) {
   return (
     <div className="flex h-9 items-center gap-2 px-3 text-muted-foreground">
-      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span className="min-w-0 flex-1 truncate tracking-[0.01em]">{title}</span>
       {pager?.visible && (
         <span className="flex items-center gap-0.5 text-code tabular-nums text-muted-foreground">
           <button

@@ -146,7 +146,7 @@
      * references resolve against whichever element uses --tool-arg, so
      * .dark's --muted-foreground/--background overrides are picked up
      * automatically without a second .dark declaration. */
-    --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+    --tool-arg: color-mix(in oklab, var(--muted-foreground) 78%, var(--background));
   }
 
   /* Flexoki Dark - flexoki-dark.json */
