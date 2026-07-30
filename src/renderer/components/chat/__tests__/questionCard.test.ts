@@ -321,6 +321,20 @@ describe('canRespondToPermission', () => {
   it('G5: false when activeSessionId is null', () => {
     expect(canRespondToPermission(queue, null, 'perm-1')).toBe(false);
   });
+
+  it('G6: only the session queue HEAD is answerable — later entries wait their turn (serialized ruling)', () => {
+    const twoForOneSession = [
+      { sessionId: 's1', permissionId: 'perm-1' },
+      { sessionId: 's1', permissionId: 'perm-2' },
+    ];
+    expect(canRespondToPermission(twoForOneSession, 's1', 'perm-1')).toBe(true);
+    expect(canRespondToPermission(twoForOneSession, 's1', 'perm-2')).toBe(false);
+  });
+
+  it('G7: after the head resolves (dequeued), the next entry becomes answerable', () => {
+    const afterHeadResolved = [{ sessionId: 's1', permissionId: 'perm-2' }];
+    expect(canRespondToPermission(afterHeadResolved, 's1', 'perm-2')).toBe(true);
+  });
 });
 
 describe('selectPendingQuestionBlock', () => {

@@ -1,0 +1,1961 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A08 定稿 · 顶栏贯通 + 联动收展 + 中列 Editor（右栏 baseline）</title>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+h1, h2, h3, h4, p, ul, figure { margin: 0; }
+ul { list-style: none; padding: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+img, svg { display: block; max-width: 100%; }
+table { border-collapse: collapse; }
+
+:root {
+  --page-bg: #faf8f2;
+  --page-fg: #1b1917;
+  --page-dim: #6b6660;
+  --page-faint: #8d877f;
+  --page-rule: #e3ded2;
+  --page-rule-soft: #efeae0;
+  --page-panel: #fffdf7;
+  --page-accent: #a8481a;
+  --page-accent-soft: #a8481a1a;
+  --page-warn: #8a5a10;
+  --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f;
+  --page-stop-soft: #96291f14;
+  --page-go: #4f6410;
+  --page-go-soft: #4f641014;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --col: 68rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #141211; --page-fg: #d6d2c8; --page-dim: #918a80; --page-faint: #6f6960;
+    --page-rule: #2f2c28; --page-rule-soft: #232120; --page-panel: #1a1817;
+    --page-accent: #e08a4c; --page-accent-soft: #e08a4c1f;
+    --page-warn: #d0a215; --page-warn-soft: #d0a2151a;
+    --page-stop: #d9584b; --page-stop-soft: #d9584b1a;
+    --page-go: #a9b85e; --page-go-soft: #a9b85e1a;
+  }
+}
+
+:root[data-page="dark"] {
+  --page-bg: #141211; --page-fg: #d6d2c8; --page-dim: #918a80; --page-faint: #6f6960;
+  --page-rule: #2f2c28; --page-rule-soft: #232120; --page-panel: #1a1817;
+  --page-accent: #e08a4c; --page-accent-soft: #e08a4c1f;
+  --page-warn: #d0a215; --page-warn-soft: #d0a2151a;
+  --page-stop: #d9584b; --page-stop-soft: #d9584b1a;
+  --page-go: #a9b85e; --page-go-soft: #a9b85e1a;
+}
+
+:root[data-page="light"] {
+  --page-bg: #faf8f2; --page-fg: #1b1917; --page-dim: #6b6660; --page-faint: #8d877f;
+  --page-rule: #e3ded2; --page-rule-soft: #efeae0; --page-panel: #fffdf7;
+  --page-accent: #a8481a; --page-accent-soft: #a8481a1a;
+  --page-warn: #8a5a10; --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f; --page-stop-soft: #96291f14;
+  --page-go: #4f6410; --page-go-soft: #4f641014;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  padding: 0 1.25rem 6rem;
+}
+
+.wrap { max-width: var(--col); margin-inline: auto; }
+
+.masthead {
+  padding: 3.5rem 0 2rem;
+  border-bottom: 2px solid var(--page-fg);
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--page-accent);
+  margin-bottom: 1rem;
+}
+.eyebrow a { color: inherit; text-decoration: none; }
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.6rem, 4vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin-bottom: 0.75rem;
+}
+.standfirst { max-width: 46rem; color: var(--page-dim); font-size: 16px; }
+.masthead-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin-top: 1.75rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--page-faint);
+}
+.masthead-meta b { color: var(--page-dim); font-weight: 500; }
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+.status-strip span {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 0.18rem 0.5rem;
+  border-radius: 3px;
+  background: var(--page-warn-soft);
+  color: var(--page-warn);
+}
+.status-strip span.is-ref { background: var(--page-accent-soft); color: var(--page-accent); }
+.status-strip span.is-go { background: var(--page-go-soft); color: var(--page-go); }
+.status-strip span.is-ask { background: var(--page-stop-soft); color: var(--page-stop); }
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0;
+  margin-bottom: 2.5rem;
+  background: var(--page-bg);
+  border-bottom: 1px solid var(--page-rule);
+}
+.toolbar .tb-label {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+}
+.toolbar nav { margin-left: auto; display: flex; gap: 0.9rem; flex-wrap: wrap; }
+.toolbar nav a {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--page-dim);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.toolbar nav a:hover { color: var(--page-accent); border-bottom-color: var(--page-accent); }
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--page-rule);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.seg button {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 0.22rem 0.65rem;
+  background: transparent;
+  color: var(--page-dim);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.seg button + button { border-left: 1px solid var(--page-rule); }
+.seg button[aria-pressed="true"] { background: var(--page-fg); color: var(--page-bg); }
+.seg button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: -2px; }
+
+section { margin-bottom: 4.5rem; scroll-margin-top: 4rem; }
+
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--page-rule);
+  margin-bottom: 1.75rem;
+}
+.sec-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--page-bg);
+  background: var(--page-fg);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+h2 { font-family: var(--mono); font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+.sec-sub { color: var(--page-faint); font-size: 13px; margin-left: auto; font-family: var(--mono); }
+h3 { font-family: var(--mono); font-size: 0.95rem; font-weight: 600; margin: 2.25rem 0 0.85rem; }
+p { margin-bottom: 0.9rem; max-width: 46rem; }
+p:last-child { margin-bottom: 0; }
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--page-rule-soft);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+.verdict-strip {
+  display: grid;
+  gap: 1px;
+  background: var(--page-rule);
+  border: 1px solid var(--page-rule);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+@media (min-width: 700px) { .verdict-strip { grid-template-columns: repeat(4, 1fr); } }
+.verdict-item { background: var(--page-panel); padding: 0.7rem 0.85rem; }
+.v-k {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  font-family: var(--mono);
+  margin-bottom: 0.25rem;
+}
+.v-v { display: block; font-family: var(--mono); font-size: 12.5px; color: var(--page-accent); line-height: 1.4; }
+
+.ask {
+  border: 1px solid var(--page-rule);
+  border-left: 3px solid var(--page-stop);
+  background: var(--page-panel);
+  border-radius: 0 7px 7px 0;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.85rem;
+}
+.ask.decided { border-left-color: var(--page-go); }
+.ask b { font-family: var(--mono); font-size: 12.5px; color: var(--page-stop); display: block; margin-bottom: 0.3rem; }
+.ask.decided b { color: var(--page-go); }
+.ask p { font-size: 13.5px; color: var(--page-dim); margin: 0; max-width: none; }
+
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.demo-cap {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+}
+.demo-bar .hint { font-family: var(--mono); font-size: 11.5px; color: var(--page-accent); margin-left: auto; }
+
+.stage {
+  border: 1px solid var(--page-rule);
+  border-radius: 9px;
+  padding: 0.55rem;
+  background: var(--page-rule-soft);
+  overflow: hidden;
+}
+.stage-wide {
+  width: min(calc(100vw - 3rem), var(--stage-w, 1680px));
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+.notes { display: grid; gap: 0.75rem; margin-top: 1.1rem; }
+@media (min-width: 860px) { .notes { grid-template-columns: repeat(2, 1fr); } }
+.note {
+  border: 1px solid var(--page-rule);
+  border-radius: 7px;
+  padding: 0.8rem 0.95rem;
+  background: var(--page-panel);
+}
+.note h4 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-accent);
+  margin-bottom: 0.5rem;
+}
+.note.is-diff h4 { color: var(--page-stop); }
+.note.is-go h4 { color: var(--page-go); }
+.note ul { display: flex; flex-direction: column; gap: 0.35rem; }
+.note li {
+  position: relative;
+  padding-left: 0.95rem;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--page-dim);
+}
+.note li::before { content: '·'; position: absolute; left: 0.25rem; color: var(--page-faint); }
+.note b { color: var(--page-fg); font-weight: 500; }
+
+.tbl-scroll { overflow-x: auto; border: 1px solid var(--page-rule); border-radius: 7px; }
+table { width: 100%; font-size: 13px; }
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--page-rule-soft);
+  vertical-align: top;
+  line-height: 1.5;
+}
+th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  background: var(--page-panel);
+  white-space: nowrap;
+}
+tr:last-child td { border-bottom: 0; }
+td.mono, td b { font-family: var(--mono); }
+td.mono { font-size: 12px; color: var(--page-accent); white-space: nowrap; }
+td b { font-weight: 500; color: var(--page-fg); font-size: 12.5px; }
+
+.shell-tb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--page-rule);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.shell-tb span { color: var(--page-faint); margin-right: 4px; }
+.shell-tb button {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--page-rule);
+  border-radius: 3px;
+  background: var(--page-panel);
+  color: var(--page-dim);
+}
+.shell-tb button.is-on {
+  background: var(--page-fg);
+  color: var(--page-bg);
+  border-color: var(--page-fg);
+}
+.shell-tb .state-readout {
+  margin-left: auto;
+  color: var(--page-accent);
+  font-size: 11px;
+}
+
+.footnote {
+  border-top: 2px solid var(--page-fg);
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
+.footnote h3 { margin-top: 0; }
+.footnote ul { list-style: disc; padding-left: 1.15rem; margin-bottom: 0.9rem; max-width: 46rem; }
+.footnote li { margin-bottom: 0.3rem; color: var(--page-dim); font-size: 14px; }
+
+/* ============================================================
+   Prototype tokens — Flexoki OKLCH verbatim from globals.css
+   No hex literals allowed inside .fx
+   ============================================================ */
+
+.fx {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.9837 0.0106 100.82);
+  --card-foreground: oklch(0.1696 0.0017 17.32);
+  --popover: oklch(0.9837 0.0106 100.82);
+  --popover-foreground: oklch(0.1696 0.0017 17.32);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --secondary: oklch(0.9673 0.0111 89.72);
+  --secondary-foreground: oklch(0.1696 0.0017 17.32);
+  --muted: oklch(0.969 0.0093 99.98);
+  --muted-foreground: oklch(0.5111 0.0053 78.28);
+  --accent: oklch(0.9422 0.0122 96.43);
+  --accent-foreground: oklch(0.1696 0.0017 17.32);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.9152 0.0109 95.17);
+  --hover: oklch(0.9422 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --destructive-foreground: oklch(0.9931 0.012 96.42);
+  --success: oklch(0.5593 0.1335 122.92);
+  --success-foreground: oklch(0.9931 0.012 96.42);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --warning-foreground: oklch(0.9931 0.012 96.42);
+  --info: oklch(0.4818 0.1315 254.79);
+  --info-foreground: oklch(0.9931 0.012 96.42);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.881 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --ring: oklch(0.5665 0.1523 45.02);
+  --radius: 0.5rem;
+
+  --r-xs: 0.25rem;
+  --r-sm: var(--radius);
+  --r-md: 0.75rem;
+
+  --h-btn: 24px;
+  --h-row: 28px;
+  --h-bar: 36px;
+  --w-side: 280px;
+  --w-rail: 44px;
+  --w-read: 48rem;
+  --dock-h: 200px;
+
+  --t-code: 13px;
+  --t-ui: 14px;
+
+  --mono: ui-monospace, "SFMono-Regular", Menlo, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--mono);
+  font-size: var(--t-ui);
+  line-height: 1.45;
+}
+
+.fx[data-fx="dark"] {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.2197 0.0037 48.55);
+  --card-foreground: oklch(0.8463 0.0137 102.05);
+  --popover: oklch(0.2197 0.0037 48.55);
+  --popover-foreground: oklch(0.8463 0.0137 102.05);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --primary-foreground: oklch(0.1981 0.0032 17.43);
+  --secondary: oklch(0.2315 0.0024 67.71);
+  --secondary-foreground: oklch(0.8463 0.0137 102.05);
+  --muted: oklch(0.2228 0.0025 67.7);
+  --muted-foreground: oklch(0.5933 0.0079 88.68);
+  --accent: oklch(0.2912 0.0029 17.32);
+  --accent-foreground: oklch(0.8463 0.0137 102.05);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.3112 0.0029 17.31);
+  --hover: oklch(0.2912 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --destructive-foreground: oklch(0.1981 0.0032 17.43);
+  --success: oklch(0.7227 0.1178 117.2);
+  --success-foreground: oklch(0.1981 0.0032 17.43);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --warning-foreground: oklch(0.1981 0.0032 17.43);
+  --info: oklch(0.5988 0.1104 247);
+  --info-foreground: oklch(0.1981 0.0032 17.43);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.3214 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --ring: oklch(0.6576 0.1539 49.3);
+}
+
+.fx svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+/* ---- final shell grid: Sidebar | Main(topbar spans all + body: Center | Panel | Rail) ---- */
+.fx-shell-final {
+  display: grid;
+  grid-template-columns: var(--w-side) minmax(0, 1fr);
+  height: 660px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Sidebar stub */
+.sb {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  padding: 0 6px;
+  min-width: 0;
+  background: var(--background);
+}
+.sb-top {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+}
+.sb-sec {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+  letter-spacing: 0.04em;
+}
+.sb-row {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 20px;
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+  font-size: var(--t-code);
+}
+.sb-row.is-active { background: var(--selection); }
+.sb-row .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-foot {
+  margin-top: auto;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+}
+
+/* Main column: topbar spans center+panel+rail; body splits below it */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--background);
+}
+.topbar {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.main-body {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+/* Center column: (chat | editor) + bottom dock */
+.center {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--background);
+}
+.topbar-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-code);
+  color: var(--foreground);
+}
+
+.cbody {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* Chat column */
+.mn {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.fx-shell-final[data-chat="hidden"] .mn { display: none; }
+.mn-read {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--muted-foreground);
+}
+.mn-read .rc {
+  width: min(100%, var(--w-read));
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  padding: 40px 24px;
+  text-align: center;
+  font-size: var(--t-code);
+}
+
+/* Split grip between chat and editor (drag = ratio memory, proposal §06-5) */
+.ed-grip {
+  display: none;
+  width: 3px;
+  flex-shrink: 0;
+  cursor: col-resize;
+}
+.ed-grip:hover { background: var(--ring); opacity: 0.35; }
+.fx-shell-final[data-editor="open"][data-chat="visible"] .ed-grip { display: block; }
+
+/* Editor column — center stage, v2-style chrome */
+.ed {
+  display: none;
+  flex: 1.3 1 0;
+  min-width: 0;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+}
+.fx-shell-final[data-editor="open"] .ed { display: flex; }
+.fx-shell-final[data-chat="hidden"] .ed { border-left: 0; }
+.ed-head {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ed-head .ic-file { color: var(--info); }
+.ed-head .fname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-code);
+  color: var(--foreground);
+}
+.ed-head .unsaved {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex-shrink: 0;
+}
+.ed-head .acts { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
+.ed-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+.ed-gutter {
+  width: 40px;
+  flex-shrink: 0;
+  padding: 12px 8px 12px 0;
+  text-align: right;
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+  line-height: 1.6;
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+.ed-code {
+  flex: 1;
+  padding: 12px;
+  font-size: var(--t-code);
+  line-height: 1.6;
+  color: var(--foreground);
+  overflow: auto;
+}
+.ed-code .kw { color: var(--info); }
+.ed-code .str { color: var(--success); }
+.ed-code .cm { color: var(--muted-foreground); }
+.ed-float {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms;
+}
+.ed-body:hover .ed-float { opacity: 1; pointer-events: auto; }
+.ed-float .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+
+/* BottomDock — terminal lives here, toggle in chead + panel tab bar */
+.bdock {
+  display: none;
+  flex-direction: column;
+  height: var(--dock-h);
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--muted);
+}
+.fx-shell-final[data-dock="open"] .bdock { display: flex; }
+.bdock-head {
+  height: var(--h-bar);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--t-code);
+  color: var(--foreground);
+  flex-shrink: 0;
+}
+.bdock-head .h-btn { margin-left: auto; }
+.bdock-body {
+  flex: 1;
+  padding: 12px;
+  font-size: var(--t-code);
+  color: var(--foreground);
+  line-height: 1.6;
+  overflow: auto;
+}
+.bdock-body .prompt { color: var(--primary); }
+.bdock-body .dim { color: var(--muted-foreground); }
+
+/* Right panel — git/files/context tabs only (editor left the panel) */
+.panel {
+  width: var(--pw, 380px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+  position: relative;
+  transition: width 250ms;
+}
+.fx-shell-final[data-panel="collapsed"] .panel { display: none; }
+.panel-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  cursor: col-resize;
+  z-index: 3;
+}
+.panel-resize:hover { background: var(--ring); opacity: 0.35; }
+
+.p-tabs {
+  height: var(--h-bar);
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 4px 4px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.p-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: var(--t-code);
+  color: var(--muted-foreground);
+  border-radius: var(--r-sm);
+  text-transform: lowercase;
+  position: relative;
+  transition: background 150ms, color 150ms;
+}
+.p-tab:hover { background: var(--hover); color: var(--foreground); }
+.p-tab.is-on { background: var(--selection); color: var(--foreground); }
+.p-tab .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-tab .tab-dot {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--info);
+  display: none;
+  flex-shrink: 0;
+}
+.fx-shell-final.is-git-dirty .p-tab[data-tab="git"] .tab-dot { display: block; }
+
+.p-acts { display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: 2px; }
+
+.p-body { flex: 1; min-height: 0; overflow: auto; }
+.p-pane { display: none; flex-direction: column; height: 100%; }
+.p-pane.is-on { display: flex; }
+
+/* Rail — content icons only, rendered only when panel collapsed (linked expand/collapse, final).
+   Expanded = clean right edge; collapsed = rail appears for one-click recall. */
+.rail {
+  width: var(--w-rail);
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  color: var(--muted-foreground);
+  background: var(--background);
+}
+.fx-shell-final[data-panel="expanded"] .rail { display: none; }
+.rail .r-btn {
+  position: relative;
+  width: var(--h-row);
+  height: var(--h-row);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  transition: background 100ms, color 100ms;
+}
+.rail .r-btn:hover { background: var(--hover); color: var(--foreground); }
+.rail .r-btn.is-on { background: var(--selection); color: var(--foreground); }
+.rail .dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--info);
+  display: none;
+}
+.fx-shell-final.is-git-dirty .rail .r-btn[data-rail="git"] .dot { display: block; }
+
+.h-btn {
+  width: var(--h-btn);
+  height: var(--h-btn);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+}
+.h-btn:hover { background: var(--hover); color: var(--foreground); }
+.h-btn.is-on { background: var(--selection); color: var(--foreground); }
+
+/* Files tab */
+.files-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.files-search {
+  flex: 1;
+  min-width: 0;
+  height: var(--h-row);
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--muted);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: var(--t-code);
+}
+.files-search::placeholder { color: var(--muted-foreground); }
+.files-acts { display: flex; gap: 2px; }
+
+.tree { padding: 4px 0; font-size: var(--t-code); }
+.tree-row {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+  cursor: pointer;
+  position: relative;
+}
+.tree-row:hover { background: var(--hover); }
+.tree-row.is-sel { background: var(--selection); }
+.tree-row .ic-folder { color: var(--folder); }
+.tree-row .ic-file { color: var(--muted-foreground); }
+.tree-row .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-row .menu-btn {
+  width: var(--h-btn);
+  height: var(--h-btn);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+  opacity: 0;
+  font-size: 12px;
+}
+.tree-row:hover .menu-btn { opacity: 1; }
+.tree-row .menu-btn:hover { background: var(--hover); color: var(--foreground); }
+.tree-indent-1 { padding-left: 20px; }
+.tree-indent-2 { padding-left: 32px; }
+
+/* Git tab */
+.git-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.branch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--h-row);
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--t-code);
+  color: var(--foreground);
+  background: var(--muted);
+  align-self: flex-start;
+}
+.git-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.git-act {
+  height: var(--h-row);
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: var(--t-code);
+  color: var(--muted-foreground);
+}
+.git-act:hover { background: var(--hover); color: var(--foreground); }
+.git-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+}
+.git-empty .title { color: var(--foreground); margin-bottom: 4px; }
+.git-empty .sub { margin-bottom: 12px; }
+.btn-secondary {
+  height: var(--h-row);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--t-code);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+.btn-secondary:hover { background: var(--hover); }
+.git-dirty-list { padding: 4px 0; font-size: var(--t-code); }
+.git-dirty-list .row {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  color: var(--foreground);
+}
+.git-dirty-list .row:hover { background: var(--hover); }
+.git-dirty-list .st { font-size: 11px; width: 12px; flex-shrink: 0; }
+.git-dirty-list .st-m { color: var(--info); }
+.git-dirty-list .st-a { color: var(--success); }
+.git-dirty-list .st-d { color: var(--destructive); }
+.git-dirty-list .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-shell-final:not(.is-git-dirty) .git-dirty-list { display: none; }
+.fx-shell-final.is-git-dirty .git-empty { display: none; }
+
+/* Context tab — session strip + notes/todo/plans */
+.ctx-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.ctx-strip .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  min-width: 0;
+}
+.ctx-strip .chip .live { width: 6px; height: 6px; border-radius: 50%; background: var(--status-running); }
+.ctx-strip .chev { margin-left: auto; color: var(--muted-foreground); transition: transform 150ms; }
+.fx-shell-final[data-ctx-open="true"] .ctx-strip .chev { transform: rotate(90deg); }
+.ctx-fields { display: none; border-bottom: 1px solid var(--border); }
+.fx-shell-final[data-ctx-open="true"] .ctx-fields { display: block; }
+.ctx-field {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--t-code);
+  align-items: baseline;
+}
+.ctx-field:last-child { border-bottom: 0; }
+.ctx-field .k { color: var(--muted-foreground); }
+.ctx-field .v { color: var(--foreground); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-field .v.is-live { color: var(--status-running); }
+
+.ctx-body { padding: 8px; display: flex; flex-direction: column; gap: 12px; }
+.ctx-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: var(--t-code);
+}
+.ctx-sec-head .label { color: var(--foreground); font-weight: 500; }
+.ctx-sec-head .count { color: var(--muted-foreground); margin-left: auto; }
+.ctx-sec-head .add {
+  width: var(--h-btn);
+  height: var(--h-btn);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+}
+.ctx-sec-head .add:hover { background: var(--hover); color: var(--foreground); }
+.ctx-textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--muted);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: var(--t-code);
+  resize: vertical;
+}
+.ctx-textarea::placeholder { color: var(--muted-foreground); }
+.ctx-hint {
+  padding: 12px 8px;
+  color: var(--muted-foreground);
+  font-size: var(--t-code);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+}
+
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">A08 定稿 · 右栏 baseline · <a href="./a08-context-panel-rail-alignment.html">索引</a> · 前版：<a href="./a08-v5-center-editor-responsive.html">v5（含 A/B 对比过程）</a></div>
+  <h1>顶栏贯通 · 联动收展 · Editor 中列 · 画幅降级梯</h1>
+  <p class="standfirst">
+    A08 右栏定稿 baseline（2026-07-30 拍板）。<b>顶栏贯通中右</b>：Session · 终端 · 折叠 是一条横贯 chat + editor + panel + rail 的上边栏，
+    git / files / context 三 tab 明确居其下；<b>右缘 chrome = 联动收展</b>：展开时右缘无图标，收起时 Rail 出现、三图标 + git dot 一键唤回；
+    <b>Editor 回中列</b>（v2 chrome：文件名头 + chat 显隐 + 关闭，chat 与代码同框）；<b>画幅降级梯</b>：L0 全 → L1 收右栏 → L2 隐 chat，手动操作永远优先。
+    本页取代 v4 / v5 注册为施工与验收基准。
+  </p>
+  <div class="status-strip">
+    <span class="is-go">定稿 · 2026-07-30 拍板</span>
+    <span class="is-ref">右缘 chrome = 联动收展</span>
+    <span class="is-ref">降级梯 1580 / 1244</span>
+    <span class="is-ref">单文件 · 可直接拷贝</span>
+  </div>
+  <div class="masthead-meta">
+    <b>依据</b> v5 A/B 实测对比 · 用户拍板「联动收展更符合操作习惯」
+    <b>日期</b> 2026-07-30
+  </div>
+</header>
+
+<div class="toolbar">
+  <span class="tb-label">Flexoki 主题</span>
+  <div class="seg" role="group" aria-label="原型主题">
+    <button type="button" data-fx-set="light" aria-pressed="true">light</button>
+    <button type="button" data-fx-set="dark" aria-pressed="false">dark</button>
+  </div>
+  <span class="tb-label">页面</span>
+  <div class="seg" role="group" aria-label="页面主题">
+    <button type="button" data-page-set="light" aria-pressed="false">light</button>
+    <button type="button" data-page-set="dark" aria-pressed="false">dark</button>
+  </div>
+  <nav>
+    <a href="#s0">范围</a>
+    <a href="#s1">交互壳</a>
+    <a href="#s2">状态机</a>
+    <a href="#s3">内容规格</a>
+    <a href="#s4">尺寸</a>
+    <a href="#s5">取舍</a>
+    <a href="#s6">施工</a>
+  </nav>
+</div>
+
+<!-- §00 Scope -->
+<section id="s0">
+  <div class="sec-head">
+    <span class="sec-tag">00</span>
+    <h2>范围：定稿决策与结构一句话</h2>
+    <span class="sec-sub">final baseline</span>
+  </div>
+
+  <div class="verdict-strip">
+    <div class="verdict-item"><span class="v-k">壳网格</span><span class="v-v">280 · 顶栏贯通 · chat|editor · panel · rail</span></div>
+    <div class="verdict-item"><span class="v-k">Editor</span><span class="v-v">回中列 · v2 chrome</span></div>
+    <div class="verdict-item"><span class="v-k">降级梯</span><span class="v-v">L0 全 → L1 收右栏 → L2 隐 chat</span></div>
+    <div class="verdict-item"><span class="v-k">右缘 chrome</span><span class="v-v">联动收展（定稿）</span></div>
+  </div>
+
+  <div class="notes">
+    <div class="note is-go">
+      <h4>定稿决策（2026-07-30 拍板）</h4>
+      <ul>
+        <li><b>顶栏贯通中右</b>：Session · 终端 · 折叠 横贯 chat+editor+panel+rail，三 tab 明确居其下 —— 壳层级从「并列」变「包含」</li>
+        <li><b>右缘 chrome = 联动收展</b>：展开时右缘无图标；收起时 Rail 出现，三图标 + git dot 唤回；折叠入口 = 顶栏折叠钮 / tab 条 ✕ / <code>Ctrl+J</code></li>
+        <li><b>Editor 回中列</b>：v2 chrome（文件名头 + chat 显隐 + 关闭），chat 与代码同框对照</li>
+        <li><b>画幅降级梯</b>：L0 ≥1580 全 → L1 ≥1244 收右栏（Rail 出现）→ L2 隐 chat；手动操作永远优先</li>
+        <li><b>Rail 瘦身</b>：底栏 bell/settings 撤出；terminal toggle 归贯通顶栏 + <code>Ctrl+`</code></li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>不动的部分（v4 继承）</h4>
+      <ul>
+        <li>Rail 44px · git/files/context 三图标 + git-only dot，仅收起时渲染</li>
+        <li>面板 h-9 分段 tab（git · files · context，不再塞 editor），位于贯通顶栏之下</li>
+        <li>Terminal 内容留 BottomDock（220px · Center 列底部）</li>
+        <li>Per-tab 宽度记忆（380 默认 · 380–1400 拖拽）</li>
+        <li>Flexoki OKLCH · 36/28/24 尺寸档 · git-only 指示纪律</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- §01 Interactive shell -->
+<section id="s1">
+  <div class="sec-head">
+    <span class="sec-tag">01</span>
+    <h2>交互主壳 —— 中列 Editor + 降级梯实况</h2>
+    <span class="sec-sub">stage 宽度可调 · 660px 高</span>
+  </div>
+
+  <div class="demo-bar">
+    <span class="demo-cap">Interactive · 定稿行为 × 宽度降级</span>
+    <span class="hint">切 stage 宽度 → 开文件看 L0/L1/L2 · 手动展开右栏/唤回 chat 覆盖自动</span>
+  </div>
+
+  <div class="stage stage-wide" id="stage">
+    <div class="shell-tb">
+      <span>Demo:</span>
+      <button type="button" id="btn-git-dirty" class="is-on">git dirty</button>
+      <span style="margin-left:8px;">stage 宽:</span>
+      <button type="button" data-sw="1680" class="is-on">1680</button>
+      <button type="button" data-sw="1500">1500</button>
+      <button type="button" data-sw="1320">1320</button>
+      <button type="button" data-sw="1120">1120</button>
+      <button type="button" id="btn-reset" style="margin-left:8px;">Reset</button>
+      <span class="state-readout" id="state-readout">—</span>
+    </div>
+
+    <div class="fx" data-fx="light" id="fx-root">
+      <div class="fx-shell-final is-git-dirty" id="fx-shell"
+           data-editor="closed" data-chat="visible" data-panel="expanded"
+           data-tab="files" data-dock="closed" data-ctx-open="false">
+
+        <!-- Sidebar stub -->
+        <aside class="sb">
+          <div class="sb-top">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+            <span style="margin-left:auto;font-size:var(--t-code);color:var(--muted-foreground);">280</span>
+          </div>
+          <div class="sb-sec">Recent</div>
+          <div class="sb-row is-active"><span class="t">OpenChamber refactor …</span></div>
+          <div class="sb-row"><span class="t">Phase 2 ledger</span></div>
+          <div class="sb-foot"><span>Sidebar stub · A05/A06 定稿 · settings 在这</span></div>
+        </aside>
+
+        <!-- Main: topbar spans center+panel+rail; body splits below it -->
+        <div class="main">
+          <header class="topbar">
+            <span class="topbar-title">Session · OpenChamber refactor</span>
+            <button type="button" class="h-btn" id="btn-dock" title="Toggle terminal dock (Ctrl+`)"><svg viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></button>
+            <button type="button" class="h-btn is-on" id="btn-panel" title="收起/展开面板（Ctrl+J）"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
+          </header>
+          <div class="main-body">
+          <!-- Center: (chat | editor) + bottom dock -->
+          <div class="center">
+          <div class="cbody">
+            <main class="mn">
+              <div class="mn-read">
+                <div class="rc">
+                  Main · Chat 空态 stub<br>min(100%, 48rem) 居中<br>
+                  <span style="color:var(--primary);">A07 定稿区域 — 本页不展开</span>
+                </div>
+              </div>
+            </main>
+            <div class="ed-grip" title="拖拽调 chat/editor 比例（提案 §06-5）"></div>
+            <section class="ed" id="ed">
+              <div class="ed-head">
+                <svg class="ic-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                <span class="fname" id="ed-fname">ContextPanel.tsx</span>
+                <span class="unsaved" title="未保存" hidden></span>
+                <span class="acts">
+                  <button type="button" class="h-btn" id="btn-chat" title="隐去 chat（editor max）"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+                  <button type="button" class="h-btn" id="btn-ed-close" title="关闭文件"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                </span>
+              </div>
+              <div class="ed-body">
+                <div class="ed-gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9</div>
+                <div class="ed-code" id="ed-code">
+                  <span class="kw">export</span> <span class="kw">function</span> ContextPanel() {<br>
+                  &nbsp;&nbsp;<span class="kw">const</span> [tab, setTab] = useState(<span class="str">'files'</span>);<br>
+                  &nbsp;&nbsp;<span class="cm">// Monaco stub · Ghostty 主题同步</span><br>
+                  &nbsp;&nbsp;<span class="kw">return</span> &lt;Panel /&gt;;<br>
+                  }
+                </div>
+                <div class="ed-float"><span class="dot"></span> Auto-save on</div>
+              </div>
+            </section>
+          </div>
+          <section class="bdock" id="bdock">
+            <div class="bdock-head">
+              <svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+              Terminal
+              <button type="button" class="h-btn" id="btn-dock-close" title="关闭"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            </div>
+            <div class="bdock-body">
+              <div><span class="prompt">dan@ai-client</span> <span class="dim">main</span> $ pnpm dev</div>
+              <div class="dim">electron-vite dev …</div>
+              <div><span class="prompt">→</span> ready on localhost:5173</div>
+            </div>
+          </section>
+          </div><!-- /.center -->
+
+          <!-- Right panel (below the spanning topbar) -->
+          <aside class="panel" id="panel" style="--pw:380px;">
+          <div class="panel-resize" title="拖拽 380–1400（demo 不展开）"></div>
+          <div class="p-tabs" role="tablist">
+            <button type="button" class="p-tab" data-tab="git" role="tab">git<span class="tab-dot" aria-hidden="true"></span></button>
+            <button type="button" class="p-tab is-on" data-tab="files" role="tab">files</button>
+            <button type="button" class="p-tab" data-tab="context" role="tab">context</button>
+            <span class="p-acts">
+              <button type="button" class="h-btn" id="btn-collapse" title="收起面板到 Rail（Ctrl+J）"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            </span>
+          </div>
+
+          <div class="p-body">
+
+            <!-- Git pane -->
+            <div class="p-pane" data-pane="git">
+              <div class="git-body">
+                <span class="branch-chip">
+                  <svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                  main
+                  <svg viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+                <div class="git-actions">
+                  <button type="button" class="git-act">commit</button>
+                  <button type="button" class="git-act">update</button>
+                  <button type="button" class="git-act">pr</button>
+                  <button type="button" class="git-act">sync</button>
+                </div>
+                <div class="git-empty">
+                  <div class="title">Working tree clean</div>
+                  <div class="sub">No uncommitted changes in this worktree.</div>
+                  <button type="button" class="btn-secondary">stashes</button>
+                </div>
+                <div class="git-dirty-list">
+                  <div class="row"><span class="st st-m">M</span><span class="t">ContextPanel.tsx</span></div>
+                  <div class="row"><span class="st st-m">M</span><span class="t">WorkspaceShell.tsx</span></div>
+                  <div class="row"><span class="st st-a">A</span><span class="t">a08-final-context-panel-baseline.html</span></div>
+                  <div class="row"><span class="st st-d">D</span><span class="t">RightDock.tsx</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Files pane -->
+            <div class="p-pane is-on" data-pane="files">
+              <div class="files-toolbar">
+                <input type="search" class="files-search" placeholder="Search files..." aria-label="Search files">
+                <div class="files-acts">
+                  <button type="button" class="h-btn" title="New File"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v6"/><path d="M9 14h6"/></svg></button>
+                  <button type="button" class="h-btn" title="New Folder"><svg viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/><path d="M12 11v6"/><path d="M9 14h6"/></svg></button>
+                  <button type="button" class="h-btn" title="Refresh"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></button>
+                </div>
+              </div>
+              <div class="tree" id="file-tree">
+                <div class="tree-row tree-indent-1">
+                  <svg class="ic-folder" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                  <span class="t">src</span>
+                </div>
+                <div class="tree-row tree-indent-2">
+                  <svg class="ic-folder" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                  <span class="t">renderer</span>
+                </div>
+                <div class="tree-row tree-indent-2 is-sel" data-file="ContextPanel.tsx">
+                  <svg class="ic-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <span class="t">ContextPanel.tsx</span>
+                  <button type="button" class="menu-btn" title="菜单">⋯</button>
+                </div>
+                <div class="tree-row tree-indent-2" data-file="settings.ts">
+                  <svg class="ic-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <span class="t">settings.ts</span>
+                  <button type="button" class="menu-btn" title="菜单">⋯</button>
+                </div>
+                <div class="tree-row tree-indent-1">
+                  <svg class="ic-folder" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 18.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                  <span class="t">docs</span>
+                </div>
+                <div class="tree-row tree-indent-2" data-file="a08-final-context-panel-baseline.html">
+                  <svg class="ic-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <span class="t">a08-final-context-panel-baseline.html</span>
+                  <button type="button" class="menu-btn" title="菜单">⋯</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Context pane -->
+            <div class="p-pane" data-pane="context">
+              <div class="ctx-strip" id="ctx-strip" title="点击展开会话字段">
+                <span class="chip">
+                  <svg viewBox="0 0 24 24" style="width:11px;height:11px;"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                  main
+                </span>
+                <span class="chip">claude-opus-5</span>
+                <span class="chip"><span class="live"></span>running</span>
+                <svg class="chev" viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
+              <div class="ctx-fields">
+                <div class="ctx-field"><span class="k">Workspace</span><span class="v">D:\Code\projects\ai-client</span></div>
+                <div class="ctx-field"><span class="k">Branch</span><span class="v">main</span></div>
+                <div class="ctx-field"><span class="k">Model</span><span class="v">claude-opus-5 · high</span></div>
+                <div class="ctx-field"><span class="k">Permission</span><span class="v">default · ask on write</span></div>
+                <div class="ctx-field"><span class="k">Attached</span><span class="v">3 files</span></div>
+                <div class="ctx-field"><span class="k">Run state</span><span class="v is-live">running</span></div>
+              </div>
+              <div class="ctx-body">
+                <div>
+                  <div class="ctx-sec-head">
+                    <span class="label">Quick notes</span>
+                    <span class="count">0/3000</span>
+                  </div>
+                  <textarea class="ctx-textarea" placeholder="Jot down context for the agent…" rows="3"></textarea>
+                </div>
+                <div>
+                  <div class="ctx-sec-head">
+                    <span class="label">Todo</span>
+                    <span class="count">0 items</span>
+                    <button type="button" class="add" title="Add a todo"><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button>
+                  </div>
+                  <div class="ctx-hint">Add a todo — click + above</div>
+                </div>
+                <div>
+                  <div class="ctx-sec-head">
+                    <span class="label">Plans</span>
+                    <span class="count">0 files</span>
+                    <button type="button" class="add" title="Link plan"><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button>
+                  </div>
+                  <div class="ctx-hint">Link a plan from plantree</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </aside>
+
+        <!-- Rail — content icons only, bottom strip removed -->
+        <nav class="rail" aria-label="Context rail">
+          <button type="button" class="r-btn" data-rail="git" title="Git">
+            <svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            <span class="dot" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="r-btn is-on" data-rail="files" title="Files">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          </button>
+          <button type="button" class="r-btn" data-rail="context" title="Context">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          </button>
+        </nav>
+          </div><!-- /.main-body -->
+        </div><!-- /.main -->
+
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note is-go">
+      <h4>降级梯（开文件后生效）</h4>
+      <ul>
+        <li><b>L0 · W ≥ 1580</b>：chat · editor · 右栏全在（展开态无 Rail）—— v2 的三列感，chat ≥400 / editor ≥520 不再被挤</li>
+        <li><b>L1 · 1244 ≤ W &lt; 1580</b>：右栏自动收起、Rail 出现（git dot 仍可见，一键唤回）</li>
+        <li><b>L2 · W &lt; 1244</b>：chat 隐去，editor max 占满中列；editor 头部 chat 按钮一键唤回</li>
+        <li><b>手动 &gt; 自动</b>：任何时候手动展开右栏/唤回 chat，本次文件会话内自动降级让步；关文件清零</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>阈值怎么来的</h4>
+      <ul>
+        <li><code>1580 = 280 side + 400 chat-min + 520 editor-min + 380 panel</code> —— 展开态无 Rail，故不含 44</li>
+        <li><code>1244 = 280 + 400 + 520 + 44 rail</code> —— 收起态 Rail 在；低于此值 chat 与 editor 无法同时达标</li>
+        <li>chat-min 400：聊天气泡可读下限（48rem 是理想值，不是下限）；editor-min 520：13px 等宽 ~66 列 + gutter</li>
+        <li>1366×768 笔记本开文件 = L2 直达（chat 隐），这是设计预期而非缺陷 —— §06-7 请确认</li>
+      </ul>
+    </div>
+    <div class="note is-go">
+      <h4>联动收展纪律（定稿）</h4>
+      <ul>
+        <li><b>展开 = 右缘无图标</b>：panel 展开时 Rail 不渲染，右缘干净；L0 阈值因此不含 44px（1580）</li>
+        <li><b>收起 = Rail 出现</b>：三图标 + git dot 随时唤回，点击 = 展开到该 tab（editor open 时记为手动覆盖）</li>
+        <li><b>折叠入口三处</b>：顶栏折叠钮 · tab 条 ✕ · <code>Ctrl+J</code>；Rail 激活态点击路径不存在（展开时 Rail 不渲染）</li>
+        <li><b>自动降级同纪律</b>：L1 自动收起后 Rail 出现，点击唤回 = 手动覆盖，本次文件会话内自动梯让步</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- §02 State machine -->
+<section id="s2">
+  <div class="sec-head">
+    <span class="sec-tag">02</span>
+    <h2>状态机</h2>
+    <span class="sec-sub">editor · chat · panel · level · dock</span>
+  </div>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>触发</th><th>前置</th><th>结果</th><th>状态变化</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">files 行 click</td><td>editor closed</td><td>editor 中列打开，按当前宽度落到 L0/L1/L2</td><td class="mono">editor=open · 手动覆盖清零</td></tr>
+        <tr><td class="mono">窗口/容器宽度变化</td><td>editor open · 无手动覆盖</td><td>沿降级梯自动收右栏 / 隐 chat / 恢复</td><td class="mono">level → panel · chat 随梯</td></tr>
+        <tr><td class="mono">Rail 图标 click</td><td>panel collapsed</td><td>展开到该 tab；editor open 时记为手动覆盖（激活态点击路径不存在 —— 展开时 Rail 不渲染）</td><td class="mono">panel→expanded · manualPanel=true</td></tr>
+        <tr><td class="mono">顶栏折叠钮 / tab 条 ✕ / Ctrl+J</td><td>panel expanded</td><td>收起到 Rail，Rail 出现可唤回（editor open 时记为手动覆盖）</td><td class="mono">panel→collapsed · manualPanel=false</td></tr>
+        <tr><td class="mono">Tab click</td><td>panel expanded</td><td>切 tab</td><td class="mono">tab · lastTab 同步</td></tr>
+        <tr><td class="mono">editor head chat 按钮</td><td>editor open</td><td>chat 显隐切换（= 手动 max/restore）</td><td class="mono">manualChat=显/隐</td></tr>
+        <tr><td class="mono">editor head ✕</td><td>editor open</td><td>关文件：editor 撤列，chat 回，panel 恢复 panelOpen 偏好</td><td class="mono">editor=closed · 手动覆盖清零</td></tr>
+        <tr><td class="mono">terminal toggle ×2（贯通顶栏 / Ctrl+`）</td><td>任意</td><td>BottomDock 开关</td><td class="mono">dock 翻转 · 与 panel/chat 无关</td></tr>
+        <tr><td class="mono">拖拽 panel 左缘 grip</td><td>panel expanded</td><td>380–1400，写入当前 tab 记忆</td><td class="mono">widthMem[tab]=w · persist</td></tr>
+        <tr><td class="mono">拖拽 chat/editor grip（提案）</td><td>L0/L1</td><td>调 chat:editor 比例</td><td class="mono">editorRatio=r · persist</td></tr>
+        <tr><td class="mono">Git dirty</td><td>任意</td><td>Rail git 图标 + git tab 各显示 6px dot</td><td class="mono">.is-git-dirty on shell</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>持久化（session store · 与 layout prefs 同级）</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>键</th><th>值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">panelOpen</td><td><b>bool</b></td><td>无 editor 时的面板开关偏好；关文件后恢复到此值</td></tr>
+        <tr><td class="mono">lastTab</td><td><b>git | files | context</b></td><td>展开恢复目标（editor 已不再是 tab）</td></tr>
+        <tr><td class="mono">widthMem</td><td><b>{ git:380, files:380, context:380 }</b></td><td>per-tab 拖拽记忆，380–1400</td></tr>
+        <tr><td class="mono">editorRatio</td><td><b>0–1 · 默认 0.44</b></td><td>chat 占中列比例（提案，§06-5）</td></tr>
+        <tr><td class="mono">dockOpen</td><td><b>bool</b></td><td>BottomDock 开关（继承 v4，一并补持久化）</td></tr>
+        <tr><td class="mono">manualPanel / manualChat</td><td><b>会话内，不持久化</b></td><td>editor open 期间的手动覆盖；关文件清零（§06-4 定稿）</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- §03 Surfaces -->
+<section id="s3">
+  <div class="sec-head">
+    <span class="sec-tag">03</span>
+    <h2>各区域内容规格</h2>
+    <span class="sec-sub">editor-head · panel tabs · dock · rail</span>
+  </div>
+
+  <h3>editor（中列）</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>区域</th><th>规格</th><th>来源</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">Head</td><td>h-9 · file 图标（<code>--info</code>）+ 截断文件名 + 未保存点（<code>--primary</code> 6px）｜右侧：chat 显隐按钮 + 关闭 ✕</td><td>v2 ed-head 精简</td></tr>
+        <tr><td class="mono">Body</td><td>Monaco（Ghostty 主题同步）· hover 浮动条 auto-save 状态</td><td>样例 editor-floating-toolbar</td></tr>
+        <tr><td class="mono">chat 按钮</td><td>chat 可见时按下=隐去（max）；chat 隐藏时按下=唤回 —— L2 的唯一常驻 chat 入口</td><td>本版新增</td></tr>
+        <tr><td class="mono">MVP 边界</td><td>单文件；多文件 = head 下加 h-7 file strip（§06-6 后续）</td><td>v4 继承</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>panel（git / files / context 三 tab）</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>区域</th><th>规格</th><th>来源</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">Tab 条</td><td>h-9 · 三个文本分段 tab 全宽均分，位于贯通顶栏之下；右侧动作区：收起 ✕</td><td>v4 + 定稿修正层级</td></tr>
+        <tr><td class="mono">git / files / context 内容</td><td>与 v4 §03 完全相同（branch chip · 树 + 行菜单 · session strip + notes/todo/plans）</td><td>v4 继承</td></tr>
+        <tr><td class="mono">Click file</td><td>打开中列 editor（不再开 panel 内 tab）</td><td>v2 流恢复</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>terminal → BottomDock（toggle 两处）</h3>
+  <p>内容仍在 <code>BottomDock</code>（220px · Center 列底部，横贯 chat+editor，不受右栏收展影响）。toggle 共两处：<b>贯通顶栏</b>（现状 MainHeader 图标原位，顶栏横贯中右后距各区域等距且恒可见）、<code>Ctrl+`</code>。上轮「tab 条动作区」落点因顶栏贯通而冗余，撤出；Rail 底栏图标维持删除。</p>
+
+  <h3>rail —— 联动收展（定稿）</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>维度</th><th>规格</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">可见性</td><td>仅 panel 收起时渲染（44px · 展开时右缘无图标，44px 让给内容）</td></tr>
+        <tr><td class="mono">图标</td><td>git / files / context 三枚 · git-only dot（6px <code>--info</code>）</td></tr>
+        <tr><td class="mono">点击行为</td><td>展开到该 tab；editor open 时记为手动覆盖</td></tr>
+        <tr><td class="mono">折叠入口</td><td>顶栏折叠钮 · tab 条 ✕ · <code>Ctrl+J</code> 三处同步</td></tr>
+        <tr><td class="mono">L0 阈值影响</td><td>展开无 Rail → L0 = <b>1580</b>（不含 44px）</td></tr>
+        <tr><td class="mono">不进 Rail 的图标</td><td>editor（中列 surface）· terminal（贯通顶栏 + <code>Ctrl+`</code>）· notifications（系统通知）· settings（Sidebar 底部入口，A05/A06 定稿）</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- §04 Sizes -->
+<section id="s4">
+  <div class="sec-head">
+    <span class="sec-tag">04</span>
+    <h2>尺寸 / token 表</h2>
+    <span class="sec-sub">全部定稿值</span>
+  </div>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>档位</th><th>值</th><th>状态</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">--w-rail / --w-side</td><td><b>44 / 280px</b></td><td>已拍板 D19</td><td>Rail · Sidebar</td></tr>
+        <tr><td class="mono">panel 拖拽范围</td><td><b>380–1400px</b></td><td>已拍板 T-22</td><td>3px 左缘 grip · hover <code>--ring</code>/35</td></tr>
+        <tr><td class="mono">panel 默认宽</td><td><b>git/files/context 380</b></td><td>v4 提案继承</td><td>per-tab 记忆（editor 宽档随 tab 一并删除）</td></tr>
+        <tr><td class="mono">chat-min / editor-min</td><td><b>400 / 520px</b></td><td><b>定稿</b></td><td>降级阈值的两个输入</td></tr>
+        <tr><td class="mono">降级阈值</td><td><b>L0→L1 = 1580 · L1→L2 = 1244</b></td><td><b>定稿</b></td><td>1580 = 280+400+520+380（展开无 Rail）；1244 = 280+400+520+44（收起态 Rail 在）</td></tr>
+        <tr><td class="mono">editorRatio 默认</td><td><b>0.44（chat 占比）</b></td><td><b>定稿</b></td><td>L0 下 chat ~0.44 / editor ~0.56</td></tr>
+        <tr><td class="mono">--dock-h</td><td><b>200–220px</b></td><td>现状代码 220</td><td>BottomDock 终端高</td></tr>
+        <tr><td class="mono">--h-bar / --h-row / --h-btn</td><td><b>36 / 28 / 24px</b></td><td>design-system</td><td>tab 栏/ed-head · 树行/git 行 · 小按钮</td></tr>
+        <tr><td class="mono">Activity dot / unsaved dot</td><td><b>6px --info / 6px --primary</b></td><td>T-22 / 提案</td><td>git-only 指示 · editor head 文件名旁</td></tr>
+        <tr><td class="mono">动画</td><td><b>收展 250ms · tab 150ms · hover 100ms</b></td><td>Motion 三档</td><td>降级切换建议淡入 150ms，避免跳变感</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- §05 Trade-offs -->
+<section id="s5">
+  <div class="sec-head">
+    <span class="sec-tag">05</span>
+    <h2>对 v4 / v2 的取舍 —— 为什么修订成这样</h2>
+    <span class="sec-sub">adopt / reject</span>
+  </div>
+
+  <div class="notes" style="grid-template-columns:1fr;">
+    <div class="note is-go">
+      <h4>vs v4（editor = 动态第 4 tab）</h4>
+      <ul>
+        <li><b>否决 · editor 塞右栏 tab</b>：380px Monaco 看代码憋屈，文件名挤在 tab 条、chrome 残缺（无独立头部），maximize 要手动多走一步 —— 观感「奇怪」的根源</li>
+        <li><b>否决 · Rail 底栏三图标</b>：terminal 有更近的落点（tab 条动作区），bell 未拍板，settings 与 Sidebar 重复 —— 底栏清空，Rail 回归纯内容导航</li>
+        <li><b>采纳</b>：Rail 常驻 + 面板分段 tab · BottomDock · per-tab 宽度记忆 · git-only dot · session strip 等全部内容规格</li>
+      </ul>
+    </div>
+    <div class="note is-go">
+      <h4>vs v2（中列三列 · 固定 0.75fr）</h4>
+      <ul>
+        <li><b>采纳 · editor 中列</b>：真实 editor chrome（文件名头 + 操作按钮），chat 与代码同框对照 —— 这是 v2 最值钱的部分</li>
+        <li><b>否决 · 固定三列硬挤</b>：1400px 下 chat &lt;400px 的老问题不解；改降级梯：宽则三列同框，中则收右栏，窄则隐 chat，每档都保住可读下限</li>
+        <li><b>否决 · 省略 Rail / 右栏恒 400</b>：v4 已论证（收起态无入口、指示不可见）；本版 Rail + tab 双 chrome 原样保留</li>
+      </ul>
+    </div>
+    <div class="note is-diff">
+      <h4>vs 方案二 · 常驻不折叠（已否决 2026-07-30）</h4>
+      <ul>
+        <li><b>否决原因</b>：v5 壳内 A/B 实测对比后拍板 —— 联动收展更符合使用者操作习惯：展开时右缘干净无干扰，收起态图标唤回路径明确</li>
+        <li><b>接受的代价</b>：收展交替时右缘有 44px 跳变 —— 收展本即是布局切换，跳变可预期；换来展开态纯净右缘 + L0 阈值降 44px（1580）</li>
+        <li><b>保留的共性</b>：git-only dot · 三图标顺序 · 自动降级后 Rail 唤回 —— 两案共通部分原样进入定稿</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h4>定稿新增（v1–v5 都没有）</h4>
+      <ul>
+        <li><b>贯通顶栏</b>：Session · 终端 · 折叠 横贯 chat+editor+panel+rail，面板 tab 条明确降一级 —— 壳层级从「并列」变「包含」</li>
+        <li><b>画幅降级梯</b>：以容器宽度为输入的布局状态机，手动操作优先级高于自动 —— 响应式从「挤一挤」变成「有纪律地让位」</li>
+        <li><b>editor head chat 按钮</b>：L2 下 chat 的一键唤回入口，避免「开了文件就找不到对话」的迷失感</li>
+        <li><b>联动收展 rail</b>：Rail 存在时机与 panel 收展严格联动 —— 展开无图标、收起出图标，单一路径不分叉</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- §06 Open questions -->
+<section id="s6">
+  <div class="sec-head">
+    <span class="sec-tag">06</span>
+    <h2>拍板记录 + 施工清单</h2>
+    <span class="sec-sub">implementation handoff</span>
+  </div>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>#</th><th>议题</th><th>定稿值</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="mono">1</td>
+          <td><b>右缘 chrome</b></td>
+          <td>联动收展：展开无图标 / 收起出 Rail · 折叠入口 = 顶栏折叠钮 + tab 条 ✕ + <code>Ctrl+J</code></td>
+          <td><b>已拍板 2026-07-30</b></td>
+        </tr>
+        <tr>
+          <td class="mono">2</td>
+          <td>降级阈值</td>
+          <td>chat-min 400 · editor-min 520 → L0/L1 = 1580 · L1/L2 = 1244；实现用 ResizeObserver 读容器宽</td>
+          <td>按提案执行</td>
+        </tr>
+        <tr>
+          <td class="mono">3</td>
+          <td>L2 下 chat 入口</td>
+          <td>editor head chat 按钮（一键唤回 / 隐去）</td>
+          <td>按提案执行</td>
+        </tr>
+        <tr>
+          <td class="mono">4</td>
+          <td>手动覆盖作用域</td>
+          <td>本次文件会话（关文件清零，不持久化）</td>
+          <td>按提案执行</td>
+        </tr>
+        <tr>
+          <td class="mono">5</td>
+          <td>terminal as tab</td>
+          <td>否决：竖向 ~50 列不实用；贯通顶栏 + <code>Ctrl+`</code> 触达成本相同</td>
+          <td>按提案执行</td>
+        </tr>
+        <tr>
+          <td class="mono">6</td>
+          <td>chat/editor grip + ratio 持久化</td>
+          <td>进 MVP；editorRatio 默认 0.44（chat 占比）</td>
+          <td>按提案执行</td>
+        </tr>
+        <tr>
+          <td class="mono">7</td>
+          <td>editor 多文件</td>
+          <td>MVP 单文件；多文件 = head 下 h-7 file strip，后续迭代</td>
+          <td>按提案执行</td>
+        </tr>
+        <tr>
+          <td class="mono">8</td>
+          <td>1366×768 预期</td>
+          <td>开文件即 L2（chat 隐、右栏收、Rail 出现）—— 设计预期而非缺陷</td>
+          <td>按提案执行</td>
+        </tr>
+        <tr>
+          <td class="mono">9</td>
+          <td>快捷键</td>
+          <td><code>Ctrl/Cmd+J</code> panel · <code>Ctrl/Cmd+`</code> dock · <code>Ctrl/Cmd+1..3</code> 直达 tab · <code>Ctrl/Cmd+B</code> chat 显隐（editor open 时）</td>
+          <td>注册进 keymap</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>施工清单（按文件）</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>文件</th><th>改动</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">WorkspaceShell.tsx</td><td>顶栏贯通中右（MainHeader 罩住 center+panel+rail）· 中列加 editor 列（chat | grip | editor）· ResizeObserver 降级梯（1580 / 1244）· 手动覆盖优先于自动</td></tr>
+        <tr><td class="mono">RightDock.tsx</td><td>Rail 条件渲染（仅 panel 收起时渲染）· tab 条动作区 = 收起 ✕ · per-tab 宽度记忆（380–1400）</td></tr>
+        <tr><td class="mono">MainHeader.tsx</td><td>贯通顶栏内容：Session 标题 + terminal toggle + 折叠钮（<code>Ctrl+J</code>）</td></tr>
+        <tr><td class="mono">BottomDock.tsx</td><td>不动（220px terminal · Center 列底部）</td></tr>
+        <tr><td class="mono">session store</td><td>持久化 panelOpen · lastTab · widthMem · editorRatio · dockOpen；manualPanel / manualChat 会话内不持久化</td></tr>
+        <tr><td class="mono">keymap</td><td><code>Ctrl/Cmd+J</code> · <code>Ctrl/Cmd+`</code> · <code>Ctrl/Cmd+1..3</code> · <code>Ctrl/Cmd+B</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ask decided" style="margin-top:1.5rem;">
+    <b>验收 checklist</b>
+    <p>① 展开时右缘无 Rail · 收起（手动 / 自动）时 Rail 出现且 git dot 正确 ② 三处折叠入口 + Rail 点击唤回行为一致 ③ 开文件按 1580 / 1244 落 L0 / L1 / L2 · 手动覆盖优先 · 关文件复原 panelOpen 偏好 ④ terminal toggle 两处 is-on 同步 · BottomDock 220px ⑤ Flexoki token · 36/28/24 尺寸档 · 收展 250ms。全部通过后 plantree 登记 A08 定稿落地。</p>
+  </div>
+</section>
+
+<footer class="footnote">
+  <h3>参考路径</h3>
+  <ul>
+    <li>前版：<code>a08-v5-center-editor-responsive.html</code>（A/B 对比过程，被本定稿取代）· <code>a08-v4-right-panel-dual-chrome.html</code>（被修订对象）· <code>a08-v2-right-panel-tab-layout.html</code>（中列 editor 来源）</li>
+    <li>样例截图：<code>docs/design/refs/openchamber-right-20260730/</code> — chat-plus-editor-pane.png 为中列并排证据</li>
+    <li>现状代码锚点：<code>WorkspaceShell.tsx</code>（LeftNav/MainHeader/ChatWorkspace/RightDock/BottomDock）· <code>MainHeader.tsx</code>（PanelRight + TerminalSquare toggle）· <code>BottomDock.tsx</code>（220px terminal）</li>
+    <li>Token 源：<code>src/renderer/styles/globals.css</code> Flexoki OKLCH · 尺寸规范 <code>docs/design-system.md</code></li>
+  </ul>
+</footer>
+
+</div><!-- .wrap -->
+
+<script>
+(function () {
+  'use strict';
+
+  var shell = document.getElementById('fx-shell');
+  var stage = document.getElementById('stage');
+  var edFname = document.getElementById('ed-fname');
+  var stateReadout = document.getElementById('state-readout');
+  var allFx = document.querySelectorAll('.fx');
+
+  /* Degradation thresholds (final, §04): L0 has no rail, so 44px is not counted */
+  var FULL_W = 1580;
+  var SPLIT_W = 1244;
+
+  var widthMem = { git: 380, files: 380, context: 380 };
+  var lastTab = 'files';
+  var panelOpenPref = true;      /* no-editor panel preference */
+  var manualPanel = null;        /* session-scoped overrides, null = follow ladder */
+  var manualChat = null;
+
+  var codeTemplates = {
+    'ContextPanel.tsx': '<span class="kw">export</span> <span class="kw">function</span> ContextPanel() {<br>&nbsp;&nbsp;<span class="kw">const</span> [tab, setTab] = useState(<span class="str">\'files\'</span>);<br>&nbsp;&nbsp;<span class="cm">// Monaco stub · Ghostty 主题同步</span><br>&nbsp;&nbsp;<span class="kw">return</span> &lt;Panel /&gt;;<br>}',
+    'settings.ts': '<span class="cm">// 37KB settings store — 修改前仔细阅读结构</span><br><span class="kw">export const</span> useSettingsStore = create(<span class="str">\'settings\'</span>);',
+    'a08-final-context-panel-baseline.html': '<span class="cm">&lt;!-- A08 v5 · center editor + ladder --&gt;</span><br>&lt;<span class="kw">main</span> <span class="str">class="mn"</span>&gt;chat&lt;/<span class="kw">main</span>&gt;<br>&lt;<span class="kw">section</span> <span class="str">class="ed"</span>&gt;editor&lt;/<span class="kw">section</span>&gt;'
+  };
+
+  /* ---- Theme toggles ---- */
+  function setFx(theme) {
+    allFx.forEach(function (el) { el.setAttribute('data-fx', theme); });
+    document.querySelectorAll('[data-fx-set]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-fx-set') === theme ? 'true' : 'false');
+    });
+  }
+  function setPage(theme) {
+    if (theme === 'light' || theme === 'dark') {
+      document.documentElement.setAttribute('data-page', theme);
+    } else {
+      document.documentElement.removeAttribute('data-page');
+    }
+    document.querySelectorAll('[data-page-set]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-page-set') === theme ? 'true' : 'false');
+    });
+  }
+  document.querySelectorAll('[data-fx-set]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setFx(btn.getAttribute('data-fx-set')); });
+  });
+  document.querySelectorAll('[data-page-set]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setPage(btn.getAttribute('data-page-set')); });
+  });
+
+  /* ---- Core state ---- */
+  function curTab() { return shell.getAttribute('data-tab'); }
+  function editorOpen() { return shell.getAttribute('data-editor') === 'open'; }
+  function isExpanded() { return shell.getAttribute('data-panel') === 'expanded'; }
+
+  function level() {
+    if (!editorOpen()) return 'chat';
+    var w = shell.clientWidth;
+    if (w >= FULL_W) return 'L0';
+    if (w >= SPLIT_W) return 'L1';
+    return 'L2';
+  }
+
+  function applyLadder() {
+    if (!editorOpen()) {
+      shell.setAttribute('data-chat', 'visible');
+      shell.setAttribute('data-panel', panelOpenPref ? 'expanded' : 'collapsed');
+      return;
+    }
+    var lv = level();
+    if (manualPanel != null) {
+      shell.setAttribute('data-panel', manualPanel ? 'expanded' : 'collapsed');
+    } else {
+      shell.setAttribute('data-panel', lv === 'L0' ? 'expanded' : 'collapsed');
+    }
+    if (manualChat != null) {
+      shell.setAttribute('data-chat', manualChat ? 'visible' : 'hidden');
+    } else {
+      shell.setAttribute('data-chat', lv === 'L2' ? 'hidden' : 'visible');
+    }
+  }
+
+  function applyWidth() {
+    document.getElementById('panel').style.setProperty('--pw', widthMem[curTab()] + 'px');
+  }
+
+  function syncUI() {
+    var tab = curTab();
+    shell.querySelectorAll('[data-rail]').forEach(function (btn) {
+      btn.classList.toggle('is-on', isExpanded() && btn.getAttribute('data-rail') === tab);
+    });
+    shell.querySelectorAll('.p-tab[data-tab]').forEach(function (t) {
+      t.classList.toggle('is-on', t.getAttribute('data-tab') === tab);
+    });
+    shell.querySelectorAll('.p-pane').forEach(function (p) {
+      p.classList.toggle('is-on', p.getAttribute('data-pane') === tab);
+    });
+    var dockOn = shell.getAttribute('data-dock') === 'open';
+    document.getElementById('btn-dock').classList.toggle('is-on', dockOn);
+    document.getElementById('btn-panel').classList.toggle('is-on', isExpanded());
+    document.getElementById('btn-chat').classList.toggle('is-on',
+      editorOpen() && shell.getAttribute('data-chat') === 'hidden');
+    document.getElementById('btn-chat').title =
+      shell.getAttribute('data-chat') === 'hidden' ? '唤回 chat' : '隐去 chat（editor max）';
+    applyWidth();
+    updateReadout();
+  }
+
+  function setTab(tab) {
+    shell.setAttribute('data-tab', tab);
+    lastTab = tab;
+    syncUI();
+  }
+
+  function setPanel(expanded) {
+    shell.setAttribute('data-panel', expanded ? 'expanded' : 'collapsed');
+    if (editorOpen()) {
+      manualPanel = expanded;
+    } else {
+      panelOpenPref = expanded;
+    }
+    syncUI();
+  }
+
+  function togglePanel() { setPanel(!isExpanded()); }
+
+  function toggleChat() {
+    manualChat = shell.getAttribute('data-chat') !== 'visible';
+    shell.setAttribute('data-chat', manualChat ? 'visible' : 'hidden');
+    syncUI();
+  }
+
+  function toggleDock() {
+    shell.setAttribute('data-dock', shell.getAttribute('data-dock') === 'open' ? 'closed' : 'open');
+    syncUI();
+  }
+
+  function openFile(name) {
+    shell.setAttribute('data-editor', 'open');
+    manualPanel = null;
+    manualChat = null;
+    edFname.textContent = name;
+    var code = document.getElementById('ed-code');
+    if (codeTemplates[name]) code.innerHTML = codeTemplates[name];
+    applyLadder();
+    syncUI();
+  }
+
+  function closeFile() {
+    shell.setAttribute('data-editor', 'closed');
+    manualPanel = null;
+    manualChat = null;
+    applyLadder();
+    syncUI();
+  }
+
+  function updateReadout() {
+    var lv = level();
+    stateReadout.textContent =
+      'w=' + shell.clientWidth +
+      ' · ' + lv +
+      (editorOpen()
+        ? ' · panel=' + shell.getAttribute('data-panel') + (manualPanel != null ? '(manual)' : '(auto)')
+          + ' · chat=' + shell.getAttribute('data-chat') + (manualChat != null ? '(manual)' : '(auto)')
+        : ' · panel=' + shell.getAttribute('data-panel')) +
+      ' · dock=' + shell.getAttribute('data-dock') +
+      (shell.classList.contains('is-git-dirty') ? ' · dirty' : '');
+  }
+
+  /* ---- Rail clicks: expand-to / switch / collapse-on-active ---- */
+  shell.querySelectorAll('[data-rail]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tab = btn.getAttribute('data-rail');
+      /* Active-tab click path does not exist: rail only renders while collapsed */
+      if (isExpanded() && curTab() === tab) return;
+      setTab(tab);
+      setPanel(true);
+    });
+  });
+
+  /* ---- Tab clicks ---- */
+  shell.querySelectorAll('.p-tab[data-tab]').forEach(function (t) {
+    t.addEventListener('click', function () {
+      setTab(t.getAttribute('data-tab'));
+    });
+  });
+
+  document.getElementById('btn-collapse').addEventListener('click', function () { setPanel(false); });
+  document.getElementById('btn-panel').addEventListener('click', togglePanel);
+  document.getElementById('btn-chat').addEventListener('click', toggleChat);
+  document.getElementById('btn-dock').addEventListener('click', toggleDock);
+  document.getElementById('btn-dock-close').addEventListener('click', toggleDock);
+  document.getElementById('btn-ed-close').addEventListener('click', closeFile);
+
+  /* ---- Files tree → open editor ---- */
+  document.getElementById('file-tree').addEventListener('click', function (e) {
+    if (e.target.closest('.menu-btn')) return;
+    var row = e.target.closest('.tree-row');
+    if (!row || !row.dataset.file) return;
+    document.querySelectorAll('.tree-row').forEach(function (r) { r.classList.remove('is-sel'); });
+    row.classList.add('is-sel');
+    openFile(row.dataset.file);
+  });
+
+  /* ---- Context session strip ---- */
+  document.getElementById('ctx-strip').addEventListener('click', function () {
+    shell.setAttribute('data-ctx-open', shell.getAttribute('data-ctx-open') === 'true' ? 'false' : 'true');
+  });
+
+  /* ---- Demo controls ---- */
+  document.getElementById('btn-git-dirty').addEventListener('click', function () {
+    shell.classList.toggle('is-git-dirty');
+    this.classList.toggle('is-on', shell.classList.contains('is-git-dirty'));
+    updateReadout();
+  });
+  document.querySelectorAll('[data-sw]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      stage.style.setProperty('--stage-w', btn.getAttribute('data-sw') + 'px');
+      document.querySelectorAll('[data-sw]').forEach(function (b) { b.classList.remove('is-on'); });
+      btn.classList.add('is-on');
+    });
+  });
+  document.getElementById('btn-reset').addEventListener('click', function () {
+    widthMem = { git: 380, files: 380, context: 380 };
+    lastTab = 'files';
+    panelOpenPref = true;
+    shell.classList.add('is-git-dirty');
+    document.getElementById('btn-git-dirty').classList.add('is-on');
+    shell.setAttribute('data-dock', 'closed');
+    shell.setAttribute('data-ctx-open', 'false');
+    shell.setAttribute('data-tab', 'files');
+    closeFile();
+    stage.style.setProperty('--stage-w', '1680px');
+    document.querySelectorAll('[data-sw]').forEach(function (b) {
+      b.classList.toggle('is-on', b.getAttribute('data-sw') === '1680');
+    });
+  });
+
+  /* ---- Re-run ladder on container resize ---- */
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(function () { applyLadder(); syncUI(); }).observe(shell);
+  }
+
+  /* ---- Init ---- */
+  setFx('light');
+  applyLadder();
+  syncUI();
+})();
+</script>
+</body>
+</html>

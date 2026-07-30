@@ -265,9 +265,13 @@ export function canRespondToPermission(
   permissionId: string | undefined
 ): boolean {
   if (!activeSessionId || !permissionId) return false;
-  return pending.some(
-    (item) => item.sessionId === activeSessionId && item.permissionId === permissionId
-  );
+  // Serialized presentation (user ruling 2026-07-30): concurrent permission
+  // requests queue up, but only the HEAD of this session's queue is answerable
+  // — the rest render as waiting until the one before them is resolved. This
+  // also structurally removes the misattribution hazard (answering a card
+  // other than the one the reply is wired to).
+  const head = pending.find((item) => item.sessionId === activeSessionId);
+  return head !== undefined && head.permissionId === permissionId;
 }
 
 export function derivePermissionCardView(
