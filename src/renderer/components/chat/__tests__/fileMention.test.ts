@@ -1,6 +1,11 @@
 import type { FileSearchResult } from '@shared/types/search';
 import { describe, expect, it } from 'vitest';
-import { extractMentionQuery, parseMentionChips, replaceMention } from '../fileMention';
+import {
+  extractMentionQuery,
+  insertMentionTrigger,
+  parseMentionChips,
+  replaceMention,
+} from '../fileMention';
 
 function file(relativePath: string, absolute?: string): FileSearchResult {
   const sep = relativePath.includes('/') ? '/' : '\\';
@@ -171,5 +176,34 @@ describe('replaceMention with a directory entry (T-07①)', () => {
   it('does not append a slash to the inserted directory', () => {
     const out = replaceMention('@d', 2, dir('docs'));
     expect(out?.text).toBe('@docs ');
+  });
+});
+
+/**
+ * F-A12 (T-30 batch 2): the ⊕ attach-context button inserts an `@` at the
+ * caret and lets the existing mention search take over. Return shape follows
+ * this module's MentionInsertion ({text, cursor}) — the spec sketch wrote
+ * `caret`; the repo convention (replaceMention) wins.
+ */
+describe('insertMentionTrigger (F-A12, ⊕ button)', () => {
+  it('inserts a space + @ after a word so the mention parser can see it', () => {
+    expect(insertMentionTrigger('abc', 3)).toEqual({ text: 'abc @', cursor: 5 });
+  });
+
+  it('does not double the space when one is already there', () => {
+    expect(insertMentionTrigger('abc ', 4)).toEqual({ text: 'abc @', cursor: 5 });
+  });
+
+  it('inserts a bare @ into an empty composer', () => {
+    expect(insertMentionTrigger('', 0)).toEqual({ text: '@', cursor: 1 });
+  });
+
+  it('inserts mid-text without touching the tail', () => {
+    expect(insertMentionTrigger('ab cd', 3)).toEqual({ text: 'ab @cd', cursor: 4 });
+  });
+
+  it('the inserted @ is immediately recognised as an open mention query', () => {
+    const out = insertMentionTrigger('prompt', 6);
+    expect(extractMentionQuery(out.text, out.cursor)).toBe('');
   });
 });

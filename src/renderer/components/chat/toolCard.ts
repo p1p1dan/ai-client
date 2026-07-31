@@ -190,11 +190,22 @@ export function groupTimeline(message: ChatMessage): TimelineItem[] {
 
 export type ToolRowBody = 'output' | 'detail' | 'thinking' | 'stats';
 
+/**
+ * D25 §2.4: the arg slot is polymorphic — the same `{view.arg}` renders
+ * machine identifiers (paths, commands, URLs: mono @ 13px) AND human prose
+ * (Bash descriptions, "2 files, 3 searches", "for 1s": sans, body tier).
+ * A blanket mono arg would scatter monospace right back onto the three most
+ * visible prose spots in the middle column.
+ */
+export type ToolArgKind = 'ident' | 'prose';
+
 export interface ToolRowView {
   /** React key: block id (aggregate rows use `${firstBlockId}~agg`). */
   key: string;
   verb: string;
   arg?: string;
+  /** Font domain for `arg` (D25 §2.4). Omitted means 'ident' — machine text is the safe default. */
+  argKind?: ToolArgKind;
   /** Running rows use the present-tense verb and never show a chevron (A07 :2331). */
   running: boolean;
   failed: boolean;
@@ -245,7 +256,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const running = run.status === 'running';
   const failed = run.status === 'failed';
   const verb = toolVerb(run.toolName, running);
-  const arg = formatToolArg(run, options);
+  const argInfo = deriveToolArg(run, options);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) ? run.output : undefined;
 
@@ -258,7 +269,8 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   return {
     key: run.blockId,
     verb,
-    arg,
+    arg: argInfo?.text,
+    argKind: argInfo?.kind,
     running,
     failed,
     expandable,
@@ -374,6 +386,8 @@ export function deriveAggregateRow(
     key: `${firstBlockId}~agg`,
     verb: running ? AGGREGATE_VERB.running : AGGREGATE_VERB.done,
     arg: segments.length > 0 ? segments.join(', ') : undefined,
+    // "2 files, 3 searches" is counted prose, not a copy-target (D25 §2.4).
+    argKind: 'prose',
     running,
     failed,
     expandable: !running,
@@ -485,6 +499,8 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     key: block.id,
     verb,
     arg,
+    // "briefly" / "for 5s" is timing prose (D25 §2.4).
+    argKind: 'prose',
     running: streaming,
     failed: false,
     expandable: showBody,
@@ -572,12 +588,22 @@ function numberField(rec: Record<string, unknown> | undefined, field: string): n
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-/** Argument text. Never contains a literal newline (truncation is CSS's job, not this function's). */
-export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): string | undefined {
+/**
+ * Argument text + font domain (D25 §2.4). Never contains a literal newline
+ * (truncation is CSS's job, not this function's). Kind rules: paths,
+ * commands, URLs, patterns and tool/subagent names are copy-target machine
+ * text ('ident' — mono); human-written descriptions, search queries, prompts
+ * and fixed prose labels are 'prose' (sans, body tier).
+ */
+export function deriveToolArg(
+  run: ToolRun,
+  options: ToolCardOptions = {}
+): { text: string; kind: ToolArgKind } | undefined {
   const rec = asRecord(run.input);
   const repoName = options.repoName;
 
   let raw: string | undefined;
+  let kind: ToolArgKind = 'ident';
   switch (run.toolName) {
     case 'Read':
     case 'NotebookRead': {
@@ -602,6 +628,7 @@ export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): stri
     }
     case 'WebSearch':
       raw = stringField(rec, 'query');
+      kind = 'prose';
       break;
     case 'WebFetch':
       raw = stringField(rec, 'url');
@@ -616,30 +643,85 @@ export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): stri
     }
     case 'Bash':
     case 'BashOutput':
-    case 'KillShell':
-      raw = stringField(rec, 'description') ?? stringField(rec, 'command');
+    case 'KillShell': {
+      const description = stringField(rec, 'description');
+      if (description) {
+        // A human-written summary — the middle column's most visible prose
+        // arg; blanket-mono here is exactly the regression D25 §2.4 names.
+        raw = description;
+        kind = 'prose';
+      } else {
+        raw = stringField(rec, 'command');
+      }
       break;
+    }
     case 'TodoWrite':
     case 'ExitPlanMode':
       raw = 'next moves';
+      kind = 'prose';
       break;
-    case 'Task':
-      raw = stringField(rec, 'description') ?? stringField(rec, 'subagent_type');
+    case 'Task': {
+      const description = stringField(rec, 'description');
+      if (description) {
+        raw = description;
+        kind = 'prose';
+      } else {
+        raw = stringField(rec, 'subagent_type');
+      }
       break;
-    default:
-      raw =
-        stringField(rec, 'command') ??
-        stringField(rec, 'description') ??
-        stringField(rec, 'path') ??
-        stringField(rec, 'file_path') ??
-        stringField(rec, 'pattern') ??
-        stringField(rec, 'query') ??
-        stringField(rec, 'prompt') ??
-        run.toolName;
+    }
+    default: {
+      const command = stringField(rec, 'command');
+      const description = stringField(rec, 'description');
+      const path = stringField(rec, 'path') ?? stringField(rec, 'file_path');
+      const pattern = stringField(rec, 'pattern');
+      const query = stringField(rec, 'query');
+      const prompt = stringField(rec, 'prompt');
+      // Same resolution order as before; kind follows whichever field won.
+      if (command != null) {
+        raw = command;
+      } else if (description != null) {
+        raw = description;
+        kind = 'prose';
+      } else if (path != null) {
+        raw = path;
+      } else if (pattern != null) {
+        raw = pattern;
+      } else if (query != null || prompt != null) {
+        raw = query ?? prompt;
+        kind = 'prose';
+      } else {
+        raw = run.toolName;
+      }
+    }
   }
 
   if (raw == null) return undefined;
-  return raw.replace(/[\r\n]+/g, ' ');
+  return { text: raw.replace(/[\r\n]+/g, ' '), kind };
+}
+
+/** Argument text only — thin wrapper kept for the existing call/test surface. */
+export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): string | undefined {
+  return deriveToolArg(run, options)?.text;
+}
+
+/**
+ * Arg slot class by font domain (D25 §2.4, assertion A2). 'ident' args drop
+ * to the 13px mono code tier (optical compensation against the 15px sans
+ * verb — the 15/13 pair is what makes mixed rows sit right); 'prose' args
+ * inherit the row's sans body tier. Both keep the failure/rest color split
+ * the row already had.
+ */
+export function toolArgClass(kind: ToolArgKind, failed: boolean): string {
+  // tabular-nums: aggregate counts ("2 files, 3 searches") and timing args
+  // refresh in place while running — proportional digits would jitter
+  // horizontally on every tick (D25 §5.4 hidden-regression #1).
+  const color = failed
+    ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'
+    : 'text-tool-arg';
+  return kind === 'ident'
+    ? `min-w-0 truncate font-mono text-code tabular-nums ${color}`
+    : `min-w-0 truncate tabular-nums ${color}`;
 }
 
 /** Read row's clickable target: `{file_path, offset, limit}` -> `{path, line, endLine}`. */

@@ -855,6 +855,13 @@ li { margin-bottom: 0.35rem; }
     该仓是活动工作树会继续往前走，<b>跨版本核对前先 <code>git checkout a3519141</code></b>，否则行号对不上。
     Light/Dark 基准 = Flexoki Light / Flexoki Dark；标准窗口尺寸本轮不冻结（裁定只用到与窗口宽度无关的相对尺寸）。
   </p>
+  <p class="standfirst" style="margin-top:0.6rem;border-left:3px solid var(--page-rule);padding-left:0.75rem;">
+    ⚠️ <b>时效标注（2026-07-31，D25 连带）</b>：本页在 <b>D18③ 全等宽字体</b>下制作并经用户验收。
+    <b>自 D25 起字体口径改为分域</b>（UI 比例 / 代码等宽，见
+    <code>docs/plans/2026-07-30-d25-font-domain-design.md</code> 与 A07 v4 追记）——本页原型画面与下方
+    「字体：全等宽 ui-monospace」相关表述<b>不再是施工依据</b>；阅读栏亦由 768px 改 720px（45rem）。
+    其余裁定（布局骨架 / 工具调用 / 问答归宿 / Flexoki 调色板）不受影响。原型渲染层冻结不改，仅本段与逐锚点标注为准。
+  </p>
   <div class="masthead-meta">
     <span><b>参考（冻结）</b> openchamber <code>a3519141</code> = v1.17.0-6-ga3519141 · packages/ui</span>
     <span><b>目标</b> ai-client feat/openchamber-chat-refactor</span>
@@ -881,7 +888,7 @@ li { margin-bottom: 0.35rem; }
     <div class="verdict-item"><span class="v-k">布局骨架</span><span class="v-v">三列 + 44px 导轨，废 BottomDock</span></div>
     <div class="verdict-item"><span class="v-k">工具调用</span><span class="v-v">单行形态，滚动窗替代行数截断</span></div>
     <div class="verdict-item"><span class="v-k">问答归宿</span><span class="v-v">就地冻结（有据偏离）</span></div>
-    <div class="verdict-item"><span class="v-k">字体</span><span class="v-v">全等宽 ui-monospace</span></div>
+    <div class="verdict-item"><span class="v-k">字体</span><span class="v-v">分域（UI 比例 / 代码等宽）—— D25 改判，原「全等宽 ui-monospace」作废</span></div>
   </div>
 
   <div class="conflict decided">
@@ -1047,7 +1054,7 @@ li { margin-bottom: 0.35rem; }
 
   <h3>对齐后 · OpenChamber 形态</h3>
   <div class="demo-bar">
-    <span class="demo-cap">Flexoki · 阅读栏 768px 居中 · 全等宽字体</span>
+    <span class="demo-cap">Flexoki · 阅读栏 768px 居中 · 全等宽字体（⚠️ 原型画面口径；生产自 D25 起为 720px + 分域字体）</span>
     <div class="seg" role="group" aria-label="主题">
       <button type="button" data-fx-set="light" aria-pressed="true">light</button>
       <button type="button" data-fx-set="dark" aria-pressed="false">dark</button>
@@ -1387,7 +1394,9 @@ li { margin-bottom: 0.35rem; }
           <td class="mono">Inter / system-ui（sans）</td>
           <td class="mono">ui-monospace（<b>全等宽</b>）</td>
           <td>OpenChamber 的 sans / mono / heading 三者是同一个等宽栈，这是它观感的最大来源之一。
-            <b>已定为全等宽照做</b>；需注意中文会回退到系统字体，中英混排的宽度节奏需实测</td>
+            <b>已定为全等宽照做</b>；需注意中文会回退到系统字体，中英混排的宽度节奏需实测。
+            <b>2026-07-31 D25 追记：实测已做、结论已翻</b>——中英混排风险坐实（open-q #10 结项升级为 D25），
+            改<b>分域</b>（UI 比例 / 代码等宽），本行「照做」裁定就此撤销</td>
         </tr>
         <tr>
           <td>根字号</td>

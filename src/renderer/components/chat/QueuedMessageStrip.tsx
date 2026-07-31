@@ -18,6 +18,7 @@
  */
 import { Pencil, X } from 'lucide-react';
 import { useI18n } from '@/i18n';
+import { queueStripWrapperClass } from './middleColumnLayout';
 import type { QueueStripEntryModel, QueueStripModel } from './queueRelease';
 
 // Copied verbatim from AttachmentChip's remove-button class (ChatComposer.tsx)
@@ -41,14 +42,16 @@ export function QueuedMessageStrip({ model, onResume, onEdit, onRemove }: Queued
   if (!model.visible) return null;
 
   return (
-    <div className="mb-1.5 flex max-h-24 flex-col gap-1 overflow-y-auto">
+    // Wrapper geometry lives in middleColumnLayout (F-A10): `mb-2` is this
+    // strip's whole share of the 8px band above the composer card.
+    <div className={queueStripWrapperClass()}>
       {model.permissionHint && (
-        <div className="flex h-6 items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex h-6 items-center gap-2 text-meta text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">{model.permissionHint}</span>
         </div>
       )}
       {model.pausedLabel && (
-        <div className="flex h-6 items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="flex h-6 items-center justify-between gap-2 text-meta text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">{model.pausedLabel}</span>
           <button
             type="button"
@@ -86,7 +89,7 @@ function QueueEntryRow({
           onEdit(entry.id);
         }
       }}
-      className="flex h-7 items-center gap-1.5 rounded-sm border border-border bg-muted/50 px-2 text-xs"
+      className="flex h-7 items-center gap-1.5 rounded-sm border border-border bg-muted/50 px-2 text-meta"
     >
       <span className="shrink-0 tabular-nums text-muted-foreground">{entry.index}</span>
       <span className="min-w-0 flex-1 truncate" title={entry.preview}>

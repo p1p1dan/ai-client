@@ -279,7 +279,7 @@ export function LeftNav({
                   </EmptyMedia>
                   <EmptyHeader>
                     <EmptyTitle className="text-sm">{t('Add Repository')}</EmptyTitle>
-                    <EmptyDescription className="text-xs">
+                    <EmptyDescription className="text-meta">
                       {t('Add a repository to get started.')}
                     </EmptyDescription>
                   </EmptyHeader>
@@ -326,7 +326,7 @@ export function LeftNav({
                         {recent.hiddenCount > 0 ? (
                           <button
                             type="button"
-                            className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-xs text-muted-foreground hover:bg-hover"
+                            className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover"
                             onClick={() => setRecentShowAll(true)}
                           >
                             {t('Show more')} ({recent.hiddenCount})
@@ -336,7 +336,7 @@ export function LeftNav({
                           recent.rows.length > RECENT_DEFAULT_LIMIT && (
                             <button
                               type="button"
-                              className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-xs text-muted-foreground hover:bg-hover"
+                              className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover"
                               onClick={() => setRecentShowAll(false)}
                             >
                               {t('Show less')}
@@ -377,7 +377,7 @@ export function LeftNav({
                   </div>
 
                   {noMatches && (
-                    <p className="px-2 py-1 text-[11px] text-muted-foreground">
+                    <p className="px-2 py-1 text-meta text-muted-foreground">
                       {t('No matching sessions')}
                     </p>
                   )}
@@ -448,7 +448,7 @@ export function LeftNav({
                             {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
                               <button
                                 type="button"
-                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-hover"
+                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
                                 onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
                               >
                                 <Plus className="h-3 w-3 shrink-0" />
@@ -582,7 +582,12 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
         </Badge>
       )}
       {row.chip && (
-        <Badge variant="outline" size="sm" className="max-w-28 shrink-0" title={row.chip.label}>
+        <Badge
+          variant="outline"
+          size="sm"
+          className="max-w-28 shrink-0 text-meta"
+          title={row.chip.label}
+        >
           <span className="min-w-0 truncate">{row.chip.label}</span>
         </Badge>
       )}
@@ -590,7 +595,7 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
           tabIndex=0, so focus-within also reveals the actions and keeps
           Archive/Close reachable by keyboard (display:none alone would drop
           them from the tab order). */}
-      <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
+      <span className="shrink-0 text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
         {formatRelativeAge(row.updatedAt, now)}
       </span>
       <div className="hidden shrink-0 items-center group-hover:flex group-focus-within:flex">

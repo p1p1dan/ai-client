@@ -25,7 +25,7 @@ export function RunLocationIndicator({ text, tone }: RunLocationIndicatorProps) 
           <span
             role="status"
             aria-label={label}
-            className="inline-flex h-6 cursor-default items-center gap-1.5 px-1.5 text-sm text-muted-foreground"
+            className="inline-flex h-6 cursor-default items-center gap-1.5 px-2 text-ui text-muted-foreground"
           />
         }
       >

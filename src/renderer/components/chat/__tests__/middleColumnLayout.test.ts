@@ -134,9 +134,9 @@ describe('middleColumnHostClass', () => {
     expect(cls).toContain('pb-[9%]');
   });
 
-  it('docks the composer with 6px top / 14px bottom padding in session mode', () => {
+  it('docks the composer with zero top padding (the 8px band above the card is owned upstream — F-A10) and 14px bottom padding in session mode', () => {
     const cls = middleColumnHostClass('session');
-    expect(cls).toContain('pt-1.5');
+    expect(cls).toContain('pt-0');
     expect(cls).toContain('pb-3.5');
   });
 
@@ -156,32 +156,31 @@ describe('middleColumnHostClass', () => {
 });
 
 describe('composerCardClass', () => {
-  it('uses the --input border, --card fill and the 12px radius token in both modes', () => {
+  // T-30b2: border ladder + radius + padding re-based on the Cursor
+  // measurements — the fine-grained contracts live in
+  // composerFormClasses.test.ts (F-A1/F-A2/F-A2b/F-A21); these keep the
+  // coarse shape pinned.
+  it('uses the neutral --border rest / --input focus ladder and --card fill in both modes', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('border-input');
+      expect(cls).toContain('border-border');
+      expect(cls).toContain('focus-within:border-input');
       expect(cls).toContain('bg-card');
-      expect(cls).toContain('rounded-md');
     }
   });
 
-  it('stacks the empty card with symmetric 12/10px padding (round-2 visual fix: pt-2.5/pb-2 was a 2px asymmetry)', () => {
-    const cls = composerCardClass('empty');
-    expect(cls).toContain('px-3');
-    expect(cls).toContain('py-2.5');
-    expect(cls).not.toContain('pt-2.5');
-    expect(cls).not.toContain('pb-2');
+  it('gives both cards the symmetric 8px padding (E1: the old px-3/py-2.5 vs px-2/py-1 asymmetry was A07 eyeballing residue)', () => {
+    expect(composerCardClass('empty')).toContain('p-2');
+    expect(composerCardClass('session')).toContain('p-2');
   });
 
-  it('rests the follow-up card at exactly 40px via min-h-10 (28px key + borders, centered)', () => {
+  it('rests the follow-up card at exactly 42px via min-h-10.5 (24px key + 16px padding + 2px borders, centered)', () => {
     const cls = composerCardClass('session');
     expect(cls).toContain('flex');
     expect(cls).toContain('items-center');
-    expect(cls).toContain('px-2');
-    expect(cls).toContain('min-h-10');
-    expect(cls).toContain('py-1');
-    // py-1.5 rested at 42px (6+28+6 + 2px borders) — the review-caught regression.
-    expect(cls).not.toContain('py-1.5');
+    expect(cls).toContain('min-h-10.5');
+    // min-h-10 (40px) was the E1 arithmetic error being enforced.
+    expect(cls).not.toContain('min-h-10 ');
   });
 
   it('never uses rounded-lg (16px in this repo) for the card', () => {
@@ -322,10 +321,16 @@ describe('resolveIdleStatusText (F5a, round-4 Codex NEEDS-FIX #4)', () => {
     ).toBe(statusHint);
   });
 
-  it('empty mode + hasStatusError: still selects the full statusHint (unaffected by this fix — only session mode changed)', () => {
+  // T-30b2: banner ownership of error text now covers BOTH modes — the empty
+  // status line stopped being resident, so its old fall-through to the full
+  // statusHint on error was the same defect-B duplication one mode later.
+  it('empty mode + hasStatusError: selects largeHint (or nothing), never the full statusHint — banner owns error text in both modes now', () => {
     expect(
       resolveIdleStatusText({ mode: 'empty', hasStatusError: true, largeHint, statusHint })
-    ).toBe(statusHint);
+    ).toBe(largeHint);
+    expect(
+      resolveIdleStatusText({ mode: 'empty', hasStatusError: true, largeHint: null, statusHint })
+    ).toBeNull();
   });
 
   it('empty mode + no hasStatusError + largeHint: still selects largeHint (unaffected)', () => {
@@ -459,7 +464,7 @@ describe('shouldShowStatusLine', () => {
     ).toBe(false);
   });
 
-  it('round-4 fix (defect B): still always shows it in empty mode, even with hasStatusError true — empty mode is unaffected by this fix', () => {
+  it('T-30b2: empty mode no longer shows it for hasStatusError either — the banner owns error text in both modes', () => {
     expect(
       shouldShowStatusLine({
         mode: 'empty',
@@ -468,7 +473,7 @@ describe('shouldShowStatusLine', () => {
         hasStatusError: true,
         hasLargeHint: false,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('shows it for a large-attachment hint', () => {
@@ -483,7 +488,7 @@ describe('shouldShowStatusLine', () => {
     ).toBe(true);
   });
 
-  it('always shows it in empty mode', () => {
+  it('T-30b2: empty mode is need-based too — the resting "Ready · cwd:" line is gone (F-A11; cwd moved to the folder trigger title)', () => {
     expect(
       shouldShowStatusLine({
         mode: 'empty',
@@ -492,7 +497,7 @@ describe('shouldShowStatusLine', () => {
         hasStatusError: false,
         hasLargeHint: false,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 
@@ -507,8 +512,9 @@ describe('mentionPopupPlacementClass', () => {
 });
 
 describe('roundActionButtonClass', () => {
-  it('is a 28px box', () => {
-    expect(roundActionButtonClass()).toContain('size-7');
+  it('is a 24px box (E2 measurement fix: the Cursor reference circles are 24 CSS px, not "about 36")', () => {
+    expect(roundActionButtonClass()).toContain('size-6');
+    expect(roundActionButtonClass()).not.toContain('size-7');
   });
 
   it('overrides both squircle radius pairs so the shape is a true circle', () => {

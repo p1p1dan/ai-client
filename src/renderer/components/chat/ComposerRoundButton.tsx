@@ -3,7 +3,8 @@ import { ListPlus, RotateCcw, SendHorizonal, Square } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Button, type buttonVariants } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
-import { roundActionButtonClass } from './middleColumnLayout';
+import { cn } from '@/lib/utils';
+import { roundActionButtonClass, roundActionButtonKindClass } from './middleColumnLayout';
 
 type RoundButtonKind = 'send' | 'stop' | 'retry' | 'enqueue';
 
@@ -35,11 +36,14 @@ const KIND_CONFIG: Record<RoundButtonKind, RoundButtonKindConfig> = {
 };
 
 /**
- * T-28 §3.5: 28px true-circle action button shared by Send / Stop / Retry /
- * Enqueue (T-19) — color comes from the Button variant, shape from
- * `roundActionButtonClass()`. All kinds occupy the same slot at the same
- * size (D23 decision 5): a running turn's Stop replaces Send in place, it
- * never grows a pill shape.
+ * T-28 §3.5 / T-30b2 拍板 ③: 24px true-circle action button shared by Send /
+ * Stop / Retry / Enqueue (T-19) — shape from `roundActionButtonClass()`,
+ * color from `roundActionButtonKindClass()` layered over the Button variant
+ * (send/enqueue fill near-black `--foreground`, the composer's only
+ * remaining high-saturation object is the destructive Stop). All kinds
+ * occupy the same slot at the same size (D23 decision 5): a running turn's
+ * Stop replaces Send in place, it never grows a pill shape — the argument
+ * that keeps this key same-position/same-size survives 拍板 ③ unchanged.
  */
 export function ComposerRoundButton({
   kind,
@@ -55,13 +59,14 @@ export function ComposerRoundButton({
     <Button
       size="icon-sm"
       variant={variant}
-      className={roundActionButtonClass()}
+      className={cn(roundActionButtonClass(), roundActionButtonKindClass(kind))}
       disabled={disabled}
       onClick={onClick}
       aria-label={title}
       title={title}
     >
-      <Icon className="size-3.5" />
+      {/* 12px icon inside the 24px circle (was 14-in-28). */}
+      <Icon className="size-3" />
     </Button>
   );
 }

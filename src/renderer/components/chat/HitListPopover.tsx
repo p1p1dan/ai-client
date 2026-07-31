@@ -1,3 +1,4 @@
+import { Ident } from '@/components/ui/ident';
 import { PreviewCard, PreviewCardPopup, PreviewCardTrigger } from '@/components/ui/preview-card';
 import type { FileLinkTarget } from './toolCard';
 import { parseHitList } from './toolHits';
@@ -36,10 +37,8 @@ export function HitListPopover({ source, children, onOpenFile }: HitListPopoverP
             className="flex h-7 w-full shrink-0 items-center gap-2 rounded-sm px-2 text-left hover:bg-hover"
             onClick={() => onOpenFile({ path: hit.path, line: hit.line })}
           >
-            <span className="shrink-0 text-markdown text-foreground">{hit.name}</span>
-            {hit.dir && (
-              <span className="min-w-0 truncate text-code text-muted-foreground">{hit.dir}</span>
-            )}
+            <Ident className="shrink-0 text-foreground">{hit.name}</Ident>
+            {hit.dir && <Ident className="min-w-0 truncate text-muted-foreground">{hit.dir}</Ident>}
           </button>
         ))}
       </PreviewCardPopup>

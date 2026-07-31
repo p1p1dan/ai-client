@@ -1,19 +1,26 @@
 # AiClient Design System
 
-> ⚠️ **时效警示（2026-07-28 更新，D18 / D19 连带）**
+> ⚠️ **时效警示（2026-07-31 更新，D25 / T-30 批2 连带；上一版 2026-07-28）**
 >
 > **已撤销（T-21 已改写并与代码对齐，可直接作为施工依据）**：
-> **Color System** / **Border Radius** / **Font Weight** / **字体族** / **根字号结论** 五节，
+> **Color System** / **Border Radius** / **根字号结论** 三节，
 > 与 `src/renderer/styles/globals.css` 的 `@theme` + `:root` + `.dark` 逐条对得上。
 >
+> **已撤销（D25 / T-30 批2 已改写并与代码对齐，2026-07-31）**：
+> **Typography（字号）** / **Font Weight（字重）** / **字体族（分域）** / **Letter-spacing 梯度** /
+> **数字对齐（tabular-nums）** / **表单控件 vs 文字 chip** 六节——token 已全部进 `@theme`
+> （`--text-meta` / `--text-ui` / `--text-title` / `--container-reading{,-wide}` + 分域双字族栈），
+> `chat/` 与 `workspace-shell/` 的调用点迁移已随 T-30 批2 落库并由
+> `fontDomainGuards.test.ts`（A1~A6）静态断言锁死。
+>
 > **已撤销（T-22 已写入并与代码对齐）**：**Spacing & Sizing → 新壳布局档位**一节与
-> `components/workspace-shell/shellLayoutModel.ts` 的常量逐条对得上。
+> `components/workspace-shell/shellLayoutModel.ts` 的常量逐条对得上（阅读栏宽已由 D25 改为
+> `--container-reading` 45rem / 60rem）。
 >
 > **仍未撤销**：
 >
-> - **Typography（字号）**：本节已按 OpenChamber 四档语义体系重写为**目标口径**，但 `@theme` 里目前
->   只有 `--text-2xs` 一个自定义字号 token，**调用点迁移未施工**（2026-07-29 更正：原写「归 T-22」与执行计划 §3 T-22 任务定义不符——T-22 仅含尺寸段落与新壳组件按四档书写，全仓调用点迁移未立项、待认领）。写新代码按本节；
->   改旧代码不要单纯为了对齐档位而重排布局。
+> - **`chat/` + `workspace-shell/` 之外的字号调用点**（settings / source-control / files / sessions /
+>   onboarding 等目录的 `text-xs` 类）未迁移新梯度——A6 断言只覆盖两个新壳目录，其余待 T-25 一并认领。
 > - **旧模块彩色硬编码**：`source-control/` 整目录、`layout/`、`ui/activity-indicator.tsx` 等 47 个文件
 >   共 134 处 `text-red-500` 类硬编码尚未迁移到语义 token。**归 T-25。**
 >
@@ -263,6 +270,11 @@ variant="destructive"
 - 交互元素：优先 `rounded-sm` / `rounded-md`
 - 顶层覆盖层：优先 `rounded-lg` / `rounded-2xl`
 
+**钳形硬规则（T-30 批2 实测教训）**：`border-radius` 一旦 ≥ 元素高度的一半，CSS 会把它**钳成满圆**。
+因此在 `h-6`(24px) 的控件上写 `rounded-md`(12) / `rounded-lg`(16) 与写 `rounded-full` **渲染完全相同**——
+Composer 旧 Model/Effort 触发器的「满圆胶囊 AI 化」正源于 `SelectTrigger` 基类的 `rounded-lg` 挂在 h-6 上。
+**小控件（h-6 / h-7）一律 `rounded-xs` / `rounded-sm`；`rounded-md` 及以上只给 ≥32px 高的容器。**
+
 #### Squircle（按钮原语，A05 基线）
 
 按钮走**超椭圆**而非普通圆角，对齐
@@ -308,6 +320,11 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
 > （零 shadow 类，只过渡 `background-color,border-color,color,opacity`）；
 > 本仓按钮当前保留 `shadow-xs` + `inset-shadow` 作为过渡态，**不得再往按钮上加 `shadow-md` / `shadow-lg`**。
 > 需要「浮起感」时优先靠 `border` + `bg-card` 而不是阴影。
+>
+> **实测脚注（T-30 批2）**：Cursor 的输入卡**零阴影**（逐像素：边框外相邻 8 行恒为背景值）——
+> 它的「浮起」来自「卡填充比页面亮一档 + 一条 L≈0.94 的发丝边」。本仓对应组合为
+> `bg-card` + `border-border`（静息）/ `border-input`（聚焦），零色度、一步灰阶——A07 :1336
+> 原「Cursor 靠阴影浮起」的前提已被证伪，此处为其更正记录。
 
 阴影遵循 5 级层次，层级越高，阴影越强：
 
@@ -324,54 +341,81 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
 
 ### Typography（字号）
 
-> **本节为目标口径（T-21 定，T-22 迁移调用点）。** `@theme` 里目前只有 `--text-2xs` 一个自定义字号 token，
-> 下表的 4 档语义尚未全部落成变量。写新代码按本节；改旧代码不要为了对齐档位而重排布局。
+> **本节已随 D25 落地（2026-07-31）**：token 全部进 `@theme`，`chat/` + `workspace-shell/` 调用点已迁移
+> 并由 `fontDomainGuards.test.ts` A6 断言锁死（两目录内禁 `text-xs` / `text-base` / `text-[10px]` / `text-[11px]`）。
 
-**从「6 级视觉分档」改为「4 档语义体系」**，对齐 OpenChamber
-（`packages/ui/src/styles/design-system.css:21-27` 的桌面基线值）：
+**梯度：10（仅 mono 拉丁）/ 13 / 14 / 15 / 18**，字族列见「字体族（分域）」：
 
-| 语义档 | Size | 上游变量 | 覆盖的用途 |
-|-------|------|---------|-----------|
-| code | **13px**（0.8125rem） | `--text-code` | 行内代码、代码块、路径、hash、diff |
-| ui | **14px**（0.875rem） | `--text-ui-label` / `--text-meta` / `--text-micro` | 绝大多数 UI 文本：label、按钮、meta、badge、时间戳、快捷键 |
-| markdown | **15px**（0.9375rem） | `--text-markdown` / `--text-ui-header` | 聊天正文、Markdown 全部内容、**以及所有标题 h1–h6** |
-| settings-title | **18px**（1.125rem） | `--text-settings-page-title` | 设置页 L1 页面标题（唯一比正文大的字号） |
+| 语义档 | Size | Token | 字族 | 覆盖的用途 |
+|-------|------|-------|------|-----------|
+| 2xs | **10px** | `--text-2xs` | **仅 mono + 拉丁** | `kbd` 快捷键 chip。**禁止承载 CJK**（中文 10px 不可读，D25 硬约束） |
+| code | **13px**（0.8125rem） | `--text-code` | **mono** | 行内代码、代码块、工具行 ident 参数、路径、hash、diff。13 是「对 15px sans 正文的光学补偿值」（同 px 下 mono 视觉体量大 ~8-12%），mono 栈或正文档位变了它要跟着调 |
+| meta | **13px**（0.8125rem） | `--text-meta` | sans | 时间戳、statusLine、meta 行、footer、次级说明。与 `--text-code` 同值**不同因**——次级 UI 文本不该被 mono 光学调参拖着走，所以是两个 token |
+| ui | **14px**（0.875rem） | `--text-ui` | sans | 侧栏行、按钮、label、段头、tab、下拉触发器 |
+| markdown | **15px**（0.9375rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
+| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 / dialog·sheet 标题（唯一 >15 的档，收编 `text-lg`） |
 
 **关键特征（照抄时最容易漏的一条）**：
-**OpenChamber 的标题层级不靠字号区分。** `packages/ui/src/styles/typography.css:143` 的注释即
-「Heading typography - all use markdown size, differentiated by weight/color」——
-`typography-h1/h2/h3` 与 `typography-markdown-h1..h6` 的 `font-size` **全部**是 `var(--text-markdown)`（15px），
-层级差异只来自三样：
+**标题层级不靠字号区分**（OpenChamber `typography.css:143`「all use markdown size, differentiated by
+weight/color」）。D25 更正理由：比例字体下缩字号**确实省宽**（等宽时代「缩字号不省宽」的论据已失效），
+但标题仍不用字号做层级——层级交给 **weight × letter-spacing × color 三件套**（D25 后三维全部可用，
+见下两节）；唯一的大字号档 `--text-title` 留给页面级标题。
 
-1. **font-weight**
-2. **letter-spacing**：h1 `-0.025em` → h2 `-0.02em` → h3 `-0.015em` → h4 `-0.01em` → h5 `0` → h6 `+0.01em`
-   （`packages/ui/src/lib/theme/cssGenerator.ts:577-582`）
-3. **color**：`markdown.heading1` / `heading2` … 各档取不同灰阶（flexoki-dark.json:132-133）
-
-在全等宽 UI 里这条尤其重要：等宽字体放大后横向占位增长很快，**靠字号做层级会立刻撑破 48rem 阅读栏**。
-
-**现有 6 级 → 4 档的过渡映射**（迁移归 T-22）：
-
-| 现有 | Tailwind | 归入 | 备注 |
-|------|---------|------|------|
-| 2xs 10px | `text-[var(--text-2xs)]` | → ui 14px | 上游无 10px 档；收敛会撞现有紧凑布局，**T-22 再动** |
-| xs 12px | `text-xs` | → ui 14px / code 13px | 路径/hash 类归 code，其余归 ui |
-| sm 14px | `text-sm` | → ui 14px | 已对齐 |
-| md 16px | `text-base` | → markdown 15px | 正文/次级标题 |
-| lg 18px | `text-lg` | → settings-title 18px | 仅设置页 L1 保留 |
-| xl 22px | `text-xl` | → markdown 15px + weight | **上游无此档**，标题不靠字号 |
-
-`--text-2xs` 在过渡期继续可用，写法：`text-[var(--text-2xs)]`（优先）或 `text-[10px]`。
+**阅读栏**：`--container-reading` 45rem（= Cursor 实测 48 CJK 字/行 @15px）/ `--container-reading-wide` 60rem，
+经 `shellLayoutModel.ts` 的 `max-w-reading{,-wide}` 消费——不要写 `max-w-[45rem]` 任意值。
 
 ### Font Weight（字重）
 
-字重是标题层级的**主要**载体（见上），不是可选装饰：
+字重是标题层级的**主要**载体（见上），不是可选装饰。**平台可靠性一列是 D25 实测矩阵的结论，是硬约束**：
 
-| Level | Tailwind | 场景 |
-|------|---------|------|
-| normal | `font-normal` | 正文、描述、占位文本（上游 `--ui-regular-font-weight: 400`） |
-| medium | `font-medium` | button、label、导航项、表头（上游 `--ui-button/label-font-weight: 500`） |
-| semibold | `font-semibold` | 标题（card/dialog/sheet/section title；上游设置页标题 600） |
+| Level | Tailwind | 场景 | 平台可靠性 |
+|------|---------|------|-----------|
+| normal | `font-normal` | 正文、描述、占位、工具行输出体、所有 muted 文本 | ✅ 全平台 |
+| medium | `font-medium` | button、label、导航项、表头、**软强调** | ⚠️ **Win10 Segoe UI 静态族无 500**——CSS 匹配降到 400，逐像素等于 normal。**500 永远不能是某个层级区分的唯一载体**；「必须在 Win10 上也看得出来」的区分用 400 vs 600 |
+| semibold | `font-semibold` | 卡片/对话框/段落标题、正文相对 meta 的强调、顶栏标题 | ✅ 全平台真档（缺 600 时升 700，不消失）。**这是 D25 交付的新维度** |
+| bold | `font-bold` | 仅 markdown `**粗体**` 内联 | ✅；不用于 UI 层级 |
+
+**mono 元素永远只用 400 / 700，禁用 500/600**——多数等宽族只有两档，中间档会触发合成加粗（毛糙）。
+`globals.css` 已在 `@layer base` 给 `html` 设 `font-synthesis-weight: none` 兜底。
+
+### Letter-spacing（字距梯度）
+
+四档 + 两条禁令（D25 §3.3；OpenChamber 的六级负字距梯度**不适用**——负 tracking 在 CJK 上撞字，
+且收益只在大字号出现）：
+
+| 档 | 值 | 域 |
+|---|---|---|
+| 段头 | `tracking-[0.04em]` | 侧栏 `Recent` / `Repositories` 段头、弹层分组标题（A07 :1339 裁定值不变） |
+| 微标签 | `tracking-[0.02em]` | ≤11px 的 badge / 角标 / `kbd` 内文（按需） |
+| 按钮 | `tracking-[0.01em]` | `ui/button.tsx` 基类全局自带，保持不动 |
+| 正文/UI | `0`（默认） | 正文、侧栏行、Composer、工具行、meta |
+| 大标题 | `tracking-[-0.01em]` | **仅 ≥18px**（`--text-title` 档）；唯一允许负字距的档 |
+
+- 🚫 **`font-mono` 元素禁止任何非零 tracking**（唯一例外：onboarding OTP 的 `tracking-[0.5em]` 字符分隔）。
+  等宽 + 字距 = 列对齐失效。已由 `fontDomainGuards.test.ts` A5 静态断言锁死。
+- 🚫 **任何可能承载 CJK 的元素禁止负 tracking**——实操上等价于「<18px 一律非负」。
+
+### 数字对齐（tabular-nums）
+
+**任何会原地变化的数字，或任何需要跨行竖直对齐的数字，必须加 `tabular-nums`**（D25 §5.4）。
+等宽时代所有数字天然等宽；分域后比例字体的数字宽度不一，原地刷新的计时器/计数/百分比会左右跳。
+已覆盖：StatusLine 全部数值段、meta 行时间、工具行计数与计时参数（`toolArgClass` 内建）、侧栏相对时间、
+队列序号。新增会刷新的数字时照此办理。
+
+### 表单控件 vs 文字 chip（ghost chip 形制）
+
+`SelectTrigger` / `Input` 是**表单控件原语**：自带边框 + 阴影 + 内高光 + `min-w` 宽度下限——只用于表单页。
+**工具条上的下拉**（模型、分支、目标、运行位置一类）一律走 **ghost chip** 形制：
+纯文字 + chevron，静息零边框零底色，`hover:bg-hover` + `data-[popup-open]:bg-selection` 显壳——
+参考 `middleColumnLayout.ts` 的 `composerModelTriggerClass()` / `targetTriggerClass()`。
+
+**悬停显壳三规则（T-30 批2 拍板落地）**：
+
+1. 壳用 `hover:bg-hover` **填充**实现，**禁止** `hover:border`——悬停瞬间撑高 2px 造成行抖动；
+2. `hover:` 与 `focus-visible:` **必须成对给同一层底色**——只挂 hover 的「默认无框」会让键盘用户完全失去控件边界
+   （断言 F-A15 成对交叉校验）；
+3. 壳外仍保留仓内 outline 约定 `focus-visible:outline-2 focus-visible:outline-offset-1
+   focus-visible:outline-accent-primary`，outline 与底色**叠加**而非二选一。
 
 ### Motion（动画时长）
 

@@ -80,6 +80,25 @@ export function replaceMention(
 }
 
 /**
+ * T-30b2 (F-A12): the ⊕ "Add file context" button's text transform — insert
+ * an `@` at the caret, with a separating space when the caret sits right
+ * after a non-whitespace character (an `@` glued to a word is invisible to
+ * `extractMentionQuery`). The caller then re-runs `extractMentionQuery` at
+ * the returned cursor so the mention popup opens exactly as if the user had
+ * typed the `@` themselves.
+ */
+export function insertMentionTrigger(text: string, cursorPos: number): MentionInsertion {
+  const before = text.slice(0, cursorPos);
+  const lastChar = before.at(-1) ?? '';
+  const needsSpace = lastChar !== '' && lastChar !== ' ' && lastChar !== '\n' && lastChar !== '\r';
+  const inserted = needsSpace ? ' @' : '@';
+  return {
+    text: before + inserted + text.slice(cursorPos),
+    cursor: cursorPos + inserted.length,
+  };
+}
+
+/**
  * Scan `text` for every `@path` token and return display chips. Used by
  * ChatComposer to render a row of selected references below the textarea.
  * Not鸣 token 的 path 必须非空（裸 `@` 不算）。允许行首 `@`；token 以空格/

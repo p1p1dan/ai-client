@@ -39,7 +39,7 @@ export function AgentGroup({ group, sessions, onGroupClick }: AgentGroupProps) {
       <Sparkles className="h-12 w-12 opacity-50" />
       <div className="flex flex-col items-center gap-1 text-center">
         <p className="text-sm">{t('No agent sessions')}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           {t('Create a session to start using AI Agent')}
         </p>
       </div>

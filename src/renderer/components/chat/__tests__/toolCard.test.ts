@@ -4,6 +4,7 @@ import {
   classifyTool,
   deriveAggregateRow,
   deriveRepoName,
+  deriveToolArg,
   deriveToolGroupRows,
   deriveToolRowView,
   formatToolArg,
@@ -429,6 +430,54 @@ describe('formatToolArg', () => {
     const long = 'x'.repeat(500);
     const run = makeRun('a', 'WebSearch', { query: long });
     expect(formatToolArg(run)).toBe(long);
+  });
+});
+
+// D25 §2.4 (assertion A2's generation side): the arg slot is polymorphic —
+// machine identifiers ride mono, human prose rides sans. These pin which
+// producer emits which kind; toolArgClass (fontDomainGuards A2) pins what
+// each kind renders as.
+describe('deriveToolArg argKind', () => {
+  it('paths, commands, URLs and patterns are ident', () => {
+    expect(deriveToolArg(makeRun('a', 'Read', { file_path: '/r/a.ts' }))?.kind).toBe('ident');
+    expect(deriveToolArg(makeRun('b', 'Bash', { command: 'ls -la' }))?.kind).toBe('ident');
+    expect(deriveToolArg(makeRun('c', 'WebFetch', { url: 'https://x.dev' }))?.kind).toBe('ident');
+    expect(deriveToolArg(makeRun('d', 'Grep', { pattern: 'foo' }))?.kind).toBe('ident');
+    expect(deriveToolArg(makeRun('e', 'Write', { file_path: '/r/b.ts' }))?.kind).toBe('ident');
+  });
+
+  it('human-written descriptions, queries and fixed prose labels are prose', () => {
+    expect(
+      deriveToolArg(makeRun('a', 'Bash', { command: 'ls', description: 'List files' }))?.kind
+    ).toBe('prose');
+    expect(deriveToolArg(makeRun('b', 'WebSearch', { query: 'how to x' }))?.kind).toBe('prose');
+    expect(deriveToolArg(makeRun('c', 'TodoWrite', {}))?.kind).toBe('prose');
+    expect(deriveToolArg(makeRun('d', 'Task', { description: 'scan repo' }))?.kind).toBe('prose');
+  });
+
+  it('unknown tools follow whichever fallback field won (command=ident, description=prose, bare toolName=ident)', () => {
+    expect(deriveToolArg(makeRun('a', 'mcp__x__y', { command: 'run' }))?.kind).toBe('ident');
+    expect(deriveToolArg(makeRun('b', 'mcp__x__y', { description: 'do a thing' }))?.kind).toBe(
+      'prose'
+    );
+    expect(deriveToolArg(makeRun('c', 'mcp__x__y', {}))?.kind).toBe('ident');
+  });
+
+  it('deriveToolRowView carries the kind onto the view', () => {
+    const view = deriveToolRowView(
+      makeRun('a', 'Bash', { command: 'ls', description: 'List files' })
+    );
+    expect(view.argKind).toBe('prose');
+    const identView = deriveToolRowView(makeRun('b', 'Read', { file_path: '/r/a.ts' }));
+    expect(identView.argKind).toBe('ident');
+  });
+
+  it('the aggregate "N files, M searches" row is prose', () => {
+    const entries: ToolGroupEntry[] = [
+      { kind: 'run', run: makeRun('a', 'Read', { file_path: '/r/a.ts' }) },
+      { kind: 'run', run: makeRun('b', 'Grep', { pattern: 'foo' }) },
+    ];
+    expect(deriveAggregateRow(entries).argKind).toBe('prose');
   });
 });
 

@@ -13,12 +13,14 @@ import {
   ComboboxSeparator,
   ComboboxTrigger,
 } from '@/components/ui/combobox';
+import { Ident } from '@/components/ui/ident';
 import { CreateWorktreeDialog } from '@/components/worktree/CreateWorktreeDialog';
 import { useGitBranches } from '@/hooks/useGit';
 import { useWorktreeCreate } from '@/hooks/useWorktree';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { BranchMenuEntry, BranchMenuModel } from './composerTarget';
+import { targetTriggerClass } from './middleColumnLayout';
 
 interface BranchComboItem {
   id: string;
@@ -136,12 +138,7 @@ export function TargetBranchSelect({
         <ComboboxTrigger
           disabled={disabled}
           title={disabled ? disabledReason : undefined}
-          render={
-            <button
-              type="button"
-              className="inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-sm text-muted-foreground hover:bg-hover data-[popup-open]:bg-selection disabled:opacity-64"
-            />
-          }
+          render={<button type="button" className={targetTriggerClass('muted')} />}
         >
           <GitBranch className="size-3.5 shrink-0" />
           {/* Round-3 fix (point-check #8): this used to cap at max-w-40
@@ -191,9 +188,9 @@ export function TargetBranchSelect({
                         // same "no longer shares width with the folder
                         // dropdown" reasoning.
                         endAddon={
-                          <span className="max-w-48 truncate text-xs text-muted-foreground">
+                          <Ident className="max-w-48 truncate text-muted-foreground">
                             {item.path}
-                          </span>
+                          </Ident>
                         }
                       >
                         <span className="flex min-w-0 items-center gap-2">

@@ -1,5 +1,6 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Ident } from '@/components/ui/ident';
 import { type HostStatus, isNode24ResolutionFailure } from './hostStatus';
 
 /**
@@ -49,7 +50,7 @@ export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
 
   return (
     <div
-      className={`shrink-0 border-b px-3 py-2 text-xs ${
+      className={`shrink-0 border-b px-3 py-2 text-meta ${
         isError
           ? 'border-destructive/40 bg-destructive/10 text-destructive'
           : 'border-status-running/30 bg-status-running/10 text-status-running'
@@ -62,14 +63,14 @@ export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
           {title}
         </p>
         {status.state !== 'starting' && (
-          <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-xs" onClick={onRetry}>
+          <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-ui" onClick={onRetry}>
             <RefreshCw className="h-3 w-3" />
             Retry
           </Button>
         )}
       </div>
       {guidance && <p className="mt-1 break-words opacity-90">{guidance}</p>}
-      {diagnostics && <p className="mt-1 break-words opacity-75">{diagnostics}</p>}
+      {diagnostics && <Ident className="mt-1 block break-words opacity-75">{diagnostics}</Ident>}
     </div>
   );
 }

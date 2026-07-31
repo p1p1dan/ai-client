@@ -173,7 +173,9 @@ function MenuGroupLabel({
   return (
     <MenuPrimitive.GroupLabel
       className={cn(
-        'px-2 py-1.5 font-medium text-muted-foreground text-xs data-inset:ps-9 sm:data-inset:ps-8',
+        // D25: group labels ride the --text-meta tier (13px sans), not the
+        // retired 12px text-xs step.
+        'px-2 py-1.5 font-medium text-muted-foreground text-meta data-inset:ps-9 sm:data-inset:ps-8',
         className
       )}
       data-inset={inset}

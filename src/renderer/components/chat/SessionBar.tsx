@@ -900,7 +900,7 @@ export function SessionBar({
                 >
                   <div className="rounded-lg border bg-popover p-1 shadow-lg">
                     <div className="flex items-center justify-between px-2 py-1">
-                      <span className="text-xs text-muted-foreground">{t('Select Agent')}</span>
+                      <span className="text-ui text-muted-foreground">{t('Select Agent')}</span>
                       <Tooltip>
                         <TooltipTrigger render={<span />}>
                           <button
@@ -949,7 +949,7 @@ export function SessionBar({
                           >
                             <span>{name}</span>
                             {isDefault && (
-                              <span className="shrink-0 text-xs text-muted-foreground">
+                              <span className="shrink-0 text-meta text-muted-foreground">
                                 {t('(default)')}
                               </span>
                             )}
@@ -1008,7 +1008,7 @@ export function SessionBar({
                     >
                       <div className="rounded-lg border bg-popover p-1 shadow-lg">
                         <div className="flex items-center justify-between px-2 py-1">
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          <span className="text-ui text-muted-foreground whitespace-nowrap">
                             {t('Select Provider')}
                           </span>
                           <Tooltip>

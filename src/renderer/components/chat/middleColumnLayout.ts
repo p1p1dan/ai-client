@@ -81,32 +81,85 @@ export function rememberSendAttempt(
 
 // ---- Composer host / card / textarea class assembly ----
 
-/** Composer host div's class: empty centers-and-grows, session docks at a fixed height. Both share `px-6`. */
+/**
+ * Composer host div's class: empty centers-and-grows, session docks at a fixed
+ * height. Both share `px-6`.
+ *
+ * T-30b2 (F-A10): the session host carries `pt-0`, NOT its old `pt-1.5` — the
+ * 8px band above the card is owned exclusively by whichever upstream renders
+ * last (`TIMELINE_PADDING_CLASS`'s `pb-2`, the question dock wrapper's `pb-2`,
+ * or the queue strip's `mb-2`). Stacking a host padding on top was how the
+ * band silently grew to 14px (A07 :2709 wrote 8px).
+ */
 export function middleColumnHostClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
     return 'flex min-h-0 flex-1 flex-col justify-center px-6 pb-[9%]';
   }
-  return 'shrink-0 px-6 pt-1.5 pb-3.5';
+  return 'shrink-0 px-6 pt-0 pb-3.5';
 }
 
 /** Timeline scroll area's inner padding (A07 `.tl`: 20/24/8). Padding stays outside `ReadingColumn`. */
 export const TIMELINE_PADDING_CLASS = 'px-6 pt-5 pb-2';
 
-/** Composer card's outer frame class — shared border/fill/radius tokens, mode-specific padding and layout. */
-export function composerCardClass(mode: MiddleColumnMode): string {
+// ---- One 24px control tier (T-30b2 §3.3 E1+E2) ----
+
+/**
+ * Single height source for every control inside the composer: attach button,
+ * model trigger, target-row triggers and the round action keys are all 24px
+ * (`h-6`/`size-6`). Tailwind's scanner cannot see dynamically-built class
+ * names, so the class strings below spell `h-6`/`size-6` literally — this
+ * constant is the assertion anchor (F-A3/F-A4 extract the numeric suffix and
+ * cross-check `n × 4 === COMPOSER_CONTROL_SIZE`), not a runtime source.
+ */
+export const COMPOSER_CONTROL_SIZE = 24;
+
+/**
+ * The follow-up card's resting-height arithmetic as an assertable object
+ * (F-A2). A07 :1844 wrote "40px (content 24 + padding 8×2)" — that sum
+ * forgets the 2×1px border; the true border-box value is 42px, which is also
+ * the Cursor reference measurement (52 device px @ DPR 1.25). T-28's review
+ * "fixed" the mismatch in the wrong direction (kept 40, squeezed padding to
+ * 5px and the key at 28); this restores content 24 + padding 8 + border 1
+ * per side.
+ */
+export function composerFollowHeightBreakdown(): {
+  border: number;
+  padding: number;
+  content: number;
+  total: number;
+} {
+  const border = 2;
+  const padding = 16;
+  const content = COMPOSER_CONTROL_SIZE;
+  return { border, padding, content, total: border + padding + content };
+}
+
+/**
+ * Composer card's outer frame class — shared border/fill tokens, mode-specific
+ * radius and layout.
+ *
+ * Border ladder (F-A1): rest = `--border`, focus = `--input` — the neutral
+ * one-step ΔL≈0.035 gray ladder matching Cursor's measured focus behavior
+ * (ΔL 0.033, zero chroma). The old `border-input` rest + `focus-within:
+ * border-ring` (brand orange, C 0.15) was 2.5× Cursor's edge weight at rest
+ * and lit the whole frame orange on focus — a top-4 "AI 化" source.
+ *
+ * Radius (拍板 ②): the resting follow-up card is a full pill (`rounded-full`,
+ * r = h/2 — the Cursor measurement: circle-fit residual ≤1px), but ONLY while
+ * it is a single resting row. When extras stack (attachment chips / notices /
+ * queue rejections) the card grows and a pill radius would warp into huge
+ * side arcs, so `hasExtras` demotes it to `rounded-md` (F-A2b). The empty
+ * card measured ~12px on Cursor — `rounded-md` stays.
+ */
+export function composerCardClass(mode: MiddleColumnMode, opts?: { hasExtras?: boolean }): string {
   if (mode === 'empty') {
-    // Round-2 visual fix: pt-2.5/pb-2 was a literal 2px top/bottom asymmetry
-    // on the empty-state card frame — symmetric py-2.5 matches the 8/10px
-    // spacing tiers already used elsewhere in this file without inventing a
-    // new value.
-    return 'relative rounded-md border border-input bg-card focus-within:border-ring px-3 py-2.5';
+    return 'relative rounded-md border border-border bg-card focus-within:border-input p-2';
   }
-  // Resting height contract (A07 :1844): exactly 40px. Border-box math:
-  // 28px round key + 2×1px border = 30px content floor; `py-1` alone would
-  // rest at 38px, so `min-h-10` (40px) owns the floor and `items-center`
-  // distributes the remaining 10px — review fix for the earlier `py-1.5`
-  // variant that rested at 42px (6+28+6+2 borders).
-  return 'relative rounded-md border border-input bg-card focus-within:border-ring flex min-h-10 items-center gap-2 px-2 py-1';
+  const radius = opts?.hasExtras ? 'rounded-md' : 'rounded-full';
+  // Resting height contract: 42px = border 2 + padding 16 + content 24 —
+  // see `composerFollowHeightBreakdown` (min-h-10.5 = 42px on the 0.25rem
+  // scale; not an arbitrary value).
+  return `relative ${radius} border border-border bg-card focus-within:border-input flex min-h-10.5 items-center gap-2 p-2`;
 }
 
 /**
@@ -219,10 +272,15 @@ export function resolveIdleStatusText(input: {
   largeHint: string | null;
   statusHint: string;
 }): string | null {
-  if (input.mode === 'session' && input.hasStatusError) {
+  // T-30b2: the banner-owns-error-text contract now covers BOTH modes — the
+  // empty card's status line stopped being resident (`shouldShowStatusLine`
+  // below), so the empty branch's old fall-through to the full `statusHint`
+  // on error would have been the same defect-B text duplication, one mode
+  // later.
+  if (input.hasStatusError) {
     return input.largeHint;
   }
-  return (!input.hasStatusError && input.largeHint) || input.statusHint;
+  return input.largeHint || input.statusHint;
 }
 
 // ---- Target row ----
@@ -267,24 +325,26 @@ export function shouldRenderTargetRow(input: {
 // ---- Status line ----
 
 /**
- * Whether the composer's status line (`Ready · cwd: …` / sending / error /
- * large-attachment hint) should be shown. The follow-up card hides its
- * resting state so a static line doesn't inflate the 40px docked height; the
- * empty-state card always shows it.
+ * Whether the composer's status line (sending / reading / large-attachment
+ * hint) should be shown. Need-based in BOTH modes now (T-30b2, F-A11): the
+ * empty card's old resident `Ready · cwd: …` line had no Cursor counterpart
+ * and duplicated information the target row's folder trigger now carries in
+ * its `title` (the full workspace path — the A06 "compensate before deleting"
+ * requirement).
  *
- * Round-4 point-check fix (defect B): session mode no longer shows it for
- * `hasStatusError` at all. The full error text (`Error: ${lastError}` —
- * potentially a multi-hundred-character `rawEvents=[...]`/`hostAfter=...`
- * dump) already renders once, in full, in the destructive banner above the
- * composer card (`ChatComposer.tsx`'s `mb-2 max-h-28 …` block) — showing it
- * a SECOND time crammed into this same single flex row as the textarea was
- * not just redundant, it was the actual defect-B trigger: the error string's
- * own max-content width could claim the row's entire shrink budget and crush
- * the textarea to 0px (see `composerTextareaClass`'s `min-w-32` / the
- * layout-half fix `sessionStatusLineWrapperClass`, both below). The banner
- * is now the SOLE owner of error text in session mode; any future inline
- * status for an error state must be a short, fixed-length label (e.g.
- * "Failed"), never the full message.
+ * Round-4 point-check fix (defect B), extended to both modes by T-30b2:
+ * `hasStatusError` never shows this line. The full error text
+ * (`Error: ${lastError}` — potentially a multi-hundred-character
+ * `rawEvents=[...]`/`hostAfter=...` dump) already renders once, in full, in
+ * the destructive banner above the composer card (`ChatComposer.tsx`'s
+ * `mb-2 max-h-28 …` block) — showing it a SECOND time crammed into the same
+ * flex row as the textarea was the actual defect-B trigger: the error
+ * string's own max-content width could claim the row's entire shrink budget
+ * and crush the textarea to 0px (see `composerTextareaClass`'s `min-w-32` /
+ * the layout-half fix `sessionStatusLineWrapperClass`, both above). The
+ * banner is the SOLE owner of error text; any future inline status for an
+ * error state must be a short, fixed-length label (e.g. "Failed"), never the
+ * full message.
  */
 export function shouldShowStatusLine(input: {
   mode: MiddleColumnMode;
@@ -293,9 +353,6 @@ export function shouldShowStatusLine(input: {
   hasStatusError: boolean;
   hasLargeHint: boolean;
 }): boolean {
-  if (input.mode === 'empty') {
-    return true;
-  }
   return input.sending || input.reading > 0 || input.hasLargeHint;
 }
 
@@ -312,13 +369,115 @@ export function mentionPopupPlacementClass(mode: MiddleColumnMode): string {
 // ---- Round action button ----
 
 /**
- * 28px true-circle class for the send/stop/retry action button, overriding
- * `Button`'s forced squircle four-piece (`rounded-[10px] [corner-shape:squircle]
- * supports-…:rounded-[50px] before:rounded-[9px]…`). Same for both modes —
- * only the `Button` variant (color) differs by kind.
+ * 24px true-circle class for the send/stop/retry/enqueue action key,
+ * overriding `Button`'s forced squircle four-piece (`rounded-[10px]
+ * [corner-shape:squircle] supports-…:rounded-[50px] before:rounded-[9px]…`).
+ * 24px = `COMPOSER_CONTROL_SIZE` (E2: A07's "Cursor 目视约 36px" was a
+ * measurement error — the reference circles are 30 device px @ DPR 1.25 =
+ * 24 CSS px, i.e. A07's own `--h-btn`). Same for both modes — color comes
+ * from `roundActionButtonKindClass`.
  */
 export function roundActionButtonClass(): string {
-  return 'size-7 rounded-full [corner-shape:round] supports-[corner-shape:squircle]:rounded-full before:rounded-full supports-[corner-shape:squircle]:before:rounded-full';
+  return 'size-6 rounded-full [corner-shape:round] supports-[corner-shape:squircle]:rounded-full before:rounded-full supports-[corner-shape:squircle]:before:rounded-full';
+}
+
+/**
+ * Per-kind color for the round action key (拍板 ③ / F-A22). Send and enqueue
+ * deliberately share one near-black fill (`--foreground` — Cursor's measured
+ * `#141414`, C≈0; they are the same "submit" action family, distinguished by
+ * icon) so the composer carries at most ONE high-saturation object at a time:
+ * the destructive Stop. Retry keeps the outline variant and needs no
+ * override. `bg-primary` here is a regression — the orange fill was one of
+ * the four "AI 化" sources.
+ */
+export function roundActionButtonKindClass(kind: 'send' | 'enqueue' | 'stop' | 'retry'): string {
+  switch (kind) {
+    case 'send':
+    case 'enqueue':
+      return 'border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground/80';
+    case 'stop':
+      return 'bg-destructive text-destructive-foreground';
+    case 'retry':
+      return '';
+  }
+}
+
+// ---- Composer row/bar assembly + ghost chips (T-30b2 §5) ----
+
+/** Session card's single docked control row (⊕ · textarea · status · model · keys). */
+export function composerRowClass(): string {
+  return 'flex min-w-0 items-center gap-2';
+}
+
+/**
+ * Empty card's bottom bar (⊕ · model · status · keys). No `justify-between`:
+ * the status slot carries `flex-1` when present, and the action-key group
+ * carries `ml-auto` in the JSX so it stays right-pinned even when the status
+ * line is hidden (need-based since T-30b2).
+ */
+export function composerBarClass(): string {
+  return 'mt-1.5 flex items-center gap-2';
+}
+
+/**
+ * ⊕ "Add file context" button (A07 `.icon-btn`, first given real semantics by
+ * T-30b2 §4.6): inserts `@` at the caret and hands over to the existing
+ * mention search — NOT an attachment picker (no renderer-side file-byte IPC
+ * exists; paste attachments are T-18's separate path). Same shell pair as
+ * every composer ghost chip: hover AND keyboard focus show the same fill.
+ */
+export function composerAttachButtonClass(): string {
+  return 'grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground transition-colors duration-150 hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary disabled:pointer-events-none disabled:opacity-64';
+}
+
+/**
+ * Merged model+effort trigger (拍板 ①, round-4 addendum §3.1): a naked text
+ * chip — no border, no shadow, no width floor — whose shell (a `--hover`
+ * fill, never a border: a hover-border would grow the row 2px and jitter)
+ * appears only on hover / keyboard focus / open popup. The old
+ * `SelectTrigger` pair brought `rounded-lg` (clamped to a full pill at
+ * h-6) + `border-input` + `shadow-xs` + inner highlight + `min-w` — the #1
+ * measured "AI 化" source. `min-w`'s dead space also caused the round-3
+ * "text not centered" misdiagnosis: width is now pure content-fit. Do not
+ * reintroduce any of the four (F-A15).
+ */
+export function composerModelTriggerClass(): string {
+  return 'inline-flex h-6 shrink-0 items-center gap-1 rounded-sm px-2 text-ui transition-colors duration-150 hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary data-[popup-open]:bg-selection disabled:pointer-events-none disabled:opacity-64';
+}
+
+/** Model base name: the lighter half of the trigger's dual polarity. */
+export function composerModelBaseClass(): string {
+  return 'text-muted-foreground';
+}
+
+/**
+ * Effort suffix: darker AND heavier than the base name (Cursor follow-up
+ * polarity; L 0.19 vs 0.40 measured). `font-medium` only means anything on
+ * the D25 proportional stack — on the old all-mono stack 500 rounded to 400
+ * (F-A17 pins the ordering). Not rendered at all when effort = Default.
+ */
+export function composerModelSuffixClass(): string {
+  return 'font-medium text-foreground';
+}
+
+/**
+ * Target-row dropdown triggers (folder / branch), downshifted from the two
+ * `.tsx` files so the composer has exactly ONE ghost-chip shape (F-A18):
+ * same height, same `px-2`, same `rounded-sm` (the old `rounded-md` clamped
+ * to a full pill at h-6 — §3.5), same hover/open shell as the model trigger.
+ */
+export function targetTriggerClass(tone?: 'default' | 'muted'): string {
+  const base =
+    'inline-flex h-6 items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover data-[popup-open]:bg-selection disabled:opacity-64';
+  return tone === 'muted' ? `${base} text-muted-foreground` : base;
+}
+
+/**
+ * Queue strip outer wrapper (T-19 component, geometry owned here): `mb-2`
+ * is this strip's whole share of the 8px band above the card (F-A10).
+ */
+export function queueStripWrapperClass(): string {
+  return 'mb-2 flex max-h-24 flex-col gap-1 overflow-y-auto';
 }
 
 // ---- Placeholder text ----

@@ -30,7 +30,7 @@ export function SurfacePlaceholder({ surface }: SurfacePlaceholderProps) {
       </EmptyMedia>
       <EmptyHeader>
         <EmptyTitle className="text-sm">{t(surface.labelKey)}</EmptyTitle>
-        <EmptyDescription className="text-xs">
+        <EmptyDescription className="text-meta">
           {surface.pendingTask
             ? t('Not connected yet — {{task}} will wire this surface.', {
                 task: surface.pendingTask,

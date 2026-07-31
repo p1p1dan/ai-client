@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { HitListPopover } from './HitListPopover';
-import type { FileLinkTarget, ToolRowView } from './toolCard';
+import { type FileLinkTarget, type ToolRowView, toolArgClass } from './toolCard';
 
 /**
  * T-05 batch 2/4: bare tool-row rendering (A07 screen 5, groups A-E), plus
@@ -111,12 +111,12 @@ function ToolRowArg({
   onOpenFile?: (target: FileLinkTarget) => void;
 }) {
   if (!view.arg) return null;
-  const argClass = cn(
-    'min-w-0 truncate',
-    view.failed
-      ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'
-      : 'text-tool-arg'
-  );
+  // D25 §2.4: 'ident' args (paths/commands/URLs) drop to mono @ text-code;
+  // 'prose' args (Bash descriptions, "2 files, 3 searches", "for 1s") stay
+  // on the row's sans body tier. Kind travels on the view (`argKind`);
+  // missing means 'ident'. `items-baseline` on the row is what lets the
+  // 13px mono and 15px sans halves share one baseline without jitter.
+  const argClass = toolArgClass(view.argKind ?? 'ident', view.failed);
 
   if (view.link) {
     const link = view.link;
@@ -186,9 +186,12 @@ function ToolRowInputSegment({
 }) {
   return (
     <div className="ml-0.5 border-l border-border pl-3.5">
+      {/* D25 M3b: explicit font-mono — JSON indentation must stay columnar.
+          Tailwind preflight already monos <pre>, but this contract is too
+          load-bearing to leave implicit (A1 whitelists this file). */}
       <pre
         className={cn(
-          'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 text-code leading-[1.55] text-muted-foreground',
+          'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
           maxHeightClass
         )}
       >
@@ -209,9 +212,12 @@ function ToolRowOutputSegment({
     case 'output':
       return (
         <div className="ml-0.5 border-l border-border pl-3.5">
+          {/* D25 M3a: explicit font-mono — CLI tables/trees/diffs need column
+              alignment; same explicit-over-preflight reasoning as the input
+              segment above. */}
           <pre
             className={cn(
-              'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 text-code leading-[1.55] text-muted-foreground',
+              'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
               view.outputMaxHeightClass
             )}
           >

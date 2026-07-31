@@ -35,7 +35,7 @@ export function MainHeader({
         <p className="truncate text-sm font-medium text-foreground">
           {activeSession?.title ?? 'No session selected'}
         </p>
-        <p className="truncate text-xs text-muted-foreground" title={activeWorkspace?.path}>
+        <p className="truncate text-meta text-muted-foreground" title={activeWorkspace?.path}>
           {activeProject?.name ?? 'Project'}
           {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
           {activeWorkspace ? ` · ${activeWorkspace.path}` : ''}
@@ -71,7 +71,7 @@ export function MainHeader({
 function UsageRingPlaceholder() {
   return (
     <div
-      className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-[10px] text-muted-foreground"
+      className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-meta text-muted-foreground"
       role="img"
       aria-label="Usage ring placeholder"
       title="Usage ring placeholder"

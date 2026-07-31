@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Ident } from '@/components/ui/ident';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
@@ -187,7 +188,8 @@ export function MessageTimeline({
           turns that hard clip into the app's established soft edge fade. */}
       <ScrollArea className="min-h-0 flex-1" scrollFade>
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
-            the documented 48rem/64rem reading width (T-22 spec §2.13). */}
+            the documented 45rem/60rem reading width (T-22 spec §2.13; widths
+            re-based by D25 §3.4). */}
         <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
           {/* T-05 (A07 `.tl` :846): 12px -> 20px turn spacing. */}
           <ReadingColumn className="space-y-5">
@@ -222,7 +224,7 @@ export function MessageTimeline({
             )}
             {status === 'failed' && (
               <div
-                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs"
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-meta"
                 role="alert"
               >
                 {/* T-30 P-06: only the title carries destructive weight — body
@@ -242,7 +244,7 @@ export function MessageTimeline({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="mt-2 h-6 text-xs"
+                    className="mt-2 h-6 text-ui"
                     onClick={() => void stopActiveSession()}
                   >
                     Stop
@@ -325,7 +327,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
     <Alert variant={view.severity} role={view.severity === 'error' ? 'alert' : 'status'}>
       <Icon />
       <AlertTitle className="min-w-0 truncate">{view.title}</AlertTitle>
-      <AlertDescription className="gap-1 text-xs">
+      <AlertDescription className="gap-1 text-meta">
         <p className="break-words">{view.guidance}</p>
         <p>{HISTORY_ERROR_NON_FATAL_HINT}</p>
         {retryControl.hint && (
@@ -448,19 +450,19 @@ function MessageBubble({
             {message.attachments.map((attachment, index) => (
               <span
                 key={`${message.id}-attachment-${index}`}
-                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 text-xs text-foreground"
+                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 text-meta text-foreground"
               >
                 {attachment.kind === 'image' ? (
                   <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
                 ) : (
                   <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                 )}
-                <span
+                <Ident
                   className="min-w-0 flex-1 truncate"
                   title={attachment.name ?? attachment.mediaType}
                 >
                   {attachment.name ?? attachment.mediaType}
-                </span>
+                </Ident>
               </span>
             ))}
           </div>
@@ -609,7 +611,7 @@ function AssistantMessage({
       })}
 
       {footerLine && (
-        <p className="flex flex-wrap items-center gap-2 text-code text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-2 text-meta tabular-nums text-muted-foreground">
           {footerLine}
         </p>
       )}
@@ -639,6 +641,8 @@ function buildWorkedForRow(message: ChatMessage, metadata?: MessageMetadata): To
     key: `${message.id}~worked-for`,
     verb: worked.verb,
     arg: worked.arg,
+    // "12s" is timing prose, not a copy-target (D25 §2.4).
+    argKind: 'prose',
     running: false,
     failed: false,
     expandable: Boolean(stats),

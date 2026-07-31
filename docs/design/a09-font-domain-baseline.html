@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A09 · 分域字体基线（D25 三测点 A/B 凭证）</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Arial, "PingFang SC", "Microsoft YaHei UI", sans-serif; background: #faf8f2; color: #1b1917; padding: 2rem clamp(1rem, 5vw, 4rem) 6rem; }
+h1, h2, h3, p, figure { margin: 0; }
+code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.87em; background: #efeae0; padding: 0 4px; border-radius: 4px; }
+.eyebrow { font-size: 13px; letter-spacing: 0.06em; color: #8d877f; text-transform: uppercase; margin-bottom: 0.5rem; }
+h1 { font-size: 1.6rem; margin-bottom: 0.75rem; }
+.standfirst { max-width: 60rem; color: #6b6660; margin-bottom: 0.6rem; }
+.warn { border-left: 3px solid #d8c58a; padding-left: 0.75rem; }
+section { margin-top: 3rem; }
+h2 { font-size: 1.15rem; border-bottom: 1px solid #e3ded2; padding-bottom: 0.4rem; margin-bottom: 1rem; }
+h3 { font-size: 0.95rem; margin: 1.2rem 0 0.5rem; }
+table { border-collapse: collapse; font-size: 13.5px; margin: 0.75rem 0; }
+th, td { border: 1px solid #e3ded2; padding: 0.4rem 0.7rem; text-align: left; vertical-align: top; }
+th { background: #f2eee4; }
+.shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; margin: 0.75rem 0 0; }
+.shot { border: 1px dashed #c9c2b4; border-radius: 8px; min-height: 180px; display: grid; place-items: center; color: #8d877f; font-size: 13px; text-align: center; padding: 1rem; background: #fdfcf8; }
+.shot.filled { border-style: solid; padding: 0; min-height: 0; }
+.shot img { width: 100%; height: auto; display: block; border-radius: 8px; }
+.cap { font-size: 12.5px; color: #8d877f; margin-top: 0.35rem; }
+.tick { color: #4a7a3d; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">A09 · 视觉凭证 · D25 分域字体 + T-30 批2 形态对齐</div>
+  <h1>三测点 A/B 基线（mono → split → Cursor 参照）</h1>
+  <p class="standfirst">
+    A07 / phase0a 的原型渲染层已冻结（用户验收凭证），本页是 D25 之后的<b>新视觉凭证载体</b>
+    （编排者裁定 3，2026-07-30 生效），同时充当工程规范第 10 条要求的对比报告。
+    三测点沿用 open-q #10 原定，不新增；每测点三图并排：<b>现状 mono</b>（D18 全等宽，切换
+    <code>html[data-font-domain="mono"]</code> feature flag 可复现）/ <b>D25 split</b>（分域后）/
+    <b>Cursor 参照</b>（refs/feedback-20260730 与 round-3 素材）。
+  </p>
+  <p class="standfirst warn">
+    ⚠️ <b>截图待 GUI 点验时填充</b>（2026-07-31 施工批建页）：本机施工环境未跑 GUI；
+    三测点 A/B 截图与量化指标实测（D25 §6.2 八项）随第五轮 GUI 点验一并采集，
+    图片落 <code>docs/design/refs/a09-font-domain/</code> 后替换下方占位框。
+    代码侧可静态断言的部分（A1~A6 + F-A15~F-A22）已全部进 vitest 常跑回归，不依赖截图。
+  </p>
+</header>
+
+<section>
+  <h2>01 · 三测点</h2>
+
+  <h3>测点 ① · Chat 阅读栏正文（45rem 下中文段落 + 中英混排）</h3>
+  <p class="standfirst">对照点：CJK 与拉丁同行的基线、标点位置、行内节奏；45rem = Cursor 实测 48 CJK 字/行 @15px。</p>
+  <div class="shots">
+    <div class="shot">现状 mono<br>（data-font-domain="mono"）<br>待截图</div>
+    <div class="shot">D25 split<br>（默认态）<br>待截图</div>
+    <div class="shot">Cursor 参照<br>refs/feedback-20260730/cursor-参照-协调布局.png<br>（user 气泡 + assistant 段落裁片待入）</div>
+  </div>
+
+  <h3>测点 ② · 左栏 Session 树（中文标题 + 分支 chip + 相对时间同行 truncate）</h3>
+  <p class="standfirst">对照点：标题可见字符数（目标 ≥16，mono 下 13）；分支 chip = sans 13（D25 §2.3 裁定 A）。</p>
+  <div class="shots">
+    <div class="shot">现状 mono · 待截图</div>
+    <div class="shot">D25 split · 待截图</div>
+    <div class="shot">Cursor 参照（侧栏裁片待入）</div>
+  </div>
+
+  <h3>测点 ③ · 工具行摘要（sans 动词 + mono ident 参数混排）</h3>
+  <p class="standfirst">对照点：verb sans@15 / ident-arg mono@13 的光学配平（items-baseline 基线对齐、行高零抖动）；prose-arg（Bash description、聚合计数、Worked for）保持 sans。</p>
+  <div class="shots">
+    <div class="shot">现状 mono · 待截图</div>
+    <div class="shot">D25 split · 待截图</div>
+    <div class="shot">Cursor 参照（工具行裁片待入）</div>
+  </div>
+</section>
+
+<section>
+  <h2>02 · 形态前后对照（T-30 批2，同批凭证）</h2>
+  <table>
+    <thead><tr><th>项</th><th>改前</th><th>改后</th><th>依据</th></tr></thead>
+    <tbody>
+      <tr><td>Model/Effort 控件</td><td>两枚 SelectTrigger 满圆胶囊（边框+阴影+内高光+min-w 共约 200px，双 chevron）</td><td>一枚合并 <code>Sonnet High ⌄</code> 裸文字 chip，悬停/聚焦/弹开才显壳，宽度内容自适应</td><td>拍板 ① + 第 4 条</td></tr>
+      <tr><td>follow-up 卡</td><td>rounded-md 12px · 40px · 聚焦品牌橙框</td><td><b>满圆 pill</b>（extras 时降 rounded-md）· <b>42px</b> · 聚焦中性灰一步梯度</td><td>拍板 ② + E1 + F-A1</td></tr>
+      <tr><td>圆形动作键</td><td>28px · send=品牌橙实心</td><td><b>24px</b> · send/enqueue=近黑 <code>--foreground</code>（stop 保持红）</td><td>拍板 ③ + E2</td></tr>
+      <tr><td>⊕ 钮</td><td>不存在（T-28 偏离①）</td><td>实现为 <code>Add file context (@)</code>——插入 @ 唤起文件搜索</td><td>§4.6，偏离①结清</td></tr>
+      <tr><td>卡上方净空</td><td>14px（pb-2 + host pt-1.5 叠加）</td><td><b>8px</b>（三上游各持唯一 8px，host pt-0）</td><td>A07 :2709 + F-A10</td></tr>
+      <tr><td>empty 态状态行</td><td>常驻 <code>Ready · cwd: …</code></td><td>按需显隐；cwd 迁入 folder 触发器 title</td><td>A07 :1612 + F-A11</td></tr>
+    </tbody>
+  </table>
+  <div class="shots">
+    <div class="shot">改前（HEAD 1b33ee3 GUI）· 待截图</div>
+    <div class="shot">改后（本批）· 待截图</div>
+    <div class="shot">Cursor 参照 refs/feedback-20260731-round3/ScreenShot_2026-07-31_085350_619.png</div>
+  </div>
+</section>
+
+<section>
+  <h2>03 · 量化指标（D25 §6.2，GUI 实测后回填）</h2>
+  <table>
+    <thead><tr><th>指标</th><th>目标</th><th>实测</th></tr></thead>
+    <tbody>
+      <tr><td>侧栏标题可见字符数</td><td>≥16（mono 基线 13）</td><td>待测</td></tr>
+      <tr><td>阅读栏 CJK 字/行</td><td>48 ± 2 @45rem</td><td>待测</td></tr>
+      <tr><td>字重可辨（400 vs 600 并置）</td><td>200% 放大目视可辨；Win10 必测（Segoe UI Semibold 非合成）</td><td>待测</td></tr>
+      <tr><td>数字不抖</td><td>计时器 10s 逐帧 x 位移 = 0</td><td>待测</td></tr>
+      <tr><td>mono/sans 光学配平</td><td>13px mono 视觉高度 ≤ 15px sans 正文</td><td>待测</td></tr>
+      <tr><td>CJK/Latin 基线重合</td><td>同行辅助线重合</td><td>待测</td></tr>
+      <tr><td>字号档位数</td><td>≤5 档（10 仅 mono 拉丁 /13/14/15/18）</td><td class="tick">✅ 静态达成（A6 断言，chat/ + workspace-shell/）</td></tr>
+      <tr><td>tracking 使用点全落四档梯度</td><td>rg 统计</td><td class="tick">✅ 静态达成（A5 断言 + 梯度落库）</td></tr>
+    </tbody>
+  </table>
+  <p class="standfirst">open-q #10 的 <code>lowercase</code> 六处豁免同批目视复核（原 #10 验收要求，不因结项而免测）。</p>
+</section>
+
+<footer style="margin-top:4rem;color:#8d877f;font-size:12.5px;">
+  规格 · docs/plans/2026-07-30-d25-font-domain-design.md + 2026-07-31-t30b2-composer-form-design.md（addendum round4）
+  ｜断言 · fontDomainGuards.test.ts（A1~A6）+ composerFormClasses.test.ts（F-A1~F-A22）
+  ｜A07 v4 追记 · docs/design/a07-cursor-composer-alignment.html 文末
+  ｜建页 2026-07-31（截图待第五轮 GUI 点验）
+</footer>
+
+</body>
+</html>

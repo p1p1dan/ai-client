@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/combobox';
 import { useI18n } from '@/i18n';
 import type { FolderMenuEntry, FolderMenuModel } from './composerTarget';
+import { targetTriggerClass } from './middleColumnLayout';
 
 interface FolderComboItem {
   id: string;
@@ -44,6 +45,12 @@ interface TargetFolderSelectProps {
   activeWorkspaceId: string | null;
   /** Trigger label — the current target's project name. */
   currentLabel: string;
+  /**
+   * Current target's full workspace path, surfaced as the trigger's title.
+   * A06 hard requirement (T-30b2 §4.8): the resting `Ready · cwd: …` status
+   * line is gone, so this title is now the cwd's only always-reachable home.
+   */
+  currentPath?: string;
   disabled: boolean;
   disabledReason?: string;
   onSelect: (workspaceId: string) => void;
@@ -61,6 +68,7 @@ export function TargetFolderSelect({
   folderMenu,
   activeWorkspaceId,
   currentLabel,
+  currentPath,
   disabled,
   disabledReason,
   onSelect,
@@ -118,13 +126,8 @@ export function TargetFolderSelect({
     >
       <ComboboxTrigger
         disabled={disabled}
-        title={disabled ? disabledReason : undefined}
-        render={
-          <button
-            type="button"
-            className="inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-sm hover:bg-hover data-[popup-open]:bg-selection disabled:opacity-64"
-          />
-        }
+        title={disabled ? disabledReason : currentPath}
+        render={<button type="button" className={targetTriggerClass()} />}
       >
         <Folder className="size-3.5 shrink-0 text-folder" />
         <span className="max-w-40 truncate text-foreground">{currentLabel}</span>
@@ -200,7 +203,7 @@ export function TargetFolderSelect({
               }}
             >
               <span className="flex-1 truncate text-left">{t('New Folder')}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-meta text-muted-foreground">
                 {t('Temporary workspace')}
               </span>
             </button>

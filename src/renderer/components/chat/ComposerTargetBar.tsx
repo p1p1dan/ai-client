@@ -76,6 +76,7 @@ export function ComposerTargetBar({
           folderMenu={folderMenu}
           activeWorkspaceId={target.workspace.id}
           currentLabel={target.project?.name ?? target.workspace.name}
+          currentPath={target.workspace.path}
           disabled={blocked}
           disabledReason={blockedReason}
           onSelect={selectTarget}

@@ -5,6 +5,7 @@ import {
   FileText,
   Folder,
   Image as ImageIcon,
+  Plus,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -38,18 +39,25 @@ import {
   totalAttachmentBytes,
   toWireAttachments,
 } from './attachments';
+import { ComposerModelTrigger } from './ComposerModelTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { resolveActiveTarget } from './composerTarget';
-import { EffortSelect } from './EffortSelect';
 import { toWireEffort } from './efforts';
-import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
+import {
+  extractMentionQuery,
+  insertMentionTrigger,
+  parseMentionChips,
+  replaceMention,
+} from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
-import { ModelSelect } from './ModelSelect';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
+  composerAttachButtonClass,
+  composerBarClass,
   composerCardClass,
   composerPlaceholder,
+  composerRowClass,
   composerTextareaClass,
   type MiddleColumnMode,
   mentionPopupPlacementClass,
@@ -178,7 +186,7 @@ const AttachmentChip = memo(function AttachmentChip({
   return (
     <span
       className={cn(
-        'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 pr-0.5 pl-1.5 text-xs text-foreground',
+        'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 pr-0.5 pl-1.5 text-meta text-foreground',
         sending && 'pointer-events-none opacity-64'
       )}
     >
@@ -189,7 +197,7 @@ const AttachmentChip = memo(function AttachmentChip({
       ) : (
         <FileText className="size-3.5 shrink-0 text-muted-foreground" />
       )}
-      <span className="min-w-0 flex-1 truncate" title={chip.title}>
+      <span className="min-w-0 flex-1 truncate font-mono text-code" title={chip.title}>
         {chip.label}
       </span>
       <span className="shrink-0 tabular-nums text-muted-foreground">{chip.sizeLabel}</span>
@@ -625,6 +633,28 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     setTimeout(() => {
       ta.focus();
       ta.setSelectionRange(out.cursor, out.cursor);
+    }, 0);
+  };
+
+  // T-30b2 §4.6: the ⊕ button inserts an `@` at the caret and hands over to
+  // the exact same mention-search pipeline typing an `@` would enter — it is
+  // a file-CONTEXT trigger, not an attachment picker (no renderer-side
+  // file-byte IPC exists; paste attachments are T-18's separate, unchanged
+  // path). Not gated on `busy`: T-19 unlocked typing while a turn runs.
+  const handleAttachContext = () => {
+    const ta = textareaRef.current;
+    const cursor = ta ? ta.selectionStart : value.length;
+    const out = insertMentionTrigger(value, cursor);
+    updateValue(out.text);
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(out.cursor, out.cursor);
+      if (!composingRef.current && cwd) {
+        setMentionQuery(extractMentionQuery(out.text, out.cursor));
+        setMentionIndex(0);
+      }
     }, 0);
   };
 
@@ -1742,7 +1772,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
         )}
         <p
-          className={cn('min-w-0 truncate text-xs tabular-nums', statusTone)}
+          className={cn('min-w-0 truncate text-meta tabular-nums', statusTone)}
           title={statusLine ?? undefined}
         >
           {statusLine}
@@ -1753,7 +1783,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const noticeBlock = attachments.notice ? (
     <Alert
       variant={attachments.notice.tone === 'info' ? 'info' : 'warning'}
-      className="mt-1 items-center gap-x-2 px-2 py-1 text-xs"
+      className="mt-1 items-center gap-x-2 px-2 py-1 text-meta"
     >
       <TriangleAlert />
       <AlertTitle className="min-w-0 truncate font-normal" title={attachments.notice.message}>
@@ -1776,7 +1806,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // byte budget) reuses the same Alert language as the attachment notice
   // above — the draft itself is left untouched by the caller (handleSend).
   const queueNoticeBlock = queueNotice ? (
-    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-xs">
+    <Alert variant="warning" className="mt-1 items-center gap-x-2 px-2 py-1 text-meta">
       <TriangleAlert />
       <AlertTitle className="min-w-0 truncate font-normal" title={queueNotice}>
         {queueNotice}
@@ -1814,7 +1844,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         {mentionChips.map((chip, idx) => (
           <span
             key={`${chip.path}-${idx}`}
-            className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+            className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-code text-primary"
           >
             {chip.path}
           </span>
@@ -1933,22 +1963,36 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     />
   );
 
-  // T-28 §3.5: Model/Effort selects and the Send/Stop/Retry round buttons —
-  // shared between both layout branches, only their position in the card
-  // differs (bottom row in empty mode, inline in the single row in session
-  // mode).
-  const modelEffortControls = activeSessionId ? (
-    <>
-      <ModelSelect
-        sessionId={activeSessionId}
-        hostDefaultModel={hostStatus.settings?.model}
-        disabled={disabled || busy || sending}
-      />
-      {/* T-20: effort sits next to the model — both are per-session
-            generation settings applied at the next createSession. */}
-      <EffortSelect sessionId={activeSessionId} disabled={disabled || busy || sending} />
-    </>
+  // T-30b2 拍板 ①: ONE merged `Sonnet High ⌄` trigger replaces the old
+  // ModelSelect + EffortSelect pair — shared between both layout branches,
+  // only its position in the card differs (bottom row in empty mode, inline
+  // in the single row in session mode). Both settings remain per-session and
+  // apply at the next createSession; the disabled gate is unchanged.
+  const modelControl = activeSessionId ? (
+    <ComposerModelTrigger
+      sessionId={activeSessionId}
+      hostDefaultModel={hostStatus.settings?.model}
+      disabled={disabled || busy || sending}
+      mode={mode}
+    />
   ) : null;
+
+  // T-30b2 §4.6: ⊕ file-context button, leftmost in both modes (A07
+  // `.icon-btn`, finally wired to a real capability). Enabled while a turn
+  // runs (T-19 unlocked typing); disabled only with no session at all —
+  // same gate as the textarea itself.
+  const attachContextButton = (
+    <button
+      type="button"
+      aria-label="Add file context"
+      title="Add file context (@)"
+      className={composerAttachButtonClass()}
+      disabled={disabled || !activeSessionId}
+      onClick={handleAttachContext}
+    >
+      <Plus className="size-3.5" />
+    </button>
+  );
 
   // T-19 decision 2.5: the button stack is now derived, not hand-assembled —
   // `deriveActionButtons` is the single source that also decides "Retry and
@@ -2040,7 +2084,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             state (below) never surfaces; Send is silently disabled with no
             visible reason. */}
       {(lastError || !activeSessionId || !activeWorkspace || !cwd) && (
-        <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive whitespace-pre-wrap break-all">
+        <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-meta text-destructive whitespace-pre-wrap break-all">
           {statusHint}
         </div>
       )}
@@ -2069,7 +2113,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           onRemove={handleQueueEntryRemove}
         />
       )}
-      <div className={composerCardClass(mode)}>
+      {/* 拍板 ②: the resting follow-up card is a full pill; stacked extras
+            demote it to rounded-md so the radius never warps (F-A2b). */}
+      <div className={composerCardClass(mode, { hasExtras: hasComposerExtras })}>
         {/* T-07 @ 文件搜索 popup——放 textarea 上方/下方，避免被 overflow-hidden 容器裁掉 */}
         {mentionOpen && (
           <div
@@ -2114,27 +2160,27 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                       </span>
                     </span>
                     {dirPart && (
-                      <span className="ml-1.5 text-xs text-muted-foreground">{dirPart}</span>
+                      <span className="ml-1.5 text-meta text-muted-foreground">{dirPart}</span>
                     )}
                   </button>
                 );
               })}
             </div>
-            <div className="flex items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   ↑↓
                 </kbd>
                 Navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   Enter
                 </kbd>
                 Select
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+                <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   Esc
                 </kbd>
                 Close
@@ -2159,10 +2205,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 {mentionChipsBlock}
               </div>
             )}
-            <div className="flex min-w-0 items-center gap-2">
+            {/* T-30b2 §5.3 row order: ⊕ · textarea · status · model · keys. */}
+            <div className={composerRowClass()}>
+              {attachContextButton}
               {textareaEl}
               {renderStatusLine(sessionStatusLineWrapperClass())}
-              {modelEffortControls}
+              {modelControl}
               {actionButtons}
             </div>
           </div>
@@ -2173,12 +2221,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             {queueNoticeBlock}
             {attachmentChipsBlock}
             {mentionChipsBlock}
-            <div className="mt-1.5 flex items-center justify-between gap-2">
+            {/* T-30b2 §5.2 bar order: ⊕ · model · status · keys. The status
+                  slot's flex-1 fills the middle when present; `ml-auto` on
+                  the key group keeps it right-pinned when the (now
+                  need-based) status line is hidden. */}
+            <div className={composerBarClass()}>
+              {attachContextButton}
+              {modelControl}
               {renderStatusLine('flex min-w-0 flex-1 items-center gap-1.5')}
-              <div className="flex shrink-0 items-center gap-1.5">
-                {modelEffortControls}
-                {actionButtons}
-              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">{actionButtons}</div>
             </div>
           </>
         )}

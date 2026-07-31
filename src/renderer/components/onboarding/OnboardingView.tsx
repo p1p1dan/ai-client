@@ -768,7 +768,7 @@ function SectionHeader({
 }) {
   return (
     <div className="flex flex-col gap-2 p-6 pb-3">
-      <h2 className="flex items-center gap-2 font-heading text-xl font-semibold leading-none">
+      <h2 className="flex items-center gap-2 font-heading text-title tracking-[-0.01em] font-semibold leading-none">
         {icon}
         {title}
       </h2>

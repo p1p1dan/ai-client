@@ -1220,6 +1220,13 @@ button.ct-row { cursor: pointer; }
     圆形发送键、空态不放最近会话。另补<b>工具行交互口径</b>（Read 行文件名可点击 / Grep 行悬浮命中列表 → 屏⑤ F 组）
     与<b>侧栏 chip 规则变更</b>（每行会话都显分支 chip，main / master 也显）。
   </p>
+  <p class="standfirst" style="margin-top:0.6rem;border-left:3px solid var(--page-rule);padding-left:0.75rem;">
+    ⚠️ <b>时效标注（2026-07-31，D25 / T-30 批2 连带）：</b>本页原型在 <b>D18③ 全等宽字体</b>下渲染并经用户验收（v3）。
+    <b>自 D25 起字体口径、自 T-30 批2 起 Composer 形态口径，均以文末「A07 v4 追记」为准</b>——
+    原型画面的字族呈现与 Composer 细部（Model/Effort 双下拉、28px 圆钮、40px 卡高、品牌橙聚焦框）<b>不再是施工依据</b>。
+    <b>未受影响、继续有效</b>：Flexoki 调色板、卡片形态学、间距、三级灰分配、失败态、展开规则、屏①~⑥ 的全部布局裁定。
+    逐条对照见文末 <b>「A07 v4 追记 · D25 分域字体 + T-30b2 形态对齐」</b>。
+  </p>
   <div class="status-strip">
     <span class="is-ref">参照 refs/cursor-20260729（12 张）</span>
     <span>待用户验收</span>
@@ -2856,6 +2863,140 @@ button.ct-row { cursor: pointer; }
     <p>侧栏 flat 平铺 + 右对齐相对时间（D21-A）；<b>分支 chip 全行常驻</b>（v3 裁定：main / master 也显实际分支名，temp / remote 显 kind 标签，推翻原「main 不显」）；运行位置只读指示器（D21-B / D22）；Recent 段保留（D21-C）；
       三列 + 44px 导轨不动（D19）；<b>工具行 / 问答卡形态源 = Cursor</b>（D24）；<b>回答后就地冻结</b>（D20，与 Cursor 一致，不再是偏离）。</p>
   </div>
+</section>
+
+<section>
+  <h2>A07 v4 追记 · D25 分域字体 + T-30b2 形态对齐（2026-07-31）</h2>
+  <p>
+    v3 是用户定稿版本，本追记<b>不回改 v3 任何裁定编号</b>；原型渲染层（全部 <code>.fx</code> 作用域 CSS 与 demo markup）
+    <b>一个字节未动</b>——改它 = 毁掉验收凭证。以下一~五节为 D25（分域字体）、六~十节为 T-30 批2（Composer 形态）、
+    十一节为第四轮追补（合并式模型档位控件），三者同批施工、同段成文。
+  </p>
+
+  <h3>一、口径变更：D18③ 全等宽撤销 → D25 分域</h3>
+  <p>
+    D18③「sans / mono / heading 三者统一 ui-monospace」撤销。生产口径：<code>--font-sans</code> = 系统比例栈
+    （Latin 先 / CJK 后 / 禁 <code>system-ui</code> / 零随包），<code>--font-mono</code> 只保留给代码块、行内 code、
+    工具行输出体与 <b>ident 型</b>参数、diff、路径、hash、kbd、终端、编辑器（域映射全表见
+    <code>docs/plans/2026-07-30-d25-font-domain-design.md</code> §2）。判据一句话：<b>内容 vs 控件</b>——
+    用户会逐字符读它、比对它、复制它 ⇒ mono；只拿它当名字点一下 ⇒ sans。
+  </p>
+
+  <h3>二、本页原型的已知字体差异（防止拿原型 diff 生产后报 bug）</h3>
+  <ul>
+    <li>原型 <code>:473-474</code> 的 <code>.fx { font-family: var(--mono) }</code> 保留等宽以维持验收画面一致；<b>生产走 <code>--font-sans</code></b>。</li>
+    <li>原型 <code>.fx code { font-family: inherit }</code>（<code>:480-481</code>）冻结；生产口径 <code>&lt;code&gt;</code> → <code>var(--font-mono)</code> @ <code>--text-code</code>。</li>
+    <li><code>:1209</code>「字体是 D18 的全等宽栈」改按分域口径读；「尺寸尽量落在既有档位上」半句<b>继续有效</b>。</li>
+    <li><code>:1272</code>「Flexoki + 全等宽，零硬编码」拆半：颜色半句有效，字体半句改「Flexoki + 分域字体（UI 比例 / 代码等宽）」。</li>
+    <li><code>:1294</code>「刻意不搬……无衬线字体」<b>本条反转</b>——D25 后已搬；白底浅灰面板仍不搬。</li>
+    <li><code>:1368</code>「本页原型内没有第二种字族」对原型仍成立、对生产不成立：生产自 D25 起有两种。</li>
+    <li><code>:2782</code> 偏离表「全等宽 ui-monospace / D18③」行：该偏离项<b>已撤销</b>，回到 Cursor 的比例字体。</li>
+  </ul>
+
+  <h3>三、v3 数值裁定的存废（字体部分）</h3>
+  <ul>
+    <li><code>:1339</code> 段头 <b>14px + muted + 0.04em：数值全部保留</b>；只换理由句——比例字体下缩字号确实省宽，
+      「不缩字号」改由「段头与内容同档、层级交给 weight + 字距 + color 三件套（D25 后三维齐全）」支撑。</li>
+    <li><code>:1346</code> chip 封顶 112px：<b>数值前提变了</b>（比例字体使可见字符 +20%，P-24 部分自解），与 P-24 合并复算，不在 D25 单独裁。</li>
+    <li>字号 token 梯度定为 <b>10（仅 mono 拉丁）/ 13（--text-meta sans · --text-code mono 双 token 同值不同因）/ 14（--text-ui）/ 15（--text-markdown）/ 18（--text-title）</b>；
+      阅读栏 48rem → <b>45rem</b>（= DPR 标定实测 Cursor 48 CJK 字/行 @15px，<code>--container-reading</code> token）。</li>
+  </ul>
+
+  <h3>四、屏⑤ 工具行字体口径（D25 生产版）</h3>
+  <p>
+    <code>verb → var(--font-sans) @ --text-markdown(15)</code>；<code>arg</code> 按 <b>argKind</b> 分流——
+    <b>ident</b>（路径/命令/URL/pattern）→ <code>mono @ --text-code(13)</code>，<b>prose</b>（Bash description、
+    「2 files, 3 searches」、「for 1s」）→ sans 随行；<code>&lt;pre&gt;</code> 输出体 → <code>mono @ 13</code>。
+    屏⑤ 的其余裁定（三级灰、失败态、展开规则、depth=0、hover）<b>全部继续有效</b>。
+  </p>
+
+  <h3>五、新增视觉凭证</h3>
+  <p><code>docs/design/a09-font-domain-baseline.html</code>：三测点 ×（mono / split / Cursor 参照）并排 A/B，兼形态前后对照（T-30 批2 S7 交付）。</p>
+
+  <h3>六、T-30 批2 · Composer 形态对齐（2026-07-31，D26）</h3>
+  <p>
+    <b>触发：</b>第三轮 GUI 点验第 9 条——「聊天框形态与 Cursor 有差异，过于圆润、AI 化；参照截图尽量一比一」。
+    参照素材：<code>refs/feedback-20260731-round3/ScreenShot_2026-07-31_085350_619.png</code>（follow-up 态）与
+    <code>…_085405_250.png</code>（新建态），DPR 判定 1.25（三条独立互证，见形态规格 §1.2）。
+  </p>
+
+  <h3>七、实测归因：本页三处数值前提被证伪</h3>
+  <ul>
+    <li><b><code>:1844</code> 的 40px 是算术错误。</b>「内容 24 + 上下 8」= 40 漏算 2×1px 边框；Cursor 实测 42px。
+      T-28 期把实现由 42「修」回 40（保 28px 圆钮 + 挤 padding 到 5px）属修错方向。生产回到「内容 24 + padding 8 + 边框 2 = <b>42</b>」。</li>
+    <li><b><code>:1329</code> 的「Cursor 发送键目视约 36px」是目测错误。</b>⊕ 与麦克风圆钮均为 30 device px @DPR1.25 = <b>24 CSS px</b>（两图互证）。
+      正确档位是本页自己的 <code>--h-btn</code>(24)，Composer 内不再需要 <code>--h-row</code>(28)（该档仍服务下拉项 / 侧栏会话行）。</li>
+    <li><b><code>:1336</code> 的「Cursor 靠阴影做出浮起」是事实错误。</b>Cursor 的卡<b>零阴影</b>（边框外相邻 8 行像素恒等于背景值）。
+      浮起 = 卡填充比页面亮 0.012 L + 一条 L 0.937 的发丝边。据此，用 <code>--input</code> 做静息卡边的必要性消失。</li>
+  </ul>
+
+  <h3>八、逐锚点处置表（形态部分）</h3>
+  <table>
+    <thead><tr><th>A07 锚点</th><th>原文要点</th><th>T-30b2 处置</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">:786-793 .cmp</td><td>卡边框 <code>--input</code>、内边距 10/12/8 三值</td><td>❄️ 原型冻结。生产：静息边 <code>--border</code>、聚焦边 <code>--input</code>、内边距四边 8px（Cursor 卡−框 ΔL=0.054，本仓 <code>--input</code> 给到 0.137 = 2.5×）</td></tr>
+      <tr><td class="mono">:793 :focus-within</td><td>聚焦转 <code>--ring</code> 品牌橙</td><td>✏️ 生产改 <code>--input</code>——Cursor 聚焦 ΔL=0.0333 且零色度；<code>--border→--input</code> 的 ΔL=0.0347 逐位对应</td></tr>
+      <tr><td class="mono">:1336</td><td>「用 --input 替代 Cursor 靠阴影做的浮起」</td><td>✏️ 理由被实测证伪（见七-3）；「不用阴影」半句继续有效</td></tr>
+      <tr><td class="mono">:1334</td><td>「Cursor 近 pill，收档到 12」</td><td>✏️ 前提修正 + 拍板 ② 采纳：follow-up <b>就是</b> pill（r=h/2，圆弧拟合残差 ≤1px）→ 生产 <code>rounded-full</code>（<code>.send</code> 已在用 999px，不引入新档）；<b>extras 堆叠时降回 rounded-md</b> 防 pill 变形。empty 态 r≈12~13，<code>--r-md</code> 原判正确不动</td></tr>
+      <tr><td class="mono">:1329</td><td>圆钮 36→28 收档</td><td>✏️ 输入值错误（见七-2）：拍板 ③ 采纳，圆钮 <b>24px</b> = <code>--h-btn</code></td></tr>
+      <tr><td class="mono">:1844</td><td>follow-up 卡高 40px</td><td>✏️ 算术勘误（见七-1）：<b>42px</b>，断言升级为「算术 × 类串交叉」（F-A2）</td></tr>
+      <tr><td class="mono">:810-819 .sel</td><td>Model/Effort = 无框文字 chip，--r-sm，hover 显底</td><td>✅ <b>裁定正确、实现从未对齐</b>——实现用了 <code>SelectTrigger</code>（rounded-lg 钳满圆 + 边框 + 阴影 + 内高光 + min-w）。本批换回无框文字 chip，属<b>合规修复</b>非改判</td></tr>
+      <tr><td class="mono">:1632</td><td>「拆回两个 select，零新控件」</td><td>✏️ <b>已撤销</b>（拍板 ①，见十一节）</td></tr>
+      <tr><td class="mono">:802-809 .icon-btn</td><td>⊕ 钮（A07 未给文字说明）</td><td>✏️ 本批实现并首次赋予语义：<code>Add file context (@)</code>——插入 <code>@</code> 唤起既有文件搜索，<b>不是附件选择</b>（无 renderer 侧读文件 IPC）。T-28 偏离①「不实现⊕」就此结清——靠接上真能力，不是靠放弃</td></tr>
+      <tr><td class="mono">:1615 / :2838-2839</td><td>「28px 圆形 --primary 实心」+「等宽下 Send 占位偏宽」论据</td><td>✏️ 拍板 ③：28→<b>24</b>（实测勘误）、<code>--primary</code>→<b><code>--foreground</code> 近黑</b>（Cursor #141414，C≈0）。「同位同尺寸的 Stop 让状态切换零位移」论据继续成立；stop 保持 destructive 红——同屏最多一件高饱和物</td></tr>
+      <tr><td class="mono">:736-753 .tgt-btn</td><td>目标行触发器 --r-sm(8px)</td><td>✅ 裁定正确、实现写成 rounded-md(12) 被钳满圆，本批改回。<b>横内距追记 6→8px</b>（用户第 4 条「外接框稍微大一点点」，与 .sel 同步，全 Composer 只剩一种 ghost chip）</td></tr>
+      <tr><td class="mono">:2709</td><td>问答折叠条 → 卡 8px</td><td>✅ 裁定正确、实现 14px（pb-2 + host pt-1.5 叠加）。本批改回 8px 并升级为可断言契约（F-A10：timeline / dock / 队列 strip 三上游各自持有唯一的 8px，host pt-0）</td></tr>
+      <tr><td class="mono">:1612</td><td>空态卡下无常驻元素</td><td>✅ 不变；本批把 empty 态常驻的 <code>Ready · cwd:</code> 状态行也改按需显隐，<b>更贴近本条</b>。cwd 全路径迁入目标行 folder 触发器的 <code>title</code>（A06：删展示前先补可达路径）</td></tr>
+      <tr><td class="mono">:1294 / :2789</td><td>不搬清单：麦克风</td><td>✅ 继续有效。补记：该 24px 圆位在本仓由发送/停止键占据，<b>silhouette 一致、语义不同</b>，不是空缺</td></tr>
+      <tr><td>（新增）</td><td><code>QueuedMessageStrip</code>（T-19）</td><td>➕ 新增锚点：挂载于 error banner 之后、卡之前，仅会话态；与卡净空 8px（mb-2），随 F-A10 一并锁死</td></tr>
+    </tbody>
+  </table>
+
+  <h3>九、「过于圆润 / AI 化」的物理来源（供后续复盘）</h3>
+  <p>
+    不是卡的圆角，而是<b>卡内控件</b>：Model/Effort 用了 <code>SelectTrigger</code> 原语，把
+    <code>rounded-lg</code>（16px，挂在 h-6 上被 CSS 钳到 h/2 = 满圆胶囊）、<code>border-input</code>、
+    <code>shadow-xs</code>、<code>before:shadow</code> 内高光、<code>min-w</code>（88+104px）一并带入，两枚并排约 200px；
+    叠加聚焦时整条卡框转品牌橙（C=0.1523）与两枚 28px 高饱和实心圆钮。
+    本页 <code>:810-819</code> 的 <code>.sel</code> 从一开始就写的是无框文字 chip——<b>裁定没错，实现没对齐</b>。
+  </p>
+  <p><b>可复用的一句判据：圆润只属于最外层容器一件事，不该同时属于容器和它内部的每一个小控件。</b></p>
+
+  <h3>十、新增锚点（A07 无对应物，登记为 A07 之后的既有事实）</h3>
+  <ul>
+    <li><code>QueuedMessageStrip</code>（T-19）：挂载于 error banner 之后、Composer 卡之前，仅会话态；与卡的净空 8px。</li>
+    <li>「卡上方净空恒 8px」升级为可断言契约：timeline / 问答 dock / 队列 strip 三个上游各自持有唯一的 8px，Composer 宿主不再叠加 <code>pt-1.5</code>。</li>
+    <li>⊕ 钮语义首次明确：<code>Add file context (@)</code>，插入 <code>@</code> 并唤起既有文件搜索；不是附件选择（本仓无 renderer 侧读文件 IPC）。</li>
+  </ul>
+
+  <h3>十一、合并式模型档位控件与「悬停显壳」（2026-07-31 用户第四轮点验第 4/5 条）</h3>
+  <p>
+    <b>撤销 :1632。</b>本页 <code>:1632</code> 原文「Cursor 的 <code>Fable 5 High</code> 是一个合并控件；我们拆回现有的两个
+    select（ModelSelect + EffortSelect），零新控件」——用户 2026-07-31 第四轮点验第 5 条明示「model 和 effect 可以做到一个选项中」，
+    该裁定正式撤销。替代口径：单触发器 <code>{模型} {档位} ⌄</code>，基名 <code>--muted-foreground</code>、档位后缀
+    <code>--foreground</code> + 500 字重，effort=Default 时后缀整段不渲染（不发 effort 字段这条协议语义的可视化）。
+  </p>
+  <p>
+    <b>:810-819 <code>.sel</code> 的两处追记。</b>裁定本身（无边框、无阴影、<code>--r-sm</code>、<code>hover:bg-hover</code>）
+    <b>完全正确且是本次的落地目标</b>，只作两点补充：
+    ① 横内距 <code>0 6px</code> → <code>0 8px</code>（用户第 4 条「外接框稍微大一点点」，同步应用于 <code>:736-753</code> 的
+    <code>.tgt-btn</code>，使 Composer 只剩一种 ghost chip 形制）；
+    ② 补 <b>键盘态</b>：<code>:focus-visible</code> 必须与 <code>:hover</code> 呈现同一层底色——「默认无框」的设计若只挂 hover，
+    键盘用户会完全失去控件边界。壳一律用<b>填充</b>实现（<code>hover:bg-hover</code>），禁止 <code>hover:border</code>（悬停瞬间撑高 2px 造成行抖动）。
+  </p>
+  <p>
+    <b>Cursor 弹层的裁剪判据（登记为方法论）。</b>参照图 <code>refs/feedback-20260731-round4/ScreenShot_2026-07-31_134823_982.png</code> 中的
+    搜索框 / <code>Auto</code> 开关 / 行内档位后缀 / <code>↺ Edit</code> / <code>Options</code> 子面板（Thinking·Context·Effort）五件，本仓<b>一件不搬</b>：
+    前四件是「9 个模型跨 5 家供应商」与「每模型记忆档位」这两个规模/能力前提的产物，本仓目录恒为 3~4 项、effort 为会话级；
+    子面板三组中 <code>Thinking</code> 是本仓的能力门控而非用户开关、<code>Context</code> 无协议字段，只剩 <code>Effort</code> 一组，
+    为一组单选开横向子面板得不偿失 ⇒ 降为主列表第二分组段（<code>Model</code> → <code>Reasoning effort</code>，段序锁死）。
+    <b>可复用的一句判据：别人的搜索框和子面板是他的规模与能力的产物，不是他的样式。</b>
+  </p>
+  <p>
+    <b>本节不含任何新的像素实测。</b>round-4 素材 DPR 未知（无三条独立互证），只作结构依据；一切几何沿用六~十节的
+    round-3 实测（DPR 1.25）与本仓既有 token 档位。实现偏差登记：弹层圆角沿用仓内 Menu popup 既有档（rounded-lg），
+    单选勾标沿用仓内 MenuRadioItem 左列指示（Cursor 为右侧 ✓）——两处均以「组件优先」压过 1:1，属登记差异非缺陷。
+  </p>
 </section>
 
 <footer class="footnote">

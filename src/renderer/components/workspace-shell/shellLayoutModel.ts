@@ -26,10 +26,13 @@ export const CONTEXT_PANEL_FALLBACK_WIDTH = 600;
 
 export type ReadingWidthMode = 'normal' | 'wide';
 
-// min(100%, 48rem) / min(100%, 64rem) — Tailwind defaults, no arbitrary values.
+// min(100%, 45rem) / min(100%, 60rem) via the --container-reading{,-wide}
+// tokens (globals.css) — no arbitrary values. 45rem = 48 CJK chars/line at
+// 15px, the DPR-calibrated Cursor reference (D25 §3.4); the old max-w-3xl
+// (48rem) ran ~51 chars/line, wider than the reference rhythm.
 export const READING_COLUMN_CLASS: Record<ReadingWidthMode, string> = {
-  normal: 'max-w-3xl',
-  wide: 'max-w-5xl',
+  normal: 'max-w-reading',
+  wide: 'max-w-reading-wide',
 };
 
 export function readingColumnClass(mode: ReadingWidthMode | undefined | null): string {
