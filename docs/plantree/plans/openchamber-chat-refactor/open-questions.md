@@ -100,4 +100,19 @@
 
 - **现状**：T-30 批2 形态规格（[`2026-07-31-t30b2-composer-form-design.md`](../../../plans/2026-07-31-t30b2-composer-form-design.md)）交付，含三处待拍板项：①模型档位是否合并一体式 `Sonnet High ⌄`；②follow-up 卡是否改满圆 pill；③圆钮 28→24px + 发送键 `--primary`→近黑。
 - **待用户**：三拍板项确认或否决，批2 开工前需裁定。
-- 出处：主线台账 2026-07-30「T-30 批2 形态规格交付」行。
+- **✅ 2026-07-31 结项**：三拍板项全部落定（第四轮 GUI 点验第 4/5 条）——①合并一体式模型档位控件 `Sonnet High ⌄`（默认无框，悬停/聚焦/弹层打开才显壳）；②follow-up 卡改满圆 `rounded-full` pill；③圆钮 28→24px + 发送键 `--primary`→近黑，均按推荐方案落定。T-30 批2 施工依据齐备（原规格 + [`2026-07-31-t30b2-composer-form-addendum-round4.md`](../../../plans/2026-07-31-t30b2-composer-form-addendum-round4.md) 追补，量级 5.6~6.1d），可开工。本条关闭。
+- 出处：主线台账 2026-07-30「T-30 批2 形态规格交付」行；结项见 2026-07-31「第四轮 GUI 点验结果 + 重试双发根治落地」行。
+
+## #26 Host 受理边界 clientTurnId 幂等（Codex 诊断方案，纵深防御，2026-07-31 新立）
+
+- **现状**：重试双发根治（`cb2d8d7`）采纳的是渲染发送层 `sawUserEcho` 作为幂等权威（Opus 诊断方案，红线零改动落地）。Codex 独立诊断同判核心根因，但主张更纵深的第二道防线——Host 受理边界按 `clientTurnId` 去重，本轮未采纳（不动 Host/协议）。
+- **连带**：A5（retry-resume 历史重放，即中断发生在 `beginTurn` 之后、Retry 走 resume 续接时模型可能看到同一条消息两遍）按 Opus 诊断建议留待现场取证后单独立项，取证与本条一并评估。
+- **待裁定**：是否排期实现 Host 侧 `clientTurnId` 幂等（涉协议/Host 改动，非零风险），或维持渲染层单一权威——等后续复现或用户反馈再评估。
+- 出处：主线台账 2026-07-31「第四轮 GUI 点验结果 + 重试双发根治落地」行，双轨诊断分歧仲裁段；[`2026-07-31-retry-doublesend-diagnosis-codex.md`](../../../plans/2026-07-31-retry-doublesend-diagnosis-codex.md) / [`2026-07-31-retry-doublesend-diagnosis-opus.md`](../../../plans/2026-07-31-retry-doublesend-diagnosis-opus.md)。
+
+## #27 组件级事故测试基建缺口（2026-07-31 新立）
+
+- **现状**：重试双发一类事故（`chat.send` 计数、竞态注入）需要真实组件渲染 + 交互模拟才能钉住回归，但本仓 vitest 为 node-only 环境、无 `.tsx` 渲染能力，写不出这类组件级事故回归测试。`cb2d8d7` 相关不变量本轮只能以 inspection-verified 注释入码，不可单测。
+- **方向**：引入 component-test 环境（jsdom/@testing-library）或补一层 e2e 冒烟层，覆盖 `.tsx` 组件交互路径。
+- **待裁定**：排期与选型（jsdom+RTL vs e2e）——等用户或后续任务评估。
+- 出处：主线台账 2026-07-31「第四轮 GUI 点验结果 + 重试双发根治落地」行，有意不做与残余段。
