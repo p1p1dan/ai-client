@@ -144,10 +144,18 @@ export function TargetBranchSelect({
           }
         >
           <GitBranch className="size-3.5 shrink-0" />
-          <span className="max-w-40 truncate">{currentLabel}</span>
+          {/* Round-3 fix (point-check #8): this used to cap at max-w-40
+              (10rem/160px) to leave room for the folder trigger sharing the
+              same target row. Now that the folder dropdown carries no branch
+              text (see TargetFolderSelect/buildFolderMenu), the branch
+              column no longer needs to budget space for a sibling's content
+              — max-w-60 (15rem/240px, token-scale) gives long branch names
+              (feature/*, release/*, remotes/origin/*) more room before
+              truncating. */}
+          <span className="max-w-60 truncate">{currentLabel}</span>
           <ChevronDown className="size-3.5 shrink-0" />
         </ComboboxTrigger>
-        <ComboboxPopup className="w-70 [&>[data-slot=combobox-popup]]:w-70">
+        <ComboboxPopup className="w-80 [&>[data-slot=combobox-popup]]:w-80">
           <div className="border-b p-1">
             <ComboboxInput
               placeholder={t('Search worktrees…')}
@@ -178,8 +186,12 @@ export function TargetBranchSelect({
                       <ComboboxItem
                         key={item.id}
                         value={item.value}
+                        // Round-3 fix (point-check #8): widened alongside
+                        // the popup/trigger above (max-w-32 -> max-w-48) —
+                        // same "no longer shares width with the folder
+                        // dropdown" reasoning.
                         endAddon={
-                          <span className="max-w-32 truncate text-xs text-muted-foreground">
+                          <span className="max-w-48 truncate text-xs text-muted-foreground">
                             {item.path}
                           </span>
                         }

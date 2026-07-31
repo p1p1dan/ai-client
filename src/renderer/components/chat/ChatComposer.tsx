@@ -13,6 +13,7 @@ import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { applyAutoSessionTitle } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import {
@@ -68,6 +69,7 @@ import {
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { decideSendPreamble } from './sendPreamble';
+import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
@@ -400,6 +402,35 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               ? 'Agent Host running — use Stop to abort'
               : `Ready · cwd: ${cwd}`;
 
+  // T-27 round-3 (point-check #10): fire-and-forget after ANY `runSend` call
+  // site sees a 'committed' outcome (the Host admitted the turn — see
+  // `RunEntryOutcome`) — covers a direct send, a queue-release first send,
+  // and a Retry that succeeds. `applyAutoSessionTitle` itself no-ops unless
+  // the session's title is still a placeholder, so later messages on an
+  // already-titled session are cheap no-ops, not repeat renames. Not
+  // awaited: a rename lagging behind by one IPC round-trip must never delay
+  // the composer unlocking for the next message.
+  //
+  // R3 fix: `hadUserMessage` gates this — every call site captures it (via
+  // `sessionHasUserMessage`, off a fresh store read) BEFORE calling
+  // `runSend`, never after. This matters because all three call sites carry
+  // "the message that was just sent", not necessarily the session's FIRST
+  // one: a resumed session's replayed history already has user messages
+  // even though its title may still be a placeholder (predates this
+  // feature, or its true first message had no derivable title), so a later
+  // follow-up must not be mistaken for the first message and re-title the
+  // session. Reading the timeline AFTER runSend would always see the
+  // just-admitted message and be trivially true — the flag has to be
+  // captured before that message can land.
+  const maybeApplyFirstMessageTitle = useCallback(
+    (sessionId: string, text: string, outcome: RunEntryOutcome, hadUserMessage: boolean) => {
+      if (outcome !== 'committed') return;
+      if (hadUserMessage) return;
+      void applyAutoSessionTitle(sessionId, text);
+    },
+    []
+  );
+
   // T-19 decision 2.3: Enter/Send-click both funnel through the same pure
   // dispatch — `decideSendAction` is the single place that decides whether
   // this keystroke starts a turn or joins the queue behind one already
@@ -420,7 +451,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     if (action === 'blocked') return;
 
     if (action === 'send') {
-      await runSend(trimmed, attachments.drafts, { clearComposerValue: true, origin: 'direct' });
+      // R3 fix: capture BEFORE runSend — the user's own echo for THIS send
+      // has not landed on the timeline yet at this point, so this reads
+      // whatever history already existed (empty for a genuinely new
+      // session, non-empty for a resumed one).
+      const hadUserMessage = activeSessionId
+        ? sessionHasUserMessage(useChatSessionsStore.getState().messages[activeSessionId] ?? [])
+        : false;
+      const outcome = await runSend(trimmed, attachments.drafts, {
+        clearComposerValue: true,
+        origin: 'direct',
+      });
+      if (activeSessionId) {
+        maybeApplyFirstMessageTitle(activeSessionId, trimmed, outcome, hadUserMessage);
+      }
       return;
     }
 
@@ -574,7 +618,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const handleRetry = async () => {
     if (!canRetry) return;
     setRetryable(null);
-    await runSend(retryText ?? '', retryDrafts, { origin: 'retry' });
+    const text = retryText ?? '';
+    // R3 fix: Retry deliberately uses the SAME uniform "capture before
+    // runSend" pattern as the direct/release call sites, not a special case
+    // that always skips naming. The timeline only ever gains a user entry
+    // via the Host's own confirmed echo (`message.started{role:'user'}` —
+    // there is no local/optimistic add, see `sessionHasUserMessage`'s
+    // header), so this is exactly right for both retry shapes:
+    //  - the failed attempt WAS admitted (Host echoed it, then the turn
+    //    failed mid-stream): that echo is already in the timeline, so this
+    //    reads true and naming is correctly skipped (same as any ordinary
+    //    follow-up);
+    //  - the failed attempt was NEVER admitted (no echo at all — a
+    //    'rejected'/timeout-with-zero-progress outcome): the timeline has
+    //    no entry for it, so this reads false, and if THIS retry succeeds,
+    //    its echo is genuinely the session's first user message — naming
+    //    must apply.
+    // No special-casing is needed because "hadUserMessage" already means
+    // exactly the right thing in both cases.
+    const hadUserMessage = activeSessionId
+      ? sessionHasUserMessage(useChatSessionsStore.getState().messages[activeSessionId] ?? [])
+      : false;
+    const outcome = await runSend(text, retryDrafts, { origin: 'retry' });
+    if (activeSessionId) {
+      maybeApplyFirstMessageTitle(activeSessionId, text, outcome, hadUserMessage);
+    }
   };
 
   // S3 (round-2 iteration-3 review, documentation only): the wiring below —
@@ -1218,7 +1286,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     sending,
     isInFlight: () => inFlightRef.current,
     status: activeSession?.status ?? 'idle',
-    runEntry: (entry) => runSend(entry.text, entry.attachments, { origin: 'release' }),
+    runEntry: async (entry) => {
+      // R3 fix: capture BEFORE runSend, off `entry.sessionId` (not
+      // `activeSessionId` — see the comment below on why those can differ)
+      // — same uniform pattern as the direct/retry call sites.
+      const hadUserMessage = sessionHasUserMessage(
+        useChatSessionsStore.getState().messages[entry.sessionId] ?? []
+      );
+      const outcome = await runSend(entry.text, entry.attachments, { origin: 'release' });
+      // `entry.sessionId` (not the render-time `activeSessionId` closure) —
+      // a queue release always targets the session the entry itself belongs
+      // to, and by the time this callback runs the user may have already
+      // navigated elsewhere.
+      maybeApplyFirstMessageTitle(entry.sessionId, entry.text, outcome, hadUserMessage);
+      return outcome;
+    },
   });
 
   // R10 (round-2 iteration-2 review): the 45s-abandon branch above armed
@@ -1503,6 +1585,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     <Textarea
       ref={textareaRef}
       unstyled
+      // Round-3 fix (point-check #7, placeholder "sits high"): `<textarea>`
+      // uses `field-sizing-content` to auto-fit its box to content (see
+      // textarea.tsx), but that sizing is measured off the actual `value` —
+      // when the field is EMPTY (only the placeholder shows, e.g. mid-send
+      // or before the first keystroke) there is no content to measure, so
+      // the browser falls back to the HTML default of 2 rows instead of 1.
+      // In the docked session card (composerTextareaClass('session')'s
+      // `min-h-6`/`leading-6` — a deliberate one-line, 24px resting-height
+      // contract) that produced a taller-than-intended box; the placeholder
+      // text is top-anchored inside it (textareas never vertically center
+      // their own content), leaving visible empty space below and reading
+      // as "text sits high". `rows={1}` pins the no-content baseline to one
+      // line so the empty/placeholder state matches the typed-content state.
+      rows={1}
       value={value}
       onChange={(event) => handleContentChange(event.target.value)}
       onCompositionStart={() => {

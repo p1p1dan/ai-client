@@ -20,7 +20,6 @@ interface FolderComboItem {
   id: string;
   label: string;
   value: string;
-  secondary?: string;
 }
 
 interface FolderComboGroup {
@@ -29,12 +28,14 @@ interface FolderComboGroup {
   items: FolderComboItem[];
 }
 
+// Round-3 fix (point-check #8): folder items carry folder identity only —
+// no branch/secondary text (that domain moved entirely to
+// TargetBranchSelect / buildBranchMenu).
 function toComboItem(entry: FolderMenuEntry): FolderComboItem {
   return {
     id: entry.workspaceId,
     label: entry.label,
     value: entry.workspaceId,
-    secondary: entry.secondary,
   };
 }
 
@@ -149,11 +150,6 @@ export function TargetFolderSelect({
                       <span className="flex min-w-0 items-center gap-2">
                         <Folder className="size-3.5 shrink-0 text-folder" />
                         <span className="truncate">{item.label}</span>
-                        {item.secondary && (
-                          <span className="shrink-0 truncate text-xs text-muted-foreground">
-                            {item.secondary}
-                          </span>
-                        )}
                       </span>
                     </ComboboxItem>
                   )}

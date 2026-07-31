@@ -67,20 +67,36 @@ export function useSessionIndex(): UseSessionIndexResult {
 }
 
 /**
+ * The rename action/IPC itself, extracted from `useSessionIndexMutations` so
+ * non-hook callers (T-27 round-3's first-message auto-title wiring in
+ * `stores/chatSessionActions.ts`) can reuse the exact same call instead of
+ * opening a second path to `window.electronAPI.chat.renameSession`.
+ * `onRenamed` runs only after the IPC confirms success — the manual
+ * LeftNav rename flow passes its `refresh()` (full session-index refetch);
+ * other callers may pass a cheaper targeted store update instead.
+ */
+export async function renameSessionIndexEntry(
+  sessionId: string,
+  title: string,
+  onRenamed: () => Promise<void>
+): Promise<boolean> {
+  try {
+    const ok = await window.electronAPI.chat.renameSession({ sessionId, title });
+    if (ok) await onRenamed();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Mutation helpers for rename / archive / close — mirror the Main IPC and
  * refresh the index afterwards so the live list reflects the new state.
  */
 export function useSessionIndexMutations(refresh: () => Promise<void>) {
   const rename = useCallback(
-    async (sessionId: string, title: string): Promise<boolean> => {
-      try {
-        const ok = await window.electronAPI.chat.renameSession({ sessionId, title });
-        if (ok) await refresh();
-        return ok;
-      } catch {
-        return false;
-      }
-    },
+    (sessionId: string, title: string): Promise<boolean> =>
+      renameSessionIndexEntry(sessionId, title, refresh),
     [refresh]
   );
 

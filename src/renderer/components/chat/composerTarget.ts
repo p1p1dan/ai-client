@@ -226,13 +226,12 @@ export function matchWorkspaceByPath(
 export interface FolderMenuEntry {
   workspaceId: string; // selecting it becomes the target
   projectId: string;
-  label: string; // project.name
-  secondary?: string; // Recents row only: targetWorktreeLabel(ws) ?? undefined
+  label: string; // project.name — folder identity only, never a branch suffix
   current: boolean; // workspaceId === activeWorkspaceId
 }
 
 export interface FolderMenuModel {
-  recents: FolderMenuEntry[]; // <= limit (default 5)
+  recents: FolderMenuEntry[]; // <= limit (default 5), one row per PROJECT
   local: FolderMenuEntry[];
   remote: FolderMenuEntry[];
 }
@@ -242,6 +241,14 @@ export interface FolderMenuModel {
  * `useSessionIndex()` and folds session-index.json into the store. If LeftNav
  * is ever lazy-loaded or removed, Recents silently degrades to this-run-only
  * sessions.
+ *
+ * Round-3 fix (point-check #8): the folder dropdown must show folders only —
+ * it used to dedupe Recents by `workspaceId`, so a project with sessions on
+ * several branches/worktrees produced one row PER BRANCH (each carrying the
+ * branch name as `secondary`), mixing branch identity into a folder-only
+ * list. Deduping by `projectId` instead folds those into a single row with
+ * no branch suffix (branch picking now lives exclusively in
+ * `buildBranchMenu`/TargetBranchSelect).
  */
 export function buildFolderMenu(input: {
   projects: readonly ChatProject[];
@@ -254,25 +261,82 @@ export function buildFolderMenu(input: {
   const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
   const projectById = new Map(input.projects.map((project) => [project.id, project] as const));
 
+  // R1 fix: resolve which PROJECT is active (not just which workspace), so
+  // every session that belongs to it — not only one that happens to sit on
+  // activeWorkspaceId itself — can retarget the merged row correctly.
+  // Previously the row only "won" the activeWorkspaceId re-point when the
+  // loop happened to walk a session ON activeWorkspaceId — a brand-new/just
+  // -switched-to active workspace with zero sessions of its own silently
+  // left the row pointed at whichever sibling branch's session was newest,
+  // so clicking the active project's own row would retarget/fork onto that
+  // other branch instead.
+  const activeWorkspace = input.activeWorkspaceId
+    ? workspaceById.get(input.activeWorkspaceId)
+    : undefined;
+  const activeProjectId = activeWorkspace?.projectId ?? null;
+
   const sortedSessions = [...input.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
   const recents: FolderMenuEntry[] = [];
-  const seenWorkspaceIds = new Set<string>();
+  // projectId -> index into `recents`. Position is decided by the folder's
+  // FIRST (most recent) occurrence, so later sessions on an already-merged
+  // folder never reorder the list — only "current" can still update in place.
+  const recentIndexByProject = new Map<string, number>();
   for (const session of sortedSessions) {
-    if (recents.length >= recentsLimit) {
-      break;
-    }
     const ws = workspaceById.get(session.workspaceId);
-    if (!ws || !isTargetableWorkspace(ws) || seenWorkspaceIds.has(ws.id)) {
+    if (!ws || !isTargetableWorkspace(ws)) {
       continue;
     }
-    seenWorkspaceIds.add(ws.id);
+    // R1 fix: ANY session belonging to the active project — regardless of
+    // which of its branches actually owns the session — points the merged
+    // row at activeWorkspaceId directly.
+    const isActiveProject = ws.projectId === activeProjectId;
+    const existingIndex = recentIndexByProject.get(ws.projectId);
+    if (existingIndex !== undefined) {
+      // Same folder as an earlier (more recent) session — already merged.
+      if (isActiveProject) {
+        recents[existingIndex] = {
+          ...recents[existingIndex],
+          workspaceId: input.activeWorkspaceId as string,
+          current: true,
+        };
+      }
+      continue;
+    }
+    // R1 fix: the active project's row is exempt from the recents cutoff —
+    // it must stay reachable even when every session that would place it is
+    // older than the `recentsLimit` newest OTHER folders.
+    if (recents.length >= recentsLimit && !isActiveProject) {
+      continue;
+    }
     recents.push({
-      workspaceId: ws.id,
+      workspaceId: isActiveProject ? (input.activeWorkspaceId as string) : ws.id,
       projectId: ws.projectId,
       label: projectById.get(ws.projectId)?.name ?? '',
-      secondary: targetWorktreeLabel(ws) ?? undefined,
-      current: ws.id === input.activeWorkspaceId,
+      current: isActiveProject,
     });
+    recentIndexByProject.set(ws.projectId, recents.length - 1);
+  }
+
+  // R1 fix: the active project may have NO session anywhere in `sessions`
+  // at all (not even on a sibling branch) — e.g. a freshly created
+  // workspace — so the loop above never produces a row for it. Add one
+  // fallback row rather than leaving the active project unreachable from
+  // its own Recents row; the dedup map above guarantees this never
+  // duplicates a row the loop already created.
+  if (
+    activeProjectId &&
+    input.activeWorkspaceId &&
+    activeWorkspace &&
+    isTargetableWorkspace(activeWorkspace) &&
+    !recentIndexByProject.has(activeProjectId)
+  ) {
+    recents.push({
+      workspaceId: input.activeWorkspaceId,
+      projectId: activeProjectId,
+      label: projectById.get(activeProjectId)?.name ?? '',
+      current: true,
+    });
+    recentIndexByProject.set(activeProjectId, recents.length - 1);
   }
 
   // Repos section intentionally does not exclude entries already shown in

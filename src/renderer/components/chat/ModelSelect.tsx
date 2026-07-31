@@ -63,11 +63,20 @@ export function ModelSelect({ sessionId, hostDefaultModel, disabled }: ModelSele
           `height`), so the trigger rendered 28px instead of the intended
           24px `h-6` token shared with its row siblings (TargetBranchSelect,
           RunLocationIndicator). `min-h-6 sm:min-h-6` reasserts both groups.
-          `min-w-26` (6.5rem, token-scale — matches `w-70` elsewhere in this
-          file, not a bracket-arbitrary literal) keeps the prior width. */}
+          Round-3 fix (point-check #7, "text sits left"): this used to share
+          EffortSelect's `min-w-26` (104px, sized for EffortSelect's own
+          longest label "Default") purely for visual width-matching between
+          the two pills. That floor is ~25px wider than this catalog's own
+          longest label ("Sonnet"/"Haiku", ~79px content-fit: px-2 8 + ~43px
+          text + gap-1 4 + size-4 icon 16 + px-2 8), so short labels sat in
+          the LEFT portion of an over-wide pill with dead space before the
+          chevron — read as "text not centered". `min-w-22` (5.5rem/88px,
+          token-scale) is sized to THIS selector's own content instead of
+          EffortSelect's — each selector now floors to its own longest
+          option, not to its sibling's. */}
       <SelectTrigger
         size="sm"
-        className="h-6 min-h-6 sm:min-h-6 w-auto min-w-26 gap-1 px-2 text-xs"
+        className="h-6 min-h-6 sm:min-h-6 w-auto min-w-22 gap-1 px-2 text-xs"
       >
         <SelectValue>{selectedLabel}</SelectValue>
       </SelectTrigger>

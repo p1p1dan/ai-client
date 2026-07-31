@@ -1,8 +1,12 @@
 import type { SessionCreateCommand } from '@shared/types/agentHost';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveSendCwd } from '@/components/chat/composerTarget';
 import { decideSendPreamble } from '@/components/chat/sendPreamble';
-import { createChatSessionOnWorkspace, retargetChatSession } from '../chatSessionActions';
+import {
+  applyAutoSessionTitle,
+  createChatSessionOnWorkspace,
+  retargetChatSession,
+} from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
 
 function makeWorkspace(overrides: Partial<ChatWorkspace> = {}): ChatWorkspace {
@@ -244,5 +248,164 @@ describe('target change flow (流程断言 · 验收②)', () => {
       workspacePath: cwd ?? '',
     };
     expect(structuredClone(payload).workspacePath).toBe('/b');
+  });
+});
+
+describe('applyAutoSessionTitle (T-27 round-3, point-check #10)', () => {
+  function stubRenameSession(renameSession: (args: unknown) => Promise<boolean>) {
+    (globalThis as { window?: unknown }).window = {
+      electronAPI: { chat: { renameSession } },
+    } as unknown as typeof globalThis.window;
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'window');
+  });
+
+  it('renames a placeholder-titled session from the first message and patches the store', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    const session = makeSession({ id: 's1', title: 'New chat' });
+    useChatSessionsStore.setState({ sessions: [session] });
+
+    await applyAutoSessionTitle('s1', 'Fix the login flow. Also check signup.');
+
+    expect(renameSession).toHaveBeenCalledWith({ sessionId: 's1', title: 'Fix the login flow' });
+    const updated = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
+    expect(updated?.title).toBe('Fix the login flow');
+  });
+
+  it('recognizes the "Session xxxxxx" fallback shape as a placeholder too', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    const session = makeSession({ id: 's1', title: 'Session ab12cd' });
+    useChatSessionsStore.setState({ sessions: [session] });
+
+    await applyAutoSessionTitle('s1', 'hello there');
+
+    expect(renameSession).toHaveBeenCalled();
+    const updated = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
+    expect(updated?.title).toBe('hello there');
+  });
+
+  it('never overwrites a real (non-placeholder / user-renamed) title', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    const session = makeSession({ id: 's1', title: 'My custom name' });
+    useChatSessionsStore.setState({ sessions: [session] });
+
+    await applyAutoSessionTitle('s1', 'some other message');
+
+    expect(renameSession).not.toHaveBeenCalled();
+    const updated = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
+    expect(updated?.title).toBe('My custom name');
+  });
+
+  it('leaves the placeholder in place when no title is derivable from the message', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    const session = makeSession({ id: 's1', title: 'New chat' });
+    useChatSessionsStore.setState({ sessions: [session] });
+
+    await applyAutoSessionTitle('s1', '!!!');
+
+    expect(renameSession).not.toHaveBeenCalled();
+    const updated = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
+    expect(updated?.title).toBe('New chat');
+  });
+
+  it('is a no-op for an unknown session id', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    useChatSessionsStore.setState({ sessions: [] });
+
+    await applyAutoSessionTitle('missing', 'hello');
+
+    expect(renameSession).not.toHaveBeenCalled();
+  });
+
+  it('leaves the store title untouched when the IPC rename fails', async () => {
+    const renameSession = vi.fn().mockResolvedValue(false);
+    stubRenameSession(renameSession);
+    const session = makeSession({ id: 's1', title: 'New chat' });
+    useChatSessionsStore.setState({ sessions: [session] });
+
+    await applyAutoSessionTitle('s1', 'hello there');
+
+    expect(renameSession).toHaveBeenCalled();
+    const updated = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
+    expect(updated?.title).toBe('New chat');
+  });
+
+  // R2: race convergence between the auto-title IPC round-trip and a
+  // concurrent manual rename / a second applyAutoSessionTitle call.
+  describe('R2 race convergence', () => {
+    it('keeps a manual rename made WHILE the IPC round-trip is still pending', async () => {
+      let resolveRename: (ok: boolean) => void = () => {};
+      const renameSession = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveRename = resolve;
+          })
+      );
+      stubRenameSession(renameSession);
+      const session = makeSession({ id: 's1', title: 'New chat' });
+      useChatSessionsStore.setState({ sessions: [session] });
+
+      const pending = applyAutoSessionTitle('s1', 'Fix the login flow');
+
+      // Simulate the user manually renaming the session while the auto-title
+      // IPC call is still in flight (setState directly — the manual rename
+      // flow's own IPC path is out of scope for this unit test).
+      useChatSessionsStore.setState((state) => ({
+        sessions: state.sessions.map((item) =>
+          item.id === 's1' ? { ...item, title: 'My manual title' } : item
+        ),
+      }));
+
+      resolveRename(true);
+      await pending;
+
+      const updated = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
+      expect(updated?.title).toBe('My manual title');
+    });
+
+    it('issues only ONE IPC rename call for two concurrent applyAutoSessionTitle calls on the same session', async () => {
+      let resolveRename: (ok: boolean) => void = () => {};
+      const renameSession = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveRename = resolve;
+          })
+      );
+      stubRenameSession(renameSession);
+      const session = makeSession({ id: 's1', title: 'New chat' });
+      useChatSessionsStore.setState({ sessions: [session] });
+
+      const first = applyAutoSessionTitle('s1', 'Fix the login flow');
+      const second = applyAutoSessionTitle('s1', 'Fix the login flow');
+
+      resolveRename(true);
+      await Promise.all([first, second]);
+
+      expect(renameSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the in-flight lock so a LATER call (after the first settles) can still rename', async () => {
+      const renameSession = vi.fn().mockResolvedValue(true);
+      stubRenameSession(renameSession);
+      const session = makeSession({ id: 's1', title: 'New chat' });
+      useChatSessionsStore.setState({ sessions: [session] });
+
+      await applyAutoSessionTitle('s1', 'Fix the login flow');
+      // A second session reusing the id space after the first genuinely
+      // completed must not still be blocked by the lock.
+      useChatSessionsStore.setState({
+        sessions: [makeSession({ id: 's1', title: 'New chat' })],
+      });
+      await applyAutoSessionTitle('s1', 'Second real message');
+
+      expect(renameSession).toHaveBeenCalledTimes(2);
+    });
   });
 });

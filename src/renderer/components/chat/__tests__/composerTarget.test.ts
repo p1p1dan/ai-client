@@ -290,19 +290,27 @@ describe('targetWorktreeLabel / shouldShowBranchSelect / isTargetableWorkspace',
 });
 
 describe('buildFolderMenu', () => {
-  it('lists at most 5 recents, newest first, deduped by workspace', () => {
+  it('lists at most 5 recents, newest first, deduped by folder (projectId)', () => {
+    // Round-3: dedup key moved from workspaceId to projectId (point-check
+    // #8) — each workspace here belongs to its OWN project, so this stays a
+    // "7 distinct folders, take the 5 newest" case under the new rule too.
     const workspaces = Array.from({ length: 7 }, (_, index) =>
-      makeWorkspace({ id: `ws-${index + 1}`, path: `/repo-${index + 1}` })
+      makeWorkspace({
+        id: `ws-${index + 1}`,
+        projectId: `project-${index + 1}`,
+        path: `/repo-${index + 1}`,
+      })
     );
     const sessions = [
-      makeSession({ id: 's-1a', workspaceId: 'ws-1', updatedAt: 100 }),
-      makeSession({ id: 's-1b', workspaceId: 'ws-1', updatedAt: 90 }), // duplicate workspace, older
-      makeSession({ id: 's-2', workspaceId: 'ws-2', updatedAt: 80 }),
-      makeSession({ id: 's-3', workspaceId: 'ws-3', updatedAt: 70 }),
-      makeSession({ id: 's-4', workspaceId: 'ws-4', updatedAt: 60 }),
-      makeSession({ id: 's-5', workspaceId: 'ws-5', updatedAt: 50 }),
-      makeSession({ id: 's-6', workspaceId: 'ws-6', updatedAt: 40 }),
-      makeSession({ id: 's-7', workspaceId: 'ws-7', updatedAt: 30 }),
+      makeSession({ id: 's-1a', workspaceId: 'ws-1', projectId: 'project-1', updatedAt: 100 }),
+      // duplicate SESSION on the same workspace/folder, older — still one row.
+      makeSession({ id: 's-1b', workspaceId: 'ws-1', projectId: 'project-1', updatedAt: 90 }),
+      makeSession({ id: 's-2', workspaceId: 'ws-2', projectId: 'project-2', updatedAt: 80 }),
+      makeSession({ id: 's-3', workspaceId: 'ws-3', projectId: 'project-3', updatedAt: 70 }),
+      makeSession({ id: 's-4', workspaceId: 'ws-4', projectId: 'project-4', updatedAt: 60 }),
+      makeSession({ id: 's-5', workspaceId: 'ws-5', projectId: 'project-5', updatedAt: 50 }),
+      makeSession({ id: 's-6', workspaceId: 'ws-6', projectId: 'project-6', updatedAt: 40 }),
+      makeSession({ id: 's-7', workspaceId: 'ws-7', projectId: 'project-7', updatedAt: 30 }),
     ];
     const menu = buildFolderMenu({ projects: [], workspaces, sessions, activeWorkspaceId: null });
     expect(menu.recents.map((entry) => entry.workspaceId)).toEqual([
@@ -364,7 +372,10 @@ describe('buildFolderMenu', () => {
     expect(menu.local.map((entry) => entry.workspaceId)).toContain('ws-a');
   });
 
-  it('annotates recents with the worktree label as secondary text', () => {
+  // Round-3 (point-check #8): the folder dropdown must show folders only —
+  // Recents entries for the same folder on different branches/worktrees
+  // merge into a single row, carrying no branch text at all.
+  it('merges same-folder, different-branch sessions into a single Recents row with no branch suffix', () => {
     const projects = [makeProject({ id: 'proj-b', name: 'Proj B' })];
     const workspaces = [
       makeWorkspace({
@@ -376,24 +387,83 @@ describe('buildFolderMenu', () => {
         name: 'wsBranchName',
       }),
       makeWorkspace({
-        id: 'ws-nobranch',
+        id: 'ws-main',
         projectId: 'proj-b',
-        kind: 'worktree',
+        kind: 'main',
         path: '/b2',
-        name: 'wsNoBranchName',
+        branch: 'main',
+        name: 'wsMainName',
       }),
     ];
     const sessions = [
       makeSession({ id: 's1', workspaceId: 'ws-branch', projectId: 'proj-b', updatedAt: 20 }),
-      makeSession({ id: 's2', workspaceId: 'ws-nobranch', projectId: 'proj-b', updatedAt: 10 }),
+      makeSession({ id: 's2', workspaceId: 'ws-main', projectId: 'proj-b', updatedAt: 10 }),
     ];
     const menu = buildFolderMenu({ projects, workspaces, sessions, activeWorkspaceId: null });
-    expect(menu.recents.find((entry) => entry.workspaceId === 'ws-branch')?.secondary).toBe(
-      'feature/y'
-    );
-    expect(menu.recents.find((entry) => entry.workspaceId === 'ws-nobranch')?.secondary).toBe(
-      'wsNoBranchName'
-    );
+    expect(menu.recents).toHaveLength(1);
+    // The newer session's workspace (feature/y) wins the merge; label is the
+    // project name only — no branch text anywhere on the entry.
+    expect(menu.recents[0]).toEqual({
+      workspaceId: 'ws-branch',
+      projectId: 'proj-b',
+      label: 'Proj B',
+      current: false,
+    });
+    expect(menu.recents[0]).not.toHaveProperty('secondary');
+  });
+
+  it('keeps a non-branch-suffixed label unchanged for a folder with a single branch', () => {
+    const projects = [makeProject({ id: 'proj-c', name: 'Proj C' })];
+    const workspaces = [makeWorkspace({ id: 'ws-c', projectId: 'proj-c', path: '/c' })];
+    const sessions = [
+      makeSession({ id: 's1', workspaceId: 'ws-c', projectId: 'proj-c', updatedAt: 10 }),
+    ];
+    const menu = buildFolderMenu({ projects, workspaces, sessions, activeWorkspaceId: null });
+    expect(menu.recents[0]?.label).toBe('Proj C');
+  });
+
+  it('keeps the active workspace locatable even when it is not the most recently touched branch', () => {
+    const projects = [makeProject({ id: 'proj-d', name: 'Proj D' })];
+    const workspaces = [
+      makeWorkspace({ id: 'ws-d-main', projectId: 'proj-d', kind: 'main', path: '/d1' }),
+      makeWorkspace({ id: 'ws-d-feat', projectId: 'proj-d', kind: 'worktree', path: '/d2' }),
+    ];
+    const sessions = [
+      // ws-d-feat is the newest session (would normally win the merge)...
+      makeSession({ id: 's1', workspaceId: 'ws-d-feat', projectId: 'proj-d', updatedAt: 20 }),
+      // ...but ws-d-main is the one actually targeted right now.
+      makeSession({ id: 's2', workspaceId: 'ws-d-main', projectId: 'proj-d', updatedAt: 10 }),
+    ];
+    const menu = buildFolderMenu({
+      projects,
+      workspaces,
+      sessions,
+      activeWorkspaceId: 'ws-d-main',
+    });
+    expect(menu.recents).toHaveLength(1);
+    expect(menu.recents[0].workspaceId).toBe('ws-d-main');
+    expect(menu.recents[0].current).toBe(true);
+  });
+
+  it('keeps Recents order stable — a folder keeps its first (most recent) position when merged', () => {
+    const projects = [
+      makeProject({ id: 'proj-a', name: 'A' }),
+      makeProject({ id: 'proj-b', name: 'B' }),
+    ];
+    const workspaces = [
+      makeWorkspace({ id: 'ws-a1', projectId: 'proj-a', path: '/a1' }),
+      makeWorkspace({ id: 'ws-a2', projectId: 'proj-a', path: '/a2' }),
+      makeWorkspace({ id: 'ws-b', projectId: 'proj-b', path: '/b' }),
+    ];
+    const sessions = [
+      makeSession({ id: 's1', workspaceId: 'ws-a1', projectId: 'proj-a', updatedAt: 30 }),
+      makeSession({ id: 's2', workspaceId: 'ws-b', projectId: 'proj-b', updatedAt: 20 }),
+      // Older session on proj-a's OTHER branch — must not bump proj-a's
+      // already-claimed (newer) position, nor add a second proj-a row.
+      makeSession({ id: 's3', workspaceId: 'ws-a2', projectId: 'proj-a', updatedAt: 10 }),
+    ];
+    const menu = buildFolderMenu({ projects, workspaces, sessions, activeWorkspaceId: null });
+    expect(menu.recents.map((entry) => entry.projectId)).toEqual(['proj-a', 'proj-b']);
   });
 
   it('returns empty sections for an empty store', () => {
@@ -404,6 +474,139 @@ describe('buildFolderMenu', () => {
       activeWorkspaceId: null,
     });
     expect(menu).toEqual({ recents: [], local: [], remote: [] });
+  });
+
+  // R1 fix: the active PROJECT's Recents row must always point at
+  // activeWorkspaceId, never at whichever sibling branch happened to own the
+  // most recent session — previously this only "won" the merge when a
+  // session on activeWorkspaceId ITSELF was encountered.
+  describe('R1: active project row correctness', () => {
+    it('① points the row at activeWorkspaceId (and marks it current) even when the active workspace has no session of its own but a sibling branch does', () => {
+      const projects = [makeProject({ id: 'proj-d', name: 'Proj D' })];
+      const workspaces = [
+        makeWorkspace({ id: 'ws-d-main', projectId: 'proj-d', kind: 'main', path: '/d1' }),
+        makeWorkspace({ id: 'ws-d-feat', projectId: 'proj-d', kind: 'worktree', path: '/d2' }),
+      ];
+      // Only the SIBLING branch (ws-d-feat) has a session — ws-d-main (the
+      // active workspace, e.g. just created/switched to) has none at all.
+      const sessions = [
+        makeSession({ id: 's1', workspaceId: 'ws-d-feat', projectId: 'proj-d', updatedAt: 20 }),
+      ];
+      const menu = buildFolderMenu({
+        projects,
+        workspaces,
+        sessions,
+        activeWorkspaceId: 'ws-d-main',
+      });
+      expect(menu.recents).toHaveLength(1);
+      expect(menu.recents[0]).toMatchObject({
+        workspaceId: 'ws-d-main',
+        projectId: 'proj-d',
+        current: true,
+      });
+    });
+
+    it('② keeps the active project row even when it would otherwise fall outside recentsLimit', () => {
+      const projects = Array.from({ length: 6 }, (_, index) =>
+        makeProject({ id: `project-${index + 1}`, name: `Project ${index + 1}` })
+      );
+      const workspaces = Array.from({ length: 6 }, (_, index) =>
+        makeWorkspace({
+          id: `ws-${index + 1}`,
+          projectId: `project-${index + 1}`,
+          path: `/repo-${index + 1}`,
+        })
+      );
+      // 6 distinct-project sessions, newest first — with the DEFAULT limit
+      // of 5, project-6's session would normally be cut entirely.
+      const sessions = Array.from({ length: 6 }, (_, index) =>
+        makeSession({
+          id: `s-${index + 1}`,
+          workspaceId: `ws-${index + 1}`,
+          projectId: `project-${index + 1}`,
+          updatedAt: 100 - index * 10,
+        })
+      );
+      const menu = buildFolderMenu({
+        projects,
+        workspaces,
+        sessions,
+        activeWorkspaceId: 'ws-6',
+      });
+      expect(menu.recents).toHaveLength(6);
+      const activeEntry = menu.recents.find((entry) => entry.projectId === 'project-6');
+      expect(activeEntry).toMatchObject({ workspaceId: 'ws-6', current: true });
+    });
+
+    it('③ leaves a non-active project row pointed at that project’s own most-recent session workspace (semantics unchanged)', () => {
+      const projects = [
+        makeProject({ id: 'proj-active', name: 'Active' }),
+        makeProject({ id: 'proj-other', name: 'Other' }),
+      ];
+      const workspaces = [
+        makeWorkspace({ id: 'ws-active', projectId: 'proj-active', path: '/active' }),
+        makeWorkspace({ id: 'ws-other-a', projectId: 'proj-other', path: '/other-a' }),
+        makeWorkspace({ id: 'ws-other-b', projectId: 'proj-other', path: '/other-b' }),
+      ];
+      const sessions = [
+        makeSession({
+          id: 's-active',
+          workspaceId: 'ws-active',
+          projectId: 'proj-active',
+          updatedAt: 30,
+        }),
+        // proj-other's newest session sits on ws-other-a — that must still
+        // win the merge since proj-other is not the active project.
+        makeSession({
+          id: 's-other-a',
+          workspaceId: 'ws-other-a',
+          projectId: 'proj-other',
+          updatedAt: 20,
+        }),
+        makeSession({
+          id: 's-other-b',
+          workspaceId: 'ws-other-b',
+          projectId: 'proj-other',
+          updatedAt: 10,
+        }),
+      ];
+      const menu = buildFolderMenu({
+        projects,
+        workspaces,
+        sessions,
+        activeWorkspaceId: 'ws-active',
+      });
+      const otherEntry = menu.recents.find((entry) => entry.projectId === 'proj-other');
+      expect(otherEntry).toMatchObject({ workspaceId: 'ws-other-a', current: false });
+    });
+
+    it('adds a fallback row for the active project when it has NO session anywhere (not even on a sibling branch), without duplicating an existing row', () => {
+      const projects = [
+        makeProject({ id: 'proj-empty', name: 'Empty Active' }),
+        makeProject({ id: 'proj-with-session', name: 'Has Session' }),
+      ];
+      const workspaces = [
+        makeWorkspace({ id: 'ws-empty', projectId: 'proj-empty', path: '/empty' }),
+        makeWorkspace({ id: 'ws-with-session', projectId: 'proj-with-session', path: '/has' }),
+      ];
+      const sessions = [
+        makeSession({
+          id: 's1',
+          workspaceId: 'ws-with-session',
+          projectId: 'proj-with-session',
+          updatedAt: 10,
+        }),
+      ];
+      const menu = buildFolderMenu({
+        projects,
+        workspaces,
+        sessions,
+        activeWorkspaceId: 'ws-empty',
+      });
+      const activeRows = menu.recents.filter((entry) => entry.projectId === 'proj-empty');
+      expect(activeRows).toHaveLength(1);
+      expect(activeRows[0]).toMatchObject({ workspaceId: 'ws-empty', current: true });
+    });
   });
 });
 

@@ -1,5 +1,6 @@
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
+import { fallbackSessionTitle } from './sessionTitle';
 
 /**
  * Team-side merge of persisted SessionIndex into the live session list (T-02).
@@ -32,10 +33,13 @@ import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
  * Last-resort display title for a persisted entry that has no title and no UI
  * sentence to fall back to. Short id suffix keeps rows distinguishable so the
  * user can locate one and rename it.
+ *
+ * R4 fix: moved into `sessionTitle.ts` (the single source shared with its
+ * recognizer counterpart, `isPlaceholderTitle`) — re-exported here as a thin
+ * forward so existing imports of `fallbackSessionTitle` from this module
+ * keep working unchanged.
  */
-export function fallbackSessionTitle(sessionId: string): string {
-  return `Session ${sessionId.slice(-6)}`;
-}
+export { fallbackSessionTitle };
 
 export interface MergeResult {
   sessions: ChatSession[];

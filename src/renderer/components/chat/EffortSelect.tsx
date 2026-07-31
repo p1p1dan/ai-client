@@ -49,9 +49,12 @@ export function EffortSelect({ sessionId, disabled }: EffortSelectProps) {
       {/* Round-2 visual fix: same min-h-8/sm:min-h-7 leak as ModelSelect —
           reassert min-h-6/sm:min-h-6 to hit the real 24px h-6 token.
           V-a: min-w bumped 5.5rem -> 6.5rem (min-w-26, token-scale, matches
-          ModelSelect and `w-70` elsewhere in this file) — "Default" (the
-          widest label incl. the sentinel) was clipping to "Defau…" at the
-          old floor. */}
+          `w-70` elsewhere in this file) — "Default" (the widest label incl.
+          the sentinel) was clipping to "Defau…" at the old floor.
+          Round-3 (point-check #7): ModelSelect no longer mirrors this
+          width (see its own comment) — each selector now floors to its OWN
+          longest label instead of the two syncing to whichever is wider, so
+          this min-w-26 stays exactly as V-a sized it for "Default". */}
       <SelectTrigger
         size="sm"
         className="h-6 min-h-6 sm:min-h-6 w-auto min-w-26 gap-1 px-2 text-xs"

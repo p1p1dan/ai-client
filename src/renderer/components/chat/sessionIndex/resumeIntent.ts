@@ -1,5 +1,6 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
+import { isPlaceholderTitle } from './sessionTitle';
 
 /**
  * Decide whether a session needs an explicit resume (T-03).
@@ -94,12 +95,21 @@ export function shouldResumeSession(
 /**
  * Choose a placeholder for the restored session title when no explicit one is
  * known. Uses the first-user-preview from the persisted summary when present.
+ *
+ * "What counts as a placeholder title" is defined once, in `sessionTitle.ts`'s
+ * `isPlaceholderTitle` — round-3's first-message auto-title wiring (T-27
+ * point-check #10) reuses the exact same function so the two call sites can
+ * never disagree on the rule (round-3 fix: this used to inline its own
+ * `!== 'New chat' && !== 'Live Agent Host'` check, which — unlike
+ * `isPlaceholderTitle` — did not recognize the `Session xxxxxx` fallback
+ * shape from `sessionIndexMerge.ts`'s `fallbackSessionTitle` as a
+ * placeholder).
  */
 export function resumeDisplayTitle(
   session: ChatSession | undefined,
   fallback: { firstMessage: string | null }
 ): string {
-  if (session?.title && session.title !== 'New chat' && session.title !== 'Live Agent Host') {
+  if (session?.title && !isPlaceholderTitle(session.title)) {
     return session.title;
   }
   const fm = fallback.firstMessage;

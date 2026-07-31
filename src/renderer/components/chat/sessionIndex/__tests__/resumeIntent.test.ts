@@ -157,4 +157,19 @@ describe('resumeDisplayTitle (T-03)', () => {
       'Untitled session'
     );
   });
+
+  // Round-3 (point-check #10): now shares `isPlaceholderTitle` with the
+  // first-message auto-title wiring, which also recognizes the
+  // `sessionIndexMerge.ts` `fallbackSessionTitle` shape ("Session xxxxxx")
+  // as a placeholder — previously this function's own inline check did not.
+  it('treats the "Session xxxxxx" fallback shape as a placeholder too', () => {
+    expect(
+      resumeDisplayTitle(session({ title: 'Session ab12cd' }), {
+        firstMessage: 'fix the login flow',
+      })
+    ).toBe('fix the login flow');
+    expect(resumeDisplayTitle(session({ title: 'Session ab12cd' }), { firstMessage: null })).toBe(
+      'Untitled session'
+    );
+  });
 });
