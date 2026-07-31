@@ -1,4 +1,4 @@
-import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { FileSearchResult } from '@shared/types/search';
 import {
   File as FileIcon,
@@ -23,7 +23,9 @@ import {
   isSessionCompletedForSend,
   isSessionFailedForSend,
   isUserEchoForSend,
+  pushPendingHostError,
   readSessionFailedError,
+  resolvePendingHostError,
 } from './assistantProgress';
 import { largeAttachmentHint, sendTimeoutMs } from './attachmentLimits';
 import {
@@ -51,11 +53,14 @@ import {
   composerTextareaClass,
   type MiddleColumnMode,
   mentionPopupPlacementClass,
+  resolveIdleStatusText,
+  sessionStatusLineWrapperClass,
   shouldShowStatusLine,
 } from './middleColumnLayout';
 import { resolveResumeModel } from './models';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
+  decideFailureAffordance,
   decidePendingResolution,
   decideRunEntryOutcome,
   decideSendAction,
@@ -64,8 +69,10 @@ import {
   isRunningStatus,
   type RunEntryOutcome,
   type RunSendOrigin,
-  shouldArmRetryable,
+  shouldClearPauseOnSend,
+  shouldClearRetryableOnOutcome,
   shouldPauseQueueOnRejection,
+  shouldRetryBusySend,
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { decideSendPreamble } from './sendPreamble';
@@ -276,6 +283,38 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     committed: { text: string; drafts: readonly AttachmentDraft[] };
     assistantCursor: number;
   } | null>(null);
+  // A1 (round-4 point-check fix): a fresh-value mirror of the composer's own
+  // `value` state. `runSend` is a plain closure re-created every render, so
+  // an ALREADY-RUNNING call's committed-outcome draft-restore (it can fire
+  // tens of seconds after the user started typing something else) must read
+  // the CURRENT composer text, not whatever it captured at call time —
+  // exactly the same staleness class this file already routes around via
+  // `useChatSessionsStore.getState()` for store-backed state, but `value` is
+  // local React state with no such accessor.
+  //
+  // F4 (round-4 Codex NEEDS-FIX #3): written SYNCHRONOUSLY by `updateValue`
+  // (below) at every `setValue` call site, not by a `useEffect([value])`.
+  // An effect runs a full render AFTER the state update that triggered it —
+  // in the window between that state update and the effect actually
+  // running, a committed-outcome restore reading the STALE ref could still
+  // pass the "composer is empty" check on text the user had already
+  // replaced (or, symmetrically, wrongly treat a just-cleared composer as
+  // non-empty and skip a restore it owed), a real two-direction race the
+  // synchronous write closes.
+  const valueRef = useRef(value);
+  const updateValue = useCallback((next: string) => {
+    valueRef.current = next;
+    setValue(next);
+  }, []);
+  // Round-4 point-check fix (Codex 2.3): the empty->session mode switch
+  // remounts `textareaEl` under a structurally different parent (see the
+  // mode-branch JSX below), destroying the native <textarea> node — and any
+  // focus it held — the instant the FIRST send flips `mode`. `hadFocusRef`
+  // (set by the textarea's own onFocus/onBlur) plus the effect further down
+  // that watches `mode` is what restores focus (and the caret) onto the new
+  // node right after that remount, instead of leaving the user to re-click
+  // into the box they were just typing in.
+  const hadFocusRef = useRef(false);
   // T-07 @ 文件引用：popup 态、搜索结果、选中索引、IME 合成态。delayed 焦点
   // 恢复通过 setTimeout 在 React 提交后再 setSelectionRange。
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -388,6 +427,24 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     setQueueNotice(null);
   }, [activeSessionId, clearAttachmentDrafts, dismissAttachmentNotice]);
 
+  // B9 (round-4 point-check fix, Codex 2.3): `mode` flipping empty->session
+  // (the FIRST send) remounts `textareaEl` under a structurally different
+  // parent below, destroying the native <textarea> node. If the user was
+  // still focused on it right before that (the exact moment a keystroke —
+  // Enter — triggered the switch), restore focus (and the caret, at the end
+  // of whatever text is now in the box) onto the freshly-mounted node so
+  // T-19's "keep typing while it runs" promise does not silently break at
+  // the one instant it matters most.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mode triggers the focus-restore across the remount mode itself causes
+  useEffect(() => {
+    if (!hadFocusRef.current) return;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus();
+    const len = ta.value.length;
+    ta.setSelectionRange(len, len);
+  }, [mode]);
+
   const statusHint = !activeSessionId
     ? 'No session selected — pick Live Agent Host in the left nav (or click New).'
     : !activeWorkspace
@@ -489,7 +546,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     setQueueNotice(null);
     // Commit-point consumption for the enqueue path, mirroring runSend's
     // (decision 2.2): the draft is now owned by the queue entry.
-    setValue('');
+    updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
 
     // Decision 4: a pending question on THIS session must never deadlock the
@@ -537,7 +594,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   }, [mentionQuery, cwd]);
 
   const handleContentChange = (next: string) => {
-    setValue(next);
+    // F4 (round-4 Codex NEEDS-FIX #3): `updateValue` writes `valueRef`
+    // synchronously, same tick as `setValue` — see the ref's own comment.
+    updateValue(next);
     if (composingRef.current || !cwd) {
       setMentionQuery(null);
       return;
@@ -560,7 +619,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const cursor = ta.selectionStart;
     const out = replaceMention(value, cursor, item);
     if (!out) return;
-    setValue(out.text);
+    updateValue(out.text);
     setMentionQuery(null);
     setMentionResults([]);
     setTimeout(() => {
@@ -569,30 +628,22 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }, 0);
   };
 
-  const lastUserPrompt = activeSessionId
-    ? [...(activeMessages ?? [])].reverse().find((message) => message.role === 'user')
-    : undefined;
-  // T-19 fix review (R5): batch 3's "failure payload lives in the queue,
-  // marked `failure` on queueEntries[0]" is reverted (see `retryable` state
-  // above) — it let a swap-edit on a failed head clear `failure` and
-  // auto-release the user's half-typed draft (blocker), and let a second
-  // direct-send failure produce a second, un-retryable queue entry (major).
-  // Retry is offered when the last turn ended badly: `retryable` (this
-  // component caught a failure), OR explicit session.failed (Host emitted it)
-  // with no local `retryable` (a session reopened already-`failed` — the SDK
-  // stream ended with no assistant progress, e.g. gateway revoked key, and
-  // Host lands on idle/stopped rather than `failed`, so status alone would
-  // miss it too).
-  const retryText =
-    retryable?.text ??
-    (activeSession?.status === 'failed'
-      ? lastUserPrompt?.blocks.find((block) => block.type === 'text' && block.text)?.text
-      : undefined);
-  // Retry is a failure affordance, never a second Send. Gating it on "something
-  // exists to resend" alone made a Retry button appear on a healthy session the
-  // moment a screenshot was pasted — and clicking it would have sent the image
-  // with an empty text field, then wiped the sentence the user had typed.
-  const lastTurnFailed = retryable !== null || activeSession?.status === 'failed';
+  // A2 (round-4 point-check fix, retry-doublesend diagnosis): the previous
+  // "no local `retryable`, but `activeSession?.status === 'failed'`" bootstrap
+  // used to derive Retry's text from `lastUserPrompt` — the timeline's own
+  // LAST user message. That is structurally guaranteed to duplicate: a
+  // message only ever appears in the timeline once the Host has already
+  // admitted it (the same `sawUserEcho` evidence `decideRunEntryOutcome`
+  // treats as "never resend" everywhere else), so this path resent exactly
+  // the text the Host had already accepted. Worse, it was immune to
+  // `handleRetry`'s own `setRetryable(null)`: as long as `status` stayed
+  // `'failed'`, the Retry button reappeared and stayed clickable on the very
+  // next render, able to re-arm itself after a Retry that had just fired.
+  // Retry is now offered ONLY off this component's own `retryable` snapshot
+  // — a session reopened already-`failed` with no local snapshot gets the
+  // error banner and Send, never an auto-derived one-click resend.
+  const retryText = retryable?.text;
+  const lastTurnFailed = retryable !== null;
   // m11 fix: no live-list fallback here. `retryable.drafts` is a snapshot
   // taken at failure time (decision 2.2) — falling back to the CURRENT
   // `attachments.drafts` meant a text-only status-'failed' reopen could
@@ -611,13 +662,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const canRetry =
     lastTurnFailed &&
     (Boolean(retryText) || retryDrafts.length > 0) &&
-    Boolean(activeSessionId && activeWorkspace) &&
+    // F3 (round-4 Codex NEEDS-FIX #2): aligned with `canSend`'s target
+    // resolution — `cwd` explicitly checked, not just `activeWorkspace`
+    // (a workspace can be "present" but not targetable, e.g. the demo
+    // placeholder's empty path). `runSend`'s own guard already covers this
+    // (its `!cwd` early-guard now safely preserves the snapshot instead of
+    // losing it — see `handleRetry` below), so this is defense in depth,
+    // not a correctness requirement: it just keeps a doomed-to-no-op Retry
+    // click from ever rendering as clickable in the first place.
+    Boolean(activeSessionId && activeWorkspace && cwd) &&
     !busy &&
     !sending &&
     attachments.reading === 0;
   const handleRetry = async () => {
     if (!canRetry) return;
-    setRetryable(null);
+    // F3 (round-4 Codex NEEDS-FIX #2): do NOT clear `retryable` before
+    // calling `runSend`. `runSend` has two early guard-fail branches
+    // (`!canSend`/`inFlightRef.current` — e.g. a race where `canSend` flips
+    // false between this render's `canRetry` check and the actual click)
+    // that return `'skipped'` BEFORE `finalizeOutcome` (and the `committed`
+    // snapshot it closes over) are even constructed — clearing here first
+    // left NOTHING able to restore the payload on that path, silently
+    // losing it. `text`/`retryDrafts` below are captured from THIS render's
+    // `retryable` regardless of when (or whether) the state gets cleared,
+    // so nothing about what gets sent changes — only whether a
+    // guard-fail can destroy the snapshot with nothing sent at all.
     const text = retryText ?? '';
     // R3 fix: Retry deliberately uses the SAME uniform "capture before
     // runSend" pattern as the direct/release call sites, not a special case
@@ -640,6 +709,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       ? sessionHasUserMessage(useChatSessionsStore.getState().messages[activeSessionId] ?? [])
       : false;
     const outcome = await runSend(text, retryDrafts, { origin: 'retry' });
+    // F3: result-level clear — only a genuine 'committed' result means this
+    // attempt's payload was actually delivered (`runSend`'s own internal
+    // commit-point/success-path already clears it too; this is the explicit,
+    // testable statement of the SAME rule at the call site). 'skipped' keeps
+    // the original snapshot (nothing else would); 'rejected' already gets
+    // its OWN re-arm from `finalizeOutcome`'s `decideFailureAffordance` —
+    // writing it again here would just be a redundant second `setRetryable`
+    // with the identical value, not a fix.
+    if (shouldClearRetryableOnOutcome(outcome)) {
+      setRetryable(null);
+    }
     if (activeSessionId) {
       maybeApplyFirstMessageTitle(activeSessionId, text, outcome, hadUserMessage);
     }
@@ -657,11 +737,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   //      `useQueueRelease`'s `runEntry` (below) passes `'release'` — the type
   //      has no default, so a fourth call site cannot silently inherit the
   //      wrong one.
-  //   2. Every non-success `return` in this function funnels through
-  //      `finalizeOutcome(...)` — never `setRetryable`/`pauseSession`
-  //      directly — so `shouldArmRetryable`/`shouldPauseQueueOnRejection`
-  //      (queueRelease.ts, both unit-tested) are the ONLY authorities for
-  //      those two side effects, and the two are complements of each other.
+  //   2. F6(iii) (round-4 Codex NEEDS-FIX #5, rewriting the stale claim this
+  //      point used to make): every non-success `return` funnels through
+  //      `finalizeOutcome(...)` — never `setRetryable`/`pauseSession`/
+  //      `restoreDraftIfComposerEmpty` directly — EXCEPT the two early
+  //      guard-fail `return 'skipped'`s right after this function starts
+  //      (`!canSend`/`inFlightRef.current`), which return before `committed`/
+  //      `finalizeOutcome` even exist and correctly do NOTHING (F3 fix:
+  //      `handleRetry` no longer pre-clears `retryable`, so there is nothing
+  //      to restore on that path either). `decideFailureAffordance`
+  //      (queueRelease.ts, unit-tested) is the ONLY authority for whether a
+  //      `finalizeOutcome`-routed outcome arms Retry or restores the draft;
+  //      `shouldPauseQueueOnRejection` is the ONLY authority for the queue
+  //      pause. A1 fix: these two are DELIBERATELY no longer complements of
+  //      each other (`decideFailureAffordance('committed', …)` is
+  //      `'restore-draft'`, not `'none'`, while `shouldPauseQueueOnRejection`
+  //      stays `false` for `'committed'`) — see `shouldPauseQueueOnRejection`'s
+  //      own header in queueRelease.ts for why.
   //   3. The success path (`return 'committed'` after the admission check)
   //      is the one deliberate bypass of `finalizeOutcome` — it clears
   //      `retryable` instead of arming it, and never pauses the queue.
@@ -753,37 +845,71 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // `clearComposerValue` is only set by the live handleSend path — a
     // queued entry being released here carries someone else's snapshot, not
     // whatever the user is typing right now, so it must never touch `value`.
-    if (options.clearComposerValue) setValue('');
+    if (options.clearComposerValue) updateValue('');
     // Safe no-op when `drafts` is a retry/queue snapshot whose ids already
     // left the live list at THEIR OWN commit point.
     attachments.removeDrafts(drafts.map((draft) => draft.id));
-    // Decision 3.4: any new turn starting — direct send, Retry, or a queued
-    // entry being released — means the user pushed the flow forward again,
-    // so this session's Stop-pause (if any) no longer applies. Release
-    // already implies "not paused" (decideQueueRelease holds on `paused`),
-    // so this is a no-op for that path and only matters for send/Retry.
-    useMessageQueueStore.getState().clearPause(sessionId);
+    // Decision 3.4: any new turn starting — direct send or a queued entry
+    // being released — means the user pushed the flow forward again, so this
+    // session's Stop-pause (if any) no longer applies. Release already
+    // implies "not paused" (decideQueueRelease holds on `paused`), so this is
+    // a no-op for that path and only matters for a plain direct send.
+    //
+    // A4 (round-4 point-check fix): Retry is explicitly EXCLUDED
+    // (`shouldClearPauseOnSend`) — a `'send-rejected'` pause is the queue
+    // layer's OWN protection against re-releasing a head entry the Host just
+    // refused, and Retry (a component-local snapshot with no queue entry
+    // involved) must not be able to clear it out from under the queue: doing
+    // so let the queue's next, DIFFERENT-text entry auto-release the instant
+    // this Retry's turn settled back to idle.
+    if (shouldClearPauseOnSend(origin)) {
+      useMessageQueueStore.getState().clearPause(sessionId);
+    }
     const committed = { text: trimmed, drafts };
+    // A1 (round-4 point-check fix): puts `committed`'s payload back into the
+    // visible composer draft — the affordance a `'committed'` outcome now
+    // gets instead of a silently-armed one-click resend (see
+    // `decideFailureAffordance`). Reads the FRESH `valueRef` mirror (synced
+    // synchronously by `updateValue`, F4 fix) and the attachments hook's own
+    // live draft count (`getLiveDraftCount` — F4 fix) instead of the
+    // `value`/`attachments` captured by this closure at call time, because
+    // this can fire tens of seconds after the render that started it, during
+    // which the user may already have started typing something new — that
+    // new content must never be clobbered.
+    const restoreDraftIfComposerEmpty = (payload: {
+      text: string;
+      drafts: readonly AttachmentDraft[];
+    }) => {
+      const composerIsEmpty =
+        valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
+      if (!composerIsEmpty) return;
+      if (payload.text) updateValue(payload.text);
+      if (payload.drafts.length > 0) attachments.addDrafts(payload.drafts);
+    };
     // R1 (round-2 iteration-2 review): the single place every non-success
-    // return below now funnels through — `shouldArmRetryable` is the ONLY
-    // place that decides whether this outcome should overwrite `retryable`,
-    // so no individual branch can independently (and inconsistently) get
-    // the origin-ownership call wrong.
+    // return below now funnels through — `decideFailureAffordance` is the
+    // ONLY place that decides whether this outcome arms the round Retry
+    // button or restores the draft, so no individual branch can
+    // independently (and inconsistently) get the origin-ownership call
+    // wrong.
     //
     // S1 (round-2 iteration-3 review): this is now ALSO the single pause
-    // authority — `shouldPauseQueueOnRejection` is the exact complement of
-    // `shouldArmRetryable`, so every non-success outcome either arms the
-    // round Retry button or pauses the queue, never both, never neither.
-    // Living here (not at one specific call site) means EVERY branch that
-    // returns through `finalizeOutcome` — create/resume timeouts, the
-    // `ensureHost()` catch, a non-busy pre-admission `host.error`, the
-    // busy-retry loop exhausting — gets the pause, closing the
-    // restore→re-release livelock for every handshake-failure class, not
-    // just `session_busy` exhaustion (see `shouldPauseQueueOnRejection`'s
-    // header in queueRelease.ts).
+    // authority — `shouldPauseQueueOnRejection` (A1 fix: no longer the
+    // literal complement of the affordance decision, see its own header) —
+    // so every non-success outcome gets exactly one of {resend armed,
+    // draft restored, queue paused, none}. Living here (not at one specific
+    // call site) means EVERY branch that returns through `finalizeOutcome` —
+    // create/resume timeouts, the `ensureHost()` catch, a non-busy
+    // pre-admission `host.error`, the busy-retry loop exhausting — gets the
+    // same treatment, closing the restore→re-release livelock for every
+    // handshake-failure class, not just `session_busy` exhaustion (see
+    // `shouldPauseQueueOnRejection`'s header in queueRelease.ts).
     const finalizeOutcome = (outcome: RunEntryOutcome): RunEntryOutcome => {
-      if (shouldArmRetryable(outcome, origin)) {
+      const affordance = decideFailureAffordance(outcome, origin);
+      if (affordance === 'resend') {
         setRetryable(committed);
+      } else if (affordance === 'restore-draft') {
+        restoreDraftIfComposerEmpty(committed);
       }
       if (shouldPauseQueueOnRejection(outcome, origin)) {
         useMessageQueueStore.getState().pauseSession(sessionId, 'send-rejected');
@@ -824,6 +950,54 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // session_not_found, deliberately emitted before the Host knows which
     // session) to THIS attempt instead of any other in-flight request.
     let currentRequestId: string | null = null;
+    // F2 (round-4 Codex NEEDS-FIX #1): single-slot stash for a host.error
+    // that arrived while `currentRequestId` was still null (the narrow
+    // window between an IPC call firing and its own requestId resolving —
+    // e.g. `chat.send()`'s IMMEDIATE failure can race the promise that
+    // reports its requestId back). Strict matching can't be evaluated yet
+    // without a known target requestId, and falling back to a loose
+    // sessionId-only accept would reopen the exact cross-request hole
+    // `strict` exists to close — so it waits here instead, and is
+    // re-evaluated the instant `setCurrentRequestId` below learns the real
+    // requestId (must happen in that SAME tick, not lazily, or a
+    // fast-arriving failure for THIS OWN send would be silently dropped).
+    //
+    // F2b (round-4 Codex re-review, second pass): a bounded LIST, not a
+    // single slot — `setCurrentRequestId(null)` now runs before EVERY new
+    // create/resume/send dispatch (below), which reopens this "unknown"
+    // window on EACH one, not just the very first. More than one
+    // session-scoped host.error can legitimately land in that window (a
+    // genuine fast failure for the JUST-dispatched request, AND/OR a late
+    // straggler from an EARLIER request still winding down) — a single slot
+    // let the second one silently evict the first with no re-evaluation.
+    let pendingHostErrors: readonly RuntimeEvent[] = [];
+
+    const applyHostError = (event: RuntimeEvent) => {
+      const message =
+        event.payload && typeof event.payload === 'object' && 'message' in event.payload
+          ? String((event.payload as { message?: string }).message ?? 'host.error')
+          : 'host.error';
+      const code =
+        event.payload && typeof event.payload === 'object' && 'code' in event.payload
+          ? String((event.payload as { code?: string }).code ?? '')
+          : '';
+      fatalHostErrorCode = code || null;
+      fatalHostError = code ? `${code}: ${message}` : message;
+      useChatSessionsStore.setState({ lastError: fatalHostError });
+    };
+
+    // F2/F2b: the ONLY place `currentRequestId` may be assigned (every IPC
+    // call site below routes through this instead of a raw assignment) — so
+    // neither the stash re-evaluation NOR the F2b pre-dispatch reset (see the
+    // call sites below) can ever be forgotten at a future call site.
+    const setCurrentRequestId = (requestId: string | null) => {
+      currentRequestId = requestId;
+      if (requestId != null) {
+        const match = resolvePendingHostError(pendingHostErrors, { sessionId, requestId });
+        if (match) applyHostError(match);
+      }
+      pendingHostErrors = [];
+    };
 
     const unsubEvents = window.electronAPI.chat.onRuntimeEvent((event) => {
       seenEvents.push(formatRuntimeEvent(event));
@@ -858,21 +1032,25 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // F3: scope to THIS send attempt — a background session's host.error
       // (e.g. a DIFFERENT session's resume hitting session_busy) must never
       // poison this attempt's fatalHostError.
-      if (
-        event.type === 'host.error' &&
-        isHostErrorForSend(event, { sessionId, requestId: currentRequestId })
-      ) {
-        const message =
-          event.payload && typeof event.payload === 'object' && 'message' in event.payload
-            ? String((event.payload as { message?: string }).message ?? 'host.error')
-            : 'host.error';
-        const code =
-          event.payload && typeof event.payload === 'object' && 'code' in event.payload
-            ? String((event.payload as { code?: string }).code ?? '')
-            : '';
-        fatalHostErrorCode = code || null;
-        fatalHostError = code ? `${code}: ${message}` : message;
-        useChatSessionsStore.setState({ lastError: fatalHostError });
+      //
+      // A3/F2/F2b (round-4 point-check + NEEDS-FIX #1 + re-review): `currentRequestId`
+      // known -> strict match decides immediately, same as before.
+      // `currentRequestId` NOT known yet (either genuinely not-yet-known, or
+      // deliberately reset to `null` by F2b right before each new
+      // create/resume/send dispatch) -> never accept on a loose
+      // sessionId-only guess (that reopens the cross-request hole strict
+      // mode exists to close); stash it in the bounded candidate list for
+      // `setCurrentRequestId` to resolve the instant a requestId is known.
+      if (event.type === 'host.error') {
+        if (currentRequestId != null) {
+          if (
+            isHostErrorForSend(event, { sessionId, requestId: currentRequestId }, { strict: true })
+          ) {
+            applyHostError(event);
+          }
+        } else if (isHostErrorForSend(event, { sessionId, requestId: currentRequestId })) {
+          pendingHostErrors = pushPendingHostError(pendingHostErrors, event);
+        }
       }
 
       // R3 (round-2 iteration-2 review): fold a `session.failed` for THIS
@@ -915,13 +1093,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       await sleep(120);
 
       sawSessionCreated = false;
+      // F2b (round-4 Codex re-review): reset BEFORE dispatch, not just after
+      // the response resolves — without this, `currentRequestId` still held
+      // whatever the PREVIOUS IPC call's requestId was for this entire
+      // in-flight window, so a host.error that arrives for THIS createSession
+      // call before its own response resolves would strict-match against the
+      // stale old requestId, fail to match, and be silently DISCARDED
+      // (rather than stashed) — the exact "own immediate failure gets
+      // swallowed, hangs to timeout" bug this fix closes. The stash path
+      // (see the listener above) naturally takes over this window.
+      setCurrentRequestId(null);
       const createResult = await window.electronAPI.chat.createSession({
         sessionId,
         workspacePath,
         model,
         ...(effort ? { effort } : {}),
       });
-      currentRequestId = createResult?.requestId ?? null;
+      setCurrentRequestId(createResult?.requestId ?? null);
 
       const created = await waitUntil(() => sawSessionCreated || Boolean(fatalHostError), 5000);
       if (fatalHostError) return 'fatal';
@@ -938,6 +1126,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
     /** Send the turn, then wait for assistant / tool / permission / terminal progress. */
     const sendAndWait = async (): Promise<boolean> => {
+      // F2b (round-4 Codex re-review): reset BEFORE dispatch — covers the
+      // FIRST send AND every busy-retry resend (`sendAndWait` is called
+      // again from the busy loop below), since each is its own NEW IPC call
+      // whose own requestId is not yet known at dispatch time. See
+      // `runCreateSequence`'s identical reset for the full rationale.
+      setCurrentRequestId(null);
       const sendResult = await window.electronAPI.chat.send({
         sessionId,
         text: trimmed,
@@ -945,7 +1139,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         ...(effort ? { effort } : {}),
         ...(wireAttachments ? { attachments: wireAttachments } : {}),
       });
-      currentRequestId = sendResult?.requestId ?? null;
+      // F2: MUST happen synchronously right here — the instant this
+      // attempt's own requestId is known — not lazily on next use, or a
+      // fast-arriving `host.error` for THIS send (already stashed above)
+      // would sit unresolved instead of being admitted immediately.
+      setCurrentRequestId(sendResult?.requestId ?? null);
       // The payload is with the Host now, so the status line may say so — and
       // the clock restarts, because `timeoutMs` budgets this phase alone.
       // T-19: `value`/attachments were already consumed at runSend's commit
@@ -1012,6 +1210,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         }
       } else if (preamble.action === 'resume') {
         sawSessionResumed = false;
+        // F2b (round-4 Codex re-review): reset BEFORE dispatch — same
+        // rationale as `runCreateSequence`'s reset above.
+        setCurrentRequestId(null);
         const resumeResult = await window.electronAPI.chat
           .resumeSession({
             sessionId,
@@ -1021,7 +1222,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             ...(effort ? { effort } : {}),
           })
           .catch(() => undefined);
-        currentRequestId = resumeResult?.requestId ?? null;
+        setCurrentRequestId(resumeResult?.requestId ?? null);
 
         const resumed = await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), 5000);
         if (!resumed || fatalHostError) {
@@ -1071,18 +1272,41 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // Host to finish tearing down the previous one.
       let busyRetry = 0;
       let cancelledDuringBusyBackoff = false;
-      while (fatalHostErrorCode === 'session_busy' && busyRetry < 8) {
+      // A3 (round-4 point-check fix): `shouldRetryBusySend` adds the
+      // `!sawUserEcho` gate on top of the existing code/attempt-count
+      // checks — `sawUserEcho` turning true at any point means the Host has
+      // already admitted this turn (past the busy gate), so a further
+      // resend inside this SAME loop would double-send the identical text
+      // without the user clicking anything.
+      while (shouldRetryBusySend({ fatalHostErrorCode, sawUserEcho, attempts: busyRetry })) {
         busyRetry += 1;
-        fatalHostError = null;
-        fatalHostErrorCode = null;
-        useChatSessionsStore.setState({ lastError: null });
         await sleep(250);
+        // F1 (round-4 Codex NEEDS-FIX #1): a SECOND gate, re-checked right
+        // after the sleep and BEFORE firing another `sendAndWait` — the
+        // while-condition above is only re-evaluated at the TOP of the
+        // NEXT iteration, which is AFTER a resend has already gone out.
+        // An echo that lands asynchronously DURING this 250ms backoff (a
+        // late admission signal for the very attempt that triggered this
+        // wait) must stop the loop HERE, closing the residual "one click,
+        // two sends" window the pre-sleep-only check left open.
+        // `fatalHostErrorCode`/`attempts` are deliberately NOT reset until
+        // after this check (see below) so it reuses the EXACT SAME
+        // evidence the while-condition just used — only `sawUserEcho` can
+        // have meaningfully changed while asleep. `attempts: busyRetry - 1`
+        // matches the value the while-condition itself was just evaluated
+        // with for this same iteration (pre-increment).
+        if (!shouldRetryBusySend({ fatalHostErrorCode, sawUserEcho, attempts: busyRetry - 1 })) {
+          break;
+        }
         // F6: check cancellation after every sleep and before every resend —
         // Stop may have landed while this attempt was backing off.
         if (sendGenerationRef.current !== myGeneration) {
           cancelledDuringBusyBackoff = true;
           break;
         }
+        fatalHostError = null;
+        fatalHostErrorCode = null;
+        useChatSessionsStore.setState({ lastError: null });
         ok = await sendAndWait();
       }
 
@@ -1214,6 +1438,30 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         ? 'rawEvents shows a network retry loop — likely a transient upstream connection issue; Retry usually recovers once it stabilizes.'
         : "no data reached the Host at all — check the Host log's [cli-stderr] lines (now forwarded) for a spawn or connection failure.";
 
+      // R2: this is the "post-timeout with zero echo/progress" exit —
+      // classify honestly instead of hardcoding 'committed'. `sawUserEcho`
+      // true still means the Host DID admit the turn (F2's whole premise:
+      // it keeps running server-side), so that case stays 'committed'; a
+      // turn that never even echoed is safe (and necessary) to put back on
+      // the queue. Computed BEFORE `abandonError` below (A1 fix) so the
+      // closing sentence can honestly describe which of the two happened.
+      const timeoutOutcome = decideRunEntryOutcome({
+        fatalHostError: true,
+        sawAssistantProgress,
+        sawUserEcho,
+      });
+      // A1 (round-4 point-check fix): 'committed' here means the Host DID
+      // echo this turn's user message before the renderer gave up waiting —
+      // the turn may still be running server-side (F2 deliberately does not
+      // Stop it), so "Click Retry to resend" would silently double-send the
+      // identical text as a second turn (this was THE primary trigger the
+      // retry-doublesend diagnosis traced the bug to). Only a truly
+      // evidence-free timeout ('rejected' — no echo at all, nothing was ever
+      // admitted) is safe to describe as resendable via Retry.
+      const closingAdvice =
+        timeoutOutcome === 'committed'
+          ? 'The message was admitted by the Host but no reply has arrived yet — wait for a late reply, or edit and send a new message.'
+          : `Click Retry to resend, or Stop — ${hint}`;
       const abandonError = [
         'No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event).',
         `status=${session?.status ?? 'n/a'}`,
@@ -1221,20 +1469,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         `hostAfter=${JSON.stringify(hostAfter)}`,
         `sessionId=${sessionId}`,
         `cwd=${workspacePath}`,
-        `Click Retry to resend, or Stop — ${hint}`,
+        closingAdvice,
       ].join(' | ');
       useChatSessionsStore.setState({ lastError: abandonError });
-      // R2: this is the "post-timeout with zero echo/progress" exit —
-      // classify honestly instead of hardcoding 'committed'. `sawUserEcho`
-      // true still means the Host DID admit the turn (F2's whole premise:
-      // it keeps running server-side), so that case stays 'committed'; a
-      // turn that never even echoed is safe (and necessary) to put back on
-      // the queue.
-      const timeoutOutcome = decideRunEntryOutcome({
-        fatalHostError: true,
-        sawAssistantProgress,
-        sawUserEcho,
-      });
       // R10: only an admitted-but-still-running turn (F2 deliberately does
       // not stop it) can still land a real answer later — arm the marker so
       // the effect below can clear this stale banner + retryable once that
@@ -1392,7 +1629,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       attachments: attachments.drafts,
     });
     if (!outcome) return;
-    setValue(outcome.payload.text);
+    updateValue(outcome.payload.text);
     attachments.removeDrafts(currentDraftIds);
     attachments.addDrafts(outcome.payload.attachments);
   };
@@ -1446,6 +1683,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       ? `Reading ${attachments.reading} file${attachments.reading > 1 ? 's' : ''}…`
       : null;
   const largeHint = largeAttachmentHint(attachments.drafts);
+  // F5(a) (round-4 Codex NEEDS-FIX #4): `resolveIdleStatusText` replaces the
+  // old inline `(!hasStatusError && largeHint) || statusHint` for the
+  // non-sending, non-reading case — that selection still fell through to
+  // the FULL `statusHint` (error / no-session / no-workspace / no-cwd text)
+  // the instant `hasStatusError` was true, even when the row was showing
+  // for an UNRELATED reason (`hasLargeHint`, since `shouldShowStatusLine`
+  // no longer consults `hasStatusError` for session mode at all) — a
+  // residual defect-B crack in exactly the combined state the original
+  // fix did not consider.
   const statusLine =
     readingLine ??
     (sending
@@ -1464,7 +1710,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               }
             : null,
         })
-      : (!hasStatusError && largeHint) || statusHint);
+      : resolveIdleStatusText({ mode, hasStatusError, largeHint, statusHint }));
   const statusTone =
     sending && elapsedSeconds >= SLOW_WAIT_HINT_SECONDS
       ? 'text-warning'
@@ -1495,7 +1741,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         {(sending || attachments.reading > 0) && (
           <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <p className={cn('min-w-0 truncate text-xs tabular-nums', statusTone)} title={statusLine}>
+        <p
+          className={cn('min-w-0 truncate text-xs tabular-nums', statusTone)}
+          title={statusLine ?? undefined}
+        >
           {statusLine}
         </p>
       </div>
@@ -1601,6 +1850,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       rows={1}
       value={value}
       onChange={(event) => handleContentChange(event.target.value)}
+      // B9 (round-4 point-check fix): tracks whether THIS node currently
+      // holds focus, so the mode-switch effect below knows whether to
+      // restore it onto the remounted node — see `hadFocusRef`'s own
+      // comment.
+      onFocus={() => {
+        hadFocusRef.current = true;
+      }}
+      onBlur={() => {
+        hadFocusRef.current = false;
+      }}
       onCompositionStart={() => {
         composingRef.current = true;
       }}
@@ -1902,7 +2161,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             )}
             <div className="flex min-w-0 items-center gap-2">
               {textareaEl}
-              {renderStatusLine('flex min-w-0 shrink items-center gap-1.5')}
+              {renderStatusLine(sessionStatusLineWrapperClass())}
               {modelEffortControls}
               {actionButtons}
             </div>

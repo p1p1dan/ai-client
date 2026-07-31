@@ -6,7 +6,11 @@ import {
   isSessionCompletedForSend,
   isSessionFailedForSend,
   isUserEchoForSend,
+  MAX_PENDING_HOST_ERRORS,
+  pushPendingHostError,
   readSessionFailedError,
+  resolvePendingHostError,
+  shouldAdmitPendingHostError,
 } from '../assistantProgress';
 
 function event(type: string, payload?: Record<string, unknown>) {
@@ -168,6 +172,74 @@ describe("isHostErrorForSend (F3: session/requestId scoping for runSend's host.e
   });
 });
 
+describe('isHostErrorForSend strict mode (A3, round-4 point-check fix)', () => {
+  it('non-strict (default): sessionId match wins even when requestId differs — unchanged behavior', () => {
+    expect(
+      isHostErrorForSend(
+        { sessionId: 'session-a', requestId: 'req-other' },
+        { sessionId: 'session-a', requestId: 'req-current' }
+      )
+    ).toBe(true);
+  });
+
+  it('strict: rejects a sessionId match whose requestId does NOT match the currently-outstanding request', () => {
+    expect(
+      isHostErrorForSend(
+        { sessionId: 'session-a', requestId: 'req-other' },
+        { sessionId: 'session-a', requestId: 'req-current' },
+        { strict: true }
+      )
+    ).toBe(false);
+  });
+
+  it('strict: accepts a sessionId + requestId match', () => {
+    expect(
+      isHostErrorForSend(
+        { sessionId: 'session-a', requestId: 'req-current' },
+        { sessionId: 'session-a', requestId: 'req-current' },
+        { strict: true }
+      )
+    ).toBe(true);
+  });
+
+  it('strict: still rejects a different session outright, same as non-strict', () => {
+    expect(
+      isHostErrorForSend(
+        { sessionId: 'session-b', requestId: 'req-current' },
+        { sessionId: 'session-a', requestId: 'req-current' },
+        { strict: true }
+      )
+    ).toBe(false);
+  });
+
+  it('strict: falls back to sessionId-only matching while this attempt has no outstanding requestId yet', () => {
+    expect(
+      isHostErrorForSend(
+        { sessionId: 'session-a', requestId: 'req-anything' },
+        { sessionId: 'session-a', requestId: null },
+        { strict: true }
+      )
+    ).toBe(true);
+  });
+
+  it('strict: session-less event matching still requires the requestId, same as non-strict', () => {
+    expect(
+      isHostErrorForSend(
+        { requestId: 'req-current' },
+        { sessionId: 'session-a', requestId: 'req-current' },
+        { strict: true }
+      )
+    ).toBe(true);
+    expect(
+      isHostErrorForSend(
+        { requestId: 'req-other' },
+        { sessionId: 'session-a', requestId: 'req-current' },
+        { strict: true }
+      )
+    ).toBe(false);
+  });
+});
+
 describe('isUserEchoForSend (R15, round-2 iteration-2 review: pure wiring coverage for sawUserEcho)', () => {
   it('is true for a message.started{role: user} event scoped to this session', () => {
     expect(
@@ -300,5 +372,130 @@ describe('countAssistantMessagesWithBlocks (S4, round-2 iteration-3 review)', ()
     expect(countAssistantMessagesWithBlocks(runtimeOnly)).toBe(
       countAssistantMessagesWithBlocks(withReplayedHistory)
     );
+  });
+});
+
+describe('shouldAdmitPendingHostError (F2, round-4 Codex NEEDS-FIX #1)', () => {
+  it('admits a stashed event once the target requestId is known and strictly matches', () => {
+    expect(
+      shouldAdmitPendingHostError(
+        { sessionId: 'session-a', requestId: 'req-current' },
+        { sessionId: 'session-a', requestId: 'req-current' }
+      )
+    ).toBe(true);
+  });
+
+  it('discards a stashed event whose requestId does not match the now-known target requestId', () => {
+    expect(
+      shouldAdmitPendingHostError(
+        { sessionId: 'session-a', requestId: 'req-stale' },
+        { sessionId: 'session-a', requestId: 'req-current' }
+      )
+    ).toBe(false);
+  });
+
+  it('never admits while the target requestId is still unknown — nothing to stash-resolve against yet', () => {
+    expect(
+      shouldAdmitPendingHostError(
+        { sessionId: 'session-a', requestId: 'req-anything' },
+        { sessionId: 'session-a', requestId: null }
+      )
+    ).toBe(false);
+  });
+
+  it('discards a stashed event for a different session even once a requestId is known', () => {
+    expect(
+      shouldAdmitPendingHostError(
+        { sessionId: 'session-b', requestId: 'req-current' },
+        { sessionId: 'session-a', requestId: 'req-current' }
+      )
+    ).toBe(false);
+  });
+
+  it('admits a stashed session-less event (e.g. session_not_found) once its requestId matches the now-known target', () => {
+    expect(
+      shouldAdmitPendingHostError(
+        { requestId: 'req-current' },
+        { sessionId: 'session-a', requestId: 'req-current' }
+      )
+    ).toBe(true);
+  });
+});
+
+describe('pushPendingHostError (F2b, round-4 Codex re-review, second pass)', () => {
+  it('admits a single event into an empty list', () => {
+    const event = { sessionId: 'session-a', requestId: 'req-1' };
+    expect(pushPendingHostError([], event)).toEqual([event]);
+  });
+
+  it('preserves FIFO order under the cap', () => {
+    const a = { sessionId: 'session-a', requestId: 'req-1' };
+    const b = { sessionId: 'session-a', requestId: 'req-2' };
+    expect(pushPendingHostError([a], b)).toEqual([a, b]);
+  });
+
+  it('exceeding the cap evicts the OLDEST candidate first, keeping the most recent MAX_PENDING_HOST_ERRORS', () => {
+    let list: readonly { sessionId: string; requestId: string }[] = [];
+    for (let i = 1; i <= MAX_PENDING_HOST_ERRORS + 2; i += 1) {
+      list = pushPendingHostError(list, { sessionId: 'session-a', requestId: `req-${i}` });
+    }
+    expect(list).toHaveLength(MAX_PENDING_HOST_ERRORS);
+    // The two oldest (req-1, req-2) are gone; the most recent MAX survive.
+    expect(list.map((e) => e.requestId)).toEqual(
+      Array.from({ length: MAX_PENDING_HOST_ERRORS }, (_, i) => `req-${i + 3}`)
+    );
+  });
+
+  it('never exceeds the cap by more than one push at a time', () => {
+    let list: readonly { requestId: string }[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      list = pushPendingHostError(list, { requestId: `req-${i}` });
+      expect(list.length).toBeLessThanOrEqual(MAX_PENDING_HOST_ERRORS);
+    }
+  });
+});
+
+describe('resolvePendingHostError (F2b, round-4 Codex re-review, second pass)', () => {
+  it('候选命中: finds the candidate whose requestId strictly matches the now-known target', () => {
+    const stale = { sessionId: 'session-a', requestId: 'req-stale' };
+    const genuine = { sessionId: 'session-a', requestId: 'req-current' };
+    expect(
+      resolvePendingHostError([stale, genuine], {
+        sessionId: 'session-a',
+        requestId: 'req-current',
+      })
+    ).toBe(genuine);
+  });
+
+  it('候选未命中: returns null when no candidate matches the target requestId', () => {
+    const stale1 = { sessionId: 'session-a', requestId: 'req-stale-1' };
+    const stale2 = { sessionId: 'session-a', requestId: 'req-stale-2' };
+    expect(
+      resolvePendingHostError([stale1, stale2], {
+        sessionId: 'session-a',
+        requestId: 'req-current',
+      })
+    ).toBeNull();
+  });
+
+  it('returns null for an empty candidate list', () => {
+    expect(resolvePendingHostError([], { sessionId: 'session-a', requestId: 'req-current' })).toBe(
+      null
+    );
+  });
+
+  it('跨 session 不收: a same-requestId candidate from a DIFFERENT session is never admitted', () => {
+    const otherSession = { sessionId: 'session-b', requestId: 'req-current' };
+    expect(
+      resolvePendingHostError([otherSession], { sessionId: 'session-a', requestId: 'req-current' })
+    ).toBeNull();
+  });
+
+  it('picks the FIRST matching candidate when (implausibly) more than one matches', () => {
+    const first = { sessionId: 'session-a', requestId: 'req-current' };
+    const second = { sessionId: 'session-a', requestId: 'req-current' };
+    expect(
+      resolvePendingHostError([first, second], { sessionId: 'session-a', requestId: 'req-current' })
+    ).toBe(first);
   });
 });

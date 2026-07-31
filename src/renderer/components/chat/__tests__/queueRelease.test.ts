@@ -7,18 +7,23 @@ import {
   canStartTurn,
   type DecideRunEntryOutcomeInput,
   type DecideSendActionInput,
+  decideFailureAffordance,
   decidePendingResolution,
   decideQueueRelease,
   decideRunEntryOutcome,
   decideSendAction,
   deriveActionButtons,
   deriveQueueStripModel,
+  type FailureAffordance,
   isRunningStatus,
   QUEUE_PERMISSION_HINT,
   type RunEntryOutcome,
   type RunSendOrigin,
   shouldArmRetryable,
+  shouldClearPauseOnSend,
+  shouldClearRetryableOnOutcome,
   shouldPauseQueueOnRejection,
+  shouldRetryBusySend,
 } from '../queueRelease';
 
 const ALL_STATUSES: readonly SessionRuntimeStatus[] = [
@@ -613,7 +618,7 @@ describe('decideRunEntryOutcome (round-2 P0 queue-loss hardening)', () => {
   });
 });
 
-describe('shouldArmRetryable (R1, round-2 iteration-2 review)', () => {
+describe('shouldArmRetryable (R1, round-2 iteration-2 review; A1 round-4 point-check fix)', () => {
   const ORIGINS: readonly RunSendOrigin[] = ['direct', 'retry', 'release'];
 
   it('is false ONLY for rejected + release — the queue itself is the recovery path there', () => {
@@ -628,15 +633,61 @@ describe('shouldArmRetryable (R1, round-2 iteration-2 review)', () => {
     expect(shouldArmRetryable('rejected', 'retry')).toBe(true);
   });
 
-  it('is true for "committed" regardless of origin — the entry (if any) has already been spent', () => {
+  // A1 (round-4 point-check fix, retry-doublesend diagnosis): replaces the
+  // OLD "is true for 'committed' regardless of origin" assertion — arming a
+  // one-click Retry for an already-admitted turn silently resent the
+  // IDENTICAL text as a second turn (the double-send incident's primary
+  // root cause). 'committed' must NEVER arm the resend affordance now,
+  // regardless of origin; see `decideFailureAffordance` for what it gets
+  // instead ('restore-draft').
+  it("round-4 fix (A1): is false for 'committed' regardless of origin — an already-admitted turn must never be silently resent", () => {
     for (const origin of ORIGINS) {
-      expect(shouldArmRetryable('committed', origin)).toBe(true);
+      expect(shouldArmRetryable('committed', origin)).toBe(false);
     }
   });
 
   it('is true for "skipped" regardless of origin', () => {
     for (const origin of ORIGINS) {
       expect(shouldArmRetryable('skipped', origin)).toBe(true);
+    }
+  });
+});
+
+describe('decideFailureAffordance (A1, round-4 point-check fix)', () => {
+  const ORIGINS: readonly RunSendOrigin[] = ['direct', 'retry', 'release'];
+  const OUTCOMES: readonly RunEntryOutcome[] = ['committed', 'skipped', 'rejected'];
+
+  it("is 'restore-draft' for 'committed', regardless of origin", () => {
+    for (const origin of ORIGINS) {
+      expect(decideFailureAffordance('committed', origin)).toBe('restore-draft');
+    }
+  });
+
+  it("is 'resend' for 'skipped', regardless of origin — nothing was ever sent", () => {
+    for (const origin of ORIGINS) {
+      expect(decideFailureAffordance('skipped', origin)).toBe('resend');
+    }
+  });
+
+  it("is 'none' for 'rejected' + 'release' — the queue owns recovery there", () => {
+    expect(decideFailureAffordance('rejected', 'release')).toBe('none');
+  });
+
+  it("is 'resend' for 'rejected' + 'direct'/'retry' — no queue entry to fall back on", () => {
+    expect(decideFailureAffordance('rejected', 'direct')).toBe('resend');
+    expect(decideFailureAffordance('rejected', 'retry')).toBe('resend');
+  });
+
+  it('full 3x3 matrix over every outcome/origin pair', () => {
+    const expected: Record<RunEntryOutcome, Record<RunSendOrigin, FailureAffordance>> = {
+      committed: { direct: 'restore-draft', retry: 'restore-draft', release: 'restore-draft' },
+      skipped: { direct: 'resend', retry: 'resend', release: 'resend' },
+      rejected: { direct: 'resend', retry: 'resend', release: 'none' },
+    };
+    for (const outcome of OUTCOMES) {
+      for (const origin of ORIGINS) {
+        expect(decideFailureAffordance(outcome, origin)).toBe(expected[outcome][origin]);
+      }
     }
   });
 });
@@ -682,5 +733,127 @@ describe('shouldPauseQueueOnRejection (S1, round-2 iteration-3 review; generaliz
         expect(shouldPauseQueueOnRejection(outcome, origin)).toBe(expected[outcome][origin]);
       }
     }
+  });
+
+  // A1 (round-4 point-check fix) regression pin: this function is now
+  // DELIBERATELY no longer the literal complement of `shouldArmRetryable` —
+  // `shouldArmRetryable('committed', …)` became `false` for every origin
+  // (A1), but a 'committed' outcome must still NEVER pause the queue (its
+  // entry, if any, has already been spent — see `decideFailureAffordance`
+  // for what 'committed' gets instead). If a future edit "simplifies" this
+  // back to `!shouldArmRetryable(...)`, this is the test that catches it.
+  it('round-4 fix (A1): stays false for "committed" even though shouldArmRetryable now also returns false for it — no longer a literal complement', () => {
+    for (const origin of ORIGINS) {
+      expect(shouldArmRetryable('committed', origin)).toBe(false);
+      expect(shouldPauseQueueOnRejection('committed', origin)).toBe(false);
+    }
+  });
+});
+
+describe('shouldRetryBusySend (A3, round-4 point-check fix)', () => {
+  it('retries while busy, no echo yet, and under the attempt cap', () => {
+    expect(
+      shouldRetryBusySend({ fatalHostErrorCode: 'session_busy', sawUserEcho: false, attempts: 0 })
+    ).toBe(true);
+  });
+
+  it('does not retry once the Host has echoed this turn — the double-send hole this fix closes', () => {
+    expect(
+      shouldRetryBusySend({ fatalHostErrorCode: 'session_busy', sawUserEcho: true, attempts: 0 })
+    ).toBe(false);
+  });
+
+  it('does not retry for a non-session_busy error code', () => {
+    expect(
+      shouldRetryBusySend({
+        fatalHostErrorCode: 'session_not_found',
+        sawUserEcho: false,
+        attempts: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('does not retry once the attempt cap (8) is reached', () => {
+    expect(
+      shouldRetryBusySend({ fatalHostErrorCode: 'session_busy', sawUserEcho: false, attempts: 8 })
+    ).toBe(false);
+  });
+
+  it('does not retry with no error code at all', () => {
+    expect(shouldRetryBusySend({ fatalHostErrorCode: null, sawUserEcho: false, attempts: 0 })).toBe(
+      false
+    );
+  });
+});
+
+// F1 (round-4 Codex NEEDS-FIX #1): `runSend`'s busy-retry loop now calls
+// `shouldRetryBusySend` TWICE per iteration — once as the while-condition
+// (before the 250ms sleep) and once again right after the sleep, before
+// firing another `sendAndWait` — closing the residual window where an echo
+// arriving DURING the backoff would otherwise still trigger a resend. The
+// function itself is unchanged/stateless (same truth table as above); these
+// tests pin the CALLING PROTOCOL by exercising it with inputs shaped exactly
+// like the two call sites use them within one loop iteration.
+describe('shouldRetryBusySend post-sleep gate calling protocol (F1, round-4 Codex NEEDS-FIX #1)', () => {
+  it('pre-sleep gate (while-condition) and post-sleep gate agree when nothing changed during the sleep', () => {
+    const preSleep = { fatalHostErrorCode: 'session_busy', sawUserEcho: false, attempts: 3 };
+    // The loop body increments `attempts` once at entry, then re-checks with
+    // `attempts - 1` so both calls describe the SAME iteration.
+    const postSleep = { ...preSleep, attempts: preSleep.attempts };
+    expect(shouldRetryBusySend(preSleep)).toBe(true);
+    expect(shouldRetryBusySend(postSleep)).toBe(true);
+  });
+
+  it('post-sleep gate flips to false the instant sawUserEcho becomes true during the sleep, even though the pre-sleep gate was true', () => {
+    const preSleep = { fatalHostErrorCode: 'session_busy', sawUserEcho: false, attempts: 0 };
+    expect(shouldRetryBusySend(preSleep)).toBe(true);
+    // An echo landing asynchronously mid-sleep flips ONLY sawUserEcho —
+    // fatalHostErrorCode/attempts are unchanged (the reset that used to
+    // precede the sleep now happens AFTER this gate, specifically so this
+    // re-check still has meaningful evidence to compare against).
+    const postSleep = { ...preSleep, sawUserEcho: true };
+    expect(shouldRetryBusySend(postSleep)).toBe(false);
+  });
+
+  it('post-sleep gate stays true across every attempt count under the cap when sawUserEcho never changes', () => {
+    for (let attempts = 0; attempts < 8; attempts += 1) {
+      const input = { fatalHostErrorCode: 'session_busy', sawUserEcho: false, attempts };
+      expect(shouldRetryBusySend(input)).toBe(true);
+    }
+  });
+
+  it('both gates agree false once the attempt cap is reached, independent of sawUserEcho', () => {
+    for (const sawUserEcho of [true, false]) {
+      const input = { fatalHostErrorCode: 'session_busy', sawUserEcho, attempts: 8 };
+      expect(shouldRetryBusySend(input)).toBe(false);
+    }
+  });
+});
+
+describe('shouldClearRetryableOnOutcome (F3, round-4 Codex NEEDS-FIX #2)', () => {
+  it('is true only for "committed" — a genuine delivery is the only outcome that should clear the snapshot', () => {
+    expect(shouldClearRetryableOnOutcome('committed')).toBe(true);
+  });
+
+  it('is false for "skipped" — the original snapshot must survive an early guard-fail with nothing sent', () => {
+    expect(shouldClearRetryableOnOutcome('skipped')).toBe(false);
+  });
+
+  it('is false for "rejected" — finalizeOutcome already re-arms its OWN snapshot for this case', () => {
+    expect(shouldClearRetryableOnOutcome('rejected')).toBe(false);
+  });
+});
+
+describe('shouldClearPauseOnSend (A4, round-4 point-check fix)', () => {
+  it('is false for "retry" — a Retry must not clear the queue\'s own "send-rejected" protection', () => {
+    expect(shouldClearPauseOnSend('retry')).toBe(false);
+  });
+
+  it('is true for "direct" — an ordinary new send still means the user pushed the flow forward', () => {
+    expect(shouldClearPauseOnSend('direct')).toBe(true);
+  });
+
+  it('is true for "release" — a no-op in practice (the queue is never paused when release fires), but harmless', () => {
+    expect(shouldClearPauseOnSend('release')).toBe(true);
   });
 });

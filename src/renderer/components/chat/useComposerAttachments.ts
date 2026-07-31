@@ -52,6 +52,18 @@ export interface ComposerAttachments {
   addDrafts: (drafts: readonly AttachmentDraft[]) => void;
   clearDrafts: () => void;
   dismissNotice: () => void;
+  /**
+   * F4 (round-4 Codex NEEDS-FIX #3): synchronous read of the CURRENT draft
+   * count off `draftsRef` (the same live ref `applyDrafts` already keeps in
+   * sync on every mutation), not the `drafts` state array — which lags a
+   * render behind an in-flight paste/removal. Exists so a caller holding a
+   * stale render closure (e.g. `ChatComposer`'s committed-outcome
+   * draft-restore, which can fire long after the render that captured it)
+   * can check "is the composer currently empty" without needing its own
+   * separate, effect-synced mirror ref (the exact staleness class that used
+   * to cause it to either clobber a new draft or skip a restore it owed).
+   */
+  getLiveDraftCount: () => number;
 }
 
 export function useComposerAttachments(options: { disabled: boolean }): ComposerAttachments {
@@ -251,6 +263,8 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
 
   const dismissNotice = useCallback(() => setNotice(null), []);
 
+  const getLiveDraftCount = useCallback(() => draftsRef.current.length, []);
+
   const totalBytes = useMemo(() => totalAttachmentBytes(drafts), [drafts]);
 
   return {
@@ -264,5 +278,6 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
     addDrafts,
     clearDrafts,
     dismissNotice,
+    getLiveDraftCount,
   };
 }

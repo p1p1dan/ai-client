@@ -10,7 +10,9 @@ import {
   mentionPopupPlacementClass,
   middleColumnHostClass,
   rememberSendAttempt,
+  resolveIdleStatusText,
   roundActionButtonClass,
+  sessionStatusLineWrapperClass,
   shouldRenderTargetRow,
   shouldShowStatusLine,
   targetRowClass,
@@ -228,6 +230,109 @@ describe('composerTextareaClass', () => {
       expect(cls).not.toContain('focus-visible:ring-0');
     }
   });
+
+  // Round-4 point-check fix (defect B): a same-row sibling with a long
+  // max-content flex-basis (a long error string) could claim the ENTIRE
+  // negative-shrink budget and squeeze the follow-up textarea's
+  // `flex: 1 1 0%` down to a literal 0px, since `min-w-0` gave it no floor
+  // at all. `min-w-32` (128px) is the width-floor half of the fix —
+  // `sessionStatusLineWrapperClass`'s `basis-0` (below) is the other half.
+  it('round-4 fix (defect B): gives the follow-up textarea a 128px width floor instead of no floor at all', () => {
+    const cls = composerTextareaClass('session');
+    expect(cls).toContain('min-w-32');
+    expect(cls).not.toContain('min-w-0');
+  });
+
+  it('round-4 fix (defect B): the empty-state textarea is unaffected by the width-floor fix', () => {
+    expect(composerTextareaClass('empty')).not.toContain('min-w-32');
+  });
+
+  // F5(b) (round-4 Codex NEEDS-FIX #4): `flex-1` (grow:1) regressed to
+  // `flex-[2]` (grow:2) — the textarea must keep a DOMINANT (not just
+  // non-zero) share of any positive free space over the status-line slot,
+  // which now also carries a non-zero grow weight (see
+  // `sessionStatusLineWrapperClass` below) to fix its own 0px-under-normal-
+  // conditions regression.
+  it('round-4 fix (F5b): raises the follow-up textarea to a dominant flex-grow weight over the status-line slot', () => {
+    const cls = composerTextareaClass('session');
+    expect(cls).toContain('flex-[2]');
+    expect(cls).not.toContain('flex-1');
+  });
+});
+
+describe('sessionStatusLineWrapperClass (round-4 point-check fix, defect B; F5b Codex NEEDS-FIX #4)', () => {
+  it('carries a zero flex-basis so its own content never dictates the row shrink math', () => {
+    const cls = sessionStatusLineWrapperClass();
+    expect(cls).toContain('basis-0');
+  });
+
+  it('still shrinks and keeps a zero min-width so it can collapse away entirely', () => {
+    const cls = sessionStatusLineWrapperClass();
+    expect(cls).toContain('shrink');
+    expect(cls).toContain('min-w-0');
+  });
+
+  // F5(b): the ORIGINAL `basis-0` fix, with flex-grow left at the browser
+  // default of 0, was itself a regression — a grow:0 item never claims any
+  // of a row's POSITIVE leftover space, so this slot rendered at literally
+  // 0px for the everyday case (short "Sending…"/attachment-hint text, no
+  // error) too, not just the long-error-text case the original fix
+  // targeted. `flex-1` (grow:1) restores real space-sharing; `max-w-48`
+  // bounds how much of it this slot can claim even in a very wide row —
+  // `max-width` clamps a flex item's HYPOTHETICAL size too, so it
+  // continues to protect the textarea under negative free space exactly
+  // as `basis-0` used to alone.
+  it('round-4 fix (F5b): carries a non-zero grow weight so normal (non-error) status text is actually visible', () => {
+    const cls = sessionStatusLineWrapperClass();
+    expect(cls).toContain('flex-1');
+  });
+
+  it('round-4 fix (F5b): caps its own width with an ordinary Tailwind scale step, not an arbitrary value', () => {
+    const cls = sessionStatusLineWrapperClass();
+    expect(cls).toContain('max-w-48');
+    expect(cls).not.toMatch(/max-w-\[/);
+  });
+});
+
+describe('resolveIdleStatusText (F5a, round-4 Codex NEEDS-FIX #4)', () => {
+  const statusHint = 'Error: something went wrong';
+  const largeHint = 'Attachments total 12 MB — sending may take longer.';
+
+  it('session mode + hasStatusError: selects largeHint, never the full statusHint, even though shouldShowStatusLine can still show the row for hasLargeHint alone', () => {
+    expect(
+      resolveIdleStatusText({ mode: 'session', hasStatusError: true, largeHint, statusHint })
+    ).toBe(largeHint);
+  });
+
+  it('session mode + hasStatusError + no largeHint: selects null (the row will not render at all — shouldShowStatusLine agrees)', () => {
+    expect(
+      resolveIdleStatusText({ mode: 'session', hasStatusError: true, largeHint: null, statusHint })
+    ).toBeNull();
+  });
+
+  it('session mode + no hasStatusError + largeHint: selects largeHint (unchanged from before this fix)', () => {
+    expect(
+      resolveIdleStatusText({ mode: 'session', hasStatusError: false, largeHint, statusHint })
+    ).toBe(largeHint);
+  });
+
+  it('session mode + no hasStatusError + no largeHint: falls back to statusHint (the "Ready · cwd:" case — unchanged)', () => {
+    expect(
+      resolveIdleStatusText({ mode: 'session', hasStatusError: false, largeHint: null, statusHint })
+    ).toBe(statusHint);
+  });
+
+  it('empty mode + hasStatusError: still selects the full statusHint (unaffected by this fix — only session mode changed)', () => {
+    expect(
+      resolveIdleStatusText({ mode: 'empty', hasStatusError: true, largeHint, statusHint })
+    ).toBe(statusHint);
+  });
+
+  it('empty mode + no hasStatusError + largeHint: still selects largeHint (unaffected)', () => {
+    expect(
+      resolveIdleStatusText({ mode: 'empty', hasStatusError: false, largeHint, statusHint })
+    ).toBe(largeHint);
+  });
 });
 
 describe('targetRowClass / targetRowSlots', () => {
@@ -335,10 +440,29 @@ describe('shouldShowStatusLine', () => {
     ).toBe(true);
   });
 
-  it('shows it whenever the composer is in an error state', () => {
+  // Round-4 point-check fix (defect B): REWRITES the previous "shows it
+  // whenever the composer is in an error state" assertion, which locked in
+  // the actual defect-B bug — session mode showing the full error text a
+  // SECOND time, inline next to the textarea, was what let a long error
+  // string's max-content flex-basis crush the textarea to 0px width. The
+  // destructive banner above the composer card is now the sole owner of
+  // error text in session mode.
+  it('round-4 fix (defect B): no longer shows it for an error state in session mode — the banner above the card owns error text exclusively now', () => {
     expect(
       shouldShowStatusLine({
         mode: 'session',
+        sending: false,
+        reading: 0,
+        hasStatusError: true,
+        hasLargeHint: false,
+      })
+    ).toBe(false);
+  });
+
+  it('round-4 fix (defect B): still always shows it in empty mode, even with hasStatusError true — empty mode is unaffected by this fix', () => {
+    expect(
+      shouldShowStatusLine({
+        mode: 'empty',
         sending: false,
         reading: 0,
         hasStatusError: true,

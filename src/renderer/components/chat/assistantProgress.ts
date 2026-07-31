@@ -37,12 +37,92 @@ export interface HostErrorMatchTarget {
   requestId: string | null;
 }
 
+/**
+ * A3 (round-4 point-check fix, retry-doublesend diagnosis): `strict` closes
+ * a cross-request hole the plain `sessionId`-only match left open. Without
+ * it, a `host.error` for THIS session but a DIFFERENT, no-longer-current
+ * request (e.g. a background `session_busy` from the user resuming this
+ * same session from the left nav while THIS attempt's own busy-backoff loop
+ * is still running) could poison `fatalHostErrorCode` after the real turn
+ * had already been admitted, re-triggering a resend. `strict` requires the
+ * event's `requestId` to match `target.requestId` too, but only once
+ * `target.requestId` is actually known (falls back to the existing
+ * sessionId-only match while an attempt has no outstanding request yet —
+ * same "don't guess" posture the session-less branch below already takes).
+ * Defaults to off so every existing non-strict call site is unaffected.
+ */
 export function isHostErrorForSend(
   event: { sessionId?: string; requestId?: string },
+  target: HostErrorMatchTarget,
+  options?: { strict?: boolean }
+): boolean {
+  if (event.sessionId != null) {
+    if (event.sessionId !== target.sessionId) return false;
+    if (options?.strict && target.requestId != null) {
+      return event.requestId === target.requestId;
+    }
+    return true;
+  }
+  return target.requestId != null && event.requestId === target.requestId;
+}
+
+/**
+ * F2 (round-4 Codex NEEDS-FIX #1): whether a STASHED `host.error` (one that
+ * arrived while THIS attempt's own `requestId` was still unknown — the
+ * narrow window between an IPC call firing and its `requestId` resolving,
+ * e.g. `chat.send()`'s own immediate failure racing the promise that
+ * reports its `requestId` back) should now be admitted, now that a
+ * `requestId` IS known. Strict mode's `target.requestId == null` fallback
+ * (see `isHostErrorForSend` above) used to accept such an event on sessionId
+ * alone the INSTANT it arrived — reopening the exact cross-request hole
+ * `strict` exists to close. The fix is to cache it instead and re-evaluate
+ * HERE the moment a `requestId` becomes known, so the decision is always
+ * made with full information: `target.requestId` must be known AND the
+ * stashed event must strictly match it.
+ */
+export function shouldAdmitPendingHostError(
+  pending: { sessionId?: string; requestId?: string },
   target: HostErrorMatchTarget
 ): boolean {
-  if (event.sessionId != null) return event.sessionId === target.sessionId;
-  return target.requestId != null && event.requestId === target.requestId;
+  return target.requestId != null && isHostErrorForSend(pending, target, { strict: true });
+}
+
+/**
+ * F2b (round-4 Codex re-review, second pass): bounded FIFO admission into
+ * the pending-host-error candidate LIST — oldest evicted first once the cap
+ * is exceeded. Replaces the original single-slot stash: `currentRequestId`
+ * being reset to `null` before EVERY new create/resume/send dispatch (the
+ * F2b fix in `ChatComposer.tsx`) means more than one session-scoped
+ * host.error can legitimately land during that null window in the SAME
+ * `runSend` call — a genuine fast failure for the JUST-dispatched request,
+ * and/or a late straggler from an EARLIER request still winding down — and
+ * a single slot let the second one silently evict the first with no
+ * re-evaluation, permanently losing whichever one didn't happen to be last.
+ * Pure so the eviction rule itself is assertable without a live listener.
+ */
+export const MAX_PENDING_HOST_ERRORS = 4;
+
+export function pushPendingHostError<E>(pending: readonly E[], event: E): readonly E[] {
+  const next = [...pending, event];
+  return next.length > MAX_PENDING_HOST_ERRORS
+    ? next.slice(next.length - MAX_PENDING_HOST_ERRORS)
+    : next;
+}
+
+/**
+ * F2b (round-4 Codex re-review, second pass): given the bounded candidate
+ * list stashed while `target.requestId` was unknown, finds the one (if any)
+ * that now strictly matches the just-resolved target — `null` if none do
+ * (every candidate was for some OTHER, already-superseded request, or a
+ * different session entirely). The whole list is meant to be discarded by
+ * the caller after this call, matched or not: once a target requestId is
+ * known, every candidate has had its one chance to be evaluated against it.
+ */
+export function resolvePendingHostError<E extends { sessionId?: string; requestId?: string }>(
+  pending: readonly E[],
+  target: HostErrorMatchTarget
+): E | null {
+  return pending.find((candidate) => shouldAdmitPendingHostError(candidate, target)) ?? null;
 }
 
 /**

@@ -201,17 +201,58 @@ export type RunSendOrigin = 'direct' | 'retry' | 'release';
 
 /**
  * R1: whether a `runSend` attempt's outcome should arm the round Retry
- * button (`ChatComposer`'s local `retryable` state). `'rejected'` +
- * `origin: 'release'` is the ONLY combination that must NOT — the queue
- * itself is the recovery path there, and arming Retry too would let two
- * independent, unaware-of-each-other live-send paths (queue auto-release
- * AND a user click) send the identical text twice. Every other combination
- * — any `'committed'` failure (regardless of origin — the entry, if any,
- * has already been spent), or `'rejected'` from a direct send / Retry click
- * (no queue entry exists to fall back on) — must arm it.
+ * button (`ChatComposer`'s local `retryable` state).
+ *
+ * A1 (round-4 point-check fix, retry-doublesend diagnosis): `'committed'`
+ * NEVER arms it anymore, regardless of origin. `'committed'` means the Host
+ * already admitted this turn's text — it echoed it (`sawUserEcho`) or made
+ * assistant/tool progress on it — so the text is already in the timeline
+ * and quite possibly already in the CLI's own JSONL transcript. Arming a
+ * one-click Retry there resends the IDENTICAL text as a brand-new turn: a
+ * second `chat.send`, a second `beginTurn`, a second user echo — a genuine
+ * double-send, not a recovery. This directly contradicted the "never
+ * requeue, the entry has already been spent" contract `'committed'` itself
+ * documents above. `decideFailureAffordance` below is what a `'committed'`
+ * failure gets instead (`'restore-draft'`).
+ *
+ * `'rejected'` + `origin: 'release'` remains the other non-arming case — the
+ * queue itself is the recovery path there (nothing was ever admitted, and a
+ * queue entry exists to restore). Every other `'rejected'` (a direct send /
+ * Retry click with no queue entry to fall back on) still arms it — the Host
+ * never saw this text at all, so a resend cannot duplicate anything.
+ * `'skipped'` (a pre-commit guard failure — nothing was ever sent) also
+ * still arms it, unchanged.
  */
 export function shouldArmRetryable(outcome: RunEntryOutcome, origin: RunSendOrigin): boolean {
+  if (outcome === 'committed') return false;
   return !(outcome === 'rejected' && origin === 'release');
+}
+
+/**
+ * A1 (round-4 point-check fix): what a non-success `runSend` outcome should
+ * offer the user, now that `shouldArmRetryable` no longer arms a one-click
+ * resend for an already-admitted turn.
+ *
+ * - `'restore-draft'` — `'committed'` (any origin): the Host already echoed
+ *   or progressed this turn, so silently resending would double-send. Hand
+ *   the text/attachments back to the visible composer draft instead (see
+ *   `ChatComposer.tsx`'s `restoreDraftIfComposerEmpty`) so a resend is a
+ *   deliberate, edited Send, never an invisible replay.
+ * - `'resend'` — every case `shouldArmRetryable` still arms for (a
+ *   `'rejected'` direct/Retry-origin failure, or `'skipped'`): the Host
+ *   never saw this text, so the existing one-click Retry affordance is
+ *   still safe and still offered.
+ * - `'none'` — `'rejected'` + `'release'`: the queue itself already owns
+ *   recovery (`shouldPauseQueueOnRejection` below), nothing else needed.
+ */
+export type FailureAffordance = 'resend' | 'restore-draft' | 'none';
+
+export function decideFailureAffordance(
+  outcome: RunEntryOutcome,
+  origin: RunSendOrigin
+): FailureAffordance {
+  if (outcome === 'committed') return 'restore-draft';
+  return shouldArmRetryable(outcome, origin) ? 'resend' : 'none';
 }
 
 /**
@@ -230,19 +271,86 @@ export function shouldArmRetryable(outcome: RunEntryOutcome, origin: RunSendOrig
  * Scoping the round-2 pause to one fatal-error code left every OTHER
  * handshake-failure class free to spin that loop.
  *
- * `origin` alone is sufficient, with no error-code narrowing: exactly
- * `!shouldArmRetryable(outcome, origin)` — the queue pause and the round
- * Retry armament are two mutually exclusive, jointly exhaustive recovery
- * paths for the same non-success outcome, never both, never neither.
- * `'direct'`/`'retry'` have no queue entry to loop against (nothing for
- * `useQueueRelease` to restore), so only `'release'` can ever produce the
- * loop this closes.
+ * A1 (round-4 point-check fix): this is DELIBERATELY no longer expressed as
+ * `!shouldArmRetryable(outcome, origin)` — that used to be an exact
+ * complement, but A1 made `shouldArmRetryable('committed', …)` false for
+ * every origin, and a `'committed'` failure must NOT pause the queue (the
+ * entry, if any, has already been spent — there is nothing left to protect
+ * from a re-release loop; see `decideFailureAffordance` for what
+ * `'committed'` gets instead). The condition is spelled out explicitly
+ * instead: true ONLY for `'rejected'` + `'release'`. `'direct'`/`'retry'`
+ * have no queue entry to loop against (nothing for `useQueueRelease` to
+ * restore), so only `'release'` can ever produce the loop this closes.
  */
 export function shouldPauseQueueOnRejection(
   outcome: RunEntryOutcome,
   origin: RunSendOrigin
 ): boolean {
-  return !shouldArmRetryable(outcome, origin);
+  return outcome === 'rejected' && origin === 'release';
+}
+
+/**
+ * A3 (round-4 point-check fix): whether `runSend`'s bounded `session_busy`
+ * backoff loop should fire another `sendAndWait()` attempt. Two gates,
+ * both must hold:
+ * - `fatalHostErrorCode === 'session_busy'` (unchanged) — only a busy
+ *   refusal is worth retrying at all.
+ * - `!sawUserEcho` (NEW) — `sawUserEcho` becoming true at ANY point during
+ *   the loop means the Host has already admitted this turn's text
+ *   (`EventNormalizer.beginTurn`'s echo, which only ever fires past the
+ *   busy gate). The loop exists ONLY to retry an as-yet-UNADMITTED turn
+ *   past a transient `session_busy` (the Host tearing down the previous
+ *   turn); once admitted, a further resend inside the SAME loop would
+ *   double-send the identical text as a second turn without the user ever
+ *   clicking anything.
+ * - `attempts < 8` (unchanged) — the existing bound.
+ */
+export interface ShouldRetryBusySendInput {
+  fatalHostErrorCode: string | null;
+  sawUserEcho: boolean;
+  attempts: number;
+}
+
+export function shouldRetryBusySend(input: ShouldRetryBusySendInput): boolean {
+  return input.fatalHostErrorCode === 'session_busy' && !input.sawUserEcho && input.attempts < 8;
+}
+
+/**
+ * A4 (round-4 point-check fix): whether `runSend`'s commit point should
+ * clear this session's queue pause. `'send-rejected'` pauses are the queue
+ * layer's OWN protection against re-releasing a head entry the Host just
+ * refused (see `shouldPauseQueueOnRejection` above) — Retry is a
+ * component-local snapshot with no queue entry involved at all, and must
+ * not be able to clear that protection out from under the queue: doing so
+ * let the queue's next entry auto-release the instant this Retry's turn
+ * settled back to idle, producing a second, DIFFERENT-text send the user
+ * never asked for. A plain direct Send still clears it — decision 3.4's
+ * "any new turn genuinely means the user pushed the flow forward again"
+ * still holds for that origin (and for `'release'`, where the queue was
+ * never paused when it fired in the first place — `decideQueueRelease`
+ * holds on `paused`).
+ */
+export function shouldClearPauseOnSend(origin: RunSendOrigin): boolean {
+  return origin !== 'retry';
+}
+
+/**
+ * F3 (round-4 Codex NEEDS-FIX #2): whether `handleRetry` should clear its
+ * local `retryable` snapshot once `runSend` resolves. Only a genuine
+ * `'committed'` result means this. Replaces the old "clear BEFORE calling
+ * `runSend`" — `runSend` has two early guard-fail branches (`!canSend`/
+ * `inFlightRef.current`) that return `'skipped'` BEFORE `finalizeOutcome`
+ * (and the `committed` snapshot it closes over) are even constructed, so a
+ * pre-clear left NOTHING to restore the payload from on that path — the
+ * user's retry text/attachments were simply gone. Clearing here, gated on
+ * the RESULT, fixes that: `'skipped'`/`'rejected'` leave the ORIGINAL
+ * snapshot untouched (`'rejected'` already gets its own re-arm from
+ * `finalizeOutcome`'s `decideFailureAffordance` — using the identical
+ * text/drafts this call passed in — so nothing here needs to duplicate
+ * that write).
+ */
+export function shouldClearRetryableOnOutcome(outcome: RunEntryOutcome): boolean {
+  return outcome === 'committed';
 }
 
 // ---- decidePendingResolution (decision 4) ----
