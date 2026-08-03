@@ -189,3 +189,6 @@
 | 2026-08-03 | fast-worker（D1+D3）+ deep-reasoner ×2（D2/D4） | 第五轮修复批一轮 | ✅ 三线零冲突并行（同文件分区编辑纪律）；D2 语义决策全部入注释；D4 六项偏离全采纳（take 语义白名单/presentational 菜单/toArrayBuffer 子视图安全等） |
 | 2026-08-03 | Opus + Codex 双轨独立对抗复核（Codex companion 直发 task-mscwpplj） | 修复批一轮 diff 复核 | ✅ 互补性强：Codex 系统性猎捕断言真值与 TOCTOU；Opus 独有 file:copy 确定性绕过、归档成功不移行、eager 登记留痕、读盘预算缺口；四大正面攻击面双轨判净 |
 | 2026-08-03 | deep-reasoner ×2（安全线/会话线） | 修复批二轮（1 blocker+8 major 闭环） | ✅ 安全线 fd 绑定 + 身份先于大小裁定 + 读循环抽纯函数使读盘次数可断言；会话线 dismissedSessions 叶模块防环 + A6 反例对照测试（不过滤即复活）自证断言真咬 |
+| 2026-08-03 | Opus + Codex 双轨独立诊断（互不见对方结论） | 第六轮 Bug B（失败重发双显）根因诊断 | ✅ 双轨独立同判「一次真实发送 + 重放/live 未对账的显示层复制」（第四轮缓期 A5 兑现）；铁证同源（中断标记字面量全仓零命中→必来自重放）；修复算法分歧（Codex 水位 vs Opus 覆盖走查）编排者裁定采 Opus——后被复核证伪为「合取而非二选一」，D3 误判更正入档 |
+| 2026-08-03 | fast-worker（Bug A 施工 + Bug A 侧测试）+ 编排者（红线/叶模块/store 测试亲改） | 第六轮修复批施工 | ✅ Bug A derive 短路零偏差；Bug B 测试套件首派撞会话限额身亡后编排者亲写；红线 chatSessions.ts 挂接与 historyReplayMerge 叶模块均编排者亲改 |
+| 2026-08-03 | Opus + Codex 双轨独立对抗复核 → Codex 终验 | 第六轮修复批两轮复核（fd55a26） | ✅ 首轮双轨同一 blocker 独立命中（v1 走查无时间边界可吃新消息，Opus 四探针实测/Codex 竞态推演）+ 互补 major（B2 游标单调性/B4 子目录同因饿死/M3 双身份 first-wins/折叠丢附件与卡片）；终验轮再抓锚消失回退丢失 + sendAndWait 绝对计数谓词两真伤；全部处置，三重护栏 + 谓词基线收敛，测试 1537→1593 |
