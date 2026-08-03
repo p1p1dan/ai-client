@@ -36,6 +36,16 @@
 - **T-02 Session 生命周期 UI** ✅ `dc727d2` + 修复 `db5116a`（2026-07-26 GUI 复验通过：标题正常显示、空标题回退短码占位符）
 - **T-07 Composer @ 文件引用** ✅ `1ff7fc1` + 修复 `db5116a`（2026-07-26 GUI 复验通过：`@src/` 有结果、目录后缀正常渲染）。补强项另列 Next。
 
+**观感对齐批次 · GUI 点验链闭环（第二~七轮，2026-07-30 ~ 2026-08-03）**
+
+> 转 Done 依据 = 本表原定门槛「0-octies 通过后 T-27/T-28/T-19/T-30批1 方可转 Done」：0-octies ①~⑤ 第三轮全过（2026-07-30）、⑥ 失败路径经第四~七轮闭环、⑦~⑩ 各轮未报异议；**第七轮用户验收通过（2026-08-03 原话「验收完毕，没有问题」）**。
+
+- **T-27 Composer 目标栏（D22）** ✅ `e8fb36a`（2026-07-29 落地，Codex 复核 8 项全采纳）——0-octies 门槛达成转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-27 行
+- **T-28 中列状态化布局（D23）** ✅ `4c1e4d7`（2026-07-29 落地，Codex 复核 blocker 卡高已修）——同门槛转 Done。明细见主线台账 2026-07-29 T-28 行
+- **T-19 消息队列（运行中解禁输入 + FIFO 排队）** ✅ `1b350ff`（2026-07-30 落地，+100 例）——同门槛转 Done（第三轮第 1 条「排队消息正常」实测确认）；已知代价（后台会话不自动放行/重启队列丢失）均设计如此。明细见主线台账 2026-07-30 T-19 行
+- **T-30 观感打磨批1+批2（D25/D26）** ✅ 批1 `3dcd2dc`（2026-07-30）+ 批2 `9e2736b`（2026-08-03，D25 分域字体全量 + Composer 形态三拍板，Opus+Codex 双轨复核 2+4 major 全闭环）——批1 随 0-octies 门槛、批2 第五轮点验无本批异议且五~七轮链闭环，转 Done；**残留 0-nonies ⑪（a09 改后截图回填 + D25 §6.2 五项真机指标，Win10 必测字重）未采集**，留 implementation-status 用户线。明细见主线台账 2026-07-30 T-30 行 + 2026-08-03 行
+- **第二~七轮 GUI 点验反馈闭环** ✅ `b159e4a`（二轮九条：授权卡/排队丢失/模型直通/附件回显四项根治 + 网络可见性 + 视觉六项）→ `514560c`（三轮快赢：下拉分域/首句凝练标题/居中残留）→ `cb2d8d7`（四轮：重试双发根治，`sawUserEcho` 幂等权威）→ `6ece6cb`（五轮四项：New 焦点夹/归档关闭语义/对齐/⊕ Attach files）→ `fd55a26`（六轮两项：aaa 文件夹 New 恢复 + 重发双显根治）→ **第七轮验收通过结项**；测试 1148→1593；各轮明细见主线台账对应行，六轮诊断档 [`2026-08-03-round6-feedback-diagnosis.md`](../../../plans/2026-08-03-round6-feedback-diagnosis.md) 已结项
+
 ## In Progress
 
 - **决策落库（2026-07-28）**：D18 / D19 / D20 已进[总台账](../../../plans/openchamber-chat-refactor-ledger.md)；ARD 十二节连带改口（清单见 [ARD 修订头](../../../plans/2026-07-23-openchamber-chat-refactor-ard.md)，2026-07-28 复验轮更正：原写「§1/§4/§7/§8/§9/§11/§13」七节已过期）、执行计划任务表（T-05 重写 + T-12~T-16 重定义 + 新增 T-21~T-25 / C-17）、本树四文件同步中。**落完才动代码**。
@@ -43,13 +53,9 @@
 - **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 - **T-21 Flexoki 主题 + 全等宽字体栈**：代码已提交 `b38017b`（2026-07-29，31 文件）。按本表口径「impl done 待 GUI 联调」不算 Done —— 用户 2026-07-29 已点测大部分，**中英混排三场景 + 6 处 `normal-case` 豁免的目视验收尚未出截图**（open-q #10），且验收须在**默认主题**下进行（`sync-terminal` 混色属 open-q #12 未裁定边界，不是 T-21 引入的 bug）。截图入台账后转 Done。
-- **T-22 壳结构改造（D19）**：代码已落 `95a5c04`（2026-07-29，23 文件 +2368/-456；三列 + 44px 导轨 + surface 模型，删 BottomDock/RightDock；纯函数 +79 例；Codex 对抗复核采纳 5 项已修）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-bis](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-22 行。
-- **T-27 Composer 目标栏（D22）**：代码已落 `e8fb36a`（2026-07-29，27 文件 +2790/-74；三下拉/指示器全真实数据、三档规则纯函数、+70 例；Codex 复核 8 项全采纳零驳回）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-ter](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-27 行。
-- **T-28 中列状态化布局（D23）**：代码已落 `4c1e4d7`（2026-07-29，8 文件 +1215/-319；两态骨架+40px follow-up+圆形发送键+49 例；Codex 复核 blocker 卡高已修）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-quater](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-28 行。
-- **T-05 工具行/问答卡重做（D24）**：代码已落 `340a59a`（2026-07-30，29 文件 +3812/-173；六纯模块 +133 例；Codex 复核 8 项全采纳）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-quinquies](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30 T-05 行。
-- **T-19 消息队列（运行中解禁输入 + FIFO 排队）**：代码已落 `1b350ff`（2026-07-30，14 文件 +2453/-83；三批施工断言先行 + 对抗复核（Codex 两次容量满载改派 deep-reasoner，1 blocker/6 major/17 minor）+ 修复批，+100 例总 1097）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-sexies](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30 T-19 行。
-- **T-30 观感打磨批1（快赢，D25/D26）**：12 项快赢中 10 项已落 `3dcd2dc`（2026-07-30，6 文件 +95/-40；P-19/P-22 让给 T-23）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-septies](./implementation-status.md)，通过后转 Done。**批2**（D25 分域字体施工）——原「施工依据已交付待用户确认」现更正：**编排者三条临时裁定（§2.3 细化点/45rem 阅读栏/a09 基线）用户第二轮点验未异议，裁定 A 生效，批2 解禁开工**（见第二轮 GUI 点验反馈闭环行）。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30 T-30 行。**批2 已落地 `9e2736b`**（2026-08-03，70 文件 +4202/−603，测试 1345→1415；D25 分域字体全量 + 形态三拍板 + 合并模型控件；Opus+Codex 双轨对抗复核 2 运行时 major + 4 断言真值 major 全闭环；A07 v4 追记 + a09 凭证页）——「impl done 待 GUI 联调」不算 Done，点验清单见 [implementation-status 用户线 0-nonies](./implementation-status.md)，明细见主线台账 2026-08-03 行。
-- **第二轮 GUI 点验反馈闭环**：代码已落 `b159e4a`（2026-07-30，51 文件 +4721/-184，+143 例）——用户对 T-27/T-28/T-19/T-30批1 的第二轮真机点验回报九条反馈，四项功能根因（授权卡不渲染/排队消息丢失/模型直通失败/附件不显示）已根治，另有网络重试可见性五项与视觉六项；Codex + Opus deep-reasoner 双轨独立对抗复核 → 三轮修复迭代全 pass。「impl done 待 GUI 联调」不算 Done——回归点验清单见 [implementation-status 用户线 0-octies](./implementation-status.md)，通过后 T-27/T-28/T-19/T-30批1 方可转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30「第二轮 GUI 点验反馈闭环」行。
+- **T-22 壳结构改造（D19）**：代码已落 `95a5c04`（2026-07-29，23 文件 +2368/-456；三列 + 44px 导轨 + surface 模型，删 BottomDock/RightDock；纯函数 +79 例；Codex 对抗复核采纳 5 项已修）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-bis](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-29 T-22 行。**2026-08-03 注**：二~七轮点验期间三列壳一直在真机使用、未报异议，但 0-bis 清单（拖拽边界/Rail 单选/Maximize/持久化等）未逐项表态，暂留 In Progress，建议并入下一次点验轮收口。
+- **T-05 工具行/问答卡重做（D24）**：代码已落 `340a59a`（2026-07-30，29 文件 +3812/-173；六纯模块 +133 例；Codex 复核 8 项全采纳）。「impl done 待 GUI 联调」不算 Done——点验清单见 [implementation-status 用户线 0-quinquies](./implementation-status.md)，通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-07-30 T-05 行。**2026-08-03 注**：同 T-22——工具行/问答卡各轮实测在用未报异议，0-quinquies 未逐项表态，暂留 In Progress；T-31 会重排其挂载结构（回合折叠壳），建议 T-31 点验时一并收口。
+- **T-31 回复解剖 + 置顶气泡（第四轮点验第 6/7 条）**：**2026-08-03 开工**。规格权威 [`2026-07-31-reply-anatomy-design.md`](../../../plans/2026-07-31-reply-anatomy-design.md)（回合层 `groupMessagesIntoTurns` / 状态读条迁回合头 / `Worked for Ns ⌄` 折过程段 / CSS sticky 置顶气泡），施工序 R0~R6 ≈3.6d，任务定义见执行计划 §3 T-31 行；§9 六项可拍板点按推荐值开工（编排者执行裁定，用户可在点验时否决回改）。
 
 ## Next
 
@@ -80,5 +86,5 @@
 - **T-25 旧模块原色硬编码清理**（2026-07-28 审查后立项，依赖 T-21）——T-21 覆盖范围之外的旧模块原色工具类，按 Flexoki 语义 token 逐目录分批替换（实测面与目录清单见执行计划 §3 T-25 行）。
 - C-11 stream-json fallback（机动，SDK 路线阻塞时提级）
 - C-12 旧路径收缩 + 千 block 压测（Phase 5；虚拟化决策依赖压测数据）
-- ~~T-19 消息队列~~（提案内容待用户落库，落库前不排期）—— **已复活并代码落地 `1b350ff`，转 In Progress**（2026-07-30，open-q #18 拍板 A 触发；原「待用户落库」前提已由用户拍板与团队研究共同满足）
+- ~~T-19 消息队列~~（提案内容待用户落库，落库前不排期）—— **已复活并代码落地 `1b350ff`，转 In Progress**（2026-07-30，open-q #18 拍板 A 触发；原「待用户落库」前提已由用户拍板与团队研究共同满足）；**2026-08-03 已转 Done**（见 Done「观感对齐批次」块）
 - T-09 补验：真触发「Node 缺失」场景（想法见 [ideas](../../ideas/inbox.md)）
