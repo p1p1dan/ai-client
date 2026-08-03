@@ -139,3 +139,11 @@ Codex 二次复核再抓 1 blocker + 1 major + 2 minor + 1 nit，全部处置：
 - `message.delta`/`thinking.delta`/`tool.*` 对缺失消息由丢弃改重建（把丢失兜底成重复）
 - 失败回合 user 气泡失败态角标（Opus round-6 提案，原登记项保留）
 - Add Repository 检测 linked-worktree/子目录注册时的 UX 提示（原登记项保留）
+
+---
+
+## 验收（2026-08-03）
+
+第七轮 GUI 点验用户验收通过（原话「验收完毕，没有问题」）：aaa 文件夹 New / "+ new chat" / 分支 chip 归属、失败退回重发无重复气泡、同文连发保留、附件与归档关闭对齐无回归。本档结项；backlog 五项与 T-31 见 plantree 权威链。
+
+附注：点验期间一次「No repository registered」误报为 dev server 带病热更新残留态（主进程重启与渲染层 HMR 错拍），localStorage 注册表实证完好，全新重启后消失，非代码回归。
