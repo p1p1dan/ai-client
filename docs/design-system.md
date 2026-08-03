@@ -518,6 +518,8 @@ D25 的四档 + 一个例外：
 
 判据一句话：**它会不会在原地被换成另一个数？会 ⇒ 加。**
 
+**相对时间统一实现（T-31 / P-18）**：分档判断（`now` / `Nm` / `Nh` / `Nd` / `Nw` / `Nmo` / `Ny`）只落一处——`src/renderer/lib/relativeTime.ts`——chat 回合尾部（`messageMetadata.ts` 的 `formatRelativeTimestamp`）与侧栏会话行共用同一份分档表，不得另起一份格式化逻辑，否则两处的「多久算 1h」会各自漂移。相对时间之外恒配 `title` 悬停给绝对时刻（`formatAbsoluteTime`），策略与侧栏一致。
+
 ### Motion（动画时长）
 
 过渡动画统一为 3 档（Progress/Meter 指示器除外）：
@@ -888,6 +890,16 @@ inline 永远赢 `:root` 声明 → **运行时稳态一直是 16px**。
   </DialogPopup>
 </Dialog>
 ```
+
+### ScrollArea 按边 fade（T-31）
+
+`ui/scroll-area.tsx` 的 `scrollFade` 支持 `boolean | 'top' | 'bottom'`：`true` 是既有的四边渐隐（默认行为不变，三个既有调用点 combobox / sheet / autocomplete 零改动）；`'top'` / `'bottom'` 只在对应一边渲染 mask 渐隐，`--fade-size`（1.5rem）不变。
+
+按边 fade 用于滚动容器某一侧不该再渐隐的场景。例子：聊天时间线顶部原来四边渐隐，是为了把「回合顶部滚出视口」的硬切软化；T-31 给顶部接上 per-turn 的 sticky 用户气泡带之后，视口顶端恒为一条不透明的气泡带，硬切面已经消失，顶部渐隐反而会把钉住的气泡吃掉一截——改传 `scrollFade="bottom"`，只保留底部软边。
+
+### `scroll-state.css` 独立于 Tailwind 管线（T-31）
+
+`src/renderer/styles/scroll-state.css` 承载 `@container scroll-state(stuck: top)` 容器查询（钉住态用户气泡的 3 行截断）。**Tailwind v4 的 lightningcss 管线无法解析这个语法，且静默丢弃这条规则**——不报错、构建照常通过，规则只是从产物 CSS 里消失。该文件因此**不走 `globals.css` 的 Tailwind 管线**，改走 Vite 原生 CSS 管线（postcss + esbuild），并因此**永远不得写入任何 Tailwind 指令**（`@import "tailwindcss"` / `@theme` / `@apply` 等）——写了任何一条都会把它重新路由回 lightningcss，规则再次被吞。新增类似的、依赖前沿 CSS 语法的样式文件时按同一判据处理：先确认 lightningcss 能不能解析，不能就走这条独立文件路线，不要指望构建报错来发现。
 
 ## Icons
 

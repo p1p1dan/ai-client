@@ -138,28 +138,59 @@ export interface WorkedForRowText {
   argKind: 'prose';
 }
 
+/** Duration text for the turn head: "31s" under a minute, "1m 6s" above it, "2m" on the minute. */
+export function formatWorkedForDuration(latencyMs: number): string {
+  const seconds = Math.max(1, Math.round(latencyMs / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
+}
+
 /**
  * Turn-level "Worked for Ns" row. `latencyMs == null` (no T-06 metadata yet,
  * e.g. a freshly hydrated history message) means the row does not render at
- * all — callers must treat `null` as "omit", not as "0s".
+ * all — callers must treat `null` as "omit", not as "0s". This is the guard
+ * A07 `:2399` ("never fabricate seconds") rests on, and T-31 keeps it verbatim.
+ *
+ * T-31 (§4.2): `stats` appends the turn's call counts to the same arg, e.g.
+ * "Worked for 1m 6s · 3 tools, 11 searches". A07 v3 made those counts the row's
+ * *expand body*; round-4's collapsed/expanded pair showed the body is the
+ * process segment instead, so the counts move up into the collapsed row — which
+ * ends up carrying more information than before, not less. Pass
+ * `deriveTurnStats(message, { style: 'compact' })`; a `null`/empty value leaves
+ * the arg exactly as it was.
  */
-export function formatWorkedForRow(latencyMs: number | null | undefined): WorkedForRowText | null {
+export function formatWorkedForRow(
+  latencyMs: number | null | undefined,
+  stats?: string | null
+): WorkedForRowText | null {
   if (latencyMs == null) return null;
-  const seconds = Math.max(1, Math.round(latencyMs / 1000));
-  return { verb: WORKED_FOR_VERB, arg: `${seconds}s`, argKind: 'prose' };
+  const duration = formatWorkedForDuration(latencyMs);
+  const arg = stats ? `${duration} · ${stats}` : duration;
+  return { verb: WORKED_FOR_VERB, arg, argKind: 'prose' };
 }
 
 const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 
 /**
- * "Worked for" row's expand body (A07 :2421 shape), built purely from what
- * `message.blocks` already carries — no first-token-latency segment (no data
- * source; see T-05 spec R-4). The three buckets are mutually exclusive (a
- * search or edit call is not double-counted into the generic "tool calls"
- * bucket); any zero-count segment is omitted; an all-zero message returns
- * null so the row cannot expand into nothing.
+ * Turn call counts, built purely from what `message.blocks` already carries —
+ * no first-token-latency segment (no data source; see T-05 spec R-4). The three
+ * buckets are mutually exclusive (a search or edit call is not double-counted
+ * into the generic tool bucket); any zero-count segment is omitted; an all-zero
+ * message returns null so nothing renders an empty summary.
+ *
+ * Two renderings of the same single count, chosen by `style` (T-31 §4.2):
+ *  - `long` (default, A07 :2421's shape) — "3 tool calls · 11 searches · 1 edit",
+ *    the standalone body form.
+ *  - `compact` — "3 tools, 11 searches, 1 edit", the form that rides along
+ *    inside the "Worked for …" arg, where ` · ` is already taken as the
+ *    separator between duration and counts.
  */
-export function deriveTurnStats(message: ChatMessage): string | null {
+export function deriveTurnStats(
+  message: ChatMessage,
+  options: { style?: 'long' | 'compact' } = {}
+): string | null {
   const runs = pairToolBlocks(message.blocks);
   const searchCount = runs.filter((run) => classifyTool(run.toolName) === 'search').length;
   const editCount = runs.filter((run) => EDIT_TOOL_NAMES.has(run.toolName)).length;
@@ -167,10 +198,15 @@ export function deriveTurnStats(message: ChatMessage): string | null {
     (run) => classifyTool(run.toolName) !== 'search' && !EDIT_TOOL_NAMES.has(run.toolName)
   ).length;
 
+  const compact = options.style === 'compact';
   const segments: string[] = [];
-  if (toolCount > 0) segments.push(`${toolCount} tool call${toolCount === 1 ? '' : 's'}`);
+  if (toolCount > 0) {
+    const noun = compact ? 'tool' : 'tool call';
+    segments.push(`${toolCount} ${noun}${toolCount === 1 ? '' : 's'}`);
+  }
   if (searchCount > 0) segments.push(`${searchCount} search${searchCount === 1 ? '' : 'es'}`);
   if (editCount > 0) segments.push(`${editCount} edit${editCount === 1 ? '' : 's'}`);
 
-  return segments.length > 0 ? segments.join(' · ') : null;
+  if (segments.length === 0) return null;
+  return segments.join(compact ? ', ' : ' · ');
 }

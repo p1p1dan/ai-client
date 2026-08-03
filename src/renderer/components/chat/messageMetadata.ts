@@ -1,3 +1,5 @@
+import { formatRelativeAge, RELATIVE_AGE_NOW } from '@/lib/relativeTime';
+
 /**
  * Message metadata registry (T-06): team-side registry that supplements the
  * red-line `chatSessions` store with assistant metadata (model · latency ·
@@ -132,13 +134,13 @@ export function reduceMessageMetadata(
 
 /**
  * Build the display line for an assistant bubble from metadata, e.g.
- * "Sonnet · 1.2s · 10:30" or "Sonnet · 10:30" when latency/usage missing.
+ * "Sonnet · 1.2s · 3h ago" or "Sonnet · 3h ago" when latency/usage missing.
  * Returns null when nothing useful is available.
  *
  * `omitLatency` (T-05): the footer line drops its own latency segment once
  * the turn-level "Worked for Ns" row (A07 :2398) takes over that duty —
  * `MessageTimeline` always passes `true` for the new assistant footer, e.g.
- * "claude-opus-5 · 07:41" (A07 :1776-1782).
+ * "claude-opus-5 · 3h ago" (A07 :1776-1782, timestamp form updated by P-18).
  */
 export function formatMessageMetadata(
   metadata: MessageMetadata | undefined,
@@ -157,7 +159,35 @@ export function formatMessageMetadata(
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-function defaultFormatTime(ms: number): string {
+/**
+ * Relative timestamp for the turn footer (T-31 §4.6 / polish-audit P-18):
+ * "just now" / "1h ago" / "3d ago".
+ *
+ * Bucket boundaries are NOT redefined here — `formatRelativeAge` is the
+ * sidebar's own formatter (moved to `@/lib/relativeTime` so both sides can
+ * reach it), so the two surfaces cannot drift into two notions of "an hour
+ * ago". Only the phrasing differs: the sidebar's column is too narrow for a
+ * suffix, the footer has room for one.
+ */
+export function formatRelativeTimestamp(ms: number, now: number): string {
+  const age = formatRelativeAge(ms, now);
+  return age === RELATIVE_AGE_NOW ? 'just now' : `${age} ago`;
+}
+
+/**
+ * `formatMessageMetadata`'s default timestamp renderer. Reads the clock, so
+ * anything asserting the bucket table should target `formatRelativeTimestamp`.
+ */
+export function defaultFormatTime(ms: number): string {
+  return formatRelativeTimestamp(ms, Date.now());
+}
+
+/**
+ * Absolute clock time (`HH:MM`), the precision the relative form trades away.
+ * Kept for the footer's `title` attribute — same policy as the sidebar (spec
+ * §10-D: relative on screen, absolute on hover).
+ */
+export function formatAbsoluteTime(ms: number): string {
   const date = new Date(ms);
   const hours = `${date.getHours()}`.padStart(2, '0');
   const minutes = `${date.getMinutes()}`.padStart(2, '0');

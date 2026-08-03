@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { applyAutoSessionTitle } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
   collectAssistantMessageIds,
@@ -33,9 +34,6 @@ import {
 import { largeAttachmentHint, sendTimeoutMs } from './attachmentLimits';
 import {
   type AttachmentDraft,
-  composerSendingLine,
-  type SendPhase,
-  SLOW_WAIT_HINT_SECONDS,
   shouldRenderThumbnail,
   toAttachmentChip,
   totalAttachmentBytes,
@@ -245,12 +243,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // T-19: rejection message from a failed `enqueue()` (queue full / over the
   // attachment byte budget) — decision 1/7's "reject, never silently drop".
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
-  /** T-18: seconds since the current send phase started — the "still alive" signal. */
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  /** T-18: wait budget of the in-flight send, so the status text cannot lie. */
-  const [sendBudgetMs, setSendBudgetMs] = useState(sendTimeoutMs(0));
-  /** T-18: handshake vs awaiting — "Sent 152 KB" must not appear before send. */
-  const [sendPhase, setSendPhase] = useState<SendPhase>('handshake');
+  // T-31 §3 (R4): T-18's three send-status values — the seconds ticker, the
+  // wait budget and the handshake/awaiting phase — used to be `useState` here,
+  // feeding the composer's own status row. That row moved to the turn head, and
+  // nothing inside this component reads them any more, so they MOVED to
+  // `stores/turnSendStatus.ts` rather than staying here with a mirror beside
+  // them. `sending` below is unchanged and stays local: it gates this
+  // component's own affordances (placeholder, canSend, queue release), which is
+  // a composer concern, not a turn one.
+  const beginTurnSend = useTurnSendStatusStore((state) => state.begin);
+  const updateTurnSend = useTurnSendStatusStore((state) => state.update);
+  const endTurnSend = useTurnSendStatusStore((state) => state.end);
+  // Review batch F3: the ownership token of the send THIS instance currently
+  // holds the status slot for, so the unmount cleanup below can only ever clear
+  // its own snapshot — never one a surviving instance published in the
+  // meantime. `runSend`'s ticker / phase switch / `finally` carry the token in
+  // their own closure instead (they may outlive this component).
+  const sendOwnerRef = useRef<TurnSendOwner | null>(null);
   const phaseStartedAtRef = useRef(0);
   // Synchronous re-entry latch: `canSend` is a render-closure constant and
   // setSending is async, so two calls in one tick would both pass the checks.
@@ -950,14 +959,49 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     };
 
     setSending(true);
-    setSendBudgetMs(timeoutMs);
+    // T-31 §3: publish this turn's status for the turn head. Attachment count
+    // and bytes are taken from `committed`-to-be `drafts`, NOT from the live
+    // composer state the old status line read: the drafts were removed from
+    // that list a few lines above (the T-19 commit point), so the live values
+    // are already zero here and would describe whatever the user attaches NEXT
+    // rather than what this turn actually sent.
     // Nothing has been transmitted yet: ensureHost / closeSession /
-    // createSession still have to run, and that can take seconds.
-    setSendPhase('handshake');
-    setElapsedSeconds(0);
+    // createSession still have to run, and that can take seconds — hence
+    // `handshake`, which keeps "Sent 152 KB" off the screen until it is true.
+    //
+    // F3: `begin` hands back this send's ownership token. Every later write to
+    // the slot — the ticker, the phase switch, the `finally`, the unmount
+    // cleanup — presents it, and the store drops the write if the slot has
+    // since been claimed by another send. Without it, a `ChatComposer` that
+    // unmounts mid-send leaves a live ticker and a live `finally` able to
+    // overwrite or blank the NEXT instance's in-flight snapshot.
+    //
+    // Final review (F2/F4 residue): the baseline is the last message id in this
+    // session's bucket RIGHT NOW — read here, before `chat.send`, so before the
+    // Host can echo this turn's user message back. It is what later tells a
+    // turn this send opened from a restored (or previously abandoned) turn that
+    // merely has the same user-with-no-reply shape. Read-only snapshot off the
+    // red-line store; nothing in `chatSessions.ts` changes.
+    const bucketAtCommit = useChatSessionsStore.getState().messages[sessionId] ?? [];
+    const baselineMessageId =
+      bucketAtCommit.length > 0 ? bucketAtCommit[bucketAtCommit.length - 1].id : null;
+    const sendOwner = beginTurnSend(
+      {
+        sessionId,
+        phase: 'handshake',
+        elapsedSeconds: 0,
+        budgetMs: timeoutMs,
+        attachmentCount: drafts.length,
+        attachmentBytes: totalAttachmentBytes(drafts),
+      },
+      baselineMessageId
+    );
+    sendOwnerRef.current = sendOwner;
     phaseStartedAtRef.current = Date.now();
     const ticker = window.setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - phaseStartedAtRef.current) / 1000));
+      updateTurnSend(sendOwner, {
+        elapsedSeconds: Math.floor((Date.now() - phaseStartedAtRef.current) / 1000),
+      });
     }, 1000);
     const seenEvents: string[] = [];
     const assistantMessageIds = new Set<string>();
@@ -1190,8 +1234,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // T-19: `value`/attachments were already consumed at runSend's commit
       // point (decision 2.2) — no clearing here.
       phaseStartedAtRef.current = Date.now();
-      setElapsedSeconds(0);
-      setSendPhase('awaiting');
+      updateTurnSend(sendOwner, { elapsedSeconds: 0, phase: 'awaiting' });
 
       // Running alone is not success — wait for assistant / tool / permission / terminal.
       return waitUntil(() => {
@@ -1545,7 +1588,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       );
     } finally {
       window.clearInterval(ticker);
-      setElapsedSeconds(0);
+      endTurnSend(sendOwner);
+      if (sendOwnerRef.current === sendOwner) sendOwnerRef.current = null;
       inFlightRef.current = false;
       inFlightSessionIdRef.current = null;
       unsubEvents();
@@ -1580,6 +1624,24 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return outcome;
     },
   });
+
+  // T-31 §3: the send-status snapshot outlives this component if the middle
+  // column tears down mid-send (the `finally` that clears it belongs to a
+  // closure that may never resume), and a stale snapshot would leave a turn
+  // head counting seconds forever.
+  //
+  // F3: scoped to THIS instance's own token. The unconditional `end()` this
+  // replaces was itself a way to blank a live snapshot — remount this component
+  // (a layout change, a session switch) while a send is in flight and the old
+  // instance's cleanup ran AFTER the new one had already published its own
+  // handshake, wiping the head the user was watching.
+  useEffect(
+    () => () => {
+      const owner = sendOwnerRef.current;
+      if (owner != null) useTurnSendStatusStore.getState().end(owner);
+    },
+    []
+  );
 
   // R10 (round-2 iteration-2 review): the 45s-abandon branch above armed
   // `abandonMarkerRef` for a turn F2 deliberately left running server-side.
@@ -1739,31 +1801,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // no longer consults `hasStatusError` for session mode at all) — a
   // residual defect-B crack in exactly the combined state the original
   // fix did not consider.
+  // T-31 §3.2: the three-way selection is a two-way one now — the `sending`
+  // branch (`composerSendingLine`, plus the `activeSession.retry` suffix it
+  // took) describes the TURN in flight, so it renders with the reply
+  // (`turnStatus.ts` calls the same generator; the copy itself was not
+  // duplicated). What is left here all describes the DRAFT in hand: attachments
+  // still being read off disk, an over-large attachment, or a missing
+  // session/workspace/cwd.
   const statusLine =
-    readingLine ??
-    (sending
-      ? composerSendingLine({
-          phase: sendPhase,
-          elapsedSeconds,
-          budgetMs: sendBudgetMs,
-          attachmentCount: attachments.drafts.length,
-          attachmentBytes: attachments.totalBytes,
-          // a1: `sessions` (source of `activeSession`) already re-renders on
-          // every session.status event, retry included — no extra selector.
-          retry: activeSession?.retry
-            ? {
-                attempt: activeSession.retry.attempt,
-                maxRetries: activeSession.retry.maxRetries,
-              }
-            : null,
-        })
-      : resolveIdleStatusText({ mode, hasStatusError, largeHint, statusHint }));
-  const statusTone =
-    sending && elapsedSeconds >= SLOW_WAIT_HINT_SECONDS
-      ? 'text-warning'
-      : !sending && hasStatusError
-        ? 'text-destructive'
-        : 'text-muted-foreground';
+    readingLine ?? resolveIdleStatusText({ mode, hasStatusError, largeHint, statusHint });
+  // The warning tone went with the copy: `Still waiting · 62s …` is now the
+  // turn head's, and so is its colour (`turnStatusToneClass`).
+  const statusTone = hasStatusError ? 'text-destructive' : 'text-muted-foreground';
 
   // Whether the status line renders at all. T-30b2 F-A11 put BOTH cards on one
   // truth table: neither shows a resting line any more. The empty card used to
@@ -1772,9 +1821,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // flight or flagged, in either mode. Keeping it out of the docked card's
   // resting state is also what holds that card at its 42px contract
   // (`composerFollowHeightBreakdown`), not the 40px this comment used to name.
+  // T-31 §3.2 / F-B11: `sending` is no longer supplied. The function ignores it
+  // either way (the field stays in its input type so that assertion can keep
+  // proving so), but passing a value the decision does not use would read like
+  // it still mattered.
   const showStatusLine = shouldShowStatusLine({
     mode,
-    sending,
     reading: attachments.reading,
     hasStatusError,
     hasLargeHint: Boolean(largeHint),
@@ -1797,11 +1849,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const renderStatusLine = (wrapperClassName: string) =>
     showStatusLine && statusLine != null ? (
       <div className={wrapperClassName}>
-        {/* A send can stay silent for a minute — the spinner and the ticking
-              seconds are what tell the user it is alive rather than hung. */}
-        {(sending || attachments.reading > 0) && (
-          <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
+        {/* Reading attachments off disk is the only thing left in this row that
+            runs for a while with nothing else to show for it. The in-flight
+            send's own spinner moved to the turn head along with its copy
+            (T-31 §3.3 — the composer still signals "something is running"
+            through the round key's Stop state). */}
+        {attachments.reading > 0 && <Spinner className="size-3.5 shrink-0 text-muted-foreground" />}
         <p
           className={cn('min-w-0 truncate text-meta tabular-nums', statusTone)}
           title={statusLine ?? undefined}

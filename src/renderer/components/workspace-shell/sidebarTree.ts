@@ -279,37 +279,11 @@ export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
   };
 }
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
-const WEEK_MS = 7 * DAY_MS;
-const MONTH_MS = 30 * DAY_MS;
-const YEAR_MS = 365 * DAY_MS;
-
 /**
- * Compact relative age for the right-aligned column ("5d" / "6d" in the
- * Cursor reference shot). Sub-minute — including small clock skew — reads
- * "now"; no "ago" suffix, the column is too narrow.
+ * The sidebar's right-hand age column. The implementation moved to
+ * `@/lib/relativeTime` when T-31 (P-18) gave the chat turn footer a relative
+ * timestamp too: chat cannot import from `components/workspace-shell`, so the
+ * shared bucket table had to sit below both. Re-exported here so this module
+ * stays the sidebar's single import surface.
  */
-export function formatRelativeAge(updatedAt: number, now: number): string {
-  const diff = now - updatedAt;
-  if (diff < MINUTE_MS) {
-    return 'now';
-  }
-  if (diff < HOUR_MS) {
-    return `${Math.floor(diff / MINUTE_MS)}m`;
-  }
-  if (diff < DAY_MS) {
-    return `${Math.floor(diff / HOUR_MS)}h`;
-  }
-  if (diff < WEEK_MS) {
-    return `${Math.floor(diff / DAY_MS)}d`;
-  }
-  if (diff < MONTH_MS) {
-    return `${Math.floor(diff / WEEK_MS)}w`;
-  }
-  if (diff < YEAR_MS) {
-    return `${Math.floor(diff / MONTH_MS)}mo`;
-  }
-  return `${Math.floor(diff / YEAR_MS)}y`;
-}
+export { formatRelativeAge } from '@/lib/relativeTime';

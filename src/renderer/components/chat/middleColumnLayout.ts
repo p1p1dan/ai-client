@@ -599,15 +599,30 @@ export function shouldRenderTargetRow(input: {
  * is now the SOLE owner of error text in session mode; any future inline
  * status for an error state must be a short, fixed-length label (e.g.
  * "Failed"), never the full message.
+ *
+ * T-31 §3.2 (F-B11): `sending` no longer shows this line at all. The waiting
+ * copy it used to gate ("Waiting for Agent Host reply · 12s (up to 45s)")
+ * describes the turn in flight, not the draft in hand, so it moved to the turn
+ * head, where it gets the full reading-column width instead of the middle of a
+ * 42px row. Leaving the condition here would print the same fact twice, in two
+ * places, from one source. What stays in the composer is the round action
+ * button's Stop state — the "something is running" signal is still
+ * double-channelled, it just no longer duplicates the text.
+ *
+ * `sending` remains in the input type on purpose, now optional: the composer
+ * stopped supplying it once the turn head took the copy over (R4), but keeping
+ * the field is what lets F-B11 keep asserting that passing it changes nothing.
+ * Delete it and the regression that assertion guards becomes unexpressible.
  */
 export function shouldShowStatusLine(input: {
   mode: MiddleColumnMode;
-  sending: boolean;
+  /** Accepted and ignored — see the note above. */
+  sending?: boolean;
   reading: number;
   hasStatusError: boolean;
   hasLargeHint: boolean;
 }): boolean {
-  return input.sending || input.reading > 0 || input.hasStatusError || input.hasLargeHint;
+  return input.reading > 0 || input.hasStatusError || input.hasLargeHint;
 }
 
 // ---- Mention popup ----

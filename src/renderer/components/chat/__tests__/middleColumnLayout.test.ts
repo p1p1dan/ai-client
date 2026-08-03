@@ -611,18 +611,36 @@ describe('shouldShowStatusLine', () => {
     }
   });
 
-  it('F-A11: any one of the four conditions shows it, in either mode', () => {
-    const triggers = [
-      { sending: true },
-      { reading: 1 },
-      { hasStatusError: true },
-      { hasLargeHint: true },
-    ];
+  // T-31 §3.2: `sending` was the fourth trigger and is gone — see F-B11 below.
+  it('F-A11: any one of the three remaining conditions shows it, in either mode', () => {
+    const triggers = [{ reading: 1 }, { hasStatusError: true }, { hasLargeHint: true }];
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       for (const trigger of triggers) {
         expect(shouldShowStatusLine({ mode, ...resting, ...trigger })).toBe(true);
       }
     }
+  });
+
+  // F-B11 (T-31 §3.2): the waiting copy describes the turn in flight, not the
+  // draft in hand, so it moved to the turn head. If `sending` still lit this
+  // row, one fact from one source would print in two places at once — the
+  // exact duplication the migration exists to remove. `reading > 0` is the
+  // control: it describes the draft (attachments still being read off disk),
+  // so it stays.
+  it('F-B11: sending alone no longer shows the composer status line, in either mode', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      expect(shouldShowStatusLine({ mode, ...resting, sending: true })).toBe(false);
+      expect(shouldShowStatusLine({ mode, ...resting, reading: 1 })).toBe(true);
+    }
+  });
+
+  it('F-B11: sending does not resurrect the row alongside a draft-side condition either', () => {
+    expect(
+      shouldShowStatusLine({ mode: 'session', ...resting, sending: true, hasLargeHint: true })
+    ).toBe(true);
+    expect(
+      shouldShowStatusLine({ mode: 'session', ...resting, sending: true, hasStatusError: false })
+    ).toBe(false);
   });
 });
 

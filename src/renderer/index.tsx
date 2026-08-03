@@ -5,6 +5,9 @@ import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui/toast';
 import './styles/globals.css';
+// Loaded separately from globals.css on purpose — see that file's header for
+// why a `scroll-state()` container query cannot survive Tailwind's pipeline.
+import './styles/scroll-state.css';
 
 // Initialize renderer logging with conservative defaults
 // Starts with 'error' level to minimize IPC overhead until settings are loaded

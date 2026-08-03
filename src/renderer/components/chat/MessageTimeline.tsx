@@ -1,6 +1,9 @@
-import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
+  Check,
+  ChevronDown,
   ChevronRight,
+  Copy,
   FileSearch,
   FileText,
   Image as ImageIcon,
@@ -8,14 +11,39 @@ import {
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { type TurnSendStatus, useTurnSendStatusStore } from '@/stores/turnSendStatus';
+import { sendTimeoutMs } from './attachmentLimits';
+import {
+  chatTurnClass,
+  readingColumnSpacingClass,
+  turnBodyClass,
+  turnBubbleBandClass,
+  turnCopyButtonClass,
+  turnFooterClass,
+  turnHeadClass,
+  turnProcessPanelClass,
+  turnProcessShellClass,
+} from './chatTimelineLayout';
+import {
+  defaultTurnProcessOpen,
+  flattenTurnItems,
+  groupMessagesIntoTurns,
+  hasUnresolvedPermission,
+  splitTurnBody,
+  stabilizeTurns,
+  type Turn,
+  type TurnItem,
+  turnHasFailure,
+} from './chatTurn';
 import {
   deriveHistoryNotice,
   deriveRetryControl,
@@ -23,7 +51,12 @@ import {
   type HistoryErrorView,
   selectHistoryError,
 } from './historyError';
-import { formatMessageMetadata, type MessageMetadata } from './messageMetadata';
+import {
+  formatAbsoluteTime,
+  formatMessageMetadata,
+  formatRelativeTimestamp,
+  type MessageMetadata,
+} from './messageMetadata';
 import { shouldStickToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { resolveResumeModel } from './models';
@@ -33,13 +66,18 @@ import { ReadingColumn } from './ReadingColumn';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';
 import { isTurnActive } from './thinkingCard';
+import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
+import { buildTurnCopyTextFromItems } from './turnCopy';
 import {
-  deriveToolGroupRows,
-  groupTimeline,
-  type ToolGroupEntry,
-  type ToolRowView,
-} from './toolCard';
-import { deriveTurnStats, formatWorkedForRow } from './turnTiming';
+  deriveSendStatusBinding,
+  deriveTurnHeadModel,
+  hasLiveTurnEvidence,
+  isTurnInFlight,
+  ownsSessionFailure,
+  type TurnHeadModel,
+} from './turnHead';
+import { deriveTurnStatus, type TurnStatus } from './turnStatus';
+import { deriveTurnStats, formatWorkedForRow, type WorkedForRowText } from './turnTiming';
 import { useHostStatus } from './useHostStatus';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useSessionModel } from './useSessionModel';
@@ -53,6 +91,66 @@ import { useTurnTiming } from './useTurnTiming';
 function findViewport(root: HTMLDivElement | null): HTMLDivElement | null {
   return root?.querySelector<HTMLDivElement>('[data-slot="scroll-area-viewport"]') ?? null;
 }
+
+/**
+ * Whole-second clock for the turn head, running only while something is
+ * actually in flight.
+ *
+ * The composer's own ticker (`turnSendStatus`) stops at the FIRST assistant
+ * progress — `runSend` returns there — so it covers the handshake/awaiting
+ * window and nothing after it. The streaming state (§4.7 `Generating · Ns`)
+ * spans the rest of the turn and needs its own tick; the epoch it counts from
+ * is T-06's `message.started` timestamp, not a new field.
+ */
+function useSecondsTick(enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return undefined;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [enabled]);
+  return now;
+}
+
+/**
+ * The clock the footer's relative timestamps are read against (review batch
+ * F9), always running.
+ *
+ * `formatMessageMetadata`'s default renderer reads `Date.now()` itself, so a
+ * footer rendered as "just now" stayed "just now" until something ELSE forced
+ * that turn to re-render — in an idle session, nothing does, and the whole
+ * transcript froze its ages at whatever they were when the last token landed.
+ * The clock is passed explicitly instead, which also makes the formatter a pure
+ * function of its arguments (`formatRelativeTimestamp(ms, now)`) and therefore
+ * assertable.
+ *
+ * A minute is the finest bucket `formatRelativeAge` has, so a 60s beat is the
+ * cheapest tick that can never be visibly late; unlike `useSecondsTick` it must
+ * run even when nothing is in flight, since ageing is exactly what happens
+ * while nothing is in flight.
+ */
+const RELATIVE_TIME_TICK_MS = 60_000;
+
+function useMinuteTick(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), RELATIVE_TIME_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
+  return now;
+}
+
+/**
+ * `nowMs` for a turn that is not the one in flight (review batch F7).
+ *
+ * Only the last turn can read the second clock (`streamStartedAt` is gated on
+ * `isLastTurn`), so handing every other turn the ticking value changed a prop
+ * on every turn in the session once a second and made `React.memo` on
+ * `ChatTurn` useless. A constant keeps their props byte-identical between
+ * ticks; the value is never read.
+ */
+const STATIC_NOW_MS = 0;
 
 interface MessageTimelineProps {
   sessionId: string | null;
@@ -90,6 +188,25 @@ export function MessageTimeline({
   const historyError = useChatSessionsStore((state) =>
     selectHistoryError(state.historyErrors, sessionId)
   );
+  // T-31 §3: the in-flight turn's status snapshot, published by ChatComposer.
+  // Scoped to THIS session — the composer's send state is not per-session, so a
+  // session switch mid-send must not paint this timeline's head with another
+  // session's clock.
+  const sendStatus = useTurnSendStatusStore((state) =>
+    state.status && state.status.sessionId === sessionId ? state.status : null
+  );
+  // Where this session's message list stood when its last send began. Session
+  // -scoped for the same reason the snapshot above is, and read separately
+  // because it deliberately OUTLIVES the snapshot — `ownsSessionFailure` needs
+  // it after `runSend`'s `finally` has cleared the live status.
+  const sendBaseline = useTurnSendStatusStore((state) =>
+    state.baseline && state.baseline.sessionId === sessionId ? state.baseline : null
+  );
+  // The CLI's own transport-retry loop, read straight off the red-line store —
+  // `deriveTurnStatus` appends it to the same copy the composer used to show.
+  const sessionRetry = useChatSessionsStore(
+    (state) => state.sessions.find((session) => session.id === sessionId)?.retry ?? null
+  );
   const { get: getMeta } = useMessageMetadata(sessionId);
   const { getThinking } = useTurnTiming(sessionId);
 
@@ -105,7 +222,74 @@ export function MessageTimeline({
     [sessionId, sessionMessages.length, historyError]
   );
 
+  // Two questions, two predicates (F12): `isActiveTurn` gates the *thinking
+  // stream* indicator, where an authorization wait is correctly "not
+  // streaming"; `inFlightSession` gates the turn SHELL, where it must still
+  // count as in flight or the head vanishes and the `Collapsible` unmounts out
+  // from under the very permission card the user has to answer.
   const isActiveTurn = isTurnActive(status);
+  const inFlightSession = isTurnInFlight(status);
+
+  // T-31 §4.1: the turn layer the whole reply anatomy hangs off. Pure
+  // derivation — no new store field, `chatSessions.ts` untouched.
+  //
+  // F7: `stabilizeTurns` feeds the previous result back in so a streamed token,
+  // which necessarily reallocates the bucket, only changes the identity of the
+  // turn it actually landed in. Without it every `ChatTurn` in the session
+  // re-derives its items on every token.
+  const turnsRef = useRef<Turn[]>([]);
+  const turns = useMemo(() => {
+    const next = stabilizeTurns(turnsRef.current, groupMessagesIntoTurns(sessionMessages));
+    turnsRef.current = next;
+    return next;
+  }, [sessionMessages]);
+  const nowMs = useSecondsTick(inFlightSession || sendStatus != null);
+  const footerNowMs = useMinuteTick();
+
+  // Which turn does an in-flight send describe? During the handshake there is
+  // no answer yet: the user's own message is echoed by the Host (`beginTurn`),
+  // not written optimistically, so for the first seconds of a send the turn it
+  // belongs to DOES NOT EXIST. Attaching the snapshot to whatever turn happens
+  // to be last would then overwrite that (finished) turn's `Worked for Ns` with
+  // the next turn's "Starting Agent Host…". So the snapshot attaches only to a
+  // turn this send demonstrably owns, and otherwise renders as a standalone
+  // head below the last turn — which is also what keeps the very first message
+  // of a session from showing "No messages yet" with its status nowhere on
+  // screen (§3.3: no information may be lost in the migration).
+  //
+  // F2: the test is `deriveSendStatusBinding`, not "the last turn has no
+  // latency". The latter is equally true of a restored history turn, a
+  // Stop-interrupted one and a 45s-abandoned one, so a fresh send's handshake
+  // used to be painted onto an old turn's head — and `PendingTurnHead`, the
+  // only thing on screen during that window, never rendered at all.
+  const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+  const lastTurnBodyMetadata = useMemo(
+    () => (lastTurn ? lastTurn.body.map((message) => getMeta(message.id)) : []),
+    [lastTurn, getMeta]
+  );
+  const sendBinding = deriveSendStatusBinding({
+    hasLastTurn: lastTurn != null,
+    lastTurnHasUser: lastTurn?.user != null,
+    lastTurnBodyEmpty: (lastTurn?.body.length ?? 0) === 0,
+    // Final review: a restored transcript can END in an unanswered prompt, so
+    // "a user message with no reply" is NOT proof this send opened the turn —
+    // the id is (see `isTurnOpenedByCurrentSend`).
+    lastTurnUserMessageId: lastTurn?.user?.id ?? null,
+    baselineKnown: sendBaseline != null,
+    baselineMessageId: sendBaseline?.messageId ?? null,
+    phase: sendStatus?.phase ?? 'handshake',
+    sessionActive: inFlightSession,
+    lastTurnHasLiveMessage: hasLiveTurnEvidence(lastTurnBodyMetadata),
+  });
+  const attachedSendStatus = sendStatus && sendBinding === 'attached' ? sendStatus : null;
+  const pendingSendStatus = sendStatus && sendBinding === 'pending' ? sendStatus : null;
+
+  // Stable identities for the memoized `ChatTurn` (F7): an inline arrow here
+  // would change on every render and defeat the memo entirely.
+  const getThinkingDurationMs = useCallback(
+    (blockId: string) => getThinking(blockId)?.durationMs,
+    [getThinking]
+  );
 
   // Stick-to-bottom scroll following. `scrollRootRef` wraps `ScrollArea` (the
   // real scrollable viewport is found through it via `findViewport`);
@@ -175,22 +359,35 @@ export function MessageTimeline({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
-      {/* Round-2 V-b: no sticky/fixed/absolute header exists anywhere above
-          this viewport (audited MessageTimeline/ChatWorkspace/HostStatusBanner/
-          WindowTitleBar — none overlap scrolled content), so the "half a row
-          cut off at the top" screenshot is the stick-to-bottom effect below
+      {/* Round-2 V-b, updated by T-31 §5.7. Conclusion ① CHANGED: this viewport
+          now contains a per-turn sticky user-bubble band (spec §5, class in
+          `turnBubbleBandClass`). It is NOT the kind of element V-b ruled out —
+          it lives inside the viewport and inside the content flow, not as a
+          layer above the scrolled content — so the "floating header overlaps
+          the timeline" failure surface V-b closed stays closed. Nothing above
+          this viewport (MessageTimeline/ChatWorkspace/HostStatusBanner/
+          WindowTitleBar) is sticky/fixed/absolute; that audit still holds.
+          Conclusion ② unchanged: the "half a row cut off at the top"
+          screenshot is the stick-to-bottom effect below
           (`viewport.scrollTop = viewport.scrollHeight` on every resize while
-          `stickToBottomRef` is true): a turn taller than the viewport
-          necessarily scrolls its own top ("Worked for Ns" row) above the
-          fold — expected chat-UI behavior, not an overlap bug. `scrollFade`
-          (same prop already used by combobox.tsx/sheet.tsx/autocomplete.tsx)
-          turns that hard clip into the app's established soft edge fade. */}
-      <ScrollArea className="min-h-0 flex-1" scrollFade>
+          `stickToBottomRef` is true) — a turn taller than the viewport
+          necessarily scrolls its own top above the fold, expected chat-UI
+          behavior, not an overlap bug. Conclusion ③ narrowed: `scrollFade` is
+          now BOTTOM-ONLY (§5.5-A). The top fade existed to soften that hard
+          clip, and the clip is gone — the top of the viewport is always an
+          opaque bubble band now. Kept at four edges it would instead render
+          the pinned bubble half-transparent, i.e. defeat §5 outright.
+          NOT ASSERTABLE (vitest is node-only, §6.2): that `position: sticky`
+          actually resolves against `ScrollArea.Viewport`, and how the viewport
+          mask paints against a pinned band. Both are GUI-check items. */}
+      <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 45rem/60rem (D25 §3.4) reading width (T-22 spec §2.13). */}
         <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
-          {/* T-05 (A07 `.tl` :846): 12px -> 20px turn spacing. */}
-          <ReadingColumn className="space-y-5">
+          {/* T-05 (A07 `.tl` :846): 20px turn spacing — still 20 in total, but
+              T-31 §5.4 split it into 10 here + 10 of band padding, so the band
+              can double as the pinned bubble's opaque buffer (F-B9). */}
+          <ReadingColumn className={readingColumnSpacingClass()}>
             {historyNotice.kind === 'error' && (
               // Keyed by session: detail/retry state must not follow the user
               // across sessions when React reuses this slot.
@@ -201,25 +398,51 @@ export function MessageTimeline({
                 status={status}
               />
             )}
-            {historyNotice.kind === 'empty' ? (
+            {historyNotice.kind === 'empty' && pendingSendStatus == null ? (
               <p className="text-ui text-muted-foreground">
                 No messages yet. Send a prompt to stream from the Agent Host.
               </p>
             ) : (
-              sessionMessages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  metadata={getMeta(message.id)}
-                  isActiveTurn={isActiveTurn}
-                  thinkingEnabled={thinkingEnabled}
-                  repoName={repoName}
-                  getThinkingDurationMs={(blockId) => getThinking(blockId)?.durationMs}
-                  canRespondPermission={canRespondPermission}
-                  onRespondPermission={respondPermission}
-                />
-              ))
+              turns.map((turn, index) => {
+                // F7: the two ticking props are handed ONLY to the turn that
+                // can read them. Every other turn keeps byte-identical props
+                // across a tick, which is what lets `React.memo` on `ChatTurn`
+                // hold and returns the per-second derivation cost to
+                // O(in-flight turn) instead of O(whole session).
+                const isLastTurn = index === turns.length - 1;
+                return (
+                  <ChatTurn
+                    key={turn.id}
+                    turn={turn}
+                    isLastTurn={isLastTurn}
+                    sessionStatus={status}
+                    isActiveTurn={isActiveTurn}
+                    inFlightSession={inFlightSession}
+                    sendStatus={isLastTurn ? attachedSendStatus : null}
+                    baselineKnown={sendBaseline != null}
+                    baselineMessageId={sendBaseline?.messageId ?? null}
+                    retry={sessionRetry}
+                    nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
+                    footerNowMs={footerNowMs}
+                    getMetadata={getMeta}
+                    thinkingEnabled={thinkingEnabled}
+                    repoName={repoName}
+                    getThinkingDurationMs={getThinkingDurationMs}
+                    canRespondPermission={canRespondPermission}
+                    onRespondPermission={respondPermission}
+                  />
+                );
+              })
             )}
+            {pendingSendStatus && (
+              <PendingTurnHead sendStatus={pendingSendStatus} retry={sessionRetry} />
+            )}
+            {/* T-31 §9-ζ: stays SESSION-level and stays here, after the last
+                turn. Folding it into the failing turn would leave a
+                session-level failure (one that belongs to no turn) with
+                nowhere to render, and would move a block T-30 batch 1 already
+                landed as P-06. The failed turn gets its own short head label
+                instead (`deriveTurnStatus` -> 'Failed'). */}
             {status === 'failed' && (
               <div
                 className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-meta"
@@ -377,60 +600,44 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
   );
 }
 
-interface MessageBubbleProps {
-  message: ChatMessage;
-  metadata?: MessageMetadata;
-  isActiveTurn: boolean;
-  thinkingEnabled: boolean;
-  repoName?: string | null;
-  getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  canRespondPermission: (permissionId: string | undefined) => boolean;
-  onRespondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
-}
-
 /**
- * T-05 (D-1) -> T-30 (P-08/P-09/P-11): three role branches.
- *  - assistant -> bare `AssistantMessage` (no bubble, no role label; A07 `:1725`/`:858`).
- *  - user -> `.fx-user-bubble` shape (A07 `:849-855`); no role label — neither
- *    A01 (`:1060-1061`) nor A07 (`:1721-1722`) ever put one on the markup.
- *  - system / error -> `Alert` primitive (same shell as `HistoryErrorNotice`
- *    below), not a chat bubble — A07 never defined a bubble form for these,
- *    and reusing the user bubble produced a third, baseline-undefined shape.
+ * T-05 (D-1) -> T-30 (P-08/P-09/P-11) -> T-31 §4.8: the three role forms are
+ * unchanged, but they are no longer selected by a single `MessageBubble`
+ * dispatcher over a flat message list. `ChatTurn` below owns the ordering now:
+ *  - user -> this `.fx-user-bubble`, hoisted into the turn's sticky band;
+ *  - assistant -> its blocks, flattened by `flattenTurnItems` and rendered
+ *    item by item by `TurnItemView` (same block order, T-05 D-5);
+ *  - system / error -> `NoticeMessage`, still the `Alert` primitive.
+ *
+ * The bubble's own shape (A07 `:849-855` — 16/16/4/16 corners, `--card` fill,
+ * primary-8% border) is byte-for-byte what P-09 landed; T-31 adds nothing to it
+ * but the two CSS hooks the pinned state needs.
  */
-function MessageBubble({
-  message,
-  metadata,
-  isActiveTurn,
-  thinkingEnabled,
-  repoName,
-  getThinkingDurationMs,
-  canRespondPermission,
-  onRespondPermission,
-}: MessageBubbleProps) {
-  if (message.role === 'assistant') {
-    return (
-      <AssistantMessage
-        message={message}
-        metadata={metadata}
-        isActiveTurn={isActiveTurn}
-        thinkingEnabled={thinkingEnabled}
-        repoName={repoName}
-        getThinkingDurationMs={getThinkingDurationMs}
-        canRespondPermission={canRespondPermission}
-        onRespondPermission={onRespondPermission}
-      />
-    );
-  }
-
-  if (message.role === 'system' || message.role === 'error') {
-    return <NoticeMessage message={message} />;
-  }
+function UserBubble({ message }: { message: ChatMessage }) {
+  // user messages only ever carry `text` blocks (chatSessions.ts attaches
+  // tool_call/tool_result/thinking/permission_request/question exclusively
+  // to role: 'assistant' messages, live and replayed alike).
+  const textBlocks = message.blocks.filter((block) => block.type === 'text');
+  // §5.6: the full prompt stays reachable by hover and screen reader in every
+  // state, which is what makes the pinned three-line clamp safe.
+  const fullText = textBlocks
+    .map((block) => block.text ?? '')
+    .filter((text) => text.length > 0)
+    .join('\n\n');
 
   return (
-    <article className="flex justify-end">
+    // D26 ④: the bubble spans the reading column. The old 85% width cap and
+    // the right-alignment that positioned it inside that slack are both gone —
+    // with a full-width box there is no slack left to align within, so the pair
+    // would only be dead weight the next reader has to reason about. Role is
+    // still unmistakable without them: the sharp bottom-right corner, the
+    // `--card` fill and the border are what say "this is the prompt", and none
+    // of the three changes here (§10-C's "corner radius / padding / fill /
+    // attachment chip layout unchanged" holds byte for byte).
+    <article>
       <div
         className={cn(
-          'max-w-[85%] space-y-2 rounded-lg border px-4 py-2.5',
+          'space-y-2 rounded-lg border px-4 py-2.5',
           // T-30 P-09: A07 `.fx-user-bubble` (`:849-855`) — 16/16/4/16 corners
           // (sharp bottom-right "tail" toward the right-aligned edge), --card
           // fill, primary-8% border. The old note about assistant needing
@@ -439,6 +646,7 @@ function MessageBubble({
           // on the same --card surface as the rest of the shell.
           'rounded-br-xs border-primary/8 bg-card'
         )}
+        title={fullText || undefined}
       >
         {/* Round-2 P0 (Chat attachments): read-only echo of what this turn sent,
             metadata only (no bytes, no size — never threaded over the wire).
@@ -467,19 +675,20 @@ function MessageBubble({
             ))}
           </div>
         ) : null}
-        {/* user messages only ever carry `text` blocks (chatSessions.ts attaches
-            tool_call/tool_result/thinking/permission_request/question exclusively
-            to role: 'assistant' messages, live and replayed alike). */}
-        {message.blocks.map((block) =>
-          block.type === 'text' ? (
+        {/* `fx-turn-bubble-text` carries no styling of its own — it is the
+            target of the `@container scroll-state(stuck: top)` rule in
+            `styles/scroll-state.css`, which clamps the prompt to three lines
+            ONLY while its band is pinned (§5.6-A). Unpinned, it does nothing. */}
+        <div className="fx-turn-bubble-text space-y-2">
+          {textBlocks.map((block) => (
             <p
               key={block.id}
               className="whitespace-pre-wrap text-markdown leading-normal text-foreground"
             >
               {block.text}
             </p>
-          ) : null
-        )}
+          ))}
+        </div>
       </div>
     </article>
   );
@@ -509,10 +718,26 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
   );
 }
 
-interface AssistantMessageProps {
-  message: ChatMessage;
-  metadata?: MessageMetadata;
+interface ChatTurnProps {
+  turn: Turn;
+  /** Only the last turn can be in flight, and only it carries the session's failure state. */
+  isLastTurn: boolean;
+  sessionStatus: SessionRuntimeStatus;
+  /** A thinking block may still be streaming (`thinkingCard.isTurnActive`). */
   isActiveTurn: boolean;
+  /** The session is in flight for turn-shell purposes, `waiting_*` included (`isTurnInFlight`, F12). */
+  inFlightSession: boolean;
+  sendStatus: TurnSendStatus | null;
+  /** A send-begin baseline exists for this session (`turnSendStatus.baseline`). */
+  baselineKnown: boolean;
+  /** Last message id in the bucket when this session's last send began. */
+  baselineMessageId: string | null;
+  retry: SessionRetryInfo | null;
+  /** Whole-second clock, ticking only while a turn is in flight (`useSecondsTick`). `STATIC_NOW_MS` for every turn but the last. */
+  nowMs: number;
+  /** Minute clock for the footer's relative timestamp (`useMinuteTick`, F9). */
+  footerNowMs: number;
+  getMetadata: (messageId: string) => MessageMetadata | undefined;
   thinkingEnabled: boolean;
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
@@ -521,101 +746,636 @@ interface AssistantMessageProps {
 }
 
 /**
- * T-05 (D-1/D-3): bare assistant container — no border, no fill, no role
- * label. Renders, in order: the turn's "Worked for Ns" row (A07 `:1728`,
- * top of turn, only when T-06 latency metadata is available), then
- * `groupTimeline`'s items (text / tool groups / permission / frozen
- * question), then the footer (`model · time`, latency dropped since the
- * "Worked for" row took over that duty).
+ * T-31 §4.8: one turn — the container this whole spec exists to introduce.
+ *
+ * Renders, in order: the sticky user-bubble band (§5), the head slot (§4.7 —
+ * status line while in flight, `Worked for Ns …` once complete, one slot with
+ * two states), the collapsible process segment, the always-visible answer
+ * segment (§4.4), and the trailing status bar (§4.6).
+ *
+ * The head/trigger and the answer are deliberately siblings under one
+ * `turnBodyClass()`: P-17's 10px "within a turn" gap stays a single source,
+ * inherited from the `<article className="flex flex-col gap-2.5">` that
+ * `AssistantMessage` used to own before it was split in two.
+ *
+ * `memo` (review batch F7) is load-bearing, not a micro-optimization: the head
+ * runs off a one-second clock, so without it every turn in the session
+ * re-derived its items, its call counts and its tool rows once a second for the
+ * whole length of a wait. It only holds because `stabilizeTurns` keeps this
+ * turn's `turn` identity across an unrelated token, because the ticking props
+ * reach the last turn only, and because both lookup callbacks are `useCallback`
+ * -stable at their source.
  */
-function AssistantMessage({
-  message,
-  metadata,
+const ChatTurn = memo(function ChatTurn({
+  turn,
+  isLastTurn,
+  sessionStatus,
   isActiveTurn,
+  inFlightSession,
+  sendStatus,
+  baselineKnown,
+  baselineMessageId,
+  retry,
+  nowMs,
+  footerNowMs,
+  getMetadata,
   thinkingEnabled,
   repoName,
   getThinkingDurationMs,
   canRespondPermission,
   onRespondPermission,
-}: AssistantMessageProps) {
-  const workedForRow = buildWorkedForRow(message, metadata);
-  const items = groupTimeline(message);
-  // Mirrors the pre-T-05 `deriveThinkingCard` streaming check: the turn's
-  // active flag gates it, and only the message's own last block can be "in
-  // flight" (thinking blocks that aren't last never match, so this needs no
-  // extra type guard).
-  const isStreamingBlockId =
-    isActiveTurn && message.blocks.length > 0 ? message.blocks[message.blocks.length - 1].id : null;
-  const footerLine = formatMessageMetadata(metadata, { omitLatency: true });
+}: ChatTurnProps) {
+  // One flatten per turn, feeding both the render and the copy payload (F7):
+  // the copy builder's `Turn` overload used to re-run `flattenTurnItems` — and
+  // through it `groupTimeline`/`pairToolBlocks` over every block — a second
+  // time on every render, clock ticks included.
+  const items = useMemo(() => flattenTurnItems(turn), [turn]);
+  const { process, answer } = useMemo(() => splitTurnBody(items), [items]);
+  const copyText = useMemo(() => buildTurnCopyTextFromItems(items), [items]);
+
+  // Turn-level metadata: the LAST assistant message's, because that is the one
+  // whose completion ends the turn. A turn with two assistant messages (a
+  // permission interrupt splits one) therefore reports the final segment's
+  // latency rather than wall-clock across the pause — which is the more honest
+  // of the two, since the pause is the user's own thinking time.
+  const lastAssistant = useMemo(() => findLastAssistant(turn.body), [turn.body]);
+  const firstAssistant = useMemo(() => findFirstAssistant(turn.body), [turn.body]);
+  const metadata = lastAssistant ? getMetadata(lastAssistant.id) : undefined;
+  // Whole-turn metadata, for the two ownership questions that need evidence
+  // rather than the absence of a latency (F2 / F4).
+  const bodyMetadata = useMemo(
+    () => turn.body.map((message) => getMetadata(message.id)),
+    [turn.body, getMetadata]
+  );
+
+  // ---- Head slot state (§4.7) ----
+
+  // Two clocks, never both: the composer's snapshot covers handshake/awaiting
+  // (it stops at the first assistant progress, where `runSend` returns), and
+  // T-06's `message.started` timestamp covers the streaming remainder.
+  // `!turnComplete` guards the stream clock the same way the parent's send
+  // binding guards the snapshot: once this turn has its latency, a
+  // still-`running` session status belongs to the NEXT turn, not this one.
+  //
+  // F12: the gate is `inFlightSession`, not `isActiveTurn` — under
+  // `waiting_permission` / `waiting_question` the latter is false, which used
+  // to drop `streamStartedAt`, drop the status row, and (before F1) drop the
+  // head entirely, unmounting the `Collapsible` that holds the authorization
+  // card the user is being asked to answer.
+  const turnComplete = metadata?.latencyMs != null;
+  const inFlight = isLastTurn && sendStatus != null;
+  const streamStartedAt =
+    !inFlight && isLastTurn && inFlightSession && !turnComplete && firstAssistant
+      ? (getMetadata(firstAssistant.id)?.startedAt ?? null)
+      : null;
+  const turnActive = inFlight || streamStartedAt != null;
+  const elapsedSeconds =
+    inFlight && sendStatus
+      ? sendStatus.elapsedSeconds
+      : streamStartedAt != null
+        ? Math.max(0, Math.floor((nowMs - streamStartedAt) / 1000))
+        : 0;
+
+  // A turn that is running with NEITHER clock (a session left running before
+  // this window opened) gets no status row rather than one frozen at "0s" —
+  // the composer showed nothing in that case either, so no information is lost.
+  const status = deriveTurnStatus({
+    active: turnActive,
+    phase: sendStatus?.phase ?? 'awaiting',
+    elapsedSeconds,
+    budgetMs: sendStatus?.budgetMs ?? DEFAULT_REPLY_BUDGET_MS,
+    attachmentCount: sendStatus?.attachmentCount ?? 0,
+    attachmentBytes: sendStatus?.attachmentBytes ?? 0,
+    retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
+    hasBlocks: turn.body.some((message) => message.blocks.length > 0),
+    // F4: a session failure belongs to the turn that was actually running when
+    // it happened — never to the completed turn that merely happens to be last
+    // while the next send's user echo is still in flight, and never to a
+    // restored history turn. `ownsSessionFailure` holds that whole judgement;
+    // a failure with no owning turn stays with the session-level block below
+    // (§9-ζ, position unchanged).
+    failed: ownsSessionFailure({
+      isLastTurn,
+      sessionFailed: sessionStatus === 'failed',
+      hasUser: turn.user != null,
+      bodyEmpty: turn.body.length === 0,
+      userMessageId: turn.user?.id ?? null,
+      baselineKnown,
+      baselineMessageId,
+      turnComplete,
+      hasLiveMessage: hasLiveTurnEvidence(bodyMetadata),
+    }),
+  });
+
+  // §4.2 (A07 v3 revision): the call counts used to be this row's EXPAND body;
+  // round-4's collapsed/expanded pair showed the body is the process segment,
+  // so the counts moved up into the collapsed row's arg. Counted across the
+  // whole turn, not one message — `deriveTurnStats` only reads `blocks`.
+  const stats = useMemo(
+    () =>
+      lastAssistant
+        ? deriveTurnStats(
+            { ...lastAssistant, blocks: turn.body.flatMap((message) => message.blocks) },
+            { style: 'compact' }
+          )
+        : null,
+    [lastAssistant, turn.body]
+  );
+  const workedFor = formatWorkedForRow(metadata?.latencyMs, stats);
+
+  // F1: the head degrades `status -> workedFor -> stats -> bare chevron`
+  // instead of stopping at the first two. A restored history turn has neither
+  // of the first two (no T-06 metadata is replayed), so it used to get a null
+  // head — no trigger, `collapsible === false`, force-expanded — which made
+  // §4.3's "restored history defaults to collapsed" literally unreachable.
+  // Nothing below fabricates a duration; the fallbacks print counts derived
+  // from `blocks`, or no text at all (A07 :2399 intact).
+  const head = deriveTurnHeadModel({
+    status,
+    workedFor,
+    stats,
+    hasProcess: process.length > 0,
+  });
+
+  // ---- Process shell (§4.3) ----
+
+  const permissionLock = hasUnresolvedPermission(turn);
+  // §4.3's "a turn that completes while mounted stays expanded" is the reason
+  // this is a lazy `useState` and not a derived value: the initializer runs
+  // ONCE, at the turn's mount, exactly like the `<Collapsible defaultOpen>` the
+  // spec describes (and like `ToolRows.tsx`'s per-row `defaultOpen`), so an
+  // active -> complete transition cannot collapse content the user is watching.
+  // NOT ASSERTABLE in a node-only vitest — this comment is the record (§6.2 ④).
+  // Holding the state HERE rather than inside the shell also means the shell
+  // may mount and unmount without ever re-deciding the open state.
+  const [processOpen, setProcessOpen] = useState(() =>
+    defaultTurnProcessOpen({
+      isActive: turnActive,
+      hasUnresolvedPermission: permissionLock,
+      hasFailure: turnHasFailure(turn),
+      answerEmpty: answer.length === 0,
+    })
+  );
+  // Controlled, not `defaultOpen`, for one reason: `permissionLock` can turn
+  // true AFTER the user has manually collapsed a running turn, and a disabled
+  // trigger over a collapsed panel would then bury the authorization card —
+  // the exact round-2 point-check #5 failure §4.3 calls the safety red line.
+  // Forcing `open` here makes that unreachable by construction.
+  const processShellOpen = permissionLock || processOpen;
+
+  // F10: the forced-open state above is released the instant the user answers,
+  // and if they had collapsed the turn before the card appeared the panel would
+  // snap shut under the cursor — the answered card, and whatever ran next,
+  // gone in the same frame they clicked. Adopting the forced state as the
+  // manual one keeps the shell exactly as it looks at the moment of the click;
+  // the user can still collapse it themselves afterwards.
+  const wasPermissionLockedRef = useRef(permissionLock);
+  useEffect(() => {
+    if (wasPermissionLockedRef.current && !permissionLock) setProcessOpen(true);
+    wasPermissionLockedRef.current = permissionLock;
+  }, [permissionLock]);
+
+  // The head IS the trigger (§4.8), and after F1 a turn with a process segment
+  // ALWAYS has one (`deriveTurnHeadModel` guarantees a non-null model whenever
+  // `hasProcess`, falling back to a text-less chevron row). So this is now
+  // decided by the process segment alone — which is also what stops the shell
+  // from mounting and unmounting when metadata arrives mid-turn and flips the
+  // head from null to non-null, remounting the whole subtree twice (F2).
+  const collapsible = process.length > 0;
+
+  const streamingBlockIdByMessage = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const message of turn.body) {
+      // Mirrors the pre-T-31 per-message check: the turn's active flag gates
+      // it, and only a message's own last block can be "in flight".
+      map.set(
+        message.id,
+        isActiveTurn && message.blocks.length > 0
+          ? message.blocks[message.blocks.length - 1].id
+          : null
+      );
+    }
+    return map;
+  }, [turn.body, isActiveTurn]);
+
+  const renderItem = (item: TurnItem) => (
+    <TurnItemView
+      key={turnItemKey(item)}
+      item={item}
+      thinkingEnabled={thinkingEnabled}
+      repoName={repoName}
+      streamingBlockId={streamingBlockIdByMessage.get(item.messageId) ?? null}
+      getThinkingDurationMs={getThinkingDurationMs}
+      canRespondPermission={canRespondPermission}
+      onRespondPermission={onRespondPermission}
+    />
+  );
 
   return (
-    // T-30 P-17: `gap-2.5` (10px) is the single source of the "段间" gap
-    // between every direct item (tool group, paragraph, question/permission
-    // card, footer) — replaces the old per-item `my-2.5`/`[&>p+p]:mt-2.5`
-    // margins, which could collapse into (or stack on top of) ReadingColumn's
-    // turn-to-turn `space-y-5` depending on which item type sat at the edge.
-    <article className="flex flex-col gap-2.5 text-markdown leading-normal">
-      {workedForRow && <ToolGroup rows={[workedForRow]} />}
-
-      {items.map((item) => {
-        switch (item.kind) {
-          case 'text':
-            return (
-              <p
-                key={item.block.id}
-                className="text-markdown leading-normal text-foreground whitespace-pre-wrap"
-              >
-                {item.block.text}
-              </p>
-            );
-
-          case 'toolGroup': {
-            const entries = filterThinkingEntries(item.entries, thinkingEnabled);
-            const rows = deriveToolGroupRows(entries, {
-              repoName,
-              thinkingDurationMs: getThinkingDurationMs,
-              isStreamingBlockId,
-            });
-            return <ToolGroup key={`tool-group-${item.blockIndex}`} rows={rows} />;
-          }
-
-          case 'permission':
-            // T-05 (D-5): same `.qa` shell as questions, thin adapter over
-            // `derivePermissionCardView` — position unchanged (block-order,
-            // not the Dock), Allow/Deny behavior preserved verbatim.
-            return (
-              <QuestionCard
-                key={item.block.id}
-                variant="permission"
-                block={item.block}
-                canRespond={canRespondPermission(item.block.permissionId)}
-                onRespondPermission={(allow) =>
-                  onRespondPermission(item.block.permissionId ?? '', allow)
-                }
-              />
-            );
-
-          case 'question': {
-            // T-05 (D-4): the live, answerable card lives in
-            // `PendingQuestionDock` (outside ScrollArea, docked above the
-            // Composer) — this branch only renders once the question is
-            // frozen (answered/skipped), in its original block position.
-            const state = deriveQuestionCardState(item.block);
-            if (state === 'pending') return null;
-            return <QuestionCard key={item.block.id} variant="frozen" block={item.block} />;
-          }
-
-          default:
-            return null;
-        }
-      })}
-
-      {footerLine && (
-        <p className="flex flex-wrap items-center gap-2 text-meta tabular-nums text-muted-foreground">
-          {footerLine}
-        </p>
+    <section className={chatTurnClass()}>
+      {turn.user && (
+        // §5.1-A: plain CSS sticky, scoped by this `<section>`. That scoping IS
+        // the release rule — when the turn's box leaves the top of the viewport
+        // the bubble is pushed out and the next turn's takes over, so there is
+        // no scroll listener, no IntersectionObserver and no `activeTurnId`
+        // state anywhere in this file (§5.3).
+        // `fx-turn-band` only declares the scroll-state query container the
+        // pinned-state clamp needs (`styles/scroll-state.css`, §5.6-A; engine
+        // support probed in `src/agent-host/spikes/scroll-state-probe.js`,
+        // and that file explains why the rule cannot live in globals.css).
+        // NOT ASSERTABLE:
+        // that sticky resolves against `ScrollArea.Viewport` (§6.2 ①③).
+        <div className={cn(turnBubbleBandClass(), 'fx-turn-band')}>
+          <UserBubble message={turn.user} />
+        </div>
       )}
-    </article>
+      <div className={turnBodyClass()}>
+        {collapsible ? (
+          // F11: `Collapsible.Root` renders a bare `<div>`, so without a class
+          // of its own the trigger row and the panel sat flush at 0px while
+          // every other pair inside the turn kept P-17's 10px beat.
+          <Collapsible
+            open={processShellOpen}
+            onOpenChange={setProcessOpen}
+            disabled={permissionLock}
+            className={turnProcessShellClass()}
+          >
+            <CollapsibleTrigger className={cn(turnHeadClass(), 'w-full disabled:cursor-default')}>
+              <TurnHeadContent head={head} />
+              {!permissionLock && (
+                <ChevronDown
+                  className={cn(
+                    'size-3.5 shrink-0 transition-transform duration-150',
+                    processShellOpen && 'rotate-180'
+                  )}
+                />
+              )}
+            </CollapsibleTrigger>
+            {/* F5: `keepMounted` is the whole of §10-C's "expanded tool rows
+                survive a collapse". Base UI's panel defaults to unmounting on
+                close, and this panel takes the `animationType: 'none'` path
+                (see `turnProcessPanelClass`), where "closed" means `mounted`
+                goes false in the same tick — so every IN/OUT body the user had
+                opened inside the process segment was destroyed and rebuilt at
+                its default state on every collapse/expand. Tailwind's preflight
+                gives `[hidden]` `display: none !important`, so the flex
+                container below cannot override the hidden state. */}
+            <CollapsibleContent
+              keepMounted
+              className={cn(turnProcessPanelClass(), turnBodyClass())}
+            >
+              {process.map(renderItem)}
+            </CollapsibleContent>
+          </Collapsible>
+        ) : (
+          <>
+            {head && (
+              <div className={turnHeadClass()}>
+                <TurnHeadContent head={head} />
+              </div>
+            )}
+            {process.map(renderItem)}
+          </>
+        )}
+        {answer.length > 0 && <div className={turnBodyClass()}>{answer.map(renderItem)}</div>}
+        {/* F13: an in-flight turn's prose is half an answer, and a Copy button
+            that silently yields it is worse than no button — the clipboard
+            gives no sign the text was truncated. Restored history turns are NOT
+            in flight, so they keep theirs. */}
+        <TurnFooter metadata={metadata} copyText={turnActive ? '' : copyText} nowMs={footerNowMs} />
+      </div>
+    </section>
+  );
+});
+
+/** Text-only reply budget — the "(up to Ns)" figure for an in-flight turn with no composer snapshot of its own. */
+const DEFAULT_REPLY_BUDGET_MS = sendTimeoutMs(0);
+
+function findLastAssistant(messages: readonly ChatMessage[]): ChatMessage | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role === 'assistant') return messages[index];
+  }
+  return null;
+}
+
+function findFirstAssistant(messages: readonly ChatMessage[]): ChatMessage | null {
+  return messages.find((message) => message.role === 'assistant') ?? null;
+}
+
+/**
+ * Head slot for a send whose turn has not been echoed back yet (§3.3).
+ *
+ * The seconds here come from the composer's own ticker, not `useSecondsTick` —
+ * nothing has streamed yet, so there is no `message.started` to count from.
+ */
+function PendingTurnHead({
+  sendStatus,
+  retry,
+}: {
+  sendStatus: TurnSendStatus;
+  retry: SessionRetryInfo | null;
+}) {
+  const status = deriveTurnStatus({
+    active: true,
+    phase: sendStatus.phase,
+    elapsedSeconds: sendStatus.elapsedSeconds,
+    budgetMs: sendStatus.budgetMs,
+    attachmentCount: sendStatus.attachmentCount,
+    attachmentBytes: sendStatus.attachmentBytes,
+    retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
+    hasBlocks: false,
+  });
+  if (!status) return null;
+  return (
+    <div className={turnHeadClass()}>
+      <TurnStatusContent status={status} />
+    </div>
+  );
+}
+
+/** Stable per-item key: block ids are unique within a message, group indexes within a message's blocks. */
+function turnItemKey(item: TurnItem): string {
+  switch (item.kind) {
+    case 'toolGroup':
+      return `${item.messageId}~group-${item.blockIndex}`;
+    case 'notice':
+      return `${item.messageId}~notice`;
+    default:
+      return item.block.id;
+  }
+}
+
+/**
+ * The head slot's four rendered states (§4.7, extended by F1's degradation
+ * chain in `deriveTurnHeadModel`).
+ *
+ * `stats` and `bare` only ever appear on a turn with no T-06 metadata — in
+ * practice a restored history turn. They are what give such a turn a trigger,
+ * and therefore a default-collapsed process segment, without printing a
+ * duration nothing measured.
+ */
+function TurnHeadContent({ head }: { head: TurnHeadModel | null }) {
+  // Unreachable from the collapsible trigger — `deriveTurnHeadModel` only
+  // returns null when there is no process segment either — but the invariant
+  // lives in that function, not in the type, so it is honoured rather than
+  // asserted away.
+  if (!head) return null;
+  switch (head.kind) {
+    case 'status':
+      return <TurnStatusContent status={head.status} />;
+    case 'workedFor':
+      return <WorkedForContent row={head.row} />;
+    case 'stats':
+      // No verb: "Worked for" would be a claim about time, and this row exists
+      // precisely because the time is unknown.
+      return (
+        <span className="min-w-0 truncate" title={head.text}>
+          {head.text}
+        </span>
+      );
+    default:
+      // `bare` — the chevron the trigger renders beside this is the whole row.
+      return null;
+  }
+}
+
+/**
+ * Head slot, in-flight state (§4.7). Spinner and colour follow `kind`, which
+ * `turnStatus.ts` derives from the branch of `composerSendingLine` that
+ * actually produced the words — so the two can never contradict each other.
+ */
+function TurnStatusContent({ status }: { status: TurnStatus }) {
+  return (
+    <>
+      {/* A turn can stay silent for a minute; the spinner and the ticking
+          seconds are what say it is alive rather than hung. Same 3.5 size the
+          composer's own status row used before this moved here. */}
+      {status.kind !== 'failed' && <Spinner className="size-3.5 shrink-0" />}
+      <span
+        className={cn('min-w-0 truncate', turnStatusToneClass(status.kind))}
+        title={status.text}
+      >
+        {status.text}
+      </span>
+    </>
+  );
+}
+
+/** Warning past the slow-wait threshold, destructive on failure; muted otherwise (from `turnHeadClass`). */
+function turnStatusToneClass(kind: TurnStatus['kind']): string | false {
+  if (kind === 'slow') return 'text-warning';
+  if (kind === 'failed') return 'text-destructive';
+  return false;
+}
+
+/** Head slot, complete state (§4.7): `Worked for 1m 6s · 3 tools, 11 searches`. */
+function WorkedForContent({ row }: { row: WorkedForRowText }) {
+  return (
+    <>
+      <span className="shrink-0">{row.verb}</span>
+      <span className="min-w-0 truncate">{row.arg}</span>
+    </>
+  );
+}
+
+interface TurnItemViewProps {
+  item: TurnItem;
+  thinkingEnabled: boolean;
+  repoName?: string | null;
+  /** The one block in this item's source message that may still be streaming, if any. */
+  streamingBlockId: string | null;
+  getThinkingDurationMs: (blockId: string) => number | null | undefined;
+  canRespondPermission: (permissionId: string | undefined) => boolean;
+  onRespondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
+}
+
+/**
+ * One flattened turn item. The five branches are `AssistantMessage`'s former
+ * `groupTimeline` switch, moved verbatim so block order and every per-branch
+ * ruling (T-05 D-4/D-5) survive the restructure, plus the `notice` branch
+ * `flattenTurnItems` adds for system/error messages that used to be siblings of
+ * the assistant message rather than part of its turn.
+ */
+function TurnItemView({
+  item,
+  thinkingEnabled,
+  repoName,
+  streamingBlockId,
+  getThinkingDurationMs,
+  canRespondPermission,
+  onRespondPermission,
+}: TurnItemViewProps) {
+  switch (item.kind) {
+    case 'text':
+      return (
+        <p className="text-markdown leading-normal text-foreground whitespace-pre-wrap">
+          {item.block.text}
+        </p>
+      );
+
+    case 'toolGroup':
+      return (
+        <ToolGroupItem
+          item={item}
+          thinkingEnabled={thinkingEnabled}
+          repoName={repoName}
+          streamingBlockId={streamingBlockId}
+          getThinkingDurationMs={getThinkingDurationMs}
+        />
+      );
+
+    case 'permission':
+      // T-05 (D-5): same `.qa` shell as questions, thin adapter over
+      // `derivePermissionCardView` — position unchanged (block-order,
+      // not the Dock), Allow/Deny behavior preserved verbatim.
+      return (
+        <QuestionCard
+          variant="permission"
+          block={item.block}
+          canRespond={canRespondPermission(item.block.permissionId)}
+          onRespondPermission={(allow) => onRespondPermission(item.block.permissionId ?? '', allow)}
+        />
+      );
+
+    case 'question': {
+      // T-05 (D-4): the live, answerable card lives in `PendingQuestionDock`
+      // (outside ScrollArea, docked above the Composer) — this branch only
+      // renders once the question is frozen (answered/skipped), in its
+      // original block position.
+      const state = deriveQuestionCardState(item.block);
+      if (state === 'pending') return null;
+      return <QuestionCard variant="frozen" block={item.block} />;
+    }
+
+    case 'notice':
+      return <NoticeMessage message={item.message} />;
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * The `toolGroup` branch, split out so it can hold hooks (review batch F7).
+ *
+ * `deriveToolGroupRows` is by far the heaviest derivation in the timeline — it
+ * re-pairs and re-classifies every tool block in the group, then builds a row
+ * view (and its detail rows) for each. Inline in the switch above it ran on
+ * every render of every turn, which the one-second head clock turned into a
+ * whole-session sweep once a second. As its own component the `useMemo` below
+ * is legal, and the group's entries are reference-stable between ticks
+ * (`flattenTurnItems` only re-runs when the turn's messages actually change).
+ */
+function ToolGroupItem({
+  item,
+  thinkingEnabled,
+  repoName,
+  streamingBlockId,
+  getThinkingDurationMs,
+}: {
+  item: Extract<TurnItem, { kind: 'toolGroup' }>;
+  thinkingEnabled: boolean;
+  repoName?: string | null;
+  streamingBlockId: string | null;
+  getThinkingDurationMs: (blockId: string) => number | null | undefined;
+}) {
+  const rows = useMemo(
+    () =>
+      deriveToolGroupRows(filterThinkingEntries(item.entries, thinkingEnabled), {
+        repoName,
+        thinkingDurationMs: getThinkingDurationMs,
+        isStreamingBlockId: streamingBlockId,
+      }),
+    [item.entries, thinkingEnabled, repoName, getThinkingDurationMs, streamingBlockId]
+  );
+  return <ToolGroup rows={rows} />;
+}
+
+/**
+ * Trailing status bar (§4.6 / P-34): model · relative time · copy, right
+ * aligned.
+ *
+ * No duration here (§9-δ): the turn's elapsed time is the head's job, and
+ * printing the same number twice was what A07 `:1871` removed. The reference
+ * shot's footer agrees — it reads `3h ago` and nothing else.
+ *
+ * The relative timestamp keeps `formatRelativeAge`'s bucket table (P-18) and
+ * the precision it trades away is restored on hover through `title`, matching
+ * the sidebar's policy (§10-D). F9: the clock is passed IN rather than read
+ * from `formatMessageMetadata`'s `defaultFormatTime`, which called `Date.now()`
+ * at render time — so an idle session's ages froze at whatever they were when
+ * the last render happened to run, and "just now" stayed "just now" for hours.
+ */
+function TurnFooter({
+  metadata,
+  copyText,
+  nowMs,
+}: {
+  metadata?: MessageMetadata;
+  copyText: string;
+  /** Minute-resolution clock from `useMinuteTick`, the single source of "now" for the whole timeline's footers. */
+  nowMs: number;
+}) {
+  const line = formatMessageMetadata(metadata, {
+    omitLatency: true,
+    formatTime: (ms) => formatRelativeTimestamp(ms, nowMs),
+  });
+  if (!line && copyText.length === 0) return null;
+  return (
+    <div className={turnFooterClass()}>
+      {line && (
+        <span
+          className="min-w-0 truncate"
+          title={
+            metadata?.completedAt != null ? formatAbsoluteTime(metadata.completedAt) : undefined
+          }
+        >
+          {line}
+        </span>
+      )}
+      {copyText.length > 0 && <TurnCopyButton text={copyText} />}
+    </div>
+  );
+}
+
+/** Copy the turn's prose (never tool input/output — see `buildTurnCopyText`), then confirm for 1.5s. */
+const COPY_CONFIRM_MS = 1500;
+
+function TurnCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    },
+    []
+  );
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard permission can be refused; a button that lies about having
+      // copied is worse than one that appears to do nothing.
+      return;
+    }
+    setCopied(true);
+    if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCopied(false), COPY_CONFIRM_MS);
+  };
+
+  const label = copied ? 'Copied' : 'Copy reply';
+  return (
+    <button
+      type="button"
+      className={turnCopyButtonClass()}
+      onClick={() => void handleCopy()}
+      aria-label={label}
+      title={label}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+    </button>
   );
 }
 
@@ -625,28 +1385,4 @@ function filterThinkingEntries(
   thinkingEnabled: boolean
 ): readonly ToolGroupEntry[] {
   return thinkingEnabled ? entries : entries.filter((entry) => entry.kind !== 'thinking');
-}
-
-/**
- * Turn-level "Worked for Ns" row (A07 `:1728`/`:2398`): reuses `ToolRow`'s own
- * rendering pipeline instead of a bespoke component — same verb/arg column,
- * same `.ct-think` expand body, just a view-model built from `turnTiming.ts`
- * instead of a tool run.
- */
-function buildWorkedForRow(message: ChatMessage, metadata?: MessageMetadata): ToolRowView | null {
-  const worked = formatWorkedForRow(metadata?.latencyMs);
-  if (!worked) return null;
-  const stats = deriveTurnStats(message);
-  return {
-    key: `${message.id}~worked-for`,
-    verb: worked.verb,
-    arg: worked.arg,
-    // D25 §2.4: the "Ns" duration is prose, not an identifier -- sans.
-    argKind: worked.argKind,
-    running: false,
-    failed: false,
-    expandable: Boolean(stats),
-    body: stats ? 'stats' : undefined,
-    output: stats ?? undefined,
-  };
 }

@@ -340,6 +340,16 @@ describe('deriveAggregateRow', () => {
     expect(deriveAggregateRow(entries).arg).toBe('1 file');
   });
 
+  // F-B14 (T-31 §4.5) covered a third "ran N command(s)" counting segment.
+  // Withdrawn in the T-31 review: `classifyTool` calls Bash an `action`, and
+  // `deriveToolGroupRows` splits every action out to a standalone row BEFORE
+  // aggregation, so no production render could ever reach the branch — the
+  // three cases here asserted a code path only a direct unit call could enter.
+  // The F-B numbering is deliberately not re-flowed; F-B14 stays retired so the
+  // spec's own numbering still traces. Reinstating it needs a baseline revision
+  // of A07 :1769-1772 ("an action call is always its own row"), which is a
+  // user-accepted ruling.
+
   it('uses the running verb when any run is still running', () => {
     const entries = [
       runEntry(makeRun('a', 'Read', { file_path: 'a.ts' }, 'ok')),

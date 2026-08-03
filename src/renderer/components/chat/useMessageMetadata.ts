@@ -1,5 +1,5 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   initialMetadataRegistry,
   type MessageMetadata,
@@ -52,7 +52,11 @@ export function useMessageMetadata(sessionId: string | null): UseMessageMetadata
     };
   }, [sessionId, getSessionModel]);
 
-  return {
-    get: (messageId: string) => registry.byMessage[messageId],
-  };
+  // Stable across renders that did not change the registry (review batch F7):
+  // this lookup is a prop of the memoized `ChatTurn`, so a fresh closure per
+  // render would defeat the memo and put every turn in the session back on the
+  // one-second re-render path the clock ticks.
+  const get = useCallback((messageId: string) => registry.byMessage[messageId], [registry]);
+
+  return { get };
 }

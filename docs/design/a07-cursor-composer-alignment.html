@@ -1267,6 +1267,7 @@ button.ct-row { cursor: pointer; }
     <a href="#s7">⑥ 问答卡</a>
     <a href="#s8">取舍 / 裁定</a>
     <a href="#s9">v4 追记</a>
+    <a href="#s10">v5 追记</a>
   </nav>
 </div>
 
@@ -3297,6 +3298,179 @@ button.ct-row { cursor: pointer; }
     同族基线 · docs/design/phase0a-openchamber-alignment.html
   </p>
 </footer>
+
+<!-- ============================================================ 10 ============ -->
+<section id="s10">
+  <div class="sec-head">
+    <span class="sec-tag">10</span>
+    <h2>A07 v5 追记 · T-31 回复解剖 + 置顶用户气泡</h2>
+    <span class="sec-sub">2026-08-03 · 追加段</span>
+  </div>
+
+  <p>
+    <b>本段同样是追记，不是改版。</b>v3 是用户定稿版本、v4 是 D25 + T-30 批 2 的追记段，本段<b>都不回改</b>——
+    判据与第九节相同：<b>改动会不会让重新打开这个页面的人，看到与用户当初点头时不同的原型画面？</b>会 ⇒ 不许改。
+    本页渲染层（<code>.fx</code> 作用域 CSS 与全部 demo markup）在本段同样<b>一字不动</b>。
+  </p>
+  <p>
+    第九节末句「三者同批施工、同属一个 v4 追记段，<b>不另开 v5</b>」，说的是 D25 与 T-30 批 2 内部的三块
+    （一~五 / 六~十 / 十一）不必再拆——它没有承诺「以后也不会有 v5」。<b>T-31</b>（回复解剖 + 置顶用户气泡）是
+    另一个批次：另一份规格（<code>docs/plans/2026-07-31-reply-anatomy-design.md</code>）、另一轮点验、
+    另一次独立的代码落地，理应另开一段，而不是塞进已经封闭的 v4。
+    本段依据即该规格 §7.1「与既有裁定的逐条对齐」表 + §7.2（D26 嵌套关系）+ 施工落地后的 as-built 事实。
+  </p>
+  <p>
+    <b>锚点仍取 A07 v3 定稿态编号</b>，沿用第九节「行号基准」段确立的约定——本节引用的 <code>:N</code>
+    与规格 §7.1 完全同号，指本页 v3 定稿态；当前文件因 v4 追记已整体下移，换算表见第九节，此处不重复。
+  </p>
+
+  <h3>一、逐锚点处置（回复解剖）</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>A07 锚点</th><th>原文要点</th><th>T-31 处置（含 as-built 事实）</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">:2396-2400 / :2413-2419</td>
+          <td>D 组「<code>Worked for Ns ⌄</code> 是回合级时长」；展开体为<b>统计文本</b>
+            （<code>3 次工具调用 · 11 次搜索 · 1 次编辑 · 首字延迟 1.2s</code>）</td>
+          <td>✏️ <b>语义修订</b>：展开体改判为<b>过程段</b>（Thinking + 工具行 + 中间正文），
+            统计移入<b>收起行的 arg 后缀</b>——<code>Worked for 1m 6s · 3 tools, 11 searches ⌄</code>，
+            收起时反而比现在信息量更大。<b>依据</b>：round-4 参照图
+            （<code>docs/design/refs/feedback-20260731-round4/</code>）第一次给出<b>同一回合</b>的收起 / 展开双图，
+            首次给出差集——v2/v3 素材只截到收起态，无法判定展开的是什么；这是<b>证据补全后的口径修正，不是审美改判</b>。
+            as-built：<code>formatWorkedForRow(latencyMs, stats)</code>（<code>turnTiming.ts</code>），
+            <code>stats</code> 取 <code>deriveTurnStats(message, { style: 'compact' })</code>；
+            <code>:2399</code>「不硬造秒数」原判<b>维持</b>——<code>latencyMs == null</code> 仍返回 <code>null</code>。</td>
+        </tr>
+        <tr>
+          <td class="mono">:1871</td>
+          <td>「回合时长搬家：footer 里的重复时长删掉」</td>
+          <td>✅ <b>维持</b>。footer 不复现耗时，耗时唯回合顶部 <code>Worked for Ns</code> 一处
+            （§9-δ 按推荐值拍板，参照图 footer 亦无耗时，只有 <code>3h ago</code>）。
+            as-built：<code>TurnFooter</code> 恒传 <code>formatMessageMetadata(metadata, { omitLatency: true })</code>。</td>
+        </tr>
+        <tr>
+          <td class="mono">:1776-1782</td>
+          <td>footer = <code>claude-opus-5 · 07:41</code>（绝对时刻）</td>
+          <td>✏️ <b>改相对</b>（P-18 落地）：<code>3h ago</code> 形态；<code>title</code> 悬停给绝对时刻，
+            与侧栏策略相同。与侧栏相对时间<b>同源</b>——两侧共享
+            <code>src/renderer/lib/relativeTime.ts</code>（自 <code>workspace-shell/sidebarTree.ts</code> 抽出，
+            旧调用点仍 re-export，零破坏）；as-built：
+            <code>formatRelativeTimestamp</code> / <code>formatAbsoluteTime</code>（<code>messageMetadata.ts</code>）。</td>
+        </tr>
+        <tr>
+          <td class="mono">:2432</td>
+          <td>失败行自动展开（明文裁定）</td>
+          <td>✅ <b>维持</b>，并升级为<b>两级</b>，<b>与 D26 ② 的嵌套关系</b>：回合级折叠壳遇失败
+            <b>强制展开</b>（保证失败可见）；进入过程段之后，<b>行级仍按 D26 ② 的簇规则</b>
+            （同一 <code>ToolGroup</code> 内 ≥3 条失败只自动展开第一条）决定哪些行展开输出体
+            （保证不满屏红）。<b>两级各自独立、互不覆盖</b>——用户看到的是「过程段打开 + 红行头可见 +
+            只有首条失败展开了 OUT」，两条裁定的意图同时达成。
+            as-built：<code>turnHasFailure(turn)</code>（<code>chatTurn.ts</code>）判据是 <code>toolOk === false</code>，
+            <b>不是</b>「回合里有 error 消息」——与 D26 ② 的行级判据共享同一份事实，
+            回合级只问「有没有」，行级另按簇规则问「展开哪几条」。</td>
+        </tr>
+        <tr>
+          <td class="mono">:846</td>
+          <td><code>.tl</code> 回合间距 20px</td>
+          <td>✅ <b>维持总量 20px</b>，但<b>构成改变</b>：10（<code>ReadingColumn</code> 的
+            <code>space-y-2.5</code>）+ 10（气泡带 <code>py-2.5</code>）。<b>单看 <code>space-y-2.5</code> 像节拍减半，
+            实为构成变化</b>——总量算术由 F-B9 钉死：<code>readingColumnSpacingClass()</code> 的数值 ×4 +
+            <code>turnBubbleBandClass()</code> 的 <code>py</code> 数值 ×4 恒等于 20。
+            as-built：<code>readingColumnSpacingClass()</code> = <code>'space-y-2.5'</code>，
+            <code>turnBubbleBandClass()</code> = <code>'sticky top-0 z-10 bg-background py-2.5'</code>
+            （<code>chatTimelineLayout.ts</code>）。</td>
+        </tr>
+        <tr>
+          <td class="mono">:848-855</td>
+          <td>user 气泡：右对齐 + <code>max-width: 85%</code></td>
+          <td>✏️ <b>D26 ④ 满宽于 T-31 补落</b>——T-30 批 2 名义上含此项，但实现从未落地，
+            此处是<b>账实更正</b>而非新裁定。气泡自身<b>圆角 / 内距 / 底色 / 附件 chip 零改动</b>
+            （<code>rounded-br-xs border-primary/8 bg-card</code> 等字节不动）。
+            新增两件：① <b>sticky 气泡带</b>（<code>band</code>，<code>bg-background py-2.5</code>），
+            回合 <code>&lt;section&gt;</code> 为其 containing block（<code>chatTurnClass()</code> 无
+            <code>overflow-*</code> / <code>transform</code> / <code>contain</code>，sticky 完整性由
+            F-B8 / F-B10 断言钉死）；② <b>钉住态 3 行截断</b>——CSS
+            <code>@container scroll-state(stuck: top)</code> 容器查询，纯 CSS 零 JS 零滚动监听。
+            Electron 39（= Chromium 142）<b>实测支持</b>：探针
+            <code>src/agent-host/spikes/scroll-state-probe.js</code> 报告
+            <code>supportsProp=true</code>、<code>container-type</code> 可回读、目标规则可解析
+            （2026-08-03，Chromium 142.0.7444.235）；未钉住态气泡全文不截，<code>title</code> 恒为全文。</td>
+        </tr>
+        <tr>
+          <td class="mono">:1294 / :2789</td>
+          <td>「刻意不搬的 Cursor 元素」清单</td>
+          <td>➕ <b>追加两项</b>：<b>尾部 fork 图标</b>——仓内同名的 <code>fork</code>
+            （<code>composerTarget.ts</code>）是「把会话换靶到另一个工作区」的语义，不是「从此处分叉对话」；
+            借它的图标去表示一个不存在的能力 = 死按钮，与 T-28 当年拒绝 ⊕ 的同一条判据。
+            <b>👍 / 👎 反馈键</b>——本仓无反馈回传通道。两项均按 A06（诚实性）不做，
+            登记入规格 §10-A/B。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>二、新增锚点四个（本页无对应物，登记为既有事实）</h3>
+  <div class="note">
+    <h4>本批新增的结构性事实</h4>
+    <ul>
+      <li><b>① 回合折叠壳</b>——默认态判定表（<code>defaultTurnProcessOpen</code>）：
+        <b>进行中</b> ⇒ 展开；<b>含未解决授权</b>（<code>hasUnresolvedPermission</code>）⇒
+        展开<b>且不可折叠</b>（安全红线，优先级最高，压过其余全部规则——把授权卡藏进折叠壳等于回归
+        第二轮点验第 5 条「授权卡不渲染」那个已闭环的故障面）；<b>含失败工具调用</b> ⇒ 展开；
+        <b>answer 段为空</b> ⇒ 展开（否则折叠后整个回合只剩一行 <code>Worked for Ns</code>）；
+        <b>恢复历史 / 加载时已完成的回合</b> ⇒ 收起；<b>用户手动切换后</b> ⇒ 尊重用户
+        （非受控 <code>Collapsible</code>，与 <code>ToolRows.tsx</code> 逐行折叠同机制）。</li>
+      <li><b>② 回合头状态段</b>——归属规则：<b>描述「在飞的这个回合」的状态属于回合；描述「手上这份草稿」的状态属于
+        Composer</b>。sending 读条（handshake / awaiting / slow / retry 四分支文案，仍由既有
+        <code>composerSendingLine()</code> 生成，只是消费方迁移）随之迁出 Composer 卡内、进回合头；
+        retry 后缀 / 已等待秒数 / Spinner 随迁。streaming 态（已有 ≥1 块但未完成）是<b>唯一新增文案</b>：
+        <code>Generating · Ns</code>（§9-ε 按推荐值）。</li>
+      <li><b>③ 置顶用户气泡</b>——就地 CSS <code>position: sticky</code>，零滚动监听、零
+        <code>IntersectionObserver</code>、零 <code>activeTurnId</code> 状态；锚定切换判据 = DOM 顺序本身——
+        回合边界离开视口顶端，气泡自然被推走，下一回合的气泡随即接管。</li>
+      <li><b>④ 回合尾 copy 按钮</b>——复制该回合的正文块（answer 段 + process 段的 text 项拼接），
+        <b>不含</b>工具 IN/OUT 与 thinking 正文（原始工具输出可能带路径 / 密钥片段，「复制这条回复」不能变成一条
+        外泄通道）；默认可见，<b>非 hover-only</b>（<code>opacity-0</code> + <code>group-hover:</code> 组合被显式禁止——
+        只有鼠标能发现的控件，触摸与键盘都够不到）。</li>
+    </ul>
+  </div>
+
+  <h3>三、as-built 附注三条</h3>
+  <div class="note">
+    <h4>施工中确认或更正的事实</h4>
+    <ul>
+      <li><b>(a) 恢复历史回合无时长源。</b>历史回放不产生 T-06 metadata，
+        <code>latencyMs</code> 恒为 <code>null</code>，回合头因此不能只有「状态段 → Worked for」两级——那样一个
+        刚恢复的历史回合会两级都拿不到，退化成无触发器、force-expanded，§4.3「恢复历史默认收起」反而不可达。
+        实现走<b>四级降级链</b>：<code>状态段 → Worked for → 纯统计行（同款 arg，无时长）→ 无文字 chevron</code>
+        （<code>deriveTurnHeadModel</code>：<code>status ?? workedFor ?? stats ?? bare</code>），
+        全程<b>不硬造秒数</b>（<code>:2399</code> 不破——后两级只印从 <code>blocks</code> 派生的真实计数或不印文字）。</li>
+      <li><b>(b) <code>ran N command(s)</code> 聚合计数撤回不落地。</b>§4.5 拟给 Bash 类调用追加一个
+        「已运行 N 条命令」的聚合计数类目，实现阶段复核发现它与
+        <code>:1769-1772</code>「action 恒独立行」冲突——本仓 Bash 从未与 <code>Explored</code> 这类聚合行合并，
+        一直独立成行，硬凑一个「聚合计数」文案没有对应的聚合结构可挂。<b>撤回，不落地</b>；复议需先修订基线。
+        规格 §4.5 记为<b>有意不对齐</b>（A06）。as-built 注释见 <code>toolCard.ts</code>：
+        「A third "ran N command(s)" counting segment was withdrawn per T-31 review: unreachable while Bash
+        stays standalone per A07; revisit needs baseline revision.」</li>
+      <li><b>(c) 折叠壳是受控组件。</b>授权在飞时（<code>hasUnresolvedPermission</code>）强制展开
+        <b>且触发器禁用</b>（<code>Collapsible</code> 的 <code>disabled</code>，不是仅仅 <code>open</code> 恒真——
+        禁用是为了不让用户在授权卡还在等答案时手滑把它收起来）；授权解决后<b>保持展开</b>，不在鼠标下坍塌——
+        若解决前用户已手动收起过回合，强制展开态被<b>原样接管</b>为手动态（而不是恢复用户收起前的选择），
+        否则已作答的卡片与刚刚发生的执行结果会在同一帧从光标下消失。</li>
+    </ul>
+  </div>
+
+  <p class="src">
+    追记依据 · docs/plans/2026-07-31-reply-anatomy-design.md（§7.1 逐条对齐表 / §7.2 D26 嵌套 / §4 回合分段 / §5 置顶气泡）&nbsp;|&nbsp;
+    参照 · docs/design/refs/feedback-20260731-round4/&nbsp;|&nbsp;
+    落地纯层 · src/renderer/components/chat/chatTurn.ts · turnHead.ts · turnStatus.ts · turnCopy.ts · chatTimelineLayout.ts&nbsp;|&nbsp;
+    探针 · src/agent-host/spikes/scroll-state-probe.js&nbsp;|&nbsp;
+    主线台账 · docs/plans/ledger-claude-mainline.md 2026-08-03 T-31 行
+  </p>
+</section>
 
 </div>
 

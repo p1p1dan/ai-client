@@ -1,5 +1,5 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   initialTurnTimingRegistry,
   reduceTurnTiming,
@@ -38,7 +38,10 @@ export function useTurnTiming(sessionId: string | null): UseTurnTimingResult {
     };
   }, [sessionId]);
 
-  return {
-    getThinking: (blockId: string) => registry.byBlock[blockId],
-  };
+  // Stable across renders that did not change the registry — same reason as
+  // `useMessageMetadata`'s `get` (review batch F7): it feeds a prop of the
+  // memoized `ChatTurn`.
+  const getThinking = useCallback((blockId: string) => registry.byBlock[blockId], [registry]);
+
+  return { getThinking };
 }

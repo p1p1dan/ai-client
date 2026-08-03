@@ -375,6 +375,9 @@ export function deriveAggregateRow(
   const segments: string[] = [];
   if (fileCount > 0) segments.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`);
   if (searchCount > 0) segments.push(`${searchCount} search${searchCount === 1 ? '' : 'es'}`);
+  // A third "ran N command(s)" counting segment was withdrawn per T-31 review:
+  // unreachable while Bash stays standalone per A07; revisit needs baseline
+  // revision.
 
   const firstEntry = entries[0];
   const firstBlockId = firstEntry

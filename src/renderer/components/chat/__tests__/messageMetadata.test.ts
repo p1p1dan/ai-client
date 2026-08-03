@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { formatRelativeAge } from '@/lib/relativeTime';
 import {
+  defaultFormatTime,
+  formatAbsoluteTime,
   formatMessageMetadata,
+  formatRelativeTimestamp,
   initialMetadataRegistry,
   type MessageMetadata,
   reduceMessageMetadata,
@@ -168,5 +172,93 @@ describe('reduceMessageMetadata (T-06)', () => {
     };
     const line = formatMessageMetadata(meta, { formatTime: () => '10:30' });
     expect(line).toBe('sonnet · 1.2s · 10:30');
+  });
+});
+
+// F-B13 (T-31 §4.6 / polish-audit P-18): the footer timestamp is relative now.
+// The sidebar already showed relative ages, so the interesting property is not
+// the wording but that both surfaces answer from ONE bucket table — a second
+// implementation would drift the two into disagreeing about when "an hour ago"
+// starts.
+describe('relative timestamps (F-B13)', () => {
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+  const NOW = Date.UTC(2026, 6, 31, 12, 0, 0);
+
+  it('F-B13: under a minute reads "just now"', () => {
+    expect(formatRelativeTimestamp(NOW - 5_000, NOW)).toBe('just now');
+    expect(formatRelativeTimestamp(NOW - 59_000, NOW)).toBe('just now');
+    // Clock skew (a future timestamp) must not fall through to a negative age.
+    expect(formatRelativeTimestamp(NOW + 5_000, NOW)).toBe('just now');
+  });
+
+  it('F-B13: 90 minutes reads "1h ago"', () => {
+    expect(formatRelativeTimestamp(NOW - 90 * MINUTE, NOW)).toBe('1h ago');
+  });
+
+  it('F-B13: across a day boundary reads "Nd ago"', () => {
+    expect(formatRelativeTimestamp(NOW - DAY, NOW)).toBe('1d ago');
+    expect(formatRelativeTimestamp(NOW - 3 * DAY, NOW)).toBe('3d ago');
+  });
+
+  it('F-B13: same source as the sidebar — the suffix is the ONLY difference', () => {
+    const samples = [30_000, 5 * MINUTE, 90 * MINUTE, 3 * DAY, 10 * DAY, 60 * DAY, 400 * DAY];
+    for (const age of samples) {
+      const sidebar = formatRelativeAge(NOW - age, NOW);
+      const footer = formatRelativeTimestamp(NOW - age, NOW);
+      expect(footer).toBe(sidebar === 'now' ? 'just now' : `${sidebar} ago`);
+    }
+  });
+
+  it('F-B13: defaultFormatTime is the relative form, read against the wall clock', () => {
+    const now = Date.now();
+    expect(defaultFormatTime(now - 5_000)).toBe('just now');
+    expect(defaultFormatTime(now - 90 * MINUTE)).toBe('1h ago');
+    expect(defaultFormatTime(now - 3 * DAY)).toBe('3d ago');
+  });
+
+  it('F-B13: formatMessageMetadata now defaults to the relative timestamp', () => {
+    const meta: MessageMetadata = {
+      model: 'claude-opus-5',
+      completedAt: Date.now() - 3 * 3600_000,
+    };
+    expect(formatMessageMetadata(meta, { omitLatency: true })).toBe('claude-opus-5 · 3h ago');
+  });
+
+  // The precision the relative form trades away is restored on hover (§10-D),
+  // so the absolute formatter stays exported rather than being deleted.
+  it('F-B13: the absolute clock time stays available for the title attribute', () => {
+    const at = new Date(2026, 6, 31, 7, 41).getTime();
+    expect(formatAbsoluteTime(at)).toBe('07:41');
+  });
+
+  // Review batch F9. The footer used to render through `defaultFormatTime`,
+  // which reads `Date.now()` itself — so the age only ever advanced when
+  // something ELSE re-rendered that turn, and in an idle session nothing does.
+  // "just now" stayed "just now" for hours. The fix is that `MessageTimeline`
+  // owns one clock and passes it in; these assertions pin the property that
+  // makes that possible — the same message, read against a later clock, ages.
+  it('F9: the same timestamp read against a later clock advances', () => {
+    const completedAt = NOW;
+    expect(formatRelativeTimestamp(completedAt, NOW + 5_000)).toBe('just now');
+    expect(formatRelativeTimestamp(completedAt, NOW + MINUTE)).toBe('1m ago');
+    expect(formatRelativeTimestamp(completedAt, NOW + 2 * MINUTE)).toBe('2m ago');
+    expect(formatRelativeTimestamp(completedAt, NOW + HOUR)).toBe('1h ago');
+  });
+
+  // The wiring F9 actually depends on: the injected `formatTime` must be what
+  // renders the footer's timestamp segment, not the wall-clock default.
+  it('F9: formatMessageMetadata renders the injected clock, not Date.now()', () => {
+    const meta: MessageMetadata = { model: 'claude-opus-5', completedAt: NOW };
+    const at = (now: number) =>
+      formatMessageMetadata(meta, {
+        omitLatency: true,
+        formatTime: (ms) => formatRelativeTimestamp(ms, now),
+      });
+    expect(at(NOW + 5_000)).toBe('claude-opus-5 · just now');
+    expect(at(NOW + MINUTE)).toBe('claude-opus-5 · 1m ago');
+    // A clock far from the wall clock proves the default was not consulted.
+    expect(at(NOW + 400 * DAY)).toBe('claude-opus-5 · 1y ago');
   });
 });

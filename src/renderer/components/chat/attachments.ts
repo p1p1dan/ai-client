@@ -310,6 +310,13 @@ export type SendPhase = 'handshake' | 'awaiting';
  * Status line shown while a send is in flight. Deliberately never predicts a
  * finish time: measured latency is size-independent and swings ~8x day to day,
  * so a fake number would be worse than none.
+ *
+ * T-31 §3.2: the sole consumer is now the TURN HEAD (`turnStatus.ts`), not the
+ * composer — this copy describes the turn in flight, so it renders with the
+ * reply. The name is kept as-is: renaming would churn this function and its
+ * two word-for-word assertions in `attachments.test.ts` for no behavior change,
+ * and those assertions are exactly what stops the copy from being reimplemented
+ * a second time downstream.
  */
 export function composerSendingLine(input: {
   phase: SendPhase;

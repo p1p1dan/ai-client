@@ -110,9 +110,36 @@ describe('formatWorkedForRow', () => {
     expect(formatWorkedForRow(400)).toEqual({ verb: 'Worked for', arg: '1s', argKind: 'prose' });
   });
 
-  it('returns null (row does not render) when latencyMs is null', () => {
+  // F-B12 (T-31, A07 :2399): the never-fabricate-seconds guard. A history
+  // message hydrated without T-06 metadata has no measured duration, and the
+  // row must be omitted rather than shown as "0s"/"1s". The stats argument
+  // added by T-31 must not create a second path that renders a row anyway.
+  it('F-B12: returns null (row does not render) when latencyMs is null, stats or not', () => {
     expect(formatWorkedForRow(null)).toBeNull();
     expect(formatWorkedForRow(undefined)).toBeNull();
+    expect(formatWorkedForRow(null, '3 tools, 11 searches')).toBeNull();
+  });
+
+  it('F-B12: 66000ms reads as "1m 6s", not "66s"', () => {
+    expect(formatWorkedForRow(66_000)?.arg).toContain('1m 6s');
+    expect(formatWorkedForRow(66_000)?.arg).toBe('1m 6s');
+  });
+
+  it('F-B12: appends the turn stats to the same arg (§4.2 — counts move up into the collapsed row)', () => {
+    expect(formatWorkedForRow(66_000, '3 tools, 11 searches')).toEqual({
+      verb: 'Worked for',
+      arg: '1m 6s · 3 tools, 11 searches',
+      argKind: 'prose',
+    });
+  });
+
+  it('F-B12: an absent or empty stats value leaves the duration arg untouched', () => {
+    expect(formatWorkedForRow(31_000, null)?.arg).toBe('31s');
+    expect(formatWorkedForRow(31_000, '')?.arg).toBe('31s');
+  });
+
+  it('F-B12: drops the seconds segment on a whole minute', () => {
+    expect(formatWorkedForRow(120_000)?.arg).toBe('2m');
   });
 
   it('D25 §2.4: the "Ns" arg is prose, not an identifier (sans, not mono)', () => {
@@ -158,5 +185,25 @@ describe('deriveTurnStats', () => {
 
   it('returns null when every count is zero', () => {
     expect(deriveTurnStats(message([]))).toBeNull();
+    expect(deriveTurnStats(message([]), { style: 'compact' })).toBeNull();
+  });
+
+  // Same counting pass, two renderings: ` · ` is already the separator between
+  // the duration and the counts inside the "Worked for …" arg, so the compact
+  // form falls back to commas instead of nesting one separator inside itself.
+  it('F-B12: compact style renders the reference wording "3 tools, 11 searches"', () => {
+    const blocks: ChatBlock[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      blocks.push(call(`t${i}`, 'Bash', { command: 'ls' }), result(`t${i}`));
+    }
+    for (let i = 0; i < 11; i += 1) {
+      blocks.push(call(`s${i}`, 'Grep', { pattern: 'x' }), result(`s${i}`));
+    }
+    expect(deriveTurnStats(message(blocks), { style: 'compact' })).toBe('3 tools, 11 searches');
+  });
+
+  it('F-B12: compact style keeps the singular/plural rule', () => {
+    const blocks: ChatBlock[] = [call('a', 'Bash', { command: 'ls' }), result('a')];
+    expect(deriveTurnStats(message(blocks), { style: 'compact' })).toBe('1 tool');
   });
 });

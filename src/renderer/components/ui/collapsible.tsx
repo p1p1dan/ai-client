@@ -18,13 +18,23 @@ function CollapsibleTrigger({ className, ...props }: CollapsiblePrimitive.Trigge
   );
 }
 
+/**
+ * The panel's measured-height animation classes.
+ *
+ * Exported because a consumer that must opt OUT of the height measurement
+ * (`chat/chatTimelineLayout.ts`'s `turnProcessPanelClass`) can only prove it
+ * actually did so by evaluating the real `cn()` merge of the two — asserting
+ * the override string alone proves nothing, since the base it overrides lives
+ * here. Importing the constant instead of copying it is what keeps that
+ * assertion honest when this line is edited.
+ */
+export const COLLAPSIBLE_PANEL_BASE_CLASS =
+  'h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 data-ending-style:h-0 data-starting-style:h-0';
+
 function CollapsiblePanel({ className, ...props }: CollapsiblePrimitive.Panel.Props) {
   return (
     <CollapsiblePrimitive.Panel
-      className={cn(
-        'h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 data-ending-style:h-0 data-starting-style:h-0',
-        className
-      )}
+      className={cn(COLLAPSIBLE_PANEL_BASE_CLASS, className)}
       data-slot="collapsible-panel"
       {...props}
     />

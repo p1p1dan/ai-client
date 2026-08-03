@@ -1,0 +1,64 @@
+/*
+ * T-31 (reply-anatomy spec §5.6-A) — pinned user bubble truncation.
+ *
+ * ## Why this is its own file, not part of globals.css
+ *
+ * Tailwind v4 runs the stylesheet that imports it through lightningcss, and
+ * lightningcss 1.30.2 cannot parse a `scroll-state()` container query at all
+ * (`Unexpected token Function("scroll-state")`). The Tailwind Vite plugin
+ * swallows that error rather than failing the build, so the rule is silently
+ * DROPPED from the bundle — verified by grepping the built CSS: the
+ * `container-type` declaration survived, the `@container` block did not.
+ * A stylesheet with no Tailwind directives takes Vite's own CSS path instead
+ * (postcss + esbuild), and esbuild passes the query through verbatim, so the
+ * rule ships. This file must therefore stay free of `@import "tailwindcss"`,
+ * `@theme`, `@apply` and friends; adding any of them re-routes it into the
+ * pipeline that eats the rule.
+ *
+ * Not a Tailwind arbitrary variant either, for the same reason plus a second
+ * one: Tailwind has no `scroll-state()` variant, and an arbitrary at-rule
+ * variant would still be emitted into the lightningcss-processed sheet.
+ *
+ * ## What it does
+ *
+ * The band (`.fx-turn-band`, `turnBubbleBandClass()`'s element — the sticky
+ * one) declares itself a scroll-state query container; the bubble INSIDE it
+ * clamps to three lines, but only while the band is actually stuck to the top
+ * of the scroll viewport. A free-scrolling bubble stays full length, which is
+ * the readability the full-width user bubble (D26 ④) was widened for; a
+ * 20-line question would otherwise fill the entire viewport the moment it
+ * pinned. The container has to be the ancestor rather than the clamped element
+ * itself — a container query cannot style its own container.
+ *
+ * Everything else about the band (sticky / top / z / background / padding)
+ * lives in `components/chat/chatTimelineLayout.ts` and is asserted there. These
+ * two classes are behaviour hooks only: no spacing, no colour, nothing that
+ * belongs to the design-token layer.
+ *
+ * `container-type: scroll-state` applies NO containment (unlike `size` /
+ * `inline-size`), so it cannot disable the band's own `position: sticky` or
+ * re-parent its containing block — the failure F-B8/F-B10 guard against.
+ *
+ * Engine support is not inferable from source and is not assertable in this
+ * repo's node-only vitest (spec §6.2 ③), so it was measured:
+ * `src/agent-host/spikes/scroll-state-probe.js` reports `supportsProp=true`,
+ * `container-type` round-trips as `scroll-state`, and the
+ * `@container scroll-state(stuck: top)` rule parses — Electron 39 /
+ * Chromium 142.0.7444.235, 2026-08-03. The documented fallback if that ever
+ * regresses is spec §5.6-B: an unconditional clamp on the bubble.
+ *
+ * The bubble's `title` carries the full prompt in every state, so the clamp
+ * never makes content unreachable.
+ */
+.fx-turn-band {
+  container-type: scroll-state;
+}
+
+@container scroll-state(stuck: top) {
+  .fx-turn-bubble-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+}
