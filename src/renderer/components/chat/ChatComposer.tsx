@@ -18,13 +18,16 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import {
   classifyAssistantProgress,
+  collectAssistantMessageIds,
   countAssistantMessagesWithBlocks,
+  hasNewAssistantMessage,
   isHostErrorForSend,
   isSessionCompletedForSend,
   isSessionFailedForSend,
   isUserEchoForSend,
   pushPendingHostError,
   readSessionFailedError,
+  resolveAbandonProgress,
   resolvePendingHostError,
 } from './assistantProgress';
 import { largeAttachmentHint, sendTimeoutMs } from './attachmentLimits';
@@ -1155,6 +1158,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
     /** Send the turn, then wait for assistant / tool / permission / terminal progress. */
     const sendAndWait = async (): Promise<boolean> => {
+      // Round-6 verify major: the store fallback in the wait below may only
+      // accept a reply THIS send produced. Captured before dispatch — an
+      // absolute "any runtime assistant exists" check is satisfied by the
+      // previous turn's reply the instant a second send starts, releasing
+      // the wait (and unsubscribing this send's listeners) with zero
+      // evidence.
+      const assistantBaseline = collectAssistantMessageIds(
+        useChatSessionsStore.getState().messages[sessionId] ?? []
+      );
       // F2b (round-4 Codex re-review): reset BEFORE dispatch — covers the
       // FIRST send AND every busy-retry resend (`sendAndWait` is called
       // again from the busy loop below), since each is its own NEW IPC call
@@ -1198,10 +1210,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         if (session?.status === 'waiting_permission' || session?.status === 'waiting_question') {
           return true;
         }
-        const hasAssistant = (state.messages[sessionId] ?? []).some(
-          (message) => message.role === 'assistant' && message.blocks.length > 0
-        );
-        return hasAssistant;
+        // Round-6 review N1 + verify major: only an assistant id that did
+        // not exist at dispatch time counts — `h:*` replay rows and the
+        // previous turn's reply are both excluded by the baseline.
+        return hasNewAssistantMessage(state.messages[sessionId] ?? [], assistantBaseline);
         // T-18: the budget scales with the payload and is clamped below the
         // Host stall watchdog. sendTimeoutMs(0) is still exactly 45000, so the
         // text-only path waits precisely as long as it did before.
@@ -1609,12 +1621,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   useEffect(() => {
     const marker = abandonMarkerRef.current;
     if (!marker || marker.sessionId !== activeSessionId) return;
-    const currentCursor = countAssistantMessagesWithBlocks(activeMessages ?? []);
-    const landed =
-      currentCursor > marker.assistantCursor ||
-      activeSession?.status === 'waiting_permission' ||
-      activeSession?.status === 'waiting_question';
-    if (!landed) return;
+    // Round-6 review B2: one pure step — see resolveAbandonProgress for why
+    // the armed cursor re-bases downward when the replay-coverage merge
+    // folds runtime assistant messages away.
+    const step = resolveAbandonProgress({
+      armedCursor: marker.assistantCursor,
+      currentCursor: countAssistantMessagesWithBlocks(activeMessages ?? []),
+      waitingInteraction:
+        activeSession?.status === 'waiting_permission' ||
+        activeSession?.status === 'waiting_question',
+    });
+    marker.assistantCursor = step.nextArmedCursor;
+    if (!step.landed) return;
     clearAbandonMarkerIfMatch(marker);
   }, [activeSessionId, activeSession?.status, activeMessages, clearAbandonMarkerIfMatch]);
 

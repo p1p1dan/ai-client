@@ -5,7 +5,7 @@
 
 import type { GitWorktree } from '@shared/types';
 import type { TempWorkspaceItem } from '@shared/types/tempWorkspace';
-import { normalizePath } from '@shared/utils/path';
+import { canonicalPathKey, normalizePath } from '@shared/utils/path';
 import type { Repository } from '@/App/constants';
 import { TEMP_REPO_ID } from '@/App/constants';
 import type { ChatProject, ChatWorkspace, WorkspaceKind } from '@/stores/chatSessions';
@@ -86,7 +86,41 @@ export function deriveChatWorkspaceTree(
 
     const isRemote = repo.kind === 'remote';
     const listed = input.worktreesByRepoPath[repo.path] ?? [];
+
     const mainWt = listed.find((wt) => wt.isMainWorktree);
+
+    // T-31 (round-6 D2, generalized by review B4): a user can register a
+    // folder that is NOT the repo root of the git repository it belongs to —
+    // a linked worktree (openchamber's `aaa` added standalone), a
+    // subdirectory of a registered repo, or a symlinked form of either.
+    // `worktree.list` for such a folder returns the PARENT repo's worktree
+    // list, whose main entry points at the parent's root. Treating that
+    // entry as this project's main workspace collides with the parent
+    // project's own `ws:main:<parent path>` id (first registrant wins;
+    // pushWorkspace's seenWorkspaceIds silently drops the loser, so
+    // whichever repo registers second gets zero workspaces) and re-attaches
+    // the parent's sibling worktrees here, duplicating ids the parent
+    // project already owns. The registered folder IS this project's main
+    // workspace — so whenever the listed root differs from repo.path,
+    // short-circuit with a single self workspace. The branch chip comes from
+    // the matching linked-worktree entry when one exists (a subdirectory has
+    // none). canonicalPathKey trims trailing separators too — `/aaa/` vs
+    // `/aaa` must not silently disable this branch (review M5).
+    if (!isRemote && mainWt && canonicalPathKey(mainWt.path) !== canonicalPathKey(repo.path)) {
+      const selfWt = listed.find((wt) => canonicalPathKey(wt.path) === canonicalPathKey(repo.path));
+      const selfBranch = workspaceBranch(selfWt);
+      pushWorkspace({
+        id: workspaceIdFor('main', repo.path),
+        projectId,
+        name: 'Main',
+        kind: 'main',
+        path: repo.path,
+        ...(selfBranch ? { branch: selfBranch } : {}),
+        gitEnabled: true,
+      });
+      continue;
+    }
+
     const mainPath = mainWt?.path ?? repo.path;
     const mainKind: WorkspaceKind = isRemote ? 'remote' : 'main';
     const mainBranch = isRemote ? undefined : workspaceBranch(mainWt);
@@ -177,6 +211,29 @@ export function workspaceTreeSignature(
   });
 }
 
+/**
+ * Tie-break for path-only workspace lookups (round-6 review M3/Major-4): D2
+ * deliberately lets one directory back two workspaces — the parent repo's
+ * `worktree` entry and the registered folder's own `main`. Path-only
+ * consumers must prefer the registered-folder identity deterministically;
+ * a bare `.find()` inherits repository registration order, which flips the
+ * resolved project when the order flips. Intentionally duplicated in
+ * `composerTarget.ts` across the chat / workspace-shell boundary (same rule
+ * as `resolveNewSessionWorkspaceId`).
+ */
+export function workspacePathMatchRank(kind: WorkspaceKind): number {
+  switch (kind) {
+    case 'main':
+      return 0;
+    case 'remote':
+      return 1;
+    case 'worktree':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
 /** Prefer active worktree path, else selected repo main, else first workspace. */
 export function resolvePreferredWorkspaceId(
   workspaces: ChatWorkspace[],
@@ -193,8 +250,15 @@ export function resolvePreferredWorkspaceId(
     if (!path || path === TEMP_REPO_ID) {
       return undefined;
     }
-    const normalized = normalizePath(path).toLowerCase();
-    return workspaces.find((ws) => normalizePath(ws.path).toLowerCase() === normalized);
+    const key = canonicalPathKey(path);
+    const matches = workspaces.filter((ws) => canonicalPathKey(ws.path) === key);
+    if (matches.length <= 1) {
+      return matches[0];
+    }
+    // Stable sort keeps derivation order within one rank tier.
+    return [...matches].sort(
+      (a, b) => workspacePathMatchRank(a.kind) - workspacePathMatchRank(b.kind)
+    )[0];
   };
 
   return (

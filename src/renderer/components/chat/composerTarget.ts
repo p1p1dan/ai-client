@@ -1,14 +1,14 @@
 /**
  * T-27: pure decision/derivation functions for the Composer target bar (D22).
  *
- * Only type imports plus the pure `normalizePath` helper are allowed here —
- * no components, hooks, or `window`. Store writes live in
+ * Only type imports plus the pure `canonicalPathKey` helper are allowed here
+ * — no components, hooks, or `window`. Store writes live in
  * `stores/chatSessionActions.ts`; this module only decides what should
  * happen and derives read-only view data.
  */
 
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
-import { normalizePath } from '@shared/utils/path';
+import { canonicalPathKey } from '@shared/utils/path';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 
 // ---- Three-tier rule ----
@@ -213,12 +213,40 @@ export function resolveRuntimeRepoPath(
   return isTargetableWorkspace(candidate) ? candidate.path : null;
 }
 
+/**
+ * Round-6 review M3: one directory can legitimately back two workspaces
+ * (the parent repo's `worktree` entry and a registered folder's own `main`
+ * — D2's deliberate dual identity). Prefer the registered-folder identity
+ * deterministically instead of inheriting derivation order. Intentionally
+ * duplicated from `deriveChatWorkspaceTree.ts` across the chat /
+ * workspace-shell boundary (same rule as `resolveProjectDefaultWorkspaceId`).
+ */
+export function workspacePathMatchRank(kind: ChatWorkspace['kind']): number {
+  switch (kind) {
+    case 'main':
+      return 0;
+    case 'remote':
+      return 1;
+    case 'worktree':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
 export function matchWorkspaceByPath(
   path: string,
   workspaces: readonly ChatWorkspace[]
 ): ChatWorkspace | undefined {
-  const normalized = normalizePath(path).toLowerCase();
-  return workspaces.find((ws) => normalizePath(ws.path).toLowerCase() === normalized);
+  const key = canonicalPathKey(path);
+  const matches = workspaces.filter((ws) => canonicalPathKey(ws.path) === key);
+  if (matches.length <= 1) {
+    return matches[0];
+  }
+  // Stable sort keeps derivation order within one rank tier.
+  return [...matches].sort(
+    (a, b) => workspacePathMatchRank(a.kind) - workspacePathMatchRank(b.kind)
+  )[0];
 }
 
 // ---- Dropdown data assembly ----

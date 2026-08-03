@@ -1,4 +1,6 @@
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
+import { canonicalPathKey } from '@shared/utils/path';
+import { workspacePathMatchRank } from '@/components/chat/composerTarget';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { fallbackSessionTitle } from './sessionTitle';
 
@@ -58,7 +60,20 @@ export function mergeSessionIndex(
 ): MergeResult {
   const seedStatus = options.seedStatus ?? 'idle';
   const byId = new Map(prevSessions.map((session) => [session.id, session] as const));
-  const workspacesByPath = new Map(options.workspaces.map((ws) => [ws.path, ws] as const));
+  // Round-6 review M3: key by canonical path (raw keys missed `/aaa/` vs
+  // `/aaa` and case drift) and prefer the registered-folder identity when one
+  // directory backs two workspaces (D2's parent `worktree` entry + own
+  // `main`) — the previous last-write-wins Map made a persisted session's
+  // folder flip with repository registration order across restarts. The real
+  // fix is persisting workspaceId in the index (backlog), not just path.
+  const workspacesByPath = new Map<string, ChatWorkspace>();
+  for (const ws of options.workspaces) {
+    const key = canonicalPathKey(ws.path);
+    const existing = workspacesByPath.get(key);
+    if (!existing || workspacePathMatchRank(ws.kind) < workspacePathMatchRank(existing.kind)) {
+      workspacesByPath.set(key, ws);
+    }
+  }
 
   const next: ChatSession[] = [];
   const seenIds = new Set<string>();
@@ -73,7 +88,7 @@ export function mergeSessionIndex(
       continue;
     }
     const existing = byId.get(entry.sessionId);
-    const workspace = workspacesByPath.get(entry.workspacePath);
+    const workspace = workspacesByPath.get(canonicalPathKey(entry.workspacePath));
     const projectId = existing?.projectId ?? workspace?.projectId ?? '';
     const workspaceId = existing?.workspaceId ?? workspace?.id ?? '';
 

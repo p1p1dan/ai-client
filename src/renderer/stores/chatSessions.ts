@@ -10,6 +10,14 @@ import { create } from 'zustand';
 // `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
 // store. Read by the `sendMessage` ghost-session guard below.
 import { isSessionDismissed } from '@/components/chat/sessionIndex/dismissedSessions';
+// Leaf module as well (shared-types import only) — see its header for the
+// replay-coverage rules the `session.history` reducer delegates to, and for
+// the resume snapshot registry that bounds which messages a replay may fold.
+import {
+  mergeReplayedHistory,
+  snapshotResumeCandidates,
+  takeResumeSnapshot,
+} from './historyReplayMerge';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
 
@@ -381,6 +389,18 @@ export function applyRuntimeEvent(
   switch (event.type) {
     case 'session.created':
     case 'session.resumed': {
+      // Watermark for the replay-coverage merge (round-6 Bug B v2): only
+      // messages that already exist NOW may be folded by this resume's
+      // `session.history`; anything echoed after this point is a new turn
+      // the replay cannot know about. Resume only — a created session has
+      // no replay coming.
+      if (event.type === 'session.resumed' && event.requestId) {
+        snapshotResumeCandidates(
+          sessionId,
+          event.requestId,
+          (state.messages[sessionId] ?? []).map((message) => message.id)
+        );
+      }
       const runtimeIdentity = event.payload?.runtimeIdentity;
       const hostBoundSessionIds = state.hostBoundSessionIds.includes(sessionId)
         ? state.hostBoundSessionIds
@@ -411,17 +431,27 @@ export function applyRuntimeEvent(
     case 'session.history': {
       const { payload } = event;
 
-      // Idempotent prefix replace: drop this session's previously hydrated
-      // `h:*` messages; runtime messages (user-*/asst-*/error) are untouched
-      // and history always precedes them in the bucket.
+      // Replay-coverage merge (round-6 Bug B): a resume replays the whole
+      // JSONL, so runtime echoes of turns the replay already contains must be
+      // reconciled away — keeping every runtime message rendered each
+      // recovered turn twice (history copy + retained live echo). The walk
+      // and its fail-open rules live in the historyReplayMerge leaf; on read
+      // failure it degrades to the old prefix-replace and never drops a
+      // runtime message.
       const bucket = state.messages[sessionId] ?? [];
-      const withoutOldHistory = bucket.filter(
-        (message) => !message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
-      );
       const historyMessages = payload.messages.map((historyMessage) =>
         mapHistoryMessageToChatMessage(sessionId, historyMessage)
       );
-      const messages = withBucket(state, sessionId, [...historyMessages, ...withoutOldHistory]);
+      const messages = withBucket(
+        state,
+        sessionId,
+        mergeReplayedHistory(bucket, historyMessages, {
+          historyReadFailed: payload.error != null,
+          // requestId-matched snapshot from this replay's own resume; null
+          // (stale replay / no resume seen) disables folding entirely.
+          snapshot: takeResumeSnapshot(sessionId, event.requestId),
+        })
+      );
 
       // Row creation is T-02's responsibility; only enrich an existing row.
       // updatedAt takes the last history message's timestamp — never Date.now(),

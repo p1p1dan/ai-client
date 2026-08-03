@@ -200,12 +200,63 @@ export interface AssistantMessageLike {
 export function countAssistantMessagesWithBlocks(
   messages: readonly AssistantMessageLike[]
 ): number {
-  return messages.filter(
-    (message) =>
-      message.role === 'assistant' &&
-      message.blocks.length > 0 &&
-      !message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
-  ).length;
+  return messages.filter(isRuntimeAssistantWithBlocks).length;
+}
+
+function isRuntimeAssistantWithBlocks(message: AssistantMessageLike): boolean {
+  return (
+    message.role === 'assistant' &&
+    message.blocks.length > 0 &&
+    !message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+  );
+}
+
+/**
+ * Send-time baseline for `hasNewAssistantMessage` (round-6 verify major):
+ * `sendAndWait`'s store fallback used an absolute "any runtime assistant
+ * exists" check, which the PREVIOUS turn's reply satisfies the instant a
+ * second send starts — the wait released with zero evidence from this send,
+ * unsubscribed its listeners, and a late failure could no longer restore
+ * the payload. Only an assistant id that was not present at dispatch time
+ * counts as this send's progress.
+ */
+export function collectAssistantMessageIds(messages: readonly AssistantMessageLike[]): Set<string> {
+  return new Set(messages.filter(isRuntimeAssistantWithBlocks).map((message) => message.id));
+}
+
+export function hasNewAssistantMessage(
+  messages: readonly AssistantMessageLike[],
+  baselineIds: ReadonlySet<string>
+): boolean {
+  return messages.some(
+    (message) => isRuntimeAssistantWithBlocks(message) && !baselineIds.has(message.id)
+  );
+}
+
+/**
+ * One step of the abandon-marker state machine (round-6 B2), pure so the
+ * mutable-marker effect in ChatComposer stays testable:
+ *
+ * - The replay-coverage merge can FOLD runtime assistant messages into their
+ *   `h:*` copies, shrinking the cursor below the armed baseline — without
+ *   the downward re-baseline, `count > armed` stays false forever and the
+ *   stale banner + Retry never clear.
+ * - A replay can only shrink or hold the runtime count (`h:*` rows are
+ *   excluded from it), so hydration alone never sets `landed` — the
+ *   iteration-4 "replayed history must not clear the marker" rule holds.
+ * - One genuinely new runtime reply pushes the count past the re-based
+ *   baseline and clears.
+ */
+export function resolveAbandonProgress(input: {
+  armedCursor: number;
+  currentCursor: number;
+  waitingInteraction: boolean;
+}): { nextArmedCursor: number; landed: boolean } {
+  const nextArmedCursor = Math.min(input.armedCursor, input.currentCursor);
+  return {
+    nextArmedCursor,
+    landed: input.currentCursor > nextArmedCursor || input.waitingInteraction,
+  };
 }
 
 export function classifyAssistantProgress(

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyAssistantProgress,
+  collectAssistantMessageIds,
   countAssistantMessagesWithBlocks,
+  hasNewAssistantMessage,
   isHostErrorForSend,
   isSessionCompletedForSend,
   isSessionFailedForSend,
@@ -9,6 +11,7 @@ import {
   MAX_PENDING_HOST_ERRORS,
   pushPendingHostError,
   readSessionFailedError,
+  resolveAbandonProgress,
   resolvePendingHostError,
   shouldAdmitPendingHostError,
 } from '../assistantProgress';
@@ -372,6 +375,87 @@ describe('countAssistantMessagesWithBlocks (S4, round-2 iteration-3 review)', ()
     expect(countAssistantMessagesWithBlocks(runtimeOnly)).toBe(
       countAssistantMessagesWithBlocks(withReplayedHistory)
     );
+  });
+});
+
+describe('collectAssistantMessageIds / hasNewAssistantMessage (round-6 verify major)', () => {
+  // A session that already completed one turn: this is the SECOND send's
+  // normal starting state, not an edge case.
+  const preexisting = [
+    { id: 'asst-old', role: 'assistant', blocks: [{ type: 'text' }] },
+    { id: 'h:1', role: 'assistant', blocks: [{ type: 'text' }] },
+    { id: 'user-1', role: 'user', blocks: [{ type: 'text' }] },
+  ];
+
+  it('the baseline collects only runtime assistant messages with blocks', () => {
+    expect([...collectAssistantMessageIds(preexisting)]).toEqual(['asst-old']);
+  });
+
+  it('a pre-existing runtime assistant is NOT progress for a new send', () => {
+    // The refuted predicate was "any runtime assistant exists": true here
+    // before this send produced anything — releasing the wait with zero
+    // evidence and unsubscribing its listeners.
+    const baseline = collectAssistantMessageIds(preexisting);
+    expect(hasNewAssistantMessage(preexisting, baseline)).toBe(false);
+  });
+
+  it('a replay landing mid-wait is NOT progress (h:* never counts)', () => {
+    const baseline = collectAssistantMessageIds(preexisting);
+    const afterReplay = [
+      ...preexisting,
+      { id: 'h:2', role: 'assistant', blocks: [{ type: 'text' }] },
+    ];
+    expect(hasNewAssistantMessage(afterReplay, baseline)).toBe(false);
+  });
+
+  it('only an assistant id unseen at dispatch time is progress', () => {
+    const baseline = collectAssistantMessageIds(preexisting);
+    const afterReply = [
+      ...preexisting,
+      { id: 'asst-new', role: 'assistant', blocks: [{ type: 'text' }] },
+    ];
+    expect(hasNewAssistantMessage(afterReply, baseline)).toBe(true);
+  });
+
+  it('an old id folded away by the replay merge does not fake progress', () => {
+    const baseline = collectAssistantMessageIds(preexisting);
+    const afterFold = [{ id: 'h:folded', role: 'assistant', blocks: [{ type: 'text' }] }];
+    expect(hasNewAssistantMessage(afterFold, baseline)).toBe(false);
+  });
+});
+
+describe('resolveAbandonProgress (round-6 B2 marker state machine)', () => {
+  it('a replay shrink re-bases the armed cursor without landing', () => {
+    expect(
+      resolveAbandonProgress({ armedCursor: 2, currentCursor: 1, waitingInteraction: false })
+    ).toEqual({ nextArmedCursor: 1, landed: false });
+  });
+
+  it('hydration-only h:* growth never lands (runtime cursor unchanged)', () => {
+    expect(
+      resolveAbandonProgress({ armedCursor: 1, currentCursor: 1, waitingInteraction: false })
+    ).toEqual({ nextArmedCursor: 1, landed: false });
+  });
+
+  it('one genuinely new reply after the re-base lands', () => {
+    const shrunk = resolveAbandonProgress({
+      armedCursor: 2,
+      currentCursor: 1,
+      waitingInteraction: false,
+    });
+    expect(
+      resolveAbandonProgress({
+        armedCursor: shrunk.nextArmedCursor,
+        currentCursor: 2,
+        waitingInteraction: false,
+      }).landed
+    ).toBe(true);
+  });
+
+  it('waiting_permission / waiting_question land regardless of the cursor', () => {
+    expect(
+      resolveAbandonProgress({ armedCursor: 2, currentCursor: 1, waitingInteraction: true }).landed
+    ).toBe(true);
   });
 });
 

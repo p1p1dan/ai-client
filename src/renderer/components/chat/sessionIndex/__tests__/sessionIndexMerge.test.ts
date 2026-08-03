@@ -114,6 +114,39 @@ describe('mergeSessionIndex (T-02)', () => {
   });
 });
 
+// Round-6 review M3: workspacesByPath keys by canonicalPathKey (raw keys
+// missed `/repo/` vs `/repo` and case drift) and prefers the
+// registered-folder identity when one directory backs two workspaces.
+describe('mergeSessionIndex — canonical path matching (round-6 review M3)', () => {
+  it('binds entry.workspacePath with a trailing slash or case drift to the canonical workspace', () => {
+    const entries = [entry('new-1', { workspacePath: '/REPO/' })];
+    const { sessions } = mergeSessionIndex([], entries, { workspaces });
+    expect(sessions[0]).toMatchObject({ id: 'new-1', projectId: 'p1', workspaceId: 'ws-1' });
+  });
+
+  it('binds a new seed to the main workspace when the path backs two identities, either array order', () => {
+    const dualPath = '/aaa';
+    const dualWorkspacesWorktreeFirst: ChatWorkspace[] = [
+      { id: 'ws-worktree', projectId: 'p-parent', name: 'aaa', kind: 'worktree', path: dualPath },
+      { id: 'ws-main', projectId: 'p-aaa', name: 'Main', kind: 'main', path: dualPath },
+    ];
+    const dualWorkspacesMainFirst: ChatWorkspace[] = [
+      { id: 'ws-main', projectId: 'p-aaa', name: 'Main', kind: 'main', path: dualPath },
+      { id: 'ws-worktree', projectId: 'p-parent', name: 'aaa', kind: 'worktree', path: dualPath },
+    ];
+
+    for (const dualWorkspaces of [dualWorkspacesWorktreeFirst, dualWorkspacesMainFirst]) {
+      const entries = [entry('new-dual', { workspacePath: dualPath })];
+      const { sessions } = mergeSessionIndex([], entries, { workspaces: dualWorkspaces });
+      expect(sessions[0]).toMatchObject({
+        id: 'new-dual',
+        projectId: 'p-aaa',
+        workspaceId: 'ws-main',
+      });
+    }
+  });
+});
+
 /**
  * Regression: `recordCreated` persists `title: ''` until an explicit rename, so
  * every merge branch has to survive an empty persisted title. Before the guard,

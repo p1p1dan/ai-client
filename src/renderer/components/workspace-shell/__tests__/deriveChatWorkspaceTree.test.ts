@@ -6,6 +6,7 @@ import {
   workspaceIdFor,
   workspaceTreeSignature,
 } from '../deriveChatWorkspaceTree';
+import { resolveNewSessionWorkspaceId } from '../sidebarTree';
 
 describe('deriveChatWorkspaceTree', () => {
   const repo: Repository = {
@@ -174,5 +175,352 @@ describe('deriveChatWorkspaceTree', () => {
       tempItems: [],
     });
     expect(loadingWorkspaces[0]?.gitEnabled).toBe(false);
+  });
+
+  // T-31 (round-6 D2): a linked git worktree registered as its own top-level
+  // repo (openchamber's `aaa` worktree) was getting zero workspaces because
+  // worktree.list for that repo still reports the *parent* repo's full
+  // worktree set, whose main entry collides with the parent project's own
+  // `ws:main:<root>` id.
+  describe('linked-worktree self-registration (T-31 / round-6 D2)', () => {
+    const rootPath = 'D:/Code/openchamber';
+    const aaaPath = 'D:/Code/openchamber-worktrees/aaa';
+
+    const rootRepo: Repository = {
+      id: 'repo-root',
+      name: 'openchamber',
+      path: rootPath,
+      kind: 'local',
+    };
+    const aaaRepo: Repository = {
+      id: 'repo-aaa',
+      name: 'aaa',
+      path: aaaPath,
+      kind: 'local',
+    };
+
+    const parentWorktreeList = [
+      {
+        path: rootPath,
+        head: 'root-head',
+        branch: 'refs/heads/main',
+        isMainWorktree: true,
+        isLocked: false,
+        prunable: false,
+      },
+      {
+        path: aaaPath,
+        head: 'aaa-head',
+        branch: 'refs/heads/aaa',
+        isMainWorktree: false,
+        isLocked: false,
+        prunable: false,
+      },
+    ];
+
+    it('T1: repo registered at a linked worktree path gets exactly one main workspace, no parent-root leak', () => {
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [aaaRepo],
+        worktreesByRepoPath: { [aaaPath]: parentWorktreeList },
+        tempItems: [],
+      });
+
+      expect(workspaces).toHaveLength(1);
+      const [ws] = workspaces;
+      expect(ws).toMatchObject({
+        id: workspaceIdFor('main', aaaPath),
+        projectId: 'repo-aaa',
+        kind: 'main',
+        path: aaaPath,
+        branch: 'aaa',
+        gitEnabled: true,
+      });
+      // No workspace under this project should point at the parent root.
+      expect(workspaces.some((w) => w.path === rootPath)).toBe(false);
+    });
+
+    it('T9: a symlinked registration (git reports a different realpath root) degrades to a single self workspace — accepted trade-off, never an id collision', () => {
+      // Lexical canonical keys cannot see through symlinks (round-6 verify
+      // minor 4): the registered link path and git's realpath root compare
+      // unequal, so the self short-circuit fires. Pinned so nobody "fixes"
+      // this back into the cross-project id collision, and nobody expects
+      // sibling worktrees or a branch chip under a symlinked registration.
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [{ id: 'repo-link', name: 'link', path: '/repo-link', kind: 'local' }],
+        worktreesByRepoPath: {
+          '/repo-link': [
+            {
+              path: '/real/repo',
+              head: 'real-head',
+              branch: 'refs/heads/main',
+              isMainWorktree: true,
+              isLocked: false,
+              prunable: false,
+            },
+          ],
+        },
+        tempItems: [],
+      });
+
+      expect(workspaces).toEqual([
+        {
+          id: workspaceIdFor('main', '/repo-link'),
+          projectId: 'repo-link',
+          name: 'Main',
+          kind: 'main',
+          path: '/repo-link',
+          gitEnabled: true,
+        },
+      ]);
+      // No listed entry matches the registered path lexically → no branch
+      // key, and the realpath root is never attached to this project.
+      expect(workspaces[0] && 'branch' in workspaces[0]).toBe(false);
+    });
+
+    it('T2: root + worktree repos registered together, either order, neither project is starved', () => {
+      const worktreesByRepoPath = {
+        [rootPath]: parentWorktreeList,
+        [aaaPath]: parentWorktreeList,
+      };
+
+      for (const repositories of [
+        [rootRepo, aaaRepo],
+        [aaaRepo, rootRepo],
+      ]) {
+        const { workspaces } = deriveChatWorkspaceTree({
+          repositories,
+          worktreesByRepoPath,
+          tempItems: [],
+        });
+
+        const rootWorkspaces = workspaces.filter((w) => w.projectId === 'repo-root');
+        const aaaWorkspaces = workspaces.filter((w) => w.projectId === 'repo-aaa');
+
+        // Root project keeps its own main plus the sibling worktree entry for
+        // `aaa` — full shape pinned (round-6 review N2: id/kind alone let a
+        // wrong path/branch/gitEnabled slip through unnoticed).
+        expect(rootWorkspaces).toEqual([
+          {
+            id: workspaceIdFor('main', rootPath),
+            projectId: 'repo-root',
+            name: 'Main',
+            kind: 'main',
+            path: rootPath,
+            branch: 'main',
+            gitEnabled: true,
+          },
+          {
+            id: workspaceIdFor('worktree', aaaPath),
+            projectId: 'repo-root',
+            name: 'aaa',
+            kind: 'worktree',
+            path: aaaPath,
+            branch: 'aaa',
+            gitEnabled: true,
+          },
+        ]);
+        // aaa project resolves to its own main workspace, not the parent root.
+        expect(aaaWorkspaces).toEqual([
+          {
+            id: workspaceIdFor('main', aaaPath),
+            projectId: 'repo-aaa',
+            name: 'Main',
+            kind: 'main',
+            path: aaaPath,
+            branch: 'aaa',
+            gitEnabled: true,
+          },
+        ]);
+      }
+    });
+
+    it('T3 (regression): ordinary repo where repo.path === main worktree path is unaffected', () => {
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [rootRepo],
+        worktreesByRepoPath: { [rootPath]: parentWorktreeList },
+        tempItems: [],
+      });
+
+      expect(
+        workspaces.map((ws) => ({ id: ws.id, kind: ws.kind, path: ws.path, branch: ws.branch }))
+      ).toEqual([
+        { id: workspaceIdFor('main', rootPath), kind: 'main', path: rootPath, branch: 'main' },
+        { id: workspaceIdFor('worktree', aaaPath), kind: 'worktree', path: aaaPath, branch: 'aaa' },
+      ]);
+    });
+
+    it('T4: self-registered linked worktree with no branch (detached HEAD) omits the branch key', () => {
+      const detachedList = [
+        {
+          path: rootPath,
+          head: 'root-head',
+          branch: 'refs/heads/main',
+          isMainWorktree: true,
+          isLocked: false,
+          prunable: false,
+        },
+        {
+          path: aaaPath,
+          head: 'aaa-head',
+          branch: null,
+          isMainWorktree: false,
+          isLocked: false,
+          prunable: false,
+        },
+      ];
+
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [aaaRepo],
+        worktreesByRepoPath: { [aaaPath]: detachedList },
+        tempItems: [],
+      });
+
+      expect(workspaces).toHaveLength(1);
+      expect('branch' in workspaces[0]).toBe(false);
+    });
+
+    it('T5: resolveNewSessionWorkspaceId resolves each project to its own main workspace, either registration order', () => {
+      const worktreesByRepoPath = {
+        [rootPath]: parentWorktreeList,
+        [aaaPath]: parentWorktreeList,
+      };
+
+      for (const repositories of [
+        [rootRepo, aaaRepo],
+        [aaaRepo, rootRepo],
+      ]) {
+        const { workspaces } = deriveChatWorkspaceTree({
+          repositories,
+          worktreesByRepoPath,
+          tempItems: [],
+        });
+
+        expect(resolveNewSessionWorkspaceId('repo-aaa', workspaces)).toBe(
+          workspaceIdFor('main', aaaPath)
+        );
+        expect(resolveNewSessionWorkspaceId('repo-root', workspaces)).toBe(
+          workspaceIdFor('main', rootPath)
+        );
+      }
+    });
+
+    it('T6: repo registered at a subdirectory of the git root gets exactly one main workspace, no root leak', () => {
+      const subRootPath = 'D:/Code/openchamber';
+      const subPath = 'D:/Code/openchamber/packages/web';
+      const subRepo: Repository = {
+        id: 'repo-web',
+        name: 'web',
+        path: subPath,
+        kind: 'local',
+      };
+      // No linked-worktree entry for `subPath` — the repo root is the only
+      // listed worktree, exactly like `git worktree list` run from a plain
+      // subdirectory of the repo.
+      const rootOnlyList = [
+        {
+          path: subRootPath,
+          head: 'root-head',
+          branch: 'refs/heads/main',
+          isMainWorktree: true,
+          isLocked: false,
+          prunable: false,
+        },
+      ];
+
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [subRepo],
+        worktreesByRepoPath: { [subPath]: rootOnlyList },
+        tempItems: [],
+      });
+
+      expect(workspaces).toHaveLength(1);
+      const [ws] = workspaces;
+      expect(ws).toMatchObject({
+        id: workspaceIdFor('main', subPath),
+        projectId: 'repo-web',
+        kind: 'main',
+        path: subPath,
+        gitEnabled: true,
+      });
+      // No matching linked-worktree entry for the subdirectory itself, so no
+      // branch chip is guessed.
+      expect('branch' in ws).toBe(false);
+      // No workspace under this project should point at the git root.
+      expect(workspaces.some((w) => w.path === subRootPath)).toBe(false);
+    });
+
+    it('T7: a trailing slash on repo.path does not disable the self-registration short-circuit', () => {
+      const aaaPathWithSlash = `${aaaPath}/`;
+      const trailingSlashRepo: Repository = {
+        id: 'repo-aaa-slash',
+        name: 'aaa',
+        path: aaaPathWithSlash,
+        kind: 'local',
+      };
+
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [trailingSlashRepo],
+        worktreesByRepoPath: { [aaaPathWithSlash]: parentWorktreeList },
+        tempItems: [],
+      });
+
+      expect(workspaces).toHaveLength(1);
+      const [ws] = workspaces;
+      // path is stored verbatim (with the trailing slash) — canonicalPathKey
+      // is a comparison key only, never a stored/displayed path.
+      expect(ws.path).toBe(aaaPathWithSlash);
+      expect(ws.branch).toBe('aaa');
+    });
+
+    it('T8: resolvePreferredWorkspaceId disambiguates the same-path dual identity toward the registered-folder main, either registration order', () => {
+      const worktreesByRepoPath = {
+        [rootPath]: parentWorktreeList,
+        [aaaPath]: parentWorktreeList,
+      };
+
+      for (const repositories of [
+        [rootRepo, aaaRepo],
+        [aaaRepo, rootRepo],
+      ]) {
+        const { workspaces } = deriveChatWorkspaceTree({
+          repositories,
+          worktreesByRepoPath,
+          tempItems: [],
+        });
+
+        expect(
+          resolvePreferredWorkspaceId(workspaces, {
+            selectedRepoPath: aaaPath,
+            activeWorktreePath: null,
+          })
+        ).toBe(workspaceIdFor('main', aaaPath));
+      }
+    });
+
+    it('T8b: the disambiguation survives a trailing-slash / case-drifted selectedRepoPath', () => {
+      const worktreesByRepoPath = {
+        [rootPath]: parentWorktreeList,
+        [aaaPath]: parentWorktreeList,
+      };
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [rootRepo, aaaRepo],
+        worktreesByRepoPath,
+        tempItems: [],
+      });
+
+      expect(
+        resolvePreferredWorkspaceId(workspaces, {
+          selectedRepoPath: `${aaaPath}/`,
+          activeWorktreePath: null,
+        })
+      ).toBe(workspaceIdFor('main', aaaPath));
+
+      expect(
+        resolvePreferredWorkspaceId(workspaces, {
+          selectedRepoPath: aaaPath.toUpperCase(),
+          activeWorktreePath: null,
+        })
+      ).toBe(workspaceIdFor('main', aaaPath));
+    });
   });
 });

@@ -45,6 +45,21 @@ export function trimTrailingPathSeparators(inputPath: string): string {
 }
 
 /**
+ * Canonical comparison key for "is this the same directory" checks across
+ * workspace derivation and lookup (round-6 review M5/B4): separator
+ * normalization + trailing-separator trim + lowercase. Trailing separators
+ * broke self-path matching (`/aaa` vs `/aaa/`); lowercase matches the
+ * long-standing `workspaceIdFor` convention (platform-aware case sensitivity
+ * for POSIX is tracked as backlog — changing it would change workspace IDs).
+ * Comparison key ONLY — never display it or store it as a path.
+ * @param inputPath Original path
+ * @returns Canonical lowercase comparison key
+ */
+export function canonicalPathKey(inputPath: string): string {
+  return trimTrailingPathSeparators(normalizePath(inputPath)).toLowerCase();
+}
+
+/**
  * Whether path is a Windows WSL UNC path.
  * Supports both "\\wsl.localhost\..." and "//wsl.localhost/..." forms.
  * @param inputPath Original path

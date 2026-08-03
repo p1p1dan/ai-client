@@ -131,3 +131,41 @@ describe('resolveTreeSyncPatch — activeSessionId handover', () => {
     expect(result.activeSessionId).toBe('s2');
   });
 });
+
+describe('resolveTreeSyncPatch — same-path dual identity (round-6 review M3/N2)', () => {
+  it('seeds the Live session onto the registered-folder main, not the parent worktree entry, when both share a path', () => {
+    // D2's deliberate dual identity: one directory backs both the parent
+    // project's `worktree` entry and the registered folder's own `main`.
+    // preferredWorkspaceId is looked up by id (not path), so the seed must
+    // land on whichever entry `preferredWorkspaceId` names — here the aaa
+    // project's main — even though the parent's worktree entry for the same
+    // path is listed first.
+    const aaaPath = '/repo/aaa';
+    const dualWorkspaces: ChatWorkspace[] = [
+      {
+        id: `ws:worktree:${aaaPath}`,
+        projectId: 'p-parent',
+        name: 'aaa',
+        kind: 'worktree',
+        path: aaaPath,
+      },
+      {
+        id: `ws:main:${aaaPath}`,
+        projectId: 'p-aaa',
+        name: 'Main',
+        kind: 'main',
+        path: aaaPath,
+      },
+    ];
+
+    const result = resolveTreeSyncPatch({
+      prev: prevState(),
+      workspaces: dualWorkspaces,
+      preferredWorkspaceId: `ws:main:${aaaPath}`,
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]?.workspaceId).toBe(`ws:main:${aaaPath}`);
+    expect(result.sessions[0]?.projectId).toBe('p-aaa');
+  });
+});

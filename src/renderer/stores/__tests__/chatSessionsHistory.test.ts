@@ -1,14 +1,21 @@
 import type { RuntimeEvent, SessionHistoryEvent } from '@shared/types/runtimeEvents';
 import type { HistoryMessage } from '@shared/types/sessionHistory';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   applyRuntimeEvent,
   type ChatMessage,
   type ChatSession,
   type ChatSessionsState,
 } from '../chatSessions';
+import { resetResumeCandidatesForTests } from '../historyReplayMerge';
 
 const SESSION_ID = 'session-1';
+
+// The replay-coverage merge keeps its resume watermark in module state
+// (leaf-module rule) — it must not leak between cases.
+beforeEach(() => {
+  resetResumeCandidatesForTests();
+});
 
 function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsState {
   return {
@@ -47,13 +54,14 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
 }
 
 function makeHistoryEvent(
-  payloadOverrides: Partial<SessionHistoryEvent['payload']> = {}
+  payloadOverrides: Partial<SessionHistoryEvent['payload']> = {},
+  requestId = 'req-1'
 ): RuntimeEvent {
   return {
     type: 'session.history',
     seq: 1,
     sessionId: SESSION_ID,
-    requestId: 'req-1',
+    requestId,
     timestamp: 1234,
     payload: {
       runtimeIdentity: 'rt-1',
@@ -64,6 +72,32 @@ function makeHistoryEvent(
       ...payloadOverrides,
     },
   };
+}
+
+/** Arms the replay-coverage watermark exactly like a real resume does. */
+function makeResumedEvent(requestId = 'req-1'): RuntimeEvent {
+  return {
+    type: 'session.resumed',
+    seq: 0,
+    sessionId: SESSION_ID,
+    requestId,
+    timestamp: 1000,
+    payload: { runtimeIdentity: 'rt-1' },
+  };
+}
+
+/** Folds successive patches so multi-event sequences read like the wire. */
+function applyAll(
+  state: ChatSessionsState,
+  events: readonly RuntimeEvent[]
+): { state: ChatSessionsState; lastPatch: Partial<ChatSessionsState> } {
+  let current = state;
+  let lastPatch: Partial<ChatSessionsState> = {};
+  for (const event of events) {
+    lastPatch = applyRuntimeEvent(current, event);
+    current = { ...current, ...lastPatch } as ChatSessionsState;
+  }
+  return { state: current, lastPatch };
 }
 
 // One user message and one assistant message (text + tool_call + tool_result + thinking).
@@ -114,7 +148,7 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     expect(patch2.historyErrors).toEqual(patch1.historyErrors);
   });
 
-  it('replaces h:* messages by prefix, keeps runtime messages, and inserts history before them', () => {
+  it('replaces h:* by prefix and keeps runtime messages the replay does not cover, history first', () => {
     const staleHistoryMessage: ChatMessage = {
       id: 'h:stale-uuid',
       sessionId: SESSION_ID,
@@ -159,11 +193,216 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     expect(ids).toContain('h:uuid-2');
 
     // History is spliced before this session's remaining (runtime) messages.
+    // The runtime texts here differ from every history row on purpose — the
+    // replay does not cover them, so the coverage merge (round-6 Bug B) must
+    // keep them exactly like the old prefix-replace did.
     expect(ids.indexOf('h:uuid-1')).toBeLessThan(ids.indexOf('user-1'));
     expect(ids.indexOf('h:uuid-2')).toBeLessThan(ids.indexOf('asst-1'));
 
     // The other session's bucket is untouched byte-for-byte.
     expect(patch.messages?.['session-other']).toEqual([otherSessionMessage]);
+  });
+
+  it('folds a pre-resume echo the replay covers to exactly one copy and leaves other sessions alone', () => {
+    // Round-6 Bug B crime scene at reducer level: the failed turn's live echo
+    // carries the same text as the replayed history row and must not render
+    // twice after `session.resumed → session.history` lands.
+    const runtimeEcho: ChatMessage = {
+      id: 'user-echo-1',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-echo-1:0', type: 'text', text: 'hello from history' }],
+    };
+    const otherSessionMessage: ChatMessage = {
+      id: 'user-other',
+      sessionId: 'session-other',
+      role: 'user',
+      blocks: [{ id: 'user-other:0', type: 'text', text: 'hello from history' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: {
+        [SESSION_ID]: [runtimeEcho],
+        'session-other': [otherSessionMessage],
+      },
+    });
+
+    const { lastPatch } = applyAll(state, [
+      makeResumedEvent(),
+      makeHistoryEvent({ messages: HISTORY_MESSAGES }),
+    ]);
+    const bucket = lastPatch.messages?.[SESSION_ID] ?? [];
+
+    expect(bucket.map((message) => message.id)).toEqual(['h:uuid-1', 'h:uuid-2']);
+    // Same text, different session: reconciliation is strictly per-bucket.
+    expect(lastPatch.messages?.['session-other']).toEqual([otherSessionMessage]);
+  });
+
+  it('keeps a post-resume message even when its text equals an old history row (watermark)', () => {
+    // The refuted-v1 pin (review B3): the fresh turn's text INTENTIONALLY
+    // equals HISTORY_MESSAGES[0] — only the resume watermark, not text,
+    // separates it from the pre-resume echo. v1 ate it; v2 must not.
+    const preResumeEcho: ChatMessage = {
+      id: 'user-echo-1',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-echo-1:0', type: 'text', text: 'hello from history' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [preResumeEcho] },
+    });
+
+    const { state: resumedState } = applyAll(state, [makeResumedEvent()]);
+    // A new send's echo lands after the resume, before the detached history
+    // read completes — the exact race both review tracks flagged.
+    const postResumeEcho: ChatMessage = {
+      id: 'user-new',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-new:0', type: 'text', text: 'hello from history' }],
+    };
+    const racedState = {
+      ...resumedState,
+      messages: {
+        ...resumedState.messages,
+        [SESSION_ID]: [...(resumedState.messages[SESSION_ID] ?? []), postResumeEcho],
+      },
+    } as ChatSessionsState;
+
+    const patch = applyRuntimeEvent(racedState, makeHistoryEvent({ messages: HISTORY_MESSAGES }));
+
+    expect(patch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+      'user-new',
+    ]);
+  });
+
+  it('keeps every runtime message when the history read failed, even on text collisions', () => {
+    const runtimeEcho: ChatMessage = {
+      id: 'user-echo-1',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-echo-1:0', type: 'text', text: 'hello from history' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [runtimeEcho] },
+    });
+
+    // A failed read carries no authority over runtime messages — losing the
+    // echo here would turn "dedup" into message loss.
+    const { lastPatch } = applyAll(state, [
+      makeResumedEvent(),
+      makeHistoryEvent({
+        messages: HISTORY_MESSAGES,
+        error: { code: 'jsonl_not_found', message: 'no file' },
+      }),
+    ]);
+
+    expect(lastPatch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+      'user-echo-1',
+    ]);
+  });
+
+  it('folds nothing without a matching resume: stale or unknown requestIds are inert', () => {
+    const runtimeEcho: ChatMessage = {
+      id: 'user-echo-1',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-echo-1:0', type: 'text', text: 'hello from history' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [runtimeEcho] },
+    });
+
+    // Armed for req-B; a replay correlated to some other request must not
+    // fold, and must not destroy the snapshot req-B still owns.
+    const { state: mismatchState, lastPatch: mismatchPatch } = applyAll(state, [
+      makeResumedEvent('req-B'),
+      makeHistoryEvent({ messages: HISTORY_MESSAGES }, 'req-stale'),
+    ]);
+    expect(mismatchPatch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+      'user-echo-1',
+    ]);
+
+    // The matching replay that arrives later still folds.
+    const patch = applyRuntimeEvent(
+      mismatchState,
+      makeHistoryEvent({ messages: HISTORY_MESSAGES }, 'req-B')
+    );
+    expect(patch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+    ]);
+  });
+
+  it('a newer resume owns the watermark: the older replay is inert, the newer one folds', () => {
+    const runtimeEcho: ChatMessage = {
+      id: 'user-echo-1',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-echo-1:0', type: 'text', text: 'hello from history' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [runtimeEcho] },
+    });
+
+    const { state: doubleResumed } = applyAll(state, [
+      makeResumedEvent('req-1'),
+      makeResumedEvent('req-2'),
+    ]);
+
+    const stalePatch = applyRuntimeEvent(
+      doubleResumed,
+      makeHistoryEvent({ messages: HISTORY_MESSAGES }, 'req-1')
+    );
+    expect(stalePatch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+      'user-echo-1',
+    ]);
+
+    const freshPatch = applyRuntimeEvent(
+      { ...doubleResumed, ...stalePatch } as ChatSessionsState,
+      makeHistoryEvent({ messages: HISTORY_MESSAGES }, 'req-2')
+    );
+    expect(freshPatch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+    ]);
+  });
+
+  it('stays idempotent under coverage: a second apply of the same replay changes nothing', () => {
+    const coveredEcho: ChatMessage = {
+      id: 'user-echo-1',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-echo-1:0', type: 'text', text: 'hello from history' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [coveredEcho] },
+    });
+    const event = makeHistoryEvent({ messages: HISTORY_MESSAGES });
+
+    const { state: afterFirst, lastPatch: patch1 } = applyAll(state, [makeResumedEvent(), event]);
+    expect(patch1.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+    ]);
+
+    // The snapshot was consumed by the first apply — the duplicate replay
+    // has no watermark, so it can only prefix-replace, never fold more.
+    const patch2 = applyRuntimeEvent(afterFirst, event);
+    expect(patch2.messages).toEqual(patch1.messages);
   });
 
   it('appends history at the array tail when the session has no remaining messages', () => {

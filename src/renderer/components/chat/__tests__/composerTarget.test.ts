@@ -893,4 +893,52 @@ describe('matchWorkspaceByPath', () => {
     const match = matchWorkspaceByPath('c:/users/foo/repo', workspaces);
     expect(match?.id).toBe('ws-1');
   });
+
+  // Round-6 review M3: one directory can back two workspaces — the parent
+  // repo's `worktree` entry and the registered folder's own `main` (D2's
+  // deliberate dual identity). Path-only lookups must prefer main
+  // deterministically instead of inheriting array order.
+  it('prefers the main workspace over a worktree entry at the same path (worktree listed first)', () => {
+    const workspaces = [
+      makeWorkspace({
+        id: 'ws-worktree',
+        projectId: 'proj-parent',
+        kind: 'worktree',
+        path: '/aaa',
+      }),
+      makeWorkspace({ id: 'ws-main', projectId: 'proj-aaa', kind: 'main', path: '/aaa' }),
+    ];
+    const match = matchWorkspaceByPath('/aaa', workspaces);
+    expect(match?.kind).toBe('main');
+    expect(match?.id).toBe('ws-main');
+  });
+
+  it('still prefers main when the array order is reversed (main listed first)', () => {
+    const workspaces = [
+      makeWorkspace({ id: 'ws-main', projectId: 'proj-aaa', kind: 'main', path: '/aaa' }),
+      makeWorkspace({
+        id: 'ws-worktree',
+        projectId: 'proj-parent',
+        kind: 'worktree',
+        path: '/aaa',
+      }),
+    ];
+    const match = matchWorkspaceByPath('/aaa', workspaces);
+    expect(match?.kind).toBe('main');
+    expect(match?.id).toBe('ws-main');
+  });
+
+  it('disambiguates the same-path pair for a trailing-slash / case-drifted query too', () => {
+    const workspaces = [
+      makeWorkspace({
+        id: 'ws-worktree',
+        projectId: 'proj-parent',
+        kind: 'worktree',
+        path: '/aaa',
+      }),
+      makeWorkspace({ id: 'ws-main', projectId: 'proj-aaa', kind: 'main', path: '/aaa' }),
+    ];
+    expect(matchWorkspaceByPath('/aaa/', workspaces)?.id).toBe('ws-main');
+    expect(matchWorkspaceByPath('/AAA', workspaces)?.id).toBe('ws-main');
+  });
 });
