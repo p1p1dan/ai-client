@@ -10,3 +10,9 @@
 - **附件选择「+」钮**（2026-07-29，T-28 A07 偏离入档）：A07 屏①②画了 Composer 卡内「+」图标钮，本仓无附件选择能力（T-18 仅粘贴通路），落死按钮违 A06 故 T-28 未实现。附件选择能力立项后补上即可对齐。
 - **恢复态显式标记 restoredFromIndex**（2026-07-29，T-28 R1 残留）：无 runtimeIdentity 的老 session-index 条目恢复瞬间理论上闪一帧居中卡（现靠规则 2/5 同 tick 兜底，最多一帧）。给会话加恢复来源显式标记可根除，属红线 store 加字段，量级小但需签名同步。
 - **assistant 正文 Markdown 解析**（2026-07-30，T-05 复核澄清）：`text-markdown` 只是字号档，assistant 文本从未有 md 解析（标题/列表/代码块/链接均按纯文本渲染）——既有能力缺口非 T-05 回归。若要做属新能力立项（渲染器选型 + 安全考量）。
+- **工具行复合 arg 渲染**（2026-08-03，T-30 批2 对抗复核共识）：Grep/Glob 的 arg 是 `pattern in repo` 混合串，本批按良性降级整体 sans；正解=pattern 段 `<Ident>` mono + 散文段 sans 的复合渲染（需 ToolRowArg 接受复合结构）；连带修 Bash 无 description 与 default 分支的 argKind 不一致。Codex 判 ident / Opus 判 sans 的分歧仲裁记录见主线台账 2026-08-03 委派行。
+- 2026-08-03 ⊕ 钮已以「Add file context (@)」语义落地（`9e2736b`，结清 T-28 A07 偏离①）；上方「附件选择+钮」条目中的**真附件选择**（renderer 读文件字节 IPC + 限额）仍待立项，两条通路并存不冲突。
+- 2026-08-03 `attachments.ts` `DEFAULT_CHIP_LABEL_LENGTH = 28` 系全等宽时代标定的死代码（CSS `max-w-56` 先兜住；若升宽会开始中段截断）——升宽时须按比例字体重标（源自 Opus 复核 note）。
+- 2026-08-03 empty 态 statusLine wrapper 仍是 ChatComposer 内 JSX 字面量（session 态已下沉 `sessionStatusLineWrapperClass()` 可断言）——下批顺手下沉（源自 Opus 复核 note）。
+- 2026-08-03 OnboardingView `installError`/`sendCodeError`/`verifyError` 多数分支是本地化文案、仅 catch 兜底为原始 Error.message，mono 处置与 `recheckError`（已 mono）不同——统一处理需先拆分支（源自 S5 存疑清单）。
+- 2026-08-03 `data-font-domain="mono"` flag 还原度约 97%（`--font-heading` 的 7+1 处在 mono 档下仍为比例）——做 A/B 对比截图时须知；flag 保留一个版本周期后删除（D25 §2.5 原定）。
