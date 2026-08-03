@@ -18,3 +18,5 @@
 - 2026-08-03 OnboardingView `installError`/`sendCodeError`/`verifyError` 多数分支是本地化文案、仅 catch 兜底为原始 Error.message，mono 处置与 `recheckError`（已 mono）不同——统一处理需先拆分支（源自 S5 存疑清单）。
 - 2026-08-03 `data-font-domain="mono"` flag 还原度约 97%（`--font-heading` 的 7+1 处在 mono 档下仍为比例）——做 A/B 对比截图时须知；flag 保留一个版本周期后删除（D25 §2.5 原定）。
 - **斜杠指令（slash command）支持**（2026-08-03，第五轮点验第 5 条，用户明示优先级不高）：对话框内输入 `/` 唤起指令面板；openchamber 有此能力可作参照（参照版本冻结 `a3519141`）。涉及输入层识别、指令目录来源（CLI 自定义命令?）与发送语义，成熟后立项。
+- **FILE_COPY/RENAME/MOVE 无根校验加固**（2026-08-03，第五轮对抗复核 Opus 发现的既有暴露面）：这三条 IPC 接受任意源/目标路径，曾可被用于把任意文件覆盖到附件授权路径实施确定性读取绕过（该绕过已被 fd 快照校验封死），但通道本身仍是全盘写原语——宜比照 LocalFileAccess 根白名单收敛（安全加固批）。
+- 2026-08-03 `session-${Date.now()}` 会话 ID 毫秒级碰撞（chatSessionActions.ts:34，既有）：同毫秒双击 New 会撞 ID；测试已显式绕开。改 crypto.randomUUID 或加计数器后缀，动红线 store 宜随下批顺手。

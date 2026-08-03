@@ -1,0 +1,1522 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="AiClient Plantree 任务地图：阶段、关键路径、任务看板、人工点验、阻塞与未决问题。"
+    />
+    <title>AiClient · Plantree Dashboard</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fffdf4;
+        --surface: #fbfaf2;
+        --surface-muted: #f6f5ee;
+        --surface-strong: #eeece3;
+        --text: #100f0f;
+        --muted: #686663;
+        --faint: #878580;
+        --border: #dad8ce;
+        --primary: #bc5215;
+        --primary-soft: #fce8d5;
+        --success: #66800b;
+        --success-soft: #eef2d5;
+        --info: #205ea6;
+        --info-soft: #e1ecef;
+        --warning: #bc5215;
+        --warning-soft: #fce8d5;
+        --danger: #af3029;
+        --danger-soft: #fae2df;
+        --shadow: 0 16px 48px rgb(16 15 15 / 8%);
+        --radius-xs: 4px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Ubuntu,
+          Cantarell, "Noto Sans", "Liberation Sans", Arial, "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC",
+          "Noto Sans SC", sans-serif;
+        --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #171515;
+        --surface: #1c1a19;
+        --surface-muted: #1f1d1c;
+        --surface-strong: #2d2b2b;
+        --text: #cecdc3;
+        --muted: #a6a39d;
+        --faint: #878580;
+        --border: #343331;
+        --primary: #da702c;
+        --primary-soft: #3c261c;
+        --success: #a0af54;
+        --success-soft: #2a2d1e;
+        --info: #4385be;
+        --info-soft: #1d2930;
+        --warning: #da702c;
+        --warning-soft: #3c261c;
+        --danger: #d14d41;
+        --danger-soft: #38201f;
+        --shadow: 0 18px 60px rgb(0 0 0 / 30%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 88% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 28rem),
+          var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        border-right: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 94%, transparent);
+        backdrop-filter: blur(18px);
+        padding: 24px 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 22px;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: var(--radius-sm);
+        background: var(--primary);
+        color: #fffdf4;
+        font-family: var(--mono);
+        font-weight: 700;
+      }
+
+      .brand strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .brand small {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .nav-title {
+        margin: 18px 8px 6px;
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .nav-link {
+        display: flex;
+        min-height: 34px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border-radius: var(--radius-sm);
+        padding: 7px 9px;
+        color: var(--muted);
+        text-decoration: none;
+        transition: 120ms ease;
+      }
+
+      .nav-link:hover,
+      .nav-link:focus-visible {
+        background: var(--surface-strong);
+        color: var(--text);
+        outline: none;
+      }
+
+      .nav-link span:last-child {
+        color: var(--faint);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .sidebar-note {
+        margin-top: 24px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface-muted);
+        padding: 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .main {
+        min-width: 0;
+        padding: 28px clamp(18px, 3vw, 44px) 72px;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 12px;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 1480px;
+        margin: 0 auto 28px;
+        border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+        border-radius: var(--radius-md);
+        background: color-mix(in srgb, var(--surface) 88%, transparent);
+        box-shadow: var(--shadow);
+        padding: 10px;
+        backdrop-filter: blur(18px);
+      }
+
+      .search-wrap {
+        position: relative;
+        flex: 1;
+      }
+
+      .search-wrap::before {
+        position: absolute;
+        top: 50%;
+        left: 12px;
+        content: "⌕";
+        color: var(--faint);
+        font-size: 18px;
+        transform: translateY(-52%);
+      }
+
+      .search {
+        width: 100%;
+        height: 38px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        outline: none;
+        background: var(--bg);
+        color: var(--text);
+        padding: 0 12px 0 38px;
+      }
+
+      .search:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+      }
+
+      .filter,
+      .icon-button {
+        height: 38px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .filter {
+        min-width: 160px;
+        padding: 0 10px;
+      }
+
+      .icon-button {
+        width: 38px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+
+      .icon-button:hover,
+      .icon-button:focus-visible {
+        background: var(--surface-strong);
+        outline: none;
+      }
+
+      .content {
+        max-width: 1480px;
+        margin: 0 auto;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.8fr);
+        gap: 18px;
+        margin-bottom: 20px;
+      }
+
+      .hero-main,
+      .hero-side,
+      .panel,
+      .metric,
+      .task-card,
+      .phase-card,
+      .route-step,
+      .question-card {
+        border: 1px solid var(--border);
+        background: var(--surface);
+      }
+
+      .hero-main,
+      .hero-side,
+      .panel {
+        border-radius: var(--radius-lg);
+      }
+
+      .hero-main {
+        position: relative;
+        overflow: hidden;
+        padding: clamp(24px, 4vw, 44px);
+      }
+
+      .hero-main::after {
+        position: absolute;
+        right: -70px;
+        bottom: -96px;
+        width: 280px;
+        height: 280px;
+        border: 44px solid color-mix(in srgb, var(--primary) 10%, transparent);
+        border-radius: 50%;
+        content: "";
+      }
+
+      .eyebrow {
+        color: var(--primary);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        position: relative;
+        z-index: 1;
+        max-width: 780px;
+        margin: 8px 0 12px;
+        font-size: clamp(28px, 4.2vw, 52px);
+        font-weight: 650;
+        letter-spacing: -0.02em;
+        line-height: 1.08;
+      }
+
+      .hero-copy {
+        position: relative;
+        z-index: 1;
+        max-width: 760px;
+        margin-bottom: 22px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .hero-meta {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip,
+      .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-sm);
+        padding: 5px 8px;
+        font-size: 12px;
+      }
+
+      .chip {
+        border: 1px solid var(--border);
+        background: var(--surface-muted);
+        color: var(--muted);
+      }
+
+      .chip code,
+      .task-id,
+      .hash {
+        font-family: var(--mono);
+      }
+
+      .hero-side {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 22px;
+      }
+
+      .pulse-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .pulse-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--info);
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--info) 15%, transparent);
+      }
+
+      .hero-side h2 {
+        margin-bottom: 8px;
+        font-size: 18px;
+      }
+
+      .hero-side p {
+        color: var(--muted);
+      }
+
+      .next-target {
+        border-left: 3px solid var(--primary);
+        padding-left: 12px;
+      }
+
+      .next-target strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .next-target span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .metric {
+        border-radius: var(--radius-md);
+        padding: 16px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 24px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .section {
+        margin-top: 36px;
+        scroll-margin-top: 82px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .section-head h2 {
+        margin-bottom: 4px;
+        font-size: 20px;
+      }
+
+      .section-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .source-link {
+        flex: none;
+        color: var(--primary);
+        font-size: 12px;
+        text-decoration: none;
+      }
+
+      .source-link:hover {
+        text-decoration: underline;
+      }
+
+      .route {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(150px, 1fr));
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+
+      .route-step {
+        position: relative;
+        min-width: 150px;
+        border-radius: var(--radius-md);
+        padding: 14px;
+      }
+
+      .route-step:not(:last-child)::after {
+        position: absolute;
+        top: 50%;
+        right: -9px;
+        z-index: 2;
+        content: "→";
+        color: var(--faint);
+        transform: translateY(-50%);
+      }
+
+      .route-step small {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--faint);
+        font-family: var(--mono);
+      }
+
+      .route-step strong {
+        display: block;
+        margin-bottom: 5px;
+      }
+
+      .route-step span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .route-step.current {
+        border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+        background: var(--primary-soft);
+      }
+
+      .phase-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .phase-card {
+        border-radius: var(--radius-md);
+        padding: 16px;
+      }
+
+      .phase-top,
+      .task-top,
+      .question-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .phase-number {
+        color: var(--faint);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .phase-card h3 {
+        margin: 8px 0 5px;
+        font-size: 15px;
+      }
+
+      .phase-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .status-chip {
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+
+      .status-done {
+        background: var(--success-soft);
+        color: var(--success);
+      }
+
+      .status-active,
+      .status-pending {
+        background: var(--warning-soft);
+        color: var(--warning);
+      }
+
+      .status-blocked {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .status-next,
+      .status-info {
+        background: var(--info-soft);
+        color: var(--info);
+      }
+
+      .status-deferred,
+      .status-open {
+        background: var(--surface-strong);
+        color: var(--muted);
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(240px, 1fr));
+        gap: 12px;
+        align-items: start;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+
+      .board-column {
+        min-width: 240px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface-muted);
+        padding: 10px;
+      }
+
+      .column-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 3px 10px;
+      }
+
+      .column-title strong {
+        font-size: 13px;
+      }
+
+      .column-title span {
+        color: var(--faint);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .task-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .task-card {
+        border-radius: var(--radius-sm);
+        padding: 12px;
+        transition: 120ms ease;
+      }
+
+      .task-card:hover {
+        border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+        transform: translateY(-1px);
+      }
+
+      .task-card h3 {
+        margin: 7px 0 5px;
+        font-size: 13px;
+      }
+
+      .task-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .task-id {
+        color: var(--primary);
+        font-size: 11px;
+      }
+
+      .hash {
+        color: var(--faint);
+        font-size: 10px;
+      }
+
+      .task-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 9px;
+      }
+
+      .task-links a {
+        color: var(--info);
+        font-size: 11px;
+        text-decoration: none;
+      }
+
+      .task-links a:hover {
+        text-decoration: underline;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+        gap: 14px;
+      }
+
+      .panel {
+        padding: 18px;
+      }
+
+      .check-groups,
+      .question-list,
+      .idea-list,
+      .evidence-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      details {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface-muted);
+      }
+
+      summary {
+        display: flex;
+        cursor: pointer;
+        list-style: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 11px 12px;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      summary::after {
+        content: "+";
+        color: var(--faint);
+        font-family: var(--mono);
+      }
+
+      details[open] summary::after {
+        content: "−";
+      }
+
+      .detail-body {
+        border-top: 1px solid var(--border);
+        padding: 11px 12px 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .detail-body ol,
+      .detail-body ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .detail-body li + li {
+        margin-top: 5px;
+      }
+
+      .question-card {
+        border-radius: var(--radius-sm);
+        padding: 12px;
+      }
+
+      .question-card h3 {
+        margin: 6px 0 4px;
+        font-size: 13px;
+      }
+
+      .question-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .idea-list a,
+      .evidence-list a {
+        display: block;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface-muted);
+        padding: 10px 12px;
+        text-decoration: none;
+      }
+
+      .idea-list a:hover,
+      .evidence-list a:hover {
+        background: var(--surface-strong);
+      }
+
+      .idea-list strong,
+      .evidence-list strong {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 13px;
+      }
+
+      .idea-list span,
+      .evidence-list span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .registry-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .registry-group {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface-muted);
+        padding: 12px;
+      }
+
+      .registry-group h3 {
+        margin: 0 0 10px;
+        font-size: 14px;
+      }
+
+      .registry-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .registry-item {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        padding: 7px 8px;
+      }
+
+      .registry-item code {
+        color: var(--primary);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .registry-item span:nth-child(2) {
+        min-width: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .registry-item .status-chip {
+        padding: 3px 6px;
+        font-size: 10px;
+      }
+
+      .empty-state {
+        display: none;
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-md);
+        padding: 24px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .footer {
+        margin-top: 44px;
+        border-top: 1px solid var(--border);
+        padding-top: 18px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .footer code {
+        font-family: var(--mono);
+      }
+
+      @media (max-width: 1180px) {
+        .metrics {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .phase-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .registry-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .board {
+          grid-template-columns: repeat(4, 280px);
+        }
+      }
+
+      @media (max-width: 860px) {
+        .shell {
+          display: block;
+        }
+
+        .sidebar {
+          position: static;
+          width: 100%;
+          height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+          padding: 14px 16px;
+        }
+
+        .brand {
+          padding-bottom: 8px;
+        }
+
+        .sidebar nav,
+        .sidebar-note {
+          display: none;
+        }
+
+        .main {
+          padding-top: 16px;
+        }
+
+        .topbar {
+          top: 8px;
+          flex-wrap: wrap;
+        }
+
+        .search-wrap {
+          min-width: calc(100% - 48px);
+        }
+
+        .filter {
+          flex: 1;
+        }
+
+        .hero,
+        .split {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .metrics,
+        .phase-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .registry-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-main,
+        .hero-side,
+        .panel {
+          border-radius: var(--radius-md);
+        }
+
+        .section-head {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">PT</div>
+          <div>
+            <strong>Plantree Dashboard</strong>
+            <small>AiClient task map</small>
+          </div>
+        </div>
+        <nav aria-label="Dashboard 导航">
+          <div class="nav-title">路线</div>
+          <a class="nav-link" href="#overview"><span>总览</span><span>01</span></a>
+          <a class="nav-link" href="#critical-route"><span>关键线路</span><span>02</span></a>
+          <a class="nav-link" href="#phases"><span>Phase 地图</span><span>03</span></a>
+          <div class="nav-title">执行</div>
+          <a class="nav-link" href="#board"><span>任务看板</span><span>04</span></a>
+          <a class="nav-link" href="#registry"><span>全量任务索引</span><span>05</span></a>
+          <a class="nav-link" href="#verification"><span>人工点验</span><span>06</span></a>
+          <a class="nav-link" href="#risks"><span>阻塞与未决</span><span>07</span></a>
+          <div class="nav-title">资料</div>
+          <a class="nav-link" href="#ideas"><span>Ideas</span><span>08</span></a>
+          <a class="nav-link" href="#evidence"><span>权威与证据</span><span>09</span></a>
+        </nav>
+        <div class="sidebar-note">
+          <strong>状态纪律</strong><br />
+          “代码已落地、待 GUI 联调”显示为 <em>Verification pending</em>，不计入 Done。
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="topbar">
+          <div class="search-wrap">
+            <input id="search" class="search" type="search" placeholder="搜索 T-30、GUI、网关、surface…" />
+          </div>
+          <select id="status-filter" class="filter" aria-label="按状态筛选">
+            <option value="all">全部状态</option>
+            <option value="done">Done</option>
+            <option value="pending">待验证</option>
+            <option value="next">Next</option>
+            <option value="blocked">Blocked</option>
+            <option value="deferred">Deferred / Open</option>
+          </select>
+          <button id="theme-toggle" class="icon-button" type="button" aria-label="切换明暗主题" title="切换明暗主题">◐</button>
+        </div>
+
+        <div class="content">
+          <section id="overview" class="hero section">
+            <div class="hero-main">
+              <div class="eyebrow">OpenChamber Chat Refactor · In Progress</div>
+              <h1>从规划基线到 GUI 验收的完整任务地图</h1>
+              <p class="hero-copy">
+                当前主轴是 Phase 0A 观感基线补做与 Phase 3 Chat MVP 收口。代码开发已推进至
+                T-30 批 2，下一开发项为 T-31；真正的近期瓶颈是第五轮 GUI 点验、历史回归点测、网关与特定机器现场验证。
+              </p>
+              <div class="hero-meta">
+                <span class="chip">Branch <code>feat/openchamber-chat-refactor</code></span>
+                <span class="chip">Last landed <code>9e2736b</code></span>
+                <span class="chip">Snapshot <code>2026-08-03</code></span>
+              </div>
+            </div>
+            <div class="hero-side">
+              <div>
+                <div class="pulse-line"><span class="pulse-dot"></span><strong>当前活动状态</strong></div>
+                <h2>Phase 0A 🟡 + Phase 3 🟡</h2>
+                <p>A01/A05/A06 已交付；A02/A03/A04 未立项。Chat MVP 多项实现完成，仍待人工与环境验证。</p>
+              </div>
+              <div class="next-target">
+                <strong>最近动作</strong>
+                <span>先完成 T-30 批2 第五轮 GUI 点验（0-nonies），再进入 T-31；T-24 新机器点验与 T-10/T-11 并行推进。</span>
+              </div>
+            </div>
+          </section>
+
+          <div class="metrics" aria-label="任务状态摘要">
+            <div class="metric"><strong>2</strong><span>已完成 Phase（1 / 2）</span></div>
+            <div class="metric"><strong>8+</strong><span>实现完成、待人工验证</span></div>
+            <div class="metric"><strong>11</strong><span>第五轮 T-30 批2点验项</span></div>
+            <div class="metric"><strong>2</strong><span>明确外部阻塞环境</span></div>
+            <div class="metric"><strong>19</strong><span>仍开放的产品/工程问题</span></div>
+          </div>
+
+          <section id="critical-route" class="section">
+            <div class="section-head">
+              <div>
+                <h2>关键线路</h2>
+                <p>开发线与用户验证线并行；箭头表示主执行顺序，不代表所有人工验收都必须串行。</p>
+              </div>
+              <a class="source-link" href="./plans/openchamber-chat-refactor/implementation-status.md">查看当前状态源 ↗</a>
+            </div>
+            <div class="route">
+              <div class="route-step current" data-search-item data-status="pending">
+                <small>NOW · GUI</small><strong>T-30 批2 点验</strong><span>字体分域、Composer 三拍板、45rem 阅读栏；清单 0-nonies。</span>
+              </div>
+              <div class="route-step" data-search-item data-status="next">
+                <small>NEXT · DEV</small><strong>T-31 回复解剖</strong><span>回复解剖 + 置顶气泡，规格已备，估算约 3.6d。</span>
+              </div>
+              <div class="route-step" data-search-item data-status="pending">
+                <small>S0 · GUI</small><strong>T-24 收尾</strong><span>新机器添加仓库通路实测 + 台账补登；实体已随 b38017b 落地。</span>
+              </div>
+              <div class="route-step" data-search-item data-status="next">
+                <small>PHASE 4</small><strong>T-12 → T-15</strong><span>git / editor / context / terminal 四种 surface 接真能力。</span>
+              </div>
+              <div class="route-step" data-search-item data-status="next">
+                <small>CLEANUP</small><strong>T-23</strong><span>死按钮、假 usage 环与存量 A06 违规逐项清零。</span>
+              </div>
+              <div class="route-step" data-search-item data-status="pending">
+                <small>RELEASE GATES</small><strong>T-10 → T-11</strong><span>打包版 GUI 点验后进入加密机现场，Phase 0 转正式 Go。</span>
+              </div>
+            </div>
+          </section>
+
+          <section id="phases" class="section">
+            <div class="section-head">
+              <div>
+                <h2>Phase 地图</h2>
+                <p>Phase 状态取总台账；日常任务状态取 plantree。</p>
+              </div>
+              <a class="source-link" href="../plans/openchamber-chat-refactor-ledger.md">查看 Phase 权威源 ↗</a>
+            </div>
+            <div class="phase-grid">
+              <article class="phase-card" data-search-item data-status="pending">
+                <div class="phase-top"><span class="phase-number">PHASE 0</span><span class="status-chip status-pending">Conditional Go</span></div>
+                <h3>技术 Go / No-Go</h3><p>开发机项完成；T-10 打包 GUI 与 T-11 加密机实证后转正式 Go。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="pending">
+                <div class="phase-top"><span class="phase-number">PHASE 0A</span><span class="status-chip status-pending">部分补做</span></div>
+                <h3>高保真产品基线</h3><p>A01/A05/A06 已验收；A02/A03/A04 未立项，故不可标完成。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="done">
+                <div class="phase-top"><span class="phase-number">PHASE 1</span><span class="status-chip status-done">Done</span></div>
+                <h3>UI Shell（Mock）</h3><p>旧四区口径完成；D19 后的三列 + 导轨重做归后续任务，不回退历史状态。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="done">
+                <div class="phase-top"><span class="phase-number">PHASE 2</span><span class="status-chip status-done">Done</span></div>
+                <h3>Runtime Vertical Slice</h3><p>Host、Main、IPC、Renderer 主闭环与 Question/Resume/附件/看门狗已完成。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="pending">
+                <div class="phase-top"><span class="phase-number">PHASE 3</span><span class="status-chip status-pending">In Progress</span></div>
+                <h3>Chat MVP</h3><p>多项实现完成待人工点验；T-04 卡网关、T-06 未测，仍未收口。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="next">
+                <div class="phase-top"><span class="phase-number">PHASE 4</span><span class="status-chip status-next">Next</span></div>
+                <h3>现有能力重新接线</h3><p>四种 ContextPanel surface 接真：git、editor、context、terminal。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="deferred">
+                <div class="phase-top"><span class="phase-number">PHASE 5</span><span class="status-chip status-deferred">Not Started</span></div>
+                <h3>收口与正式版</h3><p>旧路径收缩、压力验证、组件级事故测试与发布门禁继续完善。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="deferred">
+                <div class="phase-top"><span class="phase-number">PHASE 6</span><span class="status-chip status-deferred">Deferred</span></div>
+                <h3>按需增强</h3><p>其余 surface、子代理层、队列增强、Markdown 与 slash command 等按价值立项。</p>
+              </article>
+            </div>
+          </section>
+
+          <section id="board" class="section">
+            <div class="section-head">
+              <div>
+                <h2>任务看板</h2>
+                <p>只列当前路线中最有决策价值的任务；完整历史证据请进入台账。</p>
+              </div>
+              <a class="source-link" href="./plans/openchamber-chat-refactor/roadmap.md">查看完整 Roadmap ↗</a>
+            </div>
+            <div class="board">
+              <div class="board-column">
+                <div class="column-title"><strong>Done</strong><span>evidence-backed</span></div>
+                <div class="task-list">
+                  <article class="task-card" data-search-item data-status="done">
+                    <div class="task-top"><span class="task-id">C-01…C-15</span><span class="status-chip status-done">Done</span></div>
+                    <h3>主线 Host / 协议 / 打包底座</h3><p>打包链、Question、Resume、Session Index、附件、看门狗、随包 Node 等。</p>
+                    <div class="task-links"><a href="../plans/ledger-claude-mainline.md">主线台账</a></div>
+                  </article>
+                  <article class="task-card" data-search-item data-status="done">
+                    <div class="task-top"><span class="task-id">T-02 / T-07</span><span class="status-chip status-done">Done</span></div>
+                    <h3>会话生命周期与 @ 引用主体</h3><p>主体经 GUI 复验通过；后续增量仍在人工清单单列。</p>
+                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/roadmap.md">Roadmap</a></div>
+                  </article>
+                  <article class="task-card" data-search-item data-status="done">
+                    <div class="task-top"><span class="task-id">D21…D26</span><span class="status-chip status-done">Decided</span></div>
+                    <h3>信息架构与观感决策</h3><p>侧栏、Composer、中列、工具行、字体分域、A07 修订均已拍板。</p>
+                    <div class="task-links"><a href="../plans/openchamber-chat-refactor-ledger.md">决策表</a></div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="board-column">
+                <div class="column-title"><strong>Verification pending</strong><span>not Done</span></div>
+                <div class="task-list">
+                  <article class="task-card" data-search-item data-status="pending">
+                    <div class="task-top"><span class="task-id">T-30 BATCH 2</span><span class="hash">9e2736b</span></div>
+                    <h3>字体分域 + Composer 形态</h3><p>70 文件、1415 例；第五轮 GUI 清单 0-nonies 待用户。</p>
+                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/implementation-status.md#active-todo">点验清单</a><a href="../design/a09-font-domain-baseline.html">A09</a></div>
+                  </article>
+                  <article class="task-card" data-search-item data-status="pending">
+                    <div class="task-top"><span class="task-id">T-22 / T-27 / T-28</span><span class="hash">95a5c04…</span></div>
+                    <h3>三列壳、目标栏、中列两态</h3><p>均已落地；结构、目标切换、恢复态与布局档位等待统一 GUI 回归。</p>
+                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/implementation-status.md#用户线点测--待拍板与开发线并行">用户线</a></div>
+                  </article>
+                  <article class="task-card" data-search-item data-status="pending">
+                    <div class="task-top"><span class="task-id">T-05 / T-19</span><span class="hash">340a59a / 1b350ff</span></div>
+                    <h3>工具/问答与消息队列</h3><p>实现和对抗复核已闭环；问答冻结、排队、Stop/Resume 等仍需真机点验。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="pending">
+                    <div class="task-top"><span class="task-id">T-24 / T-10</span><span class="status-chip status-pending">GUI</span></div>
+                    <h3>新机器与打包版门禁</h3><p>新壳添加仓库通路需全新机器验证；打包版清单完成后才能汇报 CP2。</p>
+                  </article>
+                </div>
+              </div>
+
+              <div class="board-column">
+                <div class="column-title"><strong>Next</strong><span>ordered</span></div>
+                <div class="task-list">
+                  <article class="task-card" data-search-item data-status="next">
+                    <div class="task-top"><span class="task-id">T-31</span><span class="status-chip status-next">Next dev</span></div>
+                    <h3>回复解剖 + 置顶气泡</h3><p>规格已备，当前开发线下一项；在 T-30 批2落地之后接续。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="next">
+                    <div class="task-top"><span class="task-id">T-12 / 13 / 14 / 15</span><span class="status-chip status-next">Phase 4</span></div>
+                    <h3>四种 surface 接线</h3><p>git、editor、context、terminal；全部以 T-22 壳结构为前置。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="next">
+                    <div class="task-top"><span class="task-id">T-23</span><span class="status-chip status-next">Cleanup</span></div>
+                    <h3>存量违规清理</h3><p>死按钮接真能力或显式禁用；假 usage 环改真实语义或撤除。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="next">
+                    <div class="task-top"><span class="task-id">T-11</span><span class="status-chip status-next">On-site</span></div>
+                    <h3>加密机现场验收</h3><p>需先完成 T-10；验证白名单与随包 Node 读取 TSD，收口 Phase 0。</p>
+                  </article>
+                </div>
+              </div>
+
+              <div class="board-column">
+                <div class="column-title"><strong>Deferred / Open</strong><span>not committed</span></div>
+                <div class="task-list">
+                  <article class="task-card" data-search-item data-status="deferred">
+                    <div class="task-top"><span class="task-id">T-16 / T-25</span><span class="status-chip status-deferred">Deferred</span></div>
+                    <h3>壳开关成熟化与旧模块色彩清理</h3><p>分别在 M3 后与 T-21 之后推进，不进入当前近端开发队列。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="deferred">
+                    <div class="task-top"><span class="task-id">C-17 / C-11 / C-12</span><span class="status-chip status-deferred">Deferred</span></div>
+                    <h3>历史协议、fallback、压力收口</h3><p>问答进历史、stream-json 机动路线、旧路径收缩与千 block 压测。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="deferred">
+                    <div class="task-top"><span class="task-id">SURFACES × 6</span><span class="status-chip status-deferred">Reserved</span></div>
+                    <h3>pr / diff / plan / notes / browser / preview</h3><p>保留注册位，本轮不实现；必须先定义真实数据与活动信号。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="deferred">
+                    <div class="task-top"><span class="task-id">IDEAS</span><span class="status-chip status-open">Low commitment</span></div>
+                    <h3>Markdown、slash command、附件选择</h3><p>尚未进入承诺队列；成熟后再 promote 到 roadmap 或 open questions。</p>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="registry" class="section">
+            <div class="section-head">
+              <div>
+                <h2>全量任务索引</h2>
+                <p>覆盖执行计划中的全部 A / C / T 编号，并补入当前状态文件中新出现的 T-31；点击上方搜索可直接定位编号或名称。</p>
+              </div>
+              <a class="source-link" href="../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md">查看任务定义权威源 ↗</a>
+            </div>
+            <div class="registry-grid">
+              <div class="registry-group">
+                <h3>设计基线 · A 系列</h3>
+                <div class="registry-list">
+                  <div class="registry-item" data-search-item data-status="done"><code>A01</code><span>OpenChamber 参考界面清单</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>A05</code><span>视觉 Token 方案</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>A06</code><span>功能接入状态矩阵</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>A07</code><span>中列 Cursor 观感基线</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>A02/03/04</code><span>Phase 0A 缺位基线</span><span class="status-chip status-open">未立项</span></div>
+                </div>
+              </div>
+
+              <div class="registry-group">
+                <h3>Claude 主线 · C 系列</h3>
+                <div class="registry-list">
+                  <div class="registry-item" data-search-item data-status="done"><code>C-01</code><span>agent-host 构建与打包</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-02</code><span>打包态自动化验证</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-03</code><span>Question 桥 spike</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-04</code><span>Question 桥实现</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-05</code><span>Thinking 支持度探测</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-06</code><span>Resume 历史协议与重放</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-07</code><span>Session Index</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-08</code><span>Chat Store 分桶与批处理</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-09</code><span>测试基建与 lint 恢复</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-10</code><span>Effort / Plan / Build 探测</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>C-11</code><span>stream-json fallback</span><span class="status-chip status-deferred">机动</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>C-12</code><span>旧路径收缩与性能压测</span><span class="status-chip status-deferred">Phase 5</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-13</code><span>附件协议探测与桥接</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-14</code><span>Host 挂起看门狗</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-15</code><span>随包 Node 运行时</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>C-17</code><span>问答进历史协议</span><span class="status-chip status-deferred">后置</span></div>
+                </div>
+              </div>
+
+              <div class="registry-group">
+                <h3>产品与验收 · T-01—T-11</h3>
+                <div class="registry-list">
+                  <div class="registry-item" data-search-item data-status="done"><code>T-01</code><span>真实 Project / Workspace 树</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-02</code><span>Session 生命周期 UI</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-03</code><span>Resume UI 与历史增量</span><span class="status-chip status-pending">增量待验</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>T-04</code><span>Thinking 折叠卡</span><span class="status-chip status-blocked">网关</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-05</code><span>Tool 行 + Question 卡</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-06</code><span>消息元数据与重试</span><span class="status-chip status-pending">未测</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-07</code><span>Composer @ 文件引用</span><span class="status-chip status-pending">增量待验</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-08</code><span>Model 选择器</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>T-09</code><span>空/错/断状态与诊断</span><span class="status-chip status-deferred">补验</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-10</code><span>打包版 GUI 手工点验</span><span class="status-chip status-pending">待用户</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>T-11</code><span>M2 加密机验收</span><span class="status-chip status-blocked">现场</span></div>
+                </div>
+              </div>
+
+              <div class="registry-group">
+                <h3>Surface 与能力 · T-12—T-20</h3>
+                <div class="registry-list">
+                  <div class="registry-item" data-search-item data-status="next"><code>T-12</code><span>git surface</span><span class="status-chip status-next">Next</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>T-13</code><span>editor surface</span><span class="status-chip status-next">Next</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>T-14</code><span>context surface</span><span class="status-chip status-next">Next</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>T-15</code><span>terminal surface</span><span class="status-chip status-next">Next</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>T-16</code><span>新旧壳开关成熟化</span><span class="status-chip status-deferred">后置</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-17</code><span>Tool 真实调用 GUI 闭环</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-18</code><span>Composer 粘贴图片/文件</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-19</code><span>运行中输入与 FIFO 队列</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-20</code><span>Effort 选择器</span><span class="status-chip status-pending">待 GUI</span></div>
+                </div>
+              </div>
+
+              <div class="registry-group">
+                <h3>壳与观感 · T-21—T-30</h3>
+                <div class="registry-list">
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-21</code><span>Flexoki 与字体基线代码化</span><span class="status-chip status-pending">待截图</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-22</code><span>三列 + 44px 导轨 + surface 壳</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>T-23</code><span>死按钮与假 usage 清理</span><span class="status-chip status-next">Next</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-24</code><span>新壳添加仓库通路</span><span class="status-chip status-pending">S0 点验</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>T-25</code><span>旧模块原色硬编码清理</span><span class="status-chip status-deferred">后置</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-26</code><span>侧栏两层化</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-27</code><span>Composer 目标栏</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-28</code><span>中列状态化布局</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>T-29</code><span>Assistant Markdown 渲染</span><span class="status-chip status-deferred">待排期</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-30</code><span>观感打磨批1 + 批2</span><span class="status-chip status-pending">待 GUI</span></div>
+                </div>
+              </div>
+
+              <div class="registry-group">
+                <h3>当前新增与里程碑</h3>
+                <div class="registry-list">
+                  <div class="registry-item" data-search-item data-status="next"><code>T-31</code><span>回复解剖 + 置顶气泡</span><span class="status-chip status-next">Next dev</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>CP2</code><span>M1 打包链确认</span><span class="status-chip status-pending">等 T-10</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>CP5</code><span>Phase 0 正式 Go</span><span class="status-chip status-blocked">等 T-11</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>CP6</code><span>Chat MVP 日常内用</span><span class="status-chip status-pending">未收口</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>CP7</code><span>Phase 4 surface 与壳验收</span><span class="status-chip status-next">Future</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>CP8</code><span>Phase 5 发布收口</span><span class="status-chip status-deferred">Future</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="verification" class="section">
+            <div class="section-head">
+              <div>
+                <h2>人工点验地图</h2>
+                <p>这是当前最容易让“实现完成”和“真正完成”混淆的区域。</p>
+              </div>
+              <a class="source-link" href="./plans/openchamber-chat-refactor/implementation-status.md#用户线点测--待拍板与开发线并行">打开完整原始清单 ↗</a>
+            </div>
+            <div class="split">
+              <div class="panel check-groups">
+                <details open data-search-item data-status="pending">
+                  <summary><strong>0-nonies · T-30 批2第五轮</strong><span class="status-chip status-pending">11 项</span></summary>
+                  <div class="detail-body">
+                    <ol>
+                      <li>UI 比例字体与代码/路径/hash 等宽域分离。</li>
+                      <li>单个 Sonnet High 触发器及 Model / Reasoning 菜单状态正确。</li>
+                      <li>follow-up 42px、21px 圆角，多行和附件态不失控。</li>
+                      <li>24px 近黑 Send、红色 Stop、失败 Retry 并存。</li>
+                      <li>⊕ Add file context 行为与文件搜索弹层。</li>
+                      <li>ghost chip hover 8px 圆角、Composer 中性聚焦边。</li>
+                      <li>45rem 阅读栏、空态 statusLine 清理。</li>
+                      <li>CJK、Win10 字重、数字 tabular-nums 与 A09 真机凭证。</li>
+                    </ol>
+                  </div>
+                </details>
+                <details data-search-item data-status="pending">
+                  <summary><strong>0-octies · 第二轮反馈闭环回归</strong><span class="status-chip status-pending">10 项</span></summary>
+                  <div class="detail-body">授权卡、排队消息、实际模型、附件回显、网络重试、combobox、textarea、选择器尺寸、卡片 padding 与时间线顶部淡出。</div>
+                </details>
+                <details data-search-item data-status="pending">
+                  <summary><strong>0-bis → 0-septies · 核心功能组合</strong><span class="status-chip status-pending">7 组</span></summary>
+                  <div class="detail-body">依次覆盖三列壳、Composer 目标栏、中列两态、工具行/Question、消息队列与观感快赢；每组细项均在 implementation-status 用户线中。</div>
+                </details>
+                <details data-search-item data-status="pending">
+                  <summary><strong>基础回归与发布门</strong><span class="status-chip status-pending">Parallel</span></summary>
+                  <div class="detail-body">多轮上下文、T-03/T-04/T-06/T-07/T-18/T-20，随后 T-10 打包版 GUI → CP2，最后 T-11 加密机现场 → CP5。</div>
+                </details>
+              </div>
+              <aside class="panel">
+                <div class="eyebrow">Latest verified</div>
+                <h3>2026-08-03 · T-30 批2</h3>
+                <p>typecheck 干净；Biome 686 文件 0 错误；Vitest 81 文件 1415 例，仅保留 3 个 Linux 上必然失败的 Windows-only 基线。</p>
+                <p><strong>Linux 三绿口径：</strong>typecheck 干净 / lint 0 诊断 / 测试只剩固定 3 个 Windows-only 失败且总例数只增不减。</p>
+                <a class="source-link" href="./baseline/test-and-release-gates.md">查看测试与 GUI 门禁 ↗</a>
+              </aside>
+            </div>
+          </section>
+
+          <section id="risks" class="section">
+            <div class="section-head">
+              <div>
+                <h2>阻塞与未决问题</h2>
+                <p>外部阻塞与内部产品决策分开显示；已关闭问题不进入本区。</p>
+              </div>
+              <a class="source-link" href="./plans/openchamber-chat-refactor/open-questions.md">查看全部 Open Questions ↗</a>
+            </div>
+            <div class="split">
+              <div class="panel question-list">
+                <article class="question-card" data-search-item data-status="blocked">
+                  <div class="question-top"><span class="task-id">T-04 · #5 / #8</span><span class="status-chip status-blocked">Gateway</span></div>
+                  <h3>Thinking 卡被网关行为阻塞</h3><p>默认模型路径确定性 400，sonnet 返回空文本 thinking；渲染链无 app 侧可修，待网关处理后新轮次点验。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="blocked">
+                  <div class="question-top"><span class="task-id">T-11 · #7</span><span class="status-chip status-blocked">Secure machine</span></div>
+                  <h3>TSD 白名单与随包 Node 需现场实证</h3><p>开发机不得冒充通过；T-10 完成后在加密机验证六项并回填 CP5。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#3 / #14 / #27</span><span class="status-chip status-open">Test gaps</span></div>
+                  <h3>CI、凭证隔离与组件事故测试缺口</h3><p>CI 未设三绿门；dev.env 仅覆盖 dev.js 且零自动化；node-only Vitest 无法钉住组件交互竞态。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#12 / #13</span><span class="status-chip status-open">Theme</span></div>
+                  <h3>sync-terminal 混色与 dark: 脱钩</h3><p>Ghostty 会覆盖 25 个旧 token 但不覆盖 5 个新 token；Tailwind dark: 仍跟系统偏好而非 .dark 类。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#15 / #22</span><span class="status-chip status-open">Network</span></div>
+                  <h3>缓存亲和与网络瞬断待现场复测</h3><p>需同模型对照、网关采样与真实频率观察；app 已补重试可见性但不能根治传输瞬断。</p>
+                </article>
+              </div>
+              <div class="panel question-list">
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#1</span><span class="status-chip status-open">Decision</span></div>
+                  <h3>打包体积 120MB → 141MB</h3><p>随包 Node 增加约 21MB；需用户确认是否接受或改成可选随包。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#6 / #23 / #24</span><span class="status-chip status-open">Product</span></div>
+                  <h3>归档恢复、Permission Dock、标题来源元数据</h3><p>均已确认是独立产品/数据建模缺口，尚未进入当前实现批次。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#17 / #21</span><span class="status-chip status-open">Architecture</span></div>
+                  <h3>Subagent 数据源与消息队列后续</h3><p>建议先读磁盘 subagents 回放；队列仍有失败退避、后台放行、持久化等二期设计。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#20 / #26</span><span class="status-chip status-open">Reliability</span></div>
+                  <h3>stopping 直发边界与 Host clientTurnId 幂等</h3><p>当前不阻塞验收，但都是竞态与重复发送的纵深防御候选。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#4</span><span class="status-chip status-open">Testability</span></div>
+                  <h3>Node 缺失场景无法真实触发</h3><p>resolver fallback 过强；候选方向是显式 mock-resolver 注入容器。</p>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <section id="ideas" class="section">
+            <div class="section-head">
+              <div>
+                <h2>Ideas Inbox</h2>
+                <p>低承诺想法，不计入路线承诺；成熟后再 promote。</p>
+              </div>
+              <a class="source-link" href="./ideas/inbox.md">打开 Ideas 原文 ↗</a>
+            </div>
+            <div class="idea-list">
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>长会话虚拟化与千 block 压测</strong><span>是否需要取决于 C-12 压测数据，不提前承诺。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>已有分支物化为 worktree</strong><span>IPC 底层已支持，缺少“从已有分支建 worktree”的产品路径。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>真附件选择与 ⊕ 菜单扩展</strong><span>当前 ⊕ 是 Add file context；真附件选择涉及 renderer 读字节 IPC 与限额。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>Assistant Markdown 渲染</strong><span>现状仍是纯文本；需单独处理渲染器、安全、链接与流式切换。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>Slash command</strong><span>用户明确优先级不高；需先定义命令目录来源与发送语义。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>工具行复合 arg 渲染</strong><span>将 pattern 的 mono 域与“in repo”等散文域拆分呈现。</span></a>
+            </div>
+          </section>
+
+          <section id="evidence" class="section">
+            <div class="section-head">
+              <div>
+                <h2>权威与证据链</h2>
+                <p>Dashboard 是导航和快照，不替代这些源文件。</p>
+              </div>
+            </div>
+            <div class="evidence-list">
+              <a href="../plans/2026-07-23-openchamber-chat-refactor-ard.md"><strong>1 · ARD — 架构权威</strong><span>目标结构与架构裁定；发生冲突时优先级最高。</span></a>
+              <a href="../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md"><strong>2 · 执行计划 — 任务定义</strong><span>C/T 编号、验收标准、依赖、测试凭证与执行顺序。</span></a>
+              <a href="../plans/openchamber-chat-refactor-ledger.md"><strong>3 · 总台账 — Phase / 决策 / 检查点</strong><span>append-only 的 D1…D26、Phase 总览和 CP-x 里程碑证据。</span></a>
+              <a href="./plans/openchamber-chat-refactor/implementation-status.md"><strong>4 · Implementation Status — 当前快照</strong><span>当前阶段、最近落地、最近验证、用户线、阻塞与交接。</span></a>
+              <a href="./plans/openchamber-chat-refactor/roadmap.md"><strong>5 · Roadmap — 任务状态</strong><span>Done / In Progress / Next / Deferred；状态类信息以 plantree 为准。</span></a>
+              <a href="./baseline/README.md"><strong>6 · Baseline — 项目事实层</strong><span>模块图、运行时流、存储、测试与发布门禁、风险热点。</span></a>
+            </div>
+          </section>
+
+          <div id="empty-state" class="empty-state">没有匹配的任务。可清空搜索词或切回“全部状态”。</div>
+
+          <footer class="footer">
+            <strong>维护说明：</strong>本页是基于 <code>2026-08-03</code> plantree 工作树生成的人工聚合快照。
+            每次任务落地仍应先更新台账证据，再刷新 <code>implementation-status.md</code> / <code>roadmap.md</code>，最后同步此页的摘要。
+          </footer>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const root = document.documentElement;
+      const searchInput = document.querySelector("#search");
+      const statusFilter = document.querySelector("#status-filter");
+      const themeToggle = document.querySelector("#theme-toggle");
+      const emptyState = document.querySelector("#empty-state");
+      const searchableItems = [...document.querySelectorAll("[data-search-item]")];
+
+      const savedTheme = localStorage.getItem("plantree-dashboard-theme");
+      const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      root.dataset.theme = savedTheme || preferredTheme;
+
+      const normalize = (value) => value.trim().toLocaleLowerCase("zh-CN");
+
+      const applyFilters = () => {
+        const query = normalize(searchInput.value);
+        const selectedStatus = statusFilter.value;
+        let visibleCount = 0;
+
+        for (const item of searchableItems) {
+          const matchesQuery = !query || normalize(item.textContent).includes(query);
+          const matchesStatus = selectedStatus === "all" || item.dataset.status === selectedStatus;
+          const visible = matchesQuery && matchesStatus;
+          item.hidden = !visible;
+          if (visible) visibleCount += 1;
+        }
+
+        emptyState.style.display = visibleCount === 0 ? "block" : "none";
+      };
+
+      searchInput.addEventListener("input", applyFilters);
+      statusFilter.addEventListener("change", applyFilters);
+      themeToggle.addEventListener("click", () => {
+        const nextTheme = root.dataset.theme === "dark" ? "light" : "dark";
+        root.dataset.theme = nextTheme;
+        localStorage.setItem("plantree-dashboard-theme", nextTheme);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "/" && document.activeElement !== searchInput) {
+          event.preventDefault();
+          searchInput.focus();
+        }
+        if (event.key === "Escape" && document.activeElement === searchInput) {
+          searchInput.value = "";
+          searchInput.blur();
+          applyFilters();
+        }
+      });
+    </script>
+  </body>
+</html>

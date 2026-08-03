@@ -299,6 +299,8 @@ D25 §3.2 已实证：**在 D18 的全等宽栈下 `font-medium`(500) 是 no-op*
 | **F-A22** | `roundActionButtonKindClass('send')` 与 `('enqueue')` 均含 `bg-foreground` `text-background` 且**不含** `bg-primary`；`('stop')` 含 destructive；三者两两不等 | 字符串 | 拍板 ③ 被回退 / send 与 stop 撞成同色 |
 
 > 与原规格的关系：F-A5 被 **F-A15 取代**（更严格的超集），F-A8 并入 **F-A20**，F-A14 被 **F-A22 取代**。执行时按新编号写，旧编号在测试文件里以注释保留映射关系，便于对着原规格逐条点验。
+>
+> **2026-08-03 编号落地注记**：F-A20（SelectTrigger/旧组件清零静态扫描）落 `composerFormStatic.test.ts`，F-A21/F-A22 落 `middleColumnLayout.test.ts`；F-A21 已随对抗复核 as-built 修订为断言 `rounded-[21px]`（静息半高定值，×2===42 交叉）；**F-A23**（⊕ 与模型触发器 ghost 三态共享）为第五轮 D4（⊕ Attach files）新增，非本表原始编号。F-A12 已随 ⊕ 语义改判退役（见 `2026-08-03-round5-feedback-diagnosis.md`）。
 
 ---
 
