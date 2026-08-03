@@ -100,7 +100,7 @@ function QaHead({ title, pager, onPrev, onNext, collapsed, onToggleCollapsed }: 
     <div className="flex h-9 items-center gap-2 px-3 text-muted-foreground">
       <span className="min-w-0 flex-1 truncate tracking-[0.01em]">{title}</span>
       {pager?.visible && (
-        <span className="flex items-center gap-0.5 text-code tabular-nums text-muted-foreground">
+        <span className="flex items-center gap-0.5 text-meta tabular-nums text-muted-foreground">
           <button
             type="button"
             className="grid size-6 place-items-center rounded-sm hover:bg-hover disabled:pointer-events-none disabled:opacity-40"
@@ -195,7 +195,7 @@ function QaOptionRow({
       >
         <span
           className={cn(
-            'grid size-5 shrink-0 place-items-center rounded-xs border border-border bg-muted text-code leading-none text-muted-foreground',
+            'grid size-5 shrink-0 place-items-center rounded-xs border border-border bg-muted text-meta leading-none text-muted-foreground',
             selected && 'border-primary text-primary'
           )}
         >
@@ -402,7 +402,7 @@ function InteractiveQaCard({
               onClick={handleContinue}
             >
               <span>{CONTINUE_LABEL}</span>
-              <span className="text-code opacity-70">{CONTINUE_KBD}</span>
+              <span className="text-meta opacity-70">{CONTINUE_KBD}</span>
             </button>
           </div>
         </>

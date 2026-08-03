@@ -108,7 +108,7 @@ export function TemporaryWorkspacePanel({
               <FolderGit2 className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">{t('No temp sessions')}</EmptyTitle>
+              <EmptyTitle className="text-base tracking-normal">{t('No temp sessions')}</EmptyTitle>
               <EmptyDescription>{t('Create a temp session to get started')}</EmptyDescription>
             </EmptyHeader>
             {!searchQuery && (
@@ -212,7 +212,7 @@ function TemporaryWorkspaceItemRow({
           {item.path}
         </div>
         {hasActivity && (
-          <div className="relative z-10 flex items-center gap-3 pl-6 text-xs text-muted-foreground">
+          <div className="relative z-10 flex items-center gap-3 pl-6 text-xs text-muted-foreground tabular-nums">
             {activity.agentCount > 0 && (
               <span className="flex items-center gap-1">
                 <Sparkles className="h-3 w-3" />

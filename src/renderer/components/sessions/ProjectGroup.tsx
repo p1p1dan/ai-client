@@ -39,7 +39,10 @@ export function ProjectGroup({
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         )}
         <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={project.path}>
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-code text-foreground"
+          title={project.path}
+        >
           {project.path}
         </span>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">

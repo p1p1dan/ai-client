@@ -46,13 +46,14 @@ export function ensureModelOptions(hostDefault?: string | null): ChatModel[] {
 
 /**
  * F9 (round-2 review fix): the model a RESUME call should pin, using the
- * exact same resolution `ModelSelect`'s own initial value uses — an explicit
- * per-session choice, else the Host-reported default (falling back to the
- * catalog default when the Host has not reported one yet). Extracted once so
- * every resume call site pulls from the identical formula instead of each
- * hand-rolling `getSessionModel(id) ?? defaultModelId(null)`, which silently
- * hard-pins the catalog default regardless of what the Host actually
- * reported and can drift from what ModelSelect displays.
+ * exact same resolution `ComposerModelTrigger`'s (formerly ModelSelect) own
+ * initial value uses — an explicit per-session choice, else the Host-reported
+ * default (falling back to the catalog default when the Host has not
+ * reported one yet). Extracted once so every resume call site pulls from the
+ * identical formula instead of each hand-rolling
+ * `getSessionModel(id) ?? defaultModelId(null)`, which silently hard-pins the
+ * catalog default regardless of what the Host actually reported and can
+ * drift from what ComposerModelTrigger displays.
  */
 export function resolveResumeModel(
   getSessionModel: (sessionId: string) => string | null,

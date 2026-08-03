@@ -3,9 +3,14 @@ import { ListPlus, RotateCcw, SendHorizonal, Square } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Button, type buttonVariants } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
-import { roundActionButtonClass } from './middleColumnLayout';
+import { cn } from '@/lib/utils';
+import {
+  type RoundActionButtonKind,
+  roundActionButtonClass,
+  roundActionButtonKindClass,
+} from './middleColumnLayout';
 
-type RoundButtonKind = 'send' | 'stop' | 'retry' | 'enqueue';
+type RoundButtonKind = RoundActionButtonKind;
 
 interface ComposerRoundButtonProps {
   kind: RoundButtonKind;
@@ -35,11 +40,16 @@ const KIND_CONFIG: Record<RoundButtonKind, RoundButtonKindConfig> = {
 };
 
 /**
- * T-28 §3.5: 28px true-circle action button shared by Send / Stop / Retry /
- * Enqueue (T-19) — color comes from the Button variant, shape from
- * `roundActionButtonClass()`. All kinds occupy the same slot at the same
- * size (D23 decision 5): a running turn's Stop replaces Send in place, it
- * never grows a pill shape.
+ * T-28 §3.5 / T-30b2 §4.5: 24px true-circle action button shared by Send /
+ * Stop / Retry / Enqueue (T-19) — shape from `roundActionButtonClass()`,
+ * colour from `roundActionButtonKindClass()`. All kinds occupy the same slot
+ * at the same size (D23 decision 5): a running turn's Stop replaces Send in
+ * place, it never grows a pill shape — which is also why changing Send's fill
+ * costs nothing in stability, the two stay same-position and same-size.
+ *
+ * The `Button` variant still supplies each kind's structural base (borders,
+ * dark-mode treatment); the kind class is layered on top and is the single
+ * assertable source for what colour each kind is.
  */
 export function ComposerRoundButton({
   kind,
@@ -55,13 +65,15 @@ export function ComposerRoundButton({
     <Button
       size="icon-sm"
       variant={variant}
-      className={roundActionButtonClass()}
+      className={cn(roundActionButtonClass(), roundActionButtonKindClass(kind))}
       disabled={disabled}
       onClick={onClick}
       aria-label={title}
       title={title}
     >
-      <Icon className="size-3.5" />
+      {/* 12px glyph inside the 24px circle — the old 14px was proportioned for
+          the 28px box. */}
+      <Icon className="size-3" />
     </Button>
   );
 }

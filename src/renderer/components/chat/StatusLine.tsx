@@ -137,13 +137,13 @@ function DirItem({ path, icon, label }: DirItemProps) {
         title={displayPath}
       >
         <Icon className="h-5 w-5" />
-        <span>{label}</span>
+        <span className="font-mono text-code">{label}</span>
       </PopoverTrigger>
       <PopoverPopup side="top" sideOffset={8} tooltipStyle className="min-w-[140px]">
         <div className="flex flex-col">
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-ui hover:bg-accent/50"
             onClick={handleOpenFolder}
           >
             <FolderOpen className="h-4 w-4" />
@@ -151,7 +151,7 @@ function DirItem({ path, icon, label }: DirItemProps) {
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-ui hover:bg-accent/50"
             onClick={handleCopyPath}
           >
             <Copy className="h-4 w-4" />
@@ -196,7 +196,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="context" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <PieChart className="h-5 w-5" />
-          <span>{percent}%</span>
+          <span className="tabular-nums">{percent}%</span>
         </div>
       );
     }
@@ -206,7 +206,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="cost" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Coins className="h-5 w-5" />
-          <span>{formatCost(status.cost.totalCostUsd)}</span>
+          <span className="tabular-nums">{formatCost(status.cost.totalCostUsd)}</span>
         </div>
       );
     }
@@ -216,7 +216,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="duration" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Clock className="h-5 w-5" />
-          <span>{formatDuration(status.cost.totalDurationMs)}</span>
+          <span className="tabular-nums">{formatDuration(status.cost.totalDurationMs)}</span>
         </div>
       );
     }
@@ -230,8 +230,8 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="lines" className="flex shrink-0 items-center gap-2 whitespace-nowrap">
           <GitCommitHorizontal className="h-5 w-5" />
-          <span className="text-success">+{status.cost.totalLinesAdded}</span>
-          <span className="text-destructive">-{status.cost.totalLinesRemoved}</span>
+          <span className="tabular-nums text-success">+{status.cost.totalLinesAdded}</span>
+          <span className="tabular-nums text-destructive">-{status.cost.totalLinesRemoved}</span>
         </div>
       );
     }
@@ -242,7 +242,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="tokens" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Hash className="h-5 w-5" />
-          <span>{formatTokens(totalInputTokens, totalOutputTokens)}</span>
+          <span className="tabular-nums">{formatTokens(totalInputTokens, totalOutputTokens)}</span>
         </div>
       );
     }
@@ -252,7 +252,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="cache" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Database className="h-5 w-5" />
-          <span>{formatCacheTokens(status)}</span>
+          <span className="tabular-nums">{formatCacheTokens(status)}</span>
         </div>
       );
     }
@@ -266,7 +266,9 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="apiTime" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Zap className="h-5 w-5" />
-          <span>{formatApiTime(status.cost.totalApiDurationMs, status.cost.totalDurationMs)}</span>
+          <span className="tabular-nums">
+            {formatApiTime(status.cost.totalApiDurationMs, status.cost.totalDurationMs)}
+          </span>
         </div>
       );
     }
@@ -300,7 +302,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
       elements.push(
         <div key="version" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Tag className="h-5 w-5" />
-          <span>{status.version}</span>
+          <span className="tabular-nums">{status.version}</span>
         </div>
       );
     }
@@ -363,7 +365,7 @@ export function StatusLine({ sessionId, onHeightChange }: StatusLineProps) {
   return (
     <div
       ref={containerRef}
-      className="flex min-h-8 shrink-0 flex-wrap items-center justify-center gap-x-6 gap-y-1 border-t border-border bg-background px-4 py-1 text-base text-muted-foreground"
+      className="flex min-h-8 shrink-0 flex-wrap items-center justify-center gap-x-6 gap-y-1 border-t border-border bg-background px-4 py-1 text-meta text-muted-foreground"
     >
       {items}
     </div>

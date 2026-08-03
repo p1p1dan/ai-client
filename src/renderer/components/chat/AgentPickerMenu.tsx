@@ -114,7 +114,7 @@ export function AgentPickerMenu({
     >
       <div className="rounded-lg border bg-popover p-1 shadow-lg">
         <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-xs text-muted-foreground">{t('Select Agent')}</span>
+          <span className="text-ui text-muted-foreground">{t('Select Agent')}</span>
           <Tooltip>
             <TooltipTrigger render={<span />}>
               <button
@@ -151,11 +151,11 @@ export function AgentPickerMenu({
                 type="button"
                 key={agentId}
                 onClick={() => handleSelectAgent(agentId)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground whitespace-nowrap"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-ui transition-colors hover:bg-accent hover:text-accent-foreground whitespace-nowrap"
               >
                 <span>{name}</span>
                 {isDefault && (
-                  <span className="shrink-0 text-xs text-muted-foreground">{t('(default)')}</span>
+                  <span className="shrink-0 text-meta text-muted-foreground">{t('(default)')}</span>
                 )}
               </button>
             );

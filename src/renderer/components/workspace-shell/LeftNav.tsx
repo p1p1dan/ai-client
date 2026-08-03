@@ -278,8 +278,16 @@ export function LeftNav({
                     <FolderGit2 className="h-4.5 w-4.5" />
                   </EmptyMedia>
                   <EmptyHeader>
-                    <EmptyTitle className="text-sm">{t('Add Repository')}</EmptyTitle>
-                    <EmptyDescription className="text-xs">
+                    {/* D25 §3.3: EmptyTitle's shared base now carries a
+                        negative tracking meant for its 18px default — this
+                        compact sidebar usage shrinks to 14px (text-ui) and
+                        may render CJK, so tracking must be cancelled back to
+                        normal (negative tracking + CJK is the banned
+                        combination). */}
+                    <EmptyTitle className="text-ui tracking-normal">
+                      {t('Add Repository')}
+                    </EmptyTitle>
+                    <EmptyDescription className="text-meta">
                       {t('Add a repository to get started.')}
                     </EmptyDescription>
                   </EmptyHeader>
@@ -292,7 +300,7 @@ export function LeftNav({
                 <>
                   <section>
                     <div className="flex h-7 items-center px-2">
-                      <p className="text-sm font-medium tracking-[0.04em] text-muted-foreground">
+                      <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
                         {t('Recent')}
                       </p>
                       <Button
@@ -326,17 +334,18 @@ export function LeftNav({
                         {recent.hiddenCount > 0 ? (
                           <button
                             type="button"
-                            className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-xs text-muted-foreground hover:bg-hover"
+                            className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
                             onClick={() => setRecentShowAll(true)}
                           >
-                            {t('Show more')} ({recent.hiddenCount})
+                            {t('Show more')} (
+                            <span className="tabular-nums">{recent.hiddenCount}</span>)
                           </button>
                         ) : (
                           recentShowAll &&
                           recent.rows.length > RECENT_DEFAULT_LIMIT && (
                             <button
                               type="button"
-                              className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-xs text-muted-foreground hover:bg-hover"
+                              className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
                               onClick={() => setRecentShowAll(false)}
                             >
                               {t('Show less')}
@@ -348,7 +357,7 @@ export function LeftNav({
                   </section>
 
                   <div className="flex h-7 items-center px-2">
-                    <p className="text-sm font-medium tracking-[0.04em] text-muted-foreground">
+                    <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
                       {t('Repositories')}
                     </p>
                     <div className="ml-auto flex items-center">
@@ -377,7 +386,7 @@ export function LeftNav({
                   </div>
 
                   {noMatches && (
-                    <p className="px-2 py-1 text-[11px] text-muted-foreground">
+                    <p className="px-2 py-1 text-meta text-muted-foreground">
                       {t('No matching sessions')}
                     </p>
                   )}
@@ -393,7 +402,7 @@ export function LeftNav({
                         <div
                           // Project headers have no selected state, so the plain
                           // hover step is enough; --hover is the semantic alias.
-                          className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-sm hover:bg-hover"
+                          className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover"
                         >
                           <button
                             type="button"
@@ -410,7 +419,7 @@ export function LeftNav({
                             ) : (
                               <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
                             )}
-                            <span className="min-w-0 flex-1 truncate font-medium">
+                            <span className="min-w-0 flex-1 truncate font-semibold">
                               {folder.name}
                             </span>
                           </button>
@@ -448,7 +457,7 @@ export function LeftNav({
                             {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
                               <button
                                 type="button"
-                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-hover"
+                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
                                 onClick={() => createChatSessionOnWorkspace(newSessionWorkspaceId)}
                               >
                                 <Plus className="h-3 w-3 shrink-0" />
@@ -530,7 +539,7 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
               setEditing(false);
             }
           }}
-          className="h-6 flex-1 text-sm"
+          className="h-6 flex-1 text-ui"
         />
       </div>
     );
@@ -545,7 +554,7 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
         // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
         // (0,1,0), so pointing at the active row would repaint it as an ordinary
         // hovered row and erase the selection.
-        'group flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-sm',
+        'group flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-ui',
         active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
       )}
       onClick={onSelect}
@@ -590,7 +599,7 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
           tabIndex=0, so focus-within also reveals the actions and keeps
           Archive/Close reachable by keyboard (display:none alone would drop
           them from the tab order). */}
-      <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
+      <span className="shrink-0 text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
         {formatRelativeAge(row.updatedAt, now)}
       </span>
       <div className="hidden shrink-0 items-center group-hover:flex group-focus-within:flex">

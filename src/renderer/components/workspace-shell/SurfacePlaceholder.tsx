@@ -29,8 +29,12 @@ export function SurfacePlaceholder({ surface }: SurfacePlaceholderProps) {
         <Icon className="h-4.5 w-4.5" />
       </EmptyMedia>
       <EmptyHeader>
-        <EmptyTitle className="text-sm">{t(surface.labelKey)}</EmptyTitle>
-        <EmptyDescription className="text-xs">
+        {/* D25 §3.3: EmptyTitle's shared base carries a negative tracking
+            sized for its 18px default — this compact placeholder overrides
+            to 14px (text-ui) and may render CJK, so tracking must be
+            cancelled back to normal. */}
+        <EmptyTitle className="text-ui tracking-normal">{t(surface.labelKey)}</EmptyTitle>
+        <EmptyDescription className="text-meta">
           {surface.pendingTask
             ? t('Not connected yet — {{task}} will wire this surface.', {
                 task: surface.pendingTask,

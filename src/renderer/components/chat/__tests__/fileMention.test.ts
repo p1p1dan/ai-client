@@ -1,6 +1,11 @@
 import type { FileSearchResult } from '@shared/types/search';
 import { describe, expect, it } from 'vitest';
-import { extractMentionQuery, parseMentionChips, replaceMention } from '../fileMention';
+import {
+  extractMentionQuery,
+  insertMentionTrigger,
+  parseMentionChips,
+  replaceMention,
+} from '../fileMention';
 
 function file(relativePath: string, absolute?: string): FileSearchResult {
   const sep = relativePath.includes('/') ? '/' : '\\';
@@ -171,5 +176,55 @@ describe('replaceMention with a directory entry (T-07①)', () => {
   it('does not append a slash to the inserted directory', () => {
     const out = replaceMention('@d', 2, dir('docs'));
     expect(out?.text).toBe('@docs ');
+  });
+});
+
+/**
+ * T-30b2 F-A12: the text transform behind the composer's ⊕ button.
+ *
+ * The button adds a file REFERENCE, not an upload — there is no renderer-side
+ * file-read IPC here, so a real attachment picker would produce a path it
+ * could not send. Writing an `@` at the caret routes through the file-search
+ * popup that already exists, which is a capability that is actually present.
+ */
+describe('insertMentionTrigger (F-A12)', () => {
+  // `extractMentionQuery` only treats an `@` as opening a token when it is
+  // preceded by whitespace or the start of the text, so an `@` glued to the
+  // previous word would insert a character that never opens the popup — a
+  // dead button by way of a one-character bug.
+  it('adds a separating space when the caret sits right after a word', () => {
+    expect(insertMentionTrigger('abc', 3)).toEqual({ text: 'abc @', caret: 5 });
+  });
+
+  it('does not double the space when one is already there', () => {
+    expect(insertMentionTrigger('abc ', 4)).toEqual({ text: 'abc @', caret: 5 });
+  });
+
+  it('needs no leading space at the very start of the draft', () => {
+    expect(insertMentionTrigger('', 0)).toEqual({ text: '@', caret: 1 });
+  });
+
+  it('treats a newline as a separator too', () => {
+    expect(insertMentionTrigger('abc\n', 4)).toEqual({ text: 'abc\n@', caret: 5 });
+  });
+
+  it('inserts mid-draft without disturbing the text after the caret', () => {
+    expect(insertMentionTrigger('see the file', 8)).toEqual({
+      text: 'see the @file',
+      caret: 9,
+    });
+  });
+
+  // The caret reported by a textarea can outrun the value this component last
+  // committed (IME, a pending update); clamping keeps the transform total.
+  it('clamps an out-of-range caret instead of producing holes or undefined', () => {
+    expect(insertMentionTrigger('abc', 99)).toEqual({ text: 'abc @', caret: 5 });
+    expect(insertMentionTrigger('abc', -3)).toEqual({ text: '@abc', caret: 1 });
+  });
+
+  // The inserted token must be one the popup will actually pick up.
+  it('produces an @ that reads as an open, empty mention query', () => {
+    const out = insertMentionTrigger('abc', 3);
+    expect(extractMentionQuery(out.text, out.caret)).toBe('');
   });
 });

@@ -63,7 +63,7 @@ export function CommentForm({
     <div className="bg-background border rounded-lg shadow-lg p-3 w-[320px]">
       <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
         <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">
+        <span className="truncate font-mono text-code">
           {fileName}:{lineDisplay}
         </span>
       </div>

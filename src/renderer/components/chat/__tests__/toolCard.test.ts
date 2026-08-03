@@ -7,6 +7,7 @@ import {
   deriveToolGroupRows,
   deriveToolRowView,
   formatToolArg,
+  formatToolArgKind,
   groupTimeline,
   normalizeToolOutput,
   pairToolBlocks,
@@ -281,6 +282,13 @@ describe('buildThoughtRow empty-block behavior (via deriveToolGroupRows)', () =>
     expect(rows[0].expandable).toBe(false);
     expect(rows[0].body).toBeUndefined();
   });
+
+  it('marks the Thought row arg as prose (D25 §2.4): "for Ns" is sans, not mono', () => {
+    const entries = [thinkEntry(thinkingBlock('th1'))];
+    const rows = deriveToolGroupRows(entries, { thinkingDurationMs: () => 12_000 });
+    expect(rows[0].arg).toBe('for 12s');
+    expect(rows[0].argKind).toBe('prose');
+  });
 });
 
 describe('deriveAggregateRow', () => {
@@ -295,6 +303,8 @@ describe('deriveAggregateRow', () => {
     ];
     const row = deriveAggregateRow(entries);
     expect(`${row.verb} ${row.arg}`).toBe('Explored 3 files, 11 searches');
+    // D25 §2.4: "N files, M searches" is a number+prose summary, sans -- not mono.
+    expect(row.argKind).toBe('prose');
   });
 
   it('omits the searches segment when only Read runs are present', () => {
@@ -432,6 +442,34 @@ describe('formatToolArg', () => {
   });
 });
 
+describe('formatToolArgKind (D25 §2.4 arg font-domain)', () => {
+  it('classifies Read/NotebookRead/Edit/Write/NotebookEdit paths as ident', () => {
+    expect(formatToolArgKind(makeRun('a', 'Read', { file_path: 'a.ts' }))).toBe('ident');
+    expect(formatToolArgKind(makeRun('a', 'NotebookRead', { file_path: 'a.ipynb' }))).toBe('ident');
+    expect(formatToolArgKind(makeRun('a', 'Edit', { file_path: 'a.ts' }))).toBe('ident');
+    expect(formatToolArgKind(makeRun('a', 'MultiEdit', { file_path: 'a.ts' }))).toBe('ident');
+    expect(formatToolArgKind(makeRun('a', 'Write', { file_path: 'a.ts' }))).toBe('ident');
+    expect(formatToolArgKind(makeRun('a', 'NotebookEdit', { file_path: 'a.ipynb' }))).toBe('ident');
+  });
+
+  it('classifies WebFetch url as ident', () => {
+    expect(formatToolArgKind(makeRun('a', 'WebFetch', { url: 'https://example.com' }))).toBe(
+      'ident'
+    );
+  });
+
+  it('classifies Bash with a description as prose, falling back to ident for a bare command', () => {
+    const withDescription = makeRun('a', 'Bash', { command: 'ls -la', description: 'List files' });
+    expect(formatToolArgKind(withDescription)).toBe('prose');
+    const withoutDescription = makeRun('b', 'Bash', { command: 'ls -la' });
+    expect(formatToolArgKind(withoutDescription)).toBe('ident');
+  });
+
+  it('leaves argKind undefined for a branch D25 §2.4 does not cover (safe sans default)', () => {
+    expect(formatToolArgKind(makeRun('a', 'Grep', { pattern: 'foo' }))).toBeUndefined();
+  });
+});
+
 describe('deriveToolRowView', () => {
   it('forces body "output" and expandable=true when failed', () => {
     const run = makeRun('a', 'Bash', { command: 'false' }, 'failed', {
@@ -466,6 +504,16 @@ describe('deriveToolRowView', () => {
   it('gives a Read row a file link with path/line/endLine', () => {
     const run = makeRun('a', 'Read', { file_path: '/repo/a.ts', offset: 10, limit: 5 });
     expect(deriveToolRowView(run).link).toEqual({ path: '/repo/a.ts', line: 10, endLine: 14 });
+  });
+
+  it('carries argKind onto the view (D25 §2.4): ident for a path, prose for a Bash description', () => {
+    const read = makeRun('a', 'Read', { file_path: '/repo/a.ts' });
+    expect(deriveToolRowView(read).argKind).toBe('ident');
+    const bashWithDescription = makeRun('b', 'Bash', {
+      command: 'ls -la',
+      description: 'List files',
+    });
+    expect(deriveToolRowView(bashWithDescription).argKind).toBe('prose');
   });
 
   it('carries the raw output as hitSource for Grep/Glob', () => {

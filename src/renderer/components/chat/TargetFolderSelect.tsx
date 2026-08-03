@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/combobox';
 import { useI18n } from '@/i18n';
 import type { FolderMenuEntry, FolderMenuModel } from './composerTarget';
+import { targetTriggerClass } from './middleColumnLayout';
 
 interface FolderComboItem {
   id: string;
@@ -44,6 +45,18 @@ interface TargetFolderSelectProps {
   activeWorkspaceId: string | null;
   /** Trigger label — the current target's project name. */
   currentLabel: string;
+  /**
+   * Full filesystem path of the current target, surfaced as the trigger's
+   * tooltip.
+   *
+   * T-30b2 §4.8: the empty-state composer no longer parks a resting
+   * `Ready · cwd: /home/…` line inside the card, and that line was the only
+   * place the full path was ever printed outside an error state. Removing a
+   * display before restoring a route to the same information is how a UI
+   * quietly loses facts, so this tooltip is a hard requirement of that change,
+   * not a nicety.
+   */
+  workspacePath?: string | null;
   disabled: boolean;
   disabledReason?: string;
   onSelect: (workspaceId: string) => void;
@@ -61,6 +74,7 @@ export function TargetFolderSelect({
   folderMenu,
   activeWorkspaceId,
   currentLabel,
+  workspacePath,
   disabled,
   disabledReason,
   onSelect,
@@ -118,13 +132,10 @@ export function TargetFolderSelect({
     >
       <ComboboxTrigger
         disabled={disabled}
-        title={disabled ? disabledReason : undefined}
-        render={
-          <button
-            type="button"
-            className="inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-sm hover:bg-hover data-[popup-open]:bg-selection disabled:opacity-64"
-          />
-        }
+        // A blocked trigger explains itself first; otherwise the tooltip is
+        // the target's full path (see `workspacePath`).
+        title={disabled ? disabledReason : (workspacePath ?? undefined)}
+        render={<button type="button" className={targetTriggerClass()} />}
       >
         <Folder className="size-3.5 shrink-0 text-folder" />
         <span className="max-w-40 truncate text-foreground">{currentLabel}</span>
@@ -163,7 +174,7 @@ export function TargetFolderSelect({
           <div className="border-t p-1">
             <button
               type="button"
-              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm hover:bg-hover"
+              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-ui hover:bg-hover"
               onClick={() => {
                 setOpen(false);
                 onAddRepository('local');
@@ -173,7 +184,7 @@ export function TargetFolderSelect({
             </button>
             <button
               type="button"
-              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm hover:bg-hover"
+              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-ui hover:bg-hover"
               onClick={() => {
                 setOpen(false);
                 onAddRepository('remote');
@@ -183,7 +194,7 @@ export function TargetFolderSelect({
             </button>
             <button
               type="button"
-              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm hover:bg-hover"
+              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-ui hover:bg-hover"
               onClick={() => {
                 setOpen(false);
                 onAddRepository('ssh');
@@ -193,14 +204,14 @@ export function TargetFolderSelect({
             </button>
             <button
               type="button"
-              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm hover:bg-hover"
+              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-ui hover:bg-hover"
               onClick={() => {
                 setOpen(false);
                 void onCreateTempTarget();
               }}
             >
               <span className="flex-1 truncate text-left">{t('New Folder')}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-meta text-muted-foreground">
                 {t('Temporary workspace')}
               </span>
             </button>

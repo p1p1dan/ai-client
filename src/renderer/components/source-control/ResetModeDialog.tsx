@@ -68,7 +68,7 @@ export function ResetModeDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>{t('Reset to commit')}</AlertDialogTitle>
           <AlertDialogDescription>
-            <code className="text-xs">{shortHash}</code>
+            <code className="font-mono text-code">{shortHash}</code>
             <span className="mx-1 text-muted-foreground">·</span>
             <span className="line-clamp-1 text-xs">{commitMessage}</span>
           </AlertDialogDescription>

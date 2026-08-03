@@ -26,10 +26,11 @@ export const CONTEXT_PANEL_FALLBACK_WIDTH = 600;
 
 export type ReadingWidthMode = 'normal' | 'wide';
 
-// min(100%, 48rem) / min(100%, 64rem) — Tailwind defaults, no arbitrary values.
+// min(100%, 45rem) / min(100%, 60rem) — D25 §3.4 container tokens
+// (--container-reading / --container-reading-wide in globals.css), no arbitrary values.
 export const READING_COLUMN_CLASS: Record<ReadingWidthMode, string> = {
-  normal: 'max-w-3xl',
-  wide: 'max-w-5xl',
+  normal: 'max-w-reading',
+  wide: 'max-w-reading-wide',
 };
 
 export function readingColumnClass(mode: ReadingWidthMode | undefined | null): string {

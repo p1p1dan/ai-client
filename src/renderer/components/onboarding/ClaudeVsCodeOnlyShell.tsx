@@ -96,7 +96,9 @@ export function ClaudeVsCodeOnlyShell({
             </Button>
           </div>
           {recheckError ? (
-            <p className="mt-3 text-xs text-destructive">检测失败:{recheckError}</p>
+            <p className="mt-3 text-xs text-destructive">
+              检测失败:<span className="font-mono text-code">{recheckError}</span>
+            </p>
           ) : null}
           <p className="mt-4 text-xs text-muted-foreground">
             想在 AiClient 主界面中使用,点击「一键安装 CLI」即可安装 Claude Code 命令行版本(建议

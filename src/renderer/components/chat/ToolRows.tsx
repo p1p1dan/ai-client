@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { HitListPopover } from './HitListPopover';
-import type { FileLinkTarget, ToolRowView } from './toolCard';
+import { type FileLinkTarget, type ToolRowView, toolRowArgClass } from './toolCard';
 
 /**
  * T-05 batch 2/4: bare tool-row rendering (A07 screen 5, groups A-E), plus
@@ -111,12 +111,7 @@ function ToolRowArg({
   onOpenFile?: (target: FileLinkTarget) => void;
 }) {
   if (!view.arg) return null;
-  const argClass = cn(
-    'min-w-0 truncate',
-    view.failed
-      ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'
-      : 'text-tool-arg'
-  );
+  const argClass = toolRowArgClass(view);
 
   if (view.link) {
     const link = view.link;
@@ -188,7 +183,7 @@ function ToolRowInputSegment({
     <div className="ml-0.5 border-l border-border pl-3.5">
       <pre
         className={cn(
-          'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 text-code leading-[1.55] text-muted-foreground',
+          'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
           maxHeightClass
         )}
       >
@@ -211,7 +206,7 @@ function ToolRowOutputSegment({
         <div className="ml-0.5 border-l border-border pl-3.5">
           <pre
             className={cn(
-              'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 text-code leading-[1.55] text-muted-foreground',
+              'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
               view.outputMaxHeightClass
             )}
           >

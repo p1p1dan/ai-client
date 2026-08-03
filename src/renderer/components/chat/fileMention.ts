@@ -79,6 +79,40 @@ export function replaceMention(
   return { text: nextText, cursor: atPos + replacement.length };
 }
 
+export interface MentionTriggerInsertion {
+  text: string;
+  caret: number;
+}
+
+/**
+ * T-30b2 §4.6: text transform behind the composer's ⊕ button — write an `@`
+ * at the caret and report where the caret should land after it.
+ *
+ * The button does not open a file picker: this app has no renderer-side "read
+ * a file into bytes" IPC, so a picker would produce a path it could not
+ * attach. What it CAN do honestly is start a reference, which is why the
+ * button is labelled "add file context" rather than "attach": typing `@` is
+ * exactly what a user does by hand to summon the file search, and inserting it
+ * programmatically routes through the same `extractMentionQuery` popup.
+ *
+ * The leading space is conditional for the same reason `replaceMention`'s
+ * trailing one is: `extractMentionQuery` only treats an `@` as opening a token
+ * when it is preceded by whitespace or the start of the text, so an `@` glued
+ * to a preceding word would insert a dead character that never opens the
+ * popup — while adding a space after an existing one would leave a double
+ * space in the sent message.
+ */
+export function insertMentionTrigger(value: string, caret: number): MentionTriggerInsertion {
+  const at = Math.max(0, Math.min(caret, value.length));
+  const prev = at > 0 ? value[at - 1] : '';
+  const needsLeadingSpace = at > 0 && prev !== ' ' && prev !== '\n' && prev !== '\r';
+  const insertion = `${needsLeadingSpace ? ' ' : ''}@`;
+  return {
+    text: value.slice(0, at) + insertion + value.slice(at),
+    caret: at + insertion.length,
+  };
+}
+
 /**
  * Scan `text` for every `@path` token and return display chips. Used by
  * ChatComposer to render a row of selected references below the textarea.

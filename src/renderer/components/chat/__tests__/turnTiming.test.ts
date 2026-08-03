@@ -68,11 +68,19 @@ describe('reduceTurnTiming', () => {
 
 describe('formatThoughtRow', () => {
   it('shows "briefly" under the 5s threshold', () => {
-    expect(formatThoughtRow({ durationMs: 3000 })).toEqual({ verb: 'Thought', arg: 'briefly' });
+    expect(formatThoughtRow({ durationMs: 3000 })).toEqual({
+      verb: 'Thought',
+      arg: 'briefly',
+      argKind: 'prose',
+    });
   });
 
   it('shows "for Ns" at/above the threshold', () => {
-    expect(formatThoughtRow({ durationMs: 12_000 })).toEqual({ verb: 'Thought', arg: 'for 12s' });
+    expect(formatThoughtRow({ durationMs: 12_000 })).toEqual({
+      verb: 'Thought',
+      arg: 'for 12s',
+      argKind: 'prose',
+    });
   });
 
   it('shows a bare "Thought" with no arg when duration is null (never fabricates seconds)', () => {
@@ -82,20 +90,33 @@ describe('formatThoughtRow', () => {
   it('shows "Thinking" with no arg while streaming', () => {
     expect(formatThoughtRow({ streaming: true, durationMs: 9000 })).toEqual({ verb: 'Thinking' });
   });
+
+  it('D25 §2.4: "briefly" and "for Ns" args are prose, not an identifier (sans, not mono)', () => {
+    expect(formatThoughtRow({ durationMs: 3000 }).argKind).toBe('prose');
+    expect(formatThoughtRow({ durationMs: 12_000 }).argKind).toBe('prose');
+  });
 });
 
 describe('formatWorkedForRow', () => {
   it('rounds 31000ms to "Worked for 31s"', () => {
-    expect(formatWorkedForRow(31_000)).toEqual({ verb: 'Worked for', arg: '31s' });
+    expect(formatWorkedForRow(31_000)).toEqual({
+      verb: 'Worked for',
+      arg: '31s',
+      argKind: 'prose',
+    });
   });
 
   it('never shows 0s -- 400ms rounds up to "Worked for 1s"', () => {
-    expect(formatWorkedForRow(400)).toEqual({ verb: 'Worked for', arg: '1s' });
+    expect(formatWorkedForRow(400)).toEqual({ verb: 'Worked for', arg: '1s', argKind: 'prose' });
   });
 
   it('returns null (row does not render) when latencyMs is null', () => {
     expect(formatWorkedForRow(null)).toBeNull();
     expect(formatWorkedForRow(undefined)).toBeNull();
+  });
+
+  it('D25 §2.4: the "Ns" arg is prose, not an identifier (sans, not mono)', () => {
+    expect(formatWorkedForRow(31_000)?.argKind).toBe('prose');
   });
 });
 

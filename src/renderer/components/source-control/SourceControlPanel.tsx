@@ -1176,7 +1176,7 @@ export function SourceControlPanel({
                       'Are you sure you want to discard changes to {{path}}? This cannot be undone.',
                       {
                         path: (
-                          <span className="font-medium text-foreground break-all">
+                          <span className="font-mono text-code font-medium text-foreground break-all">
                             {confirmAction.paths[0]}
                           </span>
                         ),
@@ -1186,7 +1186,7 @@ export function SourceControlPanel({
                       'Are you sure you want to delete the untracked file {{path}}? This cannot be undone.',
                       {
                         path: (
-                          <span className="font-medium text-foreground break-all">
+                          <span className="font-mono text-code font-medium text-foreground break-all">
                             {confirmAction.paths[0]}
                           </span>
                         ),

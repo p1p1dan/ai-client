@@ -3,17 +3,28 @@
 > ⚠️ **时效警示（2026-07-28 更新，D18 / D19 连带）**
 >
 > **已撤销（T-21 已改写并与代码对齐，可直接作为施工依据）**：
-> **Color System** / **Border Radius** / **Font Weight** / **字体族** / **根字号结论** 五节，
+> **Color System** / **Border Radius** / **根字号结论** 三节，
 > 与 `src/renderer/styles/globals.css` 的 `@theme` + `:root` + `.dark` 逐条对得上。
+>
+> **已撤销（T-30 批 2 · D25 / D26 已改写并与代码对齐）**：**字体族（分域）** / **CJK 级联规则** /
+> **Typography（字号）** / **Font Weight** / **Letter-spacing（字距梯度）** / **数字对齐（tabular-nums）** /
+> **Border Radius → 钳制硬规则** / **表单控件 vs 文字 chip** / **Ghost chip 悬停显壳** 九节。
+> 其中 **字体族** 一节原先列在上面 T-21 的已撤销清单里，现已随 **D25 撤销 D18③** 整节重写为
+> **分域口径（UI 比例 / 代码等宽）**——旧的「三键统一等宽」一律以新节为准。
+> ⚠️ `docs/design/a07-cursor-composer-alignment.html` 与 `phase0a-openchamber-alignment.html`
+> 两份基线的**原型画面仍是全等宽的**（渲染层刻意冻结，用作验收凭证），**不要拿它们的画面当字体施工依据**；
+> 逐条对照见 A07 文末「v4 追记」。
 >
 > **已撤销（T-22 已写入并与代码对齐）**：**Spacing & Sizing → 新壳布局档位**一节与
 > `components/workspace-shell/shellLayoutModel.ts` 的常量逐条对得上。
 >
 > **仍未撤销**：
 >
-> - **Typography（字号）**：本节已按 OpenChamber 四档语义体系重写为**目标口径**，但 `@theme` 里目前
->   只有 `--text-2xs` 一个自定义字号 token，**调用点迁移未施工**（2026-07-29 更正：原写「归 T-22」与执行计划 §3 T-22 任务定义不符——T-22 仅含尺寸段落与新壳组件按四档书写，全仓调用点迁移未立项、待认领）。写新代码按本节；
->   改旧代码不要单纯为了对齐档位而重排布局。
+> - **字号 / 字族的全仓调用点迁移**：token 层已落齐（`@theme` 现有 `--text-2xs` / `--text-code` /
+>   `--text-meta` / `--text-ui` / `--text-markdown` / `--text-title` 六个字号 token 与两条字族栈），
+>   调用点迁移**已覆盖 `chat/` 与 `workspace-shell/`**（含 D25 的 mono 白名单、tracking 梯度、`tabular-nums`）；
+>   **`source-control/` / `files/` / `git/` / `sessions/` 等其余目录的逐屏复核尚未完成**（D25 §5.5 工序 ④）。
+>   写新代码按本节；改旧代码不要单纯为了对齐档位而重排布局。
 > - **旧模块彩色硬编码**：`source-control/` 整目录、`layout/`、`ui/activity-indicator.tsx` 等 47 个文件
 >   共 134 处 `text-red-500` 类硬编码尚未迁移到语义 token。**归 T-25。**
 >
@@ -263,6 +274,18 @@ variant="destructive"
 - 交互元素：优先 `rounded-sm` / `rounded-md`
 - 顶层覆盖层：优先 `rounded-lg` / `rounded-2xl`
 
+**钳制硬规则（T-30 批 2 / D26）**：**`border-radius` 一旦 ≥ 元素高度的一半，CSS 会把它钳成满圆。**
+所以在 `h-6`(24px) 上写 `rounded-md`(12) 或 `rounded-lg`(16)，与写 `rounded-full` **渲染完全相同**——
+类名读起来是「中等圆角」，屏幕上却是一枚胶囊。据此三条：
+
+1. **小控件（`h-6` / `h-7`）一律 `rounded-xs` / `rounded-sm`。**
+2. **`rounded-md` 及以上只给高度 ≥32px 的容器。**
+3. 满圆只在**刻意选择**时写 `rounded-full`，不要靠钳制「顺便」得到——
+   靠钳制得到的满圆，会在元素高度变化的那天悄悄变回圆角矩形，而类名一个字都没改。
+
+> 实测来历：Composer 的 Model / Effort 触发器写的是 `rounded-lg` 挂在 `h-6` 上，渲染成两枚满圆胶囊，
+> 是第三轮点验「过于圆润、AI 化」归因里占比最大的一项。
+
 #### Squircle（按钮原语，A05 基线）
 
 按钮走**超椭圆**而非普通圆角，对齐
@@ -297,7 +320,9 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
 2. **按钮里渲染的动态标识符**——文件名、路径、分支名、模型名、hash。
    `lowercase` 是 `text-transform`，会继承到按钮的所有后代，把 `README.md` 显示成 `readme.md`、
    把大小写敏感的远端路径 `/home/Dan/Projects` 显示成 `/home/dan/projects`（**只影响显示，不影响回调取值**，
-   所以不会报错，只会误导）。路径类建议同时加 `font-mono`。
+   所以不会报错，只会误导）。路径类**是否加 `font-mono` 不再是单点建议**——
+   按「字体族（分域）」一节的域映射判定：出现在**内容**里的路径走 mono，
+   出现在**控件**（按钮 / 下拉触发器 / chip）上的路径走 sans。完整映射见 D25 §2。
 
 现有豁免共 6 处，清单见 `docs/plantree/plans/openchamber-chat-refactor/open-questions.md` 第 10 条补记。
 
@@ -322,20 +347,69 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
 **禁止任意值阴影**：`shadow-[0_2px_8px_rgba(0,0,0,0.12)]` 这类写法会把黑色写死、亮暗共用，
 一律换成上表分档。
 
+**实测脚注（T-30 批 2）**：上面「需要浮起感时优先靠 `border` + `bg-card`」这条现在有实测背书——
+**参照实现 Cursor 的输入卡是零阴影的**：卡边框外相邻 8 行像素恒等于背景值，无阴影、无渐变。
+它读起来「浮起」只靠两件事：**卡填充比页面亮约 0.012 L** + **一条 L ≈ 0.94 的发丝边**。
+本仓的对应组合就是 `bg-card` + `border-border`，**不需要也不应该补阴影**。
+
+### 表单控件 vs 文字 chip（T-30 批 2 / D26）
+
+**`SelectTrigger` / `Input` 是输入控件原语，不是「可点文字」的通用外壳。** 它们自带
+`border` + `shadow-xs` + `before:` 内高光 + `min-w-*`，这套形制是为**表单页**设计的：
+在一屏十几个字段的表单里，边框是在告诉用户「这里可以填」。
+
+**工具条上的下拉不是表单字段。** 模型选择、分支选择、目标目录这类控件挂在信息密集的工具条上，
+每一枚都带一圈边框加一层阴影时，容器与控件会争夺同一份「圆润 / 浮起」预算，读感立刻变成「控件堆」。
+
+| 场景 | 用什么 | 形制 |
+|------|-------|------|
+| 表单页字段（设置页、对话框里的输入） | `Input` / `SelectTrigger` 原语 | 有边框、有 `shadow-xs`、有 `min-w` |
+| 工具条 / 卡内的下拉（模型、档位、分支、目标目录） | **ghost chip** | 文字 + chevron + hover 底；**无边框、无阴影、无 `min-w`** |
+
+参考实现：`composerModelTriggerClass()` / `targetTriggerClass()`（`chat/middleColumnLayout.ts`）。
+两者的**高度类与横内距类必须一致**（可交叉断言）——同一条工具条上只允许存在**一种** ghost chip 形制。
+
+**ghost chip 上的四条硬性禁止**：任何 `border*`；任何 `shadow*`（含 `before:` 内高光）；
+任何 `min-w-*`（固定下限制造死空间，是「文字看起来没居中」这类误诊的常见真因——
+居中的其实是一个比内容宽几十像素的盒子）；`rounded-md` 及以上（见 Border Radius 的钳制硬规则）。
+
+### Ghost chip 悬停显壳（T-30 批 2 / D26）
+
+ghost chip 静息态**没有任何外框**，「壳」只在交互时浮出。三条规则：
+
+1. **壳用 `hover:bg-hover` 填充实现。**
+2. **禁止用 `hover:border` 做壳。** 静息无边框、悬停加 1px 边框，会在悬停瞬间把元素撑高 2px，
+   造成整行抖动；填充式壳的盒模型恒定。
+3. **`hover:` 与 `focus-visible:` 必须成对给同一层底色。** 只挂 `hover` 的话，键盘用户 Tab 到该控件时
+   屏幕上除了一圈 outline 没有任何形状变化，**完全失去控件边界**——
+   「默认无框」是设计，「键盘用户看不见控件」是缺陷。outline 与底色两者**叠加**，不互相替代。
+
+弹层打开时保持显壳并加重一档：`data-[popup-open]:bg-selection`。
+`--hover` 与 `--selection` 在本仓已是预合成实色，**不要再叠 `/N` alpha**（见 Color System）。
+
 ### Typography（字号）
 
-> **本节为目标口径（T-21 定，T-22 迁移调用点）。** `@theme` 里目前只有 `--text-2xs` 一个自定义字号 token，
-> 下表的 4 档语义尚未全部落成变量。写新代码按本节；改旧代码不要为了对齐档位而重排布局。
+> **档位表已全部落成 `@theme` token（D25）。** 六个字号 token 均在 `globals.css` 的 `@theme` 中，
+> 直接写 `text-code` / `text-meta` / `text-ui` / `text-markdown` / `text-title` 即可，不要写任意值。
+> 调用点迁移状态见文首时效警示。
 
-**从「6 级视觉分档」改为「4 档语义体系」**，对齐 OpenChamber
-（`packages/ui/src/styles/design-system.css:21-27` 的桌面基线值）：
+**四档语义体系保留**（对齐 OpenChamber `packages/ui/src/styles/design-system.css:21-27` 的桌面基线值），
+D25 在其上做两件事：**补齐 token**、**给每一档标明字族**——分域之后「13px」与「mono」不再是同一件事。
 
-| 语义档 | Size | 上游变量 | 覆盖的用途 |
-|-------|------|---------|-----------|
-| code | **13px**（0.8125rem） | `--text-code` | 行内代码、代码块、路径、hash、diff |
-| ui | **14px**（0.875rem） | `--text-ui-label` / `--text-meta` / `--text-micro` | 绝大多数 UI 文本：label、按钮、meta、badge、时间戳、快捷键 |
-| markdown | **15px**（0.9375rem） | `--text-markdown` / `--text-ui-header` | 聊天正文、Markdown 全部内容、**以及所有标题 h1–h6** |
-| settings-title | **18px**（1.125rem） | `--text-settings-page-title` | 设置页 L1 页面标题（唯一比正文大的字号） |
+| 语义档 | Size | Token | **字族** | 覆盖的用途 |
+|-------|------|-------|---------|-----------|
+| 2xs | **10px** | `--text-2xs` | **mono only** | `kbd` 快捷键 chip。**禁止承载 CJK**——中文 10px 不可读，见「CJK 级联规则」 |
+| code | **13px**（0.8125rem） | `--text-code` | **mono** | 行内代码、代码块、工具行 ident 型参数、路径、hash、diff |
+| meta | **13px**（0.8125rem） | `--text-meta` | sans | 时间戳、statusLine、meta 行、footer、次级说明 |
+| ui | **14px**（0.875rem） | `--text-ui` | sans | 侧栏行、按钮、label、段头、tab、下拉触发器 |
+| markdown | **15px**（0.9375rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
+| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题（唯一 >15px 的档） |
+
+**为什么 `--text-meta` 与 `--text-code` 同为 13px 却必须是两个 token**：两者**变更理由不同**。
+`--text-code` 的 13 是「对 15px sans 正文的**光学补偿值**」——同 px 下 mono 的视觉体量比 sans 大 8~12%
+（平均 advance 0.6em vs 0.5em），15/13 的档比 0.867 正落在行业推荐带内；将来正文档位或 mono 栈变了，它必须跟着动。
+`--text-meta` 的 13 是「次级 UI 文本」，不该被 mono 的光学调参拖着走。
+合成一个 token 的后果很具体：**未来一次 mono 调参会静默改掉全部时间戳字号。**
 
 **关键特征（照抄时最容易漏的一条）**：
 **OpenChamber 的标题层级不靠字号区分。** `packages/ui/src/styles/typography.css:143` 的注释即
@@ -348,30 +422,101 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
    （`packages/ui/src/lib/theme/cssGenerator.ts:577-582`）
 3. **color**：`markdown.heading1` / `heading2` … 各档取不同灰阶（flexoki-dark.json:132-133）
 
-在全等宽 UI 里这条尤其重要：等宽字体放大后横向占位增长很快，**靠字号做层级会立刻撑破 48rem 阅读栏**。
+**比例字体下缩字号确实省宽，但仍然不用字号做标题层级。**
+本文件旧版这里写的是「在全等宽 UI 里这条尤其重要：等宽字体放大后横向占位增长很快……」——
+该理由**随 D25 作废**（比例字体下缩字号是真省宽的）。结论不变，理由换成两条：
+
+1. 本项目最大的标题只有 18px，**字号维度本来就只剩一档余量**；把它花在标题上，正文与标题会挤在 15/18
+   之间读不出差别，而 10~12px 的小字在 CJK 下不可读，向下也没有空间。
+2. D25 之后 **weight（400/600 全平台可靠）+ letter-spacing 梯度 + color** 三件套**全部可用**，
+   层级不再只能靠 color 一维硬撑。用三件套比动字号更稳、也更可回归（字号一动就牵连布局，权重和字距不会）。
 
 **现有 6 级 → 4 档的过渡映射**（迁移归 T-22）：
 
 | 现有 | Tailwind | 归入 | 备注 |
 |------|---------|------|------|
-| 2xs 10px | `text-[var(--text-2xs)]` | → ui 14px | 上游无 10px 档；收敛会撞现有紧凑布局，**T-22 再动** |
-| xs 12px | `text-xs` | → ui 14px / code 13px | 路径/hash 类归 code，其余归 ui |
+| 2xs 10px | `text-2xs` | **保留**（仅 mono 拉丁） | D25 修正原「→ ui 14px」：10px 档在等宽时代只是装饰，比例字体下它是**唯一能装 `kbd` 的档**；但**任何可能承载 CJK 的 10px 一律升到 `--text-meta`(13)** |
+| xs 12px | `text-xs` | → meta 13px / ui 14px / code 13px | 路径 / hash 类归 code，时间戳与次级说明归 meta，其余归 ui。**`text-xs` 在 `chat/` 与 `workspace-shell/` 已清零**（`chat/__tests__/fontDomainScan.test.ts` 有静态扫描断言守住） |
 | sm 14px | `text-sm` | → ui 14px | 已对齐 |
 | md 16px | `text-base` | → markdown 15px | 正文/次级标题 |
 | lg 18px | `text-lg` | → settings-title 18px | 仅设置页 L1 保留 |
 | xl 22px | `text-xl` | → markdown 15px + weight | **上游无此档**，标题不靠字号 |
 
-`--text-2xs` 在过渡期继续可用，写法：`text-[var(--text-2xs)]`（优先）或 `text-[10px]`。
+`--text-2xs` 继续可用，写法：`text-2xs`（token 已注册，不要再写 `text-[10px]` 或 `text-[var(--text-2xs)]`）。
+
+> **新增字号 token 的强制动作（工程注记，本仓踩过）**：任何新增的自定义字号 token
+> **必须同步注册**进 `tailwind-merge` 的 `font-size` 类组（`src/renderer/lib/utils.ts` 的 `extendTailwindMerge`）。
+> 不注册的话 `twMerge` 会把 `text-ui` 这种形状判成**颜色**类组，于是
+> `cn('text-muted-foreground', 'text-ui')` **静默吞掉颜色**——不报错、不告警，只是颜色没了。
+> （`text-2xs` 恰好匹配 tailwind-merge 默认的 t-shirt 尺寸正则，那是**巧合**，不能当先例；
+> `text-tool-arg` 是颜色 token 而非字号，**刻意不注册**，它就该落在 `text-color` 组里。）
 
 ### Font Weight（字重）
 
-字重是标题层级的**主要**载体（见上），不是可选装饰：
+字重是标题层级的**主要**载体（见上），不是可选装饰。但**有几档可用取决于字体栈**——
+等宽栈时代实测 `semibold` / `bold` 全仓 **0 处**、`font-medium` 部分失效，实际可用只有 1 档；
+D25 换到比例栈之后梯度才真正接通：
 
-| Level | Tailwind | 场景 |
-|------|---------|------|
-| normal | `font-normal` | 正文、描述、占位文本（上游 `--ui-regular-font-weight: 400`） |
-| medium | `font-medium` | button、label、导航项、表头（上游 `--ui-button/label-font-weight: 500`） |
-| semibold | `font-semibold` | 标题（card/dialog/sheet/section title；上游设置页标题 600） |
+| Level | Tailwind | 场景 | **平台可靠性** |
+|------|---------|------|--------------|
+| normal | `font-normal` | 正文、描述、占位文本、工具行输出体、全部 muted 文本 | ✅ 全平台 |
+| medium | `font-medium` | button、label、导航项、表头、**软强调** | ⚠️ macOS ✅（SF Pro Medium）· **Win11 ✅**（Segoe UI Variable，可变轴真值）· **Win10 ❌**（Segoe UI 静态族 300/350/400/600/700，**无 500**）· Linux ⚠️（视安装的子族） |
+| semibold | `font-semibold` | 卡片 / 对话框 / 段落标题、正文相对 meta 的强调、顶栏标题 | ✅ 全平台（缺档时升到 700，只会更重，不会消失） |
+| bold | `font-bold` | 仅 Markdown `**粗体**` 内联 | ✅ 全平台；**不用于 UI 层级** |
+
+**两条硬约束**：
+
+1. **500 不得作为任何层级区分的唯一载体。** CSS 字重匹配对目标 500 的规则是「先找 500，找不到就**降到 400**」
+   （CSS Fonts 4 §5.2，注意**不是**升到 600）——所以 Win10 上 `font-medium` 与 `font-normal` **逐像素相同**。
+   任何「必须在 Win10 上也看得出来」的区分，一律用 **400 vs 600**。
+2. **`font-mono` 元素只用 400 / 700。** 系统等宽族普遍只有这两档，写 500 / 600 会触发**合成加粗**（笔画毛糙）。
+   配套：`@layer base` 已设 `font-synthesis-weight: none`，缺档时走字重匹配而不是合成——
+   对 sans 侧零代价（600 处处为真），对 mono 侧是保护。
+
+### Letter-spacing（字距梯度）
+
+上游 OpenChamber 的六级梯度（h1 `-0.025em` … h6 `+0.01em`）**不能原样搬**，两条硬理由：
+① **负字距在 CJK 上会撞字**——CJK 字形本就满格排布，而我们的标题、侧栏会话标题、user 气泡都可能全是中文；
+② **负字距的收益只在大字号出现**，本项目最大的标题只有 18px，15px 以下的负字距是纯风险无收益。
+
+D25 的四档 + 一个例外：
+
+| 档 | 值 | 域 |
+|----|----|----|
+| 段头 | `+0.04em` | `Recent` / `Repositories` 之类的分组段头（A07 明文裁定值，D25 后**数值不变**，只换了理由） |
+| 微标签 | `+0.02em` | ≤11px 的 badge / 角标 / `kbd` 内文——小号比例字需要开距 |
+| 按钮 | `+0.01em` | `ui/button.tsx` 基类已全局带 `tracking-[0.01em]`（比例字体下这条才开始真的起作用） |
+| 正文 / UI | `0` | 正文、侧栏行、Composer、工具行、meta —— **默认** |
+| 大标题（例外） | `-0.01em` | **仅 ≥18px**：`font-heading` 全仓 7 处，**已全部落地**（dialog / sheet / alert-dialog / empty / SessionManagerView ×2 / OnboardingView） |
+
+**两条禁令（可静态断言）**：
+
+- 🚫 **`font-mono` 元素禁止任何非零 `tracking`。** 等宽 + 字距 = 列对齐失效，工具输出 / diff 直接崩。
+  唯一例外是 OTP 输入的 `tracking-[0.5em]`——那是刻意的字符分隔，不是排版微调。
+- 🚫 **任何可能承载 CJK 的元素禁止负 `tracking`**，操作规则 = **「<18px 一律非负」**。
+  ⚠️ 连带：**给共享基类加负字距时，必须同时清点它全部低于 18px 的覆写点，逐个补 `tracking-normal`**，
+  否则负字距会跟着字号一起被带到小字上，漏一个就是一处 CJK 撞字。
+  本仓实例：`EmptyTitle` 基类迁到 `text-title` + `-0.01em` 的同批，
+  `workspace-shell/` 的 2 个 14px 覆写点（`LeftNav` / `SurfacePlaceholder`）与
+  `layout/` 的 8 个 16px 覆写点（`TemporaryWorkspacePanel` · `TreeSidebar` ×2 · `WorktreePanel` ×3 · `RepositorySidebar` ×2）
+  **全部带上 `tracking-normal`**。
+
+### 数字对齐（tabular-nums）
+
+**规则：任何会原地变化的数字，或任何需要跨行竖直对齐的数字，必须 `tabular-nums`。**
+
+这条在等宽字体时代不存在——等宽下所有数字天然同宽。D25 换到比例栈之后它变成必答题：
+比例字体的数字字形宽度不等（`1` 比 `0` 窄一截），一个每秒刷新的计时器会**逐帧左右跳**。
+**这是 D25 引入的回归，不是既存问题**，所以必须与字族改动同批处理。
+
+典型必须加的位置：
+
+- 状态栏 / 状态行的**全部**数值项：百分比、金额、时长、`+N` / `-N` 行数、token 计数、缓存命中、API 耗时、版本号；
+- 消息 meta 行的时间戳与耗时（`1.2s` / `HH:MM`）；
+- 工具行里 prose 型参数中的数字（`Worked for 3s`、`2 files, 3 searches`）；
+- 列表里右对齐的相对时间（`50m` / `3h` / `6d`）。
+
+判据一句话：**它会不会在原地被换成另一个数？会 ⇒ 加。**
 
 ### Motion（动画时长）
 
@@ -423,8 +568,8 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
 | ContextPanel（右列） | min 380 / max 1400，默认按 surface 取可用宽度比例 | `CONTEXT_PANEL_MIN_WIDTH` / `CONTEXT_PANEL_MAX_WIDTH` |
 | ContextPanel 未测量兜底 | 600px | `CONTEXT_PANEL_FALLBACK_WIDTH` |
 | ContextPanel 收起 | 宽 0（常驻挂载 + `inert`） | — |
-| 阅读栏（中列） | `min(100%, 48rem)` 居中 | `mx-auto w-full max-w-3xl` |
-| 阅读栏宽模式 | `min(100%, 64rem)` 居中 | `mx-auto w-full max-w-5xl` |
+| 阅读栏（中列） | `min(100%, 45rem)` 居中 | `mx-auto w-full max-w-reading`（`--container-reading`） |
+| 阅读栏宽模式 | `min(100%, 60rem)` 居中 | `mx-auto w-full max-w-reading-wide`（`--container-reading-wide`） |
 | 列宽拖拽把手 | 4px | `w-1` + `cursor-col-resize` |
 
 **两条实现约束**：
@@ -433,20 +578,48 @@ supports-[corner-shape:squircle]:rounded-[50px]  ← 支持时半径顶到 50px
    否则每帧过渡与指针位置打架，手感发黏。
 2. 提升为全视图时面板宽度用**测量出的 px**、不用 `100%`：px 与百分比之间无法插值，会瞬跳。
 
-## 字体族（全等宽 UI）
+> **阅读栏为什么是 45rem（D25 §3.4）**：换比例字体会把行拉长（48rem 下约 102 拉丁字符/行），
+> 正确组合是「比例字体 **+** 收窄栏宽」，不是单纯替换字族。参照实现实测为 **48 CJK 当量/行**，
+> 15px × 48 字 = 720px = **45rem**，逐字对齐；宽模式按同比例（−6.25%）从 64rem 收到 60rem。
+> 两个值落成 `@theme` 的容器 token（`--container-reading{,-wide}`）而不是 `max-w-[45rem]` 任意值。
 
-### 唯一字体栈
+## 字体族（分域：UI 比例 / 代码等宽）
 
-`sans` / `mono` / `heading` **三者统一**为同一条等宽栈（逐字来自
-`openchamber/packages/ui/src/lib/theme/themes/flexoki-{light,dark}.json` 的 `config.fonts`，
-上游三键本身就是逐字相同的）：
+> **D25（2026-07-30）撤销 D18③。** 旧口径「`sans` / `mono` / `heading` 三键统一为同一条等宽栈」
+> **不再有效**。触发是 open-q #10「中英混排风险」实测结项——风险坐实，不是理论洁癖。
+
+### 两条栈
+
+`--font-sans` 是整个 UI 的默认字族；`--font-mono` **只服务白名单域**——代码块、行内 `<code>`、
+工具行的 ident 型参数与原始输出、diff、路径、hash、`kbd`、终端、编辑器。
 
 ```css
-/* src/renderer/styles/globals.css 的 @theme */
---font-sans:    ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
---font-mono:    ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
---font-heading: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
+/* src/renderer/styles/globals.css 的 @theme —— 完整串与逐段依据见 D25 §1.3 */
+--font-sans:
+  -apple-system, BlinkMacSystemFont,           /* macOS → SF Pro，400/500/600/700 全真 */
+  "Segoe UI Variable Text", "Segoe UI",        /* Win11 可变轴 / Win10 静态族 */
+  "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+  "PingFang SC", "Hiragino Sans GB",           /* ← CJK 段一律排在 Latin 段之后 */
+  "Microsoft YaHei UI", "Microsoft YaHei",     /* UI 版在前：为界面调过 hinting */
+  "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+  "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",  /* ← 必须在通用族之前，否则不可达 */
+  sans-serif;
+
+--font-mono:
+  ui-monospace, "SF Mono", "SFMono-Regular", "Menlo",
+  "Cascadia Mono", "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+  "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+  "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+  monospace;
+
+--font-heading: var(--font-sans);
 ```
+
+**为什么是系统栈、不随包任何 webfont**：决定性因素是 **CJK**。Latin 侧随包一个可变字体只要 ~250KB，
+CJK 侧做子集化覆盖常用 3500 字也要 1.5~3MB、全量 8~12MB。而「随包 Latin + 系统 CJK」比全系统栈**更难看**——
+`SF Pro ↔ PingFang SC`、`Segoe UI ↔ Microsoft YaHei UI` 是**厂商成对设计**的（x-height、字重感知、基线、标点位置都对过），
+塞一个第三方 Latin 进去等于把两个互不认识的字体强行混排，正是「不协调」的另一种形态。
+用户 CJK 重度使用 ⇒ 这条压倒「跨平台一致性」。附带：系统栈使本项对产物体积**零增量**。
 
 **为什么改 `--font-sans` 就等于改了整个 UI 的字体**：
 Tailwind 的 `theme.css` 把 `--default-font-family` 定义为 `--theme(--font-sans, initial)`，
@@ -458,8 +631,27 @@ Tailwind 的 `theme.css` 把 `--default-font-family` 定义为 `--theme(--font-s
 历史上 `--font-family-sans` 被引用却从未定义过，等于把整个 UI 字体交给一个悬空变量的 fallback，
 后来的人去改那个变量会毫无效果。同理仓内**没有** `@font-face`、没有 woff/ttf 资源，
 所以任何非系统字体（Inter / JetBrains Mono）写进栈里都是空头支票，实际会落到系统兜底。
+**D25 把这条从「写法纪律」升格为「选型理由」**：正因为仓内零字体基建，比例栈才只能是系统栈——
+随包字体不是改一行 token，是新建一整套资产 / 打包 / 许可证链路，属独立立项。
 
-`font-mono` 与 `font-sans` 现在视觉无差别，**这是「全等宽 UI」的目标，不是 bug**。
+### 域怎么划：判据是「内容 vs 控件」，不是「是不是标识符」
+
+同一个字符串 `WorkspaceShell.tsx`，出现在正文里用 mono，出现在下拉按钮 / 文件卡上用 sans。
+一句话测法——**用户会不会去逐字符读它、比对它、复制它？**
+会 ⇒ mono；只是拿它当一个「名字」点一下 ⇒ sans。
+完整域映射表（mono 白名单 12 项 / sans 域 26 项）见 D25 §2：`docs/plans/2026-07-30-d25-font-domain-design.md`。
+
+**落法是「sans 默认 + mono 白名单」（正向），不做反向。** 决定性理由是**失败模式**：
+漏标一处，正向落法只会把它渲染成比例字体（参照实现里文件名 / 分支名本来就是比例，降级后仍在目标态附近）；
+反向落法会把它渲染成等宽——**正是要消灭的那个 bug**。选失败模式良性的那个方向。
+
+**不要裸撒 `font-mono`。** 走三个原语：`ui/ident.tsx` 的 `<Ident>`（`font-mono` + `text-code` + `tracking-normal`）、
+`<CodeInline>`（`<Ident>` + `bg-muted` chip）、以及已有的 `ui/code-block.tsx`。
+收益：光学补偿逻辑只有一处可调；`font-mono` 的出现点可以用一行静态扫描断言锁死在白名单文件内。
+
+⚠️ **`font-mono` 与 `font-sans` 视觉无差别，在 D25 之后是 bug 判据，不是目标。**
+本文件旧版这里写的是「这是『全等宽 UI』的目标，不是 bug」——该句**随 D18③ 一并作废**。
+现在的判据反过来：**若某处 UI 文本渲染成等宽，而它不在 mono 白名单里，那就是一处待修的回归。**
 
 ### 分离契约：UI 字体 ≠ 终端/编辑器字体（强制）
 
@@ -480,12 +672,34 @@ Tailwind 的 `theme.css` 把 `--default-font-family` 定义为 `--theme(--font-s
 - `settings` store 里的 `fontFamily`（默认 `'Inter'`）与 `fontSize`（默认 `14`）是**历史死字段**，
   声明在 `types.ts`、有 setter、但零消费方。**T-21 刻意不接线。**
   将来若要接：`fontFamily` → 覆盖 `--font-sans`、`fontSize` → 覆盖 `--font-size-base`；
-  届时**必须同步把默认值改成上面的等宽栈 / 16**，否则会二次引入刚消灭的 14→16 跳变。
+  届时**必须同步把默认值改成上面的比例栈字面量 / 16**（D25 后不再是等宽栈），
+  否则会二次引入刚消灭的 14→16 跳变，以及 T-21 刚消灭的字体注入 bug。
 
-### 中英混排风险（未结项）
+### CJK 级联规则（open-q #10 已结项 → D25）
 
-全等宽栈里**没有 CJK 字形**，中文会回退系统字体 → 等宽拉丁 + 非等宽 CJK 混排，
-行内宽度节奏、基线、标点对齐都可能崩。三处必测，见 plantree open-questions #10。
+原「中英混排风险（未结项）」记的是：全等宽栈里没有 CJK 字形，中文回退系统字体 → 等宽拉丁 + 非等宽 CJK 混排，
+行内节奏 / 基线 / 标点都可能崩。**2026-07-30 实测证实风险坐实，open-q #10 结项，解法就是 D25 的分域。**
+分域之后风险不会自动消失——CJK 混排的正确性由下面四条规则承担：
+
+1. **Latin 段在前，CJK 段在后。** 字体匹配是**逐字符**的：拉丁字符落在第一个有该字形的族上，
+   CJK 字符一路穿到第一个 CJK 族。顺序反了会让拉丁字母落进 CJK 字面里渲染——
+   中文环境「丑拉丁」的经典成因。
+2. **禁止写 `system-ui`。** 在 Chromium / Windows 上它按**系统区域**解析，
+   zh-CN 机器会直接把 Latin 交给 CJK 字面，正好触发规则 1 要防的那个失败。
+   `--font-sans` 里**刻意没有**这一项，不要「顺手补上」。
+3. **10px 禁止承载 CJK。** `--text-2xs`(10px) 只给纯拉丁 / 数字（`kbd` 快捷键 chip）。
+   中文在 10px 下不可读——这不是审美判断，是识别率问题。任何可能出现中文的位置，最小档是 `--text-meta`(13px)。
+4. **负 `tracking` 禁止用于 CJK**，操作规则 = **「<18px 一律非负」**（见「Letter-spacing（字距梯度）」）。
+
+**两条附带纪律**：
+
+- **不设 `-webkit-font-smoothing: antialiased`。** 它只在 macOS 生效、会让 400 视觉变细；
+  本项目 Windows 优先，且三级灰最浅档的对比度本就吃紧，抽细笔画会把刚修好的对比度吃回去。
+- **`--font-mono` 里也带 CJK 段**，为的是代码块 / 工具输出里出现中文注释或中文路径时不落到随机字体。
+
+**验收测点（三处，沿用 open-q #10 原定）**：① 阅读栏中文段落 + 中英混排；
+② 侧栏中文会话标题 + 分支 chip + 相对时间同行 truncate；③ 工具行中文动词 + 拉丁路径同行。
+三测点各出「现状 mono / D25 split / 参照实现」三图并排，视觉凭证见 `docs/design/a09-font-domain-baseline.html`。
 
 ## 根字号结论（T-21 已结）
 

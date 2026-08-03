@@ -501,7 +501,9 @@ function DefinitionPickerWidget({
                 // Relative path + line (dim, truncated)
                 h(
                   'span',
-                  { className: 'min-w-0 flex-1 truncate text-xs text-muted-foreground' },
+                  {
+                    className: 'min-w-0 flex-1 truncate font-mono text-code text-muted-foreground',
+                  },
                   `${item.displayPath}:${item.location.line}`
                 )
               )

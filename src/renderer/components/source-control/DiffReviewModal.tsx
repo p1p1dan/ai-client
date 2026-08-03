@@ -269,7 +269,7 @@ function CommentItem({ comment, onDelete }: { comment: CommentData; onDelete: ()
     <div className="flex gap-3 group/item p-2 rounded hover:bg-muted/50">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs font-medium text-muted-foreground">{lineDisplay}</span>
+          <span className="font-mono text-code text-muted-foreground">{lineDisplay}</span>
           <span className="text-xs text-muted-foreground">
             {comment.timestamp.toLocaleTimeString()}
           </span>
@@ -885,7 +885,7 @@ export function DiffReviewModal({ open, onOpenChange, rootPath, onSend }: DiffRe
             <svg class="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-0.5">
-                <span class="text-xs font-medium text-foreground">${lineRef}</span>
+                <span class="font-mono text-code text-foreground">${lineRef}</span>
               </div>
               <p class="whitespace-pre-wrap text-foreground line-clamp-3">${comment.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
             </div>

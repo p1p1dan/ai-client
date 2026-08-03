@@ -78,7 +78,10 @@ function EmptyMedia({
 function EmptyTitle({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      className={cn('font-heading text-xl leading-none', className)}
+      // D25 §3.3 tier 5: 18px title tier is the only tier allowed negative
+      // tracking. Call sites that override the size below 18px must also
+      // reset to tracking-normal (see workspace-shell / layout call sites).
+      className={cn('font-heading text-title leading-none tracking-[-0.01em]', className)}
       data-slot="empty-title"
       {...props}
     />

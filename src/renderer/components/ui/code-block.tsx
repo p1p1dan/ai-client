@@ -146,7 +146,7 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
       <pre
         className={cn('overflow-x-auto rounded-lg border border-border bg-muted/50 p-4', className)}
       >
-        <code className="block font-mono text-sm leading-relaxed">{code}</code>
+        <code className="block font-mono text-code leading-relaxed">{code}</code>
       </pre>
     );
   }
@@ -155,7 +155,7 @@ export function CodeBlock({ code, language, className }: CodeBlockProps) {
     <div
       className={cn(
         'overflow-x-auto rounded-lg border border-border bg-muted/50',
-        '[&>pre]:!bg-transparent [&>pre]:p-4 [&>pre]:m-0 [&>pre]:text-sm [&>pre]:leading-snug [&>pre]:w-fit [&>pre]:min-w-full',
+        '[&>pre]:!bg-transparent [&>pre]:p-4 [&>pre]:m-0 [&>pre]:text-code [&>pre]:leading-snug [&>pre]:w-fit [&>pre]:min-w-full',
         '[&_code]:block [&_code]:leading-snug',
         '[&_.line]:leading-snug',
         className

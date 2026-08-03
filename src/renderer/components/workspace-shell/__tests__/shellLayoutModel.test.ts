@@ -301,20 +301,20 @@ describe('reduceShellSurface', () => {
 });
 
 describe('readingColumnClass', () => {
-  it('maps normal to max-w-3xl (48rem)', () => {
-    expect(readingColumnClass('normal')).toBe('max-w-3xl');
-    expect(READING_COLUMN_CLASS.normal).toBe('max-w-3xl');
+  it('maps normal to max-w-reading (45rem, D25 §3.4)', () => {
+    expect(readingColumnClass('normal')).toBe('max-w-reading');
+    expect(READING_COLUMN_CLASS.normal).toBe('max-w-reading');
   });
 
-  it('maps wide to max-w-5xl (64rem)', () => {
-    expect(readingColumnClass('wide')).toBe('max-w-5xl');
-    expect(READING_COLUMN_CLASS.wide).toBe('max-w-5xl');
+  it('maps wide to max-w-reading-wide (60rem, D25 §3.4)', () => {
+    expect(readingColumnClass('wide')).toBe('max-w-reading-wide');
+    expect(READING_COLUMN_CLASS.wide).toBe('max-w-reading-wide');
   });
 
   it('falls back to normal for undefined / null / garbage', () => {
-    expect(readingColumnClass(undefined)).toBe('max-w-3xl');
-    expect(readingColumnClass(null)).toBe('max-w-3xl');
-    expect(readingColumnClass('huge' as ReadingWidthMode)).toBe('max-w-3xl');
+    expect(readingColumnClass(undefined)).toBe('max-w-reading');
+    expect(readingColumnClass(null)).toBe('max-w-reading');
+    expect(readingColumnClass('huge' as ReadingWidthMode)).toBe('max-w-reading');
   });
 });
 

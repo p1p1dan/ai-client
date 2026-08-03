@@ -861,6 +861,27 @@ li { margin-bottom: 0.35rem; }
     <span><b>默认主题</b> Flexoki Light / Dark</span>
     <span><b>日期</b> 2026-07-28</span>
   </div>
+  <div class="ask">
+    <b>⚠️ 时效标注（2026-07-30，D25 连带）</b>
+    本页原型在 <b>D18③ 全等宽字体</b>下渲染并经用户验收（2026-07-28）。<b>自 D25 起，字体口径改为分域</b>——
+    UI 走系统<b>比例</b>栈，等宽只保留给<b>代码 / 终端 / 内容中的标识符</b>；判据是「内容 vs 控件」而不是「是不是标识符」。
+    施工依据以 <code>docs/plans/2026-07-30-d25-font-domain-design.md</code> 与
+    <code>docs/design/a07-cursor-composer-alignment.html</code> 文末的「v4 追记」为准。
+    本页原型画面的字族呈现<b>不再是施工依据</b>：渲染层（<code>:39</code> 的 <code>--mono</code> 栈与全部 <code>.fx</code> 舞台）<b>冻结不动</b>——
+    判据只有一条，<b>改动会不会让重新打开本页的人看到与用户当初点头时不同的画面？</b>会，所以不改。
+    <br>
+    <b>未受影响、继续有效</b>：三条结构裁定（三列 + 44px 导轨、废 BottomDock / 工具行单行形态 / 问答就地冻结）、
+    Flexoki 调色板与 token 映射、卡片形态与间距、功能接入状态矩阵、页尾落库清单。
+    <br>
+    <b>同批连带</b>：阅读栏由 48rem / 768px 收到 <b>45rem / 720px</b>（= Cursor 实测 48 CJK 当量/行）——
+    换比例字体会让行变长（≈102 字符/行），正确组合是「比例字体 <b>+</b> 收窄栏宽」，不是单纯替换字族。
+    本页仅三处说明层文字随之补记：§00 裁定摘要条的「字体」项、§01 演示页眉、§02「排版与尺寸」表的「UI 字体」行，
+    以及页尾落库清单的 ARD D6 沿革；其余一字未动。
+    <br>
+    <b>行号基准</b>：D25 §4.3 引用的 <code>:39</code> / <code>:884</code> / <code>:1050</code> / <code>:1388-1390</code> / <code>:1545</code>
+    均指本标注加入<b>之前</b>的文件（git <code>1b33ee3</code>，取 <code>git show 1b33ee3:docs/design/phase0a-openchamber-alignment.html</code>）。
+    本标注只增不改，但会使其后的行号整体下移；<code>:39</code> 位于本标注之前，<b>不受影响</b>。
+  </div>
 </header>
 
 <!-- ══════════════════════════════════════════════════════ -->
@@ -881,7 +902,7 @@ li { margin-bottom: 0.35rem; }
     <div class="verdict-item"><span class="v-k">布局骨架</span><span class="v-v">三列 + 44px 导轨，废 BottomDock</span></div>
     <div class="verdict-item"><span class="v-k">工具调用</span><span class="v-v">单行形态，滚动窗替代行数截断</span></div>
     <div class="verdict-item"><span class="v-k">问答归宿</span><span class="v-v">就地冻结（有据偏离）</span></div>
-    <div class="verdict-item"><span class="v-k">字体</span><span class="v-v">全等宽 ui-monospace</span></div>
+    <div class="verdict-item"><span class="v-k">字体</span><span class="v-v">分域字体（UI 比例 / 代码等宽）—— D25</span></div>
   </div>
 
   <div class="conflict decided">
@@ -1047,12 +1068,13 @@ li { margin-bottom: 0.35rem; }
 
   <h3>对齐后 · OpenChamber 形态</h3>
   <div class="demo-bar">
-    <span class="demo-cap">Flexoki · 阅读栏 768px 居中 · 全等宽字体</span>
+    <span class="demo-cap">Flexoki · 阅读栏 720px 居中 · 分域字体</span>
     <div class="seg" role="group" aria-label="主题">
       <button type="button" data-fx-set="light" aria-pressed="true">light</button>
       <button type="button" data-fx-set="dark" aria-pressed="false">dark</button>
     </div>
   </div>
+  <p class="src">D25（2026-07-30）口径已改：阅读栏 45rem / 720px、UI 比例字体 / 代码等宽。<b>下方原型画面仍是 2026-07-28 验收时的 768px + 全等宽</b>——渲染层冻结以保全验收凭证，栏宽与字族的呈现不再是施工依据。</p>
   <div class="stage">
     <div class="fx" id="fxStage" data-fx="light">
       <div class="fx-col">
@@ -1387,7 +1409,8 @@ li { margin-bottom: 0.35rem; }
           <td class="mono">Inter / system-ui（sans）</td>
           <td class="mono">ui-monospace（<b>全等宽</b>）</td>
           <td>OpenChamber 的 sans / mono / heading 三者是同一个等宽栈，这是它观感的最大来源之一。
-            <b>已定为全等宽照做</b>；需注意中文会回退到系统字体，中英混排的宽度节奏需实测</td>
+            <b>已定为全等宽照做</b>；需注意中文会回退到系统字体，中英混排的宽度节奏需实测
+            <br><b>2026-07-30 D25</b>：实测证实<b>风险坐实</b>（open-q #10 结项），<b>改分域</b>——UI 回到系统比例栈，等宽只保留给代码 / 终端 / 内容中的标识符；本行「已定为全等宽照做」的裁定<b>就此撤销</b>。</td>
         </tr>
         <tr>
           <td>根字号</td>
@@ -1544,6 +1567,8 @@ li { margin-bottom: 0.35rem; }
   <ul>
     <li><b>ARD D6</b> 改写为「对齐 OpenChamber 观感：Flexoki 主题 + 全等宽字体 + 卡片形态」，
       并在总台账登记推翻依据；</li>
+    <li><b>ARD D6 沿革补记（2026-07-30，D25）</b>：上一行的「全等宽字体」半句<b>已被 D25 撤销</b>，改为「<b>分域字体：UI 比例栈 / 代码等宽栈</b>」；
+      Flexoki 主题与卡片形态两半句<b>不受影响</b>。原句保留不改——它是 2026-07-28 的历史记录，不是现行口径。现行口径见 D25 与 A07 文末 v4 追记。</li>
     <li><b>ARD §4</b> 目标产品结构图重画——四区（含底部终端 Dock）改为三列 + 44px 图标导轨；</li>
     <li><b>ARD D15</b>（右栏 MVP 做单层 <code>git|files|context</code>）作废，改为 surface + 导轨模型；</li>
     <li>总台账登记新决策（拟 D18 视觉对齐 / D19 布局骨架 / D20 问答归宿偏离）；</li>

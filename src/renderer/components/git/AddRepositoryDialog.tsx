@@ -810,10 +810,14 @@ export function AddRepositoryDialog({
                         {(project: RecentEditorProject) => (
                           <AutocompleteItem key={project.path} value={project}>
                             <Tooltip>
-                              <TooltipTrigger className="min-w-0 flex-1 truncate text-left text-sm">
+                              <TooltipTrigger className="min-w-0 flex-1 truncate text-left font-mono text-code">
                                 {formatPathDisplay(project.path)}
                               </TooltipTrigger>
-                              <TooltipPopup side="right" sideOffset={8}>
+                              <TooltipPopup
+                                side="right"
+                                sideOffset={8}
+                                className="font-mono text-code"
+                              >
                                 {project.path}
                               </TooltipPopup>
                             </Tooltip>
@@ -915,7 +919,7 @@ export function AddRepositoryDialog({
                 {targetDir && repoName && !isCloning && (
                   <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                     <span className="font-medium">{t('Full path')}:</span>
-                    <code className="ml-1 break-all">
+                    <code className="ml-1 font-mono text-code break-all">
                       {targetDir}
                       {window.electronAPI.env.platform === 'win32' ? '\\' : '/'}
                       {repoName}
@@ -1009,7 +1013,8 @@ export function AddRepositoryDialog({
                     <div className="font-medium text-foreground">{selectedProfile.name}</div>
                     <div>{selectedProfile.sshTarget}</div>
                     <div className="mt-1 break-all">
-                      <span className="font-medium">{t('Remote path')}:</span> {sshRepoPath}
+                      <span className="font-medium">{t('Remote path')}:</span>{' '}
+                      <span className="font-mono text-code">{sshRepoPath}</span>
                     </div>
                   </div>
                 )}
@@ -1113,7 +1118,7 @@ export function AddRepositoryDialog({
                   <p className="text-xs font-medium text-muted-foreground">
                     {t('Current location')}
                   </p>
-                  <p className="truncate font-mono text-xs text-foreground">
+                  <p className="truncate font-mono text-code text-foreground">
                     {sshBrowserPath || t('No folder selected')}
                   </p>
                 </div>

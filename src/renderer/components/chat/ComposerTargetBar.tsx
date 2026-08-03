@@ -76,6 +76,9 @@ export function ComposerTargetBar({
           folderMenu={folderMenu}
           activeWorkspaceId={target.workspace.id}
           currentLabel={target.project?.name ?? target.workspace.name}
+          // T-30b2 §4.8 compensation: the only remaining route to the full
+          // target path now that the empty card's resting status line is gone.
+          workspacePath={target.workspace.path}
           disabled={blocked}
           disabledReason={blockedReason}
           onSelect={selectTarget}

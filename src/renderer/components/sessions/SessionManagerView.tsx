@@ -10,6 +10,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Ident } from '@/components/ui/ident';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useClaudeProjectSessions, useClaudeProjects } from '@/hooks/useClaudeSessions';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,7 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                 返回
               </Button>
               <div className="min-w-0">
-                <div className="min-w-0 truncate font-heading text-lg leading-none">
+                <div className="min-w-0 truncate font-heading text-title leading-none tracking-[-0.01em]">
                   {getDisplayPathBasename(selectedProject.path)}
                 </div>
                 <div className="mt-1 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
@@ -111,9 +112,11 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
         <>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="font-heading text-lg leading-none">会话历史</div>
+              <div className="font-heading text-title leading-none tracking-[-0.01em]">
+                会话历史
+              </div>
               <div className="mt-1 text-sm text-muted-foreground">
-                扫描 ~/.claude/projects/ 的 Claude 会话
+                扫描 <Ident>~/.claude/projects/</Ident> 的 Claude 会话
               </div>
             </div>
 
@@ -169,8 +172,8 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                 </EmptyMedia>
                 <EmptyTitle>未找到 Claude 会话</EmptyTitle>
                 <EmptyDescription>
-                  请确认本机已安装并使用过 Claude Code，且{' '}
-                  <span className="font-mono">~/.claude/projects/</span> 下存在会话记录。
+                  请确认本机已安装并使用过 Claude Code，且 <Ident>~/.claude/projects/</Ident>{' '}
+                  下存在会话记录。
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>

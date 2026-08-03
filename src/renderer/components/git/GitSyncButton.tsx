@@ -78,13 +78,13 @@ export function GitSyncButton({
         ) : (
           <>
             {ahead > 0 && (
-              <span className="flex items-center gap-0.5 text-info">
+              <span className="flex items-center gap-0.5 text-info tabular-nums">
                 <ArrowUp className="h-3 w-3" />
                 {ahead}
               </span>
             )}
             {behind > 0 && (
-              <span className="flex items-center gap-0.5 text-warning">
+              <span className="flex items-center gap-0.5 text-warning tabular-nums">
                 <ArrowDown className="h-3 w-3" />
                 {behind}
               </span>

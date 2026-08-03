@@ -678,7 +678,7 @@ export function EnhancedInput({
                     insertMention(item);
                   }}
                   className={cn(
-                    'w-full text-left px-3 py-1.5 text-sm truncate transition-colors',
+                    'w-full text-left px-3 py-1.5 text-ui truncate transition-colors',
                     i === mentionIndex
                       ? 'bg-accent text-accent-foreground'
                       : 'text-foreground hover:bg-accent/50'
@@ -686,28 +686,28 @@ export function EnhancedInput({
                 >
                   <span>{fileName}</span>
                   {dirPart && (
-                    <span className="text-muted-foreground ml-1.5 text-xs">{dirPart}</span>
+                    <span className="text-muted-foreground ml-1.5 text-meta">{dirPart}</span>
                   )}
                 </button>
               );
             })}
           </div>
           {/* Keyboard shortcut hints */}
-          <div className="flex items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                 ↑↓
               </kbd>
               Navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                 Enter
               </kbd>
               Select
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                 Esc
               </kbd>
               Close
@@ -729,7 +729,7 @@ export function EnhancedInput({
                   executeSlash(item);
                 }}
                 className={cn(
-                  'w-full text-left px-3 py-1.5 text-sm transition-colors',
+                  'w-full text-left px-3 py-1.5 text-ui transition-colors',
                   i === slashIndex
                     ? 'bg-accent text-accent-foreground'
                     : 'text-foreground hover:bg-accent/50'
@@ -737,12 +737,12 @@ export function EnhancedInput({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono">{item.label}</span>
-                  <span className="text-muted-foreground text-xs shrink-0">
+                  <span className="text-muted-foreground text-meta shrink-0">
                     {item.kind === 'command' ? '命令' : '技能'}
                   </span>
                 </div>
                 {item.description && (
-                  <div className="text-muted-foreground text-xs truncate mt-0.5">
+                  <div className="text-muted-foreground text-meta truncate mt-0.5">
                     {item.description}
                   </div>
                 )}
@@ -750,21 +750,21 @@ export function EnhancedInput({
             ))}
           </div>
           {/* Keyboard shortcut hints */}
-          <div className="flex items-center gap-3 border-t px-3 py-1.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 border-t px-3 py-1.5 text-meta text-muted-foreground">
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                 ↑↓
               </kbd>
               Navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                 Enter
               </kbd>
               Execute
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px] leading-none">
+              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                 Esc
               </kbd>
               Close
@@ -836,12 +836,12 @@ export function EnhancedInput({
                 {imagePaths.map((path, index) => (
                   <span
                     key={path}
-                    className="inline-flex items-center shrink-0 max-w-[160px] h-5 rounded border border-border bg-muted/50 text-xs"
+                    className="inline-flex items-center shrink-0 max-w-[160px] h-5 rounded border border-border bg-muted/50 text-meta"
                   >
                     <button
                       type="button"
                       onClick={() => setPreviewPath(path)}
-                      className="truncate px-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                      className="truncate px-1.5 font-mono text-code text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {getFileName(path)}
                     </button>

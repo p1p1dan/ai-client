@@ -280,7 +280,7 @@ export function WorktreePanel({
               <GitBranch className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">
+              <EmptyTitle className="text-base tracking-normal">
                 {isRemoteReconnecting
                   ? t('Remote connection lost. Attempting to reconnect...')
                   : isRemoteFailed
@@ -302,7 +302,9 @@ export function WorktreePanel({
               <GitBranch className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">{t('Not a Git repository')}</EmptyTitle>
+              <EmptyTitle className="text-base tracking-normal">
+                {t('Not a Git repository')}
+              </EmptyTitle>
               <EmptyDescription>
                 {t('This directory is not a Git repository. Initialize it to enable Git features.')}
               </EmptyDescription>
@@ -332,7 +334,7 @@ export function WorktreePanel({
               <GitBranch className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">
+              <EmptyTitle className="text-base tracking-normal">
                 {searchQuery ? t('No matching worktrees') : t('No worktrees')}
               </EmptyTitle>
               <EmptyDescription>
@@ -711,7 +713,7 @@ function WorktreeItem({
 
         {/* Activity counts and diff stats (only shown when has active sessions) */}
         {hasActivity && (
-          <div className="relative z-10 flex items-center gap-3 pl-6 text-xs text-muted-foreground">
+          <div className="relative z-10 flex items-center gap-3 pl-6 text-xs text-muted-foreground tabular-nums">
             {activity.agentCount > 0 && (
               <span className="flex items-center gap-1">
                 <Sparkles className="h-3 w-3" />

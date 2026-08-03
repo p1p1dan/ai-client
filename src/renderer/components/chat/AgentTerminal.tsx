@@ -1071,7 +1071,7 @@ export function AgentTerminal({
                 ? t('Remote terminal reconnecting...')
                 : t('Remote terminal disconnected')}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 text-meta text-muted-foreground">
               {runtimeState === 'reconnecting'
                 ? t('Remote terminal input is temporarily disabled while reconnecting.')
                 : t('Remote terminal has disconnected. Reconnect the remote host to continue.')}

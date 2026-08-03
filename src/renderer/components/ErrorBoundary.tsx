@@ -77,7 +77,7 @@ function ErrorFallback({
               <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
                 {t('Error details')}
               </summary>
-              <pre className="mt-3 max-h-64 overflow-auto rounded-lg border bg-muted/40 p-3 text-[11px] leading-relaxed text-foreground whitespace-pre-wrap break-words">
+              <pre className="mt-3 max-h-64 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-code leading-relaxed text-foreground whitespace-pre-wrap break-words">
                 {errorStack ?? ''}
                 {componentStack ? `\n\n[componentStack]\n${componentStack}` : ''}
               </pre>

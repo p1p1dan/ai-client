@@ -19,6 +19,7 @@ import { useWorktreeCreate } from '@/hooks/useWorktree';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { BranchMenuEntry, BranchMenuModel } from './composerTarget';
+import { targetTriggerClass } from './middleColumnLayout';
 
 interface BranchComboItem {
   id: string;
@@ -117,7 +118,7 @@ export function TargetBranchSelect({
   const lastGroupValue = groups.at(-1)?.value;
   const trimmedQuery = query.trim();
   const footerButtonClass =
-    'flex h-7 w-full items-center gap-2 rounded-sm px-2 text-sm hover:bg-hover';
+    'flex h-7 w-full items-center gap-2 rounded-sm px-2 text-ui hover:bg-hover';
 
   return (
     <>
@@ -136,12 +137,7 @@ export function TargetBranchSelect({
         <ComboboxTrigger
           disabled={disabled}
           title={disabled ? disabledReason : undefined}
-          render={
-            <button
-              type="button"
-              className="inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-sm text-muted-foreground hover:bg-hover data-[popup-open]:bg-selection disabled:opacity-64"
-            />
-          }
+          render={<button type="button" className={targetTriggerClass('muted')} />}
         >
           <GitBranch className="size-3.5 shrink-0" />
           {/* Round-3 fix (point-check #8): this used to cap at max-w-40
@@ -191,7 +187,7 @@ export function TargetBranchSelect({
                         // same "no longer shares width with the folder
                         // dropdown" reasoning.
                         endAddon={
-                          <span className="max-w-48 truncate text-xs text-muted-foreground">
+                          <span className="max-w-48 truncate font-mono text-code text-muted-foreground">
                             {item.path}
                           </span>
                         }

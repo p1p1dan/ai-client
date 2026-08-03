@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>a09 · D25 分域字体基线凭证</title>
+
+<style>
+/* 最小 reset —— 本地直开时不依赖任何平台注入，零外部依赖（无 CDN 字体/脚本） */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+h1, h2, h3, p, ul, ol, figure { margin: 0; }
+ul, ol { list-style: none; padding: 0; }
+img { display: block; max-width: 100%; }
+table { border-collapse: collapse; width: 100%; }
+code { font-size: inherit; }
+
+/* ============================================================
+   页面外壳 token —— 与 a07 / phase0a 同一套暖中性、刻意低调的壳子，
+   不与被评估的内容面板抢视觉。壳子 token 与 .fx 内的产物 token 是两套。
+   ============================================================ */
+:root {
+  --page-bg: #faf8f2;
+  --page-fg: #1b1917;
+  --page-dim: #6b6660;
+  --page-faint: #8d877f;
+  --page-rule: #e3ded2;
+  --page-rule-soft: #efeae0;
+  --page-panel: #fffdf7;
+  --page-accent: #a8481a;
+  --page-warn: #8a5a10;
+  --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f;
+  --page-go: #4f6410;
+  --page-go-soft: #4f641014;
+
+  --col: 72rem;
+
+  /*
+   * D25 production stacks -- copied verbatim from
+   * src/renderer/styles/globals.css :42-101 (read 2026-08-02). This page
+   * renders itself with these (see body{} below) -- it eats its own D25
+   * dog food rather than using the legacy stack as a page default.
+   */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "Menlo",
+    "Cascadia Mono", "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+    "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    monospace;
+
+  /*
+   * Pre-D25 baseline (D18③ "sans/mono/heading 三者统一 ui-monospace") --
+   * this is the literal stack the "A · 现状" columns render with below.
+   * Not read from the current file (D25 already replaced it there); this
+   * is the historical value D25 superseded, given verbatim by the task
+   * brief so the "A" columns reproduce exactly what shipped before D25.
+   */
+  --font-mono-legacy-ui:
+    ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono",
+    monospace;
+
+  /* D25 §3.1 size tokens -- src/renderer/styles/globals.css :42-55 */
+  --text-code: 13px;
+  --text-meta: 13px;
+  --text-ui: 14px;
+  --text-markdown: 15px;
+  --text-title: 18px;
+
+  /* D25 §3.4 -- src/renderer/styles/globals.css :57-59 */
+  --container-reading: 45rem;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  padding: 0 1.25rem 6rem;
+}
+
+.wrap { max-width: var(--col); margin-inline: auto; }
+
+code, .mono-shell {
+  font-family: var(--font-mono);
+  font-size: 0.87em;
+}
+
+/* ---- 页眉 ---- */
+.masthead {
+  padding: 3rem 0 1.75rem;
+  border-bottom: 2px solid var(--page-fg);
+  margin-bottom: 2rem;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--page-faint);
+  letter-spacing: 0.02em;
+  margin-bottom: 0.6rem;
+}
+.masthead h1 { font-size: 1.7rem; font-weight: 600; letter-spacing: -0.01em; }
+.dateline { font-family: var(--font-mono); font-size: 13px; color: var(--page-dim); margin-top: 0.35rem; }
+.lead { margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.7rem; max-width: 60rem; }
+.lead p { font-size: 14.5px; line-height: 1.65; color: var(--page-fg); }
+.lead b { font-weight: 600; }
+.lead code { color: var(--page-accent); }
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-top: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.toc a { color: var(--page-dim); text-decoration: none; border-bottom: 1px dotted var(--page-rule); }
+.toc a:hover { color: var(--page-accent); border-color: var(--page-accent); }
+
+/* ---- 章节 ---- */
+section { margin-bottom: 3rem; }
+h2 {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--page-rule);
+  margin-bottom: 0.85rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+h2 .h2-sub { font-family: var(--font-sans); font-weight: 400; font-size: 12.5px; color: var(--page-faint); }
+.sec-desc { font-size: 13.5px; line-height: 1.65; color: var(--page-dim); max-width: 56rem; margin-bottom: 1.1rem; }
+.sec-desc code { color: var(--page-accent); }
+
+/* ---- 三栏并排（等宽栏） ---- */
+.triad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.col {
+  min-width: 0;
+  border: 1px solid var(--page-rule);
+  border-radius: 8px;
+  background: var(--page-panel);
+  padding: 0.85rem;
+}
+.col-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--page-rule);
+}
+.col-label b { color: var(--page-fg); font-weight: 600; text-transform: none; font-size: 12.5px; }
+
+/* .fx = 产物 token 作用域（Flexoki Light，globals.css :root 实值，2026-08-02 读取）。
+   与页面外壳的 --page-* 是两套 token，刻意不混用。 */
+.fx {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.9837 0.0106 100.82);
+  --muted: oklch(0.969 0.0093 99.98);
+  --muted-foreground: oklch(0.5111 0.0053 78.28);
+  --accent: oklch(0.9422 0.0122 96.43);
+  --accent-foreground: oklch(0.1696 0.0017 17.32);
+  --border: oklch(0.881 0.0137 97.46);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --tool-arg: color-mix(in oklab, var(--muted-foreground) 78%, var(--background));
+
+  background: var(--background);
+  color: var(--foreground);
+  border-radius: 6px;
+  padding: 0.85rem 0.9rem;
+  font-family: var(--font-sans);
+}
+@media (prefers-color-scheme: dark) {
+  .fx {
+    --background: oklch(0.1981 0.0032 17.43);
+    --foreground: oklch(0.8463 0.0137 102.05);
+    --card: oklch(0.2197 0.0037 48.55);
+    --muted: oklch(0.2228 0.0025 67.7);
+    --muted-foreground: oklch(0.5933 0.0079 88.68);
+    --accent: oklch(0.2912 0.0029 17.32);
+    --accent-foreground: oklch(0.8463 0.0137 102.05);
+    --border: oklch(0.3214 0.0038 84.58);
+    --primary: oklch(0.6576 0.1539 49.3);
+    --primary-foreground: oklch(0.1981 0.0032 17.43);
+    --status-running: oklch(0.5988 0.1104 247);
+    --destructive: oklch(0.597 0.1692 28.38);
+    --tool-arg: color-mix(in oklab, var(--muted-foreground) 78%, var(--background));
+  }
+}
+
+/* A 列：整枝子树强制回退到 D18③ 旧栈，字族无差别（字号 token 不变，
+   除非该栏在下方另有 .legacy 局部覆写 —— 见测点③ 的 arg-ident 尺寸回退）。 */
+/* biome-ignore lint/complexity/noImportantStyles: the legacy A/B column must
+   defeat every scoped font-family class inside its subtree by design — this is
+   a static demo override, not cascade logic the app relies on. */
+.legacy, .legacy * { font-family: var(--font-mono-legacy-ui) !important; }
+
+/* ---- 测点①：阅读栏正文 ---- */
+.demo-copy { font-size: var(--text-markdown); line-height: 1.6; }
+.demo-copy + .demo-copy { margin-top: 0.6rem; }
+.demo-copy code {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  background: var(--muted);
+  color: var(--foreground);
+  padding: 0 0.28em;
+  border-radius: 3px;
+}
+.legacy .demo-copy code { background: transparent; padding: 0; }
+
+.reading-ruler { margin-bottom: 0.6rem; }
+.reading-ruler .track { height: 6px; background: var(--page-rule-soft); border-radius: 3px; position: relative; overflow: hidden; }
+.reading-ruler .fill { position: absolute; inset: 0 auto 0 0; background: var(--page-accent); border-radius: 3px; }
+.reading-ruler .cap { font-family: var(--font-mono); font-size: 10.5px; color: var(--page-faint); margin-top: 0.3rem; }
+
+/* ---- 测点②：侧栏树 mock 行 ---- */
+.row-demo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 28px;
+  padding: 0 0.4rem;
+  border-radius: 6px;
+}
+.row-demo + .row-demo { margin-top: 2px; }
+.row-demo .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--status-running); flex-shrink: 0; }
+.row-demo .dot.idle { visibility: hidden; }
+.row-demo .title { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-ui); }
+.row-demo .chip {
+  flex-shrink: 0;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  line-height: 16px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted-foreground);
+}
+.row-demo .age {
+  flex-shrink: 0;
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.row-note { margin-top: 0.6rem; font-size: 11.5px; line-height: 1.5; color: var(--page-faint); }
+
+/* ---- 测点③：工具行 ---- */
+.tool-row { display: flex; align-items: baseline; gap: 0.45rem; font-size: var(--text-markdown); line-height: 1.5; }
+.tool-row + .tool-row { margin-top: 0.45rem; }
+.tool-row .verb { flex-shrink: 0; color: var(--foreground); }
+.tool-row .arg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tool-arg); }
+.arg-ident { font-family: var(--font-mono); font-size: var(--text-code); }
+.arg-prose { font-variant-numeric: tabular-nums; }
+/* D25 §2.4: pre-D25 the arg slot had no distinct size, it inherited the
+   row's 15px like the verb ("全等宽 15px 同族同号"). Reproduce that in the
+   legacy column: family is already forced by `.legacy *` above; this line
+   undoes the 13px optical-compensation size so the arg matches the verb. */
+.legacy .arg-ident { font-size: var(--text-markdown); }
+
+/* ---- 参照图裁选区 ---- */
+.crop-frame { position: relative; overflow: hidden; border-radius: 6px; background: var(--page-rule-soft); }
+.crop-frame img { position: absolute; max-width: none; }
+.crop-1 { aspect-ratio: 1130 / 350; }
+.crop-1 img { left: -38.673%; top: -34.286%; width: 179.646%; }
+.crop-2 { aspect-ratio: 377 / 480; }
+.crop-2 img { left: 0%; top: -66.667%; width: 538.462%; }
+.crop-3 { aspect-ratio: 1130 / 315; }
+.crop-3 img { left: -38.673%; top: -119.048%; width: 179.646%; }
+.crop-cap { margin-top: 0.55rem; font-size: 11.5px; line-height: 1.5; color: var(--page-faint); }
+
+/* ---- Composer 形态对照 ---- */
+.triad-composer .col { display: flex; flex-direction: column; }
+.triad-composer figure { margin: 0; }
+.triad-composer figure + figure { margin-top: 0.75rem; }
+.triad-composer img { border-radius: 6px; border: 1px solid var(--page-rule); }
+.triad-composer figcaption { margin-top: 0.4rem; font-size: 11.5px; line-height: 1.45; color: var(--page-faint); }
+.col-placeholder .placeholder-box {
+  flex: 1;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.6rem;
+  border: 1.5px dashed var(--page-rule);
+  border-radius: 6px;
+  padding: 1.25rem;
+}
+.placeholder-box p:first-child { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--page-warn); }
+.placeholder-note { font-size: 11.5px; line-height: 1.55; color: var(--page-faint); }
+
+.kv-strip {
+  margin-top: 1rem;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  border: 1px solid var(--page-rule);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.kv-strip td { padding: 0.5rem 0.7rem; border-bottom: none; }
+.kv-strip tr td:nth-child(odd) { color: var(--page-faint); background: var(--page-rule-soft); white-space: nowrap; }
+.kv-strip tr td:nth-child(even) { color: var(--page-fg); }
+.kv-strip code { color: var(--page-accent); }
+
+/* ---- 量化指标表 ---- */
+.metrics-table { font-size: 13px; border: 1px solid var(--page-rule); border-radius: 8px; overflow: hidden; }
+.metrics-table th, .metrics-table td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--page-rule-soft); vertical-align: top; }
+.metrics-table th { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--page-faint); background: var(--page-rule-soft); }
+.metrics-table tr:last-child td { border-bottom: none; }
+.metrics-table td:nth-child(1) { font-weight: 600; white-space: nowrap; }
+.metrics-table code { font-size: 0.85em; }
+.status-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.status-locked { background: var(--page-go-soft); color: var(--page-go); }
+.status-gui { background: var(--page-warn-soft); color: var(--page-warn); }
+
+/* ---- A/B flag 说明 ---- */
+.flag-box {
+  border: 1px solid var(--page-rule);
+  border-left: 3px solid var(--page-accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--page-panel);
+  padding: 0.85rem 1rem;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--page-dim);
+}
+.flag-box code { color: var(--page-accent); }
+
+.foot {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--page-rule);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--page-faint);
+}
+
+@media (max-width: 860px) {
+  .triad, .triad-composer { grid-template-columns: 1fr; }
+  .kv-strip, .kv-strip tbody, .kv-strip tr { display: block; }
+  .kv-strip tr { display: grid; grid-template-columns: auto 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="eyebrow">docs/design/a09-font-domain-baseline.html · T-30 批2 · S7</div>
+    <h1>a09 · D25 分域字体基线凭证</h1>
+    <p class="dateline">2026-08-02</p>
+    <div class="lead">
+      <p><b>页面身份</b>：D25 分域字体规格（<code>docs/plans/2026-07-30-d25-font-domain-design.md</code> §6 验收口径）要求的视觉凭证页——三测点「现状 mono / D25 split / Cursor 参照」并排对拍，同时承载工程规范第 10 条要求的对比报告。</p>
+      <p><b>与 A07 v4 追记的关系</b>：<code>a07-cursor-composer-alignment.html</code> 的原型渲染层已按「渲染字节冻结、注记可追加」原则定格在 D18③ 全等宽字体上（v3 是用户定稿版本号，不回改）——那份文件继续是 Flexoki 调色板 / 卡片形态 / 间距 / 三级灰等非字体裁定的验收凭证，但其字族画面自 D25 起不再是施工依据，其文末「v4 追记」已注明新增视觉凭证转移到本页。composer 卡片形态的前后对照（见 §3）一并并入本页，因为 T-30 批2 形态规格（<code>2026-07-31-t30b2-composer-form-design.md</code>）的施工序把 a09 截图列为最后一步 S7，字体 token 与卡片形态是同批交付、互相影响可视宽度的两个维度。</p>
+      <p><b>DPR / 参照来源</b>：三测点的 Cursor 参照图沿用 D25 规格 §0 的标定方法——以 Windows 11 窗口控制按钮恒为 46×32px 反推，图中三键中心间距实测 ≈68 图像 px ⇒ <b>DPR = 1.5</b>（Win 150% 缩放）。本页下方的裁选区是同一张已标定截图（<code>refs/feedback-20260730/cursor-参照-协调布局.png</code>，原始 2030×1071px）上的目视框选，未做二次像素级复核，只服务并排对拍，不构成新的独立实测。§3 composer 形态对照区引用的是另一批参照（2026-07-31 第三轮点验），未做 DPR 标定，仅作卡片形态 / 圆角 / 色度层面的定性对照，不用于量化。</p>
+    </div>
+    <nav class="toc">
+      <a href="#point-1">① 阅读栏正文</a>
+      <a href="#point-2">② 侧栏 Session 树</a>
+      <a href="#point-3">③ 工具行摘要</a>
+      <a href="#composer-form">Composer 形态对照</a>
+      <a href="#metrics">量化指标表</a>
+      <a href="#ab-flag">A/B flag 说明</a>
+    </nav>
+  </div>
+
+  <!-- ============================================================
+       测点① · Chat 阅读栏正文
+       ============================================================ -->
+  <section id="point-1">
+    <h2>测点① · Chat 阅读栏正文 <span class="h2-sub">D25 §6.1 · 对照 Cursor 图 user 气泡 + assistant 段落</span></h2>
+    <p class="sec-desc">
+      Cursor §0 实测标定：45rem 阅读栏 = 48 CJK 字/行。D25 把本仓阅读栏从 48rem 收到 <code>--container-reading</code>（45rem，
+      -6.25%），同时把 UI 正文从全等宽切到分域比例栈。下面两栏使用<b>同一段</b>真实感文案，字号 token 保持不变
+      （<code>--text-markdown</code> 15 / <code>--text-code</code> 13），只切换 <code>font-family</code>，把这一个变量的效果单独看清楚。
+    </p>
+    <div class="triad">
+      <div class="col legacy">
+        <div class="col-label"><span>A · 现状</span><b>D18③ 全等宽栈</b></div>
+        <div class="fx">
+          <div class="reading-ruler">
+            <div class="track"><div class="fill" style="width:100%"></div></div>
+            <div class="cap">48rem（旧阅读栏，收窄前）</div>
+          </div>
+          <p class="demo-copy">
+            这版重构把 <code>ToolRows.tsx</code> 的工具行拆成两条通道：动词维持 15px 比例字，参数按 <code>argKind</code> 落到 13px 等宽；
+            阅读栏从 48rem 收到 <code>--container-reading</code>（45rem），对齐 Cursor 参照约 48 CJK 字/行的节奏。
+            改动集中在 <code>src/renderer/styles/globals.css</code> 与 3 个组件文件，净增 128 行，新增 6 处单测覆盖
+            <code>argKind</code> 的三分支判定。
+          </p>
+          <p class="demo-copy">
+            中英混排行：参照图里 <code>WorkspaceShell.tsx</code> 与 <code>RightDock.tsx</code> 这类标识符只在正文里保持等宽，
+            出现在下拉触发器或文件卡上时反而是比例字体——同一个字符串，「读 / 比对 / 复制」时是 mono，当「名字」点一下时是 sans。
+          </p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-label"><span>B · D25</span><b>分域字体，生产现值</b></div>
+        <div class="fx">
+          <div class="reading-ruler">
+            <div class="track"><div class="fill" style="width:93.75%"></div></div>
+            <div class="cap">45rem（-6.25%）= 48 CJK 字/行，对齐 Cursor 实测</div>
+          </div>
+          <p class="demo-copy">
+            这版重构把 <code>ToolRows.tsx</code> 的工具行拆成两条通道：动词维持 15px 比例字，参数按 <code>argKind</code> 落到 13px 等宽；
+            阅读栏从 48rem 收到 <code>--container-reading</code>（45rem），对齐 Cursor 参照约 48 CJK 字/行的节奏。
+            改动集中在 <code>src/renderer/styles/globals.css</code> 与 3 个组件文件，净增 128 行，新增 6 处单测覆盖
+            <code>argKind</code> 的三分支判定。
+          </p>
+          <p class="demo-copy">
+            中英混排行：参照图里 <code>WorkspaceShell.tsx</code> 与 <code>RightDock.tsx</code> 这类标识符只在正文里保持等宽，
+            出现在下拉触发器或文件卡上时反而是比例字体——同一个字符串，「读 / 比对 / 复制」时是 mono，当「名字」点一下时是 sans。
+          </p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="col-label"><span>C · Cursor 参照</span><b>裁选区</b></div>
+        <div class="crop-frame crop-1">
+          <img src="refs/feedback-20260730/cursor-参照-协调布局.png" alt="Cursor 参照图裁选区：user 气泡 + assistant 段落正文，含行内 mono 标识符">
+        </div>
+        <p class="crop-cap">
+          裁选自 <code>cursor-参照-协调布局.png</code>（近似框选，非像素级标定）：user 气泡 + assistant 前两条要点，
+          可见 <code>WorkspaceShell.tsx</code> 等标识符在正文中维持等宽 chip。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       测点② · 左栏 Session 树
+       ============================================================ -->
+  <section id="point-2">
+    <h2>测点② · 左栏 Session 树 <span class="h2-sub">D25 §6.1 · 对照 Cursor 图侧栏「标题 + 分支 + 相对时间」同行</span></h2>
+    <p class="sec-desc">
+      D25 §2.3 三处「口径细化点」采方案 A（编排者临时裁定，第二轮 GUI 点验未异议，裁定生效）：侧栏分支 chip 回落到
+      <b>sans 13px</b>，而不是字面口径的 mono——同一判据，「内容 vs 控件」。下面 4 行 mock 数据同时展示中文标题 truncate、
+      分支 chip 与相对时间 <code>tabular-nums</code> 同行的效果。
+    </p>
+    <div class="triad">
+      <div class="col legacy">
+        <div class="col-label"><span>A · 现状</span><b>D18③ 全等宽栈</b></div>
+        <div class="fx">
+          <div class="row-demo">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="title">会话重构选项讨论：分域字体三测点凭证</span>
+            <span class="chip">feat/openchamber-chat-refactor</span>
+            <span class="age">50m</span>
+          </div>
+          <div class="row-demo">
+            <span class="dot idle" aria-hidden="true"></span>
+            <span class="title">OpenChamber 聊天面板重构与验收清单</span>
+            <span class="chip">main</span>
+            <span class="age">3h</span>
+          </div>
+          <div class="row-demo">
+            <span class="dot idle" aria-hidden="true"></span>
+            <span class="title">右侧栏设计复核——一行两处截断的长标题示例</span>
+            <span class="chip">fix/d25-font-domain-baseline</span>
+            <span class="age">6d</span>
+          </div>
+          <div class="row-demo">
+            <span class="dot idle" aria-hidden="true"></span>
+            <span class="title">工具行摘要与分域字体全链路验证</span>
+            <span class="chip">release/t30-batch2</span>
+            <span class="age">16h</span>
+          </div>
+        </div>
+        <p class="row-note">
+          字号 token 与 B 栏一致（本页只对比字族）；相对时间在 D25 之前实际是原始 <code>text-[11px]</code>
+          （D25 §3.1 迁 <code>--text-meta</code> 13px），那处尺寸变更与本页的字族对比正交，未在此重演。
+        </p>
+      </div>
+      <div class="col">
+        <div class="col-label"><span>B · D25</span><b>分域字体，生产现值</b></div>
+        <div class="fx">
+          <div class="row-demo">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="title">会话重构选项讨论：分域字体三测点凭证</span>
+            <span class="chip">feat/openchamber-chat-refactor</span>
+            <span class="age">50m</span>
+          </div>
+          <div class="row-demo">
+            <span class="dot idle" aria-hidden="true"></span>
+            <span class="title">OpenChamber 聊天面板重构与验收清单</span>
+            <span class="chip">main</span>
+            <span class="age">3h</span>
+          </div>
+          <div class="row-demo">
+            <span class="dot idle" aria-hidden="true"></span>
+            <span class="title">右侧栏设计复核——一行两处截断的长标题示例</span>
+            <span class="chip">fix/d25-font-domain-baseline</span>
+            <span class="age">6d</span>
+          </div>
+          <div class="row-demo">
+            <span class="dot idle" aria-hidden="true"></span>
+            <span class="title">工具行摘要与分域字体全链路验证</span>
+            <span class="chip">release/t30-batch2</span>
+            <span class="age">16h</span>
+          </div>
+        </div>
+        <p class="row-note">
+          分支 chip 为 sans 13px（D25 §2.3 方案 A）：同一标题串比例字体下可见字符预算 +20% 左右，量化实测见 §4 「侧栏标题可见字符数」。
+        </p>
+      </div>
+      <div class="col">
+        <div class="col-label"><span>C · Cursor 参照</span><b>裁选区</b></div>
+        <div class="crop-frame crop-2">
+          <img src="refs/feedback-20260730/cursor-参照-协调布局.png" alt="Cursor 参照图裁选区：左栏 Repositories 会话列表，标题 + 相对时间同行 truncate">
+        </div>
+        <p class="crop-cap">
+          裁选自同一张参照图的左栏 <code>Repositories</code> 区（近似框选）：<code>Session refactor options 50m</code> /
+          <code>OpenChamber chat refactor … 6d</code> 等行，标题与相对时间同行、分支未在此列表内单独出现为 chip。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       测点③ · 工具行摘要
+       ============================================================ -->
+  <section id="point-3">
+    <h2>测点③ · 工具行摘要 <span class="h2-sub">D25 §6.1 · 对照 Cursor 图「Finished …」摘要行 + 行内 mono chip</span></h2>
+    <p class="sec-desc">
+      D25 §2.4：动词（verb）走 sans 15px，参数（arg）按 <code>argKind</code> 分叉——<code>'ident'</code>
+      （路径 / URL / 命令）落 mono 13px，<code>'prose'</code>（「N files」「for Ns」等数字+散文摘要）保持 sans 15px 并加
+      <code>tabular-nums</code>。旧栈下三者「全等宽同号」，没有这层区分。
+    </p>
+    <div class="triad">
+      <div class="col legacy">
+        <div class="col-label"><span>A · 现状</span><b>D18③ 全等宽同号</b></div>
+        <div class="fx">
+          <div class="tool-row">
+            <span class="verb">Read</span>
+            <span class="arg arg-ident">vflow/package.json</span>
+          </div>
+          <div class="tool-row">
+            <span class="verb">Worked for</span>
+            <span class="arg arg-prose">1s</span>
+          </div>
+          <div class="tool-row">
+            <span class="verb">Explored</span>
+            <span class="arg arg-prose">2 files, 3 searches</span>
+          </div>
+        </div>
+        <p class="row-note">verb 与 arg 同族同号（mono 15px），<code>argKind</code> 的 ident/prose 区分在字体层面不可见。</p>
+      </div>
+      <div class="col">
+        <div class="col-label"><span>B · D25</span><b>分域字体，生产现值</b></div>
+        <div class="fx">
+          <div class="tool-row">
+            <span class="verb">Read</span>
+            <span class="arg arg-ident">vflow/package.json</span>
+          </div>
+          <div class="tool-row">
+            <span class="verb">Worked for</span>
+            <span class="arg arg-prose">1s</span>
+          </div>
+          <div class="tool-row">
+            <span class="verb">Explored</span>
+            <span class="arg arg-prose">2 files, 3 searches</span>
+          </div>
+        </div>
+        <p class="row-note">
+          verb sans 15px / <code>argKind==='ident'</code> 的 arg mono 13px / <code>argKind==='prose'</code> 的 arg sans 15px
+          + <code>tabular-nums</code>（生产实现见 <code>toolCard.ts:toolRowArgClass</code>）。
+        </p>
+      </div>
+      <div class="col">
+        <div class="col-label"><span>C · Cursor 参照</span><b>裁选区</b></div>
+        <div class="crop-frame crop-3">
+          <img src="refs/feedback-20260730/cursor-参照-协调布局.png" alt="Cursor 参照图裁选区：正文内行内 mono 标识符 + Finished Static server for final doc verification 摘要行">
+        </div>
+        <p class="crop-cap">
+          裁选自同一张参照图（近似框选）：<code>WorkspaceShell.tsx</code> 等行内标识符维持 mono chip，
+          <code>Finished Static server for final doc verification</code> 摘要行整行为比例字体。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Composer 形态前后对照
+       ============================================================ -->
+  <section id="composer-form">
+    <h2>Composer 形态前后对照 <span class="h2-sub">T-30 批2 形态规格 · 与 D25 域映射同批交付</span></h2>
+    <p class="sec-desc">
+      T-30 批2 形态规格（<code>docs/plans/2026-07-31-t30b2-composer-form-design.md</code>）把 composer 卡片形态与 D25 字体域
+      映射列为同批：字体 token 的宽度节奏直接影响卡片可视宽度与截断点，施工序把这份截图核对放在最后一步（S7），因此并入本页而不
+      单独出一份文件。
+    </p>
+    <div class="triad triad-composer">
+      <div class="col">
+        <div class="col-label"><span>Cursor 参照</span><b>2026-07-31 · 第三轮点验</b></div>
+        <figure>
+          <img src="refs/feedback-20260731-round3/ScreenShot_2026-07-31_085350_619.png" alt="Cursor composer 合并态：模型选择器与麦克风连成一体式 Sonnet 5 High 按钮组">
+          <figcaption>合并态：<code>Sonnet 5 High ⌄</code> 与麦克风连成一个胶囊分组。</figcaption>
+        </figure>
+        <figure>
+          <img src="refs/feedback-20260731-round3/ScreenShot_2026-07-31_085405_250.png" alt="Cursor composer 空态：Kimi K3 Max 模型 chip 与麦克风为两个独立控件">
+          <figcaption>空态对照：模型 chip 与麦克风此时仍是两个独立控件，供比对「合并」是否总是成立。</figcaption>
+        </figure>
+      </div>
+      <div class="col">
+        <div class="col-label"><span>本仓改前</span><b>2026-07-31 · 第三轮点验</b></div>
+        <figure>
+          <img src="refs/feedback-20260731-round3/ScreenShot_2026-07-31_084744_891.png" alt="本仓改前：Permission 卡片与 composer 状态行，Haiku/Medium 两个独立下拉，红方块与橙圆两枚高饱和按钮">
+          <figcaption>Permission 卡 + composer 状态行：两个独立下拉（Haiku / Medium）、两枚高饱和圆钮（停止/发送）。</figcaption>
+        </figure>
+      </div>
+      <div class="col col-placeholder">
+        <div class="col-label"><span>改后</span><b>诚实占位</b></div>
+        <div class="placeholder-box">
+          <p>待 GUI 点验截图回填（第五轮）</p>
+          <p class="placeholder-note">
+            形态规格已裁定（见下表关键数值），但代码是否已落地、落地后的真实渲染，需等第五轮 GUI 点验产出——此处不放假图，避免把裁定值误当成已验收的视觉。
+          </p>
+        </div>
+      </div>
+    </div>
+    <table class="kv-strip">
+      <tbody>
+        <tr>
+          <td>卡高</td><td>42px</td>
+          <td>形态</td><td>pill</td>
+          <td>边框</td><td>border → input，零色度</td>
+        </tr>
+        <tr>
+          <td>圆钮</td><td>24px 近黑</td>
+          <td>模型档位</td><td>合并 <code>Sonnet High ⌄</code></td>
+          <td>依据</td><td><code>t30b2-composer-form-design.md</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============================================================
+       量化指标表
+       ============================================================ -->
+  <section id="metrics">
+    <h2>量化指标表 <span class="h2-sub">D25 §6.2 · 8 项，逐行加「状态」列</span></h2>
+    <p class="sec-desc">
+      「已锁」= 已有可回归的静态断言（<code>fontDomainScan.test.ts</code> 等），CI 每次跑都会拦住回归；
+      「待 GUI 点验」= 依赖真机渲染（字重回退、抖动、基线）的口径，尚未有实测值，本表<b>不编造数值</b>，如实标「待测」。
+    </p>
+    <table class="metrics-table">
+      <thead>
+        <tr><th>指标</th><th>现状</th><th>目标</th><th>测法</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>侧栏标题可见字符数</td>
+          <td>13（等宽 14px，advance 8.4px，实得 ≈112px）</td>
+          <td>≥16（比例 advance ≈7.0px，+20%）</td>
+          <td>固定标题串 <code>Session refactor options</code>，量到截断位</td>
+          <td><span class="status-pill status-gui">待 GUI 点验（Linux/Win10 用户线）</span></td>
+        </tr>
+        <tr>
+          <td>阅读栏 CJK 字/行</td>
+          <td>51.2 @48rem</td>
+          <td>48 ± 2（= Cursor 实测）</td>
+          <td>中文段落取样计数</td>
+          <td><span class="status-pill status-gui">待 GUI 点验（Linux/Win10 用户线）</span></td>
+        </tr>
+        <tr>
+          <td>字重可辨</td>
+          <td>semibold/bold 0 处，medium 12 处部分失效</td>
+          <td>400 与 600 并置，200% 放大目视可辨；Win10 必测</td>
+          <td>同屏并置截图</td>
+          <td><span class="status-pill status-gui">待 GUI 点验（Win10 用户线，字重矩阵最弱环）</span></td>
+        </tr>
+        <tr>
+          <td>数字不抖</td>
+          <td>未测</td>
+          <td>计时器跑 10s，逐帧 x 位置位移 = 0</td>
+          <td>录屏抽帧</td>
+          <td><span class="status-pill status-gui">待 GUI 点验（Linux/Win10 用户线）</span></td>
+        </tr>
+        <tr>
+          <td>mono/sans 光学配平</td>
+          <td>N/A</td>
+          <td>行内 13px mono 的视觉高度 ≤ 15px sans 正文</td>
+          <td>并置截图</td>
+          <td><span class="status-pill status-locked">断言已锁（fontDomainScan.test.ts A1）</span></td>
+        </tr>
+        <tr>
+          <td>CJK/Latin 基线</td>
+          <td>未测（open-q #10 的原始风险）</td>
+          <td>同行 CJK 与拉丁基线重合</td>
+          <td>截图画辅助线</td>
+          <td><span class="status-pill status-gui">待 GUI 点验（Linux/Win10 用户线）</span></td>
+        </tr>
+        <tr>
+          <td>字号档位数</td>
+          <td>7 档（10/11/12/13/14/15/16）</td>
+          <td>≤5 档（10 仅 mono 拉丁 / 13/14/15/18）</td>
+          <td>rg 统计</td>
+          <td><span class="status-pill status-locked">断言已锁（fontDomainScan.test.ts A6）</span></td>
+        </tr>
+        <tr>
+          <td>tracking 使用点</td>
+          <td>7 处（其中 1 处即将删）</td>
+          <td>6~8 处且全部落在 §3.3 四档内</td>
+          <td>rg 统计</td>
+          <td><span class="status-pill status-locked">断言已锁（fontDomainScan.test.ts A5）</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="row-note" style="margin-top:0.7rem;">
+      「mono/sans 光学配平」标「断言已锁」的范围说明：<code>fontDomainScan.test.ts</code> A1 锁的是 <code>font-mono</code>
+      白名单闭包（只允许出现在指定文件），配合 <code>ui/ident.tsx</code> 把 mono 用法硬编码到 <code>--text-code</code>(13)，
+      结构上锁死了 13px mono 配 15px sans 这一对光学补偿值不会被随手改动——但「视觉高度」本身仍是渲染结果，最终判定仍需目视，
+      这里锁住的是「配对关系」而不是「像素测量结果」。
+    </p>
+  </section>
+
+  <!-- ============================================================
+       A/B flag 说明
+       ============================================================ -->
+  <section id="ab-flag">
+    <h2>A/B flag 说明 <span class="h2-sub">工程规范第 6 条</span></h2>
+    <div class="flag-box">
+      生产内核开关：<code>html[data-font-domain="mono"]</code>（<code>src/renderer/styles/globals.css</code> <code>@layer base</code>）
+      直接给 <code>&lt;html&gt;</code> 声明 <code>font-family: var(--font-mono)</code>，一键还原 D25 之前的全等宽观感，
+      默认态（不设该属性）即分域（split）。这是唯一被保留一个版本周期、之后即删除的过渡开关。
+      <b>本页的「A · 现状」/「B · D25」两栏是静态并排渲染（各自用 <code>.legacy</code> 局部覆写或默认样式实现），
+      不是同一个 <code>data-font-domain</code> 开关的两态截图</b>——两者结论一致（旧栈 vs 分域栈），但取值方式不同，
+      不要把本页的 A/B 与生产开关的 A/B 混为一处证据。
+    </div>
+  </section>
+
+  <div class="foot">
+    docs/design/a09-font-domain-baseline.html · 参照 docs/design/2026-07-30-d25-font-domain-design.md §6 · 与 A07/phase0a 冻结原型互为补充，不改写两者任何裁定编号
+  </div>
+
+</div>
+</body>
+</html>

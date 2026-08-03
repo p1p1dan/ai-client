@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { formatThoughtRow } from './turnTiming';
 
@@ -195,6 +196,17 @@ export interface ToolRowView {
   key: string;
   verb: string;
   arg?: string;
+  /**
+   * Font-domain classifier for `arg` (D25 §2.4/§2.5): 'ident' renders mono
+   * (paths, URLs, raw commands -- copy-target content the user reads
+   * char-by-char); 'prose' renders sans (human-written descriptions,
+   * aggregate summaries, thought/worked-for durations). Mandatory semantics
+   * whenever `arg` is set for a branch D25's arg-kind table covers; branches
+   * it does not cover (Grep/Glob/WebSearch/Task/TodoWrite/unknown-tool
+   * fallback) leave this undefined, which `toolRowArgClass` treats the same
+   * as 'prose' -- the safe default direction (D25 §2.5: fail toward sans).
+   */
+  argKind?: 'ident' | 'prose';
   /** Running rows use the present-tense verb and never show a chevron (A07 :2331). */
   running: boolean;
   failed: boolean;
@@ -245,7 +257,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const running = run.status === 'running';
   const failed = run.status === 'failed';
   const verb = toolVerb(run.toolName, running);
-  const arg = formatToolArg(run, options);
+  const argDetail = formatToolArgDetail(run, options);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) ? run.output : undefined;
 
@@ -258,7 +270,8 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   return {
     key: run.blockId,
     verb,
-    arg,
+    arg: argDetail?.text,
+    argKind: argDetail?.kind,
     running,
     failed,
     expandable,
@@ -370,10 +383,14 @@ export function deriveAggregateRow(
       : firstEntry.block.id
     : 'empty';
 
+  const arg = segments.length > 0 ? segments.join(', ') : undefined;
   return {
     key: `${firstBlockId}~agg`,
     verb: running ? AGGREGATE_VERB.running : AGGREGATE_VERB.done,
-    arg: segments.length > 0 ? segments.join(', ') : undefined,
+    arg,
+    // D25 §2.4: "N files, M searches" is a number+prose summary, not an
+    // identifier -- sans, same as the row's verb.
+    argKind: arg ? 'prose' : undefined,
     running,
     failed,
     expandable: !running,
@@ -473,7 +490,7 @@ function buildEntryRow(entry: ToolGroupEntry, options: ToolCardOptions): ToolRow
 function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRowView {
   const streaming = options.isStreamingBlockId != null && options.isStreamingBlockId === block.id;
   const durationMs = options.thinkingDurationMs ? options.thinkingDurationMs(block.id) : undefined;
-  const { verb, arg } = formatThoughtRow({ durationMs, streaming });
+  const { verb, arg, argKind } = formatThoughtRow({ durationMs, streaming });
   const hasText = Boolean(block.text && block.text.length > 0);
   const showBody = !streaming && hasText;
   // An empty (no-text) block renders as a bare, non-expandable row — no
@@ -485,6 +502,7 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
     key: block.id,
     verb,
     arg,
+    argKind,
     running: streaming,
     failed: false,
     expandable: showBody,
@@ -572,12 +590,37 @@ function numberField(rec: Record<string, unknown> | undefined, field: string): n
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-/** Argument text. Never contains a literal newline (truncation is CSS's job, not this function's). */
-export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): string | undefined {
+/** D25 §2.4 arg font-domain classifier -- see `ToolRowView.argKind` doc comment. */
+export type ToolArgKind = 'ident' | 'prose';
+
+interface ToolArgDetail {
+  text: string;
+  kind?: ToolArgKind;
+}
+
+/**
+ * Argument text + D25 font-domain kind, one switch shared by `formatToolArg`
+ * and `formatToolArgKind`. Text never contains a literal newline (truncation
+ * is CSS's job, not this function's).
+ *
+ * `kind` is only assigned for the branches D25 §2.4's arg-kind table
+ * actually covers (Read/Edit/Write/NotebookRead/NotebookEdit/WebFetch paths
+ * and URLs -> 'ident'; Bash description -> 'prose', command fallback ->
+ * 'ident'). Grep/Glob/WebSearch/Task/TodoWrite/the unknown-tool fallback are
+ * out of that table and left `undefined` on purpose -- `toolRowArgClass`
+ * treats `undefined` the same as 'prose' (sans), which is D25 §2.5's safe
+ * default direction, so an uncovered branch degrades to a proportional arg
+ * instead of a silently-wrong mono one.
+ */
+function formatToolArgDetail(
+  run: ToolRun,
+  options: ToolCardOptions = {}
+): ToolArgDetail | undefined {
   const rec = asRecord(run.input);
   const repoName = options.repoName;
 
   let raw: string | undefined;
+  let kind: ToolArgKind | undefined;
   switch (run.toolName) {
     case 'Read':
     case 'NotebookRead': {
@@ -591,6 +634,7 @@ export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): stri
         } else {
           raw = shortPath(path);
         }
+        kind = 'ident';
       }
       break;
     }
@@ -605,6 +649,7 @@ export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): stri
       break;
     case 'WebFetch':
       raw = stringField(rec, 'url');
+      if (raw) kind = 'ident';
       break;
     case 'Edit':
     case 'MultiEdit':
@@ -612,13 +657,22 @@ export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): stri
     case 'NotebookEdit': {
       const path = stringField(rec, 'file_path');
       raw = path ? shortPath(path) : undefined;
+      if (raw) kind = 'ident';
       break;
     }
     case 'Bash':
     case 'BashOutput':
-    case 'KillShell':
-      raw = stringField(rec, 'description') ?? stringField(rec, 'command');
+    case 'KillShell': {
+      const description = stringField(rec, 'description');
+      if (description) {
+        raw = description;
+        kind = 'prose';
+      } else {
+        raw = stringField(rec, 'command');
+        if (raw) kind = 'ident';
+      }
       break;
+    }
     case 'TodoWrite':
     case 'ExitPlanMode':
       raw = 'next moves';
@@ -639,7 +693,20 @@ export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): stri
   }
 
   if (raw == null) return undefined;
-  return raw.replace(/[\r\n]+/g, ' ');
+  return { text: raw.replace(/[\r\n]+/g, ' '), kind };
+}
+
+/** Argument text. Never contains a literal newline (truncation is CSS's job, not this function's). */
+export function formatToolArg(run: ToolRun, options: ToolCardOptions = {}): string | undefined {
+  return formatToolArgDetail(run, options)?.text;
+}
+
+/** D25 §2.4 arg font-domain kind for `run` -- see `formatToolArgDetail`'s doc comment for coverage. */
+export function formatToolArgKind(
+  run: ToolRun,
+  options: ToolCardOptions = {}
+): ToolArgKind | undefined {
+  return formatToolArgDetail(run, options)?.kind;
 }
 
 /** Read row's clickable target: `{file_path, offset, limit}` -> `{path, line, endLine}`. */
@@ -687,4 +754,46 @@ export const INPUT_MAX_HEIGHT_CLASS = 'max-h-[240px]';
 
 export function inputMaxHeightClass(): string {
   return INPUT_MAX_HEIGHT_CLASS;
+}
+
+// ---------------------------------------------------------------------------
+// 5. Font domain (D25 §2.4/§2.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Class string for the `.ct-a` arg cell (ToolRows.tsx's `ToolRowArg`).
+ * `argKind === 'ident'` gets the D25 mono primitive (paths/URLs/commands,
+ * light-optical-compensation text-code + tracking-normal so mono columns
+ * still line up); 'prose' (or missing `argKind`) adds no font-family class
+ * and inherits the row's sans `text-markdown`. The failed-state color is
+ * unaffected by `argKind` -- font domain and status color are orthogonal
+ * (D25 §2.4 technical note 4).
+ *
+ * The mono suffix is appended by plain string concatenation, not folded
+ * into the same `cn()` call as the color class: tailwind-merge classifies
+ * an unrecognised `text-<name>` (which `text-code` is, same as `text-tool-arg`
+ * / the destructive `text-[color-mix(...)]`) as a text-COLOR utility, so
+ * merging both through `cn()` in one pass drops whichever comes first --
+ * exactly the documented gotcha in `middleColumnLayout.ts` ("`text-ui` must
+ * never be merged through `cn()` in the same argument list as a `text-*`
+ * COLOR class"). Resolving the color first, then concatenating the already-
+ * merged result with the mono suffix as a separate string, sidesteps a
+ * second twMerge pass over both together.
+ *
+ * D25 §5.4: the 'prose' branch renders content like "Worked for 1s" /
+ * "2 files, 3 searches" -- numbers that refresh in place while a turn is
+ * running. `tabular-nums` there stops the digits from jittering the row
+ * width on every refresh; the 'ident' branch doesn't need it (paths/URLs/
+ * commands aren't refreshed numeric counters).
+ */
+export function toolRowArgClass(view: Pick<ToolRowView, 'failed' | 'argKind'>): string {
+  const colorClass = cn(
+    'min-w-0 truncate',
+    view.failed
+      ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'
+      : 'text-tool-arg'
+  );
+  return view.argKind === 'ident'
+    ? `${colorClass} font-mono text-code tracking-normal`
+    : `${colorClass} tabular-nums`;
 }

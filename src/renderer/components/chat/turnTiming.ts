@@ -94,6 +94,12 @@ export const THOUGHT_BRIEF_ARG = 'briefly';
 export interface ThoughtRowText {
   verb: string;
   arg?: string;
+  /**
+   * D25 §2.4: the "for Ns" / "briefly" arg is prose, not an identifier --
+   * always 'prose' when `arg` is set, absent when it isn't (bare "Thought" /
+   * "Thinking" has no arg to classify).
+   */
+  argKind?: 'prose';
 }
 
 /**
@@ -114,9 +120,13 @@ export function formatThoughtRow(input: {
   }
   const threshold = input.briefThresholdMs ?? THOUGHT_BRIEF_THRESHOLD_MS;
   if (input.durationMs < threshold) {
-    return { verb: THOUGHT_VERB, arg: THOUGHT_BRIEF_ARG };
+    return { verb: THOUGHT_VERB, arg: THOUGHT_BRIEF_ARG, argKind: 'prose' };
   }
-  return { verb: THOUGHT_VERB, arg: `for ${Math.round(input.durationMs / 1000)}s` };
+  return {
+    verb: THOUGHT_VERB,
+    arg: `for ${Math.round(input.durationMs / 1000)}s`,
+    argKind: 'prose',
+  };
 }
 
 export const WORKED_FOR_VERB = 'Worked for';
@@ -124,6 +134,8 @@ export const WORKED_FOR_VERB = 'Worked for';
 export interface WorkedForRowText {
   verb: string;
   arg: string;
+  /** D25 §2.4: the "Ns" arg is prose, not an identifier -- always set (arg is mandatory here). */
+  argKind: 'prose';
 }
 
 /**
@@ -134,7 +146,7 @@ export interface WorkedForRowText {
 export function formatWorkedForRow(latencyMs: number | null | undefined): WorkedForRowText | null {
   if (latencyMs == null) return null;
   const seconds = Math.max(1, Math.round(latencyMs / 1000));
-  return { verb: WORKED_FOR_VERB, arg: `${seconds}s` };
+  return { verb: WORKED_FOR_VERB, arg: `${seconds}s`, argKind: 'prose' };
 }
 
 const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);

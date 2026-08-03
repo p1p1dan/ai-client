@@ -672,7 +672,9 @@ export function RepositorySidebar({
               <Search className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">{t('No matching repositories')}</EmptyTitle>
+              <EmptyTitle className="text-base tracking-normal">
+                {t('No matching repositories')}
+              </EmptyTitle>
               <EmptyDescription>{t('Try a different search term')}</EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -682,7 +684,7 @@ export function RepositorySidebar({
               <FolderGit2 className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">{t('Add Repository')}</EmptyTitle>
+              <EmptyTitle className="text-base tracking-normal">{t('Add Repository')}</EmptyTitle>
               <EmptyDescription>{t('Add a repository to get started.')}</EmptyDescription>
             </EmptyHeader>
             <Button

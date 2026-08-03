@@ -42,19 +42,63 @@
   --text-2xs: 10px;
   --text-2xs--line-height: 14px;
   /* T-05: first real landing of the design-system.md:335/337 code/markdown tiers into @theme. */
-  --text-code: 0.8125rem;      /* 13px -- A07 --t-code */
+  --text-code: 0.8125rem;      /* 13px -- A07 --t-code; sized as optical compensation vs 15px sans body (D25 §2.4) */
   --text-markdown: 0.9375rem;  /* 15px -- A07 --t-md, tool rows share body copy's tier */
+  /*
+   * D25: --text-meta shares 13px with --text-code on purpose but is a separate
+   * token -- code's 13 is a mono-vs-sans optical compensation value, meta's 13
+   * is "secondary UI text". A future mono recalibration must not silently move
+   * every timestamp (D25 §3.1).
+   */
+  --text-meta: 0.8125rem;      /* 13px sans -- timestamps / statusline / meta rows */
+  --text-ui: 0.875rem;         /* 14px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
+  --text-title: 1.125rem;      /* 18px sans -- settings L1, the only tier above 15px */
+
+  /* D25 §3.4: reading column = 48 CJK chars @15px = Cursor reference; wide keeps the same -6.25% scaling */
+  --container-reading: 45rem;
+  --container-reading-wide: 60rem;
 
   /*
-   * All-monospace UI stack, mirroring OpenChamber's flexoki-{light,dark}.json
-   * config.fonts (sans / mono / heading are byte-identical upstream).
-   * --font-sans is the single entry point for the whole UI: Tailwind maps it to
-   * --default-font-family, which preflight applies to <html>; no rule in this
+   * D25 · Split font domains (supersedes D18 clause 3's all-mono stack).
+   * UI is proportional; --font-mono is reserved for code / terminal / in-content
+   * identifiers (see docs/design-system.md "字体族（分域）").
+   * --font-sans stays the single entry point for the whole UI: Tailwind maps it
+   * to --default-font-family, which preflight applies to <html>; no rule in this
    * repo sets font-family on <body>.
+   *
+   * Ordering rules baked into these two stacks:
+   *  1. Latin faces first, CJK faces after. Font matching is per-character:
+   *     Latin resolves on the first family that has the glyph, CJK falls
+   *     through to the first CJK family. Reversing this renders Latin in a
+   *     CJK face (the classic "Chinese-locale ugly Latin" bug).
+   *  2. Deliberately NO `system-ui`. On Chromium/Windows it resolves through
+   *     the *system locale*, so a zh-CN machine renders Latin in a CJK face --
+   *     the exact failure rule 1 exists to prevent.
+   *  3. Colour-emoji families sit BEFORE the generic terminator. Anything
+   *     after `sans-serif` / `monospace` is unreachable.
+   *  4. No bundled webfont: this repo has no @font-face and no font assets;
+   *     naming a non-system family here is a blank cheque (design-system red
+   *     line), and a bundled Latin face paired with a system CJK face reads
+   *     worse than the OS's own co-designed pair.
    */
-  --font-sans: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
-  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
-  --font-heading: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    sans-serif;
+
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "Menlo",
+    "Cascadia Mono", "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+    "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    monospace;
+
+  --font-heading: var(--font-sans);
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-marquee: marquee 4s linear infinite alternate;
@@ -201,6 +245,24 @@
 
   html {
     font-size: var(--font-size-base);
+    /*
+     * D25: when a weight tier is missing (Win10 Segoe UI has no 500; mono
+     * families ship 400/700 only) fall through CSS weight matching instead of
+     * rendering a smeared synthetic bold.
+     */
+    font-synthesis-weight: none;
+  }
+
+  /*
+   * D25 feature flag (A/B only, default is the split domains above). Setting
+   * data-font-domain="mono" on <html> restores the pre-D25 all-mono look.
+   * Deliberately a direct font-family declaration, NOT an override of
+   * --font-sans: Tailwind v4's --default-font-family may inline the theme
+   * value at build time, so a runtime var() override is not guaranteed to
+   * take effect. Keep for one release cycle, then delete.
+   */
+  html[data-font-domain="mono"] {
+    font-family: var(--font-mono);
   }
 
   body {

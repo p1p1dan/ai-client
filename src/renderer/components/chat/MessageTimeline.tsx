@@ -167,7 +167,7 @@ export function MessageTimeline({
 
   if (!sessionId) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center text-ui text-muted-foreground">
         Select a session to start chatting.
       </div>
     );
@@ -187,7 +187,7 @@ export function MessageTimeline({
           turns that hard clip into the app's established soft edge fade. */}
       <ScrollArea className="min-h-0 flex-1" scrollFade>
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
-            the documented 48rem/64rem reading width (T-22 spec §2.13). */}
+            the documented 45rem/60rem (D25 §3.4) reading width (T-22 spec §2.13). */}
         <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
           {/* T-05 (A07 `.tl` :846): 12px -> 20px turn spacing. */}
           <ReadingColumn className="space-y-5">
@@ -202,7 +202,7 @@ export function MessageTimeline({
               />
             )}
             {historyNotice.kind === 'empty' ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-ui text-muted-foreground">
                 No messages yet. Send a prompt to stream from the Agent Host.
               </p>
             ) : (
@@ -222,7 +222,7 @@ export function MessageTimeline({
             )}
             {status === 'failed' && (
               <div
-                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs"
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-meta"
                 role="alert"
               >
                 {/* T-30 P-06: only the title carries destructive weight — body
@@ -231,7 +231,9 @@ export function MessageTimeline({
                     already-red failed tool rows above it. */}
                 <p className="font-medium text-destructive">Session failed</p>
                 {lastError && (
-                  <p className="mt-1 break-words whitespace-pre-wrap text-muted-foreground">
+                  // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
+                  // content family as ChatComposer's destructive banner — mono.
+                  <p className="mt-1 break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
                     {lastError}
                   </p>
                 )}
@@ -242,7 +244,7 @@ export function MessageTimeline({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="mt-2 h-6 text-xs"
+                    className="mt-2 h-6 text-ui"
                     onClick={() => void stopActiveSession()}
                   >
                     Stop
@@ -325,7 +327,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
     <Alert variant={view.severity} role={view.severity === 'error' ? 'alert' : 'status'}>
       <Icon />
       <AlertTitle className="min-w-0 truncate">{view.title}</AlertTitle>
-      <AlertDescription className="gap-1 text-xs">
+      <AlertDescription className="gap-1 text-meta">
         <p className="break-words">{view.guidance}</p>
         <p>{HISTORY_ERROR_NON_FATAL_HINT}</p>
         {retryControl.hint && (
@@ -350,7 +352,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
               Details
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all">
+              <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-code">
                 {view.message}
               </pre>
             </CollapsibleContent>
@@ -448,7 +450,7 @@ function MessageBubble({
             {message.attachments.map((attachment, index) => (
               <span
                 key={`${message.id}-attachment-${index}`}
-                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 text-xs text-foreground"
+                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 text-meta text-foreground"
               >
                 {attachment.kind === 'image' ? (
                   <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
@@ -497,7 +499,7 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
       <AlertDescription>
         {message.blocks.map((block) =>
           block.type === 'text' ? (
-            <p key={block.id} className="whitespace-pre-wrap text-foreground">
+            <p key={block.id} className="whitespace-pre-wrap text-markdown text-foreground">
               {block.text}
             </p>
           ) : null
@@ -609,7 +611,7 @@ function AssistantMessage({
       })}
 
       {footerLine && (
-        <p className="flex flex-wrap items-center gap-2 text-code text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-2 text-meta tabular-nums text-muted-foreground">
           {footerLine}
         </p>
       )}
@@ -639,6 +641,8 @@ function buildWorkedForRow(message: ChatMessage, metadata?: MessageMetadata): To
     key: `${message.id}~worked-for`,
     verb: worked.verb,
     arg: worked.arg,
+    // D25 §2.4: the "Ns" duration is prose, not an identifier -- sans.
+    argKind: worked.argKind,
     running: false,
     failed: false,
     expandable: Boolean(stats),

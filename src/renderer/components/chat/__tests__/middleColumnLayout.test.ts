@@ -1,23 +1,57 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import {
+  COMPOSER_CONTROL_SIZE,
+  composerActionGroupClass,
+  composerAttachButtonClass,
+  composerBarClass,
   composerCardClass,
+  composerFollowHeightBreakdown,
+  composerModelBaseClass,
+  composerModelSuffixClass,
+  composerModelTriggerClass,
   composerPlaceholder,
+  composerPopupSide,
   composerTextareaClass,
   deriveMiddleColumnMode,
   type MiddleColumnMode,
   type MiddleColumnModeInput,
   mentionPopupPlacementClass,
   middleColumnHostClass,
+  queueStripWrapperClass,
   rememberSendAttempt,
   resolveIdleStatusText,
   roundActionButtonClass,
+  roundActionButtonKindClass,
   sessionStatusLineWrapperClass,
   shouldRenderTargetRow,
   shouldShowStatusLine,
+  TIMELINE_PADDING_CLASS,
   targetRowClass,
   targetRowSlots,
+  targetTriggerClass,
 } from '../middleColumnLayout';
+import { QUESTION_DOCK_WRAPPER_CLASS } from '../questionCard';
+
+/**
+ * T-30b2 assertion suite (Composer form alignment).
+ *
+ * Assertion ids below map to the design spec and its round-4 addendum. Three
+ * ids were superseded when the addendum settled the three open decisions:
+ * F-A5 → F-A15 (stricter superset), F-A8 → F-A20 (moved to the static-scan
+ * file), F-A14 → F-A22. The old ids are noted at each call site so the spec
+ * can still be walked line by line.
+ *
+ * Every assertion here is a pure function or a string: `.tsx` files have zero
+ * coverage under this repo's node-env vitest, so no assertion may require a
+ * render.
+ */
+
+/** Pull the numeric part of a spacing/size step out of a class string. */
+function stepValue(cls: string, pattern: RegExp): number | null {
+  const match = cls.match(pattern);
+  return match ? Number(match[1]) : null;
+}
 
 function baseInput(overrides: Partial<MiddleColumnModeInput> = {}): MiddleColumnModeInput {
   return {
@@ -134,10 +168,22 @@ describe('middleColumnHostClass', () => {
     expect(cls).toContain('pb-[9%]');
   });
 
-  it('docks the composer with 6px top / 14px bottom padding in session mode', () => {
+  // F-A10: the 8px gap above the composer card belongs to exactly one owner.
+  // The host used to add 6px on top of whichever upstream was present, so the
+  // real gap was 14px — two elements each contributing half a contract is the
+  // shape of bug this asserts against.
+  it('F-A10: adds no top padding of its own in session mode, leaving the 8px gap to its single upstream owner', () => {
     const cls = middleColumnHostClass('session');
-    expect(cls).toContain('pt-1.5');
+    expect(cls).toContain('pt-0');
+    expect(cls).not.toMatch(/(^|\s)pt-(?!0(\s|$))/);
     expect(cls).toContain('pb-3.5');
+  });
+
+  it('F-A10: each upstream of the composer card carries the 8px gap exactly once', () => {
+    expect(TIMELINE_PADDING_CLASS).toContain('pb-2');
+    expect(QUESTION_DOCK_WRAPPER_CLASS).toContain('pb-2');
+    expect(queueStripWrapperClass()).toContain('mb-2');
+    expect(queueStripWrapperClass()).not.toContain('mb-1.5');
   });
 
   it('keeps the same horizontal padding in both modes', () => {
@@ -156,37 +202,155 @@ describe('middleColumnHostClass', () => {
 });
 
 describe('composerCardClass', () => {
-  it('uses the --input border, --card fill and the 12px radius token in both modes', () => {
+  // F-A1: the resting edge is --border and focus steps it to --input, a
+  // neutral ΔL with zero chroma. The old pair rested on --input and focused to
+  // --ring (the brand orange) — a 2.5x heavier resting edge plus a fully
+  // chromatic focus state.
+  it('F-A1: rests on --border and focuses to --input, with no brand-orange focus edge in either mode', () => {
     for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
       const cls = composerCardClass(mode);
-      expect(cls).toContain('border-input');
+      expect(cls).toContain('border-border');
+      expect(cls).toContain('focus-within:border-input');
+      // A standalone `border-input` would be the RESTING edge; the
+      // `focus-within:`-prefixed one is the focus edge and must not match.
+      expect(cls).not.toMatch(/(^|\s)border-input(\s|$)/);
+      expect(cls).not.toContain('focus-within:border-ring');
       expect(cls).toContain('bg-card');
-      expect(cls).toContain('rounded-md');
     }
   });
 
-  it('stacks the empty card with symmetric 12/10px padding (round-2 visual fix: pt-2.5/pb-2 was a 2px asymmetry)', () => {
-    const cls = composerCardClass('empty');
-    expect(cls).toContain('px-3');
-    expect(cls).toContain('py-2.5');
-    expect(cls).not.toContain('pt-2.5');
-    expect(cls).not.toContain('pb-2');
+  // F-A7: A07 :1337 (zero shadows on buttons and cards), independently
+  // confirmed by measurement — the reference card's "float" comes from a
+  // slightly brighter fill plus a hairline edge, not from a shadow.
+  it('F-A7: carries no shadow in either mode', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      expect(composerCardClass(mode)).not.toContain('shadow-');
+    }
   });
 
-  it('rests the follow-up card at exactly 40px via min-h-10 (28px key + borders, centered)', () => {
+  it('gives both cards one symmetric 8px inset instead of a three-value padding', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      const cls = composerCardClass(mode);
+      expect(cls).toContain('p-2');
+      expect(cls).not.toMatch(/(^|\s)p[xytblrse]-/);
+    }
+  });
+
+  // F-A2: the T-28 blocker was a test that asserted a class was PRESENT and
+  // therefore could not notice that the height it composed was wrong. This
+  // crosses the spelled Tailwind step against the arithmetic breakdown, so a
+  // change to either one alone fails.
+  it('F-A2: rests the follow-up card at exactly 42px, cross-checking the class step against the arithmetic', () => {
     const cls = composerCardClass('session');
+    const breakdown = composerFollowHeightBreakdown();
+
+    expect(breakdown.border + breakdown.padding + breakdown.content).toBe(breakdown.total);
+    expect(breakdown.content).toBe(COMPOSER_CONTROL_SIZE);
+    expect(breakdown.total).toBe(42);
+
+    const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
+    expect(step).not.toBeNull();
+    expect((step as number) * 4).toBe(breakdown.total);
+
     expect(cls).toContain('flex');
     expect(cls).toContain('items-center');
-    expect(cls).toContain('px-2');
-    expect(cls).toContain('min-h-10');
-    expect(cls).toContain('py-1');
-    // py-1.5 rested at 42px (6+28+6 + 2px borders) — the review-caught regression.
-    expect(cls).not.toContain('py-1.5');
+    // The 40px contract came from "24 content + 8 + 8" with the two 1px
+    // borders left out of the sum.
+    expect(cls).not.toContain('min-h-10 ');
+  });
+
+  // F-A2's blind spot, same shape as the one F-A3 documents for `size-*`: the
+  // arithmetic above cross-checks the UNPREFIXED `min-h-10.5` and `p-2`, and a
+  // variant-prefixed sibling (`sm:min-h-11`, `focus-within:p-3`, …) belongs to
+  // a different tailwind-merge conflict group, so it does not displace them —
+  // it simply wins wherever it applies. Above the `sm` breakpoint (i.e. every
+  // real window) the card would rest at a different height while every
+  // assertion in this file still passed. Since exactly one height and one inset
+  // are contracted here, ANY variant-prefixed spacing/height token is the bug,
+  // and enumerating them is cheaper than guessing which one gets written.
+  it('F-A2: no variant-prefixed padding or height token can override the resting contract', () => {
+    const spacingBase = /^(?:p[xytbrlse]?|min-h)-/;
+    const offenders = composerCardClass('session')
+      .split(/\s+/)
+      .filter((token) => token.includes(':'))
+      .filter((token) => spacingBase.test(token.slice(token.lastIndexOf(':') + 1)));
+    expect(offenders).toEqual([]);
+  });
+
+  // F-A21: the resting card is a pill, but spelled as a FIXED half-height
+  // rather than `rounded-full`. `hasExtras` only covers one of the two ways
+  // this card grows; the other is the textarea itself (`field-sizing-content`
+  // between `min-h-6` and `max-h-14`), which soft-wraps on ordinary typing and
+  // walks the card 42 → 66 → 74px with no extras present. CSS clamps a 999px
+  // radius to half the box height, so `rounded-full` would ride that growth
+  // into the 33-37px arcs §5.3 calls the runaway shape — via a path the extras
+  // guard cannot observe. A constant is the only static answer available (the
+  // spec forbids runtime measurement), so the assertion's job is to keep the
+  // constant tied to the height it was derived from.
+  it('F-A21: the resting follow-up card carries the fixed half-height radius, not rounded-full', () => {
+    const cls = composerCardClass('session');
+    expect(cls).toContain('rounded-[21px]');
+    expect(cls).not.toContain('rounded-full');
+    expect(cls).not.toContain('rounded-md');
+  });
+
+  // The cross-check that makes the constant safe: 21 is not a free-standing
+  // number, it is `composerFollowHeightBreakdown().total / 2`. Editing the
+  // resting height without re-deriving the radius (or vice versa) fails here
+  // rather than shipping a card whose corners no longer meet in the middle.
+  it('F-A21: the radius is exactly half the asserted resting height, derived not guessed', () => {
+    const cls = composerCardClass('session');
+    const radius = cls.match(/rounded-\[(\d+)px\]/);
+    expect(radius).not.toBeNull();
+    expect(Number((radius as RegExpMatchArray)[1]) * 2).toBe(composerFollowHeightBreakdown().total);
+  });
+
+  it('F-A2b: extras present drop the follow-up card back to the 12px radius', () => {
+    const withExtras = composerCardClass('session', { hasExtras: true });
+    expect(withExtras).toContain('rounded-md');
+    expect(withExtras).not.toContain('rounded-full');
+    expect(withExtras).not.toContain('rounded-[21px]');
+
+    const withoutExtras = composerCardClass('session', { hasExtras: false });
+    expect(withoutExtras).toContain('rounded-[21px]');
+    expect(withoutExtras).not.toContain('rounded-md');
+    expect(withoutExtras).not.toContain('rounded-full');
+  });
+
+  it('keeps the empty card at the 12px radius, pill or not', () => {
+    expect(composerCardClass('empty')).toContain('rounded-md');
+    expect(composerCardClass('empty', { hasExtras: true })).toContain('rounded-md');
+    expect(composerCardClass('empty')).not.toContain('rounded-full');
   });
 
   it('never uses rounded-lg (16px in this repo) for the card', () => {
     expect(composerCardClass('empty')).not.toContain('rounded-lg');
     expect(composerCardClass('session')).not.toContain('rounded-lg');
+  });
+});
+
+describe('composerBarClass / composerActionGroupClass', () => {
+  it('offsets the empty-state bottom bar 6px below the textarea and gaps it at 8px', () => {
+    const cls = composerBarClass('empty');
+    expect(cls).toContain('mt-1.5');
+    expect(cls).toContain('gap-2');
+    expect(cls).toContain('items-center');
+  });
+
+  it('gives the docked single row the same 8px gap with no top offset', () => {
+    const cls = composerBarClass('session');
+    expect(cls).toContain('gap-2');
+    expect(cls).toContain('min-w-0');
+    expect(cls).not.toContain('mt-');
+  });
+
+  // The status line to the group's left is conditional now; without an auto
+  // margin the round key would slide left whenever status text is absent,
+  // breaking the "Stop replaces Send in place" rule.
+  it('pins the empty-state action group right even when the status line is absent', () => {
+    const cls = composerActionGroupClass();
+    expect(cls).toContain('ms-auto');
+    expect(cls).toContain('shrink-0');
   });
 });
 
@@ -404,95 +568,35 @@ describe('shouldRenderTargetRow', () => {
 });
 
 describe('shouldShowStatusLine', () => {
-  it('hides the resting status line in the follow-up card', () => {
-    expect(
-      shouldShowStatusLine({
-        mode: 'session',
-        sending: false,
-        reading: 0,
-        hasStatusError: false,
-        hasLargeHint: false,
-      })
-    ).toBe(false);
+  const resting = { sending: false, reading: 0, hasStatusError: false, hasLargeHint: false };
+
+  // F-A11: one truth table for both modes, 8 cases. The empty card used to
+  // return `true` unconditionally, parking a permanent `Ready · cwd: /home/…`
+  // line inside it — the reference has no such element, and A07 :1612 says
+  // nothing is permanently docked in the empty state.
+  //
+  // Note that dropping this line is only legitimate BECAUSE the cwd path it
+  // used to be the sole carrier of is now reachable from the target row's
+  // folder trigger tooltip. The compensation is asserted separately, in the
+  // component that renders it.
+  it('F-A11: hides the resting status line in BOTH modes', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      expect(shouldShowStatusLine({ mode, ...resting })).toBe(false);
+    }
   });
 
-  it('shows it while a send is in flight', () => {
-    expect(
-      shouldShowStatusLine({
-        mode: 'session',
-        sending: true,
-        reading: 0,
-        hasStatusError: false,
-        hasLargeHint: false,
-      })
-    ).toBe(true);
-  });
-
-  it('shows it while attachments are still being read', () => {
-    expect(
-      shouldShowStatusLine({
-        mode: 'session',
-        sending: false,
-        reading: 1,
-        hasStatusError: false,
-        hasLargeHint: false,
-      })
-    ).toBe(true);
-  });
-
-  // Round-4 point-check fix (defect B): REWRITES the previous "shows it
-  // whenever the composer is in an error state" assertion, which locked in
-  // the actual defect-B bug — session mode showing the full error text a
-  // SECOND time, inline next to the textarea, was what let a long error
-  // string's max-content flex-basis crush the textarea to 0px width. The
-  // destructive banner above the composer card is now the sole owner of
-  // error text in session mode.
-  it('round-4 fix (defect B): no longer shows it for an error state in session mode — the banner above the card owns error text exclusively now', () => {
-    expect(
-      shouldShowStatusLine({
-        mode: 'session',
-        sending: false,
-        reading: 0,
-        hasStatusError: true,
-        hasLargeHint: false,
-      })
-    ).toBe(false);
-  });
-
-  it('round-4 fix (defect B): still always shows it in empty mode, even with hasStatusError true — empty mode is unaffected by this fix', () => {
-    expect(
-      shouldShowStatusLine({
-        mode: 'empty',
-        sending: false,
-        reading: 0,
-        hasStatusError: true,
-        hasLargeHint: false,
-      })
-    ).toBe(true);
-  });
-
-  it('shows it for a large-attachment hint', () => {
-    expect(
-      shouldShowStatusLine({
-        mode: 'session',
-        sending: false,
-        reading: 0,
-        hasStatusError: false,
-        hasLargeHint: true,
-      })
-    ).toBe(true);
-  });
-
-  it('always shows it in empty mode', () => {
-    expect(
-      shouldShowStatusLine({
-        mode: 'empty',
-        sending: false,
-        reading: 0,
-        hasStatusError: false,
-        hasLargeHint: false,
-      })
-    ).toBe(true);
+  it('F-A11: any one of the four conditions shows it, in either mode', () => {
+    const triggers = [
+      { sending: true },
+      { reading: 1 },
+      { hasStatusError: true },
+      { hasLargeHint: true },
+    ];
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      for (const trigger of triggers) {
+        expect(shouldShowStatusLine({ mode, ...resting, ...trigger })).toBe(true);
+      }
+    }
   });
 });
 
@@ -507,8 +611,35 @@ describe('mentionPopupPlacementClass', () => {
 });
 
 describe('roundActionButtonClass', () => {
-  it('is a 28px box', () => {
-    expect(roundActionButtonClass()).toContain('size-7');
+  // F-A3: 28px came from A07 :1329 reading "the reference send key looks about
+  // 36px" and discounting it — the measured value is 24, so the input to that
+  // derivation was 25% off. 24 is this design system's own button tier.
+  it('F-A3: is a 24px box, cross-checked against the single control tier', () => {
+    const cls = roundActionButtonClass();
+    expect(cls).toContain('size-6');
+    expect(cls).not.toContain('size-7');
+
+    const step = stepValue(cls, /(?:^|\s)size-(\d+(?:\.\d+)?)(?:\s|$)/);
+    expect(step).not.toBeNull();
+    expect((step as number) * 4).toBe(COMPOSER_CONTROL_SIZE);
+  });
+
+  // `Button`'s `icon-sm` size is `size-8 sm:size-7`. A bare `size-6` only
+  // displaces the unprefixed half — tailwind-merge keeps `sm:size-7`, because a
+  // breakpoint-prefixed class is a different conflict group — so at `sm` and
+  // wider the leftover wins and the button renders 28px while the assertion
+  // above still passes. Asserting EVERY size step (responsive ones included)
+  // resolves to the same tier is what actually closes that gap; the deleted
+  // Model/Effort selectors each carried a hand-written patch for the identical
+  // leak, which is evidence it recurs rather than being a one-off.
+  it('F-A3: every responsive size step resolves to the same tier, so no breakpoint variant can leak the old 28px', () => {
+    const steps = [
+      ...roundActionButtonClass().matchAll(/(?:^|\s)(?:[a-z-]+:)*size-(\d+(?:\.\d+)?)(?=\s|$)/g),
+    ];
+    expect(steps.length).toBeGreaterThanOrEqual(2);
+    for (const step of steps) {
+      expect(Number(step[1]) * 4).toBe(COMPOSER_CONTROL_SIZE);
+    }
   });
 
   it('overrides both squircle radius pairs so the shape is a true circle', () => {
@@ -522,6 +653,159 @@ describe('roundActionButtonClass', () => {
     expect(cls).toContain('[corner-shape:round]');
     expect(cls).toContain('supports-[corner-shape:squircle]:rounded-full');
     expect(cls).toContain('supports-[corner-shape:squircle]:before:rounded-full');
+  });
+});
+
+// F-A22 (supersedes the earlier F-A14, which was written as conditional on a
+// decision that has since been taken).
+describe('roundActionButtonKindClass', () => {
+  it('F-A22: send and enqueue are the near-neutral dark fill, never the brand primary', () => {
+    for (const kind of ['send', 'enqueue'] as const) {
+      const cls = roundActionButtonKindClass(kind);
+      expect(cls).toContain('bg-foreground');
+      expect(cls).toContain('text-background');
+      expect(cls).not.toContain('bg-primary');
+    }
+  });
+
+  // Send and enqueue are deliberately IDENTICAL: enqueue is this turn's send
+  // with a delay, not a demoted variant, so a colour difference would invent a
+  // distinction the behaviour does not have. The spec's "all mutually
+  // distinct" is therefore read as distinctness across the three colour
+  // FAMILIES (dark / destructive / outline), which is what it protects
+  // against: send and stop collapsing into one colour.
+  it('F-A22: send and enqueue share one fill', () => {
+    expect(roundActionButtonKindClass('send')).toBe(roundActionButtonKindClass('enqueue'));
+  });
+
+  it('F-A22: stop keeps the destructive fill and the three families stay mutually distinct', () => {
+    const send = roundActionButtonKindClass('send');
+    const stop = roundActionButtonKindClass('stop');
+    const retry = roundActionButtonKindClass('retry');
+
+    expect(stop).toContain('destructive');
+    expect(send).not.toContain('destructive');
+
+    expect(stop).not.toBe(send);
+    expect(retry).not.toBe(send);
+    expect(retry).not.toBe(stop);
+  });
+});
+
+describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerClass', () => {
+  // F-A15 (supersedes F-A5). Every "not" below is a form `SelectTrigger`'s
+  // base class used to drag in, and together they are the largest single
+  // contributor to the "too round / too AI" reading: a bordered, shadowed,
+  // width-floored control whose radius CSS clamps into a full pill.
+  it('F-A15: the merged model trigger is a frameless ghost chip', () => {
+    const cls = composerModelTriggerClass();
+
+    expect(cls).toContain('rounded-sm');
+    expect(cls).toContain('px-2');
+    expect(cls).toContain('hover:bg-hover');
+    expect(cls).toContain('data-[popup-open]:bg-selection');
+
+    expect(cls).not.toContain('border');
+    expect(cls).not.toContain('shadow');
+    expect(cls).not.toContain('min-w-');
+    expect(cls).not.toContain('rounded-lg');
+    expect(cls).not.toContain('rounded-md');
+    expect(cls).not.toContain('rounded-full');
+  });
+
+  // F-A15's paired half: a control with no resting frame gives a keyboard user
+  // nothing to see unless focus produces the same shell hover does. The two
+  // must ship together or neither is trustworthy.
+  it('F-A15: hover and keyboard focus produce the same shell, always as a pair', () => {
+    const cls = composerModelTriggerClass();
+    expect(cls.includes('hover:bg-hover')).toBe(cls.includes('focus-visible:bg-hover'));
+    expect(cls).toContain('focus-visible:bg-hover');
+    // The outline sits on top of the fill rather than replacing it.
+    expect(cls).toContain('focus-visible:outline-accent-primary');
+  });
+
+  // The shell is a FILL, never a border: a hover border would add 2px to the
+  // box the moment the pointer arrives and make the whole row jump.
+  it('F-A15: the hover shell is a fill, not a border', () => {
+    expect(composerModelTriggerClass()).not.toContain('hover:border');
+    expect(targetTriggerClass()).not.toContain('hover:border');
+    expect(composerAttachButtonClass()).not.toContain('hover:border');
+  });
+
+  // F-A6: `rounded-md` (12px) on an `h-6` (24px) box is clamped by CSS to half
+  // the height, so the hover fill rendered as a full pill. A07 :736-753 always
+  // said `--r-sm`.
+  it('F-A6: the target-row trigger uses the 8px radius, not the clamped 12px one', () => {
+    for (const tone of ['default', 'muted'] as const) {
+      const cls = targetTriggerClass(tone);
+      expect(cls).toContain('rounded-sm');
+      expect(cls).not.toContain('rounded-md');
+    }
+    expect(targetTriggerClass('muted')).toContain('text-muted-foreground');
+    expect(targetTriggerClass()).not.toContain('text-muted-foreground');
+  });
+
+  // F-A18: one ghost chip form across the whole Composer — the model trigger
+  // sits inside the card and the target triggers sit on the row below it, and
+  // a divergence between them reads as two different control languages
+  // stacked on top of each other.
+  it('F-A18: the model trigger and the target trigger share one height and one inset', () => {
+    const heightPattern = /(?:^|\s)h-(\d+(?:\.\d+)?)(?:\s|$)/;
+    const insetPattern = /(?:^|\s)px-(\d+(?:\.\d+)?)(?:\s|$)/;
+
+    expect(stepValue(composerModelTriggerClass(), heightPattern)).toBe(
+      stepValue(targetTriggerClass(), heightPattern)
+    );
+    expect(stepValue(composerModelTriggerClass(), insetPattern)).toBe(
+      stepValue(targetTriggerClass(), insetPattern)
+    );
+  });
+
+  // F-A4: every Composer control derives from the one 24px tier. The "three
+  // height tiers in one bar" state (24 / 28 / 40) is what the coherence work
+  // is undoing, so a local edit that moves one control off the tier fails.
+  //
+  // `matchAll`, not `match` — the F-A3 pattern, applied to the rest of the bar.
+  // Checking only the FIRST size step in each string reproduced exactly the
+  // leak F-A3 exists to close: a `sm:`/`data-[…]:`-prefixed step sits in a
+  // different tailwind-merge conflict group, survives the unprefixed one, and
+  // wins wherever it applies — so the control renders off-tier while the
+  // assertion reads a passing 24 from the token before it. Every step in the
+  // string has to land on the tier, prefixed or not.
+  it('F-A4: attach button, model trigger and target trigger all sit on the single control tier', () => {
+    // Variant prefix = `name:` or `name-[arbitrary]:`; the bracket clause is
+    // what lets this see `data-[popup-open]:h-7` and
+    // `supports-[corner-shape:squircle]:size-7`, which a plain `[a-z-]+:`
+    // prefix would skip straight past.
+    const pattern = /(?:^|\s)(?:[\w-]+(?:\[[^\]]*\])?:)*(?:size|h)-(\d+(?:\.\d+)?)(?=\s|$)/g;
+    for (const cls of [
+      composerAttachButtonClass(),
+      composerModelTriggerClass(),
+      targetTriggerClass(),
+      targetTriggerClass('muted'),
+    ]) {
+      const steps = [...cls.matchAll(pattern)];
+      expect(steps.length).toBeGreaterThanOrEqual(1);
+      for (const step of steps) {
+        expect(Number(step[1]) * 4).toBe(COMPOSER_CONTROL_SIZE);
+      }
+    }
+  });
+
+  it('splits the merged label into a quiet model name and an emphasised effort suffix', () => {
+    expect(composerModelBaseClass()).toContain('text-muted-foreground');
+    expect(composerModelSuffixClass()).toContain('text-foreground');
+  });
+});
+
+describe('composerPopupSide', () => {
+  // Restates the same judgement `mentionPopupPlacementClass` encodes as
+  // classes, for primitives that position themselves — not a second rule.
+  it('opens upward from the docked card and downward from the centered one', () => {
+    expect(composerPopupSide('session')).toBe('top');
+    expect(composerPopupSide('empty')).toBe('bottom');
+    expect(mentionPopupPlacementClass('session')).toContain('bottom-full');
+    expect(mentionPopupPlacementClass('empty')).toContain('top-full');
   });
 });
 

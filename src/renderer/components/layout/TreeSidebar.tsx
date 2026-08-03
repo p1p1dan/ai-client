@@ -1308,7 +1308,7 @@ export function TreeSidebar({
               <FolderGit2 className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">{t('Add Repository')}</EmptyTitle>
+              <EmptyTitle className="text-base tracking-normal">{t('Add Repository')}</EmptyTitle>
               <EmptyDescription>{t('Add a repository to get started.')}</EmptyDescription>
             </EmptyHeader>
             <Button
@@ -1329,7 +1329,9 @@ export function TreeSidebar({
               <Search className="h-4.5 w-4.5" />
             </EmptyMedia>
             <EmptyHeader>
-              <EmptyTitle className="text-base">{t('No matching results')}</EmptyTitle>
+              <EmptyTitle className="text-base tracking-normal">
+                {t('No matching results')}
+              </EmptyTitle>
               <EmptyDescription>{t('Try a different search term')}</EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -1825,7 +1827,7 @@ function TempWorkspaceTreeItem({
             {t('Main')}
           </span>
           {hasActivity && (
-            <div className="relative z-10 flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground">
+            <div className="relative z-10 flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground tabular-nums">
               {activity.agentCount > 0 && (
                 <span className="flex items-center gap-0.5">
                   <Sparkles className="h-3 w-3" />
@@ -2068,7 +2070,7 @@ function WorktreeTreeItem({
           onPublish={handlePublish}
         />
         {/* Activity counts */}
-        <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground tabular-nums">
           {activity.agentCount > 0 && (
             <span className="flex items-center gap-0.5">
               <Sparkles className="h-3 w-3" />
