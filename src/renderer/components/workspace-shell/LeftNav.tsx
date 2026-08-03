@@ -41,7 +41,6 @@ import { useHostStatus } from '../chat/useHostStatus';
 import { useSessionModel } from '../chat/useSessionModel';
 import {
   canCreateSessionOnWorkspace,
-  isUsableWorkspace,
   shouldShowAddRepositoryEmptyState,
 } from './addRepositoryEntry';
 import {
@@ -49,6 +48,7 @@ import {
   deriveRecentRows,
   formatRelativeAge,
   RECENT_DEFAULT_LIMIT,
+  resolveNewSessionTarget,
   type SidebarSessionRow,
 } from './sidebarTree';
 
@@ -69,6 +69,13 @@ export function LeftNav({
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  // D1 (round-5): sidebar-local "which folder is the user targeting" state.
+  // T-26 deliberately removed the cross-cutting store `selectedWorkspaceId`
+  // (folder click is UI-only, e.g. expandedProjects above) — this stays local
+  // to LeftNav and only feeds the header "New" button's target resolution,
+  // it never becomes the source of truth for "where to run" (that's the
+  // Composer target bar, T-27).
+  const [focusedProjectId, setFocusedProjectId] = useState<string | null>(null);
   const [recentCollapsed, setRecentCollapsed] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED) === 'true';
@@ -111,6 +118,13 @@ export function LeftNav({
     const state = useChatSessionsStore.getState();
     const session = state.sessions.find((item) => item.id === sessionId);
     const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
+    // D1 (round-5): keep the sidebar's own "New" target in sync with whatever
+    // folder the just-selected session actually lives under. Grouped by the
+    // workspace's project, not `session.projectId`, matching buildSidebarFolders
+    // (a stale session.projectId must not point focus at the wrong folder).
+    if (workspace) {
+      setFocusedProjectId(workspace.projectId);
+    }
     const runtimeIdentity = session?.runtimeIdentity ?? persistedRuntimeIdentity;
     const hasTimeline = (state.messages[sessionId]?.length ?? 0) > 0;
     if (runtimeIdentity && workspace && !hasTimeline) {
@@ -122,27 +136,13 @@ export function LeftNav({
   };
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
-  // Selection of "where to run" moved to the Composer target bar (T-27); this
-  // is only a fallback target for the sidebar's own "New" / "+ new chat" affordances.
-  const effectiveWorkspaceId =
-    activeSession?.workspaceId ?? workspaces.find((ws) => isUsableWorkspace(ws))?.id ?? null;
 
   // T-24: the DEMO seed keeps `projects` non-empty on a fresh machine, so the
   // tree looks populated while every workspace path is empty. Gate on usable
   // workspaces instead, otherwise the add entry point is never reachable.
   const showAddRepositoryEmptyState = shouldShowAddRepositoryEmptyState(projects, workspaces);
-  // The fallback target can be a seed workspace with an empty path, and while
-  // the empty state is up the created session would render nowhere.
-  const canStartNewSession = canCreateSessionOnWorkspace(effectiveWorkspaceId, workspaces);
 
   const isProjectExpanded = (projectId: string) => expandedProjects[projectId] !== false;
-
-  const handleNewSession = () => {
-    if (!effectiveWorkspaceId || !canStartNewSession) {
-      return;
-    }
-    createChatSessionOnWorkspace(effectiveWorkspaceId);
-  };
 
   const toggleRecentCollapsed = () => {
     setRecentCollapsed((prev) => {
@@ -186,6 +186,36 @@ export function LeftNav({
   // its "+ new chat" row remains reachable.
   const visibleFolders = queryActive ? folders.filter((folder) => folder.rows.length > 0) : folders;
   const noMatches = queryActive && recent.rows.length === 0 && visibleFolders.length === 0;
+
+  // D1 (round-5): resolved fresh every render from the live `folders` list —
+  // never cache `newSessionTarget.workspaceId` itself — so a deleted focused
+  // project self-heals to the next fallback tier instead of pointing at
+  // nothing. `folders` is always the full project list — `visibleFolders`
+  // must NOT be used here: while a search is active it hides folders with no
+  // title hits, which would make the resolver skip the focused/active folder
+  // and silently create the chat somewhere else.
+  const newSessionTarget = resolveNewSessionTarget({
+    focusedProjectId,
+    folders,
+    activeSession,
+    workspaces,
+  });
+  const effectiveWorkspaceId = newSessionTarget.workspaceId;
+  // The fallback target can be a seed workspace with an empty path, and while
+  // the empty state is up the created session would render nowhere.
+  const canStartNewSession = canCreateSessionOnWorkspace(effectiveWorkspaceId, workspaces);
+  // No folder selection visual (T-26 decision holds) — the title is the only
+  // surface that makes the resolved target discoverable.
+  const newSessionButtonTitle = newSessionTarget.folderName
+    ? t('New session in {{folder}}', { folder: newSessionTarget.folderName })
+    : undefined;
+
+  const handleNewSession = () => {
+    if (!effectiveWorkspaceId || !canStartNewSession) {
+      return;
+    }
+    createChatSessionOnWorkspace(effectiveWorkspaceId);
+  };
 
   return (
     <aside
@@ -236,6 +266,7 @@ export function LeftNav({
                 size="xs"
                 className="h-6"
                 disabled={!canStartNewSession}
+                title={newSessionButtonTitle}
                 onClick={handleNewSession}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -407,12 +438,16 @@ export function LeftNav({
                           <button
                             type="button"
                             className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                            onClick={() =>
+                            onClick={() => {
+                              // D1 (round-5): a folder header click also targets
+                              // the global "New" button at this folder, in sync
+                              // with handleSelectSession's session-pick path.
+                              setFocusedProjectId(folder.projectId);
                               setExpandedProjects((prev) => ({
                                 ...prev,
                                 [folder.projectId]: !expanded,
-                              }))
-                            }
+                              }));
+                            }}
                           >
                             {expanded ? (
                               <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />

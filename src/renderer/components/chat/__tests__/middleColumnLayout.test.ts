@@ -344,6 +344,18 @@ describe('composerBarClass / composerActionGroupClass', () => {
     expect(cls).not.toContain('mt-');
   });
 
+  // Round-5 fix (diag:placeholder-align): the session bar aligns its
+  // children by top edge, not center. Every fixed-24px sibling (attach
+  // button, model trigger, action buttons) renders identically either way,
+  // but the textarea's natural height is uncertain (`field-sizing-content`),
+  // and its top-anchored text would sit above the other controls'
+  // centerline whenever that height exceeds 24px under `items-center`.
+  it('round-5 fix (diag:placeholder-align): aligns the docked row by top edge, not center', () => {
+    const cls = composerBarClass('session');
+    expect(cls).toContain('items-start');
+    expect(cls).not.toContain('items-center');
+  });
+
   // The status line to the group's left is conditional now; without an auto
   // margin the round key would slide left whenever status text is absent,
   // breaking the "Stop replaces Send in place" rule.
@@ -455,6 +467,20 @@ describe('sessionStatusLineWrapperClass (round-4 point-check fix, defect B; F5b 
     const cls = sessionStatusLineWrapperClass();
     expect(cls).toContain('max-w-48');
     expect(cls).not.toMatch(/max-w-\[/);
+  });
+
+  // Round-5 fix (diag:placeholder-align): the parent row switched to
+  // `items-start` (composerBarClass('session') above), so this slot can no
+  // longer rely on the row centering its shorter (13px text / 14px spinner)
+  // content against the textarea's 24px line. `h-6` pins its own box to the
+  // same 24px reference the other row children stand at; its pre-existing
+  // `items-center` (asserted above) then centers the spinner/text inside
+  // THIS fixed box, keeping the status line flush with the other controls
+  // instead of drifting top-flush.
+  it('round-5 fix (diag:placeholder-align): pins its own box to the shared 24px control height', () => {
+    const cls = sessionStatusLineWrapperClass();
+    expect(cls).toContain('h-6');
+    expect(cls).toContain('items-center');
   });
 });
 
@@ -730,6 +756,43 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
     expect(composerModelTriggerClass()).not.toContain('hover:border');
     expect(targetTriggerClass()).not.toContain('hover:border');
     expect(composerAttachButtonClass()).not.toContain('hover:border');
+  });
+
+  /**
+   * F-A23 (D4, round-5; continues the F-A series — F-A20..22 were taken by
+   * T-30 batch 2, so the number the work order penciled in as F-A20 lands
+   * here).
+   *
+   * ⊕ became a MENU trigger in D4. A menu trigger has three states, not two:
+   * hover, keyboard focus, and popup-open — and the third is the one that is
+   * easy to forget, because it only shows up once the pointer leaves the
+   * button for the popup it just opened. Missing it makes the open menu look
+   * detached from anything.
+   *
+   * Asserted as SAMENESS with the model trigger rather than as three literals:
+   * the two now sit side by side in the same card, so the failure that matters
+   * is divergence between them, not any particular class name.
+   */
+  it('F-A23: the ⊕ menu trigger carries the same three ghost states as the model trigger', () => {
+    const attach = composerAttachButtonClass();
+    const model = composerModelTriggerClass();
+
+    for (const state of [
+      'hover:bg-hover',
+      'focus-visible:bg-hover',
+      'data-[popup-open]:bg-selection',
+    ]) {
+      expect(model).toContain(state);
+      expect(attach).toContain(state);
+    }
+
+    // Same absences too — a bordered/shadowed ⊕ beside a frameless model chip
+    // is the "two different apps in one row" reading F-A15 exists to prevent.
+    expect(attach).not.toContain('border');
+    expect(attach).not.toContain('shadow');
+    // …and the disabled treatment the whole Composer shares.
+    expect(attach).toContain('disabled:pointer-events-none');
+    expect(attach).toContain('disabled:opacity-64');
   });
 
   // F-A6: `rounded-md` (12px) on an `h-6` (24px) box is clamped by CSS to half

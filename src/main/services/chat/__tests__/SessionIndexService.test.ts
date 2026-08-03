@@ -187,6 +187,58 @@ describe('SessionIndexService', () => {
     expect(entry.updatedAt).toBe(new Date('2026-01-03T00:00:00.000Z').getTime());
   });
 
+  /**
+   * R5 D2: `chat:registerSession` calls `recordCreated` eagerly at chat
+   * creation and the lazy first-send `chat:createSession` calls it again.
+   * Both orders must converge on ONE entry that never loses a title, an
+   * archived bit or a runtime identity earned in between.
+   */
+  it('recordCreated is idempotent: one entry, and title/archived/runtimeIdentity survive a re-record', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+
+    await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+    await service.rename('s1', 'User title');
+    await service.setArchived('s1', true);
+    service.handleRuntimeEvent({
+      type: 'session.created',
+      seq: 1,
+      sessionId: 's1',
+      timestamp: Date.now(),
+      payload: { runtimeIdentity: 'rt-1' },
+    });
+    await vi.waitFor(async () => {
+      expect((await service.list())[0]?.runtimeIdentity).toBe('rt-1');
+    });
+
+    // Second registration for the same session (the lazy send path).
+    await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', model: 'claude-x' });
+
+    const list = await service.list();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      sessionId: 's1',
+      workspacePath: '/ws/a',
+      title: 'User title',
+      archived: true,
+      runtimeIdentity: 'rt-1',
+      model: 'claude-x',
+    });
+  });
+
+  it('setArchived on a never-recorded session returns false and creates nothing', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+
+    await expect(service.setArchived('never-indexed', true)).resolves.toBe(false);
+    await expect(service.list()).resolves.toEqual([]);
+
+    // The renderer's ladder: register, then the retry sticks.
+    await service.recordCreated({ sessionId: 'never-indexed', workspacePath: '/ws/a' });
+    await expect(service.setArchived('never-indexed', true)).resolves.toBe(true);
+    expect((await service.list())[0]?.archived).toBe(true);
+  });
+
   it('lists sessions ordered by updatedAt descending', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));

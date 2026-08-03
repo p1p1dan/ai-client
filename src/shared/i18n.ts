@@ -385,6 +385,8 @@ export const zhTranslations: Record<string, string> = {
   'Search worktrees': '搜索 worktree',
   'Search sessions': '搜索 Session',
   'New chat': '新建对话',
+  // D1 (round-5): header "New" button title, dynamic target discoverability.
+  'New session in {{folder}}': '在 {{folder}} 中新建会话',
   'Show more': '显示更多',
   'Show less': '收起',
   'Filter sessions': '筛选会话',
@@ -659,6 +661,7 @@ export const zhTranslations: Record<string, string> = {
   'Editor shortcuts': '编辑器快捷键',
   'Show Symbols': '显示符号列表',
   'Select file': '选择文件',
+  'Select files': '选择文件',
   'Select folder': '选择文件夹',
   'Select a file from the file tree to begin editing': '从左侧文件树中选择文件以开始编辑',
   'Skipped {{dirs}} (not in .gitignore)': '已跳过 {{dirs}}（未添加到 .gitignore）',

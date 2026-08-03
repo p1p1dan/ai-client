@@ -47,6 +47,15 @@ export function createChatSessionOnWorkspace(
     lastError: null,
   });
 
+  // R5 round-2 (A3): creating a chat writes NOTHING to `session-index.json`.
+  // D2 briefly registered the entry eagerly here so Archive would find one;
+  // that was reverted because every "New" click then left a permanent,
+  // empty-titled row in the persisted index — occupying a Recent slot after a
+  // restart with no cleanup path, while "a never-sent chat does not survive a
+  // restart" is the original design. Indexing stays lazy (the first send's
+  // `chat.createSession` → `recordCreated`), and Archive's own
+  // register-then-retry ladder covers a never-sent chat on demand.
+
   return sessionId;
 }
 

@@ -6,6 +6,8 @@ import type {
   AgentCliInfo,
   AgentMetadata,
   AppCloseRequestPayload,
+  AttachmentReadOptions,
+  AttachmentReadResult,
   ClaudeProject,
   ClaudeSessionMeta,
   CloneProgress,
@@ -353,6 +355,14 @@ const electronAPI = {
   file: {
     read: (filePath: string): Promise<FileReadResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.FILE_READ, filePath),
+    // D4: raw bytes for one user-picked Composer attachment. Only paths the
+    // main process just handed out via `dialog.openFiles` are served, once
+    // each; everything else comes back `{ ok: false, reason: 'not-allowed' }`.
+    readAttachment: (
+      filePath: string,
+      options: AttachmentReadOptions
+    ): Promise<AttachmentReadResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FILE_READ_ATTACHMENT, filePath, options),
     write: (filePath: string, content: string, encoding?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.FILE_WRITE, filePath, content, encoding),
     saveToTemp: (
@@ -542,6 +552,11 @@ const electronAPI = {
     openFile: (options?: {
       filters?: Array<{ name: string; extensions: string[] }>;
     }): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_FILE, options),
+    // D4: multi-select. Resolves to `[]` when the user cancels, and picking
+    // files is what grants the renderer permission to read exactly those.
+    openFiles: (options?: {
+      filters?: Array<{ name: string; extensions: string[] }>;
+    }): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_FILES, options),
   },
 
   // Remote connections
@@ -1343,6 +1358,15 @@ const electronAPI = {
       effort?: SessionEffortLevel;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
+    /**
+     * R5 D2 — index-only registration (no Agent Host start). Resolves false
+     * when the index write failed; never rejects for that reason.
+     */
+    registerSession: (payload: {
+      sessionId: string;
+      workspacePath: string;
+      model?: string;
+    }): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_REGISTER_SESSION, payload),
     resumeSession: (payload: {
       sessionId: string;
       runtimeIdentity: string;

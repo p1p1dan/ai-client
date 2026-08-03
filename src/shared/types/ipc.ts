@@ -89,6 +89,9 @@ export const IPC_CHANNELS = {
 
   // Files
   FILE_READ: 'file:read',
+  // D4: raw bytes for ONE user-picked attachment (path -> bytes). Distinct
+  // from FILE_READ, which decodes text and returns '' for binary content.
+  FILE_READ_ATTACHMENT: 'file:readAttachment',
   FILE_WRITE: 'file:write',
   FILE_SAVE_TO_TEMP: 'file:save-to-temp',
   FILE_CREATE: 'file:create',
@@ -166,6 +169,9 @@ export const IPC_CHANNELS = {
   // Dialog
   DIALOG_OPEN_DIRECTORY: 'dialog:openDirectory',
   DIALOG_OPEN_FILE: 'dialog:openFile',
+  // D4: multi-select sibling of DIALOG_OPEN_FILE. Returns string[] ([] on
+  // cancel) and issues the one-shot read allowlist for the picked paths.
+  DIALOG_OPEN_FILES: 'dialog:openFiles',
 
   // Remote connections
   REMOTE_PROFILE_LIST: 'remote:profile:list',
@@ -345,6 +351,13 @@ export const IPC_CHANNELS = {
   CHAT_ENSURE_HOST: 'chat:ensureHost',
   CHAT_GET_HOST_STATUS: 'chat:getHostStatus',
   CHAT_CREATE_SESSION: 'chat:createSession',
+  /**
+   * Index-only session registration (R5 D2): records the session in
+   * `session-index.json` WITHOUT starting the Agent Host or creating a
+   * runtime session. Lets a freshly created "New" chat be renamed/archived
+   * before its first message ever reaches the Host.
+   */
+  CHAT_REGISTER_SESSION: 'chat:registerSession',
   CHAT_RESUME_SESSION: 'chat:resumeSession',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',

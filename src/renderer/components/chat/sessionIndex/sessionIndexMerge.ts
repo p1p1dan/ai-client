@@ -121,8 +121,16 @@ export function mergeSessionIndex(
     });
   }
 
-  // Keep live-only sessions (created in this app run, not yet persisted) so a
-  // fresh "New" session doesn't vanish between index refreshes.
+  // Safety net for live-only sessions (created in this app run, not yet
+  // persisted): keep them so a fresh "New" session cannot vanish between
+  // index refreshes. A never-sent chat has no index entry at all (R5 round-2
+  // reverted the eager `chat:registerSession` on create), so this branch is
+  // the ONLY thing keeping such a row visible until its first send.
+  //
+  // It does not block removal: Archive/Close drop the session from
+  // `prevSessions` before the next refresh, and the run-scoped dismissal list
+  // (`dismissedSessions.ts`) is applied on top, so a row the user removed is
+  // never resurrected here.
   for (const session of prevSessions) {
     if (seenIds.has(session.id)) continue;
     next.push(session);

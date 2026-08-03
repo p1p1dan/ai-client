@@ -167,6 +167,70 @@ export function buildSidebarFolders(input: SidebarTreeInput): SidebarFolder[] {
   }));
 }
 
+export interface NewSessionTarget {
+  workspaceId: string | null;
+  /** Folder name for the resolved target — drives the header "New" button's
+   * dynamic title (D1, round-5): T-26 removed folder selection state, so the
+   * title is the only surface left that makes the implicit target discoverable. */
+  folderName: string | null;
+}
+
+/**
+ * Resolves which workspace the sidebar's own "New" affordances (header
+ * button) should target, and which folder that resolves to.
+ *
+ * Resolution order (round-5 D1 ruling): the folder the user last focused
+ * (header click or a session pick inside it) → the active session's
+ * workspace (pre-existing fallback) → the first usable workspace that belongs
+ * to a folder actually on screen (pre-existing fallback, tightened below).
+ *
+ * `folders` must be freshly derived (e.g. from `buildSidebarFolders`) on
+ * every call, never cached alongside a stored `focusedProjectId` — if the
+ * focused project was since deleted it simply won't be found here and
+ * resolution falls through to the next tier on its own (self-healing).
+ *
+ * R5 round-2 (B1) tightened two things:
+ *
+ * - A focused folder that resolves to no usable workspace now returns a null
+ *   target (disabled button) instead of falling through. Falling through would
+ *   create the chat in a *different* folder than the one the button's title
+ *   names — a silent redirect, which is exactly what D1 set out to remove.
+ * - Every fallback target is verified alive: the workspace must still exist,
+ *   be usable (non-empty path), and its project must still have a folder row.
+ *   A stale `activeSession.workspaceId` (workspace deleted, or its project
+ *   removed) otherwise resolved to a target that renders nowhere.
+ */
+export function resolveNewSessionTarget(input: {
+  focusedProjectId: string | null;
+  folders: readonly SidebarFolder[];
+  activeSession: Pick<ChatSession, 'workspaceId'> | undefined;
+  workspaces: readonly ChatWorkspace[];
+}): NewSessionTarget {
+  const focusedFolder = input.folders.find((folder) => folder.projectId === input.focusedProjectId);
+  if (focusedFolder) {
+    // Null `newSessionWorkspaceId` is a deliberate disabled state, not a miss.
+    return { workspaceId: focusedFolder.newSessionWorkspaceId, folderName: focusedFolder.name };
+  }
+
+  const folderByProject = new Map(
+    input.folders.map((folder) => [folder.projectId, folder] as const)
+  );
+  const isReachable = (ws: ChatWorkspace): boolean =>
+    isUsableWorkspace(ws) && folderByProject.has(ws.projectId);
+
+  const active = input.activeSession
+    ? input.workspaces.find((ws) => ws.id === input.activeSession?.workspaceId)
+    : undefined;
+  const target = active && isReachable(active) ? active : input.workspaces.find(isReachable);
+  if (!target) {
+    return { workspaceId: null, folderName: null };
+  }
+  return {
+    workspaceId: target.id,
+    folderName: folderByProject.get(target.projectId)?.name ?? null,
+  };
+}
+
 export interface RecentRowsInput {
   sessions: readonly ChatSession[];
   workspaces: readonly ChatWorkspace[];

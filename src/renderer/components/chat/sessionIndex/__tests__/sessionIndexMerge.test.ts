@@ -88,6 +88,22 @@ describe('mergeSessionIndex (T-02)', () => {
     expect(sessions.map((s) => s.id).sort()).toEqual(['fresh-new', 's1']);
   });
 
+  // R5 D2: the live-only keep-alive is a safety net, not a removal blocker.
+  it('does not resurrect a live-only session the renderer removed (Archive fallback / Close)', () => {
+    const live = [session('kept')];
+    const entries = [entry('kept')];
+    // 'removed' is in neither list — the merge must not invent it back.
+    const { sessions } = mergeSessionIndex(live, entries, { workspaces });
+    expect(sessions.map((s) => s.id)).toEqual(['kept']);
+  });
+
+  it('drops the live row as soon as its entry carries the archived bit', () => {
+    const live = [session('fresh', { status: 'idle' })];
+    const entries = [entry('fresh', { archived: true })];
+    const { sessions } = mergeSessionIndex(live, entries, { workspaces });
+    expect(sessions).toEqual([]);
+  });
+
   it('recentSessionIdsFromIndex: updatedAt desc, dedup, limit', () => {
     const sessions = [
       session('a', { updatedAt: 1 }),

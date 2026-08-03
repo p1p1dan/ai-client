@@ -6,6 +6,10 @@ import type {
 } from '@shared/types/runtimeEvents';
 import { HISTORY_MESSAGE_ID_PREFIX, type HistoryMessage } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
+// Leaf module (no imports of its own) on purpose: importing the hook module
+// `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
+// store. Read by the `sendMessage` ghost-session guard below.
+import { isSessionDismissed } from '@/components/chat/sessionIndex/dismissedSessions';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
 
@@ -790,6 +794,17 @@ const RUNTIME_EVENT_FLUSH_MS = 16;
 /** Hidden-window timer throttling can delay the flush; cap the backlog. */
 const RUNTIME_EVENT_MAX_QUEUE = 256;
 
+/**
+ * R5 round-2 (A5): TOCTOU check for `sendMessage`'s post-await guards. Both
+ * halves matter — the row can be gone from `sessions` (Close / Archive removed
+ * it) and a row that a concurrent index refresh re-added is still dismissed for
+ * the rest of this run. Must be called with a FRESH `get()`, never a snapshot
+ * taken before the await.
+ */
+function isSessionStillLive(state: ChatSessionsState, sessionId: string): boolean {
+  return state.sessions.some((item) => item.id === sessionId) && !isSessionDismissed(sessionId);
+}
+
 function isBusyStatus(status: SessionRuntimeStatus): boolean {
   return (
     status === 'starting' ||
@@ -818,6 +833,23 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     set({ activeSessionId: sessionId });
   },
 
+  /**
+   * R5 round-2 (A5) — approved additive change to this red-line store.
+   *
+   * Ghost session: `sendMessage` crosses two awaits (`ensureHost`,
+   * `createSession`) before it sends. The user can Close or Archive the active
+   * session inside that window — the row and every per-session leftover are
+   * gone from the store, but this closure still holds `activeSessionId` from
+   * before the await and happily asks the Host to create and drive it. The
+   * result is a live runtime with no row to reach or stop it, plus an error
+   * message written into a deleted session's bucket.
+   *
+   * The fix is guard clauses only: after each await, re-read the store and
+   * confirm the session still exists and was not dismissed this run. Every
+   * existing path keeps its exact semantics; the guards can only fire in a
+   * state that had no defined behaviour before. If `createSession` already
+   * went out, the runtime is reaped fire-and-forget so nothing is left running.
+   */
   sendMessage: async (text, attachments) => {
     const trimmed = text.trim();
     const state = get();
@@ -840,12 +872,28 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
 
     try {
       await window.electronAPI.chat.ensureHost();
+      // A5 guard 1: nothing has been created Host-side yet, so a silent abort
+      // is the whole remedy. No `lastError`: the user removed this session on
+      // purpose and there is no longer a Composer bound to it to show it in.
+      if (!isSessionStillLive(get(), activeSessionId)) {
+        return;
+      }
 
       if (!get().hostBoundSessionIds.includes(activeSessionId)) {
         await window.electronAPI.chat.createSession({
           sessionId: activeSessionId,
           workspacePath: workspace.path,
         });
+        // A5 guard 2: the session went away while `createSession` was in
+        // flight. The Host now holds a runtime the UI can never reach — reap
+        // it fire-and-forget (best effort; a failed close is not worse than
+        // the leak it tries to avoid) and never record the binding.
+        if (!isSessionStillLive(get(), activeSessionId)) {
+          void Promise.resolve(
+            window.electronAPI.chat.closeSession({ sessionId: activeSessionId })
+          ).catch(() => {});
+          return;
+        }
         set((prev) => ({
           hostBoundSessionIds: prev.hostBoundSessionIds.includes(activeSessionId)
             ? prev.hostBoundSessionIds

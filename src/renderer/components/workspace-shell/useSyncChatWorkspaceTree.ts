@@ -7,6 +7,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { TEMP_REPO_ID } from '@/App/constants';
 import { ensureRepositoryId, STORAGE_KEYS } from '@/App/storage';
+import {
+  dropDismissedSessions,
+  hasDismissedSessions,
+} from '@/components/chat/sessionIndex/dismissedSessions';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
@@ -74,18 +78,27 @@ function seedFallbackWorkspace(
   };
 }
 
+export interface RebindResult {
+  sessions: ChatSession[];
+  hostBoundSessionIds: string[];
+  activeSessionId: string | null;
+  /** True when a Live session was auto-created by this pass (A4 gate). */
+  seeded: boolean;
+}
+
 function rebindSessionsToTree(
   sessions: ChatSession[],
   workspaces: ChatWorkspace[],
   preferredWorkspaceId: string | null,
-  hostBoundSessionIds: string[]
-): { sessions: ChatSession[]; hostBoundSessionIds: string[]; activeSessionId: string | null } {
+  hostBoundSessionIds: string[],
+  allowSeed: boolean
+): RebindResult {
   const workspaceById = new Map(workspaces.map((ws) => [ws.id, ws]));
   const preferred =
     (preferredWorkspaceId ? workspaceById.get(preferredWorkspaceId) : undefined) ?? workspaces[0];
 
   if (!preferred) {
-    return { sessions: [], hostBoundSessionIds: [], activeSessionId: null };
+    return { sessions: [], hostBoundSessionIds: [], activeSessionId: null, seeded: false };
   }
 
   const bound = new Set(hostBoundSessionIds);
@@ -123,8 +136,10 @@ function rebindSessionsToTree(
   const hasLive = remapped.some(
     (session) => session.title === LIVE_SESSION_TITLE || session.id.startsWith('session-live')
   );
-  if (!hasLive) {
+  let seeded = false;
+  if (!hasLive && allowSeed) {
     remapped.unshift(createLiveSession(preferred));
+    seeded = true;
   }
 
   // Retire the fixed DEMO id `session-live` — Host rejects duplicate createSession.
@@ -151,6 +166,80 @@ function rebindSessionsToTree(
     sessions: remapped,
     hostBoundSessionIds: [...nextBound],
     activeSessionId,
+    seeded,
+  };
+}
+
+/** Store slice the tree sync reads. */
+export interface TreeSyncPrevState {
+  sessions: ChatSession[];
+  hostBoundSessionIds: string[];
+  activeSessionId: string | null;
+  recentSessionIds: string[];
+}
+
+/** Session-shaped part of the store patch the tree sync writes. */
+export interface TreeSyncPatch {
+  sessions: ChatSession[];
+  hostBoundSessionIds: string[];
+  activeSessionId: string | null;
+  recentSessionIds: string[];
+}
+
+/**
+ * The session half of a tree-sync write, as a pure function so vitest can
+ * cover the two rules that only exist because of user actions (R5 round-2,
+ * A4) — inside the effect body they were unreachable:
+ *
+ * 1. Auto-seeding a Live session is a first-run convenience, not a repair. It
+ *    happens only when the user has never removed a row in this run AND the
+ *    session list is empty. Otherwise a later tree signature change (a worktree
+ *    list arriving, a repo added) would undo a deliberate Close by putting a
+ *    fresh session back into an emptied nav.
+ * 2. Rows dismissed in this run are filtered out of the write-back, and
+ *    `activeSessionId` is only overwritten when the previous one no longer
+ *    exists (or a seed just happened). The removal handover in
+ *    `removeSessionRow` already picked the right neighbour; re-deriving
+ *    "first session in the preferred workspace" here would silently undo it.
+ */
+export function resolveTreeSyncPatch(input: {
+  prev: TreeSyncPrevState;
+  workspaces: ChatWorkspace[];
+  preferredWorkspaceId: string | null;
+}): TreeSyncPatch {
+  const { prev } = input;
+  const allowSeed = prev.sessions.length === 0 && !hasDismissedSessions();
+  const rebound = rebindSessionsToTree(
+    prev.sessions,
+    input.workspaces,
+    input.preferredWorkspaceId,
+    prev.hostBoundSessionIds,
+    allowSeed
+  );
+
+  const sessions = dropDismissedSessions(rebound.sessions);
+  const exists = (id: string | null): boolean =>
+    id != null && sessions.some((session) => session.id === id);
+
+  const activeSessionId = exists(prev.activeSessionId)
+    ? prev.activeSessionId
+    : exists(rebound.activeSessionId)
+      ? rebound.activeSessionId
+      : (sessions[0]?.id ?? null);
+
+  const recentSessionIds = [
+    ...(activeSessionId ? [activeSessionId] : []),
+    ...prev.recentSessionIds,
+    ...sessions.map((session) => session.id),
+  ]
+    .filter((id, index, arr) => arr.indexOf(id) === index && exists(id))
+    .slice(0, 20);
+
+  return {
+    sessions,
+    hostBoundSessionIds: rebound.hostBoundSessionIds,
+    activeSessionId,
+    recentSessionIds,
   };
 }
 
@@ -236,29 +325,14 @@ export function useSyncChatWorkspaceTree({
     }
     signatureRef.current = signature;
 
-    const prev = useChatSessionsStore.getState();
-    const rebound = rebindSessionsToTree(
-      prev.sessions,
-      tree.workspaces,
-      preferredWorkspaceId,
-      prev.hostBoundSessionIds
-    );
-
-    const recentSessionIds = [
-      ...(rebound.activeSessionId ? [rebound.activeSessionId] : []),
-      ...prev.recentSessionIds,
-      ...rebound.sessions.map((session) => session.id),
-    ].filter(
-      (id, index, arr) => arr.indexOf(id) === index && rebound.sessions.some((s) => s.id === id)
-    );
-
     useChatSessionsStore.setState({
       projects: tree.projects,
       workspaces: tree.workspaces,
-      sessions: rebound.sessions,
-      hostBoundSessionIds: rebound.hostBoundSessionIds,
-      activeSessionId: rebound.activeSessionId ?? prev.activeSessionId,
-      recentSessionIds: recentSessionIds.slice(0, 20),
+      ...resolveTreeSyncPatch({
+        prev: useChatSessionsStore.getState(),
+        workspaces: tree.workspaces,
+        preferredWorkspaceId,
+      }),
     });
   }, [tree.projects, tree.workspaces, preferredWorkspaceId]);
 }

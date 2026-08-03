@@ -1,3 +1,4 @@
+import { MAX_ATTACHMENT_READ_BYTES } from '@shared/types/attachmentIo';
 import { describe, expect, it } from 'vitest';
 import {
   type AttachmentLimits,
@@ -112,6 +113,29 @@ describe('admitAttachment (T-18 A-01..A-08)', () => {
   it('[A-10] falls back to a readable label for unnamed clipboard bitmaps', () => {
     const result = admitAttachment([], { name: '', byteLength: 0, kind: 'image' });
     expect(result.ok === false && result.message).toContain('Pasted item');
+  });
+});
+
+/**
+ * D4 (round-5) mirror lock — same technique as HOST_STALL_TIMEOUT_MS below.
+ *
+ * The main process cannot import these renderer budgets (they are renderer
+ * code, and main must not depend on the Composer), so it carries ONE number of
+ * its own: a hard ceiling on a single attachment read. If the two ever drift,
+ * the failure is silent and asymmetric — a raised image budget would be
+ * refused by main with a size the renderer never expected to be a problem, and
+ * a lowered one would let main read more than the renderer will ever accept.
+ */
+describe('MAX_ATTACHMENT_READ_BYTES mirror (D4)', () => {
+  it('the main-process read ceiling equals the renderer image budget', () => {
+    expect(MAX_ATTACHMENT_READ_BYTES).toBe(DEFAULT_ATTACHMENT_LIMITS.maxImageBytes);
+  });
+
+  // The ceiling is the LARGEST single thing that may ever be read, so no tier
+  // may sit above it — a text budget over the ceiling would be unreachable.
+  it('no per-attachment tier sits above the ceiling', () => {
+    expect(DEFAULT_ATTACHMENT_LIMITS.maxTextBytes).toBeLessThanOrEqual(MAX_ATTACHMENT_READ_BYTES);
+    expect(DEFAULT_ATTACHMENT_LIMITS.maxImageBytes).toBeLessThanOrEqual(MAX_ATTACHMENT_READ_BYTES);
   });
 });
 

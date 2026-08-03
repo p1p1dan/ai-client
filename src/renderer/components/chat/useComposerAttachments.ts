@@ -23,9 +23,33 @@ import {
 } from './attachments';
 import { planPaste } from './clipboardAttachments';
 import { readImageDimensions } from './imageDimensions';
+import {
+  type PickedBatchOutcome,
+  readPickedBatch,
+  toArrayBuffer,
+  unreadableMessage,
+  unsupportedKindMessage,
+} from './pickedAttachments';
 
 /** Clipboard bitmaps often arrive without a usable file name. */
 const UNNAMED_PASTE = 'Pasted image';
+
+/**
+ * D4: the structural minimum `ingestFiles` needs.
+ *
+ * A DOM `File` satisfies this by construction, so the paste path is unchanged
+ * — the widening exists so bytes that arrived over IPC (a picked path) can
+ * enter the SAME pipeline instead of a parallel one. Everything downstream of
+ * this interface (budgets, image-header parse, base64, the folded notice) is
+ * therefore shared by both entry points rather than reimplemented for one.
+ */
+export interface AttachmentSource {
+  name: string;
+  /** Media type, or '' when unknown — `detectAttachmentKind` falls back to the name. */
+  type: string;
+  size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
 
 let draftSeq = 0;
 
@@ -41,6 +65,12 @@ export interface ComposerAttachments {
   reading: number;
   totalBytes: number;
   handlePaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  /**
+   * D4: ingest files the user picked in the native dialog (⊕ → Attach files).
+   * Same pipeline, same budgets and same notice as a paste — only the bytes
+   * arrive over IPC instead of off the clipboard.
+   */
+  ingestPickedPaths: (paths: readonly string[]) => Promise<void>;
   removeDraft: (id: string) => void;
   /** T-19: bulk remove by id — the commit-point consumption hook uses this to
    *  drop exactly the drafts a turn just carried off (see ChatComposer's
@@ -81,15 +111,21 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
   }, []);
 
   const ingestFiles = useCallback(
-    async (files: File[]) => {
+    /**
+     * @param preSkipped D4: reasons produced BEFORE the bytes existed (a
+     * picked path that could never be read). They join this batch's own skips
+     * so the user still gets ONE folded notice for one gesture, rather than a
+     * second Alert replacing the first.
+     */
+    async (files: AttachmentSource[], preSkipped: readonly string[] = []) => {
       setReading((count) => count + files.length);
-      const skipped: string[] = [];
+      const skipped: string[] = [...preSkipped];
       try {
         for (const file of files) {
           const label = file.name || UNNAMED_PASTE;
           const detected = detectAttachmentKind(file.name, file.type);
           if (!detected) {
-            skipped.push(`"${label}" is not an image or text file — skipped.`);
+            skipped.push(unsupportedKindMessage(label));
             continue;
           }
 
@@ -110,7 +146,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
           try {
             bytes = new Uint8Array(await file.arrayBuffer());
           } catch {
-            skipped.push(`Could not read "${label}" — skipped.`);
+            skipped.push(unreadableMessage(label));
             continue;
           }
 
@@ -176,11 +212,79 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
         }
       } finally {
         setReading((count) => Math.max(0, count - files.length));
+        // In `finally` (round-5 C2), not after the block: the notice is the
+        // only report this batch ever makes, so an unexpected throw halfway
+        // through must still publish the skips collected so far instead of
+        // leaving the user with a gesture that silently produced nothing.
+        // null on a clean paste, which also clears the previous notice.
+        setNotice(formatSkipNotice(skipped));
       }
-      // null on a clean paste, which also clears the previous notice.
-      setNotice(formatSkipNotice(skipped));
     },
     [applyDrafts]
+  );
+
+  /**
+   * D4: the ⊕ menu's entry point — paths the user just picked in the native
+   * dialog, read one at a time through `file:readAttachment`.
+   *
+   * The loop itself lives in `readPickedBatch` (pure, with the read injected),
+   * which is where the serial ordering, the pre-read count budget and the
+   * per-file failure isolation are specified and tested. What is left here is
+   * the two things only a hook can do:
+   *
+   *  - **`reading` covers the IPC leg.** Send is gated on `reading > 0`, so the
+   *    counter goes up before the first `invoke` and only comes down as the
+   *    bytes are handed to `ingestFiles`, which immediately re-raises it for
+   *    its own encode leg — the count never dips to zero mid-gesture, which is
+   *    what would let a half-read batch be sent.
+   *  - **The live draft count.** Passed as a getter, not a number, so the
+   *    budget sees drafts that landed (a paste, a removal) while the batch was
+   *    still reading rather than the count at the moment the dialog closed.
+   *
+   * No budgets and no sentences are decided here; everything that survives the
+   * read is wrapped as an `AttachmentSource` and goes through the exact same
+   * `ingestFiles` the clipboard uses.
+   */
+  const ingestPickedPaths = useCallback(
+    async (paths: readonly string[]) => {
+      // Same gate as `handlePaste`: the menu is already disabled in this state,
+      // but the native dialog can outlive the state that opened it.
+      if (options.disabled) return;
+      // Cancelling the dialog must be a no-op — no notice, no state change.
+      if (paths.length === 0) return;
+
+      setReading((count) => count + paths.length);
+      let outcome: PickedBatchOutcome = { reads: [], skipped: [] };
+
+      try {
+        outcome = await readPickedBatch({
+          paths,
+          liveCount: () => draftsRef.current.length,
+          read: (filePath, maxBytes) =>
+            window.electronAPI.file.readAttachment(filePath, { maxBytes }),
+        });
+      } catch (error) {
+        // Round-5 C2: `readPickedBatch` isolates every per-file failure, so
+        // reaching here means something unforeseen broke. The handover below
+        // still runs — it is what turns this gesture into the one folded
+        // notice it owes the user, and swallowing it would leave the ⊕ menu
+        // looking like it did nothing at all.
+        console.error('[attachments] picked-path read aborted', error);
+      } finally {
+        // Handed over to `ingestFiles` below in the same synchronous run, so
+        // the two updates batch and `reading` never renders a false 0.
+        setReading((count) => Math.max(0, count - paths.length));
+      }
+
+      const sources: AttachmentSource[] = outcome.reads.map((read) => ({
+        name: read.name,
+        type: read.mediaType,
+        size: read.byteLength,
+        arrayBuffer: async () => toArrayBuffer(read.bytes),
+      }));
+      await ingestFiles(sources, outcome.skipped);
+    },
+    [ingestFiles, options.disabled]
   );
 
   const handlePaste = useCallback(
@@ -273,6 +377,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
     reading,
     totalBytes,
     handlePaste,
+    ingestPickedPaths,
     removeDraft,
     removeDrafts,
     addDrafts,

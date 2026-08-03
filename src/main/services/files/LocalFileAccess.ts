@@ -8,7 +8,12 @@ interface AllowedRootEntry {
 
 const allowedRoots = new Map<string, AllowedRootEntry>();
 
-function normalizePathForComparison(inputPath: string): string {
+/**
+ * Exported for `PickedAttachmentAccess`, which compares user-picked paths with
+ * the same rules: one normalisation, not two that can drift apart on the two
+ * case-insensitive platforms.
+ */
+export function normalizePathForComparison(inputPath: string): string {
   let resolved = path.resolve(inputPath);
   resolved = resolved.replace(/[\\/]+$/, '');
 

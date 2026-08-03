@@ -201,12 +201,30 @@ export function composerFollowHeightBreakdown(): {
  * status line → action buttons). `session` mode: the single docked row itself.
  * Both are 8px-gapped flex rows; only the empty bar needs the 6px offset from
  * the textarea above it.
+ *
+ * Round-5 fix (diag:placeholder-align): `session` mode uses `items-start`,
+ * not `items-center`. Every other child in this row (attach button, model
+ * trigger, action buttons) is an exact 24px box, so `items-start` vs.
+ * `items-center` is a no-op for them either way. The textarea is the one
+ * child whose rendered box height is NOT pinned to 24px — it relies on
+ * `field-sizing-content` (textarea.tsx) to auto-size, and the browser's
+ * intrinsic content-box height for one row is not guaranteed to equal
+ * exactly `1 × line-height`; any UA slack makes the real height `H > 24`.
+ * A `<textarea>`'s content is always top-anchored inside its own box
+ * (browser default, not something this codebase controls), so
+ * `items-center` on the row centers that taller `H`-height box against the
+ * 24px reference — which visually pushes the (top-anchored) placeholder/
+ * first line of text ABOVE the other controls' centerline whenever `H>24`.
+ * `items-start` sidesteps the uncertain `H` entirely: every child's top
+ * edge aligns, so the textarea's top-anchored first line always sits at
+ * `row-top + 12px`, matching the 24px controls' centerline by construction —
+ * robust to whatever `H` the browser actually renders, rest or grown.
  */
 export function composerBarClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
     return 'mt-1.5 flex items-center gap-2';
   }
-  return 'flex min-w-0 items-center gap-2';
+  return 'flex min-w-0 items-start gap-2';
 }
 
 /**
@@ -230,6 +248,12 @@ export function composerActionGroupClass(): string {
  * Same ghost language as the model/target triggers: no border, no shadow, a
  * filled `--hover` shell that only appears on hover or keyboard focus. It is
  * `size-6` (both axes) rather than `h-6` because it is a square icon target.
+ *
+ * D4 (round-5): it is now a MENU trigger, so it needs the third state the
+ * other menu triggers already have — `data-[popup-open]:bg-selection`. Without
+ * it the button loses its shell the moment the pointer moves off it into the
+ * open popup, which reads as "the menu belongs to nothing". The size step is
+ * untouched: 24px is the one control tier (F-A4 asserts it).
  */
 export function composerAttachButtonClass(): string {
   return [
@@ -238,6 +262,7 @@ export function composerAttachButtonClass(): string {
     'hover:bg-hover',
     'focus-visible:bg-hover',
     'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary',
+    'data-[popup-open]:bg-selection',
     'disabled:pointer-events-none disabled:opacity-64',
   ].join(' ');
 }
@@ -315,6 +340,36 @@ export function composerModelBaseClass(): string {
  */
 export function composerModelSuffixClass(): string {
   return 'text-foreground font-medium';
+}
+
+/**
+ * One row inside a Composer popup (model/effort menu, ⊕ attach menu).
+ *
+ * D4 lifted this out of `ComposerModelTrigger`, where it was a private const,
+ * because a second Composer menu now exists and two menus in one card that
+ * disagree about row height or type size read as two components borrowed from
+ * different apps.
+ *
+ * It is deliberately NOT `components/ui/menu.tsx`'s shared `MenuItem`: that
+ * one carries `text-base sm:text-sm`, i.e. the app-chrome font size, and using
+ * it here would put 16px rows inside a card whose whole content is on D25's
+ * `text-ui` domain scale. The shared item is right for app menus and wrong for
+ * this card; the divergence is the point, not an oversight.
+ *
+ * Font-size tokens (`text-ui`, `text-meta`) are written as plain concatenated
+ * strings rather than composed through `cn()`. They ARE registered in
+ * tailwind-merge's `font-size` class group in `lib/utils.ts` — but twMerge's
+ * stock config classifies an unrecognised `text-<name>` as a COLOUR and drops
+ * the real colour beside it, so plain strings stay as belt-and-braces for the
+ * window between a new token landing and someone registering it.
+ */
+export function composerMenuItemClass(): string {
+  return 'flex min-h-7 cursor-default select-none items-center gap-2 rounded-sm px-2 text-ui outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-highlighted:bg-accent data-highlighted:text-accent-foreground';
+}
+
+/** Section heading inside a Composer popup — same two-menu sharing rule as above. */
+export function composerMenuGroupLabelClass(): string {
+  return 'px-2 py-1.5 text-meta font-medium tracking-[0.04em] text-muted-foreground';
 }
 
 /**
@@ -433,9 +488,19 @@ export function composerTextareaClass(mode: MiddleColumnMode): string {
  * final rendered size), so this simultaneously re-caps this slot's
  * contribution to the negative-space shrink calculation, the exact
  * protection `basis-0` used to provide alone.
+ *
+ * Round-5 fix (diag:placeholder-align): now that the parent row
+ * (`composerBarClass('session')`) switched from `items-center` to
+ * `items-start`, this slot needs its OWN fixed-height box — its content
+ * (a `size-3.5` Spinner + `text-meta`/13px text) is shorter than the 24px
+ * the other row children stand at, and with the parent no longer centering
+ * cross-axis, an un-pinned slot would render top-flush instead of matching
+ * the textarea's 24px-tall first line. `h-6` (24px) restores that shared
+ * reference height; the pre-existing `items-center` on THIS wrapper (not
+ * the parent's) still centers the shorter spinner/text inside it.
  */
 export function sessionStatusLineWrapperClass(): string {
-  return 'flex min-w-0 flex-1 shrink basis-0 max-w-48 items-center gap-1.5';
+  return 'flex h-6 min-w-0 flex-1 shrink basis-0 max-w-48 items-center gap-1.5';
 }
 
 /**

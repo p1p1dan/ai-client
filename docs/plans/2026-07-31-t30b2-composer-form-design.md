@@ -241,8 +241,8 @@ Cursor 的对应行为：边框由 L 0.9370 → L 0.9037，**ΔL = 0.0333，色�
 |---|---|---|---|
 | 存在性 | **不存在**（T-28 明示不实现：「无附件选择能力，落死按钮违 A06」） | A07 `.icon-btn` 有；Cursor 两态都有，恒在**卡最左** | **改 —— 实现，但换成真能力**（见下） |
 | 能力绑定 | — | 点击 = 在光标处插入 `@` 并唤起既有文件搜索 popup（`extractMentionQuery` / `fileMention.ts` 全套已存在） | **改** |
-| 为什么不做「真附件」 | — | `dialog.openFile` 只返回路径（`preload/index.ts:542`），本仓**没有** renderer 侧「读文件为字节」的 IPC；补一条要动 protocol + main + preload + 限额 + 测试，远超形态批范围 | 记入执行计划的 ideas |
-| a11y / 提示 | — | `aria-label="Add file context"`、`title="Add file context (@)"` —— **文案必须说清它加的是引用不是附件**，否则又是一次不诚实 | **改** |
+| 为什么不做「真附件」 | — | `dialog.openFile` 只返回路径（`preload/index.ts:542`），本仓**没有** renderer 侧「读文件为字节」的 IPC；补一条要动 protocol + main + preload + 限额 + 测试，远超形态批范围（**2026-08-03 D4 改判**：`dialog:openFiles` + `file:readAttachment` 两条通道已落地，本论断作废，⊕ 改为「Attach files」真附件选择；见 `docs/plans/2026-08-03-round5-feedback-diagnosis.md` §diag:attach-files-scope） | 记入执行计划的 ideas（**2026-08-03 已兑现**：第五轮修复批 D4 补齐该 IPC，限额零分叉复用 `admitAttachment`） |
+| a11y / 提示 | — | ~~`aria-label="Add file context"`、`title="Add file context (@)"` —— **文案必须说清它加的是引用不是附件**，否则又是一次不诚实~~（**2026-08-03 D4 改判**：能真上传之后这句诚实声明本身变成了不诚实，两处文案改为 `Attach files`，旧文案全删） | **改** |
 | 形制 | — | A07 `.icon-btn`：`size-6 rounded-sm grid place-items-center text-muted-foreground hover:bg-hover`；图标 `Plus size-3.5` | **改** |
 | 禁用条件 | — | 与 textarea 同门（`disabled \|\| !activeSessionId`），**不随 busy 禁用**（T-19 已解禁运行中输入） | **改** |
 
@@ -398,6 +398,7 @@ Cursor 的对应行为：边框由 L 0.9370 → L 0.9037，**ΔL = 0.0333，色�
 | **F-A10** | 8px 净空契约：`TIMELINE_PADDING_CLASS` 与 `QUESTION_DOCK_WRAPPER_CLASS` 均含 `pb-2`；`middleColumnHostClass('session')` **不含** `pt-` 且含 `pt-0`；`QueuedMessageStrip` 外层类（下沉为 `queueStripWrapperClass()`）含 `mb-2` | 字符串 | 14px 那类「两处各出一半 padding」复发 |
 | **F-A11** | `shouldShowStatusLine({mode:'empty', sending:false, reading:0, hasStatusError:false, hasLargeHint:false})` === `false`；四个条件任一为真则 `true`（两态同表，8 例） | 纯函数 | 常驻 `Ready · cwd:` 复辟 |
 | **F-A12** | `insertMentionTrigger('abc', 3)` → `{text:'abc @', caret:5}`；`insertMentionTrigger('abc ', 4)` → `{text:'abc @', caret:5}`（不重复空格）；`insertMentionTrigger('', 0)` → `{text:'@', caret:1}` | 纯函数 | ⊕ 钮变成死按钮 / 插入位置错 |
+> **2026-08-03 D4 退役 F-A12**：⊕ 语义由「插入 `@` 引用」改判为「Attach files 真附件」，`insertMentionTrigger` 连同其唯一调用点一并删除，本条用例整块退役（`__tests__/fileMention.test.ts` 原位留退役注记）。手打 `@` 通路不受影响，仍由 `extractMentionQuery` / `replaceMention` 的既有用例全量覆盖。
 | **F-A13** | `deriveMiddleColumnMode` 既有 13 例**原样全绿** | 回归护栏 | 两态判据被形态改动误伤 |
 | **F-A14** | `roundActionButtonKindClass('send')` 含 `bg-foreground` `text-background`；`('stop')` 走 destructive；两者**不同** | 字符串 | **仅在拍板 ③ 采纳时启用** |
 
@@ -425,7 +426,7 @@ Cursor 的对应行为：边框由 L 0.9370 → L 0.9037，**ΔL = 0.0333，色�
 | `:1844`「follow-up 单行卡：高 **40px**（内容 24 + 上下 8）」 | 静息高契约 | ✏️ **算术勘误**：24+8+8=40 **漏算 2×1px 边框**，真值 **42px**，与 Cursor 实测 42 一致。T-28 期把实现从 42「修」回 40（保 28px 圆钮、挤 padding 到 5px）属于**修错方向**，本批回到「内容 24 + padding 8 + 边框 2 = 42」 |
 | `:810-819` `.sel`（无边框文字 chip，`--r-sm`，`hover:bg-hover`） | Model/Effort 形制 | ✅ **裁定正确、实现从未对齐**。本批把 `SelectTrigger` 换成 A07 原本就写好的无框文字 chip。属**合规修复**，非改判 |
 | `:1632`「Cursor 的 `Fable 5 High` 是一个**合并控件**；我们拆回现有的两个 select（ModelSelect + EffortSelect），**零新控件**」 | 明文裁定 | ⚠️ **待拍板 ①**：Cursor 实测确为一体式（单 chevron、基名 L 0.398 + 后缀 L 0.191 双色）。若采纳，新增 1 个 `ComposerModelTrigger`（Base UI `Menu` + 两个 `MenuRadioGroup`），两个 store 与两个纯函数层**零改动** |
-| `:802-809` `.icon-btn`（⊕，`--h-btn`，`--r-sm`，`hover:bg-hover`）；A07 全文**未给它任何文字说明** | ⊕ 钮 | ✏️ **本批实现，并首次赋予明确语义**：`Add file context (@)` —— 插入 `@` 并唤起既有文件搜索。T-28 入档的偏离①「不实现⊕（无附件选择能力，死按钮违 A06）」**就此结清**（不是靠放弃，是靠接上真能力） |
+| `:802-809` `.icon-btn`（⊕，`--h-btn`，`--r-sm`，`hover:bg-hover`）；A07 全文**未给它任何文字说明** | ⊕ 钮 | ✏️ **本批实现，并首次赋予明确语义**：`Add file context (@)` —— 插入 `@` 并唤起既有文件搜索。T-28 入档的偏离①「不实现⊕（无附件选择能力，死按钮违 A06）」**就此结清**（不是靠放弃，是靠接上真能力）。**2026-08-03 D4 再改判**：`file:readAttachment` 落地后 ⊕ 成为菜单触发器，唯一条目 `Attach files` 走真附件选择；「无附件选择能力」的前提就此消失，`Add file context (@)` 语义与其实现同批删除 |
 | `:1615` + `:2838-2839` 裁定「维持基线现状 —— **28px 圆形 `--primary` 实心**」+ 论据「等宽字体下 `Send` 占位偏宽」 | 用户已裁定 | ⚠️ **待拍板 ③**：D25 已把论据换成「同位同尺寸的 Stop 让状态切换零位移」（该论据在本批**继续成立**，因为改的是直径与填充色，send/stop 仍同位同尺寸）。结论的两个数值均建议改：28→**24**（E2 实测勘误）、`--primary`→**`--foreground`**（Cursor `#141414` 深中性）。**须用户点头** |
 | `:736-753` `.tgt-btn { border-radius: var(--r-sm) }` | 目标行触发器 8px | ✅ 裁定正确、实现写成 `rounded-md`(12px) 被钳成满圆。本批改回。**合规修复** |
 | `:2709` 问答折叠条 `style="margin-bottom:8px"` 压在 `.cmp.is-follow` 上 | 8px 净空 | ✅ 裁定正确、实现是 `pb-2 + pt-1.5 = 14px`。本批改回 8px，并把「卡上方净空恒 8px」升级为可断言契约（F-A10） |
@@ -467,7 +468,8 @@ Cursor 的对应行为：边框由 L 0.9370 → L 0.9037，**ΔL = 0.0333，色�
 <ul>
   <li><code>QueuedMessageStrip</code>（T-19）：挂载于 error banner 之后、Composer 卡之前，仅会话态；与卡的净空 8px。</li>
   <li>「卡上方净空恒 8px」升级为可断言契约：timeline / 问答 dock / 队列 strip 三个上游各自持有唯一的 8px，Composer 宿主不再叠加 <code>pt-1.5</code>。</li>
-  <li>⊕ 钮语义首次明确：<code>Add file context (@)</code>，插入 <code>@</code> 并唤起既有文件搜索；不是附件选择（本仓无 renderer 侧读文件 IPC）。</li>
+  <li>⊕ 钮语义首次明确：<code>Add file context (@)</code>，插入 <code>@</code> 并唤起既有文件搜索；不是附件选择（本仓无 renderer 侧读文件 IPC）。
+      <br><b>2026-08-03 D4 更新</b>：该括注已失效——<code>dialog:openFiles</code> + <code>file:readAttachment</code> 已落地，⊕ 改为菜单触发器，条目 <code>Attach files</code> 走真附件选择。</li>
 </ul>
 ```
 
@@ -636,7 +638,7 @@ S7  D25 ⑥ 三测点 A/B 截图 + a09 页
 | 删 `ModelSelect`/`EffortSelect` 影响 `models.test.ts` / `sessionEffortStore.test.ts` / `efforts.test.ts` | 拍板 ① 采纳 | 三个测试测的是**纯层**（`models.ts` / `sessionEffortStore.ts` / `efforts.ts`），不 import 组件 —— 零影响。已核 |
 | `middleColumnHostClass('session')` 去 `pt-1.5` 后，无 timeline / 无 dock / 无 strip 的极端态卡贴顶 | 理论上不存在（session 态必有 timeline，`TIMELINE_PADDING_CLASS` 自带 `pb-2`） | F-A10 断言三个上游各自持有 8px；若将来新增第四个上游，断言会提醒它也要带 `pb-2` |
 | 去掉 empty 态常驻 statusLine 后丢失 cwd 全路径 | 用户想确认「打到哪个目录」 | **硬要求**：folder 触发器补 `title={workspace.path}`；`!cwd` / `lastError` 的红色 banner 不受影响（在卡外，仍会打印完整 `statusHint`） |
-| ⊕ 钮被误解为「附件上传」 | 文案不清 | `title="Add file context (@)"` + `aria-label="Add file context"`；粘贴附件（T-18）路径不变，两条并存 |
+| ⊕ 钮被误解为「附件上传」 | 文案不清 | ~~`title="Add file context (@)"` + `aria-label="Add file context"`~~；粘贴附件（T-18）路径不变，两条并存。**2026-08-03 D4 作废本行**：⊕ 现在**就是**附件上传（`Attach files`），不存在误解；粘贴通路仍不变，与选文件共用同一条 `ingestFiles` 管线 |
 | D25 的 A6 断言（`chat/` 下 `text-xs` 清零）与本批新写的类相撞 | S2 写了新的 `text-xs` | S2 的所有新类**不写任何字号类**，字号统一留给 S4（D25 ③）。这是 S2 早于 S4 的第二个理由 |
 | A07 出现两个 v4 追记段 | S6 被拆成两次提交 | S6 明示「一次成文，不允许拆」 |
 

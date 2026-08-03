@@ -10,6 +10,8 @@ import {
 } from './composerModel';
 import { EFFORT_DEFAULT_ID } from './efforts';
 import {
+  composerMenuGroupLabelClass,
+  composerMenuItemClass,
   composerModelBaseClass,
   composerModelSuffixClass,
   composerModelTriggerClass,
@@ -50,20 +52,11 @@ interface ComposerModelTriggerProps {
  * and matching how the label reads), while the shared item pins its indicator
  * to a left grid column.
  *
- * Font-size tokens (`text-ui`, `text-meta`) are written as plain concatenated
- * strings here. Passing them through `cn()` next to a text colour is safe:
- * they are registered in tailwind-merge's `font-size` class group in
- * `lib/utils.ts`, which is what stopped twMerge from classifying an
- * unrecognised `text-<name>` as a colour and dropping the real one. Plain
- * strings remain belt-and-braces (a new token can land before its
- * registration), not a rule.
+ * The row/label classes themselves moved to `middleColumnLayout` in D4, where
+ * `ComposerAttachMenu` shares them — including the note on why they are not
+ * `components/ui/menu.tsx`'s `MenuItem` and why the font-size tokens are
+ * written as plain strings.
  */
-const MENU_ITEM_CLASS =
-  'flex min-h-7 cursor-default select-none items-center gap-2 rounded-sm px-2 text-ui outline-none data-disabled:pointer-events-none data-disabled:opacity-64 data-highlighted:bg-accent data-highlighted:text-accent-foreground';
-
-const MENU_GROUP_LABEL_CLASS =
-  'px-2 py-1.5 text-meta font-medium tracking-[0.04em] text-muted-foreground';
-
 function ModelMenuSection({
   section,
   onSelect,
@@ -75,7 +68,7 @@ function ModelMenuSection({
 
   return (
     <MenuGroup>
-      <MenuPrimitive.GroupLabel className={MENU_GROUP_LABEL_CLASS}>
+      <MenuPrimitive.GroupLabel className={composerMenuGroupLabelClass()}>
         {section.label}
       </MenuPrimitive.GroupLabel>
       <MenuRadioGroup
@@ -88,7 +81,7 @@ function ModelMenuSection({
           <MenuPrimitive.RadioItem
             key={item.id}
             value={item.id}
-            className={MENU_ITEM_CLASS}
+            className={composerMenuItemClass()}
             title={item.hint}
           >
             <span className="min-w-0 flex-1 truncate">{item.label}</span>

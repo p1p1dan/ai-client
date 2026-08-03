@@ -5,7 +5,6 @@ import {
   FileText,
   Folder,
   Image as ImageIcon,
-  Plus,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -39,22 +38,17 @@ import {
   totalAttachmentBytes,
   toWireAttachments,
 } from './attachments';
+import { ComposerAttachMenu } from './ComposerAttachMenu';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { resolveActiveTarget } from './composerTarget';
 import { toWireEffort } from './efforts';
-import {
-  extractMentionQuery,
-  insertMentionTrigger,
-  parseMentionChips,
-  replaceMention,
-} from './fileMention';
+import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
   composerActionGroupClass,
-  composerAttachButtonClass,
   composerBarClass,
   composerCardClass,
   composerPlaceholder,
@@ -636,28 +630,31 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }, 0);
   };
 
-  // T-30b2 §4.6: the ⊕ button. It adds a file REFERENCE, not an attachment —
-  // it writes an `@` at the caret and lets the existing mention popup take
-  // over, which is why it stays enabled while a turn is running (T-19 already
-  // unlocked composing during a run) even though the model/effort control does
-  // not: typing a reference into the next message is unaffected by the turn in
-  // flight, whereas changing generation settings mid-turn would do nothing.
-  const handleAddFileContext = () => {
-    const ta = textareaRef.current;
-    const caret = ta ? ta.selectionStart : value.length;
-    const out = insertMentionTrigger(value, caret);
-    updateValue(out.text);
-    // Same post-commit timing as `insertMention`: the caret can only be placed
-    // once React has written the new value onto the real node.
-    setTimeout(() => {
-      const node = textareaRef.current;
-      if (!node) return;
-      node.focus();
-      node.setSelectionRange(out.caret, out.caret);
-      if (!cwd) return;
-      setMentionQuery(extractMentionQuery(out.text, out.caret));
-      setMentionIndex(0);
-    }, 0);
+  // D4 (round-5): the ⊕ menu's "Attach files" entry. Replaces T-30b2 §4.6's
+  // `handleAddFileContext`, which wrote an `@` at the caret because no
+  // renderer-side file-read IPC existed yet; `file:readAttachment` closed that
+  // gap, so this now attaches real bytes.
+  //
+  // Typing `@` by hand is untouched — `handleContentChange` still drives the
+  // mention popup, and that is now the single way to add a file REFERENCE, as
+  // opposed to a file.
+  //
+  // Cancelling the picker returns `[]` and this returns immediately: no
+  // notice, no state change, nothing to undo (A06 honesty rule).
+  const handleAttachFiles = () => {
+    void (async () => {
+      let paths: string[];
+      try {
+        paths = await window.electronAPI.dialog.openFiles();
+      } catch {
+        // The platform could not open a picker. Nothing was chosen, so there
+        // is nothing to ingest and nothing about the draft to undo — the same
+        // end state as a cancel, reached without an unhandled rejection.
+        return;
+      }
+      if (paths.length === 0) return;
+      await attachments.ingestPickedPaths(paths);
+    })();
   };
 
   // A2 (round-4 point-check fix, retry-doublesend diagnosis): the previous
@@ -1992,23 +1989,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     />
   ) : null;
 
-  // T-30b2 §4.6: sits at the far left of the card in both modes. Its disabled
-  // gate matches the textarea's exactly — "there is nowhere to put this draft"
-  // — and deliberately excludes busy/sending (see `handleAddFileContext`).
+  // T-30b2 §4.6 / D4: sits at the far left of the card in both modes. Its
+  // disabled gate matches the textarea's exactly — "there is nowhere to put
+  // this draft" — and deliberately excludes busy/sending, because T-19 already
+  // unlocked composing during a run: attachments collected mid-turn simply
+  // ride out with the next message.
   const attachButton = (
-    <button
-      type="button"
-      className={composerAttachButtonClass()}
+    <ComposerAttachMenu
+      mode={mode}
       disabled={disabled || !activeSessionId}
-      onClick={handleAddFileContext}
-      // The wording has to make clear this adds a reference, not an upload:
-      // there is no renderer-side file-read IPC here, so promising "attach"
-      // would promise a capability that does not exist.
-      aria-label="Add file context"
-      title="Add file context (@)"
-    >
-      <Plus className="size-3.5" />
-    </button>
+      onAttachFiles={handleAttachFiles}
+    />
   );
 
   // T-19 decision 2.5: the button stack is now derived, not hand-assembled —

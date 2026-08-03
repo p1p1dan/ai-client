@@ -3225,7 +3225,8 @@ button.ct-row { cursor: pointer; }
         Composer 宿主 <code>pt-0</code>、不再叠加 <code>pt-1.5</code>。<b>谁在上面谁负责间距</b>——避免两处各给一半再相加，那正是 14px 的来历。</li>
       <li><b>⊕ 钮语义首次明确</b>：本页 <code>:802-809</code> 给了 <code>.icon-btn</code> 的形制，却<b>从未给它任何文字说明</b>。
         本批赋予语义 <b><code>Add file context (@)</code></b>——插入 <code>@</code> 并唤起既有文件搜索，<b>不是附件上传</b>（本仓无 renderer 侧读文件的 IPC）。
-        T-28 入档的偏离①「不实现 ⊕（无附件选择能力，死按钮违 A06）」<b>就此结清</b>——不是靠放弃，是靠接上一个真能力。</li>
+        T-28 入档的偏离①「不实现 ⊕（无附件选择能力，死按钮违 A06）」<b>就此结清</b>——不是靠放弃，是靠接上一个真能力。
+        <br><b>2026-08-03 更新（第五轮修复批 D4）</b>：括注「本仓无 renderer 侧读文件的 IPC」<b>已作废</b>——新增 <code>dialog:openFiles</code>（多选，取消返 <code>[]</code>）与 <code>file:readAttachment</code>（<code>stat</code> 先判上限、主进程一次性路径白名单、返回原始字节）两条通道后，⊕ 改判为<b>菜单触发器</b>，唯一条目 <b><code>Attach files</code></b> 走真附件选择；旧文案 <code>Add file context (@)</code> 与其实现（<code>insertMentionTrigger</code>）同批删除，手打 <code>@</code> 引用通路不受影响。限额与跳过文案零分叉复用 T-18 的 <code>admitAttachment</code> / <code>formatSkipNotice</code>。依据：<code>docs/plans/2026-08-03-round5-feedback-diagnosis.md</code> §diag:attach-files-scope + 编排者裁定 4。</li>
       <li><b><code>composerBarClass(mode)</code> 一个函数管两态</b>：empty 态是 textarea 下方的底行（含 6px 上偏移），session 态就是那条 docked 行本身；
         两者同为 8px gap 的 flex 行，合成一个函数以免两态各自漂移。</li>
       <li><b><code>composerPopupSide(mode)</code> 下沉为纯函数</b>：docked 卡下方无余量、居中卡上方无余量——这与 mention 弹层的方向判据<b>是同一条</b>，

@@ -62,6 +62,32 @@ export function registerChatHandlers(): void {
     }
   );
 
+  /**
+   * R5 D2 — index-only registration. Deliberately does NOT touch
+   * `agentHostManager`: creating a chat in the sidebar must not spawn the
+   * Host process or a runtime session before the user has typed anything.
+   * `recordCreated` upserts (it preserves an existing entry's title /
+   * runtimeIdentity / archived bit), so calling this ahead of the lazy
+   * `CHAT_CREATE_SESSION` on first send is idempotent in either order.
+   * Returns false instead of throwing — the caller treats indexing as
+   * best-effort and must never fail a session creation over it.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_REGISTER_SESSION,
+    async (
+      _e,
+      payload: { sessionId: string; workspacePath: string; model?: string }
+    ): Promise<boolean> => {
+      try {
+        await sessionIndexService.recordCreated(payload);
+        return true;
+      } catch (error) {
+        console.warn('[chat] Failed to register session in the index:', error);
+        return false;
+      }
+    }
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.CHAT_RESUME_SESSION,
     async (

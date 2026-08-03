@@ -1,8 +1,14 @@
 import { rmSync } from 'node:fs';
-import { copyFile, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, open, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { type FileEntry, type FileReadResult, IPC_CHANNELS } from '@shared/types';
+import {
+  type AttachmentReadOptions,
+  type AttachmentReadResult,
+  type FileEntry,
+  type FileReadResult,
+  IPC_CHANNELS,
+} from '@shared/types';
 import { app, BrowserWindow, ipcMain, shell, type WebContents } from 'electron';
 import iconv from 'iconv-lite';
 
@@ -23,6 +29,7 @@ import {
   registerAllowedLocalFileRoot,
   unregisterAllowedLocalFileRootsByOwner,
 } from '../services/files/LocalFileAccess';
+import { takePickedAttachmentPath } from '../services/files/PickedAttachmentAccess';
 import { createSimpleGit, normalizeGitRelativePath } from '../services/git/runtime';
 import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { createRemoteError } from '../services/remote/RemoteI18n';
@@ -32,6 +39,7 @@ import {
   toRemoteVirtualPath,
 } from '../services/remote/RemotePath';
 import { remoteRepositoryBackend } from '../services/remote/RemoteRepositoryBackend';
+import { readAttachmentViaHandle } from './attachmentReadGuard';
 
 /**
  * Normalize encoding name to a consistent format
@@ -489,6 +497,53 @@ export function registerFileHandlers(): void {
 
     return { content, encoding: detectedEncoding, detectedEncoding, confidence };
   });
+
+  /**
+   * D4: raw bytes of ONE user-picked attachment.
+   *
+   * Why not FILE_READ: that handler exists to feed the editor, so it decodes
+   * text and answers `{ content: '', isBinary: true }` for anything else — an
+   * image can never come out of it. It also has no size ceiling, which is
+   * survivable when the payload is a source file and is not when the user can
+   * point at a 2 GB video.
+   *
+   * Three properties this handler must keep:
+   *  1. the path must carry a grant from `dialog:openFiles` — and the grant is
+   *     consumed here, so it is good for exactly one read;
+   *  2. every fact comes off ONE open handle, and the size verdict comes
+   *     before any read, so an oversized file is refused without being loaded
+   *     and no file can be swapped in between the measurement and the bytes
+   *     (round-5 S1 — see `readAttachmentViaHandle`);
+   *  3. plain `readFile` on that handle — NOT `readFileSafe`/`isBinaryFile`.
+   *     An attachment is wanted verbatim; decoding or binary-sniffing it would
+   *     corrupt exactly the case (a PNG) this channel exists for.
+   *
+   * The handler itself is a shell: it turns the renderer's string into a grant
+   * and the grant into an fd, and the decisions live in the pure module.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_READ_ATTACHMENT,
+    async (
+      event,
+      filePath: string,
+      options?: AttachmentReadOptions
+    ): Promise<AttachmentReadResult> => {
+      const grant = takePickedAttachmentPath(filePath, event.sender.id);
+      if (!grant) {
+        return { ok: false, reason: 'not-allowed' };
+      }
+
+      // `grant.path` — the string the native dialog produced — not `filePath`.
+      // The renderer's argument has already done its only job (finding the
+      // grant); opening it again would put a renderer-controlled string back
+      // in the path of the read.
+      return readAttachmentViaHandle(
+        { open: (target: string) => open(target, 'r') },
+        grant,
+        options?.maxBytes
+      );
+    }
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.FILE_WRITE,

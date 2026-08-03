@@ -7,6 +7,7 @@ import {
   formatRelativeAge,
   RECENT_DEFAULT_LIMIT,
   RECENT_WINDOW_MS,
+  resolveNewSessionTarget,
   resolveNewSessionWorkspaceId,
 } from '../sidebarTree';
 
@@ -151,6 +152,113 @@ describe('resolveNewSessionWorkspaceId', () => {
     expect(resolveNewSessionWorkspaceId('p-x', seeded)).toBe('ws-real');
     expect(resolveNewSessionWorkspaceId('p-x', workspaces)).toBeNull();
     expect(resolveNewSessionWorkspaceId('p-ai', workspaces)).toBe('ws-main');
+  });
+});
+
+describe('resolveNewSessionTarget', () => {
+  const folders = buildSidebarFolders({ projects, workspaces, sessions: [] });
+
+  it('prefers the focused folder over the active session', () => {
+    const target = resolveNewSessionTarget({
+      focusedProjectId: 'p-empty',
+      folders,
+      activeSession: { workspaceId: 'ws-main' },
+      workspaces,
+    });
+    expect(target).toEqual({ workspaceId: 'ws-empty', folderName: 'newhp' });
+  });
+
+  it('falls back to the active session workspace when nothing is focused', () => {
+    const target = resolveNewSessionTarget({
+      focusedProjectId: null,
+      folders,
+      activeSession: { workspaceId: 'ws-wt' },
+      workspaces,
+    });
+    expect(target).toEqual({ workspaceId: 'ws-wt', folderName: 'ai-client' });
+  });
+
+  it('falls back to the first usable workspace when both focus and active session are absent', () => {
+    const target = resolveNewSessionTarget({
+      focusedProjectId: null,
+      folders,
+      activeSession: undefined,
+      workspaces,
+    });
+    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  });
+
+  it('self-heals when the focused folder was deleted, falling through to the next tier', () => {
+    const target = resolveNewSessionTarget({
+      focusedProjectId: 'p-deleted',
+      folders,
+      activeSession: { workspaceId: 'ws-wt' },
+      workspaces,
+    });
+    expect(target).toEqual({ workspaceId: 'ws-wt', folderName: 'ai-client' });
+  });
+
+  // R5 round-2 (B1): every fallback target must still be reachable in the nav.
+  it('skips an active session whose workspace no longer exists', () => {
+    const target = resolveNewSessionTarget({
+      focusedProjectId: null,
+      folders,
+      activeSession: { workspaceId: 'ws-deleted' },
+      workspaces,
+    });
+    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  });
+
+  it('skips an active session whose project has no folder row (orphan workspace)', () => {
+    // `ws-temp` belongs to `p-temp`, which is not in `projects` — creating a
+    // chat there would land in a folder the sidebar never renders.
+    const target = resolveNewSessionTarget({
+      focusedProjectId: null,
+      folders,
+      activeSession: { workspaceId: 'ws-temp' },
+      workspaces,
+    });
+    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  });
+
+  it('disables the button (null target) when the focused folder has no usable workspace', () => {
+    const seedProjects: ChatProject[] = [...projects, { id: 'p-seed', name: 'seed-repo' }];
+    const seedWorkspaces: ChatWorkspace[] = [
+      ...workspaces,
+      { id: 'ws-seed', projectId: 'p-seed', name: 'Main', kind: 'main', path: '' },
+    ];
+    const seedFolders = buildSidebarFolders({
+      projects: seedProjects,
+      workspaces: seedWorkspaces,
+      sessions: [],
+    });
+
+    const target = resolveNewSessionTarget({
+      focusedProjectId: 'p-seed',
+      folders: seedFolders,
+      activeSession: { workspaceId: 'ws-main' },
+      workspaces: seedWorkspaces,
+    });
+
+    // Falling through to `ws-main` would create the chat in a different folder
+    // than the button's own title names — a silent redirect (D1).
+    expect(target).toEqual({ workspaceId: null, folderName: 'seed-repo' });
+  });
+
+  it('skips orphan workspaces in the last-resort scan instead of taking the first one', () => {
+    const orphanFirst: ChatWorkspace[] = [
+      { id: 'ws-temp', projectId: 'p-temp', name: 'Scratch', kind: 'temp', path: '/tmp/scratch' },
+      ...workspaces.filter((ws) => ws.id !== 'ws-temp'),
+    ];
+
+    const target = resolveNewSessionTarget({
+      focusedProjectId: null,
+      folders,
+      activeSession: undefined,
+      workspaces: orphanFirst,
+    });
+
+    expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
   });
 });
 
