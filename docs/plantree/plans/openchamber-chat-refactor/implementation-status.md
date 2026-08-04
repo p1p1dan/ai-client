@@ -9,6 +9,7 @@
   - 验收（2026-08-03）：**第七轮 GUI 点验用户验收通过**（原话「验收完毕，没有问题」）——第六轮两项与全部复核批修复闭环，诊断档结项；实测范围含 aaa 文件夹 New / "+ new chat" / 分支 chip 归属 / 失败退回重发无重复气泡 / 同文连发保留 / 附件与归档关闭对齐。第五轮清单 0-decies 与第四轮失败路径顺延项就此关闭；**0-octies 门槛达成 → T-27/T-28/T-19/T-30批1 转 Done**（见 roadmap）。点验期间一次「No repository registered」经查为 dev server 带病热更新残留态，非代码回归（诊断档附注）
   - 更早批次（2026-07-28 ~ 2026-08-03 三批：五连修/T-21/T-22/T-26/T-27/T-28/T-05/T-19/T-30 批1+批2/第二~六轮点验修复等）：摘要原文见 [history 归档](./history/2026-0728-0803-archive.md)，明细见[主线台账](../../../plans/ledger-claude-mainline.md)各行
 - **Last Verified**:
+  - **2026-08-03 T-29 工作区态实测（未提交，施工后复核前）**：typecheck 干净 / lint **724 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **98 文件 1813 例**（+1 文件 +54 例；同 3 例 Windows-only 失败）。
   - **2026-08-03 四批复核（T-31 `8109d45` 合并态）**：typecheck 干净 / lint **718 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **97 文件 1759 例**（+7 文件 +166 例；同 3 例 Windows-only 失败）/ `pnpm build` 成功且产物含 `@container scroll-state(stuck: top)` 规则（lightningcss 管线绕行有效性的产物级验证）。
   - **2026-08-03 三批复核（第六轮修复 `fd55a26` 合并态，T-31 开工前基线实测）**：typecheck 干净 / lint **703 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **90 文件 1593 例**（+2 文件 +56 例；同 3 例 Windows-only 失败）。
   - 更早复核记录（2026-07-28 基线 51 文件 590 例起，全程只增）与 T-21 复核口径注记：见 [history 归档](./history/2026-0728-0803-archive.md)
@@ -75,7 +76,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 
 ### 开发线（按序）
 
-1. **T-29 Markdown 渲染**（D26）：assistant 正文 react-markdown+shiki，chat 专属映射零 XSS 面，流式期纯文本完成后切。→ 执行计划 §3 T-29 行
+1. **T-29 Markdown 渲染**（D26）：assistant 正文 react-markdown+shiki，chat 专属映射零 XSS 面，流式期纯文本完成后切。→ 执行计划 §3 T-29 行。**🟡 2026-08-03 施工已落工作区（未提交，六新两改约 +1,800 行）+ 三绿实测通过；双轨对抗复核因会话中断双失待重启——复核关注面 (a)~(e)、双失过程与下一步四项见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-03 T-29 行**
 2. **T-24 收尾**（S0，不改代码）：全新机器 GUI 实测 + 台账补登（实体已随 `b38017b` 落库）。→ 执行计划 §3 T-24 行
 3. **T-12 / T-13 / T-14 / T-15 四 surface**（依赖 T-22 已清）：git / editor / context / terminal 各 surface 接线；A08 临时基线正式化随行。→ 执行计划 §3 各行
 4. **T-23 存量违规清理**（A06 矩阵产出）：死按钮与假 usage 环逐项接线或 disabled+Tooltip。→ 执行计划 §3 T-23 行
