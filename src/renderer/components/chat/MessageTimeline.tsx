@@ -22,6 +22,8 @@ import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { type TurnSendStatus, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import { sendTimeoutMs } from './attachmentLimits';
+import { ChatMarkdown } from './ChatMarkdown';
+import { shouldRenderMarkdown } from './chatMarkdown';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
@@ -1206,12 +1208,33 @@ function TurnItemView({
   onRespondPermission,
 }: TurnItemViewProps) {
   switch (item.kind) {
-    case 'text':
+    /**
+     * T-29: the ONE assistant-prose render point, and therefore the only place
+     * markdown is applied. It is reached from BOTH turn segments — the process
+     * segment's intermediate prose and the always-visible answer — which is
+     * correct: both are assistant text, and the two differ only in position.
+     *
+     * The other two `whitespace-pre-wrap text-markdown` paragraphs in this file
+     * are NOT this: `:686` is the user bubble's own prompt echo and `:711` is
+     * `NoticeMessage`'s system/error body. Neither is model prose, both are
+     * inside a clamped or an alert-shaped box, and neither gets markdown.
+     * Thinking bodies and tool IN/OUT (`ToolRows.tsx`) stay plain for the same
+     * reason.
+     *
+     * `shouldRenderMarkdown` is the streaming gate (F-C3): plain text while the
+     * block is the one still streaming, markdown afterwards. Restored history
+     * lands on the markdown branch immediately — a replayed turn is never
+     * active, so its `streamingBlockId` is `null`.
+     */
+    case 'text': {
+      const text = item.block.text ?? '';
+      if (shouldRenderMarkdown({ blockId: item.block.id, streamingBlockId })) {
+        return <ChatMarkdown text={text} />;
+      }
       return (
-        <p className="text-markdown leading-normal text-foreground whitespace-pre-wrap">
-          {item.block.text}
-        </p>
+        <p className="text-markdown leading-normal text-foreground whitespace-pre-wrap">{text}</p>
       );
+    }
 
     case 'toolGroup':
       return (

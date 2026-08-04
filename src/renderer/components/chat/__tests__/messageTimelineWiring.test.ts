@@ -348,6 +348,52 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('cn(turnProcessPanelClass(), turnBodyClass())');
   });
 
+  // T-29: assistant prose is Markdown, and it is Markdown in exactly ONE place.
+  //
+  // This test is the reason the render point could be identified at all: the
+  // task brief pointed at `:686`/`:711` as the assistant text sites, and both
+  // turned out to be something else (the user bubble's prompt echo and
+  // `NoticeMessage`'s alert body). The real one is `TurnItemView`'s `text`
+  // branch, which serves BOTH turn segments. These assertions pin that, so a
+  // future edit that "helpfully" markdowns the other two fails here.
+  it('T-29: the text branch is gated by shouldRenderMarkdown and renders ChatMarkdown', () => {
+    // The gate reads the streaming-block id the timeline already derives — not
+    // a new store field (`chatSessions.ts` is a red line) and not a shape test.
+    expectCalled('shouldRenderMarkdown({ blockId: item.block.id, streamingBlockId })');
+    expectCalled('<ChatMarkdown');
+    // Exactly one markdown render site in the whole file. This is the assertion
+    // that keeps the user bubble, the notices and the tool rows out of it.
+    expect(
+      (CALL_SITES.match(/<ChatMarkdown/g) ?? []).length,
+      'assistant prose must have exactly ONE markdown render site'
+    ).toBe(1);
+    // The streaming branch is still the plain-text paragraph, unchanged.
+    expectWired("const text = item.block.text ?? '';");
+    expectCalled('className="text-markdown leading-normal text-foreground whitespace-pre-wrap"');
+  });
+
+  // The three surfaces T-29 deliberately does NOT touch. Each is model-adjacent
+  // enough that "add markdown here too" is a plausible future edit, and each has
+  // a reason not to: the user bubble is the operator's own prompt under a
+  // three-line pinned clamp, a notice is an `Alert` body, and tool IN/OUT is a
+  // mono transcript.
+  it('T-29: user bubble and notice bodies stay plain text', () => {
+    // Both paragraphs still exist and still pre-wrap. The class-string order is
+    // what distinguishes them from `TurnItemView`'s streaming fallback, which
+    // spells the same utilities in the opposite order.
+    expect(
+      (SYNTAX.match(/whitespace-pre-wrap text-markdown/g) ?? []).length,
+      'the user bubble and NoticeMessage paragraphs must both survive verbatim'
+    ).toBe(2);
+  });
+
+  // F13's sibling: the copy payload is the RAW markdown source, so the button
+  // keeps yielding what the model wrote rather than the rendered text. T-29
+  // changes nothing here, and this assertion is what says so.
+  it('T-29: copy still ships the raw markdown source', () => {
+    expectCalled('buildTurnCopyTextFromItems(items)');
+  });
+
   // D26 ④: the user bubble spans the reading column. Both tokens are named in
   // the comment that explains their removal, so these only mean anything with
   // comments blanked — and both are class-name STRINGS, which is why the
