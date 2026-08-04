@@ -115,6 +115,13 @@ interface DiffViewerProps {
   diff?: FileDiff;
   skipFetch?: boolean;
   isCommitView?: boolean; // Add flag to indicate commit history view
+  /**
+   * T-12: forwarded verbatim to Monaco's `renderSideBySideInlineBreakpoint`.
+   * Default 0 = current behavior (always side-by-side, never falls back to
+   * inline). Pass a real breakpoint (e.g. 700) when the host can render the
+   * diff at a width where two ~180px columns would be unreadable.
+   */
+  sideBySideInlineBreakpoint?: number;
 }
 
 export function DiffViewer({
@@ -128,6 +135,7 @@ export function DiffViewer({
   diff: externalDiff,
   skipFetch = false,
   isCommitView = false,
+  sideBySideInlineBreakpoint = 0,
 }: DiffViewerProps) {
   const sessionId = useActiveSessionId(rootPath);
   const { t } = useI18n();
@@ -1210,7 +1218,7 @@ export function DiffViewer({
             options={{
               readOnly: !isEditing,
               renderSideBySide: true,
-              renderSideBySideInlineBreakpoint: 0, // Always use side-by-side
+              renderSideBySideInlineBreakpoint: sideBySideInlineBreakpoint, // 0 = always side-by-side (default)
               ignoreTrimWhitespace: false,
               renderOverviewRuler: true,
               diffWordWrap: editorSettings.wordWrap === 'on' ? 'on' : 'off',

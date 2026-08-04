@@ -1,6 +1,7 @@
 import type { FileChangesResult } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toastManager } from '@/components/ui/toast';
+import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useShouldPoll } from '@/hooks/useWindowFocus';
 import { useI18n } from '@/i18n';
 
@@ -10,7 +11,7 @@ export function useFileChanges(workdir: string | null, isActive = true) {
   const shouldPoll = useShouldPoll();
 
   return useQuery({
-    queryKey: ['git', 'file-changes', workdir],
+    queryKey: gitQueryKeys.fileChanges(workdir),
     queryFn: async () => {
       if (!workdir) return emptyResult;
       return window.electronAPI.git.getFileChanges(workdir);
@@ -34,7 +35,7 @@ export function useFileDiff(
   const shouldPoll = useShouldPoll();
 
   return useQuery({
-    queryKey: ['git', 'file-diff', workdir, path, staged],
+    queryKey: gitQueryKeys.fileDiff(workdir, path, staged),
     queryFn: async () => {
       if (!workdir || !path) return null;
       return window.electronAPI.git.getFileDiff(workdir, path, staged);
@@ -56,9 +57,9 @@ export function useGitStage() {
     },
     onSuccess: async (_, { workdir }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-changes', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'status', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-diff', workdir] }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileChanges(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileDiff(workdir) }),
       ]);
     },
     onError: (error) => {
@@ -82,9 +83,9 @@ export function useGitUnstage() {
     },
     onSuccess: async (_, { workdir }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-changes', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'status', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-diff', workdir] }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileChanges(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileDiff(workdir) }),
       ]);
     },
     onError: (error) => {
@@ -108,9 +109,9 @@ export function useGitDiscard() {
     },
     onSuccess: async (_, { workdir }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-changes', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'status', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-diff', workdir] }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileChanges(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileDiff(workdir) }),
       ]);
     },
     onError: (error) => {
@@ -134,11 +135,11 @@ export function useGitCommit() {
     },
     onSuccess: async (_, { workdir }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-changes', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'status', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'log', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'log-infinite', workdir] }),
-        queryClient.invalidateQueries({ queryKey: ['git', 'file-diff', workdir] }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileChanges(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.log(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.logInfinite(workdir) }),
+        queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileDiff(workdir) }),
       ]);
     },
     onError: (error) => {
@@ -160,7 +161,7 @@ export function useGitFetch() {
       await window.electronAPI.git.fetch(workdir);
     },
     onSuccess: async (_, { workdir }) => {
-      await queryClient.invalidateQueries({ queryKey: ['git', 'status', workdir] });
+      await queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(workdir) });
     },
   });
 }
