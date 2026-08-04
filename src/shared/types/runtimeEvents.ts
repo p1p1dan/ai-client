@@ -282,10 +282,25 @@ export interface QuestionResolvedEvent extends RuntimeEventBase {
   };
 }
 
+/**
+ * T-14 (Codex precedent T-20, optional-field addition, no protocol version
+ * bump): the CLI permission mode this Host session actually runs with.
+ * Mirrors the Agent SDK's own `PermissionMode` union — `claudeRuntime.ts`'s
+ * `CHAT_PERMISSION_MODE` constant is the single source of truth that feeds
+ * both the SDK query() options and this payload, so the renderer can never
+ * report a mode the Host did not actually send to the SDK.
+ */
+export type SessionPermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'dontAsk'
+  | 'bypassPermissions'
+  | 'plan';
+
 export interface SessionCreatedEvent extends RuntimeEventBase {
   type: 'session.created' | 'session.resumed';
   sessionId: string;
-  payload?: { runtimeIdentity?: string };
+  payload?: { runtimeIdentity?: string; permissionMode?: SessionPermissionMode };
 }
 
 /**

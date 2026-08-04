@@ -135,6 +135,73 @@ describe('claudeRuntime query options — effort threading (T-20 base)', () => {
   });
 });
 
+/**
+ * T-14 §4: `permissionMode` must have exactly one source
+ * (`CHAT_PERMISSION_MODE` in claudeRuntime.ts) feeding both the query()
+ * option and the session.created/session.resumed event payloads — asserted
+ * by comparing the two captures to EACH OTHER rather than to a hardcoded
+ * literal, so a future change to the constant cannot silently desync them
+ * without failing this test.
+ */
+describe('claudeRuntime query options — permissionMode single source of truth (T-14)', () => {
+  it('sends the SDK the same permissionMode session.created reports', async () => {
+    const captured: CapturedOptions[] = [];
+    const events: Record<string, unknown>[] = [];
+    const rt = new ClaudeRuntime({
+      driver: 'agent-sdk',
+      cliPath: 'unused-in-fake',
+      env: {},
+      emit: (e) => events.push(e),
+      log: () => undefined,
+      registry: new SessionRegistry(),
+      queryFn: makeCapturingQueryFn(captured),
+    });
+    rt.createSession({ sessionId: 's24', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's24', text: 'hi' });
+
+    const created = events.find((e) => e.type === 'session.created') as
+      | { payload?: { permissionMode?: unknown } }
+      | undefined;
+    expect(created?.payload?.permissionMode).toBeDefined();
+    expect(captured[0].permissionMode).toBe(created?.payload?.permissionMode);
+  });
+
+  it('sends the SDK the same permissionMode session.resumed reports', async () => {
+    const captured: CapturedOptions[] = [];
+    const events: Record<string, unknown>[] = [];
+    const rt = new ClaudeRuntime({
+      driver: 'agent-sdk',
+      cliPath: 'unused-in-fake',
+      env: {},
+      emit: (e) => events.push(e),
+      log: () => undefined,
+      registry: new SessionRegistry(),
+      queryFn: makeCapturingQueryFn(captured),
+    });
+    rt.resumeSession({
+      sessionId: 's25',
+      workspacePath: process.cwd(),
+      runtimeIdentity: 'rt-uuid-25',
+    });
+    await rt.send({ sessionId: 's25', text: 'hi' });
+
+    const resumed = events.find((e) => e.type === 'session.resumed') as
+      | { payload?: { permissionMode?: unknown } }
+      | undefined;
+    expect(resumed?.payload?.permissionMode).toBeDefined();
+    expect(captured[0].permissionMode).toBe(resumed?.payload?.permissionMode);
+  });
+
+  it('pins the interactive default mode — never a bypass', async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 's26', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's26', text: 'hi' });
+
+    expect(captured[0].permissionMode).toBe('default');
+  });
+});
+
 describe('claudeRuntime query options — resume must re-pin model/effort (2026-07-29 cache probe)', () => {
   // cli.js is re-spawned per turn; a resume without an explicit model falls back
   // to the CLI default model — a silent model switch AND a guaranteed full

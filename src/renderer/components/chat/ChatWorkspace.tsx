@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { ChatComposer } from './ChatComposer';
 import { HostStatusBanner } from './HostStatusBanner';
 import { selectHistoryError } from './historyError';
@@ -80,6 +81,18 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     useChatSessionsStore.setState({ runtimeReady: false });
     return initRuntime();
   }, [initRuntime]);
+
+  useEffect(() => {
+    // T-14: sessionRuntimeFacts's own single-listener latch (same shape and
+    // same StrictMode/remount reason as chatSessions.initRuntime above).
+    // Started here — mounted for the whole app run, exactly like the
+    // `useHostStatus()` call above — rather than from ContextSurfaceView, so
+    // a session.created that fires before the user ever opens the Context
+    // surface is still captured instead of permanently reading as "not
+    // reported".
+    useSessionRuntimeFactsStore.setState({ listening: false });
+    return useSessionRuntimeFactsStore.getState().init();
+  }, []);
 
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).

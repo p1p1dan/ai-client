@@ -8,7 +8,7 @@ import type {
   SessionAttachment,
   SessionEffortLevel,
 } from '../shared/types/agentHost.ts';
-import type { SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
+import type { SessionPermissionMode, SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
@@ -158,6 +158,19 @@ function resolveDrainAfterResultMs(): number {
  */
 const THINKING_CONFIG = { type: 'adaptive', display: 'summarized' } as const;
 
+/**
+ * T-14 (Codex precedent T-20, optional-field addition): the single source of
+ * truth for the permission mode every session runs with. Interactive prompts
+ * via `canUseTool` (Permission timeline cards), never an SDK bypass. Feeds
+ * BOTH the query() `permissionMode` option below AND the
+ * session.created/session.resumed event payloads
+ * (`SessionCreatedEvent.payload.permissionMode`) so the Context surface can
+ * report the real, in-effect policy instead of a renderer-side guess that
+ * could drift from what was actually sent to the SDK. Change this constant,
+ * not either call site, if the mode ever needs to differ.
+ */
+const CHAT_PERMISSION_MODE: SessionPermissionMode = 'default';
+
 const EFFORT_LEVELS: readonly SessionEffortLevel[] = [
   'low',
   'medium',
@@ -274,7 +287,7 @@ export class ClaudeRuntime {
       type: 'session.created',
       sessionId: session.sessionId,
       requestId: input.requestId,
-      payload: {},
+      payload: { permissionMode: CHAT_PERMISSION_MODE },
     });
     this.opts.emit({
       type: 'session.status',
@@ -320,7 +333,10 @@ export class ClaudeRuntime {
       type: 'session.resumed',
       sessionId: session.sessionId,
       requestId: input.requestId,
-      payload: { runtimeIdentity: session.runtimeIdentity },
+      payload: {
+        runtimeIdentity: session.runtimeIdentity,
+        permissionMode: CHAT_PERMISSION_MODE,
+      },
     });
     // Per-session order contract: resumed → session.history → status idle.
     // The JSONL read runs detached so the command loop stays responsive.
@@ -646,7 +662,9 @@ export class ClaudeRuntime {
           // See THINKING_CONFIG above for the probe evidence.
           thinking: THINKING_CONFIG,
           // Interactive permission bridge (timeline cards) — not bypass.
-          permissionMode: 'default',
+          // Same constant the session.created/session.resumed events carry
+          // (CHAT_PERMISSION_MODE) — a single source of truth, see its doc.
+          permissionMode: CHAT_PERMISSION_MODE,
           canUseTool,
           env: mergedEnv,
           abortController: abort,
