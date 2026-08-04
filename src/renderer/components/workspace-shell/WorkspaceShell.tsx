@@ -9,6 +9,7 @@ import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
 import { ShellResizeHandle } from './ShellResizeHandle';
 import { clampSidebarWidth, SIDEBAR_COLLAPSED_WIDTH } from './shellLayoutModel';
+import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 
 interface WorkspaceShellProps {
@@ -49,6 +50,10 @@ export function WorkspaceShell({
     repositories,
     selectedRepoPath,
   });
+
+  // A08: global shell shortcuts (Ctrl/Cmd+J/1-4/`/B). Only live while this
+  // component is mounted, i.e. only for the new shell.
+  useShellShortcuts();
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarResizing, setSidebarResizing] = useState(false);

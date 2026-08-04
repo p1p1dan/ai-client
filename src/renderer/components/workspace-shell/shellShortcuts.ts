@@ -1,0 +1,82 @@
+/**
+ * A08: pure key-resolution for shell-level global shortcuts. Kept UI/DOM-free
+ * so vitest can cover every branch without mounting `WorkspaceShell` — same
+ * pattern as `shellLayoutModel.ts`.
+ */
+import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER, railSurfaces } from './surfaceRegistry';
+
+export type ShellShortcutAction =
+  | { type: 'toggle-context-panel' }
+  | { type: 'select-surface'; surfaceId: ContextSurfaceId }
+  | { type: 'open-terminal' }
+  | { type: 'toggle-sidebar' };
+
+export interface ResolveShellShortcutInput {
+  /** `KeyboardEvent.key` — currently unused by resolution (kept for callers/future use). */
+  key: string;
+  /** `KeyboardEvent.code` — layout-independent, what every branch here matches on. */
+  code: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  /** True on macOS: the mod key is `metaKey` there, `ctrlKey` everywhere else. */
+  isMac: boolean;
+  /** True when the event target is an input/textarea/contenteditable (incl. Monaco/xterm's hidden input hosts). */
+  targetIsEditable: boolean;
+}
+
+/**
+ * First four rail-visible surfaces, in rail order. Derived from the registry
+ * instead of a hardcoded id list so a future reorder (or a `hasContent`
+ * surface landing ahead of these) is picked up automatically.
+ */
+function numberedSurfaceIds(): readonly ContextSurfaceId[] {
+  return railSurfaces(DEFAULT_SURFACE_ORDER)
+    .slice(0, 4)
+    .map((surface) => surface.id);
+}
+
+function modKeyPressed(input: ResolveShellShortcutInput): boolean {
+  return input.isMac ? input.metaKey : input.ctrlKey;
+}
+
+/**
+ * Resolves a `keydown` event into a shell shortcut action, or `null` when the
+ * event isn't one of ours and should be left to native/downstream handling.
+ *
+ * Focus protection: while the target is editable, only Ctrl/Cmd+J is honored.
+ * Everything else — including Ctrl/Cmd+B, which collides with Monaco's
+ * bold/cursor-left semantics — is left alone so it reaches the editable
+ * element untouched.
+ */
+export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellShortcutAction | null {
+  if (input.altKey || input.shiftKey || !modKeyPressed(input)) {
+    return null;
+  }
+
+  if (input.code === 'KeyJ') {
+    return { type: 'toggle-context-panel' };
+  }
+
+  if (input.targetIsEditable) {
+    return null;
+  }
+
+  if (input.code === 'Backquote') {
+    return { type: 'open-terminal' };
+  }
+
+  if (input.code === 'KeyB') {
+    return { type: 'toggle-sidebar' };
+  }
+
+  const digitMatch = /^Digit([1-4])$/.exec(input.code);
+  if (digitMatch) {
+    const index = Number(digitMatch[1]) - 1;
+    const surfaceId = numberedSurfaceIds()[index];
+    return surfaceId ? { type: 'select-surface', surfaceId } : null;
+  }
+
+  return null;
+}
