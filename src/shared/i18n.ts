@@ -1737,6 +1737,51 @@ export const zhTranslations: Record<string, string> = {
     '尚未接入 —— 该视图将由 {{task}} 完成接线。',
   'This surface has no view registered.': '该视图尚未注册。',
 
+  // T-14: context surface (ContextSurfaceView) — definition-list group/row labels.
+  Runtime: '运行时',
+  Session: '会话',
+  Path: '路径',
+  Kind: '类型',
+  'Model (actual)': '模型（实际）',
+  'Model (configured)': '模型（配置）',
+  'Reasoning effort': '推理强度',
+  'Permission policy': '权限策略',
+  'Permission policy not reported': '权限策略未上报',
+  'Accept edits': '自动接受编辑',
+  "Don't ask": '不再询问',
+  'Bypass permissions': '跳过权限确认',
+  Plan: '规划模式',
+  'Host status': 'Host 状态',
+  'Process ID': '进程 ID',
+  Driver: '驱动',
+  Turn: '当前回合',
+  'Pending permissions': '待处理授权',
+  'Sent attachments': '已发送附件',
+  Mentions: '@ 引用',
+  'Runtime identity': '运行时身份',
+  'No context reported yet.': '暂无可展示的上下文。',
+
+  // T-12: git surface (GitSurfaceView) — empty states and diff sub-header.
+  'No active session': '暂无活动会话',
+  'Select a chat session to view its git changes.': '选择一个聊天会话以查看其 Git 变更。',
+  'Workspace path unavailable': '工作区路径不可用',
+  "This session's workspace has no resolved path yet.": '该会话的工作区尚未解析出路径。',
+  'This workspace is not tracked by Git.': '此工作区未纳入 Git 版本管理。',
+  'Back to changes': '返回变更列表',
+
+  // T-13: editor surface (EditorSurfaceView) — empty state and intent failure notices.
+  'Select a Workspace to browse files': '选择工作区以浏览文件',
+  'Could not open "{{path}}" — the path is outside the workspace.':
+    '无法打开 "{{path}}"——该路径在工作区之外。',
+  'Could not open "{{path}}".': '无法打开 "{{path}}"。',
+  'Dismiss notice': '关闭提示',
+
+  // T-15: terminal surface (TerminalSurfaceView / compact TerminalPanel).
+  'Expand the panel to manage terminal splits': '展开面板以管理终端分屏',
+  'Select a session to open a terminal': '选择一个会话以打开终端',
+  'This session has no workspace': '该会话没有工作区',
+  'This workspace has no local path': '该工作区没有本地路径',
+
   // T-27: Composer target bar (D22) — data rows (batch 2).
   'Search folders…': '搜索文件夹…',
   'Search worktrees…': '搜索 worktree…',

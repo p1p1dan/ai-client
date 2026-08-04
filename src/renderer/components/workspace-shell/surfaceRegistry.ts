@@ -72,7 +72,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
     defaultWidthFraction: 0.45,
     registeredOnly: false,
-    pendingTask: 'T-14',
+    pendingTask: null,
   },
   {
     id: 'git',
@@ -82,7 +82,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
     defaultWidthFraction: 2 / 5,
     registeredOnly: false,
-    pendingTask: 'T-12',
+    pendingTask: null,
   },
   {
     id: 'editor',
@@ -92,7 +92,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
     defaultWidthFraction: 3 / 5,
     registeredOnly: false,
-    pendingTask: 'T-13',
+    pendingTask: null,
   },
   {
     id: 'terminal',
@@ -102,7 +102,7 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
     defaultWidthFraction: 3 / 5,
     registeredOnly: false,
-    pendingTask: 'T-15',
+    pendingTask: null,
   },
   {
     id: 'chat',

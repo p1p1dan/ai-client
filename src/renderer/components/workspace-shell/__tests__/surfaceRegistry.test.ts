@@ -39,7 +39,7 @@ function gitStatus(overrides: Partial<GitStatus> = {}): GitStatus {
  *
  * Empty at S0 (shell prerequisite only); T-12~T-15 each add one line.
  */
-const WIRED: ContextSurfaceId[] = [];
+const WIRED: ContextSurfaceId[] = ['context', 'editor', 'git', 'terminal'];
 
 describe('CONTEXT_SURFACES', () => {
   it('registers all 11 openchamber surfaces so later rounds only flip flags', () => {

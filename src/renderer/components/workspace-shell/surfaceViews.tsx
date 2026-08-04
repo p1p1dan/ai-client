@@ -18,12 +18,16 @@
  * Default to 'active'; pick 'keep-alive' only for a view that owns state the
  * renderer cannot rebuild.
  *
- * Empty this round: every rail-visible surface falls back to
- * `SurfacePlaceholder` in `ContextPanel.tsx`.
+ * A surface without an entry falls back to `SurfacePlaceholder` in
+ * `ContextPanel.tsx` (all four rail surfaces are wired as of T-12~T-15).
  */
 import type { ComponentType } from 'react';
 import type { SurfaceMountPolicy } from './shellLayoutModel';
 import type { ContextSurfaceId } from './surfaceRegistry';
+import { ContextSurfaceView } from './surfaces/ContextSurfaceView';
+import { EditorSurfaceView } from './surfaces/EditorSurfaceView';
+import { GitSurfaceView } from './surfaces/GitSurfaceView';
+import { TerminalSurfaceView } from './surfaces/TerminalSurfaceView';
 
 export interface SurfaceViewProps {
   surfaceId: ContextSurfaceId;
@@ -34,4 +38,10 @@ export interface SurfaceViewRegistration {
   mountPolicy: SurfaceMountPolicy;
 }
 
-export const SURFACE_VIEWS: Partial<Record<ContextSurfaceId, SurfaceViewRegistration>> = {};
+export const SURFACE_VIEWS: Partial<Record<ContextSurfaceId, SurfaceViewRegistration>> = {
+  context: { component: ContextSurfaceView, mountPolicy: 'active' },
+  editor: { component: EditorSurfaceView, mountPolicy: 'active' },
+  git: { component: GitSurfaceView, mountPolicy: 'active' },
+  // keep-alive: a surface switch must never tear down the pty (spec §5, R2).
+  terminal: { component: TerminalSurfaceView, mountPolicy: 'keep-alive' },
+};
