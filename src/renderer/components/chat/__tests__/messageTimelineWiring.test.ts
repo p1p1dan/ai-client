@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -300,11 +301,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   // F12: `waiting_*` must count as in flight for the shell, or the head and the
-  // Collapsible vanish while the authorization card is on screen.
-  it('F12: the shell reads isTurnInFlight, the thinking indicator still reads isTurnActive', () => {
+  // Collapsible vanish while the authorization card is on screen. The second
+  // predicate this file used to fan out (`thinkingCard.isTurnActive`, which
+  // excludes `waiting_*`) is deliberately GONE: its last consumer was the
+  // Markdown streaming gate, where excluding permission waits flipped Markdown
+  // off and back on around every authorization round-trip. Re-introducing it
+  // here should trip this test and force that argument to be re-had.
+  it('F12: the shell reads isTurnInFlight; isTurnActive stays out of this file', () => {
     expectCalled('isTurnInFlight(status)');
-    expectCalled('isTurnActive(status)');
-    expectWired('isLastTurn && inFlightSession && !turnComplete && firstAssistant');
+    expectUnwired('isTurnActive(');
+    expectWired('!inFlight && isLastTurn && inFlightSession && !turnComplete && firstAssistant');
   });
 
   // F13: a half-streamed answer must not be silently copyable.
@@ -403,5 +409,103 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectUnwired('justify-end');
     // …but the FOOTER's own right alignment is a different element and stays.
     expectCalled('turnFooterClass()');
+  });
+});
+
+/**
+ * T-29 review batch addendum (adversarial re-review): the "exactly ONE markdown
+ * render site" assertion above counts `<ChatMarkdown` inside `CALL_SITES`, which
+ * is built from THIS file's own AST. The claim it backs — "assistant prose is
+ * Markdown in exactly one place in the whole app" — is a repo-wide claim, and
+ * the single-file count cannot falsify a violation living anywhere else. Proven
+ * by demonstration during review: dropping `import { ChatMarkdown } from
+ * './ChatMarkdown';` plus a render into an unrelated component leaves every
+ * assertion above green.
+ *
+ * This closes the gap with an independent filesystem walk over `src/`, outside
+ * MessageTimeline.tsx's own AST entirely. `ChatMarkdown` may be imported or
+ * referenced as an identifier nowhere except its own module (excluded from the
+ * scan) and `MessageTimeline.tsx`.
+ *
+ * The identifier check reuses the same "AST, not text" discipline as the rest
+ * of this file: comments never become AST nodes, and string-literal text lives
+ * on a `StringLiteral`, never an `Identifier`, so walking for `ts.isIdentifier`
+ * nodes tells a real reference from a comment mention or an import-path string
+ * without any manual comment-blanking.
+ */
+describe('T-29 repo-wide: ChatMarkdown has exactly one call site in src/', () => {
+  const SRC_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
+
+  /** Recursively collect every `.ts`/`.tsx` file under `dir`. */
+  function collectTsFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        out.push(...collectTsFiles(full));
+      } else if (/\.tsx?$/.test(entry.name)) {
+        out.push(full);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Whether `name` appears as a real identifier (import specifier, JSX tag,
+   * value reference) in `file` — never in a comment or a string literal. A
+   * cheap substring pre-filter skips the AST parse for files that cannot
+   * possibly match, since every `Identifier` is a substring hit first.
+   */
+  function fileUsesIdentifier(file: string, name: string): boolean {
+    const source = readFileSync(file, 'utf8');
+    if (!source.includes(name)) return false;
+    const fileAst = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      /* setParentNodes */ false,
+      file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+    );
+    let found = false;
+    const visit = (node: ts.Node): void => {
+      if (found) return;
+      if (ts.isIdentifier(node) && node.text === name) {
+        found = true;
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(fileAst);
+    return found;
+  }
+
+  const files = collectTsFiles(SRC_ROOT)
+    .filter((file) => !/[/\\]__tests__[/\\]/.test(file))
+    .filter((file) => !/\.test\.tsx?$/.test(file))
+    .filter((file) => path.basename(file) !== 'ChatMarkdown.tsx');
+
+  it('the scanned file list is non-trivial, or the guard below is vacuous', () => {
+    expect(files.length).toBeGreaterThan(100);
+    // Negative control, exercised for real rather than asserted in the abstract:
+    // `chatMarkdownPolicy.ts` names "ChatMarkdown" three times, all in prose
+    // comments (see this file's own header, which names it too). It must be
+    // IN the scanned set and NOT in the offenders below, or the identifier
+    // walk has degraded into a text search.
+    const policyFile = path.join(SRC_ROOT, 'renderer/components/chat/chatMarkdownPolicy.ts');
+    expect(files).toContain(policyFile);
+    expect(fileUsesIdentifier(policyFile, 'ChatMarkdown')).toBe(false);
+  });
+
+  it('only MessageTimeline.tsx imports or references the ChatMarkdown identifier', () => {
+    const offenders = files
+      .filter((file) => fileUsesIdentifier(file, 'ChatMarkdown'))
+      .map((file) => path.relative(SRC_ROOT, file).split(path.sep).join('/'));
+
+    expect(
+      offenders,
+      'ChatMarkdown must be imported/referenced nowhere under src/ except MessageTimeline.tsx ' +
+        '(its own module is excluded from the scan)'
+    ).toEqual(['renderer/components/chat/MessageTimeline.tsx']);
   });
 });

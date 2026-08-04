@@ -1,5 +1,5 @@
 import { Image as ImageIcon } from 'lucide-react';
-import { memo } from 'react';
+import { isValidElement, memo } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -67,7 +67,15 @@ import {
  * would trade one silent regression for another.
  */
 
-/** Frozen at module scope: a new array identity per render would re-run the whole unified pipeline. */
+/**
+ * Hoisted to module scope so the prop identity is stable across renders.
+ *
+ * It does NOT stop the pipeline from re-running, and an earlier version of this
+ * comment claimed it did: `react-markdown` v10 rebuilds its processor and
+ * re-runs `parse` + `runSync` on every render regardless of whether the plugin
+ * array is the same object. The thing that actually keeps the pipeline off the
+ * one-second turn clock is the `memo` at the bottom of this file.
+ */
 const REMARK_PLUGINS = [remarkGfm, remarkBreaks];
 
 /** Deliberately empty — see rule 1 above. Passed explicitly so it is a wiring fact, not a default. */
@@ -78,17 +86,28 @@ const REHYPE_PLUGINS: [] = [];
  *
  * A `<code>` element's children are a single text node in every markdown
  * construct that can produce one (inline spans cannot contain emphasis, and a
- * fence's body is opaque), so the string branch is what actually runs. The array
- * branch is not decoration: `String(['a','b'])` is `'a,b'`, so the naive
- * `String(children)` would splice COMMAS into displayed code the day a plugin
- * splits that text node. Joining on `''` makes the function total without
- * changing today's output.
+ * fence's body is opaque), so the string branch is what actually runs. The
+ * other branches exist so the function is total over its declared
+ * `React.ReactNode` rather than only over today's inputs — each one was a way
+ * to silently CORRUPT displayed code:
+ *
+ *  - `String(['a','b'])` is `'a,b'`, splicing commas into the code the day a
+ *    plugin splits that text node;
+ *  - `String(<em/>)` is the literal `'[object Object]'`. Measured, not
+ *    theorised: rendering `<code>{<strong>text</strong>}</code>` through the
+ *    real pipeline returned exactly that. Recursing through `props.children`
+ *    keeps the code text instead, at the cost of dropping the emphasis — which
+ *    is the right trade inside a code span.
  */
 function textOf(children: React.ReactNode): string {
   if (typeof children === 'string') return children;
   if (typeof children === 'number') return String(children);
   if (Array.isArray(children)) return children.map((child) => textOf(child)).join('');
   if (children === null || children === undefined || typeof children === 'boolean') return '';
+  if (isValidElement(children)) {
+    const props = children.props as { children?: React.ReactNode };
+    return textOf(props.children);
+  }
   return String(children);
 }
 
@@ -171,7 +190,15 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       checked={checked === true}
       disabled
       readOnly
-      className="mr-1 align-middle"
+      // `size-3.5` because the UA's default box is sized for a form, not for a
+      // 15px prose line; `accent-primary` because without it Chromium paints
+      // the native LIGHT appearance on the dark Flexoki surface — this window
+      // declares no `color-scheme` anywhere, so the control would be the one
+      // element in an audited surface whose colour comes from outside the
+      // palette. (A root-level `color-scheme` would fix every native control in
+      // the app at once and is the better fix; it is also app-wide, so it is
+      // filed rather than smuggled in here.)
+      className="mr-1 size-3.5 accent-primary align-middle"
     />
   ),
 
@@ -266,7 +293,7 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
   pre: ({ children }) => <>{children}</>,
   code: ({ node: _node, className, children }) => {
     const text = textOf(children);
-    if (isFencedCodeBlock({ className, text })) {
+    if (isFencedCodeBlock({ className, text, hasChildren: children !== undefined })) {
       return (
         <ChatCodeBlock
           code={text.replace(/\n$/, '')}

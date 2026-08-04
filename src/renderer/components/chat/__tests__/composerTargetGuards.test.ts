@@ -8,6 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { stripComments } from './stripComments';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CHAT_DIR = path.resolve(__dirname, '..');
@@ -45,20 +46,21 @@ function findMatches(pattern: RegExp): string[] {
   return offenders;
 }
 
-/** Strip `/* *\/` and `//` comments so prose mentioning "import ..." can't be
- * mistaken for real import syntax below. */
-function stripComments(content: string): string {
-  return content.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
-
 /**
  * Every `import ... from '...'` statement (including multi-line named
  * imports) in a file. Scoped to actual import syntax rather than raw text so
  * doc comments that *describe* the chat/workspace-shell boundary (which this
  * module and others intentionally have) don't trip the guard themselves.
+ *
+ * The strip is the shared, parser-backed one (see `./stripComments`); it takes
+ * the file's NAME because `.ts` and `.tsx` are different grammars. The private
+ * regex pair this used to call could delete a whole line of real code whenever
+ * a string, a template literal or a regex literal happened to contain `//` —
+ * and an import statement that has been deleted is an import statement the
+ * guards below cannot find.
  */
-function collectImportStatements(content: string): string[] {
-  return stripComments(content).match(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g) ?? [];
+function collectImportStatements(content: string, file: string): string[] {
+  return stripComments(content, file).match(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g) ?? [];
 }
 
 describe('no in-place checkout from the chat tree', () => {
@@ -71,7 +73,7 @@ describe('no in-place checkout from the chat tree', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles) {
       const content = readFileSync(file, 'utf8');
-      const imports = collectImportStatements(content);
+      const imports = collectImportStatements(content, file);
       if (imports.some((statement) => statement.includes('BranchSelector'))) {
         offenders.push(path.relative(CHAT_DIR, file));
       }
@@ -85,7 +87,7 @@ describe('dependency direction', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles) {
       const content = readFileSync(file, 'utf8');
-      const imports = collectImportStatements(content);
+      const imports = collectImportStatements(content, file);
       if (imports.some((statement) => statement.includes('workspace-shell'))) {
         offenders.push(path.relative(CHAT_DIR, file));
       }
@@ -108,7 +110,7 @@ describe('branch data source', () => {
     const importers: string[] = [];
     for (const file of sourceFiles) {
       const content = readFileSync(file, 'utf8');
-      const imports = collectImportStatements(content);
+      const imports = collectImportStatements(content, file);
       if (imports.some((statement) => statement.includes('useGitBranches'))) {
         importers.push(path.relative(CHAT_DIR, file));
       }

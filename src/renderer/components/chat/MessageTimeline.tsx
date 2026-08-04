@@ -23,7 +23,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { type TurnSendStatus, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import { sendTimeoutMs } from './attachmentLimits';
 import { ChatMarkdown } from './ChatMarkdown';
-import { shouldRenderMarkdown } from './chatMarkdownPolicy';
+import { deriveStreamingBlockIds, shouldRenderMarkdown } from './chatMarkdownPolicy';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
@@ -67,7 +67,6 @@ import { canRespondToPermission, deriveQuestionCardState } from './questionCardM
 import { ReadingColumn } from './ReadingColumn';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';
-import { isTurnActive } from './thinkingCard';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import {
@@ -224,12 +223,14 @@ export function MessageTimeline({
     [sessionId, sessionMessages.length, historyError]
   );
 
-  // Two questions, two predicates (F12): `isActiveTurn` gates the *thinking
-  // stream* indicator, where an authorization wait is correctly "not
-  // streaming"; `inFlightSession` gates the turn SHELL, where it must still
-  // count as in flight or the head vanishes and the `Collapsible` unmounts out
-  // from under the very permission card the user has to answer.
-  const isActiveTurn = isTurnActive(status);
+  // F12 used to fan a second predicate (`thinkingCard.isTurnActive`, which
+  // excludes the `waiting_*` states) down to every turn as well. Its last
+  // consumer was the Markdown streaming gate, and that turned out to be the
+  // wrong predicate there — a permission wait is still in flight, so the gate
+  // flipped Markdown on and back off around every authorization round-trip.
+  // What remains is the one the turn SHELL needs: it must count as in flight
+  // during a `waiting_*` state, or the head vanishes and the `Collapsible`
+  // unmounts out from under the very permission card the user has to answer.
   const inFlightSession = isTurnInFlight(status);
 
   // T-31 §4.1: the turn layer the whole reply anatomy hangs off. Pure
@@ -418,7 +419,6 @@ export function MessageTimeline({
                     turn={turn}
                     isLastTurn={isLastTurn}
                     sessionStatus={status}
-                    isActiveTurn={isActiveTurn}
                     inFlightSession={inFlightSession}
                     sendStatus={isLastTurn ? attachedSendStatus : null}
                     baselineKnown={sendBaseline != null}
@@ -725,8 +725,6 @@ interface ChatTurnProps {
   /** Only the last turn can be in flight, and only it carries the session's failure state. */
   isLastTurn: boolean;
   sessionStatus: SessionRuntimeStatus;
-  /** A thinking block may still be streaming (`thinkingCard.isTurnActive`). */
-  isActiveTurn: boolean;
   /** The session is in flight for turn-shell purposes, `waiting_*` included (`isTurnInFlight`, F12). */
   inFlightSession: boolean;
   sendStatus: TurnSendStatus | null;
@@ -772,7 +770,6 @@ const ChatTurn = memo(function ChatTurn({
   turn,
   isLastTurn,
   sessionStatus,
-  isActiveTurn,
   inFlightSession,
   sendStatus,
   baselineKnown,
@@ -945,20 +942,35 @@ const ChatTurn = memo(function ChatTurn({
   // head from null to non-null, remounting the whole subtree twice (F2).
   const collapsible = process.length > 0;
 
-  const streamingBlockIdByMessage = useMemo(() => {
-    const map = new Map<string, string | null>();
-    for (const message of turn.body) {
-      // Mirrors the pre-T-31 per-message check: the turn's active flag gates
-      // it, and only a message's own last block can be "in flight".
-      map.set(
-        message.id,
-        isActiveTurn && message.blocks.length > 0
-          ? message.blocks[message.blocks.length - 1].id
-          : null
-      );
-    }
-    return map;
-  }, [turn.body, isActiveTurn]);
+  // F-C3. The derivation itself is a pure function so the node suite can
+  // truth-table it; what is decided HERE is only which inputs it gets:
+  //
+  //  - `inFlightSession`, not `isActiveTurn` — a permission wait is still in
+  //    flight, and the narrower predicate made the gate flip Markdown on and
+  //    off around every authorization round-trip;
+  //  - `&& isLastTurn` — the session-level flag is handed to every turn (the
+  //    two ticking props above are narrowed for exactly this reason), so
+  //    without it a new turn dropped every EARLIER answer in the session back
+  //    to plain text until it finished;
+  //  - per-message metadata, so a message that completes mid-turn converts
+  //    immediately instead of waiting for the turn to end.
+  const streamingBlockIdByMessage = useMemo(
+    () =>
+      deriveStreamingBlockIds({
+        turnInFlight: inFlightSession && isLastTurn,
+        messages: turn.body.map((message, index) => {
+          const meta = bodyMetadata[index];
+          return {
+            id: message.id,
+            lastBlockId:
+              message.blocks.length > 0 ? message.blocks[message.blocks.length - 1].id : null,
+            tracked: meta != null,
+            completed: meta?.completedAt != null,
+          };
+        }),
+      }),
+    [turn.body, bodyMetadata, inFlightSession, isLastTurn]
+  );
 
   const renderItem = (item: TurnItem) => (
     <TurnItemView
@@ -1223,8 +1235,12 @@ function TurnItemView({
      *
      * `shouldRenderMarkdown` is the streaming gate (F-C3): plain text while the
      * block is the one still streaming, markdown afterwards. Restored history
-     * lands on the markdown branch immediately — a replayed turn is never
-     * active, so its `streamingBlockId` is `null`.
+     * lands on the markdown branch immediately — but NOT for the reason an
+     * earlier version of this comment gave ("a replayed turn is never active").
+     * `streamingBlockId` was derived from SESSION state, so a replayed turn was
+     * marked streaming the moment any new turn started; what makes restored
+     * history safe is that it carries no per-message metadata, which
+     * `deriveStreamingBlockIds` reads as finished.
      */
     case 'text': {
       const text = item.block.text ?? '';

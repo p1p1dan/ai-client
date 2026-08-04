@@ -3,6 +3,7 @@ import {
   type ChatCodeLanguage,
   type ChatCodeToken,
   normalizeCodeLanguage,
+  shouldHighlightFence,
 } from './chatMarkdownPolicy';
 
 /**
@@ -30,11 +31,23 @@ import {
  * ## Why every shiki import here is dynamic
  *
  * `shiki/core`, its regex engine and each theme are several hundred KB of
- * JavaScript, and a session with no code fence in it must not pay for them.
- * Everything below is `await import(...)` inside a function body, so Rollup
- * emits them as async chunks and the first fenced block in a session is what
- * fetches them. The only static import in this file is `import type`, which is
- * erased at build time.
+ * JavaScript, and nothing in this file should be paid for before the first code
+ * fence. Everything below is `await import(...)` inside a function body, so
+ * Rollup emits them as async chunks. The only static import here is
+ * `import type`, which is erased at build time.
+ *
+ * **What that actually buys, measured against the real build** (`pnpm build`,
+ * 2026-08-04) rather than assumed: 20 of the 27 grammars do get their own async
+ * chunk and are fetched only when a fence names them. The other seven do not,
+ * and it is not this file's doing — `files/monacoSetup.ts` STATICALLY imports
+ * `shiki/core`, the JS regex engine, both vitesse themes and the astro / svelte
+ * / vue grammars, and those three drag their embedded-language closure
+ * (`typescript`, `tsx`, `javascript`, `json`, `html`, `css`) into the eagerly
+ * loaded App chunk with them; `bash` is a re-export of the `shell` module and
+ * shares its chunk. So for the seven commonest fence languages the dynamic
+ * import resolves to a module that is already in memory — no extra fetch, but
+ * no saving either. Removing the cost would mean making `monacoSetup` lazy,
+ * which is outside T-29.
  *
  * ## Theme
  *
@@ -155,6 +168,44 @@ async function ensureLanguage(
 }
 
 /**
+ * Tokenised fences, keyed by theme + language + source.
+ *
+ * Tokenising is pure and deterministic in those three, and it is also the
+ * expensive part — so the same fence must not pay for it twice. It does today
+ * in two ordinary situations: a light/dark flip re-tokenises EVERY visible
+ * fence (`ChatCodeBlock` drops its tokens on the theme change), and the blocks
+ * all resolve inside one microtask drain, so the browser paints nothing in
+ * between and the user sees a single continuous stall — measured at 440ms for
+ * ten 300-line blocks. The second is remount: scrolling a long session, or
+ * switching away and back, re-runs the whole thing.
+ *
+ * Bounded, because the input is model-authored and unbounded: LRU on 64
+ * entries, and each entry is already capped by `shouldHighlightFence`. The
+ * theme is part of the key rather than a second cached copy, so a session that
+ * never flips themes never stores the other one.
+ */
+const HIGHLIGHT_CACHE_MAX_ENTRIES = 64;
+const highlightCache = new Map<string, ChatCodeToken[][]>();
+
+function readCache(key: string): ChatCodeToken[][] | undefined {
+  const hit = highlightCache.get(key);
+  if (!hit) return undefined;
+  // Re-insert so `keys().next()` stays the least recently used one.
+  highlightCache.delete(key);
+  highlightCache.set(key, hit);
+  return hit;
+}
+
+function writeCache(key: string, lines: ChatCodeToken[][]): void {
+  highlightCache.set(key, lines);
+  while (highlightCache.size > HIGHLIGHT_CACHE_MAX_ENTRIES) {
+    const oldest = highlightCache.keys().next().value;
+    if (oldest === undefined) break;
+    highlightCache.delete(oldest);
+  }
+}
+
+/**
  * Highlight one fenced block, or return `null` for "render it plain".
  *
  * `null` is a normal outcome, not an error: an unknown language, a grammar
@@ -169,19 +220,34 @@ export async function highlightChatCode(input: {
 }): Promise<ChatCodeToken[][] | null> {
   const language = normalizeCodeLanguage(input.language);
   if (!language) return null;
+  // F-C7: a fence past the budget is rendered plain rather than freezing the
+  // renderer for a second or more. Checked before the highlighter is even
+  // constructed, so an oversized fence in a session with no other code costs
+  // nothing at all.
+  if (!shouldHighlightFence(input.code)) return null;
+  const theme = input.isDark ? CHAT_SHIKI_THEMES.dark : CHAT_SHIKI_THEMES.light;
+  const cacheKey = `${theme}\u0000${language}\u0000${input.code}`;
+  const cached = readCache(cacheKey);
+  if (cached) return cached;
   try {
     const highlighter = await getHighlighter();
     if (!(await ensureLanguage(highlighter, language))) return null;
-    const theme = input.isDark ? CHAT_SHIKI_THEMES.dark : CHAT_SHIKI_THEMES.light;
     const { tokens } = highlighter.codeToTokens(input.code, { lang: language, theme });
-    return tokens.map((line) =>
+    const lines = tokens.map((line) =>
       line.map((token) => ({
         content: token.content,
         color: token.color,
         fontStyle: token.fontStyle,
       }))
     );
+    writeCache(cacheKey, lines);
+    return lines;
   } catch {
     return null;
   }
+}
+
+/** Test seam: the cache is process-wide, so a suite that measures it must be able to reset it. */
+export function clearChatHighlightCache(): void {
+  highlightCache.clear();
 }

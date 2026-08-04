@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { stripComments } from './stripComments';
 
 /**
  * D25 §6.3 A1/A5/A6: repo-wide static scans for the font-domain split.
@@ -10,14 +11,24 @@ import { describe, expect, it } from 'vitest';
  * in `composerFormStatic.test.ts` -- these scans read CODE, not the doc
  * comments that (necessarily, for a project like this) quote the very class
  * names they ban or restrict.
+ *
+ * `stripComments` is the shared, parser-backed one (see its own note). The
+ * private regex pair that used to sit here was over-stripping 12 files under
+ * `src/renderer` -- among them `chat/EnhancedInput.tsx`, whose `accept="image/*"`
+ * paired with a later block-comment terminator and deleted the JSX between them,
+ * and `workspace-shell/deriveChatWorkspaceTree.ts`, whose
+ * `replace(/^refs\/heads\//, '')` ended in the characters `\`, `/`, `/` and took
+ * the rest of its line with it. Both files are inside the scans below, so the
+ * scans were reading code that is not what the file says.
  */
 
 const RENDERER_ROOT = join(process.cwd(), 'src/renderer');
 const CHAT_DIR = join(RENDERER_ROOT, 'components/chat');
 const WORKSPACE_SHELL_DIR = join(RENDERER_ROOT, 'components/workspace-shell');
 
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+/** One file's code, comments blanked. The name is what tells `.ts` from `.tsx`. */
+function readStripped(file: string): string {
+  return stripComments(readFileSync(file, 'utf8'), file);
 }
 
 function collectFiles(dir: string): string[] {
@@ -227,8 +238,7 @@ describe('D25 §6.3 A1: font-mono is a closed whitelist', () => {
       .map((file) => relToRenderer(file))
       .filter((rel) => {
         const full = join(RENDERER_ROOT, rel);
-        const stripped = stripComments(readFileSync(full, 'utf8'));
-        return /\bfont-mono\b/.test(stripped);
+        return /\bfont-mono\b/.test(readStripped(full));
       })
       .filter((rel) => !FONT_MONO_WHITELIST.includes(rel));
 
@@ -242,8 +252,7 @@ describe('D25 §6.3 A5: font-mono elements never carry a non-zero tracking-*', (
     for (const rel of FONT_MONO_WHITELIST) {
       if (TRACKING_MONO_FILE_EXEMPTIONS.includes(rel)) continue;
       const full = join(RENDERER_ROOT, rel);
-      const stripped = stripComments(readFileSync(full, 'utf8'));
-      for (const literal of findMonoTrackingViolations(stripped)) {
+      for (const literal of findMonoTrackingViolations(readStripped(full))) {
         offenders.push({ file: rel, literal });
       }
     }
@@ -253,8 +262,7 @@ describe('D25 §6.3 A5: font-mono elements never carry a non-zero tracking-*', (
   it('the OTP input is the only same-string exemption, and it still pairs font-mono with tracking-[0.5em] on purpose', () => {
     for (const rel of TRACKING_MONO_FILE_EXEMPTIONS) {
       const full = join(RENDERER_ROOT, rel);
-      const stripped = stripComments(readFileSync(full, 'utf8'));
-      const violations = findMonoTrackingViolations(stripped);
+      const violations = findMonoTrackingViolations(readStripped(full));
       expect(violations.length).toBeGreaterThan(0);
       expect(violations.some((literal) => literal.includes('tracking-[0.5em]'))).toBe(true);
     }
@@ -271,7 +279,7 @@ describe('D25 §6.3 A5: font-mono elements never carry a non-zero tracking-*', (
     const offenders = collectFiles(RENDERER_ROOT)
       .map((file) => relToRenderer(file))
       .filter((rel) => {
-        const stripped = stripComments(readFileSync(join(RENDERER_ROOT, rel), 'utf8'));
+        const stripped = readStripped(join(RENDERER_ROOT, rel));
         return FILE_NONZERO_TRACKING_RE.test(stripped) && FILE_FONT_MONO_RE.test(stripped);
       })
       .filter((rel) => !exempt.has(rel));
@@ -284,7 +292,7 @@ describe('D25 §6.3 A5: font-mono elements never carry a non-zero tracking-*', (
   // coexistence it was granted for, and must still carry its reason.
   it('every adjudicated coexistence exemption is still real and still carries its reason', () => {
     for (const entry of TRACKING_MONO_COEXISTENCE_EXEMPTIONS) {
-      const stripped = stripComments(readFileSync(join(RENDERER_ROOT, entry.file), 'utf8'));
+      const stripped = readStripped(join(RENDERER_ROOT, entry.file));
       expect(FILE_FONT_MONO_RE.test(stripped)).toBe(true);
       expect(FILE_NONZERO_TRACKING_RE.test(stripped)).toBe(true);
       expect(entry.reason.length).toBeGreaterThan(40);
@@ -298,7 +306,7 @@ describe('D25 §6.3 A6: banned raw size utilities are zero in chat/ + workspace-
   const sources = scanDirs
     .flatMap((dir) => collectFiles(dir))
     .filter((file) => !file.includes('__tests__'))
-    .map((file) => ({ rel: relToRenderer(file), src: stripComments(readFileSync(file, 'utf8')) }));
+    .map((file) => ({ rel: relToRenderer(file), src: readStripped(file) }));
 
   for (const banned of BANNED_SIZE_TOKENS) {
     it(`${banned} is gone, under every variant prefix`, () => {

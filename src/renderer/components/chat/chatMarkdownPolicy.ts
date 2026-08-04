@@ -108,8 +108,34 @@ export function sanitizeMarkdownHref(href: string | null | undefined): string | 
   }
   const allowed: readonly string[] = CHAT_MARKDOWN_ALLOWED_PROTOCOLS;
   if (!allowed.includes(parsed.protocol)) return null;
+  if (!CHAT_MARKDOWN_HOST_PATTERN.test(parsed.hostname)) return null;
   return parsed.href;
 }
+
+/**
+ * What a hostname may contain once the parser is done with it.
+ *
+ * The URL parser percent-DECODES into the host and, unlike the path, does not
+ * re-encode the result: `https://ex%22ample.com/` comes back with a literal `"`
+ * in `hostname`, and `` ` ``, `{`, `}`, `&`, `$`, `;`, `!`, `'`, `(`, `)`, `*`,
+ * `+`, `,`, `=`, `~` survive the same way. That string is what reaches
+ * `shell.openExternal`, and on Windows the `https` handler is resolved from the
+ * registry and substituted into a `%1` command template.
+ *
+ * This is hardening, not a hole being closed: the parser already REJECTS every
+ * character needed to split a new argv token (space, tab, `\`, `|`, `^`, `<`,
+ * `>`, `#`, `%`, `:`, `?`, `@`, `[`, `]`, `/`), so the classic `" & calc "`
+ * shape renders as plain text today. The rule is simply that a hostname has no
+ * business containing punctuation outside this set, and the cheapest place to
+ * be sure is before the string leaves for the OS.
+ *
+ * Deliberately applied to `hostname`, not `host`: it excludes the port (which
+ * is digits the parser has already validated) and userinfo. IDN is not a false
+ * positive — IDNA runs during parsing, so `münchen.de` is `xn--mnchen-3ya.de`
+ * and `例え.jp` is `xn--r8jz45g.jp` by the time it is read here. The bracket
+ * branch keeps IPv6 literals (`[::1]`) working.
+ */
+const CHAT_MARKDOWN_HOST_PATTERN = /^(?:[a-z0-9._-]+|\[[0-9a-f:.]+\])$/;
 
 /**
  * `react-markdown`'s `urlTransform` hook, expressed over the same gate.
@@ -214,16 +240,27 @@ const CHAT_CODE_LANGUAGE_ALIASES: Readonly<Record<string, ChatCodeLanguage>> = {
 export function normalizeCodeLanguage(raw: string | null | undefined): ChatCodeLanguage | null {
   if (typeof raw !== 'string') return null;
   // A fence's info string may carry attributes after the language
-  // (```ts twoslash / ```js {1,3-4}); only the first word names the grammar.
+  // (```ts twoslash / ```js {1,3-4} / ```ts:src/index.ts, the last being the
+  // Docusaurus filename form models copy out of documentation corpora); only
+  // the first word names the grammar.
   const first =
     raw
       .trim()
-      .split(/[\s,{]/, 1)[0]
+      .split(/[\s,{:]/, 1)[0]
       ?.toLowerCase() ?? '';
   if (first.length === 0) return null;
   const supported: readonly string[] = CHAT_CODE_LANGUAGES;
   if (supported.includes(first)) return first as ChatCodeLanguage;
-  return CHAT_CODE_LANGUAGE_ALIASES[first] ?? null;
+  // `Object.hasOwn`, not a bare index: the info string is model-authored, and a
+  // plain object-literal lookup answers `__proto__` with `Object.prototype` and
+  // `constructor` with `Object` — both non-null, so `?? null` would not fire and
+  // this function would return a NON-string as `ChatCodeLanguage`. That value
+  // then skips `highlightChatCode`'s `if (!language)` fast path and builds the
+  // whole shiki singleton for a fence that can never be highlighted, which is
+  // the exact outcome the closed list exists to prevent.
+  return Object.hasOwn(CHAT_CODE_LANGUAGE_ALIASES, first)
+    ? CHAT_CODE_LANGUAGE_ALIASES[first]
+    : null;
 }
 
 /** Pull the language out of `react-markdown`'s `language-xxx` class on a `<code>`. */
@@ -237,14 +274,28 @@ export function codeLanguageFromClassName(className: string | null | undefined):
  *
  * `react-markdown` v10 dropped the `inline` prop, and its own documented recipe
  * keys off the `language-*` class — which misses a fence opened with no info
- * string at all. The newline fallback closes the common half of that gap: a
- * multi-line body cannot be an inline span. The residue (a fence with neither a
- * language nor a newline, ```` ```\nfoo\n``` ````) still renders as an inline
- * chip; that is the same behaviour `files/MarkdownPreview.tsx` has shipped with,
- * and it degrades to "correct text, wrong box" rather than to anything unsafe.
+ * string at all. Two fallbacks close that gap, and between them the residue the
+ * earlier revision of this comment described is empty:
+ *
+ *  - **a newline in the body.** A fence's body always ends in one (the closing
+ *    ```` ``` ```` sits on its own line), so ```` ```\nfoo\n``` ```` is caught
+ *    here — the worked example this comment used to call the residue was
+ *    measured and is in fact handled;
+ *  - **no children at all.** The genuinely empty fence (```` ```\n``` ````) is
+ *    the one case with neither a language nor a newline: `react-markdown` hands
+ *    the renderer `children === undefined`, where an inline span always has a
+ *    non-empty string. Without this clause it rendered as an empty `CodeInline`
+ *    chip — a stray 8px grey pill sitting in the prose with no block spacing.
  */
-export function isFencedCodeBlock(input: { className?: string | null; text: string }): boolean {
-  return codeLanguageFromClassName(input.className) !== null || input.text.includes('\n');
+export function isFencedCodeBlock(input: {
+  className?: string | null;
+  text: string;
+  /** `false` only when the `code` renderer was handed no children whatsoever. */
+  hasChildren?: boolean;
+}): boolean {
+  if (codeLanguageFromClassName(input.className) !== null) return true;
+  if (input.text.includes('\n')) return true;
+  return input.hasChildren === false;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,16 +322,66 @@ export interface MarkdownGateInput {
  * closing ``` arrives, so parsing every token would flip whole paragraphs in
  * and out of a code box as the reply is typed. One reflow at the end is the
  * price; a strobing one is not.
- *
- * The signal is the streaming-block id the timeline ALREADY derives, not a new
- * store field — `chatSessions.ts` is a red-line file and `ChatMessage` has no
- * completion flag. That id is conservative in exactly the right direction: it
- * marks the last block of every body message while the turn is active, so
- * mid-turn prose that is already final also waits, and the whole turn converts
- * in a single frame when it ends instead of block by block.
  */
 export function shouldRenderMarkdown({ blockId, streamingBlockId }: MarkdownGateInput): boolean {
   return blockId !== streamingBlockId;
+}
+
+/** One body message, reduced to what the gate needs (see `deriveStreamingBlockIds`). */
+export interface StreamingGateMessage {
+  id: string;
+  /** The message's last block id — the only block that can still be in flight. */
+  lastBlockId: string | null;
+  /**
+   * Whether the app has metadata for this message AT ALL. Restored (`h:`)
+   * history has none, which is how "replayed, therefore finished" is told apart
+   * from "started this session and not finished yet".
+   */
+  tracked: boolean;
+  /** Whether that metadata carries a `completedAt`. */
+  completed: boolean;
+}
+
+/**
+ * Which block of each body message is still streaming (F-C3).
+ *
+ * Pure, and deliberately so: this used to be an inline `useMemo` in
+ * `MessageTimeline.tsx`, where the node-only suite could not see it — and two
+ * defects lived in that blind spot until the T-29 review:
+ *
+ *  1. **the gate was session-wide.** The caller passed one `isActiveTurn` flag
+ *     to EVERY turn, so starting a new turn re-marked the last block of every
+ *     message in every EARLIER turn as "streaming" and dropped the whole
+ *     session's finished answers back to plain text — headings, lists, tables
+ *     and code boxes disappearing (and the scroll position jumping) for as long
+ *     as the new reply took, then all snapping back at once;
+ *  2. **the gate was not monotonic.** It keyed off `isTurnActive`, which
+ *     excludes `waiting_permission` / `waiting_question`, so an authorization
+ *     round-trip flipped blocks to Markdown mid-stream and back again — two
+ *     extra full reflows, precisely the strobing this gate exists to prevent.
+ *
+ * Both are fixed by asking a different question. `turnInFlight` is the caller's
+ * conjunction of "the session is in flight (including permission waits)" and
+ * "this is the LAST turn" — only that turn can contain a streaming block — and
+ * per message the answer now comes from its own metadata rather than from
+ * session state. `completedAt` only ever goes from unset to set, so a block
+ * converts to Markdown exactly once and never reverts; a message the app never
+ * tracked (restored history) is finished by definition; and an aborted turn,
+ * where `completedAt` may never arrive, is released by `turnInFlight` going
+ * false. This also narrows the T-29 as-built deviation on (c): an intermediate
+ * message that completes mid-turn now converts immediately instead of waiting
+ * for the whole turn to end.
+ */
+export function deriveStreamingBlockIds(input: {
+  messages: readonly StreamingGateMessage[];
+  turnInFlight: boolean;
+}): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const message of input.messages) {
+    const streaming = input.turnInFlight && message.tracked && !message.completed;
+    map.set(message.id, streaming ? message.lastBlockId : null);
+  }
+  return map;
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +447,11 @@ export function chatMarkdownHeadingClass(level: 1 | 2 | 3 | 4 | 5 | 6): string {
  * `[&_ul]:mt-1` / `[&_ol]:mt-1` re-tighten NESTED lists: without them a sublist
  * inherits the 10px block gap and a three-level outline reads as three separate
  * paragraphs. Descendant variants beat the plain `mt-2.5` on specificity, which
- * is the whole mechanism.
+ * is the mechanism — but the measured result is 0px, not the 4px this comment
+ * used to claim: a nested list is its `<li>`'s first ELEMENT child (the text
+ * node does not count), so `first:mt-0` at 0-2-0 outranks the descendant rule
+ * at 0-1-1. Flush is the wanted rendering; the utility stays as the guard for
+ * the sublist that is NOT first (a list item with prose above its sublist).
  *
  * `[&_li.task-list-item]:list-none` is the GFM task-list case. `remark-gfm`
  * marks those items with `.task-list-item` and every GFM stylesheet hides their
@@ -371,7 +476,14 @@ export function chatMarkdownListClass(ordered: boolean): string {
  * comes from — see `sanitizeMarkdownHref`.
  */
 export function chatMarkdownLinkClass(): string {
-  return 'text-primary underline underline-offset-4 hover:text-primary/80';
+  // The hover feedback moves the UNDERLINE, not the text colour. `text-primary`
+  // measures 4.73:1 on light / 5.49:1 on dark; the `hover:text-primary/80` this
+  // used to carry dropped that to 3.39:1 / 3.93:1, i.e. under WCAG AA's 4.5:1
+  // for body text in both themes — a hover state nobody can read is not a hover
+  // state, and `docs/design-system.md`'s "已知偏差" table is for deviations we
+  // decided to keep, not a place to file new ones. Decoration alpha carries the
+  // same affordance and is not text contrast.
+  return 'text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary';
 }
 
 /**
@@ -427,11 +539,18 @@ export function chatMarkdownHrClass(): string {
  * own markers, and a rule here would be the third horizontal line in a reply
  * that may also contain `---` and a table.
  */
-export function chatMarkdownFootnotesClass(className: string | null | undefined): string {
-  if (typeof className !== 'string') return '';
-  return className.split(/\s+/).includes('footnotes')
-    ? `${SECTION_GAP} text-meta text-muted-foreground`
-    : '';
+export function chatMarkdownFootnotesClass(className: unknown): string {
+  // Both shapes, for the same reason `isFootnoteBackref` takes both: which one
+  // arrives is a `react-markdown` / `hast` implementation detail, and getting it
+  // wrong here fails SILENTLY — the footnote block simply loses its separation
+  // and reads as one more list item. It is a string on the current pair.
+  const names =
+    typeof className === 'string'
+      ? className.split(/\s+/)
+      : Array.isArray(className)
+        ? className
+        : [];
+  return names.includes('footnotes') ? `${SECTION_GAP} text-meta text-muted-foreground` : '';
 }
 
 /**
@@ -445,6 +564,62 @@ export function chatMarkdownFootnotesClass(className: string | null | undefined)
  */
 export function chatMarkdownImagePlaceholderClass(): string {
   return 'inline-flex max-w-full items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 align-middle text-meta text-muted-foreground';
+}
+
+// ---------------------------------------------------------------------------
+// Highlight budget (F-C7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Above any of these, a fence is rendered plain (F-C7).
+ *
+ * `codeToTokens` is SYNCHRONOUS — the `async` on `highlightChatCode` covers the
+ * dynamic imports, not the tokenizer — so the whole renderer process stops for
+ * its duration: no typing, no scrolling, no cancelling, and the tokens of the
+ * reply still streaming in queue up behind it.
+ *
+ * The three limits are not three ways of saying the same thing, and the third
+ * is the one that matters. Measured with this module's own engine and themes:
+ *
+ *  - **line count** is cheap and near-linear — 5000 lines over 120k chars costs
+ *    262ms, and the DOM commit (≈110k spans) dominates it;
+ *  - **total size** bounds that DOM commit. Counted in UTF-16 code units
+ *    rather than UTF-8 bytes, which is deliberate and is why the constant is
+ *    named `_CHARS`: the tokenizer's cost tracks units of text, not their
+ *    encoded width, so a CJK fence should not get a third of the budget for
+ *    being CJK;
+ *  - **the longest single line is roughly QUADRATIC**, and it is the reason a
+ *    byte budget alone is not a guard: `typescript` takes 265ms at 4k chars on
+ *    one line, 1.06s at 8k, 4.5s at 16k and 9.5s at 20k — all of which fit
+ *    inside a 64 KB fence. A minified bundle, a base64 literal, a stringified
+ *    JSON or a wide type union in a ```ts fence gets there with no adversary
+ *    involved, and `typescript` / `tsx` / `javascript` / `bash` are exactly the
+ *    grammars a coding chat sees most (`python` / `json` are unaffected).
+ *    2000 chars keeps the worst case near 130ms.
+ *
+ * Because of the F-C3 streaming gate the highlight lands AT turn completion —
+ * i.e. the instant the user reaches for the input box — so a freeze here is
+ * maximally badly timed. The fallback is not a failure state: an un-highlighted
+ * fence is the same box with the same text, one text node instead of thousands
+ * of spans, which is why the plain path costs nothing at any size.
+ */
+export const CHAT_HIGHLIGHT_MAX_LINES = 800;
+export const CHAT_HIGHLIGHT_MAX_CHARS = 64 * 1024;
+export const CHAT_HIGHLIGHT_MAX_LINE_CHARS = 2000;
+
+/** Whether a fence is small enough to be worth (and safe to) highlight (F-C7). */
+export function shouldHighlightFence(code: string): boolean {
+  if (code.length > CHAT_HIGHLIGHT_MAX_CHARS) return false;
+  let lines = 1;
+  let lineStart = 0;
+  for (let i = 0; i < code.length; i += 1) {
+    if (code.charCodeAt(i) !== 10 /* \n */) continue;
+    if (i - lineStart > CHAT_HIGHLIGHT_MAX_LINE_CHARS) return false;
+    lineStart = i + 1;
+    lines += 1;
+    if (lines > CHAT_HIGHLIGHT_MAX_LINES) return false;
+  }
+  return code.length - lineStart <= CHAT_HIGHLIGHT_MAX_LINE_CHARS;
 }
 
 // ---------------------------------------------------------------------------

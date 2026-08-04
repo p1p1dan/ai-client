@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { stripComments } from './stripComments';
 
 /**
  * T-30b2 F-A20 (absorbs the earlier F-A8): static evidence that the merged
@@ -22,11 +23,16 @@ const CHAT_DIR = join(process.cwd(), 'src/renderer/components/chat');
  * scan and keeping the explanation, and the explanation is the only thing
  * stopping the next person from reintroducing them.
  *
- * The `[^:]` guard on line comments keeps `https://` from swallowing the rest
- * of its line.
+ * The strip is the shared, parser-backed one (see `./stripComments`). The
+ * regex pair that used to live here — including its `[^:]` guard, which only
+ * ever protected the `https://` shape where the colon is immediately in front —
+ * deleted real code out of this very directory: `EnhancedInput.tsx`'s
+ * `accept="image/*"` paired with the next block-comment terminator and took the
+ * JSX between them with it. Deleted code cannot contain `SelectTrigger`, so the
+ * scans below were partly asserting over text that is not in the file.
  */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+function readStripped(file: string): string {
+  return stripComments(readFileSync(file, 'utf8'), file);
 }
 
 function collectFiles(dir: string): string[] {
@@ -59,9 +65,7 @@ describe('F-A20: composer form static scan', () => {
   // dropdowns here use the ghost-chip form instead.
   it('no SelectTrigger survives anywhere under components/chat', () => {
     const offenders = collectFiles(CHAT_DIR).filter(
-      (file) =>
-        !file.includes('__tests__') &&
-        /\bSelectTrigger\b/.test(stripComments(readFileSync(file, 'utf8')))
+      (file) => !file.includes('__tests__') && /\bSelectTrigger\b/.test(readStripped(file))
     );
     expect(offenders).toEqual([]);
   });
@@ -76,7 +80,7 @@ describe('F-A20: composer form static scan', () => {
   it('no fixed width floor comes back to the composer controls', () => {
     const offenders = collectFiles(CHAT_DIR).filter((file) => {
       if (file.includes('__tests__')) return false;
-      return /\bmin-w-2[26]\b/.test(stripComments(readFileSync(file, 'utf8')));
+      return /\bmin-w-2[26]\b/.test(readStripped(file));
     });
     expect(offenders).toEqual([]);
   });
