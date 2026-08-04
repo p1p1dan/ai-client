@@ -4,6 +4,7 @@
 
 - **Current Phase**: **Phase 0A 基线部分补做（A01 / A05 / A06）→ 观感对齐改造**（2026-07-28 转向）。这三项产品设计基线此前只在可行性文档的候选任务池、从未进执行计划或台账，而下游 F05/H01/H09 已按它们施工——这是「观感不到位 + 死按钮泛滥 + 布局反复卡壳」的同一根因，本日补做并落库（D18 / D19 / D20）。⚠️ **Phase 0A 整体仍 🟡 未收口**：A02 / A03 / A04 仍未立项，且已交付的 A06 依赖列写的正是「A01、A02」（口径以总台账 Phase 总览 0A 行为准）。Phase 3 Chat MVP 的剩余点测与网关阻塞并行不变。
 - **Last Landed**:
+  - 验收（2026-08-04）：**T-24 收尾结项转 Done**（S0 零代码改动）——施工前双链审计 CONFIRMED（入口链 LeftNav 四处 + 目标栏三项 / 拖放整壳落区，HEAD `01be19c`，Workflow 2 追链 + opus 对抗核验）；用户本机 fresh-profile 模拟实测（`AICLIENT_PROFILE=t24fresh`，不带 `--open-path`）验收①②③全过，另核 git/非 git 目录目标栏分支门控吻合 T-27 口径；**偏离登记：真机 Windows 打包版未测 → 并入 T-10 清单第 8 项**。明细见主线台账 2026-08-04 T-24 行
   - 验收（2026-08-04）：**T-29 GUI 点验用户验收通过**（首轮「目前展示效果都不错还可以」+ 唯一缺陷内容不可选中当轮修复 `b08f6ae` + 收尾表态「本阶段收尾。脚注和标题不用改，先这样吧」）——**T-29 转 Done**；**拍板两项均维持现状**：① 脚注区 13px ② 六级标题三种视觉档。0-duodecies 随轮收口
   - 代码+文档（2026-08-04）：**T-29 Markdown 渲染代码结项 `d320206` + `666c7c3` + `4507df3`**（前两 hash 曾提交并推送但状态文档漏记，本日补登；第三个为双轨对抗复核修复批 13 文件 +2,104/−142）——策略层/shiki 高亮/流式门/安全五规则主体 + 复核裁定修复：流式门下沉纯函数 `deriveStreamingBlockIds` 根治 major 会话级误伤（新回合曾抹掉全会话历史回答的 Markdown）、门单调化、(c) 收窄为逐消息即时转正；F-C7 三重高亮预算 + 64 项 LRU；`__proto__` 守卫与 href 主机名加固；共享 TS 编译器 API `stripComments` 换掉全仓四份假绿拷贝。双轨复核闭环（Workflow 27 findings / 3 证伪 + verify:security 补格 + Codex 双盲收活）。红线零改动。**GUI 点验待用户（0-duodecies，用户线）**。明细见主线台账 2026-08-04 T-29 行
   - 验收（2026-08-03 第八轮）：**T-31 GUI 点验用户验收通过**（原话「点验完毕，没啥问题」）——0-undecies 十一项全过，**T-31 转 Done**；0-bis / 0-quinquies 随本轮捆绑表态收口，**T-22 / T-05 转 Done**（二~八轮真机连续使用未报异议 + 本轮无异议；T-31 已重排 T-05 挂载结构，其点验面被 0-undecies 覆盖）。§9 六项推荐值与 D26④ 满宽等编排者执行裁定全部获追认
@@ -11,12 +12,13 @@
   - 验收（2026-08-03）：**第七轮 GUI 点验用户验收通过**（原话「验收完毕，没有问题」）——第六轮两项与全部复核批修复闭环，诊断档结项；实测范围含 aaa 文件夹 New / "+ new chat" / 分支 chip 归属 / 失败退回重发无重复气泡 / 同文连发保留 / 附件与归档关闭对齐。第五轮清单 0-decies 与第四轮失败路径顺延项就此关闭；**0-octies 门槛达成 → T-27/T-28/T-19/T-30批1 转 Done**（见 roadmap）。点验期间一次「No repository registered」经查为 dev server 带病热更新残留态，非代码回归（诊断档附注）
   - 更早批次（2026-07-28 ~ 2026-08-03 三批：五连修/T-21/T-22/T-26/T-27/T-28/T-05/T-19/T-30 批1+批2/第二~六轮点验修复等）：摘要原文见 [history 归档](./history/2026-0728-0803-archive.md)，明细见[主线台账](../../../plans/ledger-claude-mainline.md)各行
 - **Last Verified**:
+  - **2026-08-04 T-24 收尾态实测（HEAD `01be19c`，逐门串行）**：typecheck 干净 / lint **728 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **101 文件 1902 例**（较 4507df3 登记基线 +1 例=b08f6ae 所增；同 3 例 Windows-only 失败）。本任务零代码改动。
   - **2026-08-04 T-29 代码结项态实测（HEAD `4507df3`）**：typecheck 干净 / lint **0 错误**（29w+3i 既有 a08 豁免）/ vitest **101 文件 1901 例**（较 666c7c3 合并态 1838 例 +1 文件 +63 例全为本批；同 3 例 Windows-only 失败）/ `pnpm build` 成功且 **20 个 shiki 语法异步 chunk 全在 27 语白名单内**。⚠️ **本机内存有限（用户 2026-08-04 明示）：门禁必须逐门串行跑，禁止链式合跑或与子代理/后台任务并行**——前次四门链式合跑被 OOM 杀（exit 137）。
   - **2026-08-03 T-29 工作区态实测（未提交，施工后复核前）**：typecheck 干净 / lint **724 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **98 文件 1813 例**（+1 文件 +54 例；同 3 例 Windows-only 失败）。
   - **2026-08-03 四批复核（T-31 `8109d45` 合并态）**：typecheck 干净 / lint **718 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **97 文件 1759 例**（+7 文件 +166 例；同 3 例 Windows-only 失败）/ `pnpm build` 成功且产物含 `@container scroll-state(stuck: top)` 规则（lightningcss 管线绕行有效性的产物级验证）。
   - **2026-08-03 三批复核（第六轮修复 `fd55a26` 合并态，T-31 开工前基线实测）**：typecheck 干净 / lint **703 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **90 文件 1593 例**（+2 文件 +56 例；同 3 例 Windows-only 失败）。
   - 更早复核记录（2026-07-28 基线 51 文件 590 例起，全程只增）与 T-21 复核口径注记：见 [history 归档](./history/2026-0728-0803-archive.md)
-- **Next Target**（2026-08-04 十次修订，T-29 验收结项）：开发线下一项 **T-24 收尾**（S0：全新机器 GUI 实测 + 台账补登，代码已随 `b38017b` 落库，不改代码）→ **T-12/T-13/T-14/T-15**（四 surface，均依赖 T-22 已清；A08 临时基线正式化随行）→ **T-23** 存量违规清理。**残留**：0-nonies ⑪（a09 改后截图回填 + D25 §6.2 五项真机指标，Win10 必测字重）未采集；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：历史侧回合时长源（恢复回合现无 `Worked for` 秒数，头槽降级链有意为之）；`ran N command(s)` 聚合复议（需 A07 :1769-1772 基线修订）；**T-29 转入四项**：全局 `color-scheme`（原生表单控件暗色一次修好，替代逐处 accent 类）/ 单渲染进程三个 HighlighterCore 单例（monacoSetup / ui-code-block / chatShiki）/ monacoSetup 懒化（可返还 ts/tsx/js/json/html/css 六语法的懒加载收益）/ `thinkingCard.isTurnActive` 零生产消费死导出（仅自身单测，去留待定）。
+- **Next Target**（2026-08-04 十一次修订，T-24 收尾结项）：开发线下一项 **T-12/T-13/T-14/T-15**（四 surface，均依赖 T-22 已清；A08 临时基线正式化随行）→ **T-23** 存量违规清理。**残留**：T-24 真机 Windows 打包版实测（并入 T-10 清单第 8 项）；0-nonies ⑪（a09 改后截图回填 + D25 §6.2 五项真机指标，Win10 必测字重）未采集；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源（恢复回合现无 `Worked for` 秒数，头槽降级链有意为之）；`ran N command(s)` 聚合复议（需 A07 :1769-1772 基线修订）；**T-29 转入四项**：全局 `color-scheme`（原生表单控件暗色一次修好，替代逐处 accent 类）/ 单渲染进程三个 HighlighterCore 单例（monacoSetup / ui-code-block / chatShiki）/ monacoSetup 懒化（可返还 ts/tsx/js/json/html/css 六语法的懒加载收益）/ `thinkingCard.isTurnActive` 零生产消费死导出（仅自身单测，去留待定）。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -80,7 +82,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 ### 开发线（按序）
 
 1. ~~**T-29 Markdown 渲染**（D26）~~ —— **✅ 2026-08-04 用户点验验收转 Done**（`d320206`+`666c7c3`+`4507df3`+`b08f6ae`；拍板两项维持现状：脚注 13px / 标题三档）。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-29 三行
-2. **T-24 收尾**（S0，不改代码）：全新机器 GUI 实测 + 台账补登（实体已随 `b38017b` 落库）。→ 执行计划 §3 T-24 行
+2. ~~**T-24 收尾**（S0，不改代码）~~ —— **✅ 2026-08-04 收尾结项转 Done**（fresh-profile 模拟实测全过；真机 Windows 项并入 T-10 清单第 8 项）。明细见主线台账 2026-08-04 T-24 行
 3. **T-12 / T-13 / T-14 / T-15 四 surface**（依赖 T-22 已清）：git / editor / context / terminal 各 surface 接线；A08 临时基线正式化随行。→ 执行计划 §3 各行
 4. **T-23 存量违规清理**（A06 矩阵产出）：死按钮与假 usage 环逐项接线或 disabled+Tooltip。→ 执行计划 §3 T-23 行
 
@@ -136,5 +138,5 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 - 同事交接词两处过时勿信：「biome CRLF 行尾债」（C-09 后 lint 0 诊断）、「T-05 Question 等 C-04」（C-04 已 ✅）。
 - **`ui/alert.tsx` 的 variant 是 `error` / `warning` / `info` / `success` / `default`，没有 `destructive`**（那个只存在于 button.tsx 与 badge.tsx）。写「借鉴 destructive 错误条」的交接词时要注意这一点，照字面写会编译不过。
 - **UI 逻辑一律下沉纯函数**：vitest 是 `node` 环境且 include 只收 `.ts`，`.tsx` 里的逻辑零覆盖。现成范式 `hostStatus.ts` / `fileMention.ts` / `sessionEffortStore.ts` / `historyError.ts` / `sendPreamble.ts` / `hostStderr.ts`。
-- **新机器首启注册仓库**：OpenChamber 壳内**仍**无添加仓库 UI（`SKIP_ONBOARDING_GATE=true` 硬编码 + 两处覆盖使旧壳不可达）。当前唯一通路：`pnpm dev -- --open-path=<仓库绝对路径>`（`576f3bd` 起 dev.js 透传 argv；`9331d51` 起首启拉取握手保证不丢）。**2026-07-28 起归 T-24（阻断级）+ T-16 处理，open-questions #9 已关闭**；T-16 要拆的是 `App.tsx:450` 与 `Root.tsx:52-59` 两处强制覆盖，`devFlags.ts:10` 是两者的**共同开关**——翻 `false` 能一并解除，但会连带恢复 onboarding 闸门，故**不作为达成手段**（验证时保持 `true`）。口径以[执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) §3 T-16 行为准。
+- **新机器首启注册仓库（2026-08-04 T-24 结项后口径）**：新壳已有完整添加仓库通路——LeftNav 四处入口 + Composer 目标栏三项 + 整壳拖放落区（明细见主线台账 2026-08-04 T-24 行）；`--open-path` argv（`576f3bd`/`9331d51`）仍可用但**不再是唯一通路**。open-questions #9 已关闭；T-16 要拆的是 `App.tsx:450` 与 `Root.tsx:52-59` 两处强制覆盖，`devFlags.ts:10` 是两者的**共同开关**——翻 `false` 能一并解除，但会连带恢复 onboarding 闸门，故**不作为达成手段**（验证时保持 `true`）。口径以[执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) §3 T-16 行为准。
 - **T-05 / 布局类交接词已整体过期（2026-07-28）**：凡提到「带边框工具卡 + 状态徽章」「按行数截断 + 展开全部」「四区壳」「底部终端 Dock」「右栏三 tab」的旧描述一律作废，以 D18 / D19 / D20 与对齐基线 HTML 为准。（例外：[baseline/module-map](../../baseline/module-map.md) 里的四区表述是**代码现状**，已就地标注 D19 改造去向，不属过期交接词。）
