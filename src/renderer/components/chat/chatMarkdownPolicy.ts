@@ -414,9 +414,16 @@ const SECTION_GAP = 'mt-5 first:mt-0';
  * renderer's class): `remark-breaks` turns a single newline into a `<br>`, so
  * chat's "one newline is a line break" behaviour survives the switch, and
  * keeping `pre-wrap` on top of it would double every blank line.
+ *
+ * `select-text` is load-bearing, not decoration: `globals.css` sets
+ * `user-select: none` on `*` app-wide, and `.select-text` (plus every
+ * descendant) is its opt-back-in whitelist — the same one
+ * `files/MarkdownPreview.tsx` uses. Without it the transcript's prose cannot be
+ * selected at all and copy is only possible through the turn's copy button
+ * (found in T-29 GUI review).
  */
 export function chatMarkdownRootClass(): string {
-  return 'min-w-0 break-words text-markdown leading-normal text-foreground';
+  return 'min-w-0 select-text break-words text-markdown leading-normal text-foreground';
 }
 
 export function chatMarkdownParagraphClass(): string {

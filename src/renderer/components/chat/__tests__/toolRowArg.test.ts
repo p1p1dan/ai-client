@@ -56,15 +56,18 @@ describe('toolRowArgClass', () => {
 describe('ToolRows.tsx <pre> bodies carry font-mono (D25 §2.1 M3a/M3b, static source guard)', () => {
   const source = readFileSync(path.join(__dirname, '..', 'ToolRows.tsx'), 'utf8');
 
+  // `select-text` in the string: `globals.css` sets `user-select: none` on `*`,
+  // and tool IN/OUT transcripts are content the operator copies from (T-29 GUI
+  // review) — so the opt-in class is part of the pinned string, not noise.
   it('the structured-input <pre> (ToolRowInputSegment) has font-mono ahead of text-code', () => {
     expect(source).toMatch(
-      /'m-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground'/
+      /'m-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground'/
     );
   });
 
   it('the raw-output <pre> (ToolRowOutputSegment, body === "output") has font-mono ahead of text-code', () => {
     const preClassMatches = source.match(
-      /m-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground/g
+      /m-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-\[1\.55\] text-muted-foreground/g
     );
     // Both the input segment and the output segment share the exact same
     // class string -- there must be exactly two occurrences.

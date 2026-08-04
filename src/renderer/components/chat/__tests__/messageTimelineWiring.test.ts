@@ -375,7 +375,19 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     ).toBe(1);
     // The streaming branch is still the plain-text paragraph, unchanged.
     expectWired("const text = item.block.text ?? '';");
-    expectCalled('className="text-markdown leading-normal text-foreground whitespace-pre-wrap"');
+    expectCalled(
+      'className="text-markdown leading-normal text-foreground whitespace-pre-wrap select-text"'
+    );
+  });
+
+  // Selection opt-in: `globals.css` sets `user-select: none` on `*`, so every
+  // content surface must carry `.select-text` or the transcript can only be
+  // copied through the copy button (found in T-29 GUI review). Chrome — turn
+  // heads, triggers, status rows — deliberately stays non-selectable, which is
+  // why this is pinned per surface instead of once on the timeline root.
+  it('message content opts back into text selection', () => {
+    expectCalled('className="fx-turn-bubble-text select-text space-y-2"');
+    expectCalled('className="select-text whitespace-pre-wrap text-markdown text-foreground"');
   });
 
   // The three surfaces T-29 deliberately does NOT touch. Each is model-adjacent

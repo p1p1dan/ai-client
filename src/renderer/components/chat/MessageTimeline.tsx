@@ -458,7 +458,7 @@ export function MessageTimeline({
                 {lastError && (
                   // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
                   // content family as ChatComposer's destructive banner — mono.
-                  <p className="mt-1 break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
+                  <p className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
                     {lastError}
                   </p>
                 )}
@@ -577,7 +577,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
               Details
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-code">
+              <pre className="max-h-24 select-text overflow-auto whitespace-pre-wrap break-all font-mono text-code">
                 {view.message}
               </pre>
             </CollapsibleContent>
@@ -681,7 +681,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
             target of the `@container scroll-state(stuck: top)` rule in
             `styles/scroll-state.css`, which clamps the prompt to three lines
             ONLY while its band is pinned (§5.6-A). Unpinned, it does nothing. */}
-        <div className="fx-turn-bubble-text space-y-2">
+        <div className="fx-turn-bubble-text select-text space-y-2">
           {textBlocks.map((block) => (
             <p
               key={block.id}
@@ -710,7 +710,10 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
       <AlertDescription>
         {message.blocks.map((block) =>
           block.type === 'text' ? (
-            <p key={block.id} className="whitespace-pre-wrap text-markdown text-foreground">
+            <p
+              key={block.id}
+              className="select-text whitespace-pre-wrap text-markdown text-foreground"
+            >
               {block.text}
             </p>
           ) : null
@@ -1248,7 +1251,9 @@ function TurnItemView({
         return <ChatMarkdown text={text} />;
       }
       return (
-        <p className="text-markdown leading-normal text-foreground whitespace-pre-wrap">{text}</p>
+        <p className="text-markdown leading-normal text-foreground whitespace-pre-wrap select-text">
+          {text}
+        </p>
       );
     }
 

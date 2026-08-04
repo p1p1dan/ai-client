@@ -589,6 +589,9 @@ describe('F-C4: the markdown root cannot break the pinned bubble (sticky chain)'
     expect(cls).toContain('text-markdown');
     expect(cls).toContain('leading-normal');
     expect(cls).toContain('break-words');
+    // `globals.css` disables `user-select` on `*`; `.select-text` is the only
+    // way back in. Dropping it makes the prose un-selectable (T-29 GUI review).
+    expect(cls).toContain('select-text');
     // `remark-breaks` turns a single newline into a `<br>`; keeping pre-wrap on
     // top of it would double every blank line.
     expect(cls).not.toContain('whitespace-pre-wrap');

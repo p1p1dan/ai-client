@@ -183,7 +183,7 @@ function ToolRowInputSegment({
     <div className="ml-0.5 border-l border-border pl-3.5">
       <pre
         className={cn(
-          'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+          'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
           maxHeightClass
         )}
       >
@@ -206,7 +206,7 @@ function ToolRowOutputSegment({
         <div className="ml-0.5 border-l border-border pl-3.5">
           <pre
             className={cn(
-              'm-0 overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+              'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
               view.outputMaxHeightClass
             )}
           >
@@ -225,7 +225,7 @@ function ToolRowOutputSegment({
     case 'thinking':
     case 'stats':
       return (
-        <div className="mt-1 flex flex-col gap-1.5 text-markdown leading-[1.55] text-tool-arg">
+        <div className="mt-1 flex select-text flex-col gap-1.5 text-markdown leading-[1.55] text-tool-arg">
           <p className="whitespace-pre-wrap">{view.output}</p>
         </div>
       );

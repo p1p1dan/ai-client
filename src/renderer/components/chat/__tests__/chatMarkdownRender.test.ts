@@ -291,6 +291,9 @@ describe('F-C6: the reading column’s own invariants are asserted, not only its
     expect(root).toContain('min-w-0');
     // The other half of the same job, for prose with no break opportunity.
     expect(root).toContain('break-words');
+    // `globals.css` disables `user-select` on `*`; the root's `select-text` is
+    // what lets the rendered prose be selected at all (T-29 GUI review).
+    expect(root).toContain('select-text');
     // D25's 15px body tier and its line height, pinned explicitly rather than
     // inherited — the same reason every heading spells `text-markdown`.
     expect(root).toContain('text-markdown');
