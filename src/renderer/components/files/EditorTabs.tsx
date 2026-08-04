@@ -167,7 +167,15 @@ export function EditorTabs({
 
                 {/* Title */}
                 <span className="flex-1 truncate">
-                  {tab.isDirty && <span className="mr-0.5">*</span>}
+                  {/* T-13 spec §3: EditorArea's native tab strip IS the A08
+                      "file strip" — its dirty indicator must be the design-system
+                      6px dot (`h-1.5 w-1.5`), not an ad-hoc glyph. */}
+                  {tab.isDirty && (
+                    <span
+                      aria-hidden="true"
+                      className="mr-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary align-middle"
+                    />
+                  )}
                   {tab.title}
                 </span>
 

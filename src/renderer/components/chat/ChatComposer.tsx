@@ -15,7 +15,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { applyAutoSessionTitle } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { useShellLayoutStore } from '@/stores/shellLayout';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -1926,12 +1928,24 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     mentionChips.length > 0 ? (
       <div className="mt-1 flex flex-wrap gap-1">
         {mentionChips.map((chip, idx) => (
-          <span
+          // T-13 spec §3 tail slice: clicking a mention chip opens it in the
+          // editor surface, mirroring ToolRows.tsx's `openFileTarget` — record
+          // the intent, then open the surface (source distinguishes provenance
+          // for the consumer, no behavior difference today).
+          <button
             key={`${chip.path}-${idx}`}
-            className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-code text-primary"
+            type="button"
+            onClick={() => {
+              useFileOpenIntentStore.getState().requestFileOpen({
+                path: chip.path,
+                source: 'mention-chip',
+              });
+              useShellLayoutStore.getState().openSurface('editor');
+            }}
+            className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-code text-primary transition-colors hover:bg-primary/20"
           >
             {chip.path}
-          </span>
+          </button>
         ))}
       </div>
     ) : null;
