@@ -69,7 +69,13 @@ export interface ContextHostFacts {
 export interface ContextRuntimeFacts {
   /** `null` = no active session, omit every model row. */
   configuredModel: string | null;
-  /** Real echoed model for the session's last assistant turn; `null` = none yet. */
+  /**
+   * Real echoed model for the session's last assistant turn; `null` = none
+   * yet. A06: the caller (`ContextSurfaceView`) MUST wire this from
+   * `MessageMetadata.reportedModel`, never `.model` — the latter silently
+   * falls back to the session's configured selection when the Host reports
+   * nothing, which would make this field lie about being "actual".
+   */
   actualModel: string | null;
   /**
    * `getSessionEffort` result. `undefined` = no active session (omit row);

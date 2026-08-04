@@ -1,9 +1,10 @@
 import type { GitLogEntry } from '@shared/types';
 import { type InfiniteData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 
 export function useGitHistory(workdir: string | null, initialCount = 20) {
   return useQuery({
-    queryKey: ['git', 'log', workdir, initialCount],
+    queryKey: gitQueryKeys.log(workdir, initialCount),
     queryFn: async () => {
       if (!workdir) return [];
       return window.electronAPI.git.getLog(workdir, initialCount);
@@ -24,7 +25,7 @@ export function useGitHistoryInfinite(
   submodulePath?: string | null
 ) {
   return useInfiniteQuery<GitLogEntry[], Error, InfiniteData<GitLogEntry[]>>({
-    queryKey: ['git', 'log-infinite', workdir, submodulePath],
+    queryKey: gitQueryKeys.logInfinite(workdir, submodulePath),
     queryFn: async ({ pageParam }) => {
       if (!workdir) return [];
       const skip = (pageParam ?? 0) as number;
@@ -56,7 +57,7 @@ export function useCommitFiles(
   submodulePath?: string | null
 ) {
   return useQuery({
-    queryKey: ['git', 'commit-files', workdir, hash, submodulePath],
+    queryKey: gitQueryKeys.commitFiles(workdir, hash, submodulePath),
     queryFn: async () => {
       if (!workdir || !hash) return [];
       // Use || to treat empty string as no submodule
@@ -82,7 +83,7 @@ export function useCommitDiff(
   submodulePath?: string | null
 ) {
   return useQuery({
-    queryKey: ['git', 'commit-diff', workdir, hash, filePath, status, submodulePath],
+    queryKey: gitQueryKeys.commitDiff(workdir, hash, filePath, status, submodulePath),
     queryFn: async () => {
       if (!workdir || !hash || !filePath) return null;
       return window.electronAPI.git.getCommitDiff(

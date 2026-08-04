@@ -22,6 +22,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { toastManager } from '@/components/ui/toast';
+import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import {
   useGitBranches,
   useGitCheckout,
@@ -271,8 +272,8 @@ export function SourceControlPanel({
       refetchCommits();
       refetchStatus();
       // Also refresh submodules data
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', rootPath] });
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodule', 'changes', rootPath] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(rootPath) });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submoduleChanges(rootPath) });
     }
   }, [isActive, rootPath, refetch, refetchCommits, refetchStatus, queryClient]);
 
@@ -305,7 +306,7 @@ export function SourceControlPanel({
         }
 
         if (isSubmodule) {
-          queryClient.invalidateQueries({ queryKey: ['git', 'submodules', rootPath] });
+          queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(rootPath) });
         } else {
           refetchStatus();
         }
@@ -393,7 +394,7 @@ export function SourceControlPanel({
         });
 
         if (isSubmodule) {
-          queryClient.invalidateQueries({ queryKey: ['git', 'submodules', rootPath] });
+          queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(rootPath) });
         } else {
           refetchStatus();
         }
@@ -434,7 +435,7 @@ export function SourceControlPanel({
       try {
         if (submodule && rootPath) {
           // Use dedicated submodule mutation so onSuccess invalidates
-          // ['git', 'submodules', rootPath] — the correct cache key
+          // gitQueryKeys.submodules(rootPath) — the correct cache key
           await checkoutSubmoduleMutation.mutateAsync({
             workdir: rootPath,
             submodulePath: submodule.path,
@@ -693,18 +694,18 @@ export function SourceControlPanel({
         if (selectedSubmodulePath && rootPath) {
           await Promise.all([
             queryClient.invalidateQueries({
-              queryKey: ['git', 'submodule', 'changes', rootPath, selectedSubmodulePath],
+              queryKey: gitQueryKeys.submoduleChanges(rootPath, selectedSubmodulePath),
             }),
-            queryClient.invalidateQueries({ queryKey: ['git', 'submodules', rootPath] }),
+            queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(rootPath) }),
             queryClient.invalidateQueries({
-              queryKey: ['git', 'submodule', 'diff', rootPath, selectedSubmodulePath],
+              queryKey: gitQueryKeys.submoduleDiff(rootPath, selectedSubmodulePath),
             }),
           ]);
         } else if (rootPath) {
           await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ['git', 'file-changes', rootPath] }),
-            queryClient.invalidateQueries({ queryKey: ['git', 'status', rootPath] }),
-            queryClient.invalidateQueries({ queryKey: ['git', 'file-diff', rootPath] }),
+            queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileChanges(rootPath) }),
+            queryClient.invalidateQueries({ queryKey: gitQueryKeys.status(rootPath) }),
+            queryClient.invalidateQueries({ queryKey: gitQueryKeys.fileDiff(rootPath) }),
           ]);
         }
       }

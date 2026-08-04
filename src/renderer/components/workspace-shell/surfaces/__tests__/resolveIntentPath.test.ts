@@ -68,6 +68,55 @@ describe('resolveIntentPath', () => {
     expect(resolveIntentPath('..', '/home/dan/project')).toBeNull();
     expect(resolveIntentPath('../sibling/file.ts', '/home/dan/project')).toBeNull();
   });
+
+  // Adversarial review m7: a leading drive letter with no separator right
+  // after it (bare "C:" or drive-relative "C:foo") is neither a full
+  // absolute path nor an ordinary relative segment — it used to fall through
+  // to the relative-join branch and produce "/repo/C:foo".
+  it('returns null for a bare drive letter, with or without a workspace', () => {
+    expect(resolveIntentPath('C:', '/home/dan/project')).toBeNull();
+    expect(resolveIntentPath('C:', null)).toBeNull();
+  });
+
+  it('returns null for a drive-relative path (no separator after the colon)', () => {
+    expect(resolveIntentPath('C:foo\\bar', '/home/dan/project')).toBeNull();
+    expect(resolveIntentPath('C:foo/bar', '/home/dan/project')).toBeNull();
+    expect(resolveIntentPath('C:foo\\bar', null)).toBeNull();
+  });
+
+  // Adversarial review m8: an absolute path's own "../" segments must
+  // collapse too, so the same file opened two different ways resolves to
+  // the same string (tab identity is plain string equality downstream).
+  describe('absolute path "../" collapsing (m8)', () => {
+    it('resolves a "../" that stays within a POSIX absolute path', () => {
+      expect(resolveIntentPath('/home/dan/project/src/../lib/file.ts', null)).toBe(
+        '/home/dan/project/lib/file.ts'
+      );
+    });
+
+    it('clamps at "/" instead of escaping when "../" climbs past a POSIX root', () => {
+      expect(resolveIntentPath('/a/../../b', null)).toBe('/b');
+      expect(resolveIntentPath('/..', null)).toBe('/');
+    });
+
+    it('resolves a "../" that stays within a drive-letter absolute path', () => {
+      expect(resolveIntentPath('C:/Users/dan/../file.ts', null)).toBe('C:/Users/file.ts');
+    });
+
+    it('clamps at the drive root instead of escaping when "../" climbs past it', () => {
+      expect(resolveIntentPath('C:/a/../../b', null)).toBe('C:/b');
+    });
+
+    it('clamps at the share root ("//server/share") instead of escaping for a UNC path', () => {
+      expect(resolveIntentPath('//server/share/a/../../../b', null)).toBe('//server/share/b');
+    });
+
+    it('collapses two spellings of the same file to the same resolved path (tab identity)', () => {
+      const direct = resolveIntentPath('/home/dan/project/src/file.ts', null);
+      const viaDotDot = resolveIntentPath('/home/dan/project/lib/../src/file.ts', null);
+      expect(viaDotDot).toBe(direct);
+    });
+  });
 });
 
 describe('isAbsoluteIntentPath', () => {

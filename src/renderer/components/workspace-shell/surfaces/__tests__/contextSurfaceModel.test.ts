@@ -185,6 +185,33 @@ describe('deriveContextGroups', () => {
         value: 'sonnet',
       });
     });
+
+    // A06 (config-model-impersonates-actual): the wiring contract this pure
+    // layer depends on is that `actualModel` is ONLY ever fed from
+    // `MessageMetadata.reportedModel` (see ContextSurfaceView.tsx), which
+    // carries no fallback. This pins the honest consequence at the model-row
+    // layer: with no report, there must be no "actual" row at all — never a
+    // configured value re-labeled as if it were confirmed.
+    it('never renders a "Model (actual)" row when actualModel is null (no report), regardless of a known configured model', () => {
+      const groups = deriveContextGroups(
+        baseInput({
+          runtime: {
+            configuredModel: 'claude-opus-4-8',
+            actualModel: null,
+            effortSelection: undefined,
+            permissionMode: undefined,
+            host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
+          },
+        })
+      );
+      const runtime = groups.find((g) => g.id === 'runtime');
+      expect(runtime?.rows.some((r) => r.id === 'model-actual')).toBe(false);
+      expect(runtime?.rows).toContainEqual({
+        id: 'model',
+        label: 'Model',
+        value: 'claude-opus-4-8',
+      });
+    });
   });
 
   describe('Runtime group — effort', () => {

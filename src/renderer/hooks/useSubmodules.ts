@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useShouldPoll } from '@/hooks/useWindowFocus';
 
 export function useSubmodules(workdir: string | null) {
   const shouldPoll = useShouldPoll();
 
   return useQuery({
-    queryKey: ['git', 'submodules', workdir],
+    queryKey: gitQueryKeys.submodules(workdir),
     queryFn: async () => {
       if (!workdir) return [];
       return window.electronAPI.git.listSubmodules(workdir);
@@ -25,7 +26,7 @@ export function useInitSubmodules() {
       await window.electronAPI.git.initSubmodules(workdir, recursive);
     },
     onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -38,7 +39,7 @@ export function useUpdateSubmodules() {
       await window.electronAPI.git.updateSubmodules(workdir, recursive);
     },
     onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -51,7 +52,7 @@ export function useSyncSubmodules() {
       await window.electronAPI.git.syncSubmodules(workdir);
     },
     onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -64,7 +65,7 @@ export function useFetchSubmodule() {
       await window.electronAPI.git.fetchSubmodule(workdir, submodulePath);
     },
     onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -77,7 +78,7 @@ export function usePullSubmodule() {
       await window.electronAPI.git.pullSubmodule(workdir, submodulePath);
     },
     onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -90,7 +91,7 @@ export function usePushSubmodule() {
       await window.electronAPI.git.pushSubmodule(workdir, submodulePath);
     },
     onSuccess: (_, { workdir }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -111,9 +112,9 @@ export function useCommitSubmodule() {
       return window.electronAPI.git.commitSubmodule(workdir, submodulePath, message);
     },
     onSuccess: (_, { workdir, submodulePath }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'changes', workdir, submodulePath],
+        queryKey: gitQueryKeys.submoduleChanges(workdir, submodulePath),
       });
     },
   });
@@ -136,12 +137,12 @@ export function useStageSubmodule() {
     },
     onSuccess: (_, { workdir, submodulePath }) => {
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'changes', workdir, submodulePath],
+        queryKey: gitQueryKeys.submoduleChanges(workdir, submodulePath),
       });
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'diff', workdir, submodulePath],
+        queryKey: gitQueryKeys.submoduleDiff(workdir, submodulePath),
       });
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -163,12 +164,12 @@ export function useUnstageSubmodule() {
     },
     onSuccess: (_, { workdir, submodulePath }) => {
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'changes', workdir, submodulePath],
+        queryKey: gitQueryKeys.submoduleChanges(workdir, submodulePath),
       });
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'diff', workdir, submodulePath],
+        queryKey: gitQueryKeys.submoduleDiff(workdir, submodulePath),
       });
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -190,9 +191,9 @@ export function useDiscardSubmodule() {
     },
     onSuccess: (_, { workdir, submodulePath }) => {
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'changes', workdir, submodulePath],
+        queryKey: gitQueryKeys.submoduleChanges(workdir, submodulePath),
       });
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
     },
   });
 }
@@ -201,7 +202,7 @@ export function useSubmoduleChanges(workdir: string | null, submodulePath: strin
   const shouldPoll = useShouldPoll();
 
   return useQuery({
-    queryKey: ['git', 'submodule', 'changes', workdir, submodulePath],
+    queryKey: gitQueryKeys.submoduleChanges(workdir, submodulePath),
     queryFn: async () => {
       if (!workdir || !submodulePath) return [];
       return window.electronAPI.git.getSubmoduleChanges(workdir, submodulePath);
@@ -220,7 +221,7 @@ export function useSubmoduleFileDiff(
   staged: boolean
 ) {
   return useQuery({
-    queryKey: ['git', 'submodule', 'diff', workdir, submodulePath, filePath, staged],
+    queryKey: gitQueryKeys.submoduleDiff(workdir, submodulePath, filePath, staged),
     queryFn: async () => {
       if (!workdir || !submodulePath || !filePath) return null;
       return window.electronAPI.git.getSubmoduleFileDiff(workdir, submodulePath, filePath, staged);
@@ -231,7 +232,7 @@ export function useSubmoduleFileDiff(
 
 export function useSubmoduleBranches(workdir: string | null, submodulePath: string | null) {
   return useQuery({
-    queryKey: ['git', 'submodule', 'branches', workdir, submodulePath],
+    queryKey: gitQueryKeys.submoduleBranches(workdir, submodulePath),
     queryFn: async () => {
       if (!workdir || !submodulePath) return [];
       return window.electronAPI.git.getSubmoduleBranches(workdir, submodulePath);
@@ -256,9 +257,9 @@ export function useCheckoutSubmoduleBranch() {
       await window.electronAPI.git.checkoutSubmoduleBranch(workdir, submodulePath, branch);
     },
     onSuccess: (_, { workdir, submodulePath }) => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'submodules', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.submodules(workdir) });
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'branches', workdir, submodulePath],
+        queryKey: gitQueryKeys.submoduleBranches(workdir, submodulePath),
       });
     },
   });

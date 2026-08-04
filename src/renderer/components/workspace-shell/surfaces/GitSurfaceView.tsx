@@ -255,6 +255,11 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
         isActive={surfaceActive}
         diff={fileDiffQuery.data ?? undefined}
         skipFetch
+        // T-12 batch-C fix (Opus M4): DiffViewer's own query is disabled via
+        // `skipFetch`, so its internal `isLoading` can't reflect this
+        // query's state — pass it through explicitly so the loading branch
+        // renders instead of a false "Failed to load diff" flash.
+        isLoading={fileDiffQuery.isPending}
         sideBySideInlineBreakpoint={700}
       />
     </div>

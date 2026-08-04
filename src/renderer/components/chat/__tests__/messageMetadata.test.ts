@@ -28,7 +28,7 @@ describe('reduceMessageMetadata (T-06)', () => {
       }),
       'sonnet'
     );
-    expect(next.byMessage.a1).toEqual({ startedAt: 1000, model: 'sonnet' });
+    expect(next.byMessage.a1).toEqual({ startedAt: 1000, model: 'sonnet', reportedModel: null });
     expect(next.bySessionLastAssistant.s1).toBe('a1');
   });
 
@@ -45,7 +45,11 @@ describe('reduceMessageMetadata (T-06)', () => {
       }),
       'sonnet'
     );
-    expect(next.byMessage.a1).toEqual({ startedAt: 1000, model: 'claude-opus-4-8[1m]' });
+    expect(next.byMessage.a1).toEqual({
+      startedAt: 1000,
+      model: 'claude-opus-4-8[1m]',
+      reportedModel: 'claude-opus-4-8[1m]',
+    });
   });
 
   it('falls back to the local session selection when the event carries no model (unchanged fallback chain)', () => {
@@ -58,7 +62,68 @@ describe('reduceMessageMetadata (T-06)', () => {
       }),
       'sonnet'
     );
-    expect(next.byMessage.a1).toEqual({ startedAt: 1000, model: 'sonnet' });
+    expect(next.byMessage.a1).toEqual({ startedAt: 1000, model: 'sonnet', reportedModel: null });
+  });
+
+  // A06 (config-model-impersonates-actual): `reportedModel` must carry NO
+  // fallback at all, even though `model` (above) falls back to the session
+  // selection. A consumer that read `model` as "the actual model" would show
+  // a fabricated "actual" — this pins the additive field that lets Context
+  // surface tell the two apart.
+  it('reportedModel stays null when the Host echoes no model, regardless of a session selection or catalog default being available', () => {
+    const withSessionModel = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant' },
+      }),
+      'sonnet'
+    );
+    expect(withSessionModel.byMessage.a1.reportedModel).toBeNull();
+
+    const withoutSessionModel = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant' },
+      })
+      // no sessionModel argument at all
+    );
+    expect(withoutSessionModel.byMessage.a1.reportedModel).toBeNull();
+    expect(withoutSessionModel.byMessage.a1.model).toBeNull();
+  });
+
+  it('reportedModel equals the event model exactly, independent of the session selection', () => {
+    const next = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant', model: 'claude-opus-4-8[1m]' },
+      }),
+      'a-completely-different-session-model'
+    );
+    expect(next.byMessage.a1.reportedModel).toBe('claude-opus-4-8[1m]');
+    expect(next.byMessage.a1.model).toBe('claude-opus-4-8[1m]');
+  });
+
+  it('reportedModel survives a subsequent message.completed fold unchanged', () => {
+    let reg = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant', model: 'claude-opus-4-8[1m]' },
+      }),
+      'sonnet'
+    );
+    reg = reduceMessageMetadata(
+      reg,
+      event('message.completed', { timestamp: 2200, payload: { messageId: 'a1' } })
+    );
+    expect(reg.byMessage.a1.reportedModel).toBe('claude-opus-4-8[1m]');
   });
 
   it('ignores user message.started (no assistant index, no entry)', () => {

@@ -1,7 +1,9 @@
+import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import { useEffect } from 'react';
 import { matchesKeybinding } from '../lib/keybinding';
 import { useSettingsStore } from '../stores/settings';
 import type { TabId } from './constants';
+import { shouldHandleMainTabShortcut } from './mainTabShortcutGate';
 
 interface UseAppKeyboardShortcutsOptions {
   activeWorktreePath: string | undefined;
@@ -59,6 +61,12 @@ export function useAppKeyboardShortcuts({
       if (e.isComposing) return;
       const target = e.target as HTMLElement | null;
       if (target?.hasAttribute('data-keybinding-recording')) return;
+
+      // M2: yield to the OpenChamber shell's own Ctrl/Cmd+1..4 once it is
+      // the active shell — see `shouldHandleMainTabShortcut` above.
+      const useOpenChamberShell =
+        SKIP_ONBOARDING_GATE || useSettingsStore.getState().useOpenChamberShell;
+      if (!shouldHandleMainTabShortcut(useOpenChamberShell)) return;
 
       const bindings = useSettingsStore.getState().mainTabKeybindings;
 

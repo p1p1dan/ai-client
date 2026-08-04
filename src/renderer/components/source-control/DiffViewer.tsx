@@ -25,6 +25,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { toastManager } from '@/components/ui/toast';
+import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useFileDiff } from '@/hooks/useSourceControl';
 import { useI18n } from '@/i18n';
 import { getXtermTheme, isTerminalThemeDark } from '@/lib/ghosttyTheme';
@@ -116,6 +117,18 @@ interface DiffViewerProps {
   skipFetch?: boolean;
   isCommitView?: boolean; // Add flag to indicate commit history view
   /**
+   * T-12 batch-C fix (Opus M4): when the caller sets `skipFetch` and drives
+   * the diff fetch itself (e.g. `GitSurfaceView`), this component's own
+   * `useFileDiff` query is disabled, so its internal `isLoading` is always
+   * false — before the caller's own query resolves, `diff` is still
+   * undefined and the render falls straight through to the "Failed to load
+   * diff" branch, flashing a false error on every first click. Pass the
+   * caller's own loading state here to override the (disabled) internal
+   * query's `isLoading`. Default `undefined` preserves the previous
+   * internal-query-driven behavior for callers that don't set `skipFetch`.
+   */
+  isLoading?: boolean;
+  /**
    * T-12: forwarded verbatim to Monaco's `renderSideBySideInlineBreakpoint`.
    * Default 0 = current behavior (always side-by-side, never falls back to
    * inline). Pass a real breakpoint (e.g. 700) when the host can render the
@@ -136,6 +149,7 @@ export function DiffViewer({
   skipFetch = false,
   isCommitView = false,
   sideBySideInlineBreakpoint = 0,
+  isLoading: isLoadingProp,
 }: DiffViewerProps) {
   const sessionId = useActiveSessionId(rootPath);
   const { t } = useI18n();
@@ -161,7 +175,7 @@ export function DiffViewer({
   // In commit view, we don't fetch diff - we use the provided externalDiff
   const shouldFetch = !skipFetch && !isCommitView;
 
-  const { data: fetchedDiff, isLoading } = useFileDiff(
+  const { data: fetchedDiff, isLoading: isQueryLoading } = useFileDiff(
     rootPath,
     file?.path ?? null,
     file?.staged ?? false,
@@ -169,6 +183,10 @@ export function DiffViewer({
   );
 
   const diff = externalDiff ?? fetchedDiff;
+  // `isLoadingProp` (undefined by default) defers to the internal query's
+  // own loading state; a caller-supplied value overrides it (see M4 fix note
+  // on the `isLoading` prop above).
+  const isLoading = isLoadingProp ?? isQueryLoading;
 
   const editorRef = useRef<DiffEditorInstance | null>(null);
   const modelsRef = useRef<{
@@ -948,10 +966,10 @@ export function DiffViewer({
       await window.electronAPI.file.write(absolutePath, editedContent, encoding);
 
       await queryClient.invalidateQueries({
-        queryKey: ['git', 'file-diff', rootPath, file.path],
+        queryKey: gitQueryKeys.fileDiff(rootPath, file.path),
       });
       await queryClient.invalidateQueries({
-        queryKey: ['git', 'file-changes', rootPath],
+        queryKey: gitQueryKeys.fileChanges(rootPath),
       });
 
       setEditedContent(null);

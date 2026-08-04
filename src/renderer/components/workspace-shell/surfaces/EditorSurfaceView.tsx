@@ -70,6 +70,67 @@ function EditorEmptyState({ description }: { description: string }) {
   );
 }
 
+/**
+ * Gate for a fileOpenIntent, evaluated once per effect run (adversarial
+ * review m12 + the pre-existing relative-path wait):
+ * - `'wait'`: a relative intent arrived before any workspace resolved — the
+ *   effect re-fires the moment `rootPath` changes, so this retries instead
+ *   of failing (no ack).
+ * - `'blocked'`: no workspace at all. A relative intent cannot be resolved
+ *   without one; an absolute intent COULD resolve, but the surface renders
+ *   the "Select a Workspace" empty state whenever `rootPath` is null, so a
+ *   tab opened here would land in the store with nothing on screen to show
+ *   it. Both fail definitively (ack, no retry) instead of leaving the
+ *   request to replay forever or stash an invisible tab.
+ * - `'proceed'`: resolve and navigate.
+ */
+export function gateFileOpenIntent(
+  pathIsAbsolute: boolean,
+  rootPath: string | null
+): 'wait' | 'blocked' | 'proceed' {
+  if (rootPath !== null) {
+    return 'proceed';
+  }
+  return pathIsAbsolute ? 'blocked' : 'wait';
+}
+
+/**
+ * Live re-derivation of the same `activeSession → workspace → path` chain
+ * the component computes at render time (spec §3, `useGitChangeCount.ts`
+ * pattern) — used by the `stillValid` guard below so a workspace switch is
+ * caught even if it happens in the gap between this effect's last render and
+ * an in-flight `navigateToFile` read resolving, without depending on React
+ * having already re-rendered/cleaned up this effect instance.
+ */
+function resolveLiveWorkspaceRootPath(): string | null {
+  const state = useChatSessionsStore.getState();
+  const activeSession = state.sessions.find((session) => session.id === state.activeSessionId);
+  const activeWorkspace = state.workspaces.find((ws) => ws.id === activeSession?.workspaceId);
+  return activeWorkspace?.path || null;
+}
+
+/**
+ * Pure race guard (Codex major, adversarial review batch B): whether an
+ * in-flight `navigateToFile` request is still the one that should land its
+ * side effects. `false` when either a newer intent has arrived (a different
+ * `requestId` now sits in the store) or the active workspace has changed
+ * (`liveRootPath` no longer matches what was captured when the request
+ * started) — both mean the read's result belongs to a request that no
+ * longer represents "what the user is looking at". Exported for direct unit
+ * testing without mounting the surface.
+ */
+export function isNavigationIntentStillValid(params: {
+  requestId: number;
+  liveIntentRequestId: number | null;
+  capturedRootPath: string | null;
+  liveRootPath: string | null;
+}): boolean {
+  return (
+    params.liveIntentRequestId === params.requestId &&
+    params.liveRootPath === params.capturedRootPath
+  );
+}
+
 export function EditorSurfaceView({ surfaceId }: SurfaceViewProps) {
   const { t } = useI18n();
 
@@ -162,18 +223,31 @@ export function EditorSurfaceView({ surfaceId }: SurfaceViewProps) {
   useEffect(() => {
     if (!intent) return;
 
-    const needsWorkspace = !isAbsoluteIntentPath(normalizePath(intent.path));
-    if (needsWorkspace && rootPath === null) {
+    const requestId = intent.requestId;
+    const rawPath = intent.path;
+    const pathIsAbsolute = isAbsoluteIntentPath(normalizePath(rawPath));
+    const gate = gateFileOpenIntent(pathIsAbsolute, rootPath);
+
+    if (gate === 'wait') {
       // Workspace not resolved YET — do not ack. This effect re-fires the
       // moment `rootPath` changes, so a genuinely-relative intent that
       // arrived before the workspace was ready gets retried instead of
-      // failing (an absolute-path intent never hits this branch).
+      // failing.
+      return;
+    }
+
+    if (gate === 'blocked') {
+      // m12 (adversarial review): an absolute-path intent CAN resolve with
+      // no workspace, but the surface renders the "Select a Workspace" empty
+      // state below whenever `rootPath` is null — navigating here would
+      // stash a tab in the store that nothing on screen shows. Fail
+      // definitively (ack, so the intent does not replay) instead.
+      setIntentNotice(t('Select a Workspace to browse files'));
+      useFileOpenIntentStore.getState().ackFileOpen(requestId);
       return;
     }
 
     let cancelled = false;
-    const requestId = intent.requestId;
-    const rawPath = intent.path;
 
     const resolved = resolveIntentPath(rawPath, rootPath);
     if (!resolved) {
@@ -187,7 +261,26 @@ export function EditorSurfaceView({ surfaceId }: SurfaceViewProps) {
     const cursor = fileIntentToCursor(intent);
     setIntentNotice(null);
 
-    void navigateToFile(resolved, cursor?.line, cursor?.column, cursor?.matchLength).then(() => {
+    // Codex major (adversarial review batch B): `cancelled` alone is too
+    // late — it is only checked in the `.then()` below, by which point
+    // `navigateToFile` has already run `openFile` internally. `stillValid`
+    // is instead passed INTO `navigateToFile` so it can veto the side effect
+    // right after the read settles. It re-reads the LIVE store state (not
+    // the closed-over `rootPath`/`intent` from this render) so it also
+    // catches a workspace switch or a newer intent that hasn't triggered a
+    // re-render yet.
+    const capturedRootPath = rootPath;
+    const stillValid = () =>
+      isNavigationIntentStillValid({
+        requestId,
+        liveIntentRequestId: useFileOpenIntentStore.getState().intent?.requestId ?? null,
+        capturedRootPath,
+        liveRootPath: resolveLiveWorkspaceRootPath(),
+      });
+
+    void navigateToFile(resolved, cursor?.line, cursor?.column, cursor?.matchLength, undefined, {
+      stillValid,
+    }).then(() => {
       if (cancelled) return;
       // `navigateToFile` swallows its own read failure (returns silently on
       // both success and error) — checking the store directly is how this
@@ -310,7 +403,12 @@ export function EditorSurfaceView({ surfaceId }: SurfaceViewProps) {
   const showEditor = layout === 'editor-only' || layout === 'split';
 
   return (
-    <div ref={containerRef} className="flex h-full min-h-0 min-w-0 flex-col">
+    // M6 (adversarial review): Escape must be held for the WHOLE surface
+    // subtree, not just the editor pane — FileTree's rename input lives in
+    // the tree pane, and an unheld Escape there closed the entire panel (via
+    // ContextPanel's onKeyDownCapture) before the rename's own Escape
+    // handler ever ran, silently dropping the in-progress rename.
+    <div ref={containerRef} className="flex h-full min-h-0 min-w-0 flex-col" {...ESCAPE_HOLD_PROPS}>
       {intentNotice && (
         <Alert variant="warning" className="m-1 items-center gap-x-2 px-2 py-1 text-meta">
           <AlertTriangle />
@@ -354,7 +452,7 @@ export function EditorSurfaceView({ surfaceId }: SurfaceViewProps) {
           </div>
         )}
         {showEditor && (
-          <div className="h-full min-h-0 min-w-0 flex-1" {...ESCAPE_HOLD_PROPS}>
+          <div className="h-full min-h-0 min-w-0 flex-1">
             <EditorArea
               tabs={tabs}
               activeTab={activeTab}

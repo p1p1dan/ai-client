@@ -24,6 +24,14 @@ export interface ResolveShellShortcutInput {
   isMac: boolean;
   /** True when the event target is an input/textarea/contenteditable (incl. Monaco/xterm's hidden input hosts). */
   targetIsEditable: boolean;
+  /**
+   * m15: `KeyboardEvent.isComposing` — true while an IME composition is in
+   * progress. Mirrors the guard `App/useAppKeyboardShortcuts.ts` already
+   * applies to its own shortcuts; without it, committing an IME composition
+   * with Ctrl/Cmd fires this resolver mid-composition and `preventDefault`s
+   * the keystroke the IME needed.
+   */
+  isComposing: boolean;
 }
 
 /**
@@ -37,8 +45,14 @@ function numberedSurfaceIds(): readonly ContextSurfaceId[] {
     .map((surface) => surface.id);
 }
 
+/**
+ * m16: each platform's mod key must exclude the OTHER platform's — without
+ * `&& !ctrlKey`/`&& !metaKey`, a Linux/Windows Super+Ctrl+1 chord (real on
+ * some window managers) would also satisfy `ctrlKey` and fire a shell
+ * shortcut the user never intended to press.
+ */
 function modKeyPressed(input: ResolveShellShortcutInput): boolean {
-  return input.isMac ? input.metaKey : input.ctrlKey;
+  return input.isMac ? input.metaKey && !input.ctrlKey : input.ctrlKey && !input.metaKey;
 }
 
 /**
@@ -51,6 +65,12 @@ function modKeyPressed(input: ResolveShellShortcutInput): boolean {
  * element untouched.
  */
 export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellShortcutAction | null {
+  // m15: composing always wins, even over the Ctrl/Cmd+J focus-protection
+  // exception below — an in-progress IME composition must never be
+  // interrupted by ANY shell shortcut.
+  if (input.isComposing) {
+    return null;
+  }
   if (input.altKey || input.shiftKey || !modKeyPressed(input)) {
     return null;
   }

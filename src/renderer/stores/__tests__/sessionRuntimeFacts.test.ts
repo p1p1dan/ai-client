@@ -96,4 +96,29 @@ describe('useSessionRuntimeFactsStore', () => {
     expect(onRuntimeEventSpy).toHaveBeenCalledTimes(2);
     again();
   });
+
+  // Opus m9: `init()`'s own cleanup already resets `listening: false` before
+  // unsubscribing (the block above), so a caller never needs to — and must
+  // not — force that reset itself. `ChatWorkspace.tsx` used to copy the
+  // `setState({ listening: false })` workaround from the adjacent
+  // `chatSessions.ts` `runtimeReady` latch (a red-line file whose own cleanup
+  // does NOT reset its latch, which is why that one genuinely needs the
+  // workaround). Doing the same here defeated this store's latch instead.
+  it('regression (Opus m9): resetting `listening` externally while a listener is still installed breaks the latch and installs a second one', () => {
+    const first = useSessionRuntimeFactsStore.getState().init();
+    expect(onRuntimeEventSpy).toHaveBeenCalledTimes(1);
+
+    // Simulate the removed anti-pattern: force the latch open again while
+    // the first listener from `first` above is still live and un-cleaned-up.
+    useSessionRuntimeFactsStore.setState({ listening: false });
+    const second = useSessionRuntimeFactsStore.getState().init();
+
+    // Two listeners now installed — this is the bug, not the fix. The
+    // correct call pattern (no external reset) is covered by the "is a
+    // latch" test above, which asserts exactly one call.
+    expect(onRuntimeEventSpy).toHaveBeenCalledTimes(2);
+
+    first();
+    second();
+  });
 });

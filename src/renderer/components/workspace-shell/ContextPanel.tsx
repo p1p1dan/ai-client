@@ -32,6 +32,7 @@ import {
   resolveContentColumnWidth,
   resolveContextPanelWidth,
   SURFACE_ESCAPE_HOLD_ATTR,
+  seedVisitedSurfaceIds,
   shouldCloseOnEscape,
 } from './shellLayoutModel';
 import { type ContextSurfaceId, getSurface } from './surfaceRegistry';
@@ -89,7 +90,14 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
   // rather than state: the mount list must be correct in the SAME render that
   // activates a surface (state would mount it one commit late), and the write
   // is idempotent, so a StrictMode double-render is a no-op.
-  const visitedSurfaceIdsRef = useRef<ContextSurfaceId[]>([]);
+  //
+  // m14: seeded (not `[]`) so a persisted `{activeSurfaceId: null,
+  // lastSurfaceId: 'terminal'}` restore does not skip its keep-alive surface's
+  // first activation — see `seedVisitedSurfaceIds` for why the render-time
+  // write below cannot reach it on that first render.
+  const visitedSurfaceIdsRef = useRef<ContextSurfaceId[]>(
+    seedVisitedSurfaceIds(lastSurfaceId, SURFACE_VIEWS)
+  );
   if (activeSurfaceId && !visitedSurfaceIdsRef.current.includes(activeSurfaceId)) {
     visitedSurfaceIdsRef.current = [...visitedSurfaceIdsRef.current, activeSurfaceId];
   }

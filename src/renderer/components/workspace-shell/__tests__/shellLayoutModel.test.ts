@@ -21,6 +21,7 @@ import {
   SIDEBAR_MIN_WIDTH,
   SURFACE_ESCAPE_HOLD_ATTR,
   sanitizeShellLayoutPersisted,
+  seedVisitedSurfaceIds,
   shouldCloseOnEscape,
 } from '../shellLayoutModel';
 import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER, sortSurfaces } from '../surfaceRegistry';
@@ -534,6 +535,48 @@ describe('deriveMountedSurfaceIds', () => {
         registrations: MOUNT_REGISTRATIONS,
       })
     ).toEqual(['terminal']);
+  });
+});
+
+// ── seedVisitedSurfaceIds (m14) ─────────────────────────────────────────
+describe('seedVisitedSurfaceIds', () => {
+  it('seeds a keep-alive lastSurfaceId', () => {
+    expect(seedVisitedSurfaceIds('terminal', MOUNT_REGISTRATIONS)).toEqual(['terminal']);
+  });
+
+  it('does not seed an active-policy lastSurfaceId (never needed the seed)', () => {
+    expect(seedVisitedSurfaceIds('git', MOUNT_REGISTRATIONS)).toEqual([]);
+  });
+
+  it('does not seed when lastSurfaceId is null', () => {
+    expect(seedVisitedSurfaceIds(null, MOUNT_REGISTRATIONS)).toEqual([]);
+  });
+
+  it('does not seed a surface with no registered view', () => {
+    expect(seedVisitedSurfaceIds('editor', MOUNT_REGISTRATIONS)).toEqual([]);
+  });
+
+  it('composes with deriveMountedSurfaceIds to close the m14 restore gap', () => {
+    // {activeSurfaceId: null, lastSurfaceId: 'terminal'} restored from
+    // persistence, panel closed on the very first render.
+    const seeded = seedVisitedSurfaceIds('terminal', MOUNT_REGISTRATIONS);
+    const mounted = deriveMountedSurfaceIds({
+      visited: seeded,
+      activeSurfaceId: null,
+      lastSurfaceId: 'terminal',
+      registrations: MOUNT_REGISTRATIONS,
+    });
+    expect(mounted).toEqual(['terminal']);
+  });
+
+  it('documents the bug this closes: the same restore without the seed mounts nothing', () => {
+    const mounted = deriveMountedSurfaceIds({
+      visited: [],
+      activeSurfaceId: null,
+      lastSurfaceId: 'terminal',
+      registrations: MOUNT_REGISTRATIONS,
+    });
+    expect(mounted).toEqual([]);
   });
 });
 

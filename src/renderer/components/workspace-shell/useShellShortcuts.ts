@@ -40,6 +40,8 @@ export function useShellShortcuts(): void {
         shiftKey: event.shiftKey,
         isMac: isMacPlatform(),
         targetIsEditable: isEditableTarget(event.target),
+        // m15: IME composition guard (mirrors App/useAppKeyboardShortcuts.ts).
+        isComposing: event.isComposing,
       });
       if (!action) {
         return;

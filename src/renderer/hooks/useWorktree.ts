@@ -8,6 +8,7 @@ import type {
 } from '@shared/types';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useWorktreeStore } from '@/stores/worktree';
 
 interface WorktreeListOptions {
@@ -196,7 +197,7 @@ export function useWorktreeMerge() {
       queryClient.invalidateQueries({ queryKey: ['worktree', 'list', workdir] });
       queryClient.invalidateQueries({ queryKey: ['worktree', 'listMultiple', workdir] });
       queryClient.invalidateQueries({ queryKey: ['worktree', 'mergeState', workdir] });
-      queryClient.invalidateQueries({ queryKey: ['git', 'branches', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.branches(workdir) });
     },
   });
 }
@@ -288,7 +289,7 @@ export function useWorktreeMergeContinue() {
       queryClient.invalidateQueries({ queryKey: ['worktree', 'listMultiple', workdir] });
       queryClient.invalidateQueries({ queryKey: ['worktree', 'mergeState', workdir] });
       queryClient.invalidateQueries({ queryKey: ['worktree', 'conflicts', workdir] });
-      queryClient.invalidateQueries({ queryKey: ['git', 'branches', workdir] });
+      queryClient.invalidateQueries({ queryKey: gitQueryKeys.branches(workdir) });
     },
   });
 }

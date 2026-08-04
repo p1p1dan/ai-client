@@ -19,8 +19,24 @@ export interface MessageMetadata {
   /** Epoch ms of `message.completed`. */
   completedAt?: number | null;
   latencyMs?: number | null;
-  /** Model id bound to the session at the time of the assistant turn. */
+  /**
+   * Model id bound to the session at the time of the assistant turn — the
+   * event's own real model when present, else the locally-selected
+   * `sessionModel` fallback (see `reduceMessageMetadata`). Because of that
+   * fallback this field is NOT proof the Host actually reported a model; a
+   * consumer asserting "this is what really answered" must read
+   * `reportedModel` instead (A06).
+   */
   model?: string | null;
+  /**
+   * A06 (config-model-impersonates-actual fix): the event's own
+   * `message.started` `payload.model`, stored with NO fallback applied.
+   * `null` means the Host never echoed a model for this turn — the only
+   * honest way to distinguish "we don't know" from "we guessed sessionModel
+   * and it happened to match". Additive field: `model` and its existing
+   * consumers are unchanged.
+   */
+  reportedModel?: string | null;
   /** Raw usage payload from `usage.updated`. */
   usage?: Record<string, unknown> | null;
 }
@@ -90,7 +106,12 @@ export function reduceMessageMetadata(
         const actualModel = readString(payload, 'model');
         const byMessage = {
           ...prev.byMessage,
-          [messageId]: { startedAt: ts ?? null, model: actualModel ?? sessionModel ?? null },
+          [messageId]: {
+            startedAt: ts ?? null,
+            model: actualModel ?? sessionModel ?? null,
+            // A06: no fallback here — `null` means the Host reported nothing.
+            reportedModel: actualModel ?? null,
+          },
         };
         return {
           byMessage,

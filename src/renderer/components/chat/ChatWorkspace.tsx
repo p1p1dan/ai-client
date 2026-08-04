@@ -83,14 +83,25 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   }, [initRuntime]);
 
   useEffect(() => {
-    // T-14: sessionRuntimeFacts's own single-listener latch (same shape and
-    // same StrictMode/remount reason as chatSessions.initRuntime above).
+    // T-14: sessionRuntimeFacts's own single-listener latch. Unlike
+    // chatSessions.ts's `runtimeReady` latch above — a red-line file whose
+    // `initRuntime` cleanup never resets it, which is exactly why THAT effect
+    // needs the manual `setState({ runtimeReady: false })` workaround — this
+    // store owns its cleanup (sessionRuntimeFacts.ts's own `init()`) and
+    // already resets `listening: false` there before unsubscribing. So a
+    // StrictMode mount→cleanup→remount re-latches correctly on its own.
+    //
+    // Opus m9: this effect used to force `listening: false` here too, copied
+    // from the pattern above. That defeated the latch instead of fixing
+    // anything: a second concurrent mount would flip `listening` back to
+    // false out from under an already-subscribed first mount and install a
+    // second listener. Trust the store's own latch — do not reset it here.
+    //
     // Started here — mounted for the whole app run, exactly like the
     // `useHostStatus()` call above — rather than from ContextSurfaceView, so
     // a session.created that fires before the user ever opens the Context
     // surface is still captured instead of permanently reading as "not
     // reported".
-    useSessionRuntimeFactsStore.setState({ listening: false });
     return useSessionRuntimeFactsStore.getState().init();
   }, []);
 

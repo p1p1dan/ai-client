@@ -72,12 +72,16 @@ function createInitialGroupState(originalPath = ''): GroupState {
 // Per-worktree state
 type WorktreeGroupStates = Record<string, GroupState>;
 
-export function TerminalPanel({
-  repoPath,
-  cwd,
-  isActive = false,
-  presentation = 'full',
-}: TerminalPanelProps) {
+export function TerminalPanel(props: TerminalPanelProps) {
+  const { repoPath, cwd, isActive = false, presentation = 'full' } = props;
+  // M3: `presentation` is only ever passed by a surface host (see
+  // workspace-shell/surfaces/TerminalSurfaceView.tsx, which always passes
+  // `deriveTerminalPresentation(...)`); every legacy host omits the prop and
+  // gets 'full' from the default above. A surface host owns Ctrl/Cmd+digit
+  // for surface switching (workspace-shell/shellShortcuts.ts), so this
+  // panel's own tab-switch accelerator further down must stay out of its
+  // way, or the same keypress double-triggers both handlers.
+  const isSurfaceHost = props.presentation !== undefined;
   const { t } = useI18n();
   const canManageSplits = canManageTerminalSplits(presentation);
   const [worktreeStates, setWorktreeStates] = useState<WorktreeGroupStates>({});
@@ -102,17 +106,33 @@ export function TerminalPanel({
   const { pendingScript, clearPendingScript } = useInitScriptStore();
   const pendingScriptProcessedRef = useRef<string | null>(null);
 
-  // Get current worktree's state
+  // B1: remember the last non-empty cwd. `cwd` can go back to `undefined`
+  // transiently or for good (a session whose workspace/path disappears), and
+  // unmounting the worktree tree below would unmount every ShellTerminal in
+  // it - useXterm's teardown detaches the pty, which destroys a local
+  // session created with `persistOnDisconnect: false`. So only a panel that
+  // has NEVER had a cwd is allowed to take the "no cwd at all" early return
+  // further down; once one has existed, everything below keys off
+  // `effectiveCwd` (the last known cwd) instead of the raw prop.
+  const lastCwdRef = useRef<string | undefined>(cwd);
+  const hasHadCwdRef = useRef(cwd !== undefined);
+  if (cwd !== undefined) {
+    lastCwdRef.current = cwd;
+    hasHadCwdRef.current = true;
+  }
+  const effectiveCwd = cwd ?? lastCwdRef.current;
+
+  // Get current worktree's state (keyed by effectiveCwd, not the raw prop - see above)
   const currentState = useMemo(() => {
-    if (!cwd) return createInitialGroupState();
-    const normalizedCwd = normalizePath(cwd);
+    if (!effectiveCwd) return createInitialGroupState();
+    const normalizedCwd = normalizePath(effectiveCwd);
     const existingState = worktreeStates[normalizedCwd];
     if (existingState) {
       // Update originalPath if cwd has changed (in case of case difference)
-      return { ...existingState, originalPath: cleanPath(cwd) };
+      return { ...existingState, originalPath: cleanPath(effectiveCwd) };
     }
-    return createInitialGroupState(cleanPath(cwd));
-  }, [cwd, worktreeStates]);
+    return createInitialGroupState(cleanPath(effectiveCwd));
+  }, [effectiveCwd, worktreeStates]);
 
   const { groups, activeGroupId } = currentState;
 
@@ -696,8 +716,10 @@ export function TerminalPanel({
         return;
       }
 
-      // Cmd+1-9 to switch tabs in active group
-      if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
+      // Cmd+1-9 to switch tabs in active group. Skipped for a surface host -
+      // it owns Ctrl/Cmd+digit for surface switching, and firing both here
+      // and there double-triggers on the same keypress (M3).
+      if (!isSurfaceHost && (e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
         const activeGroup = groups.find((g) => g.id === activeGroupId);
         if (activeGroup) {
@@ -714,6 +736,7 @@ export function TerminalPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     isActive,
+    isSurfaceHost,
     groups,
     activeGroupId,
     xtermKeybindings,
@@ -792,7 +815,17 @@ export function TerminalPanel({
     clearPendingScript();
   }, [pendingScript, cwd, groups, activeGroupId, updateCurrentState, clearPendingScript]);
 
-  if (!cwd) {
+  // B1: this is the ONLY early return allowed before the worktree tree
+  // renders, and it only fires for a panel that has never had a cwd at all.
+  // Once `hasHadCwdRef.current` flips true, the tree below stays mounted and
+  // renders keyed by `effectiveCwd`; "no active worktree right now" is drawn
+  // as the overlay a bit further down instead (`showEmptyState`), the same
+  // technique already used for "current worktree has no terminals" - not an
+  // early return, so nothing unmounts.
+  // `effectiveCwd === undefined` is unreachable in practice (the two refs
+  // above are always set together); it is here so TypeScript narrows
+  // `effectiveCwd` to `string` for the rest of the render.
+  if (!hasHadCwdRef.current || effectiveCwd === undefined) {
     return (
       <div
         className={cn(
@@ -813,7 +846,7 @@ export function TerminalPanel({
     );
   }
 
-  const normalizedCwd = normalizePath(cwd);
+  const normalizedCwd = normalizePath(effectiveCwd);
 
   // Check if current worktree has any terminals (not all worktrees)
   const hasCurrentWorktreeTerminals = groups.length > 0;
@@ -980,7 +1013,19 @@ export function TerminalPanel({
                       width: `${position.width}%`,
                     }}
                     role="button"
-                    tabIndex={0}
+                    // Codex minor: a hidden group (compact presentation, or
+                    // a worktree that isn't current) must stay unfocusable
+                    // and untriggerable via keyboard even though it keeps
+                    // its layout box (no display:none - see
+                    // HIDDEN_TERMINAL_GROUP_BOX). `inert` covers Tab focus
+                    // and Enter/Space activation on this element and
+                    // everything inside it (including ShellTerminal);
+                    // `aria-hidden` keeps it out of the a11y tree; the
+                    // explicit `tabIndex={-1}` covers browsers that don't
+                    // yet honor `inert`.
+                    inert={!isVisible}
+                    aria-hidden={!isVisible}
+                    tabIndex={isVisible ? 0 : -1}
                     onClick={() => handleGroupClick(info.group.id)}
                     onKeyDown={(e) => {
                       // Only handle when the div itself has focus, not child elements (xterm)

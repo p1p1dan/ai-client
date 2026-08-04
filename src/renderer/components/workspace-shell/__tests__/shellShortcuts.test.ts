@@ -11,6 +11,7 @@ function input(overrides: Partial<ResolveShellShortcutInput> = {}): ResolveShell
     shiftKey: false,
     isMac: false,
     targetIsEditable: false,
+    isComposing: false,
     ...overrides,
   };
 }
@@ -127,6 +128,59 @@ describe('resolveShellShortcut', () => {
 
     it('does not resolve without the platform mod key at all', () => {
       expect(resolveShellShortcut(input({ code: 'KeyB' }))).toBeNull();
+    });
+
+    // m16: each platform's mod key must exclude the other platform's own key.
+    it('does not resolve on non-mac when metaKey is also pressed alongside ctrlKey (e.g. Super+Ctrl+1)', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, metaKey: true }))
+      ).toBeNull();
+    });
+
+    it('does not resolve on mac when ctrlKey is also pressed alongside metaKey', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Digit1', metaKey: true, ctrlKey: true, isMac: true }))
+      ).toBeNull();
+    });
+
+    it('still resolves on non-mac with ctrlKey alone (no metaKey regression)', () => {
+      expect(resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true }))).toEqual({
+        type: 'toggle-sidebar',
+      });
+    });
+
+    it('still resolves on mac with metaKey alone (no ctrlKey regression)', () => {
+      expect(resolveShellShortcut(input({ code: 'KeyB', metaKey: true, isMac: true }))).toEqual({
+        type: 'toggle-sidebar',
+      });
+    });
+  });
+
+  // m15: IME composition guard (mirrors App/useAppKeyboardShortcuts.ts's own
+  // `e.isComposing` check).
+  describe('IME composition guard', () => {
+    it('returns null for Ctrl/Cmd+J while composing — the one shortcut normally exempt from focus protection', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+    });
+
+    it('returns null for every other binding while composing', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'Digit1', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'Backquote', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+      expect(
+        resolveShellShortcut(input({ code: 'KeyB', ctrlKey: true, isComposing: true }))
+      ).toBeNull();
+    });
+
+    it('resolves normally once composition ends', () => {
+      expect(
+        resolveShellShortcut(input({ code: 'KeyJ', ctrlKey: true, isComposing: false }))
+      ).toEqual({ type: 'toggle-context-panel' });
     });
   });
 

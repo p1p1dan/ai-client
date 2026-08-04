@@ -112,6 +112,43 @@ describe('TerminalPanel compact presentation', () => {
   });
 });
 
+describe('TerminalPanel keeps the worktree tree mounted through cwd=undefined', () => {
+  // B1: `cwd` can go back to `undefined` (transiently, e.g. mid-session-switch,
+  // or for good, e.g. a session whose workspace/path disappears). The worktree
+  // tree below the component's top-level guard holds EVERY worktree's
+  // terminals, not just the current one, so an early return there would
+  // unmount all of them, and (via useXterm's teardown) destroy every
+  // non-persistent local pty. Only a panel that has never had a cwd at all may
+  // take that early return; once one has existed, the tree must render
+  // unconditionally, keyed by the last known cwd.
+  //
+  // `return (` also matches an arrow function's empty parameter list
+  // (`return () => ...`), which shows up here as a `useEffect` cleanup and has
+  // nothing to do with early-returning JSX - the lookahead excludes it.
+  const RETURN_JSX = /return \((?!\))/g;
+
+  const FN_START = PANEL.flat.indexOf('export function TerminalPanel(');
+  const MAP_START = PANEL.flat.indexOf('Object.entries(worktreeStates).map(');
+  const preMap = PANEL.flat.slice(FN_START, MAP_START);
+
+  it('remembers the last non-empty cwd instead of trusting the prop directly', () => {
+    expect(PANEL.flat).toContain('hasHadCwdRef');
+    expect(PANEL.flat).toContain('effectiveCwd');
+  });
+
+  it("has exactly one JSX-returning `return (` before the worktree map render - the guarded early return, plus the panel's own outer return", () => {
+    const returns = preMap.match(RETURN_JSX) ?? [];
+    expect(returns).toHaveLength(2);
+  });
+
+  it('gates that early return on "never had a cwd", not on the raw cwd prop being empty', () => {
+    expect(preMap).toContain('if (!hasHadCwdRef.current || effectiveCwd === undefined) { return (');
+    // The original B1 bug: bailing out on `cwd` directly unmounts every
+    // worktree the moment the current session has no workspace/path.
+    expect(preMap).not.toContain('if (!cwd) { return (');
+  });
+});
+
 describe('TerminalGroup tab strip stays usable at panel width', () => {
   it('scrolls horizontally rather than compressing tabs', () => {
     // ~380px is narrower than two tabs; without the scroll container the tabs

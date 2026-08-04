@@ -165,7 +165,11 @@ export interface SurfaceMountRegistration {
 }
 
 export interface DeriveMountedSurfaceIdsInput {
-  /** Every surface that has been `activeSurfaceId` at least once this session. */
+  /**
+   * Every surface that has been `activeSurfaceId` at least once — either this
+   * session, or (for a keep-alive surface) seeded from a persisted
+   * `lastSurfaceId` before the very first render, see `seedVisitedSurfaceIds`.
+   */
   visited: readonly ContextSurfaceId[];
   /** null = panel closed. */
   activeSurfaceId: ContextSurfaceId | null;
@@ -205,6 +209,32 @@ export function deriveMountedSurfaceIds(input: DeriveMountedSurfaceIdsInput): Co
     }
   }
   return mounted;
+}
+
+/**
+ * m14 fix: the seed for `ContextPanel`'s `visitedSurfaceIdsRef` on its very
+ * first render. That ref otherwise only grows via a render-time write gated
+ * on `activeSurfaceId` being truthy — which never runs on a persisted
+ * `{activeSurfaceId: null, lastSurfaceId: 'terminal'}` restore, since the
+ * panel opens CLOSED on that first render. Without this seed, `visited` stays
+ * empty, `deriveMountedSurfaceIds` never mounts the keep-alive `lastSurfaceId`
+ * surface, and the panel shows a header naming it with an empty body (neither
+ * the mount stack nor the `SurfacePlaceholder` fallback render, because a
+ * registered `contentSurfaceId` skips the placeholder branch).
+ *
+ * Only seeds a KEEP-ALIVE `lastSurfaceId`: an 'active'-policy surface never
+ * needed this (it is only ever mounted while it IS `contentSurfaceId`, which
+ * `deriveMountedSurfaceIds` already derives from `activeSurfaceId ??
+ * lastSurfaceId` with no `visited` dependency).
+ */
+export function seedVisitedSurfaceIds(
+  lastSurfaceId: ContextSurfaceId | null,
+  registrations: Partial<Record<ContextSurfaceId, SurfaceMountRegistration>>
+): ContextSurfaceId[] {
+  if (lastSurfaceId && registrations[lastSurfaceId]?.mountPolicy === 'keep-alive') {
+    return [lastSurfaceId];
+  }
+  return [];
 }
 
 // ── Escape scope (S0, risk R1) ──────────────────────────────────────────

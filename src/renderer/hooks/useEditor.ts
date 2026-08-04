@@ -3,6 +3,16 @@ import { useCallback } from 'react';
 import { isUnsupportedBinaryFile } from '@/components/files/fileIcons';
 import { useEditorStore } from '@/stores/editor';
 
+/**
+ * Pure guard for `navigateToFile`'s `options.stillValid` (adversarial review
+ * batch B, Codex major) — exported for direct unit testing without mounting
+ * the hook. Only an explicit `false` return aborts; `undefined` (no guard
+ * passed) or any other value always proceeds, matching "旧调用点零影响".
+ */
+export function isNavigationRequestAborted(stillValid?: () => boolean): boolean {
+  return stillValid?.() === false;
+}
+
 export function useEditor() {
   const {
     tabs,
@@ -81,7 +91,15 @@ export function useEditor() {
       line?: number,
       column?: number,
       matchLength?: number,
-      previewMode?: 'off' | 'split' | 'fullscreen'
+      previewMode?: 'off' | 'split' | 'fullscreen',
+      // Adversarial review batch B (Codex major): purely optional, so every
+      // existing call site — none of which pass it — is unaffected. Lets a
+      // caller that awaits this function (e.g. an effect resolving a
+      // fileOpenIntent) abort the read's side effects if it has been
+      // superseded while the read was in flight, WITHOUT waiting for this
+      // promise to settle first — checking only after `navigateToFile`
+      // returns is too late, because by then `openFile` has already run.
+      options?: { stillValid?: () => boolean }
     ) => {
       const existingTab = tabs.find((t) => t.path === path);
 
@@ -92,6 +110,11 @@ export function useEditor() {
       } else {
         try {
           const { content, encoding, isBinary } = await window.electronAPI.file.read(path);
+          // Re-check right after the async read, before any side effect
+          // lands — a caller-provided guard can veto a stale request here.
+          if (isNavigationRequestAborted(options?.stillValid)) {
+            return;
+          }
           openFile({
             path,
             content,

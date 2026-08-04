@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { MutableRefObject } from 'react';
 import { useCallback, useEffect } from 'react';
 import { toastManager } from '@/components/ui/toast';
+import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useI18n } from '@/i18n';
 import { useEditorStore } from '@/stores/editor';
 import { useSettingsStore } from '@/stores/settings';
@@ -41,19 +42,19 @@ export function useWorktreeSelection(
       currentWorktreePathRef.current = worktreePath;
 
       // Immediately refresh local git data
-      const localKeys = [
-        'status',
-        'file-changes',
-        'file-diff',
-        'log',
-        'log-infinite',
-        'submodules',
+      const localKeyBuilders = [
+        gitQueryKeys.status,
+        gitQueryKeys.fileChanges,
+        gitQueryKeys.fileDiff,
+        gitQueryKeys.log,
+        gitQueryKeys.logInfinite,
+        gitQueryKeys.submodules,
       ];
-      for (const key of localKeys) {
-        queryClient.invalidateQueries({ queryKey: ['git', key, worktreePath] });
+      for (const buildKey of localKeyBuilders) {
+        queryClient.invalidateQueries({ queryKey: buildKey(worktreePath) });
       }
       queryClient.invalidateQueries({
-        queryKey: ['git', 'submodule', 'changes', worktreePath],
+        queryKey: gitQueryKeys.submoduleChanges(worktreePath),
       });
 
       // Fetch remote then refresh branch data (with race condition check)
@@ -63,10 +64,10 @@ export function useWorktreeSelection(
           // Only refresh if this is still the current worktree
           if (currentWorktreePathRef.current === worktreePath) {
             queryClient.invalidateQueries({
-              queryKey: ['git', 'branches', worktreePath],
+              queryKey: gitQueryKeys.branches(worktreePath),
             });
             queryClient.invalidateQueries({
-              queryKey: ['git', 'status', worktreePath],
+              queryKey: gitQueryKeys.status(worktreePath),
             });
           }
         })

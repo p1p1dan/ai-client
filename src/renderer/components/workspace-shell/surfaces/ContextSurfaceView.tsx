@@ -116,8 +116,11 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
     }
     return null;
   }, [messages]);
+  // A06: `reportedModel` only — NEVER `.model`, which silently falls back to
+  // the session's configured selection (messageMetadata.ts) and would make
+  // an unconfirmed guess masquerade as "what actually answered".
   const actualModel = lastAssistantMessageId
-    ? (getMeta(lastAssistantMessageId)?.model ?? null)
+    ? (getMeta(lastAssistantMessageId)?.reportedModel ?? null)
     : null;
 
   const configuredModel = activeSessionId
