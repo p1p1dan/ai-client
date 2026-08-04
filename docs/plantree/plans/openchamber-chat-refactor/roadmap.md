@@ -58,6 +58,7 @@
 - **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 - **T-21 Flexoki 主题 + 全等宽字体栈**：代码已提交 `b38017b`（2026-07-29，31 文件）。按本表口径「impl done 待 GUI 联调」不算 Done —— 用户 2026-07-29 已点测大部分，**中英混排三场景 + 6 处 `normal-case` 豁免的目视验收尚未出截图**（open-q #10），且验收须在**默认主题**下进行（`sync-terminal` 混色属 open-q #12 未裁定边界，不是 T-21 引入的 bug）。截图入台账后转 Done。
+- **T-12 / T-13 / T-14 / T-15 四 surface** —— **2026-08-04 八提交一次性落地**（S0 壳前置 `f3183f1` + T-14 `2e7353a` + T-13 `f9439d6` + T-12 `701d008` + T-15 `11616e5` + 注册收口 `61f79db` + A08 适配快捷键 `cb4de4f` + 双轨对抗复核修复批 `45c3b63`——1 blocker + 8 major + 8 minor 全闭环；A08 临时基线正式化随行，对照表见 [`2026-08-04-t12-15-surface-spec.md`](../../../plans/2026-08-04-t12-15-surface-spec.md) §7）。按本表口径「impl done 待 GUI 联调」不算 Done——**点验清单 0-tredecies**（[implementation-status](./implementation-status.md) 用户线，含 Ctrl+B 改绑追认项），通过后转 Done。三绿 117 文件 2171 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 四 surface 行。
 - ~~T-29 Markdown 渲染~~ —— **2026-08-04 用户点验验收后转 Done**（见 Done「观感对齐批次」块；拍板两项均维持现状）。
 - ~~T-22 / T-05 / T-31~~ —— **2026-08-03 第八轮验收后全部转 Done**（见 Done「观感对齐批次」块）。
 
@@ -80,7 +81,7 @@
 
 ## Deferred
 
-- **Phase 4 surface 化（D19 重定义，全部依赖 T-22 壳结构）**：
+- **Phase 4 surface 化（D19 重定义，全部依赖 T-22 壳结构）**——**2026-08-04：T-12~T-15 四项已全部施工落地转 In Progress（待 GUI 点验），本块残余 = T-16 + 后置 6 surface**：
   - T-12 **git surface**（原「右栏 Git 面板」）· T-14 **context surface**（原「右栏 Context 面板」，只放真实数据）
   - T-13 **editor surface**（原「右栏 Files 面板」）——**2026-07-28 解冻**：此前因布局未定而冻结，D19 定下骨架后放行，队列在 T-22 之后；F5 反馈（边看代码边看分析）由「Main 阅读栏 + ContextPanel 并列」直接满足
   - T-15 **terminal surface**（原「底部 Terminal Dock 接真终端」）——**重定义**：终端是 ContextPanel 的一种 surface、可提升为覆盖 Main 全视图，**不再往底部 Dock 接线**；`BottomDock.tsx` 随 D19 废弃并在 T-22 删除

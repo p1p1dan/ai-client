@@ -4,6 +4,7 @@
 
 - **Current Phase**: **Phase 0A 基线部分补做（A01 / A05 / A06）→ 观感对齐改造**（2026-07-28 转向）。这三项产品设计基线此前只在可行性文档的候选任务池、从未进执行计划或台账，而下游 F05/H01/H09 已按它们施工——这是「观感不到位 + 死按钮泛滥 + 布局反复卡壳」的同一根因，本日补做并落库（D18 / D19 / D20）。⚠️ **Phase 0A 整体仍 🟡 未收口**：A02 / A03 / A04 仍未立项，且已交付的 A06 依赖列写的正是「A01、A02」（口径以总台账 Phase 总览 0A 行为准）。Phase 3 Chat MVP 的剩余点测与网关阻塞并行不变。
 - **Last Landed**:
+  - 代码（2026-08-04 八提交）：**T-12/T-13/T-14/T-15 四 surface 一次性落地 + S0 壳前置 + A08 临时基线正式化 + 快捷键** `f3183f1`+`2e7353a`+`f9439d6`+`701d008`+`11616e5`+`61f79db`+`cb4de4f`+`45c3b63`——三路勘察 → 双轨设计（Opus+Codex 互不见，合并规格落库 [`2026-08-04-t12-15-surface-spec.md`](../../../plans/2026-08-04-t12-15-surface-spec.md)）→ 四路并发施工（共享接线文件所有权收归编排者）→ 双轨对抗复核（Codex 3maj+2min / Opus 1blocker+5maj+12min，互补显著）→ 修复批全闭环。keep-alive 挂载契约（切 surface pty 不死）/ Escape 作用域 P0 / gitQueryKeys 工厂根治 win/mac 圆点不刷 / permissionMode 协议可选加法 / A08 对照表（被取代 11 项、采纳适配 10 项）。红线 chatSessions 零改动。**GUI 点验待用户（0-tredecies，用户线）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 四 surface 行
   - 验收（2026-08-04）：**T-24 收尾结项转 Done**（S0 零代码改动）——施工前双链审计 CONFIRMED（入口链 LeftNav 四处 + 目标栏三项 / 拖放整壳落区，HEAD `01be19c`，Workflow 2 追链 + opus 对抗核验）；用户本机 fresh-profile 模拟实测（`AICLIENT_PROFILE=t24fresh`，不带 `--open-path`）验收①②③全过，另核 git/非 git 目录目标栏分支门控吻合 T-27 口径；**偏离登记：真机 Windows 打包版未测 → 并入 T-10 清单第 8 项**。明细见主线台账 2026-08-04 T-24 行
   - 验收（2026-08-04）：**T-29 GUI 点验用户验收通过**（首轮「目前展示效果都不错还可以」+ 唯一缺陷内容不可选中当轮修复 `b08f6ae` + 收尾表态「本阶段收尾。脚注和标题不用改，先这样吧」）——**T-29 转 Done**；**拍板两项均维持现状**：① 脚注区 13px ② 六级标题三种视觉档。0-duodecies 随轮收口
   - 代码+文档（2026-08-04）：**T-29 Markdown 渲染代码结项 `d320206` + `666c7c3` + `4507df3`**（前两 hash 曾提交并推送但状态文档漏记，本日补登；第三个为双轨对抗复核修复批 13 文件 +2,104/−142）——策略层/shiki 高亮/流式门/安全五规则主体 + 复核裁定修复：流式门下沉纯函数 `deriveStreamingBlockIds` 根治 major 会话级误伤（新回合曾抹掉全会话历史回答的 Markdown）、门单调化、(c) 收窄为逐消息即时转正；F-C7 三重高亮预算 + 64 项 LRU；`__proto__` 守卫与 href 主机名加固；共享 TS 编译器 API `stripComments` 换掉全仓四份假绿拷贝。双轨复核闭环（Workflow 27 findings / 3 证伪 + verify:security 补格 + Codex 双盲收活）。红线零改动。**GUI 点验待用户（0-duodecies，用户线）**。明细见主线台账 2026-08-04 T-29 行
@@ -12,13 +13,14 @@
   - 验收（2026-08-03）：**第七轮 GUI 点验用户验收通过**（原话「验收完毕，没有问题」）——第六轮两项与全部复核批修复闭环，诊断档结项；实测范围含 aaa 文件夹 New / "+ new chat" / 分支 chip 归属 / 失败退回重发无重复气泡 / 同文连发保留 / 附件与归档关闭对齐。第五轮清单 0-decies 与第四轮失败路径顺延项就此关闭；**0-octies 门槛达成 → T-27/T-28/T-19/T-30批1 转 Done**（见 roadmap）。点验期间一次「No repository registered」经查为 dev server 带病热更新残留态，非代码回归（诊断档附注）
   - 更早批次（2026-07-28 ~ 2026-08-03 三批：五连修/T-21/T-22/T-26/T-27/T-28/T-05/T-19/T-30 批1+批2/第二~六轮点验修复等）：摘要原文见 [history 归档](./history/2026-0728-0803-archive.md)，明细见[主线台账](../../../plans/ledger-claude-mainline.md)各行
 - **Last Verified**:
+  - **2026-08-04 四 surface 批复核（HEAD `45c3b63`，逐门串行）**：typecheck 干净 / lint **761 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **117 文件 2171 例**（较 1902 基线 +16 文件 +269 例只增；同 3 例 Windows-only 失败）。⚠️ 全量 vitest 曾三连挂死：新增测试经 hook 拖入 settings store import 图在 node 环境死锁 + 僵尸 worker 连环卡池——纯函数下沉独立模块（`App/mainTabShortcutGate.ts`）根治，「UI 逻辑一律下沉纯函数」纪律的又一实证。
   - **2026-08-04 T-24 收尾态实测（HEAD `01be19c`，逐门串行）**：typecheck 干净 / lint **728 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **101 文件 1902 例**（较 4507df3 登记基线 +1 例=b08f6ae 所增；同 3 例 Windows-only 失败）。本任务零代码改动。
   - **2026-08-04 T-29 代码结项态实测（HEAD `4507df3`）**：typecheck 干净 / lint **0 错误**（29w+3i 既有 a08 豁免）/ vitest **101 文件 1901 例**（较 666c7c3 合并态 1838 例 +1 文件 +63 例全为本批；同 3 例 Windows-only 失败）/ `pnpm build` 成功且 **20 个 shiki 语法异步 chunk 全在 27 语白名单内**。⚠️ **本机内存有限（用户 2026-08-04 明示）：门禁必须逐门串行跑，禁止链式合跑或与子代理/后台任务并行**——前次四门链式合跑被 OOM 杀（exit 137）。
   - **2026-08-03 T-29 工作区态实测（未提交，施工后复核前）**：typecheck 干净 / lint **724 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **98 文件 1813 例**（+1 文件 +54 例；同 3 例 Windows-only 失败）。
   - **2026-08-03 四批复核（T-31 `8109d45` 合并态）**：typecheck 干净 / lint **718 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **97 文件 1759 例**（+7 文件 +166 例；同 3 例 Windows-only 失败）/ `pnpm build` 成功且产物含 `@container scroll-state(stuck: top)` 规则（lightningcss 管线绕行有效性的产物级验证）。
   - **2026-08-03 三批复核（第六轮修复 `fd55a26` 合并态，T-31 开工前基线实测）**：typecheck 干净 / lint **703 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **90 文件 1593 例**（+2 文件 +56 例；同 3 例 Windows-only 失败）。
   - 更早复核记录（2026-07-28 基线 51 文件 590 例起，全程只增）与 T-21 复核口径注记：见 [history 归档](./history/2026-0728-0803-archive.md)
-- **Next Target**（2026-08-04 十一次修订，T-24 收尾结项）：开发线下一项 **T-12/T-13/T-14/T-15**（四 surface，均依赖 T-22 已清；A08 临时基线正式化随行）→ **T-23** 存量违规清理。**残留**：T-24 真机 Windows 打包版实测（并入 T-10 清单第 8 项）；0-nonies ⑪（a09 改后截图回填 + D25 §6.2 五项真机指标，Win10 必测字重）未采集；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源（恢复回合现无 `Worked for` 秒数，头槽降级链有意为之）；`ran N command(s)` 聚合复议（需 A07 :1769-1772 基线修订）；**T-29 转入四项**：全局 `color-scheme`（原生表单控件暗色一次修好，替代逐处 accent 类）/ 单渲染进程三个 HighlighterCore 单例（monacoSetup / ui-code-block / chatShiki）/ monacoSetup 懒化（可返还 ts/tsx/js/json/html/css 六语法的懒加载收益）/ `thinkingCard.isTurnActive` 零生产消费死导出（仅自身单测，去留待定）。
+- **Next Target**（2026-08-04 十二次修订，四 surface 落地）：开发线下一项 **T-23 存量违规清理**（A06 矩阵产出：MainHeader 五死按钮 + 72% 假 usage 环等）。**T-12~T-15 impl done 待 GUI 点验（0-tredecies）**，快捷键 Ctrl+B 改绑待追认。**残留**：T-24 真机 Windows 打包版（并入 T-10 清单第 8 项）；0-nonies ⑪ 真机指标（Win10 必测字重）；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；**本批新增**：useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -83,7 +85,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 
 1. ~~**T-29 Markdown 渲染**（D26）~~ —— **✅ 2026-08-04 用户点验验收转 Done**（`d320206`+`666c7c3`+`4507df3`+`b08f6ae`；拍板两项维持现状：脚注 13px / 标题三档）。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-29 三行
 2. ~~**T-24 收尾**（S0，不改代码）~~ —— **✅ 2026-08-04 收尾结项转 Done**（fresh-profile 模拟实测全过；真机 Windows 项并入 T-10 清单第 8 项）。明细见主线台账 2026-08-04 T-24 行
-3. **T-12 / T-13 / T-14 / T-15 四 surface**（依赖 T-22 已清）：git / editor / context / terminal 各 surface 接线；A08 临时基线正式化随行。→ 执行计划 §3 各行
+3. ~~**T-12 / T-13 / T-14 / T-15 四 surface**~~ —— **✅ 2026-08-04 八提交一次性落地（S0+四 surface+收口+快捷键+复核修复批，`f3183f1`..`45c3b63`），A08 正式化随行（对照表见规格 §7）。impl done 待 GUI 点验（0-tredecies），点验通过方转 Done**。→ 主线台账 2026-08-04 四 surface 行
 4. **T-23 存量违规清理**（A06 矩阵产出）：死按钮与假 usage 环逐项接线或 disabled+Tooltip。→ 执行计划 §3 T-23 行
 
 > T-25（旧模块原色清理，依赖 T-21）与 T-16（新旧壳开关）后置，归 [roadmap Deferred](./roadmap.md)。
@@ -104,6 +106,13 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
    ⑩ 超预算围栏（>800 行 / >64K 字符 / 单行 >2000 字符，例：整行 base64 或单行 JSON）走无高亮纯文本 `<pre>`，滚动不卡顿；
    ⑪ GFM 脚注：`[^1]` 引用号渲染为纯文本数字（有意不成链，安全裁定成文于代码注释），脚注体仍在文末小字区；**拍板①**：脚注区 13px 与 D25「Markdown 全 15px」的张力，可否接受。
    ⑫（首轮反馈修复的复核项）正文/代码块/用户气泡/工具行输出均可鼠标选中并 Ctrl+C 复制；回合头、`Worked for` 行、按钮等壳层仍不可选（与全 app 一致）。
+0-tredecies. **四 surface（T-12~T-15）+ 快捷键 GUI 点验清单（2026-08-04 施工，全部待点验）**：
+   ① Rail 四枚图标单选互斥、再点同枚收起；`Ctrl/Cmd+1..4` 直达 context/git/editor/terminal、`Ctrl/Cmd+J` 面板开关、`` Ctrl/Cmd+` `` 打开终端；**`Ctrl/Cmd+B` 已改绑侧栏收展（A08 原义 chat 显隐随中列 editor 被取代）——请追认**；
+   ② context surface：字段与实际会话一致（路径/类型/分支/模型/推理档/运行状态/待答授权/已发附件/runtimeIdentity），无任何假值占位；**新发起的会话**权限策略行应显示 default（Host 事件真值），**重启前的旧会话**显示「Permission policy not reported」（已知限制非 bug）；
+   ③ git surface：changed/staged 分组与 stage/unstage；commit 可用（含 AI 生成消息、Cmd/Ctrl+Enter）；点文件行进 diff（窄面板自动 inline、拖宽约 >700 恢复并排）；头部 Maximize2 提升为两列（左列表+右 diff）；**commit 后列表清空且 Rail git 圆点熄灭**（win/mac 曾有不刷缺陷已修）；
+   ④ editor surface：Rail 进入可浏览/编辑/保存；对话里点工具行 Read 行、Grep/Glob 命中行 → 跳转 editor 并定位；`@` 引用 chip 点击跳转；**文件树重命名中按 Esc 不应关面板**；脏 tab 关闭有 save/dontSave/cancel 确认；面板 380–1400 可拖，>704 树与编辑器并排；
+   ⑤ terminal surface：**跑 `sleep 30` → 切 git → 切回，进程仍在、输出连续**（keep-alive 核心验收）；vim/less 里按 Esc 不关面板；切 Workspace A→B→A 恢复 A 的终端组；expanded 分屏全功能、标准态 compact 分屏禁用带提示（+N 徽章披露隐藏组）；关面板再开终端不死；
+   ⑥ 跨面回归：Composer/弹窗的 Escape 原语义不回归；中文输入法合成态下快捷键不误触；旧壳本轮不可达（T-16 未做）无需回归。
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
    [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
    - **T-04 thinking 卡**：🔴 **当前无法点验**——卡在网关（sonnet 空文本 / 默认模型 400，见上表）。网关侧修复后再测；仍须在**新发起轮次**验证（旧 fixture 的 153 个 thinking 块文本为空，不可追溯）。
