@@ -1,4 +1,4 @@
-import { Plus, Terminal } from 'lucide-react';
+import { Plus, SplitSquareHorizontal, Terminal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
 import { cleanPath, normalizePath } from '@/App/storage';
@@ -10,6 +10,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
@@ -21,6 +22,13 @@ import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { ResizeHandle } from './ResizeHandle';
 import { ShellTerminal } from './ShellTerminal';
 import { TerminalGroup } from './TerminalGroup';
+import {
+  canManageTerminalSplits,
+  HIDDEN_TERMINAL_GROUP_BOX,
+  hiddenTerminalGroupCount,
+  resolveTerminalGroupLayout,
+  type TerminalPresentation,
+} from './terminalSurfaceModel';
 import type { TerminalGroup as TerminalGroupType, TerminalTab } from './types';
 import { getNextTabName } from './types';
 
@@ -28,6 +36,18 @@ interface TerminalPanelProps {
   repoPath?: string;
   cwd?: string;
   isActive?: boolean;
+  /**
+   * T-15, optional addition — every existing host omits it and keeps today's
+   * behaviour exactly. 'full' (default) is the legacy dock: all groups side by
+   * side with split / merge / cross-group tab drag. 'compact' is the new
+   * shell's ~380px context panel: one group at a time, split management
+   * disabled with the reason attached, everything else (new / close / switch
+   * tab, search, input) untouched.
+   *
+   * Presentation never changes lifetime: groups compact hides keep their
+   * terminals mounted at full width. See `terminalSurfaceModel.ts`.
+   */
+  presentation?: TerminalPresentation;
 }
 
 interface GroupState {
@@ -52,8 +72,14 @@ function createInitialGroupState(originalPath = ''): GroupState {
 // Per-worktree state
 type WorktreeGroupStates = Record<string, GroupState>;
 
-export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanelProps) {
+export function TerminalPanel({
+  repoPath,
+  cwd,
+  isActive = false,
+  presentation = 'full',
+}: TerminalPanelProps) {
   const { t } = useI18n();
+  const canManageSplits = canManageTerminalSplits(presentation);
   const [worktreeStates, setWorktreeStates] = useState<WorktreeGroupStates>({});
   // Global terminal IDs to keep terminals mounted across group moves
   const [globalTerminalIds, setGlobalTerminalIds] = useState<Set<string>>(new Set());
@@ -809,15 +835,18 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
     return null;
   };
 
-  // Calculate cumulative left positions for groups
-  const getGroupPositions = (state: GroupState) => {
-    const positions: { left: number; width: number }[] = [];
-    let cumulative = 0;
-    for (const percent of state.flexPercents) {
-      positions.push({ left: cumulative, width: percent });
-      cumulative += percent;
-    }
-    return positions;
+  // Percent geometry per worktree, presentation-aware (T-15). `byId` is what
+  // the terminal layer looks a group up in; a group with no box is one that
+  // 'compact' hides, and it still gets HIDDEN_TERMINAL_GROUP_BOX — a hidden
+  // terminal must never measure zero width.
+  const getGroupLayout = (state: GroupState) => {
+    const boxes = resolveTerminalGroupLayout({
+      presentation,
+      groups: state.groups,
+      flexPercents: state.flexPercents,
+      activeGroupId: state.activeGroupId,
+    });
+    return { boxes, byId: new Map(boxes.map((box) => [box.id, box] as const)) };
   };
 
   return (
@@ -849,7 +878,13 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
       {/* Render all worktrees' group structures (tab bars only) */}
       {Object.entries(worktreeStates).map(([worktreePath, state]) => {
         const isCurrentWorktree = worktreePath === normalizedCwd;
-        const groupPositions = getGroupPositions(state);
+        const { boxes, byId } = getGroupLayout(state);
+        const groupById = new Map(state.groups.map((group) => [group.id, group] as const));
+        const hiddenGroups = hiddenTerminalGroupCount({
+          presentation,
+          groups: state.groups,
+          activeGroupId: state.activeGroupId,
+        });
 
         return (
           <div
@@ -862,39 +897,51 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
           >
             {/* Tab bars row - flex layout */}
             <div className={cn('flex h-9 w-full', !bgImageEnabled && 'bg-background')}>
-              {state.groups.map((group, index) => (
-                <div
-                  key={group.id}
-                  className="h-full"
-                  style={{ flex: `0 0 ${state.flexPercents[index]}%` }}
-                >
-                  <TerminalGroup
-                    group={group}
-                    cwd={state.originalPath || worktreePath}
-                    isGroupActive={group.id === state.activeGroupId}
-                    onTabsChange={handleTabsChange}
-                    onGroupClick={() => handleGroupClick(group.id)}
-                    onGroupEmpty={handleGroupEmpty}
-                    onTabMoveToGroup={handleTabMoveToGroup}
-                  />
-                </div>
-              ))}
+              {boxes.map((box) => {
+                const group = groupById.get(box.id);
+                if (!group) return null;
+                return (
+                  <div
+                    key={group.id}
+                    // compact: the single visible group takes the leftover room
+                    // so the locked-split hint can sit beside it; full keeps the
+                    // legacy fixed percentage split.
+                    className={canManageSplits ? 'h-full' : 'h-full min-w-0 flex-1'}
+                    style={canManageSplits ? { flex: `0 0 ${box.width}%` } : undefined}
+                  >
+                    <TerminalGroup
+                      group={group}
+                      cwd={state.originalPath || worktreePath}
+                      isGroupActive={group.id === state.activeGroupId}
+                      onTabsChange={handleTabsChange}
+                      onGroupClick={() => handleGroupClick(group.id)}
+                      onGroupEmpty={handleGroupEmpty}
+                      // Cross-group tab drag needs a second visible tab bar,
+                      // which compact does not have. Omitting the handler makes
+                      // TerminalGroup's cross-group branch a no-op instead of
+                      // moving a tab into a group the user cannot see.
+                      onTabMoveToGroup={canManageSplits ? handleTabMoveToGroup : undefined}
+                    />
+                  </div>
+                );
+              })}
+              {!canManageSplits && state.groups.length > 0 && (
+                <SplitLockedHint hiddenGroups={hiddenGroups} />
+              )}
             </div>
 
             {/* Resize handles - positioned absolutely with z-index above terminals */}
-            {state.groups.map((group, index) => {
-              if (index >= state.groups.length - 1) return null;
-              const leftPos = groupPositions
-                .slice(0, index + 1)
-                .reduce((sum, p) => sum + p.width, 0);
-              return (
-                <ResizeHandle
-                  key={`resize-${group.id}`}
-                  style={{ left: `${leftPos}%` }}
-                  onResize={(delta) => handleResize(index, delta)}
-                />
-              );
-            })}
+            {canManageSplits &&
+              boxes.map((box, index) => {
+                if (index >= boxes.length - 1) return null;
+                return (
+                  <ResizeHandle
+                    key={`resize-${box.id}`}
+                    style={{ left: `${box.left + box.width}%` }}
+                    onResize={(delta) => handleResize(index, delta)}
+                  />
+                );
+              })}
 
             {/* All terminals - rendered in a single container with stable keys */}
             <div className="absolute left-2 right-2 bottom-2 z-0" style={{ top: 44 }}>
@@ -904,21 +951,27 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
                 // Only render for this worktree
                 if (info.worktreePath !== worktreePath) return null;
 
-                const position = groupPositions[info.groupIndex];
-                if (!position) return null;
+                // No box = a group `compact` hides. It keeps a full-width box
+                // and is hidden with opacity, never unmounted and never sized
+                // to zero: unmounting detaches the pty (and a non-persistent
+                // local session dies on the last detach), and a zero-width
+                // measurement is forwarded to the pty as `cols: 2`.
+                const box = byId.get(info.group.id);
+                const position = box ?? HIDDEN_TERMINAL_GROUP_BOX;
 
                 const isTabVisible = info.group.activeTabId === tabId;
+                const isVisible = isTabVisible && box !== undefined;
                 const isTerminalActive =
                   isActive &&
                   isCurrentWorktree &&
                   info.group.id === state.activeGroupId &&
-                  isTabVisible;
+                  isVisible;
 
                 return (
                   <div
                     key={tabId}
                     className={
-                      isTabVisible
+                      isVisible
                         ? 'absolute h-full'
                         : 'absolute h-full opacity-0 pointer-events-none'
                     }
@@ -941,7 +994,8 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
                       cwd={info.tab.cwd}
                       backendSessionId={info.tab.backendSessionId}
                       isActive={isTerminalActive}
-                      canMerge={state.groups.length > 1}
+                      canMerge={canManageSplits && state.groups.length > 1}
+                      canSplit={canManageSplits}
                       initialCommand={info.tab.initialCommand}
                       onExit={() => handleTerminalClose(tabId)}
                       onTitleChange={(title) => handleTitleChange(tabId, title)}
@@ -973,8 +1027,8 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
                           return prev;
                         });
                       }}
-                      onSplit={() => handleSplit(info.group.id)}
-                      onMerge={() => handleMerge(info.group.id)}
+                      onSplit={canManageSplits ? () => handleSplit(info.group.id) : undefined}
+                      onMerge={canManageSplits ? () => handleMerge(info.group.id) : undefined}
                     />
                   </div>
                 );
@@ -984,5 +1038,48 @@ export function TerminalPanel({ repoPath, cwd, isActive = false }: TerminalPanel
         );
       })}
     </div>
+  );
+}
+
+/**
+ * T-15, compact only: the split/merge affordance and the reason it is off.
+ *
+ * This panel has no split BUTTON — split and merge are reached from the
+ * terminal's own context menu (disabled there via `canSplit` / `canMerge`) and
+ * from `xtermKeybindings.split/merge` (unreachable once `onSplit`/`onMerge` are
+ * omitted). A native menu item cannot carry a tooltip, so a disabled control
+ * here is the one place the user can read why, and it doubles as the honest
+ * disclosure that `hiddenGroups` groups are still running out of sight — hiding
+ * a live process with no trace is exactly the failure mode A06 forbids.
+ *
+ * `aria-disabled` rather than `disabled`: a disabled button swallows the
+ * pointer events the tooltip needs, which would hide the explanation behind the
+ * thing it explains.
+ */
+function SplitLockedHint({ hiddenGroups }: { hiddenGroups: number }) {
+  const { t } = useI18n();
+  const label = t('Expand the panel to manage terminal splits');
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={150}
+        render={
+          <button
+            type="button"
+            aria-disabled="true"
+            aria-label={label}
+            onClick={(event) => event.preventDefault()}
+            className="flex h-9 shrink-0 cursor-not-allowed items-center gap-1 border-border border-b px-2 text-muted-foreground"
+          />
+        }
+      >
+        <SplitSquareHorizontal className="h-3.5 w-3.5" />
+        {hiddenGroups > 0 && <span className="text-meta">+{hiddenGroups}</span>}
+      </TooltipTrigger>
+      <TooltipPopup side="bottom" sideOffset={4}>
+        <p>{label}</p>
+      </TooltipPopup>
+    </Tooltip>
   );
 }

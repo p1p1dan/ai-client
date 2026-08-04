@@ -11,6 +11,16 @@ interface ShellTerminalProps {
   backendSessionId?: string;
   isActive?: boolean;
   canMerge?: boolean;
+  /**
+   * T-15, optional addition (default true = today's behaviour for every
+   * existing host). False disables the split entry on both routes it has: the
+   * context menu item and `xtermKeybindings.split`. The keybinding is disabled
+   * by withholding `onSplit`, which leaves useXterm's `return false` in place —
+   * deliberately, so the chord is swallowed rather than forwarded to the shell
+   * (the default split chord is Cmd/Ctrl+D, and Ctrl+D at a shell prompt is
+   * EOF).
+   */
+  canSplit?: boolean;
   initialCommand?: string;
   onExit?: () => void;
   onTitleChange?: (title: string) => void;
@@ -25,6 +35,7 @@ export function ShellTerminal({
   backendSessionId,
   isActive = false,
   canMerge = false,
+  canSplit = true,
   initialCommand,
   onExit,
   onTitleChange,
@@ -67,7 +78,7 @@ export function ShellTerminal({
     onTitleChange,
     onInit,
     onSessionIdChange,
-    onSplit,
+    onSplit: canSplit ? onSplit : undefined,
     onMerge,
     canMerge,
     onCustomKey: handleCustomKey,
@@ -101,7 +112,7 @@ export function ShellTerminal({
       e.preventDefault();
 
       const selectedId = await window.electronAPI.contextMenu.show([
-        { id: 'split', label: t('Split Terminal') },
+        { id: 'split', label: t('Split Terminal'), disabled: !canSplit },
         { id: 'merge', label: t('Merge Terminal'), disabled: !canMerge },
         { id: 'separator-0', label: '', type: 'separator' },
         { id: 'clear', label: t('Clear terminal') },
@@ -116,7 +127,9 @@ export function ShellTerminal({
 
       switch (selectedId) {
         case 'split':
-          onSplit?.();
+          if (canSplit) {
+            onSplit?.();
+          }
           break;
         case 'merge':
           onMerge?.();
@@ -143,7 +156,7 @@ export function ShellTerminal({
           break;
       }
     },
-    [terminal, clear, refreshRenderer, t, onSplit, onMerge, canMerge]
+    [terminal, clear, refreshRenderer, t, onSplit, onMerge, canMerge, canSplit]
   );
 
   useEffect(() => {
