@@ -1,21 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
   CONTEXT_PANEL_FALLBACK_WIDTH,
+  CONTEXT_PANEL_MIN_WIDTH,
   clampContextPanelWidth,
   clampSidebarWidth,
+  type DeriveMountedSurfaceIdsInput,
   defaultShellLayout,
+  deriveMountedSurfaceIds,
   initialShellSurfaceState,
   nextReadingWidthMode,
   READING_COLUMN_CLASS,
   type ReadingWidthMode,
   readingColumnClass,
   reduceShellSurface,
+  resolveContentColumnWidth,
   resolveContextPanelWidth,
   type ShellSurfaceState,
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
+  SURFACE_ESCAPE_HOLD_ATTR,
   sanitizeShellLayoutPersisted,
+  shouldCloseOnEscape,
 } from '../shellLayoutModel';
 import { type ContextSurfaceId, DEFAULT_SURFACE_ORDER, sortSurfaces } from '../surfaceRegistry';
 
@@ -376,5 +382,181 @@ describe('sanitizeShellLayoutPersisted', () => {
     expect(sanitizeShellLayoutPersisted({ readingWidthMode: 'wide' }).readingWidthMode).toBe(
       'wide'
     );
+  });
+});
+
+describe('resolveContentColumnWidth', () => {
+  it('uses the panel width while open', () => {
+    expect(resolveContentColumnWidth({ width: 600, lastOpenWidth: 380 })).toBe(600);
+  });
+
+  it('keeps the last open width through the close transition and while closed', () => {
+    expect(resolveContentColumnWidth({ width: 0, lastOpenWidth: 900 })).toBe(900);
+  });
+
+  it('never returns below the 380 floor — F-b, whatever the outer panel animates to', () => {
+    const inputs = [0, -1, 12, 379, 380, 1400, Number.NaN, Number.POSITIVE_INFINITY];
+    for (const width of inputs) {
+      for (const lastOpenWidth of inputs) {
+        expect(resolveContentColumnWidth({ width, lastOpenWidth })).toBeGreaterThanOrEqual(
+          CONTEXT_PANEL_MIN_WIDTH
+        );
+      }
+    }
+  });
+
+  it('replays the open→close render sequence without ever dropping to 0', () => {
+    // Mirrors ContextPanel: the ref is only written while the panel is open.
+    let lastOpenWidth = CONTEXT_PANEL_MIN_WIDTH;
+    const widths: number[] = [];
+    for (const width of [0, 720, 720, 0, 0]) {
+      const content = resolveContentColumnWidth({ width, lastOpenWidth });
+      if (width > 0) {
+        lastOpenWidth = content;
+      }
+      widths.push(content);
+    }
+    expect(widths).toEqual([380, 720, 720, 720, 720]);
+  });
+});
+
+// ── deriveMountedSurfaceIds (S0) ────────────────────────────────────────
+const MOUNT_REGISTRATIONS: DeriveMountedSurfaceIdsInput['registrations'] = {
+  context: { mountPolicy: 'active' },
+  git: { mountPolicy: 'active' },
+  terminal: { mountPolicy: 'keep-alive' },
+  // `editor` is deliberately absent: an unwired surface must never mount.
+};
+
+/** Replays a sequence of active surfaces the way ContextPanel accumulates state. */
+function replayMounts(
+  steps: readonly (ContextSurfaceId | null)[],
+  registrations = MOUNT_REGISTRATIONS
+): ContextSurfaceId[][] {
+  const visited: ContextSurfaceId[] = [];
+  let lastSurfaceId: ContextSurfaceId | null = null;
+  return steps.map((activeSurfaceId) => {
+    if (activeSurfaceId) {
+      if (!visited.includes(activeSurfaceId)) {
+        visited.push(activeSurfaceId);
+      }
+      lastSurfaceId = activeSurfaceId;
+    }
+    return deriveMountedSurfaceIds({ visited, activeSurfaceId, lastSurfaceId, registrations });
+  });
+}
+
+describe('deriveMountedSurfaceIds', () => {
+  it('mounts nothing before any surface has been opened', () => {
+    expect(
+      deriveMountedSurfaceIds({
+        visited: [],
+        activeSurfaceId: null,
+        lastSurfaceId: null,
+        registrations: MOUNT_REGISTRATIONS,
+      })
+    ).toEqual([]);
+  });
+
+  it('mounts an active-policy view only while it is the active surface', () => {
+    const [openGit, openContext] = replayMounts(['git', 'context']);
+    expect(openGit).toEqual(['git']);
+    expect(openContext).toEqual(['context']);
+  });
+
+  it('keeps an active-policy view mounted while the panel is closed', () => {
+    // Batch-3 correction: a close/open toggle must not reset the view.
+    const [, closed] = replayMounts(['git', null]);
+    expect(closed).toEqual(['git']);
+  });
+
+  it('keeps a keep-alive view mounted after switching to another surface', () => {
+    const [openTerminal, openGit] = replayMounts(['terminal', 'git']);
+    expect(openTerminal).toEqual(['terminal']);
+    expect(openGit).toEqual(['git', 'terminal']);
+  });
+
+  it('keeps a keep-alive view mounted while the panel is closed', () => {
+    const [, , closed] = replayMounts(['terminal', 'git', null]);
+    expect(closed).toContain('terminal');
+  });
+
+  it('survives the R2 scenario: terminal → git → terminal → closed, always mounted', () => {
+    const frames = replayMounts(['terminal', 'git', 'terminal', null]);
+    for (const frame of frames) {
+      expect(frame).toContain('terminal');
+    }
+  });
+
+  it('does not mount a keep-alive view before its first activation', () => {
+    const [openGit] = replayMounts(['git']);
+    expect(openGit).not.toContain('terminal');
+  });
+
+  it('never mounts a surface without a registered view', () => {
+    const frames = replayMounts(['editor', 'git', 'editor', null]);
+    for (const frame of frames) {
+      expect(frame).not.toContain('editor');
+    }
+  });
+
+  it('mounts nothing at all when no view is registered', () => {
+    expect(replayMounts(['git', 'terminal', null], {})).toEqual([[], [], []]);
+  });
+
+  it('returns registry order, deduped, so React keys stay stable', () => {
+    const mounted = deriveMountedSurfaceIds({
+      visited: ['terminal', 'git', 'terminal'],
+      activeSurfaceId: 'git',
+      lastSurfaceId: 'git',
+      registrations: { ...MOUNT_REGISTRATIONS, git: { mountPolicy: 'keep-alive' } },
+    });
+    expect(mounted).toEqual(['git', 'terminal']);
+    expect(mounted.indexOf('git')).toBeLessThan(mounted.indexOf('terminal'));
+  });
+
+  it('ignores unknown ids in the visited list', () => {
+    expect(
+      deriveMountedSurfaceIds({
+        visited: ['bogus' as ContextSurfaceId, 'terminal'],
+        activeSurfaceId: null,
+        lastSurfaceId: 'terminal',
+        registrations: MOUNT_REGISTRATIONS,
+      })
+    ).toEqual(['terminal']);
+  });
+
+  it('mounts an active keep-alive surface even before the caller records it', () => {
+    expect(
+      deriveMountedSurfaceIds({
+        visited: [],
+        activeSurfaceId: 'terminal',
+        registrations: MOUNT_REGISTRATIONS,
+      })
+    ).toEqual(['terminal']);
+  });
+});
+
+// ── shouldCloseOnEscape (S0, F-c/R1) ────────────────────────────────────
+describe('shouldCloseOnEscape', () => {
+  it('closes on Escape from a panel-owned target', () => {
+    expect(shouldCloseOnEscape({ key: 'Escape', isOpen: true, holdsEscape: false })).toBe(true);
+  });
+
+  it('ignores any other key', () => {
+    expect(shouldCloseOnEscape({ key: 'Enter', isOpen: true, holdsEscape: false })).toBe(false);
+    expect(shouldCloseOnEscape({ key: 'Esc', isOpen: true, holdsEscape: false })).toBe(false);
+  });
+
+  it('ignores Escape while the panel is closed', () => {
+    expect(shouldCloseOnEscape({ key: 'Escape', isOpen: false, holdsEscape: false })).toBe(false);
+  });
+
+  it('yields Escape to a surface that holds it (vim / Monaco find)', () => {
+    expect(shouldCloseOnEscape({ key: 'Escape', isOpen: true, holdsEscape: true })).toBe(false);
+  });
+
+  it('exposes the opt-out attribute surfaces must spell', () => {
+    expect(SURFACE_ESCAPE_HOLD_ATTR).toBe('data-surface-holds-escape');
   });
 });

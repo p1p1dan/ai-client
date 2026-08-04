@@ -7,6 +7,13 @@
  * Batch 3 adds: `availableWidth`-driven width resolution, the drag handle,
  * and the `expanded` promoted overlay (absolute over Main, not Rail/Sidebar —
  * Rail sits outside the measured Main+Panel row this panel lives in).
+ *
+ * S0 (T-12~15 prerequisite) adds two things and changes nothing else: the body
+ * is a multi-mount stack driven by `deriveMountedSurfaceIds` (a 'keep-alive'
+ * view stays mounted once activated, hidden but laid out, so T-15's pty
+ * survives a surface switch), and Escape is narrowed so a surface can hold it
+ * (`SURFACE_ESCAPE_HOLD_ATTR`). Header, width memory, expanded overlay and the
+ * drag handle are untouched.
  */
 
 import { Maximize2, Minimize2, X } from 'lucide-react';
@@ -21,9 +28,13 @@ import { SurfacePlaceholder } from './SurfacePlaceholder';
 import {
   CONTEXT_PANEL_MIN_WIDTH,
   clampContextPanelWidth,
+  deriveMountedSurfaceIds,
+  resolveContentColumnWidth,
   resolveContextPanelWidth,
+  SURFACE_ESCAPE_HOLD_ATTR,
+  shouldCloseOnEscape,
 } from './shellLayoutModel';
-import { getSurface } from './surfaceRegistry';
+import { type ContextSurfaceId, getSurface } from './surfaceRegistry';
 import { SURFACE_VIEWS } from './surfaceViews';
 
 interface ContextPanelProps {
@@ -63,14 +74,34 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
   // Review fix: while closing, `width` is already 0, so sizing the inner
   // column from it would reflow the content to the 380px floor on the very
   // frame the 250ms collapse starts. Remember the last open width and keep
-  // the inner column at it through the close transition and while closed.
+  // the inner column at it through the close transition and while closed
+  // (F-b: keep-alive views must never measure a 0px box — see the stack below).
   const lastOpenContentWidthRef = useRef(CONTEXT_PANEL_MIN_WIDTH);
+  const contentWidth = resolveContentColumnWidth({
+    width,
+    lastOpenWidth: lastOpenContentWidthRef.current,
+  });
   if (width > 0) {
-    lastOpenContentWidthRef.current = Math.max(width, CONTEXT_PANEL_MIN_WIDTH);
+    lastOpenContentWidthRef.current = contentWidth;
   }
 
+  // Visited set for `deriveMountedSurfaceIds`. A ref written during render
+  // rather than state: the mount list must be correct in the SAME render that
+  // activates a surface (state would mount it one commit late), and the write
+  // is idempotent, so a StrictMode double-render is a no-op.
+  const visitedSurfaceIdsRef = useRef<ContextSurfaceId[]>([]);
+  if (activeSurfaceId && !visitedSurfaceIdsRef.current.includes(activeSurfaceId)) {
+    visitedSurfaceIdsRef.current = [...visitedSurfaceIdsRef.current, activeSurfaceId];
+  }
+  const mountedSurfaceIds = deriveMountedSurfaceIds({
+    visited: visitedSurfaceIdsRef.current,
+    activeSurfaceId,
+    lastSurfaceId,
+    registrations: SURFACE_VIEWS,
+  });
+
   const Icon = descriptor ? SURFACE_ICON_MAP[descriptor.icon] : null;
-  const SurfaceView = descriptor ? SURFACE_VIEWS[descriptor.id] : undefined;
+  const contentRegistration = contentSurfaceId ? SURFACE_VIEWS[contentSurfaceId] : undefined;
 
   return (
     <div
@@ -88,26 +119,27 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
       // Composer's mention popup. Scoping to onKeyDownCapture on the panel
       // root means only Escape while focus is inside the panel closes it —
       // matches the reference panel-scoped semantics (ContextPanel.tsx:2437-2445).
+      //
+      // S0 narrows it further (F-c/R1): capture phase still runs BEFORE the
+      // surface, so vim/less inside a terminal and Monaco's find/suggest never
+      // saw their own Escape. A subtree marked `data-surface-holds-escape`
+      // opts out — the panel then neither closes nor stops propagation, so the
+      // key reaches the surface untouched.
       onKeyDownCapture={(event) => {
-        if (isOpen && event.key === 'Escape') {
-          closeSurface();
-          event.stopPropagation();
+        const target = event.target as HTMLElement | null;
+        const holdsEscape = !!target?.closest?.(`[${SURFACE_ESCAPE_HOLD_ATTR}]`);
+        if (!shouldCloseOnEscape({ key: event.key, isOpen, holdsEscape })) {
+          return;
         }
+        closeSurface();
+        event.stopPropagation();
       }}
     >
       {descriptor && (
         // Fixed px content width: the outer container animates width on
         // open/close/resize, but the inner column must not reflow mid-transition —
         // including the close transition, which keeps the last open width.
-        <div
-          className="flex h-full flex-col"
-          style={{
-            width:
-              width > 0
-                ? Math.max(width, CONTEXT_PANEL_MIN_WIDTH)
-                : lastOpenContentWidthRef.current,
-          }}
-        >
+        <div className="flex h-full flex-col" style={{ width: contentWidth }}>
           <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2">
             {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
             <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -136,11 +168,52 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <div className="min-h-0 flex-1">
-            {SurfaceView ? (
-              <SurfaceView surfaceId={descriptor.id} />
-            ) : (
-              <SurfacePlaceholder surface={descriptor} />
+          {/*
+            Multi-mount stack (S0). Every mounted view is an `absolute inset-0`
+            layer over the same box; only the current surface is shown. One
+            header above, one visible layer here — the stack changes lifetimes,
+            not looks.
+
+            Hidden layers use `invisible pointer-events-none` + `inert`, NEVER
+            `display: none`, `hidden` or a conditional unmount. This is load
+            bearing, not cosmetic: `visibility: hidden` keeps the layout box, so
+            a hidden layer still measures the panel's real content width, while
+            a display-hidden box measures 0×0. xterm's `FitAddon` runs off a
+            ResizeObserver and `useXterm` has no zero-width guard, so a 0px
+            measurement is forwarded to the pty as `cols: 2` and permanently
+            mangles the wrapping of whatever is running in it. Same technique as
+            the legacy shell's terminal tab (`layout/MainContent.tsx:577-590`).
+            The `width > 0` floor above (F-b) is the other half of the same
+            guarantee: it keeps this box ≥380px even while the panel is closed.
+
+            `isolate`: the layers' z-0/z-10 must not compete with the drag
+            handle's z-10 in the panel root's stacking context.
+          */}
+          <div className="relative isolate min-h-0 flex-1">
+            {mountedSurfaceIds.map((id) => {
+              const registration = SURFACE_VIEWS[id];
+              if (!registration) {
+                return null;
+              }
+              const SurfaceView = registration.component;
+              const visible = id === contentSurfaceId;
+              return (
+                <div
+                  key={id}
+                  className={cn(
+                    'absolute inset-0',
+                    visible ? 'z-10' : 'invisible pointer-events-none z-0'
+                  )}
+                  inert={!visible}
+                >
+                  <SurfaceView surfaceId={id} />
+                </div>
+              );
+            })}
+            {!contentRegistration && (
+              <div className="absolute inset-0">
+                <SurfacePlaceholder surface={descriptor} />
+              </div>
             )}
           </div>
         </div>

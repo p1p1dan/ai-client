@@ -30,6 +30,17 @@ function gitStatus(overrides: Partial<GitStatus> = {}): GitStatus {
   };
 }
 
+/**
+ * Surfaces with a real view wired in `surfaceViews.tsx`. The pendingTask
+ * assertion below is an IFF against this list, so the honest empty state can
+ * neither outlive its wiring nor be dropped before it: the task that lands a
+ * surface adds exactly one id here and nulls exactly one `pendingTask`, and
+ * either edit alone fails.
+ *
+ * Empty at S0 (shell prerequisite only); T-12~T-15 each add one line.
+ */
+const WIRED: ContextSurfaceId[] = [];
+
 describe('CONTEXT_SURFACES', () => {
   it('registers all 11 openchamber surfaces so later rounds only flip flags', () => {
     expect(CONTEXT_SURFACES).toHaveLength(11);
@@ -51,9 +62,13 @@ describe('CONTEXT_SURFACES', () => {
     }
   });
 
-  it('names a pendingTask for every surface that has no real content yet', () => {
+  it('names a pendingTask for exactly the surfaces that are not wired yet', () => {
     for (const surface of CONTEXT_SURFACES) {
-      expect(surface.pendingTask).not.toBeNull();
+      if (WIRED.includes(surface.id)) {
+        expect(surface.pendingTask).toBeNull();
+      } else {
+        expect(surface.pendingTask).not.toBeNull();
+      }
     }
   });
 });

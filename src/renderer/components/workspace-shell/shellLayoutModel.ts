@@ -119,6 +119,120 @@ export function resolveContextPanelWidth(input: ResolveContextPanelWidthInput): 
   return clampContextPanelWidth(Math.round(base), measured);
 }
 
+/**
+ * F-b invariant (S0). The outer panel animates its width to 0 on close, but
+ * the content column inside it must never follow: xterm's `FitAddon` and
+ * Monaco both re-measure from a ResizeObserver, and `useXterm` has no
+ * zero-width guard — a 0px measurement is forwarded to the pty as `cols: 2`.
+ * So the column keeps the last open width while closed and never drops below
+ * CONTEXT_PANEL_MIN_WIDTH. Pure mirror of what `ContextPanel` computes per
+ * render, so the floor is assertable without a DOM.
+ */
+export interface ResolveContentColumnWidthInput {
+  /** Current outer panel width; 0 while closed and throughout the close transition. */
+  width: number;
+  /** Width the content column was last laid out at while the panel was open. */
+  lastOpenWidth: number;
+}
+
+/** Always ≥ CONTEXT_PANEL_MIN_WIDTH, for every input including 0/negative/non-finite. */
+export function resolveContentColumnWidth(input: ResolveContentColumnWidthInput): number {
+  const { width, lastOpenWidth } = input;
+  if (isFiniteNumber(width) && width > 0) {
+    return Math.max(width, CONTEXT_PANEL_MIN_WIDTH);
+  }
+  if (isFiniteNumber(lastOpenWidth)) {
+    return Math.max(lastOpenWidth, CONTEXT_PANEL_MIN_WIDTH);
+  }
+  return CONTEXT_PANEL_MIN_WIDTH;
+}
+
+// ── surface mounting (S0, T-12~15 shell prerequisite) ───────────────────
+/**
+ * Lifetime of a wired surface view, not its looks:
+ * - 'active'     — mounted only while the panel shows this surface.
+ * - 'keep-alive' — mounted from its first activation onwards, including while
+ *                  another surface is shown and while the panel is closed.
+ *                  For views owning state the renderer cannot rebuild (T-15's
+ *                  pty). Hidden layers stay in the layout box; see
+ *                  `ContextPanel` for why `display: none` is banned.
+ */
+export type SurfaceMountPolicy = 'active' | 'keep-alive';
+
+/** Structural view of a `SURFACE_VIEWS` entry — keeps this module React-free. */
+export interface SurfaceMountRegistration {
+  mountPolicy: SurfaceMountPolicy;
+}
+
+export interface DeriveMountedSurfaceIdsInput {
+  /** Every surface that has been `activeSurfaceId` at least once this session. */
+  visited: readonly ContextSurfaceId[];
+  /** null = panel closed. */
+  activeSurfaceId: ContextSurfaceId | null;
+  /**
+   * Shown while the panel is closed so an 'active' view survives a close/open
+   * toggle (batch-3 correction, `ContextPanel.tsx`). Only ever names a surface
+   * that has already been active, so 'keep-alive' is covered by `visited`.
+   */
+  lastSurfaceId?: ContextSurfaceId | null;
+  /** Only surfaces with a view registered in `SURFACE_VIEWS` can mount at all. */
+  registrations: Partial<Record<ContextSurfaceId, SurfaceMountRegistration>>;
+}
+
+/**
+ * The surfaces whose views must exist in the DOM right now, in registry order
+ * (deterministic, so callers get a stable React key order and tests can assert
+ * the whole list). Unregistered ids are never mounted — an unwired surface
+ * shows `SurfacePlaceholder` instead.
+ */
+export function deriveMountedSurfaceIds(input: DeriveMountedSurfaceIdsInput): ContextSurfaceId[] {
+  const { visited, activeSurfaceId, lastSurfaceId = null, registrations } = input;
+  const contentSurfaceId = activeSurfaceId ?? lastSurfaceId;
+  const visitedSet = new Set(visited);
+
+  const mounted: ContextSurfaceId[] = [];
+  for (const id of DEFAULT_SURFACE_ORDER) {
+    const registration = registrations[id];
+    if (!registration) {
+      continue;
+    }
+    const shouldMount =
+      registration.mountPolicy === 'keep-alive'
+        ? visitedSet.has(id) || id === activeSurfaceId
+        : id === contentSurfaceId;
+    if (shouldMount) {
+      mounted.push(id);
+    }
+  }
+  return mounted;
+}
+
+// ── Escape scope (S0, risk R1) ──────────────────────────────────────────
+/**
+ * Opt-out marker for the panel's capture-phase Escape. Any element inside a
+ * surface that owns Escape itself — a terminal running vim/less, Monaco's find
+ * widget or suggest popup, a surface-local dialog — carries this attribute so
+ * the key reaches it instead of closing the panel.
+ */
+export const SURFACE_ESCAPE_HOLD_ATTR = 'data-surface-holds-escape';
+
+export interface ShouldCloseOnEscapeInput {
+  /** `KeyboardEvent.key`. */
+  key: string;
+  /** Panel open state; a closed panel has nothing to close. */
+  isOpen: boolean;
+  /** True when the event target sits inside a `[data-surface-holds-escape]` subtree. */
+  holdsEscape: boolean;
+}
+
+/**
+ * False means BOTH: do not close, and do not `stopPropagation` — swallowing the
+ * key without acting on it is what made Escape unusable inside a surface (F-c).
+ */
+export function shouldCloseOnEscape(input: ShouldCloseOnEscapeInput): boolean {
+  return input.key === 'Escape' && input.isOpen && !input.holdsEscape;
+}
+
 // ── surface state machine (decision 2) ──────────────────────────────────
 export interface ShellSurfaceState {
   /** null = panel closed. */
