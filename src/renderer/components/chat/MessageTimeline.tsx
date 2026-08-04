@@ -23,7 +23,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { type TurnSendStatus, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import { sendTimeoutMs } from './attachmentLimits';
 import { ChatMarkdown } from './ChatMarkdown';
-import { shouldRenderMarkdown } from './chatMarkdown';
+import { shouldRenderMarkdown } from './chatMarkdownPolicy';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
@@ -63,7 +63,7 @@ import { shouldStickToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { resolveResumeModel } from './models';
 import { QuestionCard } from './QuestionCard';
-import { canRespondToPermission, deriveQuestionCardState } from './questionCard';
+import { canRespondToPermission, deriveQuestionCardState } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';

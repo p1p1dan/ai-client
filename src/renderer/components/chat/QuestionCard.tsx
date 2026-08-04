@@ -28,10 +28,10 @@ import {
   setOtherText,
   toggleOption,
   toggleOther,
-} from './questionCard';
+} from './questionCardModel';
 
 /**
- * T-05 batch 3: renders `.qa` off `questionCard.ts`'s pure view models. No
+ * T-05 batch 3: renders `.qa` off `questionCardModel.ts`'s pure view models. No
  * business logic lives here — selection/pagination/payload assembly are all
  * pure-module calls, this file only turns their output into DOM.
  */

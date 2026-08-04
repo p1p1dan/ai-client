@@ -1,5 +1,9 @@
 import type { HighlighterCore } from 'shiki/core';
-import { type ChatCodeLanguage, type ChatCodeToken, normalizeCodeLanguage } from './chatMarkdown';
+import {
+  type ChatCodeLanguage,
+  type ChatCodeToken,
+  normalizeCodeLanguage,
+} from './chatMarkdownPolicy';
 
 /**
  * T-29: the chat timeline's syntax highlighter — a lazily loaded, process-wide

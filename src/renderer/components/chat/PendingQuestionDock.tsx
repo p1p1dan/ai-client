@@ -6,7 +6,7 @@ import {
   deriveQuestionCardState,
   QUESTION_DOCK_WRAPPER_CLASS,
   selectPendingQuestionBlock,
-} from './questionCard';
+} from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 
 interface PendingQuestionDockProps {

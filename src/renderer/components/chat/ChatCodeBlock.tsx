@@ -1,5 +1,9 @@
 import { Fragment, memo, useEffect, useState } from 'react';
-import { type ChatCodeToken, chatCodeTokenStyle, chatMarkdownCodeBlockClass } from './chatMarkdown';
+import {
+  type ChatCodeToken,
+  chatCodeTokenStyle,
+  chatMarkdownCodeBlockClass,
+} from './chatMarkdownPolicy';
 import { highlightChatCode } from './chatShiki';
 import { useDarkClass } from './useDarkClass';
 

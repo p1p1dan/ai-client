@@ -9,6 +9,7 @@ import {
   chatCodeTokenStyle,
   chatMarkdownBlockquoteClass,
   chatMarkdownCodeBlockClass,
+  chatMarkdownFootnotesClass,
   chatMarkdownHeadingClass,
   chatMarkdownHrClass,
   chatMarkdownImagePlaceholderClass,
@@ -24,7 +25,7 @@ import {
   normalizeCodeLanguage,
   sanitizeMarkdownHref,
   shouldRenderMarkdown,
-} from '../chatMarkdown';
+} from '../chatMarkdownPolicy';
 import { chatTurnClass, turnBodyClass, turnBubbleBandClass } from '../chatTimelineLayout';
 import { readDarkClass } from '../useDarkClass';
 
@@ -287,6 +288,7 @@ const ALL_BLOCK_CLASSES: ReadonlyArray<{ name: string; cls: string }> = [
   { name: 'table wrap', cls: chatMarkdownTableWrapClass() },
   { name: 'blockquote', cls: chatMarkdownBlockquoteClass() },
   { name: 'hr', cls: chatMarkdownHrClass() },
+  { name: 'footnotes', cls: chatMarkdownFootnotesClass('footnotes') },
 ];
 
 describe('F-C4: the markdown root cannot break the pinned bubble (sticky chain)', () => {
@@ -480,6 +482,33 @@ describe('F-C4: the remaining surfaces', () => {
     }
   });
 
+  // `remark-gfm` marks task items `.task-list-item` and the checkbox IS the
+  // marker; without this a `- [ ] item` renders a bullet AND a checkbox. Scoped
+  // to the marked `<li>` so a mixed list keeps bullets on its prose items.
+  it('F-C4: a GFM task item drops its bullet, and only the task item does', () => {
+    for (const ordered of [false, true]) {
+      expect(chatMarkdownListClass(ordered)).toContain('[&_li.task-list-item]:list-none');
+      // Not applied to the list as a whole, which would strip every marker.
+      expect(chatMarkdownListClass(ordered)).not.toMatch(/(?:^|\s)list-none(?:\s|$)/);
+    }
+  });
+
+  // The footnote apparatus is separated from the answer by the 20px SECTION
+  // tier, and the rule is keyed off `remark-gfm`'s own class so no other
+  // `<section>` can inherit it.
+  it('F-C4: the footnote block separates on the section tier, and nothing else does', () => {
+    const footnotes = chatMarkdownFootnotesClass('footnotes');
+    expect(marginTopPx(footnotes)).toBe(20);
+    expect(footnotes).toContain('text-muted-foreground');
+    // Any other section — including one whose class merely CONTAINS the word —
+    // gets nothing.
+    for (const other of ['', 'prose', 'my-footnotes', 'footnotes-extra', null, undefined]) {
+      expect(chatMarkdownFootnotesClass(other), JSON.stringify(other)).toBe('');
+    }
+    // …and it is found among several classes, not only when it stands alone.
+    expect(chatMarkdownFootnotesClass('data-footnotes footnotes')).toBe(footnotes);
+  });
+
   // The placeholder must not be able to become a picture by CSS either.
   it('F-C4: the image placeholder is a chip, with nothing that can fetch', () => {
     const cls = chatMarkdownImagePlaceholderClass();
@@ -515,7 +544,7 @@ function stripComments(source: string): string {
 const MARKDOWN_PATH_FILES = [
   'ChatMarkdown.tsx',
   'ChatCodeBlock.tsx',
-  'chatMarkdown.ts',
+  'chatMarkdownPolicy.ts',
   'chatShiki.ts',
 ] as const;
 
@@ -561,7 +590,7 @@ describe('F-C5: the rendering path really does what the policy claims', () => {
   const COMMENT_ONLY_PROSE: Record<(typeof MARKDOWN_PATH_FILES)[number], string> = {
     'ChatMarkdown.tsx': 'Security rule',
     'ChatCodeBlock.tsx': 'Trust boundary',
-    'chatMarkdown.ts': 'load-bearing',
+    'chatMarkdownPolicy.ts': 'load-bearing',
     'chatShiki.ts': 'attacker-influenceable',
   };
 
@@ -608,11 +637,37 @@ describe('F-C5: the rendering path really does what the policy claims', () => {
   it('F-C5: the outbound link goes through shell.openExternal, on a sanitised url', () => {
     const markdown = sources.find((entry) => entry.file === 'ChatMarkdown.tsx')?.src ?? '';
     expect(markdown).toContain('const safe = sanitizeMarkdownHref(href);');
-    expect(markdown).toContain('if (!safe) return <>{children}</>;');
     expect(markdown).toContain('window.electronAPI.shell.openExternal(safe)');
     // The one thing that must never appear: forwarding the AUTHOR's string
     // instead of the parsed one.
     expect(markdown).not.toContain('openExternal(href)');
+  });
+
+  /**
+   * Spread order, as a source fact.
+   *
+   * `chatMarkdownRender.test.ts` asserts the OUTCOME (a task list keeps its
+   * classes, a link title cannot lie), which is the assertion that matters. This
+   * one is cheaper and names the cause, so a reordering fails with "you moved
+   * the spread" rather than with a diff of markup.
+   *
+   * The rule: in every renderer that spreads, `{...props}` is the FIRST thing in
+   * the element, so no plugin-supplied property can land on top of an attribute
+   * this file hardened afterwards.
+   */
+  it('F-C5: every renderer spreads props before its own attributes', () => {
+    const markdown = sources.find((entry) => entry.file === 'ChatMarkdown.tsx')?.src ?? '';
+    const spreads = markdown.match(/\{\.\.\.props\}/g) ?? [];
+    // Guard against the scan silently matching nothing.
+    expect(spreads.length).toBeGreaterThan(10);
+    // `<tag {...props}` — the spread immediately after the tag name, every time.
+    const leading = markdown.match(/<[a-zA-Z][a-zA-Z0-9]*\s+\{\.\.\.props\}/g) ?? [];
+    expect(leading.length).toBe(spreads.length);
+    // And the shape that caused the bug is gone: an attribute, then the spread.
+    expect(markdown).not.toMatch(/className=\{[^}]*\}\s+\{\.\.\.props\}/);
+    // `title` is dropped rather than merged — it is the destination, and the
+    // markdown `[text](url "title")` syntax would otherwise overwrite it.
+    expect(markdown).toContain('title: _title');
   });
 
   it('F-C5: shiki is only ever reached through a dynamic import', () => {

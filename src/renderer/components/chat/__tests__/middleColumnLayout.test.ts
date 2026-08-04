@@ -31,7 +31,7 @@ import {
   targetRowSlots,
   targetTriggerClass,
 } from '../middleColumnLayout';
-import { QUESTION_DOCK_WRAPPER_CLASS } from '../questionCard';
+import { QUESTION_DOCK_WRAPPER_CLASS } from '../questionCardModel';
 
 /**
  * T-30b2 assertion suite (Composer form alignment).

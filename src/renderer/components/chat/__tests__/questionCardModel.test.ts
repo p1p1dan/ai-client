@@ -18,7 +18,7 @@ import {
   setOtherText,
   toggleOption,
   toggleOther,
-} from '../questionCard';
+} from '../questionCardModel';
 
 function questionBlock(overrides: Partial<ChatBlock> = {}): ChatBlock {
   return { id: 'q1', type: 'question', questionId: 'q1', ...overrides };

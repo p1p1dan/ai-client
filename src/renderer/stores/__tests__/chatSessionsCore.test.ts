@@ -1,6 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
-import { canRespondToPermission } from '@/components/chat/questionCard';
+import { canRespondToPermission } from '@/components/chat/questionCardModel';
 import {
   applyRuntimeEvent,
   applyRuntimeEvents,

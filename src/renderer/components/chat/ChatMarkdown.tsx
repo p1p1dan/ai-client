@@ -4,9 +4,11 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { CodeInline } from '@/components/ui/ident';
+import { cn } from '@/lib/utils';
 import { ChatCodeBlock } from './ChatCodeBlock';
 import {
   chatMarkdownBlockquoteClass,
+  chatMarkdownFootnotesClass,
   chatMarkdownHeadingClass,
   chatMarkdownHrClass,
   chatMarkdownImagePlaceholderClass,
@@ -21,17 +23,17 @@ import {
   codeLanguageFromClassName,
   isFencedCodeBlock,
   sanitizeMarkdownHref,
-} from './chatMarkdown';
+} from './chatMarkdownPolicy';
 
 /**
  * T-29: assistant prose, rendered as Markdown.
  *
  * All policy — which protocols are linkable, which elements are inert, which
- * class each element gets — lives in `chatMarkdown.ts` so the node-only test
+ * class each element gets — lives in `chatMarkdownPolicy.ts` so the node-only test
  * suite can assert it (F-C1…F-C5). This file is the wiring, plus the one thing
  * that cannot be a pure function: the component map itself.
  *
- * Read `chatMarkdown.ts`'s module note before changing anything here; the five
+ * Read `chatMarkdownPolicy.ts`'s module note before changing anything here; the five
  * security rules and the reason chat does NOT reuse `files/MarkdownPreview.tsx`
  * are stated there in full.
  *
@@ -45,7 +47,24 @@ import {
  *     `source`, a `style` with `url()`);
  *  3. `dangerouslySetInnerHTML`.
  *
- * `__tests__/chatMarkdown.test.ts` scans this file's source for all three.
+ * `__tests__/chatMarkdownPolicy.test.ts` scans this file's source for all three.
+ *
+ * ## Why every renderer spreads `props` FIRST
+ *
+ * `react-markdown` hands each renderer the parsed node's own properties, and
+ * `remark-gfm` really does set some: a task list arrives as `className:
+ * 'contains-task-list'`, a footnote heading as `className: 'sr-only'`, a link as
+ * `title` from `[text](url "title")`. Spreading LAST let every one of those
+ * overwrite the attribute this file had just hardened — measured, not theorised:
+ * a task list rendered as `<ul class="contains-task-list">` with the whole policy
+ * class gone, and `[x](https://evil "https://github.com/…")` showed the trusted
+ * string in the tooltip while pointing elsewhere.
+ *
+ * So: `{...props}` goes first, every policy-owned attribute after it, and
+ * `className` is MERGED through `cn` rather than replaced — `remark-gfm`'s hook
+ * classes carry meaning (`sr-only` hides the footnote label; `.task-list-item`
+ * is what the list class keys its marker suppression off) and dropping them
+ * would trade one silent regression for another.
  */
 
 /** Frozen at module scope: a new array identity per render would re-run the whole unified pipeline. */
@@ -59,45 +78,92 @@ const REHYPE_PLUGINS: [] = [];
  *
  * A `<code>` element's children are a single text node in every markdown
  * construct that can produce one (inline spans cannot contain emphasis, and a
- * fence's body is opaque), so this is total in practice; `String()` keeps it
- * total in principle.
+ * fence's body is opaque), so the string branch is what actually runs. The array
+ * branch is not decoration: `String(['a','b'])` is `'a,b'`, so the naive
+ * `String(children)` would splice COMMAS into displayed code the day a plugin
+ * splits that text node. Joining on `''` makes the function total without
+ * changing today's output.
  */
 function textOf(children: React.ReactNode): string {
-  return typeof children === 'string' ? children : String(children ?? '');
+  if (typeof children === 'string') return children;
+  if (typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map((child) => textOf(child)).join('');
+  if (children === null || children === undefined || typeof children === 'boolean') return '';
+  return String(children);
+}
+
+/**
+ * Whether a rejected `<a>` is GFM's footnote RETURN arrow.
+ *
+ * `remark-gfm` marks it with the (oddly named, but real) class
+ * `data-footnote-backref` plus a matching data attribute. Both are checked, and
+ * `className` is accepted as a string or an array, so this does not depend on
+ * which shape the current `react-markdown` / `hast` pair happens to hand over.
+ */
+function isFootnoteBackref(props: Record<string, unknown>): boolean {
+  if ('data-footnote-backref' in props) return true;
+  const className = props.className;
+  if (typeof className === 'string')
+    return className.split(/\s+/).includes('data-footnote-backref');
+  if (Array.isArray(className)) return className.includes('data-footnote-backref');
+  return false;
 }
 
 const CHAT_MARKDOWN_COMPONENTS: Components = {
-  h1: ({ node: _node, ...props }) => <h1 className={chatMarkdownHeadingClass(1)} {...props} />,
-  h2: ({ node: _node, ...props }) => <h2 className={chatMarkdownHeadingClass(2)} {...props} />,
-  h3: ({ node: _node, ...props }) => <h3 className={chatMarkdownHeadingClass(3)} {...props} />,
-  h4: ({ node: _node, ...props }) => <h4 className={chatMarkdownHeadingClass(4)} {...props} />,
-  h5: ({ node: _node, ...props }) => <h5 className={chatMarkdownHeadingClass(5)} {...props} />,
-  h6: ({ node: _node, ...props }) => <h6 className={chatMarkdownHeadingClass(6)} {...props} />,
-
-  p: ({ node: _node, ...props }) => <p className={chatMarkdownParagraphClass()} {...props} />,
-  ul: ({ node: _node, ...props }) => <ul className={chatMarkdownListClass(false)} {...props} />,
-  ol: ({ node: _node, ...props }) => <ol className={chatMarkdownListClass(true)} {...props} />,
-  blockquote: ({ node: _node, ...props }) => (
-    <blockquote className={chatMarkdownBlockquoteClass()} {...props} />
+  h1: ({ node: _node, className, ...props }) => (
+    <h1 {...props} className={cn(chatMarkdownHeadingClass(1), className)} />
   ),
-  hr: ({ node: _node, ...props }) => <hr className={chatMarkdownHrClass()} {...props} />,
+  h2: ({ node: _node, className, ...props }) => (
+    <h2 {...props} className={cn(chatMarkdownHeadingClass(2), className)} />
+  ),
+  h3: ({ node: _node, className, ...props }) => (
+    <h3 {...props} className={cn(chatMarkdownHeadingClass(3), className)} />
+  ),
+  h4: ({ node: _node, className, ...props }) => (
+    <h4 {...props} className={cn(chatMarkdownHeadingClass(4), className)} />
+  ),
+  h5: ({ node: _node, className, ...props }) => (
+    <h5 {...props} className={cn(chatMarkdownHeadingClass(5), className)} />
+  ),
+  h6: ({ node: _node, className, ...props }) => (
+    <h6 {...props} className={cn(chatMarkdownHeadingClass(6), className)} />
+  ),
 
-  table: ({ node: _node, ...props }) => (
+  p: ({ node: _node, className, ...props }) => (
+    <p {...props} className={cn(chatMarkdownParagraphClass(), className)} />
+  ),
+  ul: ({ node: _node, className, ...props }) => (
+    <ul {...props} className={cn(chatMarkdownListClass(false), className)} />
+  ),
+  ol: ({ node: _node, className, ...props }) => (
+    <ol {...props} className={cn(chatMarkdownListClass(true), className)} />
+  ),
+  blockquote: ({ node: _node, className, ...props }) => (
+    <blockquote {...props} className={cn(chatMarkdownBlockquoteClass(), className)} />
+  ),
+  hr: ({ node: _node, className, ...props }) => (
+    <hr {...props} className={cn(chatMarkdownHrClass(), className)} />
+  ),
+
+  table: ({ node: _node, className, ...props }) => (
     <div className={chatMarkdownTableWrapClass()}>
-      <table className={chatMarkdownTableClass()} {...props} />
+      <table {...props} className={cn(chatMarkdownTableClass(), className)} />
     </div>
   ),
-  th: ({ node: _node, ...props }) => (
-    <th className={chatMarkdownTableCellClass('head')} {...props} />
+  th: ({ node: _node, className, ...props }) => (
+    <th {...props} className={cn(chatMarkdownTableCellClass('head'), className)} />
   ),
-  td: ({ node: _node, ...props }) => (
-    <td className={chatMarkdownTableCellClass('body')} {...props} />
+  td: ({ node: _node, className, ...props }) => (
+    <td {...props} className={cn(chatMarkdownTableCellClass('body'), className)} />
   ),
 
   /**
    * GFM task-list checkbox. Re-declared instead of inherited so "inert" is
    * OUR guarantee rather than `remark-gfm`'s default: nothing is spread from
-   * the parsed node, and `disabled` + `readOnly` are set unconditionally.
+   * the parsed node, and `disabled` + `readOnly` are set unconditionally. This
+   * is the one renderer that does NOT spread `props`, and that asymmetry is the
+   * point — an `<input>` is the only element here with its own behaviour, so
+   * "inherit nothing" is worth more than class fidelity.
    */
   input: ({ checked }) => (
     <input
@@ -107,6 +173,21 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
       readOnly
       className="mr-1 align-middle"
     />
+  ),
+
+  /**
+   * The GFM footnote block at the end of a reply.
+   *
+   * `remark-gfm` emits it as `<section data-footnotes class="footnotes">` with
+   * an `<h2 class="sr-only">` label, and both classes are load-bearing — hence
+   * the merge rather than a replace. What is added is the separation: without a
+   * rule the footnote list butts straight against the last paragraph and reads
+   * as one more list item. The `sr-only` heading is left to the merged class,
+   * because `h2` would otherwise give it a visible section-break gap for a
+   * heading nobody can see.
+   */
+  section: ({ node: _node, className, ...props }) => (
+    <section {...props} className={cn(chatMarkdownFootnotesClass(className), className)} />
   ),
 
   /**
@@ -121,13 +202,34 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
    * `target`/`rel` cover the middle-click path, which never reaches `onClick`
    * and instead lands on `MainWindow`'s `setWindowOpenHandler`, itself an
    * http(s) allow-list.
+   *
+   * `title` is the destination and is NOT overridable. Markdown's own
+   * `[text](url "title")` syntax puts an author-controlled string in exactly the
+   * attribute a user hovers to check where a link goes, so honouring it would
+   * hand the model a tooltip that says `https://github.com/anthropics` over a
+   * link to anywhere. It is dropped from `props` rather than merged.
+   *
+   * ## GFM footnotes degrade, deliberately
+   *
+   * `remark-gfm` wires footnotes with SAME-DOCUMENT fragment hrefs
+   * (`#user-content-fn-1`), which are relative and therefore rejected by rule 2
+   * — so a `[^1]` reference renders as a plain `1` and its body still appears in
+   * the footnote section at the end. That is the correct trade: making them work
+   * means either an in-app fragment-navigation primitive this window does not
+   * have, or punching a hole in the allow-list for a URL shape the model also
+   * controls. The one thing suppressed is the return arrow, which is a bare `↩`
+   * once unlinked and means nothing without the jump behind it.
    */
-  a: ({ node: _node, href, children, ...props }) => {
+  a: ({ node: _node, href, children, title: _title, ...props }) => {
     const safe = sanitizeMarkdownHref(href);
-    if (!safe) return <>{children}</>;
+    if (!safe) {
+      if (isFootnoteBackref(props)) return null;
+      return <>{children}</>;
+    }
     return (
       <a
-        className={chatMarkdownLinkClass()}
+        {...props}
+        className={cn(chatMarkdownLinkClass(), props.className)}
         href={safe}
         title={safe}
         target="_blank"
@@ -136,7 +238,6 @@ const CHAT_MARKDOWN_COMPONENTS: Components = {
           event.preventDefault();
           void window.electronAPI.shell.openExternal(safe);
         }}
-        {...props}
       >
         {children}
       </a>

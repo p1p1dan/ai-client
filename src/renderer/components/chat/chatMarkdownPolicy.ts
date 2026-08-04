@@ -347,6 +347,13 @@ export function chatMarkdownHeadingClass(level: 1 | 2 | 3 | 4 | 5 | 6): string {
  * inherits the 10px block gap and a three-level outline reads as three separate
  * paragraphs. Descendant variants beat the plain `mt-2.5` on specificity, which
  * is the whole mechanism.
+ *
+ * `[&_li.task-list-item]:list-none` is the GFM task-list case. `remark-gfm`
+ * marks those items with `.task-list-item` and every GFM stylesheet hides their
+ * marker, because the checkbox IS the marker — without this a `- [ ] item`
+ * renders a bullet AND a checkbox. It is scoped to the marked `<li>` rather than
+ * applied to the whole list so a list that mixes task and prose items keeps
+ * bullets on the prose ones.
  */
 export function chatMarkdownListClass(ordered: boolean): string {
   return [
@@ -354,6 +361,7 @@ export function chatMarkdownListClass(ordered: boolean): string {
     'ml-5 list-outside space-y-1',
     ordered ? 'list-decimal' : 'list-disc',
     '[&_ul]:mt-1 [&_ol]:mt-1',
+    '[&_li.task-list-item]:list-none',
   ].join(' ');
 }
 
@@ -403,6 +411,27 @@ export function chatMarkdownBlockquoteClass(): string {
 
 export function chatMarkdownHrClass(): string {
   return `${BLOCK_GAP} border-border`;
+}
+
+/**
+ * The GFM footnote block's own separation, or `''` for any other `<section>`.
+ *
+ * Keyed off `remark-gfm`'s `footnotes` class rather than applied to every
+ * `<section>`, because the component map overrides the ELEMENT and markdown has
+ * no other way to produce one today — a future plugin that does would otherwise
+ * silently inherit a footnote's spacing. `SECTION_GAP` (20px) rather than the
+ * block tier: this is the boundary between the answer and its apparatus, which
+ * is the same weight as a top-level heading's break.
+ *
+ * A `border-t` is deliberately not added. The footnote list already carries its
+ * own markers, and a rule here would be the third horizontal line in a reply
+ * that may also contain `---` and a table.
+ */
+export function chatMarkdownFootnotesClass(className: string | null | undefined): string {
+  if (typeof className !== 'string') return '';
+  return className.split(/\s+/).includes('footnotes')
+    ? `${SECTION_GAP} text-meta text-muted-foreground`
+    : '';
 }
 
 /**
@@ -484,7 +513,7 @@ export function chatCodeTokenStyle(token: ChatCodeToken): {
  * component map is a bag of closures and a test can only look at it, not at what
  * it renders. Every field below is either consumed by `ChatMarkdown.tsx` (the
  * protocol list, the rehype list) or paired with a static source scan in
- * `__tests__/chatMarkdown.test.ts` that checks the file really does what the
+ * `__tests__/chatMarkdownPolicy.test.ts` that checks the file really does what the
  * field claims — the object on its own would only assert that someone typed it.
  */
 export const CHAT_MARKDOWN_POLICY = {
