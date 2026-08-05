@@ -80,6 +80,11 @@
 6. **GUI 统一点测**（用户人工）：多轮上下文回归 / T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测 / T-03 历史读失败提示 / **T-18 粘贴附件（本轮 100% 待人工测）**——**均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO「用户线」。
 7. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
 8. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
+9. **T-33 / T-34 / T-35 三条能力缺失**（2026-08-05 由 [multi-agent plan](../multi-agent/roadmap.md) **正式平移主线并分配节点**）——三条都只用 Claude 直连链上**已有**的数据，与「接不接 ACP」这个根问题互不依赖，压在后置的支线下会被一并冻住，故归主线：
+   - **T-33 网络重试横幅**（0.5d）——数据已在 `chatSessions.ts:85` 的 `retry`，只差 UI；三条里最便宜、用户最快能感知（「不是卡死了，在重试」）
+   - **T-34 子 agent 实况**（1.5d）——**唯一有产品价值增量的一条**。开 `forwardSubagentText`（`sdk.d.ts:1619`，现装 0.3.218 已有）+ 协议加可选字段透传 `parent_tool_use_id`；拉起/传输/交互 SDK 与既有桥全包，**真正的工作量只在「显示」**（Task 行下如何挂子 agent 的文本/思考/工具）。**已知限制**：resume 重放的 `HistoryBlock` 无子 agent 归属，当场嵌套、重开变平铺——与 D20 问答卡同一协议缺口，根治须扩历史协议（C-17，后置）
+   - **T-35 Host stderr 进 UI**（0.5d）——`claudeRuntime.ts:677` 已有 `[cli-stderr]`，开事件 + 脱敏；诊断向，平时用不到、出事时省很多时间
+   → 任务定义与验收标准的权威 = 执行计划 §3 各行；出处见 [multi-agent/topics/acp-decision.md](../multi-agent/topics/acp-decision.md) 末表（三条走 ACP 都只会更绕）
 
 ## Deferred
 

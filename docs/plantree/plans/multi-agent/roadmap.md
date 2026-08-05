@@ -40,20 +40,24 @@
 
 出口：spike 报告 → 结 [open-questions #1](./open-questions.md) → 定「接 ACP / 直连」→ 才谈并入主线。
 
-### 2. 三条能力缺失（与 ACP 无关，独立可排；归属可平移主线）
+### 2. ~~三条能力缺失~~ —— **已于 2026-08-05 正式平移主线并分配任务节点**
 
-按性价比排序，依据见 [acp-decision](./topics/acp-decision.md) 末表：
+不再挂在本 plan。三条各自成任务，定义与验收标准的权威在
+[执行计划 §3](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md)：
 
-1. **网络重试横幅** —— 最便宜。数据已在 `chatSessions.ts:85` 的 `retry`，只差 UI。
-   用户能立刻感知「不是卡死了，在重试」。
-2. **子 agent 实况** —— 三条里唯一有真正产品价值增量的。开 `forwardSubagentText`（`sdk.d.ts:1619`）
-   + 协议加可选字段透传 `parent_tool_use_id` + UI 嵌套渲染。
-   **真正的工作量只在「显示」**：Task 工具行下怎么挂子 agent 的文本/思考/工具、折叠还是展开。
-   已有基础：`toolCard.ts` 已在渲染 Task 行。**三处不打包票见 topic**（未实测消息流 / 事件量 / 历史重放会塌）。
-3. **stderr 进 UI** —— 诊断向，平时用不到，出事时省很多时间。
+| 任务 | 一行目标 | 估时 |
+|---|---|---|
+| **T-33** | 网络重试横幅——数据已在 `chatSessions.ts:85` 的 `retry`，只差 UI | 0.5d |
+| **T-34** | 子 agent 实况——开 `forwardSubagentText` + 协议加可选字段 + **UI 嵌套渲染（真正的工作量）** | 1.5d |
+| **T-35** | Host stderr 进 UI——`claudeRuntime.ts:677` 已有 `[cli-stderr]`，开事件 + 脱敏 | 0.5d |
 
-> 这三条严格说属主线能力缺口，因与本 plan 同源于 2026-08-04 那轮讨论故暂存此处；
-> 若主线先收口，可整块平移进主线 roadmap，不需重新论证。
+**为什么归主线而不是本 plan**：三条都只用 Claude 直连链上已有的数据，与「接不接 ACP」这个
+根问题（[#1](./open-questions.md)）**互不依赖**——把它们压在后置的本 plan 下会被一并冻住，
+而它们本可以随时做。判断依据仍见 [acp-decision](./topics/acp-decision.md) 末表
+（三条走 ACP 都只会更绕）。
+
+**T-34 的已知限制**（与本 plan 相关，故在此留指针）：resume 重放的 `HistoryBlock` 无子 agent
+归属概念，与 D20 问答卡是同一个协议缺口，根治须扩历史协议（C-17，后置）。
 
 ## Deferred
 
