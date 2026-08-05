@@ -116,3 +116,16 @@
 - **方向**：引入 component-test 环境（jsdom/@testing-library）或补一层 e2e 冒烟层，覆盖 `.tsx` 组件交互路径。
 - **待裁定**：排期与选型（jsdom+RTL vs e2e）——等用户或后续任务评估。
 - 出处：主线台账 2026-07-31「第四轮 GUI 点验结果 + 重试双发根治落地」行，有意不做与残余段。
+## #28 D27 回归 A08 的两处内部张力（T-32 开工前必答，2026-08-05 新立）
+
+- **背景**：用户 2026-08-05 裁定右栏骨架回归 A08（**D27**），同时逐条豁免三项维持现状——
+  其中豁免① **terminal 维持 surface 形态、不回底部 Dock**。
+- **张力**：[A08 定稿](../../../design/a08-final-context-panel-baseline.html) 的「不进 Rail 的图标」条明写
+  **editor（中列 surface）与 terminal（贯通顶栏 + `Ctrl+``）都不进 Rail**，Rail 只有 git / files / context 三图标且仅收起时渲染。
+  豁免①要求 terminal 留在右栏，A08 却没有「terminal 在右栏」这个位置。两处必须先答：
+  - **① editor 是否回中列？** 回 → 右栏 files tab = 纯文件树，`EditorSurfaceView` 搬家 + 中列布局 + 降级梯，返工面最大；
+    不回 → 与「对齐 A08」的主基调冲突，需明确记为第四项豁免。**这一项直接决定 T-32 是 1 天还是 3 天量级。**
+  - **② terminal 留右栏后 Rail / tab 是什么形态？** 候选：tab 与 Rail 都扩到四项（git/files/context/terminal）；
+    或 terminal 不进 tab、仍由 `Ctrl+`` 唤起并以 surface 形态叠在右栏。
+- **待裁定**：以上两项。**未答前 T-32 不得施工**（D27 正文已钉死此前置）。
+- 出处：总台账 **D27**；差异清单原文见 [T-12~T-15 规格 §7](../../../plans/2026-08-04-t12-15-surface-spec.md)。
