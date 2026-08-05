@@ -1471,6 +1471,15 @@ li { margin-bottom: 0.35rem; }
     下表是逐入口盘点，<code>禁用占位</code> 一列是需要立刻补 disabled 态与 Tooltip 的清单。
   </p>
 
+  <p>
+    <b>2026-08-04 T-23 结清更新</b>：下表「状态」列已按 as-built 逐行改标（T-23 验收③「矩阵与代码对得上」）；
+    2026-07-28 的原始盘点与旧行号见 git 历史。五项违规的裁定走了验收①之外的第三支——<b>删除</b>（沿 T-27
+    Folder/Host 先例，口径补记执行计划 §3 T-23 行）：Browser / Window / Menu / Help 四死按钮删除、72% 假环撤除
+    （真数据在 WindowTitleBar 用户胶囊；macOS 无标题栏行属既有缺口，记 backlog）。依据与追认状态见主线台账
+    2026-08-04 T-23 行；防回归钉在 <code>deadControlsStatic.test.ts</code>（正向不变量 + 具名 pin）。
+    未改标行（LeftNav 树/会话操作/搜索、Thinking 卡、全局搜索）的「依据」列行号仍是 2026-07-28 冻结版口径，只作历史定位用。
+  </p>
+
   <div class="tbl-scroll">
     <table>
       <thead>
@@ -1480,29 +1489,29 @@ li { margin-bottom: 0.35rem; }
         <tr><td rowspan="6">LeftNav</td><td>Project / Workspace / Session 三层树</td><td><span class="tag live">已接入</span></td><td class="mono">LeftNav.tsx:204-263</td></tr>
         <tr><td>会话 新建 / 重命名 / 归档 / resume</td><td><span class="tag live">已接入</span></td><td class="mono">LeftNav.tsx:76-92, 459-488</td></tr>
         <tr><td>会话搜索框</td><td><span class="tag part">基础接入</span></td><td class="mono">LeftNav.tsx:107-113 仅按 title 前端过滤</td></tr>
-        <tr><td>Workspace 按钮</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">LeftNav.tsx:167-170 硬编码 disabled，无 handler</td></tr>
-        <tr><td>Menu（汉堡）</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">LeftNav.tsx:136-138 无 onClick</td></tr>
-        <tr><td>Help</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">LeftNav.tsx:279-282 无 onClick</td></tr>
+        <tr><td>Workspace 按钮</td><td><span class="tag live">已接入</span></td><td class="mono">T-24/T-26 取代为 Add Repository（LeftNav 四处入口 + 目标栏三项 + 整壳拖放）</td></tr>
+        <tr><td>Menu（汉堡）</td><td><span class="tag out">暂不纳入</span></td><td class="mono">T-23 删除：全仓无已定义语义可接线；收展按钮保留</td></tr>
+        <tr><td>Help</td><td><span class="tag out">暂不纳入</span></td><td class="mono">T-23 删除：无帮助内容可指；GitHub/DevTools 在 WindowTitleBar More 菜单（macOS 另有原生菜单）</td></tr>
 
-        <tr><td rowspan="4">MainHeader</td><td>项目 / 工作区 / 路径上下文条</td><td><span class="tag live">已接入</span></td><td class="mono">MainHeader.tsx:38-49</td></tr>
-        <tr><td>Usage 环「72%」</td><td><span class="tag dead">违规：假数据</span></td><td class="mono">MainHeader.tsx:78-89 硬编码；真数据已在 WindowTitleBar.tsx:55-60</td></tr>
-        <tr><td>Layout / Folder / Host / Browser / Window 五按钮</td><td><span class="tag dead">违规：死按钮</span></td><td class="mono">MainHeader.tsx:56-72 全部无 onClick</td></tr>
-        <tr><td>终端 Dock / 右栏开关</td><td><span class="tag part">基础接入</span></td><td class="mono">开关真实，打开的是占位内容</td></tr>
+        <tr><td rowspan="4">MainHeader</td><td>项目 / 工作区 / 路径上下文条</td><td><span class="tag live">已接入（改形）</span></td><td class="mono">T-23（P-22）单行化：标题(h1 15px semibold) + 工作区 chip（Tooltip 披露 项目·工作区 + Ident 路径）；第二行删除</td></tr>
+        <tr><td>Usage 环「72%」</td><td><span class="tag out">暂不纳入</span></td><td class="mono">T-23 撤环：真数据在 WindowTitleBar 用户胶囊（todayCostUsd）；macOS 无标题栏行属既有缺口（backlog）</td></tr>
+        <tr><td>Layout / Folder / Host / Browser / Window 五按钮</td><td><span class="tag live">已接入 / 已删除</span></td><td class="mono">Layout=阅读宽度切换 + 面板开关已接线；Folder/Host 由 T-27 删除（能力迁 Composer 目标栏）；Browser/Window 由 T-23 删除（surface 后置位，入口在 Rail）</td></tr>
+        <tr><td>终端 Dock / 右栏开关</td><td><span class="tag live">已接入</span></td><td class="mono">T-22 三列壳 + T-12~T-15 四 surface 真内容（BottomDock 已删）</td></tr>
 
         <tr><td rowspan="3">ChatWorkspace</td><td>对话全链路（模型 / effort / @引用 / 附件 / Stop / Retry）</td><td><span class="tag live">已接入</span></td><td class="mono">ChatWorkspace.tsx:45-55</td></tr>
         <tr><td>Thinking 卡</td><td><span class="tag part">基础接入</span></td><td class="mono">网关侧返回空文本，见 open-questions #5/#8</td></tr>
-        <tr><td>Tool 卡 / Question 卡</td><td><span class="tag part">基础接入</span></td><td class="mono">Tool 是裸 JSON；Question 无 case，UI 完全不可见</td></tr>
+        <tr><td>Tool 卡 / Question 卡</td><td><span class="tag live">已接入</span></td><td class="mono">T-05 重做（D24 无边框单行工具行 + 就地冻结问答卡）+ T-31 回合化重排</td></tr>
 
-        <tr><td rowspan="3">RightDock</td><td>Git tab</td><td><span class="tag dead">mock 占位</span></td><td class="mono">RightDock.tsx:38-52 DockPlaceholder</td></tr>
-        <tr><td>Files tab</td><td><span class="tag dead">mock 占位</span></td><td class="mono">同上</td></tr>
-        <tr><td>Context tab</td><td><span class="tag dead">mock 占位</span></td><td class="mono">同上</td></tr>
+        <tr><td rowspan="3">RightDock（已随 T-22 删除）</td><td>Git tab</td><td><span class="tag live">已接入</span></td><td class="mono">能力由 ContextPanel git surface 承接（T-12：changed/staged/diff/commit）</td></tr>
+        <tr><td>Files tab</td><td><span class="tag live">已接入</span></td><td class="mono">editor surface 承接（T-13：树 + 多 tab 编辑 + 工具行/@ 联动定位）</td></tr>
+        <tr><td>Context tab</td><td><span class="tag live">已接入</span></td><td class="mono">context surface 承接（T-14：真实字段，零占位断言）</td></tr>
 
-        <tr><td>BottomDock</td><td>终端</td><td><span class="tag dead">mock 占位</span></td><td class="mono">BottomDock.tsx:21-23 纯文案</td></tr>
+        <tr><td>BottomDock（已随 T-22 删除）</td><td>终端</td><td><span class="tag live">已接入</span></td><td class="mono">terminal surface 承接（T-15：keep-alive + 按 Workspace 恢复）</td></tr>
 
-        <tr><td rowspan="4">全局（旧壳有 / 新壳无）</td><td><b>添加仓库</b></td><td><span class="tag dead">阻断级缺口</span></td><td class="mono">Dialog 挂载于 App.tsx:1919 但无任何 trigger；唯一通路 --open-path argv</td></tr>
-        <tr><td>建 / 删 / 合并 worktree · git init · 分组</td><td><span class="tag out">暂不纳入</span></td><td class="mono">强绑 TreeSidebar（吃 App.tsx 约 35 个回调）</td></tr>
+        <tr><td rowspan="4">全局（旧壳有 / 新壳无）</td><td><b>添加仓库</b></td><td><span class="tag live">已接入</span></td><td class="mono">T-24：LeftNav 四处入口 + 目标栏三项 + 整壳拖放（2026-08-04 fresh-profile 实测验收）</td></tr>
+        <tr><td>建 / 删 / 合并 worktree · git init · 分组</td><td><span class="tag part">基础接入</span></td><td class="mono">T-27 目标栏承接分支下拉 + New worktree；建删合并其余项仍暂不纳入</td></tr>
         <tr><td>全局搜索（内容 / 文件名）</td><td><span class="tag out">暂不纳入</span></td><td class="mono">GlobalSearchDialog 完全解耦，缺触发入口</td></tr>
-        <tr><td>Diff Review / AI Code Review / OpenInMenu</td><td><span class="tag out">暂不纳入</span></td><td class="mono">组件可复用，无 UI 落点</td></tr>
+        <tr><td>Diff Review / AI Code Review / OpenInMenu</td><td><span class="tag part">基础接入</span></td><td class="mono">DiffViewer 已由 T-12 摘件复用（git surface diff + 两列）；Review/OpenInMenu 仍暂不纳入</td></tr>
       </tbody>
     </table>
   </div>

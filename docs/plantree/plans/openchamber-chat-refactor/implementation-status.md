@@ -4,6 +4,7 @@
 
 - **Current Phase**: **Phase 0A 基线部分补做（A01 / A05 / A06）→ 观感对齐改造**（2026-07-28 转向）。这三项产品设计基线此前只在可行性文档的候选任务池、从未进执行计划或台账，而下游 F05/H01/H09 已按它们施工——这是「观感不到位 + 死按钮泛滥 + 布局反复卡壳」的同一根因，本日补做并落库（D18 / D19 / D20）。⚠️ **Phase 0A 整体仍 🟡 未收口**：A02 / A03 / A04 仍未立项，且已交付的 A06 依赖列写的正是「A01、A02」（口径以总台账 Phase 总览 0A 行为准）。Phase 3 Chat MVP 的剩余点测与网关阻塞并行不变。
 - **Last Landed**:
+  - 代码（2026-08-04，最新）：**T-23 存量违规清理 `bfc087f`**——MainHeader Browser/Window 死按钮删除 + 72% 假环撤除（真数据在 WindowTitleBar 胶囊；macOS 无标题栏行缺口显性化记 backlog）+ 顶栏单行 h-9（三顶条齐平）+ 标题 h1 15px semibold（Win10 无 500 故弃审计建议的 medium）+ 工作区 chip（项目名 + Tooltip 披露项目·工作区·Ident 路径，hover/focus 双可达，窄窗可收缩）；LeftNav Menu/Help 删除；deadControlsStatic TS AST 正向不变量 + 具名 pin；i18n 补 4 键。双轨对抗复核（Opus 1 blocker+5 major+8 minor / Codex 1 major+3 minor）+ Codex 终验（1 major chip 挤压 + 1 minor 扫描器 AST 化）全闭环；审计 P-19~P-23 五行回标（两处偏离注）。红线零改动。**GUI 点验待用户（0-quattuordecies，用户线）**；A06 矩阵已逐行结清（验收③）。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-23 行
   - 代码（2026-08-04 八提交）：**T-12/T-13/T-14/T-15 四 surface 一次性落地 + S0 壳前置 + A08 临时基线正式化 + 快捷键** `f3183f1`+`2e7353a`+`f9439d6`+`701d008`+`11616e5`+`61f79db`+`cb4de4f`+`45c3b63`——三路勘察 → 双轨设计（Opus+Codex 互不见，合并规格落库 [`2026-08-04-t12-15-surface-spec.md`](../../../plans/2026-08-04-t12-15-surface-spec.md)）→ 四路并发施工（共享接线文件所有权收归编排者）→ 双轨对抗复核（Codex 3maj+2min / Opus 1blocker+5maj+12min，互补显著）→ 修复批全闭环。keep-alive 挂载契约（切 surface pty 不死）/ Escape 作用域 P0 / gitQueryKeys 工厂根治 win/mac 圆点不刷 / permissionMode 协议可选加法 / A08 对照表（被取代 11 项、采纳适配 10 项）。红线 chatSessions 零改动。**GUI 点验待用户（0-tredecies，用户线）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 四 surface 行
   - 验收（2026-08-04）：**T-24 收尾结项转 Done**（S0 零代码改动）——施工前双链审计 CONFIRMED（入口链 LeftNav 四处 + 目标栏三项 / 拖放整壳落区，HEAD `01be19c`，Workflow 2 追链 + opus 对抗核验）；用户本机 fresh-profile 模拟实测（`AICLIENT_PROFILE=t24fresh`，不带 `--open-path`）验收①②③全过，另核 git/非 git 目录目标栏分支门控吻合 T-27 口径；**偏离登记：真机 Windows 打包版未测 → 并入 T-10 清单第 8 项**。明细见主线台账 2026-08-04 T-24 行
   - 验收（2026-08-04）：**T-29 GUI 点验用户验收通过**（首轮「目前展示效果都不错还可以」+ 唯一缺陷内容不可选中当轮修复 `b08f6ae` + 收尾表态「本阶段收尾。脚注和标题不用改，先这样吧」）——**T-29 转 Done**；**拍板两项均维持现状**：① 脚注区 13px ② 六级标题三种视觉档。0-duodecies 随轮收口
@@ -13,6 +14,7 @@
   - 验收（2026-08-03）：**第七轮 GUI 点验用户验收通过**（原话「验收完毕，没有问题」）——第六轮两项与全部复核批修复闭环，诊断档结项；实测范围含 aaa 文件夹 New / "+ new chat" / 分支 chip 归属 / 失败退回重发无重复气泡 / 同文连发保留 / 附件与归档关闭对齐。第五轮清单 0-decies 与第四轮失败路径顺延项就此关闭；**0-octies 门槛达成 → T-27/T-28/T-19/T-30批1 转 Done**（见 roadmap）。点验期间一次「No repository registered」经查为 dev server 带病热更新残留态，非代码回归（诊断档附注）
   - 更早批次（2026-07-28 ~ 2026-08-03 三批：五连修/T-21/T-22/T-26/T-27/T-28/T-05/T-19/T-30 批1+批2/第二~六轮点验修复等）：摘要原文见 [history 归档](./history/2026-0728-0803-archive.md)，明细见[主线台账](../../../plans/ledger-claude-mainline.md)各行
 - **Last Verified**:
+  - **2026-08-04 T-23 复核（HEAD `bfc087f`）**：typecheck 干净 / lint **762 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **118 文件 2180 例**（较四 surface 批 2171 基线 +1 文件 +9 例只增；同 3 例 Windows-only 失败）。
   - **2026-08-04 四 surface 批复核（HEAD `45c3b63`，逐门串行）**：typecheck 干净 / lint **761 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **117 文件 2171 例**（较 1902 基线 +16 文件 +269 例只增；同 3 例 Windows-only 失败）。⚠️ 全量 vitest 曾三连挂死：新增测试经 hook 拖入 settings store import 图在 node 环境死锁 + 僵尸 worker 连环卡池——纯函数下沉独立模块（`App/mainTabShortcutGate.ts`）根治，「UI 逻辑一律下沉纯函数」纪律的又一实证。
   - **2026-08-04 T-24 收尾态实测（HEAD `01be19c`，逐门串行）**：typecheck 干净 / lint **728 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **101 文件 1902 例**（较 4507df3 登记基线 +1 例=b08f6ae 所增；同 3 例 Windows-only 失败）。本任务零代码改动。
   - **2026-08-04 T-29 代码结项态实测（HEAD `4507df3`）**：typecheck 干净 / lint **0 错误**（29w+3i 既有 a08 豁免）/ vitest **101 文件 1901 例**（较 666c7c3 合并态 1838 例 +1 文件 +63 例全为本批；同 3 例 Windows-only 失败）/ `pnpm build` 成功且 **20 个 shiki 语法异步 chunk 全在 27 语白名单内**。⚠️ **本机内存有限（用户 2026-08-04 明示）：门禁必须逐门串行跑，禁止链式合跑或与子代理/后台任务并行**——前次四门链式合跑被 OOM 杀（exit 137）。
@@ -20,7 +22,7 @@
   - **2026-08-03 四批复核（T-31 `8109d45` 合并态）**：typecheck 干净 / lint **718 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **97 文件 1759 例**（+7 文件 +166 例；同 3 例 Windows-only 失败）/ `pnpm build` 成功且产物含 `@container scroll-state(stuck: top)` 规则（lightningcss 管线绕行有效性的产物级验证）。
   - **2026-08-03 三批复核（第六轮修复 `fd55a26` 合并态，T-31 开工前基线实测）**：typecheck 干净 / lint **703 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **90 文件 1593 例**（+2 文件 +56 例；同 3 例 Windows-only 失败）。
   - 更早复核记录（2026-07-28 基线 51 文件 590 例起，全程只增）与 T-21 复核口径注记：见 [history 归档](./history/2026-0728-0803-archive.md)
-- **Next Target**（2026-08-04 十二次修订，四 surface 落地）：开发线下一项 **T-23 存量违规清理**（A06 矩阵产出：MainHeader 五死按钮 + 72% 假 usage 环等）。**T-12~T-15 impl done 待 GUI 点验（0-tredecies）**，快捷键 Ctrl+B 改绑待追认。**残留**：T-24 真机 Windows 打包版（并入 T-10 清单第 8 项）；0-nonies ⑪ 真机指标（Win10 必测字重）；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；**本批新增**：useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）。
+- **Next Target**（2026-08-04 十三次修订，T-23 落地）：开发线下一项 **T-16 新旧壳开关**（两处强制覆盖见 Handoff Notes；前置 T-24 已备）。**T-23 impl done 待 GUI 点验（0-quattuordecies，含删除/撤环/单行化追认）**；**T-12~T-15 impl done 待 GUI 点验（0-tredecies）**，快捷键 Ctrl+B 改绑待追认。**残留**：T-24 真机 Windows 打包版（并入 T-10 清单第 8 项）；0-nonies ⑪ 真机指标（Win10 必测字重）；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；**本批新增**：useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）；**T-23 撤环连带**：macOS 无标题栏行 → 全 app 无 usage 展示（既有缺口显性化）。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -86,9 +88,9 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 1. ~~**T-29 Markdown 渲染**（D26）~~ —— **✅ 2026-08-04 用户点验验收转 Done**（`d320206`+`666c7c3`+`4507df3`+`b08f6ae`；拍板两项维持现状：脚注 13px / 标题三档）。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-29 三行
 2. ~~**T-24 收尾**（S0，不改代码）~~ —— **✅ 2026-08-04 收尾结项转 Done**（fresh-profile 模拟实测全过；真机 Windows 项并入 T-10 清单第 8 项）。明细见主线台账 2026-08-04 T-24 行
 3. ~~**T-12 / T-13 / T-14 / T-15 四 surface**~~ —— **✅ 2026-08-04 八提交一次性落地（S0+四 surface+收口+快捷键+复核修复批，`f3183f1`..`45c3b63`），A08 正式化随行（对照表见规格 §7）。impl done 待 GUI 点验（0-tredecies），点验通过方转 Done**。→ 主线台账 2026-08-04 四 surface 行
-4. **T-23 存量违规清理**（A06 矩阵产出）：死按钮与假 usage 环逐项接线或 disabled+Tooltip。→ 执行计划 §3 T-23 行
+4. ~~**T-23 存量违规清理**~~ —— **✅ 2026-08-04 代码落地 `bfc087f`（裁定走删除支 + P-19/P-22 随批 + A06 矩阵结清），impl done 待 GUI 点验（0-quattuordecies），点验通过方转 Done**。→ 主线台账 2026-08-04 T-23 行
 
-> T-25（旧模块原色清理，依赖 T-21）与 T-16（新旧壳开关）后置，归 [roadmap Deferred](./roadmap.md)。
+> 开发线下一项 = **T-16 新旧壳开关**（随 T-23 落地解锁排队，前置 T-24 已备）；T-25（旧模块原色清理，依赖 T-21）仍后置，归 [roadmap Deferred](./roadmap.md)。
 
 ### 用户线（点测 / 待拍板，与开发线并行）
 
@@ -114,6 +116,15 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
    ⑤ terminal surface：**跑 `sleep 30` → 切 git → 切回，进程仍在、输出连续**（keep-alive 核心验收）；vim/less 里按 Esc 不关面板；切 Workspace A→B→A 恢复 A 的终端组；expanded 分屏全功能、标准态 compact 分屏禁用带提示（+N 徽章披露隐藏组）；关面板再开终端不死；
    ⑥ 跨面回归：Composer/弹窗的 Escape 原语义不回归；中文输入法合成态下快捷键不误触；旧壳本轮不可达（T-16 未做）无需回归。
    ⑦（**已拍板 2026-08-04：维持露出**——用户原话「终端既然都实现了，那就实装呗」；零代码改动，`registeredOnly` 维持 `false`，第 ⑤ 条保持全量点验）～原议题存档：terminal surface 是否本阶段露出：用户表示「终端暂时可以不实装，目前只供 Claude」。编排者评估：不点即零开销（keep-alive 仅首次激活后生效，未用时 xterm/pty/渲染链均不存在），成本形态与旧壳一致；该终端是用户工作区 shell，非 Agent 供应通道，与「只供 Claude」不冲突。**若裁定隐藏**：`surfaceRegistry.ts` terminal 行 `registeredOnly` 翻 `true` 一行即藏（持久化消毒自动清旧选中态，代码保留随时启用）。裁定隐藏则本清单第 ⑤ 条降级为「启用时再验」。
+0-quattuordecies. **T-23 存量违规清理点验清单（2026-08-04 施工，待点验；①~③为裁定追认项）**：
+   ① **追认·删除四死按钮**——顶栏 Browser/Window、侧栏顶部汉堡 Menu、侧栏底部 Help 均直接删除而非 disabled+Tooltip（Browser/Window 对应后置 surface，未来入口在右侧 Rail；Menu 全仓无语义；Help 无内容可指，GitHub/DevTools 在标题栏 More 菜单）；
+   ② **追认·撤除 72% 假 usage 环**——真实今日成本在标题栏右上用户胶囊（$x.xx）；macOS 无该行属既有缺口已记 backlog；
+   ③ **追认·顶栏单行化**——第二行「项目 · 工作区 · 完整路径」删除；顶栏 h-9 与左右两列顶条三条分隔线应齐平无台阶；
+   ④ 标题 15px semibold：应明显比正文醒目（**Win10 真机必核**：若标题与正文粗细无差即字重回退 bug）；长标题截断、悬停显完整标题；
+   ⑤ 工作区 chip：标题右侧黄色文件夹图标 + 项目名；悬停或 Tab 聚焦出 tooltip（「项目 · 工作区」+ 等宽路径）；无会话/无工作区时 chip 隐藏、标题显「未选择会话」；
+   ⑥ 窄窗挤压：拖窄窗口 + 开面板，chip 先缩至图标、标题保底若干字符、右侧两按钮永不被裁；
+   ⑦ 顶栏两按钮 tooltip 为常量名（「宽阅读栏」「上下文面板」）+ 按下态高亮，功能照常；
+   ⑧ 侧栏：顶部仅剩收展按钮；底部「设置」独占整行可点；收展/设置文案已中文化。
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
    [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
    - **T-04 thinking 卡**：🔴 **当前无法点验**——卡在网关（sonnet 空文本 / 默认模型 400，见上表）。网关侧修复后再测；仍须在**新发起轮次**验证（旧 fixture 的 153 个 thinking 块文本为空，不可追溯）。
