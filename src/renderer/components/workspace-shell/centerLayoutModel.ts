@@ -89,3 +89,101 @@ export function chatWidthToEditorRatio(input: ChatWidthToEditorRatioInput): numb
 export function deriveEditorOpen(openTabCount: number): boolean {
   return isFiniteNumber(openTabCount) && openTabCount > 0;
 }
+
+// ── the level ladder (A08 §「画幅降级梯」, a08:1412-1422) ─────────────────
+
+/**
+ * A08 states the thresholds as WHOLE-WINDOW widths — `L0 = 1580 = 280 sidebar
+ * + 400 chat + 520 editor + 380 panel`, `L1 = 1244 = 280 + 400 + 520 + 44 rail`
+ * (a08:1421-1422). Ours drop the sidebar term.
+ *
+ * Why (registered as an adaptation, NOT an override of A08): A08 assumes a
+ * fixed 280px sidebar. This shell's sidebar is user-dragged 280–500 and can
+ * collapse to 48 (`shellLayoutModel.ts`), so a whole-window threshold
+ * mis-fires in both directions — a 1600px window with a 500px sidebar has less
+ * room than A08's arithmetic claims, and the same window with the sidebar
+ * collapsed has far more. Measuring the content row instead makes the ladder
+ * immune to both. With a 280px sidebar the two are exactly equivalent.
+ */
+export const LEVEL_L0_MIN_CONTENT = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 380; // 1300, panel = 380
+export const LEVEL_L1_MIN_CONTENT = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 44; //  964, rail = 44
+
+export type ShellLevel = 'L0' | 'L1' | 'L2';
+
+export interface ResolveShellLevelInput {
+  /** Measured width of chat + editor + panel/rail — the sidebar is NOT included. */
+  contentWidth: number | null;
+  editorOpen: boolean;
+}
+
+/**
+ * L0 everything fits · L1 the panel gives way · L2 chat gives way.
+ *
+ * Pinned: with no file open this is ALWAYS 'L0'. A08's state table gates the
+ * whole ladder on `editor open` (a08:1454) and the reason is structural — the
+ * 520px editor reservation is what makes the arithmetic bite, and with no
+ * editor there is nothing to reserve. Without this branch a narrow window
+ * would start hiding the panel from a chat-only shell, which is a regression
+ * against the pre-T-32 behaviour, not a feature.
+ */
+export function resolveShellLevel(input: ResolveShellLevelInput): ShellLevel {
+  const { contentWidth, editorOpen } = input;
+  if (!editorOpen) {
+    return 'L0';
+  }
+  if (!isFiniteNumber(contentWidth) || contentWidth <= 0) {
+    // Not measured yet: assume roomy rather than flashing a degraded layout
+    // on the first frame and then expanding.
+    return 'L0';
+  }
+  if (contentWidth >= LEVEL_L0_MIN_CONTENT) {
+    return 'L0';
+  }
+  return contentWidth >= LEVEL_L1_MIN_CONTENT ? 'L1' : 'L2';
+}
+
+/**
+ * A08 §06-4: `manualPanel` / `manualChat` are the user's in-session override of
+ * the automatic ladder, cleared when the file closes. `null` means "no
+ * override" — A08 writes them as booleans, but a two-state flag cannot say
+ * "cleared" without also saying "hidden", which is how an override would
+ * silently outlive the file that scoped it.
+ */
+export type ManualOverride = boolean | null;
+
+export interface DerivePanelVisibleInput {
+  level: ShellLevel;
+  editorOpen: boolean;
+  /** Persisted preference used whenever the editor is closed. */
+  panelOpen: boolean;
+  manualPanel: ManualOverride;
+}
+
+export function derivePanelVisible(input: DerivePanelVisibleInput): boolean {
+  const { level, editorOpen, panelOpen, manualPanel } = input;
+  if (!editorOpen) {
+    return panelOpen;
+  }
+  if (manualPanel !== null) {
+    return manualPanel;
+  }
+  return level === 'L0';
+}
+
+export interface DeriveChatVisibleInput {
+  level: ShellLevel;
+  editorOpen: boolean;
+  manualChat: ManualOverride;
+}
+
+export function deriveChatVisible(input: DeriveChatVisibleInput): boolean {
+  const { level, editorOpen, manualChat } = input;
+  if (!editorOpen) {
+    // Chat IS the shell when no file is open; nothing may hide it.
+    return true;
+  }
+  if (manualChat !== null) {
+    return manualChat;
+  }
+  return level !== 'L2';
+}

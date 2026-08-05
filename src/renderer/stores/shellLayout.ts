@@ -10,7 +10,10 @@
  */
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { clampEditorRatio } from '@/components/workspace-shell/centerLayoutModel';
+import {
+  clampEditorRatio,
+  type ManualOverride,
+} from '@/components/workspace-shell/centerLayoutModel';
 import {
   clampContextPanelWidth,
   clampSidebarWidth,
@@ -25,7 +28,22 @@ import {
 import type { ContextSurfaceId } from '@/components/workspace-shell/surfaceRegistry';
 import { sortSurfaces } from '@/components/workspace-shell/surfaceRegistry';
 
-export interface ShellLayoutState extends PersistedShellLayout {
+/**
+ * T-32 (D27): A08 §06-4 scopes the manual overrides to the open file — they are
+ * deliberately NOT in `PersistedShellLayout`, so a restart cannot resurrect an
+ * override for a file that is no longer open.
+ */
+export interface ShellSessionOverrides {
+  manualPanel: ManualOverride;
+  manualChat: ManualOverride;
+}
+
+export const initialSessionOverrides: ShellSessionOverrides = {
+  manualPanel: null,
+  manualChat: null,
+};
+
+export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOverrides {
   // sidebar
   toggleSidebarCollapsed: () => void;
   setSidebarWidth: (width: number) => void;
@@ -38,6 +56,11 @@ export interface ShellLayoutState extends PersistedShellLayout {
   setSurfaceWidth: (id: ContextSurfaceId, width: number, availableWidth?: number | null) => void;
   /** T-32: commits an `ed-grip` drag as a share of the center row. */
   setEditorRatio: (ratio: number) => void;
+  /** T-32: the user overriding the level ladder while a file is open. */
+  setManualPanel: (visible: boolean) => void;
+  setManualChat: (visible: boolean) => void;
+  /** T-32 (A08 §06-4): the file closed — the overrides it scoped go with it. */
+  clearManualOverrides: () => void;
   /** Reserved for rail drag-sort (postponed); already sanitized through the registry. */
   setRailOrder: (order: readonly string[]) => void;
   // reading column
@@ -57,6 +80,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
   persist(
     (set) => ({
       ...defaultShellLayout,
+      ...initialSessionOverrides,
 
       toggleSidebarCollapsed: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
@@ -83,6 +107,10 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         })),
 
       setEditorRatio: (ratio) => set({ editorRatio: clampEditorRatio(ratio) }),
+
+      setManualPanel: (visible) => set({ manualPanel: visible }),
+      setManualChat: (visible) => set({ manualChat: visible }),
+      clearManualOverrides: () => set({ ...initialSessionOverrides }),
 
       setRailOrder: (order) => set({ railOrder: sortSurfaces(order).map((surface) => surface.id) }),
 

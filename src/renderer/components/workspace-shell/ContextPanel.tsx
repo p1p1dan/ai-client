@@ -42,9 +42,16 @@ import { useGitChangeCount } from './useGitChangeCount';
 interface ContextPanelProps {
   /** Measured Main+Panel row width; null before the first measurement. */
   availableWidth: number | null;
+  /**
+   * T-32 S4: composed visibility, NOT `activeSurfaceId !== null`. That flag is
+   * the user's intent; the level ladder can hide the panel at L1 without
+   * touching it, so re-deriving visibility here would ignore the ladder and
+   * fork the layout (spec §5, R1). WorkspaceShell computes it once.
+   */
+  visible: boolean;
 }
 
-export function ContextPanel({ availableWidth }: ContextPanelProps) {
+export function ContextPanel({ availableWidth, visible }: ContextPanelProps) {
   const { t } = useI18n();
   const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
   const lastSurfaceId = useShellLayoutStore((state) => state.lastSurfaceId);
@@ -59,7 +66,7 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
   const changedFilesCount = useGitChangeCount();
   const tabs = derivePanelTabs(railOrder, { changedFilesCount });
 
-  const isOpen = activeSurfaceId !== null;
+  const isOpen = visible;
   // Content stays mounted across close/open (batch 3 correction): deriving the
   // rendered surface from activeSurfaceId alone unmounted the content column
   // during the close transition and after close, defeating "always mounted"
@@ -69,7 +76,9 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
   const contentSurfaceId = activeSurfaceId ?? lastSurfaceId;
   const descriptor = contentSurfaceId ? getSurface(contentSurfaceId) : undefined;
   const width = resolveContextPanelWidth({
-    surfaceId: activeSurfaceId,
+    // null collapses the panel to width 0 — the ladder hiding it must look
+    // exactly like the user closing it, transition included.
+    surfaceId: visible ? activeSurfaceId : null,
     manualWidth: activeSurfaceId ? widthBySurface[activeSurfaceId] : null,
     availableWidth,
     expanded,
@@ -268,7 +277,7 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
       )}
 
       {/* Promoted overlay covers Main only; no handle while expanded (decision 7). */}
-      {activeSurfaceId && !expanded && (
+      {visible && activeSurfaceId && !expanded && (
         <ShellResizeHandle
           side="left"
           ariaLabel={t('Resize context panel')}

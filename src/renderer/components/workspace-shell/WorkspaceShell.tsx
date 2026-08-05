@@ -1,4 +1,4 @@
-import { type Ref, useLayoutEffect, useRef, useState } from 'react';
+import { type Ref, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { useI18n } from '@/i18n';
@@ -10,8 +10,11 @@ import { ContextPanelRail } from './ContextPanelRail';
 import { EditorColumn } from './center/EditorColumn';
 import {
   chatWidthToEditorRatio,
+  deriveChatVisible,
   deriveEditorOpen,
+  derivePanelVisible,
   resolveChatColumnWidth,
+  resolveShellLevel,
 } from './centerLayoutModel';
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
@@ -57,10 +60,10 @@ export function WorkspaceShell({
   const editorRatio = useShellLayoutStore((state) => state.editorRatio);
   const setEditorRatio = useShellLayoutStore((state) => state.setEditorRatio);
 
-  // S4 replaces this with the level-ladder composition; until then "the panel
-  // is visible" is still exactly "a surface is active".
-  const panelVisible = activeSurfaceId !== null;
-  const railVisible = deriveRailVisible({ panelVisible });
+  const manualPanel = useShellLayoutStore((state) => state.manualPanel);
+  const manualChat = useShellLayoutStore((state) => state.manualChat);
+  const setManualChat = useShellLayoutStore((state) => state.setManualChat);
+  const clearManualOverrides = useShellLayoutStore((state) => state.clearManualOverrides);
 
   // T-32: a file being open is what makes the center row two columns.
   const editorOpen = deriveEditorOpen(useEditorStore((state) => state.tabs).length);
@@ -125,6 +128,29 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
+  // T-32 S4: `activeSurfaceId !== null` is INTENT ("the user wants the panel"),
+  // which the ladder must never write — otherwise widening the window could
+  // not restore what it auto-collapsed. Visibility is composed here, once, and
+  // handed down; no other component re-derives it (spec §5, R1).
+  const level = resolveShellLevel({ contentWidth: availableWidth, editorOpen });
+  const panelVisible = derivePanelVisible({
+    level,
+    editorOpen,
+    panelOpen: activeSurfaceId !== null,
+    manualPanel,
+  });
+  const chatVisible = deriveChatVisible({ level, editorOpen, manualChat });
+  const railVisible = deriveRailVisible({ panelVisible });
+
+  // A08 §06-4: the overrides were scoped to the open file, so closing it
+  // clears them. Guarded on the current values so this only writes on the
+  // closing edge, not on every render with no file open.
+  useEffect(() => {
+    if (!editorOpen && (manualPanel !== null || manualChat !== null)) {
+      clearManualOverrides();
+    }
+  }, [editorOpen, manualPanel, manualChat, clearManualOverrides]);
+
   return (
     <div
       ref={dropZoneRef}
@@ -182,11 +208,17 @@ export function WorkspaceShell({
               <div
                 ref={chatColumnRef}
                 data-resizing={centerResizing || undefined}
-                className={cn('relative flex min-w-0 flex-col', editorOpen ? 'shrink-0' : 'flex-1')}
-                style={editorOpen ? { width: chatWidth } : undefined}
+                className={cn(
+                  'relative min-w-0 flex-col',
+                  // `hidden`, not an unmount: ChatWorkspace owns scroll position
+                  // and in-flight composer state that must survive an L2 dip.
+                  chatVisible ? 'flex' : 'hidden',
+                  editorOpen ? 'shrink-0' : 'flex-1'
+                )}
+                style={editorOpen && chatVisible ? { width: chatWidth } : undefined}
               >
                 <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
-                {editorOpen && (
+                {editorOpen && chatVisible && (
                   <ShellResizeHandle
                     side="right"
                     ariaLabel={t('Resize chat column')}
@@ -211,10 +243,13 @@ export function WorkspaceShell({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <EditorColumn />
+                <EditorColumn
+                  chatVisible={chatVisible}
+                  onHideChat={() => setManualChat(!chatVisible)}
+                />
               </div>
             </div>
-            <ContextPanel availableWidth={availableWidth} />
+            <ContextPanel availableWidth={availableWidth} visible={panelVisible} />
           </div>
           {/* A08「展开时右缘无图标」: the rail is the collapsed-state switcher only. */}
           {railVisible && <ContextPanelRail />}

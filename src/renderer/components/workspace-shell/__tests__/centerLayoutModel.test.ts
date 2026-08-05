@@ -4,11 +4,16 @@ import {
   chatWidthToEditorRatio,
   clampEditorRatio,
   DEFAULT_EDITOR_RATIO,
+  deriveChatVisible,
   deriveEditorOpen,
+  derivePanelVisible,
   EDITOR_MIN_WIDTH,
+  LEVEL_L0_MIN_CONTENT,
+  LEVEL_L1_MIN_CONTENT,
   MAX_EDITOR_RATIO,
   MIN_EDITOR_RATIO,
   resolveChatColumnWidth,
+  resolveShellLevel,
 } from '../centerLayoutModel';
 
 describe('clampEditorRatio', () => {
@@ -114,5 +119,124 @@ describe('deriveEditorOpen', () => {
   it('is false for garbage counts rather than throwing', () => {
     expect(deriveEditorOpen(Number.NaN)).toBe(false);
     expect(deriveEditorOpen(-1)).toBe(false);
+  });
+});
+
+// ── the level ladder (S4) ───────────────────────────────────────────────
+
+describe('resolveShellLevel', () => {
+  it('is always L0 with no file open, at any width (A08 gates the ladder on `editor open`)', () => {
+    for (const contentWidth of [320, 700, 963, 1299, 4000]) {
+      expect(resolveShellLevel({ contentWidth, editorOpen: false })).toBe('L0');
+    }
+  });
+
+  it('walks L0 → L1 → L2 as the content row narrows, with a file open', () => {
+    expect(resolveShellLevel({ contentWidth: LEVEL_L0_MIN_CONTENT, editorOpen: true })).toBe('L0');
+    expect(resolveShellLevel({ contentWidth: LEVEL_L0_MIN_CONTENT - 1, editorOpen: true })).toBe(
+      'L1'
+    );
+    expect(resolveShellLevel({ contentWidth: LEVEL_L1_MIN_CONTENT, editorOpen: true })).toBe('L1');
+    expect(resolveShellLevel({ contentWidth: LEVEL_L1_MIN_CONTENT - 1, editorOpen: true })).toBe(
+      'L2'
+    );
+  });
+
+  it('assumes roomy before the first measurement rather than flashing a degraded layout', () => {
+    expect(resolveShellLevel({ contentWidth: null, editorOpen: true })).toBe('L0');
+    expect(resolveShellLevel({ contentWidth: 0, editorOpen: true })).toBe('L0');
+  });
+
+  it('derives its thresholds from the same floors the column widths use', () => {
+    // A08 states 1580/1244 including a 280px sidebar; ours exclude it because
+    // this sidebar is draggable/collapsible. The delta must stay exactly 280.
+    expect(LEVEL_L0_MIN_CONTENT + 280).toBe(1580);
+    expect(LEVEL_L1_MIN_CONTENT + 280).toBe(1244);
+    expect(LEVEL_L0_MIN_CONTENT).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 380);
+  });
+});
+
+describe('derivePanelVisible', () => {
+  const base = { level: 'L0' as const, editorOpen: true, panelOpen: true, manualPanel: null };
+
+  it('follows the user preference verbatim when no file is open', () => {
+    expect(derivePanelVisible({ ...base, editorOpen: false, panelOpen: true })).toBe(true);
+    expect(derivePanelVisible({ ...base, editorOpen: false, panelOpen: false })).toBe(false);
+    // Even at L2 — the ladder does not run without an editor.
+    expect(derivePanelVisible({ ...base, level: 'L2', editorOpen: false, panelOpen: true })).toBe(
+      true
+    );
+  });
+
+  it('gives the panel up at L1 and below when a file is open', () => {
+    expect(derivePanelVisible({ ...base, level: 'L0' })).toBe(true);
+    expect(derivePanelVisible({ ...base, level: 'L1' })).toBe(false);
+    expect(derivePanelVisible({ ...base, level: 'L2' })).toBe(false);
+  });
+
+  it('lets a manual override beat the ladder in both directions', () => {
+    expect(derivePanelVisible({ ...base, level: 'L2', manualPanel: true })).toBe(true);
+    expect(derivePanelVisible({ ...base, level: 'L0', manualPanel: false })).toBe(false);
+  });
+
+  it('treats a cleared override as absent, not as "hidden"', () => {
+    // The whole reason ManualOverride is `boolean | null`: after a file closes
+    // the override is cleared, and `false` would keep the panel hidden forever.
+    expect(derivePanelVisible({ ...base, editorOpen: false, manualPanel: null })).toBe(true);
+  });
+});
+
+describe('deriveChatVisible', () => {
+  const base = { level: 'L0' as const, editorOpen: true, manualChat: null };
+
+  it('never hides chat when no file is open — chat IS the shell then', () => {
+    for (const level of ['L0', 'L1', 'L2'] as const) {
+      expect(deriveChatVisible({ ...base, level, editorOpen: false })).toBe(true);
+    }
+  });
+
+  it('only gives chat up at L2', () => {
+    expect(deriveChatVisible({ ...base, level: 'L0' })).toBe(true);
+    expect(deriveChatVisible({ ...base, level: 'L1' })).toBe(true);
+    expect(deriveChatVisible({ ...base, level: 'L2' })).toBe(false);
+  });
+
+  it('honours the「隐去 chat」override at any level, and the un-hide too', () => {
+    expect(deriveChatVisible({ ...base, level: 'L0', manualChat: false })).toBe(false);
+    expect(deriveChatVisible({ ...base, level: 'L2', manualChat: true })).toBe(true);
+  });
+});
+
+describe('ladder composition (the combinations that actually ship)', () => {
+  it('L1 with a file open = editor + chat, no panel; the rail comes back', () => {
+    const level = resolveShellLevel({ contentWidth: 1000, editorOpen: true });
+    expect(level).toBe('L1');
+    expect(
+      derivePanelVisible({ level, editorOpen: true, panelOpen: true, manualPanel: null })
+    ).toBe(false);
+    expect(deriveChatVisible({ level, editorOpen: true, manualChat: null })).toBe(true);
+  });
+
+  it('L2 with a file open = editor only', () => {
+    const level = resolveShellLevel({ contentWidth: 800, editorOpen: true });
+    expect(level).toBe('L2');
+    expect(
+      derivePanelVisible({ level, editorOpen: true, panelOpen: true, manualPanel: null })
+    ).toBe(false);
+    expect(deriveChatVisible({ level, editorOpen: true, manualChat: null })).toBe(false);
+  });
+
+  it('closing the file restores the user preference, whatever the ladder had done', () => {
+    // The bug this pins: if the ladder had written the preference instead of
+    // composing over it, a narrow window would leave the panel off for good.
+    const narrow = resolveShellLevel({ contentWidth: 800, editorOpen: true });
+    expect(
+      derivePanelVisible({ level: narrow, editorOpen: true, panelOpen: true, manualPanel: null })
+    ).toBe(false);
+
+    const closed = resolveShellLevel({ contentWidth: 800, editorOpen: false });
+    expect(
+      derivePanelVisible({ level: closed, editorOpen: false, panelOpen: true, manualPanel: null })
+    ).toBe(true);
   });
 });
