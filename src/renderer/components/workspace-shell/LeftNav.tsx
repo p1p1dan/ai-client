@@ -2,13 +2,11 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  CircleHelp,
   Folder,
   FolderGit2,
   FolderOpen,
   FolderPlus,
   ListFilter,
-  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -223,14 +221,11 @@ export function LeftNav({
       // writes px directly during a drag, so the aside must not pin its own width.
       className="flex h-full w-full min-w-0 shrink-0 flex-col border-r bg-card/40"
     >
-      <div className="flex h-9 items-center gap-1 border-b px-2">
-        <Button variant="ghost" size="icon-xs" aria-label="Menu">
-          <Menu className="h-4 w-4" />
-        </Button>
+      <div className="flex h-9 items-center border-b px-2">
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}
           onClick={onToggleCollapsed}
         >
           {collapsed ? (
@@ -511,7 +506,9 @@ export function LeftNav({
 
           <Separator />
 
-          <div className="flex items-center gap-1 p-2">
+          <div className="flex items-center p-2">
+            {/* Full-width row on purpose (flex-1): the footer is a single
+                Settings entry since T-23 removed the dead Help button. */}
             <Button
               variant="ghost"
               size="xs"
@@ -519,11 +516,7 @@ export function LeftNav({
               onClick={onOpenSettings}
             >
               <Settings className="h-3.5 w-3.5" />
-              Settings
-            </Button>
-            <Button variant="ghost" size="xs" className="h-6 flex-1 justify-start">
-              <CircleHelp className="h-3.5 w-3.5" />
-              Help
+              {t('Settings')}
             </Button>
           </div>
         </>

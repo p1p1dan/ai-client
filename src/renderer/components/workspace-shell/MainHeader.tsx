@@ -1,6 +1,7 @@
-import { AppWindow, Globe, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Folder, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Ident } from '@/components/ui/ident';
+import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -23,69 +24,103 @@ export function MainHeader({
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const projects = useChatSessionsStore((state) => state.projects);
+  const workspaces = useChatSessionsStore((state) => state.workspaces);
 
   const activeSession = sessions.find((session) => session.id === activeSessionId);
-  const activeProject = projects.find((project) => project.id === activeSession?.projectId);
-  const workspaces = useChatSessionsStore((state) => state.workspaces);
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
+  // Resolved through the workspace, not session.projectId — a stale
+  // session.projectId must not label the header with the wrong folder (same
+  // trap buildSidebarFolders documents in LeftNav).
+  const activeProject = projects.find((project) => project.id === activeWorkspace?.projectId);
+
+  const workspaceLabel = activeProject?.name ?? activeWorkspace?.name;
+  const contextLine = [activeProject?.name, activeWorkspace?.name].filter(Boolean).join(' · ');
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b px-3">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-foreground">
-          {activeSession?.title ?? 'No session selected'}
-        </p>
-        <p className="truncate text-meta text-muted-foreground" title={activeWorkspace?.path}>
-          {activeProject?.name ?? 'Project'}
-          {activeWorkspace ? ` · ${activeWorkspace.name}` : ''}
-          {activeWorkspace ? ` · ${activeWorkspace.path}` : ''}
-        </p>
-      </div>
+    // T-23 (P-22): one line, h-9 so the three top bars (LeftNav / here /
+    // ContextPanel) share one flush border-b. The old second line is gone —
+    // but NOT because the Composer target bar repeats it: in session mode the
+    // target row drops its folder slot (A07 §08②), so the workspace chip
+    // below is the project's only header presence, with the full path behind
+    // its tooltip (hover and keyboard focus both reach it). Usage stays in
+    // WindowTitleBar's user pill (real todayCostUsd); the header must not
+    // grow a ring for it (the removed ring showed a hardcoded percentage).
+    <header className="flex h-9 shrink-0 items-center gap-3 border-b px-3">
+      <h1
+        // T-23 (P-19): body copy is 15px (--text-markdown); a 14px title read
+        // as *less* important than the messages under it, so the title joins
+        // the body tier. Weight is font-semibold per the design-system weight
+        // table: Win10's Segoe UI has no 500 and falls back to 400, so a
+        // medium-only hierarchy would vanish there.
+        // min-w-20, not the usual min-w-0: flex-1 gives the title basis 0, so
+        // in the narrow-window crunch it would vanish while the chip kept its
+        // width. The floor keeps a few characters of title and forces the
+        // chip to shrink first (80px floor still fits the 685px minimum).
+        className="min-w-20 flex-1 truncate text-markdown leading-normal font-semibold text-foreground"
+        title={activeSession?.title}
+      >
+        {activeSession?.title ?? t('No session selected')}
+      </h1>
 
-      <UsageRingPlaceholder />
+      {activeWorkspace && (
+        <Tooltip>
+          <TooltipTrigger
+            delay={150}
+            // Focusable info affordance, not a button: its whole feedback is
+            // the tooltip, so it must not read as clickable (cursor-default,
+            // no button role).
+            render={
+              <span
+                // biome-ignore lint/a11y/noNoninteractiveTabindex: WAI-ARIA tooltip pattern — the disclosure trigger must be keyboard-focusable, and it is deliberately not a button (there is no action to perform).
+                tabIndex={0}
+                // min-w-0 (NOT shrink-0): at the 685px window minimum with a
+                // 380px panel open the main column is ~213px — a fixed-width
+                // chip would push the action buttons past overflow-hidden.
+                // Flex shrinks the chip down to its icon before that happens;
+                // the tooltip still carries the full names.
+                className="flex min-w-0 max-w-48 cursor-default items-center gap-1 rounded-sm text-meta text-muted-foreground"
+              />
+            }
+          >
+            <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+            <span className="min-w-0 truncate">{workspaceLabel}</span>
+          </TooltipTrigger>
+          <TooltipPopup side="bottom" sideOffset={8} className="max-w-96">
+            <p className="font-medium">{contextLine}</p>
+            {/* Ident, not raw font-mono: paths are mono via the D25 §2.5
+                primitive so the fontDomainScan whitelist stays closed. */}
+            <p className="text-muted-foreground">
+              <Ident>{activeWorkspace.path}</Ident>
+            </p>
+          </TooltipPopup>
+        </Tooltip>
+      )}
 
-      <Separator orientation="vertical" className="h-6" />
-
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         <HeaderIconButton
-          label={
-            readingWidthMode === 'wide' ? t('Standard reading column') : t('Wide reading column')
-          }
+          label={t('Wide reading column')}
           icon={LayoutGrid}
           active={readingWidthMode === 'wide'}
           onClick={onToggleReadingWidth}
         />
-        <HeaderIconButton label="Browser" icon={Globe} />
         <HeaderIconButton
-          label={contextPanelOpen ? t('Hide context panel') : t('Show context panel')}
+          label={t('Context panel')}
           icon={contextPanelOpen ? PanelRightClose : PanelRightOpen}
           active={contextPanelOpen}
           onClick={onToggleContextPanel}
         />
-        <HeaderIconButton label="Window" icon={AppWindow} />
       </div>
     </header>
   );
 }
 
-function UsageRingPlaceholder() {
-  return (
-    <div
-      className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-meta text-muted-foreground"
-      role="img"
-      aria-label="Usage ring placeholder"
-      title="Usage ring placeholder"
-    >
-      <span className="tabular-nums">72%</span>
-    </div>
-  );
-}
-
 interface HeaderIconButtonProps {
+  /** Constant name of the thing toggled (rail idiom): state is aria-pressed's job. */
   label: string;
   icon: typeof LayoutGrid;
   active?: boolean;
-  onClick?: () => void;
+  /** Required on purpose: a handler-less header icon is a dead control (A06 / T-23). */
+  onClick: () => void;
 }
 
 function HeaderIconButton({ label, icon: Icon, active, onClick }: HeaderIconButtonProps) {

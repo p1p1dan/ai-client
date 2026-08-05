@@ -1731,6 +1731,11 @@ export const zhTranslations: Record<string, string> = {
   'Close panel': '关闭面板',
   'Wide reading column': '宽阅读栏',
   'Standard reading column': '标准阅读栏',
+  // T-23: single-line MainHeader + LeftNav cleanup strings.
+  'Context panel': '上下文面板',
+  'No session selected': '未选择会话',
+  'Expand sidebar': '展开侧栏',
+  'Collapse sidebar': '收起侧栏',
   'Resize sidebar': '调整侧栏宽度',
   'Resize context panel': '调整上下文面板宽度',
   'Not connected yet — {{task}} will wire this surface.':

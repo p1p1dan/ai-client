@@ -4,9 +4,10 @@ import ts from 'typescript';
  * Blank every comment in a TS/TSX source, leaving the code — string literals,
  * template literals and regex literals included — character for character.
  *
- * Shared by the four static-scan suites in this directory
- * (`chatMarkdownPolicy`, `fontDomainScan`, `composerFormStatic`,
- * `composerTargetGuards`), each of which scans source for a name its own doc
+ * Shared by the static-scan suites in this directory and in
+ * `workspace-shell/__tests__` (`chatMarkdownPolicy`, `fontDomainScan`,
+ * `composerFormStatic`, `composerTargetGuards`, `contextPanelMountStatic`,
+ * `terminalSurfaceStatic`, `deadControlsStatic`), each of which scans source for a name its own doc
  * comments have to spell in order to explain the ban: `rehype-raw`,
  * `dangerouslySetInnerHTML`, `SelectTrigger`, `font-mono`. Without a strip, the
  * scans would fail on the explanation; with the wrong strip, they pass on
