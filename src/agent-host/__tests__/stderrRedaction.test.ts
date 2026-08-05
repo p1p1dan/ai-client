@@ -83,6 +83,14 @@ describe('redactStderrLine — adversarial matrix (Codex review F2–F4)', () =>
     );
   });
 
+  it('masks bare provider key shapes with no field name to hook (round 2: Stripe/GitHub/Google/AWS/sk-proj)', () => {
+    expect(redactStderrLine('Stripe sk_live_1234567890abcdef')).toBe('Stripe [redacted]');
+    expect(redactStderrLine('Google AIzaSyA1234567890abcdef')).toBe('Google [redacted]');
+    expect(redactStderrLine('GitHub ghp_1234567890abcdef')).toBe('GitHub [redacted]');
+    expect(redactStderrLine('AWS AKIAIOSFODNN7EXAMPLE')).toBe('AWS [redacted]');
+    expect(redactStderrLine('bare OpenAI-ish sk-proj-abc123')).toBe('bare OpenAI-ish [redacted]');
+  });
+
   it('does not eat ordinary diagnostic vocabulary near the sensitive-name rules', () => {
     for (const line of [
       'input_tokens: 4096 output_tokens: 512',
@@ -118,6 +126,15 @@ describe('redactStderrLine — user-directory paths', () => {
       '~\\.claude\\settings.json'
     );
     expect(redactStderrLine('/mnt/c/Users/Alice/.claude/settings.json')).toBe(
+      '~/.claude/settings.json'
+    );
+  });
+
+  it('handles Windows usernames with spaces and apostrophes when a separator follows (round 2)', () => {
+    expect(redactStderrLine('C:\\Users\\Alice Smith\\AppData\\x')).toBe('~\\AppData\\x');
+    expect(redactStderrLine("C:\\Users\\O'Neil\\x")).toBe('~\\x');
+    expect(redactStderrLine('\\\\SERVER\\Users\\Alice Smith\\x')).toBe('~\\x');
+    expect(redactStderrLine('/mnt/c/Users/Alice Smith/.claude/settings.json')).toBe(
       '~/.claude/settings.json'
     );
   });

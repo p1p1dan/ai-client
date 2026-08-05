@@ -38,18 +38,19 @@ export interface RetryBannerInput {
    */
   inFlight: boolean;
   /**
-   * New blocks appeared AFTER this retry payload was first observed (the
-   * caller snapshots the turn's block count when the `retry` reference
-   * changes — MessageTimeline's `blockCountAtRetry`). Output resuming is what
-   * disproves a retry: the store only clears `retry` on the NEXT
-   * `session.status` without a payload, which streaming does not emit, so
-   * without this gate the banner would outlive the retry it reports.
+   * Output progressed AFTER this retry payload was first observed (the
+   * caller snapshots the turn's progress stamp — block count + streamed
+   * characters — when the `retry` reference changes; MessageTimeline's
+   * `progressStampAtRetry`). Output resuming is what disproves a retry: the
+   * store only clears `retry` on the NEXT `session.status` without a
+   * payload, which streaming does not emit, so without this gate the banner
+   * would outlive the retry it reports.
    *
-   * Deliberately NOT "the turn has any blocks" (the first cut, overturned in
-   * Codex review): that gate was monotonic, so one pre-retry tool call
-   * suppressed every later mid-turn retry — exactly the "why did it stop
-   * after the tool ran" case the banner exists to explain. Blocks that
-   * predate the retry prove nothing about it.
+   * Two earlier cuts, both overturned in Codex review: "the turn has any
+   * blocks" was monotonic (one pre-retry tool call suppressed every later
+   * mid-turn retry), and "block count grew" missed recovery that appends
+   * into an existing text block. Characters are counted for exactly that
+   * reason.
    */
   outputSinceRetry: boolean;
 }

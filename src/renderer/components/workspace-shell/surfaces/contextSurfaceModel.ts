@@ -491,12 +491,24 @@ function foldStderrLine(
   const previous = existing?.stderr;
   const lines = [...(previous?.lines ?? []), line].slice(-STDERR_CONTEXT_KEEP_LINES);
   const stderr: SessionStderrFacts = { lines, total: (previous?.total ?? 0) + 1 };
-  const next: SessionRuntimeFactsState = { ...prev, [sessionId]: { ...existing, stderr } };
-  if (previous) return next;
+  if (previous) {
+    // Existing carrier: in-place update, key position (= first-arrival order,
+    // see below) unchanged, never any eviction churn.
+    return { ...prev, [sessionId]: { ...existing, stderr } };
+  }
 
-  // This session is a NEW stderr carrier — enforce the carrier cap (F6).
-  // Object key order is insertion order, so the front of this list is the
-  // oldest carrier; strip until the others fit beside the current one.
+  // NEW carrier: re-insert the entry at the END of the map, so that among
+  // carriers, key order IS first-stderr-arrival order (review F6, round 2 —
+  // plain insertion order is entry-CREATION order, and a `session.created`
+  // long before the first stderr line put carriers out of order, evicting
+  // the wrong one). Non-carrier entries interleave harmlessly — the filter
+  // below never looks at them.
+  const reordered: SessionRuntimeFactsState = { ...prev };
+  delete reordered[sessionId];
+  const next: SessionRuntimeFactsState = { ...reordered, [sessionId]: { ...existing, stderr } };
+
+  // Enforce the carrier cap: the front of this list is the oldest carrier;
+  // strip until the others fit beside the current one.
   const carriers = Object.keys(next).filter((id) => id !== sessionId && next[id].stderr);
   if (carriers.length <= STDERR_SESSIONS_MAX - 1) return next;
   for (const id of carriers.slice(0, carriers.length - (STDERR_SESSIONS_MAX - 1))) {

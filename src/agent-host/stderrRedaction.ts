@@ -33,11 +33,17 @@
  * involved" is itself the diagnostic fact.
  */
 const REDACTION_RULES: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
-  // Key material by shape, wherever it appears: Anthropic's sk-ant-* at any
-  // length, plus generic sk-* (sk-proj-…, sk-live-…) long enough to be
-  // unambiguous.
+  // Key material by shape, wherever it appears. The set is enumerable
+  // provider prefixes plus a generic long-sk catchall — bare keys carry no
+  // sensitive-field name for the assignment rule to hook, so shape is the
+  // only handle (review F2, two rounds).
   { pattern: /sk-ant-[A-Za-z0-9_-]+/g, replacement: '[redacted]' },
+  { pattern: /\bsk-proj-[A-Za-z0-9_-]+/g, replacement: '[redacted]' },
   { pattern: /\bsk-[A-Za-z0-9_-]{16,}/g, replacement: '[redacted]' },
+  { pattern: /\bsk_(?:live|test)_[A-Za-z0-9]{8,}/g, replacement: '[redacted]' },
+  { pattern: /\bgh[pousr]_[A-Za-z0-9]{16,}/g, replacement: '[redacted]' },
+  { pattern: /\bAIza[A-Za-z0-9_-]{16,}/g, replacement: '[redacted]' },
+  { pattern: /\bAKIA[A-Z0-9]{12,}/g, replacement: '[redacted]' },
   // HTTP auth schemes, case-insensitive, whole token destroyed.
   { pattern: /((?:bearer|basic)\s+)[^\s"']+/gi, replacement: '$1[redacted]' },
   { pattern: /(x-api-key["':\s=]+)[^\s"']+/gi, replacement: '$1[redacted]' },
@@ -79,14 +85,30 @@ function redactSensitiveAssignments(line: string): string {
  * User-directory prefixes → `~` (username collapsed, path tail kept). Non-user
  * absolute paths (`/usr/lib/…`) reveal nothing personal and pass through.
  */
+/**
+ * The three Windows-origin families get TWO rules each (review F5, round 2):
+ * a primary that allows spaces and apostrophes in the username — real
+ * Windows profiles have them (`Alice Smith`, `O'Neil`) — bounded to 40 chars
+ * and anchored by a lookahead for a following separator so it cannot run off
+ * into prose, plus a conservative space-excluding fallback for a path-final
+ * username. POSIX/macOS keeps the conservative rule only: spaces are not
+ * legal in practice there, and a space-tolerant forward-slash rule would eat
+ * the prose between two paths on the same line. Ordering: drive rules before
+ * POSIX, or the POSIX rule eats the `/Users/Alice` substring of
+ * `C:/Users/Alice` and leaves `C:~`.
+ */
 const PATH_RULES: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
   // Windows drive, both separator styles (C:\Users\Alice, C:/Users/Alice).
-  // MUST run before the POSIX rule, which would otherwise eat the
-  // `/Users/Alice` substring of `C:/Users/Alice` and leave `C:~`.
+  { pattern: /[A-Za-z]:[\\/]Users[\\/][^\\/":]{1,40}(?=[\\/])/g, replacement: '~' },
   { pattern: /[A-Za-z]:[\\/]Users[\\/][^\\/\s"':]+/g, replacement: '~' },
-  // WSL-mapped Windows home (/mnt/c/Users/Alice) — same ordering reason.
+  // WSL-mapped Windows home (/mnt/c/Users/Alice).
+  { pattern: /\/mnt\/[a-z]\/Users\/[^/\\":]{1,40}(?=\/)/gi, replacement: '~' },
   { pattern: /\/mnt\/[a-z]\/Users\/[^/\s"':]+/gi, replacement: '~' },
   // UNC shares incl. \\wsl.localhost\<distro>\home\<user>.
+  {
+    pattern: /\\\\[^\\\s"']+(?:\\[^\\\s"']+)*?\\(?:Users|home)\\[^\\":]{1,40}(?=\\)/gi,
+    replacement: '~',
+  },
   { pattern: /\\\\[^\\\s"']+(?:\\[^\\\s"']+)*?\\(?:Users|home)\\[^\\\s"':]+/gi, replacement: '~' },
   // POSIX / macOS home.
   { pattern: /(?:\/home|\/Users)\/[^/\\\s"':]+/g, replacement: '~' },

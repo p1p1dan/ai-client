@@ -430,15 +430,17 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('T-33: the retry banner is wired into the last turn and the pending head', () => {
     // ChatTurn feeds the real gate inputs…
     expectCalled('inFlight: inFlightSession');
-    expectCalled('outputSinceRetry: turnBlockCount > blockCountAtRetry');
+    expectCalled('outputSinceRetry: turnProgressStamp > progressStampAtRetry');
     // …the pending head's are literals, because its existence is the proof.
     expectCalled('deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false })');
-    // F1 (Codex review): the disproof is "new output SINCE this retry", never
-    // "the turn ever had output" — the snapshot is keyed to the retry
-    // payload's identity, so a pre-retry tool call cannot suppress a later
-    // mid-turn retry.
-    expectWired('const blockCountAtRetry = useMemo(() => turnBlockCount, [retry]);');
+    // F1 (Codex review, two rounds): the disproof is "new output SINCE this
+    // retry", never "the turn ever had output" — and the stamp counts
+    // CHARACTERS, not just blocks, because recovery may append into an
+    // existing text block without growing the count.
+    expectWired('const progressStampAtRetry = useMemo(() => turnProgressStamp, [retry]);');
+    expectWired('sum + 1 + (block.text?.length ?? 0)');
     expectUnwired('outputSinceRetry: turnHasBlocks');
+    expectUnwired('outputSinceRetry: turnBlockCount > blockCountAtRetry');
     expect(
       (CALL_SITES.match(/<RetryBanner/g) ?? []).length,
       'the banner must render in exactly the two head slots'

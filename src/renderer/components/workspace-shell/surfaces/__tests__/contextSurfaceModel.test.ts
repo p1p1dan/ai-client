@@ -744,6 +744,32 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
     expect(newest?.stderr?.lines).toEqual([`line ${STDERR_SESSIONS_MAX + 1}`]);
   });
 
+  it('evicts by FIRST-STDERR order, not session-creation order (F6 round 2)', () => {
+    // Entries created s1..s13 — but stderr arrives in REVERSE (s13 first).
+    let state = initialSessionRuntimeFacts;
+    for (let n = 1; n <= STDERR_SESSIONS_MAX + 1; n += 1) {
+      state = reduceSessionRuntimeFacts(state, {
+        type: 'session.created',
+        sessionId: `s${n}`,
+        payload: { permissionMode: 'default' },
+      });
+    }
+    for (let n = STDERR_SESSIONS_MAX + 1; n >= 1; n -= 1) {
+      state = reduceSessionRuntimeFacts(state, {
+        type: 'session.stderr',
+        sessionId: `s${n}`,
+        payload: { line: `line ${n}` },
+      });
+    }
+    // The oldest CARRIER is the first to have received stderr — the
+    // highest-numbered session, despite being created in ascending order.
+    expect(state[`s${STDERR_SESSIONS_MAX + 1}`].stderr).toBeUndefined();
+    expect(state[`s${STDERR_SESSIONS_MAX + 1}`].permissionMode).toBe('default');
+    for (let n = 1; n <= STDERR_SESSIONS_MAX; n += 1) {
+      expect(state[`s${n}`].stderr?.lines, `s${n}`).toEqual([`line ${n}`]);
+    }
+  });
+
   it('appending to an EXISTING carrier never triggers eviction churn', () => {
     let state = initialSessionRuntimeFacts;
     for (let n = 0; n < STDERR_SESSIONS_MAX; n += 1) {

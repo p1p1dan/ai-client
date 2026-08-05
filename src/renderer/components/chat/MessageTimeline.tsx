@@ -844,17 +844,29 @@ const ChatTurn = memo(function ChatTurn({
         ? Math.max(0, Math.floor((nowMs - streamStartedAt) / 1000))
         : 0;
 
-  const turnBlockCount = turn.body.reduce((count, message) => count + message.blocks.length, 0);
-  const turnHasBlocks = turnBlockCount > 0;
+  // T-33 (review F1, round 2): the turn's progress stamp — block count PLUS
+  // streamed characters. A resumed call may append into an EXISTING text
+  // block (`appendTextBlock` mutates `text`, block count unchanged), so a
+  // count-only stamp could not see that kind of recovery and the banner
+  // outlived the retry for the rest of the turn.
+  const turnProgressStamp = turn.body.reduce(
+    (stamp, message) =>
+      message.blocks.reduce((sum, block) => sum + 1 + (block.text?.length ?? 0), stamp),
+    0
+  );
+  const turnHasBlocks = turn.body.some((message) => message.blocks.length > 0);
 
-  // T-33 (review F1): the block count snapshotted at the moment THIS retry
-  // payload appeared — every api_retry event writes a fresh `retry` object
-  // into the red-line store, so reference identity is the retry's epoch. New
-  // blocks after the snapshot mean the retried call got through; blocks that
-  // predate it (a tool call earlier in the turn) prove nothing and must not
-  // suppress the banner.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional capture — the count at the retry's arrival, not the live one
-  const blockCountAtRetry = useMemo(() => turnBlockCount, [retry]);
+  // T-33 (review F1): the stamp snapshotted at the moment THIS retry payload
+  // appeared — every api_retry event writes a fresh `retry` object into the
+  // red-line store, so reference identity is the retry's epoch. Progress
+  // after the snapshot means the retried call got through; output that
+  // predates it (a tool call earlier in the turn) proves nothing and must not
+  // suppress the banner. Residual (accepted): if the retry and its first
+  // post-retry output land in the same React commit, the snapshot includes
+  // that output and this attempt's banner is skipped — one-attempt window,
+  // self-healing on the next api_retry event.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional capture — the stamp at the retry's arrival, not the live one
+  const progressStampAtRetry = useMemo(() => turnProgressStamp, [retry]);
 
   // T-33: the banner reads `inFlightSession`, not `turnActive` — it renders
   // attempt counts, not a clock, so a session left running before this window
@@ -864,7 +876,7 @@ const ChatTurn = memo(function ChatTurn({
   const retryBanner = deriveRetryBanner({
     retry,
     inFlight: inFlightSession,
-    outputSinceRetry: turnBlockCount > blockCountAtRetry,
+    outputSinceRetry: turnProgressStamp > progressStampAtRetry,
   });
 
   // A turn that is running with NEITHER clock (a session left running before
