@@ -4,7 +4,8 @@
 
 - **Current Phase**: **Phase 0A 基线部分补做（A01 / A05 / A06）→ 观感对齐改造**（2026-07-28 转向）。这三项产品设计基线此前只在可行性文档的候选任务池、从未进执行计划或台账，而下游 F05/H01/H09 已按它们施工——这是「观感不到位 + 死按钮泛滥 + 布局反复卡壳」的同一根因，本日补做并落库（D18 / D19 / D20）。⚠️ **Phase 0A 整体仍 🟡 未收口**：A02 / A03 / A04 仍未立项，且已交付的 A06 依赖列写的正是「A01、A02」（口径以总台账 Phase 总览 0A 行为准）。Phase 3 Chat MVP 的剩余点测与网关阻塞并行不变。
 - **Last Landed**:
-  - 代码（2026-08-05，最新）：**T-16 新旧壳开关成熟化 `fd57ebf`**——Appearance 的「OpenChamber Workspace Shell」此前是**死开关**（`Root.tsx` 挂载与水合后各强写一次 `true`，另有消费端把设置与 `SKIP_ONBOARDING_GATE` 做 OR，写回 + OR 双重失效）。**勘察更正任务书**：强制覆盖**实为四处不是两处**（新增的两处 = `App/useAppKeyboardShortcuts.ts` 主 tab 快捷键让位、`App/hooks/useSettingsState.ts` 的 `forceSettingsModal`，均为 07-28 立项后长出来的）。四处一律改为只读 `settings.useOpenChamberShell`；`SKIP_ONBOARDING_GATE` **维持 `true`** 未动、不作为达成手段。**两处执行裁定待追认**：① store 默认 `false`→`true`（覆盖期已把 `true` 写进所有存量 profile，故只影响新 profile——否则新机首启落进旧标签页壳）；② 新增同步镜像 `stores/settings/shellPreferenceMirror.ts`（`electronStorage` 异步 IPC → 关掉开关后**每次启动会先闪一帧新壳**；localStorage 同步镜像消除，权威仍在 settings，水合后回写）。连带更正 Appearance 文案（「四区 + mock 运行时」已被 D19/A08 推翻）+ zh 两键。防回归 `shellSwitchStatic.test.ts`（TS AST 三条不变量）+ `shellPreferenceMirror.test.ts`。红线零改动。**impl done 待 GUI 点验（0-sexdecies）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-16 行
+  - 代码（2026-08-05，最新）：**T-33 网络重试横幅 `ba6b371` + T-35 Host stderr 进 UI `5a99ee1` + Codex 复核修复批 `e602096`+`d3635d3`+`8bf4829`（对抗复核 + 终验两轮）**——T-33：新增 `chat/retryBanner.ts` 纯函数 + 横幅双槽挂载（`ChatTurn` turnBody 首子 / `PendingTurnHead` 上方，覆盖握手窗口），视觉走 `status-running` 三件套（HostStatusBanner 既定「运行中横幅」写法，非告警色）；**门语义经复核推翻重做**：首版 `hasBlocks` 单调门会永久压制工具调用后的 mid-turn 重试（Codex F1 major），两轮改为 **epoch 进度戳门**——retry 对象引用即 epoch，`useMemo` 捕获当刻进度戳（块数+已流字符，终验第二轮指出续写既有 block 不长块数），「本次 retry 之后有新进度」才判过期；缺字段按 Host 哨兵语义判（attempt<1/delayMs≤0/error 空即缺段，A06）；**执行裁定：与状态行既有 `· Network retry N/M` 后缀共存**（最小侵入，点验可否决）。T-35：新事件 `session.stderr`（纯可选加法）；Host 侧 `stderrRedaction.ts` **摧毁式脱敏**（sk-*/ANTHROPIC_* 及泛化敏感赋值（JSON 键/含空格引号值/转义引号三形态整值消费）/大小写不敏感 Bearer·Basic 整段/URL userinfo/x-api-key）+ **用户目录前缀折叠 `~`**（执行裁定：非全路径抹除，保诊断价值；含 C:/·UNC·wsl.localhost·/mnt/c 变体）+ 单行 2000 字符钳制 + 每回合 50 行限流（Host 日志仍全量）；渲染端 `sessionRuntimeFacts` 邻接 store 环形 20 行 + running total + **载体会话数上限 12**（驱逐只剥 stderr 字段），context surface 新「Host stderr」组序号从累计值起算（驱逐可见）、空组即隐（正常回合零噪音）；ChatComposer 超时提示指向更正。复核首轮 4 major + 2 minor、终验第二轮 4 项（F1 进度戳 / F2 provider 裸 key：Stripe·GitHub·Google·AWS·sk-proj / F5 Windows 空格·撇号用户名双档规则 / F6 载体驱逐改 stderr 首达序）全闭环，对抗输入矩阵累计 +17 例转负向断言。红线 `chatSessions.ts` 零改动。**impl done 待 GUI 点验（0-septendecies）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-33/T-35 行
+  - 代码（2026-08-05）：**T-16 新旧壳开关成熟化 `fd57ebf`**——Appearance 的「OpenChamber Workspace Shell」此前是**死开关**（`Root.tsx` 挂载与水合后各强写一次 `true`，另有消费端把设置与 `SKIP_ONBOARDING_GATE` 做 OR，写回 + OR 双重失效）。**勘察更正任务书**：强制覆盖**实为四处不是两处**（新增的两处 = `App/useAppKeyboardShortcuts.ts` 主 tab 快捷键让位、`App/hooks/useSettingsState.ts` 的 `forceSettingsModal`，均为 07-28 立项后长出来的）。四处一律改为只读 `settings.useOpenChamberShell`；`SKIP_ONBOARDING_GATE` **维持 `true`** 未动、不作为达成手段。**两处执行裁定待追认**：① store 默认 `false`→`true`（覆盖期已把 `true` 写进所有存量 profile，故只影响新 profile——否则新机首启落进旧标签页壳）；② 新增同步镜像 `stores/settings/shellPreferenceMirror.ts`（`electronStorage` 异步 IPC → 关掉开关后**每次启动会先闪一帧新壳**；localStorage 同步镜像消除，权威仍在 settings，水合后回写）。连带更正 Appearance 文案（「四区 + mock 运行时」已被 D19/A08 推翻）+ zh 两键。防回归 `shellSwitchStatic.test.ts`（TS AST 三条不变量）+ `shellPreferenceMirror.test.ts`。红线零改动。**impl done 待 GUI 点验（0-sexdecies）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-16 行
   - 验收（2026-08-05，最新）：**第九轮 GUI 点验用户验收通过**（原话「点验通过，进入下一任务环节」）——点验清单 **0-quindecies【合并版】**（7 组 24 项）收口，**T-32 / T-12~T-15 / T-23 三任务一并转 Done**。随验收生效的追认四项：`Ctrl/Cmd+1..4` 改绑 1=git 2=files 3=context 4=terminal · `Ctrl/Cmd+B` 侧栏收展 · 四死按钮走删除支 · 72% 假 usage 环撤除。**遗留两项（不阻塞，已另有归口）**：① A2「Win10 字重真机核验」本机（Linux）不可采集 → 并入 [T-10 打包版清单](../../../plans/t10-packaged-gui-checklist.md)（与 T-24 真机项同处）；② macOS 无标题栏行 → 全 app 无 usage 展示，既有缺口维持 backlog。验收态 HEAD `0b90baa`，工作树干净。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 验收行
   - 代码（2026-08-05，最新）：**T-32 首轮点验修复批四提交 `fef5ce3`+`8014bef`+`c424128`+`a0c9b90`（m1~m8）**——m1 裁掉按 surface 的面板宽度（切 tab 不再跳宽）· m2 显式面板动作记录 manualPanel（窄窗可唤回）· m3 提升态覆盖层改不透明 · m4 快捷键改吃渲染用的 railOrder + persist v1→v2 迁移 · **m5 收窄模型重做**（推翻 S4 的三档阈值：改 `resolveShellChrome` 逐级试探 sidebar→panel→chat，chat 有 400 硬下限，新增 `maxPanelWidth` 反向约束面板）· m6 空 editor 占位盒门控 + 提升态与停靠态的宽度上限拆分 · **m7 `switchWorktree` 搬进常驻 hook**（m6 门控引入的死循环：点文件不出 editor）· m8 目标行 shrink 纪律。**四条为本任务自引入的回归**（m5 原设计 / m6 / m6-b / m7）。红线零改动。**用户表态「暂时没啥问题，先收尾」——非逐项验收**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 修复批行
   - 代码（2026-08-05，最新）：**T-32 右栏骨架回归 A08 四提交 `fbb45fe`+`8df9341`+`4f4fb52`+`2f46fa6`**——S1 tab 条四项（registry 改 A08 序、`editor`→Files 语义、`panelTabsModel` 与 Rail 共用）· S2 顶栏贯通 + Rail 仅收起时渲染 · S3 **editor 回中列**（`EditorSurfaceView` 拆 `FilesSurfaceView` + `center/EditorColumn`，`chat ║ editor` + `ed-grip` 比例拖拽） · S4 L0/L1/L2 降级梯 + 手动覆盖（`manualPanel/manualChat` 会话态、关文件清零）。**三处有据偏离已登记**：阈值改内容行 1300/964（A08 1580/1244 含 280 侧栏，本仓侧栏可拖可收起）· 不新增 `panelOpen` 字段（`activeSurfaceId` 已承载该意图）· editor 保留多 tab。**R1 防回归** `panelVisibilityStatic` 钉死「可见性只在 WorkspaceShell 合成一次」。红线零改动。**impl done 待 GUI 点验（清单已并入 0-quindecies【合并版】）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-32 行
@@ -19,6 +20,7 @@
   - 验收（2026-08-03）：**第七轮 GUI 点验用户验收通过**（原话「验收完毕，没有问题」）——第六轮两项与全部复核批修复闭环，诊断档结项；实测范围含 aaa 文件夹 New / "+ new chat" / 分支 chip 归属 / 失败退回重发无重复气泡 / 同文连发保留 / 附件与归档关闭对齐。第五轮清单 0-decies 与第四轮失败路径顺延项就此关闭；**0-octies 门槛达成 → T-27/T-28/T-19/T-30批1 转 Done**（见 roadmap）。点验期间一次「No repository registered」经查为 dev server 带病热更新残留态，非代码回归（诊断档附注）
   - 更早批次（2026-07-28 ~ 2026-08-03 三批：五连修/T-21/T-22/T-26/T-27/T-28/T-05/T-19/T-30 批1+批2/第二~六轮点验修复等）：摘要原文见 [history 归档](./history/2026-0728-0803-archive.md)，明细见[主线台账](../../../plans/ledger-claude-mainline.md)各行
 - **Last Verified**:
+  - **2026-08-05 T-33/T-35 复核（HEAD `8bf4829`，逐门串行）**：typecheck 干净 / lint **776 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **125 文件 2277 例**（较 T-16 态 123 文件 2231 例 +2 文件 +46 例只增；同 3 例 Windows-only 失败）/ `pnpm build` 成功。落地态与三轮修复批各自跑过完整四门（2245 → 2266 → 2274 → 2277 全程只增；第三轮 ASIA 收口不增例数）。
   - **2026-08-05 T-16 复核（HEAD `fd57ebf`，逐门串行）**：typecheck 干净 / lint **772 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **123 文件 2231 例**（较 T-32 收尾态 121 文件 2223 例 +2 文件 +8 例只增；同 3 例 Windows-only 失败）。
   - **2026-08-05 T-32 修复批复核（HEAD `a0c9b90`，逐门串行）**：typecheck 干净 / lint **769 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **121 文件 2223 例**（较 T-32 落地态 2220 例只增；同 3 例 Windows-only 失败）。⚠️ 中途曾出现 2220→2217 的**例数下降**，逐条对账为「删除被裁功能（per-surface 宽度）自身的 5 例、新增 3 例不变量」，非测试丢失，已在提交信息留证。
   - **2026-08-05 T-32 复核（HEAD `2f46fa6`，逐门串行，每片一次）**：typecheck 干净 / lint **768 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **121 文件 2220 例**（较 T-32 前基线 119 文件 2182 例 +2 文件 +38 例只增；同 3 例 Windows-only 失败）。
@@ -31,7 +33,7 @@
   - **2026-08-03 四批复核（T-31 `8109d45` 合并态）**：typecheck 干净 / lint **718 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **97 文件 1759 例**（+7 文件 +166 例；同 3 例 Windows-only 失败）/ `pnpm build` 成功且产物含 `@container scroll-state(stuck: top)` 规则（lightningcss 管线绕行有效性的产物级验证）。
   - **2026-08-03 三批复核（第六轮修复 `fd55a26` 合并态，T-31 开工前基线实测）**：typecheck 干净 / lint **703 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **90 文件 1593 例**（+2 文件 +56 例；同 3 例 Windows-only 失败）。
   - 更早复核记录（2026-07-28 基线 51 文件 590 例起，全程只增）与 T-21 复核口径注记：见 [history 归档](./history/2026-0728-0803-archive.md)
-- **Next Target**（2026-08-05 十七次修订，T-16 落地后）：**T-16 已 impl done，等 GUI 点验 0-sexdecies**（三条验收全在 GUI 面：关开关重启仍旧壳 / 新旧壳可来回切且各自核心流程可用 / 开关状态持久化；另含**两处执行裁定的追认**：默认值翻 `true`、新增同步镜像）。**开发线下一项 = T-33 网络重试横幅（0.5d）与 T-35 Host stderr 进 UI（0.5d）**（可穿插），其后 **T-34 子 agent 实况（1.5d）**；T-25 仍后置，multi-agent 支线后置。**已结清**：第九轮点验验收通过 → 0-quindecies【合并版】收口，**T-32 / T-12~T-15 / T-23 三任务转 Done**；resume 两项优先项亦已结清。**残留（用户线，与开发线并行）**：T-24 真机 Windows 打包版 + **A2 Win10 字重真机核**（同归 [T-10 清单](../../../plans/t10-packaged-gui-checklist.md) 第 8/9 项）；0-nonies ⑪ 真机指标；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）；macOS 无标题栏行 → 全 app 无 usage 展示（既有缺口显性化）；**T-16 连带**：旧壳（legacy 标签页壳）本身的功能完整性从未在 D18~D27 各批中回归过，本轮点验若发现旧壳残缺，按「旧壳是回退不是产品」口径记 backlog、不即时修。
+- **Next Target**（2026-08-05 十八次修订，T-33/T-35 落地后）：**待 GUI 点验两批并列**——T-16（0-sexdecies，含默认值翻 `true` 与同步镜像两追认）+ **T-33/T-35（0-septendecies，含共存/路径折叠/限流三追认）**。**开发线当前项 = T-34 子 agent 实况（1.5d）**——开工先实测子 agent 消息流形状（执行计划 §3「三处不打包票」第 1 条），显示层是唯一真工作量；T-25 仍后置，multi-agent 支线后置。**已结清**：第九轮点验验收通过 → 0-quindecies【合并版】收口，**T-32 / T-12~T-15 / T-23 三任务转 Done**；resume 两项优先项亦已结清。**残留（用户线，与开发线并行）**：T-24 真机 Windows 打包版 + **A2 Win10 字重真机核**（同归 [T-10 清单](../../../plans/t10-packaged-gui-checklist.md) 第 8/9 项）；0-nonies ⑪ 真机指标；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）；macOS 无标题栏行 → 全 app 无 usage 展示（既有缺口显性化）；**T-16 连带**：旧壳（legacy 标签页壳）本身的功能完整性从未在 D18~D27 各批中回归过，本轮点验若发现旧壳残缺，按「旧壳是回退不是产品」口径记 backlog、不即时修。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -102,9 +104,9 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 
 6. ~~**T-16 新旧壳开关成熟化**~~ —— **✅ 2026-08-05 代码落地 `fd57ebf`，impl done 待 GUI 点验（0-sexdecies），点验通过方转 Done**。原文保留供参照：拆 `App.tsx` / `Root.tsx` **两处强制覆盖**（**as-built 更正：实为四处**），`devFlags.ts:10` 的 `SKIP_ONBOARDING_GATE` 维持 `true`、**不作为达成手段**；验收三条（关开关重启仍旧壳 / 新旧壳可来回切且各自核心流程可用 / 开关状态持久化经重启）见执行计划 §3 T-16 行。
 
-7. **T-33 网络重试横幅**（0.5d）· **T-34 子 agent 实况**（1.5d）· **T-35 Host stderr 进 UI**（0.5d）—— 2026-08-05 由 multi-agent 支线**正式平移主线并分配节点**（三条只用 Claude 直连链已有数据，与 ACP 判断互不依赖，压在后置支线下会被一并冻住）。定义与验收见执行计划 §3；T-34 的历史重放限制归 C-17。
+7. ~~**T-33 网络重试横幅**（0.5d）· **T-35 Host stderr 进 UI**（0.5d）~~ —— **✅ 2026-08-05 代码落地 `ba6b371`（T-33）+ `5a99ee1`（T-35）+ Codex 复核修复批 `e602096`+`d3635d3`+`8bf4829`（首轮 4 major+2 minor、终验第二轮 4 项，全闭环；T-33 门语义两度收紧）**，impl done **待 GUI 点验（0-septendecies）**。**T-34 子 agent 实况**（1.5d）为开发线当前项——开工先实测消息流形状（执行计划 §3 T-34 行「三处不打包票」第 1 条）；历史重放限制归 C-17。三条均 2026-08-05 由 multi-agent 支线正式平移主线（只用 Claude 直连链已有数据，与 ACP 判断互不依赖）。
 
-> **开发线现行顺序（用户 2026-08-05 裁定）= ~~T-32（已验收 Done）~~ → ~~T-16（已落地待点验）~~ → **T-33 / T-35（当前，各 0.5d，可穿插）** → T-34**；T-25（旧模块原色清理，依赖 T-21）仍后置，归 [roadmap Deferred](./roadmap.md)。**multi-agent 支线后置**（原定并行，同日改判为「先把现有 Claude 客户端任务大致完成」）。
+> **开发线现行顺序（用户 2026-08-05 裁定）= ~~T-32（已验收 Done）~~ → ~~T-16（已落地待点验）~~ → ~~T-33 / T-35（已落地待点验）~~ → **T-34（当前，1.5d）**；T-25（旧模块原色清理，依赖 T-21）仍后置，归 [roadmap Deferred](./roadmap.md)。**multi-agent 支线后置**（原定并行，同日改判为「先把现有 Claude 客户端任务大致完成」）。
 
 ### 用户线（点测 / 待拍板，与开发线并行）
 
@@ -219,6 +221,29 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
       新壳。权威仍是 settings.json（水合后回写镜像，手改 settings.json 一次启动内收敛）
    ⑧ **文案**：开关副标题已由「四区聊天工作区原型 + mock 运行时事件」（D19/A08 已推翻）改为
       「三列气泡对话工作区：图标导轨 + 上下文面板。关闭后立即回到旧版标签页界面。」
+
+0-septendecies. **待点验清单（T-33 网络重试横幅 + T-35 Host stderr 进 UI，2026-08-05 落地 `ba6b371`+`5a99ee1`+复核修复批 `e602096`+`d3635d3`+`8bf4829`）**
+
+> 两条都是「出故障才显形」的能力，点验需人为造障——最快造法：发送前断网/挂断代理（两条可一起验）。
+> **正常回合两者都必须零痕迹**（③⑧ 是反向核）。含**三处执行裁定待追认**：④ 横幅与状态行后缀共存 ·
+> ⑦ 路径折叠 `~` 而非全抹 · ⑨ 每回合 50 行限流 + 单行 2000 字符钳制。
+
+   ① **横幅出现**（T-33）：断网后发送 → 回合区顶部出现「Network retry N/10 — the turn is still
+      running」横幅（status-running 色 + 旋转图标，**非红色告警面板**——它的使命是「没卡死」的安抚）；
+      第二行「Next attempt in Ns · <错误标签>」
+   ② **自动消失**：恢复网络 → 首个令牌到达的瞬间横幅消失（不等回合结束、不留空盒）；
+      **加验 mid-turn 场景**（复核修复项）：让回合先跑完一次工具调用再断网 → 横幅仍应出现
+   ③ **正常回合零渲染**：无重试时时间线不应有任何横幅痕迹
+   ④ **追认（执行裁定）**：横幅与回合头状态行既有「· Network retry N/10」后缀**共存**——
+      横幅是其信息超集（多下次间隔与错误标签），同一事实短暂两显仅此一处；嫌吵可裁撤后缀（一行改动）
+   ⑤ **握手窗口也有**：发送后用户气泡尚未回显时断网 → 横幅出现在 pending 状态行上方
+   ⑥ **stderr 组出现**（T-35）：造一次 CLI 失败（断网发送即可）→ 右栏 context tab 出现「Host stderr」
+      组：行前序号 `#1…`、行可复制、悬停显全文
+   ⑦ **脱敏抽查（追认）**：stderr 行里 `/home/<用户名>/...` 应显示为 `~/...`（**执行裁定：折叠用户段、
+      保留路径尾**——全抹路径则诊断价值归零）；凭证形态（sk-*、Bearer、ANTHROPIC_* 值）应为 `[redacted]`
+   ⑧ **正常回合零噪音**：健康会话的 context 面板**没有**「Host stderr」组
+   ⑨ **限流披露（追认，选测）**：刷屏场景（如无效模型名致死循环重试）第 50 行为 `[cli-stderr capped …]`
+      标记；面板只留最后 20 行、序号从累计值起算（如 `#31…#50`，驱逐可见不静默）；Host 日志仍有全量
 
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
    [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
