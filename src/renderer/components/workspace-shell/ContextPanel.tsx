@@ -130,8 +130,15 @@ export function ContextPanel({ availableWidth, visible }: ContextPanelProps) {
       ref={panelRef}
       data-resizing={panelResizing || undefined}
       className={cn(
-        'overflow-hidden border-l bg-card/30 transition-[width] duration-[250ms] data-[resizing]:transition-none',
-        expanded ? 'absolute inset-y-0 right-0 z-20' : 'relative h-full shrink-0',
+        'overflow-hidden border-l transition-[width] duration-[250ms] data-[resizing]:transition-none',
+        // m3 (user round 1, screenshot): `bg-card/30` is a fine tint for a
+        // DOCKED column sitting on the app background — but the expanded state
+        // is an overlay laid over chat and the editor, and at 30% opacity the
+        // composer and the open file showed straight through it. An overlay
+        // has to be opaque; the docked tint stays as it was.
+        expanded
+          ? 'absolute inset-y-0 right-0 z-20 bg-background'
+          : 'relative h-full shrink-0 bg-card/30',
         !isOpen && 'pointer-events-none'
       )}
       style={{ width }}

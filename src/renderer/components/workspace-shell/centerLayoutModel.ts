@@ -92,106 +92,172 @@ export function deriveEditorOpen(openTabCount: number): boolean {
   return isFiniteNumber(openTabCount) && openTabCount > 0;
 }
 
-// ── the level ladder (A08 §「画幅降级梯」, a08:1412-1422) ─────────────────
-
 /**
- * A08 states the thresholds as WHOLE-WINDOW widths — `L0 = 1580 = 280 sidebar
- * + 400 chat + 520 editor + 380 panel`, `L1 = 1244 = 280 + 400 + 520 + 44 rail`
- * (a08:1421-1422). Ours drop the sidebar term.
- *
- * Why (registered as an adaptation, NOT an override of A08): A08 assumes a
- * fixed 280px sidebar. This shell's sidebar is user-dragged 280–500 and can
- * collapse to 48 (`shellLayoutModel.ts`), so a whole-window threshold
- * mis-fires in both directions — a 1600px window with a 500px sidebar has less
- * room than A08's arithmetic claims, and the same window with the sidebar
- * collapsed has far more. Measuring the content row instead makes the ladder
- * immune to both. With a 280px sidebar the two are exactly equivalent.
- */
-export const LEVEL_L0_MIN_CONTENT = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 380; // 1300, panel = 380
-/**
- * m-T32 fix: this was `+ 44` for the rail, double-counting it. The measured
- * row (`contentRowRef`) spans chat + editor + panel ONLY — the rail is its
- * sibling, outside the measurement — so at L1, where the panel is gone, the
- * row has to fit exactly chat + editor and nothing else.
- */
-export const LEVEL_L1_MIN_CONTENT = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH; // 920
-
-export type ShellLevel = 'L0' | 'L1' | 'L2';
-
-export interface ResolveShellLevelInput {
-  /** Measured width of chat + editor + panel/rail — the sidebar is NOT included. */
-  contentWidth: number | null;
-  editorOpen: boolean;
-}
-
-/**
- * L0 everything fits · L1 the panel gives way · L2 chat gives way.
- *
- * Pinned: with no file open this is ALWAYS 'L0'. A08's state table gates the
- * whole ladder on `editor open` (a08:1454) and the reason is structural — the
- * 520px editor reservation is what makes the arithmetic bite, and with no
- * editor there is nothing to reserve. Without this branch a narrow window
- * would start hiding the panel from a chat-only shell, which is a regression
- * against the pre-T-32 behaviour, not a feature.
- */
-export function resolveShellLevel(input: ResolveShellLevelInput): ShellLevel {
-  const { contentWidth, editorOpen } = input;
-  if (!editorOpen) {
-    return 'L0';
-  }
-  if (!isFiniteNumber(contentWidth) || contentWidth <= 0) {
-    // Not measured yet: assume roomy rather than flashing a degraded layout
-    // on the first frame and then expanding.
-    return 'L0';
-  }
-  if (contentWidth >= LEVEL_L0_MIN_CONTENT) {
-    return 'L0';
-  }
-  return contentWidth >= LEVEL_L1_MIN_CONTENT ? 'L1' : 'L2';
-}
-
-/**
- * A08 §06-4: `manualPanel` / `manualChat` are the user's in-session override of
- * the automatic ladder, cleared when the file closes. `null` means "no
- * override" — A08 writes them as booleans, but a two-state flag cannot say
- * "cleared" without also saying "hidden", which is how an override would
- * silently outlive the file that scoped it.
+ * A08 §06-4: the user's in-session override of the automatic yielding, cleared
+ * when the file closes. `null` means "no override" — A08 writes these as
+ * booleans, but a two-state flag cannot say "cleared" without also saying
+ * "hidden", which is how an override would outlive the file that scoped it.
  */
 export type ManualOverride = boolean | null;
 
-export interface DerivePanelVisibleInput {
-  level: ShellLevel;
+// ── chrome yields, content has a floor (T-32 m5, user round 1) ──────────
+
+/**
+ * A08 states the ladder as whole-window thresholds — `L0 = 1580 = 280 sidebar
+ * + 400 chat + 520 editor + 380 panel`, `L1 = 1244 = 280 + 400 + 520 + 44 rail`
+ * (a08:1421-1422) — and only ever sacrifices the panel, then chat.
+ *
+ * The user's round-1 report is that this is the wrong order and the wrong
+ * subject: 「chat 页面应该设置一个最小宽度，可用宽度低于这个宽度，则优先折叠左侧，
+ * 其次是右边栏，然后根据情况决定是显示文件编辑还是 chat 页面」. Two changes fall
+ * out of that:
+ *
+ *  1. **Content has a hard floor and chrome yields to it.** Previously the
+ *     panel could take the whole row (screenshot: chat squeezed to ~270px with
+ *     a 65px composer wrapping one character per line). Now the panel is capped
+ *     so chat — and the editor when open — always keep their minimums.
+ *  2. **The sidebar joins the ladder, and goes FIRST.** It was outside it, so
+ *     a 280–500px sidebar was untouchable while chat got crushed.
+ *
+ * Yield order: sidebar → panel → chat. Anything the user did by hand wins over
+ * every rung (`manualPanel` / `manualChat`, and the sidebar's own toggle).
+ */
+export const RAIL_RESERVE = 44;
+export const PANEL_MIN_RESERVE = 380;
+export const SIDEBAR_COLLAPSED_RESERVE = 48;
+
+/** Content the shell refuses to shrink below, given what is open. */
+export function contentFloor(input: { chatWanted: boolean; editorOpen: boolean }): number {
+  return (input.chatWanted ? CHAT_MIN_WIDTH : 0) + (input.editorOpen ? EDITOR_MIN_WIDTH : 0);
+}
+
+export interface ResolveShellChromeInput {
+  /** Whole shell width — sidebar + content + panel/rail. Null before measurement. */
+  shellWidth: number | null;
+  /** Width the sidebar would take if honoured (already 48 when the user collapsed it). */
+  sidebarWidth: number;
+  /** The user's own collapse toggle; an auto-collapse never writes it. */
+  sidebarUserCollapsed: boolean;
+  /** Width the panel would take if honoured. */
+  panelWidth: number;
   editorOpen: boolean;
-  /** Persisted preference used whenever the editor is closed. */
+  /** `activeSurfaceId !== null` — intent, not visibility. */
   panelOpen: boolean;
   manualPanel: ManualOverride;
-}
-
-export function derivePanelVisible(input: DerivePanelVisibleInput): boolean {
-  const { level, editorOpen, panelOpen, manualPanel } = input;
-  if (!editorOpen) {
-    return panelOpen;
-  }
-  if (manualPanel !== null) {
-    return manualPanel;
-  }
-  return level === 'L0';
-}
-
-export interface DeriveChatVisibleInput {
-  level: ShellLevel;
-  editorOpen: boolean;
   manualChat: ManualOverride;
 }
 
-export function deriveChatVisible(input: DeriveChatVisibleInput): boolean {
-  const { level, editorOpen, manualChat } = input;
-  if (!editorOpen) {
-    // Chat IS the shell when no file is open; nothing may hide it.
-    return true;
+export interface ShellChrome {
+  /** True when the user collapsed it OR the shell had to. */
+  sidebarCollapsed: boolean;
+  /** True only because the shell had to — drives the "auto" affordance, never persisted. */
+  sidebarAutoCollapsed: boolean;
+  panelVisible: boolean;
+  chatVisible: boolean;
+  railVisible: boolean;
+}
+
+/**
+ * Successive relaxations, in the user's stated order. Each rung is tried only
+ * because the one before it did not free enough room, so the shell never gives
+ * up more chrome than the width actually demands.
+ */
+export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome {
+  const {
+    shellWidth,
+    sidebarWidth,
+    sidebarUserCollapsed,
+    panelWidth,
+    editorOpen,
+    panelOpen,
+    manualPanel,
+    manualChat,
+  } = input;
+
+  const wantPanel = manualPanel !== null ? manualPanel : panelOpen;
+  const wantChat = manualChat !== null ? manualChat : true;
+
+  const base: ShellChrome = {
+    sidebarCollapsed: sidebarUserCollapsed,
+    sidebarAutoCollapsed: false,
+    panelVisible: wantPanel,
+    chatVisible: wantChat,
+    railVisible: !wantPanel,
+  };
+
+  // Unmeasured: honour every preference rather than flashing a degraded shell.
+  if (!isFiniteNumber(shellWidth) || shellWidth <= 0) {
+    return base;
   }
-  if (manualChat !== null) {
-    return manualChat;
+
+  const sidebarNow = sidebarUserCollapsed ? SIDEBAR_COLLAPSED_RESERVE : sidebarWidth;
+  const chromeFor = (sidebar: number, panelShown: boolean) =>
+    sidebar + (panelShown ? panelWidth : RAIL_RESERVE);
+  const fits = (sidebar: number, panelShown: boolean, chatShown: boolean) =>
+    shellWidth - chromeFor(sidebar, panelShown) >=
+    contentFloor({ chatWanted: chatShown, editorOpen });
+
+  // Rung 0 — everything the user asked for.
+  if (fits(sidebarNow, base.panelVisible, base.chatVisible)) {
+    return base;
   }
-  return level !== 'L2';
+
+  // Rung 1 — collapse the sidebar (unless the user already did).
+  if (
+    !sidebarUserCollapsed &&
+    fits(SIDEBAR_COLLAPSED_RESERVE, base.panelVisible, base.chatVisible)
+  ) {
+    return { ...base, sidebarCollapsed: true, sidebarAutoCollapsed: true };
+  }
+
+  const sidebarFloor = SIDEBAR_COLLAPSED_RESERVE;
+  const autoCollapsed = !sidebarUserCollapsed;
+
+  // Rung 2 — give up the panel. An explicit `manualPanel: true` outranks this:
+  // the user summoned it on a narrow window and must not be overruled.
+  if (base.panelVisible && manualPanel !== true && fits(sidebarFloor, false, base.chatVisible)) {
+    return {
+      ...base,
+      sidebarCollapsed: true,
+      sidebarAutoCollapsed: autoCollapsed,
+      panelVisible: false,
+      railVisible: true,
+    };
+  }
+
+  // Rung 3 — give up chat, but only when there is an editor to fall back to.
+  // With no file open chat IS the shell; it is never the thing that goes.
+  if (editorOpen && base.chatVisible && manualChat !== true) {
+    return {
+      ...base,
+      sidebarCollapsed: true,
+      sidebarAutoCollapsed: autoCollapsed,
+      panelVisible: manualPanel === true && base.panelVisible,
+      railVisible: !(manualPanel === true && base.panelVisible),
+      chatVisible: false,
+    };
+  }
+
+  // Nothing left to yield: keep the sidebar collapsed and let the content
+  // scroll rather than silently dropping the user's last explicit choice.
+  return { ...base, sidebarCollapsed: true, sidebarAutoCollapsed: autoCollapsed };
+}
+
+/**
+ * The panel may never eat the content floor (T-32 m5). Returns the largest
+ * width the panel may take, or 0 when even the floor cannot be met — the
+ * caller has already decided visibility via `resolveShellChrome`.
+ */
+export function maxPanelWidth(input: {
+  shellWidth: number | null;
+  sidebarWidth: number;
+  editorOpen: boolean;
+  chatVisible: boolean;
+}): number | null {
+  const { shellWidth, sidebarWidth, editorOpen, chatVisible } = input;
+  if (!isFiniteNumber(shellWidth) || shellWidth <= 0) {
+    return null;
+  }
+  const room = shellWidth - sidebarWidth - contentFloor({ chatWanted: chatVisible, editorOpen });
+  return Math.max(0, room);
 }

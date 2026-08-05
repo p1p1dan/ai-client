@@ -58,10 +58,11 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
 
   it('WorkspaceShell composes it through the pure model rather than inline', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
-    expect(shell).toContain('derivePanelVisible({');
-    expect(shell).toContain('deriveChatVisible({');
-    expect(shell).toContain('deriveRailVisible({ panelVisible })');
-    // The ladder reads the preference; it must never write it.
+    expect(shell).toContain('resolveShellChrome({');
+    expect(shell).toContain('const { panelVisible, chatVisible, railVisible } = chrome;');
+    // m5: the panel must be capped so it can never eat the content floor.
+    expect(shell).toContain('maxPanelWidth({');
+    // The yield model reads the preference; it must never write it.
     expect(shell).toContain('panelOpen: activeSurfaceId !== null');
   });
 
@@ -71,7 +72,14 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(panel).toContain('const isOpen = visible;');
   });
 
-  it('the ladder never writes the surface state it reads', () => {
+  it('the expanded panel is opaque — an overlay may not be see-through (m3)', () => {
+    const panel = code(join(SHELL_DIR, 'ContextPanel.tsx'));
+    // The docked column keeps its tint; the overlay must not, or chat and the
+    // open file show through it (user round 1, screenshot).
+    expect(panel).toMatch(/expanded\s*\?\s*'absolute[^']*bg-background'/);
+  });
+
+  it('the yield model never writes the surface state it reads', () => {
     // `closeSurface()`/`selectSurface()` from an auto-degradation path would
     // destroy the preference the ladder is supposed to compose over — and, for
     // a keep-alive surface, could tear down the pty T-15 guarantees (R2).

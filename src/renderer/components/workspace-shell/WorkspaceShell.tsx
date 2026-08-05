@@ -10,16 +10,19 @@ import { ContextPanelRail } from './ContextPanelRail';
 import { EditorColumn } from './center/EditorColumn';
 import {
   chatWidthToEditorRatio,
-  deriveChatVisible,
   deriveEditorOpen,
-  derivePanelVisible,
+  maxPanelWidth,
   resolveChatColumnWidth,
-  resolveShellLevel,
+  resolveShellChrome,
 } from './centerLayoutModel';
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
 import { ShellResizeHandle } from './ShellResizeHandle';
-import { clampSidebarWidth, deriveRailVisible, SIDEBAR_COLLAPSED_WIDTH } from './shellLayoutModel';
+import {
+  CONTEXT_PANEL_MIN_WIDTH,
+  clampSidebarWidth,
+  SIDEBAR_COLLAPSED_WIDTH,
+} from './shellLayoutModel';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 
@@ -57,6 +60,7 @@ export function WorkspaceShell({
   const readingWidthMode = useShellLayoutStore((state) => state.readingWidthMode);
   const toggleReadingWidthMode = useShellLayoutStore((state) => state.toggleReadingWidthMode);
 
+  const panelWidth = useShellLayoutStore((state) => state.panelWidth);
   const editorRatio = useShellLayoutStore((state) => state.editorRatio);
   const setEditorRatio = useShellLayoutStore((state) => state.setEditorRatio);
 
@@ -105,6 +109,24 @@ export function WorkspaceShell({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarResizing, setSidebarResizing] = useState(false);
 
+  // m5: the yield model needs the WHOLE shell (the sidebar is now part of the
+  // ladder), which `contentRowRef` deliberately excludes.
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [shellWidth, setShellWidth] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = shellRef.current;
+    if (!el) {
+      return;
+    }
+    setShellWidth(el.clientWidth || null);
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      setShellWidth(width > 0 ? width : null);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // Sole measurement point for the Main+ContextPanel row (decision 9): feeds
   // `availableWidth` into ContextPanel's fraction/clamp math.
   const contentRowRef = useRef<HTMLDivElement>(null);
@@ -128,19 +150,29 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
-  // T-32 S4: `activeSurfaceId !== null` is INTENT ("the user wants the panel"),
-  // which the ladder must never write — otherwise widening the window could
-  // not restore what it auto-collapsed. Visibility is composed here, once, and
-  // handed down; no other component re-derives it (spec §5, R1).
-  const level = resolveShellLevel({ contentWidth: availableWidth, editorOpen });
-  const panelVisible = derivePanelVisible({
-    level,
+  // T-32 S4/m5: `activeSurfaceId !== null` is INTENT ("the user wants the
+  // panel"), which the yield model must never write — otherwise widening the
+  // window could not restore what it auto-collapsed. Chrome resolution happens
+  // here, once, and is handed down; no other component re-derives it (R1).
+  const chrome = resolveShellChrome({
+    shellWidth,
+    sidebarWidth,
+    sidebarUserCollapsed: sidebarCollapsed,
+    panelWidth: panelWidth ?? CONTEXT_PANEL_MIN_WIDTH,
     editorOpen,
     panelOpen: activeSurfaceId !== null,
     manualPanel,
+    manualChat,
   });
-  const chatVisible = deriveChatVisible({ level, editorOpen, manualChat });
-  const railVisible = deriveRailVisible({ panelVisible });
+  const { panelVisible, chatVisible, railVisible } = chrome;
+  // The panel may never eat the content floor — this is what let it squeeze
+  // chat down to a 65px composer before m5.
+  const panelWidthCap = maxPanelWidth({
+    shellWidth,
+    sidebarWidth: chrome.sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth,
+    editorOpen,
+    chatVisible,
+  });
 
   // A08 §06-4: the overrides were scoped to the open file, so closing it
   // clears them. Guarded on the current values so this only writes on the
@@ -153,7 +185,16 @@ export function WorkspaceShell({
 
   return (
     <div
-      ref={dropZoneRef}
+      ref={(node) => {
+        shellRef.current = node;
+        // `dropZoneRef` is a forwarded prop (T-24's drag-drop target); both
+        // owners need this node, so fan out rather than choosing one.
+        if (typeof dropZoneRef === 'function') {
+          dropZoneRef(node);
+        } else if (dropZoneRef) {
+          (dropZoneRef as { current: HTMLDivElement | null }).current = node;
+        }
+      }}
       className="relative flex h-full min-h-0 w-full flex-1 overflow-hidden bg-background"
     >
       {/* Left column: width + data-resizing live on this wrapper; LeftNav only writes w-full. */}
@@ -161,15 +202,15 @@ export function WorkspaceShell({
         ref={sidebarRef}
         data-resizing={sidebarResizing || undefined}
         className="relative flex h-full shrink-0 transition-[width] duration-[250ms] data-[resizing]:transition-none"
-        style={{ width: sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
+        style={{ width: chrome.sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
       >
         <LeftNav
-          collapsed={sidebarCollapsed}
+          collapsed={chrome.sidebarCollapsed}
           onToggleCollapsed={toggleSidebarCollapsed}
           onOpenSettings={onOpenSettings}
           onAddRepository={onAddRepository}
         />
-        {!sidebarCollapsed && (
+        {!chrome.sidebarCollapsed && (
           <ShellResizeHandle
             side="right"
             ariaLabel={t('Resize sidebar')}
@@ -262,7 +303,7 @@ export function WorkspaceShell({
                 />
               </div>
             </div>
-            <ContextPanel availableWidth={availableWidth} visible={panelVisible} />
+            <ContextPanel availableWidth={panelWidthCap ?? availableWidth} visible={panelVisible} />
           </div>
           {/* A08「展开时右缘无图标」: the rail is the collapsed-state switcher only. */}
           {railVisible && <ContextPanelRail />}

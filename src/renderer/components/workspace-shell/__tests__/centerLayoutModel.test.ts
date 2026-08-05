@@ -3,17 +3,17 @@ import {
   CHAT_MIN_WIDTH,
   chatWidthToEditorRatio,
   clampEditorRatio,
+  contentFloor,
   DEFAULT_EDITOR_RATIO,
-  deriveChatVisible,
   deriveEditorOpen,
-  derivePanelVisible,
   EDITOR_MIN_WIDTH,
-  LEVEL_L0_MIN_CONTENT,
-  LEVEL_L1_MIN_CONTENT,
   MAX_EDITOR_RATIO,
   MIN_EDITOR_RATIO,
+  maxPanelWidth,
+  RAIL_RESERVE,
   resolveChatColumnWidth,
-  resolveShellLevel,
+  resolveShellChrome,
+  SIDEBAR_COLLAPSED_RESERVE,
 } from '../centerLayoutModel';
 
 describe('clampEditorRatio', () => {
@@ -130,135 +130,164 @@ describe('deriveEditorOpen', () => {
   });
 });
 
-// ── the level ladder (S4) ───────────────────────────────────────────────
+// ── chrome yields, content has a floor (m5) ─────────────────────────────
 
-describe('resolveShellLevel', () => {
-  it('is always L0 with no file open, at any width (A08 gates the ladder on `editor open`)', () => {
-    for (const contentWidth of [320, 700, 963, 1299, 4000]) {
-      expect(resolveShellLevel({ contentWidth, editorOpen: false })).toBe('L0');
-    }
+const SIDEBAR = 280;
+const PANEL = 380;
+
+function chrome(overrides: Partial<Parameters<typeof resolveShellChrome>[0]> = {}) {
+  return resolveShellChrome({
+    shellWidth: 2000,
+    sidebarWidth: SIDEBAR,
+    sidebarUserCollapsed: false,
+    panelWidth: PANEL,
+    editorOpen: false,
+    panelOpen: true,
+    manualPanel: null,
+    manualChat: null,
+    ...overrides,
   });
+}
 
-  it('walks L0 → L1 → L2 as the content row narrows, with a file open', () => {
-    expect(resolveShellLevel({ contentWidth: LEVEL_L0_MIN_CONTENT, editorOpen: true })).toBe('L0');
-    expect(resolveShellLevel({ contentWidth: LEVEL_L0_MIN_CONTENT - 1, editorOpen: true })).toBe(
-      'L1'
+describe('contentFloor', () => {
+  it('reserves chat alone, chat + editor, or editor alone', () => {
+    expect(contentFloor({ chatWanted: true, editorOpen: false })).toBe(CHAT_MIN_WIDTH);
+    expect(contentFloor({ chatWanted: true, editorOpen: true })).toBe(
+      CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH
     );
-    expect(resolveShellLevel({ contentWidth: LEVEL_L1_MIN_CONTENT, editorOpen: true })).toBe('L1');
-    expect(resolveShellLevel({ contentWidth: LEVEL_L1_MIN_CONTENT - 1, editorOpen: true })).toBe(
-      'L2'
-    );
-  });
-
-  it('assumes roomy before the first measurement rather than flashing a degraded layout', () => {
-    expect(resolveShellLevel({ contentWidth: null, editorOpen: true })).toBe('L0');
-    expect(resolveShellLevel({ contentWidth: 0, editorOpen: true })).toBe('L0');
-  });
-
-  it('derives its thresholds from the same floors the column widths use', () => {
-    // A08 states 1580/1244 as WHOLE-WINDOW widths. Ours measure the content
-    // row, which excludes the sidebar (draggable 280-500, collapsible to 48)
-    // at both rungs, and ALSO excludes the rail at L1 — the rail is a sibling
-    // of the measured row, so counting it here would double it (m-T32 fix).
-    expect(LEVEL_L0_MIN_CONTENT + 280).toBe(1580); // 1580 = 280 sidebar + row
-    expect(LEVEL_L1_MIN_CONTENT + 280 + 44).toBe(1244); // 1244 = 280 + row + 44 rail
-    expect(LEVEL_L0_MIN_CONTENT).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 380);
-    expect(LEVEL_L1_MIN_CONTENT).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH);
-  });
-
-  it('drops to L2 exactly where both floors stop fitting', () => {
-    // The contract that lets resolveChatColumnWidth keep chat readable: below
-    // this width chat is not rendered, so it never needs to shrink further.
-    expect(
-      resolveShellLevel({ contentWidth: CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH, editorOpen: true })
-    ).toBe('L1');
-    expect(
-      resolveShellLevel({ contentWidth: CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH - 1, editorOpen: true })
-    ).toBe('L2');
+    expect(contentFloor({ chatWanted: false, editorOpen: true })).toBe(EDITOR_MIN_WIDTH);
   });
 });
 
-describe('derivePanelVisible', () => {
-  const base = { level: 'L0' as const, editorOpen: true, panelOpen: true, manualPanel: null };
-
-  it('follows the user preference verbatim when no file is open', () => {
-    expect(derivePanelVisible({ ...base, editorOpen: false, panelOpen: true })).toBe(true);
-    expect(derivePanelVisible({ ...base, editorOpen: false, panelOpen: false })).toBe(false);
-    // Even at L2 — the ladder does not run without an editor.
-    expect(derivePanelVisible({ ...base, level: 'L2', editorOpen: false, panelOpen: true })).toBe(
-      true
-    );
+describe('resolveShellChrome — yield order is sidebar → panel → chat', () => {
+  it('honours every preference when the width allows', () => {
+    expect(chrome({ shellWidth: 2000 })).toMatchObject({
+      sidebarCollapsed: false,
+      panelVisible: true,
+      chatVisible: true,
+      railVisible: false,
+    });
   });
 
-  it('gives the panel up at L1 and below when a file is open', () => {
-    expect(derivePanelVisible({ ...base, level: 'L0' })).toBe(true);
-    expect(derivePanelVisible({ ...base, level: 'L1' })).toBe(false);
-    expect(derivePanelVisible({ ...base, level: 'L2' })).toBe(false);
+  it('collapses the SIDEBAR first, before touching the panel', () => {
+    // 900 = 280 sidebar + 380 panel leaves 240 for chat, under its 400 floor.
+    // Collapsing the sidebar frees 232 and brings chat back over the line, so
+    // the panel must survive untouched.
+    const result = chrome({ shellWidth: 900 });
+    expect(result.sidebarCollapsed).toBe(true);
+    expect(result.sidebarAutoCollapsed).toBe(true);
+    expect(result.panelVisible).toBe(true);
+    expect(result.chatVisible).toBe(true);
   });
 
-  it('lets a manual override beat the ladder in both directions', () => {
-    expect(derivePanelVisible({ ...base, level: 'L2', manualPanel: true })).toBe(true);
-    expect(derivePanelVisible({ ...base, level: 'L0', manualPanel: false })).toBe(false);
+  it('gives up the panel only after the collapsed sidebar is still not enough', () => {
+    // 48 + 380 + 400 = 828; below that the panel is what goes next.
+    const result = chrome({ shellWidth: 800 });
+    expect(result.sidebarCollapsed).toBe(true);
+    expect(result.panelVisible).toBe(false);
+    expect(result.railVisible).toBe(true);
+    expect(result.chatVisible).toBe(true);
   });
-
-  it('treats a cleared override as absent, not as "hidden"', () => {
-    // The whole reason ManualOverride is `boolean | null`: after a file closes
-    // the override is cleared, and `false` would keep the panel hidden forever.
-    expect(derivePanelVisible({ ...base, editorOpen: false, manualPanel: null })).toBe(true);
-  });
-});
-
-describe('deriveChatVisible', () => {
-  const base = { level: 'L0' as const, editorOpen: true, manualChat: null };
 
   it('never hides chat when no file is open — chat IS the shell then', () => {
-    for (const level of ['L0', 'L1', 'L2'] as const) {
-      expect(deriveChatVisible({ ...base, level, editorOpen: false })).toBe(true);
+    for (const shellWidth of [700, 500, 300, 120]) {
+      expect(chrome({ shellWidth, editorOpen: false }).chatVisible).toBe(true);
     }
   });
 
-  it('only gives chat up at L2', () => {
-    expect(deriveChatVisible({ ...base, level: 'L0' })).toBe(true);
-    expect(deriveChatVisible({ ...base, level: 'L1' })).toBe(true);
-    expect(deriveChatVisible({ ...base, level: 'L2' })).toBe(false);
+  it('hides chat last, and only with an editor to fall back to', () => {
+    // 48 + 44 + 400 + 520 = 1012 needed to keep both; below it chat goes.
+    const result = chrome({ shellWidth: 700, editorOpen: true });
+    expect(result.chatVisible).toBe(false);
+    expect(result.panelVisible).toBe(false);
+    expect(result.sidebarCollapsed).toBe(true);
   });
 
-  it('honours the「隐去 chat」override at any level, and the un-hide too', () => {
-    expect(deriveChatVisible({ ...base, level: 'L0', manualChat: false })).toBe(false);
-    expect(deriveChatVisible({ ...base, level: 'L2', manualChat: true })).toBe(true);
+  it('does not auto-collapse a sidebar the user already collapsed', () => {
+    const result = chrome({ shellWidth: 800, sidebarUserCollapsed: true });
+    expect(result.sidebarCollapsed).toBe(true);
+    // The distinction matters: `sidebarAutoCollapsed` drives an affordance and
+    // must not claim credit for the user's own toggle.
+    expect(result.sidebarAutoCollapsed).toBe(false);
+  });
+
+  it('lets an explicit panel summon outrank the yield (user round 1, m2)', () => {
+    // The exact report: on a narrow window the panel could not be summoned
+    // back at all, because the automatic rung kept overruling the click.
+    const result = chrome({ shellWidth: 800, manualPanel: true });
+    expect(result.panelVisible).toBe(true);
+  });
+
+  it('lets an explicit chat un-hide outrank the yield too', () => {
+    const result = chrome({ shellWidth: 700, editorOpen: true, manualChat: true });
+    expect(result.chatVisible).toBe(true);
+  });
+
+  it('respects an explicit close even when there is plenty of room', () => {
+    expect(chrome({ shellWidth: 2000, manualPanel: false }).panelVisible).toBe(false);
+    expect(chrome({ shellWidth: 2000, editorOpen: true, manualChat: false }).chatVisible).toBe(
+      false
+    );
+  });
+
+  it('honours every preference before the first measurement', () => {
+    const result = chrome({ shellWidth: null });
+    expect(result).toMatchObject({
+      sidebarCollapsed: false,
+      panelVisible: true,
+      chatVisible: true,
+    });
+  });
+
+  it('keeps rail and panel visibility exact complements at every width', () => {
+    for (const shellWidth of [2000, 1200, 900, 800, 700, 400]) {
+      for (const editorOpen of [false, true]) {
+        const result = chrome({ shellWidth, editorOpen });
+        expect(result.railVisible).toBe(!result.panelVisible);
+      }
+    }
   });
 });
 
-describe('ladder composition (the combinations that actually ship)', () => {
-  it('L1 with a file open = editor + chat, no panel; the rail comes back', () => {
-    const level = resolveShellLevel({ contentWidth: 1000, editorOpen: true });
-    expect(level).toBe('L1');
-    expect(
-      derivePanelVisible({ level, editorOpen: true, panelOpen: true, manualPanel: null })
-    ).toBe(false);
-    expect(deriveChatVisible({ level, editorOpen: true, manualChat: null })).toBe(true);
+describe('maxPanelWidth', () => {
+  it('never lets the panel eat the content floor (m5, the 65px composer bug)', () => {
+    // Screenshot: a 380-min panel had taken ~860px of a 1530px shell, leaving
+    // chat 270px and its composer 65px, wrapping one character per line.
+    const cap = maxPanelWidth({
+      shellWidth: 1530,
+      sidebarWidth: 400,
+      editorOpen: false,
+      chatVisible: true,
+    });
+    expect(cap).toBe(1530 - 400 - CHAT_MIN_WIDTH);
+    expect(1530 - 400 - (cap ?? 0)).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
   });
 
-  it('L2 with a file open = editor only', () => {
-    const level = resolveShellLevel({ contentWidth: 800, editorOpen: true });
-    expect(level).toBe('L2');
+  it('reserves the editor floor too when a file is open', () => {
     expect(
-      derivePanelVisible({ level, editorOpen: true, panelOpen: true, manualPanel: null })
-    ).toBe(false);
-    expect(deriveChatVisible({ level, editorOpen: true, manualChat: null })).toBe(false);
+      maxPanelWidth({ shellWidth: 2000, sidebarWidth: 280, editorOpen: true, chatVisible: true })
+    ).toBe(2000 - 280 - CHAT_MIN_WIDTH - EDITOR_MIN_WIDTH);
   });
 
-  it('closing the file restores the user preference, whatever the ladder had done', () => {
-    // The bug this pins: if the ladder had written the preference instead of
-    // composing over it, a narrow window would leave the panel off for good.
-    const narrow = resolveShellLevel({ contentWidth: 800, editorOpen: true });
+  it('reserves nothing for a hidden chat', () => {
     expect(
-      derivePanelVisible({ level: narrow, editorOpen: true, panelOpen: true, manualPanel: null })
-    ).toBe(false);
+      maxPanelWidth({ shellWidth: 1000, sidebarWidth: 48, editorOpen: true, chatVisible: false })
+    ).toBe(1000 - 48 - EDITOR_MIN_WIDTH);
+  });
 
-    const closed = resolveShellLevel({ contentWidth: 800, editorOpen: false });
+  it('clamps to 0 rather than going negative, and defers before measurement', () => {
     expect(
-      derivePanelVisible({ level: closed, editorOpen: false, panelOpen: true, manualPanel: null })
-    ).toBe(true);
+      maxPanelWidth({ shellWidth: 300, sidebarWidth: 280, editorOpen: false, chatVisible: true })
+    ).toBe(0);
+    expect(
+      maxPanelWidth({ shellWidth: null, sidebarWidth: 280, editorOpen: false, chatVisible: true })
+    ).toBeNull();
+  });
+});
+
+describe('reserve constants match the shell they describe', () => {
+  it('mirrors the rail and collapsed-sidebar widths', () => {
+    expect(RAIL_RESERVE).toBe(44);
+    expect(SIDEBAR_COLLAPSED_RESERVE).toBe(48);
   });
 });
