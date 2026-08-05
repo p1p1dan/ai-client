@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { useChatSessionsStore } from '@/stores/chatSessions';
+import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import type { SurfaceViewProps } from '../surfaceViews';
@@ -27,6 +27,11 @@ import {
   deriveRunState,
   deriveSessionReferences,
 } from './contextSurfaceModel';
+
+// Stable snapshot for "session has no bucket yet": zustand v5 reads selectors
+// through `useSyncExternalStore`, so a fresh `[]` per call makes React see the
+// store as changed on every commit and re-render forever.
+const EMPTY_MESSAGES: readonly ChatMessage[] = [];
 
 function CopyRowButton({ value }: { value: string }) {
   const { t } = useI18n();
@@ -79,9 +84,10 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
-  const messages = useChatSessionsStore((state) =>
-    activeSessionId ? (state.messages[activeSessionId] ?? []) : []
+  const messageBucket = useChatSessionsStore((state) =>
+    activeSessionId ? state.messages[activeSessionId] : undefined
   );
+  const messages = messageBucket ?? EMPTY_MESSAGES;
 
   const { status: hostStatus } = useHostStatus();
   const { getSessionModel } = useSessionModel();
