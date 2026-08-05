@@ -68,6 +68,7 @@
 - **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 - **T-21 Flexoki 主题 + 全等宽字体栈**：代码已提交 `b38017b`（2026-07-29，31 文件）。按本表口径「impl done 待 GUI 联调」不算 Done —— 用户 2026-07-29 已点测大部分，**中英混排三场景 + 6 处 `normal-case` 豁免的目视验收尚未出截图**（open-q #10），且验收须在**默认主题**下进行（`sync-terminal` 混色属 open-q #12 未裁定边界，不是 T-21 引入的 bug）。截图入台账后转 Done。
+- **T-16 新旧壳开关成熟化** —— **2026-08-05 落地 `fd57ebf`**：拆掉**四处**强制覆盖（任务书原记两处，`App/useAppKeyboardShortcuts.ts` 与 `App/hooks/useSettingsState.ts` 两处为 07-28 之后新增的同形 OR）；`SKIP_ONBOARDING_GATE` 维持 `true` 未动。**两处执行裁定待用户追认**：store 默认值 `false`→`true`（存量 profile 零影响，只避免新 profile 落进旧壳）·新增同步镜像 `shellPreferenceMirror.ts` 消除异步水合的一帧闪壳（范式同 `stores/shellLayout.ts`）。防回归 `shellSwitchStatic.test.ts` + `shellPreferenceMirror.test.ts`。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单 **0-sexdecies**（三条验收全在 GUI 面），通过后转 Done。三绿 123 文件 2231 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-16 行。
 - ~~T-12 / T-13 / T-14 / T-15 四 surface~~ —— **2026-08-05 第九轮点验验收后转 Done**（见 Done「A08 骨架与四 surface 批次」块）。
 - ~~T-32 右栏骨架回归 A08~~ —— **2026-08-05 第九轮点验验收后转 Done**（见同上块）。
 - ~~T-23 存量违规清理~~ —— **2026-08-05 第九轮点验验收后转 Done**（见同上块）。
@@ -82,7 +83,7 @@
 > 本表顺序不得晚于执行计划口径；要后移 T-24 必须先改执行计划并在总台账追加说明。
 > **开发项（1~5）的任务定义、数值与 `file:line` 只存在于执行计划 §3 任务表**，此处不复制（避免同一口径三处漂移）；6~8 为用户点测/验收项，不受此限。
 
-0. **T-16 新旧壳开关成熟化**（**开发线当前第一顺位**，2026-08-05 由 Deferred 出列）——恢复 Appearance 开关的可逆性：拆掉 `App.tsx` / `Root.tsx` **两处强制覆盖**（只改一处无效），且 `devFlags.ts` 的 `SKIP_ONBOARDING_GATE` **维持 `true`**、不作为达成手段（翻 false 会连带恢复 onboarding 闸门）。前置 **T-24（Done）+ T-12~T-15（Done）** 均已达成。任务定义、`file:line` 与三条验收标准的权威 = [执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) §3 T-16 行；量级 1d。
+0. ~~**T-16 新旧壳开关成熟化**~~ —— **✅ 2026-08-05 代码落地 `fd57ebf`，转 In Progress 待 GUI 点验（0-sexdecies）**（原文见 In Progress 块）。
 1. ~~**T-24 新壳「添加仓库」通路**（阻断级，排第一）~~ —— **✅ 2026-08-04 收尾结项转 Done**（见 Done「团队 T-xx 已验收」块；真机 Windows 项并入 T-10 清单第 8 项）。原文保留供参考：补新壳入口并把窗口拖放 ref 绑到新壳，解开「新机器只能靠 `--open-path` argv 注册」的死结。→ 执行计划 §3 T-24 行
 2. ~~**T-21 Flexoki 主题 + 全等宽字体栈**~~ —— **代码已落 `b38017b`，转 In Progress 等 GUI 截图验收**（原文保留供参考）：`globals.css` 语义 token 重写 + 四个新 token + `docs/design-system.md` 同步改写；原色硬编码清理**只覆盖新壳 chat / workspace-shell 两个目录**（**不是全仓唯一**，旧模块归后置的 T-25，清单与实测面见执行计划）。**开工前先结 open-q #11**（根字号 14→16），验收含中英混排实测截图（#10）；终端与 Monaco 边界外（#12）。→ 执行计划 §3 T-21 行
 3. ~~**T-22 壳结构改造：三列 + 44px 导轨 + surface 模型**（D19）~~ —— **代码已落 `95a5c04`，转 In Progress 等 GUI 点验**（原文保留供参考）：建 surface 注册表并**删除 `BottomDock.tsx`**，布局与 surface 选择逻辑下沉纯函数。→ 执行计划 §3 T-22 行

@@ -184,7 +184,7 @@ Cometix/SDK 原始事件
 **保留不动**：`src/main/services/git/`、文件读写/监听、xterm.js + node-pty、RemoteConnectionManager、Worktree 管理、Monaco Editor、Settings 基础设施、Electron Main/Preload 安全边界、构建/更新/打包链、`tsdSafeRead.ts` 与系统 Node 读取经验、`ClaudeSessionScanner` 的 `~/.claude/projects/` 扫描能力。
 
 **改造**：
-- `src/renderer/App.tsx`：逐步抽出 Workspace Shell / Sidebar / Main Area / ContextPanel / Rail / Dialog Host，最终只做顶层装配。**注意**（2026-07-28）：`App.tsx:450` 的 `SKIP_ONBOARDING_GATE || useOpenChamberShellSetting` 短路与 `src/renderer/Root.tsx:52-59` 在 persist 水合完成后强行 `setUseOpenChamberShell(true)`，两处共同锁死新壳、使 Appearance 开关形同虚设——恢复可逆性必须同时改（T-16 前置）。
+- `src/renderer/App.tsx`：逐步抽出 Workspace Shell / Sidebar / Main Area / ContextPanel / Rail / Dialog Host，最终只做顶层装配。~~**注意**（2026-07-28）：`App.tsx:450` 的 `SKIP_ONBOARDING_GATE || useOpenChamberShellSetting` 短路与 `src/renderer/Root.tsx:52-59` 在 persist 水合完成后强行 `setUseOpenChamberShell(true)`，两处共同锁死新壳、使 Appearance 开关形同虚设——恢复可逆性必须同时改（T-16 前置）。~~ **已由 T-16 解除（2026-08-05，`fd57ebf`）**：实际覆盖是**四处**不是两处（07-28 记录漏了 `App/useAppKeyboardShortcuts.ts` 与 `App/hooks/useSettingsState.ts` 两处同形 OR，二者均为 07-28 之后新增）；现全部只读 `settings.useOpenChamberShell`，`SKIP_ONBOARDING_GATE` 维持 `true` 且不再参与选壳。
 - `src/renderer/components/layout/MainContent.tsx`：Chat 常驻中央；Git / Files(editor) / Context / Terminal **全部改为 ContextPanel 的 surface**（D19），**不再有底部 Dock**；Settings 独立入口。
 - `src/renderer/components/chat/AgentPanel.tsx`：Claude 主路径由新 Chat Workspace 替换；AgentTerminal 不再渲染 Claude 主会话；EnhancedInput 有价值能力迁入新 Composer；旧 AgentPanel 暂留其他 CLI Agent。
 - `src/renderer/stores/agentSessions.ts`：不扩展承载结构化消息；新建独立 Chat Store；通过 Workspace ID/Path 关联。

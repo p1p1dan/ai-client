@@ -4,6 +4,7 @@
 
 - **Current Phase**: **Phase 0A 基线部分补做（A01 / A05 / A06）→ 观感对齐改造**（2026-07-28 转向）。这三项产品设计基线此前只在可行性文档的候选任务池、从未进执行计划或台账，而下游 F05/H01/H09 已按它们施工——这是「观感不到位 + 死按钮泛滥 + 布局反复卡壳」的同一根因，本日补做并落库（D18 / D19 / D20）。⚠️ **Phase 0A 整体仍 🟡 未收口**：A02 / A03 / A04 仍未立项，且已交付的 A06 依赖列写的正是「A01、A02」（口径以总台账 Phase 总览 0A 行为准）。Phase 3 Chat MVP 的剩余点测与网关阻塞并行不变。
 - **Last Landed**:
+  - 代码（2026-08-05，最新）：**T-16 新旧壳开关成熟化 `fd57ebf`**——Appearance 的「OpenChamber Workspace Shell」此前是**死开关**（`Root.tsx` 挂载与水合后各强写一次 `true`，另有消费端把设置与 `SKIP_ONBOARDING_GATE` 做 OR，写回 + OR 双重失效）。**勘察更正任务书**：强制覆盖**实为四处不是两处**（新增的两处 = `App/useAppKeyboardShortcuts.ts` 主 tab 快捷键让位、`App/hooks/useSettingsState.ts` 的 `forceSettingsModal`，均为 07-28 立项后长出来的）。四处一律改为只读 `settings.useOpenChamberShell`；`SKIP_ONBOARDING_GATE` **维持 `true`** 未动、不作为达成手段。**两处执行裁定待追认**：① store 默认 `false`→`true`（覆盖期已把 `true` 写进所有存量 profile，故只影响新 profile——否则新机首启落进旧标签页壳）；② 新增同步镜像 `stores/settings/shellPreferenceMirror.ts`（`electronStorage` 异步 IPC → 关掉开关后**每次启动会先闪一帧新壳**；localStorage 同步镜像消除，权威仍在 settings，水合后回写）。连带更正 Appearance 文案（「四区 + mock 运行时」已被 D19/A08 推翻）+ zh 两键。防回归 `shellSwitchStatic.test.ts`（TS AST 三条不变量）+ `shellPreferenceMirror.test.ts`。红线零改动。**impl done 待 GUI 点验（0-sexdecies）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-16 行
   - 验收（2026-08-05，最新）：**第九轮 GUI 点验用户验收通过**（原话「点验通过，进入下一任务环节」）——点验清单 **0-quindecies【合并版】**（7 组 24 项）收口，**T-32 / T-12~T-15 / T-23 三任务一并转 Done**。随验收生效的追认四项：`Ctrl/Cmd+1..4` 改绑 1=git 2=files 3=context 4=terminal · `Ctrl/Cmd+B` 侧栏收展 · 四死按钮走删除支 · 72% 假 usage 环撤除。**遗留两项（不阻塞，已另有归口）**：① A2「Win10 字重真机核验」本机（Linux）不可采集 → 并入 [T-10 打包版清单](../../../plans/t10-packaged-gui-checklist.md)（与 T-24 真机项同处）；② macOS 无标题栏行 → 全 app 无 usage 展示，既有缺口维持 backlog。验收态 HEAD `0b90baa`，工作树干净。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 验收行
   - 代码（2026-08-05，最新）：**T-32 首轮点验修复批四提交 `fef5ce3`+`8014bef`+`c424128`+`a0c9b90`（m1~m8）**——m1 裁掉按 surface 的面板宽度（切 tab 不再跳宽）· m2 显式面板动作记录 manualPanel（窄窗可唤回）· m3 提升态覆盖层改不透明 · m4 快捷键改吃渲染用的 railOrder + persist v1→v2 迁移 · **m5 收窄模型重做**（推翻 S4 的三档阈值：改 `resolveShellChrome` 逐级试探 sidebar→panel→chat，chat 有 400 硬下限，新增 `maxPanelWidth` 反向约束面板）· m6 空 editor 占位盒门控 + 提升态与停靠态的宽度上限拆分 · **m7 `switchWorktree` 搬进常驻 hook**（m6 门控引入的死循环：点文件不出 editor）· m8 目标行 shrink 纪律。**四条为本任务自引入的回归**（m5 原设计 / m6 / m6-b / m7）。红线零改动。**用户表态「暂时没啥问题，先收尾」——非逐项验收**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 修复批行
   - 代码（2026-08-05，最新）：**T-32 右栏骨架回归 A08 四提交 `fbb45fe`+`8df9341`+`4f4fb52`+`2f46fa6`**——S1 tab 条四项（registry 改 A08 序、`editor`→Files 语义、`panelTabsModel` 与 Rail 共用）· S2 顶栏贯通 + Rail 仅收起时渲染 · S3 **editor 回中列**（`EditorSurfaceView` 拆 `FilesSurfaceView` + `center/EditorColumn`，`chat ║ editor` + `ed-grip` 比例拖拽） · S4 L0/L1/L2 降级梯 + 手动覆盖（`manualPanel/manualChat` 会话态、关文件清零）。**三处有据偏离已登记**：阈值改内容行 1300/964（A08 1580/1244 含 280 侧栏，本仓侧栏可拖可收起）· 不新增 `panelOpen` 字段（`activeSurfaceId` 已承载该意图）· editor 保留多 tab。**R1 防回归** `panelVisibilityStatic` 钉死「可见性只在 WorkspaceShell 合成一次」。红线零改动。**impl done 待 GUI 点验（清单已并入 0-quindecies【合并版】）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-32 行
@@ -18,6 +19,7 @@
   - 验收（2026-08-03）：**第七轮 GUI 点验用户验收通过**（原话「验收完毕，没有问题」）——第六轮两项与全部复核批修复闭环，诊断档结项；实测范围含 aaa 文件夹 New / "+ new chat" / 分支 chip 归属 / 失败退回重发无重复气泡 / 同文连发保留 / 附件与归档关闭对齐。第五轮清单 0-decies 与第四轮失败路径顺延项就此关闭；**0-octies 门槛达成 → T-27/T-28/T-19/T-30批1 转 Done**（见 roadmap）。点验期间一次「No repository registered」经查为 dev server 带病热更新残留态，非代码回归（诊断档附注）
   - 更早批次（2026-07-28 ~ 2026-08-03 三批：五连修/T-21/T-22/T-26/T-27/T-28/T-05/T-19/T-30 批1+批2/第二~六轮点验修复等）：摘要原文见 [history 归档](./history/2026-0728-0803-archive.md)，明细见[主线台账](../../../plans/ledger-claude-mainline.md)各行
 - **Last Verified**:
+  - **2026-08-05 T-16 复核（HEAD `fd57ebf`，逐门串行）**：typecheck 干净 / lint **772 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **123 文件 2231 例**（较 T-32 收尾态 121 文件 2223 例 +2 文件 +8 例只增；同 3 例 Windows-only 失败）。
   - **2026-08-05 T-32 修复批复核（HEAD `a0c9b90`，逐门串行）**：typecheck 干净 / lint **769 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **121 文件 2223 例**（较 T-32 落地态 2220 例只增；同 3 例 Windows-only 失败）。⚠️ 中途曾出现 2220→2217 的**例数下降**，逐条对账为「删除被裁功能（per-surface 宽度）自身的 5 例、新增 3 例不变量」，非测试丢失，已在提交信息留证。
   - **2026-08-05 T-32 复核（HEAD `2f46fa6`，逐门串行，每片一次）**：typecheck 干净 / lint **768 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **121 文件 2220 例**（较 T-32 前基线 119 文件 2182 例 +2 文件 +38 例只增；同 3 例 Windows-only 失败）。
   - **2026-08-05 context surface 修复复核（HEAD `42b692c`，逐门串行）**：typecheck 干净 / lint **763 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **119 文件 2182 例**（较 T-23 基线 118 文件 2180 例 +1 文件 +2 例只增；同 3 例 Windows-only 失败）。
@@ -29,7 +31,7 @@
   - **2026-08-03 四批复核（T-31 `8109d45` 合并态）**：typecheck 干净 / lint **718 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **97 文件 1759 例**（+7 文件 +166 例；同 3 例 Windows-only 失败）/ `pnpm build` 成功且产物含 `@container scroll-state(stuck: top)` 规则（lightningcss 管线绕行有效性的产物级验证）。
   - **2026-08-03 三批复核（第六轮修复 `fd55a26` 合并态，T-31 开工前基线实测）**：typecheck 干净 / lint **703 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **90 文件 1593 例**（+2 文件 +56 例；同 3 例 Windows-only 失败）。
   - 更早复核记录（2026-07-28 基线 51 文件 590 例起，全程只增）与 T-21 复核口径注记：见 [history 归档](./history/2026-0728-0803-archive.md)
-- **Next Target**（2026-08-05 十六次修订，第九轮点验验收后）：**开发线当前项 = T-16 新旧壳开关成熟化**（执行计划 §3 T-16 行，1d）——恢复 Appearance 开关可逆性，要拆的是 **`App.tsx` 与 `Root.tsx` 两处强制覆盖**（只改一处无效），`devFlags.ts` 的 `SKIP_ONBOARDING_GATE` **维持 `true`** 不作为达成手段（见 Handoff Notes）；前置 T-24 与 T-12~T-15 均已 Done。**其后顺序（用户 2026-08-05 裁定）：T-16 → T-33 / T-35（各 0.5d，可穿插）→ T-34（1.5d）**；T-25 仍后置，multi-agent 支线后置。**已结清**：第九轮点验验收通过 → 0-quindecies【合并版】收口，**T-32 / T-12~T-15 / T-23 三任务转 Done**（追认四项随验收生效，见 Last Landed 验收行）；resume 两项优先项（多 agent 方向另立 plan root / context surface 崩溃修复 `42b692c`）亦已于当日结清。**残留（用户线，与开发线并行）**：T-24 真机 Windows 打包版 + **A2 Win10 字重真机核**（两项同归 [T-10 清单](../../../plans/t10-packaged-gui-checklist.md) 第 8 项一带）；0-nonies ⑪ 真机指标；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）；macOS 无标题栏行 → 全 app 无 usage 展示（T-23 撤环连带的既有缺口显性化）。
+- **Next Target**（2026-08-05 十七次修订，T-16 落地后）：**T-16 已 impl done，等 GUI 点验 0-sexdecies**（三条验收全在 GUI 面：关开关重启仍旧壳 / 新旧壳可来回切且各自核心流程可用 / 开关状态持久化；另含**两处执行裁定的追认**：默认值翻 `true`、新增同步镜像）。**开发线下一项 = T-33 网络重试横幅（0.5d）与 T-35 Host stderr 进 UI（0.5d）**（可穿插），其后 **T-34 子 agent 实况（1.5d）**；T-25 仍后置，multi-agent 支线后置。**已结清**：第九轮点验验收通过 → 0-quindecies【合并版】收口，**T-32 / T-12~T-15 / T-23 三任务转 Done**；resume 两项优先项亦已结清。**残留（用户线，与开发线并行）**：T-24 真机 Windows 打包版 + **A2 Win10 字重真机核**（同归 [T-10 清单](../../../plans/t10-packaged-gui-checklist.md) 第 8/9 项）；0-nonies ⑪ 真机指标；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）；macOS 无标题栏行 → 全 app 无 usage 展示（既有缺口显性化）；**T-16 连带**：旧壳（legacy 标签页壳）本身的功能完整性从未在 D18~D27 各批中回归过，本轮点验若发现旧壳残缺，按「旧壳是回退不是产品」口径记 backlog、不即时修。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -98,11 +100,11 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 4. ~~**T-23 存量违规清理**~~ —— **✅ 2026-08-04 代码落地 `bfc087f`（裁定走删除支 + P-19/P-22 随批 + A06 矩阵结清）；2026-08-05 第九轮点验验收通过转 Done**（死按钮删除支与撤环两项追认随验收生效）。→ 主线台账 2026-08-04 T-23 行
 5. ~~**T-32 右栏骨架回归 A08**~~ —— **✅ 2026-08-05 五切片落地 `fbb45fe`..`2f46fa6` + 首轮点验修复批 `fef5ce3`..`a0c9b90`（m1~m8）；同日第九轮点验验收通过转 Done**。原文保留供参照：（**D27**，2026-08-05 立项，同日 open-q #28 裁定后开工阻塞解除）——**editor 回中列**（`chat ║ editor` 并排 + `ed-grip` + editor head，右栏 files tab 降纯文件树）· 右栏 tab 扩四项 · Rail 仅收起时渲染 · 顶栏贯通 · 恢复 1580/1244 降级梯。三项豁免维持现状；editor 保留多 tab。**量级 3d，与 T-23 顶栏单行 h-9 口径冲突须一并重定**（0-quattuordecies ③ 的单行化追认项随之作废，并入 T-32 点验）。→ 执行计划 §3 T-32 行
 
-6. **T-16 新旧壳开关成熟化** ⬅ **开发线当前项**（1d；2026-08-05 前置全部达成后出列）——拆 `App.tsx` / `Root.tsx` **两处强制覆盖**（只改一处无效），`devFlags.ts:10` 的 `SKIP_ONBOARDING_GATE` 维持 `true`、**不作为达成手段**；验收三条（关开关重启仍旧壳 / 新旧壳可来回切且各自核心流程可用 / 开关状态持久化经重启）见执行计划 §3 T-16 行。
+6. ~~**T-16 新旧壳开关成熟化**~~ —— **✅ 2026-08-05 代码落地 `fd57ebf`，impl done 待 GUI 点验（0-sexdecies），点验通过方转 Done**。原文保留供参照：拆 `App.tsx` / `Root.tsx` **两处强制覆盖**（**as-built 更正：实为四处**），`devFlags.ts:10` 的 `SKIP_ONBOARDING_GATE` 维持 `true`、**不作为达成手段**；验收三条（关开关重启仍旧壳 / 新旧壳可来回切且各自核心流程可用 / 开关状态持久化经重启）见执行计划 §3 T-16 行。
 
 7. **T-33 网络重试横幅**（0.5d）· **T-34 子 agent 实况**（1.5d）· **T-35 Host stderr 进 UI**（0.5d）—— 2026-08-05 由 multi-agent 支线**正式平移主线并分配节点**（三条只用 Claude 直连链已有数据，与 ACP 判断互不依赖，压在后置支线下会被一并冻住）。定义与验收见执行计划 §3；T-34 的历史重放限制归 C-17。
 
-> **开发线现行顺序（用户 2026-08-05 裁定）= ~~T-32（已验收 Done）~~ → **T-16（当前）** → T-33 / T-35（各 0.5d，可穿插）→ T-34**；T-25（旧模块原色清理，依赖 T-21）仍后置，归 [roadmap Deferred](./roadmap.md)。**multi-agent 支线后置**（原定并行，同日改判为「先把现有 Claude 客户端任务大致完成」）。
+> **开发线现行顺序（用户 2026-08-05 裁定）= ~~T-32（已验收 Done）~~ → ~~T-16（已落地待点验）~~ → **T-33 / T-35（当前，各 0.5d，可穿插）** → T-34**；T-25（旧模块原色清理，依赖 T-21）仍后置，归 [roadmap Deferred](./roadmap.md)。**multi-agent 支线后置**（原定并行，同日改判为「先把现有 Claude 客户端任务大致完成」）。
 
 ### 用户线（点测 / 待拍板，与开发线并行）
 
@@ -192,6 +194,31 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
    G2 Monaco 里 Esc 不关面板；Composer/弹窗的 Escape 原语义不变（T-32 ⑩ + T-12~15 ⑥）
    G3 切 Workspace A→B→A **不串文件**（每工作区 tab 隔离）（T-32 ⑩）
    G4 中文输入法合成态下快捷键不误触；旧壳本轮不可达（T-16 未做）无需回归（T-12~15 ⑥）
+
+0-sexdecies. **待点验清单（T-16 新旧壳开关，2026-08-05 落地 `fd57ebf`）**
+
+> 本轮唯一主体是 **Appearance 开关的可逆性**，面很窄，②③ 是核心。
+> ⚠️ **旧壳（legacy 标签页壳）自 D18~D27 各批以来从未回归过**：若点验中发现旧壳自身残缺
+> （某按钮失效、某面板空），按「**旧壳是回退不是产品**」口径记 backlog，不即时修——除非它
+> 残到「切过去就回不来」（那属本任务的 ③ 不通过）。
+
+   ① **关掉即生效**：Settings → Appearance →「OpenChamber Workspace Shell」关掉 →
+      **立即**回到旧版标签页壳，不需重启
+   ② **重启仍是旧壳**（最关键——原缺陷就在这里，水合后会被强行改回）：关掉后完全退出 app
+      再启动 → 仍是旧壳；且**启动瞬间不应闪一帧新壳**（同步镜像正是为这一帧加的，见追认⑦）
+   ③ **切得回来**：旧壳里 Settings 仍可达（标题栏齿轮 / 设置标签页）→ 打开开关 → 立即回新壳；
+      再重启仍是新壳。**切不回去 = 本任务不通过**
+   ④ **旧壳核心流程可用**：选仓库 / worktree、四个主标签（chat / file / terminal / source-control）
+      可切换；**`Ctrl/Cmd+1..4` 在旧壳里恢复为主标签切换**（新壳里仍是 git/files/context/terminal）
+   ⑤ **设置呈现方式回归**：旧壳下 Settings →「设置显示方式 = 标签页」应真的以**标签页**打开
+      （覆盖期被强制成弹窗）；新壳下仍强制弹窗（新壳没有主标签条可放）
+   ⑥ **追认①（执行裁定）**：store 默认值 `false`→`true`，即**新 profile 首启进新壳**。
+      依据：覆盖期每次启动都把 `true` 写进 settings，存量 profile 零影响；不改则新机首启落进旧壳
+   ⑦ **追认②（执行裁定）**：新增 localStorage 同步镜像 `aiclient-use-openchamber-shell`。
+      依据：`electronStorage` 是异步 IPC，首帧按默认值画壳、水合后才改写 → 关掉开关后每次启动闪一帧
+      新壳。权威仍是 settings.json（水合后回写镜像，手改 settings.json 一次启动内收敛）
+   ⑧ **文案**：开关副标题已由「四区聊天工作区原型 + mock 运行时事件」（D19/A08 已推翻）改为
+      「三列气泡对话工作区：图标导轨 + 上下文面板。关闭后立即回到旧版标签页界面。」
 
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
    [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
