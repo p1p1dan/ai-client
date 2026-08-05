@@ -105,10 +105,23 @@ describe('EditorColumn intent-consumption race guard (Codex major)', () => {
 });
 
 describe('T-32 split invariants', () => {
-  it('per-workspace tab isolation lives in the column that owns the tabs', () => {
-    expect(EDITOR.flat).toContain('switchWorktree(');
-    // Two callers would race each other on a workspace switch.
+  it('per-workspace tab isolation lives somewhere ALWAYS mounted (m7)', () => {
+    const SYNC = code('src/renderer/components/workspace-shell/useEditorWorktreeSync.ts');
+    const SHELL = code('src/renderer/components/workspace-shell/WorkspaceShell.tsx');
+
+    // `switchWorktree` CLEARS the tab list. Hosting it in a component that only
+    // mounts once a tab exists is a deadlock, not a style choice: opening a
+    // file mounts the column, whose first effect erases the file that caused
+    // the mount. It has to live in the shell, which is always mounted.
+    expect(SYNC.flat).toContain('switchWorktree(');
+    expect(SHELL.flat).toContain('useEditorWorktreeSync()');
+    expect(EDITOR.flat).not.toContain('switchWorktree(');
     expect(FILES.flat).not.toContain('switchWorktree(');
+  });
+
+  it('the worktree sync is idempotent — it must not re-clear on every render', () => {
+    const SYNC = code('src/renderer/components/workspace-shell/useEditorWorktreeSync.ts');
+    expect(SYNC.flat).toContain('currentWorktreePath === normalized');
   });
 
   it('the editor column costs no box when nothing is open', () => {

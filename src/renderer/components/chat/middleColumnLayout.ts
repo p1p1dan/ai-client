@@ -388,7 +388,11 @@ export function composerMenuGroupLabelClass(): string {
  */
 export function targetTriggerClass(tone: 'default' | 'muted' = 'default'): string {
   const base = [
-    'inline-flex h-6 items-center gap-1.5 rounded-sm px-2 text-ui',
+    // `min-w-0` is what makes the inner `truncate` actually engage: a flex item
+    // defaults to `min-width: auto`, i.e. it refuses to shrink below its
+    // content, so under pressure the row overflowed and pushed its siblings
+    // around instead of the label ellipsing (T-32 m8).
+    'inline-flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-2 text-ui',
     'transition-colors duration-150',
     'hover:bg-hover',
     'focus-visible:bg-hover',

@@ -25,7 +25,13 @@ export function RunLocationIndicator({ text, tone }: RunLocationIndicatorProps) 
           <span
             role="status"
             aria-label={label}
-            className="inline-flex h-6 cursor-default items-center gap-1.5 px-1.5 text-sm text-muted-foreground"
+            // T-32 m8 (user round 2: 「this pc 还是存在换行的可能」): a short,
+            // fixed label in an h-6 row must never be the thing that gives —
+            // without `shrink-0` a long branch chip beside it squeezed this
+            // one until its two words wrapped and the second was clipped by
+            // the row height. The branch chip truncates instead (it has the
+            // affordance for it: a tooltip and a popup carrying the full name).
+            className="inline-flex h-6 shrink-0 cursor-default items-center gap-1.5 whitespace-nowrap px-1.5 text-sm text-muted-foreground"
           />
         }
       >

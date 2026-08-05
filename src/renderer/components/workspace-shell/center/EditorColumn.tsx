@@ -88,13 +88,10 @@ export function EditorColumn({ onHideChat, chatVisible = true }: EditorColumnPro
   const rootPath = useWorkspaceRootPath();
   const editorAutoSave = useSettingsStore((state) => state.editorSettings.autoSave);
 
-  // Per-workspace tab isolation (T-13 spec §3): without this the new shell
-  // leaks one workspace's open tabs into the next. It lives here rather than
-  // in the Files surface because this column owns the tabs — and because the
-  // Files surface unmounts whenever another tab is selected.
-  useEffect(() => {
-    useEditorStore.getState().switchWorktree(rootPath ? normalizePath(rootPath) : null);
-  }, [rootPath]);
+  // Per-workspace tab isolation moved OUT of this component in m7 — see
+  // `../useEditorWorktreeSync.ts`. Keeping it here deadlocked the column once
+  // m6 gated its mount on `editorOpen`: `switchWorktree` clears the tabs, so
+  // the first mount erased the very file that caused it.
 
   const {
     tabs,

@@ -23,6 +23,7 @@ import {
   clampSidebarWidth,
   SIDEBAR_COLLAPSED_WIDTH,
 } from './shellLayoutModel';
+import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 
@@ -105,6 +106,10 @@ export function WorkspaceShell({
   // A08: global shell shortcuts (Ctrl/Cmd+J/1-4/`/B). Only live while this
   // component is mounted, i.e. only for the new shell.
   useShellShortcuts();
+
+  // m7: per-workspace editor tab isolation. Must live somewhere ALWAYS mounted
+  // — see the hook for the deadlock that put it here.
+  useEditorWorktreeSync();
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarResizing, setSidebarResizing] = useState(false);

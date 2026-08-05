@@ -823,6 +823,16 @@ describe('composerModelTriggerClass / composerAttachButtonClass / targetTriggerC
       expect(cls).not.toContain('rounded-md');
     }
     expect(targetTriggerClass('muted')).toContain('text-muted-foreground');
+
+    // T-32 m8: the target row is a fixed h-6 flex row shared with the
+    // run-location label. Without `min-w-0` a trigger refuses to shrink below
+    // its content (flex items default to `min-width: auto`), so a long branch
+    // name overflowed the row and squeezed its siblings until "This PC"
+    // wrapped and was clipped by the row height. The trigger's own `truncate`
+    // only engages once it is allowed to shrink.
+    for (const tone of ['default', 'muted'] as const) {
+      expect(targetTriggerClass(tone)).toContain('min-w-0');
+    }
     expect(targetTriggerClass()).not.toContain('text-muted-foreground');
   });
 
