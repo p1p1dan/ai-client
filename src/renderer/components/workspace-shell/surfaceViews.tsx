@@ -25,7 +25,7 @@ import type { ComponentType } from 'react';
 import type { SurfaceMountPolicy } from './shellLayoutModel';
 import type { ContextSurfaceId } from './surfaceRegistry';
 import { ContextSurfaceView } from './surfaces/ContextSurfaceView';
-import { EditorSurfaceView } from './surfaces/EditorSurfaceView';
+import { FilesSurfaceView } from './surfaces/FilesSurfaceView';
 import { GitSurfaceView } from './surfaces/GitSurfaceView';
 import { TerminalSurfaceView } from './surfaces/TerminalSurfaceView';
 
@@ -40,7 +40,10 @@ export interface SurfaceViewRegistration {
 
 export const SURFACE_VIEWS: Partial<Record<ContextSurfaceId, SurfaceViewRegistration>> = {
   context: { component: ContextSurfaceView, mountPolicy: 'active' },
-  editor: { component: EditorSurfaceView, mountPolicy: 'active' },
+  // T-32 (D27): the `editor` slot renders the file TREE now — the editor moved
+  // to the center column (`center/EditorColumn.tsx`), which is mounted by
+  // WorkspaceShell, not by this registry.
+  editor: { component: FilesSurfaceView, mountPolicy: 'active' },
   git: { component: GitSurfaceView, mountPolicy: 'active' },
   // keep-alive: a surface switch must never tear down the pty (spec §5, R2).
   terminal: { component: TerminalSurfaceView, mountPolicy: 'keep-alive' },

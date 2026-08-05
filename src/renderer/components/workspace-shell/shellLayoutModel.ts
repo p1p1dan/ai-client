@@ -3,6 +3,7 @@
  * Every hard size lives here; `docs/design-system.md` 「新壳布局档位」 mirrors it.
  * Pure so vitest (node env, `.ts` only) can cover it — `hostStatus.ts` pattern.
  */
+import { clampEditorRatio, DEFAULT_EDITOR_RATIO } from './centerLayoutModel';
 import {
   type ContextSurfaceId,
   DEFAULT_SURFACE_ORDER,
@@ -371,6 +372,8 @@ export interface PersistedShellLayout {
   widthBySurface: Partial<Record<ContextSurfaceId, number>>;
   railOrder: ContextSurfaceId[];
   readingWidthMode: ReadingWidthMode;
+  /** T-32: share of the center row given to the editor when a file is open. */
+  editorRatio: number;
 }
 
 export const defaultShellLayout: PersistedShellLayout = {
@@ -382,6 +385,7 @@ export const defaultShellLayout: PersistedShellLayout = {
   widthBySurface: {},
   railOrder: [...DEFAULT_SURFACE_ORDER],
   readingWidthMode: 'normal',
+  editorRatio: DEFAULT_EDITOR_RATIO,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -436,5 +440,8 @@ export function sanitizeShellLayoutPersisted(raw: unknown): PersistedShellLayout
     widthBySurface: sanitizeWidthBySurface(raw.widthBySurface),
     railOrder: sanitizeRailOrder(raw.railOrder),
     readingWidthMode: raw.readingWidthMode === 'wide' ? 'wide' : 'normal',
+    editorRatio: clampEditorRatio(
+      typeof raw.editorRatio === 'number' ? raw.editorRatio : Number.NaN
+    ),
   };
 }

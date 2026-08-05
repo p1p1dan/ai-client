@@ -150,6 +150,13 @@ interface EditorAreaProps {
   isFileTreeCollapsed?: boolean;
   onToggleFileTree?: () => void;
   onNavigateToFile?: (path: string) => Promise<void>;
+  /**
+   * T-32 (D27): extra controls pinned to the right of the tab strip, used by
+   * the center `EditorColumn` for A08's editor-head actions (a08:1224-1227).
+   * Purely additive — hosts that pass nothing render exactly as before, same
+   * discipline as T-12's `DiffViewer.sideBySideInlineBreakpoint`.
+   */
+  headerActions?: React.ReactNode;
 }
 
 export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function EditorArea(
@@ -174,6 +181,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     isFileTreeCollapsed,
     onToggleFileTree,
     onNavigateToFile,
+    headerActions,
   }: EditorAreaProps,
   ref: React.Ref<EditorAreaRef>
 ) {
@@ -1337,6 +1345,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
             )}
           </button>
         )}
+        {headerActions}
       </div>
 
       {/* Breadcrumb */}

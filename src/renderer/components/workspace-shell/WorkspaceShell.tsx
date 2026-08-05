@@ -2,9 +2,17 @@ import { type Ref, useLayoutEffect, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
+import { useEditorStore } from '@/stores/editor';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { ContextPanel } from './ContextPanel';
 import { ContextPanelRail } from './ContextPanelRail';
+import { EditorColumn } from './center/EditorColumn';
+import {
+  chatWidthToEditorRatio,
+  deriveEditorOpen,
+  resolveChatColumnWidth,
+} from './centerLayoutModel';
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
 import { ShellResizeHandle } from './ShellResizeHandle';
@@ -46,10 +54,41 @@ export function WorkspaceShell({
   const readingWidthMode = useShellLayoutStore((state) => state.readingWidthMode);
   const toggleReadingWidthMode = useShellLayoutStore((state) => state.toggleReadingWidthMode);
 
+  const editorRatio = useShellLayoutStore((state) => state.editorRatio);
+  const setEditorRatio = useShellLayoutStore((state) => state.setEditorRatio);
+
   // S4 replaces this with the level-ladder composition; until then "the panel
   // is visible" is still exactly "a surface is active".
   const panelVisible = activeSurfaceId !== null;
   const railVisible = deriveRailVisible({ panelVisible });
+
+  // T-32: a file being open is what makes the center row two columns.
+  const editorOpen = deriveEditorOpen(useEditorStore((state) => state.tabs).length);
+
+  const centerRowRef = useRef<HTMLDivElement>(null);
+  const chatColumnRef = useRef<HTMLDivElement>(null);
+  const [centerWidth, setCenterWidth] = useState<number | null>(null);
+  const [centerResizing, setCenterResizing] = useState(false);
+
+  // Measured separately from `contentRowRef`: that one is chat+editor+panel
+  // (the panel's width budget), this one is chat+editor (the grip's budget).
+  // Deriving one from the other would need the panel's animated width, which
+  // is exactly the mid-transition value the T-22 batch-3 fix avoids reading.
+  useLayoutEffect(() => {
+    const el = centerRowRef.current;
+    if (!el) {
+      return;
+    }
+    setCenterWidth(el.clientWidth || null);
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      setCenterWidth(width > 0 ? width : null);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const chatWidth = resolveChatColumnWidth({ centerWidth: centerWidth ?? 0, editorRatio });
 
   useSyncChatWorkspaceTree({
     repositories,
@@ -134,7 +173,47 @@ export function WorkspaceShell({
         />
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div ref={contentRowRef} className="relative flex min-w-0 flex-1 overflow-hidden">
-            <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
+            {/*
+              T-32: chat ║ editor (a08:1208-1241). With no file open the editor
+              column returns null and chat keeps `flex-1`, so the shell is
+              byte-for-byte the pre-T-32 layout until something is opened.
+            */}
+            <div ref={centerRowRef} className="relative flex min-w-0 flex-1 overflow-hidden">
+              <div
+                ref={chatColumnRef}
+                data-resizing={centerResizing || undefined}
+                className={cn('relative flex min-w-0 flex-col', editorOpen ? 'shrink-0' : 'flex-1')}
+                style={editorOpen ? { width: chatWidth } : undefined}
+              >
+                <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
+                {editorOpen && (
+                  <ShellResizeHandle
+                    side="right"
+                    ariaLabel={t('Resize chat column')}
+                    width={chatWidth}
+                    targetRef={chatColumnRef}
+                    clamp={(candidate) =>
+                      resolveChatColumnWidth({
+                        centerWidth: centerWidth ?? 0,
+                        editorRatio: chatWidthToEditorRatio({
+                          chatWidth: candidate,
+                          centerWidth: centerWidth ?? 0,
+                        }),
+                      })
+                    }
+                    onCommit={(next) =>
+                      setEditorRatio(
+                        chatWidthToEditorRatio({ chatWidth: next, centerWidth: centerWidth ?? 0 })
+                      )
+                    }
+                    onResizingChange={setCenterResizing}
+                  />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <EditorColumn />
+              </div>
+            </div>
             <ContextPanel availableWidth={availableWidth} />
           </div>
           {/* A08「展开时右缘无图标」: the rail is the collapsed-state switcher only. */}

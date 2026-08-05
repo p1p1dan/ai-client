@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { clampEditorRatio } from '@/components/workspace-shell/centerLayoutModel';
 import {
   clampContextPanelWidth,
   clampSidebarWidth,
@@ -35,6 +36,8 @@ export interface ShellLayoutState extends PersistedShellLayout {
   toggleContextPanel: () => void;
   toggleExpanded: () => void;
   setSurfaceWidth: (id: ContextSurfaceId, width: number, availableWidth?: number | null) => void;
+  /** T-32: commits an `ed-grip` drag as a share of the center row. */
+  setEditorRatio: (ratio: number) => void;
   /** Reserved for rail drag-sort (postponed); already sanitized through the registry. */
   setRailOrder: (order: readonly string[]) => void;
   // reading column
@@ -79,6 +82,8 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
           },
         })),
 
+      setEditorRatio: (ratio) => set({ editorRatio: clampEditorRatio(ratio) }),
+
       setRailOrder: (order) => set({ railOrder: sortSurfaces(order).map((surface) => surface.id) }),
 
       toggleReadingWidthMode: () =>
@@ -88,7 +93,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       name: 'aiclient-shell-layout',
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      // Only the eight persisted data fields — actions are never serialized.
+      // Only the persisted data fields — actions are never serialized.
       partialize: (state): PersistedShellLayout => ({
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
@@ -98,6 +103,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         widthBySurface: state.widthBySurface,
         railOrder: state.railOrder,
         readingWidthMode: state.readingWidthMode,
+        editorRatio: state.editorRatio,
       }),
       // No real migration yet (version stays 1) — this only protects a future
       // bump (e.g. per-directory keys) from ever seeing un-sanitized data.
