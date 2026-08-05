@@ -296,14 +296,28 @@ export function WorkspaceShell({
                   />
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <EditorColumn
-                  chatVisible={chatVisible}
-                  onHideChat={() => setManualChat(!chatVisible)}
-                />
-              </div>
+              {/*
+                m6 (user round 2): this wrapper used to render unconditionally.
+                `EditorColumn` returns null with no file open, but the `flex-1`
+                box around it still claimed half the center row — so chat was
+                laid out at half width while LOOKING full width (the empty box
+                has no background), squeezing the composer to ~355px and
+                wrapping the target bar. No editor, no box.
+              */}
+              {editorOpen && (
+                <div className="min-w-0 flex-1">
+                  <EditorColumn
+                    chatVisible={chatVisible}
+                    onHideChat={() => setManualChat(!chatVisible)}
+                  />
+                </div>
+              )}
             </div>
-            <ContextPanel availableWidth={panelWidthCap ?? availableWidth} visible={panelVisible} />
+            <ContextPanel
+              availableWidth={availableWidth}
+              maxDockedWidth={panelWidthCap}
+              visible={panelVisible}
+            />
           </div>
           {/* A08「展开时右缘无图标」: the rail is the collapsed-state switcher only. */}
           {railVisible && <ContextPanelRail />}

@@ -72,6 +72,25 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(panel).toContain('const isOpen = visible;');
   });
 
+  it('the empty editor column costs no layout box (m6)', () => {
+    const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    // `EditorColumn` returns null with no file open, but an unconditional
+    // `flex-1` wrapper still claimed half the center row — chat was laid out
+    // at half width while looking full width. The gate is the fix; without it
+    // the bug is invisible in code review and obvious only in a screenshot.
+    expect(shell).toMatch(/\{editorOpen && \( <div className="min-w-0 flex-1"> <EditorColumn/);
+  });
+
+  it('the docked cap is not applied to the expanded overlay (m6)', () => {
+    const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    const panel = code(join(SHELL_DIR, 'ContextPanel.tsx'));
+    // The cap reserves chat's floor, which is right for a docked column and
+    // wrong for an overlay: capped, it could not cover the row and exposed the
+    // chat column reflowing beside it.
+    expect(shell).toContain('maxDockedWidth={panelWidthCap}');
+    expect(panel).toContain('expanded ? availableWidth : (maxDockedWidth ?? availableWidth)');
+  });
+
   it('the expanded panel is opaque — an overlay may not be see-through (m3)', () => {
     const panel = code(join(SHELL_DIR, 'ContextPanel.tsx'));
     // The docked column keeps its tint; the overlay must not, or chat and the

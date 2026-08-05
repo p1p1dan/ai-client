@@ -49,9 +49,16 @@ interface ContextPanelProps {
    * fork the layout (spec §5, R1). WorkspaceShell computes it once.
    */
   visible: boolean;
+  /**
+   * m6 (user round 2): the largest width the DOCKED panel may take, so it can
+   * never eat chat's floor. Deliberately not applied to `expanded` — that is
+   * an overlay and must cover the whole row; capping it left a strip of the
+   * reflowing chat column showing beside it («放大后没有覆盖中右全部画幅»).
+   */
+  maxDockedWidth?: number | null;
 }
 
-export function ContextPanel({ availableWidth, visible }: ContextPanelProps) {
+export function ContextPanel({ availableWidth, maxDockedWidth, visible }: ContextPanelProps) {
   const { t } = useI18n();
   const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
   const lastSurfaceId = useShellLayoutStore((state) => state.lastSurfaceId);
@@ -80,7 +87,8 @@ export function ContextPanel({ availableWidth, visible }: ContextPanelProps) {
     // exactly like the user closing it, transition included.
     surfaceId: visible ? activeSurfaceId : null,
     manualWidth: panelWidth,
-    availableWidth,
+    // Expanded takes the full row; docked is capped by the content floor.
+    availableWidth: expanded ? availableWidth : (maxDockedWidth ?? availableWidth),
     expanded,
   });
 
