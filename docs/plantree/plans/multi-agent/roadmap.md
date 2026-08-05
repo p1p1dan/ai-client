@@ -1,7 +1,12 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**Planning**。本 plan 尚无代码落地，故无 `implementation-status.md`
+> 状态：**Planning · 暂缓**。本 plan 尚无代码落地，故无 `implementation-status.md`
 > （plan-tree 规范：仅 In Progress 的 plan 需要该文件）。
+>
+> ⚠️ **排期裁定（用户 2026-08-05，同日修订前一裁定）**：原定「与主线并行、新线先做 ACP+Codex spike」
+> **改为后置**——原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」。
+> 即：主线 [openchamber-chat-refactor](../openchamber-chat-refactor/README.md) 大致收口后本 plan 才启动，
+> **S1 spike 不在当前排期内**。本 plan 的调研结论已全部落库，随时可接续，不会再丢。
 
 ## Done
 

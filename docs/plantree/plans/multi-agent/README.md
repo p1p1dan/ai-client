@@ -16,10 +16,16 @@
 **Out of scope（本阶段）**：多 agent **协同**工作（用户 2026-08-04 明示「先放一放」）；
 Claude 线改走 ACP（已否，证据链见 [topics/acp-decision.md](./topics/acp-decision.md)）。
 
+## 排期（用户 2026-08-05 裁定，同日修订）
+
+**本 plan 后置。** 原定与主线并行、新线先跑 ACP+Codex spike；同日改判为
+**先把现有 Claude 客户端任务（主线）大致完成，再考虑 codex 支线**。
+调研结论已全部落库，启动时从 [roadmap S1](./roadmap.md) 直接接续即可。
+
 ## 与主线的关系
 
 主线 [openchamber-chat-refactor](../openchamber-chat-refactor/README.md) 是壳与观感重构，正在收口。
-本 plan 与其**并行**（用户 2026-08-05 裁定）：本 plan 先出可行性与设计，主线照常做 T-16 与消化点验债。
+本 plan **后置于主线**（同日改判，见上）：主线大致收口（T-32 → T-16 → 点验债）后本 plan 才启动。
 
 两者的接缝在三处，动工前须回主线核对，不得单方面改：
 `stores/chatSessions.ts`（红线）· `src/agent-host` 协议 · Composer 目标栏与侧栏会话行。
