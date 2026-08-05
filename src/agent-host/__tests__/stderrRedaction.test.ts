@@ -88,6 +88,7 @@ describe('redactStderrLine — adversarial matrix (Codex review F2–F4)', () =>
     expect(redactStderrLine('Google AIzaSyA1234567890abcdef')).toBe('Google [redacted]');
     expect(redactStderrLine('GitHub ghp_1234567890abcdef')).toBe('GitHub [redacted]');
     expect(redactStderrLine('AWS AKIAIOSFODNN7EXAMPLE')).toBe('AWS [redacted]');
+    expect(redactStderrLine('AWS STS ASIAIOSFODNN7EXAMPLE')).toBe('AWS STS [redacted]');
     expect(redactStderrLine('bare OpenAI-ish sk-proj-abc123')).toBe('bare OpenAI-ish [redacted]');
   });
 

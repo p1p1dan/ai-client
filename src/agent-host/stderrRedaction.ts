@@ -43,7 +43,8 @@ const REDACTION_RULES: ReadonlyArray<{ pattern: RegExp; replacement: string }> =
   { pattern: /\bsk_(?:live|test)_[A-Za-z0-9]{8,}/g, replacement: '[redacted]' },
   { pattern: /\bgh[pousr]_[A-Za-z0-9]{16,}/g, replacement: '[redacted]' },
   { pattern: /\bAIza[A-Za-z0-9_-]{16,}/g, replacement: '[redacted]' },
-  { pattern: /\bAKIA[A-Z0-9]{12,}/g, replacement: '[redacted]' },
+  // AWS access key ids: AKIA = long-lived, ASIA = temporary/STS (round 3).
+  { pattern: /\bA(?:KIA|SIA)[A-Z0-9]{12,}/g, replacement: '[redacted]' },
   // HTTP auth schemes, case-insensitive, whole token destroyed.
   { pattern: /((?:bearer|basic)\s+)[^\s"']+/gi, replacement: '$1[redacted]' },
   { pattern: /(x-api-key["':\s=]+)[^\s"']+/gi, replacement: '$1[redacted]' },
