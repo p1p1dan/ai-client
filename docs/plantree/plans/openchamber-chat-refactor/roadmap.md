@@ -79,7 +79,7 @@
 6. **GUI 统一点测**（用户人工）：多轮上下文回归 / T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测 / T-03 历史读失败提示 / **T-18 粘贴附件（本轮 100% 待人工测）**——**均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO「用户线」。
 7. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
 8. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
-9. **T-32 右栏骨架回归 A08**（**D27**，2026-08-05 立项）——🔴 **开工阻塞于 open-q #28**（editor 是否回中列 · terminal 留右栏后 Rail/tab 形态；A08 原文明写 editor 与 terminal 均不进 Rail，与 D27 豁免① 冲突，未答不得施工）。回归 tab 条 / Rail 联动收展 / 顶栏贯通 / 画幅降级梯；**三项豁免维持现状**：terminal 不回 BottomDock · context 不加 Quick notes·Todo·Plans · git 维持最小集。**与 T-23 刚落的顶栏单行 h-9 口径直接冲突，须一并重定**。→ 执行计划 §3 T-32 行
+9. **T-32 右栏骨架回归 A08**（**D27**，2026-08-05 立项，**当日 open-q #28 裁定后开工阻塞解除**）——**editor 回中列已定**（用户原话喜欢 A08 的 `chat ║ editor` 并排形态，不要现在「文件打开后内嵌在右栏」）：editor 独占中列 + `ed-grip` 比例拖拽 + editor head；右栏 **files tab 降为纯文件树**，点文件在中列打开。右栏 tab 扩四项 `git|files|context|terminal`，Rail 同步四图标**仅收起时渲染**，`` Ctrl+` `` 改为聚焦 terminal tab。恢复顶栏贯通与 L0/L1/L2 降级梯（1580 / 1244——该梯是并排形态的配套，非可选）。**三项豁免维持现状**：terminal 不回 BottomDock · context 不加 Quick notes·Todo·Plans · git 维持最小集；**一处不照搬**：editor 保留多 tab（隐藏 tab = 隐藏脏文件）。**与 T-23 刚落的顶栏单行 h-9 口径直接冲突，须一并重定**。量级 **3d**。→ 执行计划 §3 T-32 行
 
 ## Deferred
 
