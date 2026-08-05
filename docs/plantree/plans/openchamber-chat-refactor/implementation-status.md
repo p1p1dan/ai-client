@@ -113,7 +113,7 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
    ④ editor surface：Rail 进入可浏览/编辑/保存；对话里点工具行 Read 行、Grep/Glob 命中行 → 跳转 editor 并定位；`@` 引用 chip 点击跳转；**文件树重命名中按 Esc 不应关面板**；脏 tab 关闭有 save/dontSave/cancel 确认；面板 380–1400 可拖，>704 树与编辑器并排；
    ⑤ terminal surface：**跑 `sleep 30` → 切 git → 切回，进程仍在、输出连续**（keep-alive 核心验收）；vim/less 里按 Esc 不关面板；切 Workspace A→B→A 恢复 A 的终端组；expanded 分屏全功能、标准态 compact 分屏禁用带提示（+N 徽章披露隐藏组）；关面板再开终端不死；
    ⑥ 跨面回归：Composer/弹窗的 Escape 原语义不回归；中文输入法合成态下快捷键不误触；旧壳本轮不可达（T-16 未做）无需回归。
-   ⑦（**2026-08-04 用户新信号待拍板**）terminal surface 是否本阶段露出：用户表示「终端暂时可以不实装，目前只供 Claude」。编排者评估：不点即零开销（keep-alive 仅首次激活后生效，未用时 xterm/pty/渲染链均不存在），成本形态与旧壳一致；该终端是用户工作区 shell，非 Agent 供应通道，与「只供 Claude」不冲突。**若裁定隐藏**：`surfaceRegistry.ts` terminal 行 `registeredOnly` 翻 `true` 一行即藏（持久化消毒自动清旧选中态，代码保留随时启用）。裁定隐藏则本清单第 ⑤ 条降级为「启用时再验」。
+   ⑦（**已拍板 2026-08-04：维持露出**——用户原话「终端既然都实现了，那就实装呗」；零代码改动，`registeredOnly` 维持 `false`，第 ⑤ 条保持全量点验）～原议题存档：terminal surface 是否本阶段露出：用户表示「终端暂时可以不实装，目前只供 Claude」。编排者评估：不点即零开销（keep-alive 仅首次激活后生效，未用时 xterm/pty/渲染链均不存在），成本形态与旧壳一致；该终端是用户工作区 shell，非 Agent 供应通道，与「只供 Claude」不冲突。**若裁定隐藏**：`surfaceRegistry.ts` terminal 行 `registeredOnly` 翻 `true` 一行即藏（持久化消毒自动清旧选中态，代码保留随时启用）。裁定隐藏则本清单第 ⑤ 条降级为「启用时再验」。
 1. **T-04 / T-07 GUI 验收**（用户人工，统一点测）：联调环境见
    [baseline 门禁「GUI 联调环境」](../../baseline/test-and-release-gates.md)（2026-07-29 起：填好 `dev.env` 后 `node scripts/dev.js`，勿用 `pnpm dev`、勿硬编码路径）
    - **T-04 thinking 卡**：🔴 **当前无法点验**——卡在网关（sonnet 空文本 / 默认模型 400，见上表）。网关侧修复后再测；仍须在**新发起轮次**验证（旧 fixture 的 153 个 thinking 块文本为空，不可追溯）。
