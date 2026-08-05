@@ -38,13 +38,20 @@ export interface RetryBannerInput {
    */
   inFlight: boolean;
   /**
-   * The turn already produced at least one block. Arriving tokens disprove the
-   * retry — the store only clears `retry` on the NEXT `session.status` without
-   * a payload, which streaming does not emit, so without this gate the banner
-   * would outlive the retry it reports. Same precedence rule that makes
-   * `turnStatus.ts` rank `streaming` above `retrying`.
+   * New blocks appeared AFTER this retry payload was first observed (the
+   * caller snapshots the turn's block count when the `retry` reference
+   * changes — MessageTimeline's `blockCountAtRetry`). Output resuming is what
+   * disproves a retry: the store only clears `retry` on the NEXT
+   * `session.status` without a payload, which streaming does not emit, so
+   * without this gate the banner would outlive the retry it reports.
+   *
+   * Deliberately NOT "the turn has any blocks" (the first cut, overturned in
+   * Codex review): that gate was monotonic, so one pre-retry tool call
+   * suppressed every later mid-turn retry — exactly the "why did it stop
+   * after the tool ran" case the banner exists to explain. Blocks that
+   * predate the retry prove nothing about it.
    */
-  hasBlocks: boolean;
+  outputSinceRetry: boolean;
 }
 
 export interface RetryBannerView {
@@ -60,7 +67,7 @@ export interface RetryBannerView {
  * `T | null` shape.
  */
 export function deriveRetryBanner(input: RetryBannerInput): RetryBannerView | null {
-  if (!input.retry || !input.inFlight || input.hasBlocks) return null;
+  if (!input.retry || !input.inFlight || input.outputSinceRetry) return null;
 
   const attempt = positiveInt(input.retry.attempt);
   const maxRetries = positiveInt(input.retry.maxRetries);

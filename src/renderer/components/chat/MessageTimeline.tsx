@@ -844,17 +844,27 @@ const ChatTurn = memo(function ChatTurn({
         ? Math.max(0, Math.floor((nowMs - streamStartedAt) / 1000))
         : 0;
 
-  const turnHasBlocks = turn.body.some((message) => message.blocks.length > 0);
+  const turnBlockCount = turn.body.reduce((count, message) => count + message.blocks.length, 0);
+  const turnHasBlocks = turnBlockCount > 0;
+
+  // T-33 (review F1): the block count snapshotted at the moment THIS retry
+  // payload appeared — every api_retry event writes a fresh `retry` object
+  // into the red-line store, so reference identity is the retry's epoch. New
+  // blocks after the snapshot mean the retried call got through; blocks that
+  // predate it (a tool call earlier in the turn) prove nothing and must not
+  // suppress the banner.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional capture — the count at the retry's arrival, not the live one
+  const blockCountAtRetry = useMemo(() => turnBlockCount, [retry]);
 
   // T-33: the banner reads `inFlightSession`, not `turnActive` — it renders
   // attempt counts, not a clock, so a session left running before this window
   // opened can still report its retry (the status row below stays absent
-  // there by design). The `hasBlocks` gate is what makes it disappear the
+  // there by design). `outputSinceRetry` is what makes it disappear the
   // moment the retried call succeeds — see `retryBanner.ts`.
   const retryBanner = deriveRetryBanner({
     retry,
     inFlight: inFlightSession,
-    hasBlocks: turnHasBlocks,
+    outputSinceRetry: turnBlockCount > blockCountAtRetry,
   });
 
   // A turn that is running with NEITHER clock (a session left running before
@@ -1127,7 +1137,7 @@ function PendingTurnHead({
   });
   // T-33: the pending head's existence is itself the in-flight proof, and no
   // turn exists yet, so the other two gate inputs are literals here.
-  const retryBanner = deriveRetryBanner({ retry, inFlight: true, hasBlocks: false });
+  const retryBanner = deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false });
   if (!status && !retryBanner) return null;
   return (
     <>

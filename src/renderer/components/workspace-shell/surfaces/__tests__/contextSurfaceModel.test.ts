@@ -13,6 +13,7 @@ import {
   initialSessionRuntimeFacts,
   reduceSessionRuntimeFacts,
   STDERR_CONTEXT_KEEP_LINES,
+  STDERR_SESSIONS_MAX,
 } from '../contextSurfaceModel';
 
 // ---------------------------------------------------------------------------
@@ -716,6 +717,49 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
       expect(next, `line=${JSON.stringify(bad)}`).toBe(prev);
     }
     expect(reduceSessionRuntimeFacts(prev, { type: 'session.stderr', sessionId: 's1' })).toBe(prev);
+  });
+
+  it(`caps stderr carriers at ${STDERR_SESSIONS_MAX} sessions, stripping only the oldest carrier's stderr (F6)`, () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
+      type: 'session.created',
+      sessionId: 'carrier-0',
+      payload: { permissionMode: 'default' },
+    });
+    for (let n = 0; n < STDERR_SESSIONS_MAX + 2; n += 1) {
+      state = reduceSessionRuntimeFacts(state, {
+        type: 'session.stderr',
+        sessionId: `carrier-${n}`,
+        payload: { line: `line ${n}` },
+      });
+    }
+    const carriers = Object.keys(state).filter((id) => state[id].stderr);
+    expect(carriers).toHaveLength(STDERR_SESSIONS_MAX);
+    // The two oldest carriers were evicted…
+    expect(state['carrier-0']?.stderr).toBeUndefined();
+    // …but eviction strips ONLY stderr: carrier-0's permissionMode survives,
+    // while carrier-1 (stderr was its only fact) is removed outright.
+    expect(state['carrier-0']?.permissionMode).toBe('default');
+    expect(state['carrier-1']).toBeUndefined();
+    const newest = state[`carrier-${STDERR_SESSIONS_MAX + 1}`];
+    expect(newest?.stderr?.lines).toEqual([`line ${STDERR_SESSIONS_MAX + 1}`]);
+  });
+
+  it('appending to an EXISTING carrier never triggers eviction churn', () => {
+    let state = initialSessionRuntimeFacts;
+    for (let n = 0; n < STDERR_SESSIONS_MAX; n += 1) {
+      state = reduceSessionRuntimeFacts(state, {
+        type: 'session.stderr',
+        sessionId: `carrier-${n}`,
+        payload: { line: 'first' },
+      });
+    }
+    const next = reduceSessionRuntimeFacts(state, {
+      type: 'session.stderr',
+      sessionId: 'carrier-0',
+      payload: { line: 'second' },
+    });
+    expect(next['carrier-0'].stderr?.lines).toEqual(['first', 'second']);
+    expect(Object.keys(next).filter((id) => next[id].stderr)).toHaveLength(STDERR_SESSIONS_MAX);
   });
 
   it('isolates sessions — stderr for A never touches B', () => {

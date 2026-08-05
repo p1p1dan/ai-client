@@ -393,6 +393,16 @@ export interface SessionStderrFacts {
 /** Context-panel ring size for forwarded stderr lines. */
 export const STDERR_CONTEXT_KEEP_LINES = 20;
 
+/**
+ * Bound on how many sessions may carry an stderr ring at once (review F6):
+ * the per-session ring bounds lines, but nothing else ever removes a session
+ * entry, so a long-running app accumulating sessions would grow without
+ * limit. Eviction strips ONLY the `stderr` field of the oldest carrier —
+ * `permissionMode` is a different fact with its own invariants and must not
+ * be collateral.
+ */
+export const STDERR_SESSIONS_MAX = 12;
+
 export interface SessionRuntimeFacts {
   permissionMode?: SessionPermissionMode;
   /** T-35: absent until the first `session.stderr` event arrives. */
@@ -481,5 +491,21 @@ function foldStderrLine(
   const previous = existing?.stderr;
   const lines = [...(previous?.lines ?? []), line].slice(-STDERR_CONTEXT_KEEP_LINES);
   const stderr: SessionStderrFacts = { lines, total: (previous?.total ?? 0) + 1 };
-  return { ...prev, [sessionId]: { ...existing, stderr } };
+  const next: SessionRuntimeFactsState = { ...prev, [sessionId]: { ...existing, stderr } };
+  if (previous) return next;
+
+  // This session is a NEW stderr carrier — enforce the carrier cap (F6).
+  // Object key order is insertion order, so the front of this list is the
+  // oldest carrier; strip until the others fit beside the current one.
+  const carriers = Object.keys(next).filter((id) => id !== sessionId && next[id].stderr);
+  if (carriers.length <= STDERR_SESSIONS_MAX - 1) return next;
+  for (const id of carriers.slice(0, carriers.length - (STDERR_SESSIONS_MAX - 1))) {
+    const { stderr: _evicted, ...rest } = next[id];
+    if (Object.keys(rest).length === 0) {
+      delete next[id];
+    } else {
+      next[id] = rest;
+    }
+  }
+  return next;
 }

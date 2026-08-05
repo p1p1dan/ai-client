@@ -20,7 +20,7 @@ const FULL: RetryBannerInput = {
     error: 'unknown',
   },
   inFlight: true,
-  hasBlocks: false,
+  outputSinceRetry: false,
 };
 
 const TITLE_TAIL = '— the turn is still running';
@@ -35,8 +35,13 @@ describe('deriveRetryBanner — gate', () => {
     expect(deriveRetryBanner({ ...FULL, inFlight: false })).toBeNull();
   });
 
-  it('arriving tokens disprove the retry (streaming outranks retrying, as in turnStatus.ts)', () => {
-    expect(deriveRetryBanner({ ...FULL, hasBlocks: true })).toBeNull();
+  it('output arriving AFTER the retry disproves it — and only that', () => {
+    // The boolean is defined caller-side as "new blocks since THIS retry
+    // payload appeared" (MessageTimeline's blockCountAtRetry snapshot).
+    // F1 (Codex review): a pre-retry tool call keeps this false, so a
+    // mid-turn retry after tool output still banners.
+    expect(deriveRetryBanner({ ...FULL, outputSinceRetry: true })).toBeNull();
+    expect(deriveRetryBanner({ ...FULL, outputSinceRetry: false })).not.toBeNull();
   });
 });
 

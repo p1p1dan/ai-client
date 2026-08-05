@@ -430,9 +430,15 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('T-33: the retry banner is wired into the last turn and the pending head', () => {
     // ChatTurn feeds the real gate inputs…
     expectCalled('inFlight: inFlightSession');
-    expectCalled('hasBlocks: turnHasBlocks');
+    expectCalled('outputSinceRetry: turnBlockCount > blockCountAtRetry');
     // …the pending head's are literals, because its existence is the proof.
-    expectCalled('deriveRetryBanner({ retry, inFlight: true, hasBlocks: false })');
+    expectCalled('deriveRetryBanner({ retry, inFlight: true, outputSinceRetry: false })');
+    // F1 (Codex review): the disproof is "new output SINCE this retry", never
+    // "the turn ever had output" — the snapshot is keyed to the retry
+    // payload's identity, so a pre-retry tool call cannot suppress a later
+    // mid-turn retry.
+    expectWired('const blockCountAtRetry = useMemo(() => turnBlockCount, [retry]);');
+    expectUnwired('outputSinceRetry: turnHasBlocks');
     expect(
       (CALL_SITES.match(/<RetryBanner/g) ?? []).length,
       'the banner must render in exactly the two head slots'

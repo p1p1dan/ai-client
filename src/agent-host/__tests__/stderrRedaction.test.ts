@@ -39,6 +39,61 @@ describe('redactStderrLine — credentials', () => {
   });
 });
 
+describe('redactStderrLine — adversarial matrix (Codex review F2–F4)', () => {
+  it('masks non-Anthropic provider keys and generic sensitive assignments', () => {
+    expect(redactStderrLine('OPENAI_API_KEY=sk-proj-abc123def456ghi789')).toBe(
+      'OPENAI_API_KEY=[redacted]'
+    );
+    expect(redactStderrLine('OPENAI_API_KEY="sk-abc123"')).toBe('OPENAI_API_KEY="[redacted]"');
+    expect(redactStderrLine('api_key=provider-secret')).toBe('api_key=[redacted]');
+    expect(redactStderrLine('refresh_token: rt-12345 expired')).toBe(
+      'refresh_token: [redacted] expired'
+    );
+  });
+
+  it('destroys Basic blobs whole and matches auth schemes case-insensitively', () => {
+    expect(redactStderrLine('Authorization: Basic dXNlcjpzZWNyZXQ=')).toBe(
+      'Authorization: Basic [redacted]'
+    );
+    const lower = redactStderrLine('authorization: bearer eyJhbGciOiJIUzI1NiJ9.payload.signature');
+    expect(lower).toBe('authorization: bearer [redacted]');
+    expect(redactStderrLine('Authorization: BEARER opaque-access-token')).toBe(
+      'Authorization: BEARER [redacted]'
+    );
+  });
+
+  it('handles JSON-quoted names and quoted values containing spaces (whole value dies)', () => {
+    expect(redactStderrLine('{"ANTHROPIC_API_KEY":"plain-secret-value"}')).toBe(
+      '{"ANTHROPIC_API_KEY":"[redacted]"}'
+    );
+    expect(redactStderrLine('ANTHROPIC_AUTH_TOKEN="super secret value"')).toBe(
+      'ANTHROPIC_AUTH_TOKEN="[redacted]"'
+    );
+  });
+
+  it('masks URL authority userinfo, keeping scheme and host', () => {
+    expect(
+      redactStderrLine('request failed: https://alice:secret-password@gateway.example.com/v1')
+    ).toBe('request failed: https://[redacted]@gateway.example.com/v1');
+    expect(redactStderrLine('proxy error: http://build-user:p%40ssword@proxy.internal:8080/')).toBe(
+      'proxy error: http://[redacted]@proxy.internal:8080/'
+    );
+    expect(redactStderrLine('token-as-user: https://tok123@host/ and https://a:b@h2/')).toBe(
+      'token-as-user: https://[redacted]@host/ and https://[redacted]@h2/'
+    );
+  });
+
+  it('does not eat ordinary diagnostic vocabulary near the sensitive-name rules', () => {
+    for (const line of [
+      'input_tokens: 4096 output_tokens: 512',
+      'token count exceeded for this turn',
+      'max_tokens: 32000',
+    ]) {
+      expect(redactStderrLine(line)).toBe(line);
+    }
+  });
+});
+
 describe('redactStderrLine — user-directory paths', () => {
   it('collapses the user-directory prefix to ~ on all three OS shapes, keeping the tail', () => {
     expect(redactStderrLine('ENOENT: /home/dan/projects/app/cli.js')).toBe(
@@ -49,6 +104,21 @@ describe('redactStderrLine — user-directory paths', () => {
     );
     expect(redactStderrLine('spawn C:\\Users\\Alice\\AppData\\claude.exe failed')).toBe(
       'spawn ~\\AppData\\claude.exe failed'
+    );
+  });
+
+  it('covers the Windows/UNC/WSL variants a Windows-side CLI actually prints (review F5)', () => {
+    expect(redactStderrLine('C:/Users/Alice/AppData/Roaming/Claude/config.json')).toBe(
+      '~/AppData/Roaming/Claude/config.json'
+    );
+    expect(redactStderrLine('\\\\SERVER\\Users\\Alice\\.claude\\settings.json')).toBe(
+      '~\\.claude\\settings.json'
+    );
+    expect(redactStderrLine('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.claude\\settings.json')).toBe(
+      '~\\.claude\\settings.json'
+    );
+    expect(redactStderrLine('/mnt/c/Users/Alice/.claude/settings.json')).toBe(
+      '~/.claude/settings.json'
     );
   });
 

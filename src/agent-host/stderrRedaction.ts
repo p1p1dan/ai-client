@@ -21,26 +21,75 @@
 
 /**
  * Ordered rules; every rule runs on every line (a line can hold a token AND a
- * path). Credential rules run before the path rule so a secret inside a path
+ * path). Credential rules run before the path rules so a secret inside a path
  * (`/home/dan/.keys/sk-ant-xxx`) is destroyed, not merely relocated.
+ *
+ * Review-hardened set (Codex adversarial pass, 2026-08-05): provider-generic
+ * key shapes, case-insensitive auth schemes, Basic blobs (base64 is
+ * reversible — the whole token dies), URL authority userinfo, and a generic
+ * sensitive-assignment rule with real value-shape handling (JSON keys, quoted
+ * values with spaces, escaped quotes). Over-masking is the safe direction;
+ * every rule keeps the NAME of what was masked, because "which credential was
+ * involved" is itself the diagnostic fact.
  */
 const REDACTION_RULES: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
-  // Anthropic key material by shape, wherever it appears.
+  // Key material by shape, wherever it appears: Anthropic's sk-ant-* at any
+  // length, plus generic sk-* (sk-proj-…, sk-live-…) long enough to be
+  // unambiguous.
   { pattern: /sk-ant-[A-Za-z0-9_-]+/g, replacement: '[redacted]' },
-  // Values assigned to ANY ANTHROPIC_* variable (env dumps, error echoes):
-  // `ANTHROPIC_AUTH_TOKEN=…`, `ANTHROPIC_BASE_URL: "…"`. The name survives —
-  // WHICH variable was involved is exactly the diagnostic fact.
-  {
-    pattern: /(ANTHROPIC_[A-Z0-9_]+\s*[=:]\s*)("?)[^\s"']+/g,
-    replacement: '$1$2[redacted]',
-  },
-  // HTTP auth headers echoed into errors.
-  { pattern: /(Bearer\s+)[^\s"']+/g, replacement: '$1[redacted]' },
+  { pattern: /\bsk-[A-Za-z0-9_-]{16,}/g, replacement: '[redacted]' },
+  // HTTP auth schemes, case-insensitive, whole token destroyed.
+  { pattern: /((?:bearer|basic)\s+)[^\s"']+/gi, replacement: '$1[redacted]' },
   { pattern: /(x-api-key["':\s=]+)[^\s"']+/gi, replacement: '$1[redacted]' },
-  // User-directory prefixes, all three OS shapes → `~` (username collapsed,
-  // path tail kept).
+  // URL authority userinfo (proxy errors, base-URL echoes):
+  // `scheme://user:pass@host` / `scheme://token@host` → `scheme://[redacted]@host`.
+  { pattern: /([a-z][a-z0-9+.-]*:\/\/)[^\s/@"']+@/gi, replacement: '$1[redacted]@' },
+];
+
+/**
+ * Values assigned to sensitive-named variables/fields — env dumps, config
+ * echoes, JSON fragments. Three value shapes are consumed whole (double- or
+ * single-quoted incl. escapes and inner spaces, or a bare token), and the
+ * name may itself be JSON-quoted. The name survives; the value dies.
+ */
+const SENSITIVE_ASSIGNMENT = new RegExp(
+  '(["\']?)(' +
+    [
+      'ANTHROPIC_[A-Z0-9_]+',
+      '[A-Z][A-Z0-9_]*_(?:API_KEY|AUTH_TOKEN|ACCESS_TOKEN|REFRESH_TOKEN|SECRET|TOKEN|PASSWORD)',
+      'api[_-]?key',
+      'access[_-]?token',
+      'auth[_-]?token',
+      'refresh[_-]?token',
+      'client[_-]?secret',
+      'password',
+    ].join('|') +
+    ')\\1(\\s*[=:]\\s*)("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^\\s"\']+)',
+  'gi'
+);
+
+function redactSensitiveAssignments(line: string): string {
+  return line.replace(SENSITIVE_ASSIGNMENT, (_match, quote, name, separator, value) => {
+    const valueQuote = value.startsWith('"') ? '"' : value.startsWith("'") ? "'" : '';
+    return `${quote}${name}${quote}${separator}${valueQuote}[redacted]${valueQuote}`;
+  });
+}
+
+/**
+ * User-directory prefixes → `~` (username collapsed, path tail kept). Non-user
+ * absolute paths (`/usr/lib/…`) reveal nothing personal and pass through.
+ */
+const PATH_RULES: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+  // Windows drive, both separator styles (C:\Users\Alice, C:/Users/Alice).
+  // MUST run before the POSIX rule, which would otherwise eat the
+  // `/Users/Alice` substring of `C:/Users/Alice` and leave `C:~`.
+  { pattern: /[A-Za-z]:[\\/]Users[\\/][^\\/\s"':]+/g, replacement: '~' },
+  // WSL-mapped Windows home (/mnt/c/Users/Alice) — same ordering reason.
+  { pattern: /\/mnt\/[a-z]\/Users\/[^/\s"':]+/gi, replacement: '~' },
+  // UNC shares incl. \\wsl.localhost\<distro>\home\<user>.
+  { pattern: /\\\\[^\\\s"']+(?:\\[^\\\s"']+)*?\\(?:Users|home)\\[^\\\s"':]+/gi, replacement: '~' },
+  // POSIX / macOS home.
   { pattern: /(?:\/home|\/Users)\/[^/\\\s"':]+/g, replacement: '~' },
-  { pattern: /[A-Za-z]:\\Users\\[^\\/\s"':]+/g, replacement: '~' },
 ];
 
 /**
@@ -62,6 +111,10 @@ export const STDERR_FORWARD_MAX_LINES_PER_TURN = 50;
 export function redactStderrLine(line: string): string {
   let redacted = line;
   for (const rule of REDACTION_RULES) {
+    redacted = redacted.replace(rule.pattern, rule.replacement);
+  }
+  redacted = redactSensitiveAssignments(redacted);
+  for (const rule of PATH_RULES) {
     redacted = redacted.replace(rule.pattern, rule.replacement);
   }
   return redacted;
