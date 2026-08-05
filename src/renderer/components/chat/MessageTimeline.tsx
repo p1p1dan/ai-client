@@ -65,6 +65,7 @@ import { resolveResumeModel } from './models';
 import { QuestionCard } from './QuestionCard';
 import { canRespondToPermission, deriveQuestionCardState } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
+import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
@@ -423,7 +424,12 @@ export function MessageTimeline({
                     sendStatus={isLastTurn ? attachedSendStatus : null}
                     baselineKnown={sendBaseline != null}
                     baselineMessageId={sendBaseline?.messageId ?? null}
-                    retry={sessionRetry}
+                    // T-33: session-scoped retry belongs to the turn actually
+                    // in flight — the pending head below while the user echo
+                    // has not landed, the last turn otherwise. Nulled for every
+                    // other turn for the same reason the two ticking props are
+                    // (F7): a retry tick must not break `memo` session-wide.
+                    retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
                     nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
                     footerNowMs={footerNowMs}
                     getMetadata={getMeta}
@@ -838,6 +844,19 @@ const ChatTurn = memo(function ChatTurn({
         ? Math.max(0, Math.floor((nowMs - streamStartedAt) / 1000))
         : 0;
 
+  const turnHasBlocks = turn.body.some((message) => message.blocks.length > 0);
+
+  // T-33: the banner reads `inFlightSession`, not `turnActive` — it renders
+  // attempt counts, not a clock, so a session left running before this window
+  // opened can still report its retry (the status row below stays absent
+  // there by design). The `hasBlocks` gate is what makes it disappear the
+  // moment the retried call succeeds — see `retryBanner.ts`.
+  const retryBanner = deriveRetryBanner({
+    retry,
+    inFlight: inFlightSession,
+    hasBlocks: turnHasBlocks,
+  });
+
   // A turn that is running with NEITHER clock (a session left running before
   // this window opened) gets no status row rather than one frozen at "0s" —
   // the composer showed nothing in that case either, so no information is lost.
@@ -849,7 +868,7 @@ const ChatTurn = memo(function ChatTurn({
     attachmentCount: sendStatus?.attachmentCount ?? 0,
     attachmentBytes: sendStatus?.attachmentBytes ?? 0,
     retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
-    hasBlocks: turn.body.some((message) => message.blocks.length > 0),
+    hasBlocks: turnHasBlocks,
     // F4: a session failure belongs to the turn that was actually running when
     // it happened — never to the completed turn that merely happens to be last
     // while the next send's user echo is still in flight, and never to a
@@ -1007,6 +1026,10 @@ const ChatTurn = memo(function ChatTurn({
         </div>
       )}
       <div className={turnBodyClass()}>
+        {/* T-33: top of the turn body, below the pinned bubble band — the
+            banner describes the reply in progress, so it lives in the reply
+            zone, not above the user's own message. */}
+        {retryBanner && <RetryBanner view={retryBanner} />}
         {collapsible ? (
           // F11: `Collapsible.Root` renders a bare `<div>`, so without a class
           // of its own the trigger row and the panel sat flush at 0px while
@@ -1102,10 +1125,40 @@ function PendingTurnHead({
     retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
     hasBlocks: false,
   });
-  if (!status) return null;
+  // T-33: the pending head's existence is itself the in-flight proof, and no
+  // turn exists yet, so the other two gate inputs are literals here.
+  const retryBanner = deriveRetryBanner({ retry, inFlight: true, hasBlocks: false });
+  if (!status && !retryBanner) return null;
   return (
-    <div className={turnHeadClass()}>
-      <TurnStatusContent status={status} />
+    <>
+      {retryBanner && <RetryBanner view={retryBanner} />}
+      {status && (
+        <div className={turnHeadClass()}>
+          <TurnStatusContent status={status} />
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * T-33: non-fatal transport-retry banner. Tone is the `status-running` trio —
+ * the repo's established "running, non-fatal" banner idiom
+ * (`HostStatusBanner.tsx`, design-system 运行中横幅) — deliberately NOT
+ * `warning`/`destructive`: the banner exists to say the turn is alive, and an
+ * alarm color would claim the opposite.
+ */
+function RetryBanner({ view }: { view: RetryBannerView }) {
+  return (
+    <div
+      className="flex items-start gap-2 rounded-md border border-status-running/30 bg-status-running/10 px-3 py-2 text-meta text-status-running"
+      role="status"
+    >
+      <RefreshCw className="mt-0.5 size-3.5 shrink-0 animate-spin" />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">{view.title}</p>
+        {view.detail && <p className="mt-0.5 opacity-90">{view.detail}</p>}
+      </div>
     </div>
   );
 }

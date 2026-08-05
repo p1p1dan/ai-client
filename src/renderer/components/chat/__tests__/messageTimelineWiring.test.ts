@@ -422,6 +422,27 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // …but the FOOTER's own right alignment is a different element and stays.
     expectCalled('turnFooterClass()');
   });
+
+  // T-33: the retry banner is derived by the pure function and mounted in BOTH
+  // head slots — the attached last turn and the pending head. Without the
+  // second mount the handshake window (retry before the user echo lands) shows
+  // nothing, which is exactly the wait the banner exists to explain.
+  it('T-33: the retry banner is wired into the last turn and the pending head', () => {
+    // ChatTurn feeds the real gate inputs…
+    expectCalled('inFlight: inFlightSession');
+    expectCalled('hasBlocks: turnHasBlocks');
+    // …the pending head's are literals, because its existence is the proof.
+    expectCalled('deriveRetryBanner({ retry, inFlight: true, hasBlocks: false })');
+    expect(
+      (CALL_SITES.match(/<RetryBanner/g) ?? []).length,
+      'the banner must render in exactly the two head slots'
+    ).toBe(2);
+    // A retry tick must not re-render every turn in the session: the prop is
+    // narrowed to the one turn that can show it, like the two ticking props.
+    expectCalled('retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}');
+    // The pending head keeps rendering when EITHER piece exists.
+    expectWired('if (!status && !retryBanner) return null;');
+  });
 });
 
 /**
