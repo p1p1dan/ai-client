@@ -1,5 +1,4 @@
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
-import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import type {
   ClaudeProject,
   ClaudeSessionMeta,
@@ -447,9 +446,9 @@ export default function App() {
   const autoUpdateEnabled = useSettingsStore((s) => s.autoUpdateEnabled);
   const hideGroups = useSettingsStore((s) => s.hideGroups);
   const temporaryWorkspaceEnabled = useSettingsStore((s) => s.temporaryWorkspaceEnabled);
-  const useOpenChamberShellSetting = useSettingsStore((s) => s.useOpenChamberShell);
-  // Team-track bypass: always show OpenChamber shell while onboarding gate is skipped.
-  const useOpenChamberShell = SKIP_ONBOARDING_GATE || useOpenChamberShellSetting;
+  // T-16: the Appearance switch is the only input — no dev-flag short circuit,
+  // or turning it off would be silently undone on the next render.
+  const useOpenChamberShell = useSettingsStore((s) => s.useOpenChamberShell);
   const fileTreeDisplayMode = useSettingsStore((s) => s.fileTreeDisplayMode);
   const hasActiveWorktree = Boolean(activeWorktree?.path);
   const isHomeActive = isHomeViewActive || !selectedRepo;

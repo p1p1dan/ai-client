@@ -1,4 +1,3 @@
-import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SettingsCategory } from '@/components/settings/constants';
 import { useSettingsStore } from '@/stores/settings';
@@ -40,8 +39,10 @@ export function useSettingsState(
 
   const settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
   const useOpenChamberShell = useSettingsStore((s) => s.useOpenChamberShell);
-  // OpenChamber shell replaces the main tab surface — force modal settings there.
-  const forceSettingsModal = SKIP_ONBOARDING_GATE || useOpenChamberShell;
+  // OpenChamber shell replaces the main tab surface — force modal settings
+  // there. T-16: the dev-flag term is gone, so the legacy shell gets its
+  // `settingsDisplayMode: 'tab'` behaviour back once the switch is off.
+  const forceSettingsModal = useOpenChamberShell;
   const prevSettingsDisplayModeRef = useRef<typeof settingsDisplayMode | null>(null);
 
   // Persist settings category

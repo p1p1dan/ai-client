@@ -683,6 +683,9 @@ export const zhTranslations: Record<string, string> = {
   'Stage changes before committing': '暂存更改后才能提交',
   System: '跟随系统',
   'Three-column layout: repos, worktrees, workspace': '三栏布局：仓库、worktree、工作区',
+  'OpenChamber Workspace Shell': 'OpenChamber 工作区外壳',
+  'Three-column chat workspace with icon rail and context surfaces':
+    '三列气泡对话工作区：图标导轨 + 上下文面板。关闭后立即回到旧版标签页界面。',
   'File Tree Display': '文件树展示',
   'Integrated tree': '集成模式',
   'Tree + editor in one panel': '文件树与编辑器在同一面板',

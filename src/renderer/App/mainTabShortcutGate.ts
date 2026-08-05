@@ -1,8 +1,8 @@
 /**
  * M2: gate for the legacy `mainTabKeybindings` branch in
- * `useAppKeyboardShortcuts.ts`. The OpenChamber shell (App.tsx's own
- * `useOpenChamberShell = SKIP_ONBOARDING_GATE || settings.useOpenChamberShell`)
- * binds its own Ctrl/Cmd+1..4 via `workspace-shell/shellShortcuts.ts`'s
+ * `useAppKeyboardShortcuts.ts`. The OpenChamber shell (T-16: rendered on
+ * `settings.useOpenChamberShell` alone) binds its own Ctrl/Cmd+1..4 via
+ * `workspace-shell/shellShortcuts.ts`'s
  * `useShellShortcuts`. That hook is mounted unconditionally in App.tsx
  * regardless of which shell renders, so on Linux/Windows (both bind `ctrlKey`)
  * the two handlers double-fire on the same keypress — the legacy branch

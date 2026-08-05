@@ -594,7 +594,7 @@ export function AppearanceSettings() {
           <div>
             <p className="text-sm font-medium">{t('OpenChamber Workspace Shell')}</p>
             <p className="text-xs text-muted-foreground">
-              {t('Four-zone chat workspace prototype with mock runtime events')}
+              {t('Three-column chat workspace with icon rail and context surfaces')}
             </p>
           </div>
         </div>

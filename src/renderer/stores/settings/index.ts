@@ -37,6 +37,7 @@ import {
   getDefaultShellConfig,
 } from './defaults';
 import { cleanupLegacyFields, migrateSettings } from './migration';
+import { readShellPreference, writeShellPreference } from './shellPreferenceMirror';
 import { electronStorage } from './storage';
 import type {
   BackgroundSizeMode,
@@ -169,7 +170,14 @@ export function getInitialState() {
     // Beta features
     todoEnabled: defaultTodoEnabled,
     glowEffectEnabled: false,
-    useOpenChamberShell: false,
+    // T-16: on by default (`DEFAULT_USE_OPENCHAMBER_SHELL`). Until T-16 the
+    // value was irrelevant — Root.tsx force-wrote `true` on every launch — so
+    // every existing profile already persists `true` and flipping the default
+    // changes nothing for them. It is a fresh profile that would otherwise land
+    // in the legacy tab shell, which is the fallback, not the product.
+    // The read goes through the synchronous mirror so the first frame already
+    // shows the chosen shell; `electronStorage` rehydration is async.
+    useOpenChamberShell: readShellPreference(),
     temporaryWorkspaceEnabled: false,
     defaultTemporaryPath: '',
     autoCreateSessionOnTempActivate: false,
@@ -559,7 +567,12 @@ export const useSettingsStore = create<SettingsState>()(
       // Beta Feature Setters
       setTodoEnabled: (todoEnabled) => set({ todoEnabled }),
       setGlowEffectEnabled: (glowEffectEnabled) => set({ glowEffectEnabled }),
-      setUseOpenChamberShell: (useOpenChamberShell) => set({ useOpenChamberShell }),
+      setUseOpenChamberShell: (useOpenChamberShell) => {
+        // Mirror first: the persisted write is async, and this value decides
+        // what the next launch paints before rehydration lands (T-16).
+        writeShellPreference(useOpenChamberShell);
+        set({ useOpenChamberShell });
+      },
       setTemporaryWorkspaceEnabled: (temporaryWorkspaceEnabled) =>
         set({ temporaryWorkspaceEnabled }),
       setDefaultTemporaryPath: (defaultTemporaryPath) => set({ defaultTemporaryPath }),
@@ -779,6 +792,11 @@ export const useSettingsStore = create<SettingsState>()(
       onRehydrateStorage: () => (state) => {
         const effectiveState = state ?? useSettingsStore.getState();
         applyInitialSettings(effectiveState);
+
+        // T-16: settings.json stays the authority — re-point the synchronous
+        // mirror at the hydrated value so an out-of-band edit (or a cleared
+        // localStorage) converges after one launch instead of fighting it.
+        writeShellPreference(effectiveState.useOpenChamberShell);
 
         // Sync renderer logging configuration after settings are loaded
         updateRendererLogging(effectiveState.loggingEnabled, effectiveState.logLevel);
