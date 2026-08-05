@@ -37,8 +37,13 @@ export function MainHeader({
   const contextLine = [activeProject?.name, activeWorkspace?.name].filter(Boolean).join(' · ');
 
   return (
-    // T-23 (P-22): one line, h-9 so the three top bars (LeftNav / here /
-    // ContextPanel) share one flush border-b. The old second line is gone —
+    // T-23 (P-22): one line, h-9. T-32 (D27) moved this header out of the chat
+    // column so it now SPANS chat + panel + rail (A08「顶栏贯通中右」,
+    // a08:1078) — the flush line it shares is therefore LeftNav's top bar, and
+    // the panel's tab strip sits one row BELOW it («三 tab 明确居其下»), not
+    // beside it. T-23's original "three top bars flush" wording described the
+    // pre-T-32 shell and no longer holds; height and contents are unchanged.
+    // The old second line is gone —
     // but NOT because the Composer target bar repeats it: in session mode the
     // target row drops its folder slot (A07 §08②), so the workspace chip
     // below is the project's only header presence, with the full path behind

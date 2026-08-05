@@ -8,7 +8,7 @@ import { ContextPanelRail } from './ContextPanelRail';
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
 import { ShellResizeHandle } from './ShellResizeHandle';
-import { clampSidebarWidth, SIDEBAR_COLLAPSED_WIDTH } from './shellLayoutModel';
+import { clampSidebarWidth, deriveRailVisible, SIDEBAR_COLLAPSED_WIDTH } from './shellLayoutModel';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 
@@ -45,6 +45,11 @@ export function WorkspaceShell({
   const toggleContextPanel = useShellLayoutStore((state) => state.toggleContextPanel);
   const readingWidthMode = useShellLayoutStore((state) => state.readingWidthMode);
   const toggleReadingWidthMode = useShellLayoutStore((state) => state.toggleReadingWidthMode);
+
+  // S4 replaces this with the level-ladder composition; until then "the panel
+  // is visible" is still exactly "a surface is active".
+  const panelVisible = activeSurfaceId !== null;
+  const railVisible = deriveRailVisible({ panelVisible });
 
   useSyncChatWorkspaceTree({
     repositories,
@@ -112,21 +117,30 @@ export function WorkspaceShell({
         )}
       </div>
 
-      {/* Measured row: Main + ContextPanel only (not Sidebar/Rail) — fraction's denominator. */}
-      <div ref={contentRowRef} className="relative flex min-w-0 flex-1 overflow-hidden">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <MainHeader
-            contextPanelOpen={activeSurfaceId !== null}
-            onToggleContextPanel={toggleContextPanel}
-            readingWidthMode={readingWidthMode}
-            onToggleReadingWidth={toggleReadingWidthMode}
-          />
-          <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
+      {/*
+        T-32 (D27): everything right of the sidebar is one column now, so the
+        header can span chat + panel + rail instead of sitting inside the chat
+        column (A08「顶栏贯通中右」, a08:1078-1079). The measured row below it is
+        unchanged — still Main + ContextPanel only, with the rail OUTSIDE it, so
+        `availableWidth` keeps meaning "how wide the panel may get" and the
+        fraction math from T-22 needs no adjustment.
+      */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <MainHeader
+          contextPanelOpen={panelVisible}
+          onToggleContextPanel={toggleContextPanel}
+          readingWidthMode={readingWidthMode}
+          onToggleReadingWidth={toggleReadingWidthMode}
+        />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div ref={contentRowRef} className="relative flex min-w-0 flex-1 overflow-hidden">
+            <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
+            <ContextPanel availableWidth={availableWidth} />
+          </div>
+          {/* A08「展开时右缘无图标」: the rail is the collapsed-state switcher only. */}
+          {railVisible && <ContextPanelRail />}
         </div>
-        <ContextPanel availableWidth={availableWidth} />
       </div>
-
-      <ContextPanelRail />
 
       {fileDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-md border-2 border-primary border-dashed bg-primary/5">
