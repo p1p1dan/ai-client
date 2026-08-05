@@ -46,8 +46,9 @@ describe('resolveShellShortcut', () => {
   });
 
   describe('Ctrl/Cmd+1..4 — select surface', () => {
-    it('maps Digit1..4 to context/git/editor/terminal in rail order on non-mac', () => {
-      const expected = ['context', 'git', 'editor', 'terminal'];
+    it('maps Digit1..4 to git/editor(files)/context/terminal in rail order on non-mac', () => {
+      // T-32 (D27): rail order is A08's tab order now, so the digits moved with it.
+      const expected = ['git', 'editor', 'context', 'terminal'];
       for (let digit = 1; digit <= 4; digit++) {
         const action = resolveShellShortcut(input({ code: `Digit${digit}`, ctrlKey: true }));
         expect(action).toEqual({ type: 'select-surface', surfaceId: expected[digit - 1] });
@@ -55,7 +56,8 @@ describe('resolveShellShortcut', () => {
     });
 
     it('maps Digit1..4 the same way on mac with metaKey', () => {
-      const expected = ['context', 'git', 'editor', 'terminal'];
+      // T-32 (D27): rail order is A08's tab order now, so the digits moved with it.
+      const expected = ['git', 'editor', 'context', 'terminal'];
       for (let digit = 1; digit <= 4; digit++) {
         const action = resolveShellShortcut(
           input({ code: `Digit${digit}`, metaKey: true, isMac: true })

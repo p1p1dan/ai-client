@@ -28,8 +28,9 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useShellLayoutStore } from '@/stores/shellLayout';
+import { derivePanelTabs } from './panelTabsModel';
 import { RAIL_WIDTH } from './shellLayoutModel';
-import { railSurfaces, type SurfaceIconName, shouldShowActivityDot } from './surfaceRegistry';
+import type { SurfaceIconName } from './surfaceRegistry';
 import { useGitChangeCount } from './useGitChangeCount';
 
 export const SURFACE_ICON_MAP: Record<SurfaceIconName, LucideIcon> = {
@@ -53,7 +54,9 @@ export function ContextPanelRail() {
   const selectSurface = useShellLayoutStore((state) => state.selectSurface);
   const changedFilesCount = useGitChangeCount();
 
-  const surfaces = railSurfaces(railOrder);
+  // T-32: same source as the panel's tab strip (`derivePanelTabs`) so the two
+  // lists — and their git-only dots — can never drift apart.
+  const surfaces = derivePanelTabs(railOrder, { changedFilesCount });
 
   return (
     <nav
@@ -65,7 +68,7 @@ export function ContextPanelRail() {
       {surfaces.map((surface) => {
         const Icon = SURFACE_ICON_MAP[surface.icon];
         const isActive = surface.id === activeSurfaceId;
-        const showDot = shouldShowActivityDot(surface.id, { changedFilesCount });
+        const showDot = surface.showDot;
 
         return (
           <Tooltip key={surface.id}>

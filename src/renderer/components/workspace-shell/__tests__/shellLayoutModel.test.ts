@@ -208,7 +208,8 @@ describe('reduceShellSurface', () => {
 
   it('opens the first always-surface when there is no lastSurfaceId', () => {
     const result = reduceShellSurface(initialShellSurfaceState, { type: 'open' });
-    expect(result.activeSurfaceId).toBe('context');
+    // T-32: the first always-surface is `git` under A08's tab order.
+    expect(result.activeSurfaceId).toBe('git');
   });
 
   it('opens the requested surface when open carries an explicit id', () => {
@@ -243,7 +244,8 @@ describe('reduceShellSurface', () => {
 
   it('opens via toggle-panel with the fallback surface when nothing was open', () => {
     const result = reduceShellSurface(initialShellSurfaceState, { type: 'toggle-panel' });
-    expect(result.activeSurfaceId).toBe('context');
+    // T-32: the first always-surface is `git` under A08's tab order.
+    expect(result.activeSurfaceId).toBe('git');
   });
 
   it('drops expanded when the panel closes', () => {

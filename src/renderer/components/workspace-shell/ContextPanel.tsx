@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useShellLayoutStore } from '@/stores/shellLayout';
-import { SURFACE_ICON_MAP } from './ContextPanelRail';
+import { derivePanelTabs } from './panelTabsModel';
 import { ShellResizeHandle } from './ShellResizeHandle';
 import { SurfacePlaceholder } from './SurfacePlaceholder';
 import {
@@ -37,6 +37,7 @@ import {
 } from './shellLayoutModel';
 import { type ContextSurfaceId, getSurface } from './surfaceRegistry';
 import { SURFACE_VIEWS } from './surfaceViews';
+import { useGitChangeCount } from './useGitChangeCount';
 
 interface ContextPanelProps {
   /** Measured Main+Panel row width; null before the first measurement. */
@@ -50,8 +51,13 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
   const widthBySurface = useShellLayoutStore((state) => state.widthBySurface);
   const expanded = useShellLayoutStore((state) => state.expanded);
   const closeSurface = useShellLayoutStore((state) => state.closeSurface);
+  const selectSurface = useShellLayoutStore((state) => state.selectSurface);
   const toggleExpanded = useShellLayoutStore((state) => state.toggleExpanded);
   const setSurfaceWidth = useShellLayoutStore((state) => state.setSurfaceWidth);
+
+  const railOrder = useShellLayoutStore((state) => state.railOrder);
+  const changedFilesCount = useGitChangeCount();
+  const tabs = derivePanelTabs(railOrder, { changedFilesCount });
 
   const isOpen = activeSurfaceId !== null;
   // Content stays mounted across close/open (batch 3 correction): deriving the
@@ -108,7 +114,6 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
     registrations: SURFACE_VIEWS,
   });
 
-  const Icon = descriptor ? SURFACE_ICON_MAP[descriptor.icon] : null;
   const contentRegistration = contentSurfaceId ? SURFACE_VIEWS[contentSurfaceId] : undefined;
 
   return (
@@ -148,33 +153,68 @@ export function ContextPanel({ availableWidth }: ContextPanelProps) {
         // open/close/resize, but the inner column must not reflow mid-transition —
         // including the close transition, which keeps the last open width.
         <div className="flex h-full flex-col" style={{ width: contentWidth }}>
-          <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2">
-            {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
-            <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-              {t(descriptor.labelKey)}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="h-6 w-6 shrink-0"
-              aria-label={t(expanded ? 'Restore panel' : 'Expand panel')}
-              onClick={toggleExpanded}
-            >
-              {expanded ? (
-                <Minimize2 className="h-3.5 w-3.5" />
-              ) : (
-                <Maximize2 className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="h-6 w-6 shrink-0"
-              aria-label={t('Close panel')}
-              onClick={closeSurface}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
+          {/*
+            T-32 (D27): A08's tab strip replaces the single-surface header —
+            h-9, the tabs splitting the width evenly, actions pinned right
+            (a08:1259-1265). `expanded` is NOT part of A08 but is an existing
+            capability the §7 comparison never superseded, so it stays in the
+            action slot next to close.
+          */}
+          <div className="flex h-9 shrink-0 items-center gap-1 border-b px-1" role="tablist">
+            {tabs.map((tab) => {
+              const selected = tab.id === contentSurfaceId;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  title={t(tab.descriptionKey)}
+                  className={cn(
+                    'relative flex h-7 min-w-0 flex-1 items-center justify-center rounded-sm px-1 text-meta transition-colors',
+                    // Same mutual-exclusion reason as the rail (see
+                    // ContextPanelRail): `hover:bg-hover` (0,2,0) would outrank
+                    // a plain `bg-selection` (0,1,0) and erase the active tab.
+                    selected
+                      ? 'bg-selection font-medium text-primary'
+                      : 'text-muted-foreground hover:bg-hover hover:text-foreground'
+                  )}
+                  onClick={() => selectSurface(tab.id)}
+                >
+                  <span className="min-w-0 truncate">{t(tab.labelKey)}</span>
+                  {tab.showDot && (
+                    <span
+                      aria-hidden="true"
+                      className="ml-1 h-1.5 w-1.5 shrink-0 rounded-full bg-info"
+                    />
+                  )}
+                </button>
+              );
+            })}
+            <div className="flex shrink-0 items-center">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="h-6 w-6 shrink-0"
+                aria-label={t(expanded ? 'Restore panel' : 'Expand panel')}
+                onClick={toggleExpanded}
+              >
+                {expanded ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="h-6 w-6 shrink-0"
+                aria-label={t('Close panel')}
+                onClick={closeSurface}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
           {/*
             Multi-mount stack (S0). Every mounted view is an `absolute inset-0`

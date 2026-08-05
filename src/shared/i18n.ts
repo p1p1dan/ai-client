@@ -1720,6 +1720,9 @@ export const zhTranslations: Record<string, string> = {
   // (Editor / Terminal already have entries above; reused as-is.)
   Context: '上下文',
   'Browse and edit workspace files': '浏览并编辑工作区文件',
+  // T-32 (D27): the `editor` surface is the file tree now — the editor itself
+  // moved to the center column, so its tab reads "Files".
+  'Browse workspace files': '浏览工作区文件',
   'Working tree changes': '工作区变更',
   'Workspace terminal': '工作区终端',
   'Session context and runtime': '会话上下文与运行时',

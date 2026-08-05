@@ -133,11 +133,14 @@ describe('sortSurfaces', () => {
 });
 
 describe('railSurfaces', () => {
-  it('shows exactly context/git/editor/terminal by default', () => {
+  // T-32 (D27): the order IS A08's tab order — `git | files | context`
+  // (a08:1259-1262) with `terminal` appended for exemption ①. It is also what
+  // Ctrl/Cmd+1..4 binds to, so this list is a two-for-one pin.
+  it('shows exactly git/editor(files)/context/terminal in A08 tab order', () => {
     expect(railSurfaces(DEFAULT_SURFACE_ORDER).map((s) => s.id)).toEqual([
-      'context',
       'git',
       'editor',
+      'context',
       'terminal',
     ]);
   });
@@ -181,8 +184,9 @@ describe('isRailSelectableSurface', () => {
 
 describe('firstAlwaysSurfaceId', () => {
   it('returns the first rail-visible surface as the header toggle fallback', () => {
-    expect(firstAlwaysSurfaceId()).toBe('context');
-    expect(firstAlwaysSurfaceId({ hasContent: () => true })).toBe('context');
+    // T-32: `git` is first now that the rail follows A08's tab order.
+    expect(firstAlwaysSurfaceId()).toBe('git');
+    expect(firstAlwaysSurfaceId({ hasContent: () => true })).toBe('git');
   });
 });
 

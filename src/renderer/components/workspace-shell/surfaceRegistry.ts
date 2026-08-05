@@ -60,20 +60,14 @@ export interface ContextSurfaceDescriptor {
   pendingTask: string | null;
 }
 
-// Order doubles as the default rail order (decision 10): context, git, editor,
-// terminal are this round's rail-visible four; the rest are registry-only or
-// content-driven until their task lands.
+// Order doubles as the panel tab order AND the rail order (decision 10).
+// T-32 (D27) re-ordered the rail-visible four to A08's tab order —
+// `git | files | context` (a08:1259-1262) with `terminal` appended, since D27's
+// exemption ① keeps the terminal in the panel instead of a bottom dock.
+// NOTE: this order is also what `Ctrl/Cmd+1..4` maps to (shellShortcuts.ts
+// derives the digits from `railSurfaces(DEFAULT_SURFACE_ORDER).slice(0, 4)`),
+// so reordering here silently rebinds those four shortcuts.
 export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
-  {
-    id: 'context',
-    icon: 'gauge',
-    labelKey: 'Context',
-    descriptionKey: 'Session context and runtime',
-    availability: 'always',
-    defaultWidthFraction: 0.45,
-    registeredOnly: false,
-    pendingTask: null,
-  },
   {
     id: 'git',
     icon: 'git-branch',
@@ -85,12 +79,29 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     pendingTask: null,
   },
   {
+    // T-32: the id stays `editor` while the surface now means "Files" (the
+    // tree only — the editor itself moved to the center column, D27/#28 ①).
+    // Renaming it to `files` would be cosmetically right and practically
+    // wrong: this id is already persisted in `aiclient-shell-layout` under
+    // `widthBySurface` / `lastSurfaceId` / `railOrder`, so the rename costs a
+    // store migration and a version bump and buys nothing but the name.
+    // If you came here to "fix" the mismatch, that is the reason not to.
     id: 'editor',
     icon: 'file-code',
-    labelKey: 'Editor',
-    descriptionKey: 'Browse and edit workspace files',
+    labelKey: 'Files',
+    descriptionKey: 'Browse workspace files',
     availability: 'always',
     defaultWidthFraction: 3 / 5,
+    registeredOnly: false,
+    pendingTask: null,
+  },
+  {
+    id: 'context',
+    icon: 'gauge',
+    labelKey: 'Context',
+    descriptionKey: 'Session context and runtime',
+    availability: 'always',
+    defaultWidthFraction: 0.45,
     registeredOnly: false,
     pendingTask: null,
   },
