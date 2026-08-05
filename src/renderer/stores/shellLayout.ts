@@ -53,7 +53,7 @@ export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOver
   closeSurface: () => void;
   toggleContextPanel: () => void;
   toggleExpanded: () => void;
-  setSurfaceWidth: (id: ContextSurfaceId, width: number, availableWidth?: number | null) => void;
+  setPanelWidth: (width: number, availableWidth?: number | null) => void;
   /** T-32: commits an `ed-grip` drag as a share of the center row. */
   setEditorRatio: (ratio: number) => void;
   /** T-32: the user overriding the level ladder while a file is open. */
@@ -65,6 +65,14 @@ export interface ShellLayoutState extends PersistedShellLayout, ShellSessionOver
   setRailOrder: (order: readonly string[]) => void;
   // reading column
   toggleReadingWidthMode: () => void;
+}
+
+/**
+ * Stamps a reducer result with the manual override it implies: the user just
+ * said what they want, so the ladder must yield until the file closes.
+ */
+function withManualPanel(next: ShellSurfaceState): ShellSurfaceState & { manualPanel: boolean } {
+  return { ...next, manualPanel: next.activeSurfaceId !== null };
 }
 
 /** Projects the store's persisted fields onto the pure reducer's smaller state shape. */
@@ -85,26 +93,38 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
       toggleSidebarCollapsed: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
 
+      // T-32 m2: every EXPLICIT panel action also records a manual override.
+      // Without this the level ladder wins forever: at L1 it hides the panel,
+      // and clicking a rail icon only set `activeSurfaceId` — visibility stayed
+      // false, so the panel could never be summoned back on a narrow window
+      // (user report: "页面较小时打开文件无法唤出右侧栏骨架").
+      // `manualPanel` mirrors the resulting intent, so an explicit close at L0
+      // is equally respected. Cleared when the file closes (A08 §06-4).
       selectSurface: (id) =>
         set((state) =>
-          reduceShellSurface(surfaceStateOf(state), { type: 'select', surfaceId: id })
+          withManualPanel(
+            reduceShellSurface(surfaceStateOf(state), { type: 'select', surfaceId: id })
+          )
         ),
       openSurface: (id) =>
-        set((state) => reduceShellSurface(surfaceStateOf(state), { type: 'open', surfaceId: id })),
+        set((state) =>
+          withManualPanel(
+            reduceShellSurface(surfaceStateOf(state), { type: 'open', surfaceId: id })
+          )
+        ),
       closeSurface: () =>
-        set((state) => reduceShellSurface(surfaceStateOf(state), { type: 'close' })),
+        set((state) =>
+          withManualPanel(reduceShellSurface(surfaceStateOf(state), { type: 'close' }))
+        ),
       toggleContextPanel: () =>
-        set((state) => reduceShellSurface(surfaceStateOf(state), { type: 'toggle-panel' })),
+        set((state) =>
+          withManualPanel(reduceShellSurface(surfaceStateOf(state), { type: 'toggle-panel' }))
+        ),
       toggleExpanded: () =>
         set((state) => reduceShellSurface(surfaceStateOf(state), { type: 'toggle-expanded' })),
 
-      setSurfaceWidth: (id, width, availableWidth) =>
-        set((state) => ({
-          widthBySurface: {
-            ...state.widthBySurface,
-            [id]: clampContextPanelWidth(width, availableWidth),
-          },
-        })),
+      setPanelWidth: (width, availableWidth) =>
+        set({ panelWidth: clampContextPanelWidth(width, availableWidth) }),
 
       setEditorRatio: (ratio) => set({ editorRatio: clampEditorRatio(ratio) }),
 
@@ -119,7 +139,7 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
     }),
     {
       name: 'aiclient-shell-layout',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       // Only the persisted data fields — actions are never serialized.
       partialize: (state): PersistedShellLayout => ({
@@ -128,14 +148,24 @@ export const useShellLayoutStore = create<ShellLayoutState>()(
         activeSurfaceId: state.activeSurfaceId,
         lastSurfaceId: state.lastSurfaceId,
         expanded: state.expanded,
-        widthBySurface: state.widthBySurface,
+        panelWidth: state.panelWidth,
         railOrder: state.railOrder,
         readingWidthMode: state.readingWidthMode,
         editorRatio: state.editorRatio,
       }),
-      // No real migration yet (version stays 1) — this only protects a future
-      // bump (e.g. per-directory keys) from ever seeing un-sanitized data.
-      migrate: (persisted) => sanitizeShellLayoutPersisted(persisted),
+      // v1 → v2 (T-32): `railOrder` was persisted before the registry moved to
+      // A08's tab order, so a v1 profile pins the OLD order — the tab strip
+      // rendered `context|git|editor|terminal` while the digits followed the
+      // new one. `widthBySurface` is likewise gone (one panel width now).
+      // Dropping both here lets the sanitiser rebuild them from the registry.
+      migrate: (persisted, version) => {
+        const raw = persisted as Record<string, unknown> | null;
+        if (version < 2 && raw && typeof raw === 'object') {
+          const { railOrder: _staleOrder, widthBySurface: _staleWidths, ...rest } = raw;
+          return sanitizeShellLayoutPersisted(rest);
+        }
+        return sanitizeShellLayoutPersisted(persisted);
+      },
       merge: (persisted, current) => ({ ...current, ...sanitizeShellLayoutPersisted(persisted) }),
     }
   )

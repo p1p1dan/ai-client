@@ -32,15 +32,25 @@ export interface ResolveShellShortcutInput {
    * the keystroke the IME needed.
    */
   isComposing: boolean;
+  /**
+   * The rail/tab order currently rendered (the store's `railOrder`). Defaults
+   * to the registry order so existing callers and tests keep working.
+   */
+  railOrder?: readonly string[];
 }
 
 /**
- * First four rail-visible surfaces, in rail order. Derived from the registry
- * instead of a hardcoded id list so a future reorder (or a `hasContent`
- * surface landing ahead of these) is picked up automatically.
+ * First four rail-visible surfaces, in the order the UI actually renders.
+ *
+ * m-T32: this used to hardcode `DEFAULT_SURFACE_ORDER` while the tab strip and
+ * rail render the PERSISTED `railOrder`. The two agreed only until T-32
+ * reordered the registry — after which a profile carrying the pre-T-32 order
+ * kept showing `context|git|editor|terminal` while Ctrl+1..4 fired the new
+ * `git|files|context|terminal`, i.e. the digits "jumped" to the wrong tabs.
+ * Taking the same order the caller renders makes that drift impossible.
  */
-function numberedSurfaceIds(): readonly ContextSurfaceId[] {
-  return railSurfaces(DEFAULT_SURFACE_ORDER)
+function numberedSurfaceIds(order: readonly string[]): readonly ContextSurfaceId[] {
+  return railSurfaces(order)
     .slice(0, 4)
     .map((surface) => surface.id);
 }
@@ -94,7 +104,7 @@ export function resolveShellShortcut(input: ResolveShellShortcutInput): ShellSho
   const digitMatch = /^Digit([1-4])$/.exec(input.code);
   if (digitMatch) {
     const index = Number(digitMatch[1]) - 1;
-    const surfaceId = numberedSurfaceIds()[index];
+    const surfaceId = numberedSurfaceIds(input.railOrder ?? DEFAULT_SURFACE_ORDER)[index];
     return surfaceId ? { type: 'select-surface', surfaceId } : null;
   }
 

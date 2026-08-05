@@ -28,6 +28,8 @@ export function useShellShortcuts(): void {
   const selectSurface = useShellLayoutStore((state) => state.selectSurface);
   const openSurface = useShellLayoutStore((state) => state.openSurface);
   const toggleSidebarCollapsed = useShellLayoutStore((state) => state.toggleSidebarCollapsed);
+  // Same order the tab strip and rail render — see `numberedSurfaceIds`.
+  const railOrder = useShellLayoutStore((state) => state.railOrder);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -42,6 +44,7 @@ export function useShellShortcuts(): void {
         targetIsEditable: isEditableTarget(event.target),
         // m15: IME composition guard (mirrors App/useAppKeyboardShortcuts.ts).
         isComposing: event.isComposing,
+        railOrder,
       });
       if (!action) {
         return;
@@ -70,5 +73,5 @@ export function useShellShortcuts(): void {
     // own element-level handlers can consume the event.
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [toggleContextPanel, selectSurface, openSurface, toggleSidebarCollapsed]);
+  }, [toggleContextPanel, selectSurface, openSurface, toggleSidebarCollapsed, railOrder]);
 }

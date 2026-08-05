@@ -41,12 +41,14 @@ export interface ResolveChatColumnWidthInput {
 /**
  * Chat's pixel width when the editor column is open.
  *
- * Both minimums cannot always hold: at a center width below
- * `CHAT_MIN + EDITOR_MIN` something has to give, and A08's answer is that the
- * editor keeps its floor while chat yields (that is exactly what the L2 rung
- * formalises — «隐 chat», a08:1414). So when the row is too narrow this returns
- * whatever is left after the editor's floor, down to 0, instead of returning a
- * chat width that would push the editor below 520 and make BOTH unusable.
+ * **Chat is never squeezed below its floor.** m-T32 (user round 1: 「聊天页面
+ * 极度变形」): this used to let chat absorb the shortfall — at a 800px center
+ * row it returned 280px of chat, a deformed strip nobody can read. Both floors
+ * are hard; when they cannot both hold, the answer is not a squeezed chat but
+ * NO chat, and that is the ladder's job (`resolveShellLevel` drops to L2 at
+ * exactly the width where both stop fitting). So this function assumes chat is
+ * visible and always returns ≥ CHAT_MIN_WIDTH; callers must consult
+ * `deriveChatVisible` first.
  */
 export function resolveChatColumnWidth(input: ResolveChatColumnWidthInput): number {
   const { centerWidth, editorRatio } = input;
@@ -55,15 +57,15 @@ export function resolveChatColumnWidth(input: ResolveChatColumnWidthInput): numb
   }
 
   const max = centerWidth - EDITOR_MIN_WIDTH;
-  if (max <= 0) {
-    return 0;
+  if (max <= CHAT_MIN_WIDTH) {
+    // Too narrow for both. Chat keeps its floor and the editor takes the
+    // overflow for the frame or two before the ladder hides chat entirely —
+    // never the other way round.
+    return CHAT_MIN_WIDTH;
   }
 
   const desired = Math.round(centerWidth * (1 - clampEditorRatio(editorRatio)));
-  // `Math.min(CHAT_MIN_WIDTH, max)` rather than CHAT_MIN_WIDTH: in the narrow
-  // case the floor itself has to come down, otherwise clamp(min > max) throws
-  // the order and silently returns the wrong bound.
-  return clamp(desired, Math.min(CHAT_MIN_WIDTH, max), max);
+  return clamp(desired, CHAT_MIN_WIDTH, max);
 }
 
 export interface ChatWidthToEditorRatioInput {
@@ -106,7 +108,13 @@ export function deriveEditorOpen(openTabCount: number): boolean {
  * immune to both. With a 280px sidebar the two are exactly equivalent.
  */
 export const LEVEL_L0_MIN_CONTENT = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 380; // 1300, panel = 380
-export const LEVEL_L1_MIN_CONTENT = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 44; //  964, rail = 44
+/**
+ * m-T32 fix: this was `+ 44` for the rail, double-counting it. The measured
+ * row (`contentRowRef`) spans chat + editor + panel ONLY — the rail is its
+ * sibling, outside the measurement — so at L1, where the panel is gone, the
+ * row has to fit exactly chat + editor and nothing else.
+ */
+export const LEVEL_L1_MIN_CONTENT = CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH; // 920
 
 export type ShellLevel = 'L0' | 'L1' | 'L2';
 

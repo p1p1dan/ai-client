@@ -213,9 +213,22 @@ export function WorkspaceShell({
                   // `hidden`, not an unmount: ChatWorkspace owns scroll position
                   // and in-flight composer state that must survive an L2 dip.
                   chatVisible ? 'flex' : 'hidden',
-                  editorOpen ? 'shrink-0' : 'flex-1'
+                  !editorOpen && 'flex-1'
                 )}
-                style={editorOpen && chatVisible ? { width: chatWidth } : undefined}
+                // m-T32 (user round 1: 「聊天页面和右侧页面的叠加」): this used to
+                // be `width` + `shrink-0`. `chatWidth` is derived from a
+                // ResizeObserver measurement of the center row, so it lags by a
+                // frame — and lags for the whole 250ms while the panel animates
+                // its width. A non-shrinkable fixed width during that window is
+                // wider than the row it sits in, so it pushed into the panel.
+                // As a shrinkable basis it degrades gracefully instead: the
+                // requested width when it fits, proportionally less while the
+                // measurement catches up.
+                style={
+                  editorOpen && chatVisible
+                    ? { flexBasis: chatWidth, flexGrow: 0, flexShrink: 1 }
+                    : undefined
+                }
               >
                 <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
                 {editorOpen && chatVisible && (

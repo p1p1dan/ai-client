@@ -8,7 +8,6 @@ import {
   type ContextSurfaceId,
   DEFAULT_SURFACE_ORDER,
   firstAlwaysSurfaceId,
-  getSurfaceWidthFraction,
   isContextSurfaceId,
   isRailSelectableSurface,
   sortSurfaces,
@@ -89,7 +88,7 @@ function measuredWidth(availableWidth: number | null | undefined): number | null
 export interface ResolveContextPanelWidthInput {
   /** null = panel closed. */
   surfaceId: ContextSurfaceId | null;
-  /** widthBySurface[surfaceId] — user drag override, wins whenever present. */
+  /** The single persisted panel width — user drag override, wins when present. */
   manualWidth?: number | null;
   /** Measured Main+Panel row width; null/0 = not measured yet. */
   availableWidth?: number | null;
@@ -98,7 +97,14 @@ export interface ResolveContextPanelWidthInput {
 
 /**
  * 0 when closed; the full available width when expanded (px, never '100%');
- * otherwise clamp(manual ?? round(fraction × available ?? FALLBACK)).
+ * otherwise clamp(manual ?? A08's 380 default).
+ *
+ * m-T32 (user round 1): the panel used to size itself from a PER-SURFACE
+ * `defaultWidthFraction` (git 2/5, files 3/5, context 0.45 …) plus per-surface
+ * drag memory, so every tab click resized the panel. A08 specifies one default
+ * for all three tabs («panel 默认宽 git/files/context 380», a08:1550) and the
+ * user's report is the same: switching tabs must not move the edge. Both the
+ * fraction and the per-surface memory are gone; there is one panel width.
  */
 export function resolveContextPanelWidth(input: ResolveContextPanelWidthInput): number {
   const { surfaceId, manualWidth, availableWidth, expanded } = input;
@@ -115,9 +121,7 @@ export function resolveContextPanelWidth(input: ResolveContextPanelWidthInput): 
     return clampContextPanelWidth(manualWidth, measured);
   }
 
-  const fraction = getSurfaceWidthFraction(surfaceId);
-  const base = measured !== null ? measured * fraction : CONTEXT_PANEL_FALLBACK_WIDTH;
-  return clampContextPanelWidth(Math.round(base), measured);
+  return clampContextPanelWidth(CONTEXT_PANEL_MIN_WIDTH, measured);
 }
 
 /**
@@ -369,7 +373,8 @@ export interface PersistedShellLayout {
   activeSurfaceId: ContextSurfaceId | null;
   lastSurfaceId: ContextSurfaceId | null;
   expanded: boolean;
-  widthBySurface: Partial<Record<ContextSurfaceId, number>>;
+  /** One width for the panel (T-32 m1): tab switches must not move the edge. */
+  panelWidth: number | null;
   railOrder: ContextSurfaceId[];
   readingWidthMode: ReadingWidthMode;
   /** T-32: share of the center row given to the editor when a file is open. */
@@ -382,7 +387,7 @@ export const defaultShellLayout: PersistedShellLayout = {
   activeSurfaceId: null,
   lastSurfaceId: null,
   expanded: false,
-  widthBySurface: {},
+  panelWidth: null,
   railOrder: [...DEFAULT_SURFACE_ORDER],
   readingWidthMode: 'normal',
   editorRatio: DEFAULT_EDITOR_RATIO,
@@ -400,19 +405,9 @@ function sanitizeSurfaceIdOrNull(value: unknown): ContextSurfaceId | null {
   return value;
 }
 
-function sanitizeWidthBySurface(raw: unknown): Partial<Record<ContextSurfaceId, number>> {
-  if (!isRecord(raw)) {
-    return {};
-  }
-  const result: Partial<Record<ContextSurfaceId, number>> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (!isContextSurfaceId(key) || !isFiniteNumber(value)) {
-      continue;
-    }
-    // No `availableWidth` here: the window size is unknown at persistence time.
-    result[key] = clampContextPanelWidth(value);
-  }
-  return result;
+function sanitizePanelWidth(raw: unknown): number | null {
+  // No `availableWidth` here: the window size is unknown at persistence time.
+  return isFiniteNumber(raw) ? clampContextPanelWidth(raw) : null;
 }
 
 function sanitizeRailOrder(raw: unknown): ContextSurfaceId[] {
@@ -437,7 +432,7 @@ export function sanitizeShellLayoutPersisted(raw: unknown): PersistedShellLayout
     lastSurfaceId: sanitizeSurfaceIdOrNull(raw.lastSurfaceId),
     // Only meaningful while a surface is active — otherwise the overlay would be orphaned.
     expanded: raw.expanded === true && activeSurfaceId !== null,
-    widthBySurface: sanitizeWidthBySurface(raw.widthBySurface),
+    panelWidth: sanitizePanelWidth(raw.panelWidth),
     railOrder: sanitizeRailOrder(raw.railOrder),
     readingWidthMode: raw.readingWidthMode === 'wide' ? 'wide' : 'normal',
     editorRatio: clampEditorRatio(

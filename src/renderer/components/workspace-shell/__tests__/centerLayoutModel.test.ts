@@ -50,12 +50,16 @@ describe('resolveChatColumnWidth', () => {
     );
   });
 
-  it('never lets the editor fall below its floor', () => {
-    // Ratio 0.25 would give chat 990 of 1320; at 600 wide that same ratio
-    // wants 450 for chat, which would leave the editor 150.
-    const width = resolveChatColumnWidth({ centerWidth: 600, editorRatio: MIN_EDITOR_RATIO });
-    expect(width).toBe(600 - EDITOR_MIN_WIDTH);
-    expect(600 - width).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+  it('keeps the editor at or above its floor for every width where chat renders', () => {
+    // "Where chat renders" is the qualifier that matters: at or above the L1
+    // threshold both floors fit, so neither column is ever squeezed. Below it
+    // the ladder is at L2 and chat is not rendered at all, which is why
+    // `resolveChatColumnWidth` may stop honouring the editor floor down there.
+    for (const centerWidth of [920, 1000, 1320, 2400]) {
+      const chat = resolveChatColumnWidth({ centerWidth, editorRatio: MIN_EDITOR_RATIO });
+      expect(chat).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+      expect(centerWidth - chat).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+    }
   });
 
   it('holds chat`s floor while there is room for both', () => {
@@ -63,16 +67,20 @@ describe('resolveChatColumnWidth', () => {
     expect(width).toBe(CHAT_MIN_WIDTH);
   });
 
-  it('yields chat, not the editor, when the row cannot hold both (A08 L2 direction)', () => {
-    // 800 < 400 + 520: something has to give. A08's ladder hides chat, so the
-    // editor keeps its floor and chat takes what is left — the opposite choice
-    // would make BOTH columns unusable.
-    expect(resolveChatColumnWidth({ centerWidth: 800, editorRatio: 0.5 })).toBe(280);
+  it('NEVER squeezes chat below its floor — the ladder hides it instead (m-T32)', () => {
+    // User report: 「聊天页面极度变形」. 800 < 400 + 520, and the old behaviour
+    // handed chat the 280px shortfall. A deformed strip is worse than no
+    // strip: at this width `resolveShellLevel` is already L2, so chat is not
+    // rendered at all — and if it ever is, it is readable.
+    for (const centerWidth of [800, 700, EDITOR_MIN_WIDTH, 100]) {
+      expect(resolveChatColumnWidth({ centerWidth, editorRatio: 0.5 })).toBeGreaterThanOrEqual(
+        CHAT_MIN_WIDTH
+      );
+    }
   });
 
-  it('returns 0 rather than a negative width when the editor floor alone overflows', () => {
-    expect(resolveChatColumnWidth({ centerWidth: EDITOR_MIN_WIDTH, editorRatio: 0.5 })).toBe(0);
-    expect(resolveChatColumnWidth({ centerWidth: 100, editorRatio: 0.5 })).toBe(0);
+  it('hands the shortfall to the editor, which can scroll, not to chat', () => {
+    expect(resolveChatColumnWidth({ centerWidth: 800, editorRatio: 0.5 })).toBe(CHAT_MIN_WIDTH);
   });
 
   it('falls back to the chat floor before the first measurement', () => {
@@ -148,11 +156,25 @@ describe('resolveShellLevel', () => {
   });
 
   it('derives its thresholds from the same floors the column widths use', () => {
-    // A08 states 1580/1244 including a 280px sidebar; ours exclude it because
-    // this sidebar is draggable/collapsible. The delta must stay exactly 280.
-    expect(LEVEL_L0_MIN_CONTENT + 280).toBe(1580);
-    expect(LEVEL_L1_MIN_CONTENT + 280).toBe(1244);
+    // A08 states 1580/1244 as WHOLE-WINDOW widths. Ours measure the content
+    // row, which excludes the sidebar (draggable 280-500, collapsible to 48)
+    // at both rungs, and ALSO excludes the rail at L1 — the rail is a sibling
+    // of the measured row, so counting it here would double it (m-T32 fix).
+    expect(LEVEL_L0_MIN_CONTENT + 280).toBe(1580); // 1580 = 280 sidebar + row
+    expect(LEVEL_L1_MIN_CONTENT + 280 + 44).toBe(1244); // 1244 = 280 + row + 44 rail
     expect(LEVEL_L0_MIN_CONTENT).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + 380);
+    expect(LEVEL_L1_MIN_CONTENT).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH);
+  });
+
+  it('drops to L2 exactly where both floors stop fitting', () => {
+    // The contract that lets resolveChatColumnWidth keep chat readable: below
+    // this width chat is not rendered, so it never needs to shrink further.
+    expect(
+      resolveShellLevel({ contentWidth: CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH, editorOpen: true })
+    ).toBe('L1');
+    expect(
+      resolveShellLevel({ contentWidth: CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH - 1, editorOpen: true })
+    ).toBe('L2');
   });
 });
 

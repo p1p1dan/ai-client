@@ -6,7 +6,6 @@ import {
   countChangedFiles,
   DEFAULT_SURFACE_ORDER,
   firstAlwaysSurfaceId,
-  getSurfaceWidthFraction,
   isContextSurfaceId,
   isRailSelectableSurface,
   railSurfaces,
@@ -55,13 +54,6 @@ describe('CONTEXT_SURFACES', () => {
     expect(thisRound).toEqual(['chat', 'context', 'editor', 'git', 'terminal']);
   });
 
-  it('keeps every defaultWidthFraction inside (0, 1]', () => {
-    for (const surface of CONTEXT_SURFACES) {
-      expect(surface.defaultWidthFraction).toBeGreaterThan(0);
-      expect(surface.defaultWidthFraction).toBeLessThanOrEqual(1);
-    }
-  });
-
   it('names a pendingTask for exactly the surfaces that are not wired yet', () => {
     for (const surface of CONTEXT_SURFACES) {
       if (WIRED.includes(surface.id)) {
@@ -87,15 +79,15 @@ describe('isContextSurfaceId', () => {
   });
 });
 
-describe('getSurfaceWidthFraction', () => {
-  it('returns the registry fraction for a known surface', () => {
-    expect(getSurfaceWidthFraction('git')).toBe(2 / 5);
-  });
-
-  it('falls back to 0.5 for null / unknown ids', () => {
-    expect(getSurfaceWidthFraction(null)).toBe(0.5);
-    expect(getSurfaceWidthFraction(undefined)).toBe(0.5);
-    expect(getSurfaceWidthFraction('bogus' as ContextSurfaceId)).toBe(0.5);
+describe('panel width is not per-surface (T-32 m1)', () => {
+  it('no descriptor carries a width fraction', () => {
+    // The per-surface `defaultWidthFraction` made every tab click resize the
+    // panel — A08 gives all three tabs one 380 default (a08:1550), and the
+    // user reported the resizing as a bug. Reintroducing a per-surface width
+    // is a decision, not a tidy-up: it belongs in a ledger row first.
+    for (const surface of CONTEXT_SURFACES) {
+      expect(surface).not.toHaveProperty('defaultWidthFraction');
+    }
   });
 });
 

@@ -55,12 +55,12 @@ export function ContextPanel({ availableWidth, visible }: ContextPanelProps) {
   const { t } = useI18n();
   const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
   const lastSurfaceId = useShellLayoutStore((state) => state.lastSurfaceId);
-  const widthBySurface = useShellLayoutStore((state) => state.widthBySurface);
+  const panelWidth = useShellLayoutStore((state) => state.panelWidth);
   const expanded = useShellLayoutStore((state) => state.expanded);
   const closeSurface = useShellLayoutStore((state) => state.closeSurface);
   const selectSurface = useShellLayoutStore((state) => state.selectSurface);
   const toggleExpanded = useShellLayoutStore((state) => state.toggleExpanded);
-  const setSurfaceWidth = useShellLayoutStore((state) => state.setSurfaceWidth);
+  const setPanelWidth = useShellLayoutStore((state) => state.setPanelWidth);
 
   const railOrder = useShellLayoutStore((state) => state.railOrder);
   const changedFilesCount = useGitChangeCount();
@@ -79,7 +79,7 @@ export function ContextPanel({ availableWidth, visible }: ContextPanelProps) {
     // null collapses the panel to width 0 — the ladder hiding it must look
     // exactly like the user closing it, transition included.
     surfaceId: visible ? activeSurfaceId : null,
-    manualWidth: activeSurfaceId ? widthBySurface[activeSurfaceId] : null,
+    manualWidth: panelWidth,
     availableWidth,
     expanded,
   });
@@ -284,7 +284,7 @@ export function ContextPanel({ availableWidth, visible }: ContextPanelProps) {
           width={width}
           targetRef={panelRef}
           clamp={(candidate) => clampContextPanelWidth(candidate, availableWidth)}
-          onCommit={(next) => setSurfaceWidth(activeSurfaceId, next, availableWidth)}
+          onCommit={(next) => setPanelWidth(next, availableWidth)}
           onResizingChange={setPanelResizing}
         />
       )}

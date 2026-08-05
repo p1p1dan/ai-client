@@ -89,23 +89,22 @@ describe('resolveContextPanelWidth', () => {
     ).toBe(500);
   });
 
-  it('uses fraction x available width when there is no manual width', () => {
-    // git fraction = 2/5, available = 1000 -> 400
-    expect(resolveContextPanelWidth({ surfaceId: 'git', availableWidth: 1000 })).toBe(400);
+  it('is the SAME default width for every surface (T-32 m1)', () => {
+    // Was a per-surface fraction (git 2/5 -> 400, editor 3/5 -> 600 …), which
+    // made every tab click resize the panel — the user reported it as a bug and
+    // A08 gives all tabs one 380 default (a08:1550). Switching tabs must not
+    // move the edge, at any window size.
+    for (const availableWidth of [500, 1000, 3000]) {
+      const widths = (['git', 'editor', 'context', 'terminal'] as const).map((surfaceId) =>
+        resolveContextPanelWidth({ surfaceId, availableWidth })
+      );
+      expect(new Set(widths).size).toBe(1);
+      expect(widths[0]).toBe(380);
+    }
   });
 
-  it('raises a fraction result below 380 to the minimum', () => {
-    // git fraction = 2/5, available = 500 -> 200, raised to the 380 floor
-    expect(resolveContextPanelWidth({ surfaceId: 'git', availableWidth: 500 })).toBe(380);
-  });
-
-  it('lowers a fraction result above 1400 to the maximum', () => {
-    // editor fraction = 3/5, available = 3000 -> 1800, lowered to the 1400 ceiling
-    expect(resolveContextPanelWidth({ surfaceId: 'editor', availableWidth: 3000 })).toBe(1400);
-  });
-
-  it('falls back to 600 before the first measurement', () => {
-    expect(resolveContextPanelWidth({ surfaceId: 'git' })).toBe(CONTEXT_PANEL_FALLBACK_WIDTH);
+  it('uses the same 380 default before the first measurement', () => {
+    expect(resolveContextPanelWidth({ surfaceId: 'git' })).toBe(380);
   });
 
   it('keeps a manual width recorded at another window size (no re-proportioning)', () => {
@@ -131,7 +130,7 @@ describe('resolveContextPanelWidth', () => {
 
   it('falls back to the docked width when expanded before the first measurement', () => {
     expect(resolveContextPanelWidth({ surfaceId: 'git', expanded: true })).toBe(
-      CONTEXT_PANEL_FALLBACK_WIDTH
+      CONTEXT_PANEL_MIN_WIDTH
     );
     expect(resolveContextPanelWidth({ surfaceId: 'git', manualWidth: 500, expanded: true })).toBe(
       500
@@ -355,11 +354,14 @@ describe('sanitizeShellLayoutPersisted', () => {
     expect(sanitizeShellLayoutPersisted({ activeSurfaceId: 'pr' }).activeSurfaceId).toBeNull();
   });
 
-  it('drops manual widths for unknown surfaces and clamps the rest', () => {
-    const result = sanitizeShellLayoutPersisted({
-      widthBySurface: { bogus: 500, git: 50, editor: 9999 },
-    });
-    expect(result.widthBySurface).toEqual({ git: 380, editor: 1400 });
+  it('clamps a persisted panel width and rejects a non-number', () => {
+    expect(sanitizeShellLayoutPersisted({ panelWidth: 50 }).panelWidth).toBe(380);
+    expect(sanitizeShellLayoutPersisted({ panelWidth: 9999 }).panelWidth).toBe(1400);
+    expect(sanitizeShellLayoutPersisted({ panelWidth: 700 }).panelWidth).toBe(700);
+    // A v1 profile carried a per-surface MAP here; anything but a number is
+    // discarded so the panel falls back to the 380 default rather than NaN.
+    expect(sanitizeShellLayoutPersisted({ panelWidth: { git: 500 } }).panelWidth).toBeNull();
+    expect(sanitizeShellLayoutPersisted({}).panelWidth).toBeNull();
   });
 
   it('rebuilds a corrupted rail order from the registry', () => {

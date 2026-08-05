@@ -45,8 +45,6 @@ export interface ContextSurfaceDescriptor {
   labelKey: string;
   descriptionKey: string;
   availability: SurfaceAvailability;
-  /** Fraction of the measured Main+Panel row used until the user resizes this surface. */
-  defaultWidthFraction: number;
   /**
    * MVP scope gate: true = registry slot only, never rendered on the rail this
    * round. The task that lands the surface flips this to false.
@@ -74,7 +72,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Git',
     descriptionKey: 'Working tree changes',
     availability: 'always',
-    defaultWidthFraction: 2 / 5,
     registeredOnly: false,
     pendingTask: null,
   },
@@ -91,7 +88,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Files',
     descriptionKey: 'Browse workspace files',
     availability: 'always',
-    defaultWidthFraction: 3 / 5,
     registeredOnly: false,
     pendingTask: null,
   },
@@ -101,7 +97,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Context',
     descriptionKey: 'Session context and runtime',
     availability: 'always',
-    defaultWidthFraction: 0.45,
     registeredOnly: false,
     pendingTask: null,
   },
@@ -111,7 +106,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Terminal',
     descriptionKey: 'Workspace terminal',
     availability: 'always',
-    defaultWidthFraction: 3 / 5,
     registeredOnly: false,
     pendingTask: null,
   },
@@ -121,7 +115,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Chat',
     descriptionKey: 'Split chat sessions',
     availability: 'has-content',
-    defaultWidthFraction: 0.45,
     registeredOnly: false,
     pendingTask: '后置（多标签）',
   },
@@ -131,7 +124,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Pull Request',
     descriptionKey: 'Review a pull request',
     availability: 'always',
-    defaultWidthFraction: 0.45,
     registeredOnly: true,
     pendingTask: '后置',
   },
@@ -141,7 +133,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Diff',
     descriptionKey: 'Compare file changes',
     availability: 'always',
-    defaultWidthFraction: 3 / 5,
     registeredOnly: true,
     pendingTask: '后置',
   },
@@ -151,7 +142,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Plan',
     descriptionKey: 'Session task plan',
     availability: 'always',
-    defaultWidthFraction: 0.45,
     registeredOnly: true,
     pendingTask: '后置',
   },
@@ -161,7 +151,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Notes',
     descriptionKey: 'Session notes',
     availability: 'always',
-    defaultWidthFraction: 1 / 3,
     registeredOnly: true,
     pendingTask: '后置',
   },
@@ -171,7 +160,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Browser',
     descriptionKey: 'In-app browser',
     availability: 'always',
-    defaultWidthFraction: 0.45,
     registeredOnly: true,
     pendingTask: '后置',
   },
@@ -181,7 +169,6 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     labelKey: 'Preview',
     descriptionKey: 'Live app preview',
     availability: 'has-content',
-    defaultWidthFraction: 0.45,
     registeredOnly: true,
     pendingTask: '后置',
   },
@@ -193,23 +180,12 @@ export const DEFAULT_SURFACE_ORDER: readonly ContextSurfaceId[] = CONTEXT_SURFAC
 
 const SURFACE_BY_ID = new Map(CONTEXT_SURFACES.map((surface) => [surface.id, surface] as const));
 
-/** Registry fraction fallback when a surface is unknown (mirrors reference fallback). */
-const FALLBACK_WIDTH_FRACTION = 0.5;
-
 export function isContextSurfaceId(value: unknown): value is ContextSurfaceId {
   return typeof value === 'string' && SURFACE_BY_ID.has(value as ContextSurfaceId);
 }
 
 export function getSurface(id: ContextSurfaceId): ContextSurfaceDescriptor | undefined {
   return SURFACE_BY_ID.get(id);
-}
-
-/** Registry fraction, 0.5 for anything unknown (mirrors reference fallback). */
-export function getSurfaceWidthFraction(id: ContextSurfaceId | null | undefined): number {
-  if (id == null) {
-    return FALLBACK_WIDTH_FRACTION;
-  }
-  return getSurface(id)?.defaultWidthFraction ?? FALLBACK_WIDTH_FRACTION;
 }
 
 /** Applies a persisted reorder: unknown/dup ids dropped, missing ids appended in default order. */
