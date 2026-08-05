@@ -1522,7 +1522,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // also contains the word "retry".
       const hint = sawNetworkRetry
         ? 'rawEvents shows a network retry loop — likely a transient upstream connection issue; Retry usually recovers once it stabilizes.'
-        : "no data reached the Host at all — check the Host log's [cli-stderr] lines (now forwarded) for a spawn or connection failure.";
+        : "no data reached the Host at all — check the Context panel's Host stderr rows (or the Host log's [cli-stderr] lines) for a spawn or connection failure.";
 
       // R2: this is the "post-timeout with zero echo/progress" exit —
       // classify honestly instead of hardcoding 'committed'. `sawUserEcho`

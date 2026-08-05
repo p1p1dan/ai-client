@@ -8,8 +8,8 @@ import {
 
 /**
  * T-14: adjacent store for facts the red-line `chatSessions.ts` does not
- * carry — today just `permissionMode`, echoed on `session.created`/
- * `session.resumed`. All folding logic lives in
+ * carry — `permissionMode` (echoed on `session.created`/`session.resumed`)
+ * and, since T-35, the forwarded `session.stderr` ring. All folding logic lives in
  * `contextSurfaceModel.ts`'s `reduceSessionRuntimeFacts` (pure, unit tested
  * under the node-env vitest); this file is only the zustand shell plus the
  * subscription lifecycle.

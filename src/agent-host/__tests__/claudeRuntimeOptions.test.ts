@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ClaudeRuntime, normalizeEffort } from '../claudeRuntime.ts';
 import { SessionRegistry } from '../sessionRegistry.ts';
+import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '../stderrRedaction.ts';
 
 /**
  * #8 behavior lock: the exact `thinking` / `effort` options ClaudeRuntime hands
@@ -349,6 +350,64 @@ describe('claudeRuntime query options — stderr forwarding (a2)', () => {
         (args) => args[0] === '[cli-stderr]' && String(args[1]).includes('No conversation found')
       )
     ).toBe(true);
+  });
+});
+
+describe('claudeRuntime stderr → session.stderr events (T-35)', () => {
+  function makeForwardingHarness() {
+    const captured: CapturedOptions[] = [];
+    const logs: unknown[][] = [];
+    const events: Record<string, unknown>[] = [];
+    const rt = new ClaudeRuntime({
+      driver: 'agent-sdk',
+      cliPath: 'unused-in-fake',
+      env: {},
+      emit: (event) => events.push(event),
+      log: (...args) => logs.push(args),
+      registry: new SessionRegistry(),
+      queryFn: makeCapturingQueryFn(captured),
+    });
+    const stderrEvents = () => events.filter((event) => event.type === 'session.stderr');
+    return { captured, logs, rt, stderrEvents };
+  }
+
+  it('emits one redacted session.stderr per line while the Host log keeps the raw line', async () => {
+    const { captured, logs, rt, stderrEvents } = makeForwardingHarness();
+    rt.createSession({ sessionId: 's20', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's20', text: 'hi', requestId: 'req-20' });
+
+    const stderrFn = captured[0].stderr as (line: string) => void;
+    stderrFn('auth failed for sk-ant-api03-secret at /home/dan/.claude');
+
+    const forwarded = stderrEvents();
+    expect(forwarded).toHaveLength(1);
+    expect(forwarded[0].sessionId).toBe('s20');
+    expect(forwarded[0].requestId).toBe('req-20');
+    // Redaction happens HOST-side, before the event exists — the Main bridge
+    // is a content-agnostic passthrough (T-35 risk list).
+    expect(forwarded[0].payload).toEqual({
+      line: 'auth failed for [redacted] at ~/.claude',
+    });
+    // The raw line still reaches the Host log untouched — the complete record.
+    expect(
+      logs.some((args) => args[0] === '[cli-stderr]' && String(args[1]).includes('sk-ant-api03'))
+    ).toBe(true);
+  });
+
+  it(`caps forwarding at ${STDERR_FORWARD_MAX_LINES_PER_TURN} lines per turn, marker last, log uncapped`, async () => {
+    const { captured, logs, rt, stderrEvents } = makeForwardingHarness();
+    rt.createSession({ sessionId: 's21', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's21', text: 'hi' });
+
+    const stderrFn = captured[0].stderr as (line: string) => void;
+    const total = STDERR_FORWARD_MAX_LINES_PER_TURN + 25;
+    for (let n = 1; n <= total; n += 1) stderrFn(`retry chatter ${n}`);
+
+    const forwarded = stderrEvents();
+    expect(forwarded).toHaveLength(STDERR_FORWARD_MAX_LINES_PER_TURN);
+    const last = forwarded[forwarded.length - 1].payload as { line: string };
+    expect(last.line).toContain(`capped at ${STDERR_FORWARD_MAX_LINES_PER_TURN} lines`);
+    expect(logs.filter((args) => args[0] === '[cli-stderr]')).toHaveLength(total);
   });
 });
 

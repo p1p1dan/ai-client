@@ -12,6 +12,7 @@ import {
   deriveSessionReferences,
   initialSessionRuntimeFacts,
   reduceSessionRuntimeFacts,
+  STDERR_CONTEXT_KEEP_LINES,
 } from '../contextSurfaceModel';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,7 @@ function baseInput(overrides: Partial<ContextGroupsInput> = {}): ContextGroupsIn
       host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
     },
     session: null,
+    stderr: null,
     ...overrides,
   };
 }
@@ -652,5 +654,124 @@ describe('reduceSessionRuntimeFacts', () => {
       payload: { permissionMode: 'default' },
     });
     expect(next).toBe(prev);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-35: session.stderr folding + Host stderr group
+// ---------------------------------------------------------------------------
+
+describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
+  const line = (n: number) => ({
+    type: 'session.stderr',
+    sessionId: 's1',
+    payload: { line: `stderr line ${n}` },
+  });
+
+  it('appends lines in arrival order and counts the total', () => {
+    let state = initialSessionRuntimeFacts;
+    state = reduceSessionRuntimeFacts(state, line(1));
+    state = reduceSessionRuntimeFacts(state, line(2));
+    expect(state.s1.stderr).toEqual({
+      lines: ['stderr line 1', 'stderr line 2'],
+      total: 2,
+    });
+  });
+
+  it(`keeps only the last ${STDERR_CONTEXT_KEEP_LINES} lines while total keeps counting`, () => {
+    let state = initialSessionRuntimeFacts;
+    for (let n = 1; n <= STDERR_CONTEXT_KEEP_LINES + 5; n += 1) {
+      state = reduceSessionRuntimeFacts(state, line(n));
+    }
+    const stderr = state.s1.stderr;
+    expect(stderr?.lines).toHaveLength(STDERR_CONTEXT_KEEP_LINES);
+    expect(stderr?.lines[0]).toBe('stderr line 6');
+    expect(stderr?.lines[STDERR_CONTEXT_KEEP_LINES - 1]).toBe(
+      `stderr line ${STDERR_CONTEXT_KEEP_LINES + 5}`
+    );
+    expect(stderr?.total).toBe(STDERR_CONTEXT_KEEP_LINES + 5);
+  });
+
+  it('coexists with permissionMode on the same session entry', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
+      type: 'session.created',
+      sessionId: 's1',
+      payload: { permissionMode: 'default' },
+    });
+    state = reduceSessionRuntimeFacts(state, line(1));
+    expect(state.s1).toEqual({
+      permissionMode: 'default',
+      stderr: { lines: ['stderr line 1'], total: 1 },
+    });
+  });
+
+  it('drops an empty or non-string line whole — a blank row is noise pretending to be a fact', () => {
+    const prev = initialSessionRuntimeFacts;
+    for (const bad of ['', 42, null, undefined]) {
+      const next = reduceSessionRuntimeFacts(prev, {
+        type: 'session.stderr',
+        sessionId: 's1',
+        payload: { line: bad },
+      });
+      expect(next, `line=${JSON.stringify(bad)}`).toBe(prev);
+    }
+    expect(reduceSessionRuntimeFacts(prev, { type: 'session.stderr', sessionId: 's1' })).toBe(prev);
+  });
+
+  it('isolates sessions — stderr for A never touches B', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, line(1));
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'session.stderr',
+      sessionId: 's2',
+      payload: { line: 'other session' },
+    });
+    expect(state.s1.stderr?.lines).toEqual(['stderr line 1']);
+    expect(state.s2.stderr?.lines).toEqual(['other session']);
+  });
+
+  it('is a no-op without a sessionId', () => {
+    const prev = initialSessionRuntimeFacts;
+    const next = reduceSessionRuntimeFacts(prev, {
+      type: 'session.stderr',
+      payload: { line: 'orphan' },
+    });
+    expect(next).toBe(prev);
+  });
+});
+
+describe('deriveContextGroups — Host stderr group (T-35)', () => {
+  it('drops the group entirely when no stderr arrived (acceptance ③: zero noise on a healthy turn)', () => {
+    expect(deriveContextGroups(baseInput()).some((g) => g.id === 'stderr')).toBe(false);
+    expect(
+      deriveContextGroups(baseInput({ stderr: { lines: [], total: 0 } })).some(
+        (g) => g.id === 'stderr'
+      )
+    ).toBe(false);
+  });
+
+  it('renders one ordinal-labeled, copyable row per line with a full-value tooltip', () => {
+    const groups = deriveContextGroups(
+      baseInput({ stderr: { lines: ['spawn ENOENT ~/x', 'retrying'], total: 2 } })
+    );
+    const stderrGroup = groups.find((g) => g.id === 'stderr');
+    expect(stderrGroup?.label).toBe('Host stderr');
+    expect(stderrGroup?.rows).toEqual([
+      {
+        id: 'stderr-1',
+        label: '#1',
+        value: 'spawn ENOENT ~/x',
+        title: 'spawn ENOENT ~/x',
+        copyable: true,
+      },
+      { id: 'stderr-2', label: '#2', value: 'retrying', title: 'retrying', copyable: true },
+    ]);
+  });
+
+  it('ordinals count from the running total, so eviction is visible instead of silent', () => {
+    const groups = deriveContextGroups(
+      baseInput({ stderr: { lines: ['tail-1', 'tail-2'], total: 30 } })
+    );
+    const rows = groups.find((g) => g.id === 'stderr')?.rows;
+    expect(rows?.map((r) => r.label)).toEqual(['#29', '#30']);
   });
 });

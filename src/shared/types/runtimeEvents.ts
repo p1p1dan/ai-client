@@ -20,6 +20,7 @@ export type RuntimeEventType =
   | 'session.history'
   | 'session.historyListed'
   | 'session.status'
+  | 'session.stderr'
   | 'message.started'
   | 'message.delta'
   | 'message.completed'
@@ -125,6 +126,21 @@ export interface SessionStatusEvent extends RuntimeEventBase {
   type: 'session.status';
   sessionId: string;
   payload: { status: SessionRuntimeStatus; retry?: SessionRetryInfo };
+}
+
+/**
+ * T-35: one CLI stderr line, forwarded from the Host's SDK `stderr` callback
+ * (`claudeRuntime.ts`). The line is REDACTED and length-clamped host-side
+ * (`stderrRedaction.ts`) before it ever crosses IPC — the Main-process bridge
+ * is a content-agnostic passthrough, so nothing downstream gets a second
+ * chance at a secret. New event type, not a `session.status` rider: stderr is
+ * an independent diagnostic stream, and per protocol convention (see
+ * `SessionRetryInfo` above) old consumers simply ignore an unknown type.
+ */
+export interface SessionStderrEvent extends RuntimeEventBase {
+  type: 'session.stderr';
+  sessionId: string;
+  payload: { line: string };
 }
 
 /**
@@ -377,6 +393,7 @@ export type RuntimeEvent =
   | HostReadyEvent
   | HostErrorEvent
   | SessionStatusEvent
+  | SessionStderrEvent
   | SessionCreatedEvent
   | SessionUpdatedEvent
   | SessionHistoryEvent

@@ -36,7 +36,7 @@ export interface ContextRow {
   copyable?: boolean;
 }
 
-export type ContextGroupId = 'workspace' | 'runtime' | 'session';
+export type ContextGroupId = 'workspace' | 'runtime' | 'session' | 'stderr';
 
 export interface ContextGroup {
   id: ContextGroupId;
@@ -116,6 +116,8 @@ export interface ContextGroupsInput {
   runtime: ContextRuntimeFacts;
   /** `null` = no active session — the whole Session group is dropped. */
   session: ContextSessionFacts | null;
+  /** T-35: `null`/empty = no stderr this session — the whole group is dropped (zero noise on a healthy turn). */
+  stderr: SessionStderrFacts | null;
 }
 
 function buildWorkspaceRows(facts: ContextWorkspaceFacts | null): ContextRow[] {
@@ -253,12 +255,30 @@ function buildSessionRows(facts: ContextSessionFacts | null): ContextRow[] {
   return rows;
 }
 
-/** Builds the three groups and drops any that end up with zero rows (R6: no group ever fakes content). */
+/**
+ * T-35: one row per forwarded stderr line, ordinal-labeled. Ordinals count
+ * from `total`, not from the ring — after eviction `#31…#50` says plainly
+ * that 30 earlier lines exist and live in the Host log only.
+ */
+function buildStderrRows(stderr: SessionStderrFacts | null): ContextRow[] {
+  if (!stderr || stderr.lines.length === 0) return [];
+  const firstOrdinal = stderr.total - stderr.lines.length + 1;
+  return stderr.lines.map((line, index) => ({
+    id: `stderr-${firstOrdinal + index}`,
+    label: `#${firstOrdinal + index}`,
+    value: line,
+    title: line,
+    copyable: true,
+  }));
+}
+
+/** Builds the four groups and drops any that end up with zero rows (R6: no group ever fakes content). */
 export function deriveContextGroups(input: ContextGroupsInput): ContextGroup[] {
   const groups: ContextGroup[] = [
     { id: 'workspace', label: 'Workspace', rows: buildWorkspaceRows(input.workspace) },
     { id: 'runtime', label: 'Runtime', rows: buildRuntimeRows(input.runtime) },
     { id: 'session', label: 'Session', rows: buildSessionRows(input.session) },
+    { id: 'stderr', label: 'Host stderr', rows: buildStderrRows(input.stderr) },
   ];
   return groups.filter((group) => group.rows.length > 0);
 }
@@ -358,8 +378,25 @@ export function deriveSessionReferences(input: SessionReferencesInput): SessionR
 // reduceSessionRuntimeFacts (backs stores/sessionRuntimeFacts.ts)
 // ---------------------------------------------------------------------------
 
+/**
+ * T-35: the Context panel's stderr excerpt. A ring, not a transcript — the
+ * Host log keeps every line; this keeps the last `STDERR_CONTEXT_KEEP_LINES`
+ * plus the running total so row ordinals stay honest after eviction.
+ */
+export interface SessionStderrFacts {
+  /** Last N sanitized lines, oldest first. */
+  lines: readonly string[];
+  /** Lines seen this session (>= lines.length). */
+  total: number;
+}
+
+/** Context-panel ring size for forwarded stderr lines. */
+export const STDERR_CONTEXT_KEEP_LINES = 20;
+
 export interface SessionRuntimeFacts {
   permissionMode?: SessionPermissionMode;
+  /** T-35: absent until the first `session.stderr` event arrives. */
+  stderr?: SessionStderrFacts;
 }
 
 /** sessionId -> facts. */
@@ -380,10 +417,10 @@ interface SessionRuntimeFactsEvent {
 }
 
 /**
- * Folds `session.created`/`session.resumed` events' `permissionMode` into the
- * per-session facts map. Every other event type is a no-op — this is a
- * narrow adjacent reducer, not a general Runtime Event sink (mirrors
- * `messageMetadata.ts`'s `reduceMessageMetadata` shape).
+ * Folds `session.created`/`session.resumed` events' `permissionMode` and
+ * `session.stderr` lines into the per-session facts map. Every other event
+ * type is a no-op — this is a narrow adjacent reducer, not a general Runtime
+ * Event sink (mirrors `messageMetadata.ts`'s `reduceMessageMetadata` shape).
  *
  * Two invariants the T-14 assertion surface pins:
  *  - a payload missing (or invalid) `permissionMode` never overwrites an
@@ -396,6 +433,9 @@ export function reduceSessionRuntimeFacts(
   prev: SessionRuntimeFactsState,
   event: SessionRuntimeFactsEvent
 ): SessionRuntimeFactsState {
+  if (event.type === 'session.stderr') {
+    return foldStderrLine(prev, event);
+  }
   if (event.type !== 'session.created' && event.type !== 'session.resumed') {
     return prev;
   }
@@ -416,4 +456,30 @@ export function reduceSessionRuntimeFacts(
     return prev;
   }
   return { ...prev, [sessionId]: { ...existing, permissionMode } };
+}
+
+/**
+ * T-35: append one forwarded stderr line, ring-capped. An empty or non-string
+ * `line` is dropped whole — a blank row would be noise pretending to be a
+ * fact. `total` keeps counting past the ring so `buildStderrRows`'s ordinals
+ * stay truthful about eviction.
+ */
+function foldStderrLine(
+  prev: SessionRuntimeFactsState,
+  event: SessionRuntimeFactsEvent
+): SessionRuntimeFactsState {
+  const sessionId = event.sessionId;
+  if (!sessionId) return prev;
+  const payload =
+    event.payload && typeof event.payload === 'object'
+      ? (event.payload as Record<string, unknown>)
+      : undefined;
+  const line = payload?.line;
+  if (typeof line !== 'string' || line === '') return prev;
+
+  const existing = prev[sessionId];
+  const previous = existing?.stderr;
+  const lines = [...(previous?.lines ?? []), line].slice(-STDERR_CONTEXT_KEEP_LINES);
+  const stderr: SessionStderrFacts = { lines, total: (previous?.total ?? 0) + 1 };
+  return { ...prev, [sessionId]: { ...existing, stderr } };
 }

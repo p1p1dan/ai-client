@@ -14,6 +14,7 @@ import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
 import { QuestionBridge, type QuestionRespondInput } from './questionBridge.ts';
 import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
+import { STDERR_FORWARD_MAX_LINES_PER_TURN, sanitizeStderrLine } from './stderrRedaction.ts';
 import { TtftWatchdog } from './ttftWatchdog.ts';
 
 export interface ClaudeRuntimeOptions {
@@ -643,6 +644,29 @@ export class ClaudeRuntime {
       ? buildPromptWithAttachments(input.text, input.attachments)
       : input.text;
 
+    // T-35: forward CLI stderr to the renderer (`session.stderr`), redacted
+    // and clamped host-side (the Main bridge is a content-agnostic passthrough
+    // — nothing downstream gets a second chance at a secret) and capped per
+    // turn so a looping CLI cannot flood IPC. The raw line still goes to the
+    // Host log in the callback below: the log stays the complete record, the
+    // UI gets the sanitized excerpt.
+    let stderrForwardedCount = 0;
+    const forwardStderrLine = (line: string) => {
+      if (stderrForwardedCount >= STDERR_FORWARD_MAX_LINES_PER_TURN) return;
+      stderrForwardedCount += 1;
+      const capped = stderrForwardedCount === STDERR_FORWARD_MAX_LINES_PER_TURN;
+      this.opts.emit({
+        type: 'session.stderr',
+        sessionId: session.sessionId,
+        requestId: input.requestId,
+        payload: {
+          line: capped
+            ? `[cli-stderr capped at ${STDERR_FORWARD_MAX_LINES_PER_TURN} lines this turn — full output in the Host log]`
+            : sanitizeStderrLine(line),
+        },
+      });
+    };
+
     let stream: (AsyncIterable<unknown> & { close?: () => void }) | null = null;
     try {
       stream = queryFn({
@@ -674,7 +698,10 @@ export class ClaudeRuntime {
           // this the CLI's own self-diagnosis (e.g. "No conversation found
           // with session ID: …") never reached Host logs. See investigation
           // report §1.4.
-          stderr: (line: string) => this.log('[cli-stderr]', line),
+          stderr: (line: string) => {
+            this.log('[cli-stderr]', line);
+            forwardStderrLine(line);
+          },
           ...(model ? { model } : {}),
           // Top-level option (NOT output_config.effort) — SDK 0.3.218 sdk.d.ts
           // Options.effort, confirmed clean by c16 probe scenario D.

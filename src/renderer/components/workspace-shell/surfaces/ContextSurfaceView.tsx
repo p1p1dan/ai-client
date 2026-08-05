@@ -106,6 +106,11 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
   const permissionMode = useSessionRuntimeFactsStore((state) =>
     activeSessionId ? (state.factsBySession[activeSessionId]?.permissionMode ?? null) : undefined
   );
+  // T-35: the stored facts object is returned as-is (reducer replaces it per
+  // event) — stable across unrelated commits, per storeSelectorStability.
+  const stderrFacts = useSessionRuntimeFactsStore((state) =>
+    activeSessionId ? (state.factsBySession[activeSessionId]?.stderr ?? null) : null
+  );
 
   const session = useMemo(
     () => sessions.find((item) => item.id === activeSessionId) ?? null,
@@ -181,6 +186,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
               runtimeIdentity: session.runtimeIdentity ?? null,
             }
           : null,
+      stderr: stderrFacts,
     });
   }, [
     session,
@@ -194,6 +200,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
     effortSelection,
     permissionMode,
     hostStatus,
+    stderrFacts,
   ]);
 
   return (
