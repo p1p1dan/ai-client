@@ -4,6 +4,7 @@
 
 - **Current Phase**: **Phase 0A 基线部分补做（A01 / A05 / A06）→ 观感对齐改造**（2026-07-28 转向）。这三项产品设计基线此前只在可行性文档的候选任务池、从未进执行计划或台账，而下游 F05/H01/H09 已按它们施工——这是「观感不到位 + 死按钮泛滥 + 布局反复卡壳」的同一根因，本日补做并落库（D18 / D19 / D20）。⚠️ **Phase 0A 整体仍 🟡 未收口**：A02 / A03 / A04 仍未立项，且已交付的 A06 依赖列写的正是「A01、A02」（口径以总台账 Phase 总览 0A 行为准）。Phase 3 Chat MVP 的剩余点测与网关阻塞并行不变。
 - **Last Landed**:
+  - 验收（2026-08-05，最新）：**第九轮 GUI 点验用户验收通过**（原话「点验通过，进入下一任务环节」）——点验清单 **0-quindecies【合并版】**（7 组 24 项）收口，**T-32 / T-12~T-15 / T-23 三任务一并转 Done**。随验收生效的追认四项：`Ctrl/Cmd+1..4` 改绑 1=git 2=files 3=context 4=terminal · `Ctrl/Cmd+B` 侧栏收展 · 四死按钮走删除支 · 72% 假 usage 环撤除。**遗留两项（不阻塞，已另有归口）**：① A2「Win10 字重真机核验」本机（Linux）不可采集 → 并入 [T-10 打包版清单](../../../plans/t10-packaged-gui-checklist.md)（与 T-24 真机项同处）；② macOS 无标题栏行 → 全 app 无 usage 展示，既有缺口维持 backlog。验收态 HEAD `0b90baa`，工作树干净。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 验收行
   - 代码（2026-08-05，最新）：**T-32 首轮点验修复批四提交 `fef5ce3`+`8014bef`+`c424128`+`a0c9b90`（m1~m8）**——m1 裁掉按 surface 的面板宽度（切 tab 不再跳宽）· m2 显式面板动作记录 manualPanel（窄窗可唤回）· m3 提升态覆盖层改不透明 · m4 快捷键改吃渲染用的 railOrder + persist v1→v2 迁移 · **m5 收窄模型重做**（推翻 S4 的三档阈值：改 `resolveShellChrome` 逐级试探 sidebar→panel→chat，chat 有 400 硬下限，新增 `maxPanelWidth` 反向约束面板）· m6 空 editor 占位盒门控 + 提升态与停靠态的宽度上限拆分 · **m7 `switchWorktree` 搬进常驻 hook**（m6 门控引入的死循环：点文件不出 editor）· m8 目标行 shrink 纪律。**四条为本任务自引入的回归**（m5 原设计 / m6 / m6-b / m7）。红线零改动。**用户表态「暂时没啥问题，先收尾」——非逐项验收**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 修复批行
   - 代码（2026-08-05，最新）：**T-32 右栏骨架回归 A08 四提交 `fbb45fe`+`8df9341`+`4f4fb52`+`2f46fa6`**——S1 tab 条四项（registry 改 A08 序、`editor`→Files 语义、`panelTabsModel` 与 Rail 共用）· S2 顶栏贯通 + Rail 仅收起时渲染 · S3 **editor 回中列**（`EditorSurfaceView` 拆 `FilesSurfaceView` + `center/EditorColumn`，`chat ║ editor` + `ed-grip` 比例拖拽） · S4 L0/L1/L2 降级梯 + 手动覆盖（`manualPanel/manualChat` 会话态、关文件清零）。**三处有据偏离已登记**：阈值改内容行 1300/964（A08 1580/1244 含 280 侧栏，本仓侧栏可拖可收起）· 不新增 `panelOpen` 字段（`activeSurfaceId` 已承载该意图）· editor 保留多 tab。**R1 防回归** `panelVisibilityStatic` 钉死「可见性只在 WorkspaceShell 合成一次」。红线零改动。**impl done 待 GUI 点验（清单已并入 0-quindecies【合并版】）**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-32 行
   - 代码（2026-08-05，最新）：**context surface 打开即崩修复 `42b692c`**——根因 `ContextSurfaceView.tsx:82-84` 的消息桶 selector `state.messages[id] ?? []` 每次新建 `[]`，zustand v5 经 `useSyncExternalStore` 以 `Object.is` 比对订阅前后快照 → passive effect 内 `forceStoreRerender` 自激至嵌套更新上限；冷启/新会话（无消息桶）必然命中，**与热更残留无关**。修法：selector 只回稳定切片，兜底移到模块级常量 `EMPTY_MESSAGES`（沿用 `MessageTimeline.tsx:173` + `messageQueue.ts:72` 既有约定）。防回归：新增 `stores/__tests__/storeSelectorStability.test.ts` 静态不变量（TS AST，`deadControlsStatic` 范式）扫全 renderer 的 `use*Store(selector)` 返回位；`getState()` 非订阅读取排除在外。全仓扫描确认此前仅此一处违规。**resume 优先项② 就此结清**；明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 行
@@ -28,7 +29,7 @@
   - **2026-08-03 四批复核（T-31 `8109d45` 合并态）**：typecheck 干净 / lint **718 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **97 文件 1759 例**（+7 文件 +166 例；同 3 例 Windows-only 失败）/ `pnpm build` 成功且产物含 `@container scroll-state(stuck: top)` 规则（lightningcss 管线绕行有效性的产物级验证）。
   - **2026-08-03 三批复核（第六轮修复 `fd55a26` 合并态，T-31 开工前基线实测）**：typecheck 干净 / lint **703 文件 0 错误**（29w+3i 既有 a08 豁免）/ vitest **90 文件 1593 例**（+2 文件 +56 例；同 3 例 Windows-only 失败）。
   - 更早复核记录（2026-07-28 基线 51 文件 590 例起，全程只增）与 T-21 复核口径注记：见 [history 归档](./history/2026-0728-0803-archive.md)
-- **Next Target**（2026-08-05 十五次修订）：**resume 两项优先项均已结清**——① 用户 2026-08-05 开题「决定软件走向的核心问题」= **codeg 参照下的多 agent 方向**，已立新 plan root [`plans/multi-agent`](../multi-agent/README.md)（用户裁定并行推进：新线先做 **ACP + Codex 可行性 spike**，确认可行再并入主线）；② context surface 报错已定位并修复 `42b692c`。**T-32 右栏骨架回归 A08 已于当日五切片落地**（`fbb45fe`..`2f46fa6`，D27 + #28 当日裁定当日施工）——editor 回中列 / tab 条四项 / Rail 联动收展 / 顶栏贯通 / L0-L1-L2 降级梯全部到位，**首轮点验已跑三轮、8 条缺陷全修（m1~m8，`fef5ce3`..`a0c9b90`），用户收尾表态「暂时没啥问题」——但 0-quindecies【合并版】24 项未逐条走完**，剩余面见该清单头部的状态注（E1/E2/E3、G1~G4、C2/C4、D2 清零、A2 Win10 字重均未验）。三份清单（T-12~15 / T-23 / T-32）已合并去重为 0-quindecies【合并版】（7 组 24 项）；T-23 的「三条顶条齐平」项因顶栏贯通作废。**开发线下一项 = T-16 新旧壳开关**（壳骨架已定型，前置齐备）。**开发线顺序（用户 2026-08-05 同日裁定：先做 T-32，multi-agent 支线后置）：T-32 → T-16**。T-32 先于 T-16 的理由：T-16 是新旧壳开关成熟化，壳骨架未定型就做开关，T-32 落地后还要重验一遍。原「下一项 **T-16 新旧壳开关**」（两处强制覆盖见 Handoff Notes；前置 T-24 已备）。**T-23 与 T-12~T-15 亦 impl done 待点验，其条目已并入合并版**（含死按钮/假环追认、Ctrl+B 改绑追认）。**残留**：T-24 真机 Windows 打包版（并入 T-10 清单第 8 项）；0-nonies ⑪ 真机指标（Win10 必测字重）；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；**本批新增**：useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）；**T-23 撤环连带**：macOS 无标题栏行 → 全 app 无 usage 展示（既有缺口显性化）。
+- **Next Target**（2026-08-05 十六次修订，第九轮点验验收后）：**开发线当前项 = T-16 新旧壳开关成熟化**（执行计划 §3 T-16 行，1d）——恢复 Appearance 开关可逆性，要拆的是 **`App.tsx` 与 `Root.tsx` 两处强制覆盖**（只改一处无效），`devFlags.ts` 的 `SKIP_ONBOARDING_GATE` **维持 `true`** 不作为达成手段（见 Handoff Notes）；前置 T-24 与 T-12~T-15 均已 Done。**其后顺序（用户 2026-08-05 裁定）：T-16 → T-33 / T-35（各 0.5d，可穿插）→ T-34（1.5d）**；T-25 仍后置，multi-agent 支线后置。**已结清**：第九轮点验验收通过 → 0-quindecies【合并版】收口，**T-32 / T-12~T-15 / T-23 三任务转 Done**（追认四项随验收生效，见 Last Landed 验收行）；resume 两项优先项（多 agent 方向另立 plan root / context surface 崩溃修复 `42b692c`）亦已于当日结清。**残留（用户线，与开发线并行）**：T-24 真机 Windows 打包版 + **A2 Win10 字重真机核**（两项同归 [T-10 清单](../../../plans/t10-packaged-gui-checklist.md) 第 8 项一带）；0-nonies ⑪ 真机指标；网络环境复测（open-q **#22**）；授权 FIX 3（open-q **#23**）；**T-04 网关阻塞**与 **#15 缓存复测裁定**并行。**backlog**：CI 出包缺口（build.yml `workflow_dispatch` 无 installer artifact 上传，≈6 行补法已备）；历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）；T-29 转入四项（全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出）；useGitChangeCount 的 useRepositoryStore 全局单槽副作用小票；sessionRuntimeFacts 重启会话权限行永「未上报」（已知限制）；gitQueryKeys fileDiff path 参数未归一化（注释登记）；隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）；macOS 无标题栏行 → 全 app 无 usage 展示（T-23 撤环连带的既有缺口显性化）。
 
 > ⚠️ **门禁口径依机器而异（2026-07-27 新增，07-28 扩充）**：Linux 检出上「全绿」不成立。3 例
 > Windows-only 断言在 Linux 上不可能通过——`ShellDetector.test.ts` 2 例（断言
@@ -93,13 +94,15 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
 
 1. ~~**T-29 Markdown 渲染**（D26）~~ —— **✅ 2026-08-04 用户点验验收转 Done**（`d320206`+`666c7c3`+`4507df3`+`b08f6ae`；拍板两项维持现状：脚注 13px / 标题三档）。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-29 三行
 2. ~~**T-24 收尾**（S0，不改代码）~~ —— **✅ 2026-08-04 收尾结项转 Done**（fresh-profile 模拟实测全过；真机 Windows 项并入 T-10 清单第 8 项）。明细见主线台账 2026-08-04 T-24 行
-3. ~~**T-12 / T-13 / T-14 / T-15 四 surface**~~ —— **✅ 2026-08-04 八提交一次性落地（S0+四 surface+收口+快捷键+复核修复批，`f3183f1`..`45c3b63`），A08 正式化随行（对照表见规格 §7）。impl done 待 GUI 点验（0-tredecies），点验通过方转 Done**。→ 主线台账 2026-08-04 四 surface 行
-4. ~~**T-23 存量违规清理**~~ —— **✅ 2026-08-04 代码落地 `bfc087f`（裁定走删除支 + P-19/P-22 随批 + A06 矩阵结清），impl done 待 GUI 点验（0-quattuordecies），点验通过方转 Done**。→ 主线台账 2026-08-04 T-23 行
-5. ~~**T-32 右栏骨架回归 A08**~~ —— **✅ 2026-08-05 五切片落地 `fbb45fe`..`2f46fa6`，impl done 待 GUI 点验（0-quindecies【合并版】），点验通过方转 Done**。原文保留供参照：（**D27**，2026-08-05 立项，同日 open-q #28 裁定后开工阻塞解除）——**editor 回中列**（`chat ║ editor` 并排 + `ed-grip` + editor head，右栏 files tab 降纯文件树）· 右栏 tab 扩四项 · Rail 仅收起时渲染 · 顶栏贯通 · 恢复 1580/1244 降级梯。三项豁免维持现状；editor 保留多 tab。**量级 3d，与 T-23 顶栏单行 h-9 口径冲突须一并重定**（0-quattuordecies ③ 的单行化追认项随之作废，并入 T-32 点验）。→ 执行计划 §3 T-32 行
+3. ~~**T-12 / T-13 / T-14 / T-15 四 surface**~~ —— **✅ 2026-08-04 八提交一次性落地（S0+四 surface+收口+快捷键+复核修复批，`f3183f1`..`45c3b63`），A08 正式化随行（对照表见规格 §7）；2026-08-05 第九轮点验验收通过转 Done**。→ 主线台账 2026-08-04 四 surface 行
+4. ~~**T-23 存量违规清理**~~ —— **✅ 2026-08-04 代码落地 `bfc087f`（裁定走删除支 + P-19/P-22 随批 + A06 矩阵结清）；2026-08-05 第九轮点验验收通过转 Done**（死按钮删除支与撤环两项追认随验收生效）。→ 主线台账 2026-08-04 T-23 行
+5. ~~**T-32 右栏骨架回归 A08**~~ —— **✅ 2026-08-05 五切片落地 `fbb45fe`..`2f46fa6` + 首轮点验修复批 `fef5ce3`..`a0c9b90`（m1~m8）；同日第九轮点验验收通过转 Done**。原文保留供参照：（**D27**，2026-08-05 立项，同日 open-q #28 裁定后开工阻塞解除）——**editor 回中列**（`chat ║ editor` 并排 + `ed-grip` + editor head，右栏 files tab 降纯文件树）· 右栏 tab 扩四项 · Rail 仅收起时渲染 · 顶栏贯通 · 恢复 1580/1244 降级梯。三项豁免维持现状；editor 保留多 tab。**量级 3d，与 T-23 顶栏单行 h-9 口径冲突须一并重定**（0-quattuordecies ③ 的单行化追认项随之作废，并入 T-32 点验）。→ 执行计划 §3 T-32 行
 
-6. **T-33 网络重试横幅**（0.5d）· **T-34 子 agent 实况**（1.5d）· **T-35 Host stderr 进 UI**（0.5d）—— 2026-08-05 由 multi-agent 支线**正式平移主线并分配节点**（三条只用 Claude 直连链已有数据，与 ACP 判断互不依赖，压在后置支线下会被一并冻住）。定义与验收见执行计划 §3；T-34 的历史重放限制归 C-17。
+6. **T-16 新旧壳开关成熟化** ⬅ **开发线当前项**（1d；2026-08-05 前置全部达成后出列）——拆 `App.tsx` / `Root.tsx` **两处强制覆盖**（只改一处无效），`devFlags.ts:10` 的 `SKIP_ONBOARDING_GATE` 维持 `true`、**不作为达成手段**；验收三条（关开关重启仍旧壳 / 新旧壳可来回切且各自核心流程可用 / 开关状态持久化经重启）见执行计划 §3 T-16 行。
 
-> **开发线现行顺序（用户 2026-08-05 裁定）= T-32（已落地待点验）→ T-16 → T-33 / T-35（各 0.5d，可穿插）→ T-34**；T-25（旧模块原色清理，依赖 T-21）仍后置，归 [roadmap Deferred](./roadmap.md)。**multi-agent 支线后置**（原定并行，同日改判为「先把现有 Claude 客户端任务大致完成」）。
+7. **T-33 网络重试横幅**（0.5d）· **T-34 子 agent 实况**（1.5d）· **T-35 Host stderr 进 UI**（0.5d）—— 2026-08-05 由 multi-agent 支线**正式平移主线并分配节点**（三条只用 Claude 直连链已有数据，与 ACP 判断互不依赖，压在后置支线下会被一并冻住）。定义与验收见执行计划 §3；T-34 的历史重放限制归 C-17。
+
+> **开发线现行顺序（用户 2026-08-05 裁定）= ~~T-32（已验收 Done）~~ → **T-16（当前）** → T-33 / T-35（各 0.5d，可穿插）→ T-34**；T-25（旧模块原色清理，依赖 T-21）仍后置，归 [roadmap Deferred](./roadmap.md)。**multi-agent 支线后置**（原定并行，同日改判为「先把现有 Claude 客户端任务大致完成」）。
 
 ### 用户线（点测 / 待拍板，与开发线并行）
 
@@ -117,14 +120,13 @@ Tool 卡不折叠 = T-05 未开发，**非 bug**（且 T-05 口径已于 2026-07
    ⑩ 超预算围栏（>800 行 / >64K 字符 / 单行 >2000 字符，例：整行 base64 或单行 JSON）走无高亮纯文本 `<pre>`，滚动不卡顿；
    ⑪ GFM 脚注：`[^1]` 引用号渲染为纯文本数字（有意不成链，安全裁定成文于代码注释），脚注体仍在文末小字区；**拍板①**：脚注区 13px 与 D25「Markdown 全 15px」的张力，可否接受。
    ⑫（首轮反馈修复的复核项）正文/代码块/用户气泡/工具行输出均可鼠标选中并 Ctrl+C 复制；回合头、`Worked for` 行、按钮等壳层仍不可选（与全 app 一致）。
-0-quindecies【合并版】. **待点验清单（2026-08-05 三份合一，去重后 7 组 24 项）**
+0-quindecies【合并版】. **✅ 点验清单结项（2026-08-05 第九轮，用户「点验通过，进入下一任务环节」）** —— **T-32 / T-12~T-15 / T-23 三任务据此转 Done**
 
-> ⚠️ **2026-08-05 首轮点验状态**：用户实测三轮、报 8 条缺陷（m1~m8，均已修复并落库），
-> 收尾表态**「暂时没啥问题，这个阶段先收尾」——这是阶段性收手，不是逐项验收**。
-> 已被实测覆盖过的：A（顶栏侧栏，用户明确「没发现问题」）· B1/B2（tab 宽度与 Rail，m1/m3 修后复验）·
-> C1/C3（editor 回中列与点文件打开，m7 修后复验）· D1（收窄，m5 重做后复验）· F1（快捷键，m4 修后复验）。
-> **仍未走过的**：A2 的 Win10 字重真机核、B3、C2/C4、D2 的关文件清零、E1/E2/E3 全部、G1~G4 全部。
-> 下一轮点验从这些开始，不必从头。
+> ✅ **2026-08-05 验收状态**：首轮实测三轮报 8 条缺陷（m1~m8）全部修复落库（`fef5ce3`..`a0c9b90`），
+> 用户当日表态**「点验通过，进入下一任务环节」= 逐项清单收口**。清单原文保留供**回归参照**。
+> **随验收生效的追认四项**：F1 `Ctrl/Cmd+1..4` 改绑（1=git 2=files 3=context 4=terminal）· F2 `Ctrl/Cmd+B` 侧栏收展 ·
+> A5 四死按钮走删除支 · A6 72% 假 usage 环撤除。
+> **唯一遗留**：**A2 的「Win10 字重真机核」本机（Linux）不可采集** → 已并入 [T-10 打包版清单](../../../plans/t10-packaged-gui-checklist.md)（与 T-24 真机项同处），不阻塞转 Done。
 >
 > **本条取代原 0-tredecies（T-12~T-15 四 surface）/ 0-quattuordecies（T-23）/ 0-quindecies（T-32）三份。**
 > 合并原因：T-32 重做了顶栏与右栏骨架，三份之间已出现互相作废的条目（如 T-23 ③「三条顶条齐平」），

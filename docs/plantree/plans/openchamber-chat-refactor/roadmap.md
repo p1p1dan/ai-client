@@ -51,6 +51,16 @@
 - **T-05 工具行/问答卡重做（D24）** ✅ `340a59a`（2026-07-30 落地）——0-quinquies 随第八轮捆绑表态收口转 Done；T-31 已重排其挂载结构，点验面被 0-undecies 覆盖。明细见主线台账 2026-07-30 T-05 行
 - **T-29 assistant 正文 Markdown 渲染（D26）** ✅ `d320206`+`666c7c3`+`4507df3`+`b08f6ae`（2026-08-04 用户点验验收转 Done；**拍板两项均裁定维持现状：脚注区 13px、六级标题三种视觉档**）——策略层纯函数（F-C1~F-C7）/ shiki 27 语白名单懒加载 / 流式门逐消息即时转正 / 安全五规则零 XSS 面；双轨对抗复核闭环（27 findings / 3 证伪 + verify:security 补格 + Codex 双盲）；点验首轮唯一缺陷（全局 `user-select:none` 下内容不可选中）当轮修复。三绿 1902 例；红线 `chatSessions.ts` 零改动。明细见主线台账 2026-08-04 T-29 三行
 
+
+**A08 骨架与四 surface 批次 · 第九轮 GUI 点验闭环（2026-08-04 ~ 2026-08-05）**
+
+> 转 Done 依据 = 用户 **2026-08-05** 表态「点验通过，进入下一任务环节」——点验清单 **0-quindecies【合并版】**（T-12~15 / T-23 / T-32 三份合一去重，7 组 24 项）收口。
+> **遗留（不阻塞，已另有归口）**：A2 的「Win10 字重真机核验」本机（Linux）不可采集 → 并入 [T-10 打包版清单](../../../plans/t10-packaged-gui-checklist.md)；macOS 无标题栏行 → 无 usage 展示的既有缺口维持 backlog。
+> **随验收生效的追认**：`Ctrl/Cmd+1..4` 改绑 1=git 2=files 3=context 4=terminal · `Ctrl/Cmd+B` 侧栏收展 · 四死按钮走删除支 · 72% 假 usage 环撤除。
+
+- **T-12 / T-13 / T-14 / T-15 四 surface** —— **2026-08-04 八提交一次性落地**（S0 壳前置 `f3183f1` + T-14 `2e7353a` + T-13 `f9439d6` + T-12 `701d008` + T-15 `11616e5` + 注册收口 `61f79db` + A08 适配快捷键 `cb4de4f` + 双轨对抗复核修复批 `45c3b63`——1 blocker + 8 major + 8 minor 全闭环；A08 临时基线正式化随行，对照表见 [`2026-08-04-t12-15-surface-spec.md`](../../../plans/2026-08-04-t12-15-surface-spec.md) §7）。按本表口径「impl done 待 GUI 联调」不算 Done——**点验清单 0-tredecies**（[implementation-status](./implementation-status.md) 用户线，含 Ctrl+B 改绑追认项），通过后转 Done。三绿 117 文件 2171 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 四 surface 行。 **✅ 2026-08-05 点验验收转 Done。**
+- **T-23 存量违规清理** —— **2026-08-04 代码落地 `bfc087f`**（五违规清零走删除支 + P-19/P-22 随批 + A06 矩阵逐行结清；双轨对抗复核 + Codex 终验闭环，三绿 118 文件 2180 例）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单（**已并入 0-quindecies【合并版】**）（implementation-status 用户线，含删除/撤环/单行化追认），通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-23 行。 **✅ 2026-08-05 点验验收转 Done。**
+- **T-32 右栏骨架回归 A08**（**D27** + open-q #28，2026-08-05 当日立项/裁定/施工）—— **五切片落地** `fbb45fe`（S1 tab 条四项）+ `8df9341`（S2 顶栏贯通 + Rail 联动收展）+ `4f4fb52`（S3 **editor 回中列**）+ `2f46fa6`（S4 降级梯与手动覆盖），S5 归档随行。规格 [`2026-08-05-t32-a08-shell-regression-spec.md`](../../../plans/2026-08-05-t32-a08-shell-regression-spec.md)；A08 §7 十一项逐条回标（§7-bis）：**回归 7 项 / 维持豁免 4 项**。**三处有据偏离**：阈值改内容行 1300/964 · 不新增 `panelOpen` 字段 · editor 保留多 tab。**首轮点验修复批四提交** `fef5ce3`+`8014bef`+`c424128`+`a0c9b90`（m1~m8，其中 **4 条为本任务自引入的回归**；被推翻的原设计与通用坑见[规格 §9](../../../plans/2026-08-05-t32-a08-shell-regression-spec.md) 追记）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单 **0-quindecies【合并版】**（与 T-12~15 / T-23 两份合并去重，7 组 24 项），**用户 2026-08-05 收尾表态「暂时没啥问题」属阶段性收手、非逐项验收**，通过后三者一并转 Done。三绿 121 文件 2223 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-32 行。 **✅ 2026-08-05 点验验收转 Done；三绿 121 文件 2223 例。**
 ## In Progress
 
 - **决策落库（2026-07-28）**：D18 / D19 / D20 已进[总台账](../../../plans/openchamber-chat-refactor-ledger.md)；ARD 十二节连带改口（清单见 [ARD 修订头](../../../plans/2026-07-23-openchamber-chat-refactor-ard.md)，2026-07-28 复验轮更正：原写「§1/§4/§7/§8/§9/§11/§13」七节已过期）、执行计划任务表（T-05 重写 + T-12~T-16 重定义 + 新增 T-21~T-25 / C-17）、本树四文件同步中。**落完才动代码**。
@@ -58,9 +68,9 @@
 - **T-06**：实现已落地（`0f3a8da` 等），**唯一完全未测**的任务，网关恢复后可直接补。
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 - **T-21 Flexoki 主题 + 全等宽字体栈**：代码已提交 `b38017b`（2026-07-29，31 文件）。按本表口径「impl done 待 GUI 联调」不算 Done —— 用户 2026-07-29 已点测大部分，**中英混排三场景 + 6 处 `normal-case` 豁免的目视验收尚未出截图**（open-q #10），且验收须在**默认主题**下进行（`sync-terminal` 混色属 open-q #12 未裁定边界，不是 T-21 引入的 bug）。截图入台账后转 Done。
-- **T-12 / T-13 / T-14 / T-15 四 surface** —— **2026-08-04 八提交一次性落地**（S0 壳前置 `f3183f1` + T-14 `2e7353a` + T-13 `f9439d6` + T-12 `701d008` + T-15 `11616e5` + 注册收口 `61f79db` + A08 适配快捷键 `cb4de4f` + 双轨对抗复核修复批 `45c3b63`——1 blocker + 8 major + 8 minor 全闭环；A08 临时基线正式化随行，对照表见 [`2026-08-04-t12-15-surface-spec.md`](../../../plans/2026-08-04-t12-15-surface-spec.md) §7）。按本表口径「impl done 待 GUI 联调」不算 Done——**点验清单 0-tredecies**（[implementation-status](./implementation-status.md) 用户线，含 Ctrl+B 改绑追认项），通过后转 Done。三绿 117 文件 2171 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 四 surface 行。
-- **T-32 右栏骨架回归 A08**（**D27** + open-q #28，2026-08-05 当日立项/裁定/施工）—— **五切片落地** `fbb45fe`（S1 tab 条四项）+ `8df9341`（S2 顶栏贯通 + Rail 联动收展）+ `4f4fb52`（S3 **editor 回中列**）+ `2f46fa6`（S4 降级梯与手动覆盖），S5 归档随行。规格 [`2026-08-05-t32-a08-shell-regression-spec.md`](../../../plans/2026-08-05-t32-a08-shell-regression-spec.md)；A08 §7 十一项逐条回标（§7-bis）：**回归 7 项 / 维持豁免 4 项**。**三处有据偏离**：阈值改内容行 1300/964 · 不新增 `panelOpen` 字段 · editor 保留多 tab。**首轮点验修复批四提交** `fef5ce3`+`8014bef`+`c424128`+`a0c9b90`（m1~m8，其中 **4 条为本任务自引入的回归**；被推翻的原设计与通用坑见[规格 §9](../../../plans/2026-08-05-t32-a08-shell-regression-spec.md) 追记）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单 **0-quindecies【合并版】**（与 T-12~15 / T-23 两份合并去重，7 组 24 项），**用户 2026-08-05 收尾表态「暂时没啥问题」属阶段性收手、非逐项验收**，通过后三者一并转 Done。三绿 121 文件 2223 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-32 行。
-- **T-23 存量违规清理** —— **2026-08-04 代码落地 `bfc087f`**（五违规清零走删除支 + P-19/P-22 随批 + A06 矩阵逐行结清；双轨对抗复核 + Codex 终验闭环，三绿 118 文件 2180 例）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单（**已并入 0-quindecies【合并版】**）（implementation-status 用户线，含删除/撤环/单行化追认），通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-23 行。
+- ~~T-12 / T-13 / T-14 / T-15 四 surface~~ —— **2026-08-05 第九轮点验验收后转 Done**（见 Done「A08 骨架与四 surface 批次」块）。
+- ~~T-32 右栏骨架回归 A08~~ —— **2026-08-05 第九轮点验验收后转 Done**（见同上块）。
+- ~~T-23 存量违规清理~~ —— **2026-08-05 第九轮点验验收后转 Done**（见同上块）。
 - ~~T-29 Markdown 渲染~~ —— **2026-08-04 用户点验验收后转 Done**（见 Done「观感对齐批次」块；拍板两项均维持现状）。
 - ~~T-22 / T-05 / T-31~~ —— **2026-08-03 第八轮验收后全部转 Done**（见 Done「观感对齐批次」块）。
 
@@ -72,6 +82,7 @@
 > 本表顺序不得晚于执行计划口径；要后移 T-24 必须先改执行计划并在总台账追加说明。
 > **开发项（1~5）的任务定义、数值与 `file:line` 只存在于执行计划 §3 任务表**，此处不复制（避免同一口径三处漂移）；6~8 为用户点测/验收项，不受此限。
 
+0. **T-16 新旧壳开关成熟化**（**开发线当前第一顺位**，2026-08-05 由 Deferred 出列）——恢复 Appearance 开关的可逆性：拆掉 `App.tsx` / `Root.tsx` **两处强制覆盖**（只改一处无效），且 `devFlags.ts` 的 `SKIP_ONBOARDING_GATE` **维持 `true`**、不作为达成手段（翻 false 会连带恢复 onboarding 闸门）。前置 **T-24（Done）+ T-12~T-15（Done）** 均已达成。任务定义、`file:line` 与三条验收标准的权威 = [执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) §3 T-16 行；量级 1d。
 1. ~~**T-24 新壳「添加仓库」通路**（阻断级，排第一）~~ —— **✅ 2026-08-04 收尾结项转 Done**（见 Done「团队 T-xx 已验收」块；真机 Windows 项并入 T-10 清单第 8 项）。原文保留供参考：补新壳入口并把窗口拖放 ref 绑到新壳，解开「新机器只能靠 `--open-path` argv 注册」的死结。→ 执行计划 §3 T-24 行
 2. ~~**T-21 Flexoki 主题 + 全等宽字体栈**~~ —— **代码已落 `b38017b`，转 In Progress 等 GUI 截图验收**（原文保留供参考）：`globals.css` 语义 token 重写 + 四个新 token + `docs/design-system.md` 同步改写；原色硬编码清理**只覆盖新壳 chat / workspace-shell 两个目录**（**不是全仓唯一**，旧模块归后置的 T-25，清单与实测面见执行计划）。**开工前先结 open-q #11**（根字号 14→16），验收含中英混排实测截图（#10）；终端与 Monaco 边界外（#12）。→ 执行计划 §3 T-21 行
 3. ~~**T-22 壳结构改造：三列 + 44px 导轨 + surface 模型**（D19）~~ —— **代码已落 `95a5c04`，转 In Progress 等 GUI 点验**（原文保留供参考）：建 surface 注册表并**删除 `BottomDock.tsx`**，布局与 surface 选择逻辑下沉纯函数。→ 执行计划 §3 T-22 行
@@ -88,12 +99,12 @@
 
 ## Deferred
 
-- **Phase 4 surface 化（D19 重定义，全部依赖 T-22 壳结构）**——**2026-08-04：T-12~T-15 四项已全部施工落地转 In Progress（待 GUI 点验），本块残余 = T-16 + 后置 6 surface**：
+- **Phase 4 surface 化（D19 重定义，全部依赖 T-22 壳结构）**——**2026-08-05 更新：T-12~T-15 四项已点验验收转 Done，T-16 已出列进 Next；本块残余 = 后置 6 surface**：
   - T-12 **git surface**（原「右栏 Git 面板」）· T-14 **context surface**（原「右栏 Context 面板」，只放真实数据）
   - T-13 **editor surface**（原「右栏 Files 面板」）——**2026-07-28 解冻**：此前因布局未定而冻结，D19 定下骨架后放行，队列在 T-22 之后；F5 反馈（边看代码边看分析）由「Main 阅读栏 + ContextPanel 并列」直接满足
   - T-15 **terminal surface**（原「底部 Terminal Dock 接真终端」）——**重定义**：终端是 ContextPanel 的一种 surface、可提升为覆盖 Main 全视图，**不再往底部 Dock 接线**；`BottomDock.tsx` 随 D19 废弃并在 T-22 删除
   - 其余 6 种 surface（`pr / diff / plan / notes / browser / preview`）保留注册位，本轮不实现
-  - T-16 新旧壳开关成熟化（M3 后；**必须同时改两处覆盖**才生效，且排在 T-24 之后）
+  - ~~T-16 新旧壳开关成熟化~~ —— **2026-08-05 出 Deferred 进 Next 第 1 项**（前置 T-24 已 Done、T-12~T-15 已点验通过，开发线现行第一顺位）
 - **C-17 问答进历史协议**（D20 偏离的解除前置，后置）：扩 `HistoryBlock` 联合类型加 question/permission + Host 把问答写进历史 + store 补 case；做完才可重评是否切到 OpenChamber 的「回答后消失 + 历史只读 Q/A」。属主线协议变更，走协议变更纪律。（编号跳过 C-16——已被 spike 文件占用）
 - **T-25 旧模块原色硬编码清理**（2026-07-28 审查后立项，依赖 T-21）——T-21 覆盖范围之外的旧模块原色工具类，按 Flexoki 语义 token 逐目录分批替换（实测面与目录清单见执行计划 §3 T-25 行）。
 - C-11 stream-json fallback（机动，SDK 路线阻塞时提级）
