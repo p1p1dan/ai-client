@@ -59,6 +59,7 @@
 - **CP2（M1 确认）**：材料已齐（C-02 自动化 25 项 PASS），等 T-10 点验合并汇报。
 - **T-21 Flexoki 主题 + 全等宽字体栈**：代码已提交 `b38017b`（2026-07-29，31 文件）。按本表口径「impl done 待 GUI 联调」不算 Done —— 用户 2026-07-29 已点测大部分，**中英混排三场景 + 6 处 `normal-case` 豁免的目视验收尚未出截图**（open-q #10），且验收须在**默认主题**下进行（`sync-terminal` 混色属 open-q #12 未裁定边界，不是 T-21 引入的 bug）。截图入台账后转 Done。
 - **T-12 / T-13 / T-14 / T-15 四 surface** —— **2026-08-04 八提交一次性落地**（S0 壳前置 `f3183f1` + T-14 `2e7353a` + T-13 `f9439d6` + T-12 `701d008` + T-15 `11616e5` + 注册收口 `61f79db` + A08 适配快捷键 `cb4de4f` + 双轨对抗复核修复批 `45c3b63`——1 blocker + 8 major + 8 minor 全闭环；A08 临时基线正式化随行，对照表见 [`2026-08-04-t12-15-surface-spec.md`](../../../plans/2026-08-04-t12-15-surface-spec.md) §7）。按本表口径「impl done 待 GUI 联调」不算 Done——**点验清单 0-tredecies**（[implementation-status](./implementation-status.md) 用户线，含 Ctrl+B 改绑追认项），通过后转 Done。三绿 117 文件 2171 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 四 surface 行。
+- **T-32 右栏骨架回归 A08**（**D27** + open-q #28，2026-08-05 当日立项/裁定/施工）—— **五切片落地** `fbb45fe`（S1 tab 条四项）+ `8df9341`（S2 顶栏贯通 + Rail 联动收展）+ `4f4fb52`（S3 **editor 回中列**）+ `2f46fa6`（S4 降级梯与手动覆盖），S5 归档随行。规格 [`2026-08-05-t32-a08-shell-regression-spec.md`](../../../plans/2026-08-05-t32-a08-shell-regression-spec.md)；A08 §7 十一项逐条回标（§7-bis）：**回归 7 项 / 维持豁免 4 项**。**三处有据偏离**：阈值改内容行 1300/964 · 不新增 `panelOpen` 字段 · editor 保留多 tab。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单 **0-quindecies**，通过后转 Done。三绿 121 文件 2220 例。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-05 T-32 行。
 - **T-23 存量违规清理** —— **2026-08-04 代码落地 `bfc087f`**（五违规清零走删除支 + P-19/P-22 随批 + A06 矩阵逐行结清；双轨对抗复核 + Codex 终验闭环，三绿 118 文件 2180 例）。按本表口径「impl done 待 GUI 联调」不算 Done——点验清单 **0-quattuordecies**（implementation-status 用户线，含删除/撤环/单行化追认），通过后转 Done。明细见[主线台账](../../../plans/ledger-claude-mainline.md) 2026-08-04 T-23 行。
 - ~~T-29 Markdown 渲染~~ —— **2026-08-04 用户点验验收后转 Done**（见 Done「观感对齐批次」块；拍板两项均维持现状）。
 - ~~T-22 / T-05 / T-31~~ —— **2026-08-03 第八轮验收后全部转 Done**（见 Done「观感对齐批次」块）。
@@ -79,7 +80,6 @@
 6. **GUI 统一点测**（用户人工）：多轮上下文回归 / T-04 thinking 卡 / T-07 补强三项 / T-20 Effort 选择器 / T-06 补测 / T-03 历史读失败提示 / **T-18 粘贴附件（本轮 100% 待人工测）**——**均已就绪，无待写代码**，点验清单见 [implementation-status](./implementation-status.md) Active TODO「用户线」。
 7. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md)，产物含随包 Node 141MB）→ CP2 汇报。
 8. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
-9. **T-32 右栏骨架回归 A08**（**D27**，2026-08-05 立项，**当日 open-q #28 裁定后开工阻塞解除**）——**editor 回中列已定**（用户原话喜欢 A08 的 `chat ║ editor` 并排形态，不要现在「文件打开后内嵌在右栏」）：editor 独占中列 + `ed-grip` 比例拖拽 + editor head；右栏 **files tab 降为纯文件树**，点文件在中列打开。右栏 tab 扩四项 `git|files|context|terminal`，Rail 同步四图标**仅收起时渲染**，`` Ctrl+` `` 改为聚焦 terminal tab。恢复顶栏贯通与 L0/L1/L2 降级梯（1580 / 1244——该梯是并排形态的配套，非可选）。**三项豁免维持现状**：terminal 不回 BottomDock · context 不加 Quick notes·Todo·Plans · git 维持最小集；**一处不照搬**：editor 保留多 tab（隐藏 tab = 隐藏脏文件）。**与 T-23 刚落的顶栏单行 h-9 口径直接冲突，须一并重定**。量级 **3d**。→ 执行计划 §3 T-32 行
 
 ## Deferred
 

@@ -16,7 +16,7 @@
 > 逐条对照见 A07 文末「v4 追记」。
 >
 > **已撤销（T-22 已写入并与代码对齐）**：**Spacing & Sizing → 新壳布局档位**一节与
-> `components/workspace-shell/shellLayoutModel.ts` 的常量逐条对得上。
+> `components/workspace-shell/shellLayoutModel.ts` 的常量逐条对得上；**T-32 追加的中列与降级梯常量在 `centerLayoutModel.ts`**，同表同步。
 >
 > **仍未撤销**：
 >
@@ -573,6 +573,31 @@ D25 的四档 + 一个例外：
 | 阅读栏（中列） | `min(100%, 45rem)` 居中 | `mx-auto w-full max-w-reading`（`--container-reading`） |
 | 阅读栏宽模式 | `min(100%, 60rem)` 居中 | `mx-auto w-full max-w-reading-wide`（`--container-reading-wide`） |
 | 列宽拖拽把手 | 4px | `w-1` + `cursor-col-resize` |
+| **chat 列（中列左半）** | min 400px | `CHAT_MIN_WIDTH`（`centerLayoutModel.ts`） |
+| **editor 列（中列右半）** | min 520px，仅开文件时存在 | `EDITOR_MIN_WIDTH` |
+| **chat/editor 比例** | 默认 0.5，可拖 0.25–0.75 | `DEFAULT_EDITOR_RATIO` / `MIN_EDITOR_RATIO` / `MAX_EDITOR_RATIO`（持久化 `editorRatio`） |
+
+### 画幅降级梯（T-32 / D27，A08 §「画幅降级梯」）
+
+**只在开文件时生效**——没有 editor 就没有 520px 预留要让，纯聊天壳的行为与 T-32 前一致。
+阈值量的是**内容行**（chat + editor + panel/rail），**不含侧栏**：
+
+| 档 | 阈值（内容行） | 行为 | 常量 |
+|---|---|---|---|
+| L0 | ≥ 1300 | chat + editor + panel 全在（**展开态无 Rail**） | `LEVEL_L0_MIN_CONTENT` = 400 + 520 + 380 |
+| L1 | ≥ 964 | 右栏自动收起，Rail 出现（一键唤回） | `LEVEL_L1_MIN_CONTENT` = 400 + 520 + 44 |
+| L2 | < 964 | 再隐 chat，只剩 editor | — |
+
+> **与 A08 原值的差**：A08 写 **1580 / 1244**，是**含 280px 侧栏的整窗**阈值。本仓侧栏可拖
+> 280–500、可收起到 48，整窗阈值会双向误判（宽侧栏时高估、收起时低估）。故改量内容行，
+> 两者**恒差 280**（单测钉死），侧栏为 280 时完全等价。**属适配性偏离，非推翻 A08。**
+
+**手动覆盖**（`manualPanel` / `manualChat`）：会话态、**不持久化**，关文件清零（A08 §06-4）。
+类型是 `boolean | null` 而非 A08 的 bool——两态说不出「已清零」，会让覆盖活过它所属的文件。
+
+**可见性只在 `WorkspaceShell` 合成一次**：`activeSurfaceId !== null` 是**意图**（用户想不想开面板），
+不是**呈现**（此刻可不可见）。降级梯只读不写它，加宽窗口才能自动恢复。
+静态不变量 `panelVisibilityStatic.test.ts` 守着这条线。
 
 **两条实现约束**：
 

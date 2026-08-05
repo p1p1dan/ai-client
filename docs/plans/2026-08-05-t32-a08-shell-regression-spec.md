@@ -17,10 +17,14 @@
 
 ## 1. 施工切片（每片三绿后提交，逐门串行）
 
+> **顺序更正（施工首日）**：原排 S1=顶栏/Rail、S2=tab 条，**已对调**。
+> 理由：Rail 一旦改为「仅收起时渲染」而 tab 条尚未落地，面板打开时将**没有任何 surface 切换入口**——
+> 一个不该存在的中间断档。tab 条先行则任何时刻都有切换器。§2/§3 正文编号不变。
+
 | 片 | 提交 | 内容 |
 |---|---|---|
-| S1 | `refactor(shell): 顶栏贯通中右 + Rail 联动收展（T-32）` | §2 |
-| S2 | `feat(shell): 右栏 tab 条四项替换面板头（T-32）` | §3 |
+| S1 | `feat(shell): 右栏 tab 条四项替换面板头（T-32）` | §3 |
+| S2 | `refactor(shell): 顶栏贯通中右 + Rail 联动收展（T-32）` | §2 |
 | S3 | `feat(editor): editor 回中列，files tab 降为纯文件树（T-32）` | §4（最大片） |
 | S4 | `feat(shell): L0/L1/L2 画幅降级梯与手动覆盖（T-32）` | §5，依赖 S3 的 `editorOpen` |
 | S5 | `docs: T-32 A08 对照回标 + design-system 同步` | §7 |
@@ -96,8 +100,9 @@ export type ShellLevel = 'L0' | 'L1' | 'L2';
   deriveChatVisible({ level, editorOpen, manualChat }): boolean
   ```
   规则：`manualPanel`/`manualChat` 为 `boolean | null`（**null = 无覆盖**，比 A08 的 bool 多一态，才能表达「关文件清零」）；有覆盖时覆盖赢，否则 L0 全在 / L1 收 panel / L2 隐 chat。
-- **store 新字段**（务必同步 F-h 的四处）：持久 `panelOpen: boolean`、`editorRatio: number`；**会话内不持久** `manualPanel`/`manualChat`（A08 §06-4 定稿：关文件清零）。
-- **`activeSurfaceId` 语义收窄**：它今后只表示「panel 可见时显示哪个 tab」，**不再等于「panel 是否可见」**——可见性由 `derivePanelVisible` 合成。所有现读 `activeSurfaceId !== null` 判可见的地方（`WorkspaceShell.tsx:119`、`ContextPanel.tsx:56`、Rail）必须一并改，**漏改即行为分叉**。
+- **store 新字段**（务必同步 F-h 的四处）：持久 **`editorRatio: number`**（S3 已落）；**会话内不持久** `manualPanel`/`manualChat`（A08 §06-4：关文件清零）。
+- **规格简化（施工时裁定）：不新增持久字段 `panelOpen`**。原规格照搬 A08 的 `panelOpen`，但本仓 `activeSurfaceId !== null` **本就是**「用户想开面板」这一意图且已持久化。只要降级梯**不去写** `activeSurfaceId`（只影响渲染），加宽窗口即自动恢复、关文件即回到用户偏好——A08 要 `panelOpen` 达成的两条语义都成立，且省掉一个字段、一次 store 迁移与一份双真相风险。`panelOpen` 因此改为**派生量**：`panelOpen := activeSurfaceId !== null`。
+- **`activeSurfaceId` 语义收窄**：它今后表示「用户是否想开面板 + 开哪个 tab」（**意图**），**不再等于「panel 此刻是否可见」**（**呈现**）——后者由 `derivePanelVisible` 合成。读作意图（如顶栏开关、tab 选中态）合法；读作可见性的地方必须换成合成值，**漏改即行为分叉**。落法：可见性只在 `WorkspaceShell` 算一次，经 prop 下发给 `ContextPanel`，不让第二处组件自己算。
 - 断言面：三个 derive 函数 × (L0/L1/L2 × editorOpen × 覆盖三态) 全组合；「关文件清零覆盖」单独一例。
 
 ## 6. 风险
