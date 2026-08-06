@@ -94,7 +94,7 @@
 8. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
 9. **T-33 / T-34 / T-35 三条能力缺失**（2026-08-05 由 [multi-agent plan](../multi-agent/roadmap.md) **正式平移主线并分配节点**）——三条都只用 Claude 直连链上**已有**的数据，与「接不接 ACP」这个根问题互不依赖，压在后置的支线下会被一并冻住，故归主线：
    - ~~**T-33 网络重试横幅**（0.5d）~~ —— **✅ 2026-08-05 代码落地 `ba6b371` + 复核修复 `e602096`+`d3635d3`+`8bf4829`，待 GUI 点验（0-septendecies）**。原判「数据已在 `chatSessions.ts:85` 只差 UI」成立；as-built：横幅双槽挂载 + **epoch 进度戳门**（两轮收紧：首版 hasBlocks 单调门会永久压制工具后 mid-turn 重试；二版块数门看不见续写恢复，终改块数+字符）；与状态行后缀共存属执行裁定待追认
-   - **T-34 子 agent 实况**（1.5d，**开发线当前项**）——**唯一有产品价值增量的一条**。开 `forwardSubagentText`（`sdk.d.ts:1619`，现装 0.3.218 已有）+ 协议加可选字段透传 `parent_tool_use_id`；拉起/传输/交互 SDK 与既有桥全包，**真正的工作量只在「显示」**（Task 行下如何挂子 agent 的文本/思考/工具）。**已知限制**：resume 重放的 `HistoryBlock` 无子 agent 归属，当场嵌套、重开变平铺——与 D20 问答卡同一协议缺口，根治须扩历史协议（C-17，后置）
+   - ~~**T-34 子 agent 实况**（1.5d）~~ —— **✅ 2026-08-05 代码落地 `5c02730` + 复核修复批 `a81cae7`，待 GUI 点验（0-octodecies）**。as-built 与原判三处出入：① 委派工具本 CLI 实名 `Agent` 非 `Task`（双名修正随批）；② 默认态就已下发子 agent tool 流（仅 text/thinking 需开关）；③ **C-17 表述改写：重开是「全丢」非「变平铺」**——子 agent 转写在独立 sidecar `subagents/agent-*.jsonl`、主转写 isSidechain=0，未来修法抓手 = `toolUseResult.agentId`+`outputFile`（C-17 仍后置）。协议定案 `subagent.activity` 单事件 9-kind；显示 = 委派行下实况面板（跑动展开/完成不收/终报统计）
    - ~~**T-35 Host stderr 进 UI**（0.5d）~~ —— **✅ 2026-08-05 代码落地 `5a99ee1` + 复核修复 `e602096`+`d3635d3`+`8bf4829`，待 GUI 点验（0-septendecies）**。as-built：新事件 `session.stderr` + Host 侧摧毁式脱敏（两轮复核后含 provider 裸 key 形态/Basic/URL userinfo/Windows 空格·撇号用户名）+ 每回合 50 行限流；落 context surface「Host stderr」组（环形 20 行、空即隐）
    → 任务定义与验收标准的权威 = 执行计划 §3 各行；出处见 [multi-agent/topics/acp-decision.md](../multi-agent/topics/acp-decision.md) 末表（三条走 ACP 都只会更绕）
 
