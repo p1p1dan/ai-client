@@ -17,7 +17,6 @@ import { applyAutoSessionTitle } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
-import { useShellLayoutStore } from '@/stores/shellLayout';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -1929,9 +1928,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       <div className="mt-1 flex flex-wrap gap-1">
         {mentionChips.map((chip, idx) => (
           // T-13 spec §3 tail slice: clicking a mention chip opens it in the
-          // editor surface, mirroring ToolRows.tsx's `openFileTarget` — record
-          // the intent, then open the surface (source distinguishes provenance
-          // for the consumer, no behavior difference today).
+          // CENTER editor, mirroring ToolRows.tsx's `openFileTarget` — the
+          // intent alone is the whole action (round-10 ⑥: the old
+          // `openSurface('editor')` call popped the right-panel Files tree,
+          // which is what that surface id means post-T-32).
           <button
             key={`${chip.path}-${idx}`}
             type="button"
@@ -1940,7 +1940,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 path: chip.path,
                 source: 'mention-chip',
               });
-              useShellLayoutStore.getState().openSurface('editor');
             }}
             className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-code text-primary transition-colors hover:bg-primary/20"
           >

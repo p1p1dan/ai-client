@@ -340,8 +340,13 @@ export function composerSendingLine(input: {
     return `Starting Agent Host… · ${elapsed}s`;
   }
   const budgetSeconds = Math.round(input.budgetMs / 1000);
+  // Round-10 inspection ④: no "Network" here — this surface has no
+  // errorStatus to discriminate transport failures from upstream 5xx (the
+  // user's live case was an upstream 503), so the suffix stays cause-neutral.
+  // The banner (retryBanner.ts), which does see the status, carries the
+  // cause-specific wording.
   const retrySuffix = input.retry
-    ? ` · Network retry ${input.retry.attempt}/${input.retry.maxRetries}`
+    ? ` · Retry ${input.retry.attempt}/${input.retry.maxRetries}`
     : '';
   if (elapsed >= SLOW_WAIT_HINT_SECONDS) {
     return `Still waiting · ${elapsed}s${retrySuffix} — gateway latency varies. Stop to abort.`;

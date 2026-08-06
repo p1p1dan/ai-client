@@ -408,7 +408,7 @@ describe('composerSendingLine (T-18 B2)', () => {
         attachmentBytes: 0,
         retry: { attempt: 3, maxRetries: 10 },
       })
-    ).toBe('Waiting for Agent Host reply · Network retry 3/10 · 12s (up to 45s)');
+    ).toBe('Waiting for Agent Host reply · Retry 3/10 · 12s (up to 45s)');
   });
 
   it('appends the retry counter to the attachment-in-flight line too', () => {
@@ -421,7 +421,7 @@ describe('composerSendingLine (T-18 B2)', () => {
         attachmentBytes: 155_648,
         retry: { attempt: 1, maxRetries: 10 },
       })
-    ).toBe('Sent 152.0 KB · waiting for reply · Network retry 1/10 · 31s (up to 75s)');
+    ).toBe('Sent 152.0 KB · waiting for reply · Retry 1/10 · 31s (up to 75s)');
   });
 
   it('still appends the retry counter past the slow-wait threshold', () => {
@@ -433,9 +433,7 @@ describe('composerSendingLine (T-18 B2)', () => {
       attachmentBytes: 0,
       retry: { attempt: 7, maxRetries: 10 },
     });
-    expect(line).toBe(
-      'Still waiting · 62s · Network retry 7/10 — gateway latency varies. Stop to abort.'
-    );
+    expect(line).toBe('Still waiting · 62s · Retry 7/10 — gateway latency varies. Stop to abort.');
   });
 
   it('omits the retry suffix entirely when retry is absent or null', () => {
@@ -454,8 +452,8 @@ describe('composerSendingLine (T-18 B2)', () => {
       attachmentBytes: 0,
       retry: null,
     });
-    expect(withoutField).not.toContain('Network retry');
-    expect(withNull).not.toContain('Network retry');
+    expect(withoutField).not.toContain('· Retry');
+    expect(withNull).not.toContain('· Retry');
     expect(withoutField).toBe(withNull);
   });
 
@@ -469,7 +467,7 @@ describe('composerSendingLine (T-18 B2)', () => {
       retry: { attempt: 1, maxRetries: 10 },
     });
     expect(line).toBe('Starting Agent Host… · 3s');
-    expect(line).not.toContain('Network retry');
+    expect(line).not.toContain('· Retry');
   });
 });
 

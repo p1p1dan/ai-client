@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { composerSendingLine, SLOW_WAIT_HINT_SECONDS } from '../attachments';
-import { deriveTurnStatus, TURN_FAILED_TEXT, type TurnStatusInput } from '../turnStatus';
+import {
+  deriveTurnStatus,
+  isFailedCardBodyDuplicate,
+  latestErrorNoticeText,
+  TURN_FAILED_TEXT,
+  type TurnStatusInput,
+} from '../turnStatus';
 
 const base: TurnStatusInput = {
   active: true,
@@ -122,5 +128,35 @@ describe('deriveTurnStatus (F-B5)', () => {
     expect(deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7.9 })?.text).toBe(
       'Generating · 7s'
     );
+  });
+});
+
+describe('round-10 ③ — failed-card body dedupe vs the error notice', () => {
+  it('containment in either direction is a duplicate (String(err) wears an Error: prefix)', () => {
+    expect(isFailedCardBodyDuplicate('upstream 503', 'Error: upstream 503')).toBe(true);
+    expect(isFailedCardBodyDuplicate('Error: upstream 503', 'upstream 503')).toBe(true);
+    expect(isFailedCardBodyDuplicate('upstream 503', 'upstream 503')).toBe(true);
+  });
+
+  it('a different failure text keeps the card body', () => {
+    expect(isFailedCardBodyDuplicate('watchdog fired', 'Error: upstream 503')).toBe(false);
+  });
+
+  it('absence on either side keeps the card body (replayed failure with no notice)', () => {
+    expect(isFailedCardBodyDuplicate(null, 'Error: x')).toBe(false);
+    expect(isFailedCardBodyDuplicate('x', null)).toBe(false);
+    expect(isFailedCardBodyDuplicate('', '')).toBe(false);
+  });
+
+  it('latestErrorNoticeText picks the newest error notice, skipping other roles and empty bodies', () => {
+    const messages = [
+      { role: 'error', blocks: [{ type: 'text', text: 'old failure' }] },
+      { role: 'assistant', blocks: [{ type: 'text', text: 'prose' }] },
+      { role: 'error', blocks: [{ type: 'text', text: 'Error: new failure' }] },
+      { role: 'user', blocks: [{ type: 'text', text: 'hey' }] },
+    ];
+    expect(latestErrorNoticeText(messages)).toBe('Error: new failure');
+    expect(latestErrorNoticeText([])).toBeNull();
+    expect(latestErrorNoticeText([{ role: 'error', blocks: [] }])).toBeNull();
   });
 });

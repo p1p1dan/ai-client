@@ -125,6 +125,39 @@ export function resolveContextPanelWidth(input: ResolveContextPanelWidthInput): 
 }
 
 /**
+ * Round-10 GUI review ②: the ONE width budget the panel is measured against —
+ * used by the render AND by the drag handle's clamp/commit.
+ *
+ * They used to disagree. The render already capped the docked panel at
+ * `maxDockedWidth` (the content floor's leftovers), but the resize handle
+ * clamped against the whole `availableWidth` row. So a drag could commit a
+ * width the panel was never allowed to render at: the pointer pulled the edge
+ * past the cap, the commit stored it, and the next render snapped the edge
+ * back — while the oversized stored value walked the shell down the level
+ * ladder (see `resolveShellChrome`'s `panelFootprint`) until the panel
+ * vanished. One budget, both consumers, no disagreement possible.
+ *
+ * `expanded` deliberately keeps the full row: that state is an overlay meant
+ * to cover chat and the editor, and capping it left a strip of reflowing chat
+ * showing beside it (the m6 report).
+ */
+export interface ResolveDockedPanelBudgetInput {
+  expanded: boolean;
+  /** Measured Main+Panel row width. */
+  availableWidth?: number | null;
+  /** `maxPanelWidth(...)` — the largest width that still clears the content floor. */
+  maxDockedWidth?: number | null;
+}
+
+export function resolveDockedPanelBudget(input: ResolveDockedPanelBudgetInput): number | null {
+  const { expanded, availableWidth = null, maxDockedWidth = null } = input;
+  if (expanded) {
+    return availableWidth;
+  }
+  return maxDockedWidth ?? availableWidth;
+}
+
+/**
  * F-b invariant (S0). The outer panel animates its width to 0 on close, but
  * the content column inside it must never follow: xterm's `FitAddon` and
  * Monaco both re-measure from a ResizeObserver, and `useXterm` has no

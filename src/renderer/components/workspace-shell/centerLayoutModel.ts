@@ -126,6 +126,59 @@ export const RAIL_RESERVE = 44;
 export const PANEL_MIN_RESERVE = 380;
 export const SIDEBAR_COLLAPSED_RESERVE = 48;
 
+// ── which chrome the user asked for last (round 10 ①) ───────────────────
+
+/**
+ * Round-10 GUI review ①: 「点左侧栏展开按钮无反应；反过来…点右栏展开按钮可以展开
+ * 且会自动收缩左栏。期望对称」.
+ *
+ * The ladder's fixed order (sidebar first) is right for a WINDOW SHRINK — the
+ * user did not ask for anything, so the cheapest chrome goes. It is wrong for
+ * an explicit EXPAND: clicking "expand sidebar" on a narrow window flipped
+ * `sidebarCollapsed` to false, rung 1 immediately auto-collapsed it again, and
+ * the button read as dead. The panel never suffered this because rung 1
+ * sacrifices the sidebar *for* it — the asymmetry was structural, not a bug in
+ * either button.
+ *
+ * So the ladder needs one more fact: which of the two the user most recently
+ * asked FOR. Not persisted and not in the store — it is a within-session
+ * tiebreak, and a restored session with both intents set should keep A08's
+ * documented default order, which `null` gives.
+ */
+export type ChromeIntent = 'sidebar' | 'panel' | null;
+
+export interface ChromeIntentSnapshot {
+  /** NOT `chrome.sidebarCollapsed` — the user's own toggle, never the auto one. */
+  sidebarExpanded: boolean;
+  /** `activeSurfaceId !== null` — intent, same as `resolveShellChrome`'s `panelOpen`. */
+  panelOpen: boolean;
+}
+
+/**
+ * Folds a state transition into the intent. Derived from transitions rather
+ * than wired into the click handlers on purpose: the panel opens from the
+ * header button, the rail, AND `Ctrl/Cmd+1..4`, and a handler-side marker
+ * would go stale on whichever path someone forgot — leaving a 'sidebar' intent
+ * standing while the user opens the panel, which would then refuse to appear.
+ *
+ * Retreats clear the intent (back to the default order) because the contention
+ * they were resolving is gone: collapsing the sidebar again must let the panel
+ * return on its own.
+ *
+ * A same-tick swap resolves to 'panel', matching A08's documented default.
+ */
+export function reduceChromeIntent(
+  prev: ChromeIntent,
+  before: ChromeIntentSnapshot,
+  now: ChromeIntentSnapshot
+): ChromeIntent {
+  if (now.panelOpen && !before.panelOpen) return 'panel';
+  if (now.sidebarExpanded && !before.sidebarExpanded) return 'sidebar';
+  if (prev === 'panel' && !now.panelOpen) return null;
+  if (prev === 'sidebar' && !now.sidebarExpanded) return null;
+  return prev;
+}
+
 /** Content the shell refuses to shrink below, given what is open. */
 export function contentFloor(input: { chatWanted: boolean; editorOpen: boolean }): number {
   return (input.chatWanted ? CHAT_MIN_WIDTH : 0) + (input.editorOpen ? EDITOR_MIN_WIDTH : 0);
@@ -145,6 +198,12 @@ export interface ResolveShellChromeInput {
   panelOpen: boolean;
   manualPanel: ManualOverride;
   manualChat: ManualOverride;
+  /**
+   * Round-10 ①: which chrome the user last explicitly asked for. Optional and
+   * defaulting to `null` = A08's documented order, so every pre-existing
+   * caller and case behaves exactly as before.
+   */
+  chromeIntent?: ChromeIntent;
 }
 
 export interface ShellChrome {
@@ -172,6 +231,7 @@ export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome 
     panelOpen,
     manualPanel,
     manualChat,
+    chromeIntent = null,
   } = input;
 
   const wantPanel = manualPanel !== null ? manualPanel : panelOpen;
@@ -191,8 +251,29 @@ export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome 
   }
 
   const sidebarNow = sidebarUserCollapsed ? SIDEBAR_COLLAPSED_RESERVE : sidebarWidth;
+  /**
+   * Round-10 GUI review ②: this used to be the LIVE `panelWidth`, which made
+   * the ladder judge the panel by how wide the user had dragged it. Dragging
+   * the panel wider therefore walked the shell DOWN the ladder — first
+   * auto-collapsing the sidebar, then hiding the panel outright, so the very
+   * act of enlarging it made it disappear (「拖大右栏 → 触发降级梯把右栏整个
+   * 自动折叠」).
+   *
+   * The panel is elastic: `maxPanelWidth` already caps what it RENDERS at, and
+   * it can always shrink back to `PANEL_MIN_RESERVE`. So the question the
+   * ladder must ask is "can the panel exist at its floor", never "does the
+   * user's preferred width happen to fit". That is also what A08's own
+   * threshold arithmetic says — `L0 = 1580 = 280 + 400 + 520 + 380` uses the
+   * panel MINIMUM, not a live width — so the live read was the deviation and
+   * this restores the spec.
+   *
+   * `panelWidth` stays in the input: it is the width the caller wants honoured
+   * and `maxPanelWidth` is where it gets clamped. Judging existence and
+   * resolving size are two different questions.
+   */
+  const panelFootprint = Math.min(panelWidth, PANEL_MIN_RESERVE);
   const chromeFor = (sidebar: number, panelShown: boolean) =>
-    sidebar + (panelShown ? panelWidth : RAIL_RESERVE);
+    sidebar + (panelShown ? panelFootprint : RAIL_RESERVE);
   const fits = (sidebar: number, panelShown: boolean, chatShown: boolean) =>
     shellWidth - chromeFor(sidebar, panelShown) >=
     contentFloor({ chatWanted: chatShown, editorOpen });
@@ -200,6 +281,24 @@ export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome 
   // Rung 0 — everything the user asked for.
   if (fits(sidebarNow, base.panelVisible, base.chatVisible)) {
     return base;
+  }
+
+  // Rung 1a (round-10 ①) — the user's last explicit ask was the SIDEBAR, so
+  // the sidebar is not what yields: squeeze the panel out first and keep the
+  // expanded sidebar. This is the mirror image of rung 1, which sacrifices the
+  // sidebar for the panel; without it the two buttons were asymmetric and the
+  // expand-sidebar button read as dead.
+  //
+  // `manualPanel === true` still outranks this, exactly as in rung 2 — a panel
+  // the user explicitly summoned is not collateral for a later sidebar click.
+  if (
+    chromeIntent === 'sidebar' &&
+    !sidebarUserCollapsed &&
+    base.panelVisible &&
+    manualPanel !== true &&
+    fits(sidebarNow, false, base.chatVisible)
+  ) {
+    return { ...base, panelVisible: false, railVisible: true };
   }
 
   // Rung 1 — collapse the sidebar (unless the user already did).

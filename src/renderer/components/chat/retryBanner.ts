@@ -97,7 +97,15 @@ export function deriveRetryBanner(input: RetryBannerInput): RetryBannerView | nu
   }
 
   return {
-    title: `Network retry${counts} — the turn is still running`,
+    // Round-10 inspection ④: an HTTP status means the UPSTREAM answered with
+    // an error (user's live case: 503 "No available accounts") — calling that
+    // a "network" problem misdirects the diagnosis. Status present → upstream
+    // wording; status null (transport-layer failure, the normalizer's
+    // sentinel) → the original network wording.
+    title:
+      errorStatus === null
+        ? `Network retry${counts} — the turn is still running`
+        : `Upstream error ${errorStatus} — retrying${counts}, the turn is still running`,
     detail: segments.length > 0 ? segments.join(' · ') : null,
   };
 }

@@ -78,7 +78,12 @@ import {
   ownsSessionFailure,
   type TurnHeadModel,
 } from './turnHead';
-import { deriveTurnStatus, type TurnStatus } from './turnStatus';
+import {
+  deriveTurnStatus,
+  isFailedCardBodyDuplicate,
+  latestErrorNoticeText,
+  type TurnStatus,
+} from './turnStatus';
 import { deriveTurnStats, formatWorkedForRow, type WorkedForRowText } from './turnTiming';
 import { useHostStatus } from './useHostStatus';
 import { useMessageMetadata } from './useMessageMetadata';
@@ -183,6 +188,13 @@ export function MessageTimeline({
   );
   const lastError = useChatSessionsStore((state) => state.lastError);
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
+  // Round-10 inspection ③: when the latest error notice in the timeline
+  // already carries `lastError`'s text, the session-failed card drops its
+  // duplicate body (title/hint/Stop stay) — same failure, printed once.
+  const failedCardShowsError = useMemo(
+    () => !isFailedCardBodyDuplicate(lastError, latestErrorNoticeText(bucket ?? [])),
+    [lastError, bucket]
+  );
   // C-06 / T-03: this session's history read error only. Subscribing to the
   // single key (a plain string) keeps a background session's failure out of
   // this timeline and out of its re-renders — the store rebuilds the whole
@@ -461,9 +473,11 @@ export function MessageTimeline({
                     failure doesn't stack a second red block on top of the
                     already-red failed tool rows above it. */}
                 <p className="font-medium text-destructive">Session failed</p>
-                {lastError && (
+                {lastError && failedCardShowsError && (
                   // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
                   // content family as ChatComposer's destructive banner — mono.
+                  // Round-10 ③: suppressed when the latest error notice above
+                  // already prints this exact failure (see failedCardShowsError).
                   <p className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
                     {lastError}
                   </p>

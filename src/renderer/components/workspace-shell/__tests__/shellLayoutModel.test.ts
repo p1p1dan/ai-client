@@ -16,6 +16,7 @@ import {
   reduceShellSurface,
   resolveContentColumnWidth,
   resolveContextPanelWidth,
+  resolveDockedPanelBudget,
   type ShellSurfaceState,
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
@@ -627,5 +628,60 @@ describe('shouldCloseOnEscape', () => {
 
   it('exposes the opt-out attribute surfaces must spell', () => {
     expect(SURFACE_ESCAPE_HOLD_ATTR).toBe('data-surface-holds-escape');
+  });
+});
+
+// ── round-10 GUI review ② — one width budget, two consumers ─────────────
+
+describe('resolveDockedPanelBudget', () => {
+  it('caps a docked panel at the content floor`s leftovers', () => {
+    expect(
+      resolveDockedPanelBudget({ expanded: false, availableWidth: 1200, maxDockedWidth: 700 })
+    ).toBe(700);
+  });
+
+  it('gives the expanded overlay the whole row — it must cover chat and the editor', () => {
+    expect(
+      resolveDockedPanelBudget({ expanded: true, availableWidth: 1200, maxDockedWidth: 700 })
+    ).toBe(1200);
+  });
+
+  it('falls back to the measured row when no cap has been computed yet', () => {
+    expect(
+      resolveDockedPanelBudget({ expanded: false, availableWidth: 1200, maxDockedWidth: null })
+    ).toBe(1200);
+    expect(resolveDockedPanelBudget({ expanded: false, availableWidth: 1200 })).toBe(1200);
+  });
+
+  it('stays null before the first measurement rather than inventing a budget', () => {
+    expect(
+      resolveDockedPanelBudget({ expanded: false, availableWidth: null, maxDockedWidth: null })
+    ).toBeNull();
+    expect(resolveDockedPanelBudget({ expanded: true, availableWidth: null })).toBeNull();
+  });
+
+  it('honours a cap of 0 instead of falling through to the row width', () => {
+    // `maxPanelWidth` returns 0 when even the content floor cannot be met;
+    // `??` (not `||`) is what keeps that from silently becoming the full row.
+    expect(
+      resolveDockedPanelBudget({ expanded: false, availableWidth: 1200, maxDockedWidth: 0 })
+    ).toBe(0);
+  });
+
+  it('is what a drag can reach: clamping through it never exceeds the cap', () => {
+    // The end-to-end property behind ②: whatever the pointer asks for, the
+    // committed width is one the panel is allowed to render at.
+    for (const cap of [400, 700, 1000]) {
+      const budget = resolveDockedPanelBudget({
+        expanded: false,
+        availableWidth: 4000,
+        maxDockedWidth: cap,
+      });
+      for (const candidate of [0, 380, 900, 5000]) {
+        const clamped = clampContextPanelWidth(candidate, budget);
+        expect(clamped).toBeLessThanOrEqual(Math.max(cap, CONTEXT_PANEL_MIN_WIDTH));
+        expect(clamped).toBeGreaterThanOrEqual(CONTEXT_PANEL_MIN_WIDTH);
+      }
+    }
   });
 });

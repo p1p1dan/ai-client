@@ -110,3 +110,40 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
 function normalizeElapsedSeconds(elapsedSeconds: number): number {
   return Math.max(0, Math.floor(elapsedSeconds));
 }
+
+/**
+ * Round-10 inspection ③: when a turn fails, TWO renditions of the same error
+ * can reach the timeline at once — the session-level "Session failed" card
+ * (fed by the store's `lastError`) and an error-role notice message (appended
+ * by the red-line store when the send promise rejects with the same failure).
+ * The card is the richer surface (retry hint, Stop affordance), so when the
+ * LATEST error notice already carries the text, the card drops its duplicate
+ * body and keeps title/hint/actions. Containment (either direction) rather
+ * than equality: the notice's text is typically `String(err)` — the same
+ * message wearing an `Error: ` prefix.
+ *
+ * Pure and store-free; the failed-card-without-notice path (e.g. a replayed
+ * failed session whose notice was never persisted) keeps its body.
+ */
+export function isFailedCardBodyDuplicate(
+  lastError: string | null | undefined,
+  latestNoticeText: string | null | undefined
+): boolean {
+  if (!lastError || !latestNoticeText) return false;
+  return latestNoticeText.includes(lastError) || lastError.includes(latestNoticeText);
+}
+
+/** The most recent error-role notice's text, or null when none exists. */
+export function latestErrorNoticeText(
+  messages: readonly { role: string; blocks: readonly { type: string; text?: string }[] }[]
+): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== 'error') continue;
+    const text = message.blocks
+      .map((block) => (block.type === 'text' ? (block.text ?? '') : ''))
+      .join('');
+    return text.length > 0 ? text : null;
+  }
+  return null;
+}

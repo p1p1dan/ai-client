@@ -60,6 +60,22 @@ describe('deriveRetryBanner — full payload', () => {
     });
     expect(view?.detail).toBe('Next attempt in 8s · unknown 529');
   });
+
+  // Round-10 inspection ④: the user's live 503 was the UPSTREAM refusing
+  // ("No available accounts"), not a network problem — a present HTTP status
+  // must flip the title off the "Network" wording.
+  it('an HTTP status makes the title say upstream error, not network', () => {
+    const view = deriveRetryBanner({
+      ...FULL,
+      retry: { ...FULL.retry, errorStatus: '503', error: 'server_error' },
+    });
+    expect(view?.title).toBe(`Upstream error 503 — retrying 2/10, the turn is still running`);
+    expect(view?.detail).toBe('Next attempt in 8s · server_error 503');
+  });
+
+  it('a null status (transport-layer sentinel) keeps the network wording', () => {
+    expect(deriveRetryBanner(FULL)?.title).toBe(`Network retry 2/10 ${TITLE_TAIL}`);
+  });
 });
 
 describe('deriveRetryBanner — count degradation (attempt-first)', () => {

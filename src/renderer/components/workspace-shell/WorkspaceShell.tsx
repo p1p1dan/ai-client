@@ -4,14 +4,17 @@ import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
+import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { ContextPanel } from './ContextPanel';
 import { ContextPanelRail } from './ContextPanelRail';
 import { EditorColumn } from './center/EditorColumn';
 import {
+  type ChromeIntent,
   chatWidthToEditorRatio,
   deriveEditorOpen,
   maxPanelWidth,
+  reduceChromeIntent,
   resolveChatColumnWidth,
   resolveShellChrome,
 } from './centerLayoutModel';
@@ -72,6 +75,9 @@ export function WorkspaceShell({
 
   // T-32: a file being open is what makes the center row two columns.
   const editorOpen = deriveEditorOpen(useEditorStore((state) => state.tabs).length);
+  // Round-10 ⑥: primitive selector — mounts the intent consumer (below) even
+  // before any tab exists. See the EditorColumn wrapper comment.
+  const fileIntentPending = useFileOpenIntentStore((state) => state.intent !== null);
 
   const centerRowRef = useRef<HTMLDivElement>(null);
   const chatColumnRef = useRef<HTMLDivElement>(null);
@@ -155,6 +161,32 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
+  // Round-10 ①: which of the two chrome columns the user most recently asked
+  // FOR, so the ladder can let that one win instead of always sacrificing the
+  // sidebar (see `reduceChromeIntent`). Derived from state TRANSITIONS rather
+  // than from the click handlers, because the panel opens from three different
+  // places (header button, rail, Ctrl/Cmd+1..4) and a handler-side marker
+  // would go stale on whichever one someone forgot to wire.
+  //
+  // Refs written during render, `ContextPanel`'s `visitedSurfaceIdsRef`
+  // pattern: the intent must be correct in the SAME render that flips the
+  // state (state would apply it one commit late, and the user would see one
+  // frame of the wrong layout before it corrected). The write is idempotent —
+  // a StrictMode double-render sees `before === now` on the second pass and
+  // `reduceChromeIntent` returns `prev` unchanged.
+  const chromeIntentSnapshot = {
+    sidebarExpanded: !sidebarCollapsed,
+    panelOpen: activeSurfaceId !== null,
+  };
+  const chromeIntentRef = useRef<ChromeIntent>(null);
+  const prevChromeIntentSnapshotRef = useRef(chromeIntentSnapshot);
+  chromeIntentRef.current = reduceChromeIntent(
+    chromeIntentRef.current,
+    prevChromeIntentSnapshotRef.current,
+    chromeIntentSnapshot
+  );
+  prevChromeIntentSnapshotRef.current = chromeIntentSnapshot;
+
   // T-32 S4/m5: `activeSurfaceId !== null` is INTENT ("the user wants the
   // panel"), which the yield model must never write — otherwise widening the
   // window could not restore what it auto-collapsed. Chrome resolution happens
@@ -168,6 +200,7 @@ export function WorkspaceShell({
     panelOpen: activeSurfaceId !== null,
     manualPanel,
     manualChat,
+    chromeIntent: chromeIntentRef.current,
   });
   const { panelVisible, chatVisible, railVisible } = chrome;
   // The panel may never eat the content floor — this is what let it squeeze
@@ -308,9 +341,18 @@ export function WorkspaceShell({
                 laid out at half width while LOOKING full width (the empty box
                 has no background), squeezing the composer to ~355px and
                 wrapping the target bar. No editor, no box.
+
+                Round-10 inspection ⑥: m6's editorOpen-only mount recreated the
+                deadlock its own m7 note warns about — EditorColumn is the ONLY
+                fileOpenIntent consumer, so with zero tabs open a tool-row /
+                mention-chip file click had no consumer at all and silently
+                did nothing. A pending intent now mounts the column too, in a
+                `hidden` wrapper (no layout claim — m6's actual complaint —
+                and effects still run): the intent effect opens the tab,
+                `editorOpen` flips, and the wrapper becomes the flex-1 box.
               */}
-              {editorOpen && (
-                <div className="min-w-0 flex-1">
+              {(editorOpen || fileIntentPending) && (
+                <div className={editorOpen ? 'min-w-0 flex-1' : 'hidden'}>
                   <EditorColumn
                     chatVisible={chatVisible}
                     onHideChat={() => setManualChat(!chatVisible)}

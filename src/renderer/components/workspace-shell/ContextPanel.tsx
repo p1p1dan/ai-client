@@ -31,6 +31,7 @@ import {
   deriveMountedSurfaceIds,
   resolveContentColumnWidth,
   resolveContextPanelWidth,
+  resolveDockedPanelBudget,
   SURFACE_ESCAPE_HOLD_ATTR,
   seedVisitedSurfaceIds,
   shouldCloseOnEscape,
@@ -82,13 +83,17 @@ export function ContextPanel({ availableWidth, maxDockedWidth, visible }: Contex
   // width 0 when closed, so falling back to lastSurfaceId here is safe.
   const contentSurfaceId = activeSurfaceId ?? lastSurfaceId;
   const descriptor = contentSurfaceId ? getSurface(contentSurfaceId) : undefined;
+  // Round-10 ②: one budget for the render AND the drag handle below. They used
+  // to differ (render capped, drag not), which is how a drag could commit a
+  // width that then walked the level ladder until the panel disappeared.
+  const widthBudget = resolveDockedPanelBudget({ expanded, availableWidth, maxDockedWidth });
   const width = resolveContextPanelWidth({
     // null collapses the panel to width 0 — the ladder hiding it must look
     // exactly like the user closing it, transition included.
     surfaceId: visible ? activeSurfaceId : null,
     manualWidth: panelWidth,
     // Expanded takes the full row; docked is capped by the content floor.
-    availableWidth: expanded ? availableWidth : (maxDockedWidth ?? availableWidth),
+    availableWidth: widthBudget,
     expanded,
   });
 
@@ -298,8 +303,12 @@ export function ContextPanel({ availableWidth, maxDockedWidth, visible }: Contex
           ariaLabel={t('Resize context panel')}
           width={width}
           targetRef={panelRef}
-          clamp={(candidate) => clampContextPanelWidth(candidate, availableWidth)}
-          onCommit={(next) => setPanelWidth(next, availableWidth)}
+          // Round-10 ②: `widthBudget`, NOT the raw `availableWidth`. Dragging
+          // now stops at the largest width the panel may actually occupy, so
+          // the edge follows the pointer exactly and the committed value can
+          // never be one the ladder would react to by hiding the panel.
+          clamp={(candidate) => clampContextPanelWidth(candidate, widthBudget)}
+          onCommit={(next) => setPanelWidth(next, widthBudget)}
           onResizingChange={setPanelResizing}
         />
       )}

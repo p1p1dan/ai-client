@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
-import { useShellLayoutStore } from '@/stores/shellLayout';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { HitListPopover } from './HitListPopover';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
@@ -27,15 +26,20 @@ import {
  */
 
 /**
- * Default click path (T-05 §2.6, A07 F①/F②): record the navigation intent,
- * then open the (still-placeholder) editor surface — an honest empty state
- * until T-13 lands. `onOpenFile` lets a caller override this; nothing does
- * today (MessageTimeline stays untouched in batch 4 per the file-conflict
- * table), so production rows always take this branch.
+ * Default click path (T-05 §2.6, A07 F①/F②): record the navigation intent —
+ * the CENTER editor column consumes it (`EditorColumn`'s fileOpenIntent
+ * effect) and opens the file as a tab. `onOpenFile` lets a caller override
+ * this; nothing does today.
+ *
+ * Round-10 inspection ⑥: this used to ALSO call `openSurface('editor')`.
+ * Post-T-32 that surface id means the right-panel Files TREE (the editor
+ * itself moved to the center column, see surfaceRegistry.ts), so the call
+ * popped the wrong panel — and with zero tabs open the intent consumer
+ * wasn't even mounted (see WorkspaceShell's intent-pending mount), which is
+ * why clicking a file "only jumped to files". The intent alone is correct.
  */
 function openFileTarget(target: FileLinkTarget, source: FileOpenIntent['source']) {
   useFileOpenIntentStore.getState().requestFileOpen({ ...target, source });
-  useShellLayoutStore.getState().openSurface('editor');
 }
 
 interface ToolGroupProps {
@@ -212,6 +216,27 @@ function ToolRowBody({
   view: ToolRowView;
   onOpenFile?: (target: FileLinkTarget) => void;
 }) {
+  // Round-10 inspection ⑤ (user ruling): when a row expands into BOTH an
+  // input segment and an output body, they share ONE scroll container — the
+  // previous two independent scroll windows (T-05 adversarial fix #3's 240px
+  // input tier stacked above the output tier) put two inner scrollbars inside
+  // one expanded row, which read as separate modules (worst on Delegated
+  // rows: prompt JSON scrolling apart from the report). Input-only and
+  // output-only rows keep their original single-window shapes.
+  if (view.input && view.body === 'output') {
+    return (
+      <div className="ml-0.5 border-l border-border pl-3.5">
+        <div className={cn('overflow-auto', view.outputMaxHeightClass)}>
+          <pre className="m-0 select-text whitespace-pre-wrap pt-1 font-mono text-code leading-[1.55] text-muted-foreground">
+            {view.input}
+          </pre>
+          <pre className="m-0 mt-1 select-text whitespace-pre-wrap border-t border-border pt-2 pb-2 font-mono text-code leading-[1.55] text-muted-foreground">
+            {view.output}
+          </pre>
+        </div>
+      </div>
+    );
+  }
   return (
     <>
       {view.input && (
