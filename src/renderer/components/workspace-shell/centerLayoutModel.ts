@@ -100,84 +100,59 @@ export function deriveEditorOpen(openTabCount: number): boolean {
  */
 export type ManualOverride = boolean | null;
 
-// ── chrome yields, content has a floor (T-32 m5, user round 1) ──────────
+// ── clip, don't collapse (user ruling, 2026-08-05) ──────────────────────
 
 /**
- * A08 states the ladder as whole-window thresholds — `L0 = 1580 = 280 sidebar
- * + 400 chat + 520 editor + 380 panel`, `L1 = 1244 = 280 + 400 + 520 + 44 rail`
- * (a08:1421-1422) — and only ever sacrifices the panel, then chat.
+ * ## OVERTURNED DESIGN — read this before re-adding a threshold
  *
- * The user's round-1 report is that this is the wrong order and the wrong
- * subject: 「chat 页面应该设置一个最小宽度，可用宽度低于这个宽度，则优先折叠左侧，
- * 其次是右边栏，然后根据情况决定是显示文件编辑还是 chat 页面」. Two changes fall
- * out of that:
+ * Two shipped models were overturned by one user ruling on 2026-08-05
+ * (round-11 GUI review). Both are gone from this file on purpose; neither is
+ * to be reintroduced without a new ruling.
  *
- *  1. **Content has a hard floor and chrome yields to it.** Previously the
- *     panel could take the whole row (screenshot: chat squeezed to ~270px with
- *     a 65px composer wrapping one character per line). Now the panel is capped
- *     so chat — and the editor when open — always keep their minimums.
- *  2. **The sidebar joins the ladder, and goes FIRST.** It was outside it, so
- *     a 280–500px sidebar was untouchable while chat got crushed.
+ * **① T-32's L0/L1/L2 degradation ladder** (A08 a08:1421-1422, thresholds
+ * `L0 = 1580 = 280 + 400 + 520 + 380` and `L1 = 1244 = 280 + 400 + 520 + 44`).
+ * It auto-collapsed the sidebar, then hid the panel, then hid chat, as the
+ * window narrowed.
  *
- * Yield order: sidebar → panel → chat. Anything the user did by hand wins over
- * every rung (`manualPanel` / `manualChat`, and the sidebar's own toggle).
+ * **② The round-10 `ChromeIntent` / rung-1a fix**, which made the ladder
+ * reorder itself around whichever column the user had last asked for. It made
+ * sidebar-vs-panel symmetric and it worked — but it was a patch on the wrong
+ * model, and it only ever mirrored the PANEL. The editor was never in the
+ * yield order at all, so the same defect survived one seat over: with the
+ * sidebar collapsed and `chat + editor` showing, expanding the sidebar still
+ * did nothing until the user hid chat by hand to free the room.
+ *
+ * The ruling (verbatim): 「我感觉这块的逻辑是不是得好好捋一捋。优先保证左侧栏目和
+ * chat（无论多大都可以显示并且正常控制折叠），然后右侧栏目在空间不足时也不要自动缩起，
+ * 而是正常显示，只是 UI 大小不足时无法显示出来，将 UI 拖长后根据拖得长度显示被遮盖
+ * 隐藏的内容。」
+ *
+ * The root disagreement is not about ORDER, it is about AUTHORITY. Every
+ * version of the ladder answered "the window is too narrow" by overruling a
+ * visibility the user had chosen — and a user who clicks "expand" and watches
+ * the thing collapse again reads the button as broken, which is exactly the
+ * bug report we got three rounds running. The user's model removes the
+ * question: nothing is ever auto-hidden, and a window too small to show
+ * everything simply shows less of it.
+ *
+ * ## The model now
+ *
+ *  1. **Visibility is user-owned, full stop.** `resolveShellChrome` echoes the
+ *     user's flags and computes nothing. No input can make a column disappear
+ *     except the user's own toggle.
+ *  2. **Sidebar and chat are satisfied first**, from the left, always at or
+ *     above their widths/floors.
+ *  3. **Everything else is clipped by the right edge**, not collapsed
+ *     (`resolveShellAllocation`). Chat and the editor compress to their floors
+ *     first; past that the panel goes off the edge, then the editor. Widening
+ *     the window reveals it again, proportionally — no thresholds, no
+ *     hysteresis, no state.
+ *
+ * The reserve constants below survive both models: they are just widths.
  */
 export const RAIL_RESERVE = 44;
 export const PANEL_MIN_RESERVE = 380;
 export const SIDEBAR_COLLAPSED_RESERVE = 48;
-
-// ── which chrome the user asked for last (round 10 ①) ───────────────────
-
-/**
- * Round-10 GUI review ①: 「点左侧栏展开按钮无反应；反过来…点右栏展开按钮可以展开
- * 且会自动收缩左栏。期望对称」.
- *
- * The ladder's fixed order (sidebar first) is right for a WINDOW SHRINK — the
- * user did not ask for anything, so the cheapest chrome goes. It is wrong for
- * an explicit EXPAND: clicking "expand sidebar" on a narrow window flipped
- * `sidebarCollapsed` to false, rung 1 immediately auto-collapsed it again, and
- * the button read as dead. The panel never suffered this because rung 1
- * sacrifices the sidebar *for* it — the asymmetry was structural, not a bug in
- * either button.
- *
- * So the ladder needs one more fact: which of the two the user most recently
- * asked FOR. Not persisted and not in the store — it is a within-session
- * tiebreak, and a restored session with both intents set should keep A08's
- * documented default order, which `null` gives.
- */
-export type ChromeIntent = 'sidebar' | 'panel' | null;
-
-export interface ChromeIntentSnapshot {
-  /** NOT `chrome.sidebarCollapsed` — the user's own toggle, never the auto one. */
-  sidebarExpanded: boolean;
-  /** `activeSurfaceId !== null` — intent, same as `resolveShellChrome`'s `panelOpen`. */
-  panelOpen: boolean;
-}
-
-/**
- * Folds a state transition into the intent. Derived from transitions rather
- * than wired into the click handlers on purpose: the panel opens from the
- * header button, the rail, AND `Ctrl/Cmd+1..4`, and a handler-side marker
- * would go stale on whichever path someone forgot — leaving a 'sidebar' intent
- * standing while the user opens the panel, which would then refuse to appear.
- *
- * Retreats clear the intent (back to the default order) because the contention
- * they were resolving is gone: collapsing the sidebar again must let the panel
- * return on its own.
- *
- * A same-tick swap resolves to 'panel', matching A08's documented default.
- */
-export function reduceChromeIntent(
-  prev: ChromeIntent,
-  before: ChromeIntentSnapshot,
-  now: ChromeIntentSnapshot
-): ChromeIntent {
-  if (now.panelOpen && !before.panelOpen) return 'panel';
-  if (now.sidebarExpanded && !before.sidebarExpanded) return 'sidebar';
-  if (prev === 'panel' && !now.panelOpen) return null;
-  if (prev === 'sidebar' && !now.sidebarExpanded) return null;
-  return prev;
-}
 
 /** Content the shell refuses to shrink below, given what is open. */
 export function contentFloor(input: { chatWanted: boolean; editorOpen: boolean }): number {
@@ -185,167 +160,163 @@ export function contentFloor(input: { chatWanted: boolean; editorOpen: boolean }
 }
 
 export interface ResolveShellChromeInput {
-  /** Whole shell width — sidebar + content + panel/rail. Null before measurement. */
-  shellWidth: number | null;
-  /** Width the sidebar would take if honoured (already 48 when the user collapsed it). */
-  sidebarWidth: number;
-  /** The user's own collapse toggle; an auto-collapse never writes it. */
+  /** The user's own sidebar toggle. */
   sidebarUserCollapsed: boolean;
-  /** Width the panel would take if honoured. */
-  panelWidth: number;
-  editorOpen: boolean;
-  /** `activeSurfaceId !== null` — intent, not visibility. */
+  /** `activeSurfaceId !== null` — the user's panel choice. */
   panelOpen: boolean;
-  manualPanel: ManualOverride;
+  /** The editor head's "hide chat" toggle; `null` = never touched = chat shows. */
   manualChat: ManualOverride;
-  /**
-   * Round-10 ①: which chrome the user last explicitly asked for. Optional and
-   * defaulting to `null` = A08's documented order, so every pre-existing
-   * caller and case behaves exactly as before.
-   */
-  chromeIntent?: ChromeIntent;
 }
 
 export interface ShellChrome {
-  /** True when the user collapsed it OR the shell had to. */
   sidebarCollapsed: boolean;
-  /** True only because the shell had to — drives the "auto" affordance, never persisted. */
-  sidebarAutoCollapsed: boolean;
   panelVisible: boolean;
   chatVisible: boolean;
   railVisible: boolean;
 }
 
 /**
- * Successive relaxations, in the user's stated order. Each rung is tried only
- * because the one before it did not free enough room, so the shell never gives
- * up more chrome than the width actually demands.
+ * Visibility = what the user asked for, verbatim.
+ *
+ * There is deliberately no `shellWidth` parameter. It used to take one, and
+ * every defect this function has ever had came from what it did with it. A
+ * width cannot make a column invisible any more — it can only make it clipped,
+ * which is `resolveShellAllocation`'s job.
+ *
+ * `sidebarAutoCollapsed` is gone with the ladder: nothing auto-collapses, so
+ * there is no such state to report and no affordance to drive from it.
  */
 export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome {
-  const {
-    shellWidth,
-    sidebarWidth,
-    sidebarUserCollapsed,
-    panelWidth,
-    editorOpen,
-    panelOpen,
-    manualPanel,
-    manualChat,
-    chromeIntent = null,
-  } = input;
-
-  const wantPanel = manualPanel !== null ? manualPanel : panelOpen;
-  const wantChat = manualChat !== null ? manualChat : true;
-
-  const base: ShellChrome = {
-    sidebarCollapsed: sidebarUserCollapsed,
-    sidebarAutoCollapsed: false,
-    panelVisible: wantPanel,
-    chatVisible: wantChat,
-    railVisible: !wantPanel,
+  const panelVisible = input.panelOpen;
+  return {
+    sidebarCollapsed: input.sidebarUserCollapsed,
+    panelVisible,
+    // A08「展开时右缘无图标」: the rail is the collapsed-state switcher, so it
+    // is the exact complement of the panel and never both.
+    railVisible: !panelVisible,
+    chatVisible: input.manualChat !== null ? input.manualChat : true,
   };
+}
 
-  // Unmeasured: honour every preference rather than flashing a degraded shell.
-  if (!isFiniteNumber(shellWidth) || shellWidth <= 0) {
-    return base;
-  }
+export interface ResolveShellAllocationInput {
+  /** Whole shell width. Null before the first measurement. */
+  shellWidth: number | null;
+  /** The user's sidebar width; ignored while collapsed. */
+  sidebarWidth: number;
+  sidebarCollapsed: boolean;
+  chatVisible: boolean;
+  editorOpen: boolean;
+  editorRatio: number;
+  panelVisible: boolean;
+  /** The user's panel width, already 380..1400-clamped by the store. */
+  panelWidth: number;
+  railVisible: boolean;
+}
 
-  const sidebarNow = sidebarUserCollapsed ? SIDEBAR_COLLAPSED_RESERVE : sidebarWidth;
-  /**
-   * Round-10 GUI review ②: this used to be the LIVE `panelWidth`, which made
-   * the ladder judge the panel by how wide the user had dragged it. Dragging
-   * the panel wider therefore walked the shell DOWN the ladder — first
-   * auto-collapsing the sidebar, then hiding the panel outright, so the very
-   * act of enlarging it made it disappear (「拖大右栏 → 触发降级梯把右栏整个
-   * 自动折叠」).
-   *
-   * The panel is elastic: `maxPanelWidth` already caps what it RENDERS at, and
-   * it can always shrink back to `PANEL_MIN_RESERVE`. So the question the
-   * ladder must ask is "can the panel exist at its floor", never "does the
-   * user's preferred width happen to fit". That is also what A08's own
-   * threshold arithmetic says — `L0 = 1580 = 280 + 400 + 520 + 380` uses the
-   * panel MINIMUM, not a live width — so the live read was the deviation and
-   * this restores the spec.
-   *
-   * `panelWidth` stays in the input: it is the width the caller wants honoured
-   * and `maxPanelWidth` is where it gets clamped. Judging existence and
-   * resolving size are two different questions.
-   */
-  const panelFootprint = Math.min(panelWidth, PANEL_MIN_RESERVE);
-  const chromeFor = (sidebar: number, panelShown: boolean) =>
-    sidebar + (panelShown ? panelFootprint : RAIL_RESERVE);
-  const fits = (sidebar: number, panelShown: boolean, chatShown: boolean) =>
-    shellWidth - chromeFor(sidebar, panelShown) >=
-    contentFloor({ chatWanted: chatShown, editorOpen });
-
-  // Rung 0 — everything the user asked for.
-  if (fits(sidebarNow, base.panelVisible, base.chatVisible)) {
-    return base;
-  }
-
-  // Rung 1a (round-10 ①) — the user's last explicit ask was the SIDEBAR, so
-  // the sidebar is not what yields: squeeze the panel out first and keep the
-  // expanded sidebar. This is the mirror image of rung 1, which sacrifices the
-  // sidebar for the panel; without it the two buttons were asymmetric and the
-  // expand-sidebar button read as dead.
-  //
-  // `manualPanel === true` still outranks this, exactly as in rung 2 — a panel
-  // the user explicitly summoned is not collateral for a later sidebar click.
-  if (
-    chromeIntent === 'sidebar' &&
-    !sidebarUserCollapsed &&
-    base.panelVisible &&
-    manualPanel !== true &&
-    fits(sidebarNow, false, base.chatVisible)
-  ) {
-    return { ...base, panelVisible: false, railVisible: true };
-  }
-
-  // Rung 1 — collapse the sidebar (unless the user already did).
-  if (
-    !sidebarUserCollapsed &&
-    fits(SIDEBAR_COLLAPSED_RESERVE, base.panelVisible, base.chatVisible)
-  ) {
-    return { ...base, sidebarCollapsed: true, sidebarAutoCollapsed: true };
-  }
-
-  const sidebarFloor = SIDEBAR_COLLAPSED_RESERVE;
-  const autoCollapsed = !sidebarUserCollapsed;
-
-  // Rung 2 — give up the panel. An explicit `manualPanel: true` outranks this:
-  // the user summoned it on a narrow window and must not be overruled.
-  if (base.panelVisible && manualPanel !== true && fits(sidebarFloor, false, base.chatVisible)) {
-    return {
-      ...base,
-      sidebarCollapsed: true,
-      sidebarAutoCollapsed: autoCollapsed,
-      panelVisible: false,
-      railVisible: true,
-    };
-  }
-
-  // Rung 3 — give up chat, but only when there is an editor to fall back to.
-  // With no file open chat IS the shell; it is never the thing that goes.
-  if (editorOpen && base.chatVisible && manualChat !== true) {
-    return {
-      ...base,
-      sidebarCollapsed: true,
-      sidebarAutoCollapsed: autoCollapsed,
-      panelVisible: manualPanel === true && base.panelVisible,
-      railVisible: !(manualPanel === true && base.panelVisible),
-      chatVisible: false,
-    };
-  }
-
-  // Nothing left to yield: keep the sidebar collapsed and let the content
-  // scroll rather than silently dropping the user's last explicit choice.
-  return { ...base, sidebarCollapsed: true, sidebarAutoCollapsed: autoCollapsed };
+export interface ShellAllocation {
+  /** Priority 1 — granted in full, always. */
+  sidebarWidth: number;
+  /** The chat+editor row. Never below `contentFloor` for what is shown. */
+  centerWidth: number;
+  /** 0 when chat is hidden; otherwise never below `CHAT_MIN_WIDTH`. */
+  chatWidth: number;
+  /** 0 when no file is open. */
+  editorWidth: number;
+  /** The user's width, never reduced — it is clipped instead. 0 when closed. */
+  panelWidth: number;
+  /** px pushed past the shell's right edge and clipped away; 0 = everything fits. */
+  clippedWidth: number;
+  clipped: boolean;
 }
 
 /**
- * The panel may never eat the content floor (T-32 m5). Returns the largest
- * width the panel may take, or 0 when even the floor cannot be met — the
- * caller has already decided visibility via `resolveShellChrome`.
+ * Lay the columns out left to right and let the right edge cut off whatever
+ * does not fit. The caller renders this into fixed, non-shrinking widths inside
+ * an `overflow-clip` row — the clip is the whole mechanism, so a child that is
+ * allowed to shrink would silently defeat it.
+ *
+ * Order of satisfaction, straight from the ruling:
+ *  - sidebar takes its width (or 48 collapsed) — never compressed, never hidden;
+ *  - the rail, when shown, is reserved too: it is 44px and it is the only way
+ *    to bring the panel back, so clipping it would strand the user;
+ *  - chat and the editor share what is left, down to their floors;
+ *  - the panel keeps the width the user set and absorbs the shortfall by
+ *    hanging off the right edge.
+ *
+ * Before measurement everything is granted as requested and nothing is
+ * reported clipped: a first paint that guesses wrong would flash a cut-off
+ * layout, and one frame later the real width arrives anyway.
+ */
+export function resolveShellAllocation(input: ResolveShellAllocationInput): ShellAllocation {
+  const {
+    shellWidth,
+    sidebarWidth,
+    sidebarCollapsed,
+    chatVisible,
+    editorOpen,
+    editorRatio,
+    panelVisible,
+    panelWidth,
+    railVisible,
+  } = input;
+
+  const sidebar = sidebarCollapsed ? SIDEBAR_COLLAPSED_RESERVE : Math.max(0, sidebarWidth);
+  const panel = panelVisible ? Math.max(0, panelWidth) : 0;
+  const floors = contentFloor({ chatWanted: chatVisible, editorOpen });
+
+  const split = (centerWidth: number): ShellAllocation => {
+    let chatWidth = 0;
+    let editorWidth = 0;
+    if (chatVisible && editorOpen) {
+      chatWidth = resolveChatColumnWidth({ centerWidth, editorRatio });
+      editorWidth = Math.max(EDITOR_MIN_WIDTH, centerWidth - chatWidth);
+    } else if (chatVisible) {
+      chatWidth = centerWidth;
+    } else if (editorOpen) {
+      editorWidth = centerWidth;
+    }
+    return {
+      sidebarWidth: sidebar,
+      centerWidth,
+      chatWidth,
+      editorWidth,
+      panelWidth: panel,
+      clippedWidth: 0,
+      clipped: false,
+    };
+  };
+
+  if (!isFiniteNumber(shellWidth) || shellWidth <= 0) {
+    return split(floors);
+  }
+
+  const rail = railVisible ? RAIL_RESERVE : 0;
+  const row = Math.max(0, shellWidth - sidebar - rail);
+  // `Math.max(floors, …)` is the entire priority rule: when the panel's width
+  // would push chat/the editor under their floors, the floors win and the
+  // panel is what ends up past the edge — never the other way round.
+  const centerWidth = Math.max(floors, row - panel);
+  const clippedWidth = Math.max(0, centerWidth + panel - row);
+
+  return { ...split(centerWidth), clippedWidth, clipped: clippedWidth > 0 };
+}
+
+/**
+ * The largest panel width a DRAG may reach — the point past which dragging
+ * stops doing anything visible.
+ *
+ * Survives the clip-don't-collapse rewrite with a narrowed job. It no longer
+ * caps what the panel RENDERS at: under the new model the panel always renders
+ * at the width the user set and the right edge clips the remainder
+ * (`resolveShellAllocation`). But the panel's grip is on its LEFT edge, so
+ * widening it moves that edge leftward only while chat/the editor still have
+ * room to give. Once `centerWidth` bottoms out at `contentFloor`, the edge
+ * stops and every further pixel of drag goes straight off the right edge,
+ * invisible. Clamping there is what keeps the drag what-you-see-is-what-you-get
+ * (the one principle carried over from the round-10 fix).
+ *
+ * Window SHRINK is deliberately not clamped this way — that is the case the
+ * user's ruling is about, and there the panel keeps its width and gets cut off.
  */
 export function maxPanelWidth(input: {
   shellWidth: number | null;

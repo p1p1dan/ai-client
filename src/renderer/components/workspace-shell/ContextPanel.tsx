@@ -83,19 +83,23 @@ export function ContextPanel({ availableWidth, maxDockedWidth, visible }: Contex
   // width 0 when closed, so falling back to lastSurfaceId here is safe.
   const contentSurfaceId = activeSurfaceId ?? lastSurfaceId;
   const descriptor = contentSurfaceId ? getSurface(contentSurfaceId) : undefined;
-  // Round-10 ②: one budget for the render AND the drag handle below. They used
-  // to differ (render capped, drag not), which is how a drag could commit a
-  // width that then walked the level ladder until the panel disappeared.
-  const widthBudget = resolveDockedPanelBudget({ expanded, availableWidth, maxDockedWidth });
+  // Round-11 (user ruling): the DOCKED panel renders at the width the user
+  // set, full stop — no available-width cap. When the window cannot fit it,
+  // `WorkspaceShell`'s row clips the remainder off the right edge instead of
+  // shrinking the panel («右侧栏目在空间不足时也不要自动缩起，而是正常显示»).
+  // The expanded overlay still takes the whole measured row, since covering
+  // chat and the editor is its entire purpose.
   const width = resolveContextPanelWidth({
-    // null collapses the panel to width 0 — the ladder hiding it must look
-    // exactly like the user closing it, transition included.
+    // null collapses the panel to width 0 — closing must still animate.
     surfaceId: visible ? activeSurfaceId : null,
     manualWidth: panelWidth,
-    // Expanded takes the full row; docked is capped by the content floor.
-    availableWidth: widthBudget,
+    availableWidth: expanded ? availableWidth : null,
     expanded,
   });
+  // Round-10 ②, kept: the drag stays what-you-see-is-what-you-get. Past this
+  // budget the panel's left edge cannot move (chat/the editor have bottomed
+  // out) so further dragging would be pure invisible travel.
+  const widthBudget = resolveDockedPanelBudget({ expanded, availableWidth, maxDockedWidth });
 
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelResizing, setPanelResizing] = useState(false);

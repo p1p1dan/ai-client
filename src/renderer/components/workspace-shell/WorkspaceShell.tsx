@@ -10,22 +10,16 @@ import { ContextPanel } from './ContextPanel';
 import { ContextPanelRail } from './ContextPanelRail';
 import { EditorColumn } from './center/EditorColumn';
 import {
-  type ChromeIntent,
   chatWidthToEditorRatio,
   deriveEditorOpen,
   maxPanelWidth,
-  reduceChromeIntent,
-  resolveChatColumnWidth,
+  resolveShellAllocation,
   resolveShellChrome,
 } from './centerLayoutModel';
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
 import { ShellResizeHandle } from './ShellResizeHandle';
-import {
-  CONTEXT_PANEL_MIN_WIDTH,
-  clampSidebarWidth,
-  SIDEBAR_COLLAPSED_WIDTH,
-} from './shellLayoutModel';
+import { CONTEXT_PANEL_MIN_WIDTH, clampSidebarWidth } from './shellLayoutModel';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
@@ -79,30 +73,15 @@ export function WorkspaceShell({
   // before any tab exists. See the EditorColumn wrapper comment.
   const fileIntentPending = useFileOpenIntentStore((state) => state.intent !== null);
 
+  // Round-11: the center row's width is ALLOCATED, not measured — the
+  // ResizeObserver that used to feed it is gone. It lagged a frame, and lagged
+  // for the whole 250ms while the panel animated; that lag is what forced the
+  // shrinkable `flexBasis` hack on the chat column and still let chat get
+  // pushed into the panel (m-T32). Deriving the width from `shellWidth`
+  // instead makes it correct in the same commit the panel opens.
   const centerRowRef = useRef<HTMLDivElement>(null);
   const chatColumnRef = useRef<HTMLDivElement>(null);
-  const [centerWidth, setCenterWidth] = useState<number | null>(null);
   const [centerResizing, setCenterResizing] = useState(false);
-
-  // Measured separately from `contentRowRef`: that one is chat+editor+panel
-  // (the panel's width budget), this one is chat+editor (the grip's budget).
-  // Deriving one from the other would need the panel's animated width, which
-  // is exactly the mid-transition value the T-22 batch-3 fix avoids reading.
-  useLayoutEffect(() => {
-    const el = centerRowRef.current;
-    if (!el) {
-      return;
-    }
-    setCenterWidth(el.clientWidth || null);
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0;
-      setCenterWidth(width > 0 ? width : null);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const chatWidth = resolveChatColumnWidth({ centerWidth: centerWidth ?? 0, editorRatio });
 
   useSyncChatWorkspaceTree({
     repositories,
@@ -120,8 +99,8 @@ export function WorkspaceShell({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarResizing, setSidebarResizing] = useState(false);
 
-  // m5: the yield model needs the WHOLE shell (the sidebar is now part of the
-  // ladder), which `contentRowRef` deliberately excludes.
+  // The allocator budgets the WHOLE shell (the sidebar is one of the columns
+  // it satisfies first), which `contentRowRef` deliberately excludes.
   const shellRef = useRef<HTMLDivElement>(null);
   const [shellWidth, setShellWidth] = useState<number | null>(null);
   useLayoutEffect(() => {
@@ -138,8 +117,9 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
-  // Sole measurement point for the Main+ContextPanel row (decision 9): feeds
-  // `availableWidth` into ContextPanel's fraction/clamp math.
+  // Sole measurement point for the Main+ContextPanel row (decision 9). Since
+  // round-11 only two things need it: the EXPANDED panel overlay (which takes
+  // the real row width) and the panel drag's clamp.
   const contentRowRef = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState<number | null>(null);
 
@@ -161,53 +141,38 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
-  // Round-10 ①: which of the two chrome columns the user most recently asked
-  // FOR, so the ladder can let that one win instead of always sacrificing the
-  // sidebar (see `reduceChromeIntent`). Derived from state TRANSITIONS rather
-  // than from the click handlers, because the panel opens from three different
-  // places (header button, rail, Ctrl/Cmd+1..4) and a handler-side marker
-  // would go stale on whichever one someone forgot to wire.
-  //
-  // Refs written during render, `ContextPanel`'s `visitedSurfaceIdsRef`
-  // pattern: the intent must be correct in the SAME render that flips the
-  // state (state would apply it one commit late, and the user would see one
-  // frame of the wrong layout before it corrected). The write is idempotent —
-  // a StrictMode double-render sees `before === now` on the second pass and
-  // `reduceChromeIntent` returns `prev` unchanged.
-  const chromeIntentSnapshot = {
-    sidebarExpanded: !sidebarCollapsed,
-    panelOpen: activeSurfaceId !== null,
-  };
-  const chromeIntentRef = useRef<ChromeIntent>(null);
-  const prevChromeIntentSnapshotRef = useRef(chromeIntentSnapshot);
-  chromeIntentRef.current = reduceChromeIntent(
-    chromeIntentRef.current,
-    prevChromeIntentSnapshotRef.current,
-    chromeIntentSnapshot
-  );
-  prevChromeIntentSnapshotRef.current = chromeIntentSnapshot;
-
-  // T-32 S4/m5: `activeSurfaceId !== null` is INTENT ("the user wants the
-  // panel"), which the yield model must never write — otherwise widening the
-  // window could not restore what it auto-collapsed. Chrome resolution happens
-  // here, once, and is handed down; no other component re-derives it (R1).
+  // Round-11 (user ruling 2026-08-05): visibility is the user's, verbatim —
+  // no width, no threshold and no "intent" can flip a column any more. Both
+  // the T-32 ladder and round-10's `ChromeIntent` are deleted; see
+  // `centerLayoutModel.ts`'s OVERTURNED DESIGN note for why. This stays the
+  // single derivation point (R1) and is handed down; nobody re-derives it.
   const chrome = resolveShellChrome({
-    shellWidth,
-    sidebarWidth,
     sidebarUserCollapsed: sidebarCollapsed,
-    panelWidth: panelWidth ?? CONTEXT_PANEL_MIN_WIDTH,
-    editorOpen,
     panelOpen: activeSurfaceId !== null,
-    manualPanel,
     manualChat,
-    chromeIntent: chromeIntentRef.current,
   });
   const { panelVisible, chatVisible, railVisible } = chrome;
-  // The panel may never eat the content floor — this is what let it squeeze
-  // chat down to a 65px composer before m5.
+
+  // Widths come from one allocator so the columns cannot disagree about who
+  // owns which pixel: sidebar and chat are satisfied first, and whatever does
+  // not fit hangs off the right edge for the row's `overflow-clip` to cut.
+  const allocationInput = {
+    shellWidth,
+    sidebarWidth,
+    sidebarCollapsed: chrome.sidebarCollapsed,
+    chatVisible,
+    editorOpen,
+    editorRatio,
+    panelVisible,
+    panelWidth: panelWidth ?? CONTEXT_PANEL_MIN_WIDTH,
+    railVisible,
+  };
+  const allocation = resolveShellAllocation(allocationInput);
+  // Drag-only cap: past this, widening the panel moves nothing on screen
+  // because chat/the editor have bottomed out — see `maxPanelWidth`.
   const panelWidthCap = maxPanelWidth({
     shellWidth,
-    sidebarWidth: chrome.sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth,
+    sidebarWidth: allocation.sidebarWidth,
     editorOpen,
     chatVisible,
   });
@@ -240,7 +205,7 @@ export function WorkspaceShell({
         ref={sidebarRef}
         data-resizing={sidebarResizing || undefined}
         className="relative flex h-full shrink-0 transition-[width] duration-[250ms] data-[resizing]:transition-none"
-        style={{ width: chrome.sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
+        style={{ width: allocation.sidebarWidth }}
       >
         <LeftNav
           collapsed={chrome.sidebarCollapsed}
@@ -277,57 +242,69 @@ export function WorkspaceShell({
           onToggleReadingWidth={toggleReadingWidthMode}
         />
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div ref={contentRowRef} className="relative flex min-w-0 flex-1 overflow-hidden">
+          {/*
+            Round-11: THE clip boundary. `overflow-clip`, not `overflow-hidden`
+            — hidden is still a scroll container, so focusing something inside
+            the clipped-off panel would scroll the whole row sideways and drag
+            chat off screen. Clip cannot scroll at all, which is exactly the
+            「无横向滚动条」 the ruling asks for. Every child below carries an
+            explicit width and `shrink-0`: a child allowed to shrink would
+            absorb the overflow instead of letting the edge cut it, which is
+            the entire mechanism.
+          */}
+          <div ref={contentRowRef} className="relative flex min-w-0 flex-1 overflow-clip">
             {/*
               T-32: chat ║ editor (a08:1208-1241). With no file open the editor
               column returns null and chat keeps `flex-1`, so the shell is
               byte-for-byte the pre-T-32 layout until something is opened.
             */}
-            <div ref={centerRowRef} className="relative flex min-w-0 flex-1 overflow-hidden">
+            <div
+              ref={centerRowRef}
+              className="relative flex shrink-0 overflow-clip"
+              style={{ width: allocation.centerWidth }}
+            >
               <div
                 ref={chatColumnRef}
                 data-resizing={centerResizing || undefined}
                 className={cn(
-                  'relative min-w-0 flex-col',
-                  // `hidden`, not an unmount: ChatWorkspace owns scroll position
-                  // and in-flight composer state that must survive an L2 dip.
-                  chatVisible ? 'flex' : 'hidden',
-                  !editorOpen && 'flex-1'
+                  'relative min-w-0 shrink-0 flex-col',
+                  // `hidden`, not an unmount: ChatWorkspace owns scroll
+                  // position and in-flight composer state, and the editor's
+                  // "hide chat" toggle is a round trip the user makes often.
+                  chatVisible ? 'flex' : 'hidden'
                 )}
-                // m-T32 (user round 1: 「聊天页面和右侧页面的叠加」): this used to
-                // be `width` + `shrink-0`. `chatWidth` is derived from a
-                // ResizeObserver measurement of the center row, so it lags by a
-                // frame — and lags for the whole 250ms while the panel animates
-                // its width. A non-shrinkable fixed width during that window is
-                // wider than the row it sits in, so it pushed into the panel.
-                // As a shrinkable basis it degrades gracefully instead: the
-                // requested width when it fits, proportionally less while the
-                // measurement catches up.
-                style={
-                  editorOpen && chatVisible
-                    ? { flexBasis: chatWidth, flexGrow: 0, flexShrink: 1 }
-                    : undefined
-                }
+                // Round-11: back to a hard width. The shrinkable `flexBasis`
+                // this replaces existed only to survive the measurement lag
+                // that m-T32 hit (「聊天页面和右侧页面的叠加」) — an allocated
+                // width has no lag to survive, and shrinkability is now the
+                // one thing that would break clipping: a chat column that can
+                // give would absorb the overflow instead of letting the panel
+                // run off the edge, which is precisely the squeeze the user
+                // ruled out.
+                style={chatVisible ? { width: allocation.chatWidth } : undefined}
               >
                 <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
                 {editorOpen && chatVisible && (
                   <ShellResizeHandle
                     side="right"
                     ariaLabel={t('Resize chat column')}
-                    width={chatWidth}
+                    width={allocation.chatWidth}
                     targetRef={chatColumnRef}
                     clamp={(candidate) =>
-                      resolveChatColumnWidth({
-                        centerWidth: centerWidth ?? 0,
+                      resolveShellAllocation({
+                        ...allocationInput,
                         editorRatio: chatWidthToEditorRatio({
                           chatWidth: candidate,
-                          centerWidth: centerWidth ?? 0,
+                          centerWidth: allocation.centerWidth,
                         }),
-                      })
+                      }).chatWidth
                     }
                     onCommit={(next) =>
                       setEditorRatio(
-                        chatWidthToEditorRatio({ chatWidth: next, centerWidth: centerWidth ?? 0 })
+                        chatWidthToEditorRatio({
+                          chatWidth: next,
+                          centerWidth: allocation.centerWidth,
+                        })
                       )
                     }
                     onResizingChange={setCenterResizing}
@@ -352,7 +329,10 @@ export function WorkspaceShell({
                 `editorOpen` flips, and the wrapper becomes the flex-1 box.
               */}
               {(editorOpen || fileIntentPending) && (
-                <div className={editorOpen ? 'min-w-0 flex-1' : 'hidden'}>
+                <div
+                  className={editorOpen ? 'min-w-0 shrink-0' : 'hidden'}
+                  style={editorOpen ? { width: allocation.editorWidth } : undefined}
+                >
                   <EditorColumn
                     chatVisible={chatVisible}
                     onHideChat={() => setManualChat(!chatVisible)}

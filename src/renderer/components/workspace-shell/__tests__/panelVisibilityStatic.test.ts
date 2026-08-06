@@ -83,9 +83,15 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // at once: a pending intent mounts the column, but only `editorOpen`
     // grants it the `flex-1` layout box — otherwise the wrapper is `hidden`
     // and costs nothing.
+    //
+    // Round-11: the granted box is now an ALLOCATED width + `shrink-0` rather
+    // than `flex-1` — a growable/shrinkable editor would absorb the overflow
+    // the right edge is supposed to clip. Both original invariants are
+    // unchanged: mounted on a pending intent, laid out only when open.
     expect(shell).toMatch(
-      /\{\(editorOpen \|\| fileIntentPending\) && \( <div className=\{editorOpen \? 'min-w-0 flex-1' : 'hidden'\}> <EditorColumn/
+      /\{\(editorOpen \|\| fileIntentPending\) && \( <div className=\{editorOpen \? 'min-w-0 shrink-0' : 'hidden'\}/
     );
+    expect(shell).toContain('style={editorOpen ? { width: allocation.editorWidth } : undefined}');
   });
 
   it('the docked cap is not applied to the expanded overlay (m6)', () => {
@@ -120,26 +126,44 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(panel).not.toContain('setPanelWidth(next, availableWidth)');
   });
 
-  it('the level ladder judges the panel at its floor, not at its dragged width (round 10 ②)', () => {
+  /**
+   * OVERTURNED DESIGN — these two replace the round-10 fences that stood here:
+   * `the level ladder judges the panel at its floor` and `the expand buttons
+   * are symmetric — the last ask wins`. Both fenced repairs to the T-32
+   * degradation ladder, which the user overturned wholesale on 2026-08-05.
+   * See `centerLayoutModel.ts`'s OVERTURNED DESIGN note.
+   */
+  it('no width can hide a column any more — the ladder is gone (round 11)', () => {
     const model = code(join(SHELL_DIR, 'centerLayoutModel.ts'));
-    // Reading the live `panelWidth` here is what made enlarging the panel
-    // shrink the shell around it and then hide it. A08's own thresholds quote
-    // the 380 minimum, so the floor is both the fix and the spec.
-    expect(model).toContain('const panelFootprint = Math.min(panelWidth, PANEL_MIN_RESERVE);');
-    expect(model).not.toMatch(/panelShown\s*\?\s*panelWidth\s*:/);
+    const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    // Visibility takes no width at all: a threshold cannot be written without
+    // one, so this is the fence rather than a list of forbidden numbers.
+    expect(model).toMatch(
+      /export function resolveShellChrome\(input: ResolveShellChromeInput\): ShellChrome \{[^}]*sidebarCollapsed: input\.sidebarUserCollapsed/
+    );
+    expect(shell).toContain('const chrome = resolveShellChrome({ sidebarUserCollapsed:');
+    // The deleted machinery must not creep back under its old names.
+    for (const ghost of ['ChromeIntent', 'sidebarAutoCollapsed', 'panelFootprint']) {
+      expect(model).not.toContain(ghost);
+      expect(shell).not.toContain(ghost);
+    }
   });
 
-  it('the expand buttons are symmetric — the last ask wins (round 10 ①)', () => {
+  it('the shell clips at the right edge instead of shrinking columns (round 11)', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
-    const model = code(join(SHELL_DIR, 'centerLayoutModel.ts'));
-    // Without this the ladder always sacrificed the sidebar, so expanding the
-    // sidebar on a narrow window undid itself and the button read as dead.
-    expect(model).toContain("chromeIntent === 'sidebar'");
-    expect(shell).toContain('reduceChromeIntent(');
-    expect(shell).toContain('chromeIntent: chromeIntentRef.current');
-    // Derived from transitions, never from a click handler: the panel opens
-    // from the header, the rail AND Ctrl/Cmd+1..4.
-    expect(shell).toContain('panelOpen: activeSurfaceId !== null,');
+    // `overflow-clip`, not `overflow-hidden`: hidden is still a scroll
+    // container, so focusing something inside the clipped-off panel would
+    // scroll chat off screen.
+    expect(shell).toContain(
+      'ref={contentRowRef} className="relative flex min-w-0 flex-1 overflow-clip"'
+    );
+    expect(shell).toContain('const allocation = resolveShellAllocation(allocationInput);');
+    // Every column carries an allocated width; none may shrink, or it would
+    // absorb the overflow the clip is meant to cut.
+    expect(shell).toContain('style={{ width: allocation.sidebarWidth }}');
+    expect(shell).toContain('style={{ width: allocation.centerWidth }}');
+    expect(shell).toContain('style={chatVisible ? { width: allocation.chatWidth } : undefined}');
+    expect(shell).not.toMatch(/flexShrink: 1/);
   });
 
   it('the expanded panel is opaque — an overlay may not be see-through (m3)', () => {

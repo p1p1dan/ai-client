@@ -10,10 +10,9 @@ import {
   MAX_EDITOR_RATIO,
   MIN_EDITOR_RATIO,
   maxPanelWidth,
-  PANEL_MIN_RESERVE,
   RAIL_RESERVE,
-  reduceChromeIntent,
   resolveChatColumnWidth,
+  resolveShellAllocation,
   resolveShellChrome,
   SIDEBAR_COLLAPSED_RESERVE,
 } from '../centerLayoutModel';
@@ -137,20 +136,6 @@ describe('deriveEditorOpen', () => {
 const SIDEBAR = 280;
 const PANEL = 380;
 
-function chrome(overrides: Partial<Parameters<typeof resolveShellChrome>[0]> = {}) {
-  return resolveShellChrome({
-    shellWidth: 2000,
-    sidebarWidth: SIDEBAR,
-    sidebarUserCollapsed: false,
-    panelWidth: PANEL,
-    editorOpen: false,
-    panelOpen: true,
-    manualPanel: null,
-    manualChat: null,
-    ...overrides,
-  });
-}
-
 describe('contentFloor', () => {
   it('reserves chat alone, chat + editor, or editor alone', () => {
     expect(contentFloor({ chatWanted: true, editorOpen: false })).toBe(CHAT_MIN_WIDTH);
@@ -161,260 +146,290 @@ describe('contentFloor', () => {
   });
 });
 
-describe('resolveShellChrome — yield order is sidebar → panel → chat', () => {
-  it('honours every preference when the width allows', () => {
-    expect(chrome({ shellWidth: 2000 })).toMatchObject({
-      sidebarCollapsed: false,
-      panelVisible: true,
-      chatVisible: true,
-      railVisible: false,
+/**
+ * ## OVERTURNED DESIGN — what used to be asserted here
+ *
+ * This block replaced 30 cases across four describes, all of them pinning
+ * behavior the user overturned on 2026-08-05 (round-11 GUI review):
+ *
+ *  - `resolveShellChrome — yield order is sidebar → panel → chat` (11) — T-32's
+ *    L0/L1/L2 ladder, A08 a08:1421-1422's `1580` / `1244` thresholds;
+ *  - `reduceChromeIntent` (5) and `resolveShellChrome — expanding either column
+ *    is symmetric` (9) — round-10's fix for the ladder's asymmetry;
+ *  - `resolveShellChrome — the ladder judges the panel at its floor` (4) — the
+ *    round-10 ② repair, whose PROPERTY survives below in a stronger form (a
+ *    drag can still never make the panel disappear — now because nothing can).
+ *
+ * They are deleted rather than skipped: every one of them asserts that the
+ * model overrules a visibility the user chose, which is the single thing the
+ * ruling forbids. A zombie `it.skip` here would read as "temporarily off".
+ *
+ * The ruling: 「优先保证左侧栏目和 chat（无论多大都可以显示并且正常控制折叠），然后
+ * 右侧栏目在空间不足时也不要自动缩起，而是正常显示，只是 UI 大小不足时无法显示出来，
+ * 将 UI 拖长后根据拖得长度显示被遮盖隐藏的内容。」
+ */
+describe('resolveShellChrome — visibility is the user`s, verbatim', () => {
+  const vis = (overrides: Partial<Parameters<typeof resolveShellChrome>[0]> = {}) =>
+    resolveShellChrome({
+      sidebarUserCollapsed: false,
+      panelOpen: true,
+      manualChat: null,
+      ...overrides,
     });
+
+  it('echoes the sidebar toggle without ever second-guessing it', () => {
+    expect(vis({ sidebarUserCollapsed: false }).sidebarCollapsed).toBe(false);
+    expect(vis({ sidebarUserCollapsed: true }).sidebarCollapsed).toBe(true);
   });
 
-  it('collapses the SIDEBAR first, before touching the panel', () => {
-    // 900 = 280 sidebar + 380 panel leaves 240 for chat, under its 400 floor.
-    // Collapsing the sidebar frees 232 and brings chat back over the line, so
-    // the panel must survive untouched.
-    const result = chrome({ shellWidth: 900 });
-    expect(result.sidebarCollapsed).toBe(true);
-    expect(result.sidebarAutoCollapsed).toBe(true);
-    expect(result.panelVisible).toBe(true);
-    expect(result.chatVisible).toBe(true);
+  it('echoes the panel choice, and the rail is its exact complement', () => {
+    expect(vis({ panelOpen: true })).toMatchObject({ panelVisible: true, railVisible: false });
+    expect(vis({ panelOpen: false })).toMatchObject({ panelVisible: false, railVisible: true });
   });
 
-  it('gives up the panel only after the collapsed sidebar is still not enough', () => {
-    // 48 + 380 + 400 = 828; below that the panel is what goes next.
-    const result = chrome({ shellWidth: 800 });
-    expect(result.sidebarCollapsed).toBe(true);
-    expect(result.panelVisible).toBe(false);
-    expect(result.railVisible).toBe(true);
-    expect(result.chatVisible).toBe(true);
+  it('shows chat unless the editor head explicitly hid it', () => {
+    expect(vis({ manualChat: null }).chatVisible).toBe(true);
+    expect(vis({ manualChat: true }).chatVisible).toBe(true);
+    expect(vis({ manualChat: false }).chatVisible).toBe(false);
   });
 
-  it('never hides chat when no file is open — chat IS the shell then', () => {
-    for (const shellWidth of [700, 500, 300, 120]) {
-      expect(chrome({ shellWidth, editorOpen: false }).chatVisible).toBe(true);
+  it('takes no width at all — a window size can no longer hide anything', () => {
+    // The structural guarantee behind the ruling, stated as a type-level fact:
+    // there is no width to pass, so no threshold can exist.
+    expect(Object.keys(vis())).toEqual([
+      'sidebarCollapsed',
+      'panelVisible',
+      'railVisible',
+      'chatVisible',
+    ]);
+  });
+});
+
+// ── clip, don`t collapse ────────────────────────────────────────────────
+
+const alloc = (overrides: Partial<Parameters<typeof resolveShellAllocation>[0]> = {}) =>
+  resolveShellAllocation({
+    shellWidth: 2000,
+    sidebarWidth: SIDEBAR,
+    sidebarCollapsed: false,
+    chatVisible: true,
+    editorOpen: false,
+    editorRatio: DEFAULT_EDITOR_RATIO,
+    panelVisible: true,
+    panelWidth: PANEL,
+    railVisible: false,
+    ...overrides,
+  });
+
+describe('resolveShellAllocation — sidebar and chat are satisfied first', () => {
+  it('grants the sidebar its full width at every shell width', () => {
+    for (const shellWidth of [2000, 1200, 900, 700, 500, 300]) {
+      expect(alloc({ shellWidth }).sidebarWidth).toBe(SIDEBAR);
     }
   });
 
-  it('hides chat last, and only with an editor to fall back to', () => {
-    // 48 + 44 + 400 + 520 = 1012 needed to keep both; below it chat goes.
-    const result = chrome({ shellWidth: 700, editorOpen: true });
-    expect(result.chatVisible).toBe(false);
-    expect(result.panelVisible).toBe(false);
-    expect(result.sidebarCollapsed).toBe(true);
+  it('grants the collapsed sidebar its 48px, never less', () => {
+    for (const shellWidth of [2000, 700, 300]) {
+      expect(alloc({ shellWidth, sidebarCollapsed: true }).sidebarWidth).toBe(
+        SIDEBAR_COLLAPSED_RESERVE
+      );
+    }
   });
 
-  it('does not auto-collapse a sidebar the user already collapsed', () => {
-    const result = chrome({ shellWidth: 800, sidebarUserCollapsed: true });
-    expect(result.sidebarCollapsed).toBe(true);
-    // The distinction matters: `sidebarAutoCollapsed` drives an affordance and
-    // must not claim credit for the user's own toggle.
-    expect(result.sidebarAutoCollapsed).toBe(false);
+  it('never puts chat below its floor, however little room is left', () => {
+    for (const shellWidth of [2000, 1200, 900, 700, 500, 300, 120]) {
+      for (const editorOpen of [false, true]) {
+        for (const panelWidth of [PANEL, 900, 1400]) {
+          const result = alloc({ shellWidth, editorOpen, panelWidth });
+          expect(result.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+        }
+      }
+    }
   });
 
-  it('lets an explicit panel summon outrank the yield (user round 1, m2)', () => {
-    // The exact report: on a narrow window the panel could not be summoned
-    // back at all, because the automatic rung kept overruling the click.
-    const result = chrome({ shellWidth: 800, manualPanel: true });
-    expect(result.panelVisible).toBe(true);
+  it('never puts the editor below its floor either', () => {
+    for (const shellWidth of [2000, 1200, 900, 700, 300]) {
+      const result = alloc({ shellWidth, editorOpen: true });
+      expect(result.editorWidth).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+    }
   });
 
-  it('lets an explicit chat un-hide outrank the yield too', () => {
-    const result = chrome({ shellWidth: 700, editorOpen: true, manualChat: true });
-    expect(result.chatVisible).toBe(true);
+  it('gives chat the whole center row when no file is open', () => {
+    const result = alloc({ shellWidth: 2000 });
+    expect(result.chatWidth).toBe(result.centerWidth);
+    expect(result.editorWidth).toBe(0);
+    expect(result.centerWidth).toBe(2000 - SIDEBAR - PANEL);
   });
 
-  it('respects an explicit close even when there is plenty of room', () => {
-    expect(chrome({ shellWidth: 2000, manualPanel: false }).panelVisible).toBe(false);
-    expect(chrome({ shellWidth: 2000, editorOpen: true, manualChat: false }).chatVisible).toBe(
-      false
+  it('splits the center row by the ratio when a file is open', () => {
+    const result = alloc({ shellWidth: 2000, editorOpen: true, editorRatio: 0.5 });
+    expect(result.chatWidth + result.editorWidth).toBe(result.centerWidth);
+    expect(result.chatWidth).toBe(Math.round(result.centerWidth * 0.5));
+  });
+
+  it('gives the row to the editor alone when the user hid chat', () => {
+    const result = alloc({ shellWidth: 2000, editorOpen: true, chatVisible: false });
+    expect(result.chatWidth).toBe(0);
+    expect(result.editorWidth).toBe(result.centerWidth);
+  });
+
+  it('reserves the rail when it is showing — it is the only way back', () => {
+    const withRail = alloc({ shellWidth: 2000, panelVisible: false, railVisible: true });
+    expect(withRail.centerWidth).toBe(2000 - SIDEBAR - RAIL_RESERVE);
+    expect(withRail.panelWidth).toBe(0);
+  });
+});
+
+describe('resolveShellAllocation — the right edge clips, nothing collapses', () => {
+  it('reports no clipping while everything fits', () => {
+    const result = alloc({ shellWidth: 2000 });
+    expect(result.clipped).toBe(false);
+    expect(result.clippedWidth).toBe(0);
+  });
+
+  it('keeps the panel at the width the user set and clips the overflow', () => {
+    // 900 - 280 sidebar = 620 for chat + panel, but chat`s floor is 400 and
+    // the panel wants 380: 160px has to go off the edge.
+    const result = alloc({ shellWidth: 900 });
+    expect(result.panelWidth).toBe(PANEL);
+    expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
+    expect(result.clippedWidth).toBe(CHAT_MIN_WIDTH + PANEL - (900 - SIDEBAR));
+    expect(result.clipped).toBe(true);
+  });
+
+  it('reveals the hidden part pixel for pixel as the window widens', () => {
+    // 「将 UI 拖长后根据拖得长度显示被遮盖隐藏的内容」— one revealed pixel per
+    // gained pixel, with no step, no threshold and no hysteresis anywhere.
+    let previous = alloc({ shellWidth: 800 }).clippedWidth;
+    expect(previous).toBe(CHAT_MIN_WIDTH + PANEL - (800 - SIDEBAR));
+    for (const shellWidth of [850, 900, 950, 1000]) {
+      const next = alloc({ shellWidth }).clippedWidth;
+      expect(next).toBe(previous - 50);
+      previous = next;
+    }
+    // 280 + 400 + 380 = 1060 is where the last clipped pixel disappears — a
+    // CONSEQUENCE of the three widths, not a threshold anyone wrote down.
+    expect(alloc({ shellWidth: 1060 }).clipped).toBe(false);
+    expect(alloc({ shellWidth: 1059 }).clippedWidth).toBe(1);
+  });
+
+  it('never hides a column to avoid clipping — the columns are all still there', () => {
+    for (const shellWidth of [2000, 1200, 900, 700, 500, 300, 120]) {
+      for (const editorOpen of [false, true]) {
+        const result = alloc({ shellWidth, editorOpen });
+        expect(result.sidebarWidth).toBeGreaterThan(0);
+        expect(result.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+        expect(result.panelWidth).toBe(PANEL);
+        if (editorOpen) {
+          expect(result.editorWidth).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+        }
+      }
+    }
+  });
+
+  it('clips the editor too once the panel alone cannot absorb the shortfall', () => {
+    // 700 - 280 = 420 for chat(400) + editor(520) + panel(380): the panel is
+    // entirely off the edge and the editor is partly off it as well.
+    const result = alloc({ shellWidth: 700, editorOpen: true });
+    expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
+    expect(result.editorWidth).toBe(EDITOR_MIN_WIDTH);
+    expect(result.clippedWidth).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + PANEL - 420);
+  });
+
+  it('widening the panel by drag never removes anything, it only clips more', () => {
+    // The round-10 ② property, restated for the new model: the failure mode it
+    // fixed (drag → panel disappears) is now structurally impossible.
+    let previous = alloc({ shellWidth: 1200, panelWidth: PANEL });
+    for (const panelWidth of [500, 800, 1100, 1400]) {
+      const next = alloc({ shellWidth: 1200, panelWidth });
+      expect(next.panelWidth).toBe(panelWidth);
+      expect(next.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+      expect(next.clippedWidth).toBeGreaterThanOrEqual(previous.clippedWidth);
+      previous = next;
+    }
+  });
+
+  it('grants everything as requested before the first measurement', () => {
+    // A first paint that guessed would flash a cut-off layout for one frame.
+    const result = alloc({ shellWidth: null, editorOpen: true });
+    expect(result.clipped).toBe(false);
+    expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
+    expect(result.editorWidth).toBe(EDITOR_MIN_WIDTH);
+    expect(result.panelWidth).toBe(PANEL);
+  });
+});
+
+describe('resolveShellAllocation — the round-11 report, end to end', () => {
+  /**
+   * The exact symptom that triggered the ruling: sidebar collapsed, a file
+   * open so chat and the editor share the center row, and clicking "expand
+   * sidebar" did nothing — the user had to hide chat by hand to free the room
+   * first. Under the ladder the click WAS registered and then reverted; under
+   * round-10`s ChromeIntent it was still reverted, because the intent fix only
+   * ever mirrored the panel and the editor was never in the yield order.
+   */
+  const NARROW = 1100;
+  const collapsed = {
+    shellWidth: NARROW,
+    sidebarCollapsed: true,
+    chatVisible: true,
+    editorOpen: true,
+    panelVisible: false,
+    railVisible: true,
+  } as const;
+
+  it('expanding the sidebar takes effect and STAYS, with chat still shown', () => {
+    const before = alloc(collapsed);
+    const after = alloc({ ...collapsed, sidebarCollapsed: false });
+
+    // The whole bug: this used to come back collapsed again.
+    expect(after.sidebarWidth).toBe(SIDEBAR);
+    expect(after.sidebarWidth).toBeGreaterThan(before.sidebarWidth);
+    // …and chat is not sacrificed to pay for it.
+    expect(after.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+  });
+
+  it('the right edge absorbs the cost — nothing is hidden to make room', () => {
+    const after = alloc({ ...collapsed, sidebarCollapsed: false });
+    const chrome = resolveShellChrome({
+      sidebarUserCollapsed: false,
+      panelOpen: false,
+      manualChat: null,
+    });
+    expect(chrome.sidebarCollapsed).toBe(false);
+    expect(chrome.chatVisible).toBe(true);
+
+    // The 232px the sidebar just claimed are paid for out of the right edge:
+    // first the slack the row happened to have, then real clipping. Nothing
+    // is hidden and nothing is squeezed below a floor to fund it.
+    const before = alloc(collapsed);
+    expect(before.clipped).toBe(false);
+    const rowAfter = NARROW - SIDEBAR - RAIL_RESERVE;
+    expect(after.clippedWidth).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH - rowAfter);
+    expect(after.clipped).toBe(true);
+    // Conservation: every pixel the sidebar gained is accounted for as either
+    // room the row already had spare, or room now past the edge.
+    expect(before.centerWidth - after.centerWidth + after.clippedWidth).toBe(
+      SIDEBAR - SIDEBAR_COLLAPSED_RESERVE
     );
   });
 
-  it('honours every preference before the first measurement', () => {
-    const result = chrome({ shellWidth: null });
-    expect(result).toMatchObject({
+  it('the user can still collapse it again — control is never taken away', () => {
+    const reCollapsed = alloc({ ...collapsed, sidebarCollapsed: true });
+    expect(reCollapsed.sidebarWidth).toBe(SIDEBAR_COLLAPSED_RESERVE);
+  });
+
+  it('holds for the panel-open variant of the same scene', () => {
+    const after = alloc({
+      ...collapsed,
       sidebarCollapsed: false,
       panelVisible: true,
-      chatVisible: true,
+      railVisible: false,
     });
-  });
-
-  it('keeps rail and panel visibility exact complements at every width', () => {
-    for (const shellWidth of [2000, 1200, 900, 800, 700, 400]) {
-      for (const editorOpen of [false, true]) {
-        const result = chrome({ shellWidth, editorOpen });
-        expect(result.railVisible).toBe(!result.panelVisible);
-      }
-    }
-  });
-});
-
-// ── round-10 GUI review ① — symmetric expand ────────────────────────────
-
-describe('reduceChromeIntent', () => {
-  const both = (sidebarExpanded: boolean, panelOpen: boolean) => ({ sidebarExpanded, panelOpen });
-
-  it('records whichever column the user just asked for', () => {
-    expect(reduceChromeIntent(null, both(false, false), both(true, false))).toBe('sidebar');
-    expect(reduceChromeIntent(null, both(false, false), both(false, true))).toBe('panel');
-  });
-
-  it('lets the newer ask take over from the older one', () => {
-    expect(reduceChromeIntent('sidebar', both(true, false), both(true, true))).toBe('panel');
-    expect(reduceChromeIntent('panel', both(false, true), both(true, true))).toBe('sidebar');
-  });
-
-  it('clears the intent when the column it favoured retreats', () => {
-    // Collapsing the sidebar again removes the contention, so the panel must
-    // be free to come back on its own.
-    expect(reduceChromeIntent('sidebar', both(true, true), both(false, true))).toBeNull();
-    expect(reduceChromeIntent('panel', both(true, true), both(true, false))).toBeNull();
-  });
-
-  it('holds steady when nothing transitioned (idempotent under StrictMode)', () => {
-    for (const prev of ['sidebar', 'panel', null] as const) {
-      const snapshot = both(true, true);
-      expect(reduceChromeIntent(prev, snapshot, snapshot)).toBe(prev);
-    }
-  });
-
-  it('resolves a same-tick swap to the panel, matching A08`s default order', () => {
-    expect(reduceChromeIntent(null, both(false, false), both(true, true))).toBe('panel');
-  });
-});
-
-describe('resolveShellChrome — expanding either column is symmetric (round 10 ①)', () => {
-  // 900: 280 + 380 + 400 = 1060 needed for all three, so the two columns
-  // genuinely contend and exactly one of them has to yield.
-  const CONTENDED = 900;
-
-  it('reproduces the report: without an intent the sidebar is the one that yields', () => {
-    const result = chrome({ shellWidth: CONTENDED });
-    expect(result.sidebarCollapsed).toBe(true);
-    expect(result.panelVisible).toBe(true);
-  });
-
-  it('expanding the SIDEBAR squeezes the panel out instead of undoing itself', () => {
-    const result = chrome({ shellWidth: CONTENDED, chromeIntent: 'sidebar' });
-    // The whole defect: this used to come back `sidebarCollapsed: true`, so
-    // the expand button looked dead.
-    expect(result.sidebarCollapsed).toBe(false);
-    expect(result.sidebarAutoCollapsed).toBe(false);
-    expect(result.panelVisible).toBe(false);
-    expect(result.railVisible).toBe(true);
-    expect(result.chatVisible).toBe(true);
-  });
-
-  it('expanding the PANEL still collapses the sidebar — the mirror case', () => {
-    const result = chrome({ shellWidth: CONTENDED, chromeIntent: 'panel' });
-    expect(result.sidebarCollapsed).toBe(true);
-    expect(result.panelVisible).toBe(true);
-  });
-
-  it('keeps chat last in the yield order under either intent', () => {
-    for (const chromeIntent of ['sidebar', 'panel', null] as const) {
-      expect(chrome({ shellWidth: CONTENDED, chromeIntent }).chatVisible).toBe(true);
-    }
-  });
-
-  it('still collapses the sidebar when dropping the panel alone is not enough', () => {
-    // 700 - 280 sidebar - 44 rail = 376, under chat's 400 floor: the sidebar
-    // has to go too. The intent reorders the rungs, it does not delete one.
-    const result = chrome({ shellWidth: 700, chromeIntent: 'sidebar' });
-    expect(result.sidebarCollapsed).toBe(true);
-    expect(result.panelVisible).toBe(false);
-    expect(result.chatVisible).toBe(true);
-  });
-
-  it('never overrules an explicitly summoned panel (m2 semantics preserved)', () => {
-    const result = chrome({ shellWidth: CONTENDED, chromeIntent: 'sidebar', manualPanel: true });
-    expect(result.panelVisible).toBe(true);
-    // The sidebar is what yields instead — m2's guarantee outranks the intent.
-    expect(result.sidebarCollapsed).toBe(true);
-  });
-
-  it('leaves an explicit chat override alone under either intent', () => {
-    const result = chrome({
-      shellWidth: 700,
-      editorOpen: true,
-      manualChat: true,
-      chromeIntent: 'sidebar',
-    });
-    expect(result.chatVisible).toBe(true);
-  });
-
-  it('changes nothing at a width where everything already fits', () => {
-    for (const chromeIntent of ['sidebar', 'panel', null] as const) {
-      expect(chrome({ shellWidth: 2000, chromeIntent })).toMatchObject({
-        sidebarCollapsed: false,
-        panelVisible: true,
-        chatVisible: true,
-      });
-    }
-  });
-
-  it('keeps rail and panel exact complements under every intent', () => {
-    for (const chromeIntent of ['sidebar', 'panel', null] as const) {
-      for (const shellWidth of [2000, 1200, 900, 800, 700, 400]) {
-        for (const editorOpen of [false, true]) {
-          const result = chrome({ shellWidth, editorOpen, chromeIntent });
-          expect(result.railVisible).toBe(!result.panelVisible);
-        }
-      }
-    }
-  });
-});
-
-// ── round-10 GUI review ② — dragging never hides the panel ──────────────
-
-describe('resolveShellChrome — the ladder judges the panel at its floor (round 10 ②)', () => {
-  it('uses the panel floor A08`s own thresholds are built from', () => {
-    // `L0 = 1580 = 280 + 400 + 520 + 380` quotes the panel MINIMUM, so the
-    // ladder reading a live dragged width was the deviation, not this.
-    expect(PANEL).toBe(PANEL_MIN_RESERVE);
-  });
-
-  it('does not react to how wide the user dragged the panel', () => {
-    // The report: at a width where the panel fits at its 380 floor, dragging
-    // it wider used to walk the ladder down and hide it entirely.
-    for (const panelWidth of [PANEL, 600, 900, 1400]) {
-      const result = chrome({ shellWidth: 1200, panelWidth });
-      expect(result.panelVisible).toBe(true);
-      expect(result.sidebarCollapsed).toBe(false);
-    }
-  });
-
-  it('is byte-for-byte identical for every panelWidth at every shell width', () => {
-    for (const shellWidth of [2000, 1200, 1060, 900, 828, 800, 700, 400]) {
-      for (const editorOpen of [false, true]) {
-        const atFloor = chrome({ shellWidth, editorOpen, panelWidth: PANEL });
-        for (const panelWidth of [600, 1000, 1400]) {
-          expect(chrome({ shellWidth, editorOpen, panelWidth })).toEqual(atFloor);
-        }
-      }
-    }
-  });
-
-  it('the widest width the panel may take never re-triggers a downgrade', () => {
-    // The end-to-end property behind ②: commit the largest draggable width,
-    // feed it back through the ladder, and the panel must still be there.
-    for (const shellWidth of [1060, 1200, 1500, 2000]) {
-      for (const editorOpen of [false, true]) {
-        const first = chrome({ shellWidth, editorOpen });
-        if (!first.panelVisible) continue;
-        const cap = maxPanelWidth({
-          shellWidth,
-          sidebarWidth: first.sidebarCollapsed ? SIDEBAR_COLLAPSED_RESERVE : SIDEBAR,
-          editorOpen,
-          chatVisible: first.chatVisible,
-        });
-        const dragged = chrome({ shellWidth, editorOpen, panelWidth: cap ?? PANEL });
-        expect(dragged.panelVisible).toBe(true);
-        expect(dragged).toEqual(first);
-      }
-    }
+    expect(after.sidebarWidth).toBe(SIDEBAR);
+    expect(after.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+    expect(after.panelWidth).toBe(PANEL);
+    expect(after.clipped).toBe(true);
   });
 });
 
