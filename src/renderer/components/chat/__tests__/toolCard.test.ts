@@ -9,6 +9,7 @@ import {
   formatToolArg,
   formatToolArgKind,
   groupTimeline,
+  isDelegationTool,
   normalizeToolOutput,
   pairToolBlocks,
   shortPath,
@@ -399,6 +400,30 @@ describe('toolVerb / classifyTool', () => {
   it('classifies an mcp__server__tool call as action, so it never aggregates', () => {
     expect(classifyTool('mcp__server__tool')).toBe('action');
   });
+
+  // T-34 probe: cometix 2.1.212 names the delegation tool `Agent`; older
+  // CLIs said `Task`. Both spellings get the Delegated treatment — before
+  // this, the live `Agent` rows fell through to the unknown-tool "Ran".
+  it('treats Task and Agent as the same delegation tool', () => {
+    for (const name of ['Task', 'Agent']) {
+      expect(toolVerb(name, false)).toBe('Delegated');
+      expect(toolVerb(name, true)).toBe('Delegating');
+      expect(classifyTool(name)).toBe('action');
+      expect(isDelegationTool(name)).toBe(true);
+    }
+  });
+
+  it('isDelegationTool rejects every non-delegation action tool', () => {
+    for (const name of ['Bash', 'Edit', 'TodoWrite', 'mcp__server__tool', 'SomeUnknownTool']) {
+      expect(isDelegationTool(name)).toBe(false);
+    }
+  });
+
+  it('deriveToolRowView never sets defaultOpen — the failed-only fallback stays in charge', () => {
+    expect(deriveToolRowView(makeRun('a', 'Agent', { description: 'probe' }))).not.toHaveProperty(
+      'defaultOpen'
+    );
+  });
 });
 
 describe('formatToolArg', () => {
@@ -449,6 +474,19 @@ describe('formatToolArg', () => {
     const long = 'x'.repeat(500);
     const run = makeRun('a', 'WebSearch', { query: long });
     expect(formatToolArg(run)).toBe(long);
+  });
+
+  it('shows description (falling back to subagent_type) for both delegation spellings', () => {
+    for (const name of ['Task', 'Agent']) {
+      const withDescription = makeRun('a', name, {
+        description: 'shape probe',
+        subagent_type: 'general-purpose',
+        prompt: 'do the thing',
+      });
+      expect(formatToolArg(withDescription)).toBe('shape probe');
+      const withoutDescription = makeRun('b', name, { subagent_type: 'general-purpose' });
+      expect(formatToolArg(withoutDescription)).toBe('general-purpose');
+    }
   });
 });
 

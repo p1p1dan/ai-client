@@ -76,6 +76,15 @@ export class PermissionBridge {
       description?: string;
       decisionReason?: string;
       requestId?: string;
+      /**
+       * T-34: set by the SDK when the call runs inside a subagent
+       * (sdk.d.ts: "If running within the context of a sub-agent, the
+       * sub-agent's ID"); the key exists but is `undefined` for main-agent
+       * calls. Probe D/E confirmed both agents park on this SAME bridge —
+       * subagent tool permissions are not a separate mechanism — so this id
+       * is the only handle on "who is asking".
+       */
+      agentID?: string;
     }
   ) => Promise<PermissionResult> {
     return (toolName, input, options) => {
@@ -86,6 +95,7 @@ export class PermissionBridge {
         signal: options.signal,
         toolUseId: options.toolUseID,
         description: options.description ?? options.title ?? options.displayName,
+        agentId: options.agentID,
       });
     };
   }
@@ -97,6 +107,8 @@ export class PermissionBridge {
     signal: AbortSignal;
     toolUseId?: string;
     description?: string;
+    /** T-34: originating subagent id, when the SDK reported one. */
+    agentId?: string;
   }): Promise<PermissionResult> {
     const permissionId = nextPermissionId(input.toolUseId);
 
@@ -182,6 +194,11 @@ export class PermissionBridge {
           toolName: input.toolName,
           description: input.description,
           input: input.input,
+          // Optional-field addition, protocol version unchanged: the key is
+          // absent entirely for a main-agent request (the SDK's own
+          // `options.agentID` is `undefined` there), matching the
+          // `attachments`/`model` precedent — never a `null` placeholder.
+          ...(input.agentId ? { agentId: input.agentId } : {}),
         },
       });
       this.emit({

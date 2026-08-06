@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ClaudeRuntime, normalizeEffort } from '../claudeRuntime.ts';
+import {
+  ClaudeRuntime,
+  normalizeEffort,
+  resolveSubagentActivityEnabled,
+} from '../claudeRuntime.ts';
 import { SessionRegistry } from '../sessionRegistry.ts';
 import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '../stderrRedaction.ts';
 
@@ -1058,6 +1062,79 @@ describe('claudeRuntime post-result drain ownership (R5, round-2 iteration-2 rev
     expect(logs.some((args) => String(args.join(' ')).includes('no longer owns session'))).toBe(
       true
     );
+  });
+});
+
+/**
+ * T-34: `forwardSubagentText` is the only reason a subagent's own text and
+ * thinking reach the Host at all (sdk.d.ts: by default only tool_use /
+ * tool_result blocks are forwarded). It is silent when wrong in exactly the
+ * way #8's `display` was — no error, just a permanently empty half of the
+ * feature — so the option payload is pinned here rather than inferred from a
+ * live run.
+ */
+describe('claudeRuntime query options — subagent activity flag (T-34)', () => {
+  const FLAG = 'AICLIENT_HOST_SUBAGENT_ACTIVITY';
+  const original = process.env[FLAG];
+
+  afterEach(() => {
+    if (original === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = original;
+  });
+
+  it('asks the SDK to forward subagent text by default (flag unset)', async () => {
+    delete process.env[FLAG];
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 'sub-on', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 'sub-on', text: 'hi' });
+
+    expect(captured[0].forwardSubagentText).toBe(true);
+  });
+
+  it('omits the option entirely in the quiet position (flag = 0)', async () => {
+    process.env[FLAG] = '0';
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 'sub-off', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 'sub-off', text: 'hi' });
+
+    // Absent, not `false` — the quiet position stops PAYING for messages
+    // nothing will render, rather than asking for them and dropping them.
+    expect(captured[0]).not.toHaveProperty('forwardSubagentText');
+  });
+
+  it('treats any other value as on — only an explicit 0 is quiet', async () => {
+    process.env[FLAG] = '1';
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 'sub-1', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 'sub-1', text: 'hi' });
+
+    expect(captured[0].forwardSubagentText).toBe(true);
+  });
+});
+
+describe('resolveSubagentActivityEnabled', () => {
+  const FLAG = 'AICLIENT_HOST_SUBAGENT_ACTIVITY';
+  const original = process.env[FLAG];
+
+  afterEach(() => {
+    if (original === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = original;
+  });
+
+  it('defaults on, and only an explicit "0" turns it off', () => {
+    delete process.env[FLAG];
+    expect(resolveSubagentActivityEnabled()).toBe(true);
+    process.env[FLAG] = '';
+    expect(resolveSubagentActivityEnabled()).toBe(true);
+    process.env[FLAG] = '1';
+    expect(resolveSubagentActivityEnabled()).toBe(true);
+    process.env[FLAG] = 'true';
+    expect(resolveSubagentActivityEnabled()).toBe(true);
+    process.env[FLAG] = '0';
+    expect(resolveSubagentActivityEnabled()).toBe(false);
   });
 });
 

@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
+import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { ChatComposer } from './ChatComposer';
 import { HostStatusBanner } from './HostStatusBanner';
 import { selectHistoryError } from './historyError';
@@ -103,6 +104,14 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     // surface is still captured instead of permanently reading as "not
     // reported".
     return useSessionRuntimeFactsStore.getState().init();
+  }, []);
+
+  useEffect(() => {
+    // T-34: same latch discipline as sessionRuntimeFacts above (own cleanup,
+    // no manual reset — see the Opus m9 note there). Owned here, not by any
+    // ToolRow-level mount: a `subagent.activity` that lands before the panel
+    // ever renders must still reach the store.
+    return useSubagentActivityStore.getState().init();
   }, []);
 
   // Review fix: the latch would otherwise grow unbounded across a long run —

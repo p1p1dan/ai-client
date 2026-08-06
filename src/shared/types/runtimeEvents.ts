@@ -35,6 +35,7 @@ export type RuntimeEventType =
   | 'question.requested'
   | 'question.resolved'
   | 'usage.updated'
+  | 'subagent.activity'
   | 'session.completed'
   | 'session.failed'
   | 'session.stopped';
@@ -83,6 +84,12 @@ export interface HostReadyEvent extends RuntimeEventBase {
       history?: boolean;
       /** Extended thinking enabled on this Host (CP3 decision: default on). */
       thinking?: boolean;
+      /**
+       * T-34: this Host segregates subagent traffic into `subagent.activity`
+       * events. Absent on an old Host — an empty panel then means "not
+       * supported", not "no subagent ran".
+       */
+      subagentActivity?: boolean;
     };
   };
 }
@@ -234,6 +241,13 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
     toolName: string;
     description?: string;
     input?: unknown;
+    /**
+     * T-34 (optional-field addition, protocol version unchanged): the
+     * subagent that originated this request — canUseTool `options.agentID`,
+     * same id family as `task_started.task_id` / `tool_use_result.agentId`.
+     * The key is ABSENT (not undefined-valued) for main-agent requests.
+     */
+    agentId?: string;
   };
 }
 
@@ -388,6 +402,112 @@ export interface UsageUpdatedEvent extends RuntimeEventBase {
   payload: Record<string, unknown>;
 }
 
+/**
+ * T-34: live subagent activity, segregated host-side from the main-agent
+ * stream by the SDK's top-level `parent_tool_use_id` (probe: default mode
+ * already forwards subagent tool_use/tool_result/prompt-echo; only
+ * text/thinking need `forwardSubagentText`). ONE new event type with a
+ * `kind`-discriminated payload rather than a family of types: the protocol
+ * surface grows by a single member while the only consumer (the adjacent
+ * subagent-activity store's reducer) branches on `kind` exactly as cheaply.
+ * Old renderers ignore the unknown type — and that silence is the FIX for
+ * the pre-T-34 defect of subagent tool calls rendering as the main agent's.
+ *
+ * Deliberately NOT carried (size/privacy/duplication):
+ *  - the delegation prompt (already the Agent row's input body);
+ *  - subagent tool OUTPUT bodies (only a clamped errorText on failure);
+ *  - `task_notification.summary` (duplicates the Agent row's own output).
+ */
+export type SubagentRunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+/** Counters shared by `system/task_*` heartbeats and the structured report. */
+export interface SubagentUsage {
+  totalTokens?: number;
+  toolUses?: number;
+  durationMs?: number;
+}
+
+/** `tool_use_result.toolStats`, passed through verbatim — no derivation. */
+export interface SubagentToolStats {
+  readCount?: number;
+  searchCount?: number;
+  bashCount?: number;
+  editFileCount?: number;
+  linesAdded?: number;
+  linesRemoved?: number;
+  otherToolCount?: number;
+}
+
+/**
+ * Structured final report off the Agent tool_result's `tool_use_result`
+ * (SDK: "render from it instead of parsing the tool_result text").
+ * Excludes `content`/`prompt` — the protocol does not re-carry bodies.
+ */
+export interface SubagentReport {
+  status?: string;
+  agentType?: string;
+  resolvedModel?: string;
+  totalDurationMs?: number;
+  totalTokens?: number;
+  totalToolUseCount?: number;
+  toolStats?: SubagentToolStats;
+}
+
+/** Every activity must land on a delegation carrier. */
+export interface SubagentActivityBase {
+  /** The main agent's `Agent`/`Task` tool_use id — the timeline join key. */
+  parentToolCallId: string;
+  /** CLI-side id: `task_*.task_id` = `tool_use_result.agentId` = canUseTool `options.agentID`. */
+  agentId?: string;
+}
+
+export type SubagentActivityPayload =
+  | (SubagentActivityBase & {
+      kind: 'started';
+      agentType?: string;
+      description?: string;
+      taskType?: string;
+    })
+  /** Whole-message granularity (no char stream). Host drops empty bodies. */
+  | (SubagentActivityBase & { kind: 'text' | 'thinking'; id: string; text: string })
+  /** `input` is host-side whitelist-projected and per-field clamped — never file bodies. */
+  | (SubagentActivityBase & {
+      kind: 'tool.started';
+      toolCallId: string;
+      name: string;
+      input?: Record<string, string | number>;
+    })
+  /** Success carries no output body; failure carries a clamped errorText. */
+  | (SubagentActivityBase & {
+      kind: 'tool.completed';
+      toolCallId: string;
+      ok: boolean;
+      errorText?: string;
+    })
+  /** `task_progress` heartbeat — renderer folds into a single slot, not a log. */
+  | (SubagentActivityBase & {
+      kind: 'progress';
+      description?: string;
+      lastToolName?: string;
+      usage?: SubagentUsage;
+    })
+  /** `task_updated` (endedAt) and `task_notification` (usage) merged terminal. */
+  | (SubagentActivityBase & {
+      kind: 'status';
+      status: SubagentRunStatus;
+      endedAt?: number;
+      usage?: SubagentUsage;
+    })
+  | (SubagentActivityBase & { kind: 'report'; report: SubagentReport })
+  /** Per-delegation event cap hit; the carrier goes silent after this. */
+  | (SubagentActivityBase & { kind: 'capped'; limit: number });
+
+export interface SubagentActivityEvent extends RuntimeEventBase {
+  type: 'subagent.activity';
+  sessionId: string;
+  payload: SubagentActivityPayload;
+}
+
 /** Union of events Host may emit. */
 export type RuntimeEvent =
   | HostReadyEvent
@@ -411,4 +531,5 @@ export type RuntimeEvent =
   | QuestionRequestedEvent
   | QuestionResolvedEvent
   | UsageUpdatedEvent
+  | SubagentActivityEvent
   | SessionTerminalEvent;

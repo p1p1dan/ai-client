@@ -1,10 +1,18 @@
 import { ChevronDown } from 'lucide-react';
+import { useMemo } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useShellLayoutStore } from '@/stores/shellLayout';
+import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { HitListPopover } from './HitListPopover';
-import { type FileLinkTarget, type ToolRowView, toolRowArgClass } from './toolCard';
+import { deriveSubagentPanelRows } from './subagentActivityModel';
+import {
+  type FileLinkTarget,
+  isDelegationTool,
+  type ToolRowView,
+  toolRowArgClass,
+} from './toolCard';
 
 /**
  * T-05 batch 2/4: bare tool-row rendering (A07 screen 5, groups A-E), plus
@@ -73,12 +81,20 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
     </>
   );
 
-  if (!view.expandable) {
-    return <div className={rowClass}>{rowContent}</div>;
-  }
+  // T-34: a delegation row carries its live subagent panel directly below
+  // itself (the arbitration's mount point — attached to ITS row, not the
+  // group). Only the panel component subscribes to the adjacent store, so a
+  // task_progress heartbeat re-renders this one small subtree and nothing
+  // above it. Non-delegation rows return the exact pre-T-34 tree.
+  const subagentSlot =
+    view.toolName && isDelegationTool(view.toolName) && view.toolCallId ? (
+      <SubagentActivity parentToolCallId={view.toolCallId} parentRunning={view.running} />
+    ) : null;
 
-  return (
-    <Collapsible defaultOpen={view.failed}>
+  const row = !view.expandable ? (
+    <div className={rowClass}>{rowContent}</div>
+  ) : (
+    <Collapsible defaultOpen={view.defaultOpen ?? view.failed}>
       <CollapsibleTrigger
         className={cn(rowClass, '[&[data-panel-open]>svg]:rotate-180')}
         // A Read row nests a real <button> inside the trigger for its
@@ -95,6 +111,41 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
         <ToolRowBody view={view} onOpenFile={onOpenFile} />
       </CollapsibleContent>
     </Collapsible>
+  );
+
+  if (!subagentSlot) return row;
+  return (
+    <div className="flex flex-col gap-1">
+      {row}
+      {subagentSlot}
+    </div>
+  );
+}
+
+/**
+ * T-34: the delegation row's live subagent panel — the ONLY subscriber to the
+ * subagent-activity store. Defined here rather than its own module because it
+ * renders through `ToolGroup` (a separate file would form an import cycle).
+ * Renders nothing while the lane is absent or content-free — a delegation row
+ * without live data stays byte-identical to pre-T-34.
+ */
+function SubagentActivity({
+  parentToolCallId,
+  parentRunning,
+}: {
+  parentToolCallId: string;
+  parentRunning: boolean;
+}) {
+  const lane = useSubagentActivityStore((s) => s.lanes[parentToolCallId] ?? null);
+  const rows = useMemo(
+    () => deriveSubagentPanelRows(lane, { parentRunning }),
+    [lane, parentRunning]
+  );
+  if (rows.length === 0) return null;
+  return (
+    <div className="ml-0.5 border-l border-border pl-3.5">
+      <ToolGroup rows={rows} />
+    </div>
   );
 }
 

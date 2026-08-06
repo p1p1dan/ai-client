@@ -233,6 +233,13 @@ export interface ToolRowView {
   hitSource?: string;
   toolName?: string;
   toolCallId?: string;
+  /**
+   * T-34: initial open state for the row's Collapsible, evaluated at mount.
+   * `deriveToolRowView` never sets it — existing rows keep the failed-only
+   * auto-expand (`ToolRows.tsx` renders `view.defaultOpen ?? view.failed`).
+   * The subagent panel's header row sets it to open a LIVE panel by default.
+   */
+  defaultOpen?: boolean;
 }
 
 export interface FileLinkTarget {
@@ -309,7 +316,10 @@ const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   Bash: ['description', 'command'],
   BashOutput: ['description', 'command'],
   KillShell: ['description', 'command'],
+  // T-34 probe: cometix 2.1.212 names the delegation tool `Agent`; older
+  // CLIs said `Task`. Both spellings share one treatment everywhere.
   Task: ['description', 'subagent_type'],
+  Agent: ['description', 'subagent_type'],
 };
 
 /**
@@ -555,6 +565,7 @@ export const TOOL_VERBS: Readonly<Record<string, VerbPair>> = {
   TodoWrite: { done: 'Planned', running: 'Planning' },
   ExitPlanMode: { done: 'Planned', running: 'Planning' },
   Task: { done: 'Delegated', running: 'Delegating' },
+  Agent: { done: 'Delegated', running: 'Delegating' },
 };
 
 export const UNKNOWN_TOOL_VERB: VerbPair = { done: 'Ran', running: 'Running' };
@@ -565,6 +576,20 @@ export function toolVerb(toolName: string, running: boolean): string {
 }
 
 export type ToolClass = 'read' | 'search' | 'action';
+
+/**
+ * T-34: the single source of truth for "is this a delegation tool". The name
+ * is CLI-version-dependent (`Agent` on cometix 2.1.212, `Task` historically);
+ * every consumer (verbs, arg tables, the subagent-panel mount gate) must go
+ * through this predicate — a third spelling would otherwise fork the lists.
+ * `classifyTool(name) === 'action'` is NOT a substitute: Bash/Edit/unknown
+ * tools are 'action' too.
+ */
+export const DELEGATION_TOOL_NAMES: ReadonlySet<string> = new Set(['Task', 'Agent']);
+
+export function isDelegationTool(toolName: string): boolean {
+  return DELEGATION_TOOL_NAMES.has(toolName);
+}
 
 const READ_TOOL_NAMES = new Set(['Read', 'NotebookRead']);
 const SEARCH_TOOL_NAMES = new Set(['Grep', 'Glob', 'WebSearch']);
@@ -681,6 +706,7 @@ function formatToolArgDetail(
       raw = 'next moves';
       break;
     case 'Task':
+    case 'Agent':
       raw = stringField(rec, 'description') ?? stringField(rec, 'subagent_type');
       break;
     default:

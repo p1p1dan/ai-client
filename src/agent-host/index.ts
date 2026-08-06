@@ -8,7 +8,7 @@
 import { createInterface } from 'node:readline';
 import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHost.ts';
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
-import { ClaudeRuntime } from './claudeRuntime.ts';
+import { ClaudeRuntime, resolveSubagentActivityEnabled } from './claudeRuntime.ts';
 import { loadClaudeSettingsEnv } from './claudeSettings.ts';
 import { resolveCometixCli } from './cometix.ts';
 import { listSessionHistory } from './historyReader.ts';
@@ -133,7 +133,15 @@ async function handleCommand(raw: unknown): Promise<void> {
                   model: settingsDiagnostics.model,
                 }
               : null,
-            capabilities: { history: true, thinking: true },
+            // T-34: `subagentActivity` reports the FLAG's position, not a
+            // build constant — with it off the Host still segregates subagent
+            // traffic but forwards nothing, and an empty panel then means
+            // "turned off here" rather than "no subagent ran".
+            capabilities: {
+              history: true,
+              thinking: true,
+              subagentActivity: resolveSubagentActivityEnabled(),
+            },
           },
         });
       } catch (err) {

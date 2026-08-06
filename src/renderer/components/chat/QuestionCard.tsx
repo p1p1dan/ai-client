@@ -3,6 +3,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { ChatBlock } from '@/stores/chatSessions';
+import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
   buildOptionRows,
   buildRespondPayload,
@@ -29,6 +30,7 @@ import {
   toggleOption,
   toggleOther,
 } from './questionCardModel';
+import { derivePermissionOrigin } from './subagentActivityModel';
 
 /**
  * T-05 batch 3: renders `.qa` off `questionCardModel.ts`'s pure view models. No
@@ -424,6 +426,18 @@ function PermissionQaCard({
 }) {
   const view = derivePermissionCardView(block, canRespond);
   const [submitting, setSubmitting] = useState(false);
+  // T-34: "from subagent" chip, fed by the adjacent activity store's
+  // permissionId → origin index. Null for main-agent requests, old Hosts
+  // (no `agentId` on the event) and resolved cards (the index entry is
+  // deleted on permission.resolved) — the card is then byte-identical to
+  // pre-T-34. Selector returns an existing reference or null.
+  const origin = useSubagentActivityStore((s) =>
+    block.permissionId ? (s.permissionOrigin[block.permissionId] ?? null) : null
+  );
+  const originView = derivePermissionOrigin(origin);
+  const originChip = originView ? (
+    <p className="px-3.5 pb-1 text-meta text-muted-foreground">{originView.label}</p>
+  ) : null;
 
   if (view.state === 'resolved') {
     return (
@@ -437,6 +451,7 @@ function PermissionQaCard({
   return (
     <div className={QA_SHELL_CLASS}>
       <QaHead title={view.title} />
+      {originChip}
       <div className="flex flex-col gap-3 px-2.5 pb-3">
         <p className="px-1 pb-1 text-markdown leading-normal text-foreground">{view.prompt}</p>
         {view.waiting ? (

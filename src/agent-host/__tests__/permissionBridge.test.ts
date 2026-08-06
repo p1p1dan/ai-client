@@ -627,4 +627,51 @@ describe('PermissionBridge.createCanUseTool', () => {
     bridge.respond({ sessionId: 'sess-13', permissionId: 'tool-13', allow: true });
     await promise;
   });
+
+  /**
+   * T-34: probe D/E established that a subagent's write-type tool parks on
+   * THIS bridge, not a separate mechanism — the only difference is that the
+   * SDK sets `options.agentID` (sdk.d.ts: "If running within the context of a
+   * sub-agent, the sub-agent's ID"). Without threading it through, a
+   * permission card cannot say who is asking when two agents are running.
+   */
+  it('forwards options.agentID as payload.agentId for a subagent request', async () => {
+    const { events, bridge } = createBridge();
+    const canUseTool = bridge.createCanUseTool('sess-14');
+    const controller = new AbortController();
+
+    const promise = canUseTool(
+      'Bash',
+      { command: 'touch /tmp/probe.txt' },
+      { signal: controller.signal, toolUseID: 'tool-14', agentID: 'agent-abc123' }
+    );
+
+    expect(events[0]).toMatchObject({
+      type: 'permission.requested',
+      payload: { permissionId: 'tool-14', toolName: 'Bash', agentId: 'agent-abc123' },
+    });
+
+    bridge.respond({ sessionId: 'sess-14', permissionId: 'tool-14', allow: true });
+    await promise;
+  });
+
+  it('omits the agentId key entirely for a main-agent request', async () => {
+    const { events, bridge } = createBridge();
+    const canUseTool = bridge.createCanUseTool('sess-15');
+    const controller = new AbortController();
+
+    // The SDK sets the key with an `undefined` value for main-agent calls —
+    // the payload must carry NO key at all, per the attachments/model
+    // precedent, never a `null`/`undefined` placeholder.
+    const promise = canUseTool(
+      'Bash',
+      { command: 'touch /tmp/probe.txt' },
+      { signal: controller.signal, toolUseID: 'tool-15', agentID: undefined }
+    );
+
+    expect(events[0].payload).not.toHaveProperty('agentId');
+
+    bridge.respond({ sessionId: 'sess-15', permissionId: 'tool-15', allow: true });
+    await promise;
+  });
 });

@@ -1,7 +1,28 @@
 /**
  * Convert Claude Agent SDK messages into stable AiClient Runtime Events.
  * Unknown shapes are logged and skipped (Host must not crash).
+ *
+ * T-34 (subagent segregation): every SDK `assistant`/`user`/`stream_event`
+ * message carries a top-level `parent_tool_use_id` — `null` for the main
+ * agent, the delegating `Agent`/`Task` tool_use id for anything a subagent
+ * did. Before T-34 this normalizer never looked at it, so a subagent's tool
+ * calls were emitted as ordinary `tool.started`/`tool.completed` and rendered
+ * as if the MAIN agent had made them. The parent-set branches below are that
+ * fix: they never reach the main-stream emitters, and forward the same facts
+ * on the segregated `subagent.activity` event instead.
+ *
+ * The `parent_tool_use_id === null` path is a REGRESSION RED LINE — it must
+ * stay byte-for-byte the pre-T-34 behavior, and
+ * `__tests__/eventNormalizerSubagent.test.ts` pins that directly.
  */
+
+import {
+  clampSubagentText,
+  projectSubagentToolInput,
+  SUBAGENT_EVENTS_MAX_PER_DELEGATION,
+  SUBAGENT_TEXT_MAX_CHARS,
+  subagentErrorText,
+} from './subagentProjection.ts';
 
 export type EmitFn = (event: Record<string, unknown>) => void;
 export type LogFn = (...args: unknown[]) => void;
@@ -25,6 +46,18 @@ interface NormalizerState {
    * builds the envelope so it can ride along on the same `message.started`.
    */
   assistantModel: string | null;
+  /**
+   * T-34: CLI `task_id` → the delegation's `parent_tool_use_id`. Needed
+   * because `system/task_updated` is the ONE control event that carries only
+   * `task_id` (no `tool_use_id`), and it is also the only terminal signal a
+   * FAILING subagent may produce. Filled by every task_* event that carries
+   * both ids.
+   */
+  taskIdToParent: Map<string, string>;
+  /** T-34: `subagent.activity` events already forwarded, per delegation. */
+  subagentEventCount: Map<string, number>;
+  /** T-34: delegations whose per-delegation cap fired — silence latch. */
+  subagentCapped: Set<string>;
 }
 
 function newState(): NormalizerState {
@@ -39,6 +72,11 @@ function newState(): NormalizerState {
     sawResult: false,
     turnIndex: 0,
     assistantModel: null,
+    // A delegation cannot span turns, so these reset with the turn — same
+    // lifetime rule the tool sets above already follow.
+    taskIdToParent: new Map(),
+    subagentEventCount: new Map(),
+    subagentCapped: new Set(),
   };
 }
 
@@ -133,16 +171,144 @@ function extractToolResults(content: unknown): Array<{
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// T-34 subagent shape helpers (pure)
+// ---------------------------------------------------------------------------
+
+function readString(source: unknown, field: string): string | undefined {
+  if (!source || typeof source !== 'object') return undefined;
+  const value = (source as Record<string, unknown>)[field];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readFiniteNumber(source: unknown, field: string): number | undefined {
+  if (!source || typeof source !== 'object') return undefined;
+  const value = (source as Record<string, unknown>)[field];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * `system/task_*.usage` → the protocol's `SubagentUsage`. Every field is
+ * optional on both sides: an absent counter stays absent rather than becoming
+ * a zero that the panel would render as a fact.
+ */
+function normalizeSubagentUsage(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const usage: Record<string, number> = {};
+  const totalTokens = readFiniteNumber(raw, 'total_tokens');
+  const toolUses = readFiniteNumber(raw, 'tool_uses');
+  const durationMs = readFiniteNumber(raw, 'duration_ms');
+  if (totalTokens !== undefined) usage.totalTokens = totalTokens;
+  if (toolUses !== undefined) usage.toolUses = toolUses;
+  if (durationMs !== undefined) usage.durationMs = durationMs;
+  return Object.keys(usage).length > 0 ? usage : undefined;
+}
+
+/**
+ * CLI status string → `SubagentRunStatus`. An unrecognized value yields
+ * `undefined` and the caller SKIPS the event: inventing a terminal state for
+ * a status we cannot read would strand the carrier in a lie, whereas skipping
+ * leaves the main Agent row's own `tool.completed` to settle it honestly.
+ */
+function normalizeSubagentRunStatus(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  switch (raw) {
+    case 'completed':
+    case 'success':
+      return 'completed';
+    case 'failed':
+    case 'error':
+      return 'failed';
+    case 'cancelled':
+    case 'canceled':
+    case 'aborted':
+      return 'cancelled';
+    case 'running':
+    case 'in_progress':
+    case 'started':
+      return 'running';
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The structured terminal report on an Agent tool_result's `tool_use_result`
+ * (SDK: "render from it instead of parsing the tool_result text").
+ *
+ * The gate is BOTH `agentId` and `agentType` being strings: `tool_use_result`
+ * is a generic SDK field that other tools also populate, and a delegation
+ * report is the only shape that carries an agent identity. `content`/`prompt`
+ * are deliberately not projected — the protocol never re-carries bodies.
+ */
+function detectSubagentReport(raw: unknown):
+  | {
+      agentId: string;
+      content: unknown;
+      report: Record<string, unknown>;
+    }
+  | undefined {
+  const agentId = readString(raw, 'agentId');
+  const agentType = readString(raw, 'agentType');
+  if (!agentId || !agentType) return undefined;
+
+  const report: Record<string, unknown> = { agentType };
+  const status = readString(raw, 'status');
+  if (status) report.status = status;
+  const resolvedModel = readString(raw, 'resolvedModel');
+  if (resolvedModel) report.resolvedModel = resolvedModel;
+  const totalDurationMs = readFiniteNumber(raw, 'totalDurationMs');
+  if (totalDurationMs !== undefined) report.totalDurationMs = totalDurationMs;
+  const totalTokens = readFiniteNumber(raw, 'totalTokens');
+  if (totalTokens !== undefined) report.totalTokens = totalTokens;
+  const totalToolUseCount = readFiniteNumber(raw, 'totalToolUseCount');
+  if (totalToolUseCount !== undefined) report.totalToolUseCount = totalToolUseCount;
+
+  const rawStats = (raw as Record<string, unknown>).toolStats;
+  if (rawStats && typeof rawStats === 'object') {
+    const stats: Record<string, number> = {};
+    for (const field of [
+      'readCount',
+      'searchCount',
+      'bashCount',
+      'editFileCount',
+      'linesAdded',
+      'linesRemoved',
+      'otherToolCount',
+    ]) {
+      const value = readFiniteNumber(rawStats, field);
+      if (value !== undefined) stats[field] = value;
+    }
+    if (Object.keys(stats).length > 0) report.toolStats = stats;
+  }
+
+  return { agentId, content: (raw as Record<string, unknown>).content, report };
+}
+
 export class EventNormalizer {
   private state = newState();
   private readonly sessionId: string;
   private readonly emit: EmitFn;
   private readonly log: LogFn;
+  /**
+   * T-34 flag (`AICLIENT_HOST_SUBAGENT_ACTIVITY`, resolved by
+   * `claudeRuntime.ts`). `false` means QUIET, not legacy: subagent traffic is
+   * still segregated out of the main stream — that half is a defect fix, not
+   * a feature — it is simply dropped instead of forwarded. There is
+   * deliberately no position that restores the pre-T-34 misattribution.
+   */
+  private readonly subagentActivityEnabled: boolean;
 
-  constructor(sessionId: string, emit: EmitFn, log: LogFn = () => undefined) {
+  constructor(
+    sessionId: string,
+    emit: EmitFn,
+    log: LogFn = () => undefined,
+    subagentActivityEnabled = true
+  ) {
     this.sessionId = sessionId;
     this.emit = emit;
     this.log = log;
+    this.subagentActivityEnabled = subagentActivityEnabled;
   }
 
   /**
@@ -299,6 +465,279 @@ export class EventNormalizer {
     });
   }
 
+  // -------------------------------------------------------------------------
+  // T-34 subagent branches
+  // -------------------------------------------------------------------------
+
+  /**
+   * Emit one `subagent.activity`, enforcing the per-delegation cap.
+   *
+   * Exactly `SUBAGENT_EVENTS_MAX_PER_DELEGATION` real events are forwarded for
+   * a carrier, then ONE `kind:'capped'`, then silence. The `capped` event does
+   * not itself count (it is the cap's announcement) and the latch guarantees
+   * it fires at most once per delegation.
+   *
+   * When the flag is off this is a no-op — the caller has already suppressed
+   * the main-stream emission, which is the half that must happen regardless.
+   */
+  private emitSubagentActivity(
+    parentToolCallId: string,
+    payload: Record<string, unknown>,
+    requestId?: string
+  ): void {
+    if (!this.subagentActivityEnabled) return;
+    if (this.state.subagentCapped.has(parentToolCallId)) return;
+
+    const count = this.state.subagentEventCount.get(parentToolCallId) ?? 0;
+    if (count >= SUBAGENT_EVENTS_MAX_PER_DELEGATION) {
+      this.state.subagentCapped.add(parentToolCallId);
+      this.log(
+        `subagent activity capped at ${SUBAGENT_EVENTS_MAX_PER_DELEGATION} events for ${parentToolCallId}`
+      );
+      this.emit({
+        type: 'subagent.activity',
+        sessionId: this.sessionId,
+        requestId,
+        payload: {
+          parentToolCallId,
+          kind: 'capped',
+          limit: SUBAGENT_EVENTS_MAX_PER_DELEGATION,
+        },
+      });
+      return;
+    }
+    this.state.subagentEventCount.set(parentToolCallId, count + 1);
+    this.emit({
+      type: 'subagent.activity',
+      sessionId: this.sessionId,
+      requestId,
+      payload: { parentToolCallId, ...payload },
+    });
+  }
+
+  /**
+   * A subagent's own `assistant` message. Reaches NONE of the main-stream
+   * emitters — no `ensureAssistant`, so a delegation can never mint or
+   * contaminate the main agent's message envelope, and in particular
+   * `state.assistantModel` is left alone (a subagent's model must not be
+   * reported as the turn's).
+   *
+   * Text/thinking only arrive when `forwardSubagentText` is on; tool_use
+   * arrives in every mode. Empty bodies are dropped whole — the probe shows
+   * summarized thinking legitimately arriving as `thinking: ''` with only a
+   * signature, and a blank row would be noise pretending to be a fact.
+   */
+  private ingestSubagentAssistant(
+    parentToolCallId: string,
+    msg: { message?: { content?: unknown; id?: string }; uuid?: string },
+    requestId?: string
+  ): void {
+    if (!this.subagentActivityEnabled) return;
+    const content = msg.message?.content;
+    const baseId =
+      (typeof msg.uuid === 'string' && msg.uuid) ||
+      (typeof msg.message?.id === 'string' && msg.message.id) ||
+      `sub-${parentToolCallId}-${Date.now()}`;
+
+    const thinking = extractThinkingParts(content);
+    if (thinking) {
+      this.emitSubagentActivity(
+        parentToolCallId,
+        {
+          kind: 'thinking',
+          id: `${baseId}-thinking`,
+          text: clampSubagentText(thinking, SUBAGENT_TEXT_MAX_CHARS),
+        },
+        requestId
+      );
+    }
+
+    const text = extractTextParts(content);
+    if (text) {
+      this.emitSubagentActivity(
+        parentToolCallId,
+        {
+          kind: 'text',
+          id: `${baseId}-text`,
+          text: clampSubagentText(text, SUBAGENT_TEXT_MAX_CHARS),
+        },
+        requestId
+      );
+    }
+
+    for (const tool of extractToolUses(content)) {
+      const input = projectSubagentToolInput(tool.input);
+      this.emitSubagentActivity(
+        parentToolCallId,
+        {
+          kind: 'tool.started',
+          toolCallId: tool.id,
+          name: tool.name,
+          ...(input ? { input } : {}),
+        },
+        requestId
+      );
+    }
+  }
+
+  /**
+   * A subagent's own `user` message. Two shapes exist and both are handled by
+   * the same rule "forward every tool_result, forward nothing else":
+   *  - tool_result carriers become `kind:'tool.completed'`;
+   *  - the delegation PROMPT ECHO (plain text, no tool_result) therefore
+   *    produces zero events, which is the intended drop — the prompt is
+   *    already the main Agent row's input body (T-34 L4).
+   */
+  private ingestSubagentUser(
+    parentToolCallId: string,
+    msg: { message?: { content?: unknown } },
+    requestId?: string
+  ): void {
+    if (!this.subagentActivityEnabled) return;
+    for (const result of extractToolResults(msg.message?.content)) {
+      const ok = !result.isError;
+      // Success carries no body at all (T-34 L2); only a failure gets text,
+      // clamped, because "what went wrong" is the one thing the row cannot
+      // reconstruct from its argument line.
+      const errorText = ok ? undefined : subagentErrorText(result.content);
+      this.emitSubagentActivity(
+        parentToolCallId,
+        {
+          kind: 'tool.completed',
+          toolCallId: result.toolUseId,
+          ok,
+          ...(errorText ? { errorText } : {}),
+        },
+        requestId
+      );
+    }
+  }
+
+  /**
+   * The four `system/task_*` control events. They are keyed by `task_id` and
+   * associate to a carrier through `tool_use_id` — except `task_updated`,
+   * which carries only `task_id` and is resolved through the map every other
+   * task_* event fills. An unresolvable `task_updated` is dropped with a log
+   * rather than guessed at.
+   *
+   * Returns true when the subtype was one of the four (so the caller knows
+   * not to fall through to the `init`/`api_retry` handling).
+   */
+  private ingestTaskControl(
+    msg: {
+      subtype?: string;
+      task_id?: string;
+      tool_use_id?: string;
+      description?: string;
+      subagent_type?: string;
+      task_type?: string;
+      status?: string;
+      last_tool_name?: string;
+      usage?: unknown;
+      patch?: { status?: string; end_time?: number };
+    },
+    requestId?: string
+  ): boolean {
+    const subtype = msg.subtype;
+    if (
+      subtype !== 'task_started' &&
+      subtype !== 'task_progress' &&
+      subtype !== 'task_updated' &&
+      subtype !== 'task_notification'
+    ) {
+      return false;
+    }
+
+    const taskId = typeof msg.task_id === 'string' && msg.task_id ? msg.task_id : undefined;
+    const directParent =
+      typeof msg.tool_use_id === 'string' && msg.tool_use_id ? msg.tool_use_id : undefined;
+    if (taskId && directParent) {
+      this.state.taskIdToParent.set(taskId, directParent);
+    }
+    const parentToolCallId =
+      directParent ?? (taskId ? this.state.taskIdToParent.get(taskId) : undefined);
+    if (!parentToolCallId) {
+      // `task_updated` before any id-bearing task_* event for the same task —
+      // nothing to attach it to. Dropping beats attaching it to the wrong row.
+      this.log('normalizer skip unattachable task control:', subtype, taskId ?? '(no task_id)');
+      return true;
+    }
+    const agentId = taskId ? { agentId: taskId } : {};
+
+    switch (subtype) {
+      case 'task_started': {
+        this.emitSubagentActivity(
+          parentToolCallId,
+          {
+            kind: 'started',
+            ...agentId,
+            ...(msg.subagent_type ? { agentType: msg.subagent_type } : {}),
+            ...(msg.description ? { description: msg.description } : {}),
+            ...(msg.task_type ? { taskType: msg.task_type } : {}),
+            // `prompt` is deliberately NOT forwarded (T-34 L4).
+          },
+          requestId
+        );
+        return true;
+      }
+      case 'task_progress': {
+        const usage = normalizeSubagentUsage(msg.usage);
+        this.emitSubagentActivity(
+          parentToolCallId,
+          {
+            kind: 'progress',
+            ...agentId,
+            ...(msg.description ? { description: msg.description } : {}),
+            ...(msg.last_tool_name ? { lastToolName: msg.last_tool_name } : {}),
+            ...(usage ? { usage } : {}),
+          },
+          requestId
+        );
+        return true;
+      }
+      case 'task_notification': {
+        const status = normalizeSubagentRunStatus(msg.status);
+        if (!status) {
+          this.log('normalizer skip task_notification with unreadable status:', msg.status);
+          return true;
+        }
+        const usage = normalizeSubagentUsage(msg.usage);
+        this.emitSubagentActivity(
+          parentToolCallId,
+          {
+            kind: 'status',
+            ...agentId,
+            status,
+            ...(usage ? { usage } : {}),
+            // `summary` / `output_file` deliberately dropped: the summary
+            // duplicates the Agent row's own output body (T-34 §1 Q1).
+          },
+          requestId
+        );
+        return true;
+      }
+      default: {
+        const status = normalizeSubagentRunStatus(msg.patch?.status);
+        if (!status) {
+          this.log('normalizer skip task_updated with unreadable status:', msg.patch?.status);
+          return true;
+        }
+        const endedAt = readFiniteNumber(msg.patch, 'end_time');
+        this.emitSubagentActivity(
+          parentToolCallId,
+          {
+            kind: 'status',
+            ...agentId,
+            status,
+            ...(endedAt !== undefined ? { endedAt } : {}),
+          },
+          requestId
+        );
+        return true;
+      }
+    }
+  }
+
   /**
    * Ingest one SDK message. Returns Claude runtime session_id when discovered.
    */
@@ -308,7 +747,21 @@ export class EventNormalizer {
       type?: string;
       subtype?: string;
       session_id?: string;
-      message?: { content?: unknown; role?: string; model?: string };
+      message?: { content?: unknown; role?: string; model?: string; id?: string };
+      /**
+       * T-34: `null` for the main agent, the delegating `Agent`/`Task`
+       * tool_use id for anything a subagent produced. THE segregation key.
+       */
+      parent_tool_use_id?: string | null;
+      uuid?: string;
+      // T-34: `system/task_*` control-event fields.
+      task_id?: string;
+      task_type?: string;
+      subagent_type?: string;
+      description?: string;
+      status?: string;
+      last_tool_name?: string;
+      patch?: { status?: string; end_time?: number };
       event?: {
         type?: string;
         delta?: { type?: string; text?: string; thinking?: string };
@@ -334,10 +787,19 @@ export class EventNormalizer {
 
     const runtimeId = typeof msg.session_id === 'string' ? msg.session_id : undefined;
     const type = String(msg.type ?? '');
+    // T-34: presence of a non-empty parent id is what makes a message a
+    // subagent's. `null`/absent takes every branch below unchanged.
+    const parentToolCallId =
+      typeof msg.parent_tool_use_id === 'string' && msg.parent_tool_use_id.length > 0
+        ? msg.parent_tool_use_id
+        : undefined;
 
     try {
       switch (type) {
         case 'system': {
+          // T-34 first: the four task_* control events associate by their own
+          // ids, not by parent_tool_use_id (which they never carry).
+          if (this.ingestTaskControl(msg, requestId)) break;
           // init / api_retry / etc. — status only; no UI spam for unknown subtypes
           if (msg.subtype === 'init') {
             this.emit({
@@ -376,6 +838,12 @@ export class EventNormalizer {
           break;
         }
         case 'assistant': {
+          if (parentToolCallId) {
+            // T-34: a subagent's assistant message NEVER reaches the main
+            // emitters below — this is acceptance ② at its source.
+            this.ingestSubagentAssistant(parentToolCallId, msg, requestId);
+            break;
+          }
           const content = msg.message?.content;
           // Round-2 P0: capture the real model id off the raw SDK message
           // (BetaMessage.model) before anything below lazily creates the
@@ -394,6 +862,12 @@ export class EventNormalizer {
           break;
         }
         case 'stream_event': {
+          // T-34: this Host does not request `includePartialMessages`, so a
+          // parent-set stream_event is not expected at all — and letting a
+          // character-level delta stream into the renderer's adjacent store
+          // is the one shape that would break the render budget. Dropped
+          // whole; the whole-message `assistant` events carry the same text.
+          if (parentToolCallId) break;
           const ev = msg.event;
           if (!ev) break;
           if (ev.type === 'content_block_start' && ev.content_block) {
@@ -425,20 +899,45 @@ export class EventNormalizer {
           break;
         }
         case 'user': {
-          const content = msg.message?.content;
-          for (const result of extractToolResults(content)) {
-            this.emitToolCompleted(result.toolUseId, !result.isError, result.content, requestId);
+          if (parentToolCallId) {
+            // T-34: a subagent's tool_result NEVER becomes a main-stream
+            // `tool.completed`; its prompt echo produces nothing at all.
+            this.ingestSubagentUser(parentToolCallId, msg, requestId);
+            break;
           }
-          // Some SDK builds put structured output on tool_use_result
-          if (msg.tool_use_result != null && Array.isArray(content)) {
-            for (const result of extractToolResults(content)) {
-              // already emitted above
-              void result;
-            }
+          const content = msg.message?.content;
+          const results = extractToolResults(content);
+          // T-34: the Agent tool's own result carries a structured
+          // `tool_use_result` the SDK explicitly says to render FROM rather
+          // than parse out of the result text. Attribution is only safe when
+          // the message carries exactly ONE tool_result — a parallel-tool
+          // message has one top-level `tool_use_result` and no way to say
+          // which call it belongs to, so the report is skipped there rather
+          // than guessed at (the row still settles on `tool.completed`).
+          const report =
+            results.length === 1 ? detectSubagentReport(msg.tool_use_result) : undefined;
+          for (const result of results) {
+            // With a report in hand, the row's body becomes the clean answer
+            // content instead of the raw two-part text whose second part is
+            // CLI plumbing (`agentId: … <usage>subagent_tokens…`).
+            const output = report && report.content != null ? report.content : result.content;
+            this.emitToolCompleted(result.toolUseId, !result.isError, output, requestId);
+          }
+          if (report) {
+            this.emitSubagentActivity(
+              results[0].toolUseId,
+              { kind: 'report', agentId: report.agentId, report: report.report },
+              requestId
+            );
           }
           break;
         }
         case 'tool_progress': {
+          // T-34: a subagent's inner tool progress is covered by the carrier's
+          // own `progress` fold; emitting `tool.updated` for an id the main
+          // timeline does not own would be a main-stream event about subagent
+          // work — exactly what acceptance ② forbids.
+          if (parentToolCallId) break;
           if (typeof msg.tool_use_id === 'string') {
             const messageId = this.state.assistantMessageId ?? this.ensureAssistant(requestId);
             this.emit({

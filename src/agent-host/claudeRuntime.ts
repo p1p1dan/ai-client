@@ -125,6 +125,25 @@ function resolveTtftTimeoutMs(): number {
  * branch (a stream that hangs past the cap after `result`) is exercisable
  * under `pnpm vitest` without a real 2s wait.
  */
+/**
+ * T-34 feature flag (standard #6: ship behind a flag, run both positions).
+ *
+ * `'0'` is QUIET, not legacy. In both positions the normalizer segregates
+ * subagent traffic out of the main `tool.started`/`tool.completed` stream —
+ * that half is the fix for a shipped defect (subagent tool calls rendering as
+ * the main agent's) and must not be switchable back on. What the flag governs
+ * is whether the segregated facts are FORWARDED as `subagent.activity` and
+ * whether the SDK is asked to include subagent text/thinking at all.
+ *
+ * Read per send (not at module load) so a test can flip it between turns,
+ * mirroring `resolveStallTimeoutMs`'s own convention.
+ */
+export function resolveSubagentActivityEnabled(): boolean {
+  const raw = process.env.AICLIENT_HOST_SUBAGENT_ACTIVITY;
+  if (raw === undefined || raw === '') return true;
+  return raw !== '0';
+}
+
 const DEFAULT_DRAIN_AFTER_RESULT_MS = 2_000;
 
 function resolveDrainAfterResultMs(): number {
@@ -474,7 +493,13 @@ export class ClaudeRuntime {
     session.status = 'starting';
     this.opts.registry.setStatus(session.sessionId, 'starting');
 
-    const normalizer = new EventNormalizer(session.sessionId, this.opts.emit, this.log);
+    const subagentActivityEnabled = resolveSubagentActivityEnabled();
+    const normalizer = new EventNormalizer(
+      session.sessionId,
+      this.opts.emit,
+      this.log,
+      subagentActivityEnabled
+    );
     // Round-2 P0: forward the turn's attachments so the echoed user message
     // carries their metadata — previously dropped here, before any event
     // was ever emitted (see eventNormalizer.beginTurn's attachments param).
@@ -702,6 +727,13 @@ export class ClaudeRuntime {
             this.log('[cli-stderr]', line);
             forwardStderrLine(line);
           },
+          // T-34: subagent tool_use/tool_result/prompt-echo already arrive in
+          // default mode; this option adds the subagent's own text AND
+          // thinking blocks (sdk.d.ts: "Forward subagent text and thinking
+          // blocks … By default, only tool_use/tool_result blocks"). Absent
+          // when the flag is off, so the quiet position also stops paying for
+          // messages nothing will render.
+          ...(subagentActivityEnabled ? { forwardSubagentText: true } : {}),
           ...(model ? { model } : {}),
           // Top-level option (NOT output_config.effort) — SDK 0.3.218 sdk.d.ts
           // Options.effort, confirmed clean by c16 probe scenario D.
