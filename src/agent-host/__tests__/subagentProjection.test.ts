@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   clampSubagentText,
+  DELEGATION_TOOL_NAMES,
   projectSubagentToolInput,
   SUBAGENT_ERROR_TEXT_MAX_CHARS,
   SUBAGENT_INPUT_FIELD_MAX_CHARS,
@@ -114,6 +115,58 @@ describe('clampSubagentText', () => {
 
   it('treats a non-positive budget as "nothing survives"', () => {
     expect(clampSubagentText('anything', 0)).toBe('');
+  });
+
+  /**
+   * Review m7: the clamp slices by UTF-16 code unit, so a budget boundary can
+   * fall between the halves of an astral character. A lone surrogate is an
+   * ill-formed string — `JSON.stringify` on the IPC hop replaces it with
+   * U+FFFD, so the renderer would show a replacement box manufactured by our
+   * own truncation rather than sent by the model.
+   */
+  it('never splits a surrogate pair at the boundary', () => {
+    // 2100 emoji = 4200 code units, so the cut lands mid-pair at index 3999.
+    const emoji = '😀'.repeat(2_100);
+    const clamped = clampSubagentText(emoji, SUBAGENT_TEXT_MAX_CHARS);
+
+    expect(clamped.isWellFormed()).toBe(true);
+    expect(clamped.endsWith(SUBAGENT_TRUNCATION_MARKER)).toBe(true);
+    expect(clamped.length).toBeLessThanOrEqual(SUBAGENT_TEXT_MAX_CHARS);
+    // Backing off costs at most one code unit.
+    expect(clamped.length).toBeGreaterThanOrEqual(SUBAGENT_TEXT_MAX_CHARS - 1);
+    // Every emoji that survived is whole.
+    expect([...clamped].every((ch) => ch === '😀' || ch === SUBAGENT_TRUNCATION_MARKER)).toBe(true);
+  });
+
+  it('keeps a pair intact when the boundary already falls between characters', () => {
+    // A leading ASCII char shifts the cut onto a LOW surrogate's pair start,
+    // i.e. the aligned case — no back-off needed, still well formed.
+    const text = `x${'😀'.repeat(2_100)}`;
+    const clamped = clampSubagentText(text, SUBAGENT_TEXT_MAX_CHARS);
+
+    expect(clamped.isWellFormed()).toBe(true);
+    expect(clamped.length).toBe(SUBAGENT_TEXT_MAX_CHARS);
+  });
+
+  it('is surrogate-safe at the small budgets too (error text, input fields)', () => {
+    for (const budget of [SUBAGENT_ERROR_TEXT_MAX_CHARS, SUBAGENT_INPUT_FIELD_MAX_CHARS]) {
+      for (const lead of ['', 'x']) {
+        const clamped = clampSubagentText(`${lead}${'🚀'.repeat(budget)}`, budget);
+        expect(clamped.isWellFormed()).toBe(true);
+      }
+    }
+  });
+});
+
+describe('DELEGATION_TOOL_NAMES', () => {
+  it('covers both the current and the historical delegating tool name', () => {
+    // cometix 2.1.212 emits `Agent`; older builds emit `Task`. Missing either
+    // means a delegation goes unrecognized and its report is never detected.
+    expect(DELEGATION_TOOL_NAMES.has('Agent')).toBe(true);
+    expect(DELEGATION_TOOL_NAMES.has('Task')).toBe(true);
+    expect(DELEGATION_TOOL_NAMES.has('Read')).toBe(false);
+    expect(DELEGATION_TOOL_NAMES.has('Bash')).toBe(false);
+    expect(DELEGATION_TOOL_NAMES.size).toBe(2);
   });
 });
 

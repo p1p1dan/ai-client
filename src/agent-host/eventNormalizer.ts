@@ -18,6 +18,7 @@
 
 import {
   clampSubagentText,
+  DELEGATION_TOOL_NAMES,
   projectSubagentToolInput,
   SUBAGENT_EVENTS_MAX_PER_DELEGATION,
   SUBAGENT_TEXT_MAX_CHARS,
@@ -58,6 +59,14 @@ interface NormalizerState {
   subagentEventCount: Map<string, number>;
   /** T-34: delegations whose per-delegation cap fired — silence latch. */
   subagentCapped: Set<string>;
+  /**
+   * T-34 (review M2): main-stream `tool_use` id → tool name, so a
+   * `tool_use_result` can be checked against the tool that actually ran.
+   * `tool_use_result` is a generic SDK field — without this, any tool whose
+   * result happened to carry `agentId`+`agentType` would be mistaken for a
+   * delegation report and have its output body silently replaced.
+   */
+  toolNameById: Map<string, string>;
 }
 
 function newState(): NormalizerState {
@@ -77,6 +86,7 @@ function newState(): NormalizerState {
     taskIdToParent: new Map(),
     subagentEventCount: new Map(),
     subagentCapped: new Set(),
+    toolNameById: new Map(),
   };
 }
 
@@ -253,7 +263,12 @@ function detectSubagentReport(raw: unknown):
   if (!agentId || !agentType) return undefined;
 
   const report: Record<string, unknown> = { agentType };
-  const status = readString(raw, 'status');
+  // Review m6: normalized, not passed through. The protocol field is a
+  // `SubagentRunStatus`, and an unreadable CLI string must leave it ABSENT
+  // rather than smuggle an unmodelled value into the renderer's union.
+  // `running` survives normalization on purpose — an `isAsync` background
+  // delegation's report can legitimately be non-terminal.
+  const status = normalizeSubagentRunStatus(readString(raw, 'status'));
   if (status) report.status = status;
   const resolvedModel = readString(raw, 'resolvedModel');
   if (resolvedModel) report.resolvedModel = resolvedModel;
@@ -429,6 +444,10 @@ export class EventNormalizer {
     if (this.state.seenTools.has(tool.id)) return;
     this.state.seenTools.add(tool.id);
     this.state.openTools.add(tool.id);
+    // T-34 (review M2): remember what ran, so the `user` branch can verify a
+    // `tool_use_result` really belongs to a delegation before treating it as
+    // a subagent report.
+    this.state.toolNameById.set(tool.id, tool.name);
     const messageId = this.ensureAssistant(requestId);
     this.emit({
       type: 'tool.started',
@@ -914,8 +933,16 @@ export class EventNormalizer {
           // message has one top-level `tool_use_result` and no way to say
           // which call it belongs to, so the report is skipped there rather
           // than guessed at (the row still settles on `tool.completed`).
-          const report =
-            results.length === 1 ? detectSubagentReport(msg.tool_use_result) : undefined;
+          //
+          // Review M2: the shape check alone is not enough. `tool_use_result`
+          // is a generic SDK field that ordinary tools populate too, so the
+          // id must ALSO resolve to a delegating tool this turn actually
+          // started. An id we never saw is not a delegation either — an
+          // unverifiable result must not silently have its body replaced.
+          const isDelegationResult =
+            results.length === 1 &&
+            DELEGATION_TOOL_NAMES.has(this.state.toolNameById.get(results[0].toolUseId) ?? '');
+          const report = isDelegationResult ? detectSubagentReport(msg.tool_use_result) : undefined;
           for (const result of results) {
             // With a report in hand, the row's body becomes the clean answer
             // content instead of the raw two-part text whose second part is
@@ -953,6 +980,15 @@ export class EventNormalizer {
           break;
         }
         case 'result': {
+          // T-34 (review M1): a parent-set `result` is a SUBAGENT's turn
+          // ending, not the session's. Falling through would set `sawResult`
+          // and emit message.completed / session.completed / status idle —
+          // terminating the whole conversation the moment the first
+          // delegation finished, while the main agent was still working.
+          // Dropped whole, exactly like a parent-set `stream_event`: the
+          // carrier's own terminal is carried by `task_*`/`report`, and the
+          // main Agent row still settles on its own `tool.completed`.
+          if (parentToolCallId) break;
           this.state.sawResult = true;
           if (this.state.thinkingStarted && this.state.assistantMessageId) {
             this.emit({

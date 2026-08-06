@@ -227,6 +227,69 @@ describe('EventNormalizer — subagent segregation', () => {
     expect(events).toHaveLength(0);
   });
 
+  /**
+   * Review M1. The `result` message is the one SDK type whose main-stream
+   * handling is TERMINAL — it sets `sawResult` and emits message.completed /
+   * session.completed / status idle. A subagent's own turn ending carries the
+   * same type, so without a gate the first delegation to finish would end the
+   * whole conversation while the main agent was still working.
+   */
+  it('a parent-set result never terminates the main session', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'text', text: 'still working' }] },
+    });
+    events.length = 0;
+
+    n.ingest({
+      type: 'result',
+      subtype: 'success',
+      parent_tool_use_id: PARENT,
+      result: 'subagent answer',
+      is_error: false,
+      usage: { input_tokens: 5, output_tokens: 7 },
+      session_id: 'rt-1',
+    });
+
+    expect(events).toHaveLength(0);
+    for (const forbidden of [
+      'message.completed',
+      'session.completed',
+      'session.status',
+      'usage.updated',
+      'subagent.activity',
+    ]) {
+      expect(types(events)).not.toContain(forbidden);
+    }
+    // `sawResult` must stay false — observable through finishTurn, which
+    // returns 'already' only when a result already emitted the terminals.
+    expect(n.finishTurn()).toBe('completed');
+  });
+
+  it('a FAILED parent-set result never fails the main session', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'text', text: 'still working' }] },
+    });
+    events.length = 0;
+
+    n.ingest({
+      type: 'result',
+      subtype: 'error',
+      parent_tool_use_id: PARENT,
+      is_error: true,
+      error: 'subagent blew up',
+      session_id: 'rt-1',
+    });
+
+    expect(events).toHaveLength(0);
+    expect(n.finishTurn()).toBe('completed');
+  });
+
   it('projects subagent tool input — a Write body never reaches the event', () => {
     const { events, n } = makeNormalizer();
     n.ingest(
@@ -454,7 +517,10 @@ describe('EventNormalizer — task_* control events', () => {
 // Structured terminal report
 // ---------------------------------------------------------------------------
 
-function reportUserMessage(extraResults: unknown[] = []) {
+function reportUserMessage(
+  extraResults: unknown[] = [],
+  reportOverrides: Record<string, unknown> = {}
+) {
   return {
     type: 'user',
     parent_tool_use_id: null,
@@ -495,6 +561,7 @@ function reportUserMessage(extraResults: unknown[] = []) {
         linesRemoved: 0,
         otherToolCount: 0,
       },
+      ...reportOverrides,
     },
   };
 }
@@ -569,6 +636,125 @@ describe('EventNormalizer — Agent tool_use_result report', () => {
     expect(events.some((e) => e.type === 'subagent.activity')).toBe(false);
     // …and the row still settles, with its own raw output untouched.
     expect(JSON.stringify(events[0].payload?.output)).toContain('SendMessage');
+  });
+
+  /**
+   * Review M2: `tool_use_result` is a GENERIC SDK field — ordinary tools
+   * populate it too. Gating on `agentId`+`agentType` shape alone meant any
+   * tool whose result happened to carry those keys would be mistaken for a
+   * delegation and have its output body silently swapped for the impostor's
+   * `content`. The tool that actually ran is the authority.
+   */
+  it('does not mistake an ordinary tool result carrying agent-shaped fields for a report', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        content: [
+          { type: 'tool_use', id: 'toolu_read', name: 'Read', input: { file_path: '/tmp/a.ts' } },
+        ],
+      },
+    });
+    events.length = 0;
+
+    n.ingest({
+      type: 'user',
+      parent_tool_use_id: null,
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'toolu_read', content: 'the real file body' },
+        ],
+      },
+      tool_use_result: {
+        agentId: 'agent-impostor',
+        agentType: 'general-purpose',
+        content: [{ type: 'text', text: 'SWAPPED BODY' }],
+      },
+    });
+
+    expect(types(events)).toEqual(['tool.completed']);
+    // Output untouched — the Read row still shows what Read actually returned.
+    expect(events[0].payload?.output).toBe('the real file body');
+    expect(JSON.stringify(events[0])).not.toContain('SWAPPED BODY');
+  });
+
+  it('does not treat a tool_use_id this turn never started as a delegation', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { content: [{ type: 'text', text: 'hello' }] },
+    });
+    events.length = 0;
+
+    n.ingest({
+      type: 'user',
+      parent_tool_use_id: null,
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'toolu_never_seen', content: 'raw' }],
+      },
+      tool_use_result: { agentId: 'agent-x', agentType: 'general-purpose', content: 'swapped' },
+    });
+
+    expect(events.some((e) => e.type === 'subagent.activity')).toBe(false);
+    expect(events.find((e) => e.type === 'tool.completed')?.payload?.output).toBe('raw');
+  });
+
+  it('recognizes the historical `Task` name as a delegation too', () => {
+    const { events, n } = makeNormalizer();
+    n.ingest({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        content: [{ type: 'tool_use', id: PARENT, name: 'Task', input: { description: 'probe' } }],
+      },
+    });
+    events.length = 0;
+    n.ingest(reportUserMessage());
+
+    expect(kinds(events)).toEqual(['report']);
+  });
+
+  /**
+   * Review m6: the protocol field is a `SubagentRunStatus`, so a raw CLI
+   * string must be normalized or omitted — never smuggled into the union.
+   */
+  it('normalizes the report status, keeping `running` for background delegations', () => {
+    for (const [raw, expected] of [
+      ['completed', 'completed'],
+      ['success', 'completed'],
+      ['failed', 'failed'],
+      ['error', 'failed'],
+      ['cancelled', 'cancelled'],
+      // An `isAsync` background delegation reports before it is done.
+      ['running', 'running'],
+      ['in_progress', 'running'],
+    ] as const) {
+      const { events, n } = primedNormalizer();
+      n.ingest(reportUserMessage([], { status: raw }));
+      const report = events.find((e) => e.type === 'subagent.activity')?.payload?.report as Record<
+        string,
+        unknown
+      >;
+      expect(report.status).toBe(expected);
+    }
+  });
+
+  it('omits the report status entirely when it is unreadable', () => {
+    const { events, n } = primedNormalizer();
+    n.ingest(reportUserMessage([], { status: 'quantum-superposition' }));
+
+    const report = events.find((e) => e.type === 'subagent.activity')?.payload?.report as Record<
+      string,
+      unknown
+    >;
+    // The rest of the report still lands — one unreadable field is not a
+    // reason to drop the whole terminal summary.
+    expect(report).not.toHaveProperty('status');
+    expect(report).toMatchObject({ agentType: 'general-purpose', totalTokens: 26759 });
   });
 
   it('ignores a tool_use_result that is not a delegation report', () => {

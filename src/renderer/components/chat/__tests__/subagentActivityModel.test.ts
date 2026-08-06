@@ -191,6 +191,17 @@ describe('reduceSubagentActivity — progress / status / report', () => {
     expect(state.lanes[PARENT].status).toBe('failed');
   });
 
+  it('no terminal is resurrected by a straggling running heartbeat (Codex round 1 M3)', () => {
+    for (const terminal of ['completed', 'failed', 'cancelled'] as const) {
+      const state = fold([
+        started(),
+        activity({ kind: 'status', status: terminal }),
+        activity({ kind: 'status', status: 'running' }),
+      ]);
+      expect(state.lanes[PARENT].status).toBe(terminal);
+    }
+  });
+
   it('report stores the structured summary, completes the lane and clears a pending permission', () => {
     const base = fold([started()]);
     const withPending: SubagentActivityState = {
@@ -216,6 +227,43 @@ describe('reduceSubagentActivity — progress / status / report', () => {
   it('a started racing in after a terminal does not resurrect the lane', () => {
     const state = fold([started(), activity({ kind: 'status', status: 'completed' }), started()]);
     expect(state.lanes[PARENT].status).toBe('completed');
+  });
+
+  it('a report status of cancelled or running is honored, not read as success (Codex round 1 m6)', () => {
+    const cancelled = fold([
+      started(),
+      activity({ kind: 'report', report: { status: 'cancelled' } }),
+    ]);
+    expect(cancelled.lanes[PARENT].status).toBe('cancelled');
+    // Async delegation: the report lands while the subagent still works —
+    // the lane stays live instead of collapsing into a false "completed".
+    const running = fold([started(), activity({ kind: 'report', report: { status: 'running' } })]);
+    expect(running.lanes[PARENT].status).toBe('running');
+  });
+
+  it('duplicate deliveries are idempotent — no twin rows, no fresh reference (Codex round 1 m4)', () => {
+    const base = fold([
+      started(),
+      activity({ kind: 'tool.started', toolCallId: 'tc', name: 'Read' }),
+      activity({ kind: 'text', id: 't1', text: 'note' }),
+    ]);
+    expect(
+      reduceSubagentActivity(
+        base,
+        activity({ kind: 'tool.started', toolCallId: 'tc', name: 'Read' })
+      )
+    ).toBe(base);
+    expect(reduceSubagentActivity(base, activity({ kind: 'text', id: 't1', text: 'note' }))).toBe(
+      base
+    );
+    // The single row still settles normally afterwards.
+    const settled = reduceSubagentActivity(
+      base,
+      activity({ kind: 'tool.completed', toolCallId: 'tc', ok: true })
+    );
+    expect(settled.lanes[PARENT].rows.filter((r) => r.kind === 'tool')).toEqual([
+      { kind: 'tool', toolCallId: 'tc', name: 'Read', status: 'ok' },
+    ]);
   });
 });
 
@@ -255,10 +303,29 @@ describe('reduceSubagentActivity — permissions', () => {
     });
   });
 
-  it('a main-agent request (no agentId) or an unknown agentId returns the same reference', () => {
+  it('a main-agent request (no agentId) returns the same reference', () => {
     const state = fold([started()]);
     expect(reduceSubagentActivity(state, permissionRequested(undefined))).toBe(state);
-    expect(reduceSubagentActivity(state, permissionRequested('agent-unknown'))).toBe(state);
+  });
+
+  it('a request outrunning the lane still records a bare origin — the chip survives (Codex round 1 m5)', () => {
+    const state = fold([permissionRequested('agent-early')]);
+    expect(state.permissionOrigin['perm-1']).toEqual({
+      parentToolCallId: null,
+      agentType: null,
+      description: null,
+    });
+    expect(Object.keys(state.lanes)).toHaveLength(0);
+    expect(derivePermissionOrigin(state.permissionOrigin['perm-1'])).toEqual({
+      label: 'From subagent',
+    });
+    // Resolve still cleans it up without a lane to touch.
+    const resolved = reduceSubagentActivity(state, {
+      type: 'permission.resolved',
+      sessionId: SESSION,
+      payload: { permissionId: 'perm-1' },
+    });
+    expect(resolved.permissionOrigin['perm-1']).toBeUndefined();
   });
 
   it('permission.resolved deletes the origin and clears the lane’s pending marker', () => {

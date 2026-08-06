@@ -71,7 +71,13 @@ export interface SubagentLane {
 }
 
 export interface SubagentPermissionOrigin {
-  parentToolCallId: string;
+  /**
+   * Null when the request outran the lane's `started` (Codex round 1, m5):
+   * `agentId` alone already proves subagent origin, so the chip must not be
+   * forfeited just because the agentIndex entry does not exist yet — only
+   * the lane-side "Awaiting permission" marker needs the resolution.
+   */
+  parentToolCallId: string | null;
   agentType: string | null;
   description: string | null;
 }
@@ -283,6 +289,11 @@ function reduceActivity(
       const id = asString(payload.id);
       const text = asString(payload.text);
       if (!id || !text) return state === prev ? prev : state;
+      // Idempotency (Codex round 1, m4): a redelivered id must not re-enter
+      // the ring — it would burn a slot and mint a fresh state reference.
+      if (lane.rows.some((r) => r.kind === kind && r.id === id)) {
+        return state === prev ? prev : state;
+      }
       const { rows, dropped } = appendRow(lane.rows, { kind, id, text });
       return withLane(state, { ...lane, rows, droppedRows: lane.droppedRows + dropped });
     }
@@ -290,6 +301,12 @@ function reduceActivity(
       const toolCallId = asString(payload.toolCallId);
       const name = asString(payload.name);
       if (!toolCallId || !name) return state === prev ? prev : state;
+      // Idempotency (Codex round 1, m4): a duplicate started for a known id
+      // is dropped whole — appending would leave a twin the completion can
+      // never settle (only the first match updates), i.e. a forever-spinner.
+      if (lane.rows.some((r) => r.kind === 'tool' && r.toolCallId === toolCallId)) {
+        return state === prev ? prev : state;
+      }
       const input = asRecord(payload.input) as Record<string, string | number> | null;
       const { rows, dropped } = appendRow(lane.rows, {
         kind: 'tool',
@@ -348,10 +365,12 @@ function reduceActivity(
       ) {
         return state === prev ? prev : state;
       }
-      // Terminal no-downgrade (Codex guardrail): a late generic `completed`
-      // must not overwrite an observed failed/cancelled.
+      // Terminal no-downgrade (Codex guardrails, rounds 1+2): a late generic
+      // `completed` must not overwrite an observed failed/cancelled, and NO
+      // terminal may be resurrected to `running` by a straggling heartbeat.
       const finalStatus =
-        (lane.status === 'failed' || lane.status === 'cancelled') && status === 'completed'
+        (isTerminal(lane.status) && status === 'running') ||
+        ((lane.status === 'failed' || lane.status === 'cancelled') && status === 'completed')
           ? lane.status
           : status;
       return withLane(state, {
@@ -364,14 +383,25 @@ function reduceActivity(
     case 'report': {
       const report = asRecord(payload.report) as SubagentReport | null;
       if (!report) return state === prev ? prev : state;
-      const fromReport: SubagentRunStatus = report.status === 'failed' ? 'failed' : 'completed';
+      // Host-normalized status; `running` is real (async delegation whose
+      // report lands early) and must keep the lane live, not mark success.
+      // Unknown/absent reads as completed — the report IS the terminal
+      // artifact in every synchronous run.
+      const fromReport: SubagentRunStatus =
+        report.status === 'failed' || report.status === 'cancelled' || report.status === 'running'
+          ? report.status
+          : 'completed';
       const finalStatus =
-        lane.status === 'failed' || lane.status === 'cancelled' ? lane.status : fromReport;
+        (isTerminal(lane.status) && fromReport === 'running') ||
+        lane.status === 'failed' ||
+        lane.status === 'cancelled'
+          ? lane.status
+          : fromReport;
       return withLane(state, {
         ...lane,
         report,
         status: finalStatus,
-        pendingPermission: null,
+        pendingPermission: isTerminal(finalStatus) ? null : lane.pendingPermission,
       });
     }
     case 'capped':
@@ -390,16 +420,18 @@ function reducePermissionRequested(
   const toolName = payload ? asString(payload.toolName) : null;
   const agentId = payload ? asString(payload.agentId) : null;
   if (!payload || !permissionId || !toolName || !agentId) return prev;
+  // `agentId` present already proves this came from a subagent — the origin
+  // (and so the chip) is recorded unconditionally; only the lane's own
+  // "Awaiting permission" marker needs the agentIndex to resolve.
   const parentToolCallId = prev.agentIndex[agentId];
   const lane = parentToolCallId ? prev.lanes[parentToolCallId] : undefined;
-  if (!lane) return prev;
 
   let permissionOrigin: Record<string, SubagentPermissionOrigin> = {
     ...prev.permissionOrigin,
     [permissionId]: {
-      parentToolCallId: lane.parentToolCallId,
-      agentType: lane.agentType,
-      description: lane.description,
+      parentToolCallId: lane?.parentToolCallId ?? null,
+      agentType: lane?.agentType ?? null,
+      description: lane?.description ?? null,
     },
   };
   const originKeys = Object.keys(permissionOrigin);
@@ -412,10 +444,12 @@ function reducePermissionRequested(
 
   return {
     ...prev,
-    lanes: {
-      ...prev.lanes,
-      [lane.parentToolCallId]: { ...lane, pendingPermission: { toolName } },
-    },
+    lanes: lane
+      ? {
+          ...prev.lanes,
+          [lane.parentToolCallId]: { ...lane, pendingPermission: { toolName } },
+        }
+      : prev.lanes,
     permissionOrigin,
   };
 }
@@ -432,12 +466,12 @@ function reducePermissionResolved(
 
   const permissionOrigin = { ...prev.permissionOrigin };
   delete permissionOrigin[permissionId];
-  const lane = prev.lanes[origin.parentToolCallId];
+  const lane = origin.parentToolCallId ? prev.lanes[origin.parentToolCallId] : undefined;
   return {
     ...prev,
     permissionOrigin,
     lanes:
-      lane?.pendingPermission != null
+      lane?.pendingPermission != null && origin.parentToolCallId
         ? {
             ...prev.lanes,
             [origin.parentToolCallId]: { ...lane, pendingPermission: null },

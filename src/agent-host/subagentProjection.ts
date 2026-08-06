@@ -77,14 +77,42 @@ export const SUBAGENT_EVENTS_MAX_PER_DELEGATION = 200;
 export const SUBAGENT_TRUNCATION_MARKER = '…';
 
 /**
+ * The delegating tool names, host-side. `Agent` is what cometix 2.1.212 emits;
+ * `Task` is the historical name and older/other CLI builds still use it, so
+ * both must match or a delegation goes unrecognized.
+ *
+ * Deliberately duplicated rather than imported from the renderer's own
+ * `toolCard.ts` copy: the Host is a separate build target with its own
+ * tsconfig and node_modules, and a cross-boundary import for a two-element set
+ * would be the only renderer dependency in the whole Host. Kept here (the
+ * T-34 host-side constants module) so the pairing is at least in ONE obvious
+ * place per side; if a third name ever appears, both sides need it.
+ */
+export const DELEGATION_TOOL_NAMES: ReadonlySet<string> = new Set(['Task', 'Agent']);
+
+/**
  * Clamp `text` to `maxChars`, appending the marker when anything was dropped.
  * The marker replaces the last character rather than extending past the limit,
  * so the return value is never longer than `maxChars`.
+ *
+ * Surrogate-safe (review m7): slicing by UTF-16 code unit can land BETWEEN the
+ * halves of an astral character (emoji, many CJK extension glyphs), leaving a
+ * lone high surrogate. That string is ill-formed — `JSON.stringify` on the way
+ * across IPC turns it into U+FFFD, so the renderer would show a replacement
+ * box that came from our truncation rather than from the model. Backing off
+ * one unit costs at most one character and keeps the result well-formed.
  */
 export function clampSubagentText(text: string, maxChars: number): string {
   if (maxChars <= 0) return '';
   if (text.length <= maxChars) return text;
-  return text.slice(0, maxChars - SUBAGENT_TRUNCATION_MARKER.length) + SUBAGENT_TRUNCATION_MARKER;
+  let cut = maxChars - SUBAGENT_TRUNCATION_MARKER.length;
+  if (cut > 0) {
+    const lastKept = text.charCodeAt(cut - 1);
+    // High surrogate at the boundary: its low half is on the other side of
+    // the cut, so drop the orphan instead of emitting half a character.
+    if (lastKept >= 0xd800 && lastKept <= 0xdbff) cut -= 1;
+  }
+  return text.slice(0, cut) + SUBAGENT_TRUNCATION_MARKER;
 }
 
 /**

@@ -444,7 +444,13 @@ export interface SubagentToolStats {
  * Excludes `content`/`prompt` — the protocol does not re-carry bodies.
  */
 export interface SubagentReport {
-  status?: string;
+  /**
+   * Host-normalized (`normalizeSubagentRunStatus`) — never a raw CLI string.
+   * `running` is legitimate here: an async (`run_in_background`) delegation's
+   * report lands while the subagent is still working. Codex review round 1,
+   * m6: an open string let every unknown value read as success downstream.
+   */
+  status?: SubagentRunStatus;
   agentType?: string;
   resolvedModel?: string;
   totalDurationMs?: number;
