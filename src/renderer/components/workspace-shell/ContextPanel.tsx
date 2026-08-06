@@ -16,13 +16,12 @@
  * drag handle are untouched.
  */
 
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useShellLayoutStore } from '@/stores/shellLayout';
-import { derivePanelTabs } from './panelTabsModel';
 import { ShellResizeHandle } from './ShellResizeHandle';
 import { SurfacePlaceholder } from './SurfacePlaceholder';
 import {
@@ -38,7 +37,6 @@ import {
 } from './shellLayoutModel';
 import { type ContextSurfaceId, getSurface } from './surfaceRegistry';
 import { SURFACE_VIEWS } from './surfaceViews';
-import { useGitChangeCount } from './useGitChangeCount';
 
 interface ContextPanelProps {
   /** Measured Main+Panel row width; null before the first measurement. */
@@ -57,22 +55,33 @@ interface ContextPanelProps {
    * reflowing chat column showing beside it («放大后没有覆盖中右全部画幅»).
    */
   maxDockedWidth?: number | null;
+  /**
+   * Round-12: the DOCKED width the shell's allocator granted, already
+   * compressed to fit. 0 means "no room" — the surface stays active and the
+   * rail represents it until the window grows again.
+   */
+  allocatedWidth: number;
+  /** Round-12: paint one drag frame on the shell root (zero React renders). */
+  onDragFrame?: (width: number) => void;
+  onResizingChange?: (resizing: boolean) => void;
 }
 
-export function ContextPanel({ availableWidth, maxDockedWidth, visible }: ContextPanelProps) {
+export function ContextPanel({
+  availableWidth,
+  maxDockedWidth,
+  visible,
+  allocatedWidth,
+  onDragFrame,
+  onResizingChange,
+}: ContextPanelProps) {
   const { t } = useI18n();
   const activeSurfaceId = useShellLayoutStore((state) => state.activeSurfaceId);
   const lastSurfaceId = useShellLayoutStore((state) => state.lastSurfaceId);
   const panelWidth = useShellLayoutStore((state) => state.panelWidth);
   const expanded = useShellLayoutStore((state) => state.expanded);
   const closeSurface = useShellLayoutStore((state) => state.closeSurface);
-  const selectSurface = useShellLayoutStore((state) => state.selectSurface);
   const toggleExpanded = useShellLayoutStore((state) => state.toggleExpanded);
   const setPanelWidth = useShellLayoutStore((state) => state.setPanelWidth);
-
-  const railOrder = useShellLayoutStore((state) => state.railOrder);
-  const changedFilesCount = useGitChangeCount();
-  const tabs = derivePanelTabs(railOrder, { changedFilesCount });
 
   const isOpen = visible;
   // Content stays mounted across close/open (batch 3 correction): deriving the
@@ -83,19 +92,22 @@ export function ContextPanel({ availableWidth, maxDockedWidth, visible }: Contex
   // width 0 when closed, so falling back to lastSurfaceId here is safe.
   const contentSurfaceId = activeSurfaceId ?? lastSurfaceId;
   const descriptor = contentSurfaceId ? getSurface(contentSurfaceId) : undefined;
-  // Round-11 (user ruling): the DOCKED panel renders at the width the user
-  // set, full stop — no available-width cap. When the window cannot fit it,
-  // `WorkspaceShell`'s row clips the remainder off the right edge instead of
-  // shrinking the panel («右侧栏目在空间不足时也不要自动缩起，而是正常显示»).
-  // The expanded overlay still takes the whole measured row, since covering
-  // chat and the editor is its entire purpose.
-  const width = resolveContextPanelWidth({
-    // null collapses the panel to width 0 — closing must still animate.
-    surfaceId: visible ? activeSurfaceId : null,
-    manualWidth: panelWidth,
-    availableWidth: expanded ? availableWidth : null,
-    expanded,
-  });
+  // Round-12 (user ruling): the docked width is the SHELL's to allocate — it
+  // compresses the panel rather than clipping it, so what the user sees on a
+  // narrow window is a narrower panel with its border and chrome intact, never
+  // a panel with a piece cut off («右缘的 rail 与面板边框永远完整»). The
+  // expanded overlay still takes the whole measured row, since covering chat
+  // and the editor is its entire purpose.
+  const width = expanded
+    ? resolveContextPanelWidth({
+        surfaceId: visible ? activeSurfaceId : null,
+        manualWidth: panelWidth,
+        availableWidth,
+        expanded,
+      })
+    : visible
+      ? allocatedWidth
+      : 0;
   // Round-10 ②, kept: the drag stays what-you-see-is-what-you-get. Past this
   // budget the panel's left edge cannot move (chat/the editor have bottomed
   // out) so further dragging would be pure invisible travel.
@@ -187,67 +199,31 @@ export function ContextPanel({ availableWidth, maxDockedWidth, visible }: Contex
         // including the close transition, which keeps the last open width.
         <div className="flex h-full flex-col" style={{ width: contentWidth }}>
           {/*
-            T-32 (D27): A08's tab strip replaces the single-surface header —
-            h-9, the tabs splitting the width evenly, actions pinned right
-            (a08:1259-1265). `expanded` is NOT part of A08 but is an existing
-            capability the §7 comparison never superseded, so it stays in the
-            action slot next to close.
+            Round-12: the horizontal tab strip is GONE — the permanent rail is
+            the switcher now («使用右侧竖置的图标当切换标签…只用压缩右侧栏目的展示
+            内容»). What is left is the smallest honest header: which surface
+            this is, and the expand toggle, which the rail has no equivalent
+            for. The close button retired with the strip — clicking the active
+            rail icon toggles the panel shut, and Escape still works — so a
+            narrow panel spends its width on content instead of chrome.
           */}
-          <div className="flex h-9 shrink-0 items-center gap-1 border-b px-1" role="tablist">
-            {tabs.map((tab) => {
-              const selected = tab.id === contentSurfaceId;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  title={t(tab.descriptionKey)}
-                  className={cn(
-                    'relative flex h-7 min-w-0 flex-1 items-center justify-center rounded-sm px-1 text-meta transition-colors',
-                    // Same mutual-exclusion reason as the rail (see
-                    // ContextPanelRail): `hover:bg-hover` (0,2,0) would outrank
-                    // a plain `bg-selection` (0,1,0) and erase the active tab.
-                    selected
-                      ? 'bg-selection font-medium text-primary'
-                      : 'text-muted-foreground hover:bg-hover hover:text-foreground'
-                  )}
-                  onClick={() => selectSurface(tab.id)}
-                >
-                  <span className="min-w-0 truncate">{t(tab.labelKey)}</span>
-                  {tab.showDot && (
-                    <span
-                      aria-hidden="true"
-                      className="ml-1 h-1.5 w-1.5 shrink-0 rounded-full bg-info"
-                    />
-                  )}
-                </button>
-              );
-            })}
-            <div className="flex shrink-0 items-center">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="h-6 w-6 shrink-0"
-                aria-label={t(expanded ? 'Restore panel' : 'Expand panel')}
-                onClick={toggleExpanded}
-              >
-                {expanded ? (
-                  <Minimize2 className="h-3.5 w-3.5" />
-                ) : (
-                  <Maximize2 className="h-3.5 w-3.5" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="h-6 w-6 shrink-0"
-                aria-label={t('Close panel')}
-                onClick={closeSurface}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+          <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
+            <span className="min-w-0 flex-1 truncate text-meta font-medium text-foreground">
+              {t(descriptor.labelKey)}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="h-6 w-6 shrink-0"
+              aria-label={t(expanded ? 'Restore panel' : 'Expand panel')}
+              onClick={toggleExpanded}
+            >
+              {expanded ? (
+                <Minimize2 className="h-3.5 w-3.5" />
+              ) : (
+                <Maximize2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
           </div>
           {/*
             Multi-mount stack (S0). Every mounted view is an `absolute inset-0`
@@ -313,7 +289,11 @@ export function ContextPanel({ availableWidth, maxDockedWidth, visible }: Contex
           // never be one the ladder would react to by hiding the panel.
           clamp={(candidate) => clampContextPanelWidth(candidate, widthBudget)}
           onCommit={(next) => setPanelWidth(next, widthBudget)}
-          onResizingChange={setPanelResizing}
+          onDragFrame={onDragFrame}
+          onResizingChange={(next) => {
+            setPanelResizing(next);
+            onResizingChange?.(next);
+          }}
         />
       )}
     </div>

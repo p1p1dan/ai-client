@@ -185,21 +185,6 @@ export function resolveContentColumnWidth(input: ResolveContentColumnWidthInput)
   return CONTEXT_PANEL_MIN_WIDTH;
 }
 
-// ── rail visibility (T-32 / D27, A08 「联动收展」) ────────────────────────
-/**
- * A08 定稿: 「展开 = 右缘无图标；收起 = Rail 出现」(a08:1430-1432). The rail is
- * the *collapsed* affordance — while the panel is open its tab strip is the
- * switcher and the 44px belongs to content instead.
- *
- * One line, pinned on purpose: the L0 threshold is computed WITHOUT the rail
- * (a08:1421 — `1580 = 280+400+520+380`, explicitly "展开态无 Rail，故不含 44"),
- * so anything that makes the rail visible alongside an open panel silently
- * invalidates the level ladder S4 builds on top of this.
- */
-export function deriveRailVisible(input: { panelVisible: boolean }): boolean {
-  return !input.panelVisible;
-}
-
 // ── surface mounting (S0, T-12~15 shell prerequisite) ───────────────────
 /**
  * Lifetime of a wired surface view, not its looks:

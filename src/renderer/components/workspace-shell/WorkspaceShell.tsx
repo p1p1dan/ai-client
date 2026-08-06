@@ -1,4 +1,13 @@
-import { type Ref, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type Ref,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { useI18n } from '@/i18n';
@@ -15,6 +24,7 @@ import {
   maxPanelWidth,
   resolveShellAllocation,
   resolveShellChrome,
+  type ShellAllocation,
 } from './centerLayoutModel';
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
@@ -98,6 +108,9 @@ export function WorkspaceShell({
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarResizing, setSidebarResizing] = useState(false);
+  // Lifted out of ContextPanel: a panel drag re-lays every column, so the
+  // transition kill-switch has to live on the shell root (see `data-resizing`).
+  const [panelResizing, setPanelResizing] = useState(false);
 
   // The allocator budgets the WHOLE shell (the sidebar is one of the columns
   // it satisfies first), which `contentRowRef` deliberately excludes.
@@ -151,7 +164,7 @@ export function WorkspaceShell({
     panelOpen: activeSurfaceId !== null,
     manualChat,
   });
-  const { panelVisible, chatVisible, railVisible } = chrome;
+  const { panelVisible, chatVisible } = chrome;
 
   // Widths come from one allocator so the columns cannot disagree about who
   // owns which pixel: sidebar and chat are satisfied first, and whatever does
@@ -165,9 +178,69 @@ export function WorkspaceShell({
     editorRatio,
     panelVisible,
     panelWidth: panelWidth ?? CONTEXT_PANEL_MIN_WIDTH,
-    railVisible,
   };
   const allocation = resolveShellAllocation(allocationInput);
+
+  /**
+   * Round-12 (drag performance). Every column's width is published as a CSS
+   * custom property on the shell root, and the columns read them
+   * (`width: var(--shell-chat-w)`). React sets them on commit; a drag sets the
+   * SAME properties directly on the root node, from the SAME pure model, so
+   * the two paths cannot disagree and a drag costs zero React renders.
+   *
+   * Why variables rather than per-column refs: the allocator couples the
+   * columns (widening the panel narrows the center row, which re-splits chat
+   * and the editor). Painting that through refs means four `style.width`
+   * writes on four nodes per frame; through variables it is one write target
+   * and the browser propagates. It also keeps the drag correct by
+   * construction — no column can be forgotten.
+   */
+  const shellVars = useMemo(
+    () =>
+      ({
+        '--shell-sidebar-w': `${allocation.sidebarWidth}px`,
+        '--shell-center-w': `${allocation.centerWidth}px`,
+        '--shell-chat-w': `${allocation.chatWidth}px`,
+        '--shell-editor-w': `${allocation.editorWidth}px`,
+        '--shell-panel-w': `${allocation.panelWidth}px`,
+      }) as CSSProperties,
+    [allocation]
+  );
+
+  const paintAllocation = useCallback((next: ShellAllocation) => {
+    const root = shellRef.current;
+    if (!root) {
+      return;
+    }
+    root.style.setProperty('--shell-sidebar-w', `${next.sidebarWidth}px`);
+    root.style.setProperty('--shell-center-w', `${next.centerWidth}px`);
+    root.style.setProperty('--shell-chat-w', `${next.chatWidth}px`);
+    root.style.setProperty('--shell-editor-w', `${next.editorWidth}px`);
+    root.style.setProperty('--shell-panel-w', `${next.panelWidth}px`);
+  }, []);
+
+  // Kept in a ref so the drag callbacks below stay identity-stable across the
+  // renders that happen between drags (they must not re-subscribe pointers).
+  const allocationInputRef = useRef(allocationInput);
+  allocationInputRef.current = allocationInput;
+
+  const paintSidebarDrag = useCallback(
+    (nextSidebarWidth: number) => {
+      paintAllocation(
+        resolveShellAllocation({ ...allocationInputRef.current, sidebarWidth: nextSidebarWidth })
+      );
+    },
+    [paintAllocation]
+  );
+
+  const paintPanelDrag = useCallback(
+    (nextPanelWidth: number) => {
+      paintAllocation(
+        resolveShellAllocation({ ...allocationInputRef.current, panelWidth: nextPanelWidth })
+      );
+    },
+    [paintAllocation]
+  );
   // Drag-only cap: past this, widening the panel moves nothing on screen
   // because chat/the editor have bottomed out — see `maxPanelWidth`.
   const panelWidthCap = maxPanelWidth({
@@ -198,14 +271,20 @@ export function WorkspaceShell({
           (dropZoneRef as { current: HTMLDivElement | null }).current = node;
         }
       }}
-      className="relative flex h-full min-h-0 w-full flex-1 overflow-hidden bg-background"
+      data-resizing={sidebarResizing || panelResizing || centerResizing || undefined}
+      // The columns read these; a drag rewrites them on this node alone.
+      style={shellVars}
+      className="group/shell relative flex h-full min-h-0 w-full flex-1 overflow-hidden bg-background"
     >
       {/* Left column: width + data-resizing live on this wrapper; LeftNav only writes w-full. */}
       <div
         ref={sidebarRef}
-        data-resizing={sidebarResizing || undefined}
-        className="relative flex h-full shrink-0 transition-[width] duration-[250ms] data-[resizing]:transition-none"
-        style={{ width: allocation.sidebarWidth }}
+        // Round-12: the transition is disabled from the SHELL ROOT's
+        // `data-resizing`, not this node's own — a panel drag re-lays the
+        // sidebar's neighbours too, and a column still animating while another
+        // is being dragged is exactly the lag the user reported.
+        className="relative flex h-full shrink-0 transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none"
+        style={{ width: 'var(--shell-sidebar-w)' }}
       >
         <LeftNav
           collapsed={chrome.sidebarCollapsed}
@@ -221,6 +300,7 @@ export function WorkspaceShell({
             targetRef={sidebarRef}
             clamp={clampSidebarWidth}
             onCommit={setSidebarWidth}
+            onDragFrame={paintSidebarDrag}
             onResizingChange={setSidebarResizing}
           />
         )}
@@ -260,8 +340,8 @@ export function WorkspaceShell({
             */}
             <div
               ref={centerRowRef}
-              className="relative flex shrink-0 overflow-clip"
-              style={{ width: allocation.centerWidth }}
+              className="relative flex shrink-0 overflow-clip transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none"
+              style={{ width: 'var(--shell-center-w)' }}
             >
               <div
                 ref={chatColumnRef}
@@ -281,7 +361,7 @@ export function WorkspaceShell({
                 // give would absorb the overflow instead of letting the panel
                 // run off the edge, which is precisely the squeeze the user
                 // ruled out.
-                style={chatVisible ? { width: allocation.chatWidth } : undefined}
+                style={chatVisible ? { width: 'var(--shell-chat-w)' } : undefined}
               >
                 <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
                 {editorOpen && chatVisible && (
@@ -304,6 +384,17 @@ export function WorkspaceShell({
                         chatWidthToEditorRatio({
                           chatWidth: next,
                           centerWidth: allocation.centerWidth,
+                        })
+                      )
+                    }
+                    onDragFrame={(next) =>
+                      paintAllocation(
+                        resolveShellAllocation({
+                          ...allocationInputRef.current,
+                          editorRatio: chatWidthToEditorRatio({
+                            chatWidth: next,
+                            centerWidth: allocation.centerWidth,
+                          }),
                         })
                       )
                     }
@@ -331,7 +422,7 @@ export function WorkspaceShell({
               {(editorOpen || fileIntentPending) && (
                 <div
                   className={editorOpen ? 'min-w-0 shrink-0' : 'hidden'}
-                  style={editorOpen ? { width: allocation.editorWidth } : undefined}
+                  style={editorOpen ? { width: 'var(--shell-editor-w)' } : undefined}
                 >
                   <EditorColumn
                     chatVisible={chatVisible}
@@ -344,10 +435,19 @@ export function WorkspaceShell({
               availableWidth={availableWidth}
               maxDockedWidth={panelWidthCap}
               visible={panelVisible}
+              allocatedWidth={allocation.panelWidth}
+              onDragFrame={paintPanelDrag}
+              onResizingChange={setPanelResizing}
             />
           </div>
-          {/* A08「展开时右缘无图标」: the rail is the collapsed-state switcher only. */}
-          {railVisible && <ContextPanelRail />}
+          {/*
+            Round-12: PERMANENT. A08 showed the rail only while the panel was
+            collapsed and put a tab strip inside the open panel; the user
+            replaced both with one always-present vertical switcher. It also
+            sits OUTSIDE the clipped row, which is what keeps a surface
+            reachable when the window is too narrow to render the panel at all.
+          */}
+          <ContextPanelRail />
         </div>
       </div>
 

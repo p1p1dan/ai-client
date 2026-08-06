@@ -150,9 +150,29 @@ export type ManualOverride = boolean | null;
  *
  * The reserve constants below survive both models: they are just widths.
  */
+/**
+ * Round-12: the rail is PERMANENT, so this is reserved at every width.
+ *
+ * OVERTURNED: A08「展开 = 右缘无图标；收起 = Rail 出现」(a08:1430-1432) made the
+ * rail the collapsed-state affordance and gave the panel a horizontal tab
+ * strip while open. The user overturned it on 2026-08-06: 「那个展开后的 tab
+ * 标签是不是很占位置，要不就使用右侧竖置的图标当切换标签？这样标签是恒定存在的，
+ * 只用压缩右侧栏目的展示内容」. One switcher, always in the same place, costing
+ * 44px of chrome instead of a 36px-tall strip inside every panel — and it is
+ * what makes a 0-width panel recoverable, since the rail survives when
+ * nothing else does.
+ */
 export const RAIL_RESERVE = 44;
+/** The panel's PREFERRED width (round-12 demoted it from a hard floor). */
 export const PANEL_MIN_RESERVE = 380;
 export const SIDEBAR_COLLAPSED_RESERVE = 48;
+
+/**
+ * Below this the panel yields its width entirely and only the rail represents
+ * it. A 60px stub is all chrome and no content — worse than an honest absence,
+ * and it steals room chat still needs.
+ */
+export const PANEL_MIN_USEFUL_WIDTH = 150;
 
 /** Content the shell refuses to shrink below, given what is open. */
 export function contentFloor(input: { chatWanted: boolean; editorOpen: boolean }): number {
@@ -170,9 +190,14 @@ export interface ResolveShellChromeInput {
 
 export interface ShellChrome {
   sidebarCollapsed: boolean;
+  /**
+   * The user's surface choice. Round-12: this is INTENT and no longer implies
+   * a non-zero width — a window too narrow to host the panel renders it at 0
+   * while this stays true, so widening brings the same surface straight back
+   * (`ShellAllocation.panelSuppressed`).
+   */
   panelVisible: boolean;
   chatVisible: boolean;
-  railVisible: boolean;
 }
 
 /**
@@ -187,15 +212,12 @@ export interface ShellChrome {
  * there is no such state to report and no affordance to drive from it.
  */
 export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome {
-  const panelVisible = input.panelOpen;
   return {
     sidebarCollapsed: input.sidebarUserCollapsed,
-    panelVisible,
-    // A08「展开时右缘无图标」: the rail is the collapsed-state switcher, so it
-    // is the exact complement of the panel and never both.
-    railVisible: !panelVisible,
+    panelVisible: input.panelOpen,
     chatVisible: input.manualChat !== null ? input.manualChat : true,
   };
+  // No `railVisible`: round-12 made the rail permanent (see RAIL_RESERVE).
 }
 
 export interface ResolveShellAllocationInput {
@@ -207,10 +229,10 @@ export interface ResolveShellAllocationInput {
   chatVisible: boolean;
   editorOpen: boolean;
   editorRatio: number;
+  /** The user's surface choice — intent, not width. */
   panelVisible: boolean;
-  /** The user's panel width, already 380..1400-clamped by the store. */
+  /** The width the user dragged the panel to; a PREFERENCE since round-12. */
   panelWidth: number;
-  railVisible: boolean;
 }
 
 export interface ShellAllocation {
@@ -222,30 +244,44 @@ export interface ShellAllocation {
   chatWidth: number;
   /** 0 when no file is open. */
   editorWidth: number;
-  /** The user's width, never reduced — it is clipped instead. 0 when closed. */
+  /** What the panel ACTUALLY gets: the preference, compressed to fit. */
   panelWidth: number;
-  /** px pushed past the shell's right edge and clipped away; 0 = everything fits. */
-  clippedWidth: number;
-  clipped: boolean;
+  /** True when the panel is narrower than the user asked for. */
+  panelCompressed: boolean;
+  /**
+   * True when there was not even `PANEL_MIN_USEFUL_WIDTH` to give, so the
+   * panel is 0-wide and only the rail remains. The surface is still ACTIVE —
+   * this is a width outcome, never a visibility decision (round-11's rule
+   * still holds: only the user closes a panel).
+   */
+  panelSuppressed: boolean;
+  /**
+   * px of chat+editor past the row's right edge. Only ever non-zero on a
+   * window too narrow for their floors — the panel is already at 0 by then.
+   */
+  overflowWidth: number;
 }
 
 /**
- * Lay the columns out left to right and let the right edge cut off whatever
- * does not fit. The caller renders this into fixed, non-shrinking widths inside
- * an `overflow-clip` row — the clip is the whole mechanism, so a child that is
- * allowed to shrink would silently defeat it.
+ * ## OVERTURNED DESIGN — round-11's right-edge clipping
  *
- * Order of satisfaction, straight from the ruling:
- *  - sidebar takes its width (or 48 collapsed) — never compressed, never hidden;
- *  - the rail, when shown, is reserved too: it is 44px and it is the only way
- *    to bring the panel back, so clipping it would strand the user;
- *  - chat and the editor share what is left, down to their floors;
- *  - the panel keeps the width the user set and absorbs the shortfall by
- *    hanging off the right edge.
+ * Round-11 answered "too narrow" by letting the panel keep its width and run
+ * off the right edge. The user rejected the RESULT on sight: 「显示不完整很奇怪」.
+ * The diagnosis is that clipping cut the panel's own chrome — its border, its
+ * header, the scrollbar — so a narrow window produced a panel that looked
+ * broken rather than small. Clipping is right for CONTENT and wrong for a
+ * container.
  *
- * Before measurement everything is granted as requested and nothing is
- * reported clipped: a first paint that guesses wrong would flash a cut-off
- * layout, and one frame later the real width arrives anyway.
+ * Round-12 therefore compresses instead: 「空间不足时面板宽度压缩…右缘的 rail
+ * 与面板边框永远完整——窗口再窄，看到的也是『一个变窄的面板』而不是『被切掉一块的
+ * 面板』」. `CONTEXT_PANEL_MIN_WIDTH` (380) is demoted from a hard floor to a
+ * PREFERENCE: honoured whenever the room exists, given up when it does not.
+ * Inside the panel the surface's own `overflow-hidden` does the cutting, which
+ * is where cutting belongs.
+ *
+ * What did NOT change from round-11 (and must not): visibility is still the
+ * user's alone, chat and the editor still keep their floors ahead of the
+ * panel, and the sidebar is still satisfied first.
  */
 export function resolveShellAllocation(input: ResolveShellAllocationInput): ShellAllocation {
   const {
@@ -257,14 +293,13 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
     editorRatio,
     panelVisible,
     panelWidth,
-    railVisible,
   } = input;
 
   const sidebar = sidebarCollapsed ? SIDEBAR_COLLAPSED_RESERVE : Math.max(0, sidebarWidth);
-  const panel = panelVisible ? Math.max(0, panelWidth) : 0;
+  const preferred = panelVisible ? Math.max(0, panelWidth) : 0;
   const floors = contentFloor({ chatWanted: chatVisible, editorOpen });
 
-  const split = (centerWidth: number): ShellAllocation => {
+  const build = (centerWidth: number, panel: number, overflowWidth: number): ShellAllocation => {
     let chatWidth = 0;
     let editorWidth = 0;
     if (chatVisible && editorOpen) {
@@ -281,42 +316,51 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
       chatWidth,
       editorWidth,
       panelWidth: panel,
-      clippedWidth: 0,
-      clipped: false,
+      panelCompressed: panelVisible && panel < preferred,
+      panelSuppressed: panelVisible && panel === 0,
+      overflowWidth,
     };
   };
 
+  // Unmeasured: grant every preference rather than flash a compressed shell.
   if (!isFiniteNumber(shellWidth) || shellWidth <= 0) {
-    return split(floors);
+    return build(floors, preferred, 0);
   }
 
-  const rail = railVisible ? RAIL_RESERVE : 0;
-  const row = Math.max(0, shellWidth - sidebar - rail);
-  // `Math.max(floors, …)` is the entire priority rule: when the panel's width
-  // would push chat/the editor under their floors, the floors win and the
-  // panel is what ends up past the edge — never the other way round.
+  // Round-12: the rail is PERMANENT, so its 44px is reserved unconditionally.
+  // It is also outside the clip, which is what guarantees the user can always
+  // reach a surface no matter how narrow the window gets.
+  const row = Math.max(0, shellWidth - sidebar - RAIL_RESERVE);
+  // Chat and the editor are served first; whatever is left is what the panel
+  // may have. This is the priority rule, unchanged from round-11 — only the
+  // panel's response to losing changed (compress, was clip).
+  const roomForPanel = Math.max(0, row - floors);
+  let panel = Math.min(preferred, roomForPanel);
+  // A sliver of panel is worse than none: below this there is not enough room
+  // for its chrome to read as a panel at all, so it yields the space entirely
+  // and the rail alone represents it.
+  if (panel < PANEL_MIN_USEFUL_WIDTH) {
+    panel = 0;
+  }
   const centerWidth = Math.max(floors, row - panel);
-  const clippedWidth = Math.max(0, centerWidth + panel - row);
-
-  return { ...split(centerWidth), clippedWidth, clipped: clippedWidth > 0 };
+  return build(centerWidth, panel, Math.max(0, centerWidth + panel - row));
 }
 
 /**
  * The largest panel width a DRAG may reach — the point past which dragging
  * stops doing anything visible.
  *
- * Survives the clip-don't-collapse rewrite with a narrowed job. It no longer
- * caps what the panel RENDERS at: under the new model the panel always renders
- * at the width the user set and the right edge clips the remainder
- * (`resolveShellAllocation`). But the panel's grip is on its LEFT edge, so
- * widening it moves that edge leftward only while chat/the editor still have
- * room to give. Once `centerWidth` bottoms out at `contentFloor`, the edge
- * stops and every further pixel of drag goes straight off the right edge,
- * invisible. Clamping there is what keeps the drag what-you-see-is-what-you-get
- * (the one principle carried over from the round-10 fix).
+ * Survives both rewrites with a narrowed job. It no longer caps what the panel
+ * RENDERS at: since round-12 the render width is `resolveShellAllocation`'s
+ * compressed outcome, not the drag's. But the panel's grip is on its LEFT
+ * edge, so widening it moves that edge leftward only while chat/the editor
+ * still have room to give. Once `centerWidth` bottoms out at `contentFloor`,
+ * the edge stops and every further pixel of drag is invisible. Clamping there
+ * is what keeps the drag what-you-see-is-what-you-get (the one principle
+ * carried over from the round-10 fix).
  *
- * Window SHRINK is deliberately not clamped this way — that is the case the
- * user's ruling is about, and there the panel keeps its width and gets cut off.
+ * Window SHRINK is deliberately not clamped this way — shrink compresses the
+ * rendered panel while the stored preference stays put, so widening restores.
  */
 export function maxPanelWidth(input: {
   shellWidth: number | null;

@@ -59,7 +59,9 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
   it('WorkspaceShell composes it through the pure model rather than inline', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     expect(shell).toContain('resolveShellChrome({');
-    expect(shell).toContain('const { panelVisible, chatVisible, railVisible } = chrome;');
+    // Round-12: `railVisible` is gone — the rail is permanent, so the
+    // complement it used to express no longer exists.
+    expect(shell).toContain('const { panelVisible, chatVisible } = chrome;');
     // m5: the panel must be capped so it can never eat the content floor.
     expect(shell).toContain('maxPanelWidth({');
     // The yield model reads the preference; it must never write it.
@@ -91,7 +93,7 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(shell).toMatch(
       /\{\(editorOpen \|\| fileIntentPending\) && \( <div className=\{editorOpen \? 'min-w-0 shrink-0' : 'hidden'\}/
     );
-    expect(shell).toContain('style={editorOpen ? { width: allocation.editorWidth } : undefined}');
+    expect(shell).toContain("style={editorOpen ? { width: 'var(--shell-editor-w)' } : undefined}");
   });
 
   it('the docked cap is not applied to the expanded overlay (m6)', () => {
@@ -149,21 +151,65 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     }
   });
 
-  it('the shell clips at the right edge instead of shrinking columns (round 11)', () => {
+  it('every column width comes from the one allocator, via CSS variables (round 12)', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     // `overflow-clip`, not `overflow-hidden`: hidden is still a scroll
-    // container, so focusing something inside the clipped-off panel would
-    // scroll chat off screen.
+    // container, so focusing something inside a clipped column would scroll
+    // chat off screen.
     expect(shell).toContain(
       'ref={contentRowRef} className="relative flex min-w-0 flex-1 overflow-clip"'
     );
     expect(shell).toContain('const allocation = resolveShellAllocation(allocationInput);');
-    // Every column carries an allocated width; none may shrink, or it would
-    // absorb the overflow the clip is meant to cut.
-    expect(shell).toContain('style={{ width: allocation.sidebarWidth }}');
-    expect(shell).toContain('style={{ width: allocation.centerWidth }}');
-    expect(shell).toContain('style={chatVisible ? { width: allocation.chatWidth } : undefined}');
+    // Columns read variables, never numbers: that is what lets a drag repaint
+    // all of them by writing one node, with zero React renders.
+    expect(shell).toContain(`style={{ width: 'var(--shell-sidebar-w)' }}`);
+    expect(shell).toContain(`style={{ width: 'var(--shell-center-w)' }}`);
+    expect(shell).toContain(`style={chatVisible ? { width: 'var(--shell-chat-w)' } : undefined}`);
+    // …and React publishes those same variables from the same allocation, so
+    // the drag path and the commit path cannot drift.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting on source text that itself contains a template placeholder
+    expect(shell).toContain("'--shell-chat-w': `${allocation.chatWidth}px`");
+    // No column may shrink, or it would absorb what compression should handle.
     expect(shell).not.toMatch(/flexShrink: 1/);
+  });
+
+  it('a drag repaints through the model and commits once (round 12 perf)', () => {
+    const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    const hook = code(join(SHELL_DIR, 'usePanelDragResize.ts'));
+    // Per-frame work is one model call + one variable write on one node.
+    expect(shell).toContain('onDragFrame={paintSidebarDrag}');
+    expect(shell).toContain('onDragFrame={paintPanelDrag}');
+    expect(shell).toContain('root.style.setProperty(');
+    // Pointer moves are coalesced to one paint per animation frame.
+    expect(hook).toContain('requestAnimationFrame(');
+    expect(hook).toContain('cancelAnimationFrame(');
+    // The pointer handler itself must stay a recorder — no clamp, no write.
+    expect(hook).toContain('pendingXRef.current = e.clientX;');
+    // Transitions are killed for the WHOLE shell while any handle is down.
+    expect(shell).toContain(
+      'data-resizing={sidebarResizing || panelResizing || centerResizing || undefined}'
+    );
+    expect(shell).toContain('group-data-[resizing]/shell:transition-none');
+  });
+
+  it('the rail is permanent and the panel`s tab strip is gone (round 12)', () => {
+    const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    const panel = code(join(SHELL_DIR, 'ContextPanel.tsx'));
+    const layoutModel = code(join(SHELL_DIR, 'shellLayoutModel.ts'));
+    // OVERTURNED A08「展开时右缘无图标」(a08:1430-1432): one always-present
+    // vertical switcher replaces both the conditional rail and the in-panel
+    // horizontal tabs.
+    expect(shell).toContain('<ContextPanelRail />');
+    expect(shell).not.toMatch(/railVisible && <ContextPanelRail/);
+    expect(panel).not.toContain('role="tablist"');
+    expect(panel).not.toContain('derivePanelTabs');
+    // The complement it replaced may not creep back under its old name — a
+    // callable `deriveRailVisible` would let a caller re-hide the switcher
+    // the zero-width panel depends on to be recoverable.
+    expect(layoutModel).not.toContain('deriveRailVisible');
+    // The panel takes the width the shell allocated it — compressed, not cut.
+    expect(panel).toContain('allocatedWidth: number');
+    expect(shell).toContain('allocatedWidth={allocation.panelWidth}');
   });
 
   it('the expanded panel is opaque — an overlay may not be see-through (m3)', () => {

@@ -10,6 +10,7 @@ import {
   MAX_EDITOR_RATIO,
   MIN_EDITOR_RATIO,
   maxPanelWidth,
+  PANEL_MIN_USEFUL_WIDTH,
   RAIL_RESERVE,
   resolveChatColumnWidth,
   resolveShellAllocation,
@@ -182,9 +183,9 @@ describe('resolveShellChrome — visibility is the user`s, verbatim', () => {
     expect(vis({ sidebarUserCollapsed: true }).sidebarCollapsed).toBe(true);
   });
 
-  it('echoes the panel choice, and the rail is its exact complement', () => {
-    expect(vis({ panelOpen: true })).toMatchObject({ panelVisible: true, railVisible: false });
-    expect(vis({ panelOpen: false })).toMatchObject({ panelVisible: false, railVisible: true });
+  it('echoes the panel choice', () => {
+    expect(vis({ panelOpen: true }).panelVisible).toBe(true);
+    expect(vis({ panelOpen: false }).panelVisible).toBe(false);
   });
 
   it('shows chat unless the editor head explicitly hid it', () => {
@@ -193,19 +194,20 @@ describe('resolveShellChrome — visibility is the user`s, verbatim', () => {
     expect(vis({ manualChat: false }).chatVisible).toBe(false);
   });
 
+  it('no longer reports rail visibility — the rail is permanent (round 12)', () => {
+    // OVERTURNED: A08「展开时右缘无图标」made the rail the panel's complement.
+    // Round-12 made it the one always-present switcher, so a `railVisible`
+    // field could only ever be `true` — a zombie by construction.
+    expect(vis()).not.toHaveProperty('railVisible');
+    expect(Object.keys(vis())).toEqual(['sidebarCollapsed', 'panelVisible', 'chatVisible']);
+  });
+
   it('takes no width at all — a window size can no longer hide anything', () => {
-    // The structural guarantee behind the ruling, stated as a type-level fact:
-    // there is no width to pass, so no threshold can exist.
-    expect(Object.keys(vis())).toEqual([
-      'sidebarCollapsed',
-      'panelVisible',
-      'railVisible',
-      'chatVisible',
-    ]);
+    expect(Object.keys(vis())).not.toContain('shellWidth');
   });
 });
 
-// ── clip, don`t collapse ────────────────────────────────────────────────
+// ── compress, don`t clip (round 12) ─────────────────────────────────────
 
 const alloc = (overrides: Partial<Parameters<typeof resolveShellAllocation>[0]> = {}) =>
   resolveShellAllocation({
@@ -217,9 +219,12 @@ const alloc = (overrides: Partial<Parameters<typeof resolveShellAllocation>[0]> 
     editorRatio: DEFAULT_EDITOR_RATIO,
     panelVisible: true,
     panelWidth: PANEL,
-    railVisible: false,
     ...overrides,
   });
+
+/** Room the panel is competing for at a given shell width, chat-only shell. */
+const roomFor = (shellWidth: number, sidebar = SIDEBAR) =>
+  shellWidth - sidebar - RAIL_RESERVE - CHAT_MIN_WIDTH;
 
 describe('resolveShellAllocation — sidebar and chat are satisfied first', () => {
   it('grants the sidebar its full width at every shell width', () => {
@@ -236,35 +241,38 @@ describe('resolveShellAllocation — sidebar and chat are satisfied first', () =
     }
   });
 
-  it('never puts chat below its floor, however little room is left', () => {
+  it('never puts chat or the editor below their floors, at any width', () => {
     for (const shellWidth of [2000, 1200, 900, 700, 500, 300, 120]) {
       for (const editorOpen of [false, true]) {
         for (const panelWidth of [PANEL, 900, 1400]) {
           const result = alloc({ shellWidth, editorOpen, panelWidth });
           expect(result.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
+          if (editorOpen) {
+            expect(result.editorWidth).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+          }
         }
       }
     }
   });
 
-  it('never puts the editor below its floor either', () => {
-    for (const shellWidth of [2000, 1200, 900, 700, 300]) {
-      const result = alloc({ shellWidth, editorOpen: true });
-      expect(result.editorWidth).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
-    }
+  it('always reserves the rail — it is the only switcher now (round 12)', () => {
+    // Reserved unconditionally, panel open or shut: it lives outside the
+    // clipped row so a surface stays reachable at any window size.
+    expect(alloc({ shellWidth: 2000 }).centerWidth).toBe(2000 - SIDEBAR - RAIL_RESERVE - PANEL);
+    expect(alloc({ shellWidth: 2000, panelVisible: false }).centerWidth).toBe(
+      2000 - SIDEBAR - RAIL_RESERVE
+    );
   });
 
   it('gives chat the whole center row when no file is open', () => {
     const result = alloc({ shellWidth: 2000 });
     expect(result.chatWidth).toBe(result.centerWidth);
     expect(result.editorWidth).toBe(0);
-    expect(result.centerWidth).toBe(2000 - SIDEBAR - PANEL);
   });
 
   it('splits the center row by the ratio when a file is open', () => {
     const result = alloc({ shellWidth: 2000, editorOpen: true, editorRatio: 0.5 });
     expect(result.chatWidth + result.editorWidth).toBe(result.centerWidth);
-    expect(result.chatWidth).toBe(Math.round(result.centerWidth * 0.5));
   });
 
   it('gives the row to the editor alone when the user hid chat', () => {
@@ -272,101 +280,99 @@ describe('resolveShellAllocation — sidebar and chat are satisfied first', () =
     expect(result.chatWidth).toBe(0);
     expect(result.editorWidth).toBe(result.centerWidth);
   });
-
-  it('reserves the rail when it is showing — it is the only way back', () => {
-    const withRail = alloc({ shellWidth: 2000, panelVisible: false, railVisible: true });
-    expect(withRail.centerWidth).toBe(2000 - SIDEBAR - RAIL_RESERVE);
-    expect(withRail.panelWidth).toBe(0);
-  });
 });
 
-describe('resolveShellAllocation — the right edge clips, nothing collapses', () => {
-  it('reports no clipping while everything fits', () => {
-    const result = alloc({ shellWidth: 2000 });
-    expect(result.clipped).toBe(false);
-    expect(result.clippedWidth).toBe(0);
+describe('resolveShellAllocation — the panel compresses, it is never cut', () => {
+  it('honours the preferred width whenever the room exists', () => {
+    const result = alloc({ shellWidth: 2000, panelWidth: 700 });
+    expect(result.panelWidth).toBe(700);
+    expect(result.panelCompressed).toBe(false);
+    expect(result.panelSuppressed).toBe(false);
   });
 
-  it('keeps the panel at the width the user set and clips the overflow', () => {
-    // 900 - 280 sidebar = 620 for chat + panel, but chat`s floor is 400 and
-    // the panel wants 380: 160px has to go off the edge.
-    const result = alloc({ shellWidth: 900 });
-    expect(result.panelWidth).toBe(PANEL);
+  it('compresses to exactly the room left after chat`s floor', () => {
+    // 1000 - 280 sidebar - 44 rail - 400 chat = 276 for a panel that wants 380.
+    const result = alloc({ shellWidth: 1000 });
+    expect(result.panelWidth).toBe(roomFor(1000));
+    expect(result.panelCompressed).toBe(true);
     expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
-    expect(result.clippedWidth).toBe(CHAT_MIN_WIDTH + PANEL - (900 - SIDEBAR));
-    expect(result.clipped).toBe(true);
   });
 
-  it('reveals the hidden part pixel for pixel as the window widens', () => {
-    // 「将 UI 拖长后根据拖得长度显示被遮盖隐藏的内容」— one revealed pixel per
-    // gained pixel, with no step, no threshold and no hysteresis anywhere.
-    let previous = alloc({ shellWidth: 800 }).clippedWidth;
-    expect(previous).toBe(CHAT_MIN_WIDTH + PANEL - (800 - SIDEBAR));
-    for (const shellWidth of [850, 900, 950, 1000]) {
-      const next = alloc({ shellWidth }).clippedWidth;
-      expect(next).toBe(previous - 50);
-      previous = next;
-    }
-    // 280 + 400 + 380 = 1060 is where the last clipped pixel disappears — a
-    // CONSEQUENCE of the three widths, not a threshold anyone wrote down.
-    expect(alloc({ shellWidth: 1060 }).clipped).toBe(false);
-    expect(alloc({ shellWidth: 1059 }).clippedWidth).toBe(1);
-  });
-
-  it('never hides a column to avoid clipping — the columns are all still there', () => {
-    for (const shellWidth of [2000, 1200, 900, 700, 500, 300, 120]) {
-      for (const editorOpen of [false, true]) {
-        const result = alloc({ shellWidth, editorOpen });
-        expect(result.sidebarWidth).toBeGreaterThan(0);
-        expect(result.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
-        expect(result.panelWidth).toBe(PANEL);
-        if (editorOpen) {
-          expect(result.editorWidth).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
-        }
-      }
+  it('never reports overflow while the panel still has room to give', () => {
+    // The round-11 failure mode: a panel with a slice cut off its right side.
+    for (const shellWidth of [2000, 1400, 1200, 1000, 900, 800]) {
+      expect(alloc({ shellWidth }).overflowWidth).toBe(0);
     }
   });
 
-  it('clips the editor too once the panel alone cannot absorb the shortfall', () => {
-    // 700 - 280 = 420 for chat(400) + editor(520) + panel(380): the panel is
-    // entirely off the edge and the editor is partly off it as well.
-    const result = alloc({ shellWidth: 700, editorOpen: true });
+  it('yields the last sliver rather than showing a stub of chrome', () => {
+    // Just under the useful floor, the panel takes nothing at all.
+    const shellWidth = SIDEBAR + RAIL_RESERVE + CHAT_MIN_WIDTH + PANEL_MIN_USEFUL_WIDTH - 1;
+    const result = alloc({ shellWidth });
+    expect(result.panelWidth).toBe(0);
+    expect(result.panelSuppressed).toBe(true);
+    // One more pixel and it is worth showing again.
+    const wider = alloc({ shellWidth: shellWidth + 1 });
+    expect(wider.panelWidth).toBe(PANEL_MIN_USEFUL_WIDTH);
+    expect(wider.panelSuppressed).toBe(false);
+  });
+
+  it('a suppressed panel is still the user`s active surface, not a closed one', () => {
+    // Round-11's rule survives: only the user closes a panel. Zero width is a
+    // width outcome and `resolveShellChrome` is untouched by it.
+    const result = alloc({ shellWidth: 600 });
+    expect(result.panelWidth).toBe(0);
+    expect(result.panelSuppressed).toBe(true);
+    expect(
+      resolveShellChrome({ sidebarUserCollapsed: false, panelOpen: true, manualChat: null })
+        .panelVisible
+    ).toBe(true);
+  });
+
+  it('restores the panel linearly as the window grows back', () => {
+    // 「将 UI 拖长后根据拖得长度显示被遮盖隐藏的内容」— one pixel of panel per
+    // pixel of window, with no step and no hysteresis, up to the preference.
+    const base = SIDEBAR + RAIL_RESERVE + CHAT_MIN_WIDTH;
+    for (const room of [PANEL_MIN_USEFUL_WIDTH, 200, 250, 300, 379]) {
+      expect(alloc({ shellWidth: base + room }).panelWidth).toBe(room);
+    }
+    // …and stops growing once the user`s preference is met.
+    expect(alloc({ shellWidth: base + PANEL }).panelWidth).toBe(PANEL);
+    expect(alloc({ shellWidth: base + PANEL + 500 }).panelWidth).toBe(PANEL);
+  });
+
+  it('only chat and the editor can ever overflow, and only past their floors', () => {
+    // 500 - 280 - 44 = 176 for a 400px chat floor: the panel is long gone, and
+    // what is left over is chat`s own overflow inside the clipped row.
+    const result = alloc({ shellWidth: 500 });
+    expect(result.panelWidth).toBe(0);
     expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
-    expect(result.editorWidth).toBe(EDITOR_MIN_WIDTH);
-    expect(result.clippedWidth).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH + PANEL - 420);
+    expect(result.overflowWidth).toBe(CHAT_MIN_WIDTH - (500 - SIDEBAR - RAIL_RESERVE));
   });
 
-  it('widening the panel by drag never removes anything, it only clips more', () => {
-    // The round-10 ② property, restated for the new model: the failure mode it
-    // fixed (drag → panel disappears) is now structurally impossible.
-    let previous = alloc({ shellWidth: 1200, panelWidth: PANEL });
-    for (const panelWidth of [500, 800, 1100, 1400]) {
-      const next = alloc({ shellWidth: 1200, panelWidth });
-      expect(next.panelWidth).toBe(panelWidth);
-      expect(next.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
-      expect(next.clippedWidth).toBeGreaterThanOrEqual(previous.clippedWidth);
-      previous = next;
+  it('widening the panel by drag only ever compresses it back, never hides it', () => {
+    for (const panelWidth of [PANEL, 500, 800, 1400]) {
+      const result = alloc({ shellWidth: 1200, panelWidth });
+      expect(result.panelWidth).toBeLessThanOrEqual(panelWidth);
+      expect(result.panelWidth).toBeGreaterThan(0);
+      expect(result.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
     }
   });
 
-  it('grants everything as requested before the first measurement', () => {
-    // A first paint that guessed would flash a cut-off layout for one frame.
+  it('grants every preference before the first measurement', () => {
     const result = alloc({ shellWidth: null, editorOpen: true });
-    expect(result.clipped).toBe(false);
-    expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
-    expect(result.editorWidth).toBe(EDITOR_MIN_WIDTH);
     expect(result.panelWidth).toBe(PANEL);
+    expect(result.panelCompressed).toBe(false);
+    expect(result.overflowWidth).toBe(0);
   });
 });
 
-describe('resolveShellAllocation — the round-11 report, end to end', () => {
+describe('resolveShellAllocation — the round-11 report still holds', () => {
   /**
-   * The exact symptom that triggered the ruling: sidebar collapsed, a file
-   * open so chat and the editor share the center row, and clicking "expand
-   * sidebar" did nothing — the user had to hide chat by hand to free the room
-   * first. Under the ladder the click WAS registered and then reverted; under
-   * round-10`s ChromeIntent it was still reverted, because the intent fix only
-   * ever mirrored the panel and the editor was never in the yield order.
+   * Regression guard for the symptom that produced round-11's ruling: sidebar
+   * collapsed, a file open, chat showing, and expanding the sidebar did
+   * nothing. Round-12 changed how the shortfall is ABSORBED (compress, was
+   * clip); it must not have brought the old behaviour back.
    */
   const NARROW = 1100;
   const collapsed = {
@@ -375,61 +381,31 @@ describe('resolveShellAllocation — the round-11 report, end to end', () => {
     chatVisible: true,
     editorOpen: true,
     panelVisible: false,
-    railVisible: true,
   } as const;
 
   it('expanding the sidebar takes effect and STAYS, with chat still shown', () => {
     const before = alloc(collapsed);
     const after = alloc({ ...collapsed, sidebarCollapsed: false });
-
-    // The whole bug: this used to come back collapsed again.
     expect(after.sidebarWidth).toBe(SIDEBAR);
     expect(after.sidebarWidth).toBeGreaterThan(before.sidebarWidth);
-    // …and chat is not sacrificed to pay for it.
     expect(after.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
-  });
-
-  it('the right edge absorbs the cost — nothing is hidden to make room', () => {
-    const after = alloc({ ...collapsed, sidebarCollapsed: false });
-    const chrome = resolveShellChrome({
-      sidebarUserCollapsed: false,
-      panelOpen: false,
-      manualChat: null,
-    });
-    expect(chrome.sidebarCollapsed).toBe(false);
-    expect(chrome.chatVisible).toBe(true);
-
-    // The 232px the sidebar just claimed are paid for out of the right edge:
-    // first the slack the row happened to have, then real clipping. Nothing
-    // is hidden and nothing is squeezed below a floor to fund it.
-    const before = alloc(collapsed);
-    expect(before.clipped).toBe(false);
-    const rowAfter = NARROW - SIDEBAR - RAIL_RESERVE;
-    expect(after.clippedWidth).toBe(CHAT_MIN_WIDTH + EDITOR_MIN_WIDTH - rowAfter);
-    expect(after.clipped).toBe(true);
-    // Conservation: every pixel the sidebar gained is accounted for as either
-    // room the row already had spare, or room now past the edge.
-    expect(before.centerWidth - after.centerWidth + after.clippedWidth).toBe(
-      SIDEBAR - SIDEBAR_COLLAPSED_RESERVE
-    );
+    expect(after.editorWidth).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
   });
 
   it('the user can still collapse it again — control is never taken away', () => {
-    const reCollapsed = alloc({ ...collapsed, sidebarCollapsed: true });
-    expect(reCollapsed.sidebarWidth).toBe(SIDEBAR_COLLAPSED_RESERVE);
+    expect(alloc({ ...collapsed, sidebarCollapsed: true }).sidebarWidth).toBe(
+      SIDEBAR_COLLAPSED_RESERVE
+    );
   });
 
-  it('holds for the panel-open variant of the same scene', () => {
-    const after = alloc({
-      ...collapsed,
-      sidebarCollapsed: false,
-      panelVisible: true,
-      railVisible: false,
-    });
+  it('holds for the panel-open variant, which now compresses the panel', () => {
+    const after = alloc({ ...collapsed, sidebarCollapsed: false, panelVisible: true });
     expect(after.sidebarWidth).toBe(SIDEBAR);
     expect(after.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
-    expect(after.panelWidth).toBe(PANEL);
-    expect(after.clipped).toBe(true);
+    // 1100 - 280 - 44 - 920 floors = -144: no room, so the panel yields it all
+    // rather than cutting into chat or the editor.
+    expect(after.panelWidth).toBe(0);
+    expect(after.panelSuppressed).toBe(true);
   });
 });
 

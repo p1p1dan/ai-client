@@ -18,6 +18,8 @@ interface ShellResizeHandleProps {
   onCommit: (width: number) => void;
   onResizingChange?: (resizing: boolean) => void;
   disabled?: boolean;
+  /** Round-12: paint one drag frame (see `usePanelDragResize`). */
+  onDragFrame?: (width: number) => void;
 }
 
 export function ShellResizeHandle({
@@ -29,6 +31,7 @@ export function ShellResizeHandle({
   onCommit,
   onResizingChange,
   disabled,
+  onDragFrame,
 }: ShellResizeHandleProps) {
   const { resizing, handleProps } = usePanelDragResize({
     side,
@@ -38,6 +41,7 @@ export function ShellResizeHandle({
     onCommit,
     onResizingChange,
     disabled,
+    onDragFrame,
   });
 
   return (

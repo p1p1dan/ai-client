@@ -7,7 +7,6 @@ import {
   type DeriveMountedSurfaceIdsInput,
   defaultShellLayout,
   deriveMountedSurfaceIds,
-  deriveRailVisible,
   initialShellSurfaceState,
   nextReadingWidthMode,
   READING_COLUMN_CLASS,
@@ -424,27 +423,6 @@ describe('resolveContentColumnWidth', () => {
       widths.push(content);
     }
     expect(widths).toEqual([380, 720, 720, 720, 720]);
-  });
-});
-
-// ── deriveRailVisible (T-32 / D27) ──────────────────────────────────────
-
-describe('deriveRailVisible', () => {
-  it('hides the rail while the panel is visible (A08「展开 = 右缘无图标」)', () => {
-    expect(deriveRailVisible({ panelVisible: true })).toBe(false);
-  });
-
-  it('shows the rail while the panel is collapsed — it is the collapsed-state switcher', () => {
-    expect(deriveRailVisible({ panelVisible: false })).toBe(true);
-  });
-
-  it('is the exact complement, so the L0 threshold can exclude the 44px rail', () => {
-    // a08:1421 computes L0 as 280+400+520+380 and states outright that the
-    // expanded state has no rail. If these two ever both became true, the
-    // ladder S4 builds on this would be off by RAIL_WIDTH.
-    for (const panelVisible of [true, false]) {
-      expect(deriveRailVisible({ panelVisible })).toBe(!panelVisible);
-    }
   });
 });
 
