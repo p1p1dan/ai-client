@@ -16,16 +16,26 @@
 **Out of scope（本阶段）**：多 agent **协同**工作（用户 2026-08-04 明示「先放一放」）；
 Claude 线改走 ACP（已否，证据链见 [topics/acp-decision.md](./topics/acp-decision.md)）。
 
-## 排期（用户 2026-08-05 裁定，同日修订）
+## 排期（用户 2026-08-06 解冻，覆盖 2026-08-05 的后置裁定）
 
-**本 plan 后置。** 原定与主线并行、新线先跑 ACP+Codex spike；同日改判为
-**先把现有 Claude 客户端任务（主线）大致完成，再考虑 codex 支线**。
-调研结论已全部落库，启动时从 [roadmap S1](./roadmap.md) 直接接续即可。
+**本 plan 已解冻，进入执行。** 用户 2026-08-06 原话「multi-agent 支线解冻 开干」。
+
+裁定沿革（三次，后者覆盖前者）：
+
+| 日期 | 裁定 | 状态 |
+|---|---|---|
+| 2026-08-05 | 与主线并行，新线先跑 ACP+Codex spike | 被同日改判覆盖 |
+| 2026-08-05（同日修订） | **后置**——先把主线 Claude 客户端做到大致完成，再考虑 codex 支线 | **已于 2026-08-06 解除** |
+| **2026-08-06** | **解冻开干**，从 [roadmap S1](./roadmap.md) 接续 | **现行** |
+
+**解冻前提已满足**：后置裁定挂的条件是「主线大致收口」——主线开发线五任务
+（T-32 / T-16 / T-33 / T-35 / T-34）已于 2026-08-06 第十二轮点验全部转 Done，开发线收口。
 
 ## 与主线的关系
 
-主线 [openchamber-chat-refactor](../openchamber-chat-refactor/README.md) 是壳与观感重构，正在收口。
-本 plan **后置于主线**（同日改判，见上）：主线大致收口（T-32 → T-16 → 点验债）后本 plan 才启动。
+主线 [openchamber-chat-refactor](../openchamber-chat-refactor/README.md) 是壳与观感重构，开发线已收口
+（残留为真机类点验债 [T-10 清单](../../../plans/t10-packaged-gui-checklist.md) 与 T-04 网关阻塞等并行项）。
+本 plan **自 2026-08-06 起与主线残留项并行推进**，不再互为前置。
 
 两者的接缝在三处，动工前须回主线核对，不得单方面改：
 `stores/chatSessions.ts`（红线）· `src/agent-host` 协议 · Composer 目标栏与侧栏会话行。
@@ -46,7 +56,7 @@ Claude 线改走 ACP（已否，证据链见 [topics/acp-decision.md](./topics/a
 2. 本 plan 的 `topics/` 与 `decisions/`（尚未建，首个决策落地时建）
 3. [roadmap.md](./roadmap.md) — 当前状态
 
-**尚无已拍板决策**：本 plan 现处 Planning，全部结论均为「事实认定」或「待判据」，
+**尚无已拍板决策**：本 plan 现处 In Progress（S1 spike），全部结论均为「事实认定」或「待判据」，
 唯一已定的是 Claude 线不走 ACP（依据见 topic，尚未升格为编号决策）。
 
 ## 维护惯例

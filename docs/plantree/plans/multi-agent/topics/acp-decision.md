@@ -43,16 +43,39 @@ codeg（Rust）  ←--ACP--→  claude-agent-acp（node）  ←--Claude Agent SD
 
 **结论：Claude 这条线往 ACP 上挪是净损失。** 本结论待升格为编号决策。
 
-## 唯一待决问题
+## ~~唯一待决问题~~ → **2026-08-06 已裁定：不接 ACP，直连 `codex app-server`**
 
-**接 Codex 的时候，让 ACP 帮我们省掉「解析 Codex 输出」，还是自己直连解析？**
+原问题：**接 Codex 的时候，让 ACP 帮我们省掉「解析 Codex 输出」，还是自己直连解析？**
+判据只有一个 —— **三个月内打不打算加第 3 个 agent**（打算 → 接 ACP；不打算 → 直连）。
 
-判据只有一个 —— **三个月内打不打算加第 3 个 agent**（Gemini / Cursor / OpenCode / …）：
+**用户 2026-08-06 答复「不打算，就 Claude + Codex 两个」**，加上同日 S1 spike 的实测数据，
+[open-questions #1](../open-questions.md) 已关闭。完整推导见
+[S1 spike 报告](../../../../plans/2026-08-06-s1-acp-codex-spike-report.md)。
 
-- 打算加 → 接 ACP，第一次多花的钱后面摊回来
-- 不打算 → 不接，直连 Codex 更省事
+### 本 topic 被 S1 实测校正 / 坐实的三处
 
-→ 见 [open-questions #1](../open-questions.md)。用户 2026-08-05 指示先做可行性 spike，用数据代替辩论。
+| 本文原有的说法 | S1 实测 | 判定 |
+|---|---|---|
+| 「写第一个解析器的成本 ≈ 写 ACP 客户端的成本，所以对第 1、2 个 agent 不省钱」 | 两条路的 JSON-RPC 客户端都是 **~120 行**且形状几乎相同（同为按行分隔 JSON-RPC 2.0 over stdio）；归一化器净新增同为 **300–420 行** | ✅ **坐实** |
+| 上表「接 ACP：第 3 个起加一个 agent ≈ 注册一行命令」 | **不成立**。codeg 实证：`binary_cache.rs` 902 行迷你包管理器、`preflight.rs` 766 行 ≥9 类体检、Hermes 锁 Python 3.13、Grok 镜像滞后 + flag 顺序、Cursor symlink 与 Grok 同名 CLI 互相覆盖、全仓 **83 处 workaround 关键词命中** | ⚠️ **摊销模型被削弱**：映射侧每 agent 省 360–520 行，但**安装/preflight 侧的边际成本可能吃掉它** |
+| 「ACP 省的是解析器」 | codeg **接了 ACP 仍要写 508 行** `emit_conversation_update`（`connection.rs:8026`）装 13 个分支，其中单一 ToolCall 分支 145 行 / ≥7 处逐 agent 特判 | ❌ **「接 ACP 就不用写解析器」是假命题** |
+
+### S1 新增的、本文原先没有的三条
+
+1. **ACP 对 Codex 没有提供抽象，只提供了一层转发。** 审批的关键数据（reason / command /
+   commandActions / proposedExecpolicyAmendment / availableDecisions）在 ACP 里落在
+   **无 schema 的 `_meta.codex`**；直连侧同一份数据是**有 JSON Schema、有生成 TS 类型的一等契约**。[实测]
+2. **ACP 是有损投影**：codex-acp 用自己的 3 档 `AgentMode` **完全覆盖 `~/.codex` 的 approval/sandbox 配置**，
+   丢掉 `applyNetworkPolicyAmendment`、`granular`、`approvalsReviewer`。[实测]
+3. **直连的契约漂移可机器检测**：`codex app-server generate-json-schema` / `generate-ts` 产出
+   47 schema + 300 v2 类型 + 99 TS 绑定 → 可做 CI 快照 diff。
+   原推导里「直连要自己扛契约漂移」这条成本，**实测后降级为可自动化的成本**。[实测]
+
+### 直连红利表的一处扩展
+
+本文原有的「直连红利」表（子 agent 实况 / 网络重试）在 **Codex 侧同样成立**：
+直连 `thread/tokenUsage/updated` 给 **total + last 各 6 字段 + modelContextWindow**，
+ACP `usage_update` 只给 **`{used, size}`** —— 同一个 `usage.updated` 事件，**填充密度差 6 倍**。[实测]
 
 ## 与「三条能力缺失」的关系：无关
 
