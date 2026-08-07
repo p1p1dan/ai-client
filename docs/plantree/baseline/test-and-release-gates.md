@@ -2,7 +2,20 @@
 
 ## 提交门禁（DoD，执行计划 §4）
 
-- **三绿**：`pnpm typecheck`（**不覆盖 src/agent-host/**，tsconfig 排除）/ `pnpm lint`（biome，**0 诊断基线**自 C-09 `ce5a577`；`.gitattributes` 锁代码文件 eol=lf）/ `pnpm test`（vitest；2026-07-24 时点 38 文件 344 例）。
+- **四绿**（2026-08-06 起，原为三绿）：
+  1. `pnpm typecheck`（根 tsconfig，**排除 src/agent-host/**）
+  2. `pnpm typecheck:agent-host`（`-p src/agent-host/tsconfig.json`，266 文件）——**S3 切片 1 新增的第四道门**。
+     补的正是上一行括号里那个盲区：根门对 `src/agent-host/**` 实测编译 **0 个文件**，
+     单独跑立刻暴出 8 个真错，`git stash` 退回 HEAD 复验为 0（即为本轮引入）。
+     该盲区此前只靠「Host 门禁」的单测侧面兜底，类型层长期无人看守。
+  3. `pnpm lint`（biome，**0 诊断基线**自 C-09 `ce5a577`；`.gitattributes` 锁代码文件 eol=lf）
+  4. `pnpm test`（vitest；**2026-08-06 时点 133 文件 2479 例，0 红**）
+
+  > **口径纠正（2026-08-06）**：2026-08-05 之前若干条台账记「三绿」，但 HEAD 上实测**恒有 3 例红**
+  > （`ShellDetector` ×2 + `CliDetector` ×1）。它们并非 flaky，也不是「在 Linux 上无意义」——
+  > 而是**从未模拟过 Windows**，依赖宿主真的是 Windows，在别的平台上恒红。
+  > 已于本日修复（测试侧加 `process.platform` 桩，抢在动态 import 之前；产品代码零改动），
+  > 四门首次同时为真。**教训**：「三绿」写进台账前必须是当次实跑输出，不得沿抄上一行。
 - 提交规范 Conventional Commits 中文描述（分类表见 `CLAUDE.md`）。
 - 加密机相关项**永不**在开发机标注通过。
 

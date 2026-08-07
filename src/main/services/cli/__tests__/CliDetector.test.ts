@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const spawnMock = vi.fn();
 const execInPtyMock = vi.fn();
@@ -50,8 +50,31 @@ function createSpawnProcess({
   return child;
 }
 
+/**
+ * `CliDetector.ts:6` freezes `process.platform` into a module-scope
+ * `const isWindows` at import time, and the cmd.exe fallback below only exists
+ * on the Windows branch. The test never simulated Windows — it relied on the
+ * HOST being Windows and went red everywhere else. Stubbing the platform before
+ * the dynamic import (which already runs after `vi.resetModules()`) makes the
+ * Windows branch actually testable on any host; no production change needed.
+ */
+const ORIGINAL_PLATFORM = Object.getOwnPropertyDescriptor(process, 'platform');
+
+function setPlatform(value: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { configurable: true, value });
+}
+
 describe('CliDetector', () => {
+  beforeEach(() => {
+    setPlatform('win32');
+    vi.resetModules();
+  });
+
   afterEach(() => {
+    // Restore the original descriptor, not just the value — see ShellDetector.
+    if (ORIGINAL_PLATFORM) {
+      Object.defineProperty(process, 'platform', ORIGINAL_PLATFORM);
+    }
     spawnMock.mockReset();
     execInPtyMock.mockReset();
     getEnvForCommandMock.mockClear();

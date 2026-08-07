@@ -567,6 +567,7 @@ D25 的四档 + 一个例外：
 | Rail 变更圆点 | 6px | `h-1.5 w-1.5` + `bg-info`（**仅 `git` surface**） |
 | Sidebar（左列） | 默认 280px，可拖 280–500 | `SIDEBAR_DEFAULT_WIDTH` / `SIDEBAR_MIN_WIDTH` / `SIDEBAR_MAX_WIDTH` |
 | Sidebar 折叠态 | 48px | `SIDEBAR_COLLAPSED_WIDTH` |
+| Sidebar 会话行宽度预算 | 默认宽下缩进行仅 **236px**（280 − p-2 16 − pl-3 12 − px-2 16）；让位顺序 **分支 chip → 相对时间 → 永不动标题** | 标题 `min-w-20 flex-1`（下限）· agent chip `shrink-0`（闭集标签，不截断）· 分支 chip `min-w-0 max-w-24 shrink`（唯一让位者）· 时间/操作共用 `w-10` 定宽盒 |
 | ContextPanel（右列） | min 380 / max 1400，默认按 surface 取可用宽度比例 | `CONTEXT_PANEL_MIN_WIDTH` / `CONTEXT_PANEL_MAX_WIDTH` |
 | ContextPanel 未测量兜底 | 600px | `CONTEXT_PANEL_FALLBACK_WIDTH` |
 | ContextPanel 收起 | 宽 0（常驻挂载 + `inert`） | — |
@@ -725,7 +726,7 @@ Tailwind 的 `theme.css` 把 `--default-font-family` 定义为 `--theme(--font-s
 - **`--font-mono` 里也带 CJK 段**，为的是代码块 / 工具输出里出现中文注释或中文路径时不落到随机字体。
 
 **验收测点（三处，沿用 open-q #10 原定）**：① 阅读栏中文段落 + 中英混排；
-② 侧栏中文会话标题 + 分支 chip + 相对时间同行 truncate；③ 工具行中文动词 + 拉丁路径同行。
+② 侧栏中文会话标题 + agent chip + 分支 chip + 相对时间同行 truncate（S2 b 起该行是四件套，宽度预算见「新壳布局档位」）；③ 工具行中文动词 + 拉丁路径同行。
 三测点各出「现状 mono / D25 split / 参照实现」三图并排，视觉凭证见 `docs/design/a09-font-domain-baseline.html`。
 
 ## 根字号结论（T-21 已结）

@@ -582,7 +582,11 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
         // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
         // (0,1,0), so pointing at the active row would repaint it as an ordinary
         // hovered row and erase the selection.
-        'group flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-ui',
+        // overflow-hidden is load-bearing, not cosmetic: `min-w-20` on the title
+        // makes the row's minimum content size exceed the track at the default
+        // sidebar width, and without it the trailing items would spill past the
+        // rounded edge instead of the branch chip absorbing the deficit.
+        'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-ui',
         active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
       )}
       onClick={onSelect}
@@ -612,7 +616,14 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
       {row.busy && (
         <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running" />
       )}
-      <span className="min-w-0 flex-1 truncate">{row.title}</span>
+      {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
+          the row's identity and the only user-authored text on it, so it gets a
+          floor and everything else yields to it. Without the floor `flex-1
+          min-w-0` shrinks to whatever is left, and at SIDEBAR_DEFAULT_WIDTH the
+          leftovers are ~16px — a bare ellipsis. Budget for an indented row at
+          the 280px default: 280 - 16 (p-2) - 12 (pl-3) - 16 (px-2) = 236px, and
+          the agent chip alone claims ~63 of it. */}
+      <span className="min-w-20 flex-1 truncate">{row.title}</span>
       {row.failed && (
         <Badge variant="destructive" size="sm" className="shrink-0">
           failed
@@ -620,23 +631,43 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
       )}
       {/* S2 (b/C14): agent before branch — which runtime answers is the more
           load-bearing fact, and the chip budget for this row is two. Same
-          Badge shape as the branch chip so the pair reads as one rank. */}
-      <Badge variant="outline" size="sm" className="max-w-28 shrink-0" title={row.agentChip.label}>
-        <span className="min-w-0 truncate">{row.agentChip.label}</span>
+          Badge shape as the branch chip so the pair reads as one rank.
+          shrink-0 with no max-w: the label comes from AGENT_DISPLAY_NAMES, a
+          closed two-value vocabulary, so it has a known ceiling and truncating
+          it would only ever produce a worse rendering of a fact that fits. */}
+      <Badge variant="outline" size="sm" className="shrink-0" title={row.agentChip.label}>
+        {row.agentChip.label}
       </Badge>
       {row.chip && (
-        <Badge variant="outline" size="sm" className="max-w-28 shrink-0" title={row.chip.label}>
+        // The branch chip is the row's sole yielder. It is the only trailing
+        // item whose text is unbounded user data, and it is the only one that
+        // is recoverable elsewhere (row `title` tooltip + the Composer target
+        // bar, T-27), so when the row runs out of width this is what gives —
+        // never the title. `shrink` + `min-w-0` is what lets flexbox route the
+        // deficit here; dropping either sends it back to the title.
+        <Badge
+          variant="outline"
+          size="sm"
+          className="min-w-0 max-w-24 shrink"
+          title={row.chip.label}
+        >
+          {/* Inner span, not `truncate` on the Badge: Badge is `inline-flex`,
+              and text-overflow does not ellipsize the anonymous flex item that
+              bare text becomes — it needs a real block child to clip. */}
           <span className="min-w-0 truncate">{row.chip.label}</span>
         </Badge>
       )}
-      {/* Age and actions swap on hover so row width never jumps; the row has
+      {/* Age and actions swap on hover; the shared `w-10` box is what actually
+          keeps the row from jumping — the two are different natural widths (a
+          relative age is ~21px, the two icon buttons are 40px), so before the
+          fixed box the swap silently re-flowed every other item. The row has
           tabIndex=0, so focus-within also reveals the actions and keeps
           Archive/Close reachable by keyboard (display:none alone would drop
           them from the tab order). */}
-      <span className="shrink-0 text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
+      <span className="w-10 shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
         {formatRelativeAge(row.updatedAt, now)}
       </span>
-      <div className="hidden shrink-0 items-center group-hover:flex group-focus-within:flex">
+      <div className="hidden w-10 shrink-0 items-center justify-end group-hover:flex group-focus-within:flex">
         <Button
           variant="ghost"
           size="icon-xs"
