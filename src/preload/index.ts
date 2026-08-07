@@ -80,6 +80,7 @@ import type {
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
+import type { AgentWireName } from '@shared/types/agentWire';
 import type { HostReadyEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
@@ -1356,6 +1357,8 @@ const electronAPI = {
       model?: string;
       /** T-20 session default reasoning effort. */
       effort?: SessionEffortLevel;
+      /** S2 (b): which runtime to start; read off the session via `sessionAgent`. */
+      agent?: AgentWireName;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
     /**
@@ -1366,6 +1369,12 @@ const electronAPI = {
       sessionId: string;
       workspacePath: string;
       model?: string;
+      /**
+       * S2 (b): the binding, for a session that has never started a Host and
+       * so has no `session.created` to report it. Absent means "don't touch
+       * the row's agent", not "Claude Code".
+       */
+      agent?: AgentWireName;
     }): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_REGISTER_SESSION, payload),
     resumeSession: (payload: {
       sessionId: string;
@@ -1374,6 +1383,8 @@ const electronAPI = {
       model?: string;
       /** T-20 session default reasoning effort. */
       effort?: SessionEffortLevel;
+      /** S2 (b): which runtime resumes it; pairs with the opaque `runtimeIdentity`. */
+      agent?: AgentWireName;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
     send: (payload: {

@@ -1,0 +1,45 @@
+{
+  // Type-check gate for the Agent Host.
+  //
+  // WHY A SEPARATE CONFIG: the root `tsconfig.json` excludes `src/agent-host/**`
+  // (`pnpm typecheck` reports 0 files from this directory), because the Host runs
+  // under Node's `--experimental-strip-types` and therefore imports its own
+  // modules with an explicit `.ts` suffix, which the root config rejects. The
+  // result was that the process holding the runtime adapters — the half S2 slice 2
+  // grows a brand-new `codexRuntime` into — had no type checking at all. Run via
+  // `pnpm typecheck:agent-host`; both gates are required, neither covers the other.
+  //
+  // Kept as a sibling of the root config rather than a project reference: this
+  // directory is a separate npm package (its own `package.json` / `node_modules`
+  // pinning the Agent SDK), and `noEmit` + `allowImportingTsExtensions` are exactly
+  // the settings the root config cannot adopt without breaking the bundled build.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // Node strips types at runtime, so Host-internal imports carry `.ts`.
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    // No DOM: this is a Node process. A stray `window`/`document` reference must
+    // fail here rather than survive into the packaged Host.
+    "lib": ["ESNext"],
+    "types": ["node"]
+  },
+  // `../shared/**` is deliberately NOT listed: the Host's relative
+  // `../shared/types/*.ts` imports pull in exactly the shared modules it uses, and
+  // the root gate already checks all of `src/shared` (where the `@shared/*` alias
+  // those files use is defined — this config does not declare it).
+  "include": ["**/*.ts"],
+  // `spikes/` are throwaway probe scripts, never bundled and never imported by the
+  // Host. Two of them (`agent-sdk-spike.ts`, `c14-watchdog-unit.ts`) carry type
+  // errors that predate this gate: both hand-cast the Agent SDK's module shape to
+  // a local structural stand-in, which no longer overlaps the SDK's real types.
+  // Excluded rather than fixed so that adding the gate stays a no-op for existing
+  // code; fixing them is its own change.
+  "exclude": ["node_modules", "spikes"]
+}

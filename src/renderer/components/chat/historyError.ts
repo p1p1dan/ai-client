@@ -58,6 +58,16 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     guidance: '读取或解析历史文件时出错，下面的历史可能缺失或不完整。',
     retryable: true,
   },
+  // S2 (d): the session's agent has no history reader in this build. Not a
+  // failure — nothing is broken and nothing is lost, so it reads as a warning
+  // and offers no retry. Unreachable until `toCode()` learns the code (slice
+  // 5a); the entry exists now because `CODE_COPY` is exhaustive over the union.
+  history_unsupported: {
+    severity: 'warning',
+    title: 'History unavailable for this agent',
+    guidance: '当前版本还读不到该 agent 的历史记录，以下只有本次会话的新消息；记录仍在磁盘上。',
+    retryable: false,
+  },
   unknown: {
     severity: 'error',
     title: 'Failed to read history',

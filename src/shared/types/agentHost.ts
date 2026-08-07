@@ -3,6 +3,17 @@
  * See docs/plans/2026-07-23-openchamber-chat-refactor-ard.md §5.3
  */
 
+import type { AgentWireName } from './agentWire';
+import type { PermissionDecisionId } from './runtimeEvents';
+
+/**
+ * Stays 1. Multi-agent support (S2) is additive only — optional fields, new
+ * error-code VALUES, no new command or event types — so a version bump would
+ * buy nothing and cost the `protocol_mismatch` signal its meaning. A new Host
+ * talking to an old renderer just carries keys nobody reads; an old Host
+ * talking to a new renderer is handled by `capabilities.agents`, not by
+ * refusing the handshake.
+ */
 export const AGENT_HOST_PROTOCOL_VERSION = 1 as const;
 
 export type AgentHostCommandType =
@@ -55,6 +66,12 @@ export interface SessionCreateCommand extends AgentHostCommandBase {
     model?: string;
     /** Session default effort; per-send effort overrides it for one turn. */
     effort?: SessionEffortLevel;
+    /**
+     * S2 (b/d): which runtime to start. Absent = Claude Code. The Host
+     * dispatches runtime AND history reader off this one key, in one switch —
+     * two independent lookups would be two places to disagree.
+     */
+    agent?: AgentWireName;
   };
 }
 
@@ -62,9 +79,15 @@ export interface SessionResumeCommand extends AgentHostCommandBase {
   type: 'session.resume';
   payload: {
     sessionId: string;
-    /** Claude runtime / resume identity (not AiClient sessionId). */
+    /**
+     * The agent's own resume handle (not AiClient sessionId): a Claude Code
+     * session id, a Codex threadId, whatever the runtime issued. Opaque —
+     * only interpretable together with `agent`, never dispatched on by shape.
+     */
     runtimeIdentity: string;
     workspacePath: string;
+    /** S2 (b/d): which runtime resumes it. Absent = Claude Code. */
+    agent?: AgentWireName;
     /**
      * Must be re-sent on resume: cli.js is re-spawned per turn, and a resumed
      * session without an explicit model silently falls back to the CLI default
@@ -120,13 +143,21 @@ export interface SessionCloseCommand extends AgentHostCommandBase {
 }
 
 /**
- * List historical CC sessions for a workspace from ~/.claude/projects/
- * (includes CLI-created sessions unknown to the app index).
+ * List historical sessions for a workspace (includes CLI-created sessions
+ * unknown to the app index — Claude Code's live in ~/.claude/projects/).
  * Host replies with a session.historyListed event correlated by requestId.
  */
 export interface SessionListHistoryCommand extends AgentHostCommandBase {
   type: 'session.listHistory';
-  payload: { workspacePath: string };
+  payload: {
+    workspacePath: string;
+    /**
+     * S2 (d, C7): which agents to fan out to. Same name and same meaning as
+     * `capabilities.agents`. Absent = Claude Code only, i.e. today's behaviour
+     * byte for byte.
+     */
+    agents?: AgentWireName[];
+  };
 }
 
 export interface PermissionRespondCommand extends AgentHostCommandBase {
@@ -134,7 +165,18 @@ export interface PermissionRespondCommand extends AgentHostCommandBase {
   payload: {
     sessionId: string;
     permissionId: string;
+    /**
+     * Stays REQUIRED. Every existing sender writes it, and the richer
+     * `decision` below is the optional refinement — inverting that would make
+     * four hand-written inline payloads illegal at once.
+     */
     allow: boolean;
+    /**
+     * S2 (c): the button the user actually pressed, when it was richer than
+     * allow/deny. Absent means `allow ? 'allow' : 'deny'`; the two must never
+     * contradict each other.
+     */
+    decision?: PermissionDecisionId;
   };
 }
 
@@ -144,10 +186,15 @@ export interface QuestionRespondCommand extends AgentHostCommandBase {
     sessionId: string;
     questionId: string;
     /**
-     * question text (verbatim key) -> chosen answer; multiSelect answers
-     * joined with ", " (comma+space, matching the CLI separator).
-     * The CLI silently re-asks on a bare allow with no collected answers,
-     * so at least one of answers/response/cancel must be present.
+     * Opaque key -> chosen answer; multiSelect answers joined with ", "
+     * (comma+space, matching the CLI separator). S2 (C8): the key is
+     * `QuestionItem.id` when the item carried one, the question text verbatim
+     * otherwise.
+     *
+     * The Claude CLI silently re-asks on a bare allow with no collected
+     * answers, so at least one of answers/response/cancel must be present —
+     * that guard is Claude's, not a general rule: Codex treats an empty
+     * `answers` map as a clean cancellation and does not re-ask.
      */
     answers?: Record<string, string>;
     /**

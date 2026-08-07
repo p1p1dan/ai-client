@@ -273,4 +273,198 @@ describe('SessionIndexService', () => {
     expect(filesAfter.some((name) => name.endsWith('.tmp'))).toBe(false);
     expect(existsSync(join(userDataDir, 'session-index.json'))).toBe(true);
   });
+
+  /**
+   * S2 slice 1 — the agent binding's return path onto disk.
+   *
+   * Getting it wrong is silent in both directions: a dropped `session.created`
+   * payload leaves the row unbound forever (and resume after a restart has
+   * nothing to dispatch on), while a field-by-field rebuild that forgets the
+   * key erases the binding on the next send. Neither raises an error, so both
+   * are asserted against the persisted FILE rather than the in-memory map.
+   */
+  describe('agent binding (S2 slice 1)', () => {
+    function readIndexFile(): SessionIndexEntry[] {
+      const raw = readFileSync(join(userDataDir, 'session-index.json'), 'utf8');
+      return JSON.parse(raw) as SessionIndexEntry[];
+    }
+
+    it('records the agent on create and never drops it on a later re-record', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'codex' });
+      expect((await service.list())[0]?.agent).toBe('codex');
+
+      // The lazy first-send path calls recordCreated again. Both record*
+      // methods rebuild the entry key by key, so a call that does not know the
+      // binding must fall back to the stored one instead of writing undefined.
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', model: 'claude-x' });
+
+      const list = await service.list();
+      expect(list).toHaveLength(1);
+      expect(list[0]).toMatchObject({ agent: 'codex', model: 'claude-x' });
+    });
+
+    it('keeps the agent across a resume that does not repeat it', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'codex' });
+      await service.recordResumed({
+        sessionId: 's1',
+        workspacePath: '/ws/a',
+        runtimeIdentity: 'thread-1',
+      });
+
+      expect((await service.list())[0]).toMatchObject({
+        agent: 'codex',
+        runtimeIdentity: 'thread-1',
+      });
+    });
+
+    /**
+     * The regression this whole slice hangs on. A brand-new Claude session's
+     * `session.created` carries NO runtimeIdentity — the SDK issues one on the
+     * first turn — so the old `if (!runtimeIdentity) return` threw the event
+     * away wholesale. With `agent` now riding on it, that guard would discard
+     * the only report of which runtime owns the row, silently and forever.
+     */
+    it('writes and flushes a session.created that has an agent but no runtimeIdentity', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+      service.handleRuntimeEvent({
+        type: 'session.created',
+        seq: 1,
+        sessionId: 's1',
+        timestamp: Date.now(),
+        payload: { agent: 'claude-code' },
+      });
+
+      await vi.waitFor(() => {
+        const persisted = readIndexFile();
+        expect(persisted[0]?.agent).toBe('claude-code');
+      });
+      expect(readIndexFile()[0]?.runtimeIdentity).toBeUndefined();
+    });
+
+    /**
+     * Drain the fire-and-forget handler's microtask chain.
+     *
+     * `applyRuntimeEvent` only awaits ALREADY-RESOLVED promises (`ensureLoaded`
+     * short-circuits once loaded) before it would mutate the map, so a handful
+     * of microtask turns is a sufficient — and timer-free — wait. A `setTimeout`
+     * sleep would deadlock under the fake clock this test needs.
+     */
+    async function drainHandler(): Promise<void> {
+      for (let i = 0; i < 20; i += 1) {
+        await Promise.resolve();
+      }
+    }
+
+    /**
+     * The guard's own case. Asserted on a FAKE clock, a day per step: on the
+     * real clock both `Date.now()` reads can land in the same millisecond, so
+     * `updatedAt` was capable of proving nothing at all — and the companion
+     * `agent` assertion is true whether or not the guard exists. Deleting
+     * `if (!runtimeIdentity && !agent) return` has to turn this red, or the
+     * relaxed guard is untested in the one direction that matters.
+     */
+    it('still ignores a session.created carrying neither field', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+
+      vi.useFakeTimers();
+      const CREATED_AT = new Date('2026-03-01T00:00:00.000Z').getTime();
+      const EMPTY_AT = new Date('2026-03-02T00:00:00.000Z').getTime();
+      const BOUND_AT = new Date('2026-03-03T00:00:00.000Z').getTime();
+
+      vi.setSystemTime(CREATED_AT);
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+      expect((await service.list())[0].updatedAt).toBe(CREATED_AT);
+
+      vi.setSystemTime(EMPTY_AT);
+      service.handleRuntimeEvent({
+        type: 'session.created',
+        seq: 1,
+        sessionId: 's1',
+        timestamp: EMPTY_AT,
+        payload: {},
+      });
+      await drainHandler();
+
+      const [afterEmpty] = await service.list();
+      expect(afterEmpty.agent).toBeUndefined();
+      // The discriminating assertion: a day-old stamp cannot be an accidental
+      // rewrite that happened to reproduce the same value.
+      expect(afterEmpty.updatedAt).toBe(CREATED_AT);
+      // …and nothing reached disk either.
+      expect(readIndexFile()[0]?.updatedAt).toBe(CREATED_AT);
+
+      // Positive control, same clock and same drain: an event that DOES carry
+      // a field moves both. Without it, the assertions above could be passing
+      // because the harness never observes any write at all.
+      vi.setSystemTime(BOUND_AT);
+      service.handleRuntimeEvent({
+        type: 'session.created',
+        seq: 2,
+        sessionId: 's1',
+        timestamp: BOUND_AT,
+        payload: { agent: 'claude-code' },
+      });
+      await drainHandler();
+
+      const [afterBound] = await service.list();
+      expect(afterBound.agent).toBe('claude-code');
+      expect(afterBound.updatedAt).toBe(BOUND_AT);
+      // Polled, not drained: this one really does write, and the write is fs
+      // I/O rather than a microtask. Waiting for it here also keeps the flush
+      // from landing after the temp dir is torn down.
+      await vi.waitFor(() => {
+        expect(readIndexFile()[0]?.updatedAt).toBe(BOUND_AT);
+      });
+    });
+
+    it('a runtimeIdentity-only event does not blank an already-known agent', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'codex' });
+
+      service.handleRuntimeEvent({
+        type: 'session.resumed',
+        seq: 1,
+        sessionId: 's1',
+        timestamp: Date.now(),
+        payload: { runtimeIdentity: 'thread-1' },
+      });
+
+      await vi.waitFor(() => {
+        expect(readIndexFile()[0]?.runtimeIdentity).toBe('thread-1');
+      });
+      expect(readIndexFile()[0]?.agent).toBe('codex');
+    });
+
+    it('the file stays a bare top-level array once entries carry an agent', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'codex' });
+
+      // An envelope here would make an OLDER build's `for-of` throw, warn,
+      // start empty and write `[]` back — every session index silently gone.
+      const parsed = JSON.parse(readFileSync(join(userDataDir, 'session-index.json'), 'utf8'));
+      expect(Array.isArray(parsed)).toBe(true);
+
+      // A legacy row (no agent) written by an older build must still load, and
+      // loading it must not add the field on the way in.
+      const legacy: SessionIndexEntry[] = [
+        { sessionId: 'old', workspacePath: '/ws/b', title: '', updatedAt: 1, archived: false },
+      ];
+      writeFileSync(join(userDataDir, 'session-index.json'), JSON.stringify(legacy), 'utf8');
+      const fresh = new SessionIndexService();
+      const [loaded] = await fresh.list();
+      expect(loaded).not.toHaveProperty('agent');
+    });
+  });
 });

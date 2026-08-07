@@ -237,6 +237,127 @@ describe('agent-host protocol error paths (spawned process)', () => {
     TEST_TIMEOUT
   );
 
+  /**
+   * S2 (b) BLOCKER lock. Before this, `session.create`/`session.resume` never
+   * read `payload.agent` at all: a protocol-legal Codex request was handed to
+   * the only runtime present and answered as Claude, with no error anywhere.
+   * Resume was worse — a Codex `runtimeIdentity` (a threadId) would have gone
+   * to Claude's `--resume`.
+   *
+   * Asserted through the SPAWNED Host, i.e. through the real command switch,
+   * because the bug was in the dispatch and not in any helper: a unit test on a
+   * predicate would have stayed green throughout.
+   */
+  it(
+    'refuses session.create for an agent this build cannot run — non-fatal, before runtime init',
+    async () => {
+      harness.send({
+        type: 'session.create',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-agent-create-1',
+        payload: { sessionId: 's-codex-1', workspacePath: REPO_ROOT, agent: 'codex' },
+      });
+      const event = await harness.nextEvent();
+      expect(event.type).toBe('host.error');
+      expect(event.requestId).toBe('req-agent-create-1');
+      expect(event.payload?.code).toBe('agent_unsupported');
+      expect(event.payload?.fatal).toBe(false);
+      // Correlated to the session too, so the Composer can scope it.
+      expect((event as { sessionId?: string }).sessionId).toBe('s-codex-1');
+      // The message must name the offending value AND what this build has, or
+      // a downgraded user gets "unsupported" with nothing to act on.
+      expect(String(event.payload?.message)).toContain('codex');
+      expect(String(event.payload?.message)).toContain('claude-code');
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'refuses session.resume for a foreign agent, and never creates the session',
+    async () => {
+      harness.send({
+        type: 'session.resume',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-agent-resume-1',
+        payload: {
+          sessionId: 's-codex-2',
+          workspacePath: REPO_ROOT,
+          // A Codex threadId. Handing this to Claude's resume is the exact
+          // silent failure the refusal exists to prevent.
+          runtimeIdentity: '01998f0c-0000-7000-8000-000000000000',
+          agent: 'codex',
+        },
+      });
+      const event = await harness.nextEvent();
+      expect(event.type).toBe('host.error');
+      expect(event.requestId).toBe('req-agent-resume-1');
+      expect(event.payload?.code).toBe('agent_unsupported');
+      expect(event.payload?.fatal).toBe(false);
+
+      // Nothing was registered: a follow-up send finds no session at all —
+      // proof the refusal returned before `rt.resumeSession`, and that the
+      // session never entered a starting/busy state. `session.send` DOES reach
+      // ensureRuntime(), so this second assertion is the one place these tests
+      // leave the hermetic surface; it is worth it, because "did not create"
+      // is the half a host.error assertion alone cannot show.
+      harness.send({
+        type: 'session.send',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-agent-resume-2',
+        payload: { sessionId: 's-codex-2', text: 'hello' },
+      });
+      const after = await harness.nextEvent(TEST_TIMEOUT);
+      expect(after.type).toBe('host.error');
+      expect(after.payload?.code).toBe('session_not_found');
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'accepts an absent agent (legacy default) and an explicit claude-code — neither is refused',
+    async () => {
+      // Only asserts that NO `agent_unsupported` comes back; both of these do
+      // reach ensureRuntime() and then create for real, so the reply itself is
+      // environment-dependent and is not what this locks.
+      for (const [requestId, payload] of [
+        ['req-agent-absent', { sessionId: 's-legacy', workspacePath: REPO_ROOT }],
+        [
+          'req-agent-claude',
+          { sessionId: 's-claude', workspacePath: REPO_ROOT, agent: 'claude-code' },
+        ],
+      ] as const) {
+        harness.send({
+          type: 'session.create',
+          protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+          requestId,
+          payload,
+        });
+        const event = await harness.nextEvent(TEST_TIMEOUT);
+        expect(event.payload?.code).not.toBe('agent_unsupported');
+      }
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'advertises the agents it will accept on host.ready (capabilities.agents)',
+    async () => {
+      harness.send({
+        type: 'host.initialize',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-init-agents',
+      });
+      const event = await harness.nextEvent(TEST_TIMEOUT);
+      expect(event.type).toBe('host.ready');
+      const capabilities = event.payload?.capabilities as { agents?: string[] } | undefined;
+      // Exact list, not a `toContain`: the renderer disables everything absent
+      // from it, so an accidentally-widened list would re-enable a binding the
+      // create path refuses — the two facts must stay one.
+      expect(capabilities?.agents).toEqual(['claude-code']);
+    },
+    TEST_TIMEOUT
+  );
+
   it(
     'ignores empty and whitespace-only lines (no stdout output for them)',
     async () => {

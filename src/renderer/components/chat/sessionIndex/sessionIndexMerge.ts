@@ -1,3 +1,4 @@
+import { resolveAgentWireName } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { canonicalPathKey } from '@shared/utils/path';
 import { workspacePathMatchRank } from '@/components/chat/composerTarget';
@@ -29,6 +30,11 @@ import { fallbackSessionTitle } from './sessionTitle';
  *   disconnected only when explicitly requested (resume flow will flip it).
  * - Archived entries are filtered out of the live list entirely (they live
  *   only in the persisted index and can be un-archived later).
+ * - S2 (b): this is the ONE place a missing `agent` becomes a binding. The
+ *   disk side stays exactly as written — normalizing on load instead would put
+ *   the default into Main's in-memory map, and `flush()` writes the whole map,
+ *   so the next unrelated rename would stamp `agent` onto every legacy row: a
+ *   compatible read turned into an irreversible write migration.
  */
 
 /**
@@ -87,6 +93,16 @@ export function mergeSessionIndex(
       seenIds.add(entry.sessionId);
       continue;
     }
+    // S2 (b): the single materialization point. `null` means the slug was
+    // written by a NEWER build (the user downgraded) and this one cannot say
+    // which runtime it names — so the row is skipped, and deliberately without
+    // `seenIds`: a live session of the same id keeps its own sentence through
+    // the tail loop below instead of being clobbered by an entry we cannot
+    // read. The entry itself stays on disk, so upgrading brings the row back.
+    const agent = resolveAgentWireName(entry.agent);
+    if (!agent) {
+      continue;
+    }
     const existing = byId.get(entry.sessionId);
     const workspace = workspacesByPath.get(canonicalPathKey(entry.workspacePath));
     const projectId = existing?.projectId ?? workspace?.projectId ?? '';
@@ -102,6 +118,10 @@ export function mergeSessionIndex(
         projectId: projectId || existing.projectId,
         workspaceId: workspaceId || existing.workspaceId,
         runtimeIdentity: existing.runtimeIdentity ?? entry.runtimeIdentity,
+        // A binding already on the live row wins: it came from the runtime's
+        // own `session.created` echo this run, which is the only report of
+        // what is actually running. The persisted value is the fallback.
+        agent: existing.agent ?? agent,
         updatedAt:
           typeof entry.updatedAt === 'number' && entry.updatedAt > existing.updatedAt
             ? entry.updatedAt
@@ -121,6 +141,7 @@ export function mergeSessionIndex(
         status: seedStatus,
         updatedAt: entry.updatedAt,
         runtimeIdentity: entry.runtimeIdentity,
+        agent,
       });
       continue;
     }
@@ -133,6 +154,7 @@ export function mergeSessionIndex(
       status: seedStatus,
       updatedAt: entry.updatedAt,
       runtimeIdentity: entry.runtimeIdentity,
+      agent,
     });
   }
 

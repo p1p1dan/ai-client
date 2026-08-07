@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { CLAUDE_CODE_AGENT } from '../../shared/types/agentWire.ts';
 import { ClaudeRuntime, resolveCompensationStatus } from '../claudeRuntime.ts';
+import type { HostSession } from '../sessionRegistry.ts';
 import { SessionRegistry } from '../sessionRegistry.ts';
 
 /**
@@ -154,49 +156,41 @@ describe('claudeRuntime.respondPermission — F8 status convergence', () => {
   });
 });
 
+/**
+ * `resolveCompensationStatus` reads only `status`/`running`, but its parameter
+ * is a whole `HostSession`, which S2 (b) gave a REQUIRED `agent` — every
+ * registry entry is created by a runtime that names itself, so "no agent" is
+ * not a representable state and the type says so. Built here so these cases
+ * stay about the status formula, and so the next required field is one edit
+ * instead of eight.
+ */
+function hostSession(fields: Pick<HostSession, 'status' | 'running'>): HostSession {
+  return { sessionId: 's', workspacePath: '/tmp', agent: CLAUDE_CODE_AGENT, ...fields };
+}
+
 describe('resolveCompensationStatus (pure)', () => {
   it('returns idle for an undefined session', () => {
     expect(resolveCompensationStatus(undefined)).toBe('idle');
   });
 
   it('returns running whenever the session is running, regardless of its stored status', () => {
-    expect(
-      resolveCompensationStatus({
-        sessionId: 's',
-        workspacePath: '/tmp',
-        status: 'idle',
-        running: true,
-      })
-    ).toBe('running');
+    expect(resolveCompensationStatus(hostSession({ status: 'idle', running: true }))).toBe(
+      'running'
+    );
   });
 
   it('passes through a non-waiting terminal status unchanged', () => {
-    expect(
-      resolveCompensationStatus({
-        sessionId: 's',
-        workspacePath: '/tmp',
-        status: 'failed',
-        running: false,
-      })
-    ).toBe('failed');
+    expect(resolveCompensationStatus(hostSession({ status: 'failed', running: false }))).toBe(
+      'failed'
+    );
   });
 
   it('normalizes waiting_permission/waiting_question to idle when not running', () => {
     expect(
-      resolveCompensationStatus({
-        sessionId: 's',
-        workspacePath: '/tmp',
-        status: 'waiting_permission',
-        running: false,
-      })
+      resolveCompensationStatus(hostSession({ status: 'waiting_permission', running: false }))
     ).toBe('idle');
     expect(
-      resolveCompensationStatus({
-        sessionId: 's',
-        workspacePath: '/tmp',
-        status: 'waiting_question',
-        running: false,
-      })
+      resolveCompensationStatus(hostSession({ status: 'waiting_question', running: false }))
     ).toBe('idle');
   });
 });
@@ -209,40 +203,30 @@ describe('resolveCompensationStatus — R14 bridge-pending override (round-2 ite
   // otherwise-invisible bridge state.
   it('reports waiting_permission when a permission is pending, even on an idle/non-running session', () => {
     expect(
-      resolveCompensationStatus(
-        { sessionId: 's', workspacePath: '/tmp', status: 'idle', running: false },
-        { permission: true }
-      )
+      resolveCompensationStatus(hostSession({ status: 'idle', running: false }), {
+        permission: true,
+      })
     ).toBe('waiting_permission');
   });
 
   it('reports waiting_question when a question is pending', () => {
     expect(
-      resolveCompensationStatus(
-        { sessionId: 's', workspacePath: '/tmp', status: 'idle', running: false },
-        { question: true }
-      )
+      resolveCompensationStatus(hostSession({ status: 'idle', running: false }), { question: true })
     ).toBe('waiting_question');
   });
 
   it('a pending permission wins even while the session is ALSO running (a turn stays running host-side while canUseTool awaits the user)', () => {
     expect(
-      resolveCompensationStatus(
-        { sessionId: 's', workspacePath: '/tmp', status: 'running', running: true },
-        { permission: true }
-      )
+      resolveCompensationStatus(hostSession({ status: 'running', running: true }), {
+        permission: true,
+      })
     ).toBe('waiting_permission');
   });
 
   it('falls back to the running/status formula when nothing is pending (no `pending` arg at all)', () => {
-    expect(
-      resolveCompensationStatus({
-        sessionId: 's',
-        workspacePath: '/tmp',
-        status: 'idle',
-        running: true,
-      })
-    ).toBe('running');
+    expect(resolveCompensationStatus(hostSession({ status: 'idle', running: true }))).toBe(
+      'running'
+    );
   });
 });
 

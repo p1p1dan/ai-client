@@ -4,6 +4,7 @@
  * See docs/plans/2026-07-23-openchamber-chat-refactor-ard.md §5.3 / §6
  */
 
+import type { AgentWireName } from './agentWire';
 import type {
   HistoryMessage,
   HistoryParseStats,
@@ -79,7 +80,14 @@ export interface HostReadyEvent extends RuntimeEventBase {
       baseHost: string | null;
       model: string | null;
     } | null;
-    /** Host capability flags — Main degrades gracefully when absent (old Host). */
+    /**
+     * Host capability flags — Main degrades gracefully when absent (old Host).
+     *
+     * Doctrine (S2 C6): every key here describes what THIS HOST BUILD can do
+     * (process-level), never what one agent supports. Per-agent differences go
+     * through the `agents` list plus the per-session facts on `session.created`
+     * — do not grow a `Partial<Record<AgentWireName, …>>` here.
+     */
     capabilities?: {
       history?: boolean;
       /** Extended thinking enabled on this Host (CP3 decision: default on). */
@@ -90,6 +98,18 @@ export interface HostReadyEvent extends RuntimeEventBase {
        * supported", not "no subagent ran".
        */
       subagentActivity?: boolean;
+      /**
+       * S2: agents this Host build can actually run. Absent = an old Host,
+       * which only knows Claude Code. The renderer disables (not hides) the
+       * agents missing from this list.
+       */
+      agents?: AgentWireName[];
+      /**
+       * S2: this Host normalizes per-agent permission facts into
+       * `SessionPermissionPolicy`. Absent = old Host, UI keeps the old
+       * `permissionMode`-only behaviour.
+       */
+      permissionPolicy?: boolean;
     };
   };
 }
@@ -233,6 +253,65 @@ export interface ToolCompletedEvent extends RuntimeEventBase {
   };
 }
 
+/**
+ * S2 (c): what the card is asking about. Absent = `'tool'`, which is every
+ * Claude request there has ever been, so old Hosts stay correct by omission.
+ */
+export type PermissionRequestKind = 'tool' | 'exec' | 'file_change';
+
+/**
+ * S2 (c): agent-neutral decision vocabulary, four wide. `decisions.ts`
+ * (slice 4) maps each id onto the three measured dialects — v2
+ * CommandExecution (`accept | acceptForSession | decline | cancel`), v2
+ * FileChange (same four), and legacy `ReviewDecision`
+ * (`approved | approved_for_session | {denied} | abort`). Claude only ever
+ * uses `allow` / `deny`.
+ *
+ * `decline` vs `cancel` is a real distinction on the wire, not a synonym:
+ * declining refuses the call and lets the turn continue, cancelling refuses it
+ * and aborts the turn. Anything this build cannot map must resolve to a DENY —
+ * never to an allow.
+ */
+export type PermissionDecisionId = 'allow' | 'allow_session' | 'deny' | 'cancel';
+
+/**
+ * S2 (c): why the client answered a request without a human deciding.
+ * Doubles as the drain reason when the Host clears its pending server-request
+ * table on session stop/close/shutdown (C10) — one vocabulary, not two.
+ */
+export type PermissionAutoReason = 'unsupported' | 'session_closed' | 'aborted' | 'timed_out';
+
+/** One file touched by a `file_change` approval. */
+export interface PermissionFileChange {
+  path: string;
+  change: 'add' | 'update' | 'delete' | 'rename';
+  /**
+   * Unified diff when the Host has it. Codex sends the diff on the `item/started`
+   * frame that shares this request's itemId, NOT on the approval request — a
+   * missing diff means it had not arrived, and is never a reason to delay the
+   * reply (hard constraint 7).
+   */
+  diff?: string;
+  /** The diff above was clamped to `PERMISSION_DIFF_MAX_BYTES`. */
+  truncated?: boolean;
+}
+
+/**
+ * S2 (c): the body a permission card renders under its header. Absent for a
+ * plain tool request, whose `input` already carries everything.
+ */
+export type PermissionDetail =
+  | { kind: 'exec'; command: string; cwd?: string }
+  | { kind: 'file_change'; changes: PermissionFileChange[]; omittedFileCount?: number };
+
+/**
+ * Host-side clamps for `PermissionDetail`. Provisional numbers (U10): no real
+ * large-patch sample yet, and an unbounded diff would sit in the red-line
+ * message state forever. Named so the correction is a one-line edit.
+ */
+export const PERMISSION_DIFF_MAX_FILES = 20;
+export const PERMISSION_DIFF_MAX_BYTES = 64 * 1024;
+
 export interface PermissionRequestedEvent extends RuntimeEventBase {
   type: 'permission.requested';
   sessionId: string;
@@ -248,6 +327,23 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
      * The key is ABSENT (not undefined-valued) for main-agent requests.
      */
     agentId?: string;
+    /** S2: absent = `'tool'`. */
+    kind?: PermissionRequestKind;
+    /**
+     * S2: the buttons this request actually offers, already narrowed to ids
+     * this build models. Absent = the historical pair, Allow / Deny.
+     */
+    decisions?: PermissionDecisionId[];
+    /** S2: card body for exec / file_change requests. */
+    detail?: PermissionDetail;
+    /** S2: the agent's own justification, when it sent one. */
+    reason?: string;
+    /**
+     * S2: how many offered decisions this build did not model and therefore
+     * dropped from `decisions`. Shown at the bottom of the card so a narrowed
+     * choice never looks like the whole choice.
+     */
+    omittedDecisionCount?: number;
   };
 }
 
@@ -259,13 +355,36 @@ export interface QuestionOption {
   preview?: string;
 }
 
-/** One question within an AskUserQuestion tool call (SDK contract: 1-4 items). */
+/**
+ * One question within an AskUserQuestion tool call.
+ *
+ * Count/format contracts differ per agent — Claude's SDK says 1-4 items,
+ * Codex's tool description says 1-3 questions with a ≤12-char header and 2-3
+ * options. The renderer validates NEITHER: a check written to one contract
+ * misjudges the other agent's payload.
+ */
 export interface QuestionItem {
   question: string;
   /** Short chip/tag label (~12 chars per SDK contract). */
   header?: string;
   options: QuestionOption[];
   multiSelect?: boolean;
+  /**
+   * S2 (a, C8): the agent's own id for this question, when it sends one
+   * (Codex does; Claude does not). When present it is the answers-map key —
+   * see `QuestionResolvedEvent.payload.answers`. It exists because the
+   * question TEXT is not a key: two questions in one turn may repeat verbatim,
+   * and the renderer folds answers into a record before they ever reach the
+   * Host, so a duplicate is already lost by then.
+   */
+  id?: string;
+  /**
+   * S2 (a): the answer is a credential (Codex marks API keys this way).
+   * The card masks the free-text input — a key typed in plain sight would land
+   * in the timeline permanently, which contradicts the Host-side stderr
+   * redaction this repo already ships (T-35).
+   */
+  isSecret?: boolean;
 }
 
 /**
@@ -278,6 +397,13 @@ export interface QuestionRequestedEvent extends RuntimeEventBase {
   payload: {
     questionId: string;
     questions: QuestionItem[];
+    /**
+     * S2 (a): the agent will resolve the question by itself after this many
+     * ms. `null` / absent = never. NOT implemented client-side this round: the
+     * question is rendered as an ordinary one, and the agent's own timeout
+     * settles it — which is the same outcome as a user who does not answer.
+     */
+    autoResolutionMs?: number | null;
   };
 }
 
@@ -293,6 +419,17 @@ export interface PermissionResolvedEvent extends RuntimeEventBase {
   payload: {
     permissionId: string;
     allow: boolean;
+    /**
+     * S2 (c): which button settled it, when the answer was richer than
+     * allow/deny (`allow_session`, `cancel`). Absent = the boolean says it all.
+     */
+    decision?: PermissionDecisionId;
+    /**
+     * S2 (c): set when nobody was asked — the Host answered on the client's
+     * behalf. Absent means a human decided, which is what the timeline has
+     * always implied and could not previously prove.
+     */
+    autoReason?: PermissionAutoReason;
   };
 }
 
@@ -302,7 +439,14 @@ export interface QuestionResolvedEvent extends RuntimeEventBase {
   payload: {
     questionId: string;
     outcome: 'answered' | 'cancelled' | 'rejected';
-    /** question text (verbatim key) -> answer; multiSelect joined with ", ". */
+    /**
+     * Opaque key -> answer; multiSelect joined with ", ".
+     *
+     * S2 (C8): the key is `QuestionItem.id` when the item carried one and the
+     * question text verbatim otherwise, so a replayed session mixes both key
+     * spaces (Claude rows: text, Codex rows: id). Treat it as opaque — looking
+     * a question up by its text is wrong for half the corpus.
+     */
     answers?: Record<string, string>;
     /**
      * Freeform text typed instead of picking a structured option. When both
@@ -327,10 +471,62 @@ export type SessionPermissionMode =
   | 'bypassPermissions'
   | 'plan';
 
+/**
+ * Codex `approval_policy` (measured, S1 §1.5): `untrusted` = only trusted
+ * commands run unattended and escalation is forbidden; `on-request` = the
+ * model decides when to ask; `never` = never asks, failures go back to the
+ * model. The object-shaped `granular` variant exists on the wire but is not
+ * modelled this round.
+ */
+export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never';
+
+/** Codex `sandbox_mode` (measured). Network is a separate dimension, below. */
+export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+
+/**
+ * S2 (c, C4): the permission posture a session actually runs with, per agent.
+ *
+ * A discriminated union rather than one widened enum, because the two agents
+ * are not the same shape: Claude has a single mode, Codex is four orthogonal
+ * dimensions of which three are modelled here. `SessionPermissionMode` above
+ * stays FROZEN in Claude's own vocabulary — an old renderer reading a Codex
+ * session gets `false` out of `isSessionPermissionMode` and keeps its previous
+ * state, which is the correct degradation rather than a wrong reading.
+ *
+ * The discriminant is `agent`, valued with `AgentWireName`'s literals. Codex's
+ * posture is always sent explicitly by the Host and is never inherited from
+ * `~/.codex/config.toml` — a local config saying `danger-full-access` would
+ * otherwise silently switch every approval off.
+ */
+export type SessionPermissionPolicy =
+  | { agent: 'claude-code'; permissionMode: SessionPermissionMode }
+  | {
+      agent: 'codex';
+      approvalPolicy: CodexApprovalPolicy;
+      sandboxMode: CodexSandboxMode;
+      /** Sub-dimension of the sandbox, not of the approval policy. */
+      networkAccess: boolean;
+    };
+
 export interface SessionCreatedEvent extends RuntimeEventBase {
   type: 'session.created' | 'session.resumed';
   sessionId: string;
-  payload?: { runtimeIdentity?: string; permissionMode?: SessionPermissionMode };
+  payload?: {
+    runtimeIdentity?: string;
+    permissionMode?: SessionPermissionMode;
+    /**
+     * S2 (b): which runtime this session is bound to, echoed by the runtime
+     * that hard-codes its own identity. Absent = an old Host, hence Claude
+     * Code. The reducer keeps the session's existing binding when absent.
+     */
+    agent?: AgentWireName;
+    /**
+     * S2 (c): the posture the Host really handed the agent — the same constant
+     * that fed `thread/start`, so the surface can never report a policy that
+     * was not actually sent. Absent = fall back to the `permissionMode` row.
+     */
+    permissionPolicy?: SessionPermissionPolicy;
+  };
 }
 
 /**
@@ -355,6 +551,12 @@ export interface SessionHistoryEvent extends RuntimeEventBase {
   payload: {
     runtimeIdentity: string;
     workspacePath: string;
+    /**
+     * S2 (d): which reader produced these messages. Absent = Claude Code, the
+     * only reader that existed before. Pairs with `runtimeIdentity`, which is
+     * opaque and only interpretable together with the agent that issued it.
+     */
+    agent?: AgentWireName;
     /** Chronological. Message ids carry the `h:` contract prefix. */
     messages: HistoryMessage[];
     /** True when messages were dropped by input/output caps. */

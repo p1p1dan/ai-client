@@ -76,6 +76,9 @@ describe('shouldResumeSession (T-03)', () => {
       runtimeIdentity: 'persisted-rt',
       workspacePath: '/repo',
       model: undefined,
+      // S2 slice 1: the resume handle is opaque and only interpretable
+      // together with the agent that issued it, so both travel as one.
+      agent: 'claude-code',
     });
   });
 

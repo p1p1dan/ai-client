@@ -97,7 +97,14 @@ describe('sendMessage — unchanged happy path', () => {
     await send();
 
     expect(api.ensureHost).toHaveBeenCalledTimes(1);
-    expect(api.createSession).toHaveBeenCalledWith({ sessionId: 's1', workspacePath: '/repo' });
+    // S2 slice 1: the binding is stated on every create, never left for the
+    // Host to assume. An unset row resolves to the legacy agent via
+    // `sessionAgent`, so this seeded (Claude) session sends 'claude-code'.
+    expect(api.createSession).toHaveBeenCalledWith({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      agent: 'claude-code',
+    });
     expect(api.send).toHaveBeenCalledWith({ sessionId: 's1', text: 'hello' });
     expect(api.closeSession).not.toHaveBeenCalled();
     expect(useChatSessionsStore.getState().hostBoundSessionIds).toEqual(['s1']);

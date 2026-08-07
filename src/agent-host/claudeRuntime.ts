@@ -8,6 +8,7 @@ import type {
   SessionAttachment,
   SessionEffortLevel,
 } from '../shared/types/agentHost.ts';
+import { CLAUDE_CODE_AGENT } from '../shared/types/agentWire.ts';
 import type { SessionPermissionMode, SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
@@ -300,6 +301,11 @@ export class ClaudeRuntime {
     const session = this.opts.registry.create({
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
+      // S2 (b): the runtime states which agent it is. Main must not infer the
+      // binding from which adapter it happened to call — that inference breaks
+      // the moment a second runtime exists, and the wrong value would then be
+      // persisted into `session-index.json`, where it outlives the mistake.
+      agent: CLAUDE_CODE_AGENT,
       model: input.model,
       effort: normalizeEffort(input.effort),
     });
@@ -307,7 +313,10 @@ export class ClaudeRuntime {
       type: 'session.created',
       sessionId: session.sessionId,
       requestId: input.requestId,
-      payload: { permissionMode: CHAT_PERMISSION_MODE },
+      // A brand-new Claude session has no runtimeIdentity yet (the SDK issues
+      // it on the first turn), so `agent` is the ONLY field this event carries
+      // for the index to write — see SessionIndexService.applyRuntimeEvent.
+      payload: { agent: session.agent, permissionMode: CHAT_PERMISSION_MODE },
     });
     this.opts.emit({
       type: 'session.status',
@@ -346,6 +355,7 @@ export class ClaudeRuntime {
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
       runtimeIdentity: input.runtimeIdentity,
+      agent: CLAUDE_CODE_AGENT,
       model: input.model,
       effort: normalizeEffort(input.effort),
     });
@@ -354,6 +364,7 @@ export class ClaudeRuntime {
       sessionId: session.sessionId,
       requestId: input.requestId,
       payload: {
+        agent: session.agent,
         runtimeIdentity: session.runtimeIdentity,
         permissionMode: CHAT_PERMISSION_MODE,
       },

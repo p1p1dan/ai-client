@@ -1,4 +1,9 @@
+import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
 import type {
+  PermissionAutoReason,
+  PermissionDecisionId,
+  PermissionDetail,
+  PermissionRequestKind,
   QuestionItem,
   RuntimeEvent,
   SessionRetryInfo,
@@ -74,8 +79,32 @@ export interface ChatSession {
   title: string;
   status: SessionRuntimeStatus;
   updatedAt: number;
-  /** Claude runtime / resume identity when known. */
+  /**
+   * The agent's own resume handle when known — a Claude Code session id, a
+   * Codex threadId, or whatever the next runtime issues. Opaque: only
+   * interpretable together with `agent`, and never dispatched on by shape.
+   */
   runtimeIdentity?: string;
+  /**
+   * S2 (b): which runtime this session is bound to. A session is bound for
+   * life — switching agents means forking a new session, because the two sides
+   * share neither reader, id space, nor runtimeIdentity semantics.
+   *
+   * Genuinely optional, and it stays that way. `mergeSessionIndex` is the ONE
+   * place a missing value becomes a binding, but it only materializes rows it
+   * builds FROM the index: a live-only session (created in this run, never
+   * sent, so it has no index entry at all) is pushed through its safety net
+   * untouched and keeps `agent: undefined` for as long as it stays unsent.
+   * Materializing there too would be a second default and would rebuild every
+   * live row's object on every index refresh, for a value `sessionAgent()`
+   * already answers.
+   *
+   * So: NEVER read this field directly. Every consumer goes through
+   * `sessionAgent(session)`, which is the single place that knows what an
+   * unset binding means — writing `session.agent ?? '…'` at a call site
+   * creates exactly the second default this arrangement exists to prevent.
+   */
+  agent?: AgentWireName;
   /**
    * a1 (2026-07-30 net-visibility batch, optional-field addition): the CLI's
    * own transport-retry loop, when session.status last carried one. Cleared
@@ -98,9 +127,26 @@ export interface ChatBlock {
   toolDescription?: string;
   resolved?: boolean;
   allowed?: boolean;
+  /** S2 (c): what the permission card asks about. undefined = a plain tool call. */
+  permissionKind?: PermissionRequestKind;
+  /** S2 (c): exec command / file-change diffs rendered in the card body. */
+  permissionDetail?: PermissionDetail;
+  /** S2 (c): buttons offered. undefined = the historical Allow / Deny pair. */
+  permissionDecisions?: PermissionDecisionId[];
+  /** S2 (c): which button settled it, when richer than the `allowed` boolean. */
+  permissionDecision?: PermissionDecisionId;
+  /** S2 (c): set when the client answered without asking anyone. */
+  permissionAutoReason?: PermissionAutoReason;
+  /** S2 (c): offered decisions this build could not model and dropped. */
+  omittedDecisionCount?: number;
   questionId?: string;
   questions?: QuestionItem[];
   questionOutcome?: 'answered' | 'cancelled' | 'rejected';
+  /**
+   * Opaque key -> answer. S2 (C8): mixed key space — Claude rows are keyed by
+   * question text, Codex rows by `QuestionItem.id`. Replay must not look a
+   * question up by its text.
+   */
   questionAnswers?: Record<string, string>;
   questionResponse?: string;
 }
@@ -402,6 +448,11 @@ export function applyRuntimeEvent(
         );
       }
       const runtimeIdentity = event.payload?.runtimeIdentity;
+      // S2 (b): the running agent, straight from the runtime that reported it.
+      // Not a materialization — an absent value keeps whatever the row already
+      // had (an old Host never sends it), and turning undefined into a default
+      // remains `mergeSessionIndex`'s job alone.
+      const agent = event.payload?.agent;
       const hostBoundSessionIds = state.hostBoundSessionIds.includes(sessionId)
         ? state.hostBoundSessionIds
         : [...state.hostBoundSessionIds, sessionId];
@@ -412,6 +463,7 @@ export function applyRuntimeEvent(
             ? {
                 ...session,
                 runtimeIdentity: runtimeIdentity ?? session.runtimeIdentity,
+                agent: agent ?? session.agent,
                 updatedAt: Date.now(),
               }
             : session
@@ -913,6 +965,10 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
         await window.electronAPI.chat.createSession({
           sessionId: activeSessionId,
           workspacePath: workspace.path,
+          // S2 (b): the binding is decided renderer-side and stated on every
+          // create — never left for the Host to assume. `sessionAgent` is the
+          // one reader that knows what an unset binding means.
+          agent: sessionAgent(session),
         });
         // A5 guard 2: the session went away while `createSession` was in
         // flight. The Host now holds a runtime the UI can never reach — reap

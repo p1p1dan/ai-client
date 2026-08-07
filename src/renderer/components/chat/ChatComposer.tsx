@@ -1,3 +1,4 @@
+import { sessionAgent } from '@shared/types/agentWire';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { FileSearchResult } from '@shared/types/search';
 import {
@@ -848,8 +849,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // silently starting a brand-new conversation every time.
     const preState = useChatSessionsStore.getState();
     const hostBound = preState.hostBoundSessionIds.includes(sessionId);
-    const knownIdentity =
-      preState.sessions.find((session) => session.id === sessionId)?.runtimeIdentity ?? null;
+    const preSession = preState.sessions.find((session) => session.id === sessionId);
+    const knownIdentity = preSession?.runtimeIdentity ?? null;
+    // S2 (b): read off the same pre-IPC snapshot as the identity above — the
+    // two travel together (a resume handle only means something paired with
+    // the agent that issued it) and must describe the same instant.
+    const agent = sessionAgent(preSession ?? {});
     const preamble = decideSendPreamble({ hostBound, runtimeIdentity: knownIdentity });
 
     // Starting a fresh send invalidates any prior failure's retryable prompt:
@@ -1184,6 +1189,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         sessionId,
         workspacePath,
         model,
+        agent,
         ...(effort ? { effort } : {}),
       });
       setCurrentRequestId(createResult?.requestId ?? null);
@@ -1304,6 +1310,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             runtimeIdentity: preamble.runtimeIdentity,
             workspacePath,
             model,
+            agent,
             ...(effort ? { effort } : {}),
           })
           .catch(() => undefined);

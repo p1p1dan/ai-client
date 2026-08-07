@@ -8,6 +8,8 @@
 import { createInterface } from 'node:readline';
 import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHost.ts';
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
+import type { AgentWireName } from '../shared/types/agentWire.ts';
+import { CLAUDE_CODE_AGENT } from '../shared/types/agentWire.ts';
 import { ClaudeRuntime, resolveSubagentActivityEnabled } from './claudeRuntime.ts';
 import { loadClaudeSettingsEnv } from './claudeSettings.ts';
 import { resolveCometixCli } from './cometix.ts';
@@ -21,6 +23,67 @@ const envDriver = process.env.AICLIENT_AGENT_HOST_DRIVER;
 let driver: AgentHostDriver =
   envDriver === 'stream-json' || envDriver === 'agent-sdk' ? envDriver : 'agent-sdk';
 let shuttingDown = false;
+
+/**
+ * S2 (b): the agents THIS Host BUILD can actually run — one entry today; the
+ * Codex runtime appends itself in slice 2. Reported verbatim on `host.ready`
+ * as `capabilities.agents`, and enforced by `rejectUnsupportedAgent` below, so
+ * the advertised list and the accepted list are the same array rather than two
+ * facts that can drift apart.
+ */
+const SUPPORTED_AGENTS: readonly AgentWireName[] = [CLAUDE_CODE_AGENT];
+
+/**
+ * Refuse a `session.create` / `session.resume` this build cannot honour.
+ *
+ * Returns true when it emitted the refusal (the caller must stop). Nothing is
+ * created: the session must not exist Host-side, must not enter starting/busy,
+ * and no runtime is touched — the check runs BEFORE `ensureRuntime()`, like
+ * `session.listHistory`'s payload check.
+ *
+ * Why refusing beats "just run Claude": an absent `agent` is Claude Code (the
+ * legacy default — every row written before the field existed is one), but ANY
+ * other value means the caller asked for a runtime this build does not have.
+ * Silently handing the command to the only runtime present would answer as
+ * Claude while the UI says Codex, and on resume it would hand Claude another
+ * agent's opaque `runtimeIdentity` (a Codex threadId) as if it were a Claude
+ * session id. An unrecognized value is refused for the same reason and not
+ * defaulted: it comes from a NEWER build (the user downgraded), so guessing
+ * would run the session against the wrong agent.
+ *
+ * `fatal: false` — this is one bad command, not a broken Host: the process
+ * stays usable for every other session. The renderer's send path already
+ * treats a request-correlated `host.error` as "this create/resume failed",
+ * drops the Host binding and surfaces the message, so no session is left hung.
+ */
+function rejectUnsupportedAgent(cmd: {
+  type?: string;
+  requestId?: string;
+  payload?: Record<string, unknown>;
+}): boolean {
+  const requested = cmd.payload?.agent;
+  if (requested === undefined || requested === null || requested === '') {
+    return false;
+  }
+  if (typeof requested === 'string' && SUPPORTED_AGENTS.includes(requested as AgentWireName)) {
+    return false;
+  }
+  emit({
+    type: 'host.error',
+    // Correlated BOTH ways: `requestId` is what the renderer strict-matches
+    // on, `sessionId` is what scopes the error to this session's Composer.
+    ...(typeof cmd.payload?.sessionId === 'string' && cmd.payload.sessionId
+      ? { sessionId: cmd.payload.sessionId }
+      : {}),
+    requestId: cmd.requestId,
+    payload: {
+      code: 'agent_unsupported',
+      message: `${cmd.type ?? 'command'}: agent ${JSON.stringify(requested)} is not supported by this Host build (supported: ${SUPPORTED_AGENTS.join(', ')})`,
+      fatal: false,
+    },
+  });
+  return true;
+}
 
 const registry = new SessionRegistry();
 let runtime: ClaudeRuntime | null = null;
@@ -141,6 +204,11 @@ async function handleCommand(raw: unknown): Promise<void> {
               history: true,
               thinking: true,
               subagentActivity: resolveSubagentActivityEnabled(),
+              // S2 (b): the other half of the `agent_unsupported` loop — the
+              // renderer disables the agents missing here instead of finding
+              // out by having a create refused. Same array the refusal
+              // enforces, so "advertised" and "accepted" cannot drift.
+              agents: [...SUPPORTED_AGENTS],
             },
           },
         });
@@ -175,6 +243,14 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'session.create': {
+      // S2 (b): `payload.agent` is the runtime AND history-reader dispatch key.
+      // This build ships exactly one runtime, so the only two outcomes are
+      // "Claude Code" and "refused" — the real switch arrives with the Codex
+      // runtime in slice 2. Checked BEFORE ensureRuntime() so a refusal costs
+      // nothing and leaves no session behind. Whichever runtime handles the
+      // command stamps its OWN name on `session.created`; nothing echoes the
+      // requested value back unchecked.
+      if (rejectUnsupportedAgent(cmd)) return;
       const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
       const workspacePath = String(cmd.payload?.workspacePath ?? '');
@@ -213,6 +289,11 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'session.resume': {
+      // Same dispatch key as session.create above, and the same single
+      // destination today — but the stakes are higher here: `runtimeIdentity`
+      // is opaque and only means anything paired with that key, so resuming a
+      // foreign handle on the Claude runtime is never an acceptable guess.
+      if (rejectUnsupportedAgent(cmd)) return;
       const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
       const workspacePath = String(cmd.payload?.workspacePath ?? '');

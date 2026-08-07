@@ -1,3 +1,4 @@
+import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isPlaceholderTitle } from './sessionTitle';
@@ -21,6 +22,8 @@ export interface ResumeIntent {
     runtimeIdentity: string;
     workspacePath: string;
     model?: string;
+    /** S2 (b): which runtime resumes it — `runtimeIdentity` is opaque without it. */
+    agent: AgentWireName;
   };
   /** Reason the resume was skipped (for telemetry / diags). */
   reason?: string;
@@ -88,6 +91,7 @@ export function shouldResumeSession(
       runtimeIdentity,
       workspacePath: workspace.path,
       model: options.model,
+      agent: sessionAgent(session),
     },
   };
 }

@@ -618,6 +618,12 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
           failed
         </Badge>
       )}
+      {/* S2 (b/C14): agent before branch — which runtime answers is the more
+          load-bearing fact, and the chip budget for this row is two. Same
+          Badge shape as the branch chip so the pair reads as one rank. */}
+      <Badge variant="outline" size="sm" className="max-w-28 shrink-0" title={row.agentChip.label}>
+        <span className="min-w-0 truncate">{row.agentChip.label}</span>
+      </Badge>
       {row.chip && (
         <Badge variant="outline" size="sm" className="max-w-28 shrink-0" title={row.chip.label}>
           <span className="min-w-0 truncate">{row.chip.label}</span>

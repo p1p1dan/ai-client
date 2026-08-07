@@ -165,10 +165,18 @@ describe('claudeRuntime query options — permissionMode single source of truth 
     await rt.send({ sessionId: 's24', text: 'hi' });
 
     const created = events.find((e) => e.type === 'session.created') as
-      | { payload?: { permissionMode?: unknown } }
+      | { payload?: { permissionMode?: unknown; agent?: unknown } }
       | undefined;
     expect(created?.payload?.permissionMode).toBeDefined();
     expect(captured[0].permissionMode).toBe(created?.payload?.permissionMode);
+    // S2 (b) producer-side lock, on the same object. `session.created` is the
+    // ONLY place a brand-new Claude session states its binding (there is no
+    // runtimeIdentity yet), and Main writes exactly what lands here into
+    // `session-index.json`. The literal is deliberate: the value is an ABI —
+    // rows already on disk carry it — so this fails both when the field is
+    // dropped and when `CLAUDE_CODE_AGENT` is retyped. Every other test that
+    // touches the binding synthesizes its own event and cannot see either.
+    expect(created?.payload?.agent).toBe('claude-code');
   });
 
   it('sends the SDK the same permissionMode session.resumed reports', async () => {
@@ -191,10 +199,13 @@ describe('claudeRuntime query options — permissionMode single source of truth 
     await rt.send({ sessionId: 's25', text: 'hi' });
 
     const resumed = events.find((e) => e.type === 'session.resumed') as
-      | { payload?: { permissionMode?: unknown } }
+      | { payload?: { permissionMode?: unknown; agent?: unknown } }
       | undefined;
     expect(resumed?.payload?.permissionMode).toBeDefined();
     expect(captured[0].permissionMode).toBe(resumed?.payload?.permissionMode);
+    // Resume states the binding too: a row that predates the field gets it
+    // written on the first resume rather than staying blank forever.
+    expect(resumed?.payload?.agent).toBe('claude-code');
   });
 
   it('pins the interactive default mode — never a bypass', async () => {
@@ -204,6 +215,64 @@ describe('claudeRuntime query options — permissionMode single source of truth 
     await rt.send({ sessionId: 's26', text: 'hi' });
 
     expect(captured[0].permissionMode).toBe('default');
+  });
+});
+
+/**
+ * S2 (b): "the runtime states which agent it is."
+ *
+ * Main persists the binding from `session.created` / `session.resumed` and
+ * never infers it from which adapter it happened to call. That makes this
+ * runtime the PRODUCER of a value that ends up on disk — and the producer was
+ * the one link with no test: `SessionIndexService.test.ts` and
+ * `agentBindingMerge.test.ts` both synthesize their own events, so deleting
+ * `agent: session.agent` here left all of them green.
+ */
+describe('claudeRuntime — self-reported agent (S2 b, producer side)', () => {
+  function makeReportingRuntime(events: Record<string, unknown>[], registry: SessionRegistry) {
+    return new ClaudeRuntime({
+      driver: 'agent-sdk',
+      cliPath: 'unused-in-fake',
+      env: {},
+      emit: (e) => events.push(e),
+      log: () => undefined,
+      registry,
+      queryFn: makeCapturingQueryFn([]),
+    });
+  }
+
+  it('stamps the registry entry and the created event from the same value', () => {
+    const events: Record<string, unknown>[] = [];
+    const registry = new SessionRegistry();
+    makeReportingRuntime(events, registry).createSession({
+      sessionId: 's-agent-1',
+      workspacePath: process.cwd(),
+    });
+
+    const created = events.find((e) => e.type === 'session.created') as
+      | { payload?: { agent?: unknown } }
+      | undefined;
+    // Compared to EACH OTHER (like permissionMode above), so the event cannot
+    // start reporting something the registry does not hold — that divergence
+    // is exactly what a second runtime would introduce.
+    expect(created?.payload?.agent).toBe(registry.get('s-agent-1')?.agent);
+    expect(registry.get('s-agent-1')?.agent).toBe('claude-code');
+  });
+
+  it('stamps the registry entry and the resumed event from the same value', () => {
+    const events: Record<string, unknown>[] = [];
+    const registry = new SessionRegistry();
+    makeReportingRuntime(events, registry).resumeSession({
+      sessionId: 's-agent-2',
+      workspacePath: process.cwd(),
+      runtimeIdentity: 'rt-uuid-agent-2',
+    });
+
+    const resumed = events.find((e) => e.type === 'session.resumed') as
+      | { payload?: { agent?: unknown } }
+      | undefined;
+    expect(resumed?.payload?.agent).toBe(registry.get('s-agent-2')?.agent);
+    expect(registry.get('s-agent-2')?.agent).toBe('claude-code');
   });
 });
 

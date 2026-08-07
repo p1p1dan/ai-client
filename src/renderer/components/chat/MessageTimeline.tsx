@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  FileQuestion,
   FileSearch,
   FileText,
   Image as ImageIcon,
@@ -514,6 +515,9 @@ const HISTORY_ERROR_ICON = {
   jsonl_not_found: FileSearch,
   encrypted_unreadable: ShieldAlert,
   read_failed: TriangleAlert,
+  // S2 (d): this build has no reader for the session's agent. Distinct from
+  // "not found" on purpose — nothing is missing, we just cannot read it here.
+  history_unsupported: FileQuestion,
   unknown: TriangleAlert,
 } as const;
 

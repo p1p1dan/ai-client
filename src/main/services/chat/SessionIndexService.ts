@@ -42,16 +42,27 @@ export class SessionIndexService {
     return [...this.entries.values()].sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
+  /**
+   * Both record* methods rebuild the entry FIELD BY FIELD rather than
+   * spreading `existing`, so any persisted key not named here is dropped on
+   * the next call. `agent` therefore has to carry `?? existing?.agent`: a
+   * first send re-records with the binding, but a later one that happens not
+   * to know it (an older caller, a path that never resolved it) would
+   * otherwise erase the row's agent every time.
+   */
   async recordCreated(input: {
     sessionId: string;
     workspacePath: string;
     model?: string;
+    /** Loose `string` on purpose — this is the disk side (SessionIndexEntry). */
+    agent?: string;
   }): Promise<void> {
     await this.ensureLoaded();
     const existing = this.entries.get(input.sessionId);
     this.entries.set(input.sessionId, {
       sessionId: input.sessionId,
       runtimeIdentity: existing?.runtimeIdentity,
+      agent: input.agent ?? existing?.agent,
       workspacePath: input.workspacePath,
       title: existing?.title ?? '',
       model: input.model ?? existing?.model,
@@ -66,12 +77,15 @@ export class SessionIndexService {
     workspacePath: string;
     runtimeIdentity: string;
     model?: string;
+    /** Loose `string` on purpose — this is the disk side (SessionIndexEntry). */
+    agent?: string;
   }): Promise<void> {
     await this.ensureLoaded();
     const existing = this.entries.get(input.sessionId);
     this.entries.set(input.sessionId, {
       sessionId: input.sessionId,
       runtimeIdentity: input.runtimeIdentity,
+      agent: input.agent ?? existing?.agent,
       workspacePath: input.workspacePath,
       title: existing?.title ?? '',
       model: input.model ?? existing?.model,
@@ -137,10 +151,24 @@ export class SessionIndexService {
       case 'session.created':
       case 'session.resumed': {
         const runtimeIdentity = event.payload?.runtimeIdentity;
-        if (!runtimeIdentity) {
+        const agent = event.payload?.agent;
+        // A NEW Claude session reports no runtimeIdentity — the SDK issues one
+        // on the first turn — so the old `if (!runtimeIdentity) return` dropped
+        // its whole payload. That was invisible while the payload held nothing
+        // else; now it would silently discard the binding on the one event that
+        // carries it, and the row would never learn which agent owns it.
+        if (!runtimeIdentity && !agent) {
           return;
         }
-        this.entries.set(event.sessionId, { ...existing, runtimeIdentity, updatedAt: now() });
+        this.entries.set(event.sessionId, {
+          ...existing,
+          // Merged one optional field at a time: whichever the event omits
+          // keeps its persisted value instead of being overwritten with
+          // undefined.
+          ...(runtimeIdentity ? { runtimeIdentity } : {}),
+          ...(agent ? { agent } : {}),
+          updatedAt: now(),
+        });
         await this.flush();
         return;
       }

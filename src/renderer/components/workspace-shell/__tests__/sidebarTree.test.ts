@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import {
+  agentChipForSession,
   buildSidebarFolders,
   chipForWorkspace,
   deriveRecentRows,
@@ -297,6 +298,48 @@ describe('deriveRecentRows', () => {
       now: NOW,
     });
     expect(rows).toEqual([]);
+  });
+});
+
+describe('agentChipForSession (S2 slice 1, C14)', () => {
+  it('labels each binding with its product name', () => {
+    expect(agentChipForSession(session({ id: 's-codex', agent: 'codex' }))).toEqual({
+      variant: 'agent',
+      label: 'Codex',
+    });
+    expect(agentChipForSession(session({ id: 's-claude', agent: 'claude-code' }))).toEqual({
+      variant: 'agent',
+      label: 'Claude Code',
+    });
+  });
+
+  it('shows the chip on Claude rows too, including rows merged before the field existed', () => {
+    // Deliberately NOT "no chip means Claude": that encoding is unreadable on
+    // day one and wrong the day a third agent lands. Every row states its
+    // binding, so the chip is non-nullable on SidebarSessionRow.
+    expect(agentChipForSession(session({ id: 's-legacy' }))).toEqual({
+      variant: 'agent',
+      label: 'Claude Code',
+    });
+  });
+
+  it('rides on every row the sidebar builds, next to the untouched branch chip', () => {
+    const folders = buildSidebarFolders({
+      projects,
+      workspaces,
+      sessions: [
+        session({ id: 's-claude', agent: 'claude-code' }),
+        session({ id: 's-codex', agent: 'codex', workspaceId: 'ws-wt' }),
+      ],
+    });
+    const rows = folders.find((folder) => folder.projectId === 'p-ai')?.rows ?? [];
+
+    expect(
+      rows.map((row) => [row.sessionId, row.agentChip.label, row.chip?.label ?? null])
+    ).toEqual([
+      ['s-claude', 'Claude Code', 'main'],
+      ['s-codex', 'Codex', 'feat/x'],
+    ]);
   });
 });
 

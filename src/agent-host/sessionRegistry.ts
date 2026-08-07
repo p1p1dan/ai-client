@@ -3,6 +3,7 @@
  */
 
 import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
+import type { AgentWireName } from '../shared/types/agentWire.ts';
 import type { SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
 
 export interface HostSession {
@@ -11,7 +12,15 @@ export interface HostSession {
   model?: string;
   /** Session default reasoning effort; a per-send effort overrides it (#8/T-20). */
   effort?: SessionEffortLevel;
-  /** Claude Code session / resume id (from SDK session_id). */
+  /**
+   * S2 (b): which runtime owns this session. Required — every registry entry
+   * is created BY a runtime, which passes its own name, so "unknown agent" is
+   * not a state the Host can be in. It is echoed on `session.created` /
+   * `session.resumed` so Main persists the binding without inferring it from
+   * the implementation class.
+   */
+  agent: AgentWireName;
+  /** The runtime's own resume handle (Claude Code: the SDK session_id). */
   runtimeIdentity?: string;
   status: SessionRuntimeStatus;
   abort?: AbortController;
@@ -29,6 +38,7 @@ export class SessionRegistry {
   create(input: {
     sessionId: string;
     workspacePath: string;
+    agent: AgentWireName;
     model?: string;
     effort?: SessionEffortLevel;
   }): HostSession {
@@ -39,6 +49,7 @@ export class SessionRegistry {
     const session: HostSession = {
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
+      agent: input.agent,
       model: input.model,
       effort: input.effort,
       status: 'idle',
@@ -52,6 +63,7 @@ export class SessionRegistry {
     sessionId: string;
     workspacePath: string;
     runtimeIdentity: string;
+    agent: AgentWireName;
     model?: string;
     effort?: SessionEffortLevel;
   }): HostSession {
@@ -60,6 +72,8 @@ export class SessionRegistry {
       // Merge semantics (CP4 F-1): never replace the live object — a swap
       // would orphan an active turn's abort/running state. Callers must
       // reject resume for running sessions before reaching here.
+      // `agent` is deliberately NOT merged: a session is bound for life, and
+      // only the runtime that owns the entry can reach this call anyway.
       existing.workspacePath = input.workspacePath;
       existing.runtimeIdentity = input.runtimeIdentity;
       existing.model = input.model ?? existing.model;
@@ -69,6 +83,7 @@ export class SessionRegistry {
     const session: HostSession = {
       sessionId: input.sessionId,
       workspacePath: input.workspacePath,
+      agent: input.agent,
       model: input.model,
       effort: input.effort,
       runtimeIdentity: input.runtimeIdentity,

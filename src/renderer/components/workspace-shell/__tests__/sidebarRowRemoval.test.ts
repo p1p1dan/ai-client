@@ -96,7 +96,13 @@ describe('freshly created session — sidebar row lifecycle', () => {
 
     await expect(archiveSessionIndexEntry(sessionId as string, true, refresh)).resolves.toBe(true);
 
-    expect(api.registerSession).toHaveBeenCalledWith({ sessionId, workspacePath: '/repo' });
+    // S2 (b): the on-demand register carries the live row's binding — this is
+    // the only index write a never-sent session ever gets.
+    expect(api.registerSession).toHaveBeenCalledWith({
+      sessionId,
+      workspacePath: '/repo',
+      agent: 'claude-code',
+    });
     expect(api.archiveSession).toHaveBeenCalledTimes(2);
     expect(rowIds()).toEqual({ folder: [], recent: [] });
     // Nothing landed in the index, so there is no index truth to re-read.

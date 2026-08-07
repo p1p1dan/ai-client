@@ -5,6 +5,7 @@
 
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
+import type { AgentWireName } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
@@ -54,6 +55,14 @@ export function registerChatHandlers(): void {
         model?: string;
         /** T-20 reasoning effort; Host drops unknown levels (normalizeEffort). */
         effort?: SessionEffortLevel;
+        /**
+         * S2 (b): which runtime the renderer asked for. Main only relays it —
+         * it neither validates nor defaults it. The index row is authoritative
+         * only once the Host echoes the running agent back on `session.created`
+         * (see SessionIndexService.applyRuntimeEvent), which is why recording
+         * the requested value here is safe even if the Host cannot honour it.
+         */
+        agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
       await sessionIndexService.recordCreated(payload);
@@ -76,7 +85,19 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_REGISTER_SESSION,
     async (
       _e,
-      payload: { sessionId: string; workspacePath: string; model?: string }
+      payload: {
+        sessionId: string;
+        workspacePath: string;
+        model?: string;
+        /**
+         * S2 (b): the renderer's binding for a session that has never started
+         * a Host — this is the only chance the index gets to learn it before
+         * `mergeSessionIndex` would materialize the missing field as Claude
+         * Code and make the change permanent. Relayed, not validated:
+         * `recordCreated` keeps the persisted value when it is absent.
+         */
+        agent?: AgentWireName;
+      }
     ): Promise<boolean> => {
       try {
         await sessionIndexService.recordCreated(payload);
@@ -99,6 +120,8 @@ export function registerChatHandlers(): void {
         model?: string;
         /** T-20 reasoning effort; Host drops unknown levels (normalizeEffort). */
         effort?: SessionEffortLevel;
+        /** S2 (b): which runtime resumes it; pairs with `runtimeIdentity`. */
+        agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
       await sessionIndexService.recordResumed(payload);
