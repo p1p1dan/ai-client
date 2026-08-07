@@ -107,6 +107,35 @@ private async flush(): Promise<void> {
 （公开面只有 `list/recordCreated/recordResumed/rename/setArchived`），
 故 renderer 侧物化足够；将来若出现 Main 侧消费者，应调用共享的 `resolveAgentWireName`，**不得再normalize 一次**。[实测]
 
+### ④' 用户修正（2026-08-06）：**Codex 必须走 Node 入口，不得起打包好的原生二进制**
+
+> 用户原话：「codex 和 claude 一样，得用 node 版本，不能用打包好的版本，否则会读取有问题。」
+
+**这是对 S1 结论的实质修正，切片 2 的硬约束。** 编排者已核实的事实：
+
+| 事实 | 证据 |
+|---|---|
+| PATH 上的 `codex` **本身就是 node 包装器** | `which codex` → 软链到 `lib/node_modules/@openai/codex/bin/codex.js`；首行 `#!/usr/bin/env node` [实测] |
+| 它再去 spawn vendored 原生二进制 | `codex.js` 内 `spawn` 逻辑；S1 实测三级进程链 [实测] |
+| S1/S2 探针起的都是 PATH 上的 `codex`（即 node 入口） | `s1-codex-direct-probe.ts:73` / `s2-codex-question-probe.ts:111` 的 `CODEX_BIN = env ?? 'codex'` [实测] |
+
+**所以开发态的实测数据不受影响**（探针本来就走的 node 入口），**风险全在打包态**：
+Electron 打包后 PATH 未必含用户的 node，`spawn('codex')` 可能解析不到、或解析到不该用的东西。
+
+**切片 2 必须照 Claude 侧的先例办**——仓内已有
+`src/main/services/agent-host/NodeRuntimeResolver.ts` 的 `resolveNode24Runtime`，
+四源优先级 **`bundled`（C-15 随包 node，打包态首选）→ `AICLIENT_NODE24_PATH` → 版本管理器(nvm) → PATH**
+（`:47-48` 注释与 `:72/79/88` 的 `pushUnique`）[读码]。
+
+**落地要求**：
+1. `codexRuntime` **不得** `spawn('codex')` 了事，也**不得**直接起 vendored 原生二进制；
+   须解析出 Node 可执行 + `@openai/codex/bin/codex.js` 的真实路径，起 `node <codex.js> app-server`。
+2. 复用 `resolveNode24Runtime`（或与之同源的解析），**打包态首选随包 node**——
+   这与加密机的白名单口径（按进程名 `node.exe`）也是同一件事，见执行计划 C-15 / T-11⑥。
+3. 需要一条「解析不到 Codex 的 node 入口」的显式错误路径（沿用 `agent_unsupported` 的非致命形状或新增码），
+   **不得静默回落到原生二进制**。
+4. 探针脚本的 `CODEX_BIN` 环境变量口径保留，但注释里要写明「生产路径不是这样解析的」。
+
 ### ④ 复核新发现：还有一个「对外身份」要定，别与 wire 名混为一谈
 
 S1 原始报文里拍到：

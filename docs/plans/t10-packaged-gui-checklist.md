@@ -30,6 +30,22 @@ $env:CLAUDE_CONFIG_DIR='C:\Users\<你>\AppData\Local\Temp\aiclient-gui-test-conf
 | 8 | 全新机器添加仓库（T-24 真机残留，2026-08-04 并入） | 无既有仓库状态首启（不带 `--open-path`）：① 左栏空态 CTA / 头部入口添加本地仓库；② 从资源管理器拖文件夹到窗口 | ① 弹窗添加成功；② 出「Add Repository」高亮遮罩、松手弹窗预填路径；两路添加后左栏均立现 Project/Workspace | |
 | 9 | Win10 字重真机核（T-23/T-32 点验残留，2026-08-05 并入；开发机为 Linux 无法采集） | 顶栏会话标题（15px semibold）与正文并列对比；另核 0-nonies ⑪ 的 D25 §6.2 五项真机指标 | 标题明显比正文醒目；**粗细无差即字重回退 bug**（Win10 常缺 500 字重，故用 semibold） | |
 
+## 出发前必做（2026-08-06 打包体检新增，见 [体检裁定](./2026-08-06-packaging-readiness-verdict.md)）
+
+| # | 事项 | 工时 | 为什么 |
+|---|---|---|---|
+| M1 | **换 Windows 机器出包**，或给 CI `build-windows` 补 `upload-artifact`（≈6 行） | 机器 1.5–2h 首次 / CI 0.5h 改 + 20–30min 跑 | Linux 本机三处硬断：`fetch:node-runtime` 用 GNU tar 解 zip 必失败、`afterPack` 缺 `out-node-runtime/node.exe` 中止、根 node_modules 的 sqlite3/ripgrep/node-pty/@parcel-watcher 全是 Linux ELF 且 `npmRebuild:false` [实测] |
+| M2 | 在 Windows 上跑 `pnpm verify:packaged`（25 项全绿） | 10min | 本清单抬头写明的前置。**Linux 上跑没意义**——exe / 随包 node.exe / node-pty 三处断言被 platform 门控等于放行 [实测] |
+| M3 | 定死凭证注入方案 | 0.5h | `prepare:test-config` 是 node 脚本，在「无用户 Node」的加密机上鸡生蛋。可用随包 node 直跑：`resources\node-runtime\node.exe scripts\make-test-claude-config.mjs`（只用 node 内置模块）。**禁止混用 GUI onboarding**（写死 `~\.claude`，与 `CLAUDE_CONFIG_DIR` 打架） |
+| M4 | 出发前查清加密机上**是否已有被白名单的 node.exe 及其绝对路径** | 10min | T-11⑥ 失败时的唯一逃生口 `AICLIENT_NODE24_PATH`（优先级压过 bundled）。不查清则 ⑥ 一失败整轮作废 |
+| M5 | 修侧栏 agent chip 宽度挤压 | 1h | 本清单第 9 项要看的正是侧栏标题；带着挤压缺陷上机 = 浪费一次上机机会 |
+
+**版本新鲜度警告**：上一个已知 Windows 包是 **157 个提交前的 0.3.4**（2026-07-24），
+T-12~T-35 整套壳/主题/字体/压缩重构全不在内。**不要拿旧包去加密机**——验的是一个不存在的版本，结论无法回填台账。
+
+**3 例 Linux 门禁失败不进必做**：已实测证伪为环境假设缺陷（`ShellDetector.ts:7` / `CliDetector.ts:6`
+的模块级 `const isWindows` 在 import 期求值，事后 mock 影响不到），**非产品缺陷**。
+
 ## 注意
 
 - 全程走测试网关（第 3 项时间线正常即证明凭证注入生效；如需核对可看诊断/日志中 `baseHost: cch-jyw.pipidan.qzz.io`）。
