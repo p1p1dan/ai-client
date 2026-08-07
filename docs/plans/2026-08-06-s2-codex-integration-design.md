@@ -204,7 +204,7 @@ codex 回 →  "userAgent":"s1-codex-direct-probe/0.145.0 (Ubuntu 26.4.0; x86_64
 
 - **裁定**：不并行，按 切片0（共享类型一次性）→ 切片3（提问卡）→ 切片4（权限卡）串行。`ChatBlock` 的加法**只有 c 的 6 个可选字段**（a 侧不需要新 ChatBlock 字段，`questions?: QuestionItem[]` 已在，id/isSecret 随 QuestionItem 进来）。
 - 卡外壳位次：T-34 的 `originChip` 已占 head 下第一行；本轮 a 不加 footer，c 的 `omittedDecisionCount` 说明行固定在**卡底**。
-- `isSecret`：**本轮只进协议、渲染端不做掩码**（a 的建议），需用户确认安全降级（见 U5）。
+- `isSecret`：**渲染端补掩码输入**（§0.5-② 已推翻原「本轮不做」，理由=codeg 先例 + 本仓 T-35 脱敏立场）。掩码属切片 3 的问答卡工作量，+20–30 行。
 
 ### C10 【Host 侧数据结构归属】a 的 pending 表 vs c 的 approvalCorrelator
 
@@ -260,11 +260,11 @@ codex 回 →  "userAgent":"s1-codex-direct-probe/0.145.0 (Ubuntu 26.4.0; x86_64
 | 10 | `PermissionRespondCommand.payload.decision?`（`allow: boolean` **保持必填**） | 扩展 | 可选 | `decision ?? (allow?'allow':'deny')` | 零 | `agentHost.ts:132-139` + 4 处手写内联：`preload/index.ts:1397-1402`、`main/ipc/chat.ts:154`、`chatSessions.ts:178`、`:977` |
 | 11 | `PermissionResolvedEvent.payload` += `decision? / autoReason?` | 扩展 | 可选 | undefined = 用户亲手裁决 | 零（顺手补既有诚实性缺口） | `runtimeEvents.ts:290-297` |
 | 12 | `QuestionItem.id?: string` | 扩展 | 可选 | 无 id → answers key 用问题原文 | 零 | `runtimeEvents.ts:262-268` |
-| 13 | `QuestionItem.isSecret?: boolean` | 扩展 | 可选 | false；**本轮渲染端不读** | 零 | 同上 |
+| 13 | `QuestionItem.isSecret?: boolean` | 扩展 | 可选 | false；**渲染端在切片 3 补掩码输入**（§0.5-②） | 零 | 同上 |
 | 14 | `QuestionRequestedEvent.payload.autoResolutionMs?: number\|null` | 扩展 | 可选 | null = 不自动放行；**本轮客户端不实现** | 零 | `runtimeEvents.ts:276-282` |
 | 15 | `answers` 的 **key 语义**（`question.respond` / `question.resolved`） | 语义扩展（类型不变） | — | 有 `QuestionItem.id` 用 id，否则用原文 | 零（Claude 不发 id） | `agentHost.ts:141-162`、`runtimeEvents.ts:~300` 注释 |
 | 16 | `ChatBlock` += `permissionKind? / permissionDetail? / permissionDecisions? / permissionDecision? / permissionAutoReason? / omittedDecisionCount?` | 扩展（红线加法） | 全可选 | undefined | 零 | `chatSessions.ts:87-105` |
-| 17 | `HistoryReadErrorCode` += `'history_unsupported'` | 扩展并集 | — | — | 零（`toCode()` 未知回落 `'unknown'`） | `shared/types/sessionHistory.ts:46`、`renderer/components/chat/historyError.ts:41/69` |
+| 17 | `HistoryReadErrorCode` += `'history_unsupported'` | 扩展并集 | — | — | 零（`toCode()` 未知回落 `'unknown'`；两处新增均为**数据表补齐**，`toCode()` 一行未动 → 该码在切片 5a 接上分支前不可达） | `shared/types/sessionHistory.ts:46`、`renderer/components/chat/historyError.ts` 的 `CODE_COPY`、**外加第三处 `renderer/components/chat/MessageTimeline.tsx` 的 `HISTORY_ERROR_ICON`**（切片 0 实测：不补则 tsc 报 TS7053，`view.code` 索引该 `as const` 表——原表漏列，2026-08-06 补） |
 | 18 | `SessionHistoryEvent.payload.agent?` / `HistorySessionSummary.agent?`（d 原名 `agentType`，已改名） | 扩展 | 可选 | 缺省 claude-code | 零 | `runtimeEvents.ts:352-366` / `sessionHistory.ts:60-73` |
 | 19 | `SessionListHistoryCommand.payload.agents?: AgentWireName[]`（d 原名 `agentTypes`） | 扩展 | 可选 | 缺省 = 只扫 `~/.claude/projects` | 零（今日零 renderer 消费者） | `agentHost.ts:127-131` |
 | 20 | host.error code 新值 `'agent_unsupported'`（`fatal:false`） | 新值（非协议改动） | — | — | 零 | `agent-host/index.ts:177-240` 分发处 |
@@ -289,12 +289,25 @@ codex 回 →  "userAgent":"s1-codex-direct-probe/0.145.0 (Ubuntu 26.4.0; x86_64
 
 ---
 
+### 2.1 规格缺口登记（切片 0 施工时发现，2026-08-06 补）
+
+**§1 C4 / §2 #6 #9 #16 点名了三个新类型，但全档没给字段形状**（S2-c 原档只有摘要入库，无可查原文）。
+切片 0 按 [S1 报告 §1.5](./2026-08-06-s1-acp-codex-spike-report.md) 的实测报文反推并已落地，**以下为现行定义，切片 4 直接用，不要重新推**：
+
+| 类型 | 形状 | 推导依据 |
+|---|---|---|
+| `PermissionDecisionId` | `'allow' \| 'allow_session' \| 'deny' \| 'cancel'` | 4 个 × 3 方言 = §3 切片 4 的「12 例表驱动」；§2 #10 的 `decision ?? (allow?'allow':'deny')` 要求 allow/deny 在词表；C12 要求 allow_session 在词表；v2 的 decline/cancel 语义有别故各占一位 |
+| `PermissionDetail` | `exec{command,cwd?}` \| `file_change{changes[],omittedFileCount?}` | fileChange diff 分帧的实测形状 |
+| `SessionPermissionPolicy` | 判别位 `agent`；codex 分支取 U4 裁定的三维 `approvalPolicy` / `sandboxMode` / `networkAccess`。**`granular` 与 `approvalsReviewer` 本轮不建模** | §0.5-⑤ U4 |
+
+另落 U10 的两个常量：`PERMISSION_DIFF_MAX_FILES = 20` / `PERMISSION_DIFF_MAX_BYTES = 64*1024`（§0.5-⑤「写成常量便于一处改」）。
+
 ## 3. 施工顺序（先落验证，再落逻辑）
 
 依赖图（→ 表示硬前置）：**切片0 → 切片1 → {切片2 → {切片3 → 切片4}, 切片5}**；切片5 同时依赖切片2（复用 app-server 连接）。
 
 ### 切片 0 — 类型与断言骨架（**无任何逻辑**）
-- 内容：`agentWire.ts` 全部导出；§2 表 #1–#19 的**全部类型加法一次性落完**（含 c 的 `SessionPermissionPolicy` / `PermissionDecisionId` / `PermissionDetail`、a 的 `QuestionItem.id/isSecret`、d 的 `history_unsupported`）；C2 三条扫描 + d 的 G8/G9 扫描 + `PROTOCOL_VERSION===1` + 索引顶层数组断言 + `questionCardModel` 既有 4 例回归钉。
+- 内容：`agentWire.ts` 全部导出；§2 表 #1–#19 的**全部类型加法一次性落完**（含 c 的 `SessionPermissionPolicy` / `PermissionDecisionId` / `PermissionDetail`、a 的 `QuestionItem.id/isSecret`、d 的 `history_unsupported`）；C2 三条扫描 + `PROTOCOL_VERSION===1` + 索引顶层数组断言 + `questionCardModel` 既有 4 例回归钉。
 - 验收：`tsc` 全绿；新断言全绿；**既有测试一行未改且全绿**；`git diff` 中无任何 `.ts` 逻辑分支变化。
 - 为什么先：本仓纪律「定义验证先于改代码」，且这一片把三方的 payload 撞车一次性消掉，后面四片不再互相冲突。
 
@@ -310,7 +323,7 @@ codex 回 →  "userAgent":"s1-codex-direct-probe/0.145.0 (Ubuntu 26.4.0; x86_64
 
 ### 切片 3 — 提问桥（a）
 - 内容：接请求→`question.requested`+`waiting_question`+登记 pending；`respond()` 翻译（`', '` 拆回数组、key 换 id）；`cancel:true → {answers:{}}`；**不套用** Claude 的空 payload 拒收防呆。
-- 验收：用 a 抓到的 4 条真实报文做夹具回放，逐字段比对 `question.requested`；cancel 路径产出 `{answers:{}}` 并观察到 `serverRequest/resolved`；`isOther/isSecret/autoResolutionMs` 三个常量字段有显式「本轮忽略」测试而不是漏掉。
+- 验收：用 a 抓到的 4 条真实报文做夹具回放，逐字段比对 `question.requested`；cancel 路径产出 `{answers:{}}` 并观察到 `serverRequest/resolved`；`isOther`/`autoResolutionMs` 两个常量字段有显式「本轮忽略」测试而不是漏掉；**`isSecret` 不是忽略而是要掩码**（§0.5-②），需有「isSecret=true → 输入框掩码」的正向用例。
 
 ### 切片 4 — 权限投影（c）
 - 内容：`decisions.ts`（4id × 3 方言）+ `approvalCorrelator.ts` + 卡层渲染（在切片 3 之后动同一批卡文件）。
