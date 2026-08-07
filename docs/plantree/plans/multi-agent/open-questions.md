@@ -60,16 +60,54 @@
 
 </details>
 
-## #2 Codex 侧提问是什么形状
+## ~~#2 Codex 侧提问是什么形状~~ —— ✅ **2026-08-06 关闭（S2-a 实测）**
 
-**状态**：**部分推进（2026-08-06 S1 spike）—— 契约已拿到，真实报文仍未实测；维持未闭合**
+**状态**：**已关闭**。抓到 **4 条真实 `item/tool/requestUserInput` 报文 / 10 颗问题**，答复走通、回合续跑。
+证据：`src/agent-host/spikes/s2-codex-question-probe.ts` + scratchpad `s2-u1/u1-question-raw.jsonl`。
+设计落点见 [S2 设计档](../../../plans/2026-08-06-s2-codex-integration-design.md)。
 
-S1 实测拿到直连侧 `item/tool/requestUserInput` 的完整契约，与我方 `QuestionItem` **结构同构**
-（差异只有 answers key 用问题原文 vs question id，外加 `isSecret` / `isOther` 两个位）→ **薄适配估 40–80 行**。
-**但这是 schema 比对推出的判断，不是实测**——本轮 9 个真实回合零命中提问。
-补测代价见 [spike 报告 §5 U1](../../../plans/2026-08-06-s1-acp-codex-spike-report.md)（4–8 回合，
-且「诱发实验」额度损耗率实测约 50–75%）。详见
-[reuse-boundary「未验的一处」](./topics/reuse-boundary.md)。
+### 形状定案（字段取值域有实测支撑）
+
+`params = {threadId, turnId, itemId, questions[], autoResolutionMs}`；
+`question = {id, header, question, isOther, isSecret, options[]}`；`option = {label, description}`（**description 必填**）。
+实测常量：`isOther` 恒 true(10/10) · `isSecret` 恒 false(10/10) · `autoResolutionMs` 恒 null(4/4) ·
+**`options` 从不为空**（二进制里有服务端强校验 `request_user_input requires non-empty options for every question`
+——**schema 的 nullable 是假的，不要按 null 写分支**）。
+
+### 「薄适配」结论：方向对，数字偏乐观约 2 倍
+
+S1 估的 **40–80 行**校正为 **Host 侧 100–150 行 + 共享类型 ~12 行 + 渲染端 0 行**，
+另加一次性骨架成本（pending 表 + status mapper + 生命周期回收 ≈60–80 行）记在切片 2。
+**仍属「薄」**——报文自包含、无需 item 关联、无需像 codeg 的 `classify_elicitation` 把通用表单反解成类型
+（那是 ACP 侧才有的成本）。
+
+三条把成本压下来的实测：
+1. **提问是自包含报文，不需要 itemId 关联逻辑**——`params.itemId`（形如 `call_XXX`）在整回合 13 个 item 中一次未出现。
+   与 `item/fileChange/requestApproval` **正相反**（后者 diff 必须按 itemId 关联另一条 item）。
+2. **`isOther` 我方零改动即满足**——渲染端已无条件追加 `Other…` 行（`questionCardModel.ts:104-124`），
+   正是 Codex 工具描述要求的客户端行为。
+3. **`{answers:{}}` 是干净取消**（模型不重问、回合正常收尾）——**与 Claude 侧行为相反**：
+   `questionBridge.ts:8-10` 记录的「bare allow 会被 cli.js 静默丢弃并重问」在 Codex 侧不成立，
+   照搬那条防呆会把 cancel 做死。（这也是否决「抽公共 settler 基类」的决定性理由。）
+
+### S1 那条线索被证伪（记下来免得再走弯路）
+
+编排者曾据 `codex features list` 判断 `default_mode_request_user_input`（under development / 默认 false）
+是 S1 九回合零命中的原因。**实测证伪**：该 flag 连同 `collaborationMode=plan`、
+`[tools.experimental_request_user_input].enabled` 三者任意组合，**外发请求体逐字节相同**。
+真因是**模型走了散文后门**——Codex 出厂提示词写着「in rare cases … you may ask it directly without the tool」，
+`gpt-5.6-sol` 每次都走后门。**唯一有效杠杆是提示词**：点名 `request_user_input` 工具 +
+声明散文通道无效（「my client renders ONLY structured tool questions」）+ 预指定 question ids，一次命中、同回合出 4 条。
+
+### 副产物：零额度看工具表的方法（后续全线可用）
+
+把 `model_providers.<p>.base_url` 指向本地 sinkhole（记请求体、回 400、retries=0），
+codex 在拿到任何 token 之前就把完整请求（含工具表）发出来了。
+**坑**：`gpt-5.6-sol` 是 `tool_mode:"code_mode_only"` + `use_responses_lite:true`，
+请求体**没有顶层 `tools` 数组**，工具表在 `input[0] = {type:"additional_tools", role:"developer", tools:[…]}` 里
+——读 `body.tools` 会得到空表并误判。
+该方法已用于取得 **U4 的负结果**：`request_permissions` 在 5 个变体下从不出现在工具表里
+→ 本机 build/模型上 `item/permissions/requestApproval` **无法用真实回合诱发**，S2-c 只能按 schema 设计。
 
 <details><summary>原始条目（2026-08-04）</summary>
 
@@ -81,20 +119,35 @@ codeg 为它写了 `classify_elicitation` 分类器，说明形态不止一种�
 
 </details>
 
-## #3 会话 ↔ agent 绑定的持久化口径
+## ~~#3 会话 ↔ agent 绑定的持久化口径~~ —— ✅ **2026-08-06 关闭（S2-b 双轨 + 用户裁定）**
 
-**状态**：**待设计（S1 已把落点测准，2026-08-06 升为下一步首要设计项）**
+**状态**：**已关闭**。设计见 [S2 设计档 §0.5-①③ / §1 C1-C5 / §2](../../../plans/2026-08-06-s2-codex-integration-design.md)。
 
-S1 实测把落点从 1 处放大到 **4 处**，并发现一个原先不知道的硬约束：
+- **wire 名（不可逆，用户 2026-08-06 追认）**：`AGENT_WIRE_NAMES = ['claude-code','codex']`，
+  新建叶子模块 `src/shared/types/agentWire.ts`。字段名统一 `agent`（否决 `agentType`：
+  `runtimeEvents.ts:250/467` 的 `agentId?` 已被占用为 Claude 子代理 id，同屏会误读）。
+- **层级**：只落 session 层，workspace 不放（双轨独立同判）。「新建聊天默认用谁」另放全局 settings。
+- **唯一回落点**：renderer 的 `mergeSessionIndex`（`SessionIndexEntry[]→ChatSession[]` 唯一入口）。
+  **否决 Main 侧 `ensureLoaded`**——`flush()` 写的是整张表，读侧规范化会导致**任何一次 flush
+  都把 `agent` 写回磁盘上每一条老会话行**，即把兼容读取变成不可逆写迁移。
+- **不补 `schemaVersion`**：顶层信封化会让老版本 `for-of` 抛错 → 空表启动 → 下次 flush 写回 `[]`
+  → **全部会话索引静默清零**。要版本标记只能做成 per-entry 可选字段。
+- **必踩的坑（双轨各自独立命中）**：`SessionIndexService.ts:139-142` 的
+  `if (!runtimeIdentity) return` 早退——而 `claudeRuntime.ts:308-310` 新建会话的 `session.created`
+  恰恰没有 runtimeIdentity。不放宽这个守卫，agent 归属永远进不了索引且不报错。
+- **三轴不得互转**：`AgentWireName`（会话绑定）≠ `BuiltinAgentId`（终端能起哪个 CLI）≠ `AIProvider`
+  （一次性助手供应商），由静态断言钉死。
+
+<details><summary>原始条目（2026-08-05）与 S1 阶段补充</summary>
+
+**S1 阶段（关闭前）的中间结论**：把落点从 1 处放大到 **4 处**，并发现一个原先不知道的硬约束：
 **`session-index.json` 是裸数组，无 `schemaVersion`、无字段校验、无 migration**
 （`SessionIndexService.ts:172-188`，`ensureLoaded` 仅 `JSON.parse` + 灌 Map、失败即 warn 空表启动）
 → **「已有会话 undefined 视作 claude」必须在读侧显式实现**，指望迁移机制是没有的。
 四处落点与协议惯例（可只加可选字段、不升 `AGENT_HOST_PROTOCOL_VERSION`）见
 [reuse-boundary 第 2 行](./topics/reuse-boundary.md)。
 
-<details><summary>原始条目（2026-08-05）</summary>
-
-`chatSessions.ts` 是**红线 store**，加字段走加法纪律。要定的：
+**最初条目（2026-08-05）**：`chatSessions.ts` 是**红线 store**，加字段走加法纪律。要定的：
 
 - 字段落在 session 还是 workspace 层？（codeg 落在 conversation 行的 `agent_type`）
 - 已有会话（无该字段）怎么迁移——默认回落 Claude 还是显式「未知」？
@@ -115,7 +168,28 @@ S1 实测把落点从 1 处放大到 **4 处**，并发现一个原先不知道�
 
 ## #5 Codex 的模型目录与权限语义如何统一表达
 
-**状态**：**枚举已实测齐（2026-08-06），「怎么表达」待设计**
+**状态**：**权限半边已定（2026-08-06 S2-c）；模型目录半边仍待设计**
+
+**权限半边（关闭）**：设计见 [S2 设计档](../../../plans/2026-08-06-s2-codex-integration-design.md) §1 C4/C10/C11 与 §2 #6/#9/#10/#11。
+要点——① **`SessionPermissionMode` 冻结不动**（Claude 口径就让它是 Claude 口径），
+新增并列的 `SessionPermissionPolicy` 判别联合（判别位 = `agent`）挂进 `session.created.payload`，
+老 renderer 拿到 Codex 会话时 `isSessionPermissionMode` 返回 false → `return prev`，权限行不显示且不乱写；
+② 审批卡收敛成一张，`decisions?` 缺省 = Allow/Deny 两行（既有测试已钉），
+**未知 decision id 一律 deny（fail-safe）**；③ `availableDecisions` 实测是渲染提示非强校验，
+故只渲染我们认识的选项 + 卡底显示 `omittedDecisionCount`；
+④ **fileChange 的 diff 与审批分帧**，新增 `approvalCorrelator`（itemId→diff 缓存）关联，
+**但绝不因等 diff 而延迟回复审批**（会把回合挂死在 `waitingOnApproval`）；
+⑤ `item/permissions/requestApproval`（第三类 v2 审批）本机 build **诱发不出来**（工具表里从无 `request_permissions`），
+本轮不实现，default 分支走自动拒绝而非崩；⑥ **默认档 `on-request` + `workspace-write` + `networkAccess:false`**，
+**绝不继承本机 `~/.codex/config.toml`**（实测写的是 `danger-full-access`，继承 = 静默关掉全部审批）。
+
+**模型目录半边（仍开）**：三套目录（`codex debug models` 8 条含 6 档 reasoning / `model/list` 5 条 / ACP 25 档位）
+已实测齐，但「UI 怎么表达」未设计。直连下 model 与 effort 是**两个独立字段**（ACP 才合成单 id），
+故「统一抽象 + 各自枚举」是自然选择。**未解空洞**：目录是本地静态内置表**不查第三方代理**
+→ 代理真实支持哪些模型答不出，必须自建校验。
+
+<details><summary>原始条目与 S1 阶段枚举</summary>
+
 
 - **模型目录**：三套粒度——`codex debug models` **8 条**（含 **6 档 reasoning**：low/medium/high/xhigh/max/ultra）·
   app-server `model/list` **5 条** · ACP `session/new` **25 档位**。我方 `SessionEffortLevel`（`agentHost.ts:48`）是
@@ -132,3 +206,5 @@ S1 实测把落点从 1 处放大到 **4 处**，并发现一个原先不知道�
 
 → 枚举与原始报文见 [spike 报告 §1.4 / §1.5](../../../plans/2026-08-06-s1-acp-codex-spike-report.md)。
 **剩下的是设计题**：我方 `permissionMode`（Claude 口径 `acceptEdits/dontAsk/bypassPermissions`）如何承载这 4 维。
+
+</details>

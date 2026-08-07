@@ -1,6 +1,6 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**In Progress — S1 已收口，等排 S2**（2026-08-06 解冻当日跑完 S1）。
+> 状态：**In Progress — S1 / S2 设计均已收口，等排 S3 施工**（2026-08-06 同日：解冻 → S1 → S2 设计）。
 >
 > ✅ **解冻裁定（用户 2026-08-06）**：原话「multi-agent 支线解冻 开干」。
 > 2026-08-05 的「后置」裁定（原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」）
@@ -9,6 +9,27 @@
 
 ## Done
 
+- **2026-08-06 S2 — 直连 Codex 接入设计 ✅ 收口**（S1 当日接着做完）——产出
+  [S2 设计档](../../../plans/2026-08-06-s2-codex-integration-design.md)（389 行，单一施工档）。
+  编排：a 与 b/c/d 全并发，b 走 **Opus + Codex 双轨双盲**（唯一不可逆项），后接 Reconcile 强制收敛。
+  **关闭 [#2](./open-questions.md)（提问形状）与 [#3](./open-questions.md)（绑定口径）；[#5](./open-questions.md) 关掉权限半边。**
+  - **a 结 #2**：抓到 **4 条真实 `item/tool/requestUserInput` 报文 / 10 颗问题**，答复走通、回合续跑（4/6 回合）。
+    「薄适配」由 S1 的 [推测] 40–80 行校正为 **Host 100–150 行 + 类型 12 行 + 渲染端 0 行**（偏乐观约 2 倍，**方向不变**）。
+    **证伪了编排者给的线索**：`default_mode_request_user_input` 等三个开关任意组合**外发请求体逐字节相同**，
+    真因是模型走 Codex 出厂提示词留的**散文后门**，唯一杠杆是提示词。
+    副产物：**零额度看工具表的方法**（base_url 指向 sinkhole），已用它取得 U4 负结果。
+  - **b 双轨**：独立收敛 6 处（只落 session 层 / 不补 schemaVersion / 唯一回落点 / runtimeIdentity 不兼任 /
+    平行加 chip / **两轨各自独立命中同一个早退守卫**）；分歧 3 处——wire 值上交用户裁定
+    （**`'claude-code'/'codex'`**），字段名取 `agent`，**回落点取 renderer `mergeSessionIndex`**
+    （编排者复核发现 Codex 主张的 Main 侧 `ensureLoaded` 与它自己的否决项打架：`flush()` 写整张表，
+    读侧规范化 = 把兼容读取变成不可逆写迁移）。
+  - **仲裁员挖出三份设计共同的错误前提**：仓内**已有两套 agent 词表**（`BuiltinAgentId` 终端轴 /
+    `AIProvider` 一次性助手轴），且 `agentId?` 已被占用为 Claude 子代理 id，`'claude-code'` 全仓已有 24 处
+    ——b 原定的静态扫描若照落**第一次运行就红**。三轴互不转换写成断言。
+  - **编排者复核新增**：`clientInfo.name` 会被 codex 揉进 User-Agent **发给 OpenAI**，
+    生产环境须换应用名（对外身份，与 wire 名两回事）；`isSecret` 推翻原「不做」，
+    按 codeg 先例 + 本仓 T-35 脱敏立场**补掩码**。
+  - 落码 `<pending>`：`src/agent-host/spikes/s2-codex-question-probe.ts`。
 - **2026-08-06 S1 — ACP + Codex 可行性 spike ✅ 收口**（解冻当日跑完）——四路并发探针实测，
   产出 [S1 spike 报告](../../../plans/2026-08-06-s1-acp-codex-spike-report.md)（474 行，含编排者逐条回验记录）。
   **出口达成：[open-q #1](./open-questions.md) 关闭 → 裁定「不接 ACP，直连 `codex app-server`」。**
@@ -32,11 +53,33 @@
 
 ## In Progress
 
-（空 —— S1 已收口，S2 待用户排期）
+（空 —— S2 设计已收口，S3 施工待用户排期）
 
 ## Next
 
-### 1. S2 — 直连 Codex 接入设计（待用户排期）
+### 1. S3 — 直连 Codex 施工（待用户排期）
+
+**六切片，依赖图 `0 → 1 → {2 → {3 → 4}, 5}`**（切片 5 同时依赖 2）。全部细节见
+[S2 设计档 §3](../../../plans/2026-08-06-s2-codex-integration-design.md)。
+
+| 片 | 内容 | 关键前置 |
+|---|---|---|
+| 0 | 类型与断言骨架（**零逻辑**） | 一次性消掉三方 payload 撞车；本仓「定义验证先于改代码」纪律 |
+| 1 | 绑定回流链（18 跳 + 早退守卫放宽 + 唯一物化点 + 侧栏 chip） | **全局串行前置**——切片 5 的重启后 resume 完全依赖它 |
+| 2 | Codex 客户端骨架（JSON-RPC + 单一 pending 表 + **单一 status mapper** + 隔离 CODEX_HOME） | 可与 1 并行开发，**合并在 1 之后** |
+| 3 | 提问桥（用 a 抓到的 4 条真实报文做夹具回放） | 2 |
+| 4 | 权限投影（decisions 表 + approvalCorrelator + 卡层） | 3（同批卡文件，不并行） |
+| 5 | 历史：先档 A（`history_unsupported` 显式降级）再档 C | 1（threadId 落盘通道） |
+| 6 | 收口：flag on/off 双跑 + 侧栏窄宽截图 + 台账 | —— |
+
+**flag**：`AICLIENT_AGENT_CODEX`（默认 **off**，照抄既有 env 开关形状）。
+flag 只控 `capabilities.agents` 与运行时注册，**不控协议字段/store 形状/渲染分支**（否则会长出两套形状）。
+
+**门禁纪律**：逐门串行跑（本机内存有限，链式合跑曾 OOM）。
+
+### ~~2. S2~~ —— **2026-08-06 已 Done**（见 Done 段）
+
+<details><summary>S2 立项时的四项定义（2026-08-06）</summary>
 
 裁定既定，下一件事是**设计**而非继续 spike。四项，前两项可并行：
 
@@ -48,6 +91,8 @@
 | d | **历史跨 agent 的最小可接受降级** | —— | 全表**最大共同空洞**（三机制，见 reuse-boundary 末行）；两条路都没跑过 resume（U2）。短期大概率结论是「Codex 会话不支持 resume 历史」，但要**显式降级不是崩** |
 
 **红线提醒**：b 要动 `stores/chatSessions.ts`（红线 store，走加法纪律），动工前回主线核对三处接缝。
+
+</details>
 
 ### 2. ~~S1~~ —— **2026-08-06 已 Done**（见 Done 段）
 
