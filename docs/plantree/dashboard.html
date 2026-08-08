@@ -992,7 +992,7 @@
       <main class="main">
         <div class="topbar">
           <div class="search-wrap">
-            <input id="search" class="search" type="search" placeholder="搜索 T-30、GUI、网关、surface…" />
+            <input id="search" class="search" type="search" placeholder="搜索 S3、出包、T-10、网关、surface…" />
           </div>
           <select id="status-filter" class="filter" aria-label="按状态筛选">
             <option value="all">全部状态</option>
@@ -1008,65 +1008,70 @@
         <div class="content">
           <section id="overview" class="hero section">
             <div class="hero-main">
-              <div class="eyebrow">OpenChamber Chat Refactor · In Progress</div>
-              <h1>从规划基线到 GUI 验收的完整任务地图</h1>
+              <div class="eyebrow">OpenChamber Chat Refactor · 主线开发线已清空 ／ multi-agent S3 施工中</div>
+              <h1>现在只剩两条线：一条代码线，一条真机线</h1>
               <p class="hero-copy">
-                当前主轴是 Phase 0A 观感基线补做与 Phase 3 Chat MVP 收口。代码开发已推进至
-                T-30 批 2，下一开发项为 T-31；真正的近期瓶颈是第五轮 GUI 点验、历史回归点测、网关与特定机器现场验证。
+                主线七任务（T-32 · T-12~T-15 · T-23 · T-16 · T-33 · T-35 · T-34）已于 2026-08-06 第十二轮点验全部验收转 Done，
+                <strong>主线开发线零在建</strong>。唯一还在写代码的是 multi-agent 支线 S3（Codex 直连，剩 5 个切片，下一件是切片 2）。
+                真正的瓶颈不在代码而在真机——必须先在 Windows 机器上出 <code>0.4.0-test.2</code> 包，
+                T-10 打包点验 / T-11 加密机 / CP2 / CP5 全部排在它后面。
               </p>
               <div class="hero-meta">
                 <span class="chip">Branch <code>feat/openchamber-chat-refactor</code></span>
-                <span class="chip">Last landed <code>9e2736b</code></span>
-                <span class="chip">Snapshot <code>2026-08-03</code></span>
+                <span class="chip">Last landed <code>ff63987</code></span>
+                <span class="chip">Version <code>0.4.0-test.2</code></span>
+                <span class="chip">四门 <code>2481 例 0 红</code></span>
+                <span class="chip">Snapshot <code>2026-08-08</code></span>
               </div>
             </div>
             <div class="hero-side">
               <div>
                 <div class="pulse-line"><span class="pulse-dot"></span><strong>当前活动状态</strong></div>
-                <h2>Phase 0A 🟡 + Phase 3 🟡</h2>
-                <p>A01/A05/A06 已交付；A02/A03/A04 未立项。Chat MVP 多项实现完成，仍待人工与环境验证。</p>
+                <h2>代码 1 项在建 · 真机 23 项待验</h2>
+                <p>在建 = S3 切片 2（Codex 客户端骨架）。其余全在等：等出包、等网关、等截图。</p>
               </div>
               <div class="next-target">
-                <strong>最近动作</strong>
-                <span>先完成 T-30 批2 第五轮 GUI 点验（0-nonies），再进入 T-31；T-24 新机器点验与 T-10/T-11 并行推进。</span>
+                <strong>下一步（两条可并行）</strong>
+                <span>① 开发：S3 切片 2 —— JSON-RPC 客户端 + 单一 pending 表 + 单一 status mapper + 隔离 CODEX_HOME。<br />
+                ② 你：在 Windows 机器出 test.2 包 → 跑 T-10 九项 + 步骤 4b 四项回归（重点 M4 分支显示）。</span>
               </div>
             </div>
           </section>
 
           <div class="metrics" aria-label="任务状态摘要">
-            <div class="metric"><strong>2</strong><span>已完成 Phase（1 / 2）</span></div>
-            <div class="metric"><strong>8+</strong><span>实现完成、待人工验证</span></div>
-            <div class="metric"><strong>11</strong><span>第五轮 T-30 批2点验项</span></div>
-            <div class="metric"><strong>2</strong><span>明确外部阻塞环境</span></div>
-            <div class="metric"><strong>19</strong><span>仍开放的产品/工程问题</span></div>
+            <div class="metric"><strong>1</strong><span>在建代码任务</span></div>
+            <div class="metric"><strong>5</strong><span>S3 剩余切片</span></div>
+            <div class="metric"><strong>23</strong><span>待真机点验项</span></div>
+            <div class="metric"><strong>3</strong><span>被外部卡住的任务</span></div>
+            <div class="metric"><strong>21</strong><span>仍未决的问题</span></div>
           </div>
 
           <section id="critical-route" class="section">
             <div class="section-head">
               <div>
                 <h2>关键线路</h2>
-                <p>开发线与用户验证线并行；箭头表示主执行顺序，不代表所有人工验收都必须串行。</p>
+                <p>上排是代码线（我做），下排是真机线（你做）。两条并行，交汇点在 CP2 / CP5。</p>
               </div>
               <a class="source-link" href="./plans/openchamber-chat-refactor/implementation-status.md">查看当前状态源 ↗</a>
             </div>
             <div class="route">
-              <div class="route-step current" data-search-item data-status="pending">
-                <small>NOW · GUI</small><strong>T-30 批2 点验</strong><span>字体分域、Composer 三拍板、45rem 阅读栏；清单 0-nonies。</span>
+              <div class="route-step current" data-search-item data-status="next">
+                <small>NOW · DEV</small><strong>S3 切片 2</strong><span>Codex 客户端骨架：JSON-RPC 自有 id 空间 + 单一 pending 表 + 单一 status mapper + 隔离 CODEX_HOME。</span>
               </div>
               <div class="route-step" data-search-item data-status="next">
-                <small>NEXT · DEV</small><strong>T-31 回复解剖</strong><span>回复解剖 + 置顶气泡，规格已备，估算约 3.6d。</span>
+                <small>THEN · DEV</small><strong>S3 切片 3 → 6</strong><span>提问桥（4 条真实报文回放）→ 权限投影 → 历史降级 → 收口（flag 双跑）。</span>
+              </div>
+              <div class="route-step" data-search-item data-status="blocked">
+                <small>BLOCKING · 你</small><strong>出 Windows 包</strong><span>T-10 出发前必做 M1~M4。Linux 本机三处硬断，出不了包；不出包后面全走不动。</span>
               </div>
               <div class="route-step" data-search-item data-status="pending">
-                <small>S0 · GUI</small><strong>T-24 收尾</strong><span>新机器添加仓库通路实测 + 台账补登；实体已随 b38017b 落地。</span>
+                <small>GUI · 你</small><strong>T-10 九项 + 4b 回归</strong><span>打包版点验九项 + 08-07 五问题回归四项（R1~R4）→ 汇报 CP2。</span>
               </div>
-              <div class="route-step" data-search-item data-status="next">
-                <small>PHASE 4</small><strong>T-12 → T-15</strong><span>git / editor / context / terminal 四种 surface 接真能力。</span>
+              <div class="route-step" data-search-item data-status="blocked">
+                <small>ON-SITE · 你</small><strong>T-11 加密机六项</strong><span>随包 node 白名单⑥ + TSD 读取实证 → CP5，Phase 0 才能转正式 Go。</span>
               </div>
-              <div class="route-step" data-search-item data-status="next">
-                <small>CLEANUP</small><strong>T-23</strong><span>死按钮、假 usage 环与存量 A06 违规逐项清零。</span>
-              </div>
-              <div class="route-step" data-search-item data-status="pending">
-                <small>RELEASE GATES</small><strong>T-10 → T-11</strong><span>打包版 GUI 点验后进入加密机现场，Phase 0 转正式 Go。</span>
+              <div class="route-step" data-search-item data-status="blocked">
+                <small>STUCK</small><strong>T-04 / T-06</strong><span>卡网关：默认模型确定性 400、sonnet 返空文本 thinking。app 侧无可修，等网关。</span>
               </div>
             </div>
           </section>
@@ -1082,35 +1087,39 @@
             <div class="phase-grid">
               <article class="phase-card" data-search-item data-status="pending">
                 <div class="phase-top"><span class="phase-number">PHASE 0</span><span class="status-chip status-pending">Conditional Go</span></div>
-                <h3>技术 Go / No-Go</h3><p>开发机项完成；T-10 打包 GUI 与 T-11 加密机实证后转正式 Go。</p>
+                <h3>技术 Go / No-Go</h3><p>开发机项完成；T-10 打包 GUI 与 T-11 加密机实证后才转正式 Go。</p>
               </article>
               <article class="phase-card" data-search-item data-status="pending">
                 <div class="phase-top"><span class="phase-number">PHASE 0A</span><span class="status-chip status-pending">部分补做</span></div>
-                <h3>高保真产品基线</h3><p>A01/A05/A06 已验收；A02/A03/A04 未立项，故不可标完成。</p>
+                <h3>高保真产品基线</h3><p>A01/A05/A06 已验收；<strong>A02/A03/A04 至今未立项</strong>，这是唯一 Phase 级的洞。</p>
               </article>
               <article class="phase-card" data-search-item data-status="done">
                 <div class="phase-top"><span class="phase-number">PHASE 1</span><span class="status-chip status-done">Done</span></div>
-                <h3>UI Shell（Mock）</h3><p>旧四区口径完成；D19 后的三列 + 导轨重做归后续任务，不回退历史状态。</p>
+                <h3>UI Shell（Mock）</h3><p>旧四区口径完成；D19 后的三列 + 导轨重做归 T-22/T-32，不回退历史状态。</p>
               </article>
               <article class="phase-card" data-search-item data-status="done">
                 <div class="phase-top"><span class="phase-number">PHASE 2</span><span class="status-chip status-done">Done</span></div>
                 <h3>Runtime Vertical Slice</h3><p>Host、Main、IPC、Renderer 主闭环与 Question/Resume/附件/看门狗已完成。</p>
               </article>
-              <article class="phase-card" data-search-item data-status="pending">
-                <div class="phase-top"><span class="phase-number">PHASE 3</span><span class="status-chip status-pending">In Progress</span></div>
-                <h3>Chat MVP</h3><p>多项实现完成待人工点验；T-04 卡网关、T-06 未测，仍未收口。</p>
+              <article class="phase-card" data-search-item data-status="blocked">
+                <div class="phase-top"><span class="phase-number">PHASE 3</span><span class="status-chip status-blocked">卡网关</span></div>
+                <h3>Chat MVP</h3><p>只差 T-04（网关 400）与 T-06（唯一完全未测）两项；两者都不在 app 侧。</p>
               </article>
-              <article class="phase-card" data-search-item data-status="next">
-                <div class="phase-top"><span class="phase-number">PHASE 4</span><span class="status-chip status-next">Next</span></div>
-                <h3>现有能力重新接线</h3><p>四种 ContextPanel surface 接真：git、editor、context、terminal。</p>
+              <article class="phase-card" data-search-item data-status="pending">
+                <div class="phase-top"><span class="phase-number">PHASE 4</span><span class="status-chip status-pending">主体已验收</span></div>
+                <h3>现有能力重新接线</h3><p>git / editor / context / terminal 四 surface + 壳骨架已点验 Done；其余 6 surface 保留注册位未实现。</p>
               </article>
               <article class="phase-card" data-search-item data-status="deferred">
                 <div class="phase-top"><span class="phase-number">PHASE 5</span><span class="status-chip status-deferred">Not Started</span></div>
-                <h3>收口与正式版</h3><p>旧路径收缩、压力验证、组件级事故测试与发布门禁继续完善。</p>
+                <h3>收口与正式版</h3><p>旧路径收缩、千 block 压测、组件级事故测试与发布门禁。</p>
               </article>
               <article class="phase-card" data-search-item data-status="deferred">
                 <div class="phase-top"><span class="phase-number">PHASE 6</span><span class="status-chip status-deferred">Deferred</span></div>
-                <h3>按需增强</h3><p>其余 surface、子代理层、队列增强、Markdown 与 slash command 等按价值立项。</p>
+                <h3>按需增强</h3><p>其余 surface、多 agent 协同、队列增强、slash command 等按价值立项。</p>
+              </article>
+              <article class="phase-card" data-search-item data-status="next">
+                <div class="phase-top"><span class="phase-number">支线</span><span class="status-chip status-next">In Progress</span></div>
+                <h3>multi-agent · Codex 直连</h3><p>S1 spike ✅ → S2 设计 ✅ → S3 施工中（切片 0/1 已落，2~6 待做）。裁定不接 ACP。</p>
               </article>
             </div>
           </section>
@@ -1119,96 +1128,116 @@
             <div class="section-head">
               <div>
                 <h2>任务看板</h2>
-                <p>只列当前路线中最有决策价值的任务；完整历史证据请进入台账。</p>
+                <p>四列 = 已完成 / 在建 / 等外部或等你 / 后置未承诺。完整证据请进台账。</p>
               </div>
               <a class="source-link" href="./plans/openchamber-chat-refactor/roadmap.md">查看完整 Roadmap ↗</a>
             </div>
             <div class="board">
               <div class="board-column">
-                <div class="column-title"><strong>Done</strong><span>evidence-backed</span></div>
+                <div class="column-title"><strong>Done</strong><span>已验收</span></div>
                 <div class="task-list">
                   <article class="task-card" data-search-item data-status="done">
+                    <div class="task-top"><span class="task-id">主线开发线 × 7</span><span class="status-chip status-done">2026-08-06</span></div>
+                    <h3>T-32 · T-12~T-15 · T-23 · T-16 · T-33 · T-35 · T-34</h3><p>第十二轮 GUI 点验一次性验收；右栏骨架回归 A08、四 surface、违规清理、壳开关、重试横幅、stderr 进 UI、子 agent 实况。</p>
+                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/roadmap.md">Roadmap</a><a href="../plans/ledger-claude-mainline.md">主线台账</a></div>
+                  </article>
+                  <article class="task-card" data-search-item data-status="done">
+                    <div class="task-top"><span class="task-id">观感对齐链</span><span class="status-chip status-done">八轮点验</span></div>
+                    <h3>T-22 / T-05 / T-31 / T-30 / T-29 / T-19 / T-24</h3><p>三列壳、工具行问答卡、回复解剖、字体分域、Markdown 渲染、消息队列、添加仓库通路。</p>
+                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/history/2026-0728-0803-archive.md">点验归档</a></div>
+                  </article>
+                  <article class="task-card" data-search-item data-status="done">
                     <div class="task-top"><span class="task-id">C-01…C-15</span><span class="status-chip status-done">Done</span></div>
-                    <h3>主线 Host / 协议 / 打包底座</h3><p>打包链、Question、Resume、Session Index、附件、看门狗、随包 Node 等。</p>
+                    <h3>Host / 协议 / 打包底座</h3><p>打包链、Question、Resume、Session Index、附件、看门狗、随包 Node。</p>
                     <div class="task-links"><a href="../plans/ledger-claude-mainline.md">主线台账</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="done">
-                    <div class="task-top"><span class="task-id">T-02 / T-07</span><span class="status-chip status-done">Done</span></div>
-                    <h3>会话生命周期与 @ 引用主体</h3><p>主体经 GUI 复验通过；后续增量仍在人工清单单列。</p>
-                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/roadmap.md">Roadmap</a></div>
+                    <div class="task-top"><span class="task-id">S1 / S2 / S3-0 / S3-1</span><span class="hash">bc531c7 · 7fa1270 · 0314216</span></div>
+                    <h3>multi-agent 前四步</h3><p>spike 裁定不接 ACP（直连更便宜）→ 直连接入设计收口 → 类型骨架 + agent 绑定回流链落地。</p>
+                    <div class="task-links"><a href="./plans/multi-agent/roadmap.md">支线 Roadmap</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="done">
-                    <div class="task-top"><span class="task-id">D21…D26</span><span class="status-chip status-done">Decided</span></div>
-                    <h3>信息架构与观感决策</h3><p>侧栏、Composer、中列、工具行、字体分域、A07 修订均已拍板。</p>
-                    <div class="task-links"><a href="../plans/openchamber-chat-refactor-ledger.md">决策表</a></div>
+                    <div class="task-top"><span class="task-id">测试机五问题</span><span class="hash">9a6cc01</span></div>
+                    <h3>08-07 反馈修复批</h3><p>附件重放去重 · 超时抬到 3 分钟 · 新壳补仓库移除 · 分支查询加重试。<strong>已修待真机复验。</strong></p>
+                    <div class="task-links"><a href="../plans/2026-08-06-encrypted-machine-test-plan.md">回归清单 4b</a></div>
                   </article>
                 </div>
               </div>
 
               <div class="board-column">
-                <div class="column-title"><strong>Verification pending</strong><span>not Done</span></div>
+                <div class="column-title"><strong>In Progress</strong><span>唯一在建</span></div>
                 <div class="task-list">
-                  <article class="task-card" data-search-item data-status="pending">
-                    <div class="task-top"><span class="task-id">T-30 BATCH 2</span><span class="hash">9e2736b</span></div>
-                    <h3>字体分域 + Composer 形态</h3><p>70 文件、1415 例；第五轮 GUI 清单 0-nonies 待用户。</p>
-                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/implementation-status.md#active-todo">点验清单</a><a href="../design/a09-font-domain-baseline.html">A09</a></div>
+                  <article class="task-card" data-search-item data-status="next">
+                    <div class="task-top"><span class="task-id">S3 切片 2</span><span class="status-chip status-next">下一件</span></div>
+                    <h3>Codex 客户端骨架</h3><p>JSON-RPC 客户端（服务端请求走自有 id 空间且从 0 起）+ 单一 <code>pendingServerRequests</code> 表 + 单一 status mapper + 隔离 <code>CODEX_HOME</code>。</p>
+                    <div class="task-links"><a href="../plans/2026-08-06-s2-codex-integration-design.md">S2 设计档 §3</a></div>
                   </article>
-                  <article class="task-card" data-search-item data-status="pending">
-                    <div class="task-top"><span class="task-id">T-22 / T-27 / T-28</span><span class="hash">95a5c04…</span></div>
-                    <h3>三列壳、目标栏、中列两态</h3><p>均已落地；结构、目标切换、恢复态与布局档位等待统一 GUI 回归。</p>
-                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/implementation-status.md#用户线点测--待拍板与开发线并行">用户线</a></div>
+                  <article class="task-card" data-search-item data-status="next">
+                    <div class="task-top"><span class="task-id">S3 切片 3 / 4</span><span class="status-chip status-next">待 2</span></div>
+                    <h3>提问桥 + 权限投影</h3><p>4 条真实报文夹具回放（isSecret 补掩码）；decisions 表 + approvalCorrelator + 卡层。两片同批卡文件不并行。</p>
                   </article>
-                  <article class="task-card" data-search-item data-status="pending">
-                    <div class="task-top"><span class="task-id">T-05 / T-19</span><span class="hash">340a59a / 1b350ff</span></div>
-                    <h3>工具/问答与消息队列</h3><p>实现和对抗复核已闭环；问答冻结、排队、Stop/Resume 等仍需真机点验。</p>
-                  </article>
-                  <article class="task-card" data-search-item data-status="pending">
-                    <div class="task-top"><span class="task-id">T-24 / T-10</span><span class="status-chip status-pending">GUI</span></div>
-                    <h3>新机器与打包版门禁</h3><p>新壳添加仓库通路需全新机器验证；打包版清单完成后才能汇报 CP2。</p>
+                  <article class="task-card" data-search-item data-status="next">
+                    <div class="task-top"><span class="task-id">S3 切片 5 / 6</span><span class="status-chip status-next">待 1+2</span></div>
+                    <h3>历史降级 + 收口</h3><p>先档 A（<code>history_unsupported</code> 显式降级）再档 C；收口 = flag on/off 双跑 + 侧栏窄宽截图 + 台账。</p>
                   </article>
                 </div>
               </div>
 
               <div class="board-column">
-                <div class="column-title"><strong>Next</strong><span>ordered</span></div>
+                <div class="column-title"><strong>等外部 / 等你</strong><span>不是我能推的</span></div>
                 <div class="task-list">
-                  <article class="task-card" data-search-item data-status="next">
-                    <div class="task-top"><span class="task-id">T-31</span><span class="status-chip status-next">Next dev</span></div>
-                    <h3>回复解剖 + 置顶气泡</h3><p>规格已备，当前开发线下一项；在 T-30 批2落地之后接续。</p>
+                  <article class="task-card" data-search-item data-status="blocked">
+                    <div class="task-top"><span class="task-id">M1~M4</span><span class="status-chip status-blocked">出包前必做</span></div>
+                    <h3>换 Windows 机器出包</h3><p>Linux 三处硬断（GNU tar 解 zip / 缺 node.exe 中止 / 根 node_modules 全是 Linux ELF）。另需 Windows 上跑 verify:packaged、定死凭证注入、查清加密机白名单 node 路径。</p>
+                    <div class="task-links"><a href="../plans/t10-packaged-gui-checklist.md">T-10 清单</a></div>
                   </article>
-                  <article class="task-card" data-search-item data-status="next">
-                    <div class="task-top"><span class="task-id">T-12 / 13 / 14 / 15</span><span class="status-chip status-next">Phase 4</span></div>
-                    <h3>四种 surface 接线</h3><p>git、editor、context、terminal；全部以 T-22 壳结构为前置。</p>
+                  <article class="task-card" data-search-item data-status="pending">
+                    <div class="task-top"><span class="task-id">T-10 + 4b</span><span class="status-chip status-pending">13 项</span></div>
+                    <h3>打包版点验 + 五问题回归</h3><p>九项通用（含 Win10 字重真机核）+ 四项回归 R1~R4。到手先在 About 核对版本是 test.2。</p>
+                    <div class="task-links"><a href="../plans/2026-08-06-encrypted-machine-test-plan.md">测试方案</a></div>
                   </article>
-                  <article class="task-card" data-search-item data-status="next">
-                    <div class="task-top"><span class="task-id">T-23</span><span class="status-chip status-next">Cleanup</span></div>
-                    <h3>存量违规清理</h3><p>死按钮接真能力或显式禁用；假 usage 环改真实语义或撤除。</p>
+                  <article class="task-card" data-search-item data-status="blocked">
+                    <div class="task-top"><span class="task-id">T-11</span><span class="status-chip status-blocked">加密机现场</span></div>
+                    <h3>加密专属六项 → CP5</h3><p>随包 node 是否被白名单认（⑥）是地基；不成立则后面全白测。开发机不得代标通过。</p>
                   </article>
-                  <article class="task-card" data-search-item data-status="next">
-                    <div class="task-top"><span class="task-id">T-11</span><span class="status-chip status-next">On-site</span></div>
-                    <h3>加密机现场验收</h3><p>需先完成 T-10；验证白名单与随包 Node 读取 TSD，收口 Phase 0。</p>
+                  <article class="task-card" data-search-item data-status="blocked">
+                    <div class="task-top"><span class="task-id">T-04 / T-06</span><span class="status-chip status-blocked">网关</span></div>
+                    <h3>Thinking 卡 + 元数据补测</h3><p>T-04 卡网关无法点验；T-06 实现早已落地，是全仓唯一完全未测的任务，网关恢复即可补。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="pending">
+                    <div class="task-top"><span class="task-id">T-21</span><span class="status-chip status-pending">待截图</span></div>
+                    <h3>Flexoki 主题收尾</h3><p>只差中英混排三场景 + 6 处 normal-case 豁免的目视验收；须在默认主题下（非 sync-terminal）。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="pending">
+                    <div class="task-top"><span class="task-id">拍板 × 5</span><span class="status-chip status-open">等你</span></div>
+                    <h3>待你决定的五件</h3><p>141MB 体积可否接受 · 空 thinking 块要不要渲染「已思考」· 归档会话要不要补 un-archive · 网络环境复测配合 · 缓存亲和复测裁定。</p>
                   </article>
                 </div>
               </div>
 
               <div class="board-column">
-                <div class="column-title"><strong>Deferred / Open</strong><span>not committed</span></div>
+                <div class="column-title"><strong>Deferred / Open</strong><span>未承诺</span></div>
                 <div class="task-list">
                   <article class="task-card" data-search-item data-status="deferred">
-                    <div class="task-top"><span class="task-id">T-16 / T-25</span><span class="status-chip status-deferred">Deferred</span></div>
-                    <h3>壳开关成熟化与旧模块色彩清理</h3><p>分别在 M3 后与 T-21 之后推进，不进入当前近端开发队列。</p>
+                    <div class="task-top"><span class="task-id">A02 / A03 / A04</span><span class="status-chip status-open">未立项</span></div>
+                    <h3>Phase 0A 缺位基线</h3><p>从未进执行计划或台账，而已交付的 A06 依赖列写的正是「A01、A02」。Phase 0A 因此无法整体收口。</p>
                   </article>
                   <article class="task-card" data-search-item data-status="deferred">
-                    <div class="task-top"><span class="task-id">C-17 / C-11 / C-12</span><span class="status-chip status-deferred">Deferred</span></div>
-                    <h3>历史协议、fallback、压力收口</h3><p>问答进历史、stream-json 机动路线、旧路径收缩与千 block 压测。</p>
+                    <div class="task-top"><span class="task-id">C-17 / C-11 / C-12</span><span class="status-chip status-deferred">后置</span></div>
+                    <h3>历史协议 · fallback · 压测</h3><p>问答与子 agent 进历史（T-34 已铺好抓手）· stream-json 机动路线 · 旧路径收缩与千 block 压测。</p>
                   </article>
                   <article class="task-card" data-search-item data-status="deferred">
-                    <div class="task-top"><span class="task-id">SURFACES × 6</span><span class="status-chip status-deferred">Reserved</span></div>
-                    <h3>pr / diff / plan / notes / browser / preview</h3><p>保留注册位，本轮不实现；必须先定义真实数据与活动信号。</p>
+                    <div class="task-top"><span class="task-id">T-25 / SURFACES × 6</span><span class="status-chip status-deferred">后置</span></div>
+                    <h3>旧模块清理 + 保留 surface</h3><p>旧模块原色硬编码清理依赖 T-21；pr / diff / plan / notes / browser / preview 保留注册位不实现。</p>
                   </article>
                   <article class="task-card" data-search-item data-status="deferred">
-                    <div class="task-top"><span class="task-id">IDEAS</span><span class="status-chip status-open">Low commitment</span></div>
-                    <h3>Markdown、slash command、附件选择</h3><p>尚未进入承诺队列；成熟后再 promote 到 roadmap 或 open questions。</p>
+                    <div class="task-top"><span class="task-id">多 agent 远期</span><span class="status-chip status-deferred">Deferred</span></div>
+                    <h3>协同 / 第 3 个 agent / git 对齐</h3><p>多 agent 协同你已明示先放一放；第 3 个 agent 不作承诺；扩 git 缺具体参照点。</p>
+                  </article>
+                  <article class="task-card" data-search-item data-status="deferred">
+                    <div class="task-top"><span class="task-id">21 + 11</span><span class="status-chip status-open">账面</span></div>
+                    <h3>未决问题 21 条 · backlog 约 11 张</h3><p>详见下方「阻塞与未决」区与 implementation-status 的 backlog 串。</p>
+                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/open-questions.md">Open Questions</a></div>
                   </article>
                 </div>
               </div>
@@ -1219,7 +1248,7 @@
             <div class="section-head">
               <div>
                 <h2>全量任务索引</h2>
-                <p>覆盖执行计划中的全部 A / C / T 编号，并补入当前状态文件中新出现的 T-31；点击上方搜索可直接定位编号或名称。</p>
+                <p>覆盖 A / C / T 全部编号，另补 multi-agent 的 S 系列切片与打包线 M 系列；用上方搜索可直接定位。</p>
               </div>
               <a class="source-link" href="../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md">查看任务定义权威源 ↗</a>
             </div>
@@ -1231,6 +1260,7 @@
                   <div class="registry-item" data-search-item data-status="done"><code>A05</code><span>视觉 Token 方案</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>A06</code><span>功能接入状态矩阵</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>A07</code><span>中列 Cursor 观感基线</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>A08</code><span>右栏骨架基线（D27 回归）</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="deferred"><code>A02/03/04</code><span>Phase 0A 缺位基线</span><span class="status-chip status-open">未立项</span></div>
                 </div>
               </div>
@@ -1238,22 +1268,13 @@
               <div class="registry-group">
                 <h3>Claude 主线 · C 系列</h3>
                 <div class="registry-list">
-                  <div class="registry-item" data-search-item data-status="done"><code>C-01</code><span>agent-host 构建与打包</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-02</code><span>打包态自动化验证</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-03</code><span>Question 桥 spike</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-04</code><span>Question 桥实现</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-05</code><span>Thinking 支持度探测</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-06</code><span>Resume 历史协议与重放</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-07</code><span>Session Index</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-08</code><span>Chat Store 分桶与批处理</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-09</code><span>测试基建与 lint 恢复</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="done"><code>C-10</code><span>Effort / Plan / Build 探测</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>C-01…C-10</code><span>打包链 / Question / Thinking / Resume / Index / Store / 测试基建 / Effort 探测</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="deferred"><code>C-11</code><span>stream-json fallback</span><span class="status-chip status-deferred">机动</span></div>
-                  <div class="registry-item" data-search-item data-status="deferred"><code>C-12</code><span>旧路径收缩与性能压测</span><span class="status-chip status-deferred">Phase 5</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>C-12</code><span>旧路径收缩与千 block 压测</span><span class="status-chip status-deferred">Phase 5</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>C-13</code><span>附件协议探测与桥接</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>C-14</code><span>Host 挂起看门狗</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>C-15</code><span>随包 Node 运行时</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="deferred"><code>C-17</code><span>问答进历史协议</span><span class="status-chip status-deferred">后置</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>C-17</code><span>问答与子 agent 进历史协议</span><span class="status-chip status-deferred">后置</span></div>
                 </div>
               </div>
 
@@ -1263,57 +1284,75 @@
                   <div class="registry-item" data-search-item data-status="done"><code>T-01</code><span>真实 Project / Workspace 树</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>T-02</code><span>Session 生命周期 UI</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="pending"><code>T-03</code><span>Resume UI 与历史增量</span><span class="status-chip status-pending">增量待验</span></div>
-                  <div class="registry-item" data-search-item data-status="blocked"><code>T-04</code><span>Thinking 折叠卡</span><span class="status-chip status-blocked">网关</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-05</code><span>Tool 行 + Question 卡</span><span class="status-chip status-pending">待 GUI</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-06</code><span>消息元数据与重试</span><span class="status-chip status-pending">未测</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>T-04</code><span>Thinking 折叠卡</span><span class="status-chip status-blocked">卡网关</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-05</code><span>Tool 行 + Question 卡</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-06</code><span>消息元数据与重试</span><span class="status-chip status-pending">唯一完全未测</span></div>
                   <div class="registry-item" data-search-item data-status="pending"><code>T-07</code><span>Composer @ 文件引用</span><span class="status-chip status-pending">增量待验</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>T-08</code><span>Model 选择器</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="deferred"><code>T-09</code><span>空/错/断状态与诊断</span><span class="status-chip status-deferred">补验</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-10</code><span>打包版 GUI 手工点验</span><span class="status-chip status-pending">待用户</span></div>
-                  <div class="registry-item" data-search-item data-status="blocked"><code>T-11</code><span>M2 加密机验收</span><span class="status-chip status-blocked">现场</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-10</code><span>打包版 GUI 手工点验（9 + 4 项）</span><span class="status-chip status-pending">待出包</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>T-11</code><span>M2 加密机验收（6 项）</span><span class="status-chip status-blocked">现场</span></div>
                 </div>
               </div>
 
               <div class="registry-group">
                 <h3>Surface 与能力 · T-12—T-20</h3>
                 <div class="registry-list">
-                  <div class="registry-item" data-search-item data-status="next"><code>T-12</code><span>git surface</span><span class="status-chip status-next">Next</span></div>
-                  <div class="registry-item" data-search-item data-status="next"><code>T-13</code><span>editor surface</span><span class="status-chip status-next">Next</span></div>
-                  <div class="registry-item" data-search-item data-status="next"><code>T-14</code><span>context surface</span><span class="status-chip status-next">Next</span></div>
-                  <div class="registry-item" data-search-item data-status="next"><code>T-15</code><span>terminal surface</span><span class="status-chip status-next">Next</span></div>
-                  <div class="registry-item" data-search-item data-status="deferred"><code>T-16</code><span>新旧壳开关成熟化</span><span class="status-chip status-deferred">后置</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-12</code><span>git surface</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-13</code><span>editor surface</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-14</code><span>context surface</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-15</code><span>terminal surface</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-16</code><span>新旧壳开关成熟化</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="done"><code>T-17</code><span>Tool 真实调用 GUI 闭环</span><span class="status-chip status-done">Done</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-18</code><span>Composer 粘贴图片/文件</span><span class="status-chip status-pending">待 GUI</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-19</code><span>运行中输入与 FIFO 队列</span><span class="status-chip status-pending">待 GUI</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-20</code><span>Effort 选择器</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-18</code><span>Composer 粘贴图片/文件（七小项）</span><span class="status-chip status-pending">全人工待测</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-19</code><span>运行中输入与 FIFO 队列</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="pending"><code>T-20</code><span>Effort 选择器</span><span class="status-chip status-pending">待点测</span></div>
                 </div>
               </div>
 
               <div class="registry-group">
-                <h3>壳与观感 · T-21—T-30</h3>
+                <h3>壳与观感 · T-21—T-35</h3>
                 <div class="registry-list">
                   <div class="registry-item" data-search-item data-status="pending"><code>T-21</code><span>Flexoki 与字体基线代码化</span><span class="status-chip status-pending">待截图</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-22</code><span>三列 + 44px 导轨 + surface 壳</span><span class="status-chip status-pending">待 GUI</span></div>
-                  <div class="registry-item" data-search-item data-status="next"><code>T-23</code><span>死按钮与假 usage 清理</span><span class="status-chip status-next">Next</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-24</code><span>新壳添加仓库通路</span><span class="status-chip status-pending">S0 点验</span></div>
-                  <div class="registry-item" data-search-item data-status="deferred"><code>T-25</code><span>旧模块原色硬编码清理</span><span class="status-chip status-deferred">后置</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-26</code><span>侧栏两层化</span><span class="status-chip status-pending">待 GUI</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-27</code><span>Composer 目标栏</span><span class="status-chip status-pending">待 GUI</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-28</code><span>中列状态化布局</span><span class="status-chip status-pending">待 GUI</span></div>
-                  <div class="registry-item" data-search-item data-status="deferred"><code>T-29</code><span>Assistant Markdown 渲染</span><span class="status-chip status-deferred">待排期</span></div>
-                  <div class="registry-item" data-search-item data-status="pending"><code>T-30</code><span>观感打磨批1 + 批2</span><span class="status-chip status-pending">待 GUI</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-22</code><span>三列 + 44px 导轨 + surface 壳</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-23</code><span>死按钮与假 usage 清理</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-24</code><span>新壳添加仓库通路</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="deferred"><code>T-25</code><span>旧模块原色硬编码清理</span><span class="status-chip status-deferred">依赖 T-21</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-26 / T-27 / T-28</code><span>侧栏两层化 · 目标栏 · 中列状态化</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-29</code><span>Assistant Markdown 渲染</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-30 / T-31</code><span>观感打磨批1+批2 · 回复解剖</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-32</code><span>右栏骨架回归 A08</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>T-33 / T-34 / T-35</code><span>重试横幅 · 子 agent 实况 · stderr 进 UI</span><span class="status-chip status-done">Done</span></div>
                 </div>
               </div>
 
               <div class="registry-group">
-                <h3>当前新增与里程碑</h3>
+                <h3>multi-agent · S 系列</h3>
                 <div class="registry-list">
-                  <div class="registry-item" data-search-item data-status="next"><code>T-31</code><span>回复解剖 + 置顶气泡</span><span class="status-chip status-next">Next dev</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>S1</code><span>ACP + Codex 可行性 spike（裁定不接 ACP）</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>S2</code><span>直连接入设计（提问 / 绑定 / 权限 / 历史）</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>S3-0</code><span>类型与断言骨架（零逻辑）</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>S3-1</code><span>agent 绑定回流链 + 侧栏 chip</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>S3-2</code><span>Codex 客户端骨架</span><span class="status-chip status-next">下一件</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>S3-3</code><span>提问桥（4 条真实报文回放）</span><span class="status-chip status-next">待 2</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>S3-4</code><span>权限投影（decisions + 关联器）</span><span class="status-chip status-next">待 3</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>S3-5</code><span>历史降级（先档 A 后档 C）</span><span class="status-chip status-next">待 1+2</span></div>
+                  <div class="registry-item" data-search-item data-status="next"><code>S3-6</code><span>收口（flag 双跑 + 截图 + 台账）</span><span class="status-chip status-next">待全部</span></div>
+                </div>
+              </div>
+
+              <div class="registry-group">
+                <h3>打包线 · M 系列与里程碑</h3>
+                <div class="registry-list">
+                  <div class="registry-item" data-search-item data-status="blocked"><code>M1</code><span>换 Windows 机器出包</span><span class="status-chip status-blocked">未做</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>M2</code><span>Windows 上跑 verify:packaged（25 项）</span><span class="status-chip status-blocked">未做</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>M3</code><span>定死凭证注入方案</span><span class="status-chip status-blocked">未做</span></div>
+                  <div class="registry-item" data-search-item data-status="blocked"><code>M4</code><span>查清加密机白名单 node.exe 路径</span><span class="status-chip status-blocked">未做</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>M5</code><span>侧栏行宽度预算修复</span><span class="status-chip status-done">Done</span></div>
+                  <div class="registry-item" data-search-item data-status="done"><code>M6</code><span>版本抬到 0.4.0-test.2</span><span class="status-chip status-done">Done</span></div>
                   <div class="registry-item" data-search-item data-status="pending"><code>CP2</code><span>M1 打包链确认</span><span class="status-chip status-pending">等 T-10</span></div>
                   <div class="registry-item" data-search-item data-status="blocked"><code>CP5</code><span>Phase 0 正式 Go</span><span class="status-chip status-blocked">等 T-11</span></div>
                   <div class="registry-item" data-search-item data-status="pending"><code>CP6</code><span>Chat MVP 日常内用</span><span class="status-chip status-pending">未收口</span></div>
-                  <div class="registry-item" data-search-item data-status="next"><code>CP7</code><span>Phase 4 surface 与壳验收</span><span class="status-chip status-next">Future</span></div>
-                  <div class="registry-item" data-search-item data-status="deferred"><code>CP8</code><span>Phase 5 发布收口</span><span class="status-chip status-deferred">Future</span></div>
                 </div>
               </div>
             </div>
@@ -1323,45 +1362,53 @@
             <div class="section-head">
               <div>
                 <h2>人工点验地图</h2>
-                <p>这是当前最容易让“实现完成”和“真正完成”混淆的区域。</p>
+                <p>全部 23 项都在你手上，且都排在「出包」之后。这是当前项目的真实瓶颈。</p>
               </div>
-              <a class="source-link" href="./plans/openchamber-chat-refactor/implementation-status.md#用户线点测--待拍板与开发线并行">打开完整原始清单 ↗</a>
+              <a class="source-link" href="../plans/2026-08-06-encrypted-machine-test-plan.md">打开测试方案原文 ↗</a>
             </div>
             <div class="split">
               <div class="panel check-groups">
-                <details open data-search-item data-status="pending">
-                  <summary><strong>0-nonies · T-30 批2第五轮</strong><span class="status-chip status-pending">11 项</span></summary>
+                <details open data-search-item data-status="blocked">
+                  <summary><strong>① 出发前必做 · M1~M4</strong><span class="status-chip status-blocked">4 项 · 未做</span></summary>
                   <div class="detail-body">
                     <ol>
-                      <li>UI 比例字体与代码/路径/hash 等宽域分离。</li>
-                      <li>单个 Sonnet High 触发器及 Model / Reasoning 菜单状态正确。</li>
-                      <li>follow-up 42px、21px 圆角，多行和附件态不失控。</li>
-                      <li>24px 近黑 Send、红色 Stop、失败 Retry 并存。</li>
-                      <li>⊕ Add file context 行为与文件搜索弹层。</li>
-                      <li>ghost chip hover 8px 圆角、Composer 中性聚焦边。</li>
-                      <li>45rem 阅读栏、空态 statusLine 清理。</li>
-                      <li>CJK、Win10 字重、数字 tabular-nums 与 A09 真机凭证。</li>
+                      <li><strong>换 Windows 机器出包</strong>（1.5~2h 首次）——Linux 三处硬断：GNU tar 解 zip 必失败 / afterPack 缺 node.exe 中止 / 根 node_modules 全是 Linux ELF。</li>
+                      <li>在 Windows 上跑 <code>pnpm verify:packaged</code>（25 项全绿）——Linux 上跑没意义，三处断言被 platform 门控放行。</li>
+                      <li>定死凭证注入：<code>resources\node-runtime\node.exe scripts\make-test-claude-config.mjs</code>；禁止混用 GUI onboarding。</li>
+                      <li>查清加密机上已被白名单的 node.exe 绝对路径——T-11⑥ 失败时的唯一逃生口。</li>
                     </ol>
                   </div>
                 </details>
                 <details data-search-item data-status="pending">
-                  <summary><strong>0-octies · 第二轮反馈闭环回归</strong><span class="status-chip status-pending">10 项</span></summary>
-                  <div class="detail-body">授权卡、排队消息、实际模型、附件回显、网络重试、combobox、textarea、选择器尺寸、卡片 padding 与时间线顶部淡出。</div>
+                  <summary><strong>② T-10 打包版通用 · 九项</strong><span class="status-chip status-pending">9 项</span></summary>
+                  <div class="detail-body">启动无白屏 · Beta 壳 · PONG 流式 · 权限卡 Allow 真写文件 · Deny 不崩 · Stop 回 idle · 退出无孤儿 node.exe（顺带测终端 Ctrl+R 透传）· 全新机器添加仓库两路 · <strong>Win10 字重真机核</strong>（粗细无差即字重回退 bug）。</div>
                 </details>
                 <details data-search-item data-status="pending">
-                  <summary><strong>0-bis → 0-septies · 核心功能组合</strong><span class="status-chip status-pending">7 组</span></summary>
-                  <div class="detail-body">依次覆盖三列壳、Composer 目标栏、中列两态、工具行/Question、消息队列与观感快赢；每组细项均在 implementation-status 用户线中。</div>
+                  <summary><strong>③ 步骤 4b · 08-07 五问题回归</strong><span class="status-chip status-pending">4 项 · 新增</span></summary>
+                  <div class="detail-body">
+                    <ol>
+                      <li><strong>R1</strong> 带图消息重开会话后只出现一次且带缩略图（出现两条 = 未修复）。</li>
+                      <li><strong>R2</strong> 重附件/长推理消息，3 分钟内不该弹超时。</li>
+                      <li><strong>R3</strong> 仓库行悬停出 FolderMinus → 确认 → 移除；<strong>挂两个以上仓库时务必核对删掉的是点的那个</strong>。</li>
+                      <li><strong>R4</strong> 侧栏分支 chip 显示真实分支名；仍空白就在 DevTools 跑 <code>worktree.list</code> 取证分流。</li>
+                    </ol>
+                  </div>
+                </details>
+                <details data-search-item data-status="blocked">
+                  <summary><strong>④ T-11 加密专属 · 六项</strong><span class="status-chip status-blocked">现场</span></summary>
+                  <div class="detail-body">第一取证是「随包 node 到底生没生效」（<code>resolveNode()</code> 看 source==='bundled'）——它是后面所有加密结论的地基。其余：GUI 打开 TSD 加密文件 · Agent 用 Read 读加密文件 · 写文件后能否读出明文 · 加密历史显性报 <code>encrypted_unreadable</code> · 白名单⑥。</div>
                 </details>
                 <details data-search-item data-status="pending">
-                  <summary><strong>基础回归与发布门</strong><span class="status-chip status-pending">Parallel</span></summary>
-                  <div class="detail-body">多轮上下文、T-03/T-04/T-06/T-07/T-18/T-20，随后 T-10 打包版 GUI → CP2，最后 T-11 加密机现场 → CP5。</div>
+                  <summary><strong>⑤ 统一点测 · 五组</strong><span class="status-chip status-pending">与出包并行</span></summary>
+                  <div class="detail-body">T-04（卡网关暂不可测）· T-07 补强三项 · T-20 Effort 选择器 · T-03 历史读失败提示 · <strong>T-18 粘贴附件七小项（100% 人工待测）</strong>，其中 jpeg / gif / webp 至今未过网关实测。</div>
                 </details>
               </div>
               <aside class="panel">
                 <div class="eyebrow">Latest verified</div>
-                <h3>2026-08-03 · T-30 批2</h3>
-                <p>typecheck 干净；Biome 686 文件 0 错误；Vitest 81 文件 1415 例，仅保留 3 个 Linux 上必然失败的 Windows-only 基线。</p>
-                <p><strong>Linux 三绿口径：</strong>typecheck 干净 / lint 0 诊断 / 测试只剩固定 3 个 Windows-only 失败且总例数只增不减。</p>
+                <h3>2026-08-08 · 四门全绿</h3>
+                <p>lint ✅（32 条诊断全在 a08 基线 HTML，非产品代码）/ typecheck ✅ / typecheck:agent-host ✅ / vitest <strong>133 文件 2481 例 0 红</strong>。</p>
+                <p><strong>口径变更：</strong>原「Linux 上必然失败的 3 例 Windows-only」已于 2026-08-06 修复（用 <code>process.platform</code> 桩真跑 Windows 分支），<strong>现行口径是全绿，不再有豁免例</strong>。</p>
+                <p><strong>已知脆弱点：</strong><code>agentWireStatic</code> AST 扫描单跑 3057ms / 限 5000ms，满载并发下会假红一次、重跑即绿。</p>
                 <a class="source-link" href="./baseline/test-and-release-gates.md">查看测试与 GUI 门禁 ↗</a>
               </aside>
             </div>
@@ -1371,53 +1418,61 @@
             <div class="section-head">
               <div>
                 <h2>阻塞与未决问题</h2>
-                <p>外部阻塞与内部产品决策分开显示；已关闭问题不进入本区。</p>
+                <p>左列是硬阻塞（不解决就走不动），右列是待决策与账面债。已关闭问题不进入本区。</p>
               </div>
               <a class="source-link" href="./plans/openchamber-chat-refactor/open-questions.md">查看全部 Open Questions ↗</a>
             </div>
             <div class="split">
               <div class="panel question-list">
                 <article class="question-card" data-search-item data-status="blocked">
+                  <div class="question-top"><span class="task-id">M1~M4</span><span class="status-chip status-blocked">Packaging</span></div>
+                  <h3>出包只能在 Windows 机器上做</h3><p>Linux 本机三处硬断已实测。CI 路线被你 08-06 裁定排除（「不用 CI，自己出包去测」）。不出包 = T-10 / T-11 / CP2 / CP5 全部冻住。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="blocked">
                   <div class="question-top"><span class="task-id">T-04 · #5 / #8</span><span class="status-chip status-blocked">Gateway</span></div>
-                  <h3>Thinking 卡被网关行为阻塞</h3><p>默认模型路径确定性 400，sonnet 返回空文本 thinking；渲染链无 app 侧可修，待网关处理后新轮次点验。</p>
+                  <h3>Thinking 被网关行为阻塞</h3><p>默认模型确定性 400、sonnet 返带签名空文本 thinking。渲染链逐门核查无 bug，app 侧无可修；修好后须在新发起轮次验证。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="blocked">
                   <div class="question-top"><span class="task-id">T-11 · #7</span><span class="status-chip status-blocked">Secure machine</span></div>
-                  <h3>TSD 白名单与随包 Node 需现场实证</h3><p>开发机不得冒充通过；T-10 完成后在加密机验证六项并回填 CP5。</p>
+                  <h3>TSD 白名单口径仍是转述</h3><p>「只要是 node 就白名单」至今未实证，它是全部加密机结论的地基。开发机不得冒充通过。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="deferred">
                   <div class="question-top"><span class="task-id">#3 / #14 / #27</span><span class="status-chip status-open">Test gaps</span></div>
-                  <h3>CI、凭证隔离与组件事故测试缺口</h3><p>CI 未设三绿门；dev.env 仅覆盖 dev.js 且零自动化；node-only Vitest 无法钉住组件交互竞态。</p>
+                  <h3>CI、凭证隔离与组件事故测试缺口</h3><p>CI 未设三绿门且出包无 artifact 上传（≈6 行补法已备）；dev.env 只覆盖 dev.js 一条路径且零自动化断言；node-only vitest 钉不住组件交互竞态。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="deferred">
                   <div class="question-top"><span class="task-id">#12 / #13</span><span class="status-chip status-open">Theme</span></div>
-                  <h3>sync-terminal 混色与 dark: 脱钩</h3><p>Ghostty 会覆盖 25 个旧 token 但不覆盖 5 个新 token；Tailwind dark: 仍跟系统偏好而非 .dark 类。</p>
+                  <h3>sync-terminal 混色与 dark: 脱钩</h3><p>后者是全仓既存 bug：Tailwind 的 <code>dark:</code> 跟的是系统偏好而非 <code>.dark</code> 类，显式选 Light/Dark 才暴露。一行可修但要逐屏复验，属独立任务。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="deferred">
                   <div class="question-top"><span class="task-id">#15 / #22</span><span class="status-chip status-open">Network</span></div>
-                  <h3>缓存亲和与网络瞬断待现场复测</h3><p>需同模型对照、网关采样与真实频率观察；app 已补重试可见性但不能根治传输瞬断。</p>
+                  <h3>缓存亲和与网络瞬断待复测</h3><p>都需要你配合取证；app 已补重试可见性但根治不在 app 侧。多轮对话按全量重写计费的成本问题仍在。</p>
                 </article>
               </div>
               <div class="panel question-list">
                 <article class="question-card" data-search-item data-status="deferred">
                   <div class="question-top"><span class="task-id">#1</span><span class="status-chip status-open">Decision</span></div>
-                  <h3>打包体积 120MB → 141MB</h3><p>随包 Node 增加约 21MB；需用户确认是否接受或改成可选随包。</p>
+                  <h3>打包体积 120MB → 141MB</h3><p>随包 Node 增加约 21MB；等你确认是否接受，或改成可选随包 + 五源寻径为主。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="deferred">
                   <div class="question-top"><span class="task-id">#6 / #23 / #24</span><span class="status-chip status-open">Product</span></div>
-                  <h3>归档恢复、Permission Dock、标题来源元数据</h3><p>均已确认是独立产品/数据建模缺口，尚未进入当前实现批次。</p>
+                  <h3>归档恢复 · Permission Dock · 标题来源</h3><p>归档会话无 un-archive 入口（右键即归档无确认，你首轮就误触两条）；权限坞 UX 打磨；标题来源元数据缺失。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="deferred">
-                  <div class="question-top"><span class="task-id">#17 / #21</span><span class="status-chip status-open">Architecture</span></div>
-                  <h3>Subagent 数据源与消息队列后续</h3><p>建议先读磁盘 subagents 回放；队列仍有失败退避、后台放行、持久化等二期设计。</p>
+                  <div class="question-top"><span class="task-id">#19 / #20 / #26 / #21</span><span class="status-chip status-open">Reliability</span></div>
+                  <h3>发送语义与队列二期</h3><p>model/effort 对 hostBound 会话的直发不生效 · stopping 态直发边界 · Host clientTurnId 幂等 · 队列失败退避/后台放行/持久化四项。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="deferred">
-                  <div class="question-top"><span class="task-id">#20 / #26</span><span class="status-chip status-open">Reliability</span></div>
-                  <h3>stopping 直发边界与 Host clientTurnId 幂等</h3><p>当前不阻塞验收，但都是竞态与重复发送的纵深防御候选。</p>
+                  <div class="question-top"><span class="task-id">MA #4 / #5</span><span class="status-chip status-open">Multi-agent</span></div>
+                  <h3>git 对齐参照点 · Codex 模型目录</h3><p>你说喜欢 codeg 的 git 展示但未指名具体项，动 git 前必须先取回参照点；Codex 模型目录三套粒度已实测齐，但「UI 怎么表达」未设计。</p>
                 </article>
                 <article class="question-card" data-search-item data-status="deferred">
                   <div class="question-top"><span class="task-id">#4</span><span class="status-chip status-open">Testability</span></div>
-                  <h3>Node 缺失场景无法真实触发</h3><p>resolver fallback 过强；候选方向是显式 mock-resolver 注入容器。</p>
+                  <h3>Node 缺失场景无法真实触发</h3><p>resolver 容错太好，坏路径仍 fallback 成功；候选方向是显式 mock-resolver 注入容器。</p>
+                </article>
+                <article class="question-card" data-search-item data-status="deferred">
+                  <div class="question-top"><span class="task-id">#2 / #17</span><span class="status-chip status-open">记账债</span></div>
+                  <h3>两条已过期未清的未决项</h3><p>#2（T-19 提案等落库）与 #17（subagent 数据源选 A 还是 B）都已被现实解决——T-19 早已 Done、T-34 走的就是 Path A。按 plantree「决了就删」口径该清掉。</p>
                 </article>
               </div>
             </div>
@@ -1433,11 +1488,12 @@
             </div>
             <div class="idea-list">
               <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>长会话虚拟化与千 block 压测</strong><span>是否需要取决于 C-12 压测数据，不提前承诺。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>已有分支物化为 worktree</strong><span>IPC 底层已支持，缺少“从已有分支建 worktree”的产品路径。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>真附件选择与 ⊕ 菜单扩展</strong><span>当前 ⊕ 是 Add file context；真附件选择涉及 renderer 读字节 IPC 与限额。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>Assistant Markdown 渲染</strong><span>现状仍是纯文本；需单独处理渲染器、安全、链接与流式切换。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>Slash command</strong><span>用户明确优先级不高；需先定义命令目录来源与发送语义。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>工具行复合 arg 渲染</strong><span>将 pattern 的 mono 域与“in repo”等散文域拆分呈现。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>已有分支物化为 worktree</strong><span>IPC 底层已支持，缺「从已有分支建 worktree」的产品路径。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>真附件选择</strong><span>当前 ⊕ 是 Add file context；真附件选择涉及 renderer 读字节 IPC 与限额。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>Slash command</strong><span>你明确优先级不高；需先定义命令目录来源与发送语义。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>工具行复合 arg 渲染</strong><span>把 pattern 的 mono 域与「in repo」等散文域拆分呈现。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>安全加固批</strong><span>FILE_COPY/RENAME/MOVE 三条 IPC 仍是全盘写原语，宜比照根白名单收敛。</span></a>
+              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>会话 ID 毫秒碰撞</strong><span><code>session-${Date.now()}</code> 同毫秒双击 New 会撞 ID；改 randomUUID 需动红线 store。</span></a>
             </div>
           </section>
 
@@ -1455,13 +1511,15 @@
               <a href="./plans/openchamber-chat-refactor/implementation-status.md"><strong>4 · Implementation Status — 当前快照</strong><span>当前阶段、最近落地、最近验证、用户线、阻塞与交接。</span></a>
               <a href="./plans/openchamber-chat-refactor/roadmap.md"><strong>5 · Roadmap — 任务状态</strong><span>Done / In Progress / Next / Deferred；状态类信息以 plantree 为准。</span></a>
               <a href="./baseline/README.md"><strong>6 · Baseline — 项目事实层</strong><span>模块图、运行时流、存储、测试与发布门禁、风险热点。</span></a>
+              <a href="./plans/multi-agent/README.md"><strong>7 · multi-agent — 支线计划</strong><span>Codex 直连的 S1 spike / S2 设计 / S3 六切片与支线未决问题。</span></a>
+              <a href="../plans/t10-packaged-gui-checklist.md"><strong>8 · T-10 打包版清单 — 出包与点验</strong><span>出发前必做 M1~M6 + 九项通用点验；配套加密机测试方案含步骤 4b 回归。</span></a>
             </div>
           </section>
 
           <div id="empty-state" class="empty-state">没有匹配的任务。可清空搜索词或切回“全部状态”。</div>
 
           <footer class="footer">
-            <strong>维护说明：</strong>本页是基于 <code>2026-08-03</code> plantree 工作树生成的人工聚合快照。
+            <strong>维护说明：</strong>本页是基于 <code>2026-08-08</code> plantree 工作树生成的人工聚合快照。
             每次任务落地仍应先更新台账证据，再刷新 <code>implementation-status.md</code> / <code>roadmap.md</code>，最后同步此页的摘要。
           </footer>
         </div>
