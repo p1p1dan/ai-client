@@ -1517,6 +1517,7 @@ export default function App() {
             repositories={repositories}
             selectedRepoPath={selectedRepo}
             onAddRepository={handleOpenRepositoryDialog}
+            onRemoveRepository={handleRemoveRepository}
             dropZoneRef={repositorySidebarRef}
             fileDragOver={isFileDragOver}
           />

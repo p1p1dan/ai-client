@@ -42,12 +42,16 @@
  *    would be v1 again (round-6 verify blocker).
  *
  * Fold eligibility is further restricted to what a history row can actually
- * express: user/assistant role, text/thinking blocks only, no attachments
- * (`HistoryMessage` has no attachment field), no permission_request /
- * question / tool blocks (their live cards and `pendingPermissions` links
- * would be destroyed). Empty coverage text opts out entirely. Ineligible or
- * unmatched → kept: the residual fail direction is a duplicated bubble,
- * never a lost one.
+ * express: user/assistant role, text/thinking blocks only, no
+ * permission_request / question / tool blocks (their live cards and
+ * `pendingPermissions` links would be destroyed). Empty coverage text opts
+ * out entirely. Ineligible or unmatched → kept: the residual fail direction
+ * is a duplicated bubble, never a lost one.
+ *
+ * Attachment-bearing messages with otherwise foldable blocks get a
+ * "replacement fold": the runtime copy (which carries attachment metadata)
+ * REPLACES the matching history row at its position, so the user sees one
+ * message with correct attachment chips instead of two.
  *
  * The walk stays a one-way cursor: a user may legally send the same text
  * twice; forward-only matching conserves count and order.
@@ -154,6 +158,24 @@ function isFoldable(message: ReplayMergeMessage): boolean {
   return message.blocks.every((block) => FOLDABLE_BLOCK_TYPES.has(block.type));
 }
 
+/**
+ * True when the message would be foldable except for attachments. These are
+ * "replacement foldable": when matched against a history row, the history
+ * copy is REPLACED by the runtime copy (preserving attachment metadata)
+ * instead of both surviving. Without this, a user message with an image
+ * appears twice after resume — once from history (no attachment chip) and
+ * once as the unfoldable runtime echo.
+ */
+function isReplacementFoldable(message: ReplayMergeMessage): boolean {
+  if (message.role !== 'user' && message.role !== 'assistant') {
+    return false;
+  }
+  if (!message.attachments || message.attachments.length === 0) {
+    return false;
+  }
+  return message.blocks.every((block) => FOLDABLE_BLOCK_TYPES.has(block.type));
+}
+
 export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   bucket: readonly T[],
   historyMessages: readonly T[],
@@ -194,8 +216,18 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   }
 
   const kept: T[] = [];
+  // Replacement folds: runtime messages with attachments that matched a
+  // history row. The history row is swapped for the runtime copy so the
+  // attachment metadata (thumbnails, names) survives the merge.
+  const historyReplacements = new Map<number, T>();
+
   for (const message of runtime) {
-    if (!candidateIds.has(message.id) || !isFoldable(message)) {
+    if (!candidateIds.has(message.id)) {
+      kept.push(message);
+      continue;
+    }
+    const replaceFold = isReplacementFoldable(message);
+    if (!isFoldable(message) && !replaceFold) {
       kept.push(message);
       continue;
     }
@@ -216,8 +248,16 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
       kept.push(message);
     } else {
       cursor = matchedAt + 1;
+      if (replaceFold) {
+        historyReplacements.set(matchedAt, message);
+      }
     }
   }
 
-  return [...historyMessages, ...kept];
+  const mergedHistory =
+    historyReplacements.size > 0
+      ? historyMessages.map((h, i) => historyReplacements.get(i) ?? h)
+      : historyMessages;
+
+  return [...mergedHistory, ...kept];
 }

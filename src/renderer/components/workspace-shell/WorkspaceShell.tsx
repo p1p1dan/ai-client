@@ -40,6 +40,7 @@ interface WorkspaceShellProps {
   selectedRepoPath?: string | null;
   /** T-24: opens the shared AddRepositoryDialog mounted in App. */
   onAddRepository?: () => void;
+  onRemoveRepository?: (repoPath: string) => void;
   /**
    * T-24: drop zone for `useFileDragDrop`. Legacy binds this ref to its
    * repository sidebar; in the new shell the whole shell body is the target,
@@ -54,6 +55,7 @@ export function WorkspaceShell({
   repositories = [],
   selectedRepoPath = null,
   onAddRepository,
+  onRemoveRepository,
   dropZoneRef,
   fileDragOver = false,
 }: WorkspaceShellProps) {
@@ -291,6 +293,8 @@ export function WorkspaceShell({
           onToggleCollapsed={toggleSidebarCollapsed}
           onOpenSettings={onOpenSettings}
           onAddRepository={onAddRepository}
+          onRemoveRepository={onRemoveRepository}
+          repositories={repositories}
         />
         {!chrome.sidebarCollapsed && (
           <ShellResizeHandle

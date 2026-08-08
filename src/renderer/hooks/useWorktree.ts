@@ -71,8 +71,9 @@ export function useWorktreeListMultiple(repoInputs: WorktreeListMultipleInput[])
         return { repoPath, worktrees };
       },
       enabled,
-      retry: false,
-      staleTime: 30000, // Cache for 30 seconds to avoid excessive refetching
+      retry: 1,
+      retryDelay: 1000,
+      staleTime: 30000,
     })),
   });
 

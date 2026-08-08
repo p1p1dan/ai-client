@@ -177,7 +177,7 @@ export const SEND_MS_PER_MB = 30_000;
  * be imported (src/agent-host is a separate program), so the invariant below
  * is locked by a unit test instead.
  */
-export const HOST_STALL_TIMEOUT_MS = 120_000;
+export const HOST_STALL_TIMEOUT_MS = 195_000;
 
 /**
  * Documentation mirror of claudeRuntime.ts's a4 (2026-07-30) one-shot TTFT
@@ -188,14 +188,11 @@ export const HOST_STALL_TIMEOUT_MS = 120_000;
 export const HOST_TTFT_TIMEOUT_MS = 32_000;
 
 /**
- * INVARIANT (corrected 2026-07-30, a4 — the previous wording here claimed
- * the opposite of what these numbers produce): SEND_TIMEOUT_CEILING_MS
- * (115s) is LESS than HOST_STALL_TIMEOUT_MS (120s), so for a turn that HAS
- * already produced a first productive event, the renderer's ceiling elapses
- * FIRST, not the Host's — the Composer's generic "no assistant progress"
- * fallback can still win that race on a large-attachment send. That gap is a
- * known, accepted mid-term item (event-driven budget instead of a fixed wall
- * clock), not something this constant closes.
+ * INVARIANT (corrected 2026-07-30, a4): SEND_TIMEOUT_CEILING_MS (180s) is
+ * LESS than HOST_STALL_TIMEOUT_MS (195s), so for a turn that HAS already
+ * produced a first productive event, the renderer's ceiling elapses FIRST,
+ * not the Host's. Raised from 115s to 180s to accommodate image-heavy turns
+ * where model inference alone can take 2+ minutes.
  *
  * What DOES protect the common case — a turn that never produces a first
  * productive event at all (api_retry loop, dead spawn) — is the Host's new
@@ -203,7 +200,7 @@ export const HOST_TTFT_TIMEOUT_MS = 32_000;
  * SEND_BASE_TIMEOUT_MS (45s), so for that failure mode the Host speaks first
  * with its precise message, before the renderer's fallback ever fires.
  */
-export const SEND_TIMEOUT_CEILING_MS = 115_000;
+export const SEND_TIMEOUT_CEILING_MS = 180_000;
 
 /** Wait budget for one send. attachmentBytes = total RAW bytes (pre-base64). */
 export function sendTimeoutMs(attachmentBytes: number): number {

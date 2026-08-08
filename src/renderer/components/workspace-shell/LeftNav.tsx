@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Folder,
   FolderGit2,
+  FolderMinus,
   FolderOpen,
   FolderPlus,
   ListFilter,
@@ -14,8 +15,17 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import type { Repository } from '@/App/constants';
 import { STORAGE_KEYS } from '@/App/storage';
+import {
+  AlertDialog,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +51,7 @@ import {
   canCreateSessionOnWorkspace,
   shouldShowAddRepositoryEmptyState,
 } from './addRepositoryEntry';
+import { projectIdForRepo } from './deriveChatWorkspaceTree';
 import {
   buildSidebarFolders,
   deriveRecentRows,
@@ -56,6 +67,8 @@ interface LeftNavProps {
   onOpenSettings?: () => void;
   /** T-24: opens the shared AddRepositoryDialog mounted in App. */
   onAddRepository?: () => void;
+  onRemoveRepository?: (repoPath: string) => void;
+  repositories?: Repository[];
 }
 
 export function LeftNav({
@@ -63,6 +76,8 @@ export function LeftNav({
   onToggleCollapsed,
   onOpenSettings,
   onAddRepository,
+  onRemoveRepository,
+  repositories = [],
 }: LeftNavProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -83,6 +98,28 @@ export function LeftNav({
   });
   const [recentShowAll, setRecentShowAll] = useState(false);
   const [searchVisible, setSearchVisible] = useState(true);
+  const [repoToRemove, setRepoToRemove] = useState<Repository | null>(null);
+
+  const handleConfirmRemoveRepo = useCallback(() => {
+    if (repoToRemove && onRemoveRepository) {
+      onRemoveRepository(repoToRemove.path);
+    }
+    setRepoToRemove(null);
+  }, [repoToRemove, onRemoveRepository]);
+
+  /**
+   * Folder → repository by the same key the tree was built with. Matching on
+   * display name or a path suffix would let one repo answer for another
+   * (`my-app` ends with the folder name `app`) — unacceptable for a remove
+   * action. A folder with no entry (the synthetic Temp project) gets no button.
+   */
+  const repoByProjectId = useMemo(() => {
+    const map = new Map<string, Repository>();
+    for (const repo of repositories) {
+      map.set(projectIdForRepo(repo), repo);
+    }
+    return map;
+  }, [repositories]);
 
   const projects = useChatSessionsStore((state) => state.projects);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
@@ -420,6 +457,7 @@ export function LeftNav({
                   {visibleFolders.map((folder) => {
                     const expanded = isProjectExpanded(folder.projectId);
                     const newSessionWorkspaceId = folder.newSessionWorkspaceId;
+                    const folderRepo = repoByProjectId.get(folder.projectId);
                     return (
                       <section key={folder.projectId}>
                         {/* Toggle and "+ new chat" are sibling buttons in a flex
@@ -453,6 +491,21 @@ export function LeftNav({
                               {folder.name}
                             </span>
                           </button>
+                          {onRemoveRepository && folderRepo && (
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="hidden h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive group-hover:flex group-focus-within:flex"
+                              aria-label={t('Remove repository')}
+                              title={t('Remove repository')}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setRepoToRemove(folderRepo);
+                              }}
+                            >
+                              <FolderMinus className="h-3 w-3" />
+                            </Button>
+                          )}
                           {newSessionWorkspaceId && (
                             // The header New button targets the active session's
                             // workspace only, so a repo that already has sessions
@@ -521,6 +574,35 @@ export function LeftNav({
           </div>
         </>
       )}
+
+      <AlertDialog
+        open={!!repoToRemove}
+        onOpenChange={(open) => {
+          if (!open) setRepoToRemove(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Remove repository')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('Are you sure you want to remove {{name}} from the workspace?', {
+                name: repoToRemove?.name ?? '',
+              })}
+              <span className="block mt-2 text-muted-foreground">
+                {t('This will only remove it from the app and will not delete local files.')}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setRepoToRemove(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmRemoveRepo}>
+              {t('Remove')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </aside>
   );
 }

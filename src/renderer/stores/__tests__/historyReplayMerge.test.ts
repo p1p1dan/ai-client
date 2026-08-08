@@ -198,7 +198,7 @@ describe('mergeReplayedHistory — guarded replay coverage (round-6 Bug B v2)', 
     expect(ids(merged)).toEqual(['user-t1']);
   });
 
-  it('never folds a message carrying attachments — history rows cannot restate them (M1)', () => {
+  it('replacement-folds a message carrying attachments — runtime copy replaces the history row (M1)', () => {
     const withAttachment: ReplayMergeMessage = {
       id: 'user-att',
       role: 'user',
@@ -212,7 +212,45 @@ describe('mergeReplayedHistory — guarded replay coverage (round-6 Bug B v2)', 
       ok(snap(['user-att']))
     );
 
+    // The runtime copy (with attachments) replaces the history row at its
+    // position — no duplication, attachment metadata preserved.
+    expect(ids(merged)).toEqual(['user-att']);
+    expect(merged[0]?.attachments).toEqual([{ kind: 'image' }]);
+  });
+
+  it('keeps attachment message when no history match exists — fail-open to duplication', () => {
+    const withAttachment: ReplayMergeMessage = {
+      id: 'user-att',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'look at this' }],
+      attachments: [{ kind: 'image' }],
+    };
+
+    const merged = mergeReplayedHistory(
+      [withAttachment],
+      [msg('h1', 'user', 'different text')],
+      ok(snap(['user-att']))
+    );
+
     expect(ids(merged)).toEqual(['h1', 'user-att']);
+  });
+
+  it('does not replacement-fold when attachments AND non-text blocks coexist', () => {
+    const mixed: ReplayMergeMessage = {
+      id: 'asst-mixed',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'result' }, { type: 'tool_call' }],
+      attachments: [{ kind: 'image' }],
+    };
+
+    const merged = mergeReplayedHistory(
+      [mixed],
+      [msg('h1', 'assistant', 'result')],
+      ok(snap(['asst-mixed']))
+    );
+
+    // Non-text blocks make it genuinely unfoldable — kept alongside history.
+    expect(ids(merged)).toEqual(['h1', 'asst-mixed']);
   });
 
   it('never folds a message carrying non-text/thinking blocks — live cards would die (M2)', () => {

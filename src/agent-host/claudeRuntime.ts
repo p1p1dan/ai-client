@@ -84,7 +84,7 @@ function buildPromptWithAttachments(
  * a permission/question prompt or an in-flight local tool never counts as a
  * stall. 0 (or negative) disables the watchdog.
  */
-const DEFAULT_STALL_TIMEOUT_MS = 120_000;
+const DEFAULT_STALL_TIMEOUT_MS = 195_000;
 
 function resolveStallTimeoutMs(): number {
   const raw = process.env.AICLIENT_HOST_STALL_TIMEOUT_MS;

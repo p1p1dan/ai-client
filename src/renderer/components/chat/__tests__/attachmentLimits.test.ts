@@ -246,13 +246,9 @@ describe('sendTimeoutMs (T-18 T-01..T-06)', () => {
   });
 
   it('[T-06] INVARIANT: the ceiling stays under the Host stall watchdog (renderer speaks first here, by design)', () => {
-    // claudeRuntime.ts DEFAULT_STALL_TIMEOUT_MS = 120_000. This margin means
+    // claudeRuntime.ts DEFAULT_STALL_TIMEOUT_MS = 195_000. This margin means
     // the RENDERER's ceiling elapses first on a large-attachment send whose
-    // turn already produced a first productive event — a known, accepted
-    // mid-term gap (see attachmentLimits.ts's corrected INVARIANT comment on
-    // SEND_TIMEOUT_CEILING_MS), not something asserted as "Host speaks first"
-    // here.
-    expect(SEND_TIMEOUT_CEILING_MS).toBeLessThan(120_000);
+    // turn already produced a first productive event.
     expect(SEND_TIMEOUT_CEILING_MS).toBeLessThan(HOST_STALL_TIMEOUT_MS);
     expect(sendTimeoutMs(DEFAULT_ATTACHMENT_LIMITS.maxTotalBytes)).toBeLessThan(
       HOST_STALL_TIMEOUT_MS
