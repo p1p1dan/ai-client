@@ -8,6 +8,8 @@ import {
   formatRelativeAge,
   RECENT_DEFAULT_LIMIT,
   RECENT_WINDOW_MS,
+  resolveActiveProjectId,
+  resolveFolderClickActivation,
   resolveNewSessionTarget,
   resolveNewSessionWorkspaceId,
 } from '../sidebarTree';
@@ -42,6 +44,25 @@ function session(overrides: Partial<ChatSession> & { id: string }): ChatSession 
     updatedAt: NOW,
     ...overrides,
   };
+}
+
+/** Shared by the folder-click / active-project describes below: builds the
+ * one folder under test through the real `buildSidebarFolders`, so its
+ * `rows` are genuinely `updatedAt`-desc sorted the way the sidebar renders
+ * them (resolveFolderClickActivation's `rows[0]` precondition). */
+function folderOf(projectId: string, sessions: ChatSession[]) {
+  const built = buildSidebarFolders({
+    projects: [...projects, { id: projectId, name: projectId }].filter(
+      (project, index, all) => all.findIndex((p) => p.id === project.id) === index
+    ),
+    workspaces,
+    sessions,
+  });
+  const folder = built.find((f) => f.projectId === projectId);
+  if (!folder) {
+    throw new Error(`folder ${projectId} not built`);
+  }
+  return folder;
 }
 
 describe('buildSidebarFolders', () => {
@@ -260,6 +281,157 @@ describe('resolveNewSessionTarget', () => {
     });
 
     expect(target).toEqual({ workspaceId: 'ws-main', folderName: 'ai-client' });
+  });
+});
+
+describe('resolveFolderClickActivation (D29, open-q #28 A; F1/F5 adversarial-review fixes)', () => {
+  it('activates the most recent session in the folder when the click crosses projects, forcing it open', () => {
+    const folder = folderOf('p-ai', [
+      session({ id: 's-old', workspaceId: 'ws-main', updatedAt: NOW - 5000 }),
+      session({ id: 's-new', workspaceId: 'ws-wt', updatedAt: NOW }),
+      session({ id: 's-mid', workspaceId: 'ws-main', updatedAt: NOW - 1000 }),
+    ]);
+
+    // F1: activation forces nextExpanded=true regardless of the prior state —
+    // a cross-repo click must never leave the just-activated row collapsed.
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: 'p-empty', currentExpanded: true })
+    ).toEqual({ activateSessionId: 's-new', nextExpanded: true });
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: 'p-empty', currentExpanded: false })
+    ).toEqual({ activateSessionId: 's-new', nextExpanded: true });
+    // Nothing active at all is also "a different project" — the click should
+    // still land the user somewhere visible.
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: null, currentExpanded: false })
+    ).toEqual({ activateSessionId: 's-new', nextExpanded: true });
+  });
+
+  it('never hijacks a click inside the already-active project, and keeps the plain toggle', () => {
+    const folder = folderOf('p-ai', [
+      session({ id: 's-old', workspaceId: 'ws-main', updatedAt: NOW - 5000 }),
+      session({ id: 's-new', workspaceId: 'ws-wt', updatedAt: NOW }),
+    ]);
+
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: true })
+    ).toEqual({ activateSessionId: null, nextExpanded: false });
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: false })
+    ).toEqual({ activateSessionId: null, nextExpanded: true });
+  });
+
+  it('returns null for an empty folder instead of auto-creating a session, and keeps the plain toggle', () => {
+    const folder = folderOf('p-empty', []);
+    expect(folder.rows).toEqual([]);
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: true })
+    ).toEqual({ activateSessionId: null, nextExpanded: false });
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: false })
+    ).toEqual({ activateSessionId: null, nextExpanded: true });
+    // The "New" affordance still points here — that path is untouched (D29 ④).
+    expect(folder.newSessionWorkspaceId).toBe('ws-empty');
+  });
+
+  it('breaks an updatedAt tie toward rows[0], under the sorted-input precondition (F5)', () => {
+    const tied = [
+      session({ id: 's-first', workspaceId: 'ws-main', updatedAt: NOW }),
+      session({ id: 's-second', workspaceId: 'ws-wt', updatedAt: NOW }),
+    ];
+    const folder = folderOf('p-ai', tied);
+    // buildSidebarFolders sorts updatedAt desc with a stable sort, so the tie
+    // keeps input order — and the resolver must agree with what is on screen.
+    expect(folder.rows.map((row) => row.sessionId)).toEqual(['s-first', 's-second']);
+    expect(
+      resolveFolderClickActivation({ folder, activeProjectId: 'p-empty', currentExpanded: false })
+        .activateSessionId
+    ).toBe('s-first');
+
+    // Same rule with the inputs reversed: the tie follows row order, never id
+    // or workspace ordering.
+    const reversed = folderOf('p-ai', [...tied].reverse());
+    expect(reversed.rows.map((row) => row.sessionId)).toEqual(['s-second', 's-first']);
+    expect(
+      resolveFolderClickActivation({
+        folder: reversed,
+        activeProjectId: 'p-empty',
+        currentExpanded: false,
+      }).activateSessionId
+    ).toBe('s-second');
+  });
+
+  it('treats Temp as an ordinary project — no special case', () => {
+    const tempFolder = folderOf('p-temp', [
+      session({ id: 's-temp', workspaceId: 'ws-temp', updatedAt: NOW }),
+    ]);
+    expect(
+      resolveFolderClickActivation({
+        folder: tempFolder,
+        activeProjectId: 'p-ai',
+        currentExpanded: false,
+      })
+    ).toEqual({ activateSessionId: 's-temp', nextExpanded: true });
+    expect(
+      resolveFolderClickActivation({
+        folder: tempFolder,
+        activeProjectId: 'p-temp',
+        currentExpanded: true,
+      })
+    ).toEqual({ activateSessionId: null, nextExpanded: false });
+  });
+});
+
+describe('resolveActiveProjectId (F3, D29 adversarial-review)', () => {
+  it('resolves through the active session workspace, not a stale session.projectId', () => {
+    expect(
+      resolveActiveProjectId({
+        activeSessionId: 's-stale',
+        sessions: [session({ id: 's-stale', projectId: 'p-empty', workspaceId: 'ws-main' })],
+        workspaces,
+      })
+    ).toBe('p-ai');
+  });
+
+  it('returns null when nothing is active', () => {
+    expect(resolveActiveProjectId({ activeSessionId: null, sessions: [], workspaces })).toBeNull();
+  });
+
+  it('returns null for an orphan active session (workspace missing)', () => {
+    expect(
+      resolveActiveProjectId({
+        activeSessionId: 's-orphan',
+        sessions: [session({ id: 's-orphan', workspaceId: 'ws-gone' })],
+        workspaces,
+      })
+    ).toBeNull();
+  });
+
+  // F4 (store-shape case): the active session sits on a DIFFERENT worktree of
+  // the SAME project as the clicked folder (ws-wt vs ws-main, both p-ai) —
+  // resolveActiveProjectId must still land on 'p-ai' through the workspace,
+  // so the folder click resolves to "no switch", not a false activation.
+  it('a worktree of the same project as the clicked folder resolves to no switch', () => {
+    const aiFolder = folderOf('p-ai', [
+      session({ id: 's-main', workspaceId: 'ws-main', updatedAt: NOW - 1000 }),
+      session({ id: 's-wt', workspaceId: 'ws-wt', updatedAt: NOW }),
+    ]);
+    const activeProjectId = resolveActiveProjectId({
+      activeSessionId: 's-wt',
+      sessions: [
+        session({ id: 's-main', workspaceId: 'ws-main' }),
+        session({ id: 's-wt', workspaceId: 'ws-wt' }),
+      ],
+      workspaces,
+    });
+    expect(activeProjectId).toBe('p-ai');
+    expect(
+      resolveFolderClickActivation({
+        folder: aiFolder,
+        activeProjectId,
+        currentExpanded: true,
+      })
+    ).toEqual({ activateSessionId: null, nextExpanded: false });
   });
 });
 

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { shouldResumeSession } from './resumeIntent';
+import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
 
 /**
  * Hook exposing the user-driven "resume historical session" action (T-03).
@@ -38,10 +38,19 @@ export function useResumeSession(): UseResumeSessionResult {
 
       try {
         await window.electronAPI.chat.resumeSession(intent.args);
-        useChatSessionsStore.setState({
-          activeSessionId: sessionId,
-          lastError: null,
-        });
+        // F2 (D29 adversarial-review, major): guard against the race where
+        // the user selects a different session while resumeSession is in
+        // flight (see shouldApplyResumeResult's doc comment — most visible on
+        // a cold-start resume). Both callers already set activeSessionId to
+        // sessionId synchronously before calling resume(), so this write is a
+        // redundant backstop; skipping it here is zero-risk when the guard
+        // fails and prevents dragging the user back to a session they left.
+        if (shouldApplyResumeResult(useChatSessionsStore.getState().activeSessionId, sessionId)) {
+          useChatSessionsStore.setState({
+            activeSessionId: sessionId,
+            lastError: null,
+          });
+        }
         return true;
       } catch {
         return false;

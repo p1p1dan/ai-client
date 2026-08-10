@@ -158,3 +158,31 @@ describe('LeftNav pins (T-23 removals)', () => {
     expect(CODE).not.toMatch(/>\s*Help\s*</);
   });
 });
+
+/**
+ * F4 (D29 adversarial-review, minor): pins the activation wiring so a future
+ * edit cannot quietly grow a second activation path. `selectSession` is the
+ * red-line store's raw setter (no derivation, no guard) — every activation
+ * decision (a session row click, a folder-crossing click) must route through
+ * `handleSelectSession` instead of calling it directly, and
+ * `resolveFolderClickActivation`'s `activateSessionId` must feed nothing else.
+ */
+describe('LeftNav activation wiring (D29 / F4)', () => {
+  const CODE = codeOf(join(SHELL_DIR, 'LeftNav.tsx'));
+
+  it('calls the raw store selectSession exactly once, and only inside handleSelectSession', () => {
+    expect(CODE.split('selectSession(').length - 1).toBe(1);
+    expect(CODE).toContain(
+      'const handleSelectSession = (sessionId: string, persistedRuntimeIdentity?: string) => {\n    selectSession(sessionId);'
+    );
+  });
+
+  it("feeds resolveFolderClickActivation's activateSessionId into nothing but handleSelectSession", () => {
+    // Exactly three appearances: the destructure, the null-check, and the
+    // one call it is allowed to reach — a fourth means a new path opened up.
+    expect(CODE.split('activateSessionId').length - 1).toBe(3);
+    expect(CODE).toContain('const { activateSessionId, nextExpanded } =');
+    expect(CODE).toContain('if (activateSessionId) {');
+    expect(CODE.split('handleSelectSession(activateSessionId)').length - 1).toBe(1);
+  });
+});

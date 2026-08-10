@@ -1,7 +1,12 @@
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
-import { isSessionBusy, resumeDisplayTitle, shouldResumeSession } from '../resumeIntent';
+import {
+  isSessionBusy,
+  resumeDisplayTitle,
+  shouldApplyResumeResult,
+  shouldResumeSession,
+} from '../resumeIntent';
 
 const BUSY_STATUSES: SessionRuntimeStatus[] = [
   'starting',
@@ -117,6 +122,20 @@ describe('shouldResumeSession (T-03)', () => {
       expect(result.shouldResume).toBe(false);
       expect(result.reason).toBe(`busy:${status}`);
     }
+  });
+});
+
+describe('shouldApplyResumeResult (F2, D29 adversarial-review)', () => {
+  it('applies the resume result when the store is still on the resumed session', () => {
+    expect(shouldApplyResumeResult('s1', 's1')).toBe(true);
+  });
+
+  it('skips the write when the user selected a different session mid-await', () => {
+    expect(shouldApplyResumeResult('s2', 's1')).toBe(false);
+  });
+
+  it('skips the write when nothing is active anymore (session closed mid-await)', () => {
+    expect(shouldApplyResumeResult(null, 's1')).toBe(false);
   });
 });
 

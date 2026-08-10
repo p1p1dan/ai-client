@@ -59,6 +59,8 @@ import {
   deriveRecentRows,
   formatRelativeAge,
   RECENT_DEFAULT_LIMIT,
+  resolveActiveProjectId,
+  resolveFolderClickActivation,
   resolveNewSessionTarget,
   type SidebarSessionRow,
 } from './sidebarTree';
@@ -500,10 +502,37 @@ export function LeftNav({
                               // the global "New" button at this folder, in sync
                               // with handleSelectSession's session-pick path.
                               setFocusedProjectId(folder.projectId);
+                              // F3 (D29 adversarial-review, minor): read fresh
+                              // store state at click time rather than the
+                              // render-body `activeSession` snapshot — this
+                              // handler can fire well after the render that
+                              // captured it scheduled this closure.
+                              const activeProjectId = resolveActiveProjectId(
+                                useChatSessionsStore.getState()
+                              );
+                              // D29 (open-q #28 A) + F1 (adversarial-review
+                              // major): activation and expansion are decided
+                              // together by one pure call, so a cross-repo
+                              // click can never toggle the just-activated
+                              // folder closed — the old code toggled expansion
+                              // unconditionally BEFORE deciding activation,
+                              // which could collapse the row it had just
+                              // activated. Routed through the very same
+                              // handler a session row click uses — no second
+                              // activation path.
+                              const { activateSessionId, nextExpanded } =
+                                resolveFolderClickActivation({
+                                  folder,
+                                  activeProjectId,
+                                  currentExpanded: expanded,
+                                });
                               setExpandedProjects((prev) => ({
                                 ...prev,
-                                [folder.projectId]: !expanded,
+                                [folder.projectId]: nextExpanded,
                               }));
+                              if (activateSessionId) {
+                                handleSelectSession(activateSessionId);
+                              }
                             }}
                           >
                             {expanded ? (

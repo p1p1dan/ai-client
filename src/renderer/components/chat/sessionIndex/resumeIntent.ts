@@ -120,6 +120,29 @@ export function resumeDisplayTitle(
   return fm ? truncatePreview(fm, 60) : 'Untitled session';
 }
 
+/**
+ * F2 (D29 adversarial-review, major): guards `useResumeSession`'s post-await
+ * store write.
+ *
+ * `resume()` awaits `chat.resumeSession` before writing `activeSessionId`
+ * back to the store. Both callers (LeftNav's `handleSelectSession`,
+ * MessageTimeline's `HistoryErrorNotice` retry) already set `activeSessionId`
+ * to this same session synchronously before calling `resume()`, so that write
+ * is a redundant backstop, not the primary selection path — writing it
+ * unconditionally after the await raced the user: if they picked a different
+ * session while the Host round-trip was in flight (most visible on a cold
+ * start, where the first resume can take a while), the stale write would
+ * silently drag them back to the session they had just left.
+ *
+ * Skip the write whenever the store has already moved on.
+ */
+export function shouldApplyResumeResult(
+  currentActiveSessionId: string | null,
+  resumedSessionId: string
+): boolean {
+  return currentActiveSessionId === resumedSessionId;
+}
+
 function truncatePreview(text: string, max: number): string {
   const trimmed = text.trim().replace(/\s+/g, ' ');
   if (trimmed.length <= max) return trimmed;

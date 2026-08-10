@@ -189,6 +189,32 @@ export function buildSidebarFolders(input: SidebarTreeInput): SidebarFolder[] {
   }));
 }
 
+/**
+ * F3 (D29 adversarial-review, minor): the ACTIVE session's project, resolved
+ * through its workspace — same authority `buildSidebarFolders` groups by, so a
+ * stale `session.projectId` cannot misjudge "same folder" after a rebind.
+ * `null` when nothing is active or the active session is an orphan.
+ *
+ * Extracted because LeftNav previously ran this same
+ * activeSessionId → sessions → workspaceId → workspaces → projectId chain
+ * inline as a render-body snapshot — the fourth inline copy of the chain in
+ * this file — and the folder-click handler needs a FRESH read at click time
+ * (`resolveActiveProjectId(useChatSessionsStore.getState())`), not the
+ * snapshot captured when the render that scheduled the click started.
+ *
+ * Input shape mirrors the store's own field names so a caller can pass
+ * `useChatSessionsStore.getState()` straight through without reshaping it.
+ */
+export function resolveActiveProjectId(input: {
+  activeSessionId: string | null;
+  sessions: readonly Pick<ChatSession, 'id' | 'workspaceId'>[];
+  workspaces: readonly Pick<ChatWorkspace, 'id' | 'projectId'>[];
+}): string | null {
+  const session = input.sessions.find((item) => item.id === input.activeSessionId);
+  const workspace = input.workspaces.find((ws) => ws.id === session?.workspaceId);
+  return workspace?.projectId ?? null;
+}
+
 export interface NewSessionTarget {
   workspaceId: string | null;
   /** Folder name for the resolved target — drives the header "New" button's
@@ -251,6 +277,85 @@ export function resolveNewSessionTarget(input: {
     workspaceId: target.id,
     folderName: folderByProject.get(target.projectId)?.name ?? null,
   };
+}
+
+/**
+ * Result of a repository-folder header click: whether to activate a session
+ * and what the folder's expansion state should become afterward. A single
+ * return value so the two effects can never be applied from two different
+ * reads of "did this click cross projects" (F1 adversarial-review fix).
+ */
+export interface FolderClickActivation {
+  /** `null` means "leave the active session alone". */
+  activateSessionId: string | null;
+  /** What `expandedProjects[folder.projectId]` should become after this click. */
+  nextExpanded: boolean;
+}
+
+/**
+ * D29 (open-q #28, ruling A): which session a repository-folder click should
+ * activate, and what the folder's expansion should become.
+ *
+ * Why this exists: the right-hand git panel, the file tree and the session cwd
+ * all follow the ACTIVE session's workspace. A folder header click only moved
+ * `focusedProjectId` (where the next "New" lands) and toggled expansion, so
+ * clicking a repository produced no visible change anywhere — the field
+ * complaint "the git panel does not follow the sidebar". Activating the
+ * folder's most recent session gives the click a visible consequence.
+ *
+ * Rules, exactly as ruled:
+ * - Only a click that crosses into a DIFFERENT project activates anything.
+ *   Clicking inside the already-active project is the collapse/expand gesture
+ *   and must not be hijacked.
+ * - An empty folder activates nothing and never auto-creates: the same click
+ *   already pointed `focusedProjectId` at this folder, so "New" is one further
+ *   click away.
+ * - Temp is an ordinary project here — no special case.
+ *
+ * Expansion (F1 adversarial-review fix): a plain unconditional toggle in the
+ * caller collapsed the very folder a cross-repo click just activated whenever
+ * it happened to already be expanded — the just-activated session row vanished
+ * off-screen instead of coming into view. So expansion is decided HERE,
+ * together with activation, instead of the caller toggling blindly first:
+ * - Activation succeeds (cross-project click, non-empty folder): `nextExpanded`
+ *   is always `true` — the folder must be open for the newly-activated row to
+ *   be visible, regardless of its state before the click.
+ * - Activation is a no-op (same-project click, or an empty folder): the plain
+ *   collapse/expand gesture applies, `nextExpanded = !currentExpanded`.
+ *
+ * PRECONDITION (F5 adversarial-review fix): `folder.rows` must already be
+ * sorted by `updatedAt` descending — exactly what `buildSidebarFolders`
+ * hands every caller. Under that precondition the most-recent row is always
+ * `rows[0]`, so this no longer scans for a max; a tie is whatever `rows[0]`
+ * is, which is also the topmost row on screen.
+ */
+export function resolveFolderClickActivation(input: {
+  folder: {
+    projectId: string;
+    /** Same rows the folder renders — already query-filtered and sorted
+     * `updatedAt` desc, so a click while searching activates a session the
+     * user can actually see, and `rows[0]` is always the most recent one. */
+    rows: readonly Pick<SidebarSessionRow, 'sessionId'>[];
+  };
+  /**
+   * Project of the ACTIVE session's workspace — the workspace is authoritative
+   * for grouping (same rule as `buildSidebarFolders`), so a stale
+   * `session.projectId` cannot misjudge "same folder" after a rebind. `null`
+   * when nothing is active or the active session is an orphan, which counts as
+   * a different project and therefore activates.
+   */
+  activeProjectId: string | null;
+  /** This folder's expansion state BEFORE the click. */
+  currentExpanded: boolean;
+}): FolderClickActivation {
+  if (input.folder.projectId === input.activeProjectId) {
+    return { activateSessionId: null, nextExpanded: !input.currentExpanded };
+  }
+  const newestSessionId = input.folder.rows[0]?.sessionId ?? null;
+  if (!newestSessionId) {
+    return { activateSessionId: null, nextExpanded: !input.currentExpanded };
+  }
+  return { activateSessionId: newestSessionId, nextExpanded: true };
 }
 
 export interface RecentRowsInput {
