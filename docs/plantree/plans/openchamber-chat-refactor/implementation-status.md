@@ -10,7 +10,7 @@
   ⚠️ Phase 0A 整体仍 🟡：A02 / A03 / A04 未立项（口径以总台账 Phase 总览 0A 行为准）。
 - **Last Landed**（2026-08-07 施工 / 08-08 提交）：**测试机五问题修复批 `9a6cc01`** ——
   M1 附件历史重放去重（replacement fold）· M2 超时 115→180s（Host stall 195s）· M3 新壳补仓库移除入口
-  （提交前修正：取键改 `projectIdForRepo()` 精确匹配）· M4 分支查询加重试 `retry:1`（真因未定，现场取证见测试方案步骤 4b）·
+  （提交前修正：取键改 `projectIdForRepo()` 精确匹配）· M4 分支查询加重试 `retry:1`——**2026-08-09 复核判定为空改动**（`retry:1` 本就是全局默认；且 `refetchOnWindowFocus` 默认 true 已使失败查询每次聚焦即重发，「瞬时失败」假说 08-07 当天即被证伪）。真因仍未定，已给出五选一判别器与现场三步取证，见[测试方案「R4 已改判」](../../../plans/2026-08-06-encrypted-machine-test-plan.md)·
   M5 判定为 M1 的视觉后果。随后版本抬 **`0.4.0-test.2`**（`ff63987`）。
   更早各批（08-04 ~ 08-06 各任务与十二轮点验）：一行摘要见 [roadmap Done](./roadmap.md)，
   明细见[主线台账](../../../plans/ledger-claude-mainline.md)，当时活动状态原文见 history 归档。

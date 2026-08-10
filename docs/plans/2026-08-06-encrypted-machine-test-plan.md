@@ -157,18 +157,72 @@ await window.electronAPI.agentHost.resolveNode()
 | R1（M1） | 带一张图片发一条消息 → 等回合结束 → 关掉会话再重开（或重启应用后重开） | 这条消息**只出现一次**且带附件缩略图。出现两条（一条有缩略图、一条没有）= 未修复 |
 | R2（M2） | 发一条重附件或长推理的消息，掐表 | **3 分钟内不该弹超时**。渲染端上限 180s、Host stall 195s，所以先说话的应是渲染端那条 |
 | R3（M3） | 左栏仓库目录行**悬停** → 出现 FolderMinus 图标 → 点 → 确认弹窗 → Remove | 该仓库从左栏消失，磁盘文件不动。**挂两个及以上仓库时务必核对删掉的是点的那个**——取键逻辑本轮刚从「按名字/路径后缀猜」改成精确匹配，这是唯一的现场验证机会 |
-| R4（M4） | 有分支/worktree 的仓库，看侧栏会话行的分支 chip | 显示真实分支名。**本轮只加了一次重试（`retry:1`），是否真因未定**——仍空白就按下面取证 |
+| R4（M4） | 有分支/worktree 的仓库，看侧栏会话行的分支 chip | ⚠️ **本项不要按「修好没有」记分**——见下方「R4 已改判」。按 S0→S2 三步取证，目标是**拿到可归因的结论**，不是看 chip 出没出 |
 
-**R4 不过时的取证动作**（这是本节最重要的一项，别跳）：DevTools 控制台跑
+### R4 已改判（2026-08-09 复核，**出发前务必读这一段**）
+
+**`retry:1` 极可能是空改动，别把这一轮当成「验证修复」。** 三条实测：
+
+1. **`retry: 1` 本来就是全局默认**（`src/renderer/index.tsx` 的 `QueryClient.defaultOptions.queries.retry = 1`）。
+   `9a6cc01` 只是把这一个查询显式的 `retry:false` 拿掉、退回全局默认，**没有新增任何能力**。
+2. **`refetchOnWindowFocus` 未被覆写，react-query 默认为 true**；失败的 query 没有 data ⇒ 恒为 stale
+   ⇒ **即便在 `retry:false` 下，每次窗口获得焦点就已经在重发这个查询了**。你在 08-07 那台机器上必然
+   alt-tab 过若干次而 chip 始终不出 —— **「瞬时失败」这个假说当天就已经被证伪了**。
+3. 原来的 `retry:false` 是**有意的**（`useWorktree.ts:47` 注释 `// Don't retry on git errors`）。
+
+→ 所以 R4 的任务**不是**「看修好没有」，而是**拿回一个能定位到具体候选的结论**。按下面三步做。
+
+---
+
+#### S0 — 先截图（零成本，先做这个，很可能一步定案）
+
+放大一行会话行，看 `Claude Code` chip 与右侧相对时间之间那一段：
+
+- **看得见一枚很小的空边框胶囊**（约 16px 宽、里面没字或只有一两个字）
+  → 数据层是好的，**问题在宽度预算**，别再查 git。
+- **两者之间什么都没有**（连边框都没有）
+  → 走下面的数据链取证（S1 / S2）。
+
+**判别依据是实测的**：分支 chip 的 className 经本仓 `cn()` 合并后为
+`… sm:h-4 sm:min-w-4 … min-w-0 max-w-24 shrink` —— `min-w-0` 干掉了基础 `min-w-5`，
+但**同断点组之外的 `sm:min-w-4` 活了下来**（2026-08-09 用本仓 `lib/utils.ts` 的 `extendTailwindMerge` 实跑确认）。
+即桌面视口（≥640px）下分支 chip 有 **16px 硬地板**，**被挤压时只会变成空胶囊，永远不会整枚消失**。
+（这也说明 M5 那轮注释宣称的「分支 chip 可让位到 0」与实际行为不符，是一处待修缺陷。）
+
+#### S1 — 关掉新壳看旧壳（零 DevTools）
+
+Settings → Appearance → 关掉 OpenChamber Workspace Shell → 回经典左栏 → 展开该仓库。
+旧壳会把 worktree 查询错误**直接渲染成文字**（`TreeSidebar.tsx:799/976`）；新壳没有这条通路。
+**看到错误文本 = 直接就是答案**，抄下来即可，不用再做 S2。
+
+#### S2 — DevTools 一行（比原方案精确得多）
+
+原方案让你手打仓库路径，**致命缺陷是你手打的字符串与 app 实际存的 `repo.path` 未必是同一个**，
+于是「路径键对不上」这条候选根本验不出来。改用下面这条（它读 app 自己存的路径）：
 
 ```js
-await window.electronAPI.worktree.list('D:\\你的\\仓库路径')
+(async()=>{const k=p=>p.replace(/\\/g,'/').replace(/[\\/]+$/,'').toLowerCase();
+for(const r of JSON.parse(localStorage.getItem('aiclient-repositories')||'[]')){
+try{const w=await window.electronAPI.worktree.list(r.path);
+console.log('REPO',JSON.stringify(r.path),'key',k(r.path),w.map(x=>({p:x.path,key:k(x.path),b:x.branch,main:x.isMainWorktree})));}
+catch(e){console.log('REPO',JSON.stringify(r.path),'THREW',e.message);}}})()
 ```
 
-- 返回正常数组 → 数据层没问题，问题在 `deriveChatWorkspaceTree` → `workspaceBranch` 的映射
-- 抛错 / 返回空 → 问题在 `WorktreeService.list()`，把**完整错误文本**截图带回
+**读法（五选一，互斥；截图整段输出带回）**：
 
-两种结果都是有效结论，**分不清是哪种就等于没测**。
+| 输出特征 | 结论 |
+|---|---|
+| `THREW` 且文本含 `ENOENT` / `spawn git` / `不是内部或外部命令` | **git 寻不到**——app 跑 git 用的是「注册表 PATH」而非进程 PATH（Windows 分支是**替换**不是并集），Git 若装成 "Git Bash only" 就不在里面 |
+| `THREW` 且文本含 `dubious ownership` / `not a git repository` | **git 确定性拒绝该仓库**（属主 SID 不符，加密机/拷贝来的仓库常见） |
+| 返回数组，但 main 项的 `key` **≠** REPO 的 `key` | **路径键对不上**（顺便直接读出是映射网络盘 / junction / 还是你注册的是仓库子目录） |
+| 返回数组、key 相同、但 `b: null` | **detached HEAD**（切在 tag 上就是这个），一句 `git status` 可确认 |
+| 返回数组、key 相同、`b` 有值 | **数据层完全清白** → 回到 S0 的布局那一支 |
+
+> ⚠️ **别用 app 内置终端的 `where git` 下结论**：内置终端走的是 `process.env.PATH`
+> （`PtyManager.ts:377-386`），跟 git 实际用的那条 enhanced PATH **不是一回事**，
+> 在终端里能 `where git` 成功**不能**为「git 寻不到」脱罪。
+
+**S0 与 S2 都做完才算这一项测过。** 只看 chip 出没出 = 和上一轮一样，拿不到可归因的结论。
 
 ### 步骤 5 — 加密专属（T-11）
 
