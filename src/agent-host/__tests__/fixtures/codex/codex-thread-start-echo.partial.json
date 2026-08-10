@@ -1,0 +1,8 @@
+{
+  "approvalPolicy": "untrusted",
+  "sandbox": {
+    "type": "readOnly",
+    "networkAccess": false
+  },
+  "activePermissionProfile": null
+}

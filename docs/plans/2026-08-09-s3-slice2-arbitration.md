@@ -146,14 +146,70 @@
 
 ---
 
+## 4.5 取证抢救结果与由它改判的三条（2026-08-09，用户授权后执行）
+
+原始报文的 scratchpad 已蒸发，从会话 transcript 抢救回 **63 帧 / 5 个 JSONL + 1 个 partial**，
+落 `src/agent-host/__tests__/fixtures/codex/`（含 README manifest 记来源、脱敏项与**没捞到的**）。
+脱敏后经编排者独立扫描：`sk-*` / `Bearer` / `Authorization` / `base_url` / 用户路径 **零命中**；
+实际脱敏三处（`codexHome` 的 `/home/dan`→`~` · `serverName`→`[redacted-host]` · `installationId`→`[redacted]`）；
+`threadId`/`turnId`/`itemId`/`requestId` 一律保留（它们是关联逻辑的验证面）。
+夹具用 `{dir, tMs, raw:{…}}` 信封（与探针 traffic log 同形），**读取端要走 `.raw`**。
+
+### 改判 ①（**最重要**）：`idle` 状态**没有 `activeFlags` 键**
+
+编排者对夹具独立复核，`thread/status/changed` 的 `status` 形状全集 [实测]：
+
+| 次数 | 形状 | 应映射为 |
+|---|---|---|
+| 8 | `{"type":"active","activeFlags":[]}` | `running` |
+| 4 | `{"type":"active","activeFlags":["waitingOnUserInput"]}` | `waiting_question` |
+| 2 | `{"type":"active","activeFlags":["waitingOnApproval"]}` | `waiting_permission` |
+| 3 | `{"type":"idle"}` | **`idle`** ← **没有 `activeFlags` 这个键** |
+
+**后果**：任何写 `params.status.activeFlags.includes(...)` 的 mapper 会在**回合结束那一刻抛 TypeError**。
+**必须先判 `status.type`，再碰 `activeFlags`。**
+
+**同时修正 Opus 轨的映射表**：它把 `type !== 'active'` 一律映射为 `null`（「没有意见」）。
+对 `idle` 而言这是错的——`idle` 是明确无歧义的信号，映射成 null 会逼出第二个 idle 真相源
+（谁在 `turn/completed` 再发一次），正是本片要消灭的东西。**裁定**：
+`type:'idle'` → `'idle'`；`null` 只留给**真正畸形/未知 type**。
+
+### 改判 ②：`availableDecisions` 实际只有 3 项，且确认**不是强校验**
+
+真实帧 [实测] 是 `["accept", {acceptWithExecpolicyAmendment:…}, "cancel"]` —— **`decline` 不在列表里**，
+而探针回 `{"decision":"decline"}` **服务端照单全收**。这把 S1 §1.5 那条「`availableDecisions` 是渲染提示
+而非强校验」从单点观察升为有对照的实证，同时说明施工档「6 变体」是**契约全集**而非**单次可见集**。
+→ 切片 4 的表驱动按契约全集写，UI 只渲染 `availableDecisions` 里我们认识的项（口径不变）。
+
+### 改判 ③：U-c 半闭合 —— `networkAccess` **确认只在结果侧**
+
+`thread/start` 请求侧取 `sandbox: 'read-only'` **字符串**（依据是探针源码 `s1-codex-direct-probe.ts:375-379`，
+**不是逐字帧**）；结果侧回显 `{"type":"readOnly","networkAccess":false}` [实测]。
+→ §1 收敛项 2 由「两轨推断」升为「结果侧已实证」，但**请求侧是否接受对象型 sandbox 仍未测**，
+`compareSandboxEcho` 的 WARN 方案维持不变。
+
+### 确认捞不回、需重花额度的（如实登记，不得用 schema 反推编造）
+
+| # | 缺口 | 影响 |
+|---|---|---|
+| 1 | `requestUserInput` **第 3/4 条报文体**（10 颗问题里的 5 颗）——当时抓取命令带 `if n>=2: break`，它们从未进过 transcript；只有 question id 经响应帧幸存 | **切片 3 拿到的是 2 条真实请求，不是 4 条**。施工档「4 条真实报文做夹具回放」的措辞须按实修正 |
+| 2 | `activeFlags` **两 flag 并发**——全语料零样本 | **切片 2 的四组合验收只有 3 组有真实报文**；第 4 组必须**显式标注为构造用例** |
+| 3 | `thread/start` 请求参数与完整结果体的逐字留存 | U-c 请求侧仍未闭合，维持 [推测] |
+| 4 | `isSecret:true` / 非 null `autoResolutionMs` | 零样本，切片 3 的掩码用例只能构造 |
+| 5 | U4 `item/permissions/requestApproval` + MCP elicitation | 仅契约，与 S2 原判一致 |
+
+> **manifest 另记一条口径警告**：施工档「`isOther` 恒 true(10/10) · `isSecret` 恒 false(10/10)」
+> 是按 4 条报文全量统计的，而**现存夹具只保住 2 条** → 断言必须**限定在留存样本上**，
+> 不得写成「10/10」这种现在无法自证的口径。
+
 ## 5. 未闭合项（不得当成已知事实写进代码）
 
 | # | 项 | 现状 | 闭合手段（零额度优先） |
 |---|---|---|---|
 | U-a | `turn/interrupt`（`session.stop` 用）的确切拼写 | [未测] | `codex app-server generate-json-schema --experimental --out DIR`（S1 [实测] 产 47 schema + 300 类型，**零额度**），把 `CODEX_METHOD` 每个值对着 schema 索引核一遍，并把索引落成夹具 + `codexWireContract.test.ts`。这同时把 S1 建议的「契约漂移 CI 快照 diff」落了地。 |
 | U-b | `thread/resume` 拼写 | [实测·经转述] | 同上 |
-| U-c | `thread/start` 是否接受**对象型** sandbox（决定 `networkAccess:false` 到底是我方下发还是服务端默认） | [未测]，且仓库未保存 `generate-ts` 产物 | 同上。**未核实前不许猜字段名。** 现阶段处置：照发 `sandbox` 字符串 + 纯函数 `compareSandboxEcho(sent, echo)` 核对回显，mismatch 打 WARN（**不 fatal**——硬约束 7 禁止因校验挂死回合）。 |
-| U-d | 四种 `activeFlags` 组合是否都能真实观测到 | 取证抢救进行中 | 若夹具只覆盖部分组合，**如实标注哪些是构造用例**，不得声称四种都有真实报文。 |
+| U-c | `thread/start` 是否接受**对象型** sandbox | **半闭合**（见 §4.5 改判③）：结果侧 `networkAccess` 已实证；**请求侧仍 [未测]**，且仓库未保存 `generate-ts` 产物 | 同上。**未核实前不许猜字段名。** 现阶段处置：照发 `sandbox` 字符串 + 纯函数 `compareSandboxEcho(sent, echo)` 核对回显，mismatch 打 WARN（**不 fatal**——硬约束 7 禁止因校验挂死回合）。 |
+| U-d | 四种 `activeFlags` 组合是否都能真实观测到 | **已结**：3 组有真实报文，**两 flag 并发零样本**（§4.5） | 第 4 组按构造用例写并显式标注；另**新增** `idle` 无 `activeFlags` 键（§4.5 改判①）。 |
 
 ---
 
