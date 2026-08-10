@@ -37,8 +37,8 @@ pnpm build:win
 
 双击 `AiClient.exe` → 标题栏右上角菜单 → **About / 关于** → 看版本号 → 看完**关掉**。
 
-- 是 **`0.4.0-test.2`** → 继续
-- 是 `0.4.0-test.1` 或别的 → **停**，这是旧包，往下测全白测
+- 是 **`0.4.0-test.3`** → 继续
+- 是 `0.4.0-test.2` / `0.4.0-test.1` 或别的 → **停**，这是旧包，往下测全白测
 
 ---
 
@@ -84,6 +84,7 @@ $WORK = "D:\你的测试仓库"
 # ② 灌凭证（用程序自带的 node 跑，测试机可能没装 node）
 #    末尾必须带 $WORK —— 它把这个目录标记为「已信任」，
 #    不带的话 cli.js 首次用它时会卡在信任确认上
+#    路径按你实际拷贝的位置填；报 MODULE_NOT_FOUND 就是文件不在这儿，改用下面的备份写法
 & "$(Split-Path $APP)\resources\node-runtime\node.exe" "D:\make-test-claude-config.mjs" $WORK
 
 # ③ 设变量 + 启动，必须在同一个窗口连着做
@@ -93,6 +94,36 @@ $env:CLAUDE_CONFIG_DIR = "$env:TEMP\aiclient-gui-test-config"
 
 第 ② 步会打印出它生成到哪、用的哪个网关、信任了哪些目录——**核一眼**，
 特别是 `trusted workspaces` 里有没有你的 `$WORK`。
+
+### 备份写法：没带 .mjs 文件时，纯 PowerShell 灌凭证
+
+`.mjs` 忘了拷、或报 `Cannot find module` 时，用这段替代第 ② 步（干的事完全一样：
+写 `settings.json` + `.claude.json` 两个文件）。**必须和第 ③ 步同一个窗口**。
+
+```powershell
+$CFG = "$env:TEMP\aiclient-gui-test-config"
+New-Item -ItemType Directory -Force -Path $CFG | Out-Null
+
+# 不带 BOM —— PowerShell 5.1 的 `-Encoding utf8` 会写 BOM，cli.js 解析会炸
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+
+$settings = @{ env = @{
+    ANTHROPIC_AUTH_TOKEN = 'sk-4b0688c61944931297f2aee4ecfa0022'
+    ANTHROPIC_BASE_URL   = 'https://cch-jyw.pipidan.qzz.io'
+} } | ConvertTo-Json -Depth 5
+[IO.File]::WriteAllText("$CFG\settings.json", $settings, $utf8)
+
+$work = [IO.Path]::GetFullPath($WORK)   # $WORK 目录必须已存在
+$projects = @{}
+$projects[$work] = @{ hasTrustDialogAccepted = $true; hasCompletedProjectOnboarding = $true }
+$claudeJson = @{ hasCompletedOnboarding = $true; projects = $projects } | ConvertTo-Json -Depth 5
+[IO.File]::WriteAllText("$CFG\.claude.json", $claudeJson, $utf8)
+
+Write-Host "config dir: $CFG"
+Write-Host "trusted   : $work"
+```
+
+凭证若有变更，以 `scripts/make-test-claude-config.mjs` 里的默认值为准。
 
 ### 怎么确认真的生效了
 
@@ -277,3 +308,21 @@ node --version
 5. 第 8 步那三行命令的输出
 
 过了的项不用截图，说一声"过了"就行。
+
+---
+
+## 第二轮（`0.4.0-test.3`）· 上轮七个问题怎么复验
+
+> 前提不变：照第 3 步整块启动（不是双击；只有第 1 条白屏是特意双击测的）。第 1 步版本号必须是 **`0.4.0-test.3`**。
+
+| # | 上轮的问题 | 这次怎么做 | 算过的标准 |
+|---|---|---|---|
+| 1 | 双击白屏 3~5 秒 | 双击启动，盯第一屏 | 第一屏就是主题底色（亮色=米白，暗色=深色），不再是刺眼纯白。启动**总时长**这轮没治，慢但不白就算过 |
+| 2 | 授权卡选完还留着 | 点完 Allow/Deny 看那张卡 | 整卡塌成一行小字（Allowed/Denied + 描述），跟工具行一个长相；正在问的卡不变 |
+| 3 | Stop 没反应 | 长任务中点 Stop | 倒计时**立刻**消失、马上能发下一条；若 Stop 前已有排队消息，显示暂停 + Resume，再发一条新消息也会自动恢复 |
+| 4 | Temp 删不掉 | 鼠标悬停 Temp 下面的会话行 | 行尾出现垃圾桶小图标 → 点 → 确认；全删光后 Temp 文件夹自己消失 |
+| 5 | 拖文件夹没反应 | 先正常拖一次 | 有高亮遮罩+弹窗＝过。**仍没反应**：View → Developer Tools → Console，再拖一次，把 `[file-drag]` 开头的行截图；**一行都没有也是结论**，写「无任何 [file-drag] 输出」 |
+| 6 | 重启后图没了 | 发带图消息 → 重启 → 重开会话 | 消息只有一条、带附件小标签。**注意**：重启后标签显示的是 `image/png` 这类类型而不是文件名——这是这版的预期，不算 bug |
+| 7 | 说「不是 Git 仓库」 | 打开**真仓库**（如 C1Algorithm）的会话看右侧面板 | 真仓库和 Temp 会话都不该再说「未纳入 Git」。像 `testaaa` 那种**本来就没 git init 过**的文件夹仍显示「不是 Git 仓库」是**正确的**，别记成不过。**仍误报**：空态下面现在会显示它判定的目录路径，连路径一起截图；再把日志里 `[worktree:list]` 开头的几行抄回来（C1Algorithm 空数组之谜靠这个定案） |
+
+带回来的东西，在原来五项之外加两样：第 5 条的 `[file-drag]` 截图（若触发了兜底），第 7 条的 `[worktree:list]` 日志行。

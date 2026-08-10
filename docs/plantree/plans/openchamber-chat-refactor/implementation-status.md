@@ -8,13 +8,22 @@
 - **Current Phase**：**开发线全部收口 → 真机点验期**（2026-08-06 第十二轮点验后）。
   观感对齐批次（2026-07-28 转向，D18/D19/D20）的开发线任务 T-29 / T-12~T-15 / T-23 / T-32 / T-16 / T-33 / T-35 / T-34 全部 Done。
   ⚠️ Phase 0A 整体仍 🟡：A02 / A03 / A04 未立项（口径以总台账 Phase 总览 0A 行为准）。
-- **Last Landed**（2026-08-07 施工 / 08-08 提交）：**测试机五问题修复批 `9a6cc01`** ——
+- **Last Landed**（2026-08-10）：**现场七问题修复批 `d759023`**（shice2 取证）——
+  ① 白屏：`@shared/windowTheme` + 主进程按持久化主题设 `backgroundColor`，preload 亮色摘 dark 类（时序竞速未动，总时长另治）·
+  ② 授权卡已决态收敛 `ToolRow` 单行（冲突3裁定收窄为仅 Question 保留 QA 卡，基线 HTML 已注记）·
+  ③ Stop：等待谓词补 session.stopped/completed + generation 当帧生效（含 dispatch 守卫与 echo 门禁）、停止经 `decideRunEntryOutcome` 判正常结束、占位符 queue 优先、队列规格「Stop 冻结，入队恢复」·
+  ④ Temp 会话行 hover 删除按钮（复用旧壳整条链路；行宽预算 w-10→条件 w-[60px] 两态同宽）·
+  ⑤ 拖拽：终端捕获截胡修复（文件夹放行冒泡）+ `hasFilePayload` items 后备 + `[file-drag]` 自证日志（全新态打包版仍待 T-10 第 8 项实测）·
+  ⑥ 历史附件：**排查改判——载体是 user 行 content block 而非 attachment 控制行**（390 份真实 jsonl 实证），`HistoryMessage.attachments` 元数据协议扩展 + 降级 chip（image 仅 media type 无文件名，属预期）·
+  ⑦ git 判据：`gitEnabled` 改 `folder.checkType` 并集 + temp 补判（误报消除）、porcelain 解析拆纯模块 BOM/CRLF 加固 + 零解析证据日志、空态显示判定路径、死输入清理；**sessionIndexMerge temp 解锁经复核否决**（索引是跟随者，规则会破坏主动迁 temp；满屏 temp chip 系「新会话继承活动会话工作区」设计使然 → 归属权威 open-q #28）。
+  随后版本抬 **`0.4.0-test.3`**（`aa3ab33`）。第二轮现场回归按[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)执行。
+- 上一批（2026-08-07 施工 / 08-08 提交）：**测试机五问题修复批 `9a6cc01`** ——
   M1 附件历史重放去重（replacement fold）· M2 超时 115→180s（Host stall 195s）· M3 新壳补仓库移除入口
   （提交前修正：取键改 `projectIdForRepo()` 精确匹配）· M4 分支查询加重试 `retry:1`——**2026-08-09 复核判定为空改动**（`retry:1` 本就是全局默认；且 `refetchOnWindowFocus` 默认 true 已使失败查询每次聚焦即重发，「瞬时失败」假说 08-07 当天即被证伪）。真因仍未定，已给出五选一判别器与现场三步取证，见[测试方案「R4 已改判」](../../../plans/2026-08-06-encrypted-machine-test-plan.md)·
   M5 判定为 M1 的视觉后果。随后版本抬 **`0.4.0-test.2`**（`ff63987`）。
   更早各批（08-04 ~ 08-06 各任务与十二轮点验）：一行摘要见 [roadmap Done](./roadmap.md)，
   明细见[主线台账](../../../plans/ledger-claude-mainline.md)，当时活动状态原文见 history 归档。
-- **Last Verified**：2026-08-08 `9a6cc01` **四门全绿**（lint / typecheck / typecheck:agent-host / vitest **2481 例 0 红**）。
+- **Last Verified**：2026-08-10 `d759023` **四门全绿**（lint 32 条诊断全在 docs/design 基线 HTML / typecheck / typecheck:agent-host / vitest **2990 例 0 红**，较上批 +509 例）。上一口径 2026-08-08 `9a6cc01` 2481 例。
   3 例 Windows-only 恒红已于 2026-08-06 修复（测试侧 platform 桩），四门口径见 [baseline 门禁](../../baseline/test-and-release-gates.md)。
   历史逐批复核记录（51 文件 590 例起全程只增）见 history 归档。
 - **Next Target**：
@@ -65,6 +74,13 @@
 - 隐藏终端随他人 surface 宽度重排 / compact 跨组拖放静默 no-op（均登记不修）
 - macOS 无标题栏行 → 全 app 无 usage 展示（既有缺口显性化）
 - 旧壳（legacy 标签页壳）功能完整性从未在 D18~D27 各批回归——发现残缺按「旧壳是回退不是产品」记 backlog 不即时修
+- （2026-08-10 批遗留）`stopActiveSession()` 与 handleStop 的 pause 目标在送中途切会话时分叉（stop 应收显式 sessionId）；MessageTimeline:494 的 Stop 未 bump generation
+- （2026-08-10 批遗留）Stop-before-echo 的 release-origin 回合 pause 文案误标 send-rejected（冻结正确、文案误导，下次直发即清）
+- （2026-08-10 批遗留）remote 工作区 git 面板恒 not-git（gitEnabled 从未赋值，存量缺口）——新加的判定路径显示会让它现场显形
+- （2026-08-10 批遗留）新壳未接 `temporaryWorkspaceEnabled` 设置开关（tempItems 非空即显示 Temp）
+- （2026-08-10 批遗留）历史图片真位图缩略图另立需求（现为 metadata chip；image block 无处放文件名属 Host 侧限制）；纯图无文字消息同进程 resume 可能双气泡（宁多勿丢方向内，fold 可按附件身份匹配收口）
+- （2026-08-10 批遗留）启动 3-5s 总时长未治理（本批只治白屏观感）：窗口创建前 await 链 + 渲染层两层懒加载，需先补启动时间戳埋点
+- （2026-08-10 批遗留）send 等待谓词仍为内联闭包，抽 shouldReleaseSendWait 纯函数可直接单测（敏感区重构另排）
 
 ## Blocked By
 

@@ -43,6 +43,9 @@
 - 布局模型三轮改判定稿「rail 常驻 + 面板宽度压缩」✅ `cfc3bc1`（0-novodecies 收口）；性能裁定 = VM 软渲染主因 + 拖拽 rAF 直绘已治理
 - 测试机五问题修复批 ✅ `9a6cc01`（2026-08-08 提交；现场回归项 R1~R4 见[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md)步骤 4b）+ 侧栏行宽度预算 `eb4a6c0` + 版本抬 `0.4.0-test.2` `ff63987`
 
+**真机点验期修复批次（2026-08-10，shice2 现场取证）**
+- 现场七问题修复批 ✅ `d759023`（白屏首帧主题背景 · 授权卡已决收敛工具行 · Stop 全链路〔等待谓词补终止态 + generation 当帧生效 + 停止判正常结束 + 队列「Stop 冻结、入队恢复」〕· Temp 会话行可删 · 拖拽加固〔终端截胡修复 + 非原生拖源后备 + `[file-drag]` 自证日志〕· 历史附件元数据回放〔载体改判 content block〕· git 判据纠偏〔checkType 并集 + temp 补判 + BOM/CRLF 解析加固 + 空态显示判定路径〕；排查结论两处被实现方证据推翻——sessionIndexMerge temp 解锁否决、attachment 控制行非载体）+ 版本抬 `0.4.0-test.3` `aa3ab33`；四门 2990 例 0 红；第二轮现场回归要点见[现场操作单](../../../plans/2026-08-10-field-test-sheet.md)
+
 ## In Progress
 
 - **T-04 thinking 卡**：🔴 卡在网关（sonnet 空文本 thinking / 默认模型确定性 400，open-q #5/#8）——app 侧无可修，等网关侧处理；修复后须在新发起轮次验证。
