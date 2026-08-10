@@ -1,0 +1,73 @@
+{
+  "_comment": [
+    "Turn-loop parameter contract, generated from the codex binary itself:",
+    "  codex app-server generate-json-schema --experimental --out <dir>",
+    "Same provenance as codex-method-contract.json (which pins METHOD NAMES);",
+    "this file pins the PARAM SHAPES the turn loop sends, so a guessed or dropped",
+    "field shows up as a failing test instead of a -32602 at runtime on a machine",
+    "we cannot reach. `required` / `propertyNames` are lifted verbatim from the",
+    "generated JSON Schema; propertyNames is the key list of `properties`."
+  ],
+  "codexVersion": "codex-cli 0.145.0",
+  "capturedAt": "2026-08-10",
+  "TurnStartParams": {
+    "required": ["input", "threadId"],
+    "propertyNames": [
+      "additionalContext",
+      "approvalPolicy",
+      "approvalsReviewer",
+      "clientUserMessageId",
+      "collaborationMode",
+      "cwd",
+      "effort",
+      "environments",
+      "input",
+      "model",
+      "multiAgentMode",
+      "outputSchema",
+      "permissions",
+      "personality",
+      "responsesapiClientMetadata",
+      "runtimeWorkspaceRoots",
+      "sandboxPolicy",
+      "serviceTier",
+      "summary",
+      "threadId"
+    ]
+  },
+  "TurnInterruptParams": {
+    "required": ["threadId", "turnId"],
+    "propertyNames": ["threadId", "turnId"]
+  },
+  "UserInputVariants": [
+    "AudioUserInput",
+    "ImageUserInput",
+    "LocalAudioUserInput",
+    "LocalImageUserInput",
+    "MentionUserInput",
+    "SkillUserInput",
+    "TextUserInput"
+  ],
+  "UserInputText": {
+    "required": ["text", "type"],
+    "propertyNames": ["text", "text_elements", "type"]
+  },
+  "TurnStartResponse": {
+    "required": ["turn"],
+    "propertyNames": ["turn"]
+  },
+  "Turn": {
+    "required": ["id", "items", "status"],
+    "propertyNames": [
+      "completedAt",
+      "durationMs",
+      "error",
+      "id",
+      "items",
+      "itemsView",
+      "startedAt",
+      "status"
+    ]
+  },
+  "TurnStatus": ["completed", "interrupted", "failed", "inProgress"]
+}
