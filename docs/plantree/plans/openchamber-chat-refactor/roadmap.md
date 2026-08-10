@@ -45,6 +45,7 @@
 
 **真机点验期修复批次（2026-08-10，shice2 现场取证）**
 - 现场七问题修复批 ✅ `d759023`（白屏首帧主题背景 · 授权卡已决收敛工具行 · Stop 全链路〔等待谓词补终止态 + generation 当帧生效 + 停止判正常结束 + 队列「Stop 冻结、入队恢复」〕· Temp 会话行可删 · 拖拽加固〔终端截胡修复 + 非原生拖源后备 + `[file-drag]` 自证日志〕· 历史附件元数据回放〔载体改判 content block〕· git 判据纠偏〔checkType 并集 + temp 补判 + BOM/CRLF 解析加固 + 空态显示判定路径〕；排查结论两处被实现方证据推翻——sessionIndexMerge temp 解锁否决、attachment 控制行非载体）+ 版本抬 `0.4.0-test.3` `aa3ab33`；四门 2990 例 0 红；第二轮现场回归要点见[现场操作单](../../../plans/2026-08-10-field-test-sheet.md)
+- D29 侧栏点仓库切会话 ✅ `e529a55`（#28 拍 A + 三条代拍同日追认；施工+对抗复核双段，2 major 闭环——含 resume 后写 activeSessionId 既有竞态顺带根治；vitest 3004）
 
 ## In Progress
 
