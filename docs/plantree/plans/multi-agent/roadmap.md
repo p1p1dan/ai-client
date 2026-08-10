@@ -61,7 +61,7 @@
 | **1** 绑定回流链 | ✅ **已落地 `0314216`** | 正向链 + 早退守卫放宽 + 唯一物化点 + 侧栏 chip；**Host 现会显式拒绝跑不了的 agent** |
 | **2a** Codex 客户端骨架 | ✅ **已落地 `84ae4e1`** | JSON-RPC + 单一 pending 表 + **单一 status mapper** + 隔离 `CODEX_HOME` + Node 入口解析。双轨合流仲裁档 [2026-08-09-s3-slice2-arbitration](../../../plans/2026-08-09-s3-slice2-arbitration.md) |
 | **2b** 打包链 | 待 2a | **因用户裁定「Codex 随 Agent Host 打包」而新增**：`build-agent-host.mjs` 整条（preflight/external/prune/verifier）+ electron-builder + CI。**包体 141MB→约 480MB（3.4×）**，与 open-q #1 冲突，落之前须向用户交待 |
-| **2c** 回合循环 + 事件归一化器 | **新立（切片划分缺口，2026-08-09 确认）** | S2 切片表 0→1→2→{3,4},5 里**没有任何一片认领它**：`turn/start`(即 send) · `item/*`→`message/tool/thinking` · `turn/completed` · `account/rateLimits/updated`→`usage.updated` · `turn/interrupt`(拼写仍 [未测]，`session.stop` 要用)。**连带后果最严重**：提问与审批只在回合中到达，没有回合循环则切片 3/4 的验收只能是夹具回放——会绿着落地却在生产里是死代码。S1 估净新增 300–420 行。**必须排在 3 之前** |
+| **2c** 回合循环 + 事件归一化器 | ✅ **已落地 `8b0277f`** | S2 切片表 0→1→2→{3,4},5 里**没有任何一片认领它**：`turn/start`(即 send) · `item/*`→`message/tool/thinking` · `turn/completed` · `account/rateLimits/updated`→`usage.updated` · `turn/interrupt`(拼写仍 [未测]，`session.stop` 要用)。**连带后果最严重**：提问与审批只在回合中到达，没有回合循环则切片 3/4 的验收只能是夹具回放——会绿着落地却在生产里是死代码。S1 估净新增 300–420 行。**必须排在 3 之前** |
 | **3** 提问桥 | 待 **2c** | 用 S2-a 抓到的 4 条真实报文做夹具回放；**`isSecret` 要补掩码**（§0.5-②） |
 | **4** 权限投影 | 待 3 | 同批卡文件，不与 3 并行 |
 | **5** 历史 | 待 1+2 | 先档 A（`history_unsupported` 显式降级）再档 C |
@@ -70,6 +70,23 @@
 **切片 0/1 的双轨对抗复核（Opus + Codex 双盲）1 blocker + 5 major + 2 minor 全闭环**，
 两轨互补显著——blocker 与 registerSession 缺口**仅 Codex 见**，typecheck 盲区与自报身份零覆盖**仅 Opus 见**，
 静态扫描形同虚设**双轨同判**。详见[主线台账](../../../plans/ledger-claude-mainline.md)。
+
+**切片 2c 已落地 `8b0277f`（2026-08-10）**——`codexItemMapper`（18 变体全覆盖，键集合对着契约快照
+断言）+ `codexNormalizer`（按 turnId 隔离，diff 预缓存供切片 4）+ `codexRuntime.send/stop` 接线。
+另落 `84cf0d6` 的 codex 自生成契约快照（**U-a/U-b 闭合**，elicitation 方法名补齐）。
+四门：**vitest 145 文件 2852 例 0 红**，红线五文件零改动。
+
+⚠️ **本片的过程教训值得记**：接线实现（489 行）曾在**零测试**状态下完成（施工方写完实现即中断）。
+补验证时采取**对抗性立场**（「写出来是红的就是发现缺陷，不许改实现去迁就测试」），
+**逼出两个真缺陷**：① `stop()` 在终态之后又发 busy 状态 → 输入框冻死（`isBusyStatus` 认
+`waiting_permission` 为忙，`sendMessage` 硬拒），正是 `stop()` 自己注释声称要避免的更坏结果；
+② 外部 thread 的 `turn/completed` 静默退休我方回合且不发终态（既无终态又无回合记录）。
+**若当时按「实现绿了就落库」处理，这两条都会带进切片 3/4。**
+
+**切片 2c 遗留五项**（如实登记，未混进「已完成」）：`serverRequest/resolved` 无消费者（切片 3/4 会
+留下陈旧条目→「对不存在的请求回帧」）· `CodexTurnState.requestId` 只写不读 · `stop()` 的状态回声
+仍是陈旧读数（二次 Stop 会再发一次 busy）· `turn/start` 的 30 分钟期限假设 [未测] ·
+`turn/interrupt` 的实际效果 [未测]。
 
 **切片 2a 已落地 `84ae4e1`（2026-08-09）**——八个新模块（codexWire / codexPending / codexStatus /
 codexNodeEntry / codexHome / agentSupport / codexConnection / codexRuntime）+ `index.ts` 加法接线 +
