@@ -59,7 +59,6 @@
 
 ### Backlog（小票，择机清）
 
-- `agentWireStatic.test.ts` AST 扫描超时余量不足（单跑 3057ms / 限 5000ms，满载并发下会假红；2026-08-08 实测二跑即绿）
 - 历史侧回合时长源；`ran N command(s)` 聚合复议（需 A07 基线修订）
 - T-29 转入四项：全局 `color-scheme` / 三 HighlighterCore 单例 / monacoSetup 懒化 / `isTurnActive` 死导出
 - useGitChangeCount 的 useRepositoryStore 全局单槽副作用

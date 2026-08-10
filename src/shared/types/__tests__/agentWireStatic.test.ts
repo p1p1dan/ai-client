@@ -86,8 +86,13 @@ const AXES = Object.keys(AXIS_MODULE) as Axis[];
  * repo's invariants. The "scans are looking at the tree they claim to" case
  * below pins that the exclusion did not eat the tree.
  */
+// Memoized: five rules walk the same tree, and the tree cannot change inside a
+// run. Without this, each rule paid its own recursive readdir over ~800 files.
+let sourceListCache: string[] | undefined;
+
 function listSources(): string[] {
-  return (readdirSync(SRC_DIR, { recursive: true }) as string[])
+  if (sourceListCache !== undefined) return sourceListCache;
+  sourceListCache = (readdirSync(SRC_DIR, { recursive: true }) as string[])
     .map(String)
     .filter(
       (p) =>
@@ -96,10 +101,19 @@ function listSources(): string[] {
         !p.split(path.sep).includes('node_modules')
     )
     .map((p) => path.join(SRC_DIR, p));
+  return sourceListCache;
 }
 
+// Memoized for the same reason. Probe sources never go through here — they are
+// handed to `parse` directly — so nothing depends on re-reading a mutated file.
+const readCache = new Map<string, string>();
+
 function read(file: string): string {
-  return readFileSync(file, 'utf8');
+  const cached = readCache.get(file);
+  if (cached !== undefined) return cached;
+  const raw = readFileSync(file, 'utf8');
+  readCache.set(file, raw);
+  return raw;
 }
 
 function rel(file: string): string {
@@ -116,10 +130,15 @@ function rel(file: string): string {
 const parsedCache = new Map<string, ts.SourceFile>();
 
 function parse(file: string, raw: string): ts.SourceFile {
-  const stripped = stripComments(raw, file);
-  const key = `${file.length}:${file}${stripped}`;
+  // Keyed on the RAW source, not the stripped one. Keying on the stripped text
+  // meant `stripComments` — itself a full TS scanner pass — ran on every call
+  // even when the parse was about to be served from cache, so the five tree
+  // rules paid four redundant strips over the whole tree. Raw is an equally
+  // sound key: same (file, raw) always yields the same stripped text.
+  const key = `${file.length}:${file}${raw}`;
   const cached = parsedCache.get(key);
   if (cached !== undefined) return cached;
+  const stripped = stripComments(raw, file);
   const source = ts.createSourceFile(
     file,
     stripped,
@@ -599,46 +618,68 @@ function scanAxisCasts(file: string, raw: string): string[] {
 
 /* -------------------------------------------------------------------------
  * The tree scans.
+ *
+ * These four parse every `.ts`/`.tsx` under `src/` — ~800 files — so vitest's
+ * 5s default is the wrong budget for them, not a signal that something is
+ * slow. Measured on this machine (2026-08-09, after the read/parse memoization
+ * above): first rule 3069ms cold, the rest <250ms each off the shared cache;
+ * the whole file 3660ms. That left 39% headroom against 5s, which a loaded
+ * machine eats — the gate went yellow-then-green on a retry once already.
+ * An explicit budget is the honest fix: the work is genuinely this size, and a
+ * timeout is meant to catch a hang, not to referee a known-heavy scan.
  * ---------------------------------------------------------------------- */
+const TREE_SCAN_TIMEOUT_MS = 30_000;
 
 describe('the default agent literal has exactly one home', () => {
-  it('nobody defaults an agent binding to a string literal in place', () => {
-    const offenders = listSources().flatMap((file) => scanInlineAgentDefaults(file, read(file)));
+  it(
+    'nobody defaults an agent binding to a string literal in place',
+    () => {
+      const offenders = listSources().flatMap((file) => scanInlineAgentDefaults(file, read(file)));
 
-    expect(
-      offenders,
-      'Call `sessionAgent(session)` (or `resolveAgentWireName(raw)` on the disk ' +
-        'side) instead. An inline literal is a second answer to "what does a ' +
-        'missing binding mean", and the two answers will drift.'
-    ).toEqual([]);
-  });
+      expect(
+        offenders,
+        'Call `sessionAgent(session)` (or `resolveAgentWireName(raw)` on the disk ' +
+          'side) instead. An inline literal is a second answer to "what does a ' +
+          'missing binding mean", and the two answers will drift.'
+      ).toEqual([]);
+    },
+    TREE_SCAN_TIMEOUT_MS
+  );
 
-  it('no `claude-code` outside agentWire.ts and the AIProvider axis', () => {
-    const offenders = listSources().flatMap((file) => scanLegacyLiterals(file, read(file)));
+  it(
+    'no `claude-code` outside agentWire.ts and the AIProvider axis',
+    () => {
+      const offenders = listSources().flatMap((file) => scanLegacyLiterals(file, read(file)));
 
-    expect(
-      offenders,
-      'The chat-session binding literal belongs in shared/types/agentWire.ts. ' +
-        'If this is the AIProvider axis instead, say so on the node — a ' +
-        '`provider` key, an `AIProvider` annotation, a switch on a provider — ' +
-        'not by mentioning the type somewhere else in the file.'
-    ).toEqual([]);
-  });
+      expect(
+        offenders,
+        'The chat-session binding literal belongs in shared/types/agentWire.ts. ' +
+          'If this is the AIProvider axis instead, say so on the node — a ' +
+          '`provider` key, an `AIProvider` annotation, a switch on a provider — ' +
+          'not by mentioning the type somewhere else in the file.'
+      ).toEqual([]);
+    },
+    TREE_SCAN_TIMEOUT_MS
+  );
 
-  it('the scans are looking at the tree they claim to', () => {
-    // A tree-wide scan whose answer is `[]` is indistinguishable from a scan
-    // that reads nothing, so the inputs are pinned too.
-    const files = listSources();
-    expect(files.length).toBeGreaterThan(300);
-    expect(files).toContain(AGENT_WIRE_MODULE);
-    expect(files).toContain(path.join(SRC_DIR, 'renderer/stores/settings/defaults.ts'));
-    expect(files.some((file) => file.split(path.sep).includes('node_modules'))).toBe(false);
+  it(
+    'the scans are looking at the tree they claim to',
+    () => {
+      // A tree-wide scan whose answer is `[]` is indistinguishable from a scan
+      // that reads nothing, so the inputs are pinned too.
+      const files = listSources();
+      expect(files.length).toBeGreaterThan(300);
+      expect(files).toContain(AGENT_WIRE_MODULE);
+      expect(files).toContain(path.join(SRC_DIR, 'renderer/stores/settings/defaults.ts'));
+      expect(files.some((file) => file.split(path.sep).includes('node_modules'))).toBe(false);
 
-    // …and the literal rule really does meet its literal: these are the
-    // provider-axis occurrences it is deliberately letting through.
-    const carriers = files.filter((file) => read(file).includes(LEGACY_LITERAL));
-    expect(carriers.length).toBeGreaterThan(5);
-  });
+      // …and the literal rule really does meet its literal: these are the
+      // provider-axis occurrences it is deliberately letting through.
+      const carriers = files.filter((file) => read(file).includes(LEGACY_LITERAL));
+      expect(carriers.length).toBeGreaterThan(5);
+    },
+    TREE_SCAN_TIMEOUT_MS
+  );
 });
 
 describe('the legacy-literal scan catches every shape it exists for', () => {
@@ -800,16 +841,20 @@ describe('the three agent tables stay disconnected', () => {
     );
   });
 
-  it('no cast relabels one axis as another', () => {
-    const offenders = listSources().flatMap((file) => scanAxisCasts(file, read(file)));
+  it(
+    'no cast relabels one axis as another',
+    () => {
+      const offenders = listSources().flatMap((file) => scanAxisCasts(file, read(file)));
 
-    expect(
-      offenders,
-      'The three tables answer three different questions and their values do ' +
-        'not correspond. Map explicitly if a mapping is genuinely needed; a ' +
-        'cast just relabels one axis as another.'
-    ).toEqual([]);
-  });
+      expect(
+        offenders,
+        'The three tables answer three different questions and their values do ' +
+          'not correspond. Map explicitly if a mapping is genuinely needed; a ' +
+          'cast just relabels one axis as another.'
+      ).toEqual([]);
+    },
+    TREE_SCAN_TIMEOUT_MS
+  );
 
   it('the cast scan sees aliases, angle brackets and satisfies', () => {
     const PROBE = path.join(SRC_DIR, 'shared/__probe__.ts');
