@@ -33,3 +33,35 @@
 已实测齐，但「UI 怎么表达」未设计。直连下 model 与 effort 是**两个独立字段**（ACP 才合成单 id），
 故「统一抽象 + 各自枚举」是自然选择。**未解空洞**：目录是本地静态内置表**不查第三方代理**
 → 代理真实支持哪些模型答不出，必须自建校验。
+
+## #6 Anthropic 凭据会进 codex 子进程（切片 2a 落地时发现，2026-08-09）
+
+**现状**：Claude 会话跑过之后，`ensureRuntime()` 已把 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`
+写到 Host 的 `process.env` 上；`codexRuntime` spawn codex 子进程时**整体继承 env**，于是这两个值
+也进了 codex 进程。
+
+**为什么施工时没有直接过滤掉**（这是有理由的克制，不是疏忽）：`codexHome` 的白名单投影保留
+`model_providers.<id>.env_key`，用户的 codex provider 完全可能就指向这类变量名；无差别过滤会让
+那种配置**丢认证并报一个难懂的错**。
+
+**待裁定**：① 维持现状（codex 拿得到 Anthropic 令牌，但它不会发给 OpenAI——只是暴露面变宽）；
+② 按前缀过滤但对 `env_key` 点名的变量开豁免；③ 只给 codex 传白名单 env（最严，但要先枚举 codex 真正需要的）。
+与本仓 T-35「密钥不许进 UI」的立场同族，属安全取向，**不该由编排者默认**。
+
+## #7 `capabilities.agents` 只由 flag 决定，与 §2.1 的裁定有出入（2026-08-09）
+
+仲裁档 §2.1 采纳了 Codex 轨的主张：codex 可用性不只取决于 flag，还取决于 Main 解析出的 entry
+与隔离 home 的准备结果，故应在 initialize 时建 `HostAgentRegistry`。**切片 2a 实际落的是「flag 单独决定」**
+（模块加载时算一次）。
+
+**当下后果**：一台没装 codex 的机器上，渲染端仍会提供 Codex 选项，用户要到 create 时才由
+correlated `agent_unsupported` 得知。属**诚实降级**（不是静默失败），但 §2.1 想闭合的那个环没闭合。
+
+**连带**：C-c 那条（Main/renderer 会丢掉 `capabilities.agents`，`AgentHostManager.getStatus()` 只存 settings、
+`hostStatus.ts` 只折叠 thinking）**本片未动**，仍开着。两条一并归切片 6 收口，或另立。
+
+## #8 每个会话一个 app-server 进程（2026-08-09）
+
+切片 2a 的实现是**一会话一进程**（node + 约 296MiB 平台二进制）。共享一个连接需要在每一条入站帧上
+按 threadId 路由，属结构性改动。**与用户「Codex 随包」的裁定叠加后，内存与磁盘代价都要重估**——
+登记，本轮不改。
