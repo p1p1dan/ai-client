@@ -103,3 +103,20 @@ correlated `agent_unsupported` 得知。属**诚实降级**（不是静默失败
 （一个进程崩了所有会话一起没），收益只有几十 MiB——量级不值。
 
 **裁定**：补 idle sweep（照 codeg 形状），**不做共享连接**。归切片 6 收口。
+
+## #10 提问坞是全局单槽：两会话并发提问必丢一张卡（2026-08-10 切片 3 评审发现）
+
+**状态**：已确认的**既有缺陷，与 agent 无关**；切片 3 只修了其中一半，改形状需另立任务。
+
+**现状** [读码]：`chatSessions.ts` 的 `pendingQuestion` 是**一个槽**，每来一条 `question.requested`
+就整体覆盖；`PendingQuestionDock` 只渲染这一个槽。
+
+**失败链**：会话 A 挂着提问 → 会话 B 也提问 → A 的槽被顶掉 → 用户切回 A：坞里空、卡片留在时间线未 resolved、
+`waiting_question` 使 `isBusyStatus` 恒真 → **A 永久不能发消息，也永远答不了那张卡**。
+两个 Claude 会话同样触发，不是 Codex 引入的；但 Codex 一个回合就发了 4 次提问 [实测]，会显著抬高命中率。
+
+**切片 3 做了什么**：只补了「误清」半边——`question.resolved` 现在仅在 sessionId 与 questionId 都匹配时才清空
+（`4b468f4`，红线加法 + 3 例断言）。**覆盖那半边没动**。
+
+**要改什么**：`pendingQuestion` 改成 `Record<sessionId, …>`，连带 `PendingQuestionDock` 与
+`selectPendingQuestionBlock`。属红线 store 的形状变更 + 自己的测试，应在主线立任务而不是塞进 S3 切片。
