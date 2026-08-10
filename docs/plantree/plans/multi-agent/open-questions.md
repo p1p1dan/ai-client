@@ -34,7 +34,7 @@
 故「统一抽象 + 各自枚举」是自然选择。**未解空洞**：目录是本地静态内置表**不查第三方代理**
 → 代理真实支持哪些模型答不出，必须自建校验。
 
-## #6 Anthropic 凭据会进 codex 子进程（切片 2a 落地时发现，2026-08-09）
+## ~~#6 Anthropic 凭据会进 codex 子进程~~ —— ✅ **2026-08-09 用户答复后基本关闭，转出一条新约束**
 
 **现状**：Claude 会话跑过之后，`ensureRuntime()` 已把 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`
 写到 Host 的 `process.env` 上；`codexRuntime` spawn codex 子进程时**整体继承 env**，于是这两个值
@@ -44,9 +44,33 @@
 `model_providers.<id>.env_key`，用户的 codex provider 完全可能就指向这类变量名；无差别过滤会让
 那种配置**丢认证并报一个难懂的错**。
 
-**待裁定**：① 维持现状（codex 拿得到 Anthropic 令牌，但它不会发给 OpenAI——只是暴露面变宽）；
-② 按前缀过滤但对 `env_key` 点名的变量开豁免；③ 只给 codex 传白名单 env（最严，但要先枚举 codex 真正需要的）。
-与本仓 T-35「密钥不许进 UI」的立场同族，属安全取向，**不该由编排者默认**。
+**用户 2026-08-09 答复，本条据此关闭**：
+
+> 「后续接入用户登录管理后，claude 和 codex 实际上使用的 key 是相同的，只不过两者的 url 可能不同，
+> claude 是 `xxx.com`，codex 是 `xxx.com/v1`。」
+
+→ 同一把密钥、两个 URL ⇒ codex 子进程拿到 `ANTHROPIC_AUTH_TOKEN` **不是跨凭据泄漏**，
+而是它本来就有权拿的同一个秘密。**按「维持现状」关闭**，无需过滤。
+
+**但转出一条更要紧的新约束（见 #9）**：`codexHome` 现在是**从用户已有的 `~/.codex/config.toml` 投影**，
+这在有了登录管理之后是错的。
+
+## #9 登录管理落地后，codex provider 段必须由 app 生成而非投影用户文件（2026-08-09 由 #6 转出）
+
+**约束来源**：用户口径「同一把 key，两个 URL（claude `xxx.com` / codex `xxx.com/v1`）」。
+
+**现状**：`codexHome.projectCodexConfig` 的输入是用户的 `~/.codex/config.toml`，白名单投影出
+`model` / `model_provider` / `model_providers.*`。也就是说**provider 的权威在用户的文件里**。
+
+**为什么必须改**：登录管理一旦成为凭据权威，用户在 app 里换了 key，codex 仍会用它自己文件里的旧
+provider 段——**表现为「换了 key 但 codex 还在用旧的」，且不会报错**。这与 S2 §0.5 早已裁定的
+「绝不继承本机 `~/.codex/config.toml`」是同一条纪律的延伸：本轮只挡住了 approval/sandbox/
+developer_instructions，provider 段是**有意保留的例外**（否则没凭据没法跑），而登录管理正是那个例外消失的时刻。
+
+**方向**（待设计，不在 2a/2c）：`codexHome` 增加「由托管凭据直接生成 provider 段」的模式——
+`base_url` 用 `/v1` 变体、key 走 `env_key` 指向我们注入的环境变量；投影模式降级为「无登录管理时的回退」。
+**决定点在 2b 或 6 之前**，因为它同时决定 onboarding 要不要再写 `~/.codex`。
+
 
 ## #7 `capabilities.agents` 只由 flag 决定，与 §2.1 的裁定有出入（2026-08-09）
 
@@ -62,6 +86,20 @@ correlated `agent_unsupported` 得知。属**诚实降级**（不是静默失败
 
 ## #8 每个会话一个 app-server 进程（2026-08-09）
 
-切片 2a 的实现是**一会话一进程**（node + 约 296MiB 平台二进制）。共享一个连接需要在每一条入站帧上
-按 threadId 路由，属结构性改动。**与用户「Codex 随包」的裁定叠加后，内存与磁盘代价都要重估**——
-登记，本轮不改。
+**实测代价（2026-08-09 编排者亲量，此前的「296MiB」是磁盘文件大小、不是内存，属误读风险，已更正）**：
+一个 app-server 进程树 **RSS 124 MiB**（node 壳 49 + 原生 codex 75）。原生二进制是 mmap 的，
+只有触碰到的页才驻留，所以 296MiB 的磁盘体积不等于内存占用。
+
+**参照物同构**：codeg 的 `SpawnDedupKey = {agent_type, working_dir, session_id}`
+（`src-tauri/src/acp/manager.rs:125-129`）——**它也是每会话一个进程**，12 个 agent 皆然。
+即「一会话一进程」不是我们走偏了。
+
+**真正的缺口是回收，不是模型**：codeg 另有 `idle_sweep.rs`——180s 空闲即断开、每 60s 扫一次，
+注释明写是「防止长命进程泄漏 ACP 子进程、文件句柄与内存」。**我们没有这个回收器**，
+开了会话就不回收。
+
+**共享连接技术上可行但不做**：codex 契约有 `thread/list` / `thread/loaded/list`，每条通知带 `threadId`，
+一个 app-server 托多 thread 是原生支持的。但共享要求每条入站帧按 threadId 路由，且**把故障域焊在一起**
+（一个进程崩了所有会话一起没），收益只有几十 MiB——量级不值。
+
+**裁定**：补 idle sweep（照 codeg 形状），**不做共享连接**。归切片 6 收口。
