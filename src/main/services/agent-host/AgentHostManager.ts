@@ -24,6 +24,7 @@ import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import { app } from 'electron';
 import log from '../../utils/logger';
 import { AgentHostProcess } from './AgentHostProcess';
+import { buildAgentHostEnv } from './hostEnv';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
 
@@ -405,10 +406,13 @@ export class AgentHostManager {
       nodeExecPath: resolved.runtime.execPath,
       hostEntryPath,
       nodeArgs: useStripTypes ? ['--experimental-strip-types'] : [],
-      env: {
-        AICLIENT_AGENT_HOST_DRIVER: this.driver,
-        AICLIENT_COMETIX_VERSION: COMETIX_PIN.version,
-      },
+      env: buildAgentHostEnv({
+        driver: this.driver,
+        cometixVersion: COMETIX_PIN.version,
+        nodeExecPath: resolved.runtime.execPath,
+        appVersion: app.getVersion(),
+        codexHomeDir: path.join(app.getPath('userData'), 'codex-home'),
+      }),
     });
 
     this.attachProcessHandlers(proc);

@@ -9,9 +9,11 @@ import { createInterface } from 'node:readline';
 import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHost.ts';
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import type { AgentWireName } from '../shared/types/agentWire.ts';
-import { CLAUDE_CODE_AGENT } from '../shared/types/agentWire.ts';
+import { CODEX_AGENT, resolveAgentWireName, sessionAgent } from '../shared/types/agentWire.ts';
+import { resolveCodexEnabled, supportedAgents } from './agentSupport.ts';
 import { ClaudeRuntime, resolveSubagentActivityEnabled } from './claudeRuntime.ts';
 import { loadClaudeSettingsEnv } from './claudeSettings.ts';
+import { CodexRuntime } from './codexRuntime.ts';
 import { resolveCometixCli } from './cometix.ts';
 import { listSessionHistory } from './historyReader.ts';
 import { COMETIX_PIN } from './pin.ts';
@@ -25,13 +27,19 @@ let driver: AgentHostDriver =
 let shuttingDown = false;
 
 /**
- * S2 (b): the agents THIS Host BUILD can actually run — one entry today; the
- * Codex runtime appends itself in slice 2. Reported verbatim on `host.ready`
- * as `capabilities.agents`, and enforced by `rejectUnsupportedAgent` below, so
- * the advertised list and the accepted list are the same array rather than two
- * facts that can drift apart.
+ * S2 (b): the agents THIS Host BUILD can actually run. Reported verbatim on
+ * `host.ready` as `capabilities.agents`, and enforced by
+ * `rejectUnsupportedAgent` below, so the advertised list and the accepted list
+ * are the same array rather than two facts that can drift apart.
+ *
+ * S3 slice 2a: the list now depends on the Codex feature flag, read ONCE here
+ * at module load. The reader itself re-reads `process.env` per call (so tests
+ * can flip positions), but this process must not: a mid-run flip would advertise
+ * one list on `host.ready` and enforce another on the next `session.create`.
  */
-const SUPPORTED_AGENTS: readonly AgentWireName[] = [CLAUDE_CODE_AGENT];
+const SUPPORTED_AGENTS: readonly AgentWireName[] = supportedAgents({
+  codexEnabled: resolveCodexEnabled(),
+});
 
 /**
  * Refuse a `session.create` / `session.resume` this build cannot honour.
@@ -87,8 +95,18 @@ function rejectUnsupportedAgent(cmd: {
 
 const registry = new SessionRegistry();
 let runtime: ClaudeRuntime | null = null;
+let codexRuntime: CodexRuntime | null = null;
 let settingsDiagnostics: Awaited<ReturnType<typeof loadClaudeSettingsEnv>>['diagnostics'] | null =
   null;
+
+/** The runtimes a command can be dispatched to. Each stamps its own agent name. */
+type SessionRuntime = ClaudeRuntime | CodexRuntime;
+
+type HostCommand = {
+  type?: string;
+  requestId?: string;
+  payload?: Record<string, unknown>;
+};
 
 function emit(event: Record<string, unknown>): void {
   seq += 1;
@@ -140,6 +158,80 @@ async function ensureRuntime(): Promise<ClaudeRuntime> {
     registry,
   });
   return runtime;
+}
+
+/**
+ * Injected by Main (`main/services/agent-host/hostEnv.ts`). Both are values the
+ * Host cannot compute: `<userData>/codex-home` needs Electron's `app`, and the
+ * app version lives in the packaged `package.json`.
+ */
+const CODEX_HOME_ENV = 'AICLIENT_CODEX_HOME';
+const APP_VERSION_ENV = 'AICLIENT_APP_VERSION';
+
+/**
+ * Build the Codex runtime on first use, or refuse.
+ *
+ * A missing `AICLIENT_CODEX_HOME` is an explicit `agent_unsupported`, NOT a
+ * guessed default: the directory holds a copy of the user's credential and the
+ * deny-by-default config projection, so a fallback path would seed both
+ * somewhere nobody looks — and would be a second answer to "where is the
+ * isolated home", which Main already answers (arbitration doc §4).
+ */
+function ensureCodexRuntime(cmd: HostCommand): CodexRuntime | null {
+  if (codexRuntime) return codexRuntime;
+  const codexHomeDir = process.env[CODEX_HOME_ENV]?.trim();
+  if (!codexHomeDir) {
+    emit({
+      type: 'host.error',
+      ...(typeof cmd.payload?.sessionId === 'string' && cmd.payload.sessionId
+        ? { sessionId: cmd.payload.sessionId }
+        : {}),
+      requestId: cmd.requestId,
+      payload: {
+        code: 'agent_unsupported',
+        message: `${cmd.type ?? 'command'}: this Host was started without ${CODEX_HOME_ENV}, so the isolated Codex home is unknown and no Codex session can run`,
+        fatal: false,
+      },
+    });
+    return null;
+  }
+  codexRuntime = new CodexRuntime({
+    emit,
+    log,
+    registry,
+    codexHomeDir,
+    appVersion: process.env[APP_VERSION_ENV] ?? '',
+  });
+  return codexRuntime;
+}
+
+/**
+ * THE dispatch. Every command that reaches a runtime goes through this one
+ * switch — a second place deciding which runtime owns a session is a second
+ * answer, and the two would drift the first time an agent is added (S2 C5).
+ *
+ * `null` means the refusal has already been emitted and the caller must stop.
+ */
+async function runtimeForAgent(
+  agent: AgentWireName,
+  cmd: HostCommand
+): Promise<SessionRuntime | null> {
+  if (agent === CODEX_AGENT) return ensureCodexRuntime(cmd);
+  return ensureRuntime();
+}
+
+/**
+ * Route by the binding the session was CREATED with, never by the payload: an
+ * `agent` field on a send/stop/close would let a mislabeled command hand one
+ * runtime another's session. `sessionAgent` is the single fallback point for a
+ * session this Host has never heard of — legacy default, i.e. Claude Code,
+ * which is exactly what happened before this dispatch existed.
+ */
+async function runtimeForSession(
+  sessionId: string,
+  cmd: HostCommand
+): Promise<SessionRuntime | null> {
+  return runtimeForAgent(sessionAgent(registry.get(sessionId) ?? {}), cmd);
 }
 
 async function handleCommand(raw: unknown): Promise<void> {
@@ -228,6 +320,9 @@ async function handleCommand(raw: unknown): Promise<void> {
     case 'host.shutdown': {
       shuttingDown = true;
       runtime?.dispose();
+      // Fail-closed on the Codex side too: drain every pending server request
+      // (so codex is never left in `waitingOn*`) and kill every app-server.
+      codexRuntime?.dispose();
       registry.abortAll();
       emit({
         type: 'host.ready',
@@ -244,14 +339,20 @@ async function handleCommand(raw: unknown): Promise<void> {
     }
     case 'session.create': {
       // S2 (b): `payload.agent` is the runtime AND history-reader dispatch key.
-      // This build ships exactly one runtime, so the only two outcomes are
-      // "Claude Code" and "refused" — the real switch arrives with the Codex
-      // runtime in slice 2. Checked BEFORE ensureRuntime() so a refusal costs
-      // nothing and leaves no session behind. Whichever runtime handles the
-      // command stamps its OWN name on `session.created`; nothing echoes the
-      // requested value back unchecked.
+      // Checked BEFORE any runtime is built so a refusal costs nothing and
+      // leaves no session behind. Whichever runtime handles the command stamps
+      // its OWN name on `session.created`; nothing echoes the requested value
+      // back unchecked.
       if (rejectUnsupportedAgent(cmd)) return;
-      const rt = await ensureRuntime();
+      // Past the guard, so this is a supported name or absent (= legacy Claude
+      // Code). `resolveAgentWireName` is the single fallback point; `null` is
+      // unreachable here because the guard already refused unknown slugs.
+      const requestedAgent = resolveAgentWireName(
+        typeof cmd.payload?.agent === 'string' ? cmd.payload.agent : undefined
+      );
+      if (!requestedAgent) return;
+      const rt = await runtimeForAgent(requestedAgent, cmd);
+      if (!rt) return;
       const sessionId = String(cmd.payload?.sessionId ?? '');
       const workspacePath = String(cmd.payload?.workspacePath ?? '');
       if (!sessionId || !workspacePath) {
@@ -289,12 +390,17 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'session.resume': {
-      // Same dispatch key as session.create above, and the same single
-      // destination today — but the stakes are higher here: `runtimeIdentity`
-      // is opaque and only means anything paired with that key, so resuming a
-      // foreign handle on the Claude runtime is never an acceptable guess.
+      // Same dispatch key as session.create above, but the stakes are higher:
+      // `runtimeIdentity` is opaque and only means anything paired with that
+      // key, so resuming a foreign handle on the wrong runtime is never an
+      // acceptable guess.
       if (rejectUnsupportedAgent(cmd)) return;
-      const rt = await ensureRuntime();
+      const requestedAgent = resolveAgentWireName(
+        typeof cmd.payload?.agent === 'string' ? cmd.payload.agent : undefined
+      );
+      if (!requestedAgent) return;
+      const rt = await runtimeForAgent(requestedAgent, cmd);
+      if (!rt) return;
       const sessionId = String(cmd.payload?.sessionId ?? '');
       const workspacePath = String(cmd.payload?.workspacePath ?? '');
       const runtimeIdentity = String(cmd.payload?.runtimeIdentity ?? '');
@@ -365,8 +471,9 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'session.send': {
-      const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
+      const rt = await runtimeForSession(sessionId, cmd);
+      if (!rt) return;
       const text = String(cmd.payload?.text ?? '');
       const rawAttachments = cmd.payload?.attachments;
       let attachments: SessionAttachment[] | undefined;
@@ -451,8 +558,9 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'session.stop': {
-      const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
+      const rt = await runtimeForSession(sessionId, cmd);
+      if (!rt) return;
       if (!sessionId) {
         emit({
           type: 'host.error',
@@ -469,8 +577,9 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'session.close': {
-      const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
+      const rt = await runtimeForSession(sessionId, cmd);
+      if (!rt) return;
       if (!sessionId) {
         emit({
           type: 'host.error',
@@ -487,8 +596,9 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'permission.respond': {
-      const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
+      const rt = await runtimeForSession(sessionId, cmd);
+      if (!rt) return;
       const permissionId = String(cmd.payload?.permissionId ?? '');
       const allow = Boolean(cmd.payload?.allow);
       if (!sessionId || !permissionId) {
@@ -512,8 +622,9 @@ async function handleCommand(raw: unknown): Promise<void> {
       return;
     }
     case 'question.respond': {
-      const rt = await ensureRuntime();
       const sessionId = String(cmd.payload?.sessionId ?? '');
+      const rt = await runtimeForSession(sessionId, cmd);
+      if (!rt) return;
       const questionId = String(cmd.payload?.questionId ?? '');
       const rawAnswers = cmd.payload?.answers;
       const answers: Record<string, string> = {};

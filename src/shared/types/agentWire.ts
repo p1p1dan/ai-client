@@ -70,6 +70,20 @@ const LEGACY_AGENT: AgentWireName = 'claude-code';
  */
 export const CLAUDE_CODE_AGENT: AgentWireName = 'claude-code';
 
+/**
+ * Codex's own name, same "who am I" role as {@link CLAUDE_CODE_AGENT}.
+ *
+ * Note what does NOT protect this one: the value-position scan in
+ * `agentWireStatic.test.ts` bans stray `'claude-code'` literals, but the same
+ * rule cannot be pointed at `'codex'` — `BuiltinAgentId` (`shared/types/cli.ts`,
+ * the terminal axis) carries that exact value, so a naive scan would light up
+ * an unrelated axis. That is the failure mode which sank the original scan
+ * design, so the gap is left open deliberately and recorded rather than papered
+ * over: `'codex'` in value position stays covered only by the inline-default
+ * rule (no `.agent ?? '<literal>'`) and the axis-cast rule (no cross-axis `as`).
+ */
+export const CODEX_AGENT: AgentWireName = 'codex';
+
 export function isAgentWireName(value: unknown): value is AgentWireName {
   return typeof value === 'string' && (AGENT_WIRE_NAMES as readonly string[]).includes(value);
 }
