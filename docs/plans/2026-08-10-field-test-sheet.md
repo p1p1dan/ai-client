@@ -33,7 +33,9 @@ pnpm build:win
 
 ## 第 1 步 · 到了测试机，先看版本
 
-双击 `AiClient.exe` 启动 → 找到 **About / 关于**（标题栏右上角菜单里）→ 看版本号。
+**这一步双击打开就行**（只看版本，不需要凭证；从第 3 步起才必须用命令行启动）。
+
+双击 `AiClient.exe` → 标题栏右上角菜单 → **About / 关于** → 看版本号 → 看完**关掉**。
 
 - 是 **`0.4.0-test.2`** → 继续
 - 是 `0.4.0-test.1` 或别的 → **停**，这是旧包，往下测全白测
@@ -47,34 +49,83 @@ pnpm build:win
 curl https://cch-jyw.pipidan.qzz.io/
 ```
 - 有反应（返回 307 之类）→ 继续
-- 完全不通 → **对话相关的项全都做不了**。但第 4 步和第 10 步不用网关，可以只做那两项，其余带回来再说。
+- 完全不通 → **凡是要对话的项全都做不了**。但**第 4 步**（看包里的 node 有没有生效）和
+  **第 8 步**（记 codex 版本）不需要网关，可以只做这两项，其余带回来再说。
 
 ---
 
-## 第 3 步 · 灌测试凭证
+## 第 3 步 · 灌测试凭证 + 启动（**这两步必须在同一个窗口里连着做**）
 
-**别用程序里的引导流程登录**，会跟测试配置打架，造出假故障。
+### 先说清楚为什么不能"设完变量再双击图标"
 
-用包里自带的 node 跑（测试机可能没装 node，所以用包里的）：
+`CLAUDE_CONFIG_DIR` 这个环境变量是**跟着命令行窗口走的**：你在一个窗口里设了它，
+只有**从这个窗口启动的程序**才看得见。**双击桌面图标启动的程序看不见**，
+它会回落到你自己的 `C:\Users\<你>\.claude`——那就变成用你自己的账号在计费，
+而且测的不是测试网关。
+
+所以下面这一段是**一整块**，从头到尾在同一个 PowerShell 窗口里跑完。
+
+### 你的程序在哪（两种情况）
+
+| 你拿到的 | exe 路径 |
+|---|---|
+| **目录版**（CI 下载的 `windows-unpacked`，解压出来） | `<你解压的位置>\win-unpacked\AiClient.exe` |
+| **安装版**（跑了 NSIS 安装包） | `%LOCALAPPDATA%\Programs\AiClient\AiClient.exe` |
+
+下面用 `$APP` 代表这个路径，你按自己的情况填。
+
+### 一整块，复制粘贴（PowerShell，不是 cmd）
+
 ```powershell
-D:\win-unpacked\resources\node-runtime\node.exe D:\make-test-claude-config.mjs
+# ① 填两个路径：程序位置、你要用来测试的仓库/文件夹
+$APP  = "D:\win-unpacked\AiClient.exe"
+$WORK = "D:\你的测试仓库"
+
+# ② 灌凭证（用程序自带的 node 跑，测试机可能没装 node）
+#    末尾必须带 $WORK —— 它把这个目录标记为「已信任」，
+#    不带的话 cli.js 首次用它时会卡在信任确认上
+& "$(Split-Path $APP)\resources\node-runtime\node.exe" "D:\make-test-claude-config.mjs" $WORK
+
+# ③ 设变量 + 启动，必须在同一个窗口连着做
+$env:CLAUDE_CONFIG_DIR = "$env:TEMP\aiclient-gui-test-config"
+& $APP
 ```
-（把 `D:\` 换成你实际放的位置）
 
-它会告诉你生成到哪个目录了，记下来。
+第 ② 步会打印出它生成到哪、用的哪个网关、信任了哪些目录——**核一眼**，
+特别是 `trusted workspaces` 里有没有你的 `$WORK`。
 
----
+### 怎么确认真的生效了
 
-## 第 4 步 · 启动程序
+程序起来之后不用急着测别的，**先看第 5 步的第 3 项（发 PONG）**：
+- 能正常回 PONG → 凭证注入成功，往下走
+- 报认证错 / 一直转 → 变量没生效。**最常见的原因是你双击图标启动的**，
+  回到上面那一整块重来。
 
-```powershell
+### 每次重启程序都要重来一遍第 ③ 步
+
+关掉程序后再想启动，**不能双击图标**，得回到那个 PowerShell 窗口再跑一次
+`& $APP`（变量还在那个窗口里）。**窗口关了就得从 ③ 重来。**
+
+### 嫌麻烦的话：做个快捷启动脚本
+
+在桌面建一个 `跑测试版.ps1`，内容就是上面 ③ 那两行（把路径填死），
+以后右键 → 用 PowerShell 运行。或者建个 `.bat`：
+
+```bat
+@echo off
 set CLAUDE_CONFIG_DIR=%TEMP%\aiclient-gui-test-config
-D:\win-unpacked\AiClient.exe
+start "" "D:\win-unpacked\AiClient.exe"
 ```
+（`.bat` 里用 `set`，PowerShell 里用 `$env:` —— 两种写法别混。）
+
+### ⚠️ 全程别碰程序里的登录引导
+
+程序自己那个登录/引导流程写死了用 `C:\Users\<你>\.claude`，跟这里的测试配置
+**打架**。混用会造出假故障，查半天发现是配置串了。
 
 ---
 
-## 第 5 步 · 第一取证：包里的 node 到底有没有生效（**优先做这个**）
+## 第 4 步 · 第一取证：包里的 node 到底有没有生效（**优先做这个**）
 
 菜单栏 **View → Developer Tools** → 切到 **Console** 标签 → 粘贴这一行按回车：
 ```js
@@ -89,11 +140,11 @@ await window.electronAPI.agentHost.resolveNode()
 
 ---
 
-## 第 6 步 · 通用功能九项
+## 第 5 步 · 通用功能九项
 
 | # | 怎么做 | 算过的标准 |
 |---|---|---|
-| 1 | 双击启动 | 不白屏、不弹报错框 |
+| 1 | 按第 3 步那一整块启动（**不是双击**） | 不白屏、不弹报错框 |
 | 2 | 设置 → Appearance → 打开 **OpenChamber Workspace Shell** 开关 | 界面变成新版（左边栏 + 中间对话 + 右边面板） |
 | 3 | 新建一个会话，发这句：`Reply with exactly: PONG. Do not use tools.` | 能看到字一个个流出来，内容里有 PONG |
 | 4 | 发这句：`Create PING.txt with content pong` | 弹出一张**授权卡**问你允不允许 → 点 Allow → 磁盘上真的多了 `PING.txt`，内容是 `pong` |
@@ -105,7 +156,7 @@ await window.electronAPI.agentHost.resolveNode()
 
 ---
 
-## 第 7 步 · 上次五个问题的回归（**这次的重点**）
+## 第 6 步 · 上次五个问题的回归（**这次的重点**）
 
 ### R1 · 带图片的消息会不会重复
 
@@ -182,7 +233,7 @@ catch(e){console.log('REPO',JSON.stringify(r.path),'THREW',e.message);}}})()
 
 ---
 
-## 第 8 步 · 加密相关六项（这台机器专属）
+## 第 7 步 · 加密相关六项（这台机器专属）
 
 | # | 怎么做 | 看什么 |
 |---|---|---|
@@ -190,18 +241,23 @@ catch(e){console.log('REPO',JSON.stringify(r.path),'THREW',e.message);}}})()
 | ② | 在真实的加密工作区里跟它对话，让它用 Read 工具读一个加密文件 | 读出明文就算过 |
 | ③ | 授权卡点 Allow 让它写一个文件，然后自己打开那个文件看 | 记录是明文还是密文 |
 | ④ | 打开一个有**加密历史记录**的会话 | 应该明确报"历史无法读取"，而不是静默显示空白 |
-| ⑤ | 第 5 步里 `source` 是 `bundled` 的话，直接做②——能读出明文就证明包里的 node 被白名单认了 | —— |
+| ⑤ | 第 4 步里 `source` 是 `bundled` 的话，直接做②——能读出明文就证明包里的 node 被白名单认了 | —— |
 | ⑥ | 如果①②失败：先分清是"找不到程序"（ENOENT）还是"白名单不认" | **这两个别记混，结论完全不同** |
 
-**万一②③全失败**：用逃生口，**不用改代码**——
+**万一②③全失败**：用逃生口，**不用改代码**。回到第 3 步那个 PowerShell 窗口，
+在启动程序**之前**多设一个变量：
+
 ```powershell
-set AICLIENT_NODE24_PATH=<这台机器上已被白名单的 node.exe 完整路径>
+$env:AICLIENT_NODE24_PATH = "<这台机器上已被白名单的 node.exe 完整路径>"
+$env:CLAUDE_CONFIG_DIR = "$env:TEMP\aiclient-gui-test-config"
+& $APP
 ```
-然后重启程序再试。**出发前先把这个路径查清楚**，否则一失败整轮作废。
+
+**出发前先把那个路径查清楚**，否则一失败整轮作废。
 
 ---
 
-## 第 9 步 · 顺手记三条（30 秒，对后面有用）
+## 第 8 步 · 顺手记三条（30 秒，对后面有用）
 
 ```powershell
 where codex
@@ -214,10 +270,10 @@ node --version
 
 ## 带回来什么
 
-1. 第 5 步 `resolveNode()` 的截图
+1. 第 4 步 `resolveNode()` 的截图
 2. R4 第一步的**放大截图**（那个位置到底有没有小方块）
 3. R4 第二/三步的输出截图（如果做到了那一步）
 4. 九项和六项里**没过的那几条**，各配一张截图 + 一句话说明怎么操作的
-5. 第 9 步那三行命令的输出
+5. 第 8 步那三行命令的输出
 
 过了的项不用截图，说一声"过了"就行。
