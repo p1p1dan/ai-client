@@ -181,7 +181,7 @@ describe('resolveGitWorkdir', () => {
       sessions: [{ id: 's1', workspaceId: 'w1' }],
       workspaces: [{ id: 'w1', path: '/repo', gitEnabled: false }],
     });
-    expect(resolution).toEqual({ reason: 'not-git' });
+    expect(resolution).toEqual({ reason: 'not-git', judgedPath: '/repo' });
   });
 
   it('reports not-git when gitEnabled is undefined (unknown/loading, not assumed yes)', () => {
@@ -190,6 +190,30 @@ describe('resolveGitWorkdir', () => {
       sessions: [{ id: 's1', workspaceId: 'w1' }],
       workspaces: [{ id: 'w1', path: '/repo' }],
     });
-    expect(resolution).toEqual({ reason: 'not-git' });
+    expect(resolution).toEqual({ reason: 'not-git', judgedPath: '/repo' });
+  });
+
+  // The not-git verdict has to name the directory it was reached on. Without
+  // it the field could only infer WHICH folder the panel judged from unrelated
+  // evidence (an EPERM in a log), which is how a temp-workspace misreport was
+  // mistaken for a repo misreport.
+  it('names the judged directory on not-git, even when several workspaces exist', () => {
+    const resolution = resolveGitWorkdir({
+      activeSessionId: 's2',
+      sessions: [
+        { id: 's1', workspaceId: 'w1' },
+        { id: 's2', workspaceId: 'w2' },
+      ],
+      workspaces: [
+        { id: 'w1', path: 'D:/other', gitEnabled: true },
+        { id: 'w2', path: 'E:\\C1Algorithm', gitEnabled: false },
+      ],
+    });
+    expect(resolution).toEqual({ reason: 'not-git', judgedPath: 'E:\\C1Algorithm' });
+  });
+
+  it('has no judged path to name when no session resolves', () => {
+    const resolution = resolveGitWorkdir({ activeSessionId: null, sessions: [], workspaces: [] });
+    expect('judgedPath' in resolution).toBe(false);
   });
 });

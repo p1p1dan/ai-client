@@ -15,6 +15,12 @@ export function useFileDragDrop(
   // Bound by whichever shell is mounted: legacy sidebar or the new shell root.
   const repositorySidebarRef = useRef<HTMLDivElement>(null);
   const isFileDragOverRef = useRef(false);
+  // Field-test self-diagnosis (2026-08-10): "drag a folder in, nothing
+  // happens" reports gave no signal on WHICH step it died at. `dragover`
+  // fires continuously while the pointer moves, so this dedups the
+  // invalid-payload warning to one line per drag session instead of
+  // spamming the console; reset at the session boundaries (`dragend`/`drop`).
+  const invalidPayloadWarnedRef = useRef(false);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -28,7 +34,18 @@ export function useFileDragDrop(
     }
 
     const handleDragOver = (e: DragEvent) => {
-      if (!hasFilePayload(e.dataTransfer?.types)) return;
+      if (!hasFilePayload(e.dataTransfer)) {
+        if (!invalidPayloadWarnedRef.current) {
+          invalidPayloadWarnedRef.current = true;
+          console.warn('[file-drag] dragover ignored: no file payload', {
+            types: e.dataTransfer ? Array.from(e.dataTransfer.types) : [],
+            itemKinds: e.dataTransfer
+              ? Array.from(e.dataTransfer.items).map((item) => item.kind)
+              : [],
+          });
+        }
+        return;
+      }
       e.preventDefault();
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
@@ -58,10 +75,13 @@ export function useFileDragDrop(
       // session tabs); those do end on a source node. OS file drags are covered
       // by the `dragleave` edge check above.
       setIsFileDragOver(false);
+      invalidPayloadWarnedRef.current = false;
     };
 
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
+      // Session boundary: next drag's dragover gets a fresh warning slot.
+      invalidPayloadWarnedRef.current = false;
       const wasOver = isFileDragOverRef.current;
       setIsFileDragOver(false);
 
@@ -69,6 +89,9 @@ export function useFileDragDrop(
         const file = e.dataTransfer.files[0];
         const path = normalizeDroppedRepositoryPath(window.electronAPI.utils.getPathForFile(file));
         if (path) {
+          console.warn(
+            `[file-drag] drop accepted: resolved 1 path from ${e.dataTransfer.files.length} file(s)`
+          );
           setInitialLocalPath(path);
           openAddRepositoryDialog();
         }

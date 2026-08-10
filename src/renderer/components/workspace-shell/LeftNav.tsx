@@ -1,3 +1,4 @@
+import type { TempWorkspaceItem } from '@shared/types';
 import {
   Archive,
   ChevronDown,
@@ -13,6 +14,7 @@ import {
   Plus,
   Search,
   Settings,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
@@ -51,7 +53,7 @@ import {
   canCreateSessionOnWorkspace,
   shouldShowAddRepositoryEmptyState,
 } from './addRepositoryEntry';
-import { projectIdForRepo } from './deriveChatWorkspaceTree';
+import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import {
   buildSidebarFolders,
   deriveRecentRows,
@@ -69,6 +71,12 @@ interface LeftNavProps {
   onAddRepository?: () => void;
   onRemoveRepository?: (repoPath: string) => void;
   repositories?: Repository[];
+  /** Temp session items (App's `useTempWorkspaceStore`) — matched to a Temp
+   * folder row's workspace path so the row's delete button targets the right item. */
+  tempWorkspaces?: TempWorkspaceItem[];
+  /** Opens the shared `TempWorkspaceDialogs` delete confirmation, same as the
+   * legacy shell's `onRequestTempDelete={openTempDelete}` wiring. */
+  onRequestTempDelete?: (id: string) => void;
 }
 
 export function LeftNav({
@@ -78,6 +86,8 @@ export function LeftNav({
   onAddRepository,
   onRemoveRepository,
   repositories = [],
+  tempWorkspaces = [],
+  onRequestTempDelete,
 }: LeftNavProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -120,6 +130,20 @@ export function LeftNav({
     }
     return map;
   }, [repositories]);
+
+  /**
+   * Row's `workspaceId` → temp item id, keyed the same way
+   * `deriveChatWorkspaceTree` built the Temp folder's workspace ids
+   * (`workspaceIdFor('temp', item.path)`) — so this only ever matches rows
+   * that actually live under the synthetic Temp project, never a real repo.
+   */
+  const tempItemIdByWorkspaceId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of tempWorkspaces) {
+      map.set(workspaceIdFor('temp', item.path), item.id);
+    }
+    return map;
+  }, [tempWorkspaces]);
 
   const projects = useChatSessionsStore((state) => state.projects);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
@@ -525,18 +549,26 @@ export function LeftNav({
 
                         {expanded && (
                           <div className="mt-1 space-y-0.5 pl-3">
-                            {folder.rows.map((row) => (
-                              <SessionRow
-                                key={row.sessionId}
-                                row={row}
-                                now={now}
-                                active={activeSessionId === row.sessionId}
-                                onSelect={() => handleSelectSession(row.sessionId)}
-                                onClose={() => void close(row.sessionId)}
-                                onRename={(title) => void rename(row.sessionId, title)}
-                                onArchive={() => void archive(row.sessionId, true)}
-                              />
-                            ))}
+                            {folder.rows.map((row) => {
+                              const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
+                              return (
+                                <SessionRow
+                                  key={row.sessionId}
+                                  row={row}
+                                  now={now}
+                                  active={activeSessionId === row.sessionId}
+                                  onSelect={() => handleSelectSession(row.sessionId)}
+                                  onClose={() => void close(row.sessionId)}
+                                  onRename={(title) => void rename(row.sessionId, title)}
+                                  onArchive={() => void archive(row.sessionId, true)}
+                                  onDeleteTemp={
+                                    tempItemId && onRequestTempDelete
+                                      ? () => onRequestTempDelete(tempItemId)
+                                      : undefined
+                                  }
+                                />
+                              );
+                            })}
                             {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
                               <button
                                 type="button"
@@ -615,9 +647,21 @@ interface SessionRowProps {
   onClose: () => void;
   onRename: (title: string) => void;
   onArchive: () => void;
+  /** Set only for rows whose workspace is a Temp session (see `tempItemIdByWorkspaceId`
+   * in LeftNav) — renders a third hover action that deletes the whole Temp directory. */
+  onDeleteTemp?: () => void;
 }
 
-function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }: SessionRowProps) {
+function SessionRow({
+  row,
+  now,
+  active,
+  onSelect,
+  onClose,
+  onRename,
+  onArchive,
+  onDeleteTemp,
+}: SessionRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(row.title);
 
@@ -739,17 +783,29 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
           <span className="min-w-0 truncate">{row.chip.label}</span>
         </Badge>
       )}
-      {/* Age and actions swap on hover; the shared `w-10` box is what actually
+      {/* Age and actions swap on hover; the shared width box is what actually
           keeps the row from jumping — the two are different natural widths (a
-          relative age is ~21px, the two icon buttons are 40px), so before the
+          relative age is ~21px, two icon buttons are 40px), so before the
           fixed box the swap silently re-flowed every other item. The row has
           tabIndex=0, so focus-within also reveals the actions and keeps
           Archive/Close reachable by keyboard (display:none alone would drop
-          them from the tab order). */}
-      <span className="w-10 shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden">
+          them from the tab order). Temp rows get a third (delete) button, so
+          both this span and the actions box below widen to `w-[60px]`
+          together — otherwise only the temp rows would jump on hover. */}
+      <span
+        className={cn(
+          'shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden',
+          onDeleteTemp ? 'w-[60px]' : 'w-10'
+        )}
+      >
         {formatRelativeAge(row.updatedAt, now)}
       </span>
-      <div className="hidden w-10 shrink-0 items-center justify-end group-hover:flex group-focus-within:flex">
+      <div
+        className={cn(
+          'hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex',
+          onDeleteTemp ? 'w-[60px]' : 'w-10'
+        )}
+      >
         <Button
           variant="ghost"
           size="icon-xs"
@@ -776,7 +832,33 @@ function SessionRow({ row, now, active, onSelect, onClose, onRename, onArchive }
         >
           <X className="h-3 w-3" />
         </Button>
+        {onDeleteTemp && <DeleteTempButton onDelete={onDeleteTemp} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * Temp folder rows only (see `SessionRow`'s `onDeleteTemp`). Deletes the
+ * whole Temp session directory via the same `openTempDelete` →
+ * `TempWorkspaceDialogs` confirmation → `handleRemoveTempWorkspace` chain the
+ * legacy shell uses (App.tsx), not a new confirm/remove path.
+ */
+function DeleteTempButton({ onDelete }: { onDelete: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="h-5 w-5 text-muted-foreground hover:text-destructive"
+      aria-label={t('Delete')}
+      title={t('Delete')}
+      onClick={(event) => {
+        event.stopPropagation();
+        onDelete();
+      }}
+    >
+      <Trash2 className="h-3 w-3" />
+    </Button>
   );
 }

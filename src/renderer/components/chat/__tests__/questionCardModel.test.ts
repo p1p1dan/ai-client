@@ -13,6 +13,7 @@ import {
   deriveFrozenPairs,
   derivePager,
   derivePermissionCardView,
+  derivePermissionRowView,
   deriveQuestionCardState,
   emptySelection,
   isMaskedAnswer,
@@ -417,6 +418,44 @@ describe('derivePermissionCardView', () => {
       false
     );
     expect(view.frozen[0].answer).toBe('Denied');
+  });
+});
+
+describe('derivePermissionRowView (2026-08-10: resolved permission collapses to a tool row)', () => {
+  it('allowed: verb "Allowed", arg is the prompt, not failed', () => {
+    const row = derivePermissionRowView(
+      permissionBlock({ resolved: true, allowed: true, toolDescription: 'run tests' })
+    );
+    expect(row).toEqual({
+      key: 'p1',
+      verb: 'Allowed',
+      arg: 'Bash — run tests',
+      argKind: 'prose',
+      running: false,
+      failed: false,
+      expandable: false,
+    });
+  });
+
+  it('denied: verb "Denied", failed=true (reuses tool-row destructive semantics)', () => {
+    const row = derivePermissionRowView(
+      permissionBlock({ resolved: true, allowed: false, toolDescription: 'rm -rf /' })
+    );
+    expect(row?.verb).toBe('Denied');
+    expect(row?.failed).toBe(true);
+  });
+
+  it('with an origin label: appended to arg with " · "', () => {
+    const row = derivePermissionRowView(
+      permissionBlock({ resolved: true, allowed: true, toolDescription: 'run tests' }),
+      'From subagent · reviewer'
+    );
+    expect(row?.arg).toBe('Bash — run tests · From subagent · reviewer');
+  });
+
+  it('pending: returns null (pending/waiting stays the QA card)', () => {
+    const row = derivePermissionRowView(permissionBlock({ resolved: false }));
+    expect(row).toBeNull();
   });
 });
 

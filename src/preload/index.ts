@@ -84,10 +84,22 @@ import type { AgentWireName } from '@shared/types/agentWire';
 import type { HostReadyEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
+import { parseInitialThemeArg } from '@shared/windowTheme';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
 import pkg from '../../package.json';
 
 const REMOTE_PATH_PREFIX = '/__aiclient_remote__';
+
+// index.html hardcodes class="dark" on <html> (zero flicker for dark-theme
+// users). For light-theme users, strip it before first paint so they don't
+// see a dark shell flash before the renderer applies its own theme class.
+// Only remove: never add, since the hardcoded class already covers dark.
+const initialThemeIsDark = parseInitialThemeArg(process.argv);
+if (initialThemeIsDark === false) {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.documentElement.classList.remove('dark');
+  });
+}
 
 const electronAPI = {
   // Git

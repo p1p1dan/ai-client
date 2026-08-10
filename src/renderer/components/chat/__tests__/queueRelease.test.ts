@@ -857,3 +857,70 @@ describe('shouldClearPauseOnSend (A4, round-4 point-check fix)', () => {
     expect(shouldClearPauseOnSend('release')).toBe(true);
   });
 });
+
+/**
+ * Stop-hang fix (2026-08-10): the COMPOSITION `runSend`'s Stop exit relies on.
+ * The exit itself lives in `ChatComposer.tsx` (unrenderable here — see
+ * `composerStopStatic.test.ts` for its structural guards), but every decision
+ * it makes is taken by the pure functions below, called with exactly the
+ * argument shapes it passes. Asserting the composition is what makes "a user
+ * Stop is a clean end, not a failure, and never swallows a message" a
+ * property of this module rather than a claim in a comment.
+ */
+describe('Stop exit composition (2026-08-10 stop-hang fix)', () => {
+  const echoedStop: DecideRunEntryOutcomeInput = {
+    // The Stop exit passes `fatalHostError: true` in the same sense every
+    // other early exit does — "this attempt is ending without a normal
+    // completion" — so the evidence gate below is what actually decides.
+    fatalHostError: true,
+    sawAssistantProgress: false,
+    sawUserEcho: true,
+  };
+  const unadmittedStop: DecideRunEntryOutcomeInput = {
+    fatalHostError: true,
+    sawAssistantProgress: false,
+    sawUserEcho: false,
+  };
+
+  it("a Stop the Host had already echoed is 'committed' — the text is in the timeline, resending would duplicate it", () => {
+    expect(decideRunEntryOutcome(echoedStop)).toBe('committed');
+    // Consequences the exit depends on: no Retry armed anywhere, and the
+    // queue is never paused for it (`handleStop` owns that pause).
+    for (const origin of ['direct', 'retry', 'release'] satisfies RunSendOrigin[]) {
+      expect(shouldArmRetryable('committed', origin)).toBe(false);
+      expect(shouldPauseQueueOnRejection('committed', origin)).toBe(false);
+    }
+  });
+
+  it('a Stop after real assistant progress is committed too — progress is admission evidence on its own', () => {
+    expect(decideRunEntryOutcome({ ...unadmittedStop, sawAssistantProgress: true })).toBe(
+      'committed'
+    );
+  });
+
+  it("a Stop the Host never admitted is 'rejected' — nothing was spent, so nothing may be swallowed", () => {
+    expect(decideRunEntryOutcome(unadmittedStop)).toBe('rejected');
+    // 'release': useQueueRelease restores the entry to the head, and the
+    // queue pauses so it cannot immediately re-release.
+    expect(decideFailureAffordance('rejected', 'release')).toBe('none');
+    expect(shouldPauseQueueOnRejection('rejected', 'release')).toBe(true);
+    // 'direct'/'retry': no queue entry exists, so the payload comes back as
+    // the one-click Retry snapshot — safe precisely because the Host never
+    // saw this text.
+    expect(decideFailureAffordance('rejected', 'direct')).toBe('resend');
+    expect(decideFailureAffordance('rejected', 'retry')).toBe('resend');
+  });
+
+  it("'committed' carries no queue-swallowing risk in either direction: it never pauses, and never requeues", () => {
+    // The half of the contract `useQueueRelease` implements: only
+    // 'skipped'/'rejected' are restored to the head. Stated here so a future
+    // change to the outcome vocabulary has to confront it.
+    const requeued: Record<RunEntryOutcome, boolean> = {
+      committed: false,
+      skipped: true,
+      rejected: true,
+    };
+    expect(requeued[decideRunEntryOutcome(echoedStop)]).toBe(false);
+    expect(requeued[decideRunEntryOutcome(unadmittedStop)]).toBe(true);
+  });
+});

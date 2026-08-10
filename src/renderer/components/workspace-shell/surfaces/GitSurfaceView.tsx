@@ -10,6 +10,7 @@
  * `expanded`: two-column split, left changes+commit / right diff. Never
  * auto-expands (A06 + spec §2 explicit ban).
  */
+import { getDisplayPath } from '@shared/utils/path';
 import { ArrowLeft, GitBranch } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { ChangesList } from '@/components/source-control/ChangesList';
@@ -54,7 +55,16 @@ interface GitSurfaceViewProps {
 }
 
 /** Same Empty/EmptyMedia/EmptyHeader/EmptyTitle/EmptyDescription pattern as `SurfacePlaceholder`. */
-function GitEmptyState({ title, description }: { title: string; description: string }) {
+function GitEmptyState({
+  title,
+  description,
+  judgedPath,
+}: {
+  title: string;
+  description: string;
+  /** The workspace directory the "not a repo" verdict was reached on. */
+  judgedPath?: string;
+}) {
   return (
     <Empty className="h-full gap-3 border-0 p-2 md:p-2">
       <EmptyMedia variant="icon">
@@ -63,6 +73,17 @@ function GitEmptyState({ title, description }: { title: string; description: str
       <EmptyHeader>
         <EmptyTitle className="text-ui tracking-normal">{title}</EmptyTitle>
         <EmptyDescription className="text-meta">{description}</EmptyDescription>
+        {judgedPath ? (
+          // Which directory was actually judged. No new copy — the path is the
+          // whole message, so there is nothing to translate; `title` carries
+          // the untruncated value for a path too long for the panel.
+          <span
+            className="mt-1 block min-w-0 max-w-full truncate text-meta text-muted-foreground"
+            title={judgedPath}
+          >
+            {getDisplayPath(judgedPath)}
+          </span>
+        ) : null}
       </EmptyHeader>
     </Empty>
   );
@@ -216,7 +237,13 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   const emptyCopy = useGitEmptyStateCopy('reason' in resolution ? resolution.reason : 'no-session');
 
   if (!workdir) {
-    return <GitEmptyState title={emptyCopy.title} description={emptyCopy.description} />;
+    return (
+      <GitEmptyState
+        title={emptyCopy.title}
+        description={emptyCopy.description}
+        judgedPath={'judgedPath' in resolution ? resolution.judgedPath : undefined}
+      />
+    );
   }
 
   const changesPane = (

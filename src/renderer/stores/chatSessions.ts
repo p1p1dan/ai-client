@@ -9,7 +9,11 @@ import type {
   SessionRetryInfo,
   SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
-import { HISTORY_MESSAGE_ID_PREFIX, type HistoryMessage } from '@shared/types/sessionHistory';
+import {
+  HISTORY_MESSAGE_ID_PREFIX,
+  type HistoryAttachment,
+  type HistoryMessage,
+} from '@shared/types/sessionHistory';
 import { create } from 'zustand';
 // Leaf module (no imports of its own) on purpose: importing the hook module
 // `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
@@ -386,6 +390,21 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
   }
 }
 
+/**
+ * 2026-08-10: rebuilt-history attachment metadata -> the same
+ * `ChatMessageAttachment` the live `message.started` path produces, so the
+ * timeline renders one chip branch for both. Fields are copied explicitly
+ * rather than spread: the wire shape must not leak unknown keys into store
+ * state just because a newer Host added some.
+ */
+function mapHistoryAttachment(attachment: HistoryAttachment): ChatMessageAttachment {
+  return {
+    kind: attachment.kind,
+    mediaType: attachment.mediaType,
+    ...(attachment.name ? { name: attachment.name } : {}),
+  };
+}
+
 function mapHistoryMessageToChatMessage(
   sessionId: string,
   historyMessage: HistoryMessage
@@ -398,6 +417,12 @@ function mapHistoryMessageToChatMessage(
     sessionId,
     role: historyMessage.role,
     blocks,
+    // Absent unless the history actually carried attachments — keeps exact-shape
+    // assertions on attachment-free messages untouched (same rule as
+    // `message.started`).
+    ...(historyMessage.attachments?.length
+      ? { attachments: historyMessage.attachments.map(mapHistoryAttachment) }
+      : {}),
   };
 }
 

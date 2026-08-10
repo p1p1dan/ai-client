@@ -3,6 +3,8 @@
  * Does not edit chatSessions.ts — pending a proper mainline API (replaceWorkspaceTree).
  */
 
+import { canonicalPathKey } from '@shared/utils/path';
+import { useQueries } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { TEMP_REPO_ID } from '@/App/constants';
@@ -14,7 +16,6 @@ import {
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
-import { useWorktreeStore } from '@/stores/worktree';
 import {
   deriveChatWorkspaceTree,
   projectIdForRepo,
@@ -243,6 +244,65 @@ export function resolveTreeSyncPatch(input: {
   };
 }
 
+/**
+ * Ask main whether each directory is a git repository (`folder:checkType` →
+ * `isGitRepoRoot`, an `existsSync(<dir>/.git)` probe that answers for a linked
+ * worktree's `.git` FILE as well as a normal repo's `.git` directory).
+ *
+ * This is the second, independent half of `gitEnabled`. `worktree.list` alone
+ * cannot distinguish "not a git repository" from "a git repository whose list
+ * came back empty" (the E:\C1Algorithm field case) or from "a temp workspace,
+ * `git init`-ed at creation but never a member of any registered repo's
+ * worktree list" — all three used to render as "Not a Git repository".
+ *
+ * Keyed by `canonicalPathKey` — the same key the tree derivation already uses
+ * for "is this the same directory" (separator + trailing-separator + case
+ * normalization), so a repo registered as `D:\Repo\` and a temp item stored as
+ * `D:/repo` resolve to one answer instead of silently missing.
+ *
+ * Returns only settled answers: a path whose query has not resolved is absent
+ * from the map, which the derivation reads as "unknown", never as "no".
+ */
+function useGitRepoByPath(paths: readonly string[]): Record<string, boolean> {
+  // Dedupe by canonical key so two spellings of one directory issue one query.
+  const uniquePaths = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const path of paths) {
+      if (!path || path === TEMP_REPO_ID || path.startsWith('__')) {
+        continue;
+      }
+      const key = canonicalPathKey(path);
+      if (!byKey.has(key)) {
+        byKey.set(key, path);
+      }
+    }
+    return [...byKey.values()];
+  }, [paths]);
+
+  const queries = useQueries({
+    queries: uniquePaths.map((path) => ({
+      queryKey: ['folder', 'isGitRepo', canonicalPathKey(path)],
+      queryFn: async (): Promise<boolean> => window.electronAPI.folder.checkType(path),
+      // A filesystem probe: no retry storm, but re-checkable — `git init` in a
+      // folder that was not a repo when the app started must be picked up on
+      // the next invalidation rather than cached for the session.
+      retry: false,
+      staleTime: 30_000,
+    })),
+  });
+
+  return useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (let i = 0; i < uniquePaths.length; i++) {
+      const data = queries[i]?.data;
+      if (typeof data === 'boolean') {
+        map[canonicalPathKey(uniquePaths[i])] = data;
+      }
+    }
+    return map;
+  }, [queries, uniquePaths]);
+}
+
 interface UseSyncChatWorkspaceTreeOptions {
   repositories: Repository[];
   selectedRepoPath: string | null;
@@ -256,7 +316,6 @@ export function useSyncChatWorkspaceTree({
   selectedRepoPath,
 }: UseSyncChatWorkspaceTreeOptions): void {
   const tempItems = useTempWorkspaceStore((state) => state.items);
-  const activeWorktreePath = useWorktreeStore((state) => state.currentWorktree?.path ?? null);
 
   // Props can be [] on first paint before App hydrates repos from localStorage.
   const [storedRepos, setStoredRepos] = useState<Repository[]>(() => readRepositoriesFromStorage());
@@ -280,6 +339,15 @@ export function useSyncChatWorkspaceTree({
 
   const { worktreesMap, errorsMap } = useWorktreeListMultiple(localRepoPaths);
 
+  // Temp workspaces are probed too: they are real (`git init`-ed) repos that
+  // no `worktree.list` will ever report, so they can only get `gitEnabled`
+  // from this side.
+  const gitProbePaths = useMemo(
+    () => [...localRepoPaths, ...tempItems.map((item) => item.path)],
+    [localRepoPaths, tempItems]
+  );
+  const gitRepoByPath = useGitRepoByPath(gitProbePaths);
+
   // M4 (2026-08-07): the sidebar showed no branch chip on a test machine and the
   // round could not say why, because nothing on this path is observable — the
   // legacy shell renders worktree errors as text (TreeSidebar), this shell never
@@ -298,6 +366,7 @@ export function useSyncChatWorkspaceTree({
       repositories: effectiveRepos,
       worktreesByRepoPath: worktreesMap,
       tempItems,
+      gitRepoByPath,
     });
     if (derived.workspaces.length > 0) {
       return derived;
@@ -307,13 +376,13 @@ export function useSyncChatWorkspaceTree({
     const fallbackPath =
       (selectedRepoPath && selectedRepoPath !== TEMP_REPO_ID ? selectedRepoPath : null) ??
       effectiveRepos[0]?.path ??
-      activeWorktreePath;
+      null;
     if (!fallbackPath) {
       return derived;
     }
     const name = effectiveRepos[0]?.name ?? fallbackPath.split(/[/\\]/).pop() ?? 'Workspace';
     return { ...seedFallbackWorkspace(fallbackPath, name), diagnostics: derived.diagnostics };
-  }, [effectiveRepos, worktreesMap, tempItems, selectedRepoPath, activeWorktreePath]);
+  }, [effectiveRepos, worktreesMap, tempItems, gitRepoByPath, selectedRepoPath]);
 
   // `branch-unresolved` is the one that would have closed M4 on the day it was
   // reported: it prints both canonical keys, so "the repo path and git's own
@@ -326,12 +395,8 @@ export function useSyncChatWorkspaceTree({
   }, [tree.diagnostics]);
 
   const preferredWorkspaceId = useMemo(
-    () =>
-      resolvePreferredWorkspaceId(tree.workspaces, {
-        selectedRepoPath,
-        activeWorktreePath,
-      }),
-    [tree.workspaces, selectedRepoPath, activeWorktreePath]
+    () => resolvePreferredWorkspaceId(tree.workspaces, { selectedRepoPath }),
+    [tree.workspaces, selectedRepoPath]
   );
 
   const signatureRef = useRef<string>('');

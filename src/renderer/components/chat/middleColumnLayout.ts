@@ -754,7 +754,17 @@ export function composerPlaceholder(input: {
    */
   isCreatingSession?: boolean;
 }): string {
-  if (input.sending) {
+  // Stop-hang fix (2026-08-10): computed up front so the `sending` branch can
+  // stand DOWN for it. `sending` used to win outright, so a follow-up typed
+  // during a turn was told "Sending to Agent Host…" when `decideSendAction`
+  // had actually enqueued it (queueRelease.ts: any of busy/sending/inFlight
+  // returns `'enqueue'`) — the placeholder claimed delivery for a message
+  // that had not left the composer's own queue. Expressed as a stand-down
+  // rather than a moved branch so the ONE case where `sending` still wins
+  // stays visible: the m9 `hasWorkspace` gate below, where the queue cannot
+  // release at all and promising "queued" would be the lie instead.
+  const hasReleasableQueue = (input.queuedCount ?? 0) > 0 && input.hasWorkspace;
+  if (input.sending && !hasReleasableQueue) {
     if (input.isCreatingSession) {
       return 'Creating session with Agent Host (first message only)…';
     }
@@ -770,7 +780,9 @@ export function composerPlaceholder(input: {
   // when the workspace backing it is removed), and without this guard the
   // placeholder keeps promising delivery ("type another follow-up…") for a
   // queue that can no longer release at all, masking the real blocker.
-  if ((input.queuedCount ?? 0) > 0 && input.hasWorkspace) {
+  // (`hasReleasableQueue` is that same condition, hoisted above for the
+  // `sending` stand-down — same predicate, one definition.)
+  if (hasReleasableQueue) {
     return `Queued ${input.queuedCount} — type another follow-up…`;
   }
   if (input.busy) {

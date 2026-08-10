@@ -27,6 +27,7 @@ import {
   isHostErrorForSend,
   isSessionCompletedForSend,
   isSessionFailedForSend,
+  isSessionStoppedForSend,
   isUserEchoForSend,
   pushPendingHostError,
   readSessionFailedError,
@@ -798,8 +799,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   //      stays `false` for `'committed'`) — see `shouldPauseQueueOnRejection`'s
   //      own header in queueRelease.ts for why.
   //   3. The success path (`return 'committed'` after the admission check)
-  //      is the one deliberate bypass of `finalizeOutcome` — it clears
-  //      `retryable` instead of arming it, and never pauses the queue.
+  //      is a deliberate bypass of `finalizeOutcome` — it clears `retryable`
+  //      instead of arming it, and never pauses the queue. Stop-hang fix
+  //      (2026-08-10): the Stop exit added just above it is the SECOND and
+  //      only other bypass, and only for its `'committed'` half — a Stop the
+  //      Host had already admitted ends exactly like a success (same clear,
+  //      no Retry, no draft replay, no pause). Its `'rejected'` half — a Stop
+  //      the Host never admitted — still goes through `finalizeOutcome`, so
+  //      the queue entry is restored and the payload recovered by the usual
+  //      authorities. No third bypass may be added without the same
+  //      justification.
   const runSend = async (
     trimmed: string,
     drafts: readonly AttachmentDraft[],
@@ -1014,6 +1023,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     let sawSessionCreated = false;
     let sawSessionResumed = false;
     let sawAssistantProgress = false;
+    // Stop-hang fix (2026-08-10): this ATTEMPT's own TERMINAL wire events
+    // (see the listener below for the `sawUserEcho` scoping that makes them
+    // this attempt's and not merely this session's). Both are invisible to
+    // everything the wait below used to watch, because `chatSessions.ts`
+    // reduces `session.stopped` AND `session.completed` to the same `'idle'`
+    // status — so a Stop (and a completion that produced no assistant blocks)
+    // satisfied no release condition at all and the wait sat on its 50ms poll
+    // until the 45s budget expired. Read off the wire, via the same
+    // unit-tested predicates the abandon-marker effect uses; the store is not
+    // an option here even setting the collapse aside, since it applies events
+    // on a batched 16ms flush (`initRuntime`) that a Stop must not wait on.
+    let sawSessionStopped = false;
+    let sawSessionCompleted = false;
     // F4: the user's own echoed message (only EventNormalizer.beginTurn
     // emits it, past claudeRuntime.send's busy-gate) — the actual proof this
     // turn's text was admitted. classifyAssistantProgress deliberately
@@ -1146,6 +1168,32 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         fatalHostErrorCode = null;
         fatalHostError = readSessionFailedError(event.payload);
       }
+
+      // Stop-hang fix (2026-08-10): deliberately NOT folded into
+      // `fatalHostError` — neither event is an error, and both must end this
+      // attempt's wait as a clean terminal (see the Stop exit below).
+      //
+      // `sawUserEcho` scopes them to THIS ATTEMPT and not merely to this
+      // session. The Host only emits a terminal for a turn it has already
+      // begun, and the echo is the proof that the begun turn is ours. Without
+      // the gate, a terminal still in flight from the PREVIOUS turn would end
+      // this wait before our own send had echoed — reachable now that a Stop
+      // returns `runSend` immediately instead of at 45s, because the next
+      // send can start while the Host is still tearing the stopped turn down
+      // (`'stopping'` is not a busy status — see `isRunningStatus`) — and the
+      // Stop exit would then classify a turn the Host had JUST admitted as
+      // never-admitted, bouncing the user's text back with a Retry that
+      // double-sends. A Stop landing before our echo is covered by the
+      // generation check instead: `handleStop` bumps it synchronously, ahead
+      // of its own IPC.
+      if (sawUserEcho) {
+        if (isSessionStoppedForSend(event, sessionId)) {
+          sawSessionStopped = true;
+        }
+        if (isSessionCompletedForSend(event, sessionId)) {
+          sawSessionCompleted = true;
+        }
+      }
     });
 
     // A broken binding must not be retried as-is next send: the following
@@ -1209,6 +1257,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
     /** Send the turn, then wait for assistant / tool / permission / terminal progress. */
     const sendAndWait = async (): Promise<boolean> => {
+      // Stop-hang fix (2026-08-10), companion to the cancellation check in
+      // the wait below: never DISPATCH a turn the user has already cancelled.
+      // Stop is live from the moment `setSending(true)` runs — the whole
+      // ensureHost + close/create/resume handshake ahead of this point can
+      // take seconds — so a cancellation can land before this send ever goes
+      // out. Without this guard the Host would be handed a turn nobody wants
+      // anymore, AND the wait below would release on the generation check
+      // before the echo arrived, classifying that just-dispatched turn as
+      // never-admitted and arming a Retry that double-sends it. Returning
+      // early keeps `sawUserEcho` honestly false with nothing sent: the Stop
+      // exit reports `'rejected'`, so a queued entry goes back on the queue
+      // and a direct send gets its payload back. Covers all three call sites
+      // (first send, busy-retry resend, `session_not_found` fallback resend)
+      // by living here rather than at any one of them.
+      if (sendGenerationRef.current !== myGeneration) return false;
       // Round-6 verify major: the store fallback in the wait below may only
       // accept a reply THIS send produced. Captured before dispatch — an
       // absolute "any runtime assistant exists" check is satisfied by the
@@ -1245,6 +1308,28 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
       // Running alone is not success — wait for assistant / tool / permission / terminal.
       return waitUntil(() => {
+        // Stop-hang fix (2026-08-10), FIRST because a stopped turn can also
+        // carry a stale `fatalHostError` from earlier in the same attempt
+        // (e.g. a `session_busy` the busy loop already moved past) and must
+        // still read as a Stop, not as a failure.
+        //
+        // The two flags are this turn's own terminal wire events; the store
+        // collapses both into `'idle'`, which is not in the release set
+        // below, so neither used to end this wait at all.
+        if (sawSessionStopped || sawSessionCompleted) return true;
+        // F6's cancellation token, now read by the MAIN wait and not just by
+        // the `session_busy` backoff loop. This is the only release condition
+        // that still works when the Host never answers the Stop (no
+        // `session.stopped` will ever arrive) — the case that made the button
+        // look dead for a full 45s. `myGeneration` is snapshotted AFTER
+        // `runSend`'s own entry bump (asserted in composerStopStatic.test.ts),
+        // so a fresh attempt never starts out looking cancelled. `handleStop`
+        // is the only OTHER writer that can reach the ref while this attempt
+        // runs (`inFlightRef` makes a second concurrent `runSend` — direct,
+        // Retry or queue release — return `'skipped'` before it can bump);
+        // if that latch ever goes away, "a newer attempt supersedes this one"
+        // is the same intent and the same correct release.
+        if (sendGenerationRef.current !== myGeneration) return true;
         if (fatalHostError) return true;
         if (sawAssistantProgress) return true;
         // R3 (round-2 iteration-2 review): no `state.lastError` read here —
@@ -1463,6 +1548,53 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // entirely inside `finalizeOutcome` (one authority for every branch,
         // not just this one) — see its comment above.
         return finalizeOutcome(outcome);
+      }
+
+      // Stop-hang fix (2026-08-10): this attempt ENDED — the Host said so on
+      // the wire (`session.stopped` for a Stop, `session.completed` for a
+      // turn that finished without producing a single assistant block), or
+      // `handleStop` bumped the generation and the confirmation is still in
+      // flight.
+      //
+      // Classified HERE, ahead of the success gate below, because that gate
+      // reads `statusAfter`, and the store applies runtime events on a
+      // batched 16ms flush (`chatSessions.ts`'s `initRuntime`) — often much
+      // later in a background window, where the flush timer is throttled. The
+      // wait above releases the instant the event lands, so the status it
+      // would read here is routinely still `'running'`: leaving classification
+      // to that gate makes the SAME user action come out as a clean end or as
+      // the 45s abandon depending on a race with a timer.
+      //
+      // Neither ending is a failure or an abandonment: no `abandonError`, no
+      // abandon marker (there is no still-running turn left for one to wait
+      // on), and deliberately NO `unbindHost()` — the binding is healthy, and
+      // dropping it would force the next message through a resume handshake
+      // it does not need.
+      if (sawSessionStopped || sawSessionCompleted || sendGenerationRef.current !== myGeneration) {
+        useChatSessionsStore.setState({ lastError: null });
+        // Admission evidence still decides the outcome — same classifier as
+        // every other exit. An echoed/progressed turn is SPENT ('committed':
+        // the text is already in the timeline, and quite possibly in the
+        // CLI's own transcript, so a resend would double-send it). A turn the
+        // Host never admitted is 'rejected', so a release-origin entry goes
+        // back on the queue instead of being swallowed (decision 3.3) and a
+        // direct/Retry-origin one gets its payload back via
+        // `decideFailureAffordance`.
+        const stopOutcome = decideRunEntryOutcome({
+          fatalHostError: true,
+          sawAssistantProgress,
+          sawUserEcho,
+        });
+        if (stopOutcome === 'committed') {
+          // Same clean exit as the success gate below (invariant 3 in this
+          // function's S3 header) — a turn the Host admitted and then ended
+          // is a turn that FINISHED, not one that failed, so it must not hand
+          // the user a Retry or replay its payload back into a composer they
+          // have moved on from.
+          setRetryable(null);
+          return 'committed';
+        }
+        return finalizeOutcome(stopOutcome);
       }
 
       const statusAfter = useChatSessionsStore

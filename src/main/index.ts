@@ -5,7 +5,8 @@ import { electronApp, optimizer } from '@electron-toolkit/utils';
 import { type Locale, normalizeLocale } from '@shared/i18n';
 import { IPC_CHANNELS, type ProxySettings } from '@shared/types';
 import { customProtocolUriToPath, type SupportedFileUrlPlatform } from '@shared/utils/fileUrl';
-import { app, BrowserWindow, ipcMain, Menu, net, protocol } from 'electron';
+import { resolveIsDarkTheme } from '@shared/windowTheme';
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, protocol } from 'electron';
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
@@ -248,6 +249,27 @@ function readStoredLanguage(): Locale {
     // Fall back to English if settings are missing or invalid
   }
   return 'en';
+}
+
+function readStoredTheme(): string | undefined {
+  try {
+    const data = readSharedSettings();
+    const persisted = data['aiclient-settings'];
+    if (persisted && typeof persisted === 'object') {
+      const state = (persisted as { state?: Record<string, unknown> }).state;
+      const theme = state?.theme;
+      return typeof theme === 'string' ? theme : undefined;
+    }
+  } catch {
+    // Fall back to OS preference if settings are missing or invalid
+  }
+  return undefined;
+}
+
+// Resolved fresh per call (not cached) so a theme change picked up between
+// window opens (e.g. OS dark-mode toggle) is reflected in the next window.
+function getInitialWindowIsDark(): boolean {
+  return resolveIsDarkTheme(readStoredTheme(), nativeTheme.shouldUseDarkColors);
 }
 
 // Linux: avoid GTK3/GTK4 mixed symbols crash by forcing GTK3 unless explicitly overridden.
@@ -732,7 +754,7 @@ app
     setCurrentLocale(readStoredLanguage());
 
     cleanupWindowHandlers = registerWindowHandlers();
-    mainWindow = openLocalWindow();
+    mainWindow = openLocalWindow({ isDark: getInitialWindowIsDark() });
 
     // Set main window for Web Inspector server (for IPC communication)
     webInspectorServer.setMainWindow(mainWindow);
@@ -758,7 +780,7 @@ app
     gitAutoFetchService.init(mainWindow);
 
     const handleNewWindow = () => {
-      openLocalWindow();
+      openLocalWindow({ isDark: getInitialWindowIsDark() });
     };
 
     // Build and set application menu
@@ -790,7 +812,7 @@ app
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = openLocalWindow();
+        mainWindow = openLocalWindow({ isDark: getInitialWindowIsDark() });
       }
     });
 

@@ -47,6 +47,20 @@ export interface DeriveChatWorkspaceTreeInput {
   /** repo.path → git worktree list (may be empty while loading) */
   worktreesByRepoPath: Record<string, GitWorktree[]>;
   tempItems: TempWorkspaceItem[];
+  /**
+   * `canonicalPathKey(path)` → "this directory is a git repository", as
+   * answered by the main process (`folder:checkType`). A missing key means the
+   * question has not been answered yet — never "no".
+   *
+   * Exists because `worktree.list` returning `[]` is NOT the same fact as "not
+   * a git repository": a real repo can list empty (a git that fails to print
+   * the porcelain header, a BOM/CRLF-polluted stdout, a transport hiccup), and
+   * a temp workspace is `git init`-ed at creation yet never appears in any
+   * repo's worktree list at all. Deriving `gitEnabled` from the worktree list
+   * alone collapsed all three into "not a Git repository" in the git surface.
+   * The two signals are therefore unioned, not swapped.
+   */
+  gitRepoByPath?: Record<string, boolean>;
 }
 
 /**
@@ -105,6 +119,12 @@ export function deriveChatWorkspaceTree(
   const workspaces: ChatWorkspace[] = [];
   const diagnostics: WorkspaceTreeDiagnostic[] = [];
   const seenWorkspaceIds = new Set<string>();
+  const gitRepoByPath = input.gitRepoByPath ?? {};
+  /** `undefined` = not answered yet (never "no"). */
+  const gitRepoAnswer = (path: string): boolean | undefined =>
+    gitRepoByPath[canonicalPathKey(path)];
+  /** `true` only when the main process actually answered yes for this path. */
+  const isKnownGitRepo = (path: string): boolean => gitRepoAnswer(path) === true;
 
   const pushWorkspace = (workspace: ChatWorkspace) => {
     if (seenWorkspaceIds.has(workspace.id)) {
@@ -180,12 +200,16 @@ export function deriveChatWorkspaceTree(
     const mainPath = mainWt?.path ?? repo.path;
     const mainKind: WorkspaceKind = isRemote ? 'remote' : 'main';
     const mainBranch = isRemote ? undefined : workspaceBranch(mainWt);
-    // T-27: gates the Composer target bar's branch/worktree dropdown — true
-    // once `worktree.list` resolved with at least the main entry for this
-    // repo. Remote workspaces never show branch UI regardless of this value
-    // (shouldShowBranchSelect also checks `kind`), so it is only attached to
-    // the main/worktree entries below.
-    const gitEnabled = listed.length > 0;
+    // T-27: gates the Composer target bar's branch/worktree dropdown and the
+    // git surface's workdir resolution. Remote workspaces never show branch UI
+    // regardless of this value (shouldShowBranchSelect also checks `kind`), so
+    // it is only attached to the main/worktree entries below.
+    //
+    // Union, not replacement: `worktree.list` resolving with at least the main
+    // entry proves it is a repo, and so does `folder:checkType`. Either alone
+    // is enough; requiring the worktree list is what made a real repository
+    // whose list came back empty render as "not a Git repository".
+    const gitEnabled = listed.length > 0 || isKnownGitRepo(repo.path);
 
     pushWorkspace({
       id: workspaceIdFor(mainKind, mainPath),
@@ -226,12 +250,30 @@ export function deriveChatWorkspaceTree(
   if (input.tempItems.length > 0) {
     projects.push({ id: TEMP_PROJECT_ID, name: 'Temp' });
     for (const item of input.tempItems) {
+      // A temp workspace is `git init`-ed by main the moment it is created
+      // (ipc/tempWorkspace.ts), so it IS a git repository — it simply never
+      // appears in any registered repo's `worktree.list`, which is the whole
+      // reason the list-only derivation left this field unset and every temp
+      // session reported "not tracked by Git".
+      //
+      // Attached only once main has actually answered: an absent key still
+      // means "unknown" (consumers treat `!== true` as not-git, so a
+      // hard-coded `false` while the query is in flight would reintroduce the
+      // very false negative this fixes, just briefly).
+      //
+      // This does NOT add a branch dropdown to temp: `shouldShowBranchSelect`
+      // (composerTarget.ts) gates on `kind === 'main' || kind === 'worktree'`
+      // before it ever looks at `gitEnabled`, and the sidebar branch chip
+      // (contextSurfaceModel.ts) additionally needs a `branch`, which temp
+      // workspaces never carry. Temp Composer UX is unchanged by design.
+      const tempGitEnabled = gitRepoAnswer(item.path);
       pushWorkspace({
         id: workspaceIdFor('temp', item.path),
         projectId: TEMP_PROJECT_ID,
         name: item.title || item.folderName,
         kind: 'temp',
         path: item.path,
+        ...(tempGitEnabled === undefined ? {} : { gitEnabled: tempGitEnabled }),
       });
     }
   }
@@ -290,12 +332,19 @@ export function workspacePathMatchRank(kind: WorkspaceKind): number {
   }
 }
 
-/** Prefer active worktree path, else selected repo main, else first workspace. */
+/**
+ * Prefer the selected repo's workspace, else the first workspace.
+ *
+ * An `activeWorktreePath` tier used to sit in front of `selectedRepoPath`. It
+ * was fed from `useWorktreeStore.currentWorktree`, and nothing in the app ever
+ * called `setCurrentWorktree` — the value was structurally `null`, so the tier
+ * could never fire. Removed rather than left as a permanently-dead branch that
+ * reads like live priority logic.
+ */
 export function resolvePreferredWorkspaceId(
   workspaces: ChatWorkspace[],
   options: {
     selectedRepoPath: string | null;
-    activeWorktreePath: string | null;
   }
 ): string | null {
   if (workspaces.length === 0) {
@@ -317,10 +366,5 @@ export function resolvePreferredWorkspaceId(
     )[0];
   };
 
-  return (
-    byPath(options.activeWorktreePath)?.id ??
-    byPath(options.selectedRepoPath)?.id ??
-    workspaces[0]?.id ??
-    null
-  );
+  return byPath(options.selectedRepoPath)?.id ?? workspaces[0]?.id ?? null;
 }

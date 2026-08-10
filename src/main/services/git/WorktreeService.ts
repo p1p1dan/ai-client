@@ -19,12 +19,14 @@ import type {
 import iconv from 'iconv-lite';
 import jschardet from 'jschardet';
 import type { SimpleGit } from 'simple-git';
+import log from '../../utils/logger';
 import { gitShow } from './encoding';
 import {
   createSimpleGit,
   fromGitPath as fromRuntimeGitPath,
   toGitPath as toRuntimeGitPath,
 } from './runtime';
+import { parseWorktreeListPorcelain } from './worktreeListParse';
 
 const execAsync = promisify(exec);
 
@@ -164,43 +166,20 @@ export class WorktreeService {
 
   async list(): Promise<GitWorktree[]> {
     const result = await this.git.raw(['worktree', 'list', '--porcelain']);
-    const worktrees: GitWorktree[] = [];
-    let current: Partial<GitWorktree> = {};
+    const parsed = parseWorktreeListPorcelain(result, (inputPath) => this.fromGitPath(inputPath));
 
-    for (const line of result.split('\n')) {
-      if (line.startsWith('worktree ')) {
-        if (current.path) {
-          worktrees.push(current as GitWorktree);
-        }
-        current = {
-          path: this.fromGitPath(line.substring(9)),
-          isMainWorktree: false,
-          isLocked: false,
-          prunable: false,
-        };
-      } else if (line.startsWith('HEAD ')) {
-        current.head = line.substring(5);
-      } else if (line.startsWith('branch ')) {
-        current.branch = line.substring(7).replace('refs/heads/', '');
-      } else if (line === 'bare') {
-        current.isMainWorktree = true;
-      } else if (line === 'locked') {
-        current.isLocked = true;
-      } else if (line === 'prunable') {
-        current.prunable = true;
-      }
+    if (parsed.emptyDiagnostic) {
+      // log.error, not warn: when logging is disabled (the default) the logger
+      // pins both transports at 'error', so anything softer is discarded — and
+      // this is exactly the line a field machine needs. An empty list is not
+      // normally reachable for a real repository, so it cannot get noisy.
+      log.error('[worktree:list] parsed 0 worktrees', {
+        workdir: this.workdir,
+        ...parsed.emptyDiagnostic,
+      });
     }
 
-    if (current.path) {
-      worktrees.push(current as GitWorktree);
-    }
-
-    // Mark first worktree as main
-    if (worktrees.length > 0) {
-      worktrees[0].isMainWorktree = true;
-    }
-
-    return worktrees;
+    return parsed.worktrees;
   }
 
   async add(options: WorktreeCreateOptions): Promise<void> {

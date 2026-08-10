@@ -140,13 +140,17 @@ describe('enqueue', () => {
     expect(selectSessionQueue(result.state, 's1').paused).toBeNull();
   });
 
-  // m2 fix: enqueuing a follow-up while paused is not "a new turn starting"
-  // (decision 3.4 reserves pause-clearing for Send/Retry/explicit Resume) —
-  // only an EMPTY, invisible-in-the-strip paused bucket needed the auto-clear
-  // above. A non-empty bucket must keep its pause, or Stop-ing a queue and
-  // then typing one more follow-up before status settles would silently
-  // release the WHOLE stopped queue the instant it does.
-  it('preserves an active pause when admitting into a NON-EMPTY bucket', () => {
+  // Stop-hang fix (2026-08-10) — this REPLACES m2's "a non-empty bucket keeps
+  // its pause". The queue semantics are now stated as one rule: **Stop
+  // freezes the queue; the user's next message thaws it.** m2's version only
+  // thawed an EMPTY bucket, which made the interesting case the broken one —
+  // Stop with messages already queued left a `'stopped'` pause that only an
+  // explicit Resume could clear, so those messages sat frozen while the user
+  // kept typing into a composer that showed no sign anything was stuck.
+  // Enqueuing IS the user pushing the flow forward again (the same reading of
+  // decision 3.4 that `shouldClearPauseOnSend` already applies to a direct
+  // Send, which is what the same keystroke does once status has settled).
+  it('clears a STOPPED pause when admitting into a NON-EMPTY bucket (Stop freezes, the next message thaws)', () => {
     let state = createEmptyState();
     const first = enqueue(state, message({ sessionId: 's1' }));
     expect(first.ok).toBe(true);
@@ -157,8 +161,58 @@ describe('enqueue', () => {
     const second = enqueue(state, message({ sessionId: 's1' }));
     expect(second.ok).toBe(true);
     if (!second.ok) return;
-    expect(selectSessionQueue(second.state, 's1').paused).toBe('stopped');
+    expect(selectSessionQueue(second.state, 's1').paused).toBeNull();
     expect(selectSessionQueue(second.state, 's1').entries).toHaveLength(2);
+  });
+
+  // The counter-example, and the reason this is scoped to `'stopped'` rather
+  // than "clear any pause": a `'send-rejected'` pause is the queue layer's own
+  // protection against re-releasing a head entry the Host just REFUSED
+  // (`shouldPauseQueueOnRejection`). A follow-up message is not evidence the
+  // Host changed its mind, so clearing it here would restart exactly the
+  // restore→re-release livelock S1 closed. It stays until a direct Send
+  // (`shouldClearPauseOnSend`) or an explicit Resume.
+  it('preserves a SEND-REJECTED pause when admitting into a NON-EMPTY bucket', () => {
+    let state = createEmptyState();
+    const first = enqueue(state, message({ sessionId: 's1' }));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    state = pauseSession(first.state, 's1', 'send-rejected');
+
+    const second = enqueue(state, message({ sessionId: 's1' }));
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(selectSessionQueue(second.state, 's1').paused).toBe('send-rejected');
+    expect(selectSessionQueue(second.state, 's1').entries).toHaveLength(2);
+  });
+
+  // The empty-bucket rule is unchanged and still clears EITHER reason — an
+  // empty paused bucket renders nothing at all (`deriveQueueStripModel`
+  // collapses the whole strip), so it has no Resume affordance to offer and
+  // must never be able to hold a future message back invisibly.
+  it('still clears a send-rejected pause on admission into an EMPTY bucket', () => {
+    let state = createEmptyState();
+    state = pauseSession(state, 's1', 'send-rejected');
+    const result = enqueue(state, message({ sessionId: 's1' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(selectSessionQueue(result.state, 's1').paused).toBeNull();
+  });
+
+  // A rejected admission changes nothing — including the pause. The queue
+  // must not be thawed by a message it refused to take (decision 7: the text
+  // stays in the textarea, so the user has not actually handed anything over).
+  it('leaves a stopped pause untouched when the admission is REJECTED', () => {
+    let state = createEmptyState();
+    const first = enqueue(state, message({ sessionId: 's1' }));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    state = pauseSession(first.state, 's1');
+
+    const rejected = enqueue(state, message({ sessionId: 's1', text: '   ', attachments: [] }));
+    expect(rejected.ok).toBe(false);
+    expect(rejected.state).toBe(state);
+    expect(selectSessionQueue(rejected.state, 's1').paused).toBe('stopped');
   });
 
   it('exposes the default limits used when none are passed explicitly', () => {

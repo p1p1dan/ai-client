@@ -173,6 +173,22 @@ export function isSessionCompletedForSend(event: ProgressEvent, sessionId: strin
   return event.type === 'session.completed' && event.sessionId === sessionId;
 }
 
+/**
+ * Stop-hang fix (2026-08-10): the mirror of `isSessionCompletedForSend` for a
+ * user Stop. Same reason it has to read the raw wire event — `chatSessions.ts`
+ * collapses `session.stopped` into the same `'idle'` status a real completion
+ * produces, so nothing derived from the store can tell the two apart.
+ *
+ * `runSend`'s wait predicate had no member of its release set that a stopped
+ * turn ever satisfies (no assistant progress, no `failed`/`waiting_*` status,
+ * no new assistant message), so pressing Stop left it polling every 50ms until
+ * the 45s abandon budget expired — the "Stop does nothing" report. This is the
+ * signal that ends that wait honestly, in the same tick the Host reports it.
+ */
+export function isSessionStoppedForSend(event: ProgressEvent, sessionId: string): boolean {
+  return event.type === 'session.stopped' && event.sessionId === sessionId;
+}
+
 /** Minimal shape `countAssistantMessagesWithBlocks` needs — matches `ChatMessage` structurally without importing it (this module stays decoupled from `chatSessions.ts`). */
 export interface AssistantMessageLike {
   id: string;

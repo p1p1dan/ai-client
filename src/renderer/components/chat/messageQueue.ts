@@ -103,18 +103,44 @@ export type EnqueueResult =
   | { ok: false; state: MessageQueueState; reason: EnqueueRejectReason; message: string };
 
 /**
+ * What a successful admission does to the bucket's pause.
+ *
+ * Stop-hang fix (2026-08-10) — the queue's pause semantics, stated once:
+ * **Stop freezes the queue; the user's next message thaws it.**
+ *
+ * - EMPTY bucket, ANY reason -> cleared. Unchanged m2 rule: an empty paused
+ *   bucket renders nothing at all (`deriveQueueStripModel` collapses the whole
+ *   strip when there are no entries), so it has no Resume link to offer and
+ *   would hold the incoming message back invisibly.
+ * - NON-EMPTY bucket, `'stopped'` -> cleared (NEW; supersedes m2's "a
+ *   non-empty bucket keeps its pause"). m2 reasoned that enqueuing a follow-up
+ *   is not "a new turn starting", so a Stopped queue should wait for an
+ *   explicit Resume — but that left the interesting case deadlocked: Stop with
+ *   messages ALREADY queued froze them behind a Resume link the user has no
+ *   reason to look for, while the composer happily accepted more. The same
+ *   keystroke, one moment later (once status settles to idle), is a direct
+ *   Send, and `shouldClearPauseOnSend` clears the pause for THAT — so the old
+ *   rule made the outcome depend on how fast the Host tore the turn down.
+ * - NON-EMPTY bucket, `'send-rejected'` -> kept. That pause is the queue
+ *   layer's own protection against re-releasing a head entry the Host just
+ *   REFUSED (`shouldPauseQueueOnRejection` in queueRelease.ts); a follow-up
+ *   message is not evidence the Host changed its mind, and clearing it here
+ *   would restart the restore->re-release livelock S1 closed. A direct Send or
+ *   an explicit Resume still clears it.
+ */
+function nextPausedAfterEnqueue(bucket: SessionQueue): QueuePauseReason | null {
+  if (bucket.entries.length === 0) return null;
+  return bucket.paused === 'stopped' ? null : bucket.paused;
+}
+
+/**
  * Admit one message onto the tail of its session's queue.
  *
- * m2 fix: a successful admission into an EMPTY bucket also clears `paused` —
- * that is decision 3.4's actual deadlock scenario (an invisible pause on a
- * bucket the strip has nothing to show a Resume link for). Admitting into a
- * non-empty bucket leaves `paused` as-is: enqueuing a follow-up while paused
- * is not "a new turn starting" (that is Send/Retry/explicit Resume — see
- * `clearPause`'s callers), and clearing it here would silently release the
- * WHOLE queue — including messages the user explicitly Stopped — the moment
- * status next settles to idle.
+ * `nextPausedAfterEnqueue` above owns what this does to an existing pause.
  * Rejections never touch state (same reference returned) — the caller keeps
- * the textarea text exactly as typed (decision 7: "队列满 ... 绝不静默丢字").
+ * the textarea text exactly as typed (decision 7: "队列满 ... 绝不静默丢字"),
+ * and a refused message is not the user handing anything over, so a frozen
+ * queue stays frozen.
  */
 export function enqueue(
   state: MessageQueueState,
@@ -157,7 +183,7 @@ export function enqueue(
 
   const nextBucket: SessionQueue = {
     entries: [...bucket.entries, message],
-    paused: bucket.entries.length === 0 ? null : bucket.paused,
+    paused: nextPausedAfterEnqueue(bucket),
   };
   return {
     ok: true,

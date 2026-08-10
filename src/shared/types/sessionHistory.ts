@@ -34,6 +34,25 @@ export type HistoryBlock =
 /** Prefix of every history message id — the store's replace semantics key on it. */
 export const HISTORY_MESSAGE_ID_PREFIX = 'h:' as const;
 
+/**
+ * 2026-08-10: what a rebuilt user turn had attached — METADATA ONLY.
+ *
+ * Field-for-field the live wire's `MessageAttachmentMeta` (runtimeEvents.ts)
+ * and the renderer's `ChatMessageAttachment`, so a history-rebuilt chip and a
+ * live chip are the same object shape and render through the same branch.
+ *
+ * Deliberately NO `data`: the digest never re-reads the attached bytes off
+ * disk and never renders a real bitmap thumbnail. A cold restart therefore
+ * recovers "an image called X was attached here" (icon + label), which is
+ * strictly more than the nothing it used to recover. Real thumbnails are a
+ * separate piece of work with its own IO/permission surface.
+ */
+export interface HistoryAttachment {
+  kind: 'image' | 'text';
+  mediaType: string;
+  name?: string;
+}
+
 export interface HistoryMessage {
   /** Stable id: `h:<first-jsonl-uuid>`. The `h:` prefix is contract. */
   id: string;
@@ -43,6 +62,17 @@ export interface HistoryMessage {
   /** Assistant messages: message.model of the first merged line. */
   model?: string;
   blocks: HistoryBlock[];
+  /**
+   * 2026-08-10 optional-field widening (protocol version unchanged, same
+   * discipline as `message.started.attachments`): user turns only, present
+   * only when the turn actually attached something. Older payloads simply
+   * lack the key and older readers ignore it — compatible both directions.
+   *
+   * A user message may now carry attachments and ZERO blocks: an image sent
+   * with no prose used to digest to nothing at all, which lost the whole turn
+   * rather than just its chip.
+   */
+  attachments?: HistoryAttachment[];
 }
 
 /**

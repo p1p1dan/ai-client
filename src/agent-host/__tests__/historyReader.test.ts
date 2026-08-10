@@ -257,6 +257,255 @@ describe('readSessionHistory', () => {
     });
   });
 
+  // 2026-08-10: cold restart rebuilds every message through this digest, so an
+  // attachment the digest drops is an attachment the user never sees again.
+  // Chips are metadata-only by decision — no bytes are read, no bitmap is made.
+  describe('attachment metadata (2026-08-10)', () => {
+    /** Carrier A — what claudeRuntime.buildPromptWithAttachments actually writes. */
+    function imageBlock(mediaType = 'image/png'): unknown {
+      return { type: 'image', source: { type: 'base64', media_type: mediaType, data: 'AAAA' } };
+    }
+
+    it('recovers an image content block on the user line as a metadata chip', async () => {
+      const lines = [
+        line({
+          type: 'user',
+          uuid: 'u1',
+          timestamp: '2026-07-20T10:00:00.000Z',
+          message: {
+            role: 'user',
+            content: [imageBlock(), { type: 'text', text: 'look at this' }],
+          },
+        }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-content.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-content',
+        claudeConfigDir,
+      });
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].blocks).toEqual([
+        { type: 'text', id: 'h:u1:0', text: 'look at this' },
+      ]);
+      // No `data` ever crosses the wire — metadata only.
+      expect(result.messages[0].attachments).toEqual([{ kind: 'image', mediaType: 'image/png' }]);
+    });
+
+    it('recovers several attachments from one turn, in line order, with document titles as names', async () => {
+      const lines = [
+        line({
+          type: 'user',
+          uuid: 'u1',
+          message: {
+            role: 'user',
+            content: [
+              imageBlock('image/png'),
+              imageBlock('image/jpeg'),
+              {
+                type: 'document',
+                source: { type: 'text', media_type: 'text/plain', data: 'notes' },
+                title: 'notes.txt',
+              },
+              { type: 'text', text: 'three attachments' },
+            ],
+          },
+        }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-multi.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-multi',
+        claudeConfigDir,
+      });
+      expect(result.messages[0].attachments).toEqual([
+        { kind: 'image', mediaType: 'image/png' },
+        { kind: 'image', mediaType: 'image/jpeg' },
+        { kind: 'text', mediaType: 'text/plain', name: 'notes.txt' },
+      ]);
+    });
+
+    it('emits an attachment-only user turn (image, no prose) instead of dropping the whole message', async () => {
+      const lines = [
+        line({
+          type: 'user',
+          uuid: 'u1',
+          timestamp: '2026-07-20T10:00:00.000Z',
+          message: { role: 'user', content: [imageBlock()] },
+        }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-only.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-only',
+        claudeConfigDir,
+      });
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0]).toMatchObject({
+        id: 'h:u1',
+        role: 'user',
+        blocks: [],
+        attachments: [{ kind: 'image', mediaType: 'image/png' }],
+      });
+    });
+
+    it('claims a user-shaped attachment record that PRECEDES its user line', async () => {
+      const lines = [
+        line({
+          type: 'attachment',
+          uuid: 'a1',
+          attachment: { kind: 'image', path: '/home/dan/shots/x.png' },
+        }),
+        line({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'see attached' } }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-before.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-before',
+        claudeConfigDir,
+      });
+      expect(result.messages).toHaveLength(1);
+      // Path collapsed to a basename, media type inferred from the extension.
+      expect(result.messages[0].attachments).toEqual([
+        { kind: 'image', mediaType: 'image/png', name: 'x.png' },
+      ]);
+      // Claimed or not, the record itself is never a message: still a controlLine.
+      expect(result.parseStats).toEqual({ totalLines: 2, controlLines: 1, badLines: 0 });
+    });
+
+    it('claims a user-shaped attachment record that FOLLOWS its user line (the real CC line order)', async () => {
+      const lines = [
+        line({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'see attached' } }),
+        line({
+          type: 'attachment',
+          uuid: 'a1',
+          attachment: { kind: 'image', filename: 'after.webp' },
+        }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-after.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-after',
+        claudeConfigDir,
+      });
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].attachments).toEqual([
+        { kind: 'image', mediaType: 'image/webp', name: 'after.webp' },
+      ]);
+    });
+
+    it('discards an orphan attachment record without ever dropping a message', async () => {
+      const lines = [
+        // Nothing to claim it: the reply starts before any user line appears.
+        line({ type: 'attachment', uuid: 'a1', attachment: { kind: 'image', path: 'orphan.png' } }),
+        line({
+          type: 'assistant',
+          uuid: 'a2',
+          message: {
+            role: 'assistant',
+            model: 'claude-x',
+            content: [{ type: 'text', text: 'hi' }],
+          },
+        }),
+        line({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'later turn' } }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-orphan.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-orphan',
+        claudeConfigDir,
+      });
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[1].blocks[0]).toMatchObject({ text: 'later turn' });
+      // The orphan must not drift onto an unrelated later message.
+      expect(result.messages.every((m) => m.attachments === undefined)).toBe(true);
+      expect(result.parseStats.badLines).toBe(0);
+    });
+
+    it('stays inert on real Claude Code attachment records (context injections, not user attachments)', async () => {
+      // Measured shapes, 2026-08-10: none of the 22 real subtypes declares a
+      // kind or a media type, and they sit right after the user line — exactly
+      // where a trailing claim would grab them if the shape gate were loose.
+      const lines = [
+        line({ type: 'user', uuid: 'u1', message: { role: 'user', content: 'real turn' } }),
+        line({
+          type: 'attachment',
+          uuid: 'a1',
+          attachment: { type: 'task_reminder', content: [], itemCount: 0 },
+        }),
+        line({
+          type: 'attachment',
+          uuid: 'a2',
+          attachment: { type: 'file', filename: '/repo/a.ts', displayPath: 'a.ts', content: {} },
+        }),
+        line({
+          type: 'attachment',
+          uuid: 'a3',
+          attachment: { type: 'skill_listing', content: '- x', names: ['x'], skillCount: 1 },
+        }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-real.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-real',
+        claudeConfigDir,
+      });
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].attachments).toBeUndefined();
+      expect(result.parseStats).toEqual({ totalLines: 4, controlLines: 3, badLines: 0 });
+    });
+
+    it('leaves attachment-free history byte-identical: no attachments key is ever added', async () => {
+      const lines = [
+        line({
+          type: 'user',
+          uuid: 'u1',
+          timestamp: '2026-07-20T10:00:00.000Z',
+          message: { role: 'user', content: 'plain old turn' },
+        }),
+        line({
+          type: 'assistant',
+          uuid: 'a1',
+          timestamp: '2026-07-20T10:00:01.000Z',
+          message: {
+            role: 'assistant',
+            model: 'claude-x',
+            content: [{ type: 'text', text: 'ok' }],
+          },
+        }),
+      ];
+      await writeSession(WORKSPACE, 'sess-att-none.jsonl', lines);
+
+      const result = await readSessionHistory({
+        workspacePath: WORKSPACE,
+        runtimeIdentity: 'sess-att-none',
+        claudeConfigDir,
+      });
+      expect(result.messages).toEqual([
+        {
+          id: 'h:u1',
+          role: 'user',
+          timestamp: Date.parse('2026-07-20T10:00:00.000Z'),
+          blocks: [{ type: 'text', id: 'h:u1:0', text: 'plain old turn' }],
+        },
+        {
+          id: 'h:a1',
+          role: 'assistant',
+          timestamp: Date.parse('2026-07-20T10:00:01.000Z'),
+          model: 'claude-x',
+          blocks: [{ type: 'text', id: 'h:a1:0', text: 'ok' }],
+        },
+      ]);
+    });
+  });
+
   describe('merge and tool pairing', () => {
     it('merges consecutive assistant lines into one message', async () => {
       const lines = [

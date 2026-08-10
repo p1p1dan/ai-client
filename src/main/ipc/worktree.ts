@@ -13,6 +13,7 @@ import { WorktreeService } from '../services/git/WorktreeService';
 import { isRemoteVirtualPath } from '../services/remote/RemotePath';
 import { remoteRepositoryBackend } from '../services/remote/RemoteRepositoryBackend';
 import { sessionManager } from '../services/session/SessionManager';
+import log from '../utils/logger';
 import { stopWatchersInDirectory } from './files';
 
 const worktreeServices = new Map<string, WorktreeService>();
@@ -40,6 +41,13 @@ export function registerWorktreeHandlers(): void {
 
     const service = getWorktreeService(workdir);
     const worktrees = await service.list();
+
+    // Routine trace: the renderer derives "is this a git repository" partly
+    // from this count, so a support log has to show which directory was asked
+    // and what came back. log.info (not error) — it fires on every refresh and
+    // is only meant to be readable once logging is turned on; the zero-result
+    // anomaly is reported separately, at error level, by WorktreeService.list.
+    log.info(`[worktree:list] workdir=${workdir} parsed=${worktrees.length}`);
 
     // Register all worktrees with auto-fetch service
     gitAutoFetchService.clearWorktrees();

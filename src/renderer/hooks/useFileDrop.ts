@@ -41,13 +41,26 @@ export function useFileDrop<T extends HTMLElement>({
     const handleDragOver = (e: DragEvent) => {
       if (hasDroppableData(e.dataTransfer)) {
         e.preventDefault();
-        e.stopPropagation();
         e.dataTransfer!.dropEffect = 'copy';
+        // No stopPropagation (fix, 2026-08-10): this is a capture-phase
+        // listener, so stopping it here killed the event before it could ever
+        // reach the document-level "add repository" drop zone
+        // (App/hooks/useFileDragDrop.ts) — dragging a folder over a mounted
+        // terminal made the whole app ignore the drag. preventDefault alone is
+        // enough to keep this element droppable.
       }
     };
 
     const handleDrop = (e: DragEvent) => {
       if (!hasDroppableData(e.dataTransfer)) return;
+
+      // A dropped directory belongs to the document-level "add repository"
+      // flow, not this element's "insert @path" shortcut — do not consume it.
+      // Must not preventDefault/stopPropagation either, or the drop never
+      // reaches document's own `drop` listener.
+      if (isDirectoryDrop(e.dataTransfer?.items)) {
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();
@@ -67,6 +80,25 @@ export function useFileDrop<T extends HTMLElement>({
   }, [cwd, enabled]);
 
   return ref;
+}
+
+/**
+ * Minimal shape of `DataTransfer.items` this check needs, so it can be unit
+ * tested without a real (jsdom-free) DataTransferItemList.
+ */
+export interface DirectoryCheckItem {
+  webkitGetAsEntry(): { isDirectory: boolean } | null;
+}
+
+/**
+ * True when the first dragged item is a directory (folder). Extracted as a
+ * pure predicate — a full `DragEvent`/`DataTransfer` is not vitest-friendly,
+ * but `webkitGetAsEntry().isDirectory` alone is.
+ */
+export function isDirectoryDrop(items: ArrayLike<DirectoryCheckItem> | null | undefined): boolean {
+  const first = items?.[0];
+  const entry = first?.webkitGetAsEntry() ?? null;
+  return entry?.isDirectory ?? false;
 }
 
 /**

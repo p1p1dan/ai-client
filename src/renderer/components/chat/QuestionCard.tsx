@@ -15,6 +15,7 @@ import {
   deriveFrozenPairs,
   derivePager,
   derivePermissionCardView,
+  derivePermissionRowView,
   deriveQuestionCardState,
   emptySelection,
   type FrozenPair,
@@ -32,6 +33,7 @@ import {
   toggleOther,
 } from './questionCardModel';
 import { derivePermissionOrigin } from './subagentActivityModel';
+import { ToolRow } from './ToolRows';
 
 /**
  * T-05 batch 3: renders `.qa` off `questionCardModel.ts`'s pure view models. No
@@ -453,13 +455,13 @@ function PermissionQaCard({
     <p className="px-3.5 pb-1 text-meta text-muted-foreground">{originView.label}</p>
   ) : null;
 
+  // 2026-08-10 ruling: a decided permission collapses to a single tool-row
+  // (Allowed/Denied + description) instead of keeping the full QA shell —
+  // only pending/waiting permissions still render as a QA card below.
   if (view.state === 'resolved') {
-    return (
-      <div className={QA_SHELL_CLASS}>
-        <QaHead title={view.title} />
-        <QaFrozenPairs pairs={view.frozen} />
-      </div>
-    );
+    const rowView = derivePermissionRowView(block, originView?.label ?? null);
+    if (!rowView) return null;
+    return <ToolRow view={rowView} />;
   }
 
   return (

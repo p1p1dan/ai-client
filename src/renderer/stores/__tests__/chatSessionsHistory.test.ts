@@ -515,6 +515,59 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
       'thinking',
     ]);
   });
+
+  // 2026-08-10: without this passthrough a cold restart rebuilds the message
+  // but never its chip — the Host now recovers the metadata, and the store
+  // must carry it onto the same `attachments` field the live path writes.
+  it('passes rebuilt attachment metadata through to ChatMessage.attachments', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const withAttachments: HistoryMessage = {
+      id: 'h:uuid-att',
+      role: 'user',
+      timestamp: 1500,
+      blocks: [{ type: 'text', id: 'h:uuid-att:0', text: 'look at this' }],
+      attachments: [
+        { kind: 'image', mediaType: 'image/png' },
+        { kind: 'text', mediaType: 'text/plain', name: 'notes.txt' },
+      ],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [withAttachments] }));
+    const message = patch.messages?.[SESSION_ID]?.[0];
+    expect(message?.attachments).toEqual([
+      { kind: 'image', mediaType: 'image/png' },
+      { kind: 'text', mediaType: 'text/plain', name: 'notes.txt' },
+    ]);
+  });
+
+  it('omits the attachments key entirely for attachment-free history messages', () => {
+    const state = baseState({ sessions: [makeSession()] });
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: HISTORY_MESSAGES }));
+    for (const message of patch.messages?.[SESSION_ID] ?? []) {
+      expect(message).not.toHaveProperty('attachments');
+    }
+  });
+
+  it('carries an attachment-only history turn (no text blocks) through as a chip-bearing message', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const imageOnly: HistoryMessage = {
+      id: 'h:uuid-img',
+      role: 'user',
+      timestamp: 1500,
+      blocks: [],
+      attachments: [{ kind: 'image', mediaType: 'image/png' }],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [imageOnly] }));
+    expect(patch.messages?.[SESSION_ID]?.[0]).toEqual({
+      id: 'h:uuid-img',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [],
+      attachments: [{ kind: 'image', mediaType: 'image/png' }],
+    });
+  });
 });
 
 describe('applyRuntimeEvent — session.updated (C-06)', () => {

@@ -1520,6 +1520,8 @@ export default function App() {
             onRemoveRepository={handleRemoveRepository}
             dropZoneRef={repositorySidebarRef}
             fileDragOver={isFileDragOver}
+            tempWorkspaces={tempWorkspaces}
+            onRequestTempDelete={openTempDelete}
           />
         ) : (
           <>

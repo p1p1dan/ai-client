@@ -1,3 +1,4 @@
+import type { TempWorkspaceItem } from '@shared/types';
 import {
   type CSSProperties,
   type Ref,
@@ -48,6 +49,12 @@ interface WorkspaceShellProps {
    */
   dropZoneRef?: Ref<HTMLDivElement>;
   fileDragOver?: boolean;
+  /** Temp session items (App's `useTempWorkspaceStore`), threaded down to LeftNav
+   * so it can map a Temp folder row to the item its delete button targets. */
+  tempWorkspaces?: TempWorkspaceItem[];
+  /** Opens the shared `TempWorkspaceDialogs` delete confirmation (App's
+   * `useTempWorkspaceStore.openDelete`), same as the legacy shell's `onRequestTempDelete`. */
+  onRequestTempDelete?: (id: string) => void;
 }
 
 export function WorkspaceShell({
@@ -58,6 +65,8 @@ export function WorkspaceShell({
   onRemoveRepository,
   dropZoneRef,
   fileDragOver = false,
+  tempWorkspaces = [],
+  onRequestTempDelete,
 }: WorkspaceShellProps) {
   const { t } = useI18n();
 
@@ -295,6 +304,8 @@ export function WorkspaceShell({
           onAddRepository={onAddRepository}
           onRemoveRepository={onRemoveRepository}
           repositories={repositories}
+          tempWorkspaces={tempWorkspaces}
+          onRequestTempDelete={onRequestTempDelete}
         />
         {!chrome.sidebarCollapsed && (
           <ShellResizeHandle

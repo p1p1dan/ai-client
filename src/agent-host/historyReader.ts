@@ -18,6 +18,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import type {
+  HistoryAttachment,
   HistoryBlock,
   HistoryMessage,
   HistoryParseStats,
@@ -423,6 +424,10 @@ interface JsonlContentItem {
   tool_use_id?: string;
   content?: unknown;
   is_error?: boolean;
+  /** `image` / `document` blocks: `{ type: 'base64'|'text', media_type, data }`. */
+  source?: unknown;
+  /** `document` blocks: the display filename this Host puts there. */
+  title?: string;
 }
 
 interface JsonlMessage {
@@ -559,6 +564,135 @@ function capInput(input: unknown, maxChars: number): { input: unknown; truncated
 }
 
 // ---------------------------------------------------------------------------
+// Attachment metadata recovery (2026-08-10, §5.2 revision)
+//
+// Two independent carriers, because the transcript has two producers:
+//
+//  A. THIS app. `claudeRuntime.buildPromptWithAttachments` sends attachments
+//     as Anthropic content blocks inside one SDK user message (`image` with a
+//     base64 source, `document` with a text source + `title`), and the CLI
+//     records that message verbatim. So an ai-client image turn lives in the
+//     `type: 'user'` line's OWN `message.content` — this is the carrier that
+//     actually fixes "cold restart drops the image chip".
+//  B. A standalone `attachment` control record adjacent to the user line.
+//     Verified 2026-08-10 against every such record on a real machine: 22
+//     subtypes (task_reminder / skill_listing / file / directory /
+//     hook_success / …), not one carrying `kind` or a media type — they are
+//     context injections, not user attachments. `extractControlAttachment`
+//     is therefore INERT on today's Claude Code output by construction; it
+//     exists so a build that does write user attachments this way still
+//     produces a chip instead of silently dropping it.
+//
+// Metadata only in both cases: `source.data` (the base64 bytes) is never
+// touched, so this adds no IO and no new permission surface.
+// ---------------------------------------------------------------------------
+
+const IMAGE_EXTENSION_MEDIA_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  avif: 'image/avif',
+  svg: 'image/svg+xml',
+};
+
+/** Last segment of a POSIX or Windows path — the chip shows a name, not a path. */
+function baseName(value: string): string {
+  const segments = value.split(/[\\/]/);
+  return segments[segments.length - 1] || value;
+}
+
+/**
+ * Fallback when the record states no media type. `mediaType` is required by
+ * the wire shape (and doubles as the chip label when there is no name), so it
+ * must always resolve to something — never to an empty string.
+ */
+function inferMediaType(name: string | undefined, kind: 'image' | 'text'): string {
+  if (kind !== 'image') return 'text/plain';
+  const ext = name?.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined;
+  return (ext && IMAGE_EXTENSION_MEDIA_TYPES[ext]) || 'image/*';
+}
+
+/** Carrier A: `image` / `document` content blocks on the user line itself. */
+function extractContentAttachments(content: unknown): HistoryAttachment[] {
+  if (!Array.isArray(content)) return [];
+  const attachments: HistoryAttachment[] = [];
+  for (const raw of content) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as JsonlContentItem;
+    if (item.type !== 'image' && item.type !== 'document') continue;
+    const kind: 'image' | 'text' = item.type === 'image' ? 'image' : 'text';
+    const source =
+      item.source && typeof item.source === 'object'
+        ? (item.source as { media_type?: unknown })
+        : null;
+    const declared =
+      typeof source?.media_type === 'string' && source.media_type.trim()
+        ? source.media_type.trim()
+        : null;
+    // Images get no name: this Host writes `title` on `document` blocks only,
+    // and the Anthropic image block has nowhere to put a filename. The chip
+    // then falls back to the media type ("image/png") — degraded on purpose,
+    // and the reason a filename cannot be recovered for image turns.
+    const name =
+      typeof item.title === 'string' && item.title.trim() ? item.title.trim() : undefined;
+    attachments.push({
+      kind,
+      mediaType: declared ?? inferMediaType(name, kind),
+      ...(name ? { name } : {}),
+    });
+  }
+  return attachments;
+}
+
+/**
+ * Carrier B: a standalone `attachment` record, IF it describes a user
+ * attachment. Anything without `kind: image|text` and without a media type is
+ * not one (see the block comment above) and returns null, which keeps that
+ * line skipped exactly as it was before this change.
+ */
+function extractControlAttachment(record: unknown): HistoryAttachment | null {
+  if (!record || typeof record !== 'object') return null;
+  const att = record as {
+    kind?: unknown;
+    mediaType?: unknown;
+    media_type?: unknown;
+    name?: unknown;
+    filename?: unknown;
+    path?: unknown;
+  };
+
+  const declaredRaw =
+    typeof att.mediaType === 'string'
+      ? att.mediaType
+      : typeof att.media_type === 'string'
+        ? att.media_type
+        : null;
+  const declared = declaredRaw?.trim() || null;
+
+  let kind: 'image' | 'text';
+  if (att.kind === 'image' || att.kind === 'text') {
+    kind = att.kind;
+  } else if (declared) {
+    kind = declared.startsWith('image/') ? 'image' : 'text';
+  } else {
+    return null; // not a user attachment — a control record, as before.
+  }
+
+  const rawName = [att.name, att.filename, att.path].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0
+  );
+  const name = rawName ? baseName(rawName.trim()) : undefined;
+  return {
+    kind,
+    mediaType: declared ?? inferMediaType(name, kind),
+    ...(name ? { name } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Digest: parse + merge + pair + cap (§5.2 / §5.3 / §5.4)
 // ---------------------------------------------------------------------------
 
@@ -587,6 +721,18 @@ async function digestHistoryFile(filePath: string): Promise<HistoryReadResult> {
   let currentMessage: HistoryMessage | null = null;
   let pairedToolCallIds = new Set<string>();
   let blockCounter = 0;
+
+  // Attachment pairing (2026-08-10). Order tolerance is required because the
+  // two plausible layouts disagree: real Claude Code writes `attachment`
+  // records AFTER the user line they belong to (measured: prev-line = `user`
+  // in the overwhelming majority), while the historic fixture assumption put
+  // them before. So we support both, and only both.
+  //  - `pendingAttachments`: seen before their user line, waiting to be claimed.
+  //  - `lastUserMessage`: the user message a trailing record may still decorate.
+  // Unclaimed either way = orphan = discarded. An attachment problem must
+  // never cost a whole message ("only ever more, never less").
+  let pendingAttachments: HistoryAttachment[] = [];
+  let lastUserMessage: HistoryMessage | null = null;
 
   function estimateSize(msg: HistoryMessage): number {
     try {
@@ -684,12 +830,30 @@ async function digestHistoryFile(filePath: string): Promise<HistoryReadResult> {
 
       const type = entry.type;
 
+      // "Adjacent" for a trailing attachment record means strictly adjacent:
+      // only further attachment records may sit between a user line and the
+      // records decorating it. Any other line closes that window.
+      if (entry.attachment === undefined) lastUserMessage = null;
+
       if (typeof type === 'string' && CONTROL_LINE_TYPES.has(type)) {
         controlLines += 1;
         continue;
       }
       if (entry.attachment !== undefined) {
+        // Still a controlLine for parseStats: even when claimed it never
+        // becomes a message of its own, it only decorates one.
         controlLines += 1;
+        const claimed = extractControlAttachment(entry.attachment);
+        if (claimed) {
+          if (lastUserMessage) {
+            // Trailing record: its message is already in the ring buffer, so
+            // decorate it in place. The running size estimate misses these few
+            // dozen bytes — bounded, and far below the budget's resolution.
+            lastUserMessage.attachments = [...(lastUserMessage.attachments ?? []), claimed];
+          } else {
+            pendingAttachments.push(claimed);
+          }
+        }
         continue;
       }
       if (entry.isMeta === true) {
@@ -721,35 +885,52 @@ async function digestHistoryFile(filePath: string): Promise<HistoryReadResult> {
           closeCurrent(); // plain user line always breaks merge, even if it yields no visible message
         }
 
+        // Claim whatever arrived before this line; anything left unclaimed at
+        // the next user line is an orphan and is dropped with it.
+        const claimedAttachments = pendingAttachments;
+        pendingAttachments = [];
+        // Carrier A first — it is the authoritative one for turns this app sent.
+        const attachments = [...extractContentAttachments(content), ...claimedAttachments];
+
         const raw = extractUserTextBlocks(content);
-        if (raw) {
-          const cleaned = stripSystemTags(raw);
-          const text = cleaned || extractCommandLabel(raw);
-          if (text) {
-            const capped = capText(text, HISTORY_USER_TEXT_CAP_CHARS);
-            const uuid =
-              typeof entry.uuid === 'string' && entry.uuid ? entry.uuid : `synthetic-${totalLines}`;
-            const userMsg: HistoryMessage = {
-              id: `${HISTORY_MESSAGE_ID_PREFIX}${uuid}`,
-              role: 'user',
-              blocks: [
-                {
-                  type: 'text',
-                  id: `${HISTORY_MESSAGE_ID_PREFIX}${uuid}:0`,
-                  text: capped.text,
-                  ...(capped.truncated ? { truncated: true } : {}),
-                },
-              ],
-            };
-            const ts = parseTimestampMs(entry.timestamp);
-            if (ts !== null) userMsg.timestamp = ts;
-            pushMessage(userMsg);
-          }
+        const text = raw ? stripSystemTags(raw) || extractCommandLabel(raw) : null;
+
+        // Emit when there is text OR an attachment. The attachment-only case
+        // (an image sent with no prose) previously digested to nothing at all,
+        // so a cold restart lost the entire turn rather than just its chip.
+        if (text || attachments.length > 0) {
+          const capped = text
+            ? capText(text, HISTORY_USER_TEXT_CAP_CHARS)
+            : { text: '', truncated: false };
+          const uuid =
+            typeof entry.uuid === 'string' && entry.uuid ? entry.uuid : `synthetic-${totalLines}`;
+          const userMsg: HistoryMessage = {
+            id: `${HISTORY_MESSAGE_ID_PREFIX}${uuid}`,
+            role: 'user',
+            blocks: text
+              ? [
+                  {
+                    type: 'text',
+                    id: `${HISTORY_MESSAGE_ID_PREFIX}${uuid}:0`,
+                    text: capped.text,
+                    ...(capped.truncated ? { truncated: true } : {}),
+                  },
+                ]
+              : [],
+            ...(attachments.length > 0 ? { attachments } : {}),
+          };
+          const ts = parseTimestampMs(entry.timestamp);
+          if (ts !== null) userMsg.timestamp = ts;
+          pushMessage(userMsg);
+          lastUserMessage = userMsg;
         }
         continue;
       }
 
       if (type === 'assistant') {
+        // An attachment record still unclaimed when the reply starts belongs
+        // to no user message we can name — orphan, dropped.
+        pendingAttachments = [];
         const rawContent = entry.message?.content;
         const items = Array.isArray(rawContent) ? rawContent : [];
         const msg = startOrContinueAssistant(entry);

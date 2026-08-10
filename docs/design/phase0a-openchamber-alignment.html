@@ -1007,6 +1007,10 @@ li { margin-bottom: 0.35rem; }
       （<code>QuestionCard.tsx:530-556</code>）——<b>2026-07-28 复核更正</b>：此处原写的「squircle 全小写按钮」
       是<strong>全局 Button 原语</strong>的特征、不是 Question 卡形态，归属说明见 §01 卡片说明。
     </div>
+    <p><b>2026-08-10 现场裁定修订</b>：上面「保留就地冻结」的口径收窄——<strong>Question</strong> 已决态不变，仍是
+      整张 QA 卡。<strong>Permission</strong> 已决态改判：不再保留整张 QA 卡，收敛为与工具调用行一致的紧凑单行
+      （<code>Allowed</code> / <code>Denied</code> + 描述，Denied 走 destructive 色），待决/等待态 Permission
+      与 Question 的已决态均不受影响。原裁定文字保留不改——它是 2026-07-30 的历史记录，现行口径以本注记为准。</p>
     <div class="src">openchamber: chat/QuestionCard.tsx:321-323 · chat/PermissionCard.tsx:121-123 · parts/ToolPart.tsx:1667-1730 &nbsp;|&nbsp; ai-client: shared/types/sessionHistory.ts:11-30 · stores/chatSessions.ts:236-237</div>
   </div>
 </section>

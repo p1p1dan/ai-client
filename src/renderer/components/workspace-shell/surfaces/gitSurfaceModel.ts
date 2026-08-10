@@ -130,7 +130,17 @@ export interface GitWorkdirSnapshot {
 
 export type GitWorkdirResolution =
   | { workdir: string }
-  | { reason: 'no-session' | 'no-path' | 'not-git' };
+  | {
+      reason: 'no-session' | 'no-path' | 'not-git';
+      /**
+       * The directory the decision was made against, when one was resolved at
+       * all. Rendered by the empty state: "Not a Git repository" without a
+       * path forced the field to infer WHICH directory was judged from
+       * unrelated evidence (an EPERM in a log). Absent for `no-session` and
+       * for a workspace that has no path to name.
+       */
+      judgedPath?: string;
+    };
 
 /**
  * Mirrors `useGitChangeCount.ts`'s activeSession -> activeWorkspace -> path
@@ -151,7 +161,7 @@ export function resolveGitWorkdir(snapshot: GitWorkdirSnapshot): GitWorkdirResol
   }
 
   if (workspace.gitEnabled !== true) {
-    return { reason: 'not-git' };
+    return { reason: 'not-git', judgedPath: workspace.path };
   }
 
   return { workdir: workspace.path };

@@ -25,12 +25,44 @@ export interface Viewport {
   height: number;
 }
 
-/** True when the drag payload carries OS files (as opposed to text/HTML). */
-export function hasFilePayload(types: readonly string[] | undefined | null): boolean {
-  if (!types) {
+/**
+ * Minimal shape of a `DataTransfer` this check needs, so tests can build a
+ * plain object literal instead of a real (jsdom-free) `DataTransfer`. A real
+ * `DataTransfer` satisfies this structurally — callers pass `e.dataTransfer`
+ * directly.
+ */
+export interface DragPayload {
+  types?: readonly string[] | null;
+  /** Only `kind` matters — `DataTransferItem.kind` is `'file' | 'string'`. */
+  items?: ArrayLike<{ kind: string }> | null;
+}
+
+/**
+ * True when the drag payload carries OS files (as opposed to text/HTML).
+ *
+ * `types` is the primary signal, but some non-Chromium-standard drag sources
+ * never set its `'Files'` flag (T-24 audit risk) and would otherwise be
+ * silently ignored (no `preventDefault`, so `drop` never even fires). `items`
+ * is the fallback: any item whose `kind === 'file'` is also a file payload.
+ * `items` (unlike the actual file data, e.g. `getAsFile()`) is readable from
+ * `dragover` onward per the HTML5 DnD spec, so this is safe to call there —
+ * not just from `drop`.
+ */
+export function hasFilePayload(payload: DragPayload | null | undefined): boolean {
+  if (!payload) {
     return false;
   }
-  return Array.from(types).includes('Files');
+  if (payload.types && Array.from(payload.types).includes('Files')) {
+    return true;
+  }
+  if (payload.items) {
+    for (const item of Array.from(payload.items)) {
+      if (item.kind === 'file') {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**

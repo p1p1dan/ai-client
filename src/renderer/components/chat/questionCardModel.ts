@@ -1,5 +1,6 @@
 import type { QuestionItem } from '@shared/types/runtimeEvents';
 import type { ChatBlock } from '@/stores/chatSessions';
+import type { ToolRowView } from './toolCard';
 
 /**
  * T-05 question/permission pure view model. `QuestionCard.tsx` (batch 3)
@@ -373,6 +374,32 @@ export function derivePermissionCardView(
     options: [],
     frozen: [],
     waiting: true,
+  };
+}
+
+/**
+ * Resolved-permission row view — same source data as `derivePermissionCardView`'s
+ * `resolved` branch, reshaped into a `ToolRowView` so `PermissionQaCard` can
+ * render one compact tool-row instead of the full QA shell once the decision
+ * is made (2026-08-10 ruling: only the decided state collapses; pending/
+ * waiting still renders the interactive QA card). Returns `null` while the
+ * permission is not yet resolved — callers keep using
+ * `derivePermissionCardView` for that state.
+ */
+export function derivePermissionRowView(
+  block: ChatBlock,
+  originLabel?: string | null
+): ToolRowView | null {
+  if (block.resolved !== true) return null;
+  const prompt = derivePermissionPrompt(block);
+  return {
+    key: block.id,
+    verb: block.allowed ? PERMISSION_ALLOWED : PERMISSION_DENIED,
+    arg: originLabel ? `${prompt} · ${originLabel}` : prompt,
+    argKind: 'prose',
+    running: false,
+    failed: block.allowed === false,
+    expandable: false,
   };
 }
 

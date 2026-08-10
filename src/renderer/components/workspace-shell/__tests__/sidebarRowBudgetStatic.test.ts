@@ -77,12 +77,19 @@ describe('sidebar session row width budget', () => {
   });
 
   it('sizes the age/actions swap to one fixed box so hovering cannot re-flow the row', () => {
-    // ~21px of relative age vs 40px of icon buttons: without a shared width the
-    // swap moves every other item on the row on every hover.
-    expect(CODE).toContain('className="w-10 shrink-0 text-right text-meta');
+    // ~21px of relative age vs 40px of icon buttons (60px on temp rows, which
+    // carry a third delete button): without a shared width the swap moves every
+    // other item on the row on every hover. Both boxes must widen together, so
+    // the width is one conditional expression pinned to appear exactly twice —
+    // once on the age span, once on the actions box.
     expect(CODE).toContain(
-      'className="hidden w-10 shrink-0 items-center justify-end group-hover:flex group-focus-within:flex"'
+      "'shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden',"
     );
+    expect(CODE).toContain(
+      "'hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex',"
+    );
+    const sharedWidthExpr = "onDeleteTemp ? 'w-[60px]' : 'w-10'";
+    expect(CODE.split(sharedWidthExpr).length - 1).toBe(2);
   });
 
   it('keeps the derivation of the numbers in the source', () => {

@@ -10,18 +10,34 @@ import {
 const RECT: DropZoneRect = { left: 100, right: 400, top: 50, bottom: 300 };
 
 describe('hasFilePayload', () => {
-  it('accepts an OS file drag', () => {
-    expect(hasFilePayload(['Files'])).toBe(true);
+  it('accepts an OS file drag via the types flag', () => {
+    expect(hasFilePayload({ types: ['Files'] })).toBe(true);
   });
 
   it('rejects text-only drags', () => {
-    expect(hasFilePayload(['text/plain', 'text/html'])).toBe(false);
+    expect(hasFilePayload({ types: ['text/plain', 'text/html'] })).toBe(false);
   });
 
-  it('rejects a missing dataTransfer', () => {
+  it('rejects a missing payload', () => {
     expect(hasFilePayload(undefined)).toBe(false);
     expect(hasFilePayload(null)).toBe(false);
-    expect(hasFilePayload([])).toBe(false);
+    expect(hasFilePayload({ types: [] })).toBe(false);
+  });
+
+  // T-24 audit risk: some non-Chromium-standard drag sources never set the
+  // `types` 'Files' flag, which made `hasFilePayload` return false and skip
+  // `preventDefault` — the drop was never even dispatched.
+  it('falls back to items when types omits the Files flag', () => {
+    expect(hasFilePayload({ types: ['text/plain'], items: [{ kind: 'file' }] })).toBe(true);
+  });
+
+  it('rejects items with no file-kind entry', () => {
+    expect(hasFilePayload({ types: ['text/plain'], items: [{ kind: 'string' }] })).toBe(false);
+  });
+
+  it('rejects when neither types nor items signal a file', () => {
+    expect(hasFilePayload({ types: [], items: [] })).toBe(false);
+    expect(hasFilePayload({ types: ['text/plain'], items: undefined })).toBe(false);
   });
 });
 

@@ -7,6 +7,11 @@ import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
 import { translate } from '@shared/i18n';
 import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
+import {
+  buildInitialThemeArg,
+  WINDOW_BACKGROUND_DARK,
+  WINDOW_BACKGROUND_LIGHT,
+} from '@shared/windowTheme';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { claudeRuntimeChecker } from '../services/cli/ClaudeRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
@@ -89,6 +94,8 @@ interface CreateMainWindowOptions {
   initializeWindow?: (window: BrowserWindow) => Promise<void> | void;
   partition?: string;
   replaceWindow?: BrowserWindow | null;
+  /** Resolved OS/theme-setting dark flag for the initial paint. Defaults to light (renderer's default theme). */
+  isDark?: boolean;
 }
 
 interface WindowReplacementController {
@@ -132,6 +139,10 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
   const isMac = process.platform === 'darwin';
   const isWindows = process.platform === 'win32';
 
+  // Defaults to light (the renderer's default theme, see settings store getInitialState).
+  const isDark = options.isDark ?? false;
+  const backgroundColor = isDark ? WINDOW_BACKGROUND_DARK : WINDOW_BACKGROUND_LIGHT;
+
   const win = new BrowserWindow({
     width: state.width,
     height: state.height,
@@ -148,6 +159,10 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
     // Windows 启用 thickFrame 以支持窗口边缘拖拽调整大小
     ...(isWindows && { thickFrame: true }),
     show: false,
+    // Matches the resolved theme's CSS --background so the window isn't a
+    // white flash before the renderer paints (does NOT change ready-to-show /
+    // did-finish-load / timeout show-timing below — see BUG-2026-07-29-no-window).
+    backgroundColor,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -155,6 +170,9 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
       webSecurity: true,
       allowRunningInsecureContent: false,
       partition: options.partition,
+      // Lets preload strip the hardcoded `dark` class from <html> before
+      // first paint when the resolved theme is light (see index.html).
+      additionalArguments: [buildInitialThemeArg(isDark)],
       preload: join(moduleDir, '../preload/index.cjs'),
     },
   });

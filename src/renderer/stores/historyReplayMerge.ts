@@ -69,7 +69,9 @@ export interface ReplayMergeMessage {
   id: string;
   role: string;
   blocks: readonly { type: string; text?: string }[];
-  /** Runtime-only attachment metadata; history rows can never carry it. */
+  /** Attachment metadata; carried by runtime messages and, since the C-06
+   * attachments widening, by history rows too. Fold checks only read it off
+   * runtime copies. */
   attachments?: readonly unknown[];
 }
 

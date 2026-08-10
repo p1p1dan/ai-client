@@ -1072,7 +1072,13 @@ describe('composerPlaceholder', () => {
     ).toBe('Add more optional details…');
   });
 
-  it('T-19: sending still outranks a non-empty queue', () => {
+  // Stop-hang fix (2026-08-10) — this REPLACES "T-19: sending still outranks
+  // a non-empty queue". The placeholder describes what typing HERE will do,
+  // and while a turn is in flight with a non-empty queue, typing enqueues.
+  // "Sending to Agent Host…" told the user their follow-up was on its way to
+  // the Host when it was actually sitting in the queue — the copy that made a
+  // wedged send look like a working one during the Stop investigation.
+  it('a non-empty queue outranks the sending copy — typing enqueues, it does not send', () => {
     expect(
       composerPlaceholder({
         mode: 'session',
@@ -1084,7 +1090,65 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         queuedCount: 1,
       })
+    ).toBe('Queued 1 — type another follow-up…');
+  });
+
+  // The create-session handshake copy is the one "sending" variant with its
+  // own reason to exist (a slow FIRST message), but it makes the same promise
+  // about the draft in hand — so a non-empty queue outranks it too.
+  it('a non-empty queue outranks the create-session handshake copy as well', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        queuedCount: 2,
+        isCreatingSession: true,
+      })
+    ).toBe('Queued 2 — type another follow-up…');
+  });
+
+  // The m9 workspace gate wins over the reorder: with no workspace the queue
+  // cannot release at all, so the queue copy must stay suppressed and the
+  // sending copy stands (this is the ONLY case where `sending` still wins
+  // over a non-empty queue).
+  it('keeps the sending copy when a non-empty queue has lost its workspace', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: false,
+        attachmentCount: 0,
+        queuedCount: 1,
+      })
     ).toBe('Sending to Agent Host…');
+  });
+
+  // Priority is a total order, not a pile of pairwise rules: pendingQuestion
+  // still outranks the queue (existing case above), and the queue now
+  // outranks sending — so all three at once must resolve to the question copy
+  // and not accidentally re-expose the sending branch.
+  it('pendingQuestion still wins when a queue and an in-flight send are both present', () => {
+    expect(
+      composerPlaceholder({
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+        pendingQuestion: true,
+        queuedCount: 3,
+      })
+    ).toBe('Add more optional details…');
   });
 
   // m9 fix: a queue bucket can outlive its workspace (only pruned when the

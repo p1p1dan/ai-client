@@ -7,6 +7,7 @@ import {
   isHostErrorForSend,
   isSessionCompletedForSend,
   isSessionFailedForSend,
+  isSessionStoppedForSend,
   isUserEchoForSend,
   MAX_PENDING_HOST_ERRORS,
   pushPendingHostError,
@@ -329,6 +330,52 @@ describe('isSessionCompletedForSend (S4, round-2 iteration-3 review)', () => {
 
   it('is false for a different event type on the same session (e.g. session.stopped) — chatSessions.ts collapses both to the same idle status, but this must not', () => {
     expect(isSessionCompletedForSend(event('session.stopped'), 'session-live')).toBe(false);
+  });
+});
+
+/**
+ * Stop-hang fix (2026-08-10): the wire-level counterpart of
+ * `isSessionCompletedForSend`, and the reason both exist. `chatSessions.ts`
+ * reduces `session.stopped` to status `'idle'` — the SAME value a real
+ * completion produces — so `runSend`'s wait predicate, which watches derived
+ * store state, could not see a user Stop at all: it kept polling for
+ * assistant progress that a stopped turn will never produce and only gave up
+ * at the 45s abandon budget, which is what made the Stop button look dead.
+ */
+describe('isSessionStoppedForSend (2026-08-10 stop-hang fix)', () => {
+  it('is true for a session.stopped event scoped to this session', () => {
+    expect(isSessionStoppedForSend(event('session.stopped'), 'session-live')).toBe(true);
+  });
+
+  it("is false for a DIFFERENT session's session.stopped — a background Stop must not end this attempt's wait", () => {
+    expect(
+      isSessionStoppedForSend(
+        { type: 'session.stopped', sessionId: 'session-other' },
+        'session-live'
+      )
+    ).toBe(false);
+  });
+
+  it('is false for session.completed / session.failed on the same session — each terminal has exactly one predicate', () => {
+    expect(isSessionStoppedForSend(event('session.completed'), 'session-live')).toBe(false);
+    expect(
+      isSessionStoppedForSend(event('session.failed', { error: 'boom' }), 'session-live')
+    ).toBe(false);
+  });
+
+  it('does not fire on a plain session.status idle (the collapsed status is NOT the stop signal)', () => {
+    expect(
+      isSessionStoppedForSend(event('session.status', { status: 'idle' }), 'session-live')
+    ).toBe(false);
+  });
+
+  it('stays disjoint from isSessionCompletedForSend over both terminal events', () => {
+    for (const type of ['session.stopped', 'session.completed']) {
+      expect(
+        isSessionStoppedForSend(event(type), 'session-live') &&
+          isSessionCompletedForSend(event(type), 'session-live')
+      ).toBe(false);
+    }
   });
 });
 

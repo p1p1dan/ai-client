@@ -189,7 +189,7 @@ export interface SessionListHistoryCommand extends AgentHostCommandBase {
 | JSONL 行 | 处理 | 计数 |
 |---|---|---|
 | `type: mode / permission-mode / last-prompt / file-history-snapshot / queue-operation / ai-title / file-history-delta / attribution-snapshot / summary` | 跳过（已知控制记录；`ai-title` 在 listHistory 路径另作标题源） | controlLines |
-| 含 `attachment` 字段 | 跳过 | controlLines |
+| 含 `attachment` 字段 | **2026-08-10 修订**：仍跳过、仍计 controlLines，但先过一道用户附件形状闸（`kind: image` / `text` 或带 media type）——命中者暂存为「待认领附件」，由相邻 `type: user` 行认领挂到 `HistoryMessage.attachments`（元数据降级 chip，不读字节不出缩略图）；认领不到即丢弃，绝不因附件问题丢整条消息 | controlLines |
 | `isMeta: true` | 跳过 | controlLines |
 | `isSidechain: true` | 跳过 | controlLines |
 | `type: system` | 跳过（MVP） | controlLines |
@@ -199,6 +199,8 @@ export interface SessionListHistoryCommand extends AgentHostCommandBase {
 | `type: assistant`，content `text` / `thinking` / `tool_use` | → assistant blocks；thinking 仅收非空文本（`signature` 丢弃） | 正常 |
 | 压缩续接（"This session is being continued…" user 行） | 按普通 user 文本重放 | 正常 |
 | 未知 `type` / JSON.parse 失败 | 跳过 | **badLines** |
+
+> **2026-08-10 变更（带图消息冷重启后 chip 丢失）**：冷重启无内存副本，消息全靠本管线重建，而管线结构性丢弃附件——9a6cc01 的 M1「替换折叠」只救得了同进程 resume。修法为「元数据降级 chip」（`HistoryMessage.attachments?: HistoryAttachment[]`，只有 kind/mediaType/name，无 data、不生成位图缩略图）。真实样本核查（本机全量 jsonl）改写了原设想的载体：**本应用自己发的附件不走 `attachment` 控制行**，而是 `claudeRuntime.buildPromptWithAttachments` 写进 user 行自身 `message.content` 的 `image` / `document` content block（载体 A，真正修好本 bug）；`attachment` 控制行实测 22 种子类型（task_reminder / skill_listing / file / directory / hook_success …）无一携带用户附件元数据，故载体 B 的形状闸对现网数据恒不命中，仅为兜底。另：user 行**只有附件没有文本**时现在也产出消息（blocks 为空 + attachments），此前整条 turn 直接消失。
 
 ### 5.3 合并与配对
 

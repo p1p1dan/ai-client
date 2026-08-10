@@ -1,5 +1,7 @@
+import { canonicalPathKey } from '@shared/utils/path';
 import { describe, expect, it } from 'vitest';
 import type { Repository } from '@/App/constants';
+import { shouldShowBranchSelect } from '@/components/chat/composerTarget';
 import {
   deriveChatWorkspaceTree,
   resolvePreferredWorkspaceId,
@@ -7,6 +9,7 @@ import {
   workspaceTreeSignature,
 } from '../deriveChatWorkspaceTree';
 import { resolveNewSessionWorkspaceId } from '../sidebarTree';
+import { resolveGitWorkdir } from '../surfaces/gitSurfaceModel';
 
 describe('deriveChatWorkspaceTree', () => {
   const repo: Repository = {
@@ -81,7 +84,11 @@ describe('deriveChatWorkspaceTree', () => {
     });
   });
 
-  it('prefers active worktree path for preferred workspace', () => {
+  // The former first tier, `activeWorktreePath`, is gone: it was fed from
+  // `useWorktreeStore.currentWorktree`, which had no writer anywhere in the
+  // app, so the tier was structurally unreachable. `selectedRepoPath` is now
+  // the only preference ahead of "first workspace".
+  it('prefers the selected repo path, else the first workspace', () => {
     const workspaces = [
       {
         id: workspaceIdFor('main', 'D:/repo'),
@@ -99,12 +106,12 @@ describe('deriveChatWorkspaceTree', () => {
       },
     ];
 
-    expect(
-      resolvePreferredWorkspaceId(workspaces, {
-        selectedRepoPath: 'D:/repo',
-        activeWorktreePath: 'D:/repo-wt',
-      })
-    ).toBe(workspaceIdFor('worktree', 'D:/repo-wt'));
+    expect(resolvePreferredWorkspaceId(workspaces, { selectedRepoPath: 'D:/repo-wt' })).toBe(
+      workspaceIdFor('worktree', 'D:/repo-wt')
+    );
+    expect(resolvePreferredWorkspaceId(workspaces, { selectedRepoPath: null })).toBe(
+      workspaceIdFor('main', 'D:/repo')
+    );
   });
 
   it('signature changes when only a workspace branch changes (T-26 review blocker)', () => {
@@ -491,7 +498,6 @@ describe('deriveChatWorkspaceTree', () => {
         expect(
           resolvePreferredWorkspaceId(workspaces, {
             selectedRepoPath: aaaPath,
-            activeWorktreePath: null,
           })
         ).toBe(workspaceIdFor('main', aaaPath));
       }
@@ -511,14 +517,12 @@ describe('deriveChatWorkspaceTree', () => {
       expect(
         resolvePreferredWorkspaceId(workspaces, {
           selectedRepoPath: `${aaaPath}/`,
-          activeWorktreePath: null,
         })
       ).toBe(workspaceIdFor('main', aaaPath));
 
       expect(
         resolvePreferredWorkspaceId(workspaces, {
           selectedRepoPath: aaaPath.toUpperCase(),
-          activeWorktreePath: null,
         })
       ).toBe(workspaceIdFor('main', aaaPath));
     });
@@ -613,5 +617,161 @@ describe('branch resolution on real Windows path shapes (M4)', () => {
       tempItems: [],
     });
     expect(diagnostics).toEqual([]);
+  });
+});
+
+/**
+ * The git surface reported "Not a Git repository" for three different
+ * situations because `gitEnabled` was `worktree.list().length > 0`:
+ *
+ * 1. a genuinely non-git folder (correct);
+ * 2. a REAL repository whose list came back empty with no error at all (the
+ *    E:\C1Algorithm field case);
+ * 3. every temp workspace, which main `git init`s at creation but which never
+ *    appears in any registered repo's worktree list.
+ *
+ * `gitRepoByPath` (main's `folder:checkType`) is unioned in, so 2 and 3 stop
+ * being false negatives while 1 still reports honestly.
+ */
+describe('gitEnabled is a fact, not a worktree-list side effect', () => {
+  const repo: Repository = {
+    id: 'repo-c1',
+    name: 'C1Algorithm',
+    path: 'E:\\C1Algorithm',
+    kind: 'local',
+  };
+  const gitEnabledOf = (workspaces: { path: string; gitEnabled?: boolean }[], path: string) =>
+    workspaces.find((ws) => ws.path === path)?.gitEnabled;
+
+  it('a real repo whose worktree list came back empty is still git-enabled', () => {
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [repo],
+      worktreesByRepoPath: { [repo.path]: [] },
+      tempItems: [],
+      gitRepoByPath: { 'e:/c1algorithm': true },
+    });
+
+    expect(gitEnabledOf(workspaces, repo.path)).toBe(true);
+  });
+
+  it('a genuinely non-git folder stays false', () => {
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [repo],
+      worktreesByRepoPath: { [repo.path]: [] },
+      tempItems: [],
+      gitRepoByPath: { 'e:/c1algorithm': false },
+    });
+
+    expect(gitEnabledOf(workspaces, repo.path)).toBe(false);
+  });
+
+  it('an unanswered probe never turns a listed repo off (union, not replacement)', () => {
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [repo],
+      worktreesByRepoPath: {
+        [repo.path]: [
+          {
+            path: 'E:\\C1Algorithm',
+            head: 'abc',
+            branch: 'main',
+            isMainWorktree: true,
+            isLocked: false,
+            prunable: false,
+          },
+        ],
+      },
+      tempItems: [],
+      gitRepoByPath: {},
+    });
+
+    expect(gitEnabledOf(workspaces, 'E:\\C1Algorithm')).toBe(true);
+  });
+
+  it('matches the probe answer through separator / case / trailing-slash drift', () => {
+    // The probe map is keyed by canonicalPathKey — the same key the rest of
+    // this module uses for "is this the same directory". A repo registered
+    // with backslashes must not miss an answer stored from a forward-slash
+    // spelling of the same folder.
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [repo],
+      worktreesByRepoPath: { [repo.path]: [] },
+      tempItems: [],
+      gitRepoByPath: { [canonicalPathKey('E:/C1Algorithm/')]: true },
+    });
+
+    expect(gitEnabledOf(workspaces, repo.path)).toBe(true);
+  });
+
+  const tempItem = {
+    id: 'tmp-1',
+    path: 'D:/tmp/session-a',
+    folderName: 'session-a',
+    title: 'Scratch',
+    createdAt: 1,
+  };
+
+  it('a temp workspace is git-enabled once main confirms it (it is git init-ed at creation)', () => {
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [],
+      worktreesByRepoPath: {},
+      tempItems: [tempItem],
+      gitRepoByPath: { [canonicalPathKey(tempItem.path)]: true },
+    });
+
+    expect(workspaces[0]).toMatchObject({ kind: 'temp', gitEnabled: true });
+    expect(
+      resolveGitWorkdir({
+        activeSessionId: 's1',
+        sessions: [{ id: 's1', workspaceId: workspaces[0].id }],
+        workspaces,
+      })
+    ).toEqual({ workdir: tempItem.path });
+  });
+
+  it('a temp workspace leaves gitEnabled absent while the probe is unanswered', () => {
+    // Not `false`: consumers read `!== true` as "not git", so writing a hard
+    // false during the in-flight window would re-create the very misreport
+    // this fixes, just briefly.
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [],
+      worktreesByRepoPath: {},
+      tempItems: [tempItem],
+    });
+
+    expect(workspaces[0].kind).toBe('temp');
+    expect('gitEnabled' in workspaces[0]).toBe(false);
+  });
+
+  it('a git-enabled temp workspace still shows NO Composer branch dropdown', () => {
+    // The one behaviour this batch must not change: `shouldShowBranchSelect`
+    // gates on kind before it ever looks at gitEnabled, so temp keeps its
+    // current Composer UX and branch switching is not introduced here.
+    const { workspaces } = deriveChatWorkspaceTree({
+      repositories: [],
+      worktreesByRepoPath: {},
+      tempItems: [tempItem],
+      gitRepoByPath: { [canonicalPathKey(tempItem.path)]: true },
+    });
+
+    expect(workspaces[0].gitEnabled).toBe(true);
+    expect(shouldShowBranchSelect(workspaces[0])).toBe(false);
+  });
+
+  it('a late probe answer changes the tree signature (the sync bridge must re-write)', () => {
+    const unknown = deriveChatWorkspaceTree({
+      repositories: [],
+      worktreesByRepoPath: {},
+      tempItems: [tempItem],
+    });
+    const answered = deriveChatWorkspaceTree({
+      repositories: [],
+      worktreesByRepoPath: {},
+      tempItems: [tempItem],
+      gitRepoByPath: { [canonicalPathKey(tempItem.path)]: true },
+    });
+
+    expect(workspaceTreeSignature(unknown.projects, unknown.workspaces, null)).not.toBe(
+      workspaceTreeSignature(answered.projects, answered.workspaces, null)
+    );
   });
 });
