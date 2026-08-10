@@ -28,7 +28,7 @@
   历史逐批复核记录（51 文件 590 例起全程只增）见 history 归档。
 - **Next Target**：
   1. **T-10 / T-11 真机点验（用户线，当前主项）**：Windows 出包（[T-10 清单「出发前必做」M1~M4](../../../plans/t10-packaged-gui-checklist.md)）
-     → 测试机回归（[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4，重点 M4 分支显示取证）
+     → 测试机回归（**先做[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验，包必须是 `0.4.0-test.3`**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
      → 加密机现场 T-11 六项 → CP2 / CP5。
   2. **开发线下一步待用户裁定**，候选四路（不互斥）：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；

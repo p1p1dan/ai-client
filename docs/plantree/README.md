@@ -25,7 +25,7 @@
 |---|---|---|
 | `docs/plans/2026-07-23-openchamber-chat-refactor-ard.md` | **架构权威** | 目标结构、决策立论；改架构先改它 |
 | `docs/plans/2026-07-23-openchamber-chat-refactor-execution-plan.md` | 任务定义 | C-xx/T-xx 验收标准、协作规则、**测试凭证约定（§4）** |
-| `docs/plans/openchamber-chat-refactor-ledger.md` | 决策 + 里程碑档案 | 已拍板决策 **D1~D27（含历史空号 D4/D5/D7/D13，以总台账决策表为准）**、检查点（CP-x）、Phase 总览；append-only |
+| `docs/plans/openchamber-chat-refactor-ledger.md` | 决策 + 里程碑档案 | 已拍板决策 **D1~D28（含历史空号 D4/D5/D7/D13，以总台账决策表为准）**、检查点（CP-x）、Phase 总览；append-only |
 | `docs/plans/ledger-claude-mainline.md` | 过程记录档案 | C-xx/T-xx 逐任务证据与提交 hash；append-only |
 | `docs/plans/ledger-team-track.md` | 过程记录档案 | T-xx 早期证据；2026-07-24 起轨道移交主线 |
 | `docs/plans/`（其余 2025/2026 早期文档） | 历史计划 | ai-sdk-migration / quick-terminal / status-line 等，与本计划无关 |
