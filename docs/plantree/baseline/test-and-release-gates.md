@@ -65,5 +65,11 @@ node scripts/dev.js
 冲掉 `electron-builder install-app-deps` 重建好的原生模块（见下方复原两步）。
 覆盖面缺口（打包版 / `pnpm preview` 不经 dev.js，仍走本机登录）见计划树 open-q **#14**。
 
-首启无仓库时用 `node scripts/dev.js --open-path=<仓库绝对路径>` 注册仓库（OpenChamber 壳内无添加仓库 UI）。
-Beta 壳入口：Settings → Appearance → OpenChamber Workspace Shell（`SKIP_ONBOARDING_GATE=true` 时强制开启）。
+**Linux 机每次 `pnpm install` 后必须两步复原**（否则 app 起不来、T-07 集成 6 例红）：
+① `npx electron-builder install-app-deps`（重建 sqlite3 等 Electron ABI；无需代理，Electron 头文件缓存在 `~/.electron-gyp/`）；
+② 把 `src/agent-host/node_modules/@cometix/claude-code/vendor/ripgrep/x64-linux/rg` 拷进
+`node_modules/@vscode/ripgrep/bin/rg`（postinstall 被 GitHub 403 挡）。下载类脚本另需 `NODE_USE_ENV_PROXY=1`。
+
+首启无仓库可用 `node scripts/dev.js --open-path=<仓库绝对路径>` 注册仓库；T-24 后新壳已有完整添加通路
+（LeftNav 入口 + Composer 目标栏 + 整壳拖放），`--open-path` 不再是唯一通路。
+新壳开关：Settings → Appearance → OpenChamber Workspace Shell（T-16 后为真开关、默认开启，关闭立即回旧壳）。
