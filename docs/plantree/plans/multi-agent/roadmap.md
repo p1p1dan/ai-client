@@ -59,7 +59,8 @@
 |---|---|---|
 | **0** 类型与断言骨架 | ✅ **已落地 `0314216`** | `agentWire.ts` 叶子模块 + 协议增量 #1–#19 + 19 例 AST 静态扫描 |
 | **1** 绑定回流链 | ✅ **已落地 `0314216`** | 正向链 + 早退守卫放宽 + 唯一物化点 + 侧栏 chip；**Host 现会显式拒绝跑不了的 agent** |
-| **2** Codex 客户端骨架 | 下一件 | JSON-RPC + 单一 pending 表 + **单一 status mapper** + 隔离 `CODEX_HOME` |
+| **2a** Codex 客户端骨架 | **设计收口，待施工** | JSON-RPC + 单一 pending 表 + **单一 status mapper** + 隔离 `CODEX_HOME` + Node 入口解析。双轨合流仲裁档 [2026-08-09-s3-slice2-arbitration](../../../plans/2026-08-09-s3-slice2-arbitration.md) |
+| **2b** 打包链 | 待 2a | **因用户裁定「Codex 随 Agent Host 打包」而新增**：`build-agent-host.mjs` 整条（preflight/external/prune/verifier）+ electron-builder + CI。**包体 141MB→约 480MB（3.4×）**，与 open-q #1 冲突，落之前须向用户交待 |
 | **3** 提问桥 | 待 2 | 用 S2-a 抓到的 4 条真实报文做夹具回放；**`isSecret` 要补掩码**（§0.5-②） |
 | **4** 权限投影 | 待 3 | 同批卡文件，不与 3 并行 |
 | **5** 历史 | 待 1+2 | 先档 A（`history_unsupported` 显式降级）再档 C |
@@ -68,6 +69,12 @@
 **切片 0/1 的双轨对抗复核（Opus + Codex 双盲）1 blocker + 5 major + 2 minor 全闭环**，
 两轨互补显著——blocker 与 registerSession 缺口**仅 Codex 见**，typecheck 盲区与自报身份零覆盖**仅 Opus 见**，
 静态扫描形同虚设**双轨同判**。详见[主线台账](../../../plans/ledger-claude-mainline.md)。
+
+**切片 2 双轨合流已收口（2026-08-09）**——Opus + Codex 双盲同题，独立收敛 6 条（CODEX_HOME 按字面「隔离」不可实现 ·
+`networkAccess:false` 我方下发不了 · 验收句按现有类型字面不成立 · pending「清表未回帧」是最危险失效 ·
+禁止回落原生二进制 · flag env 本就全量继承），分歧 3 处已裁，单轨独有 12 条全部采纳。
+**两条用户裁定**：Codex 随包（体积代价已实测登记）· 授权 transcript→仓库夹具。
+仲裁与施工契约见 [arbitration 档](../../../plans/2026-08-09-s3-slice2-arbitration.md)。
 
 **本片新增第四道门 `pnpm typecheck:agent-host`**：根 `tsconfig.json` 的 `exclude` 含 `src/agent-host/**`，
 此前该目录**零类型检查**（实测根门编译 0 个文件）；切片 2 要在那里写全新的 `codexRuntime`，
