@@ -524,3 +524,94 @@ describe('deriveChatWorkspaceTree', () => {
     });
   });
 });
+
+describe('branch resolution on real Windows path shapes (M4)', () => {
+  // Every pre-existing case in this file writes BOTH sides with forward slashes.
+  // On a real Windows machine they differ: `repo.path` comes from the folder
+  // picker (backslashes) while git prints forward slashes. That mixed shape —
+  // the only one that actually occurs — had zero coverage, which is part of why
+  // M4 could not be reproduced here.
+  const winRepo: Repository = {
+    id: 'repo-win',
+    name: 'demo',
+    path: 'D:\\Code\\demo',
+    kind: 'local',
+  };
+  const wt = (path: string, branch: string | null, isMainWorktree: boolean) => ({
+    path,
+    head: 'abc',
+    branch,
+    isMainWorktree,
+    isLocked: false,
+    prunable: false,
+  });
+
+  it('resolves the branch when the repo path and git disagree on separators', () => {
+    const { workspaces, diagnostics } = deriveChatWorkspaceTree({
+      repositories: [winRepo],
+      worktreesByRepoPath: {
+        [winRepo.path]: [wt('D:/Code/demo', 'main', true), wt('D:/Code/demo-wt', 'feat/x', false)],
+      },
+      tempItems: [],
+    });
+
+    expect(workspaces.find((w) => w.kind === 'main')?.branch).toBe('main');
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('reports branch-unresolved with both keys when the repo is a subdirectory', () => {
+    // The registered folder is inside the repo, so it is not a worktree entry
+    // and no branch can be read. This is by design, but it used to be silent —
+    // and silent is why the round could only say "still blank".
+    const sub: Repository = { ...winRepo, path: 'D:\\Code\\demo\\packages\\app' };
+    const { diagnostics } = deriveChatWorkspaceTree({
+      repositories: [sub],
+      worktreesByRepoPath: { [sub.path]: [wt('D:/Code/demo', 'main', true)] },
+      tempItems: [],
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        kind: 'branch-unresolved',
+        repoPath: 'D:\\Code\\demo\\packages\\app',
+        repoKey: 'd:/code/demo/packages/app',
+        mainWorktreePath: 'D:/Code/demo',
+        mainWorktreeKey: 'd:/code/demo',
+        listedKeys: ['d:/code/demo'],
+      },
+    ]);
+  });
+
+  it('separates "never queried" from "queried and empty"', () => {
+    // `?? []` used to make these identical downstream, so a failed query and a
+    // non-git folder produced the same UI and the same (absent) evidence.
+    const missing = deriveChatWorkspaceTree({
+      repositories: [winRepo],
+      worktreesByRepoPath: {},
+      tempItems: [],
+    });
+    const empty = deriveChatWorkspaceTree({
+      repositories: [winRepo],
+      worktreesByRepoPath: { [winRepo.path]: [] },
+      tempItems: [],
+    });
+
+    expect(missing.diagnostics).toEqual([
+      { kind: 'worktrees-absent', repoPath: winRepo.path, neverQueried: true },
+    ]);
+    expect(empty.diagnostics).toEqual([
+      { kind: 'worktrees-absent', repoPath: winRepo.path, neverQueried: false },
+    ]);
+  });
+
+  it('stays silent on a healthy tree', () => {
+    // Falsifies a diagnostic that fires on every render: noise would be worse
+    // than the silence it replaces.
+    const { diagnostics } = deriveChatWorkspaceTree({
+      repositories: [winRepo],
+      worktreesByRepoPath: { [winRepo.path]: [wt('D:/Code/demo', 'main', true)] },
+      tempItems: [],
+    });
+    expect(diagnostics).toEqual([]);
+  });
+});

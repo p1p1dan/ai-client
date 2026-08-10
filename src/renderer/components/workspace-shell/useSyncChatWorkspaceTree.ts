@@ -278,7 +278,20 @@ export function useSyncChatWorkspaceTree({
     [effectiveRepos]
   );
 
-  const { worktreesMap } = useWorktreeListMultiple(localRepoPaths);
+  const { worktreesMap, errorsMap } = useWorktreeListMultiple(localRepoPaths);
+
+  // M4 (2026-08-07): the sidebar showed no branch chip on a test machine and the
+  // round could not say why, because nothing on this path is observable — the
+  // legacy shell renders worktree errors as text (TreeSidebar), this shell never
+  // read errorsMap at all, and deriveChatWorkspaceTree's `?? []` flattens "query
+  // failed" into "no worktrees". Both halves are surfaced here so the next round
+  // reports a cause instead of a symptom. console.error rather than warn: the
+  // renderer logger pins the default level at 'error', so a warn is discarded.
+  useEffect(() => {
+    for (const [repoPath, error] of Object.entries(errorsMap)) {
+      if (error) console.error('[workspace-tree] worktree query failed', { repoPath, error });
+    }
+  }, [errorsMap]);
 
   const tree = useMemo(() => {
     const derived = deriveChatWorkspaceTree({
@@ -299,8 +312,18 @@ export function useSyncChatWorkspaceTree({
       return derived;
     }
     const name = effectiveRepos[0]?.name ?? fallbackPath.split(/[/\\]/).pop() ?? 'Workspace';
-    return seedFallbackWorkspace(fallbackPath, name);
+    return { ...seedFallbackWorkspace(fallbackPath, name), diagnostics: derived.diagnostics };
   }, [effectiveRepos, worktreesMap, tempItems, selectedRepoPath, activeWorktreePath]);
+
+  // `branch-unresolved` is the one that would have closed M4 on the day it was
+  // reported: it prints both canonical keys, so "the repo path and git's own
+  // path are not the same identity" (mapped drive, junction, or a registered
+  // subdirectory) is readable straight from the console instead of inferred.
+  useEffect(() => {
+    for (const d of tree.diagnostics) {
+      console.error('[workspace-tree]', d.kind, d);
+    }
+  }, [tree.diagnostics]);
 
   const preferredWorkspaceId = useMemo(
     () =>

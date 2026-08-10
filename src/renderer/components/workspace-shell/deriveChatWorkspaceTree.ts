@@ -49,9 +49,46 @@ export interface DeriveChatWorkspaceTreeInput {
   tempItems: TempWorkspaceItem[];
 }
 
+/**
+ * Why a row ended up without a branch chip.
+ *
+ * M4 (2026-08-07 test machine: sidebar shows no branch) cost a whole test round
+ * because this function could reach "no chip" down several paths and left no
+ * trace of which one. `worktreesByRepoPath[path] ?? []` in particular collapses
+ * four different situations — never queried, query failed, not a git repo, and
+ * genuinely empty — into one indistinguishable empty array, so the round could
+ * only report "still blank".
+ *
+ * These are returned rather than logged so the function stays pure and each
+ * reason is unit-testable; the sync hook does the logging.
+ */
+export type WorkspaceTreeDiagnostic =
+  | {
+      kind: 'worktrees-absent';
+      repoPath: string;
+      /** `true` = key missing entirely (never queried / query failed); `false` = queried, empty. */
+      neverQueried: boolean;
+    }
+  | {
+      /**
+       * The repo path is not itself a worktree entry, so no branch could be
+       * read. Both canonical keys are carried because the usual cause is that
+       * they differ for a reason the user can see (a mapped network drive or a
+       * junction that git resolves, or a registered subdirectory of the repo).
+       */
+      kind: 'branch-unresolved';
+      repoPath: string;
+      repoKey: string;
+      mainWorktreePath: string;
+      mainWorktreeKey: string;
+      listedKeys: string[];
+    };
+
 export interface DeriveChatWorkspaceTreeResult {
   projects: ChatProject[];
   workspaces: ChatWorkspace[];
+  /** Empty on a healthy tree. See {@link WorkspaceTreeDiagnostic}. */
+  diagnostics: WorkspaceTreeDiagnostic[];
 }
 
 /**
@@ -66,6 +103,7 @@ export function deriveChatWorkspaceTree(
 ): DeriveChatWorkspaceTreeResult {
   const projects: ChatProject[] = [];
   const workspaces: ChatWorkspace[] = [];
+  const diagnostics: WorkspaceTreeDiagnostic[] = [];
   const seenWorkspaceIds = new Set<string>();
 
   const pushWorkspace = (workspace: ChatWorkspace) => {
@@ -85,7 +123,15 @@ export function deriveChatWorkspaceTree(
     projects.push({ id: projectId, name: repo.name });
 
     const isRemote = repo.kind === 'remote';
-    const listed = input.worktreesByRepoPath[repo.path] ?? [];
+    const listedOrMissing = input.worktreesByRepoPath[repo.path];
+    const listed = listedOrMissing ?? [];
+    if (!isRemote && listed.length === 0) {
+      diagnostics.push({
+        kind: 'worktrees-absent',
+        repoPath: repo.path,
+        neverQueried: listedOrMissing === undefined,
+      });
+    }
 
     const mainWt = listed.find((wt) => wt.isMainWorktree);
 
@@ -109,6 +155,16 @@ export function deriveChatWorkspaceTree(
     if (!isRemote && mainWt && canonicalPathKey(mainWt.path) !== canonicalPathKey(repo.path)) {
       const selfWt = listed.find((wt) => canonicalPathKey(wt.path) === canonicalPathKey(repo.path));
       const selfBranch = workspaceBranch(selfWt);
+      if (!selfBranch) {
+        diagnostics.push({
+          kind: 'branch-unresolved',
+          repoPath: repo.path,
+          repoKey: canonicalPathKey(repo.path),
+          mainWorktreePath: mainWt.path,
+          mainWorktreeKey: canonicalPathKey(mainWt.path),
+          listedKeys: listed.map((wt) => canonicalPathKey(wt.path)),
+        });
+      }
       pushWorkspace({
         id: workspaceIdFor('main', repo.path),
         projectId,
@@ -180,7 +236,7 @@ export function deriveChatWorkspaceTree(
     }
   }
 
-  return { projects, workspaces };
+  return { projects, workspaces, diagnostics };
 }
 
 /**
