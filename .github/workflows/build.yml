@@ -143,6 +143,29 @@ jobs:
       - name: Verify packaged agent-host (structure)
         run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --skip-smoke
 
+      # Without these, a workflow_dispatch run builds a Windows package and then
+      # throws it away — the only way to obtain a test build was a Windows machine.
+      # Tag runs also publish a draft release; these artifacts are the fallback.
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v5
+        with:
+          name: windows-installers
+          path: dist/*.exe
+          retention-days: 14
+          if-no-files-found: error
+
+      # Directory build: the encrypted-machine test plan requires win-unpacked
+      # (portable re-extracts to a temp dir, so the bundled node.exe path drifts).
+      # Only on manual runs — tag runs get the installers from the draft release.
+      - name: Upload Windows unpacked directory
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v5
+        with:
+          name: windows-unpacked
+          path: dist/win-unpacked/**
+          retention-days: 7
+          if-no-files-found: error
+
   build-linux:
     needs: build-app
     runs-on: ubuntu-latest
@@ -207,6 +230,17 @@ jobs:
 
       - name: Verify packaged agent-host (structure)
         run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --skip-smoke
+
+      - name: Upload Linux packages
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux-packages
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 7
+          if-no-files-found: error
 
   build-remote-runtime-linux:
     strategy:
