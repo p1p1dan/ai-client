@@ -559,18 +559,30 @@ describe('PendingServerRequestTable — views', () => {
   });
 });
 
-describe('registration keys are exactly the observed request kinds', () => {
-  it('exposes no method beyond the three observed plus the contract-only permissions one', () => {
-    // Falsifies adding a guessed method name: a guess never matches real traffic
-    // and cannot be falsified on this machine, so the list stays pinned.
+describe('registration keys are exactly the attested request kinds', () => {
+  it('exposes no method beyond the ones a real contract declares', () => {
+    // Falsifies adding a guessed method name. The elicitation entry was held
+    // back through slice 2a for exactly that reason and only landed once the
+    // generated contract spelled it; `codexWireContract.test.ts` checks each of
+    // these against that snapshot, so this list stays a deliberate set rather
+    // than whatever accumulated.
     expect(Object.keys(SERVER_REQUEST_KINDS).sort()).toEqual([
       'item/commandExecution/requestApproval',
       'item/fileChange/requestApproval',
       'item/permissions/requestApproval',
       'item/tool/requestUserInput',
+      'mcpServer/elicitation/request',
     ]);
-    // The elicitation kind has a reply shape but no method name yet — spelled
-    // nowhere in the fixtures or the design doc, so it stays unspelled.
-    expect(Object.values(SERVER_REQUEST_KINDS)).not.toContain('elicitation');
+    // Every declared kind is now reachable — an unreachable kind is dead code
+    // that looks like coverage.
+    expect(new Set(Object.values(SERVER_REQUEST_KINDS))).toEqual(
+      new Set([
+        'question',
+        'approval_exec',
+        'approval_file_change',
+        'approval_permissions',
+        'elicitation',
+      ])
+    );
   });
 });

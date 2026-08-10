@@ -67,18 +67,23 @@ export const MAX_FRAME_BUFFER_BYTES = 32 * 1024 * 1024;
  *   thread/status/changed [实测] fixtures (17 frames across 3 files)
  *   turn/completed        [实测] fixtures
  *   serverRequest/resolved[实测] fixtures
+ *   turn/interrupt        [实测] fixtures/codex/codex-method-contract.json
+ *   thread/resume         [实测] fixtures/codex/codex-method-contract.json
  *
- * DELIBERATELY ABSENT: `turn/interrupt` (session.stop) and `thread/resume` are
- * [未测] — arbitration doc §5 U-a/U-b. Their spelling is only known from a
- * capability probe that indexed the generated schema, not from a frame we sent.
- * Adding them here would launder a guess into a constant; they land when the
- * zero-quota `generate-json-schema` index becomes a fixture.
+ * The last two were [未测] through slice 2a (arbitration §5 U-a/U-b) and are now
+ * closed by the generated contract: `codex app-server generate-json-schema`
+ * emits the binary's own method inventory, so their spelling is read off the
+ * implementation rather than guessed. `codexWireContract.test.ts` pins every
+ * entry below against that snapshot, which also turns a codex upgrade that
+ * renames a method into a failing test instead of a runtime 'method not found'.
  */
 export const CODEX_METHOD = {
   initialize: 'initialize',
   initialized: 'initialized',
   threadStart: 'thread/start',
+  threadResume: 'thread/resume',
   turnStart: 'turn/start',
+  turnInterrupt: 'turn/interrupt',
   statusChanged: 'thread/status/changed',
   turnCompleted: 'turn/completed',
   serverRequestResolved: 'serverRequest/resolved',

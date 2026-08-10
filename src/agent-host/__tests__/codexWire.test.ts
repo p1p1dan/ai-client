@@ -164,13 +164,17 @@ describe('classifyInboundFrame — recorded Codex traffic', () => {
       expect(methodsInCorpus.has(method)).toBe(true);
     }
 
-    // Falsifies "somebody added a guessed method name": `turn/interrupt` and
-    // `thread/resume` are [未测] (arbitration §5 U-a/U-b) — known only from a
-    // schema capability probe, never sent. They may only enter this table once
-    // the generated schema index lands as a fixture.
+    // `turn/interrupt` and `thread/resume` were held out of this table while
+    // they were [未测] (arbitration §5 U-a/U-b). The condition that gated them
+    // has since been met — the generated contract landed as a fixture — so the
+    // rule they were protecting moved rather than disappeared: EVERY name in
+    // this table must now be attested by either the recorded corpus or that
+    // contract. `codexWireContract.test.ts` owns the contract half; keeping the
+    // bar here as "no unattested names" is what stops the next addition from
+    // being a guess.
     const values: readonly string[] = Object.values(CODEX_METHOD);
-    expect(values).not.toContain('turn/interrupt');
-    expect(values).not.toContain('thread/resume');
+    expect(values).toContain('turn/interrupt');
+    expect(values).toContain('thread/resume');
     expect(values.length).toBe(new Set(values).size);
   });
 });

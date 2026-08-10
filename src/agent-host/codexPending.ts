@@ -78,17 +78,19 @@ export type PendingOutcome =
  *                                       `unsupported` + fail-safe deny. "Not implemented" must never
  *                                       mean "no JSON-RPC response".
  *
- * DELIBERATELY ABSENT: the MCP elicitation method name. Neither the fixtures nor
- * the design doc spell it, and a guessed method name here would silently never
- * match (elicitation requests would fall through to `method_not_found`). The
- * `elicitation` kind and its reply shape exist below so that adding the real
- * name later is a one-line change.
+ * The MCP elicitation name was deliberately blank through slice 2a — neither the
+ * fixtures nor the design doc spelled it, and a guess would silently never match
+ * (elicitation would fall through to `method_not_found`). It is now read off the
+ * generated contract (`fixtures/codex/codex-method-contract.json`, one of the 10
+ * server→client requests), so it is evidence rather than a guess. Every key here
+ * is pinned against that snapshot by `codexWireContract.test.ts`.
  */
 export const SERVER_REQUEST_KINDS: Readonly<Record<string, PendingKind>> = {
   'item/tool/requestUserInput': 'question',
   'item/commandExecution/requestApproval': 'approval_exec',
   'item/fileChange/requestApproval': 'approval_file_change',
   'item/permissions/requestApproval': 'approval_permissions',
+  'mcpServer/elicitation/request': 'elicitation',
 };
 
 /**
