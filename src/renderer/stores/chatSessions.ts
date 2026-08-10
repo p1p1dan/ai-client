@@ -825,8 +825,19 @@ export function applyRuntimeEvent(
     case 'question.resolved': {
       const { questionId, outcome, answers, response } = event.payload;
       const bucket = state.messages[sessionId];
+      // The dock holds ONE question. Clearing it unconditionally means any
+      // resolution — including one for a different session, or one the Host
+      // emits for a request that never produced a card — takes whatever is
+      // currently docked off screen, leaving a live card unanswerable while
+      // `waiting_question` keeps its session busy. Clear only what this event
+      // actually addresses.
+      const clearsDock =
+        state.pendingQuestion !== null &&
+        state.pendingQuestion.sessionId === sessionId &&
+        state.pendingQuestion.questionId === questionId;
+      const dock = clearsDock ? { pendingQuestion: null } : {};
       if (!questionId || !bucket) {
-        return { pendingQuestion: null };
+        return dock;
       }
 
       const nextBucket = bucket.map((message) => ({
@@ -844,7 +855,7 @@ export function applyRuntimeEvent(
         ),
       }));
 
-      return { messages: withBucket(state, sessionId, nextBucket), pendingQuestion: null };
+      return { messages: withBucket(state, sessionId, nextBucket), ...dock };
     }
 
     default:

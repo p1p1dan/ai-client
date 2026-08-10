@@ -134,8 +134,26 @@ export function canContinue(sel: QuestionSelection, items: readonly QuestionItem
 }
 
 /**
+ * The answers-map key for one item (S2 C8): the agent's own `id` when it sent
+ * one (Codex always does, Claude never does), the question text otherwise.
+ *
+ * This is the PROTOCOL key. It is deliberately not reused as a React key: two
+ * questions in one turn may repeat verbatim (`runtimeEvents.ts` says so in the
+ * `QuestionItem.id` comment, which is the whole reason `id` exists), so an
+ * id-less pair would collide. `questionReactKey` handles that separately.
+ */
+export function answerKeyFor(item: QuestionItem): string {
+  return item.id ?? item.question;
+}
+
+/** Render identity: unique even for two id-less questions with identical text. */
+export function questionReactKey(item: QuestionItem, index: number): string {
+  return item.id ?? String(index);
+}
+
+/**
  * Continue payload, aligned with `respondQuestion` (`chatSessions.ts:125-129`/`:781-798`):
- *  - key is `item.question`, verbatim (runtimeEvents.ts :224 contract).
+ *  - key is `answerKeyFor(item)` — the agent's id when present, else the text.
  *  - multi-select joins with ', '.
  *  - a selected Other contributes its trimmed text, joined alongside any
  *    structured picks.
@@ -154,7 +172,7 @@ export function buildRespondPayload(
       if (text.length > 0) parts.push(text);
     }
     if (parts.length > 0) {
-      answers[item.question] = parts.join(', ');
+      answers[answerKeyFor(item)] = parts.join(', ');
     }
   });
   return { answers };
@@ -201,15 +219,42 @@ export function derivePager(count: number, page: number): PagerView {
 // ---- Frozen (read-only) ----
 
 export interface FrozenPair {
+  /** Render identity. Never the question text alone — duplicates are legal. */
+  key: string;
   question: string;
   answer: string | null;
   skipped: boolean;
 }
 
 /**
+ * Fixed-width stand-in for a secret answer. Fixed on purpose: a mask that grew
+ * with the value would leak its length, and length is information about a key.
+ */
+export const SECRET_MASK = '••••••••';
+
+/**
+ * Should this answer be hidden in the timeline?
+ *
+ * Only free text is masked. `isSecret` is a QUESTION-level flag, but the answer
+ * may well be one of the offered option labels ("Use environment variable"),
+ * which is public by construction — masking it would protect nothing while
+ * making the user unable to see what they answered. So: mask exactly when the
+ * answer did not come from the option list.
+ *
+ * The repo's position is that a credential must not sit in the timeline
+ * permanently (the same reason the Host redacts stderr, T-35); it is not that
+ * answers to sensitive-sounding questions should be unreadable.
+ */
+export function isMaskedAnswer(item: QuestionItem, answer: string | null): boolean {
+  if (item.isSecret !== true || answer === null || answer.length === 0) return false;
+  return !item.options.some((option) => option.label === answer);
+}
+
+/**
  * Frozen render data, entirely from fields the store already froze (no
  * reimplementation of D20 logic):
- *  - answered: `answer = questionAnswers[item.question] ?? questionResponse ?? null`.
+ *  - answered: `answer = questionAnswers[answerKeyFor(item)] ?? questionResponse ?? null`,
+ *    masked when `isMaskedAnswer` says so.
  *  - skipped: every question shows `answer: null, skipped: true`.
  *  - missing `questions` (history/edge case) -> empty array.
  */
@@ -218,14 +263,23 @@ export function deriveFrozenPairs(block: ChatBlock): FrozenPair[] {
   if (items.length === 0) return [];
 
   if (deriveQuestionCardState(block) === 'skipped') {
-    return items.map((item) => ({ question: item.question, answer: null, skipped: true }));
+    return items.map((item, index) => ({
+      key: questionReactKey(item, index),
+      question: item.question,
+      answer: null,
+      skipped: true,
+    }));
   }
 
-  return items.map((item) => ({
-    question: item.question,
-    answer: block.questionAnswers?.[item.question] ?? block.questionResponse ?? null,
-    skipped: false,
-  }));
+  return items.map((item, index) => {
+    const answer = block.questionAnswers?.[answerKeyFor(item)] ?? block.questionResponse ?? null;
+    return {
+      key: questionReactKey(item, index),
+      question: item.question,
+      answer: isMaskedAnswer(item, answer) ? SECRET_MASK : answer,
+      skipped: false,
+    };
+  });
 }
 
 // ---- Permission thin adapter ----
@@ -288,6 +342,7 @@ export function derivePermissionCardView(
       options: [],
       frozen: [
         {
+          key: 'permission',
           question: prompt,
           answer: block.allowed ? PERMISSION_ALLOWED : PERMISSION_DENIED,
           skipped: false,

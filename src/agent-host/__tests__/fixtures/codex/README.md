@@ -44,6 +44,18 @@
 | `codex-command-approval.jsonl` | 18 | 同上 `:104`（审批帧本体）+ `:107`（其余） | 重组信封 | 切片 2 审批 |
 | `codex-thread-start-echo.partial.json` | — | 同上 `:104` / `:93` | **PARTIAL** | 切片 2 `thread/start` 形状 |
 
+**非 transcript 来源：自生成契约快照**（上表不适用，它们不是报文）——均由
+`codex app-server generate-json-schema --experimental --out <dir>` 生成后节选落库：
+
+| 文件 | 钉住什么 | 对应验收 |
+|---|---|---|
+| `codex-method-contract.json` | 方法**名**（clientRequest / serverRequest / serverNotification / threadItemTypes） | 切片 2 `codexWireContract.test.ts` |
+| `codex-turn-schema.json` | 回合循环的**参数形状** | 切片 2c |
+| `codex-question-schema.json` | `request_user_input` 的问题与**应答体**形状 + `serverRequest/resolved` 入参 | 切片 3 |
+
+三者都是**已提交的静态快照，不会自己发现漂移**：codex 版本一升级，
+**必须手动重跑上面那条命令重生成**，否则“钉住了”只是钉住了一个过期的世界。
+
 ### 逐文件说明
 
 **`codex-handshake.jsonl`** — `initialize` 请求（我方 `clientInfo` + `capabilities`）、`initialize` 结果
@@ -154,7 +166,11 @@
    不要和我方客户端请求的 id 空间混用。
 6. **实测常量（样本量已标注，不要当作不变量硬断言）：**
    `isOther` 恒 `true`（10/10）· `isSecret` 恒 `false`（10/10）· `autoResolutionMs` 恒 `null`（4/4）·
-   `options` 从不为空（服务端强校验，schema 里的 nullable 是假的）·
+   `options` 实测从不为空（但**生成契约里它是 `["array","null"]`** ——
+   见 `codex-question-schema.json` 的 `ToolRequestUserInputQuestionOptionsType`，逐字引自生成文件。
+   两句各说一半：**契约允许 null，留存样本未见 null**。
+   2026-08-10 此处原写“schema 里的 nullable 是假的”，是从 5 颗样本得出的推断，已改写；
+   实现一律取容错解（null / 缺席 / 非数组 → `[]`）·
    `params` 恒 5 键、`question` 恒 6 键、`option` 恒 2 键（`description` 必填）。
    注意这里的 10/10 是**跨 4 条报文**统计的，而本目录只留存了其中 2 条 —— 校验时按留存样本算，
    别把 10/10 写成夹具能证明的数字。

@@ -24,6 +24,7 @@ import {
   QUESTION_CARD_BODY_MAX_CLASS,
   QUESTION_TITLE,
   type QuestionSelection,
+  questionReactKey,
   SKIP_LABEL,
   SKIPPED_MARK,
   setOtherText,
@@ -152,6 +153,13 @@ interface QaOptionRowProps {
   /** Other row only: current free-text value + change handler. */
   otherText?: string;
   onOtherTextChange?: (text: string) => void;
+  /**
+   * Other row only: the question is marked `isSecret`, so the free-text input
+   * is a password field. Codex flags API-key questions this way; typing a
+   * credential in plain sight and leaving it in the timeline is the thing the
+   * Host-side stderr redaction (T-35) already refuses to do.
+   */
+  secret?: boolean;
 }
 
 /**
@@ -175,6 +183,7 @@ function QaOptionRow({
   onSelect,
   otherText,
   onOtherTextChange,
+  secret,
 }: QaOptionRowProps) {
   const showOtherInput = option.isOther && selected && onOtherTextChange;
   return (
@@ -213,11 +222,15 @@ function QaOptionRow({
       </button>
       {showOtherInput && (
         <input
-          type="text"
+          type={secret ? 'password' : 'text'}
           value={otherText ?? ''}
           onChange={(event) => onOtherTextChange(event.target.value)}
           disabled={disabled}
-          placeholder="Type your answer…"
+          placeholder={secret ? 'Value is hidden while you type' : 'Type your answer…'}
+          // A credential must not reach the browser's autofill store or the
+          // spellchecker (which ships text to the platform on some systems).
+          autoComplete={secret ? 'off' : undefined}
+          spellCheck={secret ? false : undefined}
           className="min-w-0 flex-1 bg-transparent text-markdown text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
       )}
@@ -230,7 +243,7 @@ function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
   return (
     <div className="flex flex-col gap-2.5 px-3.5 pb-3">
       {pairs.map((pair) => (
-        <div key={pair.question} className="flex flex-col gap-0.5 text-markdown leading-normal">
+        <div key={pair.key} className="flex flex-col gap-0.5 text-markdown leading-normal">
           <span className="text-foreground">{pair.question}</span>
           {pair.skipped ? (
             <span className="italic text-muted-foreground">{SKIPPED_MARK}</span>
@@ -342,7 +355,7 @@ function InteractiveQaCard({
           <div className={cn('flex flex-col gap-3 px-2.5', QUESTION_CARD_BODY_MAX_CLASS)}>
             {items.map((item, index) => (
               <div
-                key={item.question}
+                key={questionReactKey(item, index)}
                 ref={(el) => {
                   questionRefs.current[index] = el;
                 }}
@@ -375,6 +388,7 @@ function InteractiveQaCard({
                               : toggleOption(prev, index, option.label, Boolean(item.multiSelect))
                           )
                         }
+                        secret={option.isOther && item.isSecret === true}
                         otherText={option.isOther ? (sel.otherText[index] ?? '') : undefined}
                         onOtherTextChange={
                           option.isOther

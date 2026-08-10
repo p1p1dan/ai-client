@@ -30,6 +30,19 @@ import { idKey, type JsonRpcId } from './codexWire.ts';
  * rather than reimplementing "reply then delete", so "exactly once" is true by
  * construction and not by review.
  *
+ * ## The ONE exception: `forget()`
+ *
+ * `forget()` removes an entry WITHOUT writing a frame, and it is the only place
+ * in this file that is allowed to. It exists for `serverRequest/resolved`: the
+ * server telling us it has settled its own request (auto-resolution, an
+ * interrupted turn, a withdrawn ask). Replying after that notification is
+ * exactly the second failure above — a response to nothing — so here the write
+ * is the bug and the silence is correct.
+ *
+ * Note which half of the invariant still holds: the entry is still removed
+ * exactly once, and nobody is left waiting on us, because the party that was
+ * waiting has just announced it stopped.
+ *
  * ## Scope of the key
  *
  * Keyed by `idKey(requestId)` alone, i.e. this table is PER CONNECTION — server
@@ -63,6 +76,17 @@ export type PendingAutoReason = PermissionAutoReason;
 export type PendingOutcome =
   | { reason: 'answered'; result: unknown }
   | { reason: PendingAutoReason };
+
+/**
+ * Every way an entry can leave the table, as seen by `onSettled`.
+ *
+ * `'forgotten'` is deliberately NOT a member of `PendingAutoReason`: that type
+ * is the shared `PermissionAutoReason` from the protocol, and "the server
+ * resolved its own request" is a Host-internal fact with no renderer copy
+ * behind it. Widening a protocol enum for it would put a word on the wire that
+ * no card can render.
+ */
+export type PendingSettleReason = PendingOutcome['reason'] | 'forgotten';
 
 /**
  * Server request methods we are allowed to register, and nothing else.
@@ -168,9 +192,20 @@ export type PendingReplyFactory = (
  * and we have no timeout sample; it is grouped with `unsupported` because both
  * describe a live turn we simply cannot answer for.
  */
-export const DEFAULT_PENDING_REPLIES: PendingReplyFactory = (entry, reason) => {
+export const DEFAULT_PENDING_REPLIES: PendingReplyFactory = (entry, reason) =>
+  defaultReplyFor(entry.kind, reason);
+
+/**
+ * The refusal body for one kind, without needing a table entry.
+ *
+ * Two call sites answer a server request that was never registered (no turn is
+ * running; the request carried no usable question), and both must send the same
+ * refusal a drain would have sent. Sharing the lookup keeps that from becoming
+ * a second, hand-written `{answers:{}}` that drifts away from this table.
+ */
+export function defaultReplyFor(kind: PendingKind, reason: PendingAutoReason): unknown {
   const turnIsGone = reason === 'session_closed' || reason === 'aborted';
-  switch (entry.kind) {
+  switch (kind) {
     case 'question':
       return { answers: {} };
     case 'approval_exec':
@@ -183,11 +218,19 @@ export const DEFAULT_PENDING_REPLIES: PendingReplyFactory = (entry, reason) => {
     default: {
       // Exhaustiveness: adding a PendingKind without a refusal body fails tsc
       // here rather than shipping a kind that can be registered but not settled.
-      const unreachable: never = entry.kind;
+      const unreachable: never = kind;
       throw new Error(`no default reply for pending kind ${String(unreachable)}`);
     }
   }
-};
+}
+
+/**
+ * How many recently settled ids to remember, purely so `forget()` can tell
+ * "the routine echo of an id we just answered" from "a resolution for an id we
+ * never had". Small on purpose: a server request id space that has moved 32
+ * requests past ours is not a case any log line is going to rescue.
+ */
+export const RECENT_SETTLED_MEMORY = 32;
 
 export interface PendingTableOptions {
   /** Writes exactly one JSON-RPC result frame. Injected, so this module stays pure of IO. */
@@ -197,12 +240,14 @@ export interface PendingTableOptions {
   /** Never receives payload contents — ids, methods and reasons only (T-35). */
   log?: (msg: string) => void;
   /** Observer for the runtime to project `question.resolved` / `permission.resolved`. */
-  onSettled?: (entry: PendingServerRequest, reason: PendingOutcome['reason']) => void;
+  onSettled?: (entry: PendingServerRequest, reason: PendingSettleReason) => void;
 }
 
 export class PendingServerRequestTable {
   private readonly entries = new Map<string, PendingServerRequest>();
   private readonly options: PendingTableOptions;
+  /** Ids that left the table recently, newest last. See `RECENT_SETTLED_MEMORY`. */
+  private readonly recentlySettled: string[] = [];
 
   constructor(options: PendingTableOptions) {
     this.options = options;
@@ -274,6 +319,7 @@ export class PendingServerRequestTable {
       return false;
     }
     this.entries.delete(key);
+    this.remember(key);
 
     const result =
       outcome.reason === 'answered'
@@ -283,6 +329,42 @@ export class PendingServerRequestTable {
     this.guard('reply', () => this.options.reply(entry.requestId, result));
     this.guard('onSettled', () => this.options.onSettled?.(entry, outcome.reason));
     return true;
+  }
+
+  private remember(key: string): void {
+    this.recentlySettled.push(key);
+    if (this.recentlySettled.length > RECENT_SETTLED_MEMORY) this.recentlySettled.shift();
+  }
+
+  /**
+   * Drop an entry because the SERVER settled its own request
+   * (`serverRequest/resolved`). Removes without replying — see the module
+   * header's "ONE exception".
+   *
+   * Returns the entry when one was pending, `undefined` otherwise. The
+   * `undefined` case is the common one and is NOT an error: every request we
+   * answer ourselves is followed by this notification, and `settle()` has
+   * already removed the entry by then. Distinguishing the three ways to miss
+   * is what `recentlySettled` is for — collapsing them into one silent return
+   * would hide "the server resolved an id we never registered", which is a
+   * real defect wearing the same clothes as the routine echo.
+   */
+  forget(requestId: JsonRpcId): PendingServerRequest | undefined {
+    const key = idKey(requestId);
+    const entry = this.entries.get(key);
+    if (!entry) {
+      if (this.recentlySettled.includes(key)) {
+        this.note(`codex pending: serverRequest/resolved echo for settled id ${key}`);
+      } else {
+        this.note(`WARN codex pending: serverRequest/resolved for unknown id ${key}`);
+      }
+      return undefined;
+    }
+    this.entries.delete(key);
+    this.remember(key);
+    this.note(`codex pending: ${entry.method} id ${key} resolved by the server, forgotten`);
+    this.guard('onSettled', () => this.options.onSettled?.(entry, 'forgotten'));
+    return entry;
   }
 
   /**

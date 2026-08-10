@@ -185,7 +185,7 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
     expect(patch.pendingQuestion).toBeNull();
   });
 
-  it('question.resolved tolerates an unknown questionId without crashing and clears pendingQuestion', () => {
+  it('question.resolved tolerates an unknown questionId without crashing, and (A15) leaves pendingQuestion docked since the id does not match', () => {
     const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
     const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
 
@@ -200,10 +200,12 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       questions: SAMPLE_QUESTIONS,
       resolved: false,
     });
-    expect(patch.pendingQuestion).toBeNull();
+    // Patch carries no dock change at all (not even an explicit null) — the dock stays put.
+    expect(patch.pendingQuestion).toBeUndefined();
+    expect({ ...afterRequested, ...patch }.pendingQuestion).toEqual(afterRequested.pendingQuestion);
   });
 
-  it('question.resolved is idempotent — applying the same event twice yields the same result', () => {
+  it('question.resolved is idempotent — applying the same event twice converges to the same state', () => {
     const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
     const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
 
@@ -212,8 +214,44 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
     const firstPatch = applyRuntimeEvent(afterRequested, event);
     const afterFirst = { ...afterRequested, ...firstPatch } as ChatSessionsState;
     const secondPatch = applyRuntimeEvent(afterFirst, event);
+    const afterSecond = { ...afterFirst, ...secondPatch } as ChatSessionsState;
 
     expect(secondPatch.messages).toEqual(firstPatch.messages);
-    expect(secondPatch.pendingQuestion).toEqual(firstPatch.pendingQuestion);
+    // The dock is already cleared after the first apply, so the guard is a
+    // no-op on the second apply (patch omits the field) — compare the
+    // resulting STATE, not the raw patch, to assert true idempotency.
+    expect(afterSecond.pendingQuestion).toEqual(afterFirst.pendingQuestion);
+  });
+});
+
+describe('applyRuntimeEvent — question.resolved dock guard (A15)', () => {
+  it('a mismatched questionId (same session) leaves pendingQuestion untouched', () => {
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
+
+    const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q-other', 'answered'));
+
+    expect(patch.pendingQuestion).toBeUndefined();
+    expect({ ...afterRequested, ...patch }.pendingQuestion).toEqual(afterRequested.pendingQuestion);
+  });
+
+  it('a mismatched sessionId (same questionId) leaves pendingQuestion untouched', () => {
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
+
+    // Same questionId 'q1', but the event belongs to a different session.
+    const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q1', 'answered', {}, 's2'));
+
+    expect(patch.pendingQuestion).toBeUndefined();
+    expect({ ...afterRequested, ...patch }.pendingQuestion).toEqual(afterRequested.pendingQuestion);
+  });
+
+  it('a matching sessionId + questionId clears pendingQuestion normally (guard does not block the happy path)', () => {
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
+
+    const patch = applyRuntimeEvent(afterRequested, resolvedEvent('q1', 'answered'));
+
+    expect(patch.pendingQuestion).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import type { QuestionItem } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock } from '@/stores/chatSessions';
 import {
+  answerKeyFor,
   buildOptionRows,
   buildRespondPayload,
   buildSkipPayload,
@@ -14,11 +15,25 @@ import {
   derivePermissionCardView,
   deriveQuestionCardState,
   emptySelection,
+  isMaskedAnswer,
+  questionReactKey,
+  SECRET_MASK,
   selectPendingQuestionBlock,
   setOtherText,
   toggleOption,
   toggleOther,
 } from '../questionCardModel';
+
+/** Every non-empty contiguous slice of `s`, for "mask must not leak any substring of the plaintext" checks. */
+function allSubstrings(s: string): string[] {
+  const subs: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    for (let j = i + 1; j <= s.length; j++) {
+      subs.push(s.slice(i, j));
+    }
+  }
+  return subs;
+}
 
 function questionBlock(overrides: Partial<ChatBlock> = {}): ChatBlock {
   return { id: 'q1', type: 'question', questionId: 'q1', ...overrides };
@@ -157,6 +172,33 @@ describe('canContinue', () => {
   });
 });
 
+describe('answerKeyFor', () => {
+  it('uses item.id when present', () => {
+    const item = questionItem(['A'], { id: 'q-42', question: 'Pick one' });
+    expect(answerKeyFor(item)).toBe('q-42');
+  });
+
+  it('falls back to the question text verbatim when id is absent', () => {
+    const item = questionItem(['A'], { question: 'What is your favorite color?' });
+    expect(answerKeyFor(item)).toBe('What is your favorite color?');
+  });
+});
+
+describe('questionReactKey', () => {
+  it('produces distinct keys for two id-less questions with identical text (the reason it is split from the protocol key)', () => {
+    const first = questionItem(['A'], { question: 'Pick one' });
+    const second = questionItem(['B'], { question: 'Pick one' });
+    const firstKey = questionReactKey(first, 0);
+    const secondKey = questionReactKey(second, 1);
+    expect(firstKey).not.toBe(secondKey);
+  });
+
+  it('uses item.id when present, ignoring the index', () => {
+    const item = questionItem(['A'], { id: 'q-7' });
+    expect(questionReactKey(item, 3)).toBe('q-7');
+  });
+});
+
 describe('buildRespondPayload', () => {
   it('uses item.question verbatim as the key', () => {
     const items = [questionItem(['A'], { question: 'What is your favorite color?' })];
@@ -164,6 +206,12 @@ describe('buildRespondPayload', () => {
     expect(buildRespondPayload(sel, items).answers).toEqual({
       'What is your favorite color?': 'A',
     });
+  });
+
+  it('uses item.id as the key when the item carries one (Codex-style ids)', () => {
+    const items = [questionItem(['A'], { id: 'q-42', question: 'Pick one' })];
+    const sel = toggleOption(emptySelection, 0, 'A', false);
+    expect(buildRespondPayload(sel, items).answers).toEqual({ 'q-42': 'A' });
   });
 
   it('joins multi-select picks with ", "', () => {
@@ -229,8 +277,8 @@ describe('deriveFrozenPairs', () => {
       questionAnswers: { Q1: 'A', Q2: 'C' },
     });
     expect(deriveFrozenPairs(block)).toEqual([
-      { question: 'Q1', answer: 'A', skipped: false },
-      { question: 'Q2', answer: 'C', skipped: false },
+      { key: '0', question: 'Q1', answer: 'A', skipped: false },
+      { key: '1', question: 'Q2', answer: 'C', skipped: false },
     ]);
   });
 
@@ -242,22 +290,99 @@ describe('deriveFrozenPairs', () => {
       questionResponse: 'free text reply',
     });
     expect(deriveFrozenPairs(block)).toEqual([
-      { question: 'Q1', answer: 'free text reply', skipped: false },
-      { question: 'Q2', answer: 'free text reply', skipped: false },
+      { key: '0', question: 'Q1', answer: 'free text reply', skipped: false },
+      { key: '1', question: 'Q2', answer: 'free text reply', skipped: false },
     ]);
   });
 
   it('cancelled: every question shows skipped=true with a null answer', () => {
     const block = questionBlock({ resolved: true, questionOutcome: 'cancelled', questions: items });
     expect(deriveFrozenPairs(block)).toEqual([
-      { question: 'Q1', answer: null, skipped: true },
-      { question: 'Q2', answer: null, skipped: true },
+      { key: '0', question: 'Q1', answer: null, skipped: true },
+      { key: '1', question: 'Q2', answer: null, skipped: true },
     ]);
   });
 
   it('returns an empty array when questions is missing', () => {
     const block = questionBlock({ resolved: true, questionOutcome: 'answered' });
     expect(deriveFrozenPairs(block)).toEqual([]);
+  });
+
+  it('with no item.id, the answer is still looked up by the question text — the protocol key equals the question', () => {
+    const idLess = questionItem(['A'], { question: 'What is your name?' });
+    expect(answerKeyFor(idLess)).toBe(idLess.question);
+
+    const block = questionBlock({
+      resolved: true,
+      questionOutcome: 'answered',
+      questions: [idLess],
+      questionAnswers: { 'What is your name?': 'Ada' },
+    });
+    expect(deriveFrozenPairs(block)).toEqual([
+      { key: '0', question: 'What is your name?', answer: 'Ada', skipped: false },
+    ]);
+  });
+});
+
+describe('isMaskedAnswer / SECRET_MASK (A10)', () => {
+  it('masks a free-text answer when the question is marked isSecret', () => {
+    const item = questionItem(['A', 'B'], { isSecret: true });
+    expect(isMaskedAnswer(item, 'sk-live-abcdef123456')).toBe(true);
+
+    const block = questionBlock({
+      resolved: true,
+      questionOutcome: 'answered',
+      questions: [item],
+      questionAnswers: { [item.question]: 'sk-live-abcdef123456' },
+    });
+    expect(deriveFrozenPairs(block)[0].answer).toBe(SECRET_MASK);
+  });
+
+  it('produces a byte-identical mask for two different-length free-text answers, with no plaintext substring leaked', () => {
+    const item = questionItem([], { isSecret: true });
+    const short = 'x1';
+    const long = 'a-much-longer-secret-value-here';
+    expect(short.length).not.toBe(long.length);
+
+    const block = (answer: string) =>
+      questionBlock({
+        resolved: true,
+        questionOutcome: 'answered',
+        questions: [item],
+        questionAnswers: { [item.question]: answer },
+      });
+
+    const shortMasked = deriveFrozenPairs(block(short))[0].answer;
+    const longMasked = deriveFrozenPairs(block(long))[0].answer;
+
+    // Same fixed-width output regardless of input length...
+    expect(shortMasked).toBe(longMasked);
+    expect(shortMasked).toBe(SECRET_MASK);
+
+    // ...and the mask never contains any non-empty piece of either plaintext.
+    for (const sub of [...allSubstrings(short), ...allSubstrings(long)]) {
+      expect(SECRET_MASK.includes(sub)).toBe(false);
+    }
+  });
+
+  it("does not mask when the answer is one of the question's own option labels, even if isSecret is true", () => {
+    const item = questionItem(['Use environment variable', 'Paste inline'], { isSecret: true });
+    expect(isMaskedAnswer(item, 'Use environment variable')).toBe(false);
+
+    const block = questionBlock({
+      resolved: true,
+      questionOutcome: 'answered',
+      questions: [item],
+      questionAnswers: { [item.question]: 'Use environment variable' },
+    });
+    expect(deriveFrozenPairs(block)[0].answer).toBe('Use environment variable');
+  });
+
+  it('never masks when isSecret is absent or false', () => {
+    const withoutFlag = questionItem(['A'], {});
+    const withFalseFlag = questionItem(['A'], { isSecret: false });
+    expect(isMaskedAnswer(withoutFlag, 'plain answer')).toBe(false);
+    expect(isMaskedAnswer(withFalseFlag, 'plain answer')).toBe(false);
   });
 });
 

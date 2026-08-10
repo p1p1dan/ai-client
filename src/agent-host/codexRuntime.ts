@@ -14,7 +14,15 @@ import {
 import { ensureCodexHome } from './codexHome.ts';
 import { type CodexEntryResolution, resolveCodexLaunch } from './codexNodeEntry.ts';
 import { CodexNormalizer } from './codexNormalizer.ts';
-import { kindOfServerMethod, PendingServerRequestTable } from './codexPending.ts';
+import {
+  defaultReplyFor,
+  kindOfServerMethod,
+  type PendingKind,
+  type PendingServerRequest,
+  PendingServerRequestTable,
+  type PendingSettleReason,
+} from './codexPending.ts';
+import { readAutoResolutionMs, toCodexAnswerBody, toQuestionItems } from './codexQuestionBridge.ts';
 import { readThreadStatus } from './codexStatus.ts';
 import { CODEX_METHOD, idKey, JSONRPC_METHOD_NOT_FOUND, type JsonRpcId } from './codexWire.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
@@ -448,6 +456,17 @@ function errorMessage(err: unknown): string {
  * — a frame the normalizer renders but this predicate rejects (or the reverse)
  * is a frame whose turn is half-owned.
  */
+/**
+ * `ServerRequestResolvedNotification.requestId`
+ * [实测 codex-question-schema.json: `required: [requestId, threadId]`].
+ * `null` = not a usable id, which we drop rather than guess at.
+ */
+function readRequestId(params: unknown): JsonRpcId | null {
+  if (!isRecord(params)) return null;
+  const id = params.requestId;
+  return typeof id === 'number' || typeof id === 'string' ? id : null;
+}
+
 function belongsToThread(expected: string | undefined, params: unknown): boolean {
   if (!expected) return true;
   const threadId = isRecord(params) ? params.threadId : undefined;
@@ -573,13 +592,15 @@ export class CodexRuntime {
     const pending = new PendingServerRequestTable({
       reply: (id, result) => connection.reply(id, result),
       log: (msg) => this.log(msg),
-      onSettled: (entry, reason) =>
+      onSettled: (entry, reason) => {
         this.log('codex pending settled', {
           sessionId: entry.sessionId,
           id: idKey(entry.requestId),
           kind: entry.kind,
           reason,
-        }),
+        });
+        this.projectSettledQuestion(entry, reason);
+      },
     });
 
     const state: CodexSessionState = {
@@ -734,6 +755,18 @@ export class CodexRuntime {
       return;
     }
 
+    // Handled at the SAME level as the status frame, and the placement is
+    // load-bearing: it must be above the `if (!turn)` drop below. The only case
+    // where this notification does real work is the server settling its own
+    // request (auto-resolution, an interrupted turn, a withdrawn ask), and
+    // those cluster exactly where a turn is ending or already gone. Written
+    // down next to `ingest()` — the natural-looking spot — it would be dropped
+    // in precisely the situations it exists for.
+    if (n.method === CODEX_METHOD.serverRequestResolved) {
+      this.onServerRequestResolved(state, n.params);
+      return;
+    }
+
     const turn = state.turn;
     if (!turn) {
       // Outside a turn there is no normalizer to own the frame. Dropped and
@@ -826,6 +859,38 @@ export class CodexRuntime {
     });
   }
 
+  /**
+   * The server settled its own request. Drop the entry WITHOUT replying — see
+   * `codexPending`'s "ONE exception". Replying after this notification would be
+   * a response to a request nobody is waiting on any more.
+   *
+   * Every request we answer ourselves is followed by one of these, and by then
+   * `settle()` has already removed the entry, so the common outcome here is a
+   * no-op. The case worth the code is the other one: the server resolving on
+   * its own (`autoResolutionMs`, an interrupted turn, a withdrawn ask), which
+   * would otherwise leave the entry parked — card pending forever, and a later
+   * drain writing a frame for an id the server has forgotten.
+   */
+  private onServerRequestResolved(state: CodexSessionState, params: unknown): void {
+    if (!belongsToThread(state.threadId, params)) {
+      this.log('WARN codex serverRequest/resolved for a foreign thread, ignored', {
+        sessionId: state.sessionId,
+        expected: state.threadId,
+      });
+      return;
+    }
+    const requestId = readRequestId(params);
+    if (requestId === null) {
+      // `requestId` is required by the contract, so this is a codex we do not
+      // know. Guessing which entry was meant could drop the wrong card.
+      this.log('WARN codex serverRequest/resolved carried no usable requestId', {
+        sessionId: state.sessionId,
+      });
+      return;
+    }
+    state.pending.forget(requestId);
+  }
+
   private onServerRequest(
     sessionId: string,
     req: { id: JsonRpcId; method: string; params: unknown }
@@ -845,27 +910,128 @@ export class CodexRuntime {
       this.log('codex server request refused (unknown method)', { sessionId, method: req.method });
       return;
     }
+
+    if (kind === 'question') {
+      // G1 — no turn is running. `stop()` neither tears the session down nor
+      // deletes it, and `turn/interrupt` is best effort whose real effect is
+      // [未测], so codex can keep asking after the user pressed Stop.
+      // Registering one of those would put a card on screen for a turn nobody
+      // is waiting on and, through the renderer's own `question.requested`
+      // reducer, drag the session back into the busy state it just left.
+      //
+      // Question-only on purpose. The same argument does not transfer to
+      // approvals yet: they raise no card in this slice, so a parked approval
+      // is invisible until a drain answers it, and turning that into an
+      // immediate refusal would decide slice 4's failure posture here. Left as
+      // slice 2c shipped it, and registered for slice 4.
+      if (!state.turn) {
+        this.refuseServerRequest(state, req.id, kind, 'aborted', 'no turn is running');
+        return;
+      }
+
+      const reading = toQuestionItems(req.params);
+      // G2 — nothing renderable. A zero-question card cannot be answered, so it
+      // would hang the turn; and registering it just to settle it immediately
+      // would emit a `question.resolved` for a card that was never requested,
+      // which the store turns into "clear the question dock" — taking a
+      // DIFFERENT session's live card off screen.
+      if (reading.items.length === 0) {
+        this.refuseServerRequest(
+          state,
+          req.id,
+          kind,
+          'unsupported',
+          reading.dropped > 0
+            ? `all ${reading.dropped} question(s) were unreadable`
+            : 'the request carried no questions'
+        );
+        return;
+      }
+      if (
+        state.pending.register({
+          requestId: req.id,
+          sessionId,
+          kind,
+          method: req.method,
+          params: req.params,
+          correlationId: this.correlationIdFor(sessionId, req.id),
+          createdAt: Date.now(),
+        })
+      ) {
+        const autoResolutionMs = readAutoResolutionMs(req.params);
+        this.opts.emit({
+          type: 'question.requested',
+          sessionId,
+          payload: {
+            questionId: this.correlationIdFor(sessionId, req.id),
+            questions: reading.items,
+            ...(autoResolutionMs !== undefined ? { autoResolutionMs } : {}),
+          },
+        });
+        // No `session.status` here. C10 rule 3: the waiting state is derived
+        // only from `thread/status/changed`, and codex does send
+        // `activeFlags:["waitingOnUserInput"]` around every question
+        // [实测 codex-question-turn-status.jsonl].
+        if (reading.dropped > 0) {
+          this.log('WARN codex question had unreadable entries', {
+            sessionId,
+            id: idKey(req.id),
+            dropped: reading.dropped,
+          });
+        }
+      }
+      return;
+    }
+
     const registered = state.pending.register({
       requestId: req.id,
       sessionId,
       kind,
       method: req.method,
       params: req.params,
-      correlationId: `codex:${sessionId}:${idKey(req.id)}`,
+      correlationId: this.correlationIdFor(sessionId, req.id),
       createdAt: Date.now(),
     });
     if (!registered) return;
-    // Left PENDING on purpose: the question bridge (slice 3) and the approval
-    // bridge (slice 4) are what answer these, and every teardown path below
-    // drains the table with a fail-safe refusal, so nothing can be left
-    // unanswered. Reachable for real now that turns run — a parked entry means
-    // codex is blocked on `waitingOnApproval` / `waitingOnUserInput` until a
-    // bridge or a drain answers it.
+    // Approvals are left PENDING on purpose: the approval bridge is slice 4,
+    // and every teardown path drains the table with a fail-safe refusal, so
+    // nothing is left unanswered. A parked entry means codex is blocked on
+    // `waitingOnApproval` until a bridge or a drain answers it.
     this.log('codex server request registered; no bridge in this slice', {
       sessionId,
       id: idKey(req.id),
       kind,
     });
+  }
+
+  /**
+   * Answer a server request we are deliberately not registering.
+   *
+   * The body comes from the pending table's own refusal lookup rather than a
+   * literal here, so the two "never registered" paths cannot drift away from
+   * what a drain would have sent. Nothing is registered, so nothing is settled
+   * and no `question.resolved` is emitted — there is no card to resolve.
+   */
+  private refuseServerRequest(
+    state: CodexSessionState,
+    requestId: JsonRpcId,
+    kind: PendingKind,
+    reason: 'aborted' | 'unsupported',
+    why: string
+  ): void {
+    this.log('codex server request refused without registering', {
+      sessionId: state.sessionId,
+      id: idKey(requestId),
+      kind,
+      reason,
+      why,
+    });
+    state.connection.reply(requestId, defaultReplyFor(kind, reason));
+  }
+
+  /** `question.respond` addresses this; the wire id alone would collide across sessions. */
+  private correlationIdFor(sessionId: string, requestId: JsonRpcId): string {
+    return `codex:${sessionId}:${idKey(requestId)}`;
   }
 
   private onExit(sessionId: string, info: { code: number | null; signal: string | null }): void {
@@ -1259,6 +1425,36 @@ export class CodexRuntime {
     );
   }
 
+  /**
+   * Project the timeline event for a question that left the pending table
+   * WITHOUT the user answering it: a drain (stop / close / process exit) or the
+   * server resolving its own request.
+   *
+   * `'answered'` is excluded because `respondQuestion` has already emitted the
+   * richer event (with the answers, and with `cancelled` vs `answered`
+   * distinguished). Emitting again here would deliver a second
+   * `question.resolved` for the same id, and the store applies the last one it
+   * sees — so answering a question would repaint the card as "Questions
+   * skipped".
+   *
+   * Non-question kinds are the approval bridge's business (slice 4).
+   */
+  private projectSettledQuestion(entry: PendingServerRequest, reason: PendingSettleReason): void {
+    if (entry.kind !== 'question' || reason === 'answered') return;
+    this.opts.emit({
+      type: 'question.resolved',
+      sessionId: entry.sessionId,
+      payload: { questionId: entry.correlationId, outcome: 'rejected' },
+    });
+  }
+
+  /**
+   * Answer a parked `item/tool/requestUserInput`.
+   *
+   * The questions are re-derived from the entry's untouched wire params rather
+   * than cached at request time: one function, one reading, so the keys we
+   * answer with cannot drift from the keys we asked with.
+   */
   respondQuestion(input: {
     sessionId: string;
     questionId?: string;
@@ -1267,10 +1463,92 @@ export class CodexRuntime {
     cancel?: boolean;
     requestId?: string;
   }): void {
-    this.fail(
-      'not_implemented',
-      'question.respond: the Codex question bridge lands in a later slice.',
-      { sessionId: input.sessionId, requestId: input.requestId }
-    );
+    const { sessionId, questionId } = input;
+    const state = this.sessions.get(sessionId);
+    if (!state || !questionId) {
+      this.fail('invalid_payload', 'question.respond: unknown session or missing questionId', {
+        sessionId,
+        requestId: input.requestId,
+      });
+      return;
+    }
+
+    // Scanned, not parsed back into an id: `sessionId` may contain ':', so
+    // splitting the correlation id is a parser waiting to be wrong. The table
+    // holds a handful of entries at most.
+    const entry = state.pending.list().find((candidate) => candidate.correlationId === questionId);
+
+    if (!entry) {
+      // NOT a host.error. A non-fatal `host.error` is invisible in the renderer
+      // (`hostStatus.ts` returns the previous state for it and the chat store
+      // has no branch at all), and this is exactly the race where the user
+      // needs feedback: the server auto-resolved or the turn was interrupted
+      // while the card was still on screen, and the click landed after the
+      // entry was gone. Re-emitting the resolution is idempotent and clears the
+      // dock, so the UI converges instead of freezing on a card that can never
+      // be answered.
+      this.log('codex question.respond: no pending entry, re-resolving', {
+        sessionId,
+        questionId,
+      });
+      this.opts.emit({
+        type: 'question.resolved',
+        sessionId,
+        payload: { questionId, outcome: 'rejected' },
+      });
+      return;
+    }
+
+    if (entry.kind !== 'question' || entry.sessionId !== sessionId) {
+      // A real shape error rather than a race: the id addressed something that
+      // is not a question, or belongs to another session. Nothing to converge.
+      this.fail(
+        'invalid_payload',
+        `question.respond: ${questionId} is not this session's question`,
+        {
+          sessionId,
+          requestId: input.requestId,
+        }
+      );
+      return;
+    }
+
+    const { items } = toQuestionItems(entry.params);
+    const { body, unmatched, responseIgnored } = toCodexAnswerBody(items, input);
+    if (unmatched > 0) {
+      this.log('WARN codex question.respond had unanswered questions', {
+        sessionId,
+        questionId,
+        unmatched,
+      });
+    }
+    if (responseIgnored) {
+      // Folding one free-text response into several questions would tell the
+      // model it answered things it was never asked.
+      this.log('WARN codex question.respond dropped a free-text response', {
+        sessionId,
+        questionId,
+        questions: items.length,
+      });
+    }
+
+    state.pending.settle(entry.requestId, { reason: 'answered', result: body });
+
+    const answers =
+      input.answers && Object.keys(input.answers).length > 0 ? input.answers : undefined;
+    const response =
+      typeof input.response === 'string' && input.response.length > 0 ? input.response : undefined;
+    this.opts.emit({
+      type: 'question.resolved',
+      sessionId,
+      requestId: input.requestId,
+      payload: {
+        questionId,
+        outcome: input.cancel === true ? 'cancelled' : 'answered',
+        ...(input.cancel === true
+          ? {}
+          : { ...(answers ? { answers } : {}), ...(response ? { response } : {}) }),
+      },
+    });
   }
 }

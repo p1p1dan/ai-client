@@ -1,0 +1,62 @@
+{
+  "_comment": [
+    "request_user_input contract, generated from the codex binary itself:",
+    "  codex app-server generate-json-schema --experimental --out <dir>",
+    "Same provenance as codex-method-contract.json / codex-turn-schema.json.",
+    "",
+    "WHAT THIS FILE DOES: it pins the question shapes slice 3's bridge reads and",
+    "the answer body it writes, so a field the bridge invents (or one it drops)",
+    "is a red test rather than a -32602 on a machine we cannot reach.",
+    "",
+    "WHAT IT DOES NOT DO: it is a COMMITTED SNAPSHOT and cannot notice drift by",
+    "itself. A codex upgrade only shows up here if somebody re-runs the command",
+    "above. Treat 'bump codex -> regenerate this file' as part of the upgrade,",
+    "not as something the test suite will remind you about.",
+    "",
+    "Every block carries `_from` = the generated file it was lifted out of.",
+    "`required` / `propertyNames` are verbatim; `propertyNames` is the key list",
+    "of that block's `properties`. Blocks whose name ends in `Type` quote a",
+    "single `type` node verbatim rather than a shape."
+  ],
+  "codexVersion": "codex-cli 0.145.0",
+  "capturedAt": "2026-08-10",
+  "ToolRequestUserInputParams": {
+    "_from": "ToolRequestUserInputParams.json",
+    "required": ["itemId", "questions", "threadId", "turnId"],
+    "propertyNames": ["autoResolutionMs", "itemId", "questions", "threadId", "turnId"]
+  },
+  "ToolRequestUserInputQuestion": {
+    "_from": "ToolRequestUserInputParams.json#/definitions",
+    "required": ["header", "id", "question"],
+    "propertyNames": ["header", "id", "isOther", "isSecret", "options", "question"]
+  },
+  "ToolRequestUserInputQuestionOptionsType": {
+    "_from": "ToolRequestUserInputParams.json#/definitions/ToolRequestUserInputQuestion/properties/options/type",
+    "type": ["array", "null"]
+  },
+  "ToolRequestUserInputOption": {
+    "_from": "ToolRequestUserInputParams.json#/definitions",
+    "required": ["description", "label"],
+    "propertyNames": ["description", "label"]
+  },
+  "ToolRequestUserInputResponse": {
+    "_from": "ToolRequestUserInputResponse.json",
+    "required": ["answers"],
+    "propertyNames": ["answers"]
+  },
+  "ToolRequestUserInputAnswer": {
+    "_from": "ToolRequestUserInputResponse.json#/definitions",
+    "required": ["answers"],
+    "propertyNames": ["answers"]
+  },
+  "ToolRequestUserInputAnswerAnswersType": {
+    "_from": "ToolRequestUserInputResponse.json#/definitions/ToolRequestUserInputAnswer/properties/answers",
+    "type": "array",
+    "itemsType": "string"
+  },
+  "ServerRequestResolvedNotification": {
+    "_from": "ServerNotification.json#/definitions",
+    "required": ["requestId", "threadId"],
+    "propertyNames": ["requestId", "threadId"]
+  }
+}

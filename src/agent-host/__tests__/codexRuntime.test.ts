@@ -774,15 +774,35 @@ describe('codexRuntime — server requests and the pending table', () => {
   it('answers a second, unrelated request too — the drain is not first-only', async () => {
     const h = await startedSession();
     h.push(approval(0));
-    h.push({ id: 1, method: 'item/tool/requestUserInput', params: { questions: [] } });
+    h.push({ id: 1, method: 'item/fileChange/requestApproval', params: {} });
     h.runtime.close({ sessionId: 's1' });
 
     const replies = h.replies();
     expect(replies.map((r) => r.id)).toEqual([0, 1]);
-    // Per-kind fail-safe bodies: a cancelled approval and an empty answer map,
-    // neither of which can be read as consent.
+    // Fail-safe bodies, neither of which can be read as consent.
     expect(replies[0].result).toEqual({ decision: 'cancel' });
-    expect(replies[1].result).toEqual({ answers: {} });
+    expect(replies[1].result).toEqual({ decision: 'cancel' });
+  });
+
+  it('answers a question that carries no questions immediately, never parking it', async () => {
+    // Slice 3 changed this. It used to register and sit there until a drain
+    // answered it — which meant codex stayed blocked on `waitingOnUserInput`
+    // for a request we already knew we could never render, and the eventual
+    // settle would emit a `question.resolved` for a card that was never
+    // requested. Answered on the spot instead, with the same body the drain
+    // would have sent.
+    const h = await startedSession();
+    h.push({ id: 7, method: 'item/tool/requestUserInput', params: { questions: [] } });
+
+    expect(h.replies()).toHaveLength(1);
+    expect(h.replies()[0]).toMatchObject({ id: 7, result: { answers: {} } });
+    expect(h.eventsOf('question.requested')).toHaveLength(0);
+    expect(h.eventsOf('question.resolved')).toHaveLength(0);
+
+    // Nothing was registered, so a later close has nothing left to drain.
+    h.replies().length = 0;
+    h.runtime.close({ sessionId: 's1' });
+    expect(h.replies().filter((frame) => frame.id === 7)).toHaveLength(1);
   });
 
   it('drains everything when the process dies on its own, and reports the session failed', async () => {
@@ -857,16 +877,37 @@ describe('codexRuntime — the deliberate holes are explicit refusals', () => {
     expect(h.connectInputs).toHaveLength(0);
   });
 
-  it('refuses both respond commands, correlated to the session', async () => {
+  it('still refuses permission.respond — the approval bridge is slice 4', async () => {
+    // `question.respond` used to be refused alongside it. Slice 3 implemented
+    // it, so its absence from this list is the deliberate half of the change.
     const h = await startedSession();
     h.events.length = 0;
     h.runtime.respondPermission({ sessionId: 's1', requestId: 'req-p' });
-    h.runtime.respondQuestion({ sessionId: 's1', requestId: 'req-q' });
 
-    expect(h.eventsOf('host.error').map((e) => payload(e).code)).toEqual([
-      'not_implemented',
-      'not_implemented',
-    ]);
+    expect(h.eventsOf('host.error').map((e) => payload(e).code)).toEqual(['not_implemented']);
+  });
+
+  it('answers question.respond for an id it never parked instead of going silent', async () => {
+    // A non-fatal host.error is invisible in the renderer, and this is exactly
+    // the race where the user needs the card to settle: the server resolved the
+    // request (or the turn was interrupted) between the card rendering and the
+    // click landing. Re-emitting the resolution is idempotent and frees the
+    // dock; an error event would leave the card unanswerable forever.
+    const h = await startedSession();
+    h.events.length = 0;
+    h.runtime.respondQuestion({
+      sessionId: 's1',
+      questionId: 'codex:s1:n:99',
+      answers: { a: 'yes' },
+      requestId: 'req-q',
+    });
+
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+    expect(h.eventsOf('question.resolved')).toHaveLength(1);
+    expect(payload(h.event('question.resolved'))).toEqual({
+      questionId: 'codex:s1:n:99',
+      outcome: 'rejected',
+    });
   });
 
   it('reports an unknown session on stop the way the Claude runtime does', async () => {
@@ -1484,5 +1525,293 @@ describe('compareSandboxEcho', () => {
 
     expect(result.verdict).toBe('match');
     expect(result.detail).toContain('not echoed: sandbox, networkAccess');
+  });
+});
+
+/**
+ * S3 slice 3 — the question bridge, at the runtime level.
+ *
+ * `codexQuestionBridge.test.ts` covers the translation in isolation; what can
+ * only be tested here is ownership and ordering: which events leave the
+ * runtime, which frames reach the wire, and what happens when the server
+ * settles a request out from under a card that is still on screen.
+ */
+describe('codexRuntime — the question bridge (slice 3)', () => {
+  const QUESTION_FIXTURE = readFileSync(
+    path.join(FIXTURES, 'codex-question-requests.jsonl'),
+    'utf8'
+  )
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as FixtureEnvelope);
+
+  /** The first real captured request: 3 questions, ids prod_host / db_url / telemetry. */
+  const REAL_REQUEST = QUESTION_FIXTURE.find(
+    (frame) => frame.dir === '<-' && frame.raw.method === 'item/tool/requestUserInput'
+  );
+  if (!REAL_REQUEST?.raw.params) throw new Error('question fixture lost its request frame');
+  const QUESTION_THREAD = REAL_REQUEST.raw.params.threadId as string;
+  const QUESTION_ID = 'codex:s1:n:0';
+
+  /** A session bound to the QUESTION fixture's thread, mid-turn. */
+  async function askingSession(): Promise<Harness> {
+    const h = makeHarness({
+      threadStartResult: {
+        threadId: QUESTION_THREAD,
+        approvalPolicy: 'on-request',
+        sandbox: { type: 'workspaceWrite', networkAccess: false },
+      },
+    });
+    h.runtime.createSession({ sessionId: 's1', workspacePath: '/work/repo' });
+    await h.waitForEvent('session.created');
+    await h.runtime.send({ sessionId: 's1', text: 'go', requestId: 'req-send' });
+    h.events.length = 0;
+    return h;
+  }
+
+  function askReal(h: Harness, id = 0): void {
+    h.push({ id, method: 'item/tool/requestUserInput', params: REAL_REQUEST?.raw.params });
+  }
+
+  function resolvedNotification(requestId: number, threadId = QUESTION_THREAD) {
+    return { method: 'serverRequest/resolved', params: { threadId, requestId } };
+  }
+
+  it('raises a card from a real captured request, carrying the ids the answers need', async () => {
+    const h = await askingSession();
+    askReal(h);
+
+    const requested = h.eventsOf('question.requested');
+    expect(requested).toHaveLength(1);
+    const body = payload(requested[0]);
+    expect(body.questionId).toBe(QUESTION_ID);
+    expect((body.questions as Array<{ id: string }>).map((q) => q.id)).toEqual([
+      'prod_host',
+      'db_url',
+      'telemetry',
+    ]);
+    // `null` means "never auto-resolves" and is passed through as captured.
+    expect(body.autoResolutionMs).toBeNull();
+    // Nothing is answered yet: the card is the whole point of parking.
+    expect(h.replies()).toHaveLength(0);
+  });
+
+  it('writes the answer body to the wire and resolves the card exactly once', async () => {
+    const h = await askingSession();
+    askReal(h);
+    h.runtime.respondQuestion({
+      sessionId: 's1',
+      questionId: QUESTION_ID,
+      answers: {
+        prod_host: 'Keep current host',
+        db_url: 'Use environment variable',
+        telemetry: 'Disable',
+      },
+      requestId: 'req-answer',
+    });
+
+    expect(h.replies()).toHaveLength(1);
+    expect(h.replies()[0]).toMatchObject({
+      id: 0,
+      result: {
+        answers: {
+          prod_host: { answers: ['Keep current host'] },
+          db_url: { answers: ['Use environment variable'] },
+          telemetry: { answers: ['Disable'] },
+        },
+      },
+    });
+    const resolved = h.eventsOf('question.resolved');
+    expect(resolved).toHaveLength(1);
+    expect(payload(resolved[0]).outcome).toBe('answered');
+  });
+
+  it('sends the clean-cancel body on skip and reports it as cancelled, not answered', async () => {
+    const h = await askingSession();
+    askReal(h);
+    h.runtime.respondQuestion({ sessionId: 's1', questionId: QUESTION_ID, cancel: true });
+
+    expect(h.replies()[0]).toMatchObject({ id: 0, result: { answers: {} } });
+    // An empty answers map IS the cancel on this wire — the opposite of the
+    // Claude bridge, which refuses empty payloads as a footgun guard.
+    const resolved = h.eventsOf('question.resolved');
+    expect(resolved).toHaveLength(1);
+    expect(payload(resolved[0])).toEqual({ questionId: QUESTION_ID, outcome: 'cancelled' });
+  });
+
+  it('treats the resolved notification that follows our own answer as a no-op', async () => {
+    const h = await askingSession();
+    askReal(h);
+    h.runtime.respondQuestion({ sessionId: 's1', questionId: QUESTION_ID, cancel: true });
+    const repliesBefore = h.replies().length;
+    const eventsBefore = h.events.length;
+
+    h.push(resolvedNotification(0));
+
+    // Every request we answer is followed by one of these. It must cost
+    // nothing: no second frame, no second event, and a debug line rather than
+    // a WARN, or every ordinary question would look like a fault.
+    expect(h.replies()).toHaveLength(repliesBefore);
+    expect(h.events).toHaveLength(eventsBefore);
+    expect(h.logs.some((line) => line.includes('resolved echo for settled id'))).toBe(true);
+    expect(h.logs.some((line) => line.includes('WARN codex pending: serverRequest/resolved'))).toBe(
+      false
+    );
+  });
+
+  it('drops the card WITHOUT replying when the server resolves its own request', async () => {
+    const h = await askingSession();
+    askReal(h);
+    h.events.length = 0;
+
+    h.push(resolvedNotification(0));
+
+    // Zero frames is the whole point: the server has stopped waiting, so a
+    // reply now would be a response to nothing.
+    expect(h.replies()).toHaveLength(0);
+    const resolved = h.eventsOf('question.resolved');
+    expect(resolved).toHaveLength(1);
+    expect(payload(resolved[0])).toEqual({ questionId: QUESTION_ID, outcome: 'rejected' });
+
+    // And the entry really left the table — a later close finds nothing.
+    h.runtime.close({ sessionId: 's1' });
+    expect(h.replies()).toHaveLength(0);
+  });
+
+  it('still consumes the resolved notification after the turn has ended', async () => {
+    // The placement guard. This notification is handled ABOVE the "no turn, drop
+    // it" branch, because the server settling its own request clusters exactly
+    // where a turn is ending. Handled below it, the card would be stranded in
+    // precisely the case the consumer exists for.
+    const h = await askingSession();
+    askReal(h);
+    h.runtime.stop({ sessionId: 's1' });
+    // Stop drained the table, so re-ask outside a turn is impossible; instead
+    // park a fresh request while a turn runs, then end the turn.
+    const h2 = await askingSession();
+    askReal(h2, 3);
+    h2.push({
+      method: 'turn/completed',
+      params: { threadId: QUESTION_THREAD, turn: { id: FIXTURE_TURN, status: 'completed' } },
+    });
+    await h2.waitFor(() => h2.eventsOf('session.completed').length > 0, 'turn to finish');
+    h2.events.length = 0;
+
+    h2.push(resolvedNotification(3));
+
+    expect(h2.eventsOf('question.resolved')).toHaveLength(1);
+    expect(h2.replies()).toHaveLength(0);
+  });
+
+  it('ignores a resolved notification for another thread or without a request id', async () => {
+    const h = await askingSession();
+    askReal(h);
+    h.events.length = 0;
+
+    h.push(resolvedNotification(0, 'some-other-thread'));
+    h.push({ method: 'serverRequest/resolved', params: { threadId: QUESTION_THREAD } });
+
+    // The card is untouched: neither frame identifies a request of ours.
+    expect(h.eventsOf('question.resolved')).toHaveLength(0);
+    expect(h.replies()).toHaveLength(0);
+  });
+
+  it('refuses a question that arrives after Stop instead of raising a card', async () => {
+    const h = await askingSession();
+    h.runtime.stop({ sessionId: 's1' });
+    h.events.length = 0;
+    h.replies().length = 0;
+    askReal(h, 5);
+
+    // `stop()` neither disposes nor deletes the session and the interrupt is
+    // best effort, so codex can keep asking. A card here would drag the session
+    // back into a busy state the user just left.
+    expect(h.eventsOf('question.requested')).toHaveLength(0);
+    expect(h.eventsOf('question.resolved')).toHaveLength(0);
+    expect(h.replies().filter((frame) => frame.id === 5)).toHaveLength(1);
+    expect(h.replies().find((frame) => frame.id === 5)?.result).toEqual({ answers: {} });
+  });
+
+  it('resolves the card on stop and on close, with the frame written before the kill', async () => {
+    const h = await askingSession();
+    askReal(h);
+    h.events.length = 0;
+    h.runtime.stop({ sessionId: 's1' });
+
+    expect(h.replies()).toHaveLength(1);
+    expect(h.replies()[0]).toMatchObject({ id: 0, result: { answers: {} } });
+    expect(payload(h.event('question.resolved'))).toEqual({
+      questionId: QUESTION_ID,
+      outcome: 'rejected',
+    });
+
+    const c = await askingSession();
+    askReal(c);
+    c.events.length = 0;
+    c.runtime.close({ sessionId: 's1' });
+    expect(c.replies()).toHaveLength(1);
+    expect(c.ops.indexOf('reply:0')).toBeLessThan(c.ops.findIndex((op) => op.startsWith('kill:')));
+    expect(c.eventsOf('question.resolved')).toHaveLength(1);
+  });
+
+  it('resolves the card when the process dies, and does NOT pretend a frame was sent', async () => {
+    const h = await askingSession();
+    askReal(h);
+    h.events.length = 0;
+    h.exit({ code: 1, signal: null });
+
+    // The asymmetry is real and must not be papered over with a mock: the
+    // process is already gone, so the write is dropped by the connection. What
+    // still has to happen is the card resolving — otherwise it sits pending
+    // forever on a session that has failed.
+    expect(h.replies()).toHaveLength(0);
+    expect(h.eventsOf('question.resolved')).toHaveLength(1);
+    expect(payload(h.event('question.resolved')).outcome).toBe('rejected');
+  });
+
+  it('emits no session.status anywhere on the question path (C10 rule 3)', async () => {
+    // Asserted on the RUNTIME's emit array, not on the bridge: the bridge is a
+    // pure function with no emit channel, so asserting it there would pass no
+    // matter where the status was actually written.
+    const h = await askingSession();
+    askReal(h);
+    h.runtime.respondQuestion({
+      sessionId: 's1',
+      questionId: QUESTION_ID,
+      answers: { prod_host: 'Keep current host' },
+    });
+
+    expect(h.events.map((event) => event.type)).toEqual([
+      'question.requested',
+      'question.resolved',
+    ]);
+
+    // The waiting state comes from the server's own snapshot instead, which it
+    // does send around every question [实测 codex-question-turn-status.jsonl].
+    h.push({
+      method: 'thread/status/changed',
+      params: {
+        threadId: QUESTION_THREAD,
+        status: { type: 'active', activeFlags: ['waitingOnUserInput'] },
+      },
+    });
+    expect(payload(h.eventsOf('session.status').at(-1)).status).toBe('waiting_question');
+  });
+
+  it('rejects an id that belongs to a different kind of request', async () => {
+    const h = await askingSession();
+    h.push({ id: 0, method: 'item/commandExecution/requestApproval', params: {} });
+    h.events.length = 0;
+    h.runtime.respondQuestion({
+      sessionId: 's1',
+      questionId: QUESTION_ID,
+      answers: { a: 'yes' },
+      requestId: 'req-q',
+    });
+
+    // A shape error, not a race: nothing to converge, so this one IS an error.
+    expect(payload(h.event('host.error')).code).toBe('invalid_payload');
+    expect(h.eventsOf('question.resolved')).toHaveLength(0);
+    expect(h.replies()).toHaveLength(0);
   });
 });
