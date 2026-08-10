@@ -48,11 +48,10 @@
      ⑥ **jpeg / gif / webp 至今未过网关实测**（自动化只验了 PNG 与 text/plain），请各发一张确认；
      ⑦ 失败后 chip 保留且 Retry 带着附件重发；健康会话里粘图**不应**出现 Retry 按钮。
 2. **T-06 补测**（网关已恢复，元数据行 / 红色 Stop / 失败卡 + Retry 无重影）——实现已落地，唯一完全未测的任务。
-3. **T-10 打包版点验**（用户）：[清单](../../../plans/t10-packaged-gui-checklist.md) + [加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) → **CP2 汇报**。
+3. **T-10 打包版点验**（用户）：**动手照 [现场操作单](../../../plans/2026-08-10-field-test-sheet.md) 做**（每条只写「怎么做/看什么/算不算过」）；背景与依据见 [清单](../../../plans/t10-packaged-gui-checklist.md) + [加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) → **CP2 汇报**。
    **2026-08-09 起出包不再必须有 Windows 机器**：Actions → Build → Run workflow → 下载 `windows-unpacked` / `windows-installers`（见清单「CI 出包路径」节）。**限度**：CI 跑 `--skip-smoke`，只关掉 M2 结构半边，全量 25 项仍须真机跑。
    含并入的真机残留：T-24 真机 Windows 项（第 8 项）· A2/0-nonies ⑪ Win10 字重与 D25 §6.2 五项真机指标（第 9 项）。
 4. **T-11 加密机现场六项**（等 T-10；含白名单⑥）→ CP5，Phase 0 转正式 Go。
-5. **C-15 体积 141MB（+21MB）可接受性**——等用户拍板（open-q #1）。
 6. **T-21 收尾截图**：默认主题下中英混排三场景 + 6 处 `normal-case` 豁免目视（open-q #10），截图入台账后转 Done。
 7. **#15 缓存复测裁定**：GUI 重启连发两条看第二条有无缓存读取；裁定前暂缓联系网关运营方。
 8. **给主线的需求（T-03 / T-18 / 07-28 衍生，共 8 条）**：① `session.history` 的 `truncated` / `omittedCount` 全链路无展示；② **用户气泡不回显附件**——`beginTurn` 只 emit 文字（Renderer 无法自救）；③ 看门狗把整个上传窗口计入 stall，是未来提高附件上限的硬天花板；④ 协议可选加 `document`(PDF)；⑤ store 的 `sendMessage(text, attachments?)` 无人调用、与 Composer 的 `runSend` 双路径漂移；⑥ `session.create` 应校验 workspacePath 存在性；⑦ ~~resume 重放视觉双份~~（已根治 `fd55a26`）；⑧ thinking 空块要不要渲染「已思考」指示——待用户拍板。详见[主线台账](../../../plans/ledger-claude-mainline.md) 07-27/07-28 各行。

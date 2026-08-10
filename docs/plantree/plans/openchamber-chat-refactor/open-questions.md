@@ -5,7 +5,6 @@
 > #17 被 T-34 as-built + C-17 归口取代 / #18 拍板 A→T-19 / #25 三拍板落定 / #28 D27 裁定）
 > 结项推导原文见 [history 快照](./history/2026-0808-roadmap-openq-registry-archive.md)。
 
-1. **C-15 产物体积**：portable 120MB→141MB（随包 node.exe +21MB）可否接受？——等用户拍板；不可接受的回退方案=随包改可选、五源寻径为主。
 3. **CI 测试作业缺失**：`build.yml` 仅打包无 `pnpm test/typecheck/lint`（C-09 期间发现）。tag 触发的发布构建要不要加测试门禁？——成本（双平台时长）vs 收益待拍板。
 4. **T-09 Node 缺失场景无法真触发**：resolver 容错太好，坏路径仍 fallback 成功。构造「全候选失败」的可行法？（候选想法：mock-resolver 注入容器，见 ideas）
 5. **网关「400 thinking 格式无效」——默认模型路径确定性 400**（2026-07-28 升级）：budgetTokens 假说已被实测推翻；`{type:'adaptive', display:'summarized'}` 打网关默认模型 2/2 确定性 400——网关对 thinking 的处理跨模型不一致且随时间漂移。处理口径不变（按 session.failed 显示、不回滚 thinking 默认开），**定位与修复在网关侧**，app 侧无可修。

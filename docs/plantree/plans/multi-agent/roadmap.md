@@ -60,7 +60,7 @@
 | **0** 类型与断言骨架 | ✅ **已落地 `0314216`** | `agentWire.ts` 叶子模块 + 协议增量 #1–#19 + 19 例 AST 静态扫描 |
 | **1** 绑定回流链 | ✅ **已落地 `0314216`** | 正向链 + 早退守卫放宽 + 唯一物化点 + 侧栏 chip；**Host 现会显式拒绝跑不了的 agent** |
 | **2a** Codex 客户端骨架 | ✅ **已落地 `84ae4e1`** | JSON-RPC + 单一 pending 表 + **单一 status mapper** + 隔离 `CODEX_HOME` + Node 入口解析。双轨合流仲裁档 [2026-08-09-s3-slice2-arbitration](../../../plans/2026-08-09-s3-slice2-arbitration.md) |
-| **2b** 打包链 | 待 2a | **因用户裁定「Codex 随 Agent Host 打包」而新增**：`build-agent-host.mjs` 整条（preflight/external/prune/verifier）+ electron-builder + CI。**包体 141MB→约 480MB（3.4×）**，与 open-q #1 冲突，落之前须向用户交待 |
+| **2b** 打包链 | **待 3/4/5/6 之后**（用户 2026-08-10 裁定体积可接受，但排期后置——见下方阶段顺序） | **因用户裁定「Codex 随 Agent Host 打包」而新增**：`build-agent-host.mjs` 整条（preflight/external/prune/verifier）+ electron-builder + CI。**包体 141MB→约 480MB（3.4×）**，与 open-q #1 冲突，落之前须向用户交待 |
 | **2c** 回合循环 + 事件归一化器 | ✅ **已落地 `8b0277f`** | S2 切片表 0→1→2→{3,4},5 里**没有任何一片认领它**：`turn/start`(即 send) · `item/*`→`message/tool/thinking` · `turn/completed` · `account/rateLimits/updated`→`usage.updated` · `turn/interrupt`(拼写仍 [未测]，`session.stop` 要用)。**连带后果最严重**：提问与审批只在回合中到达，没有回合循环则切片 3/4 的验收只能是夹具回放——会绿着落地却在生产里是死代码。S1 估净新增 300–420 行。**必须排在 3 之前** |
 | **3** 提问桥 | 待 **2c** | 用 S2-a 抓到的 4 条真实报文做夹具回放；**`isSecret` 要补掩码**（§0.5-②） |
 | **4** 权限投影 | 待 3 | 同批卡文件，不与 3 并行 |
@@ -104,6 +104,18 @@ main 侧 `hostEnv.ts`。四门：lint 813 文件 0 错 / typecheck 0 / typecheck
 **本片新增第四道门 `pnpm typecheck:agent-host`**：根 `tsconfig.json` 的 `exclude` 含 `src/agent-host/**`，
 此前该目录**零类型检查**（实测根门编译 0 个文件）；切片 2 要在那里写全新的 `codexRuntime`，
 不补门等于在无类型检查处写核心运行时。新门覆盖 266 文件。**此后门禁为四门，仍须逐门串行跑。**
+
+## 阶段顺序（用户 2026-08-10 裁定）
+
+**先做完当前切片 → 再进用户登录 → 最后接 Codex CLI 选择功能。**
+每一阶段的**具体设计与需求，在进入该阶段时再逐轮明确**，不提前设计。
+
+| 序 | 阶段 | 状态 | 备注 |
+|---|---|---|---|
+| 1 | S3 切片 3 / 4 / 5 / 6（提问桥 · 权限投影 · 历史 · 收口） | 在建 | 切片 3 开工前置：`serverRequest/resolved` 目前无消费者，须先修（否则从 3 起会留下陈旧 pending 条目 →「对不存在的请求回帧」） |
+| 2 | **用户登录管理** | 未立项 | 用户口径：Claude 与 Codex **同一把 key、不同 URL**（claude `xxx.com` / codex `xxx.com/v1`）。**它是 [#9](./open-questions.md) 的解**——登录管理落地时，`codexHome` 的 provider 段应改为**由 app 按托管凭据生成**，而不再投影用户的 `~/.codex/config.toml`。届时一并定，本轮不预设计。 |
+| 3 | **Codex CLI 选择功能接入** | 未立项 | 即「聊天会话用哪个 agent」的 UI 入口。**注意三轴隔离**：现有 `AgentPickerMenu` / `SessionBar` 管的是终端 `BuiltinAgentId` 轴，**不是**聊天 `AgentWireName` 轴；`chatSessionActions.ts` 也没有 agent 参数。直接改旧 picker 会违反三轴隔离纪律，须另立入口。 |
+| 4 | **2b 打包链** | 待 | **体积已由用户 2026-08-10 拍板可接受**（141MB → 约 480MB，3.4×；codex 平台包单文件 296MiB）。原 open-q #1（C-15 的 +21MB）**一并关闭**。排期后置的理由：现在做只是让包变大，Codex 尚未到可用程度，无即时收益。 |
 
 ## Next
 
