@@ -120,3 +120,12 @@ correlated `agent_unsupported` 得知。属**诚实降级**（不是静默失败
 
 **要改什么**：`pendingQuestion` 改成 `Record<sessionId, …>`，连带 `PendingQuestionDock` 与
 `selectPendingQuestionBlock`。属红线 store 的形状变更 + 自己的测试，应在主线立任务而不是塞进 S3 切片。
+
+## #11 权限卡同卡中英混排待用户裁定（2026-08-10 切片 4 落地时登记）
+
+**状态**：待用户拍板（三选一），改动只在 `questionCardModel.ts` 几个字符串常量，测试断的是计数/路径/非空，改文案不打红。
+
+**现状**：按钮文案沿用既有英文词表（`Allow` / `Allow for session` / `Deny` / `Deny and stop`——最后一个是「拒绝并中断回合」，
+文案必须与 Deny 可区分）；§3.4 卡体新行按规格字面是中文（「同时允许在 `<root>` 下写入，本会话有效」「codex 未报告命令内容」等）。
+同一张卡内中英混排。仓内先例两边都有（HostStatusBanner 全中文 / 权限卡历史按钮英文）。
+候选：① 全英文；② 全中文；③ 维持现状（按钮英文 + 说明行中文）。出处见[切片 4 规格 §7.4](../../../plans/2026-08-10-s3-slice4-permission-projection-spec.md)。
