@@ -1,6 +1,6 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**In Progress — S3 施工中，切片 0/1/2a/2c/3 已落地，切片 4 规格已落库待施工**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工）。
+> 状态：**In Progress — S3 施工中，切片 0/1/2a/2c/3/4 已落地，下一件切片 5 历史**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工）。
 >
 > ✅ **解冻裁定（用户 2026-08-06）**：原话「multi-agent 支线解冻 开干」。
 > 2026-08-05 的「后置」裁定（原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」）
@@ -63,7 +63,7 @@
 | **2b** 打包链 | **待 3/4/5/6 之后**（用户 2026-08-10 裁定体积可接受，但排期后置——见下方阶段顺序） | **因用户裁定「Codex 随 Agent Host 打包」而新增**：`build-agent-host.mjs` 整条（preflight/external/prune/verifier）+ electron-builder + CI。**包体 141MB→约 480MB（3.4×）**，与 open-q #1 冲突，落之前须向用户交待 |
 | **2c** 回合循环 + 事件归一化器 | ✅ **已落地 `8b0277f`** | S2 切片表 0→1→2→{3,4},5 里**没有任何一片认领它**：`turn/start`(即 send) · `item/*`→`message/tool/thinking` · `turn/completed` · `account/rateLimits/updated`→`usage.updated` · `turn/interrupt`(拼写仍 [未测]，`session.stop` 要用)。**连带后果最严重**：提问与审批只在回合中到达，没有回合循环则切片 3/4 的验收只能是夹具回放——会绿着落地却在生产里是死代码。S1 估净新增 300–420 行。**必须排在 3 之前** |
 | **3** 提问桥 | ✅ **已落地 `4b468f4`** | `codexQuestionBridge.ts`（纯函数）+ 三道前置守卫 + `pending.forget()` 前置修复 + 渲染端 id 键与 `isSecret` 掩码。施工档 [切片 3 规格](../../../plans/2026-08-10-s3-slice3-question-bridge-spec.md)（rev.2，双轨评审后修订）。**夹具实际只有 2 条入向报文 / 5 颗问题**——S2 写的「4 条 / 10 颗」仓内不存在 |
-| **4** 权限投影 | **规格已落库（rev.2，双轨评审后），待施工** | 施工档 [切片 4 规格](../../../plans/2026-08-10-s3-slice4-permission-projection-spec.md)。动工前重生成 codex 契约拿到三套决策方言逐字定义，**推翻 S2 三处**（exec 6 变体非 4、exec 与 file_change 方言不同、legacy deny 是对象）；**`approvalCorrelator.ts` 不用新建**（2c 的 `CodexNormalizer.getFileChangeDetail` 已是它）。双轨评审在写代码前推翻 rev.1 十三处，含一条安全 blocker：`grantRoot` 是会话级目录写权、rev.1 通篇没有它 |
+| **4** 权限投影 | ✅ **已落地 `7f357c2`** | `codexDecisions.ts` + 审批桥全链路 + 渲染端 decision 透传 8 处。施工档 [切片 4 规格](../../../plans/2026-08-10-s3-slice4-permission-projection-spec.md)（rev.2 + §7 as-built）。评审在写代码前推翻 rev.1 十三处（含 `grantRoot` 会话级写权 blocker）；施工收窄规格一处（回合末 drain 仅审批族，§7.1）；复核修复含 decision 发射链三个接线 pin。**vitest 152 文件 3160 例 0 红** |
 | **5** 历史 | 待 1+2 | 先档 A（`history_unsupported` 显式降级）再档 C |
 | **6** 收口 | 待全部 | flag on/off 双跑 + **侧栏窄宽截图（U8）** + 台账 |
 
@@ -75,6 +75,13 @@
 `', '` 拆分规则对 Codex 恒不可达且只可能切碎自由文本（改恒不拆）· 桥内重复了分发层已有的空 payload 防呆（删除）·
 「本片不改 `chatSessions.ts`」是错的（`question.resolved` 无条件清 `pendingQuestion` 会跨会话抹掉另一张卡，补匹配守卫）。
 四门：**vitest 146 文件 2914 例 0 红**。
+
+**切片 4 已落地 `7f357c2`（2026-08-10，规格与夹具先行 `35b4594`/`1ae2abc`）**——沿用切片 3 流程（取证 → 规格 → 双轨对抗评审 → 施工）。
+取证重生成同版 codex 契约，**在写规格前推翻 S2 三处**（exec 方言 6 变体非 4 / exec≠file_change / legacy deny 是对象），
+并抓出仓内证据缺陷（method-contract 的 serverRequest 一多一少两处错，契约测试按错列表钉了「未覆盖面」）。
+双轨评审（失败态镜头 + 证据镜头，双盲）推翻 rev.1 十三处；施工三段 + 修复段做了 16 处变异验证；
+fresh-eyes 复核的 major（decision 发射链零覆盖）以三个源码接线 pin 收口。四门全绿 **vitest 3160 例**。
+遗留见规格 §6 L1~L10 与 §7.4（含「权限卡同卡中英混排」待用户裁）。
 
 ⚠️ **本片教训：设计档里的数字不等于仓里的证据。** 规格 rev.1 照抄 S2「4 条真实报文 / 10 颗问题」写进验收表，
 而夹具只留存 **2 条**入向报文（5 颗问题）——另两次交换只剩我方回包。照 rev.1 施工，唯一写得出测试的办法

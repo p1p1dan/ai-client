@@ -394,3 +394,44 @@ if ((effective === 'allow' || effective === 'allow_session') && !allow) effectiv
 | L8 | `approvalId`（zsh-exec-bridge 子命令审批，一个 itemId 多回调）不做路由消歧：本片按 JSON-RPC id 一一对应，够用；真出现同 item 多审批时卡片标题会重复 | 观察项 |
 | L9 | **跨 agent 回声**：Codex 会话 teardown 后的迟到点击经 `runtimeForSession` 回落 Claude 运行时，被回声成 `allow: input.allow` 并把状态推回 idle。本片靠渲染端 R12 兜住（A20），根治要么给命令带 agent、要么让 registry 保留墓碑 | 登记（§0.2 否决项） |
 | L10 | `grantRoot` 自带 `[UNSTABLE] (unclear if this is honored today)`：我们照它渲染警示行，但**服务端是否真的据此放宽写权未经证实**；若后来证明不生效，警示行会变成虚惊 | 观察项 |
+
+
+---
+
+## 7. as-built 施工偏差登记（2026-08-10 施工批，规格拍板后追加）
+
+> 施工按「实现方否决权」原则执行：与规格冲突处取更安全读法落地并在此留痕，不静默改写上文。
+> 编排：串行三段（Foundation → Host → Renderer，各自变异验证）+ fresh-eyes 复核（1 major + 5 minor，全部闭环）+ 修复段。
+
+### 7.1 对规格点名内容的范围变更（最重要的两条）
+
+| # | 规格原文 | as-built | 理由 |
+|---|---|---|---|
+| 1 | §2.6「`finishTurn` 内 drain({sessionId},'aborted')」（全表） | **收窄为仅审批族**（`APPROVAL_CARD_KINDS`）；为此给 `codexPending.drain` 加了可选 `kinds` 过滤（缺省全表，既有调用点行为不变） | 照字面会连提问一起 drain：打红切片 3 既有测试（不在 §5 迁移清单内），且渲染端终端分支只清 `pendingPermissions`——提问在回合末**并不搁浅**，替用户 reject 一张他仍能作答的卡是新增伤害。两处代码注释已写明「规格说全表、此处有意收窄」 |
+| 2 | §2.1-2 只列「缺席/null/非数组」回落 `['allow','deny']` | **空数组不回落**：产出 `['deny']`、omitted=0（deny-only 卡）。渲染端对称：`permissionDecisions` 全不可识别 → `['deny']`，不产出零按钮卡 | 空数组是数组；回落等于替服务端凭空造一个 Allow 按钮。恒含 deny 的不变量（§0.2-4）仍满足 |
+
+### 7.2 其余实现取舍（逐条）
+
+- **`toWireDecision` 签名 `string | null` 非 `unknown | null`**：TS 里 `unknown | null` 塌缩成 `unknown`，抹掉 §2.3-5 依赖的 null 判据；legacy 对象变体（L5）落地时再加宽。
+- **A6(b) 两半的落地**：Host 侧 detail 恒发（`{kind:'file_change',changes:[]}`，§2.2 优先于 A6(b) 措辞）；渲染端 `derivePermissionDetailView` 在一行都渲染不出时返回 null——屏幕效果即「卡照发、detail 省略」，避免空 flex 占位盒（本仓已有该类缺陷记录）；`changes:[]` 但有 `grantRoot` 时卡体仍出。
+- **A2 的 allow 半边当前不可观测**：两条活方言 4 id 全可映射，唯一触发降级的是词表外 id，两种派生给同样的 `allow:false`。可观测的 `decision` 字段已被钉死（变异验证）；`allow` 按 §0.2-8 用降级后值实现，作为防御不变量保留。
+- **§2.8（index.ts 分发）零自动化覆盖**：index.ts 顶层起 readline 监听 stdin，vitest(node) import 即挂死（仓内已有同类事故）。6 行逻辑按规格内联，靠评审保证——**登记为覆盖缺口**。派生块移到 sessionId/permissionId 校验之后（对合法载荷零差异）。
+- **method-contract 修正的追加序**：两个 legacy 方法**追加在数组末尾**而非字母序——`unhandled` 断言是保序 filter，只有末尾追加能逐字等于 §0.4 的六项。A24 另加固：两份快照 codexVersion 必须一致、serverRequest 集合必须等于 `codex-approval-schema.json` 的 11 项、legacy 方法**不得**进 `SERVER_REQUEST_KINDS`（把"为绿而注册"的捷径钉死）。
+- **卡层细节**：autoReason 尾注在 frozen answer 里是字符串尾部、在 ToolRow 里追 arg 末尾（verb 保持纯动词槽位）；file 行 React key 用 `${index}:${path}`（防 rename 同路径撞 key）；`OptionRow.decision` 为 undefined 时 early return（不回落 allow/deny——"认不出就当 allow/deny"正是本片拆掉的 bug）；识别判定用 `Object.hasOwn`（防 wire 载荷 `'constructor'` 原型链投毒，有负面断言）；`permissionKind` 当前是只写字段（卡体分派走 `detail.kind`），登记以防误认有活消费者。
+- **`respondPermission` 的 requestId 口径**：成功路径带、补发路径不带——对齐切片 3 `respondQuestion` 先例（规格未规定）。
+
+### 7.3 复核发现与修复（1 major + 5 minor，全闭环）
+
+| 严重级 | 发现 | 修复 |
+|---|---|---|
+| major | **A19 发射半边零覆盖**：decision 从按钮到 IPC 整条链没有一跳被钉住，去掉透传全套件仍绿，"Deny and stop"静默退化成普通 deny | `messageTimelineWiring.test.ts` 加 S3-4 源码 pin（含 `expectUnwired` 钉死被替换的 boolean 调用）；`chatSessionsRespond.test.ts` 补 3 参/2 参 payload 断言（键集合断言，区分"缺席"与"undefined"）；**hop 1** 另立 `questionCardWiring.test.ts` 钉 `onRespond?.(decision)` 与 not.toContain 旧 label 比对 |
+| minor | A12 store 半边缺失（未来给 resolved reducer 加队列前置即复活 §2.6 缺陷） | `chatSessionsCore.test.ts` 补 4 行：终端 × resolved 双序，block 都 resolved 且新字段记上（变异验证：注入队列前置 → 恰好终端先行两行转红） |
+| minor | codexRuntime G1 注释仍写"审批不发卡、留给切片 4" | 改写为 P1 共享姿态现状 |
+| minor | QuestionCard 注释把旧陷阱方向写反（旧代码是 fail-closed DENY 不是 ALLOW） | 如实改写：方向 fail-closed、语义错误（Allow for session 会被当拒绝发出） |
+| minor | §7.1-1 收窄在代码侧无"规格说全表"的自白 | 两处注释补上 |
+| minor | `countDiffStat` 的 `+++/---` 前缀跳过吞正文行（删除 `--foo` 产生 `---foo`） | hunk 感知：`@@` 前才跳文件头，`diff ` 行复位（防多文件补丁回归）；**已声明残留**：无头部的裸 `-`/`+` 行内容仍按旧行为计数（有既有冻结测试依赖） |
+
+### 7.4 覆盖缺口与待裁清单（本批遗留，不混入 §6）
+
+- index.ts 分发 6 行零自动化覆盖（§7.2，成因结构性 = open-q #27 同族）。
+- **UI 中英混排待用户裁**：按钮文案英文（既有 `PERMISSION_ALLOW` 词表沿用），§3.4 卡体新行按规格字面是中文——同卡混排。统一只需改 `questionCardModel.ts` 几个字符串常量，测试断的是计数/路径/非空不会打红。
