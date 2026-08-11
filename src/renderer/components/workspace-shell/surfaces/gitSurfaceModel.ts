@@ -3,7 +3,7 @@
  * `shellLayoutModel.ts` — every decision lives here so vitest (node env,
  * `.ts` only) can cover it without mounting React or Monaco.
  */
-import type { FileChange, FileChangesResult } from '@shared/types';
+import type { FileChange, FileChangesResult, GitLogEntry } from '@shared/types';
 
 // ── layout constants ────────────────────────────────────────────────────
 /** Left column width (changes list + commit box) in the `expanded` split presentation. */
@@ -54,21 +54,34 @@ export interface GitSurfaceSelection {
 export interface GitSurfaceViewState {
   /** null = the list view; a value = the diff view is showing this file. */
   selection: GitSurfaceSelection | null;
+  /**
+   * D30(a): collapse state of the History section rendered below `CommitBox`
+   * inside `changesPane`. Defaults to expanded. Independent of `selection` —
+   * neither field's action touches the other.
+   */
+  historyExpanded: boolean;
 }
 
-export const initialGitSurfaceViewState: GitSurfaceViewState = { selection: null };
+export const initialGitSurfaceViewState: GitSurfaceViewState = {
+  selection: null,
+  historyExpanded: true,
+};
 
 export type GitSurfaceViewAction =
   | { type: 'select'; file: GitSurfaceSelection }
   | { type: 'back' }
   | { type: 'workdir-changed' }
-  | { type: 'selection-gone' };
+  | { type: 'selection-gone' }
+  | { type: 'toggle-history' };
 
 /**
  * select -> diff (sets the selection); back / workdir-changed / selection-gone
  * all return to the list (clear the selection) — the workdir switching out
  * from under a stale selection and the selected file disappearing (staged/
  * discarded away) both fall back to the same safe state as pressing back.
+ * `toggle-history` only flips `historyExpanded`; every other action carries
+ * it through untouched, and `toggle-history` carries `selection` through
+ * untouched — the two pieces of state are orthogonal.
  */
 export function reduceGitSurfaceView(
   state: GitSurfaceViewState,
@@ -76,11 +89,13 @@ export function reduceGitSurfaceView(
 ): GitSurfaceViewState {
   switch (action.type) {
     case 'select':
-      return { selection: action.file };
+      return { ...state, selection: action.file };
     case 'back':
     case 'workdir-changed':
     case 'selection-gone':
-      return { selection: null };
+      return { ...state, selection: null };
+    case 'toggle-history':
+      return { ...state, historyExpanded: !state.historyExpanded };
     default:
       return state;
   }
@@ -165,4 +180,45 @@ export function resolveGitWorkdir(snapshot: GitWorkdirSnapshot): GitWorkdirResol
   }
 
   return { workdir: workspace.path };
+}
+
+// ── history section (D30a) ──────────────────────────────────────────────
+
+/**
+ * Splits a `GitLogEntry.refs` string into individual ref badge labels for the
+ * History section's row pills.
+ *
+ * `gitLogFormat.ts` (backend) already strips a leading `"HEAD -> "` before
+ * this ever reaches the renderer, so a real `refs` value looks like
+ * `"main, origin/main"` or `"main, tag: v1"` — never `"HEAD -> main, ..."`.
+ * This still strips a `HEAD ->` prefix defensively (matching
+ * `CommitHistoryList.tsx`'s existing per-badge cleanup) so the function is
+ * correct standalone even if that upstream guarantee ever changes; the
+ * `tag:` prefix is real and always needs stripping.
+ */
+export function parseRefBadges(refs: string | undefined): string[] {
+  if (!refs) {
+    return [];
+  }
+  return refs
+    .split(',')
+    .map((part) =>
+      part
+        .replace(/^\s*HEAD\s*->\s*/, '')
+        .replace(/^\s*tag:\s*/, '')
+        .trim()
+    )
+    .filter((label) => label.length > 0);
+}
+
+/**
+ * Row tooltip for a History entry: short hash + author + date. The 320px
+ * changes pane has no room for hash/author/date as visible row text without
+ * crowding the subject (spec: "do not crowd 380px") — this hover title is
+ * the only place they surface.
+ */
+export function formatCommitTooltip(
+  commit: Pick<GitLogEntry, 'hash' | 'author_name' | 'date'>
+): string {
+  return `${commit.hash.slice(0, 8)} · ${commit.author_name} · ${commit.date}`;
 }

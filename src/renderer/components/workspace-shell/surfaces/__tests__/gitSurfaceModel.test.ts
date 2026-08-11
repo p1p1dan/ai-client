@@ -2,9 +2,11 @@ import type { FileChange, FileChangesResult } from '@shared/types';
 import { describe, expect, it } from 'vitest';
 import {
   deriveGitSurfacePresentation,
+  formatCommitTooltip,
   type GitSurfaceSelection,
   type GitSurfaceViewState,
   initialGitSurfaceViewState,
+  parseRefBadges,
   partitionFileChanges,
   reduceGitSurfaceView,
   resolveGitWorkdir,
@@ -71,44 +73,76 @@ describe('partitionFileChanges', () => {
 
 describe('reduceGitSurfaceView', () => {
   const file: GitSurfaceSelection = { path: 'a.ts', staged: false };
-  const selectedState: GitSurfaceViewState = { selection: file };
+  const selectedState: GitSurfaceViewState = { selection: file, historyExpanded: true };
 
-  it('starts on the list (no selection)', () => {
-    expect(initialGitSurfaceViewState).toEqual({ selection: null });
+  it('starts on the list (no selection), history expanded', () => {
+    expect(initialGitSurfaceViewState).toEqual({ selection: null, historyExpanded: true });
   });
 
   it('select sets the selection (pushes into diff)', () => {
     const next = reduceGitSurfaceView(initialGitSurfaceViewState, { type: 'select', file });
-    expect(next).toEqual({ selection: file });
+    expect(next).toEqual({ selection: file, historyExpanded: true });
   });
 
   it('select replaces a prior selection', () => {
     const other: GitSurfaceSelection = { path: 'b.ts', staged: true };
     const next = reduceGitSurfaceView(selectedState, { type: 'select', file: other });
-    expect(next).toEqual({ selection: other });
+    expect(next).toEqual({ selection: other, historyExpanded: true });
   });
 
   it('back clears the selection (returns to list)', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'back' });
-    expect(next).toEqual({ selection: null });
+    expect(next).toEqual({ selection: null, historyExpanded: true });
   });
 
   it('workdir-changed clears the selection', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'workdir-changed' });
-    expect(next).toEqual({ selection: null });
+    expect(next).toEqual({ selection: null, historyExpanded: true });
   });
 
   it('selection-gone clears the selection', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'selection-gone' });
-    expect(next).toEqual({ selection: null });
+    expect(next).toEqual({ selection: null, historyExpanded: true });
   });
 
   it('back / workdir-changed / selection-gone are no-ops on an already-empty list state', () => {
     for (const type of ['back', 'workdir-changed', 'selection-gone'] as const) {
       expect(reduceGitSurfaceView(initialGitSurfaceViewState, { type })).toEqual({
         selection: null,
+        historyExpanded: true,
       });
     }
+  });
+
+  // D30(a): the History section's collapse state, orthogonal to `selection`.
+  it('toggle-history flips historyExpanded from true to false', () => {
+    const next = reduceGitSurfaceView(initialGitSurfaceViewState, { type: 'toggle-history' });
+    expect(next).toEqual({ selection: null, historyExpanded: false });
+  });
+
+  it('toggle-history flips historyExpanded from false back to true', () => {
+    const collapsed: GitSurfaceViewState = { selection: null, historyExpanded: false };
+    const next = reduceGitSurfaceView(collapsed, { type: 'toggle-history' });
+    expect(next).toEqual({ selection: null, historyExpanded: true });
+  });
+
+  it('toggle-history leaves an active selection untouched', () => {
+    const next = reduceGitSurfaceView(selectedState, { type: 'toggle-history' });
+    expect(next).toEqual({ selection: file, historyExpanded: false });
+  });
+
+  it('select / back / workdir-changed / selection-gone leave historyExpanded untouched when collapsed', () => {
+    const collapsedWithSelection: GitSurfaceViewState = { selection: file, historyExpanded: false };
+    expect(reduceGitSurfaceView(collapsedWithSelection, { type: 'back' })).toEqual({
+      selection: null,
+      historyExpanded: false,
+    });
+    expect(
+      reduceGitSurfaceView(collapsedWithSelection, {
+        type: 'select',
+        file: { path: 'b.ts', staged: true },
+      })
+    ).toEqual({ selection: { path: 'b.ts', staged: true }, historyExpanded: false });
   });
 });
 
@@ -215,5 +249,51 @@ describe('resolveGitWorkdir', () => {
   it('has no judged path to name when no session resolves', () => {
     const resolution = resolveGitWorkdir({ activeSessionId: null, sessions: [], workspaces: [] });
     expect('judgedPath' in resolution).toBe(false);
+  });
+});
+
+describe('parseRefBadges', () => {
+  it('returns an empty array for undefined', () => {
+    expect(parseRefBadges(undefined)).toEqual([]);
+  });
+
+  it('returns an empty array for an empty string', () => {
+    expect(parseRefBadges('')).toEqual([]);
+  });
+
+  // Real shape: `gitLogFormat.ts` already strips a leading "HEAD -> " before
+  // this reaches the renderer.
+  it('splits a plain refs string into badge labels', () => {
+    expect(parseRefBadges('main, origin/main')).toEqual(['main', 'origin/main']);
+  });
+
+  it('strips a leftover "HEAD -> " prefix defensively', () => {
+    expect(parseRefBadges('HEAD -> main, origin/main')).toEqual(['main', 'origin/main']);
+  });
+
+  it('strips the "tag: " prefix from annotated tag refs', () => {
+    expect(parseRefBadges('main, origin/main, tag: v1')).toEqual(['main', 'origin/main', 'v1']);
+  });
+
+  it('handles a single ref with no comma', () => {
+    expect(parseRefBadges('main')).toEqual(['main']);
+  });
+});
+
+describe('formatCommitTooltip', () => {
+  it('joins an 8-char short hash, the author, and the date with middle dots', () => {
+    expect(
+      formatCommitTooltip({
+        hash: '0123456789abcdef',
+        author_name: 'Ada Lovelace',
+        date: '2026-08-11',
+      })
+    ).toBe('01234567 · Ada Lovelace · 2026-08-11');
+  });
+
+  it('does not truncate a hash already shorter than 8 chars', () => {
+    expect(formatCommitTooltip({ hash: 'abc', author_name: 'A', date: '2026-01-01' })).toBe(
+      'abc · A · 2026-01-01'
+    );
   });
 });

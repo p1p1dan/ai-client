@@ -1784,6 +1784,9 @@ export const zhTranslations: Record<string, string> = {
   "This session's workspace has no resolved path yet.": '该会话的工作区尚未解析出路径。',
   'This workspace is not tracked by Git.': '此工作区未纳入 Git 版本管理。',
   'Back to changes': '返回变更列表',
+  // D30(a): History section (GitHistoryList) — 'History' and 'No commits yet'
+  // are reused from existing keys above (sessions sidebar / CommitHistoryList).
+  'Load more': '加载更多',
 
   // T-13: editor surface (EditorSurfaceView) — empty state and intent failure notices.
   'Select a Workspace to browse files': '选择工作区以浏览文件',

@@ -1,9 +1,18 @@
 /**
  * T-12: the git surface — wires `ChangesList` + `CommitBox` + `DiffViewer`
  * (all prop-driven, zero changes to them beyond `DiffViewer`'s additive
- * `sideBySideInlineBreakpoint`) onto the context panel. Minimal-set
- * discipline (spec §2): no `SourceControlPanel` / `RepositoryList` /
- * `CommitHistoryList` / `BranchSwitcher` / `components/git/` orphans, no
+ * `sideBySideInlineBreakpoint`) onto the context panel, plus a `GitHistoryList`
+ * flat-history section under `CommitBox` (D30(a), 2026-08-11).
+ *
+ * D30(a) walks back exactly the "no history" half of the minimal-set ban
+ * below — the decision explicitly names `CommitHistoryList` reuse as the
+ * thing it overturns. It does NOT reuse that component verbatim though:
+ * `CommitHistoryList`'s revert/reset context menu, toast wiring, and legacy
+ * hardcoded colors dragged in more than the display-only scope asked for, so
+ * History renders through a lean, local `GitHistoryList` instead (see that
+ * file's header for the reuse-vs-fork rationale). The rest of the original
+ * ban is unchanged and still in force: no `SourceControlPanel` /
+ * `RepositoryList` / `BranchSwitcher` / other `components/git/` orphans, no
  * branch/PR/sync/stash actions.
  *
  * Standard width: single-view push navigation, changes list <-> diff.
@@ -25,6 +34,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useGitStatus } from '@/hooks/useGit';
+import { useGitHistoryInfinite } from '@/hooks/useGitHistory';
 import {
   useFileChanges,
   useFileDiff,
@@ -38,14 +48,19 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import type { ContextSurfaceId } from '../surfaceRegistry';
+import { GitHistoryList } from './GitHistoryList';
 import {
   deriveGitSurfacePresentation,
   GIT_CHANGES_PANE_WIDTH,
   type GitWorkdirResolution,
+  initialGitSurfaceViewState,
   partitionFileChanges,
   reduceGitSurfaceView,
   resolveGitWorkdir,
 } from './gitSurfaceModel';
+
+/** Commits per page — matches the spec's "~30 commits initial page". */
+const GIT_HISTORY_PAGE_SIZE = 30;
 
 // Structurally identical to surfaceViews.tsx's `SurfaceViewProps` — defined
 // locally instead of imported so this file has zero dependency on the wiring
@@ -136,7 +151,7 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   );
   const workdir = 'workdir' in resolution ? resolution.workdir : null;
 
-  const [state, dispatch] = useReducer(reduceGitSurfaceView, { selection: null });
+  const [state, dispatch] = useReducer(reduceGitSurfaceView, initialGitSurfaceViewState);
 
   // Reset the selection whenever the resolved workdir changes out from under it
   // (workspace switch, session switch) — a stale path/staged pair from the
@@ -159,6 +174,12 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     () => partitionFileChanges(fileChangesQuery.data),
     [fileChangesQuery.data]
   );
+
+  // D30(a): History section data — the existing GIT_LOG infinite-query hook,
+  // no backend changes. Runs regardless of `state.historyExpanded` (default
+  // expanded, and collapsing shouldn't throw away an already-loaded page).
+  const historyQuery = useGitHistoryInfinite(workdir, GIT_HISTORY_PAGE_SIZE);
+  const historyCommits = useMemo(() => historyQuery.data?.pages.flat() ?? [], [historyQuery.data]);
 
   // If the selected file is no longer present (staged away, discarded,
   // committed) once real data has arrived, fall back to the list instead of
@@ -197,6 +218,14 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   const handleBack = useCallback(() => {
     dispatch({ type: 'back' });
   }, []);
+
+  const handleToggleHistory = useCallback(() => {
+    dispatch({ type: 'toggle-history' });
+  }, []);
+
+  const handleLoadMoreHistory = useCallback(() => {
+    historyQuery.fetchNextPage();
+  }, [historyQuery]);
 
   const handleStage = useCallback(
     (paths: string[]) => {
@@ -267,6 +296,15 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
         onCommit={handleCommit}
         isCommitting={commitMutation.isPending}
         rootPath={workdir}
+      />
+      <GitHistoryList
+        commits={historyCommits}
+        expanded={state.historyExpanded}
+        hasNextPage={historyQuery.hasNextPage}
+        isFetchingNextPage={historyQuery.isFetchingNextPage}
+        isLoading={historyQuery.isLoading}
+        onLoadMore={handleLoadMoreHistory}
+        onToggle={handleToggleHistory}
       />
     </div>
   );
