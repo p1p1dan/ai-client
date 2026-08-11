@@ -1,6 +1,6 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**In Progress — S3 施工中，切片 0/1 已落地**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工）。
+> 状态：**In Progress — S3 施工中，切片 0/1/2a/2c/3 已落地，切片 4 规格已落库待施工**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工）。
 >
 > ✅ **解冻裁定（用户 2026-08-06）**：原话「multi-agent 支线解冻 开干」。
 > 2026-08-05 的「后置」裁定（原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」）
@@ -63,7 +63,7 @@
 | **2b** 打包链 | **待 3/4/5/6 之后**（用户 2026-08-10 裁定体积可接受，但排期后置——见下方阶段顺序） | **因用户裁定「Codex 随 Agent Host 打包」而新增**：`build-agent-host.mjs` 整条（preflight/external/prune/verifier）+ electron-builder + CI。**包体 141MB→约 480MB（3.4×）**，与 open-q #1 冲突，落之前须向用户交待 |
 | **2c** 回合循环 + 事件归一化器 | ✅ **已落地 `8b0277f`** | S2 切片表 0→1→2→{3,4},5 里**没有任何一片认领它**：`turn/start`(即 send) · `item/*`→`message/tool/thinking` · `turn/completed` · `account/rateLimits/updated`→`usage.updated` · `turn/interrupt`(拼写仍 [未测]，`session.stop` 要用)。**连带后果最严重**：提问与审批只在回合中到达，没有回合循环则切片 3/4 的验收只能是夹具回放——会绿着落地却在生产里是死代码。S1 估净新增 300–420 行。**必须排在 3 之前** |
 | **3** 提问桥 | ✅ **已落地 `4b468f4`** | `codexQuestionBridge.ts`（纯函数）+ 三道前置守卫 + `pending.forget()` 前置修复 + 渲染端 id 键与 `isSecret` 掩码。施工档 [切片 3 规格](../../../plans/2026-08-10-s3-slice3-question-bridge-spec.md)（rev.2，双轨评审后修订）。**夹具实际只有 2 条入向报文 / 5 颗问题**——S2 写的「4 条 / 10 颗」仓内不存在 |
-| **4** 权限投影 | **就绪可开工** | 同批卡文件，不与 3 并行。切片 3 已把 `forget()` / `defaultReplyFor()` 做成通用件，审批直接吃；**审批侧的「无回合守卫」有意留给本片决定**（切片 3 只给提问加了 G1，见规格 §2.3） |
+| **4** 权限投影 | **规格已落库（rev.2，双轨评审后），待施工** | 施工档 [切片 4 规格](../../../plans/2026-08-10-s3-slice4-permission-projection-spec.md)。动工前重生成 codex 契约拿到三套决策方言逐字定义，**推翻 S2 三处**（exec 6 变体非 4、exec 与 file_change 方言不同、legacy deny 是对象）；**`approvalCorrelator.ts` 不用新建**（2c 的 `CodexNormalizer.getFileChangeDetail` 已是它）。双轨评审在写代码前推翻 rev.1 十三处，含一条安全 blocker：`grantRoot` 是会话级目录写权、rev.1 通篇没有它 |
 | **5** 历史 | 待 1+2 | 先档 A（`history_unsupported` 显式降级）再档 C |
 | **6** 收口 | 待全部 | flag on/off 双跑 + **侧栏窄宽截图（U8）** + 台账 |
 
