@@ -52,9 +52,17 @@
 | `codex-method-contract.json` | 方法**名**（clientRequest / serverRequest / serverNotification / threadItemTypes） | 切片 2 `codexWireContract.test.ts` |
 | `codex-turn-schema.json` | 回合循环的**参数形状** | 切片 2c |
 | `codex-question-schema.json` | `request_user_input` 的问题与**应答体**形状 + `serverRequest/resolved` 入参 | 切片 3 |
+| `codex-approval-schema.json` | 三套**决策方言**（v2 exec / v2 file_change / legacy ReviewDecision）+ 三类审批请求的参数形状 + `ServerRequest` 全量方法名 | 切片 4 |
 
-三者都是**已提交的静态快照，不会自己发现漂移**：codex 版本一升级，
+四者都是**已提交的静态快照，不会自己发现漂移**：codex 版本一升级，
 **必须手动重跑上面那条命令重生成**，否则“钉住了”只是钉住了一个过期的世界。
+
+⚠️ **`codex-method-contract.json` 的 `serverRequest` 一列是错的**（2026-08-10 切片 4 取证发现，同版本重生成对照）：
+它把 `openai/form` 当成方法名（那其实是 `McpServerElicitationRequestParams` 里 `mode` 字段的枚举值），
+又漏掉两个真实的服务端请求 `applyPatchApproval` / `execCommandApproval`。真值 **11 条**见
+`codex-approval-schema.json` 的 `serverRequestMethods`（提取口径：`ServerRequest.json` 顶层 `oneOf` 各变体的
+`properties.method.enum[0]`）。同类欠采还波及 `clientRequest`（缺 5 条，含 `initialize`）与
+`serverNotification`（缺 5 条，含 `error` / `warning`）—— 切片 4 只修 `serverRequest` 一族，其余登记为遗留。
 
 ### 逐文件说明
 

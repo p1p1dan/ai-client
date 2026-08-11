@@ -1,0 +1,640 @@
+{
+  "_comment": [
+    "Approval contract snapshot, generated from the codex binary itself:",
+    "  codex app-server generate-json-schema --experimental --out <dir>",
+    "  (45 files + a v1/ and a v2/ subdirectory)",
+    "Excerpted for S3 slice 4 (permission projection): the decision dialects, the",
+    "approval request params, and the full server-request method list.",
+    "FIDELITY, per block: `serverRequestMethods` is a derived list (see its own",
+    "_source). Every *Decision `oneOf` and every entry under `requestParams` is",
+    "VERBATIM, descriptions included — rev.1 of this file reduced the request",
+    "properties to bare type names, which silently hid that fileChange.grantRoot",
+    "asks for session-long write access under a root. Do not reduce them again:",
+    "the descriptions ARE the security semantics.",
+    "This is a COMMITTED STATIC SNAPSHOT. It does not discover drift by itself:",
+    "when codex is upgraded the command above MUST be re-run and this file rebuilt,",
+    "or \"pinned\" only means pinned to a world that no longer exists."
+  ],
+  "codexVersion": "codex-cli 0.145.0",
+  "capturedAt": "2026-08-10",
+  "serverRequestMethods": {
+    "_source": "ServerRequest.json (top-level oneOf, properties.method.enum[0] of each variant)",
+    "_note": "ELEVEN variants. codex-method-contract.json lists ten and is wrong in both directions: it invents \"openai/form\" (that string is the `mode` enum inside McpServerElicitationRequestParams, never a method) and omits applyPatchApproval / execCommandApproval.",
+    "methods": [
+      "item/commandExecution/requestApproval",
+      "item/fileChange/requestApproval",
+      "item/tool/requestUserInput",
+      "mcpServer/elicitation/request",
+      "item/permissions/requestApproval",
+      "item/tool/call",
+      "account/chatgptAuthTokens/refresh",
+      "attestation/generate",
+      "currentTime/read",
+      "applyPatchApproval",
+      "execCommandApproval"
+    ]
+  },
+  "CommandExecutionApprovalDecision": {
+    "_source": "CommandExecutionRequestApprovalResponse.json -> definitions.CommandExecutionApprovalDecision",
+    "_note": "SIX variants, not the four the S2 design assumed. The two object variants persist a rule and are not modelled this round.",
+    "oneOf": [
+      {
+        "description": "User approved the command.",
+        "type": "string",
+        "enum": [
+          "accept"
+        ]
+      },
+      {
+        "description": "User approved the command and future prompts in the same session-scoped approval cache should run without prompting.",
+        "type": "string",
+        "enum": [
+          "acceptForSession"
+        ]
+      },
+      {
+        "description": "User approved the command, and wants to apply the proposed execpolicy amendment so future matching commands can run without prompting.",
+        "type": "object",
+        "required": [
+          "acceptWithExecpolicyAmendment"
+        ],
+        "properties": {
+          "acceptWithExecpolicyAmendment": {
+            "type": "object",
+            "required": [
+              "execpolicy_amendment"
+            ],
+            "properties": {
+              "execpolicy_amendment": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "title": "AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision"
+      },
+      {
+        "description": "User chose a persistent network policy rule (allow/deny) for this host.",
+        "type": "object",
+        "required": [
+          "applyNetworkPolicyAmendment"
+        ],
+        "properties": {
+          "applyNetworkPolicyAmendment": {
+            "type": "object",
+            "required": [
+              "network_policy_amendment"
+            ],
+            "properties": {
+              "network_policy_amendment": {
+                "$ref": "#/definitions/NetworkPolicyAmendment"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "title": "ApplyNetworkPolicyAmendmentCommandExecutionApprovalDecision"
+      },
+      {
+        "description": "User denied the command. The agent will continue the turn.",
+        "type": "string",
+        "enum": [
+          "decline"
+        ]
+      },
+      {
+        "description": "User denied the command. The turn will also be immediately interrupted.",
+        "type": "string",
+        "enum": [
+          "cancel"
+        ]
+      }
+    ]
+  },
+  "FileChangeApprovalDecision": {
+    "_source": "FileChangeRequestApprovalResponse.json -> definitions.FileChangeApprovalDecision",
+    "_note": "FOUR string variants, no object variants: the file_change dialect is NOT identical to the exec one.",
+    "oneOf": [
+      {
+        "description": "User approved the file changes.",
+        "type": "string",
+        "enum": [
+          "accept"
+        ]
+      },
+      {
+        "description": "User approved the file changes and future changes to the same files should run without prompting.",
+        "type": "string",
+        "enum": [
+          "acceptForSession"
+        ]
+      },
+      {
+        "description": "User denied the file changes. The agent will continue the turn.",
+        "type": "string",
+        "enum": [
+          "decline"
+        ]
+      },
+      {
+        "description": "User denied the file changes. The turn will also be immediately interrupted.",
+        "type": "string",
+        "enum": [
+          "cancel"
+        ]
+      }
+    ]
+  },
+  "ReviewDecision": {
+    "_source": "ApplyPatchApprovalResponse.json -> definitions.ReviewDecision (identical in ExecCommandApprovalResponse.json)",
+    "_note": "The legacy dialect, used by applyPatchApproval / execCommandApproval. Reachable on this wire per ServerRequest.json, never observed in any recorded frame. Not registered in SERVER_REQUEST_KINDS this round (slice 4 spec L5).",
+    "oneOf": [
+      {
+        "description": "User has approved this command and the agent should execute it.",
+        "type": "string",
+        "enum": [
+          "approved"
+        ]
+      },
+      {
+        "description": "User has approved this command and wants to apply the proposed execpolicy amendment so future matching commands are permitted.",
+        "type": "object",
+        "required": [
+          "approved_execpolicy_amendment"
+        ],
+        "properties": {
+          "approved_execpolicy_amendment": {
+            "type": "object",
+            "required": [
+              "proposed_execpolicy_amendment"
+            ],
+            "properties": {
+              "proposed_execpolicy_amendment": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "title": "ApprovedExecpolicyAmendmentReviewDecision"
+      },
+      {
+        "description": "User has approved this request and wants future prompts in the same session-scoped approval cache to be automatically approved for the remainder of the session.",
+        "type": "string",
+        "enum": [
+          "approved_for_session"
+        ]
+      },
+      {
+        "description": "User chose to persist a network policy rule (allow/deny) for future requests to the same host.",
+        "type": "object",
+        "required": [
+          "network_policy_amendment"
+        ],
+        "properties": {
+          "network_policy_amendment": {
+            "type": "object",
+            "required": [
+              "network_policy_amendment"
+            ],
+            "properties": {
+              "network_policy_amendment": {
+                "$ref": "#/definitions/NetworkPolicyAmendment"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "title": "NetworkPolicyAmendmentReviewDecision"
+      },
+      {
+        "description": "User has denied this command and the agent should not execute it, but it should continue the session and try something else.",
+        "type": "object",
+        "required": [
+          "denied"
+        ],
+        "properties": {
+          "denied": {
+            "type": "object",
+            "required": [
+              "rejection"
+            ],
+            "properties": {
+              "rejection": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "title": "DeniedReviewDecision"
+      },
+      {
+        "description": "Automatic approval review timed out before reaching a decision.",
+        "type": "string",
+        "enum": [
+          "timed_out"
+        ]
+      },
+      {
+        "description": "User has denied this command and the agent should not do anything until the user's next command.",
+        "type": "string",
+        "enum": [
+          "abort"
+        ]
+      }
+    ]
+  },
+  "PermissionsRequestApprovalResponse": {
+    "_source": "PermissionsRequestApprovalResponse.json (top level; GrantedPermissionProfile has no required members)",
+    "_note": "Confirms codexPending's fail-safe body {permissions:{}, scope:'turn'} is contract-legal.",
+    "required": [
+      "permissions"
+    ],
+    "properties": [
+      "permissions",
+      "scope",
+      "strictAutoReview"
+    ],
+    "PermissionGrantScope": [
+      "turn",
+      "session"
+    ]
+  },
+  "McpServerElicitationRequestResponse": {
+    "_source": "McpServerElicitationRequestResponse.json",
+    "required": [
+      "action"
+    ],
+    "McpServerElicitationAction": [
+      "accept",
+      "decline",
+      "cancel"
+    ]
+  },
+  "requestParams": {
+    "_source": "{CommandExecutionRequestApproval,FileChangeRequestApproval,PermissionsRequestApproval,ApplyPatchApproval,ExecCommandApproval}Params.json — `required` and `properties` copied VERBATIM (descriptions included). Nested $ref definitions are kept only for the two shapes slice 4 renders (NetworkApprovalContext, AdditionalPermissionProfile); the rest stay as $ref names pointing back at the generated files.",
+    "_note": "fileChange carries NO diff and NO availableDecisions: the patch arrives on the item/started frame sharing its itemId. Read grantRoot / additionalPermissions / networkApprovalContext before designing any approval UI — each one widens what an Allow actually grants.",
+    "CommandExecutionRequestApprovalParams": {
+      "required": [
+        "itemId",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "properties": {
+        "additionalPermissions": {
+          "description": "Optional additional permissions requested for this command.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AdditionalPermissionProfile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "approvalId": {
+          "description": "Unique identifier for this specific approval callback.\n\nFor regular shell/unified_exec approvals, this is null.\n\nFor zsh-exec-bridge subcommand approvals, multiple callbacks can belong to one parent `itemId`, so `approvalId` is a distinct opaque callback id (a UUID) used to disambiguate routing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "availableDecisions": {
+          "description": "Ordered list of decisions the client may present for this prompt.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/CommandExecutionApprovalDecision"
+          }
+        },
+        "command": {
+          "description": "The command to be executed.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commandActions": {
+          "description": "Best-effort parsed command actions for friendly display.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/CommandAction"
+          }
+        },
+        "cwd": {
+          "description": "The command's working directory.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LegacyAppPathString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "environmentId": {
+          "description": "Environment in which the command will run.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "networkApprovalContext": {
+          "description": "Optional context for a managed-network approval prompt.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NetworkApprovalContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proposedExecpolicyAmendment": {
+          "description": "Optional proposed execpolicy amendment to allow similar commands without prompting.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "proposedNetworkPolicyAmendments": {
+          "description": "Optional proposed network policy amendments (allow/deny host) for future requests.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/NetworkPolicyAmendment"
+          }
+        },
+        "reason": {
+          "description": "Optional explanatory reason (e.g. request for network access).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startedAtMs": {
+          "description": "Unix timestamp (in milliseconds) when this approval request started.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "definitions": {
+        "AdditionalNetworkPermissions": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "AdditionalPermissionProfile": {
+          "type": "object",
+          "properties": {
+            "fileSystem": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/AdditionalFileSystemPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "network": {
+              "description": "Partial overlay used for per-command permission requests.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/AdditionalNetworkPermissions"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "NetworkApprovalContext": {
+          "type": "object",
+          "required": [
+            "host",
+            "protocol"
+          ],
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "protocol": {
+              "$ref": "#/definitions/NetworkApprovalProtocol"
+            }
+          }
+        },
+        "NetworkApprovalProtocol": {
+          "type": "string",
+          "enum": [
+            "http",
+            "https",
+            "socks5Tcp",
+            "socks5Udp"
+          ]
+        }
+      }
+    },
+    "FileChangeRequestApprovalParams": {
+      "required": [
+        "itemId",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "properties": {
+        "grantRoot": {
+          "description": "[UNSTABLE] When set, the agent is asking the user to allow writes under this root for the remainder of the session (unclear if this is honored today).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "reason": {
+          "description": "Optional explanatory reason (e.g. request for extra write access).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startedAtMs": {
+          "description": "Unix timestamp (in milliseconds) when this approval request started.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      }
+    },
+    "PermissionsRequestApprovalParams": {
+      "required": [
+        "cwd",
+        "itemId",
+        "permissions",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "properties": {
+        "cwd": {
+          "$ref": "#/definitions/AbsolutePathBuf"
+        },
+        "environmentId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/definitions/RequestPermissionProfile"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startedAtMs": {
+          "description": "Unix timestamp (in milliseconds) when this approval request started.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      }
+    },
+    "ApplyPatchApprovalParams": {
+      "required": [
+        "callId",
+        "conversationId",
+        "fileChanges"
+      ],
+      "properties": {
+        "callId": {
+          "description": "Use to correlate this with [codex_protocol::protocol::PatchApplyBeginEvent] and [codex_protocol::protocol::PatchApplyEndEvent].",
+          "type": "string"
+        },
+        "conversationId": {
+          "$ref": "#/definitions/ThreadId"
+        },
+        "fileChanges": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/FileChange"
+          }
+        },
+        "grantRoot": {
+          "description": "When set, the agent is asking the user to allow writes under this root for the remainder of the session (unclear if this is honored today).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "description": "Optional explanatory reason (e.g. request for extra write access).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ExecCommandApprovalParams": {
+      "required": [
+        "callId",
+        "command",
+        "conversationId",
+        "cwd",
+        "parsedCmd"
+      ],
+      "properties": {
+        "approvalId": {
+          "description": "Identifier for this specific approval callback.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callId": {
+          "description": "Use to correlate this with [codex_protocol::protocol::ExecCommandBeginEvent] and [codex_protocol::protocol::ExecCommandEndEvent].",
+          "type": "string"
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conversationId": {
+          "$ref": "#/definitions/ThreadId"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "parsedCmd": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ParsedCommand"
+          }
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}
