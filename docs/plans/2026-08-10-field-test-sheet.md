@@ -33,7 +33,7 @@ pnpm build:win
 
 ## 第 1 步 · 到了测试机，先看版本
 
-**这一步双击打开就行**（只看版本，不需要凭证；从第 3 步起才必须用命令行启动）。
+**这一步双击打开就行**（只看版本，不需要凭证；从第 3 步起才需要按第 3 步生成配置 + 用启动器）。
 
 双击 `AiClient.exe` → 标题栏右上角菜单 → **About / 关于** → 看版本号 → 看完**关掉**。
 
@@ -54,16 +54,18 @@ curl https://cch-jyw.pipidan.qzz.io/
 
 ---
 
-## 第 3 步 · 灌测试凭证 + 启动（**这两步必须在同一个窗口里连着做**）
+## 第 3 步 · 灌测试凭证 + 生成启动器（一次性）
 
-### 先说清楚为什么不能"设完变量再双击图标"
+### 用「启动器」而不是每次手动设变量
 
-`CLAUDE_CONFIG_DIR` 这个环境变量是**跟着命令行窗口走的**：你在一个窗口里设了它，
-只有**从这个窗口启动的程序**才看得见。**双击桌面图标启动的程序看不见**，
-它会回落到你自己的 `C:\Users\<你>\.claude`——那就变成用你自己的账号在计费，
-而且测的不是测试网关。
+`CLAUDE_CONFIG_DIR` 这个环境变量本来是**跟着命令行窗口走的**：手动设的话，只有从设置它的
+那个窗口启动的程序才看得见，**双击桌面图标启动的程序看不见**，会回落到你自己的
+`C:\Users\<你>\.claude`——那就变成用你自己的账号在计费，测的也不是测试网关（这条坑昨天
+现场真栽过：直接双击 exe 没走这一步，历史会话全部找不到）。
 
-所以下面这一段是**一整块**，从头到尾在同一个 PowerShell 窗口里跑完。
+所以现在**只需要跑一次**下面这一整块生成配置目录，**它会顺带生成一个启动器
+`launch-gui-test.cmd`**——之后每次启动都双击这个 `.cmd`，不用再开 PowerShell、
+不用再手动设变量，也不会再因为手滑直接双击 exe 而串到自己的账号。
 
 ### 你的程序在哪（两种情况）
 
@@ -74,7 +76,7 @@ curl https://cch-jyw.pipidan.qzz.io/
 
 下面用 `$APP` 代表这个路径，你按自己的情况填。
 
-### 一整块，复制粘贴（PowerShell，不是 cmd）
+### 一次性：生成配置目录 + 启动器（PowerShell，不是 cmd）
 
 ```powershell
 # ① 填两个路径：程序位置、你要用来测试的仓库/文件夹
@@ -86,22 +88,29 @@ $WORK = "D:\你的测试仓库"
 #    不带的话 cli.js 首次用它时会卡在信任确认上
 #    路径按你实际拷贝的位置填；报 MODULE_NOT_FOUND 就是文件不在这儿，改用下面的备份写法
 & "$(Split-Path $APP)\resources\node-runtime\node.exe" "D:\make-test-claude-config.mjs" $WORK
-
-# ③ 设变量 + 启动，必须在同一个窗口连着做
-$env:CLAUDE_CONFIG_DIR = "$env:TEMP\aiclient-gui-test-config"
-& $APP
 ```
 
-第 ② 步会打印出它生成到哪、用的哪个网关、信任了哪些目录——**核一眼**，
-特别是 `trusted workspaces` 里有没有你的 `$WORK`。
+这一步会打印出配置目录路径（默认 `%LOCALAPPDATA%\aiclient-gui-test-config`，不是 `%TEMP%`，
+不会被 Windows 自动清理丢掉）、用的哪个网关、信任了哪些目录、以及启动器路径——**核一眼**，
+特别是 `trusted workspaces` 里有没有你的 `$WORK`，以及有没有打印出 `wrapper: ...\launch-gui-test.cmd`。
 
-### 备份写法：没带 .mjs 文件时，纯 PowerShell 灌凭证
+### 之后每次启动：双击 launch-gui-test.cmd
 
-`.mjs` 忘了拷、或报 `Cannot find module` 时，用这段替代第 ② 步（干的事完全一样：
-写 `settings.json` + `.claude.json` 两个文件）。**必须和第 ③ 步同一个窗口**。
+打开打印出来的配置目录，把里面的 `launch-gui-test.cmd` **拷贝到 `AiClient.exe` 同一个文件夹**，
+以后双击这个 `.cmd`（不是 exe）启动——`CLAUDE_CONFIG_DIR` 已经焊死在脚本里了，不用再开
+PowerShell、不用再手动设变量，关掉程序想再开也是**直接再双击一次**就行。
+
+（不想拷贝的话也可以留在原地，双击时把 exe 路径当参数传进去：右键 `launch-gui-test.cmd` →
+新建快捷方式，把目标改成 `"...\launch-gui-test.cmd" "D:\win-unpacked\AiClient.exe"`。）
+
+### 备份写法：没带 .mjs 文件时，纯 PowerShell 灌凭证（不生成启动器）
+
+`.mjs` 忘了拷、或报 `Cannot find module` 时，用这段替代第 ② 步（干的事类似：写
+`settings.json` + `.claude.json` 两个文件，但**不会**生成 `launch-gui-test.cmd`，
+后面只能走下面「兜底：手动设变量启动」那条老办法）。
 
 ```powershell
-$CFG = "$env:TEMP\aiclient-gui-test-config"
+$CFG = "$env:LOCALAPPDATA\aiclient-gui-test-config"
 New-Item -ItemType Directory -Force -Path $CFG | Out-Null
 
 # 不带 BOM —— PowerShell 5.1 的 `-Encoding utf8` 会写 BOM，cli.js 解析会炸
@@ -125,29 +134,23 @@ Write-Host "trusted   : $work"
 
 凭证若有变更，以 `scripts/make-test-claude-config.mjs` 里的默认值为准。
 
+### 兜底：手动设变量启动（没有 launch-gui-test.cmd 时才用）
+
+```powershell
+$env:CLAUDE_CONFIG_DIR = "$env:LOCALAPPDATA\aiclient-gui-test-config"
+& $APP
+```
+
+这条**必须和灌凭证在同一个 PowerShell 窗口连着做**，且**每次重启程序都要重新跑一遍**——
+关掉程序后不能双击图标，得回到这个窗口再跑一次 `& $APP`（变量还在那个窗口里）。
+**窗口关了就得从头来。** 有 `launch-gui-test.cmd` 的话优先用它，省得记这些。
+
 ### 怎么确认真的生效了
 
 程序起来之后不用急着测别的，**先看第 5 步的第 3 项（发 PONG）**：
 - 能正常回 PONG → 凭证注入成功，往下走
-- 报认证错 / 一直转 → 变量没生效。**最常见的原因是你双击图标启动的**，
-  回到上面那一整块重来。
-
-### 每次重启程序都要重来一遍第 ③ 步
-
-关掉程序后再想启动，**不能双击图标**，得回到那个 PowerShell 窗口再跑一次
-`& $APP`（变量还在那个窗口里）。**窗口关了就得从 ③ 重来。**
-
-### 嫌麻烦的话：做个快捷启动脚本
-
-在桌面建一个 `跑测试版.ps1`，内容就是上面 ③ 那两行（把路径填死），
-以后右键 → 用 PowerShell 运行。或者建个 `.bat`：
-
-```bat
-@echo off
-set CLAUDE_CONFIG_DIR=%TEMP%\aiclient-gui-test-config
-start "" "D:\win-unpacked\AiClient.exe"
-```
-（`.bat` 里用 `set`，PowerShell 里用 `$env:` —— 两种写法别混。）
+- 报认证错 / 一直转 → 变量没生效。**最常见的原因是双击了 exe 而不是 `launch-gui-test.cmd`**
+  （或者走的是兜底手动设变量但没在同一窗口），回到上面重来。
 
 ### ⚠️ 全程别碰程序里的登录引导
 
@@ -175,7 +178,7 @@ await window.electronAPI.agentHost.resolveNode()
 
 | # | 怎么做 | 算过的标准 |
 |---|---|---|
-| 1 | 按第 3 步那一整块启动（**不是双击**） | 不白屏、不弹报错框 |
+| 1 | 用第 3 步生成的 `launch-gui-test.cmd` 启动（**不是直接双击 `AiClient.exe`**） | 不白屏、不弹报错框 |
 | 2 | 设置 → Appearance → 打开 **OpenChamber Workspace Shell** 开关 | 界面变成新版（左边栏 + 中间对话 + 右边面板） |
 | 3 | 新建一个会话，发这句：`Reply with exactly: PONG. Do not use tools.` | 能看到字一个个流出来，内容里有 PONG |
 | 4 | 发这句：`Create PING.txt with content pong` | 弹出一张**授权卡**问你允不允许 → 点 Allow → 磁盘上真的多了 `PING.txt`，内容是 `pong` |
@@ -275,12 +278,12 @@ catch(e){console.log('REPO',JSON.stringify(r.path),'THREW',e.message);}}})()
 | ⑤ | 第 4 步里 `source` 是 `bundled` 的话，直接做②——能读出明文就证明包里的 node 被白名单认了 | —— |
 | ⑥ | 如果①②失败：先分清是"找不到程序"（ENOENT）还是"白名单不认" | **这两个别记混，结论完全不同** |
 
-**万一②③全失败**：用逃生口，**不用改代码**。回到第 3 步那个 PowerShell 窗口，
-在启动程序**之前**多设一个变量：
+**万一②③全失败**：用逃生口，**不用改代码**。这条要多设一个变量，
+`launch-gui-test.cmd` 没设它，所以**不能用启动器**，改开一个 PowerShell 窗口手动启动：
 
 ```powershell
 $env:AICLIENT_NODE24_PATH = "<这台机器上已被白名单的 node.exe 完整路径>"
-$env:CLAUDE_CONFIG_DIR = "$env:TEMP\aiclient-gui-test-config"
+$env:CLAUDE_CONFIG_DIR = "$env:LOCALAPPDATA\aiclient-gui-test-config"
 & $APP
 ```
 
@@ -313,7 +316,7 @@ node --version
 
 ## 第二轮（`0.4.0-test.3`）· 上轮七个问题怎么复验
 
-> 前提不变：照第 3 步整块启动（不是双击；只有第 1 条白屏是特意双击测的）。第 1 步版本号必须是 **`0.4.0-test.3`**。
+> 前提不变：用第 3 步生成的 `launch-gui-test.cmd` 启动（不是直接双击 `AiClient.exe`；只有第 1 条白屏是特意双击 exe 测的）。第 1 步版本号必须是 **`0.4.0-test.3`**。
 
 | # | 上轮的问题 | 这次怎么做 | 算过的标准 |
 |---|---|---|---|

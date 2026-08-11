@@ -93,14 +93,18 @@ curl https://cch-jyw.pipidan.qzz.io/
 D:\win-unpacked\resources\node-runtime\node.exe D:\make-test-claude-config.mjs
 ```
 
-它会在 `%TEMP%\aiclient-gui-test-config` 写 `settings.json`（网关 token + base URL）与 `.claude.json`。
+它会在稳定目录（非 `%TEMP%`，防 Windows 存储感知清理丢证据；Windows 默认 `%LOCALAPPDATA%\aiclient-gui-test-config`）写 `settings.json`（网关 token + base URL）、`.claude.json`，并生成 `launch-gui-test.cmd` 启动器（拷到 `AiClient.exe` 旁边双击即可，自动带上 `CLAUDE_CONFIG_DIR`）。
 
 > **全程禁止走 GUI onboarding** —— 它写死 `~\.claude`，与 `CLAUDE_CONFIG_DIR` 打架，混用会造出假故障。[读码]
 
 ### 步骤 2 — 启动
 
+**首选：双击 `launch-gui-test.cmd`**（步骤 1 生成在配置目录里，拷到 `AiClient.exe` 旁边双击即可；`CLAUDE_CONFIG_DIR` 已焊死在脚本里，不会再因为"忘了设变量直接双击 exe"而串到 `~\.claude`）。
+
+**兜底（手动设变量）**：
+
 ```powershell
-set CLAUDE_CONFIG_DIR=%TEMP%\aiclient-gui-test-config
+set CLAUDE_CONFIG_DIR=%LOCALAPPDATA%\aiclient-gui-test-config
 D:\win-unpacked\AiClient.exe
 ```
 
@@ -270,7 +274,7 @@ node --version                    # 记下系统 Node 版本与路径
 |---|---|---|
 | R1 | **随包 node.exe 不被白名单认**（白名单实为按路径/签名/哈希） | 用逃生口、**不改码**：`set AICLIENT_NODE24_PATH=<机器上已被白名单的 node.exe 绝对路径>`（优先级压过 bundled），重启复跑 ②③⑤。**出发前先查清这个路径** |
 | R2 | **网关连不通**（内网代理 / 防火墙 / TLS 拦截） | 步骤 0 当场止损。仍可只做步骤 3（`resolveNode()`）与 ⑤（历史读取），这两项不需要网关，把结论带回来也不虚此行 |
-| R3 | **管控层挡在门口**：未签名 exe 被拒 / EDR 拦 spawn / `%TEMP%` 禁止执行 | 改用 NSIS 安装版；凭证目录换到非 `%TEMP%` 的可写路径（`CLAUDE_CONFIG_DIR` 指哪都行）；若 spawn 被拦，`resolveNode()` 仍能返回（纯路径解析不 spawn），至少把「随包 node 有没有被认到」这半证据拿回来 |
+| R3 | **管控层挡在门口**：未签名 exe 被拒 / EDR 拦 spawn / `%TEMP%` 禁止执行 | 改用 NSIS 安装版；凭证目录换到非 `%TEMP%` 的可写路径（`CLAUDE_CONFIG_DIR` 指哪都行——步骤 1 起已默认非 `%TEMP%`，此项通常无需再手动改）；若 spawn 被拦，`resolveNode()` 仍能返回（纯路径解析不 spawn），至少把「随包 node 有没有被认到」这半证据拿回来 |
 
 ---
 

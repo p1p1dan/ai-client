@@ -8,9 +8,16 @@
 ```powershell
 # 生成测试网关配置目录（可附加要信任的工作区路径作为参数）
 pnpm prepare:test-config D:\你的\测试工作区
+```
 
-# 按脚本输出设置 CLAUDE_CONFIG_DIR 后再启动应用，例如：
-$env:CLAUDE_CONFIG_DIR='C:\Users\<你>\AppData\Local\Temp\aiclient-gui-test-config'
+脚本会打印配置目录路径（默认 `%LOCALAPPDATA%\aiclient-gui-test-config`，非 `%TEMP%`），并在该目录里
+生成 `launch-gui-test.cmd`——**这是首选启动方式**：拷到 `AiClient.exe`（或便携版 exe）旁边双击，
+自动带上 `CLAUDE_CONFIG_DIR` 再启动，杜绝"忘设变量直接双击 exe"串到自己账号的坑。
+
+兜底（手动设变量，需与启动在同一窗口）：
+
+```powershell
+$env:CLAUDE_CONFIG_DIR='<脚本打印的配置目录路径>'
 .\dist\AiClient-<version>-portable.exe
 ```
 
