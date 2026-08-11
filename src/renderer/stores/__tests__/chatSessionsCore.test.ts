@@ -736,6 +736,235 @@ describe('applyRuntimeEvent — permission.resolved', () => {
   });
 });
 
+/**
+ * S3 slice 4 (Codex permission projection), store half. The reducer is a
+ * red-line file: these rows exist so the two ADDITIONS can be verified without
+ * anyone having to re-read the guards they must not touch — R12 (first
+ * resolution wins) is load-bearing for the late-click path below, not
+ * incidental.
+ */
+describe('applyRuntimeEvent — permission projection (S3 slice 4)', () => {
+  function stateWithAssistant(): ChatSessionsState {
+    return baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'asst-1', blocks: [] })] },
+    });
+  }
+
+  function requestedBlock(
+    payload: Extract<RuntimeEvent, { type: 'permission.requested' }>['payload']
+  ) {
+    const patch = applyRuntimeEvent(stateWithAssistant(), {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload,
+    });
+    return patch.messages?.[SESSION_ID]?.find((message) => message.id === 'asst-1')?.blocks[0];
+  }
+
+  // A15 (renderer half): `reason` and `description` are two independent
+  // protocol keys — Codex writes the first, Claude the second. Reading one
+  // while the other agent writes the other loses every justification it sends,
+  // with no error anywhere.
+  it('A15: a Codex request carries its justification on `reason`', () => {
+    const block = requestedBlock({
+      permissionId: 'perm-codex',
+      toolName: 'Run command',
+      kind: 'exec',
+      reason: 'needs network access',
+    });
+    expect(block?.toolDescription).toBe('needs network access');
+  });
+
+  it('A15: a Claude request still carries its justification on `description`', () => {
+    const block = requestedBlock({
+      permissionId: 'perm-claude',
+      toolName: 'Bash',
+      description: 'run ls',
+    });
+    expect(block?.toolDescription).toBe('run ls');
+  });
+
+  it('A15: `reason` wins when a payload somehow carries both', () => {
+    const block = requestedBlock({
+      permissionId: 'perm-both',
+      toolName: 'Run command',
+      reason: 'from reason',
+      description: 'from description',
+    });
+    expect(block?.toolDescription).toBe('from reason');
+  });
+
+  it('records kind / detail / decisions / omittedDecisionCount on the new block', () => {
+    const detail = {
+      kind: 'exec',
+      command: 'curl https://example.com',
+      cwd: '/repo',
+      network: { host: 'example.com', protocol: 'https' },
+    } as const;
+    const block = requestedBlock({
+      permissionId: 'perm-exec',
+      toolName: 'Run command',
+      kind: 'exec',
+      decisions: ['allow', 'deny', 'cancel'],
+      omittedDecisionCount: 1,
+      detail,
+    });
+    expect(block?.permissionKind).toBe('exec');
+    expect(block?.permissionDetail).toEqual(detail);
+    expect(block?.permissionDecisions).toEqual(['allow', 'deny', 'cancel']);
+    expect(block?.omittedDecisionCount).toBe(1);
+  });
+
+  it('a Claude request leaves all four unset (absent is the historical shape)', () => {
+    const block = requestedBlock({ permissionId: 'perm-plain', toolName: 'Bash' });
+    expect(block?.permissionKind).toBeUndefined();
+    expect(block?.permissionDetail).toBeUndefined();
+    expect(block?.permissionDecisions).toBeUndefined();
+    expect(block?.omittedDecisionCount).toBeUndefined();
+  });
+
+  function resolvedState(): ChatSessionsState {
+    return baseState({
+      sessions: [makeSession({ status: 'waiting_permission' })],
+      messages: {
+        [SESSION_ID]: [
+          makeMessage({
+            id: 'asst-1',
+            blocks: [
+              { id: 'perm-1', type: 'permission_request', permissionId: 'perm-1', resolved: false },
+            ],
+          }),
+        ],
+      },
+      pendingPermissions: [{ sessionId: SESSION_ID, permissionId: 'perm-1', messageId: 'asst-1' }],
+    });
+  }
+
+  it('records the decision a human pressed, with no auto-reason', () => {
+    const patch = applyRuntimeEvent(resolvedState(), {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', allow: true, decision: 'allow_session' },
+    });
+    const block = patch.messages?.[SESSION_ID]?.[0].blocks[0];
+    expect(block?.resolved).toBe(true);
+    expect(block?.allowed).toBe(true);
+    expect(block?.permissionDecision).toBe('allow_session');
+    expect(block?.permissionAutoReason).toBeUndefined();
+  });
+
+  it('records the auto-reason when nobody was asked (a drained approval)', () => {
+    const patch = applyRuntimeEvent(resolvedState(), {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', allow: false, autoReason: 'aborted' },
+    });
+    const block = patch.messages?.[SESSION_ID]?.[0].blocks[0];
+    expect(block?.allowed).toBe(false);
+    expect(block?.permissionAutoReason).toBe('aborted');
+    expect(block?.permissionDecision).toBeUndefined();
+  });
+
+  // A20 — the explicit dependency the spec's rejected hardening leans on
+  // (L9): after a Codex session is torn down, a late click routes through
+  // `runtimeForSession`, falls back to the Claude runtime and is echoed as
+  // `allow: input.allow`. Nothing on the Host side stops that echo, so R12 is
+  // what keeps the card honest.
+  it('A20: a late allow:true echo does not flip a card the Host already settled', () => {
+    const denied = applyRuntimeEvent(resolvedState(), {
+      type: 'permission.resolved',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-1', allow: false, decision: 'deny', autoReason: 'aborted' },
+    });
+    const settled = { ...resolvedState(), ...denied } as ChatSessionsState;
+
+    const patch = applyRuntimeEvent(settled, {
+      type: 'permission.resolved',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: { permissionId: 'perm-1', allow: true, decision: 'allow' },
+    });
+
+    // R13: an identity-preserving no-op, so the bucket is not even rebuilt.
+    expect(patch.messages).toBeUndefined();
+    const block = settled.messages[SESSION_ID]?.[0].blocks[0];
+    expect(block?.allowed).toBe(false);
+    expect(block?.resolved).toBe(true);
+    // The two new fields ride the same branch: the losing redelivery must not
+    // relabel the card either.
+    expect(block?.permissionDecision).toBe('deny');
+    expect(block?.permissionAutoReason).toBe('aborted');
+  });
+
+  // A12, store half. The Host half (`finishTurn` drains the approval kinds) is
+  // asserted in `codexRuntime.test.ts`; this is the other end of the same fix.
+  //
+  // Spec §2.6: a terminal event and the drain's `permission.resolved` are two
+  // independent emissions, so they can arrive in EITHER order. The terminal
+  // branches discard `pendingPermissions` unconditionally, which means the
+  // queue is not what makes the card settle — the block is. If a card can only
+  // resolve when its queue entry is still there, the terminal-first order
+  // leaves `resolved: false` forever and the card spins on "Waiting" until the
+  // session is closed, which is exactly the defect §2.6 names.
+  //
+  // What these four rows really guard is a FUTURE edit: the `permission.resolved`
+  // reducer deliberately consults no queue. Adding an "only if still parked"
+  // precondition would read as a tightening and would silently resurrect the
+  // defect for one order only.
+  for (const terminal of ['session.completed', 'session.stopped'] as const) {
+    const resolved: RuntimeEvent = {
+      type: 'permission.resolved',
+      seq: 2,
+      sessionId: SESSION_ID,
+      timestamp: 2,
+      payload: {
+        permissionId: 'perm-1',
+        allow: false,
+        decision: 'deny',
+        autoReason: 'aborted',
+      },
+    };
+    const expectSettled = (patch: Partial<ChatSessionsState>) => {
+      // The queue is empty either way — the point is that the BLOCK still
+      // converges.
+      expect(patch.pendingPermissions).toEqual([]);
+      const block = patch.messages?.[SESSION_ID]?.[0].blocks[0];
+      expect(block?.resolved).toBe(true);
+      expect(block?.allowed).toBe(false);
+      expect(block?.permissionDecision).toBe('deny');
+      expect(block?.permissionAutoReason).toBe('aborted');
+    };
+
+    it(`A12: ${terminal} arriving BEFORE permission.resolved still settles the block`, () => {
+      expectSettled(
+        applyRuntimeEvents(resolvedState(), [
+          { type: terminal, seq: 1, sessionId: SESSION_ID, timestamp: 1 },
+          resolved,
+        ])
+      );
+    });
+
+    it(`A12: ${terminal} arriving AFTER permission.resolved leaves the block settled`, () => {
+      expectSettled(
+        applyRuntimeEvents(resolvedState(), [
+          resolved,
+          { type: terminal, seq: 3, sessionId: SESSION_ID, timestamp: 3 },
+        ])
+      );
+    });
+  }
+});
+
 // Regression coverage for the permission-queue concurrency fix: two `canUseTool`
 // prompts can park at once (SDK concurrency), so `pendingPermissions` must behave
 // as a real per-permissionId queue, never a single slot. N1+N2+A1 (see

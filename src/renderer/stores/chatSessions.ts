@@ -224,8 +224,16 @@ export interface ChatSessionsState {
    * parked — a stale click, not a failure — and `false` with `lastError` set
    * when the IPC call throws, so the card can unlock its submitting state
    * (T-05 fix #4).
+   *
+   * `decision` (S2 c) is the richer button the user pressed. It is FORWARDED,
+   * never re-derived: `allow` is computed from it once, at the card's call
+   * site, so the two can never contradict each other here.
    */
-  respondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
+  respondPermission: (
+    permissionId: string,
+    allow: boolean,
+    decision?: PermissionDecisionId
+  ) => Promise<boolean>;
   respondQuestion: (input: {
     answers?: Record<string, string>;
     response?: string;
@@ -741,9 +749,17 @@ export function applyRuntimeEvent(
                 type: 'permission_request',
                 permissionId: event.payload.permissionId,
                 toolName: event.payload.toolName,
-                toolDescription: event.payload.description,
+                // Two keys, one field: `reason` is the protocol's own name for
+                // the agent's justification (Codex writes it), `description`
+                // is the historical Claude key. Reading only one loses every
+                // justification the other agent sends, silently.
+                toolDescription: event.payload.reason ?? event.payload.description,
                 toolInput: event.payload.input,
                 resolved: false,
+                permissionKind: event.payload.kind,
+                permissionDetail: event.payload.detail,
+                permissionDecisions: event.payload.decisions,
+                omittedDecisionCount: event.payload.omittedDecisionCount,
               },
             ],
           };
@@ -761,7 +777,7 @@ export function applyRuntimeEvent(
     }
 
     case 'permission.resolved': {
-      const { permissionId, allow } = event.payload;
+      const { permissionId, allow, decision, autoReason } = event.payload;
       if (!permissionId) return {};
 
       const cleared = withoutPermission(state, sessionId, permissionId);
@@ -789,7 +805,17 @@ export function applyRuntimeEvent(
           // the CLI no.
           if (block.resolved) return block;
           messageChanged = true;
-          return { ...block, resolved: true, allowed: allow };
+          // The two S2 (c) additions ride the SAME first-resolution-wins
+          // branch: a decision or an auto-reason that arrived on a losing
+          // redelivery would otherwise relabel a card the Host already
+          // settled, which is the flip R12 exists to refuse.
+          return {
+            ...block,
+            resolved: true,
+            allowed: allow,
+            permissionDecision: decision,
+            permissionAutoReason: autoReason,
+          };
         });
         if (!messageChanged) return message;
         matched = true;
@@ -1066,7 +1092,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     }
   },
 
-  respondPermission: async (permissionId, allow) => {
+  respondPermission: async (permissionId, allow, decision) => {
     // Find the entry's own sessionId — never activeSessionId — to preserve
     // existing cross-session behavior; a stale click (id no longer parked)
     // is not a failure, so it returns false without an IPC call or lastError.
@@ -1080,6 +1106,9 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
         sessionId: entry.sessionId,
         permissionId: entry.permissionId,
         allow,
+        // Omitted rather than sent as undefined: absent means "the boolean
+        // says it all", which is exactly the Claude-side payload.
+        ...(decision ? { decision } : {}),
       });
       return true;
     } catch (err) {

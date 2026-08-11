@@ -103,13 +103,62 @@ describe('every registrable server request is a real server request', () => {
   it('covers half of the declared server requests, and the rest are out of scope by name', () => {
     // Not a completeness claim — a reminder of what we are choosing not to
     // handle, so a future reader sees the gap instead of assuming full coverage.
+    // Corrected in S3 slice 4: the previous expectation pinned a snapshot that
+    // invented `openai/form` and lost the two legacy approvals, so the test that
+    // exists to "make the uncovered surface visible" was showing a fake surface.
     const unhandled = contract.serverRequest.filter((m) => !(m in SERVER_REQUEST_KINDS));
     expect(unhandled).toEqual([
       'account/chatgptAuthTokens/refresh',
       'attestation/generate',
       'currentTime/read',
       'item/tool/call',
-      'openai/form',
+      'applyPatchApproval',
+      'execCommandApproval',
     ]);
+  });
+});
+
+describe('the serverRequest family matches the generated ServerRequest.json (A24)', () => {
+  // Second, independently generated excerpt of the SAME codex build. Two
+  // fixtures disagreeing is exactly how the ten-vs-eleven defect stayed
+  // invisible: one file was wrong and nothing compared it to anything.
+  const approvalSchema = JSON.parse(
+    readFileSync(
+      path.resolve(import.meta.dirname, 'fixtures', 'codex', 'codex-approval-schema.json'),
+      'utf8'
+    )
+  ) as { codexVersion: string; serverRequestMethods: { methods: string[] } };
+
+  it('was excerpted from the same build', () => {
+    // A cross-fixture assertion is worthless if the two came from different
+    // codex versions — then a real difference reads as a version difference.
+    expect(approvalSchema.codexVersion).toBe(contract.codexVersion);
+  });
+
+  it('lists the same eleven methods as the approval snapshot', () => {
+    expect(approvalSchema.serverRequestMethods.methods.length).toBe(11);
+    expect([...contract.serverRequest].sort()).toEqual(
+      [...approvalSchema.serverRequestMethods.methods].sort()
+    );
+  });
+
+  it('drops the phantom method and carries the two legacy approvals', () => {
+    // `openai/form` is the `mode` enum inside McpServerElicitationRequestParams,
+    // never a method: the Host would have waited forever for a request that
+    // cannot arrive, and the coverage list claimed a gap that did not exist.
+    expect(contract.serverRequest).not.toContain('openai/form');
+    expect(contract.serverRequest).toContain('applyPatchApproval');
+    expect(contract.serverRequest).toContain('execCommandApproval');
+  });
+
+  it('does NOT register the two legacy approvals (slice 4 L5)', () => {
+    // They are real methods, so the fix above makes the previous expectation
+    // red — and the cheap way to green is to register them. That would be a
+    // bug: the legacy params (callId / conversationId / fileChanges / parsedCmd)
+    // and the legacy ReviewDecision dialect are both unimplemented, so a
+    // registered kind would park a request nothing can answer. Unregistered,
+    // it still gets a method_not_found and the turn cannot hang.
+    expect(SERVER_REQUEST_KINDS).not.toHaveProperty('applyPatchApproval');
+    expect(SERVER_REQUEST_KINDS).not.toHaveProperty('execCommandApproval');
   });
 });

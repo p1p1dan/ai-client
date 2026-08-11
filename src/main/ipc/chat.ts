@@ -6,7 +6,7 @@
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { AgentWireName } from '@shared/types/agentWire';
-import type { RuntimeEvent } from '@shared/types/runtimeEvents';
+import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, ipcMain } from 'electron';
@@ -174,7 +174,13 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_RESPOND_PERMISSION,
     async (
       _e,
-      payload: { sessionId: string; permissionId: string; allow: boolean }
+      payload: {
+        sessionId: string;
+        permissionId: string;
+        allow: boolean;
+        /** S2 (c): the richer button, when the renderer had one. */
+        decision?: PermissionDecisionId;
+      }
     ): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.respondPermission(payload);
       return { requestId };

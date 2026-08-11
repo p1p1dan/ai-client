@@ -143,3 +143,83 @@ describe('respondPermission answers the exact permissionId clicked, never a gues
     expect(useChatSessionsStore.getState().lastError).toBeNull();
   });
 });
+
+/**
+ * S3 slice 4 §3.2: the decision the user pressed reaches the Host as its own
+ * payload key.
+ *
+ * `allow` cannot carry it. `allow_session` and `allow` both produce
+ * `allow: true`, `cancel` and `deny` both produce `allow: false` — so dropping
+ * `decision` from this payload turns "Allow for session" into a one-shot allow
+ * and "Deny and stop" into an ordinary deny, with no error, no type failure and
+ * nothing different on the card. These rows exist because that degradation is
+ * invisible everywhere else.
+ *
+ * The key SET is asserted, not just the values: `toHaveBeenCalledWith` compares
+ * with `toEqual` semantics, under which `{…, decision: undefined}` and `{…}` are
+ * the same object — which is exactly the difference between "omitted" and "sent
+ * as undefined" that the `...(decision ? {decision} : {})` spread exists to make.
+ */
+describe('respondPermission forwards the pressed decision (S3 slice 4)', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'window');
+  });
+
+  /** Typed so the recorded payload can be read back without a cast. */
+  function mockElectronAPI() {
+    const respondPermission = vi.fn((_payload: Record<string, unknown>) =>
+      Promise.resolve({ requestId: 'r1' })
+    );
+    (globalThis as { window?: unknown }).window = {
+      electronAPI: {
+        chat: { respondPermission },
+      },
+    } as unknown as typeof globalThis.window;
+    useChatSessionsStore.setState({
+      activeSessionId: 's1',
+      pendingPermissions: [{ sessionId: 's1', permissionId: 'perm-1', messageId: 'm1' }],
+      lastError: null,
+    });
+    return respondPermission;
+  }
+
+  it('A19 (store half): an allow_session click sends decision alongside allow:true', async () => {
+    const respondPermission = mockElectronAPI();
+
+    await useChatSessionsStore.getState().respondPermission('perm-1', true, 'allow_session');
+
+    expect(respondPermission).toHaveBeenCalledTimes(1);
+    const payload = respondPermission.mock.calls[0][0];
+    expect(Object.keys(payload).sort()).toEqual(['allow', 'decision', 'permissionId', 'sessionId']);
+    expect(payload).toEqual({
+      sessionId: 's1',
+      permissionId: 'perm-1',
+      allow: true,
+      decision: 'allow_session',
+    });
+  });
+
+  it('A19 (store half): a cancel click sends decision:cancel alongside allow:false', async () => {
+    const respondPermission = mockElectronAPI();
+
+    await useChatSessionsStore.getState().respondPermission('perm-1', false, 'cancel');
+
+    const payload = respondPermission.mock.calls[0][0];
+    // Without this key the Host sees a plain deny and the turn is never
+    // interrupted — the whole difference between Deny and "Deny and stop".
+    expect(payload.decision).toBe('cancel');
+    expect(payload.allow).toBe(false);
+  });
+
+  it('a two-argument call omits the key entirely (the Claude-side payload, byte for byte)', async () => {
+    const respondPermission = mockElectronAPI();
+
+    await useChatSessionsStore.getState().respondPermission('perm-1', true);
+
+    const payload = respondPermission.mock.calls[0][0];
+    expect(Object.keys(payload).sort()).toEqual(['allow', 'permissionId', 'sessionId']);
+    // `in`, not a value check: `decision: undefined` would pass every
+    // assertion above and still put an unexpected key on the wire.
+    expect('decision' in payload).toBe(false);
+  });
+});

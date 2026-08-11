@@ -1,4 +1,8 @@
-import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import type {
+  PermissionDecisionId,
+  SessionRetryInfo,
+  SessionRuntimeStatus,
+} from '@shared/types/runtimeEvents';
 import {
   Check,
   ChevronDown,
@@ -64,7 +68,11 @@ import { shouldStickToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { resolveResumeModel } from './models';
 import { QuestionCard } from './QuestionCard';
-import { canRespondToPermission, deriveQuestionCardState } from './questionCardModel';
+import {
+  canRespondToPermission,
+  deriveQuestionCardState,
+  permissionDecisionAllows,
+} from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { useResumeSession } from './sessionIndex/useResumeSession';
@@ -769,7 +777,11 @@ interface ChatTurnProps {
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
   canRespondPermission: (permissionId: string | undefined) => boolean;
-  onRespondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
+  onRespondPermission: (
+    permissionId: string,
+    allow: boolean,
+    decision?: PermissionDecisionId
+  ) => Promise<boolean>;
 }
 
 /**
@@ -1296,7 +1308,11 @@ interface TurnItemViewProps {
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
   canRespondPermission: (permissionId: string | undefined) => boolean;
-  onRespondPermission: (permissionId: string, allow: boolean) => Promise<boolean>;
+  onRespondPermission: (
+    permissionId: string,
+    allow: boolean,
+    decision?: PermissionDecisionId
+  ) => Promise<boolean>;
 }
 
 /**
@@ -1370,7 +1386,16 @@ function TurnItemView({
           variant="permission"
           block={item.block}
           canRespond={canRespondPermission(item.block.permissionId)}
-          onRespondPermission={(allow) => onRespondPermission(item.block.permissionId ?? '', allow)}
+          // The one place `allow` is derived from the decision (spec §3.2):
+          // downstream both travel together, so a card that says Allowed
+          // cannot sit on top of a wire reply that said decline.
+          onRespondPermission={(decision) =>
+            onRespondPermission(
+              item.block.permissionId ?? '',
+              permissionDecisionAllows(decision),
+              decision
+            )
+          }
         />
       );
 

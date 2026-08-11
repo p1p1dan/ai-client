@@ -2,6 +2,10 @@ import { CODEX_AGENT } from '../shared/types/agentWire.ts';
 import type {
   CodexApprovalPolicy,
   CodexSandboxMode,
+  PermissionAutoReason,
+  PermissionDecisionId,
+  PermissionDetail,
+  PermissionRequestKind,
   SessionPermissionPolicy,
 } from '../shared/types/runtimeEvents.ts';
 import {
@@ -11,6 +15,7 @@ import {
   CodexConnectionClosedError,
   spawnCodexConnection,
 } from './codexConnection.ts';
+import { readOfferedDecisions, toWireDecision } from './codexDecisions.ts';
 import { ensureCodexHome } from './codexHome.ts';
 import { type CodexEntryResolution, resolveCodexLaunch } from './codexNodeEntry.ts';
 import { CodexNormalizer } from './codexNormalizer.ts';
@@ -473,6 +478,150 @@ function belongsToThread(expected: string | undefined, params: unknown): boolean
   return typeof threadId !== 'string' || threadId === expected;
 }
 
+/**
+ * The two card kinds an approval can become. Derived from the protocol union
+ * rather than respelled, so a rename there fails here instead of drifting.
+ */
+type ApprovalCardKind = Extract<PermissionRequestKind, 'exec' | 'file_change'>;
+
+/**
+ * The approval kinds this build can put on screen, and the card kind each one
+ * becomes.
+ *
+ * This map is the P2 guard as well as the projection table, deliberately: a
+ * kind that is not in here is refused at the door (`unsupported`) instead of
+ * being parked, and the SAME lookup decides whether a settle is projected back
+ * as `permission.resolved`. One table means "we raised a card" and "we resolve
+ * that card" can never disagree — the disagreement being a card that no drain
+ * can ever take off screen.
+ *
+ * `approval_permissions` and `elicitation` are absent on purpose (spec §2.5):
+ * parking them costs a hung turn (codex sits on `waitingOnApproval` with
+ * nothing on screen until Stop), and both are rare — `item/permissions/
+ * requestApproval` is unreachable on this build [实测 S2-a] and elicitation
+ * needs an MCP server. A rare refusal beats a rare hang.
+ */
+const APPROVAL_CARD_KINDS = new Map<PendingKind, ApprovalCardKind>([
+  ['approval_exec', 'exec'],
+  ['approval_file_change', 'file_change'],
+]);
+
+/** Card header per approval kind. Not the wire method: this is what the user reads. */
+const APPROVAL_TOOL_NAME: Readonly<Record<ApprovalCardKind, string>> = {
+  exec: 'Run command',
+  file_change: 'Apply patch',
+};
+
+/** A non-empty string field, or `undefined` — `null` is a declared value here, not an error. */
+function readText(source: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = source?.[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * `additionalPermissions` -> a count and a boolean, never an expansion.
+ *
+ * `AdditionalPermissionProfile` is a recursive shape with ZERO captured
+ * samples, and the generated snapshot keeps `AdditionalFileSystemPermissions`
+ * as a bare `$ref` — so listing individual entries would be inventing a shape.
+ * "There are extras, this many file-system ones, network or not" is enough for
+ * the user to see this is not an ordinary exec, and every part of it is
+ * readable without knowing the sub-shape: any array under `fileSystem` is a
+ * list of file-system permissions whatever its key is called.
+ */
+function readExtraPermissions(
+  value: unknown
+): { fileSystemEntries: number; networkRequested: boolean } | undefined {
+  if (!isRecord(value)) return undefined;
+  // An object of nothing but nulls is codex saying "no extras", not "extras".
+  if (!Object.values(value).some((entry) => entry !== null && entry !== undefined)) {
+    return undefined;
+  }
+  let fileSystemEntries = 0;
+  const fileSystem = isRecord(value.fileSystem) ? value.fileSystem : undefined;
+  if (fileSystem) {
+    for (const entry of Object.values(fileSystem)) {
+      if (Array.isArray(entry)) fileSystemEntries += entry.length;
+    }
+  }
+  const network = isRecord(value.network) ? value.network : undefined;
+  return { fileSystemEntries, networkRequested: network?.enabled === true };
+}
+
+/**
+ * The card body for a command approval.
+ *
+ * ALWAYS returns a detail, even an almost empty one. `command` is typed
+ * `["string","null"]` by the contract — a command-less approval is a declared
+ * shape (zsh-exec-bridge subcommands), not a malformed frame — so a body that
+ * exists only when there is a command would render an empty box for exactly the
+ * requests that need explaining most: a managed-network exit, or a command
+ * asking for permissions on top of the session's posture.
+ */
+function buildExecDetail(params: unknown): PermissionDetail {
+  const source = isRecord(params) ? params : undefined;
+  const detail: Extract<PermissionDetail, { kind: 'exec' }> = { kind: 'exec' };
+  const command = readText(source, 'command');
+  if (command) detail.command = command;
+  const cwd = readText(source, 'cwd');
+  if (cwd) detail.cwd = cwd;
+  const context = isRecord(source?.networkApprovalContext)
+    ? source.networkApprovalContext
+    : undefined;
+  const host = readText(context, 'host');
+  const protocol = readText(context, 'protocol');
+  // Both or neither: half a context renders `undefined://host`.
+  if (host && protocol) detail.network = { host, protocol };
+  const extras = readExtraPermissions(source?.additionalPermissions);
+  if (extras) detail.extraPermissions = extras;
+  return detail;
+}
+
+/**
+ * The card body for a patch approval: the diff cached by the normalizer plus
+ * whatever the request itself adds.
+ *
+ * A missing `cached` is a degraded card, never a delayed one (hard constraint
+ * 7): the patch rides an `item/started` that lands ~1ms earlier [实测], and
+ * waiting for one that is not coming would hang the turn instead of showing an
+ * imperfect card.
+ *
+ * `grantRoot` has to be here even when the patch is not. Allowing the patch
+ * ALSO allows writes under that root for the rest of the session [契约], so a
+ * card that drops it turns one Allow into a directory grant nobody was shown.
+ */
+function buildFileChangeDetail(
+  cached: PermissionDetail | undefined,
+  params: unknown
+): PermissionDetail {
+  const source = isRecord(params) ? params : undefined;
+  const base = cached?.kind === 'file_change' ? cached : undefined;
+  const grantRoot = readText(source, 'grantRoot');
+  return {
+    kind: 'file_change',
+    // Copied out rather than passed through: the cached object is also the
+    // source of the tool row's input, and one shared object is one mutation
+    // away from two wrong renderings.
+    changes: base ? [...base.changes] : [],
+    ...(base?.omittedFileCount !== undefined ? { omittedFileCount: base.omittedFileCount } : {}),
+    ...(grantRoot ? { grantRoot } : {}),
+  };
+}
+
+/**
+ * Why a pending entry left the table, in the protocol's vocabulary.
+ *
+ * `'forgotten'` (the server settled its own request) has no protocol word and
+ * C10 forbids widening the enum for a Host-internal concept, so it degrades to
+ * the nearest true one: the request was abandoned. The alternative — omitting
+ * `autoReason` — would state that a human decided, which is the one thing this
+ * field exists to stop the timeline from claiming. The real reason goes to the
+ * log (spec L4).
+ */
+function toAutoReason(reason: Exclude<PendingSettleReason, 'answered'>): PermissionAutoReason {
+  return reason === 'forgotten' ? 'aborted' : reason;
+}
+
 export class CodexRuntime {
   private readonly opts: CodexRuntimeOptions;
   private readonly log: LogFn;
@@ -599,7 +748,7 @@ export class CodexRuntime {
           kind: entry.kind,
           reason,
         });
-        this.projectSettledQuestion(entry, reason);
+        this.projectSettled(entry, reason);
       },
     });
 
@@ -919,11 +1068,12 @@ export class CodexRuntime {
       // is waiting on and, through the renderer's own `question.requested`
       // reducer, drag the session back into the busy state it just left.
       //
-      // Question-only on purpose. The same argument does not transfer to
-      // approvals yet: they raise no card in this slice, so a parked approval
-      // is invisible until a drain answers it, and turning that into an
-      // immediate refusal would decide slice 4's failure posture here. Left as
-      // slice 2c shipped it, and registered for slice 4.
+      // No longer question-only: slice 4 gave approvals the same posture (P1,
+      // in the approval branch below), plus one reason of their own — the diff
+      // cache lives on the TURN's normalizer, so with no turn there is nothing
+      // to correlate a patch against. The two guards have to stay in step: a
+      // refusal here and a registration there would mean codex can revive a
+      // stopped session through whichever door was left open.
       if (!state.turn) {
         this.refuseServerRequest(state, req.id, kind, 'aborted', 'no turn is running');
         return;
@@ -983,24 +1133,72 @@ export class CodexRuntime {
       return;
     }
 
+    // The approval bridge (slice 4). Both guards run BEFORE `register()`: an
+    // entry registered and then refused would leave a card on screen for a
+    // request that has already been answered.
+    //
+    // P1 — no turn is running. Same argument as the question bridge's G1
+    // (`stop()` neither tears the session down nor deletes it, and the real
+    // effect of `turn/interrupt` is [未测], so codex can keep asking after the
+    // user pressed Stop), plus one that is specific to approvals: the diff
+    // cache lives on the TURN's normalizer, so with no turn there is nothing to
+    // correlate a patch against and the card could not be rendered anyway.
+    if (!state.turn) {
+      this.refuseServerRequest(state, req.id, kind, 'aborted', 'no turn is running');
+      return;
+    }
+    // P2 — a kind we cannot put on screen. See `APPROVAL_CARD_KINDS`.
+    const permissionKind = APPROVAL_CARD_KINDS.get(kind);
+    if (!permissionKind) {
+      this.refuseServerRequest(state, req.id, kind, 'unsupported', 'no card for this kind');
+      return;
+    }
+    // There is deliberately no third guard for a missing diff: a card without
+    // one is degraded, a turn waiting for one is broken (hard constraint 7).
+
+    const permissionId = this.correlationIdFor(sessionId, req.id);
     const registered = state.pending.register({
       requestId: req.id,
       sessionId,
       kind,
       method: req.method,
       params: req.params,
-      correlationId: this.correlationIdFor(sessionId, req.id),
+      correlationId: permissionId,
       createdAt: Date.now(),
     });
     if (!registered) return;
-    // Approvals are left PENDING on purpose: the approval bridge is slice 4,
-    // and every teardown path drains the table with a fail-safe refusal, so
-    // nothing is left unanswered. A parked entry means codex is blocked on
-    // `waitingOnApproval` until a bridge or a drain answers it.
-    this.log('codex server request registered; no bridge in this slice', {
+
+    const offered = readOfferedDecisions(kind, req.params);
+    const params = isRecord(req.params) ? req.params : undefined;
+    const reason = readText(params, 'reason');
+    const detail =
+      permissionKind === 'exec'
+        ? buildExecDetail(req.params)
+        : buildFileChangeDetail(
+            state.turn.normalizer.getFileChangeDetail(readText(params, 'itemId') ?? ''),
+            req.params
+          );
+
+    this.opts.emit({
+      type: 'permission.requested',
       sessionId,
-      id: idKey(req.id),
-      kind,
+      payload: {
+        permissionId,
+        toolName: APPROVAL_TOOL_NAME[permissionKind],
+        kind: permissionKind,
+        // The protocol's own key for the agent's justification. `description` is
+        // the Claude arm of the same card and reading one while writing the
+        // other loses every Codex reason, silently.
+        ...(reason ? { reason } : {}),
+        decisions: offered.decisions,
+        // A `0` would read as a deliberate statement that something was dropped.
+        ...(offered.omitted > 0 ? { omittedDecisionCount: offered.omitted } : {}),
+        detail,
+        // No `input`: that field is a Claude tool's arguments, and there is no
+        // counterpart here. No `session.status` either — C10 rule 3 gives the
+        // waiting state exactly one writer, and codex does send
+        // `waitingOnApproval` itself [实测].
+      },
     });
   }
 
@@ -1085,7 +1283,55 @@ export class CodexRuntime {
       outcome,
       stats: turn.normalizer.stats(),
     });
+    // An approval still parked belongs to a turn that no longer exists, and the
+    // renderer clears its permission QUEUE on every terminal event — so the
+    // entry loses its queue slot while `block.resolved` stays false, i.e. the
+    // card spins until the session is closed. The reverse (clearing without
+    // replying) is the hang this table exists to prevent, so both halves happen
+    // here. Usually a no-op: the teardown paths drain first, because after
+    // `dispose()` there is no stdin left to write the refusals to.
+    //
+    // APPROVALS ONLY, and that is a deliberate DEVIATION from the spec, recorded
+    // here rather than silently: §2.6 prescribes `drain({sessionId}, 'aborted')`
+    // — the whole table for this session. It is narrowed to the approval kinds
+    // because the renderer's terminal branches discard `pendingPermissions` and
+    // nothing else, so a question parked here is NOT stranded — its dock
+    // survives — and auto-rejecting one the user can still answer would be new
+    // harm, not the fix. Slice 3 shipped that question posture deliberately;
+    // this stays scoped to the defect §2.6 actually names.
+    this.drainPending(state, 'aborted', `turn ${outcome}`, {
+      sessionId: state.sessionId,
+      kinds: [...APPROVAL_CARD_KINDS.keys()],
+    });
     if (!opts.terminalAlreadyEmitted) turn.normalizer.closeTurn(outcome, error);
+  }
+
+  /**
+   * Settle every pending request of this session with a fail-safe refusal, and
+   * say so once in the log.
+   *
+   * One helper rather than four call sites, so that "every drain is audible"
+   * cannot be true of three of them: the count and the reason are the only
+   * evidence that a card left the screen because we answered for it.
+   */
+  private drainPending(
+    state: CodexSessionState,
+    reason: 'session_closed' | 'aborted',
+    why: string,
+    filter: { sessionId?: string; kinds?: readonly PendingKind[] } = {
+      sessionId: state.sessionId,
+    }
+  ): PendingServerRequest[] {
+    const drained = state.pending.drain(filter, reason);
+    if (drained.length > 0) {
+      this.log('codex pending drained', {
+        sessionId: state.sessionId,
+        count: drained.length,
+        reason,
+        why,
+      });
+    }
+    return drained;
   }
 
   /**
@@ -1180,14 +1426,7 @@ export class CodexRuntime {
   ): void {
     if (state.torndown) return;
     state.torndown = true;
-    const drained = state.pending.drain(filter, reason);
-    if (drained.length > 0) {
-      this.log('codex pending drained', {
-        sessionId: state.sessionId,
-        count: drained.length,
-        reason,
-      });
-    }
+    this.drainPending(state, reason, disposeReason, filter);
     this.interruptTurn(state, disposeReason);
     state.connection.dispose(disposeReason);
     this.sessions.delete(state.sessionId);
@@ -1231,7 +1470,7 @@ export class CodexRuntime {
       });
       return;
     }
-    state.pending.drain({ sessionId: input.sessionId }, 'aborted');
+    this.drainPending(state, 'aborted', 'stop');
     this.interruptTurn(state, 'stop');
     this.opts.emit({
       type: 'session.status',
@@ -1412,39 +1651,166 @@ export class CodexRuntime {
     );
   }
 
+  /**
+   * Answer a parked approval with the user's decision.
+   *
+   * `allow` is DERIVED from the decision rather than trusted alongside it: the
+   * two arrive together over IPC and, once a decision that this build cannot map
+   * has been downgraded to a deny, an echoed `allow` would paint an approved
+   * card over a frame that said `decline`.
+   */
   respondPermission(input: {
     sessionId: string;
     permissionId?: string;
     allow?: boolean;
+    decision?: PermissionDecisionId;
     requestId?: string;
   }): void {
-    this.fail(
-      'not_implemented',
-      'permission.respond: the Codex approval bridge lands in a later slice.',
-      { sessionId: input.sessionId, requestId: input.requestId }
-    );
+    const { sessionId, permissionId } = input;
+    const state = this.sessions.get(sessionId);
+    if (!state || !permissionId) {
+      this.fail('invalid_payload', 'permission.respond: unknown session or missing permissionId', {
+        sessionId,
+        requestId: input.requestId,
+      });
+      return;
+    }
+
+    // Scanned, not parsed: `sessionId` may contain ':', so splitting the
+    // correlation id is a parser waiting to be wrong (same rule as
+    // `respondQuestion`). The table holds a handful of entries at most.
+    const entry = state.pending
+      .list()
+      .find((candidate) => candidate.correlationId === permissionId);
+
+    if (!entry) {
+      // NOT a host.error, and deliberately NOT the Claude echo either. A
+      // non-fatal host.error is invisible in the renderer, so the card would be
+      // left unanswerable; and echoing `input.allow` — which is what the Claude
+      // bridge does for its own desync recovery — would draw an "Allowed" card
+      // for a request that no longer exists and granted nothing. The honest
+      // convergence is the one a drain would have emitted.
+      this.log('codex permission.respond: no pending entry, re-resolving', {
+        sessionId,
+        permissionId,
+      });
+      this.opts.emit({
+        type: 'permission.resolved',
+        sessionId,
+        payload: { permissionId, allow: false, autoReason: 'aborted' },
+      });
+      return;
+    }
+
+    if (!APPROVAL_CARD_KINDS.has(entry.kind) || entry.sessionId !== sessionId) {
+      // A shape error rather than a race: the id addressed something that is not
+      // an approval, or belongs to another session. Nothing to converge.
+      this.fail(
+        'invalid_payload',
+        `permission.respond: ${permissionId} is not this session's approval`,
+        { sessionId, requestId: input.requestId }
+      );
+      return;
+    }
+
+    const requested: PermissionDecisionId = input.decision ?? (input.allow ? 'allow' : 'deny');
+    const wire = toWireDecision(entry.kind, requested);
+    // Fail-safe: a decision this build cannot express becomes a plain deny, on
+    // the wire AND on the card. `deny` always maps for the live dialects, which
+    // `codexDecisions.test.ts` pins.
+    const effective: PermissionDecisionId = wire === null ? 'deny' : requested;
+    if (wire === null) {
+      this.log('WARN codex permission.respond: unmappable decision, denied instead', {
+        sessionId,
+        permissionId,
+        kind: entry.kind,
+        decision: requested,
+      });
+    }
+    const body = wire ?? toWireDecision(entry.kind, 'deny');
+    state.pending.settle(entry.requestId, { reason: 'answered', result: { decision: body } });
+
+    this.opts.emit({
+      type: 'permission.resolved',
+      sessionId,
+      requestId: input.requestId,
+      payload: {
+        permissionId,
+        allow: effective === 'allow' || effective === 'allow_session',
+        decision: effective,
+        // No `autoReason`: a human decided this one.
+      },
+    });
+
+    if (effective === 'cancel') this.finishAfterCancel(state);
   }
 
   /**
-   * Project the timeline event for a question that left the pending table
-   * WITHOUT the user answering it: a drain (stop / close / process exit) or the
-   * server resolving its own request.
+   * Local clean-up after the user picked "Deny and stop".
    *
-   * `'answered'` is excluded because `respondQuestion` has already emitted the
-   * richer event (with the answers, and with `cancelled` vs `answered`
-   * distinguished). Emitting again here would deliver a second
-   * `question.resolved` for the same id, and the store applies the last one it
-   * sees — so answering a question would repaint the card as "Questions
-   * skipped".
+   * `cancel` means the server interrupts the turn immediately [契约], and doing
+   * nothing locally has two bad endings: a later `turn/completed` whose status
+   * is not `completed` is projected as `session.failed` (the user's own choice
+   * painted as a crash), and if no `turn/completed` arrives at all our turn
+   * record never clears and every later send is refused `session_busy`.
    *
-   * Non-question kinds are the approval bridge's business (slice 4).
+   * So: the same closing sequence as `stop()`, minus the interrupt. The reply we
+   * just wrote IS the interrupt; sending `turn/interrupt` on top would be
+   * shouting at a turn that is already dying. The registered cost is symmetric
+   * with Stop's: if the server did NOT interrupt, its later frames are dropped
+   * with a log line.
    */
-  private projectSettledQuestion(entry: PendingServerRequest, reason: PendingSettleReason): void {
-    if (entry.kind !== 'question' || reason === 'answered') return;
+  private finishAfterCancel(state: CodexSessionState): void {
+    this.drainPending(state, 'aborted', 'decision cancel');
+    const session = this.opts.registry.get(state.sessionId);
+    if (session) {
+      // The registry's own last reading, never an invented `stopping` (C10 rule
+      // 3), and BEFORE the terminal — behind it, a busy status would re-freeze
+      // the renderer's send gate.
+      this.opts.emit({
+        type: 'session.status',
+        sessionId: state.sessionId,
+        payload: { status: session.status },
+      });
+    }
+    this.finishTurn(state, 'stopped');
+  }
+
+  /**
+   * Project the timeline event for a request that left the pending table
+   * WITHOUT the user answering it: a drain (stop / close / process exit / turn
+   * end) or the server resolving its own request.
+   *
+   * `'answered'` is excluded because `respondQuestion` / `respondPermission`
+   * have already emitted the richer event (the answers; the decision). Emitting
+   * again here would deliver a second resolution for the same id, and the store
+   * applies the last one it sees — so answering would repaint the card as
+   * "skipped" / "denied automatically".
+   *
+   * Kinds that never raised a card are skipped: they are refused at the door
+   * (`APPROVAL_CARD_KINDS`), so resolving one would address an id the renderer
+   * has never seen.
+   */
+  private projectSettled(entry: PendingServerRequest, reason: PendingSettleReason): void {
+    if (reason === 'answered') return;
+    if (entry.kind === 'question') {
+      this.opts.emit({
+        type: 'question.resolved',
+        sessionId: entry.sessionId,
+        payload: { questionId: entry.correlationId, outcome: 'rejected' },
+      });
+      return;
+    }
+    if (!APPROVAL_CARD_KINDS.has(entry.kind)) return;
     this.opts.emit({
-      type: 'question.resolved',
+      type: 'permission.resolved',
       sessionId: entry.sessionId,
-      payload: { questionId: entry.correlationId, outcome: 'rejected' },
+      payload: {
+        permissionId: entry.correlationId,
+        // Nothing a drain can send is a grant, so this is false on every path.
+        allow: false,
+        autoReason: toAutoReason(reason),
+      },
     });
   }
 

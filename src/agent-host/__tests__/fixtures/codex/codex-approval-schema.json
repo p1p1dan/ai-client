@@ -41,29 +41,21 @@
       {
         "description": "User approved the command.",
         "type": "string",
-        "enum": [
-          "accept"
-        ]
+        "enum": ["accept"]
       },
       {
         "description": "User approved the command and future prompts in the same session-scoped approval cache should run without prompting.",
         "type": "string",
-        "enum": [
-          "acceptForSession"
-        ]
+        "enum": ["acceptForSession"]
       },
       {
         "description": "User approved the command, and wants to apply the proposed execpolicy amendment so future matching commands can run without prompting.",
         "type": "object",
-        "required": [
-          "acceptWithExecpolicyAmendment"
-        ],
+        "required": ["acceptWithExecpolicyAmendment"],
         "properties": {
           "acceptWithExecpolicyAmendment": {
             "type": "object",
-            "required": [
-              "execpolicy_amendment"
-            ],
+            "required": ["execpolicy_amendment"],
             "properties": {
               "execpolicy_amendment": {
                 "type": "array",
@@ -80,15 +72,11 @@
       {
         "description": "User chose a persistent network policy rule (allow/deny) for this host.",
         "type": "object",
-        "required": [
-          "applyNetworkPolicyAmendment"
-        ],
+        "required": ["applyNetworkPolicyAmendment"],
         "properties": {
           "applyNetworkPolicyAmendment": {
             "type": "object",
-            "required": [
-              "network_policy_amendment"
-            ],
+            "required": ["network_policy_amendment"],
             "properties": {
               "network_policy_amendment": {
                 "$ref": "#/definitions/NetworkPolicyAmendment"
@@ -102,16 +90,12 @@
       {
         "description": "User denied the command. The agent will continue the turn.",
         "type": "string",
-        "enum": [
-          "decline"
-        ]
+        "enum": ["decline"]
       },
       {
         "description": "User denied the command. The turn will also be immediately interrupted.",
         "type": "string",
-        "enum": [
-          "cancel"
-        ]
+        "enum": ["cancel"]
       }
     ]
   },
@@ -122,30 +106,22 @@
       {
         "description": "User approved the file changes.",
         "type": "string",
-        "enum": [
-          "accept"
-        ]
+        "enum": ["accept"]
       },
       {
         "description": "User approved the file changes and future changes to the same files should run without prompting.",
         "type": "string",
-        "enum": [
-          "acceptForSession"
-        ]
+        "enum": ["acceptForSession"]
       },
       {
         "description": "User denied the file changes. The agent will continue the turn.",
         "type": "string",
-        "enum": [
-          "decline"
-        ]
+        "enum": ["decline"]
       },
       {
         "description": "User denied the file changes. The turn will also be immediately interrupted.",
         "type": "string",
-        "enum": [
-          "cancel"
-        ]
+        "enum": ["cancel"]
       }
     ]
   },
@@ -156,22 +132,16 @@
       {
         "description": "User has approved this command and the agent should execute it.",
         "type": "string",
-        "enum": [
-          "approved"
-        ]
+        "enum": ["approved"]
       },
       {
         "description": "User has approved this command and wants to apply the proposed execpolicy amendment so future matching commands are permitted.",
         "type": "object",
-        "required": [
-          "approved_execpolicy_amendment"
-        ],
+        "required": ["approved_execpolicy_amendment"],
         "properties": {
           "approved_execpolicy_amendment": {
             "type": "object",
-            "required": [
-              "proposed_execpolicy_amendment"
-            ],
+            "required": ["proposed_execpolicy_amendment"],
             "properties": {
               "proposed_execpolicy_amendment": {
                 "type": "array",
@@ -188,22 +158,16 @@
       {
         "description": "User has approved this request and wants future prompts in the same session-scoped approval cache to be automatically approved for the remainder of the session.",
         "type": "string",
-        "enum": [
-          "approved_for_session"
-        ]
+        "enum": ["approved_for_session"]
       },
       {
         "description": "User chose to persist a network policy rule (allow/deny) for future requests to the same host.",
         "type": "object",
-        "required": [
-          "network_policy_amendment"
-        ],
+        "required": ["network_policy_amendment"],
         "properties": {
           "network_policy_amendment": {
             "type": "object",
-            "required": [
-              "network_policy_amendment"
-            ],
+            "required": ["network_policy_amendment"],
             "properties": {
               "network_policy_amendment": {
                 "$ref": "#/definitions/NetworkPolicyAmendment"
@@ -217,15 +181,11 @@
       {
         "description": "User has denied this command and the agent should not execute it, but it should continue the session and try something else.",
         "type": "object",
-        "required": [
-          "denied"
-        ],
+        "required": ["denied"],
         "properties": {
           "denied": {
             "type": "object",
-            "required": [
-              "rejection"
-            ],
+            "required": ["rejection"],
             "properties": {
               "rejection": {
                 "type": "string"
@@ -239,56 +199,32 @@
       {
         "description": "Automatic approval review timed out before reaching a decision.",
         "type": "string",
-        "enum": [
-          "timed_out"
-        ]
+        "enum": ["timed_out"]
       },
       {
         "description": "User has denied this command and the agent should not do anything until the user's next command.",
         "type": "string",
-        "enum": [
-          "abort"
-        ]
+        "enum": ["abort"]
       }
     ]
   },
   "PermissionsRequestApprovalResponse": {
     "_source": "PermissionsRequestApprovalResponse.json (top level; GrantedPermissionProfile has no required members)",
     "_note": "Confirms codexPending's fail-safe body {permissions:{}, scope:'turn'} is contract-legal.",
-    "required": [
-      "permissions"
-    ],
-    "properties": [
-      "permissions",
-      "scope",
-      "strictAutoReview"
-    ],
-    "PermissionGrantScope": [
-      "turn",
-      "session"
-    ]
+    "required": ["permissions"],
+    "properties": ["permissions", "scope", "strictAutoReview"],
+    "PermissionGrantScope": ["turn", "session"]
   },
   "McpServerElicitationRequestResponse": {
     "_source": "McpServerElicitationRequestResponse.json",
-    "required": [
-      "action"
-    ],
-    "McpServerElicitationAction": [
-      "accept",
-      "decline",
-      "cancel"
-    ]
+    "required": ["action"],
+    "McpServerElicitationAction": ["accept", "decline", "cancel"]
   },
   "requestParams": {
     "_source": "{CommandExecutionRequestApproval,FileChangeRequestApproval,PermissionsRequestApproval,ApplyPatchApproval,ExecCommandApproval}Params.json — `required` and `properties` copied VERBATIM (descriptions included). Nested $ref definitions are kept only for the two shapes slice 4 renders (NetworkApprovalContext, AdditionalPermissionProfile); the rest stay as $ref names pointing back at the generated files.",
     "_note": "fileChange carries NO diff and NO availableDecisions: the patch arrives on the item/started frame sharing its itemId. Read grantRoot / additionalPermissions / networkApprovalContext before designing any approval UI — each one widens what an Allow actually grants.",
     "CommandExecutionRequestApprovalParams": {
-      "required": [
-        "itemId",
-        "startedAtMs",
-        "threadId",
-        "turnId"
-      ],
+      "required": ["itemId", "startedAtMs", "threadId", "turnId"],
       "properties": {
         "additionalPermissions": {
           "description": "Optional additional permissions requested for this command.",
@@ -303,34 +239,22 @@
         },
         "approvalId": {
           "description": "Unique identifier for this specific approval callback.\n\nFor regular shell/unified_exec approvals, this is null.\n\nFor zsh-exec-bridge subcommand approvals, multiple callbacks can belong to one parent `itemId`, so `approvalId` is a distinct opaque callback id (a UUID) used to disambiguate routing.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "availableDecisions": {
           "description": "Ordered list of decisions the client may present for this prompt.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/CommandExecutionApprovalDecision"
           }
         },
         "command": {
           "description": "The command to be executed.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "commandActions": {
           "description": "Best-effort parsed command actions for friendly display.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/CommandAction"
           }
@@ -349,10 +273,7 @@
         "environmentId": {
           "description": "Environment in which the command will run.",
           "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "itemId": {
           "type": "string"
@@ -370,30 +291,21 @@
         },
         "proposedExecpolicyAmendment": {
           "description": "Optional proposed execpolicy amendment to allow similar commands without prompting.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "type": "string"
           }
         },
         "proposedNetworkPolicyAmendments": {
           "description": "Optional proposed network policy amendments (allow/deny host) for future requests.",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/NetworkPolicyAmendment"
           }
         },
         "reason": {
           "description": "Optional explanatory reason (e.g. request for network access).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "startedAtMs": {
           "description": "Unix timestamp (in milliseconds) when this approval request started.",
@@ -412,10 +324,7 @@
           "type": "object",
           "properties": {
             "enabled": {
-              "type": [
-                "boolean",
-                "null"
-              ]
+              "type": ["boolean", "null"]
             }
           }
         },
@@ -447,10 +356,7 @@
         },
         "NetworkApprovalContext": {
           "type": "object",
-          "required": [
-            "host",
-            "protocol"
-          ],
+          "required": ["host", "protocol"],
           "properties": {
             "host": {
               "type": "string"
@@ -462,39 +368,23 @@
         },
         "NetworkApprovalProtocol": {
           "type": "string",
-          "enum": [
-            "http",
-            "https",
-            "socks5Tcp",
-            "socks5Udp"
-          ]
+          "enum": ["http", "https", "socks5Tcp", "socks5Udp"]
         }
       }
     },
     "FileChangeRequestApprovalParams": {
-      "required": [
-        "itemId",
-        "startedAtMs",
-        "threadId",
-        "turnId"
-      ],
+      "required": ["itemId", "startedAtMs", "threadId", "turnId"],
       "properties": {
         "grantRoot": {
           "description": "[UNSTABLE] When set, the agent is asking the user to allow writes under this root for the remainder of the session (unclear if this is honored today).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "itemId": {
           "type": "string"
         },
         "reason": {
           "description": "Optional explanatory reason (e.g. request for extra write access).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "startedAtMs": {
           "description": "Unix timestamp (in milliseconds) when this approval request started.",
@@ -510,24 +400,14 @@
       }
     },
     "PermissionsRequestApprovalParams": {
-      "required": [
-        "cwd",
-        "itemId",
-        "permissions",
-        "startedAtMs",
-        "threadId",
-        "turnId"
-      ],
+      "required": ["cwd", "itemId", "permissions", "startedAtMs", "threadId", "turnId"],
       "properties": {
         "cwd": {
           "$ref": "#/definitions/AbsolutePathBuf"
         },
         "environmentId": {
           "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "itemId": {
           "type": "string"
@@ -536,10 +416,7 @@
           "$ref": "#/definitions/RequestPermissionProfile"
         },
         "reason": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "startedAtMs": {
           "description": "Unix timestamp (in milliseconds) when this approval request started.",
@@ -555,11 +432,7 @@
       }
     },
     "ApplyPatchApprovalParams": {
-      "required": [
-        "callId",
-        "conversationId",
-        "fileChanges"
-      ],
+      "required": ["callId", "conversationId", "fileChanges"],
       "properties": {
         "callId": {
           "description": "Use to correlate this with [codex_protocol::protocol::PatchApplyBeginEvent] and [codex_protocol::protocol::PatchApplyEndEvent].",
@@ -576,35 +449,20 @@
         },
         "grantRoot": {
           "description": "When set, the agent is asking the user to allow writes under this root for the remainder of the session (unclear if this is honored today).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "reason": {
           "description": "Optional explanatory reason (e.g. request for extra write access).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     },
     "ExecCommandApprovalParams": {
-      "required": [
-        "callId",
-        "command",
-        "conversationId",
-        "cwd",
-        "parsedCmd"
-      ],
+      "required": ["callId", "command", "conversationId", "cwd", "parsedCmd"],
       "properties": {
         "approvalId": {
           "description": "Identifier for this specific approval callback.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "callId": {
           "description": "Use to correlate this with [codex_protocol::protocol::ExecCommandBeginEvent] and [codex_protocol::protocol::ExecCommandEndEvent].",
@@ -629,10 +487,7 @@
           }
         },
         "reason": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     }

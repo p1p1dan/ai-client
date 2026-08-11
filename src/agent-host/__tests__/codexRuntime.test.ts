@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CODEX_AGENT } from '../../shared/types/agentWire.ts';
+import type { PermissionDecisionId } from '../../shared/types/runtimeEvents.ts';
 import {
   type CodexConnectFactory,
   type CodexConnectionCore,
@@ -402,6 +403,37 @@ async function stoppableTurn(options: Parameters<typeof makeHarness>[0] = {}): P
   return h;
 }
 
+/** A constructed exec approval, for the drain cases that only need SOMETHING parked. */
+function commandApproval(id: number): Record<string, unknown> {
+  return {
+    id,
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: THREAD_START_RESULT.threadId, command: 'rm -rf /' },
+  };
+}
+
+/** `correlationIdFor` for a numeric server-request id on session `s1`. */
+function permissionIdOf(id: number): string {
+  return `codex:s1:n:${id}`;
+}
+
+/**
+ * A plain session with a turn open and one approval parked.
+ *
+ * The turn is not decoration: slice 4's P1 guard refuses an approval that
+ * arrives with no turn running (there is no normalizer to correlate a diff
+ * against, and a card raised for a turn nobody is waiting on drags the session
+ * back into a busy state the user just left). Parking one therefore REQUIRES a
+ * turn — the slice 2c spelling of these drain cases registered outside a turn,
+ * which slice 4 made unreachable.
+ */
+async function parkedApproval(sessionId = 's1'): Promise<Harness> {
+  const h = await startedSession(sessionId);
+  await h.runtime.send({ sessionId, text: PROMPT });
+  h.push(commandApproval(0));
+  return h;
+}
+
 describe('codexRuntime — permission posture has a single source (gate item)', () => {
   it('sends thread/start exactly the posture session.created reports', async () => {
     const h = await startedSession();
@@ -725,12 +757,6 @@ describe('codexRuntime — thread/status/changed is the only status source', () 
 });
 
 describe('codexRuntime — server requests and the pending table', () => {
-  const approval = (id: number) => ({
-    id,
-    method: 'item/commandExecution/requestApproval',
-    params: { threadId: THREAD_START_RESULT.threadId, command: 'rm -rf /' },
-  });
-
   it('answers an unknown server method with method-not-found instead of registering it', async () => {
     const h = await startedSession();
     h.push({ id: 5, method: 'item/telepathy/request', params: {} });
@@ -744,8 +770,7 @@ describe('codexRuntime — server requests and the pending table', () => {
     // The two halves of the invariant: the table ends empty AND every entry got
     // exactly one frame. Clearing without replying passes a naive `size === 0`
     // check while codex waits on `waitingOnApproval` forever.
-    const h = await startedSession();
-    h.push(approval(0));
+    const h = await parkedApproval();
     h.runtime.close({ sessionId: 's1', requestId: 'req-close' });
 
     const replies = h.replies();
@@ -756,11 +781,20 @@ describe('codexRuntime — server requests and the pending table', () => {
     expect(h.ops.indexOf('reply:0')).toBeLessThan(h.ops.indexOf('kill:session closed'));
     expect(payload(h.eventsOf('session.status').at(-1)).status).toBe('disconnected');
     expect(h.registry.get('s1')).toBeUndefined();
+    // Slice 4 (spec §5): the frame is only half of it. Without the projection
+    // the wire is clean and the CARD still spins — the renderer was never told
+    // this request stopped existing.
+    const resolved = h.eventsOf('permission.resolved');
+    expect(resolved).toHaveLength(1);
+    expect(payload(resolved[0])).toEqual({
+      permissionId: permissionIdOf(0),
+      allow: false,
+      autoReason: 'session_closed',
+    });
   });
 
   it('drains on stop with the aborted reason and keeps the connection alive', async () => {
-    const h = await startedSession();
-    h.push(approval(0));
+    const h = await parkedApproval();
     h.events.length = 0;
     h.runtime.stop({ sessionId: 's1', requestId: 'req-stop' });
 
@@ -769,12 +803,19 @@ describe('codexRuntime — server requests and the pending table', () => {
     // Stop is not close: the session survives it.
     expect(h.registry.get('s1')).toBeDefined();
     expect(h.event('session.status')?.requestId).toBe('req-stop');
+    const resolved = h.eventsOf('permission.resolved');
+    expect(resolved).toHaveLength(1);
+    expect(payload(resolved[0])).toEqual({
+      permissionId: permissionIdOf(0),
+      allow: false,
+      autoReason: 'aborted',
+    });
   });
 
   it('answers a second, unrelated request too — the drain is not first-only', async () => {
-    const h = await startedSession();
-    h.push(approval(0));
+    const h = await parkedApproval();
     h.push({ id: 1, method: 'item/fileChange/requestApproval', params: {} });
+    h.events.length = 0;
     h.runtime.close({ sessionId: 's1' });
 
     const replies = h.replies();
@@ -782,6 +823,11 @@ describe('codexRuntime — server requests and the pending table', () => {
     // Fail-safe bodies, neither of which can be read as consent.
     expect(replies[0].result).toEqual({ decision: 'cancel' });
     expect(replies[1].result).toEqual({ decision: 'cancel' });
+    // One projection per entry, same order, none skipped.
+    expect(h.eventsOf('permission.resolved').map((event) => payload(event).permissionId)).toEqual([
+      permissionIdOf(0),
+      permissionIdOf(1),
+    ]);
   });
 
   it('answers a question that carries no questions immediately, never parking it', async () => {
@@ -806,8 +852,7 @@ describe('codexRuntime — server requests and the pending table', () => {
   });
 
   it('drains everything when the process dies on its own, and reports the session failed', async () => {
-    const h = await startedSession();
-    h.push(approval(0));
+    const h = await parkedApproval();
     h.events.length = 0;
     // A crash, through the real connection core — not a close we initiated.
     h.exit({ code: 1, signal: null });
@@ -820,18 +865,30 @@ describe('codexRuntime — server requests and the pending table', () => {
     expect(h.replies()).toHaveLength(0);
     expect(payload(h.event('session.failed')).error).toContain('exited');
     expect(h.registry.get('s1')?.status).toBe('disconnected');
+    // The card cannot be answered by anyone now, so it has to be told so —
+    // this is the ONLY thing the renderer gets on a dead link.
+    const resolved = h.eventsOf('permission.resolved');
+    expect(resolved).toHaveLength(1);
+    expect(payload(resolved[0])).toEqual({
+      permissionId: permissionIdOf(0),
+      allow: false,
+      autoReason: 'aborted',
+    });
   });
 
   it('drains and disposes every session on host shutdown', async () => {
-    const h = await startedSession();
-    h.push(approval(0));
+    const h = await parkedApproval();
+    h.events.length = 0;
     h.runtime.dispose();
 
     expect(h.replies()).toHaveLength(1);
     expect(h.ops.some((op) => op === 'kill:host shutting down')).toBe(true);
+    expect(h.eventsOf('permission.resolved')).toHaveLength(1);
+    expect(payload(h.event('permission.resolved')).autoReason).toBe('session_closed');
     // Idempotent: a close arriving after shutdown must not drain twice.
     h.runtime.close({ sessionId: 's1' });
     expect(h.replies()).toHaveLength(1);
+    expect(h.eventsOf('permission.resolved')).toHaveLength(1);
   });
 
   it('closes a session that has no live connection without throwing', async () => {
@@ -877,14 +934,30 @@ describe('codexRuntime — the deliberate holes are explicit refusals', () => {
     expect(h.connectInputs).toHaveLength(0);
   });
 
-  it('still refuses permission.respond — the approval bridge is slice 4', async () => {
-    // `question.respond` used to be refused alongside it. Slice 3 implemented
-    // it, so its absence from this list is the deliberate half of the change.
-    const h = await startedSession();
+  it('no longer refuses permission.respond — the approval bridge landed in slice 4', async () => {
+    // Slice 2c pinned this hole with `toEqual(['not_implemented'])`; slice 3 had
+    // already removed `question.respond` from the same list. Slice 4 fills it,
+    // so the assertion is RE-JUDGED rather than deleted (spec §5): what it
+    // guards now is that the refusal did not survive as a silent no-op, and
+    // that a real click reaches the parked request.
+    const h = await parkedApproval();
     h.events.length = 0;
-    h.runtime.respondPermission({ sessionId: 's1', requestId: 'req-p' });
+    h.runtime.respondPermission({
+      sessionId: 's1',
+      permissionId: permissionIdOf(0),
+      allow: true,
+      decision: 'allow',
+      requestId: 'req-p',
+    });
 
-    expect(h.eventsOf('host.error').map((e) => payload(e).code)).toEqual(['not_implemented']);
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+    expect(h.replies()).toHaveLength(1);
+    expect(h.replies()[0]).toMatchObject({ id: 0, result: { decision: 'accept' } });
+    expect(payload(h.event('permission.resolved'))).toEqual({
+      permissionId: permissionIdOf(0),
+      allow: true,
+      decision: 'allow',
+    });
   });
 
   it('answers question.respond for an id it never parked instead of going silent', async () => {
@@ -1813,5 +1886,671 @@ describe('codexRuntime — the question bridge (slice 3)', () => {
     expect(payload(h.event('host.error')).code).toBe('invalid_payload');
     expect(h.eventsOf('question.resolved')).toHaveLength(0);
     expect(h.replies()).toHaveLength(0);
+  });
+});
+
+/**
+ * S3 slice 4 — the approval bridge, at the runtime level.
+ *
+ * `codexDecisions.test.ts` covers the dialect translation in isolation. What
+ * can only be proved here is the wiring: which card leaves the runtime, WHEN a
+ * JSON-RPC frame is written (never before a human decided), and what happens to
+ * a card whose request stops existing under it — the four ways an approval can
+ * leave the pending table without an answer.
+ *
+ * Two evidence grades are mixed on purpose and are labelled per use:
+ *   [实测]  — params lifted verbatim from a captured frame.
+ *   [构造]  — a shape the test builds, because no capture holds one.
+ */
+describe('codexRuntime — the approval bridge (slice 4)', () => {
+  /**
+   * The one real `item/commandExecution/requestApproval` we own, params
+   * verbatim: command, cwd, and an `availableDecisions` of
+   * `["accept", {acceptWithExecpolicyAmendment}, "cancel"]` — the frame that
+   * makes "offer exactly what the server listed" produce a card whose only
+   * refusal kills the turn.
+   */
+  const EXEC_FRAME = loadTurnFixture('codex-command-approval.jsonl').find(
+    (frame) => frame.raw.method === 'item/commandExecution/requestApproval'
+  );
+  if (!EXEC_FRAME?.raw.params) throw new Error('command approval fixture lost its request frame');
+  const EXEC_PARAMS = EXEC_FRAME.raw.params;
+  const EXEC_METHOD = 'item/commandExecution/requestApproval';
+  const EXEC_THREAD = EXEC_PARAMS.threadId as string;
+
+  /**
+   * [构造] — the JSON-RPC id is supplied BY THE TEST.
+   *
+   * The fixture file does carry `"id": 0` on this frame, but its README records
+   * that field as INFERRED from the same turn's `serverRequest/resolved
+   * {requestId: 0}`, not captured: the source report stored `method` + `params`
+   * only. The id is therefore stated here, where its provenance can be read,
+   * rather than borrowed from a file the manifest forbids "completing".
+   */
+  const EXEC_APPROVAL_ID = 0;
+
+  /** The recorded fileChange approval params [实测]: reason null, grantRoot null. */
+  const FILE_CHANGE_PARAMS = loadTurnFixture('codex-filechange-approval-turn.jsonl').find(
+    (frame) => frame.raw.method === APPROVAL_METHOD
+  )?.raw.params;
+  if (!FILE_CHANGE_PARAMS) throw new Error('fileChange fixture lost its approval frame');
+
+  /** A session bound to the EXEC fixture's thread, mid-turn. */
+  async function execSession(): Promise<Harness> {
+    const h = makeHarness({
+      threadStartResult: {
+        threadId: EXEC_THREAD,
+        approvalPolicy: 'on-request',
+        sandbox: { type: 'workspaceWrite', networkAccess: false },
+      },
+    });
+    h.runtime.createSession({ sessionId: 's1', workspacePath: '/work/repo' });
+    await h.waitForEvent('session.created');
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+    h.events.length = 0;
+    return h;
+  }
+
+  function pushExec(h: Harness, params: unknown = EXEC_PARAMS, id = EXEC_APPROVAL_ID): void {
+    h.push({ id, method: EXEC_METHOD, params });
+  }
+
+  /**
+   * The recorded turn replayed up to — but NOT including — its approval request,
+   * so the approval params can be doctored while the `item/started` that carries
+   * the patch has already landed under the same itemId.
+   */
+  async function approvalReadyTurn(): Promise<Harness> {
+    const h = await turnSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+    replayRecordedTurn(h, { upTo: 9 });
+    return h;
+  }
+
+  function pushFileChange(h: Harness, params: unknown = FILE_CHANGE_PARAMS): void {
+    h.push({ id: APPROVAL_ID, method: APPROVAL_METHOD, params });
+  }
+
+  function detailOf(event: Record<string, unknown> | undefined): Record<string, unknown> {
+    return (payload(event).detail ?? {}) as Record<string, unknown>;
+  }
+
+  describe('A5 — the real exec frame becomes a card, verbatim', () => {
+    it('carries kind, command, cwd, the offered decisions and the omitted count', async () => {
+      const h = await execSession();
+      pushExec(h);
+
+      const requested = h.eventsOf('permission.requested');
+      expect(requested).toHaveLength(1);
+      const body = payload(requested[0]);
+      expect(body.permissionId).toBe(permissionIdOf(EXEC_APPROVAL_ID));
+      expect(body.kind).toBe('exec');
+      expect(body.toolName).toBe('Run command');
+      const detail = detailOf(requested[0]);
+      expect(detail.kind).toBe('exec');
+      expect(detail.command).toBe(EXEC_PARAMS.command);
+      expect(detail.cwd).toBe(EXEC_PARAMS.cwd);
+      // The object variant ("approve and persist an execpolicy rule") is not
+      // modelled, so it is COUNTED rather than dropped in silence...
+      expect(body.omittedDecisionCount).toBe(1);
+      // ...and the card still offers a plain Deny, which this frame never
+      // listed: without it the only refusal on screen aborts the whole turn.
+      expect(body.decisions).toEqual(['allow', 'deny', 'cancel']);
+    });
+
+    it('does not answer the request while the card is on screen', async () => {
+      const h = await execSession();
+      pushExec(h);
+
+      // The one failure this whole bridge exists to prevent: replying before a
+      // human decided is deciding FOR them.
+      expect(h.replies()).toHaveLength(0);
+      expect(h.eventsOf('permission.resolved')).toHaveLength(0);
+    });
+
+    it('does not carry `input`, which has no Codex counterpart', async () => {
+      const h = await execSession();
+      pushExec(h);
+
+      // `input` is the Claude tool's arguments. Filling it with the approval
+      // params would put a second, differently-shaped body on the card.
+      expect(payload(h.event('permission.requested'))).not.toHaveProperty('input');
+    });
+  });
+
+  describe('A15 — the justification is written under the protocol key `reason`', () => {
+    it('writes `reason`, never `description`', async () => {
+      const h = await execSession();
+      // [构造] — the captured exec frame has no `reason`; the field is real and
+      // optional per the generated contract.
+      pushExec(h, { ...EXEC_PARAMS, reason: 'needs network access to fetch deps' });
+
+      const body = payload(h.event('permission.requested'));
+      expect(body.reason).toBe('needs network access to fetch deps');
+      // The two are separate protocol fields. Writing `description` here and
+      // reading `reason` in the store loses every Codex justification, silently.
+      expect(body).not.toHaveProperty('description');
+    });
+
+    it('omits the key entirely when codex sent none, rather than writing an empty string', async () => {
+      const h = await execSession();
+      pushExec(h);
+      expect(payload(h.event('permission.requested'))).not.toHaveProperty('reason');
+
+      const nulled = await approvalReadyTurn();
+      pushFileChange(nulled); // the recorded frame carries `reason: null` [实测]
+      expect(FILE_CHANGE_PARAMS.reason).toBeNull();
+      expect(payload(nulled.event('permission.requested'))).not.toHaveProperty('reason');
+    });
+  });
+
+  describe('A8 — an exec approval that is not about a command still has a body', () => {
+    it('projects networkApprovalContext and additionalPermissions, with a null command', async () => {
+      const h = await execSession();
+      // [构造] — a managed-network approval. No capture exists; the shape is the
+      // generated contract's (`NetworkApprovalContext` requires host+protocol,
+      // `AdditionalPermissionProfile` is fileSystem + network).
+      pushExec(h, {
+        ...EXEC_PARAMS,
+        command: null,
+        networkApprovalContext: { host: 'registry.npmjs.org', protocol: 'https' },
+        additionalPermissions: {
+          fileSystem: { entries: [{ path: '/etc' }, { path: '/var' }] },
+          network: { enabled: true },
+        },
+      });
+
+      const detail = detailOf(h.event('permission.requested'));
+      // `command: null` is a DECLARED shape (zsh-exec-bridge subcommands), so
+      // the card must not degrade to an empty box — and must not auto-decline,
+      // which would make a whole class of approvals unusable.
+      expect(detail).not.toHaveProperty('command');
+      expect(detail.network).toEqual({ host: 'registry.npmjs.org', protocol: 'https' });
+      expect(detail.extraPermissions).toEqual({ fileSystemEntries: 2, networkRequested: true });
+      expect(detail.cwd).toBe(EXEC_PARAMS.cwd);
+      expect(h.replies()).toHaveLength(0);
+      expect(h.eventsOf('permission.requested')).toHaveLength(1);
+    });
+
+    it('reports extras that ask for no network as exactly that', async () => {
+      const h = await execSession();
+      pushExec(h, { ...EXEC_PARAMS, additionalPermissions: { fileSystem: {} } });
+
+      // Counted, never expanded (the profile is recursive and unsampled), but
+      // the fact that extras exist at all has to reach the card.
+      expect(detailOf(h.event('permission.requested')).extraPermissions).toEqual({
+        fileSystemEntries: 0,
+        networkRequested: false,
+      });
+    });
+
+    it('writes neither key when the request carries nothing to say', async () => {
+      const h = await execSession();
+      pushExec(h, {
+        ...EXEC_PARAMS,
+        additionalPermissions: null,
+        // Half a context is not a context: a host with no protocol would render
+        // `undefined://host`.
+        networkApprovalContext: { host: 'example.com' },
+      });
+
+      const detail = detailOf(h.event('permission.requested'));
+      expect(detail).not.toHaveProperty('extraPermissions');
+      expect(detail).not.toHaveProperty('network');
+      expect(detail.kind).toBe('exec');
+    });
+  });
+
+  describe('A6 — the diff correlation, and the reply that waits for a human', () => {
+    it('(a) real order: the patch from item/started reaches the card', async () => {
+      // [实测] — frame 8 (`item/started`, fileChange, with the diff) then frame
+      // 10 (the approval), same itemId, 1ms apart. This IS the correlation.
+      const h = await stoppableTurn();
+
+      const body = payload(h.event('permission.requested'));
+      expect(body.kind).toBe('file_change');
+      expect(body.toolName).toBe('Apply patch');
+      const changes = detailOf(h.event('permission.requested')).changes as Array<
+        Record<string, unknown>
+      >;
+      expect(changes).toHaveLength(1);
+      expect(String(changes[0].path).endsWith('probe_b.txt')).toBe(true);
+      expect(changes[0].change).toBe('add');
+      expect(changes[0].diff).toBe('hi\n');
+      // file_change requests carry NO availableDecisions [实测], which is their
+      // normal path, not an error path.
+      expect(body.decisions).toEqual(['allow', 'deny']);
+      expect(body).not.toHaveProperty('omittedDecisionCount');
+    });
+
+    it('(b) [构造] reversed order: the card is still raised, only the patch is missing', async () => {
+      // The frames are swapped BY THE TEST — no capture shows this order. Hard
+      // constraint 7: a missing diff degrades the card, it never delays it and
+      // it never answers early.
+      const h = await turnSession();
+      await h.runtime.send({ sessionId: 's1', text: PROMPT });
+      replayRecordedTurn(h, { upTo: 7 }); // everything BEFORE the fileChange item/started
+      pushFileChange(h);
+
+      expect(h.eventsOf('permission.requested')).toHaveLength(1);
+      expect(detailOf(h.event('permission.requested'))).toEqual({
+        kind: 'file_change',
+        changes: [],
+      });
+      expect(h.replies()).toHaveLength(0);
+    });
+
+    it('(c) zero wire frames until the click, then exactly one', async () => {
+      const h = await stoppableTurn();
+      expect(h.replies()).toHaveLength(0);
+
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: true,
+        decision: 'allow',
+      });
+
+      expect(h.replies()).toHaveLength(1);
+      expect(h.replies()[0]).toMatchObject({ id: APPROVAL_ID, result: { decision: 'accept' } });
+    });
+  });
+
+  describe('A7 — grantRoot is what an Allow really grants', () => {
+    it('is absent when codex did not ask for one', async () => {
+      expect(FILE_CHANGE_PARAMS.grantRoot).toBeNull();
+      const h = await stoppableTurn();
+
+      expect(detailOf(h.event('permission.requested'))).not.toHaveProperty('grantRoot');
+    });
+
+    it('[构造] reaches the detail when it is set, alongside the patch', async () => {
+      const h = await approvalReadyTurn();
+      pushFileChange(h, { ...FILE_CHANGE_PARAMS, grantRoot: '/work/repo' });
+
+      const detail = detailOf(h.event('permission.requested'));
+      // Not a substitute for the patch — BOTH, or the card shows a one-file
+      // patch while the Allow hands over a directory for the whole session.
+      expect(detail.grantRoot).toBe('/work/repo');
+      expect((detail.changes as unknown[]).length).toBe(1);
+    });
+  });
+
+  describe('A9 / A2 — respondPermission on a parked request', () => {
+    it('A9 — one wire frame, one resolved carrying the decision and no autoReason', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: true,
+        decision: 'allow_session',
+        requestId: 'req-perm',
+      });
+
+      expect(h.replies()).toHaveLength(1);
+      expect(h.replies()[0]).toMatchObject({
+        id: APPROVAL_ID,
+        result: { decision: 'acceptForSession' },
+      });
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      // No autoReason: a human decided, and claiming otherwise is the exact
+      // dishonesty the field was added to remove.
+      expect(payload(resolved[0])).toEqual({
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: true,
+        decision: 'allow_session',
+      });
+
+      // The entry left the table: a later close cannot answer id 0 again.
+      h.runtime.close({ sessionId: 's1' });
+      expect(h.replies().filter((frame) => frame.id === APPROVAL_ID)).toHaveLength(1);
+      expect(h.eventsOf('permission.resolved')).toHaveLength(1);
+    });
+
+    it('A9 — a plain deny sends the decline word and reports allow:false', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        decision: 'deny',
+      });
+
+      expect(h.replies()[0]).toMatchObject({ id: APPROVAL_ID, result: { decision: 'decline' } });
+      expect(payload(h.event('permission.resolved')).allow).toBe(false);
+    });
+
+    it('A2 — an unmappable decision is downgraded to deny on the wire AND on the card', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        // A word from a future build (or a payload that got past the dispatch
+        // guard). It must never be forwarded and never guessed at.
+        decision: 'allow_forever' as PermissionDecisionId,
+        allow: true,
+      });
+
+      expect(h.replies()[0]).toMatchObject({ id: APPROVAL_ID, result: { decision: 'decline' } });
+      // The card must agree with the wire: painting "Allowed for session" over a
+      // frame that said `decline` is the defect this assertion pins.
+      expect(payload(h.event('permission.resolved'))).toEqual({
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        decision: 'deny',
+      });
+      expect(h.logs.some((line) => line.includes('unmappable decision'))).toBe(true);
+    });
+
+    it('derives allow from the decision when the caller sent no boolean', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        decision: 'allow',
+      });
+
+      expect(h.replies()[0]).toMatchObject({ id: APPROVAL_ID, result: { decision: 'accept' } });
+      expect(payload(h.event('permission.resolved')).allow).toBe(true);
+    });
+  });
+
+  describe('A10 — a click that lands on an id we no longer hold', () => {
+    it('converges the card instead of emitting an invisible host.error', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: 'codex:s1:n:99',
+        allow: true,
+        decision: 'allow',
+        requestId: 'req-late',
+      });
+
+      // A non-fatal host.error is invisible in the renderer, so it would leave
+      // the card unanswerable forever.
+      expect(h.eventsOf('host.error')).toHaveLength(0);
+      expect(h.replies()).toHaveLength(0);
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      // Deliberately NOT the Claude echo (`allow: input.allow`): nothing was
+      // granted here, so a card reading "Allowed" would be a lie about a
+      // request that no longer exists.
+      expect(payload(resolved[0])).toEqual({
+        permissionId: 'codex:s1:n:99',
+        allow: false,
+        autoReason: 'aborted',
+      });
+    });
+
+    it('still reports a genuinely malformed command as invalid_payload', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.respondPermission({ sessionId: 's1', allow: true, requestId: 'req-bad' });
+      h.runtime.respondPermission({
+        sessionId: 'nope',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: true,
+      });
+
+      expect(h.eventsOf('host.error').map((event) => payload(event).code)).toEqual([
+        'invalid_payload',
+        'invalid_payload',
+      ]);
+      expect(h.eventsOf('permission.resolved')).toHaveLength(0);
+      expect(h.replies()).toHaveLength(0);
+    });
+  });
+
+  describe('A11 — every way a request leaves the table without an answer', () => {
+    it('stop -> aborted', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.stop({ sessionId: 's1' });
+
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      expect(payload(resolved[0])).toEqual({
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        autoReason: 'aborted',
+      });
+      // The projection lands BEFORE the terminal on this path; the turn/completed
+      // path (A12) is the other order. Neither may be depended on.
+      const types = typesOf(h.events);
+      expect(types.indexOf('permission.resolved')).toBeLessThan(types.indexOf('session.stopped'));
+    });
+
+    it('close -> session_closed', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.close({ sessionId: 's1' });
+
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      expect(payload(resolved[0]).autoReason).toBe('session_closed');
+    });
+
+    it('process exit -> aborted', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.exit({ code: 1, signal: null });
+
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      expect(payload(resolved[0]).autoReason).toBe('aborted');
+    });
+
+    it('A16 — the server resolving its own request -> aborted, and never a claim that someone decided', async () => {
+      // The fileChange capture very likely walks exactly this path: the request
+      // and its `serverRequest/resolved` arrive in the same millisecond and the
+      // item goes straight to `status: "declined"`. For file_change this is a
+      // NORMAL path, not a corner.
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.push({
+        method: 'serverRequest/resolved',
+        params: { threadId: FIXTURE_THREAD, requestId: APPROVAL_ID },
+      });
+
+      // No frame: the server has stopped waiting, so a reply would answer
+      // nobody. `forgotten` is not a protocol word, and 'aborted' is the closest
+      // existing one — but the key must be PRESENT, because omitting it asserts
+      // that a human decided (spec §2.4 / L4).
+      expect(h.replies()).toHaveLength(0);
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      expect(payload(resolved[0])).toEqual({
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        autoReason: 'aborted',
+      });
+      expect(payload(resolved[0])).not.toHaveProperty('decision');
+    });
+
+    it('an answered request is not projected a second time', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        decision: 'deny',
+      });
+      // Every request we answer is followed by one of these.
+      h.push({
+        method: 'serverRequest/resolved',
+        params: { threadId: FIXTURE_THREAD, requestId: APPROVAL_ID },
+      });
+      h.runtime.close({ sessionId: 's1' });
+
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      // A second projection would arrive WITH an autoReason and repaint a card
+      // the user answered as "denied automatically".
+      expect(payload(resolved[0])).not.toHaveProperty('autoReason');
+      expect(h.replies()).toHaveLength(1);
+    });
+  });
+
+  describe('A12 — a turn that ends with an approval still parked', () => {
+    it('answers the request, resolves the card and empties the table', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.push({
+        method: 'turn/completed',
+        params: {
+          threadId: FIXTURE_THREAD,
+          turn: { id: FIXTURE_TURN, items: [], status: 'completed' },
+        },
+      });
+
+      // Without this drain the renderer clears its permission QUEUE on the
+      // terminal while `block.resolved` stays false: the card spins until the
+      // session is closed.
+      const resolved = h.eventsOf('permission.resolved');
+      expect(resolved).toHaveLength(1);
+      expect(payload(resolved[0])).toEqual({
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        autoReason: 'aborted',
+      });
+      expect(h.replies()).toHaveLength(1);
+      expect(h.replies()[0]).toMatchObject({ id: APPROVAL_ID, result: { decision: 'cancel' } });
+      expect(terminalsOf(h.events)).toEqual(['session.completed']);
+      // On THIS path the terminal is emitted first (the normalizer writes it
+      // from the frame's own status, before the runtime retires the turn), the
+      // opposite of the stop path — which is why the store must converge under
+      // either order.
+      const types = typesOf(h.events);
+      expect(types.indexOf('session.completed')).toBeLessThan(types.indexOf('permission.resolved'));
+
+      // Table empty: a later close writes no second frame for the same id.
+      h.runtime.close({ sessionId: 's1' });
+      expect(h.replies().filter((frame) => frame.id === APPROVAL_ID)).toHaveLength(1);
+      expect(h.eventsOf('permission.resolved')).toHaveLength(1);
+    });
+  });
+
+  describe('A13 — "Deny and stop" ends the turn locally too', () => {
+    it('sends cancel, drains the rest, retires the turn and frees the session', async () => {
+      const h = await stoppableTurn();
+      // A second approval on the same turn: the contract declares one itemId can
+      // own several approval callbacks, so a multi-parked turn is a real shape.
+      h.push(commandApproval(1));
+      h.events.length = 0;
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        decision: 'cancel',
+        requestId: 'req-cancel',
+      });
+
+      // The user's own decision, on the wire, exactly once...
+      expect(h.replies().map((frame) => frame.id)).toEqual([APPROVAL_ID, 1]);
+      expect(h.replies()[0].result).toEqual({ decision: 'cancel' });
+      // ...and the sibling nobody can answer any more, refused fail-safe.
+      expect(h.replies()[1].result).toEqual({ decision: 'cancel' });
+      const resolved = h.eventsOf('permission.resolved');
+      expect(payload(resolved[0])).toEqual({
+        permissionId: permissionIdOf(APPROVAL_ID),
+        allow: false,
+        decision: 'cancel',
+      });
+      expect(payload(resolved[1])).toEqual({
+        permissionId: permissionIdOf(1),
+        allow: false,
+        autoReason: 'aborted',
+      });
+      // Cancel means "the turn is interrupted" on the server side; a second
+      // interrupt frame would be shouting at a turn that is already dying.
+      expect(h.requestsFor('turn/interrupt')).toHaveLength(0);
+      expect(terminalsOf(h.events)).toEqual(['session.stopped']);
+      // The status echo is the registry's own reading, not an invented one.
+      expect(h.eventsOf('session.status')).toHaveLength(1);
+      expect(payload(h.event('session.status')).status).toBe(h.registry.get('s1')?.status);
+    });
+
+    it('leaves the session able to send again, instead of busy forever', async () => {
+      const h = await stoppableTurn();
+      h.runtime.respondPermission({
+        sessionId: 's1',
+        permissionId: permissionIdOf(APPROVAL_ID),
+        decision: 'cancel',
+        allow: false,
+      });
+      h.events.length = 0;
+      await h.runtime.send({ sessionId: 's1', text: 'again', requestId: 'req-2' });
+
+      // Falsifies "cancel and hope": if `turn/completed` never arrives for an
+      // interrupted turn, a session that did not retire its own turn answers
+      // every later send with `session_busy` for the rest of its life.
+      expect(h.eventsOf('host.error')).toHaveLength(0);
+      expect(h.requestsFor('turn/start')).toHaveLength(2);
+    });
+  });
+
+  describe('A14 — the bridge writes no session.status of its own', () => {
+    it('emits exactly one session.status per status frame fed in', async () => {
+      const h = await turnSession();
+      await h.runtime.send({ sessionId: 's1', text: PROMPT });
+      const routed = replayRecordedTurn(h);
+      const statusFrames = routed.filter((method) => method === 'thread/status/changed').length;
+
+      // Conservation, not "none": the recording carries its own status frames,
+      // so "the approval path emitted none" can only be stated as a count.
+      expect(statusFrames).toBeGreaterThan(0);
+      expect(h.eventsOf('session.status')).toHaveLength(statusFrames);
+      // Not vacuous — the approval really did travel this replay.
+      expect(h.eventsOf('permission.requested')).toHaveLength(1);
+      expect(h.eventsOf('permission.resolved')).toHaveLength(1);
+    });
+  });
+
+  describe('A17 / A18 — the two requests that never become cards', () => {
+    it('A17 — an approval with no turn running is refused on the spot', async () => {
+      const h = await startedSession();
+      h.events.length = 0;
+      h.push(commandApproval(0));
+
+      // No normalizer means no diff to correlate, and `stop()` neither tears the
+      // session down nor guarantees the interrupt landed — so codex can keep
+      // asking after the user pressed Stop. A card here would drag the session
+      // back into a busy state it just left.
+      expect(h.eventsOf('permission.requested')).toHaveLength(0);
+      expect(h.eventsOf('permission.resolved')).toHaveLength(0);
+      expect(h.replies()).toHaveLength(1);
+      expect(h.replies()[0]).toMatchObject({ id: 0, result: { decision: 'cancel' } });
+      // Nothing was registered, so a later close has nothing left to answer.
+      h.runtime.close({ sessionId: 's1' });
+      expect(h.replies().filter((frame) => frame.id === 0)).toHaveLength(1);
+    });
+
+    it('A18 — permissions and elicitation are refused fail-safe, not parked', async () => {
+      const h = await stoppableTurn();
+      h.events.length = 0;
+      h.push({ id: 1, method: 'item/permissions/requestApproval', params: {} });
+      h.push({ id: 2, method: 'mcpServer/elicitation/request', params: {} });
+
+      // Parking them is what slice 2c did, and it costs a hung turn: codex sits
+      // on `waitingOnApproval` with no card on screen until Stop.
+      expect(h.replies()).toHaveLength(2);
+      expect(h.replies()[0]).toMatchObject({ id: 1, result: { permissions: {}, scope: 'turn' } });
+      expect(h.replies()[1]).toMatchObject({ id: 2, result: { action: 'decline' } });
+      expect(h.eventsOf('permission.requested')).toHaveLength(0);
+      expect(h.eventsOf('permission.resolved')).toHaveLength(0);
+
+      // The table is untouched: the fileChange approval parked before them is
+      // still the only entry, and it is the only thing close() answers.
+      h.runtime.close({ sessionId: 's1' });
+      expect(h.replies()).toHaveLength(3);
+      expect(h.replies()[2]).toMatchObject({ id: APPROVAL_ID, result: { decision: 'cancel' } });
+    });
   });
 });

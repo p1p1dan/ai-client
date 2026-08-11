@@ -454,6 +454,35 @@ describe('PendingServerRequestTable — drain', () => {
     expect(table.size).toBe(0);
   });
 
+  it('drains only the named kinds when the caller asks for a subset', () => {
+    // S3 slice 4 §2.6: the turn-end drain answers the APPROVALS a finished turn
+    // left behind, because the renderer discards its permission queue on every
+    // terminal event and the card would spin forever. Questions are not in that
+    // list — their dock survives a terminal — so a kind-blind drain here would
+    // take a still-answerable question off screen. The filter is what keeps the
+    // two apart.
+    const { table, replies, settled } = makeTable();
+    table.register(entryOf(0, 'a', 'question', 'item/tool/requestUserInput'));
+    table.register(entryOf(1, 'a', 'approval_exec', 'item/commandExecution/requestApproval'));
+    table.register(entryOf(2, 'a', 'approval_file_change', 'item/fileChange/requestApproval'));
+
+    const drained = table.drain(
+      { sessionId: 'a', kinds: ['approval_exec', 'approval_file_change'] },
+      'aborted'
+    );
+
+    expect(drained.map((entry) => entry.requestId)).toEqual([1, 2]);
+    expect(replies.map((reply) => reply.id)).toEqual([1, 2]);
+    expect(settled.map((record) => record.entry.kind)).toEqual([
+      'approval_exec',
+      'approval_file_change',
+    ]);
+    // The question is still pending AND still unanswered — no frame was written
+    // for it, so nobody has been told it was refused.
+    expect(table.has(0)).toBe(true);
+    expect(table.sizeFor('a')).toBe(1);
+  });
+
   it('is a no-op for a session with nothing pending', () => {
     const { table, replies } = makeTable();
     table.register(entryOf(0, 'a'));

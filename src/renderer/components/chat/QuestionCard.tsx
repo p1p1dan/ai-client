@@ -1,6 +1,7 @@
-import type { QuestionItem } from '@shared/types/runtimeEvents';
+import type { PermissionDecisionId, QuestionItem } from '@shared/types/runtimeEvents';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { Ident } from '@/components/ui/ident';
 import { cn } from '@/lib/utils';
 import type { ChatBlock } from '@/stores/chatSessions';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
@@ -20,8 +21,9 @@ import {
   emptySelection,
   type FrozenPair,
   type OptionRow,
-  PERMISSION_ALLOW,
+  PERMISSION_DIFF_CLAMPED_MARK,
   PERMISSION_WAITING,
+  type PermissionDetailView,
   QUESTION_CARD_BODY_MAX_CLASS,
   QUESTION_TITLE,
   type QuestionSelection,
@@ -58,7 +60,11 @@ interface QuestionCardProps {
   onSkip?: () => Promise<boolean> | undefined;
   /** permission only. */
   canRespond?: boolean;
-  onRespondPermission?: (allow: boolean) => Promise<boolean> | undefined;
+  /**
+   * Takes the DECISION the pressed row carries, not a boolean: the allow/deny
+   * boolean is derived from it exactly once, at the timeline's call site.
+   */
+  onRespondPermission?: (decision: PermissionDecisionId) => Promise<boolean> | undefined;
 }
 
 const QA_SHELL_CLASS = 'overflow-hidden rounded-md border border-border bg-card';
@@ -431,6 +437,64 @@ function InteractiveQaCard({
 
 // ---- Permission variant (thin adapter over the same shell) ----
 
+/**
+ * The card body: what is actually being asked for. Every line comes out of
+ * `derivePermissionDetailView` already formatted — this function only chooses
+ * type domains (mono for command/path idents, meta for secondary lines) and
+ * emphasis (destructive for grants that outlive the single request).
+ *
+ * Deliberately NOT rendered: the diff body. The repo's only diff surface is a
+ * Monaco `DiffEditor` bound to git paths rather than unified-diff strings, so a
+ * real patch view is its own task; until then the file list plus +/- counts is
+ * what this card honestly has.
+ */
+function PermissionDetailBody({ detail }: { detail: PermissionDetailView }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 px-1">
+      {detail.command !== null && (
+        <Ident className="min-w-0 truncate text-foreground" title={detail.command}>
+          {detail.command}
+        </Ident>
+      )}
+      {detail.files.map((file) => (
+        <div key={file.key} className="flex min-w-0 items-center gap-2">
+          <span className="grid size-5 shrink-0 place-items-center rounded-xs border border-border bg-muted text-meta leading-none text-muted-foreground">
+            {file.badge}
+          </span>
+          <Ident className="min-w-0 flex-1 truncate text-foreground" title={file.path}>
+            {file.path}
+          </Ident>
+          {file.stat && (
+            <span className="shrink-0 text-meta tabular-nums text-muted-foreground">
+              {file.stat}
+            </span>
+          )}
+          {file.truncated && (
+            <span className="shrink-0 text-meta text-muted-foreground">
+              {PERMISSION_DIFF_CLAMPED_MARK}
+            </span>
+          )}
+        </div>
+      ))}
+      {detail.meta.map((line) => (
+        <p key={line} className="min-w-0 truncate text-meta text-muted-foreground" title={line}>
+          {line}
+        </p>
+      ))}
+      {detail.warnings.map((line) => (
+        <p key={line} className="text-meta text-destructive">
+          {line}
+        </p>
+      ))}
+      {detail.notes.map((line) => (
+        <p key={line} className="text-meta italic text-muted-foreground">
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function PermissionQaCard({
   block,
   canRespond,
@@ -438,7 +502,7 @@ function PermissionQaCard({
 }: {
   block: ChatBlock;
   canRespond: boolean;
-  onRespond?: (allow: boolean) => Promise<boolean> | undefined;
+  onRespond?: (decision: PermissionDecisionId) => Promise<boolean> | undefined;
 }) {
   const view = derivePermissionCardView(block, canRespond);
   const [submitting, setSubmitting] = useState(false);
@@ -470,6 +534,7 @@ function PermissionQaCard({
       {originChip}
       <div className="flex flex-col gap-3 px-2.5 pb-3">
         <p className="px-1 pb-1 text-markdown leading-normal text-foreground">{view.prompt}</p>
+        {view.detail && <PermissionDetailBody detail={view.detail} />}
         {view.waiting ? (
           <p className="px-1 text-markdown text-muted-foreground">{PERMISSION_WAITING}</p>
         ) : (
@@ -482,10 +547,23 @@ function PermissionQaCard({
                 multiSelect={false}
                 disabled={submitting}
                 onSelect={async () => {
+                  // The row carries its own decision. Unreachable when absent
+                  // (every permission row is built with one), and doing nothing
+                  // is the right failure.
+                  //
+                  // What this replaced was NOT fail-open: `option.label ===
+                  // PERMISSION_ALLOW` answered false for every row it did not
+                  // recognise, so an unrecognised row was sent as a DENY. The
+                  // direction was safe; the meaning was wrong. The moment a
+                  // third row exists, pressing "Allow for session" would have
+                  // gone out as a refusal and the card would have come back
+                  // Denied — the user's grant silently inverted.
+                  const { decision } = option;
+                  if (!decision) return;
                   setSubmitting(true);
                   // Same await-and-unlock pattern as Continue/Skip above
                   // (T-05 adversarial fix #4).
-                  const ok = await onRespond?.(option.label === PERMISSION_ALLOW);
+                  const ok = await onRespond?.(decision);
                   if (ok === false) {
                     setSubmitting(false);
                   }
@@ -493,6 +571,11 @@ function PermissionQaCard({
               />
             ))}
           </div>
+        )}
+        {/* C9: the "decisions we could not model" line is pinned to the card
+            bottom, so a narrowed choice never reads as the whole choice. */}
+        {view.omittedNote && (
+          <p className="px-1 text-meta text-muted-foreground">{view.omittedNote}</p>
         )}
       </div>
     </div>

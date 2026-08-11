@@ -81,7 +81,7 @@ import { IPC_CHANNELS } from '@shared/types';
 import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { AgentWireName } from '@shared/types/agentWire';
-import type { HostReadyEvent } from '@shared/types/runtimeEvents';
+import type { HostReadyEvent, PermissionDecisionId } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { parseInitialThemeArg } from '@shared/windowTheme';
@@ -1421,6 +1421,11 @@ const electronAPI = {
       sessionId: string;
       permissionId: string;
       allow: boolean;
+      /**
+       * S2 (c): the richer button the user pressed. Absent = `allow ? 'allow'
+       * : 'deny'`; the two must never contradict each other.
+       */
+      decision?: PermissionDecisionId;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_PERMISSION, payload),
     respondQuestion: (payload: {

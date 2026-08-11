@@ -4,7 +4,17 @@
     "  codex app-server generate-json-schema --experimental --out <dir>",
     "Committed so CODEX_METHOD and the item mapper are pinned against a real",
     "contract instead of guessed spellings, and so a codex upgrade shows up as a",
-    "diff on this file rather than as a runtime 'method not found'."
+    "diff on this file rather than as a runtime 'method not found'.",
+    "2026-08-10 CORRECTION (serverRequest family only, same codex build): the list",
+    "was wrong in both directions. It carried 'openai/form', which is not a method",
+    "at all but the `mode` enum inside McpServerElicitationRequestParams, and it",
+    "omitted the two legacy approval requests applyPatchApproval /",
+    "execCommandApproval. ServerRequest.json declares ELEVEN variants; ten were",
+    "recorded here. The two legacy names are appended at the END rather than sorted",
+    "in, matching the tail of the generated oneOf. The other two families are known",
+    "to be under-sampled the same way (clientRequest 126 vs 121, serverNotification",
+    "missing error/warning/configWarning/deprecationNotice/guardianWarning) and are",
+    "deliberately NOT touched by this correction (S3 slice 4 spec L6)."
   ],
   "codexVersion": "codex-cli 0.145.0",
   "capturedAt": "2026-08-09",
@@ -141,7 +151,8 @@
     "item/tool/call",
     "item/tool/requestUserInput",
     "mcpServer/elicitation/request",
-    "openai/form"
+    "applyPatchApproval",
+    "execCommandApproval"
   ],
   "serverNotification": [
     "account/login/completed",

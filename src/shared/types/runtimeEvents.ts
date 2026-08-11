@@ -299,10 +299,47 @@ export interface PermissionFileChange {
 /**
  * S2 (c): the body a permission card renders under its header. Absent for a
  * plain tool request, whose `input` already carries everything.
+ *
+ * S3 slice 4 widened both arms. Every addition is OPTIONAL and the protocol
+ * version is unchanged, so an older Host stays correct by omission. The one
+ * non-additive change is `exec.command`, which went from required to optional:
+ * the generated contract types it `["string","null"]` [契约], i.e. a command-less
+ * approval is a declared shape (zsh-exec-bridge subcommand approvals), not a
+ * malformed frame. Relaxing it is safe because the only producer is the Codex
+ * approval path added in the same slice and the only consumer is the card body,
+ * which must still render what the request DOES say (network host, extra
+ * permissions, grant root) — an approval we cannot describe is still an
+ * approval the user has to answer.
  */
 export type PermissionDetail =
-  | { kind: 'exec'; command: string; cwd?: string }
-  | { kind: 'file_change'; changes: PermissionFileChange[]; omittedFileCount?: number };
+  | {
+      kind: 'exec';
+      /** Absent when codex reported no command; the card says so rather than rendering empty. */
+      command?: string;
+      cwd?: string;
+      /** Managed-network approval context: the host this command wants to reach. */
+      network?: { host: string; protocol: string };
+      /**
+       * Permissions this command asks for ON TOP of the session's posture.
+       * Counted, never expanded: `AdditionalPermissionProfile` is a recursive
+       * shape with zero captured samples, so listing entries would be invention.
+       * "There are extras, how many, network or not" is enough for the user to
+       * see this is not an ordinary exec.
+       */
+      extraPermissions?: { fileSystemEntries: number; networkRequested: boolean };
+    }
+  | {
+      kind: 'file_change';
+      changes: PermissionFileChange[];
+      omittedFileCount?: number;
+      /**
+       * Allowing this patch ALSO allows writes anywhere under this root for the
+       * remainder of the session [契约, marked UNSTABLE upstream]. Present only
+       * when codex asked for it. The card has to state it, or an Allow meant
+       * for one patch silently grants a directory.
+       */
+      grantRoot?: string;
+    };
 
 /**
  * Host-side clamps for `PermissionDetail`. Provisional numbers (U10): no real

@@ -289,6 +289,30 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('disabled={permissionLock}');
   });
 
+  // S3 slice 4 (§3.2): the permission card now sends a DECISION, and the
+  // allow/deny boolean is derived from it in exactly one place — this lambda.
+  //
+  // Why it needs a pin here rather than somewhere cheaper: both halves of the
+  // wire reply are covered on their own (`permissionDecisionAllows` is truth-
+  // tabled in `questionCardModel.test.ts`, the store's outbound payload in
+  // `chatSessionsRespond.test.ts`) and NEITHER can tell whether this component
+  // joins them. Delete the third argument and every one of those stays green
+  // while `Deny and stop` silently degrades into an ordinary deny — the exact
+  // shape of blind spot this file's header describes.
+  it('S3-4: the permission lambda derives allow from the decision and forwards the decision', () => {
+    expectCalled('onRespondPermission={(decision) =>');
+    // The single derivation site. A second one would eventually disagree about
+    // `allow_session` and draw an "Allowed" card over a wire reply that declined.
+    expectCalled('permissionDecisionAllows(decision)');
+    // The decision travels as the THIRD argument, immediately after the boolean
+    // it produced. Adjacency is the assertion: a bare `decision` token would be
+    // satisfied by the lambda's own parameter list.
+    expectCalled('permissionDecisionAllows(decision), decision');
+    // The boolean-only call this replaced, so a revert cannot pass by adding
+    // the third argument back somewhere else in the file.
+    expectUnwired("item.block.permissionId ?? '', allow)");
+  });
+
   // F10: releasing that lock must not collapse the shell under the cursor.
   it('F10: resolving a permission re-opens the shell instead of dropping it', () => {
     expectWired('if (wasPermissionLockedRef.current && !permissionLock) setProcessOpen(true);');

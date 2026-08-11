@@ -10,9 +10,11 @@ import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHo
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import type { AgentWireName } from '../shared/types/agentWire.ts';
 import { CODEX_AGENT, resolveAgentWireName, sessionAgent } from '../shared/types/agentWire.ts';
+import type { PermissionDecisionId } from '../shared/types/runtimeEvents.ts';
 import { resolveCodexEnabled, supportedAgents } from './agentSupport.ts';
 import { ClaudeRuntime, resolveSubagentActivityEnabled } from './claudeRuntime.ts';
 import { loadClaudeSettingsEnv } from './claudeSettings.ts';
+import { isPermissionDecisionId } from './codexDecisions.ts';
 import { CodexRuntime } from './codexRuntime.ts';
 import { resolveCometixCli } from './cometix.ts';
 import { listSessionHistory } from './historyReader.ts';
@@ -613,10 +615,36 @@ async function handleCommand(raw: unknown): Promise<void> {
         });
         return;
       }
+      // S3 slice 4: the four-wide decision vocabulary rides ALONGSIDE the
+      // historical boolean, and an unknown word is DROPPED rather than
+      // forwarded — a decision this build cannot name has no safe meaning, and
+      // the runtime would have to guess one.
+      const decision = isPermissionDecisionId(cmd.payload?.decision)
+        ? cmd.payload.decision
+        : undefined;
+      // One derivation, not two. `allow` and `decision` come from the same
+      // click, so they can only disagree if something upstream is wrong — and
+      // the only safe way to settle a disagreement about granting is not to
+      // grant. Claude's arm never sends a decision, so it reads `allow` exactly
+      // as it always has.
+      let effective: PermissionDecisionId = decision ?? (allow ? 'allow' : 'deny');
+      if ((effective === 'allow' || effective === 'allow_session') && !allow) {
+        log('permission.respond: decision/allow conflict, denying', {
+          sessionId,
+          permissionId,
+          decision,
+          allow,
+        });
+        effective = 'deny';
+      }
       rt.respondPermission({
         sessionId,
         permissionId,
-        allow,
+        allow: effective === 'allow' || effective === 'allow_session',
+        // Only when the renderer actually named one: the Claude runtime's input
+        // has no such field, and a synthesized `decision` would put a Codex
+        // concept on a call that cannot use it.
+        ...(decision !== undefined ? { decision: effective } : {}),
         requestId: cmd.requestId,
       });
       return;

@@ -105,8 +105,9 @@ export type PendingSettleReason = PendingOutcome['reason'] | 'forgotten';
  * The MCP elicitation name was deliberately blank through slice 2a — neither the
  * fixtures nor the design doc spelled it, and a guess would silently never match
  * (elicitation would fall through to `method_not_found`). It is now read off the
- * generated contract (`fixtures/codex/codex-method-contract.json`, one of the 10
- * server→client requests), so it is evidence rather than a guess. Every key here
+ * generated contract (`fixtures/codex/codex-method-contract.json`, one of the 11
+ * server→client requests — that snapshot said 10 until slice 4 corrected the
+ * family), so it is evidence rather than a guess. Every key here
  * is pinned against that snapshot by `codexWireContract.test.ts`.
  */
 export const SERVER_REQUEST_KINDS: Readonly<Record<string, PendingKind>> = {
@@ -375,12 +376,25 @@ export class PendingServerRequestTable {
    * the same failure family as a missed close: the process is gone but the cards
    * are still on screen waiting (arbitration doc §2.3 O-d).
    *
+   * `kinds` narrows the same sweep to part of the vocabulary. It exists for the
+   * turn-end drain, and it exists as a recorded DEVIATION: slice 4 §2.6
+   * prescribes draining the whole table for the session when a turn ends.
+   * `finishTurn` passes the approval kinds only, because the renderer's terminal
+   * branches discard `pendingPermissions` and nothing else — a question parked
+   * at turn end keeps its dock and is NOT stranded, so auto-rejecting one the
+   * user can still answer would be new harm rather than the fix. Absent = every
+   * kind, which is what every teardown path wants.
+   *
    * The snapshot is taken before settling because `settle` mutates the map.
    */
-  drain(filter: { sessionId?: string }, reason: PendingAutoReason): PendingServerRequest[] {
+  drain(
+    filter: { sessionId?: string; kinds?: readonly PendingKind[] },
+    reason: PendingAutoReason
+  ): PendingServerRequest[] {
     const targets: PendingServerRequest[] = [];
     for (const entry of this.entries.values()) {
       if (filter.sessionId !== undefined && entry.sessionId !== filter.sessionId) continue;
+      if (filter.kinds !== undefined && !filter.kinds.includes(entry.kind)) continue;
       targets.push(entry);
     }
     for (const entry of targets) {
