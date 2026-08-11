@@ -61,7 +61,7 @@ describe('deriveChatWorkspaceTree', () => {
     ]);
   });
 
-  it('adds temp workspaces under a Temp project', () => {
+  it('adds temp workspaces under a Temp project when temporaryWorkspaceEnabled is on', () => {
     const { projects, workspaces } = deriveChatWorkspaceTree({
       repositories: [],
       worktreesByRepoPath: {},
@@ -74,6 +74,7 @@ describe('deriveChatWorkspaceTree', () => {
           createdAt: 1,
         },
       ],
+      temporaryWorkspaceEnabled: true,
     });
 
     expect(projects[0]?.name).toBe('Temp');
@@ -81,6 +82,68 @@ describe('deriveChatWorkspaceTree', () => {
       kind: 'temp',
       name: 'Scratch',
       path: 'D:/tmp/session-a',
+    });
+  });
+
+  // Parity with the legacy shells' `{temporaryWorkspaceEnabled && (...)}`
+  // gate: the setting hides the Temp group, it does not delete the items —
+  // toggling it back on must reveal the same temp workspaces again.
+  describe('temporaryWorkspaceEnabled gating (new-shell parity with legacy Temp gating)', () => {
+    const tempItems = [
+      {
+        id: 'tmp-1',
+        path: 'D:/tmp/session-a',
+        folderName: 'session-a',
+        title: 'Scratch',
+        createdAt: 1,
+      },
+    ];
+
+    it('off + items: no Temp project, no temp workspace', () => {
+      const { projects, workspaces } = deriveChatWorkspaceTree({
+        repositories: [],
+        worktreesByRepoPath: {},
+        tempItems,
+        temporaryWorkspaceEnabled: false,
+      });
+
+      expect(projects.some((p) => p.name === 'Temp')).toBe(false);
+      expect(workspaces.some((ws) => ws.kind === 'temp')).toBe(false);
+    });
+
+    it('on + items: Temp project and temp workspace present', () => {
+      const { projects, workspaces } = deriveChatWorkspaceTree({
+        repositories: [],
+        worktreesByRepoPath: {},
+        tempItems,
+        temporaryWorkspaceEnabled: true,
+      });
+
+      expect(projects.some((p) => p.name === 'Temp')).toBe(true);
+      expect(workspaces.some((ws) => ws.kind === 'temp')).toBe(true);
+    });
+
+    it('on + zero items: no Temp project (nothing to reveal)', () => {
+      const { projects, workspaces } = deriveChatWorkspaceTree({
+        repositories: [],
+        worktreesByRepoPath: {},
+        tempItems: [],
+        temporaryWorkspaceEnabled: true,
+      });
+
+      expect(projects.some((p) => p.name === 'Temp')).toBe(false);
+      expect(workspaces.some((ws) => ws.kind === 'temp')).toBe(false);
+    });
+
+    it('omitted (default false) + items: no Temp project', () => {
+      const { projects, workspaces } = deriveChatWorkspaceTree({
+        repositories: [],
+        worktreesByRepoPath: {},
+        tempItems,
+      });
+
+      expect(projects.some((p) => p.name === 'Temp')).toBe(false);
+      expect(workspaces.some((ws) => ws.kind === 'temp')).toBe(false);
     });
   });
 
@@ -716,6 +779,7 @@ describe('gitEnabled is a fact, not a worktree-list side effect', () => {
       worktreesByRepoPath: {},
       tempItems: [tempItem],
       gitRepoByPath: { [canonicalPathKey(tempItem.path)]: true },
+      temporaryWorkspaceEnabled: true,
     });
 
     expect(workspaces[0]).toMatchObject({ kind: 'temp', gitEnabled: true });
@@ -736,6 +800,7 @@ describe('gitEnabled is a fact, not a worktree-list side effect', () => {
       repositories: [],
       worktreesByRepoPath: {},
       tempItems: [tempItem],
+      temporaryWorkspaceEnabled: true,
     });
 
     expect(workspaces[0].kind).toBe('temp');
@@ -751,6 +816,7 @@ describe('gitEnabled is a fact, not a worktree-list side effect', () => {
       worktreesByRepoPath: {},
       tempItems: [tempItem],
       gitRepoByPath: { [canonicalPathKey(tempItem.path)]: true },
+      temporaryWorkspaceEnabled: true,
     });
 
     expect(workspaces[0].gitEnabled).toBe(true);
@@ -762,12 +828,14 @@ describe('gitEnabled is a fact, not a worktree-list side effect', () => {
       repositories: [],
       worktreesByRepoPath: {},
       tempItems: [tempItem],
+      temporaryWorkspaceEnabled: true,
     });
     const answered = deriveChatWorkspaceTree({
       repositories: [],
       worktreesByRepoPath: {},
       tempItems: [tempItem],
       gitRepoByPath: { [canonicalPathKey(tempItem.path)]: true },
+      temporaryWorkspaceEnabled: true,
     });
 
     expect(workspaceTreeSignature(unknown.projects, unknown.workspaces, null)).not.toBe(

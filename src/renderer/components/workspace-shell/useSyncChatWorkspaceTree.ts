@@ -306,6 +306,13 @@ function useGitRepoByPath(paths: readonly string[]): Record<string, boolean> {
 interface UseSyncChatWorkspaceTreeOptions {
   repositories: Repository[];
   selectedRepoPath: string | null;
+  /**
+   * Passed in by the caller instead of read from `@/stores/settings` here:
+   * `treeSyncPatch.test.ts` imports this module's pure exports, and the
+   * settings store's import graph deadlocks the node-env vitest collector
+   * (documented trap — keep that store out of this file's imports).
+   */
+  temporaryWorkspaceEnabled: boolean;
 }
 
 /**
@@ -314,6 +321,10 @@ interface UseSyncChatWorkspaceTreeOptions {
 export function useSyncChatWorkspaceTree({
   repositories,
   selectedRepoPath,
+  // Parity with the legacy shells' `{temporaryWorkspaceEnabled && (...)}`
+  // gate (RepositorySidebar/TreeSidebar): the Temp group is hidden, not
+  // deleted, so re-enabling reveals the same items again.
+  temporaryWorkspaceEnabled,
 }: UseSyncChatWorkspaceTreeOptions): void {
   const tempItems = useTempWorkspaceStore((state) => state.items);
 
@@ -367,6 +378,7 @@ export function useSyncChatWorkspaceTree({
       worktreesByRepoPath: worktreesMap,
       tempItems,
       gitRepoByPath,
+      temporaryWorkspaceEnabled,
     });
     if (derived.workspaces.length > 0) {
       return derived;
@@ -382,7 +394,14 @@ export function useSyncChatWorkspaceTree({
     }
     const name = effectiveRepos[0]?.name ?? fallbackPath.split(/[/\\]/).pop() ?? 'Workspace';
     return { ...seedFallbackWorkspace(fallbackPath, name), diagnostics: derived.diagnostics };
-  }, [effectiveRepos, worktreesMap, tempItems, gitRepoByPath, selectedRepoPath]);
+  }, [
+    effectiveRepos,
+    worktreesMap,
+    tempItems,
+    gitRepoByPath,
+    selectedRepoPath,
+    temporaryWorkspaceEnabled,
+  ]);
 
   // `branch-unresolved` is the one that would have closed M4 on the day it was
   // reported: it prints both canonical keys, so "the repo path and git's own

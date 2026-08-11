@@ -62,8 +62,12 @@ interface TargetFolderSelectProps {
   onSelect: (workspaceId: string) => void;
   /** Opens the shared AddRepositoryDialog; footer actions don't render without it (no dead buttons). */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
-  /** New Folder footer action. */
-  onCreateTempTarget: () => Promise<void>;
+  /**
+   * New Folder footer action. `undefined` when the `temporaryWorkspaceEnabled`
+   * setting is off (parity with the legacy shells' Temp gating) — the footer
+   * entry is not rendered in that case.
+   */
+  onCreateTempTarget?: () => Promise<void>;
 }
 
 /**
@@ -202,19 +206,21 @@ export function TargetFolderSelect({
             >
               {t('Add Remote…')}
             </button>
-            <button
-              type="button"
-              className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-ui hover:bg-hover"
-              onClick={() => {
-                setOpen(false);
-                void onCreateTempTarget();
-              }}
-            >
-              <span className="flex-1 truncate text-left">{t('New Folder')}</span>
-              <span className="shrink-0 text-meta text-muted-foreground">
-                {t('Temporary workspace')}
-              </span>
-            </button>
+            {onCreateTempTarget && (
+              <button
+                type="button"
+                className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-ui hover:bg-hover"
+                onClick={() => {
+                  setOpen(false);
+                  void onCreateTempTarget();
+                }}
+              >
+                <span className="flex-1 truncate text-left">{t('New Folder')}</span>
+                <span className="shrink-0 text-meta text-muted-foreground">
+                  {t('Temporary workspace')}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </ComboboxPopup>

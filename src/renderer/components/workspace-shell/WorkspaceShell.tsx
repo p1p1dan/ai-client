@@ -15,6 +15,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
+import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { ContextPanel } from './ContextPanel';
 import { ContextPanelRail } from './ContextPanelRail';
@@ -104,9 +105,11 @@ export function WorkspaceShell({
   const chatColumnRef = useRef<HTMLDivElement>(null);
   const [centerResizing, setCenterResizing] = useState(false);
 
+  const temporaryWorkspaceEnabled = useSettingsStore((state) => state.temporaryWorkspaceEnabled);
   useSyncChatWorkspaceTree({
     repositories,
     selectedRepoPath,
+    temporaryWorkspaceEnabled,
   });
 
   // A08: global shell shortcuts (Ctrl/Cmd+J/1-4/`/B). Only live while this

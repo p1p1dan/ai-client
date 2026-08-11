@@ -48,6 +48,16 @@ export interface DeriveChatWorkspaceTreeInput {
   worktreesByRepoPath: Record<string, GitWorktree[]>;
   tempItems: TempWorkspaceItem[];
   /**
+   * Settings-store `temporaryWorkspaceEnabled` (default `false`, parity with
+   * the legacy shells' `{temporaryWorkspaceEnabled && (...)}` gate at
+   * RepositorySidebar/TreeSidebar). Gates only whether the Temp project is
+   * PUSHED into the tree — existing temp items are never deleted, so
+   * toggling the setting back on reveals them again. Defaults to `false`
+   * when omitted so callers (and tests) that don't care about this gate
+   * don't accidentally opt in.
+   */
+  temporaryWorkspaceEnabled?: boolean;
+  /**
    * `canonicalPathKey(path)` → "this directory is a git repository", as
    * answered by the main process (`folder:checkType`). A missing key means the
    * question has not been answered yet — never "no".
@@ -247,7 +257,7 @@ export function deriveChatWorkspaceTree(
     }
   }
 
-  if (input.tempItems.length > 0) {
+  if ((input.temporaryWorkspaceEnabled ?? false) && input.tempItems.length > 0) {
     projects.push({ id: TEMP_PROJECT_ID, name: 'Temp' });
     for (const item of input.tempItems) {
       // A temp workspace is `git init`-ed by main the moment it is created

@@ -50,8 +50,13 @@ export interface UseComposerTargetResult {
   runLocation: { text: string; tone: 'local' | 'remote' } | null;
   /** User picked a workspace in either dropdown. */
   selectTarget: (workspaceId: string) => void;
-  /** New Folder footer action: creates a temp workspace, then auto-switches to it. */
-  createTempTarget: () => Promise<void>;
+  /**
+   * New Folder footer action: creates a temp workspace, then auto-switches to
+   * it. `undefined` when the `temporaryWorkspaceEnabled` setting is off
+   * (parity with the legacy shells' Temp gating) — `TargetFolderSelect` only
+   * renders the footer entry when this is defined.
+   */
+  createTempTarget?: () => Promise<void>;
   /** New worktree success handler: waits for the path to land in `workspaces`, then auto-switches. */
   awaitWorkspaceAtPath: (path: string) => void;
   /** workdir for the controlled CreateWorktreeDialog (project's main/remote workspace path). */
@@ -280,6 +285,7 @@ export function useComposerTarget(input: {
 
   const queryClient = useQueryClient();
   const defaultTemporaryPath = useSettingsStore((state) => state.defaultTemporaryPath);
+  const temporaryWorkspaceEnabled = useSettingsStore((state) => state.temporaryWorkspaceEnabled);
   const addTempWorkspace = useTempWorkspaceStore((state) => state.addItem);
 
   const [pendingTarget, setPendingTarget] = useState<PendingTarget | null>(null);
@@ -342,7 +348,14 @@ export function useComposerTarget(input: {
     });
   }, []);
 
-  const createTempTarget = useCallback(async () => {
+  const createTempTargetImpl = useCallback(async () => {
+    // Defense-in-depth: the footer entry that calls this is already hidden
+    // when the setting is off (see the `createTempTarget` return below), but
+    // guard the action itself in case a stale handler reference ever fires.
+    if (!temporaryWorkspaceEnabled) {
+      return;
+    }
+
     const isWindows = window.electronAPI?.env.platform === 'win32';
     const pathSep = isWindows ? '\\' : '/';
     const homeDir = window.electronAPI?.env.HOME || '';
@@ -366,7 +379,13 @@ export function useComposerTarget(input: {
       kind: 'temp',
       sourceSessionId: useChatSessionsStore.getState().activeSessionId,
     });
-  }, [defaultTemporaryPath, addTempWorkspace, t]);
+  }, [temporaryWorkspaceEnabled, defaultTemporaryPath, addTempWorkspace, t]);
+
+  // Primary gate: `TargetFolderSelect` renders the "New Folder / Temporary
+  // workspace" footer entry only when `onCreateTempTarget` is defined, so
+  // handing back `undefined` here hides it (parity with the legacy shells'
+  // `{temporaryWorkspaceEnabled && (...)}` gate).
+  const createTempTarget = temporaryWorkspaceEnabled ? createTempTargetImpl : undefined;
 
   return {
     target,
