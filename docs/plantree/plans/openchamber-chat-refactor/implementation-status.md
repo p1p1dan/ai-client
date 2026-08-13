@@ -36,10 +36,11 @@
   1. **T-10 / T-11 真机点验（用户线，当前主项）**：Windows 出包（[T-10 清单「出发前必做」M1~M4](../../../plans/t10-packaged-gui-checklist.md)）
      → 测试机回归（**先做[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验，包必须是 `0.4.0-test.3`**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
      → 加密机现场 T-11 六项 → CP2 / CP5。
-  2. **开发线下一步待用户裁定**，候选四路（不互斥）：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
+  2. **开发线下一步待用户裁定**，候选五路（不互斥）：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；
      ③ Deferred 复活（C-17 问答/子 agent 进历史 · T-25 旧模块原色清理 · 后置 6 surface · C-12 压测）；
-     ④ backlog 清票（见下）。
+     ④ backlog 清票（见下）；
+     ⑤ **buchong1 参考批采纳（2026-08-13 新增）**：ZCode 聊天细节九图对照已落档（[分析档](../../../plans/2026-08-13-buchong1-zcode-reference.md)，截图入库 `docs/design/refs/zcode-20260813-buchong1/`）——S 档六件零协议改动可小批直开；主拍板项（Progress 面板⭐ / per-session 权限模式选择器 / 会话右键菜单连带解 #6）见 open-q #32；与既有拍板冲突四件默认不采纳。
   3. **xvqiu1 反馈批（2026-08-11）**：triage + 无拍板三件 + D30-a **已全部落地**（[triage](../../../plans/2026-08-11-xvqiu1-triage.md)；四片 `2ba0bde`/`fdcbca0`/`dee4921`/`de06bf5`）。**余**：
      ① 拍板 #30（断链语义——先真机 `[cli-stderr]` 取证）与 #31（流式三小件，spike 已补正 token 口径背景）；
      ② 流式施工批（去重算法与两对变异验证可直接抄 [spike 报告](../../../plans/2026-08-11-partial-messages-spike.md) §3/§4）；
