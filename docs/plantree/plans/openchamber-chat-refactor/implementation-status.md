@@ -40,7 +40,7 @@
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；
      ③ Deferred 复活（C-17 问答/子 agent 进历史 · T-25 旧模块原色清理 · 后置 6 surface · C-12 压测）；
      ④ backlog 清票（见下）；
-     ⑤ **buchong1 参考批采纳（2026-08-13 新增）**：ZCode 聊天细节九图对照已落档（[分析档](../../../plans/2026-08-13-buchong1-zcode-reference.md)，截图入库 `docs/design/refs/zcode-20260813-buchong1/`）——S 档六件零协议改动可小批直开；主拍板项（Progress 面板⭐ / per-session 权限模式选择器 / 会话右键菜单连带解 #6）见 open-q #32；与既有拍板冲突四件默认不采纳。
+     ⑤ **buchong1 参考批（2026-08-13 已拍板 = D31，四路全部立项）**：S 档六件 + 冲突项回摆三件（气泡改回右对齐（推翻 D26④）· 模型-effort 拆回双下拉（推翻 T-30b2①）· Recent 封顶折叠）可合为渲染端小批先行 → 会话右键菜单（连带解 #6）→ Progress 面板（施工前先真会话实测 TodoWrite 字段完整性）→ per-session 权限模式选择器（触 Host 红线，flag+Happy Path）；排期顺序未拍（此为建议序）；证据见[分析档](../../../plans/2026-08-13-buchong1-zcode-reference.md)。
   3. **xvqiu1 反馈批（2026-08-11）**：triage + 无拍板三件 + D30-a **已全部落地**（[triage](../../../plans/2026-08-11-xvqiu1-triage.md)；四片 `2ba0bde`/`fdcbca0`/`dee4921`/`de06bf5`）。**余**：
      ① 拍板 #30（断链语义——先真机 `[cli-stderr]` 取证）与 #31（流式三小件，spike 已补正 token 口径背景）；
      ② 流式施工批（去重算法与两对变异验证可直接抄 [spike 报告](../../../plans/2026-08-11-partial-messages-spike.md) §3/§4）；
