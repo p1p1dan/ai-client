@@ -45,7 +45,8 @@
      ① ~~拍板/施工~~ **D32/D33 已于 2026-08-14 当日全部落地**（#30 文案修 `49aee3f`；流式批黄金 `5281ceb` + 主体 `956f8bb` + 状态行 `31a49c5` + 折叠环 `4c2440b`，flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON；规格 [build-spec rev.2](../../../plans/2026-08-14-partial-messages-build-spec.md) 经双轨对抗评审合取；CDP 冒烟实证状态行与四步渐显）——随下轮真机复验流式观感与加密机 IPC 负载；
      ② ~~流式施工批~~ 已并入 ①（规格 rev.2 取代 spike §3/§4 直抄口径）；
      ③ Temp 门控五态 / D30-a 六项 / D29 已于 2026-08-14 **本地点验全过**（CDP 驱动 dev GUI，加密机风险经用户裁定解除后点验前移）；Windows 侧仅剩启动包装器（`launch-gui-test.cmd` 双击路径）随下轮真机（现场操作单已同步包装器启动步骤）；
-     ④ 本地点验三条意外发现待另立：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）。
+     ④ **D34 UI 反馈批已于 2026-08-14 落地**（八提交 `7566d4c`~`0a3bb52`，六裁定见总台账 D34 行）：右栏 min 250 / rail 迁顶栏（覆盖 round-12）/ git 面板 VS Code 化 + 提交点击展开 + diff 迁中栏 / Context status 三行 / Thought 孤箭头修复（T-31 潜伏）——随下轮真机复验；余：X 状态紫色无语义 token（T-25）、①窄宽按钮异常待用户复验；
+     ⑤ 本地点验三条意外发现待另立：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）。
 
 > ⚠️ **门禁纪律**：本机内存有限，四门**逐门串行跑**，禁止链式合跑或与子代理/后台任务并行（曾 OOM exit 137）。
 > ⚠️ **GUI 启动口径**：填好 `dev.env` 后一律 `node scripts/dev.js`，勿用 `pnpm dev`；
