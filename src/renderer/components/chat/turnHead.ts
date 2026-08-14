@@ -302,6 +302,7 @@ export type TurnHeadModel =
   | { kind: 'status'; status: TurnStatus }
   | { kind: 'workedFor'; row: WorkedForRowText }
   | { kind: 'stats'; text: string }
+  | { kind: 'thought' }
   | { kind: 'bare' };
 
 export interface TurnHeadInput {
@@ -313,16 +314,27 @@ export interface TurnHeadInput {
   stats: string | null;
   /** The turn has a process segment, i.e. the head has something to collapse. */
   hasProcess: boolean;
+  /**
+   * The process segment is thinking and nothing else — no tool run at all
+   * (`turnTiming.turnHasThinkingOnlyProcess`). `stats` is null in exactly this
+   * case (it only counts tool runs), so without this rung a replayed turn
+   * whose entire process is one thought degraded straight to `bare` — a
+   * chevron with no label, even though the turn has something to say.
+   */
+  thoughtOnly: boolean;
 }
 
 /**
- * The head's degradation chain: `status ?? workedFor ?? stats ?? bare`.
+ * The head's degradation chain: `status ?? workedFor ?? stats ?? thought ?? bare`.
  *
- * The last two rungs exist for turns with no latency to print:
+ * The last three rungs exist for turns with no latency to print:
  *  - `stats` reuses the call counts the completed row would have carried
  *    ("3 tools, 11 searches") — real, derived from `blocks`, no invented time;
+ *  - `thought` is the D25 §2.4 "bare Thought, no arg" label, for a turn whose
+ *    process is thinking-only (so `stats` has nothing to count);
  *  - `bare` is a text-less chevron trigger, for a turn whose counts are all
- *    zero but which still has a process segment to hide.
+ *    zero, is not thinking-only either, but still has a process segment to
+ *    hide.
  *
  * Returns `null` only when there is nothing to say AND nothing to collapse, in
  * which case the turn renders flat with no head row — the same shape it had
@@ -335,5 +347,6 @@ export function deriveTurnHeadModel(input: TurnHeadInput): TurnHeadModel | null 
   if (input.status) return { kind: 'status', status: input.status };
   if (input.workedFor) return { kind: 'workedFor', row: input.workedFor };
   if (input.stats) return { kind: 'stats', text: input.stats };
+  if (input.thoughtOnly) return { kind: 'thought' };
   return input.hasProcess ? { kind: 'bare' } : null;
 }

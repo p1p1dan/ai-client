@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@/stores/chatSessions';
+import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { classifyTool, pairToolBlocks } from './toolCard';
 
 /**
@@ -209,4 +209,24 @@ export function deriveTurnStats(
 
   if (segments.length === 0) return null;
   return segments.join(compact ? ', ' : ' · ');
+}
+
+/**
+ * True when a turn's whole process segment is thinking and nothing else — no
+ * tool run at all. `deriveTurnStats` above counts only tool runs (search /
+ * edit / generic), by design (T-31, "no invented time"), so a turn made of a
+ * single thinking block scores zero on every bucket and returns `null`. Before
+ * this, `turnHead.ts`'s degradation chain then fell all the way to its `bare`
+ * rung — a text-less chevron — discarding the one thing the turn actually
+ * knows: the process was a thought. `turnHead.ts` uses this to add a `thought`
+ * rung between `stats` and `bare` (D25 §2.4's "bare Thought, no arg" applied
+ * one level up, from the per-row shape to the turn head).
+ *
+ * Reads the same block list `deriveTurnStats` already scans, for the same
+ * reason it lives here rather than in `turnHead.ts` (a leaf module with no
+ * block-shape knowledge of its own).
+ */
+export function turnHasThinkingOnlyProcess(blocks: readonly ChatBlock[]): boolean {
+  if (pairToolBlocks(blocks).length > 0) return false;
+  return blocks.some((block) => block.type === 'thinking');
 }

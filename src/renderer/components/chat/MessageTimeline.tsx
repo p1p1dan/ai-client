@@ -93,7 +93,13 @@ import {
   latestErrorNoticeText,
   type TurnStatus,
 } from './turnStatus';
-import { deriveTurnStats, formatWorkedForRow, type WorkedForRowText } from './turnTiming';
+import {
+  deriveTurnStats,
+  formatWorkedForRow,
+  THOUGHT_VERB,
+  turnHasThinkingOnlyProcess,
+  type WorkedForRowText,
+} from './turnTiming';
 import { useHostStatus } from './useHostStatus';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useSessionModel } from './useSessionModel';
@@ -962,30 +968,35 @@ const ChatTurn = memo(function ChatTurn({
   // round-4's collapsed/expanded pair showed the body is the process segment,
   // so the counts moved up into the collapsed row's arg. Counted across the
   // whole turn, not one message — `deriveTurnStats` only reads `blocks`.
+  const turnBlocks = useMemo(() => turn.body.flatMap((message) => message.blocks), [turn.body]);
   const stats = useMemo(
     () =>
       lastAssistant
-        ? deriveTurnStats(
-            { ...lastAssistant, blocks: turn.body.flatMap((message) => message.blocks) },
-            { style: 'compact' }
-          )
+        ? deriveTurnStats({ ...lastAssistant, blocks: turnBlocks }, { style: 'compact' })
         : null,
-    [lastAssistant, turn.body]
+    [lastAssistant, turnBlocks]
   );
   const workedFor = formatWorkedForRow(metadata?.latencyMs, stats);
+  // A turn whose process is one bare thought (no tool run) scores zero on
+  // every `deriveTurnStats` bucket — see `turnHasThinkingOnlyProcess`'s
+  // header comment for why that used to fall through to the label-less
+  // `bare` rung below instead of saying "Thought".
+  const thoughtOnly = useMemo(() => turnHasThinkingOnlyProcess(turnBlocks), [turnBlocks]);
 
-  // F1: the head degrades `status -> workedFor -> stats -> bare chevron`
-  // instead of stopping at the first two. A restored history turn has neither
-  // of the first two (no T-06 metadata is replayed), so it used to get a null
-  // head — no trigger, `collapsible === false`, force-expanded — which made
-  // §4.3's "restored history defaults to collapsed" literally unreachable.
-  // Nothing below fabricates a duration; the fallbacks print counts derived
-  // from `blocks`, or no text at all (A07 :2399 intact).
+  // F1: the head degrades `status -> workedFor -> stats -> thought -> bare
+  // chevron` instead of stopping at the first two. A restored history turn
+  // has neither of the first two (no T-06 metadata is replayed), so it used
+  // to get a null head — no trigger, `collapsible === false`, force-expanded
+  // — which made §4.3's "restored history defaults to collapsed" literally
+  // unreachable. Nothing below fabricates a duration; the fallbacks print
+  // counts derived from `blocks`, the D25 §2.4 bare "Thought" label, or no
+  // text at all (A07 :2399 intact).
   const head = deriveTurnHeadModel({
     status,
     workedFor,
     stats,
     hasProcess: process.length > 0,
+    thoughtOnly,
   });
 
   // ---- Process shell (§4.3) ----
@@ -1273,6 +1284,13 @@ function TurnHeadContent({ head }: { head: TurnHeadModel | null }) {
           {head.text}
         </span>
       );
+    case 'thought':
+      // D25 §2.4's bare "Thought" (no arg — no duration to print for a
+      // replayed turn), applied to the turn head instead of the per-row
+      // shape. `THOUGHT_VERB` is the same constant `turnTiming.formatThoughtRow`
+      // renders for the individual row, imported rather than re-spelled so the
+      // two labels cannot drift apart.
+      return <span className="shrink-0">{THOUGHT_VERB}</span>;
     default:
       // `bare` — the chevron the trigger renders beside this is the whole row.
       return null;

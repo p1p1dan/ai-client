@@ -6,6 +6,7 @@ import {
   formatWorkedForRow,
   initialTurnTimingRegistry,
   reduceTurnTiming,
+  turnHasThinkingOnlyProcess,
 } from '../turnTiming';
 
 function event(
@@ -205,5 +206,36 @@ describe('deriveTurnStats', () => {
   it('F-B12: compact style keeps the singular/plural rule', () => {
     const blocks: ChatBlock[] = [call('a', 'Bash', { command: 'ls' }), result('a')];
     expect(deriveTurnStats(message(blocks), { style: 'compact' })).toBe('1 tool');
+  });
+});
+
+function thinking(id: string, text = 'hmm'): ChatBlock {
+  return { id, type: 'thinking', text };
+}
+
+describe('turnHasThinkingOnlyProcess', () => {
+  // The bug this exists to catch: `deriveTurnStats` returns null here (zero
+  // tool runs), so a replayed turn made of one thought used to fall all the
+  // way to `turnHead.ts`'s label-less `bare` rung.
+  it('true for a process that is exactly one thinking block', () => {
+    expect(turnHasThinkingOnlyProcess([thinking('t1')])).toBe(true);
+  });
+
+  it('true for several thinking blocks and no tool run', () => {
+    expect(turnHasThinkingOnlyProcess([thinking('t1'), thinking('t2')])).toBe(true);
+  });
+
+  it('false once a tool run is present alongside the thinking block', () => {
+    const blocks: ChatBlock[] = [thinking('t1'), call('a', 'Bash', { command: 'ls' }), result('a')];
+    expect(turnHasThinkingOnlyProcess(blocks)).toBe(false);
+  });
+
+  it('false for a tool-only process (nothing to label "Thought")', () => {
+    const blocks: ChatBlock[] = [call('a', 'Bash', { command: 'ls' }), result('a')];
+    expect(turnHasThinkingOnlyProcess(blocks)).toBe(false);
+  });
+
+  it('false for an empty block list', () => {
+    expect(turnHasThinkingOnlyProcess([])).toBe(false);
   });
 });

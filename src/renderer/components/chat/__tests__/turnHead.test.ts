@@ -38,6 +38,7 @@ const headInput = (over: Partial<TurnHeadInput> = {}): TurnHeadInput => ({
   workedFor: null,
   stats: null,
   hasProcess: false,
+  thoughtOnly: false,
   ...over,
 });
 
@@ -72,15 +73,49 @@ describe('deriveTurnHeadModel (F1)', () => {
     expect(deriveTurnHeadModel(headInput({ hasProcess: true }))).toEqual({ kind: 'bare' });
   });
 
+  // A replayed turn whose entire process is one thought has no tool run to
+  // count, so `stats` is null — before this rung existed the chain fell
+  // straight to `bare`, discarding the one thing the turn actually has to
+  // say. D25 §2.4's bare "Thought, no arg" convention, one level up from the
+  // per-row shape it was written for.
+  it('thoughtOnly: a thinking-only process degrades to "Thought", not to a bare chevron', () => {
+    const head = deriveTurnHeadModel(headInput({ hasProcess: true, thoughtOnly: true }));
+    expect(head).toEqual({ kind: 'thought' });
+  });
+
+  // Priority: `thoughtOnly` sits BELOW `stats` in the chain — a turn that also
+  // ran a tool has real counts to print, and `deriveTurnStats` only sets
+  // `thoughtOnly` when it counted zero tool runs, but the two inputs are
+  // independent at this layer, so the ordering itself must be asserted.
+  it('thoughtOnly: stats still wins over "Thought" when both are set', () => {
+    const head = deriveTurnHeadModel(
+      headInput({ hasProcess: true, thoughtOnly: true, stats: '3 tools' })
+    );
+    expect(head).toEqual({ kind: 'stats', text: '3 tools' });
+  });
+
+  // Mutation check: with `thoughtOnly` false, the chain must still fall all
+  // the way to `bare` — proves the new rung does not swallow the pre-existing
+  // "no counts, no thought, but still a process segment" case.
+  it('thoughtOnly: false leaves the bare-chevron case reachable', () => {
+    expect(deriveTurnHeadModel(headInput({ hasProcess: true, thoughtOnly: false }))).toEqual({
+      kind: 'bare',
+    });
+  });
+
   // The contrapositive is the invariant `MessageTimeline` relies on to decide
   // `collapsible` from `process.length > 0` alone.
-  it('F1: hasProcess always yields a head — for every combination of the other three', () => {
+  it('F1: hasProcess always yields a head — for every combination of the other four', () => {
     for (const status of [null, STATUS]) {
       for (const workedFor of [null, WORKED_FOR]) {
         for (const stats of [null, '', '2 tools']) {
-          expect(
-            deriveTurnHeadModel(headInput({ status, workedFor, stats, hasProcess: true }))
-          ).not.toBeNull();
+          for (const thoughtOnly of [false, true]) {
+            expect(
+              deriveTurnHeadModel(
+                headInput({ status, workedFor, stats, hasProcess: true, thoughtOnly })
+              )
+            ).not.toBeNull();
+          }
         }
       }
     }
@@ -97,6 +132,9 @@ describe('deriveTurnHeadModel (F1)', () => {
     const stats = deriveTurnHeadModel(headInput({ stats: '3 tools', hasProcess: true }));
     expect(JSON.stringify(stats)).not.toMatch(/\d+\s*s\b/);
     expect(JSON.stringify(deriveTurnHeadModel(headInput({ hasProcess: true })))).not.toMatch(/\d/);
+    expect(
+      JSON.stringify(deriveTurnHeadModel(headInput({ hasProcess: true, thoughtOnly: true })))
+    ).not.toMatch(/\d/);
   });
 });
 
