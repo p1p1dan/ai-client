@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { FileChange, FileChangesResult } from '@shared/types';
 import { describe, expect, it } from 'vitest';
 import {
+  gitHistoryPanelClass,
   deriveGitSurfacePresentation,
   formatCommitTooltip,
   type GitSurfaceSelection,
@@ -295,5 +298,29 @@ describe('formatCommitTooltip', () => {
     expect(formatCommitTooltip({ hash: 'abc', author_name: 'A', date: '2026-01-01' })).toBe(
       'abc · A · 2026-01-01'
     );
+  });
+});
+
+// D34 static invariants: docked git surface splits 50/50 between the changes
+// half and the History half, and History fills its share instead of capping.
+// Mutation check: reverting gitHistoryPanelClass() to the pre-D34 `max-h-60`
+// cap (or dropping `flex-1`) must turn these red.
+describe('gitHistoryPanelClass (D34 half-split)', () => {
+  it('lets History fill its half: flex-1 present, no max-height cap', () => {
+    const cls = gitHistoryPanelClass();
+    expect(cls).toContain('flex-1');
+    expect(cls).toContain('min-h-0');
+    expect(cls).not.toMatch(/max-h-\d/);
+  });
+
+  it('GitSurfaceView gives BOTH halves flex-1 (50/50 split, History non-collapsing)', () => {
+    const src = readFileSync(
+      join(__dirname, '..', 'GitSurfaceView.tsx'),
+      'utf8'
+    );
+    const changesHalf = src.match(/<div className="flex min-h-0 flex-1 flex-col">/);
+    const historyHalf = src.match(/<div className="flex min-h-0 flex-1 flex-col border-t">/);
+    expect(changesHalf).not.toBeNull();
+    expect(historyHalf).not.toBeNull();
   });
 });

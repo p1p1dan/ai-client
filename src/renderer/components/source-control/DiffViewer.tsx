@@ -539,7 +539,7 @@ export function DiffViewer({
     selectionWidgetRootRef.current.render(
       <button
         type="button"
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground shadow-md hover:bg-primary/90 transition-colors"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-md hover:bg-primary/90 transition-colors"
         onClick={showCommentForm}
         onMouseDown={(e) => e.preventDefault()}
       >
@@ -1106,7 +1106,7 @@ export function DiffViewer({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex h-10 shrink-0 items-center justify-between border-b px-4">
+      <div className="flex h-9 shrink-0 items-center justify-between border-b px-4">
         <div className="flex items-center">
           <span className="text-sm font-medium">{file.path}</span>
           {isCommitView ? (

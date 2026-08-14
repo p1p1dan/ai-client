@@ -15,6 +15,7 @@ import {
   TreeDeciduous,
 } from 'lucide-react';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/i18n';
@@ -51,14 +52,24 @@ const statusIcons: Record<FileChangeStatus, React.ElementType> = {
   X: FileWarning, // Conflict
 };
 
+// D34 token slice (design-system.md:227 mapping table): A/U map to the "diff
+// added" token, D to "diff deleted", R/C (rename/copy) have no dedicated
+// mapping table entry so they take the nearest semantic hue (`text-info`,
+// blue). M keeps its amber hue via `text-warning` — the only token with that
+// hue, despite `warning` being value-identical to `primary` (design-system.md
+// warns against reusing it as a generic "amber" stand-in); accepted here
+// because there's no other token for "modified". X (conflict, purple) has no
+// semantic token in the palette at all — left as a literal, tracked under
+// T-25 rather than collapsed onto `destructive` (which would make it
+// indistinguishable from D).
 const statusColors: Record<FileChangeStatus, string> = {
-  M: 'text-orange-500',
-  A: 'text-green-500',
-  D: 'text-red-500',
-  R: 'text-blue-500',
-  C: 'text-blue-500',
-  U: 'text-green-500', // Untracked shows as green (new file)
-  X: 'text-purple-500', // Conflict
+  M: 'text-warning',
+  A: 'text-success',
+  D: 'text-destructive',
+  R: 'text-info',
+  C: 'text-info',
+  U: 'text-success', // Untracked shows as new-file green (same token as Added)
+  X: 'text-purple-500', // Conflict — no semantic token for this hue (T-25)
 };
 
 function FileItem({
@@ -84,7 +95,7 @@ function FileItem({
   return (
     <div
       className={cn(
-        'group relative flex h-7 items-center gap-2 rounded-sm px-2 text-sm cursor-pointer transition-colors',
+        'group relative flex h-7 items-center gap-2 rounded-sm px-2 text-ui cursor-pointer transition-colors',
         isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
       )}
       onClick={onFileClick}
@@ -96,7 +107,7 @@ function FileItem({
       <Icon className={cn('h-4 w-4 shrink-0', isSelected ? '' : statusColors[file.status])} />
 
       <span
-        className={cn('shrink-0 font-mono text-xs', isSelected ? '' : statusColors[file.status])}
+        className={cn('shrink-0 font-mono text-code', isSelected ? '' : statusColors[file.status])}
       >
         {file.status}
       </span>
@@ -161,14 +172,8 @@ export function ChangesList({
 
   const getReviewButtonIcon = () => {
     if (isMinimizedInProgress) return <Loader2 className="animate-spin" />;
-    if (isMinimizedComplete) return <CheckCircle className="text-green-500" />;
+    if (isMinimizedComplete) return <CheckCircle className="text-success" />;
     return <Eye />;
-  };
-
-  const getReviewButtonText = () => {
-    if (isMinimizedInProgress) return t('Reviewing...');
-    if (isMinimizedComplete) return t('Review complete');
-    return t('Review');
   };
 
   // Separate tracked and untracked changes
@@ -196,39 +201,47 @@ export function ChangesList({
   if (viewMode === 'tree') {
     return (
       <div className="flex h-full min-h-0 flex-col">
-        {/* View Mode Toggle */}
-        <div className="flex h-9 shrink-0 items-center justify-end gap-2 border-b px-3">
-          {codeReviewEnabled && (
-            <Button
-              variant={isMinimizedForThisRepo ? 'default' : 'outline'}
-              size="xs"
-              onClick={() => setIsReviewModalOpen(true)}
-              title={isMinimizedForThisRepo ? t('View code review') : t('Start code review')}
-            >
-              {getReviewButtonIcon()}
-              {getReviewButtonText()}
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => setViewMode('list')}
-            title={t('Switch to list view')}
-          >
-            <List />
-            {t('List view')}
-          </Button>
-          {onRefresh && (
+        {/* Toolbar: same left title + icon-only controls as list mode below. */}
+        <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b px-3">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span className="min-w-0 truncate text-ui font-medium">{t('Changes')}</span>
+            <Badge className="shrink-0" size="sm" variant="secondary">
+              {staged.length + unstaged.length}
+            </Badge>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {codeReviewEnabled && (
+              <Button
+                variant={isMinimizedForThisRepo ? 'default' : 'outline'}
+                size="icon-xs"
+                onClick={() => setIsReviewModalOpen(true)}
+                aria-label={isMinimizedForThisRepo ? t('View code review') : t('Start code review')}
+                title={isMinimizedForThisRepo ? t('View code review') : t('Start code review')}
+              >
+                {getReviewButtonIcon()}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="icon-xs"
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              title={t('Refresh')}
+              onClick={() => setViewMode('list')}
+              aria-label={t('Switch to list view')}
+              title={t('Switch to list view')}
             >
-              <RefreshCw className={cn(isRefreshing && 'animate-spin')} />
+              <List />
             </Button>
-          )}
+            {onRefresh && (
+              <Button
+                variant="outline"
+                size="icon-xs"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                title={t('Refresh')}
+              >
+                <RefreshCw className={cn(isRefreshing && 'animate-spin')} />
+              </Button>
+            )}
+          </div>
         </div>
         {/* Tree View */}
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -256,57 +269,66 @@ export function ChangesList({
 
   const isEmpty =
     staged.length === 0 && trackedChanges.length === 0 && untrackedChanges.length === 0;
+  const totalChangesCount = staged.length + unstaged.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* View Mode Toggle */}
-      <div className="flex h-9 shrink-0 items-center justify-end gap-2 border-b px-3">
-        {codeReviewEnabled && (
-          <Button
-            variant={isMinimizedForThisRepo ? 'default' : 'outline'}
-            size="xs"
-            onClick={() => setIsReviewModalOpen(true)}
-            title={isMinimizedForThisRepo ? t('View code review') : t('Start code review')}
-          >
-            {getReviewButtonIcon()}
-            {getReviewButtonText()}
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          size="xs"
-          onClick={() => setViewMode(viewMode === 'list' ? 'tree' : 'list')}
-          title={viewMode === 'list' ? t('Switch to tree view') : t('Switch to list view')}
-        >
-          {viewMode === 'list' ? (
-            <>
-              <TreeDeciduous />
-              {t('Tree view')}
-            </>
-          ) : (
-            <>
-              <List />
-              {t('List view')}
-            </>
+      {/* Toolbar: left title + count badge, right review/view/refresh controls.
+          `min-w-0 flex-1 truncate` on the title + `shrink-0` on the badge and
+          the button cluster (design-system.md truncation convention) — at the
+          panel's narrow end the label ellipsizes instead of bleeding text
+          into the buttons. */}
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="min-w-0 truncate text-ui font-medium">{t('Changes')}</span>
+          <Badge className="shrink-0" size="sm" variant="secondary">
+            {totalChangesCount}
+          </Badge>
+        </div>
+        {/* Icon-only controls (VS Code SCM toolbar convention): at the panel's
+            250px minimum a labeled Review + Tree view pair squeezes the left
+            title down to a single letter, so the label lives in the tooltip. */}
+        <div className="flex shrink-0 items-center gap-1">
+          {codeReviewEnabled && (
+            <Button
+              variant={isMinimizedForThisRepo ? 'default' : 'outline'}
+              size="icon-xs"
+              onClick={() => setIsReviewModalOpen(true)}
+              aria-label={isMinimizedForThisRepo ? t('View code review') : t('Start code review')}
+              title={isMinimizedForThisRepo ? t('View code review') : t('Start code review')}
+            >
+              {getReviewButtonIcon()}
+            </Button>
           )}
-        </Button>
-        {onRefresh && (
           <Button
             variant="outline"
             size="icon-xs"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            title={t('Refresh')}
+            onClick={() => setViewMode(viewMode === 'list' ? 'tree' : 'list')}
+            aria-label={viewMode === 'list' ? t('Switch to tree view') : t('Switch to list view')}
+            title={viewMode === 'list' ? t('Switch to tree view') : t('Switch to list view')}
           >
-            <RefreshCw className={cn(isRefreshing && 'animate-spin')} />
+            {viewMode === 'list' ? <TreeDeciduous /> : <List />}
           </Button>
-        )}
+          {onRefresh && (
+            <Button
+              variant="outline"
+              size="icon-xs"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              title={t('Refresh')}
+            >
+              <RefreshCw className={cn(isRefreshing && 'animate-spin')} />
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Empty State */}
+      {/* Empty State — compact, top-aligned block (D34: no longer stretches to
+          fill the pane, so the upper half's docked 50/50 split reads as
+          intentional whitespace rather than a file list pretending to be tall). */}
       {isEmpty ? (
-        <div className="flex flex-1 min-h-[120px] flex-col items-center justify-center text-center text-muted-foreground">
-          <p className="text-sm">{t('No changes')}</p>
+        <div className="flex min-h-[80px] shrink-0 items-center justify-center text-center text-muted-foreground">
+          <p className="text-meta">{t('No changes')}</p>
         </div>
       ) : (
         /* List View */
@@ -316,12 +338,12 @@ export function ChangesList({
             {staged.length > 0 && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-2">
-                  <h3 className="text-xs font-medium text-muted-foreground">
+                  <h3 className="text-ui font-medium text-muted-foreground">
                     {t('Staged changes ({{count}})', { count: staged.length })}
                   </h3>
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-ui text-muted-foreground hover:text-foreground transition-colors"
                     onClick={handleUnstageAll}
                   >
                     {t('Unstage all')}
@@ -347,13 +369,13 @@ export function ChangesList({
             {trackedChanges.length > 0 && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-2">
-                  <h3 className="text-xs font-medium text-muted-foreground">
+                  <h3 className="text-ui font-medium text-muted-foreground">
                     {t('Changes ({{count}})', { count: trackedChanges.length })}
                   </h3>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-ui text-muted-foreground hover:text-foreground transition-colors"
                       onClick={handleDiscardTracked}
                       title={t('Discard all changes')}
                     >
@@ -361,7 +383,7 @@ export function ChangesList({
                     </button>
                     <button
                       type="button"
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-ui text-muted-foreground hover:text-foreground transition-colors"
                       onClick={handleStageTracked}
                     >
                       {t('Stage all')}
@@ -391,14 +413,14 @@ export function ChangesList({
             {untrackedChanges.length > 0 && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-2">
-                  <h3 className="text-xs font-medium text-muted-foreground">
+                  <h3 className="text-ui font-medium text-muted-foreground">
                     {t('Untracked changes ({{count}})', { count: untrackedChanges.length })}
                   </h3>
                   <div className="flex items-center gap-2">
                     {onDeleteUntracked && (
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        className="text-ui text-muted-foreground hover:text-foreground transition-colors"
                         onClick={handleDeleteAllUntracked}
                         title={t('Delete all untracked files')}
                       >
@@ -407,7 +429,7 @@ export function ChangesList({
                     )}
                     <button
                       type="button"
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-ui text-muted-foreground hover:text-foreground transition-colors"
                       onClick={handleStageUntracked}
                     >
                       {t('Stage all')}

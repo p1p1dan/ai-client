@@ -217,6 +217,18 @@ export function parseRefBadges(refs: string | undefined): string[] {
  * crowding the subject (spec: "do not crowd 380px") — this hover title is
  * the only place they surface.
  */
+/**
+ * D34 half-split: class list for the History Collapsible's content panel.
+ * `flex-1` (not a max-height cap) lets History fill its 50% share of the
+ * docked surface; the h-auto/transition-none/data-*-style overrides disable
+ * the Collapsible's measured-height open/close animation, which would
+ * otherwise fight the flex sizing and leave the panel stuck at 0px.
+ * Kept in the model so the split invariant stays assertable from node tests.
+ */
+export function gitHistoryPanelClass(): string {
+  return 'flex min-h-0 flex-1 flex-col h-auto overflow-visible transition-none duration-0 data-starting-style:h-auto data-ending-style:h-auto';
+}
+
 export function formatCommitTooltip(
   commit: Pick<GitLogEntry, 'hash' | 'author_name' | 'date'>
 ): string {

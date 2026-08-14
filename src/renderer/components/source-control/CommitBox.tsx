@@ -88,7 +88,7 @@ export function CommitBox({
       <div className="relative">
         <textarea
           className={cn(
-            'w-full resize-none border-0 bg-transparent px-3 py-2 pr-10 text-sm',
+            'w-full resize-none border-0 bg-transparent px-3 py-2 pr-10 text-ui',
             'placeholder:text-muted-foreground focus:outline-none',
             'min-h-[80px] max-h-[200px]'
           )}
@@ -123,18 +123,21 @@ export function CommitBox({
       {/* Actions */}
       <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
         {/* Staged count */}
-        <span className="text-xs text-muted-foreground">
+        <span className="text-meta text-muted-foreground">
           {stagedCount > 0
             ? t('{{count}} staged changes', { count: stagedCount })
             : t('No staged changes')}
         </span>
 
-        {/* Commit button */}
+        {/* Commit button — D34: falls back to the muted `secondary` variant
+            when nothing is staged instead of staying solid `primary` at 64%
+            opacity (still legible as "the primary action", just not it yet). */}
         <Button
           size="sm"
+          variant={stagedCount === 0 ? 'secondary' : 'default'}
           onClick={handleCommit}
           disabled={!canCommit}
-          className="h-7 gap-1.5 text-xs"
+          className="h-7 gap-1.5 text-ui"
         >
           {isCommitting ? (
             <>

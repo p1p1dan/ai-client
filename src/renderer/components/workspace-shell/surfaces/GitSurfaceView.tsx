@@ -277,35 +277,43 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
 
   const changesPane = (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1">
-        <ChangesList
-          staged={partitioned.staged}
-          unstaged={partitioned.unstaged}
-          selectedFile={state.selection}
-          onFileClick={handleFileClick}
-          onStage={handleStage}
-          onUnstage={handleUnstage}
-          onDiscard={handleDiscard}
-          onRefresh={handleRefresh}
-          isRefreshing={fileChangesQuery.isFetching}
-          repoPath={workdir}
+      {/* D34: docked git surface is split 50/50 top-half (Changes + CommitBox)
+          vs bottom-half (History) — `flex-1` on both halves, not just the
+          top one, so History gets an equal, non-collapsing share of the
+          panel instead of shrinking to its content (VS Code SCM reference). */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1">
+          <ChangesList
+            staged={partitioned.staged}
+            unstaged={partitioned.unstaged}
+            selectedFile={state.selection}
+            onFileClick={handleFileClick}
+            onStage={handleStage}
+            onUnstage={handleUnstage}
+            onDiscard={handleDiscard}
+            onRefresh={handleRefresh}
+            isRefreshing={fileChangesQuery.isFetching}
+            repoPath={workdir}
+          />
+        </div>
+        <CommitBox
+          stagedCount={partitioned.staged.length}
+          onCommit={handleCommit}
+          isCommitting={commitMutation.isPending}
+          rootPath={workdir}
         />
       </div>
-      <CommitBox
-        stagedCount={partitioned.staged.length}
-        onCommit={handleCommit}
-        isCommitting={commitMutation.isPending}
-        rootPath={workdir}
-      />
-      <GitHistoryList
-        commits={historyCommits}
-        expanded={state.historyExpanded}
-        hasNextPage={historyQuery.hasNextPage}
-        isFetchingNextPage={historyQuery.isFetchingNextPage}
-        isLoading={historyQuery.isLoading}
-        onLoadMore={handleLoadMoreHistory}
-        onToggle={handleToggleHistory}
-      />
+      <div className="flex min-h-0 flex-1 flex-col border-t">
+        <GitHistoryList
+          commits={historyCommits}
+          expanded={state.historyExpanded}
+          hasNextPage={historyQuery.hasNextPage}
+          isFetchingNextPage={historyQuery.isFetchingNextPage}
+          isLoading={historyQuery.isLoading}
+          onLoadMore={handleLoadMoreHistory}
+          onToggle={handleToggleHistory}
+        />
+      </div>
     </div>
   );
 
