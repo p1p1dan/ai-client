@@ -117,6 +117,8 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/source-control/DiffReviewModal.tsx',
   'components/source-control/ResetModeDialog.tsx',
   'components/source-control/SourceControlPanel.tsx',
+  // D34 commit-expand file list: monospace status letters, same rationale as ChangesList.
+  'components/workspace-shell/surfaces/GitHistoryList.tsx',
   'components/ui/code-block.tsx',
   'components/ui/ident.tsx',
   'components/ui/mermaid-renderer.tsx',
