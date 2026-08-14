@@ -139,6 +139,16 @@ export function reduceMessageMetadata(
     case 'usage.updated': {
       const sid = sessionId ?? '';
       if (!payload) return prev;
+      // D33: interim ticks (`payload.interim === true`, the Host's live
+      // token-estimate channel — `contextSurfaceModel.ts`'s
+      // `turnTokensDisplay` is the intended consumer) never reach this
+      // registry. The merge below is additive (`{ ...existing.usage,
+      // ...payload }`), so an interim payload's `interim`/
+      // `turn_output_tokens_display` keys would otherwise survive forever —
+      // the settled result's own `usage.updated` never clears keys, only
+      // adds/overwrites them — and this registry has no render point that
+      // could ever surface the pollution to catch it.
+      if (payload.interim === true) return prev;
       const messageId = sid ? prev.bySessionLastAssistant[sid] : undefined;
       if (!messageId) return prev;
       const existing = prev.byMessage[messageId] ?? {};

@@ -407,6 +407,17 @@ export interface SessionRuntimeFacts {
   permissionMode?: SessionPermissionMode;
   /** T-35: absent until the first `session.stderr` event arrives. */
   stderr?: SessionStderrFacts;
+  /**
+   * D33: the Host's live, ESTIMATED output-token count for the turn
+   * currently in flight (`usage.updated` events with `payload.interim ===
+   * true`, `eventNormalizer.ts`'s `emitInterimUsage`). `undefined` = no
+   * interim tick has landed for this session yet; `null` = a tick landed
+   * earlier this session but the turn it belonged to is no longer in flight
+   * (cleared on `session.status` idle/failed or on `message.completed` —
+   * see `clearTurnTokensDisplay`). Both render the same way (no ↓ suffix);
+   * the distinction only matters to this reducer's own idempotence checks.
+   */
+  turnTokensDisplay?: number | null;
 }
 
 /** sessionId -> facts. */
@@ -445,6 +456,16 @@ export function reduceSessionRuntimeFacts(
 ): SessionRuntimeFactsState {
   if (event.type === 'session.stderr') {
     return foldStderrLine(prev, event);
+  }
+  // D33: the live token estimate is written and cleared on three distinct
+  // event types, none of which are `session.created`/`session.resumed` — so
+  // these three checks must run BEFORE the narrowing guard below, or every
+  // one of them would silently no-op through the `return prev` two lines down.
+  if (event.type === 'usage.updated') {
+    return foldInterimTokensDisplay(prev, event);
+  }
+  if (event.type === 'session.status' || event.type === 'message.completed') {
+    return clearTurnTokensDisplay(prev, event);
   }
   if (event.type !== 'session.created' && event.type !== 'session.resumed') {
     return prev;
@@ -520,4 +541,65 @@ function foldStderrLine(
     }
   }
   return next;
+}
+
+/**
+ * D33: write the live token estimate off an interim `usage.updated` tick.
+ * Anything else on this event type is a no-op — a missing sessionId, a
+ * non-interim/settled result (the `messageMetadata.ts` guard exists for that
+ * one, this reducer never even looks at it here), or a malformed payload
+ * all leave `prev` untouched, reference-identical.
+ */
+function foldInterimTokensDisplay(
+  prev: SessionRuntimeFactsState,
+  event: SessionRuntimeFactsEvent
+): SessionRuntimeFactsState {
+  const sessionId = event.sessionId;
+  if (!sessionId) return prev;
+  const payload =
+    event.payload && typeof event.payload === 'object'
+      ? (event.payload as Record<string, unknown>)
+      : undefined;
+  if (payload?.interim !== true) return prev;
+  const display = payload.turn_output_tokens_display;
+  if (typeof display !== 'number') return prev;
+
+  const existing = prev[sessionId];
+  if (existing?.turnTokensDisplay === display) return prev;
+  return { ...prev, [sessionId]: { ...existing, turnTokensDisplay: display } };
+}
+
+/**
+ * D33: clear the live token estimate once the turn it described is no
+ * longer in flight. Two triggers, either sufficient on its own:
+ *  - `session.status` settling on `idle` or `failed` (any other status,
+ *    e.g. `running`/`waiting_permission`, is a no-op);
+ *  - `message.completed` — the Host's own control-flow comment
+ *    (`eventNormalizer.ts` `emitInterimUsage`) documents the terminal order
+ *    as `…message.completed → usage.updated(final) → session.completed →
+ *    session.status`, so this fires before the settled `usage.updated` even
+ *    arrives, and before a next turn's `running` status could strand a
+ *    stale number on screen.
+ * A session with no entry, or one whose `turnTokensDisplay` is already
+ * `null`/unset, returns `prev` untouched — this must stay a true no-op or
+ * every idle tick in a session with nothing to clear would re-notify
+ * zustand subscribers for free.
+ */
+function clearTurnTokensDisplay(
+  prev: SessionRuntimeFactsState,
+  event: SessionRuntimeFactsEvent
+): SessionRuntimeFactsState {
+  const sessionId = event.sessionId;
+  if (!sessionId) return prev;
+  if (event.type === 'session.status') {
+    const payload =
+      event.payload && typeof event.payload === 'object'
+        ? (event.payload as Record<string, unknown>)
+        : undefined;
+    const status = payload?.status;
+    if (status !== 'idle' && status !== 'failed') return prev;
+  }
+  const existing = prev[sessionId];
+  if (existing?.turnTokensDisplay == null) return prev;
+  return { ...prev, [sessionId]: { ...existing, turnTokensDisplay: null } };
 }

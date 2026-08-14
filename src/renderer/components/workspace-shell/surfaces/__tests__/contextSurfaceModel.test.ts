@@ -809,6 +809,152 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// D33: turnTokensDisplay — interim usage.updated writes + clearing
+// ---------------------------------------------------------------------------
+
+describe('reduceSessionRuntimeFacts — turnTokensDisplay (D33)', () => {
+  const interimEvent = (display: number) => ({
+    type: 'usage.updated',
+    sessionId: 's1',
+    payload: { interim: true, turn_output_tokens_display: display },
+  });
+
+  it('writes turnTokensDisplay from an interim usage.updated tick', () => {
+    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    expect(next.s1.turnTokensDisplay).toBe(850);
+  });
+
+  it('updates turnTokensDisplay across successive interim ticks', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(300));
+    state = reduceSessionRuntimeFacts(state, interimEvent(1200));
+    expect(state.s1.turnTokensDisplay).toBe(1200);
+  });
+
+  it('returns the same reference for a repeated identical interim value', () => {
+    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(500));
+    const next = reduceSessionRuntimeFacts(state, interimEvent(500));
+    expect(next).toBe(state);
+  });
+
+  it('does NOT write from a settled (non-interim) usage.updated result payload', () => {
+    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
+      type: 'usage.updated',
+      sessionId: 's1',
+      payload: { input_tokens: 10, output_tokens: 850 },
+    });
+    expect(next).toBe(initialSessionRuntimeFacts);
+    expect(next.s1).toBeUndefined();
+  });
+
+  it('is a no-op without a sessionId', () => {
+    const prev = initialSessionRuntimeFacts;
+    const next = reduceSessionRuntimeFacts(prev, {
+      type: 'usage.updated',
+      payload: { interim: true, turn_output_tokens_display: 500 },
+    });
+    expect(next).toBe(prev);
+  });
+
+  it('clears turnTokensDisplay to null on session.status idle', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'idle' },
+    });
+    expect(state.s1.turnTokensDisplay).toBeNull();
+  });
+
+  it('clears turnTokensDisplay to null on session.status failed', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'failed' },
+    });
+    expect(state.s1.turnTokensDisplay).toBeNull();
+  });
+
+  it('leaves turnTokensDisplay untouched on a non-terminal session.status (e.g. running)', () => {
+    const state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    const next = reduceSessionRuntimeFacts(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'running' },
+    });
+    expect(next).toBe(state);
+    expect(next.s1.turnTokensDisplay).toBe(850);
+  });
+
+  it('clears turnTokensDisplay to null on message.completed', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'message.completed',
+      sessionId: 's1',
+      payload: { messageId: 'a1' },
+    });
+    expect(state.s1.turnTokensDisplay).toBeNull();
+  });
+
+  it('clearing is idempotent — returns the same reference once already null/unset', () => {
+    const prev = initialSessionRuntimeFacts;
+    const next = reduceSessionRuntimeFacts(prev, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'idle' },
+    });
+    expect(next).toBe(prev);
+
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'message.completed',
+      sessionId: 's1',
+      payload: { messageId: 'a1' },
+    });
+    const twiceCleared = reduceSessionRuntimeFacts(state, {
+      type: 'message.completed',
+      sessionId: 's1',
+      payload: { messageId: 'a1' },
+    });
+    expect(twiceCleared).toBe(state);
+  });
+
+  it('coexists with permissionMode/stderr on the same session entry', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
+      type: 'session.created',
+      sessionId: 's1',
+      payload: { permissionMode: 'default' },
+    });
+    state = reduceSessionRuntimeFacts(state, interimEvent(850));
+    expect(state.s1).toEqual({ permissionMode: 'default', turnTokensDisplay: 850 });
+  });
+
+  it('isolates sessions — clearing session A never touches session B', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'usage.updated',
+      sessionId: 's2',
+      payload: { interim: true, turn_output_tokens_display: 300 },
+    });
+    state = reduceSessionRuntimeFacts(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      payload: { status: 'idle' },
+    });
+    expect(state.s1.turnTokensDisplay).toBeNull();
+    expect(state.s2.turnTokensDisplay).toBe(300);
+  });
+
+  // Regression guard for the reducer's own "unrelated event returns prev
+  // unchanged" discipline (must survive the D33 branches added above it).
+  it('an unrelated event type still returns the exact same reference', () => {
+    const prev = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, interimEvent(850));
+    const next = reduceSessionRuntimeFacts(prev, { type: 'permission.requested', sessionId: 's1' });
+    expect(next).toBe(prev);
+  });
+});
+
 describe('deriveContextGroups — Host stderr group (T-35)', () => {
   it('drops the group entirely when no stderr arrived (acceptance ③: zero noise on a healthy turn)', () => {
     expect(deriveContextGroups(baseInput()).some((g) => g.id === 'stderr')).toBe(false);

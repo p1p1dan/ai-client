@@ -174,6 +174,43 @@ describe('reduceMessageMetadata (T-06)', () => {
     expect(reg.byMessage.a1.usage).toEqual({ input_tokens: 10, output_tokens: 5 });
   });
 
+  // D33: interim ticks (`payload.interim === true`, the Host's live
+  // token-estimate channel) must never reach this registry — the merge below
+  // is additive and never clears keys, so an interim payload's `interim`/
+  // `turn_output_tokens_display` keys would otherwise survive in `usage`
+  // forever, even after the settled result lands.
+  it('D33: an interim usage.updated tick is dropped; the settled result that follows lands clean', () => {
+    let reg = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant' },
+      }),
+      'sonnet'
+    );
+    // Step 1: an interim tick — must be a no-op.
+    reg = reduceMessageMetadata(
+      reg,
+      event('usage.updated', {
+        sessionId: 's1',
+        payload: { interim: true, turn_output_tokens_display: 850 },
+      })
+    );
+    expect(reg.byMessage.a1.usage).toBeUndefined();
+
+    // Step 2: the settled result — lands deep-equal to ITS OWN payload, no
+    // trace of the interim tick's keys.
+    const resultPayload = { input_tokens: 10, output_tokens: 900 };
+    reg = reduceMessageMetadata(
+      reg,
+      event('usage.updated', { sessionId: 's1', payload: resultPayload })
+    );
+    expect(reg.byMessage.a1.usage).toEqual(resultPayload);
+    expect(reg.byMessage.a1.usage).not.toHaveProperty('interim');
+    expect(reg.byMessage.a1.usage).not.toHaveProperty('turn_output_tokens_display');
+  });
+
   it('ignores usage.updated with no prior assistant index for the session', () => {
     const next = reduceMessageMetadata(
       initialMetadataRegistry,

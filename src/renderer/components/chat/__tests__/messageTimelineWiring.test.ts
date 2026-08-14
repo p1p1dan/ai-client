@@ -475,6 +475,27 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The pending head keeps rendering when EITHER piece exists.
     expectWired('if (!status && !retryBanner) return null;');
   });
+
+  // D33 (streaming build spec, slice 3): the live output-token estimate must
+  // follow the exact same last-turn-only discipline as `nowMs`/`retry` (F7) —
+  // a narrow primitive selector at the parent, gated to `null` for every turn
+  // but the last, and the `✽` glyph applied at exactly one `.tsx` render site
+  // (never inside the pure `turnStatus.ts` module, per that file's own
+  // copy/decoration split).
+  it('D33: the live token estimate is scoped like nowMs/retry, and the ✽ glyph is a .tsx-only decoration', () => {
+    // A narrow primitive selector — never the whole per-session facts object.
+    expectCalled('useSessionRuntimeFactsStore(');
+    expectWired('state.factsBySession[sessionId]?.turnTokensDisplay ?? null');
+    // Last-turn-only gate on the prop passed down to ChatTurn — the same
+    // discipline as `nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}` above.
+    expectCalled('outputTokensDisplay={isLastTurn ? outputTokensDisplay : null}');
+    // Reaches the pure status derivation.
+    expectCalled('outputTokensDisplay,');
+    // The glyph is added at render time, gated on kind, never inside
+    // `deriveTurnStatus`'s own text (that stays store/glyph-free by spec).
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: pinning literal source text, not writing a template string
+    expectWired("status.kind === 'streaming' ? `✽ ${status.text}` : status.text");
+  });
 });
 
 /**

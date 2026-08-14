@@ -25,6 +25,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { type TurnSendStatus, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import { sendTimeoutMs } from './attachmentLimits';
 import { ChatMarkdown } from './ChatMarkdown';
@@ -228,6 +229,15 @@ export function MessageTimeline({
   // `deriveTurnStatus` appends it to the same copy the composer used to show.
   const sessionRetry = useChatSessionsStore(
     (state) => state.sessions.find((session) => session.id === sessionId)?.retry ?? null
+  );
+  // D33: the Host's live output-token estimate for THIS session's in-flight
+  // turn. A narrow primitive selector (`number | null`, never the facts
+  // object) — this ticks as often as the interim channel does, so widening it
+  // to the whole per-session facts record would re-render on every stderr
+  // line and permission-mode echo too, not just the token estimate this row
+  // actually needs.
+  const outputTokensDisplay = useSessionRuntimeFactsStore((state) =>
+    sessionId ? (state.factsBySession[sessionId]?.turnTokensDisplay ?? null) : null
   );
   const { get: getMeta } = useMessageMetadata(sessionId);
   const { getThinking } = useTurnTiming(sessionId);
@@ -451,6 +461,11 @@ export function MessageTimeline({
                     // (F7): a retry tick must not break `memo` session-wide.
                     retry={isLastTurn && pendingSendStatus == null ? sessionRetry : null}
                     nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}
+                    // D33: same last-turn-only discipline as `nowMs`/`retry`
+                    // above (F7) — every other turn must keep a byte-identical
+                    // prop across an interim tick, or `memo` on `ChatTurn`
+                    // stops holding session-wide the moment a turn is streaming.
+                    outputTokensDisplay={isLastTurn ? outputTokensDisplay : null}
                     footerNowMs={footerNowMs}
                     getMetadata={getMeta}
                     thinkingEnabled={thinkingEnabled}
@@ -769,6 +784,8 @@ interface ChatTurnProps {
   retry: SessionRetryInfo | null;
   /** Whole-second clock, ticking only while a turn is in flight (`useSecondsTick`). `STATIC_NOW_MS` for every turn but the last. */
   nowMs: number;
+  /** D33: the live output-token estimate, `isLastTurn`-gated the same way as `nowMs`/`retry`. `null` for every turn but the last. */
+  outputTokensDisplay: number | null;
   /** Minute clock for the footer's relative timestamp (`useMinuteTick`, F9). */
   footerNowMs: number;
   getMetadata: (messageId: string) => MessageMetadata | undefined;
@@ -814,6 +831,7 @@ const ChatTurn = memo(function ChatTurn({
   baselineMessageId,
   retry,
   nowMs,
+  outputTokensDisplay,
   footerNowMs,
   getMetadata,
   thinkingEnabled,
@@ -920,6 +938,7 @@ const ChatTurn = memo(function ChatTurn({
     attachmentBytes: sendStatus?.attachmentBytes ?? 0,
     retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
     hasBlocks: turnHasBlocks,
+    outputTokensDisplay,
     // F4: a session failure belongs to the turn that was actually running when
     // it happened — never to the completed turn that merely happens to be last
     // while the next send's user echo is still in flight, and never to a
@@ -1266,17 +1285,19 @@ function TurnHeadContent({ head }: { head: TurnHeadModel | null }) {
  * actually produced the words — so the two can never contradict each other.
  */
 function TurnStatusContent({ status }: { status: TurnStatus }) {
+  // D33 / spec §3a: the `✽` glyph is decoration, not copy — `turnStatus.ts`
+  // stays a pure text module (its own file header draws that line), so the
+  // prefix is applied here, at the ONE `.tsx` render site, only once
+  // `kind === 'streaming'` actually reaches paint.
+  const text = status.kind === 'streaming' ? `✽ ${status.text}` : status.text;
   return (
     <>
       {/* A turn can stay silent for a minute; the spinner and the ticking
           seconds are what say it is alive rather than hung. Same 3.5 size the
           composer's own status row used before this moved here. */}
       {status.kind !== 'failed' && <Spinner className="size-3.5 shrink-0" />}
-      <span
-        className={cn('min-w-0 truncate', turnStatusToneClass(status.kind))}
-        title={status.text}
-      >
-        {status.text}
+      <span className={cn('min-w-0 truncate', turnStatusToneClass(status.kind))} title={text}>
+        {text}
       </span>
     </>
   );

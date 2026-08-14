@@ -32,9 +32,6 @@ export interface TurnStatus {
   text: string;
 }
 
-/** Streaming verb — the one string this batch adds (spec §9-ε: `Generating · Ns`). */
-export const TURN_STREAMING_VERB = 'Generating';
-
 /**
  * Failed turn head label. Short and fixed-length by contract: the full error
  * text belongs to the session-level failure block, whose position §9-ζ keeps
@@ -58,6 +55,14 @@ export interface TurnStatusInput {
   retry?: { attempt: number; maxRetries: number } | null;
   /** The turn already produced at least one block, i.e. tokens are arriving. */
   hasBlocks?: boolean;
+  /**
+   * D33: the Host's live, ESTIMATED output-token count for this turn
+   * (`contextSurfaceModel.ts`'s `turnTokensDisplay`, folded from
+   * `usage.updated`'s interim payload). `undefined`/`null` omits the ` · ↓
+   * …` suffix entirely — a turn that has not received an interim tick yet
+   * (or whose Host build predates the token channel) shows the clock alone.
+   */
+  outputTokensDisplay?: number | null;
   /** The turn ended in failure. */
   failed?: boolean;
 }
@@ -95,7 +100,16 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
 
   if (input.phase === 'handshake') return { kind: 'handshake', text };
   if (input.hasBlocks) {
-    return { kind: 'streaming', text: `${TURN_STREAMING_VERB} · ${elapsed}s` };
+    const clock = formatElapsedClock(elapsed);
+    const tokenSuffix =
+      input.outputTokensDisplay != null
+        ? ` · ↓ ${formatTokenCount(input.outputTokensDisplay)}`
+        : '';
+    // No verb, no `✽` here on purpose (D33 / spec §3a): this module stays
+    // text-only (see the file header's copy/decoration split) — the glyph is
+    // the `.tsx` layer's prefix (`TurnStatusContent`, `MessageTimeline.tsx`),
+    // added only once `kind === 'streaming'` reaches render.
+    return { kind: 'streaming', text: `${clock}${tokenSuffix}` };
   }
 
   // The threshold is imported, never re-declared: `composerSendingLine` keys
@@ -109,6 +123,35 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
 /** Same normalization `composerSendingLine` applies, so both lines count the same second. */
 function normalizeElapsedSeconds(elapsedSeconds: number): number {
   return Math.max(0, Math.floor(elapsedSeconds));
+}
+
+/**
+ * D33: `42s` / `19m 55s` — the streaming branch's own clock format,
+ * deliberately NOT `composerSendingLine`'s `Ns` wording. That format is
+ * exempt from this split by design: its own window closes at
+ * `SLOW_WAIT_HINT_SECONDS` (well under a minute), so a bare seconds count
+ * never gets hard to read there. The streaming branch has no such ceiling —
+ * a turn can run for several minutes — and a raw `"143s"` is materially
+ * harder to scan at a glance than `"2m 23s"`.
+ */
+export function formatElapsedClock(elapsedSeconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedSeconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+/**
+ * D33: `850` / `38.5k` — display formatting for the Host's live output-token
+ * estimate. This number is NOT a billing figure: it is a monotonic peak the
+ * Host derives mid-turn from streamed deltas (`eventNormalizer.ts`'s
+ * `emitInterimUsage`), never the settled `usage.updated` result payload, so
+ * it must only ever be shown as a rough, in-flight indicator — never
+ * presented as (or reconciled against) an authoritative token count.
+ */
+export function formatTokenCount(count: number): string {
+  if (count < 1000) return `${count}`;
+  return `${(count / 1000).toFixed(1)}k`;
 }
 
 /**

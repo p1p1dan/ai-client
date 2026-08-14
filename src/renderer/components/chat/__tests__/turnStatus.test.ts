@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { composerSendingLine, SLOW_WAIT_HINT_SECONDS } from '../attachments';
 import {
   deriveTurnStatus,
+  formatElapsedClock,
+  formatTokenCount,
   isFailedCardBodyDuplicate,
   latestErrorNoticeText,
   TURN_FAILED_TEXT,
@@ -63,14 +65,42 @@ describe('deriveTurnStatus (F-B5)', () => {
     );
   });
 
-  it('F-B5: streaming — the one string this batch adds (§9-ε)', () => {
+  it('D33: streaming — elapsed clock only, no verb, when no token estimate has arrived', () => {
     const status = deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7 });
-    expect(status).toEqual({ kind: 'streaming', text: 'Generating · 7s' });
+    expect(status).toEqual({ kind: 'streaming', text: '7s' });
   });
 
-  it('F-B5: streaming outranks the slow branch — "Still waiting" is false once tokens arrive', () => {
+  it('D33: streaming outranks the slow branch — "Still waiting" is false once tokens arrive', () => {
     const status = deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 90 });
-    expect(status).toEqual({ kind: 'streaming', text: 'Generating · 90s' });
+    expect(status).toEqual({ kind: 'streaming', text: '1m 30s' });
+  });
+
+  it('D33: streaming appends the ↓ token suffix once an estimate is present', () => {
+    const status = deriveTurnStatus({
+      ...base,
+      hasBlocks: true,
+      elapsedSeconds: 7,
+      outputTokensDisplay: 850,
+    });
+    expect(status).toEqual({ kind: 'streaming', text: '7s · ↓ 850' });
+  });
+
+  it('D33: streaming formats a large token estimate in k-notation', () => {
+    const status = deriveTurnStatus({
+      ...base,
+      hasBlocks: true,
+      elapsedSeconds: 7,
+      outputTokensDisplay: 38512,
+    });
+    expect(status).toEqual({ kind: 'streaming', text: '7s · ↓ 38.5k' });
+  });
+
+  it('D33: streaming omits the ↓ suffix for null/undefined outputTokensDisplay', () => {
+    expect(
+      deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7, outputTokensDisplay: null })
+        ?.text
+    ).toBe('7s');
+    expect(deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7 })?.text).toBe('7s');
   });
 
   it('F-B5: slow at the threshold, still delegating the copy', () => {
@@ -122,12 +152,40 @@ describe('deriveTurnStatus (F-B5)', () => {
   });
 
   it('F-B5: a negative/fractional elapsed counts the same second as the composer copy does', () => {
-    expect(deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: -2 })?.text).toBe(
-      'Generating · 0s'
-    );
-    expect(deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7.9 })?.text).toBe(
-      'Generating · 7s'
-    );
+    expect(deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: -2 })?.text).toBe('0s');
+    expect(deriveTurnStatus({ ...base, hasBlocks: true, elapsedSeconds: 7.9 })?.text).toBe('7s');
+  });
+});
+
+describe('formatElapsedClock (D33)', () => {
+  it('renders under a minute as bare seconds', () => {
+    expect(formatElapsedClock(0)).toBe('0s');
+    expect(formatElapsedClock(42)).toBe('42s');
+    expect(formatElapsedClock(59)).toBe('59s');
+  });
+
+  it('renders a minute and over as "Nm Ns"', () => {
+    expect(formatElapsedClock(60)).toBe('1m 0s');
+    expect(formatElapsedClock(61)).toBe('1m 1s');
+    expect(formatElapsedClock(1195)).toBe('19m 55s');
+  });
+
+  it('floors fractional input and clamps negative input to zero', () => {
+    expect(formatElapsedClock(7.9)).toBe('7s');
+    expect(formatElapsedClock(-5)).toBe('0s');
+  });
+});
+
+describe('formatTokenCount (D33)', () => {
+  it('renders under 1000 as-is', () => {
+    expect(formatTokenCount(0)).toBe('0');
+    expect(formatTokenCount(850)).toBe('850');
+    expect(formatTokenCount(999)).toBe('999');
+  });
+
+  it('renders 1000 and over as one-decimal k-notation', () => {
+    expect(formatTokenCount(1000)).toBe('1.0k');
+    expect(formatTokenCount(38512)).toBe('38.5k');
   });
 });
 
