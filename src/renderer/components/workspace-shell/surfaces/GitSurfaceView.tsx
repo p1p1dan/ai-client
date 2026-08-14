@@ -18,7 +18,15 @@
  * Standard width: single-view push navigation, changes list <-> diff.
  * `expanded`: two-column split, left changes+commit / right diff. Never
  * auto-expands (A06 + spec §2 explicit ban).
+ *
+ * D34 (2026-08-14, click-to-expand): clicking a History row toggles its
+ * inline file list (`GitHistoryList`'s own concern); clicking a file inside
+ * that list drives a per-commit diff view here via `useCommitDiff` — a third
+ * render branch, checked before `presentation`, that takes over the whole
+ * pane the same way the single-view `state.selection` diff branch does. No
+ * revert/reset/context-menu/multi-lane graph, same ban as D30(a).
  */
+import type { FileChangeStatus } from '@shared/types';
 import { getDisplayPath } from '@shared/utils/path';
 import { ArrowLeft, GitBranch } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
@@ -34,7 +42,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useGitStatus } from '@/hooks/useGit';
-import { useGitHistoryInfinite } from '@/hooks/useGitHistory';
+import { useCommitDiff, useGitHistoryInfinite } from '@/hooks/useGitHistory';
 import {
   useFileChanges,
   useFileDiff,
@@ -52,6 +60,7 @@ import { GitHistoryList } from './GitHistoryList';
 import {
   deriveGitSurfacePresentation,
   GIT_CHANGES_PANE_WIDTH,
+  type GitSurfaceCommitFile,
   type GitWorkdirResolution,
   initialGitSurfaceViewState,
   partitionFileChanges,
@@ -206,6 +215,16 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     { enabled: surfaceActive && view === 'diff' }
   );
 
+  // D34: per-commit diff for `state.selectedCommitFile`. Unlike `useFileDiff`
+  // this hook has no built-in poll, so there's no isActive gate to wire up —
+  // it only fetches when a hash+path are actually selected.
+  const commitDiffQuery = useCommitDiff(
+    workdir,
+    state.selectedCommitFile?.hash ?? null,
+    state.selectedCommitFile?.path ?? null,
+    state.selectedCommitFile?.status as FileChangeStatus | undefined
+  );
+
   const stageMutation = useGitStage();
   const unstageMutation = useGitUnstage();
   const discardMutation = useGitDiscard();
@@ -226,6 +245,14 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   const handleLoadMoreHistory = useCallback(() => {
     historyQuery.fetchNextPage();
   }, [historyQuery]);
+
+  const handleToggleCommit = useCallback((hash: string) => {
+    dispatch({ type: 'toggle-commit', hash });
+  }, []);
+
+  const handleSelectCommitFile = useCallback((file: GitSurfaceCommitFile) => {
+    dispatch({ type: 'select-commit-file', file });
+  }, []);
 
   const handleStage = useCallback(
     (paths: string[]) => {
@@ -275,6 +302,46 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     );
   }
 
+  // D34: a commit file selected from the History section's inline file list
+  // takes over the whole pane, the same way `state.selection`'s single-view
+  // diff branch does below — regardless of `expanded`/split, so this check
+  // runs before `presentation` is even consulted. `handleBack` (shared with
+  // the `presentation === 'diff'` branch) clears `selectedCommitFile` and
+  // lands back on whatever `expanded`/`state.selection` derive next.
+  if (state.selectedCommitFile) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="h-6 w-6 shrink-0"
+            aria-label={t('Back to changes')}
+            title={t('Back to changes')}
+            onClick={handleBack}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+          </Button>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {state.selectedCommitFile.path}
+          </span>
+        </div>
+        <div className="min-h-0 flex-1" {...{ [SURFACE_ESCAPE_HOLD_ATTR]: '' }}>
+          <DiffViewer
+            rootPath={workdir}
+            file={{ path: state.selectedCommitFile.path, staged: false }}
+            isActive={surfaceActive}
+            diff={commitDiffQuery.data ?? undefined}
+            skipFetch
+            isCommitView
+            isLoading={commitDiffQuery.isPending}
+            sideBySideInlineBreakpoint={700}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const changesPane = (
     <div className="flex h-full min-h-0 flex-col">
       {/* D34: docked git surface is split 50/50 top-half (Changes + CommitBox)
@@ -307,11 +374,16 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
         <GitHistoryList
           commits={historyCommits}
           expanded={state.historyExpanded}
+          expandedCommitHash={state.expandedCommitHash}
           hasNextPage={historyQuery.hasNextPage}
           isFetchingNextPage={historyQuery.isFetchingNextPage}
           isLoading={historyQuery.isLoading}
           onLoadMore={handleLoadMoreHistory}
+          onSelectCommitFile={handleSelectCommitFile}
           onToggle={handleToggleHistory}
+          onToggleCommit={handleToggleCommit}
+          selectedCommitFile={state.selectedCommitFile}
+          workdir={workdir}
         />
       </div>
     </div>

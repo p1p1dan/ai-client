@@ -51,6 +51,13 @@ export interface GitSurfaceSelection {
   staged: boolean;
 }
 
+/** A file inside an expanded commit's inline file list (D34 commit-row expand). */
+export interface GitSurfaceCommitFile {
+  hash: string;
+  path: string;
+  status?: string;
+}
+
 export interface GitSurfaceViewState {
   /** null = the list view; a value = the diff view is showing this file. */
   selection: GitSurfaceSelection | null;
@@ -60,11 +67,27 @@ export interface GitSurfaceViewState {
    * neither field's action touches the other.
    */
   historyExpanded: boolean;
+  /**
+   * D34: hash of the History row whose inline file list is expanded below it
+   * (VS Code SCM graph-expand reference). null = no row expanded. Only one
+   * commit can be expanded at a time — expanding a different hash replaces
+   * the previous one instead of stacking.
+   */
+  expandedCommitHash: string | null;
+  /**
+   * D34: the commit file currently driving the per-commit diff view (set by
+   * clicking a file inside the expanded commit's inline file list). `status`
+   * carries `CommitFileChange.status` through for `getCommitDiff`'s
+   * rename/merge handling. null = no commit file selected.
+   */
+  selectedCommitFile: GitSurfaceCommitFile | null;
 }
 
 export const initialGitSurfaceViewState: GitSurfaceViewState = {
   selection: null,
   historyExpanded: true,
+  expandedCommitHash: null,
+  selectedCommitFile: null,
 };
 
 export type GitSurfaceViewAction =
@@ -72,7 +95,9 @@ export type GitSurfaceViewAction =
   | { type: 'back' }
   | { type: 'workdir-changed' }
   | { type: 'selection-gone' }
-  | { type: 'toggle-history' };
+  | { type: 'toggle-history' }
+  | { type: 'toggle-commit'; hash: string }
+  | { type: 'select-commit-file'; file: GitSurfaceCommitFile };
 
 /**
  * select -> diff (sets the selection); back / workdir-changed / selection-gone
@@ -82,6 +107,22 @@ export type GitSurfaceViewAction =
  * `toggle-history` only flips `historyExpanded`; every other action carries
  * it through untouched, and `toggle-history` carries `selection` through
  * untouched — the two pieces of state are orthogonal.
+ *
+ * D34: `toggle-commit` re-clicking the already-expanded hash collapses it;
+ * clicking a different hash replaces the expansion. Either way
+ * `selectedCommitFile` is cleared — the file list it pointed into just
+ * collapsed or got swapped out, so a stale selection has nowhere to render
+ * from. `select-commit-file` only sets `selectedCommitFile`, leaving
+ * `expandedCommitHash` untouched (the row stays expanded so "back" can
+ * return to the same open file list). `workdir-changed` additionally clears
+ * both new fields — a different repo makes the expanded hash and any file
+ * picked from it meaningless. `back` clears `selectedCommitFile` (mirrors
+ * the return-button semantics for the per-commit diff view) but leaves
+ * `expandedCommitHash` alone, so returning from a commit's file diff lands
+ * back on that same commit still expanded. `select` / `selection-gone` are
+ * about the working-tree diff and don't touch either new field — the two
+ * diff sources can't be visible at once (the commit-diff branch takes over
+ * the whole pane), so there's nothing to reconcile.
  */
 export function reduceGitSurfaceView(
   state: GitSurfaceViewState,
@@ -91,11 +132,26 @@ export function reduceGitSurfaceView(
     case 'select':
       return { ...state, selection: action.file };
     case 'back':
+      return { ...state, selection: null, selectedCommitFile: null };
     case 'workdir-changed':
+      return {
+        ...state,
+        selection: null,
+        expandedCommitHash: null,
+        selectedCommitFile: null,
+      };
     case 'selection-gone':
       return { ...state, selection: null };
     case 'toggle-history':
       return { ...state, historyExpanded: !state.historyExpanded };
+    case 'toggle-commit':
+      return {
+        ...state,
+        expandedCommitHash: state.expandedCommitHash === action.hash ? null : action.hash,
+        selectedCommitFile: null,
+      };
+    case 'select-commit-file':
+      return { ...state, selectedCommitFile: action.file };
     default:
       return state;
   }

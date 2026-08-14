@@ -3,11 +3,12 @@ import { join } from 'node:path';
 import type { FileChange, FileChangesResult } from '@shared/types';
 import { describe, expect, it } from 'vitest';
 import {
-  gitHistoryPanelClass,
   deriveGitSurfacePresentation,
   formatCommitTooltip,
+  type GitSurfaceCommitFile,
   type GitSurfaceSelection,
   type GitSurfaceViewState,
+  gitHistoryPanelClass,
   initialGitSurfaceViewState,
   parseRefBadges,
   partitionFileChanges,
@@ -76,36 +77,71 @@ describe('partitionFileChanges', () => {
 
 describe('reduceGitSurfaceView', () => {
   const file: GitSurfaceSelection = { path: 'a.ts', staged: false };
-  const selectedState: GitSurfaceViewState = { selection: file, historyExpanded: true };
+  const selectedState: GitSurfaceViewState = {
+    selection: file,
+    historyExpanded: true,
+    expandedCommitHash: null,
+    selectedCommitFile: null,
+  };
 
-  it('starts on the list (no selection), history expanded', () => {
-    expect(initialGitSurfaceViewState).toEqual({ selection: null, historyExpanded: true });
+  it('starts on the list (no selection), history expanded, no commit expanded/selected', () => {
+    expect(initialGitSurfaceViewState).toEqual({
+      selection: null,
+      historyExpanded: true,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('select sets the selection (pushes into diff)', () => {
     const next = reduceGitSurfaceView(initialGitSurfaceViewState, { type: 'select', file });
-    expect(next).toEqual({ selection: file, historyExpanded: true });
+    expect(next).toEqual({
+      selection: file,
+      historyExpanded: true,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('select replaces a prior selection', () => {
     const other: GitSurfaceSelection = { path: 'b.ts', staged: true };
     const next = reduceGitSurfaceView(selectedState, { type: 'select', file: other });
-    expect(next).toEqual({ selection: other, historyExpanded: true });
+    expect(next).toEqual({
+      selection: other,
+      historyExpanded: true,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('back clears the selection (returns to list)', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'back' });
-    expect(next).toEqual({ selection: null, historyExpanded: true });
+    expect(next).toEqual({
+      selection: null,
+      historyExpanded: true,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('workdir-changed clears the selection', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'workdir-changed' });
-    expect(next).toEqual({ selection: null, historyExpanded: true });
+    expect(next).toEqual({
+      selection: null,
+      historyExpanded: true,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('selection-gone clears the selection', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'selection-gone' });
-    expect(next).toEqual({ selection: null, historyExpanded: true });
+    expect(next).toEqual({
+      selection: null,
+      historyExpanded: true,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('back / workdir-changed / selection-gone are no-ops on an already-empty list state', () => {
@@ -113,6 +149,8 @@ describe('reduceGitSurfaceView', () => {
       expect(reduceGitSurfaceView(initialGitSurfaceViewState, { type })).toEqual({
         selection: null,
         historyExpanded: true,
+        expandedCommitHash: null,
+        selectedCommitFile: null,
       });
     }
   });
@@ -120,32 +158,190 @@ describe('reduceGitSurfaceView', () => {
   // D30(a): the History section's collapse state, orthogonal to `selection`.
   it('toggle-history flips historyExpanded from true to false', () => {
     const next = reduceGitSurfaceView(initialGitSurfaceViewState, { type: 'toggle-history' });
-    expect(next).toEqual({ selection: null, historyExpanded: false });
+    expect(next).toEqual({
+      selection: null,
+      historyExpanded: false,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('toggle-history flips historyExpanded from false back to true', () => {
-    const collapsed: GitSurfaceViewState = { selection: null, historyExpanded: false };
+    const collapsed: GitSurfaceViewState = {
+      selection: null,
+      historyExpanded: false,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    };
     const next = reduceGitSurfaceView(collapsed, { type: 'toggle-history' });
-    expect(next).toEqual({ selection: null, historyExpanded: true });
+    expect(next).toEqual({
+      selection: null,
+      historyExpanded: true,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('toggle-history leaves an active selection untouched', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'toggle-history' });
-    expect(next).toEqual({ selection: file, historyExpanded: false });
+    expect(next).toEqual({
+      selection: file,
+      historyExpanded: false,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
   });
 
   it('select / back / workdir-changed / selection-gone leave historyExpanded untouched when collapsed', () => {
-    const collapsedWithSelection: GitSurfaceViewState = { selection: file, historyExpanded: false };
+    const collapsedWithSelection: GitSurfaceViewState = {
+      selection: file,
+      historyExpanded: false,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    };
     expect(reduceGitSurfaceView(collapsedWithSelection, { type: 'back' })).toEqual({
       selection: null,
       historyExpanded: false,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
     });
     expect(
       reduceGitSurfaceView(collapsedWithSelection, {
         type: 'select',
         file: { path: 'b.ts', staged: true },
       })
-    ).toEqual({ selection: { path: 'b.ts', staged: true }, historyExpanded: false });
+    ).toEqual({
+      selection: { path: 'b.ts', staged: true },
+      historyExpanded: false,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
+  });
+
+  // D34: click-to-expand a History row + per-commit file selection.
+  describe('D34 commit row expand / file select', () => {
+    const commitFile: GitSurfaceCommitFile = { hash: 'abc123', path: 'src/a.ts', status: 'M' };
+
+    it('toggle-commit expands a row from the empty state', () => {
+      const next = reduceGitSurfaceView(initialGitSurfaceViewState, {
+        type: 'toggle-commit',
+        hash: 'abc123',
+      });
+      expect(next).toEqual({
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: null,
+      });
+    });
+
+    it('toggle-commit on the same hash again collapses it and clears selectedCommitFile', () => {
+      const expandedWithFile: GitSurfaceViewState = {
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: commitFile,
+      };
+      const next = reduceGitSurfaceView(expandedWithFile, {
+        type: 'toggle-commit',
+        hash: 'abc123',
+      });
+      expect(next).toEqual({
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: null,
+        selectedCommitFile: null,
+      });
+    });
+
+    it('toggle-commit on a different hash replaces the expansion and clears selectedCommitFile', () => {
+      const expandedWithFile: GitSurfaceViewState = {
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: commitFile,
+      };
+      const next = reduceGitSurfaceView(expandedWithFile, {
+        type: 'toggle-commit',
+        hash: 'def456',
+      });
+      expect(next).toEqual({
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'def456',
+        selectedCommitFile: null,
+      });
+    });
+
+    it('select-commit-file sets selectedCommitFile, leaving expandedCommitHash untouched', () => {
+      const expanded: GitSurfaceViewState = {
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: null,
+      };
+      const next = reduceGitSurfaceView(expanded, { type: 'select-commit-file', file: commitFile });
+      expect(next).toEqual({
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: commitFile,
+      });
+    });
+
+    it('select-commit-file replaces a prior commit file selection', () => {
+      const withFile: GitSurfaceViewState = {
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: commitFile,
+      };
+      const other: GitSurfaceCommitFile = { hash: 'abc123', path: 'src/b.ts', status: 'A' };
+      const next = reduceGitSurfaceView(withFile, { type: 'select-commit-file', file: other });
+      expect(next).toEqual({
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: other,
+      });
+    });
+
+    // back returns from the per-commit diff view but leaves the row
+    // expanded — the file list it pointed into is still there to pick
+    // another file from.
+    it('back clears selectedCommitFile but leaves expandedCommitHash expanded', () => {
+      const withFile: GitSurfaceViewState = {
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: commitFile,
+      };
+      const next = reduceGitSurfaceView(withFile, { type: 'back' });
+      expect(next).toEqual({
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: null,
+      });
+    });
+
+    // workdir-changed (repo switch) clears both — a hash/file from the old
+    // repo is meaningless once the workdir points somewhere else.
+    it('workdir-changed clears both expandedCommitHash and selectedCommitFile', () => {
+      const withFile: GitSurfaceViewState = {
+        selection: file,
+        historyExpanded: true,
+        expandedCommitHash: 'abc123',
+        selectedCommitFile: commitFile,
+      };
+      const next = reduceGitSurfaceView(withFile, { type: 'workdir-changed' });
+      expect(next).toEqual({
+        selection: null,
+        historyExpanded: true,
+        expandedCommitHash: null,
+        selectedCommitFile: null,
+      });
+    });
   });
 });
 
@@ -314,10 +510,7 @@ describe('gitHistoryPanelClass (D34 half-split)', () => {
   });
 
   it('GitSurfaceView gives BOTH halves flex-1 (50/50 split, History non-collapsing)', () => {
-    const src = readFileSync(
-      join(__dirname, '..', 'GitSurfaceView.tsx'),
-      'utf8'
-    );
+    const src = readFileSync(join(__dirname, '..', 'GitSurfaceView.tsx'), 'utf8');
     const changesHalf = src.match(/<div className="flex min-h-0 flex-1 flex-col">/);
     const historyHalf = src.match(/<div className="flex min-h-0 flex-1 flex-col border-t">/);
     expect(changesHalf).not.toBeNull();
