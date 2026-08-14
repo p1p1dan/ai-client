@@ -1,0 +1,75 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { stripComments } from './stripComments';
+
+/**
+ * Build spec 2026-08-14 (partial messages), 施工纪律: mechanical gate for the
+ * "stays importable under vitest's node environment" rule that slice 0 and
+ * slice 2/3 modules (`turnStatus.ts`, `historyError.ts`, `eventRing.ts`,
+ * `contextSurfaceModel.ts`) depend on for their own test suites to run at
+ * all.
+ *
+ * These modules are asserted elsewhere to be pure (no DOM, no store
+ * subscription) precisely so their truth tables can be driven directly from
+ * `node`-env vitest without mounting React. That property is easy to lose
+ * silently: a single stray `import { useX } from '@/stores/...'` (a VALUE
+ * import — it runs at module load) is enough to pull React and/or zustand's
+ * runtime into the graph, which is exactly the shape that has hung this
+ * repo's node-env vitest run before (see the spike note this batch's docs
+ * reference). A source scan catches the reintroduction immediately, instead
+ * of as an opaque test-runner hang days later.
+ *
+ * `import type ...` lines are exempt: TypeScript erases them at compile time,
+ * so they never execute and can never pull in a runtime dependency, no matter
+ * what module they name. `contextSurfaceModel.ts` legitimately reaches
+ * `@/stores/chatSessions` today for exactly one type (`ChatMessage`) — the
+ * forbidden-specifier list below is scoped to VALUE imports so that stays
+ * green without widening the gate to something that would also pass a real
+ * store import next to it.
+ */
+
+/** Readable, not clever: each entry is the exact text a forbidden import contains. */
+const FORBIDDEN_VALUE_IMPORT_SPECIFIERS = [
+  "from 'react'",
+  "from '@/stores",
+  "from '@/components/settings",
+];
+
+const TARGET_FILES = [
+  '../turnStatus.ts',
+  '../historyError.ts',
+  // Ships in build-spec slice 2 (diagnostic event ring). Not built yet in
+  // slice 0 — skipped below rather than failing, per the spec's own note.
+  '../eventRing.ts',
+  '../../workspace-shell/surfaces/contextSurfaceModel.ts',
+] as const;
+
+/** Import statement lines only, `import type ...` lines excluded. */
+function valueImportLines(source: string): string[] {
+  return source
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('import '))
+    .filter((line) => !line.startsWith('import type '));
+}
+
+describe('pure module import gate (build spec 施工纪律)', () => {
+  for (const relativePath of TARGET_FILES) {
+    const absolutePath = fileURLToPath(new URL(relativePath, import.meta.url));
+
+    if (!existsSync(absolutePath)) {
+      it.skip(`${relativePath}: file does not exist yet (later slice)`, () => {});
+      continue;
+    }
+
+    it(`${relativePath} carries no react / store / settings value import`, () => {
+      const source = stripComments(readFileSync(absolutePath, 'utf8'), absolutePath);
+      const lines = valueImportLines(source);
+      for (const forbidden of FORBIDDEN_VALUE_IMPORT_SPECIFIERS) {
+        const offender = lines.find((line) => line.includes(forbidden));
+        expect(offender, `${relativePath}: found "${forbidden}" in "${offender}"`).toBeUndefined();
+      }
+    });
+  }
+});

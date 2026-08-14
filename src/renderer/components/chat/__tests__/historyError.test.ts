@@ -8,6 +8,7 @@ import { applyRuntimeEvent, type ChatSessionsState } from '@/stores/chatSessions
 import {
   deriveHistoryNotice,
   deriveRetryControl,
+  HISTORY_ERROR_DEAD_SESSION_HINT,
   HISTORY_ERROR_NON_FATAL_HINT,
   HISTORY_RETRY_BUSY_HINT,
   HISTORY_RETRY_FAILED_HINT,
@@ -20,7 +21,7 @@ const ENCRYPTED_RAW =
   'encrypted_unreadable: Session file appears TSD-encrypted and unreadable by this Host process: /home/u/.claude/projects/p/rt.jsonl';
 
 describe('parseHistoryError (T-03)', () => {
-  it('[PHE-01] parses jsonl_not_found as a non-retryable warning', () => {
+  it('[PHE-01] parses jsonl_not_found as a non-retryable error (D32: dead session, not a warning)', () => {
     const view = parseHistoryError(
       'jsonl_not_found: No session JSONL found for runtimeIdentity "rt-x" under /home/u/.claude/projects'
     );
@@ -29,11 +30,14 @@ describe('parseHistoryError (T-03)', () => {
     expect(view?.message).toBe(
       'No session JSONL found for runtimeIdentity "rt-x" under /home/u/.claude/projects'
     );
-    expect(view?.severity).toBe('warning');
+    // D32: a missing JSONL means resume fails on the very next send, so this
+    // reads as an error, not the old "nothing on disk" warning.
+    expect(view?.severity).toBe('error');
     // Re-reading a file that is not there yields the same result every time.
     expect(view?.retryable).toBe(false);
     expect(view?.title.length).toBeGreaterThan(0);
     expect(view?.guidance.length).toBeGreaterThan(0);
+    expect(view?.continuationHint).toBe(HISTORY_ERROR_DEAD_SESSION_HINT);
   });
 
   it('[PHE-02] parses encrypted_unreadable and keeps the trailing path intact', () => {
@@ -112,6 +116,7 @@ describe('parseHistoryError (T-03)', () => {
       'jsonl_not_found',
       'encrypted_unreadable',
       'read_failed',
+      'history_unsupported',
       'unknown',
     ];
     const views = codes.map((code) => parseHistoryError(`${code}: x`));
@@ -119,12 +124,52 @@ describe('parseHistoryError (T-03)', () => {
       expect(view?.title.trim().length).toBeGreaterThan(0);
       expect(view?.guidance.trim().length).toBeGreaterThan(0);
     }
-    // jsonl_not_found is the benign, high-frequency case: it must read as a
-    // warning so the encrypted case keeps its urgency.
-    expect(views[0]?.severity).toBe('warning');
+    // D32: jsonl_not_found is now the dead-session case (resume fails on the
+    // next send), so it reads as an error, same urgency tier as encrypted.
+    expect(views[0]?.severity).toBe('error');
     expect(views[1]?.severity).toBe('error');
+    // history_unsupported is the true "nothing lost, just unreadable here"
+    // benign case — it is the one that stays a warning.
+    expect(views[3]?.severity).toBe('warning');
     // Guidance must never let "encrypted" be mistaken for "no history".
     expect(new Set(views.map((view) => view?.guidance)).size).toBe(codes.length);
+  });
+
+  /**
+   * Five-code continuationHint table (D32). Each row is asserted on its own
+   * exact string — not "the four non-jsonl codes share a string" — so a slice
+   * that accidentally reused `HISTORY_ERROR_NON_FATAL_HINT` for
+   * `jsonl_not_found` (the #30 bug this batch fixes) cannot hide behind a
+   * merged assertion.
+   */
+  it('[PHE-13] jsonl_not_found gets the dead-session hint, verbatim', () => {
+    const view = parseHistoryError('jsonl_not_found: x');
+    expect(view?.code).toBe('jsonl_not_found');
+    expect(view?.continuationHint).toBe(HISTORY_ERROR_DEAD_SESSION_HINT);
+  });
+
+  it('[PHE-14] encrypted_unreadable gets a hint that does not promise success', () => {
+    const view = parseHistoryError('encrypted_unreadable: x');
+    expect(view?.code).toBe('encrypted_unreadable');
+    expect(view?.continuationHint).toBe('会话或仍可继续发送；若发送同样失败，请新建会话。');
+  });
+
+  it('[PHE-15] read_failed gets the shared non-fatal hint, verbatim', () => {
+    const view = parseHistoryError('read_failed: x');
+    expect(view?.code).toBe('read_failed');
+    expect(view?.continuationHint).toBe(HISTORY_ERROR_NON_FATAL_HINT);
+  });
+
+  it('[PHE-16] history_unsupported gets the shared non-fatal hint, verbatim', () => {
+    const view = parseHistoryError('history_unsupported: x');
+    expect(view?.code).toBe('history_unsupported');
+    expect(view?.continuationHint).toBe(HISTORY_ERROR_NON_FATAL_HINT);
+  });
+
+  it('[PHE-17] unknown gets the shared non-fatal hint, verbatim', () => {
+    const view = parseHistoryError('unknown_future_code: x');
+    expect(view?.code).toBe('unknown');
+    expect(view?.continuationHint).toBe(HISTORY_ERROR_NON_FATAL_HINT);
   });
 
   it('[PHE-11] ships a non-fatal hint stating the session can continue', () => {
@@ -139,6 +184,7 @@ describe('parseHistoryError (T-03)', () => {
       'jsonl_not_found',
       'encrypted_unreadable',
       'read_failed',
+      'history_unsupported',
       'unknown',
     ];
     for (const code of codes) {

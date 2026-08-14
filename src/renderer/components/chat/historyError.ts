@@ -31,19 +31,36 @@ export interface HistoryErrorView {
   message: string;
   /** Only transient IO failures are worth re-reading. */
   retryable: boolean;
+  /**
+   * What continuing to use the session actually means for this code. Most
+   * codes are non-fatal; `jsonl_not_found` is not (see
+   * `HISTORY_ERROR_DEAD_SESSION_HINT`) — a per-code field, rather than one
+   * hint shared by every variant, is what keeps that distinction honest (#30).
+   */
+  continuationHint: string;
 }
 
-/** Shown under every variant: a history read failure never kills the session. */
+/** Shown under most variants: a history read failure never kills the session. */
 export const HISTORY_ERROR_NON_FATAL_HINT = '会话未中断，可以继续发送消息。';
+
+/**
+ * `jsonl_not_found` only, and only it: once the JSONL is gone, the Host's
+ * resume path fails with "No conversation found" on the very next send, so
+ * promising continuation here would be a lie the user discovers mid-message
+ * (#30 / D32).
+ */
+export const HISTORY_ERROR_DEAD_SESSION_HINT =
+  '该会话已无法继续：历史文件缺失后，继续发送会因「No conversation found」失败；请新建会话继续工作。';
 
 type HistoryErrorCopy = Omit<HistoryErrorView, 'code' | 'message'>;
 
 const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
   jsonl_not_found: {
-    severity: 'warning',
+    severity: 'error',
     title: 'History file not found',
-    guidance: '恢复该会话时未找到它的历史文件（JSONL），历史消息没有载入，以下只有本次的新消息。',
+    guidance: '恢复该会话时未找到它的历史文件（JSONL），历史消息没有载入。',
     retryable: false,
+    continuationHint: HISTORY_ERROR_DEAD_SESSION_HINT,
   },
   encrypted_unreadable: {
     severity: 'error',
@@ -51,33 +68,39 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     guidance:
       '历史文件已加密，本进程读不到明文。这不代表该会话没有历史——记录仍在磁盘上，只是无法在此显示。',
     retryable: false,
+    continuationHint: '会话或仍可继续发送；若发送同样失败，请新建会话。',
   },
   read_failed: {
     severity: 'error',
     title: 'Failed to read history',
     guidance: '读取或解析历史文件时出错，下面的历史可能缺失或不完整。',
     retryable: true,
+    continuationHint: HISTORY_ERROR_NON_FATAL_HINT,
   },
   // S2 (d): the session's agent has no history reader in this build. Not a
   // failure — nothing is broken and nothing is lost, so it reads as a warning
-  // and offers no retry. Unreachable until `toCode()` learns the code (slice
-  // 5a); the entry exists now because `CODE_COPY` is exhaustive over the union.
+  // and offers no retry. Reachable: `toCode()` recognises this code.
   history_unsupported: {
     severity: 'warning',
     title: 'History unavailable for this agent',
     guidance: '当前版本还读不到该 agent 的历史记录，以下只有本次会话的新消息；记录仍在磁盘上。',
     retryable: false,
+    continuationHint: HISTORY_ERROR_NON_FATAL_HINT,
   },
   unknown: {
     severity: 'error',
     title: 'Failed to read history',
     guidance: '历史读取返回了未知错误，下面的历史可能缺失或不完整。',
     retryable: true,
+    continuationHint: HISTORY_ERROR_NON_FATAL_HINT,
   },
 };
 
 function toCode(value: string): HistoryErrorCode {
-  return value === 'jsonl_not_found' || value === 'encrypted_unreadable' || value === 'read_failed'
+  return value === 'jsonl_not_found' ||
+    value === 'encrypted_unreadable' ||
+    value === 'read_failed' ||
+    value === 'history_unsupported'
     ? value
     : 'unknown';
 }

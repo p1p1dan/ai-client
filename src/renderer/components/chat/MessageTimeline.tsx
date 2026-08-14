@@ -54,7 +54,6 @@ import {
 import {
   deriveHistoryNotice,
   deriveRetryControl,
-  HISTORY_ERROR_NON_FATAL_HINT,
   type HistoryErrorView,
   selectHistoryError,
 } from './historyError';
@@ -586,7 +585,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
       <AlertTitle className="min-w-0 truncate">{view.title}</AlertTitle>
       <AlertDescription className="gap-1 text-meta">
         <p className="break-words">{view.guidance}</p>
-        <p>{HISTORY_ERROR_NON_FATAL_HINT}</p>
+        <p>{view.continuationHint}</p>
         {retryControl.hint && (
           <p
             className={cn(
