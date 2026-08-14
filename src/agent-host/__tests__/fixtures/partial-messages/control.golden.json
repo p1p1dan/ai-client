@@ -1,0 +1,154 @@
+{
+  "note": "Generated once by spikes/generate-partial-golden.ts against the pre-partial-messages normalizer. Never regenerate — see that file.",
+  "generatedAtCommit": "7a577a1eda4f440f963fd1c3415fe0a177cad85a",
+  "frozenNowMs": 1786665600000,
+  "sessionId": "sess-golden-control",
+  "requestId": "req-golden-control",
+  "userText": "Run the echo probe and tell me what it printed.",
+  "sdkFixture": "control.sdk.json",
+  "events": [
+    {
+      "type": "message.started",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "user-sess-golden-control-1786665600000",
+        "role": "user"
+      }
+    },
+    {
+      "type": "message.delta",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "user-sess-golden-control-1786665600000",
+        "blockId": "user-sess-golden-control-1786665600000-text",
+        "text": "Run the echo probe and tell me what it printed."
+      }
+    },
+    {
+      "type": "message.completed",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "user-sess-golden-control-1786665600000"
+      }
+    },
+    {
+      "type": "session.status",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "status": "running"
+      }
+    },
+    {
+      "type": "message.started",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000",
+        "role": "assistant",
+        "model": "claude-opus-4-8"
+      }
+    },
+    {
+      "type": "thinking.started",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000",
+        "blockId": "asst-sess-golden-control-1786665600000-thinking"
+      }
+    },
+    {
+      "type": "thinking.delta",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000",
+        "blockId": "asst-sess-golden-control-1786665600000-thinking",
+        "text": "Running the command now."
+      }
+    },
+    {
+      "type": "tool.started",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000",
+        "toolCallId": "toolu_01Qj3wbVGolden0000000001",
+        "name": "Bash",
+        "input": {
+          "command": "echo \"partial-probe control\"",
+          "description": "Echo a probe string"
+        }
+      }
+    },
+    {
+      "type": "tool.completed",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000",
+        "toolCallId": "toolu_01Qj3wbVGolden0000000001",
+        "ok": true,
+        "output": "partial-probe control\n"
+      }
+    },
+    {
+      "type": "message.delta",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000",
+        "blockId": "asst-sess-golden-control-1786665600000-text",
+        "text": "It printed: partial-probe control"
+      }
+    },
+    {
+      "type": "thinking.completed",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000",
+        "blockId": "asst-sess-golden-control-1786665600000-thinking"
+      }
+    },
+    {
+      "type": "message.completed",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "messageId": "asst-sess-golden-control-1786665600000"
+      }
+    },
+    {
+      "type": "usage.updated",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "input_tokens": 2883,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 88,
+        "output_tokens_details": {
+          "thinking_tokens": 12
+        }
+      }
+    },
+    {
+      "type": "session.completed",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control"
+    },
+    {
+      "type": "session.status",
+      "sessionId": "sess-golden-control",
+      "requestId": "req-golden-control",
+      "payload": {
+        "status": "idle"
+      }
+    }
+  ]
+}

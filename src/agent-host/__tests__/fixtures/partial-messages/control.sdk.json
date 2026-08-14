@@ -1,0 +1,130 @@
+[
+  {
+    "type": "system",
+    "subtype": "init",
+    "session_id": "rt-golden-control",
+    "model": "claude-opus-4-8",
+    "tools": ["Bash", "Read"]
+  },
+  {
+    "type": "system",
+    "subtype": "status",
+    "session_id": "rt-golden-control",
+    "status": "requesting"
+  },
+  {
+    "type": "system",
+    "subtype": "thinking_tokens",
+    "session_id": "rt-golden-control",
+    "estimated_tokens": 1,
+    "estimated_tokens_delta": 1
+  },
+  {
+    "type": "system",
+    "subtype": "thinking_tokens",
+    "session_id": "rt-golden-control",
+    "estimated_tokens": 3,
+    "estimated_tokens_delta": 2
+  },
+  {
+    "type": "system",
+    "subtype": "thinking_tokens",
+    "session_id": "rt-golden-control",
+    "estimated_tokens": 6,
+    "estimated_tokens_delta": 3
+  },
+  {
+    "type": "system",
+    "subtype": "thinking_tokens",
+    "session_id": "rt-golden-control",
+    "estimated_tokens": 12,
+    "estimated_tokens_delta": 6
+  },
+  {
+    "type": "assistant",
+    "parent_tool_use_id": null,
+    "session_id": "rt-golden-control",
+    "message": {
+      "id": "msg_011Cdvd32dMZQ2EH951XESAL",
+      "role": "assistant",
+      "model": "claude-opus-4-8",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Running the command now.",
+          "signature": "EqQBCkYIBRgCKkBc0mock-signature-bytes-for-the-control-fixture-onlyEgxq"
+        }
+      ]
+    }
+  },
+  {
+    "type": "assistant",
+    "parent_tool_use_id": null,
+    "session_id": "rt-golden-control",
+    "message": {
+      "id": "msg_011Cdvd32dMZQ2EH951XESAL",
+      "role": "assistant",
+      "model": "claude-opus-4-8",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_01Qj3wbVGolden0000000001",
+          "name": "Bash",
+          "input": {
+            "command": "echo \"partial-probe control\"",
+            "description": "Echo a probe string"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "user",
+    "parent_tool_use_id": null,
+    "session_id": "rt-golden-control",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Qj3wbVGolden0000000001",
+          "content": "partial-probe control\n",
+          "is_error": false
+        }
+      ]
+    }
+  },
+  {
+    "type": "system",
+    "subtype": "status",
+    "session_id": "rt-golden-control",
+    "status": "requesting"
+  },
+  {
+    "type": "assistant",
+    "parent_tool_use_id": null,
+    "session_id": "rt-golden-control",
+    "message": {
+      "id": "msg_011Cdvd3RfUhsMkYZAm4JUBv",
+      "role": "assistant",
+      "model": "claude-opus-4-8",
+      "content": [{ "type": "text", "text": "It printed: partial-probe control" }]
+    }
+  },
+  {
+    "type": "result",
+    "subtype": "success",
+    "session_id": "rt-golden-control",
+    "is_error": false,
+    "result": "It printed: partial-probe control",
+    "duration_ms": 8421,
+    "num_turns": 2,
+    "usage": {
+      "input_tokens": 2883,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 88,
+      "output_tokens_details": { "thinking_tokens": 12 }
+    }
+  }
+]
