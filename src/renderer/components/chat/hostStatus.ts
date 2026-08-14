@@ -11,6 +11,7 @@ import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 export interface HostSettingsDiagnostics {
   loaded: boolean;
   hasAuthToken: boolean;
+  authTokenType?: 'ANTHROPIC_AUTH_TOKEN' | 'ANTHROPIC_API_KEY' | 'none';
   hasBaseUrl: boolean;
   baseHost: string | null;
   model: string | null;

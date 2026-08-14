@@ -285,6 +285,7 @@ async function handleCommand(raw: unknown): Promise<void> {
               ? {
                   loaded: settingsDiagnostics.loaded,
                   hasAuthToken: settingsDiagnostics.hasAuthToken,
+                  authTokenType: settingsDiagnostics.authTokenType,
                   hasBaseUrl: settingsDiagnostics.hasBaseUrl,
                   baseHost: settingsDiagnostics.baseHost,
                   model: settingsDiagnostics.model,

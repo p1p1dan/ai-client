@@ -12,6 +12,8 @@ export interface ClaudeSettingsDiagnostics {
   loaded: boolean;
   hasAuthToken: boolean;
   hasApiKey: boolean;
+  /** Precedence-resolved credential type actually in effect for the Host env (never the value itself). */
+  authTokenType: 'ANTHROPIC_AUTH_TOKEN' | 'ANTHROPIC_API_KEY' | 'none';
   hasBaseUrl: boolean;
   baseHost: string | null;
   model: string | null;
@@ -43,6 +45,7 @@ export async function loadClaudeSettingsEnv(
     loaded: false,
     hasAuthToken: false,
     hasApiKey: false,
+    authTokenType: 'none',
     hasBaseUrl: false,
     baseHost: null,
     model: null,
@@ -71,6 +74,11 @@ export async function loadClaudeSettingsEnv(
 
   diagnostics.hasAuthToken = Boolean(env.ANTHROPIC_AUTH_TOKEN);
   diagnostics.hasApiKey = Boolean(env.ANTHROPIC_API_KEY);
+  diagnostics.authTokenType = diagnostics.hasAuthToken
+    ? 'ANTHROPIC_AUTH_TOKEN'
+    : diagnostics.hasApiKey
+      ? 'ANTHROPIC_API_KEY'
+      : 'none';
   diagnostics.hasBaseUrl = Boolean(env.ANTHROPIC_BASE_URL);
   if (typeof env.ANTHROPIC_BASE_URL === 'string') {
     try {

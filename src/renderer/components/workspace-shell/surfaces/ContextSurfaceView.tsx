@@ -172,6 +172,9 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
           pid: hostStatus.pid,
           driver: hostStatus.driver,
           version: hostStatus.cometixVersion,
+          appVersion: window.electronAPI?.env.appVersion ?? null,
+          authTokenType: hostStatus.settings?.authTokenType ?? null,
+          baseHost: hostStatus.settings?.baseHost ?? null,
         },
       },
       session:

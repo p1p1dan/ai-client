@@ -64,6 +64,12 @@ export interface ContextHostFacts {
   pid: number | null | undefined;
   driver: string | null | undefined;
   version: string | null | undefined;
+  /** Local Electron app build version (`window.electronAPI.env.appVersion`) — independent of Host/session state, always known once the renderer has loaded. `null`/undefined omits the row. */
+  appVersion?: string | null;
+  /** Precedence-resolved credential type in effect for the Host env (claudeSettings.ts). `null`/undefined (incl. an old, not-yet-restarted Host build that never reported it) omits the row — never guessed. */
+  authTokenType?: 'ANTHROPIC_AUTH_TOKEN' | 'ANTHROPIC_API_KEY' | 'none' | null;
+  /** Bare gateway host (never the full URL — deliberate host-only projection, see claudeSettings.ts `baseHost`). `null`/undefined omits the row. */
+  baseHost?: string | null;
 }
 
 export interface ContextRuntimeFacts {
@@ -187,6 +193,19 @@ function buildHostRows(host: ContextHostFacts): ContextRow[] {
   }
   if (host.version) {
     rows.push({ id: 'host-version', label: 'Version', value: host.version });
+  }
+  if (host.appVersion) {
+    rows.push({ id: 'host-app-version', label: 'App', value: host.appVersion });
+  }
+  if (host.authTokenType) {
+    rows.push({
+      id: 'host-auth',
+      label: 'Auth',
+      value: host.authTokenType === 'none' ? 'OAuth / subscription login' : host.authTokenType,
+    });
+  }
+  if (host.baseHost) {
+    rows.push({ id: 'host-gateway', label: 'Gateway', value: host.baseHost });
   }
   return rows;
 }

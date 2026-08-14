@@ -343,6 +343,135 @@ describe('deriveContextGroups', () => {
         { id: 'host-version', label: 'Version', value: '2.1.0' },
       ]);
     });
+
+    it('shows App row only when appVersion is known', () => {
+      const withVersion = deriveContextGroups(
+        baseInput({
+          runtime: {
+            configuredModel: null,
+            actualModel: null,
+            effortSelection: undefined,
+            permissionMode: undefined,
+            host: {
+              state: 'ready',
+              pid: undefined,
+              driver: undefined,
+              version: undefined,
+              appVersion: '0.4.0-test.3',
+            },
+          },
+        })
+      );
+      expect(withVersion.find((g) => g.id === 'runtime')?.rows).toContainEqual({
+        id: 'host-app-version',
+        label: 'App',
+        value: '0.4.0-test.3',
+      });
+      const without = deriveContextGroups(baseInput());
+      expect(
+        without.find((g) => g.id === 'runtime')?.rows.some((r) => r.id === 'host-app-version')
+      ).toBe(false);
+    });
+
+    it('renders Auth row for each authTokenType state, with the honest OAuth label for none', () => {
+      const cases: Array<['ANTHROPIC_AUTH_TOKEN' | 'ANTHROPIC_API_KEY' | 'none', string]> = [
+        ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN'],
+        ['ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'],
+        ['none', 'OAuth / subscription login'],
+      ];
+      for (const [authTokenType, value] of cases) {
+        const groups = deriveContextGroups(
+          baseInput({
+            runtime: {
+              configuredModel: null,
+              actualModel: null,
+              effortSelection: undefined,
+              permissionMode: undefined,
+              host: {
+                state: 'ready',
+                pid: undefined,
+                driver: undefined,
+                version: undefined,
+                authTokenType,
+              },
+            },
+          })
+        );
+        expect(groups.find((g) => g.id === 'runtime')?.rows).toContainEqual({
+          id: 'host-auth',
+          label: 'Auth',
+          value,
+        });
+      }
+    });
+
+    it('omits the Auth row when authTokenType is null/undefined (old Host build, never reported)', () => {
+      const groups = deriveContextGroups(baseInput());
+      expect(groups.find((g) => g.id === 'runtime')?.rows.some((r) => r.id === 'host-auth')).toBe(
+        false
+      );
+    });
+
+    it('shows Gateway row only when baseHost is known (host-only projection, never a full URL)', () => {
+      const groups = deriveContextGroups(
+        baseInput({
+          runtime: {
+            configuredModel: null,
+            actualModel: null,
+            effortSelection: undefined,
+            permissionMode: undefined,
+            host: {
+              state: 'ready',
+              pid: undefined,
+              driver: undefined,
+              version: undefined,
+              baseHost: 'api.vllmproxy.com',
+            },
+          },
+        })
+      );
+      expect(groups.find((g) => g.id === 'runtime')?.rows).toContainEqual({
+        id: 'host-gateway',
+        label: 'Gateway',
+        value: 'api.vllmproxy.com',
+      });
+      const without = deriveContextGroups(baseInput());
+      expect(
+        without.find((g) => g.id === 'runtime')?.rows.some((r) => r.id === 'host-gateway')
+      ).toBe(false);
+    });
+
+    it('places App / Auth / Gateway rows, in that order, immediately after Version', () => {
+      const groups = deriveContextGroups(
+        baseInput({
+          runtime: {
+            configuredModel: null,
+            actualModel: null,
+            effortSelection: undefined,
+            permissionMode: undefined,
+            host: {
+              state: 'ready',
+              pid: 4242,
+              driver: 'agent-sdk',
+              version: '2.1.0',
+              appVersion: '0.4.0-test.3',
+              authTokenType: 'ANTHROPIC_AUTH_TOKEN',
+              baseHost: 'api.vllmproxy.com',
+            },
+          },
+        })
+      );
+      const runtime = groups.find((g) => g.id === 'runtime');
+      expect(runtime?.rows.map((r) => r.id)).toEqual([
+        'host-state',
+        'host-pid',
+        'host-driver',
+        'host-version',
+        'host-app-version',
+        'host-auth',
+        'host-gateway',
+      ]);
+    });
   });
 
   describe('Session group', () => {

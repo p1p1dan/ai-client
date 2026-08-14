@@ -76,6 +76,8 @@ export interface HostReadyEvent extends RuntimeEventBase {
     settings?: {
       loaded: boolean;
       hasAuthToken: boolean;
+      /** Precedence-resolved credential type in effect (never the value) — see claudeSettings.ts. Absent on an old Host build. */
+      authTokenType?: 'ANTHROPIC_AUTH_TOKEN' | 'ANTHROPIC_API_KEY' | 'none';
       hasBaseUrl: boolean;
       baseHost: string | null;
       model: string | null;
