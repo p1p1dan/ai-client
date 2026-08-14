@@ -16,6 +16,7 @@
  * `__tests__/eventNormalizerSubagent.test.ts` pins that directly.
  */
 
+import { CoalescingEmitter } from './coalescingEmitter.ts';
 import {
   clampSubagentText,
   DELEGATION_TOOL_NAMES,
@@ -27,6 +28,23 @@ import {
 
 export type EmitFn = (event: Record<string, unknown>) => void;
 export type LogFn = (...args: unknown[]) => void;
+
+/**
+ * 1d: minimum spacing between interim `usage.updated` events on the
+ * `system/thinking_tokens` tick path — that path fires ~1:1 with every
+ * `thinking_delta` (spike §1 Q5: 47~58 per turn), which is far more often
+ * than a status line can usefully change. The `message_delta` step and the
+ * thinking-block tail emit deliberately bypass this throttle.
+ */
+const INTERIM_USAGE_MIN_INTERVAL_MS = 250;
+
+/** 1b: a partial content block being accumulated for whole-message reconciliation. */
+interface PartialBlock {
+  type: 'text' | 'thinking';
+  acc: string;
+  /** Consumed by a whole `assistant` message already — cannot match a second one. */
+  matched: boolean;
+}
 
 interface NormalizerState {
   assistantMessageId: string | null;
@@ -67,6 +85,61 @@ interface NormalizerState {
    * delegation report and have its output body silently replaced.
    */
   toolNameById: Map<string, string>;
+
+  // -------------------------------------------------------------------------
+  // Partial-messages batch (片 1). Every field below stays at its initial
+  // value unless a MAIN-agent `stream_event` carrying real content arrives, so
+  // the control position (gateway not honouring `includePartialMessages`, or
+  // the flag off) keeps the exact pre-batch behavior —
+  // `__tests__/eventNormalizerGolden.test.ts` is the arbiter.
+  // -------------------------------------------------------------------------
+  /**
+   * 1b THE GATE. Set ONLY when a main-agent `content_block_start(text|thinking)`
+   * — or a text/thinking delta that has to establish its own accumulator —
+   * arrives. Deliberately NOT set by `message_start`/`message_delta`/tool
+   * blocks: a gateway that emits only envelope events has not actually
+   * duplicated any content, and opening the gate there would route the whole
+   * `assistant` message into a dedup path with nothing to dedup against.
+   * The decision is made on OBSERVED FACT, never on the flag value (spike §3.4)
+   * — that is what makes an unhonoured `includePartialMessages` degrade
+   * silently into today's behavior.
+   */
+  partialContentSeen: boolean;
+  /** 1b: content-block index → accumulator, for blocks not yet stopped. */
+  openBlocks: Map<number, PartialBlock>;
+  /**
+   * 1b: blocks moved here by `content_block_stop`, kept (not discarded) so a
+   * whole `assistant` message that arrives AFTER its block's stop can still be
+   * reconciled instead of being emitted a second time.
+   */
+  closedBlocks: PartialBlock[];
+  /**
+   * 1c: tool_use id → the stub facts learned from `content_block_start`. The
+   * stub's own `input` is `{}` (spike §4), so no `tool.started` is emitted from
+   * it — `seenTools` is first-write-wins and would mask the real input forever.
+   * The stub is kept so the information is not LOST: the whole message clears
+   * it, and a `tool_result` with no whole message back-fills from it.
+   */
+  pendingToolStubs: Map<string, { name: string; inputJsonAcc: string }>;
+  /**
+   * 1c: content-block index → tool_use id, so `input_json_delta` fragments
+   * (which carry only the index) reach the right stub. Cleared on
+   * `message_start` alongside the content blocks — indices restart per API
+   * message.
+   */
+  openToolBlocks: Map<number, string>;
+  /** 1d: sum of every `message_delta.usage.output_tokens` this turn (per-message counters). */
+  turnOutputTokensSettled: number;
+  /** 1d: `system/thinking_tokens` estimate accumulated since the last settled step. */
+  turnThinkingEstimate: number;
+  /** 1d: monotonic peak of the displayed number — it must never count backwards. */
+  turnTokensDisplayMax: number;
+  /**
+   * 1d: `null` means "nothing emitted yet, emit unconditionally". A `0` initial
+   * value would make a mocked clock sitting at 0/10/20 look like a throttled
+   * emit and turn the throttle test vacuously green.
+   */
+  lastInterimUsageEmitMs: number | null;
 }
 
 function newState(): NormalizerState {
@@ -87,6 +160,15 @@ function newState(): NormalizerState {
     subagentEventCount: new Map(),
     subagentCapped: new Set(),
     toolNameById: new Map(),
+    partialContentSeen: false,
+    openBlocks: new Map(),
+    closedBlocks: [],
+    pendingToolStubs: new Map(),
+    openToolBlocks: new Map(),
+    turnOutputTokensSettled: 0,
+    turnThinkingEstimate: 0,
+    turnTokensDisplayMax: 0,
+    lastInterimUsageEmitMs: null,
   };
 }
 
@@ -303,7 +385,13 @@ function detectSubagentReport(raw: unknown):
 export class EventNormalizer {
   private state = newState();
   private readonly sessionId: string;
-  private readonly emit: EmitFn;
+  /**
+   * 1e: every emitted event goes through the coalescer. It is a straight
+   * passthrough until the partial gate opens, so the control path is
+   * unaffected; once open, consecutive same-block text deltas merge inside a
+   * 45ms window. See `coalescingEmitter.ts`.
+   */
+  private readonly coalescer: CoalescingEmitter;
   private readonly log: LogFn;
   /**
    * T-34 flag (`AICLIENT_HOST_SUBAGENT_ACTIVITY`, resolved by
@@ -321,9 +409,18 @@ export class EventNormalizer {
     subagentActivityEnabled = true
   ) {
     this.sessionId = sessionId;
-    this.emit = emit;
+    this.coalescer = new CoalescingEmitter(emit);
     this.log = log;
     this.subagentActivityEnabled = subagentActivityEnabled;
+  }
+
+  /**
+   * The single emit funnel. Identical call signature to the `emit` field it
+   * replaced, so every existing call site is untouched; the only difference is
+   * that the coalescer sits in the path (a no-op bypass while disabled).
+   */
+  private emit(event: Record<string, unknown>): void {
+    this.coalescer.emit(event);
   }
 
   /**
@@ -335,6 +432,10 @@ export class EventNormalizer {
    * already folded into the SDK prompt separately (`buildPromptWithAttachments`).
    */
   beginTurn(userText: string, attachments?: TurnAttachmentInput[], requestId?: string): void {
+    // 1e: a new turn must not inherit the previous turn's buffered run — flush
+    // it out (never drop: dropping would lose already-produced text) and close
+    // the gate, which the new turn re-opens only on its own evidence.
+    this.coalescer.setEnabled(false);
     this.state = newState();
     this.state.turnIndex += 1;
     const messageId = `user-${this.sessionId}-${Date.now()}`;
@@ -481,6 +582,138 @@ export class EventNormalizer {
         output,
         error: ok ? undefined : String(output ?? 'tool error'),
       },
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Partial-messages batch (片 1b/1c/1d) helpers
+  // -------------------------------------------------------------------------
+
+  /**
+   * 1b: THE ONLY two call sites are `content_block_start(text|thinking)` and a
+   * text/thinking delta that has to establish its own accumulator — both of
+   * them downstream of the `parent_tool_use_id` drop, so a SUBAGENT's partial
+   * traffic can never open the main stream's gate.
+   */
+  private openPartialGate(): void {
+    if (this.state.partialContentSeen) return;
+    this.state.partialContentSeen = true;
+    this.coalescer.setEnabled(true);
+  }
+
+  /**
+   * 1b: append a delta to its block's accumulator, creating the accumulator
+   * when the `content_block_start` was never seen (truncated stream, or an
+   * index reused after a missing stop).
+   */
+  private accumulatePartialText(index: number, type: 'text' | 'thinking', text: string): void {
+    const open = this.state.openBlocks.get(index);
+    if (open && open.type === type) {
+      open.acc += text;
+      return;
+    }
+    this.state.openBlocks.set(index, { type, acc: text, matched: false });
+    this.openPartialGate();
+  }
+
+  /**
+   * 1b: reconcile a whole `assistant` message's text/thinking against what the
+   * deltas already emitted, and return ONLY the part that still needs to go
+   * out (`''` = fully covered, drop the whole message).
+   *
+   * Candidate order — open same-typed block, then the first unmatched closed
+   * one (the whole message can legitimately arrive after its
+   * `content_block_stop`), then nothing:
+   *  - `acc === whole`            → drop (the measured常态 path: five probe runs
+   *                                 were byte-equal every time, spike §2);
+   *  - `whole.startsWith(acc)`    → emit the missing suffix. NAMED "tail
+   *                                 truncation fallback" on purpose: it covers
+   *                                 ONLY text lost off the end. A delta lost in
+   *                                 the MIDDLE lands in the mismatch branch
+   *                                 below and cannot be repaired — the already
+   *                                 emitted prefix cannot be rolled back on an
+   *                                 append-only protocol. Accepted in writing;
+   *                                 the log line carries both lengths so a real
+   *                                 occurrence is diagnosable;
+   *  - mismatch                   → drop the whole + log (宁弃不重);
+   *  - ≥2 open same-typed blocks  → protocol invariant violated. Emit as-is and
+   *                                 log — a silent drop here would be an
+   *                                 invisible loss of the final answer;
+   *  - no candidate at all        → emit as-is + log. A gateway that stops
+   *                                 honouring partials mid-turn must never lose
+   *                                 its final answer; a duplicate is strictly
+   *                                 less bad than a disappearance.
+   */
+  private reconcileWholeBlock(type: 'text' | 'thinking', whole: string): string {
+    if (!whole) return '';
+    const open = [...this.state.openBlocks.values()].filter(
+      (block) => block.type === type && !block.matched
+    );
+    if (open.length >= 2) {
+      this.log(
+        `normalizer partial dedup: ${open.length} open ${type} blocks when a whole message ` +
+          `arrived (protocol invariant violated) — emitting it as-is, whole=${whole.length} chars`
+      );
+      return whole;
+    }
+    const candidate =
+      open[0] ?? this.state.closedBlocks.find((block) => block.type === type && !block.matched);
+    if (!candidate) {
+      this.log(
+        `normalizer partial dedup: no ${type} accumulator candidate (acc=none, ` +
+          `whole=${whole.length} chars) — emitting the whole message as-is`
+      );
+      return whole;
+    }
+    candidate.matched = true;
+    const acc = candidate.acc;
+    if (acc === whole) return '';
+    if (whole.startsWith(acc)) {
+      this.log(
+        `normalizer partial dedup: ${type} tail-truncation fallback — acc=${acc.length} chars, ` +
+          `whole=${whole.length} chars, emitting the ${whole.length - acc.length}-char suffix`
+      );
+      return whole.slice(acc.length);
+    }
+    this.log(
+      `normalizer partial dedup: ${type} accumulator mismatch — acc=${acc.length} chars, ` +
+        `whole=${whole.length} chars; dropping the whole message (mid-stream delta loss is an ` +
+        'append-only protocol limitation — emitted text cannot be rolled back)'
+    );
+    return '';
+  }
+
+  /**
+   * 1d: emit one interim `usage.updated`.
+   *
+   * `sessionId`/`requestId` are mandatory, not decorative — the renderer's
+   * `reduceSessionRuntimeFacts` drops any event without a sessionId, which
+   * would make the whole channel silently dead.
+   *
+   * The displayed number is a MONOTONIC peak: a subagent's `thinking_tokens`
+   * carries no parent marker, so it mixes into the estimate, and the main
+   * stream's `message_delta` then zeroes that estimate — without the peak the
+   * status line would visibly count backwards.
+   *
+   * `force` skips the throttle: used for the `message_delta` step and for the
+   * thinking block's tail emit, neither of which can repeat often enough to
+   * matter and both of which carry information a dropped tick would lose.
+   */
+  private emitInterimUsage(requestId: string | undefined, force: boolean): void {
+    const now = Date.now();
+    const last = this.state.lastInterimUsageEmitMs;
+    if (!force && last !== null && now - last < INTERIM_USAGE_MIN_INTERVAL_MS) return;
+    const display = Math.max(
+      this.state.turnTokensDisplayMax,
+      this.state.turnOutputTokensSettled + this.state.turnThinkingEstimate
+    );
+    this.state.turnTokensDisplayMax = display;
+    this.state.lastInterimUsageEmitMs = now;
+    this.emit({
+      type: 'usage.updated',
+      sessionId: this.sessionId,
+      requestId,
+      payload: { interim: true, turn_output_tokens_display: display },
     });
   }
 
@@ -783,10 +1016,22 @@ export class EventNormalizer {
       patch?: { status?: string; end_time?: number };
       event?: {
         type?: string;
-        delta?: { type?: string; text?: string; thinking?: string };
+        // 1c: `input_json_delta` fragments — the ONLY place a tool's real
+        // input exists before the whole message lands (spike §1 Q3).
+        delta?: { type?: string; text?: string; thinking?: string; partial_json?: string };
         content_block?: { type?: string; id?: string; name?: string; input?: unknown };
         index?: number;
+        // 1b: `message_start.message.model`. Without this the ON position
+        // never sees a raw `assistant` message before `ensureAssistant` runs,
+        // and `message.started` ships with no model at all (A06 regression).
+        message?: { id?: string; model?: string };
+        // 1d: `message_delta.usage.output_tokens` — per-API-message settled
+        // total, one per message (spike §1 Q4).
+        usage?: { output_tokens?: number };
       };
+      // 1d: `system/thinking_tokens` increment; the only real-time token
+      // source during the thinking phase (spike §5).
+      estimated_tokens_delta?: number;
       tool_use_id?: string;
       tool_name?: string;
       result?: string;
@@ -853,6 +1098,17 @@ export class EventNormalizer {
                 },
               },
             });
+          } else if (msg.subtype === 'thinking_tokens') {
+            // 1d: GATED. `thinking_tokens` is not a partial-messages event —
+            // the control position emits 47~58 of them per turn today (spike
+            // §1 Q5). Reacting to it unconditionally would emit brand-new
+            // `usage.updated` events on the OFF path and blow the golden
+            // zero-regression arbiter.
+            if (this.state.partialContentSeen) {
+              this.state.turnThinkingEstimate +=
+                typeof msg.estimated_tokens_delta === 'number' ? msg.estimated_tokens_delta : 0;
+              this.emitInterimUsage(requestId, false);
+            }
           }
           break;
         }
@@ -873,47 +1129,130 @@ export class EventNormalizer {
           }
           const text = extractTextParts(content);
           const thinking = extractThinkingParts(content);
-          if (thinking) this.emitThinkingDelta(thinking, requestId);
-          if (text) this.emitTextDelta(text, requestId);
+          if (this.state.partialContentSeen) {
+            // 1b: the deltas already carried this content — emit only what is
+            // still missing (usually nothing). See reconcileWholeBlock.
+            const thinkingResidue = this.reconcileWholeBlock('thinking', thinking);
+            if (thinkingResidue) this.emitThinkingDelta(thinkingResidue, requestId);
+            const textResidue = this.reconcileWholeBlock('text', text);
+            if (textResidue) this.emitTextDelta(textResidue, requestId);
+          } else {
+            if (thinking) this.emitThinkingDelta(thinking, requestId);
+            if (text) this.emitTextDelta(text, requestId);
+          }
           for (const tool of extractToolUses(content)) {
+            // 1c: the whole message is the FIRST and only `tool.started` — it
+            // is the one carrying the real input. `seenTools` already makes
+            // this idempotent; clearing the stub records that it was covered.
             this.emitToolStarted(tool, requestId);
+            this.state.pendingToolStubs.delete(tool.id);
           }
           break;
         }
         case 'stream_event': {
-          // T-34: this Host does not request `includePartialMessages`, so a
-          // parent-set stream_event is not expected at all — and letting a
-          // character-level delta stream into the renderer's adjacent store
-          // is the one shape that would break the render budget. Dropped
-          // whole; the whole-message `assistant` events carry the same text.
+          // T-34 RED LINE, unchanged by 片 1: a SUBAGENT's partial stream is
+          // dropped whole — letting a character-level delta into the main
+          // stream is the one shape that would break the render budget, and
+          // the subagent's own whole-message `assistant` events carry the same
+          // text. Everything below (including the partial gate) is deliberately
+          // AFTER this line: a delegation must never open the main stream's
+          // dedup gate.
           if (parentToolCallId) break;
           const ev = msg.event;
           if (!ev) break;
+          if (ev.type === 'message_start') {
+            // 1b, three jobs in one branch:
+            // ① capture the model. On the ON path this is the ONLY model
+            //    source that precedes envelope creation: the deltas mint the
+            //    assistant envelope via ensureAssistant long before the first
+            //    whole `assistant` message lands, so without this line
+            //    `message.started` ships model-less (A06 regression). MUST
+            //    stay ahead of every ensureAssistant path — it is, because
+            //    this branch emits nothing.
+            if (!this.state.assistantModel && typeof ev.message?.model === 'string') {
+              this.state.assistantModel = ev.message.model;
+            }
+            // ② content-block indices restart at 0 for EVERY API message, so
+            //    stale blocks from the previous message must go or a reused
+            //    index would reconcile against the wrong accumulator.
+            //    `pendingToolStubs` is keyed by tool id, not index, and
+            //    deliberately survives: its `tool_result` arrives after this.
+            this.state.openBlocks.clear();
+            this.state.closedBlocks.length = 0;
+            this.state.openToolBlocks.clear();
+            // ③ does NOT open the gate — an envelope event duplicates nothing.
+            break;
+          }
           if (ev.type === 'content_block_start' && ev.content_block) {
             const block = ev.content_block;
+            const index = typeof ev.index === 'number' ? ev.index : -1;
             if (block.type === 'tool_use' && block.id && block.name) {
-              this.emitToolStarted(
-                { id: block.id, name: block.name, input: block.input },
-                requestId
-              );
+              // 1c: NO `tool.started` here. This stub's `input` is `{}` (spike
+              // §4) and `emitToolStarted` is first-write-wins, so emitting it
+              // would permanently mask the real input arriving ~930ms later.
+              // The facts are ledgered instead of thrown away.
+              this.state.pendingToolStubs.set(block.id, { name: block.name, inputJsonAcc: '' });
+              this.state.openToolBlocks.set(index, block.id);
             }
-            if (block.type === 'thinking') {
-              this.ensureAssistant(requestId);
-            }
-            if (block.type === 'text') {
+            if (block.type === 'thinking' || block.type === 'text') {
+              this.state.openBlocks.set(index, { type: block.type, acc: '', matched: false });
+              this.openPartialGate();
               this.ensureAssistant(requestId);
             }
           }
           if (ev.type === 'content_block_delta' && ev.delta) {
+            const index = typeof ev.index === 'number' ? ev.index : -1;
+            // The type dispatch below is exhaustive on purpose: `signature_delta`
+            // (which closes a thinking block, spike §2 摘录 B seq 111) and
+            // `input_json_delta` must NEVER reach the text/thinking emitters,
+            // even if a future SDK starts attaching a `text` field to them.
             if (ev.delta.type === 'text_delta' && ev.delta.text) {
+              this.accumulatePartialText(index, 'text', ev.delta.text);
               this.emitTextDelta(ev.delta.text, requestId);
             }
             if (
               (ev.delta.type === 'thinking_delta' || ev.delta.type === 'thinking') &&
               (ev.delta.thinking || ev.delta.text)
             ) {
-              this.emitThinkingDelta(ev.delta.thinking ?? ev.delta.text ?? '', requestId);
+              const thinkingText = ev.delta.thinking ?? ev.delta.text ?? '';
+              this.accumulatePartialText(index, 'thinking', thinkingText);
+              this.emitThinkingDelta(thinkingText, requestId);
             }
+            if (ev.delta.type === 'input_json_delta' && typeof ev.delta.partial_json === 'string') {
+              // 1c: the real tool input, one fragment at a time. Kept against
+              // the stub so an orphaned `tool_result` can still be given a
+              // `tool.started` with真入参 rather than an empty object.
+              const toolId = this.state.openToolBlocks.get(index);
+              const stub = toolId ? this.state.pendingToolStubs.get(toolId) : undefined;
+              if (stub) stub.inputJsonAcc += ev.delta.partial_json;
+            }
+          }
+          if (ev.type === 'content_block_stop') {
+            const index = typeof ev.index === 'number' ? ev.index : -1;
+            const open = this.state.openBlocks.get(index);
+            if (open) {
+              // 1b: retired, not discarded — a whole message that arrives
+              // after its block's stop still needs something to match against.
+              this.state.openBlocks.delete(index);
+              this.state.closedBlocks.push(open);
+              // 1d tail emit: the thinking→text transition is where the
+              // `thinking_tokens` tick stops; without this the last few
+              // estimated tokens never reach the status line.
+              if (open.type === 'thinking') this.emitInterimUsage(requestId, true);
+            }
+            this.state.openToolBlocks.delete(index);
+          }
+          if (ev.type === 'message_delta') {
+            // 1d: exactly one per API message, carrying that message's settled
+            // output token total (spike §1 Q4) — so the turn total is a Host-
+            // side sum (probe: 51+30 = the result event's 81). The estimate
+            // resets because those tokens are now counted for real; the
+            // monotonic peak in emitInterimUsage keeps the display from
+            // stepping backwards when it does.
+            this.state.turnOutputTokensSettled +=
+              typeof ev.usage?.output_tokens === 'number' ? ev.usage.output_tokens : 0;
+            this.state.turnThinkingEstimate = 0;
+            this.emitInterimUsage(requestId, true);
           }
           break;
         }
@@ -926,6 +1265,34 @@ export class EventNormalizer {
           }
           const content = msg.message?.content;
           const results = extractToolResults(content);
+          // 1c ORPHAN FALLBACK. Normally the whole `assistant` message emits
+          // `tool.started` before its result lands. When it never arrives (the
+          // gateway stops honouring partials mid-turn, or the whole message is
+          // lost), the stub ledger is the only surviving record — without this
+          // the timeline would show a `tool.completed` with no card to settle.
+          // Runs BEFORE `isDelegationResult` below so a back-filled tool name
+          // is visible to the delegation check. On the control path
+          // `pendingToolStubs` is always empty, making this a no-op.
+          for (const result of results) {
+            if (this.state.seenTools.has(result.toolUseId)) continue;
+            const stub = this.state.pendingToolStubs.get(result.toolUseId);
+            if (!stub) continue;
+            let input: unknown = {};
+            try {
+              input = JSON.parse(stub.inputJsonAcc);
+            } catch {
+              // Truncated fragments cannot be parsed; an empty object beats
+              // losing the card entirely.
+              input = {};
+            }
+            this.log(
+              `normalizer partial tool ledger: back-filling tool.started for ${result.toolUseId} ` +
+                `(${stub.name}) from ${stub.inputJsonAcc.length} buffered partial_json chars — ` +
+                'no whole assistant message ever arrived'
+            );
+            this.emitToolStarted({ id: result.toolUseId, name: stub.name, input }, requestId);
+            this.state.pendingToolStubs.delete(result.toolUseId);
+          }
           // T-34: the Agent tool's own result carries a structured
           // `tool_use_result` the SDK explicitly says to render FROM rather
           // than parse out of the result text. Attribution is only safe when
@@ -989,6 +1356,11 @@ export class EventNormalizer {
           // carrier's own terminal is carried by `task_*`/`report`, and the
           // main Agent row still settles on its own `tool.completed`.
           if (parentToolCallId) break;
+          // 1e: the turn's terminals must not overtake buffered deltas — flush
+          // before a single terminal event is emitted so the downstream order
+          // (…delta → thinking.completed → message.completed → usage.updated →
+          // session.completed → session.status) is exactly the control one.
+          this.coalescer.flushAll();
           this.state.sawResult = true;
           if (this.state.thinkingStarted && this.state.assistantMessageId) {
             this.emit({
@@ -1072,6 +1444,8 @@ export class EventNormalizer {
 
   /** Emit a failed terminal (e.g. stall watchdog), closing any open blocks. */
   emitFailed(error: string, requestId?: string): void {
+    // 1e: an aborted turn still owes the UI whatever text already streamed.
+    this.coalescer.flushAll();
     if (this.state.thinkingStarted && this.state.assistantMessageId) {
       this.emit({
         type: 'thinking.completed',
@@ -1107,6 +1481,8 @@ export class EventNormalizer {
 
   /** Emit stopped terminal after abort. */
   emitStopped(requestId?: string): void {
+    // 1e: same reason as emitFailed — flush before the terminals.
+    this.coalescer.flushAll();
     if (this.state.thinkingStarted && this.state.assistantMessageId) {
       this.emit({
         type: 'thinking.completed',
@@ -1151,6 +1527,10 @@ export class EventNormalizer {
    *                 session.failed + status failed
    */
   finishTurn(requestId?: string): 'already' | 'completed' | 'failed' {
+    // 1e: a silently ended stream must not strand a buffered run. Ahead of the
+    // `already` short-circuit because the `result` branch's own flush leaves
+    // nothing behind — this is the no-result path's only chance.
+    this.coalescer.flushAll();
     if (this.state.sawResult) return 'already';
     if (this.state.thinkingStarted && this.state.assistantMessageId) {
       this.emit({

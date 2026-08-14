@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { COALESCE_WINDOW_MS } from '../coalescingEmitter.ts';
 import { EventNormalizer } from '../eventNormalizer.ts';
 
 /** Fresh normalizer + its captured event log, per the harness pattern used across this suite. */
@@ -277,25 +278,38 @@ describe('EventNormalizer', () => {
     expect(n.hasOpenTools()).toBe(false);
   });
 
+  // Partial-messages batch (片 1e): a content delta opens the partial gate, so
+  // from here on text/thinking deltas leave through the CoalescingEmitter and
+  // reach the sink when the 45ms window expires (or a foreign event arrives).
+  // The dispatch this test pins — which delta type feeds which emitter — is
+  // unchanged; only the moment of delivery moved.
   it('stream_event content_block_delta: text_delta -> message.delta, first thinking_delta -> thinking.started + thinking.delta', () => {
-    const { events, n } = makeNormalizer();
-    n.ingest({
-      type: 'stream_event',
-      event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'partial' } },
-    });
-    expect(types(events)).toEqual(['message.started', 'message.delta']);
-    expect(events[1]).toMatchObject({ payload: { text: 'partial' } });
+    vi.useFakeTimers();
+    try {
+      const { events, n } = makeNormalizer();
+      n.ingest({
+        type: 'stream_event',
+        event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'partial' } },
+      });
+      expect(types(events)).toEqual(['message.started']);
+      vi.advanceTimersByTime(COALESCE_WINDOW_MS);
+      expect(types(events)).toEqual(['message.started', 'message.delta']);
+      expect(events[1]).toMatchObject({ payload: { text: 'partial' } });
 
-    events.length = 0;
-    n.ingest({
-      type: 'stream_event',
-      event: {
-        type: 'content_block_delta',
-        delta: { type: 'thinking_delta', thinking: 'pondering' },
-      },
-    });
-    expect(types(events)).toEqual(['thinking.started', 'thinking.delta']);
-    expect(events[1]).toMatchObject({ payload: { text: 'pondering' } });
+      events.length = 0;
+      n.ingest({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'thinking_delta', thinking: 'pondering' },
+        },
+      });
+      vi.advanceTimersByTime(COALESCE_WINDOW_MS);
+      expect(types(events)).toEqual(['thinking.started', 'thinking.delta']);
+      expect(events[1]).toMatchObject({ payload: { text: 'pondering' } });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('system subtype init emits session.status running; unknown subtypes emit nothing', () => {

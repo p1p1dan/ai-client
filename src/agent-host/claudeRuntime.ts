@@ -145,6 +145,28 @@ export function resolveSubagentActivityEnabled(): boolean {
   return raw !== '0';
 }
 
+/**
+ * Partial-messages feature flag (D33③: default ON), 片 1a.
+ *
+ * `includePartialMessages` makes the CLI forward the raw Anthropic stream
+ * (`message_start` / `content_block_*` / `message_delta`) as `stream_event`
+ * SDK messages — the source for character-level text, live thinking, and the
+ * turn's in-flight token counter. The spike confirmed the pinned CLI+SDK pair
+ * honours it (44~106 `stream_event` per turn against a control-position zero).
+ *
+ * `'0'` is the ROLLBACK position and it is a real one: with the option absent
+ * the normalizer's partial gate never opens (it decides on observed fact, not
+ * on this flag), so the Host emits exactly the pre-batch event stream —
+ * pinned by `__tests__/eventNormalizerGolden.test.ts`.
+ *
+ * Read per send, mirroring `resolveSubagentActivityEnabled` above.
+ */
+export function resolveHostPartialMessagesEnabled(): boolean {
+  const raw = process.env.AICLIENT_HOST_PARTIAL_MESSAGES;
+  if (raw === undefined || raw === '') return true;
+  return raw !== '0';
+}
+
 const DEFAULT_DRAIN_AFTER_RESULT_MS = 2_000;
 
 function resolveDrainAfterResultMs(): number {
@@ -505,6 +527,11 @@ export class ClaudeRuntime {
     this.opts.registry.setStatus(session.sessionId, 'starting');
 
     const subagentActivityEnabled = resolveSubagentActivityEnabled();
+    // 1a: the normalizer deliberately does NOT receive this flag — it decides
+    // whether to dedup from the observed arrival of `stream_event`, so a
+    // gateway that ignores the option degrades into today's behavior on its
+    // own instead of leaving the Host in a half-configured state.
+    const partialMessagesEnabled = resolveHostPartialMessagesEnabled();
     const normalizer = new EventNormalizer(
       session.sessionId,
       this.opts.emit,
@@ -745,6 +772,11 @@ export class ClaudeRuntime {
           // when the flag is off, so the quiet position also stops paying for
           // messages nothing will render.
           ...(subagentActivityEnabled ? { forwardSubagentText: true } : {}),
+          // 1a: raw Anthropic stream events (`stream_event`) — see
+          // resolveHostPartialMessagesEnabled. Absent (not `false`) in the
+          // rollback position, matching the forwardSubagentText precedent
+          // above: the off position stops PAYING for traffic nothing consumes.
+          ...(partialMessagesEnabled ? { includePartialMessages: true } : {}),
           ...(model ? { model } : {}),
           // Top-level option (NOT output_config.effort) — SDK 0.3.218 sdk.d.ts
           // Options.effort, confirmed clean by c16 probe scenario D.

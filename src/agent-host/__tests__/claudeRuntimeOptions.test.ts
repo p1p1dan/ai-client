@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ClaudeRuntime,
   normalizeEffort,
+  resolveHostPartialMessagesEnabled,
   resolveSubagentActivityEnabled,
 } from '../claudeRuntime.ts';
 import { SessionRegistry } from '../sessionRegistry.ts';
@@ -1204,6 +1205,80 @@ describe('resolveSubagentActivityEnabled', () => {
     expect(resolveSubagentActivityEnabled()).toBe(true);
     process.env[FLAG] = '0';
     expect(resolveSubagentActivityEnabled()).toBe(false);
+  });
+});
+
+/**
+ * Partial-messages flag (片 1a, D33③).
+ *
+ * Same silent-when-wrong shape as `forwardSubagentText` above: a missing
+ * `includePartialMessages` produces no error at all, just a turn with zero
+ * `stream_event` — which the normalizer's fact-based gate then treats as a
+ * perfectly healthy control turn. Nothing downstream would ever complain, so
+ * the option payload is pinned here rather than inferred from a live run.
+ */
+describe('claudeRuntime query options — partial messages flag (片 1a)', () => {
+  const FLAG = 'AICLIENT_HOST_PARTIAL_MESSAGES';
+  const original = process.env[FLAG];
+
+  afterEach(() => {
+    if (original === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = original;
+  });
+
+  it('asks the SDK for partial messages by default (flag unset)', async () => {
+    delete process.env[FLAG];
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 'partial-on', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 'partial-on', text: 'hi' });
+
+    expect(captured[0].includePartialMessages).toBe(true);
+  });
+
+  it('omits the option entirely in the rollback position (flag = 0)', async () => {
+    process.env[FLAG] = '0';
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 'partial-off', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 'partial-off', text: 'hi' });
+
+    // Absent, not `false` — mirrors the forwardSubagentText precedent, and it
+    // is what makes the rollback position identical to the pre-batch build.
+    expect(captured[0]).not.toHaveProperty('includePartialMessages');
+  });
+
+  it('treats any other value as on — only an explicit 0 rolls back', async () => {
+    process.env[FLAG] = '1';
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 'partial-1', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 'partial-1', text: 'hi' });
+
+    expect(captured[0].includePartialMessages).toBe(true);
+  });
+});
+
+describe('resolveHostPartialMessagesEnabled', () => {
+  const FLAG = 'AICLIENT_HOST_PARTIAL_MESSAGES';
+  const original = process.env[FLAG];
+
+  afterEach(() => {
+    if (original === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = original;
+  });
+
+  it('defaults on, and only an explicit "0" turns it off', () => {
+    delete process.env[FLAG];
+    expect(resolveHostPartialMessagesEnabled()).toBe(true);
+    process.env[FLAG] = '';
+    expect(resolveHostPartialMessagesEnabled()).toBe(true);
+    process.env[FLAG] = '1';
+    expect(resolveHostPartialMessagesEnabled()).toBe(true);
+    process.env[FLAG] = 'true';
+    expect(resolveHostPartialMessagesEnabled()).toBe(true);
+    process.env[FLAG] = '0';
+    expect(resolveHostPartialMessagesEnabled()).toBe(false);
   });
 });
 
