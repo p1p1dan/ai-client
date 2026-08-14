@@ -15,25 +15,31 @@
  * `RepositoryList` / `BranchSwitcher` / other `components/git/` orphans, no
  * branch/PR/sync/stash actions.
  *
- * Standard width: single-view push navigation, changes list <-> diff.
  * `expanded`: two-column split, left changes+commit / right diff. Never
- * auto-expands (A06 + spec §2 explicit ban).
+ * auto-expands (A06 + spec §2 explicit ban). Unchanged by D34-E below.
  *
  * D34 (2026-08-14, click-to-expand): clicking a History row toggles its
- * inline file list (`GitHistoryList`'s own concern); clicking a file inside
- * that list drives a per-commit diff view here via `useCommitDiff` — a third
- * render branch, checked before `presentation`, that takes over the whole
- * pane the same way the single-view `state.selection` diff branch does. No
- * revert/reset/context-menu/multi-lane graph, same ban as D30(a).
+ * inline file list (`GitHistoryList`'s own concern).
+ *
+ * D34-E (2026-08-14, diff-to-center): a file click — from `ChangesList` or
+ * from a History row's expanded inline file list — now opens/reuses a
+ * center-column diff tab (`useEditorStore.openDiffTab`, the same open-mode
+ * `FilesSurfaceView` uses for a file, VS Code's shared tab strip). This
+ * retired the two in-panel `DiffViewer`-takeover render branches the standard
+ * (non-`expanded`) width used to push into: the single-view `state.selection`
+ * diff and the per-commit `state.selectedCommitFile` diff. `expanded`'s
+ * split `diffPane` is a THIRD, separate `DiffViewer` mount (a docked preview
+ * pane, not a tab) and keeps working exactly as before — the spec's explicit
+ * "维持现状不动" — still driven by `state.selection`, still updated on every
+ * file click alongside the new center tab.
  */
 import type { FileChangeStatus } from '@shared/types';
 import { getDisplayPath } from '@shared/utils/path';
-import { ArrowLeft, GitBranch } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { ChangesList } from '@/components/source-control/ChangesList';
 import { CommitBox } from '@/components/source-control/CommitBox';
 import { DiffViewer } from '@/components/source-control/DiffViewer';
-import { Button } from '@/components/ui/button';
 import {
   Empty,
   EmptyDescription,
@@ -42,7 +48,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useGitStatus } from '@/hooks/useGit';
-import { useCommitDiff, useGitHistoryInfinite } from '@/hooks/useGitHistory';
+import { useGitHistoryInfinite } from '@/hooks/useGitHistory';
 import {
   useFileChanges,
   useFileDiff,
@@ -53,6 +59,8 @@ import {
 } from '@/hooks/useSourceControl';
 import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import type { DiffTabTarget } from '@/stores/diffTabTarget';
+import { useEditorStore } from '@/stores/editor';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import type { ContextSurfaceId } from '../surfaceRegistry';
@@ -140,7 +148,6 @@ function useGitEmptyStateCopy(
 }
 
 export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
-  const { t } = useI18n();
   const activeSurfaceId = useShellLayoutStore((s) => s.activeSurfaceId);
   const expanded = useShellLayoutStore((s) => s.expanded);
   const surfaceActive = activeSurfaceId === surfaceId;
@@ -203,26 +210,21 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     }
   }, [fileChangesQuery.data, partitioned, state.selection]);
 
+  // D34-E: `diffPane` (the `expanded`/split docked preview) is the only
+  // remaining in-panel DiffViewer consumer — gated on `expanded` too now, so
+  // a plain (non-expanded) file click doesn't leave a wasted live-poll query
+  // running for a pane nothing renders any more.
   const view: 'list' | 'diff' = state.selection ? 'diff' : 'list';
-  const presentation = deriveGitSurfacePresentation({ expanded, selection: state.selection });
+  const presentation = deriveGitSurfacePresentation({ expanded });
 
   const fileDiffQuery = useFileDiff(
     workdir,
     state.selection?.path ?? null,
     state.selection?.staged ?? false,
     // useFileDiff's own 2s poll has no isActive gate — must be disabled
-    // explicitly here or it keeps polling while the git surface is hidden.
-    { enabled: surfaceActive && view === 'diff' }
-  );
-
-  // D34: per-commit diff for `state.selectedCommitFile`. Unlike `useFileDiff`
-  // this hook has no built-in poll, so there's no isActive gate to wire up —
-  // it only fetches when a hash+path are actually selected.
-  const commitDiffQuery = useCommitDiff(
-    workdir,
-    state.selectedCommitFile?.hash ?? null,
-    state.selectedCommitFile?.path ?? null,
-    state.selectedCommitFile?.status as FileChangeStatus | undefined
+    // explicitly here or it keeps polling while the git surface is hidden,
+    // or while `expanded` isn't showing `diffPane` at all.
+    { enabled: surfaceActive && expanded && view === 'diff' }
   );
 
   const stageMutation = useGitStage();
@@ -230,13 +232,28 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   const discardMutation = useGitDiscard();
   const commitMutation = useGitCommit();
 
-  const handleFileClick = useCallback((file: { path: string; staged: boolean }) => {
-    dispatch({ type: 'select', file });
-  }, []);
+  const openDiffTab = useEditorStore((s) => s.openDiffTab);
 
-  const handleBack = useCallback(() => {
-    dispatch({ type: 'back' });
-  }, []);
+  // D34-E: every file click opens/reuses a center-column diff tab (VS Code's
+  // shared tab strip, the same open-mode a Files-tree click uses) AND keeps
+  // `state.selection` updated — the latter still drives `diffPane` in
+  // `expanded`/split mode (unchanged) and `ChangesList`'s row highlight.
+  const handleFileClick = useCallback(
+    (file: { path: string; staged: boolean }) => {
+      dispatch({ type: 'select', file });
+      const status = [...partitioned.staged, ...partitioned.unstaged].find(
+        (f) => f.path === file.path && f.staged === file.staged
+      )?.status;
+      const target: DiffTabTarget = {
+        kind: 'workdir',
+        path: file.path,
+        staged: file.staged,
+        status,
+      };
+      openDiffTab(target);
+    },
+    [partitioned, openDiffTab]
+  );
 
   const handleToggleHistory = useCallback(() => {
     dispatch({ type: 'toggle-history' });
@@ -250,9 +267,22 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     dispatch({ type: 'toggle-commit', hash });
   }, []);
 
-  const handleSelectCommitFile = useCallback((file: GitSurfaceCommitFile) => {
-    dispatch({ type: 'select-commit-file', file });
-  }, []);
+  // D34-E: same treatment as `handleFileClick` — `select-commit-file` now
+  // only drives `GitHistoryList`'s row highlight (the render takeover it used
+  // to drive retired); the diff itself opens as a center tab.
+  const handleSelectCommitFile = useCallback(
+    (file: GitSurfaceCommitFile) => {
+      dispatch({ type: 'select-commit-file', file });
+      const target: DiffTabTarget = {
+        kind: 'commit',
+        path: file.path,
+        hash: file.hash,
+        status: file.status as FileChangeStatus | undefined,
+      };
+      openDiffTab(target);
+    },
+    [openDiffTab]
+  );
 
   const handleStage = useCallback(
     (paths: string[]) => {
@@ -299,46 +329,6 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
         description={emptyCopy.description}
         judgedPath={'judgedPath' in resolution ? resolution.judgedPath : undefined}
       />
-    );
-  }
-
-  // D34: a commit file selected from the History section's inline file list
-  // takes over the whole pane, the same way `state.selection`'s single-view
-  // diff branch does below — regardless of `expanded`/split, so this check
-  // runs before `presentation` is even consulted. `handleBack` (shared with
-  // the `presentation === 'diff'` branch) clears `selectedCommitFile` and
-  // lands back on whatever `expanded`/`state.selection` derive next.
-  if (state.selectedCommitFile) {
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="h-6 w-6 shrink-0"
-            aria-label={t('Back to changes')}
-            title={t('Back to changes')}
-            onClick={handleBack}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-          </Button>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {state.selectedCommitFile.path}
-          </span>
-        </div>
-        <div className="min-h-0 flex-1" {...{ [SURFACE_ESCAPE_HOLD_ATTR]: '' }}>
-          <DiffViewer
-            rootPath={workdir}
-            file={{ path: state.selectedCommitFile.path, staged: false }}
-            isActive={surfaceActive}
-            diff={commitDiffQuery.data ?? undefined}
-            skipFetch
-            isCommitView
-            isLoading={commitDiffQuery.isPending}
-            sideBySideInlineBreakpoint={700}
-          />
-        </div>
-      </div>
     );
   }
 
@@ -424,28 +414,8 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     );
   }
 
-  if (presentation === 'diff') {
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="h-6 w-6 shrink-0"
-            aria-label={t('Back to changes')}
-            title={t('Back to changes')}
-            onClick={handleBack}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-          </Button>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {state.selection?.path}
-          </span>
-        </div>
-        {diffPane}
-      </div>
-    );
-  }
-
+  // D34-E: the non-expanded standard width no longer pushes into a
+  // single-view diff on file click — `presentation` is 'changes' here, and
+  // the click already opened a center tab (`handleFileClick`).
   return changesPane;
 }

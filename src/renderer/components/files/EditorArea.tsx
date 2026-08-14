@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { normalizePath } from '@/App/storage';
+import { DiffViewer } from '@/components/source-control/DiffViewer';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -27,6 +28,7 @@ import {
 } from '@/components/ui/empty';
 import { addToast } from '@/components/ui/toast';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
+import { useCommitDiff } from '@/hooks/useGitHistory';
 import { useI18n } from '@/i18n';
 import { toMonacoFileUri } from '@/lib/monacoModelPath';
 import { useActiveSessionId } from '@/stores/agentSessions';
@@ -245,8 +247,25 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     [sessionId, getRelativePath, write, focus, t]
   );
 
-  // Markdown preview state
-  const isMarkdown = isMarkdownFile(activeTabPath);
+  // D34-E: a diff tab (`activeTab.diffTarget` set) renders `DiffViewer`
+  // instead of Monaco — computed once up top so every other body-shape check
+  // below (markdown preview, breadcrumbs) can defer to it.
+  const isDiffTab = !!activeTab?.diffTarget;
+  const commitDiffTarget = activeTab?.diffTarget?.kind === 'commit' ? activeTab.diffTarget : null;
+  // Workdir diff tabs let `DiffViewer` self-fetch via its own internal
+  // `useFileDiff` (matches the spec: "实时跟随工作区变化：复用 useFileDiff
+  // 查询即可"). A commit diff has no such internal path — `DiffViewer` only
+  // fetches when `!isCommitView`, so the caller must drive it, same as
+  // `GitSurfaceView`'s own commit-diff branch.
+  const commitDiffQuery = useCommitDiff(
+    rootPath ?? null,
+    commitDiffTarget?.hash ?? null,
+    commitDiffTarget?.path ?? null,
+    commitDiffTarget?.status
+  );
+
+  // Markdown preview state — never for a diff tab (it has no file content to preview).
+  const isMarkdown = isMarkdownFile(activeTabPath) && !isDiffTab;
   const isImage = isImageFile(activeTabPath);
   const isPdf = isPdfFile(activeTabPath);
   const [previewMode, setPreviewMode] = useState<MarkdownPreviewMode>('off');
@@ -376,7 +395,11 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
 
   // Calculate breadcrumb segments from active file path
   const breadcrumbSegments = useMemo(() => {
-    if (!activeTabPath || !rootPath) return [];
+    // A diff tab's `path` is a `git-diff://` pseudo path, not a real fs
+    // location under `rootPath` — a breadcrumb built from it would be
+    // garbage, so a diff tab gets no breadcrumb row at all (matches how
+    // GitSurfaceView's own diff panes never show one either).
+    if (!activeTabPath || !rootPath || isDiffTab) return [];
 
     const relativePath = activeTabPath.startsWith(rootPath)
       ? activeTabPath.slice(rootPath.length).replace(/^\//, '')
@@ -390,7 +413,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       path: `${rootPath}/${parts.slice(0, index + 1).join('/')}`,
       isLast: index === parts.length - 1,
     }));
-  }, [activeTabPath, rootPath]);
+  }, [activeTabPath, rootPath, isDiffTab]);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -1410,7 +1433,26 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
                       : 0,
               }}
             >
-              {activeTab.isUnsupported ? (
+              {activeTab.diffTarget ? (
+                <DiffViewer
+                  rootPath={rootPath ?? ''}
+                  file={
+                    activeTab.diffTarget.kind === 'workdir'
+                      ? { path: activeTab.diffTarget.path, staged: activeTab.diffTarget.staged }
+                      : { path: activeTab.diffTarget.path, staged: false }
+                  }
+                  isActive
+                  {...(activeTab.diffTarget.kind === 'commit'
+                    ? {
+                        diff: commitDiffQuery.data ?? undefined,
+                        skipFetch: true,
+                        isCommitView: true,
+                        isLoading: commitDiffQuery.isPending,
+                      }
+                    : {})}
+                  sideBySideInlineBreakpoint={700}
+                />
+              ) : activeTab.isUnsupported ? (
                 <Empty className="flex-1">
                   <EmptyMedia variant="icon">
                     <FileX className="h-4.5 w-4.5" />

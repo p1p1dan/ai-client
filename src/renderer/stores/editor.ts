@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { type DiffTabTarget, diffTabPath, diffTabTitle } from './diffTabTarget';
+
+export type { DiffTabTarget } from './diffTabTarget';
 
 export interface EditorTab {
   path: string;
@@ -11,6 +14,16 @@ export interface EditorTab {
   // External change conflict: set when file is modified externally while user has unsaved edits
   hasExternalChange?: boolean;
   externalContent?: string;
+  /**
+   * D34-E: set only for a "diff tab" — a center-column page showing a git
+   * diff instead of file content (`EditorArea` branches on this before its
+   * isUnsupported/image/pdf checks, the same precedent those already are).
+   * Every other tab operation (open/close/reorder/worktree isolation/active
+   * pointer) treats a diff tab as an ordinary tab keyed by its `git-diff://`
+   * pseudo `path` — see `diffTabTarget.ts` for why that scheme is safe to
+   * mix into the same array as real fs paths.
+   */
+  diffTarget?: DiffTabTarget;
 }
 
 export interface PendingCursor {
@@ -49,6 +62,14 @@ interface EditorState {
   currentWorktreePath: string | null;
 
   openFile: (file: Omit<EditorTab, 'title' | 'viewState'> & { title?: string }) => void;
+  /**
+   * D34-E: open (or, if already open, reuse-and-refresh) a diff tab. Re-
+   * clicking the same target activates the existing tab and updates its
+   * title/target in place instead of appending a duplicate — the spec's
+   * "别开无限 tab". Content freshness for a workdir target comes from
+   * `DiffViewer`'s own live `useFileDiff` poll, not from this action.
+   */
+  openDiffTab: (target: DiffTabTarget) => void;
   closeFile: (path: string) => void;
   closeOtherFiles: (keepPath: string) => void;
   closeFilesToLeft: (path: string) => void;
@@ -116,6 +137,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           },
         ],
         activeTabPath: file.path,
+      };
+    }),
+
+  openDiffTab: (target) =>
+    set((state) => {
+      const path = diffTabPath(target);
+      const title = diffTabTitle(target);
+      const exists = state.tabs.some((tab) => tab.path === path);
+      if (exists) {
+        return {
+          tabs: state.tabs.map((tab) =>
+            tab.path === path ? { ...tab, title, diffTarget: target } : tab
+          ),
+          activeTabPath: path,
+        };
+      }
+      return {
+        tabs: [...state.tabs, { path, title, content: '', isDirty: false, diffTarget: target }],
+        activeTabPath: path,
       };
     }),
 

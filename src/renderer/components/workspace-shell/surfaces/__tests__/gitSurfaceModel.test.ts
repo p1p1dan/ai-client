@@ -114,16 +114,6 @@ describe('reduceGitSurfaceView', () => {
     });
   });
 
-  it('back clears the selection (returns to list)', () => {
-    const next = reduceGitSurfaceView(selectedState, { type: 'back' });
-    expect(next).toEqual({
-      selection: null,
-      historyExpanded: true,
-      expandedCommitHash: null,
-      selectedCommitFile: null,
-    });
-  });
-
   it('workdir-changed clears the selection', () => {
     const next = reduceGitSurfaceView(selectedState, { type: 'workdir-changed' });
     expect(next).toEqual({
@@ -144,8 +134,8 @@ describe('reduceGitSurfaceView', () => {
     });
   });
 
-  it('back / workdir-changed / selection-gone are no-ops on an already-empty list state', () => {
-    for (const type of ['back', 'workdir-changed', 'selection-gone'] as const) {
+  it('workdir-changed / selection-gone are no-ops on an already-empty list state', () => {
+    for (const type of ['workdir-changed', 'selection-gone'] as const) {
       expect(reduceGitSurfaceView(initialGitSurfaceViewState, { type })).toEqual({
         selection: null,
         historyExpanded: true,
@@ -192,14 +182,14 @@ describe('reduceGitSurfaceView', () => {
     });
   });
 
-  it('select / back / workdir-changed / selection-gone leave historyExpanded untouched when collapsed', () => {
+  it('select / workdir-changed / selection-gone leave historyExpanded untouched when collapsed', () => {
     const collapsedWithSelection: GitSurfaceViewState = {
       selection: file,
       historyExpanded: false,
       expandedCommitHash: null,
       selectedCommitFile: null,
     };
-    expect(reduceGitSurfaceView(collapsedWithSelection, { type: 'back' })).toEqual({
+    expect(reduceGitSurfaceView(collapsedWithSelection, { type: 'workdir-changed' })).toEqual({
       selection: null,
       historyExpanded: false,
       expandedCommitHash: null,
@@ -212,6 +202,12 @@ describe('reduceGitSurfaceView', () => {
       })
     ).toEqual({
       selection: { path: 'b.ts', staged: true },
+      historyExpanded: false,
+      expandedCommitHash: null,
+      selectedCommitFile: null,
+    });
+    expect(reduceGitSurfaceView(collapsedWithSelection, { type: 'selection-gone' })).toEqual({
+      selection: null,
       historyExpanded: false,
       expandedCommitHash: null,
       selectedCommitFile: null,
@@ -306,25 +302,6 @@ describe('reduceGitSurfaceView', () => {
       });
     });
 
-    // back returns from the per-commit diff view but leaves the row
-    // expanded — the file list it pointed into is still there to pick
-    // another file from.
-    it('back clears selectedCommitFile but leaves expandedCommitHash expanded', () => {
-      const withFile: GitSurfaceViewState = {
-        selection: null,
-        historyExpanded: true,
-        expandedCommitHash: 'abc123',
-        selectedCommitFile: commitFile,
-      };
-      const next = reduceGitSurfaceView(withFile, { type: 'back' });
-      expect(next).toEqual({
-        selection: null,
-        historyExpanded: true,
-        expandedCommitHash: 'abc123',
-        selectedCommitFile: null,
-      });
-    });
-
     // workdir-changed (repo switch) clears both — a hash/file from the old
     // repo is meaningless once the workdir points somewhere else.
     it('workdir-changed clears both expandedCommitHash and selectedCommitFile', () => {
@@ -345,20 +322,18 @@ describe('reduceGitSurfaceView', () => {
   });
 });
 
+// D34-E: collapsed from a 3-way (changes/diff/split) to a 2-way signature —
+// a file click no longer changes which pane shape the docked panel shows
+// (it opens a center tab instead), so `selection` dropped out of the input
+// entirely. Mutation check: reintroducing a `selection`-driven 'diff' return
+// here (the pre-D34-E in-panel push-navigation shape) must turn this red.
 describe('deriveGitSurfacePresentation', () => {
-  const file: GitSurfaceSelection = { path: 'a.ts', staged: false };
-
-  it('shows changes (list) when not expanded and nothing is selected', () => {
-    expect(deriveGitSurfacePresentation({ expanded: false, selection: null })).toBe('changes');
+  it('shows changes (list) when not expanded', () => {
+    expect(deriveGitSurfacePresentation({ expanded: false })).toBe('changes');
   });
 
-  it('shows diff when not expanded and a file is selected', () => {
-    expect(deriveGitSurfacePresentation({ expanded: false, selection: file })).toBe('diff');
-  });
-
-  it('shows split when expanded, regardless of selection', () => {
-    expect(deriveGitSurfacePresentation({ expanded: true, selection: null })).toBe('split');
-    expect(deriveGitSurfacePresentation({ expanded: true, selection: file })).toBe('split');
+  it('shows split when expanded', () => {
+    expect(deriveGitSurfacePresentation({ expanded: true })).toBe('split');
   });
 });
 

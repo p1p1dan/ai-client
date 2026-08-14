@@ -9,6 +9,13 @@
  *
  * Renders nothing when no file is open — `editorOpen` is what the shell reads
  * to decide whether the column exists at all, so "no tabs" must cost no box.
+ *
+ * D34-E: a git diff can also open a page here (`GitSurfaceView` calling
+ * `useEditorStore.getState().openDiffTab`), the same open-mode as a file —
+ * it is just another `EditorTab` (with `diffTarget` set) in the same `tabs`
+ * array, so this column, `useEditorWorktreeSync`, and `deriveEditorOpen` all
+ * need zero changes to carry it. Only `EditorArea`'s body picks a different
+ * renderer for it (`DiffViewer` instead of Monaco).
  */
 
 import { normalizePath } from '@shared/utils/path';
@@ -182,9 +189,16 @@ export function EditorColumn({ onHideChat, chatVisible = true }: EditorColumnPro
   const handleTabClick = useCallback(
     (path: string) => {
       setActiveFile(path);
-      refreshFileContent(path);
+      // D34-E: a diff tab's `path` is a `git-diff://` pseudo path, not a real
+      // fs location — refreshing it would just be a wasted (harmlessly
+      // caught) IPC read. Content freshness for a diff tab comes from
+      // `DiffViewer`'s own live query instead.
+      const tab = tabs.find((t) => t.path === path);
+      if (!tab?.diffTarget) {
+        refreshFileContent(path);
+      }
     },
-    [setActiveFile, refreshFileContent]
+    [setActiveFile, refreshFileContent, tabs]
   );
 
   // T-13 coordinator ruling, unchanged: a dirty tab goes through the SAME

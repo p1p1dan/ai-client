@@ -92,7 +92,6 @@ export const initialGitSurfaceViewState: GitSurfaceViewState = {
 
 export type GitSurfaceViewAction =
   | { type: 'select'; file: GitSurfaceSelection }
-  | { type: 'back' }
   | { type: 'workdir-changed' }
   | { type: 'selection-gone' }
   | { type: 'toggle-history' }
@@ -100,10 +99,20 @@ export type GitSurfaceViewAction =
   | { type: 'select-commit-file'; file: GitSurfaceCommitFile };
 
 /**
- * select -> diff (sets the selection); back / workdir-changed / selection-gone
- * all return to the list (clear the selection) — the workdir switching out
- * from under a stale selection and the selected file disappearing (staged/
- * discarded away) both fall back to the same safe state as pressing back.
+ * D34-E: a file click now ALWAYS opens/reuses a center-column diff tab
+ * (`useEditorStore.openDiffTab`, driven directly from `GitSurfaceView`'s
+ * click handlers — not through this reducer). `selection` and
+ * `selectedCommitFile` survive here only as bookkeeping the panel itself
+ * still needs: `selection` drives `expanded`'s split-view `diffPane` (「展开
+ * ⤡」维持现状不动) and `ChangesList`'s row highlight; `selectedCommitFile`
+ * drives `GitHistoryList`'s inline-file-list row highlight. Neither any
+ * longer makes an in-panel DiffViewer branch take over the pane — those
+ * branches retired with the `'back'` action that used to return from them
+ * (nothing dispatches it any more; removed rather than left dead).
+ *
+ * `workdir-changed` / `selection-gone` still return to a clean list state —
+ * the workdir switching out from under a stale selection and the selected
+ * file disappearing (staged/discarded away) both need the same reset.
  * `toggle-history` only flips `historyExpanded`; every other action carries
  * it through untouched, and `toggle-history` carries `selection` through
  * untouched — the two pieces of state are orthogonal.
@@ -111,18 +120,12 @@ export type GitSurfaceViewAction =
  * D34: `toggle-commit` re-clicking the already-expanded hash collapses it;
  * clicking a different hash replaces the expansion. Either way
  * `selectedCommitFile` is cleared — the file list it pointed into just
- * collapsed or got swapped out, so a stale selection has nowhere to render
- * from. `select-commit-file` only sets `selectedCommitFile`, leaving
- * `expandedCommitHash` untouched (the row stays expanded so "back" can
- * return to the same open file list). `workdir-changed` additionally clears
- * both new fields — a different repo makes the expanded hash and any file
- * picked from it meaningless. `back` clears `selectedCommitFile` (mirrors
- * the return-button semantics for the per-commit diff view) but leaves
- * `expandedCommitHash` alone, so returning from a commit's file diff lands
- * back on that same commit still expanded. `select` / `selection-gone` are
- * about the working-tree diff and don't touch either new field — the two
- * diff sources can't be visible at once (the commit-diff branch takes over
- * the whole pane), so there's nothing to reconcile.
+ * collapsed or got swapped out, so a stale highlight has nowhere to point.
+ * `select-commit-file` only sets `selectedCommitFile`, leaving
+ * `expandedCommitHash` untouched (the row stays expanded, matching the
+ * center diff tab it opened). `workdir-changed` additionally clears both new
+ * fields — a different repo makes the expanded hash and any file picked
+ * from it meaningless.
  */
 export function reduceGitSurfaceView(
   state: GitSurfaceViewState,
@@ -131,8 +134,6 @@ export function reduceGitSurfaceView(
   switch (action.type) {
     case 'select':
       return { ...state, selection: action.file };
-    case 'back':
-      return { ...state, selection: null, selectedCommitFile: null };
     case 'workdir-changed':
       return {
         ...state,
@@ -158,26 +159,27 @@ export function reduceGitSurfaceView(
 }
 
 // ── presentation ─────────────────────────────────────────────────────────
-export type GitSurfacePresentation = 'changes' | 'diff' | 'split';
+// D34-E: collapsed from a 3-way ('changes' | 'diff' | 'split') to a 2-way
+// type. The push-navigation single-view diff ('diff') retired along with the
+// in-panel DiffViewer branch it drove — a file click no longer changes which
+// pane shape the DOCKED (non-expanded) panel shows, only `expanded` does.
+export type GitSurfacePresentation = 'changes' | 'split';
 
 export interface DeriveGitSurfacePresentationInput {
   expanded: boolean;
-  selection: GitSurfaceSelection | null;
 }
 
 /**
- * expanded always wins (two-column split, left changes+commit / right diff —
- * DiffViewer renders its own "select a file" empty state when there is no
- * selection yet). Otherwise: a selection pushes into the single-view diff,
- * no selection stays on the changes list. Never auto-expands.
+ * expanded -> split (two-column: left changes+commit / right diff, `diffPane`
+ * unchanged from before D34-E — still driven by `state.selection`, still
+ * showing DiffViewer's own "select a file" empty state with no selection).
+ * Otherwise -> changes (the list; a file click opens a center tab instead of
+ * changing this). Never auto-expands.
  */
 export function deriveGitSurfacePresentation(
   input: DeriveGitSurfacePresentationInput
 ): GitSurfacePresentation {
-  if (input.expanded) {
-    return 'split';
-  }
-  return input.selection ? 'diff' : 'changes';
+  return input.expanded ? 'split' : 'changes';
 }
 
 // ── workdir resolution ───────────────────────────────────────────────────
