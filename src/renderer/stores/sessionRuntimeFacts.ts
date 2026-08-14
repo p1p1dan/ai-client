@@ -45,9 +45,13 @@ export const useSessionRuntimeFactsStore = create<SessionRuntimeFactsStoreState>
     set({ listening: true });
 
     const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event: RuntimeEvent) => {
-      set((state) => ({
-        factsBySession: reduceSessionRuntimeFacts(state.factsBySession, event),
-      }));
+      // Return `state` itself (not a new object) when the reducer produced no
+      // change so zustand's `Object.is` check short-circuits `setState` and
+      // skips notifying subscribers.
+      set((state) => {
+        const next = reduceSessionRuntimeFacts(state.factsBySession, event);
+        return next === state.factsBySession ? state : { factsBySession: next };
+      });
     });
 
     return () => {

@@ -48,6 +48,7 @@ import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { resolveActiveTarget } from './composerTarget';
 import { toWireEffort } from './efforts';
+import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
@@ -151,6 +152,17 @@ function formatRuntimeEvent(event: { type: string; payload?: unknown }): string 
     return `${event.type}(${status}${retrySuffix})`;
   }
   return event.type;
+}
+
+/**
+ * Renders an `eventRing.ts` ring for the `rawEvents=[...]` diagnostic lines
+ * below. A dropped-events prefix comes first (partial-messages build spec
+ * §2 "片 2") so a reader sees the trail is incomplete before scanning it.
+ */
+function formatSeenEvents(ring: EventRing): string {
+  const dropped = ring.dropped();
+  const prefix = dropped > 0 ? `…(${dropped} earlier events dropped) ` : '';
+  return `${prefix}${ring.snapshot().join(' ; ') || 'none'}`;
 }
 
 interface AttachmentChipProps {
@@ -1018,7 +1030,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         elapsedSeconds: Math.floor((Date.now() - phaseStartedAtRef.current) / 1000),
       });
     }, 1000);
-    const seenEvents: string[] = [];
+    // Rev.2 (partial-messages build spec §2): a collapsing ring, not a flat
+    // array — under partial-message traffic a flat cap would fill with
+    // `message.delta ×N` and destroy the EARLIEST evidence the
+    // create-timeout diagnostic below needs. See eventRing.ts for the
+    // head-window + tail-cap + fold rules.
+    const seenEvents = createEventRing();
     const assistantMessageIds = new Set<string>();
     let sawSessionCreated = false;
     let sawSessionResumed = false;
@@ -1210,7 +1227,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       useChatSessionsStore.setState({
         lastError: [
           'Timed out waiting for session.created after createSession.',
-          `rawEvents=[${seenEvents.join(' ; ') || 'none'}]`,
+          `rawEvents=[${formatSeenEvents(seenEvents)}]`,
           `sessionId=${sessionId}`,
         ].join(' | '),
       });
@@ -1689,7 +1706,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       const abandonError = [
         'No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event).',
         `status=${session?.status ?? 'n/a'}`,
-        `rawEvents=[${seenEvents.join(' ; ') || 'none'}]`,
+        `rawEvents=[${formatSeenEvents(seenEvents)}]`,
         `hostAfter=${JSON.stringify(hostAfter)}`,
         `sessionId=${sessionId}`,
         `cwd=${workspacePath}`,

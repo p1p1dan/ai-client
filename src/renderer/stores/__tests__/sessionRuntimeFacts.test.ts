@@ -121,4 +121,49 @@ describe('useSessionRuntimeFactsStore', () => {
     first();
     second();
   });
+
+  // Build spec 2026-08-14 (partial messages), 片 2: `set()`'s callback must
+  // return `state` itself (not a fresh object) when `reduceSessionRuntimeFacts`
+  // produced no change, so zustand's `Object.is` equality check short-circuits
+  // `setState` and skips notifying subscribers — an unrelated event must not
+  // wake up every `useSessionRuntimeFactsStore` consumer in the tree.
+  it('notification short-circuit: an event the reducer does not recognize triggers zero subscriber calls', () => {
+    const unsubscribe = useSessionRuntimeFactsStore.getState().init();
+    expect(captured).not.toBeNull();
+
+    const listener = vi.fn();
+    const unsubscribeListener = useSessionRuntimeFactsStore.subscribe(listener);
+
+    // `message.delta` is not one of reduceSessionRuntimeFacts's recognized
+    // types (session.created / session.resumed / session.stderr) — the
+    // reducer returns `prev` (the SAME object reference), so `next ===
+    // state.factsBySession` and `set()` returns `state` itself.
+    captured?.({
+      type: 'message.delta',
+      seq: 1,
+      sessionId: 's1',
+      timestamp: 1,
+      payload: {},
+    } as unknown as RuntimeEvent);
+
+    expect(listener).not.toHaveBeenCalled();
+
+    unsubscribeListener();
+    unsubscribe();
+  });
+
+  it('notification positive control: an event the reducer actually folds still notifies subscribers', () => {
+    const unsubscribe = useSessionRuntimeFactsStore.getState().init();
+    expect(captured).not.toBeNull();
+
+    const listener = vi.fn();
+    const unsubscribeListener = useSessionRuntimeFactsStore.subscribe(listener);
+
+    captured?.(permissionModeEvent('s1', 'acceptEdits'));
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribeListener();
+    unsubscribe();
+  });
 });
