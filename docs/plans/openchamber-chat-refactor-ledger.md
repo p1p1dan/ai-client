@@ -141,6 +141,7 @@
 | 2026-08-10 | **用户拍板 D29（#28 A 方案）+ 三条代拍全部追认生效**（上行「待追认」自此闭环：Stop 队列语义「冻结、入队恢复」/ 历史附件 metadata chip / 首帧背景色动态取值）。D29 施工走「施工 + 对抗复核」双段：复核抓 2 major（激活被折叠藏结果 / resume 后写 activeSessionId 竞态——后者系**既有缺陷**，所有会话行点击均可踩，本批以 shouldApplyResumeResult 纯谓词顺带根治）+ 3 minor，全闭环；四门 vitest 3004 例 0 红 | ✅ | `e529a55` |
 | 2026-08-11 | **xvqiu1 四问题批：triage + 用户拍板 D30（git (a) 先行）+ 施工四片**（Temp 开关接线 / config dir 迁稳定位 + 启动包装器 / partial spike 五问全答并修正 triage 两处假设 / git 平铺历史 D30-a）。无拍板三件按「可径施工」直落；#30 断链语义留真机取证；#31 流式三小件待拍（spike 已补正 token 口径背景）；全量 vitest 挂死事故根因（settings store import 图新形态）入主线台账 2026-08-11 行 | ✅ | `2ba0bde` `fdcbca0` `dee4921` `de06bf5` |
 | 2026-08-14 | **本地点验批 + 拍板批**：xvqiu1 四片本地点验全过（Temp 门控五态 / D30-a 六项 / D29 顺带 / 首帧；CDP 驱动 dev GUI）+ **#30 断链取证 CONFIRMED**（原判「须真机」推翻，本地移出 JSONL 即复现）+ 用户拍板 **D32**（#30 最小改文案）/ **D33**（#31 三小件：仅输出 tokens / 无动词 / test.4 默认 ON）。三条意外发现待另立（`<button>` 嵌套 / React unmount 告警 / `chat:runtimeEvent` 监听器超限）。纯点验与拍板批不触码，四门不适用 | ✅ | —— |
+| 2026-08-14 | **流式施工批 + #30 文案修落地**：D32/D33 执行完毕——`jsonl_not_found` 卡不再假承诺（`continuationHint` per-code 化 + `history_unsupported` 接通）；`includePartialMessages` 默认 ON（`AICLIENT_HOST_PARTIAL_MESSAGES=0` 回 OFF = 今日行为，改造前黄金基线仲裁）；状态行 `✽ elapsed · ↓ tokens` CDP 冒烟实测生效。规格 rev.2 = 双轨对抗评审合取（Opus 4 blocker + Codex 13 条）；变异验证 15 对；四门 vitest 3268 例 0 红。过程明细见主线台账 2026-08-14 施工批行 | ✅ | `49aee3f` `4c2440b` `5281ceb` `956f8bb` `31a49c5` |
 
 ---
 

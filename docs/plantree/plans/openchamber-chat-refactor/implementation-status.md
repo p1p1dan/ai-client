@@ -42,8 +42,8 @@
      ④ backlog 清票（见下）；
      ⑤ **buchong1 参考批（2026-08-13 已拍板 = D31，四路全部立项）**：S 档六件 + 冲突项回摆三件（气泡改回右对齐（推翻 D26④）· 模型-effort 拆回双下拉（推翻 T-30b2①）· Recent 封顶折叠）可合为渲染端小批先行 → 会话右键菜单（连带解 #6）→ Progress 面板（施工前先真会话实测 TodoWrite 字段完整性）→ per-session 权限模式选择器（触 Host 红线，flag+Happy Path）；排期顺序未拍（此为建议序）；证据见[分析档](../../../plans/2026-08-13-buchong1-zcode-reference.md)。
   3. **xvqiu1 反馈批（2026-08-11）**：triage + 无拍板三件 + D30-a **已全部落地**（[triage](../../../plans/2026-08-11-xvqiu1-triage.md)；四片 `2ba0bde`/`fdcbca0`/`dee4921`/`de06bf5`）。**余**：
-     ① ~~拍板 #30 / #31~~ **已拍 2026-08-14 = D32 / D33**（#30 最小改文案不改行为，取证 CONFIRMED 见主线台账该日行；#31 仅输出 tokens / 无动词 / test.4 流式 flag 默认 ON）——**#30 文案修（S）与流式施工批可径直开工**；
-     ② 流式施工批（去重算法与两对变异验证可直接抄 [spike 报告](../../../plans/2026-08-11-partial-messages-spike.md) §3/§4）；
+     ① ~~拍板/施工~~ **D32/D33 已于 2026-08-14 当日全部落地**（#30 文案修 `49aee3f`；流式批黄金 `5281ceb` + 主体 `956f8bb` + 状态行 `31a49c5` + 折叠环 `4c2440b`，flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON；规格 [build-spec rev.2](../../../plans/2026-08-14-partial-messages-build-spec.md) 经双轨对抗评审合取；CDP 冒烟实证状态行与四步渐显）——随下轮真机复验流式观感与加密机 IPC 负载；
+     ② ~~流式施工批~~ 已并入 ①（规格 rev.2 取代 spike §3/§4 直抄口径）；
      ③ Temp 门控五态 / D30-a 六项 / D29 已于 2026-08-14 **本地点验全过**（CDP 驱动 dev GUI，加密机风险经用户裁定解除后点验前移）；Windows 侧仅剩启动包装器（`launch-gui-test.cmd` 双击路径）随下轮真机（现场操作单已同步包装器启动步骤）；
      ④ 本地点验三条意外发现待另立：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）。
 
