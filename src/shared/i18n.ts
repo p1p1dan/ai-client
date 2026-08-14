@@ -1734,7 +1734,7 @@ export const zhTranslations: Record<string, string> = {
   'Working tree changes': '工作区变更',
   'Workspace terminal': '工作区终端',
   'Session context and runtime': '会话上下文与运行时',
-  'Context surfaces': '上下文面板导轨',
+  'Context surfaces': '上下文面板切换',
   'Show context panel': '显示上下文面板',
   'Hide context panel': '隐藏上下文面板',
   'Expand panel': '展开面板',

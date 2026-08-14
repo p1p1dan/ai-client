@@ -5,7 +5,8 @@
  *
  * Pure so vitest (node env, `.ts` only) can cover it — same pattern as
  * `sidebarTree.ts` / `hostStatus.ts`. Icons are string names here; the mapping
- * to lucide components lives in `ContextPanelRail.tsx`.
+ * to lucide components lives in `surfaceIcons.ts` (D34: split out of the
+ * retired `ContextPanelRail.tsx`, whose four icons moved into MainHeader).
  */
 import type { GitStatus } from '@shared/types/git';
 

@@ -151,18 +151,22 @@ export type ManualOverride = boolean | null;
  * The reserve constants below survive both models: they are just widths.
  */
 /**
- * Round-12: the rail is PERMANENT, so this is reserved at every width.
+ * D34 (overturns round-12's "the rail is PERMANENT"): the vertical rail
+ * itself retired — its four icons moved into `MainHeader`'s top bar, left of
+ * the collapse toggle. The content row no longer has a rail column to reserve
+ * width for, so this is 0 rather than removed: `resolveShellAllocation`
+ * below still subtracts it (untouched by this round, see its call site), and
+ * zeroing the constant is what hands the freed 44px back to the panel/chat
+ * without touching that function's body.
  *
- * OVERTURNED: A08「展开 = 右缘无图标；收起 = Rail 出现」(a08:1430-1432) made the
- * rail the collapsed-state affordance and gave the panel a horizontal tab
- * strip while open. The user overturned it on 2026-08-06: 「那个展开后的 tab
- * 标签是不是很占位置，要不就使用右侧竖置的图标当切换标签？这样标签是恒定存在的，
- * 只用压缩右侧栏目的展示内容」. One switcher, always in the same place, costing
- * 44px of chrome instead of a 36px-tall strip inside every panel — and it is
- * what makes a 0-width panel recoverable, since the rail survives when
- * nothing else does.
+ * OVERTURNED (round-12, 2026-08-06): A08「展开 = 右缘无图标；收起 = Rail 出现」
+ * (a08:1430-1432) made the rail the collapsed-state affordance and gave the
+ * panel a horizontal tab strip while open; round-12 replaced both with one
+ * always-present vertical switcher costing 44px of permanent chrome. D34
+ * (2026-08-14) replaces THAT with a switcher in the header, costing none of
+ * the content row's width.
  */
-export const RAIL_RESERVE = 44;
+export const RAIL_RESERVE = 0;
 /** The panel's PREFERRED width (round-12 demoted it from a hard floor). */
 export const PANEL_MIN_RESERVE = 380;
 export const SIDEBAR_COLLAPSED_RESERVE = 48;
@@ -217,7 +221,9 @@ export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome 
     panelVisible: input.panelOpen,
     chatVisible: input.manualChat !== null ? input.manualChat : true,
   };
-  // No `railVisible`: round-12 made the rail permanent (see RAIL_RESERVE).
+  // No `railVisible`: D34 retired the rail into MainHeader's top bar, so
+  // there is no rendered column left to report visibility for (see
+  // `RAIL_RESERVE`, now 0).
 }
 
 export interface ResolveShellAllocationInput {
@@ -327,9 +333,11 @@ export function resolveShellAllocation(input: ResolveShellAllocationInput): Shel
     return build(floors, preferred, 0);
   }
 
-  // Round-12: the rail is PERMANENT, so its 44px is reserved unconditionally.
-  // It is also outside the clip, which is what guarantees the user can always
-  // reach a surface no matter how narrow the window gets.
+  // D34: `RAIL_RESERVE` is 0 — the rail retired into MainHeader, which is
+  // outside this allocator's row entirely (the top bar, not the content row),
+  // so there is nothing left here to reserve width for. The subtraction stays
+  // rather than being deleted, so a future column filling this role again
+  // only needs to change the constant.
   const row = Math.max(0, shellWidth - sidebar - RAIL_RESERVE);
   // Chat and the editor are served first; whatever is left is what the panel
   // may have. This is the priority rule, unchanged from round-11 — only the

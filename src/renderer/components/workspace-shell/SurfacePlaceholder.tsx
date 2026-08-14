@@ -12,7 +12,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { useI18n } from '@/i18n';
-import { SURFACE_ICON_MAP } from './ContextPanelRail';
+import { SURFACE_ICON_MAP } from './surfaceIcons';
 import type { ContextSurfaceDescriptor } from './surfaceRegistry';
 
 interface SurfacePlaceholderProps {

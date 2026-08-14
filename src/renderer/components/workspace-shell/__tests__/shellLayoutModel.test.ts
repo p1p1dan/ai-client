@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONTEXT_PANEL_DEFAULT_WIDTH,
   CONTEXT_PANEL_FALLBACK_WIDTH,
   CONTEXT_PANEL_MIN_WIDTH,
   clampContextPanelWidth,
@@ -48,17 +49,27 @@ describe('clampSidebarWidth', () => {
 });
 
 describe('clampContextPanelWidth', () => {
-  it('clamps into 380..1400', () => {
-    expect(clampContextPanelWidth(100)).toBe(380);
+  it('clamps into 250..1400 (D34: floor demoted from 380)', () => {
+    expect(clampContextPanelWidth(100)).toBe(CONTEXT_PANEL_MIN_WIDTH);
     expect(clampContextPanelWidth(2000)).toBe(1400);
+  });
+
+  it('pins the literal 250 floor (D34) — not merely self-referential against the constant', () => {
+    // Every other assertion in this file compares against the imported
+    // `CONTEXT_PANEL_MIN_WIDTH`, so a regression that silently reverted the
+    // constant's VALUE (380 was both the old floor and the still-current
+    // default — a mutation back to 380 would slip past a purely symbolic
+    // check). This hardcodes the number D34 actually pinned.
+    expect(CONTEXT_PANEL_MIN_WIDTH).toBe(250);
+    expect(clampContextPanelWidth(100)).toBe(250);
   });
 
   it('caps at the measured available width when it is narrower than 1400', () => {
     expect(clampContextPanelWidth(1000, 600)).toBe(600);
   });
 
-  it('keeps the 380 minimum even when the available width is smaller', () => {
-    expect(clampContextPanelWidth(500, 200)).toBe(380);
+  it('keeps the 250 minimum even when the available width is smaller', () => {
+    expect(clampContextPanelWidth(500, 200)).toBe(CONTEXT_PANEL_MIN_WIDTH);
   });
 
   it('ignores a null / zero / negative available width', () => {
@@ -99,12 +110,12 @@ describe('resolveContextPanelWidth', () => {
         resolveContextPanelWidth({ surfaceId, availableWidth })
       );
       expect(new Set(widths).size).toBe(1);
-      expect(widths[0]).toBe(380);
+      expect(widths[0]).toBe(CONTEXT_PANEL_DEFAULT_WIDTH);
     }
   });
 
   it('uses the same 380 default before the first measurement', () => {
-    expect(resolveContextPanelWidth({ surfaceId: 'git' })).toBe(380);
+    expect(resolveContextPanelWidth({ surfaceId: 'git' })).toBe(CONTEXT_PANEL_DEFAULT_WIDTH);
   });
 
   it('keeps a manual width recorded at another window size (no re-proportioning)', () => {
@@ -128,9 +139,12 @@ describe('resolveContextPanelWidth', () => {
     ).toBe(900);
   });
 
-  it('falls back to the docked width when expanded before the first measurement', () => {
+  it('falls back to the docked DEFAULT width when expanded before the first measurement', () => {
+    // D34: the floor (250) and the default (380) diverged — this fallback is
+    // "no manual width yet", which must still land on the default, not the
+    // (now narrower) floor.
     expect(resolveContextPanelWidth({ surfaceId: 'git', expanded: true })).toBe(
-      CONTEXT_PANEL_MIN_WIDTH
+      CONTEXT_PANEL_DEFAULT_WIDTH
     );
     expect(resolveContextPanelWidth({ surfaceId: 'git', manualWidth: 500, expanded: true })).toBe(
       500
@@ -355,11 +369,17 @@ describe('sanitizeShellLayoutPersisted', () => {
   });
 
   it('clamps a persisted panel width and rejects a non-number', () => {
-    expect(sanitizeShellLayoutPersisted({ panelWidth: 50 }).panelWidth).toBe(380);
+    // D34: the floor this clamps to is 250 now, not 380 — `sanitizePanelWidth`
+    // calls `clampContextPanelWidth` with no `availableWidth`, i.e. the plain
+    // MIN..MAX clamp, not the DEFAULT fallback (that only applies to `null`).
+    expect(sanitizeShellLayoutPersisted({ panelWidth: 50 }).panelWidth).toBe(
+      CONTEXT_PANEL_MIN_WIDTH
+    );
     expect(sanitizeShellLayoutPersisted({ panelWidth: 9999 }).panelWidth).toBe(1400);
     expect(sanitizeShellLayoutPersisted({ panelWidth: 700 }).panelWidth).toBe(700);
     // A v1 profile carried a per-surface MAP here; anything but a number is
-    // discarded so the panel falls back to the 380 default rather than NaN.
+    // discarded to `null`, so downstream (`WorkspaceShell`) falls back to the
+    // 380 DEFAULT rather than NaN.
     expect(sanitizeShellLayoutPersisted({ panelWidth: { git: 500 } }).panelWidth).toBeNull();
     expect(sanitizeShellLayoutPersisted({}).panelWidth).toBeNull();
   });
@@ -400,7 +420,7 @@ describe('resolveContentColumnWidth', () => {
     expect(resolveContentColumnWidth({ width: 0, lastOpenWidth: 900 })).toBe(900);
   });
 
-  it('never returns below the 380 floor — F-b, whatever the outer panel animates to', () => {
+  it('never returns below the CONTEXT_PANEL_MIN_WIDTH floor — F-b, whatever the outer panel animates to', () => {
     const inputs = [0, -1, 12, 379, 380, 1400, Number.NaN, Number.POSITIVE_INFINITY];
     for (const width of inputs) {
       for (const lastOpenWidth of inputs) {
@@ -422,7 +442,9 @@ describe('resolveContentColumnWidth', () => {
       }
       widths.push(content);
     }
-    expect(widths).toEqual([380, 720, 720, 720, 720]);
+    // D34: the seed is CONTEXT_PANEL_MIN_WIDTH (now 250, was 380) — this floor
+    // is F-b's protection, not the panel's default width.
+    expect(widths).toEqual([CONTEXT_PANEL_MIN_WIDTH, 720, 720, 720, 720]);
   });
 });
 

@@ -18,7 +18,6 @@ import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
 import { ContextPanel } from './ContextPanel';
-import { ContextPanelRail } from './ContextPanelRail';
 import { EditorColumn } from './center/EditorColumn';
 import {
   chatWidthToEditorRatio,
@@ -31,7 +30,7 @@ import {
 import { LeftNav } from './LeftNav';
 import { MainHeader } from './MainHeader';
 import { ShellResizeHandle } from './ShellResizeHandle';
-import { CONTEXT_PANEL_MIN_WIDTH, clampSidebarWidth } from './shellLayoutModel';
+import { CONTEXT_PANEL_DEFAULT_WIDTH, clampSidebarWidth } from './shellLayoutModel';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
 import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
@@ -191,7 +190,10 @@ export function WorkspaceShell({
     editorOpen,
     editorRatio,
     panelVisible,
-    panelWidth: panelWidth ?? CONTEXT_PANEL_MIN_WIDTH,
+    // D34: the fallback is the 380 DEFAULT, not the (now 250) MIN — "no
+    // persisted panelWidth yet" must still land on A08's default, same as
+    // `resolveContextPanelWidth`'s fallback in shellLayoutModel.ts.
+    panelWidth: panelWidth ?? CONTEXT_PANEL_DEFAULT_WIDTH,
   };
   const allocation = resolveShellAllocation(allocationInput);
 
@@ -459,13 +461,12 @@ export function WorkspaceShell({
             />
           </div>
           {/*
-            Round-12: PERMANENT. A08 showed the rail only while the panel was
-            collapsed and put a tab strip inside the open panel; the user
-            replaced both with one always-present vertical switcher. It also
-            sits OUTSIDE the clipped row, which is what keeps a surface
-            reachable when the window is too narrow to render the panel at all.
+            D34 (overturns round-12's "rail is permanent"): the vertical
+            switcher retired — its four icons moved into `MainHeader`, to the
+            left of the collapse toggle. Nothing replaces it here; the row
+            that used to reserve its 44px now goes straight to the panel/chat
+            (see `centerLayoutModel.ts`'s `RAIL_RESERVE`).
           */}
-          <ContextPanelRail />
         </div>
       </div>
 

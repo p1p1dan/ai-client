@@ -192,15 +192,20 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     expect(shell).toContain('group-data-[resizing]/shell:transition-none');
   });
 
-  it('the rail is permanent and the panel`s tab strip is gone (round 12)', () => {
+  it('the surface switcher lives in MainHeader now, and the panel`s tab strip stays gone (round 12 / D34)', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
+    const header = code(join(SHELL_DIR, 'MainHeader.tsx'));
     const panel = code(join(SHELL_DIR, 'ContextPanel.tsx'));
     const layoutModel = code(join(SHELL_DIR, 'shellLayoutModel.ts'));
-    // OVERTURNED A08「展开时右缘无图标」(a08:1430-1432): one always-present
-    // vertical switcher replaces both the conditional rail and the in-panel
-    // horizontal tabs.
-    expect(shell).toContain('<ContextPanelRail />');
-    expect(shell).not.toMatch(/railVisible && <ContextPanelRail/);
+    // OVERTURNED (round 12 -> D34): A08「展开时右缘无图标」(a08:1430-1432) made
+    // the rail the panel's complement and gave the panel a horizontal tab
+    // strip while open; round-12 replaced both with one permanent vertical
+    // switcher; D34 (user ruling 2026-08-14) moved its four icons into
+    // MainHeader's top bar, left of the collapse toggle. The retired
+    // component must not creep back anywhere in the shell.
+    expect(shell).not.toContain('ContextPanelRail');
+    expect(header).toContain('derivePanelTabs(railOrder');
+    expect(header).toContain('selectSurface');
     expect(panel).not.toContain('role="tablist"');
     expect(panel).not.toContain('derivePanelTabs');
     // The complement it replaced may not creep back under its old name — a

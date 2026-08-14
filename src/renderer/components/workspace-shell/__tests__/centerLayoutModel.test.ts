@@ -194,10 +194,12 @@ describe('resolveShellChrome — visibility is the user`s, verbatim', () => {
     expect(vis({ manualChat: false }).chatVisible).toBe(false);
   });
 
-  it('no longer reports rail visibility — the rail is permanent (round 12)', () => {
-    // OVERTURNED: A08「展开时右缘无图标」made the rail the panel's complement.
-    // Round-12 made it the one always-present switcher, so a `railVisible`
-    // field could only ever be `true` — a zombie by construction.
+  it('no longer reports rail visibility — round 12 made it permanent, D34 retired it into MainHeader', () => {
+    // OVERTURNED (round 12): A08「展开时右缘无图标」made the rail the panel's
+    // complement; round-12 made it the one always-present switcher instead, so
+    // a `railVisible` field could only ever be `true` — a zombie by
+    // construction. OVERTURNED again (D34): the rail is gone entirely (its
+    // icons moved into MainHeader), so there is even less to report.
     expect(vis()).not.toHaveProperty('railVisible');
     expect(Object.keys(vis())).toEqual(['sidebarCollapsed', 'panelVisible', 'chatVisible']);
   });
@@ -255,9 +257,11 @@ describe('resolveShellAllocation — sidebar and chat are satisfied first', () =
     }
   });
 
-  it('always reserves the rail — it is the only switcher now (round 12)', () => {
-    // Reserved unconditionally, panel open or shut: it lives outside the
-    // clipped row so a surface stays reachable at any window size.
+  it('centerWidth`s formula still carries the (now zero) rail term (D34)', () => {
+    // D34: the rail retired into MainHeader, so RAIL_RESERVE is 0 — this pin
+    // stays to prove the formula still SUBTRACTS the term (symbolically, via
+    // the constant) rather than having dropped it, in case a future column
+    // fills the role again.
     expect(alloc({ shellWidth: 2000 }).centerWidth).toBe(2000 - SIDEBAR - RAIL_RESERVE - PANEL);
     expect(alloc({ shellWidth: 2000, panelVisible: false }).centerWidth).toBe(
       2000 - SIDEBAR - RAIL_RESERVE
@@ -291,7 +295,8 @@ describe('resolveShellAllocation — the panel compresses, it is never cut', () 
   });
 
   it('compresses to exactly the room left after chat`s floor', () => {
-    // 1000 - 280 sidebar - 44 rail - 400 chat = 276 for a panel that wants 380.
+    // 1000 - 280 sidebar - 0 rail (D34: retired into MainHeader) - 400 chat =
+    // 320 for a panel that wants 380.
     const result = alloc({ shellWidth: 1000 });
     expect(result.panelWidth).toBe(roomFor(1000));
     expect(result.panelCompressed).toBe(true);
@@ -342,8 +347,9 @@ describe('resolveShellAllocation — the panel compresses, it is never cut', () 
   });
 
   it('only chat and the editor can ever overflow, and only past their floors', () => {
-    // 500 - 280 - 44 = 176 for a 400px chat floor: the panel is long gone, and
-    // what is left over is chat`s own overflow inside the clipped row.
+    // 500 - 280 - 0 (D34: no rail reserve) = 220 for a 400px chat floor: the
+    // panel is long gone, and what is left over is chat`s own overflow inside
+    // the clipped row.
     const result = alloc({ shellWidth: 500 });
     expect(result.panelWidth).toBe(0);
     expect(result.chatWidth).toBe(CHAT_MIN_WIDTH);
@@ -402,8 +408,8 @@ describe('resolveShellAllocation — the round-11 report still holds', () => {
     const after = alloc({ ...collapsed, sidebarCollapsed: false, panelVisible: true });
     expect(after.sidebarWidth).toBe(SIDEBAR);
     expect(after.chatWidth).toBeGreaterThanOrEqual(CHAT_MIN_WIDTH);
-    // 1100 - 280 - 44 - 920 floors = -144: no room, so the panel yields it all
-    // rather than cutting into chat or the editor.
+    // 1100 - 280 - 0 (D34: no rail reserve) - 920 floors = -100: no room, so
+    // the panel yields it all rather than cutting into chat or the editor.
     expect(after.panelWidth).toBe(0);
     expect(after.panelSuppressed).toBe(true);
   });
@@ -446,8 +452,11 @@ describe('maxPanelWidth', () => {
 });
 
 describe('reserve constants match the shell they describe', () => {
-  it('mirrors the rail and collapsed-sidebar widths', () => {
-    expect(RAIL_RESERVE).toBe(44);
+  it('mirrors the collapsed-sidebar width, and the rail reserve is retired (D34)', () => {
+    // D34: the rail migrated into MainHeader's top bar, which sits outside
+    // this allocator's row — there is nothing left in the content row to
+    // reserve width for.
+    expect(RAIL_RESERVE).toBe(0);
     expect(SIDEBAR_COLLAPSED_RESERVE).toBe(48);
   });
 });

@@ -14,12 +14,23 @@ import {
 } from './surfaceRegistry';
 
 // ── sizes (acceptance ①) ────────────────────────────────────────────────
-export const RAIL_WIDTH = 44;
+// D34: the vertical rail retired (its four icons moved into MainHeader's top
+// bar) — `RAIL_WIDTH` had exactly one consumer, `ContextPanelRail.tsx`, and
+// dies with it. `centerLayoutModel.ts`'s `RAIL_RESERVE` is a SEPARATE
+// constant (a width-budget reservation, not a rendered column) and is
+// zeroed there rather than removed.
 export const SIDEBAR_MIN_WIDTH = 280;
 export const SIDEBAR_MAX_WIDTH = 500;
 export const SIDEBAR_DEFAULT_WIDTH = 280;
 export const SIDEBAR_COLLAPSED_WIDTH = 48; // = current `w-12`
-export const CONTEXT_PANEL_MIN_WIDTH = 380;
+// D34 (user ruling 2026-08-14): the hard floor drops 380 -> 250 so the panel
+// can go narrower than a fixed 380px minimum. The DEFAULT stays 380 (A08's
+// value, unchanged) — the two used to be the same number by coincidence, not
+// by rule, and this round is what proves it: `CONTEXT_PANEL_DEFAULT_WIDTH` is
+// what "no manual width yet" resolves to, `CONTEXT_PANEL_MIN_WIDTH` is the
+// floor a drag can never cross.
+export const CONTEXT_PANEL_MIN_WIDTH = 250;
+export const CONTEXT_PANEL_DEFAULT_WIDTH = 380;
 export const CONTEXT_PANEL_MAX_WIDTH = 1400;
 /** Used before the first ResizeObserver measurement (reference component default). */
 export const CONTEXT_PANEL_FALLBACK_WIDTH = 600;
@@ -59,11 +70,12 @@ export function clampSidebarWidth(width: number): number {
 }
 
 /**
- * 380..1400, additionally capped by `availableWidth` when it is a positive
- * finite number. When the available width is below the 380 minimum the minimum
- * wins (acceptance ① pins 380 as hard) — the panel then overflows the row on
- * purpose rather than silently violating the floor. NaN/Infinity/non-finite
- * `width` falls back to `CONTEXT_PANEL_FALLBACK_WIDTH` before clamping, mirroring
+ * 250..1400, additionally capped by `availableWidth` when it is a positive
+ * finite number. When the available width is below the 250 minimum the minimum
+ * wins (D34 pins 250 as hard, demoted from acceptance ①'s original 380) — the
+ * panel then overflows the row on purpose rather than silently violating the
+ * floor. NaN/Infinity/non-finite `width` falls back to
+ * `CONTEXT_PANEL_FALLBACK_WIDTH` before clamping, mirroring
  * `clampSidebarWidth`'s non-finite guard.
  */
 export function clampContextPanelWidth(width: number, availableWidth?: number | null): number {
@@ -105,6 +117,11 @@ export interface ResolveContextPanelWidthInput {
  * for all three tabs («panel 默认宽 git/files/context 380», a08:1550) and the
  * user's report is the same: switching tabs must not move the edge. Both the
  * fraction and the per-surface memory are gone; there is one panel width.
+ *
+ * D34: the fallback below is `CONTEXT_PANEL_DEFAULT_WIDTH`, not
+ * `CONTEXT_PANEL_MIN_WIDTH` — the two used to be the same 380 by coincidence.
+ * Now that the floor is 250, "no manual width yet" must still land on A08's
+ * 380 default, not on the new, narrower floor.
  */
 export function resolveContextPanelWidth(input: ResolveContextPanelWidthInput): number {
   const { surfaceId, manualWidth, availableWidth, expanded } = input;
@@ -121,7 +138,7 @@ export function resolveContextPanelWidth(input: ResolveContextPanelWidthInput): 
     return clampContextPanelWidth(manualWidth, measured);
   }
 
-  return clampContextPanelWidth(CONTEXT_PANEL_MIN_WIDTH, measured);
+  return clampContextPanelWidth(CONTEXT_PANEL_DEFAULT_WIDTH, measured);
 }
 
 /**

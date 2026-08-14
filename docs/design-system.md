@@ -557,18 +557,17 @@ D25 的四档 + 一个例外：
 
 ### 新壳布局档位（D19 / T-22）
 
-新壳 `components/workspace-shell/` 的三列 + 导轨为**硬性档位**，权威常量在
+新壳 `components/workspace-shell/` 的三列（+ D34 起 Surface 切换迁入顶栏，不再是独立导轨列）为**硬性档位**，权威常量在
 `components/workspace-shell/shellLayoutModel.ts`，改值必须同步本表：
 
 | 区域 | 值 | Tailwind / 常量 |
 |------|-----|----------------|
-| Rail（图标导轨） | 固定 44px | `RAIL_WIDTH`（inline style，44px） |
-| Rail 图标按钮 | 32px（图标 18px） | `size="icon"` · `size-4.5` |
-| Rail 变更圆点 | 6px | `h-1.5 w-1.5` + `bg-info`（**仅 `git` surface**） |
+| 顶栏 Surface 切换（D34，原 Rail） | 折叠按钮左侧横排 4 × 32px 图标按钮 | `MainHeader.tsx`（`size="icon"` · `size-4.5`） |
+| Surface 切换变更圆点 | 6px | `h-1.5 w-1.5` + `bg-info`（**仅 `git` surface**） |
 | Sidebar（左列） | 默认 280px，可拖 280–500 | `SIDEBAR_DEFAULT_WIDTH` / `SIDEBAR_MIN_WIDTH` / `SIDEBAR_MAX_WIDTH` |
 | Sidebar 折叠态 | 48px | `SIDEBAR_COLLAPSED_WIDTH` |
 | Sidebar 会话行宽度预算 | 默认宽下缩进行仅 **236px**（280 − p-2 16 − pl-3 12 − px-2 16）；让位顺序 **分支 chip → 相对时间 → 永不动标题** | 标题 `min-w-20 flex-1`（下限）· agent chip `shrink-0`（闭集标签，不截断）· 分支 chip `min-w-0 max-w-24 shrink`（唯一让位者）· 时间/操作共用 `w-10` 定宽盒 |
-| ContextPanel（右列） | min 380 / max 1400，默认按 surface 取可用宽度比例 | `CONTEXT_PANEL_MIN_WIDTH` / `CONTEXT_PANEL_MAX_WIDTH` |
+| ContextPanel（右列） | min 250（D34，原 380）/ max 1400，默认 380 | `CONTEXT_PANEL_MIN_WIDTH` / `CONTEXT_PANEL_DEFAULT_WIDTH` / `CONTEXT_PANEL_MAX_WIDTH` |
 | ContextPanel 未测量兜底 | 600px | `CONTEXT_PANEL_FALLBACK_WIDTH` |
 | ContextPanel 收起 | 宽 0（常驻挂载 + `inert`） | — |
 | 阅读栏（中列） | `min(100%, 45rem)` 居中 | `mx-auto w-full max-w-reading`（`--container-reading`） |
