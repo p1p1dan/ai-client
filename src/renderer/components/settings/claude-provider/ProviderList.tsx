@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Reorder, useDragControls } from 'framer-motion';
 import {
   Ban,
+  Building2,
   Check,
   CheckCircle,
   Circle,
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { toastManager } from '@/components/ui/toast';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
+import { useManagedMode } from '@/hooks/useManagedMode';
 import { useShouldPoll } from '@/hooks/useWindowFocus';
 import { useI18n } from '@/i18n';
 import {
@@ -179,6 +181,7 @@ function ProviderItem({
 
 export function ProviderList({ className, repoPath }: ProviderListProps) {
   const { t } = useI18n();
+  const { data: managedModeInfo } = useManagedMode();
   const queryClient = useQueryClient();
   const providers = useSettingsStore((s) => s.claudeCodeIntegration.providers);
   const removeClaudeProvider = useSettingsStore((s) => s.removeClaudeProvider);
@@ -195,11 +198,13 @@ export function ProviderList({ className, repoPath }: ProviderListProps) {
   const [saveFromCurrent, setSaveFromCurrent] = React.useState(false);
   const [previewOpen, setPreviewOpen] = React.useState(false);
 
-  // 读取当前 Claude settings（窗口空闲时停止轮询）
+  // 读取当前 Claude settings（窗口空闲时停止轮询；托管模式下不查询——Provider
+  // 面完全只读，查询结果也已被 Main 裁剪为不含 authToken/settings 的安全子集）
   const { data: claudeData } = useQuery({
     queryKey: ['claude-settings', repoPath ?? null],
     queryFn: () => window.electronAPI.claudeProvider.readSettings(repoPath),
     refetchInterval: shouldPoll ? 30000 : false,
+    enabled: !managedModeInfo.managed,
   });
 
   // 监听 settings.json 文件变化事件（由主进程 fs.watch 触发）
@@ -295,6 +300,27 @@ export function ProviderList({ className, repoPath }: ProviderListProps) {
       window.removeEventListener('open-settings-provider-save', handleSaveOpen);
     };
   }, []);
+
+  // D47 S2b §1 ④: managed mode replaces the whole editable list with a
+  // read-only card — no baseUrl/token/model fields, no add/edit/delete, no
+  // "save from current". Rendered by default until `auth.managedMode()`
+  // resolves (see `useManagedMode`'s first-frame default) so a flag-on user
+  // never sees the raw local Provider UI flash before it's hidden.
+  if (managedModeInfo.managed) {
+    return (
+      <div className={cn('space-y-3', className)}>
+        <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/40 px-3 py-2.5">
+          <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{t('Managed by your organization')}</div>
+            <div className="text-ui text-muted-foreground">
+              {t('Provider settings are managed by your organization and cannot be changed here.')}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn('space-y-3', className)}>

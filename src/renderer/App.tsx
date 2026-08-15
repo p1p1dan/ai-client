@@ -85,6 +85,7 @@ import { addToast, toastManager } from './components/ui/toast';
 import { WorkspaceShell } from './components/workspace-shell';
 import { MergeEditor, MergeWorktreeDialog } from './components/worktree';
 import { useAutoFetchListener, useGitBranches, useGitInit } from './hooks/useGit';
+import { useManagedMode } from './hooks/useManagedMode';
 import { useWebInspector } from './hooks/useWebInspector';
 import {
   useWorktreeCreate,
@@ -120,34 +121,41 @@ function createPlaceholderWorktree(path: string): GitWorktree {
 }
 
 async function resolveClaudeConfigDirForResumeSession(options: {
+  /** Provenance from `ClaudeSessionScanner` (D47 S2b §1 resume) — when present,
+   *  trust it directly instead of re-probing candidate paths ("不再猜"). */
+  configDir?: string | null;
+  /** Managed home dir from `auth.managedMode()`, used only in the no-meta fallback. */
+  claudeHomeDir?: string | null;
   homeDir: string;
   pathSep: string;
   projectId: string;
   sessionId: string;
 }): Promise<string | null> {
-  const { homeDir, pathSep, projectId, sessionId } = options;
+  const { configDir, claudeHomeDir, homeDir, pathSep, projectId, sessionId } = options;
+
+  if (configDir) return configDir;
+
   if (!homeDir) return null;
 
-  const nullConfigDir = `${homeDir}${pathSep}.aiclient${pathSep}claude-null`;
   const userConfigDir = `${homeDir}${pathSep}.claude`;
-  const candidates = [nullConfigDir, userConfigDir];
+  const candidates = claudeHomeDir ? [claudeHomeDir, userConfigDir] : [userConfigDir];
 
-  const buildSessionPath = (configDir: string) =>
-    `${configDir}${pathSep}projects${pathSep}${projectId}${pathSep}${sessionId}.jsonl`;
+  const buildSessionPath = (dir: string) =>
+    `${dir}${pathSep}projects${pathSep}${projectId}${pathSep}${sessionId}.jsonl`;
 
   const checks = await Promise.all(
-    candidates.map(async (configDir) => {
+    candidates.map(async (dir) => {
       try {
-        const exists = await window.electronAPI.file.exists(buildSessionPath(configDir));
-        return { configDir, exists };
+        const exists = await window.electronAPI.file.exists(buildSessionPath(dir));
+        return { dir, exists };
       } catch {
-        return { configDir, exists: false };
+        return { dir, exists: false };
       }
     })
   );
 
   const match = checks.find((c) => c.exists);
-  return match?.configDir ?? null;
+  return match?.dir ?? null;
 }
 
 // Initialize global clone progress listener
@@ -456,6 +464,7 @@ export default function App() {
   const isWindows = window.electronAPI?.env.platform === 'win32';
   const pathSep = isWindows ? '\\' : '/';
   const homeDir = window.electronAPI?.env.HOME || '';
+  const { data: managedModeInfo } = useManagedMode();
   const effectiveTempBasePath = useMemo(
     () => getEffectiveTemporaryBasePath(defaultTemporaryPath, homeDir, pathSep),
     [defaultTemporaryPath, homeDir, pathSep]
@@ -1165,6 +1174,8 @@ export default function App() {
       const targetPath = project.path;
 
       const claudeConfigDir = await resolveClaudeConfigDirForResumeSession({
+        configDir: session.configDir,
+        claudeHomeDir: managedModeInfo.claudeHomeDir,
         homeDir,
         pathSep,
         projectId: project.id,
@@ -1173,7 +1184,7 @@ export default function App() {
 
       if (!claudeConfigDir) {
         const diagnostic = homeDir
-          ? `\n(诊断) 已检查以下路径是否存在：\n${homeDir}${pathSep}.aiclient${pathSep}claude-null${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl\n${homeDir}${pathSep}.claude${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl`
+          ? `\n(诊断) 已检查以下路径是否存在：\n${homeDir}${pathSep}.claude${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl`
           : '\n(诊断) 未能获取 HOME 目录，请确认系统环境变量 USERPROFILE/HOME 是否可用。';
         addToast({
           type: 'error',
@@ -1203,6 +1214,7 @@ export default function App() {
       handleAddLocalRepository,
       handleTabChange,
       homeDir,
+      managedModeInfo.claudeHomeDir,
       pathSep,
       resumeClaudeSession,
       setActiveWorktree,

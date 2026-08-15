@@ -292,7 +292,10 @@ export const IPC_CHANNELS = {
   CLAUDE_RUNTIME_DOWNGRADE: 'claude:runtime:downgrade',
   CLAUDE_RUNTIME_DOWNGRADE_PROGRESS: 'claude:runtime:downgrade:progress',
   CLAUDE_RUNTIME_DISABLE_AUTO_UPDATES: 'claude:runtime:disableAutoUpdates',
-  CLAUDE_RUNTIME_REGISTER_ENV: 'claude:runtime:registerEnv',
+
+  // Auth (D47 S2a) — managed-credentials mode probe. Path is not a secret;
+  // renderer has no other way to learn the userData-relative claude-home dir.
+  AUTH_MANAGED_MODE: 'auth:managedMode',
 
   // Search
   SEARCH_FILES: 'search:files',

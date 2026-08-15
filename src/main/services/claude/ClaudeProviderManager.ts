@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import type { ClaudeProvider, ClaudeSettings } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import type { BrowserWindow } from 'electron';
+import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 
 function getClaudeConfigDir(): string {
   if (process.env.CLAUDE_CONFIG_DIR) {
@@ -50,6 +51,18 @@ function hasProviderChanged(extracted: Partial<ClaudeProvider> | null): boolean 
  * 监听 ~/.claude/settings.json 的变化
  */
 export function watchClaudeSettings(window: BrowserWindow): void {
+  // D47 S2b §1 Provider ③: single choke point for the managed gate — both
+  // `initClaudeProviderWatcher` and `toggleClaudeProviderWatcher` funnel
+  // through this function, so gating here (rather than in each caller) closes
+  // both entry points at once. In managed mode settings.json is Main-owned
+  // (writes go through `managedFileWriter`'s serialized queue); an
+  // independent fs.watch-driven read/push loop here would race it.
+  if (resolveManagedCredentialsEnabled()) {
+    console.log('[ClaudeProviderManager] Managed credentials enabled: skipping settings watcher.');
+    unwatchClaudeSettings();
+    return;
+  }
+
   // 防止重复监听
   if (settingsWatcher) {
     settingsWatcher.close();
@@ -233,6 +246,35 @@ export function extractProviderFromClaudeSettings(
     defaultOpusModel: settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL,
     defaultHaikuModel: settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL,
   };
+}
+
+/**
+ * D47 S2b §1 Provider ①: managed-mode (flag-on + local context) response
+ * trim for `CLAUDE_PROVIDER_READ_SETTINGS`. Whitelist construction (mirrors
+ * S1's `toRendererRegisterResponse` — every kept field is named explicitly,
+ * not carved out via delete): only `baseUrl` + the three default-model keys
+ * survive. `authToken` and the raw `settings` object never cross the IPC
+ * boundary in managed mode — otherwise onboard-managed credentials become
+ * renderer-visible plaintext, and "save from current" could persist them
+ * into the 0644 `~/.aiclient` providers store (I1/I2 double breach).
+ */
+export function trimManagedProviderExtracted(
+  extracted: Partial<ClaudeProvider> | null
+): Partial<ClaudeProvider> | null {
+  if (!extracted) return null;
+
+  const trimmed: Partial<ClaudeProvider> = {};
+  if (extracted.baseUrl !== undefined) trimmed.baseUrl = extracted.baseUrl;
+  if (extracted.defaultSonnetModel !== undefined) {
+    trimmed.defaultSonnetModel = extracted.defaultSonnetModel;
+  }
+  if (extracted.defaultOpusModel !== undefined) {
+    trimmed.defaultOpusModel = extracted.defaultOpusModel;
+  }
+  if (extracted.defaultHaikuModel !== undefined) {
+    trimmed.defaultHaikuModel = extracted.defaultHaikuModel;
+  }
+  return trimmed;
 }
 
 /**

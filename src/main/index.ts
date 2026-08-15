@@ -43,6 +43,11 @@ import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
 import { createRealVaultCrypto, promoteVaultCrypto } from './services/auth';
+import {
+  activateManagedClaudeHome,
+  ensureManagedHomeSkeleton,
+  regenerateFromVault,
+} from './services/auth/managedClaudeHomeStartup';
 import { registerClaudeBridgeIpcHandlers } from './services/claude/ClaudeIdeBridge';
 import { unwatchClaudeSettings } from './services/claude/ClaudeProviderManager';
 import {
@@ -134,6 +139,15 @@ if (isDev) {
   const profile = sanitizeProfileName(process.env.AICLIENT_PROFILE || '') || 'dev';
   app.setPath('userData', join(app.getPath('appData'), `${app.getName()}-${profile}`));
 }
+
+// D47 S2a §1 phase ① — right after `setPath('userData')`, before any
+// service action: flag on ⇒ redirect `CLAUDE_CONFIG_DIR` to
+// `<userData>/claude-home` and build the directory SKELETON only (never
+// touches settings.json's `env` — phase ③ / `regenerateFromVault`, called
+// after the first window is constructed further down, owns that). Both
+// functions are no-ops when the managed-credentials flag is off.
+activateManagedClaudeHome();
+await ensureManagedHomeSkeleton();
 
 // Register URL scheme handler (must be done before app is ready)
 if (process.defaultApp) {
@@ -766,6 +780,12 @@ app
 
     cleanupWindowHandlers = registerWindowHandlers();
     mainWindow = openLocalWindow({ isDark: getInitialWindowIsDark() });
+
+    // D47 S2a §1 phase ③ — only safe now: `openLocalWindow` constructs the
+    // first `BrowserWindow`, which synchronously fires `browser-window-created`
+    // (the upgrade latch registered above), so `promoteVaultCrypto` has
+    // already installed the real crypto adapter by this point.
+    await regenerateFromVault();
 
     // Set main window for Web Inspector server (for IPC communication)
     webInspectorServer.setMainWindow(mainWindow);

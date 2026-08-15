@@ -1460,6 +1460,9 @@ export const zhTranslations: Record<string, string> = {
   'New provider detected': '检测到新配置',
   'Click to save this config': '点击保存此配置',
   'Open Settings': '打开设置',
+  'Managed by your organization': '由公司统一托管',
+  'Provider settings are managed by your organization and cannot be changed here.':
+    'Provider 配置由公司统一托管，无法在此修改。',
   // MCP Servers
   'MCP Servers': 'MCP 服务器',
   'No MCP servers configured': '暂无 MCP 服务器',

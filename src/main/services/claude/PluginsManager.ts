@@ -3,13 +3,19 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { AvailablePlugin, InstalledPlugin, Plugin, PluginMarketplace } from '@shared/types';
 import { execInPty } from '../../utils/shell';
+import { writeSettingsFile } from '../auth/managedFileWriter';
+
+/** D47 S2a §1: follows `CLAUDE_CONFIG_DIR` when set (managed redirect). */
+function getClaudeConfigDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+}
 
 function getPluginsDir(): string {
-  return path.join(os.homedir(), '.claude', 'plugins');
+  return path.join(getClaudeConfigDir(), 'plugins');
 }
 
 function getSettingsPath(): string {
-  return path.join(os.homedir(), '.claude', 'settings.json');
+  return path.join(getClaudeConfigDir(), 'settings.json');
 }
 
 function getInstalledPluginsPath(): string {
@@ -65,12 +71,12 @@ function readSettings(): ClaudeSettings {
 }
 
 /**
- * 写入 Claude settings
+ * 写入 Claude settings（D47 S2a §1：改走 managedFileWriter 唯一入口）
  */
-function writeSettings(data: ClaudeSettings): boolean {
+async function writeSettings(data: ClaudeSettings): Promise<boolean> {
   try {
     const filePath = getSettingsPath();
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { mode: 0o600 });
+    await writeSettingsFile(filePath, () => data);
     return true;
   } catch (error) {
     console.error('[PluginsManager] Failed to write settings.json:', error);
@@ -114,7 +120,7 @@ export function getPlugins(): Plugin[] {
 /**
  * 设置插件启用状态
  */
-export function setPluginEnabled(pluginId: string, enabled: boolean): boolean {
+export async function setPluginEnabled(pluginId: string, enabled: boolean): Promise<boolean> {
   const settings = readSettings();
 
   if (!settings.enabledPlugins) {
@@ -123,7 +129,7 @@ export function setPluginEnabled(pluginId: string, enabled: boolean): boolean {
 
   settings.enabledPlugins[pluginId] = enabled;
 
-  const success = writeSettings(settings);
+  const success = await writeSettings(settings);
 
   if (success) {
     console.log(`[PluginsManager] Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`);

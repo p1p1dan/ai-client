@@ -1056,11 +1056,14 @@ const electronAPI = {
         success: boolean;
         error?: string;
       }>,
-    registerEnv: (env: Record<string, string | null>) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_RUNTIME_REGISTER_ENV, env) as Promise<{
-        success: boolean;
-        error?: string;
-      }>,
+  },
+
+  // Auth (D47 S2a) — managed-credentials mode probe (S1 spec §1 "不做" is
+  // about renderer/preload importing AuthStateService directly; invoking a
+  // registered IPC channel by string constant is not that).
+  auth: {
+    managedMode: (): Promise<{ managed: boolean; claudeHomeDir: string | null }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTH_MANAGED_MODE),
   },
 
   // Claude Config (MCP, Prompts, Plugins)

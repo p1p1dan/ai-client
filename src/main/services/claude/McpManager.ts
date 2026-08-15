@@ -10,8 +10,21 @@ import type {
   McpStdioServer,
 } from '@shared/types';
 import { isHttpMcpConfig, isHttpMcpServer, isStdioMcpServer } from '@shared/types';
+import { writeSettingsFile } from '../auth/managedFileWriter';
 
+/**
+ * D47 S2a §1: follows `CLAUDE_CONFIG_DIR` when set (managed redirect), same
+ * shape as `sessionLogReader.ts`/`ClaudeSessionScanner.ts`'s existing
+ * followers. Unlike `settings.json` (which lives INSIDE `~/.claude`),
+ * `.claude.json` normally sits at the top-level `~/.claude.json` — Claude
+ * Code's own `CLAUDE_CONFIG_DIR` handling relocates it to
+ * `$CLAUDE_CONFIG_DIR/.claude.json` instead, not `~/.claude/.claude.json`.
+ */
 function getClaudeJsonPath(): string {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  if (configDir) {
+    return path.join(configDir, '.claude.json');
+  }
   return path.join(os.homedir(), '.claude.json');
 }
 
@@ -38,12 +51,13 @@ function readClaudeJson(): ClaudeJson {
 }
 
 /**
- * 写入 ~/.claude.json
+ * 写入 .claude.json（D47 S2a §1：改走 managedFileWriter 唯一入口——per-path
+ * 队列 + 原子写 + chmod 0600，消除原先 writeFileSync 无 mode 隐患）
  */
-function writeClaudeJson(data: ClaudeJson): boolean {
+async function writeClaudeJson(data: ClaudeJson): Promise<boolean> {
   try {
     const jsonPath = getClaudeJsonPath();
-    fs.writeFileSync(jsonPath, JSON.stringify(data, null, 2), { mode: 0o600 });
+    await writeSettingsFile(jsonPath, () => data);
     return true;
   } catch (error) {
     console.error('[McpManager] Failed to write .claude.json:', error);
@@ -115,7 +129,7 @@ function serverToConfig(server: McpServer): McpServerConfig | null {
  * 只写入 enabled=true 的服务器
  * 注意：会保留原有的 HTTP/SSE 配置
  */
-export function syncMcpServers(servers: McpServer[]): boolean {
+export async function syncMcpServers(servers: McpServer[]): Promise<boolean> {
   const data = readClaudeJson();
   const existingConfigs = data.mcpServers ?? {};
 
@@ -143,7 +157,7 @@ export function syncMcpServers(servers: McpServer[]): boolean {
   }
 
   data.mcpServers = mcpServers;
-  const success = writeClaudeJson(data);
+  const success = await writeClaudeJson(data);
 
   if (success) {
     console.log(`[McpManager] Synced ${Object.keys(mcpServers).length} MCP servers`);
@@ -156,7 +170,7 @@ export function syncMcpServers(servers: McpServer[]): boolean {
  * 添加或更新单个 MCP 服务器
  * 保留现有配置，只修改指定的服务器
  */
-export function upsertMcpServer(server: McpServer): boolean {
+export async function upsertMcpServer(server: McpServer): Promise<boolean> {
   const data = readClaudeJson();
 
   if (!data.mcpServers) {
@@ -186,7 +200,7 @@ export function upsertMcpServer(server: McpServer): boolean {
 /**
  * 删除 MCP 服务器
  */
-export function deleteMcpServer(serverId: string): boolean {
+export async function deleteMcpServer(serverId: string): Promise<boolean> {
   const data = readClaudeJson();
 
   if (data.mcpServers) {

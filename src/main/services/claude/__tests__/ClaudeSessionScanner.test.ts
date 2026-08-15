@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ClaudeSessionScanner } from '../ClaudeSessionScanner';
+import { ClaudeSessionScanner, resolveLegacyClaudeSessionRoot } from '../ClaudeSessionScanner';
 
 describe('ClaudeSessionScanner', () => {
   let tempDir: string;
@@ -45,7 +45,9 @@ describe('ClaudeSessionScanner', () => {
     ].join('\n');
     await fs.writeFile(filePath, `${jsonl}\n`, 'utf-8');
 
-    const scanner = new ClaudeSessionScanner();
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [resolveLegacyClaudeSessionRoot()],
+    });
     const projects = await scanner.scanProjects();
 
     expect(projects).toHaveLength(1);
@@ -69,7 +71,9 @@ describe('ClaudeSessionScanner', () => {
     ].join('\n');
     await fs.writeFile(filePath, `${jsonl}\n`, 'utf-8');
 
-    const scanner = new ClaudeSessionScanner();
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [resolveLegacyClaudeSessionRoot()],
+    });
     const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
@@ -98,7 +102,9 @@ describe('ClaudeSessionScanner', () => {
     ].join('\n');
     await fs.writeFile(filePath, `${jsonl}\n`, 'utf-8');
 
-    const scanner = new ClaudeSessionScanner();
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [resolveLegacyClaudeSessionRoot()],
+    });
     const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
@@ -125,7 +131,9 @@ describe('ClaudeSessionScanner', () => {
     ].join('\n');
     await fs.writeFile(filePath, `${jsonl}\n`, 'utf-8');
 
-    const scanner = new ClaudeSessionScanner();
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [resolveLegacyClaudeSessionRoot()],
+    });
     const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
@@ -162,7 +170,9 @@ describe('ClaudeSessionScanner', () => {
     ].join('\n');
     await fs.writeFile(filePath, `${jsonl}\n`, 'utf-8');
 
-    const scanner = new ClaudeSessionScanner();
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [resolveLegacyClaudeSessionRoot()],
+    });
     const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
@@ -192,10 +202,241 @@ describe('ClaudeSessionScanner', () => {
     ].join('\n');
     await fs.writeFile(filePath, `${jsonl}\n`, 'utf-8');
 
-    const scanner = new ClaudeSessionScanner();
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [resolveLegacyClaudeSessionRoot()],
+    });
     const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.firstMessage).toBe('Hello World');
+  });
+});
+
+/**
+ * D47 S2b §1 Scanner dual-root suite (B-track M2 six-arm spec): managed vs
+ * legacy root merge, deterministic winner tie-break, provenance (`configDir`)
+ * threading, and per-root degradation. `~/.claude`-shaped roots are plain
+ * mkdtemp dirs tagged 'managed'/'legacy' — the Scanner never inspects the
+ * dir path itself, only the `kind` passed in via `resolveRoots`.
+ */
+describe('ClaudeSessionScanner dual-root (managed + legacy)', () => {
+  let managedDir: string;
+  let legacyDir: string;
+
+  beforeEach(async () => {
+    managedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-scanner-managed-'));
+    legacyDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-scanner-legacy-'));
+    await fs.mkdir(path.join(managedDir, 'projects'), { recursive: true });
+    await fs.mkdir(path.join(legacyDir, 'projects'), { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(managedDir, { recursive: true, force: true });
+    await fs.rm(legacyDir, { recursive: true, force: true });
+  });
+
+  function dualRootScanner(): ClaudeSessionScanner {
+    return new ClaudeSessionScanner({
+      resolveRoots: () => [
+        { dir: managedDir, kind: 'managed' },
+        { dir: legacyDir, kind: 'legacy' },
+      ],
+    });
+  }
+
+  async function writeSession(
+    rootDir: string,
+    projectId: string,
+    sessionId: string,
+    opts: { cwd?: string; mtime: Date }
+  ): Promise<string> {
+    const projectDir = path.join(rootDir, 'projects', projectId);
+    await fs.mkdir(projectDir, { recursive: true });
+    const filePath = path.join(projectDir, `${sessionId}.jsonl`);
+    const jsonl = JSON.stringify({
+      type: 'user',
+      cwd: opts.cwd ?? 'D:\\Projects\\dual-root',
+      timestamp: '2026-04-09T08:00:00.000Z',
+      message: { role: 'user', content: 'hello' },
+    });
+    await fs.writeFile(filePath, `${jsonl}\n`, 'utf-8');
+    await fs.utimes(filePath, opts.mtime, opts.mtime);
+    return filePath;
+  }
+
+  it('arm 1: session present only in managed root is included with configDir=managed', async () => {
+    const projectId = 'proj-managed-only';
+    await writeSession(managedDir, projectId, 'session-a', { mtime: new Date('2026-01-01') });
+
+    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.configDir).toBe(managedDir);
+  });
+
+  it('arm 2: session present only in legacy root is included with configDir=legacy', async () => {
+    const projectId = 'proj-legacy-only';
+    await writeSession(legacyDir, projectId, 'session-b', { mtime: new Date('2026-01-01') });
+
+    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.configDir).toBe(legacyDir);
+  });
+
+  it('arm 3 (utimes construction): same sessionId in both roots, managed strictly newer — managed wins, single entry', async () => {
+    const projectId = 'proj-tiebreak-managed-newer';
+    await writeSession(legacyDir, projectId, 'session-c', {
+      mtime: new Date('2026-01-01T00:00:00Z'),
+    });
+    await writeSession(managedDir, projectId, 'session-c', {
+      mtime: new Date('2026-01-02T00:00:00Z'),
+    });
+
+    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.configDir).toBe(managedDir);
+  });
+
+  it('arm 4 (utimes construction): same sessionId in both roots, legacy strictly newer — legacy wins, single entry', async () => {
+    const projectId = 'proj-tiebreak-legacy-newer';
+    await writeSession(managedDir, projectId, 'session-d', {
+      mtime: new Date('2026-01-01T00:00:00Z'),
+    });
+    await writeSession(legacyDir, projectId, 'session-d', {
+      mtime: new Date('2026-01-02T00:00:00Z'),
+    });
+
+    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.configDir).toBe(legacyDir);
+  });
+
+  it('arm 5: same sessionId in both roots with equal mtimeMs — managed wins the tie deterministically', async () => {
+    const projectId = 'proj-tie-equal-mtime';
+    const tie = new Date('2026-01-01T00:00:00Z');
+    await writeSession(legacyDir, projectId, 'session-e', { mtime: tie });
+    await writeSession(managedDir, projectId, 'session-e', { mtime: tie });
+
+    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.configDir).toBe(managedDir);
+  });
+
+  it('arm 6: same sessionId under two DIFFERENT projectIds is kept as two distinct entries (session key includes projectId)', async () => {
+    const sameSessionId = 'shared-session-id';
+    await writeSession(managedDir, 'proj-x', sameSessionId, { mtime: new Date('2026-01-01') });
+    await writeSession(legacyDir, 'proj-y', sameSessionId, { mtime: new Date('2026-01-01') });
+
+    const scanner = dualRootScanner();
+    const sessionsX = await scanner.getSessionsForProject('proj-x');
+    const sessionsY = await scanner.getSessionsForProject('proj-y');
+
+    expect(sessionsX).toHaveLength(1);
+    expect(sessionsY).toHaveLength(1);
+    expect(sessionsX[0]?.configDir).toBe(managedDir);
+    expect(sessionsY[0]?.configDir).toBe(legacyDir);
+  });
+
+  it('scanProjects merges same-slug project across roots: dedup sessionCount + max lastActivityAt', async () => {
+    const projectId = 'proj-merge-slug';
+    await writeSession(legacyDir, projectId, 'legacy-only-session', {
+      mtime: new Date('2026-01-01'),
+    });
+    await writeSession(managedDir, projectId, 'managed-only-session', {
+      mtime: new Date('2026-03-01'),
+    });
+    // Duplicate session key across roots must count once, not twice.
+    await writeSession(legacyDir, projectId, 'shared-session', { mtime: new Date('2026-01-15') });
+    await writeSession(managedDir, projectId, 'shared-session', { mtime: new Date('2026-01-20') });
+
+    const projects = await dualRootScanner().scanProjects();
+
+    expect(projects).toHaveLength(1);
+    expect(projects[0]?.id).toBe(projectId);
+    // 3 unique session keys: legacy-only, managed-only, shared (deduped).
+    expect(projects[0]?.sessionCount).toBe(3);
+    expect(projects[0]?.lastActivityAt).toBe(Math.floor(new Date('2026-03-01').getTime() / 1000));
+  });
+
+  it('degrades per-root on a broken symlink (stat failure) instead of dropping the other root', async () => {
+    const projectId = 'proj-degraded-root';
+    await writeSession(legacyDir, projectId, 'legacy-good-session', {
+      mtime: new Date('2026-01-01'),
+    });
+
+    const managedProjectDir = path.join(managedDir, 'projects', projectId);
+    await fs.mkdir(managedProjectDir, { recursive: true });
+    // A dangling symlink: fs.stat() throws ENOENT on it, simulating a
+    // per-file stat failure without relying on OS permission semantics.
+    await fs.symlink(
+      path.join(managedProjectDir, 'does-not-exist-target'),
+      path.join(managedProjectDir, 'broken-session.jsonl')
+    );
+
+    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.id).toBe('legacy-good-session');
+  });
+
+  it('flag-off single root: resolveLegacyClaudeSessionRoot ignores managed root entirely (no merge)', async () => {
+    const projectId = 'proj-flag-off';
+    await writeSession(managedDir, projectId, 'should-be-invisible', {
+      mtime: new Date('2026-01-01'),
+    });
+    await writeSession(legacyDir, projectId, 'should-be-visible', {
+      mtime: new Date('2026-01-01'),
+    });
+
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [{ dir: legacyDir, kind: 'legacy' }],
+    });
+    const sessions = await scanner.getSessionsForProject(projectId);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.id).toBe('should-be-visible');
+  });
+
+  /**
+   * Mutation pin (D47 S2 §3-8, s2b-mutation-plan pair 5): `resolveRoots` must
+   * be invoked fresh on every public-method call, never captured once at
+   * `new ClaudeSessionScanner(...)` time. A constructor that eagerly calls
+   * `options.resolveRoots()` and memoizes the snapshot (`this.resolveRoots =
+   * () => snapshot`) would still typecheck and pass every other test in this
+   * file — those all construct-then-call-once — but breaks the module-level
+   * singleton (`claudeSessions.ts`) silently: it constructs one `Scanner`
+   * instance and expects flag/env changes made *after* that construction to
+   * still be picked up on the next call (`D47 S2 §0.1`). This test flips the
+   * provider's return value strictly between two calls on the SAME instance.
+   */
+  it('resolveRoots is re-invoked per call, not captured at construction time (pins against eager/constructor-time capture)', async () => {
+    const projectId = 'proj-lazy-provider';
+    await writeSession(legacyDir, projectId, 'legacy-session', { mtime: new Date('2026-01-01') });
+    await writeSession(managedDir, projectId, 'managed-session', {
+      mtime: new Date('2026-01-01'),
+    });
+
+    let currentRoots: Array<{ dir: string; kind: 'managed' | 'legacy' }> = [
+      { dir: legacyDir, kind: 'legacy' },
+    ];
+    const scanner = new ClaudeSessionScanner({ resolveRoots: () => currentRoots });
+
+    const before = await scanner.getSessionsForProject(projectId);
+    expect(before).toHaveLength(1);
+    expect(before[0]?.id).toBe('legacy-session');
+
+    // Flip AFTER construction, on the SAME scanner instance. A constructor
+    // that captured a snapshot would keep returning the legacy-only result.
+    currentRoots = [
+      { dir: legacyDir, kind: 'legacy' },
+      { dir: managedDir, kind: 'managed' },
+    ];
+
+    const after = await scanner.getSessionsForProject(projectId);
+    expect(after.map((s) => s.id).sort()).toEqual(['legacy-session', 'managed-session']);
   });
 });

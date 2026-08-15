@@ -7,10 +7,16 @@ import type {
   OnboardingSendCodeResponse,
   OnboardingState,
 } from '@shared/types';
-import { net } from 'electron';
+import { app, net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import {
+  type ClaudeHomeCredentials,
+  generateClaudeSettings,
+  getManagedClaudeHomeDir,
+} from '../auth/claudeHome';
+import { writeSettingsFile } from '../auth/managedFileWriter';
 import { redactLogArgs } from '../auth/redact';
 import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
@@ -184,9 +190,64 @@ class OnboardingService {
         cchServerUrl,
         onboardingState.registeredAt ?? new Date().toISOString()
       );
+
+      // D47 S2a §1: regenerate the managed claude-home settings.json using
+      // the CREDENTIALS OBJECT WE ALREADY HAVE, not a vault re-read — a
+      // vault.save failure above must not leave a freshly-logged-in user
+      // without a working managed env (A-track M4).
+      const credentialsForClaudeHome = this.getCredentialWriteInputs(result, normalizedServerUrl);
+      if (credentialsForClaudeHome) {
+        await this.regenerateManagedClaudeHomeSettings({
+          baseUrl: credentialsForClaudeHome.claudeBaseUrl,
+          authToken: credentialsForClaudeHome.claudeAuthToken,
+        });
+        // I5 epoch chain (A-track M10): drop any Host that cached the old
+        // (or absent) env so the next session picks up the fresh one.
+        void this.shutdownAgentHostAfterRegenerate();
+      }
     }
 
     return result;
+  }
+
+  /**
+   * Lazily imports `agentHostManager` (D47 S2a M10 wiring) instead of a
+   * static top-level import: `AgentHostManager.ts` pulls in a much heavier
+   * dependency graph (process spawning, logger, etc.) that this repo's
+   * vitest node environment can hang on importing eagerly (see sibling
+   * `__tests__` files' `vi.mock('electron', ...)` scope). A dynamic import
+   * keeps that cost paid only when managed credentials are actually on and a
+   * regenerate actually ran.
+   */
+  private async shutdownAgentHostAfterRegenerate(): Promise<void> {
+    try {
+      const { agentHostManager } = await import('../agent-host/AgentHostManager');
+      await agentHostManager.shutdown();
+    } catch (error) {
+      console.warn('[OnboardingService] Failed to shut down agent host after regenerate:', error);
+    }
+  }
+
+  /**
+   * D47 S2a §1 — writes the managed `<claude-home>/settings.json` env
+   * section directly from a credentials object (login) or `null` (logout).
+   * Never reads the vault: the caller already knows what it wants written.
+   * Best-effort — a failure here must not turn a successful legacy
+   * login/logout into a rejected one.
+   */
+  private async regenerateManagedClaudeHomeSettings(
+    credentials: ClaudeHomeCredentials | null
+  ): Promise<void> {
+    try {
+      const claudeHomeDir = getManagedClaudeHomeDir(app.getPath('userData'));
+      const settingsPath = path.join(claudeHomeDir, 'settings.json');
+      await writeSettingsFile(settingsPath, (current) => ({
+        ...current,
+        ...generateClaudeSettings(credentials),
+      }));
+    } catch (error) {
+      console.warn('[OnboardingService] Failed to regenerate managed claude-home settings:', error);
+    }
   }
 
   private async saveVaultShadowCopy(
@@ -229,6 +290,20 @@ class OnboardingService {
   logout(): boolean {
     try {
       this.removeClaudeCredentials();
+
+      // D47 S2a §1 — deterministic no-credential regenerate, positioned right
+      // after `removeClaudeCredentials()` rather than chained off
+      // `clearVaultShadowCopy()`'s fire-and-forget promise (which has no
+      // "after clear" checkpoint, A-track B2). Never reads the vault: logout
+      // always writes an empty env regardless of what the vault currently
+      // holds. `logout()` itself stays synchronous `boolean` (unchanged
+      // public contract) — this kicks the regenerate off without awaiting it.
+      if (resolveManagedCredentialsEnabled()) {
+        void this.regenerateManagedClaudeHomeSettings(null).then(() => {
+          void this.shutdownAgentHostAfterRegenerate();
+        });
+      }
+
       this.removeCodexConfig();
       const ok = mergeSettingsPatch({ onboarding: { registered: false } });
       this.clearVaultShadowCopy();

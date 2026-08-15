@@ -2,8 +2,20 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+/**
+ * D47 S2a §1: follows `CLAUDE_CONFIG_DIR` when set (managed redirect).
+ * Note: CLAUDE.md is plain text (not JSON), so it is NOT routed through
+ * `managedFileWriter` — that pipeline is JSON-shaped and also chmods 0600,
+ * which would wrongly lock down CLAUDE.md (intentionally 0644/world-readable,
+ * unlike settings.json/.claude.json which carry credentials). Only the
+ * CLAUDE_CONFIG_DIR-aware path resolution applies here.
+ */
+function getClaudeConfigDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+}
+
 function getClaudeMdPath(): string {
-  return path.join(os.homedir(), '.claude', 'CLAUDE.md');
+  return path.join(getClaudeConfigDir(), 'CLAUDE.md');
 }
 
 /**
@@ -56,7 +68,7 @@ export function backupClaudeMd(): string | null {
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = path.join(os.homedir(), '.claude', 'backups', `CLAUDE.md.${timestamp}.bak`);
+    const backupPath = path.join(getClaudeConfigDir(), 'backups', `CLAUDE.md.${timestamp}.bak`);
     const backupDir = path.dirname(backupPath);
 
     if (!fs.existsSync(backupDir)) {

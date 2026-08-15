@@ -1,3 +1,4 @@
+import { join, resolve as resolvePath } from 'node:path';
 import {
   IPC_CHANNELS,
   type SessionAttachOptions,
@@ -10,7 +11,9 @@ import {
   type SessionRuntimeState,
   type SessionStateEvent,
 } from '@shared/types';
-import { BrowserWindow, type WebContents } from 'electron';
+import { app, BrowserWindow, type WebContents } from 'electron';
+import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { ensureWorkspaceTrusted, getManagedClaudeHomeDir } from '../auth/claudeHome';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
 import { isRemoteVirtualPath, parseRemoteVirtualPath } from '../remote/RemotePath';
 import { PtyManager } from '../terminal/PtyManager';
@@ -71,7 +74,20 @@ export class SessionManager {
     if (options.cwd && isRemoteVirtualPath(options.cwd)) {
       return this.createRemote(windowId, options);
     }
+    // D47 S2a trust call matrix entry ③ — the common local-session throat
+    // for both the legacy Terminal IPC and the newer generic Session IPC.
+    // Remote paths never reach here (already routed to createRemote above,
+    // I8 no-op).
+    await this.ensureWorkspaceTrustedForLocalCreate(options.cwd);
     return this.createLocal(windowId, options);
+  }
+
+  private async ensureWorkspaceTrustedForLocalCreate(cwd: string | undefined): Promise<void> {
+    if (!resolveManagedCredentialsEnabled()) return;
+    if (!cwd) return;
+    const claudeHomeDir = getManagedClaudeHomeDir(app.getPath('userData'));
+    const claudeJsonPath = join(claudeHomeDir, '.claude.json');
+    await ensureWorkspaceTrusted(claudeJsonPath, resolvePath(cwd));
   }
 
   async attach(

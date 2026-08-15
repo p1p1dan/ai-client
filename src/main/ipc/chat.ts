@@ -3,15 +3,33 @@
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
+import { join, resolve } from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { AgentWireName } from '@shared/types/agentWire';
 import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
-import { BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { agentHostManager } from '../services/agent-host/AgentHostManager';
+import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
+import { ensureWorkspaceTrusted, getManagedClaudeHomeDir } from '../services/auth/claudeHome';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
+import { isRemoteVirtualPath } from '../services/remote/RemotePath';
+
+/**
+ * D47 S2a trust call matrix (spec §1) — entries ①②: `CHAT_CREATE_SESSION`
+ * and `CHAT_RESUME_SESSION` await this BEFORE `recordCreated`/`createSession`
+ * (or the resume equivalents). flag off, or a remote virtual path (I8), is a
+ * no-op — trust marking only applies to the managed local `.claude.json`.
+ */
+async function ensureWorkspaceTrustedForChat(workspacePath: string | undefined): Promise<void> {
+  if (!resolveManagedCredentialsEnabled()) return;
+  if (!workspacePath || isRemoteVirtualPath(workspacePath)) return;
+  const claudeHomeDir = getManagedClaudeHomeDir(app.getPath('userData'));
+  const claudeJsonPath = join(claudeHomeDir, '.claude.json');
+  await ensureWorkspaceTrusted(claudeJsonPath, resolve(workspacePath));
+}
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -65,6 +83,7 @@ export function registerChatHandlers(): void {
         agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
+      await ensureWorkspaceTrustedForChat(payload.workspacePath);
       await sessionIndexService.recordCreated(payload);
       const requestId = await agentHostManager.createSession(payload);
       return { requestId };
@@ -124,6 +143,7 @@ export function registerChatHandlers(): void {
         agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
+      await ensureWorkspaceTrustedForChat(payload.workspacePath);
       await sessionIndexService.recordResumed(payload);
       const requestId = await agentHostManager.resumeSession(payload);
       return { requestId };

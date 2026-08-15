@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GlowCard, useGlowEffectEnabled } from '@/components/ui/glow-card';
 import { toastManager } from '@/components/ui/toast';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
+import { useManagedMode } from '@/hooks/useManagedMode';
 import { useSessionOutputState } from '@/hooks/useOutputState';
 import { useI18n } from '@/i18n';
 import {
@@ -470,6 +471,7 @@ export function SessionBar({
   const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
 
   // Provider 查询和切换逻辑
+  const { data: managedModeInfo } = useManagedMode();
   const queryClient = useQueryClient();
   const providers = useSettingsStore((s) => s.claudeCodeIntegration.providers);
   const showProviderSwitcher = useSettingsStore(
@@ -483,7 +485,7 @@ export function SessionBar({
   const { data: claudeData } = useQuery({
     queryKey: ['claude-settings', repoPath ?? null],
     queryFn: () => window.electronAPI.claudeProvider.readSettings(repoPath),
-    enabled: !state.collapsed, // 仅在展开状态查询
+    enabled: !state.collapsed && !managedModeInfo.managed, // 仅在展开且非托管状态查询
     staleTime: 30000, // 30秒缓存避免频繁查询
   });
 
@@ -961,8 +963,8 @@ export function SessionBar({
               )}
             </div>
 
-            {/* Provider Tag - 仅在展开且设置启用时显示 */}
-            {!state.collapsed && showProviderSwitcher && (
+            {/* Provider Tag - 仅在展开、设置启用且非托管模式时显示（D47 S2b §1 ④：托管模式下 Provider 入口隐藏） */}
+            {!state.collapsed && showProviderSwitcher && !managedModeInfo.managed && (
               <>
                 <div className="mx-1 h-4 w-px bg-border" />
 

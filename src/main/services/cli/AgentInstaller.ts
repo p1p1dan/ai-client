@@ -377,7 +377,7 @@ export class AgentInstaller {
       // Claude's built-in updater silently pulls the latest Bun build on the
       // next launch; turn it off so we don't fall back outside the whitelist.
       try {
-        disableClaudeAutoUpdates();
+        await disableClaudeAutoUpdates();
       } catch (error) {
         console.warn('[AgentInstaller] Failed to disable Claude autoUpdates:', error);
       }

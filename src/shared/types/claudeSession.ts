@@ -20,4 +20,11 @@ export interface ClaudeSessionMeta {
   lastMessageAt: number | null;
   /** Model name, e.g. `claude-sonnet-4.6`. */
   model: string | null;
+  /**
+   * Absolute path to the `~/.claude`-shaped config dir this session's
+   * winning file lives under (managed home or legacy `~/.claude`).
+   * Provenance from `ClaudeSessionScanner`'s dual-root merge — resume uses
+   * this directly instead of guessing via candidate-path existence probes.
+   */
+  configDir: string;
 }

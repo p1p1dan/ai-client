@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/command';
 import { toastManager } from '@/components/ui/toast';
 import { useDetectedApps, useOpenWith } from '@/hooks/useAppDetector';
+import { useManagedMode } from '@/hooks/useManagedMode';
 import { useI18n } from '@/i18n';
 import {
   clearClaudeProviderSwitch,
@@ -223,13 +224,14 @@ export function ActionPanel({
   const { recentIds, addRecentCommand } = useRecentCommands();
 
   // Claude Provider
+  const { data: managedModeInfo } = useManagedMode();
   const queryClient = useQueryClient();
   const providers = useSettingsStore((s) => s.claudeCodeIntegration.providers);
 
   const { data: claudeData } = useQuery({
     queryKey: ['claude-settings', repoPath ?? null],
     queryFn: () => window.electronAPI.claudeProvider.readSettings(repoPath),
-    enabled: open, // 只在面板打开时查询
+    enabled: open && !managedModeInfo.managed, // 只在面板打开且非托管状态查询
   });
 
   const activeProvider = React.useMemo(() => {
@@ -261,8 +263,9 @@ export function ActionPanel({
   const actionGroups: ActionGroup[] = React.useMemo(() => {
     const groups: ActionGroup[] = [];
 
-    // Claude Provider group (only show if providers exist)
-    if (providers.length > 0) {
+    // Claude Provider group (only show if providers exist and not managed —
+    // D47 S2b §1 ④: managed mode hides the provider entry entirely)
+    if (providers.length > 0 && !managedModeInfo.managed) {
       groups.push({
         label: 'Claude Provider',
         items: providers.map((provider) => ({
@@ -426,6 +429,7 @@ export function ActionPanel({
     providers,
     activeProvider,
     applyProvider,
+    managedModeInfo.managed,
     t,
     repositoryCollapsed,
     worktreeCollapsed,

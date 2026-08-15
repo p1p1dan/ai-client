@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CREDENTIAL_ENV_KEYS, CREDENTIAL_ENV_PREFIX } from './credential-env-keys.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -88,21 +89,18 @@ ensureLocalLinuxRuntimeBundle();
 // ---------------------------------------------------------------------------
 
 const DEV_ENV_FILE = process.env.AICLIENT_DEV_ENV_FILE || join(root, 'dev.env');
-const STRIPPED_PREFIX = 'ANTHROPIC_';
+// D47 S2a §1: the credential-shaped prefix/key list is shared with Main
+// (`src/main/index.ts`) via `credential-env-keys.mjs` — single source, a
+// vitest asserts both sides resolve to the same list.
+const STRIPPED_PREFIX = CREDENTIAL_ENV_PREFIX;
 // D47 S1 §2.6: AICLIENT_MANAGED_CREDENTIALS rides along with the other
 // credential-shaped vars — stripped from the inherited shell copy so a
-// leftover export in the developer's shell can't silently flip it on.
+// leftover export in the developer's shell can't silently flip it on. This
+// key is dev.js-specific (the managed-credentials flag itself is not a
+// "credential" var Main needs to redact), so it stays local rather than
+// living in the shared list.
 const MANAGED_CREDENTIALS_KEY = 'AICLIENT_MANAGED_CREDENTIALS';
-const STRIPPED_KEYS = [
-  'CLAUDE_CODE_OAUTH_TOKEN',
-  'CLAUDE_CONFIG_DIR',
-  'CLAUDE_CODE_USE_BEDROCK',
-  'CLAUDE_CODE_USE_VERTEX',
-  'AWS_BEARER_TOKEN_BEDROCK',
-  'GOOGLE_APPLICATION_CREDENTIALS',
-  'CLOUD_ML_REGION',
-  MANAGED_CREDENTIALS_KEY,
-];
+const STRIPPED_KEYS = [...CREDENTIAL_ENV_KEYS, MANAGED_CREDENTIALS_KEY];
 
 /**
  * D47 S1 §2.6 (A-track "dev 轮可开" + B-track "不被继承环境意外打开", 合取):

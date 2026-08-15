@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { app } from 'electron';
+import { writeSettingsFile } from '../auth/managedFileWriter';
 
 interface StatusLineConfig {
   type: 'command' | 'text';
@@ -80,59 +81,44 @@ function getClaudeSettingsPath(): string {
 }
 
 /**
- * Read env keys from the current settings.json on disk. Used by
- * `writeSettingsWithEnvGuard` to detect when a write would silently drop
- * ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN — the failure mode users hit on
- * 0.2.56 where the file survives with hooks-only contents.
+ * Env snapshot extraction (D47 S2 §1): derived directly from the in-memory
+ * settings object a managedFileWriter mutator is handed (the freshest
+ * on-disk content for this queue turn) instead of a separate `readFileSync`
+ * right before writing — same information, one fewer TOCTOU-prone read.
  */
-function readEnvSnapshot(settingsPath: string): {
-  baseUrl: string;
-  authToken: string;
-} | null {
-  try {
-    if (!fs.existsSync(settingsPath)) return null;
-    const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
-      env?: Record<string, unknown>;
-    };
-    const env = parsed.env ?? {};
-    return {
-      baseUrl: typeof env.ANTHROPIC_BASE_URL === 'string' ? env.ANTHROPIC_BASE_URL : '',
-      authToken: typeof env.ANTHROPIC_AUTH_TOKEN === 'string' ? env.ANTHROPIC_AUTH_TOKEN : '',
-    };
-  } catch {
-    return null;
-  }
+function extractEnvSnapshot(settings: ClaudeSettings): { baseUrl: string; authToken: string } {
+  const env = (settings.env as Record<string, unknown> | undefined) ?? {};
+  return {
+    baseUrl: typeof env.ANTHROPIC_BASE_URL === 'string' ? env.ANTHROPIC_BASE_URL : '',
+    authToken: typeof env.ANTHROPIC_AUTH_TOKEN === 'string' ? env.ANTHROPIC_AUTH_TOKEN : '',
+  };
 }
 
 /**
- * Persist a hook-mutated settings.json and loudly complain if we're about to
- * drop the user's Anthropic credentials. Returns the env that was on disk
- * before this write so callers can detect a regression introduced by their
- * own merge logic. We log instead of refusing because settings.json may
- * legitimately have empty env (logout, pre-onboarding) — refusing would
- * break those flows. The signal we want is "env was there and we lost it".
+ * Assertion-only guard (D47 S2 §1): the actual write now goes through
+ * `managedFileWriter.writeSettingsFile`'s queued read-modify-write, so this
+ * function no longer writes anything — it only compares the env captured
+ * before a hook mutation to the env baked into the settings the mutator is
+ * about to return, and loudly warns if we're about to drop the user's
+ * Anthropic credentials. Warning semantics are unchanged from pre-S2: we log
+ * instead of refusing because settings.json may legitimately have empty env
+ * (logout, pre-onboarding) — refusing would break those flows. The signal we
+ * want is "env was there and we lost it".
  */
-function writeSettingsWithEnvGuard(
-  settingsPath: string,
-  settings: ClaudeSettings,
+function warnIfEnvRegressed(
+  before: { baseUrl: string; authToken: string },
+  next: ClaudeSettings,
   callerName: string
 ): void {
-  const before = readEnvSnapshot(settingsPath);
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
-  if (before && (before.baseUrl || before.authToken)) {
-    const newEnv = (settings.env as Record<string, unknown> | undefined) ?? {};
-    const newBaseUrl =
-      typeof newEnv.ANTHROPIC_BASE_URL === 'string' ? newEnv.ANTHROPIC_BASE_URL : '';
-    const newAuthToken =
-      typeof newEnv.ANTHROPIC_AUTH_TOKEN === 'string' ? newEnv.ANTHROPIC_AUTH_TOKEN : '';
-    if (newBaseUrl !== before.baseUrl || newAuthToken !== before.authToken) {
-      console.error(
-        `[ClaudeHookManager] ENV REGRESSION in ${callerName}: settings.env Anthropic keys changed during a hook write. ` +
-          `before(baseUrl=${before.baseUrl ? 'set' : 'empty'}, token=${before.authToken ? 'set' : 'empty'}) ` +
-          `after(baseUrl=${newBaseUrl ? 'set' : 'empty'}, token=${newAuthToken ? 'set' : 'empty'}) ` +
-          `topKeys=${Object.keys(settings as object).join(',')}`
-      );
-    }
+  if (!before.baseUrl && !before.authToken) return;
+  const after = extractEnvSnapshot(next);
+  if (after.baseUrl !== before.baseUrl || after.authToken !== before.authToken) {
+    console.error(
+      `[ClaudeHookManager] ENV REGRESSION in ${callerName}: settings.env Anthropic keys changed during a hook write. ` +
+        `before(baseUrl=${before.baseUrl ? 'set' : 'empty'}, token=${before.authToken ? 'set' : 'empty'}) ` +
+        `after(baseUrl=${after.baseUrl ? 'set' : 'empty'}, token=${after.authToken ? 'set' : 'empty'}) ` +
+        `topKeys=${Object.keys(next as object).join(',')}`
+    );
   }
 }
 
@@ -360,7 +346,7 @@ export function isClaudeInstalled(): boolean {
  * Returns true if hook was added or already exists
  * Returns false if Claude is not installed (skips setup)
  */
-export function ensureStopHook(): boolean {
+export async function ensureStopHook(): Promise<boolean> {
   // Skip hook setup if Claude is not installed
   if (!isClaudeInstalled()) {
     console.log('[ClaudeHookManager] Claude not installed, skipping hook setup');
@@ -369,88 +355,72 @@ export function ensureStopHook(): boolean {
 
   try {
     const settingsPath = getClaudeSettingsPath();
-
-    // Read existing settings or create new
-    let settings: ClaudeSettings = {};
-    if (fs.existsSync(settingsPath)) {
-      const content = fs.readFileSync(settingsPath, 'utf-8');
-      settings = JSON.parse(content);
-    }
-
-    // IMPORTANT: Migrate settings.json BEFORE deleting legacy script files
-    // This ensures atomic migration - if settings update fails, script still exists
-    let needSave = false;
-    if (settings.hooks?.Stop) {
-      const originalLength = settings.hooks.Stop.length;
-      // Remove old .js and legacy .cjs references
-      settings.hooks.Stop = settings.hooks.Stop.filter(
-        (hookGroup) =>
-          !hookGroup.hooks?.some(
-            (hook) =>
-              hook.type === 'command' &&
-              (hook.command?.includes('aiclient-stop.js') || hook.command?.includes(LEGACY_MARKER))
-          )
-      );
-      if (settings.hooks.Stop.length < originalLength) {
-        console.log('[ClaudeHookManager] Cleaned up legacy hook references from settings');
-        needSave = true;
-      }
-      // Clean up empty Stop array
-      if (settings.hooks.Stop.length === 0) {
-        delete settings.hooks.Stop;
-      }
-    }
-
-    // Save migrated settings BEFORE deleting script files
-    if (needSave) {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-        mode: 0o600,
-      });
-    }
-
-    // Now safe to update script files (settings.json is already clean)
-    ensureHookScript();
-
-    // Check if already configured (with NEW hook marker only, not legacy)
-    const hasCurrentHook = settings.hooks?.Stop?.some((hookGroup) =>
-      hookGroup.hooks?.some(
-        (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
-      )
-    );
-    if (hasCurrentHook) {
-      return true;
-    }
-
-    // Initialize hooks object if needed
-    if (!settings.hooks) {
-      settings.hooks = {};
-    }
-    if (!settings.hooks.Stop) {
-      settings.hooks.Stop = [];
-    }
-
-    // Add our hook - marker is embedded in the command for identification
-    const hookCommand = generateHookCommand();
-    settings.hooks.Stop.push({
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          // Marker is checked via includes(HOOK_MARKER), embedded in command itself
-          command: hookCommand,
-          timeout: 5,
-        },
-      ],
-    });
-
-    // Ensure directory exists
     const configDir = getClaudeConfigDir();
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
 
-    // Write settings
-    writeSettingsWithEnvGuard(settingsPath, settings, 'ensureStopHook');
+    // D47 S2 §1: legacy-reference migration + hook-presence check + hook
+    // append all run inside managedFileWriter's per-path queue, against
+    // whatever the freshest on-disk content is at this mutator's turn — not
+    // a snapshot read before the queue. This is what keeps a concurrent
+    // claudeHome generator write and this hook write from losing either
+    // side's sentinel (spec §3-1). The settings write always lands before
+    // `ensureHookScript()` runs below, preserving the pre-refactor ordering
+    // guarantee ("migrate settings before deleting legacy script files").
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
+      const before = extractEnvSnapshot(settings);
+
+      // Remove old .js and legacy .cjs references.
+      if (settings.hooks?.Stop) {
+        settings.hooks.Stop = settings.hooks.Stop.filter(
+          (hookGroup) =>
+            !hookGroup.hooks?.some(
+              (hook) =>
+                hook.type === 'command' &&
+                (hook.command?.includes('aiclient-stop.js') ||
+                  hook.command?.includes(LEGACY_MARKER))
+            )
+        );
+        if (settings.hooks.Stop.length === 0) {
+          delete settings.hooks.Stop;
+        }
+      }
+
+      // Check if already configured (with NEW hook marker only, not legacy)
+      const hasCurrentHook = settings.hooks?.Stop?.some((hookGroup) =>
+        hookGroup.hooks?.some(
+          (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
+        )
+      );
+      if (!hasCurrentHook) {
+        if (!settings.hooks) {
+          settings.hooks = {};
+        }
+        if (!settings.hooks.Stop) {
+          settings.hooks.Stop = [];
+        }
+        // Add our hook - marker is embedded in the command for identification
+        settings.hooks.Stop.push({
+          matcher: '',
+          hooks: [
+            {
+              type: 'command',
+              // Marker is checked via includes(HOOK_MARKER), embedded in command itself
+              command: generateHookCommand(),
+              timeout: 5,
+            },
+          ],
+        });
+      }
+
+      warnIfEnvRegressed(before, settings, 'ensureStopHook');
+      return settings;
+    });
+
+    // Now safe to update script files (settings.json is already clean)
+    ensureHookScript();
 
     console.log('[ClaudeHookManager] Stop hook configured successfully');
     return true;
@@ -463,7 +433,7 @@ export function ensureStopHook(): boolean {
 /**
  * Remove AiClient Stop hook from Claude settings
  */
-export function removeStopHook(): boolean {
+export async function removeStopHook(): Promise<boolean> {
   try {
     const settingsPath = getClaudeSettingsPath();
 
@@ -471,35 +441,33 @@ export function removeStopHook(): boolean {
       return true;
     }
 
-    const content = fs.readFileSync(settingsPath, 'utf-8');
-    const settings: ClaudeSettings = JSON.parse(content);
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
+      if (!settings.hooks?.Stop) {
+        return settings;
+      }
 
-    if (!settings.hooks?.Stop) {
-      return true;
-    }
+      // Filter out our hook (both current and legacy)
+      settings.hooks.Stop = settings.hooks.Stop.filter(
+        (hookGroup) =>
+          !hookGroup.hooks?.some(
+            (hook) =>
+              hook.type === 'command' &&
+              (hook.command?.includes(HOOK_MARKER) ||
+                hook.command?.includes(LEGACY_MARKER) ||
+                hook.command?.includes('aiclient-stop'))
+          )
+      );
 
-    // Filter out our hook (both current and legacy)
-    settings.hooks.Stop = settings.hooks.Stop.filter(
-      (hookGroup) =>
-        !hookGroup.hooks?.some(
-          (hook) =>
-            hook.type === 'command' &&
-            (hook.command?.includes(HOOK_MARKER) ||
-              hook.command?.includes(LEGACY_MARKER) ||
-              hook.command?.includes('aiclient-stop'))
-        )
-    );
+      // Clean up empty arrays
+      if (settings.hooks.Stop.length === 0) {
+        delete settings.hooks.Stop;
+      }
+      if (Object.keys(settings.hooks).length === 0) {
+        delete settings.hooks;
+      }
 
-    // Clean up empty arrays
-    if (settings.hooks.Stop.length === 0) {
-      delete settings.hooks.Stop;
-    }
-    if (Object.keys(settings.hooks).length === 0) {
-      delete settings.hooks;
-    }
-
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-      mode: 0o600,
+      return settings;
     });
 
     console.log('[ClaudeHookManager] Stop hook removed successfully');
@@ -690,7 +658,7 @@ function restoreStatusLineConfig(): StatusLineConfig | null | undefined {
 /**
  * Ensure status line hook is configured
  */
-export function ensureStatusLineHook(): boolean {
+export async function ensureStatusLineHook(): Promise<boolean> {
   if (!isClaudeInstalled()) {
     console.log('[ClaudeHookManager] Claude not installed, skipping status line hook setup');
     return false;
@@ -701,53 +669,47 @@ export function ensureStatusLineHook(): boolean {
     ensureStatusLineScript();
 
     const settingsPath = getClaudeSettingsPath();
-
-    let settings: ClaudeSettings = {};
-    if (fs.existsSync(settingsPath)) {
-      const content = fs.readFileSync(settingsPath, 'utf-8');
-      settings = JSON.parse(content);
-    }
-
-    // TODO(v0.3.0): Remove legacy .js cleanup from settings.json
-    // Clean up legacy .js reference in statusLine (file may have been deleted in previous versions)
-    let needSave = false;
-    if (
-      settings.statusLine?.type === 'command' &&
-      settings.statusLine?.command?.includes('aiclient-statusline.js')
-    ) {
-      console.log('[ClaudeHookManager] Cleaned up legacy .js statusLine reference from settings');
-      delete settings.statusLine;
-      needSave = true;
-    }
-
-    // Save if we cleaned up legacy reference
-    if (needSave) {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-        mode: 0o600,
-      });
-    }
-
-    // Already configured
-    if (isStatusLineHookConfigured(settings)) {
-      return true;
-    }
-
-    // Backup existing config
-    backupStatusLineConfig(settings.statusLine);
-
-    // Set our status line config
-    settings.statusLine = {
-      type: 'command',
-      command: generateStatusLineCommand(),
-      padding: 0,
-    };
-
     const configDir = getClaudeConfigDir();
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
 
-    writeSettingsWithEnvGuard(settingsPath, settings, 'ensureStatusLineHook');
+    // D47 S2 §1: legacy cleanup + already-configured check + backup + new
+    // statusLine assignment all run inside one managedFileWriter mutator
+    // turn, against the freshest on-disk content (see `ensureStopHook`).
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
+      const before = extractEnvSnapshot(settings);
+
+      // TODO(v0.3.0): Remove legacy .js cleanup from settings.json
+      // Clean up legacy .js reference in statusLine (file may have been deleted in previous versions)
+      if (
+        settings.statusLine?.type === 'command' &&
+        settings.statusLine?.command?.includes('aiclient-statusline.js')
+      ) {
+        console.log('[ClaudeHookManager] Cleaned up legacy .js statusLine reference from settings');
+        delete settings.statusLine;
+      }
+
+      // Already configured
+      if (isStatusLineHookConfigured(settings)) {
+        return settings;
+      }
+
+      // Backup existing config
+      backupStatusLineConfig(settings.statusLine);
+
+      // Set our status line config
+      settings.statusLine = {
+        type: 'command',
+        command: generateStatusLineCommand(),
+        padding: 0,
+      };
+
+      warnIfEnvRegressed(before, settings, 'ensureStatusLineHook');
+      return settings;
+    });
+
     console.log('[ClaudeHookManager] Status line hook configured successfully');
     return true;
   } catch (error) {
@@ -759,7 +721,7 @@ export function ensureStatusLineHook(): boolean {
 /**
  * Remove status line hook and restore original config
  */
-export function removeStatusLineHook(): boolean {
+export async function removeStatusLineHook(): Promise<boolean> {
   try {
     const settingsPath = getClaudeSettingsPath();
 
@@ -767,37 +729,38 @@ export function removeStatusLineHook(): boolean {
       return true;
     }
 
-    const content = fs.readFileSync(settingsPath, 'utf-8');
-    const settings: ClaudeSettings = JSON.parse(content);
+    let removed = false;
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
 
-    // Only remove if it's our hook
-    if (!isStatusLineHookConfigured(settings)) {
-      return true;
+      // Only remove if it's our hook
+      if (!isStatusLineHookConfigured(settings)) {
+        return settings;
+      }
+      removed = true;
+
+      // Restore from backup
+      const originalConfig = restoreStatusLineConfig();
+
+      if (originalConfig === undefined || originalConfig === null) {
+        // No backup, or original had no config — just delete our config
+        delete settings.statusLine;
+      } else {
+        // Restore original config
+        settings.statusLine = originalConfig;
+      }
+
+      return settings;
+    });
+
+    if (removed) {
+      // Remove script file
+      const scriptPath = getStatusLineScriptPath();
+      if (fs.existsSync(scriptPath)) {
+        fs.unlinkSync(scriptPath);
+      }
+      console.log('[ClaudeHookManager] Status line hook removed successfully');
     }
-
-    // Restore from backup
-    const originalConfig = restoreStatusLineConfig();
-
-    if (originalConfig === undefined) {
-      // No backup, just delete our config
-      delete settings.statusLine;
-    } else if (originalConfig === null) {
-      // Original had no config
-      delete settings.statusLine;
-    } else {
-      // Restore original config
-      settings.statusLine = originalConfig;
-    }
-
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
-
-    // Remove script file
-    const scriptPath = getStatusLineScriptPath();
-    if (fs.existsSync(scriptPath)) {
-      fs.unlinkSync(scriptPath);
-    }
-
-    console.log('[ClaudeHookManager] Status line hook removed successfully');
     return true;
   } catch (error) {
     console.error('[ClaudeHookManager] Failed to remove status line hook:', error);
@@ -847,7 +810,7 @@ function isPermissionRequestHookConfigured(settings: ClaudeSettings): boolean {
 /**
  * Ensure PermissionRequest hook is configured
  */
-export function ensurePermissionRequestHook(): boolean {
+export async function ensurePermissionRequestHook(): Promise<boolean> {
   if (!isClaudeInstalled()) {
     console.log('[ClaudeHookManager] Claude not installed, skipping PermissionRequest hook setup');
     return false;
@@ -855,82 +818,62 @@ export function ensurePermissionRequestHook(): boolean {
 
   try {
     const settingsPath = getClaudeSettingsPath();
-
-    // Read existing settings or create new
-    let settings: ClaudeSettings = {};
-    if (fs.existsSync(settingsPath)) {
-      const content = fs.readFileSync(settingsPath, 'utf-8');
-      settings = JSON.parse(content);
-    }
-
-    // Migrate legacy hook references (aiclient-stop -> aiclient-hook)
-    let needSave = false;
-    if (settings.hooks?.PermissionRequest) {
-      const originalLength = settings.hooks.PermissionRequest.length;
-      settings.hooks.PermissionRequest = settings.hooks.PermissionRequest.filter(
-        (hookGroup) =>
-          !hookGroup.hooks?.some(
-            (hook) =>
-              hook.type === 'command' &&
-              (hook.command?.includes('aiclient-stop.js') || hook.command?.includes(LEGACY_MARKER))
-          )
-      );
-      if (settings.hooks.PermissionRequest.length < originalLength) {
-        console.log(
-          '[ClaudeHookManager] Cleaned up legacy PermissionRequest hook references from settings'
-        );
-        needSave = true;
-      }
-      if (settings.hooks.PermissionRequest.length === 0) {
-        delete settings.hooks.PermissionRequest;
-      }
-    }
-
-    if (needSave) {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-        mode: 0o600,
-      });
-    }
-
-    // Check if already configured (with NEW hook marker only)
-    const hasCurrentHook = settings.hooks?.PermissionRequest?.some((hookGroup) =>
-      hookGroup.hooks?.some(
-        (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
-      )
-    );
-    if (hasCurrentHook) {
-      return true;
-    }
-
-    // Initialize hooks object if needed
-    if (!settings.hooks) {
-      settings.hooks = {};
-    }
-    if (!settings.hooks.PermissionRequest) {
-      settings.hooks.PermissionRequest = [];
-    }
-
-    // Add our hook - reuse the same aiclient-hook.cjs script
-    const hookCommand = generateHookCommand();
-    settings.hooks.PermissionRequest.push({
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: hookCommand,
-          timeout: 5,
-        },
-      ],
-    });
-
-    // Ensure directory exists
     const configDir = getClaudeConfigDir();
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
 
-    // Write settings
-    writeSettingsWithEnvGuard(settingsPath, settings, 'ensurePermissionRequestHook');
+    // D47 S2 §1: migration + hasCurrentHook check + hook append merged into
+    // one managedFileWriter mutator turn (see `ensureStopHook` for rationale).
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
+      const before = extractEnvSnapshot(settings);
+
+      // Migrate legacy hook references (aiclient-stop -> aiclient-hook)
+      if (settings.hooks?.PermissionRequest) {
+        settings.hooks.PermissionRequest = settings.hooks.PermissionRequest.filter(
+          (hookGroup) =>
+            !hookGroup.hooks?.some(
+              (hook) =>
+                hook.type === 'command' &&
+                (hook.command?.includes('aiclient-stop.js') ||
+                  hook.command?.includes(LEGACY_MARKER))
+            )
+        );
+        if (settings.hooks.PermissionRequest.length === 0) {
+          delete settings.hooks.PermissionRequest;
+        }
+      }
+
+      // Check if already configured (with NEW hook marker only)
+      const hasCurrentHook = settings.hooks?.PermissionRequest?.some((hookGroup) =>
+        hookGroup.hooks?.some(
+          (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
+        )
+      );
+      if (!hasCurrentHook) {
+        if (!settings.hooks) {
+          settings.hooks = {};
+        }
+        if (!settings.hooks.PermissionRequest) {
+          settings.hooks.PermissionRequest = [];
+        }
+        // Add our hook - reuse the same aiclient-hook.cjs script
+        settings.hooks.PermissionRequest.push({
+          matcher: '',
+          hooks: [
+            {
+              type: 'command',
+              command: generateHookCommand(),
+              timeout: 5,
+            },
+          ],
+        });
+      }
+
+      warnIfEnvRegressed(before, settings, 'ensurePermissionRequestHook');
+      return settings;
+    });
 
     console.log('[ClaudeHookManager] PermissionRequest hook configured successfully');
     return true;
@@ -944,7 +887,7 @@ export function ensurePermissionRequestHook(): boolean {
  * Ensure UserPromptSubmit hook is configured in Claude settings
  * This hook triggers when user submits a message to Claude
  */
-export function ensureUserPromptSubmitHook(): boolean {
+export async function ensureUserPromptSubmitHook(): Promise<boolean> {
   if (!isClaudeInstalled()) {
     console.log('[ClaudeHookManager] Claude not installed, skipping UserPromptSubmit hook setup');
     return false;
@@ -952,53 +895,46 @@ export function ensureUserPromptSubmitHook(): boolean {
 
   try {
     const settingsPath = getClaudeSettingsPath();
-
-    // Read existing settings or create new
-    let settings: ClaudeSettings = {};
-    if (fs.existsSync(settingsPath)) {
-      const content = fs.readFileSync(settingsPath, 'utf-8');
-      settings = JSON.parse(content);
-    }
-
-    // Check if already configured
-    const hasCurrentHook = settings.hooks?.UserPromptSubmit?.some((hookGroup) =>
-      hookGroup.hooks?.some(
-        (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
-      )
-    );
-    if (hasCurrentHook) {
-      return true;
-    }
-
-    // Initialize hooks object if needed
-    if (!settings.hooks) {
-      settings.hooks = {};
-    }
-    if (!settings.hooks.UserPromptSubmit) {
-      settings.hooks.UserPromptSubmit = [];
-    }
-
-    // Add our hook - reuse the same aiclient-hook.cjs script
-    const hookCommand = generateHookCommand();
-    settings.hooks.UserPromptSubmit.push({
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: hookCommand,
-          timeout: 5,
-        },
-      ],
-    });
-
-    // Ensure directory exists
     const configDir = getClaudeConfigDir();
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
 
-    // Write settings
-    writeSettingsWithEnvGuard(settingsPath, settings, 'ensureUserPromptSubmitHook');
+    // D47 S2 §1: hasCurrentHook check + hook append merged into one
+    // managedFileWriter mutator turn (see `ensureStopHook` for rationale).
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
+      const before = extractEnvSnapshot(settings);
+
+      // Check if already configured
+      const hasCurrentHook = settings.hooks?.UserPromptSubmit?.some((hookGroup) =>
+        hookGroup.hooks?.some(
+          (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
+        )
+      );
+      if (!hasCurrentHook) {
+        if (!settings.hooks) {
+          settings.hooks = {};
+        }
+        if (!settings.hooks.UserPromptSubmit) {
+          settings.hooks.UserPromptSubmit = [];
+        }
+        // Add our hook - reuse the same aiclient-hook.cjs script
+        settings.hooks.UserPromptSubmit.push({
+          matcher: '',
+          hooks: [
+            {
+              type: 'command',
+              command: generateHookCommand(),
+              timeout: 5,
+            },
+          ],
+        });
+      }
+
+      warnIfEnvRegressed(before, settings, 'ensureUserPromptSubmitHook');
+      return settings;
+    });
 
     console.log('[ClaudeHookManager] UserPromptSubmit hook configured successfully');
     return true;
@@ -1012,7 +948,7 @@ export function ensureUserPromptSubmitHook(): boolean {
  * Ensure PreToolUse hook is configured in Claude settings
  * This hook triggers when Claude starts using any tool
  */
-export function ensurePreToolUseHook(): boolean {
+export async function ensurePreToolUseHook(): Promise<boolean> {
   if (!isClaudeInstalled()) {
     console.log('[ClaudeHookManager] Claude not installed, skipping PreToolUse hook setup');
     return false;
@@ -1020,53 +956,46 @@ export function ensurePreToolUseHook(): boolean {
 
   try {
     const settingsPath = getClaudeSettingsPath();
-
-    // Read existing settings or create new
-    let settings: ClaudeSettings = {};
-    if (fs.existsSync(settingsPath)) {
-      const content = fs.readFileSync(settingsPath, 'utf-8');
-      settings = JSON.parse(content);
-    }
-
-    // Check if already configured
-    const hasCurrentHook = settings.hooks?.PreToolUse?.some((hookGroup) =>
-      hookGroup.hooks?.some(
-        (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
-      )
-    );
-    if (hasCurrentHook) {
-      return true;
-    }
-
-    // Initialize hooks object if needed
-    if (!settings.hooks) {
-      settings.hooks = {};
-    }
-    if (!settings.hooks.PreToolUse) {
-      settings.hooks.PreToolUse = [];
-    }
-
-    // Add our hook - reuse the same aiclient-hook.cjs script
-    const hookCommand = generateHookCommand();
-    settings.hooks.PreToolUse.push({
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: hookCommand,
-          timeout: 5,
-        },
-      ],
-    });
-
-    // Ensure directory exists
     const configDir = getClaudeConfigDir();
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
 
-    // Write settings
-    writeSettingsWithEnvGuard(settingsPath, settings, 'ensurePreToolUseHook');
+    // D47 S2 §1: hasCurrentHook check + hook append merged into one
+    // managedFileWriter mutator turn (see `ensureStopHook` for rationale).
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
+      const before = extractEnvSnapshot(settings);
+
+      // Check if already configured
+      const hasCurrentHook = settings.hooks?.PreToolUse?.some((hookGroup) =>
+        hookGroup.hooks?.some(
+          (hook) => hook.type === 'command' && hook.command?.includes(HOOK_MARKER)
+        )
+      );
+      if (!hasCurrentHook) {
+        if (!settings.hooks) {
+          settings.hooks = {};
+        }
+        if (!settings.hooks.PreToolUse) {
+          settings.hooks.PreToolUse = [];
+        }
+        // Add our hook - reuse the same aiclient-hook.cjs script
+        settings.hooks.PreToolUse.push({
+          matcher: '',
+          hooks: [
+            {
+              type: 'command',
+              command: generateHookCommand(),
+              timeout: 5,
+            },
+          ],
+        });
+      }
+
+      warnIfEnvRegressed(before, settings, 'ensurePreToolUseHook');
+      return settings;
+    });
 
     console.log('[ClaudeHookManager] PreToolUse hook configured successfully');
     return true;
@@ -1079,7 +1008,7 @@ export function ensurePreToolUseHook(): boolean {
 /**
  * Remove PermissionRequest hook from Claude settings
  */
-export function removePermissionRequestHook(): boolean {
+export async function removePermissionRequestHook(): Promise<boolean> {
   try {
     const settingsPath = getClaudeSettingsPath();
 
@@ -1087,35 +1016,33 @@ export function removePermissionRequestHook(): boolean {
       return true;
     }
 
-    const content = fs.readFileSync(settingsPath, 'utf-8');
-    const settings: ClaudeSettings = JSON.parse(content);
+    await writeSettingsFile(settingsPath, (current) => {
+      const settings = current as ClaudeSettings;
+      if (!settings.hooks?.PermissionRequest) {
+        return settings;
+      }
 
-    if (!settings.hooks?.PermissionRequest) {
-      return true;
-    }
+      // Filter out our hook (both current and legacy)
+      settings.hooks.PermissionRequest = settings.hooks.PermissionRequest.filter(
+        (hookGroup) =>
+          !hookGroup.hooks?.some(
+            (hook) =>
+              hook.type === 'command' &&
+              (hook.command?.includes(HOOK_MARKER) || hook.command?.includes(LEGACY_MARKER))
+          )
+      );
 
-    // Filter out our hook (both current and legacy)
-    settings.hooks.PermissionRequest = settings.hooks.PermissionRequest.filter(
-      (hookGroup) =>
-        !hookGroup.hooks?.some(
-          (hook) =>
-            hook.type === 'command' &&
-            (hook.command?.includes(HOOK_MARKER) || hook.command?.includes(LEGACY_MARKER))
-        )
-    );
+      // Clean up empty PermissionRequest array
+      if (settings.hooks.PermissionRequest.length === 0) {
+        delete settings.hooks.PermissionRequest;
+      }
 
-    // Clean up empty PermissionRequest array
-    if (settings.hooks.PermissionRequest.length === 0) {
-      delete settings.hooks.PermissionRequest;
-    }
+      // Clean up empty hooks object
+      if (Object.keys(settings.hooks).length === 0) {
+        delete settings.hooks;
+      }
 
-    // Clean up empty hooks object
-    if (Object.keys(settings.hooks).length === 0) {
-      delete settings.hooks;
-    }
-
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), {
-      mode: 0o600,
+      return settings;
     });
 
     console.log('[ClaudeHookManager] PermissionRequest hook removed successfully');

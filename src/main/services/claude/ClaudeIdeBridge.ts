@@ -695,7 +695,7 @@ export async function setClaudeBridgeEnabled(
 
       // Install PreToolUse hook automatically when bridge starts
       // This enables activity state tracking (running/waiting_input/completed)
-      ensureUserPromptSubmitHook();
+      await ensureUserPromptSubmitHook();
     } else if (workspaceFolders) {
       bridgeInstance.updateWorkspaceFolders(workspaceFolders);
     }
@@ -723,7 +723,7 @@ export function setBridgeOptions(options: ClaudeIdeBridgeOptions): void {
 /**
  * Enable or disable the Stop hook for precise agent completion notifications
  */
-export function setStopHookEnabled(enabled: boolean): boolean {
+export async function setStopHookEnabled(enabled: boolean): Promise<boolean> {
   if (enabled) {
     return ensureStopHook();
   } else {
@@ -734,7 +734,7 @@ export function setStopHookEnabled(enabled: boolean): boolean {
 /**
  * Enable or disable the Status Line hook for displaying agent status
  */
-export function setStatusLineHookEnabled(enabled: boolean): boolean {
+export async function setStatusLineHookEnabled(enabled: boolean): Promise<boolean> {
   if (enabled) {
     return ensureStatusLineHook();
   } else {
@@ -745,7 +745,7 @@ export function setStatusLineHookEnabled(enabled: boolean): boolean {
 /**
  * Enable or disable the PermissionRequest hook for AskUserQuestion notifications
  */
-export function setPermissionRequestHookEnabled(enabled: boolean): boolean {
+export async function setPermissionRequestHookEnabled(enabled: boolean): Promise<boolean> {
   if (enabled) {
     return ensurePermissionRequestHook();
   } else {
@@ -756,7 +756,7 @@ export function setPermissionRequestHookEnabled(enabled: boolean): boolean {
 /**
  * Enable or disable the UserPromptSubmit hook for agent activity notifications
  */
-export function setUserPromptSubmitHookEnabled(enabled: boolean): boolean {
+export async function setUserPromptSubmitHookEnabled(enabled: boolean): Promise<boolean> {
   if (enabled) {
     return ensureUserPromptSubmitHook();
   } else {

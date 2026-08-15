@@ -23,9 +23,142 @@ type JsonlEntry = {
   message?: JsonlMessage;
 };
 
-function getClaudeProjectsDir(): string {
-  const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-  return path.join(claudeDir, 'projects');
+export type ClaudeSessionRootKind = 'managed' | 'legacy';
+
+/** A `~/.claude`-shaped config dir (contains `projects/`) to scan. */
+export interface ClaudeSessionRoot {
+  dir: string;
+  kind: ClaudeSessionRootKind;
+}
+
+export interface ClaudeSessionScannerOptions {
+  /**
+   * Lazy provider — invoked once per public method call, never cached at
+   * construction time. This mirrors the pre-refactor behavior (no
+   * constructor at all; `getClaudeProjectsDir()` re-read `CLAUDE_CONFIG_DIR`
+   * on every call) so the module-level singleton (`claudeSessions.ts`) keeps
+   * following env/flag changes made after import (D47 S2 §0.1 — "没有构造
+   * 函数...今天能跟随重定向正因无构造期捕获").
+   */
+  resolveRoots: () => ClaudeSessionRoot[];
+}
+
+/**
+ * Pre-refactor single-root resolution (`CLAUDE_CONFIG_DIR ?? ~/.claude`),
+ * exported so both the flag-off production wiring and tests can share the
+ * exact same "legacy" root computation instead of re-deriving it.
+ */
+export function resolveLegacyClaudeSessionRoot(
+  env: NodeJS.ProcessEnv = process.env
+): ClaudeSessionRoot {
+  const dir = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  return { dir, kind: 'legacy' };
+}
+
+function getProjectsDir(root: ClaudeSessionRoot): string {
+  return path.join(root.dir, 'projects');
+}
+
+async function listRootProjectIds(root: ClaudeSessionRoot): Promise<string[]> {
+  const projectsDir = getProjectsDir(root);
+  try {
+    const dirents = await fs.readdir(projectsDir, { withFileTypes: true });
+    return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'ENOENT') return [];
+    console.error(
+      `[ClaudeSessionScanner] Failed to read projects dir for ${root.kind} root (${root.dir}):`,
+      error
+    );
+    return [];
+  }
+}
+
+async function listRootSessionFiles(root: ClaudeSessionRoot, projectId: string): Promise<string[]> {
+  const projectDir = path.join(getProjectsDir(root), projectId);
+  try {
+    return await listSessionFiles(projectDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'ENOENT') return [];
+    console.error(
+      `[ClaudeSessionScanner] Failed to list sessions for ${root.kind} root project ${projectId}:`,
+      error
+    );
+    return [];
+  }
+}
+
+interface SessionFileCandidate {
+  root: ClaudeSessionRoot;
+  fileName: string;
+  fullPath: string;
+  sessionId: string;
+  mtimeMs: number;
+}
+
+/**
+ * Gathers every session file across all roots for one project, degrading
+ * per-root/per-file on stat failure instead of aborting the whole scan
+ * (D47 S2b §1 Scanner: "单根 stat 失败降级为另一根继续 + 诊断").
+ */
+async function collectSessionFileCandidates(
+  roots: ClaudeSessionRoot[],
+  projectId: string
+): Promise<SessionFileCandidate[]> {
+  const perRoot = await Promise.all(
+    roots.map(async (root) => {
+      const fileNames = await listRootSessionFiles(root, projectId);
+      const projectDir = path.join(getProjectsDir(root), projectId);
+      const stats = await Promise.all(
+        fileNames.map(async (fileName) => {
+          const fullPath = path.join(projectDir, fileName);
+          try {
+            const stat = await fs.stat(fullPath);
+            const candidate: SessionFileCandidate = {
+              root,
+              fileName,
+              fullPath,
+              sessionId: path.basename(fileName, '.jsonl'),
+              mtimeMs: stat.mtimeMs,
+            };
+            return candidate;
+          } catch (error) {
+            console.warn(
+              `[ClaudeSessionScanner] Failed to stat session file (${root.kind} root), skipping:`,
+              fullPath,
+              error
+            );
+            return null;
+          }
+        })
+      );
+      return stats.filter((s): s is SessionFileCandidate => !!s);
+    })
+  );
+  return perRoot.flat();
+}
+
+/** Deterministic tie-break (D47 S2b §1 Scanner): higher mtimeMs wins; equal mtime → managed wins. */
+function pickWinningCandidate(candidates: SessionFileCandidate[]): SessionFileCandidate {
+  return candidates.reduce((winner, candidate) => {
+    if (candidate.mtimeMs > winner.mtimeMs) return candidate;
+    if (candidate.mtimeMs < winner.mtimeMs) return winner;
+    if (candidate.root.kind === 'managed' && winner.root.kind !== 'managed') return candidate;
+    return winner;
+  });
+}
+
+/** Session key = (projectId, sessionId) — this dedupes only within one projectId's candidates. */
+function dedupeSessionCandidates(candidates: SessionFileCandidate[]): SessionFileCandidate[] {
+  const bySessionId = new Map<string, SessionFileCandidate[]>();
+  for (const candidate of candidates) {
+    const list = bySessionId.get(candidate.sessionId) ?? [];
+    list.push(candidate);
+    bySessionId.set(candidate.sessionId, list);
+  }
+  return [...bySessionId.values()].map((list) => pickWinningCandidate(list));
 }
 
 function toUnixSeconds(ms: number): number {
@@ -295,69 +428,43 @@ async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
 }
 
 export class ClaudeSessionScanner {
-  async decodeProjectPath(projectId: string): Promise<string> {
-    const projectsDir = getClaudeProjectsDir();
-    const projectDir = path.join(projectsDir, projectId);
+  private readonly resolveRoots: () => ClaudeSessionRoot[];
 
-    let sessionFiles: string[] = [];
-    try {
-      sessionFiles = await listSessionFiles(projectDir);
-    } catch {
+  constructor(options: ClaudeSessionScannerOptions) {
+    this.resolveRoots = options.resolveRoots;
+  }
+
+  async decodeProjectPath(projectId: string): Promise<string> {
+    const roots = this.resolveRoots();
+    const candidates = await collectSessionFileCandidates(roots, projectId);
+    if (candidates.length === 0) {
       return decodeProjectDirNameFallback(projectId);
     }
-
-    return this.decodeProjectPathFromFiles(projectId, projectDir, sessionFiles);
+    return this.decodeProjectPathFromCandidates(projectId, candidates);
   }
 
   async scanProjects(): Promise<ClaudeProject[]> {
-    const projectsDir = getClaudeProjectsDir();
+    const roots = this.resolveRoots();
 
-    let dirents: Array<import('node:fs').Dirent> = [];
-    try {
-      dirents = await fs.readdir(projectsDir, { withFileTypes: true });
-    } catch (error) {
-      const nodeError = error as NodeJS.ErrnoException;
-      if (nodeError.code === 'ENOENT') return [];
-      console.error('[ClaudeSessionScanner] Failed to read projects dir:', error);
-      return [];
-    }
-
-    const projectIds = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+    const projectIdSets = await Promise.all(roots.map((root) => listRootProjectIds(root)));
+    const projectIds = [...new Set(projectIdSets.flat())];
 
     const projects = await Promise.all(
       projectIds.map(async (projectId): Promise<ClaudeProject | null> => {
-        const projectDir = path.join(projectsDir, projectId);
+        const candidates = await collectSessionFileCandidates(roots, projectId);
+        if (candidates.length === 0) return null;
 
-        let sessionFiles: string[] = [];
-        try {
-          sessionFiles = await listSessionFiles(projectDir);
-        } catch {
-          return null;
-        }
-        if (sessionFiles.length === 0) return null;
-
-        const sessionStats = await Promise.all(
-          sessionFiles.map(async (fileName) => {
-            const fullPath = path.join(projectDir, fileName);
-            try {
-              const stat = await fs.stat(fullPath);
-              return { fileName, mtimeMs: stat.mtimeMs };
-            } catch {
-              return null;
-            }
-          })
-        );
-
-        const lastActivityMs = sessionStats
-          .filter((s): s is { fileName: string; mtimeMs: number } => !!s)
-          .reduce((max, s) => Math.max(max, s.mtimeMs), 0);
-
-        const initCwd = await this.decodeProjectPathFromFiles(projectId, projectDir, sessionFiles);
+        // Project aggregation across roots (D47 S2b §1 Scanner): same slug
+        // merges — sessionCount is deduped by session key, lastActivityAt
+        // takes the max across every candidate (dedup doesn't change the max).
+        const winners = dedupeSessionCandidates(candidates);
+        const lastActivityMs = candidates.reduce((max, c) => Math.max(max, c.mtimeMs), 0);
+        const initCwd = await this.decodeProjectPathFromCandidates(projectId, winners);
 
         return {
           id: projectId,
           path: initCwd,
-          sessionCount: sessionFiles.length,
+          sessionCount: winners.length,
           lastActivityAt: lastActivityMs ? toUnixSeconds(lastActivityMs) : 0,
         };
       })
@@ -369,28 +476,19 @@ export class ClaudeSessionScanner {
   }
 
   async getSessionsForProject(projectId: string): Promise<ClaudeSessionMeta[]> {
-    const projectsDir = getClaudeProjectsDir();
-    const projectDir = path.join(projectsDir, projectId);
-
-    let sessionFiles: string[] = [];
-    try {
-      sessionFiles = await listSessionFiles(projectDir);
-    } catch (error) {
-      const nodeError = error as NodeJS.ErrnoException;
-      if (nodeError.code === 'ENOENT') return [];
-      console.error('[ClaudeSessionScanner] Failed to list project sessions:', error);
-      return [];
-    }
+    const roots = this.resolveRoots();
+    const candidates = await collectSessionFileCandidates(roots, projectId);
+    const winners = dedupeSessionCandidates(candidates);
 
     const sessions = await Promise.all(
-      sessionFiles.map(async (fileName) => {
+      winners.map(async (candidate) => {
         try {
-          return await this.extractSessionMeta(projectId, projectDir, fileName);
+          return await this.extractSessionMeta(projectId, candidate);
         } catch (error) {
           // Per-session failures (e.g. TSD spawn/decrypt error) must not abort
           // the whole project scan. Drop this session and move on.
           console.error(
-            `[ClaudeSessionScanner] Failed to extract session meta for ${fileName}:`,
+            `[ClaudeSessionScanner] Failed to extract session meta for ${candidate.fullPath}:`,
             error
           );
           return null;
@@ -405,11 +503,9 @@ export class ClaudeSessionScanner {
 
   private async extractSessionMeta(
     projectId: string,
-    projectDir: string,
-    fileName: string
+    candidate: SessionFileCandidate
   ): Promise<ClaudeSessionMeta | null> {
-    const filePath = path.join(projectDir, fileName);
-    const sessionId = path.basename(fileName, '.jsonl');
+    const { fullPath: filePath, sessionId, root } = candidate;
 
     let stat: Awaited<ReturnType<typeof fs.stat>> | null = null;
     try {
@@ -498,17 +594,19 @@ export class ClaudeSessionScanner {
       createdAt: createdAt ?? createdAtFallback,
       lastMessageAt: lastMessageAt ?? lastAtFallback,
       model,
+      // Provenance (D47 S2b §1 Scanner): which root this session's winning
+      // file actually lives under — resume uses this directly instead of
+      // re-guessing via candidate-path existence probes.
+      configDir: root.dir,
     };
   }
 
-  private async decodeProjectPathFromFiles(
+  private async decodeProjectPathFromCandidates(
     projectId: string,
-    projectDir: string,
-    sessionFiles: string[]
+    candidates: SessionFileCandidate[]
   ): Promise<string> {
-    for (const fileName of sessionFiles) {
-      const fullPath = path.join(projectDir, fileName);
-      const initCwd = await readInitCwdFromJsonl(fullPath);
+    for (const candidate of candidates) {
+      const initCwd = await readInitCwdFromJsonl(candidate.fullPath);
       if (initCwd) return initCwd;
     }
 
