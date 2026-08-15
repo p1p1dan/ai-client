@@ -140,3 +140,25 @@ error 通知漏 turn/completed（双 carrier 杀）⑨ 子串 pairs 包含（ord
 | A 轨独有 | 存量 auth 真机取证 / M2 终端行为差清单 / M3 模式漂移 sidecar / M6 model 默认申报 / M9 结果联合 / m1~m9 全收 |
 | rev.1 裁定 a~f | a **伪**（两轨同判→§1 重设计）；b 真（M6 申报补足）；c 真但限 config 写手（原子写仍加，M4）；d 真（哨兵前缀测试）；e **伪**（「同构」撤回，改「接受共享+原子写+已知限制」）；f 真（落点改 normalizer+双 carrier） |
 | 母规格连带 | §3.B「删投影链净减」归属改 S6；§7 S3/S4 行合并断言更新；R7 引用补齐 |
+
+## §6 as-built（2026-08-15 施工收口，commit `50de617`）
+
+三员施工（S4a agent-host / S3b Main+shared 并行零混面 + 收尾员四门与变异批）。
+门禁串行：lint 0 / typecheck 0 / typecheck:agent-host 0 / **vitest 195 文件 3727 例 0 红**（S2 基线 3637 → +90）。
+**变异 10/10 零存活**（9 对收尾执行 + ④ S3b 施工期实跑；⑨ 现场验证「Set.size」用例在包含式变异下保持绿——
+规格点名的盲区实证），记录 [reviews/mutations.log](./2026-08-15-d47-s34-reviews/mutations.log)。
+blessing spike：codex 0.145.0 `--strict-config doctor` parse ok + env_key present，生成字节存
+`codex-config.blessed.toml` 字节钉死。
+
+规格偏差（均不改契约）：
+1. 同源断言用源码文本比对而非跨 tsconfig import（TS5097 实测触发，规格 A-M7 预案落地）；
+   `ANTHROPIC_` 剥离镜像常量落 codexRuntime 内部，同手法。
+2. codex-home 的 vault `absent` 并入「保留既有字节」分支（无 dev-seed 兜底，首登由 login 分支首写）。
+3. Main 两处独立读 flag+vault 未抽公共 resolver（防 SessionManager 拉入重依赖图——vitest import 挂死教训）。
+4. normalizer `closeTurn` 侧 terminalEmitted 守卫超规格字面（覆盖具名错误后进程崩溃、turn/completed
+   永不到达的 teardown 竞态）。
+5. `method:"error"` 走专线未入 CODEX_NORMALIZER_METHODS（不在生成契约）；E4 夹具与既有语料回归锁的
+   glob 冲突以排除 `e4-*` 解决（注释注明夹具类别）。
+6. `AICLIENT_CODEX_HOME_MANAGED_DIR` 键已发未消费（ensureCodexHome 交叉校验登记为可选纵深，非阻塞）。
+
+欠账登记：GUI 点验随 S5 开轮；win/mac 随 test.4；投影链物理删除归 S6。
