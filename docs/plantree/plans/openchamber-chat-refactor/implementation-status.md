@@ -29,12 +29,12 @@
   M5 判定为 M1 的视觉后果。随后版本抬 **`0.4.0-test.2`**（`ff63987`）。
   更早各批（08-04 ~ 08-06 各任务与十二轮点验）：一行摘要见 [roadmap Done](./roadmap.md)，
   明细见[主线台账](../../../plans/ledger-claude-mainline.md)，当时活动状态原文见 history 归档。
-- **Last Verified**：2026-08-11 `de06bf5` 批**四门全绿**（lint 32 条基线诊断持平 / typecheck / typecheck:agent-host / vitest **152 文件 3176 例 0 红**，健康全量仅 21s）。上一口径 2026-08-10 `e529a55` 3004 例（`d759023` 2990）、2026-08-08 `9a6cc01` 2481 例。
+- **Last Verified**：2026-08-14 `4d8f003` 批（D35）**四门全绿**（lint 32 条基线诊断持平 / typecheck ×2 / vitest **163 文件 3339 例 0 红**，约 20s）。当日三批口径链：流式批 `31a49c5` 3268 → D34 `0a3bb52` 3329 → D35 3339。上一口径 2026-08-11 `de06bf5` 3176、2026-08-10 `e529a55` 3004、2026-08-08 `9a6cc01` 2481。
   3 例 Windows-only 恒红已于 2026-08-06 修复（测试侧 platform 桩），四门口径见 [baseline 门禁](../../baseline/test-and-release-gates.md)。
   历史逐批复核记录（51 文件 590 例起全程只增）见 history 归档。
 - **Next Target**：
-  1. **T-10 / T-11 真机点验（用户线，当前主项）**：Windows 出包（[T-10 清单「出发前必做」M1~M4](../../../plans/t10-packaged-gui-checklist.md)）
-     → 测试机回归（**先做[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验，包必须是 `0.4.0-test.3`**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
+  1. **T-10 / T-11 真机点验（用户线，当前主项）——下一具体动作：版本抬 `0.4.0-test.4` + CI 出包**（GitHub Actions → Build → Run workflow 选本分支，下载 `windows-installers`/`windows-unpacked` artifact——2026-08-14 三批 D32~D35 共 19 提交全在本分支，**不要拿 test.3 旧包**）：
+     → 测试机回归（[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验 + **新增复验面：流式观感（flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON，状态行 ✽ elapsed·↓tokens / 渐显 / 加密机 IPC 负载）、D34 全批（rail 迁顶栏 / git 面板 VS Code 化 / 提交展开 / diff 中栏）、D35 四调、`launch-gui-test.cmd` 包装器双击路径**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
      → 加密机现场 T-11 六项 → CP2 / CP5。
   2. **开发线下一步待用户裁定**，候选五路（不互斥）：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；
@@ -45,8 +45,8 @@
      ① ~~拍板/施工~~ **D32/D33 已于 2026-08-14 当日全部落地**（#30 文案修 `49aee3f`；流式批黄金 `5281ceb` + 主体 `956f8bb` + 状态行 `31a49c5` + 折叠环 `4c2440b`，flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON；规格 [build-spec rev.2](../../../plans/2026-08-14-partial-messages-build-spec.md) 经双轨对抗评审合取；CDP 冒烟实证状态行与四步渐显）——随下轮真机复验流式观感与加密机 IPC 负载；
      ② ~~流式施工批~~ 已并入 ①（规格 rev.2 取代 spike §3/§4 直抄口径）；
      ③ Temp 门控五态 / D30-a 六项 / D29 已于 2026-08-14 **本地点验全过**（CDP 驱动 dev GUI，加密机风险经用户裁定解除后点验前移）；Windows 侧仅剩启动包装器（`launch-gui-test.cmd` 双击路径）随下轮真机（现场操作单已同步包装器启动步骤）；
-     ④ **D34 UI 反馈批已于 2026-08-14 落地**（八提交 `7566d4c`~`0a3bb52`，六裁定见总台账 D34 行）：右栏 min 250 / rail 迁顶栏（覆盖 round-12）/ git 面板 VS Code 化 + 提交点击展开 + diff 迁中栏 / Context status 三行 / Thought 孤箭头修复（T-31 潜伏）——随下轮真机复验；余：X 状态紫色无语义 token（T-25）、①窄宽按钮异常待用户复验；
-     ⑤ 本地点验三条意外发现待另立：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）。
+     ④ **D34 UI 反馈批已于 2026-08-14 落地**（八提交 `7566d4c`~`0a3bb52`，六裁定见总台账 D34 行）：右栏 min 250 / rail 迁顶栏（覆盖 round-12）/ git 面板 VS Code 化 + 提交点击展开 + diff 迁中栏 / Context status 三行 / Thought 孤箭头修复（T-31 潜伏）——随下轮真机复验；**D35 diff 页四调同日落地**（`4d8f003`：Chat column 钮退役 / diff 恒双侧换行（Monaco `wordWrapOverride2` 覆盖链坑）/ diff tab 单例 / diff 激活独占中栏——用户宽屏澄清「并排非覆盖」后中途改规格）；余：X 状态紫色无语义 token（T-25）、①窄宽按钮异常已修（icon-only）待用户复验；
+     ⑤ 本地点验三条意外发现待另立：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）/ git 面板 Changes 计数在**外部（命令行）提交后不自动刷新**（须手点刷新，观察项 2026-08-14）。
 
 > ⚠️ **门禁纪律**：本机内存有限，四门**逐门串行跑**，禁止链式合跑或与子代理/后台任务并行（曾 OOM exit 137）。
 > ⚠️ **GUI 启动口径**：填好 `dev.env` 后一律 `node scripts/dev.js`，勿用 `pnpm dev`；
