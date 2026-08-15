@@ -57,6 +57,8 @@
 
 ## #9 登录管理落地后，codex provider 段必须由 app 生成而非投影用户文件（2026-08-09 由 #6 转出）
 
+**状态（2026-08-15 更新）**：登录管理已立项（**D47**），落盘方式拍定「app 私有托管 + 进程注入」——本条按 D47 ⑤ 执行（provider 段由托管凭据生成，投影退役），随施工落地关闭。
+
 **约束来源**：用户口径「同一把 key，两个 URL（claude `xxx.com` / codex `xxx.com/v1`）」。
 
 **现状**：`codexHome.projectCodexConfig` 的输入是用户的 `~/.codex/config.toml`，白名单投影出

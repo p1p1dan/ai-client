@@ -56,7 +56,7 @@ Claude 线改走 ACP（已否，证据链见 [topics/acp-decision.md](./topics/a
 2. 本 plan 的 `topics/` 与 `decisions/`（尚未建，首个决策落地时建）
 3. [roadmap.md](./roadmap.md) — 当前状态
 
-**已编号决策**：**D45**（不接 ACP，直连 `codex app-server`）与 **D46**（Claude 线不走 ACP），2026-08-15 升格入[总台账](../../../plans/openchamber-chat-refactor-ledger.md)决策表；证据链仍在 [topics/acp-decision.md](./topics/acp-decision.md)。
+**已编号决策**：**D45**（不接 ACP，直连 `codex app-server`）与 **D46**（Claude 线不走 ACP），2026-08-15 升格入[总台账](../../../plans/openchamber-chat-refactor-ledger.md)决策表；证据链仍在 [topics/acp-decision.md](./topics/acp-decision.md)。**D47**（用户登录管理立项五点，2026-08-15 拍板）同入该表。
 
 ## 维护惯例
 
