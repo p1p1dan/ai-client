@@ -321,3 +321,14 @@ curl -sS -m 15 -D - -X GET "$CCH/totally-bogus-random-path-xyz123-qwerty"
 ### 请求预算
 
 本轮 5/8（a、b、c、d1、d2）。e（有效 key 的 `set-cookie` 观察）未触发，因 b 未登录成功；未额外消耗诊断请求，主机身份已由响应头（`openresty` + `Next.js` + `x-served-by: cch-jyw.pipidan.qzz.io`）直接坐实，无需再打 `GET /`。
+
+## Valid 臂补齐（2026-08-15，E1-lite 注册后实打）
+
+- `POST /api/auth/login {key:<valid>}` → `200` + `{"ok":true,"user":{"id":14,…,"role":"user"},"redirectTo":"/my-usage","loginType":"readonly_user"}`；
+  `Set-Cookie: auth-token=<REDACTED>; Path=/; Max-Age=604800; HttpOnly; SameSite=lax`（7 天）。
+- **关键发现**：`POST /api/actions/my-usage/getMyTodayStats` 带**有效** bearer 仍 `401 {"ok":false,"error":"认证无效或已过期"}`
+  ——actions 端点只认 cookie 会话，不认裸 key bearer。带 `auth-token` cookie 重试 → `200` + 真实用量体。
+- 推论（回写母规格 I6/§4）：UsageService 的「bearer 先试 → 401 → cookie login → 重试」路径**每次都会走到 cookie 分支**，
+  业务 401 在 key 有效时也必然出现——**绝不能**把业务 401 直接当失效信号；`/api/auth/login` 的 `401 KEY_INVALID`
+  是唯一权威判据（该判据两臂形状现已齐：valid=200+ok:true / invalid=401+KEY_INVALID）。
+- E5 全臂收口，无欠账。
