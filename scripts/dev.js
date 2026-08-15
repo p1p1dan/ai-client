@@ -89,6 +89,10 @@ ensureLocalLinuxRuntimeBundle();
 
 const DEV_ENV_FILE = process.env.AICLIENT_DEV_ENV_FILE || join(root, 'dev.env');
 const STRIPPED_PREFIX = 'ANTHROPIC_';
+// D47 S1 §2.6: AICLIENT_MANAGED_CREDENTIALS rides along with the other
+// credential-shaped vars — stripped from the inherited shell copy so a
+// leftover export in the developer's shell can't silently flip it on.
+const MANAGED_CREDENTIALS_KEY = 'AICLIENT_MANAGED_CREDENTIALS';
 const STRIPPED_KEYS = [
   'CLAUDE_CODE_OAUTH_TOKEN',
   'CLAUDE_CONFIG_DIR',
@@ -97,7 +101,19 @@ const STRIPPED_KEYS = [
   'AWS_BEARER_TOKEN_BEDROCK',
   'GOOGLE_APPLICATION_CREDENTIALS',
   'CLOUD_ML_REGION',
+  MANAGED_CREDENTIALS_KEY,
 ];
+
+/**
+ * D47 S1 §2.6 (A-track "dev 轮可开" + B-track "不被继承环境意外打开", 合取):
+ * every `buildChildEnv` return path ends with this — only an explicit `'1'`
+ * (from dev.env, or the original shell env captured before stripping) keeps
+ * managed credentials on for the dev child process; anything else, including
+ * an inherited-but-wrong-shaped value, is forced to `'0'`.
+ */
+function resolveManagedCredentialsForDev(explicitValue) {
+  return explicitValue === '1' ? '1' : '0';
+}
 
 /** Minimal dotenv: `KEY=VALUE`, `#` comments, optional quotes and `export `. */
 function parseEnvFile(text) {
@@ -172,6 +188,10 @@ function seedIsolatedConfigDir(vars) {
 
 function buildChildEnv(allowLocal) {
   const env = { ...process.env };
+  // Captured before stripping so an explicit shell export still counts as
+  // "explicit" for resolveManagedCredentialsForDev below, even though the
+  // STRIPPED_KEYS loop is about to delete it from `env`.
+  const originalManagedCredentials = process.env[MANAGED_CREDENTIALS_KEY];
 
   const stripped = [];
   for (const key of Object.keys(env)) {
@@ -184,7 +204,11 @@ function buildChildEnv(allowLocal) {
   if (!existsSync(DEV_ENV_FILE)) {
     if (allowLocal) {
       console.warn(`[dev] ${DEV_ENV_FILE} not found — running with LOCAL credentials (~/.claude).`);
-      return process.env;
+      const fallbackEnv = { ...process.env };
+      fallbackEnv[MANAGED_CREDENTIALS_KEY] = resolveManagedCredentialsForDev(
+        originalManagedCredentials
+      );
+      return fallbackEnv;
     }
     console.error(`[dev] Missing credentials file: ${DEV_ENV_FILE}`);
     console.error('[dev] Refusing to start: the app would fall back to your personal ~/.claude');
@@ -208,6 +232,11 @@ function buildChildEnv(allowLocal) {
   if (!vars.CLAUDE_CONFIG_DIR) {
     env.CLAUDE_CONFIG_DIR = seedIsolatedConfigDir(vars);
   }
+  // dev.env's own value wins if set; otherwise fall back to what the shell
+  // had before stripping. Either way only an exact '1' survives.
+  env[MANAGED_CREDENTIALS_KEY] = resolveManagedCredentialsForDev(
+    vars[MANAGED_CREDENTIALS_KEY] ?? originalManagedCredentials
+  );
 
   console.log(`[dev] credentials: ${DEV_ENV_FILE}`);
   console.log(
@@ -217,6 +246,7 @@ function buildChildEnv(allowLocal) {
     `[dev]   ${env.ANTHROPIC_AUTH_TOKEN ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY'} = ${maskSecret(env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY)}`
   );
   console.log(`[dev]   CLAUDE_CONFIG_DIR  = ${env.CLAUDE_CONFIG_DIR}`);
+  console.log(`[dev]   AICLIENT_MANAGED_CREDENTIALS = ${env[MANAGED_CREDENTIALS_KEY]}`);
   if (stripped.length > 0) {
     console.log(`[dev]   stripped from shell: ${stripped.join(', ')}`);
   }

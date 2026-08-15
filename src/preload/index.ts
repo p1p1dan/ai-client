@@ -774,7 +774,7 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_SEND_CODE, request),
     verifyAndRegister: (
       request: import('@shared/types').OnboardingVerifyRequest
-    ): Promise<import('@shared/types').OnboardingRegisterResponse> =>
+    ): Promise<import('@shared/types').OnboardingRegisterClientResponse> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_VERIFY_AND_REGISTER, request),
     detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),

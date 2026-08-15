@@ -42,6 +42,7 @@ import { initClaudeProviderWatcher } from './ipc/claudeProvider';
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
+import { createRealVaultCrypto, promoteVaultCrypto } from './services/auth';
 import { registerClaudeBridgeIpcHandlers } from './services/claude/ClaudeIdeBridge';
 import { unwatchClaudeSettings } from './services/claude/ClaudeProviderManager';
 import {
@@ -691,6 +692,16 @@ app
         console.error('[local-image] Error handling request:', request.url, error);
         return new Response('Bad Request', { status: 400 });
       }
+    });
+
+    // D47 S1 §2.2 upgrade latch: the FIRST BrowserWindow's construction is
+    // the earliest safe point to touch safeStorage — `ready-to-show` never
+    // fires on this repo's Electron build (MainWindow.ts:219-224 fallback),
+    // and calling `isEncryptionAvailable()` before any window exists hangs
+    // (E6). `promoteVaultCrypto` itself is idempotent/one-directional, but
+    // `once` keeps this from re-registering a second listener per window.
+    app.once('browser-window-created', () => {
+      promoteVaultCrypto(createRealVaultCrypto());
     });
 
     // Default open or close DevTools by F12 in development

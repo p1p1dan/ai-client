@@ -4,7 +4,7 @@ import type {
   InstallStepId,
   OnboardingCliStatus,
   OnboardingErrorCode,
-  OnboardingRegisterResponse,
+  OnboardingRegisterClientResponse,
   OnboardingSendCodeResponse,
 } from '@shared/types';
 import {
@@ -177,7 +177,9 @@ export function OnboardingView({
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [resendCountdown, setResendCountdown] = useState(0);
 
-  const [registerResult, setRegisterResult] = useState<OnboardingRegisterResponse | null>(null);
+  const [registerResult, setRegisterResult] = useState<OnboardingRegisterClientResponse | null>(
+    null
+  );
 
   const detectCli = useCallback(
     async (options?: { autoAdvance?: boolean }) => {
@@ -310,7 +312,7 @@ export function OnboardingView({
     setVerifyError(null);
     setVerifying(true);
     try {
-      const result: OnboardingRegisterResponse =
+      const result: OnboardingRegisterClientResponse =
         await window.electronAPI.onboarding.verifyAndRegister({
           email: email.trim(),
           code: code.trim(),

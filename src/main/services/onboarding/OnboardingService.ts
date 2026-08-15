@@ -4,14 +4,17 @@ import * as path from 'node:path';
 import type {
   OnboardingCliStatus,
   OnboardingCredentialsHealth,
-  OnboardingRegisterResponse,
   OnboardingSendCodeResponse,
   OnboardingState,
 } from '@shared/types';
 import { net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
+import { getCredentialVault } from '../auth';
+import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { redactLogArgs } from '../auth/redact';
 import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
+import type { OnboardingRegisterResponse } from './types';
 
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
 const DEFAULT_ONBOARDING_SERVICE_URL = 'https://onboarding-jyw.pipidan.qzz.io';
@@ -170,7 +173,54 @@ class OnboardingService {
       return { ok: false, error: 'Failed to save onboarding state' };
     }
 
+    // Shadow write (D47 S1 §2.7): vault.save only when managed credentials
+    // are on; a vault failure is logged and never blocks the legacy-write
+    // success this method has already committed to returning.
+    if (resolveManagedCredentialsEnabled()) {
+      await this.saveVaultShadowCopy(
+        result,
+        normalizedServerUrl,
+        normalizedEmail,
+        cchServerUrl,
+        onboardingState.registeredAt ?? new Date().toISOString()
+      );
+    }
+
     return result;
+  }
+
+  private async saveVaultShadowCopy(
+    result: OnboardingRegisterResponse,
+    normalizedServerUrl: string,
+    normalizedEmail: string,
+    cchServerUrl: string,
+    receivedAt: string
+  ): Promise<void> {
+    const credentials = this.getCredentialWriteInputs(result, normalizedServerUrl);
+    if (!credentials || !result.data) {
+      return;
+    }
+
+    try {
+      const saveResult = await getCredentialVault().save({
+        identity: { email: normalizedEmail, userId: result.data.user.id },
+        cchBaseUrl: cchServerUrl,
+        claude: { baseUrl: credentials.claudeBaseUrl, authToken: credentials.claudeAuthToken },
+        codex: { baseUrl: credentials.codexBaseUrl, apiKey: credentials.codexApiKey },
+        receivedAt,
+      });
+      if (!saveResult.ok) {
+        console.warn(
+          ...redactLogArgs([`[OnboardingService] vault.save skipped: ${saveResult.reason}`])
+        );
+      }
+    } catch (error) {
+      // Shadow write only — never let a vault failure surface as a
+      // verifyAndRegister rejection (S1 spec §2.7).
+      console.warn(
+        ...redactLogArgs(['[OnboardingService] vault.save threw; ignoring (shadow write)', error])
+      );
+    }
   }
 
   /**
@@ -180,10 +230,28 @@ class OnboardingService {
     try {
       this.removeClaudeCredentials();
       this.removeCodexConfig();
-      return mergeSettingsPatch({ onboarding: { registered: false } });
+      const ok = mergeSettingsPatch({ onboarding: { registered: false } });
+      this.clearVaultShadowCopy();
+      return ok;
     } catch (error) {
       console.error('[OnboardingService] Failed to logout:', error);
       return false;
+    }
+  }
+
+  /**
+   * No flag gate (S1 spec §2.1/§2.7, A-track B8): a key must never survive a
+   * flag flip, so logout always attempts to wipe the vault. Fire-and-forget —
+   * `CredentialVault.clear()` never rejects, and `logout()`'s return value
+   * must never depend on the vault outcome.
+   */
+  private clearVaultShadowCopy(): void {
+    try {
+      void getCredentialVault().clear({ keepLastEmail: true });
+    } catch (error) {
+      console.warn(
+        ...redactLogArgs(['[OnboardingService] vault.clear threw synchronously', error])
+      );
     }
   }
 
@@ -243,12 +311,14 @@ class OnboardingService {
     const claudeDir = path.join(os.homedir(), '.claude');
     const settingsPath = path.join(claudeDir, 'settings.json');
 
-    // Log intent up front. Truncate the token so the full secret never lands
-    // in logs / DevTools output, but keep the baseUrl visible because it's
-    // the most common source of routing confusion.
-    const tokenPreview = authToken.length > 6 ? `${authToken.slice(0, 6)}...` : '***';
+    // Log intent up front, routed through redactLogArgs so the token never
+    // lands in logs / DevTools output — not even the first six characters,
+    // which the old tokenPreview leaked (D47 S1 §2.5, B-track 1.6). Keep the
+    // baseUrl visible because it's the most common source of routing confusion.
     console.log(
-      `[OnboardingService] writeClaudeConfig intent: baseUrl=${baseUrl}, token=${tokenPreview}`
+      ...redactLogArgs([
+        `[OnboardingService] writeClaudeConfig intent: baseUrl=${baseUrl}, token=${authToken}, tokenPresent=${Boolean(authToken)}`,
+      ])
     );
 
     // Retry once: covers the transient case where antivirus / a sibling

@@ -41,21 +41,18 @@ export interface OnboardingVerifyRequest {
   code: string;
 }
 
-// Successful verify-and-register payload. Same shape as legacy /register.
-export interface OnboardingRegisterResponse {
-  ok: boolean;
-  error?: OnboardingErrorCode | string;
-  data?: {
-    user: { id: number; name: string };
-    apiKey: string;
-    config: {
-      claude: { baseUrl: string; authToken: string };
-      codex: { baseUrl: string; apiKey: string };
-    };
-    // Verify-only failure context: remaining attempts before code is locked.
-    attemptsLeft?: number;
-  };
-}
+/**
+ * What the renderer is allowed to see from verify-and-register (D47 S1 §2.3).
+ * The full response (with `apiKey`/`config`, real secrets) lives in
+ * `src/main/services/onboarding/types.ts` and stays in Main —
+ * `onboardingHandlers.ts:toRendererRegisterResponse` is the only place that
+ * turns one into the other, via an explicit whitelist construction (never a
+ * delete-style trim, so an unexpected new server field is dropped by
+ * default rather than leaking through).
+ */
+export type OnboardingRegisterClientResponse =
+  | { ok: true; data: { user: { id: number; name: string } } }
+  | { ok: false; error?: OnboardingErrorCode | string; data?: { attemptsLeft?: number } };
 
 export interface OnboardingPrerequisiteStatus {
   gitInstalled: boolean;
