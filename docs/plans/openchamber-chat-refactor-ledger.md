@@ -86,6 +86,8 @@
 | D42 | dev.env 凭证隔离范围（用户拍板 2026-08-15；关闭 open-q #14） | **维持「主路径 + 约定」不下沉 Host**（开发专用逻辑不进产品侧；GUI 启动口径已锁 `node scripts/dev.js`）；连带缺口补票：dev.js parseEnvFile / 剥离 / 拒启逻辑抽纯函数补 vitest 断言（S） |
 | D43 | Phase 0A 收口口径（用户拍板 2026-08-15） | **A02/A03/A04 裁定「被演进取代」，Phase 0A 转 ✅**：A02 现状盘点 → baseline/module-map 取代；A03 目标信息架构 → D21/D22 拍板 + T-26/T-27 落地取代；A04 UI 状态矩阵不补作（各状态已实现并由 vitest 3339 例钉行为）。取代清单以本行为凭；A06 的 A02 依赖按此口径视为满足 |
 | D44 | 组件测试基建选型（用户拍板 2026-08-15；关闭 open-q #27） | **jsdom + RTL 组件层立项**：vitest 加独立 jsdom project 只收 `.test.tsx`，组件级事故案例（重试双发等）转可执行回归；与现有四门串行跑（本机内存纪律）。转施工票（M） |
+| D45 | 多 agent 接入通道（用户判据答复 2026-08-06；2026-08-15 拍板升格落账；关闭 multi-agent open-q #1） | **不接 ACP，直连 `codex app-server`**。依据 = 用户判据答复（「不打算加第 3 个 agent，就 Claude + Codex 两个」）+ S1 spike 实测（直连反而更便宜；审批/补丁报文已在真实回合捕获，ACP 退路价值归零；实证 ACP 只是把直连 payload 原样塞 `_meta.codex` 转发并丢字段）。将来加第 3 个 agent 时按 spike 报告 §8.3 重估。证据链 = [S1 spike 报告](./2026-08-06-s1-acp-codex-spike-report.md) + [acp-decision topic](../plantree/plans/multi-agent/topics/acp-decision.md)。S3 切片 0~6 已按此落地 |
+| D46 | Claude 线是否改走 ACP（结论 2026-08-04 会话、2026-08-05 补落库；2026-08-15 拍板升格落账） | **Claude 线不走 ACP，维持既有直连**。判断依据与证据链见 [acp-decision topic](../plantree/plans/multi-agent/topics/acp-decision.md)（收益不成立：既有链路已覆盖 ACP 能力面，改造只增中间层） |
 
 > 注（2026-07-28，编号完整性）：本表最初只收录了当时正在争论的决策轴，**D4 / D5 / D7 / D13 是历史空号**——全仓 `*.md` 与 git 历史均检索不到这四个编号的任何决策正文（`grep -rn "\bD(4|5|7|13)\b" --include="*.md"` + `git log -S` 均无命中），既非遗漏收录也非被撤销，编号在拍板过程中直接跳过；**不要为它们保留语义，也不要复用这四个号**。D12 / D14 已于同日按上两行补录，**至此本表「D1~D20」名副其实**（现含 D1/D2/D3/D6/D8/D9/D10/D11/D12/D14/D15/D16/D17/D18/D19/D20 共 16 行 + 4 个空号）。
 

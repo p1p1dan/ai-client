@@ -5,7 +5,7 @@
 
 ## 已关闭（存根）
 
-- ~~#1 接 ACP 还是直连 Codex~~ —— ✅ 2026-08-06 关闭：**不接 ACP，直连 `codex app-server`**。依据 = 用户判据答复（「不打算加第 3 个 agent，就 Claude + Codex 两个」）+ [S1 spike 实测](../../../plans/2026-08-06-s1-acp-codex-spike-report.md)（直连反而更便宜；审批报文已捕获，ACP 退路价值归零）。将来若加第 3 个 agent，按 spike 报告 §8.3 重估。**待升格为编号决策**（与「Claude 线不走 ACP」一并）。
+- ~~#1 接 ACP 还是直连 Codex~~ —— ✅ 2026-08-06 关闭：**不接 ACP，直连 `codex app-server`**。依据 = 用户判据答复（「不打算加第 3 个 agent，就 Claude + Codex 两个」）+ [S1 spike 实测](../../../plans/2026-08-06-s1-acp-codex-spike-report.md)（直连反而更便宜；审批报文已捕获，ACP 退路价值归零）。将来若加第 3 个 agent，按 spike 报告 §8.3 重估。已于 2026-08-15 升格为 **[D45](../../../plans/openchamber-chat-refactor-ledger.md)**（连同「Claude 线不走 ACP」= **D46**，用户当日拍板）。
 - ~~#2 Codex 侧提问形状~~ —— ✅ 2026-08-06 关闭（S2-a 实测）：4 条真实 `item/tool/requestUserInput` 报文定形；`{answers:{}}` 是干净取消（与 Claude 侧相反，勿照搬防呆）；`options` 从不为空（服务端强校验）。形状定案与「薄适配」校正值见 [S2 设计档](../../../plans/2026-08-06-s2-codex-integration-design.md)。
 - ~~#3 会话 ↔ agent 绑定持久化口径~~ —— ✅ 2026-08-06 关闭（S2-b 双轨 + 用户裁定）：wire 名 `'claude-code'/'codex'`（不可逆）· 字段 `agent` 只落 session 层 · 唯一回落点 renderer `mergeSessionIndex` · 不补顶层 `schemaVersion` · 三轴不互转。已随 S3 切片 0/1 落地 `0314216`；设计见 [S2 设计档 §0.5/§1/§2](../../../plans/2026-08-06-s2-codex-integration-design.md)。
 
