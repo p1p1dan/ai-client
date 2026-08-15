@@ -1,3 +1,4 @@
+import { type AgentWireName, isAgentWireName } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 
 /**
@@ -25,9 +26,29 @@ export interface HostStatus {
   nodeVersion?: string;
   nodeExecPath?: string;
   settings?: HostSettingsDiagnostics | null;
-  /** Host capability flags (T-04 thinking render gate). Unknown → undefined. */
-  capabilities?: { thinking?: boolean };
+  /**
+   * Host capability flags. Unknown → undefined.
+   * - `thinking`: T-04 thinking render gate.
+   * - `agents`: S3 slice 6 (A6) — the HostAgentRegistry's wire form
+   *   (`capabilities.agents`), filtered to known `AgentWireName`s so an
+   *   unrecognized slug (older renderer, newer Host) never reaches a
+   *   consumer. Today's only consumer is test assertions; a stage-3 agent
+   *   picker is the eventual UI reader.
+   */
+  capabilities?: { thinking?: boolean; agents?: AgentWireName[] };
   lastFatalError?: string | null;
+}
+
+/**
+ * Drop anything that is not a recognized `AgentWireName` before it reaches
+ * `HostStatus` — shared by `reduceHostStatus` and `primeHostStatus` (O6: both
+ * channels must filter the same way, not just both "carry the field").
+ * `undefined` means "the source did not send an agents list at all", which is
+ * different from "sent an empty/all-unrecognized list".
+ */
+function filterAgentWireNames(value: unknown): AgentWireName[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter(isAgentWireName);
 }
 
 export const initialHostStatus: HostStatus = {
@@ -63,10 +84,17 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
         capRaw && typeof capRaw === 'object'
           ? (capRaw as { thinking?: unknown }).thinking
           : undefined;
+      const agentsRaw =
+        capRaw && typeof capRaw === 'object' ? (capRaw as { agents?: unknown }).agents : undefined;
       // Preserve undefined when the flag is absent (T-04 default-on rendering).
       const capabilities =
         capRaw && typeof capRaw === 'object'
-          ? { thinking: typeof thinkingRaw === 'boolean' ? thinkingRaw : undefined }
+          ? {
+              thinking: typeof thinkingRaw === 'boolean' ? thinkingRaw : undefined,
+              // S3 slice 6 (A6): same "capabilities key present → derive fresh
+              // from THIS event, never merge with prior" rule as `thinking`.
+              agents: filterAgentWireNames(agentsRaw),
+            }
           : prev.capabilities;
       return {
         ...prev,
@@ -104,6 +132,12 @@ export interface HostStatusPrimeSnapshot {
   driver?: string;
   cometixVersion?: string;
   settings?: HostSettingsDiagnostics | null;
+  /**
+   * S3 slice 6 (A6): mirrors `AgentHostManager.getStatus().capabilities`
+   * (`AgentHostCapabilitiesInfo`). Optional/nullable exactly like `settings`
+   * above — an old Main build's snapshot simply omits the key.
+   */
+  capabilities?: { thinking?: boolean; agents?: unknown } | null;
 }
 
 /**
@@ -117,11 +151,20 @@ export interface HostStatusPrimeSnapshot {
  * fired (e.g. `HistoryErrorNotice`, only ever mounted in session mode) kept
  * reading `settings: undefined` forever, silently pinning the catalog
  * default model instead of the Host's own.
+ *
+ * S3 slice 6 (A6/O6): `capabilities` (notably `.agents`) now rides this same
+ * prime channel too — this file's own `settings` history above is the exact
+ * mistake `capabilities` must not repeat: rev.0 of the slice 6 spec added
+ * `agents` to `reduceHostStatus` only and missed that a consumer mounting
+ * BEFORE the first live `host.ready` (i.e. everyone, on a cold start) learns
+ * everything else from this prime call and would have read `agents` as
+ * `undefined` until the first Runtime Event.
  */
 export function primeHostStatus(
   prev: HostStatus,
   snapshot: HostStatusPrimeSnapshot | null | undefined
 ): HostStatus {
+  const primedCapabilities = snapshot?.capabilities;
   return {
     ...prev,
     state: (snapshot?.state as HostStatus['state']) ?? prev.state,
@@ -132,6 +175,16 @@ export function primeHostStatus(
     // object actually arrived — only a failed/not-yet-resolved IPC call
     // (snapshot itself null/undefined) falls back to the prior value.
     settings: snapshot ? snapshot.settings : prev.settings,
+    // Same "capabilities key present → derive fresh" rule as
+    // `reduceHostStatus`'s host.ready fold above; a snapshot with no
+    // `capabilities` key (old Main build) or `capabilities: null` (Host never
+    // reported one yet) keeps whatever this snapshot already had.
+    capabilities: primedCapabilities
+      ? {
+          thinking: primedCapabilities.thinking,
+          agents: filterAgentWireNames(primedCapabilities.agents),
+        }
+      : prev.capabilities,
   };
 }
 

@@ -1,6 +1,7 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import {
+  type HostStatus,
   initialHostStatus,
   isNode24ResolutionFailure,
   primeHostStatus,
@@ -128,6 +129,66 @@ describe('reduceHostStatus (T-09)', () => {
       expect(next.capabilities).toEqual({ thinking: true });
     });
   });
+
+  /**
+   * S3 slice 6 (A6): `capabilities.agents` is the HostAgentRegistry's wire
+   * form (`host.ready`'s `capabilities.agents`) — same fold shape as
+   * `thinking` above, plus filtering against the known `AgentWireName`
+   * vocabulary so an unrecognized slug never reaches a consumer.
+   */
+  describe('capabilities.agents fold (A6)', () => {
+    it('records capabilities.agents when host.ready advertises a codex-inclusive list', () => {
+      const next = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { agents: ['claude-code', 'codex'] } })
+      );
+      expect(next.capabilities).toEqual({ thinking: undefined, agents: ['claude-code', 'codex'] });
+    });
+
+    it('records capabilities.agents=[claude-code] when the flag is off', () => {
+      const next = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { agents: ['claude-code'] } })
+      );
+      expect(next.capabilities?.agents).toEqual(['claude-code']);
+    });
+
+    it('drops an unrecognized slug instead of forwarding it (newer Host, older renderer)', () => {
+      const next = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { agents: ['claude-code', 'some-future-agent'] } })
+      );
+      expect(next.capabilities?.agents).toEqual(['claude-code']);
+    });
+
+    it('leaves agents undefined when capabilities exists but the field is absent', () => {
+      const next = reduceHostStatus(initialHostStatus, event('host.ready', { capabilities: {} }));
+      expect(next.capabilities).toEqual({ thinking: undefined, agents: undefined });
+    });
+
+    it('leaves agents undefined when the field is present but not an array (malformed payload)', () => {
+      const next = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { agents: 'codex' } })
+      );
+      expect(next.capabilities?.agents).toBeUndefined();
+    });
+
+    it('preserves prior agents when host.ready carries no capabilities at all', () => {
+      const prior = reduceHostStatus(
+        initialHostStatus,
+        event('host.ready', { capabilities: { agents: ['claude-code', 'codex'] } })
+      );
+      const next = reduceHostStatus(prior, event('host.ready', {}));
+      expect(next.capabilities?.agents).toEqual(['claude-code', 'codex']);
+    });
+
+    it('an old payload with no capabilities key at all does not throw and leaves capabilities untouched', () => {
+      expect(() => reduceHostStatus(initialHostStatus, event('host.ready', {}))).not.toThrow();
+      const next = reduceHostStatus(initialHostStatus, event('host.ready', {}));
+      expect(next.capabilities).toBeUndefined();
+    });
+  });
 });
 
 describe('primeHostStatus (S7, round-2 iteration-3 review)', () => {
@@ -202,5 +263,62 @@ describe('primeHostStatus (S7, round-2 iteration-3 review)', () => {
     expect(next.state).toBe('ready');
     expect(next.driver).toBe('agent-sdk');
     expect(next.cometixVersion).toBe('2.1.212');
+  });
+
+  /**
+   * S3 slice 6 (A6/O6): `capabilities.agents` must ride this SAME prime
+   * channel `settings` rides above — this file's own `settings` history is
+   * the exact mistake `agents` must not repeat (a consumer mounting before
+   * the first live `host.ready` learns everything else here and would
+   * otherwise read `agents` as `undefined` forever).
+   */
+  describe('capabilities (A6)', () => {
+    it('copies capabilities.agents from the Main-side snapshot onto a placeholder state', () => {
+      const next = primeHostStatus(initialHostStatus, {
+        state: 'ready',
+        capabilities: { agents: ['claude-code', 'codex'] },
+      });
+      expect(next.capabilities).toEqual({ thinking: undefined, agents: ['claude-code', 'codex'] });
+    });
+
+    it('drops an unrecognized slug instead of forwarding it, same as reduceHostStatus', () => {
+      const next = primeHostStatus(initialHostStatus, {
+        state: 'ready',
+        capabilities: { agents: ['claude-code', 'some-future-agent'] },
+      });
+      expect(next.capabilities?.agents).toEqual(['claude-code']);
+    });
+
+    it('preserves the prior capabilities when the snapshot has no capabilities key at all (old Main build)', () => {
+      const prev: HostStatus = {
+        ...initialHostStatus,
+        capabilities: { agents: ['claude-code', 'codex'] },
+      };
+      const next = primeHostStatus(prev, { state: 'ready' });
+      expect(next.capabilities).toEqual({ agents: ['claude-code', 'codex'] });
+    });
+
+    it('preserves the prior capabilities when the snapshot itself is missing (a failed/unresolved getHostStatus() call)', () => {
+      const prev: HostStatus = {
+        ...initialHostStatus,
+        capabilities: { agents: ['claude-code', 'codex'] },
+      };
+      expect(primeHostStatus(prev, undefined).capabilities).toEqual(prev.capabilities);
+      expect(primeHostStatus(prev, null).capabilities).toEqual(prev.capabilities);
+    });
+
+    it('preserves the prior capabilities when the snapshot carries an explicit capabilities:null (Host has not reported one yet)', () => {
+      const prev: HostStatus = {
+        ...initialHostStatus,
+        capabilities: { agents: ['claude-code', 'codex'] },
+      };
+      const next = primeHostStatus(prev, { state: 'ready', capabilities: null });
+      expect(next.capabilities).toEqual({ agents: ['claude-code', 'codex'] });
+    });
+
+    it('an old snapshot with no capabilities key at all does not throw', () => {
+      expect(() => primeHostStatus(initialHostStatus, { state: 'ready' })).not.toThrow();
+      expect(primeHostStatus(initialHostStatus, { state: 'ready' }).capabilities).toBeUndefined();
+    });
   });
 });

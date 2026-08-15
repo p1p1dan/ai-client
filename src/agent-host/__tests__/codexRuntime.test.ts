@@ -19,10 +19,17 @@ import {
   CODEX_CLIENT_TITLE,
   CODEX_HISTORY_UNSUPPORTED,
   CODEX_HISTORY_UNSUPPORTED_MESSAGE,
+  CODEX_IDLE_TIMEOUT_ENV,
   CODEX_PERMISSION_DEFAULT,
+  CODEX_REVIVE_DEADLINE_MS,
+  CODEX_REVIVE_FAILED_CODE,
+  CODEX_SWEEP_INTERVAL_MS,
+  type CodexIdleView,
   CodexRuntime,
   type CodexRuntimeOptions,
   compareSandboxEcho,
+  isCodexIdleSweepable,
+  resolveCodexIdleTimeoutMs,
 } from '../codexRuntime.ts';
 import { CODEX_METHOD, JSONRPC_METHOD_NOT_FOUND } from '../codexWire.ts';
 import { SessionRegistry } from '../sessionRegistry.ts';
@@ -231,6 +238,67 @@ interface OutboundFrame {
   result?: unknown;
 }
 
+/**
+ * ONE connection, addressable on its own (O16).
+ *
+ * The harness used to keep a single `core` and let each new connection overwrite
+ * it, which is exactly enough for every path that opens one link. The revive
+ * path opens a SECOND link for the same session, and the questions that matter
+ * about it are per-link questions: was a new process started at all, did THIS
+ * link send `thread/resume` and nothing else, is the old one really dead. A
+ * single latest-wins core answers all three by accident.
+ */
+interface ConnectionSlice {
+  /** Frames this link wrote, parsed, in order. */
+  written: OutboundFrame[];
+  /** This link's transcript: `write:<method>` / `reply:<id>` / `kill:<reason>`. */
+  ops: string[];
+  requestsFor(method: string): OutboundFrame[];
+  /** Feed one inbound frame into THIS link. */
+  push(frame: Record<string, unknown>): void;
+  /** Kill THIS link's "process" through the real connection core. */
+  exit(info: { code: number | null; signal: string | null }): void;
+}
+
+/**
+ * A timer the runtime started, with the two things it is required to do to it.
+ *
+ * `unrefs` is asserted, not assumed: an interval that was never unref'd keeps
+ * the Host process alive after Main has closed it, and nothing else in the suite
+ * would notice.
+ */
+interface FakeTimer {
+  ms: number;
+  /** Run the callback, unless the runtime has already stopped this timer. */
+  fire(): void;
+  unrefs: number;
+  stops: number;
+}
+
+function collectTimers(into: FakeTimer[]) {
+  return (fire: () => void, ms: number) => {
+    const entry: FakeTimer = {
+      ms,
+      fire: () => {
+        // A stopped timer that still fires would let a test assert behaviour the
+        // real one could never produce.
+        if (entry.stops === 0) fire();
+      },
+      unrefs: 0,
+      stops: 0,
+    };
+    into.push(entry);
+    return {
+      unref: () => {
+        entry.unrefs += 1;
+      },
+      stop: () => {
+        entry.stops += 1;
+      },
+    };
+  };
+}
+
 interface Harness {
   runtime: CodexRuntime;
   registry: SessionRegistry;
@@ -248,52 +316,90 @@ interface Harness {
   replies(): OutboundFrame[];
   event(type: string): Record<string, unknown> | undefined;
   eventsOf(type: string): Array<Record<string, unknown>>;
-  /** Feed one inbound frame from "codex". */
+  /** Feed one inbound frame from "codex" — into the newest link. */
   push(frame: Record<string, unknown>): void;
-  /** Kill the "process" the way a crash would — through the real connection core. */
+  /** Kill the newest "process" the way a crash would — through the real core. */
   exit(info: { code: number | null; signal: string | null }): void;
   waitFor(check: () => boolean, what: string): Promise<void>;
   waitForEvent(type: string): Promise<Record<string, unknown>>;
+  /** Every link the runtime opened, in the order it opened them (O16). */
+  connections: ConnectionSlice[];
+  /**
+   * The option object the fake codex consults on EVERY frame — not a copy.
+   * Flipping a field mid-test is the only way to give a SECOND connection
+   * different behaviour from the first, which is what a revive needs: its
+   * handshake has to be able to stall without stalling the create that produced
+   * the session in the first place.
+   */
+  options: HarnessOptions;
+  /** Move the injected clock. Real time never moves in these tests. */
+  advance(ms: number): void;
+  now(): number;
+  /**
+   * Every interval the sweeper started. More than one is not a leak: a sweep
+   * that empties the session map stops the timer, and the next session — a
+   * revived one, say — has to start a fresh one.
+   */
+  intervals: FakeTimer[];
+  /** The interval currently running, if any. */
+  sweeper(): FakeTimer | undefined;
+  /** Run one pass of the current sweeper. */
+  sweepTick(): void;
+  /** Every one-shot deadline the runtime armed (the revive chain's). */
+  deadlines: FakeTimer[];
 }
 
-function makeHarness(
-  options: {
-    threadStartResult?: unknown;
-    threadStartError?: { code: number; message: string };
-    /** `false` = codex never answers `turn/start`, so the turn id stays unknown. */
-    answerTurnStart?: boolean;
-    turnStartResult?: unknown;
-    turnStartError?: { code: number; message: string };
-    /** `false` = codex never answers `initialize`, i.e. a handshake still in flight. */
-    answerInitialize?: boolean;
-    initializeError?: { code: number; message: string };
-    threadResumeResult?: unknown;
-    threadResumeError?: { code: number; message: string };
-    turnsListResult?: unknown;
-    turnsListError?: { code: number; message: string };
-    /**
-     * Frames codex pushes AHEAD of its `thread/resume` answer — the resume window
-     * is not quiet [实测 `codex-s5-thread-resume.jsonl` lines 5-8: two MCP startup
-     * notifications, a `thread/status/changed` and a token-usage frame all land
-     * before the response].
-     */
-    resumeWindowFrames?: Array<Record<string, unknown>>;
-    resolveLaunch?: () => CodexEntryResolution;
-    ensureHome?: CodexRuntimeOptions['ensureHome'];
-    appVersion?: string;
-    codexHomeDir?: string;
-  } = {}
-): Harness {
+/** Everything the fake codex can be told to do. */
+interface HarnessOptions {
+  threadStartResult?: unknown;
+  threadStartError?: { code: number; message: string };
+  /** `false` = codex never answers `turn/start`, so the turn id stays unknown. */
+  answerTurnStart?: boolean;
+  turnStartResult?: unknown;
+  turnStartError?: { code: number; message: string };
+  /** `false` = codex never answers `initialize`, i.e. a handshake still in flight. */
+  answerInitialize?: boolean;
+  initializeError?: { code: number; message: string };
+  threadResumeResult?: unknown;
+  threadResumeError?: { code: number; message: string };
+  turnsListResult?: unknown;
+  turnsListError?: { code: number; message: string };
+  /**
+   * Frames codex pushes AHEAD of its `thread/resume` answer — the resume window
+   * is not quiet [实测 `codex-s5-thread-resume.jsonl` lines 5-8: two MCP startup
+   * notifications, a `thread/status/changed` and a token-usage frame all land
+   * before the response].
+   */
+  resumeWindowFrames?: Array<Record<string, unknown>>;
+  resolveLaunch?: () => CodexEntryResolution;
+  ensureHome?: CodexRuntimeOptions['ensureHome'];
+  appVersion?: string;
+  codexHomeDir?: string;
+  /**
+   * The idle sweeper's environment. Defaults to EMPTY, not to `process.env`:
+   * a developer with `AICLIENT_CODEX_IDLE_TIMEOUT_SECS` exported would
+   * otherwise change what this suite tests, which is the non-hermetic-harness
+   * defect F13 records against `protocolErrors.test.ts`.
+   */
+  env?: NodeJS.ProcessEnv;
+}
+
+function makeHarness(options: HarnessOptions = {}): Harness {
   const events: Array<Record<string, unknown>> = [];
   const logs: string[] = [];
   const ops: string[] = [];
   const written: OutboundFrame[] = [];
   const connectInputs: Array<Parameters<CodexConnectFactory>[0]> = [];
   const ensureHomeInputs: Array<Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]> = [];
-  let core: CodexConnectionCore | null = null;
+  const connections: ConnectionSlice[] = [];
+  const intervals: FakeTimer[] = [];
+  const deadlines: FakeTimer[] = [];
+  // A non-zero epoch, so "seeded at construction" and "never set" are different
+  // readings rather than both being 0.
+  let clock = 1_700_000_000_000;
 
-  function answer(frame: OutboundFrame): void {
-    if (!core || frame.id === undefined) return;
+  function answer(frame: OutboundFrame, core: CodexConnectionCore): void {
+    if (frame.id === undefined) return;
     if (frame.method === 'initialize') {
       if (options.answerInitialize === false) return;
       const body = options.initializeError
@@ -354,27 +460,55 @@ function makeHarness(
 
   const connect: CodexConnectFactory = (input) => {
     connectInputs.push(input);
+    const mine: OutboundFrame[] = [];
+    const myOps: string[] = [];
+    // Assigned one statement below, and only ever read from callbacks that run
+    // later — the core has to exist before anything can be written to it.
+    let self: CodexConnectionCore | null = null;
     const created = createCodexConnection({
       transport: {
         pid: 4242,
         write: (line) => {
           const frame = JSON.parse(line) as OutboundFrame;
           written.push(frame);
-          ops.push(frame.method ? `write:${frame.method}` : `reply:${String(frame.id)}`);
+          mine.push(frame);
+          const op = frame.method ? `write:${frame.method}` : `reply:${String(frame.id)}`;
+          ops.push(op);
+          myOps.push(op);
           // A real process never answers inside the write call; a microtask
-          // keeps the ordering realistic without a timer.
-          if (frame.method !== undefined && frame.id !== undefined)
-            queueMicrotask(() => answer(frame));
+          // keeps the ordering realistic without a timer. Answered into the link
+          // that WROTE it — a latest-wins core would post the answer to a
+          // connection the caller is not listening on the moment a revive opens
+          // a second one.
+          if (frame.method !== undefined && frame.id !== undefined) {
+            queueMicrotask(() => {
+              if (self) answer(frame, self);
+            });
+          }
         },
-        kill: (reason) => ops.push(`kill:${reason}`),
+        kill: (reason) => {
+          ops.push(`kill:${reason}`);
+          myOps.push(`kill:${reason}`);
+        },
       },
       handlers: input.handlers,
       log: (...args) =>
         logs.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')),
     });
-    core = created;
+    self = created;
+    connections.push({
+      written: mine,
+      ops: myOps,
+      requestsFor: (method) => mine.filter((f) => f.method === method),
+      push: (frame) => created.pushStdout(`${JSON.stringify(frame)}\n`),
+      exit: (info) => created.handleExit(info),
+    });
     return created.connection;
   };
+
+  function newest(): ConnectionSlice | undefined {
+    return connections[connections.length - 1];
+  }
 
   const registry = new SessionRegistry();
   const runtime = new CodexRuntime({
@@ -384,6 +518,10 @@ function makeHarness(
     registry,
     codexHomeDir: options.codexHomeDir ?? HOME_DIR,
     appVersion: options.appVersion ?? '9.9.9-test',
+    now: () => clock,
+    env: options.env ?? {},
+    startInterval: collectTimers(intervals),
+    startTimeout: collectTimers(deadlines),
     connect,
     resolveLaunch: options.resolveLaunch ?? (() => ({ ok: true, plan: PLAN })),
     ensureHome: (input) => {
@@ -419,8 +557,22 @@ function makeHarness(
     replies: () => written.filter((f) => f.method === undefined),
     event: (type) => events.find((e) => e.type === type),
     eventsOf: (type) => events.filter((e) => e.type === type),
-    push: (frame) => core?.pushStdout(`${JSON.stringify(frame)}\n`),
-    exit: (info) => core?.handleExit(info),
+    push: (frame) => newest()?.push(frame),
+    exit: (info) => newest()?.exit(info),
+    connections,
+    options,
+    deadlines,
+    advance: (ms) => {
+      clock += ms;
+    },
+    now: () => clock,
+    intervals,
+    sweeper: () => intervals[intervals.length - 1],
+    sweepTick: () => {
+      const sweeper = intervals[intervals.length - 1];
+      if (!sweeper) throw new Error('no idle sweeper was ever started');
+      sweeper.fire();
+    },
     waitFor: async (check, what) => {
       for (let i = 0; i < 200; i += 1) {
         if (check()) return;
@@ -3438,5 +3590,714 @@ describe('codexRuntime — the approval bridge (slice 4)', () => {
       expect(h.replies()).toHaveLength(3);
       expect(h.replies()[2]).toMatchObject({ id: APPROVAL_ID, result: { decision: 'cancel' } });
     });
+  });
+});
+
+/**
+ * S3 slice 6 (#8) — the idle sweeper and the send that brings a swept session
+ * back.
+ *
+ * What is being defended here is not memory: it is the session. Reclaiming one
+ * app-server is worth nothing if the conversation it was running cannot be
+ * continued, so every case below is really one of two questions — "did we take
+ * something we were allowed to take" and "can the user still talk to it".
+ *
+ * The clock and both timers are injected (`makeHarness`), so a 180s threshold is
+ * exercised in microseconds and a sweep happens exactly when a test says it
+ * does. Real time never moves.
+ */
+const IDLE_MS = 180 * 1000;
+
+describe('resolveCodexIdleTimeoutMs — the threshold env (G7)', () => {
+  const read = (value?: string): number | null =>
+    resolveCodexIdleTimeoutMs(value === undefined ? {} : { [CODEX_IDLE_TIMEOUT_ENV]: value });
+
+  it('reads the six documented shapes', () => {
+    // Unset is the default; `0` and any negative disable it (codeg's own
+    // convention, whose `u64` parse simply rejects the negatives); an
+    // unparseable value falls back rather than disabling a memory guard by
+    // typo; fractions and exponents are ordinary numbers of seconds.
+    expect(read()).toBe(IDLE_MS);
+    expect(read('0')).toBeNull();
+    expect(read('-1')).toBeNull();
+    expect(read('abc')).toBe(IDLE_MS);
+    expect(read('1.5')).toBe(1500);
+    expect(read('1e9')).toBe(1e12);
+  });
+
+  it('treats an empty value as unset, not as zero', () => {
+    // `Number('') === 0`, so an env var that exists and says nothing would
+    // otherwise turn the sweeper OFF — the opposite of "not configured", and
+    // silently. This is why the empty check runs before the parse.
+    expect(read('')).toBe(IDLE_MS);
+  });
+});
+
+describe('isCodexIdleSweepable — six conditions, six vetoes (G6)', () => {
+  /** A session that satisfies every condition, so each case can break ONE. */
+  const SWEEPABLE: CodexIdleView = {
+    threadId: FIXTURE_THREAD,
+    rolloutBacked: true,
+    hasTurn: false,
+    pendingCount: 0,
+    torndown: false,
+    reviving: false,
+    lastActivityAt: 0,
+  };
+  const judge = (over: Partial<CodexIdleView>): boolean =>
+    isCodexIdleSweepable({ ...SWEEPABLE, ...over }, IDLE_MS, IDLE_MS);
+
+  it('sweeps a session that satisfies all of them', () => {
+    // The positive control. Without it every veto below could pass vacuously.
+    expect(judge({})).toBe(true);
+  });
+
+  it('refuses a session with no thread id — the handshake is still in flight', () => {
+    // Killing this one aborts a create or a resume the user is waiting on.
+    expect(judge({ threadId: undefined })).toBe(false);
+  });
+
+  it('refuses a session with no rollout file behind it', () => {
+    // A zero-turn thread cannot be resumed at all [实测 -32600 no rollout], so
+    // reclaiming it would DELETE the session rather than park it (L8).
+    expect(judge({ rolloutBacked: false })).toBe(false);
+  });
+
+  it('refuses a session with a turn in flight', () => {
+    // The link can be quiet for minutes while the model thinks.
+    expect(judge({ hasTurn: true })).toBe(false);
+  });
+
+  it('refuses a session holding a card the user can still answer', () => {
+    expect(judge({ pendingCount: 1 })).toBe(false);
+  });
+
+  it('refuses a session that is already leaving or already coming back', () => {
+    expect(judge({ torndown: true })).toBe(false);
+    expect(judge({ reviving: true })).toBe(false);
+  });
+
+  it('refuses a session that is inside the threshold, to the millisecond', () => {
+    expect(isCodexIdleSweepable(SWEEPABLE, IDLE_MS - 1, IDLE_MS)).toBe(false);
+    // The boundary is inclusive: "at least this long" is what the env says.
+    expect(isCodexIdleSweepable(SWEEPABLE, IDLE_MS, IDLE_MS)).toBe(true);
+  });
+});
+
+/**
+ * The runtime half of G6: the mapping from a live session onto the view above.
+ * The pure test cannot see it, and a swapped field there (`hasTurn: turn ===
+ * null`) would sweep exactly the sessions that must never be swept.
+ */
+/**
+ * A session with ONE COMPLETED TURN behind it — the minimum shape the sweeper
+ * may reclaim, because the completed turn is what puts a rollout file on disk.
+ */
+async function sweepableSession(options: HarnessOptions = {}): Promise<Harness> {
+  const h = await turnSession(options);
+  await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-send' });
+  replayRecordedTurn(h);
+  await h.waitFor(() => terminalsOf(h.events).length === 1, 'the turn to end');
+  h.events.length = 0;
+  return h;
+}
+
+function killsOf(slice: ConnectionSlice): string[] {
+  return slice.ops.filter((op) => op.startsWith('kill:'));
+}
+
+/**
+ * A question request shaped the way the recorded one is: `question` is the
+ * field that decides whether a card can be rendered at all, so a request
+ * without it is REFUSED at the door and never reaches the pending table.
+ */
+function questionRequest(id: number): Record<string, unknown> {
+  return {
+    id,
+    method: 'item/tool/requestUserInput',
+    params: {
+      threadId: FIXTURE_THREAD,
+      questions: [{ id: 'q1', header: 'Host', question: 'Which host?', options: [{ label: 'A' }] }],
+    },
+  };
+}
+
+describe('codexRuntime — the idle sweeper takes only what it may (G6/G8/G15)', () => {
+  it('starts exactly one interval, at codeg s cadence, and unrefs it', async () => {
+    const h = await sweepableSession();
+
+    expect(h.sweeper()?.ms).toBe(CODEX_SWEEP_INTERVAL_MS);
+    // An interval that exists to FREE resources must never be the reason the
+    // Host process cannot exit when Main closes it.
+    expect(h.sweeper()?.unrefs).toBe(1);
+    // Idempotent: a second session must not start a second sweeper.
+    h.runtime.createSession({ sessionId: 's2', workspacePath: '/work/repo' });
+    await h.waitFor(() => h.connections.length === 2, 'the second session');
+    expect(h.deadlines).toEqual([]);
+  });
+
+  it('reclaims an idle session silently, keeping the binding that can reopen it', async () => {
+    const h = await sweepableSession();
+    h.advance(IDLE_MS);
+    h.sweepTick();
+
+    // The process is gone...
+    expect(killsOf(h.connections[0])).toEqual(['kill:idle sweep']);
+    // ...the row says so — and this line is NOT redundant with the exit path:
+    // `teardown` sets `torndown` first and `onExit` returns on a torn-down
+    // state, so the `disconnected` a crash writes never runs for a kill we
+    // asked for.
+    expect(h.registry.get('s1')?.status).toBe('disconnected');
+    // ...but the binding survives, because it is the resume handle. Deleting it
+    // would make the next send `session_not_found`, which the renderer answers
+    // by building a brand-new thread over this one.
+    expect(h.registry.get('s1')?.runtimeIdentity).toBe(FIXTURE_THREAD);
+    expect(h.registry.get('s1')?.agent).toBe(CODEX_AGENT);
+    // And the user was told NOTHING: they never asked for this, and a
+    // `session.failed` here would report a crash that did not happen.
+    expect(h.events).toEqual([]);
+    // The state itself is gone rather than merely flagged — `stop` needs one,
+    // and now says so.
+    h.runtime.stop({ sessionId: 's1', requestId: 'req-stop' });
+    expect(payload(h.event('host.error')).code).toBe('session_not_found');
+  });
+
+  it('does not reclaim a session whose turn is still running', async () => {
+    // A SECOND turn on a session that already has a completed one, so every
+    // other condition says "reclaimable" and the live turn is the only thing
+    // standing between it and a kill that abandons the model mid-answer. (A
+    // fresh session would be held back by its missing rollout file instead,
+    // which would leave this rule untested.)
+    const h = await sweepableSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-2' });
+    // The link has been silent since: a model that thinks for four minutes is
+    // not an idle session.
+    h.advance(IDLE_MS * 10);
+    h.sweepTick();
+
+    expect(killsOf(h.connections[0])).toEqual([]);
+    expect(h.registry.get('s1')?.status).not.toBe('disconnected');
+  });
+
+  it('does not reclaim a session that has never completed a turn', async () => {
+    // The zero-turn case (L8): no rollout file exists, so `thread/resume` would
+    // answer `-32600 no rollout found` and the session would be gone for good.
+    const h = await startedSession();
+    h.advance(IDLE_MS * 10);
+    h.sweepTick();
+
+    expect(killsOf(h.connections[0])).toEqual([]);
+  });
+
+  it('does not reclaim a session still holding a question card', async () => {
+    const h = await sweepableSession();
+    // A question parked mid-turn SURVIVES the turn's end (only approvals are
+    // drained there), so this is a real state: no turn, but a card on screen
+    // that the user can still answer.
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-2' });
+    h.push(questionRequest(7));
+    replayRecordedTurn(h, { turnId: 'turn-2' });
+    await h.waitFor(() => h.eventsOf('question.requested').length === 1, 'the card');
+    h.advance(IDLE_MS);
+    h.sweepTick();
+
+    expect(killsOf(h.connections[0])).toEqual([]);
+
+    // Answered — now nothing is waiting on the user and the session is idle.
+    h.runtime.respondQuestion({
+      sessionId: 's1',
+      questionId: 'codex:s1:n:7',
+      answers: { q1: 'a' },
+    });
+    h.advance(IDLE_MS);
+    h.sweepTick();
+    expect(killsOf(h.connections[0])).toEqual(['kill:idle sweep']);
+  });
+
+  it('does not reclaim before the threshold, and does on the first tick after it', async () => {
+    const h = await sweepableSession();
+    h.advance(IDLE_MS - 1);
+    h.sweepTick();
+    expect(killsOf(h.connections[0])).toEqual([]);
+
+    h.advance(1);
+    h.sweepTick();
+    expect(killsOf(h.connections[0])).toEqual(['kill:idle sweep']);
+  });
+
+  it('counts a frame in EITHER direction as activity (O20)', async () => {
+    const h = await sweepableSession();
+
+    // Inbound, and deliberately a frame the runtime drops on the floor: a
+    // status notification outside a turn changes no session state at all, but
+    // it is still codex talking to us about this session.
+    h.advance(IDLE_MS - 1);
+    h.push({
+      method: 'thread/status/changed',
+      params: { threadId: FIXTURE_THREAD, status: { type: 'idle' } },
+    });
+    h.advance(IDLE_MS - 1);
+    h.sweepTick();
+    expect(killsOf(h.connections[0])).toEqual([]);
+
+    // Outbound, from the path a runtime-level timestamp could never see: the
+    // pending table's reply closure writes straight into the connection.
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-2' });
+    h.push(questionRequest(8));
+    replayRecordedTurn(h, { turnId: 'turn-2' });
+    h.advance(IDLE_MS - 1);
+    h.runtime.respondQuestion({
+      sessionId: 's1',
+      questionId: 'codex:s1:n:8',
+      answers: { q1: 'a' },
+    });
+    expect(h.connections[0].ops).toContain('reply:8');
+    h.advance(IDLE_MS - 1);
+    h.sweepTick();
+    expect(killsOf(h.connections[0])).toEqual([]);
+  });
+
+  it('starts a sweeper for a process that only ever RESUMED a session (O14)', async () => {
+    // The restart shape: the app comes back, the user opens an old session from
+    // the history list and never creates a new one. Hanging the sweeper off
+    // `createSession` alone would leave this process holding an app-server per
+    // reopened session with nothing watching them.
+    const h = makeHarness();
+    h.runtime.resumeSession({
+      sessionId: 's-resume',
+      workspacePath: '/work/repo',
+      runtimeIdentity: RECORDED_THREAD,
+      requestId: 'req-resume',
+    });
+    await h.waitForEvent('session.history');
+    h.events.length = 0;
+
+    expect(h.sweeper()?.ms).toBe(CODEX_SWEEP_INTERVAL_MS);
+    h.advance(IDLE_MS);
+    h.sweepTick();
+
+    // An answered `thread/resume` IS the proof the rollout file exists, so a
+    // cold-resumed session is sweepable straight away.
+    expect(killsOf(h.connections[0])).toEqual(['kill:idle sweep']);
+    expect(h.events).toEqual([]);
+  });
+
+  it('stops the interval when the last session goes, and never starts one when disabled', async () => {
+    const h = await sweepableSession();
+    h.advance(IDLE_MS);
+    h.sweepTick();
+    // Nothing left to watch. The pairing that makes this safe is on the other
+    // side: every insertion point re-ensures the sweeper, so a revived session
+    // is watched again.
+    expect(h.sweeper()?.stops).toBe(1);
+
+    const off = await turnSession({ env: { [CODEX_IDLE_TIMEOUT_ENV]: '0' } });
+    expect(off.sweeper()).toBeUndefined();
+    off.advance(IDLE_MS * 100);
+    expect(() => off.sweepTick()).toThrow(/no idle sweeper/);
+    expect(off.connections[0].ops.filter((op) => op.startsWith('kill:'))).toEqual([]);
+  });
+});
+
+/**
+ * The other half of #8: a swept session is only reclaimed if the user can pick
+ * the conversation up again. These cases are the pickup.
+ *
+ * Everything here is QUIET on purpose. The renderer was never told the session
+ * went away, so it must not be told it came back either — a `session.resumed` +
+ * `session.history` pair would replay a transcript the user is already looking
+ * at and reset the chat they are typing into.
+ */
+describe('codexRuntime — send() revives a swept session (G9/G13)', () => {
+  /**
+   * What `thread/resume` answers on the revive path. Only the POSTURE is read
+   * there (no transcript is replayed), so this carries the echo dialect over the
+   * thread the swept session actually owns, rather than pointing the whole
+   * recorded result at the wrong thread.
+   */
+  const REVIVED_RESULT: Record<string, unknown> = {
+    thread: { id: FIXTURE_THREAD, turns: [] },
+    approvalPolicy: 'on-request',
+    sandbox: { type: 'workspaceWrite' },
+  };
+
+  async function sweptSession(options: HarnessOptions = {}): Promise<Harness> {
+    const h = await sweepableSession({ threadResumeResult: REVIVED_RESULT, ...options });
+    h.advance(IDLE_MS);
+    h.sweepTick();
+    h.events.length = 0;
+    return h;
+  }
+
+  it('reopens the thread over ONE new link and runs the turn on it', async () => {
+    const h = await sweptSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-again' });
+
+    expect(h.connections).toHaveLength(2);
+    // `thread/resume`, never `thread/start`: a new thread would leave the user's
+    // conversation on disk and hand them an empty one under the same row.
+    expect(h.connections[1].ops).toEqual([
+      'write:initialize',
+      'write:initialized',
+      'write:thread/resume',
+      'write:turn/start',
+    ]);
+    expect(h.connections[1].requestsFor('thread/resume')[0].params).toEqual({
+      threadId: FIXTURE_THREAD,
+    });
+    expect(h.connections[1].requestsFor('turn/start')[0].params).toEqual(
+      buildTurnStartParams({ threadId: FIXTURE_THREAD, text: PROMPT })
+    );
+    // H9 stays double-layered on this path too: the isolated home is re-seeded
+    // with the same posture object (layer 1), and the echo is verified below in
+    // its own case (layer 2).
+    expect(h.ensureHomeInputs).toHaveLength(2);
+    expect(h.ensureHomeInputs[1].permission).toBe(CODEX_PERMISSION_DEFAULT);
+    // Quiet. Nothing that would repaint the conversation, and no error either.
+    expect(h.eventsOf('session.resumed')).toEqual([]);
+    expect(h.eventsOf('session.history')).toEqual([]);
+    expect(h.eventsOf('host.error')).toEqual([]);
+  });
+
+  it('leaves the status projector open afterwards (O3)', async () => {
+    const h = await sweptSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-again' });
+    h.events.length = 0;
+
+    // `statusGated` is released by the resume CONTRACT, which this path never
+    // emits — so the revive has to release it itself. Left set, the session
+    // could send but could never look busy again, for the rest of its life.
+    h.push({
+      method: 'thread/status/changed',
+      params: { threadId: FIXTURE_THREAD, status: { type: 'active', activeFlags: [] } },
+    });
+
+    expect(h.eventsOf('session.status').map((event) => payload(event).status)).toEqual(['running']);
+    // The registry converges through the same frame: the sweep left it
+    // `disconnected`, and this is what takes it off that reading.
+    expect(h.registry.get('s1')?.status).toBe('running');
+  });
+
+  it('watches the revived session again and can reclaim it a second time', async () => {
+    const h = await sweptSession();
+    // The sweep that produced it emptied the map and stopped the interval.
+    expect(h.intervals).toHaveLength(1);
+    expect(h.intervals[0].stops).toBe(1);
+
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-again' });
+    replayRecordedTurn(h, { turnId: 'turn-revived' });
+    await h.waitFor(() => terminalsOf(h.events).length === 1, 'the revived turn to end');
+
+    // Without re-ensuring, a revived session would be held until the app quits.
+    expect(h.intervals).toHaveLength(2);
+    expect(h.intervals[1].unrefs).toBe(1);
+    h.advance(IDLE_MS);
+    h.sweepTick();
+    expect(killsOf(h.connections[1])).toEqual(['kill:idle sweep']);
+  });
+
+  it('refuses a second send while the revive is in flight, retryably (F16)', async () => {
+    const h = await sweptSession();
+    // The option object is read per frame, so flipping it now stalls the
+    // REVIVE's handshake without having stalled the create that produced the
+    // session.
+    h.options.answerInitialize = false;
+    const sending = h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    await h.waitFor(() => h.connections.length === 2, 'the revive link');
+
+    await h.runtime.send({ sessionId: 's1', text: 'again', requestId: 'req-2' });
+
+    // The placeholder state has no thread id yet, which is the gate `send`
+    // already had — no invented turn is needed to hold the door.
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe('session_busy');
+    expect(error?.requestId).toBe('req-2');
+    expect(h.connections).toHaveLength(2);
+    expect(h.connections[1].requestsFor('turn/start')).toEqual([]);
+
+    h.deadlines[0].fire();
+    await sending;
+  });
+
+  it('does not let a sweep tick kill the link that is reopening the thread', async () => {
+    const h = await sweptSession();
+    h.options.answerInitialize = false;
+    const sending = h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    await h.waitFor(() => h.connections.length === 2, 'the revive link');
+
+    // The placeholder's clock starts at construction, so a tick landing inside
+    // a slow revive would otherwise reclaim the very link that is bringing the
+    // session back — and the send would fail for a reason we caused.
+    h.advance(IDLE_MS * 10);
+    h.sweepTick();
+    expect(killsOf(h.connections[1])).toEqual([]);
+
+    h.deadlines[0].fire();
+    await sending;
+  });
+
+  it('refuses a sidebar resume while the revive is in flight (O13)', async () => {
+    const h = await sweptSession();
+    h.options.answerInitialize = false;
+    const sending = h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    await h.waitFor(() => h.connections.length === 2, 'the revive link');
+    h.events.length = 0;
+
+    h.runtime.resumeSession({
+      sessionId: 's1',
+      workspacePath: '/work/repo',
+      runtimeIdentity: FIXTURE_THREAD,
+      requestId: 'req-resume',
+    });
+
+    // Guard ③ would otherwise take this: `connection.alive` is true from the
+    // moment the link is constructed, so the sidebar's resume would be answered
+    // with `thread/turns/list` over a link that has not finished `initialize`.
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe('session_busy');
+    expect(error?.requestId).toBe('req-resume');
+    expect(h.connections[1].requestsFor('thread/turns/list')).toEqual([]);
+    expect(h.eventsOf('session.resumed')).toEqual([]);
+
+    h.deadlines[0].fire();
+    await sending;
+  });
+});
+
+describe('codexRuntime — a revive that cannot happen says so (G10/G11/G14)', () => {
+  const REVIVED_RESULT: Record<string, unknown> = {
+    thread: { id: FIXTURE_THREAD, turns: [] },
+    approvalPolicy: 'on-request',
+    sandbox: { type: 'workspaceWrite' },
+  };
+
+  async function sweptSession(options: HarnessOptions = {}): Promise<Harness> {
+    const h = await sweepableSession({ threadResumeResult: REVIVED_RESULT, ...options });
+    h.advance(IDLE_MS);
+    h.sweepTick();
+    h.events.length = 0;
+    return h;
+  }
+
+  it('refuses a thread whose posture does not check out (H9 layer 2)', async () => {
+    const h = await sweptSession();
+    // The REAL recorded result: that capture ran under the developer's own
+    // `~/.codex`, whose `danger-full-access` is what came back. A revive that
+    // accepted it would run the session with every approval prompt switched off.
+    h.options.threadResumeResult = RECORDED_RESUME_RESULT;
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-again' });
+
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe(CODEX_REVIVE_FAILED_CODE);
+    expect(String(payload(error).message)).toContain('permission posture');
+    // Nothing was sent on a session we could not vouch for, and the process it
+    // opened is gone rather than left running with a posture we refused.
+    expect(h.connections[1].requestsFor('turn/start')).toEqual([]);
+    expect(killsOf(h.connections[1])).toHaveLength(1);
+    expect(h.eventsOf('session.failed')).toEqual([]);
+  });
+
+  it('drops a thread whose rollout is gone and converges back to session_not_found', async () => {
+    const h = await sweptSession();
+    h.options.threadResumeError = {
+      code: -32600,
+      message: `no rollout found for thread id ${FIXTURE_THREAD}`,
+    };
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    expect(payload(h.event('host.error')).code).toBe(CODEX_REVIVE_FAILED_CODE);
+    h.events.length = 0;
+
+    // Off the list: no retry can succeed against a rollout that is not there, so
+    // the session converges back to the semantics it had before this path
+    // existed — the renderer's own new-thread recovery included.
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-2' });
+    expect(payload(h.event('host.error')).code).toBe('session_not_found');
+    expect(h.connections).toHaveLength(2);
+  });
+
+  it('keeps a session whose revive failed for an infrastructure reason', async () => {
+    const h = await sweptSession();
+    h.options.initializeError = { code: -32603, message: 'handshake exploded' };
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    expect(payload(h.event('host.error')).code).toBe(CODEX_REVIVE_FAILED_CODE);
+    expect(h.connections).toHaveLength(2);
+    h.events.length = 0;
+
+    // Still on the list — a handshake that failed once is not a thread that is
+    // gone — and the retry really does reopen it.
+    h.options.initializeError = undefined;
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-2' });
+    expect(h.connections).toHaveLength(3);
+    expect(h.connections[2].requestsFor('thread/resume')[0].params).toEqual({
+      threadId: FIXTURE_THREAD,
+    });
+    expect(h.eventsOf('host.error')).toEqual([]);
+  });
+
+  it('reports a revive that could not start codex at all, and keeps the session', async () => {
+    let broken = false;
+    const h = await sweptSession({
+      resolveLaunch: () =>
+        broken
+          ? {
+              ok: false,
+              code: 'codex_entry_unresolved',
+              message: 'Codex entry not found: no @openai/codex bin next to node.',
+              inspected: [],
+            }
+          : { ok: true, plan: PLAN },
+    });
+    broken = true;
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+
+    expect(payload(h.event('host.error')).code).toBe(CODEX_REVIVE_FAILED_CODE);
+    // Nothing was spawned, so there was nothing to tear down.
+    expect(h.connections).toHaveLength(1);
+    h.events.length = 0;
+
+    broken = false;
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-2' });
+    expect(h.connections).toHaveLength(2);
+    expect(h.eventsOf('host.error')).toEqual([]);
+  });
+
+  it('gives up on its OWN deadline, not the transport s (O10)', async () => {
+    const h = await sweptSession();
+    h.options.answerInitialize = false;
+    const sending = h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    await h.waitFor(() => h.deadlines.length === 1, 'the revive deadline');
+
+    // The component deadlines add up to 75s (15s initialize + a 60s request),
+    // while the renderer abandons a send at 45s — so without a chain-level
+    // budget the user's send fails generically and the Host keeps working.
+    expect(h.deadlines[0].ms).toBe(CODEX_REVIVE_DEADLINE_MS);
+    expect(h.deadlines[0].unrefs).toBe(1);
+    h.deadlines[0].fire();
+    await sending;
+
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe(CODEX_REVIVE_FAILED_CODE);
+    expect(String(payload(error).message)).toContain('timed out');
+    expect(killsOf(h.connections[1])).toHaveLength(1);
+    // Cancelled once it has lost, or every send leaves a timer behind.
+    expect(h.deadlines[0].stops).toBe(1);
+  });
+
+  it('never answers a failed revive with the code that makes the renderer swap the thread', async () => {
+    // `session_not_found` on a direct send is the renderer's signal to close
+    // this session, create a fresh one and OVERWRITE the persisted
+    // runtimeIdentity. Reusing it for a failed revive would turn "we could not
+    // reopen your thread" into a silent session swap — the loudest possible
+    // data loss dressed up as a fail-safe.
+    for (const failure of [
+      { threadResumeError: { code: -32600, message: 'no rollout found for thread id x' } },
+      { initializeError: { code: -32603, message: 'handshake exploded' } },
+      { threadResumeResult: RECORDED_RESUME_RESULT },
+    ]) {
+      const h = await sweptSession();
+      Object.assign(h.options, failure);
+      await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+
+      const error = h.event('host.error');
+      expect(payload(error).code).toBe(CODEX_REVIVE_FAILED_CODE);
+      expect(payload(error).code).not.toBe('session_not_found');
+      // Non-fatal and correlated both ways, like every other refusal: the
+      // Composer has to be able to fail THIS message instead of spinning.
+      expect(payload(error).fatal).toBe(false);
+      expect(error?.sessionId).toBe('s1');
+      expect(error?.requestId).toBe('req-1');
+    }
+  });
+
+  it('refuses to revive a row whose binding no longer fits (defensive)', async () => {
+    // Neither state below is reachable through this runtime today: only a codex
+    // session can be swept, and a swept one always has its thread id. Both
+    // checks are here because the cost of being wrong is asymmetric — spawning
+    // a codex for a row whose sends go to the Claude runtime, or resuming
+    // `undefined` as a thread — so they are pinned rather than trusted.
+    const foreign = await sweptSession();
+    foreign.registry.delete('s1');
+    // Rebound to the other runtime, thread handle and all: the agent is the
+    // ONLY thing left that can refuse this one.
+    foreign.registry.resume({
+      sessionId: 's1',
+      workspacePath: '/work/repo',
+      runtimeIdentity: FIXTURE_THREAD,
+      agent: CLAUDE_CODE_AGENT,
+    });
+    await foreign.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    expect(payload(foreign.event('host.error')).code).toBe('session_not_found');
+    expect(foreign.connections).toHaveLength(1);
+
+    const unbound = await sweptSession();
+    unbound.registry.delete('s1');
+    unbound.registry.create({ sessionId: 's1', workspacePath: '/work/repo', agent: CODEX_AGENT });
+    await unbound.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    expect(payload(unbound.event('host.error')).code).toBe('session_not_found');
+    expect(unbound.connections).toHaveLength(1);
+  });
+
+  it('leaves a CRASHED session on the ordinary session_not_found path (O12)', async () => {
+    const h = await sweepableSession();
+    h.exit({ code: 1, signal: null });
+    await h.waitForEvent('session.failed');
+    h.events.length = 0;
+
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+
+    // The judgement is the sweep LIST, not "the state is missing". This user was
+    // already told the session died; reopening it silently would replace a
+    // failure they saw with a recovery they cannot audit.
+    expect(payload(h.event('host.error')).code).toBe('session_not_found');
+    expect(h.connections).toHaveLength(1);
+  });
+
+  it('leaves a failed cold resume on the ordinary session_not_found path (O12)', async () => {
+    const h = makeHarness({ threadResumeError: { code: -32603, message: 'resume exploded' } });
+    h.runtime.resumeSession({
+      sessionId: 's-resume',
+      workspacePath: '/work/repo',
+      runtimeIdentity: RECORDED_THREAD,
+      requestId: 'req-resume',
+    });
+    await h.waitForEvent('session.history');
+    h.events.length = 0;
+
+    await h.runtime.send({ sessionId: 's-resume', text: PROMPT, requestId: 'req-1' });
+
+    expect(payload(h.event('host.error')).code).toBe('session_not_found');
+    expect(h.connections).toHaveLength(1);
+  });
+
+  it('takes a swept session off the revive list once the user reopens it themselves', async () => {
+    const h = await sweptSession();
+    h.options.threadResumeError = { code: -32603, message: 'resume exploded' };
+    h.runtime.resumeSession({
+      sessionId: 's1',
+      workspacePath: '/work/repo',
+      runtimeIdentity: FIXTURE_THREAD,
+      requestId: 'req-resume',
+    });
+    await h.waitForEvent('session.history');
+    h.events.length = 0;
+
+    // The reclaim was quiet; this resume was not. Its failure has already been
+    // reported through the degradation contract, so the next send must not go
+    // spawning another codex behind a banner the user is already reading — it
+    // is an ordinary failed resume from here on.
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+    expect(payload(h.event('host.error')).code).toBe('session_not_found');
+    expect(h.connections).toHaveLength(2);
+  });
+
+  it('does not revive a session that was closed after it was swept', async () => {
+    const h = await sweptSession();
+    h.runtime.close({ sessionId: 's1', requestId: 'req-close' });
+    h.events.length = 0;
+
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
+
+    expect(payload(h.event('host.error')).code).toBe('session_not_found');
+    expect(h.connections).toHaveLength(1);
   });
 });

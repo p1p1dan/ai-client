@@ -42,7 +42,7 @@ import { readAutoResolutionMs, toCodexAnswerBody, toQuestionItems } from './code
 import { readThreadStatus } from './codexStatus.ts';
 import { CODEX_METHOD, idKey, JSONRPC_METHOD_NOT_FOUND, type JsonRpcId } from './codexWire.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
-import type { SessionRegistry } from './sessionRegistry.ts';
+import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
 
 /**
  * Codex Runtime Adapter — the shell that owns one `codex app-server` link per
@@ -302,6 +302,126 @@ export const CODEX_TURN_START_TIMEOUT_MS = 30 * 60_000;
  * result is logged, never acted on.
  */
 export const CODEX_TURN_INTERRUPT_TIMEOUT_MS = 15_000;
+
+/**
+ * How often the idle sweeper looks, and how long a session may sit still before
+ * it is reclaimed (slice 6 #8). Both numbers are codeg's
+ * [读码 `idle_sweep.rs:13-64`], because the thing being managed is the same:
+ * one ~296MiB platform binary per open chat, held for a conversation nobody is
+ * having any more.
+ *
+ * The cadence is NOT the resolution of the timeout — a session crosses the
+ * threshold at T and is reclaimed at the next tick, so up to one interval late.
+ * Making them equal would be a false precision: the point is bounding the leak,
+ * not reclaiming at a particular second.
+ */
+export const CODEX_SWEEP_INTERVAL_MS = 60_000;
+const CODEX_DEFAULT_IDLE_TIMEOUT_SECS = 180;
+export const CODEX_IDLE_TIMEOUT_ENV = 'AICLIENT_CODEX_IDLE_TIMEOUT_SECS';
+
+/**
+ * The idle threshold in ms, or `null` for "never sweep".
+ *
+ * Shaped after `claudeRuntime.resolveStallTimeoutMs` (the repo's own precedent
+ * for a host-side env timeout) with codeg's disable convention on top:
+ *
+ *  - unset or EMPTY -> the default. The empty case is checked before `Number`
+ *    on purpose: `Number('')` is `0`, so an env var that exists but says
+ *    nothing would otherwise turn the sweeper OFF — the opposite of "not
+ *    configured", and silently.
+ *  - unparseable -> the default. A typo must not disable a memory guard.
+ *  - `<= 0` -> disabled, matching codeg's `0` and swallowing negatives the same
+ *    way (its `u64` parse rejects them outright; here they arrive as numbers, so
+ *    they are decided rather than crashed on). A negative threshold read
+ *    literally would make every session instantly eligible.
+ *  - anything else -> seconds, fractions included (a 1.5s threshold is what the
+ *    tests run on).
+ */
+export function resolveCodexIdleTimeoutMs(env: NodeJS.ProcessEnv): number | null {
+  const raw = env[CODEX_IDLE_TIMEOUT_ENV];
+  if (raw === undefined || raw === '') return CODEX_DEFAULT_IDLE_TIMEOUT_SECS * 1000;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return CODEX_DEFAULT_IDLE_TIMEOUT_SECS * 1000;
+  if (parsed <= 0) return null;
+  return parsed * 1000;
+}
+
+/**
+ * The whole revive chain's budget — spawn, handshake and `thread/resume`
+ * together.
+ *
+ * It exists because the component deadlines do not add up to anything usable:
+ * `initialize` alone may take 15s and `thread/resume` rides the default 60s
+ * request timeout, i.e. a worst case of 75s, while the renderer abandons a send
+ * at 45s [读码 `attachmentLimits.ts`]. Without this the user would watch a send
+ * fail generically and the Host would keep working on it for another half
+ * minute. 20s leaves room for a cold start of the platform binary and still
+ * reports back well inside the renderer's own budget.
+ */
+export const CODEX_REVIVE_DEADLINE_MS = 20_000;
+
+/**
+ * The error code a failed revive reports, and it must NEVER be
+ * `session_not_found`.
+ *
+ * That code has a meaning at the other end: on a direct send the renderer takes
+ * it as "the Host lost this row", closes the session and creates a NEW one,
+ * overwriting the persisted `runtimeIdentity` [读码 `ChatComposer.tsx:1523`,
+ * `chatSessions.ts`]. Reusing it here would turn "we could not reopen your
+ * thread" into "your thread is gone and here is a different one", silently —
+ * the H9-shaped fail-safe of a revive would become the loudest possible data
+ * loss. A code nobody special-cases fails the send visibly and leaves the
+ * binding alone, which is the whole point.
+ */
+export const CODEX_REVIVE_FAILED_CODE = 'session_revive_failed';
+
+/**
+ * Exactly what the sweeper is allowed to know about a session. A view rather
+ * than the state itself, so the decision below can be asked every question in
+ * isolation — several of these conditions cannot be produced independently
+ * through the runtime's own API (a session with no thread id has never had a
+ * turn either), and a rule that can only be tested in combination is a rule
+ * whose individual clauses are never actually verified.
+ */
+export interface CodexIdleView {
+  /** Our only "this session is connected" mark. */
+  threadId?: string;
+  rolloutBacked: boolean;
+  hasTurn: boolean;
+  pendingCount: number;
+  torndown: boolean;
+  reviving: boolean;
+  lastActivityAt: number;
+}
+
+/**
+ * May this session be reclaimed? Every clause is a separate `return false`
+ * because every clause is a separate way to destroy work:
+ *
+ *  - no `threadId`: a session mid-handshake has a process and a state but
+ *    nothing to resume, so killing it aborts a create/resume the user is
+ *    waiting on.
+ *  - not rollout-backed: `thread/resume` cannot reopen a thread with no rollout
+ *    file [实测], so reclaiming a zero-turn session would DELETE it rather than
+ *    park it (registered as L8 — those are held until close).
+ *  - a live turn, or anything parked in the pending table: the model is working,
+ *    or it is waiting on an answer the user can still give. Either way the
+ *    session is in use however quiet the link happens to be.
+ *  - torn down or reviving: the state is already leaving, or already coming
+ *    back. Both are belt and braces TODAY — a torn-down state has left the
+ *    session map and a reviving one has no thread id yet — and are kept because
+ *    that redundancy is a property of the current call sites, not of the rule.
+ *  - inside the threshold: the actual question, asked last because it is the
+ *    only one about time rather than about work in progress.
+ */
+export function isCodexIdleSweepable(view: CodexIdleView, now: number, timeoutMs: number): boolean {
+  if (view.threadId == null) return false;
+  if (!view.rolloutBacked) return false;
+  if (view.hasTurn) return false;
+  if (view.pendingCount > 0) return false;
+  if (view.torndown || view.reviving) return false;
+  return now - view.lastActivityAt >= timeoutMs;
+}
 
 /**
  * The `history_unsupported` message every degraded resume carries (slice 5a).
@@ -612,6 +732,58 @@ export function verifyResumePosture(
   return { ok: true, detail: `approvalPolicy=${String(approval)}, sandbox=${String(sandboxType)}` };
 }
 
+/**
+ * H9 layer 2 as a STATEMENT: every path that reopens a thread refuses one whose
+ * posture it cannot confirm, and the refusal is a throw so no caller can decide
+ * to carry on with the verdict.
+ *
+ * Shared by the cold resume and the idle-revive because the check is the same
+ * check — the thread is coming back under a posture whose only source is the
+ * isolated `config.toml`, and a second inline copy is how one of the two ends up
+ * logging a verdict it never acted on.
+ *
+ * Returns the detail for the caller's log line.
+ */
+function assertResumePosture(policy: CodexSessionPermissionPolicy, result: unknown): string {
+  const posture = verifyResumePosture(policy, result);
+  if (!posture.ok) throw new CodexResumePostureError(posture.detail);
+  return posture.detail;
+}
+
+/**
+ * The slice of a Node timer the Host uses. `unref` is not optional here even
+ * though `NodeJS.Timeout.unref` is always present: it is the difference between
+ * a Host that exits when Main closes it and one an interval pins open, so it is
+ * a named part of the contract a test seam has to honour rather than a call
+ * hidden inside the real implementation.
+ */
+export interface CodexTimerHandle {
+  unref(): void;
+  stop(): void;
+}
+
+export type CodexStartTimer = (fire: () => void, ms: number) => CodexTimerHandle;
+
+const startRealInterval: CodexStartTimer = (fire, ms) => {
+  const timer = setInterval(fire, ms);
+  return {
+    unref: () => {
+      timer.unref?.();
+    },
+    stop: () => clearInterval(timer),
+  };
+};
+
+const startRealTimeout: CodexStartTimer = (fire, ms) => {
+  const timer = setTimeout(fire, ms);
+  return {
+    unref: () => {
+      timer.unref?.();
+    },
+    stop: () => clearTimeout(timer),
+  };
+};
+
 export interface CodexRuntimeOptions {
   emit: EmitFn;
   log?: LogFn;
@@ -626,6 +798,18 @@ export interface CodexRuntimeOptions {
   resolveLaunch?: () => CodexEntryResolution;
   /** Test seam — replaces the isolated-home seeding. */
   ensureHome?: typeof ensureCodexHome;
+  /**
+   * Test seam — the clock the idle sweeper reads. Every timestamp it compares
+   * comes from here, so a fake clock moves "how long ago" without moving real
+   * time (a 180s default is not something a unit test can wait out).
+   */
+  now?: () => number;
+  /** Test seam — where the idle threshold is read from. Defaults to `process.env`. */
+  env?: NodeJS.ProcessEnv;
+  /** Test seam — the sweeper's interval. */
+  startInterval?: CodexStartTimer;
+  /** Test seam — the revive chain's whole-chain deadline. */
+  startTimeout?: CodexStartTimer;
 }
 
 /**
@@ -665,8 +849,44 @@ interface CodexSessionState {
    * early one ends the resume before its own history arrives. Cleared once the
    * three-event contract is out; never set on the create path, whose first
    * status is a legitimate reading of a thread we just started.
+   *
+   * The idle-revive sets it too and has to CLEAR IT ITSELF: that path emits no
+   * contract at all, so `emitHistoryClose` — the one place it is released — never
+   * runs. A revive that forgot would leave the session permanently unable to
+   * project a status, i.e. silently frozen at whatever the renderer last saw.
    */
   statusGated: boolean;
+  /**
+   * When this session last moved a frame in either direction — the idle
+   * sweeper's only input (slice 6 #8). Written by the connection's own activity
+   * hook, so a reply the pending table wrote straight into the link counts too.
+   *
+   * Seeded at construction rather than at `0`: a session whose handshake is
+   * still in flight has moved no frames through a runtime that is holding its
+   * state, and a zero here would make it instantly older than any threshold.
+   */
+  lastActivityAt: number;
+  /**
+   * Is there a rollout file on disk for this thread — i.e. can it be resumed at
+   * all?
+   *
+   * A zero-turn thread has NONE, and `thread/resume` answers
+   * `-32600 no rollout found for thread id <uuid>` [实测 G8b probe]. Reclaiming
+   * such a session would therefore not be a reclaim but a deletion: nothing
+   * could ever reopen it. Set when a resume proved the file exists, or when a
+   * turn completed on this link (a completed turn is a written turn).
+   */
+  rolloutBacked: boolean;
+  /**
+   * A revive is in flight on this state (slice 6 #8).
+   *
+   * It is both an admission gate and a sweep exemption. As a gate it is the only
+   * thing that can stop `resumeSession`'s guard ③, whose `connection.alive` is
+   * true from the moment the link is constructed — a sidebar resume landing
+   * mid-revive would otherwise be answered by `thread/turns/list` on a
+   * connection that has not finished `initialize`, let alone resumed the thread.
+   */
+  reviving: boolean;
 }
 
 /** `thread/start`'s result shape is [读码] from the probe, which read both spellings. */
@@ -872,10 +1092,153 @@ export class CodexRuntime {
   private readonly opts: CodexRuntimeOptions;
   private readonly log: LogFn;
   private readonly sessions = new Map<string, CodexSessionState>();
+  private readonly now: () => number;
+  private readonly startInterval: CodexStartTimer;
+  private readonly startTimeout: CodexStartTimer;
+  /** `null` = the sweeper is disabled for this process; see `resolveCodexIdleTimeoutMs`. */
+  private readonly idleTimeoutMs: number | null;
+  private sweeper: CodexTimerHandle | null = null;
+  /**
+   * Sessions THIS runtime reclaimed while they were idle, and the ONLY sessions
+   * a send may quietly revive.
+   *
+   * The list is what keeps the revive path from becoming a general "reopen
+   * anything" retry. A session whose state is missing for any other reason — a
+   * crashed app-server, a cold resume that failed — is a session we have already
+   * told the renderer about, and re-opening it behind the user's back would
+   * replace an audible failure with a silent one. Those keep the existing
+   * `session_not_found`, and `codexRuntime.test.ts` pins that they do.
+   */
+  private readonly sweptSessions = new Set<string>();
 
   constructor(opts: CodexRuntimeOptions) {
     this.opts = opts;
     this.log = opts.log ?? ((...args) => console.error('[codex-runtime]', ...args));
+    this.now = opts.now ?? (() => Date.now());
+    this.startInterval = opts.startInterval ?? startRealInterval;
+    this.startTimeout = opts.startTimeout ?? startRealTimeout;
+    // Read ONCE. The alternative (per tick) would let the threshold change under
+    // a session that is already being timed, and the host agent registry's
+    // freeze rule holds here too: a process decides what it is doing at startup
+    // and does not drift.
+    this.idleTimeoutMs = resolveCodexIdleTimeoutMs(opts.env ?? process.env);
+  }
+
+  /**
+   * Start the idle sweeper if it is not already running.
+   *
+   * Called from EVERY point that puts a session into the map — create, cold
+   * resume and revive — and the plural matters: hanging it off `createSession`
+   * alone leaves a process that only ever reopened history (app restarted, user
+   * clicked an old session) with an app-server per session and nothing watching
+   * them. Idempotent, so the call sites do not have to know about each other.
+   */
+  private ensureSweeper(): void {
+    if (this.sweeper || this.idleTimeoutMs === null) return;
+    this.sweeper = this.startInterval(() => this.sweepIdleSessions(), CODEX_SWEEP_INTERVAL_MS);
+    // An interval that exists to free resources must never be the reason the
+    // process itself cannot go away.
+    this.sweeper.unref();
+    this.log('codex idle sweeper started', {
+      intervalMs: CODEX_SWEEP_INTERVAL_MS,
+      idleTimeoutMs: this.idleTimeoutMs,
+    });
+  }
+
+  /**
+   * Nothing left to watch. Paired with `ensureSweeper` at every insertion point:
+   * stopping without that pairing would leave a revived session unwatched
+   * forever (a revive necessarily follows a sweep that emptied the map).
+   */
+  private stopSweeperIfIdle(): void {
+    if (!this.sweeper || this.sessions.size > 0) return;
+    this.sweeper.stop();
+    this.sweeper = null;
+  }
+
+  /**
+   * One pass over the live sessions. Nothing here emits: a reclaimed session is
+   * a session the user can still open and keep talking to, so telling the
+   * renderer about it would be reporting a failure that did not happen.
+   */
+  private sweepIdleSessions(): void {
+    const timeoutMs = this.idleTimeoutMs;
+    if (timeoutMs === null) return;
+    const now = this.now();
+    // Snapshot: reclaiming mutates the map we are walking.
+    for (const state of [...this.sessions.values()]) {
+      if (!this.isIdleSweepable(state, now, timeoutMs)) continue;
+      this.reclaimIdleSession(state, now);
+    }
+    this.stopSweeperIfIdle();
+  }
+
+  /**
+   * The live state read as the sweeper's view (see `isCodexIdleSweepable` for
+   * the rule itself). Nothing is decided here — this is only the mapping, and it
+   * is kept trivial because it is the one part the pure test cannot see: the
+   * runtime-level sweep cases exercise every field below through the real API.
+   */
+  private isIdleSweepable(state: CodexSessionState, now: number, timeoutMs: number): boolean {
+    return isCodexIdleSweepable(
+      {
+        threadId: state.threadId,
+        rolloutBacked: state.rolloutBacked,
+        hasTurn: state.turn !== null,
+        pendingCount: state.pending.sizeFor(state.sessionId),
+        torndown: state.torndown,
+        reviving: state.reviving,
+        lastActivityAt: state.lastActivityAt,
+      },
+      now,
+      timeoutMs
+    );
+  }
+
+  /**
+   * Reclaim one idle session: kill the process, keep the binding.
+   *
+   * The `setStatus` is NOT redundant with the exit path, and this is the trap
+   * the whole slice was reviewed for: `teardown` sets `torndown` first, and
+   * `onExit` returns immediately on a torn-down state — so the `disconnected`
+   * that a crash would write NEVER runs for a kill we asked for. Without the
+   * line below the registry would keep reporting the last live status of a
+   * session whose process is gone.
+   *
+   * `registry.delete` would be the obvious counterpart and is exactly wrong: the
+   * row IS the resume handle. Deleting it turns the next send into
+   * `session_not_found`, and the renderer answers that by making a brand-new
+   * thread — the silent session swap this design exists to avoid.
+   */
+  private reclaimIdleSession(state: CodexSessionState, now: number): void {
+    const { sessionId } = state;
+    const idleMs = now - state.lastActivityAt;
+    const pid = state.connection.pid;
+    this.teardown(state, 'aborted', 'idle sweep');
+    this.opts.registry.setStatus(sessionId, 'disconnected');
+    this.sweptSessions.add(sessionId);
+    this.log('codex idle session reclaimed', {
+      sessionId,
+      threadId: state.threadId,
+      pid,
+      idleMs,
+      swept: this.sweptSessions.size,
+    });
+  }
+
+  /**
+   * The session moved a frame. Called by the connection layer for BOTH
+   * directions — see `CodexConnectionHandlers.onActivity` for why it cannot be
+   * done at this layer alone.
+   *
+   * Looks the state up rather than closing over it because the handlers are
+   * wired before the state exists; frames that predate it (the very first
+   * `initialize` write) simply find nothing, which is correct — the state's
+   * `lastActivityAt` is seeded at construction.
+   */
+  private touchActivity(sessionId: string): void {
+    const state = this.sessions.get(sessionId);
+    if (state) state.lastActivityAt = this.now();
   }
 
   /**
@@ -929,6 +1292,7 @@ export class CodexRuntime {
 
     const state = opened.state;
     this.sessions.set(sessionId, state);
+    this.ensureSweeper();
 
     // Registered SYNCHRONOUSLY, before the handshake round trip, so that
     // `index.ts` can dispatch a close/stop that arrives while we are still
@@ -1025,6 +1389,14 @@ export class CodexRuntime {
     const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: homeDir };
 
     const connect = this.opts.connect ?? spawnCodexConnection;
+    // The exit handler has to name the state this connection belongs to, and the
+    // state cannot exist before the connection it holds — hence the holder,
+    // filled in below. Routing that handler on the sessionId instead (as every
+    // other handler safely does, because a disposed link routes nothing) would
+    // let a process that is still dying tear down the session's NEXT
+    // connection: `dispose()` returns before the child does, and the revive path
+    // reopens the same sessionId immediately.
+    const owner: { state?: CodexSessionState } = {};
     let connection: CodexConnection;
     try {
       connection = connect({
@@ -1038,7 +1410,10 @@ export class CodexRuntime {
           // `session.stderr` needs the per-turn cap + redaction that
           // `claudeRuntime` applies around a turn — there are no turns here yet.
           onStderr: (line) => this.log('[codex-stderr]', sessionId, line),
-          onExit: (info) => this.onExit(sessionId, info),
+          onExit: (info) => {
+            if (owner.state) this.onExit(owner.state, info);
+          },
+          onActivity: () => this.touchActivity(sessionId),
         },
       });
     } catch (err) {
@@ -1059,21 +1434,24 @@ export class CodexRuntime {
       },
     });
 
-    return {
-      ok: true,
-      homeDir,
-      plan: resolution.plan,
-      state: {
-        sessionId,
-        workspacePath,
-        policy: CODEX_PERMISSION_DEFAULT,
-        connection,
-        pending,
-        turn: null,
-        torndown: false,
-        statusGated: false,
-      },
+    const state: CodexSessionState = {
+      sessionId,
+      workspacePath,
+      policy: CODEX_PERMISSION_DEFAULT,
+      connection,
+      pending,
+      turn: null,
+      torndown: false,
+      statusGated: false,
+      lastActivityAt: this.now(),
+      // Not known yet on either path: a created thread has no turn on disk, and
+      // a resumed one has not been answered. Both are set where they are proved.
+      rolloutBacked: false,
+      reviving: false,
     };
+    owner.state = state;
+
+    return { ok: true, homeDir, plan: resolution.plan, state };
   }
 
   /**
@@ -1249,6 +1627,12 @@ export class CodexRuntime {
         });
         return;
       }
+      // A completed turn is a turn on disk, and a thread with a turn on disk has
+      // a rollout file — which is the only thing that makes it resumable, and
+      // therefore the only thing that makes it safe to reclaim when idle. Set
+      // AFTER the ownership check: another thread's completion proves nothing
+      // about ours.
+      state.rolloutBacked = true;
       // The normalizer already emitted this turn's terminal event from the
       // frame's own `turn.status`, so the runtime only retires the record — a second
       // terminal here would double-report every turn.
@@ -1535,9 +1919,21 @@ export class CodexRuntime {
     return `codex:${sessionId}:${idKey(requestId)}`;
   }
 
-  private onExit(sessionId: string, info: { code: number | null; signal: string | null }): void {
-    const state = this.sessions.get(sessionId);
-    if (!state || state.torndown) return;
+  /**
+   * Takes the STATE, not the sessionId: this handler is the one that can fire
+   * after the connection was disposed, so it must answer "did MY session die"
+   * rather than "is there a session under this id" — the two differ for exactly
+   * as long as a killed child takes to exit, which is the window a revive opens
+   * a fresh link in. `torndown` is what makes it a no-op for every kill we asked
+   * for (teardown sets it before anything else), including close, dispose and
+   * the idle sweep.
+   */
+  private onExit(
+    state: CodexSessionState,
+    info: { code: number | null; signal: string | null }
+  ): void {
+    if (state.torndown) return;
+    const { sessionId } = state;
     this.log('codex process exited', { sessionId, code: info.code, signal: info.signal });
     const error = `codex app-server exited (code=${String(info.code)}, signal=${String(info.signal)})`;
     // An open turn is closed FIRST, and it carries the terminal event. Doing it
@@ -1794,6 +2190,11 @@ export class CodexRuntime {
   close(input: { sessionId: string; requestId?: string }): void {
     const state = this.sessions.get(input.sessionId);
     if (state) this.teardown(state, 'session_closed', 'session closed');
+    // Off the revive list with the row: the binding a revive would reopen is
+    // being deleted one line below, so a send arriving afterwards is a genuine
+    // `session_not_found` and must read as one.
+    this.sweptSessions.delete(input.sessionId);
+    this.stopSweeperIfIdle();
     this.opts.registry.delete(input.sessionId);
     this.opts.emit({
       type: 'session.status',
@@ -1809,6 +2210,11 @@ export class CodexRuntime {
       this.teardown(state, 'session_closed', 'host shutting down');
     }
     this.sessions.clear();
+    this.sweptSessions.clear();
+    if (this.sweeper) {
+      this.sweeper.stop();
+      this.sweeper = null;
+    }
   }
 
   /**
@@ -1841,8 +2247,19 @@ export class CodexRuntime {
     requestId?: string;
   }): Promise<void> {
     const { sessionId, requestId } = input;
-    const state = this.sessions.get(sessionId);
+    let state = this.sessions.get(sessionId);
     const session = this.opts.registry.get(sessionId);
+    // The idle sweeper took this session's process while the user was away, and
+    // this send is them coming back. Reopening the thread is the whole reason
+    // the sweep keeps the registry row (see `reclaimIdleSession`); it happens
+    // before any of the checks below, so a revived session is then treated as
+    // the ordinary live session it now is.
+    const handle = state ? null : this.reviveHandleFor(sessionId, session);
+    if (handle) {
+      state = await this.reviveSweptSession(sessionId, handle, requestId);
+      // Every failure has already been reported as `session_revive_failed`.
+      if (!state) return;
+    }
     if (!state || !session) {
       this.fail('session_not_found', `Unknown session: ${sessionId}`, { sessionId, requestId });
       return;
@@ -1944,6 +2361,179 @@ export class CodexRuntime {
   }
 
   /**
+   * May this missing session be revived, and with which thread?
+   *
+   * THREE conditions, and the first is the one that keeps this narrow: the
+   * session must be on the sweep list. "State is missing" has other causes — a
+   * crashed app-server, a cold resume that failed — and each of those was
+   * already reported to the user; reopening one silently would replace a failure
+   * they saw with a recovery they cannot audit. Only a session WE took away, for
+   * a reason that was never their business, gets put back.
+   *
+   * The other two are the binding itself: a row that is not this runtime's, or
+   * that has no thread handle, has nothing to reopen. Both fall through to
+   * `session_not_found`, which is what they were before this path existed.
+   */
+  private reviveHandleFor(sessionId: string, session: HostSession | undefined): string | null {
+    if (!session || !this.sweptSessions.has(sessionId)) return null;
+    if (session.agent !== CODEX_AGENT) return null;
+    return session.runtimeIdentity ?? null;
+  }
+
+  /**
+   * Put a swept session back: spawn, handshake, `thread/resume`, and hand the
+   * caller a state it can send on. QUIET — no `session.resumed`, no
+   * `session.history`, no status. The renderer never learned the session went
+   * away, so telling it the session came back would replay a transcript it is
+   * already showing and reset a chat the user is in the middle of.
+   *
+   * The state is inserted BEFORE the first byte goes out, exactly as the cold
+   * resume does and for the same reason (H11): the window is not quiet, and a
+   * server request arriving with no state is dropped without a reply — parking
+   * codex on an answer that never comes. `reviving` and `statusGated` are set on
+   * it before it is reachable, so no second command and no status frame can slip
+   * into the gap.
+   *
+   * Returns nothing on every failure, having already reported it.
+   */
+  private async reviveSweptSession(
+    sessionId: string,
+    threadId: string,
+    requestId?: string
+  ): Promise<CodexSessionState | undefined> {
+    const session = this.opts.registry.get(sessionId);
+    if (!session) return undefined;
+
+    const opened = this.openConnection({
+      sessionId,
+      workspacePath: session.workspacePath,
+      why: 'session.revive',
+    });
+    if (!opened.ok) {
+      // Nothing was started, so there is nothing to tear down — and the session
+      // stays ON the list: a machine that could not spawn codex this second may
+      // well manage it next time, and dropping it would silently downgrade every
+      // later send to the renderer's new-thread fallback.
+      this.failRevive(sessionId, requestId, `could not start codex — ${opened.message}`);
+      return undefined;
+    }
+
+    const state = opened.state;
+    state.reviving = true;
+    state.statusGated = true;
+    this.sessions.set(sessionId, state);
+    // The sweep that produced this session may have emptied the map and stopped
+    // the sweeper; a revived session has to be watched again like any other.
+    this.ensureSweeper();
+    this.log('codex reviving a swept session', {
+      sessionId,
+      threadId,
+      pid: state.connection.pid,
+    });
+
+    try {
+      await this.withDeadline(
+        this.reopenThread(state, threadId),
+        CODEX_REVIVE_DEADLINE_MS,
+        `revive of ${sessionId}`
+      );
+    } catch (err) {
+      const message = errorMessage(err);
+      this.log('codex revive failed', { sessionId, threadId, error: message });
+      // Teardown FIRST (H10 order): the process must be gone before the renderer
+      // is told the send failed, or a user retrying leaks one app-server per
+      // attempt.
+      this.teardown(state, 'session_closed', `revive failed: ${message}`);
+      this.opts.registry.setStatus(sessionId, 'disconnected');
+      if (classifyResumeFailure(err) === 'jsonl_not_found') {
+        // The rollout is genuinely gone — deleted behind our back, or never
+        // written. No retry can succeed, so the session leaves the list and
+        // converges back to the pre-existing `session_not_found` semantics,
+        // renderer fallback included. Every OTHER failure stays on the list:
+        // spawn, handshake and timeout are all things that pass.
+        this.sweptSessions.delete(sessionId);
+      }
+      this.failRevive(sessionId, requestId, message);
+      return undefined;
+    }
+
+    state.threadId = threadId;
+    state.rolloutBacked = true;
+    state.reviving = false;
+    // O3, and it has exactly one clear point on this path: `emitHistoryClose`
+    // opens the gate for a cold resume, and nothing on a quiet revive ever calls
+    // it. Left set, this session would drop every `thread/status/changed` for
+    // the rest of its life — a session that can send but can never look busy.
+    state.statusGated = false;
+    this.sweptSessions.delete(sessionId);
+    this.log('codex session revived', { sessionId, threadId, pid: state.connection.pid });
+    return state;
+  }
+
+  /**
+   * The revive's own I/O: handshake, then `thread/resume` with EXACTLY one key,
+   * then H9 layer 2.
+   *
+   * Deliberately the same three steps in the same order as `resumeColdThread`,
+   * sharing `assertResumePosture` rather than re-checking inline — the posture
+   * of a reopened thread comes from the isolated `config.toml` on both paths, so
+   * one of them verifying more weakly than the other would mean a session's
+   * safety depended on how it happened to be reopened.
+   */
+  private async reopenThread(state: CodexSessionState, threadId: string): Promise<void> {
+    const init = await state.connection.request(
+      CODEX_METHOD.initialize,
+      buildInitializeParams(this.opts.appVersion),
+      CODEX_INITIALIZE_TIMEOUT_MS
+    );
+    this.checkHomeEcho(state.sessionId, init);
+    state.connection.notify(CODEX_METHOD.initialized, {});
+    const result = await state.connection.request(CODEX_METHOD.threadResume, { threadId });
+    const detail = assertResumePosture(state.policy, result);
+    this.log('codex revive posture verified', { sessionId: state.sessionId, detail });
+  }
+
+  /**
+   * A budget for the WHOLE chain rather than for each of its steps — see
+   * `CODEX_REVIVE_DEADLINE_MS` for why the per-request deadlines cannot serve.
+   *
+   * `Promise.race` attaches a handler to both sides, so the loser's rejection is
+   * always handled: the work rejecting after the deadline won (the teardown
+   * kills the link, which rejects everything outstanding) is the normal case,
+   * and an unhandled rejection there would take the Host down.
+   */
+  private async withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+    let expire = (): void => {
+      /* replaced synchronously by the executor below */
+    };
+    const deadline = new Promise<never>((_resolve, reject) => {
+      expire = () => reject(new Error(`${what} timed out after ${ms}ms`));
+    });
+    const timer = this.startTimeout(() => expire(), ms);
+    timer.unref();
+    try {
+      return await Promise.race([work, deadline]);
+    } finally {
+      timer.stop();
+    }
+  }
+
+  /**
+   * The one place a revive failure reaches the user, and the one place the code
+   * is spelled. See `CODEX_REVIVE_FAILED_CODE` for why it is not
+   * `session_not_found`: the renderer answers that code by building a NEW thread
+   * over this one's binding.
+   */
+  private failRevive(sessionId: string, requestId: string | undefined, why: string): void {
+    this.fail(
+      CODEX_REVIVE_FAILED_CODE,
+      `session.send: this Codex session was reclaimed while it was idle and could not be ` +
+        `reopened — ${why}`,
+      { sessionId, requestId }
+    );
+  }
+
+  /**
    * Resume a Codex session (slice 5b: replay the thread and keep the link).
    *
    * The renderer waits for three events after a resume, in order, and treats
@@ -1980,6 +2570,21 @@ export class CodexRuntime {
     const { sessionId, requestId } = input;
     const state = this.sessions.get(sessionId);
     const session = this.opts.registry.get(sessionId);
+
+    // Guard ⓪ — a revive is already reopening this thread. FIRST, because it is
+    // the only guard that can catch it: no turn is running (guard ①), the agent
+    // matches (guard ②), and guard ③'s `connection.alive` is true from the
+    // moment the link is constructed — so without this the sidebar's resume
+    // would be answered with `thread/turns/list` over a connection that has not
+    // even finished `initialize`. `session_busy` because it IS transient: the
+    // revive settles within its own deadline.
+    if (state?.reviving === true) {
+      this.fail('session_busy', `Cannot resume while this session is reconnecting: ${sessionId}`, {
+        sessionId,
+        requestId,
+      });
+      return;
+    }
 
     // Guard ①. Both readings, because they fail apart: `state.turn` is our own
     // admission record (the one `send` gates on) and `running` is the registry's,
@@ -2045,6 +2650,13 @@ export class CodexRuntime {
     // thread could contradict it, and it is what the index row persisted.
     const threadId = input.runtimeIdentity;
 
+    // The quiet reclaim is over the moment the user reopens the session
+    // themselves: from here on the outcome is reported to them through the
+    // three-event contract, so a failure must not leave the id on the revive
+    // list. It would otherwise send the NEXT message off to spawn a second
+    // codex behind a banner the user is already reading.
+    this.sweptSessions.delete(sessionId);
+
     const opened = this.openConnection({ sessionId, workspacePath, why: 'session.resume' });
     if (!opened.ok) {
       // Nothing was started, so there is nothing to tear down — but the row is
@@ -2071,6 +2683,10 @@ export class CodexRuntime {
     // cannot beat `session.resumed` out of the door.
     state.statusGated = true;
     this.sessions.set(sessionId, state);
+    // The second mount point, and the one a restarted app hits first: a process
+    // whose only sessions came from the history list would otherwise never start
+    // a sweeper at all.
+    this.ensureSweeper();
     this.bindResumedRow({
       sessionId,
       workspacePath,
@@ -2103,15 +2719,17 @@ export class CodexRuntime {
       // H9 layer 2, fail-safe. BEFORE the transcript is emitted and before the
       // thread id is adopted: a posture we cannot confirm means the session must
       // not become sendable at all.
-      const posture = verifyResumePosture(state.policy, result);
-      if (!posture.ok) throw new CodexResumePostureError(posture.detail);
-      this.log('codex resume posture verified', { sessionId, detail: posture.detail });
+      const detail = assertResumePosture(state.policy, result);
+      this.log('codex resume posture verified', { sessionId, detail });
 
       // Adopted only now, and this is what makes the resumed session a LIVE one:
       // `send` gates on `state.threadId`, so the next `turn/start` addresses the
       // thread we just resumed instead of waiting for a `thread/start` that this
       // path never issues.
       state.threadId = threadId;
+      // An answered `thread/resume` IS the proof that the rollout file exists —
+      // the only proof there is, short of reading the user's disk.
+      state.rolloutBacked = true;
 
       const read = reprojectCodexHistory(result, { threadId });
       this.log('codex resume replayed', {

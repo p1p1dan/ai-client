@@ -121,6 +121,22 @@ export interface CodexConnectionHandlers {
   onStderr(line: string): void;
   /** Fired at most once, AFTER outstanding promises have been rejected. */
   onExit(info: { code: number | null; signal: string | null }): void;
+  /**
+   * One frame moved in either direction (slice 6, the idle sweeper's clock).
+   *
+   * It lives HERE rather than on the runtime's handlers alone because two of the
+   * three traffic sources never pass through the runtime at all: an outbound
+   * `reply` is written by the pending table's own closure straight into this
+   * connection, and an inbound RESPONSE is settled by `settleResponse` without
+   * any handler firing. A timestamp kept at the runtime layer would therefore
+   * miss exactly the traffic of a session that is busy answering codex — and
+   * "busy" read as "idle" is a reclaimed live session.
+   *
+   * stderr is deliberately NOT activity: it is prose from a process that may be
+   * doing nothing for this session, and a chatty log would pin an idle session
+   * open forever. Anything that really is work shows up as a frame.
+   */
+  onActivity?(): void;
 }
 
 export type CodexConnectFactory = (input: {
@@ -200,6 +216,12 @@ export function createCodexConnection(input: {
     }
   }
 
+  /** Never lets a bookkeeping hook break traffic; see `guard` for the same rule. */
+  function touch(): void {
+    if (!handlers.onActivity) return;
+    guard('onActivity', () => handlers.onActivity?.());
+  }
+
   function write(line: string, what: string): boolean {
     if (closed) {
       // Not a throw: the pending-table drain writes its refusal frames during
@@ -208,6 +230,11 @@ export function createCodexConnection(input: {
       log(`dropped ${what}: connection closed (${closedReason})`);
       return false;
     }
+    // Every outbound frame, in ONE place: request / notify / reply / replyError
+    // all funnel through here, so no caller can add a fifth kind that moves
+    // bytes without moving the clock. Counted before the transport rather than
+    // after, because a write that throws is still an attempt to talk.
+    touch();
     try {
       transport.write(line);
       return true;
@@ -328,6 +355,10 @@ export function createCodexConnection(input: {
   };
 
   function routeLine(line: string): void {
+    // BEFORE the parse and before every dispatch: an unreadable line is still a
+    // process saying something, and a response settles here without any handler
+    // running at all.
+    touch();
     const parsed = parseFrameLine(line);
     if (!parsed.ok) {
       // Content is never logged: an unparseable stdout line can hold anything,

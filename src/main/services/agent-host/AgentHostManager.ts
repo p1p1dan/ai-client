@@ -33,6 +33,9 @@ export type AgentHostState = 'stopped' | 'starting' | 'ready' | 'error';
 /** S7 (round-2 iteration-3 review): the desensitized settings diagnostics `host.ready` carries — same shape as `HostReadyEvent['payload']['settings']`, normalized to drop `undefined` (only `null`/present). */
 export type AgentHostSettingsInfo = NonNullable<HostReadyEvent['payload']['settings']>;
 
+/** S3 slice 6 (A5): same "capture off the live `host.ready` event" shape as {@link AgentHostSettingsInfo}, for `capabilities` (notably `capabilities.agents`, the HostAgentRegistry's wire form). */
+export type AgentHostCapabilitiesInfo = NonNullable<HostReadyEvent['payload']['capabilities']>;
+
 let requestSeq = 0;
 
 function nextRequestId(prefix: string): string {
@@ -54,6 +57,9 @@ export class AgentHostManager {
   // at least once this process lifetime (never yet ready, or reported no
   // diagnostics).
   private settings: AgentHostSettingsInfo | null = null;
+  // S3 slice 6 (A5): same capture-off-`host.ready` pattern as `settings` above —
+  // `null` until this process lifetime has seen at least one `host.ready`.
+  private capabilities: AgentHostCapabilitiesInfo | null = null;
 
   getStatus(): {
     state: AgentHostState;
@@ -65,6 +71,10 @@ export class AgentHostManager {
     // `host.ready` event) can now read the Host's already-reported default
     // instead of reading `undefined` forever.
     settings: AgentHostSettingsInfo | null;
+    // S3 slice 6 (A5): additive, same reasoning as `settings` — carries
+    // `capabilities.agents` (the HostAgentRegistry's wire form) to a consumer
+    // that mounts after the live `host.ready` already fired.
+    capabilities: AgentHostCapabilitiesInfo | null;
   } {
     return {
       state: this.state,
@@ -72,6 +82,7 @@ export class AgentHostManager {
       driver: this.driver,
       cometixVersion: COMETIX_PIN.version,
       settings: this.settings,
+      capabilities: this.capabilities,
     };
   }
 
@@ -319,6 +330,10 @@ export class AgentHostManager {
         // `null` too, so `settings` always reads as "known: none" rather
         // than silently keeping a PRIOR ready event's diagnostics around.
         this.settings = (event as HostReadyEvent).payload.settings ?? null;
+        // S3 slice 6 (A5): same normalization for `capabilities` — an old Host
+        // build that never sends the field must not leave a PRIOR ready
+        // event's capabilities (e.g. a stale `agents` list) looking current.
+        this.capabilities = (event as HostReadyEvent).payload.capabilities ?? null;
       }
       if (
         event.type === 'host.error' &&

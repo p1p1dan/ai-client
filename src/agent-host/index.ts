@@ -11,11 +11,18 @@ import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import type { AgentWireName } from '../shared/types/agentWire.ts';
 import { CODEX_AGENT, resolveAgentWireName, sessionAgent } from '../shared/types/agentWire.ts';
 import type { PermissionDecisionId } from '../shared/types/runtimeEvents.ts';
-import { resolveCodexEnabled, supportedAgents } from './agentSupport.ts';
+import type { HostAgentRegistry } from './agentSupport.ts';
+import {
+  describeHostAgentReason,
+  ensureHostAgentRegistry,
+  initializeHostAgents,
+} from './agentSupport.ts';
 import { ClaudeRuntime, resolveSubagentActivityEnabled } from './claudeRuntime.ts';
 import { loadClaudeSettingsEnv } from './claudeSettings.ts';
 import { isPermissionDecisionId } from './codexDecisions.ts';
-import { CodexRuntime } from './codexRuntime.ts';
+import { ensureCodexHome } from './codexHome.ts';
+import { resolveCodexLaunch } from './codexNodeEntry.ts';
+import { CODEX_PERMISSION_DEFAULT, CodexRuntime } from './codexRuntime.ts';
 import { resolveCometixCli } from './cometix.ts';
 import { listSessionHistory } from './historyReader.ts';
 import { COMETIX_PIN } from './pin.ts';
@@ -27,21 +34,6 @@ const envDriver = process.env.AICLIENT_AGENT_HOST_DRIVER;
 let driver: AgentHostDriver =
   envDriver === 'stream-json' || envDriver === 'agent-sdk' ? envDriver : 'agent-sdk';
 let shuttingDown = false;
-
-/**
- * S2 (b): the agents THIS Host BUILD can actually run. Reported verbatim on
- * `host.ready` as `capabilities.agents`, and enforced by
- * `rejectUnsupportedAgent` below, so the advertised list and the accepted list
- * are the same array rather than two facts that can drift apart.
- *
- * S3 slice 2a: the list now depends on the Codex feature flag, read ONCE here
- * at module load. The reader itself re-reads `process.env` per call (so tests
- * can flip positions), but this process must not: a mid-run flip would advertise
- * one list on `host.ready` and enforce another on the next `session.create`.
- */
-const SUPPORTED_AGENTS: readonly AgentWireName[] = supportedAgents({
-  codexEnabled: resolveCodexEnabled(),
-});
 
 /**
  * Refuse a `session.create` / `session.resume` this build cannot honour.
@@ -65,6 +57,11 @@ const SUPPORTED_AGENTS: readonly AgentWireName[] = supportedAgents({
  * stays usable for every other session. The renderer's send path already
  * treats a request-correlated `host.error` as "this create/resume failed",
  * drops the Host binding and surfaces the message, so no session is left hung.
+ *
+ * S3 slice 6 (A3/G3): reads `getHostAgentRegistry()` instead of a module-level
+ * `SUPPORTED_AGENTS` constant, so an early `session.create`/`session.resume`
+ * (before `host.initialize` ever runs) still builds and checks against the
+ * real, current-computed list rather than tripping over an unbuilt registry.
  */
 function rejectUnsupportedAgent(cmd: {
   type?: string;
@@ -75,9 +72,15 @@ function rejectUnsupportedAgent(cmd: {
   if (requested === undefined || requested === null || requested === '') {
     return false;
   }
-  if (typeof requested === 'string' && SUPPORTED_AGENTS.includes(requested as AgentWireName)) {
+  const registry = getHostAgentRegistry();
+  if (typeof requested === 'string' && registry.agents.includes(requested as AgentWireName)) {
     return false;
   }
+  // S3 slice 6 spec §2 point 7: fold in WHY, when known — flag off / no entry /
+  // home prep failed are three different support-log stories, and this reads
+  // the same `detail` row the registry already computed rather than guessing.
+  const detail = registry.detail.find((d) => d.agent === requested);
+  const reasonClue = detail?.reason ? ` — ${describeHostAgentReason(detail.reason)}` : '';
   emit({
     type: 'host.error',
     // Correlated BOTH ways: `requestId` is what the renderer strict-matches
@@ -88,7 +91,7 @@ function rejectUnsupportedAgent(cmd: {
     requestId: cmd.requestId,
     payload: {
       code: 'agent_unsupported',
-      message: `${cmd.type ?? 'command'}: agent ${JSON.stringify(requested)} is not supported by this Host build (supported: ${SUPPORTED_AGENTS.join(', ')})`,
+      message: `${cmd.type ?? 'command'}: agent ${JSON.stringify(requested)} is not supported by this Host build (supported: ${registry.agents.join(', ')})${reasonClue}`,
       fatal: false,
     },
   });
@@ -169,6 +172,48 @@ async function ensureRuntime(): Promise<ClaudeRuntime> {
  */
 const CODEX_HOME_ENV = 'AICLIENT_CODEX_HOME';
 const APP_VERSION_ENV = 'AICLIENT_APP_VERSION';
+
+/**
+ * S3 slice 6 (A2): the registry's real entry probe. Pure delegation to
+ * `codexNodeEntry.ts` — `agentSupport.ts` never imports that module itself
+ * (F14), so the real fs-touching implementation is wired here instead.
+ */
+function probeCodexEntry(): boolean {
+  return resolveCodexLaunch().ok;
+}
+
+/**
+ * S3 slice 6 (A2): the registry's real home preparation. Same isolated-home
+ * recipe `openConnection` runs per session (`codexRuntime.ts`), run once here
+ * to DECIDE availability rather than to launch anything — a missing
+ * `AICLIENT_CODEX_HOME` throws through `ensureCodexHome` exactly like an empty
+ * `homeDir` always has, and `buildHostAgentRegistry` folds that into
+ * `home_prepare_failed` (F7: this env is Main-injected and non-empty in
+ * production, so that fold-in — not a dedicated reason — is the expected path
+ * for a dev/test invocation that skipped Main).
+ */
+function prepareCodexHome(): void {
+  ensureCodexHome({
+    homeDir: process.env[CODEX_HOME_ENV]?.trim() ?? '',
+    // H9 layer 1 (codexRuntime.ts): the SAME posture object every Codex
+    // session's `thread/start` sends, so the registry's availability check
+    // prepares the isolated home for the posture sessions will actually run
+    // under, not a different one.
+    permission: CODEX_PERMISSION_DEFAULT,
+    log: (...args: unknown[]) => log('[codex-home]', ...args),
+  });
+}
+
+/**
+ * S3 slice 6 (A1/A3): the single call site every command handler goes through
+ * to read the capabilities registry — memoized single-flight in
+ * `agentSupport.ts`, so whichever of `host.initialize` / early
+ * `session.create` / early `session.resume` calls this FIRST is the one that
+ * actually builds it (F15), and every later call just reads that same result.
+ */
+function getHostAgentRegistry(): HostAgentRegistry {
+  return ensureHostAgentRegistry({ probeEntry: probeCodexEntry, prepareHome: prepareCodexHome });
+}
 
 /**
  * Build the Codex runtime on first use, or refuse.
@@ -270,44 +315,17 @@ async function handleCommand(raw: unknown): Promise<void> {
       if (payloadDriver === 'agent-sdk' || payloadDriver === 'stream-json') {
         driver = payloadDriver;
       }
-      try {
-        await ensureRuntime();
-        emit({
-          type: 'host.ready',
-          requestId: cmd.requestId,
-          payload: {
-            protocolVersion: PROTOCOL_VERSION,
-            driver,
-            nodeVersion: process.version,
-            nodeExecPath: process.execPath,
-            cometixVersion: COMETIX_PIN.version,
-            settings: settingsDiagnostics
-              ? {
-                  loaded: settingsDiagnostics.loaded,
-                  hasAuthToken: settingsDiagnostics.hasAuthToken,
-                  authTokenType: settingsDiagnostics.authTokenType,
-                  hasBaseUrl: settingsDiagnostics.hasBaseUrl,
-                  baseHost: settingsDiagnostics.baseHost,
-                  model: settingsDiagnostics.model,
-                }
-              : null,
-            // T-34: `subagentActivity` reports the FLAG's position, not a
-            // build constant — with it off the Host still segregates subagent
-            // traffic but forwards nothing, and an empty panel then means
-            // "turned off here" rather than "no subagent ran".
-            capabilities: {
-              history: true,
-              thinking: true,
-              subagentActivity: resolveSubagentActivityEnabled(),
-              // S2 (b): the other half of the `agent_unsupported` loop — the
-              // renderer disables the agents missing here instead of finding
-              // out by having a create refused. Same array the refusal
-              // enforces, so "advertised" and "accepted" cannot drift.
-              agents: [...SUPPORTED_AGENTS],
-            },
-          },
-        });
-      } catch (err) {
+      // S3 slice 6 (A4/G4): the registry build and Claude's bootstrap run as
+      // two operations that cannot affect each other's outcome — registry
+      // FIRST and unconditional, Claude's own try/catch after it, so a Claude
+      // `initialize_failed` never clears or skips the registry already built,
+      // and a registry that left codex unavailable never blocks Claude.
+      const outcome = await initializeHostAgents({
+        buildRegistry: getHostAgentRegistry,
+        ensureClaudeRuntime: ensureRuntime,
+      });
+      if (!outcome.claude.ok) {
+        const err = outcome.claude.error;
         emit({
           type: 'host.error',
           requestId: cmd.requestId,
@@ -317,7 +335,44 @@ async function handleCommand(raw: unknown): Promise<void> {
             fatal: true,
           },
         });
+        return;
       }
+      emit({
+        type: 'host.ready',
+        requestId: cmd.requestId,
+        payload: {
+          protocolVersion: PROTOCOL_VERSION,
+          driver,
+          nodeVersion: process.version,
+          nodeExecPath: process.execPath,
+          cometixVersion: COMETIX_PIN.version,
+          settings: settingsDiagnostics
+            ? {
+                loaded: settingsDiagnostics.loaded,
+                hasAuthToken: settingsDiagnostics.hasAuthToken,
+                authTokenType: settingsDiagnostics.authTokenType,
+                hasBaseUrl: settingsDiagnostics.hasBaseUrl,
+                baseHost: settingsDiagnostics.baseHost,
+                model: settingsDiagnostics.model,
+              }
+            : null,
+          // T-34: `subagentActivity` reports the FLAG's position, not a
+          // build constant — with it off the Host still segregates subagent
+          // traffic but forwards nothing, and an empty panel then means
+          // "turned off here" rather than "no subagent ran".
+          capabilities: {
+            history: true,
+            thinking: true,
+            subagentActivity: resolveSubagentActivityEnabled(),
+            // S2 (b): the other half of the `agent_unsupported` loop — the
+            // renderer disables the agents missing here instead of finding
+            // out by having a create refused. Same registry the refusal
+            // enforces against (S3 slice 6 A5), so "advertised" and
+            // "accepted" cannot drift.
+            agents: [...outcome.registry.agents],
+          },
+        },
+      });
       return;
     }
     case 'host.shutdown': {

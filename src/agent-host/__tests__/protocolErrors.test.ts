@@ -1,10 +1,14 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AGENT_HOST_PROTOCOL_VERSION } from '../../shared/types/agentHost.ts';
+import { CODEX_FLAG_ENV, describeHostAgentReason } from '../agentSupport.ts';
+import { CODEX_JS_PATH_ENV, NODE_EXEC_PATH_ENV } from '../codexNodeEntry.ts';
 
 /**
  * Behavior-lock: spawns the real Host entry (src/agent-host/index.ts) as a child
@@ -41,11 +45,22 @@ class HostHarness {
   private exitInfo: { code: number | null } | null = null;
   private exitWaiters: Array<(info: { code: number | null }) => void> = [];
 
-  constructor() {
+  /**
+   * S3 slice 6 (C1/F13): `envOverride` layers onto the child's env on top of
+   * an explicit `AICLIENT_AGENT_CODEX: ''` pin — every harness defaults to
+   * the OFF position regardless of what the test RUNNER's own environment has
+   * set. The flag on/off gate (spec §4) re-runs this whole suite a second
+   * time with `AICLIENT_AGENT_CODEX=1` set OUTSIDE vitest, and without this
+   * pin every "off" assertion in this file would silently start asserting
+   * against an ON Host during that second run — that drift is exactly what
+   * F13 found. A test that wants the on position passes it explicitly.
+   */
+  constructor(envOverride: NodeJS.ProcessEnv = {}) {
     this.child = spawn(process.execPath, ['--experimental-strip-types', HOST_ENTRY], {
       cwd: REPO_ROOT,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
+      env: { ...process.env, [CODEX_FLAG_ENV]: '', ...envOverride },
     });
 
     const rl = createInterface({ input: this.child.stdout });
@@ -110,6 +125,22 @@ class HostHarness {
         reject(new Error(`Timed out after ${timeoutMs}ms waiting for a host stdout event`));
       }, timeoutMs);
       this.waiters.push(waiter);
+    });
+  }
+
+  /**
+   * Waits `windowMs`, then returns every event that arrived during that
+   * window (queued, since nothing was pending a `nextEvent()` call to hand
+   * them to instead). Used to assert a BOUNDED absence — e.g. "no
+   * session.created/session.status trailed this refusal" (G1's off-runtime
+   * half, O18) — as a positive collect-and-inspect, unlike `nextEvent`, which
+   * treats a timeout as failure.
+   */
+  eventsWithin(windowMs: number): Promise<HostEvent[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(this.queue.splice(0, this.queue.length));
+      }, windowMs);
     });
   }
 
@@ -268,6 +299,21 @@ describe('agent-host protocol error paths (spawned process)', () => {
       // a downgraded user gets "unsupported" with nothing to act on.
       expect(String(event.payload?.message)).toContain('codex');
       expect(String(event.payload?.message)).toContain('claude-code');
+      // Pinned to the flag_off REASON specifically, not merely "unavailable":
+      // in an environment where AICLIENT_CODEX_HOME happens to be unset too
+      // (true for every plain `vitest run`, since only Main injects it),
+      // codex ends up unavailable via home_prepare_failed regardless of the
+      // flag position, which would leave the two assertions above green even
+      // if the harness's off-pin (constructor doc above) were silently
+      // dropped. This is the assertion the on/off gate actually needs.
+      expect(String(event.payload?.message)).toContain(describeHostAgentReason('flag_off'));
+
+      // G1 (off runtime half, O18): the refusal must be a dead end — no
+      // session.created/session.status trails it within a bounded window,
+      // proving no session/busy state was created before the refusal fired.
+      const trailing = await harness.eventsWithin(300);
+      expect(trailing.map((e) => e.type)).not.toContain('session.created');
+      expect(trailing.map((e) => e.type)).not.toContain('session.status');
     },
     TEST_TIMEOUT
   );
@@ -403,5 +449,190 @@ describe('agent-host protocol error paths (spawned process)', () => {
       expect(code).toBe(0);
     },
     TEST_TIMEOUT
+  );
+});
+
+/**
+ * S3 slice 6 施工 C — flag on/off gate, non-hermetic-test retrofit (spec §4).
+ * The suite above always runs OFF now (`HostHarness`'s default env pin), so
+ * every arm that needs the ON position lives here instead, each owning its
+ * own harness(es) and its own throwaway fixture directory rather than the
+ * single shared harness above — spawn is slow, so the new arm count is kept
+ * to exactly what G1/G17 ask for (one harness lifecycle per arm).
+ */
+describe('agent-host flag on/off gate — protocolErrors non-hermetic retrofit (S3 slice 6 C)', () => {
+  let tmpRoot: string;
+  let harnesses: HostHarness[];
+
+  beforeEach(() => {
+    tmpRoot = mkdtempSync(path.join(tmpdir(), 'aiclient-codex-gate-'));
+    harnesses = [];
+  });
+
+  afterEach(() => {
+    for (const h of harnesses) h.kill();
+    rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  function spawnHarness(envOverride: NodeJS.ProcessEnv = {}): HostHarness {
+    const harness = new HostHarness(envOverride);
+    harnesses.push(harness);
+    return harness;
+  }
+
+  it(
+    'on-arm: registry advertises codex when a fabricated entry and home both resolve',
+    async () => {
+      // Positive arm of G1's four: flag on, entry resolves, home prepares.
+      // Fabricated end to end so it is true on a CI box with no codex install
+      // exactly the same way it is true on this dev machine.
+      const entryDir = path.join(tmpRoot, 'fake-codex-entry');
+      mkdirSync(entryDir, { recursive: true });
+      const entryPath = path.join(entryDir, 'codex.js');
+      // Never executed: host.initialize only PROBES existence
+      // (resolveCodexLaunch) and prepares the isolated home; it does not spawn.
+      writeFileSync(entryPath, '// fixture codex.js entry, existence-only\n');
+
+      const harness = spawnHarness({
+        [CODEX_FLAG_ENV]: '1',
+        // Candidate #1 in resolveCodexLaunch's search order (codexNodeEntry.ts)
+        // — checked before path_shim/node_sibling/path_node_sibling.
+        [CODEX_JS_PATH_ENV]: entryPath,
+        // The other three candidates are ALSO starved (same recipe as the
+        // negative arm below), not left to inherit this process's real PATH —
+        // otherwise, on a machine with a real codex install (this dev box
+        // [实测] has one), entry resolution could succeed via node_sibling/
+        // path_shim even with entryPath above deleted, and this test would
+        // stay green for the wrong reason instead of because of the fixture.
+        [NODE_EXEC_PATH_ENV]: path.join(tmpRoot, 'no-such-node-root', 'bin', 'node'),
+        PATH: '',
+        // Destination: ensureCodexHome (codexHome.ts) mkdir -p's this and
+        // writes config.toml into it. index.ts's own (unexported)
+        // CODEX_HOME_ENV constant — mirrored here as a literal because this
+        // file may only touch protocolErrors.test.ts.
+        AICLIENT_CODEX_HOME: path.join(tmpRoot, 'codex-home'),
+        // codex's OWN env var, read by resolveSourceCodexHome (codexHome.ts)
+        // ahead of homedir() — redirects the SOURCE projection away from the
+        // real ~/.codex. A nonexistent source is tolerated (missing
+        // config.toml/auth.json are logged, not thrown), so this never reads
+        // or copies a real user credential.
+        CODEX_HOME: path.join(tmpRoot, 'codex-home-source-absent'),
+      });
+
+      harness.send({
+        type: 'host.initialize',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-init-on',
+      });
+      const event = await harness.nextEvent(TEST_TIMEOUT);
+      expect(event.type).toBe('host.ready');
+      const capabilities = event.payload?.capabilities as { agents?: string[] } | undefined;
+      expect(capabilities?.agents).toEqual(['claude-code', 'codex']);
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'on-arm: refuses session.create for codex when NO candidate entry resolves — never really spawns',
+    async () => {
+      // Negative arm of G1's four: flag on, entry_missing. Every candidate
+      // resolveCodexLaunch (codexNodeEntry.ts) can produce is starved, so
+      // this is true on a CI box with no codex install exactly the same way
+      // it is true on this dev machine (which, per that module's own header,
+      // [实测] has a real codex install sitting right next to its real node
+      // binary):
+      //   1. env override      → points at a codex.js that is never written
+      //   2. path_shim         → PATH is empty, findOnPath sees zero dirs
+      //   3. node_sibling      → AICLIENT_NODE_EXEC_PATH points under a tmp
+      //      root with no lib/node_modules/@openai/codex/bin/codex.js,
+      //      instead of the real node binary that launched this Host
+      //   4. path_node_sibling → covered by the same empty PATH as (2)
+      const harness = spawnHarness({
+        [CODEX_FLAG_ENV]: '1',
+        [CODEX_JS_PATH_ENV]: path.join(tmpRoot, 'nowhere', 'codex.js'),
+        [NODE_EXEC_PATH_ENV]: path.join(tmpRoot, 'no-such-node-root', 'bin', 'node'),
+        PATH: '',
+      });
+
+      harness.send({
+        type: 'session.create',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-on-entry-missing',
+        payload: { sessionId: 's-codex-on-missing', workspacePath: REPO_ROOT, agent: 'codex' },
+      });
+      const event = await harness.nextEvent(TEST_TIMEOUT);
+      expect(event.type).toBe('host.error');
+      expect(event.payload?.code).toBe('agent_unsupported');
+      expect((event as { sessionId?: string }).sessionId).toBe('s-codex-on-missing');
+      // The entry-specific clue, proving the refusal knows WHICH gate stopped
+      // it (S3 slice 6 spec §2 point 7), not just THAT one did.
+      expect(String(event.payload?.message)).toContain(describeHostAgentReason('entry_missing'));
+
+      // rejectUnsupportedAgent returns before ensureCodexRuntime/CodexRuntime
+      // ever construct, so a spawn of the (nonexistent) entry is structurally
+      // impossible here — this bounded window corroborates nothing trails.
+      const trailing = await harness.eventsWithin(300);
+      expect(trailing).toEqual([]);
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'Claude create is unaffected by the codex flag position: off/on arms emit the same first session.created',
+    async () => {
+      // C5/G17: "not agent_unsupported" alone cannot carry "Claude is
+      // unaffected" — this asserts the actual event both arms produce is the
+      // same, field by field (minus seq/timestamp, which are per-process).
+      const claudePayload = {
+        sessionId: 's-claude-equiv',
+        workspacePath: REPO_ROOT,
+        agent: 'claude-code',
+      };
+
+      const offHarness = spawnHarness();
+      offHarness.send({
+        type: 'session.create',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-claude-equiv',
+        payload: claudePayload,
+      });
+      const offEvent = await offHarness.nextEvent(TEST_TIMEOUT);
+
+      // Flag ON, same entry-starved recipe as the negative arm above:
+      // irrelevant to a claude-code create's OUTCOME, but rejectUnsupportedAgent
+      // builds the registry for any NAMED agent (not only 'codex'), so this
+      // keeps that build deterministic (entry_missing specifically, not a
+      // machine-dependent mix of entry_missing/home_prepare_failed) rather
+      // than depending on whether this box happens to have a real codex
+      // install. Starving PATH here is safe: Claude's own bootstrap
+      // (ensureRuntime → loadClaudeSettingsEnv/resolveCometixCli) resolves
+      // its cli.js via node module resolution (cometix.ts), never PATH.
+      const onHarness = spawnHarness({
+        [CODEX_FLAG_ENV]: '1',
+        [CODEX_JS_PATH_ENV]: path.join(tmpRoot, 'equiv-nowhere', 'codex.js'),
+        [NODE_EXEC_PATH_ENV]: path.join(tmpRoot, 'equiv-no-node-root', 'bin', 'node'),
+        PATH: '',
+      });
+      onHarness.send({
+        type: 'session.create',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-claude-equiv',
+        payload: claudePayload,
+      });
+      const onEvent = await onHarness.nextEvent(TEST_TIMEOUT);
+
+      expect(offEvent.type).toBe('session.created');
+      expect(onEvent.type).toBe('session.created');
+      // The only two fields a brand-new Claude session.created carries
+      // (claudeRuntime.ts:334-342) — both fixed constants (agent's own name,
+      // CHAT_PERMISSION_MODE), so a fresh runtime per harness still produces
+      // byte-identical payloads.
+      expect(onEvent.payload).toEqual(offEvent.payload);
+      expect(offEvent.requestId).toBe('req-claude-equiv');
+      expect(onEvent.requestId).toBe('req-claude-equiv');
+      expect((offEvent as { sessionId?: string }).sessionId).toBe('s-claude-equiv');
+      expect((onEvent as { sessionId?: string }).sessionId).toBe('s-claude-equiv');
+    },
+    TEST_TIMEOUT * 2
   );
 });

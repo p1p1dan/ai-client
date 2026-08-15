@@ -403,6 +403,137 @@ describe('AgentHostManager.getStatus — settings (S7, round-2 iteration-3 revie
 });
 
 /**
+ * S3 slice 6 (A5): `capabilities` is captured off `host.ready` the same way
+ * `settings` is above — a consumer that mounts AFTER the live event already
+ * fired (Main-side `getStatus()` callers, e.g. `useHostStatus.ts`'s prime
+ * call) must still be able to read `capabilities.agents` (the
+ * HostAgentRegistry's wire form) instead of `undefined` forever.
+ */
+describe('AgentHostManager.getStatus — capabilities (S3 slice 6, A5)', () => {
+  async function attached() {
+    const { AgentHostManager } = await import('../AgentHostManager');
+    const manager = new AgentHostManager();
+    const proc = new FakeAgentHostProcess();
+    const internals = manager as unknown as {
+      process: FakeAgentHostProcess | null;
+      state: string;
+      attachProcessHandlers(p: FakeAgentHostProcess): void;
+    };
+    internals.attachProcessHandlers(proc);
+    internals.process = proc;
+    internals.state = 'ready';
+    return { manager, proc };
+  }
+
+  it('is null before any host.ready event has ever landed', async () => {
+    const { manager } = await attached();
+    expect(manager.getStatus().capabilities).toBeNull();
+  });
+
+  it('captures capabilities.agents from a live host.ready event', async () => {
+    const { manager, proc } = await attached();
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 1,
+      timestamp: Date.now(),
+      payload: {
+        protocolVersion: 1,
+        driver: 'agent-sdk',
+        nodeVersion: 'v24.0.0',
+        capabilities: {
+          history: true,
+          thinking: true,
+          subagentActivity: false,
+          agents: ['claude-code', 'codex'],
+        },
+      },
+    } satisfies RuntimeEvent);
+
+    expect(manager.getStatus()).toMatchObject({
+      state: 'ready',
+      capabilities: {
+        history: true,
+        thinking: true,
+        subagentActivity: false,
+        agents: ['claude-code', 'codex'],
+      },
+    });
+  });
+
+  it('normalizes an absent capabilities field (old Host build) to null, not undefined', async () => {
+    const { manager, proc } = await attached();
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 1,
+      timestamp: Date.now(),
+      payload: { protocolVersion: 1, driver: 'agent-sdk', nodeVersion: 'v24.0.0' },
+    } satisfies RuntimeEvent);
+
+    expect(manager.getStatus().capabilities).toBeNull();
+  });
+
+  it('replaces a PRIOR ready event’s capabilities on a later host.ready (a Host restart that lost the flag)', async () => {
+    const { manager, proc } = await attached();
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 1,
+      timestamp: Date.now(),
+      payload: {
+        protocolVersion: 1,
+        driver: 'agent-sdk',
+        nodeVersion: 'v24.0.0',
+        capabilities: { agents: ['claude-code', 'codex'] },
+      },
+    } satisfies RuntimeEvent);
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 2,
+      timestamp: Date.now(),
+      payload: { protocolVersion: 1, driver: 'agent-sdk', nodeVersion: 'v24.0.0' },
+    } satisfies RuntimeEvent);
+
+    expect(manager.getStatus().capabilities).toBeNull();
+  });
+
+  it('settings and capabilities are captured independently off the same host.ready event', async () => {
+    const { manager, proc } = await attached();
+
+    proc.emit('event', {
+      type: 'host.ready',
+      seq: 1,
+      timestamp: Date.now(),
+      payload: {
+        protocolVersion: 1,
+        driver: 'agent-sdk',
+        nodeVersion: 'v24.0.0',
+        settings: {
+          loaded: true,
+          hasAuthToken: true,
+          hasBaseUrl: false,
+          baseHost: null,
+          model: 'opus',
+        },
+        capabilities: { agents: ['claude-code'] },
+      },
+    } satisfies RuntimeEvent);
+
+    const status = manager.getStatus();
+    expect(status.settings).toEqual({
+      loaded: true,
+      hasAuthToken: true,
+      hasBaseUrl: false,
+      baseHost: null,
+      model: 'opus',
+    });
+    expect(status.capabilities).toEqual({ agents: ['claude-code'] });
+  });
+});
+
+/**
  * The stderr wiring is only useful if a failure reaches the log FILE. This app
  * ships file logging at 'error' unless the user enables it (logger.ts
  * initLogger defaults enabled=false), so info-level stderr lines are dropped in
