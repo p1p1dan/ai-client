@@ -187,3 +187,21 @@
 
 - `account/rateLimits/updated`：`limitName` / `primary` / `secondary` / `credits` / `planType` **实测全为 null**。
   这是第三方代理 + API-key 的结果，**不要据此认为这些字段永远为空**。
+
+
+## S5 追加捕获（2026-08-15，切片 5 取证，U2-a 判决）
+
+| 文件 | 内容 |
+|---|---|
+| `codex-s5-history-turn.jsonl` | 一个真实回合的全部帧（userMessage / reasoning / commandExecution / agentMessage 四种 item 的 `item/started`/`item/completed`），探针 `spikes/s5-u2a-history-probe.ts`，花费 U9 拍板预算内的 1 个真实回合 |
+| `codex-s5-thread-resume.jsonl` | **新进程**里 `thread/resume` + `thread/read` 的全部帧（重启后恢复的真实回包，仓内此前零留存） |
+| `codex-s5-u2a-report.json` | 探针结构化报告（liveIds vs 重投影 ids 的比对结论） |
+
+**U2-a 判决（2026-08-15 实测，codex-cli 0.145.0）**：
+1. **实时 item id ≠ 重投影 item id**——实时是异构体系（userMessage=uuid / reasoning=`rs_…` / exec=`exec-…` / agentMessage=`msg_…`），`thread/resume` 重投影后是**位置序 `item-N`**。`h:codex:<threadId>:<itemId>` 的 id 若取重投影 id，与实时消息**永不可按 id 对齐**；去重须按内容/身份。
+2. **重投影丢 item**：实时 4 个 item，重投影只回 userMessage + agentMessage 两个——**reasoning 与 commandExecution 不进重投影**（`itemsView:"full"` 仍如此）。
+3. `thread/read` 只回 thread 元数据**不带 turns**；`thread/items/list` 报错；**读历史唯一可用方法 = `thread/resume`**（结果的 `turns[].items[]`）。
+4. **resume 重新从 config.toml 派生权限**：原 thread 以 `never/read-only` 起，重启 resume 回包却是 `on-request/dangerFullAccess`（探针跑在真实 `~/.codex` 下）——产品 resume 路径必须重申权限策略。
+
+抓取环境：真实 `~/.codex`（探针口径，产品用隔离 CODEX_HOME）；模型 `gpt-5.6-sol` 经第三方代理。
+内容全为探针自拟的琐碎指令（`echo u2a-probe` / `DONE`），无用户对话内容。
