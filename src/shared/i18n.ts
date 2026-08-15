@@ -1729,7 +1729,6 @@ export const zhTranslations: Record<string, string> = {
   // T-32 S3: A08 editor-head actions + the chat/editor grip. Button labels are
   // the constant name of the thing toggled (rail idiom) — state is aria-pressed's job.
   'Close file': '关闭文件',
-  'Chat column': '对话栏',
   'Resize chat column': '调整对话栏宽度',
   'Working tree changes': '工作区变更',
   'Workspace terminal': '工作区终端',

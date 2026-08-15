@@ -194,6 +194,20 @@ describe('resolveShellChrome — visibility is the user`s, verbatim', () => {
     expect(vis({ manualChat: false }).chatVisible).toBe(false);
   });
 
+  it('D35 round 2: a diff tab active hides chat REGARDLESS of manualChat — the one deliberate exception', () => {
+    expect(vis({ diffTabActive: true, manualChat: null }).chatVisible).toBe(false);
+    expect(vis({ diffTabActive: true, manualChat: true }).chatVisible).toBe(false);
+    expect(vis({ diffTabActive: true, manualChat: false }).chatVisible).toBe(false);
+  });
+
+  it('D35 round 2: diffTabActive false (or omitted) leaves manualChat/default behavior untouched', () => {
+    expect(vis({ diffTabActive: false, manualChat: null }).chatVisible).toBe(true);
+    expect(vis({ diffTabActive: false, manualChat: true }).chatVisible).toBe(true);
+    expect(vis({ diffTabActive: false, manualChat: false }).chatVisible).toBe(false);
+    // Omitted entirely (no caller change needed): same as `false`.
+    expect(vis({ manualChat: true }).chatVisible).toBe(true);
+  });
+
   it('no longer reports rail visibility — round 12 made it permanent, D34 retired it into MainHeader', () => {
     // OVERTURNED (round 12): A08「展开时右缘无图标」made the rail the panel's
     // complement; round-12 made it the one always-present switcher instead, so

@@ -1239,7 +1239,29 @@ export function DiffViewer({
               renderSideBySideInlineBreakpoint: sideBySideInlineBreakpoint, // 0 = always side-by-side (default)
               ignoreTrimWhitespace: false,
               renderOverviewRuler: true,
-              diffWordWrap: editorSettings.wordWrap === 'on' ? 'on' : 'off',
+              // D35 (user feedback, 2026-08-14, hard evidence: original side
+              // stayed unwrapped while modified wrapped): a diff page's word
+              // wrap is now ALWAYS on, exempt from `editorSettings.wordWrap`.
+              // Root cause (found live via `monaco.editor.getEditors()` +
+              // `getOption(EditorOption.wordWrapOverride2)` on a running
+              // instance — `diffWordWrap` alone reads as fixed in Monaco's own
+              // source but is NOT what actually wins): Monaco's diff editor
+              // only ever pushes `diffWordWrap` into each side's
+              // `wordWrapOverride1`. `wordWrapOverride2` outranks override1
+              // (`wordWrapOverride2 !== 'inherit' ? wordWrapOverride2 :
+              // wordWrapOverride1`) and the diff editor never sets it back to
+              // `'inherit'` for the ORIGINAL side once something has forced it
+              // to `'off'` (its "never wrap the hidden editor" branch for
+              // non-side-by-side rendering, which this app's mount sequence
+              // passes through transiently) — so the original side is stuck
+              // wrap-off even while `diffWordWrap`/`wordWrap` both correctly
+              // read `'on'`. Pinning `wordWrapOverride1`/`wordWrapOverride2`
+              // ourselves, every render, is what actually breaks the stuck
+              // value rather than merely matching Monaco's own field names.
+              wordWrap: 'on',
+              diffWordWrap: 'on',
+              wordWrapOverride1: 'on',
+              wordWrapOverride2: 'on',
               // Display
               minimap: {
                 enabled: editorSettings.minimapEnabled,

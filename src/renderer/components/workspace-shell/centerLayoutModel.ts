@@ -190,6 +190,22 @@ export interface ResolveShellChromeInput {
   panelOpen: boolean;
   /** The editor head's "hide chat" toggle; `null` = never touched = chat shows. */
   manualChat: ManualOverride;
+  /**
+   * D35 round 2 (user feedback, 2026-08-14): whether the ACTIVE editor tab is
+   * a diff tab (`useEditorStore`'s `isDiffTabActive`). `true` forces
+   * `chatVisible` false regardless of `manualChat` or window width — a diff
+   * tab takes the WHOLE center column, on any window size, not just a narrow
+   * one. Reverts the instant the active tab isn't a diff tab any more
+   * (switching tabs, closing it) since this is read fresh every call, never
+   * written into `manualChat` itself.
+   *
+   * This is the one deliberate exception to this function's own "nothing but
+   * the user's toggle hides a column" rule below — it is content-driven focus
+   * (closer to a modal), not a width response, so it does not reopen the
+   * OVERTURNED DESIGN this file spent two rulings closing off. Optional
+   * (default `false`) so callers that never touch diff tabs need no change.
+   */
+  diffTabActive?: boolean;
 }
 
 export interface ShellChrome {
@@ -216,10 +232,12 @@ export interface ShellChrome {
  * there is no such state to report and no affordance to drive from it.
  */
 export function resolveShellChrome(input: ResolveShellChromeInput): ShellChrome {
+  const manualOrDefaultChat = input.manualChat !== null ? input.manualChat : true;
+  const chatVisible = input.diffTabActive ? false : manualOrDefaultChat;
   return {
     sidebarCollapsed: input.sidebarUserCollapsed,
     panelVisible: input.panelOpen,
-    chatVisible: input.manualChat !== null ? input.manualChat : true,
+    chatVisible,
   };
   // No `railVisible`: D34 retired the rail into MainHeader's top bar, so
   // there is no rendered column left to report visibility for (see

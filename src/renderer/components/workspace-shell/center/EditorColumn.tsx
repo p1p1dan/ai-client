@@ -19,7 +19,7 @@
  */
 
 import { normalizePath } from '@shared/utils/path';
-import { AlertTriangle, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { EditorArea } from '@/components/files/EditorArea';
 import type { UnsavedChangesChoice } from '@/components/files/UnsavedChangesDialog';
@@ -84,13 +84,10 @@ export function isNavigationIntentStillValid(params: {
   );
 }
 
-export interface EditorColumnProps {
-  /** A08's「隐去 chat」head button; null hides it (nothing to hide). */
-  onHideChat?: (() => void) | null;
-  chatVisible?: boolean;
-}
-
-export function EditorColumn({ onHideChat, chatVisible = true }: EditorColumnProps) {
+// D35 (user feedback, 2026-08-14): retired the column's only prop pair
+// (`onHideChat`/`chatVisible`, the "Chat column" head button below) — it took
+// no arguments left after that, so the props type goes with it.
+export function EditorColumn() {
   const { t } = useI18n();
   const rootPath = useWorkspaceRootPath();
   const editorAutoSave = useSettingsStore((state) => state.editorSettings.autoSave);
@@ -296,28 +293,22 @@ export function EditorColumn({ onHideChat, chatVisible = true }: EditorColumnPro
           onSave={handleSave}
           onClearPendingCursor={handleClearPendingCursor}
           headerActions={
-            // A08 editor head (a08:1224-1227): hide-chat + close-file, pinned
-            // to the right of the tab strip. `headerActions` is an optional
-            // additive prop — EditorArea's other hosts pass nothing and render
-            // exactly as before (same discipline as T-12's DiffViewer prop).
+            // A08 editor head (a08:1224-1227) originally paired hide-chat +
+            // close-file here. D35 (user feedback, 2026-08-14, 「折叠按钮太多
+            // 搞得人懵」) retires the hide-chat half: its only effect —
+            // temporarily showing chat at full width — is already reachable
+            // by closing the open tab(s) (`deriveEditorOpen` keys `editorOpen`
+            // off `tabs.length`, and `WorkspaceShell`'s
+            // `!editorOpen && ... clearManualOverrides()` effect resets
+            // `manualChat` to `null` the moment the column has none, which
+            // `resolveShellChrome` reads back as `chatVisible: true` by
+            // default) — so the dedicated button was a second control for a
+            // state already one click away via any tab's ✕ or its context
+            // menu's "Close All Tabs". `headerActions` remains an optional
+            // additive prop — EditorArea's other hosts pass nothing and
+            // render exactly as before (same discipline as T-12's DiffViewer
+            // prop).
             <div className="flex shrink-0 items-center gap-0.5 pr-1">
-              {onHideChat && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-6 w-6"
-                  onClick={onHideChat}
-                  aria-label={t('Chat column')}
-                  aria-pressed={!chatVisible}
-                  title={t('Chat column')}
-                >
-                  {chatVisible ? (
-                    <PanelLeftClose className="h-3.5 w-3.5" />
-                  ) : (
-                    <PanelLeftOpen className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              )}
               <Button
                 variant="ghost"
                 size="icon-xs"

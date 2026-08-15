@@ -69,3 +69,24 @@ export function diffTabTitle(target: DiffTabTarget): string {
   }
   return `${name} @ ${target.hash.slice(0, 7)}`;
 }
+
+/**
+ * D35 round 2 (user feedback, 2026-08-14): "diff tab active" is what the
+ * shell reads to give the diff the WHOLE center column — chat hides, no
+ * matter how wide the window is (see `centerLayoutModel.ts`'s
+ * `diffTabActive` chrome input). Only the ACTIVE tab matters: a diff tab
+ * sitting unfocused behind a real file tab must not suppress chat. Typed
+ * against a minimal inline shape (not `EditorTab`) so this file stays
+ * dependency-free — the same discipline as `diffTabPath`/`diffTabTitle`
+ * above, which is also why it lives here rather than in `editor.ts` or
+ * `centerLayoutModel.ts` (whose own doc note says pure-and-no-store-import).
+ */
+export function isDiffTabActive(
+  tabs: readonly { path: string; diffTarget?: DiffTabTarget }[],
+  activeTabPath: string | null
+): boolean {
+  if (activeTabPath === null) {
+    return false;
+  }
+  return tabs.some((tab) => tab.path === activeTabPath && tab.diffTarget != null);
+}

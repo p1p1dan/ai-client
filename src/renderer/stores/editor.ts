@@ -63,11 +63,18 @@ interface EditorState {
 
   openFile: (file: Omit<EditorTab, 'title' | 'viewState'> & { title?: string }) => void;
   /**
-   * D34-E: open (or, if already open, reuse-and-refresh) a diff tab. Re-
-   * clicking the same target activates the existing tab and updates its
-   * title/target in place instead of appending a duplicate — the spec's
-   * "别开无限 tab". Content freshness for a workdir target comes from
-   * `DiffViewer`'s own live `useFileDiff` poll, not from this action.
+   * D34-E introduced this as "open (or, if the SAME target is already open,
+   * reuse-and-refresh)". D35 (user feedback, 2026-08-14, 「一次只看一份，点另一个
+   * 直接切换，不要多 tab」) tightens it to a global singleton: AT MOST ONE diff
+   * tab ever exists, keyed off "is a diff tab" rather than "is the same
+   * target" — opening any target REPLACES whichever diff tab is already open
+   * (in its same array slot) instead of comparing paths, so two different
+   * targets opened back to back never coexist. A plain file tab is a
+   * different `path` namespace (no `diffTarget`) and is NOT touched by this
+   * rule — the D34-E "diff tab coexists with a real file tab for the same
+   * path" guarantee is unchanged. Content freshness for a workdir target
+   * still comes from `DiffViewer`'s own live `useFileDiff` poll, not from
+   * this action.
    */
   openDiffTab: (target: DiffTabTarget) => void;
   closeFile: (path: string) => void;
@@ -144,19 +151,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) => {
       const path = diffTabPath(target);
       const title = diffTabTitle(target);
-      const exists = state.tabs.some((tab) => tab.path === path);
-      if (exists) {
+      const existingDiffIndex = state.tabs.findIndex((tab) => tab.diffTarget != null);
+      if (existingDiffIndex === -1) {
         return {
-          tabs: state.tabs.map((tab) =>
-            tab.path === path ? { ...tab, title, diffTarget: target } : tab
-          ),
+          tabs: [...state.tabs, { path, title, content: '', isDirty: false, diffTarget: target }],
           activeTabPath: path,
         };
       }
-      return {
-        tabs: [...state.tabs, { path, title, content: '', isDirty: false, diffTarget: target }],
-        activeTabPath: path,
-      };
+      // D35: replace the ONE existing diff tab in its own array slot (keeps
+      // its position among any file tabs stable) rather than appending —
+      // `path` is derived from `target`, so replacing the target also
+      // replaces the tab's own key; `activeTabPath` is repointed to the new
+      // path in this same update so it is never left dangling at the old one.
+      const tabs = state.tabs.map((tab, index) =>
+        index === existingDiffIndex ? { ...tab, path, title, diffTarget: target } : tab
+      );
+      return { tabs, activeTabPath: path };
     }),
 
   closeFile: (path) =>

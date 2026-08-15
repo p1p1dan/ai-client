@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffTabPath, diffTabTitle } from '../diffTabTarget';
+import { diffTabPath, diffTabTitle, isDiffTabActive } from '../diffTabTarget';
 
 describe('diffTabPath', () => {
   it('uses a git-diff:// scheme so it can never collide with a real fs path', () => {
@@ -68,5 +68,42 @@ describe('diffTabTitle', () => {
         status: 'A',
       })
     ).toBe('File.ts · A');
+  });
+});
+
+describe('isDiffTabActive', () => {
+  const diffTab = { path: diffTabPath({ kind: 'workdir', path: 'a.ts', staged: false }) };
+  const fileTab = { path: 'src/real.ts' };
+
+  it('is true when the active tab has a diffTarget', () => {
+    const tabs = [
+      { ...diffTab, diffTarget: { kind: 'workdir' as const, path: 'a.ts', staged: false } },
+    ];
+    expect(isDiffTabActive(tabs, diffTab.path)).toBe(true);
+  });
+
+  it('is false when the active tab is a plain file tab', () => {
+    const tabs = [fileTab];
+    expect(isDiffTabActive(tabs, fileTab.path)).toBe(false);
+  });
+
+  it('is false when activeTabPath is null (no tabs open)', () => {
+    expect(isDiffTabActive([], null)).toBe(false);
+  });
+
+  it('a diff tab that exists but is NOT active does not count — only the active tab matters', () => {
+    const tabs = [
+      fileTab,
+      { ...diffTab, diffTarget: { kind: 'workdir' as const, path: 'a.ts', staged: false } },
+    ];
+    // The FILE tab is active, not the diff tab.
+    expect(isDiffTabActive(tabs, fileTab.path)).toBe(false);
+  });
+
+  it('is false when activeTabPath points at nothing in tabs (defensive)', () => {
+    const tabs = [
+      { ...diffTab, diffTarget: { kind: 'workdir' as const, path: 'a.ts', staged: false } },
+    ];
+    expect(isDiffTabActive(tabs, 'src/nonexistent.ts')).toBe(false);
   });
 });

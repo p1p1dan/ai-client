@@ -13,6 +13,7 @@ import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { isDiffTabActive } from '@/stores/diffTabTarget';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSettingsStore } from '@/stores/settings';
@@ -84,12 +85,19 @@ export function WorkspaceShell({
   const setEditorRatio = useShellLayoutStore((state) => state.setEditorRatio);
 
   const manualPanel = useShellLayoutStore((state) => state.manualPanel);
+  // D35: `manualChat` itself stays (it also gates the "close all tabs snaps
+  // chat back to full width" reset below) — only `setManualChat`'s UI caller
+  // (the retired "Chat column" head button) is gone, so nothing sets it to
+  // `false` any more and `chatVisible` reads `true` by default.
   const manualChat = useShellLayoutStore((state) => state.manualChat);
-  const setManualChat = useShellLayoutStore((state) => state.setManualChat);
   const clearManualOverrides = useShellLayoutStore((state) => state.clearManualOverrides);
 
   // T-32: a file being open is what makes the center row two columns.
   const editorOpen = deriveEditorOpen(useEditorStore((state) => state.tabs).length);
+  // D35 round 2 (2026-08-14): a diff tab, while ACTIVE, takes the whole
+  // center column — see `resolveShellChrome`'s `diffTabActive` doc note.
+  // Primitive selector (boolean), same discipline as `editorOpen` above.
+  const diffTabActive = useEditorStore((state) => isDiffTabActive(state.tabs, state.activeTabPath));
   // Round-10 ⑥: primitive selector — mounts the intent consumer (below) even
   // before any tab exists. See the EditorColumn wrapper comment.
   const fileIntentPending = useFileOpenIntentStore((state) => state.intent !== null);
@@ -172,10 +180,13 @@ export function WorkspaceShell({
   // the T-32 ladder and round-10's `ChromeIntent` are deleted; see
   // `centerLayoutModel.ts`'s OVERTURNED DESIGN note for why. This stays the
   // single derivation point (R1) and is handed down; nobody re-derives it.
+  // D35 round 2 adds `diffTabActive` as the one deliberate exception — see
+  // `resolveShellChrome`'s doc note on that field.
   const chrome = resolveShellChrome({
     sidebarUserCollapsed: sidebarCollapsed,
     panelOpen: activeSurfaceId !== null,
     manualChat,
+    diffTabActive,
   });
   const { panelVisible, chatVisible } = chrome;
 
@@ -444,10 +455,9 @@ export function WorkspaceShell({
                   className={editorOpen ? 'min-w-0 shrink-0' : 'hidden'}
                   style={editorOpen ? { width: 'var(--shell-editor-w)' } : undefined}
                 >
-                  <EditorColumn
-                    chatVisible={chatVisible}
-                    onHideChat={() => setManualChat(!chatVisible)}
-                  />
+                  {/* D35: `EditorColumn`'s hide-chat head button retired —
+                      see EditorColumn.tsx's `headerActions` doc note. */}
+                  <EditorColumn />
                 </div>
               )}
             </div>
