@@ -7,7 +7,7 @@
 ## Done
 
 **阶段性**
-- Phase 0 技术 Go/No-Go：🟡 Conditional Go（加密机项待 T-11 转正，见 [phase0-report](../../../plans/phase0-report.md)）
+- Phase 0 技术 Go/No-Go：✅ 正式 Go（2026-08-15 加密机现场 T-11 六项全过 → CP5；历程见 [phase0-report](../../../plans/phase0-report.md)）
 - Phase 0A 设计基线补做 🟡 部分完成 2026-07-28——A01/A05/A06 交付（产物[对齐基线 HTML](../../../design/phase0a-openchamber-alignment.html)，拍板 D18/D19/D20）；**A02/A03/A04 未立项，Phase 未整体收口**（口径以总台账 0A 行为准）
 - Phase 1 UI Shell（Mock）✅ `259e863`（旧四区口径，不回退；D18/D19 后重做归 T-21/T-22）· Phase 2 Runtime Vertical Slice ✅
 
@@ -57,9 +57,9 @@
 ## Next
 
 1. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md) + [加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md)，出发前必做 M1~M4）→ CP2 汇报。
-2. **T-11 M2 加密机现场验收**（等 T-10；六项含白名单⑥）→ CP5，Phase 0 转正式 Go。
+2. ~~**T-11 M2 加密机现场验收**~~ ✅ 2026-08-15 现场六项全过（含白名单⑥）→ CP5，Phase 0 正式 Go（open-q #7 关闭）。
 3. **GUI 统一点测残项**（T-04 待网关 / T-06 / T-07 补强 / T-20 / T-03 / T-18 附件人工项）——清单见 [implementation-status 用户线](./implementation-status.md)。
-4. **开发线下一步待用户裁定**——候选四路见 [implementation-status Next Target](./implementation-status.md)。
+4. **开发线已裁定（2026-08-15）**：意外发现小批先行 → multi-agent 切片 5 主攻（详见 [implementation-status Next Target](./implementation-status.md)）。
 
 ## Deferred
 

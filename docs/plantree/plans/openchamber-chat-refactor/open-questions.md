@@ -9,7 +9,6 @@
 4. **T-09 Node 缺失场景无法真触发**：resolver 容错太好，坏路径仍 fallback 成功。构造「全候选失败」的可行法？（候选想法：mock-resolver 注入容器，见 ideas）
 5. **网关「400 thinking 格式无效」——默认模型路径确定性 400**（2026-07-28 升级）：budgetTokens 假说已被实测推翻；`{type:'adaptive', display:'summarized'}` 打网关默认模型 2/2 确定性 400——网关对 thinking 的处理跨模型不一致且随时间漂移。处理口径不变（按 session.failed 显示、不回滚 thinking 默认开），**定位与修复在网关侧**，app 侧无可修。
 6. **归档会话无 un-archive 入口**：右键即归档、无确认，`mergeSessionIndex` 把 archived 连 live 镜像一起丢弃 → 彻底不可见，只能手改索引文件恢复。要不要补 UI 入口（或至少加确认）？——等用户拍板。
-7. **TSD 白名单口径**（按进程名，任意路径 node.exe 均可读）待 T-11⑥ 现场实证——实证前所有加密机相关能力不得标注通过。
 8. **sonnet 空文本 thinking 块要不要渲染「已思考」指示**：GUI 默认 sonnet 在本网关返回带签名但文本为空的 thinking 块，Host 按设计吞空 → 无卡。要不要渲染无文本指示？——产品决策等用户拍板；根治在网关侧。**T-04 在网关修复前无法点验**（连同 #5）。
 10. **T-21 验收截图未出**（本条主体已升 D25 结项，唯一遗留 = 截图验收）：默认主题下中英混排三场景（Chat 正文 / 侧栏树中文标题 / 工具行摘要）+ 6 处 `normal-case` 豁免目视（两处渲染动态标识符的关键位：`MergeEditor.tsx:751` 冲突文件 Tab、`AddRepositoryDialog.tsx:1087` SSH 路径 chip；余四处为 onboarding 中文按钮）。截图入台账后本条删除、T-21 转 Done。6 处清单全文见 history 快照。
 12. **终端 Ghostty 主题与 Monaco 跟随是否随 D18 一并 Flexoki 化**：`sync-terminal` 模式下 `applyTerminalThemeToApp()` 把 25 个语义变量以 inline hex 写到 documentElement → Flexoki 调色板被 100% 覆盖；且不覆盖 T-21 新增 5 token → 该模式下呈「25 终端色 + 5 Flexoki 色」混色。三种口径待选：① 全保留两套并存；② Monaco 改跟 Flexoki；③ 全部 Flexoki 化。**裁定前 `ghosttyTheme.ts` / `monacoTheme.ts` 原样不动**；T-21 验收必须在默认（非 sync-terminal）主题下进行，混色属本条未决非 bug。

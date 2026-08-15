@@ -5,7 +5,7 @@
 > [2026-07-28 ~ 08-03](./history/2026-0728-0803-archive.md) ·
 > [2026-08-08 全文快照](./history/2026-0808-implementation-status-archive.md)（本文件瘦身前原文，含 0-duodecies ~ 0-novodecies 六份清单）。
 
-- **Current Phase**：**开发线全部收口 → 真机点验期**（2026-08-06 第十二轮点验后）。
+- **Current Phase**：**Phase 0 正式 Go（2026-08-15 CP5 过）→ 开发线恢复施工：意外发现小批 → multi-agent 切片 5**。
   观感对齐批次（2026-07-28 转向，D18/D19/D20）的开发线任务 T-29 / T-12~T-15 / T-23 / T-32 / T-16 / T-33 / T-35 / T-34 全部 Done。
   ⚠️ Phase 0A 整体仍 🟡：A02 / A03 / A04 未立项（口径以总台账 Phase 总览 0A 行为准）。
 - **Last Landed**（2026-08-11）：**xvqiu1 四问题反馈批**——triage（[报告](../../../plans/2026-08-11-xvqiu1-triage.md)，四路独立排查 + 承重结论亲验）→ 用户拍板 **D30**（git (a) 先行）→ 施工四片：
@@ -35,11 +35,11 @@
 - **Next Target**：
   1. **T-10 / T-11 真机点验（用户线，当前主项）——`0.4.0-test.4` 包已出（2026-08-15，CI 出包路径首次跑通）**：
      [run 31861599547](https://github.com/p1p1dan/ai-client/actions/runs/31861599547) 下载 `windows-installers`（345MB，NSIS+portable，测试机回归用）/ `windows-unpacked`（251MB，去加密机优先带它——T-10 口径）。**2026-08-15 用户真机初验通过（安装版正常，portable 启动 1-2min 系解压型预期行为归档为已知限制），本阶段用户裁定归档收口**。
-     余下真机深度回归（现场操作单七项 / 流式观感 / D34-D35 逐项 / 包装器 / 加密机 T-11）按用户节奏另启。
-     CI 首跑三轮迭代records：cpSync filter 在 Windows runner **整体失灵**（.bin/.ts/平台包全漏，`ae57020` 兜底删 + `0d4011c` 弃 filter 改自写 walk 根治）；**backlog 新增：build-linux verify `Node 24 resolvable` 恒红**——Linux 包从不 fetch 随包 runtime，需拍板「Linux 包捆不捆 node」（不阻塞 Windows 链）。
+     余下真机深度回归（现场操作单七项 / 流式观感 / D34-D35 逐项 / 包装器）按用户节奏另启；GUI 点测批（T-03/06/07/18/20）与 T-21 目视同留用户线。
+     CI 首跑三轮迭代records：cpSync filter 在 Windows runner **整体失灵**（.bin/.ts/平台包全漏，`ae57020` 兜底删 + `0d4011c` 弃 filter 改自写 walk 根治）；**Linux 捆 node 已拍板 = D36（2026-08-15，捆齐口径一致）**——build-linux 补 fetch 随包 runtime 转施工票（择机，见 Backlog）。
      → 测试机回归（[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验 + **新增复验面：流式观感（flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON，状态行 ✽ elapsed·↓tokens / 渐显 / 加密机 IPC 负载）、D34 全批（rail 迁顶栏 / git 面板 VS Code 化 / 提交展开 / diff 中栏）、D35 四调、`launch-gui-test.cmd` 包装器双击路径**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
-     → 加密机现场 T-11 六项 → CP2 / CP5。
-  2. **开发线下一步待用户裁定**，候选五路（不互斥）：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
+     → 加密机现场 T-11 六项 ✅ **2026-08-15 全过 → CP5，Phase 0 正式 Go（含 ⑥ TSD 白名单实证，open-q #7 关闭）**；余 CP2 = T-10 深度回归汇报。
+  2. **开发线已裁定（2026-08-15）：意外发现小批先行 → multi-agent 切片 5 主攻**；候选五路存档：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；
      ③ Deferred 复活（C-17 问答/子 agent 进历史 · T-25 旧模块原色清理 · 后置 6 surface · C-12 压测）；
      ④ backlog 清票（见下）；
@@ -49,7 +49,7 @@
      ② ~~流式施工批~~ 已并入 ①（规格 rev.2 取代 spike §3/§4 直抄口径）；
      ③ Temp 门控五态 / D30-a 六项 / D29 已于 2026-08-14 **本地点验全过**（CDP 驱动 dev GUI，加密机风险经用户裁定解除后点验前移）；Windows 侧仅剩启动包装器（`launch-gui-test.cmd` 双击路径）随下轮真机（现场操作单已同步包装器启动步骤）；
      ④ **D34 UI 反馈批已于 2026-08-14 落地**（八提交 `7566d4c`~`0a3bb52`，六裁定见总台账 D34 行）：右栏 min 250 / rail 迁顶栏（覆盖 round-12）/ git 面板 VS Code 化 + 提交点击展开 + diff 迁中栏 / Context status 三行 / Thought 孤箭头修复（T-31 潜伏）——随下轮真机复验；**D35 diff 页四调同日落地**（`4d8f003`：Chat column 钮退役 / diff 恒双侧换行（Monaco `wordWrapOverride2` 覆盖链坑）/ diff tab 单例 / diff 激活独占中栏——用户宽屏澄清「并排非覆盖」后中途改规格）；余：X 状态紫色无语义 token（T-25）、①窄宽按钮异常已修（icon-only）待用户复验；
-     ⑤ 本地点验三条意外发现待另立：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）/ git 面板 Changes 计数在**外部（命令行）提交后不自动刷新**（须手点刷新，观察项 2026-08-14）。
+     ⑤ 本地点验三条意外发现**已拍板即修一小批（2026-08-15，先于主线）**：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）；git 面板 Changes 计数**外部（命令行）提交后不自动刷新**（须手点刷新）另挂 backlog 票。
 
 > ⚠️ **门禁纪律**：本机内存有限，四门**逐门串行跑**，禁止链式合跑或与子代理/后台任务并行（曾 OOM exit 137）。
 > ⚠️ **GUI 启动口径**：填好 `dev.env` 后一律 `node scripts/dev.js`，勿用 `pnpm dev`；
@@ -76,7 +76,7 @@
 3. **T-10 打包版点验**（用户）：**动手照 [现场操作单](../../../plans/2026-08-10-field-test-sheet.md) 做**（每条只写「怎么做/看什么/算不算过」）；背景与依据见 [清单](../../../plans/t10-packaged-gui-checklist.md) + [加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) → **CP2 汇报**。
    **2026-08-09 起出包不再必须有 Windows 机器**：Actions → Build → Run workflow → 下载 `windows-unpacked` / `windows-installers`（见清单「CI 出包路径」节）。**限度**：CI 跑 `--skip-smoke`，只关掉 M2 结构半边，全量 25 项仍须真机跑。
    含并入的真机残留：T-24 真机 Windows 项（第 8 项）· A2/0-nonies ⑪ Win10 字重与 D25 §6.2 五项真机指标（第 9 项）。
-4. **T-11 加密机现场六项**（等 T-10；含白名单⑥）→ CP5，Phase 0 转正式 Go。
+4. ~~**T-11 加密机现场六项**~~ ✅ 2026-08-15 现场全过（含白名单⑥ TSD 实证）→ CP5，Phase 0 正式 Go；open-q #7 关闭。
 6. **T-21 收尾截图**：默认主题下中英混排三场景 + 6 处 `normal-case` 豁免目视（open-q #10），截图入台账后转 Done。
 7. **#15 缓存复测裁定**：GUI 重启连发两条看第二条有无缓存读取；裁定前暂缓联系网关运营方。
 8. **给主线的需求（T-03 / T-18 / 07-28 衍生，共 8 条）**：① `session.history` 的 `truncated` / `omittedCount` 全链路无展示；② **用户气泡不回显附件**——`beginTurn` 只 emit 文字（Renderer 无法自救）；③ 看门狗把整个上传窗口计入 stall，是未来提高附件上限的硬天花板；④ 协议可选加 `document`(PDF)；⑤ store 的 `sendMessage(text, attachments?)` 无人调用、与 Composer 的 `runSend` 双路径漂移；⑥ `session.create` 应校验 workspacePath 存在性；⑦ ~~resume 重放视觉双份~~（已根治 `fd55a26`）；⑧ thinking 空块要不要渲染「已思考」指示——待用户拍板。详见[主线台账](../../../plans/ledger-claude-mainline.md) 07-27/07-28 各行。
@@ -97,6 +97,8 @@
 - （2026-08-10 批遗留）启动 3-5s 总时长未治理（本批只治白屏观感）：窗口创建前 await 链 + 渲染层两层懒加载，需先补启动时间戳埋点
 - （2026-08-10 批遗留）send 等待谓词仍为内联闭包，抽 shouldReleaseSendWait 纯函数可直接单测（敏感区重构另排）
 - （D29 复核观察项）空仓库文件夹点击仍零可见后果（#28 心智在空仓场景未闭合）；激活恒取最新无「上次看的那条」记忆；面板按 project 粒度跟随（Temp 内多目录、同仓多 worktree 间不跟随，系 T-26 取消 workspace 树层级的结构性结果）；文件夹头无 aria-expanded/live-region（既存小瑕）
+- （2026-08-15 挂票）git 面板 Changes 计数外部（命令行）提交后不自动刷新——须手点刷新；候选：窗口聚焦 invalidate git 查询
+- （D36 施工票 2026-08-15）build-linux 打包链补 fetch 随包 runtime（linux-x64 pin `24.18.0` + SHA256），verify「Node 24 resolvable」转绿
 
 ## Blocked By
 

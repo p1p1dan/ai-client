@@ -29,7 +29,7 @@
 
 | Phase | 名称 | 状态 | 说明 |
 |---|---|---|---|
-| 0 | 技术 Go/No-Go | 🟡 Conditional Go | 开发机项全部完成；仅剩加密机实证（T-11 → CP5 转正式 Go） |
+| 0 | 技术 Go/No-Go | ✅ 正式 Go（2026-08-15） | 开发机项全部完成；加密机现场 T-11 六项实证通过（CP5，含 ⑥ TSD 白名单口径） |
 | 0A | 高保真产品基线（A01~A06） | 🟡 部分补做（2026-07-28） | A01 / A05 / A06 **补登并交付**，统一产物 [`phase0a-openchamber-alignment.html`](../design/phase0a-openchamber-alignment.html)（用户已验收），据此拍板 D18 / D19 / D20；A02 / A03 / A04 仍未立项（三项只见于可行性文档候选任务池，从未进执行计划或任何台账）。方案层已收口，**代码落地另立 T-21 / T-22 / T-23**。**本 Phase 未整体完成**——plantree roadmap Done 段的 ✅ 只覆盖「A01/A05/A06 三项补做」，不等于 Phase 0A 收口；A06 的申报依赖是 A01+A02 而 A02 缺位，故本行维持 🟡，两边口径**以本行为准**（2026-07-28 澄清） |
 | 1 | UI Shell（Mock） | ✅ 完成 | 四区壳可交互；Beta 开关接入 |
 | 2 | Runtime Vertical Slice | ✅ 完成（2026-07-24） | 主路径 + Permission/Question 桥 + Resume 历史 + 附件 + 看门狗 + 打包链（C-01~C-07/C-13~C-15）全量；唯 stream-json fallback 后置为 C-11 机动 |
@@ -77,6 +77,7 @@
 | D33 | 流式状态行三小件（用户拍板 2026-08-14；关闭 open-q #31 待定项） | ① token 口径：**仅 ↓ 输出 tokens**（对齐官方 CLI；完整 in/out/ctx% 仍归 StatusLine，不重复）；② 趣味动词：**不要**——状态行只显示计时与 token（`✽ 19m 55s · ↓ 38.5k`），状态行侧绕开产品语言口径之争（multi-agent #11 权限卡混排仍归该问自裁）；③ test.4 流式 flag **默认 ON**（真机真实踩到流式路径，CI 恒保 OFF 位绿，出问题现场关 flag 兜底）。主修复路径（开 partial + 除双雷 + seenEvents 环形）无拍板径直施工，规格抄 [spike 报告](./2026-08-11-partial-messages-spike.md) §3/§4。 |
 | D34 | UI 反馈批六裁定（用户拍板 2026-08-14 当场问答；视觉参照 VS Code SCM 面板，参考图入库 `docs/design/refs/vscode-20260814-gitxvqiu/`） | ① 右栏最小宽 **380→250**（`CONTEXT_PANEL_MIN_WIDTH`；默认 380 = A08 拍板不动，拆 `CONTEXT_PANEL_DEFAULT_WIDTH`）；② **rail 四图标迁顶栏折叠钮左侧**（横排 4×32px + git 变更圆点随迁，44px 竖排导轨退役、`RAIL_RESERVE` 归零——**覆盖 round-12「右侧竖置图标当切换标签」裁定**，append-only 以本条为准；Ctrl+1..4 与 railOrder 数据源不动）；③ git 面板 VS Code 化：docked 上下 **50/50 平分**（用户点名比例）+ Changes 工具栏左标题+计数徽章 + review/tree 钮 icon-only（250px 窄宽挤压的解）+ History 行单列 graph 圆点线+右侧作者名 + commit 钮无 staged 弱化 + statusColors 五色迁语义 token（X 紫无 token 留 T-25）；④ **History 提交行点击展开**：内嵌 meta 行+文件清单，点文件看 per-commit diff——后端 `getCommitFiles`/`getCommitDiff`+hooks 全现成（旧壳同款交互先例），零主进程/IPC 改动；⑤ **diff 迁中栏页（Files 同款，VS Code 模式）**：`EditorTab.diffTarget` 复用整套 tab 机制（`git-diff://` 伪路径），工作区与 commit 两路 diff 都开中栏 tab，面板内嵌 DiffViewer 两分支退役（静态钉子），expanded 双栏维持字节不动；⑥ Context status 三行（Auth 类型枚举/App 版本/Gateway 主机）——**不做有据**：full base URL（维持 baseHost 最小投影）、configDir（#30 连带未裁禁区）、setting sources（Host 刻意 `settingSources:[]`）、session kind（CLI 内部不可得）。 |
 | D35 | diff 中栏页四调（用户反馈 2026-08-14 当日第二轮，含一次中途澄清） | ① 「Chat column」按钮退役（与「关全部 tab 自动回聊天」语义重叠，用户"折叠按钮太多"——editor 区其余功能钮盘点后全保留）；② diff 页**恒双侧自动换行**（豁免跟随 editor 设置；根因系 Monaco `wordWrapOverride2` 覆盖链一侧未复位，live API 取证钉死）；③ **diff tab 全局单例**（点另一文件原位替换 target/标题，不再多 tab；真实文件 tab 不受影响）；④ **diff 激活时独占中栏**（`diffTabActive` 强制 `chatVisible:false`，宽屏并排改覆盖——用户澄清后由"激活钉子"升格；切回文件 tab / 关闭即恢复，Files tab 并排行为不动）。落地 `4d8f003`。 |
+| D36 | Linux 包 Node 运行时（用户拍板 2026-08-15；关闭 test.4 CI backlog「Node 24 resolvable 恒红」产品裁定） | **捆齐，口径与 Windows 一致**：build-linux 打包链补 fetch 随包 runtime（linux-x64，沿用 Windows 链 pin `24.18.0` + SHA256 校验），verify「Node 24 resolvable」转绿恢复门禁效力；代价（打包脚本施工 + Linux 包体积增大）已知悉。否决候选「不捆并降级 verify」与「砍掉 Linux 出包」 |
 
 > 注（2026-07-28，编号完整性）：本表最初只收录了当时正在争论的决策轴，**D4 / D5 / D7 / D13 是历史空号**——全仓 `*.md` 与 git 历史均检索不到这四个编号的任何决策正文（`grep -rn "\bD(4|5|7|13)\b" --include="*.md"` + `git log -S` 均无命中），既非遗漏收录也非被撤销，编号在拍板过程中直接跳过；**不要为它们保留语义，也不要复用这四个号**。D12 / D14 已于同日按上两行补录，**至此本表「D1~D20」名副其实**（现含 D1/D2/D3/D6/D8/D9/D10/D11/D12/D14/D15/D16/D17/D18/D19/D20 共 16 行 + 4 个空号）。
 
@@ -148,6 +149,8 @@
 | 2026-08-14 | **D35 diff 页四调落地**：`4d8f003`——Chat column 钮退役 / diff 恒双侧换行（Monaco wordWrapOverride2 坑）/ diff tab 单例 / diff 激活独占中栏（宽屏澄清）。变异两轮命中精确；四门全绿 **vitest 3339 例 0 红** | ✅ | `4d8f003` |
 | 2026-08-15 | **test.4 CI 出包跑通（出包路径首秀）**：三轮迭代根治 Windows runner cpSync filter 整体失灵（`ae57020` 兜底 + `0d4011c` 自写 walk）；`windows-installers` 345MB / `windows-unpacked` 251MB 产出（run 31861599547）；Linux verify Node 24 断言恒红入 backlog（产品决定）。无 release 无 tag，在线用户零感知 | ✅ | `1a96a55` `ae57020` `0d4011c` |
 | 2026-08-15 | **test.4 用户真机初验通过，阶段归档**：NSIS 安装版正常（立即启动、使用无发现问题）；portable 启动 1-2 分钟——解压型包预期行为（每次启动解 ~250MB 到临时目录，杀软实时扫描加剧），**归档为已知限制不作缺陷**，口径与 T-10「优先安装版/unpacked」一致。用户裁定本阶段收口 | ✅ | —— |
+| 2026-08-15 | **CP5：加密机现场 T-11 六项全过，Phase 0 转正式 Go** — 用户现场点验六项（含 ⑥ TSD 白名单口径实证：随包 node 按进程名读 TSD 放行）无问题；open-q #7 关闭，加密机相关能力自此可标注通过。**范围注意**：本批仅覆盖 T-11；T-10 深度回归（现场操作单七项 / 全量 25 项 / 流式观感 / D34-D35 逐项 / 包装器）、GUI 点测批（T-03/06/07/18/20）与 T-21 目视仍留用户线未点 | ✅ | —— |
+| 2026-08-15 | **拍板批（排期 + D36）**：① 开发线主攻 = multi-agent S3 切片 5「历史」（先收敛在制品，收完 5 → 切片 6 支线收口）；② 三条本地意外发现**立即修一小批**（`<button>` 嵌套违规 / React unmount 告警 / runtimeEvent 监听器超限），先于主线；git 面板外部提交不自动刷新另挂 backlog 票；③ **D36** Linux 包捆随包 node（见决策表） | ✅ | —— |
 
 ---
 
