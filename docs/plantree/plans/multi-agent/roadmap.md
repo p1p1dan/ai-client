@@ -1,6 +1,6 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**In Progress — S3 施工线全落（切片 0/1/2a/2c/3/4/5/6；仅 2b 打包链既定后置），当前阶段 = 用户登录管理（D47，规格 rev.1 待拍板）**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工；切片 5/6 均于 2026-08-15 收口）。
+> 状态：**In Progress — S3 施工线全落（切片 0/1/2a/2c/3/4/5/6；仅 2b 打包链既定后置），当前阶段 = 用户登录管理（D47，规格 rev.2 已收口，进施工）**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工；切片 5/6 均于 2026-08-15 收口）。
 >
 > ✅ **解冻裁定（用户 2026-08-06）**：原话「multi-agent 支线解冻 开干」。
 > 2026-08-05 的「后置」裁定（原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」）
@@ -137,7 +137,7 @@ main 侧 `hostEnv.ts`。四门：lint 813 文件 0 错 / typecheck 0 / typecheck
 | 序 | 阶段 | 状态 | 备注 |
 |---|---|---|---|
 | 1 | S3 切片 3 / 4 / 5 / 6（提问桥 · 权限投影 · 历史 · 收口） | ✅ **全落（2026-08-15）** | 四片依序收口；切片 6 见上表行（#7/#8 一并了账） |
-| 2 | **用户登录管理** | **已立项（D47）→ 规格 rev.1 待拍板（2026-08-15）** | 立项五点见[总台账 D47](../../../plans/openchamber-chat-refactor-ledger.md)：范围=凭据权威收敛到 app · 邮箱+验证码登录（无密码）· 服务端最小改（登录=换取既有 key，幂等假定需实证）· 单账号 · **落盘改 app 私有托管+注入（不再写 `~/.claude` 与 `~/.codex`）**；[#9](./open-questions.md) 按此解。既有口径「同一把 key、不同 URL」不变。设计规格 = [2026-08-15-login-management-design-spec.md](../../../plans/2026-08-15-login-management-design-spec.md)（四调查 + 双轨双盲设计合取，S0 六 spike 先行，拍板点 U1~U4 见其 §8）。 |
+| 2 | **用户登录管理** | **规格 rev.2 已收口（2026-08-15）→ 施工 S0~S6** | 立项五点见[总台账 D47](../../../plans/openchamber-chat-refactor-ledger.md)：范围=凭据权威收敛到 app · 邮箱+验证码登录（无密码）· 服务端最小改（登录=换取既有 key，幂等假定需实证）· 单账号 · **落盘改 app 私有托管+注入（不再写 `~/.claude` 与 `~/.codex`）**；[#9](./open-questions.md) 按此解。既有口径「同一把 key、不同 URL」不变。设计规格 = [2026-08-15-login-management-design-spec.md](../../../plans/2026-08-15-login-management-design-spec.md)（rev.2：四调查 + 双轨双盲合取 + 拍板收口；U1 收编不清理 / U2 S5 收门禁 / U3 幂等经 onboard 源码 CONFIRMED（S7 删）/ U4 换邮箱历史接受现状；S0 余五 spike → S1~S6 施工）。 |
 | 3 | **Codex CLI 选择功能接入** | 未立项 | 即「聊天会话用哪个 agent」的 UI 入口。**注意三轴隔离**：现有 `AgentPickerMenu` / `SessionBar` 管的是终端 `BuiltinAgentId` 轴，**不是**聊天 `AgentWireName` 轴；`chatSessionActions.ts` 也没有 agent 参数。直接改旧 picker 会违反三轴隔离纪律，须另立入口。 |
 | 4 | **2b 打包链** | 待 | **体积已由用户 2026-08-10 拍板可接受**（141MB → 约 480MB，3.4×；codex 平台包单文件 296MiB）。原 open-q #1（C-15 的 +21MB）**一并关闭**。排期后置的理由：现在做只是让包变大，Codex 尚未到可用程度，无即时收益。 |
 
