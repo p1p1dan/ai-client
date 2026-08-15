@@ -209,5 +209,5 @@ S0 保留一次**轻量部署一致性实打**（一封验证码走全程，确�
 ~~R1~~（已闭：E2 PASS，CLI 认 `$CLAUDE_CONFIG_DIR/.claude.json` 的 onboarding+信任标志；新注记：CLI 自动更新检查会写 `$HOME/.npm`，S2 以 `autoUpdates:false` 压制并断言）· ~~R2~~（已闭：E3 PASS，假 HOME + `settingSources:[]` 全链会话成功且零静默写）·
 R3 终端 codex env 可见性不对称（中，档位声明覆盖）· R4 历史双源排序/续接（中）· R5 Provider 面板消费者未定位（中，S2 前置）·
 R6 safeStorage Linux 退化（低）· R7 codex home 并发（低）· R8 portable 与安装版 userData 同异未证（低）· R9'〔U1 后果〕旧文件 key 过时 / 新装机器 app 外终端无凭据（已知限制，§6）· R10'〔U4〕换邮箱可见旧历史（已知限制，不施工）。
-**O1** ~~onboard 幂等~~（已关闭：代码级 CONFIRMED + S0 轻量实打复核）｜ **O2** app-server 无凭据错误帧（E4）｜ **O3** cch 401/403 语义细分（E5）｜
+**O1** ~~onboard 幂等~~（已关闭：代码级 CONFIRMED + S0 轻量实打复核）｜ ~~O2~~（已闭：E4——错误只在 turn 级异步 `error` 通知 + `turn/completed(failed)` 浮出（`Missing environment variable`），initialize/thread-start/turn-start RPC 全成功；registry 前置 `probeCredentials` 因此为唯一正门，帧 fixture 见 e4 报告）｜ ~~O3~~（已闭：E5 补测——真 cch 上 key 无效 = `401`+JSON+`errorCode:"KEY_INVALID"`，与 404(HTML)/307(重定向) 三维可区分；valid 臂与 `auth-token` cookie 属性欠 E1-lite；连带发现 `/api/actions` 弃用 sunset 2026-12-31 已入 ideas）｜
 **O4** codex 上下文两键数值定夺（另立，需真实网关回合实测）｜ **O5** 远程 SSH 注入审计清单（B 轨 §3-8，将来启用前置）。
