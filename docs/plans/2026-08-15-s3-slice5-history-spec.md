@@ -95,10 +95,10 @@
 - **L6** codex 同进程 resume 的 merge 重排/重复（agent 无关既有 merge 口径 × codex 单 assistant 消息形态）——G14 钉现状，口径改造另立。
 - **L7** 分页全量翻页（`thread/turns/list` + cursor）——本片只做诚实 truncated，翻页另立。
 
-## 6. 待裁定（P1/P2 当场问）
+## 6. 已裁定（2026-08-15 用户当场拍板）
 
-- **P1（用户）**：listHistory 的 codex 扇出砍出本片（F5 三方证据）。默认：砍。
-- **P2（用户）**：5a/`history_unsupported` 的 continuationHint 诚实化文案（M12：现文案承诺「可以继续发送」，而 5a 态每次 send 必收 `session_not_found`）。
+- **P1**：listHistory 的 codex 扇出**砍出本片**（F5 三方证据：死接口零消费者；「扫盘补列索引外会话」将来真需要再另立）。
+- **P2**：`history_unsupported` 的 continuationHint **改文案说实话**（方案 A）：不承诺可发送；改为「当前版本还读不到该 agent 的历史；若发送失败，请新建会话继续；记录仍在磁盘上」方向的表述——与 D32 同款最小修法，具体措辞施工时随 G3 文案钉定稿。
 
 ## 7. 双轨评审记录（合取仲裁）
 
