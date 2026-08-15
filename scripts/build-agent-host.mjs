@@ -243,6 +243,31 @@ function tsdFixBundleOnWindows() {
   execSync(`powershell -EncodedCommand ${b64}`, { stdio: 'pipe' });
 }
 
+// Belt-and-braces prune: the cpSync filter above skips platform-variant
+// packages, but on the Windows CI runner the filter demonstrably let
+// @anthropic-ai/claude-agent-sdk-win32-x64 through (first real CI run of this
+// pipeline, 2026-08-15, run 31860506141) while the same code prunes correctly
+// on Linux. Rather than depend on cpSync filter semantics per platform, delete
+// every variant that must not ship after the copy — idempotent where the
+// filter already worked.
+function pruneResidualPlatformPackages() {
+  const rules = [
+    ['@anthropic-ai', /^claude-agent-sdk-.+/],
+    ['@cometix', /^claude-code-.+/],
+    // sharp keeps ONLY the current platform's prebuild (mirrors shouldCopy).
+    ['@img', new RegExp(`^sharp-(?!${process.platform}-${process.arch}$).+`)],
+  ];
+  for (const [scope, pattern] of rules) {
+    const dir = path.join(outDir, 'node_modules', scope);
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) {
+      if (pattern.test(name)) {
+        fs.rmSync(path.join(dir, name), { recursive: true, force: true });
+      }
+    }
+  }
+}
+
 async function main() {
   const started = Date.now();
   const pins = preflight();
@@ -256,6 +281,7 @@ async function main() {
     `${JSON.stringify({ name: 'aiclient-agent-host-artifact', private: true, type: 'module' }, null, 2)}\n`
   );
   copyNodeModules();
+  pruneResidualPlatformPackages();
   tsdFixBundleOnWindows();
   verifyArtifact(pins);
   console.log(`[build-agent-host] done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
