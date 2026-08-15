@@ -73,3 +73,7 @@ node scripts/dev.js
 首启无仓库可用 `node scripts/dev.js --open-path=<仓库绝对路径>` 注册仓库；T-24 后新壳已有完整添加通路
 （LeftNav 入口 + Composer 目标栏 + 整壳拖放），`--open-path` 不再是唯一通路。
 新壳开关：Settings → Appearance → OpenChamber Workspace Shell（T-16 后为真开关、默认开启，关闭立即回旧壳）。
+
+## D47 登录管理分发纪律（2026-08-15，S5 规格 rev.2 裁定）
+
+S6（存量收编）落地前，**分发构建不得开启 `AICLIENT_MANAGED_CREDENTIALS`**——否则存量员工（legacy 凭据完好）开机即被强制重登。解除条件 = S6 收编落地并在 as-built 记录解除。

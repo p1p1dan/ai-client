@@ -124,6 +124,7 @@ UsageService 既有 5 分钟轮询 + `/api/auth/login` 重试链 = 零新增契�
 | 无 vault / 已清除 / 解密失败 | `signed_out` 或 `credentials_invalid`（曾登录过则后者，预填邮箱） |
 | vault 完好，未在线验证 | `authenticated + remoteHealth:unknown` |
 | auth-probe（`/api/auth/login`）成功 | `authenticated + remoteHealth:valid` |
+| vault `locked`（keyring 未解锁/升格前） | `locked`（第五臂，S5 rev.2）——LoadingShell 等升格，**不踢登录页** |
 | 网络错误/超时/5xx | 保持 `authenticated`，降 `unknown`，**不重登** |
 | 业务 401/403 → auth-probe 亦拒 | `credentials_invalid: rejected` |
 
@@ -175,7 +176,7 @@ S0 保留一次**轻量部署一致性实打**（一封验证码走全程，确�
 | **S2** | 两相启动（skeleton/升格后 regenerate）+ 全局 `CLAUDE_CONFIG_DIR` + 共享清单剥离 + managedFileWriter 统一写手 + 硬编码写手清理 + Provider 面裁剪/退役 + **Scanner 双源（provenance 模型）** + trust 调用矩阵 + dev seed | **非 resume 路径**对 `~/.claude*` 写调用数=0；vault locked 时既有 env 字节不变；hooks/IDE lockfile 落托管 home；历史双源 provenance 贯通 resume；细则见 [S2 规格 rev.2](./2026-08-15-d47-s2-claude-home-spec.md) |
 | **S3** | 终端注入：claude 自动继承；codex 由 Main 在 `SessionManager.createLocal` 填 `CODEX_HOME`+key；resume 候选扩托管 home | session-create IPC payload 无 secret；登出态两键缺席；终端 `claude`/`codex` 免向导直接可用 |
 | **S4** | Codex 生成模式 + env_key + 删投影/auth 拷贝链 + `credentials_missing` + child env 剥离 ANTHROPIC_* | 生成 toml root 无上下文两键、表有 env_key；codex-home 无 auth.json；`--strict-config` 过；四 reason 子串互异；报错帧匹配 E4 fixture |
-| **S5** | 三态/推送/Root 收敛/MainWindow 同源/门禁收回（逃生舱+打包负控）/UserProfileCard/登出七步/Usage 改读 vault | Root 与 MainWindow 同一服务（换服务两处同变）；离线不重登（负控：403+probe 成功不转失效）；登出后托管 home secret 字节=0、调用序断言 |
+| **S5** | 双轨下沉 Main（getGateSnapshot）/argv 投递初始快照/resolveGateDecision 共享纯函数/probe 独立定时/门禁收回/I9 编排重构/agent 面 spawn 门禁/§0 三现役 bug 修复 | Root 与 MainWindow 同函数（表驱动 20 格矩阵）；业务 401 绝不判失效（E5 伪码 ok:false 分支作废）；locked 不踢人；markRejected await host shutdown（灭 revive 路径）；细则见 [S5 规格 rev.2](./2026-08-15-d47-s5-authstate-spec.md) |
 | **S6** | 收编 + 停双写 + marker + 修 flag-off 登出 rmSync bug（外科中和随 U1 取消） | marker 单次；收编仅在 baseUrl 匹配公司网关时静默；无凭据机器 no-op；停双写后一次登录对旧位置写调用数=0 |
 | ~~S7~~ | **已删除**（幂等已代码定论，零新接口，见 §5） | — |
 
