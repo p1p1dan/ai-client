@@ -140,3 +140,23 @@ ws 键 = `path.resolve` 归一化绝对路径（Windows 大小写/分隔符差�
 | B 轨独有 | B1 调用矩阵四臂 / B5 黄金差分落法 / M1 watcher 失实纠正 / M3 扫描器自验 / M6 损坏 JSON 策略 / 3.2 后缀纪律沿用 |
 | rev.1 自设裁定 a~f | a 成立（附 M5 条件）；b 成立但升级为 `{managed, claudeHomeDir}` 且无需放宽 S1 断言；c 附 dev seed 后成立；d 升级为统一写手；e 升级为 provenance 模型；f 修订为「一次性收编 copy」 |
 | 母规格连带修订 | I3 措辞（硬编码禁令→计数基线口径）；§7 S2 行断言（非 resume 路径限定 + Scanner 锚定）；§6 已知限制补 IDE bridge 条 |
+
+## §5 as-built（2026-08-15 施工收口，commit `2f7d60b`）
+
+三员施工（S2a Main 侧 / S2b Provider-Scanner 侧并行零混面 + 收尾员 HookManager 收口与统一验证）。
+门禁串行：lint 0 / typecheck 0 / **vitest 191 文件 3637 例 0 红**（S1 基线 3538 → +99）。
+**变异 16/16 逐对红灯零存活**（含收尾补的构造期捕获与 flag 宽松两 pin），
+记录 [reviews/mutations.log](./2026-08-15-d47-s2-reviews/mutations.log)。
+
+规格偏差（均不改契约）：
+1. 新增 `managedClaudeHomeStartup.ts`——两相启动编排从 main/index.ts 抽出（index 模块级 electron 副作用
+   不可测，此抽取使 flag-off 零变异/黄金差分契约可测）。
+2. `PromptsManager`（CLAUDE.md）只改口径不走 managedFileWriter——纯文本非 JSON 且有意 0644，强推 0600 是回归。
+3. 静态扫描基线实测 **18 命中 / 10 跟随者**（规格写 9），逐文件带理由列在测试内。
+4. HookManager 收口超出四 ensureXHook：statusLine/remove 系与旧绕过直写点全部入队列；8 函数转 async，
+   `ClaudeIdeBridge` 调用方随迁；env 守卫改纯断言层（快照取自 mutator 的 current，少一次盘读）。
+5. no-op hook 写现在每次都会入队写盘（内容幂等，mtime/chmod 会动）——合并逻辑整体进 mutator 的代价，登记。
+6. S2b renderer 三组件与 resume resolver 无 render 级测试——仓内无 renderHook/RTL 基建（D44 已立项组件层，
+   届时补），登记为既有债非本片引入。
+
+欠账登记：GUI 点验（flag-on 全链真跑）随 S5 开轮方式；win/mac 真机随 test.4 轮。
