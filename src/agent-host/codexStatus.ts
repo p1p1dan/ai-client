@@ -10,10 +10,10 @@ import type { SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
  * that can produce `waiting_*`, and it is driven by the server's own snapshot.
  *
  * WIRE SHAPE (17 recorded frames, `__tests__/fixtures/codex/*.jsonl`):
- *   8x `{type:'active', activeFlags:[]}`                      -> running
+ *   9x `{type:'active', activeFlags:[]}`                      -> running
  *   4x `{type:'active', activeFlags:['waitingOnUserInput']}`  -> waiting_question
  *   2x `{type:'active', activeFlags:['waitingOnApproval']}`   -> waiting_permission
- *   3x `{type:'idle'}`  <- NO `activeFlags` KEY AT ALL        -> idle
+ *   5x `{type:'idle'}`  <- NO `activeFlags` KEY AT ALL        -> idle
  *
  * The idle shape is why `status.type` is branched on BEFORE `activeFlags` is
  * touched: reading `status.activeFlags.includes(...)` first throws a TypeError

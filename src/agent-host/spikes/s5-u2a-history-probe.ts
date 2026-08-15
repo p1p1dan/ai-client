@@ -191,7 +191,9 @@ function collectItems(root: unknown): Array<{ id: unknown; type: unknown; path: 
   const out: Array<{ id: unknown; type: unknown; path: string }> = [];
   const walk = (node: unknown, p: string): void => {
     if (Array.isArray(node)) {
-      node.forEach((v, i) => walk(v, `${p}[${i}]`));
+      node.forEach((v, i) => {
+        walk(v, `${p}[${i}]`);
+      });
       return;
     }
     if (node && typeof node === 'object') {
@@ -277,9 +279,11 @@ async function main(): Promise<void> {
       await new Promise((r) => setTimeout(r, 1_500));
       report.resumeNotifications = srv2.notes.map((n) => ({
         method: n.method,
-        itemId: ((n.params as Record<string, unknown> | undefined)?.item as
-          | Record<string, unknown>
-          | undefined)?.id,
+        itemId: (
+          (n.params as Record<string, unknown> | undefined)?.item as
+            | Record<string, unknown>
+            | undefined
+        )?.id,
       }));
       try {
         const reread = await srv2.request('thread/read', { threadId }, 30_000);
@@ -299,9 +303,11 @@ async function main(): Promise<void> {
     .map((i) => i.id)
     .filter((v): v is string => typeof v === 'string');
   const idsOf = (key: string) =>
-    (((report[key] as Record<string, unknown> | undefined)?.items as
-      | Array<{ id: unknown }>
-      | undefined) ?? [])
+    (
+      ((report[key] as Record<string, unknown> | undefined)?.items as
+        | Array<{ id: unknown }>
+        | undefined) ?? []
+    )
       .map((i) => i.id)
       .filter((v): v is string => typeof v === 'string');
   const uniq = (a: string[]) => [...new Set(a)];

@@ -75,15 +75,15 @@ describe('classifyInboundFrame — recorded Codex traffic', () => {
       if (frame.kind === 'invalid') rejected.push(raw);
     }
 
-    // Falsifies "the classifier drops real frames": every one of the 57 recorded
+    // Falsifies "the classifier drops real frames": every one of the 93 recorded
     // inbound frames must land in a routable bucket. The per-kind totals are
     // pinned rather than just `invalid === 0` so that a classifier which sorts
     // everything into one bucket (e.g. by never finding `id`) still fails.
     expect(rejected).toEqual([]);
     expect(counts).toEqual({
       server_request: 3,
-      response: 1,
-      notification: 53,
+      response: 10,
+      notification: 80,
       invalid: 0,
     });
   });
@@ -92,11 +92,11 @@ describe('classifyInboundFrame — recorded Codex traffic', () => {
     // Falsifies a vacuous pass: if the loader path broke, or a fixture were
     // emptied, the sweep above would assert `[] === []` and stay green.
     const files = fixtureFiles();
-    expect(files.length).toBe(5);
+    expect(files.length).toBe(7);
     for (const file of files) {
       expect(readEnvelopes(file).filter((e) => e.dir === '<-').length).toBeGreaterThan(0);
     }
-    expect(inboundFrames().length).toBe(57);
+    expect(inboundFrames().length).toBe(93);
   });
 
   it('reads a server request whose id is 0 as a request, not a notification', () => {

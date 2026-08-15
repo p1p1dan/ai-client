@@ -39,7 +39,7 @@ function fixtureStatusParams(): unknown[] {
 }
 
 describe('readThreadStatus — real recorded corpus', () => {
-  it('reproduces the measured 8/4/2/3 census over every recorded frame', () => {
+  it('reproduces the measured 9/4/2/5 census over every recorded frame', () => {
     // Falsifies: any mapping table that disagrees with the wire on ANY of the
     // four observed shapes, and any test that only feeds hand-written objects
     // (if the fixtures moved or lost frames, the totals below go red).
@@ -50,12 +50,12 @@ describe('readThreadStatus — real recorded corpus', () => {
       return acc;
     }, {});
 
-    expect(readings).toHaveLength(17);
+    expect(readings).toHaveLength(20);
     expect(census).toEqual({
-      running: 8,
+      running: 9,
       waiting_question: 4,
       waiting_permission: 2,
-      idle: 3,
+      idle: 5,
     });
   });
 
@@ -66,8 +66,8 @@ describe('readThreadStatus — real recorded corpus', () => {
     const readings = fixtureStatusParams().map(readThreadStatus);
     expect(readings.filter((r) => r.reason === 'malformed')).toEqual([]);
     expect(readings.flatMap((r) => r.unknownFlags)).toEqual([]);
-    expect(readings.filter((r) => r.reason === 'idle')).toHaveLength(3);
-    expect(readings.filter((r) => r.reason === 'flags')).toHaveLength(14);
+    expect(readings.filter((r) => r.reason === 'idle')).toHaveLength(5);
+    expect(readings.filter((r) => r.reason === 'flags')).toHaveLength(15);
   });
 
   it('confirms the fixtures really do omit activeFlags on idle frames', () => {
@@ -78,7 +78,7 @@ describe('readThreadStatus — real recorded corpus', () => {
       .map((p) => (p as { status: Record<string, unknown> }).status)
       .filter((s) => s.type === 'idle');
 
-    expect(idleStatuses).toHaveLength(3);
+    expect(idleStatuses).toHaveLength(5);
     for (const status of idleStatuses) {
       expect(Object.hasOwn(status, 'activeFlags')).toBe(false);
       expect(Object.keys(status)).toEqual(['type']);

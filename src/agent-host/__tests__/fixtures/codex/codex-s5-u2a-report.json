@@ -214,9 +214,7 @@
       "runtimeWorkspaceRoots": [
         "/tmp/claude-1000/-home-dan-projects-ai-client/1fcc9fe1-03a1-42b6-a131-898fc863bc0c/scratchpad/s5-u2a/sandbox"
       ],
-      "instructionSources": [
-        "/home/dan/.codex/AGENTS.md"
-      ],
+      "instructionSources": ["/home/dan/.codex/AGENTS.md"],
       "approvalPolicy": "on-request",
       "approvalsReviewer": "user",
       "sandbox": {
@@ -292,10 +290,7 @@
       "msg_09519c7c90d2c2ed016a8004fec4dc8191a6ff99bee4026373"
     ],
     "threadReadIds": [],
-    "threadResumeIds": [
-      "item-1",
-      "item-2"
-    ],
+    "threadResumeIds": ["item-1", "item-2"],
     "threadReadAfterRestartIds": [],
     "liveSubsetOfRead": false,
     "liveSubsetOfResume": false,

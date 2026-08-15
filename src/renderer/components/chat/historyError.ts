@@ -44,21 +44,37 @@ export interface HistoryErrorView {
 export const HISTORY_ERROR_NON_FATAL_HINT = '会话未中断，可以继续发送消息。';
 
 /**
- * `jsonl_not_found` only, and only it: once the JSONL is gone, the Host's
- * resume path fails with "No conversation found" on the very next send, so
- * promising continuation here would be a lie the user discovers mid-message
- * (#30 / D32).
+ * `jsonl_not_found` only, and only it: once the agent's record is gone, resume
+ * has nothing to hand it and the very next send fails, so promising
+ * continuation here would be a lie the user discovers mid-message (#30 / D32).
+ *
+ * The exact failure text is NOT quoted any more (S3 slice 5a): "No conversation
+ * found" is the Claude CLI's own wording, and this code now reaches whichever
+ * agent lost its record — quoting one agent's error string would send the user
+ * looking for a message the other never prints.
  */
 export const HISTORY_ERROR_DEAD_SESSION_HINT =
-  '该会话已无法继续：历史文件缺失后，继续发送会因「No conversation found」失败；请新建会话继续工作。';
+  '该会话已无法继续：历史记录缺失后，继续发送会失败；请新建会话继续工作。';
+
+/**
+ * `history_unsupported` only (P2). This build never read anything for the
+ * session's agent, so it also never verified that the session is still live:
+ * "可以继续发送" would be a promise nothing here checked. States the fallback
+ * instead, which holds either way.
+ */
+export const HISTORY_ERROR_UNSUPPORTED_HINT = '不保证还能继续发送；若发送失败，请新建会话继续。';
 
 type HistoryErrorCopy = Omit<HistoryErrorView, 'code' | 'message'>;
 
 const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
+  // The wire code keeps its Claude-era spelling, but its meaning is
+  // agent-neutral (`sessionHistory.ts`): nothing on disk for this session,
+  // whichever store the agent uses. The copy says that, and names no file
+  // format — a Codex row has no JSONL to look for.
   jsonl_not_found: {
     severity: 'error',
-    title: 'History file not found',
-    guidance: '恢复该会话时未找到它的历史文件（JSONL），历史消息没有载入。',
+    title: 'History not found',
+    guidance: '恢复该会话时没有找到它的历史记录，历史消息没有载入。',
     retryable: false,
     continuationHint: HISTORY_ERROR_DEAD_SESSION_HINT,
   },
@@ -83,9 +99,9 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
   history_unsupported: {
     severity: 'warning',
     title: 'History unavailable for this agent',
-    guidance: '当前版本还读不到该 agent 的历史记录，以下只有本次会话的新消息；记录仍在磁盘上。',
+    guidance: '当前版本还读不到该 agent 的历史记录，更早的消息没有载入；记录仍在磁盘上。',
     retryable: false,
-    continuationHint: HISTORY_ERROR_NON_FATAL_HINT,
+    continuationHint: HISTORY_ERROR_UNSUPPORTED_HINT,
   },
   unknown: {
     severity: 'error',

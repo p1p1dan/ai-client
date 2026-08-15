@@ -4,18 +4,21 @@ import type {
   SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
-import { applyRuntimeEvent, type ChatSessionsState } from '@/stores/chatSessions';
+import { applyRuntimeEvent, type ChatSession, type ChatSessionsState } from '@/stores/chatSessions';
 import {
   deriveHistoryNotice,
   deriveRetryControl,
   HISTORY_ERROR_DEAD_SESSION_HINT,
   HISTORY_ERROR_NON_FATAL_HINT,
+  HISTORY_ERROR_UNSUPPORTED_HINT,
   HISTORY_RETRY_BUSY_HINT,
   HISTORY_RETRY_FAILED_HINT,
   type HistoryErrorCode,
   parseHistoryError,
   selectHistoryError,
 } from '../historyError';
+import { deriveMiddleColumnMode } from '../middleColumnLayout';
+import { isSessionBusy } from '../sessionIndex/resumeIntent';
 
 const ENCRYPTED_RAW =
   'encrypted_unreadable: Session file appears TSD-encrypted and unreadable by this Host process: /home/u/.claude/projects/p/rt.jsonl';
@@ -160,10 +163,16 @@ describe('parseHistoryError (T-03)', () => {
     expect(view?.continuationHint).toBe(HISTORY_ERROR_NON_FATAL_HINT);
   });
 
-  it('[PHE-16] history_unsupported gets the shared non-fatal hint, verbatim', () => {
+  it('[PHE-16] history_unsupported gets its own hint, which never promises a send will work', () => {
     const view = parseHistoryError('history_unsupported: x');
     expect(view?.code).toBe('history_unsupported');
-    expect(view?.continuationHint).toBe(HISTORY_ERROR_NON_FATAL_HINT);
+    expect(view?.continuationHint).toBe(HISTORY_ERROR_UNSUPPORTED_HINT);
+    // P2 (S3 slice 5a): this code means the build never read anything for the
+    // session's agent — and on the Codex path it never contacted the agent at
+    // all, so nothing verified the session is still live. The shared non-fatal
+    // hint says "可以继续发送消息", a promise this path cannot make.
+    expect(view?.continuationHint).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
+    expect(HISTORY_ERROR_UNSUPPORTED_HINT).toContain('新建会话');
   });
 
   it('[PHE-17] unknown gets the shared non-fatal hint, verbatim', () => {
@@ -174,6 +183,27 @@ describe('parseHistoryError (T-03)', () => {
 
   it('[PHE-11] ships a non-fatal hint stating the session can continue', () => {
     expect(HISTORY_ERROR_NON_FATAL_HINT).toContain('继续');
+  });
+
+  it('[PHE-18] names no agent-specific file format in the not-found copy', () => {
+    // F6 (S3 slice 5a): `jsonl_not_found` keeps its Claude-era wire spelling,
+    // but it now means "nothing on disk for this session" whichever store the
+    // agent uses — a Codex row has no JSONL for the user to go looking for.
+    const view = parseHistoryError('jsonl_not_found: x');
+    expect(view?.guidance).not.toContain('JSONL');
+    expect(view?.title).not.toContain('JSONL');
+    // Still says WHAT was not found, or the copy degrades to "something failed".
+    expect(view?.guidance).toContain('历史记录');
+  });
+
+  it('[PHE-19] quotes no CLI-specific error string in the dead-session hint', () => {
+    // It used to promise the next send would fail with "No conversation found"
+    // — the Claude CLI's own wording, which no other agent ever prints.
+    expect(HISTORY_ERROR_DEAD_SESSION_HINT).not.toContain('No conversation found');
+    // Dropping the quote must not soften the verdict back into "keep sending":
+    // the record is gone, so resume has nothing to hand the agent (#30 / D32).
+    expect(HISTORY_ERROR_DEAD_SESSION_HINT).toContain('新建会话');
+    expect(HISTORY_ERROR_DEAD_SESSION_HINT).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
   });
 
   it('[PHE-12] never claims the timeline below is empty', () => {
@@ -478,6 +508,140 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       expect(view?.code).toBe(code);
       expect(view?.message).toBe('boom');
     }
+  });
+
+  /**
+   * G3 (S3 slice 5a). The Codex degradation, from the wire event the Host
+   * really emits to what the timeline shows. Driven through the reducer for the
+   * same reason as CTR-01/02: hand-written `historyErrors` literals would stay
+   * green if the encoding drifted, while every real Codex resume degraded to
+   * `unknown` — i.e. an ERROR banner with a Retry button, which is the opposite
+   * of what this code means.
+   */
+  describe('history_unsupported (S3 slice 5a: the Codex degradation)', () => {
+    // Shortened stand-in for the Host's own wording. The exact bytes are pinned
+    // Host-side (`codexRuntime.test.ts`, CODEX_HISTORY_UNSUPPORTED_MESSAGE);
+    // what this file owns is that the CODE survives the store's encoding.
+    const HOST_MESSAGE = 'This build has no Codex history reader.';
+
+    function codexRow(): ChatSession {
+      return {
+        id: SESSION_ID,
+        projectId: 'project-demo',
+        workspaceId: 'ws-main',
+        title: 'Codex session',
+        status: 'idle',
+        updatedAt: 42,
+        agent: 'codex',
+        runtimeIdentity: 'thr-cold-0007',
+      };
+    }
+
+    /** Field for field what `CodexRuntime.resumeSession` emits with no reader. */
+    function codexHistoryEvent(): RuntimeEvent {
+      return {
+        type: 'session.history',
+        seq: 2,
+        sessionId: SESSION_ID,
+        requestId: 'req-resume',
+        timestamp: 1234,
+        payload: {
+          runtimeIdentity: 'thr-cold-0007',
+          workspacePath: '/work/repo',
+          agent: 'codex',
+          messages: [],
+          truncated: false,
+          omittedCount: 0,
+          error: { code: 'history_unsupported', message: HOST_MESSAGE },
+        },
+      };
+    }
+
+    function ingest(): { patch: Partial<ChatSessionsState>; stored: string | undefined } {
+      const state = {
+        ...baseState(),
+        sessions: [codexRow()],
+        activeSessionId: SESSION_ID,
+        hostBoundSessionIds: [SESSION_ID],
+      } as ChatSessionsState;
+      const patch = applyRuntimeEvent(state, codexHistoryEvent());
+      return { patch, stored: selectHistoryError(patch.historyErrors ?? {}, SESSION_ID) };
+    }
+
+    it('[G3-01] survives the store encoding as history_unsupported, message intact', () => {
+      const { stored } = ingest();
+      expect(stored).toBe(`history_unsupported: ${HOST_MESSAGE}`);
+      const view = parseHistoryError(stored);
+      expect(view?.code).toBe('history_unsupported');
+      expect(view?.message).toBe(HOST_MESSAGE);
+    });
+
+    it('[G3-02] shows a warning notice — a notice, but not a failure', () => {
+      const { stored } = ingest();
+      const notice = deriveHistoryNotice({ sessionId: SESSION_ID, messageCount: 0, error: stored });
+      // A notice IS required: an empty timeline with nothing on it reads as
+      // "this session had nothing to say", which is precisely the misreading
+      // the explicit error exists to prevent.
+      expect(notice.kind).toBe('error');
+      // …but the tone is a warning: nothing is broken and nothing was lost.
+      expect(notice.error?.severity).toBe('warning');
+      expect(notice.error?.guidance).toBe(
+        '当前版本还读不到该 agent 的历史记录，更早的消息没有载入；记录仍在磁盘上。'
+      );
+      expect(notice.error?.continuationHint).toBe(HISTORY_ERROR_UNSUPPORTED_HINT);
+      // The honest half of P2, pinned on the copy the user actually reads.
+      expect(notice.error?.continuationHint).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
+    });
+
+    it('[G3-03] renders no Retry button at all — not a disabled one (m14)', () => {
+      const { stored } = ingest();
+      const view = parseHistoryError(stored);
+      const control = deriveRetryControl({
+        retryable: view?.retryable ?? true,
+        status: 'idle',
+        retrying: false,
+        failed: false,
+      });
+      // Re-reading cannot conjure a reader this build does not have, so a
+      // greyed-out button would invite a click that can never do anything.
+      expect(control.visible).toBe(false);
+      expect(control.hint).toBeNull();
+    });
+
+    it('[G3-04] leaves every input of the composer send gate untouched', () => {
+      const { patch } = ingest();
+      // The reducer's WHOLE patch. `hostBoundSessionIds` and `activeSessionId`
+      // are absent, i.e. unchanged: a history error must not un-bind the
+      // session, which is what would actually disable the composer.
+      expect(Object.keys(patch).sort()).toEqual(['historyErrors', 'messages', 'sessions']);
+      const row = patch.sessions?.find((session) => session.id === SESSION_ID);
+      expect(row?.status).toBe('idle');
+
+      // ChatComposer's gate restated from its own inputs (`ChatComposer.tsx`:
+      // `activeSessionId && cwd && !disabled && !canStop`, where `disabled` is
+      // ChatWorkspace's `!activeSessionId` and `canStop` follows the session
+      // status). A history error appears in none of them.
+      const canSend = Boolean(SESSION_ID) && !isSessionBusy(row?.status ?? 'idle');
+      expect(canSend).toBe(true);
+    });
+
+    it('[G3-05] docks the composer instead of showing the centered empty state', () => {
+      const { stored } = ingest();
+      // The session replayed nothing, so without the error flag the middle
+      // column would fall back to "no session yet" and hide the notice under a
+      // welcome screen.
+      expect(
+        deriveMiddleColumnMode({
+          sessionId: SESSION_ID,
+          messageCount: 0,
+          sendAttempted: false,
+          hostBound: true,
+          hasRuntimeIdentity: true,
+          hasHistoryError: Boolean(stored),
+          status: 'idle',
+        })
+      ).toBe('session');
+    });
   });
 
   it('[CTR-03] a clean re-read clears the entry, so the notice unmounts', () => {

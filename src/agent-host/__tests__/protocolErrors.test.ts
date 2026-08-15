@@ -272,6 +272,13 @@ describe('agent-host protocol error paths (spawned process)', () => {
     TEST_TIMEOUT
   );
 
+  /**
+   * S3 slice 5a raised the stakes on this one: `CodexRuntime.resumeSession` no
+   * longer refuses on its own (it now binds the registry row and emits the
+   * degradation contract), so THIS gate is the only thing between a build that
+   * cannot run codex and a session bound to it. If the check were dropped, the
+   * first assertion below would see `session.resumed` instead of the refusal.
+   */
   it(
     'refuses session.resume for a foreign agent, and never creates the session',
     async () => {

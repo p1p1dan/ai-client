@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CODEX_AGENT } from '../../shared/types/agentWire.ts';
+import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '../../shared/types/agentWire.ts';
 import type { PermissionDecisionId } from '../../shared/types/runtimeEvents.ts';
 import {
   type CodexConnectFactory,
@@ -16,6 +16,7 @@ import {
   buildTurnStartParams,
   CODEX_CLIENT_NAME,
   CODEX_CLIENT_TITLE,
+  CODEX_HISTORY_UNSUPPORTED_MESSAGE,
   CODEX_PERMISSION_DEFAULT,
   CodexRuntime,
   type CodexRuntimeOptions,
@@ -917,21 +918,23 @@ describe('codexRuntime — the deliberate holes are explicit refusals', () => {
     expect(payload(error)?.code).not.toBe('not_implemented');
   });
 
-  it('refuses resume with agent_unsupported and explains why', async () => {
-    // A Codex resume that emitted only `session.resumed` would leave the
-    // renderer on a blank transcript with no error at all — history replay is
-    // slice 5a.
+  it('no longer refuses resume — the degradation contract landed in slice 5a', () => {
+    // Slice 2a refused resume outright (`agent_unsupported`), because a Codex
+    // resume that emitted only `session.resumed` would have left the renderer
+    // on a blank transcript with no error at all. 5a fills the hole, so the
+    // assertion is RE-JUDGED rather than deleted (same discipline as send and
+    // permission.respond above): what it guards now is that the refusal did not
+    // survive as a silent no-op. The contract itself is covered below.
     const h = makeHarness();
-    h.runtime.resumeSession({ sessionId: 's-resume', requestId: 'req-resume' });
+    h.runtime.resumeSession({
+      sessionId: 's-resume',
+      workspacePath: '/work/repo',
+      runtimeIdentity: 'thr-cold-0007',
+      requestId: 'req-resume',
+    });
 
-    const error = h.event('host.error');
-    expect(payload(error).code).toBe('agent_unsupported');
-    expect(payload(error).fatal).toBe(false);
-    expect(error?.sessionId).toBe('s-resume');
-    expect(String(payload(error).message)).toContain('later slice');
-    // Nothing registered, nothing spawned.
-    expect(h.registry.get('s-resume')).toBeUndefined();
-    expect(h.connectInputs).toHaveLength(0);
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+    expect(h.eventsOf('session.resumed')).toHaveLength(1);
   });
 
   it('no longer refuses permission.respond — the approval bridge landed in slice 4', async () => {
@@ -988,6 +991,242 @@ describe('codexRuntime — the deliberate holes are explicit refusals', () => {
     h.runtime.stop({ sessionId: 'nope', requestId: 'req-stop' });
 
     expect(payload(h.event('host.error')).code).toBe('session_not_found');
+  });
+});
+
+/**
+ * Slice 5a — resume without a reader.
+ *
+ * Two failure shapes are in play and they are NOT the same event: a resume this
+ * runtime accepts always ends in the three-event contract carrying an explicit
+ * `history_unsupported` (H10), while the two cases where it refuses to take the
+ * session at all answer with a `host.error` and emit nothing else (H10's two
+ * exceptions). Every case below pins which of the two it is, because the
+ * dangerous defect is one turning into the other: a `host.error` where the
+ * contract was expected leaves the renderer waiting forever, and a contract
+ * where a refusal was expected paints a history banner over a live session or
+ * steals another runtime's row.
+ */
+describe('codexRuntime — resume degrades explicitly instead of refusing (slice 5a)', () => {
+  const COLD_RESUME = {
+    sessionId: 's-resume',
+    workspacePath: '/work/repo',
+    runtimeIdentity: 'thr-cold-0007',
+    requestId: 'req-resume',
+  };
+
+  it('emits the whole three-event contract, in order, with every history field spelled out', () => {
+    const h = makeHarness();
+    h.runtime.resumeSession({ ...COLD_RESUME, model: 'gpt-5.6-sol' });
+
+    // An EXACT array is assertable here (rather than an ordered subsequence)
+    // precisely because nothing is spawned: there is no status mapper that
+    // could slip a `session.status` in front of `session.resumed`. The order
+    // itself is the contract — the renderer pairs the replay with this resume
+    // and stays on the old transcript until the closing status.
+    expect(typesOf(h.events)).toEqual(['session.resumed', 'session.history', 'session.status']);
+    // Correlated BOTH ways on all three: the renderer matches the replay
+    // snapshot by requestId, and drops one it cannot pair.
+    expect(h.events.map((event) => event.requestId)).toEqual([
+      'req-resume',
+      'req-resume',
+      'req-resume',
+    ]);
+    expect(h.events.map((event) => event.sessionId)).toEqual(['s-resume', 's-resume', 's-resume']);
+
+    expect(payload(h.event('session.resumed'))).toEqual({
+      agent: CODEX_AGENT,
+      runtimeIdentity: 'thr-cold-0007',
+    });
+    // Full equality, not `toMatchObject`: an absent field is not neutral here —
+    // `agent` absent means "an old Host, therefore Claude Code" to the reducer,
+    // and a missing `error` turns the empty transcript into "this session had
+    // nothing in it", which is the exact misreading 5a exists to prevent.
+    expect(payload(h.event('session.history'))).toEqual({
+      runtimeIdentity: 'thr-cold-0007',
+      workspacePath: '/work/repo',
+      agent: CODEX_AGENT,
+      messages: [],
+      truncated: false,
+      omittedCount: 0,
+      error: { code: 'history_unsupported', message: CODEX_HISTORY_UNSUPPORTED_MESSAGE },
+    });
+    expect(payload(h.event('session.status'))).toEqual({ status: 'idle' });
+    // H10: this is a resume that could not replay, not a refusal — a
+    // `host.error` here would be invisible in the renderer and would leave the
+    // session waiting for a contract that never completes.
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+  });
+
+  it('says why the transcript is empty without promising the session still works', () => {
+    // M12/P2: the renderer prints this message verbatim under the banner. On
+    // this path nothing was connected — no home prepared, no handshake, no
+    // thread — so any claim about what sending will do would be unverified.
+    expect(CODEX_HISTORY_UNSUPPORTED_MESSAGE).toContain('no Codex history reader');
+    for (const promise of ['send', 'continue', 'still works']) {
+      expect(CODEX_HISTORY_UNSUPPORTED_MESSAGE.toLowerCase()).not.toContain(promise);
+    }
+  });
+
+  it('spawns nothing for a resume it cannot replay', () => {
+    const h = makeHarness();
+    h.runtime.resumeSession(COLD_RESUME);
+
+    // With no reader there is nothing to ask an app-server for, and starting one
+    // costs a node process plus the ~296MiB platform binary per resumed row —
+    // to be torn down again on the very next line.
+    expect(h.connectInputs).toHaveLength(0);
+    expect(h.ops).toEqual([]);
+  });
+
+  it('binds the row to codex anyway, so the next command still routes here', async () => {
+    const h = makeHarness();
+    h.runtime.resumeSession(COLD_RESUME);
+
+    // `index.ts` dispatches send/stop/close on this entry's `agent`. Skipping
+    // the binding on the degraded path would hand the renderer's next send to
+    // the Claude runtime together with a Codex threadId.
+    expect(h.registry.get('s-resume')).toMatchObject({
+      agent: CODEX_AGENT,
+      runtimeIdentity: 'thr-cold-0007',
+      workspacePath: '/work/repo',
+      running: false,
+    });
+
+    // And that send is refused AUDIBLY, correlated both ways: no connection
+    // stands behind this row, so the Composer has to be able to fail its
+    // pending message instead of spinning on it.
+    h.events.length = 0;
+    await h.runtime.send({ sessionId: 's-resume', text: 'hello again', requestId: 'req-send' });
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe('session_not_found');
+    expect(payload(error).fatal).toBe(false);
+    expect(error?.sessionId).toBe('s-resume');
+    expect(error?.requestId).toBe('req-send');
+    expect(h.requestsFor('turn/start')).toHaveLength(0);
+  });
+
+  it('refuses a row another runtime owns, leaving that row exactly as it was', () => {
+    const h = makeHarness();
+    const claudeRow = h.registry.create({
+      sessionId: 's-claude',
+      workspacePath: '/work/other',
+      agent: CLAUDE_CODE_AGENT,
+    });
+    claudeRow.runtimeIdentity = 'claude-session-uuid';
+
+    h.runtime.resumeSession({
+      sessionId: 's-claude',
+      workspacePath: '/work/repo',
+      runtimeIdentity: 'thr-cold-0007',
+      requestId: 'req-conflict',
+    });
+
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe('agent_conflict');
+    expect(payload(error).fatal).toBe(false);
+    expect(error?.sessionId).toBe('s-claude');
+    expect(error?.requestId).toBe('req-conflict');
+    // `registry.resume` deliberately does NOT merge `agent`, so reaching it
+    // would have left the row routing every send to Claude while we announced a
+    // Codex resume — and it WOULD have overwritten the three fields it does
+    // merge, pointing Claude's next resume at a Codex threadId.
+    expect(h.registry.get('s-claude')).toMatchObject({
+      agent: CLAUDE_CODE_AGENT,
+      workspacePath: '/work/other',
+      runtimeIdentity: 'claude-session-uuid',
+    });
+    // A refusal, so NOT the contract: no `session.resumed` for a session this
+    // runtime just declined to own.
+    expect(typesOf(h.events)).toEqual(['host.error']);
+    expect(h.connectInputs).toHaveLength(0);
+  });
+
+  it('refuses a session with a live turn and leaves the turn running', async () => {
+    const h = await turnSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-send' });
+    replayRecordedTurn(h, { upTo: 8 });
+    h.events.length = 0;
+
+    h.runtime.resumeSession({
+      sessionId: 's1',
+      workspacePath: '/work/elsewhere',
+      runtimeIdentity: 'thr-stale',
+      requestId: 'req-resume',
+    });
+
+    // `session_busy` (the Claude spelling, CP4 F-1), not the degradation: the
+    // session is alive and usable, and a history-error banner over a running
+    // conversation would be false.
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe('session_busy');
+    expect(payload(error).fatal).toBe(false);
+    expect(error?.sessionId).toBe('s1');
+    expect(error?.requestId).toBe('req-resume');
+    expect(typesOf(h.events)).toEqual(['host.error']);
+
+    // Nothing of the live session was rewritten — identity and workspace both
+    // still describe the thread the open turn is running on.
+    expect(h.registry.get('s1')).toMatchObject({
+      agent: CODEX_AGENT,
+      workspacePath: '/work/repo',
+      runtimeIdentity: FIXTURE_THREAD,
+      running: true,
+    });
+    // …and the turn still ends normally, which is the half a refusal assertion
+    // alone cannot show: an orphaned abort/running state would surface here.
+    replayRecordedTurn(h, { from: 8 });
+    expect(terminalsOf(h.events)).toEqual(['session.completed']);
+    expect(h.registry.get('s1')?.running).toBe(false);
+  });
+
+  it("reuses a live session's own connection and thread, spawning nothing new", async () => {
+    const h = await startedSession();
+    h.events.length = 0;
+
+    h.runtime.resumeSession({
+      sessionId: 's1',
+      // A stale index row: the renderer resumes from what it persisted, which
+      // can predate the thread this session is actually talking to.
+      workspacePath: '/work/moved',
+      runtimeIdentity: 'thr-stale',
+      requestId: 'req-resume',
+    });
+
+    // ONE connect for the life of the session — the one `createSession` made.
+    // A second would leak the first process until the app quits.
+    expect(h.connectInputs).toHaveLength(1);
+    expect(h.ops.some((op) => op.startsWith('kill:'))).toBe(false);
+
+    // Ordered subsequence rather than an exact array (m13): this session has a
+    // live status mapper, and codex may push a frame of its own at any moment.
+    // What must hold is that `session.resumed` is never behind the history or
+    // the closing status.
+    const types = typesOf(h.events);
+    expect(types.indexOf('session.resumed')).toBe(0);
+    expect(types.indexOf('session.resumed')).toBeLessThan(types.indexOf('session.history'));
+    expect(types.indexOf('session.history')).toBeLessThan(types.lastIndexOf('session.status'));
+
+    // The live link's identity wins over the caller's: it names the thread this
+    // connection can actually address, and persisting the stale one would send
+    // the next `turn/start` to a thread this process does not own.
+    expect(payload(h.event('session.resumed')).runtimeIdentity).toBe(THREAD_START_RESULT.threadId);
+    expect(payload(h.event('session.history'))).toMatchObject({
+      runtimeIdentity: THREAD_START_RESULT.threadId,
+      workspacePath: '/work/repo',
+      error: { code: 'history_unsupported' },
+    });
+    expect(h.registry.get('s1')).toMatchObject({
+      runtimeIdentity: THREAD_START_RESULT.threadId,
+      workspacePath: '/work/repo',
+    });
+
+    // Still the same live session afterwards: the next send opens a turn on
+    // that connection instead of finding a torn-down one.
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+    expect((h.requestFor('turn/start').params as { threadId: string }).threadId).toBe(
+      THREAD_START_RESULT.threadId
+    );
   });
 });
 

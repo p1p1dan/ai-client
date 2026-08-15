@@ -52,12 +52,13 @@ import type { SessionRegistry } from './sessionRegistry.ts';
  *
  * ## What this slice still does NOT do, on purpose
  *
- *  - `resumeSession()` refuses. It needs history replay: Claude's contract is
- *    `session.resumed -> session.history -> session.status(idle)`, and a Codex
- *    resume that emitted only `session.resumed` would leave the renderer on a
- *    blank transcript with no error. `history_unsupported` belongs to slice 5a
- *    (arbitration doc §2.3 O-a). It means a Codex session cannot yet be resumed
- *    after a restart — a known, registered limitation.
+ *  - `resumeSession()` replays NOTHING. It honours the whole contract
+ *    (`session.resumed -> session.history -> session.status(idle)`) but the
+ *    history carries an explicit `history_unsupported` error instead of a
+ *    silent empty transcript, and no `codex app-server` is spawned for it
+ *    (slice 5a). Reading a thread back off disk is `thread/resume` + a mapper,
+ *    i.e. slice 5b; until then a resumed Codex session shows its new messages
+ *    only, and says so.
  *  - `send()` refuses ATTACHMENTS (see `send`), because no measured frame shows
  *    how codex wants them.
  *  - The question / approval bridges (slices 3 and 4) still leave every server
@@ -272,6 +273,19 @@ export const CODEX_TURN_START_TIMEOUT_MS = 30 * 60_000;
  * result is logged, never acted on.
  */
 export const CODEX_TURN_INTERRUPT_TIMEOUT_MS = 15_000;
+
+/**
+ * The `history_unsupported` message every degraded resume carries (slice 5a).
+ *
+ * Static on purpose: the payload already names the thread (`runtimeIdentity`)
+ * and the workspace, so repeating either here would hand the banner two copies
+ * of one fact. It states what did NOT happen and what is still true — the
+ * thread itself is untouched [实测: a new process resumed it]. It must not
+ * promise that sending works, because on this path nothing has been connected.
+ */
+export const CODEX_HISTORY_UNSUPPORTED_MESSAGE =
+  'This build has no Codex history reader, so no earlier messages were replayed. ' +
+  'The thread itself is untouched.';
 
 /** `'unverifiable'` is NOT `'match'`: it means we learned nothing, not that we agree. */
 export type SandboxEchoVerdict = 'match' | 'mismatch' | 'unverifiable';
@@ -1633,22 +1647,148 @@ export class CodexRuntime {
     }
   }
 
-  /** Refused rather than half-implemented — see the module header (O-a). */
+  /**
+   * Resume a Codex session (slice 5a: the explicit-degradation contract).
+   *
+   * The renderer waits for three events after a resume, in order, and treats
+   * anything else as a resume that never finished. So every ACCEPTED resume
+   * emits all three — `session.resumed`, `session.history`, `session.status` —
+   * and the history says out loud why it is empty (`history_unsupported`)
+   * instead of arriving as a blank transcript, which reads as "this session had
+   * nothing in it" (H10: a failed resume ends in `session.history{error}`,
+   * never in a `host.error`).
+   *
+   * Nothing is spawned on this path. With no reader there is nothing to ask a
+   * `codex app-server` for, and a process started only to be told that would
+   * cost the user a node + a ~296MiB binary per resumed row. `thread/resume` and
+   * the item mapper are slice 5b; THIS body stays as the `default` branch for
+   * every agent that has no history reader, so it is written to be permanent
+   * rather than temporary.
+   *
+   * Two guards run BEFORE the contract, because they are not failed resumes but
+   * refusals to take the session at all — the two documented exceptions to H10:
+   *
+   *  - a session with a live turn: it is already usable, and painting a history
+   *    error banner over a running conversation would be false. Mirrors
+   *    `claudeRuntime.resumeSession` (CP4 F-1), down to the `session_busy` code
+   *    the renderer's bounded retry keys on.
+   *  - a session another runtime owns: `registry.resume` deliberately does NOT
+   *    merge `agent`, so "resuming" it here would emit `session.resumed{codex}`
+   *    for a row that still routes every send to the other runtime.
+   */
   resumeSession(input: {
     sessionId: string;
-    workspacePath?: string;
-    runtimeIdentity?: string;
+    workspacePath: string;
+    runtimeIdentity: string;
     model?: string;
+    /** Accepted for command-shape parity; Codex has no measured effort parameter. */
     effort?: unknown;
     requestId?: string;
   }): void {
-    this.fail(
-      'agent_unsupported',
-      'session.resume: Codex session resume arrives in a later slice. Replaying a ' +
-        'Codex transcript is not implemented, so resuming now would leave the ' +
-        'conversation blank with no explanation.',
-      { sessionId: input.sessionId, requestId: input.requestId }
-    );
+    const { sessionId, requestId } = input;
+    const state = this.sessions.get(sessionId);
+    const session = this.opts.registry.get(sessionId);
+
+    // Guard ①. Both readings, because they fail apart: `state.turn` is our own
+    // admission record (the one `send` gates on) and `running` is the registry's,
+    // written by the turn lifecycle — a session mid-handshake has the second
+    // without the first.
+    if (state?.turn != null || session?.running === true) {
+      this.fail('session_busy', `Cannot resume while a turn is running: ${sessionId}`, {
+        sessionId,
+        requestId,
+      });
+      return;
+    }
+
+    // Guard ②. Checked against the REGISTRY, not against our own session map:
+    // the map only knows sessions this runtime started, so a Claude-owned row
+    // would sail past it and be re-emitted as a Codex session.
+    if (session && session.agent !== CODEX_AGENT) {
+      this.fail(
+        'agent_conflict',
+        `session.resume: ${sessionId} is bound to ${session.agent} and cannot be resumed as ` +
+          `${CODEX_AGENT} — a session's agent is fixed for its life`,
+        { sessionId, requestId }
+      );
+      return;
+    }
+
+    // Guard ③: a session whose app-server is still alive keeps it. Reusing the
+    // connection (rather than spawning a second one for the same thread) is what
+    // stops a resume from leaking a process — and the live link's own thread is
+    // the truth about what this session is, so its ids win over the caller's
+    // stale index row. 5b upgrades this branch to read the missing history back
+    // over that same connection with `thread/turns/list` (no `thread/resume`
+    // side effects on a live thread); until then it lands in the same
+    // degradation as a cold resume.
+    const live = state && !state.torndown && state.connection.alive ? state : undefined;
+    const runtimeIdentity = live?.threadId ?? input.runtimeIdentity;
+    const workspacePath = live?.workspacePath ?? input.workspacePath;
+    if (live) {
+      this.log('codex resume reusing the live connection', {
+        sessionId,
+        threadId: live.threadId,
+        requestedIdentity: input.runtimeIdentity,
+      });
+    }
+
+    // Bound BEFORE the events (H11): `index.ts` routes send/stop/close on
+    // `registry.get(sessionId).agent`, so a command arriving between the
+    // `session.resumed` the renderer just saw and the entry appearing would go
+    // to the Claude runtime. `effort` is not carried: `createSession` drops it
+    // for the same reason (no measured Codex parameter), and writing it only
+    // here would leave the registry claiming a per-session effort that nothing
+    // on this path can ever apply.
+    const entry = this.opts.registry.resume({
+      sessionId,
+      workspacePath,
+      runtimeIdentity,
+      agent: CODEX_AGENT,
+      model: input.model,
+    });
+
+    this.opts.emit({
+      type: 'session.resumed',
+      sessionId,
+      requestId,
+      payload: {
+        // Off the registry entry, so the event and the binding cannot disagree.
+        agent: entry.agent,
+        runtimeIdentity: entry.runtimeIdentity,
+        // No `permissionPolicy`: nothing was negotiated here. The posture is
+        // re-derived from the isolated home when a connection is actually made
+        // (5b, H9), and echoing the constant now would report a posture no
+        // process is running under.
+      },
+    });
+    this.opts.emit({
+      type: 'session.history',
+      sessionId,
+      // Threaded through all three events: the renderer pairs a replay with the
+      // resume that asked for it by `requestId`, and an unpaired one is dropped.
+      requestId,
+      payload: {
+        runtimeIdentity,
+        workspacePath,
+        agent: CODEX_AGENT,
+        messages: [],
+        truncated: false,
+        omittedCount: 0,
+        error: {
+          code: 'history_unsupported',
+          message: CODEX_HISTORY_UNSUPPORTED_MESSAGE,
+        },
+        // No `parseStats`: nothing was parsed. Zeros there would report a file
+        // that was read and found empty.
+      },
+    });
+    this.opts.emit({
+      type: 'session.status',
+      sessionId,
+      requestId,
+      payload: { status: 'idle' },
+    });
   }
 
   /**
