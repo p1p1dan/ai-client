@@ -173,14 +173,35 @@ function shouldCopy(rel) {
   return true;
 }
 
+// Hand-rolled recursive copy instead of fs.cpSync({filter}): on the Windows
+// CI runner cpSync demonstrably ignored the filter wholesale (runs
+// 31860506141 / 31861138363, 2026-08-15 — .bin, browser-sdk.js, .ts/.md and
+// the 252MB platform packages all shipped; the identical code filters
+// correctly on Linux). Walking ourselves makes the include/exclude decision
+// platform-independent: `rel` is built with '/' directly, no path.sep games.
+// Symlinks are dereferenced (nothing load-bearing links out of the tree; a
+// copied dangling link would be strictly worse).
 function copyNodeModules() {
-  fs.cpSync(hostNodeModules, path.join(outDir, 'node_modules'), {
-    recursive: true,
-    filter: (source) => {
-      const rel = path.relative(hostNodeModules, source).split(path.sep).join('/');
-      return shouldCopy(rel);
-    },
-  });
+  const destRoot = path.join(outDir, 'node_modules');
+  const walk = (relDir) => {
+    const srcDir = relDir === '' ? hostNodeModules : path.join(hostNodeModules, relDir);
+    for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+      const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
+      if (!shouldCopy(rel)) continue;
+      const src = path.join(hostNodeModules, rel);
+      const dest = path.join(destRoot, rel);
+      const stat = entry.isSymbolicLink() ? fs.statSync(src) : entry;
+      if (stat.isDirectory()) {
+        fs.mkdirSync(dest, { recursive: true });
+        walk(rel);
+      } else if (stat.isFile()) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(src, dest);
+      }
+    }
+  };
+  fs.mkdirSync(destRoot, { recursive: true });
+  walk('');
 }
 
 // ---------------------------------------------------------------------------
