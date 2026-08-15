@@ -88,6 +88,48 @@ describe('mergeReplayedHistory — guarded replay coverage (round-6 Bug B v2)', 
     expect(ids(merged)).toEqual(['h:old-1', 'h:old-2', 'user-resend']);
   });
 
+  it('G14 (slice-5 L6, pinned CURRENT behavior): a codex live turn duplicates and reorders on same-process resume', () => {
+    // Codex live link puts a whole turn on ONE assistant envelope (thinking +
+    // tool_call/tool_result + final text), which is never fold-eligible; the
+    // codex reprojection carries only userMessage/agentMessage [实测, fixtures
+    // README S5]. So on a same-process resume the user echo folds, but the
+    // live assistant message is KEPT and appended AFTER all history rows:
+    // the final answer appears twice and the reasoning/tool content ends up
+    // BELOW the reprojected final answer. Both review tracks flagged this
+    // independently; it is registered as L6 (agent-agnostic merge policy ×
+    // codex message shape), not fixed in slice 5 — this test is the pin that
+    // makes the behavior a documented fact instead of a field surprise.
+    const bucket: ReplayMergeMessage[] = [
+      msg('codex-user-01a003a5', 'user', 'run the probe'),
+      {
+        id: 'codex-asst-s1-t1',
+        role: 'assistant',
+        blocks: [
+          { type: 'thinking', text: 'planning' },
+          { type: 'tool_call', text: 'echo u2a-probe' },
+          { type: 'tool_result', text: 'u2a-probe' },
+          { type: 'text', text: 'DONE' },
+        ],
+      },
+    ];
+    const history = [
+      msg('h:codex:T:turn-1:item-1', 'user', 'run the probe'),
+      msg('h:codex:T:turn-1:item-2', 'assistant', 'DONE'),
+    ];
+
+    const merged = mergeReplayedHistory(
+      bucket,
+      history,
+      ok(snap(['codex-user-01a003a5', 'codex-asst-s1-t1']))
+    );
+
+    expect(ids(merged)).toEqual([
+      'h:codex:T:turn-1:item-1',
+      'h:codex:T:turn-1:item-2',
+      'codex-asst-s1-t1',
+    ]);
+  });
+
   it('anchor: a whole unflushed tail turn survives a second replay (P2)', () => {
     const bucket = [
       msg('h:t1u', 'user', '继续'),
