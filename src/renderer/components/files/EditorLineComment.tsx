@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
+import { deferRootUnmount } from '@/lib/deferRootUnmount';
 import { useActiveSessionId } from '@/stores/agentSessions';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
@@ -168,14 +169,12 @@ export function useEditorLineComment({
   // Cleanup widgets on unmount or when disabled
   useEffect(() => {
     return () => {
-      if (addButtonRootRef.current) {
-        addButtonRootRef.current.unmount();
-        addButtonRootRef.current = null;
-      }
-      if (commentRootRef.current) {
-        commentRootRef.current.unmount();
-        commentRootRef.current = null;
-      }
+      const addButtonRoot = addButtonRootRef.current;
+      const commentRoot = commentRootRef.current;
+      addButtonRootRef.current = null;
+      commentRootRef.current = null;
+
+      deferRootUnmount([addButtonRoot, commentRoot]);
     };
   }, []);
 

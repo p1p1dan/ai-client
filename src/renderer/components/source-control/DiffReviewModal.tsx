@@ -33,6 +33,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFileChanges, useFileDiff } from '@/hooks/useSourceControl';
 import { useSubmoduleChanges, useSubmoduleFileDiff, useSubmodules } from '@/hooks/useSubmodules';
 import { useI18n } from '@/i18n';
+import { deferRootUnmount } from '@/lib/deferRootUnmount';
 import { getXtermTheme, isTerminalThemeDark } from '@/lib/ghosttyTheme';
 import { cn } from '@/lib/utils';
 import { useActiveSessionId } from '@/stores/agentSessions';
@@ -940,22 +941,16 @@ export function DiffReviewModal({ open, onOpenChange, rootPath, onSend }: DiffRe
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (addButtonRootRef.current) {
-        addButtonRootRef.current.unmount();
-        addButtonRootRef.current = null;
-      }
-      if (commentRootRef.current) {
-        commentRootRef.current.unmount();
-        commentRootRef.current = null;
-      }
-      if (selectionWidgetRootRef.current) {
-        selectionWidgetRootRef.current.unmount();
-        selectionWidgetRootRef.current = null;
-      }
-      if (selectionCommentRootRef.current) {
-        selectionCommentRootRef.current.unmount();
-        selectionCommentRootRef.current = null;
-      }
+      const addButtonRoot = addButtonRootRef.current;
+      const commentRoot = commentRootRef.current;
+      const selectionWidgetRoot = selectionWidgetRootRef.current;
+      const selectionCommentRoot = selectionCommentRootRef.current;
+      addButtonRootRef.current = null;
+      commentRootRef.current = null;
+      selectionWidgetRootRef.current = null;
+      selectionCommentRootRef.current = null;
+
+      deferRootUnmount([addButtonRoot, commentRoot, selectionWidgetRoot, selectionCommentRoot]);
     };
   }, []);
 

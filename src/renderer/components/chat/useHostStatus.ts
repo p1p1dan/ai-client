@@ -1,5 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { useEffect, useState } from 'react';
+import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import {
   type HostStatus,
   initialHostStatus,
@@ -41,7 +42,7 @@ export function useHostStatus(): HostStatusSnapshot {
       })
       .catch(() => undefined);
 
-    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event: RuntimeEvent) => {
+    const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
       if (cancelled) return;
       setStatus((prev) => reduceHostStatus(prev, event));
     });

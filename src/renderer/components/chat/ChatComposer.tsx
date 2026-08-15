@@ -18,6 +18,7 @@ import { applyAutoSessionTitle } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -1120,7 +1121,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       pendingHostErrors = [];
     };
 
-    const unsubEvents = window.electronAPI.chat.onRuntimeEvent((event) => {
+    const unsubEvents = subscribeRuntimeEvent((event) => {
       seenEvents.push(formatRuntimeEvent(event));
 
       if (event.type === 'session.created' && event.sessionId === sessionId) {
@@ -1862,10 +1863,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // `'idle'` status, so the effect above (derived store state only) cannot
   // tell a real completion apart from a user Stop — this listens to the raw
   // wire event directly instead. Mount-once: every identifier it closes over
-  // (`abandonMarkerRef`, `clearAbandonMarkerIfMatch`, `window.electronAPI`)
+  // (`abandonMarkerRef`, `clearAbandonMarkerIfMatch`, `subscribeRuntimeEvent`)
   // is stable, so this never needs to resubscribe.
   useEffect(() => {
-    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event) => {
+    const unsubscribe = subscribeRuntimeEvent((event) => {
       const marker = abandonMarkerRef.current;
       if (!marker || !isSessionCompletedForSend(event, marker.sessionId)) return;
       clearAbandonMarkerIfMatch(marker);

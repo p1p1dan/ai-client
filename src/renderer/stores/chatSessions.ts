@@ -27,6 +27,9 @@ import {
   snapshotResumeCandidates,
   takeResumeSnapshot,
 } from './historyReplayMerge';
+// Refcounted fan-out over preload's single `chat:runtimeEvent` IPC listener —
+// see its header for why every renderer subscriber shares one.
+import { subscribeRuntimeEvent } from './runtimeEventBus';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
 
@@ -1160,7 +1163,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       set((state) => ({ ...applyRuntimeEvents(state, batch) }));
     };
 
-    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event) => {
+    const unsubscribe = subscribeRuntimeEvent((event) => {
       queue.push(event);
       if (queue.length >= RUNTIME_EVENT_MAX_QUEUE) {
         if (flushTimer !== null) {

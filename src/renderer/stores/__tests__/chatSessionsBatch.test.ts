@@ -8,6 +8,7 @@ import {
   type ChatSessionsState,
   useChatSessionsStore,
 } from '../chatSessions';
+import { resetRuntimeEventBus } from '../runtimeEventBus';
 
 // Behavior-lock tests for the C-08a batching layer: the pure applyRuntimeEvents
 // fold, and the setTimeout-coalesced queue inside initRuntime.
@@ -246,6 +247,10 @@ describe('initRuntime — batching (RUNTIME_EVENT_FLUSH_MS / RUNTIME_EVENT_MAX_Q
     captured = null;
     unsubSpy = vi.fn();
     activeCleanup = null;
+    // `initRuntime` now subscribes through the shared runtime-event bus, whose
+    // singleton outlives a test file — drop it so this test's `onRuntimeEvent`
+    // mock is the one the bus attaches to.
+    resetRuntimeEventBus();
 
     (globalThis as { window?: unknown }).window = {
       electronAPI: {

@@ -1,5 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetRuntimeEventBus } from '../runtimeEventBus';
 import { useSessionRuntimeFactsStore } from '../sessionRuntimeFacts';
 
 /**
@@ -25,6 +26,9 @@ describe('useSessionRuntimeFactsStore', () => {
   }
 
   beforeEach(() => {
+    // `init()` subscribes through the shared runtime-event bus, whose singleton
+    // outlives a test file — drop it so the bus attaches to THIS test's mock.
+    resetRuntimeEventBus();
     captured = null;
     unsubSpy = vi.fn();
     onRuntimeEventSpy = vi.fn((callback: (event: RuntimeEvent) => void) => {
@@ -113,13 +117,20 @@ describe('useSessionRuntimeFactsStore', () => {
     useSessionRuntimeFactsStore.setState({ listening: false });
     const second = useSessionRuntimeFactsStore.getState().init();
 
-    // Two listeners now installed — this is the bug, not the fix. The
-    // correct call pattern (no external reset) is covered by the "is a
-    // latch" test above, which asserts exactly one call.
-    expect(onRuntimeEventSpy).toHaveBeenCalledTimes(2);
+    // Two store listeners now installed — this is the bug, not the fix. Since
+    // they share ONE preload listener through the runtime-event bus, the extra
+    // subscription shows up on the teardown side instead of as a second
+    // `onRuntimeEvent` call: `first()` can no longer release the upstream,
+    // because `second` is still holding it. The correct call pattern (no
+    // external reset) is covered by the "is a latch" test above, where the
+    // single cleanup does release it.
+    expect(onRuntimeEventSpy).toHaveBeenCalledTimes(1);
 
     first();
+    expect(unsubSpy).not.toHaveBeenCalled();
+
     second();
+    expect(unsubSpy).toHaveBeenCalledTimes(1);
   });
 
   // Build spec 2026-08-14 (partial messages), 片 2: `set()`'s callback must

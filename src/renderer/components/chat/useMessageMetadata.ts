@@ -1,5 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { useCallback, useEffect, useState } from 'react';
+import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import {
   initialMetadataRegistry,
   type MessageMetadata,
@@ -33,7 +34,7 @@ export function useMessageMetadata(sessionId: string | null): UseMessageMetadata
       return () => undefined;
     }
     let cancelled = false;
-    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event: RuntimeEvent) => {
+    const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
       if (cancelled) return;
       if (event.sessionId && event.sessionId !== sessionId) return;
       // T-30 P-14: ComposerModelTrigger's (formerly ModelSelect) initial value

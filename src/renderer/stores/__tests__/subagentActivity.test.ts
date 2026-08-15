@@ -1,6 +1,7 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialSubagentActivity } from '@/components/chat/subagentActivityModel';
+import { resetRuntimeEventBus } from '../runtimeEventBus';
 import { useSubagentActivityStore } from '../subagentActivity';
 
 /**
@@ -25,6 +26,9 @@ describe('useSubagentActivityStore', () => {
   }
 
   beforeEach(() => {
+    // `init()` subscribes through the shared runtime-event bus, whose singleton
+    // outlives a test file — drop it so the bus attaches to THIS test's mock.
+    resetRuntimeEventBus();
     captured = null;
     unsubSpy = vi.fn();
     onRuntimeEventSpy = vi.fn((callback: (event: RuntimeEvent) => void) => {

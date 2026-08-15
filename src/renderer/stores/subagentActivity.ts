@@ -5,6 +5,7 @@ import {
   reduceSubagentActivity,
   type SubagentActivityState,
 } from '@/components/chat/subagentActivityModel';
+import { subscribeRuntimeEvent } from './runtimeEventBus';
 
 /**
  * T-34: adjacent store for live subagent activity — the red-line
@@ -16,7 +17,7 @@ import {
  * (`ChatWorkspace.tsx`) must own `init()`).
  */
 interface SubagentActivityStoreState extends SubagentActivityState {
-  /** Latch: true once the single `onRuntimeEvent` listener is installed. */
+  /** Latch: true once the single runtime-event listener is installed. */
   listening: boolean;
   /** Subscribe (no-op if already subscribed) and return the unsubscribe. */
   init: () => () => void;
@@ -32,7 +33,7 @@ export const useSubagentActivityStore = create<SubagentActivityStoreState>()((se
     }
     set({ listening: true });
 
-    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event: RuntimeEvent) => {
+    const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
       set((state) => {
         const next = reduceSubagentActivity(state, event);
         return next === state ? state : next;

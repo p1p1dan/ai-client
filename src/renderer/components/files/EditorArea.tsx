@@ -30,6 +30,7 @@ import { addToast } from '@/components/ui/toast';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { useCommitDiff } from '@/hooks/useGitHistory';
 import { useI18n } from '@/i18n';
+import { deferRootUnmount } from '@/lib/deferRootUnmount';
 import { toMonacoFileUri } from '@/lib/monacoModelPath';
 import { useActiveSessionId } from '@/stores/agentSessions';
 import type { EditorTab, NavEntry, PendingCursor } from '@/stores/editor';
@@ -977,11 +978,11 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
       editor.addContentWidget(commentWidget);
     };
 
-    // Render the button
-    if (widgetRootRef.current) {
-      widgetRootRef.current.unmount();
-    }
+    // Render the button - the stale root owns the previous run's DOM node, so its
+    // deferred unmount cannot race the root created below
+    const staleWidgetRoot = widgetRootRef.current;
     widgetRootRef.current = createRoot(widgetDomNode);
+    deferRootUnmount([staleWidgetRoot]);
     widgetRootRef.current.render(
       <button
         type="button"
@@ -1097,13 +1098,9 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
           // Ignore
         }
       }
-      if (widgetRootRef.current) {
-        widgetRootRef.current.unmount();
-        widgetRootRef.current = null;
-      }
-      if (commentWidgetRoot) {
-        commentWidgetRoot.unmount();
-      }
+      const pendingWidgetRoot = widgetRootRef.current;
+      widgetRootRef.current = null;
+      deferRootUnmount([pendingWidgetRoot, commentWidgetRoot]);
     };
   }, [
     editorReady,

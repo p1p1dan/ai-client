@@ -12,7 +12,7 @@ const QUERY_KEYS = {
 };
 
 interface BreadcrumbTreeMenuProps {
-  children: React.ReactNode;
+  children: React.ReactElement;
   dirPath: string;
   rootPath: string;
   onFileClick: (path: string) => void;
@@ -292,7 +292,7 @@ export function BreadcrumbTreeMenu({
 
   return (
     <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-      <MenuTrigger>{children}</MenuTrigger>
+      <MenuTrigger render={children as React.ReactElement<Record<string, unknown>>} />
       <MenuPopup align="start" sideOffset={4} className="max-h-80">
         {isLoading ? (
           <div className="flex items-center justify-center py-4">

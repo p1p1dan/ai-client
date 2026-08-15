@@ -1,5 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { useCallback, useEffect, useState } from 'react';
+import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import {
   initialTurnTimingRegistry,
   reduceTurnTiming,
@@ -27,7 +28,7 @@ export function useTurnTiming(sessionId: string | null): UseTurnTimingResult {
       return () => undefined;
     }
     let cancelled = false;
-    const unsubscribe = window.electronAPI.chat.onRuntimeEvent((event: RuntimeEvent) => {
+    const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
       if (cancelled) return;
       if (event.sessionId && event.sessionId !== sessionId) return;
       setRegistry((prev) => reduceTurnTiming(prev, event));

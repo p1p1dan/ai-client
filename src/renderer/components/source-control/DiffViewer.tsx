@@ -28,6 +28,7 @@ import { toastManager } from '@/components/ui/toast';
 import { gitQueryKeys } from '@/hooks/gitQueryKeys';
 import { useFileDiff } from '@/hooks/useSourceControl';
 import { useI18n } from '@/i18n';
+import { deferRootUnmount } from '@/lib/deferRootUnmount';
 import { getXtermTheme, isTerminalThemeDark } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { toMonacoVirtualUri } from '@/lib/monacoModelPath';
@@ -608,14 +609,15 @@ export function DiffViewer({
   // Cleanup widgets on unmount
   useEffect(() => {
     return () => {
-      if (addButtonRootRef.current) {
-        addButtonRootRef.current.unmount();
-        addButtonRootRef.current = null;
-      }
-      if (commentRootRef.current) {
-        commentRootRef.current.unmount();
-        commentRootRef.current = null;
-      }
+      const addButtonRoot = addButtonRootRef.current;
+      const commentRoot = commentRootRef.current;
+      const selectionWidgetRoot = selectionWidgetRootRef.current;
+      const selectionCommentRoot = selectionCommentRootRef.current;
+      addButtonRootRef.current = null;
+      commentRootRef.current = null;
+      selectionWidgetRootRef.current = null;
+      selectionCommentRootRef.current = null;
+
       if (addButtonWidgetRef.current) {
         addButtonWidgetRef.current.remove();
         addButtonWidgetRef.current = null;
@@ -624,14 +626,8 @@ export function DiffViewer({
         commentWidgetRef.current.remove();
         commentWidgetRef.current = null;
       }
-      if (selectionWidgetRootRef.current) {
-        selectionWidgetRootRef.current.unmount();
-        selectionWidgetRootRef.current = null;
-      }
-      if (selectionCommentRootRef.current) {
-        selectionCommentRootRef.current.unmount();
-        selectionCommentRootRef.current = null;
-      }
+
+      deferRootUnmount([addButtonRoot, commentRoot, selectionWidgetRoot, selectionCommentRoot]);
     };
   }, []);
 
