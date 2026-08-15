@@ -5,7 +5,7 @@
 > [2026-07-28 ~ 08-03](./history/2026-0728-0803-archive.md) ·
 > [2026-08-08 全文快照](./history/2026-0808-implementation-status-archive.md)（本文件瘦身前原文，含 0-duodecies ~ 0-novodecies 六份清单）。
 
-- **Current Phase**：**Phase 0 正式 Go + 0A 收口 → 意外发现小批已落地（`5dab201`）→ multi-agent 切片 5 主攻**。
+- **Current Phase**：**Phase 0 正式 Go + 0A 收口；意外发现小批（`5dab201`）与 multi-agent 切片 5（`1aa68f2`~`118b6b5`）均已收口 → 下一件 multi-agent 切片 6 收口，其后 D31 建议序队列**。
   观感对齐批次（2026-07-28 转向，D18/D19/D20）的开发线任务 T-29 / T-12~T-15 / T-23 / T-32 / T-16 / T-33 / T-35 / T-34 全部 Done。
   Phase 0A ✅ 收口（2026-08-15 D43：A02/A03/A04 裁定被演进取代，口径以总台账 0A 行为准）。
 - **Last Landed**（2026-08-11）：**xvqiu1 四问题反馈批**——triage（[报告](../../../plans/2026-08-11-xvqiu1-triage.md)，四路独立排查 + 承重结论亲验）→ 用户拍板 **D30**（git (a) 先行）→ 施工四片：
@@ -39,8 +39,8 @@
      CI 首跑三轮迭代records：cpSync filter 在 Windows runner **整体失灵**（.bin/.ts/平台包全漏，`ae57020` 兜底删 + `0d4011c` 弃 filter 改自写 walk 根治）；**Linux 捆 node 已拍板 = D36（2026-08-15，捆齐口径一致）**——build-linux 补 fetch 随包 runtime 转施工票（择机，见 Backlog）。
      → 测试机回归（[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验 + **新增复验面：流式观感（flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON，状态行 ✽ elapsed·↓tokens / 渐显 / 加密机 IPC 负载）、D34 全批（rail 迁顶栏 / git 面板 VS Code 化 / 提交展开 / diff 中栏）、D35 四调、`launch-gui-test.cmd` 包装器双击路径**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
      → 加密机现场 T-11 六项 ✅ **2026-08-15 全过 → CP5，Phase 0 正式 Go（含 ⑥ TSD 白名单实证，open-q #7 关闭）**；余 CP2 = T-10 深度回归汇报。
-  2. **开发线已裁定（2026-08-15）：意外发现小批先行 → multi-agent 切片 5 主攻**；候选五路存档：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
-     **新立项排队（2026-08-15 拍板 2~4 轮，序待意外发现小批与切片 5 之后）**：D31 四路按建议序（渲染端小批 → 右键菜单（连带解 #6 归档恢复）→ Progress 面板 → 权限选择器）→ D37 三件（projectsRoot 标记 / 卡内归档入口 / configDir 口径，S）→ D38 终端域改造（Ghostty 外溢退役，M）→ D39 git remote 进出（L）→ D40 `session.send` 补 model/effort（M）→ D44 jsdom+RTL 组件层（M）；小票：D41 CI Linux 门禁（S）· D42 dev.js 断言（S）；(b) 泳道 graph 维持后置。
+  2. **开发线进展（2026-08-15）**：意外发现小批 ✅ `5dab201` → multi-agent 切片 5 ✅（七提交，vitest 3418，见[该 plan](../multi-agent/README.md)）→ **当前下一件 = multi-agent 切片 6 收口**；候选五路存档：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
+     **新立项排队（2026-08-15 拍板 2~4 轮，序待 multi-agent 切片 6 之后）**：D31 四路按建议序（渲染端小批 → 右键菜单（连带解 #6 归档恢复）→ Progress 面板 → 权限选择器）→ D37 三件（projectsRoot 标记 / 卡内归档入口 / configDir 口径，S）→ D38 终端域改造（Ghostty 外溢退役，M）→ D39 git remote 进出（L）→ D40 `session.send` 补 model/effort（M）→ D44 jsdom+RTL 组件层（M）；小票：D41 CI Linux 门禁（S）· D42 dev.js 断言（S）；(b) 泳道 graph 维持后置。
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；
      ③ Deferred 复活（C-17 问答/子 agent 进历史 · T-25 旧模块原色清理 · 后置 6 surface · C-12 压测）；
      ④ backlog 清票（见下）；
