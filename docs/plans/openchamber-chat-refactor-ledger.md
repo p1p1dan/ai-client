@@ -146,6 +146,7 @@
 | 2026-08-14 | **流式施工批 + #30 文案修落地**：D32/D33 执行完毕——`jsonl_not_found` 卡不再假承诺（`continuationHint` per-code 化 + `history_unsupported` 接通）；`includePartialMessages` 默认 ON（`AICLIENT_HOST_PARTIAL_MESSAGES=0` 回 OFF = 今日行为，改造前黄金基线仲裁）；状态行 `✽ elapsed · ↓ tokens` CDP 冒烟实测生效。规格 rev.2 = 双轨对抗评审合取（Opus 4 blocker + Codex 13 条）；变异验证 15 对；四门 vitest 3268 例 0 红。过程明细见主线台账 2026-08-14 施工批行 | ✅ | `49aee3f` `4c2440b` `5281ceb` `956f8bb` `31a49c5` |
 | 2026-08-14 | **UI 反馈批（D34）八提交落地**：`7566d4c`（min 250 + rail 迁顶栏）/ `9b17dc6`（git 面板观感：平分+标题+行升级+token 切片）/ `6f0659a`（平分静态钉）/ `21ed45d`（提交点击展开）/ `c6a6c80`（diff 迁中栏页，面板内嵌退役）/ `f580129`（Context status 三行，脱敏红线守住）/ `185f5ec`（**Thought 孤箭头修复——T-31 潜伏缺陷**：纯思考回合降级链落 bare 渲染 null，加 thought 档；blame 排除本日批次）/ `0a3bb52`（D25 字体门禁收口）。观感批施工员 API 中断由编排者收尾（250px 窄宽 icon-only 修复 + 静态断言补铸；期间误用 git checkout 抹未提交函数，凭上下文复原并验证）。四门全绿 **vitest 163 文件 3329 例 0 红** | ✅ | `7566d4c`~`0a3bb52` |
 | 2026-08-14 | **D35 diff 页四调落地**：`4d8f003`——Chat column 钮退役 / diff 恒双侧换行（Monaco wordWrapOverride2 坑）/ diff tab 单例 / diff 激活独占中栏（宽屏澄清）。变异两轮命中精确；四门全绿 **vitest 3339 例 0 红** | ✅ | `4d8f003` |
+| 2026-08-15 | **test.4 CI 出包跑通（出包路径首秀）**：三轮迭代根治 Windows runner cpSync filter 整体失灵（`ae57020` 兜底 + `0d4011c` 自写 walk）；`windows-installers` 345MB / `windows-unpacked` 251MB 产出（run 31861599547）；Linux verify Node 24 断言恒红入 backlog（产品决定）。无 release 无 tag，在线用户零感知 | ✅ | `1a96a55` `ae57020` `0d4011c` |
 
 ---
 

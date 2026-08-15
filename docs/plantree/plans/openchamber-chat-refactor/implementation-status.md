@@ -33,7 +33,9 @@
   3 例 Windows-only 恒红已于 2026-08-06 修复（测试侧 platform 桩），四门口径见 [baseline 门禁](../../baseline/test-and-release-gates.md)。
   历史逐批复核记录（51 文件 590 例起全程只增）见 history 归档。
 - **Next Target**：
-  1. **T-10 / T-11 真机点验（用户线，当前主项）——下一具体动作：版本抬 `0.4.0-test.4` + CI 出包**（GitHub Actions → Build → Run workflow 选本分支，下载 `windows-installers`/`windows-unpacked` artifact——2026-08-14 三批 D32~D35 共 19 提交全在本分支，**不要拿 test.3 旧包**）：
+  1. **T-10 / T-11 真机点验（用户线，当前主项）——`0.4.0-test.4` 包已出（2026-08-15，CI 出包路径首次跑通）**：
+     [run 31861599547](https://github.com/p1p1dan/ai-client/actions/runs/31861599547) 下载 `windows-installers`（345MB，NSIS+portable，测试机回归用）/ `windows-unpacked`（251MB，去加密机优先带它——T-10 口径）。**下一具体动作：下载 artifact → 测试机回归**（到手先 About 核对版本 test.4）。
+     CI 首跑三轮迭代records：cpSync filter 在 Windows runner **整体失灵**（.bin/.ts/平台包全漏，`ae57020` 兜底删 + `0d4011c` 弃 filter 改自写 walk 根治）；**backlog 新增：build-linux verify `Node 24 resolvable` 恒红**——Linux 包从不 fetch 随包 runtime，需拍板「Linux 包捆不捆 node」（不阻塞 Windows 链）。
      → 测试机回归（[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验 + **新增复验面：流式观感（flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON，状态行 ✽ elapsed·↓tokens / 渐显 / 加密机 IPC 负载）、D34 全批（rail 迁顶栏 / git 面板 VS Code 化 / 提交展开 / diff 中栏）、D35 四调、`launch-gui-test.cmd` 包装器双击路径**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
      → 加密机现场 T-11 六项 → CP2 / CP5。
   2. **开发线下一步待用户裁定**，候选五路（不互斥）：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
