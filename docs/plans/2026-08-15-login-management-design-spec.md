@@ -92,7 +92,9 @@ CredentialVault  <userData>/credentials/vault.json（0600 原子写；safeStorag
 - schema：`{version, enc, lastEmail, identity{email,userId}, cchBaseUrl, claude{baseUrl,authToken},
   codex{baseUrl,apiKey}, invalidatedAt}`；`deriveCchBaseUrl` 结果落库不重算。
 - safeStorage：可用即加密；Linux `basic_text`/不可用 → `enc:"none"` + 0600 + 诊断位，**不阻断登录**；
-  解密失败 → `reauth_required`（重登 30 秒）。〔设计者默认，不上拍板〕
+  解密失败 → `reauth_required`（重登 30 秒）。〔设计者默认，不上拍板〕**E6 实测两硬事实**：
+  ① `isEncryptionAvailable()` 在首个 BrowserWindow 创建前调用会**无限挂死**（S1 以适配器后置升格规避）；
+  ② `basic_text` 时该函数自返 false——无需显式判 backend 名，单布尔足够。
 - 安全档位声明：防偶然泄露（备份同步捞走、0644 他人可读、误发日志），不防同 OS 用户恶意进程——key 本来
   就要交给子进程与员工 shell，该威胁模型结构性无解。卸载留存维持现状（`deleteAppDataOnUninstall:false` 不动）。
 - dev/prod：dev.js 维持 D42 现状，但 `buildChildEnv` 强制 `AICLIENT_MANAGED_CREDENTIALS=0`（防 Main 全局
@@ -204,7 +206,7 @@ S0 保留一次**轻量部署一致性实打**（一封验证码走全程，确�
 
 ## §10 风险与开放问题
 
-R1 `.claude.json` 在 `$CLAUDE_CONFIG_DIR` 下的 CLI 实解（高，E2 定生死）· R2 `settingSources:[]` 语义（中，E3）·
+~~R1~~（已闭：E2 PASS，CLI 认 `$CLAUDE_CONFIG_DIR/.claude.json` 的 onboarding+信任标志；新注记：CLI 自动更新检查会写 `$HOME/.npm`，S2 以 `autoUpdates:false` 压制并断言）· ~~R2~~（已闭：E3 PASS，假 HOME + `settingSources:[]` 全链会话成功且零静默写）·
 R3 终端 codex env 可见性不对称（中，档位声明覆盖）· R4 历史双源排序/续接（中）· R5 Provider 面板消费者未定位（中，S2 前置）·
 R6 safeStorage Linux 退化（低）· R7 codex home 并发（低）· R8 portable 与安装版 userData 同异未证（低）· R9'〔U1 后果〕旧文件 key 过时 / 新装机器 app 外终端无凭据（已知限制，§6）· R10'〔U4〕换邮箱可见旧历史（已知限制，不施工）。
 **O1** ~~onboard 幂等~~（已关闭：代码级 CONFIRMED + S0 轻量实打复核）｜ **O2** app-server 无凭据错误帧（E4）｜ **O3** cch 401/403 语义细分（E5）｜

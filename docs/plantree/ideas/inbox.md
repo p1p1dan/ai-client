@@ -21,3 +21,4 @@
 - **FILE_COPY/RENAME/MOVE 无根校验加固**（2026-08-03，第五轮对抗复核 Opus 发现的既有暴露面）：这三条 IPC 接受任意源/目标路径，曾可被用于把任意文件覆盖到附件授权路径实施确定性读取绕过（该绕过已被 fd 快照校验封死），但通道本身仍是全盘写原语——宜比照 LocalFileAccess 根白名单收敛（安全加固批）。
 - 2026-08-03 `session-${Date.now()}` 会话 ID 毫秒级碰撞（chatSessionActions.ts:34，既有）：同毫秒双击 New 会撞 ID；测试已显式绕开。改 crypto.randomUUID 或加计数器后缀，动红线 store 宜随下批顺手。
 - **buchong1 参考批候选池**（2026-08-13，ZCode 九图对照）：S 档六件 + M 档四件 + L 档四件的完整分档与 file:line 证据见 [分析档 §4](../../plans/2026-08-13-buchong1-zcode-reference.md)；其中「回合级 files changed + Undo 汇总条」（Undo 通道全仓无先例，最重）与「Always allow in this project 项目级持久化」（涉安全层）建议只存念不排期；采纳拍板挂 open-q #32。
+- UsageService 的 /api/actions/* 端点已被 cch 标记弃用（响应头 deprecation/sunset: 2026-12-31，应迁 /api/v1）——E5 补测发现（docs/plans/2026-08-15-d47-s0-spikes/e5-cch-auth-probe.md）；D47 S5 动 UsageService 时顺带评估，或另立小票。（2026-08-15）
