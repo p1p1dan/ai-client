@@ -40,6 +40,7 @@
      → 测试机回归（[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验 + **新增复验面：流式观感（flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON，状态行 ✽ elapsed·↓tokens / 渐显 / 加密机 IPC 负载）、D34 全批（rail 迁顶栏 / git 面板 VS Code 化 / 提交展开 / diff 中栏）、D35 四调、`launch-gui-test.cmd` 包装器双击路径**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
      → 加密机现场 T-11 六项 ✅ **2026-08-15 全过 → CP5，Phase 0 正式 Go（含 ⑥ TSD 白名单实证，open-q #7 关闭）**；余 CP2 = T-10 深度回归汇报。
   2. **开发线已裁定（2026-08-15）：意外发现小批先行 → multi-agent 切片 5 主攻**；候选五路存档：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
+     **新立项排队（2026-08-15 第二轮拍板，序待意外发现小批与切片 5 之后）**：D37 三件（projectsRoot 标记 / 卡内归档入口 / configDir 口径，S）→ D38 终端域改造（Ghostty 外溢退役，M）→ D39 git remote 进出（L）；(b) 泳道 graph 维持后置。
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；
      ③ Deferred 复活（C-17 问答/子 agent 进历史 · T-25 旧模块原色清理 · 后置 6 surface · C-12 压测）；
      ④ backlog 清票（见下）；
