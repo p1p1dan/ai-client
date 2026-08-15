@@ -43,3 +43,12 @@
 - git 面板外部提交不自动刷新（backlog 票，候选窗口聚焦 invalidate）。
 - Select/Combobox/Tabs 触发器族嵌套全量审计（取证 caveat，如现场再报再立）。
 - `DiffReviewModal.tsx:944-956` 之外的非禁区 unmount 站点维持现状。
+
+
+## As-built 备注（2026-08-15 施工后）
+
+- 全部落地于 `5dab201`；四门全绿 vitest 166 文件 3357 例 0 红；变异验证 7/7 咬合。
+- **偏差三处（实现方否决权行使，均现场证据推翻取证）**：① DiffViewer `[]`-cleanup 内未延迟 unmount 实为 **4 处**（addButton / comment / selectionWidget / selectionComment），非取证的 2 处，全部延迟；连带两处 DOM `.remove()` 先于延迟 unmount 执行——合法（detached 容器上 unmount 合法且组件卸载中无 root 复建）。② 取证所称「useMessageTimeline 双份」实为 `useMessageMetadata.ts:36` 单订阅；8 订阅点实名 = chatSessions.initRuntime / sessionRuntimeFacts / subagentActivity / useHostStatus / useMessageMetadata / useTurnTiming / ChatComposer×2。③ 既有 sessionRuntimeFacts「regression (Opus m9)」用例断言的正是被总线消除的重复订阅（断言 spy 调用两次），同场景改锚新观测面（首退订不拆上游）。
+- **变异验证发现测试缺口一处**：disposed 守卫对「独立 listener 三连退订」inert（Set 删除幂等 + detach 置空已兜住该场景）；真承重场景 =「同 listener 重订阅后旧句柄二次调用」（旧句柄误删活订阅并拆上游），补用例后咬合。
+- **CDP 复验四查全过**：面包屑段钮即 trigger 本体（render 融合生效）、点开菜单正常、全 DOM `button button`=0；模拟亮 OS 下 `.dark` 切换使 `dark:text-red-400` 计算色翻转（oklch 0.577→0.704）；console 全程无 validateDOMNesting / MaxListeners / sync-unmount（仅启动期既有良性日志）；整窗截图目检无布局异常。
+- **Residual**：① 原始同步卸载告警的具体来源站点未逐一现场复现（机制级同类同修，六站点全改）；② dark: 66 处逐屏视觉细查并入下轮真机 D34/D35 复验单；③ Select/Combobox/Tabs 触发器族未全量审计（如现场再报再立）。

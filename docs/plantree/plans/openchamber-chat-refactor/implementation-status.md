@@ -5,7 +5,7 @@
 > [2026-07-28 ~ 08-03](./history/2026-0728-0803-archive.md) ·
 > [2026-08-08 全文快照](./history/2026-0808-implementation-status-archive.md)（本文件瘦身前原文，含 0-duodecies ~ 0-novodecies 六份清单）。
 
-- **Current Phase**：**Phase 0 正式 Go（CP5）+ Phase 0A 收口（D43）→ 开发线恢复施工：意外发现小批（含 #13）→ multi-agent 切片 5**。
+- **Current Phase**：**Phase 0 正式 Go + 0A 收口 → 意外发现小批已落地（`5dab201`）→ multi-agent 切片 5 主攻**。
   观感对齐批次（2026-07-28 转向，D18/D19/D20）的开发线任务 T-29 / T-12~T-15 / T-23 / T-32 / T-16 / T-33 / T-35 / T-34 全部 Done。
   Phase 0A ✅ 收口（2026-08-15 D43：A02/A03/A04 裁定被演进取代，口径以总台账 0A 行为准）。
 - **Last Landed**（2026-08-11）：**xvqiu1 四问题反馈批**——triage（[报告](../../../plans/2026-08-11-xvqiu1-triage.md)，四路独立排查 + 承重结论亲验）→ 用户拍板 **D30**（git (a) 先行）→ 施工四片：
@@ -29,7 +29,7 @@
   M5 判定为 M1 的视觉后果。随后版本抬 **`0.4.0-test.2`**（`ff63987`）。
   更早各批（08-04 ~ 08-06 各任务与十二轮点验）：一行摘要见 [roadmap Done](./roadmap.md)，
   明细见[主线台账](../../../plans/ledger-claude-mainline.md)，当时活动状态原文见 history 归档。
-- **Last Verified**：2026-08-14 `4d8f003` 批（D35）**四门全绿**（lint 32 条基线诊断持平 / typecheck ×2 / vitest **163 文件 3339 例 0 红**，约 20s）。当日三批口径链：流式批 `31a49c5` 3268 → D34 `0a3bb52` 3329 → D35 3339。上一口径 2026-08-11 `de06bf5` 3176、2026-08-10 `e529a55` 3004、2026-08-08 `9a6cc01` 2481。
+- **Last Verified**：2026-08-15 `5dab201` 批（意外发现小批）**四门全绿**（lint 32 条基线诊断持平 / typecheck ×2 / vitest **166 文件 3357 例 0 红**）。上一口径 2026-08-14 `4d8f003`（D35）3339，当日三批链：流式批 3268 → D34 3329 → D35 3339；更早 2026-08-11 `de06bf5` 3176、2026-08-10 `e529a55` 3004、2026-08-08 `9a6cc01` 2481。
   3 例 Windows-only 恒红已于 2026-08-06 修复（测试侧 platform 桩），四门口径见 [baseline 门禁](../../baseline/test-and-release-gates.md)。
   历史逐批复核记录（51 文件 590 例起全程只增）见 history 归档。
 - **Next Target**：
@@ -50,7 +50,7 @@
      ② ~~流式施工批~~ 已并入 ①（规格 rev.2 取代 spike §3/§4 直抄口径）；
      ③ Temp 门控五态 / D30-a 六项 / D29 已于 2026-08-14 **本地点验全过**（CDP 驱动 dev GUI，加密机风险经用户裁定解除后点验前移）；Windows 侧仅剩启动包装器（`launch-gui-test.cmd` 双击路径）随下轮真机（现场操作单已同步包装器启动步骤）；
      ④ **D34 UI 反馈批已于 2026-08-14 落地**（八提交 `7566d4c`~`0a3bb52`，六裁定见总台账 D34 行）：右栏 min 250 / rail 迁顶栏（覆盖 round-12）/ git 面板 VS Code 化 + 提交点击展开 + diff 迁中栏 / Context status 三行 / Thought 孤箭头修复（T-31 潜伏）——随下轮真机复验；**D35 diff 页四调同日落地**（`4d8f003`：Chat column 钮退役 / diff 恒双侧换行（Monaco `wordWrapOverride2` 覆盖链坑）/ diff tab 单例 / diff 激活独占中栏——用户宽屏澄清「并排非覆盖」后中途改规格）；余：X 状态紫色无语义 token（T-25）、①窄宽按钮异常已修（icon-only）待用户复验；
-     ⑤ 本地点验三条意外发现**已拍板即修一小批（2026-08-15，先于主线，#13 dark: 脱钩修复并入）**：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）/ #13 dark: `@custom-variant` 一行修复 + CDP 亮暗逐屏复验；git 面板 Changes 计数**外部（命令行）提交后不自动刷新**（须手点刷新）另挂 backlog 票。
+     ⑤ ~~本地点验三条意外发现~~ ✅ **已修复落地 `5dab201`（2026-08-15，含 #13 dark:；变异 7/7 + CDP 复验四查全过，证据见总台账当日行与 [smallbatch-spec as-built](../../../plans/2026-08-15-incident-smallbatch-spec.md)）**；git 面板 Changes 外部提交不自动刷新维持 backlog 票。
 
 > ⚠️ **门禁纪律**：本机内存有限，四门**逐门串行跑**，禁止链式合跑或与子代理/后台任务并行（曾 OOM exit 137）。
 > ⚠️ **GUI 启动口径**：填好 `dev.env` 后一律 `node scripts/dev.js`，勿用 `pnpm dev`；

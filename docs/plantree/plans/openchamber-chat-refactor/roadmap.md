@@ -59,7 +59,7 @@
 1. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md) + [加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md)，出发前必做 M1~M4）→ CP2 汇报。
 2. ~~**T-11 M2 加密机现场验收**~~ ✅ 2026-08-15 现场六项全过（含白名单⑥）→ CP5，Phase 0 正式 Go（open-q #7 关闭）。
 3. **GUI 统一点测残项**（T-04 待网关 / T-06 / T-07 补强 / T-20 / T-03 / T-18 附件人工项）——清单见 [implementation-status 用户线](./implementation-status.md)。
-4. **开发线已裁定（2026-08-15）**：意外发现小批先行 → multi-agent 切片 5 主攻（详见 [implementation-status Next Target](./implementation-status.md)）。
+4. **开发线推进中（2026-08-15）**：意外发现小批（三条 console 级 + #13 dark:）已落地 `5dab201`；当前主攻 multi-agent 切片 5，其后按新立项队列（见 [implementation-status Next Target](./implementation-status.md)）。
 
 ## Deferred
 
