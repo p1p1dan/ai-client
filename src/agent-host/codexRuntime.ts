@@ -376,14 +376,15 @@ class CodexResumePostureError extends Error {
 /**
  * "This thread is not there any more" vs "the read failed".
  *
- * Matched on the message rather than on a numeric code because codex has no
- * measured code for a missing thread — the only recorded error from this family
- * is `thread/items/list is not supported yet` at -32601, which is the opposite
- * case and is excluded explicitly. Matching text is a guess about wording; the
- * cost of guessing wrong is a banner that says "read failed" instead of "nothing
- * on disk", both of which are honest and neither of which loses data.
+ * Matched on the message rather than on a numeric code: the one MEASURED
+ * missing-thread error is `-32600 no rollout found for thread id <uuid>`
+ * (G8b probe, 2026-08-15: a zero-turn thread has no rollout file, so resume
+ * fails exactly like a deleted one), and -32600 is generic INVALID_REQUEST —
+ * not a dedicated code. `no rollout` pins the measured wording; the other
+ * alternatives cover the plausible wording family. Guessing wrong degrades to
+ * a "read failed" banner instead of "nothing on disk" — both honest.
  */
-const THREAD_MISSING_PATTERN = /not found|no such|unknown thread|does not exist/i;
+const THREAD_MISSING_PATTERN = /not found|no rollout|no such|unknown thread|does not exist/i;
 
 function classifyResumeFailure(err: unknown): HistoryReadErrorCode {
   if (err instanceof CodexRpcError && err.code !== JSONRPC_METHOD_NOT_FOUND) {

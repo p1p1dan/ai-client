@@ -1434,10 +1434,13 @@ describe('codexRuntime — a failed resume tears down, then degrades (G7)', () =
 
   it('a thread codex cannot find -> jsonl_not_found', async () => {
     const h = makeHarness({
-      // Shaped like a real JSON-RPC error reply. Codex has no measured code for
-      // a missing thread, so the classifier reads the message — see
-      // `THREAD_MISSING_PATTERN`.
-      threadResumeError: { code: -32603, message: `thread not found: ${RECORDED_THREAD}` },
+      // The MEASURED shape (G8b probe): resuming a thread whose rollout file
+      // does not exist in CODEX_HOME fails with generic -32600 and this exact
+      // wording — the classifier reads the message, see `THREAD_MISSING_PATTERN`.
+      threadResumeError: {
+        code: -32600,
+        message: `no rollout found for thread id ${RECORDED_THREAD}`,
+      },
     });
     h.runtime.resumeSession(COLD_RESUME);
     await h.waitForEvent('session.status');

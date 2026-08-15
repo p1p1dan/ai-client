@@ -205,3 +205,15 @@
 
 抓取环境：真实 `~/.codex`（探针口径，产品用隔离 CODEX_HOME）；模型 `gpt-5.6-sol` 经第三方代理。
 内容全为探针自拟的琐碎指令（`echo u2a-probe` / `DONE`），无用户对话内容。
+
+
+## 升级门禁（G9b，2026-08-15 立）
+
+固定夹具永不自己变红（false-green）：codex-cli 版本升级时**必须**——
+
+1. 重跑 `spikes/s5-u2a-history-probe.ts`（花 1 真实回合）重新捕获 `thread/resume` 回包；
+2. 比较回包 `turns[].items[]` 的 **item type 集合**与本目录 `codex-s5-thread-resume.jsonl` 的差异——出现新类型（尤其 reasoning / commandExecution 若恢复进重投影）即触发 reader 富化评审（切片 5 L1 哨兵）；
+3. 重跑 `codex app-server generate-json-schema` 更新契约快照（既有 L7 纪律）；
+4. 顺带核对 `historyMode` / `itemsView` 语义有无启用（L2 观察项）。
+
+G8b 免额度姿态校验可随时重跑：`spikes/s5-g8b-posture-probe.ts`（注意零回合 thread 无 rollout 的前置，见该文件头）。
