@@ -1,92 +1,108 @@
-# S3 切片 5 施工规格 — Codex 历史（5a 显式降级 + 5b thread/resume 重投影）rev.1
+# S3 切片 5 施工规格 — Codex 历史（5a 显式降级 + 5b thread/resume 重投影）rev.2
 
 > 2026-08-15。plan root：[multi-agent](../plantree/plans/multi-agent/README.md)。上游：[S2 设计档 §3 切片 5](./2026-08-06-s2-codex-integration-design.md)。
-> **S2-d 原档（含 G1–G12 可执行形式）确认不在仓内**（全 docs grep 仅 S2 档引用）——本档按仓内证据**重生成 G 表**，与切片 4「取证重生成契约」同一路径。
-> 取证来源：① 四路只读取证 workflow `wf_bf03ccc7-b13`（Host / 渲染端 / 契约与 mapper / 切片 1 链路）；② **U2-a 真实回合**（U9 拍板预算内的 1 个，探针 `spikes/s5-u2a-history-probe.ts`，判决与新夹具见 [fixtures README「S5 追加捕获」](../../src/agent-host/__tests__/fixtures/codex/README.md)）。
+> **rev.2 = 双轨双盲对抗评审合取修订**（deep-reasoner 失败态镜头 5 blocker + 7 major + 7 minor；Codex 证据镜头 1 blocker + 3 major + 1 minor；四处独立命中同点；评审记录与分歧仲裁见 §7）。rev.1 原文以 git 历史为准（`5987113`）。
+> S2-d 原档（G1–G12 可执行形式）确认失传——本档按仓内证据重生成。取证：四路 recon workflow `wf_bf03ccc7-b13` + **U2-a 真实回合**（[fixtures README「S5 追加捕获」](../../src/agent-host/__tests__/fixtures/codex/README.md)）。
 > 标注纪律沿用 S2：`[实测]` / `[读码]` / `[推测]`。
 
 ---
 
-## 0. 取证对 S2 的推翻与收窄（五条，写码前锁定）
+## 0. 取证对 S2 的推翻与收窄（rev.2 修订后）
 
 | # | S2 原表述 | 取证结论 | 后果 |
 |---|---|---|---|
-| F1 | 5b id 方案 `h:codex:<threadId>:<itemId>` | **重投影 item id 是 turn 内位置序 `item-N`**（`turns[0].items[]` = item-1/item-2），跨 turn 必碰撞 [实测] | id 改为 **`h:codex:<threadId>:<turnId>:<itemId>`**（turnId 为 uuid，capture 有据） |
-| F2 | 「replay-merge 去重（若 id 不等改按 toolCallId/文本）」 | **实时 id 与重投影 id 是两个空间**（uuid/`rs_…`/`exec-…`/`msg_…` vs `item-N`）[实测]；且**重投影整类丢 item**：reasoning 与 commandExecution 不进 `thread/resume` 回包（4 个实时 item 只回 2 个，`itemsView:"full"` 仍如此；同进程 `thread/turns/list` 同样只回 2 个 → 是存储/压缩性质，非 restart 特有）[实测] | 按 id 去重**判死**；按 toolCallId 去重**也救不了缺失 item**（item 整个不在）。5b 不做跨源去重——依赖既有 `historyReplayMerge` 的 fold（text/thinking-only，宁多勿丢）兜同进程重放；**重投影缺工具行/思考行登记为已知限制 L1** |
-| F3 | 「reader = `thread/resume` 不传 `excludeTurns`」 | 证实且**唯一可用**：`thread/read` 恒不带 turns（`turns:[]`）、`thread/items/list` 服务端未实现（-32601）[实测]。`excludeTurns` 本身零证据（探针只发过 `{threadId}` 单键）——「不传」是唯一有实证的路径 | reader 定死 `thread/resume` `{threadId}` 单键；不实验 excludeTurns |
-| F4 | （S2 未覆盖）resume 的权限姿态 | **`thread/resume` 从 CODEX_HOME 的 config.toml 重新派生权限，不继承原 thread 的 start 参数**：原 `never/read-only` 起的 thread，restart-resume 回显 `on-request` + `dangerFullAccess`（探针跑在真实 `~/.codex` 下）[实测]。而我方隔离 config 投影**有意剥掉** `approval_policy`/`sandbox_mode`（`codexHome.ts:78-108`，因姿态原在 thread/start 参数层）[读码] → **resume 后姿态失控** | 新硬约束 **H9**（见 §4）：隔离 config 投影补写权限键 + resume 回显校验，失败即 fail-safe |
-| F5 | C7/U6/U7（listHistory 扇出 codex + per-agent errors + 临时 spawn） | `session.historyListed` **零渲染端消费者**（事件无 sessionId，reducer 顶部早退必吞；grep 零命中）[读码]；侧栏列表只读 `session-index.json`（主线 handoff 口径）；Host 侧 `agents[]` 参数已进类型但 index.ts 从未读 [读码] | **listHistory 的 codex 扇出砍出本片**（做了也是死代码）；`agents[]` 参数维持「类型在、不接线」现状；U6 的 errors[] 协议加法**不落**。→ 待裁定 P1（§6） |
+| F1 | 5b id 方案 `h:codex:<threadId>:<itemId>` | 重投影 item id 是 **turn 内位置序 `item-N`**，跨 turn 必碰撞 [实测]；`turns[].id` 是 uuid [实测] | 消息 id = **`h:codex:<threadId>:<turnId>:<itemId>`**；**块 id 与 toolCallId 同域改写**（M8）：reader 在 mapper 产物上统一加 `codex:<threadId>:<turnId>:` 前缀（mapper 本体不动）；itemId 缺失→位置序 `item-pN`、turn.id 缺失→`turn-N`（m17） |
+| F2 | 「replay-merge 去重（若 id 不等改按 toolCallId/文本）」 | 实时 id 与重投影 id 两个空间 [实测]；重投影**整类丢** reasoning/commandExecution（`itemsView:"full"` 的回包仍如此；同进程 `thread/turns/list` 同样只回 2 个 → 存储性质。注：full/summary 是**回包里观察到的值**，非我方请求变体，m19）[实测] | 按 id 去重判死；toolCallId 去重救不了缺失 item。**既有 fold 兜不住 codex**（M9/Codex-major 双轨同判）：codex 实时链一回合单条 assistant 消息挂 reasoning/tool 块 → 永不可 fold，且 merge 把保留行整体追加到历史**之后**（重排）[读码 `historyReplayMerge.ts:153-161,259`] → 登记 **L6** + **G14 钉现行为**；B1 的「活连接不重投影」分支收窄暴露面 |
+| F3（rev.2 修正） | 「thread/resume 唯一可用」 | **唯一不可用的是 `thread/items/list`**（-32601）[实测]；`thread/read` 恒 `turns:[]` [实测]；`thread/resume` 与 `thread/turns/list` 都能回 items 且内容一致 [实测]；resume 回包带 `initialTurnsPage`/`turnsBackwardsCursor`/`itemsBackwardsCursor` 三个分页键（单 turn 下均 null）、turns/list 带 `nextCursor`（M6）[实测] | 冷恢复用 `thread/resume{threadId}` 单键（兼续跑）；**已有活连接的历史补读用 `thread/turns/list`**（无 resume 副作用，B1）；**任一分页 cursor 非 null → `truncated:true`**（诚实优先；全量翻页另立 L7） |
+| F4 | （S2 未覆盖）resume 权限姿态 | `thread/resume` 从 CODEX_HOME 的 config.toml **重新派生**权限（字段级对上：`on-request`/`danger-full-access`/`user` 逐字来自探针机的真实 config）[实测]；我方隔离投影**有意剥掉** `approval_policy`/`sandbox_mode` [读码]；**resume 回显里 `networkAccess` 键恒缺失** [实测]；仓内已有 `compareSandboxEcho` 但为 **advisory 语义**（部分字段缺失可判 match，create 路径仅 WARN）[读码 `codexRuntime.ts:275-377,825-831`] | 硬约束 **H9（rev.2 细化）**见 §4 |
+| F5 | C7/U6/U7（listHistory 扇出） | `session.historyListed` 零渲染端消费者、事件无 sessionId 必被 reducer 早退吞掉、Host 从未读 `agents[]`、侧栏数据源是 `chat.listSessions`（双轨 + recon 三方证实）[读码] | **扇出砍出本片**（待裁 P1）；`agents[]` 类型维持不接线 |
+| F6（rev.2 新增） | rev.1 引 C11 称「jsonl_not_found 文案已去 JSONL 字样」 | **不实**：guidance 仍含「历史文件（JSONL）」、dead-session hint 承诺 Claude CLI 专属报错串 [读码 `historyError.ts:52-64`]（M11） | 本片顺带把两段文案改 agent 中性 + 测试钉住；「渲染端零改动」修正为「渲染端仅文案与测试」 |
 
 ## 1. 范围
 
-**5a — 显式降级契约（先落，落地后永不删；最终态是「无 reader 的 agent」的 default 分支）**
+### 5a — 显式降级契约（先落；最终态 = 「无 reader 的 agent」default 分支，永不删）
 
-Host 侧（渲染端零改动——`history_unsupported` 的 CODE_COPY/toCode/图标/warning 态/Retry 禁用**已全链就位且今日是死代码**，无任何 Host emit 站点 [读码]）：
+1. `codexRuntime.resumeSession` 前置守卫（**顺序固定**，B1/B2/M10）：
+   - **① busy 守卫**：`state?.turn !== null || registry.get(sessionId)?.running` → 镜像 Claude 发 `host.error{code:'session_busy', fatal:false}` 并 return（**H10 例外一**，理由：会话已活着可用，此时注入历史错误横幅是错误语义；Claude 先例 `claudeRuntime.ts:360-375`；registry 自身契约要求调用方拦 [读码 `sessionRegistry.ts:72-76`]）；
+   - **② agent 冲突守卫**：registry 既有条目 `agent !== 'codex'` → `host.error{code:'agent_conflict', fatal:false}` 并 return，**禁止**靠 `registry.resume` 覆写（它有意不合并 agent [读码 `:70-81`]；**H10 例外二**——不能对拒绝拥有的会话谎发 resumed）；
+   - **③ 活连接守卫**（B1）：`this.sessions.has(sessionId)` 且连接 alive → **不 spawn**，复用现有连接以 `thread/turns/list` 补读历史（F3），照常发三连；`connect` 工厂全程只被调用一次（G 断言）。
+2. 降级主体（无 reader / 5a 独立落地态）：**先绑定**（`registry.resume{agent:'codex', runtimeIdentity, …}`）→ 三连：
+   - `session.resumed{agent:'codex', runtimeIdentity}` →
+   - `session.history` **全字段**（B5）：`{runtimeIdentity: threadId, workspacePath, messages: [], truncated: false, omittedCount: 0, agent: 'codex', error: {code:'history_unsupported', …}}`，且 **requestId 全程透传**（renderer 的 resume 快照按 requestId 配对 [读码 `chatSessions.ts:479` / `historyReplayMerge.ts:121-131`]）→
+   - `session.status{idle}`。零 host.error、零连接 spawn。
+3. 5a 态 send：无 state → 既有 `host.error{code:'session_not_found', fatal:false}` 路径，Composer 有 sessionId+requestId 关联捕获，非静默且不卡 busy [读码，Codex 轨验证]。**诚实性修正（M12）**：`history_unsupported` 的 continuationHint 不得承诺「可以继续发送」→ 文案改法待裁 **P2**。
+4. 渲染端改动仅限：M12/F6 三段文案 + 测试（G3/G14 及文案钉）。banner/图标/Retry 机制零改动（全链已就位 [读码]）。
 
-1. `codexRuntime.resumeSession` 从「host.error 拒绝」改为**降级契约**：
-   - **先注册**：`registry.resume(...)`，会话绑 `agent:'codex'` + `runtimeIdentity`（**misroute blocker**：今日拒绝路径不注册 → 后续 send/stop/close 经 `runtimeForSession` 误路由到 ClaudeRuntime 再 `session_not_found`，错 runtime 错错误码 [读码 `index.ts:232-237` + `agentWire.ts:118-120`]）；
-   - 按 Claude 契约发三连：`session.resumed{agent,runtimeIdentity}` → `session.history{messages:[], agent:'codex', error:{code:'history_unsupported',…}}` → `session.status{idle}`（镜像 `claudeRuntime.ts:351-451` 的 replayHistory 形状；**不得走 host.error**——resume 的 host.error 渲染端零关联，是静默无声无息的失败 [读码 `useResumeSession.ts:39-57`]）；
-   - **不 spawn 连接**（5a 零 IO）。
-2. 5a 态下的 send：会话已注册但无活连接 → `codexRuntime.send` 现有 no-state 路径给出显式非致命错误（取证确认其形状后钉住，不得静默）。
+### 5b — 真 resume（历史重投影 + 运行时续跑一条链）
 
-**5b — 真 resume（历史重投影 + 运行时续跑，一条链）**
+1. `codexHistoryReader.ts`（纯函数为主）：`thread/resume` 回包 → `HistoryMessage[]`：
+   - 逐 item 过 **`mapCodexItem`**（与实时链共用；**不得**碰 `CodexNormalizer.ingest` [读码]）；空 blocks（not_rendered）整条略过；
+   - id/块 id/toolCallId 按 F1 域改写；时间戳（m16/Codex-minor）：userMessage = `turn.startedAt×1000`、末位 agentMessage = `turn.completedAt×1000`（completedAt null → 回落 startedAt），其余 item 取 startedAt；G4 断言具体值；
+   - **上限与诚实截断**（M7）：沿用 Claude 侧 `HISTORY_MAX_MESSAGES` 级常量与头部淘汰 + `omittedCount`；**分页 cursor 非 null → `truncated:true`**（M6）。
+2. `resumeSession` 全链（**与 createSession 同构**，B3）：
+   - 守卫①②③（同 5a）→ `ensureCodexHome` → spawn 连接 → **立即** `this.sessions.set(state)` + `registry.resume(...)`（**在 initialize 之前**——resume 窗口不安静：MCP 启动通知/elicitation 可能到达，无 state 的服务端请求会被静默丢弃 [实测 fixture 第 5-8 行 + 读码 `codexRuntime.ts:900-901,1047-1048`]）→ initialize → `thread/resume{threadId}` 单键；
+   - **resume 窗口内压住 status mapper 出声**（m13）：`session.resumed` 发出前 mapper 不得先发 `session.status`；G 按有序子序列断言兜底；
+   - **成功**：H9 校验过 → 发 `session.resumed` → `session.history{messages, 全字段, truncated 如实}` → `session.status{idle}`；连接留作会话活连接（**resume 即续聊**）；
+   - **失败路径一律 `teardown()`**（drain pending → interrupt → dispose → delete state + registry 状态收敛），**然后**三连降级（B3；G7 断言 teardown 三步而非仅进程死）：thread 不存在→`jsonl_not_found`（文案已中性化，F6）；spawn/initialize/超时→`read_failed`；H9 不过→`read_failed`（message 写明权限姿态原因）；无 reader→`history_unsupported`。
+3. `history_unsupported` 分支保留为 default（5a 代码即最终 default）。
 
-1. 新 `src/agent-host/codexHistoryReader.ts`（纯函数为主）：输入 `thread/resume` 回包 → `HistoryMessage[]`：
-   - 遍历 `result.thread.turns[].items[]`，逐 item 过 **`mapCodexItem`（与实时链路同一纯函数**，`CodexBlock = HistoryBlock` verbatim，零上下文依赖 [读码]；**不得**复用 `CodexNormalizer.ingest`——那是回合循环专用有状态层 [读码]）；
-   - id：`h:codex:<threadId>:<turnId>:<itemId>`（F1）；role：userMessage→user、agentMessage→assistant（mapper 的 `role` 字段现成）；时间戳：turn 的 `startedAt/completedAt` 为**秒**（capture 值 1786767552）→ ×1000 进 ms；
-   - 空 blocks 的 item（not_rendered）整条略过（渲染端对空 blocks 已有防御，但不投喂垃圾）。
-2. `codexRuntime.resumeSession` 升级为全链：`ensureCodexHome` → spawn 连接（复用 `codexConnection`/`codexNodeEntry`，与 createSession 同构）→ initialize → `thread/resume{threadId}` →
-   - **成功**：H9 回显校验过 → `registry.resume` → 建 `CodexSessionState`（threadId、policy、连接归此会话——后续 `turn/start` 直接可用，**resume 即续聊**）→ `session.resumed` → `session.history{messages}` → `idle`；
-   - **thread 不存在**（rollout 丢失 = codex 版断链）：错误映射 `jsonl_not_found`（C11/D32 已裁语义放宽、文案已去 JSONL 字样）→ 三连降级（messages:[] + error）→ 连接关闭；
-   - **spawn/initialize/超时类失败**：映射 `read_failed`（retryable，渲染端有 Retry）→ 三连降级 → 连接关闭；
-   - **H9 校验失败**：视同失败（fail-safe）：杀连接 → `read_failed` 降级三连，message 写明权限姿态不符。
-3. `history_unsupported` 分支保留为「该 agent 无 reader」default（5a 代码即最终 default 分支，5b 不删只改 codex 的 happy path）。
+### 明确不做（登记）
 
-**明确不做（登记，防散架）**
+- listHistory codex 扇出 / U6 errors[] / U7（F5，P1）；跨源 id 对齐去重（F2）；重投影缺行的 UI「部分历史」指示（L1）；merge 重排的口径改造（L6，agent 无关既有行为）；分页全量翻页（L7）；`historyMode`/`itemsView` 处理（L2）；`thread/fork`（C12）；协议升版（禁）。
 
-- listHistory 的 codex 扇出 / U6 errors[] / U7 临时 spawn（F5，待裁定 P1）；
-- 跨源 id 对齐去重（F2 判死）；重投影缺 reasoning/exec 的 UI「部分历史」指示（L1，另立）；
-- `historyMode:"legacy"` / `itemsView` 字段的处理（仓内零消费 [读码]，观察项 L2）；
-- `thread/fork`（C12 禁令不变）；协议不升版（硬约束不变）。
-
-## 2. 验收 G 表（证据重生成；每条须有可执行断言）
+## 2. 验收 G 表（rev.2）
 
 | G | 断言 | 层 |
 |---|---|---|
-| G1 | 5a/5b 的 resume 后会话在 registry 绑 codex：随后 `session.send`/`stop`/`close` 路由到 CodexRuntime（misroute 钉死；含「拒绝路径也注册」的负例回归） | Host 单测 |
-| G2 | 5a 三连顺序与 payload 钉死：resumed（agent+runtimeIdentity）→ history（messages:[] + error.code=history_unsupported + agent）→ status idle；全程零 host.error、零连接 spawn | Host 单测 |
-| G3 | `history_unsupported` 走 store reducer 端到端（applyRuntimeEvent → historyErrors → banner view + Retry 禁用 + composer 不禁用）——补 CTR-02 缺口（现仅 parseHistoryError 直调覆盖 [读码]） | 渲染端单测 |
-| G4 | reader 纯函数喂**真实夹具** `codex-s5-thread-resume.jsonl` 的回包 → 恰 2 条 HistoryMessage（user 原文 / assistant "DONE"），id 形如 `h:codex:<threadId>:<turnId>:item-1/2`，时间戳为 ms | Host 单测（真实帧） |
-| G5 | id 含 turnId：构造两 turn 输入（合成输入喂纯函数，非冒充线上帧）→ 四条 id 全唯一；item-N 复现跨 turn 时无碰撞 | Host 单测 |
-| G6 | 成功 resume 全链（mock 连接）：thread/resume 带且只带 `{threadId}`；回显校验通过后 resumed→history(messages)→idle；**连接保留**、后续 send 的 `turn/start` 打同一 threadId | Host 单测 |
-| G7 | 失败映射三分法：thread-not-found→`jsonl_not_found`、spawn/超时→`read_failed`、无 reader→`history_unsupported`；三者都以三连降级收尾（messages:[] + error + idle），连接不残留 | Host 单测 |
-| G8 | **H9 权限重申**：① codexHome 投影 config 含 `approval_policy`/`sandbox_mode` 且值与 `CODEX_PERMISSION_DEFAULT` 单一真相（相等断言）；② resume 回显与期望不符 → 杀连接 + read_failed 降级（fail-safe 用例） | Host 单测 |
-| G9 | mapper 契约照真回包：`mapCodexItem` 直接吃重投影形状的 userMessage（content[] 型）与 agentMessage（text 型）不 malformed；**当前真相钉住**「重投影只含 user/agent 两类」——codex 未来版本若恢复 reasoning/exec，此钉变红提醒富化（L1 的哨兵） | Host 单测（真实帧） |
-| G10 | flag off：`session.resume{agent:'codex'}` 仍在 index.ts 门口 `agent_unsupported`（§4 off 态 #2 不回归） | Host 单测 |
-| G11 | Claude 端到端零变化：claude 侧文件零 diff；全量既有 vitest 0 红 | 门禁 |
-| G12 | 协议不升版断言仍绿（`AGENT_HOST_PROTOCOL_VERSION===1`）；索引顶层裸数组断言仍绿 | 既有钉 |
-| G13 | 重启后 resume（G13 原义）：从 `session-index.json` 行出发（agent=codex + runtimeIdentity=threadId [读码：#22 守卫已放宽、链路 create 半边实测通]）→ resume 命令逐跳携带 agent/runtimeIdentity/workspacePath [读码] → mock 连接断言 `thread/resume` 收到的正是索引里的 threadId | Host 单测 + 后续 CDP 实机 |
+| G1 | resume 后 registry 绑 codex，send/stop/close 路由 CodexRuntime。**负控三条**：① spawn 失败降级后 send 仍进 CodexRuntime（拒绝路径也绑定）；② registry 已有 claude 条目 → `agent_conflict` 拒绝、零 spawn、无三连；③ busy 会话 → `session_busy` 拒绝、旧 state/turn 原样无恙 | Host 单测 |
+| G2 | 5a 三连有序子序列 + `session.history` **全字段等值断言**（runtimeIdentity=threadId / workspacePath / truncated:false / omittedCount:0 / agent / error.code / requestId 透传）；零 spawn | Host 单测 |
+| G3 | 渲染端增量：`history_unsupported` 走 reducer 端到端置 historyErrors + banner 视图 severity=warning + **Retry 不渲染**（visible:false，非 disabled，m14）+ composer 不禁用；文案钉（M12/F6 新文案） | 渲染端单测 |
+| G4 | reader 喂真实夹具 `codex-s5-thread-resume.jsonl` → 恰 2 条 HistoryMessage；id 含 threadId+turnId；**时间戳等值 `1786767552000` / `1786767565000`** | Host 单测（真帧） |
+| G5 | 合成两 turn 输入：**消息 id、全部块 id、toolCallId 三个域全局唯一**（M8）；itemId/turn.id 缺失走位置序兜底不产 `undefined` 拼串 | Host 单测 |
+| G6 | 成功 resume 全链（**内存 transport 驱动真实 connection 核**，m15，禁手写 stub 自证）：`thread/resume` 带且只带 `{threadId}`；state+registry 在 initialize 前就位（窗口内到达的服务端请求有 state 可查）；有序子序列 resumed→history→idle；连接保留、后续 send 的 `turn/start` 打同一 threadId | Host 单测 |
+| G7 | 失败四分法（jsonl_not_found / read_failed×2 / history_unsupported）各自：**teardown 三步观测**（pending drain + dispose + state 删除）→ 三连降级全字段 → 无进程/监听残留 | Host 单测 |
+| G8 | **H9**：① codexHome 投影 config 含 `approval_policy`/`sandbox_mode` 且与 `CODEX_PERMISSION_DEFAULT` 单一真相（等值断言）；② resume 回显 **approvalPolicy+sandbox.type 两维**任一 mismatch **或 missing** → fail-safe teardown+read_failed；③ **负控四条**：完全无回显 / 只回 approval / 只回 sandbox / networkAccess 缺失（**最后者必须通过**——该键 resume 恒不回显 [实测]，只查两维）；④ create 路径 advisory 语义不动（回归钉） | Host 单测 |
+| G8b | **施工期免额度真机正例**（`thread/start`/`thread/resume` 不花额度）：隔离 CODEX_HOME + 新投影 → start 回显、restart-resume 回显均两维 match。**条件执行**：若正例不过（token 归一化坑），fail-safe 降级为 WARN + 登记，不得带病转 fatal | 施工现场 |
+| G9a | mapper 契约照真帧：重投影形状的 userMessage（content[] 型）/ agentMessage（text 型）→ rendered（固定夹具回归，**只**证明 0.145.0 形状） | Host 单测 |
+| G9b | **升级门禁（人工，防 false-green——固定夹具永不自己变红 [Codex 轨]）**：codex 版本升级流程 = 重跑 capture 探针 + 比较 `thread/resume` 的 item type 集合，出新类型即审 reader；写进 fixtures README 升级段 | 流程 |
+| G10 | flag off：resume 在 index.ts 门口 `agent_unsupported`（回归） | Host 单测 |
+| G11 | Claude 端到端零变化；全量 vitest 0 红 | 门禁 |
+| G12 | 协议版本===1、索引裸数组断言仍绿 | 既有钉 |
+| G13 | 拆两半（m15）：渲染端半——`sessionIndexMerge`+`resumeIntent` 从索引行产出含 agent+runtimeIdentity 的 resume args（既有测试补 codex 例）；Host 半——resume 命令带索引里的 threadId → mock 连接断言 `thread/resume` 收到同值；真机 CDP 挂下轮点验单 | 双侧单测 |
+| G14 | **钉现行为**（M9/L6）：真实四 item 实时 bucket + 两 item 重投影历史过 merge → 断言当前输出（fold 命中面 + 保留行追加在后）——把重排写成已知事实而非意外 | 渲染端单测 |
+| G15 | 分页与上限：合成「cursor 非 null」回包 → truncated:true；合成超限多 turn → 头部淘汰 + omittedCount>0 | Host 单测 |
 
 ## 3. 施工顺序
 
-1. **5a**（小、零 IO）：codexRuntime.resumeSession 降级契约 + G1/G2/G3/G10 → 四门串行；
-2. **5b-reader**（纯函数 + 真夹具测试）：codexHistoryReader + G4/G5/G9；
-3. **5b-runtime**：resumeSession 全链 + codexHome 投影扩展 + G6/G7/G8/G13 → 四门串行 + 变异验证；
-4. 收口：G11/G12 全量、台账、plantree、（CDP 实机验证挂入下轮真机/本地点验单）。
+1. **5a**：守卫①②③ + 降级契约 + 文案两处 + G1/G2/G3/G10 → 四门串行；
+2. **5b-reader**：纯函数 + G4/G5/G9a/G15；
+3. **5b-runtime**：同构全链 + codexHome 投影扩展 + G6/G7/G8/G13 + **G8b 现场正例** → 四门串行 + 变异验证；
+4. 收口：G11/G12/G14 + 台账 + plantree + G9b 写进 README。
 
-## 4. 硬约束（S2 附表 8 条全承继，新增两条）
+## 4. 硬约束（S2 附表 8 条承继 + 三条）
 
-- **H9（新）**：Codex 会话的权限姿态必须在 **config 投影与 resume 回显校验**两层同时成立；两处取值同源 `CODEX_PERMISSION_DEFAULT`（单一真相），回显不符即 fail-safe 断连降级。
-- **H10（新）**：5a/5b 的一切失败路径必须以 `session.history{error}` 三连收尾，**不得以 host.error 结束 resume**（渲染端 resume 链路对 host.error 零关联 [读码]）。
+- **H9（rev.2）**：Codex resume 的权限姿态三层防御——① 隔离 config 投影写 `approval_policy`/`sandbox_mode`（与 `CODEX_PERMISSION_DEFAULT` 同源单一真相；**注意它是全应用共享持久文件：常量或版本一变，下一次 resume 即重定老 thread 姿态**，m18）；② resume 回显 **approvalPolicy + sandbox.type 两维严格**（mismatch/missing 皆 fail-safe）；③ `networkAccess` 维 resume 恒不回显 [实测] → 只由 config 层承载，事件 message 注明「network 维未校验」。create 路径维持 advisory（S2 硬约束 7 禁因校验挂回合；不对称理由：create 姿态由我方 thread/start 参数显式下发，resume 姿态源头是 config——回显是唯一证据）。
+- **H10**：resume 失败一律 `session.history{error}` 三连收尾，不得 host.error 收尾。**两个例外**（都不是「resume 失败」而是「拒绝受理」）：busy → `session_busy`、agent 冲突 → `agent_conflict`（§1 理由）。
+- **H11（新）**：resumeSession 的一切 I/O（spawn/initialize/resume）之前，state 与 registry 绑定必须已存在；一切失败经 `teardown()` 清态后才发降级三连。
 
 ## 5. 遗留登记
 
-- **L1** 重投影缺 reasoning/commandExecution（codex 0.145.0 存储性质）——历史回放无工具行/思考行；G9 哨兵钉当前真相；「部分历史」UI 指示另立。
-- **L2** `historyMode:"legacy"` / `itemsView:"full"|"summary"` 零消费观察项；codex 升级重跑契约快照时一并看。
-- **L3** 5a 态 send 的错误形状依赖 codexRuntime 现有 no-state 路径——施工时取证钉住（若形状不可接受再修，不预设）。
-- **L4** `historyErrors` 仅被「无 error 的 session.history」清除 [读码]——重复 resume 尝试的 stale 场景补一条渲染端用例（归 G3 附带）。
-- **L5** 真实回包夹具只覆盖单 turn/两 item 形态；多 turn、含审批/问答的 thread 重投影形状未捕获（预算内回合已花完，留待下次真实使用时截获）。
+- **L1** 重投影缺 reasoning/commandExecution（0.145.0 存储性质）——G9a 只钉现状，升级哨兵走 G9b 人工门禁；「部分历史」UI 指示另立。
+- **L2** `historyMode`/`itemsView` 零消费观察项，并入 G9b 升级流程一并看。
+- **L3**（已结）5a 态 send 形状 = `host.error{session_not_found}`，渲染端有关联捕获 [读码]；诚实性归 P2。
+- **L4** historyErrors 清除的端到端已有覆盖 [读码 `chatSessionsHistory.test.ts:423-438`]（rev.1 误判缺口，m14 更正）；G3 只补 history_unsupported 例。
+- **L5** 真帧夹具仅单 turn/两 item；多 turn、含审批/问答 thread 的重投影未捕获（额度已花完，下次真实使用时截获 + G9b）。
+- **L6** codex 同进程 resume 的 merge 重排/重复（agent 无关既有 merge 口径 × codex 单 assistant 消息形态）——G14 钉现状，口径改造另立。
+- **L7** 分页全量翻页（`thread/turns/list` + cursor）——本片只做诚实 truncated，翻页另立。
 
-## 6. 待裁定
+## 6. 待裁定（P1/P2 当场问）
 
-- **P1（用户）**：listHistory 的 codex 扇出按 F5 砍出本片——「侧栏 Codex 行来自 session-index（切片 1 已落）」已覆盖可见性需求；若要「扫 CODEX_HOME 补索引外的 codex 会话」再立新片。**默认：砍。**
+- **P1（用户）**：listHistory 的 codex 扇出砍出本片（F5 三方证据）。默认：砍。
+- **P2（用户）**：5a/`history_unsupported` 的 continuationHint 诚实化文案（M12：现文案承诺「可以继续发送」，而 5a 态每次 send 必收 `session_not_found`）。
+
+## 7. 双轨评审记录（合取仲裁）
+
+- **独立命中同点四处**（可当定论）：先绑定顺序（DR-B3 / Codex-blocker）；registry 不合并 agent 的冲突面（DR-M10 / Codex-blocker）；merge 重排（DR-M9 / Codex-major2）；时间戳规则欠定（DR-m16 / Codex-minor5）。
+- **单轨独有全采纳**：DR——B1 连接泄漏、B2 busy 守卫、B4 unverifiable 语义、B5 payload 抹字段、M6 分页、M7 上限、M8 块 id、M11/M12 文案诚实性、m13~m19；Codex——G9 false-green 哨兵、`compareSandboxEcho` 已存在的事实、L3 精确形状。
+- **分歧一处，合取裁定**：H9 严格度——Codex 主张三维全严 vs DR 实证 `networkAccess` resume 恒不回显（全严=resume 必死）。裁定 = 两维严格 + 第三维 config 层承载 + G8b 免额度真机正例条件执行（互补反例合取，非二选一）。
+- **编排者对 DR 一处修正**：B2 建议 busy 拒绝走三连+read_failed——否决，改镜像 Claude 的 `session_busy`（对活会话注入历史错误横幅是错误语义），H10 开例外并记理由。
