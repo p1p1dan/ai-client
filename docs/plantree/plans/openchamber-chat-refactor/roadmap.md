@@ -8,7 +8,7 @@
 
 **阶段性**
 - Phase 0 技术 Go/No-Go：✅ 正式 Go（2026-08-15 加密机现场 T-11 六项全过 → CP5；历程见 [phase0-report](../../../plans/phase0-report.md)）
-- Phase 0A 设计基线补做 🟡 部分完成 2026-07-28——A01/A05/A06 交付（产物[对齐基线 HTML](../../../design/phase0a-openchamber-alignment.html)，拍板 D18/D19/D20）；**A02/A03/A04 未立项，Phase 未整体收口**（口径以总台账 0A 行为准）
+- Phase 0A 设计基线 ✅ 收口（2026-08-15 D43）——A01/A05/A06 交付（2026-07-28，产物[对齐基线 HTML](../../../design/phase0a-openchamber-alignment.html)，拍板 D18/D19/D20）；A02/A03/A04 裁定被演进取代（见总台账 D43 行）
 - Phase 1 UI Shell（Mock）✅ `259e863`（旧四区口径，不回退；D18/D19 后重做归 T-21/T-22）· Phase 2 Runtime Vertical Slice ✅
 
 **主线 C-xx（全部完成，明细见[主线台账](../../../plans/ledger-claude-mainline.md)）**

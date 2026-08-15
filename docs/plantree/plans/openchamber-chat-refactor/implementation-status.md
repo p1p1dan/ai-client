@@ -5,9 +5,9 @@
 > [2026-07-28 ~ 08-03](./history/2026-0728-0803-archive.md) ·
 > [2026-08-08 全文快照](./history/2026-0808-implementation-status-archive.md)（本文件瘦身前原文，含 0-duodecies ~ 0-novodecies 六份清单）。
 
-- **Current Phase**：**Phase 0 正式 Go（2026-08-15 CP5 过）→ 开发线恢复施工：意外发现小批 → multi-agent 切片 5**。
+- **Current Phase**：**Phase 0 正式 Go（CP5）+ Phase 0A 收口（D43）→ 开发线恢复施工：意外发现小批（含 #13）→ multi-agent 切片 5**。
   观感对齐批次（2026-07-28 转向，D18/D19/D20）的开发线任务 T-29 / T-12~T-15 / T-23 / T-32 / T-16 / T-33 / T-35 / T-34 全部 Done。
-  ⚠️ Phase 0A 整体仍 🟡：A02 / A03 / A04 未立项（口径以总台账 Phase 总览 0A 行为准）。
+  Phase 0A ✅ 收口（2026-08-15 D43：A02/A03/A04 裁定被演进取代，口径以总台账 0A 行为准）。
 - **Last Landed**（2026-08-11）：**xvqiu1 四问题反馈批**——triage（[报告](../../../plans/2026-08-11-xvqiu1-triage.md)，四路独立排查 + 承重结论亲验）→ 用户拍板 **D30**（git (a) 先行）→ 施工四片：
   Temp 开关接线（可见性 + 创建入口双门控，settings import 参数化防 vitest 死锁）`2ba0bde` ·
   测试 config dir 迁 `%LOCALAPPDATA%` + `launch-gui-test.cmd` 双击包装器 `fdcbca0` ·
@@ -40,7 +40,7 @@
      → 测试机回归（[现场操作单「第二轮回归要点」](../../../plans/2026-08-10-field-test-sheet.md)七项复验 + **新增复验面：流式观感（flag `AICLIENT_HOST_PARTIAL_MESSAGES` 默认 ON，状态行 ✽ elapsed·↓tokens / 渐显 / 加密机 IPC 负载）、D34 全批（rail 迁顶栏 / git 面板 VS Code 化 / 提交展开 / diff 中栏）、D35 四调、`launch-gui-test.cmd` 包装器双击路径**；[加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) 步骤 4b R1~R4 照旧，R4 现已有 `[worktree:list]` 主进程日志可自证）
      → 加密机现场 T-11 六项 ✅ **2026-08-15 全过 → CP5，Phase 0 正式 Go（含 ⑥ TSD 白名单实证，open-q #7 关闭）**；余 CP2 = T-10 深度回归汇报。
   2. **开发线已裁定（2026-08-15）：意外发现小批先行 → multi-agent 切片 5 主攻**；候选五路存档：① T-21 收尾截图（唯一残留 In Progress，见 open-q #10）；
-     **新立项排队（2026-08-15 第二轮拍板，序待意外发现小批与切片 5 之后）**：D37 三件（projectsRoot 标记 / 卡内归档入口 / configDir 口径，S）→ D38 终端域改造（Ghostty 外溢退役，M）→ D39 git remote 进出（L）；(b) 泳道 graph 维持后置。
+     **新立项排队（2026-08-15 拍板 2~4 轮，序待意外发现小批与切片 5 之后）**：D31 四路按建议序（渲染端小批 → 右键菜单（连带解 #6 归档恢复）→ Progress 面板 → 权限选择器）→ D37 三件（projectsRoot 标记 / 卡内归档入口 / configDir 口径，S）→ D38 终端域改造（Ghostty 外溢退役，M）→ D39 git remote 进出（L）→ D40 `session.send` 补 model/effort（M）→ D44 jsdom+RTL 组件层（M）；小票：D41 CI Linux 门禁（S）· D42 dev.js 断言（S）；(b) 泳道 graph 维持后置。
      ② multi-agent 支线（已解冻在建，见[该 plan](../multi-agent/README.md)）；
      ③ Deferred 复活（C-17 问答/子 agent 进历史 · T-25 旧模块原色清理 · 后置 6 surface · C-12 压测）；
      ④ backlog 清票（见下）；
@@ -50,7 +50,7 @@
      ② ~~流式施工批~~ 已并入 ①（规格 rev.2 取代 spike §3/§4 直抄口径）；
      ③ Temp 门控五态 / D30-a 六项 / D29 已于 2026-08-14 **本地点验全过**（CDP 驱动 dev GUI，加密机风险经用户裁定解除后点验前移）；Windows 侧仅剩启动包装器（`launch-gui-test.cmd` 双击路径）随下轮真机（现场操作单已同步包装器启动步骤）；
      ④ **D34 UI 反馈批已于 2026-08-14 落地**（八提交 `7566d4c`~`0a3bb52`，六裁定见总台账 D34 行）：右栏 min 250 / rail 迁顶栏（覆盖 round-12）/ git 面板 VS Code 化 + 提交点击展开 + diff 迁中栏 / Context status 三行 / Thought 孤箭头修复（T-31 潜伏）——随下轮真机复验；**D35 diff 页四调同日落地**（`4d8f003`：Chat column 钮退役 / diff 恒双侧换行（Monaco `wordWrapOverride2` 覆盖链坑）/ diff tab 单例 / diff 激活独占中栏——用户宽屏澄清「并排非覆盖」后中途改规格）；余：X 状态紫色无语义 token（T-25）、①窄宽按钮异常已修（icon-only）待用户复验；
-     ⑤ 本地点验三条意外发现**已拍板即修一小批（2026-08-15，先于主线）**：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）；git 面板 Changes 计数**外部（命令行）提交后不自动刷新**（须手点刷新）另挂 backlog 票。
+     ⑤ 本地点验三条意外发现**已拍板即修一小批（2026-08-15，先于主线，#13 dark: 脱钩修复并入）**：`<button>` 嵌套违规 error（base-ui menu-trigger 内层）/ React「synchronously unmount while rendering」告警 / `chat:runtimeEvent` 监听器 11/10 超限告警（泄漏迹象）/ #13 dark: `@custom-variant` 一行修复 + CDP 亮暗逐屏复验；git 面板 Changes 计数**外部（命令行）提交后不自动刷新**（须手点刷新）另挂 backlog 票。
 
 > ⚠️ **门禁纪律**：本机内存有限，四门**逐门串行跑**，禁止链式合跑或与子代理/后台任务并行（曾 OOM exit 137）。
 > ⚠️ **GUI 启动口径**：填好 `dev.env` 后一律 `node scripts/dev.js`，勿用 `pnpm dev`；
