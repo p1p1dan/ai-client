@@ -1,6 +1,6 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**In Progress — S3 施工中，切片 0/1/2a/2c/3/4 已落地，下一件切片 5 历史**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工）。
+> 状态：**In Progress — S3 施工中，切片 0/1/2a/2c/3/4/5 已落地，下一件切片 6 收口**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工；切片 5 于 2026-08-15 收口）。
 >
 > ✅ **解冻裁定（用户 2026-08-06）**：原话「multi-agent 支线解冻 开干」。
 > 2026-08-05 的「后置」裁定（原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」）
@@ -64,7 +64,7 @@
 | **2c** 回合循环 + 事件归一化器 | ✅ **已落地 `8b0277f`** | S2 切片表 0→1→2→{3,4},5 里**没有任何一片认领它**：`turn/start`(即 send) · `item/*`→`message/tool/thinking` · `turn/completed` · `account/rateLimits/updated`→`usage.updated` · `turn/interrupt`(拼写仍 [未测]，`session.stop` 要用)。**连带后果最严重**：提问与审批只在回合中到达，没有回合循环则切片 3/4 的验收只能是夹具回放——会绿着落地却在生产里是死代码。S1 估净新增 300–420 行。**必须排在 3 之前** |
 | **3** 提问桥 | ✅ **已落地 `4b468f4`** | `codexQuestionBridge.ts`（纯函数）+ 三道前置守卫 + `pending.forget()` 前置修复 + 渲染端 id 键与 `isSecret` 掩码。施工档 [切片 3 规格](../../../plans/2026-08-10-s3-slice3-question-bridge-spec.md)（rev.2，双轨评审后修订）。**夹具实际只有 2 条入向报文 / 5 颗问题**——S2 写的「4 条 / 10 颗」仓内不存在 |
 | **4** 权限投影 | ✅ **已落地 `7f357c2`** | `codexDecisions.ts` + 审批桥全链路 + 渲染端 decision 透传 8 处。施工档 [切片 4 规格](../../../plans/2026-08-10-s3-slice4-permission-projection-spec.md)（rev.2 + §7 as-built）。评审在写代码前推翻 rev.1 十三处（含 `grantRoot` 会话级写权 blocker）；施工收窄规格一处（回合末 drain 仅审批族，§7.1）；复核修复含 decision 发射链三个接线 pin。**vitest 152 文件 3160 例 0 红** |
-| **5** 历史 | 待 1+2 | 先档 A（`history_unsupported` 显式降级）再档 C |
+| **5** 历史 | ✅ **已落地 `1aa68f2`+`61bcd0d`（2026-08-15）** | 5a 降级契约（busy/冲突/活连接三守卫 + 先绑定根治 misroute）+ 5b `thread/resume` 全链（**恢复即续聊**；H9 权限双层重申经免额度真机双臂实证）。U2-a 真实回合四推翻（id 对齐判死 / 重投影丢 reasoning·exec / thread-resume 唯一可靠读法 / resume 从 config 重派生权限）。规格 [切片 5 spec](../../../plans/2026-08-15-s3-slice5-history-spec.md)（rev.2 = 双轨双盲评审合取 + as-built）。四门全绿 **vitest 167 文件 3418 例 0 红**；变异 43+ 翻全红。P1 listHistory 扇出砍（死接口）、P2 假承诺文案改（用户拍板）。遗留 L1~L7 见规格 §5 |
 | **6** 收口 | 待全部 | flag on/off 双跑 + **侧栏窄宽截图（U8）** + 台账 |
 
 **切片 0/1 的双轨对抗复核（Opus + Codex 双盲）1 blocker + 5 major + 2 minor 全闭环**，

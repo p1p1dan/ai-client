@@ -106,3 +106,13 @@
 - **单轨独有全采纳**：DR——B1 连接泄漏、B2 busy 守卫、B4 unverifiable 语义、B5 payload 抹字段、M6 分页、M7 上限、M8 块 id、M11/M12 文案诚实性、m13~m19；Codex——G9 false-green 哨兵、`compareSandboxEcho` 已存在的事实、L3 精确形状。
 - **分歧一处，合取裁定**：H9 严格度——Codex 主张三维全严 vs DR 实证 `networkAccess` resume 恒不回显（全严=resume 必死）。裁定 = 两维严格 + 第三维 config 层承载 + G8b 免额度真机正例条件执行（互补反例合取，非二选一）。
 - **编排者对 DR 一处修正**：B2 建议 busy 拒绝走三连+read_failed——否决，改镜像 Claude 的 `session_busy`（对活会话注入历史错误横幅是错误语义），H10 开例外并记理由。
+
+
+## 8. As-built（2026-08-15 收口）
+
+- **提交链**：取证 `5987113` → rev.2 `83db520` → P1/P2 拍板 `4b0c655` → Phase A（5a+reader）`1aa68f2` → Phase B（5b-runtime）`61bcd0d` → G8b+no-rollout 钉 `4d61730` → G14 `ae3398e`。四门全绿 **vitest 167 文件 3418 例 0 红**。
+- **G 表全项闭合**：G1~G15 单测全落；G8b 免额度真机**双臂 PASS**（隔离投影 config 下 start 与 fresh-process resume 回显均两维 match；同 thread 在真实 config 下曾回显 dangerFullAccess——H9 正反两例闭环）；G9b 升级门禁入 fixtures README；G14 钉 L6 现行为。
+- **G8b 白捡实测**：零回合 thread 无 rollout 文件，resume 报 `-32600 no rollout found for thread id …`——rev.2 的 THREAD_MISSING_PATTERN 不含该唯一实测形态（"no rollout found" 不含字面 "not found"），已补 `no rollout` 择项并以真实串钉测试（变异红）。
+- **变异验证**：施工员自跑 Phase A 19 翻 + reader 10 承重 + Phase B 14 翻全红；编排者抽查 5 翻全红。事故一起：`statusGated = false` 翻转复原时新串在 :2313 有合法第二出现、唯一性断言拦截了盲复原，上下文锚定修复并全量复验（教训：变异脚本的 new-string 也要预检唯一性）。
+- **偏差登记**（全文见各批施工记录）：Phase A 7 条（guard③ 临时态、effort 不传、busy 谓词按意图、签名收紧、resumed 无 permissionPolicy、parseStats 省略、G10 已有）；reader 4 条（字节预算补、threadId 优先级、块 id 基底替换而非前缀、turns/list cursor 语义警示）；Phase B 10 条（codexWire +1 法名、posture 必传参数化、G7 drain 不可观测改锚、D4 default 导出钉、**D5 活连接读失败不拆连接**（会话可用性优先，H10 语义内）、D6 resume 窗口进程死单报、**D7 createSession 重构至共用 openConnection（同构 by construction）**、D8 scoped 越界自检、D9 夹具诚实标注、D10 G8b 移交编排者——已亲驱完成）。
+- **Residual 移交**：L1~L7 照 §5；G13 真机半边（CDP 点开 codex 会话行真实恢复）挂下轮本地/真机点验单；多 turn/含审批 thread 的重投影形状待下次真实使用截获（G9b 流程）。
