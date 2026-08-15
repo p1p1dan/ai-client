@@ -72,7 +72,11 @@ developer_instructions，provider 段是**有意保留的例外**（否则没凭
 **决定点在 2b 或 6 之前**，因为它同时决定 onboarding 要不要再写 `~/.codex`。
 
 
-## #7 `capabilities.agents` 只由 flag 决定，与 §2.1 的裁定有出入（2026-08-09）
+## ~~#7 `capabilities.agents` 只由 flag 决定，与 §2.1 的裁定有出入~~ —— ✅ **2026-08-15 切片 6 关闭**
+
+**关闭方式**：`HostAgentRegistry` 落地（`81a130b`）——initialize 时现算（flag × entry 探测 × `ensureCodexHome` 真准备）+ memoized 冻结（广播=执行不漂移）+ Main `getStatus().capabilities` 与渲染端 reduce/prime 双通路透传；C-c 半边一并闭合。四臂 reason（flag_off / entry_missing / home_prepare_failed）进 `agent_unsupported` message。规格 = [切片 6 spec](../../../plans/2026-08-15-s3-slice6-closure-spec.md) §2 + §11。原登记留档如下。
+
+（2026-08-09 原文）
 
 仲裁档 §2.1 采纳了 Codex 轨的主张：codex 可用性不只取决于 flag，还取决于 Main 解析出的 entry
 与隔离 home 的准备结果，故应在 initialize 时建 `HostAgentRegistry`。**切片 2a 实际落的是「flag 单独决定」**
@@ -84,7 +88,11 @@ correlated `agent_unsupported` 得知。属**诚实降级**（不是静默失败
 **连带**：C-c 那条（Main/renderer 会丢掉 `capabilities.agents`，`AgentHostManager.getStatus()` 只存 settings、
 `hostStatus.ts` 只折叠 thinking）**本片未动**，仍开着。两条一并归切片 6 收口，或另立。
 
-## #8 每个会话一个 app-server 进程（2026-08-09）
+## ~~#8 每个会话一个 app-server 进程~~ —— ✅ **2026-08-15 切片 6 关闭（裁定原样落地）**
+
+**关闭方式**：idle sweep 照 codeg 形状落地（`81a130b`）：180s/60s、env `AICLIENT_CODEX_IDLE_TIMEOUT_SECS`（≤0 禁用）、六条件资格（含 rolloutBacked——零回合 thread 无 rollout 不可 resume，绝不回收）+ **回收后续聊**（sweptSessions 名单判据的 send 静默复活，`session_revive_failed` 防渲染端换线程兜底）。共享连接维持不做。遗留 L8~L11 见[切片 6 spec §7](../../../plans/2026-08-15-s3-slice6-closure-spec.md)。原登记留档如下。
+
+（2026-08-09 原文）
 
 **实测代价（2026-08-09 编排者亲量，此前的「296MiB」是磁盘文件大小、不是内存，属误读风险，已更正）**：
 一个 app-server 进程树 **RSS 124 MiB**（node 壳 49 + 原生 codex 75）。原生二进制是 mmap 的，

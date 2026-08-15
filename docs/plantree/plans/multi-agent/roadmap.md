@@ -1,6 +1,6 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**In Progress — S3 施工中，切片 0/1/2a/2c/3/4/5 已落地，下一件切片 6 收口**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工；切片 5 于 2026-08-15 收口）。
+> 状态：**In Progress — S3 施工线全落（切片 0/1/2a/2c/3/4/5/6；仅 2b 打包链既定后置），下一阶段 = 用户登录管理**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工；切片 5/6 均于 2026-08-15 收口）。
 >
 > ✅ **解冻裁定（用户 2026-08-06）**：原话「multi-agent 支线解冻 开干」。
 > 2026-08-05 的「后置」裁定（原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」）
@@ -65,7 +65,7 @@
 | **3** 提问桥 | ✅ **已落地 `4b468f4`** | `codexQuestionBridge.ts`（纯函数）+ 三道前置守卫 + `pending.forget()` 前置修复 + 渲染端 id 键与 `isSecret` 掩码。施工档 [切片 3 规格](../../../plans/2026-08-10-s3-slice3-question-bridge-spec.md)（rev.2，双轨评审后修订）。**夹具实际只有 2 条入向报文 / 5 颗问题**——S2 写的「4 条 / 10 颗」仓内不存在 |
 | **4** 权限投影 | ✅ **已落地 `7f357c2`** | `codexDecisions.ts` + 审批桥全链路 + 渲染端 decision 透传 8 处。施工档 [切片 4 规格](../../../plans/2026-08-10-s3-slice4-permission-projection-spec.md)（rev.2 + §7 as-built）。评审在写代码前推翻 rev.1 十三处（含 `grantRoot` 会话级写权 blocker）；施工收窄规格一处（回合末 drain 仅审批族，§7.1）；复核修复含 decision 发射链三个接线 pin。**vitest 152 文件 3160 例 0 红** |
 | **5** 历史 | ✅ **已落地 `1aa68f2`+`61bcd0d`（2026-08-15）** | 5a 降级契约（busy/冲突/活连接三守卫 + 先绑定根治 misroute）+ 5b `thread/resume` 全链（**恢复即续聊**；H9 权限双层重申经免额度真机双臂实证）。U2-a 真实回合四推翻（id 对齐判死 / 重投影丢 reasoning·exec / thread-resume 唯一可靠读法 / resume 从 config 重派生权限）。规格 [切片 5 spec](../../../plans/2026-08-15-s3-slice5-history-spec.md)（rev.2 = 双轨双盲评审合取 + as-built）。四门全绿 **vitest 167 文件 3418 例 0 红**；变异 43+ 翻全红。P1 listHistory 扇出砍（死接口）、P2 假承诺文案改（用户拍板）。遗留 L1~L7 见规格 §5 |
-| **6** 收口 | 待全部 | flag on/off 双跑 + **侧栏窄宽截图（U8）** + 台账 |
+| **6** 收口 | ✅ **已落地 `81a130b`（2026-08-15）** | #7 HostAgentRegistry 全链 + #8 idle sweep 与回收后续聊（`session_revive_failed`）+ flag 双轮门禁（off/on 双轮 vitest 3482 全绿）+ **U8 三态截图判不挤** + **G13 真机恢复 PASS**。规格 [切片 6 spec](../../../plans/2026-08-15-s3-slice6-closure-spec.md)（rev.1 双轨合取 + §11 as-built）。open-q #7/#8 关闭；遗留 L8~L11 见规格 §7 |
 
 **切片 0/1 的双轨对抗复核（Opus + Codex 双盲）1 blocker + 5 major + 2 minor 全闭环**，
 两轨互补显著——blocker 与 registerSession 缺口**仅 Codex 见**，typecheck 盲区与自报身份零覆盖**仅 Opus 见**，
@@ -136,7 +136,7 @@ main 侧 `hostEnv.ts`。四门：lint 813 文件 0 错 / typecheck 0 / typecheck
 
 | 序 | 阶段 | 状态 | 备注 |
 |---|---|---|---|
-| 1 | S3 切片 3 / 4 / 5 / 6（提问桥 · 权限投影 · 历史 · 收口） | 在建 | 切片 3 开工前置：`serverRequest/resolved` 目前无消费者，须先修（否则从 3 起会留下陈旧 pending 条目 →「对不存在的请求回帧」） |
+| 1 | S3 切片 3 / 4 / 5 / 6（提问桥 · 权限投影 · 历史 · 收口） | ✅ **全落（2026-08-15）** | 四片依序收口；切片 6 见上表行（#7/#8 一并了账） |
 | 2 | **用户登录管理** | 未立项 | 用户口径：Claude 与 Codex **同一把 key、不同 URL**（claude `xxx.com` / codex `xxx.com/v1`）。**它是 [#9](./open-questions.md) 的解**——登录管理落地时，`codexHome` 的 provider 段应改为**由 app 按托管凭据生成**，而不再投影用户的 `~/.codex/config.toml`。届时一并定，本轮不预设计。 |
 | 3 | **Codex CLI 选择功能接入** | 未立项 | 即「聊天会话用哪个 agent」的 UI 入口。**注意三轴隔离**：现有 `AgentPickerMenu` / `SessionBar` 管的是终端 `BuiltinAgentId` 轴，**不是**聊天 `AgentWireName` 轴；`chatSessionActions.ts` 也没有 agent 参数。直接改旧 picker 会违反三轴隔离纪律，须另立入口。 |
 | 4 | **2b 打包链** | 待 | **体积已由用户 2026-08-10 拍板可接受**（141MB → 约 480MB，3.4×；codex 平台包单文件 296MiB）。原 open-q #1（C-15 的 +21MB）**一并关闭**。排期后置的理由：现在做只是让包变大，Codex 尚未到可用程度，无即时收益。 |

@@ -159,3 +159,22 @@
 
 施工 A → B → C（A 先行；B 依赖 A 无共享冻结面可并，但 protocolErrors 改造（C 件）与 A 同文件族，排 A 后）→ 四门逐门串行（off 轮）→ on 轮 test 门 → 点验 D → 台账 E。
 门禁纪律照旧：逐门串行、vitest `--maxWorkers=2` 以内、期间不并行大编队。
+
+## 11. As-built（2026-08-15 收口）
+
+- **提交序**：规格 rev.1 `e281435` → 施工批 `81a130b`（11 文件 +2643/−162）→ 收尾档案批（本节所在提交）。
+- **门禁**：lint 0 错 / typecheck 0 / typecheck:agent-host 0 / **off 轮 vitest 167 文件 3482 例 0 红** / **on 轮（`AICLIENT_AGENT_CODEX=1`）167 文件 3482 例 0 红（G16）**。基线 3418 → 3482（+64）。
+- **施工偏差与登记（全部追认）**：
+  - A 件：连带删除 `supportedAgents()` 纯函数（规格只要求删 `index.ts` 冻结常量）——按 F1 反漂移立场追认：留两个能算 agents 列表的函数正是要防的漂移。`ensureCodexRuntime` 的 home 空值检查因 registry 前置而结构性不可达，保留为防御。
+  - B 件三条规格冲突全部成立并按报告落地：①「wire 错误码词表 + AST 扫描」前提不成立（`HostErrorEvent.payload.code` 是裸 string、扫描管的是 agent 名三轴）→ 落具名常量 `CODEX_REVIVE_FAILED_CODE`（比现状强一档）；② B4 六条件在 runtime 层不可独立构造（`threadId==null` 恒伴 `rolloutBacked=false` 等）→ 纯谓词 `isCodexIdleSweepable` 承担 G6 字面 + 适配层 5 例端到端，变异 M10（`reviving` 子句）在运行时层不可杀，已注释登记；③ B6 名单清理补第四点：用户自行重开且冷 resume 失败时在 `resumeColdThread` 顶部清名单（M26 钉住），防「已见降级横幅还再 spawn」。
+  - B 件顺带修实码缺陷：`onExit` 原按 sessionId 查表，dispose 早于子进程真死时会把同 id 的**下一条**连接拆掉——改闭包捕获 `owner.state`。复活场景会把此竞态变常发。
+  - C 件规格缺口自解：无 `AICLIENT_CODEX_HOME` 的裸 vitest 环境里 flag on/off 都以 codex 不可用收场（reason 不同），原三断言检不出 off 钉丢失 → off 断言升级为 `describeHostAgentReason('flag_off')` 子串专断言（严格更强）。
+  - 编排者两笔：修 A 件 `hostStatus.test.ts` 三处 `prev` 字面量宽化型错（补 `HostStatus` 注解，根 typecheck 门抓获）；改 `codexRuntime.ts` 构造器注释里已删除常量名的引用。
+- **变异验证合计 40 处**：A 件 10（G1 四臂 5 + G2 冻结 5）全翻红；B 件 27 中 26 翻红 + M10 登记存活（运行时不可达组合）；C 件 3 全翻红（off 钉撤除在 on 轮翻红实证了钉的承重）。
+- **G12（渲染端半边）双源确认**：编排者与 B 件独立读码同判——`ChatComposer.tsx:1523` 兜底判据为严格 `=== 'session_not_found'`，新码落 `:1552` 通用可见失败分支，不触发 close+create。未加渲染端断言（组件内联逻辑），D 阶段真机未触发复活失败路径，按规格 G12 降级条款登记。
+- **D 件点验（CDP，evidence: `docs/design/refs/slice6-20260815-u8/`）**：
+  - **U8 三态全过，判定不挤**（icon-only 退路不启用）：280px 窄态（DOM 实测 280，DPR 1.33）双 chip 完整、长标题正常截断；500px 宽态干净；折叠 rail 无 chip（符合 F11 预期）。**C14/U8 关闭。**
+  - **G13 真机恢复 PASS**：借真 rollout（`019fd342-c370-7bc2-bdbe-873eb809316f`，129KB 真实对话）入隔离 home + 植入 index 行 → GUI 点行 → registry（flag on + PATH entry + home 真准备）→ spawn → `thread/resume` → H9 → 切片 5b reader 重放時间线完整可读 → 「Send follow-up…」可续发。切片 5 移交的真机半边了账。
+  - 一次瞬态：折叠态首拍全白系 reload 中间帧，重拍正常（DOM 全量在场），非缺陷。
+  - 现场已恢复：植入行/借用 rollout/dev.env flag/备份/进程树全清（残留第二个 dev.js 进程按精确 pid 清除）。
+- **L8~L11 维持登记**；B 件另报三条如实观察（复活成功后 registry 状态到首帧前仍 disconnected（单写者纪律不补写）/ 附件 send 先复活再 `not_implemented`（顺序与改动前一致）/ `close()` 的名单删除是防泄漏非行为位），均不改语义，随 L 系列归档。
