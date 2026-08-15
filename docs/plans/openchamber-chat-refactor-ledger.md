@@ -147,6 +147,7 @@
 | 2026-08-14 | **UI 反馈批（D34）八提交落地**：`7566d4c`（min 250 + rail 迁顶栏）/ `9b17dc6`（git 面板观感：平分+标题+行升级+token 切片）/ `6f0659a`（平分静态钉）/ `21ed45d`（提交点击展开）/ `c6a6c80`（diff 迁中栏页，面板内嵌退役）/ `f580129`（Context status 三行，脱敏红线守住）/ `185f5ec`（**Thought 孤箭头修复——T-31 潜伏缺陷**：纯思考回合降级链落 bare 渲染 null，加 thought 档；blame 排除本日批次）/ `0a3bb52`（D25 字体门禁收口）。观感批施工员 API 中断由编排者收尾（250px 窄宽 icon-only 修复 + 静态断言补铸；期间误用 git checkout 抹未提交函数，凭上下文复原并验证）。四门全绿 **vitest 163 文件 3329 例 0 红** | ✅ | `7566d4c`~`0a3bb52` |
 | 2026-08-14 | **D35 diff 页四调落地**：`4d8f003`——Chat column 钮退役 / diff 恒双侧换行（Monaco wordWrapOverride2 坑）/ diff tab 单例 / diff 激活独占中栏（宽屏澄清）。变异两轮命中精确；四门全绿 **vitest 3339 例 0 红** | ✅ | `4d8f003` |
 | 2026-08-15 | **test.4 CI 出包跑通（出包路径首秀）**：三轮迭代根治 Windows runner cpSync filter 整体失灵（`ae57020` 兜底 + `0d4011c` 自写 walk）；`windows-installers` 345MB / `windows-unpacked` 251MB 产出（run 31861599547）；Linux verify Node 24 断言恒红入 backlog（产品决定）。无 release 无 tag，在线用户零感知 | ✅ | `1a96a55` `ae57020` `0d4011c` |
+| 2026-08-15 | **test.4 用户真机初验通过，阶段归档**：NSIS 安装版正常（立即启动、使用无发现问题）；portable 启动 1-2 分钟——解压型包预期行为（每次启动解 ~250MB 到临时目录，杀软实时扫描加剧），**归档为已知限制不作缺陷**，口径与 T-10「优先安装版/unpacked」一致。用户裁定本阶段收口 | ✅ | —— |
 
 ---
 
