@@ -19,7 +19,7 @@
 |---|---|
 | I1 | 凭据唯一权威 = **CredentialVault**（`<userData>/credentials/vault.json`）。托管 claude-home 的 `settings.json` 是**唯一授权的第二份落盘**（0600、app 生成、登出即再生成无凭据版），此外任何位置不得出现明文 key |
 | I2 | 明文 key 永不进 renderer / IPC 返回值 / 日志 / trace。`verify-and-register` 的全量响应（含 key）**止步 Main**，renderer 只收 `{ok, account, authState}`（现状是全量穿到 renderer——B 轨抓出的 blocker，`shared/types/onboarding.ts:44` + `preload/index.ts:768`）。建统一 redactor（拦 `authToken/apiKey/OPENAI_API_KEY/ANTHROPIC_*/AICLIENT_CODEX_API_KEY/auth-token/cookie`） |
-| I3 | flag on（S6 中和后）：不写真实 `~/.claude/settings.json`、`~/.claude.json`、`~/.codex/*`；静态扫描断言生产源码不再拼 `homedir() + '.claude'` |
+| I3 | flag on（S6 停双写后）：不写真实 `~/.claude/settings.json`、`~/.claude.json`、`~/.codex/*`——**resume 命中 legacy 根的老会话除外**（S2 评审 M14 裁定②，U1 收编不清理的自然延伸，登记非缺陷）；静态扫描口径 = **文件级 allowlist + 每文件命中计数基线**（S2 评审 M7：本方案自身口径含 `?? 回退` 形态，字面禁令不可实现） |
 | I4 | codex 生成 config 不含 key；`<userData>/codex-home` 下**不存在 auth.json** |
 | I5 | **Host 进程生命周期 == 凭据纪元**：登录/登出/失效必 `agentHostManager.shutdown()`，下次 `ensureStarted` 重建（解 `ensureRuntime` 永久缓存与 registry 单飞记忆的凭据不刷新，`agent-host/index.ts:130-131`、`agentSupport.ts:132-137`） |
 | I6 | 网络故障 ≠ 凭据失效。业务请求 401/403 只触发一次 `POST {cch}/api/auth/login {key}` auth-probe；**probe 明确拒绝**才是失效终局证据（防离线/5xx 触发验证码风暴，防业务权限 403 误判） |
@@ -156,7 +156,8 @@ S0 保留一次**轻量部署一致性实打**（一封验证码走全程，确�
 - **旧文件处置（用户拍板 U1）：收编但永不清理**——外科中和整段取消，存量 `~/.claude`/`~/.codex` 留置原样，
   系统终端（app 外）用法不断。已知限制（诚实登记）：(a) 旧文件 key 可能过时（cch 禁旧 key → app 重登自动拿
   新 key，但旧文件不更新，app 外终端将 401 直到人工处理）；(b) **新装机器** flag on 后 app 从不写旧位置 →
-  app 外系统终端无凭据（app 内终端不受影响）；如成真实痛点另行拍板。
+  app 外系统终端无凭据（app 内终端不受影响）；(c) flag-on 下 IDE bridge lockfile 落托管 `ide/`，
+  app 外系统终端的 claude 看不到 IDE 桥（S2 登记）；如成真实痛点另行拍板。
 - **仍随本轮修的既有 bug**：flag-off 登出路径的 `removeCodexConfig` `rmSync` 整删两文件（会毁用户自有 codex
   配置）——改外科式只删 app 键（`OPENAI_API_KEY` 字段 / `[model_providers.jyw]` 表）。
 - 停双写后 flag off = 存量机器靠留置旧文件即时可用；全新机器需一次重登（旧路径会重写旧文件）；vault 不受
@@ -171,7 +172,7 @@ S0 保留一次**轻量部署一致性实打**（一封验证码走全程，确�
 |---|---|---|
 | **S0** | 六 spike，不动产品代码：E1 部署一致性轻量实打（幂等已代码定论，§5）· E2 `$CLAUDE_CONFIG_DIR/.claude.json` 信任标志实测 · E3 SDK `settingSources:[]` + 无 `~/.claude` 全会话 · E4 app-server（非 exec）缺 env_key 报错帧 · E5 cch 401/403 可区分性（业务 403 vs auth 拒）· E6 safeStorage 三平台矩阵 | trace + fixture 落库；E2/E3 定 §3.A 主干成立性 |
 | **S1** | Vault + AuthStateService + **IPC 消毒**（I2，含 verify 响应裁剪；**无 flag，回退=revert**）+ 双写开始 | 0600（含残留 tmp 情形）；`clear` 留 lastEmail 且无 flag 门控；日志无 secret 子串（含 token 前 6 字符）；off 轮不写 vault 且**磁盘写入与 legacy 文件字节一致**；renderer 收不到 key（真实 handler 接缝负控）；施工细则见 [S1 规格 rev.2](./2026-08-15-d47-s1-vault-spec.md) |
-| **S2** | ClaudeHomeGenerator + 全局 `CLAUDE_CONFIG_DIR` + 剥离继承 ANTHROPIC_* + 硬编码写手清理（§3.A 四组）+ Provider 写路径退役 + historyReader 双源 | 一次 SDK 会话期间 `~/.claude*` 写调用数=0（fs 打桩）；hooks/IDE lockfile 落托管 home；历史含新旧两源；生成文件含 skipWebFetchPreflight |
+| **S2** | 两相启动（skeleton/升格后 regenerate）+ 全局 `CLAUDE_CONFIG_DIR` + 共享清单剥离 + managedFileWriter 统一写手 + 硬编码写手清理 + Provider 面裁剪/退役 + **Scanner 双源（provenance 模型）** + trust 调用矩阵 + dev seed | **非 resume 路径**对 `~/.claude*` 写调用数=0；vault locked 时既有 env 字节不变；hooks/IDE lockfile 落托管 home；历史双源 provenance 贯通 resume；细则见 [S2 规格 rev.2](./2026-08-15-d47-s2-claude-home-spec.md) |
 | **S3** | 终端注入：claude 自动继承；codex 由 Main 在 `SessionManager.createLocal` 填 `CODEX_HOME`+key；resume 候选扩托管 home | session-create IPC payload 无 secret；登出态两键缺席；终端 `claude`/`codex` 免向导直接可用 |
 | **S4** | Codex 生成模式 + env_key + 删投影/auth 拷贝链 + `credentials_missing` + child env 剥离 ANTHROPIC_* | 生成 toml root 无上下文两键、表有 env_key；codex-home 无 auth.json；`--strict-config` 过；四 reason 子串互异；报错帧匹配 E4 fixture |
 | **S5** | 三态/推送/Root 收敛/MainWindow 同源/门禁收回（逃生舱+打包负控）/UserProfileCard/登出七步/Usage 改读 vault | Root 与 MainWindow 同一服务（换服务两处同变）；离线不重登（负控：403+probe 成功不转失效）；登出后托管 home secret 字节=0、调用序断言 |
