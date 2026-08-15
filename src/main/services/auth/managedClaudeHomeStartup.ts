@@ -28,6 +28,7 @@ import {
   generateSidecarStamp,
   getManagedClaudeHomeDir,
 } from './claudeHome';
+import { regenerateManagedCodexHome } from './codexHome';
 import { getCredentialVault } from './index';
 import { writeSettingsFile } from './managedFileWriter';
 
@@ -140,6 +141,22 @@ export async function regenerateFromVault(): Promise<void> {
   }
 
   const result = getCredentialVault().read();
+
+  // D47 S3b — codex-home materialization rides the same phase ③ tick as
+  // claude-home, off the SAME vault read (no second read). Unlike claude
+  // (which has a dev-seed fallback for `absent`), codex has no comparable
+  // seed, so EVERY non-`'ok'` status — including `absent` — maps to "leave
+  // config.toml's bytes exactly as they are" (D47 S34 spec rev.2 §2 S3b
+  // "vault 非 ok：config 保留既有字节", aligned with claude's
+  // locked/unsupported/invalid skip below, but a strict superset for codex).
+  // The stale `auth.json` cleanup inside `regenerateManagedCodexHome` still
+  // runs unconditionally either way (idempotent, harmless when absent).
+  await regenerateManagedCodexHome({
+    userDataDir: app.getPath('userData'),
+    source: 'startup',
+    credentials: result.status === 'ok' ? { baseUrl: result.doc.payload.codex.baseUrl } : null,
+  });
+
   if (
     result.status === 'locked' ||
     result.status === 'unsupported' ||

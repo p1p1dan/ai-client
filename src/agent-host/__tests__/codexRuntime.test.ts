@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '../../shared/types/agentWire.ts';
 import type { PermissionDecisionId } from '../../shared/types/runtimeEvents.ts';
 import type { SessionIndexEntry } from '../../shared/types/sessionIndex.ts';
+import { CODEX_MANAGED_API_KEY_ENV, CODEX_MANAGED_ENV } from '../agentSupport.ts';
 import {
   type CodexConnectFactory,
   type CodexConnectionCore,
@@ -532,6 +533,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
       return (
         options.ensureHome ??
         ((seen: Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]) => ({
+          mode: 'projected' as const,
           homeDir: seen.homeDir,
           projection: { toml: '', kept: [], dropped: [] },
           authCopied: false,
@@ -860,6 +862,13 @@ describe('codexRuntime — handshake identity and isolation', () => {
     expect(h.ensureHomeInputs[0].permission).toBe(CODEX_PERMISSION_DEFAULT);
   });
 
+  it('managed mode: spawn env carries the isolated CODEX_HOME too (not just the fallback path)', async () => {
+    const h = await startedSession('s1', {
+      env: { [CODEX_MANAGED_ENV]: '1', [CODEX_MANAGED_API_KEY_ENV]: 'sk-live' },
+    });
+    expect(h.connectInputs[0].env.CODEX_HOME).toBe(HOME_DIR);
+  });
+
   it('sends the initialized notification after the initialize response', async () => {
     const h = await startedSession();
 
@@ -890,6 +899,95 @@ describe('codexRuntime — handshake identity and isolation', () => {
     expect(buildThreadStartParams({ cwd: '/w' })).not.toHaveProperty('model');
     expect(buildThreadStartParams({ cwd: '/w', model: 'gpt-5.4' }).model).toBe('gpt-5.4');
     expect(buildThreadStartParams({ cwd: '/w', model: '  ' })).not.toHaveProperty('model');
+  });
+});
+
+/**
+ * D47 S4a §2 — managed-mode spawn env. Fallback mode's env-building line is
+ * UNCHANGED by this slice (`{...process.env, CODEX_HOME}`, spec: "fallback
+ * 全继承现状") — its zero-diff coverage is the existing
+ * "spawns with CODEX_HOME pointing at the isolated directory" case above.
+ * Everything here is the MANAGED branch, asserted through the same
+ * `connectInputs` harness seam (B 轨 M4: no separately-exported helper test).
+ */
+describe('codexRuntime — managed spawn env (D47 S4a §2)', () => {
+  const MANAGED_ENV: NodeJS.ProcessEnv = {
+    [CODEX_MANAGED_ENV]: '1',
+    [CODEX_MANAGED_API_KEY_ENV]: 'sk-live-managed',
+  };
+
+  it('strips every ANTHROPIC_-prefixed var, including one this build has never heard of (mutation ⑤ sentinel)', async () => {
+    const h = await startedSession('s1', {
+      env: {
+        ...MANAGED_ENV,
+        ANTHROPIC_API_KEY: 'leak-me',
+        ANTHROPIC_AUTH_TOKEN: 'leak-me-too',
+        // A name with no meaning today: an enumerated-key-list implementation
+        // (rather than a genuine prefix strip) would let exactly this one
+        // through, and it would still pass every OTHER assertion here.
+        ANTHROPIC_FUTURE_SENTINEL: 'leak-me-as-well',
+      },
+    });
+    const env = h.connectInputs[0].env;
+
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(env.ANTHROPIC_FUTURE_SENTINEL).toBeUndefined();
+  });
+
+  it('injects AICLIENT_CODEX_API_KEY and CODEX_HOME, and keeps an unrelated var (targeted strip, not a wholesale wipe)', async () => {
+    const h = await startedSession('s1', {
+      env: { ...MANAGED_ENV, SOME_UNRELATED_VAR: 'keep-me' },
+    });
+    const env = h.connectInputs[0].env;
+
+    expect(env[CODEX_MANAGED_API_KEY_ENV]).toBe('sk-live-managed');
+    expect(env.CODEX_HOME).toBe(HOME_DIR);
+    expect(env.SOME_UNRELATED_VAR).toBe('keep-me');
+  });
+
+  it('managed_missing_credentials (marker on, key absent) strips credential-shaped vars but injects no api key — defence in depth even though the registry should refuse first', async () => {
+    const h = await startedSession('s1', {
+      env: { [CODEX_MANAGED_ENV]: '1', ANTHROPIC_API_KEY: 'leak-me' },
+    });
+    const env = h.connectInputs[0].env;
+
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env[CODEX_MANAGED_API_KEY_ENV]).toBeUndefined();
+    expect(env.CODEX_HOME).toBe(HOME_DIR);
+  });
+
+  it('create/resume/revive all share the same openConnection wiring — one smoke test per path (B 轨 M4)', async () => {
+    // create
+    const created = await startedSession('s1', { env: MANAGED_ENV });
+    expect(created.connectInputs[0].env[CODEX_MANAGED_API_KEY_ENV]).toBe('sk-live-managed');
+
+    // resume
+    const resumed = makeHarness({ env: MANAGED_ENV });
+    resumed.runtime.resumeSession({
+      sessionId: 's-resume',
+      workspacePath: '/work/repo',
+      runtimeIdentity: RECORDED_THREAD,
+      requestId: 'req-resume',
+    });
+    await resumed.waitForEvent('session.history');
+    expect(resumed.connectInputs[0].env[CODEX_MANAGED_API_KEY_ENV]).toBe('sk-live-managed');
+
+    // revive (send() reopening a session the idle sweeper reclaimed)
+    const revived = await sweepableSession({
+      env: MANAGED_ENV,
+      threadResumeResult: {
+        thread: { id: FIXTURE_THREAD, turns: [] },
+        approvalPolicy: 'on-request',
+        sandbox: { type: 'workspaceWrite' },
+      },
+    });
+    revived.advance(IDLE_MS);
+    revived.sweepTick();
+    revived.events.length = 0;
+    await revived.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-again' });
+    expect(revived.connections).toHaveLength(2);
+    expect(revived.connectInputs[1].env[CODEX_MANAGED_API_KEY_ENV]).toBe('sk-live-managed');
   });
 });
 

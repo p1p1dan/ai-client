@@ -1,12 +1,19 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildHostAgentRegistry,
   CODEX_FLAG_ENV,
+  CODEX_MANAGED_API_KEY_ENV,
+  CODEX_MANAGED_ENV,
+  type CodexCredentialMode,
   describeHostAgentReason,
   ensureHostAgentRegistry,
+  type HostAgentAvailabilityReason,
   type HostAgentRegistry,
   initializeHostAgents,
   resetHostAgentRegistryForTests,
+  resolveCodexCredentialMode,
   resolveCodexEnabled,
 } from '../agentSupport.ts';
 
@@ -69,9 +76,130 @@ describe('resolveCodexEnabled', () => {
 });
 
 /**
- * S3 slice 6 (#7 HostAgentRegistry) — codex availability = flag × entry
- * resolution × isolated-home preparation (arbitration doc §2.1), replacing
- * the flag-only `supportedAgents`/`SUPPORTED_AGENTS` this suite used to cover.
+ * D47 S4a §1 (rev.2) — the three-state resolver every managed-mode reader
+ * goes through. `env` is always passed explicitly here (never omitted) so
+ * these cases stay hermetic; the "falls back to process.env" case below is
+ * the one exception, by design, matching `resolveCodexEnabled`'s own
+ * convention.
+ */
+describe('resolveCodexCredentialMode (D47 S4a §1 three-state resolver)', () => {
+  it('fallback: marker missing/blank/anything other than the exact string "1" — today behaviour byte for byte', () => {
+    for (const raw of [undefined, '', '0', 'true', 'True', ' 1', '1 ', '2']) {
+      const env: NodeJS.ProcessEnv = raw === undefined ? {} : { [CODEX_MANAGED_ENV]: raw };
+      expect(resolveCodexCredentialMode(env)).toEqual({ mode: 'fallback' });
+    }
+  });
+
+  it('fallback even when the api key IS present, as long as the marker is not exactly "1" (negative control)', () => {
+    // Falsifies "presence of the key alone turns managed mode on" — the
+    // explicit marker is the ONLY switch (rev.1's "a" was struck down).
+    expect(resolveCodexCredentialMode({ [CODEX_MANAGED_API_KEY_ENV]: 'sk-live' })).toEqual({
+      mode: 'fallback',
+    });
+  });
+
+  it('managed: marker is exactly "1" and the api key is non-empty', () => {
+    expect(
+      resolveCodexCredentialMode({
+        [CODEX_MANAGED_ENV]: '1',
+        [CODEX_MANAGED_API_KEY_ENV]: 'sk-live',
+      })
+    ).toEqual({ mode: 'managed', apiKey: 'sk-live' });
+  });
+
+  it('trims the api key before deciding presence and before returning it', () => {
+    expect(
+      resolveCodexCredentialMode({
+        [CODEX_MANAGED_ENV]: '1',
+        [CODEX_MANAGED_API_KEY_ENV]: '  sk-live  ',
+      })
+    ).toEqual({ mode: 'managed', apiKey: 'sk-live' });
+  });
+
+  it('managed_missing_credentials: marker is "1" but the key is absent or blank', () => {
+    expect(resolveCodexCredentialMode({ [CODEX_MANAGED_ENV]: '1' })).toEqual({
+      mode: 'managed_missing_credentials',
+    });
+    expect(
+      resolveCodexCredentialMode({ [CODEX_MANAGED_ENV]: '1', [CODEX_MANAGED_API_KEY_ENV]: '   ' })
+    ).toEqual({ mode: 'managed_missing_credentials' });
+    expect(
+      resolveCodexCredentialMode({ [CODEX_MANAGED_ENV]: '1', [CODEX_MANAGED_API_KEY_ENV]: '' })
+    ).toEqual({ mode: 'managed_missing_credentials' });
+  });
+
+  it('falls back to process.env when called with no argument (same convention as resolveCodexEnabled)', () => {
+    const previousMarker = process.env[CODEX_MANAGED_ENV];
+    const previousKey = process.env[CODEX_MANAGED_API_KEY_ENV];
+    try {
+      process.env[CODEX_MANAGED_ENV] = '1';
+      process.env[CODEX_MANAGED_API_KEY_ENV] = 'sk-live';
+      expect(resolveCodexCredentialMode()).toEqual({ mode: 'managed', apiKey: 'sk-live' });
+      delete process.env[CODEX_MANAGED_ENV];
+      expect(resolveCodexCredentialMode()).toEqual({ mode: 'fallback' });
+    } finally {
+      if (previousMarker === undefined) delete process.env[CODEX_MANAGED_ENV];
+      else process.env[CODEX_MANAGED_ENV] = previousMarker;
+      if (previousKey === undefined) delete process.env[CODEX_MANAGED_API_KEY_ENV];
+      else process.env[CODEX_MANAGED_API_KEY_ENV] = previousKey;
+    }
+  });
+
+  it('the three modes are mutually exclusive discriminants (exhaustive switch compiles)', () => {
+    // A compile-time falsification as much as a runtime one: adding a fourth
+    // mode without updating every switch over CodexCredentialMode fails tsc.
+    const describe_ = (m: CodexCredentialMode): string => {
+      switch (m.mode) {
+        case 'fallback':
+          return 'fallback';
+        case 'managed':
+          return `managed:${m.apiKey}`;
+        case 'managed_missing_credentials':
+          return 'managed_missing_credentials';
+      }
+    };
+    expect(describe_({ mode: 'fallback' })).toBe('fallback');
+    expect(describe_({ mode: 'managed', apiKey: 'k' })).toBe('managed:k');
+    expect(describe_({ mode: 'managed_missing_credentials' })).toBe('managed_missing_credentials');
+  });
+});
+
+/**
+ * D47 S4a §1 — the marker literal is a single source of truth on purpose (see
+ * `CODEX_MANAGED_ENV`'s docstring): every reader must go through
+ * `resolveCodexCredentialMode` instead of re-testing the env var itself. This
+ * scan is scoped to `src/agent-host` (this file's own directory) — Main's
+ * `hostEnv.ts` half of the contract is asserted independently on that side
+ * (out of scope here, S3b).
+ */
+describe('AICLIENT_CODEX_MANAGED marker literal — single source of truth (D47 S4a §1)', () => {
+  it('appears in no PRODUCTION source under src/agent-host except its own definition in agentSupport.ts', () => {
+    // `__tests__` is deliberately excluded: test titles/assertions legitimately
+    // spell the constant's value out in prose (including this very file, whose
+    // own describe title above names it) — the discipline being enforced is
+    // that no CODE branches on the raw string a second time, not that no
+    // English sentence mentions it.
+    const dir = path.resolve(import.meta.dirname, '..');
+    const files = (readdirSync(dir, { recursive: true }) as string[])
+      .map(String)
+      .filter((p) => p.endsWith('.ts') && !p.includes('node_modules'))
+      .filter((p) => !p.includes('__tests__') && !p.startsWith(`spikes${path.sep}`))
+      .map((p) => path.join(dir, p));
+
+    const offenders = files
+      .filter((file) => path.basename(file) !== 'agentSupport.ts')
+      .filter((file) => readFileSync(file, 'utf8').includes(CODEX_MANAGED_ENV))
+      .map((file) => path.relative(dir, file));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * S3 slice 6 (#7 HostAgentRegistry) — codex availability = flag × credential
+ * mode × entry resolution × isolated-home preparation (arbitration doc
+ * §2.1), replacing the flag-only `supportedAgents`/`SUPPORTED_AGENTS` this
+ * suite used to cover. `credentials_missing` (D47 S4a) is the second gate.
  */
 describe('buildHostAgentRegistry (A1/A2/G1)', () => {
   it('flag off: claude-code only, codex reason flag_off, and the fs-touching probes never run (A2)', () => {
@@ -87,6 +215,58 @@ describe('buildHostAgentRegistry (A1/A2/G1)', () => {
     ]);
     expect(probeEntry).not.toHaveBeenCalled();
     expect(prepareHome).not.toHaveBeenCalled();
+  });
+
+  it('flag on + managed marker on + api key missing: codex reason credentials_missing, and probeEntry/prepareHome never run (D47 S4a)', () => {
+    const probeEntry = vi.fn(() => true);
+    const prepareHome = vi.fn();
+
+    const registry = buildHostAgentRegistry({
+      env: { [CODEX_FLAG_ENV]: '1', [CODEX_MANAGED_ENV]: '1' },
+      probeEntry,
+      prepareHome,
+    });
+
+    expect(registry.agents).toEqual(['claude-code']);
+    expect(registry.detail).toEqual([
+      { agent: 'claude-code', available: true },
+      { agent: 'codex', available: false, reason: 'credentials_missing' },
+    ]);
+    expect(probeEntry).not.toHaveBeenCalled();
+    expect(prepareHome).not.toHaveBeenCalled();
+  });
+
+  it('flag on + managed marker ABSENT: negative control — falls through to the existing fallback path, NOT credentials_missing (D47 S4a §1)', () => {
+    const registry = buildHostAgentRegistry({
+      env: { [CODEX_FLAG_ENV]: '1' },
+      probeEntry: () => true,
+      prepareHome: () => {},
+    });
+
+    expect(registry.agents).toEqual(['claude-code', 'codex']);
+    expect(registry.detail).toEqual([
+      { agent: 'claude-code', available: true },
+      { agent: 'codex', available: true },
+    ]);
+  });
+
+  it('flag on + managed marker on + api key present: proceeds through the entry/home checks normally (D47 S4a)', () => {
+    const probeEntry = vi.fn(() => true);
+    const prepareHome = vi.fn();
+
+    const registry = buildHostAgentRegistry({
+      env: {
+        [CODEX_FLAG_ENV]: '1',
+        [CODEX_MANAGED_ENV]: '1',
+        [CODEX_MANAGED_API_KEY_ENV]: 'sk-live',
+      },
+      probeEntry,
+      prepareHome,
+    });
+
+    expect(registry.agents).toEqual(['claude-code', 'codex']);
+    expect(probeEntry).toHaveBeenCalledTimes(1);
+    expect(prepareHome).toHaveBeenCalledTimes(1);
   });
 
   it('flag on + entry unresolved: claude-code only, codex reason entry_missing, and prepareHome never runs', () => {
@@ -155,16 +335,38 @@ describe('buildHostAgentRegistry (A1/A2/G1)', () => {
 });
 
 describe('describeHostAgentReason (A1 point 7, G1 message clue)', () => {
-  it('returns three mutually distinguishable clues, one per reason', () => {
-    const flagOff = describeHostAgentReason('flag_off');
-    const entryMissing = describeHostAgentReason('entry_missing');
-    const homePrepareFailed = describeHostAgentReason('home_prepare_failed');
+  const REASONS: readonly HostAgentAvailabilityReason[] = [
+    'flag_off',
+    'credentials_missing',
+    'entry_missing',
+    'home_prepare_failed',
+  ];
+  const clues = REASONS.map((reason) => describeHostAgentReason(reason));
 
+  it('returns four mutually distinguishable clues, one per reason (D47 S4a adds credentials_missing)', () => {
     // Falsifies a generic "not supported" fallback shared across reasons.
-    expect(new Set([flagOff, entryMissing, homePrepareFailed]).size).toBe(3);
-    expect(flagOff).toContain(CODEX_FLAG_ENV);
-    expect(entryMissing).toContain('codex.js');
-    expect(homePrepareFailed.toLowerCase()).toContain('home');
+    expect(new Set(clues).size).toBe(4);
+  });
+
+  it('D47 S4a new discipline: no clue is a substring of another (ordered pairs) — Set.size alone cannot catch one clue merely EXTENDING another', () => {
+    for (let i = 0; i < clues.length; i += 1) {
+      for (let j = 0; j < clues.length; j += 1) {
+        if (i === j) continue;
+        const a = clues[i] as string;
+        const b = clues[j] as string;
+        expect(
+          a.includes(b),
+          `clue for ${REASONS[i]} must not contain the clue for ${REASONS[j]}`
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('names the env var / codex.js / "home" / api-key var respectively', () => {
+    expect(describeHostAgentReason('flag_off')).toContain(CODEX_FLAG_ENV);
+    expect(describeHostAgentReason('credentials_missing')).toContain(CODEX_MANAGED_API_KEY_ENV);
+    expect(describeHostAgentReason('entry_missing')).toContain('codex.js');
+    expect(describeHostAgentReason('home_prepare_failed').toLowerCase()).toContain('home');
   });
 });
 

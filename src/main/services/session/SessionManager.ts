@@ -12,8 +12,10 @@ import {
   type SessionStateEvent,
 } from '@shared/types';
 import { app, BrowserWindow, type WebContents } from 'electron';
+import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { ensureWorkspaceTrusted, getManagedClaudeHomeDir } from '../auth/claudeHome';
+import { getManagedCodexHomeDir } from '../auth/codexHome';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
 import { isRemoteVirtualPath, parseRemoteVirtualPath } from '../remote/RemotePath';
 import { PtyManager } from '../terminal/PtyManager';
@@ -28,6 +30,62 @@ interface ManagedSessionRecord extends SessionDescriptor {
 }
 
 const MAX_SESSION_REPLAY_CHARS = 65_536;
+
+/**
+ * D47 S34 spec rev.2 §2 S3b — the `CODEX_HOME`/`AICLIENT_CODEX_API_KEY`
+ * values a local terminal PTY gets when Codex managed credentials are on.
+ * Resolved independently here (flag + a fresh vault read), rather than
+ * importing `AgentHostManager.ts`'s `resolveCodexManagedHostEnv` — this
+ * mirrors `ensureWorkspaceTrustedForLocalCreate` below, which already
+ * resolves its OWN claude-home need directly instead of reaching into a
+ * sibling manager, and avoids pulling `AgentHostManager.ts`'s much heavier
+ * import graph (process spawning, logger, Node runtime resolution) into
+ * every `SessionManager` import — this repo's vitest node environment has a
+ * documented history of hanging on that kind of eager heavy import.
+ *
+ * `null` means "managed credentials are off" — the flag-off zero-mutation
+ * caller branch below never even calls this.
+ */
+function resolveCodexManagedPtyEnv(): { codexHomeDir: string; apiKey: string | undefined } | null {
+  if (!resolveManagedCredentialsEnabled()) {
+    return null;
+  }
+  const codexHomeDir = getManagedCodexHomeDir(app.getPath('userData'));
+  const vaultResult = getCredentialVault().read();
+  const apiKey = vaultResult.status === 'ok' ? vaultResult.doc.payload.codex.apiKey : undefined;
+  return { codexHomeDir, apiKey };
+}
+
+/**
+ * D47 S34 spec rev.2 §2 S3b — local-PTY-only Codex env injection.
+ * Flag off: returns the SAME `options` object reference, byte-for-byte
+ * unmutated ("零变异" — not even a shallow copy; a caller's own
+ * `CODEX_HOME` inherited via their shell stays exactly as they set it,
+ * because "this slice didn't touch that key" ≠ "the key doesn't exist").
+ * Flag on: returns a NEW options object with a NEW `env` object —
+ * `{...options.env, CODEX_HOME, [AICLIENT_CODEX_API_KEY]}` — Main's two
+ * values are spread LAST so they win over any renderer-supplied same-named
+ * key (B-track B6 "合并向"), and the input `options`/`options.env` objects
+ * are never mutated in place. `AICLIENT_CODEX_API_KEY` is OMITTED (not set
+ * to `undefined`) when the vault has no usable key — node-pty stringifies an
+ * `undefined` env value as the literal text `"undefined"` instead of
+ * dropping the key (unlike Node's own `child_process`), so "not present at
+ * all" has to mean an absent object key here, not a key set to `undefined`.
+ */
+function withManagedCodexEnv(options: SessionCreateOptions): SessionCreateOptions {
+  const managed = resolveCodexManagedPtyEnv();
+  if (!managed) {
+    return options;
+  }
+  return {
+    ...options,
+    env: {
+      ...options.env,
+      CODEX_HOME: managed.codexHomeDir,
+      ...(managed.apiKey !== undefined ? { AICLIENT_CODEX_API_KEY: managed.apiKey } : {}),
+    },
+  };
+}
 
 function getWindowId(target: BrowserWindow | WebContents | number): number {
   if (typeof target === 'number') {
@@ -388,7 +446,7 @@ export class SessionManager {
 
     try {
       this.localPtyManager.create(
-        options,
+        withManagedCodexEnv(options),
         (data) => this.handleLocalData(sessionId, data),
         (exitCode, signal) => {
           this.handleLocalExit(sessionId, exitCode, signal);

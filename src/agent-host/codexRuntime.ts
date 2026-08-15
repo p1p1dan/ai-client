@@ -13,6 +13,7 @@ import type {
   HistoryReadError,
   HistoryReadErrorCode,
 } from '../shared/types/sessionHistory.ts';
+import { CODEX_MANAGED_API_KEY_ENV, resolveCodexCredentialMode } from './agentSupport.ts';
 import {
   CODEX_INITIALIZE_TIMEOUT_MS,
   type CodexConnectFactory,
@@ -919,6 +920,44 @@ function errorMessage(err: unknown): string {
 }
 
 /**
+ * D47 S4a (§2 S4a) — mirrored from `scripts/credential-env-keys.mjs`'s
+ * `CREDENTIAL_ENV_PREFIX`, NOT imported from it (A 轨 M7 fallback plan): that
+ * file lives in a separate npm package with its own `tsconfig.json`
+ * (`src/agent-host/tsconfig.json`'s `include: ["**\/*.ts"]` does not reach
+ * outside this directory, and the `.mjs` + hand-written `.d.mts` sibling it
+ * ships for its OTHER two consumers does not resolve under
+ * `typecheck:agent-host` either). This is a deliberate, DOCUMENTED duplicate
+ * of one string, not a second design decision — the drift-prevention
+ * assertion lives on the Main/shared side of this contract, which owns both
+ * `scripts/` and the cross-source pin.
+ */
+const MANAGED_ENV_STRIP_PREFIX = 'ANTHROPIC_';
+
+/**
+ * Strip every `ANTHROPIC_`-prefixed var from a managed-mode spawn env.
+ *
+ * A whole-PREFIX strip, not an enumerated key list: `ANTHROPIC_FUTURE_SENTINEL`
+ * (a name with no meaning today — `codexRuntime.test.ts`'s sentinel case) must
+ * be stripped exactly like `ANTHROPIC_API_KEY`, because an implementation that
+ * enumerates today's known keys is a false green against tomorrow's new one
+ * (B 轨 M1-4).
+ *
+ * Scoped to the `ANTHROPIC_` prefix ONLY — not the exact-match half of
+ * `credential-env-keys.mjs`'s list (`CLAUDE_CONFIG_DIR` etc.): those are
+ * Claude-runtime-shaped keys with no codex meaning, and a managed codex
+ * child's ONE credential is already named explicitly
+ * (`AICLIENT_CODEX_API_KEY`, `config.toml`'s `env_key` indirection — E4).
+ */
+function stripCredentialEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const stripped: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (key.startsWith(MANAGED_ENV_STRIP_PREFIX)) continue;
+    stripped[key] = value;
+  }
+  return stripped;
+}
+
+/**
  * Does this frame belong to the session's own thread (C12)?
  *
  * An ABSENT `threadId` is accepted, matching `CodexNormalizer.acceptsThread`:
@@ -1360,6 +1399,11 @@ export class CodexRuntime {
         // thread re-derives its posture from this file, so the constant has to
         // reach the disk as well as the wire.
         permission: CODEX_PERMISSION_DEFAULT,
+        // D47 S4a: the SAME env object the spawn-env build below reads (one of
+        // `resolveCodexCredentialMode`'s four readers, §1) — so a mode decided
+        // for the home cannot disagree with the mode decided for the env a few
+        // lines later in this same call.
+        env: this.opts.env,
         log: (...args: unknown[]) => this.log('[codex-home]', ...args),
       });
       homeDir = home.homeDir;
@@ -1377,16 +1421,35 @@ export class CodexRuntime {
     // and the session silently inherits `developer_instructions` and
     // `danger-full-access`.
     //
-    // The rest of the environment is inherited whole, deliberately. NOTE for
-    // whoever revisits this: once a Claude session has run, `ensureRuntime()`
-    // has copied `~/.claude/settings.json`'s env (including
+    // FALLBACK: the rest of the environment is inherited whole, deliberately,
+    // and this branch is UNCHANGED by D47 S4a (spec: "fallback 全继承现状").
+    // NOTE for whoever revisits this: once a Claude session has run,
+    // `ensureRuntime()` has copied `~/.claude/settings.json`'s env (including
     // `ANTHROPIC_AUTH_TOKEN`) onto this process, so those variables reach the
     // codex child too. Filtering them looks tempting and is NOT done here,
     // because a user whose codex `model_providers.<id>.env_key` names one of
     // them would lose authentication with a confusing error — the projection
     // keeps `env_key`, so that configuration is reachable. Registered as an open
     // question rather than settled by guess.
-    const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: homeDir };
+    //
+    // MANAGED (D47 S4a, §2 S4a): the credential landscape is the opposite —
+    // Main already told us exactly which one key codex needs
+    // (`AICLIENT_CODEX_API_KEY`, injected onto AND read off this SAME opts.env
+    // / process.env by `resolveCodexCredentialMode`) — so inherited credential
+    // shaped vars are a LIABILITY here, not a reachability feature: an
+    // `ANTHROPIC_*` var surviving onto a managed codex child could shadow the
+    // one credential `config.toml`'s `env_key` indirection actually names.
+    const credentialMode = resolveCodexCredentialMode(this.opts.env ?? process.env);
+    const env: NodeJS.ProcessEnv =
+      credentialMode.mode === 'fallback'
+        ? { ...process.env, CODEX_HOME: homeDir }
+        : {
+            ...stripCredentialEnv(this.opts.env ?? process.env),
+            CODEX_HOME: homeDir,
+            ...(credentialMode.mode === 'managed'
+              ? { [CODEX_MANAGED_API_KEY_ENV]: credentialMode.apiKey }
+              : {}),
+          };
 
     const connect = this.opts.connect ?? spawnCodexConnection;
     // The exit handler has to name the state this connection belongs to, and the

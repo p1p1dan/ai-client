@@ -70,17 +70,20 @@ function backupCorruptFile(path: string, raw: string): void {
   }
 }
 
-/** `writeFileSync`'s `mode` option only applies on file CREATION — a stale tmp left by a crashed prior write would silently keep its old permissions without this explicit chmod (mirrors `CredentialVault`, S1 A-track B5). */
-function writeJsonAtomic(path: string, value: JsonRecord): void {
+/** `writeFileSync`'s `mode` option only applies on file CREATION — a stale tmp left by a crashed prior write would silently keep its old permissions without this explicit chmod (mirrors `CredentialVault`, S1 A-track B5). Shared by both the JSON path (`writeSettingsFile`) and the raw-text path (`writeManagedFile`, D47 S3b — `codex-home/config.toml` is TOML, not JSON). */
+function writeTextAtomic(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
 
   const tmpPath = `${path}.${process.pid}.${randomTmpSuffix()}.tmp`;
-  const serialized = `${JSON.stringify(value, null, 2)}\n`;
 
-  writeFileSync(tmpPath, serialized, { encoding: 'utf-8' });
+  writeFileSync(tmpPath, content, { encoding: 'utf-8' });
   chmodSync(tmpPath, 0o600);
   renameSync(tmpPath, path);
   chmodSync(path, 0o600);
+}
+
+function writeJsonAtomic(path: string, value: JsonRecord): void {
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function writeSettingsFileInternal(path: string, mutator: SettingsMutator): void {
@@ -100,22 +103,16 @@ function writeSettingsFileInternal(path: string, mutator: SettingsMutator): void
 }
 
 /**
- * The only write path for managed-home JSON files (D47 S2a §1). Serializes
- * concurrent calls for the SAME path through a per-path Promise queue: each
- * queued task re-reads the file from disk when its turn comes (not a value
- * captured at enqueue time), so a task that runs after an earlier one
- * commits sees that earlier write rather than a stale snapshot — this is
- * what keeps a concurrent generator-write + hook-write from losing either
- * side's sentinel (D47 S2a spec §3-1 "并发交错").
+ * Per-absolute-path serialization for a single write attempt — shared by
+ * `writeSettingsFile` (JSON, read-modify-write) and `writeManagedFile` (raw
+ * text, D47 S3b). Each queued task runs only after every earlier task for the
+ * SAME path has settled, so two writers never interleave tmp-file writes.
  */
-export function writeSettingsFile(path: string, mutator: SettingsMutator): Promise<void> {
+function enqueueWrite(path: string, run: () => void): Promise<void> {
   const key = resolve(path);
   const previous = writeQueues.get(key) ?? Promise.resolve();
 
-  const task = previous.then(
-    () => writeSettingsFileInternal(key, mutator),
-    () => writeSettingsFileInternal(key, mutator)
-  );
+  const task = previous.then(run, run);
 
   // Chain-continuation for queue bookkeeping only — never reject, or every
   // later write to this path would join a permanently-rejected chain. The
@@ -129,6 +126,33 @@ export function writeSettingsFile(path: string, mutator: SettingsMutator): Promi
   );
 
   return task;
+}
+
+/**
+ * The only write path for managed-home JSON files (D47 S2a §1). Serializes
+ * concurrent calls for the SAME path through a per-path Promise queue: each
+ * queued task re-reads the file from disk when its turn comes (not a value
+ * captured at enqueue time), so a task that runs after an earlier one
+ * commits sees that earlier write rather than a stale snapshot — this is
+ * what keeps a concurrent generator-write + hook-write from losing either
+ * side's sentinel (D47 S2a spec §3-1 "并发交错").
+ */
+export function writeSettingsFile(path: string, mutator: SettingsMutator): Promise<void> {
+  return enqueueWrite(path, () => writeSettingsFileInternal(resolve(path), mutator));
+}
+
+/**
+ * D47 S3b — atomic write for a managed file whose FULL next content the
+ * caller already computed (currently just `codex-home/config.toml`). Unlike
+ * `writeSettingsFile`, this is NOT a read-modify-write: `config.toml` is
+ * entirely AiClient's own generated file (no foreign keys from another
+ * writer to preserve — see `src/shared/codexManagedConfig.ts`), so there is
+ * no read-latest step, only tmp-write + rename + chmod. Still goes through
+ * the SAME per-path serialization queue as `writeSettingsFile` so a
+ * concurrent write to the identical path can't interleave tmp files.
+ */
+export function writeManagedFile(path: string, content: string): Promise<void> {
+  return enqueueWrite(path, () => writeTextAtomic(resolve(path), content));
 }
 
 /** Test-only: drop queued state between test cases (mirrors `resetAuthSingletonsForTests`). */

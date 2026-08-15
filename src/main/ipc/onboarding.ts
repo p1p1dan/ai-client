@@ -122,6 +122,13 @@ export function registerOnboardingHandlers(): void {
       console.warn('[onboarding:logout] Failed to clear onboarding state');
     }
 
+    // D47 S3b I5 epoch barrier: `logout()` itself stays synchronous (kicks
+    // the managed-home regenerate + Host shutdown chain off without
+    // awaiting), so THIS handler is where the wait lives — the renderer must
+    // not see the logout IPC call resolve while a Host that still holds the
+    // logged-out session's env is alive.
+    await onboardingService.awaitPendingLogoutRegenerate();
+
     if (serverUrl) {
       await clearServerAuthCookie(serverUrl);
     }

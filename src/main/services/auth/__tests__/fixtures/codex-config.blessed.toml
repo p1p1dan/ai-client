@@ -1,0 +1,10 @@
+model_provider = "jyw"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[model_providers.jyw]
+name = "jyw"
+base_url = "https://cch-blessing.example.com/v1"
+wire_api = "responses"
+requires_openai_auth = false
+env_key = "AICLIENT_CODEX_API_KEY"

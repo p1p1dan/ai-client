@@ -5,10 +5,12 @@ import {
   mkdirSync,
   readFileSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { resolveCodexCredentialMode } from './agentSupport.ts';
 
 /**
  * The app-private CODEX_HOME.
@@ -198,13 +200,23 @@ export interface CodexHomeFs {
   copyFileSync(source: string, destination: string): void;
   chmodSync(path: string, mode: number): void;
   statSync(path: string): { mtimeMs: number };
+  /** D47 S4a — the managed branch's only destructive call (stale `auth.json` cleanup). */
+  unlinkSync(path: string): void;
 }
 
-export interface EnsureCodexHomeResult {
-  homeDir: string;
-  projection: CodexConfigProjection;
-  authCopied: boolean;
-}
+/**
+ * D47 S4a (rev.2 architecture pick) — judgement-discriminated by `mode`,
+ * replacing the old single shape that only ever described the fallback
+ * (projecting) branch. `'projected'` is the fallback branch, unchanged in
+ * every field (A 轨 M9: `projection`/`authCopied` are real audit data, never
+ * an empty array standing in for "we did not actually project anything").
+ * `'managed'` carries no projection audit at all — this branch never reads or
+ * writes `config.toml`, so there is nothing truthful to report under those
+ * keys.
+ */
+export type EnsureCodexHomeResult =
+  | { mode: 'projected'; homeDir: string; projection: CodexConfigProjection; authCopied: boolean }
+  | { mode: 'managed'; homeDir: string };
 
 /** `auth.json` and the generated config are created owner-only. */
 const CREDENTIAL_MODE = 0o600;
@@ -551,6 +563,9 @@ const nodeFs: CodexHomeFs = {
     chmodSync(path, mode);
   },
   statSync: (path) => statSync(path),
+  unlinkSync: (path) => {
+    unlinkSync(path);
+  },
 };
 
 function readIfExists(fs: CodexHomeFs, path: string): string | null {
@@ -592,11 +607,23 @@ export function ensureCodexHome(input: {
    * The posture to enforce in the generated config (H9 layer 1). Required, so a
    * new caller cannot materialise a home whose posture nobody chose — see the
    * "no default parameter" note in the module header.
+   *
+   * Unused in the managed branch (D47 S4a): Main writes `config.toml` there
+   * (S3b, `codexManagedConfig.ts`), posture included. Still required on every
+   * call — the caller does not know which branch it will take until this
+   * function reads {@link resolveCodexCredentialMode}, so there is no call
+   * site that could omit it.
    */
   permission: CodexHomePermissionPosture;
   sourceHomeDir?: string;
   fs?: CodexHomeFs;
   log?: (...args: unknown[]) => void;
+  /**
+   * D47 S4a — test seam for {@link resolveCodexCredentialMode}, one of the
+   * resolver's four readers (§1). Defaults to `process.env`, same convention
+   * as every other env-reading function in this repo.
+   */
+  env?: NodeJS.ProcessEnv;
 }): EnsureCodexHomeResult {
   const fs = input.fs ?? nodeFs;
   const log = input.log ?? ((...args: unknown[]) => console.error('[codex-home]', ...args));
@@ -607,9 +634,20 @@ export function ensureCodexHome(input: {
     // credential copy somewhere nobody looks.
     throw new Error('ensureCodexHome: homeDir is required (Main injects AICLIENT_CODEX_HOME)');
   }
-  const sourceHomeDir = trimOrUndefined(input.sourceHomeDir) ?? resolveSourceCodexHome();
 
   fs.mkdirSync(homeDir, { recursive: true });
+
+  // D47 S4a (rev.2 architecture pick, B 轨 c): managed mode's `config.toml` is
+  // physically OWNED by Main (S3b) — this branch neither projects, copies nor
+  // writes it. `managed_missing_credentials` never reaches here in normal
+  // operation (the registry gate in `agentSupport.ts` refuses the session
+  // before `createSession`/`resumeSession` ever calls this function), so any
+  // non-`'fallback'` mode is treated identically: managed.
+  if (resolveCodexCredentialMode(input.env).mode !== 'fallback') {
+    return ensureManagedCodexHome({ homeDir, fs, log });
+  }
+
+  const sourceHomeDir = trimOrUndefined(input.sourceHomeDir) ?? resolveSourceCodexHome();
 
   const sourceConfigPath = join(sourceHomeDir, CONFIG_BASENAME);
   const targetConfigPath = join(homeDir, CONFIG_BASENAME);
@@ -648,5 +686,76 @@ export function ensureCodexHome(input: {
     authCopied,
   });
 
-  return { homeDir, projection, authCopied };
+  return { mode: 'projected', homeDir, projection, authCopied };
+}
+
+/**
+ * `false` only for the one errno this branch treats as "nothing to do"
+ * (ENOENT). Every OTHER unlink failure (EACCES, EPERM, a directory where a
+ * file was expected…) propagates as a thrown Error from
+ * {@link ensureManagedCodexHome}, which is deliberate: both S4 review tracks
+ * independently flagged "delete stale auth.json" as an ACTION the caller must
+ * be able to act on (`home_prepare_failed`), not a fact merely logged and
+ * ignored (rev.2 §2 S4a, I4).
+ */
+function isEnoentError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'ENOENT';
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * The managed branch (D47 S4a). `config.toml` is Main's to write (S3b); this
+ * function's only two jobs are cleanup and an honesty check:
+ *
+ *  - delete a leftover `auth.json`. A managed session authenticates purely
+ *    through `AICLIENT_CODEX_API_KEY` (`codexRuntime.ts`'s spawn env) plus
+ *    `config.toml`'s `env_key` indirection (E4 evidence, 2026-08-15) — a STALE
+ *    copy left behind by an earlier FALLBACK-mode run in this same `homeDir`
+ *    would let codex silently prefer file-based auth over the managed one,
+ *    exactly the leak "managed" promises not to have. Idempotent unlink
+ *    (ENOENT is the ordinary case — nothing to delete); any OTHER failure now
+ *    BLOCKS the session rather than only being logged (see
+ *    {@link isEnoentError}).
+ *  - verify `config.toml` exists. Main writes it in a separate lifecycle step
+ *    (startup phase 3 / login / logout regenerate, S3b); a Host that raced
+ *    ahead of that write, or whose Main-side write failed, must refuse
+ *    honestly (`home_prepare_failed`, via the thrown Error below) instead of
+ *    handing codex a directory with no provider table — which fails
+ *    illegibly deep inside the turn loop instead of at the point that
+ *    actually knows what is missing.
+ *
+ * Never touches `config.toml`'s CONTENT either way, so — unlike the fallback
+ * branch's `log('codex home ready', …)` — there is nothing here that could
+ * leak a projected value even by accident (T-35).
+ */
+function ensureManagedCodexHome(input: {
+  homeDir: string;
+  fs: CodexHomeFs;
+  log: (...args: unknown[]) => void;
+}): EnsureCodexHomeResult {
+  const { homeDir, fs, log } = input;
+  const authPath = join(homeDir, AUTH_BASENAME);
+  try {
+    fs.unlinkSync(authPath);
+  } catch (err) {
+    if (!isEnoentError(err)) {
+      throw new Error(
+        `ensureCodexHome (managed): could not remove the stale auth.json at ${authPath}: ${errorMessage(err)}`
+      );
+    }
+  }
+
+  const configPath = join(homeDir, CONFIG_BASENAME);
+  if (!fs.existsSync(configPath)) {
+    throw new Error(
+      `ensureCodexHome (managed): config.toml not found at ${configPath} — Main should have written it before the Host starts a session`
+    );
+  }
+
+  log('codex home ready (managed)', { homeDir, configPath, authRemoved: true });
+
+  return { mode: 'managed', homeDir };
 }

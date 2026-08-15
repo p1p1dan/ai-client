@@ -1,16 +1,22 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * D47 S2a §1 — OnboardingService's managed-claude-home regenerate branches
- * (login: credentials-object regenerate; logout: deterministic no-credential
- * regenerate). Separate file from `OnboardingService.test.ts` because these
- * cases need `AICLIENT_MANAGED_CREDENTIALS=1` and a per-test isolated
- * userData dir — every existing (flag-off) OnboardingService test must stay
- * unaffected by this file's setup (verified separately: that suite passes
- * unchanged with this file's imports untouched).
+ * D47 S2a §1 / S3b §2 — OnboardingService's managed-home regenerate branches:
+ * claude-home (login: credentials-object regenerate; logout: deterministic
+ * no-credential regenerate) and its codex-home counterpart (login: writes
+ * `config.toml`; logout: `config.toml` bytes untouched, stale `auth.json`
+ * deleted) — plus the D47 S3b I5 epoch barrier (login awaits Host shutdown
+ * before `verifyAndRegister` returns; logout's shutdown is awaited via
+ * `awaitPendingLogoutRegenerate()`, not a raw `setTimeout` tick).
+ *
+ * Separate file from `OnboardingService.test.ts` because these cases need
+ * `AICLIENT_MANAGED_CREDENTIALS=1` and a per-test isolated userData dir —
+ * every existing (flag-off) OnboardingService test must stay unaffected by
+ * this file's setup (verified separately: that suite passes unchanged with
+ * this file's imports untouched).
  */
 
 const fetchMock = vi.fn();
@@ -46,7 +52,7 @@ declare global {
   var __testUserDataDir: string;
 }
 
-describe('OnboardingService managed claude-home regenerate (D47 S2a §1)', () => {
+describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S3b §2 codex-home)', () => {
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;
   const originalFlag = process.env.AICLIENT_MANAGED_CREDENTIALS;
@@ -68,6 +74,7 @@ describe('OnboardingService managed claude-home regenerate (D47 S2a §1)', () =>
 
     fetchMock.mockReset();
     shutdownMock.mockClear();
+    shutdownMock.mockResolvedValue(undefined);
     vi.stubGlobal('__ONBOARDING_SERVICE_URL__', 'https://onboarding-test.example.com');
   });
 
@@ -85,8 +92,17 @@ describe('OnboardingService managed claude-home regenerate (D47 S2a §1)', () =>
   function settingsPath(): string {
     return join(userDataDir, 'claude-home', 'settings.json');
   }
+  function codexConfigPath(): string {
+    return join(userDataDir, 'codex-home', 'config.toml');
+  }
+  function codexAuthPath(): string {
+    return join(userDataDir, 'codex-home', 'auth.json');
+  }
+  function codexSidecarPath(): string {
+    return join(userDataDir, 'codex-home', '.aiclient-generated');
+  }
 
-  it('login (flag on) regenerates managed settings.json from the credentials object and shuts down the host', async () => {
+  function mockRegisterResponse(): void {
     fetchMock.mockResolvedValue({
       json: async () => ({
         ok: true,
@@ -99,10 +115,18 @@ describe('OnboardingService managed claude-home regenerate (D47 S2a §1)', () =>
         },
       }),
     });
+  }
+
+  it('login (flag on) regenerates managed settings.json + codex-home/config.toml from the credentials object, and AWAITS host shutdown before returning (D47 S3b I5 epoch barrier)', async () => {
+    mockRegisterResponse();
 
     const { onboardingService } = await import('../OnboardingService');
     const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     expect(result.ok).toBe(true);
+
+    // No extra microtask tick needed — the I5 barrier means shutdown() has
+    // already resolved by the time verifyAndRegister's own promise settled.
+    expect(shutdownMock).toHaveBeenCalledTimes(1);
 
     const managed = JSON.parse(readFileSync(settingsPath(), 'utf-8')) as {
       env: Record<string, string>;
@@ -117,14 +141,41 @@ describe('OnboardingService managed claude-home regenerate (D47 S2a §1)', () =>
     expect(managed.autoUpdates).toBe(false);
     expect(managed.skipWebFetchPreflight).toBe(true);
 
-    // Give the fire-and-forget shutdown() microtask a turn.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(shutdownMock).toHaveBeenCalledTimes(1);
+    const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
+    expect(readFileSync(codexConfigPath(), 'utf-8')).toBe(
+      generateManagedCodexConfigToml({ baseUrl: 'https://cch-test.example.com/v1' })
+    );
+    const sidecar = JSON.parse(readFileSync(codexSidecarPath(), 'utf-8'));
+    expect(sidecar).toMatchObject({ mode: 'managed', source: 'login' });
   });
 
-  it('logout (flag on) regenerates managed settings.json to an empty env without reading the vault, and shuts down the host', async () => {
+  it('login: shutdown() is fully settled BEFORE verifyAndRegister resolves, not merely "eventually called" (I5 ordering, not just presence)', async () => {
+    mockRegisterResponse();
+    let shutdownSettled = false;
+    shutdownMock.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      shutdownSettled = true;
+    });
+
+    const { onboardingService } = await import('../OnboardingService');
+    await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
+
+    expect(shutdownSettled).toBe(true);
+  });
+
+  it('login: deletes a stale codex-home/auth.json copy', async () => {
+    mockRegisterResponse();
+    mkdirSync(join(userDataDir, 'codex-home'), { recursive: true });
+    writeFileSync(codexAuthPath(), JSON.stringify({ OPENAI_API_KEY: 'stale' }), 'utf-8');
+
+    const { onboardingService } = await import('../OnboardingService');
+    await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
+
+    expect(existsSync(codexAuthPath())).toBe(false);
+  });
+
+  it('logout (flag on) regenerates managed settings.json to an empty env, leaves codex-home/config.toml bytes untouched, deletes stale auth.json, and shuts down the host — awaited via awaitPendingLogoutRegenerate()', async () => {
     mkdirSync(join(userDataDir, 'claude-home'), { recursive: true });
-    const { writeFileSync } = await import('node:fs');
     writeFileSync(
       settingsPath(),
       JSON.stringify({
@@ -133,14 +184,21 @@ describe('OnboardingService managed claude-home regenerate (D47 S2a §1)', () =>
       }),
       'utf-8'
     );
+    mkdirSync(join(userDataDir, 'codex-home'), { recursive: true });
+    const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
+    const existingCodexBytes = generateManagedCodexConfigToml({
+      baseUrl: 'https://old-codex.example/v1',
+    });
+    writeFileSync(codexConfigPath(), existingCodexBytes, 'utf-8');
+    writeFileSync(codexAuthPath(), JSON.stringify({ OPENAI_API_KEY: 'stale' }), 'utf-8');
 
     const { onboardingService } = await import('../OnboardingService');
     const ok = onboardingService.logout();
     expect(ok).toBe(true);
 
-    // logout() is synchronous but the managed-home regenerate is
-    // fire-and-forget — give it a turn before asserting on disk state.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // logout() is synchronous; the barrier is this explicit await, not a
+    // fire-and-forget microtask guess.
+    await onboardingService.awaitPendingLogoutRegenerate();
 
     const managed = JSON.parse(readFileSync(settingsPath(), 'utf-8')) as {
       env: Record<string, string>;
@@ -149,32 +207,24 @@ describe('OnboardingService managed claude-home regenerate (D47 S2a §1)', () =>
     expect(managed.env).toEqual({});
     expect(managed.hooks).toEqual({ Stop: ['keep-me'] });
     expect(shutdownMock).toHaveBeenCalledTimes(1);
+
+    // codex-home: config.toml bytes stay exactly as they were (B-track B1
+    // logout contract — "config 保留"); the stale auth.json copy is gone.
+    expect(readFileSync(codexConfigPath(), 'utf-8')).toBe(existingCodexBytes);
+    expect(existsSync(codexAuthPath())).toBe(false);
   });
 
-  it('flag off: neither login nor logout touch the managed claude-home directory', async () => {
+  it('flag off: neither login nor logout touch the managed claude-home OR codex-home directories', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
-
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        ok: true,
-        data: {
-          user: { id: 1, name: 'Test User' },
-          config: {
-            claude: { baseUrl: 'https://cch-test.example.com/v1', authToken: 'claude-token' },
-            codex: { baseUrl: 'https://cch-test.example.com/v1', apiKey: 'codex-key' },
-          },
-        },
-      }),
-    });
+    mockRegisterResponse();
 
     const { onboardingService } = await import('../OnboardingService');
     await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     onboardingService.logout();
+    await onboardingService.awaitPendingLogoutRegenerate();
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const { existsSync } = await import('node:fs');
     expect(existsSync(join(userDataDir, 'claude-home'))).toBe(false);
+    expect(existsSync(join(userDataDir, 'codex-home'))).toBe(false);
     expect(shutdownMock).not.toHaveBeenCalled();
   });
 });

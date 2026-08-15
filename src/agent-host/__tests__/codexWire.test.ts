@@ -42,9 +42,19 @@ function readEnvelopes(file: string): Envelope[] {
 }
 
 function fixtureFiles(): string[] {
-  return readdirSync(FIXTURE_DIR)
-    .filter((name) => name.endsWith('.jsonl'))
-    .sort();
+  return (
+    readdirSync(FIXTURE_DIR)
+      .filter((name) => name.endsWith('.jsonl'))
+      // `e4-*` (D47 S4a) is a DIFFERENT fixture category — a targeted spike
+      // experiment (`docs/plans/2026-08-15-d47-s0-spikes/e4-…md`) capturing one
+      // specific credential-missing failure shape for `codexNormalizer.test.ts`,
+      // not part of the "rescued transcript" corpus this suite characterizes and
+      // pins exact per-kind totals against. Bumping those totals every time an
+      // unrelated future fixture lands here would turn this regression lock into
+      // permanent busywork instead of a signal about THIS corpus.
+      .filter((name) => !name.startsWith('e4-'))
+      .sort()
+  );
 }
 
 function allEnvelopes(): Array<{ file: string; envelope: Envelope }> {

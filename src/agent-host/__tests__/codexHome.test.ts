@@ -1,15 +1,33 @@
 import { describe, expect, it } from 'vitest';
+import { CODEX_MANAGED_API_KEY_ENV, CODEX_MANAGED_ENV } from '../agentSupport.ts';
 import {
   CODEX_CONFIG_HEADER,
   CODEX_CONFIG_ROOT_ALLOWLIST,
   CODEX_CONFIG_TABLE_ALLOWLIST,
   CODEX_PERMISSION_CONFIG_KEYS,
   type CodexHomeFs,
+  type EnsureCodexHomeResult,
   ensureCodexHome,
   projectCodexConfig,
   resolveSourceCodexHome,
 } from '../codexHome.ts';
 import { CODEX_PERMISSION_DEFAULT } from '../codexRuntime.ts';
+
+/**
+ * D47 S4a — `ensureCodexHome`'s result is now a discriminated union
+ * (`{mode:'projected',…}|{mode:'managed'}`). Every EXISTING test in this file
+ * predates that change and asserted directly against `.projection`/
+ * `.authCopied`, which only exist on the `'projected'` variant; this helper
+ * narrows once per call site instead of repeating the same `if` everywhere.
+ */
+function expectProjected(
+  result: EnsureCodexHomeResult
+): Extract<EnsureCodexHomeResult, { mode: 'projected' }> {
+  if (result.mode !== 'projected') {
+    throw new Error(`expected a 'projected' result, got mode=${result.mode}`);
+  }
+  return result;
+}
 
 /**
  * The single most important property under test is NEGATIVE: nothing outside the
@@ -129,6 +147,7 @@ interface FakeFs extends CodexHomeFs {
   writes: string[];
   copies: Array<{ from: string; to: string }>;
   chmods: Array<{ path: string; mode: number }>;
+  unlinks: string[];
 }
 
 function createFakeFs(seed: Record<string, { data: string; mtimeMs?: number }> = {}): FakeFs {
@@ -140,12 +159,14 @@ function createFakeFs(seed: Record<string, { data: string; mtimeMs?: number }> =
   const writes: string[] = [];
   const copies: Array<{ from: string; to: string }> = [];
   const chmods: Array<{ path: string; mode: number }> = [];
+  const unlinks: string[] = [];
   return {
     files,
     dirs,
     writes,
     copies,
     chmods,
+    unlinks,
     existsSync: (path) => files.has(path) || dirs.has(path),
     mkdirSync: (path) => {
       dirs.add(path);
@@ -174,6 +195,11 @@ function createFakeFs(seed: Record<string, { data: string; mtimeMs?: number }> =
       const file = files.get(path);
       if (!file) throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' });
       return { mtimeMs: file.mtimeMs };
+    },
+    unlinkSync: (path) => {
+      if (!files.has(path)) throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' });
+      files.delete(path);
+      unlinks.push(path);
     },
   };
 }
@@ -458,13 +484,15 @@ describe('ensureCodexHome', () => {
     // Falsifies a stub that returns a projection without materialising anything,
     // and a copy that leaves the credential world-readable.
     const fs = seededHome();
-    const result = ensureCodexHome({
-      homeDir: '/data/codex-home',
-      permission: POSTURE,
-      sourceHomeDir: '/src/.codex',
-      fs,
-      log: () => {},
-    });
+    const result = expectProjected(
+      ensureCodexHome({
+        homeDir: '/data/codex-home',
+        permission: POSTURE,
+        sourceHomeDir: '/src/.codex',
+        fs,
+        log: () => {},
+      })
+    );
 
     expect(fs.dirs.has('/data/codex-home')).toBe(true);
     const config = fs.files.get('/data/codex-home/config.toml');
@@ -488,21 +516,25 @@ describe('ensureCodexHome', () => {
     // session start races a codex process that is already reading them, and
     // rewrites mtimes that this very function uses as its staleness signal.
     const fs = seededHome();
-    const first = ensureCodexHome({
-      homeDir: '/data/h',
-      permission: POSTURE,
-      sourceHomeDir: '/src/.codex',
-      fs,
-      log: () => {},
-    });
+    const first = expectProjected(
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        sourceHomeDir: '/src/.codex',
+        fs,
+        log: () => {},
+      })
+    );
     const writesAfterFirst = [...fs.writes];
-    const second = ensureCodexHome({
-      homeDir: '/data/h',
-      permission: POSTURE,
-      sourceHomeDir: '/src/.codex',
-      fs,
-      log: () => {},
-    });
+    const second = expectProjected(
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        sourceHomeDir: '/src/.codex',
+        fs,
+        log: () => {},
+      })
+    );
 
     expect(first.authCopied).toBe(true);
     expect(second.authCopied).toBe(false);
@@ -551,13 +583,15 @@ describe('ensureCodexHome', () => {
       log: () => {},
     });
     fs.files.set('/src/.codex/auth.json', { data: '{"rotated":true}', mode: null, mtimeMs: 9_000 });
-    const result = ensureCodexHome({
-      homeDir: '/data/h',
-      permission: POSTURE,
-      sourceHomeDir: '/src/.codex',
-      fs,
-      log: () => {},
-    });
+    const result = expectProjected(
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        sourceHomeDir: '/src/.codex',
+        fs,
+        log: () => {},
+      })
+    );
 
     expect(result.authCopied).toBe(true);
     expect(fs.copies).toHaveLength(2);
@@ -568,13 +602,15 @@ describe('ensureCodexHome', () => {
     // Falsifies a throw: "not signed in yet" (or an API-key-only setup) must
     // still produce a usable home, with the caller left to decide.
     const fs = createFakeFs({ '/src/.codex/config.toml': { data: REALISTIC_SOURCE } });
-    const result = ensureCodexHome({
-      homeDir: '/data/h',
-      permission: POSTURE,
-      sourceHomeDir: '/src/.codex',
-      fs,
-      log: () => {},
-    });
+    const result = expectProjected(
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        sourceHomeDir: '/src/.codex',
+        fs,
+        log: () => {},
+      })
+    );
 
     expect(result.authCopied).toBe(false);
     expect(fs.copies).toEqual([]);
@@ -585,17 +621,31 @@ describe('ensureCodexHome', () => {
     // Falsifies "readFileSync on a missing config kills the session": a fresh
     // machine has neither file, and the home must still come out valid.
     const fs = createFakeFs();
-    const result = ensureCodexHome({
-      homeDir: '/data/h',
-      permission: POSTURE,
-      sourceHomeDir: '/nope',
-      fs,
-      log: () => {},
-    });
+    const result = expectProjected(
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        sourceHomeDir: '/nope',
+        fs,
+        log: () => {},
+      })
+    );
 
     expect(result.authCopied).toBe(false);
     expect(result.projection.kept).toEqual([]);
     expect(fs.files.get('/data/h/config.toml')?.data).toBe(result.projection.toml);
+  });
+
+  it('the fallback result carries mode:"projected" (D47 S4a discriminant)', () => {
+    const fs = seededHome();
+    const result = ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      sourceHomeDir: '/src/.codex',
+      fs,
+      log: () => {},
+    });
+    expect(result.mode).toBe('projected');
   });
 
   it('logs paths and key names only — never file content', () => {
@@ -633,5 +683,167 @@ describe('ensureCodexHome', () => {
       ensureCodexHome({ homeDir: '   ', permission: POSTURE, fs, log: () => {} })
     ).toThrow(/homeDir/);
     expect(fs.dirs.size).toBe(0);
+  });
+});
+
+/**
+ * D47 S4a — the managed branch. `config.toml` is Main's to write (S3b); this
+ * function's job here is cleanup (stale `auth.json`) and an honesty check
+ * (`config.toml` exists). Every case passes `env: MANAGED_ENV` to force the
+ * branch without depending on real `process.env`.
+ */
+describe('ensureCodexHome — managed branch (D47 S4a)', () => {
+  const MANAGED_ENV: NodeJS.ProcessEnv = {
+    [CODEX_MANAGED_ENV]: '1',
+    [CODEX_MANAGED_API_KEY_ENV]: 'sk-live',
+  };
+
+  it('deletes a stale auth.json, verifies config.toml exists, and returns mode:"managed" with no projection audit', () => {
+    const fs = createFakeFs({
+      '/data/h/auth.json': { data: AUTH_SECRET },
+      '/data/h/config.toml': { data: '# written by Main' },
+    });
+
+    const result = ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      fs,
+      env: MANAGED_ENV,
+      log: () => {},
+    });
+
+    expect(result).toEqual({ mode: 'managed', homeDir: '/data/h' });
+    expect(fs.files.has('/data/h/auth.json')).toBe(false);
+    expect(fs.unlinks).toEqual(['/data/h/auth.json']);
+  });
+
+  it('idempotent unlink: a missing auth.json (ENOENT) is not an error', () => {
+    const fs = createFakeFs({ '/data/h/config.toml': { data: '# written by Main' } });
+
+    expect(() =>
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        fs,
+        env: MANAGED_ENV,
+        log: () => {},
+      })
+    ).not.toThrow();
+    expect(fs.unlinks).toEqual([]);
+  });
+
+  it('mutation ③ — a non-ENOENT unlink failure BLOCKS the session (throws), never just logs (I4, both review tracks)', () => {
+    const fs = createFakeFs({
+      '/data/h/auth.json': { data: AUTH_SECRET },
+      '/data/h/config.toml': { data: '# written by Main' },
+    });
+    const originalUnlink = fs.unlinkSync;
+    fs.unlinkSync = (path) => {
+      if (path === '/data/h/auth.json') {
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      }
+      originalUnlink(path);
+    };
+    const logs: unknown[][] = [];
+
+    expect(() =>
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        fs,
+        env: MANAGED_ENV,
+        log: (...args) => logs.push(args),
+      })
+    ).toThrow(/auth\.json/);
+    // Falsifies "log and continue": a caller (`buildHostAgentRegistry`,
+    // `codexRuntime.ts`'s openConnection) must SEE this as a failure it can
+    // act on (home_prepare_failed / session_create_failed), not silently
+    // proceed with a stale credential file still on disk.
+  });
+
+  it('config.toml missing — refuses honestly (home_prepare_failed upstream) instead of handing codex an empty provider table', () => {
+    const fs = createFakeFs({ '/data/h/auth.json': { data: AUTH_SECRET } });
+
+    expect(() =>
+      ensureCodexHome({
+        homeDir: '/data/h',
+        permission: POSTURE,
+        fs,
+        env: MANAGED_ENV,
+        log: () => {},
+      })
+    ).toThrow(/config\.toml/);
+    // The auth.json cleanup still ran before the config check failed —
+    // documented order, not asserted as a hard requirement either way.
+  });
+
+  it('mutation ② — never projects/copies/writes config.toml: Main owns that file entirely', () => {
+    const fs = createFakeFs({
+      '/data/h/auth.json': { data: AUTH_SECRET },
+      '/data/h/config.toml': { data: '# written by Main, model_provider = "jyw"' },
+    });
+
+    ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      fs,
+      env: MANAGED_ENV,
+      log: () => {},
+    });
+
+    expect(fs.writes).toEqual([]);
+    expect(fs.copies).toEqual([]);
+    expect(fs.chmods).toEqual([]);
+    // Byte-for-byte untouched — this function read `existsSync` only, never
+    // `readFileSync`'d or rewrote the file Main wrote.
+    expect(fs.files.get('/data/h/config.toml')?.data).toBe(
+      '# written by Main, model_provider = "jyw"'
+    );
+  });
+
+  it('still creates homeDir (mkdir -p) before branching on credential mode', () => {
+    const fs = createFakeFs({ '/data/h/config.toml': { data: '# written by Main' } });
+    ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      fs,
+      env: MANAGED_ENV,
+      log: () => {},
+    });
+    expect(fs.dirs.has('/data/h')).toBe(true);
+  });
+
+  it('logs paths and key names only, never a value (T-35) — this branch never even reads config.toml content', () => {
+    const fs = createFakeFs({
+      '/data/h/auth.json': { data: AUTH_SECRET },
+      '/data/h/config.toml': { data: '# written by Main, base_url = "https://proxy.invalid/v1"' },
+    });
+    const calls: unknown[][] = [];
+
+    ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      fs,
+      env: MANAGED_ENV,
+      log: (...args) => calls.push(args),
+    });
+
+    const logged = JSON.stringify(calls);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(logged).toContain('/data/h');
+    expect(logged).not.toContain('sk-live');
+    expect(logged).not.toContain('proxy.invalid');
+  });
+
+  it('managed_missing_credentials is treated identically to managed (both are non-fallback) — defence in depth even though the registry gate should refuse the session first', () => {
+    const fs = createFakeFs({ '/data/h/config.toml': { data: '# written by Main' } });
+    const result = ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      fs,
+      env: { [CODEX_MANAGED_ENV]: '1' }, // marker on, key ABSENT
+      log: () => {},
+    });
+    expect(result.mode).toBe('managed');
   });
 });

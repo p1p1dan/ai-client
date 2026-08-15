@@ -44,12 +44,74 @@ export function resolveCodexEnabled(env: NodeJS.ProcessEnv = process.env): boole
 }
 
 /**
+ * D47 S4 §1 (rev.2) — the explicit managed-mode marker. `'1'` only, same
+ * strictness as {@link CODEX_FLAG_ENV}: this is NOT reused from the presence
+ * of a base URL or any other side-channel (rev.1's "a" was independently
+ * struck down by both review tracks), and no other spelling counts as on.
+ *
+ * The literal string appears EXACTLY ONCE in `src/agent-host` — right here —
+ * and every one of the resolver's readers (the registry below, `codexHome.ts`,
+ * `codexRuntime.ts`'s home call and its spawn-env build) goes through
+ * {@link resolveCodexCredentialMode} instead of re-testing this env var
+ * itself; `agentSupport.test.ts` statically scans the directory for the
+ * literal to keep that true. Main's own half of this contract
+ * (`hostEnv.ts`) asserts its own side independently — see that file's
+ * docstring for the split ("each half asserted on its own").
+ */
+export const CODEX_MANAGED_ENV = 'AICLIENT_CODEX_MANAGED';
+
+/**
+ * The one credential a managed session's spawn env carries (`codexRuntime.ts`)
+ * and the same name `config.toml`'s `env_key` points codex at (S3b,
+ * `codexManagedConfig.ts`) — the indirection E4 measured live.
+ */
+export const CODEX_MANAGED_API_KEY_ENV = 'AICLIENT_CODEX_API_KEY';
+
+/**
+ * The three-state resolver (§1, rev.2 architecture pick). `'fallback'` is
+ * TODAY'S behaviour, byte for byte — the marker is off (or anything other
+ * than the exact string `'1'`), so nothing downstream may branch on it.
+ */
+export type CodexCredentialMode =
+  | { mode: 'fallback' }
+  | { mode: 'managed'; apiKey: string }
+  | { mode: 'managed_missing_credentials' };
+
+/**
+ * THE single resolver every Host-side reader of managed-mode state must call
+ * — never re-test {@link CODEX_MANAGED_ENV} / {@link CODEX_MANAGED_API_KEY_ENV}
+ * directly. Four call sites (§1): this file's own registry gate below,
+ * `codexHome.ts`'s managed/fallback branch, and `codexRuntime.ts` twice (the
+ * `ensureCodexHome` call and the spawn-env build) — all four must agree on the
+ * SAME three-way read of the SAME env object, or the registry could advertise
+ * `codex` as unavailable while a session already in flight spawns it anyway
+ * (or the reverse).
+ *
+ * `apiKey` is trimmed before the presence check AND before being returned —
+ * an env var padded with whitespace by whatever set it must not count as
+ * "present" and must not carry the padding onto the wire.
+ */
+export function resolveCodexCredentialMode(
+  env: NodeJS.ProcessEnv = process.env
+): CodexCredentialMode {
+  if (env[CODEX_MANAGED_ENV] !== '1') return { mode: 'fallback' };
+  const apiKey = env[CODEX_MANAGED_API_KEY_ENV]?.trim();
+  if (apiKey) return { mode: 'managed', apiKey };
+  return { mode: 'managed_missing_credentials' };
+}
+
+/**
  * Why `codex` is (or is not) in `HostAgentRegistry.agents` this run — carried
  * alongside the boolean so a refusal message (and a support log) can say WHICH
- * of the three gates stopped it, without inventing a new wire error code
- * (S3 slice 6 spec §2 point 7). Only set when `available` is false.
+ * of the four gates stopped it, without inventing a new wire error code
+ * (S3 slice 6 spec §2 point 7; `credentials_missing` added D47 S4a). Only set
+ * when `available` is false.
  */
-export type HostAgentAvailabilityReason = 'flag_off' | 'entry_missing' | 'home_prepare_failed';
+export type HostAgentAvailabilityReason =
+  | 'flag_off'
+  | 'credentials_missing'
+  | 'entry_missing'
+  | 'home_prepare_failed';
 
 export interface HostAgentDetail {
   agent: AgentWireName;
@@ -84,20 +146,28 @@ export interface BuildHostAgentRegistryInput {
 }
 
 /**
- * A2/A3 (arbitration doc §2.1): codex availability = flag × entry resolution ×
- * isolated-home preparation, computed fresh from the three gates rather than
- * read off a flag-only snapshot.
+ * A2/A3 (arbitration doc §2.1): codex availability = flag × credential mode ×
+ * entry resolution × isolated-home preparation, computed fresh from the four
+ * gates rather than read off a flag-only snapshot.
  *
- * Short-circuits deliberately: `entry_missing` never calls `prepareHome` (no
- * point preparing a home for an entry that cannot be launched), and `flag_off`
- * never calls either probe (A2's "flag off 时不碰 fs" — the off position must
- * stay side-effect-free).
+ * Short-circuits deliberately, in gate ORDER (§1): `flag_off` never calls
+ * {@link resolveCodexCredentialMode} or either probe (A2's "flag off 时不碰
+ * fs" — the off position must stay side-effect-free); `credentials_missing`
+ * (marker on, key absent/blank) never calls `probeEntry`/`prepareHome` either
+ * — there is no point resolving an entry or preparing a home for a session
+ * that cannot authenticate; `entry_missing` never calls `prepareHome`.
+ *
+ * Negative control (§1): flag on + marker ABSENT (not `'1'`) resolves to
+ * `{mode:'fallback'}`, which is NOT `credentials_missing` — it falls straight
+ * through to the existing entry/home checks exactly as before D47 S4.
  */
 export function buildHostAgentRegistry(input: BuildHostAgentRegistryInput): HostAgentRegistry {
   const detail: HostAgentDetail[] = [{ agent: CLAUDE_CODE_AGENT, available: true }];
 
   if (!resolveCodexEnabled(input.env)) {
     detail.push({ agent: CODEX_AGENT, available: false, reason: 'flag_off' });
+  } else if (resolveCodexCredentialMode(input.env).mode === 'managed_missing_credentials') {
+    detail.push({ agent: CODEX_AGENT, available: false, reason: 'credentials_missing' });
   } else if (!input.probeEntry()) {
     detail.push({ agent: CODEX_AGENT, available: false, reason: 'entry_missing' });
   } else {
@@ -144,14 +214,22 @@ export function resetHostAgentRegistryForTests(): void {
 /**
  * Human-readable clue for `HostAgentDetail.reason`, folded into the
  * `agent_unsupported` wire message (S3 slice 6 spec §2 point 7) so the message
- * says WHICH of the three gates stopped Codex — flag never turned on, this
- * machine has no resolvable entry, or the isolated home could not be prepared —
- * without adding a new error code. Three distinct substrings on purpose.
+ * says WHICH of the four gates stopped Codex — flag never turned on, managed
+ * credentials are missing, this machine has no resolvable entry, or the
+ * isolated home could not be prepared — without adding a new error code.
+ *
+ * Four distinct substrings on purpose, and — new discipline as of D47 S4a —
+ * pairwise NON-CONTAINING: no one clue may be a substring of another. A plain
+ * `Set.size` check (this file's test used to stop there) only proves the four
+ * strings are not equal; it does not catch one clue merely EXTENDING another,
+ * which would still confuse a caller that does `message.includes(clue)`.
  */
 export function describeHostAgentReason(reason: HostAgentAvailabilityReason): string {
   switch (reason) {
     case 'flag_off':
       return `the ${CODEX_FLAG_ENV} feature flag is off for this Host build`;
+    case 'credentials_missing':
+      return `the ${CODEX_MANAGED_API_KEY_ENV} environment variable is required for managed Codex credentials but is missing or empty`;
     case 'entry_missing':
       return 'no @openai/codex bin/codex.js entry point could be resolved on this machine';
     case 'home_prepare_failed':

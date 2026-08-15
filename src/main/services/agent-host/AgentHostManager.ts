@@ -23,10 +23,38 @@ import type {
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import { app } from 'electron';
 import log from '../../utils/logger';
+import { getCredentialVault } from '../auth';
+import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { AgentHostProcess } from './AgentHostProcess';
 import { buildAgentHostEnv } from './hostEnv';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
+
+const CODEX_HOME_DIR_NAME = 'codex-home';
+
+/**
+ * D47 S3b §1 — the three Codex managed-credentials `buildAgentHostEnv` inputs,
+ * resolved from the managed-credentials flag + a FRESH vault snapshot (never
+ * cached across Host restarts, so a login/logout that happened while the Host
+ * was down is picked up the next time `ensureStarted()` spawns a new one —
+ * this is what the I5 epoch barrier below exists to make possible). Flag off
+ * returns all three `undefined` — `hostEnv.ts`'s "继承污染防御" contract
+ * needs that to kill any stray inherited value, not merely omit the key.
+ */
+export function resolveCodexManagedHostEnv(): {
+  codexManaged: string | undefined;
+  codexApiKey: string | undefined;
+  codexHomeManagedDir: string | undefined;
+} {
+  if (!resolveManagedCredentialsEnabled()) {
+    return { codexManaged: undefined, codexApiKey: undefined, codexHomeManagedDir: undefined };
+  }
+  const codexHomeManagedDir = path.join(app.getPath('userData'), CODEX_HOME_DIR_NAME);
+  const vaultResult = getCredentialVault().read();
+  const codexApiKey =
+    vaultResult.status === 'ok' ? vaultResult.doc.payload.codex.apiKey : undefined;
+  return { codexManaged: '1', codexApiKey, codexHomeManagedDir };
+}
 
 export type AgentHostState = 'stopped' | 'starting' | 'ready' | 'error';
 
@@ -51,6 +79,14 @@ export class AgentHostManager {
   private state: AgentHostState = 'stopped';
   private driver: AgentHostDriver = DEFAULT_AGENT_HOST_DRIVER;
   private readyPromise: Promise<void> | null = null;
+  // D47 S3b I5 epoch barrier: set for the duration of `shutdown()` (including
+  // the underlying `proc.stop()` await), so a `create` request racing a
+  // login/logout-triggered shutdown waits for the OLD Host to fully land
+  // before `ensureStarted()` decides whether to spawn a NEW one — otherwise a
+  // new Host could spawn (and read a fresh vault snapshot) while the old
+  // process is still mid-teardown, or a caller could keep talking to a Host
+  // that's about to disappear.
+  private shutdownPromise: Promise<void> | null = null;
   private eventHandlers = new Set<(event: RuntimeEvent) => void>();
   // S7 (round-2 iteration-3 review): captured off the live `host.ready` event
   // in `attachProcessHandlers` below — `null` until the Host has reported it
@@ -93,6 +129,14 @@ export class AgentHostManager {
 
   async ensureStarted(driver?: AgentHostDriver): Promise<void> {
     if (driver) this.driver = driver;
+    // I5 epoch barrier (D47 S3b): a shutdown in flight must fully land before
+    // this method looks at `state`/`process` at all — those fields are
+    // updated (to 'stopped'/null) synchronously at the START of `shutdown()`,
+    // before the actual `proc.stop()` teardown has finished, so reading them
+    // early would let a new Host spawn while the old one is still exiting.
+    if (this.shutdownPromise) {
+      await this.shutdownPromise;
+    }
     if (this.state === 'ready' && this.process?.isRunning) return;
     if (this.readyPromise) return this.readyPromise;
 
@@ -299,6 +343,23 @@ export class AgentHostManager {
   }
 
   async shutdown(): Promise<void> {
+    // Concurrent shutdown() calls share the same in-flight promise rather
+    // than racing two `proc.stop()` calls against each other (D47 S3b I5).
+    if (this.shutdownPromise) {
+      return this.shutdownPromise;
+    }
+    const task = this.shutdownInternal();
+    this.shutdownPromise = task;
+    try {
+      await task;
+    } finally {
+      if (this.shutdownPromise === task) {
+        this.shutdownPromise = null;
+      }
+    }
+  }
+
+  private async shutdownInternal(): Promise<void> {
     const proc = this.process;
     this.process = null;
     this.state = 'stopped';
@@ -417,6 +478,12 @@ export class AgentHostManager {
 
     const hostEntryPath = resolveHostEntryPath();
     const useStripTypes = hostEntryPath.endsWith('.ts');
+    // D47 S3b §1 — resolved fresh on every spawn (never cached on `this`), so
+    // a Host that (re)starts after a login/logout regenerate always reads the
+    // CURRENT vault snapshot instead of whatever was true the last time a
+    // Host came up (the I5 epoch barrier on `ensureStarted`/`shutdown` above
+    // is what makes "always fresh at spawn time" actually hold).
+    const codexManagedEnv = resolveCodexManagedHostEnv();
     const proc = new AgentHostProcess({
       nodeExecPath: resolved.runtime.execPath,
       hostEntryPath,
@@ -426,7 +493,10 @@ export class AgentHostManager {
         cometixVersion: COMETIX_PIN.version,
         nodeExecPath: resolved.runtime.execPath,
         appVersion: app.getVersion(),
-        codexHomeDir: path.join(app.getPath('userData'), 'codex-home'),
+        codexHomeDir: path.join(app.getPath('userData'), CODEX_HOME_DIR_NAME),
+        codexManaged: codexManagedEnv.codexManaged,
+        codexApiKey: codexManagedEnv.codexApiKey,
+        codexHomeManagedDir: codexManagedEnv.codexHomeManagedDir,
       }),
     });
 

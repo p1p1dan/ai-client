@@ -48,6 +48,20 @@ import type { EmitFn, LogFn } from './eventNormalizer.ts';
  * most expensive failure mode available here.
  */
 
+/**
+ * `method:"error"` (D47 S4a, E4 spike 2026-08-15): codex broadcasts this
+ * bare-named notification mid-turn — the frame `classifyCodexTurnError` and
+ * `onError` exist to interpret — but the CLI's own `generate-json-schema`
+ * inventory does NOT list `error` under `serverNotification`
+ * [实测 `codex-method-contract.json`], so it cannot join
+ * `CODEX_NORMALIZER_METHODS` below: every one of THAT object's values is
+ * asserted against the generated contract in `codexNormalizer.test.ts`, and
+ * `error` would fail that assertion despite being real, measured wire
+ * traffic. Routed by literal string instead, in `ingest()`, ahead of the
+ * `CODEX_NORMALIZER_METHODS` switch.
+ */
+export const CODEX_ERROR_METHOD = 'error';
+
 /** Notifications this class turns into runtime events. Pinned against the contract. */
 export const CODEX_NORMALIZER_METHODS = {
   turnStarted: 'turn/started',
@@ -148,6 +162,16 @@ interface TurnState {
   progressCount: Map<string, number>;
   /** itemId -> highest reasoning summary part index seen. */
   reasoningPart: Map<string, number>;
+  /**
+   * D47 S4a — exactly-once (spec §2 S4a point ③). Set the moment THIS turn's
+   * terminal outcome has been emitted from an `error` notification
+   * (`willRetry` not `true`), so the `turn/completed` frame that follows it
+   * (E4: carrying the SAME error object) closes the turn without emitting a
+   * second `session.failed`. Also read by `closeTurn`, so a teardown racing
+   * between the two frames (the process dying before `turn/completed`
+   * arrives) cannot double-report either.
+   */
+  terminalEmitted: boolean;
 }
 
 function newTurnState(turnId: string | null): TurnState {
@@ -160,6 +184,7 @@ function newTurnState(turnId: string | null): TurnState {
     settledTools: new Set(),
     progressCount: new Map(),
     reasoningPart: new Map(),
+    terminalEmitted: false,
   };
 }
 
@@ -205,6 +230,58 @@ function readDelta(params: unknown): string {
 
 function readItemId(params: unknown): string | null {
   return isRecord(params) ? str(params.itemId) : null;
+}
+
+/**
+ * D47 S4a point ① — fixes the existing bug at the old `:504-521`: `turn.error`
+ * is an OBJECT on the wire (`{message, codexErrorInfo, additionalDetails}`,
+ * E4 [实测]), and `String(turnError)` on an object produces the literal text
+ * `[object Object]` instead of anything a human — or `classifyCodexTurnError`
+ * — can read. Reads `.message` for the object shape; the plain-string shape
+ * (never actually observed, kept for backward compatibility per the spec
+ * text) is returned as-is. Anything else (an object with no `message`, a
+ * number, …) is an honest `null` rather than a fabricated string.
+ */
+function readTurnErrorMessage(turnError: unknown): string | null {
+  if (turnError == null) return null;
+  if (typeof turnError === 'string') return turnError;
+  if (isRecord(turnError)) return str(turnError.message);
+  return null;
+}
+
+/**
+ * D47 S4a point ② — the ONE classification defined so far. `error` is
+ * whatever shape `turn.error` / the `error` notification's `params.error`
+ * carries; both are byte-identical for the same failure [实测 E4]. Pure: no
+ * fs, no env, no clock, so it is unit-testable directly against the E4
+ * fixtures' extracted objects as well as through the full frame replay.
+ *
+ * All three conditions are required, matching E4's exact evidence:
+ *  - `codexErrorInfo === 'other'` — the protocol does not have a dedicated
+ *    code for "missing credential"; `'other'` is also what a GENUINE unrelated
+ *    failure reports, so the message substrings below are load-bearing, not
+ *    decorative.
+ *  - `message` contains `Missing environment variable` — codex's own wording
+ *    for this failure class.
+ *  - `message` contains `AICLIENT_CODEX_API_KEY` — the SPECIFIC var this
+ *    build's managed `config.toml` names as `env_key` (S3b). A missing
+ *    variable with a DIFFERENT name is a real misconfiguration this function
+ *    must not paper over as "credentials missing" (the third required test
+ *    arm: a generic "other" error must not match).
+ *
+ * Deliberately does NOT look at `willRetry`: that field lives on the `error`
+ * notification's OUTER envelope, not on this inner object, and the caller
+ * (`onError`) is the one that must never let a `willRetry:true` frame reach a
+ * terminal event — see that function's docstring.
+ */
+export function classifyCodexTurnError(error: unknown): 'codex_credentials_missing' | null {
+  if (!isRecord(error)) return null;
+  if (error.codexErrorInfo !== 'other') return null;
+  const message = str(error.message);
+  if (!message) return null;
+  if (!message.includes('Missing environment variable')) return null;
+  if (!message.includes('AICLIENT_CODEX_API_KEY')) return null;
+  return 'codex_credentials_missing';
 }
 
 export class CodexNormalizer {
@@ -275,6 +352,11 @@ export class CodexNormalizer {
         return;
       }
 
+      if (method === CODEX_ERROR_METHOD) {
+        this.onError(params);
+        return;
+      }
+
       const M = CODEX_NORMALIZER_METHODS;
       switch (method) {
         case M.turnStarted:
@@ -333,14 +415,24 @@ export class CodexNormalizer {
    * Used by teardown paths (interrupt, process exit): without it, an aborted
    * turn leaves an assistant message and a thinking block that the renderer
    * shows as still streaming, forever.
+   *
+   * D47 S4a — also guarded by `terminalEmitted`: a process that dies BETWEEN
+   * a named `error` notification (`onError` already emitted `session.failed`)
+   * and the `turn/completed` that would otherwise have closed it cleanly
+   * reaches this path via `codexRuntime.ts`'s exit handler. Without the guard
+   * that race would emit a second terminal event for the same turn — the
+   * exactly-once contract (spec §2 S4a point ③) is about the TURN, not about
+   * which frame happened to observe its outcome first.
    */
   closeTurn(outcome: 'completed' | 'failed' | 'stopped', error?: string): void {
     this.finishOpenBlocks();
-    this.emit({
-      type: outcome === 'completed' ? 'session.completed' : `session.${outcome}`,
-      sessionId: this.sessionId,
-      payload: error ? { error } : undefined,
-    });
+    if (!this.turn.terminalEmitted) {
+      this.emit({
+        type: outcome === 'completed' ? 'session.completed' : `session.${outcome}`,
+        sessionId: this.sessionId,
+        payload: error ? { error } : undefined,
+      });
+    }
     if (outcome === 'completed') this.stat.turnsCompleted += 1;
     this.turn = newTurnState(null);
   }
@@ -505,21 +597,91 @@ export class CodexNormalizer {
     this.ensureTurn(params);
     const turn = isRecord(params) && isRecord(params.turn) ? params.turn : null;
     const status = turn ? str(turn.status) : null;
-    const error = turn && turn.error != null ? String(turn.error) : null;
+    const turnError = turn ? turn.error : undefined;
+    // Presence, not readability, decides `failed` (D47 S4a point ①): the OLD
+    // `String(turnError)` conflated the two ("[object Object]" is truthy too),
+    // and an object whose shape we cannot read is still a failed turn, just
+    // one whose message falls back to the generic `turn <status>` text below.
+    const hasError = turn ? turn.error != null : false;
     // `status:'completed'` with `error:null` is the recorded shape [实测]; the
     // turn that produced it had its patch DECLINED, so "completed" means the
     // loop ended, not that the agent got what it wanted. Anything else is a
     // failed turn.
-    const failed = (status !== null && status !== 'completed') || error !== null;
+    const failed = (status !== null && status !== 'completed') || hasError;
 
     this.finishOpenBlocks();
-    this.emit({
-      type: failed ? 'session.failed' : 'session.completed',
-      sessionId: this.sessionId,
-      payload: failed ? { error: error ?? `turn ${status ?? 'ended abnormally'}` } : undefined,
-    });
+    if (this.turn.terminalEmitted) {
+      // D47 S4a point ③ (exactly-once): an `error` notification already
+      // reported this turn's outcome — E4 measured `turn/completed.turn.error`
+      // as byte-identical to that notification's `error` object. This frame
+      // only closes the turn; a second `session.failed` here would double the
+      // report of the SAME failure.
+      this.log('codex turn/completed: terminal already reported by an error notification', {
+        sessionId: this.sessionId,
+        status,
+      });
+    } else {
+      if (hasError) {
+        this.log('codex turn/completed carries an error', {
+          sessionId: this.sessionId,
+          classification: classifyCodexTurnError(turnError),
+        });
+      }
+      this.emit({
+        type: failed ? 'session.failed' : 'session.completed',
+        sessionId: this.sessionId,
+        payload: failed
+          ? { error: readTurnErrorMessage(turnError) ?? `turn ${status ?? 'ended abnormally'}` }
+          : undefined,
+      });
+    }
     this.stat.turnsCompleted += 1;
     this.turn = newTurnState(null);
+  }
+
+  /**
+   * `method:"error"` (D47 S4a, E4 spike). See `CODEX_ERROR_METHOD` for why it
+   * is routed here instead of through `CODEX_NORMALIZER_METHODS`.
+   *
+   * `willRetry:true` must NEVER escalate to a terminal event: E4's present
+   * group (a transient network failure AFTER the credential check already
+   * passed — `codexErrorInfo` an object, not `'other'`, message
+   * `"Reconnecting... 1/5"`) is exactly this shape, and `turn/completed` never
+   * arrives in that capture window — the turn is still retrying, not done.
+   * `willRetry:false`/absent IS terminal: E4's missing group shows
+   * `turn/completed` arriving ~23ms AFTER this frame carrying the IDENTICAL
+   * `error` object, which is exactly the double-carrier `terminalEmitted`
+   * exists to collapse into one `session.failed` (see `onTurnCompleted`).
+   */
+  private onError(params: unknown): void {
+    this.ensureTurn(params);
+    const record = isRecord(params) ? params : undefined;
+    const willRetry = record?.willRetry === true;
+    const errorPayload = record?.error;
+    const message = readTurnErrorMessage(errorPayload) ?? 'codex reported an error';
+    const classification = classifyCodexTurnError(errorPayload);
+
+    if (willRetry) {
+      this.log('codex turn error notification (retrying, not terminal)', {
+        sessionId: this.sessionId,
+        message,
+        classification,
+      });
+      return;
+    }
+
+    this.log('codex turn error notification', {
+      sessionId: this.sessionId,
+      message,
+      classification,
+    });
+    this.finishOpenBlocks();
+    this.emit({
+      type: 'session.failed',
+      sessionId: this.sessionId,
+      payload: { error: message },
+    });
+    this.turn.terminalEmitted = true;
   }
 
   private onItemStarted(params: unknown): void {

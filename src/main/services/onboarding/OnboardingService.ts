@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import type { ManagedCodexConfigInput } from '@shared/codexManagedConfig';
 import type {
   OnboardingCliStatus,
   OnboardingCredentialsHealth,
@@ -16,6 +17,7 @@ import {
   generateClaudeSettings,
   getManagedClaudeHomeDir,
 } from '../auth/claudeHome';
+import { type CodexHomeRegenerateSource, regenerateManagedCodexHome } from '../auth/codexHome';
 import { writeSettingsFile } from '../auth/managedFileWriter';
 import { redactLogArgs } from '../auth/redact';
 import { AgentInstaller } from '../cli/AgentInstaller';
@@ -31,6 +33,18 @@ function getInjectedOnboardingServiceUrl(): string {
 }
 
 class OnboardingService {
+  /**
+   * D47 S3b I5 epoch barrier — the managed-home regenerate + Host shutdown
+   * chain `logout()` kicks off (fire-and-forget, so `logout()`'s own
+   * signature can stay synchronous `boolean`). `main/ipc/onboarding.ts`'s
+   * logout handler awaits this AFTER calling `logout()`, so the renderer
+   * only sees the logout IPC call resolve once the OLD Host (holding
+   * stale/logged-out env) is actually gone. `null` whenever nothing was
+   * kicked off (managed credentials off, or `logout()` hasn't run yet this
+   * process lifetime) — awaiting `null` is a no-op.
+   */
+  private pendingLogoutRegeneratePromise: Promise<void> | null = null;
+
   /**
    * Check if user has already completed onboarding.
    * Reads the onboarding field from ~/.aiclient/settings.json.
@@ -201,9 +215,19 @@ class OnboardingService {
           baseUrl: credentialsForClaudeHome.claudeBaseUrl,
           authToken: credentialsForClaudeHome.claudeAuthToken,
         });
-        // I5 epoch chain (A-track M10): drop any Host that cached the old
-        // (or absent) env so the next session picks up the fresh one.
-        void this.shutdownAgentHostAfterRegenerate();
+        // D47 S3b §2: codex-home rides the same login regenerate tick, off
+        // the same already-in-hand credentials object (never a vault
+        // re-read, same A-track M4 reasoning as claude above).
+        await this.regenerateManagedCodexHomeConfig(
+          { baseUrl: credentialsForClaudeHome.codexBaseUrl },
+          'login'
+        );
+        // I5 epoch barrier (A-track M10, upgraded to a hard AWAIT by D47 S3b
+        // — the renderer must not observe login success while a Host that
+        // cached the old/absent env is still alive): drop any running Host
+        // so the very next `ensureStarted()` spawns one that reads the fresh
+        // env this regenerate just wrote.
+        await this.shutdownAgentHostAfterRegenerate();
       }
     }
 
@@ -247,6 +271,32 @@ class OnboardingService {
       }));
     } catch (error) {
       console.warn('[OnboardingService] Failed to regenerate managed claude-home settings:', error);
+    }
+  }
+
+  /**
+   * D47 S3b §2 — the codex-home counterpart of
+   * `regenerateManagedClaudeHomeSettings` above: writes
+   * `<codex-home>/config.toml` + sidecar from a credentials object (login),
+   * or leaves `config.toml`'s bytes untouched (`null` — logout's "config
+   * 保留" contract, see `codexHome.ts`'s module header). Always deletes a
+   * stale `codex-home/auth.json` regardless (double safety alongside
+   * agent-host's own managed-mode deletion, S4a). Best-effort, same as the
+   * claude-home sibling — a failure here must not turn a successful
+   * login/logout into a rejected one.
+   */
+  private async regenerateManagedCodexHomeConfig(
+    credentials: ManagedCodexConfigInput | null,
+    source: CodexHomeRegenerateSource
+  ): Promise<void> {
+    try {
+      await regenerateManagedCodexHome({
+        userDataDir: app.getPath('userData'),
+        source,
+        credentials,
+      });
+    } catch (error) {
+      console.warn('[OnboardingService] Failed to regenerate managed codex-home config:', error);
     }
   }
 
@@ -297,12 +347,15 @@ class OnboardingService {
       // "after clear" checkpoint, A-track B2). Never reads the vault: logout
       // always writes an empty env regardless of what the vault currently
       // holds. `logout()` itself stays synchronous `boolean` (unchanged
-      // public contract) — this kicks the regenerate off without awaiting it.
-      if (resolveManagedCredentialsEnabled()) {
-        void this.regenerateManagedClaudeHomeSettings(null).then(() => {
-          void this.shutdownAgentHostAfterRegenerate();
-        });
-      }
+      // public contract, D47 S3b I5 note — `OnboardingService.logout()` 同步
+      // 签名不动) — this kicks the regenerate + shutdown chain off WITHOUT
+      // awaiting it here, but stashes the promise on
+      // `pendingLogoutRegeneratePromise` so `main/ipc/onboarding.ts`'s logout
+      // handler can await it (the I5 barrier lives in the IPC handler, not
+      // in this method).
+      this.pendingLogoutRegeneratePromise = resolveManagedCredentialsEnabled()
+        ? this.regenerateManagedHomesForLogout()
+        : null;
 
       this.removeCodexConfig();
       const ok = mergeSettingsPatch({ onboarding: { registered: false } });
@@ -312,6 +365,33 @@ class OnboardingService {
       console.error('[OnboardingService] Failed to logout:', error);
       return false;
     }
+  }
+
+  /**
+   * D47 S3b I5 epoch barrier — `main/ipc/onboarding.ts`'s logout handler
+   * awaits this AFTER calling `logout()` (never before — `logout()` is what
+   * populates `pendingLogoutRegeneratePromise` in the first place). Awaiting
+   * `null` (managed credentials off) is a no-op.
+   */
+  async awaitPendingLogoutRegenerate(): Promise<void> {
+    if (this.pendingLogoutRegeneratePromise) {
+      await this.pendingLogoutRegeneratePromise;
+    }
+  }
+
+  /**
+   * D47 S3b §2 — logout's deterministic no-credential regenerate, now
+   * covering BOTH managed homes off the same tick: claude-home's env section
+   * goes empty (unchanged S2a behavior); codex-home's `config.toml` is left
+   * exactly as-is (`credentials: null` — see `codexHome.ts`'s module header
+   * for why logout has no "no-credentials config" form to write), but its
+   * stale `auth.json` still gets deleted. Host shutdown runs last, after
+   * BOTH regenerates have landed.
+   */
+  private async regenerateManagedHomesForLogout(): Promise<void> {
+    await this.regenerateManagedClaudeHomeSettings(null);
+    await this.regenerateManagedCodexHomeConfig(null, 'logout');
+    await this.shutdownAgentHostAfterRegenerate();
   }
 
   /**

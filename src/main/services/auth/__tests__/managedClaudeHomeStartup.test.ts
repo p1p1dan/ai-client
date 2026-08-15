@@ -365,4 +365,106 @@ describe('managedClaudeHomeStartup (D47 S2a §1)', () => {
       expect(existsSync(join(claudeHomeDir(), '.claude.json'))).toBe(true);
     });
   });
+
+  describe('flag on — phase ③ also materializes codex-home (D47 S3b §2, same vault read as claude-home)', () => {
+    function codexHomeDir(): string {
+      return join(userDataDir, 'codex-home');
+    }
+    function codexConfigPath(): string {
+      return join(codexHomeDir(), 'config.toml');
+    }
+
+    async function setupPromoted(cryptoAvailable: boolean) {
+      const authIndex = await import('../index');
+      authIndex.getCredentialVault().promoteCrypto(fakeCrypto(cryptoAvailable));
+      return authIndex;
+    }
+
+    it('vault ok: writes codex-home/config.toml from vault.codex.baseUrl', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+      const authIndex = await setupPromoted(true);
+      await authIndex.getCredentialVault().save({
+        identity: { email: 'a@jcdz.cc', userId: 1 },
+        cchBaseUrl: 'https://cch.example.com',
+        claude: { baseUrl: 'https://vault.example.com/v1', authToken: 'vault-token' },
+        codex: { baseUrl: 'https://vault-codex.example.com/v1', apiKey: 'vault-codex-key' },
+        receivedAt: new Date().toISOString(),
+      });
+
+      const { activateManagedClaudeHome, ensureManagedHomeSkeleton, regenerateFromVault } =
+        await import('../managedClaudeHomeStartup');
+      activateManagedClaudeHome();
+      await ensureManagedHomeSkeleton();
+      await regenerateFromVault();
+
+      const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
+      expect(readFileSync(codexConfigPath(), 'utf-8')).toBe(
+        generateManagedCodexConfigToml({ baseUrl: 'https://vault-codex.example.com/v1' })
+      );
+    });
+
+    it('vault absent: does not create codex-home/config.toml (no dev-seed fallback for codex)', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+
+      const { activateManagedClaudeHome, ensureManagedHomeSkeleton, regenerateFromVault } =
+        await import('../managedClaudeHomeStartup');
+      activateManagedClaudeHome();
+      await ensureManagedHomeSkeleton();
+      await regenerateFromVault();
+
+      // The claude side still gets an empty-env settings.json (existing
+      // contract, unaffected) — codex has no equivalent "write empty" form.
+      expect(existsSync(codexConfigPath())).toBe(false);
+    });
+
+    it('vault locked: existing codex-home/config.toml bytes are preserved untouched', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+      const authIndex = await setupPromoted(true);
+      await authIndex.getCredentialVault().save({
+        identity: { email: 'a@jcdz.cc', userId: 1 },
+        cchBaseUrl: 'https://cch.example.com',
+        claude: { baseUrl: 'https://vault.example.com/v1', authToken: 'vault-token' },
+        codex: { baseUrl: 'https://vault-codex.example.com/v1', apiKey: 'vault-codex-key' },
+        receivedAt: new Date().toISOString(),
+      });
+      vi.resetModules();
+      const authIndex2 = await import('../index');
+      authIndex2.getCredentialVault().promoteCrypto(fakeCrypto(false));
+
+      const { activateManagedClaudeHome, ensureManagedHomeSkeleton, regenerateFromVault } =
+        await import('../managedClaudeHomeStartup');
+      activateManagedClaudeHome();
+      await ensureManagedHomeSkeleton();
+
+      mkdirSync(codexHomeDir(), { recursive: true });
+      const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
+      const existingBytes = generateManagedCodexConfigToml({
+        baseUrl: 'https://existing-codex.example.com/v1',
+      });
+      writeFileSync(codexConfigPath(), existingBytes, 'utf-8');
+
+      expect(authIndex2.getCredentialVault().read().status).toBe('locked');
+
+      await regenerateFromVault();
+
+      expect(readFileSync(codexConfigPath(), 'utf-8')).toBe(existingBytes);
+    });
+
+    it('also deletes a stale codex-home/auth.json on every phase ③ pass, regardless of vault status', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+
+      const { activateManagedClaudeHome, ensureManagedHomeSkeleton, regenerateFromVault } =
+        await import('../managedClaudeHomeStartup');
+      activateManagedClaudeHome();
+      await ensureManagedHomeSkeleton();
+
+      mkdirSync(codexHomeDir(), { recursive: true });
+      const staleAuthPath = join(codexHomeDir(), 'auth.json');
+      writeFileSync(staleAuthPath, JSON.stringify({ OPENAI_API_KEY: 'stale' }), 'utf-8');
+
+      await regenerateFromVault();
+
+      expect(existsSync(staleAuthPath)).toBe(false);
+    });
+  });
 });

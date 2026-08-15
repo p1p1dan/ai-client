@@ -25,6 +25,15 @@ function fixtureStatusParams(): unknown[] {
   const params: unknown[] = [];
   const files = readdirSync(dir)
     .filter((name) => name.endsWith('.jsonl'))
+    // `e4-*` (D47 S4a) is a different fixture category — see the matching
+    // exclusion (and its full rationale) in `codexWire.test.ts`. Its one
+    // `thread/status/changed{type:"systemError"}` frame is real E4 evidence
+    // that this mapper has never seen `systemError` before and correctly
+    // reports "no opinion" for it (`readThreadStatus`'s `type !== 'active'`
+    // branch) — genuine information, but about a status TYPE this file's
+    // mapper does not yet handle, not about the rescued-transcript corpus
+    // this regression lock exists to pin.
+    .filter((name) => !name.startsWith('e4-'))
     .sort();
   for (const name of files) {
     const lines = readFileSync(`${dir}${name}`, 'utf8')

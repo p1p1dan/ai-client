@@ -217,3 +217,20 @@
 4. 顺带核对 `historyMode` / `itemsView` 语义有无启用（L2 观察项）。
 
 G8b 免额度姿态校验可随时重跑：`spikes/s5-g8b-posture-probe.ts`（注意零回合 thread 无 rollout 的前置，见该文件头）。
+
+
+## E4 缺凭据夹具（D47 S4a，2026-08-15 从 spike 文档提取，非会话 transcript 抢救）
+
+| 文件 | 内容 | 权威原文 |
+|---|---|---|
+| `e4-missing-envkey.jsonl` | `AICLIENT_CODEX_API_KEY` 未设置组的完整 14 帧（`initialize`→`thread/start`→`turn/start`→异步通知序列，终于 `turn/completed`，`turn.status:"failed"`） | `docs/plans/2026-08-15-d47-s0-spikes/e4-appserver-missing-envkey.md` 「逐帧 fixture —— missing 组」 |
+| `e4-present-envkey.jsonl` | 对照组差异尾段 2 帧（`turn/started` + 延迟 `error` 通知，`willRetry:true`，网络层重试中，本窗口内无 `turn/completed`） | 同上「逐帧 fixture —— present 组对照」 |
+
+**逐字来源**：两文件的每一行都是从上表 E4 spike 文档的「逐帧 fixture」代码块**逐字**转录成本目录既有的
+`{"dir":…,"tMs":…,"raw":{…}}` 信封格式（该文档本身记录的是一次真实 `codex app-server` 进程的 NDJSON
+JSON-RPC 会话，非构造样本 —— 见文档头「只做实验，未改动 `src/` 下任何产品代码」）。`<CODEX_HOME>` /
+`<workdir>` 两处占位符沿用原文档，未替换为具体路径（原文档本就是脱敏占位，不是本次转录引入的）。
+
+**用途**：`codexNormalizer.ts`「三臂必测」——missing 组验证 `error` 通知与 `turn/completed.turn.error`
+双 carrier 携带同一 `Missing environment variable: `AICLIENT_CODEX_API_KEY`.` 错误时只产出一次
+`session.failed`（exactly-once）；present 组验证 `willRetry:true` 的网络重试臂绝不被误判为终态。

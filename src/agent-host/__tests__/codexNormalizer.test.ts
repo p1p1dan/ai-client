@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  CODEX_ERROR_METHOD,
   CODEX_IGNORED_NOTIFICATIONS,
   CODEX_NORMALIZER_METHODS,
   CODEX_TOOL_PROGRESS_MAX_PER_ITEM,
   CodexNormalizer,
+  classifyCodexTurnError,
 } from '../codexNormalizer.ts';
 import { kindOfServerMethod } from '../codexPending.ts';
 
@@ -441,6 +443,17 @@ describe('unknown and malformed input keeps the turn alive', () => {
     expect(events.filter((e) => e.type === 'host.error')).toEqual([]);
   });
 
+  // CODEX_ERROR_METHOD ('error') is routed OUTSIDE CODEX_NORMALIZER_METHODS
+  // (see that constant's docstring), so it needs its own garbage-params case —
+  // the parameterized one above never reaches it.
+  it('survives garbage params on the error method too', () => {
+    const { events, normalizer } = harness();
+    for (const junk of [null, undefined, 'string', 42, [], {}, { error: 'not an object' }]) {
+      expect(() => normalizer.ingest(CODEX_ERROR_METHOD, junk)).not.toThrow();
+    }
+    expect(events.filter((e) => e.type === 'host.error')).toEqual([]);
+  });
+
   it('counts an unknown item type instead of dropping it silently', () => {
     const { normalizer } = harness();
     normalizer.ingest('item/completed', {
@@ -467,5 +480,208 @@ describe('one session is one thread', () => {
     const { normalizer } = harness(THREAD);
     normalizer.ingest('item/started', { item: { type: 'plan', id: 'p1', text: '' } });
     expect(normalizer.stats().foreignThreadFrames).toBe(0);
+  });
+});
+
+/**
+ * D47 S4a point ① — the existing `[object Object]` bug at the old `:504-521`:
+ * `turn.error` is an OBJECT on the wire (E4 [实测]), and the old
+ * `String(turnError)` produced the literal text `[object Object]` instead of
+ * anything readable.
+ */
+describe('turn.error object shape (D47 S4a point ①)', () => {
+  it('reads .message off an object-shaped turn.error instead of stringifying the object', () => {
+    const { events, normalizer } = harness();
+    normalizer.ingest('turn/completed', {
+      threadId: THREAD,
+      turn: {
+        id: 't',
+        status: 'failed',
+        error: {
+          message: 'Missing environment variable: `AICLIENT_CODEX_API_KEY`.',
+          codexErrorInfo: 'other',
+          additionalDetails: null,
+        },
+      },
+    });
+    const failed = events.at(-1);
+    expect(failed).toMatchObject({ type: 'session.failed' });
+    expect(String(failed?.payload?.error)).not.toContain('[object Object]');
+    expect(failed?.payload?.error).toBe('Missing environment variable: `AICLIENT_CODEX_API_KEY`.');
+  });
+
+  it('still accepts the plain-string turn.error shape (backward compatibility)', () => {
+    // The existing "reports a failed turn as failed" case above already pins
+    // this; repeated here as the explicit before/after pair for point ①.
+    const { events, normalizer } = harness();
+    normalizer.ingest('turn/completed', {
+      threadId: THREAD,
+      turn: { id: 't', status: 'failed', error: 'model exploded' },
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: 'session.failed',
+      payload: { error: 'model exploded' },
+    });
+  });
+
+  it('falls back to the generic turn-status text when the error object has no .message', () => {
+    // Presence, not readability, decides `failed` — an unreadable error object
+    // must still fail the turn, just without a fabricated "[object Object]".
+    const { events, normalizer } = harness();
+    normalizer.ingest('turn/completed', {
+      threadId: THREAD,
+      turn: { id: 't', status: 'failed', error: { codexErrorInfo: 'other' } },
+    });
+    const failed = events.at(-1);
+    expect(failed).toMatchObject({ type: 'session.failed' });
+    expect(failed?.payload?.error).toBe('turn failed');
+    expect(String(failed?.payload?.error)).not.toContain('[object Object]');
+  });
+});
+
+/**
+ * D47 S4a point ② — `classifyCodexTurnError` is pure and unit-tested directly
+ * against the E4-measured shapes (both arms) plus the generic-"other" arm the
+ * spec's three required test arms name explicitly.
+ */
+describe('classifyCodexTurnError (D47 S4a point ②, pure function)', () => {
+  const MISSING_ENVKEY_ERROR = {
+    message: 'Missing environment variable: `AICLIENT_CODEX_API_KEY`.',
+    codexErrorInfo: 'other',
+    additionalDetails: null,
+  };
+
+  it('classifies the E4 missing-envkey shape as codex_credentials_missing', () => {
+    expect(classifyCodexTurnError(MISSING_ENVKEY_ERROR)).toBe('codex_credentials_missing');
+  });
+
+  it('does not misclassify the E4 present-group network-retry shape (codexErrorInfo is an object, not "other")', () => {
+    expect(
+      classifyCodexTurnError({
+        message: 'Reconnecting... 1/5',
+        codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: null } },
+        additionalDetails: 'stream disconnected before completion',
+      })
+    ).toBeNull();
+  });
+
+  it('does not misclassify a generic "other" error with an unrelated message', () => {
+    expect(
+      classifyCodexTurnError({ message: 'model produced invalid output', codexErrorInfo: 'other' })
+    ).toBeNull();
+  });
+
+  it('requires BOTH message substrings, not just "Missing environment variable"', () => {
+    // A missing variable with a DIFFERENT name is a real misconfiguration —
+    // must not be papered over as "our" credentials_missing case.
+    expect(
+      classifyCodexTurnError({
+        message: 'Missing environment variable: `SOME_OTHER_KEY`.',
+        codexErrorInfo: 'other',
+      })
+    ).toBeNull();
+  });
+
+  it('requires AICLIENT_CODEX_API_KEY even when codexErrorInfo is "other" and the message is close', () => {
+    expect(
+      classifyCodexTurnError({
+        message: 'AICLIENT_CODEX_API_KEY is set but invalid',
+        codexErrorInfo: 'other',
+      })
+    ).toBeNull();
+  });
+
+  it('returns null for non-object / message-less input instead of throwing', () => {
+    for (const junk of [null, undefined, 'string', 42, [], {}, { codexErrorInfo: 'other' }]) {
+      expect(() => classifyCodexTurnError(junk)).not.toThrow();
+      expect(classifyCodexTurnError(junk)).toBeNull();
+    }
+  });
+});
+
+/**
+ * D47 S4a point ③ — E4 machine fixtures (`fixtures/codex/e4-{missing,present}-envkey.jsonl`,
+ * readFileSync-driven, never parsed out of the docs markdown — spec B 轨 B4).
+ * The three required test arms: missing group's dual carrier fires exactly
+ * once / present group's network arm is never misjudged as terminal / a
+ * generic "other" error (synthetic, since no real fixture) is not misjudged
+ * either.
+ */
+describe('E4 fixture replay — exactly-once credential classification (D47 S4a point ③)', () => {
+  it('missing group: the error notification and turn/completed carry the SAME error, but only one session.failed is emitted', () => {
+    const { events, normalizer } = harness();
+    replay(normalizer, 'e4-missing-envkey.jsonl');
+
+    const failed = events.filter((e) => e.type === 'session.failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.payload?.error).toBe(
+      'Missing environment variable: `AICLIENT_CODEX_API_KEY`.'
+    );
+    expect(events.filter((e) => e.type === 'session.completed')).toEqual([]);
+    // The turn observed exactly one completion frame, exactly-once bookkeeping
+    // intact even though two frames carried terminal-shaped information.
+    expect(normalizer.stats().turnsCompleted).toBe(1);
+  });
+
+  it('present group: the willRetry:true network-retry arm never escalates to a terminal event', () => {
+    const { events, normalizer } = harness();
+    replay(normalizer, 'e4-present-envkey.jsonl');
+
+    expect(events.filter((e) => e.type === 'session.failed')).toEqual([]);
+    expect(events.filter((e) => e.type === 'session.completed')).toEqual([]);
+    // No turn/completed in this capture window (still retrying) — the counter
+    // must not have been bumped by the willRetry:true error notification.
+    expect(normalizer.stats().turnsCompleted).toBe(0);
+  });
+
+  it('a generic "other" error (synthetic — no real fixture) that does not match the substrings still fails the turn honestly, without a credentials_missing classification', () => {
+    const { events, normalizer } = harness();
+    normalizer.ingest(CODEX_ERROR_METHOD, {
+      error: { message: 'internal model error', codexErrorInfo: 'other', additionalDetails: null },
+      willRetry: false,
+      threadId: THREAD,
+      turnId: 't-other',
+    });
+    normalizer.ingest('turn/completed', {
+      threadId: THREAD,
+      turn: {
+        id: 't-other',
+        status: 'failed',
+        error: {
+          message: 'internal model error',
+          codexErrorInfo: 'other',
+          additionalDetails: null,
+        },
+      },
+    });
+
+    const failed = events.filter((e) => e.type === 'session.failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.payload?.error).toBe('internal model error');
+  });
+
+  it('a named error followed by teardown (no turn/completed ever arrives) still emits exactly one terminal event', () => {
+    // The process-exit race `closeTurn`'s `terminalEmitted` guard exists for:
+    // an `error` notification already reported this turn, then the codex
+    // process dies before `turn/completed` arrives, and `codexRuntime.ts`'s
+    // exit handler calls `closeTurn` directly.
+    const { events, normalizer } = harness();
+    normalizer.ingest(CODEX_ERROR_METHOD, {
+      error: {
+        message: 'Missing environment variable: `AICLIENT_CODEX_API_KEY`.',
+        codexErrorInfo: 'other',
+        additionalDetails: null,
+      },
+      willRetry: false,
+      threadId: THREAD,
+      turnId: 't-crash',
+    });
+    normalizer.closeTurn('failed', 'codex app-server exited (code=null, signal=SIGKILL)');
+
+    const failed = events.filter((e) => e.type === 'session.failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.payload?.error).toBe(
+      'Missing environment variable: `AICLIENT_CODEX_API_KEY`.'
+    );
   });
 });
