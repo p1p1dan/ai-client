@@ -23,7 +23,7 @@
 | I4 | codex 生成 config 不含 key；`<userData>/codex-home` 下**不存在 auth.json** |
 | I5 | **Host 进程生命周期 == 凭据纪元**：登录/登出/失效必 `agentHostManager.shutdown()`，下次 `ensureStarted` 重建（解 `ensureRuntime` 永久缓存与 registry 单飞记忆的凭据不刷新，`agent-host/index.ts:130-131`、`agentSupport.ts:132-137`） |
 | I6 | 网络故障 ≠ 凭据失效。业务请求 401/403 只触发一次 `POST {cch}/api/auth/login {key}` auth-probe；**probe 明确拒绝**才是失效终局证据（防离线/5xx 触发验证码风暴，防业务权限 403 误判） |
-| I7 | Vault 不被 flag-off 触碰；S6 中和后**禁止任何 vault → 真实 home 的反向导出** |
+| I7 | flag-off 不得写入/读取 vault（**登出清除除外**——密钥不得跨 flag 留盘，S1 评审 B8 裁定）；停双写后**禁止任何 vault → 真实 home 的反向导出** |
 | I8 | 远程 SSH 本轮显式排除：vault 凭据不进 `getRemoteServerSource()` 模板、不推远端；远程会话维持现状（吃远程机自己的配置） |
 | I9 | 登出七步序（防竞态，B 轨 R14）：**关 spawn gate** → 终止全部会话/PTY → host shutdown → 清 vault（留 `lastEmail`）→ 再生成无凭据版两个 home → 清 cch cookie → 广播 `signed_out` |
 | I10 | 登录态单一真源 = Main 的 **AuthStateService**；Root 与 `MainWindow.isAppMountedFor()` 读同一快照（收敛现有双镜像，`MainWindow.ts:28-35`） |
@@ -89,8 +89,9 @@ CredentialVault  <userData>/credentials/vault.json（0600 原子写；safeStorag
 
 - `<userData>/credentials/vault.json`；否 `~/.aiclient`（远程 helper 共用命名约定 + umask 权限弱 + 无 profile
   隔离）；否复用 SharedSessionState（浅合并坑 + 防抖写语义不符）。
-- schema：`{version, enc, lastEmail, identity{email,userId}, cchBaseUrl, claude{baseUrl,authToken},
-  codex{baseUrl,apiKey}, invalidatedAt}`；`deriveCchBaseUrl` 结果落库不重算。
+- schema：**envelope 版为权威（S1 评审合取修订，见 [S1 规格 §2.1](./2026-08-15-d47-s1-vault-spec.md)）**：
+  明文层 `{version, enc, lastEmail, invalidatedAt, encReason}` + `payload`（密文串或明文对象，内含
+  identity/cchBaseUrl/claude/codex/receivedAt）；`deriveCchBaseUrl` 与 `buildApiBaseUrl` 归一化值落库不重算。
 - safeStorage：可用即加密；Linux `basic_text`/不可用 → `enc:"none"` + 0600 + 诊断位，**不阻断登录**；
   解密失败 → `reauth_required`（重登 30 秒）。〔设计者默认，不上拍板〕**E6 实测两硬事实**：
   ① `isEncryptionAvailable()` 在首个 BrowserWindow 创建前调用会**无限挂死**（S1 以适配器后置升格规避）；
@@ -169,7 +170,7 @@ S0 保留一次**轻量部署一致性实打**（一封验证码走全程，确�
 | 片 | 内容 | 关键断言（摘） |
 |---|---|---|
 | **S0** | 六 spike，不动产品代码：E1 部署一致性轻量实打（幂等已代码定论，§5）· E2 `$CLAUDE_CONFIG_DIR/.claude.json` 信任标志实测 · E3 SDK `settingSources:[]` + 无 `~/.claude` 全会话 · E4 app-server（非 exec）缺 env_key 报错帧 · E5 cch 401/403 可区分性（业务 403 vs auth 拒）· E6 safeStorage 三平台矩阵 | trace + fixture 落库；E2/E3 定 §3.A 主干成立性 |
-| **S1** | Vault + AuthStateService + **IPC 消毒**（I2，含 verify 响应裁剪）+ 双写开始 | 0600；`clear` 留 lastEmail；日志无 secret 子串；off 轮不写 vault；renderer 收不到 key（负控：造违规返回断言变红） |
+| **S1** | Vault + AuthStateService + **IPC 消毒**（I2，含 verify 响应裁剪；**无 flag，回退=revert**）+ 双写开始 | 0600（含残留 tmp 情形）；`clear` 留 lastEmail 且无 flag 门控；日志无 secret 子串（含 token 前 6 字符）；off 轮不写 vault 且**磁盘写入与 legacy 文件字节一致**；renderer 收不到 key（真实 handler 接缝负控）；施工细则见 [S1 规格 rev.2](./2026-08-15-d47-s1-vault-spec.md) |
 | **S2** | ClaudeHomeGenerator + 全局 `CLAUDE_CONFIG_DIR` + 剥离继承 ANTHROPIC_* + 硬编码写手清理（§3.A 四组）+ Provider 写路径退役 + historyReader 双源 | 一次 SDK 会话期间 `~/.claude*` 写调用数=0（fs 打桩）；hooks/IDE lockfile 落托管 home；历史含新旧两源；生成文件含 skipWebFetchPreflight |
 | **S3** | 终端注入：claude 自动继承；codex 由 Main 在 `SessionManager.createLocal` 填 `CODEX_HOME`+key；resume 候选扩托管 home | session-create IPC payload 无 secret；登出态两键缺席；终端 `claude`/`codex` 免向导直接可用 |
 | **S4** | Codex 生成模式 + env_key + 删投影/auth 拷贝链 + `credentials_missing` + child env 剥离 ANTHROPIC_* | 生成 toml root 无上下文两键、表有 env_key；codex-home 无 auth.json；`--strict-config` 过；四 reason 子串互异；报错帧匹配 E4 fixture |
