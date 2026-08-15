@@ -8,6 +8,7 @@ import {
   type ChatSessionsState,
   type ChatWorkspace,
 } from '@/stores/chatSessions';
+import { shouldResumeSession } from '../resumeIntent';
 import { mergeSessionIndex } from '../sessionIndexMerge';
 
 /**
@@ -122,6 +123,52 @@ describe('mergeSessionIndex materializes the agent binding', () => {
     expect(sessions[0]).toBe(live);
     // …and the one reader every consumer is required to use still answers.
     expect(sessionAgent(sessions[0])).toBe('claude-code');
+  });
+});
+
+/**
+ * G13, renderer half — the whole string from a persisted row to the resume args.
+ *
+ * The Host half of this test lives in `agent-host/__tests__/codexRuntime.test.ts`
+ * and asserts that `thread/resume` addresses exactly the `runtimeIdentity` it was
+ * handed. Neither half is worth much alone: the failure they bracket is a resume
+ * that reaches the right runtime with the wrong id, or the right id with the
+ * wrong runtime, and both look like "the history is empty" on screen.
+ */
+describe('G13 — a persisted codex row becomes codex resume args', () => {
+  const THREAD_ID = '01a003a5-307f-77d1-b7a4-a5379a560067';
+
+  it('carries the agent and the threadId from the index row into the resume args', () => {
+    const { sessions } = mergeSessionIndex(
+      [],
+      [entry('s1', { agent: 'codex', runtimeIdentity: THREAD_ID })],
+      { workspaces }
+    );
+    const intent = shouldResumeSession(sessions[0], workspaces[0]);
+
+    expect(sessions[0]).toMatchObject({ agent: 'codex', runtimeIdentity: THREAD_ID });
+    expect(intent.shouldResume).toBe(true);
+    expect(intent.args).toEqual({
+      sessionId: 's1',
+      runtimeIdentity: THREAD_ID,
+      workspacePath: '/repo',
+      model: undefined,
+      agent: 'codex',
+    });
+  });
+
+  it('does not hand a legacy row a codex binding just because it has a runtimeIdentity', () => {
+    // The negative control that makes the case above mean something: a row
+    // written before the field existed still resumes as Claude Code, so a merge
+    // that defaulted everything to `codex` would fail here rather than pass both.
+    const { sessions } = mergeSessionIndex([], [entry('s1', { runtimeIdentity: 'claude-uuid' })], {
+      workspaces,
+    });
+
+    expect(shouldResumeSession(sessions[0], workspaces[0]).args).toMatchObject({
+      agent: 'claude-code',
+      runtimeIdentity: 'claude-uuid',
+    });
   });
 });
 

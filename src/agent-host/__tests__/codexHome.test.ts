@@ -3,18 +3,30 @@ import {
   CODEX_CONFIG_HEADER,
   CODEX_CONFIG_ROOT_ALLOWLIST,
   CODEX_CONFIG_TABLE_ALLOWLIST,
+  CODEX_PERMISSION_CONFIG_KEYS,
   type CodexHomeFs,
   ensureCodexHome,
   projectCodexConfig,
   resolveSourceCodexHome,
 } from '../codexHome.ts';
+import { CODEX_PERMISSION_DEFAULT } from '../codexRuntime.ts';
 
 /**
  * The single most important property under test is NEGATIVE: nothing outside the
- * allowlist may reach the generated config. Every `it` below names what it
- * falsifies, because a projection test that only checks "the good keys survived"
- * passes just as happily on a straight file copy.
+ * allowlist may reach the generated config — with ONE addition since S3 slice 5b
+ * (H9 layer 1): the two posture keys, which this module now WRITES from the
+ * caller's constant instead of merely dropping the user's. Every `it` below names
+ * what it falsifies, because a projection test that only checks "the good keys
+ * survived" passes just as happily on a straight file copy.
  */
+
+/**
+ * The posture under test is the runtime's own constant, never a literal: the
+ * whole point of H9 layer 1 is that `thread/start` and this file cannot disagree,
+ * and a test that spelled `'on-request'` here would keep passing after one of the
+ * two sides was changed.
+ */
+const POSTURE = CODEX_PERMISSION_DEFAULT;
 
 /**
  * A realistic third-party-proxy config, shaped like the one on the dev machine
@@ -62,16 +74,26 @@ model = "gpt-5.6-mini"
 trust_level = "trusted"
 `;
 
+/**
+ * Keys that must never appear in the generated body at all.
+ *
+ * `approval_policy` / `sandbox_mode` LEFT this list in slice 5b and that is not a
+ * relaxation: the user's values are still dropped (they are asserted in `dropped`
+ * below, and their VALUES are asserted absent), but the two keys are now written
+ * back from our own posture, because `thread/resume` re-derives the posture from
+ * this file [实测].
+ */
 const BANNED = [
   'developer_instructions',
-  'approval_policy',
-  'sandbox_mode',
   'mcp_servers',
   'notify',
   'profiles',
   'projects',
   'history',
 ] as const;
+
+/** The user's own posture values in `REALISTIC_SOURCE` — none may survive. */
+const BANNED_POSTURE_VALUES = ['never', 'danger-full-access'] as const;
 
 /** `dropped` records a rejected table by its own path, so match the prefix too. */
 function wasDropped(dropped: readonly string[], name: string): boolean {
@@ -169,7 +191,7 @@ describe('projectCodexConfig', () => {
   it('keeps model / model_provider / model_providers.* from a realistic source', () => {
     // Falsifies: an over-eager allowlist that drops the proxy settings and leaves
     // codex talking to api.openai.com (or to nothing) on every turn.
-    const { toml, kept } = projectCodexConfig(REALISTIC_SOURCE);
+    const { toml, kept } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
 
     expect(toml).toContain('model = "gpt-5.6-sol"');
     expect(toml).toContain('model_provider = "thirdparty"');
@@ -193,14 +215,22 @@ describe('projectCodexConfig', () => {
     // blacklist implementation. `sandbox_mode = "danger-full-access"` inherited
     // = every approval prompt silently disabled; `developer_instructions`
     // inherited = the three measured zero-tool-call turns (S1 §6.2 C5).
-    const { toml, dropped } = projectCodexConfig(REALISTIC_SOURCE);
+    const { toml, dropped } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
     const body = configBody(toml);
 
     for (const banned of BANNED) {
       expect(body).not.toContain(banned);
       expect(wasDropped(dropped, banned)).toBe(true);
     }
-    expect(body).not.toContain('danger-full-access');
+    // The two posture keys are the one thing the body may name that the source
+    // also named — their VALUES still have to be ours, and the user's must be
+    // reported as dropped exactly as before.
+    for (const value of BANNED_POSTURE_VALUES) {
+      expect(body).not.toContain(`"${value}"`);
+    }
+    for (const key of Object.values(CODEX_PERMISSION_CONFIG_KEYS)) {
+      expect(wasDropped(dropped, key)).toBe(true);
+    }
     expect(body).not.toContain('save-all');
   });
 
@@ -208,7 +238,8 @@ describe('projectCodexConfig', () => {
     // Falsifies a blacklist: a key invented by a future codex release, or one the
     // banned list simply forgot, must not survive by default.
     const { toml, kept, dropped } = projectCodexConfig(
-      'model = "m"\nsome_future_switch = "on"\n[some_future_table]\nx = 1\n'
+      'model = "m"\nsome_future_switch = "on"\n[some_future_table]\nx = 1\n',
+      POSTURE
     );
 
     expect(toml).not.toContain('some_future_switch');
@@ -220,7 +251,7 @@ describe('projectCodexConfig', () => {
   it('matches root keys exactly, so `model_reasoning_effort` is not a `model` prefix hit', () => {
     // Falsifies a `startsWith('model')` allowlist, which would also drag in
     // `model_reasoning_effort`, `model_verbosity`, `model_max_output_tokens`…
-    const { toml, dropped } = projectCodexConfig(REALISTIC_SOURCE);
+    const { toml, dropped } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
 
     expect(toml).not.toContain('model_reasoning_effort');
     expect(dropped).toContain('model_reasoning_effort');
@@ -230,7 +261,7 @@ describe('projectCodexConfig', () => {
     // Falsifies the naive line filter: it drops the `developer_instructions =`
     // line itself but then re-parses `model = "leaked-from-instructions"` inside
     // the block as a root assignment — which would OVERRIDE the real model.
-    const { toml } = projectCodexConfig(REALISTIC_SOURCE);
+    const { toml } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
 
     expect(toml).not.toContain('leaked-from-instructions');
     expect(toml).not.toContain('Never touch code');
@@ -250,7 +281,7 @@ query_params = [
 ]
 wire_api = "responses"
 `;
-    const { toml, kept, dropped } = projectCodexConfig(source);
+    const { toml, kept, dropped } = projectCodexConfig(source, POSTURE);
 
     expect(kept).toEqual(['model_providers.p.base_url', 'model_providers.p.wire_api']);
     expect(dropped).toContain('model_providers.p.query_params');
@@ -266,7 +297,8 @@ wire_api = "responses"
     // the keys below it as ROOT keys and let `model` through from inside a
     // section the user meant to be `[mcp_servers.x]`.
     const { toml, kept } = projectCodexConfig(
-      '[mcp_servers."broken\nmodel = "from-broken-scope"\n'
+      '[mcp_servers."broken\nmodel = "from-broken-scope"\n',
+      POSTURE
     );
 
     expect(toml).not.toContain('from-broken-scope');
@@ -276,19 +308,25 @@ wire_api = "responses"
   it('starts with the generated-file header and ends with a newline', () => {
     // Falsifies a silent hand-off: without the header a user edits this file,
     // sees the edit vanish next session, and files a bug against Codex.
-    const { toml } = projectCodexConfig(REALISTIC_SOURCE);
+    const { toml } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
 
     expect(toml.startsWith(CODEX_CONFIG_HEADER)).toBe(true);
     expect(CODEX_CONFIG_HEADER).toContain('DO NOT EDIT');
     expect(toml.endsWith('\n')).toBe(true);
   });
 
-  it('projects an absent/empty source into a header-only config', () => {
+  it('projects an absent/empty source into a posture-only config', () => {
     // Falsifies a crash-on-missing-config path: a machine that never ran the
     // codex CLI has no `config.toml`, and that must still produce a valid file.
-    const { toml, kept, dropped } = projectCodexConfig('');
+    // Since 5b the floor is not an EMPTY file but the posture: a home with no
+    // `approval_policy` would let codex fall back to its own default on the next
+    // resume, which is the hole H9 layer 1 closes.
+    const { toml, kept, dropped } = projectCodexConfig('', POSTURE);
 
-    expect(bodyLines(toml)).toEqual([]);
+    expect(bodyLines(toml)).toEqual([
+      `${CODEX_PERMISSION_CONFIG_KEYS.approvalPolicy} = "${POSTURE.approvalPolicy}"`,
+      `${CODEX_PERMISSION_CONFIG_KEYS.sandboxMode} = "${POSTURE.sandboxMode}"`,
+    ]);
     expect(kept).toEqual([]);
     expect(dropped).toEqual([]);
   });
@@ -296,7 +334,7 @@ wire_api = "responses"
   it('every kept path is justified by one of the two exported allowlists', () => {
     // A structural invariant rather than a sample check: whoever widens the
     // projection has to widen an exported constant, where review can see it.
-    const { kept } = projectCodexConfig(REALISTIC_SOURCE);
+    const { kept } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
 
     expect([...CODEX_CONFIG_ROOT_ALLOWLIST]).toEqual(['model', 'model_provider']);
     expect([...CODEX_CONFIG_TABLE_ALLOWLIST]).toEqual(['model_providers']);
@@ -314,13 +352,91 @@ wire_api = "responses"
     // Falsifies a filter that scans for `key =` anywhere on the line: a
     // commented-out `# sandbox_mode = "danger-full-access"` must stay dead.
     const { toml, kept } = projectCodexConfig(
-      '# sandbox_mode = "danger-full-access"\nmodel = "m" # trailing note\n'
+      '# sandbox_mode = "danger-full-access"\nmodel = "m" # trailing note\n',
+      POSTURE
     );
 
     expect(toml).not.toContain('danger-full-access');
     expect(toml).toContain('model = "m"');
     expect(toml).not.toContain('trailing note');
     expect(kept).toEqual(['model']);
+  });
+});
+
+/**
+ * G8① — H9 layer 1.
+ *
+ * The failure these falsify is not hypothetical: it is [实测]. A thread started
+ * under `never` / `read-only` came back from `thread/resume` as
+ * `on-request` / `dangerFullAccess` in a fresh process, because resume re-derives
+ * the posture from the CODEX_HOME config instead of from the parameters the
+ * thread was created with. A projection that only drops the two keys therefore
+ * hands every resumed session whatever posture codex defaults to.
+ */
+describe('projectCodexConfig writes the session posture (H9 layer 1)', () => {
+  it('emits both keys with the runtime constant s values, compared to the constant itself', () => {
+    const { toml } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
+    const body = configBody(toml);
+
+    // Equality against `CODEX_PERMISSION_DEFAULT`, never a literal: this is the
+    // single-source assertion. Spelling `'on-request'` here would keep passing
+    // after `thread/start` and this file had drifted apart, which is the exact
+    // state H9 exists to make impossible.
+    expect(body).toContain(
+      `${CODEX_PERMISSION_CONFIG_KEYS.approvalPolicy} = "${CODEX_PERMISSION_DEFAULT.approvalPolicy}"`
+    );
+    expect(body).toContain(
+      `${CODEX_PERMISSION_CONFIG_KEYS.sandboxMode} = "${CODEX_PERMISSION_DEFAULT.sandboxMode}"`
+    );
+  });
+
+  it('writes OUR posture even though the source set both keys to something weaker', () => {
+    // Falsifies "kept the user's line after all": the source says
+    // `approval_policy = "never"` + `sandbox_mode = "danger-full-access"`, i.e.
+    // every approval prompt off and the whole disk writable.
+    const body = configBody(projectCodexConfig(REALISTIC_SOURCE, POSTURE).toml);
+    const assignments = body
+      .split('\n')
+      .filter((line) => line.startsWith(`${CODEX_PERMISSION_CONFIG_KEYS.approvalPolicy} =`));
+
+    // Exactly one, not two: codex reads the LAST assignment of a duplicated root
+    // key, so a projection that appended ours after the user's would look right
+    // in a `toContain` assertion and run under theirs.
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]).toBe(
+      `${CODEX_PERMISSION_CONFIG_KEYS.approvalPolicy} = "${CODEX_PERMISSION_DEFAULT.approvalPolicy}"`
+    );
+    for (const value of BANNED_POSTURE_VALUES) {
+      expect(body).not.toContain(`"${value}"`);
+    }
+  });
+
+  it('puts both keys above every table header, where TOML still reads them as root keys', () => {
+    // Falsifies an append-at-the-end implementation: a root assignment written
+    // after `[model_providers.thirdparty]` becomes a member of THAT table, so
+    // codex would see no posture at all and fall back to its own default —
+    // silently, since the file still parses.
+    const lines = bodyLines(projectCodexConfig(REALISTIC_SOURCE, POSTURE).toml);
+    const firstTable = lines.findIndex((line) => line.startsWith('['));
+
+    expect(firstTable).toBeGreaterThan(0);
+    for (const key of Object.values(CODEX_PERMISSION_CONFIG_KEYS)) {
+      const at = lines.findIndex((line) => line.startsWith(`${key} =`));
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(at).toBeLessThan(firstTable);
+    }
+  });
+
+  it('does not report the enforced keys as kept — `kept` audits the USER s config', () => {
+    // Falsifies folding the posture into the audit lists: the log line would then
+    // claim the user's `approval_policy` survived the projection, which is the
+    // opposite of what happened to it.
+    const { kept, dropped } = projectCodexConfig(REALISTIC_SOURCE, POSTURE);
+
+    for (const key of Object.values(CODEX_PERMISSION_CONFIG_KEYS)) {
+      expect(kept).not.toContain(key);
+      expect(dropped).toContain(key);
+    }
   });
 });
 
@@ -344,6 +460,7 @@ describe('ensureCodexHome', () => {
     const fs = seededHome();
     const result = ensureCodexHome({
       homeDir: '/data/codex-home',
+      permission: POSTURE,
       sourceHomeDir: '/src/.codex',
       fs,
       log: () => {},
@@ -353,7 +470,13 @@ describe('ensureCodexHome', () => {
     const config = fs.files.get('/data/codex-home/config.toml');
     expect(config?.data).toBe(result.projection.toml);
     expect(config?.data).toContain('[model_providers.thirdparty]');
-    expect(configBody(config?.data ?? '')).not.toContain('sandbox_mode');
+    // The materialised file carries the posture, not just the projection's
+    // return value: `ensureCodexHome` is the only writer, and a resume reads the
+    // FILE.
+    expect(configBody(config?.data ?? '')).toContain(
+      `${CODEX_PERMISSION_CONFIG_KEYS.sandboxMode} = "${CODEX_PERMISSION_DEFAULT.sandboxMode}"`
+    );
+    expect(configBody(config?.data ?? '')).not.toContain('danger-full-access');
     expect(result.authCopied).toBe(true);
     expect(fs.files.get('/data/codex-home/auth.json')?.data).toBe(AUTH_SECRET);
     expect(fs.files.get('/data/codex-home/auth.json')?.mode).toBe(0o600);
@@ -367,6 +490,7 @@ describe('ensureCodexHome', () => {
     const fs = seededHome();
     const first = ensureCodexHome({
       homeDir: '/data/h',
+      permission: POSTURE,
       sourceHomeDir: '/src/.codex',
       fs,
       log: () => {},
@@ -374,6 +498,7 @@ describe('ensureCodexHome', () => {
     const writesAfterFirst = [...fs.writes];
     const second = ensureCodexHome({
       homeDir: '/data/h',
+      permission: POSTURE,
       sourceHomeDir: '/src/.codex',
       fs,
       log: () => {},
@@ -390,13 +515,25 @@ describe('ensureCodexHome', () => {
     // Falsifies "exists ⇒ skip": the user switching provider would keep getting
     // the stale projection forever.
     const fs = seededHome();
-    ensureCodexHome({ homeDir: '/data/h', sourceHomeDir: '/src/.codex', fs, log: () => {} });
+    ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      sourceHomeDir: '/src/.codex',
+      fs,
+      log: () => {},
+    });
     fs.files.set('/src/.codex/config.toml', {
       data: 'model = "gpt-6"\nmodel_provider = "other"\n',
       mode: null,
       mtimeMs: 3_000,
     });
-    ensureCodexHome({ homeDir: '/data/h', sourceHomeDir: '/src/.codex', fs, log: () => {} });
+    ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      sourceHomeDir: '/src/.codex',
+      fs,
+      log: () => {},
+    });
 
     expect(fs.files.get('/data/h/config.toml')?.data).toContain('model = "gpt-6"');
     expect(fs.writes.filter((path) => path === '/data/h/config.toml')).toHaveLength(2);
@@ -406,10 +543,17 @@ describe('ensureCodexHome', () => {
     // Falsifies a copy-once implementation: after the user rotates
     // `~/.codex/auth.json` our copy is a stale credential that still looks valid.
     const fs = seededHome();
-    ensureCodexHome({ homeDir: '/data/h', sourceHomeDir: '/src/.codex', fs, log: () => {} });
+    ensureCodexHome({
+      homeDir: '/data/h',
+      permission: POSTURE,
+      sourceHomeDir: '/src/.codex',
+      fs,
+      log: () => {},
+    });
     fs.files.set('/src/.codex/auth.json', { data: '{"rotated":true}', mode: null, mtimeMs: 9_000 });
     const result = ensureCodexHome({
       homeDir: '/data/h',
+      permission: POSTURE,
       sourceHomeDir: '/src/.codex',
       fs,
       log: () => {},
@@ -426,6 +570,7 @@ describe('ensureCodexHome', () => {
     const fs = createFakeFs({ '/src/.codex/config.toml': { data: REALISTIC_SOURCE } });
     const result = ensureCodexHome({
       homeDir: '/data/h',
+      permission: POSTURE,
       sourceHomeDir: '/src/.codex',
       fs,
       log: () => {},
@@ -442,6 +587,7 @@ describe('ensureCodexHome', () => {
     const fs = createFakeFs();
     const result = ensureCodexHome({
       homeDir: '/data/h',
+      permission: POSTURE,
       sourceHomeDir: '/nope',
       fs,
       log: () => {},
@@ -460,6 +606,7 @@ describe('ensureCodexHome', () => {
     const calls: unknown[][] = [];
     ensureCodexHome({
       homeDir: '/data/h',
+      permission: POSTURE,
       sourceHomeDir: '/src/.codex',
       fs,
       log: (...args) => calls.push(args),
@@ -482,7 +629,9 @@ describe('ensureCodexHome', () => {
     // scatter credential copies where no cleanup or audit ever looks.
     const fs = createFakeFs();
 
-    expect(() => ensureCodexHome({ homeDir: '   ', fs, log: () => {} })).toThrow(/homeDir/);
+    expect(() =>
+      ensureCodexHome({ homeDir: '   ', permission: POSTURE, fs, log: () => {} })
+    ).toThrow(/homeDir/);
     expect(fs.dirs.size).toBe(0);
   });
 });

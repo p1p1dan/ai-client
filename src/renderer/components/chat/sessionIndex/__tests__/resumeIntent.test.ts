@@ -87,6 +87,27 @@ describe('shouldResumeSession (T-03)', () => {
     });
   });
 
+  it('G13 — hands a codex row its own agent and threadId, not the Claude default', () => {
+    // S3 slice 5b: `runtimeIdentity` is opaque and means nothing without the
+    // agent beside it — a Codex threadId resumed as `claude-code` reaches the
+    // Claude runtime, which looks for a JSONL file named after a thread id and
+    // reports an empty history. Both fields therefore travel as one.
+    const threadId = '01a003a5-307f-77d1-b7a4-a5379a560067';
+    const result = shouldResumeSession(
+      session({ runtimeIdentity: threadId, agent: 'codex' }),
+      workspace()
+    );
+
+    expect(result.shouldResume).toBe(true);
+    expect(result.args).toEqual({
+      sessionId: 's1',
+      runtimeIdentity: threadId,
+      workspacePath: '/repo',
+      model: undefined,
+      agent: 'codex',
+    });
+  });
+
   it('resumes when the live session already has a runtimeIdentity and is idle', () => {
     const result = shouldResumeSession(session({ runtimeIdentity: 'rt' }), workspace(), {
       model: 'sonnet',

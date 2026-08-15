@@ -35,7 +35,8 @@ import { join } from 'node:path';
  *    user's instructions tell it never to touch code without permission.
  *  - `approval_policy` / `sandbox_mode` — [实测] `danger-full-access` on this
  *    machine. Inheriting it silently disables every approval prompt we are
- *    building slice 4 to show.
+ *    building slice 4 to show. The user's values are still dropped; ours are
+ *    now written in their place (see "The posture is WRITTEN here" below).
  *  - `mcp_servers` / `notify` / `profiles` / `projects` / `history` — extra
  *    processes, extra egress, and a history store we do not control.
  *
@@ -44,6 +45,33 @@ import { join } from 'node:path';
  * `config.toml` is WRITTEN BY US, never copied wholesale. Only the root keys in
  * `CODEX_CONFIG_ROOT_ALLOWLIST` and anything under `model_providers.` survives;
  * everything else is dropped, including keys nobody has invented yet.
+ *
+ * ## The posture is WRITTEN here, not only dropped (S3 slice 5b, H9 layer 1)
+ *
+ * `approval_policy` / `sandbox_mode` used to be dropped and nothing more, on the
+ * reasoning that AiClient states the posture itself in `thread/start`. Resume
+ * falsified that: `thread/resume` RE-DERIVES the posture from this file. A thread
+ * that had started under `never` / `read-only` came back as
+ * `on-request` / `dangerFullAccess` — the real `~/.codex/config.toml`'s values —
+ * the moment a fresh process resumed it
+ * [实测 `__tests__/fixtures/codex/README.md` 「S5 追加捕获」判决 4]. A projection
+ * that only drops therefore hands every resumed session whatever posture the
+ * isolated home happens to fall back to, which is the opposite of isolating it.
+ *
+ * So both keys are now WRITTEN, from the posture the caller passes in — the same
+ * object `codexRuntime` puts in `thread/start` (`CODEX_PERMISSION_DEFAULT`).
+ * Passed in, never imported: `codexRuntime` imports THIS module, so the reverse
+ * edge would be an import cycle. There is deliberately NO default parameter — a
+ * defaulted posture would be a second source of truth, and two sources drift in
+ * the one direction nobody audits (weaker).
+ *
+ * CAVEAT, this file is SHARED PERSISTENT state (spec m18): one `config.toml`
+ * backs every Codex session, and `ensureCodexHome` rewrites it whenever the bytes
+ * would change. Changing the constant therefore RE-POSTURES OLD THREADS on their
+ * next resume — a thread created under `workspace-write` resumes under whatever
+ * the constant says today. Deliberate (a resumed thread must never run weaker
+ * than the current build promises) but not versioned: a per-thread posture would
+ * need a mechanism other than this file.
  *
  * Multi-line values are dropped unconditionally. That rule is constructive
  * safety, not laziness: a line-by-line filter over
@@ -99,13 +127,53 @@ export const CODEX_CONFIG_HEADER = [
   '# This is a deny-by-default projection of your own Codex config: only',
   '#   model, model_provider, model_providers.*',
   '# are carried over. Everything else is dropped on purpose — notably',
-  '# developer_instructions, approval_policy, sandbox_mode, mcp_servers, notify,',
-  '# profiles, projects and history — because AiClient drives approvals and the',
-  '# sandbox itself.',
+  '# developer_instructions, mcp_servers, notify, profiles, projects and history.',
+  '#',
+  '# The approval_policy / sandbox_mode below are NOT yours: they are the posture',
+  '# AiClient runs Codex sessions under, written here because resuming a thread',
+  '# re-derives the posture from this file instead of from the parameters the',
+  '# session originally started with. Your own values were dropped with the rest.',
   '#',
   '# To change what Codex sees here, edit your real config (CODEX_HOME or',
   '# ~/.codex/config.toml) and restart the session.',
 ].join('\n');
+
+/**
+ * The two config keys the projection ENFORCES, and the posture field each one
+ * carries. Exported so the assertion that they are present can name them without
+ * respelling the TOML — a test that hard-codes `'approval_policy'` still passes
+ * after a rename here, which is exactly the drift H9 exists to catch.
+ */
+export const CODEX_PERMISSION_CONFIG_KEYS = {
+  approvalPolicy: 'approval_policy',
+  sandboxMode: 'sandbox_mode',
+} as const;
+
+/**
+ * The posture, structurally. Deliberately NOT `CodexSessionPermissionPolicy`
+ * (that type lives in `codexRuntime.ts`, which imports this module — importing
+ * it back would be a cycle) and deliberately not widened with `networkAccess`:
+ * that field is a server default we merely record, never a config key.
+ */
+export interface CodexHomePermissionPosture {
+  approvalPolicy: string;
+  sandboxMode: string;
+}
+
+/**
+ * The enforced lines, rendered as root assignments.
+ *
+ * `JSON.stringify` and not manual quoting: a TOML basic string and a JSON string
+ * escape the same way, so a posture value containing a quote or a backslash
+ * cannot produce a config file codex refuses to parse (which would fail EVERY
+ * session, not just this key).
+ */
+function renderPermissionPosture(permission: CodexHomePermissionPosture): string[] {
+  return [
+    `${CODEX_PERMISSION_CONFIG_KEYS.approvalPolicy} = ${JSON.stringify(permission.approvalPolicy)}`,
+    `${CODEX_PERMISSION_CONFIG_KEYS.sandboxMode} = ${JSON.stringify(permission.sandboxMode)}`,
+  ];
+}
 
 export interface CodexConfigProjection {
   /** The generated `config.toml` text, header included. Always ends with a newline. */
@@ -324,8 +392,12 @@ interface KeptEntry {
   value: string;
 }
 
-function renderToml(entries: readonly KeptEntry[]): string {
-  const lines: string[] = [CODEX_CONFIG_HEADER, ''];
+function renderToml(entries: readonly KeptEntry[], permission: CodexHomePermissionPosture): string {
+  // FIRST, and above every projected key: they are root assignments, and TOML
+  // reads a root assignment that follows a `[table]` header as a member of that
+  // table. Emitting the posture last would silently move it under
+  // `[model_providers.…]`, where codex would never read it as a posture at all.
+  const lines: string[] = [CODEX_CONFIG_HEADER, '', ...renderPermissionPosture(permission), ''];
   const rootEntries = entries.filter((entry) => entry.segments.length === 1);
   for (const entry of rootEntries) {
     lines.push(`${formatSegment(entry.segments[0] as string)} = ${entry.value}`);
@@ -355,11 +427,20 @@ function renderToml(entries: readonly KeptEntry[]): string {
 }
 
 /**
- * Pure projection: source TOML text in, generated TOML text + audit lists out.
- * No fs, no env, no clock — the whole security decision of this feature is one
- * string→string function so it can be tested exhaustively.
+ * Pure projection: source TOML text + the posture to enforce in, generated TOML
+ * text + audit lists out. No fs, no env, no clock — the whole security decision
+ * of this feature is one string→string function so it can be tested
+ * exhaustively.
+ *
+ * `permission` is required and never lands in `kept`: `kept` / `dropped` audit
+ * what happened to the USER'S keys, and their `approval_policy` / `sandbox_mode`
+ * are still DROPPED (they appear in `dropped`, as before). Recording our own two
+ * lines as "kept" would report that the user's posture survived.
  */
-export function projectCodexConfig(sourceToml: string): CodexConfigProjection {
+export function projectCodexConfig(
+  sourceToml: string,
+  permission: CodexHomePermissionPosture
+): CodexConfigProjection {
   const entries: KeptEntry[] = [];
   const kept = new Set<string>();
   const dropped = new Set<string>();
@@ -432,7 +513,7 @@ export function projectCodexConfig(sourceToml: string): CodexConfigProjection {
     entries.push({ segments, value: scan.text });
   }
 
-  return { toml: renderToml(entries), kept: [...kept], dropped: [...dropped] };
+  return { toml: renderToml(entries, permission), kept: [...kept], dropped: [...dropped] };
 }
 
 function trimOrUndefined(value: string | undefined): string | undefined {
@@ -507,6 +588,12 @@ function mtimeOrNull(fs: CodexHomeFs, path: string): number | null {
  */
 export function ensureCodexHome(input: {
   homeDir: string;
+  /**
+   * The posture to enforce in the generated config (H9 layer 1). Required, so a
+   * new caller cannot materialise a home whose posture nobody chose — see the
+   * "no default parameter" note in the module header.
+   */
+  permission: CodexHomePermissionPosture;
   sourceHomeDir?: string;
   fs?: CodexHomeFs;
   log?: (...args: unknown[]) => void;
@@ -526,7 +613,7 @@ export function ensureCodexHome(input: {
 
   const sourceConfigPath = join(sourceHomeDir, CONFIG_BASENAME);
   const targetConfigPath = join(homeDir, CONFIG_BASENAME);
-  const projection = projectCodexConfig(readIfExists(fs, sourceConfigPath) ?? '');
+  const projection = projectCodexConfig(readIfExists(fs, sourceConfigPath) ?? '', input.permission);
   if (readIfExists(fs, targetConfigPath) !== projection.toml) {
     fs.writeFileSync(targetConfigPath, projection.toml, { mode: CREDENTIAL_MODE });
   }
@@ -549,11 +636,15 @@ export function ensureCodexHome(input: {
   }
 
   // Paths and key NAMES only — never `projection.toml`, never a value. (T-35)
+  // `enforced` lists the two posture KEYS, not their values: a log line is not
+  // the place to publish the posture, and the values are asserted in tests
+  // against the constant instead.
   log('codex home ready', {
     homeDir,
     configPath: targetConfigPath,
     kept: projection.kept,
     dropped: projection.dropped,
+    enforced: Object.values(CODEX_PERMISSION_CONFIG_KEYS),
     authCopied,
   });
 

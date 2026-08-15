@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '../../shared/types/agentWire.ts';
 import type { PermissionDecisionId } from '../../shared/types/runtimeEvents.ts';
+import type { SessionIndexEntry } from '../../shared/types/sessionIndex.ts';
 import {
   type CodexConnectFactory,
   type CodexConnectionCore,
@@ -16,13 +17,14 @@ import {
   buildTurnStartParams,
   CODEX_CLIENT_NAME,
   CODEX_CLIENT_TITLE,
+  CODEX_HISTORY_UNSUPPORTED,
   CODEX_HISTORY_UNSUPPORTED_MESSAGE,
   CODEX_PERMISSION_DEFAULT,
   CodexRuntime,
   type CodexRuntimeOptions,
   compareSandboxEcho,
 } from '../codexRuntime.ts';
-import { JSONRPC_METHOD_NOT_FOUND } from '../codexWire.ts';
+import { CODEX_METHOD, JSONRPC_METHOD_NOT_FOUND } from '../codexWire.ts';
 import { SessionRegistry } from '../sessionRegistry.ts';
 
 /**
@@ -118,6 +120,110 @@ const THREAD_START_RESULT = {
   sandbox: { type: 'workspaceWrite', networkAccess: false },
 };
 
+/**
+ * The RECORDED restart-resume: a real `thread/resume` against a real thread in a
+ * fresh process (`codex-s5-thread-resume.jsonl`), split into its answer and the
+ * frames that arrived AHEAD of the answer.
+ *
+ * The answer is located by shape rather than by frame index, so a re-capture that
+ * adds a frame cannot silently point this at `thread/read` — whose result looks
+ * almost identical and carries `turns: []` [实测].
+ */
+const RESUME_CAPTURE: {
+  result: Record<string, unknown>;
+  windowFrames: Array<Record<string, unknown>>;
+} = (() => {
+  const frames = readFileSync(path.join(FIXTURES, 'codex-s5-thread-resume.jsonl'), 'utf8')
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as { dir: string; raw: Record<string, unknown> });
+  const answerAt = frames.findIndex((frame) => {
+    const thread = (frame.raw.result as { thread?: { turns?: unknown } } | undefined)?.thread;
+    return frame.dir === '<-' && Array.isArray(thread?.turns) && thread.turns.length > 0;
+  });
+  if (answerAt === -1) {
+    throw new Error('codex-s5-thread-resume.jsonl has no resume result carrying turns');
+  }
+  return {
+    result: frames[answerAt].raw.result as Record<string, unknown>,
+    // Everything codex pushed BEFORE that answer: the resume window, verbatim.
+    windowFrames: frames
+      .slice(0, answerAt)
+      .filter((frame) => frame.dir === '<-' && typeof frame.raw.method === 'string')
+      .map((frame) => ({ method: frame.raw.method as string, params: frame.raw.params })),
+  };
+})();
+
+const RECORDED_RESUME_RESULT = RESUME_CAPTURE.result;
+const RESUME_WINDOW_FRAMES = RESUME_CAPTURE.windowFrames;
+
+const RECORDED_THREAD = String(
+  (RECORDED_RESUME_RESULT.thread as { id: string; turns: Array<{ id: string }> }).id
+);
+const RECORDED_TURN = String(
+  (RECORDED_RESUME_RESULT.thread as { turns: Array<{ id: string }> }).turns[0].id
+);
+const RECORDED_USER_TEXT =
+  'First use your shell tool to run exactly: echo u2a-probe . Then reply with exactly DONE and nothing else.';
+
+/**
+ * The recorded result with ONE field changed, and the change is the point.
+ *
+ * The capture ran under the developer's real `~/.codex`, whose
+ * `sandbox_mode = "danger-full-access"` [实测] is what came back — that recording
+ * predates H9 layer 1. With the posture now written into the isolated home, a
+ * resume echoes the tier we put there, so the success path is exercised with
+ * `workspaceWrite` (the camel-case dialect codex echoes [实测: `readOnly` in
+ * `codex-thread-start-echo.partial.json`]). Everything else — turns, items,
+ * timestamps, the three null cursors — is the recording, untouched.
+ * `RECORDED_RESUME_RESULT` itself is reused below as the mismatch case, where it
+ * is not a construction at all but a real posture we must refuse.
+ */
+const RESUME_RESULT: Record<string, unknown> = {
+  ...RECORDED_RESUME_RESULT,
+  sandbox: { type: 'workspaceWrite' },
+};
+
+/**
+ * The RECORDED `thread/turns/list` result, including the field this whole branch
+ * is shaped around: `backwardsCursor` is NON-null on a complete one-turn history
+ * [实测], so it must not be read as "there is more".
+ */
+const RECORDED_TURNS_LIST: Record<string, unknown> = (
+  JSON.parse(readFileSync(path.join(FIXTURES, 'codex-s5-u2a-report.json'), 'utf8')) as {
+    threadTurnsList: { raw: Record<string, unknown> };
+  }
+).threadTurnsList.raw;
+
+/**
+ * What the reader must produce from that thread, spelled out rather than
+ * recomputed: calling `reprojectCodexHistory` in the expectation would compare
+ * the runtime's output to itself and pass on any reader that returns nothing.
+ * Ids follow F1 (`h:codex:<threadId>:<turnId>:<itemId>`), timestamps follow the
+ * turn rule (`startedAt` for everything, `completedAt` for the closing agent
+ * message), both in seconds on the wire.
+ */
+function expectedResumeMessages(threadId: string): Array<Record<string, unknown>> {
+  // Parameterised by threadId because the two read paths namespace on a
+  // different one: a cold resume uses the handle it asked with, a live read uses
+  // the thread the open connection actually owns.
+  const namespace = `codex:${threadId}:${RECORDED_TURN}`;
+  return [
+    {
+      id: `h:${namespace}:item-1`,
+      role: 'user',
+      blocks: [{ type: 'text', id: `${namespace}:item-1:text`, text: RECORDED_USER_TEXT }],
+      timestamp: 1786767552000,
+    },
+    {
+      id: `h:${namespace}:item-2`,
+      role: 'assistant',
+      blocks: [{ type: 'text', id: `${namespace}:item-2:text`, text: 'DONE' }],
+      timestamp: 1786767565000,
+    },
+  ];
+}
+
 interface OutboundFrame {
   id?: number;
   method?: string;
@@ -133,6 +239,8 @@ interface Harness {
   /** Ordered transport transcript: `write:<method>` / `reply:<id>` / `kill:<reason>`. */
   ops: string[];
   connectInputs: Array<Parameters<CodexConnectFactory>[0]>;
+  /** Every call the runtime made into the isolated-home builder, in order. */
+  ensureHomeInputs: Array<Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]>;
   /** Our outbound requests, parsed. */
   requestFor(method: string): OutboundFrame;
   /** Every outbound frame for a method — a second turn writes a second turn/start. */
@@ -156,6 +264,20 @@ function makeHarness(
     answerTurnStart?: boolean;
     turnStartResult?: unknown;
     turnStartError?: { code: number; message: string };
+    /** `false` = codex never answers `initialize`, i.e. a handshake still in flight. */
+    answerInitialize?: boolean;
+    initializeError?: { code: number; message: string };
+    threadResumeResult?: unknown;
+    threadResumeError?: { code: number; message: string };
+    turnsListResult?: unknown;
+    turnsListError?: { code: number; message: string };
+    /**
+     * Frames codex pushes AHEAD of its `thread/resume` answer — the resume window
+     * is not quiet [实测 `codex-s5-thread-resume.jsonl` lines 5-8: two MCP startup
+     * notifications, a `thread/status/changed` and a token-usage frame all land
+     * before the response].
+     */
+    resumeWindowFrames?: Array<Record<string, unknown>>;
     resolveLaunch?: () => CodexEntryResolution;
     ensureHome?: CodexRuntimeOptions['ensureHome'];
     appVersion?: string;
@@ -167,12 +289,36 @@ function makeHarness(
   const ops: string[] = [];
   const written: OutboundFrame[] = [];
   const connectInputs: Array<Parameters<CodexConnectFactory>[0]> = [];
+  const ensureHomeInputs: Array<Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]> = [];
   let core: CodexConnectionCore | null = null;
 
   function answer(frame: OutboundFrame): void {
     if (!core || frame.id === undefined) return;
     if (frame.method === 'initialize') {
-      core.pushStdout(`${JSON.stringify({ id: frame.id, result: { codexHome: HOME_DIR } })}\n`);
+      if (options.answerInitialize === false) return;
+      const body = options.initializeError
+        ? { id: frame.id, error: options.initializeError }
+        : { id: frame.id, result: { codexHome: HOME_DIR } };
+      core.pushStdout(`${JSON.stringify(body)}\n`);
+      return;
+    }
+    if (frame.method === 'thread/resume') {
+      // The window first, the answer second — in that order, because the whole
+      // point of H11 is what happens to a frame that arrives BEFORE the response.
+      for (const pushed of options.resumeWindowFrames ?? []) {
+        core.pushStdout(`${JSON.stringify(pushed)}\n`);
+      }
+      const body = options.threadResumeError
+        ? { id: frame.id, error: options.threadResumeError }
+        : { id: frame.id, result: options.threadResumeResult ?? RESUME_RESULT };
+      core.pushStdout(`${JSON.stringify(body)}\n`);
+      return;
+    }
+    if (frame.method === 'thread/turns/list') {
+      const body = options.turnsListError
+        ? { id: frame.id, error: options.turnsListError }
+        : { id: frame.id, result: options.turnsListResult ?? RECORDED_TURNS_LIST };
+      core.pushStdout(`${JSON.stringify(body)}\n`);
       return;
     }
     if (frame.method === 'thread/start') {
@@ -240,13 +386,20 @@ function makeHarness(
     appVersion: options.appVersion ?? '9.9.9-test',
     connect,
     resolveLaunch: options.resolveLaunch ?? (() => ({ ok: true, plan: PLAN })),
-    ensureHome:
-      options.ensureHome ??
-      ((input) => ({
-        homeDir: input.homeDir,
-        projection: { toml: '', kept: [], dropped: [] },
-        authCopied: false,
-      })),
+    ensureHome: (input) => {
+      // Recorded before delegating, so the H9 layer-1 WIRING (which posture the
+      // runtime hands the home builder) is observable — `codexHome.test.ts` can
+      // only pin what the projection does with a posture it is given.
+      ensureHomeInputs.push(input);
+      return (
+        options.ensureHome ??
+        ((seen: Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]) => ({
+          homeDir: seen.homeDir,
+          projection: { toml: '', kept: [], dropped: [] },
+          authCopied: false,
+        }))
+      )(input);
+    },
   });
 
   const harness: Harness = {
@@ -256,6 +409,7 @@ function makeHarness(
     logs,
     ops,
     connectInputs,
+    ensureHomeInputs,
     requestFor: (method) => {
       const frame = written.find((f) => f.method === method);
       if (!frame) throw new Error(`no outbound request for ${method}; saw ${ops.join(', ')}`);
@@ -288,8 +442,11 @@ function payload(event: Record<string, unknown> | undefined): Payload {
   return (event?.payload ?? {}) as Payload;
 }
 
-async function startedSession(sessionId = 's1'): Promise<Harness> {
-  const h = makeHarness();
+async function startedSession(
+  sessionId = 's1',
+  options: Parameters<typeof makeHarness>[0] = {}
+): Promise<Harness> {
+  const h = makeHarness(options);
   h.runtime.createSession({ sessionId, workspacePath: '/work/repo', requestId: 'req-create' });
   await h.waitForEvent('session.created');
   return h;
@@ -545,6 +702,10 @@ describe('codexRuntime — handshake identity and isolation', () => {
     expect(input.env.CODEX_HOME).toBe(HOME_DIR);
     expect(input.cwd).toBe('/work/repo');
     expect(input.plan.codexJsPath.endsWith('codex.js')).toBe(true);
+    // …and the home it points at was seeded with the session's own posture
+    // (H9 layer 1). Identity, so create and resume cannot be handed two
+    // different objects that merely look alike today.
+    expect(h.ensureHomeInputs[0].permission).toBe(CODEX_PERMISSION_DEFAULT);
   });
 
   it('sends the initialized notification after the initialize response', async () => {
@@ -918,10 +1079,11 @@ describe('codexRuntime — the deliberate holes are explicit refusals', () => {
     expect(payload(error)?.code).not.toBe('not_implemented');
   });
 
-  it('no longer refuses resume — the degradation contract landed in slice 5a', () => {
+  it('no longer refuses resume — the replay chain landed in slice 5b', async () => {
     // Slice 2a refused resume outright (`agent_unsupported`), because a Codex
     // resume that emitted only `session.resumed` would have left the renderer
-    // on a blank transcript with no error at all. 5a fills the hole, so the
+    // on a blank transcript with no error at all. 5a filled the hole with an
+    // explicit degradation and 5b replaced that with a real replay, so the
     // assertion is RE-JUDGED rather than deleted (same discipline as send and
     // permission.respond above): what it guards now is that the refusal did not
     // survive as a silent no-op. The contract itself is covered below.
@@ -929,9 +1091,10 @@ describe('codexRuntime — the deliberate holes are explicit refusals', () => {
     h.runtime.resumeSession({
       sessionId: 's-resume',
       workspacePath: '/work/repo',
-      runtimeIdentity: 'thr-cold-0007',
+      runtimeIdentity: RECORDED_THREAD,
       requestId: 'req-resume',
     });
+    await h.waitForEvent('session.resumed');
 
     expect(h.eventsOf('host.error')).toHaveLength(0);
     expect(h.eventsOf('session.resumed')).toHaveLength(1);
@@ -995,117 +1158,517 @@ describe('codexRuntime — the deliberate holes are explicit refusals', () => {
 });
 
 /**
- * Slice 5a — resume without a reader.
+ * Slice 5b — resume replays the thread and KEEPS the link.
  *
- * Two failure shapes are in play and they are NOT the same event: a resume this
- * runtime accepts always ends in the three-event contract carrying an explicit
- * `history_unsupported` (H10), while the two cases where it refuses to take the
- * session at all answer with a `host.error` and emit nothing else (H10's two
- * exceptions). Every case below pins which of the two it is, because the
- * dangerous defect is one turning into the other: a `host.error` where the
- * contract was expected leaves the renderer waiting forever, and a contract
- * where a refusal was expected paints a history banner over a live session or
- * steals another runtime's row.
+ * Three shapes are in play and no two of them are the same event. A resume this
+ * runtime accepts ends in the three-event contract, carrying either the replayed
+ * transcript or an explicit error code (H10). The two cases where it refuses to
+ * take the session at all answer with a `host.error` and emit nothing else (H10's
+ * two exceptions). Every case below pins which of the three it is, because the
+ * dangerous defect is one turning into another: a `host.error` where the contract
+ * was expected leaves the renderer waiting forever, a contract where a refusal was
+ * expected paints a history banner over a live session or steals another runtime's
+ * row, and an empty-but-successful history reads as "this session had nothing in
+ * it".
  */
-describe('codexRuntime — resume degrades explicitly instead of refusing (slice 5a)', () => {
+describe('codexRuntime — resume replays a cold thread (G6)', () => {
   const COLD_RESUME = {
     sessionId: 's-resume',
     workspacePath: '/work/repo',
-    runtimeIdentity: 'thr-cold-0007',
+    runtimeIdentity: RECORDED_THREAD,
     requestId: 'req-resume',
   };
 
-  it('emits the whole three-event contract, in order, with every history field spelled out', () => {
+  it('asks thread/resume for exactly the thread id, with no second key', async () => {
     const h = makeHarness();
     h.runtime.resumeSession({ ...COLD_RESUME, model: 'gpt-5.6-sol' });
+    await h.waitForEvent('session.history');
 
-    // An EXACT array is assertable here (rather than an ordered subsequence)
-    // precisely because nothing is spawned: there is no status mapper that
-    // could slip a `session.status` in front of `session.resumed`. The order
-    // itself is the contract — the renderer pairs the replay with this resume
-    // and stays on the old transcript until the closing status.
-    expect(typesOf(h.events)).toEqual(['session.resumed', 'session.history', 'session.status']);
-    // Correlated BOTH ways on all three: the renderer matches the replay
-    // snapshot by requestId, and drops one it cannot pair.
-    expect(h.events.map((event) => event.requestId)).toEqual([
-      'req-resume',
-      'req-resume',
-      'req-resume',
-    ]);
-    expect(h.events.map((event) => event.sessionId)).toEqual(['s-resume', 's-resume', 's-resume']);
+    // EXACT equality, not `toMatchObject`. `thread/resume` accepts overrides
+    // (cwd, model, and the posture itself), and each one would become a second
+    // source for something the thread already decided — the posture in
+    // particular has to come back from the isolated config.toml, or the H9 check
+    // below would be verifying our own echo.
+    expect(h.requestFor('thread/resume').params).toEqual({ threadId: RECORDED_THREAD });
+    // A resume that quietly started a NEW thread would look identical from the
+    // outside until the user noticed the model had forgotten the conversation.
+    expect(h.requestsFor('thread/start')).toHaveLength(0);
+    expect(h.connectInputs).toHaveLength(1);
+  });
+
+  it('H9 layer 1 — seeds the isolated home with the posture the wire uses', async () => {
+    const h = makeHarness();
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.history');
+
+    // IDENTITY, not a value comparison: the config write and `thread/start` must
+    // be reading the same object, because on resume the config file is the only
+    // source of the posture and the echo check below is the only proof it took.
+    // `codexHome.test.ts` pins what the projection DOES with this object; this
+    // pins which object it gets.
+    expect(h.ensureHomeInputs).toHaveLength(1);
+    expect(h.ensureHomeInputs[0].permission).toBe(CODEX_PERMISSION_DEFAULT);
+    expect(h.ensureHomeInputs[0].homeDir).toBe(HOME_DIR);
+  });
+
+  it('binds state and the registry BEFORE the handshake is answered (H11)', async () => {
+    const h = makeHarness({ answerInitialize: false });
+    h.runtime.resumeSession(COLD_RESUME);
+
+    // Synchronously true: `resumeSession` returns once the link is open and the
+    // handshake has been WRITTEN, and nothing has answered it yet.
+    expect(h.requestsFor('initialize')).toHaveLength(1);
+    expect(h.registry.get('s-resume')).toMatchObject({
+      agent: CODEX_AGENT,
+      runtimeIdentity: RECORDED_THREAD,
+      workspacePath: '/work/repo',
+    });
+    expect(h.eventsOf('session.resumed')).toHaveLength(0);
+
+    // …and the reason it has to be true: a server request arriving inside this
+    // window finds a state to look up, so it is ANSWERED. With no state,
+    // `onServerRequest` returns silently and codex waits forever for a reply
+    // nobody owes it — the window is real (MCP servers start inside it [实测]).
+    h.push({
+      id: 11,
+      method: 'item/commandExecution/requestApproval',
+      params: { threadId: RECORDED_THREAD, command: 'echo hi' },
+    });
+    expect(h.replies().map((frame) => frame.id)).toEqual([11]);
+    await h.waitFor(() => true, 'nothing');
+  });
+
+  it('emits resumed then history then idle, with the replayed transcript in full', async () => {
+    const h = makeHarness({ resumeWindowFrames: RESUME_WINDOW_FRAMES });
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
+
+    // Ordered subsequence rather than an exact array (m13): the window frames
+    // this harness replays are the ones codex really sent, and one of them is a
+    // `thread/status/changed`.
+    const types = typesOf(h.events);
+    expect(types.indexOf('session.resumed')).toBe(0);
+    expect(types.indexOf('session.resumed')).toBeLessThan(types.indexOf('session.history'));
+    expect(types.indexOf('session.history')).toBeLessThan(types.lastIndexOf('session.status'));
+    expect(h.eventsOf('host.error')).toHaveLength(0);
 
     expect(payload(h.event('session.resumed'))).toEqual({
       agent: CODEX_AGENT,
-      runtimeIdentity: 'thr-cold-0007',
+      runtimeIdentity: RECORDED_THREAD,
     });
-    // Full equality, not `toMatchObject`: an absent field is not neutral here —
-    // `agent` absent means "an old Host, therefore Claude Code" to the reducer,
-    // and a missing `error` turns the empty transcript into "this session had
-    // nothing in it", which is the exact misreading 5a exists to prevent.
+    // FULL equality: an absent field is not neutral here — `agent` absent means
+    // "an old Host, therefore Claude Code" to the reducer, and an `error` that
+    // survived a successful read would paint a banner over a replayed thread.
     expect(payload(h.event('session.history'))).toEqual({
-      runtimeIdentity: 'thr-cold-0007',
+      runtimeIdentity: RECORDED_THREAD,
+      workspacePath: '/work/repo',
+      agent: CODEX_AGENT,
+      messages: expectedResumeMessages(RECORDED_THREAD),
+      truncated: false,
+      omittedCount: 0,
+    });
+    expect(payload(h.event('session.status'))).toEqual({ status: 'idle' });
+    for (const type of ['session.resumed', 'session.history', 'session.status']) {
+      // Correlated both ways: the renderer pairs the replay snapshot with this
+      // resume by requestId and drops one it cannot pair.
+      expect(h.event(type)?.requestId).toBe('req-resume');
+      expect(h.event(type)?.sessionId).toBe('s-resume');
+    }
+  });
+
+  it('lets no status frame out of the resume window before session.resumed (m13)', async () => {
+    const h = makeHarness({ resumeWindowFrames: RESUME_WINDOW_FRAMES });
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
+
+    // The window carries a real `thread/status/changed {status:{type:'idle'}}`
+    // [实测 fixture line 8]. Projected, it would arrive BEFORE `session.resumed`
+    // — and the renderer reads the closing status of a resume as "the replay is
+    // finished", so the transcript would be dropped as unpaired.
+    expect(RESUME_WINDOW_FRAMES.some((frame) => frame.method === 'thread/status/changed')).toBe(
+      true
+    );
+    expect(h.eventsOf('session.status')).toHaveLength(1);
+    expect(h.logs.some((line) => line.includes('suppressed inside the resume window'))).toBe(true);
+
+    // The gate is released with the contract, not left latched: a status frame
+    // after the resume is projected normally.
+    h.push({
+      method: 'thread/status/changed',
+      params: { threadId: RECORDED_THREAD, status: { type: 'active', activeFlags: [] } },
+    });
+    await h.waitFor(() => h.eventsOf('session.status').length === 2, 'the post-resume status');
+    expect(payload(h.eventsOf('session.status')[1])).toEqual({ status: 'running' });
+  });
+
+  it('keeps the connection, so the next send opens a turn on the SAME thread', async () => {
+    const h = makeHarness();
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
+
+    // Resume means "continue this thread": the link stays, and the state carries
+    // the thread id from the resume instead of waiting for a `thread/start` this
+    // path never issues.
+    expect(h.ops.some((op) => op.startsWith('kill:'))).toBe(false);
+    await h.runtime.send({ sessionId: 's-resume', text: PROMPT, requestId: 'req-send' });
+
+    expect(h.requestFor('turn/start').params).toMatchObject({ threadId: RECORDED_THREAD });
+    expect(h.requestsFor('thread/start')).toHaveLength(0);
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+  });
+
+  it('G13 — addresses the thread id that came off the session-index row', async () => {
+    // The renderer builds its resume args from a persisted index row
+    // (`sessionIndexMerge` -> `resumeIntent`, pinned on the renderer side). This
+    // is the Host end of that same string: whatever `runtimeIdentity` the row
+    // carried is what `thread/resume` must address, with no re-derivation in
+    // between — a Host that resolved the thread some other way would replay
+    // someone else's conversation into this session.
+    const row: SessionIndexEntry = {
+      sessionId: 's-index',
+      workspacePath: '/work/repo',
+      runtimeIdentity: RECORDED_THREAD,
+      agent: CODEX_AGENT,
+      title: 'a resumed codex chat',
+      updatedAt: 1_700_000,
+      archived: false,
+    };
+    const h = makeHarness();
+    h.runtime.resumeSession({
+      sessionId: row.sessionId,
+      workspacePath: row.workspacePath,
+      runtimeIdentity: row.runtimeIdentity as string,
+      requestId: 'req-resume',
+    });
+    await h.waitForEvent('session.history');
+
+    expect(h.requestFor('thread/resume').params).toEqual({ threadId: row.runtimeIdentity });
+    expect(payload(h.event('session.resumed')).runtimeIdentity).toBe(row.runtimeIdentity);
+    expect(h.registry.get(row.sessionId)?.runtimeIdentity).toBe(row.runtimeIdentity);
+  });
+});
+
+/**
+ * G7 — every way a cold resume can fail.
+ *
+ * Two things must hold on all of them and they fail in opposite directions: the
+ * process must be GONE (a failed resume that leaks an app-server costs the user
+ * one node + a ~296MiB binary per retry) and the row must still be BOUND to
+ * codex (an unbound row sends the user's next message to the Claude runtime with
+ * a Codex threadId attached).
+ */
+describe('codexRuntime — a failed resume tears down, then degrades (G7)', () => {
+  const COLD_RESUME = {
+    sessionId: 's-resume',
+    workspacePath: '/work/repo',
+    runtimeIdentity: RECORDED_THREAD,
+    requestId: 'req-resume',
+  };
+
+  /**
+   * The contract's shape, checked once so each case below only has to name its
+   * own error code.
+   *
+   * On the drain step: a resume window CANNOT park a pending server request —
+   * both bridges refuse an approval or a question that arrives with no turn
+   * running (slice 4 P1 / slice 3 G1), so the table is empty by construction and
+   * a drain has nothing observable to do. What is asserted instead is that the
+   * teardown that ran is the SHARED one — its dispose reason is threaded through
+   * to the transport's kill, and that reason is written by `teardown()` alone,
+   * whose drain-before-dispose ordering is pinned by the close/stop cases above.
+   */
+  function expectDegraded(
+    h: Harness,
+    expected: {
+      code: string;
+      spawned: boolean;
+      messageContains?: string;
+      /** The dispose reason the kill carries; `teardown` is the only writer of it. */
+      killReason?: string;
+    }
+  ): void {
+    const types = typesOf(h.events);
+    expect(types.indexOf('session.resumed')).toBe(0);
+    expect(types.indexOf('session.resumed')).toBeLessThan(types.indexOf('session.history'));
+    expect(types.indexOf('session.history')).toBeLessThan(types.lastIndexOf('session.status'));
+    // H10: a failed resume ends in the contract, never in a `host.error` — a
+    // non-fatal host.error is invisible in the renderer, so the session would
+    // wait forever for a replay that already failed.
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+
+    const history = payload(h.event('session.history'));
+    expect(history).toEqual({
+      runtimeIdentity: RECORDED_THREAD,
       workspacePath: '/work/repo',
       agent: CODEX_AGENT,
       messages: [],
       truncated: false,
       omittedCount: 0,
-      error: { code: 'history_unsupported', message: CODEX_HISTORY_UNSUPPORTED_MESSAGE },
+      error: { code: expected.code, message: expect.any(String) },
     });
-    expect(payload(h.event('session.status'))).toEqual({ status: 'idle' });
-    // H10: this is a resume that could not replay, not a refusal — a
-    // `host.error` here would be invisible in the renderer and would leave the
-    // session waiting for a contract that never completes.
-    expect(h.eventsOf('host.error')).toHaveLength(0);
-  });
-
-  it('says why the transcript is empty without promising the session still works', () => {
-    // M12/P2: the renderer prints this message verbatim under the banner. On
-    // this path nothing was connected — no home prepared, no handshake, no
-    // thread — so any claim about what sending will do would be unverified.
-    expect(CODEX_HISTORY_UNSUPPORTED_MESSAGE).toContain('no Codex history reader');
-    for (const promise of ['send', 'continue', 'still works']) {
-      expect(CODEX_HISTORY_UNSUPPORTED_MESSAGE.toLowerCase()).not.toContain(promise);
+    if (expected.messageContains) {
+      expect((history.error as { message: string }).message).toContain(expected.messageContains);
     }
-  });
+    expect(payload(h.event('session.status'))).toEqual({ status: 'idle' });
 
-  it('spawns nothing for a resume it cannot replay', () => {
-    const h = makeHarness();
-    h.runtime.resumeSession(COLD_RESUME);
-
-    // With no reader there is nothing to ask an app-server for, and starting one
-    // costs a node process plus the ~296MiB platform binary per resumed row —
-    // to be torn down again on the very next line.
-    expect(h.connectInputs).toHaveLength(0);
-    expect(h.ops).toEqual([]);
-  });
-
-  it('binds the row to codex anyway, so the next command still routes here', async () => {
-    const h = makeHarness();
-    h.runtime.resumeSession(COLD_RESUME);
-
-    // `index.ts` dispatches send/stop/close on this entry's `agent`. Skipping
-    // the binding on the degraded path would hand the renderer's next send to
-    // the Claude runtime together with a Codex threadId.
+    // The row survives the failure, bound to codex (G1 negative control ①).
     expect(h.registry.get('s-resume')).toMatchObject({
       agent: CODEX_AGENT,
-      runtimeIdentity: 'thr-cold-0007',
-      workspacePath: '/work/repo',
+      runtimeIdentity: RECORDED_THREAD,
       running: false,
     });
 
-    // And that send is refused AUDIBLY, correlated both ways: no connection
-    // stands behind this row, so the Composer has to be able to fail its
-    // pending message instead of spinning on it.
+    const kills = h.ops.filter((op) => op.startsWith('kill:'));
+    if (expected.spawned) {
+      // Disposed exactly once, through `teardown` — the reason it carries is the
+      // one only `teardown` writes.
+      expect(kills).toHaveLength(1);
+      expect(kills[0]).toContain(expected.killReason ?? 'resume failed');
+      // Nothing written after the kill: no straggling frame to a dead process.
+      expect(h.ops.indexOf(kills[0])).toBe(h.ops.length - 1);
+    } else {
+      expect(h.connectInputs).toHaveLength(0);
+      expect(kills).toEqual([]);
+    }
+  }
+
+  it('a thread codex cannot find -> jsonl_not_found', async () => {
+    const h = makeHarness({
+      // Shaped like a real JSON-RPC error reply. Codex has no measured code for
+      // a missing thread, so the classifier reads the message — see
+      // `THREAD_MISSING_PATTERN`.
+      threadResumeError: { code: -32603, message: `thread not found: ${RECORDED_THREAD}` },
+    });
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
+
+    expectDegraded(h, { code: 'jsonl_not_found', spawned: true });
+  });
+
+  it('a machine with no codex.js -> read_failed, and nothing was spawned', async () => {
+    const h = makeHarness({
+      resolveLaunch: () => ({
+        ok: false,
+        code: 'codex_entry_unresolved',
+        message: 'Codex entry not found: no @openai/codex bin next to node.',
+        inspected: [{ path: '/home/someone/secret-project/codex.js', reason: 'not-found' }],
+      }),
+    });
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
+
+    expectDegraded(h, { code: 'read_failed', spawned: false });
+    // The inspected paths describe the user's machine layout: log only, never
+    // an event that reaches the UI.
+    expect(JSON.stringify(h.events)).not.toContain('secret-project');
+    expect(h.logs.some((line) => line.includes('secret-project'))).toBe(true);
+  });
+
+  it('a handshake codex refuses -> read_failed, with the process torn down', async () => {
+    const h = makeHarness({ initializeError: { code: -32603, message: 'initialize exploded' } });
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
+
+    expectDegraded(h, { code: 'read_failed', spawned: true });
+    // A `thread/resume` must never have gone out: the link never came up.
+    expect(h.requestsFor('thread/resume')).toHaveLength(0);
+  });
+
+  it('reports a process that dies mid-resume ONCE, through the contract', async () => {
+    const h = makeHarness({ answerInitialize: false });
+    h.runtime.resumeSession(COLD_RESUME);
+    h.exit({ code: 1, signal: null });
+    await h.waitForEvent('session.status');
+
+    // The link's own teardown rejects the in-flight handshake, and that
+    // rejection ends here as `read_failed`. A `session.failed` in front of it
+    // would tell the renderer the session crashed AND then that it resumed
+    // idle — one death, two reports, the second contradicting the first.
+    expect(h.eventsOf('session.failed')).toHaveLength(0);
+    expectDegraded(h, { code: 'read_failed', spawned: true, killReason: 'process exited' });
+  });
+
+  it('leaves nothing behind: the next send is refused, not queued', async () => {
+    const h = makeHarness({
+      threadResumeError: { code: -32603, message: `thread not found: ${RECORDED_THREAD}` },
+    });
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
     h.events.length = 0;
-    await h.runtime.send({ sessionId: 's-resume', text: 'hello again', requestId: 'req-send' });
+
+    await h.runtime.send({ sessionId: 's-resume', text: PROMPT, requestId: 'req-send' });
+
+    // The state is gone (that is the teardown's third step) but the ROW is not,
+    // so the refusal comes from this runtime and is correlated both ways —
+    // the Composer can fail its pending message instead of spinning on it.
     const error = h.event('host.error');
     expect(payload(error).code).toBe('session_not_found');
     expect(payload(error).fatal).toBe(false);
     expect(error?.sessionId).toBe('s-resume');
     expect(error?.requestId).toBe('req-send');
     expect(h.requestsFor('turn/start')).toHaveLength(0);
+    expect(h.connectInputs).toHaveLength(1);
   });
 
+  it('says nothing at all when the session was closed while the resume was in flight', async () => {
+    const h = makeHarness({ answerInitialize: false });
+    h.runtime.resumeSession(COLD_RESUME);
+    h.runtime.close({ sessionId: 's-resume', requestId: 'req-close' });
+    h.events.length = 0;
+    await h.waitFor(() => h.ops.some((op) => op.startsWith('kill:')), 'the close kill');
+
+    // `close` already emitted `disconnected` and dropped the row. Three more
+    // events behind it would put a dead session back on screen as idle.
+    await h.waitFor(() => true, 'a tick');
+    expect(h.events).toEqual([]);
+    expect(h.registry.get('s-resume')).toBeUndefined();
+  });
+});
+
+/**
+ * G8 — H9 layer 2, the resume echo.
+ *
+ * Strict on purpose, and asymmetric with the create path on purpose: on create WE
+ * state the posture in `thread/start`, so the echo cross-checks something we
+ * control; on resume the posture's only source is the isolated `config.toml`, so
+ * the echo is the ONLY evidence that the thread came back under the posture this
+ * build promises.
+ */
+describe('codexRuntime — the resume posture echo is fail-safe (G8)', () => {
+  const COLD_RESUME = {
+    sessionId: 's-resume',
+    workspacePath: '/work/repo',
+    runtimeIdentity: RECORDED_THREAD,
+    requestId: 'req-resume',
+  };
+
+  async function resumeWith(result: unknown): Promise<Harness> {
+    const h = makeHarness({ threadResumeResult: result });
+    h.runtime.resumeSession(COLD_RESUME);
+    await h.waitForEvent('session.status');
+    return h;
+  }
+
+  function historyError(h: Harness): { code?: string; message?: string } {
+    return (payload(h.event('session.history')).error ?? {}) as { code?: string; message?: string };
+  }
+
+  it('② refuses the RECORDED echo, which really did come back weaker', async () => {
+    // Not a constructed case: this is the raw capture. The thread had started
+    // under `never` / `read-only`, and a fresh process resumed it as
+    // `on-request` / `dangerFullAccess` — the developer machine's own
+    // `~/.codex/config.toml` [实测]. Under H9 layer 1 the isolated home now says
+    // `workspace-write`, so an echo like this one means the config write did not
+    // take, and running the session anyway would give the model full disk access
+    // while the UI reported a workspace sandbox.
+    const h = await resumeWith(RECORDED_RESUME_RESULT);
+
+    expect(historyError(h).code).toBe('read_failed');
+    expect(historyError(h).message).toContain('permission posture');
+    expect(historyError(h).message).toContain(CODEX_PERMISSION_DEFAULT.sandboxMode);
+    expect(historyError(h).message).toContain('dangerFullAccess');
+    // The failure names the dimension it did NOT check, so nobody reads "two
+    // dimensions verified" as "three".
+    expect(historyError(h).message).toContain('network dimension unverified');
+    // Fail-safe: torn down, never left running under an unverified posture.
+    expect(h.ops.filter((op) => op.startsWith('kill:'))).toHaveLength(1);
+    expect(payload(h.event('session.history')).messages).toEqual([]);
+  });
+
+  it('③ negative control: an echo with no posture at all is refused, not shrugged at', async () => {
+    // `compareSandboxEcho` would call this `unverifiable` and let the session
+    // run. On resume "we learned nothing" is exactly the case that must fail.
+    const h = await resumeWith({ thread: RECORDED_RESUME_RESULT.thread });
+
+    expect(historyError(h).code).toBe('read_failed');
+    expect(historyError(h).message).toContain('approvalPolicy was not echoed');
+    expect(historyError(h).message).toContain('sandbox.type was not echoed');
+  });
+
+  it('③ negative control: only approvalPolicy echoed -> refused', async () => {
+    const h = await resumeWith({
+      thread: RECORDED_RESUME_RESULT.thread,
+      approvalPolicy: CODEX_PERMISSION_DEFAULT.approvalPolicy,
+    });
+
+    expect(historyError(h).code).toBe('read_failed');
+    expect(historyError(h).message).toContain('sandbox.type was not echoed');
+  });
+
+  it('③ negative control: only the sandbox echoed -> refused', async () => {
+    const h = await resumeWith({
+      thread: RECORDED_RESUME_RESULT.thread,
+      sandbox: { type: 'workspaceWrite' },
+    });
+
+    expect(historyError(h).code).toBe('read_failed');
+    expect(historyError(h).message).toContain('approvalPolicy was not echoed');
+  });
+
+  it('③ negative control: networkAccess missing but both dimensions matching -> SUCCEEDS', async () => {
+    // The one negative control that must pass. `networkAccess` is absent from
+    // every recorded resume result [实测], so requiring it would fail every
+    // resume forever — it is carried by the config layer instead, and the
+    // failure message says so.
+    const echo = RESUME_RESULT;
+    expect(JSON.stringify(echo)).not.toContain('networkAccess');
+    const h = await resumeWith(echo);
+
+    expect(payload(h.event('session.history')).error).toBeUndefined();
+    expect(payload(h.event('session.history')).messages).toHaveLength(2);
+    expect(h.ops.some((op) => op.startsWith('kill:'))).toBe(false);
+  });
+
+  it('③ token spellings that only differ in case and punctuation still match', async () => {
+    // The request side spells `workspace-write`, the echo spells `workspaceWrite`
+    // [实测]. A comparison that missed that would fail every healthy resume,
+    // which is the failure mode a fail-safe check must not have.
+    const h = await resumeWith({
+      ...RECORDED_RESUME_RESULT,
+      approvalPolicy: 'on_request',
+      sandbox: { type: 'WORKSPACE-WRITE' },
+    });
+
+    expect(payload(h.event('session.history')).error).toBeUndefined();
+  });
+
+  it('④ the create path keeps its advisory semantics (regression pin)', async () => {
+    // The asymmetry is the whole ruling: hard constraint 7 forbids failing a
+    // turn over a verification step, and `thread/start` states the posture
+    // itself. A mismatch there WARNs and the session lives.
+    const h = makeHarness({
+      threadStartResult: {
+        threadId: 'thr-0001',
+        approvalPolicy: 'never',
+        sandbox: { type: 'dangerFullAccess', networkAccess: true },
+      },
+    });
+    h.runtime.createSession({ sessionId: 's1', workspacePath: '/work/repo' });
+    await h.waitForEvent('session.created');
+
+    expect(h.logs.some((line) => line.includes('WARN codex sandbox echo mismatch'))).toBe(true);
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+    expect(h.ops.some((op) => op.startsWith('kill:'))).toBe(false);
+    // Still usable: the session takes a turn.
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+    expect(h.requestsFor('turn/start')).toHaveLength(1);
+  });
+
+  it('the no-reader default keeps its exact shape, even though codex no longer reaches it', () => {
+    // Spec §1 5b.3: the degradation body stays as the `default` branch for an
+    // agent with no history reader. Codex has one now, so nothing here emits it
+    // — the shape is pinned instead of deleted, because re-deriving it later
+    // from memory is how the silent-empty-transcript regression comes back.
+    expect(CODEX_HISTORY_UNSUPPORTED).toEqual({
+      messages: [],
+      truncated: false,
+      omittedCount: 0,
+      error: { code: 'history_unsupported', message: CODEX_HISTORY_UNSUPPORTED_MESSAGE },
+    });
+  });
+});
+
+describe('codexRuntime — resume refuses the two sessions it must not take (H10 exceptions)', () => {
   it('refuses a row another runtime owns, leaving that row exactly as it was', () => {
     const h = makeHarness();
     const claudeRow = h.registry.create({
@@ -1118,7 +1681,7 @@ describe('codexRuntime — resume degrades explicitly instead of refusing (slice
     h.runtime.resumeSession({
       sessionId: 's-claude',
       workspacePath: '/work/repo',
-      runtimeIdentity: 'thr-cold-0007',
+      runtimeIdentity: RECORDED_THREAD,
       requestId: 'req-conflict',
     });
 
@@ -1137,7 +1700,7 @@ describe('codexRuntime — resume degrades explicitly instead of refusing (slice
       runtimeIdentity: 'claude-session-uuid',
     });
     // A refusal, so NOT the contract: no `session.resumed` for a session this
-    // runtime just declined to own.
+    // runtime just declined to own, and no process for it either.
     expect(typesOf(h.events)).toEqual(['host.error']);
     expect(h.connectInputs).toHaveLength(0);
   });
@@ -1164,6 +1727,8 @@ describe('codexRuntime — resume degrades explicitly instead of refusing (slice
     expect(error?.sessionId).toBe('s1');
     expect(error?.requestId).toBe('req-resume');
     expect(typesOf(h.events)).toEqual(['host.error']);
+    expect(h.requestsFor('thread/resume')).toHaveLength(0);
+    expect(h.requestsFor('thread/turns/list')).toHaveLength(0);
 
     // Nothing of the live session was rewritten — identity and workspace both
     // still describe the thread the open turn is running on.
@@ -1179,29 +1744,57 @@ describe('codexRuntime — resume degrades explicitly instead of refusing (slice
     expect(terminalsOf(h.events)).toEqual(['session.completed']);
     expect(h.registry.get('s1')?.running).toBe(false);
   });
+});
 
-  it("reuses a live session's own connection and thread, spawning nothing new", async () => {
+/**
+ * Guard ③ — the session is still connected.
+ *
+ * `thread/resume` on a thread this very process has loaded would ask the
+ * app-server to re-enter a session it is already running, whose side effects are
+ * [未测]. `thread/turns/list` returns the same items with none of that
+ * [实测 `codex-s5-u2a-report.json`: `threadTurnsList.items` matches
+ * `threadResume.items`].
+ */
+describe('codexRuntime — a live session is read over its own link (guard ③)', () => {
+  const STALE_ROW = {
+    sessionId: 's1',
+    // A stale index row: the renderer resumes from what it persisted, which can
+    // predate the thread this session is actually talking to.
+    workspacePath: '/work/moved',
+    runtimeIdentity: 'thr-stale',
+    requestId: 'req-resume',
+  };
+
+  it('spells thread/turns/list the way the binary declares it', () => {
+    // The one new method name this slice puts on the wire. A misspelling does
+    // not fail to compile and does not fail any other test — it fails at runtime
+    // on a user's machine as -32601, i.e. "the history is empty" with no reason.
+    // Same bar as every other entry (`codexWire.ts` header): attested by the
+    // binary's own generated contract, not by a plausible-looking guess.
+    const contract = JSON.parse(
+      readFileSync(path.join(FIXTURES, 'codex-method-contract.json'), 'utf8')
+    ) as { clientRequest: string[] };
+
+    expect(CODEX_METHOD.threadTurnsList).toBe('thread/turns/list');
+    expect(contract.clientRequest).toContain(CODEX_METHOD.threadTurnsList);
+  });
+
+  it('reads with thread/turns/list, spawns nothing, and keeps the link', async () => {
     const h = await startedSession();
     h.events.length = 0;
 
-    h.runtime.resumeSession({
-      sessionId: 's1',
-      // A stale index row: the renderer resumes from what it persisted, which
-      // can predate the thread this session is actually talking to.
-      workspacePath: '/work/moved',
-      runtimeIdentity: 'thr-stale',
-      requestId: 'req-resume',
-    });
+    h.runtime.resumeSession(STALE_ROW);
+    await h.waitForEvent('session.history');
 
-    // ONE connect for the life of the session — the one `createSession` made.
-    // A second would leak the first process until the app quits.
+    // ONE connect for the life of the session — the one `createSession` made. A
+    // second would leak the first process until the app quits.
     expect(h.connectInputs).toHaveLength(1);
     expect(h.ops.some((op) => op.startsWith('kill:'))).toBe(false);
+    expect(h.requestsFor('thread/resume')).toHaveLength(0);
+    expect(h.requestFor('thread/turns/list').params).toEqual({
+      threadId: THREAD_START_RESULT.threadId,
+    });
 
-    // Ordered subsequence rather than an exact array (m13): this session has a
-    // live status mapper, and codex may push a frame of its own at any moment.
-    // What must hold is that `session.resumed` is never behind the history or
-    // the closing status.
     const types = typesOf(h.events);
     expect(types.indexOf('session.resumed')).toBe(0);
     expect(types.indexOf('session.resumed')).toBeLessThan(types.indexOf('session.history'));
@@ -1211,10 +1804,13 @@ describe('codexRuntime — resume degrades explicitly instead of refusing (slice
     // connection can actually address, and persisting the stale one would send
     // the next `turn/start` to a thread this process does not own.
     expect(payload(h.event('session.resumed')).runtimeIdentity).toBe(THREAD_START_RESULT.threadId);
-    expect(payload(h.event('session.history'))).toMatchObject({
+    expect(payload(h.event('session.history'))).toEqual({
       runtimeIdentity: THREAD_START_RESULT.threadId,
       workspacePath: '/work/repo',
-      error: { code: 'history_unsupported' },
+      agent: CODEX_AGENT,
+      messages: expectedResumeMessages(THREAD_START_RESULT.threadId),
+      truncated: false,
+      omittedCount: 0,
     });
     expect(h.registry.get('s1')).toMatchObject({
       runtimeIdentity: THREAD_START_RESULT.threadId,
@@ -1227,6 +1823,54 @@ describe('codexRuntime — resume degrades explicitly instead of refusing (slice
     expect((h.requestFor('turn/start').params as { threadId: string }).threadId).toBe(
       THREAD_START_RESULT.threadId
     );
+  });
+
+  it('does not call a complete history truncated over backwardsCursor [实测 deviation]', async () => {
+    const h = await startedSession();
+    h.events.length = 0;
+    h.runtime.resumeSession(STALE_ROW);
+    await h.waitForEvent('session.history');
+
+    // The recorded result carries a NON-null `backwardsCursor` on a history that
+    // is complete [实测]. The resume reader's rule — any non-null cursor means
+    // truncated — would therefore mark every live read as partial, which is the
+    // reason that shape is not fed to it directly.
+    expect(RECORDED_TURNS_LIST.backwardsCursor).not.toBeNull();
+    expect(RECORDED_TURNS_LIST.nextCursor).toBeNull();
+    expect(payload(h.event('session.history')).truncated).toBe(false);
+  });
+
+  it('does report truncated when nextCursor says there is another page', async () => {
+    const h = await startedSession('s1', {
+      turnsListResult: { ...RECORDED_TURNS_LIST, nextCursor: '{"turnId":"older"}' },
+    });
+    h.events.length = 0;
+    h.runtime.resumeSession(STALE_ROW);
+    await h.waitForEvent('session.history');
+
+    // Honesty over completeness (M6): full pagination is registered as L7, so
+    // the user is told the transcript is partial rather than shown a partial one
+    // that looks whole.
+    expect(payload(h.event('session.history')).truncated).toBe(true);
+  });
+
+  it('a failed read degrades WITHOUT taking the working session down', async () => {
+    const h = await startedSession('s1', {
+      turnsListError: { code: -32603, message: 'turns/list exploded' },
+    });
+    h.events.length = 0;
+    h.runtime.resumeSession(STALE_ROW);
+    await h.waitForEvent('session.history');
+
+    // DEVIATION from the cold path, deliberately: this session is connected and
+    // usable, so tearing it down over an unreadable transcript would take a
+    // working conversation away from the user. The contract still completes with
+    // an explicit error (H10).
+    expect(payload(h.event('session.history')).error).toMatchObject({ code: 'read_failed' });
+    expect(h.ops.some((op) => op.startsWith('kill:'))).toBe(false);
+    expect(h.eventsOf('host.error')).toHaveLength(0);
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+    expect(h.requestsFor('turn/start')).toHaveLength(1);
   });
 });
 
