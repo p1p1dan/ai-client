@@ -1839,6 +1839,14 @@ export const zhTranslations: Record<string, string> = {
   'Retry last message': '重试上一条消息',
   // T-19: fourth round-button kind — "send, only delayed" while a turn runs.
   'Queue message': '加入队列',
+
+  // D47 S5 §1.4: the three-state user profile chip (WindowTitleBar /
+  // UserProfileCard, `deriveUserProfilePresentation`) — 'attention'
+  // (credentials_invalid/locked) vs. 'signed-out' (signed_out/unknown) copy.
+  'Login expired': '登录已过期',
+  'Not signed in': '未登录',
+  'Sign in again': '重新登录',
+  'Sign in': '登录',
 };
 
 export function normalizeLocale(input?: string): Locale {

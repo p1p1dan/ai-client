@@ -6,6 +6,7 @@ import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentHandlers } from './agent';
 import { cleanupAgentHost, cleanupAgentHostSync, registerAgentHostHandlers } from './agentHost';
 import { registerAppHandlers } from './app';
+import { registerAuthHandlers } from './auth';
 import { registerChatHandlers } from './chat';
 import {
   registerClaudeCompletionsHandlers,
@@ -53,6 +54,7 @@ import { registerWebInspectorHandlers } from './webInspector';
 import { clearAllWorktreeServices, registerWorktreeHandlers } from './worktree';
 
 export function registerIpcHandlers(): void {
+  registerAuthHandlers();
   registerGitHandlers();
   registerWorktreeHandlers();
   registerFolderHandlers();

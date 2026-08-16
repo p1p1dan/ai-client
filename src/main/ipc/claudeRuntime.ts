@@ -1,7 +1,5 @@
 import { IPC_CHANNELS } from '@shared/types';
-import { app, ipcMain } from 'electron';
-import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
-import { getManagedClaudeHomeDir } from '../services/auth/claudeHome';
+import { ipcMain } from 'electron';
 import { AgentInstaller } from '../services/cli/AgentInstaller';
 import {
   type ClaudeRuntimeStatus,
@@ -54,19 +52,5 @@ export function registerClaudeRuntimeHandlers(): void {
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  });
-
-  // D47 S2a §1-S2b-⑤ — renderer has no way to know the userData path, so it
-  // can't derive `claudeHomeDir` itself; the path is not a secret, so
-  // returning it directly (rather than gating it behind more IPC) is fine.
-  // S2b's Provider/UI layer consumes this; preload only invokes the channel
-  // and never imports a Main service symbol, so S1's staticImportBans scan
-  // stays green untouched.
-  ipcMain.handle(IPC_CHANNELS.AUTH_MANAGED_MODE, () => {
-    const managed = resolveManagedCredentialsEnabled();
-    return {
-      managed,
-      claudeHomeDir: managed ? getManagedClaudeHomeDir(app.getPath('userData')) : null,
-    };
   });
 }

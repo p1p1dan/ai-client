@@ -1,0 +1,8 @@
+{
+  "request": { "endpoint": "/api/auth/login", "authMode": "body-key" },
+  "response": {
+    "status": 401,
+    "headers": { "content-type": "application/json" },
+    "bodyText": "{\"error\":\"API Key 无效或已过期\",\"errorCode\":\"KEY_INVALID\"}"
+  }
+}

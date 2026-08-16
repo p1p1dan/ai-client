@@ -3,6 +3,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { UsageStatsResult } from '@shared/types';
 import { net } from 'electron';
+import { getAuthProbeScheduler, getCredentialVault } from '../auth';
+import { classifyAuthLoginResponse } from '../auth/AuthProbeScheduler';
+import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { onboardingService } from '../onboarding';
 
 function coerceFiniteNumber(value: unknown): number | null {
@@ -60,7 +63,7 @@ function extractCookieValue(setCookieHeader: string, cookieName: string): string
   return rawValue || null;
 }
 
-function readCodexApiKey(): string | null {
+function readCodexApiKeyLegacy(): string | null {
   try {
     const authPath = path.join(os.homedir(), '.codex', 'auth.json');
     if (!fs.existsSync(authPath)) {
@@ -78,10 +81,36 @@ function readCodexApiKey(): string | null {
   }
 }
 
+/**
+ * D47 S5 §2 — "key 来源 flag-on 走 vault" (`serverUrl` stays legacy;
+ * `onboardingService.checkRegistration().serverUrl` is untouched — S6 owns
+ * moving that registration too, A-track m4). Flag off keeps reading
+ * `~/.codex/auth.json` exactly as before.
+ */
+function resolveUsageApiKey(): string | null {
+  if (resolveManagedCredentialsEnabled()) {
+    const result = getCredentialVault().read();
+    return result.status === 'ok' ? result.doc.payload.codex.apiKey : null;
+  }
+  return readCodexApiKeyLegacy();
+}
+
+/**
+ * D47 S5 §0-1/§2 — the `/api/auth/login` login attempt for an opaque Actions
+ * session. Returns a discriminated union (B-track m4: the old boolean-ish
+ * shape dropped `status`/`errorCode`, leaving no way for `getStats()` to tell
+ * "key is definitively dead" from "some other transient failure"). Also
+ * reports its raw response into `AuthProbeScheduler` as an ADDITIONAL
+ * rejection-trigger source (S5 §2) — never runs its own extra probe, just
+ * classifies the response it already fetched for its own purposes.
+ */
 async function loginForActionsSession(
   serverUrl: string,
   apiKey: string
-): Promise<{ ok: true; sessionId: string | null } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; sessionId: string | null }
+  | { ok: false; rejection: 'key_invalid' | 'unknown'; error: string }
+> {
   const loginUrl = `${serverUrl}/api/auth/login`;
   const response = await net.fetch(loginUrl, {
     method: 'POST',
@@ -90,16 +119,35 @@ async function loginForActionsSession(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ key: apiKey }),
-    credentials: 'include',
+    // D47 S5 §0-2 — never rely on the cookie jar, not even for the login
+    // call itself: `set-cookie` is read directly off the response headers
+    // below, and `credentials:'omit'` keeps a stale 7-day-old jar cookie
+    // from ever silently substituting for this request's own outcome.
+    credentials: 'omit',
   });
+  const bodyText = await response.text();
 
-  const payload = (await response.json().catch(() => null)) as unknown;
+  if (resolveManagedCredentialsEnabled()) {
+    getAuthProbeScheduler().reportExternalLoginResponse(response.status, bodyText);
+  }
+
+  let payload: unknown = null;
+  try {
+    payload = JSON.parse(bodyText);
+  } catch {
+    // Non-JSON body (e.g. an HTML 404) — payloadOk stays false below.
+  }
   const payloadRecord = isRecord(payload) ? payload : null;
   const payloadOk = payloadRecord?.ok === true;
 
   if (!response.ok || !payloadOk) {
+    const classification = classifyAuthLoginResponse(response.status, bodyText);
     const message = extractErrorMessage(payload) ?? `Usage API request failed (${response.status})`;
-    return { ok: false, error: message };
+    return {
+      ok: false,
+      rejection: classification === 'rejected' ? 'key_invalid' : 'unknown',
+      error: message,
+    };
   }
 
   const setCookie = response.headers.get('set-cookie');
@@ -108,24 +156,37 @@ async function loginForActionsSession(
   return { ok: true, sessionId };
 }
 
+/** D47 S5 §0-1 — the retry auth carrier: a `set-cookie`-extracted session value goes back out as a `Cookie` header, never as a Bearer token (the pre-S5 bug — a cookie value is not a bearer credential and the cch gateway rejects it every time, E5 real-gateway verification). */
+type ActionAuth = { type: 'bearer'; token: string } | { type: 'cookie'; value: string };
+
 async function postAction(
   url: string,
   body: Record<string, unknown>,
-  token?: string
+  auth?: ActionAuth
 ): Promise<{ ok: true; payload: unknown } | { ok: false; error: string; status: number }> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
   };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (auth?.type === 'bearer') {
+    headers.Authorization = `Bearer ${auth.token}`;
+  } else if (auth?.type === 'cookie') {
+    headers.Cookie = `auth-token=${auth.value}`;
   }
 
   const response = await net.fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    credentials: 'include',
+    // D47 S5 §0-2 — the direct (bearer) attempt must be allowed to genuinely
+    // 401 so the 401->login branch actually runs; `credentials:'include'`
+    // let a stale 7-day login cookie from a PRIOR session silently
+    // authenticate every direct call, masking that branch forever (E5
+    // real-gateway finding: the actions endpoint ONLY accepts the cookie
+    // session, never a bare key bearer — so this branch always needs to run
+    // in practice). The cookie-carrying retry sends its own explicit
+    // `Cookie` header above instead of relying on the jar either.
+    credentials: 'omit',
   });
 
   const payload = (await response.json().catch(() => null)) as unknown;
@@ -146,7 +207,7 @@ class UsageService {
         return { error: 'Not registered' };
       }
 
-      const apiKey = readCodexApiKey();
+      const apiKey = resolveUsageApiKey();
       if (!apiKey) {
         return { error: 'Credentials not available' };
       }
@@ -162,7 +223,7 @@ class UsageService {
       const summaryUrl = `${serverUrl}/api/actions/my-usage/getMyStatsSummary`;
 
       const tryFetchStats = async (
-        authToken?: string
+        auth?: ActionAuth
       ): Promise<
         | {
             ok: true;
@@ -173,7 +234,7 @@ class UsageService {
           }
         | { ok: false; error: string; status: number }
       > => {
-        const todayResponse = await postAction(todayUrl, {}, authToken);
+        const todayResponse = await postAction(todayUrl, {}, auth);
         if (!todayResponse.ok) {
           return { ok: false, error: todayResponse.error, status: todayResponse.status };
         }
@@ -185,7 +246,7 @@ class UsageService {
           return { ok: false, error: 'Invalid usage stats response', status: 200 };
         }
 
-        const summaryResponse = await postAction(summaryUrl, { startDate, endDate }, authToken);
+        const summaryResponse = await postAction(summaryUrl, { startDate, endDate }, auth);
         if (!summaryResponse.ok) {
           return { ok: false, error: summaryResponse.error, status: summaryResponse.status };
         }
@@ -203,7 +264,7 @@ class UsageService {
       };
 
       // Attempt #1: call Actions API with apiKey directly (works in legacy/dual session modes).
-      const direct = await tryFetchStats(apiKey);
+      const direct = await tryFetchStats({ type: 'bearer', token: apiKey });
       if (direct.ok) {
         return {
           todayCount: direct.todayCount,
@@ -220,8 +281,11 @@ class UsageService {
         if (!login.ok) {
           return { error: login.error };
         }
+        if (!login.sessionId) {
+          return { error: 'Login succeeded but no session cookie was returned' };
+        }
 
-        const retry = await tryFetchStats(login.sessionId ?? undefined);
+        const retry = await tryFetchStats({ type: 'cookie', value: login.sessionId });
         if (retry.ok) {
           return {
             todayCount: retry.todayCount,
@@ -230,21 +294,6 @@ class UsageService {
             monthCostUsd: retry.monthCostUsd,
           };
         }
-
-        // Some fetch implementations don't expose Set-Cookie; rely on cookie jar as a best-effort fallback.
-        if (!login.sessionId) {
-          const cookieRetry = await tryFetchStats(undefined);
-          if (cookieRetry.ok) {
-            return {
-              todayCount: cookieRetry.todayCount,
-              todayCostUsd: cookieRetry.todayCostUsd,
-              monthCount: cookieRetry.monthCount,
-              monthCostUsd: cookieRetry.monthCostUsd,
-            };
-          }
-          return { error: cookieRetry.error };
-        }
-
         return { error: retry.error };
       }
 

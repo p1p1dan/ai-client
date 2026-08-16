@@ -287,6 +287,42 @@ describe('OnboardingService', () => {
     expect(existsSync(join(tempHome, '.codex', 'auth.json'))).toBe(false);
   });
 
+  it('D47 S5 §0-3 regression — logout re-pastes email instead of letting the shallow settings merge silently drop it', async () => {
+    const { onboardingService } = await import('../OnboardingService');
+
+    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
+    writeFileSync(
+      join(tempHome, '.aiclient', 'settings.json'),
+      JSON.stringify({
+        onboarding: {
+          registered: true,
+          email: 'user@jcdz.cc',
+          serverUrl: 'https://cch.example.com',
+          registeredAt: '2026-08-01T00:00:00.000Z',
+        },
+      })
+    );
+
+    expect(onboardingService.logout()).toBe(true);
+
+    const settings = JSON.parse(
+      readFileSync(join(tempHome, '.aiclient', 'settings.json'), 'utf-8')
+    ) as { onboarding: { registered: boolean; email?: string } };
+    expect(settings.onboarding.registered).toBe(false);
+    // The bug (pre-fix): a bare `{onboarding:{registered:false}}` patch is a
+    // SHALLOW merge (`{...base, ...patch}`) that replaces the whole
+    // `onboarding` object, silently dropping `email` — breaking the
+    // flag-off re-login pre-fill that reads `onboarding.email`.
+    expect(settings.onboarding.email).toBe('user@jcdz.cc');
+  });
+
+  it('logout with no prior registration merges email:undefined, never throws (checkRegistration returns registered:false)', async () => {
+    const { onboardingService } = await import('../OnboardingService');
+
+    expect(onboardingService.logout()).toBe(true);
+    expect(onboardingService.checkRegistration().registered).toBe(false);
+  });
+
   it('sendCode posts to /api/onboarding/send-code and returns server response', async () => {
     fetchMock.mockResolvedValue({
       json: async () => ({

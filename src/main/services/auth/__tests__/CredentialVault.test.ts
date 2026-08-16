@@ -133,8 +133,11 @@ describe('CredentialVault — clear (1b)', () => {
     expect(parsed.lastEmail).toBe('user@jcdz.cc');
     expect(parsed.payload).toBeNull();
 
+    // D47 S5 §1.1: a cleared-but-existing vault reads as its own `cleared`
+    // status now — `absent` is reserved for "no vault file at all" (S1
+    // as-built deviation 3, paid down here).
     const readResult = vault.read();
-    expect(readResult.status).toBe('absent');
+    expect(readResult).toEqual({ status: 'cleared', lastEmail: 'user@jcdz.cc' });
   });
 
   it('is a no-op when the vault file does not exist — never creates a lastEmail-only shell', async () => {
@@ -311,5 +314,59 @@ describe('CredentialVault — promotion latch (1f)', () => {
     expect(crypto2AvailableSpy).not.toHaveBeenCalled();
     // The cached `available()` result from crypto1 is reused — no second call either.
     expect(availableSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CredentialVault — markInvalidated / rejected (D47 S5 §1.1)', () => {
+  it('flips invalidatedAt and reports rejected on the next read, leaving payload bytes untouched', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(fakeAvailableCrypto());
+    const payload = makePayload();
+    await vault.save(payload);
+
+    const beforeBytes = readFileSync(join(baseDir, VAULT_FILE), 'utf-8');
+    const beforePayloadField = (JSON.parse(beforeBytes) as { payload: unknown }).payload;
+
+    await vault.markInvalidated('2026-08-15T12:00:00.000Z');
+
+    const afterBytes = readFileSync(join(baseDir, VAULT_FILE), 'utf-8');
+    const afterParsed = JSON.parse(afterBytes) as { payload: unknown; invalidatedAt: string };
+    expect(afterParsed.invalidatedAt).toBe('2026-08-15T12:00:00.000Z');
+    // Payload bytes are byte-for-byte unchanged — markInvalidated never touches them.
+    expect(afterParsed.payload).toEqual(beforePayloadField);
+
+    expect(vault.read()).toEqual({ status: 'rejected', lastEmail: 'user@jcdz.cc' });
+  });
+
+  it('rejected outranks a still-decryptable ok payload', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(fakeAvailableCrypto());
+    await vault.save(makePayload());
+
+    expect(vault.read().status).toBe('ok');
+    await vault.markInvalidated('2026-08-15T12:00:00.000Z');
+    expect(vault.read().status).toBe('rejected');
+  });
+
+  it('is a safe no-op when no vault file exists', async () => {
+    const emptyDir = mkdtempSync(join(tmpdir(), 'aiclient-vault-mark-empty-'));
+    try {
+      const vault = new CredentialVault({ baseDir: emptyDir, crypto: fakeAvailableCrypto() });
+      await vault.markInvalidated('2026-08-15T12:00:00.000Z');
+      expect(existsSync(join(emptyDir, VAULT_FILE))).toBe(false);
+    } finally {
+      rmSync(emptyDir, { recursive: true, force: true });
+    }
+  });
+
+  it('works even when crypto was never promoted (locked keyring) — never touches crypto', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeAvailableCrypto() });
+    vault.promoteCrypto(fakeAvailableCrypto());
+    await vault.save(makePayload());
+
+    const lockedVault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    await lockedVault.markInvalidated('2026-08-15T12:00:00.000Z');
+
+    expect(lockedVault.read()).toEqual({ status: 'rejected', lastEmail: 'user@jcdz.cc' });
   });
 });

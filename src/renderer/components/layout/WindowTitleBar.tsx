@@ -1,5 +1,14 @@
-import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, MoreHorizontal, RefreshCw, Settings, Terminal, X } from 'lucide-react';
+import { AUTH_GATE_SNAPSHOT_QUERY_KEY, deriveUserProfilePresentation } from '@shared/authGate';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  AlertTriangle,
+  ExternalLink,
+  MoreHorizontal,
+  RefreshCw,
+  Settings,
+  Terminal,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import logoImage from '@/assets/logo.png';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -41,18 +50,35 @@ function formatCostUsd(usd: number): string {
  */
 export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const [profileOpen, setProfileOpen] = useState(false);
-  const onboarding = useQuery({
-    queryKey: ['onboardingState'],
-    queryFn: async () => {
-      return await window.electronAPI.onboarding.check();
-    },
+  // D47 S5: stop reading the retired `onboardingState` query — the gate
+  // snapshot / `auth.stateChanged` push is now the single source of truth for
+  // whether a user identity exists at all (three-state chip below). Same
+  // query key Root.tsx uses: when nested under it, this dedupes onto the
+  // same cache entry instead of firing a second `getGateSnapshot()` IPC
+  // round trip; when mounted standalone (the `skipAuthGate` escape hatch
+  // never mounts Root's gate query at all), it fetches on its own.
+  const gateQuery = useQuery({
+    queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY,
+    queryFn: () => window.electronAPI.auth.getGateSnapshot(),
+    staleTime: Infinity,
   });
 
-  const isRegistered = onboarding.data?.registered === true;
-  const email = isRegistered ? (onboarding.data?.email ?? null) : null;
+  useEffect(() => {
+    return window.electronAPI.auth.onStateChanged((state) => {
+      queryClient.setQueryData(AUTH_GATE_SNAPSHOT_QUERY_KEY, (prev) =>
+        prev ? { ...prev, state } : prev
+      );
+    });
+  }, [queryClient]);
+
+  const authState = gateQuery.data?.state ?? { status: 'unknown' as const };
+  const presentation = deriveUserProfilePresentation(authState);
+  const isAuthenticated = presentation.tone === 'signed-in';
+  const email = presentation.email;
   const initial = (email?.trim()?.[0] ?? '?').toUpperCase();
-  const usage = useUsageStats({ enabled: isRegistered });
+  const usage = useUsageStats({ enabled: isAuthenticated });
 
   const todayCostUsd =
     usage.data && 'error' in usage.data ? null : (usage.data?.todayCostUsd ?? null);
@@ -60,11 +86,11 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
     usage.isLoading || todayCostUsd === null ? '--' : formatCostUsd(todayCostUsd);
 
   useEffect(() => {
-    if (isRegistered) {
+    if (isAuthenticated) {
       return;
     }
     setProfileOpen(false);
-  }, [isRegistered]);
+  }, [isAuthenticated]);
 
   // 所有 hooks 必须在条件返回之前调用，遵循 React Hooks 规则
   const handleReload = useCallback(() => {
@@ -116,34 +142,54 @@ export function WindowTitleBar({ onOpenSettings }: WindowTitleBarProps) {
 
       {/* Right: Actions and window controls */}
       <div className="flex items-center no-drag">
-        {/* User Profile */}
-        {isRegistered && (
-          <Popover open={profileOpen} onOpenChange={setProfileOpen}>
-            <PopoverTrigger
-              className={userPillClass}
-              aria-label={t('User profile')}
-              title={email ?? t('User profile')}
-            >
-              <Avatar className="size-5 bg-transparent">
-                <AvatarFallback className="bg-muted text-foreground text-xs">
-                  {initial}
-                </AvatarFallback>
-              </Avatar>
-              <div className="h-3 w-px bg-border/70" />
-              <span
-                className={cn(
-                  'shrink-0 text-xs font-medium tabular-nums',
-                  (usage.isLoading || todayCostUsd === null) && 'text-muted-foreground/70'
-                )}
-              >
-                {todayCostText}
-              </span>
-            </PopoverTrigger>
-            <PopoverPopup align="end" sideOffset={8} className="w-[280px]">
-              <UserProfileCard email={email} onRequestClose={() => setProfileOpen(false)} />
-            </PopoverPopup>
-          </Popover>
-        )}
+        {/* User Profile — D47 S5: three-state chip driven by
+            `deriveUserProfilePresentation`. Unlike the old `isRegistered &&`
+            gate, this always renders — `invalid`/`signed_out` need a
+            clickable affordance too (re-login / login), not just the
+            authenticated usage summary. */}
+        <Popover open={profileOpen} onOpenChange={setProfileOpen}>
+          <PopoverTrigger
+            className={cn(
+              userPillClass,
+              presentation.tone === 'attention' &&
+                'border-destructive/40 text-destructive hover:text-destructive'
+            )}
+            aria-label={t('User profile')}
+            title={isAuthenticated ? (email ?? t('User profile')) : t('User profile')}
+          >
+            {isAuthenticated ? (
+              <>
+                <Avatar className="size-5 bg-transparent">
+                  <AvatarFallback className="bg-muted text-foreground text-xs">
+                    {initial}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="h-3 w-px bg-border/70" />
+                <span
+                  className={cn(
+                    'shrink-0 text-xs font-medium tabular-nums',
+                    (usage.isLoading || todayCostUsd === null) && 'text-muted-foreground/70'
+                  )}
+                >
+                  {todayCostText}
+                </span>
+              </>
+            ) : presentation.tone === 'attention' ? (
+              <>
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span className="shrink-0 text-xs font-medium">{t('Login expired')}</span>
+              </>
+            ) : (
+              <span className="shrink-0 text-xs font-medium">{t('Not signed in')}</span>
+            )}
+          </PopoverTrigger>
+          <PopoverPopup align="end" sideOffset={8} className="w-[280px]">
+            <UserProfileCard
+              presentation={presentation}
+              onRequestClose={() => setProfileOpen(false)}
+            />
+          </PopoverPopup>
+        </Popover>
 
         {/* Settings Button */}
         <button

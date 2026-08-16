@@ -245,6 +245,10 @@ function buildChildEnv(allowLocal) {
   );
   console.log(`[dev]   CLAUDE_CONFIG_DIR  = ${env.CLAUDE_CONFIG_DIR}`);
   console.log(`[dev]   AICLIENT_MANAGED_CREDENTIALS = ${env[MANAGED_CREDENTIALS_KEY]}`);
+  // D47 S5 §1.3 — the resolved value of the login-gate escape hatch
+  // (`resolveSkipAuthGate`, src/shared/devFlags.ts). Not stripped/redacted:
+  // it is a plain boolean-shaped switch, never a credential.
+  console.log(`[dev]   AICLIENT_SKIP_AUTH_GATE = ${env.AICLIENT_SKIP_AUTH_GATE ?? '(unset)'}`);
   if (stripped.length > 0) {
     console.log(`[dev]   stripped from shell: ${stripped.join(', ')}`);
   }

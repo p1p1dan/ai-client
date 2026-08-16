@@ -1,4 +1,26 @@
-# auth 夹具（codex-config blessing）
+# auth 夹具
+
+## E5 auth-probe 拒绝形状夹具（`e5-*.json`）
+
+D47 S5 §2 —— `classifyAuthLoginResponse` 与 `UsageService`'s login/actions
+接缝的 fixture 驱动测试数据源。Schema：`{request:{endpoint,authMode},
+response:{status,headers,bodyText}}`。
+
+| 文件 | 来源 | 溯源 |
+|---|---|---|
+| `e5-login-valid.json` | 真机实测字节（打码） | `docs/plans/2026-08-15-d47-s0-spikes/e5-cch-auth-probe.md` "Valid 臂补齐" 节：`POST /api/auth/login` 有效 key → `200` + `{"ok":true,"user":{...},"redirectTo":"/my-usage","loginType":"readonly_user"}` + `Set-Cookie: auth-token=...; Max-Age=604800; HttpOnly; SameSite=lax` |
+| `e5-login-key-invalid.json` | 真机实测字节（逐字节） | 同文档「补测（真 cch 主机）」a 组：`401` + `{"error":"API Key 无效或已过期","errorCode":"KEY_INVALID"}` |
+| `e5-actions-401-no-cookie.json` | 真机实测字节（逐字节，另附 `warning`/`deprecation` 头，本 fixture 只保留 `warning` 供上下文） | 同文档 c 组：`POST /api/actions/my-usage/getMyTodayStats` 无效 bearer → `401` + `{"ok":false,"error":"认证无效或已过期"}`（注意 body schema 与 login 端点不同：无 `errorCode`） |
+| `e5-actions-cookie-200.json` | **合成**，非逐字节实测 | E5 文档记录「带 `auth-token` cookie 重试 → `200` + 真实用量体」但未存字面 JSON；本 fixture 的 `bodyText` 按 `UsageService.ts` 既有 `readActionData`/`{ok:true,data:{calls,costUsd}}` 契约合成，仅用于驱动 UsageService 重试路径断言（cookie 头置换 + 200 成功），不用于 `classifyAuthLoginResponse`（该函数只消费 login 端点响应） |
+
+`classifyAuthLoginResponse(status, bodyText)` 只读 `e5-login-*` 两份（唯一权威判据：
+`401 + body.errorCode==='KEY_INVALID'` → `'rejected'`，其余一律 `'unknown'`，
+`e5-actions-401-no-cookie.json` 的 `ok:false` 无 `errorCode` 形状是这条规则的负控——
+两轨评审都判定「若误把 actions 端点的 `ok:false` 也算作 KEY_INVALID 会连坐误杀业务
+401」，`__tests__/AuthProbeScheduler.test.ts` 显式驱动这份 fixture 断言分类结果为
+`'unknown'`）。
+
+## codex-config blessing
 
 `codex-config.blessed.toml` — D47 S3b §3「strict-config 验收」的 blessing fixture。
 

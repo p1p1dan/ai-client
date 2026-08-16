@@ -58,14 +58,25 @@ export interface VaultDoc {
 }
 
 /**
- * Read outcome union (S1 spec §2.1, A-track B2 + B-track 1.5 合取). `locked`
- * is a TEMPORARY state (keyring/session not unlocked yet) and must never be
- * confused with `invalid` (a permanently broken file) — see `enc:'safeStorage'`
- * handling below.
+ * Read outcome union (S1 spec §2.1, A-track B2 + B-track 1.5 合取; D47 S5
+ * §1.1 adds `rejected`/`cleared`). `locked` is a TEMPORARY state
+ * (keyring/session not unlocked yet) and must never be confused with
+ * `invalid` (a permanently broken file) — see `enc:'safeStorage'` handling
+ * below.
+ *
+ * `rejected` (`invalidatedAt` non-null, set by `markInvalidated()`) is
+ * checked BEFORE everything else that would otherwise decode to `ok` — a
+ * probe-confirmed KEY_INVALID must never be masked by a payload that still
+ * happens to decrypt fine. `cleared` (`payload: null`, set by `clear()`)
+ * REPLACES the S1 `absent` folding for a vault file that exists but was
+ * explicitly wiped by logout — `absent` now means "no vault file at all"
+ * exclusively (S1 as-built deviation 3, paid down here).
  */
 export type VaultReadResult =
   | { status: 'ok'; doc: VaultDoc }
   | { status: 'absent' }
+  | { status: 'cleared'; lastEmail: string | null }
+  | { status: 'rejected'; lastEmail: string | null }
   | { status: 'locked'; lastEmail?: string | null }
   | { status: 'unsupported'; lastEmail?: string | null }
   | {
@@ -204,11 +215,22 @@ export class CredentialVault {
       return { status: 'unsupported', lastEmail: envelope.lastEmail };
     }
 
+    // D47 S5 §1.1: `rejected` outranks everything below it, including a
+    // payload that still decrypts fine — a probe-confirmed KEY_INVALID must
+    // never be masked by `ok`. Checked before the `cleared` branch too (the
+    // two are mutually exclusive in practice — `clear()` always resets
+    // `invalidatedAt` to null — but this ordering stays correct even if that
+    // ever changes).
+    if (envelope.invalidatedAt !== null) {
+      return { status: 'rejected', lastEmail: envelope.lastEmail };
+    }
+
     if (envelope.payload === null) {
       // Cleared vault (logout): no credential payload, only lastEmail
-      // survives on disk. Nothing to hand back through `read()` — a future
-      // slice adds a dedicated lastEmail accessor (S1 spec §4 risk register).
-      return { status: 'absent' };
+      // survives on disk. D47 S5 §1.1: this is now its own `cleared` status,
+      // no longer folded into `absent` (S1 as-built deviation 3) — `absent`
+      // means "no vault file on disk at all".
+      return { status: 'cleared', lastEmail: envelope.lastEmail };
     }
 
     if (envelope.enc === 'safeStorage') {
@@ -305,6 +327,63 @@ export class CredentialVault {
   /** No flag gate (S1 spec §2.1, A-track B8) — logout must clear the vault regardless of the managed-credentials flag. */
   clear(options: { keepLastEmail: boolean }): Promise<void> {
     return this.runSerialized(() => this.clearInternal(options));
+  }
+
+  /**
+   * D47 S5 §1.1/§2 — flips the plaintext envelope's `invalidatedAt` field to
+   * `iso`, leaving `payload` byte-for-byte untouched (string ciphertext or
+   * plain object, whichever it already was). Deliberately does NOT go
+   * through `save()`: `save()` requires a promoted, available crypto adapter
+   * and re-encrypts the whole payload, but marking a key invalid must work
+   * even when the keyring is locked or crypto was never promoted — the
+   * secret itself never needs to be read or rewritten for this operation.
+   * Serialized through the same write queue as `save()`/`clear()`
+   * (A-track B4). Best-effort like `clear()`: a missing/unreadable vault
+   * file is a no-op, never a thrown error — the caller
+   * (`AuthStateService.markRejected`) must not be blocked by a vault that
+   * has nothing to invalidate.
+   */
+  markInvalidated(iso: string): Promise<void> {
+    return this.runSerialized(() => this.markInvalidatedInternal(iso));
+  }
+
+  private markInvalidatedInternal(iso: string): void {
+    if (!existsSync(this.vaultPath)) {
+      return;
+    }
+
+    let raw: string;
+    try {
+      raw = readFileSync(this.vaultPath, 'utf-8');
+    } catch (error) {
+      console.warn('[CredentialVault] markInvalidated: failed to read existing vault', error);
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      console.warn('[CredentialVault] markInvalidated: existing vault is not valid JSON', error);
+      return;
+    }
+
+    const validation = validateEnvelopeShape(parsed);
+    if (!validation.ok) {
+      console.warn(
+        '[CredentialVault] markInvalidated: existing vault has an invalid envelope shape'
+      );
+      return;
+    }
+
+    // Spread the validated envelope verbatim — `payload` (string or object)
+    // is carried through unchanged; only `invalidatedAt` moves.
+    const envelope: RawEnvelope = { ...validation.envelope, invalidatedAt: iso };
+    try {
+      this.writeEnvelope(envelope);
+    } catch (error) {
+      console.warn('[CredentialVault] markInvalidated: failed to write updated vault', error);
+    }
   }
 
   private clearInternal(options: { keepLastEmail: boolean }): void {

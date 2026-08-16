@@ -42,7 +42,7 @@ import { initClaudeProviderWatcher } from './ipc/claudeProvider';
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
-import { createRealVaultCrypto, promoteVaultCrypto } from './services/auth';
+import { createRealVaultCrypto, getAuthStateService, promoteVaultCrypto } from './services/auth';
 import {
   activateManagedClaudeHome,
   ensureManagedHomeSkeleton,
@@ -58,7 +58,6 @@ import { checkGitInstalled } from './services/git/checkGit';
 import { gitAutoFetchService } from './services/git/GitAutoFetchService';
 import { setCurrentLocale } from './services/i18n';
 import { buildAppMenu } from './services/MenuBuilder';
-import { onboardingService } from './services/onboarding';
 import {
   getSharedStatePaths,
   isLegacySettingsMigrated,
@@ -423,43 +422,6 @@ app
     migrateLegacySettingsIfNeeded();
     await migrateLegacyTodoIfNeeded();
 
-    const onboardingState = onboardingService.checkRegistration();
-    const shouldSendCredentialStatus = onboardingState.registered;
-    let credentialStatusSent = false;
-    let windowFinishedLoading = false;
-    let credentialFilesAvailable: boolean | null = shouldSendCredentialStatus ? null : false;
-
-    const detectCredentialFilesAvailable = (): boolean => {
-      if (!onboardingState.registered) {
-        return false;
-      }
-      // Existence is not enough: users have reported settings.json surviving
-      // with hooks-only contents (env stripped somehow). Delegate to the
-      // service-level health check that actually parses both files.
-      const health = onboardingService.checkCredentialsHealth();
-      return health.claudeEnvOk && health.codexAuthOk;
-    };
-
-    const maybeSendLiveCredentialsStatus = () => {
-      if (!shouldSendCredentialStatus) return;
-      if (!windowFinishedLoading) return;
-      if (credentialFilesAvailable === null) return;
-      if (credentialStatusSent) return;
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-
-      credentialStatusSent = true;
-      mainWindow.webContents.send(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, {
-        available: credentialFilesAvailable,
-      });
-    };
-
-    // Trust persisted onboarding state for existing users; only check whether the
-    // local CLI credential files are still on disk. Re-onboarding (logout + verify
-    // by email code) is the way back if files are missing or invalid.
-    if (shouldSendCredentialStatus) {
-      credentialFilesAvailable = detectCredentialFilesAvailable();
-    }
-
     // Register protocol to handle local file:// URLs for markdown images
     protocol.handle('local-file', (request) => {
       try {
@@ -787,6 +749,17 @@ app
     // already installed the real crypto adapter by this point.
     await regenerateFromVault();
 
+    // D47 S5 §1.3 — the startup auth-state computation, strictly AFTER
+    // `regenerateFromVault()` (which may need to fall back to
+    // `devCredentialSeed` for an `absent`/`cleared` vault, S1 as-built).
+    // `registerAuthHandlers()` (called earlier, inside `init()`) already
+    // attached the `onChange` bridge, so if this refresh lands on
+    // `authenticated` it both broadcasts (harmless — no window has finished
+    // loading yet) and kicks `AuthProbeScheduler`'s "启动 refresh 后一次"
+    // probe in the same tick (S5 §2's module header explains why no separate
+    // "prime" step is needed).
+    getAuthStateService().refresh();
+
     // Set main window for Web Inspector server (for IPC communication)
     webInspectorServer.setMainWindow(mainWindow);
 
@@ -796,13 +769,6 @@ app
       (appSettings?.claudeCodeIntegration as Record<string, unknown>)?.enableProviderWatcher !==
       false;
     initClaudeProviderWatcher(mainWindow, providerWatcherEnabled);
-
-    // IMPORTANT: Set up did-finish-load handler BEFORE handling command line args
-    // to avoid race condition where page loads before handler is registered
-    mainWindow.webContents.once('did-finish-load', () => {
-      windowFinishedLoading = true;
-      maybeSendLiveCredentialsStatus();
-    });
 
     // Initialize auto-updater
     await initAutoUpdater(mainWindow);

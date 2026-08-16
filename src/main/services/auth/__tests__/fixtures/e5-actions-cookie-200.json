@@ -1,0 +1,8 @@
+{
+  "request": { "endpoint": "/api/actions/my-usage/getMyTodayStats", "authMode": "cookie" },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json" },
+    "bodyText": "{\"ok\":true,\"data\":{\"calls\":3,\"costUsd\":0.0696284}}"
+  }
+}

@@ -1,3 +1,4 @@
+import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import type {
   ClaudeProject,
@@ -11,7 +12,6 @@ import type {
 import { getDisplayPath, getDisplayPathBasename } from '@shared/utils/path';
 import { isRemoteVirtualPath, toRemoteVirtualPath } from '@shared/utils/remotePath';
 import { buildRepositoryId } from '@shared/utils/workspace';
-import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PanelLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -163,25 +163,23 @@ initCloneProgressListener();
 
 export default function App() {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const [isHomeViewActive, setIsHomeViewActive] = useState(false);
   const exitHomeView = useCallback(() => setIsHomeViewActive(false), []);
 
+  // D47 S5: `ONBOARDING_LIVE_CREDENTIALS_STATUS` is retired — `auth.stateChanged`
+  // is now the single push channel for credential-state changes.
+  // `credentials_invalid` (rejected/corrupt/decrypt_failed) routes straight
+  // back to the login gate instead of a dismissable toast: the old
+  // "temporarily unavailable" warning let the user keep working in a chat
+  // session whose agent spawns would now be gated, which just delayed the
+  // failure instead of explaining it.
   useEffect(() => {
-    return window.electronAPI.onboarding.onLiveCredentialsStatus(({ available }) => {
-      if (available) {
-        // Credentials were loaded after app startup. Kick usage queries immediately instead of waiting
-        // for the periodic polling interval.
-        queryClient.invalidateQueries({ queryKey: ['usageStats'] });
-        return;
+    return window.electronAPI.auth.onStateChanged((state) => {
+      if (state.status === 'credentials_invalid') {
+        window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT));
       }
-      addToast({
-        type: 'warning',
-        title: t('AI tools temporarily unavailable'),
-        description: t('Unable to connect to server. Claude/Codex credentials were not loaded.'),
-      });
     });
-  }, [queryClient, t]);
+  }, []);
 
   // Initialize agent activity listener for tree sidebar status display
   useEffect(() => {

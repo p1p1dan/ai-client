@@ -296,6 +296,15 @@ export const IPC_CHANNELS = {
   // Auth (D47 S2a) — managed-credentials mode probe. Path is not a secret;
   // renderer has no other way to learn the userData-relative claude-home dir.
   AUTH_MANAGED_MODE: 'auth:managedMode',
+  // Auth (D47 S5) — login-state gate. `getGateSnapshot` is the single-call
+  // `{managed, state, skipAuthGate}` atomic read `resolveGateDecision`
+  // consumes; `stateChanged` is the value-changed-only push.
+  AUTH_GET_GATE_SNAPSHOT: 'auth:getGateSnapshot',
+  AUTH_STATE_CHANGED: 'auth:stateChanged',
+  // Dev-only (D47 S5 §5 GUI point-check ⑧) — registered ONLY when
+  // `!app.isPackaged`; forces `vault.markInvalidated` so the failed-login
+  // path can be exercised without a real key rejection.
+  AUTH_DEV_MARK_INVALIDATED: 'auth:devMarkInvalidated',
 
   // Search
   SEARCH_FILES: 'search:files',

@@ -15,7 +15,8 @@
  */
 
 import { join } from 'node:path';
-import { app, safeStorage } from 'electron';
+import { app, net, safeStorage } from 'electron';
+import { type AuthProbeFetchResponse, AuthProbeScheduler } from './AuthProbeScheduler';
 import { AuthStateService } from './AuthStateService';
 import { CredentialVault, type VaultCrypto } from './CredentialVault';
 
@@ -51,11 +52,52 @@ export function getCredentialVault(): CredentialVault {
   return cachedVault;
 }
 
+/**
+ * D47 S5 §2 — `markRejected()`'s `agentHost.shutdown()` dependency, lazily
+ * dynamic-imported (never a static top-level import): `AgentHostManager.ts`
+ * pulls in a much heavier dependency graph (process spawning, logger, Node
+ * runtime resolution) that this repo's vitest node environment can hang on
+ * importing eagerly — same reasoning as
+ * `OnboardingService.shutdownAgentHostAfterRegenerate`.
+ */
+async function shutdownRealAgentHost(): Promise<void> {
+  const { agentHostManager } = await import('../agent-host/AgentHostManager');
+  await agentHostManager.shutdown();
+}
+
 export function getAuthStateService(): AuthStateService {
   if (!cachedAuthStateService) {
-    cachedAuthStateService = new AuthStateService({ vault: getCredentialVault() });
+    cachedAuthStateService = new AuthStateService({
+      vault: getCredentialVault(),
+      agentHost: { shutdown: shutdownRealAgentHost },
+    });
   }
   return cachedAuthStateService;
+}
+
+let cachedProbeScheduler: AuthProbeScheduler | null = null;
+
+function toProbeFetchResponse(response: Response): AuthProbeFetchResponse {
+  return { status: response.status, text: () => response.text() };
+}
+
+/**
+ * D47 S5 §2 — the `AuthProbeScheduler` singleton, wired to the same
+ * `net.fetch`-shaped adapter both `main/ipc/auth.ts` (the `onChange`/timer
+ * bridge) and `UsageService.ts` (the "additional trigger source",
+ * `reportExternalLoginResponse`) need to reach the SAME instance through —
+ * two independent schedulers would each run their own singleflight/backoff
+ * bookkeeping and could double-fire `markRejected()`.
+ */
+export function getAuthProbeScheduler(): AuthProbeScheduler {
+  if (!cachedProbeScheduler) {
+    cachedProbeScheduler = new AuthProbeScheduler({
+      authStateService: getAuthStateService(),
+      vault: getCredentialVault(),
+      fetchFn: async (url, init) => toProbeFetchResponse(await net.fetch(url, init)),
+    });
+  }
+  return cachedProbeScheduler;
 }
 
 /**
@@ -79,4 +121,6 @@ export function createRealVaultCrypto(): VaultCrypto {
 export function resetAuthSingletonsForTests(): void {
   cachedVault = null;
   cachedAuthStateService = null;
+  cachedProbeScheduler?.stop();
+  cachedProbeScheduler = null;
 }

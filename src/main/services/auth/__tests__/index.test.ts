@@ -95,7 +95,7 @@ describe('getAuthStateService — wired to the same vault singleton', () => {
     const snapshot = authState.refresh();
     // Flag is off in this test's process env (not set) — AuthStateService's
     // own zero-IO gate applies regardless of what the vault holds.
-    expect(snapshot).toEqual({ status: 'signed_out', reason: 'never' });
+    expect(snapshot).toEqual({ status: 'signed_out', lastEmail: null });
   });
 });
 

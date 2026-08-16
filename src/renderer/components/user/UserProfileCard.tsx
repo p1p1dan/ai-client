@@ -1,5 +1,10 @@
+import {
+  AUTH_GATE_SNAPSHOT_QUERY_KEY,
+  AUTH_OPEN_ONBOARDING_EVENT,
+  type UserProfilePresentation,
+} from '@shared/authGate';
 import { useQueryClient } from '@tanstack/react-query';
-import { LogOut, RefreshCw } from 'lucide-react';
+import { AlertTriangle, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -17,8 +22,6 @@ import { toastManager } from '@/components/ui/toast';
 import { useUsageStats } from '@/hooks/useUsageStats';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-
-const ONBOARDING_OPEN_EVENT = 'aiclient:onboarding:open';
 
 const usageNumberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 });
 
@@ -58,14 +61,17 @@ function UsageMetric({
 }
 
 interface UserProfileCardProps {
-  email: string | null;
+  /** D47 S5: three-state presentation (`deriveUserProfilePresentation`) replaces the raw email prop. */
+  presentation: UserProfilePresentation;
   onRequestClose?: () => void;
 }
 
-export function UserProfileCard({ email, onRequestClose }: UserProfileCardProps) {
+export function UserProfileCard({ presentation, onRequestClose }: UserProfileCardProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const usage = useUsageStats({ enabled: Boolean(email) });
+  const isAuthenticated = presentation.tone === 'signed-in';
+  const email = isAuthenticated ? presentation.email : null;
+  const usage = useUsageStats({ enabled: isAuthenticated });
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -132,9 +138,9 @@ export function UserProfileCard({ email, onRequestClose }: UserProfileCardProps)
       }
 
       queryClient.invalidateQueries({ queryKey: ['usageStats'] });
-      queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
+      queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
       onRequestClose?.();
-      window.dispatchEvent(new CustomEvent(ONBOARDING_OPEN_EVENT));
+      window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT));
     } catch (error) {
       toastManager.add({
         type: 'error',
@@ -145,6 +151,57 @@ export function UserProfileCard({ email, onRequestClose }: UserProfileCardProps)
       setLoggingOut(false);
     }
   }, [onRequestClose, queryClient, t]);
+
+  const handleOpenOnboarding = useCallback(() => {
+    onRequestClose?.();
+    window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT));
+  }, [onRequestClose]);
+
+  // D47 S5: `attention` (credentials_invalid/locked) and `signed-out`
+  // (signed_out/unknown) both render a compact call-to-action instead of the
+  // usage/logout panel below — there is nothing to log out of yet, only
+  // somewhere to send the user (back through onboarding, re-verifying via
+  // `AUTH_OPEN_ONBOARDING_EVENT`).
+  if (!isAuthenticated) {
+    const isAttention = presentation.tone === 'attention';
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <Avatar className="size-9">
+            <AvatarFallback
+              className={cn(
+                'text-foreground',
+                isAttention ? 'bg-destructive/12 text-destructive' : 'bg-muted'
+              )}
+            >
+              {isAttention ? <AlertTriangle className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div
+              className={cn(
+                'text-sm font-medium',
+                isAttention ? 'text-destructive' : 'text-muted-foreground'
+              )}
+            >
+              {isAttention ? t('Login expired') : t('Not signed in')}
+            </div>
+            {presentation.email && (
+              <div className="truncate text-xs text-muted-foreground">{presentation.email}</div>
+            )}
+          </div>
+        </div>
+        <Button
+          variant={isAttention ? 'destructive' : 'default'}
+          className="w-full"
+          onClick={handleOpenOnboarding}
+        >
+          <LogIn className="mr-2 h-4 w-4" />
+          {isAttention ? t('Sign in again') : t('Sign in')}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

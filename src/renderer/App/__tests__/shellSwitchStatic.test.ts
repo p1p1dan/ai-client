@@ -21,6 +21,14 @@ import { stripComments } from '../../components/chat/__tests__/stripComments';
  * `SKIP_ONBOARDING_GATE` itself stays `true` and keeps its own job (skipping
  * detection/login). Flipping it to `false` is NOT how reversibility is
  * achieved — that would drag the onboarding gate back in with it.
+ *
+ * D47 S5 (rev.2 §1.3): `SKIP_ONBOARDING_GATE` (a hardcoded renderer constant)
+ * retired — the skip signal is now `skipAuthGate`, read off the argv-delivered
+ * `parseInitialAuthGateArg` payload (`@shared/authGate`). The anchor below
+ * moved with it; `skipAuthGate` is the field name that actually reaches
+ * renderer code (`resolveSkipAuthGate`/`AICLIENT_SKIP_AUTH_GATE`, the
+ * Main-side function and env var that compute it, never appear in renderer
+ * source — Main computes the value and delivers it already-resolved).
  */
 
 const RENDERER_DIR = join(process.cwd(), 'src/renderer');
@@ -41,19 +49,30 @@ function rel(path: string): string {
 }
 
 describe('the OpenChamber shell switch is reversible (T-16)', () => {
-  it('no file decides the shell from the onboarding dev flag', () => {
-    const offenders = listRendererSources()
-      .filter((path) => {
-        const source = code(path);
-        return source.includes('SKIP_ONBOARDING_GATE') && source.includes('useOpenChamberShell');
-      })
+  it('no file decides the shell from the auth-gate skip flag', () => {
+    const sources = listRendererSources();
+    const skipFlagFiles = sources.filter((path) => code(path).includes('skipAuthGate'));
+
+    // A 轨 M10 — vacuous-green guard: the D47 S5 skip-gate wiring must
+    // actually exist somewhere in renderer, or the offender scan below would
+    // pass for the wrong reason (the token simply absent, e.g. after a
+    // careless rename back to `SKIP_ONBOARDING_GATE`-style hardcoding).
+    expect(
+      skipFlagFiles.length,
+      'Expected at least one renderer file to reference `skipAuthGate` — if ' +
+        'this is 0, the D47 S5 argv-delivered skip-gate wiring was removed or ' +
+        'renamed without updating this anchor.'
+    ).toBeGreaterThan(0);
+
+    const offenders = skipFlagFiles
+      .filter((path) => code(path).includes('useOpenChamberShell'))
       .map(rel);
 
     expect(
       offenders,
       'Read `settings.useOpenChamberShell` on its own. OR-ing it with ' +
-        'SKIP_ONBOARDING_GATE pins the new shell on and makes the Appearance ' +
-        'switch a no-op.'
+        'skipAuthGate pins the new shell on and makes the Appearance switch a ' +
+        'no-op.'
     ).toEqual([]);
   });
 
@@ -83,7 +102,7 @@ describe('the OpenChamber shell switch is reversible (T-16)', () => {
 
   it('the gate skip mounts App without touching settings', () => {
     const root = code(join(RENDERER_DIR, 'Root.tsx')).replace(/\s+/g, ' ');
-    expect(root).toContain('if (SKIP_ONBOARDING_GATE) { return <SkippedOnboardingApp />; }');
+    expect(root).toContain('if (skipAuthGate) { return <SkippedOnboardingApp />; }');
     expect(root).not.toContain('useSettingsStore');
   });
 

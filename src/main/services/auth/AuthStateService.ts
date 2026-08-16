@@ -1,13 +1,19 @@
 /**
- * D47 S1 §2.4 — the login-state state machine. Pure module: it is handed a
- * vault-like object (duck-typed against `CredentialVault`, type-only import)
- * and computes one of the three states from mother-spec §4's judgment table.
+ * D47 S1 §2.4 / D47 S5 §1.2-§1.4/§3 — the login-state state machine. Pure
+ * module: it is handed a vault-like object (duck-typed against
+ * `CredentialVault`, type-only import) and an optional agent-host-like object
+ * (duck-typed against `AgentHostManager.shutdown()`), and computes one of the
+ * FIVE `AuthState` arms (`@shared/types/auth`, the S5 authoritative DTO —
+ * replaces this file's own S1-local 3-arm type).
  *
- * S1 wires nothing into IPC or the renderer (mother spec §1 "不做"): this
- * class exists so the mapping and the flag-off zero-IO guarantee are
- * independently testable ahead of S5, when Root/MainWindow actually read it.
+ * S5 wires this into `main/ipc/auth.ts` (`auth.getGateSnapshot` /
+ * `auth.stateChanged`), the spawn gate (`main/ipc/chat.ts` /
+ * `SessionManager.create`), and the I9 logout orchestration
+ * (`main/ipc/onboarding.ts`'s `performLogoutSequence`) — this class stays the
+ * single owner of "what is the current login state" and "how does it change".
  */
 
+import type { AuthState } from '@shared/types/auth';
 import type { VaultReadResult } from './CredentialVault';
 
 export const MANAGED_CREDENTIALS_FLAG_ENV = 'AICLIENT_MANAGED_CREDENTIALS';
@@ -22,58 +28,118 @@ export function resolveManagedCredentialsEnabled(env: NodeJS.ProcessEnv = proces
   return env[MANAGED_CREDENTIALS_FLAG_ENV] === '1';
 }
 
-export type SignedOutReason = 'never' | 'logout';
-export type CredentialsInvalidReason = 'corrupt' | 'decrypt_failed';
-export type RemoteHealth = 'unknown' | 'valid';
-
-export type AuthState =
-  | { status: 'signed_out'; reason: SignedOutReason }
-  | { status: 'authenticated'; remoteHealth: RemoteHealth }
-  | { status: 'credentials_invalid'; reason: CredentialsInvalidReason };
-
 export interface AuthStateVault {
   read(): VaultReadResult;
+  markInvalidated(iso: string): Promise<void>;
+}
+
+/** Duck-typed against `AgentHostManager` — never imported directly (heavy dep graph, see `OnboardingService.shutdownAgentHostAfterRegenerate`'s module header for the same reasoning). */
+export interface AuthStateAgentHost {
+  shutdown(): Promise<void>;
 }
 
 export interface AuthStateServiceOptions {
   vault: AuthStateVault;
   env?: NodeJS.ProcessEnv;
+  /** Defaults to a no-op — every production caller (`services/auth/index.ts`) supplies the real lazy-imported `agentHostManager`. */
+  agentHost?: AuthStateAgentHost;
+  /** Injectable clock for `markRejected()`'s `invalidatedAt` timestamp — defaults to `() => new Date()`. */
+  now?: () => Date;
 }
 
-const SIGNED_OUT_NEVER: AuthState = { status: 'signed_out', reason: 'never' };
+const DEFAULT_STATE: AuthState = { status: 'signed_out', lastEmail: null };
+
+function normalizeLastEmail(value: string | null | undefined): string | null {
+  return value ?? null;
+}
 
 /**
- * S1 spec §2.4: `locked`/`unsupported` fold into `signed_out` — a temporary
- * keyring lock or a schema this build cannot read is not "invalid
- * credentials", it is "cannot tell right now" (S5 gives it a distinct UI
- * treatment). Only a truly broken payload (`malformed_json`/`schema_invalid`
- * → `corrupt`, `decrypt_failed` → `decrypt_failed`) is `credentials_invalid`.
+ * D47 S5 §1.1 — the seven `CredentialVault.read()` outcomes fold down to the
+ * five `AuthState` arms. `rejected` is checked ahead of everything by the
+ * vault itself (`read()`'s own priority order), so this switch only needs to
+ * translate 1:1. `locked` gets its OWN arm (rev.2 self-correction — rev.1
+ * folded it into `signed_out`, which forces a re-login for a merely-locked
+ * keyring and conflicts with S2's "保字节" contract). `unsupported` stays
+ * folded into `signed_out`, unchanged from S1 — rev.2 never re-litigated it
+ * (only `locked` was called out as "rev.1 的错"), and it is not one of the
+ * five columns in the S5 20-cell matrix (ok/cleared/rejected/locked/invalid).
  */
 function mapVaultResultToAuthState(result: VaultReadResult): AuthState {
   switch (result.status) {
     case 'ok':
-      return { status: 'authenticated', remoteHealth: 'unknown' };
+      return {
+        status: 'authenticated',
+        email: result.doc.payload.identity.email,
+        remoteHealth: 'unknown',
+      };
     case 'absent':
-    case 'locked':
+      return { status: 'signed_out', lastEmail: null };
+    case 'cleared':
+      return { status: 'signed_out', lastEmail: normalizeLastEmail(result.lastEmail) };
     case 'unsupported':
-      return SIGNED_OUT_NEVER;
+      return { status: 'signed_out', lastEmail: normalizeLastEmail(result.lastEmail) };
+    case 'locked':
+      return { status: 'locked', lastEmail: normalizeLastEmail(result.lastEmail) };
+    case 'rejected':
+      return {
+        status: 'credentials_invalid',
+        reason: 'rejected',
+        lastEmail: normalizeLastEmail(result.lastEmail),
+      };
     case 'invalid':
       return {
         status: 'credentials_invalid',
         reason: result.reason === 'decrypt_failed' ? 'decrypt_failed' : 'corrupt',
+        lastEmail: normalizeLastEmail(result.lastEmail),
       };
+  }
+}
+
+/** D47 S5 §1.2 "值变才广播" — structural equality per arm, not `===`/JSON.stringify (field order stays explicit and readable). */
+function statesEqual(a: AuthState, b: AuthState): boolean {
+  if (a.status !== b.status) return false;
+  switch (a.status) {
+    case 'unknown':
+      return true;
+    case 'signed_out':
+      return a.lastEmail === (b as Extract<AuthState, { status: 'signed_out' }>).lastEmail;
+    case 'authenticated': {
+      const other = b as Extract<AuthState, { status: 'authenticated' }>;
+      return a.email === other.email && a.remoteHealth === other.remoteHealth;
+    }
+    case 'credentials_invalid': {
+      const other = b as Extract<AuthState, { status: 'credentials_invalid' }>;
+      return a.reason === other.reason && a.lastEmail === other.lastEmail;
+    }
+    case 'locked':
+      return a.lastEmail === (b as Extract<AuthState, { status: 'locked' }>).lastEmail;
   }
 }
 
 export class AuthStateService {
   private readonly vault: AuthStateVault;
   private readonly env?: NodeJS.ProcessEnv;
-  private snapshot: AuthState = SIGNED_OUT_NEVER;
+  private readonly agentHost: AuthStateAgentHost;
+  private readonly now: () => Date;
+  private snapshot: AuthState = DEFAULT_STATE;
   private readonly listeners = new Set<(state: AuthState) => void>();
+  // D47 S5 §3 I9 checkpoint ① — set synchronously by `beginLogout()`, BEFORE
+  // any session teardown, so the spawn gate rejects new agent sessions
+  // immediately even though `refresh()` (which would otherwise re-derive
+  // `signed_out` from the vault) has not run yet. Cleared by the next
+  // `refresh()` — once a refresh has landed, the real snapshot is
+  // authoritative again and the transient latch would otherwise stick
+  // forever and block a later, successful re-login.
+  private logoutInProgress = false;
+  // D47 S5 §1.3 — `auth.getGateSnapshot`'s lazy latch: true once `refresh()`
+  // has run at least once this process lifetime.
+  private refreshed = false;
 
   constructor(options: AuthStateServiceOptions) {
     this.vault = options.vault;
     this.env = options.env;
+    this.agentHost = options.agentHost ?? { shutdown: async () => {} };
+    this.now = options.now ?? (() => new Date());
   }
 
   /** Cache-only, never touches disk — safe to call on every render/query. */
@@ -82,18 +148,30 @@ export class AuthStateService {
   }
 
   /**
-   * Recomputes the snapshot and notifies every subscriber exactly once. Flag
-   * off short-circuits BEFORE `vault.read()` is called — zero filesystem IO
-   * is a hard requirement (S1 spec §2.4), not just a fast path.
+   * Recomputes the snapshot and notifies every subscriber IFF the value
+   * actually changed (D47 S5 §1.2 — upgraded from S1's "always notify
+   * exactly once"). Flag off short-circuits BEFORE `vault.read()` is called —
+   * zero filesystem IO is a hard requirement (S1 spec §2.4), not just a fast
+   * path. Also releases the `beginLogout()` latch — see its field comment.
    */
   refresh(): AuthState {
+    this.logoutInProgress = false;
+    this.refreshed = true;
     const enabled = resolveManagedCredentialsEnabled(this.env ?? process.env);
-    const next = enabled ? mapVaultResultToAuthState(this.vault.read()) : SIGNED_OUT_NEVER;
+    const next = enabled ? mapVaultResultToAuthState(this.vault.read()) : DEFAULT_STATE;
+    const changed = !statesEqual(this.snapshot, next);
     this.snapshot = next;
-    for (const listener of this.listeners) {
-      listener(next);
+    if (changed) {
+      for (const listener of this.listeners) {
+        listener(next);
+      }
     }
     return next;
+  }
+
+  /** D47 S5 §1.3 — has `refresh()` run at least once this process lifetime? Used by `auth.getGateSnapshot`'s lazy latch. */
+  hasRefreshed(): boolean {
+    return this.refreshed;
   }
 
   /** Returns the unsubscribe function. */
@@ -102,5 +180,56 @@ export class AuthStateService {
     return () => {
       this.listeners.delete(callback);
     };
+  }
+
+  /**
+   * D47 S5 §3 I9 checkpoint ① — synchronous, called as the very first step of
+   * `performLogoutSequence()`, strictly before `terminateAllSessions()`
+   * (checkpoint ②). See the `logoutInProgress` field comment for why this is
+   * a separate latch instead of eagerly mutating `snapshot`.
+   */
+  beginLogout(): void {
+    this.logoutInProgress = true;
+  }
+
+  /** Spawn-gate predicate (D47 S5 §3): true only while genuinely `authenticated` and no logout is mid-flight. Callers still need to check `managed`/`skipAuthGate` themselves — see `resolveSpawnGateDecision` (`@shared/authGate`), which folds this in. */
+  isAuthenticatedForSpawn(): boolean {
+    return !this.logoutInProgress && this.snapshot.status === 'authenticated';
+  }
+
+  /**
+   * D47 S5 §2 — `markRejected()` orchestration (B-track B5): flips the
+   * vault's `invalidatedAt` (plaintext layer only, payload untouched),
+   * shuts down the Agent Host (kills the swept-revive internal path —
+   * `agent-host/codexRuntime.ts`'s send-time silent reopen can never fire
+   * once the whole Host process is gone), then `refresh()`s — which
+   * re-derives `credentials_invalid: rejected` from the now-invalidated
+   * vault and broadcasts exactly once (value changed).
+   */
+  async markRejected(): Promise<void> {
+    const iso = this.now().toISOString();
+    await this.vault.markInvalidated(iso);
+    await this.agentHost.shutdown();
+    this.refresh();
+  }
+
+  /**
+   * D47 S5 §2 — "`remoteHealth` unknown→valid 由下次 probe 200 恢复": bumps
+   * the CACHED `authenticated` snapshot's `remoteHealth` without a vault
+   * re-read (a successful probe response carries no new vault bytes to
+   * read). No-op outside `authenticated` or when already `valid`. Every
+   * subsequent `refresh()` resets to `'unknown'` — `mapVaultResultToAuthState`
+   * always derives a fresh `'unknown'` off `status:'ok'` — so only the
+   * probe's own success re-elevates it.
+   */
+  reportRemoteHealthy(): void {
+    if (this.snapshot.status !== 'authenticated' || this.snapshot.remoteHealth === 'valid') {
+      return;
+    }
+    const next: AuthState = { ...this.snapshot, remoteHealth: 'valid' };
+    this.snapshot = next;
+    for (const listener of this.listeners) {
+      listener(next);
+    }
   }
 }

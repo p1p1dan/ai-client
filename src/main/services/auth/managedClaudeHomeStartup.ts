@@ -157,10 +157,17 @@ export async function regenerateFromVault(): Promise<void> {
     credentials: result.status === 'ok' ? { baseUrl: result.doc.payload.codex.baseUrl } : null,
   });
 
+  // D47 S5 §1.1: `rejected` (probe-confirmed KEY_INVALID, persisted across
+  // restarts by `markInvalidated`) joins the skip set — settings.json's env
+  // is left exactly as-is, same as locked/unsupported/invalid. Falling back
+  // to `devCredentialSeed` here would be actively wrong: a rejected real
+  // login must never be silently replaced by the dev's own inherited
+  // ANTHROPIC_* seed.
   if (
     result.status === 'locked' ||
     result.status === 'unsupported' ||
-    result.status === 'invalid'
+    result.status === 'invalid' ||
+    result.status === 'rejected'
   ) {
     return;
   }
@@ -171,7 +178,7 @@ export async function regenerateFromVault(): Promise<void> {
           baseUrl: result.doc.payload.claude.baseUrl,
           authToken: result.doc.payload.claude.authToken,
         }
-      : devCredentialSeed; // status === 'absent'
+      : devCredentialSeed; // status === 'absent' | 'cleared'
 
   const settingsPath = join(managedClaudeHomeDir, 'settings.json');
   await writeSettingsFile(settingsPath, (current) => ({

@@ -34,18 +34,6 @@ function getInjectedOnboardingServiceUrl(): string {
 
 class OnboardingService {
   /**
-   * D47 S3b I5 epoch barrier — the managed-home regenerate + Host shutdown
-   * chain `logout()` kicks off (fire-and-forget, so `logout()`'s own
-   * signature can stay synchronous `boolean`). `main/ipc/onboarding.ts`'s
-   * logout handler awaits this AFTER calling `logout()`, so the renderer
-   * only sees the logout IPC call resolve once the OLD Host (holding
-   * stale/logged-out env) is actually gone. `null` whenever nothing was
-   * kicked off (managed credentials off, or `logout()` hasn't run yet this
-   * process lifetime) — awaiting `null` is a no-op.
-   */
-  private pendingLogoutRegeneratePromise: Promise<void> | null = null;
-
-  /**
    * Check if user has already completed onboarding.
    * Reads the onboarding field from ~/.aiclient/settings.json.
    */
@@ -335,32 +323,35 @@ class OnboardingService {
   }
 
   /**
-   * Logout current user. Clears non-sensitive onboarding state and removes local CLI credentials.
+   * Logout current user — the LEGACY (flag-agnostic) half only: removes
+   * local `~/.claude`/`~/.codex` CLI credential files and merges
+   * `onboarding.registered = false` into `~/.aiclient/settings.json`.
+   *
+   * D47 S5 §3 I9 restructure: the vault clear, managed-home regenerate, and
+   * Agent Host shutdown steps MOVED OUT to
+   * `main/ipc/onboarding.ts`'s `performLogoutSequence()`, which awaits each
+   * one explicitly as its own checkpoint (④⑤③) instead of this method
+   * kicking off a fire-and-forget promise a caller had to remember to await
+   * separately (the old `pendingLogoutRegeneratePromise` /
+   * `awaitPendingLogoutRegenerate()` pair, now retired). `logout()` keeps its
+   * synchronous `boolean` signature — `performLogoutSequence()` calls it as
+   * one step among its own explicitly-sequenced ones.
+   *
+   * D47 S5 §0-3 bug fix: the settings merge now explicitly re-pastes `email`
+   * — `mergeSettingsPatch` is a SHALLOW top-level merge
+   * (`{...base, ...patch}`), so a bare `{onboarding:{registered:false}}`
+   * patch REPLACES the whole `onboarding` object and silently drops `email`,
+   * breaking the flag-off pre-fill that depends on `onboarding.email`
+   * surviving a logout.
    */
   logout(): boolean {
     try {
+      const currentRegistration = this.checkRegistration();
+      const email = currentRegistration.registered ? currentRegistration.email : undefined;
+
       this.removeClaudeCredentials();
-
-      // D47 S2a §1 — deterministic no-credential regenerate, positioned right
-      // after `removeClaudeCredentials()` rather than chained off
-      // `clearVaultShadowCopy()`'s fire-and-forget promise (which has no
-      // "after clear" checkpoint, A-track B2). Never reads the vault: logout
-      // always writes an empty env regardless of what the vault currently
-      // holds. `logout()` itself stays synchronous `boolean` (unchanged
-      // public contract, D47 S3b I5 note — `OnboardingService.logout()` 同步
-      // 签名不动) — this kicks the regenerate + shutdown chain off WITHOUT
-      // awaiting it here, but stashes the promise on
-      // `pendingLogoutRegeneratePromise` so `main/ipc/onboarding.ts`'s logout
-      // handler can await it (the I5 barrier lives in the IPC handler, not
-      // in this method).
-      this.pendingLogoutRegeneratePromise = resolveManagedCredentialsEnabled()
-        ? this.regenerateManagedHomesForLogout()
-        : null;
-
       this.removeCodexConfig();
-      const ok = mergeSettingsPatch({ onboarding: { registered: false } });
-      this.clearVaultShadowCopy();
-      return ok;
+      return mergeSettingsPatch({ onboarding: { registered: false, email } });
     } catch (error) {
       console.error('[OnboardingService] Failed to logout:', error);
       return false;
@@ -368,46 +359,21 @@ class OnboardingService {
   }
 
   /**
-   * D47 S3b I5 epoch barrier — `main/ipc/onboarding.ts`'s logout handler
-   * awaits this AFTER calling `logout()` (never before — `logout()` is what
-   * populates `pendingLogoutRegeneratePromise` in the first place). Awaiting
-   * `null` (managed credentials off) is a no-op.
+   * D47 S5 §3 I9 checkpoint ⑤ — logout's deterministic no-credential
+   * regenerate, covering BOTH managed homes off the same tick: claude-home's
+   * env section goes empty (unchanged S2a behavior); codex-home's
+   * `config.toml` is left exactly as-is (`credentials: null` — see
+   * `codexHome.ts`'s module header for why logout has no "no-credentials
+   * config" form to write), but its stale `auth.json` still gets deleted.
+   * Public (was private through S3b) — `performLogoutSequence()` calls this
+   * directly, no longer via a fire-and-forget promise stashed on `this`.
+   * Host shutdown is NO LONGER called at the end of this method — it moved
+   * to `performLogoutSequence()`'s own checkpoint ③, strictly BEFORE this
+   * one, per the I9 restructure ("shutdown 从 regenerate 链尾摘出").
    */
-  async awaitPendingLogoutRegenerate(): Promise<void> {
-    if (this.pendingLogoutRegeneratePromise) {
-      await this.pendingLogoutRegeneratePromise;
-    }
-  }
-
-  /**
-   * D47 S3b §2 — logout's deterministic no-credential regenerate, now
-   * covering BOTH managed homes off the same tick: claude-home's env section
-   * goes empty (unchanged S2a behavior); codex-home's `config.toml` is left
-   * exactly as-is (`credentials: null` — see `codexHome.ts`'s module header
-   * for why logout has no "no-credentials config" form to write), but its
-   * stale `auth.json` still gets deleted. Host shutdown runs last, after
-   * BOTH regenerates have landed.
-   */
-  private async regenerateManagedHomesForLogout(): Promise<void> {
+  async regenerateManagedHomesForLogout(): Promise<void> {
     await this.regenerateManagedClaudeHomeSettings(null);
     await this.regenerateManagedCodexHomeConfig(null, 'logout');
-    await this.shutdownAgentHostAfterRegenerate();
-  }
-
-  /**
-   * No flag gate (S1 spec §2.1/§2.7, A-track B8): a key must never survive a
-   * flag flip, so logout always attempts to wipe the vault. Fire-and-forget —
-   * `CredentialVault.clear()` never rejects, and `logout()`'s return value
-   * must never depend on the vault outcome.
-   */
-  private clearVaultShadowCopy(): void {
-    try {
-      void getCredentialVault().clear({ keepLastEmail: true });
-    } catch (error) {
-      console.warn(
-        ...redactLogArgs(['[OnboardingService] vault.clear threw synchronously', error])
-      );
-    }
   }
 
   private normalizeEmail(email: string): string {

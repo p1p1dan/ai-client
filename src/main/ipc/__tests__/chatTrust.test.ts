@@ -53,6 +53,7 @@ declare global {
 
 describe('chat.ts trust call matrix entries ①② (D47 S2a)', () => {
   const originalFlag = process.env.AICLIENT_MANAGED_CREDENTIALS;
+  const originalSkip = process.env.AICLIENT_SKIP_AUTH_GATE;
   let userDataDir: string;
 
   beforeEach(async () => {
@@ -65,6 +66,11 @@ describe('chat.ts trust call matrix entries ①② (D47 S2a)', () => {
     userDataDir = mkdtempSync(join(tmpdir(), 'chat-trust-'));
     globalThis.__testUserDataDir = userDataDir;
     resetManagedFileWriterQueuesForTests();
+    // D47 S5 §3 — this suite is about the trust-write ordering, not the spawn
+    // gate (covered by `chatSpawnGate.test.ts`); the escape hatch keeps these
+    // flag-on cases from tripping over an unauthenticated AuthStateService
+    // default.
+    process.env.AICLIENT_SKIP_AUTH_GATE = '1';
 
     const { registerChatHandlers } = await import('../chat');
     registerChatHandlers();
@@ -75,6 +81,8 @@ describe('chat.ts trust call matrix entries ①② (D47 S2a)', () => {
     rmSync(userDataDir, { recursive: true, force: true });
     if (originalFlag === undefined) delete process.env.AICLIENT_MANAGED_CREDENTIALS;
     else process.env.AICLIENT_MANAGED_CREDENTIALS = originalFlag;
+    if (originalSkip === undefined) delete process.env.AICLIENT_SKIP_AUTH_GATE;
+    else process.env.AICLIENT_SKIP_AUTH_GATE = originalSkip;
   });
 
   function claudeJsonPath(): string {

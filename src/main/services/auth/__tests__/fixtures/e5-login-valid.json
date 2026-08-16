@@ -1,0 +1,11 @@
+{
+  "request": { "endpoint": "/api/auth/login", "authMode": "body-key" },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "set-cookie": "auth-token=<REDACTED>; Path=/; Max-Age=604800; HttpOnly; SameSite=lax"
+    },
+    "bodyText": "{\"ok\":true,\"user\":{\"id\":14,\"role\":\"user\"},\"redirectTo\":\"/my-usage\",\"loginType\":\"readonly_user\"}"
+  }
+}

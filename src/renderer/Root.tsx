@@ -1,5 +1,11 @@
-import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
+import {
+  AUTH_GATE_SNAPSHOT_QUERY_KEY,
+  AUTH_OPEN_ONBOARDING_EVENT,
+  parseInitialAuthGateArg,
+  resolveGateDecision,
+} from '@shared/authGate';
 import type { ClaudeRuntimeStatus } from '@shared/types';
+import type { AuthState } from '@shared/types/auth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { lazy, type ReactNode, Suspense, useEffect, useState } from 'react';
@@ -15,7 +21,17 @@ import { Button } from './components/ui/button';
 // hydration, etc.) do not run until the user is registered.
 const App = lazy(() => import('./App'));
 
-const ONBOARDING_OPEN_EVENT = 'aiclient:onboarding:open';
+// D47 S5 (rev.2 §1.3): parsed once, at module load — before first paint,
+// same timing as `windowTheme.ts`'s `initialThemeIsDark`. Only `skipAuthGate`
+// is used from this payload (see the comment on `RootWithOnboardingGate`'s
+// gate query for why the accompanying `state` snapshot isn't): a
+// missing/malformed argv entry (older Main build mid-rollout, or a renderer
+// reload without a fresh `additionalArguments` payload) falls back to
+// `false` — it must never silently bypass the gate.
+const argvGatePayload = parseInitialAuthGateArg(
+  typeof window !== 'undefined' ? (window.electronAPI?.auth?.initialArgv ?? []) : []
+);
+const skipAuthGate = argvGatePayload?.skipAuthGate ?? false;
 
 function LoadingShell() {
   return (
@@ -49,6 +65,16 @@ function AppShell({ banner }: { banner?: ReactNode }) {
  * the Appearance switch could never stay off. Skipping the onboarding gate and
  * choosing a shell are unrelated concerns; the shell is now read from settings
  * alone (default on, see `stores/settings/index.ts`).
+ *
+ * D47 S5: the bypass signal itself moved from a hardcoded renderer constant
+ * (`SKIP_ONBOARDING_GATE`, retired) to `skipAuthGate` — Main-computed via
+ * `resolveSkipAuthGate({env, isPackaged})` (always false when packaged) and
+ * delivered through the argv snapshot. Same silent-skip behavior, different
+ * — and now reversible without a rebuild — trigger. `resolveGateDecision`
+ * also special-cases `skipAuthGate` (returns `shell:'app'`) for its other
+ * consumers (MainWindow.isAppMountedFor, the spawn gate); Root keeps this
+ * standalone check ahead of any query, exactly like the pre-S5
+ * `if (SKIP_ONBOARDING_GATE) return <SkippedOnboardingApp/>` it replaces.
  */
 function SkippedOnboardingApp() {
   // No banner: it stole layout height and clipped the shell. Gate skip is silent.
@@ -107,61 +133,56 @@ function RuntimeDetectionFailedShell({
  * complete. While the user is going through CLI detection / registration,
  * only the window title bar and onboarding view are rendered.
  *
- * Two separate conditions must hold before App mounts:
- *  1. The user has registered (credentials written to ~/.claude and ~/.codex).
- *  2. The required CLI (Claude Code) is actually installed on this machine.
+ * D47 S5 (rev.2): every branch decision below is delegated to
+ * `resolveGateDecision` (@shared/authGate) — the same pure function
+ * `MainWindow.isAppMountedFor` uses to decide whether App is allowed to be
+ * mounted for close-confirm/spawn-gate purposes. Root only supplies inputs
+ * (AuthState + managed + legacyRegistered from `auth.getGateSnapshot()`, CLI
+ * status, runtime status) and renders whatever shell comes back; it does not
+ * re-derive any of the old registered/cliInstalled/credentialsHealth
+ * branching locally, and `decision.onboarding` (populated by
+ * `resolveGateDecision` itself, via `deriveOnboardingEntry` internally) is
+ * used as-is rather than re-derived here.
  *
- * Register-only flow persists `registered: true` even though CLI is missing,
- * so we must re-check CLI status on every launch — otherwise the user would
- * bypass the install step forever.
- *
- * On TEC OCular Agent (TSD) encrypted machines, the Claude Code CLI must be
- * pinned to the last Node release (2.1.112) — Bun-based 2.1.113+ falls outside
- * the whitelist and can't read encrypted files. The runtime gate below
- * branches on the detection result:
- *   - bun-incompatible: mount App but show a yellow banner offering downgrade
- *   - vscode-extension-only: render a dedicated shell (no main App)
- *   - node-compatible: also opportunistically disable Claude's auto-updater
- *     so a future launch doesn't silently pull a Bun build
+ * The gate snapshot query intentionally does NOT seed from the argv payload's
+ * `state` field: `resolveGateDecision`'s flag-off branch needs `managed` +
+ * `legacyRegistered`, neither of which argv carries (only `skipAuthGate` +
+ * `state`), and guessing them would risk a wrong-then-corrected flash — worse
+ * than the plain "Loading -> single correct terminal state" this renders
+ * instead (still exactly the flicker guarantee rev.2 §1.3 asks for; it just
+ * doesn't try to skip the first Loading frame for the non-skip-gate path).
  */
-export default function Root() {
-  // Temporary: OpenChamber chat-refactor team track — skip detection/login/env rewrite.
-  if (SKIP_ONBOARDING_GATE) {
-    return <SkippedOnboardingApp />;
-  }
-  return <RootWithOnboardingGate />;
-}
-
 function RootWithOnboardingGate() {
   const queryClient = useQueryClient();
 
-  const onboarding = useQuery({
-    queryKey: ['onboardingState'],
-    queryFn: async () => window.electronAPI.onboarding.check(),
-    staleTime: 1000 * 60 * 5,
+  const gateQuery = useQuery({
+    queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY,
+    queryFn: () => window.electronAPI.auth.getGateSnapshot(),
+    staleTime: Infinity, // kept live by `auth.stateChanged`, not polling.
   });
 
-  const registered = onboarding.data?.registered === true;
+  useEffect(() => {
+    return window.electronAPI.auth.onStateChanged((state: AuthState) => {
+      queryClient.setQueryData(AUTH_GATE_SNAPSHOT_QUERY_KEY, (prev) =>
+        prev ? { ...prev, state } : prev
+      );
+    });
+  }, [queryClient]);
 
+  const legacyRegistered = gateQuery.data?.legacyRegistered ?? false;
+
+  // Gated on the gate snapshot having resolved at all — NOT on
+  // `legacyRegistered`. `resolveGateDecision` also reads `cliStatus` in its
+  // `managed && state.status === 'authenticated'` arm, which has nothing to
+  // do with the flag-off `legacyRegistered` signal; gating on that alone
+  // would deadlock a managed/authenticated user in `shell:'loading'` forever
+  // (cliStatus never fetched -> `resolveGateDecision` never sees a non-null
+  // cliStatus -> never returns 'app').
   const cliStatus = useQuery({
     queryKey: ['onboardingCliStatus'],
     queryFn: async () => window.electronAPI.onboarding.detectCli(),
-    enabled: registered,
+    enabled: Boolean(gateQuery.data),
     staleTime: 1000 * 60,
-  });
-
-  // Credential-content sanity check. checkRegistration() only reads the
-  // ~/.aiclient/settings.json "registered" flag, and the legacy file-existence
-  // probe in main/index.ts is also true-on-existence. Neither catches the
-  // failure mode users reported in 0.2.56 where ~/.claude/settings.json exists
-  // but no longer carries ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN (only
-  // hooks). When that happens the gate must fall back to re-registration
-  // instead of mounting App and letting Claude error out inside the terminal.
-  const credentialsHealth = useQuery({
-    queryKey: ['onboardingCredentialsHealth'],
-    queryFn: async () => window.electronAPI.onboarding.checkCredentialsHealth(),
-    enabled: registered,
-    staleTime: 1000 * 30,
   });
 
   // Runtime gate: detect CLI version + VSCode extension presence on every
@@ -230,29 +251,22 @@ function RootWithOnboardingGate() {
 
   useEffect(() => {
     const handler = () => {
-      queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
       queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
-      queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
       queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
+      queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
     };
-    window.addEventListener(ONBOARDING_OPEN_EVENT, handler);
-    return () => window.removeEventListener(ONBOARDING_OPEN_EVENT, handler);
+    window.addEventListener(AUTH_OPEN_ONBOARDING_EVENT, handler);
+    return () => window.removeEventListener(AUTH_OPEN_ONBOARDING_EVENT, handler);
   }, [queryClient]);
-
-  if (
-    onboarding.isLoading ||
-    !onboarding.data ||
-    (runtime.isLoading && !runtime.isError) ||
-    !runtimeStatus
-  ) {
-    return <LoadingShell />;
-  }
 
   // Runtime probe failed for a non-"missing CLI" reason (IPC crash, fs
   // permission, transient PATH lookup, etc.). Show an explicit retry surface
   // instead of routing the user into onboarding — that would suggest "Claude
-  // is not installed" and hide the real problem.
-  if (runtimeStatus.kind === 'detection-failed') {
+  // is not installed" and hide the real problem. This still short-circuits
+  // ahead of `resolveGateDecision`: it is a Root-local retry affordance, not
+  // an auth-gate branch (`resolveGateDecision` folds `detection-failed` into
+  // its own `shell` output too, but has no retry-button concept to offer).
+  if (runtimeStatus?.kind === 'detection-failed') {
     return (
       <RuntimeDetectionFailedShell
         error={runtimeStatus.error}
@@ -263,6 +277,23 @@ function RootWithOnboardingGate() {
         }}
       />
     );
+  }
+
+  if (gateQuery.isLoading || !gateQuery.data) {
+    return <LoadingShell />;
+  }
+
+  const decision = resolveGateDecision({
+    state: gateQuery.data.state,
+    managed: gateQuery.data.managed,
+    skipAuthGate: false, // Root() already branched on the argv value above.
+    cliStatus: cliStatus.data ?? null,
+    runtimeStatus,
+    legacyRegistered,
+  });
+
+  if (decision.shell === 'loading') {
+    return <LoadingShell />;
   }
 
   // VSCode extension is present but CLI is not installed: AiClient main view
@@ -276,19 +307,18 @@ function RootWithOnboardingGate() {
   // so they don't get bounced back through CLI detection/install (the whole
   // point of the VSCode path is to skip the CLI). Registered users always see
   // the shell — they're done, just need to go back to VSCode.
-  if (runtimeStatus.kind === 'vscode-extension-only') {
-    if (!registered && vscodeRegisterFlow) {
+  if (decision.shell === 'vscode-only' && runtimeStatus?.kind === 'vscode-extension-only') {
+    if (!legacyRegistered && vscodeRegisterFlow) {
       return (
         <OnboardingShell
           initialStep="register-email"
           initialMode="vscode-extension"
           onComplete={() => {
             setVscodeRegisterFlow(false);
-            queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
             queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
-            queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
             queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
             queryClient.invalidateQueries({ queryKey: ['usageStats'] });
+            queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
           }}
         />
       );
@@ -296,15 +326,14 @@ function RootWithOnboardingGate() {
     if (vscodeInstallFlow) {
       return (
         <OnboardingShell
-          alreadyRegistered={registered}
+          alreadyRegistered={legacyRegistered}
           initialStep="cli-check"
           onComplete={() => {
             setVscodeInstallFlow(false);
-            queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
             queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
-            queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
             queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
             queryClient.invalidateQueries({ queryKey: ['usageStats'] });
+            queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
           }}
         />
       );
@@ -312,7 +341,7 @@ function RootWithOnboardingGate() {
     return (
       <ClaudeVsCodeOnlyShell
         status={runtimeStatus}
-        registered={registered}
+        registered={legacyRegistered}
         rechecking={vscodeRecheckPending}
         recheckError={vscodeRecheckError}
         onStartRegister={() => {
@@ -350,81 +379,49 @@ function RootWithOnboardingGate() {
     );
   }
 
-  if (!registered) {
+  if (decision.shell === 'onboarding' && decision.onboarding) {
+    const entry = decision.onboarding;
     return (
       <OnboardingShell
+        // B5-3: re-key on (reason, initialEmail) so a stale-mounted
+        // OnboardingShell can't silently keep showing yesterday's copy/prefill
+        // when AuthState changes underneath it (e.g. signed_out -> expired).
+        key={`${entry.reason}:${entry.initialEmail}`}
+        alreadyRegistered={legacyRegistered}
+        initialStep={entry.initialStep}
+        reason={entry.reason}
+        initialEmail={entry.initialEmail}
         onComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
           queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
-          queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
           queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
           queryClient.invalidateQueries({ queryKey: ['usageStats'] });
+          queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
         }}
       />
     );
   }
 
-  // Registered but CLI status still loading — show a neutral loading shell
-  // so we do not mount App prematurely with a missing CLI.
-  if (cliStatus.isLoading || !cliStatus.data) {
-    return <LoadingShell />;
-  }
-
-  // Registered but Claude CLI is still missing (typical of the register-only
-  // flow). Re-enter onboarding at the CLI check step; skip registration since
-  // credentials are already persisted.
-  if (!cliStatus.data.claudeInstalled) {
-    return (
-      <OnboardingShell
-        alreadyRegistered
-        onComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
-          queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
-          queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
-          queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
-          queryClient.invalidateQueries({ queryKey: ['usageStats'] });
-        }}
-      />
-    );
-  }
-
-  // Wait for the credential health probe before deciding whether the env in
-  // ~/.claude/settings.json is intact. Mounting App on an unhealthy probe
-  // would surface as "无法调用 API" inside the terminal — worse UX than a
-  // brief loading shell.
-  if (credentialsHealth.isLoading || !credentialsHealth.data) {
-    return <LoadingShell />;
-  }
-
-  // Self-heal: registered + CLI present, but ~/.claude/settings.json lost its
-  // env (or codex auth.json lost its key). Drop back into the registration
-  // step so the user can re-mint tokens. Skip the CLI install gate by
-  // forcing initialStep='register-email' — they already have the tools.
-  if (!credentialsHealth.data.claudeEnvOk || !credentialsHealth.data.codexAuthOk) {
-    return (
-      <OnboardingShell
-        initialStep="register-email"
-        onComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ['onboardingState'] });
-          queryClient.invalidateQueries({ queryKey: ['onboardingCliStatus'] });
-          queryClient.invalidateQueries({ queryKey: ['onboardingCredentialsHealth'] });
-          queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
-          queryClient.invalidateQueries({ queryKey: ['usageStats'] });
-        }}
-      />
-    );
-  }
-
+  // decision.shell === 'app'
   return (
     <AppShell
       banner={
-        <ClaudeRuntimeBanner
-          status={runtimeStatus}
-          onStatusChange={(next) => {
-            queryClient.setQueryData(['claudeRuntimeStatus'], next);
-          }}
-        />
+        runtimeStatus ? (
+          <ClaudeRuntimeBanner
+            status={runtimeStatus}
+            onStatusChange={(next) => {
+              queryClient.setQueryData(['claudeRuntimeStatus'], next);
+            }}
+          />
+        ) : undefined
       }
     />
   );
+}
+
+export default function Root() {
+  // Temporary: OpenChamber chat-refactor team track — skip detection/login/env rewrite.
+  if (skipAuthGate) {
+    return <SkippedOnboardingApp />;
+  }
+  return <RootWithOnboardingGate />;
 }

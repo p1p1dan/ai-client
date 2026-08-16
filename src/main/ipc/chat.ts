@@ -14,6 +14,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { agentHostManager } from '../services/agent-host/AgentHostManager';
 import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
 import { ensureWorkspaceTrusted, getManagedClaudeHomeDir } from '../services/auth/claudeHome';
+import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
 import { isRemoteVirtualPath } from '../services/remote/RemotePath';
 
@@ -83,6 +84,11 @@ export function registerChatHandlers(): void {
         agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
+      // D47 S5 §3 — agent-session-only spawn gate. `attach`/resume-of-an-
+      // existing-connection and plain terminal sessions are never gated
+      // (SessionManager.create's own kind==='agent' check is the sibling
+      // enforcement point for the PTY-agent path).
+      assertAgentSpawnAllowed();
       await ensureWorkspaceTrustedForChat(payload.workspacePath);
       await sessionIndexService.recordCreated(payload);
       const requestId = await agentHostManager.createSession(payload);
@@ -143,6 +149,12 @@ export function registerChatHandlers(): void {
         agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
+      // D47 S5 §3 — same gate as CHAT_CREATE_SESSION. Resuming a session that
+      // already ran is still a fresh Agent Host spawn from Main's point of
+      // view (a new `session.resume` command, possibly a new Host process) —
+      // it is NOT the `attach` exemption (attach reconnects to an ALREADY
+      // running in-process session, no new credentials touched).
+      assertAgentSpawnAllowed();
       await ensureWorkspaceTrustedForChat(payload.workspacePath);
       await sessionIndexService.recordResumed(payload);
       const requestId = await agentHostManager.resumeSession(payload);

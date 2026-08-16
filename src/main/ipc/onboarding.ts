@@ -1,6 +1,8 @@
 import type { InstallAgentId, OnboardingSendCodeRequest } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { BrowserWindow, ipcMain, session } from 'electron';
+import { getAuthStateService, getCredentialVault } from '../services/auth';
+import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
 import { AgentInstaller } from '../services/cli/AgentInstaller';
 import { onboardingService } from '../services/onboarding/OnboardingService';
 import { sessionManager } from '../services/session/SessionManager';
@@ -39,6 +41,94 @@ async function clearServerAuthCookie(serverUrl: string): Promise<void> {
   } catch (error) {
     console.warn('[onboarding:logout] Failed to clear auth-token cookie:', error);
   }
+}
+
+/**
+ * D47 S5 §3 — the I9 logout orchestration (rev.2 restructure; B-track B2
+ * "handler 重排不可实现" is what forced this out of the fire-and-forget
+ * `pendingLogoutRegeneratePromise` shape into an explicit, fully-awaited
+ * sequence). `ONBOARDING_LOGOUT`'s handler is a thin `await` of this.
+ *
+ * Seven checkpoints, each an observable completion (A-track M5 口径):
+ *  ① `beginLogout()` — synchronous, closes the spawn gate before ANY
+ *     teardown starts (a `create`/`resume` call racing logout must see the
+ *     gate already shut, not a stale `authenticated` snapshot).
+ *  ② `terminateAllSessions()` — kill remote sessions, then await local PTYs.
+ *  ③ `await agentHostManager.shutdown()` — flag-gated (matches the pre-S5
+ *     "logout with managed credentials off never touches the Host" contract,
+ *     `OnboardingServiceManagedHome.test.ts`'s own assertion). MOVED OUT of
+ *     `regenerateManagedHomesForLogout`'s tail (I9: "shutdown 从 regenerate
+ *     链尾摘出") — this eliminates the codex swept-revive window
+ *     (`agent-host/codexRuntime.ts`'s send-time silent reopen) by killing the
+ *     whole Host process BEFORE the credential stores are wiped, not after.
+ *  ④ `await vault.clear({keepLastEmail:true})` — NEVER flag-gated
+ *     (`CredentialVault.clear()`'s own "no flag gate" contract); failure is
+ *     caught and logged, never changes the return value.
+ *  ⑤ `regenerateManagedHomesForLogout()` — flag-gated, construction-order-
+ *     independent with ④ (logout's regenerate never reads the vault, S2-B2).
+ *     Also where the legacy (`~/.claude`/`~/.codex`/`~/.aiclient/settings.json`)
+ *     cleanup (`onboardingService.logout()`) runs — flag-agnostic, touches
+ *     entirely different files than ④/⑤.
+ *  ⑥ `clearServerAuthCookie(serverUrl)` — `serverUrl` captured BEFORE step's
+ *     legacy cleanup wipes `onboarding.serverUrl` from settings.json.
+ *  ⑦ `authStateService.refresh()` — the value-changed broadcast of
+ *     `signed_out` (D47 S5 §1.2); the vault is already `cleared` (④), so this
+ *     lands on `signed_out` and notifies exactly once (assuming the snapshot
+ *     was previously `authenticated`).
+ */
+export async function performLogoutSequence(): Promise<boolean> {
+  // Captured before ANY mutation — `onboardingService.logout()` (step ⑤)
+  // wipes `onboarding.serverUrl` from settings.json.
+  const onboarding = onboardingService.checkRegistration();
+  const serverUrl = onboarding.registered ? onboarding.serverUrl : undefined;
+
+  // ① — synchronous, before ②.
+  getAuthStateService().beginLogout();
+
+  // ②
+  try {
+    await terminateAllSessions();
+  } catch (error) {
+    console.warn('[onboarding:logout] Failed to terminate sessions:', error);
+  }
+
+  // ③ — flag-gated; strictly before ④/⑤ (I9 restructure).
+  if (resolveManagedCredentialsEnabled()) {
+    try {
+      const { agentHostManager } = await import('../services/agent-host/AgentHostManager');
+      await agentHostManager.shutdown();
+    } catch (error) {
+      console.warn('[onboarding:logout] Failed to shut down agent host:', error);
+    }
+  }
+
+  // ④ — never flag-gated; failure captured, never changes the return value.
+  try {
+    await getCredentialVault().clear({ keepLastEmail: true });
+  } catch (error) {
+    console.warn('[onboarding:logout] vault.clear threw:', error);
+  }
+
+  // ⑤ + legacy cleanup — construction-order-independent with ④.
+  if (resolveManagedCredentialsEnabled()) {
+    await onboardingService.regenerateManagedHomesForLogout();
+  }
+  const ok = onboardingService.logout();
+  if (!ok) {
+    console.warn('[onboarding:logout] Failed to clear onboarding state');
+  }
+
+  // ⑥
+  if (serverUrl) {
+    await clearServerAuthCookie(serverUrl);
+  }
+
+  // ⑦ — payload/env already zeroed (④/⑤ landed above), so this is safe to
+  // broadcast now: no renderer can observe a signed_out push before the
+  // credential stores it implies are actually empty.
+  getAuthStateService().refresh();
+
+  return ok;
 }
 
 export function registerOnboardingHandlers(): void {
@@ -108,31 +198,6 @@ export function registerOnboardingHandlers(): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.ONBOARDING_LOGOUT, async () => {
-    const onboarding = onboardingService.checkRegistration();
-    const serverUrl = onboarding.registered ? onboarding.serverUrl : undefined;
-
-    try {
-      await terminateAllSessions();
-    } catch (error) {
-      console.warn('[onboarding:logout] Failed to terminate sessions:', error);
-    }
-
-    const ok = onboardingService.logout();
-    if (!ok) {
-      console.warn('[onboarding:logout] Failed to clear onboarding state');
-    }
-
-    // D47 S3b I5 epoch barrier: `logout()` itself stays synchronous (kicks
-    // the managed-home regenerate + Host shutdown chain off without
-    // awaiting), so THIS handler is where the wait lives — the renderer must
-    // not see the logout IPC call resolve while a Host that still holds the
-    // logged-out session's env is alive.
-    await onboardingService.awaitPendingLogoutRegenerate();
-
-    if (serverUrl) {
-      await clearServerAuthCookie(serverUrl);
-    }
-
-    return ok;
+    return performLogoutSequence();
   });
 }

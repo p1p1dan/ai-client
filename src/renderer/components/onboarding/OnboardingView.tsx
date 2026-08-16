@@ -1,3 +1,4 @@
+import type { AuthGateOnboardingReason } from '@shared/authGate';
 import type {
   InstallAgentId,
   InstallProgress,
@@ -140,6 +141,15 @@ export interface OnboardingViewProps {
    * with an optional "continue installing CLI" button.
    */
   initialMode?: OnboardingMode;
+  /**
+   * D47 S5: why the gate routed here (`deriveOnboardingEntry`, @shared/authGate).
+   * `'expired'` swaps the register-email copy for a re-verification message
+   * and hides the "返回" (back to CLI check) button — with an expired login
+   * there is nothing to go back to, only forward through email verification.
+   */
+  reason?: AuthGateOnboardingReason;
+  /** Prefill for the email step — `AuthState.lastEmail`, when known. */
+  initialEmail?: string | null;
 }
 
 export function OnboardingView({
@@ -148,6 +158,8 @@ export function OnboardingView({
   alreadyRegistered = false,
   initialStep,
   initialMode,
+  reason,
+  initialEmail,
 }: OnboardingViewProps) {
   const [step, setStep] = useState<Step>(initialStep ?? 'cli-check');
   const [mode, setMode] = useState<OnboardingMode>(initialMode ?? 'standard');
@@ -167,7 +179,10 @@ export function OnboardingView({
   });
 
   // Step: register-email
-  const [email, setEmail] = useState('');
+  // D47 S5 mutation ⑥: `initialEmail` (AuthState.lastEmail) must survive into
+  // the prefill — a returning user re-verifying an expired login should not
+  // have to retype an address the app already knows.
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [sendingCode, setSendingCode] = useState(false);
   const [sendCodeError, setSendCodeError] = useState<string | null>(null);
 
@@ -540,11 +555,13 @@ export function OnboardingView({
             icon={<ServerIcon className="h-5 w-5 text-muted-foreground" />}
             title="注册"
             description={
-              mode === 'register-only'
-                ? '当前仅写入本地配置与环境变量,CLI 工具可稍后安装。'
-                : mode === 'vscode-extension'
-                  ? '检测到 VSCode Claude 扩展,仅需完成邮箱注册即可直接在 VSCode 中使用。'
-                  : '输入邮箱以接收验证码。'
+              reason === 'expired'
+                ? '登录已失效，请重新验证邮箱。'
+                : mode === 'register-only'
+                  ? '当前仅写入本地配置与环境变量,CLI 工具可稍后安装。'
+                  : mode === 'vscode-extension'
+                    ? '检测到 VSCode Claude 扩展,仅需完成邮箱注册即可直接在 VSCode 中使用。'
+                    : '输入邮箱以接收验证码。'
             }
           />
           <SectionBody>
@@ -597,9 +614,13 @@ export function OnboardingView({
             </div>
           </SectionBody>
           <SectionFooter>
-            <Button variant="outline" onClick={handleReturnToInstall} disabled={sendingCode}>
-              返回
-            </Button>
+            {/* D47 S5: a dead end once the login has expired — there is no CLI
+                re-check to go back to, only the email step ahead. */}
+            {reason !== 'expired' && (
+              <Button variant="outline" onClick={handleReturnToInstall} disabled={sendingCode}>
+                返回
+              </Button>
+            )}
             <Button onClick={() => void handleSendCode()} disabled={!canSendCode}>
               {sendingCode && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
               发送验证码

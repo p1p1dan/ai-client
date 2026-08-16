@@ -1,3 +1,4 @@
+import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
 import type {
   PermissionDecisionId,
   SessionRetryInfo,
@@ -28,6 +29,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { type TurnSendStatus, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import { sendTimeoutMs } from './attachmentLimits';
+import { AUTH_REQUIRED_ERROR_VIEW, isAuthRequiredError } from './authRequiredError';
 import { ChatMarkdown } from './ChatMarkdown';
 import { deriveStreamingBlockIds, shouldRenderMarkdown } from './chatMarkdownPolicy';
 import {
@@ -502,27 +504,49 @@ export function MessageTimeline({
                     failure doesn't stack a second red block on top of the
                     already-red failed tool rows above it. */}
                 <p className="font-medium text-destructive">Session failed</p>
-                {lastError && failedCardShowsError && (
-                  // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
-                  // content family as ChatComposer's destructive banner — mono.
-                  // Round-10 ③: suppressed when the latest error notice above
-                  // already prints this exact failure (see failedCardShowsError).
-                  <p className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
-                    {lastError}
-                  </p>
-                )}
-                <p className="mt-1 text-muted-foreground">
-                  已产内容保留。在下方输入框点 Retry 重发上条消息。
-                </p>
-                {pendingPermissions.some((item) => item.sessionId === sessionId) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2 h-6 text-ui"
-                    onClick={() => void stopActiveSession()}
-                  >
-                    Stop
-                  </Button>
+                {lastError && isAuthRequiredError(lastError) ? (
+                  // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
+                  // @shared/authGate) — retrying won't help without a fresh
+                  // login, so this replaces the raw diagnostic + Retry hint
+                  // with mapped copy and a re-login action instead.
+                  <>
+                    <p className="mt-1 text-muted-foreground">{AUTH_REQUIRED_ERROR_VIEW.message}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 h-6 text-ui"
+                      onClick={() =>
+                        window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))
+                      }
+                    >
+                      {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {lastError && failedCardShowsError && (
+                      // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
+                      // content family as ChatComposer's destructive banner — mono.
+                      // Round-10 ③: suppressed when the latest error notice above
+                      // already prints this exact failure (see failedCardShowsError).
+                      <p className="mt-1 select-text break-words whitespace-pre-wrap font-mono text-code text-muted-foreground">
+                        {lastError}
+                      </p>
+                    )}
+                    <p className="mt-1 text-muted-foreground">
+                      已产内容保留。在下方输入框点 Retry 重发上条消息。
+                    </p>
+                    {pendingPermissions.some((item) => item.sessionId === sessionId) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 h-6 text-ui"
+                        onClick={() => void stopActiveSession()}
+                      >
+                        Stop
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -757,6 +781,13 @@ function UserBubble({ message }: { message: ChatMessage }) {
  */
 function NoticeMessage({ message }: { message: ChatMessage }) {
   const isError = message.role === 'error';
+  // D47 S5 §3: a spawn-gate rejection (resolveSpawnGateDecision,
+  // @shared/authGate) landing in this card as raw text — swap in mapped
+  // Chinese copy + a re-login action instead of the raw diagnostic.
+  const authRequired =
+    isError &&
+    message.blocks.some((block) => block.type === 'text' && isAuthRequiredError(block.text));
+
   return (
     <Alert variant={isError ? 'error' : 'default'} role={isError ? 'alert' : 'status'}>
       <AlertDescription>
@@ -766,11 +797,27 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
               key={block.id}
               className="select-text whitespace-pre-wrap text-markdown text-foreground"
             >
-              {block.text}
+              {/* D47 S5 §3: swap the raw spawn-gate rejection text for mapped
+                  Chinese copy in-place — same paragraph, same class, so this
+                  stays the one "notice body" surface T-29 pinned (see the
+                  wiring test's exact-count assertion on this class string). */}
+              {authRequired ? AUTH_REQUIRED_ERROR_VIEW.message : block.text}
             </p>
           ) : null
         )}
       </AlertDescription>
+      {authRequired && (
+        <AlertAction>
+          <Button
+            size="xs"
+            variant="outline"
+            className="h-6"
+            onClick={() => window.dispatchEvent(new CustomEvent(AUTH_OPEN_ONBOARDING_EVENT))}
+          >
+            {AUTH_REQUIRED_ERROR_VIEW.actionLabel}
+          </Button>
+        </AlertAction>
+      )}
     </Alert>
   );
 }

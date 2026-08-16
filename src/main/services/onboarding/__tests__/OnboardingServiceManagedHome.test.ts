@@ -4,13 +4,20 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * D47 S2a §1 / S3b §2 — OnboardingService's managed-home regenerate branches:
- * claude-home (login: credentials-object regenerate; logout: deterministic
- * no-credential regenerate) and its codex-home counterpart (login: writes
- * `config.toml`; logout: `config.toml` bytes untouched, stale `auth.json`
- * deleted) — plus the D47 S3b I5 epoch barrier (login awaits Host shutdown
- * before `verifyAndRegister` returns; logout's shutdown is awaited via
- * `awaitPendingLogoutRegenerate()`, not a raw `setTimeout` tick).
+ * D47 S2a §1 / S3b §2 / S5 §3 — OnboardingService's managed-home regenerate
+ * branches: claude-home (login: credentials-object regenerate; logout:
+ * deterministic no-credential regenerate) and its codex-home counterpart
+ * (login: writes `config.toml`; logout: `config.toml` bytes untouched, stale
+ * `auth.json` deleted) — plus the D47 S3b I5 epoch barrier (login awaits Host
+ * shutdown before `verifyAndRegister` returns).
+ *
+ * D47 S5 §3 I9 restructure: `logout()`'s vault-clear/regenerate/shutdown
+ * chain moved OUT to `main/ipc/onboarding.ts`'s `performLogoutSequence()`
+ * (own test file: `main/ipc/__tests__/onboardingLogoutSequence.test.ts`).
+ * This file's logout-side tests now drive `regenerateManagedHomesForLogout()`
+ * directly (now public, no `awaitPendingLogoutRegenerate()` needed — that
+ * pairing is retired) and confirm the LEGACY half (`logout()`) no longer
+ * touches the managed homes or the Host at all.
  *
  * Separate file from `OnboardingService.test.ts` because these cases need
  * `AICLIENT_MANAGED_CREDENTIALS=1` and a per-test isolated userData dir —
@@ -174,7 +181,7 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     expect(existsSync(codexAuthPath())).toBe(false);
   });
 
-  it('logout (flag on) regenerates managed settings.json to an empty env, leaves codex-home/config.toml bytes untouched, deletes stale auth.json, and shuts down the host — awaited via awaitPendingLogoutRegenerate()', async () => {
+  it('regenerateManagedHomesForLogout() (flag on) regenerates managed settings.json to an empty env, leaves codex-home/config.toml bytes untouched, deletes stale auth.json — and does NOT itself shut down the host (D47 S5 §3 I9: shutdown moved OUT to performLogoutSequence checkpoint ③)', async () => {
     mkdirSync(join(userDataDir, 'claude-home'), { recursive: true });
     writeFileSync(
       settingsPath(),
@@ -193,12 +200,7 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     writeFileSync(codexAuthPath(), JSON.stringify({ OPENAI_API_KEY: 'stale' }), 'utf-8');
 
     const { onboardingService } = await import('../OnboardingService');
-    const ok = onboardingService.logout();
-    expect(ok).toBe(true);
-
-    // logout() is synchronous; the barrier is this explicit await, not a
-    // fire-and-forget microtask guess.
-    await onboardingService.awaitPendingLogoutRegenerate();
+    await onboardingService.regenerateManagedHomesForLogout();
 
     const managed = JSON.parse(readFileSync(settingsPath(), 'utf-8')) as {
       env: Record<string, string>;
@@ -206,7 +208,11 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     };
     expect(managed.env).toEqual({});
     expect(managed.hooks).toEqual({ Stop: ['keep-me'] });
-    expect(shutdownMock).toHaveBeenCalledTimes(1);
+    // I9 restructure: this method no longer shuts down the host itself —
+    // `performLogoutSequence()` (main/ipc/onboarding.ts) does that BEFORE
+    // calling this, as its own checkpoint ③. Covered end-to-end in
+    // `main/ipc/__tests__/onboardingLogoutSequence.test.ts`.
+    expect(shutdownMock).not.toHaveBeenCalled();
 
     // codex-home: config.toml bytes stay exactly as they were (B-track B1
     // logout contract — "config 保留"); the stale auth.json copy is gone.
@@ -214,14 +220,13 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     expect(existsSync(codexAuthPath())).toBe(false);
   });
 
-  it('flag off: neither login nor logout touch the managed claude-home OR codex-home directories', async () => {
+  it("logout() (legacy-only half) no longer touches the managed claude-home OR codex-home directories at all — that is performLogoutSequence()'s job now", async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
     mockRegisterResponse();
 
     const { onboardingService } = await import('../OnboardingService');
     await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     onboardingService.logout();
-    await onboardingService.awaitPendingLogoutRegenerate();
 
     expect(existsSync(join(userDataDir, 'claude-home'))).toBe(false);
     expect(existsSync(join(userDataDir, 'codex-home'))).toBe(false);

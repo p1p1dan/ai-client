@@ -1,3 +1,4 @@
+import type { AuthGateOnboardingReason } from '@shared/authGate';
 import { DevToolsOverlay } from '@/components/DevToolsOverlay';
 import { BackgroundLayer } from '@/components/layout/BackgroundLayer';
 import { WindowTitleBar } from '@/components/layout/WindowTitleBar';
@@ -16,6 +17,15 @@ export interface OnboardingShellProps {
   initialStep?: OnboardingViewProps['initialStep'];
   /** Forwarded to OnboardingView — override the starting mode. */
   initialMode?: OnboardingViewProps['initialMode'];
+  /**
+   * D47 S5: why the gate routed here — `deriveOnboardingEntry` (@shared/authGate)
+   * output, passed straight through to OnboardingView for copy selection
+   * (`reason === 'expired'` gets its own message and hides the CLI-check
+   * escape hatch, a dead end once a login has expired).
+   */
+  reason?: AuthGateOnboardingReason;
+  /** Forwarded to OnboardingView — prefill for the email step (`lastEmail`). */
+  initialEmail?: string | null;
 }
 
 /**
@@ -31,6 +41,8 @@ export function OnboardingShell({
   alreadyRegistered,
   initialStep,
   initialMode,
+  reason,
+  initialEmail,
 }: OnboardingShellProps) {
   return (
     <div className="relative z-0 flex h-screen flex-col overflow-hidden">
@@ -43,6 +55,8 @@ export function OnboardingShell({
           alreadyRegistered={alreadyRegistered}
           initialStep={initialStep}
           initialMode={initialMode}
+          reason={reason}
+          initialEmail={initialEmail}
         />
       </div>
     </div>

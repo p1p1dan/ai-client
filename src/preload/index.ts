@@ -1064,6 +1064,35 @@ const electronAPI = {
   auth: {
     managedMode: (): Promise<{ managed: boolean; claudeHomeDir: string | null }> =>
       ipcRenderer.invoke(IPC_CHANNELS.AUTH_MANAGED_MODE),
+    // D47 S5 — single-path auth gate (rev.2 §1.2/§1.3).
+    //
+    // `initialArgv` is a raw passthrough of this process's argv, mirroring
+    // `windowTheme.ts`'s `additionalArguments` precedent but pushing the
+    // parse step (`parseInitialAuthGateArg`, @shared/authGate) to the
+    // renderer instead of consuming it here — Root only needs the
+    // `skipAuthGate` flag out of it (see Root.tsx's own comment on why the
+    // rest of the payload isn't used for a guessed-at gate decision).
+    initialArgv: process.argv,
+    // Return shape mirrors `ResolveGateDecisionInput`'s renderer-relevant
+    // fields (@shared/authGate) plus `legacyRegistered` — the flag-off
+    // `checkRegistration()`+`checkCredentialsHealth()` fold-in the IPC
+    // handler (`src/main/ipc/auth.ts`, S5a) computes so OnboardingService's
+    // method bodies stay untouched (S5 spec §1.2). No dedicated shared type
+    // exists for this yet; inlined here rather than guessing an export name.
+    getGateSnapshot: (): Promise<{
+      managed: boolean;
+      legacyRegistered: boolean;
+      state: import('@shared/types/auth').AuthState;
+      skipAuthGate: boolean;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.AUTH_GET_GATE_SNAPSHOT),
+    onStateChanged: (
+      callback: (state: import('@shared/types/auth').AuthState) => void
+    ): (() => void) => {
+      const handler = (_: unknown, state: import('@shared/types/auth').AuthState) =>
+        callback(state);
+      ipcRenderer.on(IPC_CHANNELS.AUTH_STATE_CHANGED, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.AUTH_STATE_CHANGED, handler);
+    },
   },
 
   // Claude Config (MCP, Prompts, Plugins)

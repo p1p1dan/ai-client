@@ -3,7 +3,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { is } from '@electron-toolkit/utils';
-import { SKIP_ONBOARDING_GATE } from '@shared/devFlags';
+import { buildInitialAuthGateArg, resolveGateDecision } from '@shared/authGate';
+import { resolveSkipAuthGate } from '@shared/devFlags';
 import { translate } from '@shared/i18n';
 import type { AppCloseRequestPayload, AppCloseRequestReason } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
@@ -13,25 +14,36 @@ import {
   WINDOW_BACKGROUND_LIGHT,
 } from '@shared/windowTheme';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+import { getAuthStateService } from '../services/auth';
+import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
 import { claudeRuntimeChecker } from '../services/cli/ClaudeRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
 import { onboardingService } from '../services/onboarding';
 import { sessionManager } from '../services/session/SessionManager';
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
 
-// Runtime kinds where Root.tsx mounts the full <App>. Anything else (vscode-
-// extension-only, not-installed, detection-failed, or no detection yet) means
-// only an onboarding/runtime shell is on screen, with no APP_CLOSE_REQUEST
-// listener — confirming on close would hang for 30s and trap the user.
-const APP_MOUNTABLE_RUNTIME_KINDS = new Set(['node-compatible', 'bun-incompatible']);
-
+/**
+ * D47 S5 §1.4 — Main's own call site for the shared `resolveGateDecision`
+ * (the same function Root uses), so "换服务两处同变" is enforced by the two
+ * call sites sharing one implementation rather than by convention. No
+ * `cliStatus` on this side (no cheap synchronous source in Main) —
+ * `resolveGateDecision` treats a `null` `cliStatus` as "skip that extra
+ * check", matching this function's pre-S5 behavior exactly
+ * (`runtimeStatus.kind === 'not-installed'` alone already excluded
+ * not-installed from "mounted").
+ */
 function isAppMountedFor(): boolean {
-  // Keep Main close-confirm in sync with Root when onboarding gate is skipped.
-  if (SKIP_ONBOARDING_GATE) return true;
-  if (!onboardingService.checkRegistration().registered) return false;
-  const cached = claudeRuntimeChecker.getCached();
-  if (!cached) return false;
-  return APP_MOUNTABLE_RUNTIME_KINDS.has(cached.kind);
+  const skipAuthGate = resolveSkipAuthGate({ env: process.env, isPackaged: app.isPackaged });
+  const managed = resolveManagedCredentialsEnabled();
+  const decision = resolveGateDecision({
+    state: getAuthStateService().getState(),
+    managed,
+    skipAuthGate,
+    cliStatus: null,
+    runtimeStatus: claudeRuntimeChecker.getCached(),
+    legacyRegistered: onboardingService.checkRegistration().registered,
+  });
+  return decision.shell === 'app';
 }
 
 /** Default macOS traffic lights position (matches BrowserWindow trafficLightPosition) */
@@ -143,6 +155,19 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
   const isDark = options.isDark ?? false;
   const backgroundColor = isDark ? WINDOW_BACKGROUND_DARK : WINDOW_BACKGROUND_LIGHT;
 
+  // D47 S5 §1.3 — the initial AuthState snapshot + resolved skip-gate flag,
+  // frozen into argv at `BrowserWindow` construction time (windowTheme.ts
+  // `additionalArguments` precedent). Necessarily earlier than the upgrade
+  // latch (`browser-window-created`) and the startup `regenerateFromVault()`
+  // + `refresh()` sequence — `getAuthStateService().getState()` may still be
+  // the pre-refresh default (or a stale value on a second/new window), which
+  // is why the spec allows this snapshot to be stale/`locked`: Root renders
+  // LoadingShell and reconciles on the first `auth.stateChanged` push.
+  const initialAuthGateArg = buildInitialAuthGateArg({
+    skipAuthGate: resolveSkipAuthGate({ env: process.env, isPackaged: app.isPackaged }),
+    state: getAuthStateService().getState(),
+  });
+
   const win = new BrowserWindow({
     width: state.width,
     height: state.height,
@@ -171,8 +196,10 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
       allowRunningInsecureContent: false,
       partition: options.partition,
       // Lets preload strip the hardcoded `dark` class from <html> before
-      // first paint when the resolved theme is light (see index.html).
-      additionalArguments: [buildInitialThemeArg(isDark)],
+      // first paint when the resolved theme is light (see index.html), plus
+      // the D47 S5 §1.3 initial auth-gate snapshot (parsed renderer-side via
+      // `parseInitialAuthGateArg`, @shared/authGate).
+      additionalArguments: [buildInitialThemeArg(isDark), initialAuthGateArg],
       preload: join(moduleDir, '../preload/index.cjs'),
     },
   });

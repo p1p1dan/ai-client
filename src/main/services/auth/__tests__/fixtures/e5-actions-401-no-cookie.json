@@ -1,0 +1,11 @@
+{
+  "request": { "endpoint": "/api/actions/my-usage/getMyTodayStats", "authMode": "bearer" },
+  "response": {
+    "status": 401,
+    "headers": {
+      "content-type": "application/json",
+      "warning": "299 - \"The /api/actions API is deprecated; use /api/v1\""
+    },
+    "bodyText": "{\"ok\":false,\"error\":\"认证无效或已过期\"}"
+  }
+}

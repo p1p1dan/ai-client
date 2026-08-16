@@ -3,6 +3,7 @@ export * from './agentHost';
 export * from './ai';
 export * from './app';
 export * from './attachmentIo';
+export * from './auth';
 export * from './claude';
 export * from './claudeRuntime';
 export * from './claudeSession';

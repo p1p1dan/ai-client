@@ -16,6 +16,7 @@ import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { ensureWorkspaceTrusted, getManagedClaudeHomeDir } from '../auth/claudeHome';
 import { getManagedCodexHomeDir } from '../auth/codexHome';
+import { assertAgentSpawnAllowed } from '../auth/spawnGate';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
 import { isRemoteVirtualPath, parseRemoteVirtualPath } from '../remote/RemotePath';
 import { PtyManager } from '../terminal/PtyManager';
@@ -128,6 +129,15 @@ export class SessionManager {
     target: BrowserWindow | WebContents | number,
     options: SessionCreateOptions = {}
   ): Promise<SessionOpenResult> {
+    // D47 S5 §3 — agent-session-only spawn gate: only the `kind === 'agent'`
+    // arm (the PTY-based AgentTerminal path — `useXterm`'s `kind:'agent'`)
+    // is gated; plain terminal sessions must keep working even while
+    // credentials are invalid (git, shells, etc. don't depend on the
+    // managed key). `attach` (below) is a separate method, never gated —
+    // reconnecting to an already-running session touches no credentials.
+    if (options.kind === 'agent') {
+      assertAgentSpawnAllowed();
+    }
     const windowId = getWindowId(target);
     if (options.cwd && isRemoteVirtualPath(options.cwd)) {
       return this.createRemote(windowId, options);
