@@ -47,3 +47,10 @@
 
 **D47 托管登录链全链真跑 PASS**（14/14 主链项）。S0~S5 全部落地且经真实网关/真实验证码/真实进程环境验证。
 残余 = S6（收编存量 + 停双写 + 兼容清理）与 test.4 真机轮补测项。
+
+## 附：点验连带事故（2026-08-15 晚，已复原）
+
+GUI 登出测试触发**现行 flag-on 登出仍跑 legacy `removeCodexConfig` 的 `rmSync` 整删**——用户本机
+`~/.codex/{config.toml,auth.json}` 被删（该机器的 codex 日常即走 cch 账号，config 里的 provider 段被抹后
+本机 codex 回落官方 api.openai.com 打 401）。靠登录时刻的 `.bak` 完整复原（provider/base_url/key 全对）。
+**这正是 S6 §1-3 要修的破坏性 bug 的真机实锤**；S6 停双写 + 外科删除落地后此类事故根除。
