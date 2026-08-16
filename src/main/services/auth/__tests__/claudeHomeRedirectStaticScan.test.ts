@@ -88,6 +88,11 @@ const BASELINE: Record<string, { count: number; reason: string }> = {
     reason:
       'S2b Scanner dual-source infra: literal legacy-root constant (kind:"legacy"), not a redirect follower by design — paired with a managed root elsewhere in the same file.',
   },
+  'src/main/services/auth/adoption.ts': {
+    count: 1,
+    reason:
+      'D47 S6 §1.2 adoption reader (readClaudeHomeCredentials) — the OS-home HARDCODED path IS the point (self-adoption guard, A-m3): must never become a CLAUDE_CONFIG_DIR-aware follower, or a managed-mode process could adopt from its own redirected home instead of the real legacy one.',
+  },
 };
 
 function listMainSources(): string[] {

@@ -112,6 +112,39 @@ describe('CredentialVault — roundtrip (1a)', () => {
       expect(result.doc.payload).toEqual(payload);
     }
   });
+
+  // D47 S6 §1.4 — `identity.userId` was widened from `number` to
+  // `number | null` (adoption never has a real numeric id to put there).
+  // Double-test: null persists through save/read, AND a numeric id from a
+  // real login still round-trips unchanged — neither arm is allowed to
+  // regress the other.
+  it('round-trips a null userId (adoption payload shape) without coercion', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(fakeAvailableCrypto());
+
+    const payload = makePayload({ identity: { email: 'user@jcdz.cc', userId: null } });
+    await vault.save(payload);
+
+    const result = vault.read();
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.doc.payload.identity.userId).toBeNull();
+    }
+  });
+
+  it('round-trips a numeric userId (real-login payload shape) without loss', async () => {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(fakeAvailableCrypto());
+
+    const payload = makePayload({ identity: { email: 'user@jcdz.cc', userId: 42 } });
+    await vault.save(payload);
+
+    const result = vault.read();
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.doc.payload.identity.userId).toBe(42);
+    }
+  });
 });
 
 describe('CredentialVault — clear (1b)', () => {

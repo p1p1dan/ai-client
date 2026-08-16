@@ -709,6 +709,7 @@ export const zhTranslations: Record<string, string> = {
     '目录包含未提交的修改，请勾选「强制删除」',
   'This directory is not a Git repository. Initialize it to enable Git features.':
     '当前目录还不是 Git 仓库，初始化后即可使用 Git 功能',
+  'This does not affect CLI logins in your system terminal.': '不影响系统终端里的 CLI 登录',
   'This will delete the directory and all files inside. This action cannot be undone!':
     '这将删除目录及其中所有文件，此操作不可撤销！',
   'This will only remove it from the app and will not delete local files.':

@@ -778,8 +778,6 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_VERIFY_AND_REGISTER, request),
     detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),
-    checkCredentialsHealth: (): Promise<import('@shared/types').OnboardingCredentialsHealth> =>
-      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK_CREDENTIALS_HEALTH),
     checkPrerequisites: (): Promise<import('@shared/types').OnboardingPrerequisiteStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK_PREREQUISITES),
     installAgents: (
@@ -796,11 +794,6 @@ const electronAPI = {
       return () => ipcRenderer.off(IPC_CHANNELS.ONBOARDING_INSTALL_PROGRESS, handler);
     },
     logout: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_LOGOUT),
-    onLiveCredentialsStatus: (callback: (status: { available: boolean }) => void): (() => void) => {
-      const handler = (_: unknown, status: Parameters<typeof callback>[0]) => callback(status);
-      ipcRenderer.on(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.ONBOARDING_LIVE_CREDENTIALS_STATUS, handler);
-    },
   },
 
   // Environment

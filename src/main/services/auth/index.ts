@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { app, net, safeStorage } from 'electron';
 import { type AuthProbeFetchResponse, AuthProbeScheduler } from './AuthProbeScheduler';
 import { AuthStateService } from './AuthStateService';
+import { getMigrationIncompleteSignal } from './adoption';
 import { CredentialVault, type VaultCrypto } from './CredentialVault';
 
 const CREDENTIALS_DIR_NAME = 'credentials';
@@ -70,6 +71,8 @@ export function getAuthStateService(): AuthStateService {
     cachedAuthStateService = new AuthStateService({
       vault: getCredentialVault(),
       agentHost: { shutdown: shutdownRealAgentHost },
+      // D47 S6 §1.4 — sourced from `adoption.ts`'s last boot-time outcome.
+      migrationSignal: getMigrationIncompleteSignal,
     });
   }
   return cachedAuthStateService;

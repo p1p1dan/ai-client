@@ -6,6 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const fetchMock = vi.fn();
 const reportExternalLoginResponseMock = vi.fn();
 const vaultReadMock = vi.fn(() => ({ status: 'absent' }) as const);
+const authStateGetStateMock = vi.fn(() => ({ status: 'authenticated' }) as { status: string });
+const authStateHasRefreshedMock = vi.fn(() => true);
+const authStateRefreshMock = vi.fn();
+// `vi.mock` factories are hoisted above every top-level statement, including
+// plain `const` declarations — a `vi.mock('node:fs', ...)` factory is forced
+// to run EAGERLY (before this file's own top-level code executes) because
+// this file also has a static top-level `import ... from 'node:fs'` below,
+// so a plain `const mockFsExistsSync = vi.fn()` referenced inside the factory
+// throws "Cannot access before initialization". `vi.hoisted()` is the
+// documented escape hatch: its return value is hoisted together with
+// `vi.mock`, so it's guaranteed initialized before any factory runs.
+const { mockFsExistsSync, mockFsReadFileSync } = vi.hoisted(() => ({
+  mockFsExistsSync: vi.fn(),
+  mockFsReadFileSync: vi.fn(),
+}));
 
 vi.mock('electron', () => ({
   net: {
@@ -13,13 +28,36 @@ vi.mock('electron', () => ({
   },
 }));
 
+// ESM module namespaces are not configurable, so `vi.spyOn(fsModule, 'existsSync')`
+// cannot work directly. Unlike `CredentialVault.test.ts`'s `vi.fn(actual.chmodSync)`
+// (that file never calls `vi.resetModules()`), THIS file resets the module
+// registry in every `afterEach`, which would otherwise recreate a brand-new
+// `vi.fn()` wrapper each time `'node:fs'` is re-evaluated — desyncing from this
+// file's own static top-level `existsSync`/`readFileSync` imports (per Vitest's
+// docs, static imports are never re-bound by `resetModules`). Delegating to the
+// file-scope `mockFsExistsSync`/`mockFsReadFileSync` singletons keeps identity
+// stable across resets, so `readCodexApiKeyLegacy()`'s call count stays
+// independently assertable (D47 S6 §3 — "legacy reader 零参与，调用数断言 0").
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  mockFsExistsSync.mockImplementation(actual.existsSync);
+  mockFsReadFileSync.mockImplementation(actual.readFileSync);
+  return { ...actual, existsSync: mockFsExistsSync, readFileSync: mockFsReadFileSync };
+});
+
 // Real `services/auth/index.ts` touches `electron.app`/`net` at call time,
 // which this file's minimal `electron` mock does not provide — mocked here
 // so `UsageService.ts`'s flag-on branches are independently controllable
-// (`vaultReadMock`) without needing a real vault/userData dir.
+// (`vaultReadMock`, `authState*Mock`) without needing a real vault/userData dir
+// or a real `AuthStateService` singleton.
 vi.mock('../../auth', () => ({
   getAuthProbeScheduler: () => ({ reportExternalLoginResponse: reportExternalLoginResponseMock }),
   getCredentialVault: () => ({ read: vaultReadMock }),
+  getAuthStateService: () => ({
+    hasRefreshed: authStateHasRefreshedMock,
+    getState: authStateGetStateMock,
+    refresh: authStateRefreshMock,
+  }),
 }));
 
 describe('UsageService', () => {
@@ -41,6 +79,13 @@ describe('UsageService', () => {
     reportExternalLoginResponseMock.mockReset();
     vaultReadMock.mockReset();
     vaultReadMock.mockReturnValue({ status: 'absent' });
+    authStateGetStateMock.mockReset();
+    authStateGetStateMock.mockReturnValue({ status: 'authenticated' });
+    authStateHasRefreshedMock.mockReset();
+    authStateHasRefreshedMock.mockReturnValue(true);
+    authStateRefreshMock.mockReset();
+    mockFsExistsSync.mockClear();
+    mockFsReadFileSync.mockClear();
   });
 
   afterEach(() => {
@@ -268,7 +313,7 @@ describe('UsageService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('flag on + vault absent: key source is the vault, NOT the legacy ~/.codex file (D47 S5 §2 regression)', async () => {
+  it('flag on + vault absent: key source is the vault, NOT the legacy ~/.codex file (D47 S5 §2 regression) — legacy reader is never called (D47 S6 §3)', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     writeOnboardingState('https://cch.example.com');
     writeLegacyCodexKey(); // legacy file must be ignored once the flag is on
@@ -278,14 +323,53 @@ describe('UsageService', () => {
 
     expect(result).toEqual({ error: 'Credentials not available' });
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockFsExistsSync).not.toHaveBeenCalled();
+    expect(mockFsReadFileSync).not.toHaveBeenCalled();
   });
 
-  it('flag on + vault ok: key source is the vault codex apiKey', async () => {
+  it('flag on + AuthState is not authenticated: the admission gate uses AuthState, NOT legacy registered/serverUrl — the vault is never read (D47 S6 §3)', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-    writeOnboardingState('https://cch.example.com');
+    writeOnboardingState('https://cch.example.com'); // legacy says registered=true; must be irrelevant now
+    authStateGetStateMock.mockReturnValue({ status: 'signed_out' });
+
+    const { usageService } = await import('../UsageService');
+    const result = await usageService.getStats();
+
+    expect(result).toEqual({ error: 'Not registered' });
+    expect(authStateHasRefreshedMock).toHaveBeenCalled();
+    expect(vaultReadMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'cleared',
+    'rejected',
+    'locked',
+    'unsupported',
+    'invalid',
+  ] as const)("flag on + vault status '%s': unavailable, and NEVER falls back to the legacy ~/.codex reader (D47 S6 §3 — stop-dual-write means a stale/rejected legacy key must not silently come back)", async (status) => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+    writeLegacyCodexKey('legacy-key-should-never-be-used');
+    vaultReadMock.mockReturnValue({ status } as never);
+
+    const { usageService } = await import('../UsageService');
+    const result = await usageService.getStats();
+
+    expect(result).toEqual({ error: 'Credentials not available' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockFsExistsSync).not.toHaveBeenCalled();
+    expect(mockFsReadFileSync).not.toHaveBeenCalled();
+  });
+
+  it('flag on + vault ok: key source AND server URL both come from the vault snapshot (cchBaseUrl/codex.apiKey), never legacy onboarding state — legacy reader is never called (D47 S6 §3)', async () => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+    writeOnboardingState('https://legacy-should-be-ignored.example.com'); // must be ignored once flag is on
+    writeLegacyCodexKey('legacy-key-should-be-ignored');
     vaultReadMock.mockReturnValue({
       status: 'ok',
-      doc: { payload: { codex: { apiKey: 'vault-api-key' } } },
+      doc: {
+        payload: { cchBaseUrl: 'https://cch.example.com', codex: { apiKey: 'vault-api-key' } },
+      },
     } as never);
 
     fetchMock.mockResolvedValueOnce({
@@ -302,8 +386,36 @@ describe('UsageService', () => {
     const { usageService } = await import('../UsageService');
     await usageService.getStats();
 
-    const directCall = fetchMock.mock.calls[0][1] as { headers: Record<string, string> };
-    expect(directCall.headers.Authorization).toBe('Bearer vault-api-key');
+    const directCall = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(directCall[0]).toBe('https://cch.example.com/api/actions/my-usage/getMyTodayStats');
+    expect(directCall[1].headers.Authorization).toBe('Bearer vault-api-key');
+    // Legacy reader (`readCodexApiKeyLegacy()`) never runs once the flag is on
+    // — zero fs reads, even though a legacy key file was written above.
+    expect(mockFsExistsSync).not.toHaveBeenCalled();
+    expect(mockFsReadFileSync).not.toHaveBeenCalled();
+  });
+
+  it('flag off: never consults AuthStateService or the vault — vault read count 0 (D47 S6 §3)', async () => {
+    writeOnboardingState('https://cch.example.com');
+    writeLegacyCodexKey();
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { calls: 1, costUsd: 0.01 } }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { totalRequests: 1, totalCost: 0.01 } }),
+    });
+
+    const { usageService } = await import('../UsageService');
+    await usageService.getStats();
+
+    expect(vaultReadMock).not.toHaveBeenCalled();
+    expect(authStateHasRefreshedMock).not.toHaveBeenCalled();
+    expect(authStateGetStateMock).not.toHaveBeenCalled();
   });
 
   it('D47 S5 §2 — a KEY_INVALID login response is reported to AuthProbeScheduler as an additional trigger source (flag on)', async () => {
@@ -311,7 +423,9 @@ describe('UsageService', () => {
     writeOnboardingState('https://cch.example.com');
     vaultReadMock.mockReturnValue({
       status: 'ok',
-      doc: { payload: { codex: { apiKey: 'vault-api-key' } } },
+      doc: {
+        payload: { cchBaseUrl: 'https://cch.example.com', codex: { apiKey: 'vault-api-key' } },
+      },
     } as never);
 
     fetchMock.mockResolvedValueOnce({

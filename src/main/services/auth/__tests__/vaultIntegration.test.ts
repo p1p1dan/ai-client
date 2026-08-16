@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -88,10 +88,11 @@ function successFetchResponse(token: string) {
   };
 }
 
-describe('vault vs. legacy files — same login, same bytes (§3-1g)', () => {
-  it('vault claude/codex/cch baseUrls equal the legacy files byte-for-byte', async () => {
+describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored D47 S6 §3)', () => {
+  it('vault claude/codex baseUrls + claude authToken feed generateClaudeSettings()/generateManagedCodexConfigToml() to reproduce the exact managed-home content the runtime regenerate step writes', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-    fetchMock.mockResolvedValue(successFetchResponse('claude-secret-token-abc'));
+    const token = 'claude-secret-token-abc';
+    fetchMock.mockResolvedValue(successFetchResponse(token));
 
     const authIndex = await import('../index');
     (await import('electron')).app.setPath('userData', userDataDir);
@@ -101,22 +102,40 @@ describe('vault vs. legacy files — same login, same bytes (§3-1g)', () => {
     const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     expect(result.ok).toBe(true);
 
-    const claudeSettings = JSON.parse(
-      readFileSync(join(tempHome, '.claude', 'settings.json'), 'utf-8')
-    ) as { env: { ANTHROPIC_BASE_URL: string } };
-    const codexConfig = readFileSync(join(tempHome, '.codex', 'config.toml'), 'utf-8');
-    const codexBaseUrlMatch = codexConfig.match(/base_url = "([^"]+)"/);
-    const aiclientSettings = JSON.parse(
-      readFileSync(join(tempHome, '.aiclient', 'settings.json'), 'utf-8')
-    ) as { onboarding: { serverUrl: string } };
+    // Stop-dual-write (D47 S6 §2): flag-on never writes ~/.claude or
+    // ~/.codex anymore, so there is no independent legacy-file writer left
+    // to diff the vault against (the old S1-era version of this test read
+    // those files back off disk). Re-anchored instead to re-derive the
+    // managed-home outputs from the vault's own saved fields through the
+    // SAME pure generators `managedClaudeHomeStartup.ts`/`codexHome.ts`'s
+    // regenerate step calls, and check the result against the fixture's
+    // known literal values — still an independent-path parity proof (vault
+    // write path vs. generator function), just without a legacy write step
+    // in between.
+    const { generateClaudeSettings } = await import('../claudeHome');
+    const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
 
     const readResult = authIndex.getCredentialVault().read();
     expect(readResult.status).toBe('ok');
-    if (readResult.status === 'ok') {
-      expect(readResult.doc.payload.claude.baseUrl).toBe(claudeSettings.env.ANTHROPIC_BASE_URL);
-      expect(readResult.doc.payload.codex.baseUrl).toBe(codexBaseUrlMatch?.[1]);
-      expect(readResult.doc.payload.cchBaseUrl).toBe(aiclientSettings.onboarding.serverUrl);
-    }
+    if (readResult.status !== 'ok') return;
+    const { payload } = readResult.doc;
+
+    expect(payload.claude.baseUrl).toBe('https://cch-test.example.com/v1');
+    expect(payload.claude.authToken).toBe(token);
+    expect(payload.codex.baseUrl).toBe('https://cch-test.example.com/v1');
+    expect(payload.codex.apiKey).toBe(token); // same-key doctrine (D47 S6 §1 point 2)
+
+    const claudeSettings = generateClaudeSettings({
+      baseUrl: payload.claude.baseUrl,
+      authToken: payload.claude.authToken,
+    });
+    expect(claudeSettings.env).toMatchObject({
+      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: token,
+    });
+
+    const codexToml = generateManagedCodexConfigToml({ baseUrl: payload.codex.baseUrl });
+    expect(codexToml).toContain('base_url = "https://cch-test.example.com/v1"');
   });
 });
 
@@ -149,6 +168,37 @@ describe('end-to-end token leak guarantee (§3-5a)', () => {
     const combined = logs.join('\n');
     expect(combined).not.toContain(token);
     expect(combined).not.toContain(token.slice(0, 6));
+  });
+
+  it('flag off — a full verifyAndRegister run STILL never prints the real token (D47 S6 §3-1g re-anchor note: pins the OTHER half of this guarantee — the flag-on arm above alone cannot catch a mutation that only breaks flag-off logging)', async () => {
+    delete process.env.AICLIENT_MANAGED_CREDENTIALS;
+    const token = 'sk-ant-SENTINEL-FLAGOFF-4b8e1c';
+    fetchMock.mockResolvedValue(successFetchResponse(token));
+
+    const logs: string[] = [];
+    const capture = (...args: unknown[]) => {
+      logs.push(
+        args
+          .map((arg) => (arg instanceof Error ? `${arg.message}\n${arg.stack}` : String(arg)))
+          .join(' ')
+      );
+    };
+    vi.spyOn(console, 'log').mockImplementation(capture);
+    vi.spyOn(console, 'warn').mockImplementation(capture);
+    vi.spyOn(console, 'error').mockImplementation(capture);
+
+    const authIndex = await import('../index');
+    (await import('electron')).app.setPath('userData', userDataDir);
+    // Deliberately NOT promoting crypto: flag off never reaches vault.save.
+
+    const { onboardingService } = await import('../../onboarding/OnboardingService');
+    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
+    expect(result.ok).toBe(true);
+
+    const combined = logs.join('\n');
+    expect(combined).not.toContain(token);
+    expect(combined).not.toContain(token.slice(0, 6));
+    expect(authIndex.getCredentialVault().read()).toEqual({ status: 'absent' });
   });
 });
 

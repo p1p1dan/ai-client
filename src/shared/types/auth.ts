@@ -15,7 +15,7 @@ export type AuthState =
   | { status: 'authenticated'; email: string; remoteHealth: 'unknown' | 'valid' }
   | {
       status: 'credentials_invalid';
-      reason: 'rejected' | 'corrupt' | 'decrypt_failed';
+      reason: 'rejected' | 'corrupt' | 'decrypt_failed' | 'migration_incomplete';
       lastEmail: string | null;
     }
   // Keyring/session not yet unlocked — TEMPORARY, never folded into

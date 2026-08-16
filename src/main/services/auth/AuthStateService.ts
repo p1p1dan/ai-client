@@ -38,6 +38,12 @@ export interface AuthStateAgentHost {
   shutdown(): Promise<void>;
 }
 
+/** D47 S6 §1.4 — see `adoption.ts`'s `AuthStateMigrationSignal` (duck-typed here rather than imported, keeping this file's own dependency surface unchanged). */
+export interface AuthStateMigrationSignal {
+  migrationIncomplete: boolean;
+  legacyEmail: string | null;
+}
+
 export interface AuthStateServiceOptions {
   vault: AuthStateVault;
   env?: NodeJS.ProcessEnv;
@@ -45,6 +51,16 @@ export interface AuthStateServiceOptions {
   agentHost?: AuthStateAgentHost;
   /** Injectable clock for `markRejected()`'s `invalidatedAt` timestamp — defaults to `() => new Date()`. */
   now?: () => Date;
+  /**
+   * D47 S6 §1.4 — supplies the "registered=true but adoption's required
+   * source was missing, or the gateway guard rejected it" signal (plus the
+   * legacy email to prefill). Only consulted when `vault.read()` comes back
+   * `absent`; turns that into `credentials_invalid: migration_incomplete`
+   * instead of `signed_out`. Defaults to "never incomplete" — every S1-S5
+   * caller (tests, and any wiring that predates adoption) keeps its exact
+   * prior behavior unchanged.
+   */
+  migrationSignal?: () => AuthStateMigrationSignal;
 }
 
 const DEFAULT_STATE: AuthState = { status: 'signed_out', lastEmail: null };
@@ -54,17 +70,26 @@ function normalizeLastEmail(value: string | null | undefined): string | null {
 }
 
 /**
- * D47 S5 §1.1 — the seven `CredentialVault.read()` outcomes fold down to the
- * five `AuthState` arms. `rejected` is checked ahead of everything by the
- * vault itself (`read()`'s own priority order), so this switch only needs to
- * translate 1:1. `locked` gets its OWN arm (rev.2 self-correction — rev.1
- * folded it into `signed_out`, which forces a re-login for a merely-locked
- * keyring and conflicts with S2's "保字节" contract). `unsupported` stays
- * folded into `signed_out`, unchanged from S1 — rev.2 never re-litigated it
- * (only `locked` was called out as "rev.1 的错"), and it is not one of the
- * five columns in the S5 20-cell matrix (ok/cleared/rejected/locked/invalid).
+ * D47 S5 §1.1 / D47 S6 §1.4 — the seven `CredentialVault.read()` outcomes
+ * fold down to the six `AuthState` arms. `rejected` is checked ahead of
+ * everything by the vault itself (`read()`'s own priority order), so this
+ * switch only needs to translate 1:1. `locked` gets its OWN arm (rev.2
+ * self-correction — rev.1 folded it into `signed_out`, which forces a
+ * re-login for a merely-locked keyring and conflicts with S2's "保字节"
+ * contract). `unsupported` stays folded into `signed_out`, unchanged from
+ * S1 — rev.2 never re-litigated it (only `locked` was called out as "rev.1
+ * 的错"), and it is not one of the five columns in the S5 20-cell matrix
+ * (ok/cleared/rejected/locked/invalid). `absent` is the ONLY status that
+ * consults `migrationSignal`: a fresh S6 adoption skip for a
+ * "registered=true but source missing/guard rejected" machine reads as
+ * `credentials_invalid: migration_incomplete` rather than plain
+ * `signed_out` — every other `absent` case (never registered at all) is
+ * unaffected.
  */
-function mapVaultResultToAuthState(result: VaultReadResult): AuthState {
+function mapVaultResultToAuthState(
+  result: VaultReadResult,
+  migrationSignal: AuthStateMigrationSignal
+): AuthState {
   switch (result.status) {
     case 'ok':
       return {
@@ -73,7 +98,13 @@ function mapVaultResultToAuthState(result: VaultReadResult): AuthState {
         remoteHealth: 'unknown',
       };
     case 'absent':
-      return { status: 'signed_out', lastEmail: null };
+      return migrationSignal.migrationIncomplete
+        ? {
+            status: 'credentials_invalid',
+            reason: 'migration_incomplete',
+            lastEmail: migrationSignal.legacyEmail,
+          }
+        : { status: 'signed_out', lastEmail: null };
     case 'cleared':
       return { status: 'signed_out', lastEmail: normalizeLastEmail(result.lastEmail) };
     case 'unsupported':
@@ -121,6 +152,7 @@ export class AuthStateService {
   private readonly env?: NodeJS.ProcessEnv;
   private readonly agentHost: AuthStateAgentHost;
   private readonly now: () => Date;
+  private readonly migrationSignal: () => AuthStateMigrationSignal;
   private snapshot: AuthState = DEFAULT_STATE;
   private readonly listeners = new Set<(state: AuthState) => void>();
   // D47 S5 §3 I9 checkpoint ① — set synchronously by `beginLogout()`, BEFORE
@@ -140,6 +172,8 @@ export class AuthStateService {
     this.env = options.env;
     this.agentHost = options.agentHost ?? { shutdown: async () => {} };
     this.now = options.now ?? (() => new Date());
+    this.migrationSignal =
+      options.migrationSignal ?? (() => ({ migrationIncomplete: false, legacyEmail: null }));
   }
 
   /** Cache-only, never touches disk — safe to call on every render/query. */
@@ -158,7 +192,9 @@ export class AuthStateService {
     this.logoutInProgress = false;
     this.refreshed = true;
     const enabled = resolveManagedCredentialsEnabled(this.env ?? process.env);
-    const next = enabled ? mapVaultResultToAuthState(this.vault.read()) : DEFAULT_STATE;
+    const next = enabled
+      ? mapVaultResultToAuthState(this.vault.read(), this.migrationSignal())
+      : DEFAULT_STATE;
     const changed = !statesEqual(this.snapshot, next);
     this.snapshot = next;
     if (changed) {

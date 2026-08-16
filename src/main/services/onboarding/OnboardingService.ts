@@ -32,6 +32,74 @@ function getInjectedOnboardingServiceUrl(): string {
   return injected || DEFAULT_ONBOARDING_SERVICE_URL;
 }
 
+/**
+ * D47 S6 §2 (A-M5) — pure surgical removal for the flag-off logout path:
+ * deletes only `OPENAI_API_KEY` from an already-parsed `~/.codex/auth.json`
+ * object, preserving every other field (a user's own unrelated keys, or a
+ * ChatGPT-OAuth `tokens` block). Replaces the old `fs.rmSync(authPath)`
+ * full-file delete, which destroyed bytes this app never wrote. Pure: takes
+ * and returns a plain object, no filesystem access.
+ */
+export function removeOpenAiApiKey(authObj: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...authObj };
+  delete next.OPENAI_API_KEY;
+  return next;
+}
+
+/**
+ * D47 S6 §2 (A-M5) — pure surgical removal for the flag-off logout path:
+ * removes only the `[model_providers.jyw]` table this app itself writes
+ * (`upsertCodexConfigToml`'s counterpart), preserving every other table,
+ * root-level key, comment, and blank line a user's own `config.toml` may
+ * carry. The top-level `model_provider = "jyw"` root line is removed ONLY
+ * when its value is EXACTLY `"jyw"` — deleting a differently-valued root
+ * line would silently fall the user's own chosen provider back to
+ * `api.openai.com`; leaving a `model_provider = "jyw"` root line pointing at
+ * a now-removed table would hard-error the CLI on next launch. If the file
+ * has no `[model_providers.jyw]` table at all (a real-machine shape seen
+ * during S6 evidence-gathering: `[model_providers.OpenAI]`), this function
+ * is a complete no-op. Pure: string in, string out, no filesystem access.
+ */
+export function removeJywProviderFromToml(toml: string): string {
+  const headerRegex = /^\s*\[([^\]]+)\]\s*$/;
+  const jywRootLineRegex = /^\s*model_provider\s*=\s*"jyw"\s*$/;
+
+  if (toml === '') {
+    return toml;
+  }
+
+  const trimmed = toml.endsWith('\n') ? toml.slice(0, -1) : toml;
+  const lines = trimmed.split('\n');
+
+  const kept: string[] = [];
+  let skippingJywTable = false;
+
+  for (const line of lines) {
+    const headerMatch = line.match(headerRegex);
+    if (headerMatch) {
+      skippingJywTable = headerMatch[1] === 'model_providers.jyw';
+      if (skippingJywTable) {
+        continue;
+      }
+      kept.push(line);
+      continue;
+    }
+    if (skippingJywTable) {
+      continue;
+    }
+    if (jywRootLineRegex.test(line)) {
+      continue;
+    }
+    kept.push(line);
+  }
+
+  const result = kept.join('\n');
+  if (result === '') {
+    return '';
+  }
+  return result.endsWith('\n') ? result : `${result}\n`;
+}
+
 class OnboardingService {
   /**
    * Check if user has already completed onboarding.
@@ -162,7 +230,19 @@ class OnboardingService {
       };
     }
 
-    if (!this.persistCredentialFiles(result, normalizedServerUrl)) {
+    // D47 S6 §2 — stop dual-write: flag-on means the managed vault (below)
+    // is the sole credential source of truth, so the legacy
+    // `~/.claude`/`~/.codex`/`~/.claude.json` writes below (all three of
+    // `persistCredentialFiles`'s writers: writeClaudeConfig/writeCodexConfig/
+    // ensureClaudeOnboardingComplete) are dead weight that only races the
+    // bytes the vault now owns. `saveOnboardingState` a few lines down is
+    // deliberately NOT part of this gate — `onboarding.serverUrl` still gets
+    // written every login regardless of the flag (both the flag-off rollback
+    // path and adoption's own corroborating source, §1, depend on it — A-M3).
+    if (
+      !resolveManagedCredentialsEnabled() &&
+      !this.persistCredentialFiles(result, normalizedServerUrl)
+    ) {
       return { ok: false, error: 'Failed to write CLI credentials' };
     }
 
@@ -342,16 +422,35 @@ class OnboardingService {
    * (`{...base, ...patch}`), so a bare `{onboarding:{registered:false}}`
    * patch REPLACES the whole `onboarding` object and silently drops `email`,
    * breaking the flag-off pre-fill that depends on `onboarding.email`
-   * surviving a logout.
+   * surviving a logout. D47 S6 §2 (A-m7) widens this re-paste to
+   * `serverUrl`/`registeredAt` too — the same shallow-merge drop applied to
+   * those two keys, confirmed on this machine.
+   *
+   * D47 S6 §2 — flag-on: `removeClaudeCredentials`/`removeCodexConfig` are
+   * SKIPPED (the company token deliberately stays at `~/.claude`/`~/.codex`
+   * after a flag-on logout — U1 "留置", so an outside terminal keeps working;
+   * see the logout dialog copy, A-m9). The `mergeSettingsPatch` call below is
+   * NEVER flag-gated — `registered:false` is the SECOND latch against silent
+   * re-adoption after logout (the first is §1.5's marker-present +
+   * vault-not-absent skip in `ensureVaultAdoption`); skipping it here would
+   * let a logged-out managed machine get silently re-adopted on next boot.
    */
   logout(): boolean {
     try {
       const currentRegistration = this.checkRegistration();
       const email = currentRegistration.registered ? currentRegistration.email : undefined;
+      const serverUrl = currentRegistration.registered ? currentRegistration.serverUrl : undefined;
+      const registeredAt = currentRegistration.registered
+        ? currentRegistration.registeredAt
+        : undefined;
 
-      this.removeClaudeCredentials();
-      this.removeCodexConfig();
-      return mergeSettingsPatch({ onboarding: { registered: false, email } });
+      if (!resolveManagedCredentialsEnabled()) {
+        this.removeClaudeCredentials();
+        this.removeCodexConfig();
+      }
+      return mergeSettingsPatch({
+        onboarding: { registered: false, email, serverUrl, registeredAt },
+      });
     } catch (error) {
       console.error('[OnboardingService] Failed to logout:', error);
       return false;
@@ -677,6 +776,14 @@ class OnboardingService {
     fs.writeFileSync(settingsPath, `${JSON.stringify(next, null, 2)}\n`, { encoding: 'utf-8' });
   }
 
+  /**
+   * D47 S6 §2 (A-M5) — surgical, not full-file: `[model_providers.jyw]`
+   * (+ the conditional `model_provider` root line) is stripped out of
+   * `config.toml` via `removeJywProviderFromToml`, and `OPENAI_API_KEY`
+   * alone is stripped out of `auth.json` via `removeOpenAiApiKey` — both
+   * files are REWRITTEN, never `fs.rmSync`'d, so a user's own unrelated
+   * provider tables / keys / comments survive a flag-off logout intact.
+   */
   private removeCodexConfig(): void {
     const codexDir = path.join(os.homedir(), '.codex');
     const configPath = path.join(codexDir, 'config.toml');
@@ -684,10 +791,19 @@ class OnboardingService {
 
     try {
       if (fs.existsSync(configPath)) {
-        fs.rmSync(configPath, { force: true });
+        const original = fs.readFileSync(configPath, 'utf-8');
+        const next = removeJywProviderFromToml(original);
+        if (next !== original) {
+          fs.writeFileSync(configPath, next, { encoding: 'utf-8' });
+        }
       }
       if (fs.existsSync(authPath)) {
-        fs.rmSync(authPath, { force: true });
+        const existingAuth = this.readJsonIfExists(authPath) as Record<string, unknown>;
+        const nextAuth = removeOpenAiApiKey(existingAuth);
+        fs.writeFileSync(authPath, `${JSON.stringify(nextAuth, null, 2)}\n`, {
+          encoding: 'utf-8',
+          mode: 0o600,
+        });
       }
     } catch (error) {
       console.warn('[OnboardingService] Failed to remove Codex config:', error);

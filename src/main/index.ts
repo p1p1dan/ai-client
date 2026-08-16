@@ -42,7 +42,13 @@ import { initClaudeProviderWatcher } from './ipc/claudeProvider';
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
-import { createRealVaultCrypto, getAuthStateService, promoteVaultCrypto } from './services/auth';
+import {
+  createRealVaultCrypto,
+  getAuthStateService,
+  getCredentialVault,
+  promoteVaultCrypto,
+} from './services/auth';
+import { ensureVaultAdoption } from './services/auth/adoption';
 import {
   activateManagedClaudeHome,
   ensureManagedHomeSkeleton,
@@ -747,6 +753,14 @@ app
     // first `BrowserWindow`, which synchronously fires `browser-window-created`
     // (the upgrade latch registered above), so `promoteVaultCrypto` has
     // already installed the real crypto adapter by this point.
+
+    // D47 S6 §1.5 — adoption runs AFTER crypto promotion and BEFORE
+    // `regenerateFromVault()`: on a match it calls `vault.save()`, so the
+    // very next `regenerateFromVault()` read below already sees a freshly
+    // adopted vault instead of materializing an empty claude-home/codex-home
+    // that would force a needless re-login. Flag-off is a zero-FS-IO no-op.
+    await ensureVaultAdoption(getCredentialVault(), app.getPath('userData'));
+
     await regenerateFromVault();
 
     // D47 S5 §1.3 — the startup auth-state computation, strictly AFTER

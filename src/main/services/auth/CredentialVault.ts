@@ -38,9 +38,19 @@ export interface VaultCrypto {
   decrypt(cipherText: string): string;
 }
 
-/** The decrypted (or, on `enc:"none"`, plain) contents of the vault payload. */
+/**
+ * The decrypted (or, on `enc:"none"`, plain) contents of the vault payload.
+ *
+ * `identity.userId` — D47 S6 §1.1: relaxed from `number` to `number|null`.
+ * Adoption (`adoption.ts`) never has a real numeric id to put here (the
+ * legacy on-disk sources it reads carry no id field, and a probe response's
+ * body is deliberately never parsed for one — "probe 200 回填 id" was
+ * considered and rejected, A-m2), so an adopted payload always saves
+ * `userId: null`. A real login (`OnboardingService.verifyAndRegister`) still
+ * gets the server-issued numeric id.
+ */
 export interface VaultPayload {
-  identity: { email: string; userId: number };
+  identity: { email: string; userId: number | null };
   cchBaseUrl: string;
   claude: { baseUrl: string; authToken: string };
   codex: { baseUrl: string; apiKey: string };

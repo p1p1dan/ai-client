@@ -269,6 +269,12 @@ export function UserProfileCard({ presentation, onRequestClose }: UserProfileCar
                 'This will terminate all active agent and terminal sessions. You will need to register again to continue using AI features.'
               )}
             </DialogDescription>
+            {/* D47 S6 §2 (A-m9) — known limitation: flag-on logout stops
+                touching ~/.claude at all (U1 decision), so a CLI logged in
+                outside this app keeps working after this dialog's logout. */}
+            <p className="text-xs text-muted-foreground">
+              {t('This does not affect CLI logins in your system terminal.')}
+            </p>
           </DialogHeader>
           <DialogFooter variant="bare">
             <Button

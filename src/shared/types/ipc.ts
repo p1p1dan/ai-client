@@ -356,8 +356,6 @@ export const IPC_CHANNELS = {
   ONBOARDING_INSTALL_PROGRESS: 'onboarding:installProgress',
   ONBOARDING_CANCEL_INSTALL: 'onboarding:cancelInstall',
   ONBOARDING_LOGOUT: 'onboarding:logout',
-  ONBOARDING_LIVE_CREDENTIALS_STATUS: 'onboarding:liveCredentialsStatus',
-  ONBOARDING_CHECK_CREDENTIALS_HEALTH: 'onboarding:checkCredentialsHealth',
 
   // OpenChamber Chat / Agent Host Runtime
   CHAT_ENSURE_HOST: 'chat:ensureHost',

@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { UsageStatsResult } from '@shared/types';
 import { net } from 'electron';
-import { getAuthProbeScheduler, getCredentialVault } from '../auth';
+import { getAuthProbeScheduler, getAuthStateService, getCredentialVault } from '../auth';
 import { classifyAuthLoginResponse } from '../auth/AuthProbeScheduler';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { onboardingService } from '../onboarding';
@@ -82,17 +82,53 @@ function readCodexApiKeyLegacy(): string | null {
 }
 
 /**
- * D47 S5 §2 — "key 来源 flag-on 走 vault" (`serverUrl` stays legacy;
- * `onboardingService.checkRegistration().serverUrl` is untouched — S6 owns
- * moving that registration too, A-track m4). Flag off keeps reading
- * `~/.codex/auth.json` exactly as before.
+ * D47 S6 §3 (A-M3 + B-M4) — the single-authority credential source for
+ * `getStats()`. Flag-on: the admission gate migrates from legacy
+ * `onboardingService.checkRegistration()` to `AuthState` (mirrors
+ * `main/ipc/auth.ts`'s `hasRefreshed()`-guard-then-`getState()` idiom), and
+ * `{serverUrl, apiKey}` come out of ONE vault snapshot
+ * (`cchBaseUrl`/`codex.apiKey`) — the legacy `~/.codex/auth.json` reader
+ * never participates (call count 0, asserted in tests). A vault status other
+ * than `'ok'` (absent/cleared/rejected/locked/invalid/unsupported) is
+ * `unavailable` and NEVER falls back to the legacy reader — stop-dual-write
+ * (S6 §2) means `~/.codex/auth.json` can be stale or hold a since-rejected
+ * key, and falling back to it would let old credentials silently come back
+ * to life. Flag-off: unchanged legacy status quo (vault read count 0).
  */
-function resolveUsageApiKey(): string | null {
+export type UsageAuthTarget =
+  | { status: 'ok'; serverUrl: string; apiKey: string }
+  | { status: 'unavailable'; reason: string };
+
+function resolveUsageAuthTarget(): UsageAuthTarget {
   if (resolveManagedCredentialsEnabled()) {
-    const result = getCredentialVault().read();
-    return result.status === 'ok' ? result.doc.payload.codex.apiKey : null;
+    const authStateService = getAuthStateService();
+    if (!authStateService.hasRefreshed()) {
+      authStateService.refresh();
+    }
+    if (authStateService.getState().status !== 'authenticated') {
+      return { status: 'unavailable', reason: 'Not registered' };
+    }
+
+    const vaultResult = getCredentialVault().read();
+    if (vaultResult.status !== 'ok') {
+      return { status: 'unavailable', reason: 'Credentials not available' };
+    }
+    return {
+      status: 'ok',
+      serverUrl: vaultResult.doc.payload.cchBaseUrl,
+      apiKey: vaultResult.doc.payload.codex.apiKey,
+    };
   }
-  return readCodexApiKeyLegacy();
+
+  const onboarding = onboardingService.checkRegistration();
+  if (!onboarding.registered || !onboarding.serverUrl) {
+    return { status: 'unavailable', reason: 'Not registered' };
+  }
+  const apiKey = readCodexApiKeyLegacy();
+  if (!apiKey) {
+    return { status: 'unavailable', reason: 'Credentials not available' };
+  }
+  return { status: 'ok', serverUrl: onboarding.serverUrl, apiKey };
 }
 
 /**
@@ -202,17 +238,13 @@ async function postAction(
 class UsageService {
   async getStats(): Promise<UsageStatsResult> {
     try {
-      const onboarding = onboardingService.checkRegistration();
-      if (!onboarding.registered || !onboarding.serverUrl) {
-        return { error: 'Not registered' };
+      const authTarget = resolveUsageAuthTarget();
+      if (authTarget.status !== 'ok') {
+        return { error: authTarget.reason };
       }
 
-      const apiKey = resolveUsageApiKey();
-      if (!apiKey) {
-        return { error: 'Credentials not available' };
-      }
-
-      const serverUrl = onboarding.serverUrl.trim().replace(/\/+$/, '');
+      const apiKey = authTarget.apiKey;
+      const serverUrl = authTarget.serverUrl.trim().replace(/\/+$/, '');
 
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

@@ -67,10 +67,13 @@ export interface GateDecision {
 }
 
 /**
- * D47 S5 §1.1/§4 — `credentials_invalid`'s three sub-reasons (`rejected` /
- * `corrupt` / `decrypt_failed`) all read as onboarding reason `'expired'`:
- * the user-facing distinction that matters is "your session needs
- * re-verifying", not which internal failure mode produced it.
+ * D47 S5 §1.1/§4 / D47 S6 §1.4 — `credentials_invalid`'s four sub-reasons
+ * (`rejected` / `corrupt` / `decrypt_failed` / `migration_incomplete`) all
+ * read as onboarding reason `'expired'`: the user-facing distinction that
+ * matters is "your session needs re-verifying", not which internal failure
+ * mode produced it. `migration_incomplete`'s `lastEmail` (legacy-email
+ * prefill, S6 §1.4) flows through the existing `state.lastEmail ?? ''` below
+ * unchanged — no separate branch needed.
  */
 export function deriveOnboardingEntry(state: AuthState): AuthGateOnboardingEntry | null {
   switch (state.status) {
@@ -278,7 +281,10 @@ function isValidAuthState(value: unknown): value is AuthState {
     case 'credentials_invalid': {
       const v = value as { reason?: unknown; lastEmail?: unknown };
       return (
-        (v.reason === 'rejected' || v.reason === 'corrupt' || v.reason === 'decrypt_failed') &&
+        (v.reason === 'rejected' ||
+          v.reason === 'corrupt' ||
+          v.reason === 'decrypt_failed' ||
+          v.reason === 'migration_incomplete') &&
         (v.lastEmail === null || typeof v.lastEmail === 'string')
       );
     }

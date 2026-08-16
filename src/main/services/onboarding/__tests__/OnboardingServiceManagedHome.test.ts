@@ -232,4 +232,38 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     expect(existsSync(join(userDataDir, 'codex-home'))).toBe(false);
     expect(shutdownMock).not.toHaveBeenCalled();
   });
+
+  it('logout() (flag ON) skips removeClaudeCredentials()/removeCodexConfig() entirely — legacy ~/.claude and ~/.codex are never touched, matching stop-dual-write symmetry with verifyAndRegister (D47 S6 §2)', async () => {
+    // Flag stays '1' from beforeEach. Pre-seed legacy files that a flag-on
+    // verifyAndRegister would NEVER have written (persistCredentialFiles is
+    // gated off) but that could still exist on disk from a prior flag-off
+    // session — logout() must leave them completely untouched.
+    const legacyClaudeSettingsPath = join(tempHome, '.claude', 'settings.json');
+    mkdirSync(join(tempHome, '.claude'), { recursive: true });
+    writeFileSync(
+      legacyClaudeSettingsPath,
+      JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'https://old', KEEP: 'x' } }, null, 2),
+      'utf-8'
+    );
+    const legacyCodexConfigPath = join(tempHome, '.codex', 'config.toml');
+    const legacyCodexAuthPath = join(tempHome, '.codex', 'auth.json');
+    mkdirSync(join(tempHome, '.codex'), { recursive: true });
+    writeFileSync(legacyCodexConfigPath, 'model_provider = "jyw"\n', 'utf-8');
+    writeFileSync(legacyCodexAuthPath, JSON.stringify({ OPENAI_API_KEY: 'stale' }), 'utf-8');
+
+    mockRegisterResponse();
+    const { onboardingService } = await import('../OnboardingService');
+    await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
+    const result = onboardingService.logout();
+
+    expect(result).toBe(true);
+    // Byte-for-byte untouched — logout() must not even read-modify-write them.
+    expect(readFileSync(legacyClaudeSettingsPath, 'utf-8')).toBe(
+      JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'https://old', KEEP: 'x' } }, null, 2)
+    );
+    expect(readFileSync(legacyCodexConfigPath, 'utf-8')).toBe('model_provider = "jyw"\n');
+    expect(readFileSync(legacyCodexAuthPath, 'utf-8')).toBe(
+      JSON.stringify({ OPENAI_API_KEY: 'stale' })
+    );
+  });
 });

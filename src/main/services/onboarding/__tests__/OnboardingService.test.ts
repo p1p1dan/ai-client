@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchMock = vi.fn();
 const checkPrerequisitesMock = vi.fn();
@@ -243,7 +243,7 @@ describe('OnboardingService', () => {
     expect(readFileSync(claudeJsonPath, 'utf-8')).not.toBe(originalClaudeJson);
   });
 
-  it('logout removes local CLI credentials', async () => {
+  it("logout removes local CLI credentials surgically — config.toml/auth.json are REWRITTEN, never deleted, and a user's own unrelated provider/keys/comments/files survive (D47 S6 §2, re-anchored)", async () => {
     const { onboardingService } = await import('../OnboardingService');
 
     mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
@@ -271,11 +271,34 @@ describe('OnboardingService', () => {
     );
 
     mkdirSync(join(tempHome, '.codex'), { recursive: true });
-    writeFileSync(join(tempHome, '.codex', 'config.toml'), 'model_provider = "jyw"\n');
+    const codexConfigPath = join(tempHome, '.codex', 'config.toml');
+    const codexAuthPath = join(tempHome, '.codex', 'auth.json');
+    const sentinelPath = join(tempHome, '.codex', 'sentinel-user-file');
+    // Fixture deliberately mixes: a comment, this app's own root line + jyw
+    // table, and a user's own unrelated provider table — all of which must
+    // survive except the jyw root line and the jyw table itself.
     writeFileSync(
-      join(tempHome, '.codex', 'auth.json'),
-      JSON.stringify({ OPENAI_API_KEY: 'k' }, null, 2)
+      codexConfigPath,
+      [
+        '# user comment above their own settings',
+        'model_provider = "jyw"',
+        '',
+        '[model_providers.my-own-provider]',
+        'name = "My Own Provider"',
+        'base_url = "https://my-own.example.com/v1"',
+        '',
+        '[model_providers.jyw]',
+        'name = "jyw"',
+        'base_url = "https://cch.example.com/v1"',
+        'wire_api = "responses"',
+        '',
+      ].join('\n')
     );
+    writeFileSync(
+      codexAuthPath,
+      JSON.stringify({ OPENAI_API_KEY: 'k', OPENAI_ORG: 'user-own-org' }, null, 2)
+    );
+    writeFileSync(sentinelPath, 'user-owned file untouched by logout\n');
 
     expect(onboardingService.logout()).toBe(true);
 
@@ -283,8 +306,26 @@ describe('OnboardingService', () => {
       env?: Record<string, unknown>;
     };
     expect(updatedClaudeSettings.env).toEqual({ KEEP: 'x' });
-    expect(existsSync(join(tempHome, '.codex', 'config.toml'))).toBe(false);
-    expect(existsSync(join(tempHome, '.codex', 'auth.json'))).toBe(false);
+
+    // Surgical, not rmSync: both files still exist.
+    expect(existsSync(codexConfigPath)).toBe(true);
+    expect(existsSync(codexAuthPath)).toBe(true);
+
+    const updatedCodexConfig = readFileSync(codexConfigPath, 'utf-8');
+    expect(updatedCodexConfig).not.toMatch(/^model_provider = "jyw"$/m);
+    expect(updatedCodexConfig).not.toMatch(/\[model_providers\.jyw\]/);
+    expect(updatedCodexConfig).not.toContain('base_url = "https://cch.example.com/v1"');
+    // User's own comment, root-order, and unrelated provider table survive byte-for-byte.
+    expect(updatedCodexConfig).toContain('# user comment above their own settings');
+    expect(updatedCodexConfig).toContain('[model_providers.my-own-provider]');
+    expect(updatedCodexConfig).toContain('base_url = "https://my-own.example.com/v1"');
+
+    expect(JSON.parse(readFileSync(codexAuthPath, 'utf-8'))).toEqual({
+      OPENAI_ORG: 'user-own-org',
+    });
+
+    // A file logout never touches at all must survive verbatim.
+    expect(readFileSync(sentinelPath, 'utf-8')).toBe('user-owned file untouched by logout\n');
   });
 
   it('D47 S5 §0-3 regression — logout re-pastes email instead of letting the shallow settings merge silently drop it', async () => {
@@ -659,5 +700,125 @@ describe('OnboardingService', () => {
       codexInstalled: false,
       codexVersion: undefined,
     });
+  });
+});
+
+/**
+ * D47 S6 §2 (A-M5) — dedicated pure-function coverage for the two surgical
+ * removal helpers backing `removeCodexConfig()`. Zero filesystem, zero
+ * `OnboardingService` instance: string/object in, string/object out.
+ *
+ * Dynamic-imported once in `beforeAll` (not a static top-level import):
+ * `../OnboardingService` pulls in `electron`, which this file's top-level
+ * `vi.mock('electron', ...)` factory satisfies with `fetchMock` — a static
+ * import here would hoist above that `const fetchMock = vi.fn()`
+ * declaration and throw "Cannot access 'fetchMock' before initialization".
+ */
+let removeOpenAiApiKey: (authObj: Record<string, unknown>) => Record<string, unknown>;
+let removeJywProviderFromToml: (toml: string) => string;
+
+beforeAll(async () => {
+  const mod = await import('../OnboardingService');
+  removeOpenAiApiKey = mod.removeOpenAiApiKey;
+  removeJywProviderFromToml = mod.removeJywProviderFromToml;
+});
+
+describe('removeOpenAiApiKey (pure, D47 S6 §2)', () => {
+  it("removes only OPENAI_API_KEY, preserving a user's own unrelated keys", () => {
+    const input = { OPENAI_API_KEY: 'secret', OPENAI_ORG: 'user-own-org', CUSTOM_FLAG: true };
+    expect(removeOpenAiApiKey(input)).toEqual({ OPENAI_ORG: 'user-own-org', CUSTOM_FLAG: true });
+  });
+
+  it('is a no-op (returns an equal, distinct object) when the key is already absent', () => {
+    const input = { OPENAI_ORG: 'user-own-org' };
+    const result = removeOpenAiApiKey(input);
+    expect(result).toEqual(input);
+    expect(result).not.toBe(input);
+  });
+
+  it('handles an empty object', () => {
+    expect(removeOpenAiApiKey({})).toEqual({});
+  });
+
+  it('never mutates the input object', () => {
+    const input = { OPENAI_API_KEY: 'secret', KEEP: 1 };
+    const snapshot = { ...input };
+    removeOpenAiApiKey(input);
+    expect(input).toEqual(snapshot);
+  });
+});
+
+describe('removeJywProviderFromToml (pure, D47 S6 §2)', () => {
+  it('strips the [model_providers.jyw] table and the root model_provider = "jyw" line, preserving a user\'s own comment, blank lines, and unrelated provider table', () => {
+    const toml = [
+      '# user comment above their own settings',
+      'model_provider = "jyw"',
+      '',
+      '[model_providers.my-own-provider]',
+      'name = "My Own Provider"',
+      'base_url = "https://my-own.example.com/v1"',
+      '',
+      '[model_providers.jyw]',
+      'name = "jyw"',
+      'base_url = "https://cch.example.com/v1"',
+      'wire_api = "responses"',
+      '',
+    ].join('\n');
+
+    const result = removeJywProviderFromToml(toml);
+
+    expect(result).not.toMatch(/^model_provider = "jyw"$/m);
+    expect(result).not.toContain('[model_providers.jyw]');
+    expect(result).not.toContain('base_url = "https://cch.example.com/v1"');
+    expect(result).toContain('# user comment above their own settings');
+    expect(result).toContain('[model_providers.my-own-provider]');
+    expect(result).toContain('name = "My Own Provider"');
+    expect(result).toContain('base_url = "https://my-own.example.com/v1"');
+  });
+
+  it('leaves a root model_provider line pointing at a DIFFERENT value completely untouched', () => {
+    const toml = [
+      'model_provider = "my-own-provider"',
+      '',
+      '[model_providers.jyw]',
+      'name = "jyw"',
+      '',
+    ].join('\n');
+
+    const result = removeJywProviderFromToml(toml);
+
+    expect(result).toContain('model_provider = "my-own-provider"');
+    expect(result).not.toContain('[model_providers.jyw]');
+  });
+
+  it('is a complete no-op when there is no [model_providers.jyw] table at all (real-machine shape: [model_providers.OpenAI])', () => {
+    const toml = [
+      '[model_providers.OpenAI]',
+      'name = "OpenAI"',
+      'base_url = "https://api.openai.com/v1"',
+      '',
+    ].join('\n');
+
+    expect(removeJywProviderFromToml(toml)).toBe(toml);
+  });
+
+  it('handles an empty string', () => {
+    expect(removeJywProviderFromToml('')).toBe('');
+  });
+
+  it('handles a file that is ONLY the jyw table, collapsing to an empty string', () => {
+    const toml = [
+      '[model_providers.jyw]',
+      'name = "jyw"',
+      'base_url = "https://cch.example.com/v1"',
+      '',
+    ].join('\n');
+
+    expect(removeJywProviderFromToml(toml)).toBe('');
+  });
+
+  it('preserves a comment/blank-line-only sentinel file untouched', () => {
+    const toml = ['# just a comment', '', '# and another', ''].join('\n');
+    expect(removeJywProviderFromToml(toml)).toBe(toml);
   });
 });

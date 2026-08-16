@@ -14,6 +14,7 @@ import type { AuthState } from '@shared/types/auth';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { getAuthProbeScheduler, getAuthStateService } from '../services/auth';
 import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
+import { getAdoptionLatch } from '../services/auth/adoption';
 import { getManagedClaudeHomeDir } from '../services/auth/claudeHome';
 import { onboardingService } from '../services/onboarding';
 
@@ -72,7 +73,15 @@ export function registerAuthHandlers(): void {
     };
   });
 
-  ipcMain.handle(IPC_CHANNELS.AUTH_GET_GATE_SNAPSHOT, () => {
+  ipcMain.handle(IPC_CHANNELS.AUTH_GET_GATE_SNAPSHOT, async () => {
+    // D47 S6 §1.5 — front-loaded: a caller that races the boot sequence
+    // (renderer mounts before `ensureVaultAdoption()` has resolved) must
+    // never observe a pre-adoption snapshot and flash `first_run`/
+    // `cli-check` before flipping to `authenticated` a moment later. A
+    // no-op (already-resolved promise) once adoption has settled, and on
+    // flag-off (adoption never even calls `vault.read()` there).
+    await getAdoptionLatch();
+
     const managed = resolveManagedCredentialsEnabled();
     const skipAuthGate = resolveSkipAuthGate({ env: process.env, isPackaged: app.isPackaged });
     if (!managed) {

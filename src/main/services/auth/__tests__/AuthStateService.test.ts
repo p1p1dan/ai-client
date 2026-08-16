@@ -142,6 +142,109 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
   });
 });
 
+describe('AuthStateService — migrationSignal / migration_incomplete (D47 S6 §1.4)', () => {
+  it('vault absent + migrationSignal incomplete produces credentials_invalid/migration_incomplete with the legacy email', () => {
+    const service = new AuthStateService({
+      vault: fakeVault({ status: 'absent' }),
+      env: ON_ENV,
+      migrationSignal: () => ({ migrationIncomplete: true, legacyEmail: 'legacy@jcdz.cc' }),
+    });
+    expect(service.refresh()).toEqual({
+      status: 'credentials_invalid',
+      reason: 'migration_incomplete',
+      lastEmail: 'legacy@jcdz.cc',
+    });
+  });
+
+  it('vault absent + migrationSignal NOT incomplete is still a plain signed_out', () => {
+    const service = new AuthStateService({
+      vault: fakeVault({ status: 'absent' }),
+      env: ON_ENV,
+      migrationSignal: () => ({ migrationIncomplete: false, legacyEmail: null }),
+    });
+    expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: null });
+  });
+
+  it('no migrationSignal injected at all defaults to the no-op signal (plain signed_out on absent)', () => {
+    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), env: ON_ENV });
+    expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: null });
+  });
+
+  it('every non-absent vault status ignores migrationSignal entirely, even when it claims incomplete', () => {
+    const incompleteSignal = () => ({ migrationIncomplete: true, legacyEmail: 'legacy@jcdz.cc' });
+
+    const cleared = new AuthStateService({
+      vault: fakeVault({ status: 'cleared', lastEmail: 'past@jcdz.cc' }),
+      env: ON_ENV,
+      migrationSignal: incompleteSignal,
+    });
+    expect(cleared.refresh()).toEqual({ status: 'signed_out', lastEmail: 'past@jcdz.cc' });
+
+    const rejected = new AuthStateService({
+      vault: fakeVault({ status: 'rejected', lastEmail: 'user@jcdz.cc' }),
+      env: ON_ENV,
+      migrationSignal: incompleteSignal,
+    });
+    expect(rejected.refresh()).toEqual({
+      status: 'credentials_invalid',
+      reason: 'rejected',
+      lastEmail: 'user@jcdz.cc',
+    });
+
+    const locked = new AuthStateService({
+      vault: fakeVault({ status: 'locked', lastEmail: 'user@jcdz.cc' }),
+      env: ON_ENV,
+      migrationSignal: incompleteSignal,
+    });
+    expect(locked.refresh()).toEqual({ status: 'locked', lastEmail: 'user@jcdz.cc' });
+
+    const unsupported = new AuthStateService({
+      vault: fakeVault({ status: 'unsupported', lastEmail: 'user@jcdz.cc' }),
+      env: ON_ENV,
+      migrationSignal: incompleteSignal,
+    });
+    expect(unsupported.refresh()).toEqual({ status: 'signed_out', lastEmail: 'user@jcdz.cc' });
+
+    const invalid = new AuthStateService({
+      vault: fakeVault({ status: 'invalid', reason: 'decrypt_failed', lastEmail: 'user@jcdz.cc' }),
+      env: ON_ENV,
+      migrationSignal: incompleteSignal,
+    });
+    expect(invalid.refresh()).toEqual({
+      status: 'credentials_invalid',
+      reason: 'decrypt_failed',
+      lastEmail: 'user@jcdz.cc',
+    });
+
+    const ok = new AuthStateService({
+      vault: fakeVault({
+        status: 'ok',
+        doc: {
+          version: 1,
+          enc: 'none',
+          lastEmail: 'user@jcdz.cc',
+          invalidatedAt: null,
+          encReason: 'unavailable',
+          payload: {
+            identity: { email: 'user@jcdz.cc', userId: 1 },
+            cchBaseUrl: 'https://cch.example.com',
+            claude: { baseUrl: 'https://cch.example.com/v1', authToken: 'x' },
+            codex: { baseUrl: 'https://cch.example.com/v1', apiKey: 'y' },
+            receivedAt: '2026-08-15T00:00:00.000Z',
+          },
+        },
+      }),
+      env: ON_ENV,
+      migrationSignal: incompleteSignal,
+    });
+    expect(ok.refresh()).toEqual({
+      status: 'authenticated',
+      email: 'user@jcdz.cc',
+      remoteHealth: 'unknown',
+    });
+  });
+});
+
 describe('AuthStateService — subscription lifecycle, value-changed-only broadcast (D47 S5 §1.2)', () => {
   it('refresh() notifies onChange when the value actually changes', () => {
     // The service's own pre-refresh default is already `signed_out/null`
