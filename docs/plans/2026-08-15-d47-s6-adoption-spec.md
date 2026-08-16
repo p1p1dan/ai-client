@@ -154,3 +154,21 @@ probe valid + 用量卡）→ as-built + 台账 + plantree + baseline 分发纪�
 | 改判 A 轨建议一处 | crypto 不可用时不加跳过重试——与登录 save() 降级语义一致优先（§1.5，登记 A-M6 顾虑） |
 | rev.1 裁定 | a 半真（位置对、链重构）；b 真（marker 语义补齐）；c 半真（`~/.aiclient` 切出）；d 伪→类型放宽定论；e 真（连带 5 处注记 + 退役批注册） |
 | 母规格连带修订 | §6 守卫措辞（网关集合）；§4 reason 加 `migration_incomplete`；S4 行投影链删除归属；「免重登」承诺收窄 |
+
+## §8 as-built（2026-08-15 施工收口，commit `8cfef4d`）
+
+单施工员全量（100 分钟长跑，尾段报告丢前段清单——编排者以 git status 实况核对：21 改 + 5 新，+2539/−93）+
+收尾员四门与变异批 + 编排者补 ⑥b pin。
+门禁串行：lint 0（**发现 Biome 诊断截断陷阱**：默认上限被字典序靠前的大体量无关 html 吃满，S6 改动文件的
+13 条真实问题被静默隐藏——`--max-diagnostics` 复核修复，坑记档）/ typecheck 0 / typecheck:agent-host 0 /
+**vitest 208 文件 3973 例 0 红**（S5 3874 → +99）。
+**变异 7/7 零存活**（收尾员执行 6.5 对 + ⑥b 静态扫描测试系施工遗漏、编排者当场补落并实跑红绿闭环），
+记录 [reviews/mutations.log](./2026-08-15-d47-s6-reviews/mutations.log)。
+
+规格偏差（不改契约）：
+1. 「七种 fs 调用」按工程判断落为七名写面 spy 集（appendFileSync 顶 chmodSync——生产今仅用三种，超集覆盖）。
+2. 变异④由通用 mutation-trace 泛化覆盖（任一写手泄漏产出可区分 trace 条目），非逐写手专测。
+3. 变异①红断言实际值与谱面字面预告有出入（参数化 fixture 未预置 legacy 齐活），已如实记录。
+
+**尚欠（本片验收清单 §6 的真机双步）**：flag-off 登录造场（验证码 ×1）→ flag-on 冷启动零重登证据 →
+分发纪律解除标注。投影链退役批已在 roadmap 阶段 4 注册欠账（S34 四处注记连带改判随退役批做）。
