@@ -22,3 +22,4 @@
 - 2026-08-03 `session-${Date.now()}` 会话 ID 毫秒级碰撞（chatSessionActions.ts:34，既有）：同毫秒双击 New 会撞 ID；测试已显式绕开。改 crypto.randomUUID 或加计数器后缀，动红线 store 宜随下批顺手。
 - **buchong1 参考批候选池**（2026-08-13，ZCode 九图对照）：S 档六件 + M 档四件 + L 档四件的完整分档与 file:line 证据见 [分析档 §4](../../plans/2026-08-13-buchong1-zcode-reference.md)；其中「回合级 files changed + Undo 汇总条」（Undo 通道全仓无先例，最重）与「Always allow in this project 项目级持久化」（涉安全层）建议只存念不排期；采纳拍板挂 open-q #32。
 - UsageService 的 /api/actions/* 端点已被 cch 标记弃用（响应头 deprecation/sunset: 2026-12-31，应迁 /api/v1）——E5 补测发现（docs/plans/2026-08-15-d47-s0-spikes/e5-cch-auth-probe.md）；D47 S5 动 UsageService 时顺带评估，或另立小票。（2026-08-15）
+- Bun 版本横幅阈值过时（用户 2026-08-15 GUI 点验现场提出）：ClaudeVersion.ts 以「>2.1.112 即 bun-incompatible」静态阈值弹降级横幅；新版 claude 已重新内置 node，规则应改（候选：a 直接退役横幅与降级链；b 改为实际二进制类型检测而非版本阈值；c 更新阈值）。改法待拍板 + 需确认新版是否已在加密机实测。
