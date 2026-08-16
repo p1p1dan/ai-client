@@ -166,3 +166,29 @@ Authorization（§0-1 回归）⑨ direct 臂 include 吞 login 分支（§0-2 �
 | 新增第五臂 `locked` | rev.2 自裁：locked 不踢人（与 S2 保字节精神对齐），LoadingShell 等升格 |
 | 现役缺陷三条 | §0 收编本片（cookie 载体/cookie 遮蔽/浅合并抹 email） |
 | 母规格连带 | §4 判定表加 locked 行；S5 行断言更新；分发纪律入 baseline 门禁 |
+
+## §7 as-built（2026-08-15 施工收口，commit `5e8b494`）
+
+三员施工（S5a Main/shared / S5b renderer 并行零混面【接口自发对齐零冲突，S5a 中途按 S5b 的 preload 消费端
+补 `legacyRegistered` 字段】+ 收尾员对账/四门/变异批）。中途一次会话限额中断（两员探查期终止，零残留重发）。
+门禁串行：lint 0 / typecheck 0 / typecheck:agent-host 0 / **vitest 205 文件 3874 例 0 红**（S3+S4 3727 → +147）。
+**变异 10/10 零存活**，记录 [reviews/mutations.log](./2026-08-15-d47-s5-reviews/mutations.log)。
+
+对账四项：spawn 门禁实为 throw（`spawnGate.assertAgentSpawnAllowed`），S5b 双保险匹配成立无静默吞错，
+补端到端形状测试；i18n 补 4 key；IPC 三通道三处一致；LoadingShell 死锁修复（`enabled:Boolean(gateQuery.data)`）
++ 矩阵外组合用例钉死。
+
+规格偏差（均不改契约）：
+1. `getGateSnapshot` 返回加 `legacyRegistered`（resolveGateDecision 需要，rev.2 契约漏列）。
+2. argv 快照**只用于 skipAuthGate**，不作 gate 决策种子（flag-off 分支需要 argv 不携带的
+   managed/legacyRegistered——「多等一帧 Loading」优于「错误态先渲染再纠正」，Root 注释记录）。
+3. `resolveGateDecision.cliStatus` 参数「可选仅加严」（isAppMountedFor 无廉价同步来源）。
+4. close-confirm 的 credentials_invalid 脏文件确认握手**未实现**（沿用原跳过逻辑），按评审 A-M4 登记
+   已知风险非新功能。
+5. 新增 `probeTarget.ts`/`spawnGate.ts` 两个同域小助手（防四文件重复逻辑）。
+6. `deriveUserProfilePresentation` 只回 tone+email 不回文案（i18n 归渲染层）。
+7. 变异⑥（预填漏 lastEmail）由源码静态扫描钉住而非运行时挂载断言（仓内无 OnboardingView 挂载测试基建
+   ——D44 组件层落地后补强，登记）。
+
+欠账登记：**GUI 点验 12 项（§5）未跑**——D47 全链首次真跑，需真实验证码，见 plantree 下一步；
+mac 的 UserProfileCard 缺席与 win/mac 权限位随 test.4。
