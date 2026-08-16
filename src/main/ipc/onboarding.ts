@@ -145,7 +145,12 @@ export function registerOnboardingHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.ONBOARDING_VERIFY_AND_REGISTER,
-    createVerifyAndRegisterHandler(onboardingService)
+    createVerifyAndRegisterHandler(onboardingService, {
+      // Login-success trigger (S5 §1.2), symmetric to logout step ⑦ below:
+      // refresh recomputes from the freshly-saved vault, and the
+      // value-changed broadcast kicks the probe scheduler once.
+      onSuccess: () => getAuthStateService().refresh(),
+    })
   );
 
   ipcMain.handle(IPC_CHANNELS.ONBOARDING_DETECT_CLI, async () => {

@@ -97,3 +97,47 @@ describe('toRendererRegisterResponse — direct unit coverage', () => {
     expect(toRendererRegisterResponse(malformed)).toEqual({ ok: false });
   });
 });
+
+describe('login-success hook (S5 §1.2 — GUI round regression 2026-08-15)', () => {
+  it('fires onSuccess exactly once for a successful register (after sanitize)', async () => {
+    const full: OnboardingRegisterResponse = {
+      ok: true,
+      data: {
+        user: { id: 14, name: 'danyuan@jcdz.cc' },
+        apiKey: 'sk-secret',
+        config: {
+          claude: { baseUrl: 'https://cch.example', authToken: 'sk-secret' },
+          codex: { baseUrl: 'https://cch.example/v1', apiKey: 'sk-secret' },
+        },
+      },
+    } as OnboardingRegisterResponse;
+    let calls = 0;
+    const handler = createVerifyAndRegisterHandler(fakeService(full), {
+      onSuccess: () => {
+        calls += 1;
+      },
+    });
+
+    await handler(undefined, { email: 'user@jcdz.cc', code: '123456' });
+
+    expect(calls).toBe(1);
+  });
+
+  it('does NOT fire onSuccess for a failed verify', async () => {
+    const full = {
+      ok: false,
+      error: 'CODE_INVALID',
+      data: { attemptsLeft: 2 },
+    } as OnboardingRegisterResponse;
+    let calls = 0;
+    const handler = createVerifyAndRegisterHandler(fakeService(full), {
+      onSuccess: () => {
+        calls += 1;
+      },
+    });
+
+    await handler(undefined, { email: 'user@jcdz.cc', code: '999999' });
+
+    expect(calls).toBe(0);
+  });
+});

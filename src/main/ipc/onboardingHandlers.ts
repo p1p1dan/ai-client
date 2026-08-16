@@ -44,12 +44,31 @@ export function toRendererRegisterResponse(
   };
 }
 
-export function createVerifyAndRegisterHandler(service: VerifyAndRegisterService) {
+export interface VerifyAndRegisterHooks {
+  /**
+   * D47 S5 §1.2 login-success trigger — symmetric to logout step ⑦.
+   * Production wiring passes `() => getAuthStateService().refresh()`; the
+   * value-changed broadcast then kicks the probe scheduler via the auth IPC
+   * bridge. Fires only on `ok: true`, after the full response is sanitized.
+   * (GUI round 2026-08-15 caught the miss: without this, a fresh login left
+   * the gate snapshot at the stale pre-login `signed_out` forever.)
+   */
+  onSuccess?: () => void;
+}
+
+export function createVerifyAndRegisterHandler(
+  service: VerifyAndRegisterService,
+  hooks: VerifyAndRegisterHooks = {}
+) {
   return async (
     _event: unknown,
     request: OnboardingVerifyRequest
   ): Promise<OnboardingRegisterClientResponse> => {
     const full = await service.verifyAndRegister(request.email, request.code);
-    return toRendererRegisterResponse(full);
+    const response = toRendererRegisterResponse(full);
+    if (response.ok) {
+      hooks.onSuccess?.();
+    }
+    return response;
   };
 }
