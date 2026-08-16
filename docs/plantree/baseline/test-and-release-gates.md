@@ -76,4 +76,4 @@ node scripts/dev.js
 
 ## D47 登录管理分发纪律（2026-08-15，S5 规格 rev.2 裁定）
 
-S6（存量收编）落地前，**分发构建不得开启 `AICLIENT_MANAGED_CREDENTIALS`**——否则存量员工（legacy 凭据完好）开机即被强制重登。解除条件 = S6 收编落地并在 as-built 记录解除。
+~~S6（存量收编）落地前，分发构建不得开启 `AICLIENT_MANAGED_CREDENTIALS`~~——**已解除（2026-08-16）**：S6 落地 `8cfef4d` + 真机零重登证据（flag-off 造场 → flag-on 冷启动收编直进主界面，见 [GUI 报告附二](../../plans/2026-08-15-d47-gui-checklist.md)）。flag 默认仍 off，何时转 on 属发布决策。

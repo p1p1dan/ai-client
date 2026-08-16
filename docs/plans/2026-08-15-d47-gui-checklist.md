@@ -54,3 +54,13 @@ GUI 登出测试触发**现行 flag-on 登出仍跑 legacy `removeCodexConfig` �
 `~/.codex/{config.toml,auth.json}` 被删（该机器的 codex 日常即走 cch 账号，config 里的 provider 段被抹后
 本机 codex 回落官方 api.openai.com 打 401）。靠登录时刻的 `.bak` 完整复原（provider/base_url/key 全对）。
 **这正是 S6 §1-3 要修的破坏性 bug 的真机实锤**；S6 停双写 + 外科删除落地后此类事故根除。
+
+## 附二：S6 收编真机双步（2026-08-16 凌晨，分发纪律解除证据）
+
+| 步 | 操作 | 结果 |
+|---|---|---|
+| 造场 | flag-off 真实登录（用户输码），重建 legacy 五源（claude env 三键 / onboarding registered+email+serverUrl / .claude.json / codex jyw 表+auth.json——rmSync 外科修后 legacy 写手已不再破坏用户自有 OpenAI 表） | ✅ 四文件逐项核对 |
+| 初态 | 杀进程 + 删 vault/marker（模拟存量员工首次升级 flag-on 版本） | ✅ 零进程零 vault |
+| 证据 | **flag-on 冷启动 → 零重登直进主界面**：authenticated + email + probe valid + 用量卡 $48.79；vault 收编生成（safeStorage 加密 + lastEmail）；marker `.adopted-v1` 写入（adoptedAt 2026-08-16T10:59:47Z）；托管 claude-home env 三键再生成；**legacy `~/.claude/settings.json` mtime 停留登录时刻 = 停双写实证** | ✅ 截图 06 + 落盘四证 |
+
+**分发纪律解除条件全部满足**（S6 落地 + 真机零重登证据）。D47 全链收官。
