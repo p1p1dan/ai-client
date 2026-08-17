@@ -15,10 +15,14 @@ import {
 } from '@shared/types/agentWire';
 import type {
   PermissionDecisionId,
+  PermissionUpdateEffective,
   RuntimeEvent,
   SessionPermissionPreference,
 } from '@shared/types/runtimeEvents';
-import { readSessionPermissionPreference } from '@shared/types/runtimeEvents';
+import {
+  permissionChangeNeedsConfirmation,
+  readSessionPermissionPreference,
+} from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { app, BrowserWindow, ipcMain } from 'electron';
@@ -376,6 +380,100 @@ export function registerChatHandlers(): void {
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.closeSession(payload);
       return { requestId };
+    }
+  );
+
+  /**
+   * D48 S4 §6.3 — change the posture of a session that is already running.
+   *
+   * Four things happen here and the ORDER is the design:
+   *
+   *  1. The session's binding comes off the INDEX ROW, never off the payload.
+   *     A posture is agent-shaped (`permissionMode` vs `approvalPolicy` +
+   *     `sandboxMode`), so letting the caller name the agent would let it pick
+   *     which arm gets validated — the same reason `chat:send`'s model guard
+   *     reads the row (B18).
+   *  2. The tier is validated and matched against that binding, exactly as
+   *     create/resume do (C10). Refused, never coerced.
+   *  3. R18 — a dangerous tier without an explicit confirmation is refused HERE,
+   *     before the Host is contacted at all. The renderer's dialog is a UX
+   *     affordance; this is the boundary that makes "we never expand privilege
+   *     silently" true for any caller, including one that bypassed the dialog.
+   *  4. Only after the Host CONFIRMS (a correlated `session.permissionUpdated`;
+   *     any failure rejects) is the session snapshot rewritten (D10). A failed
+   *     change must leave the row byte-identical, or the next resume would
+   *     replay a posture the session never ran under.
+   *
+   * What it deliberately does NOT do: touch the `ChatAgentDefaults` template
+   * (D11). A one-off change to one chat must not become the default for every
+   * chat created afterwards — that is the silent-privilege-expansion path R18
+   * names, and this handler has no import that could reach app settings.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_UPDATE_PERMISSION,
+    async (
+      _e,
+      payload: {
+        sessionId: string;
+        permissionPreference: SessionPermissionPreference;
+        /** R18: the second confirmation for a dangerous tier actually happened. */
+        dangerousConfirmed?: boolean;
+      }
+    ): Promise<{
+      requestId: string;
+      preference: SessionPermissionPreference;
+      effective: PermissionUpdateEffective;
+    }> => {
+      const agent = await resolveSessionAgentForDispatch(payload.sessionId);
+      if (agent === null) {
+        // Unlike `chat:send`'s guard, an unresolvable binding is fatal here.
+        // Send can stand down and let the Host route the message; this command
+        // would have to pick which half of the preference union to validate,
+        // and picking wrong means validating nothing.
+        throw new Error(
+          `session_binding_unknown: no indexed agent for session ${payload.sessionId} — a ` +
+            'permission change needs to know which runtime it is addressed to'
+        );
+      }
+      const parsed = readSessionPermissionPreference(
+        payload.permissionPreference,
+        PREFERENCE_AGENTS
+      );
+      if (!parsed) {
+        throw new Error(
+          'invalid_permission_preference: the requested permission posture is not a shape this ' +
+            'build accepts (networkAccess is reported by the runtime and is never a request field)'
+        );
+      }
+      if (parsed.agent !== agent) {
+        throw new Error(
+          `permission_agent_mismatch: a ${parsed.agent} permission posture cannot be applied to a ` +
+            `${agent} session — a session's posture and its agent are one decision`
+        );
+      }
+      if (permissionChangeNeedsConfirmation(parsed, payload.dangerousConfirmed)) {
+        throw new Error(
+          'dangerous_tier_unconfirmed: this tier removes a safety boundary and was not confirmed ' +
+            '— it is never applied on the strength of the request alone'
+        );
+      }
+      const event = await agentHostManager.updateSessionPermission({
+        sessionId: payload.sessionId,
+        permissionPreference: parsed,
+        ...(payload.dangerousConfirmed === true ? { dangerousConfirmed: true } : {}),
+      });
+      // Confirmed. The snapshot is the value every later resume replays, so it
+      // is written from the event's own echo rather than from what we sent —
+      // one truth, and it is the runtime's.
+      await sessionIndexService.setPermissionPreference(
+        payload.sessionId,
+        event.payload.preference
+      );
+      return {
+        requestId: event.requestId ?? '',
+        preference: event.payload.preference,
+        effective: event.payload.effective,
+      };
     }
   );
 

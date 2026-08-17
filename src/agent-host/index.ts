@@ -19,7 +19,10 @@ import type {
   PermissionDecisionId,
   SessionPermissionPreference,
 } from '../shared/types/runtimeEvents.ts';
-import { readSessionPermissionPreference } from '../shared/types/runtimeEvents.ts';
+import {
+  permissionChangeNeedsConfirmation,
+  readSessionPermissionPreference,
+} from '../shared/types/runtimeEvents.ts';
 import type { HostAgentRegistry } from './agentSupport.ts';
 import {
   describeHostAgentReason,
@@ -753,6 +756,106 @@ async function handleCommand(raw: unknown): Promise<void> {
         return;
       }
       rt.close({ sessionId, requestId: cmd.requestId });
+      return;
+    }
+    case 'session.updatePermission': {
+      // Routed on the session's RECORDED binding, exactly like send/stop/close:
+      // a payload `agent` here would let a mislabeled command hand one runtime
+      // another's session, and the posture is the last thing that should reach
+      // the wrong runtime.
+      const sessionId = String(cmd.payload?.sessionId ?? '');
+      if (!sessionId) {
+        emit({
+          type: 'host.error',
+          requestId: cmd.requestId,
+          payload: {
+            code: 'invalid_payload',
+            message: 'session.updatePermission requires sessionId',
+            fatal: false,
+          },
+        });
+        return;
+      }
+      const bound = registry.get(sessionId);
+      if (!bound) {
+        // Refused rather than defaulted to Claude Code the way `sessionAgent`
+        // does for send/stop/close: those are addressed to a session that at
+        // worst does not exist, while this one would apply a posture to whatever
+        // runtime the fallback picked. There is no safe guess about a posture.
+        emit({
+          type: 'host.error',
+          sessionId,
+          requestId: cmd.requestId,
+          payload: {
+            code: 'session_not_found',
+            message: `session.updatePermission: unknown session ${sessionId}`,
+            fatal: false,
+          },
+        });
+        return;
+      }
+      const agent = sessionAgent(bound);
+      // REQUIRED here, unlike create/resume where absent = the runtime constant.
+      // `null` counts as absent, and has to: `readPermissionPreference` treats it
+      // as "nothing was asked for" and answers `{ok:true}` with no preference, so
+      // a `null` slipping past this guard would reach
+      // `permissionChangeNeedsConfirmation(undefined, …)` — which is vacuously
+      // false, i.e. the dangerous-tier wall spinning on nothing — and only be
+      // stopped a layer later by a different error with a different message.
+      const requestedPreference = cmd.payload?.permissionPreference;
+      if (requestedPreference === undefined || requestedPreference === null) {
+        emit({
+          type: 'host.error',
+          sessionId,
+          requestId: cmd.requestId,
+          payload: {
+            code: 'invalid_payload',
+            message:
+              'session.updatePermission requires permissionPreference — a change command with ' +
+              'nothing to change would silently reset the session to the default tier',
+            fatal: false,
+          },
+        });
+        return;
+      }
+      const preference = readPermissionPreference(cmd, agent);
+      if (!preference.ok) return;
+      // R18, wall two of two. Main refuses first (so no dangerous posture is
+      // reachable from a renderer path that skipped the dialog) and this one
+      // makes the RUNTIME safe to drive from anywhere — an in-process caller, a
+      // future automation surface, a replayed command file.
+      if (
+        permissionChangeNeedsConfirmation(preference.preference, cmd.payload?.dangerousConfirmed)
+      ) {
+        emit({
+          type: 'host.error',
+          sessionId,
+          requestId: cmd.requestId,
+          payload: {
+            code: 'dangerous_tier_unconfirmed',
+            message:
+              'session.updatePermission: this tier removes a safety boundary and was not ' +
+              'confirmed — the Host does not apply it on the strength of the request alone',
+            fatal: false,
+          },
+        });
+        return;
+      }
+      const rt = await runtimeForAgent(agent, cmd);
+      if (!rt) return;
+      // Codex's half is async (one JSON-RPC round trip); Claude's is synchronous
+      // state. `void` + catch, like `session.send`: the command loop must not
+      // block on a link that may be slow, and every failure has already been
+      // reported as a correlated `host.error` by the runtime itself.
+      void Promise.resolve(
+        rt.updatePermission({
+          sessionId,
+          permissionPreference: preference.preference,
+          requestId: cmd.requestId,
+        })
+      ).catch((err) => {
+        log('session.updatePermission unhandled:', err);
+      });
       return;
     }
     case 'permission.respond': {

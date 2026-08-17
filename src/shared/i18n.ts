@@ -1804,6 +1804,33 @@ export const zhTranslations: Record<string, string> = {
   "Don't ask": '不再询问',
   'Bypass permissions': '跳过权限确认',
   Plan: '规划模式',
+  // D48 S4 — the Composer's live (mid-session) permission chip.
+  'Applies from your next message — a turn already running keeps the tier it started with.':
+    '从你的下一条消息起生效——已经在跑的这一回合仍沿用它开始时的档位。',
+  'Applies immediately, to this thread.': '立即生效，作用于当前线程。',
+  'Bypass permissions and danger-full-access remove the approval and sandbox limits on THIS chat. From the moment they apply, the agent can read and change anything this machine can, with no prompt to stop it.':
+    'Bypass permissions 与 danger-full-access 会移除「当前这个对话」的审批与沙箱边界。一旦生效，Agent 就能读写这台机器能触及的一切，且不会再有任何提示可以拦下。',
+  'Remove the limits on this chat?': '移除当前对话的限制？',
+  'This tier has not been applied. Confirm to run this chat without approval prompts or a sandbox; cancel to stay on the current tier. Only this chat changes — the default for new chats is untouched.':
+    '该档尚未生效。确认后当前对话将在无审批提示、无沙箱的情况下运行；取消则保持当前档。只影响这一个对话——新建对话的默认档不受影响。',
+  'Apply to this chat': '应用到当前对话',
+  'Permission tier unchanged': '权限档未变更',
+  // The chip's assembled copy: templates, so the tier label and the scope
+  // sentence are each translated before they are put together.
+  'This chat has nowhere to run right now.': '当前对话暂时没有可运行的目标。',
+  'The Agent Host is not ready.': 'Agent Host 尚未就绪。',
+  'A turn is running — the tier is fixed for the turn already in flight.':
+    '正在进行一个回合——已在飞行中的这一回合，档位已经定型。',
+  'A permission change is already on its way.': '已有一次权限变更在路上。',
+  'applying…': '正在应用…',
+  '{{tier}} from your next message': '{{tier}}（自下一条消息起）',
+  '{{tier}} pending': '{{tier}}（待生效）',
+  'Permissions: {{tier}} — click to change ({{scope}})':
+    '权限：{{tier}} —— 点击可修改（{{scope}}）',
+  'Permissions: {{tier}} — {{reason}}': '权限：{{tier}} —— {{reason}}',
+  'Permission tier: {{tier}} — {{scope}}': '权限档：{{tier}} —— {{scope}}',
+  'Permission tier: {{tier}} ({{pending}}) — {{scope}}':
+    '权限档：{{tier}}（{{pending}}） —— {{scope}}',
   'Host status': 'Host 状态',
   'Process ID': '进程 ID',
   Driver: '驱动',

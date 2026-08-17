@@ -42,6 +42,7 @@ import {
   type PendingSettleReason,
 } from './codexPending.ts';
 import { readAutoResolutionMs, toCodexAnswerBody, toQuestionItems } from './codexQuestionBridge.ts';
+import { buildThreadSettingsUpdateParams, readThreadSettings } from './codexSettingsUpdate.ts';
 import { readThreadStatus } from './codexStatus.ts';
 import { CODEX_METHOD, idKey, JSONRPC_METHOD_NOT_FOUND, type JsonRpcId } from './codexWire.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
@@ -1959,6 +1960,22 @@ export class CodexRuntime {
    * failed, or the server may have ignored a field it did not recognise (unknown
    * fields are accepted silently [实测 06-probes P1 严格性观察]). Leaving the old
    * value in place is the fail-closed reading of both.
+   *
+   * ## D48 S4: the same frame is also the POSTURE echo, and the projection
+   *
+   * S4 sends `approvalPolicy` / `sandboxPolicy` down `thread/settings/update`,
+   * whose response is empty [实测 06-probes P3] — so this notification is the
+   * only evidence a posture change actually landed, exactly as it is the only
+   * evidence of the model. One frame, one mapping, one event out (§6.2-6):
+   * writing a second echo path per control is how two controls end up
+   * disagreeing about which frame was the last one.
+   *
+   * `state.policy` is written HERE and nowhere on the request path, which is
+   * what makes "the request succeeded" and "the thread runs under it" separate
+   * facts (D7). It is also what keeps a later idle-revive honest: `reopenThread`
+   * verifies the reopened thread against `state.policy`, so a posture changed
+   * mid-session has to be the one recorded here or the revive would be checking
+   * against a value nobody is running.
    */
   private onThreadSettingsUpdated(state: CodexSessionState, params: unknown): void {
     if (!belongsToThread(state.threadId, params)) {
@@ -1979,17 +1996,62 @@ export class CodexRuntime {
     const session = this.opts.registry.get(state.sessionId);
     if (!session) return;
 
-    const model = typeof settings.model === 'string' ? settings.model.trim() : '';
+    const reading = readThreadSettings(params);
     // A settings frame is a FULL snapshot of the thread (13 fields [实测 P3]), so
     // an absent/blank model means codex reports none — not "unchanged". Still,
     // only a usable value is written: blanking the default would make the next
     // turn silently fall back to the provider default.
-    if (model) session.model = model;
-    if (isSessionEffortLevel(settings.effort)) session.effort = settings.effort;
+    if (reading.model) session.model = reading.model;
+    if (reading.effort) session.effort = reading.effort;
+
+    // Both dimensions or neither. A half-read posture (`approvalPolicy` we can
+    // name, a sandbox variant we cannot — `granular` approvals and
+    // `externalSandbox` are both declared shapes this build does not model
+    // [实测 codex-settings-schema.json]) would put one new value beside one
+    // stale one and call the pair a posture.
+    const posture =
+      reading.approvalPolicy !== undefined && reading.sandboxMode !== undefined
+        ? {
+            agent: CODEX_PERMISSION_DEFAULT.agent,
+            approvalPolicy: reading.approvalPolicy,
+            sandboxMode: reading.sandboxMode,
+            // Carried over when this frame did not report it, for the same
+            // reason `compareSandboxEcho` learns rather than assumes: absent is
+            // "not reported", and the last thing the runtime DID report about
+            // this thread is still the best answer there is.
+            ...(reading.networkAccess !== undefined
+              ? { networkAccess: reading.networkAccess }
+              : state.policy.networkAccess !== undefined
+                ? { networkAccess: state.policy.networkAccess }
+                : {}),
+          }
+        : undefined;
+    if (posture) state.policy = posture;
+
     this.log('codex thread settings applied', {
       sessionId: state.sessionId,
       model: session.model,
       effort: session.effort,
+      approvalPolicy: posture?.approvalPolicy,
+      sandboxMode: posture?.sandboxMode,
+    });
+
+    // Nothing readable, nothing to project. Emitting an empty payload would
+    // teach a consumer that this event means "settings changed" when it means
+    // "here is what they are".
+    //
+    // The MODEL half of this frame stops at the registry line above, on purpose:
+    // the renderer's model trigger still shows the local selection and does not
+    // subscribe to this event, and a payload field with no reader is the
+    // producer-side half of exactly the empty-shell shape S3's terminal check
+    // caught on the consumer side. The projection is 遗留 §8.2-L12 and lands with
+    // the reader, not before it — so a frame that names only a model updates the
+    // thread's model where it is used (revive, next turn) and broadcasts nothing.
+    if (!posture) return;
+    this.opts.emit({
+      type: 'session.settingsEcho',
+      sessionId: state.sessionId,
+      payload: { permissionPolicy: posture },
     });
   }
 
@@ -2465,6 +2527,239 @@ export class CodexRuntime {
    * Stop unable to free the session until a frame arrives that this method has
    * just finished explaining it will not wait for.
    */
+  /**
+   * D48 S4 §6.2 — change this session's posture on the thread that is already
+   * open, without spending a turn.
+   *
+   * ## Why `thread/settings/update` and not a `turn/start` override
+   *
+   * `turn/start` accepts `approvalPolicy` / `sandboxPolicy` and they are sticky
+   * [实测 06-probes P1], so the override route works — but it requires the user
+   * to send a MESSAGE in order to change a setting, and it puts a second writer
+   * of the posture inside the turn loop. `thread/settings/update` costs zero
+   * turns, works on an idle thread and is what the official CLI's own mid-session
+   * commands use [实测 06-probes P3].
+   *
+   * ## Idle-only, and the runtime is the boundary
+   *
+   * P3 measured the race directly: an update sent 1ms after `turn/start` landed
+   * BEHIND that turn's `turn_context`, so the user saw "I changed it and this
+   * turn ignored me". The control is disabled during a turn as a courtesy; this
+   * check is the actual gate, and a refusal is final — nothing is queued for
+   * later (a queued posture change is a posture change at a time nobody chose).
+   *
+   * ## Only what changed goes on the wire
+   *
+   * Omission means "unchanged" [实测 06-probes §0.2], so the frame carries the
+   * dimensions that actually differ from what this thread is running and no
+   * others. A no-op change writes NO frame at all and is acknowledged directly:
+   * the posture is already the requested one, and a round trip to be told so
+   * would be a round trip whose only possible outcome is a second identical
+   * `thread/settings/updated`.
+   *
+   * ## Nothing here updates the facts — with two named exceptions
+   *
+   * The response is empty [实测 06-probes P3], so `state.policy` is NOT written
+   * on success — `onThreadSettingsUpdated` writes it when the broadcast arrives.
+   * What IS written here is the registry's `permissionPreference`, which is a
+   * request rather than a fact and is the value an idle-revive reopens under: a
+   * session that changed posture and was then swept must come back under the new
+   * one, not the one it was created with.
+   *
+   * The two exceptions are the two arms where NO notification is ever coming, so
+   * a facts consumer waiting for one would wait forever (the control's pending
+   * marker is exactly such a consumer). Both restate something already VERIFIED
+   * rather than predicting anything:
+   *
+   *  - the no-op arm re-emits `state.policy`, which is the last posture this
+   *    thread actually echoed;
+   *  - the swept arm emits `resolveCodexPolicy(preference)`, which is not a
+   *    prediction either: the session has no thread at all, the row IS its
+   *    posture, and `reopenThread`'s `assertResumePosture` FAILS the revive
+   *    outright if the thread comes back under anything else.
+   *
+   * ## A swept session is answered, not refused
+   *
+   * The idle sweeper kills the process and keeps the row (`reclaimIdleSession`),
+   * and the row is precisely what this method writes — so a change to a session
+   * the user has left open but not touched for three minutes is a change this
+   * method can apply completely, without spawning anything. Refusing it (which is
+   * what a plain `this.sessions` lookup does) loses the change with a
+   * `session_not_found` the user has no way to act on: the control is live, the
+   * session looks idle, and nothing about the UI says "send a message first".
+   * Reviving to apply a setting is still NOT done — spawning a ~296MiB process to
+   * write a field inverts the whole point of the sweep.
+   */
+  async updatePermission(input: {
+    sessionId: string;
+    /** Untrusted at this boundary; the arm is re-checked here as well as upstream. */
+    permissionPreference?: unknown;
+    requestId?: string;
+  }): Promise<void> {
+    const { sessionId, requestId } = input;
+    const state = this.sessions.get(sessionId);
+    const session = this.opts.registry.get(sessionId);
+    // A missing `state` has two causes and they are not the same answer. One is
+    // "we have never had this session" (or it crashed, or it was closed) — that
+    // is a genuine `session_not_found`. The other is "the sweeper took the
+    // process and kept the binding", which is the arm below: still ours, still
+    // reopenable, and its posture still writable. `reviveHandleFor` is the same
+    // three-condition predicate `send` uses, so the two paths cannot disagree
+    // about which sessions are still alive.
+    const sweptHandle = state ? null : this.reviveHandleFor(sessionId, session);
+    if (!session || (!state && sweptHandle === null)) {
+      this.fail('session_not_found', `Unknown session: ${sessionId}`, { sessionId, requestId });
+      return;
+    }
+    const preference = codexPermissionPreference(input.permissionPreference, CODEX_AGENT);
+    if (!preference) {
+      // Refused, not degraded: `resolveCodexPolicy` degrades to the constant
+      // because its callers ask "what does this session run under". A caller
+      // asking to CHANGE the posture and silently getting the constant would
+      // believe it constrained a session it did not.
+      this.fail(
+        'invalid_payload',
+        'session.updatePermission: this is not a Codex permission preference — a mid-session ' +
+          'change is refused rather than degraded to the default posture',
+        { sessionId, requestId }
+      );
+      return;
+    }
+
+    if (!state) {
+      // The swept arm. Everything this method does on the live path except the
+      // wire call — which has no wire to go out on, and needs none: the row is
+      // the only carrier a revive reads (`reviveSweptSession`), so writing it IS
+      // applying the change.
+      session.permissionPreference = preference;
+      this.log('codex permission update recorded on a swept session', {
+        sessionId,
+        threadId: sweptHandle,
+        approvalPolicy: preference.approvalPolicy,
+        sandboxMode: preference.sandboxMode,
+      });
+      // Emitted BEFORE the ACK so a consumer that acts on the ACK already has
+      // the fact. See the header for why this is a statement rather than a
+      // prediction — and note `networkAccess` is deliberately absent: the sweep
+      // threw away the value learned from `thread/start`, and the sandbox may
+      // just have changed under it, so "not reported" is the only true answer.
+      this.opts.emit({
+        type: 'session.settingsEcho',
+        sessionId,
+        payload: { permissionPolicy: resolveCodexPolicy(preference) },
+      });
+      this.opts.emit({
+        type: 'session.permissionUpdated',
+        sessionId,
+        requestId,
+        // NOT `immediately`: there is no open thread for it to be immediate on.
+        // The posture takes effect when the next send revives the session, which
+        // is exactly what `next_turn` says on the Claude axis too.
+        payload: { preference, effective: 'next_turn' },
+      });
+      return;
+    }
+
+    if (state.turn != null || session.running === true) {
+      // Both readings, for the reason `resumeSession`'s guard ① gives: they
+      // fail apart, and a posture written between them would land on a turn
+      // that is already fixed.
+      this.fail(
+        'session_busy',
+        'session.updatePermission: a turn is running — codex fixes the turn context when the ' +
+          'turn starts [实测], so this request is refused rather than queued',
+        { sessionId, requestId }
+      );
+      return;
+    }
+    if (!state.threadId) {
+      this.fail('session_busy', 'session.updatePermission: the Codex thread is still starting', {
+        sessionId,
+        requestId,
+      });
+      return;
+    }
+
+    const current = state.policy;
+    const build = buildThreadSettingsUpdateParams({
+      threadId: state.threadId,
+      ...(preference.approvalPolicy !== current.approvalPolicy
+        ? { approvalPolicy: preference.approvalPolicy }
+        : {}),
+      ...(preference.sandboxMode !== current.sandboxMode
+        ? { sandboxMode: preference.sandboxMode }
+        : {}),
+    });
+    if (!build.ok) {
+      this.fail('invalid_payload', `session.updatePermission: ${build.reason}`, {
+        sessionId,
+        requestId,
+      });
+      return;
+    }
+
+    if (build.changed.length > 0) {
+      try {
+        await state.connection.request(CODEX_METHOD.threadSettingsUpdate, build.params);
+      } catch (err) {
+        // Not retried and not softened. A `-32600` here means codex refused the
+        // posture (a tier it does not know, a thread it does not have), and the
+        // one thing that must not happen is the row recording a posture the
+        // thread never took — so the registry write below is not reached.
+        this.fail('permission_update_failed', `session.updatePermission: ${errorMessage(err)}`, {
+          sessionId,
+          requestId,
+        });
+        return;
+      }
+    } else {
+      this.log('codex permission update is a no-op, no frame sent', {
+        sessionId,
+        approvalPolicy: preference.approvalPolicy,
+        sandboxMode: preference.sandboxMode,
+      });
+    }
+
+    // Written after the wire call, so a refused update leaves the row exactly as
+    // it was — the same ordering rule Main applies to the session snapshot.
+    session.permissionPreference = preference;
+    this.log('codex permission update accepted', {
+      sessionId,
+      changed: build.changed,
+      approvalPolicy: preference.approvalPolicy,
+      sandboxMode: preference.sandboxMode,
+    });
+    if (build.changed.length === 0) {
+      // No frame went out, so no `thread/settings/updated` is coming — and a
+      // consumer that only moves on the echo (the live control's pending marker)
+      // would sit unresolved forever. `state.policy` is not an optimistic write:
+      // it is the last posture this thread ECHOED, verified at `thread/start` or
+      // rewritten by a previous settings frame. Restating it is the one honest
+      // way to say "already there".
+      //
+      // It also covers the case that makes this more than cosmetic: facts and
+      // `state.policy` can legitimately differ (a frame carrying `granular`
+      // approvals leaves the facts on the older value by design), so "the runtime
+      // says no change" and "the surface already shows it" are not the same
+      // statement, and only the runtime's is worth broadcasting.
+      this.opts.emit({
+        type: 'session.settingsEcho',
+        sessionId,
+        payload: { permissionPolicy: state.policy },
+      });
+    }
+    this.opts.emit({
+      type: 'session.permissionUpdated',
+      sessionId,
+      requestId,
+      // `immediately`: this thread is already open and the next turn will run
+      // under the new posture without the user doing anything [实测 P3]. The
+      // FACTS still wait for `thread/settings/updated` — this says when it
+      // applies, not that it has been confirmed.
+      payload: { preference, effective: 'immediately' },
+    });
+  }
+
   stop(input: { sessionId: string; requestId?: string }): void {
     const state = this.sessions.get(input.sessionId);
     const session = this.opts.registry.get(input.sessionId);

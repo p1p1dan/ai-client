@@ -92,8 +92,8 @@ export class SessionIndexService {
       // crash, an unbind), and by then the global template may say something
       // else; re-capturing it there would let a Settings edit silently retune
       // an existing chat through the back door. S4's mid-session change is the
-      // one thing allowed to overwrite this, and it comes in through its own
-      // entry point rather than through here.
+      // one thing allowed to overwrite this, and it does so through
+      // `setPermissionPreference` below rather than through here.
       permissionPreference: existing?.permissionPreference ?? input.permissionPreference,
       updatedAt: now(),
       archived: existing?.archived ?? false,
@@ -128,6 +128,40 @@ export class SessionIndexService {
       archived: existing?.archived ?? false,
     });
     await this.flush();
+  }
+
+  /**
+   * D48 S4 §6.3 / D10 — the ONE writer allowed to move a captured posture, and
+   * the reason `recordCreated`'s first-write-wins is safe.
+   *
+   * Every other path into this field is a CAPTURE (a template read at first
+   * send) and must never overwrite one that already exists, or a Settings edit
+   * would retune an existing chat behind the user's back. This one is not a
+   * capture: it records a change the user made to THIS session, on purpose, and
+   * it is the value the next resume replays — which is the whole point of
+   * storing the posture per session rather than reading the template again.
+   *
+   * Called only after the Host confirmed the change (Main awaits
+   * `session.permissionUpdated`), so a refused or failed update never reaches
+   * here and the row stays byte-identical.
+   *
+   * `false` for a session this index has never heard of, rather than creating a
+   * row: a posture with no session is a row with no workspace, and the callers
+   * that create rows (`recordCreated` / `recordResumed`) are the ones that know
+   * what else belongs in one.
+   */
+  async setPermissionPreference(
+    sessionId: string,
+    permissionPreference: SessionPermissionPreference
+  ): Promise<boolean> {
+    await this.ensureLoaded();
+    const existing = this.entries.get(sessionId);
+    if (!existing) {
+      return false;
+    }
+    this.entries.set(sessionId, { ...existing, permissionPreference, updatedAt: now() });
+    await this.flush();
+    return true;
   }
 
   async rename(sessionId: string, title: string): Promise<boolean> {

@@ -164,6 +164,20 @@ class HostHarness {
   }
 }
 
+/**
+ * Drain until the reply to ONE request arrives. Needed by any case that has to
+ * set a session up first: a `session.create` answers with several events
+ * (created, then status), so `nextEvent()` alone would hand back whichever came
+ * first rather than the one being asserted on.
+ */
+async function waitForRequest(harness: HostHarness, requestId: string): Promise<HostEvent> {
+  for (let i = 0; i < 40; i += 1) {
+    const event = await harness.nextEvent();
+    if (event.requestId === requestId) return event;
+  }
+  throw new Error(`no event for requestId ${requestId}`);
+}
+
 describe('agent-host protocol error paths (spawned process)', () => {
   let harness: HostHarness;
 
@@ -521,6 +535,84 @@ describe('agent-host protocol error paths (spawned process)', () => {
       // from it, so an accidentally-widened list would re-enable a binding the
       // create path refuses — the two facts must stay one.
       expect(capabilities?.agents).toEqual(['claude-code']);
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'D48 S4 — session.updatePermission refuses a session it has no binding for',
+    async () => {
+      // Hermetic on purpose: both refusals below return BEFORE `runtimeForAgent`
+      // is reached, so no runtime is built and no SDK is loaded. That is also
+      // the property being asserted — a posture change for a session this Host
+      // never registered must not fall back to "probably Claude" the way
+      // send/stop/close do, because there is no safe guess about a posture.
+      harness.send({
+        type: 'session.updatePermission',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-perm-ghost',
+        payload: {
+          sessionId: 'never-created',
+          permissionPreference: { agent: 'claude-code', permissionMode: 'plan' },
+        },
+      });
+      const event = await harness.nextEvent();
+      expect(event.type).toBe('host.error');
+      expect(event.requestId).toBe('req-perm-ghost');
+      expect(event.payload?.code).toBe('session_not_found');
+      expect(event.payload?.fatal).toBe(false);
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'D48 S4 — a session.updatePermission with no sessionId is an invalid payload',
+    async () => {
+      harness.send({
+        type: 'session.updatePermission',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-perm-empty',
+        payload: { permissionPreference: { agent: 'claude-code', permissionMode: 'plan' } },
+      });
+      const event = await harness.nextEvent();
+      expect(event.type).toBe('host.error');
+      expect(event.requestId).toBe('req-perm-empty');
+      expect(event.payload?.code).toBe('invalid_payload');
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    'D48 S4 — `permissionPreference: null` is caught by the REQUIRED guard, not two layers down',
+    async () => {
+      // `readPermissionPreference` reads `null` as "nothing was asked for" and
+      // answers `{ok:true}` with no preference. So a `null` that slipped past the
+      // REQUIRED guard would reach `permissionChangeNeedsConfirmation(undefined,
+      // …)` — vacuously false, i.e. the dangerous-tier wall spinning on nothing —
+      // and only be stopped later by a different error with a different message.
+      // Hermetic: `createSession` registers the row without loading the SDK
+      // (`ensureSdk` runs on the first send, which this test never does).
+      harness.send({
+        type: 'session.create',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-perm-null-create',
+        payload: { sessionId: 's-perm-null', workspacePath: REPO_ROOT },
+      });
+      await waitForRequest(harness, 'req-perm-null-create');
+
+      harness.send({
+        type: 'session.updatePermission',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-perm-null',
+        payload: { sessionId: 's-perm-null', permissionPreference: null },
+      });
+      const event = await waitForRequest(harness, 'req-perm-null');
+      expect(event.type).toBe('host.error');
+      expect(event.payload?.code).toBe('invalid_payload');
+      // The message identifies WHICH guard refused it: a change command with
+      // nothing to change is the caller's bug, and saying so is the whole point
+      // of having the guard rather than letting the runtime answer differently.
+      expect(String(event.payload?.message)).toContain('requires permissionPreference');
     },
     TEST_TIMEOUT
   );

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import {
   CODEX_APPROVAL_POLICIES,
@@ -7,6 +9,7 @@ import {
   DANGEROUS_CODEX_SANDBOX_MODE,
   DANGEROUS_PERMISSION_MODE,
   isDangerousPermissionPreference,
+  permissionChangeNeedsConfirmation,
   readSessionPermissionPreference,
   SESSION_PERMISSION_MODES,
   type SessionPermissionPreference,
@@ -204,5 +207,63 @@ describe('isDangerousPermissionPreference (C13/C16 input)', () => {
       ).toBe(false);
     }
     expect(isDangerousPermissionPreference(undefined)).toBe(false);
+  });
+});
+
+/**
+ * D48 S4 / R18 — the second-confirmation predicate, and the two walls that share
+ * it.
+ *
+ * One predicate, because the failure being prevented is the two walls
+ * DISAGREEING: Main accepting a confirmation the Host would reject (or the other
+ * way round) is a wall with a door in it, and neither side's own test would show
+ * it. The scan below is what keeps them on the same predicate — a hand-rolled
+ * `=== true` at either call site would pass every behavioural assertion here and
+ * still be a second copy waiting to drift.
+ */
+describe('permissionChangeNeedsConfirmation — one gate, two walls (R18)', () => {
+  const DANGEROUS = [
+    { agent: CLAUDE_CODE_AGENT, permissionMode: DANGEROUS_PERMISSION_MODE },
+    { agent: CODEX_AGENT, approvalPolicy: 'never', sandboxMode: DANGEROUS_CODEX_SANDBOX_MODE },
+  ] as SessionPermissionPreference[];
+  const SAFE = [
+    { agent: CLAUDE_CODE_AGENT, permissionMode: 'plan' },
+    { agent: CODEX_AGENT, approvalPolicy: 'untrusted', sandboxMode: 'read-only' },
+  ] as SessionPermissionPreference[];
+
+  it('holds every dangerous tier until the confirmation is the BOOLEAN true', () => {
+    for (const preference of DANGEROUS) {
+      // Everything that is not `true` means the caller did not state what this
+      // asks. `"true"` and `1` are what an untrusted JSON payload looks like
+      // when somebody tried, and expanding privilege gets no benefit of the doubt.
+      for (const confirmed of [undefined, null, false, 0, 1, 'true', 'yes', {}, []]) {
+        expect(permissionChangeNeedsConfirmation(preference, confirmed)).toBe(true);
+      }
+      expect(permissionChangeNeedsConfirmation(preference, true)).toBe(false);
+    }
+  });
+
+  it('never asks for a confirmation on a tier that is not dangerous (negative half)', () => {
+    // A gate that fired on safe tiers too would train the user to click through
+    // it, which is how the dialog stops being a decision.
+    for (const preference of SAFE) {
+      for (const confirmed of [undefined, false, true]) {
+        expect(permissionChangeNeedsConfirmation(preference, confirmed)).toBe(false);
+      }
+    }
+    expect(permissionChangeNeedsConfirmation(undefined, undefined)).toBe(false);
+  });
+
+  it('is the predicate BOTH walls call, rather than two spellings of the same idea', () => {
+    const root = path.resolve(import.meta.dirname, '..', '..', '..');
+    const walls = {
+      'main/ipc/chat.ts': readFileSync(path.join(root, 'main', 'ipc', 'chat.ts'), 'utf8'),
+      'agent-host/index.ts': readFileSync(path.join(root, 'agent-host', 'index.ts'), 'utf8'),
+    };
+    for (const [where, source] of Object.entries(walls)) {
+      expect(source, where).toContain('permissionChangeNeedsConfirmation(');
+      // And neither reimplements the comparison next to it.
+      expect(source, where).not.toContain('dangerousConfirmed !== true');
+    }
   });
 });

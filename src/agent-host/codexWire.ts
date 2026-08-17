@@ -84,6 +84,19 @@ export const MAX_FRAME_BUFFER_BYTES = 32 * 1024 * 1024;
  *                         response, `turn/started`, `turn/completed` and
  *                         `thread/read` all carry none — which is why the D48
  *                         write-back reads this frame and nothing else.
+ *   thread/settings/update
+ *                         [实测] fixtures/codex/codex-method-contract.json
+ *                         (clientRequest) + a real round trip: changing
+ *                         model/effort/approvalPolicy on an IDLE thread returned
+ *                         `null` and the next turn ran under all three new
+ *                         values, with the un-named `sandbox_policy` untouched
+ *                         [实测 D48 06-probes §P3]. Zero turns — this is the
+ *                         channel a mid-session permission change uses, so a
+ *                         posture can be changed without making the user send a
+ *                         message. Its param shapes are pinned separately in
+ *                         `fixtures/codex/codex-settings-schema.json`, because
+ *                         this server swallows unknown FIELDS as silently as it
+ *                         would a renamed method.
  *
  * The last two were [未测] through slice 2a (arbitration §5 U-a/U-b) and are now
  * closed by the generated contract: `codex app-server generate-json-schema`
@@ -100,6 +113,7 @@ export const CODEX_METHOD = {
   threadTurnsList: 'thread/turns/list',
   turnStart: 'turn/start',
   turnInterrupt: 'turn/interrupt',
+  threadSettingsUpdate: 'thread/settings/update',
   statusChanged: 'thread/status/changed',
   turnCompleted: 'turn/completed',
   serverRequestResolved: 'serverRequest/resolved',

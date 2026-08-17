@@ -9,11 +9,12 @@ import {
   type SessionAttachment,
   type SessionEffortLevel,
 } from '../shared/types/agentHost.ts';
-import { CLAUDE_CODE_AGENT } from '../shared/types/agentWire.ts';
+import { CLAUDE_CODE_AGENT, CLAUDE_CODE_AGENT_ARM } from '../shared/types/agentWire.ts';
 import {
   claudePermissionPreference,
   DANGEROUS_PERMISSION_MODE,
   type SessionPermissionMode,
+  type SessionPermissionPolicy,
   type SessionPermissionPreference,
   type SessionRuntimeStatus,
 } from '../shared/types/runtimeEvents.ts';
@@ -256,6 +257,21 @@ export function resolveClaudePermissionMode(
  */
 export function sessionPermissionMode(session: HostSession | undefined): SessionPermissionMode {
   return resolveClaudePermissionMode(session?.permissionPreference);
+}
+
+/**
+ * D48 S4 — the same value as a `SessionPermissionPolicy`, for the facts echo
+ * (`session.settingsEcho`) this axis emits per turn.
+ *
+ * `CLAUDE_CODE_AGENT_ARM`, not `CLAUDE_CODE_AGENT`: this field is the
+ * discriminant of a union typed with literals, and the ordinary constant is the
+ * wider `AgentWireName`, which cannot narrow it. Writing the literal here
+ * instead is what the value-position scan in `agentWireStatic.test.ts` bans —
+ * the name has one home, and the narrow spelling lives there too. The two are
+ * pinned equal by assertion so they cannot drift.
+ */
+export function claudePermissionPolicy(mode: SessionPermissionMode): SessionPermissionPolicy {
+  return { agent: CLAUDE_CODE_AGENT_ARM, permissionMode: mode };
 }
 
 /**
@@ -591,9 +607,10 @@ export class ClaudeRuntime {
       typeof input.model === 'string' && input.model.trim() ? input.model.trim() : session.model;
     if (model) session.model = model;
     // Read ONCE per turn, off the registry entry, so the option below and any
-    // later reader of this turn agree. There is no per-send override in S3 —
-    // the mid-session change is S4's, and it will write the registry entry
-    // rather than add a second parameter here.
+    // later reader of this turn agree. There is still no per-send override:
+    // S4's mid-session change writes the registry entry (`updatePermission`)
+    // instead of adding a second parameter here, which is what makes "the tier
+    // applies from the next turn" true by construction rather than by care.
     const permissionMode = sessionPermissionMode(session);
     const abort = new AbortController();
     session.abort = abort;
@@ -864,6 +881,30 @@ export class ClaudeRuntime {
         },
       });
 
+      // Consumption point 4 (D48 S4 §6.3 / D7) — and the one that makes the
+      // other three reportable AFTER the session was opened.
+      //
+      // `session.created` / `session.resumed` also carry this value, but they
+      // fire exactly once per Host session: `decideSendPreamble` returns
+      // `direct` for anything already host-bound, so within a single app run a
+      // tier changed mid-conversation would never reach the surface again — the
+      // Composer chip and the Context row would state the tier the session was
+      // OPENED with, forever, while it ran under another one. Under-reporting
+      // the posture in force is the one direction this control must not be wrong
+      // in (§9.2), so the axis gets an echo of its own.
+      //
+      // Emitted HERE, after `queryFn` returned, because that is the moment the
+      // tier stopped being a request: the SDK is holding these options for this
+      // turn. Before the call it would be a prediction (`queryFn` can throw);
+      // inside `updatePermission` it would be an ACK dressed as a fact, which is
+      // what `session.permissionUpdated` already is and this deliberately is not.
+      this.opts.emit({
+        type: 'session.settingsEcho',
+        sessionId: session.sessionId,
+        requestId: input.requestId,
+        payload: { permissionPolicy: claudePermissionPolicy(permissionMode) },
+      });
+
       armStallTimer();
       ttftWatchdog.arm();
       // F10 (round-2 review fix): a bare `break` on the terminal `result`
@@ -1130,6 +1171,109 @@ export class ClaudeRuntime {
         },
       });
     }
+  }
+
+  /**
+   * D48 S4 §6.1 — change this session's permission tier mid-conversation.
+   *
+   * ## Why this is three lines of state and no protocol work at all
+   *
+   * Every send opens a NEW `query()` (`ensureSdk` caches the function, not a
+   * session; the stream is built inside `send()` and closed in its `finally`,
+   * and continuity across turns is `options.resume`) and `permissionMode` is a
+   * `query()` option [实测 06-probes P2]. So the tier is re-read from the
+   * session on every turn already — writing it here IS the channel. The
+   * alternative the SDK offers, `Query.setPermissionMode()`, is documented
+   * "Only available in streaming input mode" and our prompt is a plain string
+   * for any turn without attachments, so it would fail on the common path.
+   *
+   * ## What it deliberately does NOT do
+   *
+   * It does not touch an in-flight turn. That `query()`'s options were fixed
+   * when the stream was built, and rebuilding it would restart a turn the user
+   * is watching in order to apply a setting that costs nothing to apply one turn
+   * later — so the runtime REFUSES while a turn is running rather than
+   * pretending, and the reply says `next_turn` rather than `immediately` (D2,
+   * D8). Single-tool approvals keep flowing through `canUseTool` untouched:
+   * approving one call and choosing a tier are different decisions and neither
+   * implements the other.
+   *
+   * The Host-side idle check is not a duplicate of the UI's — the control being
+   * disabled is a courtesy, this is the boundary.
+   */
+  updatePermission(input: {
+    sessionId: string;
+    /** Untrusted at this boundary; the arm is re-checked here as well as upstream. */
+    permissionPreference?: unknown;
+    requestId?: string;
+  }): void {
+    const session = this.opts.registry.get(input.sessionId);
+    if (!session) {
+      this.opts.emit({
+        type: 'host.error',
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        payload: {
+          code: 'session_not_found',
+          message: `Unknown session: ${input.sessionId}`,
+          fatal: false,
+        },
+      });
+      return;
+    }
+    const preference = claudePermissionPreference(input.permissionPreference, CLAUDE_CODE_AGENT);
+    if (!preference) {
+      // Refused, never degraded to the constant: `resolveClaudePermissionMode`
+      // degrades because its callers are asking "what does this session run
+      // under", and the safe answer to that is the constant. Here the caller is
+      // asking to CHANGE the tier, and quietly changing it to something else is
+      // how a user ends up believing they restricted a session they did not.
+      this.opts.emit({
+        type: 'host.error',
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        payload: {
+          code: 'invalid_payload',
+          message:
+            'session.updatePermission: this is not a Claude permission preference — a mid-session ' +
+            'change is refused rather than degraded to the default tier',
+          fatal: false,
+        },
+      });
+      return;
+    }
+    if (session.running || session.abort) {
+      // Same reading `stop()` uses: `abort` outlives `running` through the
+      // post-result drain, and a tier written during that window would land on a
+      // session the SDK is still streaming.
+      this.opts.emit({
+        type: 'host.error',
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        payload: {
+          code: 'session_busy',
+          message:
+            'session.updatePermission: a turn is running — the permission tier is fixed for the ' +
+            'turn that is already in flight, and this request is refused rather than queued',
+          fatal: false,
+        },
+      });
+      return;
+    }
+
+    session.permissionPreference = preference;
+    // The ACK, and only the ACK: no facts event is synthesized here. Those
+    // carry what the Host HANDED the SDK, and nothing has been handed to it yet
+    // — the next send is what makes this real, and it says so itself with a
+    // `session.settingsEcho` built from the same `sessionPermissionMode` reader
+    // (D1/D7). A fact emitted here would be this method confirming its own
+    // request.
+    this.opts.emit({
+      type: 'session.permissionUpdated',
+      sessionId: session.sessionId,
+      requestId: input.requestId,
+      payload: { preference, effective: 'next_turn' },
+    });
   }
 
   stop(input: { sessionId: string; requestId?: string }): void {

@@ -170,15 +170,103 @@ describe('SessionIndexService — the permission snapshot (C9/C14/C15)', () => {
     // posture rather than of the whole row being frozen.
     expect(entry?.model).toBe('opus');
     expect(entry?.runtimeIdentity).toBe('thr-1');
-    // The prerequisite S4 inherits, stated as an assertion rather than as prose
-    // in a doc: there is no `recordPermissionPreference`-shaped entry point on
-    // this service today. S4's mid-session change has to add one; it cannot be
-    // built by calling `recordCreated` again.
+    // The prerequisite S4 inherited, stated as an assertion rather than as prose
+    // in a doc: the change could not be built out of `recordCreated`, so S4 had
+    // to bring an entry point of its own. It did — and this now pins that the
+    // capture paths are STILL not it, so exactly one method can move the field.
     expect(
       Object.getOwnPropertyNames(Object.getPrototypeOf(service)).filter((name) =>
         /permission/i.test(name)
       )
-    ).toEqual([]);
+    ).toEqual(['setPermissionPreference']);
+  });
+});
+
+/**
+ * D48 S4 §6.3 / D10 — the one writer allowed to move a captured posture.
+ *
+ * Every other path into this field is a CAPTURE and is first-write-wins (above).
+ * This one records a change the user made to THIS chat on purpose, and it is
+ * what the next resume replays — so the assertions are about the two halves of
+ * that: it really moves the value, and it really lands on disk, because a change
+ * that survives only until the next restart is a change the user will make
+ * twice and trust once.
+ */
+describe('SessionIndexService — the mid-session posture write (D48 S4)', () => {
+  beforeEach(() => {
+    userDataDir = mkdtempSync(join(tmpdir(), 'aiclient-permission-update-'));
+  });
+
+  afterEach(() => {
+    rmSync(userDataDir, { recursive: true, force: true });
+  });
+
+  it('overwrites a captured posture, and flushes it', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({
+      sessionId: 's1',
+      workspacePath: '/ws/a',
+      agent: CLAUDE_CODE_AGENT,
+      permissionPreference: PLAN,
+    });
+
+    expect(await service.setPermissionPreference('s1', BYPASS)).toBe(true);
+    expect((await service.get('s1'))?.permissionPreference).toEqual(BYPASS);
+    // On disk, not merely in the map: resume reads the file after a restart.
+    expect(readIndexFile()[0].permissionPreference).toEqual(BYPASS);
+  });
+
+  it('a later capture cannot undo it — the change outranks the template forever', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({
+      sessionId: 's1',
+      workspacePath: '/ws/a',
+      agent: CLAUDE_CODE_AGENT,
+    });
+    await service.setPermissionPreference('s1', PLAN);
+    // `chat:createSession` runs again on every rebind (restart, crash, unbind).
+    await service.recordCreated({
+      sessionId: 's1',
+      workspacePath: '/ws/a',
+      agent: CLAUDE_CODE_AGENT,
+      permissionPreference: BYPASS,
+    });
+    await service.recordResumed({
+      sessionId: 's1',
+      workspacePath: '/ws/a',
+      runtimeIdentity: 'thr-1',
+    });
+    expect((await service.get('s1'))?.permissionPreference).toEqual(PLAN);
+  });
+
+  it('keeps the rest of the row intact while it moves the posture', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({
+      sessionId: 's1',
+      workspacePath: '/ws/a',
+      agent: CLAUDE_CODE_AGENT,
+      model: 'sonnet',
+    });
+    await service.rename('s1', 'my chat');
+    await service.setPermissionPreference('s1', PLAN);
+
+    const entry = await service.get('s1');
+    // A rebuild-field-by-field write here (the shape `recordCreated` uses) would
+    // silently drop the title and the archived bit.
+    expect(entry?.title).toBe('my chat');
+    expect(entry?.model).toBe('sonnet');
+    expect(entry?.agent).toBe(CLAUDE_CODE_AGENT);
+    expect(entry?.archived).toBe(false);
+  });
+
+  it('refuses a session it has never heard of rather than inventing a row', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    expect(await service.setPermissionPreference('ghost', PLAN)).toBe(false);
+    expect(await service.get('ghost')).toBeUndefined();
   });
 });
 

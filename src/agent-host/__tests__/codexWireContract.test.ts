@@ -47,6 +47,23 @@ const turnSchema = JSON.parse(
   )
 ) as { TurnStartParams: { required: string[]; propertyNames: string[] } };
 
+/**
+ * D48 S4 — the settings channel's PARAM shapes, same provenance again. Loaded
+ * here so the method name and the fields that travel under it are pinned by one
+ * suite: this server swallows an unknown field exactly as silently as it would
+ * swallow a renamed method, so "the method exists" is only half a contract.
+ */
+const settingsSchema = JSON.parse(
+  readFileSync(
+    path.resolve(import.meta.dirname, 'fixtures', 'codex', 'codex-settings-schema.json'),
+    'utf8'
+  )
+) as {
+  codexVersion: string;
+  ThreadSettingsUpdateParams: { required: string[]; propertyNames: string[] };
+  ThreadSettings: { required: string[]; propertyNames: string[] };
+};
+
 const CLIENT_REQUESTS = new Set(contract.clientRequest);
 const SERVER_REQUESTS = new Set(contract.serverRequest);
 const SERVER_NOTIFICATIONS = new Set(contract.serverNotification);
@@ -66,6 +83,43 @@ describe('the generated contract snapshot is usable at all', () => {
     // from a current one, and "pinned" would mean "pinned to something unknown".
     expect(contract.codexVersion).toMatch(/\d+\.\d+\.\d+/);
   });
+
+  it('D48 S4 (D14 / L9) — the two under-sampled families are now complete', () => {
+    // The snapshot recorded 121 clientRequest and 65 serverNotification against
+    // a binary that declares 126 and 70; the gap was pure under-sampling (the
+    // 2026-08-10 header says so, 06-probes §0.1 named the five) and it was
+    // closed in the same slice that started SENDING a method off this list.
+    // Exact counts, not `>`: a re-capture against a different codex build should
+    // be a visible decision, and an under-sampled re-capture should be red.
+    expect(contract.clientRequest.length).toBe(126);
+    expect(contract.serverNotification.length).toBe(70);
+    expect(contract.serverRequest.length).toBe(11);
+    for (const method of [
+      'initialize',
+      'fuzzyFileSearch',
+      'thread/inject_items',
+      'thread/increment_elicitation',
+      'thread/decrement_elicitation',
+    ]) {
+      expect(CLIENT_REQUESTS.has(method)).toBe(true);
+    }
+    for (const method of [
+      'error',
+      'warning',
+      'configWarning',
+      'deprecationNotice',
+      'guardianWarning',
+    ]) {
+      expect(SERVER_NOTIFICATIONS.has(method)).toBe(true);
+    }
+  });
+
+  it('the settings excerpt came from the same build as the method inventory', () => {
+    // Two fixtures generated from different codex versions would make a real
+    // difference read as a version difference — the failure the approval-schema
+    // cross-check below was added for.
+    expect(settingsSchema.codexVersion).toBe(contract.codexVersion);
+  });
 });
 
 describe('CODEX_METHOD spells only methods the binary declares', () => {
@@ -76,6 +130,7 @@ describe('CODEX_METHOD spells only methods the binary declares', () => {
     CODEX_METHOD.threadResume,
     CODEX_METHOD.turnStart,
     CODEX_METHOD.turnInterrupt,
+    CODEX_METHOD.threadSettingsUpdate,
   ];
   const SERVER_SENT = [
     CODEX_METHOD.statusChanged,
@@ -102,9 +157,21 @@ describe('CODEX_METHOD spells only methods the binary declares', () => {
     // every unit test still green because nothing else consumes this name.
     expect(CODEX_METHOD.threadSettingsUpdated).toBe('thread/settings/updated');
     expect(SERVER_NOTIFICATIONS.has('thread/settings/updated')).toBe(true);
-    // Its zero-turn sibling, which S4 will send. Pinned now so the pair cannot
-    // drift apart between slices — they differ by one character.
+    // Its zero-turn sibling, which S4 sends. Pinned so the pair cannot drift
+    // apart — they differ by one character, and the wrong one of the two is a
+    // method-not-found on the request side or a frame nobody listens for on the
+    // notification side.
     expect(CLIENT_REQUESTS.has('thread/settings/update')).toBe(true);
+    expect(CODEX_METHOD.threadSettingsUpdate).toBe('thread/settings/update');
+    expect(CODEX_METHOD.threadSettingsUpdate).not.toBe(CODEX_METHOD.threadSettingsUpdated);
+  });
+
+  it('D14 — CODEX_METHOD spells the settings channel IF AND ONLY IF the fixture declares it', () => {
+    // The gate the slice discipline is written against: "fixture first, method
+    // table second". Stated as an equivalence rather than as two assertions, so
+    // deleting the fixture entry to make a rename go green is red too.
+    const spelled = Object.values(CODEX_METHOD).includes('thread/settings/update');
+    expect(spelled).toBe(CLIENT_REQUESTS.has('thread/settings/update'));
   });
 
   it('closes U-a and U-b with evidence rather than a guess', () => {
@@ -206,6 +273,20 @@ describe('D48 §4.8-B7 — turn/start carries only field names the binary declar
       expect(turnSchema.TurnStartParams.required).not.toContain(field);
     }
     expect(turnSchema.TurnStartParams.required).toEqual(['input', 'threadId']);
+  });
+
+  it('D48 S4 — the settings channel declares the two posture fields we DO send there', () => {
+    // The mirror image of the negative control below: the posture is excluded
+    // from `turn/start` because it has its own zero-turn channel, and this is
+    // the assertion that the channel really carries it.
+    for (const field of ['approvalPolicy', 'sandboxPolicy']) {
+      expect(settingsSchema.ThreadSettingsUpdateParams.propertyNames).toContain(field);
+    }
+    expect(settingsSchema.ThreadSettingsUpdateParams.required).toEqual(['threadId']);
+    // And the echo carries them back — the only frame that does [实测 §0.4].
+    for (const field of ['approvalPolicy', 'sandboxPolicy', 'model']) {
+      expect(settingsSchema.ThreadSettings.propertyNames).toContain(field);
+    }
   });
 
   it('the posture fields we deliberately never send are declared too (negative control)', () => {

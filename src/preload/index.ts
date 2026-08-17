@@ -85,6 +85,7 @@ import type { AgentWireName } from '@shared/types/agentWire';
 import type {
   HostReadyEvent,
   PermissionDecisionId,
+  PermissionUpdateEffective,
   SessionPermissionPreference,
 } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
@@ -1454,6 +1455,30 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
     closeSession: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLOSE_SESSION, payload),
+    /**
+     * D48 S4 §6.3 — change the posture of a session that is already running.
+     *
+     * Rejects (never resolves with a failure shape) when the change did not
+     * land: an unconfirmed dangerous tier, a posture for the other agent, a
+     * running turn, a protocol error, an old Host that does not know the
+     * command. The caller rolls the control back to the tier the session was
+     * already on — nothing is retried and nothing is queued.
+     *
+     * The resolved `effective` says WHEN it applies, and the two axes differ:
+     * `immediately` on Codex (zero-turn, the open thread takes it) and
+     * `next_turn` on Claude (the tier is a `query()` option and every send opens
+     * a new query). Copy must read it rather than assume one of them.
+     */
+    updatePermission: (payload: {
+      sessionId: string;
+      permissionPreference: SessionPermissionPreference;
+      /** R18: the second confirmation for a dangerous tier actually happened. */
+      dangerousConfirmed?: boolean;
+    }): Promise<{
+      requestId: string;
+      preference: SessionPermissionPreference;
+      effective: PermissionUpdateEffective;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_UPDATE_PERMISSION, payload),
     respondPermission: (payload: {
       sessionId: string;
       permissionId: string;

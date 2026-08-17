@@ -328,3 +328,169 @@ describe('the Permission policy row (C3/C5)', () => {
     expect(row?.value).toBe('Approval: on-request · Sandbox: workspace-write · Network: off');
   });
 });
+
+/**
+ * D48 S4 §6.2-6 / D7 — the mid-session echo, and the ACK that is NOT one.
+ *
+ * codex answers `thread/settings/update` with an EMPTY body [实测 06-probes P3].
+ * So there are two events after a mid-session change and only one of them is
+ * evidence: `session.permissionUpdated` says "the runtime accepted this
+ * REQUEST", and `session.settingsEcho` (one mapping of the full 13-field
+ * `thread/settings/updated` frame) says what the thread is actually running
+ * under. This panel is a facts surface, so it may only ever move on the second.
+ */
+describe('reduceSessionRuntimeFacts — the mid-session echo (D48 S4, D7)', () => {
+  const ECHOED: SessionPermissionPolicy = {
+    agent: 'codex',
+    approvalPolicy: 'never',
+    sandboxMode: 'read-only',
+  };
+
+  function echo(sessionId: string, payload: Record<string, unknown>) {
+    return { type: 'session.settingsEcho', sessionId, payload };
+  }
+
+  it('an echo moves the row without any session.created in sight', () => {
+    const established = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      created('s1', { agent: 'codex', permissionPolicy: CODEX_POLICY })
+    );
+    const next = reduceSessionRuntimeFacts(established, echo('s1', { permissionPolicy: ECHOED }));
+    expect(next.s1?.permissionPolicy).toEqual(ECHOED);
+    // The whole point of the slice: the tier changed with no new session and no
+    // new turn, and the panel followed.
+    expect(
+      permissionRow(runtimeFacts({ permissionPolicy: next.s1?.permissionPolicy }))?.value
+    ).toBe('Approval: never · Sandbox: read-only · Network: not reported');
+  });
+
+  it('the ACK is not a fact: session.permissionUpdated leaves the map byte-identical', () => {
+    // The failure this forbids is mutation ⑧: treating the reply to our own
+    // request as confirmation. On the Codex axis that reply is literally `null`,
+    // so a panel that moved on it would be reporting a posture on the strength
+    // of a message that states nothing.
+    const established = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      created('s1', { agent: 'codex', permissionPolicy: CODEX_POLICY })
+    );
+    const after = reduceSessionRuntimeFacts(established, {
+      type: 'session.permissionUpdated',
+      sessionId: 's1',
+      payload: {
+        preference: { agent: 'codex', approvalPolicy: 'never', sandboxMode: 'danger-full-access' },
+        effective: 'immediately',
+      },
+    });
+    expect(after).toBe(established);
+  });
+
+  it('the echo is read BEFORE the created/resumed narrowing, in behaviour and in source order', () => {
+    // Same N4 shape C2 pins for the policy read: an echo branch placed after the
+    // `session.created`/`session.resumed` check is a silent no-op, because an
+    // echo is neither of those two types and would already have returned.
+    const next = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      echo('s1', { permissionPolicy: ECHOED })
+    );
+    expect(next).not.toBe(initialSessionRuntimeFacts);
+    expect(next.s1?.permissionPolicy).toEqual(ECHOED);
+
+    const source = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '../contextSurfaceModel.ts'),
+      'utf8'
+    );
+    const reducerBody = source.slice(source.indexOf('export function reduceSessionRuntimeFacts'));
+    const echoBranch = reducerBody.indexOf("event.type === 'session.settingsEcho'");
+    const narrowing = reducerBody.indexOf("event.type !== 'session.created'");
+    expect(echoBranch).toBeGreaterThan(-1);
+    expect(narrowing).toBeGreaterThan(-1);
+    expect(echoBranch).toBeLessThan(narrowing);
+  });
+
+  it('an unreadable echo never erases a posture that WAS reported', () => {
+    const established = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      created('s1', { agent: 'codex', permissionPolicy: CODEX_POLICY })
+    );
+    for (const payload of [
+      {},
+      { permissionPolicy: undefined },
+      { permissionPolicy: { agent: 'codex', approvalPolicy: 'nope', sandboxMode: 'read-only' } },
+      { permissionPolicy: { agent: 'codex', approvalPolicy: 'never' } },
+      { permissionPolicy: { agent: 'martian', approvalPolicy: 'never', sandboxMode: 'read-only' } },
+      // The model half of the frame is not this map's business, and a frame
+      // carrying only a model must not blank the posture.
+      { model: 'gpt-5.5' },
+    ]) {
+      expect(reduceSessionRuntimeFacts(established, echo('s1', payload))).toBe(established);
+    }
+  });
+
+  it('an echo with no sessionId, and an echo for another session, are both inert here', () => {
+    const established = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      created('s1', { agent: 'codex', permissionPolicy: CODEX_POLICY })
+    );
+    expect(
+      reduceSessionRuntimeFacts(established, {
+        type: 'session.settingsEcho',
+        payload: { permissionPolicy: ECHOED },
+      })
+    ).toBe(established);
+    const other = reduceSessionRuntimeFacts(established, echo('s2', { permissionPolicy: ECHOED }));
+    expect(other.s1?.permissionPolicy).toEqual(CODEX_POLICY);
+    expect(other.s2?.permissionPolicy).toEqual(ECHOED);
+  });
+
+  it('re-echoing the same posture returns the same object (zustand short-circuits on identity)', () => {
+    const established = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      echo('s1', { permissionPolicy: ECHOED })
+    );
+    expect(reduceSessionRuntimeFacts(established, echo('s1', { permissionPolicy: ECHOED }))).toBe(
+      established
+    );
+  });
+
+  it('an echo never touches the legacy Claude carrier beside it', () => {
+    const claude = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      created('s1', { permissionMode: 'acceptEdits' })
+    );
+    const next = reduceSessionRuntimeFacts(claude, echo('s1', { permissionPolicy: ECHOED }));
+    expect(next.s1?.permissionMode).toBe('acceptEdits');
+    expect(next.s1?.permissionPolicy).toEqual(ECHOED);
+  });
+
+  it('the CLAUDE axis produces this event too, and the same fold reads it', () => {
+    // The Claude half of the mid-session echo (§6.3): its runtime emits one of
+    // these at the moment `query()` is handed the tier, because
+    // `session.created`/`session.resumed` fire once per Host session and cannot
+    // restate a change made afterwards. No new consumer was added for it — the
+    // fold already accepts the claude arm of the policy union, and this is the
+    // assertion that keeps that true.
+    const established = reduceSessionRuntimeFacts(
+      initialSessionRuntimeFacts,
+      created('s1', { permissionMode: 'default' })
+    );
+    const claudePolicy: SessionPermissionPolicy = {
+      agent: 'claude-code',
+      permissionMode: 'plan',
+    };
+    const next = reduceSessionRuntimeFacts(
+      established,
+      echo('s1', { permissionPolicy: claudePolicy })
+    );
+    expect(next.s1?.permissionPolicy).toEqual(claudePolicy);
+    // C4's precedence still decides the row: the policy outranks the legacy
+    // field, so the panel reports the tier the SDK was just handed.
+    expect(
+      permissionRow(
+        runtimeFacts({
+          permissionMode: next.s1?.permissionMode,
+          permissionPolicy: next.s1?.permissionPolicy,
+        })
+      )?.value
+    ).toBe('Plan');
+  });
+});

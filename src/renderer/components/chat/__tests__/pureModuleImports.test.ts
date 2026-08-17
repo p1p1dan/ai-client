@@ -66,6 +66,21 @@ const TARGET_FILES = [
   '../agentModelCatalog.ts',
   '../sessionPreferenceStore.ts',
   '../../../../shared/models/chatAgentDefaults.ts',
+  // D48 S4 (§9.3): the sandbox shape mapping and the `thread/settings/update`
+  // parameter whitelist. It lives under `src/agent-host/` and is loaded by the
+  // Host under `--experimental-strip-types`, so a React or store import there
+  // would not merely take a suite down — it would be unloadable in the process
+  // that actually runs it.
+  '../../../../agent-host/codexSettingsUpdate.ts',
+  // D48 S4 renderer half: every branch of the live permission chip (the render
+  // gate, the idle gate, the echo projection, the dangerous-tier gate) plus the
+  // tier vocabulary both layers read. The `.tsx` beside it never renders under
+  // this config, so a store or React import here would move a security decision
+  // out of reach of every truth table in the slice — and the settings ban in
+  // particular is load-bearing: the live layer must NOT reach into the template
+  // layer's module, which is why the shared tier table exists.
+  '../composerPermissionModel.ts',
+  '../../../../shared/models/permissionTiers.ts',
 ] as const;
 
 /** Import statement lines only, `import type ...` lines excluded. */

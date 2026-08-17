@@ -13,6 +13,17 @@ import type { PermissionDecisionId, SessionPermissionPreference } from './runtim
  * talking to an old renderer just carries keys nobody reads; an old Host
  * talking to a new renderer is handled by `capabilities.agents`, not by
  * refusing the handshake.
+ *
+ * D48 S4 adds one COMMAND type (`session.updatePermission`) and two EVENT types
+ * and still stays 1, because the same reasoning covers a new member of an open
+ * union: an old Host answers an unknown command with a correlated
+ * `host.error{not_implemented}` (`index.ts`'s default arm), which is a clean
+ * per-command failure rather than a broken handshake, and an old renderer
+ * ignores an event type it does not switch on. The renderer is told NOT to offer
+ * the control at all through `capabilities.permissionPolicy` (§6.3, D15), so the
+ * `not_implemented` reply is the backstop and not the user-facing path. Bumping
+ * the version instead would refuse EVERY command from a new Main to an old Host
+ * — a total outage to buy a capability check we already have.
  */
 export const AGENT_HOST_PROTOCOL_VERSION = 1 as const;
 
@@ -25,6 +36,7 @@ export type AgentHostCommandType =
   | 'session.stop'
   | 'session.close'
   | 'session.listHistory'
+  | 'session.updatePermission'
   | 'permission.respond'
   | 'question.respond';
 
@@ -193,6 +205,50 @@ export interface SessionListHistoryCommand extends AgentHostCommandBase {
   };
 }
 
+/**
+ * D48 S4 §6 — change the permission posture of a session that is ALREADY
+ * running. The one command whose whole purpose is to move a value that
+ * create/resume could only set once.
+ *
+ * Why a command of its own rather than a field on `session.send`: the Codex axis
+ * changes posture with ZERO turns [实测 06-probes P3] and must be able to do so
+ * while the user has typed nothing, and riding on a send would make a posture
+ * change something that can only happen alongside a message — which is exactly
+ * the "a posture change rides along with a turn" coupling `buildTurnStartParams`
+ * refuses (`codexRuntime.ts`, negative control). The two axes then differ in
+ * WHEN it applies, and the Host says which on the reply: Codex takes effect on
+ * the running thread, Claude on the next turn's `query()` options.
+ *
+ * Routed on the session's RECORDED binding, never on a payload `agent`: same
+ * rule as send/stop/close (`index.ts`'s `runtimeForSession`).
+ */
+export interface SessionUpdatePermissionCommand extends AgentHostCommandBase {
+  type: 'session.updatePermission';
+  payload: {
+    sessionId: string;
+    /**
+     * REQUIRED here, unlike on create/resume where absent means "the runtime's
+     * own constant". There is no such reading for an update: a change command
+     * with nothing to change is a bug in the caller, and defaulting it would
+     * silently reset a session's posture to the constant.
+     */
+    permissionPreference: SessionPermissionPreference;
+    /**
+     * R18 — the caller states that the second confirmation for a dangerous tier
+     * (`bypassPermissions` / `danger-full-access`) actually happened.
+     *
+     * A claim, not a proof, and it is treated as one: it is refused when absent
+     * on a dangerous tier and IGNORED on every other tier (setting it on a safe
+     * tier grants nothing). It exists because the UI gate is not a security
+     * boundary — Main refuses first so no dangerous posture can be reached from
+     * a renderer path that skipped the dialog, and the Host refuses again so the
+     * runtime is safe to drive from anywhere (same two-wall shape as the
+     * create/resume preference check, §5.9.4-A5).
+     */
+    dangerousConfirmed?: boolean;
+  };
+}
+
 export interface PermissionRespondCommand extends AgentHostCommandBase {
   type: 'permission.respond';
   payload: {
@@ -250,6 +306,7 @@ export type AgentHostCommand =
   | SessionStopCommand
   | SessionCloseCommand
   | SessionListHistoryCommand
+  | SessionUpdatePermissionCommand
   | PermissionRespondCommand
   | QuestionRespondCommand;
 

@@ -71,6 +71,22 @@ const LEGACY_AGENT: AgentWireName = 'claude-code';
 export const CLAUDE_CODE_AGENT: AgentWireName = 'claude-code';
 
 /**
+ * The same name again, typed as the LITERAL rather than as the wide union.
+ *
+ * `SessionPermissionPolicy` (`runtimeEvents.ts`) is a union discriminated by
+ * literal `agent` fields, and a value typed `AgentWireName` cannot narrow it —
+ * so a Host building the claude arm of that union would otherwise have to write
+ * `'claude-code'` at the call site, which is precisely what the value-position
+ * scan bans. (`CODEX_PERMISSION_DEFAULT` writes its own literal for this exact
+ * reason; the scan cannot cover `'codex'`, so nothing stopped it.)
+ *
+ * Read off the ABI list rather than spelled a third time in this file: the
+ * order of `AGENT_WIRE_NAMES` is itself pinned, so this cannot silently become
+ * some other agent.
+ */
+export const CLAUDE_CODE_AGENT_ARM = AGENT_WIRE_NAMES[0];
+
+/**
  * Codex's own name, same "who am I" role as {@link CLAUDE_CODE_AGENT}.
  *
  * Note what does NOT protect this one: the value-position scan in

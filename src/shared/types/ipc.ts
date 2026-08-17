@@ -372,6 +372,14 @@ export const IPC_CHANNELS = {
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
   CHAT_CLOSE_SESSION: 'chat:closeSession',
+  /**
+   * D48 S4 §6 — change the permission posture of a session that is already
+   * running. Its own channel rather than a field on `chat:send`: the Codex axis
+   * changes posture with zero turns, so this has to work when the user has typed
+   * nothing, and Main has to be able to REFUSE it (an unconfirmed dangerous
+   * tier, a posture for the other agent) without failing a message.
+   */
+  CHAT_UPDATE_PERMISSION: 'chat:updatePermission',
   CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
   CHAT_RESPOND_QUESTION: 'chat:respondQuestion',
   CHAT_LIST_SESSIONS: 'chat:listSessions',

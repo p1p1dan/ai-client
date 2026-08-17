@@ -29,6 +29,14 @@
  */
 
 import { agentDefaultPermission, type ChatAgentDefaults } from '@shared/models/chatAgentDefaults';
+import {
+  CLAUDE_PERMISSION_TIERS,
+  CODEX_APPROVAL_TIERS,
+  CODEX_SANDBOX_TIERS,
+  MOST_RESTRICTIVE_APPROVAL,
+  MOST_RESTRICTIVE_SANDBOX,
+  type PermissionTierOption,
+} from '@shared/models/permissionTiers';
 import { type AgentWireName, CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import {
   type ClaudePermissionPreference,
@@ -52,102 +60,20 @@ import {
  */
 export const RUNTIME_DEFAULT_OPTION = '__runtime_default__';
 
-export interface PermissionOption<T extends string> {
-  value: T;
-  label: string;
-  /** Rendered next to the option, not hidden behind a tooltip. */
-  description: string;
-  /** §8.0-Q3's two tiers — drives the warning and the second confirmation. */
-  dangerous: boolean;
-}
-
 /**
- * Claude's five, in the SDK's own vocabulary (`SESSION_PERMISSION_MODES`).
- * Ordered least → most permissive so the dangerous one is last, where a
- * mis-click is least likely; `'auto'` is absent because SDK 0.3.218 has no such
- * value [实测 sdk.d.ts:1720, 06-probes P2(b)].
- */
-export const CLAUDE_PERMISSION_OPTIONS: ReadonlyArray<PermissionOption<SessionPermissionMode>> = [
-  {
-    value: 'plan',
-    label: 'Plan',
-    description: 'Plan only — no edits, no commands.',
-    dangerous: false,
-  },
-  {
-    value: 'default',
-    label: 'Default',
-    description: 'Ask before every tool use.',
-    dangerous: false,
-  },
-  {
-    value: 'acceptEdits',
-    label: 'Accept edits',
-    description: 'File edits apply without asking; other tools still ask.',
-    dangerous: false,
-  },
-  {
-    value: 'dontAsk',
-    label: "Don't ask",
-    description: 'Approvals are answered for you; the sandbox still applies.',
-    dangerous: false,
-  },
-  {
-    value: 'bypassPermissions',
-    label: 'Bypass permissions',
-    description: 'No approval prompts at all. Anything the agent decides to run, runs.',
-    dangerous: true,
-  },
-];
-
-export const CODEX_APPROVAL_OPTIONS: ReadonlyArray<PermissionOption<CodexApprovalPolicy>> = [
-  {
-    value: 'untrusted',
-    label: 'untrusted',
-    description: 'Only a trusted allow-list runs unattended.',
-    dangerous: false,
-  },
-  {
-    value: 'on-request',
-    label: 'on-request',
-    description: 'The agent asks when it wants to escalate.',
-    dangerous: false,
-  },
-  {
-    value: 'never',
-    label: 'never',
-    description: 'Never asks — the sandbox is the only remaining limit.',
-    dangerous: false,
-  },
-];
-
-export const CODEX_SANDBOX_OPTIONS: ReadonlyArray<PermissionOption<CodexSandboxMode>> = [
-  { value: 'read-only', label: 'read-only', description: 'No writes at all.', dangerous: false },
-  {
-    value: 'workspace-write',
-    label: 'workspace-write',
-    description: 'Writes confined to the workspace.',
-    dangerous: false,
-  },
-  {
-    value: 'danger-full-access',
-    label: 'danger-full-access',
-    description: 'No sandbox. Full read and write access to this machine.',
-    dangerous: true,
-  },
-];
-
-/**
- * The most restrictive value of each Codex dimension.
+ * The tier vocabulary is `@shared/models/permissionTiers`'s, not this file's.
  *
- * Codex's posture is a PAIR, but the UI is two controls, so picking one
- * dimension while the other has never been chosen has to complete the pair
- * somehow. It completes it with the most restrictive value rather than with the
- * runtime's constant (which this side must not know) — deliberately erring
- * toward less capability, and provably never toward a dangerous tier (C13).
+ * D48 S4 added the LIVE layer (the Composer chip), and the two layers have to
+ * agree tier for tier — including which two are dangerous (§5.4 "模板层与实时
+ * 层逐条同口径"). They agree because they read one table, not because two
+ * tables were kept in step. The names are re-exported under this module's
+ * original spellings so the S3 panel and its truth tables keep importing from
+ * where they always did.
  */
-const MOST_RESTRICTIVE_APPROVAL: CodexApprovalPolicy = 'untrusted';
-const MOST_RESTRICTIVE_SANDBOX: CodexSandboxMode = 'read-only';
+export type PermissionOption<T extends string> = PermissionTierOption<T>;
+export const CLAUDE_PERMISSION_OPTIONS = CLAUDE_PERMISSION_TIERS;
+export const CODEX_APPROVAL_OPTIONS = CODEX_APPROVAL_TIERS;
+export const CODEX_SANDBOX_OPTIONS = CODEX_SANDBOX_TIERS;
 
 /** The scope sentence §5.4 requires verbatim, so both cards state the same thing. */
 export const CHAT_PERMISSION_SCOPE_NOTE =
@@ -254,8 +180,8 @@ export function nextCodexTemplate(
   return {
     agent: CODEX_AGENT,
     // The companion dimension, when the user has never chosen one — see
-    // MOST_RESTRICTIVE_* above for why it is the strictest value and not the
-    // Host's constant.
+    // `MOST_RESTRICTIVE_*` in `@shared/models/permissionTiers` for why it is the
+    // strictest value and not the Host's constant.
     approvalPolicy: approvalPolicy ?? MOST_RESTRICTIVE_APPROVAL,
     sandboxMode: sandboxMode ?? MOST_RESTRICTIVE_SANDBOX,
   } as CodexPermissionPreference;

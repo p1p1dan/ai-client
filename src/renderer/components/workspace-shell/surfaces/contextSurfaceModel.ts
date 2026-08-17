@@ -647,6 +647,20 @@ export function reduceSessionRuntimeFacts(
   if (event.type === 'session.status' || event.type === 'message.completed') {
     return clearTurnTokensDisplay(prev, event);
   }
+  // D48 S4 §6.2-6 / D7: the mid-session posture echo. Same "before the narrowing
+  // guard" rule as the three above — it is a THIRD event type, and placing it
+  // after the `session.created`/`session.resumed` check would make it a silent
+  // no-op, which is the N4 shape twice over.
+  if (event.type === 'session.settingsEcho') {
+    return foldSettingsEcho(prev, event);
+  }
+  // NOT folded here, deliberately: `session.permissionUpdated`. That event is
+  // the ACK — "the runtime accepted this REQUEST" — and codex answers
+  // `thread/settings/update` with an empty body [实测 06-probes P3], so
+  // accepting it as a fact would report a posture on the strength of a reply
+  // that states nothing. The facts move on the echo above — which both axes emit,
+  // Codex from `thread/settings/updated` and Claude at the moment `query()` is
+  // handed the tier — and on nothing else (D7).
   if (event.type !== 'session.created' && event.type !== 'session.resumed') {
     return prev;
   }
@@ -693,6 +707,41 @@ export function reduceSessionRuntimeFacts(
       ...(nextMode ? { permissionMode: nextMode } : {}),
     },
   };
+}
+
+/**
+ * D48 S4 — fold one `session.settingsEcho` (the renderer projection of codex's
+ * `thread/settings/updated`) into the per-session facts.
+ *
+ * The Context surface stays read-only through this: the row it renders is the
+ * runtime's own statement about the thread, arriving on the runtime's own
+ * schedule. Nothing about the live control writes here, and the control reads
+ * this map rather than its own request — which is what keeps the two directions
+ * from becoming a loop where a control confirms itself.
+ *
+ * Same two invariants as the created/resumed fold: an unreadable payload never
+ * erases a known posture (a frame this build cannot name is silence, not a
+ * value), and folding an event for session A never touches session B. The
+ * event's `model` field is not read here — that one belongs to the model
+ * trigger, and this map is the Context panel's.
+ */
+function foldSettingsEcho(
+  prev: SessionRuntimeFactsState,
+  event: SessionRuntimeFactsEvent
+): SessionRuntimeFactsState {
+  const sessionId = event.sessionId;
+  if (!sessionId) return prev;
+  const payload =
+    event.payload && typeof event.payload === 'object'
+      ? (event.payload as Record<string, unknown>)
+      : undefined;
+  if (!isSessionPermissionPolicy(payload?.permissionPolicy)) return prev;
+  const permissionPolicy = payload.permissionPolicy;
+  const existing = prev[sessionId];
+  if (existing && samePermissionPolicy(existing.permissionPolicy, permissionPolicy)) {
+    return prev;
+  }
+  return { ...prev, [sessionId]: { ...existing, permissionPolicy } };
 }
 
 /**

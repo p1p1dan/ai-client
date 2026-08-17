@@ -13,12 +13,14 @@ import {
   type SessionResumeCommand,
   type SessionSendCommand,
   type SessionStopCommand,
+  type SessionUpdatePermissionCommand,
 } from '@shared/types/agentHost';
 import type {
   HostReadyEvent,
   RuntimeEvent,
   RuntimeEventType,
   SessionHistoryListedEvent,
+  SessionPermissionUpdatedEvent,
 } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import { app } from 'electron';
@@ -225,6 +227,34 @@ export class AgentHostManager {
       payload,
     });
     return requestId;
+  }
+
+  /**
+   * D48 S4 §6 — mid-session posture change, and the ONE session command that
+   * waits for its own answer.
+   *
+   * Every other session command is fire-and-forget because its outcome reaches
+   * the renderer as events on the session's own stream. This one has a decision
+   * hanging off it in Main: the session snapshot may only be rewritten if the
+   * change actually landed (D10), and "landed" is a correlated
+   * `session.permissionUpdated` — a correlated `host.error` (bad tier, busy
+   * turn, an old Host answering `not_implemented`) has to leave the snapshot
+   * byte-identical. Waiting here is what makes that decision possible at all.
+   */
+  async updateSessionPermission(
+    payload: SessionUpdatePermissionCommand['payload'],
+    requestId = nextRequestId('perm-update')
+  ): Promise<SessionPermissionUpdatedEvent> {
+    const command: SessionUpdatePermissionCommand = {
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'session.updatePermission',
+      payload,
+    };
+    return (await this.requestAndWait(
+      command,
+      'session.permissionUpdated'
+    )) as SessionPermissionUpdatedEvent;
   }
 
   async respondPermission(

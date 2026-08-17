@@ -18,6 +18,8 @@ export type RuntimeEventType =
   | 'session.created'
   | 'session.resumed'
   | 'session.updated'
+  | 'session.permissionUpdated'
+  | 'session.settingsEcho'
   | 'session.history'
   | 'session.historyListed'
   | 'session.status'
@@ -727,6 +729,29 @@ export function isDangerousPermissionPreference(
     : value.sandboxMode === DANGEROUS_CODEX_SANDBOX_MODE;
 }
 
+/**
+ * D48 S4 / R18 — must this mid-session change be refused for want of a second
+ * confirmation?
+ *
+ * ONE predicate for TWO walls. Main refuses first (so a dangerous posture is
+ * unreachable from a renderer path that skipped the dialog) and the Host refuses
+ * again (so the runtime is safe to drive from anywhere), and the thing that must
+ * not happen is the two walls disagreeing about what counts as confirmation —
+ * one of them accepting the string `"true"` off a JSON payload while the other
+ * does not is a wall with a door in it.
+ *
+ * `!== true` rather than a falsiness test, deliberately: `confirmed` arrives as
+ * untrusted JSON, and every value that is not the boolean `true` — `"true"`,
+ * `1`, `{}` — means the caller did not state what this asks. Expanding privilege
+ * is the one decision that gets no benefit of the doubt.
+ */
+export function permissionChangeNeedsConfirmation(
+  preference: SessionPermissionPreference | undefined,
+  confirmed: unknown
+): boolean {
+  return isDangerousPermissionPreference(preference) && confirmed !== true;
+}
+
 export interface SessionCreatedEvent extends RuntimeEventBase {
   type: 'session.created' | 'session.resumed';
   sessionId: string;
@@ -756,6 +781,91 @@ export interface SessionUpdatedEvent extends RuntimeEventBase {
   type: 'session.updated';
   sessionId: string;
   payload: { runtimeIdentity: string };
+}
+
+/**
+ * D48 S4 — when a posture the caller ASKED for starts to apply.
+ *
+ * The two axes are not the same axis and the copy must not pretend they are
+ * (§6.3): codex's `thread/settings/update` is zero-turn and takes effect on the
+ * thread that is already open, while Claude's `permissionMode` is a `query()`
+ * option and every send opens a new `query()` — so the change lands on the NEXT
+ * turn and nothing about the in-flight one moves [实测 06-probes P1/P2/P3].
+ * The Host says which rather than letting the renderer infer it from the agent
+ * name, because the renderer would then own a protocol fact it cannot verify.
+ */
+export type PermissionUpdateEffective = 'immediately' | 'next_turn';
+
+/**
+ * D48 S4 §6 — the ACK half of a mid-session posture change: this Host accepted
+ * this preference for this session.
+ *
+ * Deliberately a REQUEST echo (`SessionPermissionPreference`) and not a fact
+ * (`SessionPermissionPolicy`), which is the same split S3 drew and the same
+ * reason: on the Codex axis "the update call returned" is not "the thread runs
+ * under it" — the response body is empty [实测 06-probes P3: `null`/`{}`], and
+ * the only echo of what the thread ACTUALLY runs is the
+ * `thread/settings/updated` notification, which arrives on its own as a
+ * `session.settingsEcho` below. Anything that renders a posture as a fact must
+ * read that one; this event is what a control converges on and what a failed
+ * update never produces (D7/D9/D10).
+ *
+ * Correlated by `requestId`, because Main waits for exactly this event (or a
+ * correlated `host.error`) to decide whether the session snapshot may be
+ * rewritten. A change that was refused must leave the snapshot byte-identical.
+ */
+export interface SessionPermissionUpdatedEvent extends RuntimeEventBase {
+  type: 'session.permissionUpdated';
+  sessionId: string;
+  payload: {
+    /** The accepted request, re-stated by the runtime that accepted it. */
+    preference: SessionPermissionPreference;
+    effective: PermissionUpdateEffective;
+  };
+}
+
+/**
+ * D48 S4 §6.2-6 — the posture a runtime says a session is running under, stated
+ * outside the create/resume handshake.
+ *
+ * ## Both axes produce it, for the same reason and from different frames
+ *
+ * A mid-session tier change has to become visible without the session being
+ * created or resumed again, and neither runtime restates its posture on its own:
+ *
+ *  - **Codex** broadcasts `thread/settings/updated`, a FULL snapshot of the
+ *    thread [实测 06-probes P3], and this is one mapping of it. It is also the
+ *    only echo there is — `turn/start`'s response, `turn/started`,
+ *    `turn/completed` and `thread/read` all carry no settings at all
+ *    [实测 06-probes §0.4].
+ *  - **Claude** has no protocol frame to carry one, so the Host emits this at
+ *    the moment it hands `permissionMode` to `query()` — the one instant on that
+ *    axis at which the tier stops being a request and becomes what the SDK is
+ *    running. Its `session.created` / `session.resumed` payloads carry the same
+ *    value, but they fire ONCE per Host session (`sendPreamble` sends directly
+ *    on an already-bound session), so within one app run they cannot report a
+ *    change that happened after the session was opened.
+ *
+ * Neither arm is synthesized: each one restates something the runtime has
+ * already been given or has already reported, never something a caller asked for.
+ * The ACK for a request is `session.permissionUpdated` above; this is the fact.
+ *
+ * The field is optional and only present when there was something to say: this
+ * event says what the runtime said, and a key it did not carry is silence rather
+ * than a value.
+ *
+ * 遗留 §8.2-L12 (the thread's current MODEL, which after a sticky override is no
+ * longer the one `thread/start` was given) is NOT carried here yet: it has no
+ * reader in the renderer, and shipping a payload field ahead of its consumer is
+ * the producer-side half of the empty-shell shape. It lands with the reader.
+ */
+export interface SessionSettingsEchoEvent extends RuntimeEventBase {
+  type: 'session.settingsEcho';
+  sessionId: string;
+  payload: {
+    /** The posture the session reports it is running under, right now. */
+    permissionPolicy?: SessionPermissionPolicy;
+  };
 }
 
 /**
@@ -943,6 +1053,8 @@ export type RuntimeEvent =
   | SessionStderrEvent
   | SessionCreatedEvent
   | SessionUpdatedEvent
+  | SessionPermissionUpdatedEvent
+  | SessionSettingsEchoEvent
   | SessionHistoryEvent
   | SessionHistoryListedEvent
   | MessageStartedEvent

@@ -370,6 +370,8 @@ interface HarnessOptions {
   threadResumeError?: { code: number; message: string };
   turnsListResult?: unknown;
   turnsListError?: { code: number; message: string };
+  /** D48 S4: codex refusing a posture change (a bad enum is `-32600` [实测]). */
+  settingsUpdateError?: { code: number; message: string };
   /**
    * Frames codex pushes AHEAD of its `thread/resume` answer — the resume window
    * is not quiet [实测 `codex-s5-thread-resume.jsonl` lines 5-8: two MCP startup
@@ -455,6 +457,16 @@ function makeHarness(options: HarnessOptions = {}): Harness {
               turn: { id: FIXTURE_TURN, items: [], status: 'inProgress' },
             },
           };
+      core.pushStdout(`${JSON.stringify(body)}\n`);
+      return;
+    }
+    if (frame.method === 'thread/settings/update') {
+      // The response is EMPTY [实测 06-probes P3: `null` / `{}`], and the fake
+      // has to be empty too — an invented echo here would let the runtime pass
+      // a test by reading a body the real server never sends.
+      const body = options.settingsUpdateError
+        ? { id: frame.id, error: options.settingsUpdateError }
+        : { id: frame.id, result: null };
       core.pushStdout(`${JSON.stringify(body)}\n`);
       return;
     }
@@ -4624,7 +4636,15 @@ describe('codexRuntime — D40: the write-back reads the echo, not the request (
     h.events.length = 0;
     h.push(settingsUpdated({ model: 'gpt-5.5' }));
 
-    expect(h.events).toEqual([]);
+    // D48 S4 narrowed this from `toEqual([])`. The frame now legitimately
+    // produces ONE event — `session.settingsEcho`, the projection L12 asked for
+    // — and a blanket "emits nothing" would have to be deleted rather than
+    // narrowed the first time the echo shipped. What it was really pinning is
+    // unchanged and is spelled out instead: the frame is intercepted ABOVE the
+    // turn router, so nothing it carries can reach the per-turn normalizer and
+    // open a message/tool/thinking bubble for a settings change.
+    expect(h.events.map((e) => e.type)).toEqual(['session.settingsEcho']);
+    expect(h.events.filter((e) => String(e.type).match(/^(message|tool|thinking)\./))).toEqual([]);
   });
 });
 
@@ -5005,5 +5025,460 @@ describe('resolveCodexPolicy — request → posture, in one place', () => {
         sandboxMode: DANGEROUS_CODEX_SANDBOX_MODE,
       }).sandboxMode
     ).toBe(DANGEROUS_CODEX_SANDBOX_MODE);
+  });
+});
+
+/**
+ * D48 S4 §6.2 — the zero-turn permission channel, end to end through the real
+ * connection core.
+ *
+ * The three failures being pinned all look like success from the request side:
+ *  · the frame is accepted and changes nothing (unknown field / wrong shape);
+ *  · the frame lands behind a turn whose context is already fixed [实测 P3
+ *    measured this race directly, at 1ms];
+ *  · the empty response is read as confirmation, so the panel reports a posture
+ *    that was never applied.
+ * So every assertion below reads the FRAME that went out or the EVENT that came
+ * back, never "the call resolved".
+ */
+const THREAD_ID = THREAD_START_RESULT.threadId;
+
+/**
+ * A `thread/settings/updated` broadcast that NAMES this harness's thread.
+ *
+ * Separate from `settingsUpdated` above, which omits `threadId` the way the
+ * recorded S2 frames do: the posture path has to work when the frame identifies
+ * itself, and the foreign-thread case below needs a frame identifying itself as
+ * somebody ELSE's for that assertion to mean anything.
+ */
+function postureUpdated(settings: Record<string, unknown>): Record<string, unknown> {
+  return {
+    method: CODEX_METHOD.threadSettingsUpdated,
+    params: {
+      threadId: THREAD_ID,
+      // Codex sends a FULL snapshot (13 fields [实测 P3]); the shape matters
+      // more than the completeness, so the fields the runtime reads are real
+      // and the rest is represented by the two that prove "full snapshot".
+      threadSettings: {
+        cwd: '/work/repo',
+        approvalPolicy: 'on-request',
+        sandboxPolicy: { type: 'workspaceWrite', networkAccess: false },
+        model: 'gpt-5.6-sol',
+        modelProvider: 'gateway',
+        ...settings,
+      },
+    },
+  };
+}
+
+const STRICT = {
+  agent: CODEX_AGENT,
+  approvalPolicy: 'untrusted',
+  sandboxMode: 'read-only',
+} as SessionPermissionPreference;
+
+describe('codexRuntime — mid-session permission update (D48 S4)', () => {
+  it('D4 — sends only the dimensions that actually changed, and nothing else', async () => {
+    const h = await startedSession();
+    // The session runs `on-request` + `workspace-write`; this changes both.
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: STRICT,
+      requestId: 'req-update',
+    });
+
+    const frames = h.requestsFor(CODEX_METHOD.threadSettingsUpdate);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].params).toEqual({
+      threadId: THREAD_ID,
+      approvalPolicy: 'untrusted',
+      sandboxPolicy: { type: 'readOnly' },
+    });
+    // The kebab spelling belongs to `thread/start` alone (D5): on this method it
+    // is an unknown shape, which the server accepts and ignores.
+    expect(JSON.stringify(frames[0].params)).not.toContain('read-only');
+  });
+
+  it('D4 — a one-dimension change carries one dimension, the other ABSENT not null', async () => {
+    const h = await startedSession();
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: {
+        agent: CODEX_AGENT,
+        approvalPolicy: 'never',
+        // unchanged — this session already runs workspace-write
+        sandboxMode: CODEX_PERMISSION_DEFAULT.sandboxMode,
+      } as SessionPermissionPreference,
+    });
+
+    const params = h.requestsFor(CODEX_METHOD.threadSettingsUpdate)[0].params ?? {};
+    expect(Object.keys(params).sort()).toEqual(['approvalPolicy', 'threadId']);
+    // `null` would CLEAR the field on this API [实测 §0.2]; "unchanged" is the
+    // key not being there at all.
+    expect(JSON.stringify(params)).not.toContain('null');
+  });
+
+  it('D4 — a change to the posture the session already has writes NO frame', async () => {
+    const h = await startedSession();
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: {
+        agent: CODEX_AGENT,
+        approvalPolicy: CODEX_PERMISSION_DEFAULT.approvalPolicy,
+        sandboxMode: CODEX_PERMISSION_DEFAULT.sandboxMode,
+      } as SessionPermissionPreference,
+      requestId: 'req-noop',
+    });
+
+    expect(h.requestsFor(CODEX_METHOD.threadSettingsUpdate)).toHaveLength(0);
+    // Still acknowledged: the session IS on the requested posture, and the
+    // caller has to be able to tell that from a failure.
+    const ack = h.event('session.permissionUpdated');
+    expect(ack?.requestId).toBe('req-noop');
+    expect(payload(ack).effective).toBe('immediately');
+    // ...and the posture is RESTATED, because no frame went out and therefore no
+    // `thread/settings/updated` is coming. A consumer that only moves on the echo
+    // (the chip's pending marker) would otherwise sit unresolved forever on the
+    // one arm where nothing is actually wrong. The value is `state.policy` — the
+    // last posture this thread echoed — not the request.
+    const echo = payload(h.event('session.settingsEcho'));
+    expect(echo.permissionPolicy).toMatchObject({
+      approvalPolicy: CODEX_PERMISSION_DEFAULT.approvalPolicy,
+      sandboxMode: CODEX_PERMISSION_DEFAULT.sandboxMode,
+    });
+  });
+
+  it('D7 — the empty response is not a fact: session.settingsEcho waits for the notification', async () => {
+    const h = await startedSession();
+    await h.runtime.updatePermission({ sessionId: 's1', permissionPreference: STRICT });
+
+    // The response was `null` [实测 P3]. The ACK is out (the request was
+    // accepted); the FACTS event is not, because nothing has confirmed anything.
+    expect(h.event('session.permissionUpdated')).toBeDefined();
+    expect(h.event('session.settingsEcho')).toBeUndefined();
+
+    h.push(
+      postureUpdated({
+        approvalPolicy: 'untrusted',
+        sandboxPolicy: { type: 'readOnly', networkAccess: false },
+      })
+    );
+    await h.waitForEvent('session.settingsEcho');
+
+    expect(payload(h.event('session.settingsEcho')).permissionPolicy).toEqual({
+      agent: CODEX_AGENT,
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only',
+      networkAccess: false,
+    });
+  });
+
+  it('D7 — the NOTIFICATION wins when it disagrees with what we asked for', async () => {
+    const h = await startedSession();
+    await h.runtime.updatePermission({ sessionId: 's1', permissionPreference: STRICT });
+    // The server applied something else (a policy profile, an admin override —
+    // it does not matter which; what matters is that we report what IS).
+    h.push(
+      postureUpdated({
+        approvalPolicy: 'never',
+        sandboxPolicy: { type: 'workspaceWrite', networkAccess: true },
+      })
+    );
+    await h.waitForEvent('session.settingsEcho');
+
+    const echoed = payload(h.event('session.settingsEcho')).permissionPolicy as Record<
+      string,
+      unknown
+    >;
+    expect(echoed.approvalPolicy).toBe('never');
+    expect(echoed.sandboxMode).toBe('workspace-write');
+    expect(echoed.networkAccess).toBe(true);
+    // And the requested value is nowhere in the reported facts.
+    expect(echoed.approvalPolicy).not.toBe('untrusted');
+  });
+
+  it('one frame is read ONCE — the registry takes model and effort, the renderer gets one echo', async () => {
+    const h = await startedSession();
+    h.push(
+      postureUpdated({
+        approvalPolicy: 'never',
+        sandboxPolicy: { type: 'dangerFullAccess' },
+        model: 'gpt-5.5',
+        effort: 'low',
+      })
+    );
+    await h.waitForEvent('session.settingsEcho');
+
+    const echo = payload(h.event('session.settingsEcho'));
+    expect((echo.permissionPolicy as Record<string, unknown>).sandboxMode).toBe(
+      DANGEROUS_CODEX_SANDBOX_MODE
+    );
+    // One event, not two: a second echo path per control is how two controls end
+    // up disagreeing about which frame was last.
+    expect(h.eventsOf('session.settingsEcho')).toHaveLength(1);
+    // The registry converged too — that is what a later revive reopens under,
+    // and it is where the MODEL half of this frame stops. §8.2-L12 (a renderer
+    // label reading the thread's current model) has no reader yet, so the
+    // payload carries no `model` key: a field with a producer and no consumer is
+    // the empty shell this batch exists to stop shipping.
+    expect(h.registry.get('s1')?.model).toBe('gpt-5.5');
+    expect(h.registry.get('s1')?.effort).toBe('low');
+    expect('model' in echo).toBe(false);
+  });
+
+  it('a frame that names no readable posture still refreshes the model, and broadcasts nothing', async () => {
+    const h = await startedSession();
+    // `granular` approvals are a declared shape this build does not model.
+    h.push(
+      postureUpdated({
+        approvalPolicy: {
+          granular: { mcp_elicitations: true, rules: true, sandbox_approval: true },
+        },
+        model: 'gpt-5.2',
+      })
+    );
+    await h.waitFor(
+      () => h.registry.get('s1')?.model === 'gpt-5.2',
+      'the registry to take the model'
+    );
+
+    // The event says "here is the posture"; a frame with no nameable posture has
+    // nothing to say on it, and an empty payload would teach a consumer that
+    // this event means "settings changed".
+    expect(h.event('session.settingsEcho')).toBeUndefined();
+  });
+
+  it('D8 — a running turn refuses the change, writes no frame and queues nothing', async () => {
+    const h = await turnSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+    const framesBefore = h.requestsFor(CODEX_METHOD.threadSettingsUpdate).length;
+
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: STRICT,
+      requestId: 'req-busy',
+    });
+
+    const error = h.eventsOf('host.error').at(-1);
+    expect(payload(error).code).toBe('session_busy');
+    expect(error?.requestId).toBe('req-busy');
+    // P3 measured the race: a frame written here lands behind a turn context
+    // that is already fixed, i.e. "I changed it and this turn ignored me".
+    expect(h.requestsFor(CODEX_METHOD.threadSettingsUpdate)).toHaveLength(framesBefore);
+    expect(h.event('session.permissionUpdated')).toBeUndefined();
+    // Nothing is deferred: the registry still holds the posture it held.
+    expect(h.registry.get('s1')?.permissionPreference).toBeUndefined();
+  });
+
+  it('D8 — the same change succeeds once the turn is over', async () => {
+    const h = await turnSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+    h.runtime.stop({ sessionId: 's1' });
+
+    await h.runtime.updatePermission({ sessionId: 's1', permissionPreference: STRICT });
+    expect(h.requestsFor(CODEX_METHOD.threadSettingsUpdate)).toHaveLength(1);
+    expect(h.event('session.permissionUpdated')).toBeDefined();
+  });
+
+  it('D9 — a JSON-RPC refusal is surfaced, not swallowed, and moves nothing', async () => {
+    const h = await startedSession('s1', {
+      settingsUpdateError: {
+        code: -32600,
+        message: 'Invalid request: unknown variant `bogus-policy`',
+      },
+    });
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: STRICT,
+      requestId: 'req-bad',
+    });
+
+    const error = h.eventsOf('host.error').at(-1);
+    expect(payload(error).code).toBe('permission_update_failed');
+    expect(String(payload(error).message)).toContain('-32600');
+    expect(error?.requestId).toBe('req-bad');
+    // No ACK, no facts, no registry write — and no retry.
+    expect(h.event('session.permissionUpdated')).toBeUndefined();
+    expect(h.event('session.settingsEcho')).toBeUndefined();
+    expect(h.registry.get('s1')?.permissionPreference).toBeUndefined();
+    expect(h.requestsFor(CODEX_METHOD.threadSettingsUpdate)).toHaveLength(1);
+  });
+
+  it('D10 (Host half) — a SUCCESSFUL change is what a later revive reopens under', async () => {
+    const h = await startedSession();
+    await h.runtime.updatePermission({ sessionId: 's1', permissionPreference: STRICT });
+
+    // The registry entry is the revive's only source for the posture — the
+    // sweep throws the session state away.
+    expect(h.registry.get('s1')?.permissionPreference).toEqual(STRICT);
+    expect(resolveCodexPolicy(h.registry.get('s1')?.permissionPreference)).toEqual({
+      agent: CODEX_AGENT,
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only',
+    });
+  });
+
+  it('refuses a Claude posture on a Codex session rather than degrading to the constant', async () => {
+    const h = await startedSession();
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: { agent: CLAUDE_CODE_AGENT, permissionMode: 'plan' },
+      requestId: 'req-cross',
+    });
+
+    expect(payload(h.eventsOf('host.error').at(-1)).code).toBe('invalid_payload');
+    expect(h.requestsFor(CODEX_METHOD.threadSettingsUpdate)).toHaveLength(0);
+    expect(h.registry.get('s1')?.permissionPreference).toBeUndefined();
+  });
+
+  it('refuses a session it has never heard of, and never spawns one to answer', async () => {
+    const h = makeHarness();
+    await h.runtime.updatePermission({
+      sessionId: 'ghost',
+      permissionPreference: STRICT,
+      requestId: 'req-ghost',
+    });
+
+    expect(payload(h.eventsOf('host.error').at(-1)).code).toBe('session_not_found');
+    expect(h.connections).toHaveLength(0);
+  });
+
+  it('a CRASHED session is still session_not_found — only the sweeper earns the other arm', async () => {
+    // The distinction the swept arm turns on: "no state" has two causes, and a
+    // process that died on its own was already reported to the user. Answering
+    // that one as if the change had landed would record a posture on a session
+    // nothing can reopen.
+    const h = await sweepableSession();
+    h.exit({ code: 1, signal: null });
+    await h.waitForEvent('session.failed');
+    h.events.length = 0;
+
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: STRICT,
+      requestId: 'req-dead',
+    });
+
+    expect(payload(h.eventsOf('host.error').at(-1)).code).toBe('session_not_found');
+    expect(h.event('session.permissionUpdated')).toBeUndefined();
+    expect(h.registry.get('s1')?.permissionPreference).toBeUndefined();
+  });
+
+  it('ignores a settings frame addressed to another thread', async () => {
+    const h = await startedSession();
+    h.push({
+      method: CODEX_METHOD.threadSettingsUpdated,
+      params: {
+        threadId: 'someone-elses-thread',
+        threadSettings: { approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' } },
+      },
+    });
+    await h.waitFor(
+      () => h.logs.some((l) => l.includes('foreign thread')),
+      'the foreign-thread warning'
+    );
+
+    expect(h.event('session.settingsEcho')).toBeUndefined();
+    expect(h.registry.get('s1')?.model).toBe(undefined);
+  });
+});
+
+/**
+ * D48 S4 terminal check — the arm the whole feature falls over on in normal use.
+ *
+ * `CODEX_DEFAULT_IDLE_TIMEOUT_SECS` is 180 and the sweeper is ON by default, so
+ * "a Codex chat the user left open for three minutes" is the ORDINARY state of
+ * the control, not an edge case: the process is gone, the registry row is not,
+ * and the chip is still rendered and still clickable (host ready, no turn, facts
+ * present). Every assertion here is about that arm — refusing it loses the
+ * change with a `session_not_found` the user has no way to act on, and reviving
+ * to apply it would spawn a process for a chat nobody is having.
+ */
+describe('codexRuntime — a swept session can still be retuned (D48 S4 terminal check)', () => {
+  const REVIVED_UNDER_STRICT: Record<string, unknown> = {
+    thread: { id: FIXTURE_THREAD, turns: [] },
+    approvalPolicy: 'untrusted',
+    sandbox: { type: 'readOnly' },
+  };
+
+  async function sweptSession(options: HarnessOptions = {}): Promise<Harness> {
+    const h = await sweepableSession(options);
+    h.advance(IDLE_MS);
+    h.sweepTick();
+    h.events.length = 0;
+    return h;
+  }
+
+  it('writes the row and acknowledges it as next_turn, spawning nothing and sending nothing', async () => {
+    const h = await sweptSession({ threadResumeResult: REVIVED_UNDER_STRICT });
+    const linksBefore = h.connections.length;
+
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: STRICT,
+      requestId: 'req-swept',
+    });
+
+    // The row is the only carrier a revive reads, and it took the change whole.
+    expect(h.registry.get('s1')?.permissionPreference).toEqual(STRICT);
+    const ack = h.event('session.permissionUpdated');
+    expect(ack?.requestId).toBe('req-swept');
+    expect(payload(ack).preference).toEqual(STRICT);
+    // NOT `immediately`: there is no open thread for it to be immediate on.
+    expect(payload(ack).effective).toBe('next_turn');
+    expect(payload(ack).effective).not.toBe('immediately');
+    // No process, no frame, no failure — applying a setting must not resurrect
+    // a ~296MiB app-server, and it must not report one either.
+    expect(h.connections).toHaveLength(linksBefore);
+    expect(h.requestsFor(CODEX_METHOD.threadSettingsUpdate)).toHaveLength(0);
+    expect(h.eventsOf('host.error')).toEqual([]);
+  });
+
+  it('states the new posture as a fact, because the row IS the posture while the process is gone', async () => {
+    const h = await sweptSession({ threadResumeResult: REVIVED_UNDER_STRICT });
+    await h.runtime.updatePermission({ sessionId: 's1', permissionPreference: STRICT });
+
+    // Not an optimistic write: `assertResumePosture` FAILS the revive outright
+    // if the thread comes back under anything else, so "this session runs under
+    // X" is enforced rather than hoped for. Without it the chip would show the
+    // pre-sweep tier with a pending marker that no frame is ever coming to
+    // settle — a permanently false statement about a safety posture.
+    const echo = payload(h.event('session.settingsEcho'));
+    expect(echo.permissionPolicy).toEqual(resolveCodexPolicy(STRICT));
+    // And the dimension nobody verified stays unsaid: the sweep threw away the
+    // value learned from `thread/start`, and the sandbox just changed under it.
+    expect('networkAccess' in (echo.permissionPolicy as Record<string, unknown>)).toBe(false);
+  });
+
+  it('and the revive that follows really does reopen under it (the assertion the row exists for)', async () => {
+    const h = await sweptSession({ threadResumeResult: REVIVED_UNDER_STRICT });
+    await h.runtime.updatePermission({ sessionId: 's1', permissionPreference: STRICT });
+
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-after' });
+    await h.waitFor(() => h.connections.length === 2, 'the revive link');
+
+    // The isolated home is where a codex thread's posture actually comes from
+    // [实测], so this is the frame that proves the change reached the process.
+    expect(h.ensureHomeInputs).toHaveLength(2);
+    expect(h.ensureHomeInputs[1].permission.approvalPolicy).toBe('untrusted');
+    expect(h.ensureHomeInputs[1].permission.sandboxMode).toBe('read-only');
+    // `assertResumePosture` compares the echo against exactly that, so a revive
+    // under the OLD posture fails the send rather than running the wrong tier.
+    expect(h.eventsOf(CODEX_REVIVE_FAILED_CODE)).toEqual([]);
+    expect(h.eventsOf('host.error')).toEqual([]);
+  });
+
+  it('refuses a posture it cannot name on this arm too, and leaves the row alone', async () => {
+    const h = await sweptSession();
+    await h.runtime.updatePermission({
+      sessionId: 's1',
+      permissionPreference: { agent: CLAUDE_CODE_AGENT, permissionMode: 'plan' },
+      requestId: 'req-cross',
+    });
+
+    expect(payload(h.eventsOf('host.error').at(-1)).code).toBe('invalid_payload');
+    expect(h.registry.get('s1')?.permissionPreference).toBeUndefined();
+    expect(h.event('session.permissionUpdated')).toBeUndefined();
+    expect(h.event('session.settingsEcho')).toBeUndefined();
   });
 });

@@ -52,6 +52,7 @@ import {
 import { ComposerAgentPicker } from './ComposerAgentPicker';
 import { ComposerAttachMenu } from './ComposerAttachMenu';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
+import { ComposerPermissionTrigger } from './ComposerPermissionTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { AGENT_UNAVAILABLE_SEND_ERROR, isSendableAgent } from './composerAgentPickerModel';
@@ -2359,6 +2360,26 @@ export function ChatComposer({
     />
   ) : null;
 
+  // D48 S4 §6.3: the live permission chip. Its gate is the model trigger's
+  // (`busy || sending`) and NOT the picker's `agentBindingLocked` — the whole
+  // requirement is that an established chat can still change tier (D13). It
+  // renders only once the Host has echoed a posture for this session and only on
+  // a Host that reports `permissionPolicy`; an old Host gets no control rather
+  // than a dead one (D15), and an unsent draft has no posture to change (its
+  // starting tier comes from the Settings template at first send).
+  const permissionControl = activeSessionId ? (
+    <ComposerPermissionTrigger
+      sessionId={activeSessionId}
+      agent={composerAgent}
+      capabilityPermissionPolicy={hostStatus.capabilities?.permissionPolicy}
+      hostState={hostStatus.state}
+      mode={mode}
+      busy={busy}
+      sending={sending}
+      disabled={disabled}
+    />
+  ) : null;
+
   // T-30b2 §4.6 / D4: sits at the far left of the card in both modes. Its
   // disabled gate matches the textarea's exactly — "there is nowhere to put
   // this draft" — and deliberately excludes busy/sending, because T-19 already
@@ -2595,6 +2616,7 @@ export function ChatComposer({
               {renderStatusLine(sessionStatusLineWrapperClass())}
               {agentPicker}
               {modelEffortControls}
+              {permissionControl}
               {actionButtons}
             </div>
           </div>
@@ -2617,6 +2639,7 @@ export function ChatComposer({
               {attachButton}
               {agentPicker}
               {modelEffortControls}
+              {permissionControl}
               {renderStatusLine('flex min-w-0 flex-1 items-center gap-1.5')}
               <div className={composerActionGroupClass()}>{actionButtons}</div>
             </div>
