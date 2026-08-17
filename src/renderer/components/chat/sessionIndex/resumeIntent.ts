@@ -90,7 +90,10 @@ export function shouldResumeSession(
       sessionId: session.id,
       runtimeIdentity,
       workspacePath: workspace.path,
-      model: options.model,
+      // D48 S2 (B11): `Automatic` reaches here as `undefined`, and the key is
+      // dropped rather than sent with an undefined value — "no model" has to be
+      // indistinguishable from "field absent" for the runtime default to apply.
+      ...(options.model ? { model: options.model } : {}),
       agent: sessionAgent(session),
     },
   };

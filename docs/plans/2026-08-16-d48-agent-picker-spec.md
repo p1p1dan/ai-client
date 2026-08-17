@@ -565,6 +565,150 @@ type CodexTurnStartParams = {
 ⑮ 目录外的存量选择被丢弃/重置为 `Automatic` → **B16 红**（R11 的第二个入口）
 ⑯ 把「跨 agent model 拒绝」放进 agent-host 侧（等价于永远放行）→ **B18 红**
 
+### 4.10 S2 as-built（施工实况与规格偏差）
+
+> 落账 2026-08-16。按 §1.3「每片 as-built 段落必须记：git commit · 四门逐门实跑输出 · 变异逐对红灯原文 · off/on 双轮结果 · 新增/改动文件清单 · 规格偏差条目」六项补齐。
+> **施工编制**：核心员（Main / agent-host 半边）→ UI 员（renderer 半边）→ 变异复核员（⑨ 补跑 + ⑫~⑯ 交叉复核）→ **终检修复批**（本节末四门数字与 ⑰ / B10 变异出自该批）。
+> **git commit：本片尚未提交**——终检修复批按用户纪律不自行 commit，收口态为工作树 50 个变更项（清单见 §4.10.6）。
+
+#### 4.10.1 四门逐门实跑（终检修复后，逐门串行）
+
+| 门 | 命令 | 结果 |
+|---|---|---|
+| 1 | `pnpm typecheck` | `EXIT=0`，`tsc --noEmit` 无输出 |
+| 2 | `pnpm typecheck:agent-host` | `EXIT=0`，`tsc --noEmit -p src/agent-host/tsconfig.json` 无输出 |
+| 3 | `pnpm lint` | `EXIT=0`，`Checked 955 files in 755ms. No fixes applied. / Found 29 warnings. / Found 3 infos.`（0 error；29 warning 全在 `docs/design/*.html`，基线既有） |
+| 4 | `pnpm test` | `EXIT=0`，`Test Files 220 passed (220) / Tests 4268 passed (4268)`，Duration 19.17s |
+
+基线链：D47 收官 208 文件 3973 例 → 核心员交接 217/4161 → UI 员交接 220/4247 → **终检修复批收口 220/4268**（+21 例，无新增文件）。
+
+#### 4.10.2 flag off/on 双轮
+
+| 轮次 | 结果 |
+|---|---|
+| `AICLIENT_AGENT_CODEX` 未设（off） | `Test Files 220 passed (220) / Tests 4268 passed (4268)` |
+| `AICLIENT_AGENT_CODEX=1`（on） | `Test Files 220 passed (220) / Tests 4268 passed (4268)` |
+
+两轮逐例相同 —— §1.1-4「renderer/store 形状不得因 flag 分叉」在测试面成立。
+
+#### 4.10.3 既有非 hermetic 红（**非本批引入**，不计入收口）
+
+`AICLIENT_MANAGED_CREDENTIALS=1` 下：`Test Files 4 failed | 216 passed (220) / Tests 15 failed \| 4253 passed (4268)`。
+
+落点 4 文件：`main/services/auth/__tests__/index.test.ts`（1）· `onboarding/__tests__/OnboardingService.test.ts`（6）· `session/__tests__/SessionManager.test.ts`（2）· `usage/__tests__/UsageService.test.ts`（6）。
+
+**判定**：核心员已 `git stash` 回基线复跑，复现同样 15 例红 ⇒ 既有夹具非 hermetic 缺陷（读环境变量而非注入），**与 F13 同形**，零例落在 D48 S2 改动面。终检修复批在当前工作树复跑数字一致。留作独立票，不阻塞本片。
+
+#### 4.10.4 规格偏差清单
+
+**A · 核心员自报（Main / agent-host 半边，12 条）**
+
+1. 服务文件名取规格 §4.1 原文 `AgentCatalogService.ts`（任务书写作 `ModelCatalogService`），因规格自称施工唯一入口。
+2. **B18 判据 = 归属制而非目录成员制**。规格写 `model ∈ 当前 catalog ∪ {该 session legacy/unverified 既有值}`，但 Main 侧没有 renderer 的 per-session 选择存储，成员判定会把 §4.4-6 的 unverified（`gpt-5.5` / `claude-opus-4-6`）一并拒掉 = R11 的第二入口。改为三值 `resolveModelAgentOwner`：**只拒能证明属于对方轴的，未知/unverified/legacy 同轴一律放行**。
+3. **B14 的 wire 事实修正**：codex 复活走 `thread/resume`（schema 仅 `threadId`，不重发 `thread/start`）。故「revive 重建的 `thread/start` 参数必须是 B」落为「复活后首发 `turn/start` 带 B」+「registry 默认 == B」双断言；失败臂用「下一发仍是 A」。
+4. **B8 无超时窗状态机**。`thread/settings/updated` 处理器是 registry model/effort 的唯一写者 ⇒「通知缺席不回写」由构造成立，不需要 pending-override + latch + 定时器。规格的「超时窗未到达 = 未确认」退化为「没通知就没写」，行为等价、活动部件少一组。
+5. 凭据 flag-off = `credentials-unavailable` → 种子表；**不**像 `UsageService` 那样回落读 `~/.codex/auth.json`（D47 S6 停双写后该文件可能是已被拒的旧 key），同时严守 §1.2：全链零读用户全局配置。
+6. 种子表/请求规则不用 `Record<AgentWireName, …>` 字面量（`agentWireStatic.test.ts` 禁 `'claude-code'` 二次拼写），改为两个具名常量 + 选择器 `seedCatalogFor` / `requestRuleFor`。
+7. effort 词表上收 shared（`SESSION_EFFORT_LEVELS` / `isSessionEffortLevel` 落 `shared/types/agentHost.ts`），`claudeRuntime.normalizeEffort` 改委托——一表两轴。这是本批唯一一处 `claudeRuntime` 触碰。
+8. codex 侧 effort 开始入 registry：`createSession` / `resumeSession` / `bindResumedRow` 原注释「Codex has no measured effort parameter」故意丢弃，04 探测 E/G 后前提消失，已改为记录并注明反转理由。
+9. **过滤后为空 ≠ 种子**：代理答了但白名单过滤后 0 条 → 仍 `source:'proxy', models:[]`（诚实的第四级 `Automatic` + Retry）；只有「解析不出 / 0 个 id」才判 `invalid-response` 进回落链。
+10. `error:'host-not-ready'` 在类型里但 **Main 永不产生**（Main 看不到 Host 状态），留给 renderer hook 产生；已在类型注释写明。
+11. 顺带补 `SessionIndexService.get(sessionId)` 点查（不用 `list().find` 排序全表）——B18 的 send 臂需要它。
+12. 夹具欠采（06 §0.1 的 clientRequest 126 vs 121）本批未补；D48 要用的四个方法名夹具里都在，不阻塞。
+
+**B · UI 员自报（renderer 半边，13 条）**
+
+1. **两个存储键保留**，schema 为 `Record<sessionId, Partial<Record<agent, string>>>`，而非规格 §4.3 字面的合并对象 `{model?, effort?}`：合并对象需要第三个新键并迁移两份 legacy blob；拆成两键各存自己那个标量，(session, agent) 粒度完全一致，且两份 pre-D48 blob 在首次写入前字节不动。
+2. legacy 扁平值的归属判据复用 `isModelAllowedForAgent`（与 Main B18 守卫**同一符号、同三值语义**）：`sonnet` 不会出现在 codex 草稿上；无法归类的值两轴都能读。
+3. `hostDefaultModel` 降级口径落为「目录为空且本会话无既有选择」时的 unverified 选中值，**且同时是发送值**（只显示不发送会重演 A11 的显示值≠发送值）；走 `isModelAllowedForAgent` 闸，catalog 到达后由 `reconcileModelSelection` 的唯一 rewrite 臂改回 `Automatic`。
+4. `Automatic` 存为「缺席」而非持久化哨兵（effort 的 `Default` 仍存哨兵）：model 侧「显式选 Automatic」与「从未选过」行为等价（都省略键、都继续跟随 agent 模板），存哨兵会把会话冻结在模板之外。
+5. `resolveResumeModel` 签名改为 `(get, sessionId, agent, agentDefaultModel?) => string | undefined`，不再吃 `hostDefaultModel`；四个站点改经新 hook `useResolvedSessionModel`。
+6. `resumeIntent.ts` 与 `ChatComposer` 内的 `resumeSession` 也改条件展开（规格 B11 只点名 create/send）：`model: undefined` 会把 Host registry 的 model 显式钉成「无」，与 `Automatic` 的「字段不存在」语义不同。变异 B11a 正是靠这条暴露出第三个漏改站点。
+7. `useMessageMetadata` 的 `?? defaultModelId(null)` 兜底**删除而非替换**（它给每个未触碰会话盖上一个用户没选、线上也没发过的 `sonnet`），现为 `?? null`。
+8. `ChatAgentDefaults` 落 `src/shared/models/` 而非 `src/renderer/`：与 `familyWhitelist.ts` / `seedCatalog.ts` 同类，且让 `settings/types.ts` 继续只从 `@shared` 取类型，不新增 settings → components 的 import 边。
+9. 新增 `useSettingsHydrated()`（reactive）：裸调 `persist.hasHydrated()` 只会把「未 hydrate」答案留一辈子。B15 两条 hydration 臂分别由 `resolveInitialDraftAgent` 与 `canPersistLastAgent` 承担（拆开才咬得住写臂，变异 ⑭b 实证）。
+10. `lastAgent` 记忆值会被回写 store，但**仅当它不等于 legacy 绑定**——否则每个新会话都会物化 `session.agent`，等于在 `mergeSessionIndex` 之外造第二个默认物化点。
+11. `composerAgentPickerWiring.test.ts` 的 m9 断言由「恰 2 次」改为「等于 `setDraftSessionAgent` 调用点数」：S2 新增了第三个正确调用点，钉死字面 2 会为「正确代码到来」而红。
+12. `chat.ts:240` 英文注释里混入的 `承重` 已改 `load-bearing`（CLAUDE.md 注释语言条），同批把同形状的 4 处一并改掉（保留 `[实测 调查 04]` 形式的中文出处引用）。
+13. **未做**：`ChatAgentDefaults.permission` 字段（§5.5，属 S3）；Settings 的「Chat agent defaults」面板（S3 模板层写侧 UI）。本片只落 `byAgent` 的读写通道，写入点是 Composer 的显式选择。
+
+**C · 终检核查新增（6 条，两员未自报）**
+
+1. **§4.6 P1 指示 1「线程当前模型」文案 = 简版实现**。规格要求 registry 回声投影到 renderer 的完整版；as-built 只做**文案分轴**（`CLAUDE_MODEL_SCOPE_HINT` / `CODEX_MODEL_SCOPE_HINT` + `modelScopeHint(agent)`，进 tooltip 与 `aria-label`），并以静态断言钉死两轴不共用同一句、Codex 句不得含 `turn`。**完整版（registry 回声 → renderer 显示线程当前模型）降级为遗留条目，另立后续票**，S4 订阅 `thread/settings/updated` 时一并落。
+2. **B18 归属制放行未知 id 是负控，须有引用**：偏差 A-2 的三值判据意味着「未知家族的新 id」在 Main 侧一律放行——这是**刻意**的（拒绝未知 = R11 的第二入口），不是守卫漏洞。变异 ⑯b（守卫恒真）9 红证明它不是假守卫。
+3. **§4.3-1 的 props 契约未抬升**。规格列 `agent / catalog / catalogState / selectedModel / selectedEffort / onModelChange / onEffortChange / onRetryCatalog` 八个新 prop；实际只加了 `agent` 与 `hostState`，目录与选择仍由组件内 `useAgentModelCatalog` + 两个 `useState` 自持。理由：把 catalog 提到 `ChatComposer` 会让每个 Composer 渲染都持有目录状态，而目录是**按 agent** 而非按 composer 缓存的；抬升 props 只是把同一份 hook 状态多穿一层。**决策面仍全在纯模块**（`models.ts` / `agentModelCatalog.ts`），可真值表化的部分一条没少。
+4. **`ChatAgentDefaults` 落点实际是 `types.ts` / `index.ts` / `migration.ts`**，非 §4.3 写的 `types.ts` / `defaults.ts` / `migration.ts`：本仓 `settings/defaults.ts` 不是 store 初值的落点，初值在 `settings/index.ts:177`（`chatAgentDefaults: EMPTY_CHAT_AGENT_DEFAULTS`）。规格行号引用有误，实现取实况。
+5. **`ChatAgentPreference.effort` 类型是 `string` 而非 `EffortSelection`**（`shared/models/chatAgentDefaults.ts:42`）。原因：`shared` 侧不 import renderer 的 `efforts.ts`，而 `EffortSelection` 含 renderer 的 `EFFORT_DEFAULT_ID` 哨兵。sanitize 只做「非空字符串」收窄，**真正的词表守卫在 storage 与 Host wire 两层**（见下条）。
+6. **B10「四层拒绝」措辞修正为实况**。规格称 `ultra` 在「shared type / storage normalization / 菜单 / Host wire」四层均被拒；实况是 **shared type 为编译期**（`SessionEffortLevel` 联合，运行时零拦截）、**菜单为不提供**（只渲染 `CHAT_EFFORTS` 五条 + 哨兵，属「选不到」而非「拒绝」）。终检前真正的**运行时**拒绝只有 Host wire 一层。本轮补 storage 层（见 D-3），实况为**运行时两层 + 编译期一层 + 菜单不提供一层**。
+
+**D · 终检修复批新增（3 条）**
+
+1. **`reconcileModelSelection` 双触发折叠（BLOCKER，已修）**。§4.3-6 的两个触发被折成单保守函数：切会话保留上一会话模型（`storedModel` 被无视）、`catalogLoaded=false` 时跨轴值存活（B12 破口）。修法 = `ModelReconcileInput` 增**必填** `pairChanged`（刻意不给默认值，漏传不编译），pair 变化时无条件走 `resolveModelSelection`；保守臂只服务 catalog 迟到场景，且**在所有 keep 臂之前**加 `isModelAllowedForAgent` 闸。消费侧 `ComposerModelTrigger` 用 `resolvedPairRef` 记住上次已解析的 `(sessionId, agent)`——该组件**从不按会话重挂载**（`ChatWorkspace` 渲染单个无 `key` 的 `ChatComposer`），无此 ref 则「切会话」与「重渲染」不可区分。补 B17「pair 移动」四例 + B12「未加载即杀跨轴值」一例；变异 ⑰ 三臂全灭。
+2. **`ComposerModelTrigger.tsx` 混入两个裸 NUL 字节（新发现，已修）**。pair key 写作 `` `${sessionId}<0x00>${agent}` `` —— 分隔符选 NUL 本身是对的（会话 id 与 agent 名都不可能含它），但**以裸字节写进源文件**使 `file(1)` 判定该文件为 `data`、ripgrep 判定为 binary 并**整文件跳过**。本仓多处资产删除守卫（B13 等）依赖对 `chat/` 目录的文本扫描，一个 grep 不可见的文件是**假绿风险**。改为 `\0` 转义，运行时字符串逐字节相同，文件恢复 `UTF-8 text`。
+3. **B10 storage 层词表守卫补齐（对应 C-6）**。`efforts.ts` 新增 `isEffortSelection()`（由 `CHAT_EFFORTS` 派生，不第二次拼写五个词），`sessionPreferenceStore.writeSessionEffort` 在写入前拒绝词表外的值。选**写入拒绝**而非读时丢弃：读时丢弃会把坏值留在盘上、每次读重新判定一次，而「读时顺手改写」被 `sessionIndex.ts:19-27` 明令禁止（把一次兼容的读变成不可逆的写迁移）。四例断言 + 变异两臂各 3 红。
+
+> **另附终检修复批过程中的两处连带修**（非规格偏差，属测试自身缺陷）：
+> ① `composerModelWiring.test.ts` 的 `expect(trigger).toContain('useAgentModelCatalog(agent, hostState)')` 因菜单 TTL 修复往解构里加了一个 `refresh,`，整行由 100 字符涨到 102 触发 biome 换行而变红——**正是该文件头注自己警告的「formatter owns the line breaks」**。改为按去空白形式断言（新增 `compact()` 助手）。
+> ② `models.test.ts`「catalog 未加载时保持当前值」一例原用 `current:'gpt-5.5'` 配 Claude 轴，被 D-1 新增的跨轴闸正确改写而变红。该用例本意是「过滤掉的同轴遗留值也要保留」，故改用 Claude 轴的 `claude-opus-4-6`；跨轴场景由相邻的 B12 用例专管。
+
+#### 4.10.5 变异逐对红灯表
+
+> 口径：逐对实跑，红灯以 vitest 失败用例名记录（本仓 reporter 不打印 `FAIL ... N failed` 汇总尾行，故抄失败用例名 + 计数）。**变异施加与还原一律用 python / Edit 精确字符串替换，禁 `git checkout`**（原因见 §4.10.5 末「事故披露」）。
+
+| 编号 | 变异内容 | 红灯 | 执行者 |
+|---|---|---|---|
+| ①a | cache TTL 判定反向（过期当新鲜） | 4 红（B1-② + TTL 三例） | 核心员 |
+| ①b | 失败仍刷新 `fetchedAt` | 1 红（"a non-2xx overwrites neither the models nor fetchedAt"） | 核心员 |
+| ② | 删单飞去重 | 1 红（B2） | 核心员 |
+| ③ | 双轴 header 对调（Claude 用 Bearer / Codex 用 x-api-key） | 11 红（含 B4 两条对钉） | 核心员 |
+| ④ | 静态 `CHAT_MODELS` 当失败 fallback | 2 红（B13 扫描 +「空目录仍只给 Automatic」） | UI 员 |
+| ⑤a | `buildTurnStartParams` 再丢 `model` | 8 红（B6 五 + B14 三） | 核心员 |
+| ⑤b | 丢 `effort` | 4 红 | 核心员 |
+| ⑤c | `effort` 改名 `reasoningEffort` | 5 红（含 "every key it can emit is one the binary declares"，即 -32602 咬合） | 核心员 |
+| ⑥a | 乐观回写请求值（仍消费通知） | 3 红（B8-②③ + B14 失败臂） | 核心员 |
+| ⑥b | 乐观回写 + 忽略通知 | 5 红（含 B8-① 分叉臂） | 核心员 |
+| ⑦ | legacy 短名自动映射到目录首条 | 3 红（B5/B16 存量原样 + Host default 优先级） | UI 员 |
+| ⑧a | 跳过白名单直透全量目录 | 24 红 | 核心员 |
+| ⑧b | 删解析层家族闸 | **首轮存活**（输出循环是第二道闸）→ 补 parse 层断言后 1 红 | 核心员 |
+| **⑨a** | `SESSION_EFFORT_LEVELS` 加入 `'ultra'` | 2 红（`claudeRuntimeOptions.test.ts` `normalizeEffort` 拒绝表 + `codexRuntime.test.ts` "drops an effort outside the measured five-word vocabulary"） | **变异复核员补跑** |
+| **⑨b** | `filterCodex` 顶代过滤改为放行全部代际（目录外 `gpt-5.2` 成 verified） | 9 红（`familyWhitelist.test.ts` B10 纯半 + `agentCatalogService.test.ts` B3 双轴交叉两例） | **变异复核员补跑** |
+| ⑩ | 未知项前插改为把勾移到 `options[0]` | 3 红（F-A16 + B5 + B16） | UI 员 |
+| ⑪ | cache key 不按 agent 分 | **首轮仅 1 红**（夹具两轴密钥不同掩盖）→ 补「同 host 同 key」用例后 2 红 | 核心员 |
+| ⑫a | vault `locked` 改 throw | 1 红 | 核心员 |
+| ⑫b | 凭据不可用仍发 `net.fetch` | 7 红 | 核心员 |
+| ⑬ | revive/resume 改读 `thread/start` 初始 model | 4 红（B14 三 + B6 wiring 一） | 核心员 |
+| ⑭a | `lastAgent` 不与 capabilities 求交 | 3 红（B15 求交三臂） | UI 员 |
+| ⑭b | hydration 前允许写 `lastAgent` | 1 红（B15 写臂——单列才咬得住） | UI 员 |
+| ⑮ | 目录外存量选择重置为 `Automatic` | 3 红（B17 keep 臂 + B12 切轴臂） | UI 员 |
+| ⑯a | 删 Main send 守卫 | 4 红 | 核心员 |
+| ⑯b | 守卫恒真（假守卫形） | 9 红（跨两文件） | 核心员 |
+| **⑰a** | **删 `if (pairChanged) return resolveModelSelection(input);`（两触发折成单保守函数）** | **3 红**：`B17: the pair moved > a session switch on the same agent adopts the new session stored choice` / `> a session switch to a session that chose nothing falls back, it does not inherit` / `> resolves the new pair even while its catalog is still in flight`（`Tests 3 failed \| 34 passed (37)`） | **终检修复批** |
+| **⑰b** | **删 keep 臂前的 `isModelAllowedForAgent` 跨轴闸** | **1 红**：`B17: what a late catalog may overwrite > B12: a value belonging to the other runtime dies even before the catalog loads`（`Tests 1 failed \| 36 passed (37)`） | **终检修复批** |
+| **⑰c** | **消费侧改传 `pairChanged: false`（组件算了但不告诉纯函数）** | **1 红**：`B17 wiring > the reconcile is told when the (session, agent) pair moved, off a ref`（`Tests 1 failed \| 20 passed (21)`） | **终检修复批** |
+| **B10a** | **删 `writeSessionEffort` 的词表守卫** | **3 红**：`B10: a word outside the vocabulary never reaches storage` / `B10: rejecting an illegal write leaves the previous legal value intact` / `B10: neither a blank string nor a near-miss casing gets through`（`Tests 3 failed \| 24 passed (27)`） | **终检修复批** |
+| **B10b** | **`isEffortSelection` 放宽为「任意非空字符串」** | **3 红**（同上三例，`Tests 3 failed \| 24 passed (27)`） | **终检修复批** |
+| **ctx** | **Context 面板去掉 agent 模板那一级（第二实参改 `null`）** | **2 红**：`§4.3 wiring > reads the session rung and the agent-template rung through the shared helper` / `> keys both rungs by the session agent, never by a hard-coded axis` | **终检修复批** |
+| **ttl** | **菜单 `onOpenChange` 改接 `retry()`（强制臂）** | **1 红**：`B17 wiring > opening the menu re-checks the TTL through the non-forced request` | **终检修复批** |
+
+**⑫~⑯ 交叉复核**（变异复核员独立重跑，范围比原报告更粗、方向一致，不构成推翻）：⑬ 屏蔽 `onThreadSettingsUpdated` 的 `session.model` 写回 → 4 红（revive 用旧值 `gpt-5.6-sol` 而非确认值 `gpt-5.5`）· ⑭ 删 `resolveInitialDraftAgent` 求交 → 3 红 · ⑮ `usableFor` 恒返回 null → 13 红 · ⑯a `assertModelMatchesAgent` 整函数 no-op → 7 红（关的是全部 3 个调用点）· ⑫b `credentials.status !== 'ok'` 判据关闭 → 1 红（`vault.codex` 访问 undefined 崩溃，证明该分支承重）· ⑫a vault locked→throw 因 electron 依赖不可单测，经 `AgentCatalogService.test.ts` "④ credentials unavailable" 间接钉住，走查一致、未独立实跑。
+
+**事故披露（纪律违反，已复原）**：变异复核员验证 ⑨ 时用 `git checkout -- src/shared/types/agentHost.ts` 撤销自施变异，而该文件同时携带 D48 的真实未提交改动（`SESSION_EFFORT_LEVELS` / `isSessionEffortLevel`），checkout 把真实工作一并清空——违反用户「未提交态恢复禁 checkout」明令。发现后以此前保留的完整 diff 经 Edit 手工重建，`git diff` 复核显示重建后 blob hash（`8ba0fb5`）与事故前完全一致，**确认字节级零损失**。此后全部变异施加/还原改用 python / Edit 精确字符串替换。
+
+#### 4.10.6 改动/新增文件清单（`src/` 工作树 50 项；本规格文档 §4.10 落账为第 51 项）
+
+**新增 · Main / shared（11）**：`src/shared/types/agentCatalog.ts` · `src/shared/models/familyWhitelist.ts` · `src/shared/models/seedCatalog.ts` · `src/shared/models/chatAgentDefaults.ts` · `src/main/services/agentCatalog/AgentCatalogService.ts` · `src/main/services/agentCatalog/index.ts` · `src/main/ipc/agentCatalog.ts` · 测试 4：`src/shared/__tests__/familyWhitelist.test.ts` · `src/shared/__tests__/chatAgentDefaults.test.ts` · `src/main/services/agentCatalog/__tests__/agentCatalogService.test.ts` · `src/main/ipc/__tests__/chatModelAgentGuard.test.ts` · `src/main/ipc/__tests__/agentCatalogIpc.test.ts`
+
+**新增 · renderer（6）**：`chat/agentModelCatalog.ts` · `chat/useAgentModelCatalog.ts` · `chat/sessionPreferenceStore.ts` · `chat/useResolvedSessionModel.ts` · 测试 2：`chat/__tests__/agentModelCatalog.test.ts` · `chat/__tests__/composerModelWiring.test.ts`
+
+**删除/改名（2）**：`chat/sessionEffortStore.ts` 删除（并入 `sessionPreferenceStore.ts`）· 其测试 `git mv` 为 `chat/__tests__/sessionPreferenceStore.test.ts` 并重写
+
+**修改 · Main / agent-host（13）**：`shared/types/ipc.ts` · `shared/types/agentHost.ts` · `preload/index.ts` · `main/ipc/index.ts` · `main/ipc/chat.ts` · `main/services/chat/SessionIndexService.ts` · `agent-host/codexRuntime.ts` · `agent-host/codexWire.ts` · `agent-host/codexNormalizer.ts` · `agent-host/claudeRuntime.ts` · 测试 3：`agent-host/__tests__/codexRuntime.test.ts` · `agent-host/__tests__/codexWireContract.test.ts` · `chat/__tests__/pureModuleImports.test.ts`
+
+**修改 · renderer（18）**：`chat/models.ts`（整体重写）· `chat/composerModel.ts` · `chat/efforts.ts` · `chat/ComposerModelTrigger.tsx`（重写）· `chat/ComposerAgentPicker.tsx` · `chat/ChatComposer.tsx` · `chat/useSessionModel.ts` · `chat/useSessionEffort.ts` · `chat/useMessageMetadata.ts` · `chat/MessageTimeline.tsx` · `chat/sessionIndex/resumeIntent.ts` · `workspace-shell/LeftNav.tsx` · `workspace-shell/surfaces/ContextSurfaceView.tsx` · `stores/settings.ts` · `stores/settings/{types,index,migration}.ts` · 测试 4：`chat/__tests__/models.test.ts` · `chat/__tests__/composerModel.test.ts` · `chat/__tests__/efforts.test.ts` · `chat/__tests__/composerAgentPickerWiring.test.ts`
+
+**终检修复批实际触碰（8）**：`chat/models.ts`（⑰ 修：`pairChanged` + 跨轴闸；上批已落，本批仅复核）· `chat/ComposerModelTrigger.tsx`（NUL → `\0`）· `chat/efforts.ts`（`isEffortSelection`）· `chat/sessionPreferenceStore.ts`（B10 写侧守卫）· `chat/__tests__/sessionPreferenceStore.test.ts`（+4 例）· `chat/__tests__/composerModelWiring.test.ts`（+3 例 Context 面板断言、+`compact()`）· `chat/__tests__/models.test.ts`（跨轴用例改判）· `main/services/agentCatalog/AgentCatalogService.ts` 与其测试 + `chat/__tests__/composerModel.test.ts`（中英混排注释改英文，共 5 处）
+
+
 ---
 
 ## §5 S3 — 权限读侧闭环 + 新会话默认档
@@ -890,6 +1034,7 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 | L9 | `codex-method-contract.json` 欠采 5 条 clientRequest（121 vs 126） | 纯欠采、方向单一、D48 用的四个方法都在 → **不阻塞**。补采顺手挂 S4 扩 `CODEX_METHOD` 的 fixture 提交（D14）；S2 若先动 codex fixture 也可顺手带 |
 | L10 | SDK `PermissionMode` 的 `'auto'` 第 6 值 | **明确不做**：06-probes P2 抄录 SDK 0.3.218 的取值注释为五值，当前版本没有该值（§5.4 已改判）。等 SDK 真出现该值且有行为实证再议 |
 | L11 | 「改档 + 发消息」合并进一次 `turn/start` 的往返优化 | P1/P3 都支持（`turn/start` 覆盖字段 sticky），但首版形状是 `thread/settings/update` 零回合下发（§6.2-1）。等真实性能诉求再做；做时须保证两条路径的回写收敛口径一致（同认 `thread/settings/updated`） |
+| L12 | Codex 轴「线程当前模型」的 **registry 回声投影到 renderer**（P1 指示 1 完整版） | S2 as-built §4.10.4-C-1 记为简版落地：只做**文案分轴**（`modelScopeHint`，两轴不共用一句 + 静态断言）。完整版 = 把 `thread/settings/updated` 确认后的 registry 值投影回 renderer，让触发器显示「线程当前模型」而非本地选择。**S4 已要订阅同一条通知（§6.2-6），届时一并落**，不另造第二条回声路径 |
 
 ---
 

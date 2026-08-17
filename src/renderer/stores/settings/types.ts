@@ -1,4 +1,5 @@
 import type { Locale } from '@shared/i18n';
+import type { ChatAgentDefaults } from '@shared/models/chatAgentDefaults';
 import type {
   BuiltinAgentId,
   ConnectionProfile,
@@ -329,6 +330,18 @@ export interface SettingsState {
   agentNotificationDelay: number; // in seconds
   agentNotificationEnterDelay: number; // delay after Enter before starting idle timer
 
+  /**
+   * D48 S2 §4.3 — chat-axis agent defaults: the agent a new draft starts on and
+   * the per-agent model/effort template a new draft restores.
+   *
+   * Deliberately NOT folded into `agentSettings` above: that record is the
+   * TERMINAL axis (`BuiltinAgentId`, which CLI a PTY spawns), and the two tables
+   * do not share values — `agentWireStatic.test.ts` asserts that neither
+   * converts into the other. One record holding both would be the first place a
+   * conversion could quietly appear.
+   */
+  chatAgentDefaults: ChatAgentDefaults;
+
   // Claude Code Integration
   claudeCodeIntegration: ClaudeCodeIntegrationSettings;
 
@@ -451,6 +464,12 @@ export interface SettingsState {
   setAgentNotificationEnabled: (enabled: boolean) => void;
   setAgentNotificationDelay: (delay: number) => void;
   setAgentNotificationEnterDelay: (delay: number) => void;
+  /**
+   * D48 S2 §4.3. Takes the WHOLE record rather than field setters: the callers
+   * build it through `chatAgentDefaults.ts`'s immutable helpers, so the store
+   * never grows a second, subtly different merge rule.
+   */
+  setChatAgentDefaults: (defaults: ChatAgentDefaults) => void;
 
   // Setters - Claude Code Integration
   setClaudeCodeIntegration: (settings: Partial<ClaudeCodeIntegrationSettings>) => void;

@@ -1,8 +1,15 @@
-import { AGENT_DISPLAY_NAMES, type AgentWireName, CODEX_AGENT } from '@shared/types/agentWire';
+import { canPersistLastAgent, resolveInitialDraftAgent } from '@shared/models/chatAgentDefaults';
+import {
+  AGENT_DISPLAY_NAMES,
+  type AgentWireName,
+  CODEX_AGENT,
+  sessionAgent,
+} from '@shared/types/agentWire';
 import { Asterisk, Braces } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { toastManager } from '@/components/ui/toast';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import {
   agentFallbackNotice,
   type ComposerAgentOption,
@@ -126,6 +133,16 @@ export function ComposerAgentPicker({
   );
   const hostBound = useChatSessionsStore((state) => state.hostBoundSessionIds.includes(sessionId));
   const setDraftSessionAgent = useChatSessionsStore((state) => state.setDraftSessionAgent);
+  // D48 S2 §4.3 (B15): the cross-session memory, moved out of S1 because it
+  // needs app settings and app settings hydrate asynchronously.
+  const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
+  const setChatAgentDefaults = useSettingsStore((state) => state.setChatAgentDefaults);
+  const settingsHydrated = useSettingsHydrated();
+  const rememberedAgent = resolveInitialDraftAgent({
+    lastAgent: chatAgentDefaults.lastAgent,
+    capabilitiesAgents: agents,
+    settingsHydrated,
+  });
 
   const model = deriveComposerAgentPicker({
     // Each arm in the slot it actually came from: the raw latch from the
@@ -138,9 +155,28 @@ export function ComposerAgentPicker({
     binding: { sendAttempted, hostBound, hasRuntimeIdentity },
     lockedUpstream: locked,
     capabilitiesAgents: agents,
-    draftAgent,
+    // The remembered agent stands in for an untouched draft so the SAME value
+    // the effect below commits is what this render already shows — the store
+    // write and the paint must not be one frame apart.
+    draftAgent: draftAgent ?? (settingsHydrated ? rememberedAgent : undefined),
     hostState,
   });
+
+  // B15 wiring: a draft that has never been touched adopts the remembered agent
+  // — and WRITES it, rather than only displaying it. A display-only version
+  // would put the picker on Codex while `sessionAgent(session)`, and therefore
+  // the `chat.createSession` payload, still said Claude Code: the exact
+  // display≠send split A11 exists to forbid, reached from the other side.
+  //
+  // The write is skipped when the answer is the legacy binding anyway, so an
+  // untouched draft on a machine with no memory stays byte-identical to S1 —
+  // materialising `session.agent` for every session would be a second default
+  // in a place `chatSessions.ts:109-113` reserves for `mergeSessionIndex`.
+  useEffect(() => {
+    if (draftAgent !== undefined) return;
+    if (rememberedAgent === sessionAgent({})) return;
+    setDraftSessionAgent(sessionId, rememberedAgent, { sendAttempted });
+  }, [draftAgent, rememberedAgent, sessionId, sendAttempted, setDraftSessionAgent]);
 
   const { commitFallback, selectedAgent } = model;
   // One notice per resolved fallback, not one per render: this effect re-runs
@@ -202,6 +238,13 @@ export function ComposerAgentPicker({
                   return;
                 }
                 setDraftSessionAgent(sessionId, option.agent, { sendAttempted });
+                // §3.3-5 / §4.3: the same click that sets the draft records the
+                // memory. Gated on hydration so the first pick of a launch
+                // cannot persist an empty default over the user's real one —
+                // that arm is `canPersistLastAgent`, truth-tabled next door.
+                if (canPersistLastAgent(settingsHydrated)) {
+                  setChatAgentDefaults({ ...chatAgentDefaults, lastAgent: option.agent });
+                }
               }}
               role="radio"
               title={option.reason}

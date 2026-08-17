@@ -3,11 +3,15 @@
  *
  * The Composer used to carry two separate `Select`s side by side (`Sonnet ⌄`
  * and `Default ⌄`). They are now one trigger reading `Sonnet High ⌄` backed by
- * a single menu with two radio sections. Nothing about the underlying data
- * moved: the model catalog still comes from `models.ts`, the effort catalog
- * still comes from `efforts.ts`, and the two per-session stores are untouched.
- * This module only decides how those two independent selections are presented
- * as one label and one list.
+ * a single menu with two radio sections. This module only decides how those two
+ * independent selections are presented as one label and one list.
+ *
+ * D48 S2 moved the model catalog out from under it: `options` now arrives from
+ * the proxy by way of `models.ts`'s `modelOptionsFor`, so the list is whatever
+ * the gateway offers after family filtering plus the `Automatic` row, instead of
+ * three hard-coded short names. The effort catalog still comes from `efforts.ts`
+ * (one shared five-level vocabulary on both axes), and nothing here knows which
+ * agent is running — everything agent-shaped is resolved before it gets here.
  *
  * Kept free of React so it is testable under the repo's node-env vitest.
  */
@@ -62,6 +66,16 @@ export interface ComposerMenuItem {
   /** Tooltip text, present only for effort levels that ship one. */
   hint?: string;
   selected: boolean;
+  /**
+   * D48 S2 §4.4: `false` on a row this build could not corroborate against the
+   * live catalog — a legacy short name, or a stored full name the family
+   * whitelist filters out. Absent on ordinary rows and on `Automatic`.
+   *
+   * It changes NOTHING about how the row behaves: it is still selectable, still
+   * checked, and still leaves the composer on the wire byte-for-byte. The flag
+   * is what lets the label say so.
+   */
+  verified?: boolean;
 }
 
 export interface ComposerMenuSection {
@@ -91,8 +105,9 @@ export interface ComposerModelMenuViewModel {
  * Deliberately NOT modelled, each because the capability behind it does not
  * exist here (a control for a capability we do not have is a lie about the
  * product, not a UI detail):
- *  - a search field — the catalog is 3 entries, 4 when the Host reports a
- *    default outside it. A search box would imply a larger catalog exists.
+ *  - a search field — the family-filtered catalog is a handful of entries
+ *    (§4.3-5 pins that: no search, no virtualisation). A search box would imply
+ *    a larger catalog exists.
  *  - an `Auto` routing toggle — there is no automatic model routing.
  *  - a per-row effort suffix — effort is per SESSION here, not per model, so
  *    annotating each row would claim per-model memory that does not exist.
@@ -104,13 +119,28 @@ export function composerModelMenuModel(input: {
   options: readonly ChatModel[];
   selectedModel: string | null;
   selectedEffort: string | null;
+  /**
+   * D48 S2 §4.4-1/§4.4-6: what to call the prepended row when the selection is
+   * not in `options`. Defaults to the raw id, which is what the pre-D48 build
+   * did and what an unknown EFFORT level still does one section down.
+   *
+   * It is passed in rather than computed here because the two spellings the
+   * spec asks for (`Sonnet (legacy alias)` vs `gpt-5.5 · unverified`) depend on
+   * which agent is running the session, and this module deliberately knows
+   * nothing about agents.
+   */
+  unknownModelLabel?: string;
 }): ComposerModelMenuViewModel {
   const { options } = input;
 
   // A stored selection outside the catalog is PREPENDED as its own row rather
-  // than redirecting the check mark to `options[0]`, mirroring exactly what
-  // `ensureModelOptions` already does for a Host-reported default it does not
-  // recognise. The old fallback marked a row the session is not actually on:
+  // than redirecting the check mark to `options[0]`. D48 S2 made this the ONLY
+  // mechanism that carries such a value: the pre-D48 sibling that prepended an
+  // unrecognised Host default was deleted along with its "unrecognised therefore
+  // legal" rule, and the family whitelist now filters the catalog down to a
+  // handful of ids, so legacy short names and superseded full names land here in
+  // ordinary use rather than as a curiosity. The old fallback marked a row the
+  // session is not actually on:
   // the trigger label and every send/resume call read the raw stored value, so
   // the menu was the only surface claiming a different model — a menu that
   // lies about the current selection is worse than a menu with nothing marked,
@@ -136,11 +166,21 @@ export function composerModelMenuModel(input: {
     : (unknownEffort ?? EFFORT_DEFAULT_ID);
 
   const modelItems: ComposerMenuItem[] = [
-    ...(unknownModel ? [{ id: unknownModel, label: unknownModel, selected: true }] : []),
+    ...(unknownModel
+      ? [
+          {
+            id: unknownModel,
+            label: input.unknownModelLabel ?? unknownModel,
+            selected: true,
+            verified: false,
+          },
+        ]
+      : []),
     ...options.map((option) => ({
       id: option.id,
       label: option.label,
       selected: option.id === effectiveModel,
+      ...(option.verified === undefined ? {} : { verified: option.verified }),
     })),
   ];
 

@@ -1,13 +1,25 @@
+import { CLAUDE_SEED_MODELS } from '@shared/models/seedCatalog';
+import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import { describe, expect, it } from 'vitest';
 import { composerModelLabelParts, composerModelMenuModel } from '../composerModel';
 import { CHAT_EFFORTS } from '../efforts';
-import { CHAT_MODELS, ensureModelOptions } from '../models';
+import { AUTOMATIC_MODEL_ID, modelOptionsFor, unverifiedModelLabel } from '../models';
 
 /**
  * T-30b2 assertions for the merged model + reasoning-effort control's pure
  * layer. Ids map to the design spec's round-4 addendum §6 (F-A9 was widened
  * into F-A19 there; both readings are covered below).
+ *
+ * D48 S2 replaced the fixture: `options` used to be the hard-coded `CHAT_MODELS`
+ * short-name table, which no longer exists. It is now what the Composer actually
+ * builds — `Automatic` plus a family-filtered catalog — using the seed table as
+ * a stand-in for a live proxy answer, because that table IS the filter's output
+ * on the ids the gateway really served [实测 调查 04].
  */
+
+/** `Automatic` + the three Claude ids the whitelist keeps. */
+const CLAUDE_OPTIONS = modelOptionsFor(CLAUDE_SEED_MODELS);
+const CATALOG_SIZE = CLAUDE_SEED_MODELS.length;
 
 describe('composerModelLabelParts', () => {
   // F-A9 / F-A19: the `default` sentinel means "send no effort field at all",
@@ -58,8 +70,8 @@ describe('composerModelLabelParts', () => {
     });
   });
 
-  // A Host default outside the catalog has no friendly label to fall back on,
-  // so the id itself is the honest thing to display.
+  // A stored id outside the catalog has no friendly label to fall back on, so
+  // the id itself is the honest thing to display.
   it('F-A19: an out-of-catalog model id passes through unmodified', () => {
     expect(
       composerModelLabelParts({ modelLabel: 'claude-4-2-experimental', effort: 'max' })
@@ -74,37 +86,52 @@ describe('composerModelMenuModel', () => {
   // sentinel plus the five real levels.
   it('F-A16: two sections, model first, with the default sentinel leading the effort list', () => {
     const menu = composerModelMenuModel({
-      options: CHAT_MODELS,
-      selectedModel: 'sonnet',
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'claude-sonnet-5',
       selectedEffort: 'default',
     });
 
     expect(menu.sections).toHaveLength(2);
     expect(menu.sections[0].id).toBe('model');
-    expect(menu.sections[0].items).toHaveLength(3);
+    expect(menu.sections[0].items).toHaveLength(CATALOG_SIZE + 1);
     expect(menu.sections[1].id).toBe('effort');
     expect(menu.sections[1].items).toHaveLength(6);
     expect(menu.sections[1].items[0].id).toBe('default');
   });
 
+  // D48 S2 §4.1's fourth fallback rung, and 改判 #10: `Automatic` leads the model
+  // section, so "pin nothing" is always one click away and is never expressed by
+  // the absence of a row.
+  it('D48 B11: `Automatic` is the first model row, and it is not a catalog entry', () => {
+    const menu = composerModelMenuModel({
+      options: CLAUDE_OPTIONS,
+      selectedModel: AUTOMATIC_MODEL_ID,
+      selectedEffort: 'default',
+    });
+    expect(menu.sections[0].items[0].id).toBe(AUTOMATIC_MODEL_ID);
+    expect(menu.sections[0].items[0].selected).toBe(true);
+    expect(menu.sections[0].items[0].verified).toBeUndefined();
+    expect(menu.sections[0].items.filter((item) => item.selected)).toHaveLength(1);
+  });
+
   it('F-A16: exactly one row is selected in each section', () => {
     const menu = composerModelMenuModel({
-      options: CHAT_MODELS,
-      selectedModel: 'sonnet',
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'claude-sonnet-5',
       selectedEffort: 'default',
     });
 
     for (const section of menu.sections) {
       expect(section.items.filter((item) => item.selected)).toHaveLength(1);
     }
-    expect(menu.sections[0].items.find((item) => item.selected)?.id).toBe('sonnet');
+    expect(menu.sections[0].items.find((item) => item.selected)?.id).toBe('claude-sonnet-5');
     expect(menu.sections[1].items.find((item) => item.selected)?.id).toBe('default');
   });
 
   it('F-A16: a real effort level selects its own row, not the sentinel', () => {
     const menu = composerModelMenuModel({
-      options: CHAT_MODELS,
-      selectedModel: 'opus',
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'claude-opus-5',
       selectedEffort: 'high',
     });
     expect(menu.sections[1].items.find((item) => item.selected)?.id).toBe('high');
@@ -122,7 +149,7 @@ describe('composerModelMenuModel', () => {
   // how many.
   it('F-A16: an unrecognised stored selection is carried as its own row and marked, never redirected', () => {
     const menu = composerModelMenuModel({
-      options: CHAT_MODELS,
+      options: CLAUDE_OPTIONS,
       selectedModel: 'a-model-that-was-removed',
       selectedEffort: 'a-level-that-does-not-exist',
     });
@@ -131,9 +158,7 @@ describe('composerModelMenuModel', () => {
       expect(section.items.filter((item) => item.selected)).toHaveLength(1);
     }
 
-    // One extra row per section, mirroring `ensureModelOptions`' own handling
-    // of a Host default outside the catalog.
-    expect(menu.sections[0].items).toHaveLength(CHAT_MODELS.length + 1);
+    expect(menu.sections[0].items).toHaveLength(CLAUDE_OPTIONS.length + 1);
     expect(menu.sections[1].items).toHaveLength(CHAT_EFFORTS.length + 1 + 1);
 
     expect(menu.sections[0].items.find((item) => item.selected)?.id).toBe(
@@ -150,6 +175,7 @@ describe('composerModelMenuModel', () => {
       id: 'a-model-that-was-removed',
       label: 'a-model-that-was-removed',
       selected: true,
+      verified: false,
     });
     expect(menu.sections[1].items[0]).toMatchObject({
       id: 'a-level-that-does-not-exist',
@@ -167,43 +193,86 @@ describe('composerModelMenuModel', () => {
     expect(menu.sections[1].items.find((item) => item.id === 'default')?.selected).toBe(false);
   });
 
+  // B5 — the pre-D48 short name. The gateway rejects it outright [实测 调查 04
+  // 探测 B], and this build refuses to guess which full name it meant, so the
+  // row says what it is and stays selected.
+  it('D48 B5: a legacy Claude short name is prepended, marked, labelled as an alias, and unverified', () => {
+    const menu = composerModelMenuModel({
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'sonnet',
+      selectedEffort: 'default',
+      unknownModelLabel: unverifiedModelLabel(CLAUDE_CODE_AGENT, 'sonnet'),
+    });
+
+    expect(menu.sections[0].items[0]).toMatchObject({
+      id: 'sonnet',
+      label: 'Sonnet (legacy alias)',
+      selected: true,
+      verified: false,
+    });
+    // NOT widened into the catalog: the other rows are still exactly the live
+    // ones, so no other session can pick this id from a menu.
+    expect(menu.sections[0].items.slice(1).map((item) => item.id)).toEqual(
+      CLAUDE_OPTIONS.map((option) => option.id)
+    );
+    expect(menu.sections[0].items.filter((item) => item.selected)).toHaveLength(1);
+  });
+
+  // B16 — the OTHER kind of leftover: a full name the gateway may well still
+  // serve, filtered out of the product surface by the family whitelist. Same
+  // treatment, different sentence, and the id is untouched.
+  it('D48 B16: a stored full name outside the whitelist is prepended, marked and labelled unverified', () => {
+    const menu = composerModelMenuModel({
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'gpt-5.5',
+      selectedEffort: 'default',
+      unknownModelLabel: unverifiedModelLabel(CODEX_AGENT, 'gpt-5.5'),
+    });
+
+    expect(menu.sections[0].items[0]).toMatchObject({
+      id: 'gpt-5.5',
+      label: 'gpt-5.5 · unverified',
+      selected: true,
+      verified: false,
+    });
+    expect(menu.sections[0].items.some((item) => item.id === 'gpt-5.5' && item.verified)).toBe(
+      false
+    );
+  });
+
+  // Catalog rows carry the opposite flag, so "unverified" is a real distinction
+  // in the view model rather than a label convention a renderer could ignore.
+  it('D48 B16: live catalog rows are marked verified', () => {
+    const menu = composerModelMenuModel({
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'claude-opus-5',
+      selectedEffort: 'default',
+    });
+    for (const seed of CLAUDE_SEED_MODELS) {
+      expect(menu.sections[0].items.find((item) => item.id === seed.id)?.verified).toBe(true);
+    }
+  });
+
   // A null selection is the one case with no id to carry: nothing is stored at
   // all, so the first row keeps the mark rather than the menu inventing a
-  // phantom entry for a value that does not exist.
-  it('F-A16: a null model selection still falls back to the first catalog row', () => {
+  // phantom entry for a value that does not exist. Post-D48 the first row IS
+  // `Automatic`, which makes that fallback the honest one.
+  it('F-A16: a null model selection still falls back to the first row, which is Automatic', () => {
     const menu = composerModelMenuModel({
-      options: CHAT_MODELS,
+      options: CLAUDE_OPTIONS,
       selectedModel: null,
       selectedEffort: null,
     });
-    expect(menu.sections[0].items).toHaveLength(CHAT_MODELS.length);
-    expect(menu.sections[0].items.find((item) => item.selected)?.id).toBe(CHAT_MODELS[0].id);
+    expect(menu.sections[0].items).toHaveLength(CLAUDE_OPTIONS.length);
+    expect(menu.sections[0].items.find((item) => item.selected)?.id).toBe(AUTOMATIC_MODEL_ID);
     expect(menu.sections[1].items).toHaveLength(CHAT_EFFORTS.length + 1);
     expect(menu.sections[1].items.find((item) => item.selected)?.id).toBe('default');
   });
 
-  // F-A16b: a Host-reported default outside the catalog is prepended by
-  // `ensureModelOptions` so it stays selectable. The merged control must not
-  // swallow that row.
-  it('F-A16b: an out-of-catalog Host default is kept, first, and selectable', () => {
-    const options = ensureModelOptions('claude-4-2-experimental');
-    expect(options).toHaveLength(4);
-
-    const menu = composerModelMenuModel({
-      options,
-      selectedModel: 'claude-4-2-experimental',
-      selectedEffort: 'default',
-    });
-
-    expect(menu.sections[0].items).toHaveLength(4);
-    expect(menu.sections[0].items[0].id).toBe('claude-4-2-experimental');
-    expect(menu.sections[0].items[0].selected).toBe(true);
-  });
-
   it('passes each effort level its tooltip text through unchanged', () => {
     const menu = composerModelMenuModel({
-      options: CHAT_MODELS,
-      selectedModel: 'sonnet',
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'claude-sonnet-5',
       selectedEffort: 'default',
     });
     for (const effort of CHAT_EFFORTS) {
@@ -216,14 +285,14 @@ describe('composerModelMenuModel', () => {
   // F-A16c: the reference popup also carries a model search field, an `Auto`
   // routing toggle and a right-hand Options sub-panel. None are modelled here,
   // and each omission is a capability statement rather than a style choice:
-  // the catalog is 3-4 entries, there is no automatic routing, thinking is a
-  // Host capability gate rather than a user switch, and there is no
-  // context-window field in the protocol. This asserts nobody "completes" the
-  // view model later without the capability arriving first.
+  // the family-filtered catalog is a handful of entries, there is no automatic
+  // routing, thinking is a Host capability gate rather than a user switch, and
+  // there is no context-window field in the protocol. This asserts nobody
+  // "completes" the view model later without the capability arriving first.
   it('F-A16c: the view model carries no search, auto-routing or sub-panel keys at any depth', () => {
     const menu = composerModelMenuModel({
-      options: CHAT_MODELS,
-      selectedModel: 'sonnet',
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'claude-sonnet-5',
       selectedEffort: 'high',
     });
 

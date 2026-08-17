@@ -2146,18 +2146,18 @@ describe('codexRuntime — send() opens a turn on the wire (slice 2c)', () => {
     expect(params.input).toEqual([{ type: 'text', text: PROMPT }]);
   });
 
-  it('keeps the posture out of the turn, because a turn-level override is sticky', async () => {
-    // The schema says `approvalPolicy` / `sandboxPolicy` / `cwd` apply "for this
-    // turn AND SUBSEQUENT TURNS". Sending them would give the posture a second
-    // source that silently outlives the turn that set it; `thread/start` stays
-    // the only place it is decided. `effort` and `model` are accepted by send()
-    // and dropped for the same reason (plus: `effort`'s vocabulary is per-model
-    // and we have never read one out of `model/list`).
+  it('keeps the POSTURE out of the turn, even though the schema would take it', async () => {
+    // D48 §4.6-6, and the reason inverted rather than weakened: P1 proved
+    // `sandboxPolicy` on `turn/start` is accepted AND sticky, so this is no
+    // longer "codex might refuse it" — it is a negative control. The permission
+    // posture gets its own zero-turn channel (`thread/settings/update`, S4), and
+    // a second writer reachable from the turn loop would let a posture change
+    // ride along with a message.
     const h = await turnSession();
     await h.runtime.send({ sessionId: 's1', text: PROMPT, effort: 'high', model: 'gpt-5.4' });
 
     const params = (h.requestFor('turn/start').params ?? {}) as Record<string, unknown>;
-    for (const sticky of ['approvalPolicy', 'sandboxPolicy', 'cwd', 'model', 'effort']) {
+    for (const sticky of ['approvalPolicy', 'sandboxPolicy', 'cwd']) {
       expect(params).not.toHaveProperty(sticky);
     }
   });
@@ -4399,3 +4399,296 @@ describe('codexRuntime — a revive that cannot happen says so (G10/G11/G14)', (
     expect(h.connections).toHaveLength(1);
   });
 });
+
+/**
+ * D48 S2 §4.6 — the Codex half of D40: `turn/start` now carries `model` and
+ * `effort`, and the value that ends up on the registry entry comes from codex's
+ * own echo rather than from what we asked for.
+ *
+ * Assertion ids follow the spec: B6 (params shape), B8 (write-back
+ * transactionality AND provenance), B14 (the consumer side — the half that a
+ * "writes the registry but reads the initial value anyway" implementation would
+ * otherwise pass green with two truths intact).
+ */
+describe('codexRuntime — D40: model/effort reach turn/start (B6)', () => {
+  it('sends both keys when both are chosen', () => {
+    expect(
+      buildTurnStartParams({
+        threadId: 'thr-1',
+        text: PROMPT,
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+      })
+    ).toEqual({
+      threadId: 'thr-1',
+      input: [{ type: 'text', text: PROMPT }],
+      model: 'gpt-5.6-sol',
+      effort: 'high',
+    });
+  });
+
+  it('OMITS the keys rather than sending undefined values', () => {
+    const params = buildTurnStartParams({ threadId: 'thr-1', text: PROMPT });
+    // `in`, not a value check: `{model: undefined}` serialises to a present
+    // `"model": null`-shaped absence that codex accepts silently [实测 P1
+    // 严格性观察], so "we sent nothing" and "we sent a blank" would be the same
+    // green test against two very different frames.
+    expect('model' in params).toBe(false);
+    expect('effort' in params).toBe(false);
+    expect(params).toEqual({ threadId: 'thr-1', input: [{ type: 'text', text: PROMPT }] });
+  });
+
+  it('treats a blank or whitespace model as no choice at all', () => {
+    for (const blank of ['', '   ', '\t']) {
+      expect('model' in buildTurnStartParams({ threadId: 't', text: PROMPT, model: blank })).toBe(
+        false
+      );
+    }
+  });
+
+  it('trims a chosen model instead of sending the padding', () => {
+    expect(buildTurnStartParams({ threadId: 't', text: PROMPT, model: '  gpt-5.5  ' }).model).toBe(
+      'gpt-5.5'
+    );
+  });
+
+  it('sends only the half that was chosen', () => {
+    const modelOnly = buildTurnStartParams({ threadId: 't', text: PROMPT, model: 'gpt-5.5' });
+    expect(modelOnly.model).toBe('gpt-5.5');
+    expect('effort' in modelOnly).toBe(false);
+
+    const effortOnly = buildTurnStartParams({ threadId: 't', text: PROMPT, effort: 'max' });
+    expect(effortOnly.effort).toBe('max');
+    expect('model' in effortOnly).toBe(false);
+  });
+
+  it('every key it can emit is one the binary declares', () => {
+    const params = buildTurnStartParams({
+      threadId: 't',
+      text: PROMPT,
+      model: 'gpt-5.5',
+      effort: 'xhigh',
+    });
+    for (const key of Object.keys(params)) {
+      expect(turnSchema.TurnStartParams.propertyNames).toContain(key);
+    }
+  });
+});
+
+describe('codexRuntime — D40: send() resolves the turn model (B6 wiring)', () => {
+  it('puts the session default on the wire when the send names none', async () => {
+    const h = await modelSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+
+    const params = (h.requestFor('turn/start').params ?? {}) as Record<string, unknown>;
+    expect(params.model).toBe(CREATE_MODEL);
+  });
+
+  it('lets a per-send choice win over the session default', async () => {
+    const h = await modelSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.5', effort: 'high' });
+
+    const params = (h.requestFor('turn/start').params ?? {}) as Record<string, unknown>;
+    expect(params.model).toBe('gpt-5.5');
+    expect(params.effort).toBe('high');
+  });
+
+  it('drops an effort outside the measured five-word vocabulary instead of forwarding it', async () => {
+    // `ultra` is the one the local codex table used to claim and the gateway
+    // rejects outright [实测 调查 04 探测 G]. Forwarded, it fails the whole turn.
+    const h = await modelSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, effort: 'ultra' });
+
+    const params = (h.requestFor('turn/start').params ?? {}) as Record<string, unknown>;
+    expect('effort' in params).toBe(false);
+  });
+
+  it('sends no model at all for a session that never chose one', async () => {
+    const h = await turnSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT });
+
+    const params = (h.requestFor('turn/start').params ?? {}) as Record<string, unknown>;
+    expect('model' in params).toBe(false);
+  });
+});
+
+describe('codexRuntime — D40: the write-back reads the echo, not the request (B8)', () => {
+  it('① success + echo → the registry takes the value FROM THE NOTIFICATION', async () => {
+    const h = await modelSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.6-sol', effort: 'high' });
+
+    // The divergence is the assertion: we asked for `gpt-5.6-sol`, codex says the
+    // thread is running `gpt-5.5` (a provider-side fallback does exactly this).
+    // An optimistic "write what we sent" implementation records a model the
+    // thread is NOT running, and every later turn inherits the fiction.
+    h.push(settingsUpdated({ model: 'gpt-5.5', effort: 'low' }));
+
+    expect(h.registry.get('s1')?.model).toBe('gpt-5.5');
+    expect(h.registry.get('s1')?.effort).toBe('low');
+  });
+
+  it('② a failed turn/start writes nothing', async () => {
+    const h = await modelSession({ turnStartError: { code: -32000, message: 'nope' } });
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.5' });
+
+    expect(h.registry.get('s1')?.model).toBe(CREATE_MODEL);
+  });
+
+  it('③ a successful turn/start whose echo never arrives writes nothing', async () => {
+    const h = await modelSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.5' });
+    replayRecordedTurn(h);
+    await h.waitFor(() => terminalsOf(h.events).length === 1, 'the turn to end');
+
+    // The whole turn ran and completed; no settings frame ever landed. Silence
+    // is not confirmation — codex accepts fields it does not know without a word
+    // [实测 P1 严格性观察], so an unconfirmed override must leave the old default.
+    expect(h.registry.get('s1')?.model).toBe(CREATE_MODEL);
+  });
+
+  it('applies an echo that arrives with NO turn open (the S4 zero-turn path)', async () => {
+    const h = await modelSession();
+    h.push(settingsUpdated({ model: 'gpt-5.6-terra' }));
+
+    expect(h.registry.get('s1')?.model).toBe('gpt-5.6-terra');
+  });
+
+  it('refuses an echo that names another thread', async () => {
+    const h = await modelSession();
+    h.push({
+      method: 'thread/settings/updated',
+      params: { threadId: 'thr-someone-else', threadSettings: { model: 'gpt-5.5' } },
+    });
+
+    expect(h.registry.get('s1')?.model).toBe(CREATE_MODEL);
+  });
+
+  it('ignores a frame with no settings object, and a blank model inside one', async () => {
+    const h = await modelSession();
+    h.push({ method: 'thread/settings/updated', params: {} });
+    expect(h.registry.get('s1')?.model).toBe(CREATE_MODEL);
+
+    h.push(settingsUpdated({ model: '   ' }));
+    // Blanking the default would make the next turn fall back to the provider's
+    // model without anyone choosing that.
+    expect(h.registry.get('s1')?.model).toBe(CREATE_MODEL);
+  });
+
+  it('never reaches the normalizer, so it cannot open a bubble', async () => {
+    const h = await modelSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.5' });
+    h.events.length = 0;
+    h.push(settingsUpdated({ model: 'gpt-5.5' }));
+
+    expect(h.events).toEqual([]);
+  });
+});
+
+describe('codexRuntime — D40: the consumer side reads the written-back value (B14)', () => {
+  it('an idle-sweep revive runs the OVERRIDDEN model, not the one thread/start pinned', async () => {
+    const h = await sweptOverriddenSession();
+    await h.runtime.send({ sessionId: 's1', text: 'second', requestId: 'req-again' });
+
+    // The revive addresses the thread with `thread/resume`, which carries no
+    // model at all [实测 schema] — so the ONLY thing that can keep the user's
+    // mid-conversation choice alive across a sweep is the registry entry the
+    // echo rewrote. Reading `thread/start`'s initial value here is the
+    // two-truths defect this whole defence exists for.
+    expect(h.connections).toHaveLength(2);
+    const params = (h.connections[1].requestsFor('turn/start')[0].params ?? {}) as Record<
+      string,
+      unknown
+    >;
+    expect(params.model).toBe('gpt-5.5');
+    expect(params.effort).toBe('low');
+  });
+
+  it('the failure arm: an override that was never confirmed leaves the next turn on the original', async () => {
+    const h = await modelSession({ turnStartError: { code: -32000, message: 'nope' } });
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.5', requestId: 'req-1' });
+    // The failed turn was retired; the next send opens a new one on the same
+    // thread and must not inherit a model the thread never accepted.
+    h.options.turnStartError = undefined;
+    await h.runtime.send({ sessionId: 's1', text: 'again', requestId: 'req-2' });
+
+    const params = (h.requestsFor('turn/start')[1].params ?? {}) as Record<string, unknown>;
+    expect(params.model).toBe(CREATE_MODEL);
+  });
+
+  it('a later send that omits the model keeps the confirmed choice', async () => {
+    const h = await modelSession();
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.5' });
+    h.push(settingsUpdated({ model: 'gpt-5.5' }));
+    replayRecordedTurn(h);
+    await h.waitFor(() => terminalsOf(h.events).length === 1, 'the turn to end');
+
+    await h.runtime.send({ sessionId: 's1', text: 'again' });
+    const params = (h.requestsFor('turn/start')[1].params ?? {}) as Record<string, unknown>;
+    expect(params.model).toBe('gpt-5.5');
+  });
+});
+
+/** The model `thread/start` pins for the D40 cases — the value an override must displace. */
+const CREATE_MODEL = 'gpt-5.6-sol';
+
+/** What `thread/resume` echoes on the revive path: posture only, over this thread. */
+const D40_REVIVE_ECHO: Record<string, unknown> = {
+  thread: { id: FIXTURE_THREAD, turns: [] },
+  approvalPolicy: 'on-request',
+  sandbox: { type: 'workspaceWrite' },
+};
+
+/** A session created with an explicit model, bound to the recorded thread. */
+async function modelSession(options: HarnessOptions = {}): Promise<Harness> {
+  const h = makeHarness({
+    threadStartResult: {
+      threadId: FIXTURE_THREAD,
+      approvalPolicy: 'on-request',
+      sandbox: { type: 'workspaceWrite', networkAccess: false },
+    },
+    threadResumeResult: D40_REVIVE_ECHO,
+    ...options,
+  });
+  h.runtime.createSession({
+    sessionId: 's1',
+    workspacePath: '/work/repo',
+    model: CREATE_MODEL,
+    requestId: 'req-create',
+  });
+  await h.waitForEvent('session.created');
+  h.events.length = 0;
+  return h;
+}
+
+/**
+ * The `thread/settings/updated` frame codex broadcasts, shaped the way the real
+ * one is [实测 06-probes §P1/§P3]: a FULL snapshot under `threadSettings`, with
+ * no `threadId` beside it.
+ */
+function settingsUpdated(settings: Record<string, unknown>): Record<string, unknown> {
+  return {
+    method: 'thread/settings/updated',
+    params: {
+      threadSettings: {
+        approvalPolicy: 'on-request',
+        sandboxPolicy: { type: 'workspaceWrite', networkAccess: true },
+        modelProvider: 'test-gateway',
+        ...settings,
+      },
+    },
+  };
+}
+
+/** A swept session whose model was overridden — and confirmed — before it went away. */
+async function sweptOverriddenSession(): Promise<Harness> {
+  const h = await modelSession();
+  await h.runtime.send({ sessionId: 's1', text: PROMPT, model: 'gpt-5.5', effort: 'low' });
+  h.push(settingsUpdated({ model: 'gpt-5.5', effort: 'low' }));
+  replayRecordedTurn(h);
+  await h.waitFor(() => terminalsOf(h.events).length === 1, 'the turn to end');
+  h.events.length = 0;
+  h.advance(IDLE_MS);
+  h.sweepTick();
+  h.events.length = 0;
+  return h;
+}

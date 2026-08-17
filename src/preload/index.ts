@@ -79,6 +79,7 @@ import type {
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentStopNotificationData } from '@shared/types/agent';
+import type { AgentModelCatalog, ListAgentModelsRequest } from '@shared/types/agentCatalog';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { AgentWireName } from '@shared/types/agentWire';
 import type { HostReadyEvent, PermissionDecisionId } from '@shared/types/runtimeEvents';
@@ -1474,6 +1475,14 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RENAME_SESSION, payload),
     archiveSession: (payload: { sessionId: string; archived: boolean }): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_ARCHIVE_SESSION, payload),
+    /**
+     * D48 S2 §4.1 — the per-agent model catalog. The reply carries ids, labels
+     * and provenance only: no key, no token, no gateway URL ever crosses this
+     * bridge (§0.1-2). `force` skips the 10-minute TTL (Retry/Refresh), never
+     * the single-flight.
+     */
+    listAgentModels: (payload: ListAgentModelsRequest): Promise<AgentModelCatalog> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_AGENT_MODELS, payload),
   },
 
   // Agent Host diagnostics

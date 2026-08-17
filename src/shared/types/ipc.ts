@@ -378,6 +378,13 @@ export const IPC_CHANNELS = {
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',
   CHAT_LIST_HISTORY: 'chat:listHistory',
+  /**
+   * D48 S2 §4.1 — per-agent model catalog, answered by Main against the D47
+   * credential vault. Its own channel rather than a field on `getHostStatus`:
+   * the Agent Host has neither the credentials nor the gateway URL to answer it
+   * (`hostEnv.ts`), and the reply must never carry either.
+   */
+  CHAT_LIST_AGENT_MODELS: 'chat:listAgentModels',
   /** Main → Renderer: Agent Host RuntimeEvent push */
   CHAT_RUNTIME_EVENT: 'chat:runtimeEvent',
 

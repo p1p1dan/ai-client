@@ -1,0 +1,69 @@
+/**
+ * D48 S2 §4.1 — the shape the model catalog crosses the Main → Renderer border in.
+ *
+ * ## Why the result is a discriminated record and not a bare array
+ *
+ * A boolean "the catalog loaded" cannot tell "the proxy says these are the only
+ * models" apart from "the network was down so this is the table we shipped with".
+ * The first is authoritative and must be trusted; the second MUST be labelled
+ * unreachable in the UI, because pretending a seed table is a live catalog is how
+ * a user ends up selecting a model the gateway no longer serves. `source` is
+ * therefore load-bearing product state, not a diagnostic garnish (§4.1).
+ *
+ * ## What never crosses this border
+ *
+ * No key, no token, no base URL, no raw response body. The catalog service runs
+ * in Main against the D47 credential vault and hands the renderer nothing but
+ * ids, labels and provenance (§0.1-2). Every field below is safe to log.
+ */
+
+import type { AgentWireName } from './agentWire';
+
+/** One selectable model. `label` is UI copy only and is never compared against. */
+export interface AgentModelOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * Where the models in a result came from.
+ *
+ * - `proxy` — a live `/v1/models` answer from the gateway, family-filtered (§4.2).
+ * - `stale-cache` — the last successful proxy answer for this key; the refresh
+ *   that was just attempted failed. Still real data, just not current.
+ * - `seed` — the built-in table (`shared/models/seedCatalog.ts`). The UI must say
+ *   the catalog is unreachable when it sees this; it must NOT render it as a
+ *   normal catalog (arbitration §2.2 ∧ B "不得伪装可用目录").
+ */
+export type AgentModelCatalogSource = 'proxy' | 'stale-cache' | 'seed';
+
+/**
+ * Why a result is not `proxy`.
+ *
+ * `host-not-ready` is produced by the RENDERER hook, which refuses to ask before
+ * the Host reports ready; Main never emits it (Main has no view of Host state).
+ * It lives here so both halves speak one vocabulary.
+ */
+export type AgentModelCatalogError =
+  | 'host-not-ready'
+  | 'credentials-unavailable'
+  | 'http'
+  | 'invalid-response';
+
+export interface AgentModelCatalog {
+  agent: AgentWireName;
+  /** Already family-filtered and in this repo's deterministic order (§4.2). */
+  models: AgentModelOption[];
+  source: AgentModelCatalogSource;
+  /** `true` for anything that is not a live proxy answer. */
+  stale: boolean;
+  /** When the underlying proxy answer was fetched; `null` for the seed table. */
+  fetchedAt: number | null;
+  error?: AgentModelCatalogError;
+}
+
+/** `chat:listAgentModels` request payload. `force` skips the TTL, never the single-flight. */
+export interface ListAgentModelsRequest {
+  agent: AgentWireName;
+  force?: boolean;
+}

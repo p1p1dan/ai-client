@@ -74,6 +74,16 @@ export const MAX_FRAME_BUFFER_BYTES = 32 * 1024 * 1024;
  *                         `threadTurnsList`), which is what earns it a place
  *                         here: `thread/items/list` is declared by the same
  *                         contract and answers -32601 [实测].
+ *   thread/settings/updated
+ *                         [实测] fixtures/codex/codex-method-contract.json
+ *                         (serverNotification) + a real capture: overriding
+ *                         `model` on `turn/start` broadcast one, carrying the
+ *                         full 13-field `threadSettings` object
+ *                         [实测 D48 06-probes §P1/§0.4]. It is the ONLY echo
+ *                         of a thread's current model — `turn/start`'s own
+ *                         response, `turn/started`, `turn/completed` and
+ *                         `thread/read` all carry none — which is why the D48
+ *                         write-back reads this frame and nothing else.
  *
  * The last two were [未测] through slice 2a (arbitration §5 U-a/U-b) and are now
  * closed by the generated contract: `codex app-server generate-json-schema`
@@ -93,6 +103,7 @@ export const CODEX_METHOD = {
   statusChanged: 'thread/status/changed',
   turnCompleted: 'turn/completed',
   serverRequestResolved: 'serverRequest/resolved',
+  threadSettingsUpdated: 'thread/settings/updated',
 } as const;
 
 /**

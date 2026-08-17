@@ -242,13 +242,20 @@ describe('A11 / A5b (component half) — what the picker itself does with the mo
     expect(body.indexOf('return;')).toBeLessThan(body.indexOf('setDraftSessionAgent('));
   });
 
-  it('m9: both writes are handed the RAW latch, never the folded lock', () => {
+  it('m9: EVERY write is handed the RAW latch, never the folded lock', () => {
     // `setDraftSessionAgent`'s third argument is documented as the one fact no
     // store holds. Passing `locked` — a fold of three — makes the action's
     // guard hold by coincidence and leaves that arm untested at its only call
     // site.
+    //
+    // Counted against the number of CALL SITES rather than against a literal 2:
+    // D48 S2 added a third (the `lastAgent` adoption effect), and a test that
+    // pinned the old number would have failed for the arrival of a correct call
+    // site while still passing if one of them started handing over `locked`.
     expect(picker).not.toContain('sendAttempted: locked');
-    expect(offsets(picker, '{ sendAttempted }')).toHaveLength(2);
+    const callSites = offsets(picker, 'setDraftSessionAgent(sessionId,').length;
+    expect(callSites).toBeGreaterThanOrEqual(2);
+    expect(offsets(picker, '{ sendAttempted }')).toHaveLength(callSites);
     expect(picker).toContain('binding: { sendAttempted, hostBound, hasRuntimeIdentity },');
     expect(picker).toContain('lockedUpstream: locked,');
   });

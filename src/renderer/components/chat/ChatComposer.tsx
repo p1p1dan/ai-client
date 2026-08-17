@@ -1,3 +1,4 @@
+import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
 import { sessionAgent } from '@shared/types/agentWire';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { FileSearchResult } from '@shared/types/search';
@@ -19,6 +20,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
+import { useSettingsStore } from '@/stores/settings';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -50,7 +52,7 @@ import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { AGENT_UNAVAILABLE_SEND_ERROR, isSendableAgent } from './composerAgentPickerModel';
 import { resolveActiveTarget } from './composerTarget';
-import { toWireEffort } from './efforts';
+import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
@@ -443,6 +445,12 @@ export function ChatComposer({
   const canSend = Boolean(activeSessionId && cwd && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
+  // D48 S2 §4.3-1: the model trigger is handed the SAME binding the agent
+  // picker shows — `sessionAgent` is the one reader that knows what an unset
+  // binding means, and two independent resolutions of "which agent" is how a
+  // menu ends up offering the other runtime's catalog.
+  const composerAgent = sessionAgent(activeSession ?? {});
+  const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
   // R11 (round-2 iteration-2 review): the same Host-reported default the
   // resume paths (LeftNav/MessageTimeline) already resolve through — so the
   // live send path and ModelSelect's own display never diverge from what a
@@ -891,14 +899,31 @@ export function ChatComposer({
 
     const sessionId = activeSessionId;
     const workspacePath = cwd;
-    // R11: same formula as the resume paths (LeftNav/MessageTimeline) and
-    // ModelSelect's own initial value — an explicit per-session choice, else
-    // the Host-reported default, never a hard-pinned catalog default that
-    // can drift from what a just-completed resume pinned onto the Host.
-    const model = resolveResumeModel(getSessionModel, sessionId, hostStatus.settings?.model);
+    // D48 S2: `agentAtEntry` is the binding this turn was admitted under (read
+    // off the store snapshot the guard above already took), and both selections
+    // are keyed by it — which catalog a model id came from is not a detail the
+    // wire can recover, so resolving against the wrong agent would send a Claude
+    // id to Codex and be refused in Main (B18).
+    const turnAgent = agentAtEntry;
+    // R11, D48 S2 form: an explicit per-(session, agent) choice, else this
+    // agent's template, else NOTHING — `undefined` means `Automatic`, i.e. the
+    // key leaves the payload and the runtime's own default serves the turn
+    // (B11). The pre-D48 `?? defaultModelId(null)` tail hard-pinned `sonnet`
+    // onto every session the user never touched.
+    const model = resolveResumeModel(
+      getSessionModel,
+      sessionId,
+      turnAgent,
+      agentDefaultModel(chatAgentDefaults, turnAgent)
+    );
     // T-20: undefined when the user left it on "Default", so the key is dropped
     // from the payload entirely and the model default applies (≠ pinning high).
-    const effort = toWireEffort(getSessionEffort(sessionId));
+    const effort = toWireEffort(
+      resolveEffortSelection(
+        getSessionEffort(sessionId, turnAgent),
+        agentDefaultEffort(chatAgentDefaults, turnAgent)
+      )
+    );
     const wireAttachments = toWireAttachments(drafts);
     // RAW bytes (pre-base64) — the same unit every limit is expressed in.
     const attachmentBytes = totalAttachmentBytes(drafts);
@@ -1295,7 +1320,11 @@ export function ChatComposer({
       const createResult = await window.electronAPI.chat.createSession({
         sessionId,
         workspacePath,
-        model,
+        // B11: `Automatic` omits the key entirely rather than sending an
+        // `undefined` value — `model: undefined` still serialises as a present
+        // key on some paths, and "no model" has to be indistinguishable from
+        // "field not supported" for the runtime default to apply.
+        ...(model ? { model } : {}),
         agent,
         ...(effort ? { effort } : {}),
       });
@@ -1349,7 +1378,11 @@ export function ChatComposer({
       const sendResult = await window.electronAPI.chat.send({
         sessionId,
         text: trimmed,
-        model,
+        // Same B11 rule as the create payload above. On the Codex axis this key
+        // is what D40's `turn/start` override rides on, and an override is
+        // STICKY there [实测 06-probes P1] — so sending a model the user did
+        // not pick would silently re-default the whole thread, not just a turn.
+        ...(model ? { model } : {}),
         ...(effort ? { effort } : {}),
         ...(wireAttachments ? { attachments: wireAttachments } : {}),
       });
@@ -1453,7 +1486,11 @@ export function ChatComposer({
             sessionId,
             runtimeIdentity: preamble.runtimeIdentity,
             workspacePath,
-            model,
+            // B11, third dispatch site: same rule as create and send. A resume
+            // that named `model: undefined` would pin the Host registry entry's
+            // model to nothing EXPLICITLY, which is not what `Automatic` means —
+            // it means the field never existed.
+            ...(model ? { model } : {}),
             agent,
             ...(effort ? { effort } : {}),
           })
@@ -2265,7 +2302,9 @@ export function ChatComposer({
   const modelEffortControls = activeSessionId ? (
     <ComposerModelTrigger
       sessionId={activeSessionId}
+      agent={composerAgent}
       hostDefaultModel={hostStatus.settings?.model}
+      hostState={hostStatus.state}
       mode={mode}
       disabled={disabled || busy || sending}
     />

@@ -6,6 +6,6 @@
  */
 
 export * from './settings/defaults';
-export { useSettingsStore } from './settings/index';
+export { useSettingsHydrated, useSettingsStore } from './settings/index';
 // Re-export everything from the modularized settings store
 export * from './settings/types';

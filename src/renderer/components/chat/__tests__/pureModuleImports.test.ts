@@ -49,6 +49,23 @@ const TARGET_FILES = [
   // both suites out at once, as an opaque runner hang rather than a red test.
   '../sessionBinding.ts',
   '../composerAgentPickerModel.ts',
+  // D48 S2: the family whitelist and the seed table are read by Main (the
+  // catalog service), by the renderer's menu model and by tests. A store or
+  // React import in either would take the Main-side suite down as well as this
+  // one — and would be an import edge from `src/shared` into `src/renderer`,
+  // which nothing else in the tree has.
+  '../../../../shared/models/familyWhitelist.ts',
+  '../../../../shared/models/seedCatalog.ts',
+  // D48 S2 renderer half: the model SELECTION rules, the catalog's product
+  // copy, the (session, agent) storage layer and the app-settings template
+  // shape. Every branch the Composer's model trigger takes lives in one of
+  // these four — the `.tsx` itself is wiring — so a React or store import here
+  // would silently move a decision out of reach of every truth table in the
+  // slice, and take the suites with it.
+  '../models.ts',
+  '../agentModelCatalog.ts',
+  '../sessionPreferenceStore.ts',
+  '../../../../shared/models/chatAgentDefaults.ts',
 ] as const;
 
 /** Import statement lines only, `import type ...` lines excluded. */

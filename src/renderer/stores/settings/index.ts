@@ -1,6 +1,8 @@
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
+import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
 import type { CustomAgent, McpServer, PromptPreset } from '@shared/types';
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
@@ -46,6 +48,33 @@ import type {
   SettingsState,
   Theme,
 } from './types';
+
+/**
+ * D48 S2 §4.3 — whether the async settings rehydrate has landed.
+ *
+ * `electronStorage` reads and writes through `window.electronAPI.settings`, so
+ * every launch has a window where this store holds `defaults.ts` values that
+ * nobody chose. Two things must not happen in that window: believing a default
+ * is a user preference, and PERSISTING it back over the real one. Callers gate
+ * both halves on this flag (`resolveInitialDraftAgent` / `canPersistLastAgent`,
+ * truth-tabled in `shared/models/chatAgentDefaults.ts`).
+ *
+ * Reactive rather than a bare `persist.hasHydrated()` call: hydration finishes
+ * asynchronously, so a component that read it once at mount would keep the
+ * pre-hydration answer for the rest of its life.
+ */
+export function useSettingsHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(() => useSettingsStore.persist.hasHydrated());
+  useEffect(() => {
+    if (hydrated) return undefined;
+    const unsubscribe = useSettingsStore.persist.onFinishHydration(() => setHydrated(true));
+    // A rehydrate that completed between the initial read and this subscription
+    // would otherwise never be observed.
+    if (useSettingsStore.persist.hasHydrated()) setHydrated(true);
+    return unsubscribe;
+  }, [hydrated]);
+  return hydrated;
+}
 
 export * from './defaults';
 // Re-export types and defaults for external use
@@ -143,6 +172,9 @@ export function getInitialState() {
     agentNotificationEnabled: true,
     agentNotificationDelay: 5,
     agentNotificationEnterDelay: 5,
+    // D48 S2 §4.3: empty means "no memory yet" — a new install starts every
+    // draft on the legacy binding and every model on `Automatic`.
+    chatAgentDefaults: EMPTY_CHAT_AGENT_DEFAULTS,
 
     // Claude Code Integration
     claudeCodeIntegration: defaultClaudeCodeIntegrationSettings,
@@ -390,6 +422,8 @@ export const useSettingsStore = create<SettingsState>()(
       setAgentNotificationDelay: (agentNotificationDelay) => set({ agentNotificationDelay }),
       setAgentNotificationEnterDelay: (agentNotificationEnterDelay) =>
         set({ agentNotificationEnterDelay }),
+
+      setChatAgentDefaults: (chatAgentDefaults) => set({ chatAgentDefaults }),
 
       // Claude Code Integration Setters
       setClaudeCodeIntegration: (settings) =>

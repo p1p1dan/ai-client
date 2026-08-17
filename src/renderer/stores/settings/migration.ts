@@ -1,3 +1,4 @@
+import { sanitizeChatAgentDefaults } from '@shared/models/chatAgentDefaults';
 import type { SettingsState, TerminalKeybinding, XtermKeybindings } from './types';
 
 function sanitizeRemoteProfiles(
@@ -240,6 +241,12 @@ export function migrateSettings(
       ...currentState.quickTerminal,
       ...persisted.quickTerminal,
     },
+    // D48 S2 §4.3: replaced wholesale rather than shallow-merged. The record's
+    // shape is nested (`byAgent[agent].model`), so `{...current, ...persisted}`
+    // would keep a `byAgent` from one side and a `lastAgent` from the other; and
+    // it is the ONE field here whose values name an agent, so an unknown slug
+    // written by a newer build has to be dropped rather than spread through.
+    chatAgentDefaults: sanitizeChatAgentDefaults(persisted.chatAgentDefaults),
   };
 }
 

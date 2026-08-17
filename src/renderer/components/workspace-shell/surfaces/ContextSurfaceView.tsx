@@ -6,19 +6,22 @@
  * "field missing → row omitted, group empty → group omitted" rules this view
  * only renders, never decides.
  */
+import { agentDefaultEffort } from '@shared/models/chatAgentDefaults';
+import { sessionAgent } from '@shared/types/agentWire';
 import { Copy } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
-import { resolveResumeModel } from '@/components/chat/models';
+import { resolveEffortSelection } from '@/components/chat/efforts';
 import { useHostStatus } from '@/components/chat/useHostStatus';
 import { useMessageMetadata } from '@/components/chat/useMessageMetadata';
+import { useResolvedSessionModel } from '@/components/chat/useResolvedSessionModel';
 import { useSessionEffort } from '@/components/chat/useSessionEffort';
-import { useSessionModel } from '@/components/chat/useSessionModel';
 import { Button } from '@/components/ui/button';
 import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
+import { useSettingsStore } from '@/stores/settings';
 import { useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import type { SurfaceViewProps } from '../surfaceViews';
 import {
@@ -90,8 +93,12 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
   const messages = messageBucket ?? EMPTY_MESSAGES;
 
   const { status: hostStatus } = useHostStatus();
-  const { getSessionModel } = useSessionModel();
+  const resolveSessionModel = useResolvedSessionModel();
   const { getSessionEffort } = useSessionEffort();
+  // The template rung of the effort chain. Subscribed rather than read through
+  // `getState()` because this surface re-renders off store changes and an
+  // effort template edited in Settings has to show up here without a click.
+  const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
   const { get: getMeta } = useMessageMetadata(activeSessionId);
 
   // Session-scoped, same filter useTurnSendStatusStore's other readers use
@@ -134,10 +141,23 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
     ? (getMeta(lastAssistantMessageId)?.reportedModel ?? null)
     : null;
 
-  const configuredModel = activeSessionId
-    ? resolveResumeModel(getSessionModel, activeSessionId, hostStatus.settings?.model)
-    : null;
-  const effortSelection = activeSessionId ? getSessionEffort(activeSessionId) : undefined;
+  // D48 S2: `Automatic` resolves to `undefined` here, which this surface shows
+  // as "no configured model" rather than inventing a name — the Context panel
+  // is a mirror of what the runtime was told, and it was told nothing.
+  const configuredModel = activeSessionId ? (resolveSessionModel(activeSessionId) ?? null) : null;
+  // Both rungs of §4.3's chain, exactly as the send path resolves them: a
+  // session that never picked an effort still sends its agent template's level,
+  // so a mirror reading only the session's own storage would report "not
+  // configured" while `effort:'high'` was on the wire. `undefined` (no session)
+  // stays distinct from `null` (session, nothing configured) — that is what
+  // decides between "row omitted" and "row says none".
+  const effortSelection =
+    activeSessionId && session
+      ? resolveEffortSelection(
+          getSessionEffort(activeSessionId, sessionAgent(session)),
+          agentDefaultEffort(chatAgentDefaults, sessionAgent(session))
+        )
+      : undefined;
 
   const groups = useMemo(() => {
     const runState = session

@@ -4,9 +4,10 @@
  */
 
 import { join, resolve } from 'node:path';
+import { isModelAllowedForAgent } from '@shared/models/familyWhitelist';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
-import type { AgentWireName } from '@shared/types/agentWire';
+import { type AgentWireName, resolveAgentWireName } from '@shared/types/agentWire';
 import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
@@ -30,6 +31,54 @@ async function ensureWorkspaceTrustedForChat(workspacePath: string | undefined):
   const claudeHomeDir = getManagedClaudeHomeDir(app.getPath('userData'));
   const claudeJsonPath = join(claudeHomeDir, '.claude.json');
   await ensureWorkspaceTrusted(claudeJsonPath, resolve(workspacePath));
+}
+
+/**
+ * D48 §4.3/§4.6-1 (B18) — the cross-agent model guard, and the reason it lives
+ * in Main rather than in the Agent Host.
+ *
+ * The Host child process holds neither a model catalog nor a gateway URL
+ * [实测 `hostEnv.ts`: all eight injected keys enumerated, none of them a base
+ * URL], so a check written there could only ever compare a string against
+ * nothing — a guard that always passes, which is worse than no guard because it
+ * reads like one. Main is the last place with enough context, so the refusal
+ * happens BEFORE `agentHostManager` is called and therefore before any
+ * `turn/start` frame exists.
+ *
+ * ## Why ownership and not catalog membership
+ *
+ * §4.4-6 requires a stored selection the family whitelist filtered out
+ * (`gpt-5.5`, `claude-opus-4-6`) to keep working on the session that chose it. A
+ * membership test would reject exactly those and reset the user to `Automatic` —
+ * the silent model swap R11 exists to prevent, arriving through a different
+ * door. So the guard refuses only what it can PROVE belongs to the other runtime
+ * (`resolveModelAgentOwner`), and lets everything it cannot classify through.
+ *
+ * Thrown as `code: message` for the same reason `assertAgentSpawnAllowed` does:
+ * only `.message` survives `ipcRenderer.invoke`.
+ */
+function assertModelMatchesAgent(agent: AgentWireName | null, model: unknown): void {
+  if (agent === null) return;
+  if (typeof model !== 'string' || model.trim().length === 0) return;
+  if (isModelAllowedForAgent(agent, model.trim())) return;
+  throw new Error(
+    `model_agent_mismatch: model "${model.trim()}" belongs to another agent and cannot run on ` +
+      `${agent} — pick a model from this agent's catalog`
+  );
+}
+
+/**
+ * Which runtime a `chat:send` is going to reach.
+ *
+ * `null` (not "assume Claude Code") when the row is missing or carries a slug
+ * this build does not know: guessing would let the guard refuse a model that is
+ * perfectly valid for the agent it is actually going to. An unresolvable binding
+ * is a reason to stand down, not a reason to invent one.
+ */
+async function resolveSessionAgentForDispatch(sessionId: string): Promise<AgentWireName | null> {
+  const entry = await sessionIndexService.get(sessionId);
+  if (!entry) return null;
+  return resolveAgentWireName(entry.agent);
 }
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
@@ -89,6 +138,9 @@ export function registerChatHandlers(): void {
       // (SessionManager.create's own kind==='agent' check is the sibling
       // enforcement point for the PTY-agent path).
       assertAgentSpawnAllowed();
+      // B18 — before `recordCreated`, so a refused create leaves no index row
+      // claiming a model the session could never have run.
+      assertModelMatchesAgent(resolveAgentWireName(payload.agent), payload.model);
       await ensureWorkspaceTrustedForChat(payload.workspacePath);
       await sessionIndexService.recordCreated(payload);
       const requestId = await agentHostManager.createSession(payload);
@@ -155,6 +207,9 @@ export function registerChatHandlers(): void {
       // it is NOT the `attach` exemption (attach reconnects to an ALREADY
       // running in-process session, no new credentials touched).
       assertAgentSpawnAllowed();
+      // B18 — the resume payload names the binding explicitly (it pairs with
+      // `runtimeIdentity`), so the guard reads it rather than the index row.
+      assertModelMatchesAgent(resolveAgentWireName(payload.agent), payload.model);
       await ensureWorkspaceTrustedForChat(payload.workspacePath);
       await sessionIndexService.recordResumed(payload);
       const requestId = await agentHostManager.resumeSession(payload);
@@ -181,6 +236,13 @@ export function registerChatHandlers(): void {
         model?: string;
       }
     ): Promise<{ requestId: string }> => {
+      // B18 — a send carries no binding of its own, so the row decides. This is
+      // the load-bearing arm: a per-turn model override is the ONE payload that can carry
+      // a model the session was never created with.
+      assertModelMatchesAgent(
+        await resolveSessionAgentForDispatch(payload.sessionId),
+        payload.model
+      );
       const requestId = await agentHostManager.sendMessage(payload);
       return { requestId };
     }

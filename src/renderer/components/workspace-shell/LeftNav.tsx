@@ -44,11 +44,9 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { resolveResumeModel } from '../chat/models';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
-import { useHostStatus } from '../chat/useHostStatus';
-import { useSessionModel } from '../chat/useSessionModel';
+import { useResolvedSessionModel } from '../chat/useResolvedSessionModel';
 import {
   canCreateSessionOnWorkspace,
   shouldShowAddRepositoryEmptyState,
@@ -166,13 +164,12 @@ export function LeftNav({
   // silently inherited — the gateway's own default served the turn instead
   // of whatever the user picked. Closes the gap at its source instead of
   // only patching the per-send wire path.
-  const { getSessionModel } = useSessionModel();
-  // F9 (round-2 review fix): resolve the SAME way ModelSelect's own initial
-  // value does (explicit selection, else the Host-reported default) instead
-  // of hard-pinning the catalog default via `defaultModelId(null)` — the old
-  // form silently downgraded an unpicked session's resume to `sonnet` even
-  // when the Host reported a different default (e.g. an Opus gateway).
-  const { status: hostStatus } = useHostStatus();
+  // F9 (round-2 review fix), D48 S2 form: resolve the SAME way the Composer's
+  // model trigger does — an explicit per-(session, agent) selection, else that
+  // agent's template, else nothing at all. `undefined` is `Automatic` and drops
+  // the key, replacing the old `defaultModelId(null)` tail that silently
+  // downgraded an unpicked session's resume to `sonnet`.
+  const resolveSessionModel = useResolvedSessionModel();
 
   const handleSelectSession = (sessionId: string, persistedRuntimeIdentity?: string) => {
     selectSession(sessionId);
@@ -191,7 +188,7 @@ export function LeftNav({
     if (runtimeIdentity && workspace && !hasTimeline) {
       void resume(sessionId, {
         persistedRuntimeIdentity: runtimeIdentity,
-        model: resolveResumeModel(getSessionModel, sessionId, hostStatus.settings?.model),
+        model: resolveSessionModel(sessionId),
       });
     }
   };

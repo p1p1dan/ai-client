@@ -43,6 +43,20 @@ export class SessionIndexService {
   }
 
   /**
+   * One row, or `undefined` when this process has never heard of the session.
+   *
+   * Added for D48 §4.3's dispatch guard: `chat:send` carries no `agent` (the
+   * binding is a property of the session, not of the message), so the only
+   * Main-side answer to "which runtime is this model going to" is the index row.
+   * Deliberately NOT `list().find(…)`, which sorts the whole map to answer a
+   * point lookup on every keystroke-driven send.
+   */
+  async get(sessionId: string): Promise<SessionIndexEntry | undefined> {
+    await this.ensureLoaded();
+    return this.entries.get(sessionId);
+  }
+
+  /**
    * Both record* methods rebuild the entry FIELD BY FIELD rather than
    * spreading `existing`, so any persisted key not named here is dropped on
    * the next call. `agent` therefore has to carry `?? existing?.agent`: a

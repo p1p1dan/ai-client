@@ -68,7 +68,6 @@ import {
 } from './messageMetadata';
 import { shouldStickToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
-import { resolveResumeModel } from './models';
 import { QuestionCard } from './QuestionCard';
 import {
   canRespondToPermission,
@@ -102,9 +101,8 @@ import {
   turnHasThinkingOnlyProcess,
   type WorkedForRowText,
 } from './turnTiming';
-import { useHostStatus } from './useHostStatus';
 import { useMessageMetadata } from './useMessageMetadata';
-import { useSessionModel } from './useSessionModel';
+import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
 
 /**
@@ -595,12 +593,10 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
   // path LeftNav's sidebar open does — without a model it leaves the Host
   // registry entry's `model` undefined, and every later 'direct' send
   // silently falls back to the gateway default instead of the user's pick.
-  const { getSessionModel } = useSessionModel();
-  // F9 (round-2 review fix): resolve the SAME way ModelSelect's own initial
-  // value does (explicit selection, else the Host-reported default) — see
-  // LeftNav.tsx's identical fix for why `defaultModelId(null)` alone
-  // hard-pins the catalog default regardless of what the Host reported.
-  const { status: hostStatus } = useHostStatus();
+  // F9 (round-2 review fix), D48 S2 form: resolve the SAME way the Composer's
+  // model trigger does — see `useResolvedSessionModel` for why the answer now
+  // needs the session's agent, and LeftNav.tsx for the identical call site.
+  const resolveSessionModel = useResolvedSessionModel();
   const Icon = HISTORY_ERROR_ICON[view.code];
   const retryControl = deriveRetryControl({
     retryable: view.retryable,
@@ -614,7 +610,7 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
     setRetryFailed(false);
     try {
       const resumed = await resume(sessionId, {
-        model: resolveResumeModel(getSessionModel, sessionId, hostStatus.settings?.model),
+        model: resolveSessionModel(sessionId),
       });
       // A successful resume replays history and clears the store entry, which
       // unmounts this notice; anything else needs to say it went nowhere.

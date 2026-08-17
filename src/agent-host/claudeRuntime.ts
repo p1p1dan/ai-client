@@ -3,10 +3,11 @@
  * Emits AiClient Runtime Events via EventNormalizer; no Electron deps.
  */
 
-import type {
-  AgentHostDriver,
-  SessionAttachment,
-  SessionEffortLevel,
+import {
+  type AgentHostDriver,
+  isSessionEffortLevel,
+  type SessionAttachment,
+  type SessionEffortLevel,
 } from '../shared/types/agentHost.ts';
 import { CLAUDE_CODE_AGENT } from '../shared/types/agentWire.ts';
 import type { SessionPermissionMode, SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
@@ -214,23 +215,17 @@ const THINKING_CONFIG = { type: 'adaptive', display: 'summarized' } as const;
  */
 const CHAT_PERMISSION_MODE: SessionPermissionMode = 'default';
 
-const EFFORT_LEVELS: readonly SessionEffortLevel[] = [
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const;
-
 /**
  * Guard the protocol boundary: `effort` arrives as untrusted JSON from Main, and
  * an unknown value would be forwarded verbatim into query() and rejected by the
  * API. Drop it instead so the turn still runs at the model default.
+ *
+ * The vocabulary itself moved to `shared/types/agentHost.ts` in D48, because the
+ * Codex axis needs the same judgement for `turn/start.effort` and two copies of
+ * a five-word table is two chances to disagree.
  */
 export function normalizeEffort(value: unknown): SessionEffortLevel | undefined {
-  return typeof value === 'string' && (EFFORT_LEVELS as readonly string[]).includes(value)
-    ? (value as SessionEffortLevel)
-    : undefined;
+  return isSessionEffortLevel(value) ? value : undefined;
 }
 
 /**

@@ -1,71 +1,46 @@
+import type { AgentWireName } from '@shared/types/agentWire';
 import { useCallback } from 'react';
+import { readSessionModel, removeSessionModel, writeSessionModel } from './sessionPreferenceStore';
 
 /**
- * Per-session model selection (T-08): persist a `sessionId -> model id` map in
- * localStorage so each Session keeps a fixed model across Composer sends,
- * send-session-close/recreate cycles, and app restarts (until the Host-side
- * session index lands via C-07/T-02 and owns this field).
+ * Per-session model selection (T-08), re-keyed by (session, agent) in D48 S2:
+ * the storage layer moved to `sessionPreferenceStore.ts` (pure, and therefore
+ * testable under the node-env vitest, which cannot call a `useCallback`), and
+ * every accessor now names the agent whose catalog the id came from.
  *
  * Renderer-only; does not touch the red-line `chatSessions` store.
  */
 
-const STORAGE_KEY = 'aiclient:chat:session-models';
-
-type SessionModelMap = Record<string, string>;
-
-function loadMap(): SessionModelMap {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as SessionModelMap;
-    }
-    return {};
-  } catch {
-    return {};
-  }
-}
-
-function saveMap(map: SessionModelMap): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    // Storage may be unavailable (private mode / quota); selection stays in memory only.
-  }
-}
-
 export interface SessionModelApi {
-  /** Returns the stored model id for a session, or null when unset. */
-  getSessionModel: (sessionId: string) => string | null;
-  /** Bind a model id to a session and persist. */
-  setSessionModel: (sessionId: string, modelId: string) => void;
-  /** Drop the binding for a session (no-op when unset). */
-  clearSessionModel: (sessionId: string) => void;
+  /** Returns the stored model id for one (session, agent), or null when unset. */
+  getSessionModel: (sessionId: string, agent: AgentWireName) => string | null;
+  /** Bind a model id to one (session, agent) and persist. */
+  setSessionModel: (sessionId: string, agent: AgentWireName, modelId: string) => void;
+  /** Drop the binding for one (session, agent) — how `Automatic` is stored. */
+  clearSessionModel: (sessionId: string, agent: AgentWireName) => void;
 }
 
 /**
- * Imperative (non-reactive) accessor for the session->model map. Components
- * keep selected state in plain `useState` and call these to persist/restore.
+ * Imperative (non-reactive) accessor for the (session, agent)->model map.
+ * Components keep selected state in plain `useState` and call these to
+ * persist/restore.
  */
 export function useSessionModel(): SessionModelApi {
-  const getSessionModel = useCallback((sessionId: string): string | null => {
-    return loadMap()[sessionId] ?? null;
-  }, []);
+  const getSessionModel = useCallback(
+    (sessionId: string, agent: AgentWireName): string | null => readSessionModel(sessionId, agent),
+    []
+  );
 
-  const setSessionModel = useCallback((sessionId: string, modelId: string): void => {
-    const map = loadMap();
-    map[sessionId] = modelId;
-    saveMap(map);
-  }, []);
+  const setSessionModel = useCallback(
+    (sessionId: string, agent: AgentWireName, modelId: string): void =>
+      writeSessionModel(sessionId, agent, modelId),
+    []
+  );
 
-  const clearSessionModel = useCallback((sessionId: string): void => {
-    const map = loadMap();
-    if (sessionId in map) {
-      delete map[sessionId];
-      saveMap(map);
-    }
-  }, []);
+  const clearSessionModel = useCallback(
+    (sessionId: string, agent: AgentWireName): void => removeSessionModel(sessionId, agent),
+    []
+  );
 
   return { getSessionModel, setSessionModel, clearSessionModel };
 }

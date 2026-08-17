@@ -4,6 +4,7 @@ import {
   EFFORT_DEFAULT_ID,
   effortLabel,
   isEffortLevel,
+  resolveEffortSelection,
   toWireEffort,
 } from '../efforts';
 
@@ -68,6 +69,41 @@ describe('toWireEffort', () => {
       ...(toWireEffort(EFFORT_DEFAULT_ID) ? { effort: 'x' } : {}),
     };
     expect(payload).not.toHaveProperty('effort');
+  });
+});
+
+/**
+ * D48 S2 §4.3 — the effort priority chain, extracted because it had already
+ * split in two: the send path and the composer trigger consulted the agent
+ * template, the Context surface did not, so a session running on a template
+ * `high` displayed "no effort configured" while the wire carried `high`.
+ */
+describe('resolveEffortSelection (§4.3 priority chain)', () => {
+  it("prefers this (session, agent)'s own selection over the template", () => {
+    expect(resolveEffortSelection('low', 'high')).toBe('low');
+    // Including the sentinel: an explicit `Default` is a CHOICE, and it must
+    // out-rank the template rather than falling through to it.
+    expect(resolveEffortSelection(EFFORT_DEFAULT_ID, 'high')).toBe(EFFORT_DEFAULT_ID);
+  });
+
+  it('falls back to the agent template when the session chose nothing', () => {
+    expect(resolveEffortSelection(null, 'high')).toBe('high');
+    expect(resolveEffortSelection(undefined, 'high')).toBe('high');
+    expect(resolveEffortSelection('', 'high')).toBe('high');
+  });
+
+  it('answers null — never the sentinel — when neither rung has a value', () => {
+    expect(resolveEffortSelection(null, null)).toBeNull();
+    expect(resolveEffortSelection(undefined, undefined)).toBeNull();
+    expect(resolveEffortSelection('  ', '')).toBeNull();
+  });
+
+  // The mirror and the wire are resolved from the same call, so this is the
+  // pairing that keeps them from disagreeing.
+  it('feeds toWireEffort the same value the UI shows', () => {
+    expect(toWireEffort(resolveEffortSelection(null, 'high'))).toBe('high');
+    expect(toWireEffort(resolveEffortSelection(EFFORT_DEFAULT_ID, 'high'))).toBeUndefined();
+    expect(toWireEffort(resolveEffortSelection(null, null))).toBeUndefined();
   });
 });
 

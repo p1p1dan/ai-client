@@ -33,6 +33,20 @@ const contract = JSON.parse(
   )
 ) as MethodContract;
 
+/**
+ * The binary's own param schema for the turn methods, same provenance as the
+ * method inventory above (`codex app-server generate-json-schema`). Loaded HERE,
+ * next to the method names, because a field name is exactly as fatal as a method
+ * name: `turn/start` with a mis-spelled `effort` is a -32602 at runtime, on a
+ * machine we cannot reach, with nothing red on the way in.
+ */
+const turnSchema = JSON.parse(
+  readFileSync(
+    path.resolve(import.meta.dirname, 'fixtures', 'codex', 'codex-turn-schema.json'),
+    'utf8'
+  )
+) as { TurnStartParams: { required: string[]; propertyNames: string[] } };
+
 const CLIENT_REQUESTS = new Set(contract.clientRequest);
 const SERVER_REQUESTS = new Set(contract.serverRequest);
 const SERVER_NOTIFICATIONS = new Set(contract.serverNotification);
@@ -67,6 +81,7 @@ describe('CODEX_METHOD spells only methods the binary declares', () => {
     CODEX_METHOD.statusChanged,
     CODEX_METHOD.turnCompleted,
     CODEX_METHOD.serverRequestResolved,
+    CODEX_METHOD.threadSettingsUpdated,
   ];
 
   it.each(CLIENT_SENT)('client→server %s exists in the contract', (method) => {
@@ -79,6 +94,17 @@ describe('CODEX_METHOD spells only methods the binary declares', () => {
 
   it.each(SERVER_SENT)('server→client %s exists in the contract', (method) => {
     expect(SERVER_NOTIFICATIONS.has(method)).toBe(true);
+  });
+
+  it('D48 §4.6 — the settings echo is a declared server notification, spelled exactly', () => {
+    // The one frame the Codex model write-back reads. A rename upstream would
+    // otherwise present as "the model selector silently stops sticking", with
+    // every unit test still green because nothing else consumes this name.
+    expect(CODEX_METHOD.threadSettingsUpdated).toBe('thread/settings/updated');
+    expect(SERVER_NOTIFICATIONS.has('thread/settings/updated')).toBe(true);
+    // Its zero-turn sibling, which S4 will send. Pinned now so the pair cannot
+    // drift apart between slices — they differ by one character.
+    expect(CLIENT_REQUESTS.has('thread/settings/update')).toBe(true);
   });
 
   it('closes U-a and U-b with evidence rather than a guess', () => {
@@ -160,5 +186,34 @@ describe('the serverRequest family matches the generated ServerRequest.json (A24
     // it still gets a method_not_found and the turn cannot hang.
     expect(SERVER_REQUEST_KINDS).not.toHaveProperty('applyPatchApproval');
     expect(SERVER_REQUEST_KINDS).not.toHaveProperty('execCommandApproval');
+  });
+});
+
+describe('D48 §4.8-B7 — turn/start carries only field names the binary declares', () => {
+  it('model and effort are real TurnStartParams properties', () => {
+    // The D40 half of D48 puts both on the wire. If codex renames either, this
+    // is the cheap red; the expensive one is a -32602 that reads to the user as
+    // "the model I picked did nothing".
+    for (const field of ['model', 'effort']) {
+      expect(turnSchema.TurnStartParams.propertyNames).toContain(field);
+    }
+  });
+
+  it('neither is required, so omitting them is a legal frame', () => {
+    // The `Automatic` / `Default` path omits the key entirely; that has to stay
+    // valid rather than merely tolerated.
+    for (const field of ['model', 'effort']) {
+      expect(turnSchema.TurnStartParams.required).not.toContain(field);
+    }
+    expect(turnSchema.TurnStartParams.required).toEqual(['input', 'threadId']);
+  });
+
+  it('the posture fields we deliberately never send are declared too (negative control)', () => {
+    // Proof that excluding `approvalPolicy` / `sandboxPolicy` / `cwd` from
+    // `buildTurnStartParams` is a CHOICE, not a schema limitation — which is what
+    // makes the exclusion assertion in codexRuntime.test.ts meaningful.
+    for (const field of ['approvalPolicy', 'sandboxPolicy', 'cwd']) {
+      expect(turnSchema.TurnStartParams.propertyNames).toContain(field);
+    }
   });
 });

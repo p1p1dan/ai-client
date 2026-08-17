@@ -56,7 +56,22 @@ export interface HostShutdownCommand extends AgentHostCommandBase {
  * `xhigh` needs Opus 4.7+/Sonnet 5/Fable 5 and silently degrades to `high`
  * elsewhere; `max` is select-models-only. Omit to inherit the model default.
  */
-export type SessionEffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export const SESSION_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type SessionEffortLevel = (typeof SESSION_EFFORT_LEVELS)[number];
+
+/**
+ * Protocol-boundary guard for an untrusted `effort`.
+ *
+ * D48 §4.6 gave this a second caller: the Codex axis now puts effort on
+ * `turn/start` too, and the gateway's vocabulary was measured to be these exact
+ * five words with an EXPLICIT error outside them [实测 调查 04 探测 G]. One
+ * table, two runtimes — a per-runtime copy is how the two axes end up
+ * disagreeing about what `xhigh` means.
+ */
+export function isSessionEffortLevel(value: unknown): value is SessionEffortLevel {
+  return typeof value === 'string' && (SESSION_EFFORT_LEVELS as readonly string[]).includes(value);
+}
 
 export interface SessionCreateCommand extends AgentHostCommandBase {
   type: 'session.create';

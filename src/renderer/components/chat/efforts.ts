@@ -49,6 +49,45 @@ export function isEffortLevel(value: unknown): value is SessionEffortLevel {
 }
 
 /**
+ * True for anything the effort selector may legitimately hold: one of the five
+ * measured levels, or the `Default` sentinel.
+ *
+ * This is the vocabulary the STORAGE layer enforces (B10). It is derived from
+ * `CHAT_EFFORTS` rather than spelled out again, because a second copy of the
+ * five words is exactly how a layer ends up accepting a level the wire will
+ * later drop — the divergence B10 counts layers to prevent.
+ */
+export function isEffortSelection(value: unknown): value is EffortSelection {
+  return value === EFFORT_DEFAULT_ID || isEffortLevel(value);
+}
+
+/**
+ * The effort selection for one (session, agent): this pair's own choice, then
+ * this agent's template, then nothing chosen at all.
+ *
+ * D48 S2 §4.3's priority chain, model-side twin `resolveModelSelection`. It is
+ * a function rather than three inline `??` chains because it had already drifted
+ * into two different answers: the send path and the trigger both fell back to
+ * the agent template while the Context surface read only the session's own
+ * value, so a session running on a template `high` reported "no effort
+ * configured" on the mirror while the wire carried `effort:'high'` — the same
+ * mirror≠wire split A06 pins for the model row.
+ *
+ * Returns `null`, not the sentinel: "nothing chosen" and an explicit `Default`
+ * are the same thing on the wire but not in a UI, and the caller decides which
+ * of the two it is showing.
+ */
+export function resolveEffortSelection(
+  storedEffort: string | null | undefined,
+  agentTemplateEffort: string | null | undefined
+): string | null {
+  for (const candidate of [storedEffort, agentTemplateEffort]) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) return candidate;
+  }
+  return null;
+}
+
+/**
  * Map a stored selection to the value to put on the wire: a real level, or
  * `undefined` to omit the field entirely.
  */

@@ -91,6 +91,8 @@ export const CODEX_NORMALIZER_METHODS = {
 export const CODEX_IGNORED_NOTIFICATIONS: Readonly<Record<string, string>> = {
   'thread/status/changed': 'owned by codexStatus.ts + codexRuntime — the single status truth (C10)',
   'serverRequest/resolved': 'owned by the pending table: it settles a request, it is not content',
+  'thread/settings/updated':
+    'owned by codexRuntime — the sole write-back of the thread model/effort default (D48 §4.6)',
   'thread/started': 'thread lifecycle; codexRuntime owns session.created',
   'turn/plan/updated': 'plan items are not rendered this round (see CODEX_ITEM_RULES.plan)',
   'item/plan/delta': 'plan items are not rendered this round (see CODEX_ITEM_RULES.plan)',

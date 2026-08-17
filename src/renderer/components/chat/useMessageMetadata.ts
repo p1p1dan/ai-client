@@ -7,14 +7,14 @@ import {
   type MetadataRegistry,
   reduceMessageMetadata,
 } from './messageMetadata';
-import { defaultModelId } from './models';
-import { useSessionModel } from './useSessionModel';
+import { useResolvedSessionModel } from './useResolvedSessionModel';
 
 /**
  * Team-side metadata registry surface (T-06): subscribe to Runtime Events and
  * return a per-message metadata lookup. Stamps each new assistant metadata
- * entry with the session-bound model id from `useSessionModel` so the timeline
- * can show "Sonnet · 1.2s · 10:30" without touching the red-line store.
+ * entry with the session-bound model id resolved by `useResolvedSessionModel`
+ * so the timeline can show "Sonnet · 1.2s · 10:30" without touching the
+ * red-line store.
  *
  * Subscribes once per mount; ChatWorkspace drives a single instance per
  * active session. Returning a stable `get` keeps timeline rows cheap.
@@ -25,7 +25,7 @@ export interface UseMessageMetadataResult {
 }
 
 export function useMessageMetadata(sessionId: string | null): UseMessageMetadataResult {
-  const { getSessionModel } = useSessionModel();
+  const resolveSessionModel = useResolvedSessionModel();
   const [registry, setRegistry] = useState<MetadataRegistry>(initialMetadataRegistry);
 
   useEffect(() => {
@@ -37,21 +37,21 @@ export function useMessageMetadata(sessionId: string | null): UseMessageMetadata
     const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
       if (cancelled) return;
       if (event.sessionId && event.sessionId !== sessionId) return;
-      // T-30 P-14: ComposerModelTrigger's (formerly ModelSelect) initial value
-      // never gets persisted until the user actually changes the dropdown (it
-      // only calls `setSessionModel` from `onValueChange`), so an untouched
-      // session's `getSessionModel` stays null forever and the meta line
-      // silently drops the model segment. Fall back to the same catalog
-      // default ComposerModelTrigger itself renders, mirroring ChatComposer's
-      // own `?? defaultModelId(null)` guard.
-      const sessionModel = getSessionModel(sessionId) ?? defaultModelId(null);
+      // T-30 P-14 revisited for D48 S2: the trigger still only persists on an
+      // explicit pick, so an untouched session resolves to `undefined` here —
+      // and that is now the RIGHT answer rather than a gap to paper over. The
+      // old code substituted the catalog default (`sonnet`), which stamped every
+      // untouched session's meta line with a model nobody selected and the wire
+      // never carried. `null` means "we did not pin one", and the reducer
+      // already prefers the Host's own reported model over this value anyway.
+      const sessionModel = resolveSessionModel(sessionId) ?? null;
       setRegistry((prev) => reduceMessageMetadata(prev, event, sessionModel));
     });
     return () => {
       cancelled = true;
       unsubscribe();
     };
-  }, [sessionId, getSessionModel]);
+  }, [sessionId, resolveSessionModel]);
 
   // Stable across renders that did not change the registry (review batch F7):
   // this lookup is a prop of the memoized `ChatTurn`, so a fresh closure per

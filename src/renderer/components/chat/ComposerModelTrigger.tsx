@@ -1,14 +1,23 @@
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
+import {
+  agentDefaultEffort,
+  agentDefaultModel,
+  withAgentPreference,
+} from '@shared/models/chatAgentDefaults';
+import type { AgentWireName } from '@shared/types/agentWire';
 import { Check, ChevronDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Menu, MenuGroup, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
+import { useSettingsStore } from '@/stores/settings';
+import { catalogModels } from './agentModelCatalog';
 import {
   type ComposerMenuItem,
   type ComposerMenuSection,
   composerModelLabelParts,
   composerModelMenuModel,
 } from './composerModel';
-import { EFFORT_DEFAULT_ID } from './efforts';
+import { EFFORT_DEFAULT_ID, resolveEffortSelection } from './efforts';
+import type { HostStatus } from './hostStatus';
 import {
   composerMenuGroupLabelClass,
   composerMenuItemClass,
@@ -18,7 +27,16 @@ import {
   composerPopupSide,
   type MiddleColumnMode,
 } from './middleColumnLayout';
-import { defaultModelId, ensureModelOptions } from './models';
+import {
+  AUTOMATIC_MODEL_ID,
+  AUTOMATIC_MODEL_LABEL,
+  modelOptionsFor,
+  modelScopeHint,
+  reconcileModelSelection,
+  resolveModelSelection,
+  unverifiedModelLabel,
+} from './models';
+import { useAgentModelCatalog } from './useAgentModelCatalog';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
 
@@ -26,10 +44,24 @@ import { useSessionModel } from './useSessionModel';
  * T-30b2: the Composer's single model + reasoning-effort control, replacing
  * the former `ModelSelect` + `EffortSelect` pair.
  *
- * Both selections are still independent and still land in their own
- * per-session store — only the surface merged. The two states this component
- * owns mirror what the two deleted components each owned, including the
- * "session switched, or the Host reported a default late" reconciliation.
+ * D48 S2 rewired what it reads without changing what it is. Three changes:
+ *
+ *  1. The catalog is the PROXY's, fetched per agent through
+ *     `useAgentModelCatalog` and already family-filtered by Main. The three
+ *     hard-coded short names are gone, and so is `ensureModelOptions`' rule that
+ *     an unrecognised Host default was automatically a legal option.
+ *  2. Both selections are keyed by the (session, AGENT) pair. Which models exist
+ *     depends on which runtime runs the chat, so one scalar per session would
+ *     lose the Claude pick the moment a zero-turn draft visited Codex (§4.3).
+ *  3. `hostDefaultModel` is demoted (§4.3-3): it is no longer an initial value
+ *     nor a prepended catalog row, only one more source of an unverified
+ *     pre-existing value, consulted when there is no catalog at all.
+ *
+ * The two `useState`s and the reconciliation effect are the same SHAPE as
+ * before — a session switch or a late arrival re-resolves the displayed value —
+ * but the late arrival is now the catalog rather than the Host default, and the
+ * rules for what a late catalog may overwrite live in `reconcileModelSelection`,
+ * truth-tabled under the node-env vitest that can never render this file.
  *
  * `Menu` rather than `Select`: a `Select` models ONE value, and this popup
  * holds two orthogonal radio groups. `Menu.RadioGroup` is the primitive that
@@ -39,8 +71,16 @@ import { useSessionModel } from './useSessionModel';
 
 interface ComposerModelTriggerProps {
   sessionId: string;
+  /**
+   * The runtime this session runs on — `sessionAgent(session)`, the SAME value
+   * the agent picker shows. Single source of truth: a trigger resolving its own
+   * agent could offer a catalog for a runtime the session is not bound to.
+   */
+  agent: AgentWireName;
   /** Host-reported default model id from `host.ready.settings.model`, if seen. */
   hostDefaultModel?: string | null;
+  /** Gates the catalog request — nothing is fetched before the Host is up. */
+  hostState: HostStatus['state'];
   /** Which way the popup opens — the docked card has no room below it. */
   mode: MiddleColumnMode;
   disabled?: boolean;
@@ -97,64 +137,164 @@ function ModelMenuSection({
 
 export function ComposerModelTrigger({
   sessionId,
+  agent,
   hostDefaultModel,
+  hostState,
   mode,
   disabled,
 }: ComposerModelTriggerProps) {
-  const { getSessionModel, setSessionModel } = useSessionModel();
+  const { getSessionModel, setSessionModel, clearSessionModel } = useSessionModel();
   const { getSessionEffort, setSessionEffort } = useSessionEffort();
+  const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
+  const setChatAgentDefaults = useSettingsStore((state) => state.setChatAgentDefaults);
 
-  const [model, setModel] = useState<string>(() => {
-    const stored = getSessionModel(sessionId);
-    if (stored) return stored;
-    return defaultModelId(hostDefaultModel);
-  });
+  const { catalog, loaded, loading, status, refresh, retry } = useAgentModelCatalog(
+    agent,
+    hostState
+  );
+  const catalogOptions = catalogModels(catalog);
+
+  const [model, setModel] = useState<string>(() =>
+    resolveModelSelection({
+      agent,
+      storedModel: getSessionModel(sessionId, agent),
+      agentDefaultModel: agentDefaultModel(chatAgentDefaults, agent),
+      catalog: catalogOptions,
+      hostDefaultModel,
+    })
+  );
   const [effort, setEffort] = useState<string>(
-    () => getSessionEffort(sessionId) ?? EFFORT_DEFAULT_ID
+    () =>
+      resolveEffortSelection(
+        getSessionEffort(sessionId, agent),
+        agentDefaultEffort(chatAgentDefaults, agent)
+      ) ?? EFFORT_DEFAULT_ID
   );
 
-  // Session switched or the Host reported a default late: an explicit stored
-  // selection always wins, otherwise adopt the new default.
-  useEffect(() => {
-    const stored = getSessionModel(sessionId);
-    if (stored) {
-      setModel(stored);
-    } else if (hostDefaultModel) {
-      setModel(defaultModelId(hostDefaultModel));
-    }
-  }, [sessionId, hostDefaultModel, getSessionModel]);
+  // Which (session, agent) the displayed value was resolved for. This component
+  // is NEVER remounted per session — `ChatWorkspace` renders one `ChatComposer`
+  // with no `key` — so without this ref a session switch is indistinguishable
+  // from a re-render, and §4.3-6's two triggers collapse into one.
+  const resolvedPairRef = useRef<string>(`${sessionId}\0${agent}`);
 
+  // §4.3-6: the session, the agent, or the catalog moved. A pair change
+  // re-resolves from that pair's own storage unconditionally (anything else
+  // shows the previous session's model while the send path uses the new
+  // session's — R11/A11's display≠send split); a catalog that has not landed
+  // yet changes nothing at all (that is what "show the last value, never a
+  // spinner and never an empty menu" means in state terms); and a catalog that
+  // HAS landed may only overwrite a value nobody chose. Every one of those
+  // branches is `reconcileModelSelection`'s, not this effect's.
   useEffect(() => {
-    setEffort(getSessionEffort(sessionId) ?? EFFORT_DEFAULT_ID);
-  }, [sessionId, getSessionEffort]);
+    const pair = `${sessionId}\0${agent}`;
+    const pairChanged = resolvedPairRef.current !== pair;
+    resolvedPairRef.current = pair;
+    setModel((current) =>
+      reconcileModelSelection({
+        current,
+        pairChanged,
+        agent,
+        storedModel: getSessionModel(sessionId, agent),
+        agentDefaultModel: agentDefaultModel(chatAgentDefaults, agent),
+        catalog: catalogOptions,
+        catalogLoaded: loaded,
+        hostDefaultModel,
+      })
+    );
+  }, [
+    sessionId,
+    agent,
+    catalogOptions,
+    loaded,
+    hostDefaultModel,
+    chatAgentDefaults,
+    getSessionModel,
+  ]);
 
-  const options = ensureModelOptions(hostDefaultModel);
-  const modelLabel = options.find((option) => option.id === model)?.label ?? model;
+  // Session or agent switched: re-read this pair's own effort. Unlike the model
+  // there is no catalog to wait for — the five levels are one shared vocabulary
+  // on both axes [实测 调查 04 探测 E/G], so the value is decided the instant the
+  // pair is known.
+  useEffect(() => {
+    setEffort(
+      resolveEffortSelection(
+        getSessionEffort(sessionId, agent),
+        agentDefaultEffort(chatAgentDefaults, agent)
+      ) ?? EFFORT_DEFAULT_ID
+    );
+  }, [sessionId, agent, chatAgentDefaults, getSessionEffort]);
+
+  const options = modelOptionsFor(catalogOptions);
+  const inCatalog = catalogOptions.some((option) => option.id === model);
+  const isAutomatic = model === AUTOMATIC_MODEL_ID;
+  // The label the prepended row carries, and the label the TRIGGER carries, are
+  // deliberately the same string: a trigger reading `gpt-5.5` next to a menu row
+  // reading `gpt-5.5 · unverified` would read as two different selections.
+  const unknownLabel = isAutomatic || inCatalog ? undefined : unverifiedModelLabel(agent, model);
+  const modelLabel = isAutomatic
+    ? AUTOMATIC_MODEL_LABEL
+    : (options.find((option) => option.id === model)?.label ?? unknownLabel ?? model);
   const { base, suffix } = composerModelLabelParts({ modelLabel, effort });
   const menu = composerModelMenuModel({
     options,
     selectedModel: model,
     selectedEffort: effort,
+    unknownModelLabel: unknownLabel,
   });
 
   const handleSelect = (sectionId: ComposerMenuSection['id'], itemId: string) => {
     if (sectionId === 'model') {
       setModel(itemId);
-      setSessionModel(sessionId, itemId);
+      // `Automatic` is stored as an ABSENCE, not as a persisted sentinel: it
+      // means "omit the field", which is also what an unset pair means, and
+      // writing a sentinel would freeze the session against a later agent
+      // template. The effort sentinel is stored, because there `Default` and
+      // "never chosen" genuinely differ once a template exists.
+      if (itemId === AUTOMATIC_MODEL_ID) {
+        clearSessionModel(sessionId, agent);
+      } else {
+        setSessionModel(sessionId, agent, itemId);
+      }
+      // §4.3: an explicit pick also becomes this agent's template, so the next
+      // new draft on the same agent starts where the user left off.
+      setChatAgentDefaults(
+        withAgentPreference(chatAgentDefaults, agent, {
+          model: itemId === AUTOMATIC_MODEL_ID ? undefined : itemId,
+        })
+      );
       return;
     }
     setEffort(itemId);
-    setSessionEffort(sessionId, itemId);
+    setSessionEffort(sessionId, agent, itemId);
+    setChatAgentDefaults(withAgentPreference(chatAgentDefaults, agent, { effort: itemId }));
   };
 
+  // §4.6 防线 ① 连带口径: the two axes do NOT share this sentence. A Codex pick
+  // rewrites the thread's standing model until it is changed again [实测
+  // 06-probes P1], so per-turn wording would be a false statement about what
+  // the control just did — while on Claude every turn restates its options
+  // [实测 06-probes P2] and per-turn is the literal truth.
+  const scopeHint = modelScopeHint(agent);
   // The trigger shows the effort as a bare value ("High") with no category
   // word, so the accessible name has to supply the category that sighted users
   // read off the menu's own group headings.
-  const spokenLabel = `Model and reasoning effort: ${base}${suffix ? ` ${suffix}` : ''}`;
-  const title = `${base}${suffix ? ` ${suffix}` : ''} — click to change model or reasoning effort`;
+  const spokenLabel = `Model and reasoning effort: ${base}${suffix ? ` ${suffix}` : ''} — ${scopeHint}`;
+  const title = `${base}${suffix ? ` ${suffix}` : ''} — click to change model or reasoning effort (${scopeHint})`;
 
   return (
-    <Menu>
+    <Menu
+      // §4.1 刷新: opening the menu is the one moment a stale list is about to
+      // be read, so it is where the TTL is checked. Without it a catalog
+      // fetched once is frozen for the life of the renderer process — the hook
+      // only re-requests when its `request` identity changes (agent/hostState)
+      // and this component is never remounted. `refresh` is the non-forced
+      // path: `shouldRequestCatalog` decides, and a fresh proxy entry costs
+      // nothing. The menu keeps showing the values it has while it runs, which
+      // is what `REFRESHING_CATALOG_NOTICE` is for.
+      onOpenChange={(open) => {
+        if (open) refresh();
+      }}
+    >
       <MenuPrimitive.Trigger
         className={composerModelTriggerClass()}
         disabled={disabled}
@@ -180,6 +320,31 @@ export function ComposerModelTrigger({
             <ModelMenuSection section={section} onSelect={handleSelect} />
           </div>
         ))}
+        {/* §4.3-5: catalog provenance is a STATUS row, never a radio item — a
+            `source:'seed'` list is the built-in table, and offering it silently
+            alongside real entries is the one thing the `source` discriminant
+            exists to stop. `loading` shows here and nowhere else, which is what
+            keeps the menu on its last value instead of a spinner. */}
+        {status.message && (
+          <>
+            <MenuSeparator />
+            <div className="flex items-center gap-2 px-2 py-1.5 text-meta text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate" title={status.reason ?? undefined}>
+                {status.message}
+              </span>
+              {status.retryable && (
+                <button
+                  className="shrink-0 rounded-sm px-1 text-ui hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-primary"
+                  disabled={loading}
+                  onClick={retry}
+                  type="button"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </MenuPopup>
     </Menu>
   );
