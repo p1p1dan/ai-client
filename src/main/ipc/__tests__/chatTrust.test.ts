@@ -43,6 +43,10 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
     recordCreated: recordCreatedMock,
     recordResumed: recordResumedMock,
     handleRuntimeEvent: vi.fn(),
+    // D48 S3: create/resume now read the row for this session's captured
+    // permission posture. No row here — this suite is about the trust call
+    // matrix, and an empty index is the not-yet-captured arm.
+    get: vi.fn(async () => undefined),
   },
 }));
 

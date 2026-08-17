@@ -7,6 +7,8 @@
  * and write `[]` back on its next flush — every session silently gone. Version
  * markers, if ever needed, can only be optional per-entry fields.
  */
+import type { SessionPermissionPreference } from './runtimeEvents';
+
 export interface SessionIndexEntry {
   sessionId: string;
   /**
@@ -29,6 +31,27 @@ export interface SessionIndexEntry {
   workspacePath: string;
   title: string;
   model?: string;
+  /**
+   * D48 S3 §5.5-2 — the permission posture this session was STARTED under,
+   * captured from the "Chat agent defaults" template at first send.
+   *
+   * Optional per-entry, like every other addition to this file: an older build
+   * reads the row, ignores the key and rewrites it verbatim, and a row written
+   * before this field existed simply has none (the runtime's own safe constant
+   * then applies, i.e. today's behaviour).
+   *
+   * It exists so that resume does NOT re-read the template. Editing the global
+   * default must not retroactively change the posture of a chat that started
+   * months ago — that would be a silent security-posture change to a
+   * conversation the user is not even looking at. Typed as the shared union for
+   * the Main-side readers' benefit, but re-validated on every read: this is
+   * disk content, which a user or a future build can have written.
+   *
+   * Written twice by design: once here at first send, and again by S4's
+   * mid-session change (an explicit choice INSIDE this session, which is a
+   * different thing from the template leaking in).
+   */
+  permissionPreference?: SessionPermissionPreference;
   /** Epoch ms of last meaningful activity (create/resume/turn end/rename/archive). */
   updatedAt: number;
   archived: boolean;

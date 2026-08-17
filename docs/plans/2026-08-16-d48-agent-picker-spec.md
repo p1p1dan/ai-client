@@ -771,7 +771,7 @@ shared 已有判别联合：Claude 为 `permissionMode`，Codex 为 `approvalPol
 **不加 SDK 的第 6 值 `'auto'`**：rev.3 起理由升级——06-probes P2(b) 抄录的 `sdk.d.ts:1720` 取值注释就是 `'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'` **五值**（SDK 0.3.218），与本仓冻结类型逐值一致，**当前 SDK 版本压根没有 `'auto'`**。该项由「未实证、随 S4 探针处理」改判为**明确不做**，转 §8.2-L10 遗留登记，等 SDK 真出现该值且有行为实证再议。
 
 **Codex** — Approval policy `untrusted / on-request / never` + Sandbox mode `read-only / workspace-write / danger-full-access`。
-**Network：只读 `Reported by runtime`，本片不给控件。** `networkAccess` **不是 `thread/start` 的请求字段**（`codexRuntime.ts:122-132`，只在响应回声里，由 `compareSandboxEcho:594-665` 校验），只能经隔离 config.toml 投影生效（`codexHome.ts:149-163`、`:173-178`、`:412`）；给了控件就要改 config.toml 写手，而 resume 姿态是从 config.toml 重派生的（`:2952-2954` H9），会波及 resume 回声校验。
+**Network：只读 `Reported by runtime`，本片不给控件。**（**S3 终检改判**：该维度由「Host 记一个常量信念 `false`」改为「只从 `thread/start` 回声学、学不到就不报」——`SessionPermissionPolicy` 的 codex 臂 `networkAccess` 由必填放宽为**可选**，缺席即 Context 显 `Network: not reported`。理由见 §5.9.4 偏差 ⑦：S3 把 sandbox 档位变成用户可选后，`danger-full-access` 根本没有网络边界，常量 `false` 会在最危险的档位上把事实说反。) `networkAccess` **不是 `thread/start` 的请求字段**（`codexRuntime.ts:122-132`，只在响应回声里，由 `compareSandboxEcho:594-665` 校验），只能经隔离 config.toml 投影生效（`codexHome.ts:149-163`、`:173-178`、`:412`）；给了控件就要改 config.toml 写手，而 resume 姿态是从 config.toml 重派生的（`:2952-2954` H9），会波及 resume 回声校验。
 
 **危险档 `bypassPermissions` / `danger-full-access`：已拍板（§8.0-Q3）= 给控件 + warning + 二次确认 + 绝不做默认值。** 五条硬口径，**模板层（本片）与实时层（S4）逐条同口径**，不得只在一层落实：
 
@@ -806,6 +806,8 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 
 4. **会话快照的第二个写入点（rev.3，写入臂归 S4）**：S4 的中途改档**成功**后，同一 `permissionPreference` 字段按新值更新（resume 因此拿到用户**最后一次显式选择**）。这不违反第 2 条的立意——第 2 条防的是「**全局模板**在 resume 时倒灌旧会话」，而中途改档是**本会话内的显式选择**（同 §3.3-6「显示值 == 发送值」与 §4.6 防线 ② 的回写收敛）。S3 只需保证该字段是**可选加法、可被二次写入、历史行不重写**；写入臂与断言归 S4（§6.5-D10）。
 
+5. **「行存在但从未捕获姿态」的分支（S3 终检补写，实况口径）**：§5.4 文案「已存在的会话保持首发时捕获的姿态」描述不到这类行——**pre-D48 老行**与 **C15 下首发时 settings 未 hydrate 的行**都没有可保持的姿态。口径**写死为「取当次模板」**：下一次 `chat:createSession` 会把**当时的**全局模板捕获进去（含危险档）。这是权衡后的选择而不是疏漏：唯一能区分「老行」与「全新行」的带内信号只有「行是否存在」，而 `chat:registerSession`（R5 D2）在侧栏出现该会话的那一刻就写了行、远早于首发——因此「只要行存在就拒绝候选」等于对**所有**会话拒绝模板，即删掉 S3 的写侧。风险边界由「捕获至多一次」封住：行一旦有姿态，任何模板都推不动它（两条断言见 §5.7-C9 扩，`chatPermissionPreferenceGuard.test.ts` 的 §5.5-5 双臂）。
+
 **不得写**：终端轴 `AgentConfig`（key 是松散 terminal agent id）· `chatSessions.ts` 的 runtime facts（会话索引只保存「请求偏好」，不冒充实际回声）· **用户真实 `~/.codex/config.toml`**（Host 使用隔离生成文件并声明用户 posture 不继承，`codexHome.ts:123-140`；这条同时受 §1.2 运维铁律约束）。
 
 **wire 与运行时**：
@@ -825,7 +827,7 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 2. **Claude 无回归**：打开旧 Claude 会话（只有 legacy `permissionMode`）→ Context 行输出与今天逐字一致。
 3. **写侧模板**：Settings 选 Claude `plan` → 新草稿首发 → create 携带 preference → `query()` 用 plan → Host 回声 → Context 显 Plan → session-index 记下该会话快照。
 4. **Codex 写侧**：Settings 选 `untrusted + read-only` → 新草稿首发 → thread/start 与隔离 config 同值 → Context 显三维事实。
-5. **Codex resume**：不依赖旧 event 猜值，从隔离 config 重派生并经 H9 校验；校验成功后事实事件到达 renderer，权限行不再消失。
+5. **Codex resume**：不依赖旧 event 猜值，从隔离 config 重派生并经 H9 校验；校验成功后事实事件到达 renderer，权限行不再消失。**该「事实事件」= `session.resumed` 自带 `permissionPolicy`**（S3 终检补：原实现无条件不带该字段，冷 resume 与 live-connection resume 两条路都不带 ⇒ 任何经历过一次 app 重启的 Codex 会话，权限行退回 `not reported`，S3 读侧等于对绝大多数打开方式不存在）。校验**失败**的降级臂**不带**该字段——未验证的姿态不广播。
 6. **偏好不污染事实**：用户改 Settings 默认 → 当前 active session 与所有已物化 session **姿态不变**；只有之后首次发送的新草稿采用新值。
 7. **old Host**：不发 `permissionPolicy` → renderer 保留 legacy 行，不崩溃、不显示 Codex 假值。
 8. 单次 `PermissionQaCard` Allow/Deny **不改** chat defaults，也不改 Context policy 行。
@@ -844,6 +846,8 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 | **C8** | **负控**：`SessionPermissionPreference` 的 Codex 分支**不存在 `networkAccess` 键**（类型级 + 面板视图模型 `writable:false`） | 类型断言 + 结构负控 |
 | C9 | 首发把 preference 恰好物化一次进 session-index；resume 读会话快照，**后来修改的全局默认不生效** | 时序真值表（改 Settings 后 resume 旧会话） |
 | C10 | create/resume 的 preference `agent` 必须匹配 `sessionAgent(session)`；错配在 dispatch **之前**失败 | 拒绝路径断言 |
+| **C11-R** | **resume 侧同值（S3 终检补）**：`session.resumed.permissionPolicy` == `state.policy` == `ensureCodexHome` 收到的 permission（H9 姿态验证通过的那一个）；live-connection resume 复述 `session.created` 的同一值；**验证失败的降级臂不带该字段** | 三处同值 + 负控臂 |
+| **C17** | **`networkAccess` 只从回声学（S3 终检补）**：`thread/start` 回声带 `networkAccess:true` → `session.created.permissionPolicy.networkAccess === true`；回声不带该键 → 该键**缺席**（不是 `false`）；Context 行相应显 `Network: not reported`；`resolveCodexPolicy` 的结果恒无该键 | 回声真值表 + 面板三态 |
 | C11 | Claude：**四处同值**——`query()` options（`claudeRuntime.ts:754`）· `session.created` 回声（`:341`）· `session.resumed` 回声（`:391`）· registry 值，全部来自同一 preference（P2 的三消费点 + registry）；Codex：thread/start、isolated config、`state.policy`、Context 回声四处 approval/sandbox 同值 | 四处同值断言（H9 形状） |
 | C12 | Settings 更新**不调用任何 active-session mutation IPC**；`PermissionQaCard` 响应不写 chat defaults | spy 零调用 |
 | C13 | 危险档：`bypassPermissions` / `danger-full-access` 有常驻 warning 且**不可能成为默认值**——`defaults.ts` 出厂值、**每一条回退/降级臂**、hydration 未完成时的占位值**逐项枚举皆非危险档**；chat permission 不落终端轴 `agentSettings`（轴隔离静态扫描） | 设置模型真值表（含回退臂逐条枚举）+ 静态扫描 |
@@ -867,6 +871,122 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 ⑫ 危险档跳过二次确认直接写入 app settings（反向：取消后仍停在危险档）→ **C16 红**（两个方向各一次实跑）
 ⑬ `bypassPermissions` 不发 `allowDangerouslySkipPermissions`（反向：给全部档位都发）→ **C16 红**（前者 SDK 直接拒、后者静默扩权，两个方向各一次实跑）
 ⑭ 某条回退/降级臂落到危险档（如 hydration 未完成时占位 `danger-full-access`）→ **C13 红**
+⑮ `emitResumed` 重新无条件丢掉 `permissionPolicy`（反向：把未验证的姿态也广播）→ **C11-R 红**（两个方向各一次实跑）
+⑯ `networkAccess` 改回常量信念（反向：面板把「未上报」渲染成 `off`）→ **C17 红**（两个方向各一次实跑）
+
+---
+
+### 5.9 S3 as-built（施工实况与规格偏差）
+
+> 落账 2026-08-17（终检修复批收口）。按 §1.3「每片 as-built 段落必须记：git commit · 四门逐门实跑输出 · 变异逐对红灯原文 · off/on 双轮结果 · 新增/改动文件清单 · 规格偏差条目」六项补齐，格式照 §4.10。
+> **施工编制**：施工两员（Host/Main 半边 + renderer/Settings 半边）→ 规格符合性终检（10 条，1 blocker / 2 major / 7 minor）→ **终检修复批**（本节全部数字、⑮/⑯ 两对新变异、C11-R/C17 两条新断言出自该批）。
+> **git commit：本片尚未提交**——按用户纪律终检修复批不自行 commit，收口态为工作树 32 个变更项（清单见 §5.9.6）。
+
+#### 5.9.1 四门逐门实跑（终检修复后，逐门串行）
+
+| 门 | 命令 | 结果 |
+|---|---|---|
+| 1 | `pnpm typecheck` | `EXIT=0`，`tsc --noEmit` 无输出 |
+| 2 | `pnpm typecheck:agent-host` | `EXIT=0`，`tsc --noEmit -p src/agent-host/tsconfig.json` 无输出 |
+| 3 | `pnpm lint` | `EXIT=0`，`Checked 964 files in 732ms. No fixes applied. / Found 29 warnings. / Found 3 infos.`（0 error；29 warning 全在 `docs/design/*.html`，基线既有） |
+| 4 | `pnpm test` | `EXIT=0`，`Test Files 227 passed (227) / Tests 4403 passed (4403)`，Duration 19.26s |
+
+基线链：S2 收口 **220 文件 4268 例** → 施工两员交接 **227/4392**（+7 文件 +124 例）→ **终检修复批收口 227/4403**（+11 例，无新增文件）。
+终检修复批新增的 11 例分布：`codexRuntime.test.ts` +5（C11-R 双臂、C17 三例）· `contextPermissionPolicy.test.ts` +2（网络三态行、guard 可选臂/null 负控净 +1）· `chatPermissionPreferenceGuard.test.ts` +2（§5.5-5 双臂）· `composerPermissionWiring.test.ts` +1（store 休眠 create 负控）· `sessionPermissionSnapshot.test.ts` ±0（空壳用例就地改写为真断言）· `compareSandboxEcho` 组 +2 −1（学习/未上报/二次回声矛盾三例换掉原「server default」一例）。
+
+#### 5.9.2 flag off/on 双轮
+
+| 轮次 | 结果 |
+|---|---|
+| `AICLIENT_AGENT_CODEX` 未设（off） | `Test Files 227 passed (227) / Tests 4403 passed (4403)` |
+| `AICLIENT_AGENT_CODEX=1`（on） | `Test Files 227 passed (227) / Tests 4403 passed (4403)` |
+
+两轮逐例相同 —— §1.1-4「renderer/store 形状不得因 flag 分叉」在测试面成立；S3 的写侧模板与读侧补链**均不受 flag 控制**（flag 只管 Codex 能否被 spawn，不管 store 形状与渲染分支）。
+
+#### 5.9.3 既有非 hermetic 红（**非本批引入**，不计入收口）
+
+`AICLIENT_MANAGED_CREDENTIALS=1` 下：`Test Files 4 failed | 223 passed (227) / Tests 15 failed | 4388 passed (4403)`。
+
+落点与 §4.10.3 **逐文件逐例完全一致**（4 文件 15 例）：`main/services/auth/__tests__/index.test.ts`（1）· `onboarding/__tests__/OnboardingService.test.ts`（6）· `session/__tests__/SessionManager.test.ts`（2）· `usage/__tests__/UsageService.test.ts`（6）。零例落在 D48 S3 改动面，判定沿用 S2：既有夹具非 hermetic 缺陷（读环境变量而非注入），留独立票。
+
+#### 5.9.4 规格偏差清单
+
+**A · 施工两员自报（6 条，由终检核实）**
+
+1. **`SessionPermissionMode` 由手写联合改为 const 数组派生**。§5.4 写「冻结类型不动」，实况是 `SESSION_PERMISSION_MODES` const 数组 + `type = (typeof …)[number]`。**词表逐值未变**（仍是 SDK 0.3.218 的五值），改动理由是请求侧现在必须**运行时校验**一个不可信值：`isSessionPermissionMode` 住在 renderer，Host 需要自己的读法，而第二份手写副本正是 wire 与校验器对 `dontAsk` 各说各话的经典入口。判定：**非违规**，是「冻结的是词表不是写法」。
+2. **`readSessionPermissionPreference` 以入参形式接收两个 agent 常量，而非 import**。`shared/types/runtimeEvents.ts` 不 import `agentWire.ts`（strip-types 环境下会把类型模块拖进运行时依赖），故签名为 `(value, agents: {claudeCode, codex})`。代码里有解释，规格里没有，补记于此。
+3. **`isSessionPermissionPolicy` 落在 `contextSurfaceModel.ts` 内为 module-private**。§5.2-2 只写「放 `contextSurfaceModel.ts` 内」，未写导出与否；实况不导出（守卫跟着唯一消费者走），因此 **C6 的真值表改由 reducer 间接钉**（合法值写进 facts / 非法值 `toBe(prev)`），比直接调守卫更贴近它承重的位置。
+4. **`capabilities.permissionPolicy` 通到 `HostStatus` 但零消费者**：面板实际是按字段有无降级的。C7 仍钉两条通道（reduce + prime），本片只把该 bit 的**措辞收窄**（见 D-4）。登记为 §8.2-L14。
+5. **create/resume 的 preference 判据在 Main 与 Host 各拦一次**：§5.7-C10 只写了 Host 侧。实况是 Main（`chat.ts` `resolveSessionPermissionPreference`）在 `recordCreated` **之前**拒绝，Host（`index.ts`）在 dispatch 时第二次拒绝。两道都要：Main 那道保证被拒的姿态**不会先落成索引行**，Host 那道保证从任何入口调 runtime 都安全。
+6. **隔离 codex home 单目录并发写**：代码注释自陈「registered as a leftover」而 §8.2 当时没有该条。已补 **§8.2-L13**（并把注释改为指名 `§8.2-L13`，不让代码单方面声称已登记）。
+
+**B · 终检核查新增（4 条，两员未自报）**
+
+1. **`session.resumed` 从不带 `permissionPolicy`（BLOCKER，已修）**——详见 D-1。
+2. **`Network: on/off` 渲染的是硬编码信念（MAJOR，已修）**——详见 D-2。
+3. **`chatSessions.ts` 的第二条 create 派发点不带姿态**（也不带 model/effort，S2 起如此）。判定：**休眠 API，不修**。全 renderer 无非测试调用方（`.sendMessage(` 零命中），活的发送路径是 `ChatComposer` 自己那条。处置 = 把 `composerPermissionWiring.test.ts` 的用例名限定到 `ChatComposer.tsx`，并新增一条负控：store 那条 payload **不含** posture/model/effort，**且**全 renderer 无调用方——任何一天出现调用方，这条断言先红。红线文件 `chatSessions.ts` 因此**一字未动**。
+4. **`capabilities.permissionPolicy` 的措辞过宽（已修）**：`index.ts` 与 `hostStatus.ts` 原注释均称「this Host normalizes **per-agent** permission facts into `SessionPermissionPolicy`」，而 Claude 轴按 §5.2 逐字不改、只发 legacy `permissionMode`、永远不发 policy。措辞已收窄为「**Codex 轴**发 policy + **两轴**收 preference」，并明写「不得据此等一个永远不来的 Claude policy」。
+
+**C · 终检修复批新增（4 条）**
+
+1. **`session.resumed` 不带 `permissionPolicy`（BLOCKER，已修）**。`emitResumed` 原注释自陈「reporting the constant here would state a posture instead of the verified one」——推理对、结论差一步：调用它时 `assertResumePosture` 已经抛过了，除非线程正是按 `state.policy` 回来的，所以**那一刻 `state.policy` 就是被验证过的姿态**。后果是 `reduceSessionRuntimeFacts` 收到一个两个载体都没有的 payload → `return prev` → **任何经历过一次 app 重启的 Codex 会话，权限行恒显 `Permission policy not reported`**，即 S3 读侧对绝大多数打开方式等于不存在（直接违反 §5.6-5 与 §9.2）。修法：`emitResumed` 增可选 `permissionPolicy` 入参；**冷 resume 走 `assertResumePosture` 之后传 `state.policy`**，**live-connection resume 传 `state.policy`**（该进程的姿态在 create 或冷 resume 时已验证过，`thread/turns/list` 不回声姿态，故是复述不是复验），**失败降级臂不传**（未验证不广播）。**revive 路仍一个事件都不发**：它按 `resolveCodexPolicy(registry.permissionPreference)` 重开、`reopenThread` 的 `assertResumePosture` 会拒掉任何别的姿态，所以 renderer 手里的事实跨 revive 仍为真——已在该函数头注写明。新增断言 C11-R（三处同值 + 负控臂）与变异 ⑮ 两臂。**这正是 §7-R14 预判过的风险**（「resume 不发 Codex policy，权限行再次消失」，major，缓解写的就是「H9 校验成功后补事实事件（§5.6-5）」），施工时缓解措施漏落、且被一条**只喂合成 payload 的 reducer 用例**（`contextPermissionPolicy.test.ts` 的「a session.resumed carries the policy on the same path as session.created」）掩盖成有覆盖的样子——**有断言、无生产者**的同名空壳。该用例已就地加注指回 Host 侧的真生产者断言。
+2. **`networkAccess` 是硬编码信念而非事实（MAJOR，已修）**。原链路：`CODEX_PERMISSION_DEFAULT.networkAccess = false` → `resolveCodexPolicy` 显式从常量取 → `compareSandboxEcho` 发现回声不一致只打 WARN、**从不回写** → `session.created` 照发 → 面板渲染 `Network: off`。而 06-probes P1/P3 实测报文里 workspaceWrite 线程的服务端回答是 `networkAccess: true`；S3 又把 sandbox 档位变成用户可选，`danger-full-access` **根本没有网络边界**，于是最危险的档位上必然把事实说反。修法（三处一致）：① `SessionPermissionPolicy` 的 codex 臂 `networkAccess` **由必填放宽为可选**（"没说" 是第三态，`false` 不是它）；② 常量与 `resolveCodexPolicy` **不再携带该维度**，`compareSandboxEcho` 返回 `SandboxEchoReading{verdict, detail, networkAccess?}`，`startThread` 在 emit **之前**把学到的值并入 `state.policy`（比较臂仍在：只有「已学到的值被第二次回声推翻」才算 mismatch）；③ 面板三态渲染 `on / off / not reported`，reducer 守卫接受**缺席**但仍拒绝**非布尔**。新增断言 C17 与变异 ⑯ 两臂。
+3. **「行存在但从未捕获姿态」的分支无口径（minor，已写死 + 加断言）**。`chat.ts` 的「行内已捕获姿态优先」只保护已捕获过的行；pre-D48 老行与 C15 未 hydrate 行会在下一次 `chat:createSession` 捕获**当时的**模板（含危险档）。评审建议的收紧案（只有 `entry === undefined` 才收候选）**经核实不可行**：`chat:registerSession`（R5 D2）在侧栏出现会话的那一刻就写了行、远早于首发，该规则会对**所有**会话拒绝模板 = 删掉 S3 写侧。故取「写死 + 钉住」：口径入 §5.5-5，`chat.ts` 注释写明为什么不是疏漏，并加 §5.5-5 双臂断言（老行 + 危险档模板 → 捕获；已捕获行 + 反向模板 → 推不动）。
+4. **§5.5-4「快照第二写入点」原是空壳用例（minor，已改写）**。原用例名「the field is re-writable, which is what S4 needs」，断言只有「值还等于 PLAN」+「`Object.isFrozen === false`」，一次二次写入都没发生；而实况是 `recordCreated` first-write-wins、`recordResumed` 只保留，**现有 API 无任何一条能改写该字段**。改写为真断言：拿不同姿态再跑一遍 `recordCreated` + 一次 `recordResumed`，钉「姿态不动、而 `model`/`runtimeIdentity` 确实动了」（证明这是姿态的性质不是整行冻结），再加一条 **S4 前置**断言——该 service 原型上没有任何 `/permission/i` 方法，S4 必须自带写入口。
+
+**D · 判定为不成立、未改（1 条，附证据）**
+
+- **「中文界面权限下拉会中英混排」——不成立**。评审称 `'Plan'` 与 `'Default'` 两个选项标签在 `zhTranslations` 无词条、`t()` 回落英文。实测两条都在：`src/shared/i18n.ts:189` `Default: '默认'`（对象简写键形式），`:1806` `Plan: '规划模式'`（同为简写键，与新增块同批）。`grep -n "^  Plan:\|^  Default:"` 双命中，全表各仅一处、无重复键。故下拉五项在中文界面全中文，无需补词条；评审很可能是按 `'Plan':` 引号形式检索而漏掉简写键。
+
+#### 5.9.5 变异逐对红灯表
+
+> 口径同 §4.10.5：逐对实跑，红灯抄失败用例名 + 计数。**变异施加与还原一律经 python 精确字符串替换（`/tmp/d48s3_mutate.py`：施加 → 跑子集 → 无条件还原原始字节），禁 `git checkout`。**
+
+| 编号 | 变异内容 | 红灯 | 计数 |
+|---|---|---|---|
+| ① | `permissionPolicy` 分支移到 `isSessionPermissionMode` 守卫之后 | `C1 — a Codex session.created writes permissionPolicy, with no permissionMode anywhere in sight` / `C2 — the policy is read BEFORE the permissionMode guard, in behaviour and in source order` / `C4 ×2` / `a session.resumed carries the policy on the same path as session.created` / C6 accepts 组 6 例 | **11 红**（`Tests 11 failed \| 23 passed (34)`） |
+| ② | `permissionRowValue` 优先序反过来（`permissionMode` 赢） | `the Permission policy row (C3/C5) > C4 — the policy wins over the legacy field when both are present` | **1 红**（`1 failed \| 33 passed (34)`） |
+| ③ | prime 通道漏掉 `permissionPolicy` 键 | `capabilities.permissionPolicy — both channels (D48 S3, C7) > the prime channel carries it` | **1 红**（`1 failed \| 32 passed (33)`） |
+| ④ | Preference 守卫不再拒绝伪造的 `networkAccess` | `C8 — refuses a Codex preference that claims to set networkAccess` / `C8 — a forged networkAccess claim is refused, not silently stripped` / `resolveCodexPolicy … degrades to the constant for absent, malformed, cross-agent and forged input` | **3 红**（`3 failed \| 240 passed (243)`） |
+| ⑤ | renderer 读侧不接 Codex policy（`permissionPolicy` 恒 undefined） | C1/C2/C4 四例 + `a session.resumed carries the policy…` + C6 accepts 组 6 例 | **12 红**（`12 failed \| 31 passed (43)`） |
+| ⑥ | 把 Codex 三维压成 Claude `permissionMode` 枚举 | `C5 — a Codex policy renders all three dimensions, never a Claude enum` / `C5 — networkAccess true and the dangerous sandbox are reported verbatim, not softened` / `C5 — an unreported network dimension says so, it does not resolve to off` / `C5 — a Codex session with only the policy still gets a row` | **4 红**（`4 failed \| 30 passed (34)`） |
+| ⑦ | Settings 提交时顺手打一发 `chat.createSession`（乐观写活动会话） | `C8 / C12 — negative controls > C12 — the write side cannot reach a session: no IPC surface is imported at all` | **1 红**（`1 failed \| 18 passed (19)`） |
+| ⑧a | create：模板反超快照（`candidate ?? captured`） | `a re-create after a Settings edit still runs under the captured tier` / `§5.5-5 — and once that row HAS a posture, the same second create cannot move it` + C10 四例 | **6 红**（`6 failed \| 8 passed (14)`） |
+| ⑧b | resume 改吃 renderer 送来的模板 | `C9 — the snapshot outranks the template > resume takes the tier off the row and offers the renderer no way to supply one` | **1 红**（`1 failed \| 13 passed (14)`） |
+| ⑨ | 隔离 config 写常量、`thread/start` 写请求（两载体分叉） | `C11 — thread/start, the isolated config, the created echo and the registry agree` / `C11 resume — session.resumed carries the VERIFIED posture, the same one the isolated home got` / `carries the posture across an idle sweep and back` | **3 红**（`3 failed \| 215 passed (218)`） |
+| ⑩a | 只在注释里写 `agentSettings` | **首轮存活**（C13 轴隔离扫描走 `stripComments`，注释不算代码——**这是对的**）→ 换可执行形态 | 0 红 |
+| ⑩b | `commit` 里真写 `useSettingsStore.setState({ agentSettings: … })` | `chat permission never lands on the terminal axis (axis isolation, static)` / `C12 — the only store this panel writes is app settings` | **2 红**（`2 failed \| 17 passed (19)`） |
+| ⑪ | 删 `resolveDraftPermissionPreference` 的 hydration 闸 | `C15 — an unhydrated first send materialises nothing at all` / `C15 — an unhydrated first send materialises nothing, so nothing is pinned` | **2 红**（`2 failed \| 32 passed (34)`） |
+| ⑫a | 危险档跳过二次确认直接 apply | `a dangerous tier is held, not written` / `the CANCEL arm leaves app settings untouched…` / `the CONFIRM arm writes exactly the held tier…` | **3 红**（`3 failed \| 16 passed (19)`） |
+| ⑫b | 反向：Cancel 按钮也提交（取消后仍落危险档） | `the component routes EVERY selection through the gate — there is no direct write path` | **1 红**（`1 failed \| 18 passed (19)`） |
+| ⑬a | `bypassPermissions` 不发 `allowDangerouslySkipPermissions` | `sends allowDangerouslySkipPermissions with bypassPermissions` | **1 红**（`1 failed \| 20 passed (21)`） |
+| ⑬b | 反向：全部档位都发该键 | `omits the key entirely for every other tier (negative half)` / `the default session (no preference at all) never carries the key` | **2 红**（`2 failed \| 8 passed (10)`） |
+| ⑭ | 回退臂落到危险档（`MOST_RESTRICTIVE_SANDBOX` 改 `danger-full-access`） | `every non-user-chosen arm is enumerated by name, and none of them is dangerous` / `the Codex companion dimension fills in the most restrictive value, not the most convenient` | **2 红**（`2 failed \| 17 passed (19)`） |
+| **⑮a** | **`session.resumed` 重新无条件丢掉 `permissionPolicy`** | `emits resumed then history then idle, with the replayed transcript in full` / `reads with thread/turns/list, spawns nothing, and keeps the link` / `C11 resume — session.resumed carries the VERIFIED posture…` | **3 红**（`3 failed \| 215 passed (218)`） |
+| **⑮b** | **反向：广播一个没验证过的姿态（冷 resume 传 `never`+`danger-full-access`）** | `emits resumed then history then idle, with the replayed transcript in full` / `C11 resume — session.resumed carries the VERIFIED posture…` | **2 红**（`2 failed \| 216 passed (218)`） |
+| **⑯a** | **`networkAccess` 改回常量信念（`state.policy.networkAccess = false`）** | `the reported networkAccess is the echoed one, never a constant (S3 terminal check)` / `omits the dimension entirely when the runtime did not report it` | **2 红**（`2 failed \| 250 passed (252)`） |
+| **⑯b** | **反向：面板把「未上报」渲染成 `off`** | `C5 — an unreported network dimension says so, it does not resolve to off` | **1 红**（`1 failed \| 33 passed (34)`） |
+
+**⑩ 的首轮存活值得单记**：它不是漏网，而是断言正确地区分了「注释里提到」与「代码真写」——`code(file)` 走 `stripComments`，所以只有可执行形态才算变异。换形态后 2 红，且第二条红灯（`C12 — the only store this panel writes is app settings`）证明轴隔离与单写者两道闸互为补充。
+
+#### 5.9.6 改动/新增文件清单（`src/` 工作树 32 项 = 新增 9 + 修改 23；本规格文档 §5.9 落账为第 33 项）
+
+**新增（9）**
+
+- renderer 实现 2：`components/settings/chatPermissionDefaults.ts`（模板层纯模型：选项表 · 危险档判定 · 二次确认动作 · 回退臂枚举 `NON_USER_CHOSEN_TEMPLATE_ARMS`）· `components/settings/ChatAgentDefaultsSection.tsx`（两张卡 + 常驻 warning + AlertDialog 二次确认）
+- 测试 7：`components/settings/__tests__/chatPermissionDefaults.test.ts` · `components/workspace-shell/surfaces/__tests__/contextPermissionPolicy.test.ts` · `components/chat/__tests__/composerPermissionWiring.test.ts` · `shared/types/__tests__/sessionPermissionPreference.test.ts` · `agent-host/__tests__/claudeRuntimePermissionPreference.test.ts` · `main/ipc/__tests__/chatPermissionPreferenceGuard.test.ts` · `main/services/chat/__tests__/sessionPermissionSnapshot.test.ts`
+
+**修改（23）**
+
+- shared（5）：`types/runtimeEvents.ts`（Preference 判别联合 + 三个读取器 + `isDangerousPermissionPreference` + policy 的 `networkAccess` 转可选）· `types/agentHost.ts`（create/resume payload 加可选 `permissionPreference`）· `types/sessionIndex.ts`（行内可选 `permissionPreference`）· `models/chatAgentDefaults.ts`（`permission` 字段 + `agentDefaultPermission` / `withAgentPreference` / `resolveDraftPermissionPreference`）· `i18n.ts`（zh 词条）
+- agent-host（4）：`codexRuntime.ts`（`resolveCodexPolicy` · policy 入 `openConnection` · 回声学 `networkAccess` · `emitResumed` 带已验证姿态）· `claudeRuntime.ts`（三消费点同喂 + `dangerousSkipPermissionsOption`）· `sessionRegistry.ts`（可选 preference 存储位与 create/resume 合并语义）· `index.ts`（dispatch 侧 C10 拒绝 + `capabilities.permissionPolicy`）
+- Main / preload（3）：`main/ipc/chat.ts`（`resolveSessionPermissionPreference` 三规则 + create/resume 两入口）· `main/services/chat/SessionIndexService.ts`（快照字段 first-write-wins）· `preload/index.ts`（两条 payload 加可选键）
+- renderer（5）：`components/workspace-shell/surfaces/contextSurfaceModel.ts`（facts 加字段 · 严格守卫 · N4 顺序 · 三值行 + 网络三态）· `.../ContextSurfaceView.tsx`（选择并传入，恒只读）· `components/chat/hostStatus.ts`（reduce + prime 两通道）· `components/chat/ChatComposer.tsx`（首发解析模板并条件展开）· `components/settings/AISettings.tsx`（挂载新区块）
+- 测试（6）：`agent-host/__tests__/codexRuntime.test.ts` · `agent-host/__tests__/protocolErrors.test.ts` · `main/ipc/__tests__/chatSpawnGate.test.ts` · `main/ipc/__tests__/chatTrust.test.ts` · `renderer/components/chat/__tests__/hostStatus.test.ts` · `shared/__tests__/chatAgentDefaults.test.ts`
+
+**红线文件零触碰**：`src/renderer/stores/chatSessions.ts` 全片一字未动（`git status` 无该项），三轴隔离亦无破口（终端轴 `AgentSettings.tsx` / `AgentPickerMenu` / `SessionBar` 均未出现在清单里，并由 C13 静态扫描反向钉住）。
+
+**终检修复批实际触碰（13）**：`shared/types/runtimeEvents.ts` · `agent-host/codexRuntime.ts` · `agent-host/index.ts`（capability 措辞收窄）· `renderer/components/chat/hostStatus.ts`（同上）· `renderer/.../contextSurfaceModel.ts` · `main/ipc/chat.ts`（§5.5-5 分支注释）· `agent-host/__tests__/codexRuntime.test.ts` · `renderer/.../__tests__/contextPermissionPolicy.test.ts` · `main/ipc/__tests__/chatPermissionPreferenceGuard.test.ts` · `main/services/chat/__tests__/sessionPermissionSnapshot.test.ts` · `renderer/components/chat/__tests__/composerPermissionWiring.test.ts` · `shared/types/__tests__/sessionPermissionPreference.test.ts` · `agent-host/__tests__/claudeRuntimePermissionPreference.test.ts`（后两项为中英混排的两处引用改纯英文，CLAUDE.md 注释语言条）
 
 ---
 
@@ -1035,6 +1155,8 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 | L10 | SDK `PermissionMode` 的 `'auto'` 第 6 值 | **明确不做**：06-probes P2 抄录 SDK 0.3.218 的取值注释为五值，当前版本没有该值（§5.4 已改判）。等 SDK 真出现该值且有行为实证再议 |
 | L11 | 「改档 + 发消息」合并进一次 `turn/start` 的往返优化 | P1/P3 都支持（`turn/start` 覆盖字段 sticky），但首版形状是 `thread/settings/update` 零回合下发（§6.2-1）。等真实性能诉求再做；做时须保证两条路径的回写收敛口径一致（同认 `thread/settings/updated`） |
 | L12 | Codex 轴「线程当前模型」的 **registry 回声投影到 renderer**（P1 指示 1 完整版） | S2 as-built §4.10.4-C-1 记为简版落地：只做**文案分轴**（`modelScopeHint`，两轴不共用一句 + 静态断言）。完整版 = 把 `thread/settings/updated` 确认后的 registry 值投影回 renderer，让触发器显示「线程当前模型」而非本地选择。**S4 已要订阅同一条通知（§6.2-6），届时一并落**，不另造第二条回声路径 |
+| L13 | **隔离 codex home 是 Host 进程唯一一个目录**（`codexRuntime.openConnection` 每次开连接整文件重写 `config.toml`） | S3 as-built 新登记。顺序开连接恒正确（每次 spawn 读的就是本次刚写的文件），但**两个不同姿态的会话并发开连接**会把写入与对方的 spawn 交错 → 失效形态是「A 会话按 B 的姿态启动」（安全姿态串档，不是性能问题）。今天不可达：create/resume 都由 renderer 的发送路径串行化。正解 = **per-session home**（`codexHome.ts` 的 `homeDir` 改按 sessionId 派生），成本是每会话一份投影目录 + 清理时机；S4 若引入并发改档路径须先落这条 |
+| L14 | **`capabilities.permissionPolicy` 目前零消费**（`hostStatus.ts` 写入，面板实际按字段有无降级） | S3 as-built 新登记。本片只把措辞收窄到「Codex 轴发 policy + 两轴收 preference」（`index.ts` / `hostStatus.ts` 注释，C7 仍钉两通道）。要让它落到实处 = Context 面板读该 bit，缺失即按 `permissionMode`-only 渲染；今天面板已能按字段有无降级，所以这是**冗余闸门而非缺口**，等出现「Host 比 renderer 新/旧」的真实事故再接 |
 
 ---
 

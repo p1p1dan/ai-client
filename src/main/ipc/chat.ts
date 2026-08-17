@@ -7,8 +7,18 @@ import { join, resolve } from 'node:path';
 import { isModelAllowedForAgent } from '@shared/models/familyWhitelist';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
-import { type AgentWireName, resolveAgentWireName } from '@shared/types/agentWire';
-import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
+import {
+  type AgentWireName,
+  CLAUDE_CODE_AGENT,
+  CODEX_AGENT,
+  resolveAgentWireName,
+} from '@shared/types/agentWire';
+import type {
+  PermissionDecisionId,
+  RuntimeEvent,
+  SessionPermissionPreference,
+} from '@shared/types/runtimeEvents';
+import { readSessionPermissionPreference } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { app, BrowserWindow, ipcMain } from 'electron';
@@ -66,6 +76,82 @@ function assertModelMatchesAgent(agent: AgentWireName | null, model: unknown): v
       `${agent} — pick a model from this agent's catalog`
   );
 }
+
+/**
+ * D48 S3 §5.5 — Main is the session snapshot's keeper, so it is also the one
+ * place that decides which posture a create/resume actually carries.
+ *
+ * Three rules, in this order:
+ *
+ *  1. A row that already holds a posture WINS over anything the renderer sends.
+ *     `chat:createSession` runs again every time the Host registry entry was
+ *     dropped (restart, crash, unbind), and by then the global template may say
+ *     something else — re-capturing it would let a Settings edit retune an
+ *     existing chat through the back door, which is precisely what §5.5-2 says
+ *     resume must never do. Resume passes no candidate at all for the same
+ *     reason: it REPLAYS, it does not re-derive.
+ *  2. Otherwise the renderer's template is taken, but only after being
+ *     validated: it arrives as raw IPC JSON, and the value decides what a
+ *     session may do unattended.
+ *
+ *     "Otherwise" covers a case worth naming, because the §5.4 copy ("existing
+ *     sessions keep the posture captured when they were first sent") does not
+ *     describe it: a row that EXISTS but never captured a posture. There are
+ *     two ways to get one — a chat that predates D48, and a first send that
+ *     happened before the settings store had hydrated (C15) — and both of them
+ *     take today's template on the next `chat:createSession`. That is
+ *     deliberate rather than overlooked, and the alternative was measured: the
+ *     only in-band signal that would separate "old row" from "brand-new row" is
+ *     the row's own existence, and `chat:registerSession` (R5 D2) writes a row
+ *     for every chat the moment it appears in the sidebar — long before its
+ *     first send. Refusing the candidate whenever a row exists would therefore
+ *     refuse it for EVERY session, i.e. delete the S3 write side. The residual
+ *     exposure is bounded to postureless rows and is pinned by the timing
+ *     assertion in `chatPermissionPreferenceGuard.test.ts` (§5.5-5): once a row
+ *     has a posture, no template can move it.
+ *  3. A posture addressed to a DIFFERENT agent than the session is refused
+ *     outright, before `recordCreated` — a row claiming a posture the session
+ *     could never have run is the same class of lie B18 refuses for `model`.
+ *     The Host refuses it a second time at dispatch (§5.7-C10); this one is
+ *     what keeps the refusal ahead of the persisted row.
+ *
+ * Thrown as `code: message`, same as `assertModelMatchesAgent` — only
+ * `.message` survives `ipcRenderer.invoke`.
+ */
+async function resolveSessionPermissionPreference(input: {
+  sessionId: string;
+  agent: AgentWireName | null;
+  candidate?: unknown;
+}): Promise<SessionPermissionPreference | undefined> {
+  const entry = await sessionIndexService.get(input.sessionId);
+  const captured = entry?.permissionPreference;
+  if (captured) {
+    // Re-validated even though we wrote it: this came back off disk.
+    const parsed = readSessionPermissionPreference(captured, PREFERENCE_AGENTS);
+    if (parsed && (input.agent === null || parsed.agent === input.agent)) return parsed;
+    // A snapshot that no longer matches its own row (hand-edited file, a build
+    // that changed a binding) degrades to the runtime constant rather than to
+    // the current template — "we do not know" must not become "use today's".
+    return undefined;
+  }
+  if (input.candidate === undefined || input.candidate === null) return undefined;
+  const parsed = readSessionPermissionPreference(input.candidate, PREFERENCE_AGENTS);
+  if (!parsed) {
+    throw new Error(
+      'invalid_permission_preference: the requested permission posture is not a shape this build ' +
+        'accepts (networkAccess is reported by the runtime and is never a request field)'
+    );
+  }
+  if (input.agent !== null && parsed.agent !== input.agent) {
+    throw new Error(
+      `permission_agent_mismatch: a ${parsed.agent} permission posture cannot be applied to a ` +
+        `${input.agent} session — a session's posture and its agent are one decision`
+    );
+  }
+  return parsed;
+}
+
+const PREFERENCE_AGENTS = { claudeCode: CLAUDE_CODE_AGENT, codex: CODEX_AGENT } as const;
 
 /**
  * Which runtime a `chat:send` is going to reach.
@@ -131,6 +217,14 @@ export function registerChatHandlers(): void {
          * the requested value here is safe even if the Host cannot honour it.
          */
         agent?: AgentWireName;
+        /**
+         * D48 S3 §5.5 — the "Chat agent defaults" template the renderer read at
+         * the moment of this send. A CANDIDATE, not the decision: a session that
+         * already captured a posture keeps it (see
+         * `resolveSessionPermissionPreference`). Absent = the runtime constant,
+         * which is every pre-D48 caller and every unhydrated first send (C15).
+         */
+        permissionPreference?: SessionPermissionPreference;
       }
     ): Promise<{ requestId: string }> => {
       // D47 S5 §3 — agent-session-only spawn gate. `attach`/resume-of-an-
@@ -138,12 +232,22 @@ export function registerChatHandlers(): void {
       // (SessionManager.create's own kind==='agent' check is the sibling
       // enforcement point for the PTY-agent path).
       assertAgentSpawnAllowed();
+      const requestedAgent = resolveAgentWireName(payload.agent);
       // B18 — before `recordCreated`, so a refused create leaves no index row
       // claiming a model the session could never have run.
-      assertModelMatchesAgent(resolveAgentWireName(payload.agent), payload.model);
+      assertModelMatchesAgent(requestedAgent, payload.model);
+      // Same "before the row exists" rule, for the posture (C10).
+      const permissionPreference = await resolveSessionPermissionPreference({
+        sessionId: payload.sessionId,
+        agent: requestedAgent,
+        candidate: payload.permissionPreference,
+      });
       await ensureWorkspaceTrustedForChat(payload.workspacePath);
-      await sessionIndexService.recordCreated(payload);
-      const requestId = await agentHostManager.createSession(payload);
+      // One resolved value into BOTH the snapshot and the wire: the row and the
+      // running session cannot disagree about what was asked for.
+      const resolved = { ...payload, permissionPreference };
+      await sessionIndexService.recordCreated(resolved);
+      const requestId = await agentHostManager.createSession(resolved);
       return { requestId };
     }
   );
@@ -210,9 +314,20 @@ export function registerChatHandlers(): void {
       // B18 — the resume payload names the binding explicitly (it pairs with
       // `runtimeIdentity`), so the guard reads it rather than the index row.
       assertModelMatchesAgent(resolveAgentWireName(payload.agent), payload.model);
+      // D48 S3 §5.5-2 / C9 — the posture comes off the SESSION SNAPSHOT and
+      // from nowhere else. No candidate is passed, so there is no code path by
+      // which a resume could pick up a template edited after this chat started:
+      // the renderer is not even given the chance to send one.
+      const permissionPreference = await resolveSessionPermissionPreference({
+        sessionId: payload.sessionId,
+        agent: resolveAgentWireName(payload.agent),
+      });
       await ensureWorkspaceTrustedForChat(payload.workspacePath);
       await sessionIndexService.recordResumed(payload);
-      const requestId = await agentHostManager.resumeSession(payload);
+      const requestId = await agentHostManager.resumeSession({
+        ...payload,
+        permissionPreference,
+      });
       return { requestId };
     }
   );

@@ -9,8 +9,17 @@ import { createInterface } from 'node:readline';
 import type { AgentHostDriver, SessionAttachment } from '../shared/types/agentHost.ts';
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import type { AgentWireName } from '../shared/types/agentWire.ts';
-import { CODEX_AGENT, resolveAgentWireName, sessionAgent } from '../shared/types/agentWire.ts';
-import type { PermissionDecisionId } from '../shared/types/runtimeEvents.ts';
+import {
+  CLAUDE_CODE_AGENT,
+  CODEX_AGENT,
+  resolveAgentWireName,
+  sessionAgent,
+} from '../shared/types/agentWire.ts';
+import type {
+  PermissionDecisionId,
+  SessionPermissionPreference,
+} from '../shared/types/runtimeEvents.ts';
+import { readSessionPermissionPreference } from '../shared/types/runtimeEvents.ts';
 import type { HostAgentRegistry } from './agentSupport.ts';
 import {
   describeHostAgentReason,
@@ -96,6 +105,68 @@ function rejectUnsupportedAgent(cmd: {
     },
   });
   return true;
+}
+
+/**
+ * D48 S3 §5.5 / C10 — validate `payload.permissionPreference` against the agent
+ * the command is for, BEFORE any runtime is built.
+ *
+ * Three outcomes, and the middle one is the point:
+ *  - absent  → `{ ok: true, preference: undefined }`, i.e. the runtime constant
+ *    applies. Every pre-D48 sender lands here (C14).
+ *  - present and coherent → passed to the runtime verbatim.
+ *  - present and either malformed or addressed to the OTHER agent → REFUSED.
+ *    Not dropped: a caller that asked for `plan` and was silently given
+ *    `default` believes it constrained a session that is not constrained, and a
+ *    Codex posture arriving on a Claude create means the two ends disagree
+ *    about what this session even is. Refusing costs one round trip and leaves
+ *    nothing behind (nothing has been created yet).
+ *
+ * `agent` here is the RESOLVED wire name (absent = Claude Code), so a legacy
+ * create that omits `agent` but carries a Claude preference is accepted, while
+ * the same create carrying a Codex preference is refused.
+ */
+function readPermissionPreference(
+  cmd: HostCommand,
+  agent: AgentWireName
+): { ok: true; preference?: SessionPermissionPreference } | { ok: false } {
+  const raw = cmd.payload?.permissionPreference;
+  if (raw === undefined || raw === null) return { ok: true };
+  // Both names travel in, because this boundary does not yet know which arm it
+  // is looking at — see `readSessionPermissionPreference`'s header for why the
+  // shared module cannot hold them itself.
+  const parsed = readSessionPermissionPreference(raw, {
+    claudeCode: CLAUDE_CODE_AGENT,
+    codex: CODEX_AGENT,
+  });
+  if (!parsed) {
+    emitInvalidPreference(
+      cmd,
+      `${cmd.type ?? 'command'}: permissionPreference is not a valid permission preference ` +
+        '(networkAccess is a runtime-reported fact and is never accepted as a request field)'
+    );
+    return { ok: false };
+  }
+  if (parsed.agent !== agent) {
+    emitInvalidPreference(
+      cmd,
+      `${cmd.type ?? 'command'}: permissionPreference is for ${parsed.agent} but this session is ` +
+        `bound to ${agent} — a session's posture and its agent must be the same decision`
+    );
+    return { ok: false };
+  }
+  return { ok: true, preference: parsed };
+}
+
+function emitInvalidPreference(cmd: HostCommand, message: string): void {
+  emit({
+    type: 'host.error',
+    ...(typeof cmd.payload?.sessionId === 'string' && cmd.payload.sessionId
+      ? { sessionId: cmd.payload.sessionId }
+      : {}),
+    requestId: cmd.requestId,
+    payload: { code: 'invalid_payload', message, fatal: false },
+  });
 }
 
 const registry = new SessionRegistry();
@@ -370,6 +441,23 @@ async function handleCommand(raw: unknown): Promise<void> {
             // enforces against (S3 slice 6 A5), so "advertised" and
             // "accepted" cannot drift.
             agents: [...outcome.registry.agents],
+            // D48 S3 §5.3 (N1). Exactly two promises, and NOT a third:
+            //
+            //  1. the Codex axis reports `SessionPermissionPolicy` on
+            //     `session.created` / `session.resumed`;
+            //  2. both axes ACCEPT a `permissionPreference` on create/resume.
+            //
+            // It does NOT promise a policy on the Claude axis — that axis is
+            // byte-unchanged by S3 and still reports the legacy
+            // `permissionMode` alone (§5.2 "Claude 逐字不改"). Anyone waiting
+            // on this bit for a Claude `permissionPolicy` would wait forever,
+            // which is why the wording is narrow here rather than "per-agent".
+            //
+            // The type has carried this key since S2 while no Host ever set it,
+            // so every renderer shipped so far already treats absent as "old
+            // Host, keep the permissionMode-only behaviour" — the degradation
+            // this key buys back for builds that predate the write side.
+            permissionPolicy: true,
           },
         },
       });
@@ -409,6 +497,11 @@ async function handleCommand(raw: unknown): Promise<void> {
         typeof cmd.payload?.agent === 'string' ? cmd.payload.agent : undefined
       );
       if (!requestedAgent) return;
+      // Before `runtimeForAgent`: a refused preference must not have spawned a
+      // runtime, and a Codex posture on a Claude create must not reach the
+      // runtime that would have to guess what to do with it (C10).
+      const preference = readPermissionPreference(cmd, requestedAgent);
+      if (!preference.ok) return;
       const rt = await runtimeForAgent(requestedAgent, cmd);
       if (!rt) return;
       const sessionId = String(cmd.payload?.sessionId ?? '');
@@ -432,6 +525,9 @@ async function handleCommand(raw: unknown): Promise<void> {
           model: typeof cmd.payload?.model === 'string' ? cmd.payload.model : undefined,
           // Validated in claudeRuntime (normalizeEffort) — unknown values drop.
           effort: cmd.payload?.effort,
+          // Already validated against this session's agent above; the runtime
+          // re-guards its own half of the union anyway.
+          permissionPreference: preference.preference,
           requestId: cmd.requestId,
         });
       } catch (err) {
@@ -457,6 +553,9 @@ async function handleCommand(raw: unknown): Promise<void> {
         typeof cmd.payload?.agent === 'string' ? cmd.payload.agent : undefined
       );
       if (!requestedAgent) return;
+      // Same guard, same position, same reason as on create (C10).
+      const preference = readPermissionPreference(cmd, requestedAgent);
+      if (!preference.ok) return;
       const rt = await runtimeForAgent(requestedAgent, cmd);
       if (!rt) return;
       const sessionId = String(cmd.payload?.sessionId ?? '');
@@ -481,6 +580,9 @@ async function handleCommand(raw: unknown): Promise<void> {
         model: typeof cmd.payload?.model === 'string' ? cmd.payload.model : undefined,
         // Validated in claudeRuntime (normalizeEffort) — unknown values drop.
         effort: cmd.payload?.effort,
+        // §5.5-2: this is the SESSION SNAPSHOT's posture, not the current
+        // template — the Host takes what it is given and never re-derives it.
+        permissionPreference: preference.preference,
         requestId: cmd.requestId,
       });
       return;

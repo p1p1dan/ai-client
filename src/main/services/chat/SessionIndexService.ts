@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { RuntimeEvent } from '@shared/types/runtimeEvents';
+import type { RuntimeEvent, SessionPermissionPreference } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { app } from 'electron';
 
@@ -70,6 +70,11 @@ export class SessionIndexService {
     model?: string;
     /** Loose `string` on purpose — this is the disk side (SessionIndexEntry). */
     agent?: string;
+    /**
+     * D48 S3 §5.5-2 — the posture this session starts under. Merged
+     * FIRST-WRITE-WINS below, not last-write-wins like `model`.
+     */
+    permissionPreference?: SessionPermissionPreference;
   }): Promise<void> {
     await this.ensureLoaded();
     const existing = this.entries.get(input.sessionId);
@@ -80,6 +85,16 @@ export class SessionIndexService {
       workspacePath: input.workspacePath,
       title: existing?.title ?? '',
       model: input.model ?? existing?.model,
+      // "The posture captured when they were FIRST sent" (§5.4 copy), so the
+      // persisted value wins over the incoming one — the opposite direction
+      // from `model` right above, and deliberately so. `chat:createSession`
+      // runs again whenever the Host registry entry was dropped (a restart, a
+      // crash, an unbind), and by then the global template may say something
+      // else; re-capturing it there would let a Settings edit silently retune
+      // an existing chat through the back door. S4's mid-session change is the
+      // one thing allowed to overwrite this, and it comes in through its own
+      // entry point rather than through here.
+      permissionPreference: existing?.permissionPreference ?? input.permissionPreference,
       updatedAt: now(),
       archived: existing?.archived ?? false,
     });
@@ -103,6 +118,12 @@ export class SessionIndexService {
       workspacePath: input.workspacePath,
       title: existing?.title ?? '',
       model: input.model ?? existing?.model,
+      // Resume never re-captures: it replays what the row already holds. The
+      // field is listed only because this method rebuilds the entry field by
+      // field (see the class note above) and omitting it would DELETE the
+      // snapshot on the first resume — the exact shape of the `agent` bug the
+      // `?? existing` chain next to it exists to prevent.
+      permissionPreference: existing?.permissionPreference,
       updatedAt: now(),
       archived: existing?.archived ?? false,
     });

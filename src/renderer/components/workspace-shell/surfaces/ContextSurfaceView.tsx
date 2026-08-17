@@ -113,6 +113,15 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
   const permissionMode = useSessionRuntimeFactsStore((state) =>
     activeSessionId ? (state.factsBySession[activeSessionId]?.permissionMode ?? null) : undefined
   );
+  // D48 S3 §5.2 — the per-agent posture, selected exactly like the legacy field
+  // next to it. This surface stays READ-ONLY: it mirrors what the Host echoed,
+  // and the two write layers (the Settings template, S4's live control) never
+  // render into it — a row that is both a request and a report cannot be
+  // trusted as either. The stored object is returned as-is (the reducer
+  // replaces it per event), so the selector is stable across unrelated commits.
+  const permissionPolicy = useSessionRuntimeFactsStore((state) =>
+    activeSessionId ? (state.factsBySession[activeSessionId]?.permissionPolicy ?? null) : undefined
+  );
   // T-35: the stored facts object is returned as-is (reducer replaces it per
   // event) — stable across unrelated commits, per storeSelectorStability.
   const stderrFacts = useSessionRuntimeFactsStore((state) =>
@@ -187,6 +196,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
         actualModel,
         effortSelection,
         permissionMode,
+        permissionPolicy,
         host: {
           state: hostStatus.state,
           pid: hostStatus.pid,
@@ -222,6 +232,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
     actualModel,
     effortSelection,
     permissionMode,
+    permissionPolicy,
     hostStatus,
     stderrFacts,
   ]);

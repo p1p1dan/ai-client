@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '../../shared/types/agentWire.ts';
-import type { PermissionDecisionId } from '../../shared/types/runtimeEvents.ts';
+import {
+  DANGEROUS_CODEX_SANDBOX_MODE,
+  type PermissionDecisionId,
+  type SessionPermissionPreference,
+} from '../../shared/types/runtimeEvents.ts';
 import type { SessionIndexEntry } from '../../shared/types/sessionIndex.ts';
 import { CODEX_MANAGED_API_KEY_ENV, CODEX_MANAGED_ENV } from '../agentSupport.ts';
 import {
@@ -31,6 +35,7 @@ import {
   compareSandboxEcho,
   isCodexIdleSweepable,
   resolveCodexIdleTimeoutMs,
+  resolveCodexPolicy,
 } from '../codexRuntime.ts';
 import { CODEX_METHOD, JSONRPC_METHOD_NOT_FOUND } from '../codexWire.ts';
 import { SessionRegistry } from '../sessionRegistry.ts';
@@ -1505,6 +1510,10 @@ describe('codexRuntime — resume replays a cold thread (G6)', () => {
     expect(payload(h.event('session.resumed'))).toEqual({
       agent: CODEX_AGENT,
       runtimeIdentity: RECORDED_THREAD,
+      // S3 terminal check: the VERIFIED posture rides along. Two dimensions
+      // and not three — `thread/resume` never echoes `networkAccess` [实测],
+      // so the Host reports what it confirmed and nothing else.
+      permissionPolicy: CODEX_PERMISSION_DEFAULT,
     });
     // FULL equality: an absent field is not neutral here — `agent` absent means
     // "an old Host, therefore Claude Code" to the reducer, and an `error` that
@@ -2034,6 +2043,7 @@ describe('codexRuntime — a live session is read over its own link (guard ③)'
 
   it('reads with thread/turns/list, spawns nothing, and keeps the link', async () => {
     const h = await startedSession();
+    const createdPolicy = payload(h.event('session.created')).permissionPolicy;
     h.events.length = 0;
 
     h.runtime.resumeSession(STALE_ROW);
@@ -2057,6 +2067,12 @@ describe('codexRuntime — a live session is read over its own link (guard ③)'
     // connection can actually address, and persisting the stale one would send
     // the next `turn/start` to a thread this process does not own.
     expect(payload(h.event('session.resumed')).runtimeIdentity).toBe(THREAD_START_RESULT.threadId);
+    // …and the posture the live process is ALREADY running under is restated,
+    // so a re-resume of an open chat does not blank the Context row. This arm
+    // re-states rather than re-verifies (`thread/turns/list` echoes no posture),
+    // which is safe because nothing on this path can change the posture: it is
+    // the same value `session.created` reported for this same process.
+    expect(payload(h.event('session.resumed')).permissionPolicy).toEqual(createdPolicy);
     expect(payload(h.event('session.history'))).toEqual({
       runtimeIdentity: THREAD_START_RESULT.threadId,
       workspacePath: '/work/repo',
@@ -2682,7 +2698,6 @@ describe('compareSandboxEcho', () => {
         agent: 'codex',
         approvalPolicy: 'untrusted',
         sandboxMode: 'read-only',
-        networkAccess: false,
       },
       recorded
     );
@@ -2701,16 +2716,45 @@ describe('compareSandboxEcho', () => {
     expect(result.detail).toContain('sandbox');
   });
 
-  it('names networkAccess as a server default, not a dropped request field', () => {
-    // Anyone reading the WARN would otherwise hunt for a bug on the request
-    // side, where the field does not exist at all.
+  it('LEARNS networkAccess rather than comparing it — the resolved posture has no belief to compare', () => {
+    // S3 terminal check. `sent` carries no `networkAccess` at all (the request
+    // side has no such field), so an echo that names it is new knowledge, not a
+    // disagreement. Reporting a mismatch here is what used to produce a
+    // confident `Network: off` on a session the server had put on the network.
     const result = compareSandboxEcho(sent, {
       approvalPolicy: 'on-request',
       sandbox: { type: 'workspace-write', networkAccess: true },
     });
 
+    expect(sent.networkAccess).toBeUndefined();
+    expect(result.verdict).toBe('match');
+    expect(result.networkAccess).toBe(true);
+    expect(result.detail).toContain('learned: networkAccess=true');
+  });
+
+  it('reports the dimension as unknown when the result never carried it', () => {
+    // Every `thread/resume` result is this shape [实测]. `undefined` is the
+    // third state the surface renders as "not reported"; `false` here would be
+    // the Host inventing the safer-sounding answer.
+    const result = compareSandboxEcho(sent, {
+      approvalPolicy: 'on-request',
+      sandbox: 'workspace-write',
+    });
+
+    expect(result.networkAccess).toBeUndefined();
+    expect(result.detail).toContain('not echoed: networkAccess');
+  });
+
+  it('still reports a mismatch when a SECOND echo contradicts one already adopted', () => {
+    // The only way the comparison arm is reachable now: a posture that has
+    // already learned the dimension meets an echo that says the opposite.
+    const result = compareSandboxEcho(
+      { ...sent, networkAccess: false },
+      { approvalPolicy: 'on-request', sandbox: { type: 'workspace-write', networkAccess: true } }
+    );
+
     expect(result.verdict).toBe('mismatch');
-    expect(result.detail).toContain('never sent by us');
+    expect(result.detail).toContain('networkAccess recorded=false echo=true');
   });
 
   it('returns unverifiable — never match — when nothing comparable came back', () => {
@@ -4692,3 +4736,274 @@ async function sweptOverriddenSession(): Promise<Harness> {
   h.events.length = 0;
   return h;
 }
+
+/**
+ * D48 S3 §5.5 — the requested posture reaches all four carriers of H9.
+ *
+ * The gate item at the top of this file pinned that the CONSTANT reached
+ * `thread/start` and `session.created` as one value. S3 makes the posture a
+ * per-session request, which multiplies the places it can be dropped: the
+ * isolated `config.toml` (from which a resumed thread re-derives everything),
+ * `state.policy`, the wire params, the created echo, and — because the idle
+ * sweeper throws the state away — the registry row a revive reads it back from.
+ * A drop in any one of them is silent: the session simply runs under the
+ * default while the surface reports what was asked for.
+ */
+describe('codexRuntime — a requested posture reaches every carrier (C11)', () => {
+  const UNTRUSTED_READ_ONLY = {
+    agent: CODEX_AGENT,
+    approvalPolicy: 'untrusted',
+    sandboxMode: 'read-only',
+  } as SessionPermissionPreference;
+
+  /** A thread/start answer that echoes back the requested posture. */
+  const startResultFor = (preference: SessionPermissionPreference): Record<string, unknown> => ({
+    threadId: FIXTURE_THREAD,
+    approvalPolicy: (preference as { approvalPolicy: string }).approvalPolicy,
+    sandbox: { type: 'readOnly', networkAccess: false },
+  });
+
+  async function startedWithPreference(
+    preference: SessionPermissionPreference,
+    options: HarnessOptions = {}
+  ): Promise<Harness> {
+    const h = makeHarness({ threadStartResult: startResultFor(preference), ...options });
+    h.runtime.createSession({
+      sessionId: 's1',
+      workspacePath: '/work/repo',
+      requestId: 'req-create',
+      permissionPreference: preference,
+    });
+    await h.waitForEvent('session.created');
+    return h;
+  }
+
+  it('C11 — thread/start, the isolated config, the created echo and the registry agree', async () => {
+    const h = await startedWithPreference(UNTRUSTED_READ_ONLY);
+    const start = h.requestFor('thread/start');
+    const created = payload(h.event('session.created'));
+    const advertised = created.permissionPolicy as { approvalPolicy: string; sandboxMode: string };
+    const home = h.ensureHomeInputs[0].permission;
+    const stored = h.registry.get('s1')?.permissionPreference as { approvalPolicy: string };
+
+    // Four captures compared to each other, never to a literal (the paradigm the
+    // gate item at the top of this file establishes).
+    expect(start.params?.approvalPolicy).toBe(advertised.approvalPolicy);
+    expect(start.params?.sandbox).toBe(advertised.sandboxMode);
+    expect(home.approvalPolicy).toBe(advertised.approvalPolicy);
+    expect(home.sandboxMode).toBe(advertised.sandboxMode);
+    expect(stored.approvalPolicy).toBe(advertised.approvalPolicy);
+    // …and it really is the REQUESTED posture, not the constant that used to be
+    // the only possible answer.
+    expect(advertised.approvalPolicy).toBe('untrusted');
+    expect(advertised.approvalPolicy).not.toBe(CODEX_PERMISSION_DEFAULT.approvalPolicy);
+    expect(advertised.sandboxMode).not.toBe(CODEX_PERMISSION_DEFAULT.sandboxMode);
+  });
+
+  it('C8 — an override still never puts networkAccess on the request', async () => {
+    const h = await startedWithPreference(UNTRUSTED_READ_ONLY);
+    const start = h.requestFor('thread/start');
+
+    // The request side has no such field at any posture: `sandbox` is a STRING
+    // and the dimension is the server's answer, not our question.
+    expect(JSON.stringify(start.params)).not.toContain('networkAccess');
+    expect(typeof start.params?.sandbox).toBe('string');
+    // The dimension travels on the FACT (session.created) and it is the SERVER'S
+    // answer — this harness echoes `false`, the constant has no opinion at all.
+    const created = payload(h.event('session.created'));
+    expect(CODEX_PERMISSION_DEFAULT.networkAccess).toBeUndefined();
+    expect((created.permissionPolicy as { networkAccess?: boolean }).networkAccess).toBe(false);
+  });
+
+  it('the reported networkAccess is the echoed one, never a constant (S3 terminal check)', async () => {
+    // The failure this pins: `danger-full-access` has no sandbox and therefore
+    // no network limit, so a Host that reported its own belief would tell the
+    // user `Network: off` about the single most dangerous posture it can run.
+    const h = await startedWithPreference(
+      {
+        agent: CODEX_AGENT,
+        approvalPolicy: 'never',
+        sandboxMode: 'danger-full-access',
+      } as SessionPermissionPreference,
+      {
+        threadStartResult: {
+          threadId: FIXTURE_THREAD,
+          approvalPolicy: 'never',
+          sandbox: { type: 'dangerFullAccess', networkAccess: true },
+        },
+      }
+    );
+    const created = payload(h.event('session.created'));
+
+    expect((created.permissionPolicy as { networkAccess?: boolean }).networkAccess).toBe(true);
+    // …and still never a request field, at the tier most likely to tempt one.
+    expect(JSON.stringify(h.requestFor('thread/start').params)).not.toContain('networkAccess');
+  });
+
+  it('omits the dimension entirely when the runtime did not report it', async () => {
+    const h = await startedWithPreference(UNTRUSTED_READ_ONLY, {
+      // A bare tier string, which is one of the two shapes observed [实测].
+      threadStartResult: {
+        threadId: FIXTURE_THREAD,
+        approvalPolicy: 'untrusted',
+        sandbox: 'read-only',
+      },
+    });
+    const created = payload(h.event('session.created'));
+
+    // Absent, not `false`: "the runtime has not said" is a third state, and
+    // collapsing it into `off` is the guess this whole pair of types refuses.
+    expect(created.permissionPolicy).not.toHaveProperty('networkAccess');
+  });
+
+  it('C14 — a create with no preference is byte-for-byte the pre-D48 behaviour', async () => {
+    const h = await startedSession();
+    const created = payload(h.event('session.created'));
+
+    // The two dimensions we ask for are the constant's; the third one is the
+    // harness echo's, which is the only place it can come from.
+    expect(created.permissionPolicy).toEqual({ ...CODEX_PERMISSION_DEFAULT, networkAccess: false });
+    expect(h.ensureHomeInputs[0].permission).toBe(CODEX_PERMISSION_DEFAULT);
+    expect(h.registry.get('s1')?.permissionPreference).toBeUndefined();
+  });
+
+  it('C11 resume — session.resumed carries the VERIFIED posture, the same one the isolated home got', async () => {
+    // The regression this pins is the one that made the whole S3 read side
+    // vanish for any chat that had survived an app restart: `session.resumed`
+    // used to carry no `permissionPolicy` at all, so the reducer took a payload
+    // with neither carrier, returned `prev`, and the Context panel said
+    // "Permission policy not reported" forever (§5.6-5). A cold resume is how
+    // almost every Codex chat is opened.
+    const h = makeHarness({
+      threadResumeResult: {
+        thread: { id: FIXTURE_THREAD, turns: [] },
+        approvalPolicy: 'untrusted',
+        sandbox: { type: 'readOnly' },
+      },
+    });
+    h.runtime.resumeSession({
+      sessionId: 's1',
+      workspacePath: '/work/repo',
+      runtimeIdentity: FIXTURE_THREAD,
+      requestId: 'req-resume',
+      permissionPreference: UNTRUSTED_READ_ONLY,
+    });
+    await h.waitForEvent('session.status');
+
+    const resumed = payload(h.event('session.resumed'));
+    const advertised = resumed.permissionPolicy as { approvalPolicy: string; sandboxMode: string };
+    const home = h.ensureHomeInputs[0].permission;
+
+    // Captures compared to each other: the file the thread re-derives its
+    // posture from, the posture `assertResumePosture` verified against, and the
+    // one the surface is told about are one value.
+    expect(advertised.approvalPolicy).toBe(home.approvalPolicy);
+    expect(advertised.sandboxMode).toBe(home.sandboxMode);
+    expect(advertised.approvalPolicy).toBe('untrusted');
+    expect(advertised.approvalPolicy).not.toBe(CODEX_PERMISSION_DEFAULT.approvalPolicy);
+    // Two dimensions, not three: a resume echo never carries the network one.
+    expect(resumed.permissionPolicy).not.toHaveProperty('networkAccess');
+  });
+
+  it('C11 resume — a resume that could NOT verify its posture reports none at all', async () => {
+    // The other half of the same rule. `assertResumePosture` throws, the
+    // contract degrades, and the payload must stay silent about the posture
+    // rather than restate what it was going to run under — an unverified claim
+    // on this row is worse than a missing one.
+    const h = makeHarness({ threadResumeResult: { thread: { id: FIXTURE_THREAD, turns: [] } } });
+    h.runtime.resumeSession({
+      sessionId: 's1',
+      workspacePath: '/work/repo',
+      runtimeIdentity: FIXTURE_THREAD,
+      requestId: 'req-resume',
+      permissionPreference: UNTRUSTED_READ_ONLY,
+    });
+    await h.waitForEvent('session.status');
+
+    expect(payload(h.event('session.resumed'))).not.toHaveProperty('permissionPolicy');
+    expect((payload(h.event('session.history')).error as { code?: string } | undefined)?.code).toBe(
+      'read_failed'
+    );
+  });
+
+  it('carries the posture across an idle sweep and back (the registry is why it is stored there)', async () => {
+    const h = await startedWithPreference(UNTRUSTED_READ_ONLY, {
+      // The revive verifies the echo against `state.policy` (H9 layer 2), so a
+      // revive that came back under the CONSTANT would fail this check instead
+      // of quietly running the wrong posture.
+      threadResumeResult: {
+        thread: { id: FIXTURE_THREAD, turns: [] },
+        approvalPolicy: 'untrusted',
+        sandbox: { type: 'readOnly' },
+      },
+    });
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-send' });
+    replayRecordedTurn(h);
+    await h.waitFor(() => terminalsOf(h.events).length === 1, 'the turn to end');
+    h.advance(IDLE_MS);
+    h.sweepTick();
+    h.events.length = 0;
+
+    await h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-again' });
+    await h.waitFor(() => h.connections.length === 2, 'the revive link');
+
+    // The revive has no command to read a preference from — only the registry
+    // row — so this is the assertion that keeps the field on the row.
+    expect(h.ensureHomeInputs).toHaveLength(2);
+    expect(h.ensureHomeInputs[1].permission.approvalPolicy).toBe('untrusted');
+    expect(h.ensureHomeInputs[1].permission.sandboxMode).toBe('read-only');
+    expect(h.eventsOf('host.error')).toEqual([]);
+  });
+});
+
+describe('resolveCodexPolicy — request → posture, in one place', () => {
+  it('adopts both requested dimensions and keeps networkAccess off the request', () => {
+    const resolved = resolveCodexPolicy({
+      agent: CODEX_AGENT,
+      approvalPolicy: 'never',
+      sandboxMode: 'workspace-write',
+    });
+    expect(resolved.approvalPolicy).toBe('never');
+    expect(resolved.sandboxMode).toBe('workspace-write');
+    // Left UNSET, not taken from a constant: a request cannot move a dimension
+    // it is not allowed to set (§5.4-1), and this Host has no belief of its own
+    // about it either — the runtime's echo is the only source (S3 terminal
+    // check).
+    expect('networkAccess' in resolved).toBe(false);
+    expect(resolved.agent).toBe(CODEX_AGENT);
+  });
+
+  it('degrades to the constant for absent, malformed, cross-agent and forged input', () => {
+    for (const value of [
+      undefined,
+      null,
+      {},
+      'never',
+      { agent: CLAUDE_CODE_AGENT, permissionMode: 'bypassPermissions' },
+      { agent: CODEX_AGENT, approvalPolicy: 'yolo', sandboxMode: 'read-only' },
+      // A forged networkAccess claim is refused wholesale rather than trimmed:
+      // half-applying it would leave the caller believing it configured the one
+      // dimension we cannot configure.
+      {
+        agent: CODEX_AGENT,
+        approvalPolicy: 'never',
+        sandboxMode: 'read-only',
+        networkAccess: true,
+      },
+    ]) {
+      expect(resolveCodexPolicy(value)).toEqual(CODEX_PERMISSION_DEFAULT);
+    }
+  });
+
+  it('C13 — the constant every one of those arms falls back to is not the dangerous tier', () => {
+    expect(CODEX_PERMISSION_DEFAULT.sandboxMode).not.toBe(DANGEROUS_CODEX_SANDBOX_MODE);
+    // …and the dangerous tier is still expressible when a user picks it.
+    expect(
+      resolveCodexPolicy({
+        agent: CODEX_AGENT,
+        approvalPolicy: 'never',
+        sandboxMode: DANGEROUS_CODEX_SANDBOX_MODE,
+      }).sandboxMode
+    ).toBe(DANGEROUS_CODEX_SANDBOX_MODE);
+  });
+});

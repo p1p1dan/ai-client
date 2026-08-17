@@ -45,6 +45,8 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
     recordCreated: vi.fn(async () => {}),
     recordResumed: vi.fn(async () => {}),
     handleRuntimeEvent: vi.fn(),
+    // D48 S3: create/resume read the row for the captured permission posture.
+    get: vi.fn(async () => undefined),
   },
 }));
 

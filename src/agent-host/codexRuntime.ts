@@ -9,6 +9,7 @@ import type {
   PermissionRequestKind,
   SessionPermissionPolicy,
 } from '../shared/types/runtimeEvents.ts';
+import { codexPermissionPreference } from '../shared/types/runtimeEvents.ts';
 import type {
   HistoryMessage,
   HistoryReadError,
@@ -120,17 +121,27 @@ export type CodexSessionPermissionPolicy = Extract<SessionPermissionPolicy, { ag
  * `codexHome.ts` takes it as an argument rather than importing it, which is what
  * keeps the dependency edge one-way.
  *
- * ## `networkAccess` is NOT ours to send — read this before "fixing" it
+ * ## `networkAccess` is NOT ours to send, and NOT ours to guess either
  *
  * `thread/start` takes `sandbox` as a STRING. `networkAccess` appears only in
  * the RESULT, as a sub-field of the expanded sandbox object
  * (`{"type":"readOnly","networkAccess":false}` [实测]) — it is the server's
- * default for the sandbox tier we asked for, not a parameter. The value here
- * therefore RECORDS what we believe that default is (so the surface can show a
- * complete posture); it is not, and must not become, a request field. Whether
- * the request side even accepts an object-shaped sandbox is [未测] (arbitration
- * doc §5 U-c), so `buildThreadStartParams` deliberately sends the string and
- * `compareSandboxEcho` checks the echo afterwards.
+ * default for the sandbox tier we asked for, not a parameter. Whether the
+ * request side even accepts an object-shaped sandbox is [未测] (arbitration doc
+ * §5 U-c), so `buildThreadStartParams` deliberately sends the string and
+ * `compareSandboxEcho` reads the echo afterwards.
+ *
+ * This constant therefore carries NO `networkAccess` at all (S3 terminal
+ * check). It used to carry `false`, which was defensible while every session
+ * ran the one hard-coded `workspace-write` tier; S3 made the tier a user
+ * choice, and `danger-full-access` means no sandbox and therefore no network
+ * limit — a session on that tier would have been reported as `Network: off`
+ * while the opposite was true, on the single row that describes the safety
+ * posture. The value is now LEARNED from the `thread/start` echo
+ * (`startThread` adopts `compareSandboxEcho`'s reading into `state.policy`
+ * before `session.created` goes out), and stays absent when the runtime did
+ * not report it — `thread/resume` never echoes the key [实测], so a resumed
+ * session honestly reports two dimensions and not three.
  */
 export const CODEX_PERMISSION_DEFAULT: CodexSessionPermissionPolicy = {
   // Literal, not `CODEX_AGENT`: this field is the discriminant of
@@ -141,8 +152,37 @@ export const CODEX_PERMISSION_DEFAULT: CodexSessionPermissionPolicy = {
   agent: 'codex',
   approvalPolicy: 'on-request',
   sandboxMode: 'workspace-write',
-  networkAccess: false,
 };
+
+/**
+ * D48 S3 §5.5 — the requested posture (or nothing) → the posture this session
+ * actually runs, in ONE place.
+ *
+ * Two invariants live here rather than at the four carriers:
+ *
+ *  - `networkAccess` is never carried out of here at all. The preference type
+ *    has no such key by construction (§5.4), and this function is what makes
+ *    that structural fact operational: whatever the caller asked for, the
+ *    resolved posture leaves that dimension UNSET, to be learned from the
+ *    runtime's own echo or reported as unknown (see the constant's header). A
+ *    request cannot move it, so nothing can claim it configured it.
+ *  - a preference for the other agent, or a malformed one, degrades to the
+ *    constant rather than half-applying. `index.ts` already refuses those
+ *    upstream (C10); this is the second wall, so the runtime is safe to call
+ *    from anywhere.
+ *
+ * The result feeds all four carriers of H9 (thread/start · isolated config.toml
+ * · `state.policy` · `session.created`), which is what C11 pins.
+ */
+export function resolveCodexPolicy(preference: unknown): CodexSessionPermissionPolicy {
+  const requested = codexPermissionPreference(preference, CODEX_AGENT);
+  if (!requested) return CODEX_PERMISSION_DEFAULT;
+  return {
+    agent: CODEX_PERMISSION_DEFAULT.agent,
+    approvalPolicy: requested.approvalPolicy,
+    sandboxMode: requested.sandboxMode,
+  };
+}
 
 /**
  * Our identity TO OPENAI. codex folds `clientInfo.name` into the User-Agent it
@@ -586,6 +626,23 @@ function readTurnsListHistory(result: unknown, threadId: string): CodexHistoryPa
 /** `'unverifiable'` is NOT `'match'`: it means we learned nothing, not that we agree. */
 export type SandboxEchoVerdict = 'match' | 'mismatch' | 'unverifiable';
 
+/**
+ * What one `thread/start` echo told us: a verdict about the two dimensions we
+ * SENT, plus the one dimension we can only be told about.
+ *
+ * `networkAccess` is deliberately not folded into the verdict. It is absent
+ * whenever the result did not carry the key, which is the state the surface has
+ * to render as "not reported" — the verdict is about agreement, this field is
+ * about knowledge, and merging them is how a missing fact becomes a stated one.
+ */
+export interface SandboxEchoReading {
+  verdict: SandboxEchoVerdict;
+  /** Always populated on a real reading: what was compared, learned or missing. */
+  detail?: string;
+  /** The runtime's own answer for the network dimension, when it gave one. */
+  networkAccess?: boolean;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -659,7 +716,7 @@ function readEchoSandboxType(sandbox: unknown): string | undefined {
 export function compareSandboxEcho(
   sent: CodexSessionPermissionPolicy,
   echo: unknown
-): { verdict: SandboxEchoVerdict; detail?: string } {
+): SandboxEchoReading {
   const roots = echoRoots(echo);
   if (roots.length === 0) {
     return { verdict: 'unverifiable', detail: 'thread/start result is not an object' };
@@ -690,34 +747,53 @@ export function compareSandboxEcho(
     missing.push('sandbox');
   }
 
+  // NOT compared — LEARNED. This dimension is never sent (see
+  // `CODEX_PERMISSION_DEFAULT`'s header), so the resolved posture reaches this
+  // point with no belief about it at all and the echo is the only source there
+  // is. Comparing it against a hard-coded `false`, as this did until the S3
+  // terminal check, produced a confident `Network: off` on a
+  // `danger-full-access` session — a sandbox tier that has no network limit.
   const network = isRecord(sandbox) ? sandbox.networkAccess : undefined;
-  if (typeof network === 'boolean') {
-    compared.push('networkAccess');
-    if (network !== sent.networkAccess) {
-      // Worth naming precisely: this dimension is a SERVER DEFAULT we merely
-      // record, so a mismatch means our record is stale — not that a request
-      // field was dropped. Anyone reading the WARN would otherwise go hunting
-      // for a bug on the request side, where the field does not exist.
-      mismatches.push(
-        `networkAccess recorded=${String(sent.networkAccess)} echo=${String(network)} ` +
-          '(server default, never sent by us)'
-      );
-    }
-  } else {
+  const networkAccess = typeof network === 'boolean' ? network : undefined;
+  const learned: string[] = [];
+  if (networkAccess === undefined) {
     missing.push('networkAccess');
+  } else if (sent.networkAccess === undefined) {
+    learned.push(`networkAccess=${String(networkAccess)}`);
+  } else if (networkAccess !== sent.networkAccess) {
+    // Only reachable when a SECOND echo contradicts the first one this session
+    // already adopted, which is a real disagreement rather than a stale record.
+    mismatches.push(
+      `networkAccess recorded=${String(sent.networkAccess)} echo=${String(networkAccess)}`
+    );
+  } else {
+    compared.push('networkAccess');
   }
 
-  const suffix = missing.length > 0 ? `; not echoed: ${missing.join(', ')}` : '';
+  const learnedSuffix = learned.length > 0 ? `; learned: ${learned.join(', ')}` : '';
+  const suffix = (missing.length > 0 ? `; not echoed: ${missing.join(', ')}` : '') + learnedSuffix;
   if (mismatches.length > 0) {
-    return { verdict: 'mismatch', detail: `${mismatches.join('; ')}${suffix}` };
+    return { verdict: 'mismatch', detail: `${mismatches.join('; ')}${suffix}`, networkAccess };
   }
-  if (compared.length === 0) {
+  if (compared.length === 0 && learned.length === 0) {
     // Nothing comparable came back. Reporting `match` here would turn "we could
     // not check" into "we checked and agreed", which is the one reading this
     // function must never produce.
     return { verdict: 'unverifiable', detail: `no comparable field in the result${suffix}` };
   }
-  return { verdict: 'match', detail: `compared: ${compared.join(', ')}${suffix}` };
+  if (compared.length === 0) {
+    // Something was learned but nothing was verified: still not `match`.
+    return {
+      verdict: 'unverifiable',
+      detail: `no comparable field in the result${suffix}`,
+      networkAccess,
+    };
+  }
+  return {
+    verdict: 'match',
+    detail: `compared: ${compared.join(', ')}${suffix}`,
+    networkAccess,
+  };
 }
 
 /**
@@ -1351,6 +1427,12 @@ export class CodexRuntime {
      * effort field at all [实测 codex schema], so the turn is its only carrier.
      */
     effort?: unknown;
+    /**
+     * D48 S3 §5.5 — the requested posture, untrusted at this boundary. Absent
+     * (every pre-D48 caller) = `CODEX_PERMISSION_DEFAULT`, byte for byte the
+     * behaviour this runtime shipped with.
+     */
+    permissionPreference?: unknown;
     requestId?: string;
   }): void {
     const { sessionId, workspacePath, requestId } = input;
@@ -1362,7 +1444,13 @@ export class CodexRuntime {
       return;
     }
 
-    const opened = this.openConnection({ sessionId, workspacePath, why: 'session.create' });
+    const preference = codexPermissionPreference(input.permissionPreference, CODEX_AGENT);
+    const opened = this.openConnection({
+      sessionId,
+      workspacePath,
+      why: 'session.create',
+      policy: resolveCodexPolicy(preference),
+    });
     if (!opened.ok) {
       // One stage, one code: a missing codex.js is `agent_unsupported` (nothing
       // is wrong with the request, this machine simply has no codex), the other
@@ -1390,6 +1478,10 @@ export class CodexRuntime {
       agent: CODEX_AGENT,
       model: input.model,
       effort: isSessionEffortLevel(input.effort) ? input.effort : undefined,
+      // Recorded on the registry entry, not only on `state`: the idle-revive
+      // throws the state away and builds a new one, and a revived thread has to
+      // come back under the posture the session was started with.
+      permissionPreference: preference,
     });
     this.log('codex session starting', {
       sessionId,
@@ -1422,10 +1514,18 @@ export class CodexRuntime {
     sessionId: string;
     workspacePath: string;
     why: string;
+    /**
+     * D48 S3 — the posture this connection is for. It reaches BOTH carriers
+     * from here (the isolated config.toml written below and `state.policy`,
+     * which is what `thread/start` then sends), so the two cannot be given
+     * different values by two call sites. Absent = the constant.
+     */
+    policy?: CodexSessionPermissionPolicy;
   }):
     | { ok: true; state: CodexSessionState; homeDir: string; plan: CodexLaunchPlan }
     | { ok: false; stage: 'entry' | 'home' | 'spawn'; message: string } {
     const { sessionId, workspacePath } = input;
+    const policy = input.policy ?? CODEX_PERMISSION_DEFAULT;
     const resolution = (this.opts.resolveLaunch ?? resolveCodexLaunch)();
     if (!resolution.ok) {
       // The inspected paths describe the USER'S machine layout, so they go to
@@ -1443,9 +1543,18 @@ export class CodexRuntime {
       const home = (this.opts.ensureHome ?? ensureCodexHome)({
         homeDir: this.opts.codexHomeDir,
         // H9 layer 1: the SAME object `buildThreadStartParams` sends. A resumed
-        // thread re-derives its posture from this file, so the constant has to
+        // thread re-derives its posture from this file, so the posture has to
         // reach the disk as well as the wire.
-        permission: CODEX_PERMISSION_DEFAULT,
+        //
+        // D48 S3 caveat (as-built, §5.5): this isolated home is ONE directory
+        // per Host process, so the file is rewritten on every connection open.
+        // Sequential opens are correct — each spawn reads the file this call
+        // just wrote — but two sessions with DIFFERENT postures opening
+        // concurrently could interleave the write with the other's spawn. Not
+        // reachable from today's UI (create and resume are serialized by the
+        // renderer's own send path) and out of S3's scope to fix properly,
+        // which needs a per-session home; registered as spec §8.2-L13.
+        permission: policy,
         // D47 S4a: the SAME env object the spawn-env build below reads (one of
         // `resolveCodexCredentialMode`'s four readers, §1) — so a mode decided
         // for the home cannot disagree with the mode decided for the env a few
@@ -1547,7 +1656,7 @@ export class CodexRuntime {
     const state: CodexSessionState = {
       sessionId,
       workspacePath,
-      policy: CODEX_PERMISSION_DEFAULT,
+      policy,
       connection,
       pending,
       turn: null,
@@ -1608,6 +1717,15 @@ export class CodexRuntime {
         echo.verdict === 'mismatch' ? 'WARN codex sandbox echo mismatch' : 'codex sandbox echo',
         { sessionId, verdict: echo.verdict, detail: echo.detail }
       );
+      // The ONE place the network dimension is ever written, and it is written
+      // from the runtime's own answer rather than from a belief of ours (S3
+      // terminal check). Before the emit below, so `session.created` reports
+      // what was echoed on this very thread; when the key was not echoed the
+      // dimension stays unset and the surface says "not reported" instead of
+      // inventing an `off` for a tier that may have no network limit at all.
+      if (echo.networkAccess !== undefined) {
+        state.policy = { ...state.policy, networkAccess: echo.networkAccess };
+      }
 
       const session = this.opts.registry.get(sessionId);
       if (!session || state.torndown) {
@@ -2583,6 +2701,17 @@ export class CodexRuntime {
    * it before it is reachable, so no second command and no status frame can slip
    * into the gap.
    *
+   * D48 S3: this path emits NO `session.resumed`, so it also reports no
+   * posture — deliberately, and safely. The posture it reopens under is
+   * `resolveCodexPolicy(session.permissionPreference)`, the same preference the
+   * surface was already told about when this session was created or cold
+   * resumed, and `reopenThread`'s `assertResumePosture` refuses the revive
+   * outright if the thread comes back under anything else. So the facts the
+   * renderer is holding stay true across a revive; the one dimension that can
+   * go stale is `networkAccess`, which is learned from a `thread/start` echo
+   * this path never issues and is therefore simply carried over from before the
+   * sweep.
+   *
    * Returns nothing on every failure, having already reported it.
    */
   private async reviveSweptSession(
@@ -2597,6 +2726,11 @@ export class CodexRuntime {
       sessionId,
       workspacePath: session.workspacePath,
       why: 'session.revive',
+      // Off the REGISTRY entry, which is why the preference is stored there at
+      // all: this path has no command to read it from, and a revived thread
+      // that came back under the constant would be a silent posture change in
+      // the middle of a chat the user never left.
+      policy: resolveCodexPolicy(session.permissionPreference),
     });
     if (!opened.ok) {
       // Nothing was started, so there is nothing to tear down — and the session
@@ -2754,6 +2888,15 @@ export class CodexRuntime {
     model?: string;
     /** D48 §4.6 — the session default a resumed thread's turns inherit. */
     effort?: unknown;
+    /**
+     * D48 S3 §5.5 — the posture from the SESSION SNAPSHOT. It has to be
+     * re-applied here because a cold resume re-derives its posture from the
+     * isolated config.toml, which this process rewrites on every connection
+     * open: without it, a session created under `untrusted` would come back
+     * under the constant and the H9 echo check would be verifying the wrong
+     * promise.
+     */
+    permissionPreference?: unknown;
     requestId?: string;
   }): void {
     const { sessionId, requestId } = input;
@@ -2833,6 +2976,7 @@ export class CodexRuntime {
     runtimeIdentity: string;
     model?: string;
     effort?: unknown;
+    permissionPreference?: unknown;
     requestId?: string;
   }): Promise<void> {
     const { sessionId, requestId, workspacePath } = input;
@@ -2847,7 +2991,18 @@ export class CodexRuntime {
     // codex behind a banner the user is already reading.
     this.sweptSessions.delete(sessionId);
 
-    const opened = this.openConnection({ sessionId, workspacePath, why: 'session.resume' });
+    const opened = this.openConnection({
+      sessionId,
+      workspacePath,
+      why: 'session.resume',
+      // Written into the isolated config.toml BEFORE codex reads it, which is
+      // the only way a resumed thread comes back under the session's own
+      // posture instead of the constant — and it is that same file the H9
+      // resume echo is checked against.
+      policy: resolveCodexPolicy(
+        codexPermissionPreference(input.permissionPreference, CODEX_AGENT)
+      ),
+    });
     if (!opened.ok) {
       // Nothing was started, so there is nothing to tear down — but the row is
       // still BOUND (G1 negative control ①): the renderer's next send has to
@@ -2858,6 +3013,7 @@ export class CodexRuntime {
         runtimeIdentity: threadId,
         model: input.model,
         effort: input.effort,
+        permissionPreference: input.permissionPreference,
       });
       this.finishResume(
         { sessionId, requestId, runtimeIdentity: threadId, workspacePath },
@@ -2884,6 +3040,7 @@ export class CodexRuntime {
       runtimeIdentity: threadId,
       model: input.model,
       effort: input.effort,
+      permissionPreference: input.permissionPreference,
     });
     this.log('codex resume starting', {
       sessionId,
@@ -2931,7 +3088,14 @@ export class CodexRuntime {
         omittedCount: read.omittedCount,
         stats: read.stats,
       });
-      this.finishResume({ sessionId, requestId, runtimeIdentity: threadId, workspacePath }, read);
+      // `state.policy` and not the constant: `assertResumePosture` above threw
+      // unless the thread came back under exactly this posture, so this is the
+      // verified reading rather than a restatement of what we asked for.
+      this.finishResume(
+        { sessionId, requestId, runtimeIdentity: threadId, workspacePath },
+        read,
+        state.policy
+      );
     } catch (err) {
       const message = errorMessage(err);
       this.log('codex resume failed', { sessionId, threadId, error: message });
@@ -2972,6 +3136,15 @@ export class CodexRuntime {
       runtimeIdentity: string;
       model?: string;
       effort?: unknown;
+      /**
+       * Accepted for signature parity with the cold path and then IGNORED: this
+       * app-server is already running under the posture its config.toml had at
+       * spawn time, so rewriting the file would change nothing about the live
+       * process, and recording a different value on the row would make the row
+       * claim a posture nothing is enforcing. Mid-session change is S4's, over
+       * `thread/settings/update`.
+       */
+      permissionPreference?: unknown;
       requestId?: string;
     }
   ): Promise<void> {
@@ -2992,12 +3165,25 @@ export class CodexRuntime {
       runtimeIdentity,
       model: input.model,
       effort: input.effort,
+      // Deliberately NOT forwarded (see the parameter's doc): the row must keep
+      // describing the posture the live app-server is actually running under.
     });
     // Emitted before the read, unlike the cold path: this session is already
     // resumed in every sense the renderer cares about (bound, connected,
     // sendable), so making the user wait for a round trip to learn that would
     // only widen the window in which the UI shows a half-resumed row.
-    this.emitResumed({ sessionId, requestId, agent: entry.agent, runtimeIdentity });
+    // The posture this live app-server is running under was already verified
+    // when the process started (`compareSandboxEcho` on create, or
+    // `assertResumePosture` on the cold resume that brought it up) and nothing
+    // on this path can change it — `thread/turns/list` echoes no posture at all,
+    // which is why this arm re-states rather than re-verifies.
+    this.emitResumed({
+      sessionId,
+      requestId,
+      agent: entry.agent,
+      runtimeIdentity,
+      permissionPolicy: state.policy,
+    });
 
     let history: CodexHistoryPayload;
     try {
@@ -3044,6 +3230,7 @@ export class CodexRuntime {
     runtimeIdentity: string;
     model?: string;
     effort?: unknown;
+    permissionPreference?: unknown;
   }) {
     return this.opts.registry.resume({
       sessionId: input.sessionId,
@@ -3052,11 +3239,26 @@ export class CodexRuntime {
       agent: CODEX_AGENT,
       model: input.model,
       effort: isSessionEffortLevel(input.effort) ? input.effort : undefined,
+      // Merge semantics on the registry side: an omitted preference keeps what
+      // the entry already had (a live-connection resume of a session created in
+      // this same process must not reset its posture to the constant).
+      permissionPreference: codexPermissionPreference(input.permissionPreference, CODEX_AGENT),
     });
   }
 
-  /** The whole three-event contract, for the paths that emit it in one go. */
-  private finishResume(target: ResumeTarget, history: CodexHistoryPayload): void {
+  /**
+   * The whole three-event contract, for the paths that emit it in one go.
+   *
+   * `permissionPolicy` is passed ONLY by the arm that got past
+   * `assertResumePosture` — a degraded resume (spawn failed, `thread/resume`
+   * threw) reports no posture at all rather than the one it was going to run
+   * under, because nothing came back to confirm it.
+   */
+  private finishResume(
+    target: ResumeTarget,
+    history: CodexHistoryPayload,
+    permissionPolicy?: CodexSessionPermissionPolicy
+  ): void {
     // A close that landed while we were resuming already emitted `disconnected`;
     // three more events behind it would put the row back on screen as idle.
     if (!this.opts.registry.get(target.sessionId)) {
@@ -3066,7 +3268,7 @@ export class CodexRuntime {
       return;
     }
     const agent = this.opts.registry.get(target.sessionId)?.agent ?? CODEX_AGENT;
-    this.emitResumed({ ...target, agent });
+    this.emitResumed({ ...target, agent, permissionPolicy });
     this.emitHistoryClose(target, history);
   }
 
@@ -3079,6 +3281,22 @@ export class CodexRuntime {
     requestId?: string;
     runtimeIdentity: string;
     agent: AgentWireName;
+    /**
+     * The VERIFIED posture, or nothing.
+     *
+     * This field was omitted unconditionally until the S3 terminal check, on
+     * the reasoning that a resumed thread re-derives its posture from the
+     * isolated config.toml and that reporting the constant would state a
+     * posture rather than the verified one. The reasoning was right and the
+     * conclusion was one step short: by the time the cold path calls this,
+     * `assertResumePosture` has already thrown unless the thread came back
+     * under exactly `state.policy`, so `state.policy` IS the verified posture —
+     * and withholding it meant every Codex session that had survived an app
+     * restart went back to `Permission policy not reported` on the Context
+     * panel, i.e. the whole S3 read side disappeared for the most common way of
+     * opening a chat (§5.6-5).
+     */
+    permissionPolicy?: CodexSessionPermissionPolicy;
   }): void {
     this.opts.emit({
       type: 'session.resumed',
@@ -3088,10 +3306,10 @@ export class CodexRuntime {
         // Off the registry entry, so the event and the binding cannot disagree.
         agent: input.agent,
         runtimeIdentity: input.runtimeIdentity,
-        // No `permissionPolicy`: the posture on a resumed thread is re-derived
-        // from the isolated config.toml, and the echo that proves it is checked
-        // (H9) rather than advertised — reporting the constant here would state
-        // a posture instead of the verified one.
+        // Absent, never `null`: the reducer keeps the previously-known posture
+        // when a payload carries none, which is the correct degradation for a
+        // resume that could not confirm one.
+        ...(input.permissionPolicy ? { permissionPolicy: input.permissionPolicy } : {}),
       },
     });
   }

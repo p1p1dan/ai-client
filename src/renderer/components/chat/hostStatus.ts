@@ -34,8 +34,16 @@ export interface HostStatus {
    *   unrecognized slug (older renderer, newer Host) never reaches a
    *   consumer. Today's only consumer is test assertions; a stage-3 agent
    *   picker is the eventual UI reader.
+   * - `permissionPolicy`: D48 S3 (N1) — this Host reports a
+   *   `SessionPermissionPolicy` on the CODEX axis and accepts a
+   *   `permissionPreference` on create/resume. It says nothing about the Claude
+   *   axis, which S3 left byte-unchanged on the legacy `permissionMode` (§5.2),
+   *   so this bit must never be read as "a Claude policy is coming".
+   *   `undefined` = a Host build that predates the write side, and the Context
+   *   surface then keeps its `permissionMode`-only behaviour instead of showing
+   *   a blank row.
    */
-  capabilities?: { thinking?: boolean; agents?: AgentWireName[] };
+  capabilities?: { thinking?: boolean; agents?: AgentWireName[]; permissionPolicy?: boolean };
   lastFatalError?: string | null;
 }
 
@@ -86,6 +94,10 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
           : undefined;
       const agentsRaw =
         capRaw && typeof capRaw === 'object' ? (capRaw as { agents?: unknown }).agents : undefined;
+      const permissionPolicyRaw =
+        capRaw && typeof capRaw === 'object'
+          ? (capRaw as { permissionPolicy?: unknown }).permissionPolicy
+          : undefined;
       // Preserve undefined when the flag is absent (T-04 default-on rendering).
       const capabilities =
         capRaw && typeof capRaw === 'object'
@@ -94,6 +106,11 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
               // S3 slice 6 (A6): same "capabilities key present → derive fresh
               // from THIS event, never merge with prior" rule as `thinking`.
               agents: filterAgentWireNames(agentsRaw),
+              // D48 S3 (N1): rides BOTH channels — see `primeHostStatus`, where
+              // the same key is copied, and the `settings` history recorded in
+              // its header for what happens when only one of the two is wired.
+              permissionPolicy:
+                typeof permissionPolicyRaw === 'boolean' ? permissionPolicyRaw : undefined,
             }
           : prev.capabilities;
       return {
@@ -137,7 +154,7 @@ export interface HostStatusPrimeSnapshot {
    * (`AgentHostCapabilitiesInfo`). Optional/nullable exactly like `settings`
    * above — an old Main build's snapshot simply omits the key.
    */
-  capabilities?: { thinking?: boolean; agents?: unknown } | null;
+  capabilities?: { thinking?: boolean; agents?: unknown; permissionPolicy?: unknown } | null;
 }
 
 /**
@@ -183,6 +200,15 @@ export function primeHostStatus(
       ? {
           thinking: primedCapabilities.thinking,
           agents: filterAgentWireNames(primedCapabilities.agents),
+          // D48 S3 (N1), the second of the two channels. A consumer mounting on
+          // a cold start learns everything from THIS call, so a key added to
+          // `reduceHostStatus` alone reads as `undefined` here until the next
+          // live `host.ready` — the exact slice-6 `agents` mistake, which was
+          // itself the exact `settings` mistake above it.
+          permissionPolicy:
+            typeof primedCapabilities.permissionPolicy === 'boolean'
+              ? primedCapabilities.permissionPolicy
+              : undefined,
         }
       : prev.capabilities,
   };

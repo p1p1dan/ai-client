@@ -392,6 +392,120 @@ describe('agent-host protocol error paths (spawned process)', () => {
     TEST_TIMEOUT
   );
 
+  /**
+   * D48 S3 §5.3 (N1) — the capability key the TYPE has carried since S2 while no
+   * Host ever set it. Every shipped renderer already reads absent as "old Host,
+   * keep the permissionMode-only behaviour", so this key is what buys the read
+   * side its degradation signal back.
+   */
+  it(
+    'advertises permissionPolicy on host.ready (C7, Host arm)',
+    async () => {
+      harness.send({
+        type: 'host.initialize',
+        protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+        requestId: 'req-init-permission-policy',
+      });
+      const event = await harness.nextEvent(TEST_TIMEOUT);
+      expect(event.type).toBe('host.ready');
+      const capabilities = event.payload?.capabilities as
+        | { permissionPolicy?: unknown; agents?: string[] }
+        | undefined;
+      expect(capabilities?.permissionPolicy).toBe(true);
+      // Same object as the agents list: a build that emitted one and forgot the
+      // other would leave the surface unable to tell which half it may trust.
+      expect(capabilities?.agents).toEqual(['claude-code']);
+    },
+    TEST_TIMEOUT
+  );
+
+  /**
+   * D48 S3 §5.7-C10 — the posture and the agent are ONE decision.
+   *
+   * All three arms below are refused BEFORE any runtime is built, which is what
+   * makes them assertable here at all (this suite never loads the SDK): the
+   * check sits between `resolveAgentWireName` and `runtimeForAgent`. Dropping
+   * instead of refusing would be the silent failure — a caller that asked for
+   * `plan` and was quietly given `default` believes it constrained a session
+   * that is not constrained.
+   */
+  it(
+    'C10 — refuses a permissionPreference addressed to the other agent, on create and on resume',
+    async () => {
+      for (const [requestId, type, extra] of [
+        ['req-pref-create-cross', 'session.create', {}],
+        ['req-pref-resume-cross', 'session.resume', { runtimeIdentity: 'claude-session-id' }],
+      ] as const) {
+        harness.send({
+          type,
+          protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+          requestId,
+          payload: {
+            sessionId: 's-pref-cross',
+            workspacePath: REPO_ROOT,
+            // Absent `agent` = Claude Code (the legacy default), so a Codex
+            // posture here is the mismatch.
+            permissionPreference: {
+              agent: 'codex',
+              approvalPolicy: 'never',
+              sandboxMode: 'danger-full-access',
+            },
+            ...extra,
+          },
+        });
+        const event = await harness.nextEvent(TEST_TIMEOUT);
+        expect(event.type).toBe('host.error');
+        expect(event.requestId).toBe(requestId);
+        expect(event.payload?.code).toBe('invalid_payload');
+        expect(event.payload?.fatal).toBe(false);
+        // A dead end, like the agent refusal above: nothing was created, so no
+        // session/busy state trails it.
+        const trailing = await harness.eventsWithin(300);
+        expect(trailing.map((e) => e.type)).not.toContain('session.created');
+        expect(trailing.map((e) => e.type)).not.toContain('session.resumed');
+      }
+    },
+    TEST_TIMEOUT * 2
+  );
+
+  it(
+    'C8/C10 — refuses a forged networkAccess and a malformed tier rather than trimming them',
+    async () => {
+      for (const [requestId, permissionPreference] of [
+        [
+          'req-pref-network',
+          {
+            agent: 'codex',
+            approvalPolicy: 'on-request',
+            sandboxMode: 'workspace-write',
+            networkAccess: true,
+          },
+        ],
+        ['req-pref-garbage', { agent: 'claude-code', permissionMode: 'yolo' }],
+        ['req-pref-shape', 'bypassPermissions'],
+      ] as const) {
+        harness.send({
+          type: 'session.create',
+          protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+          requestId,
+          payload: {
+            sessionId: 's-pref-bad',
+            workspacePath: REPO_ROOT,
+            permissionPreference,
+          },
+        });
+        const event = await harness.nextEvent(TEST_TIMEOUT);
+        expect(event.type).toBe('host.error');
+        expect(event.requestId).toBe(requestId);
+        // `networkAccess` is a fact the runtime reports, never a request field:
+        // accepting the object (even by ignoring that one key) would let the
+        // caller believe a dimension was configured that nothing configured.
+        expect(event.payload?.code).toBe('invalid_payload');
+      }
+    },
+    TEST_TIMEOUT * 2
+  );
+
   it(
     'advertises the agents it will accept on host.ready (capabilities.agents)',
     async () => {

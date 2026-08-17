@@ -4,7 +4,7 @@
  */
 
 import type { AgentWireName } from './agentWire';
-import type { PermissionDecisionId } from './runtimeEvents';
+import type { PermissionDecisionId, SessionPermissionPreference } from './runtimeEvents';
 
 /**
  * Stays 1. Multi-agent support (S2) is additive only — optional fields, new
@@ -87,6 +87,17 @@ export interface SessionCreateCommand extends AgentHostCommandBase {
      * two independent lookups would be two places to disagree.
      */
     agent?: AgentWireName;
+    /**
+     * D48 S3 §5.5: the permission posture this session is asked to run under,
+     * captured from the "Chat agent defaults" template at the moment of the
+     * first send. Purely additive (protocol version stays 1): absent = the
+     * runtime's own safe constant, which is exactly today's behaviour.
+     *
+     * Its `agent` discriminant MUST equal `payload.agent` — the Host refuses a
+     * mismatch before any runtime is built (§5.7-C10) rather than letting a
+     * runtime guess which half of the union was meant for it.
+     */
+    permissionPreference?: SessionPermissionPreference;
   };
 }
 
@@ -111,6 +122,13 @@ export interface SessionResumeCommand extends AgentHostCommandBase {
     model?: string;
     /** Session default effort; per-send effort overrides it for one turn. */
     effort?: SessionEffortLevel;
+    /**
+     * D48 S3 §5.5: the posture the SESSION SNAPSHOT recorded, replayed on every
+     * resume. Deliberately NOT re-read from the global template — changing the
+     * template must not silently change the security posture of a chat that was
+     * started months ago (§5.7-C9). Absent = the runtime's safe constant.
+     */
+    permissionPreference?: SessionPermissionPreference;
   };
 }
 

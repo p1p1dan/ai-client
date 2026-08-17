@@ -10,7 +10,13 @@ import {
   type SessionEffortLevel,
 } from '../shared/types/agentHost.ts';
 import { CLAUDE_CODE_AGENT } from '../shared/types/agentWire.ts';
-import type { SessionPermissionMode, SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
+import {
+  claudePermissionPreference,
+  DANGEROUS_PERMISSION_MODE,
+  type SessionPermissionMode,
+  type SessionPermissionPreference,
+  type SessionRuntimeStatus,
+} from '../shared/types/runtimeEvents.ts';
 import { type EmitFn, EventNormalizer, type LogFn } from './eventNormalizer.ts';
 import { type HistoryReadResult, readSessionHistory } from './historyReader.ts';
 import { PermissionBridge } from './permissionBridge.ts';
@@ -203,17 +209,68 @@ function resolveDrainAfterResultMs(): number {
 const THINKING_CONFIG = { type: 'adaptive', display: 'summarized' } as const;
 
 /**
- * T-14 (Codex precedent T-20, optional-field addition): the single source of
- * truth for the permission mode every session runs with. Interactive prompts
- * via `canUseTool` (Permission timeline cards), never an SDK bypass. Feeds
- * BOTH the query() `permissionMode` option below AND the
- * session.created/session.resumed event payloads
- * (`SessionCreatedEvent.payload.permissionMode`) so the Context surface can
- * report the real, in-effect policy instead of a renderer-side guess that
- * could drift from what was actually sent to the SDK. Change this constant,
- * not either call site, if the mode ever needs to differ.
+ * T-14 (Codex precedent T-20, optional-field addition): the DEFAULT permission
+ * mode a session runs with. Interactive prompts via `canUseTool` (Permission
+ * timeline cards), never an SDK bypass.
+ *
+ * D48 S3: it is no longer the only source — `session.create` / `session.resume`
+ * may carry a `permissionPreference`, which this constant backstops. What did
+ * NOT change is the rule this constant's old header existed to enforce: it
+ * feeds THREE places at once — the query() `permissionMode` option, the
+ * `session.created` payload and the `session.resumed` payload — and all three
+ * must read the SAME value, or the Context surface reports a posture the SDK
+ * never received (06-probes P2, direction 2). So none of the three reads this
+ * constant directly any more: they all go through
+ * `sessionPermissionMode(session)` below, which is the one place the fallback
+ * happens.
+ *
+ * Never a dangerous tier: this value IS the fallback arm for a missing,
+ * malformed or mis-addressed preference, and §5.4-4 forbids a dangerous default
+ * (asserted, C13).
  */
-const CHAT_PERMISSION_MODE: SessionPermissionMode = 'default';
+export const CHAT_PERMISSION_MODE: SessionPermissionMode = 'default';
+
+/**
+ * Preference (a request, possibly absent or for the wrong agent) → the mode
+ * this Host will actually run.
+ *
+ * The arm check is not paranoia: `SessionPermissionPreference` is a
+ * discriminated union and the Codex arm has no `permissionMode` at all, so
+ * without it a Codex-shaped preference that slipped through would put
+ * `undefined` into the query options — which the SDK reads as "no mode was
+ * requested" rather than as an error.
+ */
+export function resolveClaudePermissionMode(
+  preference: SessionPermissionPreference | undefined
+): SessionPermissionMode {
+  return (
+    claudePermissionPreference(preference, CLAUDE_CODE_AGENT)?.permissionMode ??
+    CHAT_PERMISSION_MODE
+  );
+}
+
+/**
+ * The single reader the three consumption points share. Exported so the
+ * four-place assertion (C11) can compare the registry's own value against what
+ * went out on the wire, rather than comparing two literals to each other.
+ */
+export function sessionPermissionMode(session: HostSession | undefined): SessionPermissionMode {
+  return resolveClaudePermissionMode(session?.permissionPreference);
+}
+
+/**
+ * SDK 0.3.218 refuses `permissionMode:'bypassPermissions'` unless this key is
+ * ALSO set [实测 sdk.d.ts:1729, 06-probes P2(b)]. It is spread in (not set to
+ * `false`) for the other four tiers, so "we never asked to skip permissions" is
+ * an absent key rather than a value the SDK has to interpret — and the negative
+ * half is asserted with `in`, because a build that sent it everywhere would
+ * silently widen every session (C16).
+ */
+export function dangerousSkipPermissionsOption(
+  mode: SessionPermissionMode
+): { allowDangerouslySkipPermissions: true } | Record<string, never> {
+  return mode === DANGEROUS_PERMISSION_MODE ? { allowDangerouslySkipPermissions: true } : {};
+}
 
 /**
  * Guard the protocol boundary: `effort` arrives as untrusted JSON from Main, and
@@ -313,6 +370,11 @@ export class ClaudeRuntime {
     model?: string;
     /** Untrusted at this boundary (raw NDJSON payload) — normalized below. */
     effort?: unknown;
+    /**
+     * D48 S3 §5.5 — the requested posture. Untrusted at this boundary, and
+     * absent for every caller that predates the field (= today's constant).
+     */
+    permissionPreference?: unknown;
     requestId?: string;
   }): void {
     const session = this.opts.registry.create({
@@ -325,6 +387,10 @@ export class ClaudeRuntime {
       agent: CLAUDE_CODE_AGENT,
       model: input.model,
       effort: normalizeEffort(input.effort),
+      permissionPreference: claudePermissionPreference(
+        input.permissionPreference,
+        CLAUDE_CODE_AGENT
+      ),
     });
     this.opts.emit({
       type: 'session.created',
@@ -333,7 +399,9 @@ export class ClaudeRuntime {
       // A brand-new Claude session has no runtimeIdentity yet (the SDK issues
       // it on the first turn), so `agent` is the ONLY field this event carries
       // for the index to write — see SessionIndexService.applyRuntimeEvent.
-      payload: { agent: session.agent, permissionMode: CHAT_PERMISSION_MODE },
+      // Consumption point 2 of 3 (06-probes P2): the same reader as the query
+      // options, so what the surface shows is what the SDK was handed.
+      payload: { agent: session.agent, permissionMode: sessionPermissionMode(session) },
     });
     this.opts.emit({
       type: 'session.status',
@@ -350,6 +418,8 @@ export class ClaudeRuntime {
     model?: string;
     /** Untrusted at this boundary (raw NDJSON payload) — normalized below. */
     effort?: unknown;
+    /** D48 S3 §5.5 — the posture recorded in the session snapshot. */
+    permissionPreference?: unknown;
     requestId?: string;
   }): void {
     // CP4 F-1: resuming a session with an active turn would orphan its
@@ -375,6 +445,10 @@ export class ClaudeRuntime {
       agent: CLAUDE_CODE_AGENT,
       model: input.model,
       effort: normalizeEffort(input.effort),
+      permissionPreference: claudePermissionPreference(
+        input.permissionPreference,
+        CLAUDE_CODE_AGENT
+      ),
     });
     this.opts.emit({
       type: 'session.resumed',
@@ -383,7 +457,8 @@ export class ClaudeRuntime {
       payload: {
         agent: session.agent,
         runtimeIdentity: session.runtimeIdentity,
-        permissionMode: CHAT_PERMISSION_MODE,
+        // Consumption point 3 of 3 — same reader, same value.
+        permissionMode: sessionPermissionMode(session),
       },
     });
     // Per-session order contract: resumed → session.history → status idle.
@@ -515,6 +590,11 @@ export class ClaudeRuntime {
     const model =
       typeof input.model === 'string' && input.model.trim() ? input.model.trim() : session.model;
     if (model) session.model = model;
+    // Read ONCE per turn, off the registry entry, so the option below and any
+    // later reader of this turn agree. There is no per-send override in S3 —
+    // the mid-session change is S4's, and it will write the registry entry
+    // rather than add a second parameter here.
+    const permissionMode = sessionPermissionMode(session);
     const abort = new AbortController();
     session.abort = abort;
     session.running = true;
@@ -743,10 +823,14 @@ export class ClaudeRuntime {
           // is required — the default `omitted` streams empty thinking text.
           // See THINKING_CONFIG above for the probe evidence.
           thinking: THINKING_CONFIG,
-          // Interactive permission bridge (timeline cards) — not bypass.
-          // Same constant the session.created/session.resumed events carry
-          // (CHAT_PERMISSION_MODE) — a single source of truth, see its doc.
-          permissionMode: CHAT_PERMISSION_MODE,
+          // Consumption point 1 of 3 — the one that actually reaches the SDK.
+          // Same reader as the session.created/session.resumed payloads
+          // (`sessionPermissionMode`), so the reported posture and the sent one
+          // cannot drift (06-probes P2, direction 2).
+          permissionMode,
+          // Required by the SDK for `bypassPermissions` and forbidden for the
+          // other four — absent, not `false`, in the safe positions.
+          ...dangerousSkipPermissionsOption(permissionMode),
           canUseTool,
           env: mergedEnv,
           abortController: abort,

@@ -1,4 +1,8 @@
-import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
+import {
+  agentDefaultEffort,
+  agentDefaultModel,
+  resolveDraftPermissionPreference,
+} from '@shared/models/chatAgentDefaults';
 import { sessionAgent } from '@shared/types/agentWire';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { FileSearchResult } from '@shared/types/search';
@@ -20,7 +24,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
-import { useSettingsStore } from '@/stores/settings';
+import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -451,6 +455,12 @@ export function ChatComposer({
   // menu ends up offering the other runtime's catalog.
   const composerAgent = sessionAgent(activeSession ?? {});
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
+  // D48 S3 §5.5-3 (C15): app settings rehydrate over an async IPC round trip,
+  // and the posture a first send materialises is PERMANENT for that session
+  // (resume replays the snapshot and never revisits the template). Sending a
+  // factory value that nobody chose would pin it forever, so the send path has
+  // to know whether what it is reading is real yet.
+  const settingsHydrated = useSettingsHydrated();
   // R11 (round-2 iteration-2 review): the same Host-reported default the
   // resume paths (LeftNav/MessageTimeline) already resolve through — so the
   // live send path and ModelSelect's own display never diverge from what a
@@ -924,6 +934,21 @@ export function ChatComposer({
         agentDefaultEffort(chatAgentDefaults, turnAgent)
       )
     );
+    // D48 S3 §5.5 — the permission template, resolved at the SAME commit point
+    // as the model and effort above, keyed by the SAME `turnAgent`, and for the
+    // same reason: which agent a posture belongs to is not something the wire
+    // can recover afterwards. `undefined` (no template, or settings not yet
+    // hydrated) drops the key entirely, so the runtime's own safe constant
+    // applies — byte for byte the pre-D48 path.
+    //
+    // Only the create payload carries it. A resume takes its posture from the
+    // session snapshot, which Main reads off the index row; this side does not
+    // get to re-supply a template for a chat that already started (C9).
+    const permissionPreference = resolveDraftPermissionPreference({
+      defaults: chatAgentDefaults,
+      agent: turnAgent,
+      settingsHydrated,
+    });
     const wireAttachments = toWireAttachments(drafts);
     // RAW bytes (pre-base64) — the same unit every limit is expressed in.
     const attachmentBytes = totalAttachmentBytes(drafts);
@@ -1327,6 +1352,9 @@ export function ChatComposer({
         ...(model ? { model } : {}),
         agent,
         ...(effort ? { effort } : {}),
+        // Same B11 rule as `model`: absent, never an `undefined` value — "no
+        // template" has to be indistinguishable from "field not supported".
+        ...(permissionPreference ? { permissionPreference } : {}),
       });
       setCurrentRequestId(createResult?.requestId ?? null);
 

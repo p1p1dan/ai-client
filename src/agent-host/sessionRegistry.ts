@@ -4,7 +4,10 @@
 
 import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { AgentWireName } from '../shared/types/agentWire.ts';
-import type { SessionRuntimeStatus } from '../shared/types/runtimeEvents.ts';
+import type {
+  SessionPermissionPreference,
+  SessionRuntimeStatus,
+} from '../shared/types/runtimeEvents.ts';
 
 export interface HostSession {
   sessionId: string;
@@ -20,6 +23,21 @@ export interface HostSession {
    * the implementation class.
    */
   agent: AgentWireName;
+  /**
+   * D48 S3 §5.5 — the posture this session was ASKED to run under, as it came
+   * off `session.create` / `session.resume`. Absent = the runtime's own safe
+   * constant, i.e. every session that existed before this field did.
+   *
+   * It lives here, next to `model` and `effort`, because the same three
+   * questions are asked of it: it must survive a runtime's internal state being
+   * torn down and rebuilt (the Codex idle-revive drops its session state and
+   * reopens a connection, and the reopened one has to come back under the SAME
+   * posture, not under the constant), it must be readable by the send path, and
+   * it must be one value rather than a copy per call site. `agent` is NOT
+   * merged on resume for the same reason it is not here: a session's binding is
+   * fixed for life, and a preference for the other agent is refused upstream.
+   */
+  permissionPreference?: SessionPermissionPreference;
   /** The runtime's own resume handle (Claude Code: the SDK session_id). */
   runtimeIdentity?: string;
   status: SessionRuntimeStatus;
@@ -41,6 +59,7 @@ export class SessionRegistry {
     agent: AgentWireName;
     model?: string;
     effort?: SessionEffortLevel;
+    permissionPreference?: SessionPermissionPreference;
   }): HostSession {
     const existing = this.sessions.get(input.sessionId);
     if (existing) {
@@ -52,6 +71,7 @@ export class SessionRegistry {
       agent: input.agent,
       model: input.model,
       effort: input.effort,
+      permissionPreference: input.permissionPreference,
       status: 'idle',
       running: false,
     };
@@ -66,6 +86,7 @@ export class SessionRegistry {
     agent: AgentWireName;
     model?: string;
     effort?: SessionEffortLevel;
+    permissionPreference?: SessionPermissionPreference;
   }): HostSession {
     const existing = this.sessions.get(input.sessionId);
     if (existing) {
@@ -78,6 +99,10 @@ export class SessionRegistry {
       existing.runtimeIdentity = input.runtimeIdentity;
       existing.model = input.model ?? existing.model;
       existing.effort = input.effort ?? existing.effort;
+      // Same merge rule as model/effort: an omitted preference keeps the one
+      // this session already runs under instead of silently resetting it to the
+      // runtime constant (§5.5: create/resume merge like model and effort).
+      existing.permissionPreference = input.permissionPreference ?? existing.permissionPreference;
       return existing;
     }
     const session: HostSession = {
@@ -86,6 +111,7 @@ export class SessionRegistry {
       agent: input.agent,
       model: input.model,
       effort: input.effort,
+      permissionPreference: input.permissionPreference,
       runtimeIdentity: input.runtimeIdentity,
       status: 'idle',
       running: false,

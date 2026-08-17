@@ -82,7 +82,11 @@ import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { AgentModelCatalog, ListAgentModelsRequest } from '@shared/types/agentCatalog';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { AgentWireName } from '@shared/types/agentWire';
-import type { HostReadyEvent, PermissionDecisionId } from '@shared/types/runtimeEvents';
+import type {
+  HostReadyEvent,
+  PermissionDecisionId,
+  SessionPermissionPreference,
+} from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { parseInitialThemeArg } from '@shared/windowTheme';
@@ -1397,6 +1401,13 @@ const electronAPI = {
       effort?: SessionEffortLevel;
       /** S2 (b): which runtime to start; read off the session via `sessionAgent`. */
       agent?: AgentWireName;
+      /**
+       * D48 S3 §5.5 — the "Chat agent defaults" template, as read at this send.
+       * Only a candidate: Main keeps a posture the session already captured.
+       * Absent (unhydrated settings, no template, an old renderer) = the
+       * runtime's own safe constant.
+       */
+      permissionPreference?: SessionPermissionPreference;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
     /**

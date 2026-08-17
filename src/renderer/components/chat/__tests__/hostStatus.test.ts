@@ -322,3 +322,64 @@ describe('primeHostStatus (S7, round-2 iteration-3 review)', () => {
     });
   });
 });
+
+/**
+ * D48 S3 §5.7-C7 — `capabilities.permissionPolicy` on BOTH channels.
+ *
+ * This file's own history is the reason the two arms are asserted separately
+ * rather than "the key is carried": `settings` was added to the reducer and
+ * forgotten in the prime call, then `agents` repeated it. Both bugs are
+ * invisible to a consumer that mounts after a live `host.ready` and fatal to
+ * one that mounts on a cold start, which is everyone.
+ */
+describe('capabilities.permissionPolicy — both channels (D48 S3, C7)', () => {
+  it('the host.ready fold carries it', () => {
+    const next = reduceHostStatus(
+      initialHostStatus,
+      event('host.ready', {
+        driver: 'agent-sdk',
+        capabilities: { thinking: true, agents: ['claude-code', 'codex'], permissionPolicy: true },
+      })
+    );
+    expect(next.capabilities?.permissionPolicy).toBe(true);
+  });
+
+  it('the prime channel carries it', () => {
+    const next = primeHostStatus(initialHostStatus, {
+      state: 'ready',
+      capabilities: { agents: ['claude-code', 'codex'], permissionPolicy: true },
+    });
+    expect(next.capabilities?.permissionPolicy).toBe(true);
+  });
+
+  it('an old Host omitting the key leaves it undefined on both channels (degrade, never guess)', () => {
+    const folded = reduceHostStatus(
+      initialHostStatus,
+      event('host.ready', { driver: 'agent-sdk', capabilities: { agents: ['claude-code'] } })
+    );
+    expect(folded.capabilities?.permissionPolicy).toBeUndefined();
+    // Absent is not the same as `false`: `false` would be a Host that says it
+    // cannot normalize postures, which no build has ever said.
+    expect('permissionPolicy' in (folded.capabilities ?? {})).toBe(true);
+    expect(folded.capabilities?.agents).toEqual(['claude-code']);
+
+    const primed = primeHostStatus(initialHostStatus, {
+      state: 'ready',
+      capabilities: { agents: ['claude-code'] },
+    });
+    expect(primed.capabilities?.permissionPolicy).toBeUndefined();
+  });
+
+  it('a non-boolean value is dropped rather than coerced, on both channels', () => {
+    const folded = reduceHostStatus(
+      initialHostStatus,
+      event('host.ready', { driver: 'agent-sdk', capabilities: { permissionPolicy: 'yes' } })
+    );
+    expect(folded.capabilities?.permissionPolicy).toBeUndefined();
+    const primed = primeHostStatus(initialHostStatus, {
+      state: 'ready',
+      capabilities: { permissionPolicy: 1 },
+    });
+    expect(primed.capabilities?.permissionPolicy).toBeUndefined();
+  });
+});

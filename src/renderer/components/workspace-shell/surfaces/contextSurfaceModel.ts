@@ -13,8 +13,12 @@
  * React/electronAPI so it runs under the repo's node-env vitest.
  */
 
+import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import type {
+  CodexApprovalPolicy,
+  CodexSandboxMode,
   SessionPermissionMode,
+  SessionPermissionPolicy,
   SessionRetryInfo,
   SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
@@ -96,6 +100,19 @@ export interface ContextRuntimeFacts {
    * 'default'.
    */
   permissionMode: SessionPermissionMode | null | undefined;
+  /**
+   * D48 S3 §5.2 — the per-agent posture, which is what a Codex session reports
+   * (it has no `permissionMode` at all, so before this field its whole
+   * Permission policy row simply vanished).
+   *
+   * Kept ALONGSIDE `permissionMode` rather than replacing it, because the wire
+   * itself keeps both: `SessionCreatedEvent.payload` still carries the historic
+   * `permissionMode` and a Host that predates the policy field sends only that
+   * one. Same tri-state as the field above — `undefined` omits, `null` means
+   * "session exists, nothing reported". When both are present this one wins
+   * (`runtimeEvents.ts`'s own rule for the pair).
+   */
+  permissionPolicy?: SessionPermissionPolicy | null;
   host: ContextHostFacts;
 }
 
@@ -176,10 +193,79 @@ const PERMISSION_MODE_LABELS: Record<SessionPermissionMode, string> = {
   plan: 'Plan',
 };
 
+/**
+ * D48 S3 §5.2 — codex's own vocabulary, kept VERBATIM on purpose.
+ *
+ * The Claude table above turns wire tokens into prose because `acceptEdits`
+ * is not a phrase anyone says. These are the opposite case: `on-request` and
+ * `danger-full-access` are the exact strings the user sees in codex's own docs
+ * and config file, and "Full access" would read as a milder thing than the word
+ * `danger` the vendor deliberately put in the token. The tables exist for the
+ * exhaustiveness (a new enum member fails to compile until it is listed here,
+ * which is also what makes them the validity sets below), not for translation.
+ */
+const CODEX_APPROVAL_LABELS: Record<CodexApprovalPolicy, string> = {
+  untrusted: 'untrusted',
+  'on-request': 'on-request',
+  never: 'never',
+};
+
+const CODEX_SANDBOX_LABELS: Record<CodexSandboxMode, string> = {
+  'read-only': 'read-only',
+  'workspace-write': 'workspace-write',
+  'danger-full-access': 'danger-full-access',
+};
+
 /** `null` = Host never reported a mode for this session — the ONLY honest string, never a guessed 'default'. */
 function permissionPolicyLabel(mode: SessionPermissionMode | null): string {
   if (!mode) return 'Permission policy not reported';
   return PERMISSION_MODE_LABELS[mode] ?? mode;
+}
+
+/**
+ * One row per agent shape, and codex's three dimensions stay three.
+ *
+ * Folding `approval × sandbox × network` down into a Claude `permissionMode`
+ * would need a mapping nobody can write honestly: `never` + `read-only` is not
+ * `dontAsk` (nothing is being skipped, everything is being refused) and
+ * `on-request` + `danger-full-access` is not `default`. A summary line reports
+ * all three, so the panel never claims a posture the runtime is not in.
+ *
+ * The narrowing is by KEY rather than by comparing `policy.agent` to the
+ * exported constants: those are typed as the wide `AgentWireName` and cannot
+ * narrow a discriminated union (same spelling as the shared guards).
+ */
+function permissionPolicyValue(policy: SessionPermissionPolicy): string {
+  if ('permissionMode' in policy) {
+    // Claude's arm renders through the SAME table as the legacy field, so a
+    // policy-reporting Host and an old one produce byte-identical rows (C3).
+    return permissionPolicyLabel(policy.permissionMode);
+  }
+  const approval = CODEX_APPROVAL_LABELS[policy.approvalPolicy] ?? policy.approvalPolicy;
+  const sandbox = CODEX_SANDBOX_LABELS[policy.sandboxMode] ?? policy.sandboxMode;
+  // Three states, not two. `networkAccess` is the one dimension the Host never
+  // requests — it is read off the `thread/start` echo and is simply absent on a
+  // resumed thread, whose result never carries the key [实测]. Rendering an
+  // absent value as `off` is the same class of lie as guessing `default` for a
+  // missing permission mode, and it is worse on `danger-full-access`, a tier
+  // that has no network limit at all.
+  const network =
+    policy.networkAccess === undefined ? 'not reported' : policy.networkAccess ? 'on' : 'off';
+  return `Approval: ${approval} · Sandbox: ${sandbox} · Network: ${network}`;
+}
+
+/**
+ * The pair's precedence, in one place: a reported POLICY beats the historic
+ * `permissionMode`, per `SessionCreatedEvent.payload.permissionPolicy`'s own
+ * wire note ("absent = fall back to the permissionMode row"). Reversing these
+ * two lines is what mutation ② tests.
+ */
+function permissionRowValue(
+  policy: SessionPermissionPolicy | null,
+  mode: SessionPermissionMode | null
+): string {
+  if (policy) return permissionPolicyValue(policy);
+  return permissionPolicyLabel(mode);
 }
 
 function buildHostRows(host: ContextHostFacts): ContextRow[] {
@@ -219,11 +305,14 @@ function buildRuntimeRows(facts: ContextRuntimeFacts): ContextRow[] {
       value: effortDisplayLabel(facts.effortSelection),
     });
   }
-  if (facts.permissionMode !== undefined) {
+  // Either carrier being present means this session has something to say about
+  // its posture; only "no active session at all" (both `undefined`) omits the
+  // row. A Codex session reports the policy alone, an old Host the mode alone.
+  if (facts.permissionPolicy !== undefined || facts.permissionMode !== undefined) {
     rows.push({
       id: 'permission-policy',
       label: 'Permission policy',
-      value: permissionPolicyLabel(facts.permissionMode),
+      value: permissionRowValue(facts.permissionPolicy ?? null, facts.permissionMode ?? null),
     });
   }
   rows.push(...buildHostRows(facts.host));
@@ -417,13 +506,20 @@ export const STDERR_CONTEXT_KEEP_LINES = 20;
  * the per-session ring bounds lines, but nothing else ever removes a session
  * entry, so a long-running app accumulating sessions would grow without
  * limit. Eviction strips ONLY the `stderr` field of the oldest carrier —
- * `permissionMode` is a different fact with its own invariants and must not
- * be collateral.
+ * `permissionMode` and `permissionPolicy` are different facts with their own
+ * invariants and must not be collateral.
  */
 export const STDERR_SESSIONS_MAX = 12;
 
 export interface SessionRuntimeFacts {
   permissionMode?: SessionPermissionMode;
+  /**
+   * D48 S3 §5.2 — the per-agent posture echoed on `session.created` /
+   * `session.resumed`. Independent of `permissionMode` above: a Claude session
+   * may carry both, a Codex session only this one, and a Host that predates the
+   * field only the other. Neither ever overwrites the other.
+   */
+  permissionPolicy?: SessionPermissionPolicy;
   /** T-35: absent until the first `session.stderr` event arrives. */
   stderr?: SessionStderrFacts;
   /**
@@ -445,9 +541,70 @@ export type SessionRuntimeFactsState = Record<string, SessionRuntimeFacts>;
 export const initialSessionRuntimeFacts: SessionRuntimeFactsState = {};
 
 const VALID_PERMISSION_MODES = new Set<string>(Object.keys(PERMISSION_MODE_LABELS));
+const VALID_CODEX_APPROVALS = new Set<string>(Object.keys(CODEX_APPROVAL_LABELS));
+const VALID_CODEX_SANDBOXES = new Set<string>(Object.keys(CODEX_SANDBOX_LABELS));
 
 function isSessionPermissionMode(value: unknown): value is SessionPermissionMode {
   return typeof value === 'string' && VALID_PERMISSION_MODES.has(value);
+}
+
+/**
+ * D48 S3 §5.2 — the strict guard for the policy half of the pair.
+ *
+ * Strict means: the discriminant must be one of the two agents this build
+ * knows, EVERY field of that arm must be present and inside its vocabulary, and
+ * the other arm's fields must be absent. A widened `string` is refused for the
+ * same reason `isSessionPermissionMode` refuses one — this value arrives as raw
+ * JSON from the Host, and half-reading a posture is worse than reporting none:
+ * the panel would state a constraint the session is not actually under.
+ *
+ * Lives here, next to its only consumer, on the same "guards follow consumers"
+ * rule as `isSessionPermissionMode` directly above.
+ */
+function isSessionPermissionPolicy(value: unknown): value is SessionPermissionPolicy {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const raw = value as Record<string, unknown>;
+  if (raw.agent === CLAUDE_CODE_AGENT) {
+    return (
+      isSessionPermissionMode(raw.permissionMode) &&
+      !('approvalPolicy' in raw) &&
+      !('sandboxMode' in raw)
+    );
+  }
+  if (raw.agent === CODEX_AGENT) {
+    return (
+      typeof raw.approvalPolicy === 'string' &&
+      VALID_CODEX_APPROVALS.has(raw.approvalPolicy) &&
+      typeof raw.sandboxMode === 'string' &&
+      VALID_CODEX_SANDBOXES.has(raw.sandboxMode) &&
+      // OPTIONAL, and only here: a Host that could not learn the dimension
+      // omits the key (every resumed thread does), and refusing that payload
+      // would throw away the two dimensions it DID verify. A key that is
+      // present must still be a boolean — a widened `'false'` string would
+      // render as `on`.
+      (!('networkAccess' in raw) || typeof raw.networkAccess === 'boolean') &&
+      !('permissionMode' in raw)
+    );
+  }
+  return false;
+}
+
+/** Field-by-field, because the reducer's no-change identity check needs it. */
+function samePermissionPolicy(
+  a: SessionPermissionPolicy | undefined,
+  b: SessionPermissionPolicy | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if ('permissionMode' in a) {
+    return 'permissionMode' in b && a.permissionMode === b.permissionMode;
+  }
+  return (
+    !('permissionMode' in b) &&
+    a.approvalPolicy === b.approvalPolicy &&
+    a.sandboxMode === b.sandboxMode &&
+    a.networkAccess === b.networkAccess
+  );
 }
 
 interface SessionRuntimeFactsEvent {
@@ -468,6 +625,10 @@ interface SessionRuntimeFactsEvent {
  *    dropped the field must not erase a previously-reported truth);
  *  - sessions are isolated — folding an event for session A never touches
  *    session B's entry.
+ *
+ * D48 S3 adds `permissionPolicy` under both invariants, and one more of its
+ * own: the two fields never overwrite each other. See the N4 note at the read
+ * site below for the ordering this depends on.
  */
 export function reduceSessionRuntimeFacts(
   prev: SessionRuntimeFactsState,
@@ -496,16 +657,42 @@ export function reduceSessionRuntimeFacts(
     event.payload && typeof event.payload === 'object'
       ? (event.payload as Record<string, unknown>)
       : undefined;
-  const permissionMode = payload?.permissionMode;
-  if (!isSessionPermissionMode(permissionMode)) {
+  // ⚠️ N4 (承重, same shape as the D33 incident recorded ~20 lines above):
+  // the policy MUST be read BEFORE the `permissionMode` guard below. A Codex
+  // payload carries no `permissionMode` key at all, so it fails that guard and
+  // returns — any policy handling placed after it is a silent no-op for the
+  // one agent it exists to serve. The ordering is pinned by an assertion of its
+  // own (C2), not by this comment.
+  const permissionPolicy = isSessionPermissionPolicy(payload?.permissionPolicy)
+    ? payload.permissionPolicy
+    : undefined;
+  const rawMode = payload?.permissionMode;
+  const permissionMode = isSessionPermissionMode(rawMode) ? rawMode : undefined;
+  // Nothing valid on either carrier: an old Host, a resume that dropped the
+  // fields, or a garbage value. Keep whatever this session already reported —
+  // erasing a known truth is the failure, not the missing update.
+  if (!permissionPolicy && !permissionMode) {
     return prev;
   }
 
   const existing = prev[sessionId];
-  if (existing?.permissionMode === permissionMode) {
+  const nextPolicy = permissionPolicy ?? existing?.permissionPolicy;
+  const nextMode = permissionMode ?? existing?.permissionMode;
+  if (
+    existing &&
+    samePermissionPolicy(existing.permissionPolicy, nextPolicy) &&
+    existing.permissionMode === nextMode
+  ) {
     return prev;
   }
-  return { ...prev, [sessionId]: { ...existing, permissionMode } };
+  return {
+    ...prev,
+    [sessionId]: {
+      ...existing,
+      ...(nextPolicy ? { permissionPolicy: nextPolicy } : {}),
+      ...(nextMode ? { permissionMode: nextMode } : {}),
+    },
+  };
 }
 
 /**
