@@ -1,4 +1,4 @@
-# D48 施工规格（定稿 rev.2）— Codex CLI 选择功能（阶段 3）
+# D48 施工规格（定稿 rev.3）— Codex CLI 选择功能（阶段 3）
 
 > 2026-08-16。**定稿 rev.1 = A 稿（Opus 轨）为底本 + B 稿（Codex 轨）吸收项 + 仲裁档裁定 + 用户拍板三条**
 > （家族规则白名单 / D40 model-effort 都补 / 官方 CLI 中途 `/model` 佐证）。
@@ -6,9 +6,18 @@
 > [A 稿](./2026-08-16-agent-picker-investigation/design-track-a.md) →
 > [B 稿](./2026-08-16-agent-picker-investigation/design-track-b.md) →
 > [05 设计任务书](./2026-08-16-agent-picker-investigation/05-design-brief.md) → 调查 00~04。
-> 一切与仲裁档冲突处以仲裁档为准；本文自身是施工唯一入口，实现方对标注「条件执行」的项保留否决权。
+> 一切与仲裁档冲突处以仲裁档为准（**唯一例外**：仲裁 §1 收敛表「权限写侧首期只管创建/恢复默认档」行已被仲裁 §4-3-Q1 的用户拍板自我改判，以 §4-3 为准）；本文自身是施工唯一入口，实现方对标注「实现方可否决」的项保留否决权（**rev.3 起全文已无「条件执行」项**）。
 >
 > **rev.2（2026-08-16，三镜头对抗核查后修订）**：① 越权自裁的写侧落点与危险档控件退回 **§8.0 需用户拍板**（仲裁 §1 只裁持久化位置）；② `agentBindingLocked` 的来源与 `ChatWorkspace.tsx` 改动面补齐（照 rev.1 抄编译不过）；③ 锁定判据按 store/UI 分层（`sendAttempted` 不在 store）；④ 锁定态收敛为单段静态 chip（`deriveMiddleColumnMode` 实测：session 模式恒锁定）；⑤ `lastAgent` 记忆移出 S1 并补 hydration 口径；⑥ 回退回写 / 空列表发送守卫 / 消费侧回写 / unverified 存量选择 / Main 侧 model 校验各补断言与变异对；⑦ cache key 去掉不存在的 `credentialGeneration`；⑧ 十余处行号引用按 `cat -n` 实测校正。
+>
+> **rev.3（2026-08-16，用户三项拍板 + 三探针实证后修订）**
+>
+> **拍板三条**（[仲裁 §4-3](./2026-08-16-agent-picker-investigation/design-arbitration.md)）：① **Q1：中途改权限档 = 必做**（用户原话「肯定要支持中途改啊」）——**S4 由条件切片升为正式切片**，写侧收敛为**双层**（Composer 实时控件管当前会话 + Settings「Chat agent defaults」默认模板管新会话起点，与 codeg 同构）；仲裁 §1 收敛表「权限写侧首期只管创建/恢复默认档」行按本条**改判作废**。② **Q3：危险档给控件 + warning + 二次确认，默认值绝不是危险档**（两层同口径，断言钉死）。③ **Q4：P1/P2/P3 三探开工前齐发**——**已执行完毕**。
+>
+> **探针三证**（[06-probes.md](./2026-08-16-agent-picker-investigation/06-probes.md)，live 3 回合 / 预算 ≤8，本地配置零写入）：**P1 ✅** `turn/start` 覆盖 model 是 sticky（覆盖写进线程常驻设置并广播 `thread/settings/updated`；`sandboxPolicy` 同样 sticky）⇒ §4.6 防线 ① 已过、S2 的 D40 半边不再条件执行；**P2 ✅** Claude 中途改档 = per-turn `query()` options（无需 `setPermissionMode`、无 streaming-input 前提），`CHAT_PERMISSION_MODE` 的**三消费点须同喂**（`:754` query options / `:341` session.created / `:391` session.resumed）；**P3 ✅** `thread/settings/update` 存在、零回合生效、**未知字段静默吞**（⇒ 类型 + 单测兜底）。
+>
+> **本轮受影响章节**：文档头 · §0.1/§0.2 · §1.1 · §2 · §4.6（连带 §4.8-B8 / §4.9-⑥）· §5.1/§5.4/§5.5/§5.7/§5.8 · **§6 全面改写** · §7 · §8 · §9。**§3（S1）一字未动——S1 正在施工。**
+> **已知悬挂引用（不本轮修）**：§3.3 有一处括注「S3 若将来恢复 per-session 权限控件（§8.0-Q1）须同 import」——rev.3 口径下该分支**不会发生**（S4 的权限控件**不消费**锁定判据，见 §6.3 与 D13），因 §3 冻结，留待 S1 收口 as-built 时一并清理。
 
 ---
 
@@ -16,9 +25,9 @@
 
 ### 0.1 三句话
 
-1. **切四片，依赖序 S1 → S2 → S3 → S4（条件切片）**：S1 = agent picker + 零回合绑定（纯渲染端 + `capabilities.agents` 首消费者，零协议改动）；S2 = 模型目录代理化（家族白名单过滤）+ D40 Codex 半边补齐；S3 = 权限读侧闭环 + 新会话默认档写侧；S4 = 会话中途改权限档，**探针先行、条件执行，不阻断 D48 收口**。
+1. **切四片，依赖序 S1 → S2 → S3 → S4（rev.3 起四片全为正式切片）**：S1 = agent picker + 零回合绑定（纯渲染端 + `capabilities.agents` 首消费者，零协议改动）；S2 = 模型目录代理化（家族白名单过滤）+ D40 Codex 半边补齐；S3 = 权限读侧闭环 + 新会话默认档写侧（**模板层**）；S4 = **会话中途改权限档（Q1 拍板，由条件切片升正式切片）**：Composer 实时控件 + 两条已实证通道（Claude per-turn `query()` options / Codex `thread/settings/update`）。
 2. **目录服务归 Main，不进 agent-host、不塞 `host.ready`**：凭据只在 Main 的 CredentialVault（`CredentialVault.ts:52-56`），agent-host 子进程只拿到 `AICLIENT_CODEX_API_KEY` 一个 key、**没有任何 baseUrl**（`hostEnv.ts:64-71` 八键全列）；把目录查询放进 Host 需要新增 env 键扩散凭据面，与 D47「凭据权威收敛到 app」直接冲突。范式照抄 `UsageService.ts:102-131`（`resolveManagedCredentialsEnabled` → vault → `net.fetch`），走**独立 IPC**，key 与 baseUrl 都不进 renderer（`runtimeEvents.ts:85-115`：capabilities 只描述 Host build 能力）。
-3. **D40 Codex 半边 = `buildTurnStartParams` 补 `model` 与 `effort` 两者**（用户拍板 2026-08-16，双轴行为对称优先；官方 codex CLI 会话中途 `/model` 即上游一等公民路径）。A 稿「不补 model」的双真源分析**不丢弃**，全部转为三条条件执行防线（探针先行 / 覆盖后回写收敛为单一真源 / 中途改 model 路径必须有显式测试与变异对），见 §4.6。
+3. **D40 Codex 半边 = `buildTurnStartParams` 补 `model` 与 `effort` 两者**（用户拍板 2026-08-16，双轴行为对称优先；官方 codex CLI 会话中途 `/model` 即上游一等公民路径）。A 稿「不补 model」的双真源分析**不丢弃**，全部转为三条防线（① 探针先行 —— **rev.3 已过：P1 实证 sticky 成立** / ② 覆盖后回写收敛为单一真源 —— **回写值取 `thread/settings/updated` 广播，不做乐观更新** / ③ 中途改 model 路径必须有显式测试与变异对），见 §4.6。
 
 ### 0.2 定稿相对双轨草案的改判清单
 
@@ -30,14 +39,16 @@
 | 2 | 目录数据形状 | A/B 均为「代理返回的全量目录」（claude 15 / codex 10） | **家族规则白名单过滤后的目录**（Main 侧过滤层），种子表六条 | 拍板 #5（05 简报 :12）+ 仲裁 §3 |
 | 3 | 不可用 agent 的表达 | A：`agents.length < 2` 整个 picker 不挂载 | **恒渲染两项，不可用项置灰 + tooltip 原因** | 仲裁 §1；`runtimeEvents.ts:104-108` 类型注释本就写 disable 而非 hide |
 | 4 | 三态琥珀点 | A 的可选加法 C1 / codeg 参照 | **不做（首期二态）**，扩 wire 进遗留登记 | 仲裁 §2.2；N2：`HostAgentDetail.reason` 不过 wire |
-| 5 | 切片数 | A：3 片（中途改档并进 S3 探针） | **4 片，S4 单列为条件切片** | 仲裁 §1 采 B 的单列形式，边界更清晰 |
+| 5 | 切片数 | A：3 片（中途改档并进 S3 探针） | **4 片，S4 单列且为正式切片**（rev.2 曾记「条件切片」，rev.3 按 Q1 拍板升格） | 仲裁 §1 采 B 的单列形式，边界更清晰；仲裁 §4-3-Q1 定「中途改档必做」 |
 | 6 | 锁定判据 | A：`computeEverHostBound`；B：`onSendStart()` latch | **两者合取**：`sendAttempted \|\| hostBound \|\| runtimeIdentity != null` | 仲裁 §2.2「两轨各答了半边」 |
 | 7 | agent 草稿存哪 | A：新 localStorage key + `resolveDraftAgent` 双路径接线 | **store 窄 action `setDraftSessionAgent`（零新字段）** | B §3.3；`chatSessions.ts:95-114` 只禁「第二默认值」，不禁用户显式选择；A 的「读一律经 `sessionAgent()`」与显式回退语义保留 |
 | 8 | 目录缓存介质 | A：进程内 + `<userData>` 磁盘缓存 TTL 24h | **仅进程内内存 cache**，磁盘快照不做 | 仲裁 §2.2 回退链写死「进程内 stale cache」；B U2 的「昨日目录冒充当前真源」关切 |
 | 9 | 目录回退第三级 | A：内置 snapshot = 04 实测 25 条全表 | **内置种子表 = 白名单过滤后六条，`source:'seed'` 且 UI 显示「目录不可达」** | 仲裁 §2.2（合取 B 的「不得伪装可用目录」）+ 拍板 #5 |
 | 10 | 新会话默认 model | A：取目录第一条 | **`Automatic`（省略 model）** | B U1：不猜服务端/规则排序；短名常量 `DEFAULT_CHAT_MODEL_ID` 同样退役。**实现方可否决**：若 Claude 轴 Automatic 在 resume 后产生可感知漂移（`agentHost.ts:91-96`），退到「该 agent 的 `byAgent` 默认；仍无则退到 §4.2 定义的**本仓确定性家族序首条**」——注意该序是本仓硬编码的家族序，**不是 `/v1/models` 的返回序**（返回顺序不做任何语义假设，B U1 原意如此），回退到安全态 |
-| 11 | 权限写侧落点与持久化 | A：Context 面板未物化可写 + localStorage | **Settings 新增「Chat agent defaults」区 + app settings 持久化；Context 面板恒只读**（**落点为定稿推荐案，待 §8.0-Q1 用户拍板**） | **持久化位置**由仲裁 §1 裁定（app settings 独立区、不复用终端轴 AgentSettings、不写 `~/.codex/config.toml`）；**写侧 UI 落点仲裁档未裁**（§2.2 五项与 §4-2 吸收清单均不含此项），故本行只是推荐案 → §8.0-Q1；B §5.3 Preference/Policy 双类型要求 Context 只承载 Host 回声 |
+| 11 | 权限写侧落点与持久化 | A：Context 面板未物化可写 + localStorage | **双层写侧**：Settings 新增「Chat agent defaults」区（新会话模板，S3）+ **Composer 实时权限控件（当前会话中途可改，S4）**；Context 面板**恒只读** | **持久化位置**由仲裁 §1 裁定（app settings 独立区、不复用终端轴 AgentSettings、不写 `~/.codex/config.toml`）；**写侧 UI 落点由 §8.0-Q1 拍板**（仲裁 §4-3：与 codeg 同构的双层；rev.2 的「只做 Settings 模板」推荐案作废）；B §5.3 Preference/Policy 双类型要求 Context 只承载 Host 回声 |
 | 12 | 权限 preference 的会话快照 | A：无（草稿不跨重启） | **首发时物化进 session-index 可选字段，resume 优先会话快照** | B §5.3：否则改 Settings 会在重启后静默改变旧会话安全姿态 |
+| 13 | 会话中途改权限档 | A/B 均为**条件执行**（探针不成立即该轴不做） | **必做，S4 正式切片**：Claude = per-turn `query()` options（P2）；Codex = `thread/settings/update`（P3）；成功后**更新会话快照、不回写全局模板** | 仲裁 §4-3-Q1 用户拍板；06-probes P2/P3 两条通道均实证成立 |
+| 14 | 危险档控件 | A 推荐 (a) 给 + warning + 二次确认（未拍板）；rev.2 挂在 §8.0-Q3 待拍 | **拍定 (a)**：给 + warning + **二次确认** + **绝不做默认/回退值**，模板层与实时层**两层同口径**；Claude `bypassPermissions` 下发时必须同发 `allowDangerouslySkipPermissions:true` | 仲裁 §4-3-Q3 用户拍板；扩权键出处 = 06-probes P2（`sdk.d.ts:1729`） |
 
 ### 0.3 承重事实（调查抽查 + 本批新发现）
 
@@ -70,7 +81,9 @@
 3. **三轴隔离**：不碰终端轴 `AgentPickerMenu`/`SessionBar`；聊天轴另立入口；`AgentWireName` 与 `BuiltinAgentId` 不互转（静态断言已钉，`agentWireStatic.test.ts` 保持绿）。
 4. 沿用既定：D45 直连（无 ACP config_options 通道）；flag `AICLIENT_AGENT_CODEX` 只控 Host registry/capabilities 与运行时注册，**renderer/store 形状不得因 flag 分叉**；红线 store `chatSessions.ts` 只走加法。
 5. **模型展示面 = 家族规则白名单 + 动态推导**（拍板 #5，落点见 §4.2）：规则硬编码，型号动态推导；全新家族名默认不上架；三级回落含内置种子表（**拍板原话是「三级回落」；定稿在其后加了 `Automatic + Retry` 兜底，共四级，见 §4.1** —— 加的是最后一级安全态，不改前三级）；静态短名表 `CHAT_MODELS` 随之退役。
-6. **D40 Codex 半边 = model / effort 都补**（拍板，见 §4.6 的三条条件执行防线）。
+6. **D40 Codex 半边 = model / effort 都补**（拍板，见 §4.6 的三条防线；**防线 ① 探针已过**）。
+7. **中途改权限档 = 必做需求**（拍板 2026-08-16，仲裁 §4-3-Q1，用户原话「肯定要支持中途改啊」；理由与 D40 同构——官方 CLI 两侧都支持中途改档，后端即同一 CLI 运行时）：**S4 升为正式切片**；写侧 = **Composer 实时控件（当前会话）+ Settings 默认模板（新会话起点）双层**，与 codeg 同构。**仲裁 §1 收敛表「权限写侧首期只管创建/恢复默认档」行按本条改判作废**（该表其余行不变；权限数据的**持久化位置**裁定仍有效）。
+8. **危险档 = 给控件 + warning + 二次确认 + 绝不做默认值**（拍板，仲裁 §4-3-Q3）：模板层与实时层**逐条同口径**，断言钉死（§5.7-C13/C16、§6.5-D3/D12）。
 
 ### 1.2 运维铁律（仲裁 §3.5，约束全部后续探针与施工，用户原话强调）
 
@@ -94,18 +107,20 @@
 | 片 | 名称 | 范围 | 依赖 | 协议改动 | 独立可回归 |
 |---|---|---|---|---|---|
 | **S1** | agent picker 与零回合绑定 | Composer 新入口 + `capabilities.agents` 首消费者 + 锁定判据下沉（含 `ChatWorkspace.tsx` 计算并下传 `agentBindingLocked`）+ 降级矩阵 | 无（**不含跨会话 `lastAgent` 记忆**——它要动 app settings 三处落点，整体推迟到 S2，见 §3.3-4） | **无** | ✅ 四门 + off/on 双轮 + 两轴首发 GUI |
-| **S2** | 模型目录代理化 + D40 Codex 半边 | Main `AgentCatalogService`（含家族白名单过滤层）+ 1 条 IPC + per-agent 目录/偏好（`ChatAgentDefaults` app settings 区，含 `lastAgent`）+ 短名兼容 + `turn/start` 补 model/effort | **S1 + P1 探针**（§4.6 防线 ①；P1 未过则本片 D40 半边退到只补 effort 并回报用户重拍，其余照做） | 加法（`CodexTurnStartParams` 加可选 `model`/`effort`；app settings 既有通道加字段，无 Host 协议改动） | ✅ 四门 + **四级回落四轮**（含凭据不可用臂）+ D40 payload |
+| **S2** | 模型目录代理化 + D40 Codex 半边 | Main `AgentCatalogService`（含家族白名单过滤层）+ 1 条 IPC + per-agent 目录/偏好（`ChatAgentDefaults` app settings 区，含 `lastAgent`）+ 短名兼容 + `turn/start` 补 model/effort | **S1**（P1 探针 **✅ 已过**：sticky 成立，见 [06-probes §P1](./2026-08-16-agent-picker-investigation/06-probes.md)；D40 半边**不再条件执行**） | 加法（`CodexTurnStartParams` 加可选 `model`/`effort`；app settings 既有通道加字段，无 Host 协议改动） | ✅ 四门 + **四级回落四轮**（含凭据不可用臂）+ D40 payload |
 | **S3** | 权限读侧闭环 + 新会话默认档 | Codex 读侧补链 + `capabilities.permissionPolicy` 补发 + Settings「Chat agent defaults」+ create/resume preference 通道 | S1（按 agent 分岔） | 加法（capabilities 补键 + create/resume 加可选 preference + session-index 可选字段） | ✅ 四门 + 双轴 Context 对照 |
-| **S4** | 会话中途改权限档 | **条件切片**：两条探针任一成立才做对应轴的 idle selector | S3 + 对应探针 PASS | 条件（`CODEX_METHOD` 扩项须先落 contract fixture） | ✅ 探针报告 + fixture + 四门 |
+| **S4** | 会话中途改权限档（**正式切片**） | Composer 实时权限控件（idle-only）+ Claude `CHAT_PERMISSION_MODE` 升会话态（**三消费点同喂**）+ Codex `thread/settings/update` 通道与 `thread/settings/updated` 回声订阅 + 会话快照更新 | **S3**（通道已实证，不再条件执行） | 加法（`CODEX_METHOD` 扩 `thread/settings/update`，**须先落 contract fixture**；runtime command 加法，renderer 形状不按 flag 分叉） | ✅ 四门 + 双轴 idle/busy 双轮 + 危险档二次确认 |
 
 **为什么是这四片**：
 
 - **S1 与 S2 不能合**：S1 是零协议、零 Main、纯渲染端的一片（**跨会话 `lastAgent` 记忆因此不能留在 S1**——它要动 `stores/settings/` 的 `types.ts`/`defaults.ts`/`migration.ts` 并踩异步 hydration 竞态，见 §3.3-4/§4.3），可在 flag-off 下全绿收口并单独 GUI 点验；S2 一并入就把「新增 Main 服务 + 网络 IO + 缓存 + Host 协议加法」拖进同一次回归，失败面从一个组件扩到四个进程边界，红了分不清是谁。
 - **S2 与 S3 不能合**：唯一耦合点是「都要按 agent 分岔」，而那个分岔在 S1 已建立。
 - **S2 内部不再切第 4 片**：「目录查询」与「D40 半边」看似可分，但补 model/effort 的前提就是目录/词表已有真源，拆开会让 S2 落一个「查了目录但没人用」的半成品，违反规范第 6 条（每个能力都要能 on/off 双跑并各自有意义）。
-- **S4 必须单列且条件执行**（仲裁 §1 采 B 的单列形式）：两条协议半通道均未实证，探针不成立则该轴不做实时 selector，**不阻断 D48 收口**。S4 先提交探针（只含 fixture/测试工具与报告），结论成立后另提实现提交；**S4 不得成为 S1~S3 的暗含前提**。
+- **S4 单列，但 rev.3 起是正式切片**（单列形式仍采 B 稿；升格依据 = 仲裁 §4-3-Q1）：两条通道已由 06-probes 实证（P2 Claude per-turn options / P3 Codex `thread/settings/update`），**「探针不成立就不做」的臂已删除**。单列的理由改为工程边界——S4 是唯一一片要动 `CODEX_METHOD` 方法表、把 `CHAT_PERMISSION_MODE` 常量升成会话态、并新增一条设置回声订阅的切片，与 S3 的「读侧 + 模板写侧」是两套失败面。**S4 仍不得成为 S1~S3 的暗含前提**：S1~S3 各自可独立收口发布，产品在 S4 落地前不出现实时权限控件。
 
-**最小安全交付线 = S1 + S2 + S3**（其中 S2 的 D40 半边**条件执行**：P1 探针未过则退到只补 effort 并回报用户重拍，不阻断本线收口）：用户能零回合选 agent；模型/effort 由代理真实目录（白名单过滤）驱动且 Codex 本回合生效；权限既能如实展示，也能管理新会话默认值。
+**最小安全交付线 = S1 + S2 + S3 + S4**（rev.3 按 Q1 拍板扩线；S2 的 D40 半边**不再条件执行**——P1 已过）：用户能零回合选 agent；模型/effort 由代理真实目录（白名单过滤）驱动且 Codex 轴覆盖后成为线程新默认；权限既能如实展示、能管新会话默认模板，**也能在会话中途改当前会话的档位**。
+
+> **与 rev.2 的差别要读清**：若 S4 因排期延期，S1~S3 仍是可独立发布的安全态（不渲染实时控件，模板层照常工作）——但那是**延期**，不是 rev.2 的「条件不成立就不做」。中途改档已是承诺的需求，不得再以「探针」为由缩范围。
 
 ---
 
@@ -405,7 +420,7 @@ Codex 有两个可能来源：cch `GET /v1/models`（10 条，调查 04 实测�
 - 接了就有两张 codex 目录要合并，而合并规则（交集？并集？谁优先？）没有任何证据支撑。
 - 代价：`CODEX_METHOD`（`codexWire.ts:85-96`，实为**十方法**）不用加第十一个方法，agent-host 不用加凭据面。
 
-### 4.6 D40 Codex 半边：**model / effort 都补 + 三条条件执行防线**
+### 4.6 D40 Codex 半边：**model / effort 都补 + 三条防线（rev.3：防线 ① 探针已过）**
 
 > **定稿裁定（用户拍板 2026-08-16，仲裁 §2.1）：`buildTurnStartParams` 同时补 `model` 与 `effort`。**
 > A 稿的「不补 model」被推翻，但其**双真源分析全部保留为防线理由背景**（下）。
@@ -420,13 +435,14 @@ Codex 有两个可能来源：cch `GET /v1/models`（10 条，调查 04 实测�
 **拍板理由（用户，双轴行为对称优先）**：同一个 D48 UI 在 Claude 轴能中途改 model、Codex 轴无效，是确定性错误而非安全降级。
 **用户补充佐证（同日）**：官方 codex CLI 本身支持会话中途 `/model` 换模型与 effort，后端同为 app-server 长驻 thread ——**「中途覆盖 model」是上游一等公民路径，「覆盖即新默认」有官方先例**，A 轨的双真源担忧因此进一步降级。
 
-**A 轨反例转成的三条防线（不丢弃，全部为施工前置/硬约束）**：
+**A 轨反例转成的三条防线（不丢弃，全部为施工前置/硬约束；rev.3 起防线 ① 已由 P1 实证关闭，②③ 原样生效）**：
 
-- **① 探针先行【条件执行】**：施工前用真实 thread 实证 `turn/start` 覆盖 model 的 sticky 行为与 `thread/start` 值的关系（覆盖是否延续到后续回合、与 resume 重派生是否冲突）。
-  **预期不是「验证是否可行」，而是「确认 CLI 同款行为并抄其报文形状」**——需看清官方 CLI 的 `/model` 走的是 `turn/start` 覆盖还是别的方法，**照抄不猜**。
-  **不过怎么办**：探针推翻「覆盖即新默认」→ 回退到只补 effort（安全态）**并回报用户重拍**，不得自行改语义。
-  探针受 §1.2 运维铁律约束：事前报测试项与预计用量，最小 payload。
+- **① 探针先行【✅ 已过，rev.3】**：P1 实测（[06-probes §P1](./2026-08-16-agent-picker-investigation/06-probes.md)，live 2 回合，`~/.claude` / `~/.codex` / dev.env 零写入）——`thread/start` 钉 `gpt-5.6-sol` → 第 1 发 `turn/start` 带 `model:'gpt-5.5'` → **第 2 发不带任何覆盖，rollout 的逐回合 `turn_context` 仍是 `gpt-5.5`**（`sandboxPolicy` 同样没回到 `thread/start` 的值）；schema 侧 `TurnStartParams` 的 `model`/`effort`/`approvalPolicy`/`sandboxPolicy` 等覆盖字段描述逐条写着 "for this turn AND subsequent turns"（06 §0.3），即**codex 在 schema 层就没有「仅本回合」的覆盖语义**。
+  → **「覆盖即新默认」成立，`buildTurnStartParams` 补 model/effort 的前提坐实**；「探针推翻则退回只补 effort」的回退臂**不再触发**（保留在 §7-R8 作为历史依据，不再是活条款）。
+  **连带口径（P1 对 S2 的直接指示 1，必须落进 UI）**：Codex 轴**不存在 per-message 模型语义**——选了 X 就是整条线程改成 X，直到下次再改。S2 的模型选择器在 Codex 轴按「**线程当前模型**」呈现，**不得复制 Claude 轴的 per-turn 心智**（Claude 轴每回合重开 `query()`，见 P2）；文案与 tooltip 按此写，两轴不共用一句话。
+  **顺带实证（归 S4 用）**：`turn/start` 覆盖 `approvalPolicy`/`sandboxPolicy` 同样合法且 sticky——但 **S4 的实时权限走 `thread/settings/update`（零回合），不为改档去凑一个 `turn/start`**（§6.2-1）。
 - **② 单一语义写死（消双真源靠回写收敛，不靠禁止覆盖）**：`turn/start` 覆盖成功后，运行时**必须**把新 model 写回会话状态（Host `SessionRegistry` session default），对齐 Claude 轴 `claudeRuntime.ts:514-522` 的回写模式（回写语句本身在 `:522`），使 `thread/start` 的初始值不再被任何路径读作真源；idle sweep revive 与后续 resume 都用回写后的值。**请求失败不提交默认值**（事务式）。
+  > **回写的 wire 依据 = `thread/settings/updated` 广播（P1 实证，rev.3 落实）**：`turn/start` 的**响应体里没有 model**（实测 `{turn:{id,items,itemsView,status,…}}`），`turn/started`/`turn/completed` 通知载荷同为 `Turn` 对象、同样没有，`thread/read` 的 `Thread` 也没有 —— **覆盖生效的唯一权威回声是 `thread/settings/updated` 通知的全量 `threadSettings`**（06 §0.4）。因此回写值**取通知里的 `threadSettings.model`/`effort`，不做「我发了什么就回写什么」的乐观更新**（发出去的值可能被 `allowProviderModelFallback` 之类改写）。**这条通知本来就要在 S4 订阅（§6.2-6），S2 直接消费同一条即可，不另造第二条回声路径。** 兜底：通知在超时窗内未到达 = **未确认**，不回写 registry 默认、UI 保留旧值（与「请求失败不提交」同臂）。断言 B8（扩为三臂），B14 不变。
   > **消费侧也必须有钉子**：B6/B8 只钉了**生产侧**（出参形状 / 成功臂写、失败臂不写），没有任何一条钉「revive/resume 重建 `thread/start` 参数时读的是回写值而非初始值」。只钉生产侧时，一个「照写 registry 但 revive 仍读初始 model」的实现可以全绿通过，双真源原样复活。承重断言 = **B14**（消费侧分叉场景），对应变异 ⑬。
 - **③ 负控与显式覆盖**：中途换 model 路径**必须有显式测试与变异对**（§4.8-**B6/B8/B14** + §4.9-⑤⑥⑬）。A 轨指出的真实风险是「两处发同一个值时行为一致，**只有用户中途改 model 才分叉**，而那条路径今天零覆盖」——因此本防线的承重用例**必须构造分叉场景**：`thread/start` 用 model A 建 thread → `turn/start` 覆盖为 B → 随后 revive/resume。纯函数出参断言与写入臂断言都**不构成**这条路径的覆盖。
 
@@ -449,7 +465,7 @@ type CodexTurnStartParams = {
 3. **两者只在显式选择时出现；`Automatic`/`Default` 一律省略键**（不是发 `undefined` 值）。
 4. 成功后按防线 ② 事务式回写 registry 默认；失败不回写。
 5. `thread/start` 保留初始 model 与权限姿态，**不删**。
-6. **不把 approval/sandbox 顺手加进 `turn/start`**——它们属于 S4 条件项。
+6. **不把 approval/sandbox 顺手加进 `turn/start`**——P1 顺带实证它们在 `turn/start` 里同样合法且 sticky，**正因为能塞进去才更要挡住**：S4 的实时权限走 `thread/settings/update`（零回合，§6.2-1），S2 顺手补上会在两个切片之间造出第二条权限写通道。本条是**负控**，不是「暂时不做」。
 
 调用点 `:2393-2399` 把 `send()` 已收到的 model/effort（`:2304-2311`）透传进去；**`:250-256` 的丢弃注释整段重写**为本裁定 + 三条防线的摘要（保留 sticky 语义引用，因为防线 ② 依赖它）。
 `codex-turn-schema.json` 的 `TurnStartParams.propertyNames` 已含 `effort`/`model`，`codexWireContract.test.ts` 范式的契约测试**必须同步扩到断言这两个字段名**——否则 codex 升级改名会变成运行时 `-32602`。
@@ -474,7 +490,7 @@ type CodexTurnStartParams = {
 | B5 | 存量短名 `'sonnet'` + 全名目录 → 菜单前插 `{id:'sonnet', verified:false}` 且 `selected:true`，**且读操作不改 localStorage**（字节快照对比）；新 session options 不含 `sonnet/haiku/opus` | 已有测试扩例 + storage 快照 |
 | **B6** | **`buildTurnStartParams({threadId,text,model:'gpt-5.6-sol',effort:'high'})` → params 同时含两键**；不传时**键缺席**（`'model' in params === false`，不是 `undefined` 值）；model 空串/空白 trim 后省略 | 纯函数 `toEqual` + `in` 断言（表驱动） |
 | B7 | 契约测试扩到断言 `model`/`effort` ∈ `codex-turn-schema.json` 的 `TurnStartParams.propertyNames` | 读 fixture 比对 |
-| B8 | **回写事务性（防线 ②）**：`turn/start` 成功 → registry session default 更新为新 model/effort；失败 → 不更新（旧值不变） | Host 单测双臂 |
+| B8 | **回写事务性 + 回写来源（防线 ②）**：`turn/start` 成功**且收到 `thread/settings/updated`** → registry session default 更新为**通知里的 `threadSettings.model`/`effort`**（须构造「请求 `gpt-5.6-sol` 而通知回 `gpt-5.5`」的分叉臂，钉死回写的是**通知值不是请求值**）；请求失败 → 不更新；通知在超时窗内**缺席** → 同样不更新（旧值不变） | Host 单测三臂（成功 / 失败 / 通知缺席） |
 | B9 | **白名单过滤（拍板 #5）**：喂 04 实测原始列表 → 输出恰为种子六条；族内出现更高版本 → 自动上架且旧版下架；出现未知家族名 → 不上架；`gpt-image-*`/`codex-auto-review`/`-mini` 恒被排除；同版本有日期别名与无日期别名时取无日期 | 表驱动纯函数 |
 | B10 | 目录外项不会成为 verified option（Codex fixture 含 `gpt-5.2` → 过滤后不出现）；`ultra` 在 shared type、storage normalization、菜单、Host wire **四层均被拒绝** | 边界表 |
 | B11 | `Automatic`/`Default` 分别使 model/effort 键从 create/send payload **省略** | payload 断言 |
@@ -493,7 +509,7 @@ type CodexTurnStartParams = {
 ③ Claude 请求误用 `Bearer`、Codex 误用 `x-api-key` → **B4 红**
 ④ 把静态 `CHAT_MODELS` 当失败 fallback（伪装可用目录）→ **B1/B13 红**
 ⑤ `buildTurnStartParams` 再次丢掉 `model`（或丢 `effort`）→ **B6 红**（D40 承重变异）
-⑥ `turn/start` 失败仍写 registry 默认（非事务）→ **B8 红**
+⑥ `turn/start` 失败仍写 registry 默认（非事务）**／** 把**请求值**乐观回写而不等 `thread/settings/updated`（通知回了别的 model 也照写请求值）→ **B8 红**（两个方向各一次实跑）
 ⑦ legacy `sonnet` 自动映射为目录第一条 → **B5 红**
 ⑧ 白名单过滤层跳过（直接透传全量目录）或把「未知家族默认上架」→ **B9 红**
 ⑨ 接受 `ultra` 或目录外 `gpt-5.2` 为 verified → **B10 红**
@@ -516,10 +532,13 @@ type CodexTurnStartParams = {
 | **L1 读侧补链** | ✅ 做 | Codex 会话的 Context 面板不再整行消失 |
 | **L2 capabilities 补键** | ✅ 做 | `permissionPolicy: true`（N1：类型已存在、Host 忘接） |
 | **L3 写侧：新会话/恢复默认档** | ✅ 做 | Settings「Chat agent defaults」模板 + 首发物化为会话快照 |
-| **L4 会话中途改档** | ❌ 本片不做 | 归 S4 条件切片（§6） |
+| **L4 会话中途改档** | ❌ 本片不做 | 归 **S4 正式切片**（§6）——Q1 拍板后它是必做需求，只是不在 S3 的失败面里 |
 | **L5 单次工具审批** | ❌ 不做 | `PermissionQaCard`（`QuestionCard.tsx:498`）已存在，是独立概念（调查 02 §4），与默认档互不污染 |
 
-**为什么 L3 进本阶段而不是首片**：L3 的**下发时机**与 agent/model 完全同构——未物化可选、随 create **一次性下发**、物化后由会话快照接管，**共用同一个物化点**（首条 `sendMessage()` commit）与同一条 wire 时机，分开做等于把同一语义实现两遍；而 L4 不同构（需要新协议 + 中途生效），故切出去。（**注意**：改判 #11 之后写侧只在 Settings（全局模板），Context 面板恒只读、不进 Composer 底栏，S3 **不存在** per-session 权限控件，因此「三者共用锁定判据」这个理由已不成立，不再引用——锁定判据的消费者见 §3.3 的三处。若 §8.0-Q1 拍板改回 Context 面板未物化可写，则本条恢复。）
+**为什么 L3 进本阶段而不是首片**：L3 的**下发时机**与 agent/model 完全同构——未物化可选、随 create 下发、物化后由会话快照接管，**共用同一个物化点**（首条 `sendMessage()` commit）与同一条 wire 时机，分开做等于把同一语义实现两遍；而 L4 不同构（要动 `CODEX_METHOD` 方法表、把 `CHAT_PERMISSION_MODE` 升成会话态、并订阅一条新的设置回声），故切出去。
+
+> **rev.3 口径修正（Q1 拍板后，务必读完再动工）**：写侧是**双层**——S3 只做 **Settings 模板层**，Composer 的**实时权限控件归 S4**。因此 S3 依旧**不存在** per-session 权限控件，「三者共用锁定判据」的理由依旧**不引用**（锁定判据的消费者仍是 §3.3 的三处，一处不多）。
+> 更要紧的是：**S4 的权限控件也不消费锁定判据**。agent 绑定在首发后锁死，是「换 agent 等于另开会话」的后果；而权限档在**已锁定会话里照样可改**——那正是 Q1 拍板的需求本体。两个闸门形状不同、**不得复用**（§6.3 + 断言 §6.5-D13）。
 
 ### 5.2 L1：Codex 读侧补链（三处改动 + 一个早退陷阱）
 
@@ -545,24 +564,34 @@ shared 已有判别联合：Claude 为 `permissionMode`，Codex 为 `approvalPol
 
 ### 5.4 L3：写侧最小形态 —— Settings「Chat agent defaults」+ Preference/Policy 双类型
 
-**落点：定稿推荐案（未拍板）—— 见 §8.0-Q1**。仲裁档只裁定了**持久化位置**（app settings 独立区 / 不复用终端轴 AgentSettings / 不写 `~/.codex/config.toml`，仲裁 §1 第 5 项），**写侧 UI 落点仲裁档未裁**（§2.2 五项裁定与 §4-2 的 B 稿吸收清单均不含此项），A 稿把它列为需用户拍板的 Q1 并推荐 (a) Context 面板未物化可写。本节以下为**定稿推荐案 (c) Settings 区**的理由；**拍板前施工方不得按本节动工写侧 UI**（L1 读侧 + L2 capabilities 补键不受影响，可照常开工）。
+**落点：已拍板（§8.0-Q1，仲裁 §4-3）—— 写侧双层，本片只做其中的模板层。**
 
-**推荐案**：入口放在 `AISettings` 下新增 **Chat agent defaults** 区，**不进 Composer 底栏、不进 Context 面板**。
+| 层 | 管什么 | 落点 | 切片 |
+|---|---|---|---|
+| **模板层** | **新会话起点**：新草稿首发时采用的权限档 | `AISettings` 新增 **Chat agent defaults** 区（持久化位置照仲裁 §1：app settings 独立区、不复用终端轴 AgentSettings、不写 `~/.codex/config.toml`） | **S3（本片）** |
+| **实时层** | **当前会话**：会话中途改档（Claude 下一回合 / Codex 零回合生效） | **Composer 实时权限控件**（idle-only），通道与形态见 §6 | **S4** |
 
-- **不进 Composer 底栏**：三个 pill 挤在 `h-6` 底栏会撑爆 `@[30rem]` 窄形态（codeg 都要折叠成 Popover，调查 03 §4）；且本片只有创建时一次性下发，**放在每回合都看得见的高频位置会暗示它随时可改**——那是关于产品的谎言（同 `composerModel.ts:91-93` 的规矩）。
-- **不进 Context 面板（本推荐案与 A 稿 Q1 推荐 (a) 的分歧点）**：该数据是「新会话默认模板」而非「本会话事实」，而 Context 面板承载的是 **Host 回声的事实**（Policy）；把可写模板放进事实面会让同一行既是请求又是回声——B 稿标 blocker 的「preference 被当作 runtime fact」正是这个形状。
-  > **A 稿的反对理由（拍板前必须一并呈给用户，不得只给推荐案）**：权限档决定 agent 动手前问不问你，**建会话当时**才是用户想设它的时刻；放进全局 Settings 意味着「改一次影响此后所有新会话」，用户要为单次会话调档就得去 Settings 改完再改回来。A 稿的 (a) 用「未物化可写 / 物化后只读」把请求与事实放在同一面但用锁定态区分，代价是同一行两种语义。
+**Context 面板恒只读（两层都不进它）**：该面板承载的是 **Host 回声的事实**（Policy），把可写请求塞进事实面会让同一行既是请求又是回声——B 稿标 blocker 的「preference 被当作 runtime fact」正是这个形状。A 稿 Q1 推荐 (a) 的核心关切（「**建会话当时**才是用户想设它的时刻」「为单次会话调档要去 Settings 改完再改回来」）由**实时层正面解决**：用户在 Composer 就地改当前会话，全局模板一动不动。
+
+- **模板层为什么不进 Composer 底栏**：它是「此后所有新会话的起点」，放进每回合都看得见的位置会与实时控件语义打架（同一个 pill 到底改的是本会话还是所有新会话？）；且三个 pill 挤在 `h-6` 底栏会撑爆 `@[30rem]` 窄形态（codeg 都要折叠成 Popover，调查 03 §4）。**Composer 只放实时控件（S4），它改的恒是当前会话。**
+- **两层不互相回写**：实时层改档**只影响当前会话并更新该会话快照**，**不修改模板层**（§6.3 + 断言 §6.5-D11）。这与 model/effort 的口径（§4.3「用户改 model/effort：写当前 session storage，**同时**更新该 agent 默认偏好」）**是故意的不对称**——权限是安全姿态，把一次临时提权变成此后所有新会话的默认就是静默扩权（§7-R18）。
 - **不复用终端轴 `AgentSettings.tsx`**：后者管理终端/CLI `BuiltinAgentId`、custom/hapi/happy agent，复用会破坏三轴隔离（`AISettings.tsx:26-66` 的 provider/模型静态面**不得**被误当 `AgentWireName`）。
 
 设置区按 agent 两张小卡：
 
 **Claude Code** — Permission mode：`default / acceptEdits / dontAsk / bypassPermissions / plan`（`SessionPermissionMode`，`runtimeEvents.ts:506-511`，**冻结类型不动**）。
-**不加 SDK 的第 6 值 `'auto'`**：调查 02 §6-4 明确其行为未实证，且可能需额外开关（类比 `bypassPermissions` 需 `allowDangerouslySkipPermissions`）；随 S4 探针一并处理。
+**不加 SDK 的第 6 值 `'auto'`**：rev.3 起理由升级——06-probes P2(b) 抄录的 `sdk.d.ts:1720` 取值注释就是 `'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'` **五值**（SDK 0.3.218），与本仓冻结类型逐值一致，**当前 SDK 版本压根没有 `'auto'`**。该项由「未实证、随 S4 探针处理」改判为**明确不做**，转 §8.2-L10 遗留登记，等 SDK 真出现该值且有行为实证再议。
 
 **Codex** — Approval policy `untrusted / on-request / never` + Sandbox mode `read-only / workspace-write / danger-full-access`。
 **Network：只读 `Reported by runtime`，本片不给控件。** `networkAccess` **不是 `thread/start` 的请求字段**（`codexRuntime.ts:122-132`，只在响应回声里，由 `compareSandboxEcho:594-665` 校验），只能经隔离 config.toml 投影生效（`codexHome.ts:149-163`、`:173-178`、`:412`）；给了控件就要改 config.toml 写手，而 resume 姿态是从 config.toml 重派生的（`:2952-2954` H9），会波及 resume 回声校验。
 
-**危险档 `bypassPermissions` / `danger-full-access`：推荐案（未拍板）—— 见 §8.0-Q3**。定稿推荐 = **给控件**（不给等于替用户决定他不能用，且 codeg 给了）+ **warning 文案** + **二次确认** + **绝不做默认值**（= A 稿 Q3 推荐 (a)，B 稿同向）。该项涉及安全姿态扩权，仲裁档未裁，按 05 简报设计要求 6「需用户拍板项单列（含推荐案）」列入 §8.0；未拍板前施工方**先做非危险档**（Claude `default/acceptEdits/dontAsk/plan` + Codex `untrusted/on-request/never` × `read-only/workspace-write`），危险档控件留空位。
+**危险档 `bypassPermissions` / `danger-full-access`：已拍板（§8.0-Q3）= 给控件 + warning + 二次确认 + 绝不做默认值。** 五条硬口径，**模板层（本片）与实时层（S4）逐条同口径**，不得只在一层落实：
+
+1. **给控件**：不给等于替用户决定他不能用，且 codeg 给了。首版不再「留空位」。
+2. **warning 文案常驻**：控件旁明写风险，不靠 tooltip 藏；文案不承诺「可随时撤销」。
+3. **二次确认**：从选中危险档到写入 preference 之间必须经过一次显式确认；**未确认不写入**，取消 = 值回到原档（**不是**停在危险档上的「未保存态」）。断言 C16 / D12。
+4. **绝不做默认值**：`defaults.ts` 出厂值、**任何回退/降级臂**、hydration 未完成时的占位值，**均不得**是危险档（C13 由「不可能成为默认值」扩到「回退臂也不得」）。
+5. **Claude 的扩权键**：下发 `bypassPermissions` 时 `query()` options 必须**同时**含 `allowDangerouslySkipPermissions: true`（06-probes P2(b)，`sdk.d.ts:1729`），否则 SDK 直接拒；其余四档**不得**出现该键（负控半边）。断言 C16 / D3。
 
 **文案硬要求**：`Applies to new chat sessions. Existing and active sessions keep the permission posture captured when they were first sent.` 且不得与消息流中的单次 `PermissionQaCard` 混淆。
 
@@ -587,13 +616,16 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 2. **首条发送 commit 时，把该草稿采用的 preference 与 agent 一起物化为会话快照**：`session-index` 增加**可选加法**字段 `permissionPreference`（`sessionIndex.ts:1-8` 头注 + `:10-35` 接口：该文件必须保持裸 JSON 数组，加字段只能是 optional per-entry，历史行**不重写**）。resume 用会话快照，**不重新读取可能已变化的全局默认**——否则改一次 Settings 会在重启后静默改变旧会话的安全姿态（B 标 blocker）。
 3. **物化前必须确认 settings 已 hydrate（与 R6 同族的第二个入口）**：app settings 走 zustand persist + 异步 IPC（`stores/settings/storage.ts` 的 `getItem/setItem` 均为 `await window.electronAPI.settings.read/write`）。冷启动后立刻发第一条消息，若此时 hydrate 未完成，捕获进 session-index 的会是 `defaults.ts` 的出厂值而非用户实际设置，**并被永久钉进快照**（resume 按设计不再纠正，正是 §5.5 的立意）——安全姿态的静默降级/升级。**口径**：未 hydrate 时**不物化**权限快照（该 session 的 `permissionPreference` 字段缺席，resume 时走 runtime 安全默认，与 old snapshot 同路径），**绝不写 defaults 冒充用户选择**；实现可选「首发路径经一次 Main 同步读取权限模板后再物化」，两者择一写死。断言 C15 + 变异 ⑪。
 
+4. **会话快照的第二个写入点（rev.3，写入臂归 S4）**：S4 的中途改档**成功**后，同一 `permissionPreference` 字段按新值更新（resume 因此拿到用户**最后一次显式选择**）。这不违反第 2 条的立意——第 2 条防的是「**全局模板**在 resume 时倒灌旧会话」，而中途改档是**本会话内的显式选择**（同 §3.3-6「显示值 == 发送值」与 §4.6 防线 ② 的回写收敛）。S3 只需保证该字段是**可选加法、可被二次写入、历史行不重写**；写入臂与断言归 S4（§6.5-D10）。
+
 **不得写**：终端轴 `AgentConfig`（key 是松散 terminal agent id）· `chatSessions.ts` 的 runtime facts（会话索引只保存「请求偏好」，不冒充实际回声）· **用户真实 `~/.codex/config.toml`**（Host 使用隔离生成文件并声明用户 posture 不继承，`codexHome.ts:123-140`；这条同时受 §1.2 运维铁律约束）。
 
 **wire 与运行时**：
 
 - `SessionCreateCommand.payload`（`agentHost.ts:61-77`）与 resume 命令加可选 `permissionPreference?: SessionPermissionPreference`（判别联合，agent 位自带）。
 - **约束**：payload 的 preference `agent` 必须等于 `sessionAgent(session)`，不匹配在 Main/Host dispatch **之前**拒绝，不让 runtime 自己猜。首发 create 用草稿 snapshot；resume 用 session-index snapshot；两者都缺失才用 runtime 安全默认。
-- Claude：`CHAT_PERMISSION_MODE`（`claudeRuntime.ts:215`）与 Codex：`CODEX_PERMISSION_DEFAULT`（`codexRuntime.ts:134-144`）**保留为默认值不删**（它们是 `:204-214` 自陈的「单一真源」，参数化的正确做法是给它一个覆盖入口，不是把常量拆了），`claudeRuntime.ts:341` / `codexRuntime.ts:1547` 改为「有则用、无则常量」。
+- Claude：`CHAT_PERMISSION_MODE`（`claudeRuntime.ts:215`）与 Codex：`CODEX_PERMISSION_DEFAULT`（`codexRuntime.ts:134-144`）**保留为默认值不删**（它们是 `:204-214` 自陈的「单一真源」，参数化的正确做法是给它一个覆盖入口，不是把常量拆了），改为「有则用、无则常量」。
+  > **Claude 侧的覆盖入口有三个消费点，必须一起改**（06-probes P2 指示 2；`:204-214` 头注 "Change this constant, not either call site" 正是在防这个事故）：`query()` options（`claudeRuntime.ts:754`，**真正下发给 SDK 的那一处**）· `session.created` 回声（`:341`）· `session.resumed` 回声（`:391`）。S3 把「常量」换成「create/resume 带来的 preference」，S4 再把它升成可中途改的会话态（§6.1-2）——**两片都必须三处同喂**，漏一处即 Context 面板报的档位与实际下发漂移。断言 C11（扩）/ D1。
 - Claude：session 值进 `query()` options，`session.created/resumed` 回声同一值。
 - Codex：`state.policy` 与 `buildThreadStartParams` 使用它；隔离 `config.toml` 继续写 approval/sandbox 以保证 resume 重派生与 H9 回声校验一致（四处同值：thread/start · isolated config · state.policy · Context 回声）。
 - Host `SessionRegistry` 增加可选 policy 存储位，create/resume 合并规则与 model/effort 同类，**但 agent 不可变**。
@@ -624,10 +656,11 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 | **C8** | **负控**：`SessionPermissionPreference` 的 Codex 分支**不存在 `networkAccess` 键**（类型级 + 面板视图模型 `writable:false`） | 类型断言 + 结构负控 |
 | C9 | 首发把 preference 恰好物化一次进 session-index；resume 读会话快照，**后来修改的全局默认不生效** | 时序真值表（改 Settings 后 resume 旧会话） |
 | C10 | create/resume 的 preference `agent` 必须匹配 `sessionAgent(session)`；错配在 dispatch **之前**失败 | 拒绝路径断言 |
-| C11 | Claude：`query()` option、`session.created` 回声、registry 值三处来自同一 preference；Codex：thread/start、isolated config、`state.policy`、Context 回声四处 approval/sandbox 同值 | 四处同值断言（H9 形状） |
+| C11 | Claude：**四处同值**——`query()` options（`claudeRuntime.ts:754`）· `session.created` 回声（`:341`）· `session.resumed` 回声（`:391`）· registry 值，全部来自同一 preference（P2 的三消费点 + registry）；Codex：thread/start、isolated config、`state.policy`、Context 回声四处 approval/sandbox 同值 | 四处同值断言（H9 形状） |
 | C12 | Settings 更新**不调用任何 active-session mutation IPC**；`PermissionQaCard` 响应不写 chat defaults | spy 零调用 |
-| C13 | 危险档：`bypassPermissions` / `danger-full-access` 有 warning 且**不可能成为默认值**；chat permission 不落终端轴 `agentSettings`（轴隔离静态扫描） | 设置模型真值表 + 静态扫描 |
+| C13 | 危险档：`bypassPermissions` / `danger-full-access` 有常驻 warning 且**不可能成为默认值**——`defaults.ts` 出厂值、**每一条回退/降级臂**、hydration 未完成时的占位值**逐项枚举皆非危险档**；chat permission 不落终端轴 `agentSettings`（轴隔离静态扫描） | 设置模型真值表（含回退臂逐条枚举）+ 静态扫描 |
 | **C15** | **hydration 前不物化（§5.5-3）**：settings 未 hydrate 时首发 → session-index 该行**无** `permissionPreference` 字段（或首发被显式等待到 hydrate 完成后才物化），**绝不写入 `defaults.ts` 的出厂值**；hydrate 完成后首发 → 物化的是用户实际设置 | 时序双臂 |
+| **C16** | **危险档二次确认 + 扩权键（Q3 拍板的模板层半边）**：选中 `bypassPermissions` / `danger-full-access` 后**未完成二次确认前不写入** app settings（取消 → 值回原档，不留「未保存的危险态」）；采用 `bypassPermissions` 模板的会话，其 `query()` options **同时**含 `allowDangerouslySkipPermissions:true`，其余四档该键**缺席**（`in` 断言，不是 `undefined` 值） | 设置动作双臂 + options 真值表（含负控半边） |
 | C14 | old Host payload 不含新字段时仍走现 compatibility path（session-index 历史行无字段 → 回退 runtime 安全默认，不重写历史行） | 兼容回归 |
 
 ### 5.8 S3 变异对（逐对实跑记红灯）
@@ -643,38 +676,106 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 ⑨ Codex isolated config 与 thread/start 用不同 policy → **C11 红**（H9 一致性）
 ⑩ 把 chat permission 存进终端 `agentSettings` → **C13 红**
 ⑪ settings 未 hydrate 时照写 `defaults` 的出厂值进 session-index → **C15 红**
+⑫ 危险档跳过二次确认直接写入 app settings（反向：取消后仍停在危险档）→ **C16 红**（两个方向各一次实跑）
+⑬ `bypassPermissions` 不发 `allowDangerouslySkipPermissions`（反向：给全部档位都发）→ **C16 红**（前者 SDK 直接拒、后者静默扩权，两个方向各一次实跑）
+⑭ 某条回退/降级臂落到危险档（如 hydration 未完成时占位 `danger-full-access`）→ **C13 红**
 
 ---
 
-## §6 S4 — 会话中途改权限档（**条件切片**）
+## §6 S4 — 会话中途改权限档（**正式切片**，rev.3 升格）
 
-> **本片在探针出结果之前，一律不得进入施工范围。规格写它们是为了钉住「探什么、什么算过」，不是为了排期。**
-> S4 先提交探针（只含 fixture / 测试工具 / 报告），结论成立后**另提**实现提交。**S4 不得反向阻塞 S1~S3，也不得把未成立的能力写进 UI。**
-> 一切打 cch / 真机的探针受 §1.2 运维铁律约束：事前报测试项与预计用量、最小 payload、只读优先、不碰本地全局配置。
+> **rev.3 状态变更**：Q1 拍板「中途改权限档 = 必做」（仲裁 §4-3），本片由条件切片升为**正式切片**；两条通道已由 [06-probes](./2026-08-16-agent-picker-investigation/06-probes.md) 实证成立（P2 Claude / P3 Codex），**「探针不过就不做」的臂已全部删除**。rev.2 的 §6.1/§6.2「探什么 / 过的判据 / 不过怎么办」整段作废——探针结论见 06-probes，本节写的是**施工形状**。
+> **依赖 = S3**：preference 判别联合类型、会话快照字段、`capabilities.permissionPolicy` 能力闸门、Codex 读侧闭环都在 S3 落地；本片只加「中途改」这一层。
+> **本片仍单列的理由**（不是条件性）：它是唯一一片要动 `CODEX_METHOD` 方法表、把 `CHAT_PERMISSION_MODE` 常量升成会话态、并新增一条设置回声订阅的切片。
+> 真机点验（两轴各一次 idle 改档）仍受 §1.2 运维铁律约束：事前报测试项与预计用量、最小 payload、只读优先、不碰本地 `~/.claude` / `~/.codex` 与开发服务器 env。
 
-### 6.1 条件 A：Claude SDK `Query.setPermissionMode()`
+### 6.1 Claude 通道 = per-turn `query()` options（P2 实证）
 
-- **探什么**：① 纯文本字符串 prompt（非 streaming input）下调用的真实失败模式——抛异常 / 静默无效 / 自动切换；② prompt 固定改为 streaming-input 后，首回合/空闲期调用是否生效；③ active turn 调用的时序与失败模式；④ 第 6 值 `'auto'` 是否真实可用、是否需额外 flag。
-- **为什么必须探**：`claudeRuntime.ts:33-36` 把 `queryFn` 类型收窄成 `AsyncIterable & {close?}`，**类型上抹掉了 `setPermissionMode`**；且 prompt 只在有附件时才是 AsyncIterable（`:706-708` 三元），纯文本走字符串 → **我们大多数回合都不满足 SDK 文档写的 streaming-input 前提**。
-- **过的判据**：纯文本场景下调用后，**下一个回合的实际权限行为**与新档一致（"没抛异常" 不算过——静默无效恰恰不抛），需要一个会触发权限询问的真实回合做对照臂；且错误可确定性归类。
-- **不过怎么办**：Claude 半边取消，或退到「改档需要重开会话」（与 Codex 半边对齐，安全态）。
-- **成立后的最小实现**：Composer model 菜单旁增 Claude permission selector，**只在 idle 启用**（active turn 时 disabled，不引入权限 mutation queue）；走专用 `chat:setPermissionPreference` runtime command；成功事件更新事实 store，失败**不改 Context**。
-- **扩权红线**：若必须把所有 prompt 改成 streaming-input，那是 query 输入架构改造，**需单独用户拍板**，不得在 S4 自动扩权。
+**通道形状**：Claude 轴**每发一条消息都新开一个 `query()`**（`claudeRuntime.ts:513` 取 `queryFn`——`ensureSdk` 只缓存函数引用不缓存会话；`:735` 在 `send()` 函数体内新建 stream；`:952-967` finally 关流；跨回合连续性靠 `options.resume`），而 `permissionMode` 是 `query()` 的 options 字段（`sdk.d.ts:1720`，落在 `Options` 体内）。→ **中途改档与 D40 的 model 完全同形状：下一发 send 带上新档即可。**
 
-### 6.2 条件 B：Codex `thread/settings/update`
+1. **不引入 `setPermissionMode`、不改 streaming-input、不动 `canUseTool` 桥**：`Query.setPermissionMode()`（`sdk.d.ts:2281`）注释明写 "Only available in streaming input mode."，而我们的 prompt 在无附件时是**字符串**（`claudeRuntime.ts:706-708` 三元），大多数回合根本不满足该前提。回合进行中的实时管控仍由既有 `canUseTool` 权限卡承担（`:563-574`）——**单次审批与档位管理是两件事，不重叠、不互相实现**。rev.2 §6.1 的「扩权红线：若必须全改 streaming-input 需单独拍板」随之作废（§8.2-L7）。
+2. **改造量 = 把常量升成会话态，三个消费点必须一起改**：`CHAT_PERMISSION_MODE`（`claudeRuntime.ts:215`）→ `session.permissionMode`（缺省仍取该常量，常量**不删**）。三处（P2 指示 2；`:204-214` 头注 "Change this constant, not either call site" 就是在防这个事故）：
+   - `:754` — `permissionMode: CHAT_PERMISSION_MODE` 的 `query()` options（**真正下发给 SDK 的那一处**）；
+   - `:341` — `session.created` 回声；
+   - `:391` — `session.resumed` 回声。
+   漏改任一处 = **Context 面板报的档位与实际下发的档位漂移**（谎报安全姿态）。断言 D1、变异 ①。
+3. **生效时机 = 下一个回合边界**：改档**不影响 in-flight 回合**（那个 `query()` 的 options 在创建时已定型，不得为改档去重建 stream 或中断回合）。**UI 文案统一写「下一条消息起生效」，不得对 Claude 轴承诺「立即生效」**——与 Codex 轴的零回合语义不同轴，两轴文案不共用。断言 D2、变异 ②。
+4. **危险档扩权键**：`bypassPermissions` 下发时 options 必须**同时**含 `allowDangerouslySkipPermissions: true`（`sdk.d.ts:1729`），否则 SDK 直接拒；其余四档**不得**出现该键。与 §5.4 危险档口径 5 是同一条，两层各有断言。断言 D3、变异 ③。
+5. **`'auto'` 明确不做**：P2 抄录的 SDK 0.3.218 取值注释是五值，无 `'auto'`（§5.4 已改判 → §8.2-L10）。
 
-- **现有证据强度 = 仅方法名**：`codex-method-contract.json` clientRequest[110] 有它（已复核命中），`serverNotification` 有 `thread/settings/updated`，但**零 schema 样本零调用**；contract 头部自陈 L6 欠采（clientRequest 实录 121 vs 实际 126）；`CODEX_METHOD`（`codexWire.ts:85-96`）十方法不含它。
-- **探什么**：完整 request schema / response / notification fixture；能否中途改 `approvalPolicy`/`sandboxMode`、是否支持 network；对下一 turn 与当前 pending approval 的作用边界；与 `turn/start` sticky 字段冲突时谁优先；当前 method-contract 欠采是否需升级 Codex CLI/fixture。
-- **过的判据**：binary-generated schema（`codex app-server generate-json-schema` 是否输出它）**且**至少一个真实 thread 的 before/after 回声，且 resume 后姿态规则可解释。
-- **成立后的最小实现**：**扩 `CODEX_METHOD` 前先提交 contract fixture**；只开放 schema 明示且实测成功的字段；idle-only；成功 notification 后更新 `state.policy` 与 runtime facts。
-- **备选路（`turn/start` sticky 覆盖）**：schema 层已确认 `approvalPolicy`/`sandboxPolicy` 是 `turn/start` 合法字段（`codexRuntime.ts:246-249`），若 B 探不通，它是更可能成立的备选。**但权限姿态还有 config.toml 这第三个载体（H9），比 §4.6 的 model 情况更糟** → 走这条路必须回到用户拍板：是否接受「下一回合及后续回合生效」的 selector 语义，**不得自行把它包装成即时设置**。两条都不通时，**Codex 半边明确不做**，不硬上。
+### 6.2 Codex 通道 = `thread/settings/update`（P3 实证）
 
-### 6.3 S4 Happy Path · 断言 · 变异
+**通道形状**：方法真实存在（不是 method not found）、**零回合成本**（线程空闲时可调、不消耗模型回合）、响应体是空的（实测 `null`/`{}`，**不带任何回声**），但会立刻广播一条**全量** `thread/settings/updated`；实测「没有任何 turn 的情况下改掉 model + effort + approvalPolicy，随后那一回合的 `turn_context` 三项全按新值执行，未提及的 `sandbox_policy` 原样保留」。
 
-- **探针不支持**：产品 UI 中**不存在** active-session selector；Settings 新会话默认仍可用；报告明确写 NOT-SUPPORTED（这是可交付结论，不是失败）。
-- **探针支持**：idle 改档 → protocol success → 下一回合采用新档 → Host 事实事件 → Context 更新；**任一步失败均保持旧事实**。
-- **断言**：active turn 时控件 disabled；协议 error 不得被吞；Settings 默认值不得被当作 active fact；`CODEX_METHOD` 扩项必须有 committed fixture 才允许存在。
-- **变异候选**：先乐观改 Context（协议未回就更新）→ 事实/请求隔离断言红；忽略 protocol error → 失败保持旧事实断言红；把 Settings default 当 active fact → 隔离断言红；无 fixture 就扩 `CODEX_METHOD` → 契约门禁红。
+1. **不为改档去凑 `turn/start`**：P1 顺带实证 `turn/start` 覆盖 `approvalPolicy`/`sandboxPolicy` 同样合法且 sticky，但那要求用户**必须同时发一条消息**才能改档。**实时控件走 `thread/settings/update`（零回合）**；「改档并同时发消息合并进一次 `turn/start` 省一次往返」是可选优化，**不是首版形状**（→ §8.2-L11）。
+2. **省略即不变**：`ThreadSettingsUpdateParams` 唯一必填 `threadId`，其余字段全部 nullable——**省略 = 不变，显式 `null` = 清除**（06 §0.2 的字段表已采全）。→ 参数构造**只带用户本次改动的键**，不做「全量重发」（全量重发会把 UI 没有真源的字段一起钉死）。断言 D4。
+3. **未知字段静默吞（承重坑，必须用类型 + 单测兜住）**：P1 严格性实测——坏枚举 `-32600` 拒、缺 `threadId` `-32600` 拒，但**未知字段返回 `{}`、无通知、无副作用**。**拼错字段名不会报错，只会悄无声息地不生效**，且在测试里完全不可见。→ 参数构造走**白名单常量**（只允许 schema 明示且实测过的键），配一条单测钉「白名单外的键在类型层构造不出来 + 报文里零出现」。断言 D4、变异 ④。
+4. **形状映射：三处不可互抄**——`thread/start` 用 `sandbox`（`SandboxMode` 字符串枚举，kebab-case `read-only` / `workspace-write` / `danger-full-access`）；`turn/start` 与 `thread/settings/update` 用 `sandboxPolicy`（判别联合对象，camelCase `readOnly` / `workspaceWrite` / `dangerFullAccess` / `externalSandbox`）。仓内现有 `CODEX_PERMISSION_DEFAULT`（`codexRuntime.ts:134`，`on-request` + `workspace-write`）是 **thread/start 形状，不能直接喂给 settings/update**，须过一层显式映射纯模块并配静态断言。断言 D5、变异 ⑤。
+5. **`permissions` 与 `sandboxPolicy` 互斥**（schema 自述 "Cannot be combined with `sandboxPolicy`"）。D48 首版**不引入命名权限 profile**（§9.1 已列不做），但构造层仍要有二选一守卫——服务端对冲突/未知字段同样静默吞，不会替我们报错。断言 D6。
+6. **回声唯一来源 = `thread/settings/updated` 通知**：响应体空 ⇒ **「请求成功」不等于「已生效」**，不得据此更新 UI 或 facts。一条通知带全量 13 项设置，Host 侧**一次映射**即可同时刷新模型标签与权限档标签，**不为两个控件各写一条回声路径**（S2 的 model 回写消费同一条，§4.6 防线 ②）。断言 D7、变异 ⑦。
+7. **idle-only 下发**：P3 实测竞态——`turn/start` 刚发出后 1ms 打 settings/update，那一回合的 `turn_context` 已定型，表现为「**改了但这一回合没生效**」。→ 控件在 active turn 时 disabled，**且 runtime 侧再拦一次**（UI 闸门不是安全边界），失败即失败、**不排队**（不引入权限 mutation queue）。断言 D8、变异 ⑧。
+8. **扩 `CODEX_METHOD` 前先落 contract fixture**：`codexWire.ts:85-96` 今天是十方法、不含它；`codex-method-contract.json` 记 121 条而同版二进制 126 条（06 §0.1，差集 5 条为**纯欠采**、无一条消失，`thread/settings/update` 在 experimental 与非 experimental 两版里都在）。→ **先提交 fixture（顺手补齐 5 条欠采），再扩方法表**。断言 D14、变异 ⑭。
+
+### 6.3 写侧 UI = Composer 实时权限控件（实时层）
+
+**落点**：Composer 底栏，与 `modelEffortControls` 同族的 ghost chip + 菜单（形制照 §3.1 的 ghost chip 规则与 `composerModelTriggerClass()`，**不新造第二种形制**，高度/内距可交叉断言）。**Settings 模板层（§5.4）不变**：一个管新会话起点，一个管当前会话。
+
+- **闸门 = idle-only，与 agent picker 的 `locked` 是两套，不得复用**：agent 绑定首发即锁死（换 agent 等于另开会话）；**权限档在已锁定会话里照样可改**——那正是 Q1 拍板的需求本体。控件闸门 = `busy || sending || Host 非 ready || capabilities 未报 permissionPolicy`，**判据里不出现 `agentBindingLocked`**。断言 D13、变异 ⑬。
+- **两轴文案不同轴**：Claude =「下一条消息起生效」；Codex =「立即生效（当前线程）」。**不共用一句话**，也不把 Claude 的延迟语义粉饰成即时。
+- **危险档（Q3 拍板的实时层半边）**：给控件 + 常驻 warning + **二次确认**（未确认前 **runtime command 零调用**，取消回原档）+ **绝不做默认/回退值**。断言 D12、变异 ⑫。
+- **改档成功后做三件事、且只做三件**：① 更新 runtime facts —— **经回声，不乐观写**（Codex 等 `thread/settings/updated`；Claude 等下一回合的 `session.created/resumed` 回声）；② 更新该会话的 `permissionPreference` 快照（§5.5-4），使重启 resume 拿到用户最后一次显式选择；③ **不修改 `ChatAgentDefaults.byAgent[agent].permission` 模板**——与 model/effort 的回写口径**故意不对称**（§5.4），一次临时提权不得变成此后所有新会话的默认。断言 D10 / D11，变异 ⑩⑪。
+- **失败 = 保持旧事实**：协议 error（`-32600` 坏枚举 / 缺 `threadId`、SDK 拒扩权键）必须冒泡为**可判定的失败态**，控件回滚旧值 + inline 提示，**Context 面板一格不动**，不自动重试。断言 D9、变异 ⑨。
+- **能力闸门复用 S3 的 `capabilities.permissionPolicy`**（N1 补发的那把闸）：old Host 不报该键 → **不渲染实时控件**（不是渲染一个禁用的空壳），Settings 模板层与 S3 读侧行为逐字不变。断言 D15、变异 ⑮。
+  > 与 §3.4 的「不可用 agent 置灰而非隐藏」**不冲突**：那条针对的是「我们有、但当前 Host 缺凭据/未开 flag」的能力；old Host 的实时改档是**协议上根本不存在**的能力，渲染一个永远点不动的权限控件才是关于产品的谎言（`composerModel.ts:91-101`）。
+
+### 6.4 S4 Happy Path
+
+1. **Claude 中途改档**：已发过两轮的 Claude 会话（idle）→ Composer 权限控件选 `plan` → 写会话态 + 更新会话快照 → 提示「下一条消息起生效」→ 用户发第 3 条 → `query()` options 带 `permissionMode:'plan'`，`session.created/resumed` 回声同值 → Context 面板显示 Plan。
+2. **Codex 中途改档（零回合）**：idle 的 Codex 会话 → 选 `never` + `read-only` → `thread/settings/update` **只带 `approvalPolicy`/`sandboxPolicy` 两键** → 响应 `null` → **等** `thread/settings/updated` 全量通知到达 → 才刷新 facts 与控件显示 → 下一回合 `turn_context` 按新档跑。
+3. **危险档**：选 `danger-full-access` → warning + 二次确认 → **取消** → 值回原档、**IPC 零调用**；再选一次并确认 → 下发。Claude 侧选 `bypassPermissions` 并确认 → options 同时带 `allowDangerouslySkipPermissions:true`。
+4. **busy 臂**：回合进行中控件 disabled；即使绕过 UI 直调 runtime command 也被拒（idle-only 在 runtime 侧再拦一次），**不排队、不延迟执行**。
+5. **失败臂**：坏枚举被 `-32600` 拒 → 控件回滚旧值 + inline 错误 → Context 不变 → 不重试；Claude 侧 SDK 拒扩权键同形状。
+6. **重启后**：会话快照记的是**最后一次成功改档**的值 → resume 用它，不被 Settings 模板倒灌（C9 的形状，值来源换成 S4 的写入）。
+7. **old Host**：`capabilities.permissionPolicy` 缺席 → 实时控件不渲染；Settings 模板层与 S3 读侧行为不变、不报错。
+8. **模板不受污染**：中途把当前会话改成 `dontAsk` → 新建下一个草稿 → 仍取 Settings 模板的值（**不是** `dontAsk`）。
+
+### 6.5 S4 确定性断言点
+
+| # | 断言 | 形状 |
+|---|---|---|
+| **D1** | **三消费点同喂（P2 承重）**：改档后 `query()` options（`:754`）· `session.created`（`:341`）· `session.resumed`（`:391`）三处取到**同一个** `session.permissionMode`；任一处仍读 `CHAT_PERMISSION_MODE` 常量即红 | 三点同值断言（Host 单测） |
+| **D2** | **Claude 生效时机 = 下一回合**：in-flight 回合中改档 → 当前 `query()` 的 options **不变**（不重建 stream、不中断回合）；下一发 send 的 options 才带新值；文案常量为「下一条消息起生效」，Codex 轴文案与之**不同串** | 时序双臂 + 文案常量断言 |
+| **D3** | **Claude 危险档扩权键**：preference = `bypassPermissions` → options **同时**含 `allowDangerouslySkipPermissions:true`；`default`/`acceptEdits`/`dontAsk`/`plan` 四档 → 该键**缺席**（`in` 断言，不是 `undefined` 值） | options 真值表（含负控半边） |
+| **D4** | **参数白名单 + 省略即不变（静默吞的兜底）**：`thread/settings/update` 参数只由白名单常量构造，白名单外的键**类型层不可表达且报文里零出现**；只发本次改动的键，未改动键**缺席**而非发 `null` | 类型断言 + 构造真值表 |
+| **D5** | **形状映射三处不互抄**：`read-only` / `workspace-write` / `danger-full-access`（thread/start 的 `sandbox`）↔ `{type:'readOnly'}` / `{type:'workspaceWrite'}` / `{type:'dangerFullAccess'}`（settings/update 的 `sandboxPolicy`）逐值映射；`CODEX_PERMISSION_DEFAULT` 的字符串形态**原样出现**在 settings/update 参数里即红 | 映射表 + 静态扫描 |
+| **D6** | **互斥守卫**：`permissions` 与 `sandboxPolicy` 不得同时出现在同一次请求；同时给出时构造层失败且**零报文发出** | 构造守卫双臂 |
+| **D7** | **回声唯一来源**：facts 与控件显示只在收到 `thread/settings/updated`（Claude 轴为下一回合的 `session.created/resumed`）后更新；**空响应 `null`/`{}` 不触发任何 facts 变更**；通知值与请求值不一致时**以通知为准** | 事实/请求隔离 + 分叉臂 |
+| **D8** | **idle-only 双层闸门**：active turn 时控件 disabled **且** runtime command 被拒、`thread/settings/update` 报文**零发出**、**不排队**；turn 完成后同一操作成功 | 调用计数 + 时序 |
+| **D9** | **协议 error 不吞**：`-32600`（坏枚举 / 缺 `threadId`）与 SDK 拒扩权键各一例 → 失败态可判定、控件回滚旧值、**Context/facts 一格不动**、无自动重试 | 失败双臂 |
+| **D10** | **会话快照更新（§5.5-4）**：改档**成功** → session-index 的 `permissionPreference` 更新为新值，重启 resume 用新值；改档**失败** → 快照逐字节不变 | 时序双臂（C9 形状） |
+| **D11** | **不回写全局模板（负控，安全承重）**：改档后 `ChatAgentDefaults.byAgent[agent].permission` **逐字节不变**，此后新草稿仍取模板值 | settings 快照对比 + 新草稿真值表 |
+| **D12** | **危险档二次确认（实时层）**：选中危险档但未确认 → runtime command **调用 0 次**、控件值回原档；确认后**恰好 1 次**；控件的默认值/回退值枚举**均非**危险档 | 调用计数 + 真值表 |
+| **D13** | **两个闸门不复用**：`agentBindingLocked === true` 的会话（agent picker 已是单段静态 chip）在 idle 下权限控件**仍可用**；权限控件的 disabled 判据里**不出现** `agentBindingLocked` 符号 | 结构断言 + 静态扫描 |
+| **D14** | **契约门禁**：`thread/settings/update` 出现在 `codexWire.ts` 的 `CODEX_METHOD` 中**当且仅当** `codex-method-contract.json` 已含该方法；fixture 补采后 clientRequest 计数与同版二进制一致（121 → 126） | 契约测试（`codexWireContract.test.ts` 范式） |
+| **D15** | **能力闸门降级**：`capabilities.permissionPolicy` 缺席（old Host）→ 实时控件**不渲染**（非「渲染个禁用的」）、runtime command 不注册；Settings 模板层与 S3 读侧输出**逐字不变** | 降级臂 + 回归对照 |
+
+### 6.6 S4 变异对（逐对实跑记红灯）
+
+① 改档只改 `query()` options，`session.created` / `session.resumed` 仍读常量（或只改其中一处）→ **D1 红**
+② 为改档重建 in-flight 回合的 stream，或把文案改成「立即生效」→ **D2 红**
+③ `bypassPermissions` 不发 `allowDangerouslySkipPermissions`（反向：全部档位都发）→ **D3 红**（两个方向各一次实跑）
+④ 参数构造改为透传 UI 对象（未知/拼错的键照发）→ **D4 红**（**服务端静默吞 ⇒ 没有这一对，该缺陷在测试里完全不可见**）
+⑤ 把 `CODEX_PERMISSION_DEFAULT` 的 kebab 字符串形态直接喂 `thread/settings/update` → **D5 红**
+⑥ 同一次请求同时发 `permissions` 与 `sandboxPolicy` → **D6 红**
+⑦ 收到空响应即乐观更新 facts / 用请求值刷 UI（不等通知）→ **D7 红**
+⑧ 去掉 idle-only 闸门（turn 飞行期照发）或改为排队重试 → **D8 红**（P3 实测竞态：改了但这一回合没生效）
+⑨ 吞掉 JSON-RPC / SDK error 并保留新档显示 → **D9 红**
+⑩ 改档成功后不更新会话快照（重启 resume 回旧档）→ **D10 红**
+⑪ 改档顺手回写 `ChatAgentDefaults` 模板（照抄 model/effort 的回写口径）→ **D11 红**（静默扩权主入口，R18）
+⑫ 危险档跳过二次确认直接下发，或把危险档设为控件默认/回退值 → **D12 红**
+⑬ 权限控件复用 `agentBindingLocked` 闸门（已锁定会话不能改权限）→ **D13 红**（等于把 Q1 拍板的需求实现没）
+⑭ 无 committed fixture 就扩 `CODEX_METHOD` → **D14 红**
+⑮ `capabilities.permissionPolicy` 缺席时仍渲染控件（点了报错）→ **D15 红**
 
 ---
 
@@ -689,41 +790,46 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 | R5 | **权限 preference 被当作 runtime fact** | blocker | Settings 乐观写 Context | UI 谎报实际权限姿态 | Preference/Policy 双类型（§5.4）+ C8/C12 |
 | R6 | **全局默认在 resume 时覆盖旧会话安全姿态** | blocker | 会话未存权限快照 | 重启后安全姿态静默变化 | 首发物化进 session-index（§5.5）+ C9 + 变异 ⑧；**hydrate 前不物化（§5.5-3）+ C15 + 变异 ⑪** |
 | R7 | **`networkAccess` 被假装可控** | blocker | UI 给布尔开关但 wire/config 不接 | 安全边界错误 | S3 只读 + C8 负控 + 变异 ④ |
-| R8 | **D40 补 model 后出现 thread/start 与 turn/start 双真源** | major | 覆盖成功但不回写会话状态 | 后续回合/resume 用哪个值无定论 | §4.6 防线 ②（成功后事务式回写）+ **B8（生产侧）+ B14（消费侧：revive/resume 读回写值，分叉场景双臂）** + 变异 ⑥⑬；**防线 ① 探针未过则退回只补 effort 并回报用户** |
+| R8 | **D40 补 model 后出现 thread/start 与 turn/start 双真源** | major | 覆盖成功但不回写会话状态 | 后续回合/resume 用哪个值无定论 | §4.6 防线 ②（成功后事务式回写，**回写值取 `thread/settings/updated` 通知而非请求值**）+ **B8（生产侧三臂）+ B14（消费侧：revive/resume 读回写值，分叉场景双臂）** + 变异 ⑥⑬；**防线 ① 探针 ✅ 已过（P1 sticky 成立），「退回只补 effort」的回退臂不再触发，仅作历史依据保留** |
 | R9 | **stale cache 被误标 fresh / 种子表伪装成可用目录** | major | refresh 失败仍更新 `fetchedAt`；或用静态表当 fallback | 用户选到已下线模型，或以为目录正常 | `source`/`stale`/`fetchedAt` 明示 + UI「目录不可达」+ B1/B3 + 变异 ①④ |
 | R10 | **家族白名单在 renderer 侧实现或被绕过** | major | 过滤层不在 Main 响应层 | 白名单与种子表两处规则漂移，renderer 见到未过滤目录 | §4.2 落点写死 Main 过滤层 + B9 表驱动 + 变异 ⑧ |
 | R11 | **legacy 短名被自动映射** | major | 迁移时猜 `sonnet → claude-sonnet-5` | 升级后静默换模型且不可回滚 | §4.4 legacy 合成项 + B5 storage 字节快照 + 变异 ⑦；**目录外存量全名走 §4.4-6 的 unverified 前插 + B16 + 变异 ⑮**（白名单过滤是 R11 的第二个入口） |
 | R12 | **capabilities 不带原因，UI 过度承诺** | major | 文案写「flag 未开启」 | 误导用户去改一个不存在的开关 | N2 → 文案用 generic `Unavailable in the current Host`；old Host 单独可判 + A1 |
 | R13 | **per-agent 与 per-session 偏好互相覆盖** | major | 单一 map 没有两层语义 | 切 agent 或切 session 串值 | §4.3 两层优先级 + key 含 agent + B12 + 变异 ⑪ |
 | R14 | **resume 不发 Codex policy，权限行再次消失** | major | 打开恢复会话 | 读侧闭环白做 | H9 校验成功后补事实事件（§5.6-5）+ resume regression C5 |
-| R15 | **S4 先实现后探针** | blocker | 猜 schema / 猜 SDK 行为 | 错协议或静默无效 | fixture/probe 是硬 gate，条件项独立提交（§6） |
+| R15 | **S4 照猜不照抄**（rev.3 改写：探针已完成，风险从「先实现后探针」变为「不照 06-probes 的实测报文施工」） | blocker | 绕过 06-probes 的报文自行猜字段名/形状；无 committed fixture 就扩 `CODEX_METHOD`；把 `thread/start` 的 kebab `sandbox` 与 settings/update 的 `sandboxPolicy` 互抄 | 错协议；或**未知字段被静默吞导致改档悄无声息不生效** | §6.2 逐条钉报文形状 + **D4（白名单）/ D5（形状映射）/ D14（契约门禁）**；真机点验按 §1.2 报备 |
 | R16 | **flag-off 发布形态改变（不只是评审误判）** | minor | 改判 #3 后 flag-off 也在 empty 模式渲染置灰 Codex 段 | 评审以为 off 轮不该有变化；且 **§1.1-4 禁 renderer 按 flag 分叉 → S1 没有独立 UI 回退杆**，唯一回退是整片不合入 | §3.4 已写明 off 轮断言口径改为「两项渲染 + codex disabled + reason」，并把「flag-off 上架置灰段」记为**已知并接受的发布形态**（仲裁 §1 disable-not-hide 的直接后果）；已锁定会话只有单段 chip，不受影响 |
+| R17 | **中途改档静默不生效（谎报安全姿态）** | blocker | Codex 未知字段静默吞（P1 严格性实测）；在 `turn/start` 飞行期打 settings/update（P3 实测竞态）；把空响应当作已生效 | UI 显示新档、实际按旧档执行——**且该缺陷在服务端不报错、在测试里不可见** | §6.2-3/6/7 三条合围（构造白名单 · 只认通知回声 · idle-only 双层闸门）+ **D4 / D7 / D8** + 变异 ④⑦⑧ |
+| R18 | **中途改档变成静默扩权** | blocker | 危险档无二次确认；一次临时提权被回写进 `ChatAgentDefaults` 模板；`bypassPermissions` 缺 `allowDangerouslySkipPermissions` 被 SDK 拒后落到未知态 | 此后**所有新会话**默认带危险档；或用户以为已提权而实际被拒 | §5.4 危险档五条口径（两层同口径）+ §6.3 + **C13 / C16 / D3 / D11 / D12** + 变异 §5.8-⑫⑬⑭、§6.6-③⑪⑫ |
 
 ---
 
 ## §8 未决表与遗留登记
 
-### 8.0 需用户拍板（不自行扩权，含推荐案 —— 05 简报设计要求 6）
+### 8.0 拍板记录（2026-08-16 当场逐卡敲定 —— rev.3 由「需拍板」转为「已拍板」）
 
-> 以下三项**仲裁档未裁**（仲裁 §1 只裁了权限数据的**持久化位置**，§2.2 五项与 §4-2 吸收清单均不含写侧 UI 落点与危险档控件），定稿不得自裁。**Q1/Q3 阻塞 S3 的写侧（L3）**，不阻塞 S1/S2 与 S3 的 L1/L2；Q4 只影响 S4 排期。
+> rev.2 挂在本节待拍的三项（仲裁 §1 只裁了权限数据的**持久化位置**，§2.2 五项与 §4-2 吸收清单均不含写侧 UI 落点与危险档控件），用户已于 2026-08-16 当场全部拍定；原始记录见[仲裁 §4-3](./2026-08-16-agent-picker-investigation/design-arbitration.md)。
+> **本节自此是拍板存档，不再是待办**；三项结论已回填正文（§1.1-7/8 · §2 · §5.1/§5.4 · §6 · §9）与 plantree（`docs/plantree/plans/multi-agent/roadmap.md` 的 D48 行 + `open-questions.md`）。
 
-| # | 问题 | 背景（这东西是干嘛的 / 别人怎么做） | 选项 | **定稿推荐** | 阻塞面 |
-|---|---|---|---|---|---|
-| **Q1** | **写侧权限控件落在哪？** | 权限档决定 agent 动手前问不问你。codeg 放 composer（因为它**能中途改**）；我们 L4 不做，只有创建时一次性下发。放 composer 会暗示随时可改；放 Settings 则「改一次影响此后所有新会话」，为单次会话调档要去 Settings 改完再改回来（A 稿反对理由） | (a) Context 面板未物化可写、物化后只读（**A 稿推荐**）(b) Composer 底栏第三个 pill (c) `AISettings` 新增 Chat agent defaults 区（**定稿推荐**） | **(c)**：理由见 §5.4（数据是「新会话默认模板」而非「本会话事实」，Context 面板承载 Host 回声事实，混写会让同一行既是请求又是回声 = B 标 blocker 的形状）。若选 (a)，§5.1 的「共用锁定判据」理由恢复成立、§3.3 的锁定判据多一个消费者 | S3-L3 |
-| **Q3** | **`bypassPermissions` / `danger-full-access` 两个危险档给不给控件？** | 这俩是「agent 干什么都不问你」。Claude 侧 SDK 另有 `allowDangerouslySkipPermissions` 开关；codeg 全给了 | (a) 给 + warning + 二次确认（**A 稿推荐，定稿同向**）(b) 给 + 藏在 Settings 高级区 (c) 不给 | **(a)**：不给等于替用户决定他不能用；但**默认值绝不能是它们**（C13 钉死）。未拍板前先做非危险档，危险档留空位 | S3-L3 |
-| **Q4** | **S4 的两条探针（P2/P3）什么时候跑？** | 两条通道都只有「名字存在」级证据，探一次要一轮真机 + cch 用量报备（§1.2） | (a) D48 开工前一并跑 (b) S1~S3 收口后与真机补测批合跑（**A 稿推荐**）(c) 明确不做 | **(b)**：S1~S3 的价值不依赖它；探针要真机轮，与既有真机补测批合跑更省用量。**P1 不在此列**——它是 S2 前置，必须先跑 | S4 排期 |
+| # | 原问题 | 拍板结论 | 回填落点 |
+|---|---|---|---|
+| **Q1** | 写侧权限控件落在哪？（rev.2 选项：(a) Context 未物化可写 / (b) Composer 第三个 pill / (c) Settings 区） | **双层，且连带改判切片形状**：**Composer 实时控件**（管当前会话，**中途可改**）+ **Settings「Chat agent defaults」默认模板**（管新会话起点），与 codeg 同构。用户原话「肯定要支持中途改啊」，理由与 D40 同构——官方 CLI 两侧都支持中途改档，后端即同一 CLI 运行时。**S4 由条件切片升正式切片**；rev.2 的「写侧只做创建时一次性下发」前提与仲裁 §1 收敛表「权限写侧首期只管创建/恢复默认档」行**一并作废** | §1.1-7 · §2 切片表 · §5.1/§5.4 · **§6 全篇** · §9.2 |
+| **Q3** | 两个危险档给不给控件？ | **(a) 给 + warning + 二次确认，且默认值绝不是危险档**（断言钉死；与 A/B 两轨及 rev.2 推荐同向）。**模板层与实时层两层同口径**；Claude `bypassPermissions` 另须同发 `allowDangerouslySkipPermissions:true` | §5.4 危险档五条 · C13/C16 · D3/D12 · §7-R18 |
+| **Q4** | 三条探针什么时候跑？ | **(a) 开工前齐发**（用户批准 Codex 侧 cch 用量 ≤8 发最小回合，P2 优先代码级验证）。**已执行完毕**：实耗 live 3 回合，`~/.claude` / `~/.codex` / dev.env 零写入，结论见 06-probes | §8.1 · §4.6 防线 ① · §6 |
 
-> 按「拍板要当场直接问」纪律：本节落库后须**当场向用户提问**并把结论回填到本表与 plantree（`docs/plantree/plans/multi-agent/roadmap.md` 的 D48 行 + `open-questions.md`），不得只留档。
+### 8.1 已闭探针（P1/P2/P3 —— rev.3 全部关闭，本节无真未决项）
 
-### 8.1 真未决（施工前必须处理，全部为**探针**，均受 §1.2 运维铁律约束）
+> **一行指针**：三条探针的报文、file:line 证据、严格性观察、预算与产物全在 **[`06-probes.md`](./2026-08-16-agent-picker-investigation/06-probes.md)**（2026-08-16；live 3 回合 / 预算 ≤8；探针脚本在 `/tmp/d48-probe/` 不入仓；本地配置零写入）。下表只留**结论 + 它改了规格哪一处**，细节不在本文重复。
 
-> **档位不同，别混读**：**P1 = S2 施工前置（阻塞 S2，不阻塞 S1）**；**P2/P3 = S4 前置，不阻断 D48 收口**（§2/§6 已定 S4 为条件切片）。**D48 开工（S1）不需要先跑任何探针**；P2/P3 的排期见 §8.0-Q4 推荐（与真机补测批合跑，S1~S3 收口后再按 §1.2 报备用量）。
+| # | 探针 | 结论 | 落到规格哪里 |
+|---|---|---|---|
+| **P1** | `turn/start` 覆盖 model 的 sticky 行为 | **✅ 成立**：覆盖写进线程常驻设置（第 2 发不带覆盖仍跑被覆盖的模型，rollout 逐回合 `turn_context` 为证），并广播 `thread/settings/updated`；`sandboxPolicy` 同样 sticky；schema 层所有覆盖字段自述 "this turn AND subsequent turns"，即 codex **没有「仅本回合」语义** | §4.6 防线 ①（已过）与防线 ②（回写值取通知）· §2 的 S2 依赖列 · B8 · §4.6-6 负控 |
+| **P2** | Claude 中途改权限档的通道 | **✅ 成立且比预想简单**：每发一条消息新开 `query()`，`permissionMode` 是 options 字段 ⇒ 与 D40 model 同形状；**不需要 `setPermissionMode`、不需要 streaming-input**；`CHAT_PERMISSION_MODE` 三消费点（`:754`/`:341`/`:391`）须同喂；`bypassPermissions` 需 `allowDangerouslySkipPermissions`；SDK 0.3.218 **无 `'auto'` 第 6 值** | §6.1 全条 · D1/D2/D3 · §5.4（`'auto'` 改判 + 危险档扩权键）· §5.5 wire · §8.2-L7/L10 |
+| **P3** | codex `thread/settings/update` | **✅ 成立**：方法存在、**零回合**、空响应但立刻广播全量 `thread/settings/updated`；省略即不变；坏枚举/缺必填 `-32600` 拒而**未知字段静默吞**；`permissions` 与 `sandboxPolicy` 互斥；`thread/start.sandbox`（kebab 字符串）≠ `settings/update.sandboxPolicy`（camelCase 对象）；`turn/start` 刚发出即改档有竞态 | §6.2 全条 · D4~D8 · §6.3 · §7-R17 |
 
-| # | 未决项 | 归属 | 预期 | 不成立时的安全态 |
-|---|---|---|---|---|
-| **P1** | **`turn/start` 覆盖 model 的 sticky 行为**：覆盖是否延续后续回合、与 `thread/start` 值及 resume 重派生的关系、官方 CLI `/model` 用的是不是这条路 | S2 施工前置（§4.6 防线 ①） | **预期是「确认 CLI 同款行为并抄其报文形状」**，不是「验证是否可行」——用户已实证官方 codex CLI 支持中途 `/model`，「覆盖即新默认」有官方先例。**照抄不猜**：需看清 CLI 用的是 `turn/start` 覆盖还是别的方法 | 推翻「覆盖即新默认」→ **回退到只补 effort 并回报用户重拍**（不得自行改语义） |
-| **P2** | **Claude SDK `Query.setPermissionMode()`** 在纯文本 prompt 下的真实失败模式（含 `'auto'` 第 6 值） | S4 条件 A（§6.1） | 未知；类型上已被 `claudeRuntime.ts:33-36` 抹掉，且多数回合不满足 streaming-input 前提 | Claude 半边取消，或退到「改档需重开会话」 |
-| **P3** | **codex `thread/settings/update`** 的 schema / 中途改档能力 / 作用边界 | S4 条件 B（§6.2） | 证据强度仅方法名；备选路 `turn/start` sticky 覆盖需用户另行拍板语义 | 两条都不通 → **Codex 半边明确不做** |
+**副产物（不阻塞，登记去向）**：`codex-method-contract.json` 记 121 条而同版二进制 126 条，差集 5 条（`initialize` / `fuzzyFileSearch` / `thread/inject_items` / `thread/increment_elicitation` / `thread/decrement_elicitation`）为**纯欠采**、无一条消失，D48 要用的四个方法拼写无漂移 → **不构成任何前置**；补采挂 S4 的 fixture 提交（D14）或 S2 顺手活，见 §8.2-L9。
+
+**开工判据**：S1~S4 四片均可直接开工，**不存在「等探针结论才能定形状」的项**；剩余的真机动作只有各片收口时的 GUI 点验（受 §1.2 约束）。
 
 ### 8.2 遗留登记（不阻塞施工，不进本阶段）
 
@@ -732,11 +838,14 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 | L1 | 三态琥珀点（扩 wire 发 `HostAgentDetail.reason`） | 仲裁裁定不做。要做须把 Host 内部诊断（`agentSupport.ts:227-237` 四条 reason，含「pairwise 非包含」纪律）变成对外契约 → 等真实需求（用户自己装了 codex 但没生效且高频） |
 | L2 | 目录磁盘快照（跨重启离线目录） | 本阶段只做进程内 cache。要做须先设计来源/年龄 UI，否则昨日目录会冒充当前真源 |
 | L3 | `model/list` 的 per-model `supportedReasoningEfforts` | §4.3 本片不读。将来出现「某模型不支持 xhigh」的真实故障再开 |
-| L4 | `turn/start` 的 `effort` 是否 sticky（schema 未明说） | 即使 sticky 也与 Claude 轴现有行为一致（`claudeRuntime.ts:514-522` 把新 model 写回 session 默认），不构成阻断；且防线 ② 的回写已覆盖同一形状。S2 GUI 点验时顺手观察 |
+| L4 | ~~`turn/start` 的 `effort` 是否 sticky~~ | **已闭（rev.3）**：06 §0.3 实采 schema——`effort` 与 `model` 同列在「for this turn AND subsequent turns」字段清单里，**sticky 确定**；与防线 ② 的回写口径一致，无遗留动作 |
 | L5 | 种子表随时间过期 | 调查 04 是单日快照；四级回落使设计不依赖它长期为真，但**每次发布前对一次**（`seedCatalog.ts` 头注写明采集日期） |
 | L6 | 存量短名的自然衰减速度 | §4.4 迁移靠用户下次点击。若长期仍大量残留且 SDK 翻译层变了，届时才需写迁移（那时会有真实映射证据） |
-| L7 | Claude 统一改 streaming-input 的架构成本 | S4 条件 A 若要求它，须单独用户拍板与回归评估（§6.1 扩权红线） |
-| L8 | Context 面板内联的「未物化可写」权限控件 | **落点未拍板（§8.0-Q1）**：定稿推荐把写侧收在 Settings（改判 #11 的推荐案）。若 Q1 拍成 (a)，本条即为实施项而非遗留项；若拍成 (c) 而后续用户反馈「建会话时就想改」，再评估把 Preference 编辑器嵌入 Context 的只读行上方 |
+| L7 | ~~Claude 统一改 streaming-input 的架构成本~~ | **已闭（rev.3）**：P2 实证中途改档走 per-turn `query()` options，**根本不需要 streaming-input**；rev.2 §6.1 的「扩权红线」条款随之作废（§6.1-1） |
+| L8 | ~~Context 面板内联的「未物化可写」权限控件~~ | **已闭（rev.3）**：Q1 拍成**双层**，A 稿 (a) 的关切（「建会话/用会话当时才是想设它的时刻」）由 Composer 实时控件正面解决；**Context 面板恒只读**的口径不再有例外分支 |
+| L9 | `codex-method-contract.json` 欠采 5 条 clientRequest（121 vs 126） | 纯欠采、方向单一、D48 用的四个方法都在 → **不阻塞**。补采顺手挂 S4 扩 `CODEX_METHOD` 的 fixture 提交（D14）；S2 若先动 codex fixture 也可顺手带 |
+| L10 | SDK `PermissionMode` 的 `'auto'` 第 6 值 | **明确不做**：06-probes P2 抄录 SDK 0.3.218 的取值注释为五值，当前版本没有该值（§5.4 已改判）。等 SDK 真出现该值且有行为实证再议 |
+| L11 | 「改档 + 发消息」合并进一次 `turn/start` 的往返优化 | P1/P3 都支持（`turn/start` 覆盖字段 sticky），但首版形状是 `thread/settings/update` 零回合下发（§6.2-1）。等真实性能诉求再做；做时须保证两条路径的回写收敛口径一致（同认 `thread/settings/updated`） |
 
 ---
 
@@ -744,7 +853,8 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 
 ### 9.1 本阶段明确不做
 
-多 agent 协同 / 同会话切 agent · 终端轴 `AgentPickerMenu`/`SessionBar`/`AgentSettings` 任何改动 · 2b 打包链（阶段 4）· git surface 扩展（open-q #4）· 提问坞单槽（open-q #10）· cch 服务端 / 供应商配置 / 模型重定向表改动 · ACP 通道与 config_options（D45 已定直连）· 猜测或模拟 `thread/settings/update` 与 SDK 实时权限协议 · 会话中途改权限档（S4 条件执行）· `networkAccess` 写侧 · SDK `'auto'` 权限档 · 目录搜索/虚拟化 · 目录磁盘快照。
+多 agent 协同 / 同会话切 agent · 终端轴 `AgentPickerMenu`/`SessionBar`/`AgentSettings` 任何改动 · 2b 打包链（阶段 4）· git surface 扩展（open-q #4）· 提问坞单槽（open-q #10）· cch 服务端 / 供应商配置 / 模型重定向表改动 · ACP 通道与 config_options（D45 已定直连）· **不照 06-probes 实测报文而自行猜测/模拟 `thread/settings/update` 与 SDK 权限通道**（rev.3：通道已实证，禁的是猜形状与无 fixture 扩 `CODEX_METHOD`）· `networkAccess` 写侧 · SDK `'auto'` 权限档 · 命名权限 profile（`permissions` 字段）· 「改档 + 发消息」合并进 `turn/start` 的往返优化（§8.2-L11）· 目录搜索/虚拟化 · 目录磁盘快照。
+> **rev.3 移除项**：「会话中途改权限档」已由 Q1 拍板成为**必做需求**（S4），不再属于本阶段不做清单。
 
 ### 9.2 功能验收
 
@@ -757,18 +867,21 @@ type SessionPermissionPolicy = /* runtimeEvents.ts:540-567 现状不动 */;
 - [ ] model/effort 随 agent 切换偏好，session 之间不串值。
 - [ ] Codex `turn/start` 实际收到 **model 与 effort**，五档生效，`ultra` 不可进入 wire；成功后 registry 默认事务式回写。
 - [ ] Codex `permissionPolicy` 在 Context 可见；Claude legacy 展示零回归。
-- [ ] Settings 可保存两轴新会话默认权限（**落点以 §8.0-Q1 拍板为准**）；active Context 只显示 Host 实际回声；**settings 未 hydrate 时不物化权限快照**。
+- [ ] Settings 可保存两轴新会话默认权限（**模板层**，落点已由 §8.0-Q1 拍板）；active Context 只显示 Host 实际回声；**settings 未 hydrate 时不物化权限快照**。
 - [ ] `networkAccess` 无假写控件；单次审批与会话默认权限互不污染。
-- [ ] S4 未有探针 PASS 时，产品中不存在中途权限 selector。
+- [ ] **Composer 实时权限控件（S4）**：idle 可改、busy 禁用**且 runtime 侧再拦一次**；Claude 文案「下一条消息起生效」、Codex 零回合生效且**只认 `thread/settings/updated` 回声**；两轴均**不吞** JSON-RPC / SDK 错误，失败保持旧事实。
+- [ ] **中途改档只动当前会话**：成功后更新该会话 `permissionPreference` 快照（重启 resume 用它），**不回写 `ChatAgentDefaults` 模板**；**agent 已锁定的会话照样能改权限**。
+- [ ] **危险档两层同口径**：warning + 二次确认（未确认零 IPC）+ 绝不做默认/回退值；Claude `bypassPermissions` 同发 `allowDangerouslySkipPermissions:true`。
 
 ### 9.3 工程验收
 
 - [ ] `AgentWireName` / `BuiltinAgentId` 静态隔离断言保持绿色。
 - [ ] `chatSessions.ts` 只有 `setDraftSessionAgent` 等必要加法（**零新字段**）；目录/权限 facts 走 adjacent store / Main service。
-- [ ] 新增纯模块（`sessionBinding.ts` / `composerAgentPickerModel.ts` / **`src/shared/models/familyWhitelist.ts`**，路径见 §4.2）已加入 `pureModuleImports.test.ts` 的 `TARGET_FILES`（相对 `src/renderer/components/chat/__tests__/` 的路径，跨目录条目已有先例）。
+- [ ] 新增纯模块（`sessionBinding.ts` / `composerAgentPickerModel.ts` / **`src/shared/models/familyWhitelist.ts`**，路径见 §4.2）已加入 `pureModuleImports.test.ts` 的 `TARGET_FILES`（相对 `src/renderer/components/chat/__tests__/` 的路径，跨目录条目已有先例）；**S4 新增的 sandbox 形状映射与 `thread/settings/update` 参数白名单亦为纯模块，同样入表**（§6.2-3/4）。
 - [ ] IPC/shared/session-index 字段均为兼容性可选加法；old Host / old snapshot 各有回归。
 - [ ] secret scan 证明 catalog 日志与 renderer payload 不含 key/token/完整 auth URL。
 - [ ] 每片 Happy Path、确定性过程断言、变异对**逐对实跑并抄红灯原文**；flag off/on 双轮各跑。
 - [ ] 每片分别逐门通过 `typecheck → typecheck:agent-host → lint → test`（串行），基线 208 文件 3973 例 0 红不倒退。
-- [ ] 所有探针执行前已按 §1.2 报备用量并获批准；施工全程未触碰本地 `~/.claude/`、`~/.codex/` 与开发服务器 env。
+- [ ] 三条前置探针已按 §1.2 报备并执行完毕（06-probes：live 3 回合 / 预算 ≤8，本地配置零写入）；各片收口的真机点验同样先报备；施工全程未触碰本地 `~/.claude/`、`~/.codex/` 与开发服务器 env。
+- [ ] `CODEX_METHOD` 的 `thread/settings/update` 扩项**有 committed contract fixture 在先**（D14）；fixture 补采后 clientRequest 计数与同版二进制一致。
 - [ ] 收口按规范第 15 条更新 D48 台账、plantree 状态与证据链接（由实际施工票执行，本规格不预改其他文件）。
