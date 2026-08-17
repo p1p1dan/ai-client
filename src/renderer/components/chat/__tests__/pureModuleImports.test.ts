@@ -43,6 +43,12 @@ const TARGET_FILES = [
   // slice 0 — skipped below rather than failing, per the spec's own note.
   '../eventRing.ts',
   '../../workspace-shell/surfaces/contextSurfaceModel.ts',
+  // D48 S1: the agent picker's whole decision surface lives in these two, and
+  // their truth tables are the only automated coverage the picker gets (no
+  // `.tsx` renders under this config). A stray store import here would take
+  // both suites out at once, as an opaque runner hang rather than a red test.
+  '../sessionBinding.ts',
+  '../composerAgentPickerModel.ts',
 ] as const;
 
 /** Import statement lines only, `import type ...` lines excluded. */

@@ -20,7 +20,7 @@ import { toastManager } from '@/components/ui/toast';
 import { useRepositoryRuntimeContext } from '@/hooks/useRepositoryRuntimeContext';
 import { useI18n } from '@/i18n';
 import { createChatSessionOnWorkspace, retargetChatSession } from '@/stores/chatSessionActions';
-import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSettingsStore } from '@/stores/settings';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
 import {
@@ -39,6 +39,10 @@ import {
   targetWorktreeLabel,
 } from './composerTarget';
 import { markForkDraftCarry } from './forkDraftCarry';
+// D48 S1: `computeEverHostBound` moved out of this file — the agent picker's
+// lock and the target bar's lock have to be the same sentence, and this file
+// already had two documented mirrors elsewhere in the tree.
+import { computeEverHostBound } from './sessionBinding';
 
 export interface UseComposerTargetResult {
   target: ActiveTarget;
@@ -63,31 +67,6 @@ export interface UseComposerTargetResult {
   worktreeRepoPath: string | null;
   /** projectName for the controlled CreateWorktreeDialog. */
   worktreeProjectName: string;
-}
-
-/**
- * "Ever host-bound" for a session: true when the session is currently
- * registered with Agent Host (`hostBoundSessionIds`) OR it carries a
- * persisted `runtimeIdentity` even though it isn't in that list right now —
- * the case for a session restored from session-index.json (messageCount=0,
- * history not yet loaded, Host not running). A restored session must still
- * be judged as host-bound: retargeting it in place would send the first
- * message through `decideSendPreamble`'s 'resume' path (it only checks
- * hostBound + runtimeIdentity, not "is Host live right now"), which resumes
- * the OLD conversation into the NEW cwd instead of starting a fresh one.
- *
- * Both call sites below (the render-time `everHostBound` and
- * `applyPendingTarget`) go through this single function so the synthesis
- * logic cannot drift between them.
- */
-function computeEverHostBound(
-  session: Pick<ChatSession, 'id' | 'runtimeIdentity'> | undefined,
-  hostBoundSessionIds: readonly string[]
-): boolean {
-  if (!session) {
-    return false;
-  }
-  return hostBoundSessionIds.includes(session.id) || session.runtimeIdentity != null;
 }
 
 interface PendingTarget {

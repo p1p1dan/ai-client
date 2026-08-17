@@ -15,6 +15,10 @@ import {
   type HistoryMessage,
 } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
+// Leaf module too (one type import): the single "this session's binding is
+// settled" criterion, shared with the composer chain and the agent picker so
+// the store's own guard cannot drift away from the UI's.
+import { isChatAgentBindingLocked } from '@/components/chat/sessionBinding';
 // Leaf module (no imports of its own) on purpose: importing the hook module
 // `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
 // store. Read by the `sendMessage` ghost-session guard below.
@@ -217,6 +221,37 @@ export interface ChatSessionsState {
   historyErrors: Record<string, string>;
 
   selectSession: (sessionId: string) => void;
+  /**
+   * D48 S1 — approved ADDITIVE change to this red-line store (no new state
+   * field: `ChatSession.agent` has existed since S2 (b)).
+   *
+   * The zero-turn agent picker's only write. It sets a DRAFT binding on a
+   * session that has not been materialized yet, and refuses on anything that
+   * has — switching the agent of a session that already owns a resume handle
+   * would hand that handle to a runtime which never issued it.
+   *
+   * `sendAttempted` is an explicit argument rather than something read from
+   * here because no store holds it: it is `ChatWorkspace`'s own sticky
+   * `useState` latch, set the instant `runSend` commits and several awaits
+   * before `hostBoundSessionIds` or `runtimeIdentity` catch up. Without it the
+   * "you cannot repoint a session whose create IPC is in flight" rule would
+   * live entirely in the composer's `disabled` prop.
+   *
+   * Returns FALSE ONLY WHEN REFUSED — no such session, or the binding is
+   * already settled. True covers both a write and a re-selection of the value
+   * already held; the two are deliberately not distinguished. `sessions` stays
+   * referentially identical in every case except an actual change.
+   *
+   * This does NOT materialize anything: `mergeSessionIndex` remains the one
+   * place a missing binding becomes a persisted one. A user's explicit choice
+   * is not a default, and an unsent live-only session has no index entry for
+   * it to become a second default in.
+   */
+  setDraftSessionAgent: (
+    sessionId: string,
+    agent: AgentWireName,
+    options: { sendAttempted: boolean }
+  ) => boolean;
   sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
   stopActiveSession: () => Promise<void>;
   /**
@@ -978,6 +1013,36 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
 
   selectSession: (sessionId) => {
     set({ activeSessionId: sessionId });
+  },
+
+  /** D48 S1 — see the interface above for why this is additive and narrow. */
+  setDraftSessionAgent: (sessionId, agent, options) => {
+    const state = get();
+    const session = state.sessions.find((item) => item.id === sessionId);
+    if (!session) {
+      return false;
+    }
+    // Same single criterion the picker and the target bar read, reached
+    // through the same symbol — a hand-written copy here is how one arm goes
+    // missing and a restored session becomes re-pointable.
+    if (
+      isChatAgentBindingLocked({
+        sendAttempted: options.sendAttempted,
+        hostBound: state.hostBoundSessionIds.includes(sessionId),
+        hasRuntimeIdentity: session.runtimeIdentity != null,
+      })
+    ) {
+      return false;
+    }
+    if (session.agent === agent) {
+      return true;
+    }
+    set({
+      sessions: state.sessions.map((item) =>
+        item.id === sessionId ? { ...item, agent, updatedAt: Date.now() } : item
+      ),
+    });
+    return true;
   },
 
   /**

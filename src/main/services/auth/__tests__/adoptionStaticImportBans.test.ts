@@ -16,10 +16,35 @@ describe('adoption.ts static import bans (S6 §5 ⑥b)', () => {
     expect(source.length).toBeGreaterThan(1000);
   });
 
-  it('never imports node:fs or fs write APIs', () => {
-    expect(source).not.toMatch(/from\s+['"](node:)?fs['"]/);
+  it('never imports fs write APIs (read-only existsSync/readFileSync are the documented exception)', () => {
+    // D48-era errata: the original blanket ban on any `fs` import contradicted
+    // the module header's own contract ("only the read-only existsSync/
+    // readFileSync"), which adoption.ts has relied on since 8cfef4d. Named
+    // read-only imports are allowed; everything else stays banned.
+    const namedImports = [
+      ...source.matchAll(/import\s*\{([^}]*)\}\s*from\s+['"](?:node:)?fs['"]/g),
+    ];
+    for (const match of namedImports) {
+      const names = match[1]
+        .split(',')
+        .map((entry) => entry.trim().split(/\s+as\s+/)[0])
+        .filter(Boolean);
+      for (const name of names) {
+        expect(['existsSync', 'readFileSync']).toContain(name);
+      }
+    }
+    // Default/namespace fs imports and require() stay fully banned.
+    expect(source).not.toMatch(/import\s+(?!\{)[^;]*from\s+['"](node:)?fs['"]/);
     expect(source).not.toMatch(/require\(\s*['"](node:)?fs['"]\s*\)/);
-    for (const token of ['writeFileSync', 'appendFileSync', 'rmSync', 'unlinkSync', 'renameSync', 'copyFileSync', 'mkdirSync']) {
+    for (const token of [
+      'writeFileSync',
+      'appendFileSync',
+      'rmSync',
+      'unlinkSync',
+      'renameSync',
+      'copyFileSync',
+      'mkdirSync',
+    ]) {
       expect(source).not.toContain(token);
     }
   });

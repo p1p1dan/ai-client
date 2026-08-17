@@ -43,10 +43,12 @@ import {
   totalAttachmentBytes,
   toWireAttachments,
 } from './attachments';
+import { ComposerAgentPicker } from './ComposerAgentPicker';
 import { ComposerAttachMenu } from './ComposerAttachMenu';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
+import { AGENT_UNAVAILABLE_SEND_ERROR, isSendableAgent } from './composerAgentPickerModel';
 import { resolveActiveTarget } from './composerTarget';
 import { toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
@@ -99,6 +101,19 @@ interface ChatComposerProps {
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
   /** T-28: fires once runSend's guards pass, before the send starts — feeds the sticky `sendAttempted` latch in ChatWorkspace. */
   onSendStart?: () => void;
+  /**
+   * D48 S1: whether this session's agent binding is already settled
+   * (`isChatAgentBindingLocked`). Computed in `ChatWorkspace` because the
+   * `sendAttempted` half of that criterion is its local latch and never
+   * reaches a store — see `sessionBinding.ts`.
+   */
+  agentBindingLocked?: boolean;
+  /**
+   * D48 S1: the raw `sendAttempted` latch behind `agentBindingLocked`'s first
+   * arm, passed unfolded because `setDraftSessionAgent`'s option of that name
+   * is a contract about that one fact — see `ComposerAgentPicker`'s prop doc.
+   */
+  agentSendAttempted?: boolean;
 }
 
 /** T-07③: popup page size. Kept next to the truncation hint that reports it. */
@@ -239,7 +254,14 @@ async function waitUntil(
   return predicate();
 }
 
-export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: ChatComposerProps) {
+export function ChatComposer({
+  mode,
+  disabled,
+  onAddRepository,
+  onSendStart,
+  agentBindingLocked = false,
+  agentSendAttempted = false,
+}: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   // T-19 fix review (R5): reverted from batch 3's queue-based "failure
@@ -425,7 +447,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // resume paths (LeftNav/MessageTimeline) already resolve through — so the
   // live send path and ModelSelect's own display never diverge from what a
   // resume just pinned onto the Host registry entry.
-  const { status: hostStatus } = useHostStatus();
+  const { status: hostStatus, retry: retryHost } = useHostStatus();
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
   // T-19 decision 2.1: paste unlocks whenever the textarea does — only
@@ -840,6 +862,25 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return 'skipped';
     }
     if (inFlightRef.current) return 'skipped';
+    // D48 S1 (A12): the Host has told us which agents it can run — refuse a
+    // turn bound to one that is not on that list instead of letting the create
+    // come back `agent_unsupported` after the draft is already consumed and
+    // the picker already locked. `undefined` (a Host build that predates the
+    // capability) deliberately does NOT trigger this; `isSendableAgent` owns
+    // that distinction and is truth-tabled next door.
+    //
+    // Placed with the other guard-fail returns, i.e. BEFORE `inFlightRef` is
+    // claimed and before `onSendStart?.()`: returning after either would wedge
+    // the composer shut for the run, or lock the binding for a turn that never
+    // went out.
+    const knownAgents = hostStatus.capabilities?.agents;
+    const agentAtEntry = sessionAgent(
+      useChatSessionsStore.getState().sessions.find((item) => item.id === activeSessionId) ?? {}
+    );
+    if (!isSendableAgent(knownAgents, agentAtEntry)) {
+      useChatSessionsStore.setState({ lastError: AGENT_UNAVAILABLE_SEND_ERROR });
+      return 'skipped';
+    }
     inFlightRef.current = true;
     inFlightSessionIdRef.current = activeSessionId;
     // F6: this attempt's cancellation token — handleStop bumps the shared
@@ -2230,6 +2271,27 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     />
   ) : null;
 
+  // D48 S1: the chat-agent entry point, `capabilities.agents`'s first UI
+  // consumer. Its gate is deliberately NOT the model trigger's
+  // `disabled || busy || sending`: a model change applies to the next turn, so
+  // it only has to stand down while one is running, whereas an agent change
+  // never applies to an existing session at all. `locked` is the whole rule,
+  // and `disabled` stays only as the "there is nowhere to put this draft"
+  // kill switch. Adding busy/sending on top would be a second, weaker copy of
+  // the lock: once a turn is in flight the `sendAttempted` latch has already
+  // set `locked`.
+  const agentPicker = activeSessionId ? (
+    <ComposerAgentPicker
+      sessionId={activeSessionId}
+      agents={hostStatus.capabilities?.agents}
+      hostState={hostStatus.state}
+      locked={agentBindingLocked}
+      sendAttempted={agentSendAttempted}
+      disabled={disabled}
+      onRetryHost={() => void retryHost()}
+    />
+  ) : null;
+
   // T-30b2 §4.6 / D4: sits at the far left of the card in both modes. Its
   // disabled gate matches the textarea's exactly — "there is nowhere to put
   // this draft" — and deliberately excludes busy/sending, because T-19 already
@@ -2452,10 +2514,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 {mentionChipsBlock}
               </div>
             )}
+            {/* D48 S1 §3.2: the agent chip sits immediately left of the
+                model/effort chip, NOT next to ⊕. The session row's own
+                reading order is `attach → textarea → status → model →
+                actions` (the "⊕ → model → status → actions" note below is
+                empty-mode-only), and putting the picker after ⊕ would both
+                push the textarea's width down and separate the two ghost
+                chips whose height/inset are cross-asserted against each
+                other. */}
             <div className={composerBarClass('session')}>
               {attachButton}
               {textareaEl}
               {renderStatusLine(sessionStatusLineWrapperClass())}
+              {agentPicker}
               {modelEffortControls}
               {actionButtons}
             </div>
@@ -2470,9 +2541,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             {/* T-30b2 §5.2: the bottom bar reads left-to-right as ⊕ → model →
                   status → actions, so the two controls that start a message
                   sit together at the left and the status text takes whatever
-                  space is left instead of owning the leading position. */}
+                  space is left instead of owning the leading position.
+                  D48 S1 §3.2 extends that same reasoning by one slot: the
+                  agent comes BEFORE the model, because which models exist is
+                  a function of which agent runs the chat — reading order
+                  follows the causal order. */}
             <div className={composerBarClass('empty')}>
               {attachButton}
+              {agentPicker}
               {modelEffortControls}
               {renderStatusLine('flex min-w-0 flex-1 items-center gap-1.5')}
               <div className={composerActionGroupClass()}>{actionButtons}</div>

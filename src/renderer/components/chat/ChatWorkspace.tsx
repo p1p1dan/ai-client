@@ -14,6 +14,7 @@ import {
   rememberSendAttempt,
 } from './middleColumnLayout';
 import { PendingQuestionDock } from './PendingQuestionDock';
+import { isChatAgentBindingLocked } from './sessionBinding';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -64,14 +65,32 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     setSendAttempts((prev) => rememberSendAttempt(prev, currentSessionId));
   }, []);
 
+  // One read of the latch for this render: the mode derivation, the binding
+  // lock and the picker's own prop are three consumers of the same fact.
+  const sendAttempted = sendAttempts.includes(activeSessionId ?? '');
+
   const mode = deriveMiddleColumnMode({
     sessionId: activeSessionId,
     messageCount,
-    sendAttempted: sendAttempts.includes(activeSessionId ?? ''),
+    sendAttempted,
     hostBound,
     hasRuntimeIdentity: activeSession?.runtimeIdentity != null,
     hasHistoryError,
     status: activeSession?.status ?? 'idle',
+  });
+
+  // D48 S1: the same triple the mode derivation above runs on, folded by the
+  // shared criterion instead of a second hand-written disjunction. It is
+  // computed HERE and passed down because `sendAttempts` is this component's
+  // own state — `ChatComposer` only ever receives the write callback
+  // (`onSendStart`), and `turnSendStatus` is a one-slot in-flight snapshot,
+  // not a per-session sticky latch, so the composer genuinely cannot derive it.
+  // The raw latch goes down alongside the fold: the picker hands it to
+  // `setDraftSessionAgent`, whose option of that name is about this fact alone.
+  const agentBindingLocked = isChatAgentBindingLocked({
+    sendAttempted,
+    hostBound,
+    hasRuntimeIdentity: activeSession?.runtimeIdentity != null,
   });
 
   useEffect(() => {
@@ -156,6 +175,8 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
       {mode === 'session' && <PendingQuestionDock sessionId={activeSessionId} />}
       <div className={middleColumnHostClass(mode)}>
         <ChatComposer
+          agentBindingLocked={agentBindingLocked}
+          agentSendAttempted={sendAttempted}
           mode={mode}
           disabled={!activeSessionId}
           onAddRepository={onAddRepository}

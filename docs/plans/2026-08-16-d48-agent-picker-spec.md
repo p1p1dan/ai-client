@@ -130,7 +130,9 @@
 
 **新增文件**：`src/renderer/components/chat/ComposerAgentPicker.tsx` · `composerAgentPickerModel.ts`（纯视图模型）· `sessionBinding.ts`（§3.3 提取）· `__tests__/composerAgentPickerModel.test.ts`。
 
-**改动面（既有文件，S1 全清单）**：`ChatComposer.tsx`（组装 + 新 prop `agentBindingLocked` + 发送守卫）· **`ChatWorkspace.tsx`（计算 `agentBindingLocked` 并下传——`sendAttempted` latch 只有它有，见 §3.2）** · `chatSessions.ts`（窄 action `setDraftSessionAgent`）· `useComposerTarget.ts`（`computeEverHostBound` 改 import 共享模块）· `__tests__/pureModuleImports.test.ts`（`TARGET_FILES` 加两个新纯模块）。
+**改动面（既有文件，S1 全清单）**：`ChatComposer.tsx`（组装 + 新 prop `agentBindingLocked` / `agentSendAttempted` + 发送守卫）· **`ChatWorkspace.tsx`（计算 `agentBindingLocked` 并下传，另下传原始 `sendAttempted` latch——该 latch 只有它有，见 §3.2 与 §3.8-⑤）** · `chatSessions.ts`（窄 action `setDraftSessionAgent`）· `useComposerTarget.ts`（`computeEverHostBound` 改 import 共享模块）· `__tests__/pureModuleImports.test.ts`（`TARGET_FILES` 加两个新纯模块）。
+
+**改动面补记（rev.3 规格未列、施工实际动到的 7 个文件；口径见 §3.8-⑦）**：新增测试 3 个 —— `__tests__/composerAgentPickerWiring.test.ts`（A3 composer 臂 / A6 / A10a / A10b / A11 / A12 源扫描）· `__tests__/sessionBinding.test.ts`（A2 真值表 + 消费者 import 扫描）· `stores/__tests__/chatSessionsDraftAgent.test.ts`（A5a / A5b / A7 store action 单测）；fixture 存根 4 个（`ChatSessionsState` 加了 action，既有 `baseState()` 工厂必须补桩，否则类型不全）—— `components/chat/__tests__/historyError.test.ts` · `stores/__tests__/chatSessionsBatch.test.ts` · `stores/__tests__/chatSessionsCore.test.ts` · `stores/__tests__/chatSessionsHistory.test.ts`。
 
 - 底座 = 仓内已有的 `ToggleGroup`/`Toggle`（`components/ui/toggle-group.tsx:88` 导出 `{ToggleGroup, Toggle, ToggleGroupItem, ToggleGroupSeparator}`，Base UI 底层），`type="single"` 单选语义（或等价 `role=radiogroup`）。**禁止手写 segmented control**（CLAUDE.md 组件优先条）。候选集恒为 ≤2 项（`AgentWireName` 是闭合两元，`agentWire.ts:43-45`），为两项开一层 popup 是纯负收益。
 - **必须遵守本仓 ghost chip 规则**（`docs/design-system.md:360-388`，B 稿吸收项）：`h-6`（小按钮 24px）、`rounded-sm`、`text-ui`；**四条硬性禁止**——任何 `border*`、任何 `shadow*`（含 `before:` 内高光）、任何 `min-w-*`、`rounded-md` 及以上。静息无壳，`hover:bg-hover` 与 `focus-visible:` **成对**给同一层底色（`:383-385`：只挂 hover 会让键盘用户完全失去控件边界）；弹层/选中态用 `data-[popup-open]:bg-selection`，不叠 `/N` alpha。
@@ -297,6 +299,48 @@ deriveComposerAgentOptions(input: {
 ⑨ 把 picker 放到 `modelEffortControls` 之后 → **A10a/A10b 红**
 ⑩ `fellBack` 只改视图不回写 store（picker 显 Claude、payload 仍 `codex`）→ **A11 红**
 ⑪ `agents=[]` 仍放行发送 → **A12 红**
+
+### 3.8 as-built（施工后记，2026-08-16 S1 规格符合性终检后补）
+
+> 本节只记 **§3 定稿口径与实际落地的差异**，以及差异的理由与交叉证据。断言编号沿用 §3.6，变异编号沿用 §3.7。
+> 触发来源 = S1 规格符合性终检 9 条发现（B1 / M2 / M3 / M4 / m6 / m7 / m8 / m9 / m10，M5 lint 由编排者另修）。
+
+**① 偏差（形制）：`ComposerAgentPicker.tsx` 保留手写 segmented control，不用 `ToggleGroup`/`Toggle`。**
+
+§3.1 写的是「底座 = 仓内已有的 `ToggleGroup`/`Toggle`……**禁止手写 segmented control**（CLAUDE.md 组件优先条）」。实际实现是手写的两段 `<button role="radio">` + `role="radiogroup"` 容器。理由是**这两条规则在本控件上互斥，且 §3.1 自己的另一半（ghost chip 四禁）有断言背书、组件优先条没有**：
+
+- 冲突串（实测 `src/renderer/components/ui/toggle.tsx:8-24`，`toggleVariants` 是每个 `ToggleGroupItem` 的渲染底座）：base 串含 `rounded-lg`、`border`、`before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)]`（内高光 = §3.1 明文点名的 `shadow*` 一类）；`size` 三档最小的 `sm` = `h-8 min-w-8 px-[calc(--spacing(1.5)-1px)] sm:h-7 sm:min-w-7`。
+- 对照 §3.1 的四条硬性禁止（任何 `border*` / 任何 `shadow*`（含 `before:` 内高光）/ 任何 `min-w-*` / `rounded-md` 及以上）：**四条全撞**；外加高度档不符（要 `h-6`，最小档给 `h-8`）与一个 `sm:h-7` 断点前缀高度——后者正是 A9 里「`Button` 的 `sm:size-7` 泄漏」那条既有教训的同形状（裸 `h-6` 只置换无前缀那半，断点前缀那半在所有真实窗宽下继续赢）。
+- **交叉证据 = A9 会红**：`composerAgentPickerModel.test.ts` 的 A9 组把四禁写成正则 `[/\bborder/, /\bshadow/, /\bmin-w-/, /\brounded-(md|lg|xl|2xl|3xl|full)\b/]` 逐个类名串跑，并单列一条 `sm:h-` 断点高度残留断言。走 `ToggleGroup` 要把 base 串整个覆盖掉才能过 A9——那是「引入一个组件，只为了把它的类名全部剥掉」，剩下的只有 `role=radiogroup` 语义，而候选集是闭合两元（`AGENT_WIRE_NAMES`），没有列表逻辑可继承。
+- 组件头部已就地记同一取舍（英文注释，引 `toggleVariants` 冲突串）；**若将来 `toggleVariants` 出现 ghost/`unstyled` 变体，本条偏差应回退到组件优先**。
+
+**② 语义修正（M3）：锁定分支不再把「Host 未 ready」说成「Host 不支持该 agent」。**
+
+原实现 `deriveComposerAgentOptions` 锁定分支的 `boundAvailable = available(selectedAgent)` 把 `hostState !== 'ready'` 折进了 `BOUND_AGENT_UNAVAILABLE_REASON`（"This session is bound to an agent the current Host cannot run"）。后果：**冷启动期间每一个已建会话的 chip 都挂这句文案**——而 §3.2 实测「session 模式下 picker 几乎恒为锁定态」，即这是全量已建会话的常态路径，不是边缘态。现口径：`hostState !== 'ready'` 时锁定 chip 只出 `AGENT_LOCKED_REASON`，不宣称任何不可用；`available` 字段仍如实为 `false`（Host 没给答案 ≠ 给了否定答案）。断言补 `locked × hostState` 四态真值表（`stopped`/`starting`/`error`/`ready` × 绑定项在列表/不在列表）+ 一条「冷启动 `capabilities===undefined` 也不出不可用文案」。
+
+**③ 语义修正（M4）：`resolveSelectedAgent` 增加 `hostState` 入参，Host 未 ready 时不回退。**
+
+§3.4 声明的签名只有 `{capabilitiesAgents, draftAgent, locked}`。按该签名实现会踩：冷启动 `capabilities` 整个 `undefined` → `effectiveAgents(undefined)` 读成「老 Host 只能跑 legacy」→ **codex 草稿在 picker 上显示 Claude Code，而 `sessionAgent(session)` 与 create payload 仍是 `codex`**——正是 §3.3-6 / A11 要禁的「显示值 ≠ 发送值」，只是从另一头到达（`shouldCommitAgentFallback` 的 `hostState` 闸门只拦住了回写，拦不住显示）。现签名加 `hostState`，`!== 'ready'` 时原样返回草稿值、`fellBack:false`，与 §3.4 矩阵「Host 非 ready → **当前选择只读占位**」那行字面一致。断言补 `draft codex + hostState 'starting'/'stopped'/'error'` ⇒ `selectedAgent==='codex'` 三态，及一条 `deriveComposerAgentPicker` 端到端冷启动用例。
+
+**④ 断言手法（m6）：A3 的 composer 臂 / A6 / A12 以源扫描替代 spy。**
+
+`vitest.config.ts` 实测 `test: { environment: 'node', include: ['src/**/__tests__/**/*.test.ts', …] }`——**node 环境 + 只收 `.test.ts`**，`.tsx` 在整个套件里从不渲染，`ChatComposer.runSend` 也就无法被调用。§3.6 给 A3/A6/A12 标的「spy on `window.electronAPI.chat.createSession`」「调用序断言（spy 顺序）」因此只在 store 侧那条路径（`chatSessions.sendMessage`，纯 `.ts`）成立，已如实用 spy 实现；**composer 侧那条路径改为对 `ChatComposer.tsx` 的源扫描**（`composerAgentPickerWiring.test.ts`，范式沿用同目录既有的 `composerStopStatic.test.ts` / `messageTimelineWiring.test.ts`，注释均经 `stripComments` 解析器致盲）。A3 的「发射半边 pin」由此保留：两条发送路径各一例，只是取证手段不同轴。**残余盲区已知并接受**：源扫描不证可达性（`if (false)` 内的守卫同样能过），这正是把全部判断下沉到 `composerAgentPickerModel.ts` 纯函数真值表的原因。
+
+**⑤ 偏差（接线，m9）：picker 新增 `sendAttempted` prop，`deriveComposerAgentPicker` 新增 `lockedUpstream` 入参。**
+
+§3.2 的组装示例只给 picker 传 `locked={agentBindingLocked}`。首版实现据此把**折叠后的** `locked` 塞进了两个 `sendAttempted` 槽（视图模型 `binding.sendAttempted` 与 store action 的 `{ sendAttempted }` 选项）。行为上今天等价（多出的两臂只会让守卫更严），但**契约上是错的**：`setDraftSessionAgent` 的第三参数按 §3.3-2 是「store 看不见、必须由调用方显式交出」的那一个事实，喂给它一个三项析取会让守卫**靠巧合成立**，并让 A5b 那条臂在其唯一调用点上无人看守。现口径：`ChatWorkspace` 把原始 latch 与折叠值**并排下传**（`agentSendAttempted` / `agentBindingLocked`，经 `ChatComposer` 同名 prop 透传），picker 用原始 latch 填两个 `sendAttempted` 槽，上游折叠值走 `lockedUpstream` 独立入参并与本地折叠取**析取**（两折叠若失配只能倒向「锁定」，fail closed）。A2 的「`ChatWorkspace` 不得自拼析取」不受影响（仍是 `isChatAgentBindingLocked(...)` 单点）。
+
+**⑥ 断言范围（m8）：A2 的消费者扫描是 4 处，不是 §3.3-2 的 3 处。**
+
+§3.3 列的 S1 消费者是 `useComposerTarget.ts` + `ChatWorkspace.tsx` + picker 视图模型。实际第 4 个消费者是 **`stores/chatSessions.ts`**：`setDraftSessionAgent` 的 store 侧写守卫与 picker 的 UI 闸是同一条规则，而 store 看不到组件 props，只能自己再折一次。它是最容易长出「第四份手写析取」的地方（两臂就在自己 state 里，`hostBoundSessionIds.includes(id) || session.runtimeIdentity != null` 是一行的诱惑，而漏掉的恰是覆盖整个 create-IPC 飞行期的 `sendAttempted`）。扫描已补第 4 处，并对该 action 体加「不自拼析取」的负断言。注：store 侧 import 说明符是 `@/components/chat/sessionBinding`，扫描正则同时认 `./` 与 `@/components/chat/` 两种拼法。
+
+**⑦ 改动面（m7）**：§3.1 的既有文件清单漏列 7 个实际动到的文件（3 新测试 + 4 fixture 存根），已在 §3.1 就地补记。另有 1 个**连带勘误**不计入 S1 改动面：`src/main/services/auth/__tests__/adoptionStaticImportBans.test.ts` 的「禁任何 `fs` import」与 `adoption.ts` 模块头自陈的契约（只用只读 `existsSync`/`readFileSync`）自相矛盾，本轮改为「具名只读 import 放行、默认/命名空间 import 与全部写 API 仍禁」。
+
+**⑧ 注释勘误（m10）**：`chatSessions.ts` 的 `setDraftSessionAgent` 原注释承诺返回值「能区分 refused 与 already-that-value」，而实现（`:1033-1035`）两者都返 `true`。**返回值形状不动**（红线 store 最小动原则），改注释为 "false only when refused"。若将来真需要区分，那是加法接口而不是改这条返回值。
+
+**⑨ B1 补断言**：`composerAgentPickerWiring.test.ts` 对 `ComposerAgentPicker.tsx` 原本只有一条 `toContain('ComposerAgentPicker')` 空壳断言（即：删光组件实现也不会红）。已按同文件对另两个 `.tsx` 的既有手法补齐——回退 effect 体内含 `setDraftSessionAgent(sessionId, selectedAgent, { sendAttempted })`、onClick 体内含同一 action 且 inert/已选早退在前、三个 `<button>` 开标签均无 `disabled` 属性而锁定 chip 与 segment 均带 `aria-disabled` + `title`、`onRetryHost` 嵌在 `emptyStateNotice` 条件块之内、锁定分支早退于任何可交互 segment。**变异 ⑩ 已按 §3.7 复跑取证**（字节级删除回退 effect 里的回写调用 → scoped vitest 两红：A11「the fallback effect writes the resolved agent back to the store」+ m9「both writes are handed the RAW latch」；字节还原后 19/19 复绿）——补断言前该变异**存活**。
+
+**⑩ 悬挂引用清理**：文档头 rev.3 记的「§3.3 有一处括注『S3 若将来恢复 per-session 权限控件（§8.0-Q1）须同 import』」——rev.3 口径下该分支不会发生（S4 的权限控件不消费锁定判据，见 §6.3 与 D13），**该括注作废**；§3.3 正文保持冻结原样，以本条为准。
 
 ---
 
