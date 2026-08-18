@@ -7,7 +7,9 @@ import type {
   PermissionDecisionId,
   PermissionDetail,
   PermissionRequestKind,
+  SessionLivenessNote,
   SessionPermissionPolicy,
+  SessionRuntimeStatus,
 } from '../shared/types/runtimeEvents.ts';
 import { codexPermissionPreference } from '../shared/types/runtimeEvents.ts';
 import type {
@@ -32,7 +34,7 @@ import {
   type CodexLaunchPlan,
   resolveCodexLaunch,
 } from './codexNodeEntry.ts';
-import { CodexNormalizer } from './codexNormalizer.ts';
+import { CODEX_PRODUCTIVE_METHODS, CodexNormalizer } from './codexNormalizer.ts';
 import {
   defaultReplyFor,
   kindOfServerMethod,
@@ -47,6 +49,7 @@ import { readThreadStatus } from './codexStatus.ts';
 import { CODEX_METHOD, idKey, JSONRPC_METHOD_NOT_FOUND, type JsonRpcId } from './codexWire.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
 import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
+import { type TimerHandle, TtftWatchdog } from './ttftWatchdog.ts';
 
 /**
  * Codex Runtime Adapter — the shell that owns one `codex app-server` link per
@@ -388,6 +391,140 @@ export const CODEX_TURN_START_TIMEOUT_MS = 30 * 60_000;
 export const CODEX_TURN_INTERRUPT_TIMEOUT_MS = 15_000;
 
 /**
+ * F2 (2026-08-18 watchdog redesign) §7 — the Codex axis grows the same pair of
+ * turn watchdogs the Claude axis has had since a4, and with the SAME numbers.
+ *
+ * Before this batch a wedged Codex turn had no observer at all: the only clock
+ * on it was `CODEX_TURN_START_TIMEOUT_MS` above, i.e. up to THIRTY MINUTES of a
+ * spinning composer with nobody deciding anything [实测 E18]. One constant
+ * family across both axes is the point — the "40x philosophy mismatch" the
+ * triage named converges on both ends.
+ *
+ * These two are budgets for the TURN. `CODEX_TURN_START_TIMEOUT_MS` is the
+ * budget for one outstanding JSON-RPC promise, and §7.5 is explicit that it is
+ * NOT to be shortened to match: whether codex acks `turn/start` at turn start or
+ * at turn end is [未测], so a short ack deadline would fail healthy long turns.
+ * The two clocks measure different things and either may fire first.
+ */
+export const CODEX_TTFT_TIMEOUT_MS = 32_000;
+export const CODEX_STALL_TIMEOUT_MS = 195_000;
+export const CODEX_TTFT_TIMEOUT_ENV = 'AICLIENT_CODEX_TTFT_TIMEOUT_MS';
+export const CODEX_STALL_TIMEOUT_ENV = 'AICLIENT_CODEX_STALL_TIMEOUT_MS';
+
+/**
+ * §9.2 — the ops/test knob shared with the Claude axis (`claudeRuntime`'s
+ * `resolveLivenessNoteEnabled` reads the same name).
+ *
+ * `'0'` stops EMITTING a diagnostic frame; it restores no previous judgement,
+ * because the abort decision is taken on the same evidence either way. A test
+ * seam and a wire-snapshot determinism knob, NOT a product rollout gate.
+ */
+export const CODEX_LIVENESS_NOTE_ENV = 'AICLIENT_HOST_LIVENESS_NOTE';
+
+/**
+ * Milliseconds, `<= 0` disables — and "disabled" must mean EXACTLY today's
+ * behaviour (§9.2), i.e. no timer is armed at all rather than one that fires and
+ * declines.
+ *
+ * Shaped after `resolveCodexIdleTimeoutMs` above, including the reason the empty
+ * string is checked before `Number`: `Number('')` is `0`, so an exported-but-
+ * blank variable would silently switch a safety net off. An unparseable value
+ * falls back to the default for the same reason — a typo must not disarm a
+ * watchdog.
+ */
+function resolveCodexWatchdogMs(env: NodeJS.ProcessEnv, key: string, fallbackMs: number): number {
+  const raw = env[key];
+  if (raw === undefined || raw === '') return fallbackMs;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallbackMs;
+  return parsed;
+}
+
+export function resolveCodexTtftTimeoutMs(env: NodeJS.ProcessEnv): number {
+  return resolveCodexWatchdogMs(env, CODEX_TTFT_TIMEOUT_ENV, CODEX_TTFT_TIMEOUT_MS);
+}
+
+export function resolveCodexStallTimeoutMs(env: NodeJS.ProcessEnv): number {
+  return resolveCodexWatchdogMs(env, CODEX_STALL_TIMEOUT_ENV, CODEX_STALL_TIMEOUT_MS);
+}
+
+export function resolveCodexLivenessNoteEnabled(env: NodeJS.ProcessEnv): boolean {
+  const raw = env[CODEX_LIVENESS_NOTE_ENV];
+  if (raw === undefined || raw === '') return true;
+  return raw !== '0';
+}
+
+/** Everything one expired watchdog window knows about the turn under it. */
+export interface CodexWatchdogInput {
+  /** Which dog expired. */
+  source: SessionLivenessNote['source'];
+  /** The budget that elapsed with no qualifying progress, ms. */
+  budgetMs: number;
+  /** Server requests parked on the USER (approval / question) right now. */
+  pendingServerRequests: number;
+  /** The session's current status, i.e. the last `thread/status/changed` reading. */
+  status: SessionRuntimeStatus;
+  /** An `item/started` no `item/completed` has settled — a local tool is running. */
+  openTools: boolean;
+  /** `null` until `turn/start` answers or a turn frame names the turn. */
+  turnId: string | null;
+}
+
+/**
+ * What an expired window does. `pause` and `degrade` both carry the diagnostic
+ * frame; `abort` carries none, because a liveness note means "the watchdog
+ * DECLINED to abort" (§3.4) and a verdict is not a decline.
+ */
+export type CodexWatchdogAction =
+  | { kind: 'pause'; note: SessionLivenessNote }
+  | { kind: 'degrade'; note: SessionLivenessNote }
+  | { kind: 'abort'; interrupt: boolean };
+
+/**
+ * F2 §7.3 / §7.4 — the whole expiry policy, as a pure function.
+ *
+ * Pure on purpose: this is the part worth pinning against a hardcoded matrix,
+ * and a decision buried in a timer callback can only be tested by arranging a
+ * session, a process and a clock around it. The runtime below supplies the four
+ * facts and executes the verdict; it decides nothing.
+ *
+ * ## Order of the branches, and why each is separate
+ *
+ * 1. Parked on the user, then 2. parked on a tool — the `interactive` layer of
+ *    §2.3. Split into two checks rather than one `||` so the note names the
+ *    branch that ACTUALLY ran instead of guessing a reason after the fact (the
+ *    same rule the Claude axis's `onTimeout` follows). Neither degrades: a legal
+ *    pause must leave later windows able to speak.
+ * 3. A bare TTFT expiry is a DIAGNOSTIC, never a verdict (§7.2). Both blind
+ *    tracks agreed that TTFT expiry alone is not evidence of anything on this
+ *    axis, so the only thing 32s buys is an earlier first frame; the table then
+ *    closes for good and the stall dog becomes the sole observer.
+ * 4. The stall dog is therefore the ONLY aborter here, and it forks on the turn
+ *    id, not on which dog fired: both ids are required by `TurnInterruptParams`
+ *    [实测], so with no turn id there is no interrupt to send — only a local
+ *    retirement, whose accepted residue (codex may still be running the turn) is
+ *    registered as a known limit under 拍板 D4.
+ */
+export function decideCodexWatchdogAction(input: CodexWatchdogInput): CodexWatchdogAction {
+  const note = (reason: SessionLivenessNote['reason'], degraded: boolean): SessionLivenessNote => ({
+    source: input.source,
+    budgetMs: input.budgetMs,
+    reason,
+    degraded,
+  });
+  const parkedOnUser =
+    input.pendingServerRequests > 0 ||
+    input.status === 'waiting_permission' ||
+    input.status === 'waiting_question';
+  if (parkedOnUser) return { kind: 'pause', note: note('awaiting_user', false) };
+  if (input.openTools) return { kind: 'pause', note: note('tool_running', false) };
+  if (input.source === 'ttft') {
+    return { kind: 'degrade', note: note('insufficient_evidence', true) };
+  }
+  return { kind: 'abort', interrupt: input.turnId !== null };
+}
+
+/**
  * How often the idle sweeper looks, and how long a session may sit still before
  * it is reclaimed (slice 6 #8). Both numbers are codeg's
  * [读码 `idle_sweep.rs:13-64`], because the thing being managed is the same:
@@ -436,11 +573,20 @@ export function resolveCodexIdleTimeoutMs(env: NodeJS.ProcessEnv): number | null
  *
  * It exists because the component deadlines do not add up to anything usable:
  * `initialize` alone may take 15s and `thread/resume` rides the default 60s
- * request timeout, i.e. a worst case of 75s, while the renderer abandons a send
- * at 45s [读码 `attachmentLimits.ts`]. Without this the user would watch a send
- * fail generically and the Host would keep working on it for another half
- * minute. 20s leaves room for a cold start of the platform binary and still
- * reports back well inside the renderer's own budget.
+ * request timeout, i.e. a worst case of 75s — long enough that the user watches
+ * a send hang while the Host is still quietly working on it.
+ *
+ * F2 (2026-08-18) §1 — the number this used to be justified against is GONE.
+ * The old note read "the renderer abandons a send at 45s
+ * [读码 `attachmentLimits.ts`]", i.e. it treated a renderer deadline as the
+ * thing the Host had to beat. That invariant was REVERSED: the renderer's
+ * budget is no longer a verdict at all, it is a 300s SILENCE ceiling that sits
+ * ABOVE the Host's own budgets (`src/renderer/components/chat/sendBudgets.ts`,
+ * which is where the 45s constant retired to nothing), and the Host is
+ * structurally guaranteed to speak first. So 20s is not a race any more; it is
+ * simply a chain budget short enough that a revive that cannot happen SAYS SO
+ * rather than sitting on a send, and long enough for a cold start of the
+ * platform binary.
  */
 export const CODEX_REVIVE_DEADLINE_MS = 20_000;
 
@@ -904,6 +1050,38 @@ const startRealTimeout: CodexStartTimer = (fire, ms) => {
   };
 };
 
+/**
+ * F2 §7 — adapt this runtime's `CodexStartTimer` seam to the setTimeout-shaped
+ * one `TtftWatchdog` takes.
+ *
+ * The two seams describe the same thing with different handle types (`{stop()}`
+ * vs `ReturnType<typeof setTimeout>`), so one of them has to be cast. Casting
+ * here — one function, both directions, no other caller — is the cheaper of the
+ * two options on offer: `ttftWatchdog.ts` is closed for edits this batch (S1
+ * owns it), and giving the Codex axis a SECOND copy of the arm / disarm /
+ * degrade state machine to keep in sync with the first is exactly the drift the
+ * shared class exists to prevent. `ttftWatchdog.test.ts`'s own fake handle is
+ * cast the same way, so the shape is established rather than invented.
+ *
+ * `unref` is applied unconditionally: a watchdog must never be the reason the
+ * Host process cannot exit when Main closes it.
+ */
+function watchdogTimerSeam(start: CodexStartTimer): {
+  setTimeoutFn: (callback: () => void, ms: number) => TimerHandle;
+  clearTimeoutFn: (handle: TimerHandle) => void;
+} {
+  return {
+    setTimeoutFn: (callback, ms) => {
+      const handle = start(callback, ms);
+      handle.unref();
+      return handle as unknown as TimerHandle;
+    },
+    clearTimeoutFn: (handle) => {
+      (handle as unknown as CodexTimerHandle).stop();
+    },
+  };
+}
+
 export interface CodexRuntimeOptions {
   emit: EmitFn;
   log?: LogFn;
@@ -928,7 +1106,11 @@ export interface CodexRuntimeOptions {
   env?: NodeJS.ProcessEnv;
   /** Test seam — the sweeper's interval. */
   startInterval?: CodexStartTimer;
-  /** Test seam — the revive chain's whole-chain deadline. */
+  /**
+   * Test seam — every ONE-SHOT deadline this runtime arms: the revive chain's
+   * whole-chain budget, and (F2 §7) both turn watchdogs. Tests that want one of
+   * them pick it by its budget, never by position.
+   */
   startTimeout?: CodexStartTimer;
 }
 
@@ -946,6 +1128,23 @@ interface CodexTurnState {
    * whichever arrives first. Without it no interrupt can be addressed.
    */
   turnId?: string;
+  /**
+   * F2 §7 — the two watchdogs on THIS turn, and their budgets.
+   *
+   * Per turn rather than per session, because both budgets are statements about
+   * one turn's progress and a leftover timer from turn N is how turn N+1 gets a
+   * terminal it never earned. `finishTurn` disarms both, on every path.
+   *
+   * `ttft` is the shared `TtftWatchdog` (one-shot, `markProductive` on the first
+   * sign of life, `markDegraded` when the window ends with nothing to say);
+   * `stallTimer` is the ROLLING one, re-armed by every productive frame, and the
+   * only thing on this axis with the authority to end a turn.
+   */
+  ttft: TtftWatchdog;
+  stallTimer: CodexTimerHandle | null;
+  /** `<= 0` means the stall dog is disabled for this turn (§9.2 env). */
+  stallTimeoutMs: number;
+  ttftTimeoutMs: number;
 }
 
 interface CodexSessionState {
@@ -1255,6 +1454,15 @@ export class CodexRuntime {
   private readonly startTimeout: CodexStartTimer;
   /** `null` = the sweeper is disabled for this process; see `resolveCodexIdleTimeoutMs`. */
   private readonly idleTimeoutMs: number | null;
+  /**
+   * F2 §7 — the turn watchdog budgets and the diagnostic-frame knob, read ONCE
+   * for the same reason `idleTimeoutMs` is: a threshold that changed under a
+   * turn already being timed would make the process drift from what it decided
+   * at startup.
+   */
+  private readonly ttftTimeoutMs: number;
+  private readonly stallTimeoutMs: number;
+  private readonly livenessNoteEnabled: boolean;
   private sweeper: CodexTimerHandle | null = null;
   /**
    * Sessions THIS runtime reclaimed while they were idle, and the ONLY sessions
@@ -1279,7 +1487,11 @@ export class CodexRuntime {
     // a session that is already being timed, and the host agent registry's
     // freeze rule holds here too: a process decides what it is doing at startup
     // and does not drift.
-    this.idleTimeoutMs = resolveCodexIdleTimeoutMs(opts.env ?? process.env);
+    const env = opts.env ?? process.env;
+    this.idleTimeoutMs = resolveCodexIdleTimeoutMs(env);
+    this.ttftTimeoutMs = resolveCodexTtftTimeoutMs(env);
+    this.stallTimeoutMs = resolveCodexStallTimeoutMs(env);
+    this.livenessNoteEnabled = resolveCodexLivenessNoteEnabled(env);
   }
 
   /**
@@ -1852,6 +2064,21 @@ export class CodexRuntime {
       if (seen) turn.turnId = seen;
     }
 
+    // F2 §7.3 — AFTER `ingest`, so `hasOpenTools()` and the turn id already
+    // reflect this frame, and gated on the thread for the same reason the
+    // normalizer drops foreign frames (C12): a turn kept alive by another
+    // thread's traffic is the connection-level reading this layering rejects.
+    // `state.turn` is re-read because `ingest` can emit a terminal (a
+    // `turn/completed` closes the turn from inside), and re-arming a budget on a
+    // turn that just ended would leave a timer with nothing to watch.
+    if (
+      state.turn === turn &&
+      CODEX_PRODUCTIVE_METHODS.has(n.method) &&
+      belongsToThread(state.threadId, n.params)
+    ) {
+      this.markTurnProductive(state, turn);
+    }
+
     if (n.method === CODEX_METHOD.turnCompleted) {
       if (!belongsToThread(state.threadId, n.params)) {
         // C12 again, and the reason it is checked HERE rather than left to the
@@ -2320,6 +2547,164 @@ export class CodexRuntime {
   }
 
   /**
+   * F2 §7 — (re-)start the ROLLING stall budget for this turn.
+   *
+   * Rolling is the whole difference from the TTFT dog: a healthy turn can be
+   * silent for minutes at a time (one `npm test`, one long model reply), so what
+   * is being timed is the gap BETWEEN signs of life, not the turn's length.
+   * Called once at `send()` and again on every productive frame.
+   *
+   * `<= 0` arms nothing, which is the precise meaning of "disabled = today's
+   * behaviour" (§9.2): not a timer that fires and declines, no timer at all.
+   */
+  private armStallTimer(state: CodexSessionState, turn: CodexTurnState): void {
+    turn.stallTimer?.stop();
+    turn.stallTimer = null;
+    if (turn.stallTimeoutMs <= 0) return;
+    const handle = this.startTimeout(() => {
+      turn.stallTimer = null;
+      this.onWatchdogExpired(state, 'stall');
+    }, turn.stallTimeoutMs);
+    // A watchdog must never be the reason the Host cannot exit when Main closes
+    // it — same rule as the idle sweeper's interval.
+    handle.unref();
+    turn.stallTimer = handle;
+  }
+
+  /**
+   * F2 §7 — both dogs off, unconditionally.
+   *
+   * Called from `finishTurn`, i.e. from EVERY path that retires a turn, because
+   * the alternative is a timer belonging to turn N deciding something about turn
+   * N+1 — a terminal the second turn never earned, on a session the user is
+   * still typing into.
+   */
+  private disarmWatchdogs(turn: CodexTurnState): void {
+    turn.ttft.dispose();
+    turn.stallTimer?.stop();
+    turn.stallTimer = null;
+  }
+
+  /**
+   * F2 §7.3 — one inbound frame counted as MODEL PROGRESS.
+   *
+   * The layering B_track insisted on, in one place: `touchActivity` above is the
+   * CONNECTION's clock and counts every frame in both directions — our own
+   * requests, our own replies, rate-limit chatter — so a session that is merely
+   * busy talking looks alive to it forever. That reading is correct for the idle
+   * sweeper and useless as a liveness signal, so the turn keeps its own, fed
+   * only by `CODEX_PRODUCTIVE_METHODS`.
+   */
+  private markTurnProductive(state: CodexSessionState, turn: CodexTurnState): void {
+    turn.ttft.markProductive();
+    this.armStallTimer(state, turn);
+  }
+
+  /**
+   * F2 §3.4 / §7.3 — one diagnostic frame saying a window elapsed and the
+   * watchdog DECLINED to abort. The session stays `running`; this is not a
+   * verdict and not a heartbeat.
+   *
+   * The status carried is the session's CURRENT one, never a hardcoded
+   * `'running'`: codex reports `waitingOnApproval` / `waitingOnUserInput` through
+   * `thread/status/changed`, and the registry already holds that reading, so
+   * asserting `running` here would knock the renderer out of a parked state that
+   * is entirely correct — the same desync the Claude axis's compensation helper
+   * exists to repair.
+   */
+  private emitLivenessNote(state: CodexSessionState, note: SessionLivenessNote): void {
+    if (!this.livenessNoteEnabled) return;
+    if (state.statusGated) {
+      // m13's resume window holds every status projection shut, and a watchdog
+      // frame is still a `session.status`. `onStatusChanged` argues no turn can
+      // be running inside that window; if the idle-revive's self-clear ever
+      // regresses, a diagnostic must not be the thing that breaks the resume
+      // contract.
+      return;
+    }
+    const session = this.opts.registry.get(state.sessionId);
+    this.opts.emit({
+      type: 'session.status',
+      sessionId: state.sessionId,
+      requestId: state.turn?.requestId,
+      payload: { status: session?.status ?? 'running', liveness: note },
+    });
+  }
+
+  /**
+   * F2 §7 — one watchdog window elapsed. Gather the four facts, hand them to
+   * `decideCodexWatchdogAction`, execute the verdict. No policy lives here.
+   */
+  private onWatchdogExpired(state: CodexSessionState, source: SessionLivenessNote['source']): void {
+    const turn = state.turn;
+    // The turn may have ended in the same tick this timer came due — a queued
+    // callback survives the `clearTimeout` that raced it. Deciding anything
+    // about a turn that is already gone is how a session gets a second terminal.
+    if (!turn) return;
+    const budgetMs = source === 'ttft' ? turn.ttftTimeoutMs : turn.stallTimeoutMs;
+    const action = decideCodexWatchdogAction({
+      source,
+      budgetMs,
+      pendingServerRequests: state.pending.sizeFor(state.sessionId),
+      status: this.opts.registry.get(state.sessionId)?.status ?? 'running',
+      openTools: turn.normalizer.hasOpenTools(),
+      turnId: turn.turnId ?? turn.normalizer.currentTurnId(),
+    });
+    if (action.kind === 'pause') {
+      this.emitLivenessNote(state, action.note);
+      if (source === 'ttft') turn.ttft.rearm();
+      else this.armStallTimer(state, turn);
+      return;
+    }
+    if (action.kind === 'degrade') {
+      this.emitLivenessNote(state, action.note);
+      // The TTFT table closes for good. `markDegraded` also clears `hasFired`,
+      // which is what keeps a later stall failure from being reported in the
+      // TTFT dog's words (spec §0.5 finding 4).
+      turn.ttft.markDegraded();
+      return;
+    }
+    this.abortStalledTurn(state, turn, action.interrupt);
+  }
+
+  /**
+   * F2 §7.4 — the only place on this axis that ends a turn on time alone.
+   *
+   * The interrupt is skipped, not faked, when the turn never named itself: BOTH
+   * ids are required by `TurnInterruptParams` [实测], so a one-id frame is a
+   * schema error, i.e. an interrupt that never interrupts while our log claims we
+   * sent one. 拍板 D4 accepts the residue that follows — the turn is retired
+   * locally and codex may still be running it — because the only alternative is
+   * resetting the whole connection, which would take out every other session on
+   * the same app-server.
+   *
+   * No drain-before-interrupt here (unlike `stop()`): this path is reached ONLY
+   * after `decideCodexWatchdogAction` established that nothing is parked, so
+   * there is no reply the turn loop is blocked on.
+   */
+  private abortStalledTurn(
+    state: CodexSessionState,
+    turn: CodexTurnState,
+    interrupt: boolean
+  ): void {
+    const detail = `tune via ${CODEX_STALL_TIMEOUT_ENV}, 0 disables`;
+    const message = interrupt
+      ? `Codex stall watchdog: no turn progress for ${turn.stallTimeoutMs}ms ` +
+        `(model/gateway hang or a wedged turn — ${detail})`
+      : `Codex stall watchdog: no turn progress for ${turn.stallTimeoutMs}ms and ` +
+        'the turn was never named, so it cannot be interrupted — retiring it ' +
+        `locally; codex may still be running it (${detail})`;
+    this.log('codex stall watchdog fired', {
+      sessionId: state.sessionId,
+      turnId: turn.turnId,
+      stallTimeoutMs: turn.stallTimeoutMs,
+      interrupt,
+    });
+    if (interrupt) this.interruptTurn(state, 'stall watchdog');
+    this.finishTurn(state, 'failed', message);
+  }
+
+  /**
    * Retire the in-flight turn and let the session accept a new send.
    *
    * `terminalAlreadyEmitted` is for the one path where the wire already told the
@@ -2341,6 +2726,9 @@ export class CodexRuntime {
     const turn = state.turn;
     if (!turn) return;
     state.turn = null;
+    // F2 §7 — before anything else, and before any emit that could re-enter:
+    // a dog left running past its turn is how a session gets a second terminal.
+    this.disarmWatchdogs(turn);
     const session = this.opts.registry.get(state.sessionId);
     if (session) session.running = false;
     this.log('codex turn ended', {
@@ -2913,12 +3301,26 @@ export class CodexRuntime {
         log: (...args: unknown[]) => this.log('[codex-normalizer]', ...args),
         threadId: state.threadId,
       }),
+      ttft: new TtftWatchdog({
+        timeoutMs: this.ttftTimeoutMs,
+        onTimeout: () => this.onWatchdogExpired(state, 'ttft'),
+        ...watchdogTimerSeam(this.startTimeout),
+      }),
+      stallTimer: null,
+      stallTimeoutMs: this.stallTimeoutMs,
+      ttftTimeoutMs: this.ttftTimeoutMs,
     };
     // Installed BEFORE the request is written: the first notifications of the
     // turn can arrive before the response does, and a normalizer installed
     // afterwards would miss them.
     state.turn = turn;
     session.running = true;
+    // F2 §7 — armed here, at the same instant the turn becomes the session's
+    // in-flight one, so the budget covers the `turn/start` round trip too: the
+    // shape this batch exists to catch (codex never answers, no notification
+    // ever arrives) produces nothing later to hang an arm() off.
+    turn.ttft.arm();
+    this.armStallTimer(state, turn);
 
     // D48 §4.6 — per-turn choice wins, otherwise the session default carried on
     // the registry entry. That default is whatever the LAST accepted override

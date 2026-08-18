@@ -3861,6 +3861,19 @@ function killsOf(slice: ConnectionSlice): string[] {
 }
 
 /**
+ * The revive chain's one-shot deadlines, picked by BUDGET rather than by index.
+ *
+ * F2 S4 hung the two turn watchdogs off the same `startTimeout` seam, so
+ * `h.deadlines` is now every one-shot the runtime ever armed — including the
+ * pair a completed turn in a fixture's setup left behind. Indexing into it would
+ * make these assertions depend on how many turns ran first, which is exactly the
+ * coupling that broke them once already.
+ */
+function reviveDeadlines(h: Harness): FakeTimer[] {
+  return h.deadlines.filter((timer) => timer.ms === CODEX_REVIVE_DEADLINE_MS);
+}
+
+/**
  * A question request shaped the way the recorded one is: `question` is the
  * field that decides whether a card can be rendered at all, so a request
  * without it is REFUSED at the door and never reaches the pending table.
@@ -3887,7 +3900,7 @@ describe('codexRuntime — the idle sweeper takes only what it may (G6/G8/G15)',
     // Idempotent: a second session must not start a second sweeper.
     h.runtime.createSession({ sessionId: 's2', workspacePath: '/work/repo' });
     await h.waitFor(() => h.connections.length === 2, 'the second session');
-    expect(h.deadlines).toEqual([]);
+    expect(reviveDeadlines(h)).toEqual([]);
   });
 
   it('reclaims an idle session silently, keeping the binding that can reopen it', async () => {
@@ -4169,7 +4182,7 @@ describe('codexRuntime — send() revives a swept session (G9/G13)', () => {
     expect(h.connections).toHaveLength(2);
     expect(h.connections[1].requestsFor('turn/start')).toEqual([]);
 
-    h.deadlines[0].fire();
+    reviveDeadlines(h)[0].fire();
     await sending;
   });
 
@@ -4186,7 +4199,7 @@ describe('codexRuntime — send() revives a swept session (G9/G13)', () => {
     h.sweepTick();
     expect(killsOf(h.connections[1])).toEqual([]);
 
-    h.deadlines[0].fire();
+    reviveDeadlines(h)[0].fire();
     await sending;
   });
 
@@ -4213,7 +4226,7 @@ describe('codexRuntime — send() revives a swept session (G9/G13)', () => {
     expect(h.connections[1].requestsFor('thread/turns/list')).toEqual([]);
     expect(h.eventsOf('session.resumed')).toEqual([]);
 
-    h.deadlines[0].fire();
+    reviveDeadlines(h)[0].fire();
     await sending;
   });
 });
@@ -4319,14 +4332,16 @@ describe('codexRuntime — a revive that cannot happen says so (G10/G11/G14)', (
     const h = await sweptSession();
     h.options.answerInitialize = false;
     const sending = h.runtime.send({ sessionId: 's1', text: PROMPT, requestId: 'req-1' });
-    await h.waitFor(() => h.deadlines.length === 1, 'the revive deadline');
+    await h.waitFor(() => reviveDeadlines(h).length === 1, 'the revive deadline');
 
     // The component deadlines add up to 75s (15s initialize + a 60s request),
-    // while the renderer abandons a send at 45s — so without a chain-level
-    // budget the user's send fails generically and the Host keeps working.
-    expect(h.deadlines[0].ms).toBe(CODEX_REVIVE_DEADLINE_MS);
-    expect(h.deadlines[0].unrefs).toBe(1);
-    h.deadlines[0].fire();
+    // so without a chain-level budget a revive that cannot happen just sits on
+    // the send while the Host keeps working. (The old note here justified the
+    // number against a 45s renderer deadline; F2 §1 reversed that invariant —
+    // see `CODEX_REVIVE_DEADLINE_MS`.)
+    expect(reviveDeadlines(h)[0].ms).toBe(CODEX_REVIVE_DEADLINE_MS);
+    expect(reviveDeadlines(h)[0].unrefs).toBe(1);
+    reviveDeadlines(h)[0].fire();
     await sending;
 
     const error = h.event('host.error');
@@ -4334,7 +4349,7 @@ describe('codexRuntime — a revive that cannot happen says so (G10/G11/G14)', (
     expect(String(payload(error).message)).toContain('timed out');
     expect(killsOf(h.connections[1])).toHaveLength(1);
     // Cancelled once it has lost, or every send leaves a timer behind.
-    expect(h.deadlines[0].stops).toBe(1);
+    expect(reviveDeadlines(h)[0].stops).toBe(1);
   });
 
   it('never answers a failed revive with the code that makes the renderer swap the thread', async () => {

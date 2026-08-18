@@ -101,6 +101,52 @@ export const CODEX_IGNORED_NOTIFICATIONS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * F2 (2026-08-18 watchdog redesign) §7.3 / §2.3: the ONLY inbound methods that
+ * count as MODEL PROGRESS on the Codex axis — they satisfy the TTFT watchdog and
+ * re-arm the stall watchdog (`codexRuntime.ts`).
+ *
+ * It lives here, next to the two tables it is derived from, because there must
+ * be exactly one copy: a second hand-typed list in the runtime would drift the
+ * moment codex adds a notification, and the drift is SILENT — a method spelling
+ * nobody receives simply never fires, which is the most expensive failure mode
+ * this file has.
+ *
+ * Two judgements are encoded, and neither is derivable from the tables alone:
+ *
+ *  - the three plan/diff notifications are IN, even though
+ *    `CODEX_IGNORED_NOTIFICATIONS` lists them. That table is a RENDERING
+ *    decision table, not a liveness table: `turn/plan/updated`,
+ *    `item/plan/delta` and `turn/diff/updated` are real model output we choose
+ *    not to draw this round. Reading "not rendered" as "not alive" would kill a
+ *    turn that is busy writing a plan.
+ *  - `account/rateLimits/updated` is OUT, even though the normalizer handles it.
+ *    It is this axis's analogue of Claude's `api_retry` — the link talking about
+ *    itself. Admitting it would let a wedged turn re-arm its own watchdog
+ *    forever, which is the C-14 detector defeat, on the other axis.
+ *
+ * `codexWatchdog.test.ts` `[X-3]` pins the partition against
+ * `CODEX_NORMALIZER_METHODS` + `CODEX_IGNORED_NOTIFICATIONS`, so a codex upgrade
+ * that adds a notification cannot be silently misjudged by either side.
+ */
+export const CODEX_PRODUCTIVE_METHODS: ReadonlySet<string> = new Set<string>([
+  CODEX_NORMALIZER_METHODS.turnStarted,
+  CODEX_NORMALIZER_METHODS.turnCompleted,
+  CODEX_NORMALIZER_METHODS.itemStarted,
+  CODEX_NORMALIZER_METHODS.itemCompleted,
+  CODEX_NORMALIZER_METHODS.agentMessageDelta,
+  CODEX_NORMALIZER_METHODS.reasoningSummaryPartAdded,
+  CODEX_NORMALIZER_METHODS.reasoningSummaryTextDelta,
+  CODEX_NORMALIZER_METHODS.reasoningTextDelta,
+  CODEX_NORMALIZER_METHODS.commandExecutionOutputDelta,
+  CODEX_NORMALIZER_METHODS.fileChangeOutputDelta,
+  CODEX_NORMALIZER_METHODS.mcpToolCallProgress,
+  CODEX_NORMALIZER_METHODS.tokenUsageUpdated,
+  'turn/plan/updated',
+  'item/plan/delta',
+  'turn/diff/updated',
+]);
+
+/**
  * Cap on `tool.updated` pings forwarded per item.
  *
  * Output deltas are unbounded by nature (one `npm install` produces thousands),
@@ -323,6 +369,28 @@ export class CodexNormalizer {
   /** Turn currently open, `null` before the first turn-scoped frame. */
   currentTurnId(): string | null {
     return this.turn.turnId;
+  }
+
+  /**
+   * F2 (2026-08-18) §7.3: is a tool row still open — i.e. an `item/started` that
+   * no `item/completed` has settled?
+   *
+   * The watchdogs' `interactive` layer reads it: a local command that produces no
+   * output for three minutes (a long build, a test suite) is a turn that is very
+   * much alive, and a budget that cannot see the difference kills it. Named after
+   * `claudeRuntime`'s `normalizer.hasOpenTools()` because it answers the same
+   * question for the same caller.
+   *
+   * A set difference rather than a size comparison: the two sets are keyed by the
+   * same `toolCallId`, but "settled is a subset of started" is an invariant of
+   * today's item mapper, not something this predicate should assume on behalf of
+   * a future one.
+   */
+  hasOpenTools(): boolean {
+    for (const toolCallId of this.turn.startedTools) {
+      if (!this.turn.settledTools.has(toolCallId)) return true;
+    }
+    return false;
   }
 
   /**
