@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   type AttachmentDraft,
@@ -8,12 +11,41 @@ import {
   formatAttachmentSize,
   formatSkipNotice,
   isProbablyBinary,
+  SLOW_WAIT_HINT_SECONDS,
+  STALLED_HINT_SECONDS,
   shouldRenderThumbnail,
   THUMBNAIL_MAX_BYTES,
   toAttachmentChip,
   totalAttachmentBytes,
   toWireAttachments,
+  VERB_ROTATION_SECONDS,
+  VERBS,
 } from '../attachments';
+import { stripComments } from './stripComments';
+
+const CHAT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Every module in this directory reachable from `entry` by relative import,
+ * `entry` included. `[F4-5]` scans this set rather than one file: purity that
+ * only holds for the entry point is purity a one-line move can escape.
+ */
+function localImportClosure(entry: string): string[] {
+  const seen = new Set<string>();
+  const queue = [entry];
+  const files: string[] = [];
+  while (queue.length > 0) {
+    const name = queue.pop() as string;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    files.push(name);
+    const source = readFileSync(path.join(CHAT_DIR, name), 'utf8');
+    for (const match of source.matchAll(/from '\.\/([A-Za-z0-9_.-]+)'/g)) {
+      queue.push(match[1].endsWith('.ts') ? match[1] : `${match[1]}.ts`);
+    }
+  }
+  return files;
+}
 
 function draft(partial: Partial<AttachmentDraft> = {}): AttachmentDraft {
   return {
@@ -321,29 +353,62 @@ describe('toAttachmentChip (T-18 C-01, C-04..C-08)', () => {
   });
 });
 
-describe('composerSendingLine (T-18 B2)', () => {
-  it('reports the real budget on the text-only path', () => {
-    expect(
-      composerSendingLine({
-        phase: 'awaiting',
-        elapsedSeconds: 12,
-        budgetMs: 45_000,
-        attachmentCount: 0,
-        attachmentBytes: 0,
-      })
-    ).toBe('Waiting for Agent Host reply · 12s (up to 45s)');
+describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
+  /** The line's leading word, minus its trailing ellipsis — `Pondering… · …` -> `Pondering`. */
+  function verbOf(line: string): string {
+    return line.split(' ')[0].replace('…', '');
+  }
+
+  /** An ordinary text-only waiting line at `elapsed`, with nothing else varying. */
+  function waitingAt(elapsedSeconds: number): string {
+    return composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+    });
+  }
+
+  // Retired (F4 §7.2): the old pin was the whole sentence `Waiting for Agent
+  // Host reply · 12s (up to 45s)`. Both halves of it are gone — the copy now
+  // leads with a rotating verb, and the budget clause was retired outright
+  // because F2 re-sourced `budgetMs` to a silence ceiling that explicitly does
+  // NOT promise a finish time (`:309-312` here says a fake number is worse than
+  // none). The proposition this replaces it with is the SHAPE of the line, so
+  // the verb is free to rotate without churning an assertion every 6 seconds.
+  it('leads the text-only waiting line with a verb, counts the prompt, and predicts nothing', () => {
+    const line = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 12,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 428,
+    });
+    expect(VERBS).toContain(verbOf(line));
+    expect(line).toContain('↑ 428 chars');
+    expect(line).toContain('· 12s');
+    expect(line).not.toContain('up to');
   });
 
-  it('names the payload once attachments are in flight', () => {
-    expect(
-      composerSendingLine({
-        phase: 'awaiting',
-        elapsedSeconds: 31,
-        budgetMs: 75_000,
-        attachmentCount: 1,
-        attachmentBytes: 155_648,
-      })
-    ).toBe('Sent 152.0 KB · waiting for reply · 31s (up to 75s)');
+  // Retired for the same reason; the attachment fact itself is unchanged and
+  // stays pinned word for word, because "Sent 152.0 KB" is the one claim on
+  // this line that would be a lie if it drifted.
+  it('still names the payload once attachments are in flight', () => {
+    const line = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 31,
+      budgetMs: 75_000,
+      attachmentCount: 1,
+      attachmentBytes: 155_648,
+      promptChars: 428,
+    });
+    expect(line).toContain('Sent 152.0 KB');
+    expect(line).toContain('↑ 428 chars');
+    expect(line).toContain('· 31s');
+    expect(line).not.toContain('up to');
+    expect(VERBS).toContain(verbOf(line));
   });
 
   it('switches wording past the slow threshold and never predicts a finish time', () => {
@@ -367,12 +432,20 @@ describe('composerSendingLine (T-18 B2)', () => {
       attachmentBytes: 1024,
     });
     expect(line.toLowerCase()).not.toContain('upload');
+    // Extended to the whole table (§7.7): one sampled second only proves the
+    // verb that happened to be showing at 3s is clean. The rotation means every
+    // entry reaches the screen, so every entry has to clear the same bar.
+    for (const verb of VERBS) {
+      expect(verb.toLowerCase(), verb).not.toContain('upload');
+    }
   });
 
   it('never claims the payload was sent while the handshake is still running', () => {
     // ensureHost -> closeSession -> createSession can burn seconds before
     // chat.send is even called; "Sent 152 KB" there would be a lie that a
-    // createSession timeout immediately contradicts.
+    // createSession timeout immediately contradicts. Same reason the verbs stay
+    // out of this branch (§7.1): "Pondering" before the Host is even connected
+    // is the same lie wearing a friendlier word.
     const line = composerSendingLine({
       phase: 'handshake',
       elapsedSeconds: 3,
@@ -394,34 +467,52 @@ describe('composerSendingLine (T-18 B2)', () => {
         attachmentBytes: 0,
       })
     ).toBe('Starting Agent Host… · 61s');
-  });
-
-  // a1 (2026-07-30 net-visibility batch): the CLI-side network retry counter
-  // must appear ALONGSIDE the existing "waiting for reply" copy, not replace it.
-  it('appends the retry counter to the text-only waiting line without dropping the base copy', () => {
+    // Past the SECOND threshold too: the handshake test runs before either
+    // tier, so a stalled handshake is still a handshake (§7.7).
     expect(
       composerSendingLine({
-        phase: 'awaiting',
-        elapsedSeconds: 12,
+        phase: 'handshake',
+        elapsedSeconds: STALLED_HINT_SECONDS + 1,
         budgetMs: 45_000,
         attachmentCount: 0,
         attachmentBytes: 0,
-        retry: { attempt: 3, maxRetries: 10 },
       })
-    ).toBe('Waiting for Agent Host reply · Retry 3/10 · 12s (up to 45s)');
+    ).toBe(`Starting Agent Host… · ${STALLED_HINT_SECONDS + 1}s`);
+  });
+
+  // a1 (2026-07-30 net-visibility batch): the CLI-side network retry counter
+  // must appear ALONGSIDE the existing waiting copy, not replace it. F4 changed
+  // the base copy underneath it, so the pin moves from the sentence to the
+  // proposition: the suffix is still there AND the base line is still intact.
+  it('appends the retry counter to the text-only waiting line without dropping the base copy', () => {
+    const line = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 12,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 428,
+      retry: { attempt: 3, maxRetries: 10 },
+    });
+    expect(line).toContain('· Retry 3/10');
+    expect(VERBS).toContain(verbOf(line));
+    expect(line).toContain('↑ 428 chars');
+    expect(line).toContain('· 12s');
   });
 
   it('appends the retry counter to the attachment-in-flight line too', () => {
-    expect(
-      composerSendingLine({
-        phase: 'awaiting',
-        elapsedSeconds: 31,
-        budgetMs: 75_000,
-        attachmentCount: 1,
-        attachmentBytes: 155_648,
-        retry: { attempt: 1, maxRetries: 10 },
-      })
-    ).toBe('Sent 152.0 KB · waiting for reply · Retry 1/10 · 31s (up to 75s)');
+    const line = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 31,
+      budgetMs: 75_000,
+      attachmentCount: 1,
+      attachmentBytes: 155_648,
+      retry: { attempt: 1, maxRetries: 10 },
+    });
+    expect(line).toContain('· Retry 1/10');
+    expect(line).toContain('Sent 152.0 KB');
+    expect(VERBS).toContain(verbOf(line));
+    expect(line).toContain('· 31s');
   });
 
   it('still appends the retry counter past the slow-wait threshold', () => {
@@ -468,6 +559,259 @@ describe('composerSendingLine (T-18 B2)', () => {
     });
     expect(line).toBe('Starting Agent Host… · 3s');
     expect(line).not.toContain('· Retry');
+  });
+
+  /**
+   * `[F4-1]` The verb is a DETERMINISTIC function of `elapsedSeconds` — the one
+   * property that keeps `composerSendingLine` pure and therefore truth-table
+   * assertable at all (§7.3).
+   *
+   * `A -> B -> A` interleaved, not "same argument twice": two adjacent calls
+   * returning the same thing is also what a module-level counter that happens
+   * to land on the same index would do. Going away to a different second and
+   * coming back is what a counter, a cache or a clock read cannot survive.
+   */
+  it('[F4-1] the verb is a pure function of elapsed seconds — A -> B -> A returns to A', () => {
+    const a1 = waitingAt(0);
+    const b = waitingAt(7);
+    const a2 = waitingAt(0);
+    expect(a2).toBe(a1);
+    expect(verbOf(b)).not.toBe(verbOf(a1));
+
+    // The whole reachable window, second by second: this is the fixed sequence
+    // a user sees across one 45s wait, written out rather than recomputed from
+    // the formula (a test that re-derives the formula proves only that two
+    // copies of it agree).
+    const sequence = Array.from({ length: SLOW_WAIT_HINT_SECONDS }, (_, second) =>
+      verbOf(waitingAt(second))
+    );
+    expect(sequence).toEqual([
+      'Pondering',
+      'Pondering',
+      'Pondering',
+      'Pondering',
+      'Pondering',
+      'Pondering',
+      'Percolating',
+      'Percolating',
+      'Percolating',
+      'Percolating',
+      'Percolating',
+      'Percolating',
+      'Ruminating',
+      'Ruminating',
+      'Ruminating',
+      'Ruminating',
+      'Ruminating',
+      'Ruminating',
+      'Noodling',
+      'Noodling',
+      'Noodling',
+      'Noodling',
+      'Noodling',
+      'Noodling',
+      'Mulling',
+      'Mulling',
+      'Mulling',
+      'Mulling',
+      'Mulling',
+      'Mulling',
+      'Simmering',
+      'Simmering',
+      'Simmering',
+      'Simmering',
+      'Simmering',
+      'Simmering',
+      'Marinating',
+      'Marinating',
+      'Marinating',
+      'Marinating',
+      'Marinating',
+      'Marinating',
+      'Cogitating',
+      'Cogitating',
+      'Cogitating',
+    ]);
+
+    // No exported mutable state: a frozen table cannot be reordered or extended
+    // by a consumer, so the sequence above is a property of the module and not
+    // of whatever ran before this test.
+    expect(Object.isFrozen(VERBS)).toBe(true);
+  });
+
+  /**
+   * `[F4-2]` A single wait never repeats a verb. The window is
+   * `[0, SLOW_WAIT_HINT_SECONDS)` — past that the copy switches to
+   * `Still waiting` and the rotation stops — so at most
+   * `ceil(SLOW / ROTATION)` verbs are ever drawn from the table.
+   *
+   * Cross-module on purpose: if F2 (or anyone) raises the slow threshold, or
+   * someone shortens the rotation or the table, THIS goes red rather than the
+   * degradation being invisible ("the verbs started repeating" is not a thing
+   * review notices).
+   */
+  it('[F4-2] one wait can never repeat a verb, whoever moves the thresholds', () => {
+    const drawn = Math.ceil(SLOW_WAIT_HINT_SECONDS / VERB_ROTATION_SECONDS);
+    expect(drawn).toBeLessThanOrEqual(VERBS.length);
+    const seen = new Set(
+      Array.from({ length: SLOW_WAIT_HINT_SECONDS }, (_, second) => verbOf(waitingAt(second)))
+    );
+    expect(seen.size).toBe(drawn);
+  });
+
+  /**
+   * `[F4-3]` The two counters: presence, omission, ORDER and the actual values.
+   *
+   * The value half is what makes this load-bearing — an implementation that
+   * hard-coded `↑ 1 chars · ↓ 1k` would satisfy every presence/order check.
+   */
+  it('[F4-3] the up/down counters appear, omit and format by their own inputs', () => {
+    const bare = waitingAt(12);
+    expect(bare).not.toContain('↑');
+    expect(bare).not.toContain('↓');
+
+    const both = composerSendingLine({
+      phase: 'awaiting',
+      elapsedSeconds: 12,
+      budgetMs: 45_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 428,
+      outputTokensDisplay: 1800,
+    });
+    expect(both).toContain('↑ 428 chars');
+    expect(both).toContain('↓ 1.8k');
+    expect(both.indexOf('↑')).toBeLessThan(both.indexOf('↓'));
+
+    // Both sides of the 1000 boundary for the token count, and the char count
+    // keeps its unit word while the token count deliberately has none (§7.4).
+    expect(
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds: 12,
+        budgetMs: 45_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+        outputTokensDisplay: 850,
+      })
+    ).toContain('↓ 850');
+
+    // A session already running when this window opened has no snapshot, so
+    // `promptChars` falls back to 0 — which must read as "unknown", not as a
+    // user who sent an empty prompt.
+    expect(
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds: 12,
+        budgetMs: 45_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+        promptChars: 0,
+        outputTokensDisplay: null,
+      })
+    ).not.toContain('↑');
+  });
+
+  /**
+   * `[F4-4]` `budgetMs` is accepted and ignored (§7.2). The parameter stays on
+   * the signature precisely so this stays expressible: delete it and "passing a
+   * budget cannot put a deadline on screen" becomes an unstatable proposition.
+   *
+   * The second half matters as much as the first: proving only that something
+   * DISAPPEARED is also satisfied by a function that returns a constant, so the
+   * same assertion re-confirms the six facts that must still be there.
+   */
+  it('[F4-4] budgetMs changes nothing, and the rest of the line is still there', () => {
+    const args = {
+      phase: 'awaiting' as const,
+      elapsedSeconds: 31,
+      attachmentCount: 1,
+      attachmentBytes: 155_648,
+      promptChars: 428,
+      outputTokensDisplay: 1800,
+      retry: { attempt: 3, maxRetries: 10 },
+    };
+    const cheap = composerSendingLine({ ...args, budgetMs: 45_000 });
+    const generous = composerSendingLine({ ...args, budgetMs: 300_000 });
+    expect(cheap).toBe(generous);
+    expect(cheap).not.toContain('up to');
+    expect(cheap).not.toContain('45');
+    expect(cheap).not.toContain('300');
+    // Six positives, in one assertion block, so "simplify the whole line to a
+    // constant" cannot pass by deleting content this test only checks for.
+    expect(VERBS).toContain(verbOf(cheap));
+    expect(cheap).toContain('· 31s');
+    expect(cheap).toContain('Sent 152.0 KB');
+    expect(cheap).toContain('· Retry 3/10');
+    expect(cheap).toContain('↑ 428 chars');
+    expect(cheap).toContain('↓ 1.8k');
+  });
+
+  /**
+   * `[F4-5]` No randomness or clock anywhere the copy can reach.
+   *
+   * Scanned over the LOCAL IMPORT CLOSURE, not just this module: the rotation's
+   * purity is trivially escapable by moving `Math.random()` into a helper
+   * `attachments.ts` imports (`countFormat.ts` is exactly such a helper and was
+   * created by this batch), and a scan of one file would never see it.
+   */
+  it('[F4-5] neither attachments.ts nor anything it imports locally can read a clock or a die', () => {
+    const closure = localImportClosure('attachments.ts');
+    // The new helper is genuinely inside the scanned set — otherwise this test
+    // passes by scanning nothing that changed.
+    expect(closure).toContain('countFormat.ts');
+    for (const file of closure) {
+      const code = stripComments(readFileSync(path.join(CHAT_DIR, file), 'utf8'), file);
+      for (const source of [
+        'Math.random',
+        'Date.now',
+        'performance.now',
+        'crypto.getRandomValues',
+      ]) {
+        expect(code, `${file} must not read ${source}`).not.toContain(source);
+      }
+    }
+  });
+
+  /**
+   * `[F4-6]` The stalled tier has its OWN wording, keyed off its own constant.
+   *
+   * `kind` and copy may only ever flip together (`turnStatus.ts`'s own header
+   * states the invariant). A second `kind` with the first tier's words would
+   * break that by construction — which is why the copy below exists at all.
+   * Both tiers keep `Stop to abort.`: the sentence names the one control that
+   * is actually on screen, and it is load-bearing in BOTH.
+   */
+  it('[F4-6] the stalled tier reads differently from slow, and both keep "Stop to abort."', () => {
+    const slow = waitingAt(STALLED_HINT_SECONDS - 1);
+    const stalled = waitingAt(STALLED_HINT_SECONDS);
+    expect(slow).toBe('Still waiting · 179s — gateway latency varies. Stop to abort.');
+    expect(stalled).toBe(
+      'Still waiting · 180s — past the usual range; no reply and no error yet. Stop to abort.'
+    );
+    expect(slow).toContain('Stop to abort.');
+    expect(stalled).toContain('Stop to abort.');
+    // No threshold number is ever written into the copy (§0.2) — "the usual
+    // range" is the fact; the number that defines it stays in the constant.
+    // Sampled away from the boundary, where the clock would supply a 180 of its
+    // own and hide a hard-coded one.
+    expect(waitingAt(200)).not.toContain('180');
+    expect(SLOW_WAIT_HINT_SECONDS).toBeLessThan(STALLED_HINT_SECONDS);
+  });
+
+  /**
+   * `[F4-8]` Word-table discipline (§7.3's four rules, in their assertable
+   * part). Scoped to `VERBS` ONLY: `slow`/`stalled` both open with "Still
+   * waiting", so a ban applied to the whole line would fail them by design.
+   */
+  it('[F4-8] every verb is a single neutral present participle, promising nothing', () => {
+    for (const verb of VERBS) {
+      expect(verb, verb).toMatch(/^[A-Z][a-z]+$/);
+      for (const banned of ['upload', 'almost', 'nearly', 'still']) {
+        expect(verb.toLowerCase(), verb).not.toContain(banned);
+      }
+    }
+    expect(new Set(VERBS).size).toBe(VERBS.length);
   });
 });
 

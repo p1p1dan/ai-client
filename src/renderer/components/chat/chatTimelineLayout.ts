@@ -31,6 +31,7 @@
  * bubble is the band's bottom padding, and a section gap would stack a second
  * 10px on top of it, doubling §5.4's "bubble -> turn head = 10".
  */
+import type { TurnStatusKind } from './turnStatus';
 
 /**
  * `ReadingColumn`'s turn-to-turn spacing. Half of the 20px beat; the other half
@@ -210,4 +211,48 @@ export function turnCopyButtonClass(): string {
  */
 export function turnAnswerContainerClass(): string {
   return 'rounded-sm border border-border p-3.5';
+}
+
+/**
+ * Tone override for the turn-head status line, or `false` to keep the muted
+ * colour `turnHeadClass()` already carries (F456 §7.5).
+ *
+ * Moved here from `MessageTimeline.tsx` by F456 slice ④. Two reasons: it is
+ * turn-level class assembly, the same job as `turnHeadClass()` above it; and as
+ * a module-private function inside a `.tsx` it was unreachable from any suite —
+ * "which tier gets a colour" had no test at all.
+ *
+ * ## The two tiers, and why only one of them shouts
+ *
+ * `slow` used to be `text-warning`. F2 raised the silence ceiling to ~300s,
+ * which turned "no first token by 45s" into the ordinary shape of a long prompt
+ * or a long think — and a warning colour that stays on for minutes at a time
+ * has stopped warning about anything. It now falls through to the head's own
+ * `text-muted-foreground`, which this batch raised to a 7.20 / 6.70 contrast
+ * pair: legible enough that the tier does not need a colour to be read, which
+ * is the readability work paying for the alert work.
+ *
+ * ## Known deviation: `stalled` uses `text-warning`, which IS the brand orange
+ *
+ * `docs/design-system.md` says, in as many words, not to use `warning` in place
+ * of amber: Flexoki's `status.warning` is bit-for-bit `primary.base` in both
+ * themes (`globals.css` light `:176` / dark `:223` match `--primary` exactly).
+ * This batch uses it anyway, knowingly, on three stated grounds:
+ *
+ *  1. a turn head contains no links, and `text-primary`'s only routine job in
+ *     this app is links — so nothing in this element can be confused for one;
+ *  2. this is the single moment on the whole timeline that has earned an
+ *     eye-catching colour, and there is exactly one of it;
+ *  3. a new semantic token would have to be double-written into `@theme` and
+ *     both palettes, which is not worth opening for one tier.
+ *
+ * Recorded rather than done quietly: the deviation is also logged in the batch
+ * ledger row and raised for review as Q8. If review rejects it, the fallback is
+ * that `stalled` goes muted too and the wording tier carries the whole signal —
+ * which is why §7.5-a's separate `stalled` copy is not optional.
+ */
+export function turnStatusToneClass(kind: TurnStatusKind): string | false {
+  if (kind === 'stalled') return 'text-warning';
+  if (kind === 'failed') return 'text-destructive';
+  return false;
 }

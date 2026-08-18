@@ -1,4 +1,19 @@
-import { composerSendingLine, type SendPhase, SLOW_WAIT_HINT_SECONDS } from './attachments';
+import {
+  composerSendingLine,
+  type SendPhase,
+  SLOW_WAIT_HINT_SECONDS,
+  STALLED_HINT_SECONDS,
+} from './attachments';
+import { formatTokenCount } from './countFormat';
+
+/**
+ * F456 §7.4: the formatter moved to `countFormat.ts` so `attachments.ts` can
+ * use it too — importing it back from here would be a straight cycle. Re-exported
+ * rather than relocated in the callers' eyes: this module has been its address
+ * since D33, and moving the address as well as the file would churn imports for
+ * no behaviour change.
+ */
+export { formatTokenCount } from './countFormat';
 
 /**
  * T-31 turn-head status (reply-anatomy spec §3 / §4.7).
@@ -12,8 +27,8 @@ import { composerSendingLine, type SendPhase, SLOW_WAIT_HINT_SECONDS } from './a
  * `composerSendingLine` call rather than against a literal.
  *
  * `kind` mirrors which branch of `composerSendingLine` actually produced the
- * text (handshake / slow / retry / plain awaiting), so the colour and spinner
- * the `.tsx` layer picks can never contradict the words on screen.
+ * text (handshake / stalled / slow / retry / plain awaiting), so the colour and
+ * spinner the `.tsx` layer picks can never contradict the words on screen.
  *
  * Input is a plain object on purpose — no store import, so the whole six-state
  * table is assertable in vitest's node environment.
@@ -24,6 +39,12 @@ export type TurnStatusKind =
   | 'awaiting'
   | 'streaming'
   | 'slow'
+  /**
+   * F456 §7.5: the deeper of the two waiting tiers. Split off from `slow`
+   * because `slow` stopped being remarkable once F2 raised the ceiling to
+   * ~300s — a tier that is on for minutes cannot also be the alarm.
+   */
+  | 'stalled'
   | 'retrying'
   | 'failed';
 
@@ -47,10 +68,21 @@ export interface TurnStatusInput {
   /** Send phase of the in-flight turn; only read while `active`. */
   phase: SendPhase;
   elapsedSeconds: number;
-  /** Reply budget in ms — the `(up to Ns)` figure, passed straight through. */
+  /**
+   * Reply budget in ms, passed straight through. F456 §7.2 retired the
+   * `(up to Ns)` clause it used to print, so nothing downstream reads it —
+   * see `composerSendingLine`'s own note on why the parameter stays.
+   */
   budgetMs: number;
   attachmentCount: number;
   attachmentBytes: number;
+  /**
+   * F456 §7.4: size of this turn's prompt in code points, from the composer's
+   * send snapshot. Optional because the fallback for "a session was already
+   * running when this window opened" is no count at all, not a zero the line
+   * would print as fact.
+   */
+  promptChars?: number;
   /** The CLI's transport-retry loop for this turn, if any. */
   retry?: { attempt: number; maxRetries: number } | null;
   /** The turn already produced at least one block, i.e. tokens are arriving. */
@@ -79,10 +111,12 @@ export interface TurnStatusInput {
  *  4. `hasBlocks` — once tokens are arriving, "Waiting for … reply" / "Still
  *     waiting" are factually false, so `streaming` outranks both. §4.7 defines
  *     `awaiting` as "no block yet" for exactly this reason.
- *  5. slow (>= `SLOW_WAIT_HINT_SECONDS`) before retry: at that point
- *     `composerSendingLine` itself switches to the "Still waiting …" wording
+ *  5. the two waiting tiers (`stalled` >= `STALLED_HINT_SECONDS`, then `slow`
+ *     >= `SLOW_WAIT_HINT_SECONDS`) before retry: at either point
+ *     `composerSendingLine` itself switches to a "Still waiting …" wording
  *     (retry counter included as a suffix), and `kind` follows the copy branch
- *     that actually ran.
+ *     that actually ran. Deeper tier first — the two overlap, and the more
+ *     specific statement is the true one.
  */
 export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
   if (input.failed) return { kind: 'failed', text: TURN_FAILED_TEXT };
@@ -96,6 +130,12 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
     attachmentCount: input.attachmentCount,
     attachmentBytes: input.attachmentBytes,
     retry: input.retry,
+    // F456 §7.4: both counters are forwarded, not consumed here. The `↓`
+    // estimate used to be read only by the streaming branch below, which meant
+    // it was invisible during exactly the wait where "is anything coming back?"
+    // is the question being asked.
+    promptChars: input.promptChars,
+    outputTokensDisplay: input.outputTokensDisplay,
   });
 
   if (input.phase === 'handshake') return { kind: 'handshake', text };
@@ -112,9 +152,14 @@ export function deriveTurnStatus(input: TurnStatusInput): TurnStatus | null {
     return { kind: 'streaming', text: `${clock}${tokenSuffix}` };
   }
 
-  // The threshold is imported, never re-declared: `composerSendingLine` keys
-  // its own wording switch off the same constant, so `kind` and copy can only
-  // ever flip together.
+  // Both thresholds are imported, never re-declared, and tested in the SAME
+  // ORDER `composerSendingLine` tests them: it keys its own wording switch off
+  // the same two constants, so a `kind` can only ever name the sentence that
+  // actually ran. F456 §7.5-a strengthened the invariant rather than weakening
+  // it — one constant against one wording switch became two against two, still
+  // unable to flip apart. Adding a tier here without a matching tier there (or
+  // in the other order) is the failure this arrangement makes impossible.
+  if (elapsed >= STALLED_HINT_SECONDS) return { kind: 'stalled', text };
   if (elapsed >= SLOW_WAIT_HINT_SECONDS) return { kind: 'slow', text };
   if (input.retry) return { kind: 'retrying', text };
   return { kind: 'awaiting', text };
@@ -139,19 +184,6 @@ export function formatElapsedClock(elapsedSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-}
-
-/**
- * D33: `850` / `38.5k` — display formatting for the Host's live output-token
- * estimate. This number is NOT a billing figure: it is a monotonic peak the
- * Host derives mid-turn from streamed deltas (`eventNormalizer.ts`'s
- * `emitInterimUsage`), never the settled `usage.updated` result payload, so
- * it must only ever be shown as a rough, in-flight indicator — never
- * presented as (or reconciled against) an authoritative token count.
- */
-export function formatTokenCount(count: number): string {
-  if (count < 1000) return `${count}`;
-  return `${(count / 1000).toFixed(1)}k`;
 }
 
 /**

@@ -25,6 +25,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { deriveTurnStatus } from '../turnStatus';
 import { stripComments } from './stripComments';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -118,5 +119,57 @@ describe('MessageTimeline pending turn head (F2 S3 §4.5)', () => {
     // it was `sendTimeoutMs`'s last consumer in the whole renderer.
     expect(source).not.toContain('sendTimeoutMs');
     expect(source).toContain('const DEFAULT_REPLY_BUDGET_MS = SEND_SILENCE_CEILING_MS;');
+  });
+});
+
+/**
+ * F456 slice ④ §7.4 / §8.4 `[F4-9]` — the pending head is the EARLIEST window
+ * the `↑` count can appear in, and the one where it says the most.
+ *
+ * `PendingTurnHead` exists exactly between "send left the renderer" and "the
+ * Host echoed the user message back" (see this component's own header). During
+ * that span there is no user bubble on screen yet, so `↑ 428 chars` is the only
+ * thing describing what was just sent. Wiring the field into the attached turn
+ * alone therefore lands it in the window where it matters least.
+ *
+ * Split in two for the same reason the guards above are source scans: this
+ * suite runs `environment: 'node'` with `include: *.test.ts`, so no component
+ * renders here. The first half asserts the call site passes the field; the
+ * second runs the very inputs that call site builds through the pure function
+ * behind it, so together they cover what a render would have shown.
+ */
+describe('[F4-9] the pending turn head carries the ↑ prompt count (F456 §7.4)', () => {
+  /** `PendingTurnHead`'s own body — the file has two `deriveTurnStatus` call sites. */
+  function pendingHeadBody(): string {
+    const start = source.indexOf('function PendingTurnHead(');
+    expect(start, 'PendingTurnHead not found').toBeGreaterThan(-1);
+    const end = source.indexOf('\nfunction ', start + 1);
+    return source.slice(start, end === -1 ? undefined : end);
+  }
+
+  it('[F4-9] PendingTurnHead passes promptChars from its own required snapshot', () => {
+    const body = pendingHeadBody();
+    expect(body).toContain('deriveTurnStatus({');
+    expect(body).toContain('promptChars: sendStatus.promptChars');
+    // Not the attached turn's optional form: `sendStatus` is a required prop
+    // here (the mount site renders this only when the snapshot exists), so a
+    // `?? 0` fallback would be dead code concealing a missing wire.
+    expect(body).not.toContain('sendStatus?.promptChars');
+  });
+
+  it('[F4-9] those inputs produce a waiting line reading `↑ 428 chars`', () => {
+    const status = deriveTurnStatus({
+      active: true,
+      phase: 'awaiting',
+      elapsedSeconds: 12,
+      budgetMs: 300_000,
+      attachmentCount: 0,
+      attachmentBytes: 0,
+      promptChars: 428,
+      retry: null,
+      hasBlocks: false,
+    });
+    expect(status?.kind).toBe('awaiting');
+    expect(status?.text).toContain('↑ 428 chars');
   });
 });

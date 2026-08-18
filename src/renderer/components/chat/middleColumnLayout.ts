@@ -637,10 +637,11 @@ export function shouldRenderTargetRow(input: {
  * message.)
  *
  * T-31 §3.2 (F-B11): `sending` no longer shows this line at all. The waiting
- * copy it used to gate ("Waiting for Agent Host reply · 12s (up to 300s)")
- * describes the turn in flight, not the draft in hand, so it moved to the turn
- * head, where it gets the full reading-column width instead of the middle of
- * the docked card. Leaving the condition here would print the same fact twice, in two
+ * copy it used to gate ("Pondering… · ↑ 428 chars · 12s" — F456 §7.1 replaced
+ * the older "Waiting for Agent Host reply · 12s (up to 45s)" wording, budget
+ * clause and all) describes the turn in flight, not the draft in hand, so it
+ * moved to the turn head, where it gets the full reading-column width instead
+ * of the middle of the docked card. Leaving the condition here would print the same fact twice, in two
  * places, from one source. What stays in the composer is the round action
  * button's Stop state — the "something is running" signal is still
  * double-channelled, it just no longer duplicates the text.

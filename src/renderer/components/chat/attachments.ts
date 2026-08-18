@@ -8,6 +8,7 @@
  * §12 verification first: __tests__/attachments.test.ts.
  */
 import type { ChatSendAttachment } from '@/stores/chatSessions';
+import { formatCharCount, formatTokenCount } from './countFormat';
 
 export type AttachmentKind = 'image' | 'text';
 
@@ -293,8 +294,97 @@ export function toAttachmentChip(
   };
 }
 
-/** Seconds after which the status line turns warning and changes wording. */
+/**
+ * First of TWO display thresholds (F456 §7.5-a). Past this many seconds the
+ * waiting copy drops the verb and switches to `Still waiting`.
+ *
+ * No longer "turns warning": F2 raised the silence ceiling to ~300s, which made
+ * a first token after 45s the ordinary shape of a long prompt rather than an
+ * alarm. A warning colour that is on for minutes at a time is not a warning, so
+ * `turnStatusToneClass` now leaves this tier on the head's own muted colour and
+ * the tier is carried by wording alone (§7.5 ruling 1).
+ *
+ * Neither threshold is a TIMEOUT: crossing one aborts nothing, unbinds nothing
+ * and changes no state. They only decide which sentence is on screen.
+ */
 export const SLOW_WAIT_HINT_SECONDS = 45;
+
+/**
+ * Second display threshold: past this the wait is outside any range this app
+ * can honestly call usual, and the copy says exactly that (F456 §7.5-a).
+ *
+ * Declared beside `SLOW_WAIT_HINT_SECONDS` on purpose. `composerSendingLine`
+ * and `deriveTurnStatus` both key their wording switch off these two constants
+ * in the same order, which is what makes `kind` and copy unable to flip apart —
+ * the invariant F2 §8.3 established for one threshold, now stated over two.
+ *
+ * The value is F2 §8.3's suggested one and has no measurement behind it. It is
+ * a tunable and is registered as one (spec §10.2 Q6), not a derived constant.
+ */
+export const STALLED_HINT_SECONDS = 180;
+
+/**
+ * F456 §7.3: the rotating verb the ordinary waiting line opens with.
+ *
+ * All four selection rules, and what each is defending against:
+ *
+ *  1. Nothing here claims to know what the other end is DOING. In this branch
+ *     no block has arrived by definition, so "Reading your files" would be a
+ *     guess wearing the clothes of a fact — and naming tools is the tool rows'
+ *     job, where the claim is backed by an event.
+ *  2. Nothing predicts progress or a finish ("Almost there", "Nearly done").
+ *     Same rule that retired the `(up to Ns)` clause, for the same reason: this
+ *     surface has never been able to predict a finish time and must not imply
+ *     it can.
+ *  3. Nothing scolds ("Still nothing…"). The wait is not the user's doing.
+ *  4. Every entry is an intransitive present participle. What they assert is
+ *     that something is under way — the one fact this branch can actually
+ *     witness (the request is demonstrably in flight: `sawUserEcho` and F2's
+ *     liveness frames both prove it), as opposed to a claim about what the
+ *     model is thinking.
+ *
+ * Frozen: the rotation's entire value is that a given second always shows the
+ * same word, and a table a consumer could reorder would not have that property.
+ */
+export const VERBS = Object.freeze([
+  'Pondering',
+  'Percolating',
+  'Ruminating',
+  'Noodling',
+  'Mulling',
+  'Simmering',
+  'Marinating',
+  'Cogitating',
+  'Deliberating',
+  'Brewing',
+  'Puzzling',
+  'Contemplating',
+] as const);
+
+/**
+ * Seconds each verb holds the line. Long enough to finish reading, short enough
+ * that one wait is not a single frozen word.
+ *
+ * Load-bearing against the table's length: one wait spans
+ * `[0, SLOW_WAIT_HINT_SECONDS)`, so it draws
+ * `ceil(SLOW_WAIT_HINT_SECONDS / VERB_ROTATION_SECONDS)` verbs and must never
+ * draw more than the table holds. `[F4-2]` asserts that ACROSS the two
+ * constants, so raising the slow threshold — or shortening either the period or
+ * the table — fails loudly instead of silently starting to repeat words, which
+ * is not a degradation review would ever notice.
+ */
+export const VERB_ROTATION_SECONDS = 6;
+
+/**
+ * The verb for a given second. A pure function of `elapsedSeconds` and nothing
+ * else: no `Math.random`, no clock read, no module state. That is what keeps
+ * `composerSendingLine` truth-table assertable second by second, and `[F4-1]`
+ * pins it with an interleaved `A -> B -> A` call rather than a repeat call,
+ * which a cache or a counter would also survive.
+ */
+function waitingVerb(elapsedSeconds: number): string {
+  return VERBS[Math.floor(elapsedSeconds / VERB_ROTATION_SECONDS) % VERBS.length];
+}
 
 /**
  * Where an in-flight send currently is.
@@ -309,7 +399,9 @@ export type SendPhase = 'handshake' | 'awaiting';
 /**
  * Status line shown while a send is in flight. Deliberately never predicts a
  * finish time: measured latency is size-independent and swings ~8x day to day,
- * so a fake number would be worse than none.
+ * so a fake number would be worse than none. F456 §7.2 took that rule to its
+ * conclusion and retired the `(up to Ns)` clause, which was a soft prediction
+ * of exactly the kind this paragraph forbids.
  *
  * T-31 §3.2: the sole consumer is now the TURN HEAD (`turnStatus.ts`), not the
  * composer — this copy describes the turn in flight, so it renders with the
@@ -321,6 +413,17 @@ export type SendPhase = 'handshake' | 'awaiting';
 export function composerSendingLine(input: {
   phase: SendPhase;
   elapsedSeconds: number;
+  /**
+   * F456 §7.2: ACCEPTED AND IGNORED. The `(up to Ns)` clause it used to print
+   * was retired outright once F2 re-sourced this to a silence ceiling that
+   * expressly does not end the turn — `up to N` reads as "you will have a
+   * result by then", which is the one promise F2 stopped making.
+   *
+   * Kept on the signature rather than deleted, for the same reason
+   * `shouldShowStatusLine` keeps its `sending` input: remove it and "passing a
+   * budget cannot put a deadline on screen" stops being a statable proposition,
+   * and `[F4-4]` is that proposition.
+   */
   budgetMs: number;
   attachmentCount: number;
   attachmentBytes: number;
@@ -334,12 +437,26 @@ export function composerSendingLine(input: {
    * and design-doc reference stale.
    */
   retry?: { attempt: number; maxRetries: number } | null;
+  /**
+   * F456 §7.4: size of the prompt this turn sent, in CODE POINTS, snapshotted
+   * at the commit point (`ChatComposer.tsx`). `0` — the fallback for a session
+   * that was already running when this window opened and therefore has no
+   * snapshot — omits the `↑` entirely rather than printing a truthful-looking
+   * `↑ 0 chars` for a message that was certainly not empty.
+   */
+  promptChars?: number;
+  /**
+   * D33's live, ESTIMATED output-token count, forwarded from
+   * `deriveTurnStatus`. Previously read only by the streaming branch; the wait
+   * before the first block is exactly when "is anything coming back at all"
+   * is the user's question, so it is answered here too.
+   */
+  outputTokensDisplay?: number | null;
 }): string {
   const elapsed = Math.max(0, Math.floor(input.elapsedSeconds));
   if (input.phase === 'handshake') {
     return `Starting Agent Host… · ${elapsed}s`;
   }
-  const budgetSeconds = Math.round(input.budgetMs / 1000);
   // Round-10 inspection ④: no "Network" here — this surface has no
   // errorStatus to discriminate transport failures from upstream 5xx (the
   // user's live case was an upstream 503), so the suffix stays cause-neutral.
@@ -348,14 +465,37 @@ export function composerSendingLine(input: {
   const retrySuffix = input.retry
     ? ` · Retry ${input.retry.attempt}/${input.retry.maxRetries}`
     : '';
+  // The two wording tiers, in the same order `deriveTurnStatus` tests its two
+  // kinds — same constants, same sequence, so a `kind` can never describe a
+  // sentence other than the one that actually ran. Deeper tier first: they
+  // overlap, and the more specific statement wins.
+  if (elapsed >= STALLED_HINT_SECONDS) {
+    // Every clause is checkable. "past the usual range" states only that a
+    // threshold was crossed and predicts nothing. "no reply and no error yet"
+    // is true by construction here: `hasBlocks` routes to `streaming` before
+    // this point, and `failed` is a higher-priority kind of its own. The
+    // threshold's NUMBER stays out of the copy — the constant owns it.
+    return `Still waiting · ${elapsed}s${retrySuffix} — past the usual range; no reply and no error yet. Stop to abort.`;
+  }
   if (elapsed >= SLOW_WAIT_HINT_SECONDS) {
     return `Still waiting · ${elapsed}s${retrySuffix} — gateway latency varies. Stop to abort.`;
   }
+  const promptChars = Math.max(0, Math.floor(input.promptChars ?? 0));
+  // The asymmetry in unit words is deliberate. `↑` is an exact figure the
+  // renderer counted from text it holds, so labelling it costs nothing. `↓` is
+  // the Host's mid-turn estimate, which `turnStatus.ts` states must never be
+  // presented as an authoritative token count — appending a `tokens` unit would
+  // raise precisely the air of authority that rule forbids. The two labels also
+  // happen to keep the arrows apart at a glance.
+  const sentCount = promptChars > 0 ? ` · ↑ ${formatCharCount(promptChars)} chars` : '';
+  const replyCount =
+    input.outputTokensDisplay != null ? ` · ↓ ${formatTokenCount(input.outputTokensDisplay)}` : '';
+  const verb = waitingVerb(elapsed);
   if (input.attachmentCount > 0) {
     const size = formatAttachmentSize(input.attachmentBytes);
-    return `Sent ${size} · waiting for reply${retrySuffix} · ${elapsed}s (up to ${budgetSeconds}s)`;
+    return `${verb}…${sentCount}${replyCount} · Sent ${size}${retrySuffix} · ${elapsed}s`;
   }
-  return `Waiting for Agent Host reply${retrySuffix} · ${elapsed}s (up to ${budgetSeconds}s)`;
+  return `${verb}…${sentCount}${replyCount}${retrySuffix} · ${elapsed}s`;
 }
 
 /**

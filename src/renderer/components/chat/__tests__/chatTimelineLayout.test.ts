@@ -13,6 +13,7 @@ import {
   turnHeadClass,
   turnProcessPanelClass,
   turnProcessShellClass,
+  turnStatusToneClass,
   userBubbleTextClass,
 } from '../chatTimelineLayout';
 
@@ -291,5 +292,43 @@ describe('turnAnswerContainerClass (F5 D3-b)', () => {
     expect(new Set(turnAnswerContainerClass().split(/\s+/))).toEqual(
       new Set(['rounded-sm', 'border', 'border-border', 'p-3.5'])
     );
+  });
+});
+
+/**
+ * F456 slice ④ §7.5 / §8.4 `[F4-6]` — the turn head's tone tiers.
+ *
+ * `turnStatusToneClass` moved here from `MessageTimeline.tsx`, where it was a
+ * module-private function no node-environment suite could reach. It belongs in
+ * this file on its own merits: it is turn-level class assembly, the same job as
+ * `turnHeadClass()` right next to it.
+ */
+describe('turnStatusToneClass (F456 §7.5)', () => {
+  /**
+   * `[F4-6]` The slow tier stops shouting. With a 300s silence ceiling, a first
+   * token arriving after 45s is the ordinary shape of a long prompt, and a
+   * warning colour that is on for minutes at a time is not a warning. The tier
+   * still reads: it falls back to the head's own muted colour, which this batch
+   * raised to a 7.20 / 6.70 contrast pair.
+   */
+  it('[F4-6] slow falls back to the head colour instead of a warning', () => {
+    expect(turnStatusToneClass('slow')).toBe(false);
+    // The fallback has to land somewhere legible, or "muted" is just "gone".
+    expect(turnHeadClass()).toContain('text-muted-foreground');
+  });
+
+  /**
+   * `[F4-6]` The stalled tier is the one moment on the timeline that earns a
+   * colour, so it takes the one it needs.
+   */
+  it('[F4-6] stalled is the single tier that takes a colour', () => {
+    expect(turnStatusToneClass('stalled')).toBe('text-warning');
+  });
+
+  it('[F4-6] failure stays destructive; every other kind stays muted', () => {
+    expect(turnStatusToneClass('failed')).toBe('text-destructive');
+    for (const kind of ['handshake', 'awaiting', 'streaming', 'retrying'] as const) {
+      expect(turnStatusToneClass(kind), kind).toBe(false);
+    }
   });
 });

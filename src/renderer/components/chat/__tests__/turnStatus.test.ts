@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composerSendingLine, SLOW_WAIT_HINT_SECONDS } from '../attachments';
+import { composerSendingLine, SLOW_WAIT_HINT_SECONDS, STALLED_HINT_SECONDS } from '../attachments';
 import {
   deriveTurnStatus,
   formatElapsedClock,
@@ -299,5 +299,130 @@ describe('[TS-1] slow kind and slow copy are same-sourced (F2 §8.3)', () => {
       hasBlocks: false,
     });
     expect(status?.text).not.toContain('up to');
+  });
+});
+
+/**
+ * F456 slice ④ §7.5-b — `[TS-1]` continued, in its SEGMENTED form.
+ *
+ * F2 wrote `[TS-1]` as "kind and copy flip together" and anchored its sample
+ * inside `[45, 180)` precisely so this batch could split `>=180` off without
+ * retiring it. What follows is the other segment plus the boundary sweep F2's
+ * §8.3 asked the later batch to add: the two thresholds now key TWO wording
+ * switches, and the same-source invariant is stated over both.
+ *
+ * The load-bearing half — every waiting tier names the control that is
+ * actually on screen — is asserted on BOTH tiers, not just the one F2 owned.
+ */
+describe('[TS-1] the slow/stalled split keeps kind and copy same-sourced (F456 §7.5-b)', () => {
+  it('[TS-1] `[SLOW, STALLED)` is slow and `>= STALLED` is stalled, both delegating their copy', () => {
+    const at = (elapsedSeconds: number) =>
+      deriveTurnStatus({ ...base, elapsedSeconds, budgetMs: 300_000, hasBlocks: false });
+    const sameArgumentCopy = (elapsedSeconds: number) =>
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds,
+        budgetMs: 300_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+      });
+
+    for (const second of [SLOW_WAIT_HINT_SECONDS, 62, STALLED_HINT_SECONDS - 1]) {
+      expect(at(second)?.kind, `at ${second}s`).toBe('slow');
+      expect(at(second)?.text, `at ${second}s`).toBe(sameArgumentCopy(second));
+    }
+    for (const second of [STALLED_HINT_SECONDS, 299]) {
+      expect(at(second)?.kind, `at ${second}s`).toBe('stalled');
+      expect(at(second)?.text, `at ${second}s`).toBe(sameArgumentCopy(second));
+    }
+  });
+
+  it('[TS-1] both waiting tiers still tell the user about a control that exists', () => {
+    // F2 §9's stated purpose for this half was to stop a later batch deleting
+    // it. A later batch then added a tier — so the half moves with it rather
+    // than staying pinned to the one tier that happened to exist first.
+    for (const second of [SLOW_WAIT_HINT_SECONDS, STALLED_HINT_SECONDS, 299]) {
+      const status = deriveTurnStatus({
+        ...base,
+        elapsedSeconds: second,
+        budgetMs: 300_000,
+        hasBlocks: false,
+      });
+      expect(status?.text, `at ${second}s`).toContain('Stop to abort.');
+    }
+  });
+
+  /**
+   * `[TS-1b]` The boundary sweep. At each of the four seconds either BOTH the
+   * kind and the wording change, or NEITHER does — a kind that moved a second
+   * before (or after) its copy is exactly the drift the shared constants exist
+   * to prevent, and it is invisible to a test that samples one second per tier.
+   */
+  it('[TS-1b] kind and copy flip on the same second at 44/45 and 179/180', () => {
+    const sample = (elapsedSeconds: number) => {
+      const status = deriveTurnStatus({
+        ...base,
+        elapsedSeconds,
+        budgetMs: 300_000,
+        hasBlocks: false,
+      });
+      return { kind: status?.kind, text: status?.text };
+    };
+    const before = [SLOW_WAIT_HINT_SECONDS - 1, STALLED_HINT_SECONDS - 1];
+    for (const boundary of before) {
+      const low = sample(boundary);
+      const high = sample(boundary + 1);
+      expect(low.kind, `kind must change at ${boundary + 1}s`).not.toBe(high.kind);
+      expect(low.text, `copy must change at ${boundary + 1}s`).not.toBe(high.text);
+    }
+    // And the seconds that are NOT boundaries move neither: one step inside
+    // each tier leaves both the kind and the sentence alone.
+    for (const boundary of before) {
+      const a = sample(boundary - 1);
+      const b = sample(boundary);
+      expect(a.kind, `kind must not change at ${boundary}s`).toBe(b.kind);
+      expect(a.text?.replace(`${boundary - 1}s`, `${boundary}s`)).toBe(b.text);
+    }
+  });
+});
+
+/**
+ * F456 slice ④ §7.4 / §8.4 `[F4-3]` — the two counters, asserted at the layer
+ * that WIRES them rather than the one that formats them.
+ *
+ * `attachments.test.ts` owns the formatting contract. What only this file can
+ * see is whether `deriveTurnStatus` actually hands its own inputs down: the
+ * `↓` estimate used to be read exclusively by the streaming branch, and a
+ * version that keeps it there passes every assertion in the other suite while
+ * showing the user nothing.
+ */
+describe('[F4-3] deriveTurnStatus feeds both counters into the waiting copy', () => {
+  it('[F4-3] the awaiting tier carries the ↓ token estimate, not just the streaming tier', () => {
+    const status = deriveTurnStatus({
+      ...base,
+      hasBlocks: false,
+      outputTokensDisplay: 1800,
+    });
+    expect(status?.kind).toBe('awaiting');
+    expect(status?.text).toContain('↓ 1.8k');
+  });
+
+  it('[F4-3] the awaiting tier carries the ↑ prompt size from the send snapshot', () => {
+    const status = deriveTurnStatus({ ...base, hasBlocks: false, promptChars: 428 });
+    expect(status?.text).toContain('↑ 428 chars');
+  });
+
+  it('[F4-3] a turn with no snapshot and no estimate shows neither arrow', () => {
+    // The `?? 0` fallback in `MessageTimeline.tsx` exists for a session that was
+    // already running when this window opened. It must read as "unknown", never
+    // as a user who sent nothing.
+    const status = deriveTurnStatus({
+      ...base,
+      hasBlocks: false,
+      promptChars: 0,
+      outputTokensDisplay: null,
+    });
+    expect(status?.text).not.toContain('↑');
+    expect(status?.text).not.toContain('↓');
   });
 });

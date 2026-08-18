@@ -336,3 +336,36 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
     ]);
   });
 });
+
+/**
+ * F456 slice ④ §7.4 / §8.4 `[F4-7]` — the `↑` count is a COMMIT-POINT
+ * snapshot, counted in code points.
+ *
+ * Two facts, both invisible to any other assertion in this repo:
+ *
+ *  - the source is `committed`, not the live `value`. The textarea is not
+ *    cleared until after the send resolves, and the user can start typing the
+ *    next message while this one is in flight — a live read would show the
+ *    in-flight turn a character count belonging to a message it never sent.
+ *    Exactly the reason `attachmentCount`/`attachmentBytes` next to it take
+ *    `drafts` rather than live state, stated word for word at the same site.
+ *  - the count is `[...text].length`, i.e. CODE POINTS. `.length` counts UTF-16
+ *    units, so an emoji would be reported as two characters. The opposite call
+ *    to `CHAT_HIGHLIGHT_MAX_CHARS`'s deliberate use of units is not a
+ *    contradiction: that one measures tokeniser cost, this one answers "how
+ *    much did I type".
+ */
+describe('[F4-7] the ↑ prompt count is taken at the commit point', () => {
+  it('[F4-7] beginTurnSend receives promptChars counted in code points off `committed`', () => {
+    const source = readStripped(join(CHAT_DIR, 'ChatComposer.tsx'));
+    const call = source.match(/beginTurnSend\(\s*\{[^}]*\}/);
+    expect(call, 'beginTurnSend call not found').not.toBeNull();
+    const args = call?.[0] ?? '';
+    expect(args).toContain('promptChars');
+    expect(args).toContain('[...committed.text].length');
+    // A live read is the defect this guards; naming it here is what makes the
+    // assertion point at a specific regression rather than a style.
+    expect(args).not.toContain('promptChars: value');
+    expect(args).not.toContain('promptChars: text.length');
+  });
+});

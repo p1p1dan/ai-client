@@ -20,6 +20,7 @@ const snapshot = (sessionId: string) => ({
   budgetMs: 60_000,
   attachmentCount: 0,
   attachmentBytes: 0,
+  promptChars: 0,
 });
 
 beforeEach(() => {
@@ -221,6 +222,39 @@ describe('turnSendStatus pendingReply (F2 §4.5)', () => {
     expect(useTurnSendStatusStore.getState().pendingReply).toEqual({
       sessionId: 's1',
       turnStartedAtMs: 500,
+    });
+  });
+});
+
+/**
+ * F456 slice ④ §7.4 — the `↑` prompt-size field.
+ *
+ * A separate section from the ownership and baseline groups above on purpose:
+ * this is a plain payload field, and mixing it into the ownership cases would
+ * make those cases assert two unrelated propositions at once.
+ */
+describe('turnSendStatus promptChars (F456 §7.4)', () => {
+  const { begin, update } = useTurnSendStatusStore.getState();
+
+  it('carries the committed prompt size through to the reader', () => {
+    begin({ ...snapshot('s1'), promptChars: 428 }, null);
+    expect(useTurnSendStatusStore.getState().status?.promptChars).toBe(428);
+  });
+
+  /**
+   * The count is fixed at the commit point and the ticker patches only the
+   * clock, so a phase/seconds update must leave it alone — a snapshot whose
+   * prompt size drifted mid-send would be describing a different message than
+   * the one in flight.
+   */
+  it('survives the phase switch and every seconds tick untouched', () => {
+    const owner = begin({ ...snapshot('s1'), promptChars: 428 }, null);
+    update(owner, { phase: 'awaiting' });
+    update(owner, { elapsedSeconds: 12 });
+    expect(useTurnSendStatusStore.getState().status).toMatchObject({
+      phase: 'awaiting',
+      elapsedSeconds: 12,
+      promptChars: 428,
     });
   });
 });

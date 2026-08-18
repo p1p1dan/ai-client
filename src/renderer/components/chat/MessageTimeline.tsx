@@ -46,6 +46,7 @@ import {
   turnHeadClass,
   turnProcessPanelClass,
   turnProcessShellClass,
+  turnStatusToneClass,
   userBubbleTextClass,
 } from './chatTimelineLayout';
 import {
@@ -1078,6 +1079,12 @@ const ChatTurn = memo(function ChatTurn({
     budgetMs: sendStatus?.budgetMs ?? DEFAULT_REPLY_BUDGET_MS,
     attachmentCount: sendStatus?.attachmentCount ?? 0,
     attachmentBytes: sendStatus?.attachmentBytes ?? 0,
+    // F456 §7.4: `?? 0` is the "session already running when this window
+    // opened" path the fallbacks above serve — and 0 omits the `↑` rather than
+    // printing `↑ 0 chars`, so a missing snapshot never reads as an empty
+    // prompt. The pending head below needs no such fallback: its snapshot is a
+    // required prop.
+    promptChars: sendStatus?.promptChars ?? 0,
     retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
     hasBlocks: turnHasBlocks,
     outputTokensDisplay,
@@ -1314,8 +1321,10 @@ const ChatTurn = memo(function ChatTurn({
 });
 
 /**
- * Fallback reply budget — the "(up to Ns)" figure for an in-flight turn with no
- * composer snapshot of its own.
+ * Fallback reply budget for an in-flight turn with no composer snapshot of its
+ * own. F456 §7.2 retired the `(up to Ns)` clause this used to feed, so the
+ * value now reaches a parameter that is accepted and ignored; it is still
+ * passed so `[F4-4]` can assert that passing it changes nothing.
  *
  * F2 (2026-08-18 §1.3): re-sourced from the retired byte-scaled `sendTimeoutMs(0)`
  * (45s) to the renderer's silence ceiling. This was `sendTimeoutMs`'s LAST
@@ -1357,6 +1366,10 @@ function PendingTurnHead({
     budgetMs: sendStatus.budgetMs,
     attachmentCount: sendStatus.attachmentCount,
     attachmentBytes: sendStatus.attachmentBytes,
+    // F456 §7.4: the EARLIEST window this count can appear in, and the one
+    // where it says the most — no user bubble exists yet, so `↑ 428 chars` is
+    // the only thing on screen describing what was just sent.
+    promptChars: sendStatus.promptChars,
     retry: retry ? { attempt: retry.attempt, maxRetries: retry.maxRetries } : null,
     hasBlocks: false,
   });
@@ -1473,13 +1486,6 @@ function TurnStatusContent({ status }: { status: TurnStatus }) {
       </span>
     </>
   );
-}
-
-/** Warning past the slow-wait threshold, destructive on failure; muted otherwise (from `turnHeadClass`). */
-function turnStatusToneClass(kind: TurnStatus['kind']): string | false {
-  if (kind === 'slow') return 'text-warning';
-  if (kind === 'failed') return 'text-destructive';
-  return false;
 }
 
 /** Head slot, complete state (§4.7): `Worked for 1m 6s · 3 tools, 11 searches`. */

@@ -44,11 +44,26 @@ export interface TurnSendStatus {
   phase: SendPhase;
   /** Seconds since the CURRENT phase started (the ticker resets at the phase change). */
   elapsedSeconds: number;
-  /** This send's wait budget in ms — the "(up to Ns)" figure. */
+  /**
+   * This send's wait budget in ms. F456 §7.2 retired the `(up to Ns)` clause it
+   * used to feed, so no reader prints it any more; it is still carried so the
+   * turn head can pass it to a parameter whose whole job is now to be ignored.
+   */
   budgetMs: number;
   /** Attachments committed with THIS turn, captured at the commit point (see `begin`). */
   attachmentCount: number;
   attachmentBytes: number;
+  /**
+   * F456 §7.4: size of the committed prompt in CODE POINTS — what the turn head
+   * shows as `↑ 428 chars`.
+   *
+   * Captured at the commit point for the same reason as the two attachment
+   * fields above, and REQUIRED rather than optional: the pending turn head reads
+   * it off a non-null snapshot, so a producer that forgets to write it should
+   * fail to compile rather than silently drop the count from the one window
+   * where it is the only description of what was just sent.
+   */
+  promptChars: number;
 }
 
 /**

@@ -1284,6 +1284,16 @@ export function ChatComposer({
         budgetMs: SEND_SILENCE_CEILING_MS,
         attachmentCount: drafts.length,
         attachmentBytes: totalAttachmentBytes(drafts),
+        // F456 §7.4: CODE POINTS, not `.length`. UTF-16 units would report an
+        // emoji as two characters, and this number answers "how much did I
+        // type" — not `CHAT_HIGHLIGHT_MAX_CHARS`'s question, which is about
+        // tokeniser cost and deliberately counts units.
+        //
+        // Read off `committed`, exactly like the two fields above and for the
+        // reason spelled out there: the textarea is not cleared until the send
+        // resolves, so a live read would show this turn a count belonging to
+        // the next message the user has already started typing.
+        promptChars: [...committed.text].length,
       },
       baselineMessageId
     );
