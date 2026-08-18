@@ -904,6 +904,59 @@ describe('pinned wire facts', () => {
     expect(AGENT_HOST_PROTOCOL_VERSION).toBe(1);
   });
 
+  it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness}', () => {
+    // F2 (S0, 2026-08-18 watchdog redesign spec §3.4/§12.1): `liveness` rides
+    // this payload as a THIRD optional field, same precedent as `retry`
+    // (SessionRetryInfo, E11) — an optional-field addition, protocol version
+    // unchanged. This pins the SET so a later addition that types a fourth
+    // optional key straight onto the literal (instead of asking whether it
+    // belongs on a new event type) breaks here first.
+    const source = parse(RUNTIME_EVENTS_MODULE, read(RUNTIME_EVENTS_MODULE));
+    let optionalKeys: string[] | undefined;
+    eachNode(source, (node) => {
+      if (!ts.isInterfaceDeclaration(node) || node.name.text !== 'SessionStatusEvent') return;
+      for (const member of node.members) {
+        if (
+          !ts.isPropertySignature(member) ||
+          !member.type ||
+          !ts.isIdentifier(member.name) ||
+          member.name.text !== 'payload' ||
+          !ts.isTypeLiteralNode(member.type)
+        ) {
+          continue;
+        }
+        optionalKeys = member.type.members
+          .filter(
+            (m): m is ts.PropertySignature =>
+              ts.isPropertySignature(m) && !!m.questionToken && ts.isIdentifier(m.name)
+          )
+          .map((m) => (m.name as ts.Identifier).text);
+      }
+    });
+    expect(optionalKeys?.sort()).toEqual(['liveness', 'retry']);
+  });
+
+  it('[W-1a] SessionLivenessNote field set stays exactly {source, budgetMs, reason, degraded}, all required', () => {
+    // Companion pin to [W-1]: the note's OWN shape, not just where it rides.
+    // §3.4 dropped the arbitration draft's `retryCount` (D3: no field without a
+    // judging use — the same payload already has `retry: SessionRetryInfo` as
+    // the single source of truth for attempt counts), so a fifth field
+    // reappearing here — `retryCount` or otherwise — is exactly the regression
+    // this guards.
+    const source = parse(RUNTIME_EVENTS_MODULE, read(RUNTIME_EVENTS_MODULE));
+    let fields: Array<{ name: string; optional: boolean }> | undefined;
+    eachNode(source, (node) => {
+      if (!ts.isInterfaceDeclaration(node) || node.name.text !== 'SessionLivenessNote') return;
+      fields = node.members
+        .filter(
+          (m): m is ts.PropertySignature => ts.isPropertySignature(m) && ts.isIdentifier(m.name)
+        )
+        .map((m) => ({ name: (m.name as ts.Identifier).text, optional: !!m.questionToken }));
+    });
+    expect(fields?.map((f) => f.name).sort()).toEqual(['budgetMs', 'degraded', 'reason', 'source']);
+    expect(fields?.every((f) => !f.optional)).toBe(true);
+  });
+
   it('session-index.json stays a bare JSON array', () => {
     // An envelope (`{schemaVersion, entries}`) makes an OLDER build's `for-of`
     // throw; its catch only warns and starts empty, and its next flush writes

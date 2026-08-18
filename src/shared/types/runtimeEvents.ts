@@ -153,10 +153,36 @@ export interface SessionRetryInfo {
   error: string;
 }
 
+/**
+ * F2 (2026-08-18 watchdog redesign): one Host watchdog window elapsed and the
+ * watchdog DECLINED to abort. Status stays 'running' — the turn is alive.
+ *
+ * Optional-field addition; AGENT_HOST_PROTOCOL_VERSION stays 1 (same
+ * precedent as SessionRetryInfo above). GUARD FOR LATER READERS: if you are
+ * ever tempted to promote this to its own RuntimeEventType, you must FIRST
+ * prove that the old renderer reducer is a no-op on unknown event types —
+ * until that proof exists, an optional field on an already-consumed event is
+ * the only shape whose compatibility is established rather than assumed.
+ */
+export interface SessionLivenessNote {
+  /** Which watchdog spoke. */
+  source: 'ttft' | 'stall';
+  /** The budget that elapsed with no qualifying progress, ms. */
+  budgetMs: number;
+  /** Why it declined to abort — never a guess, always the branch that ran. */
+  reason: 'awaiting_user' | 'tool_running' | 'insufficient_evidence';
+  /** Whether the TTFT table was permanently closed by this note (§3.2 markDegraded). */
+  degraded: boolean;
+}
+
 export interface SessionStatusEvent extends RuntimeEventBase {
   type: 'session.status';
   sessionId: string;
-  payload: { status: SessionRuntimeStatus; retry?: SessionRetryInfo };
+  payload: {
+    status: SessionRuntimeStatus;
+    retry?: SessionRetryInfo;
+    liveness?: SessionLivenessNote;
+  };
 }
 
 /**
