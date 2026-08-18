@@ -1,0 +1,1304 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>聊天时间线可读性改造 · 三维度对比稿 · F5</title>
+
+<style>
+/* 最小 reset —— 本地直开时不依赖任何平台注入（工法沿用 phase0a-openchamber-alignment.html） */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+h1, h2, h3, h4, p, ul, ol, figure, pre { margin: 0; }
+ul, ol { list-style: none; padding: 0; }
+button { font: inherit; color: inherit; }
+img, svg { display: block; max-width: 100%; }
+table { border-collapse: collapse; }
+
+/* ============================================================
+   页面外壳 token —— 与 phase0a / a07 同一套暖中性，刻意低调，
+   不与被评估的原型舞台抢视觉。外壳与舞台是两套独立变量。
+   ============================================================ */
+:root {
+  --page-bg: #faf8f2;
+  --page-fg: #1b1917;
+  --page-dim: #6b6660;
+  --page-faint: #8d877f;
+  --page-rule: #e3ded2;
+  --page-rule-soft: #efeae0;
+  --page-panel: #fffdf7;
+  --page-accent: #a8481a;
+  --page-accent-soft: #a8481a1a;
+  --page-warn: #8a5a10;
+  --page-warn-soft: #8a5a1014;
+  --page-stop: #96291f;
+  --page-stop-soft: #96291f14;
+  --page-go: #4f6410;
+  --page-go-soft: #4f641014;
+
+  --mono: ui-monospace, "SFMono-Regular", Menlo, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  --col: 72rem;
+}
+
+:root[data-page="dark"] {
+  --page-bg: #141211;
+  --page-fg: #d6d2c8;
+  --page-dim: #918a80;
+  --page-faint: #6f6960;
+  --page-rule: #2f2c28;
+  --page-rule-soft: #232120;
+  --page-panel: #1a1817;
+  --page-accent: #e08a4c;
+  --page-accent-soft: #e08a4c1f;
+  --page-warn: #d0a215;
+  --page-warn-soft: #d0a2151a;
+  --page-stop: #d9584b;
+  --page-stop-soft: #d9584b1a;
+  --page-go: #a9b85e;
+  --page-go-soft: #a9b85e1a;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  padding: 0 1.25rem 6rem;
+}
+
+.wrap { max-width: var(--col); margin-inline: auto; }
+
+/* ---- 页眉 ---- */
+
+.masthead {
+  padding: 3.5rem 0 2rem;
+  border-bottom: 2px solid var(--page-fg);
+  margin-bottom: 2rem;
+}
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--page-accent);
+  margin-bottom: 1rem;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(1.6rem, 4vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin-bottom: 0.75rem;
+}
+.standfirst { max-width: 48rem; color: var(--page-dim); font-size: 16px; }
+.masthead-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin-top: 1.5rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--page-faint);
+}
+.masthead-meta b { color: var(--page-dim); font-weight: 500; }
+
+/* ---- 章节 ---- */
+
+section { margin-bottom: 4rem; scroll-margin-top: 4.5rem; }
+
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--page-rule);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.sec-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--page-bg);
+  background: var(--page-fg);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+h2 { font-family: var(--mono); font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+.sec-sub { color: var(--page-faint); font-size: 13px; margin-left: auto; font-family: var(--mono); }
+
+h3 { font-family: var(--mono); font-size: 0.95rem; font-weight: 600; margin: 2rem 0 0.8rem; }
+h4 { font-family: var(--mono); font-size: 0.85rem; font-weight: 600; margin: 1.4rem 0 0.6rem; color: var(--page-dim); }
+p { margin-bottom: 0.9rem; max-width: 52rem; }
+p:last-child { margin-bottom: 0; }
+.wrap code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--page-rule-soft);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+.wrap ul.bul { list-style: disc; padding-left: 1.15rem; margin-bottom: 0.9rem; max-width: 52rem; }
+.wrap ul.bul li { margin-bottom: 0.35rem; }
+
+/* ---- 表格 ---- */
+
+.tbl-scroll { overflow-x: auto; border: 1px solid var(--page-rule); border-radius: 7px; margin-bottom: 1rem; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--page-rule-soft);
+  vertical-align: top;
+}
+th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+  font-weight: 500;
+  background: var(--page-rule-soft);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: 0; }
+td.mono, th.mono { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+td.num { font-family: var(--mono); font-size: 12px; text-align: right; white-space: nowrap; }
+.sw {
+  display: inline-block;
+  width: 11px; height: 11px;
+  border-radius: 2px;
+  border: 1px solid #0003;
+  vertical-align: -1px;
+  margin-right: 0.35rem;
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 0.08rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.tag.aaa { background: var(--page-go-soft); color: var(--page-go); }
+.tag.aa  { background: var(--page-go-soft); color: var(--page-go); }
+.tag.warn { background: var(--page-warn-soft); color: var(--page-warn); }
+.tag.fail { background: var(--page-stop-soft); color: var(--page-stop); }
+.tag.out { background: var(--page-rule-soft); color: var(--page-faint); }
+
+/* ---- 拍板导引 ---- */
+
+.guide {
+  border: 1px solid var(--page-rule);
+  border-left: 3px solid var(--page-accent);
+  background: var(--page-panel);
+  border-radius: 0 7px 7px 0;
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1.5rem;
+}
+.guide h3 { margin: 0 0 0.9rem; }
+.opt-grid { display: grid; gap: 1px; background: var(--page-rule); border: 1px solid var(--page-rule); border-radius: 6px; overflow: hidden; }
+.opt-row { background: var(--page-panel); padding: 0.6rem 0.8rem; display: grid; gap: 0.15rem 0.8rem; }
+@media (min-width: 760px) { .opt-row { grid-template-columns: 6.5rem 1fr 9rem; align-items: baseline; } }
+.opt-id { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--page-accent); }
+.opt-txt { font-size: 13.5px; }
+.opt-cost { font-family: var(--mono); font-size: 11px; color: var(--page-faint); }
+.opt-row.is-rec { background: var(--page-go-soft); }
+.opt-row.is-rec .opt-id { color: var(--page-go); }
+.opt-head { background: var(--page-rule-soft); font-family: var(--mono); font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--page-faint); padding: 0.4rem 0.8rem; }
+.reply-hint { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px dashed var(--page-rule); font-size: 13.5px; }
+.reply-hint b { font-family: var(--mono); color: var(--page-accent); }
+
+/* ---- 提示盒 ---- */
+
+.note {
+  border: 1px solid var(--page-rule);
+  border-left: 3px solid var(--page-warn);
+  background: var(--page-warn-soft);
+  border-radius: 0 6px 6px 0;
+  padding: 0.85rem 1.05rem;
+  font-size: 13.5px;
+  margin-bottom: 1.1rem;
+}
+.note.stop { border-left-color: var(--page-stop); background: var(--page-stop-soft); }
+.note.go { border-left-color: var(--page-go); background: var(--page-go-soft); }
+.note b { font-family: var(--mono); font-size: 12.5px; }
+.note p { max-width: none; }
+.note p:last-child { margin-bottom: 0; }
+
+/* ---- 控制条 ---- */
+
+.controlbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0;
+  margin-bottom: 1.5rem;
+  background: var(--page-bg);
+  border-bottom: 1px solid var(--page-rule);
+}
+.demo-bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.demo-cap {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--page-faint);
+}
+.seg { display: inline-flex; border: 1px solid var(--page-rule); border-radius: 5px; overflow: hidden; }
+.seg.push { margin-left: auto; }
+.seg button {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 0.28rem 0.7rem;
+  border: 0;
+  background: transparent;
+  color: var(--page-dim);
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.seg button + button { border-left: 1px solid var(--page-rule); }
+.seg button[aria-pressed="true"] { background: var(--page-fg); color: var(--page-bg); }
+.seg button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: -2px; }
+
+.stage { border: 1px solid var(--page-rule); border-radius: 7px; overflow: hidden; }
+.stage + .stage { margin-top: 0.75rem; }
+
+.src { font-family: var(--mono); font-size: 11.5px; color: var(--page-faint); margin-top: 0.5rem; line-height: 1.5; }
+
+.footnote { border-top: 1px solid var(--page-rule); padding-top: 1.5rem; font-size: 13px; color: var(--page-dim); }
+.footnote h3 { margin-top: 0; }
+
+/* ============================================================
+   舞台 token —— 逐字取自 src/renderer/styles/globals.css
+   :root (:147-196) 与 .dark (:199-232) 的 OKLCH 字面量。
+   唯一改动：去掉 `/ var(--panel-bg-opacity, 1)`（默认 1，恒等），
+   见 §02 的「背景图前置排查」。
+   ============================================================ */
+
+.oc {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.9837 0.0106 100.82);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --secondary: oklch(0.9673 0.0111 89.72);
+  --muted: oklch(0.969 0.0093 99.98);
+  --muted-foreground: oklch(0.5111 0.0053 78.28);
+  --accent: oklch(0.9422 0.0122 96.43);
+  --selection: oklch(0.9152 0.0109 95.17);
+  --border: oklch(0.881 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --success: oklch(0.5593 0.1335 122.92);
+  --tool-arg: color-mix(in oklab, var(--muted-foreground) 78%, var(--background));
+
+  /* @theme 档位（globals.css:39-60） */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --text-code: 13px;
+  --text-meta: 13px;
+  --text-ui: 14px;
+  --text-title: 18px;
+  --w-read: 45rem;
+
+  /* 分域字体栈（globals.css:86-101，缩写但同序） */
+  --oc-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  --oc-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono",
+    "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+    "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", monospace;
+
+  /* 维度一：密度旋钮，默认 = 现状（D1-a） */
+  --fs-body: 15px;
+  --lh-body: 1.5;
+  --gap-block: 10px;
+  --gap-section: 20px;
+  --gap-li: 4px;
+  --lh-code: 1.375;
+  --pad-code: 10px;
+  --py-cell: 4px;
+
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--oc-sans);
+  font-synthesis-weight: none;
+}
+
+/* 舞台内的作用域重置 —— 页面外壳的 `p` / `h3` / `th` / `table` 规则（元素选择器，0,0,1）
+   会穿进舞台，给段落塞 0.9rem 下边距、把表头渲成 mono + 11px + 大写。
+   舞台必须只受本节 token 控制，否则密度对比比的是外壳而不是提案。 */
+.oc :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li, pre, table, th, td) {
+  margin-bottom: 0;
+  max-width: none;
+}
+
+.oc[data-oc="dark"] {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.2197 0.0037 48.55);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --secondary: oklch(0.2315 0.0024 67.71);
+  --muted: oklch(0.2228 0.0025 67.7);
+  --muted-foreground: oklch(0.5933 0.0079 88.68);
+  --accent: oklch(0.2912 0.0029 17.32);
+  --selection: oklch(0.3112 0.0029 17.31);
+  --border: oklch(0.3214 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --success: oklch(0.7227 0.1178 117.2);
+}
+
+/* ---- 维度一：D1-b / D1-c 密度档（提案值，非现值） ---- */
+.oc[data-density="b"] { --lh-body: 1.625; --gap-block: 14px; --gap-section: 24px; --gap-li: 6px; --lh-code: 1.5; --pad-code: 12px; --py-cell: 6px; }
+.oc[data-density="c"] { --lh-body: 1.75;  --gap-block: 18px; --gap-section: 28px; --gap-li: 8px; --lh-code: 1.6; --pad-code: 14px; --py-cell: 8px; }
+/* 可叠加加项：正文字号 15 -> 16px */
+.oc[data-fs="16"] { --fs-body: 16px; }
+
+/* ---- 维度二：D2-b / D2-c 次要层提档（提案值，非现值） ---- */
+.oc[data-oc="light"][data-contrast="b"],
+.oc[data-oc="light"][data-contrast="c"] { --muted-foreground: #575653; --tool-arg: var(--muted-foreground); }
+.oc[data-oc="dark"][data-contrast="b"],
+.oc[data-oc="dark"][data-contrast="c"]  { --muted-foreground: #9F9D96; --tool-arg: var(--muted-foreground); }
+/* D2-c 追加：容器边界可见化（行内代码 chip 与工具输出块补 border-border） */
+.oc[data-contrast="c"] .oc-ic { border: 1px solid var(--border); }
+.oc[data-contrast="c"] .oc-toolout { border-left: 2px solid var(--border); padding-left: 8px; }
+
+/* ============================================================
+   时间线骨架 —— 逐条对应 chatTimelineLayout.ts / MessageTimeline.tsx
+   ============================================================ */
+
+/* ReadingColumn: `mx-auto w-full` + `--container-reading` 45rem（globals.css:60） */
+.oc-col { width: min(100%, var(--w-read)); margin-inline: auto; padding: 12px 16px 16px; }
+/* readingColumnSpacingClass() = `space-y-2.5` -> 回合间 10px（chatTimelineLayout.ts:40） */
+.oc-turn + .oc-turn { margin-top: 10px; }
+/* turnBubbleBandClass() = `sticky top-0 z-10 bg-background py-2.5`（:64）—— 与上面 10 合成 20px 回合节拍 */
+.oc-band { padding: 10px 0; background: var(--background); }
+/* turnBodyClass() = `flex flex-col gap-2.5 text-markdown leading-normal`（:79） */
+.oc-body { display: flex; flex-direction: column; gap: 10px; }
+
+/* UserBubble（MessageTimeline.tsx:713-722）：
+   `space-y-2 rounded-lg border px-4 py-2.5 rounded-br-xs border-primary/8 bg-card` */
+.oc-userwrap { display: block; }
+.oc-bubble {
+  border: 1px solid color-mix(in oklab, var(--primary) 8%, transparent);
+  background: var(--card);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
+  padding: 10px 16px;
+}
+.oc-bubble > p {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--foreground);
+  white-space: pre-wrap;
+}
+
+/* turnHeadClass() / turnFooterClass()（:133 / :138）—— text-meta + muted-foreground */
+.oc-head, .oc-foot {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  font-size: var(--text-meta); font-variant-numeric: tabular-nums; color: var(--muted-foreground);
+}
+.oc-foot { justify-content: flex-end; gap: 8px; }
+.oc-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.55; }
+
+/* ToolRows.tsx:76-77 —— `flex items-baseline gap-1.5 text-markdown leading-normal text-muted-foreground` */
+.oc-tools { display: flex; flex-direction: column; gap: 4px; }
+.oc-toolrow {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: var(--fs-body); line-height: var(--lh-body); color: var(--muted-foreground);
+}
+.oc-tname { flex-shrink: 0; }
+/* ToolRows.tsx:304 —— 参数行是 text-tool-arg（本稿 §02 的主角） */
+.oc-targ { color: var(--tool-arg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-chev { color: var(--tool-arg); flex-shrink: 0; font-size: 11px; }
+/* ToolRows.tsx:230 —— 输出体 font-mono text-code leading-[1.55] text-muted-foreground */
+.oc-toolout {
+  font-family: var(--oc-mono); font-size: var(--text-code); line-height: 1.55;
+  color: var(--muted-foreground); white-space: pre-wrap; margin-top: 4px;
+}
+
+/* ============================================================
+   散文层 —— 逐条对应 chatMarkdownPolicy.ts
+   ============================================================ */
+
+/* chatMarkdownRootClass()（:426）= `text-markdown leading-normal text-foreground` */
+.oc-prose {
+  min-width: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--foreground);
+  overflow-wrap: break-word;
+}
+.oc-prose > * { margin-top: var(--gap-block); }          /* BLOCK_GAP = mt-2.5（:399） */
+.oc-prose > :first-child { margin-top: 0; }              /* first:mt-0 */
+.oc-prose > h3 {                                          /* chatMarkdownHeadingClass(1..3)（:446） */
+  margin-top: var(--gap-section);                         /* SECTION_GAP = mt-5（:400） */
+  font-family: inherit;
+  font-size: var(--fs-body);                              /* D25：标题不靠字号 */
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: 0;                                      /* D25：<18px 一律非负 */
+}
+/* chatMarkdownListClass()（:470-478）= `ml-5 list-outside space-y-1` */
+.oc-prose ol, .oc-prose ul { margin-left: 20px; padding: 0; }
+.oc-prose ol { list-style: decimal outside; }
+.oc-prose ul { list-style: disc outside; }
+.oc-prose li + li { margin-top: var(--gap-li); }
+/* CodeInline（ui/ident.tsx:31）= `rounded-xs bg-muted px-1 font-mono text-code` —— 注意：无边框 */
+.oc-ic {
+  border-radius: var(--radius-xs);
+  background: var(--muted);
+  padding: 0 4px;
+  font-family: var(--oc-mono);
+  font-size: var(--text-code);
+  letter-spacing: 0;
+}
+/* chatMarkdownCodeBlockClass()（:509）= `rounded-sm border border-border bg-muted/50 p-2.5 text-code leading-snug` */
+.oc-pre {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+  padding: var(--pad-code);
+  font-family: var(--oc-mono);
+  font-size: var(--text-code);
+  line-height: var(--lh-code);
+  white-space: pre;
+}
+/* chatMarkdownTable*Class()（:513-525） */
+.oc-tblwrap { overflow-x: auto; }
+.oc-tbl { width: 100%; border-collapse: collapse; border: 1px solid var(--border); font-size: var(--fs-body); }
+.oc-tbl th, .oc-tbl td { border: 1px solid var(--border); padding: var(--py-cell) 10px; text-align: left; line-height: var(--lh-body); vertical-align: baseline; }
+.oc-tbl th {
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+  font-weight: 600;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+}
+/* chatMarkdownBlockquoteClass()（:528） */
+.oc-quote { border-left: 2px solid var(--border); padding-left: 10px; color: var(--muted-foreground); }
+
+/* ============================================================
+   维度三：角色区分变体
+   ============================================================ */
+/* D3-a：用户气泡边框 primary/8 -> /24（助手仍完全平铺） */
+.oc[data-role="a"] .oc-bubble { border-color: color-mix(in oklab, var(--primary) 24%, transparent); }
+/* D3-b：助手加中性容器 bg-muted + border-border（触碰基线条款） */
+.oc[data-role="b"] .oc-prose {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+/* D3-c：非对称——用户右对齐收窄 + 底色换 accent + 描边换 input；助手一字不动 */
+.oc[data-role="c"] .oc-userwrap { display: flex; justify-content: flex-end; }
+.oc[data-role="c"] .oc-bubble { max-width: 85%; background: var(--accent); border-color: var(--input); }
+
+/* 边框强度对照条 */
+.strength { display: grid; gap: 8px; }
+@media (min-width: 720px) { .strength { grid-template-columns: repeat(4, 1fr); } }
+.strength .oc-bubble { padding: 8px 12px; }
+.st-cap { font-family: var(--mono); font-size: 10.5px; color: var(--muted-foreground); margin-bottom: 4px; letter-spacing: 0.06em; }
+.b8  .oc-bubble { border-color: color-mix(in oklab, var(--primary) 8%, transparent); }
+.b16 .oc-bubble { border-color: color-mix(in oklab, var(--primary) 16%, transparent); }
+.b24 .oc-bubble { border-color: color-mix(in oklab, var(--primary) 24%, transparent); }
+.b32 .oc-bubble { border-color: color-mix(in oklab, var(--primary) 32%, transparent); }
+
+/* 三档并排 */
+.trio { display: grid; gap: 0.75rem; }
+@media (min-width: 1100px) { .trio { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.trio .oc-col { padding: 10px 12px 14px; }
+.duo { display: grid; gap: 0.75rem; }
+@media (min-width: 1000px) { .duo { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  /* biome-ignore lint/complexity/noImportantStyles: the reduced-motion kill switch is a `*`
+     selector (0,0,0) and must override the class-level transition shorthands above (0,1,0). */
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">F5 · 聊天时间线可读性 · 三维度对比稿</div>
+  <h1>读起来太费劲，到底该改哪一层</h1>
+  <p class="standfirst">
+    用户真机点验提了三条：<b>① 内容太密集</b>、<b>② 显示内容与背景对比太弱</b>、<b>③ 用户输入与 agent 输出没有区分度</b>。
+    本页把这三条各拆成一个可独立拍板的维度，每维给出「现状 + 2~3 个变体」，用同一段中文技术内容渲染，亮暗双主题都能看。
+    <br>
+    <b>全部「现状」数值取自本仓源码</b>（文件 : 行号逐条标注），<b>全部对比度是本轮算出来的</b>（OKLCH → sRGB → WCAG 2.x 相对亮度），
+    不是估读、不是照抄旧文档。稿内出现的<b>提案值</b>一律显式标注为提案，并注明它是否落在既有词表内、是否需要新增 token、是否触碰已冻结的基线条款。
+  </p>
+  <div class="masthead-meta">
+    <span><b>日期</b> 2026-08-18</span>
+    <span><b>分支</b> feat/openchamber-chat-refactor</span>
+    <span><b>词表</b> docs/design-system.md</span>
+    <span><b>观感基线</b> docs/design/phase0a-openchamber-alignment.html · a07-cursor-composer-alignment.html</span>
+    <span><b>不改生产代码</b> 本页是设计稿</span>
+  </div>
+</header>
+
+<div class="controlbar">
+  <span class="demo-cap">全页主题</span>
+  <div class="seg" role="group" aria-label="舞台主题">
+    <button type="button" data-theme-set="light" aria-pressed="true">light</button>
+    <button type="button" data-theme-set="dark" aria-pressed="false">dark</button>
+  </div>
+  <span class="demo-cap" style="margin-left:auto">页面外壳</span>
+  <div class="seg" role="group" aria-label="页面外壳配色">
+    <button type="button" data-page-set="light" aria-pressed="true">light</button>
+    <button type="button" data-page-set="dark" aria-pressed="false">dark</button>
+  </div>
+</div>
+
+<section id="guide">
+  <div class="sec-head">
+    <span class="sec-tag">拍板</span>
+    <h2>三个维度，各选一项</h2>
+    <span class="sec-sub">回复示例：D1-b + D2-b + D3-a</span>
+  </div>
+
+  <div class="guide">
+    <h3>D1 · 排版密度（对应「内容太密集」）</h3>
+    <div class="opt-grid">
+      <div class="opt-head">选项 &nbsp;|&nbsp; 内容 &nbsp;|&nbsp; 落地成本</div>
+      <div class="opt-row">
+        <span class="opt-id">D1-a</span>
+        <span class="opt-txt"><b>现状不动</b>：15px / 行高 1.5 / 段距 10px。</span>
+        <span class="opt-cost">零</span>
+      </div>
+      <div class="opt-row is-rec">
+        <span class="opt-id">D1-b ★</span>
+        <span class="opt-txt"><b>舒适档</b>：行高 <code>leading-relaxed</code> 1.625、段距 14px、列表项距 6px、标题上距 24px。行高档在 Tailwind 内置词表里，不需新 token。</span>
+        <span class="opt-cost">改 2 常量 + 1 组测试</span>
+      </div>
+      <div class="opt-row">
+        <span class="opt-id">D1-c</span>
+        <span class="opt-txt"><b>宽松档</b>：行高 1.75（= 长文排版通行值）、段距 18px、列表项距 8px、标题上距 28px。1.75 <b>不在</b> Tailwind 内置档，需新增 <code>--leading-*</code> token。</span>
+        <span class="opt-cost">新增 1 token + 同上</span>
+      </div>
+      <div class="opt-row">
+        <span class="opt-id">D1+16</span>
+        <span class="opt-txt"><b>可叠加加项</b>：正文字号 15px → 16px（<code>--text-markdown</code>）。中文在 15px 下字面偏小，这是行高之外唯一的密度轴。<b>需修订 D25 字号档位表</b>，且会牵连工具行动词与全部 h1–h6。</span>
+        <span class="opt-cost">修订 D25 档位表</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="guide">
+    <h3>D2 · 前景 / 背景对比（对应「对比太弱」）</h3>
+    <div class="opt-grid">
+      <div class="opt-head">选项 &nbsp;|&nbsp; 内容 &nbsp;|&nbsp; 落地成本</div>
+      <div class="opt-row">
+        <span class="opt-id">D2-a</span>
+        <span class="opt-txt"><b>现状不动</b>。前提：正文其实是 18.78:1（亮）/ 11.38:1（暗），已经是 AAA 上限，<b>问题不在正文</b>——见 §02。</span>
+        <span class="opt-cost">零</span>
+      </div>
+      <div class="opt-row is-rec">
+        <span class="opt-id">D2-b ★</span>
+        <span class="opt-txt"><b>次要层提档</b>：<code>--muted-foreground</code> 亮 <code>#686663</code>→<code>#575653</code>（5.62→7.20）、暗 <code>#807E79</code>→<code>#9F9D96</code>（4.48→6.70）；<code>--tool-arg</code> 退役并入 muted-foreground（3.61/3.11 → 同上）。两个提案值都是 <b>Flexoki 官方 base 色阶整档</b>，不是自创色。</span>
+        <span class="opt-cost">改 2 token 值 + 修订「已知偏差」表</span>
+      </div>
+      <div class="opt-row">
+        <span class="opt-id">D2-c</span>
+        <span class="opt-txt"><b>= D2-b + 容器边界可见化</b>：行内代码 chip 补 <code>border-border</code>（现在只有 1.07:1 的底，等于没有）、工具输出块补左导轨。纯类串改动，零新 token。</span>
+        <span class="opt-cost">D2-b + 改 2 处类串</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="guide">
+    <h3>D3 · 用户 / 助手区分（对应「没有区分度」）</h3>
+    <div class="opt-grid">
+      <div class="opt-head">选项 &nbsp;|&nbsp; 内容 &nbsp;|&nbsp; 落地成本</div>
+      <div class="opt-row">
+        <span class="opt-id">D3-a</span>
+        <span class="opt-txt"><b>加强用户气泡</b>：<code>border-primary/8</code> → <code>/24</code>（对 card 1.11:1 → 1.39:1 亮 / 1.10:1 → 1.41:1 暗），助手保持完全平铺。<b>不触碰任何结构裁定</b>，只改 A07 冻结的一个数值。</span>
+        <span class="opt-cost">1 个类串</span>
+      </div>
+      <div class="opt-row">
+        <span class="opt-id">D3-b</span>
+        <span class="opt-txt"><b>助手加中性容器</b>：助手散文加 <code>bg-muted + border-border</code> 盒（= design-system 判据 #3 的中性提示盒写法）。<b>需修订 phase0a「助手：完全平铺，无容器」基线条款</b>；且代码块 / 表格自带边框，会出现嵌套框。</span>
+        <span class="opt-cost">修订基线条款</span>
+      </div>
+      <div class="opt-row is-rec">
+        <span class="opt-id">D3-c ★</span>
+        <span class="opt-txt"><b>非对称</b>：用户气泡右对齐 + <code>max-w-[85%]</code> + 底色换 <code>bg-accent</code>（对底 1.16:1 亮 / 1.29:1 暗，是真看得见的面）+ 描边换 <code>border-input</code>；助手一字不动。区分度来自<b>形状不对称</b>而非新容器。<b>需撤销 D26 ④</b>（它当初废掉了 85% 与右对齐）。</span>
+        <span class="opt-cost">撤销 D26 ④ + 2 个类串</span>
+      </div>
+    </div>
+    <div class="reply-hint">
+      三维互相独立，可任意组合。<b>推荐组合见 §04</b>：<b>R1 = D1-b + D2-b + D3-a</b>（不碰任何结构裁定的最大收益）、
+      <b>R2 = D1-c + D2-c + D3-c</b>（愿意动裁定时的完全体）。加项 <b>D1+16</b> 可单独回复「要 / 不要」。
+    </div>
+  </div>
+</section>
+
+<section id="s00">
+  <div class="sec-head">
+    <span class="sec-tag">00</span>
+    <h2>现状实测台账</h2>
+    <span class="sec-sub">所有「现状」列的唯一依据</span>
+  </div>
+
+  <p>
+    下面两张表是本页所有「现状」渲染的来源。<b>排版表</b>逐条对应源码里的类串常量；
+    <b>对比度表</b>是把 <code>globals.css</code> 的 OKLCH 字面量转成 sRGB 后按 WCAG 2.x 相对亮度算出来的，
+    与 <code>docs/design-system.md</code> 已记录的三处数值（18.78 / 11.39 / 4.49）逐位吻合，可交叉验证。
+  </p>
+
+  <h3>A · 排版（现值）</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>项</th><th class="mono">现值</th><th>来源（file : line）</th></tr></thead>
+    <tbody>
+      <tr><td>根字号</td><td class="mono">16px</td><td class="mono">globals.css:146 <code>--font-size-base</code></td></tr>
+      <tr><td>正文字号</td><td class="mono">15px</td><td class="mono">globals.css:48 <code>--text-markdown: 0.9375rem</code></td></tr>
+      <tr><td><b>正文行高</b></td><td class="mono"><b>1.5 → 行盒 22.5px</b></td><td class="mono">tailwindcss/theme.css:345 <code>--leading-normal</code> ← chatMarkdownPolicy.ts:426</td></tr>
+      <tr><td><b>段距（段落 / 列表 / 表格 / 代码块）</b></td><td class="mono"><b>10px</b>（<code>mt-2.5</code>）</td><td class="mono">chatMarkdownPolicy.ts:399 <code>BLOCK_GAP</code></td></tr>
+      <tr><td>标题上距 h1–h3</td><td class="mono">20px（<code>mt-5</code>）</td><td class="mono">chatMarkdownPolicy.ts:400 / 446</td></tr>
+      <tr><td>标题上距 h4–h6</td><td class="mono">10px</td><td class="mono">chatMarkdownPolicy.ts:447-448</td></tr>
+      <tr><td>标题字号</td><td class="mono">15px（全部）</td><td class="mono">D25：层级只靠 weight + color</td></tr>
+      <tr><td>列表缩进 / 项距 / 嵌套</td><td class="mono">20px / 4px / 4px</td><td class="mono">chatMarkdownPolicy.ts:470-478（<code>ml-5 space-y-1</code>）</td></tr>
+      <tr><td>代码块</td><td class="mono">13px / 1.375 → 17.9px，内距 10px，圆角 8px</td><td class="mono">chatMarkdownPolicy.ts:509</td></tr>
+      <tr><td>表格单元格</td><td class="mono">px 10px / py 4px，全边框</td><td class="mono">chatMarkdownPolicy.ts:521-525</td></tr>
+      <tr><td>行内代码</td><td class="mono">13px mono，<code>bg-muted</code>，<b>无边框</b>，圆角 4px</td><td class="mono">ui/ident.tsx:31 <code>CodeInline</code></td></tr>
+      <tr><td>回合内节拍</td><td class="mono">10px（<code>gap-2.5</code>）</td><td class="mono">chatTimelineLayout.ts:79 <code>turnBodyClass()</code></td></tr>
+      <tr><td>回合间节拍</td><td class="mono">20px = 10（<code>space-y-2.5</code>）+ 10（band <code>py-2.5</code>）</td><td class="mono">chatTimelineLayout.ts:40 / 64</td></tr>
+      <tr><td>阅读栏宽</td><td class="mono">45rem = 720px</td><td class="mono">globals.css:60 <code>--container-reading</code></td></tr>
+      <tr><td>字距</td><td class="mono">0（正文 / UI 全档）</td><td class="mono">design-system.md:489</td></tr>
+      <tr><td><b>用户气泡</b></td><td class="mono">圆角 16/16/4/16、<code>px-4 py-2.5</code>、<code>bg-card</code>、<code>border-primary/8</code>、<b>满栏宽</b></td><td class="mono">MessageTimeline.tsx:713-722（85% + 右对齐已被 D26 ④ 废除，:702-711）</td></tr>
+      <tr><td><b>助手</b></td><td class="mono"><b>完全平铺，无容器</b></td><td class="mono">phase0a:431-433 基线条款</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>B · 对比度（现值，本轮计算）</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>角色 / 类</th><th class="mono">Light</th><th class="num">比值</th><th></th><th class="mono">Dark</th><th class="num">比值</th><th></th><th>用量（chat/，非测试）</th></tr></thead>
+    <tbody>
+      <tr><td><b>正文</b> <code>text-foreground</code> on <code>bg-background</code></td>
+          <td class="mono"><span class="sw" style="background:#100F0F"></span>#100F0F</td><td class="num">18.78</td><td><span class="tag aaa">AAA</span></td>
+          <td class="mono"><span class="sw" style="background:#CECDC3"></span>#CECDC3</td><td class="num">11.38</td><td><span class="tag aaa">AAA</span></td>
+          <td class="mono">49 处</td></tr>
+      <tr><td>用户气泡正文 on <code>bg-card</code></td>
+          <td class="mono">同上</td><td class="num">18.28</td><td><span class="tag aaa">AAA</span></td>
+          <td class="mono">同上</td><td class="num">10.85</td><td><span class="tag aaa">AAA</span></td>
+          <td class="mono">—</td></tr>
+      <tr><td><b>次要文字 / 整条工具行</b> <code>text-muted-foreground</code></td>
+          <td class="mono"><span class="sw" style="background:#686663"></span>#686663</td><td class="num">5.62</td><td><span class="tag aa">AA</span></td>
+          <td class="mono"><span class="sw" style="background:#807E79"></span>#807E79</td><td class="num">4.48</td><td><span class="tag warn">险过</span></td>
+          <td class="mono"><b>104 处</b></td></tr>
+      <tr><td><b>工具行参数 / 折叠箭头</b> <code>text-tool-arg</code></td>
+          <td class="mono"><span class="sw" style="background:#878581"></span>#878581</td><td class="num">3.61</td><td><span class="tag fail">不过 AA</span></td>
+          <td class="mono"><span class="sw" style="background:#676561"></span>#676561</td><td class="num">3.11</td><td><span class="tag fail">不过 AA</span></td>
+          <td class="mono">4 处</td></tr>
+      <tr><td><code>text-muted-foreground/60</code></td>
+          <td class="mono"><span class="sw" style="background:#A4A29D"></span>#A4A29D</td><td class="num">2.49</td><td><span class="tag fail">不过</span></td>
+          <td class="mono"><span class="sw" style="background:#565451"></span>#565451</td><td class="num">2.41</td><td><span class="tag fail">不过</span></td>
+          <td class="mono">1 处</td></tr>
+      <tr><td><code>text-muted-foreground/50</code></td>
+          <td class="mono"><span class="sw" style="background:#B3B1AC"></span>#B3B1AC</td><td class="num">2.09</td><td><span class="tag fail">不过</span></td>
+          <td class="mono"><span class="sw" style="background:#4C4A47"></span>#4C4A47</td><td class="num">2.04</td><td><span class="tag fail">不过</span></td>
+          <td class="mono">1 处</td></tr>
+      <tr><td><code>text-primary</code>（链接）</td>
+          <td class="mono"><span class="sw" style="background:#BC5215"></span>#BC5215</td><td class="num">4.73</td><td><span class="tag aa">AA</span></td>
+          <td class="mono"><span class="sw" style="background:#DA702C"></span>#DA702C</td><td class="num">5.49</td><td><span class="tag aa">AA</span></td>
+          <td class="mono">8 处</td></tr>
+      <tr><td><b>面</b>：<code>card</code> vs <code>background</code>（= 用户气泡底 vs 时间线底）</td>
+          <td class="mono"><span class="sw" style="background:#FBFAF2"></span>#FBFAF2</td><td class="num">1.027</td><td><span class="tag fail">不可辨</span></td>
+          <td class="mono"><span class="sw" style="background:#1C1A19"></span>#1C1A19</td><td class="num">1.049</td><td><span class="tag fail">不可辨</span></td>
+          <td class="mono">—</td></tr>
+      <tr><td><b>线</b>：<code>border-primary/8</code> vs <code>card</code>（= 用户气泡边框）</td>
+          <td class="mono"><span class="sw" style="background:#F6EDE0"></span>#F6EDE0</td><td class="num">1.111</td><td><span class="tag fail">近不可辨</span></td>
+          <td class="mono"><span class="sw" style="background:#2B211B"></span>#2B211B</td><td class="num">1.102</td><td><span class="tag fail">近不可辨</span></td>
+          <td class="mono">1 处</td></tr>
+      <tr><td>行内代码底 <code>bg-muted</code> vs <code>background</code></td>
+          <td class="mono"><span class="sw" style="background:#F6F5EE"></span>#F6F5EE</td><td class="num">1.073</td><td><span class="tag fail">不可辨</span></td>
+          <td class="mono"><span class="sw" style="background:#1C1B1A"></span>#1C1B1A</td><td class="num">1.057</td><td><span class="tag fail">不可辨</span></td>
+          <td class="mono">—</td></tr>
+      <tr><td>参照：<code>border-border</code> vs <code>background</code></td>
+          <td class="mono"><span class="sw" style="background:#DAD8CE"></span>#DAD8CE</td><td class="num">1.402</td><td><span class="tag out">可辨阈</span></td>
+          <td class="mono"><span class="sw" style="background:#343331"></span>#343331</td><td class="num">1.441</td><td><span class="tag out">可辨阈</span></td>
+          <td class="mono">—</td></tr>
+      <tr><td>参照：<code>bg-accent</code> vs <code>background</code></td>
+          <td class="mono"><span class="sw" style="background:#EEECE3"></span>#EEECE3</td><td class="num">1.161</td><td><span class="tag out">面可辨</span></td>
+          <td class="mono"><span class="sw" style="background:#2D2B2B"></span>#2D2B2B</td><td class="num">1.292</td><td><span class="tag out">面可辨</span></td>
+          <td class="mono">—</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note go">
+    <p><b>台账读出来的三条结论（本页三个维度的立论基础）</b></p>
+    <p>① <b>「对比太弱」不是正文的问题</b>——正文 18.78 / 11.38 已经是 AAA 上限，亮色下 <code>#100F0F</code> 就是 Flexoki 的黑，<b>没有更深的地方可去</b>。
+       弱的是<b>次要层</b>：chat 目录里 <code>text-muted-foreground</code> 用了 <b>104 处</b>、<code>text-foreground</code> 只有 49 处——
+       用户视野里大部分「字」（整条工具行、时间戳、耗时、状态、次级标题、引用块、脚注）都落在 4.48:1（暗）和 3.11~3.61:1（tool-arg）上。所以 D2 的动作在次要层，不在正文。</p>
+    <p>② <b>「没有区分度」有精确解释</b>——用户气泡的底 <code>card</code> 对时间线底只有 <b>1.027:1</b>（亮），边框 <code>primary/8</code> 对底只有 <b>1.111:1</b>。
+       两个信号都在人眼可辨阈以下，等于气泡<b>根本没画出来</b>；再加上 D26 ④ 把 85% 宽度与右对齐也拿掉了，用户消息与助手消息就只剩「有没有圆角」这一个几乎看不见的差别。</p>
+    <p>③ <b>「太密集」是行高 1.5 用在中文上</b>——1.5 是拉丁文正文的下限档。CJK 无升降部、字面率高，同一 line-height 下视觉上更挤；
+       再叠上段距只有 10px（= 0.44 行），段落之间几乎没有呼吸位。</p>
+  </div>
+</section>
+
+<section id="s01">
+  <div class="sec-head">
+    <span class="sec-tag">01</span>
+    <h2>维度一 · 排版密度</h2>
+    <span class="sec-sub">D1-a / D1-b / D1-c（+ 加项 D1+16）</span>
+  </div>
+
+  <div class="note">
+    <p><b>出处依据（诚实标注）</b></p>
+    <p><b>可在本机核验的一条</b>：<code>node_modules/tailwindcss/theme.css:343-347</code> 的行高档只有
+      <code>tight 1.25 / snug 1.375 / normal 1.5 / relaxed 1.625 / loose 2</code>——
+      <b>1.65 与 1.75 都不在内置档里</b>。这直接决定了 D1-b（1.625，白嫖内置档）与 D1-c（1.75，必须新增 token）的成本差。</p>
+    <p><b>行业量级锚点（本轮未在本机实测第三方产品，以下是公开实现与规范里的通行取值，只作量级参照）</b>：
+      <code>@tailwindcss/typography</code> 的 <code>prose</code> 长文基线是正文行高 <b>1.75</b>、段落上下 margin <b>1.25em</b>、
+      <code>li</code> margin <b>0.5em</b>；GitHub 的 markdown 样式是行高 <b>1.5</b> + 段落 margin-bottom <b>16px</b>（= 1em）；
+      Material / HIG 正文普遍在 <b>1.5</b> 附近。也就是说：<b>1.5 是「界面正文」的档，1.75 是「长文阅读」的档</b>，
+      而聊天时间线在本项目里已经是长文场景。</p>
+    <p><b>CJK 修正</b>：中文字形满格、无升降部，同一 line-height 的视觉行距比拉丁文更紧，通行做法是再放 <b>0.1~0.2</b>；
+      中文正文常见落点是 <b>1.6~1.8</b>。所以 D1-b 的 1.625 大致等效于拉丁文的 1.5（即「先补回中文欠的那一档」），
+      D1-c 的 1.75 才是真正的「宽松」。</p>
+    <p><b>字距不设变体</b>：CJK 正文加 <code>letter-spacing</code> 会破坏字面节奏，
+      <code>design-system.md:489</code> 已裁定正文 / UI 一律 <b>0</b>，本页三档全部保持 0，密度只从<b>行高 / 段距 / 项距</b>三个轴取。</p>
+  </div>
+
+  <h3>三档并排 · 同一段中文技术内容</h3>
+  <div class="demo-bar">
+    <span class="demo-cap">并排比较用；栏宽被压窄，真实 720px 栏宽的效果见下方「真宽单档」与 §04</span>
+  </div>
+  <div class="trio">
+    <div>
+      <div class="demo-bar"><span class="demo-cap">D1-a · 现状 15/1.5 · 段距 10</span></div>
+      <div class="stage"><div class="oc" data-oc="light" data-density="a"><div class="oc-col"><div class="oc-prose" data-tpl="prose"></div></div></div></div>
+    </div>
+    <div>
+      <div class="demo-bar"><span class="demo-cap">D1-b · 舒适 15/1.625 · 段距 14</span></div>
+      <div class="stage"><div class="oc" data-oc="light" data-density="b"><div class="oc-col"><div class="oc-prose" data-tpl="prose"></div></div></div></div>
+    </div>
+    <div>
+      <div class="demo-bar"><span class="demo-cap">D1-c · 宽松 15/1.75 · 段距 18</span></div>
+      <div class="stage"><div class="oc" data-oc="light" data-density="c"><div class="oc-col"><div class="oc-prose" data-tpl="prose"></div></div></div></div>
+    </div>
+  </div>
+
+  <h3>真宽单档 · 720px 阅读栏（点按钮逐档切）</h3>
+  <div class="demo-bar">
+    <span class="demo-cap">切换密度档</span>
+    <div class="seg" role="group" aria-label="密度档">
+      <button type="button" data-density-set="a" data-target="d1stage" aria-pressed="true">D1-a 现状</button>
+      <button type="button" data-density-set="b" data-target="d1stage" aria-pressed="false">D1-b 舒适</button>
+      <button type="button" data-density-set="c" data-target="d1stage" aria-pressed="false">D1-c 宽松</button>
+    </div>
+    <div class="seg push" role="group" aria-label="字号加项">
+      <button type="button" data-fs-set="15" data-target="d1stage" aria-pressed="true">15px</button>
+      <button type="button" data-fs-set="16" data-target="d1stage" aria-pressed="false">D1+16 · 16px</button>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="oc" id="d1stage" data-oc="light" data-density="a" data-fs="15">
+      <div class="oc-col"><div class="oc-turn" data-tpl="turn"></div></div>
+    </div>
+  </div>
+  <p class="src">舞台内的一切（栏宽 720px、气泡形状、工具行、散文层）都是现状真值；本节只有密度旋钮在动。</p>
+
+  <h3>三档规格差异表</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>轴</th><th class="mono">D1-a 现状</th><th class="mono">D1-b 舒适</th><th class="mono">D1-c 宽松</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>正文行高</td><td class="mono">1.5 → 22.5px</td><td class="mono"><b>1.625 → 24.4px</b></td><td class="mono"><b>1.75 → 26.3px</b></td><td>b 用内置 <code>leading-relaxed</code>；c 需新 token</td></tr>
+      <tr><td>段落 / 块间距</td><td class="mono">10px</td><td class="mono"><b>14px</b></td><td class="mono"><b>18px</b></td><td><code>BLOCK_GAP</code>；c 的 18px ≈ 1.2em，接近 prose 的 1.25em</td></tr>
+      <tr><td>标题上距 h1–h3</td><td class="mono">20px</td><td class="mono"><b>24px</b></td><td class="mono"><b>28px</b></td><td><code>SECTION_GAP</code></td></tr>
+      <tr><td>列表项距</td><td class="mono">4px</td><td class="mono"><b>6px</b></td><td class="mono"><b>8px</b></td><td><code>space-y-1</code> → <code>space-y-1.5</code> / <code>space-y-2</code></td></tr>
+      <tr><td>代码块行高 / 内距</td><td class="mono">1.375 / 10px</td><td class="mono"><b>1.5 / 12px</b></td><td class="mono"><b>1.6 / 14px</b></td><td><code>leading-snug</code> → <code>leading-normal</code>（b，内置档）</td></tr>
+      <tr><td>表格单元格 py</td><td class="mono">4px</td><td class="mono"><b>6px</b></td><td class="mono"><b>8px</b></td><td><code>py-1</code> → <code>py-1.5</code> / <code>py-2</code></td></tr>
+      <tr><td>回合骨架（10 / 20px）</td><td class="mono">不动</td><td class="mono">不动</td><td class="mono">不动</td><td>P-17 裁定的两档节拍，本维度<b>刻意不碰</b></td></tr>
+      <tr><td>栏宽 / 字距</td><td class="mono">720px / 0</td><td class="mono">720px / 0</td><td class="mono">720px / 0</td><td>三档一致</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note stop">
+    <p><b>工程标注 · D1 的真实成本不在类串，在一条被钉死的不变量</b></p>
+    <p><code>chatMarkdownPolicy.ts:396-400</code> 明文写着两个间距档「are the turn layout's own tiers, re-used rather than re-invented … <b>No third tier is introduced, which is what F-C4 pins</b>」，
+      而 <code>__tests__/chatMarkdownPolicy.test.ts:643-656</code> 有一条断言把它钉住：
+      <b>「F-C4: block rhythm reuses the turn layout's two tiers, inventing none」——每个块级 <code>mt-*</code> 必须 ∈ {10, 20}</b>；
+      另有 <code>:635/:638</code> 断言标题上距恰为 20 / 10、<code>:590</code> 断言根类必须含 <code>leading-normal</code>。</p>
+    <p>所以 D1-b / D1-c <b>必然引入第三档间距</b>，改动清单是：
+      ① <code>chatMarkdownPolicy.ts</code> 的 <code>BLOCK_GAP</code> / <code>SECTION_GAP</code> 两个常量 + 根类的 <code>leading-normal</code>；
+      ② <b>连带改上述三条断言</b>，并把「散文层的节拍与回合骨架解耦」这个新口径写进注释（现注释会变成假话）；
+      ③ D1-c 追加：在 <code>globals.css</code> 的 <code>@theme</code> 新增 <code>--leading-*</code> 档（不能写 <code>leading-[1.75]</code> 任意值，
+      <code>design-system.md</code> 的 Token 分档纪律禁任意值）。</p>
+    <p><b>D1+16 另算</b>：改 <code>--text-markdown</code> 的值会同时改掉 Markdown 全部内容、<b>全部 h1–h6</b>（D25 规定标题同字号）与工具行动词，
+      并使 <code>--text-code</code> 的 13px「对 15px sans 的光学补偿」失去依据（15/13 = 0.867 的档比要重算到 16/14）。
+      属于<b>修订 D25 Typography 档位表</b>，不是一个类串的事。</p>
+  </div>
+</section>
+
+<section id="s02">
+  <div class="sec-head">
+    <span class="sec-tag">02</span>
+    <h2>维度二 · 前景 / 背景对比</h2>
+    <span class="sec-sub">D2-a / D2-b / D2-c</span>
+  </div>
+
+  <div class="note stop">
+    <p><b>前置排查（请先回答，否则 D2 的任何变体都可能救不回来）</b></p>
+    <p><b>你有没有开「背景图」？</b> <code>App/hooks/useBackgroundImage.ts:39</code> 会在 <code>documentElement</code> 上写
+      <code>--panel-bg-opacity = 1 - backgroundOpacity</code>，而 <code>--background / --card / --popover / --muted</code> 四个面
+      都乘了这个系数（<code>globals.css:147/149/151/158</code>）。一旦开图，<b>正文对比度就不再由 token 决定，而由壁纸决定</b>——
+      同一段字在壁纸亮处可能只剩 2:1。若你确实开着背景图，正确处置不是调 token，而是<b>给聊天时间线一个不透明的阅读底</b>（另立决策）。
+      本页所有数值都按 <code>--panel-bg-opacity = 1</code>（未开图）计算。</p>
+  </div>
+
+  <p>
+    §00-B 已经算清楚：<b>正文没问题，次要层才是问题</b>。所以 D2 的三个变体都不动 <code>--foreground</code>——
+    亮色下它是 <code>#100F0F</code>（Flexoki 的黑），本来就没有更深的余地；把背景再提亮也只会把 18.78 推到 19 出头，
+    在感知上等于零，反而更刺眼。
+  </p>
+
+  <h3>变体对照 · 同一段工具行 + 散文（工具行是次要层的重灾区）</h3>
+  <div class="demo-bar">
+    <span class="demo-cap">每列上格恒为 light、下格恒为 dark —— 本节两套主题都锁定，不随顶部主题切换</span>
+  </div>
+  <div class="trio">
+    <div>
+      <div class="demo-bar"><span class="demo-cap">D2-a · 现状</span></div>
+      <div class="stage"><div class="oc" data-oc="light" data-contrast="a" data-oc-lock><div class="oc-col"><div class="oc-body" data-tpl="contrast"></div></div></div></div>
+      <div class="stage"><div class="oc" data-oc="dark" data-contrast="a" data-oc-lock><div class="oc-col"><div class="oc-body" data-tpl="contrast"></div></div></div></div>
+    </div>
+    <div>
+      <div class="demo-bar"><span class="demo-cap">D2-b · 次要层提档</span></div>
+      <div class="stage"><div class="oc" data-oc="light" data-contrast="b" data-oc-lock><div class="oc-col"><div class="oc-body" data-tpl="contrast"></div></div></div></div>
+      <div class="stage"><div class="oc" data-oc="dark" data-contrast="b" data-oc-lock><div class="oc-col"><div class="oc-body" data-tpl="contrast"></div></div></div></div>
+    </div>
+    <div>
+      <div class="demo-bar"><span class="demo-cap">D2-c · + 容器边界</span></div>
+      <div class="stage"><div class="oc" data-oc="light" data-contrast="c" data-oc-lock><div class="oc-col"><div class="oc-body" data-tpl="contrast"></div></div></div></div>
+      <div class="stage"><div class="oc" data-oc="dark" data-contrast="c" data-oc-lock><div class="oc-col"><div class="oc-body" data-tpl="contrast"></div></div></div></div>
+    </div>
+  </div>
+  <p class="src">每列第一格恒为 light、第二格恒为 dark（<code>data-oc-lock</code> 锁定），不随全页主题切换——本节的重点就是两套主题<b>各自</b>的数值。</p>
+
+  <h3>提案值与 WCAG 判定</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>层</th><th>主题</th><th class="mono">现值</th><th class="num">现比值</th><th class="mono">D2-b 提案</th><th class="num">提案比值</th><th>判定</th><th>提案值的出处</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="2"><code>--muted-foreground</code><br>（次要文字 / 整条工具行 / 时间戳 / 引用块 / h4–h6）</td>
+          <td>Light</td><td class="mono"><span class="sw" style="background:#686663"></span>#686663</td><td class="num">5.62</td>
+          <td class="mono"><span class="sw" style="background:#575653"></span>#575653</td><td class="num"><b>7.20</b></td>
+          <td><span class="tag aa">AA</span> → <span class="tag aaa">AAA</span></td><td class="mono">Flexoki base-700</td></tr>
+      <tr><td>Dark</td><td class="mono"><span class="sw" style="background:#807E79"></span>#807E79</td><td class="num">4.48</td>
+          <td class="mono"><span class="sw" style="background:#9F9D96"></span>#9F9D96</td><td class="num"><b>6.70</b></td>
+          <td><span class="tag warn">险过</span> → <span class="tag aa">AA+</span></td><td class="mono">Flexoki base-400</td></tr>
+      <tr><td rowspan="2"><code>--tool-arg</code><br>（工具行参数 / 折叠箭头）</td>
+          <td>Light</td><td class="mono"><span class="sw" style="background:#878581"></span>#878581</td><td class="num">3.61</td>
+          <td class="mono">退役 → 并入 muted-foreground</td><td class="num"><b>7.20</b></td>
+          <td><span class="tag fail">不过 AA</span> → <span class="tag aaa">AAA</span></td><td class="mono">删 globals.css:195 的派生</td></tr>
+      <tr><td>Dark</td><td class="mono"><span class="sw" style="background:#676561"></span>#676561</td><td class="num">3.11</td>
+          <td class="mono">同上</td><td class="num"><b>6.70</b></td>
+          <td><span class="tag fail">不过 AA</span> → <span class="tag aa">AA+</span></td><td class="mono">同上</td></tr>
+      <tr><td rowspan="2">行内代码 chip 边界（D2-c）</td>
+          <td>Light</td><td class="mono"><code>bg-muted</code> 单独</td><td class="num">1.073</td>
+          <td class="mono">+ <code>border-border</code></td><td class="num"><b>1.402</b></td>
+          <td><span class="tag fail">不可辨</span> → <span class="tag out">可辨</span></td><td class="mono">词表内既有 token</td></tr>
+      <tr><td>Dark</td><td class="mono"><code>bg-muted</code> 单独</td><td class="num">1.057</td>
+          <td class="mono">+ <code>border-border</code></td><td class="num"><b>1.441</b></td>
+          <td><span class="tag fail">不可辨</span> → <span class="tag out">可辨</span></td><td class="mono">同上</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="src">
+    保守替代（若嫌 D2-b 跨度大）：亮色取 Flexoki base-600 <code>#6F6E69</code> = 5.01:1、暗色取 base-500 <code>#878580</code> = 4.93:1，
+    只把暗色从「险过」推到「稳过 AA」，亮色几乎不动。本页不为它单开选项，回复时说一句「D2-b 走保守值」即可。
+  </p>
+
+  <div class="note">
+    <p><b>工程标注 · D2</b></p>
+    <p><b>改哪里</b>：<code>globals.css:159</code>（light <code>--muted-foreground</code>）、<code>:211</code>（dark 同名）、
+      <code>:195</code>（<code>--tool-arg</code> 派生，D2-b 直接删掉这条并把 4 处调用点改成 <code>text-muted-foreground</code>）。
+      D2-c 追加：<code>ui/ident.tsx:31</code> 的 <code>CodeInline</code> 补 <code>border border-border</code>、
+      <code>ToolRows.tsx:230/262/285</code> 的输出块补左导轨。</p>
+    <p><b>是否触碰基线</b>：触碰 <code>design-system.md:240-248</code> 的「已知偏差」表——那三条里的
+      <code>--muted-foreground 暗色 4.49:1</code> 会被消灭，需要把该行删掉并注明「D2-b 已修正，偏离上游 Flexoki 原值」。
+      该表原文写的是「改动需另立决策」，所以这一步<b>本身就是那个决策</b>。</p>
+    <p><b>是否需要新 token</b>：不需要。两个提案值都是 Flexoki 官方 base 色阶上的整档（不是自创色），<code>--tool-arg</code> 是净减少一个 token。</p>
+    <p><b>影响面</b>：<code>--muted-foreground</code> 是全仓语义 token，改值会影响 chat 之外的侧栏、设置页、状态栏等所有次要文字——
+      这是<b>好事</b>（同一条弱对比问题会一并修好），但需要一次全局 GUI 点验，不能只验聊天页。</p>
+  </div>
+</section>
+
+<section id="s03">
+  <div class="sec-head">
+    <span class="sec-tag">03</span>
+    <h2>维度三 · 用户 / 助手区分</h2>
+    <span class="sec-sub">D3-a / D3-b / D3-c</span>
+  </div>
+
+  <p>
+    现状是：用户 = <code>bg-card</code> + <code>border-primary/8</code> 的满栏宽圆角卡（右下角 <code>rounded-br-xs</code> 收成 4px），
+    助手 = 完全平铺无容器。§00-B 已经量出来两个信号都在可辨阈以下（面 1.027:1、线 1.111:1，亮色），
+    所以用户看到的实际画面是<b>两段连排的正文</b>，只有一个几乎看不见的圆角轮廓。
+  </p>
+
+  <h3>先看一眼「边框到底要多强才看得见」</h3>
+  <div class="demo-bar"><span class="demo-cap"><code>border-primary/N</code> 对 <code>bg-card</code> 的实测对比度</span></div>
+  <div class="stage">
+    <div class="oc" data-oc="light">
+      <div class="oc-col">
+        <div class="strength">
+          <div class="b8"><div class="st-cap">/8 现状 · 亮 1.111 · 暗 1.102</div><div class="oc-bubble"><p>崩边检测误报率压不下去</p></div></div>
+          <div class="b16"><div class="st-cap">/16 · 亮 1.238 · 暗 1.238</div><div class="oc-bubble"><p>崩边检测误报率压不下去</p></div></div>
+          <div class="b24"><div class="st-cap">/24 建议 · 亮 1.385 · 暗 1.410</div><div class="oc-bubble"><p>崩边检测误报率压不下去</p></div></div>
+          <div class="b32"><div class="st-cap">/32 · 亮 1.555 · 暗 1.620</div><div class="oc-bubble"><p>崩边检测误报率压不下去</p></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="src">
+    参照系：<code>border-border</code>（全仓分割线的标准强度）对 <code>bg-card</code> 是 <b>1.365</b>（亮）/ <b>1.374</b>（暗）。
+    也就是说 <b>/24 恰好把气泡边框拉到「和全仓其它分割线一样看得见」</b>，/16 仍在其下、/32 已经开始抢眼。
+    原任务里提的 <code>/16</code> 实测只有 1.238，<b>建议直接取 /24</b>。若嫌橙味重，等强度的中性替代是直接写 <code>border-border</code>。
+  </p>
+
+  <h3>三变体 · 同一组「用户问题 + 助手长回复」</h3>
+  <div class="demo-bar">
+    <span class="demo-cap">切换角色方案</span>
+    <div class="seg" role="group" aria-label="角色方案">
+      <button type="button" data-role-set="now" data-target="d3stage" aria-pressed="true">现状</button>
+      <button type="button" data-role-set="a" data-target="d3stage" aria-pressed="false">D3-a 强边框</button>
+      <button type="button" data-role-set="b" data-target="d3stage" aria-pressed="false">D3-b 助手中性盒</button>
+      <button type="button" data-role-set="c" data-target="d3stage" aria-pressed="false">D3-c 非对称</button>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="oc" id="d3stage" data-oc="light" data-role="now">
+      <div class="oc-col"><div class="oc-turn" data-tpl="turn2"></div></div>
+    </div>
+  </div>
+  <p class="src">此舞台跟随全页主题切换（顶部控制条）。密度保持 D1-a 现状，以免与维度一混淆。</p>
+
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>变体</th><th>用户侧</th><th>助手侧</th><th class="mono">关键实测</th><th>触碰的基线</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">现状</td><td><code>bg-card</code> + <code>border-primary/8</code>，满栏宽</td><td>完全平铺</td>
+          <td class="mono">面 1.027 / 线 1.111</td><td>—</td></tr>
+      <tr><td class="mono"><b>D3-a</b></td><td>同上，边框 → <code>/24</code></td><td>完全平铺（不动）</td>
+          <td class="mono">线 1.385 / 1.410</td><td>只改 A07 <code>:848-859</code> 冻结的一个<b>数值</b>，不动结构</td></tr>
+      <tr><td class="mono"><b>D3-b</b></td><td>不动</td><td><code>bg-muted</code> + <code>border-border</code> 中性盒</td>
+          <td class="mono">盒线 1.402 / 1.441；盒底 1.073 / 1.057</td><td><b>需修订</b> phase0a <code>:431-433</code>「助手：完全平铺，无容器」</td></tr>
+      <tr><td class="mono"><b>D3-c</b></td><td>右对齐 + <code>max-w-[85%]</code> + <code>bg-accent</code> + <code>border-input</code></td><td>完全平铺（不动）</td>
+          <td class="mono">面 1.161 / 1.292；线对底色 1.350 / 1.322<br>正文 on accent 16.17 / 8.81</td><td><b>需撤销 D26 ④</b>（MessageTimeline.tsx:702-711 的注释就是那条裁定）</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p><b>三个变体各自的代价，说清楚再选</b></p>
+    <p><b>D3-a</b>：最省。但它只是把一条看不见的线变成看得见的线——区分度的来源仍然是「有没有框」这一个二值信号，
+      在一屏塞进三四个回合时，仍要靠扫描边框来找自己问过什么。<b>收益上限较低，风险也最低。</b></p>
+    <p><b>D3-b</b>：把助手也装进盒子，等于宣布「一切都是卡片」，反而让两边更像；
+      而且助手回复里本来就有代码块（自带 <code>border-border</code> + 圆角 8px）和表格（自带全边框），套一层外盒会出现<b>三层嵌套框</b>。
+      <b>我不推荐它</b>，列出来是因为它是原任务点名要评估的方向，且它是 <code>design-system.md:210-211</code> 判据 #3
+      「中性提示盒 = <code>bg-muted</code> + <code>border-border</code>」的合法写法——不是不能做，是做了不划算。</p>
+    <p><b>D3-c</b>：区分度来自<b>形状</b>（右对齐 + 收窄）而不是新容器，这是 ChatGPT / Claude 网页版等主流客户端的通行做法，
+      也正是本仓 A07 <code>:848-850</code> 与 phase0a <code>:419-429</code> <b>最初的形态</b>——D26 ④ 才把它废掉的。
+      所以 D3-c 严格说不是「发明新方案」，是<b>回滚一条裁定</b>。
+      底色用 <code>bg-accent</code> 是词表内动作：<code>design-system.md:102</code> 明写「需要真正拉开的第三级底色时，用 <code>--accent</code> / <code>--selection</code>（交互层）或 <code>--input</code>（填充层）」；
+      用户气泡本身没有 hover 态，不会和 hover 语义打架。描边取 <code>--input</code> 也有语义依据——它的定义就是「填充语义，兼作<b>输入框</b>描边」，而气泡正是用户输入的回显。</p>
+    <p><b>为什么 D3-c 需要重新讨论 D26 ④</b>：D26 ④ 当初的理由是「满宽后没有 slack 可对齐，85% 与右对齐是死重量」。
+      这个理由在<b>气泡看得见</b>的前提下成立；但现状是气泡根本看不见（1.027 / 1.111），当初的判断建立在一个未被量化的前提上。
+      本页把这个前提量化了，所以值得复议——<b>这属于「有新证据的复议」，不是推翻裁定。</b></p>
+  </div>
+</section>
+
+<section id="s04">
+  <div class="sec-head">
+    <span class="sec-tag">04</span>
+    <h2>组合预览 · 整页多轮对话</h2>
+    <span class="sec-sub">亮暗上下堆叠，两栏都是真实 720px 栏宽</span>
+  </div>
+
+  <p>
+    下面两组是「维度一 × 二 × 三」的推荐组合，各渲染一段完整的两轮对话（含工具行、段落、列表、表格、行内代码、代码块、回合尾部元信息）。
+    <b>刻意上下堆叠而非左右并排</b>：并排会把阅读栏压到 540px 以下，而本页要判的恰恰是「一行多少字才不挤」，栏宽必须是真值。
+  </p>
+
+  <h3>参照 · 现状（D1-a + D2-a + 现状角色）</h3>
+  <div class="stage"><div class="oc" data-oc="light" data-oc-lock data-density="a" data-contrast="a" data-role="now"><div class="oc-col" data-tpl="convo"></div></div></div>
+  <div class="stage"><div class="oc" data-oc="dark" data-oc-lock data-density="a" data-contrast="a" data-role="now"><div class="oc-col" data-tpl="convo"></div></div></div>
+
+  <h3>R1 · D1-b + D2-b + D3-a <span class="tag aaa">推荐</span></h3>
+  <div class="note go">
+    <p><b>推荐理由</b>：这是「<b>不触碰任何结构裁定</b>」前提下能拿到的最大收益。
+      三条抱怨各被正面回应一次——行高 1.625 + 段距 14px 解决密集；次要层 4.48 → 6.70（暗）、3.11 → 6.70（tool-arg）解决对比弱；
+      气泡边框拉到和全仓分割线同强度解决区分度。<b>零新增 token</b>（1.625 是 Tailwind 内置档，两个色值是 Flexoki 官方色阶），
+      唯一的硬成本是改 F-C4 的三条断言 + 修订「已知偏差」表一行。<b>可以一次落地、一次回归。</b></p>
+  </div>
+  <div class="stage"><div class="oc" data-oc="light" data-oc-lock data-density="b" data-contrast="b" data-role="a"><div class="oc-col" data-tpl="convo"></div></div></div>
+  <div class="stage"><div class="oc" data-oc="dark" data-oc-lock data-density="b" data-contrast="b" data-role="a"><div class="oc-col" data-tpl="convo"></div></div></div>
+
+  <h3>R2 · D1-c + D2-c + D3-c <span class="tag warn">完全体</span></h3>
+  <div class="note">
+    <p><b>取舍</b>：行高 1.75 是长文排版的通行档，中文下最舒服；容器边界可见化让行内代码 / 工具输出真的成为「块」；
+      非对称气泡让「谁在说话」变成<b>一眼可见的形状差</b>而不是需要辨认的边框差。
+      代价是三项：新增一个 <code>--leading-*</code> token、撤销 D26 ④、外加 R1 的全部改动。
+      <b>如果愿意为可读性动裁定，选这个；如果这轮只想快速止血，选 R1。</b></p>
+  </div>
+  <div class="stage"><div class="oc" data-oc="light" data-oc-lock data-density="c" data-contrast="c" data-role="c"><div class="oc-col" data-tpl="convo"></div></div></div>
+  <div class="stage"><div class="oc" data-oc="dark" data-oc-lock data-density="c" data-contrast="c" data-role="c"><div class="oc-col" data-tpl="convo"></div></div></div>
+</section>
+
+<section id="s05">
+  <div class="sec-head">
+    <span class="sec-tag">05</span>
+    <h2>落地成本总表</h2>
+    <span class="sec-sub">改哪个文件 / token / 类 · 是否触碰基线 · 是否需新 token</span>
+  </div>
+
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>选项</th><th>改动点（file : 位置）</th><th>连带测试</th><th>触碰基线？</th><th>新 token？</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">D1-a</td><td>—</td><td>—</td><td>否</td><td>否</td></tr>
+      <tr><td class="mono"><b>D1-b</b></td>
+          <td class="mono">chatMarkdownPolicy.ts:399 <code>BLOCK_GAP</code> · :400 <code>SECTION_GAP</code> · :426 根类行高 · :470 列表 <code>space-y-1</code> · :509 代码块 · :521-525 表格<br>chatMarkdownPolicy.ts:396-400 注释须重写</td>
+          <td class="mono">chatMarkdownPolicy.test.ts:590 · :635 · :638 · :643-656</td>
+          <td>F-C4「两档节拍」不变量作废（需改注释 + 断言）</td><td>否（<code>leading-relaxed</code> 内置）</td></tr>
+      <tr><td class="mono">D1-c</td><td class="mono">D1-b 全部 + globals.css <code>@theme</code> 新增 <code>--leading-*</code></td>
+          <td class="mono">同上</td><td>同上</td><td><b>是</b>（1 个行高档）</td></tr>
+      <tr><td class="mono">D1+16</td><td class="mono">globals.css:48 <code>--text-markdown</code>（+ :47 <code>--text-code</code> 光学补偿重算）</td>
+          <td class="mono">fontDomainScan / 字号档位相关断言</td><td><b>修订 D25 Typography 档位表</b>（design-system.md:399-406）</td><td>否（改值不加档）</td></tr>
+      <tr><td class="mono">D2-a</td><td>—</td><td>—</td><td>否</td><td>否</td></tr>
+      <tr><td class="mono"><b>D2-b</b></td>
+          <td class="mono">globals.css:159（light）· :211（dark）· :195 删 <code>--tool-arg</code><br>ToolRows.tsx:112/304 等 4 处 <code>text-tool-arg</code> → <code>text-muted-foreground</code></td>
+          <td class="mono">若有对比度快照/扫描断言需同步</td>
+          <td><b>修订</b> design-system.md:240-248「已知偏差」表（删 <code>--muted-foreground</code> 暗色 4.49 那行）</td><td>否（净减 1）</td></tr>
+      <tr><td class="mono">D2-c</td><td class="mono">D2-b 全部 + ui/ident.tsx:31 <code>CodeInline</code> 补 <code>border border-border</code> + ToolRows.tsx:230/262/285 输出块补左导轨</td>
+          <td class="mono">同上</td><td>同 D2-b</td><td>否</td></tr>
+      <tr><td class="mono"><b>D3-a</b></td><td class="mono">MessageTimeline.tsx:721 <code>border-primary/8</code> → <code>/24</code></td>
+          <td class="mono">若有类串断言需同步</td><td>改 A07 <code>:848-859</code> / phase0a <code>:419-429</code> 冻结的<b>一个数值</b>（不动结构）</td><td>否</td></tr>
+      <tr><td class="mono">D3-b</td><td class="mono">MessageTimeline 助手散文外层加 <code>bg-muted border border-border rounded-sm p-*</code></td>
+          <td class="mono">turnBody / markdown 结构断言</td><td><b>修订</b> phase0a:431-433「助手：完全平铺，无容器」</td><td>否</td></tr>
+      <tr><td class="mono"><b>D3-c</b></td><td class="mono">MessageTimeline.tsx:711-722：外层加 <code>flex justify-end</code>、内层加 <code>max-w-[85%]</code>、<code>bg-card</code> → <code>bg-accent</code>、<code>border-primary/8</code> → <code>border-input</code></td>
+          <td class="mono">同上 + D26 相关断言</td><td><b>撤销 D26 ④</b>（复议，需重新落决策）</td><td>否</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p><b>三条通用纪律（改动时别踩）</b></p>
+    <p>① <b>禁任意值</b>：行高 1.75 只能走新 token，不能写 <code>leading-[1.75]</code>；色值只能走语义 token，不能写 <code>text-[#575653]</code>（<code>design-system.md:218-232</code> 硬编码色禁令）。</p>
+    <p>② <b>新增 token 必须双写</b>：任何新 <code>--*</code> 都要同时在 <code>globals.css</code> 的 <code>@theme</code> 补 <code>--color-*</code> / 对应桥接，否则 Tailwind v4 不生成工具类（<code>design-system.md:234-238</code>，已有 <code>bg-sidebar-*</code> 死件先例）；新<b>字号</b> token 还要注册进 <code>lib/utils.ts</code> 的 tailwind-merge <code>font-size</code> 组，否则 <code>cn()</code> 会静默吞掉颜色类。</p>
+    <p>③ <b>不许用 <code>dark:</code> 表达可读性差异</b>（<code>design-system.md:115-124</code>）：本页所有变体都靠语义 token 自身随 <code>.dark</code> 换值，没有一处 <code>dark:</code>。</p>
+  </div>
+</section>
+
+<div class="footnote">
+  <h3>取证与口径</h3>
+  <ul class="bul">
+    <li><b>排版现值</b>：<code>src/renderer/styles/globals.css</code>、<code>src/renderer/components/chat/chatMarkdownPolicy.ts</code>、<code>chatTimelineLayout.ts</code>、<code>MessageTimeline.tsx</code>、<code>ToolRows.tsx</code>、<code>components/ui/ident.tsx</code>、<code>node_modules/tailwindcss/theme.css</code>。行号为 2026-08-18 工作树（<code>feat/openchamber-chat-refactor</code>，取证时无未提交改动）实测。</li>
+    <li><b>对比度</b>：把 <code>globals.css</code> 的 OKLCH(D65) 字面量按标准矩阵转 sRGB，再按 WCAG 2.x 相对亮度公式求比值。与 <code>design-system.md</code> 已记录的 18.78 / 11.39 / 5.62 / 4.49 / 4.73 / 5.49 全部吻合，可交叉验证。<code>/N</code> 的合成按「<code>color-mix(in oklab, X N%, transparent)</code> 后在 sRGB 上与底色 alpha 合成」计算，与 Chromium 的实际绘制一致。</li>
+    <li><b>用量统计</b>：<code>src/renderer/components/chat/</code> 下非测试文件的类名出现次数（<code>text-muted-foreground</code> 104 · <code>text-foreground</code> 49 · <code>text-meta</code> 50 · <code>text-ui</code> 32 · <code>text-markdown</code> 21 · <code>text-code</code> 20 · <code>text-primary</code> 8 · <code>text-tool-arg</code> 4）。</li>
+    <li><b>第三方产品排版值</b>：<b>本轮未在本机实测</b>。稿内引用的 1.75 / 1.25em / 1.5 / 16px 是 <code>@tailwindcss/typography</code> 与 GitHub markdown 样式等公开实现的通行默认值，仅作<b>量级锚点</b>，不作精确复刻依据。若要把某一档作为「对齐某产品」的验收合同，需要另做一次真机取证（浏览器 devtools 读 computed style）并冻结版本，工法照 phase0a 的「参考版本冻结」段。</li>
+    <li><b>本页不改任何生产代码</b>。全部提案值均显式标注为提案；凡触碰已冻结基线条款的，已在对应变体旁点名条款位置。</li>
+  </ul>
+</div>
+
+</div>
+
+<!-- ══════════ 内容模板 ══════════
+     同一段中文技术内容只写一份，各舞台克隆使用——保证「一眼可比」比的是排版，不是内容差异。 -->
+
+<template id="tpl-prose">
+  <p>18 µm/px 下一个 die 的边缘过渡带只有 3~4 个像素，崩边判据落在梯度上，采样其实是够的。误报压不下去通常不是「看不清」，而是<b>光照一致性</b>与 <b>die 阵列配准</b>没做干净——分辨率翻到 36 µm 反而会把过渡带压到 2 px 以内，梯度算子直接失效。</p>
+  <h3>先分清三类误报</h3>
+  <ol>
+    <li><b>配准漂移</b>：<span class="oc-ic">dieGrid</span> 的原点每 200 片累计偏移 0.5 个 pitch，边界框套到相邻 die 的街区上。</li>
+    <li><b>光照不均</b>：环光在 wafer 边缘 3 mm 内衰减，外圈 die 的灰度基线整体低 12~15 LSB。</li>
+    <li><b>真崩边</b>：崩口深度 &gt; 25 µm，且沿边长方向连续两个采样窗超阈。</li>
+  </ol>
+  <div class="oc-tblwrap">
+    <table class="oc-tbl">
+      <thead><tr><th>类别</th><th>现场占比</th><th>特征</th><th>处置</th></tr></thead>
+      <tbody>
+        <tr><td>配准漂移</td><td>约 52%</td><td>整列 die 同时报</td><td>每 50 片重锚一次</td></tr>
+        <tr><td>光照不均</td><td>约 31%</td><td>只在 R &gt; 145 mm 出现</td><td>分区基线校正</td></tr>
+        <tr><td>真崩边</td><td>约 17%</td><td>随机分布</td><td>进复检</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>结论</h3>
+  <p>先做分区基线校正，再谈换镜头。把 <span class="oc-ic">edgeGradientThreshold</span> 从固定值改成按半径分档：</p>
+  <pre class="oc-pre">const threshold = radiusMm &gt; 145
+  ? BASE_THRESHOLD * 0.82   // 外圈补偿环光衰减
+  : BASE_THRESHOLD;</pre>
+  <p>预计能吃掉八成误报；剩下的再评估 36 µm 双通道是否值得那 2.3 倍的采图时间。</p>
+</template>
+
+<template id="tpl-turn">
+  <div class="oc-band">
+    <div class="oc-userwrap">
+      <div class="oc-bubble">
+        <p>晶圆终检这条线现在用 18 µm/px 跑崩边检测，误报率一直压不下去。要不要上 36 µm 双通道？给个判断依据。</p>
+      </div>
+    </div>
+  </div>
+  <div class="oc-body">
+    <div class="oc-head"><span>claude-opus-5</span><span class="oc-dot"></span><span>6.4s</span><span class="oc-dot"></span><span>18:50</span></div>
+    <div class="oc-tools">
+      <div class="oc-toolrow"><span class="oc-chev">&#9656;</span><span class="oc-tname">Read</span><span class="oc-targ">src/vision/edgeChip.ts</span></div>
+      <div class="oc-toolrow"><span class="oc-chev">&#9656;</span><span class="oc-tname">Grep</span><span class="oc-targ">edgeGradientThreshold · 6 hits · src/vision/</span></div>
+    </div>
+    <div class="oc-prose" data-tpl="prose"></div>
+    <div class="oc-foot"><span>2 tools</span><span class="oc-dot"></span><span>1.8k tokens</span><span class="oc-dot"></span><span>刚刚</span></div>
+  </div>
+</template>
+
+<template id="tpl-turn2">
+  <div class="oc-band">
+    <div class="oc-userwrap">
+      <div class="oc-bubble">
+        <p>崩边检测的误报率能不能靠换更高分辨率的镜头解决？现在 18 µm/px，考虑上 36 µm 双通道。</p>
+      </div>
+    </div>
+  </div>
+  <div class="oc-body">
+    <div class="oc-head"><span>claude-opus-5</span><span class="oc-dot"></span><span>6.4s</span><span class="oc-dot"></span><span>18:50</span></div>
+    <div class="oc-prose" data-tpl="prose"></div>
+    <div class="oc-foot"><span>1.8k tokens</span><span class="oc-dot"></span><span>刚刚</span></div>
+  </div>
+</template>
+
+<template id="tpl-contrast">
+  <div class="oc-head"><span>claude-opus-5</span><span class="oc-dot"></span><span>6.4s</span><span class="oc-dot"></span><span>18:50</span></div>
+  <div class="oc-tools">
+    <div class="oc-toolrow"><span class="oc-chev">&#9656;</span><span class="oc-tname">Read</span><span class="oc-targ">src/vision/edgeChip.ts</span></div>
+    <div class="oc-toolrow"><span class="oc-chev">&#9656;</span><span class="oc-tname">Grep</span><span class="oc-targ">edgeGradientThreshold · 6 hits</span></div>
+    <div class="oc-toolrow"><span class="oc-chev">&#9656;</span><span class="oc-tname">Bash</span><span class="oc-targ">pnpm vitest run vision/edge --reporter=dot</span></div>
+    <div class="oc-toolout">  12 passed · 1 skipped (2.31s)
+  edgeChip.spec.ts  ✓ 崩边深度阈值分档</div>
+  </div>
+  <div class="oc-prose">
+    <p>误报里约 52% 是配准漂移，31% 是光照不均，真崩边只占 17%。把 <span class="oc-ic">edgeGradientThreshold</span> 改成按半径分档后，前两类基本能吃掉。</p>
+    <p class="oc-quote">注：本节的<b>正文</b>用的是 <span class="oc-ic">text-foreground</span>，上面的<b>工具行</b>用的是 <span class="oc-ic">text-muted-foreground</span>、<b>参数</b>用的是 <span class="oc-ic">text-tool-arg</span>——一眼就能看出用户抱怨的「对比弱」落在哪一层。</p>
+  </div>
+  <div class="oc-foot"><span>3 tools</span><span class="oc-dot"></span><span>1.8k tokens</span><span class="oc-dot"></span><span>刚刚</span></div>
+</template>
+
+<template id="tpl-convo">
+  <div class="oc-turn" data-tpl="turn"></div>
+  <div class="oc-turn" data-tpl="turn2"></div>
+</template>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---- 1. 模板挂载（可嵌套：turn 内含 prose，convo 内含 turn） ---- */
+  function mount() {
+    for (var pass = 0; pass < 8; pass++) {
+      var slots = document.querySelectorAll('[data-tpl]');
+      var filled = 0;
+      for (var i = 0; i < slots.length; i++) {
+        var el = slots[i];
+        if (el.getAttribute('data-tpl-done') === '1') continue;
+        el.setAttribute('data-tpl-done', '1');
+        var tpl = document.getElementById('tpl-' + el.getAttribute('data-tpl'));
+        if (!tpl) continue;
+        el.appendChild(tpl.content.cloneNode(true));
+        filled++;
+      }
+      if (filled === 0) break;
+    }
+  }
+
+  /* ---- 2. 分段控件的按压态 ---- */
+  function pressWithin(btn) {
+    var group = btn.closest('.seg');
+    if (!group) return;
+    var all = group.querySelectorAll('button');
+    for (var i = 0; i < all.length; i++) {
+      all[i].setAttribute('aria-pressed', all[i] === btn ? 'true' : 'false');
+    }
+  }
+
+  /* ---- 3. 全页舞台主题（带 data-oc-lock 的舞台不跟随，它们是恒定对照） ---- */
+  function setStageTheme(value) {
+    var stages = document.querySelectorAll('.oc:not([data-oc-lock])');
+    for (var i = 0; i < stages.length; i++) stages[i].setAttribute('data-oc', value);
+  }
+
+  /* ---- 4. 事件绑定 ---- */
+  document.addEventListener('click', function (event) {
+    var btn = event.target.closest ? event.target.closest('button') : null;
+    if (!btn) return;
+
+    var theme = btn.getAttribute('data-theme-set');
+    if (theme) { setStageTheme(theme); pressWithin(btn); return; }
+
+    var page = btn.getAttribute('data-page-set');
+    if (page) { document.documentElement.setAttribute('data-page', page); pressWithin(btn); return; }
+
+    var targetId = btn.getAttribute('data-target');
+    var target = targetId ? document.getElementById(targetId) : null;
+    if (!target) return;
+
+    var density = btn.getAttribute('data-density-set');
+    if (density) { target.setAttribute('data-density', density); pressWithin(btn); return; }
+
+    var fs = btn.getAttribute('data-fs-set');
+    if (fs) { target.setAttribute('data-fs', fs); pressWithin(btn); return; }
+
+    var role = btn.getAttribute('data-role-set');
+    if (role) { target.setAttribute('data-role', role); pressWithin(btn); return; }
+  });
+
+  /* ---- 5. 首次进入跟随系统偏好（只影响页面外壳，不影响舞台——
+           舞台默认 light，因为 §00 的数值表默认按 light 列读） ---- */
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.setAttribute('data-page', 'dark');
+    var pageBtns = document.querySelectorAll('[data-page-set]');
+    for (var i = 0; i < pageBtns.length; i++) {
+      pageBtns[i].setAttribute('aria-pressed', pageBtns[i].getAttribute('data-page-set') === 'dark' ? 'true' : 'false');
+    }
+  }
+
+  mount();
+})();
+</script>
+
+</body>
+</html>
