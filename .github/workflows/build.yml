@@ -228,6 +228,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Linux packages ship no bundled runtime (C-15 is win-only), so the
+      # packaged-state Node check needs machine Node 24 — the same contract a
+      # Linux user machine must satisfy. Node 20 above is only for the build.
+      - name: Setup Node.js 24 (packaged-state verify)
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
       - name: Verify packaged agent-host (structure)
         run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --skip-smoke
 
