@@ -55,7 +55,8 @@
       "!**/out-agent-host",
       "!**/out-node-runtime",
       "!**/*.min.js",
-      "!**/*.css"
+      "!**/*.css",
+      "!docs/design"
     ]
   }
 }
