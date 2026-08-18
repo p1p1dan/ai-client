@@ -156,7 +156,7 @@
     --secondary: oklch(0.9673 0.0111 89.72);
     --secondary-foreground: oklch(0.1696 0.0017 17.32);
     --muted: oklch(0.969 0.0093 99.98 / var(--panel-bg-opacity, 1));
-    --muted-foreground: oklch(0.5111 0.0053 78.28);
+    --muted-foreground: oklch(0.4531 0.005 91.5);
     /* interactive.hover #76736f @ 12.55% pre-composited over --background */
     --accent: oklch(0.9422 0.0122 96.43);
     --accent-foreground: oklch(0.1696 0.0017 17.32);
@@ -192,7 +192,7 @@
      * references resolve against whichever element uses --tool-arg, so
      * .dark's --muted-foreground/--background overrides are picked up
      * automatically without a second .dark declaration. */
-    --tool-arg: color-mix(in oklab, var(--muted-foreground) 78%, var(--background));
+    --tool-arg: color-mix(in oklab, var(--muted-foreground) 85%, var(--background));
   }
 
   /* Flexoki Dark - flexoki-dark.json */
@@ -208,7 +208,7 @@
     --secondary: oklch(0.2315 0.0024 67.71);
     --secondary-foreground: oklch(0.8463 0.0137 102.05);
     --muted: oklch(0.2228 0.0025 67.7 / var(--panel-bg-opacity, 1));
-    --muted-foreground: oklch(0.5933 0.0079 88.68);
+    --muted-foreground: oklch(0.6956 0.0103 93.62);
     /* interactive.hover #ffffff @ 9.41% pre-composited over --background */
     --accent: oklch(0.2912 0.0029 17.32);
     --accent-foreground: oklch(0.8463 0.0137 102.05);

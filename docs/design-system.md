@@ -72,7 +72,7 @@ sRGB hex → OKLCH(D65) 转换后写入 `src/renderer/styles/globals.css` 的 `:
 | `secondary` | `#f7f4ec` | `#1e1d1c` | secondary 按钮/徽章底（`surface.subtle`） |
 | `secondary-foreground` | `#100F0F` | `#CECDC3` | — |
 | `muted` | `#f6f5ee` | `#1C1B1A` | 次要面板底（参与 `--panel-bg-opacity`） |
-| `muted-foreground` | `#686663` | `#807e79` | 次要文字（亮 5.62:1；暗 4.49:1，见「已知偏差」） |
+| `muted-foreground` | `#575653` | `#9F9D96` | 次要文字（亮 7.20:1；暗 6.70:1，2026-08-18 D2-b 提档） |
 | `accent` | `#eeece3` | `#2d2b2b` | **交互覆盖底**（hover / 选中行）。`interactive.hover` 预乘实色 |
 | `accent-foreground` | `#100F0F` | `#CECDC3` | — |
 | `accent-primary` | `#F9AE77` | `#F9AE77` | 品牌强调（`primary.emphasis`）。**亮色有可读性红线，见下** |
@@ -237,15 +237,18 @@ variant="destructive"
 否则 Tailwind v4 不会生成对应工具类。
 （现成反例：`components/ui/sidebar.tsx` 整套 `bg-sidebar-*` 因为从未注册，至今是死件。）
 
-### 已知偏差（Flexoki 原值，刻意不私自调色）
+### 已知偏差（Flexoki 原值，默认不私自调色；偏离须逐条留痕）
 
-以下三处不满足 WCAG AA（4.5:1）小字要求，属沿用上游取值的**已知偏差**，改动需另立决策：
+以下两处不满足 WCAG AA（4.5:1）小字要求，属沿用上游取值的**已知偏差**，改动需另立决策：
 
 | 位置 | 对比度 |
 |------|--------|
 | `--success` 亮色（对 `background`） | 4.42:1 |
 | `--destructive` 暗色 | 4.20:1 |
-| `--muted-foreground` 暗色 | 4.49:1 |
+
+> 2026-08-18 · F5 批 D2-b：`--muted-foreground` 亮/暗双档提至 Flexoki base-700 / base-400（7.20 / 6.70），
+> 该行偏差消灭；`--tool-arg` 派生比 78%→85%（5.09 / 5.02）。**已刻意偏离上游 Flexoki 原值**，
+> 理由与实测见 `docs/plans/2026-08-18-f456-readability-composer-spec.md` §2。
 
 另有两条**本次改造引入**的退化，记录待后续处理：
 
