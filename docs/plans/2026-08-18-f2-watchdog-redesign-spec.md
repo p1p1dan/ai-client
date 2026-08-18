@@ -1334,3 +1334,49 @@ session.status(running, retry{attempt:1, maxRetries:10, errorStatus:'503', error
 ---
 
 > **施工方的第一件事**：把 §12 的验证定义写完（Happy Path → 断言 → 用例 → 变异对），**再动生产代码**（工程规范 #12「定义验证先，改代码后」）。§0.4 的 incident 样本 `[I-1]` 已经给出了本批最强的那条 Happy Path 反例，先让它红，再让它绿。
+
+---
+
+## §15 as-built 实录（2026-08-18 施工收口回填，对应 §14.3 各项）
+
+### 15.1 各片 commit 与影响面核对
+
+| 片 | commit | diff | 影响面核对 |
+|---|---|---|---|
+| S0 | `06b4ac5` | 2 文件 +80/−1 | 与 §10 一致 |
+| S1 | `2f1a7ea` | 4 文件 +597/−74 | 与 §10.2 一致；`claudeRuntimePartialStall.test.ts` 零改动保持绿 |
+| S5 | `9e29e05` | 3 文件 +459/−1 | `chat.ts` 生产代码零改动（偏离①：既有转发链天然覆盖合成事件，仅补 3 条回归测试钉住） |
+| S2 | `7f6d9e2` | 9 文件 +669/−117 | 多 `attachmentLimits.test.ts`（反转退役迁移）；`sendTimeoutMs` 留残移交 S3（偏离①，S3 已清） |
+| S4 | `ad73ce8` | 4 文件 +1095/−19 | 多 `codexRuntime.test.ts`（`startTimeout` seam 顶位，5 处 revive 用例改按预算筛，不改则必红） |
+| S3 | `d614a83` | 13 文件 +1881/−381 | 多 3 个测试文件（`turnStatus`/`turnSendStatus`/`attachmentLimits` 各配套落点，任务书授权内） |
+| 伴修 | `b82acf9` / `44e3e70` | biome 排除 docs/design（lint 基线污染）/ `attachmentIo.ts` 镜像注释订正 | 编排者亲修 |
+
+### 15.2 四门终跑（收口日全仓，逐门串行）
+
+typecheck ✓（tsc 零输出）· typecheck:agent-host ✓ · lint ✓（biome 977 文件零 error）·
+**vitest 全量 238 文件 / 4672 例全绿**（前基线 4567 → +105）。各片 scoped 四门见各片交付报告（会话任务产物）。
+
+### 15.3 变异实录（计划 23 对 → 实跑 28 臂，零跳过，全部 python 字节替换 + 唯一预检 + md5 还原对账）
+
+S0 自立 2（M-S0-1/2）· S1 7（M10/M11/M12/M13/M19/M22/M23）· S5 2（M17/M18）·
+S2 5（M1~M5）· S4 4（M15/M16 + 自设 S4-a/S4-b）· S3 8（M6 结构断言化+M6/M7 联合臂、M7、M8、M9、M14、M20、M21）。
+**唯一规格事实错误**：M6 单删无行为咬合（`decideFailureAffordance` 与 `shouldArmRetryable` 的 `'pending'`
+分支互相遮蔽）——已按变异纪律换承重形态：结构断言 `[P-2b]` + M6/M7 联合变异证明 §4.3 的 P0 判断本身成立。
+
+### 15.4 逐项拍板回执
+
+- **S5 先于 S3**：`git log` 序 `9e29e05`(S5) → `d614a83`(S3) ✓，未动用轮询兜底回退位。
+- **拆 `sendBudgets.ts`**：拆（新文件 110 行 + 测试 117 行，含源文镜像锁 `[C-03]`）。
+- **`markDegraded()` vs 连调回退位**：`markDegraded()` 落地（S1，M22 钉住 `firedFlag` 复位）。
+- **F456 rebase**：F456 批尚未开工；§11.4 四点留待其 ④ 片执行。`turnSendStatus.ts` 实测无冲突
+  （S3 落 `TurnSendStatusStore :116-135`，`TurnSendStatus :41-52` 零触碰）。
+- **`[I-1]` incident 夹具**：`src/renderer/components/chat/__tests__/f2IncidentTest5.test.ts`
+  （265 行，`[I-1a]~[I-1d]`），S3 门禁首次实跑绿；负控「重试横幅可见时不得 no-progress 报错」在列。
+
+### 15.5 已知限制登记
+
+1. D4：Codex 轴 TTFT 裸到期只降格不 abort（stall 是唯一 aborter），远端回合可能续跑——已写入错误文案。
+2. D5：渲染端半边无 flag，规范 #6 偏离已认（回退性依据= `[I-1]` 夹具 + 全套断言）。
+3. Claude 轴 stall 侧 liveness 帧生产者缺席（§10.2 S1 行只指派 `onTimeout`；Codex 轴两狗均有帧）。
+4. `RestoredDraftMarker` 无 `requestId` 字段（本仓 `session.failed` 不带 requestId；协议长出那天连检查一起加回）。
+5. S3 清理链第 5/6 步随形态退役（ceiling 路径不产 `lastError`/`retryable`，无自身产物可清）。
