@@ -532,3 +532,9 @@ R6  A07 v5 追记（Worked-for 语义修订 / 折叠两级嵌套 /          S   
 | 状态信息两处并显 | Composer 与回合头都显示等待 | F-B11 |
 | 流式期折叠壳内容跳动 | `splitTurnBody` 在追加文本时结果变化 | F-B6 序列断言 |
 | 与 T-30 批2 的 `middleColumnLayout.ts` diff 冲突 | 两批同改 `shouldShowStatusLine` | §8.2 定序：T-30 批2 先落，本批基于其结果改 |
+
+---
+
+## As-built 修正（2026-08-18，F10）
+
+§5.6-A 的钉住态截断（`scroll-state(stuck: top)` → 3 行 clamp）在真机点验中被证实**结构性振荡**：截断抽高度 → 浏览器钳 `scrollTop` 回 sticky 阈值下 → 解钉展开 → 贴底跟随器推回，逐帧循环（触发窗口宽度 = 截断抽走的 Δ 高度，长提问 + 短回复必中）。§9-η 预授权的回退 **§5.6-B（无条件 clamp）已启用**：`userBubbleTextClass()` = `line-clamp-6`，`scroll-state.css` 删除；伴修两件——时间线视口 `overflow-anchor: none`、跟随器改 `nextFollowState` 步进函数（高度变化帧不武装）。§5.3「零滚动监听、零状态」的判断本身仍成立，且正因为无状态无迟滞，钉住态截断才不可修。`scroll-state-probe.js` 的结论（「query 可解析」）不构成「该属性可安全使用」的证据——探针只问了解析性没问反馈环。红线固化：`chat/__tests__/scrollStateCss.test.ts`。根因全文见 [D48/T-10 点验分诊](./2026-08-17-d48-t10-inspection-triage.md) F10 与主线台账 2026-08-18 行。

@@ -20,6 +20,7 @@
 | F7 | 回退/分叉会话（revert / fork / copy / multi-run） | 新功能 | 双运行时均原生支持定点分支；瓶颈在我方 id 管道 | medium |
 | F8 | historyReader 分支盲（调查附带发现） | 潜伏缺陷 | `historyReader.ts:439-450` 无 parentUuid | 另立票 |
 | F9 | 加密机 xlsx 读取失败（TSD） | 环境性 | 白名单判定语义待判别测试（用户报 python 在白名单） | n/a |
+| F10 | 置顶气泡滚动振荡（追加发现，2026-08-18） | 缺陷 | `scroll-state(stuck: top)` 截断制造滚动位→版面高度反馈环 | small（已修） |
 
 ---
 
@@ -199,3 +200,17 @@ bash source `.bashrc` 报 cannot execute binary file；转 node 链路（CLI Rea
    85% 宽 accent 底 + 助手加中性容器——用户在设计员明示三层嵌套框反对意见后仍选并用，施工规格须解嵌套：
    助手盒内代码块/表格边框去重方案由规格给出，实现方保留否决权上报）+ **无背景图**（阅读底票不立）。
    连带：正式修订 D26④ 与 phase0a「助手无容器」条款（按归档纪律走修订记录，不静默漂移）。
+
+---
+
+## F10 置顶气泡滚动振荡（2026-08-18 追加，已修 — 快修批二）
+
+- **症状**（用户报）：最后一条用户长发言置顶后，滚向 agent 输出时置顶气泡反复折叠/展开，画面卡在一个位置闪动，需大幅甩动跳过该区段。
+- **根因**（RCA 工作流，结构性闭环）：`scroll-state.css` 的钉住态 3 行截断抽走 Δ 高度 → `scrollHeight` 缩小、浏览器把 `scrollTop` 钳到新最大值（恰在底部）→ 掉回 sticky 阈值下解钉展开 → 钳制滚动事件把贴底跟随器误武装 → `ResizeObserver` 执行 `scrollTop = scrollHeight` 推回触发区——每帧一循环。振荡窗口宽度恰为 Δ（约 22.5px/行 × 超出 3 行的行数），短提问 Δ≈0 故此前未显形。次驱动：视口未关 Chromium scroll anchoring。
+- **修复**（§9-η 预授权回退 §5.6-B，结构性证明：滚动位→高度的边整条删除，循环图无环）：
+  ① `userBubbleTextClass()` 无条件 `line-clamp-6`（`title` 兜底全文；展开控件归 F456 批）；`scroll-state.css` 删除、`fx-turn-band`/`fx-turn-bubble-text` 钩子退役；
+  ② 视口 `overflow-anchor: none`；
+  ③ 跟随器改 `nextFollowState` 纯步进函数：不在底=必解除；在底但本帧高度变化=保持原值（无用户意图证据）；在底且高度稳定=武装。幂等性有测试钉住（振荡序列不可表示）。
+- **不变量固化**：`scrollStateCss.test.ts`（styles 目录任何 scroll-state 块 paint-only 白名单）+ `chatTimelineLayout.test.ts` F10 三例（无条件裸 clamp）+ `messageTimelineScroll.test.ts` 五例（缩高钳制不可武装 + 幂等）。变异三臂全咬合。
+- **文档修正**：design-system.md scroll-state 节改退役记录（lightningcss 教训保留）；reply-anatomy 规格附 as-built 修正；probe 结论标注「解析性≠可用性」。
+- **GUI 点验项**（不可断言半边）：20+ 行提问 + 短回复，两种视口高度下慢滚过边界——无闪动、滚动行程单调。随下轮点验批执行。

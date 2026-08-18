@@ -922,10 +922,13 @@ inline 永远赢 `:root` 声明 → **运行时稳态一直是 16px**。
 
 按边 fade 用于滚动容器某一侧不该再渐隐的场景。例子：聊天时间线顶部原来四边渐隐，是为了把「回合顶部滚出视口」的硬切软化；T-31 给顶部接上 per-turn 的 sticky 用户气泡带之后，视口顶端恒为一条不透明的气泡带，硬切面已经消失，顶部渐隐反而会把钉住的气泡吃掉一截——改传 `scrollFade="bottom"`，只保留底部软边。
 
-### `scroll-state.css` 独立于 Tailwind 管线（T-31）
+### `scroll-state()` 容器查询已退役（T-31 → F10 修正，2026-08-18）
 
-`src/renderer/styles/scroll-state.css` 承载 `@container scroll-state(stuck: top)` 容器查询（钉住态用户气泡的 3 行截断）。**Tailwind v4 的 lightningcss 管线无法解析这个语法，且静默丢弃这条规则**——不报错、构建照常通过，规则只是从产物 CSS 里消失。该文件因此**不走 `globals.css` 的 Tailwind 管线**，改走 Vite 原生 CSS 管线（postcss + esbuild），并因此**永远不得写入任何 Tailwind 指令**（`@import "tailwindcss"` / `@theme` / `@apply` 等）——写了任何一条都会把它重新路由回 lightningcss，规则再次被吞。新增类似的、依赖前沿 CSS 语法的样式文件时按同一判据处理：先确认 lightningcss 能不能解析，不能就走这条独立文件路线，不要指望构建报错来发现。
+原 `src/renderer/styles/scroll-state.css` 用 `@container scroll-state(stuck: top)` 做钉住态用户气泡的 3 行截断。**F10 点验证实该形态在结构上不可修**：钉住态截断抽走版面高度 → `scrollHeight` 缩小 → 浏览器把 `scrollTop` 钳回 sticky 阈值之下 → 解钉展开 → 贴底跟随器又把偏移推回——逐帧折叠/展开振荡。已改为无条件截断（`chatTimelineLayout.userBubbleTextClass()`，`line-clamp-6`），该 CSS 文件整体删除。
 
+**红线（有测试钉住）**：滚动派生状态永远不得改变版面高度。任何 `@container scroll-state(...)` 块只允许 paint-only 属性（颜色/背景/阴影/透明度等），由 `chat/__tests__/scrollStateCss.test.ts` 扫描 `styles/` 目录强制。
+
+**保留的管线教训**（供未来前沿 CSS 语法复用）：Tailwind v4 的 lightningcss 管线解析不了它不认识的语法时会**静默丢弃规则**——不报错、构建照常过。依赖前沿语法的样式必须放独立文件走 Vite 原生 CSS 管线（postcss + esbuild），且该文件永远不得写入任何 Tailwind 指令（`@import "tailwindcss"` / `@theme` / `@apply`），否则被重新路由回 lightningcss 再次被吞。不要指望构建报错来发现。
 ## Icons
 
 ### 文件图标映射
