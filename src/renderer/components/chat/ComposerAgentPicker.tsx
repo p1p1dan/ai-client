@@ -221,7 +221,14 @@ export function ComposerAgentPicker({
   }
 
   return (
-    <span className="flex min-w-0 shrink-0 items-center gap-1">
+    // F6 §6.6 ③: `shrink`, not `shrink-0`. This span carried `min-w-0 shrink-0`
+    // — a self-cancelling pair. `shrink-0` means it never gives width back, so
+    // the `truncate` on the `emptyStateNotice` below could never fire, however
+    // long the Host's message got. That went unnoticed while the composer's
+    // textarea absorbed all the row pressure with `flex-[2]`; F6's row 2 has no
+    // elastic child at all, so an un-shrinkable notice plus its Retry button
+    // would widen the row and push the action buttons out of view.
+    <span className="flex min-w-0 shrink items-center gap-1">
       <span aria-label="Chat agent" className={composerAgentPickerGroupClass()} role="radiogroup">
         {model.options.map((option) => {
           const label = AGENT_DISPLAY_NAMES[option.agent];

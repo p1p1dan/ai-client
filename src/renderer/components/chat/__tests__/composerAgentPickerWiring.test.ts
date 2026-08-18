@@ -91,18 +91,25 @@ describe('A10a / A10b — where the picker sits in each bottom bar', () => {
     expect(status).toBeGreaterThan(block.indexOf('{modelEffortControls}'));
   });
 
-  it('session mode reads ⊕ → textarea → status → agent → model → actions', () => {
+  // F6 (2026-08-18): the docked card is two rows now, and this bar is row 2.
+  // The two slots that used to share it — the textarea and the status line —
+  // left for row 1 and the extras stack respectively, which is the entire
+  // point of the split: one row can hold one elastic text child, and this row
+  // held two. A10b's own fact is untouched and is what this still asserts: ⊕
+  // leads, the agent chip and the model chip sit together, the round keys tail.
+  // Their ABSENCE is asserted positively rather than implied by the order
+  // array, because `slotOrder` silently skips slots it cannot find — the same
+  // shape that would let a half-done split pass.
+  it('session mode row 2 reads ⊕ → agent → model → actions, textarea and status gone', () => {
     const block = barBlock('session');
     expect(slotOrder(block, SLOTS)).toEqual([
       'attachButton',
-      'textareaEl',
       'agentPicker',
       'modelEffortControls',
       'actionButtons',
     ]);
-    const status = block.indexOf('renderStatusLine(');
-    expect(status).toBeGreaterThan(block.indexOf('{textareaEl}'));
-    expect(status).toBeLessThan(block.indexOf('{agentPicker}'));
+    expect(block).not.toContain('{textareaEl}');
+    expect(block).not.toContain('renderStatusLine(');
   });
 
   it('the picker is adjacent to the model trigger in BOTH bars', () => {

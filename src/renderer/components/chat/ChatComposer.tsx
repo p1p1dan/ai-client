@@ -68,6 +68,7 @@ import {
   composerBarClass,
   composerCardClass,
   composerPlaceholder,
+  composerRowsClass,
   composerTextareaClass,
   type MiddleColumnMode,
   mentionPopupPlacementClass,
@@ -2321,23 +2322,30 @@ export function ChatComposer({
     hasStatusError,
     hasLargeHint: Boolean(largeHint),
   });
-  // Wrapper class differs by mode: empty mode's status area takes the slack
-  // between the model control and the action group (needs flex-1 so it
-  // truncates instead of pushing the buttons off), session mode's row already
-  // gives the growth budget to the textarea, so the status area only needs to
-  // shrink, not grow.
+  // Wrapper class differs by mode, and after F6 so does the SLOT: empty mode's
+  // status area takes the slack inside the bottom bar (needs flex-1 so it
+  // truncates instead of pushing the buttons off), while session mode renders
+  // it on its own line in the extras stack, where nothing competes for width
+  // (`sessionStatusLineWrapperClass`).
   // T-30b2: `statusLine != null` is a second gate on top of
   // `shouldShowStatusLine`. Now that session mode admits `hasStatusError` into
   // the show condition (the two modes share one truth table again),
   // `resolveIdleStatusText` can legitimately return null for it — session mode
   // deliberately refuses to reprint the full error text the banner above the
-  // card already owns. Rendering the wrapper anyway would put an EMPTY
-  // `flex-1` slot in the docked row, and a grow-weighted empty box still
-  // claims its share of the free space (up to its `max-w-48`), taking it from
-  // the textarea. Every state that previously showed this row still produces a
-  // non-null line, so this narrows nothing that was visible before.
+  // card already owns. Rendering the wrapper anyway used to hand an empty
+  // grow-weighted box a share of the docked row's free space at the textarea's
+  // expense; after F6 it would instead mount an empty line and add its gap to
+  // the card's height for nothing. Every state that previously showed this row
+  // still produces a non-null line, so this narrows nothing that was visible
+  // before.
+  // F6 §6.4: hoisted out of `renderStatusLine` because the session card now
+  // needs the ANSWER, not just the node — the status line renders inside the
+  // extras stack, and that stack's mount gate has to widen to include it.
+  // Deriving it here keeps one truth: a `renderStatusLine` that returned a node
+  // while the gate said "nothing to show" would silently drop the line.
+  const statusRowVisible = showStatusLine && statusLine != null;
   const renderStatusLine = (wrapperClassName: string) =>
-    showStatusLine && statusLine != null ? (
+    statusRowVisible ? (
       <div className={wrapperClassName}>
         {/* Reading attachments off disk is the only thing left in this row that
             runs for a while with nothing else to show for it. The in-flight
@@ -2737,7 +2745,7 @@ export function ChatComposer({
           onRemove={handleQueueEntryRemove}
         />
       )}
-      <div className={composerCardClass(mode, { hasExtras: hasComposerExtras })}>
+      <div className={composerCardClass(mode)}>
         {/* T-07 @ 文件搜索 popup——放 textarea 上方/下方，避免被 overflow-hidden 容器裁掉 */}
         {mentionOpen && (
           <div
@@ -2818,31 +2826,38 @@ export function ChatComposer({
           </div>
         )}
         {mode === 'session' ? (
-          <div className="flex min-w-0 flex-1 flex-col">
-            {hasComposerExtras && (
-              <div className="mb-1 flex flex-col gap-1">
+          <div className={composerRowsClass()}>
+            {/* F6 §6.4: the status line joined this stack. It is the fifth
+                draft-side fact here, not a sixth control below — in session
+                mode it can only ever say "reading attachments off disk" or
+                "these attachments are large", both of which happen BEFORE a
+                send and belong with the notice and the chips. The gate widened
+                with it: left at `hasComposerExtras` alone, the status line
+                would render into a container that never mounts. */}
+            {(hasComposerExtras || statusRowVisible) && (
+              <div className="flex flex-col gap-1">
                 {noticeBlock}
                 {queueNoticeBlock}
                 {attachmentChipsBlock}
                 {mentionChipsBlock}
+                {renderStatusLine(sessionStatusLineWrapperClass())}
               </div>
             )}
-            {/* D48 S1 §3.2: the agent chip sits immediately left of the
-                model/effort chip, NOT next to ⊕. The session row's own
-                reading order is `attach → textarea → status → model →
-                actions` (the "⊕ → model → status → actions" note below is
-                empty-mode-only), and putting the picker after ⊕ would both
-                push the textarea's width down and separate the two ghost
-                chips whose height/inset are cross-asserted against each
-                other. */}
+            {textareaEl}
+            {/* F6 §6.2: row 2. The textarea has row 1 to itself, which is the
+                whole point of the split — one row can hold one elastic text
+                child, and this card had two fighting over it.
+                D48 S1 §3.2 still governs the order WITHIN this row: the agent
+                chip sits immediately left of the model/effort chip, NOT next
+                to ⊕, because which models exist follows from which agent runs
+                the chat, and the two ghost chips' height/inset are
+                cross-asserted against each other. */}
             <div className={composerBarClass('session')}>
               {attachButton}
-              {textareaEl}
-              {renderStatusLine(sessionStatusLineWrapperClass())}
               {agentPicker}
               {modelEffortControls}
               {permissionControl}
-              {actionButtons}
+              <div className={composerActionGroupClass()}>{actionButtons}</div>
             </div>
           </div>
         ) : (

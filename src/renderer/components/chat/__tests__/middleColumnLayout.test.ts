@@ -12,6 +12,7 @@ import {
   composerModelTriggerClass,
   composerPlaceholder,
   composerPopupSide,
+  composerRowsClass,
   composerTextareaClass,
   deriveMiddleColumnMode,
   type MiddleColumnMode,
@@ -240,23 +241,46 @@ describe('composerCardClass', () => {
   // therefore could not notice that the height it composed was wrong. This
   // crosses the spelled Tailwind step against the arithmetic breakdown, so a
   // change to either one alone fails.
-  it('F-A2: rests the follow-up card at exactly 42px, cross-checking the class step against the arithmetic', () => {
+  //
+  // F6 (2026-08-18): the contract is 74px, not 42px — the card now stacks a
+  // textarea row and a control row with an 8px gap between them. The
+  // load-bearing proposition is unchanged ("the resting height is DERIVED, not
+  // copied"), so this is a value change rather than a retirement; the
+  // breakdown simply grew the two terms the second row introduced, and the gap
+  // term is cross-checked against the class that actually produces it.
+  //
+  // The `items-center` assertion that used to sit here is GONE on purpose, not
+  // by omission: the card's only in-flow child is now a single full-width
+  // column, so centring it cross-axis is meaningless, and it aligns
+  // ambiguously the moment the extras stack appears.
+  it('F-A2: rests the follow-up card at exactly 74px, cross-checking the class step against the arithmetic', () => {
     const cls = composerCardClass('session');
     const breakdown = composerFollowHeightBreakdown();
 
-    expect(breakdown.border + breakdown.padding + breakdown.content).toBe(breakdown.total);
+    expect(breakdown.rows).toBe(2);
     expect(breakdown.content).toBe(COMPOSER_CONTROL_SIZE);
-    expect(breakdown.total).toBe(42);
+    expect(
+      breakdown.border +
+        breakdown.padding +
+        breakdown.content * breakdown.rows +
+        breakdown.rowGap * (breakdown.rows - 1)
+    ).toBe(breakdown.total);
+    expect(breakdown.total).toBe(74);
+
+    // The inter-row gap is not a free number either: it is whatever
+    // `composerRowsClass()` spells, so the two cannot drift apart.
+    const gapStep = stepValue(composerRowsClass(), /(?:^|\s)gap-(\d+(?:\.\d+)?)(?:\s|$)/);
+    expect(gapStep).not.toBeNull();
+    expect((gapStep as number) * 4).toBe(breakdown.rowGap);
 
     const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
     expect(step).not.toBeNull();
     expect((step as number) * 4).toBe(breakdown.total);
 
     expect(cls).toContain('flex');
-    expect(cls).toContain('items-center');
-    // The 40px contract came from "24 content + 8 + 8" with the two 1px
-    // borders left out of the sum.
-    expect(cls).not.toContain('min-h-10 ');
+    // The single-row 42px step must not come back on its own: that spelling
+    // and the two-row structure cannot both be right.
+    expect(cls).not.toContain('min-h-10.5');
   });
 
   // F-A2's blind spot, same shape as the one F-A3 documents for `size-*`: the
@@ -277,50 +301,27 @@ describe('composerCardClass', () => {
     expect(offenders).toEqual([]);
   });
 
-  // F-A21: the resting card is a pill, but spelled as a FIXED half-height
-  // rather than `rounded-full`. `hasExtras` only covers one of the two ways
-  // this card grows; the other is the textarea itself (`field-sizing-content`
-  // between `min-h-6` and `max-h-14`), which soft-wraps on ordinary typing and
-  // walks the card 42 → 66 → 74px with no extras present. CSS clamps a 999px
-  // radius to half the box height, so `rounded-full` would ride that growth
-  // into the 33-37px arcs §5.3 calls the runaway shape — via a path the extras
-  // guard cannot observe. A constant is the only static answer available (the
-  // spec forbids runtime measurement), so the assertion's job is to keep the
-  // constant tied to the height it was derived from.
-  it('F-A21: the resting follow-up card carries the fixed half-height radius, not rounded-full', () => {
-    const cls = composerCardClass('session');
-    expect(cls).toContain('rounded-[21px]');
-    expect(cls).not.toContain('rounded-full');
-    expect(cls).not.toContain('rounded-md');
-  });
-
-  // The cross-check that makes the constant safe: 21 is not a free-standing
-  // number, it is `composerFollowHeightBreakdown().total / 2`. Editing the
-  // resting height without re-deriving the radius (or vice versa) fails here
-  // rather than shipping a card whose corners no longer meet in the middle.
-  it('F-A21: the radius is exactly half the asserted resting height, derived not guessed', () => {
-    const cls = composerCardClass('session');
-    const radius = cls.match(/rounded-\[(\d+)px\]/);
-    expect(radius).not.toBeNull();
-    expect(Number((radius as RegExpMatchArray)[1]) * 2).toBe(composerFollowHeightBreakdown().total);
-  });
-
-  it('F-A2b: extras present drop the follow-up card back to the 12px radius', () => {
-    const withExtras = composerCardClass('session', { hasExtras: true });
-    expect(withExtras).toContain('rounded-md');
-    expect(withExtras).not.toContain('rounded-full');
-    expect(withExtras).not.toContain('rounded-[21px]');
-
-    const withoutExtras = composerCardClass('session', { hasExtras: false });
-    expect(withoutExtras).toContain('rounded-[21px]');
-    expect(withoutExtras).not.toContain('rounded-md');
-    expect(withoutExtras).not.toContain('rounded-full');
-  });
-
-  it('keeps the empty card at the 12px radius, pill or not', () => {
-    expect(composerCardClass('empty')).toContain('rounded-md');
-    expect(composerCardClass('empty', { hasExtras: true })).toContain('rounded-md');
-    expect(composerCardClass('empty')).not.toContain('rounded-full');
+  // [F6-1] RETIRES both F-A21 assertions and F-A2b (2026-08-18). Those three
+  // asserted the PILL DERIVATION: that the session card's radius was
+  // `composerFollowHeightBreakdown().total / 2` spelled as a constant, and
+  // that `hasExtras` switched it down to `rounded-md`. That derivation chain
+  // is what stopped being true — not its value. Followed literally at the new
+  // 74px resting height it yields `rounded-[37px]`, which is a hand-written
+  // arbitrary value (the design system bans those), and half-height corners on
+  // a two-row card read as a stretched capsule rather than a pill. The card
+  // has no pill mental model left to protect, so the whole chain retires and
+  // both cards simply share `rounded-md`.
+  //
+  // What replaces it is a stronger fact than "the number is 12": arbitrary-
+  // value radii are out of this card entirely. `rounded-[21px]` coming back —
+  // or any other `rounded-[…]` — is the regression, whatever its number.
+  it('[F6-1] both composer cards share rounded-md, with no arbitrary-value radius anywhere', () => {
+    for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+      const cls = composerCardClass(mode);
+      expect(cls).toContain('rounded-md');
+      expect(cls).not.toMatch(/rounded-\[/);
+      expect(cls).not.toContain('rounded-full');
+    }
   });
 
   it('never uses rounded-lg (16px in this repo) for the card', () => {
@@ -344,25 +345,44 @@ describe('composerBarClass / composerActionGroupClass', () => {
     expect(cls).not.toContain('mt-');
   });
 
-  // Round-5 fix (diag:placeholder-align): the session bar aligns its
-  // children by top edge, not center. Every fixed-24px sibling (attach
-  // button, model trigger, action buttons) renders identically either way,
-  // but the textarea's natural height is uncertain (`field-sizing-content`),
-  // and its top-anchored text would sit above the other controls'
-  // centerline whenever that height exceeds 24px under `items-center`.
-  it('round-5 fix (diag:placeholder-align): aligns the docked row by top edge, not center', () => {
+  // F6 (2026-08-18) REVERSES the round-5 fix (diag:placeholder-align), because
+  // the condition that fix existed for is gone. `items-start` was chosen for
+  // one reason: the textarea was the single child in this row whose rendered
+  // height was NOT pinned to 24px (`field-sizing-content`), so `items-center`
+  // would centre its taller box against the 24px reference and push its
+  // top-anchored first line above the other controls' centreline. Row 2 no
+  // longer contains the textarea — every remaining child is an exact 24px box,
+  // which makes the two values equivalent in output and `items-center` the
+  // honest one to write.
+  it('F6: aligns the docked control row by centre, now that the textarea has left it', () => {
     const cls = composerBarClass('session');
-    expect(cls).toContain('items-start');
-    expect(cls).not.toContain('items-center');
+    expect(cls).toContain('items-center');
+    expect(cls).not.toContain('items-start');
   });
 
-  // The status line to the group's left is conditional now; without an auto
-  // margin the round key would slide left whenever status text is absent,
-  // breaking the "Stop replaces Send in place" rule.
-  it('pins the empty-state action group right even when the status line is absent', () => {
+  // The action group is shared by BOTH modes now (F6): it tail-anchors the
+  // round keys at the end of the empty card's bottom bar and of the session
+  // card's row 2. Without the auto margin the round key would slide left
+  // whenever the slots to its left are narrow, breaking the "Stop replaces
+  // Send in place" rule the whole button stack is built on.
+  it('pins the action group right in both modes, whatever sits to its left', () => {
     const cls = composerActionGroupClass();
     expect(cls).toContain('ms-auto');
     expect(cls).toContain('shrink-0');
+  });
+
+  // The two-row mechanism itself. `[F6-4]` proves this class is APPLIED to the
+  // session branch's root; nothing there proves it lays out as a column, so a
+  // silent `flex-col` → `flex-row` edit would put the textarea back beside the
+  // controls with every AST assertion still green. `flex-1`/`min-w-0` are the
+  // pair that lets the column fill the card and still shrink below its
+  // content's intrinsic width.
+  it('F6: the session card body is a growable, shrinkable column', () => {
+    const cls = composerRowsClass();
+    expect(cls).toContain('flex-col');
+    expect(cls).toContain('flex-1');
+    expect(cls).toContain('min-w-0');
+    expect(cls).not.toContain('flex-row');
   });
 });
 
@@ -407,80 +427,51 @@ describe('composerTextareaClass', () => {
     }
   });
 
-  // Round-4 point-check fix (defect B): a same-row sibling with a long
-  // max-content flex-basis (a long error string) could claim the ENTIRE
-  // negative-shrink budget and squeeze the follow-up textarea's
-  // `flex: 1 1 0%` down to a literal 0px, since `min-w-0` gave it no floor
-  // at all. `min-w-32` (128px) is the width-floor half of the fix —
-  // `sessionStatusLineWrapperClass`'s `basis-0` (below) is the other half.
-  it('round-4 fix (defect B): gives the follow-up textarea a 128px width floor instead of no floor at all', () => {
+  // [F6-2] RETIRES the 128px width floor (round-4 defect B) and the dominant
+  // flex-grow weight (F5b), 2026-08-18. Both were patches for ONE condition:
+  // the session row held two elastic text competitors, so the textarea needed
+  // a floor no sibling's shrink math could cross and a grow weight that
+  // outvoted the status slot. Row 1 now holds the textarea and nothing else,
+  // which deletes the contest rather than arbitrating it.
+  //
+  // The replacement fact is that the contest cannot come back by accident:
+  // any `flex-` weight or `min-w-` floor on this class means something is
+  // sharing the row again, which is the regression this catches.
+  it('[F6-2] the session textarea owns its whole row, carrying no flex weight and no width floor', () => {
     const cls = composerTextareaClass('session');
-    expect(cls).toContain('min-w-32');
-    expect(cls).not.toContain('min-w-0');
+    expect(cls).toContain('w-full');
+    expect(cls).not.toMatch(/(?:^|\s)flex-/);
+    expect(cls).not.toMatch(/(?:^|\s)min-w-/);
   });
 
-  it('round-4 fix (defect B): the empty-state textarea is unaffected by the width-floor fix', () => {
-    expect(composerTextareaClass('empty')).not.toContain('min-w-32');
-  });
-
-  // F5(b) (round-4 Codex NEEDS-FIX #4): `flex-1` (grow:1) regressed to
-  // `flex-[2]` (grow:2) — the textarea must keep a DOMINANT (not just
-  // non-zero) share of any positive free space over the status-line slot,
-  // which now also carries a non-zero grow weight (see
-  // `sessionStatusLineWrapperClass` below) to fix its own 0px-under-normal-
-  // conditions regression.
-  it('round-4 fix (F5b): raises the follow-up textarea to a dominant flex-grow weight over the status-line slot', () => {
-    const cls = composerTextareaClass('session');
-    expect(cls).toContain('flex-[2]');
-    expect(cls).not.toContain('flex-1');
+  it('[F6-2] the empty-state textarea never picked up the row-sharing patches either', () => {
+    const cls = composerTextareaClass('empty');
+    expect(cls).not.toContain('min-w-32');
+    expect(cls).not.toContain('flex-[2]');
   });
 });
 
-describe('sessionStatusLineWrapperClass (round-4 point-check fix, defect B; F5b Codex NEEDS-FIX #4)', () => {
-  it('carries a zero flex-basis so its own content never dictates the row shrink math', () => {
+describe('sessionStatusLineWrapperClass (F6: the status slot left the control row)', () => {
+  // [F6-3] RETIRES all five assertions this group used to hold (`basis-0`,
+  // `shrink` + `min-w-0`, non-zero grow, `max-w-48`, `h-6`), 2026-08-18. Every
+  // one of them arbitrated this slot's share of a row it no longer sits in:
+  // the session status line moved into the extras stack above the textarea
+  // (§6.4), where it is the only thing on its line and has the full card width
+  // to itself. A width cap, a zero basis, a grow weight and a compensating
+  // fixed height are all answers to a question that stopped being asked — kept
+  // as-is they would cap this line at 192px for no reason anyone could name.
+  //
+  // The one surviving requirement is that it can still shrink below its
+  // content: the text is arbitrary-length and the `truncate` on the inner
+  // `<p>` needs a zero min-width somewhere above it to ever fire.
+  it('[F6-3] is a plain full-line slot: shrinkable, with none of the row-contest patches left', () => {
     const cls = sessionStatusLineWrapperClass();
-    expect(cls).toContain('basis-0');
-  });
-
-  it('still shrinks and keeps a zero min-width so it can collapse away entirely', () => {
-    const cls = sessionStatusLineWrapperClass();
-    expect(cls).toContain('shrink');
     expect(cls).toContain('min-w-0');
-  });
-
-  // F5(b): the ORIGINAL `basis-0` fix, with flex-grow left at the browser
-  // default of 0, was itself a regression — a grow:0 item never claims any
-  // of a row's POSITIVE leftover space, so this slot rendered at literally
-  // 0px for the everyday case (short "Sending…"/attachment-hint text, no
-  // error) too, not just the long-error-text case the original fix
-  // targeted. `flex-1` (grow:1) restores real space-sharing; `max-w-48`
-  // bounds how much of it this slot can claim even in a very wide row —
-  // `max-width` clamps a flex item's HYPOTHETICAL size too, so it
-  // continues to protect the textarea under negative free space exactly
-  // as `basis-0` used to alone.
-  it('round-4 fix (F5b): carries a non-zero grow weight so normal (non-error) status text is actually visible', () => {
-    const cls = sessionStatusLineWrapperClass();
-    expect(cls).toContain('flex-1');
-  });
-
-  it('round-4 fix (F5b): caps its own width with an ordinary Tailwind scale step, not an arbitrary value', () => {
-    const cls = sessionStatusLineWrapperClass();
-    expect(cls).toContain('max-w-48');
-    expect(cls).not.toMatch(/max-w-\[/);
-  });
-
-  // Round-5 fix (diag:placeholder-align): the parent row switched to
-  // `items-start` (composerBarClass('session') above), so this slot can no
-  // longer rely on the row centering its shorter (13px text / 14px spinner)
-  // content against the textarea's 24px line. `h-6` pins its own box to the
-  // same 24px reference the other row children stand at; its pre-existing
-  // `items-center` (asserted above) then centers the spinner/text inside
-  // THIS fixed box, keeping the status line flush with the other controls
-  // instead of drifting top-flush.
-  it('round-5 fix (diag:placeholder-align): pins its own box to the shared 24px control height', () => {
-    const cls = sessionStatusLineWrapperClass();
-    expect(cls).toContain('h-6');
     expect(cls).toContain('items-center');
+    expect(cls).not.toContain('flex-1');
+    expect(cls).not.toMatch(/(?:^|\s)basis-/);
+    expect(cls).not.toMatch(/(?:^|\s)max-w-/);
+    expect(cls).not.toMatch(/(?:^|\s)h-6(?:\s|$)/);
   });
 });
 

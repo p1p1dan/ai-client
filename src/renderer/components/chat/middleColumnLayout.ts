@@ -134,109 +134,152 @@ export const COMPOSER_CONTROL_SIZE = 24;
  * shadow at all (8 rows outside the border are a flat background value), so
  * the premise for that tier is gone.
  *
- * The session card's resting radius is a FIXED half-height (21px), not
- * `rounded-full`. Adversarial review of the pill decision (A07 v4 §8 `:1334`)
- * found `hasExtras` only covers one of the two ways this card grows: the other
- * is the textarea itself. It is `field-sizing-content` with
- * `[&_textarea]:min-h-6 max-h-14`, so ordinary typing soft-wraps and walks the
- * card 42 → 66 → 74px with no extras present at all. CSS clamps a 999px radius
- * to half the box height, so `rounded-full` would follow that growth into the
- * 33-37px arcs §5.3 names as the "runaway" shape — precisely what the extras
- * guard exists to prevent, reached by a path the guard cannot see.
+ * F6 (2026-08-18) RETIRES the pill radius and the `hasExtras` opt-in that
+ * switched it. Both cards now rest on `rounded-md`.
  *
- * `hasExtras` still drops to `rounded-md`, unchanged: chips/notices are a
- * different, larger jump and the flatter radius reads better there.
+ * The pill was never a free constant: `21` was defined as
+ * `composerFollowHeightBreakdown().total / 2`, cross-asserted against the 42px
+ * resting height, and spelled as a fixed value rather than `rounded-full`
+ * precisely so the corners could not ride the textarea's `field-sizing-content`
+ * growth into the 33-37px arcs §5.3 names as the "runaway" shape. That
+ * derivation is what broke, not its value: the session card is two rows now and
+ * rests at 74px, so the same chain yields `rounded-[37px]` — a hand-written
+ * arbitrary value the design system bans, and half-height corners on a two-row
+ * card read as a stretched capsule, not a pill. There is no pill mental model
+ * left to preserve, so the chain retires whole and the radius joins the empty
+ * card's.
+ *
+ * With the radius constant in both branches, `opts.hasExtras` had no remaining
+ * consumer and is gone from the signature; the extras stack still uses
+ * `hasComposerExtras` at the call site to decide whether to RENDER, which was
+ * always a separate question.
  */
-export function composerCardClass(mode: MiddleColumnMode, opts?: { hasExtras?: boolean }): string {
+export function composerCardClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
     // T-30b2 §4.1: both modes now share one symmetric 8px inset (`p-2`). The
     // old 12/10 split traced back to A07's eyeballed three-value padding, not
     // to a measurement.
     return 'relative rounded-md border border-border bg-card focus-within:border-input p-2';
   }
-  // Resting height contract, T-30b2 §3.3-E1: exactly 42px, not the 40px A07
-  // :1844 wrote. That line computed "24px content + 8px top + 8px bottom" and
-  // never added the two 1px borders; the Cursor reference measures 42px, which
-  // is the same arithmetic done completely. T-28 saw the implementation render
-  // 42 and "fixed" it back down to 40 by keeping a 28px round key and
-  // squeezing the padding to 5px — the wrong direction. Content returns to
-  // 24 (COMPOSER_CONTROL_SIZE), padding to 8, and the card rests at
-  // `min-h-10.5` = 42px. `composerFollowHeightBreakdown()` below carries the
-  // same arithmetic as data so a test can cross-check it against this string.
-  // 21 === composerFollowHeightBreakdown().total / 2 — pixel-identical to a
-  // pill at the 42px resting height, and it degrades to a rounded rectangle
-  // instead of a growing arc once the content-sized textarea gets taller.
-  // `rounded-full` would instead be clamped to h/2 at every height. The spec
-  // forbids runtime measurement, so a static half-height constant is the only
-  // available answer; the assertion cross-checks 21 × 2 against the breakdown
-  // so the two cannot drift.
-  const radius = opts?.hasExtras ? 'rounded-md' : 'rounded-[21px]';
-  return `relative ${radius} border border-border bg-card focus-within:border-input flex min-h-10.5 items-center gap-2 p-2`;
+  // Resting height contract, T-30b2 §3.3-E1 as re-derived by F6: exactly 74px.
+  // The arithmetic is unchanged in KIND — borders + padding + content, done
+  // completely (the 40px A07 :1844 wrote left the two 1px borders out of the
+  // sum, and T-28 "fixed" the correct 42 back down to it by squeezing the
+  // padding to 5px, the wrong direction). What changed is the content term:
+  // the card stacks two 24px rows with an 8px gap between them instead of one
+  // row, so 2 + 16 + 24 + 8 + 24 = 74 and the card rests at `min-h-18.5`.
+  // `composerFollowHeightBreakdown()` below carries the same arithmetic as
+  // data, including the gap, so a test can cross-check every term of it
+  // against this string and against `composerRowsClass()`.
+  //
+  // No `items-center`: the card's only in-flow child is now one full-width
+  // column (`composerRowsClass()`), so there is nothing to centre cross-axis,
+  // and the moment the extras stack appears inside that column, centring it
+  // would align the card's contents against an ambiguous reference.
+  return 'relative rounded-md border border-border bg-card focus-within:border-input flex min-h-18.5 gap-2 p-2';
 }
 
 /**
- * The 42px resting height of the docked follow-up card, as data.
+ * The 74px resting height of the docked follow-up card, as data.
  *
  * This exists purely so the height contract is assertable as ARITHMETIC rather
- * than as "the class string contains `min-h-10.5`". T-28's blocker was exactly
+ * than as "the class string contains `min-h-18.5`". T-28's blocker was exactly
  * that gap: the test asserted a class was present and could not notice that
  * the composed height it produced was wrong.
+ *
+ * F6 (2026-08-18) added `rows` and `rowGap` rather than editing `total` to a
+ * new literal, for the same reason the breakdown exists at all — the height
+ * has to stay something you can re-derive. `content` remains the height of ONE
+ * row (the shared 24px control tier); the card stacks `rows` of them with
+ * `rowGap` between each pair.
  */
 export function composerFollowHeightBreakdown(): {
   border: number;
   padding: number;
   content: number;
+  rows: number;
+  rowGap: number;
   total: number;
 } {
   const border = 2; // 1px top + 1px bottom
   const padding = 16; // p-2 → 8px top + 8px bottom
   const content = COMPOSER_CONTROL_SIZE;
-  return { border, padding, content, total: border + padding + content };
+  const rows = 2; // row 1: the textarea; row 2: the control strip
+  const rowGap = 8; // composerRowsClass()'s `gap-2`
+  return {
+    border,
+    padding,
+    content,
+    rows,
+    rowGap,
+    total: border + padding + content * rows + rowGap * (rows - 1),
+  };
+}
+
+/**
+ * The session card's body: the column that holds the two rows.
+ *
+ * This is not a new wrapper — the docked branch always had a
+ * `flex min-w-0 flex-1 flex-col` div written inline at the call site, whose one
+ * job was to stack the conditional extras above the single control row. F6
+ * promotes that literal into the class-assembly layer (and gives it a real
+ * `gap-2`, replacing the extras stack's own `mb-1`) so the two-row structure is
+ * assertable from a pure module instead of only from JSX text.
+ *
+ * `flex-1` lets it claim the card's full width; `min-w-0` is what lets both
+ * rows shrink below their content's intrinsic width, which every `truncate`
+ * inside them depends on.
+ */
+export function composerRowsClass(): string {
+  return 'flex min-w-0 flex-1 flex-col gap-2';
 }
 
 /**
  * The card's inner control row.
  *
- * `empty` mode: the bottom bar under the textarea (attach → model trigger →
- * status line → action buttons). `session` mode: the single docked row itself.
- * Both are 8px-gapped flex rows; only the empty bar needs the 6px offset from
- * the textarea above it.
+ * `empty` mode: the bottom bar under the textarea (attach → agent → model →
+ * permission → status line → action buttons). `session` mode: row 2 of the
+ * card, the same strip minus the status line. Both are 8px-gapped flex rows;
+ * only the empty bar needs the 6px offset from the textarea above it (the
+ * session column spaces its own rows through `composerRowsClass()`'s gap).
  *
- * Round-5 fix (diag:placeholder-align): `session` mode uses `items-start`,
- * not `items-center`. Every other child in this row (attach button, model
- * trigger, action buttons) is an exact 24px box, so `items-start` vs.
- * `items-center` is a no-op for them either way. The textarea is the one
- * child whose rendered box height is NOT pinned to 24px — it relies on
- * `field-sizing-content` (textarea.tsx) to auto-size, and the browser's
- * intrinsic content-box height for one row is not guaranteed to equal
- * exactly `1 × line-height`; any UA slack makes the real height `H > 24`.
- * A `<textarea>`'s content is always top-anchored inside its own box
- * (browser default, not something this codebase controls), so
- * `items-center` on the row centers that taller `H`-height box against the
- * 24px reference — which visually pushes the (top-anchored) placeholder/
- * first line of text ABOVE the other controls' centerline whenever `H>24`.
- * `items-start` sidesteps the uncertain `H` entirely: every child's top
- * edge aligns, so the textarea's top-anchored first line always sits at
- * `row-top + 12px`, matching the 24px controls' centerline by construction —
- * robust to whatever `H` the browser actually renders, rest or grown.
+ * F6 (2026-08-18) REVERSES the round-5 fix (diag:placeholder-align), which had
+ * put `session` on `items-start`. That fix existed for exactly one child: the
+ * textarea's rendered height is NOT pinned to 24px (it relies on
+ * `field-sizing-content`, and the UA's intrinsic one-row height is not
+ * guaranteed to equal `1 × line-height`), and a `<textarea>`'s content is
+ * always top-anchored inside its own box, so `items-center` centred that
+ * taller box and pushed the placeholder above the other controls' centreline.
+ * `items-start` sidestepped the uncertain height by aligning top edges.
+ *
+ * The textarea now has row 1 to itself. Every remaining child of this row —
+ * attach button, agent picker, model/effort trigger, permission trigger,
+ * action buttons — is an exact 24px box, which makes `items-start` and
+ * `items-center` identical in output. `items-center` is the one that states
+ * what the row means, and it no longer needs the status slot's `h-6`
+ * compensation (see `sessionStatusLineWrapperClass`).
  */
 export function composerBarClass(mode: MiddleColumnMode): string {
   if (mode === 'empty') {
     return 'mt-1.5 flex items-center gap-2';
   }
-  return 'flex min-w-0 items-start gap-2';
+  return 'flex min-w-0 items-center gap-2';
 }
 
 /**
- * `empty` mode's right-hand action group (round buttons).
+ * The right-hand action group (round buttons), shared by both modes.
  *
- * `ms-auto` rather than a `justify-between` row: the status line to its left
- * is conditional now, and without an auto margin the send key would slide left
- * whenever the status text is absent. A round action key that changes position
- * depending on unrelated state breaks the "Stop replaces Send in place" rule
- * the whole button stack is built on. With the status line present its
- * `flex-1` already absorbs the free space, so the margin resolves to zero and
- * changes nothing.
+ * `ms-auto` rather than a `justify-between` row: what sits to its left is
+ * conditional in both cards — the empty bar's status line, and (before F6) the
+ * session row's status slot — and without an auto margin the send key would
+ * slide left whenever those are absent. A round action key that changes
+ * position depending on unrelated state breaks the "Stop replaces Send in
+ * place" rule the whole button stack is built on.
+ *
+ * F6 (2026-08-18): the session card's row 2 uses this too. It used to render
+ * `actionButtons` bare, relying on the textarea's `flex-[2]` to eat the free
+ * space and push them right; row 2 has no elastic child at all now, so without
+ * the auto margin the whole strip would bunch at the left edge.
  */
 export function composerActionGroupClass(): string {
   return 'ms-auto flex shrink-0 items-center gap-1.5';
@@ -427,84 +470,72 @@ export function composerTextareaClass(mode: MiddleColumnMode): string {
   }
   // Round-2 visual fix: same resize pierce-through as the empty branch, plus
   // `[&_textarea]:leading-6` — the session textarea pins `min-h-6`/`py-0`
-  // (needed for the 40px docked-card contract), and a `<textarea>` never
+  // (the 24px row the card's height arithmetic counts twice, see
+  // `composerFollowHeightBreakdown`), and a `<textarea>` never
   // vertically centers its own content, so with zero padding the resting
   // line sat high in the 24px box. Matching line-height to the height token
   // fills the box instead of relying on padding.
   //
-  // Round-4 point-check fix (defect B): `min-w-0` was a genuine flex-crush
-  // hazard — the textarea's `flex: 1 1 0%` gives it a zero flex-basis, and
-  // with no floor at all a same-row sibling with a large max-content basis
-  // (e.g. a long error string) can claim the ENTIRE negative-shrink budget
-  // (`shrink × basis`) and squeeze this down to a literal 0px. `min-w-32`
-  // (128px, an ordinary Tailwind scale step) gives it a floor no sibling's
-  // shrink math can cross, independent of how long any status text gets —
-  // the same-row status slot itself also gets `basis-0` as the other half
-  // of this fix (see `sessionStatusLineWrapperClass` below).
+  // F6 (2026-08-18) RETIRES `min-w-32` (round-4 defect B) and `flex-[2]`
+  // (round-4 F5b) together. Both were arbitration between two elastic text
+  // competitors in one row: a same-row sibling with a large max-content basis
+  // (a long error string) could claim the entire negative-shrink budget and
+  // crush this to 0px, so it got a 128px floor; then the status slot needed a
+  // non-zero grow weight of its own to stop rendering at 0px, so this one was
+  // raised to grow:2 to keep the dominant share. The textarea now owns row 1
+  // outright and the status line moved into the extras stack, which deletes
+  // the contest instead of arbitrating it — a width floor and a grow weight
+  // both describe a negotiation that no longer happens.
   //
-  // Round-4 Codex NEEDS-FIX #4 (F5b): `flex-1` (grow:1) is now `flex-[2]`
-  // (grow:2, same shrink:1/basis:0% — CSS's single-number `flex: N`
-  // shorthand). `sessionStatusLineWrapperClass` below was ALSO switched to a
-  // `flex-1`-based (grow:1) sibling instead of grow:0 — a real, live bug
-  // Codex's review caught: `basis-0` with NO grow at all means that slot's
-  // final width stays pinned at its zero basis in ANY positive-free-space
-  // layout (the ordinary case — short "Sending…"/attachment-hint text, no
-  // error present), since flex-grow:0 never claims a share of leftover
-  // space; `min-w-0` on that slot removed even the browser's automatic
-  // minimum-content floor. Ordinary status text was being crushed to 0px
-  // EVERY time, not just under overflow — the fix this comment describes
-  // regressed the case it wasn't targeting. Giving both siblings a
-  // grow>0 flex basis restores real space-sharing; the 2:1 ratio keeps the
-  // textarea's share dominant so the status slot (capped by its own
-  // `max-w`, see below) never wins a fight for width, mirroring
-  // `MergeEditor.tsx`'s existing `flex-[1.5]` split-pane precedent — no
-  // non-arbitrary Tailwind step exists for a flex-grow RATIO (unlike a
-  // spacing/size token, which `min-w-32`/the status line's `max-w` below
-  // both are).
-  return 'min-w-32 flex-[2] p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-14 [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-6';
+  // `w-full` in their place: this is a column child, so it stretches by
+  // default, and saying so keeps the intent legible next to the empty
+  // branch. The four `[&_textarea]:` pierce-through variants are untouched —
+  // `<Textarea unstyled>` only applies `className` to the outer span
+  // (textarea.tsx), so sizing that must reach the real inner element still
+  // has to be written this way.
+  return 'w-full p-0 [&_textarea]:min-h-6 [&_textarea]:max-h-14 [&_textarea]:resize-none [&_textarea]:px-0 [&_textarea]:py-0 [&_textarea]:leading-6';
 }
 
 /**
- * Round-4 point-check fix (defect B, `shouldShowStatusLine`'s sibling in the
- * layout half of the fix): the session card's single docked row places the
- * textarea, the status line, Model/Effort and the action buttons all in one
- * flex row. ANY same-row auxiliary text slot in that row must carry
- * `basis-0` — without an explicit `flex-basis`, its own (potentially long)
- * content becomes its flex base size, and CSS's negative-space shrink
- * distribution (`shrink × basis`) hands nearly all of the deficit to
- * whichever sibling has the larger basis, starving the textarea's
- * `flex: 1 1 0%` toward 0px regardless of its own `min-w-32` floor's
- * PRESENCE — `basis-0` is what stops that sibling from ever outweighing the
- * textarea in the first place; `min-w-32` above is the second, independent
- * line of defense.
+ * The session card's status line wrapper — now a full-width line in the extras
+ * stack, no longer a slot competing inside the control row.
  *
- * Round-4 Codex NEEDS-FIX #4 (F5b): `basis-0` alone, with `flex-grow`
- * left at its browser default of 0, was itself a regression — a grow:0
- * item never claims any of a row's POSITIVE leftover space, so this slot
- * rendered at literally 0px (its own zero basis, un-grown) for the
- * ordinary, no-error case too (short "Sending…"/attachment-hint text),
- * not just the long-error-text case the original fix targeted. Now
- * carries `flex-1` (grow:1 — the textarea's own `flex-[2]` above keeps a
- * 2:1 dominance so this slot still loses any real space contest) PLUS an
- * explicit `max-w-48` (192px, an ordinary Tailwind scale step) so it can
- * never claim more than a bounded share even in a very wide row —
- * `max-width` clamps a flex item's HYPOTHETICAL size too (not just its
- * final rendered size), so this simultaneously re-caps this slot's
- * contribution to the negative-space shrink calculation, the exact
- * protection `basis-0` used to provide alone.
+ * F6 (2026-08-18) RETIRES the whole patch network this class used to carry
+ * (`basis-0`, `flex-1`, `max-w-48`, `h-6`), and MOVES the line itself out of
+ * `composerBarClass('session')` into the extras stack above the textarea. Both
+ * halves of that need justifying, because the patches were each fixing a real,
+ * observed defect:
  *
- * Round-5 fix (diag:placeholder-align): now that the parent row
- * (`composerBarClass('session')`) switched from `items-center` to
- * `items-start`, this slot needs its OWN fixed-height box — its content
- * (a `size-3.5` Spinner + `text-meta`/13px text) is shorter than the 24px
- * the other row children stand at, and with the parent no longer centering
- * cross-axis, an un-pinned slot would render top-flush instead of matching
- * the textarea's 24px-tall first line. `h-6` (24px) restores that shared
- * reference height; the pre-existing `items-center` on THIS wrapper (not
- * the parent's) still centers the shorter spinner/text inside it.
+ *  - `basis-0` (round-4 defect B): without an explicit flex-basis this slot's
+ *    own potentially-long content became its base size, and CSS's negative
+ *    shrink distribution (`shrink × basis`) handed the deficit to the larger
+ *    basis, starving the textarea toward 0px.
+ *  - `flex-1` + `max-w-48` (round-4 F5b): `basis-0` with grow:0 then rendered
+ *    this slot at literally 0px in the ORDINARY positive-free-space case, so
+ *    it needed a grow weight back, bounded so it could not win a width contest.
+ *  - `h-6` (round-5 diag:placeholder-align): compensation for the parent row's
+ *    `items-start`, so this slot's shorter content still stood at the shared
+ *    24px reference.
+ *
+ * Every one of those answers the same question — how should this slot and the
+ * textarea divide one row — and F6 stops asking it. The line is a DRAFT-side
+ * fact (attachments being read off disk, or a large-attachment hint; see
+ * `shouldShowStatusLine` and `resolveIdleStatusText` for why nothing else can
+ * reach it in this mode), which puts it in the same family as the notice, the
+ * queue notice and the chips. It renders with them, on its own line, with the
+ * card's full width. `min-w-0` is all that survives, and only because the
+ * inner `<p>`'s `truncate` needs a zero min-width above it to fire at all;
+ * `h-6` goes because the parent it compensated for is `items-center` again.
+ *
+ * The two modes deliberately place this line DIFFERENTLY and must not be
+ * "unified": `empty` keeps its status line inside the bottom bar, where it is
+ * the only elastic text and has room to be (`ChatComposer.tsx`'s empty branch
+ * passes its own wrapper class). The empty card is a wide centred card; the
+ * session card is a narrow docked one whose row 2 already carries five
+ * controls. Same component, two different width budgets, two right answers.
  */
 export function sessionStatusLineWrapperClass(): string {
-  return 'flex h-6 min-w-0 flex-1 shrink basis-0 max-w-48 items-center gap-1.5';
+  return 'flex min-w-0 items-center gap-1.5';
 }
 
 /**
@@ -595,20 +626,21 @@ export function shouldRenderTargetRow(input: {
  * potentially a multi-hundred-character `rawEvents=[...]`/`hostAfter=...`
  * dump) already renders once, in full, in the destructive banner above the
  * composer card (`ChatComposer.tsx`'s `mb-2 max-h-28 …` block) — showing it
- * a SECOND time crammed into this same single flex row as the textarea was
- * not just redundant, it was the actual defect-B trigger: the error string's
- * own max-content width could claim the row's entire shrink budget and crush
- * the textarea to 0px (see `composerTextareaClass`'s `min-w-32` / the
- * layout-half fix `sessionStatusLineWrapperClass`, both below). The banner
- * is now the SOLE owner of error text in session mode; any future inline
- * status for an error state must be a short, fixed-length label (e.g.
- * "Failed"), never the full message.
+ * a SECOND time crammed into what was then the same flex row as the textarea
+ * was not just redundant, it was the actual defect-B trigger: the error
+ * string's own max-content width could claim the row's entire shrink budget
+ * and crush the textarea to 0px. (F6 has since taken the status line out of
+ * that row entirely — see `sessionStatusLineWrapperClass` below — which
+ * removes the mechanism, not the reason: the banner is still the SOLE owner
+ * of error text in session mode, and any future inline status for an error
+ * state must be a short, fixed-length label (e.g. "Failed"), never the full
+ * message.)
  *
  * T-31 §3.2 (F-B11): `sending` no longer shows this line at all. The waiting
  * copy it used to gate ("Waiting for Agent Host reply · 12s (up to 300s)")
  * describes the turn in flight, not the draft in hand, so it moved to the turn
- * head, where it gets the full reading-column width instead of the middle of a
- * 42px row. Leaving the condition here would print the same fact twice, in two
+ * head, where it gets the full reading-column width instead of the middle of
+ * the docked card. Leaving the condition here would print the same fact twice, in two
  * places, from one source. What stays in the composer is the round action
  * button's Stop state — the "something is running" signal is still
  * double-channelled, it just no longer duplicates the text.
