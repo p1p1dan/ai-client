@@ -218,3 +218,86 @@ describe('round-10 ③ — failed-card body dedupe vs the error notice', () => {
     expect(latestErrorNoticeText([{ role: 'error', blocks: [] }])).toBeNull();
   });
 });
+
+/**
+ * F2 S3 §8.3 / §12.1 — `[TS-1]`: `kind` and copy are SAME-SOURCED.
+ *
+ * `turnStatus.ts` and `composerSendingLine` both key their wording switch off
+ * the one imported `SLOW_WAIT_HINT_SECONDS`, which is what makes it impossible
+ * for the head to say "Still waiting" while calling itself `awaiting` (or the
+ * reverse). F2 makes this window reachable for text-only sends for the first
+ * time — the budget went from 45s to a 300s silence ceiling, so `45s -> 300s`
+ * is now a VISIBLE waiting state rather than the instant before an abandon.
+ *
+ * The proposition is deliberately "kind and copy flip together", NOT ">=45 is
+ * always slow": F456's fourth slice splits `>=180` off into its own `'stalled'`
+ * kind, and a test written the second way would go red by construction on a
+ * proposition F2 never owned. The sample point is therefore anchored INSIDE
+ * `[45, 180)` — 62s, the same second `attachments.test.ts:357`/`:436` pin word
+ * for word, so the two suites stay same-sourced too.
+ */
+describe('[TS-1] slow kind and slow copy are same-sourced (F2 §8.3)', () => {
+  const SAMPLE_SECONDS = 62;
+
+  it('[TS-1] 62s with no blocks is `slow`, and its text delegates to composerSendingLine', () => {
+    expect(SAMPLE_SECONDS).toBeGreaterThanOrEqual(SLOW_WAIT_HINT_SECONDS);
+    const input: TurnStatusInput = {
+      ...base,
+      elapsedSeconds: SAMPLE_SECONDS,
+      budgetMs: 300_000,
+      hasBlocks: false,
+    };
+    const status = deriveTurnStatus(input);
+    expect(status?.kind).toBe('slow');
+    // Delegation, not a literal — the same posture as the `awaiting` pair
+    // above. `attachments.test.ts` owns the word-for-word pin.
+    expect(status?.text).toBe(
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds: SAMPLE_SECONDS,
+        budgetMs: 300_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+      })
+    );
+    // The one word-level fact this batch DID audit before making the copy
+    // reachable on the text-only path (§8.4): the instruction it gives is
+    // executable. Stop really is on screen in this state — `'pending'` keeps
+    // the turn head alive and never unbinds the Host, so the button reaches it.
+    expect(status?.text).toContain('Stop to abort.');
+  });
+
+  it('[TS-1] the retry suffix survives the slow branch, still from the same source', () => {
+    const retry = { attempt: 1, maxRetries: 10 };
+    const status = deriveTurnStatus({
+      ...base,
+      elapsedSeconds: SAMPLE_SECONDS,
+      budgetMs: 300_000,
+      hasBlocks: false,
+      retry,
+    });
+    expect(status?.kind).toBe('slow');
+    expect(status?.text).toBe(
+      composerSendingLine({
+        phase: 'awaiting',
+        elapsedSeconds: SAMPLE_SECONDS,
+        budgetMs: 300_000,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+        retry,
+      })
+    );
+  });
+
+  it('[TS-1] the budget re-source does not print a deadline in the slow branch', () => {
+    // §9.3 change 4: `(up to Ns)` is a prediction, and past the threshold
+    // there is nothing to predict — reaching the ceiling is not an event.
+    const status = deriveTurnStatus({
+      ...base,
+      elapsedSeconds: SAMPLE_SECONDS,
+      budgetMs: 300_000,
+      hasBlocks: false,
+    });
+    expect(status?.text).not.toContain('up to');
+  });
+});

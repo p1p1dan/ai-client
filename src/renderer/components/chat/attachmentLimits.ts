@@ -7,12 +7,9 @@
  * reproduce (150 KB -> 11.2s, 500 KB -> 9.5s, 2 MB -> 10.6s the same day), so
  * nothing here is derived from a size/latency model.
  *
- * F2 (2026-08-18): the send-wait half moved to `sendBudgets.ts`. This file's
- * former second reason-to-exist ("the limit checks and the timeout formula
- * cannot drift apart") no longer holds — once the wait became a RESETTABLE
- * silence table, the user echo resets it at t~=0 and attachment bytes have
- * exactly zero effect on it, so there is nothing left for the two halves to
- * drift about.
+ * F2 (2026-08-18, S3): the send-wait half — `sendTimeoutMs` and its
+ * constants — has been removed entirely; this module is attachment limits
+ * only. The wait budget now lives in `sendBudgets.ts`.
  *
  * §12 verification first: __tests__/attachmentLimits.test.ts.
  */
@@ -166,51 +163,4 @@ export function largeAttachmentHint(
     return `Attachments total ${formatAttachmentSize(total)} — sending may take longer.`;
   }
   return null;
-}
-
-/**
- * DEPRECATED as a whole (F2 2026-08-18, §1.3) — the byte-scaled send budget is
- * retired, and with it the old "the renderer speaks first" INVARIANT block
- * that used to sit here. The authoritative (REVERSED) cross-program invariant,
- * the two Host mirrors and the live budgets are in `sendBudgets.ts`.
- *
- * Why the formula died rather than moved: `normalizer.beginTurn` emits the
- * user echo BEFORE the query starts, so a resettable silence table is reset at
- * t~=0 on every send — byte scaling has identically zero effect on it. The
- * size metadata the Composer still shows never went through here anyway
- * (`composerSendingLine` takes `attachmentCount` / `attachmentBytes` as its
- * own inputs, and `largeAttachmentHint` above is independent).
- *
- * ONE caller remains: `MessageTimeline.tsx`'s `DEFAULT_REPLY_BUDGET_MS`. F2 S2
- * removed both `ChatComposer.tsx` call sites; `MessageTimeline.tsx` is S3's
- * exclusive file, and S3 deletes this block together with that last consumer
- * (re-sourced to `SEND_SILENCE_CEILING_MS`). Do not add a new caller.
- */
-
-/** @deprecated F2 S3 removes this with `sendTimeoutMs`. */
-export const SEND_BASE_TIMEOUT_MS = 45_000;
-
-/**
- * Not an upload-speed model: measured latency is size-independent
- * (2 MB -> 10.6s, 150 KB -> 11.2s on the same day). This was headroom for
- * gateway variance, which spanned ~8x on the same payload class across days —
- * the measurement `attachments.ts`'s "gateway latency varies" copy cites.
- *
- * @deprecated F2 S3 removes this with `sendTimeoutMs`.
- */
-export const SEND_MS_PER_MB = 30_000;
-
-/** @deprecated F2 S3 removes this with `sendTimeoutMs`. */
-export const SEND_TIMEOUT_CEILING_MS = 180_000;
-
-/**
- * Wait budget for one send. attachmentBytes = total RAW bytes (pre-base64).
- *
- * @deprecated F2 (2026-08-18): use `SEND_SILENCE_CEILING_MS` from
- * `sendBudgets.ts`. See the block above for the removal plan.
- */
-export function sendTimeoutMs(attachmentBytes: number): number {
-  if (attachmentBytes <= 0) return SEND_BASE_TIMEOUT_MS;
-  const scaled = SEND_BASE_TIMEOUT_MS + Math.ceil(attachmentBytes / (1024 * 1024)) * SEND_MS_PER_MB;
-  return Math.min(scaled, SEND_TIMEOUT_CEILING_MS);
 }

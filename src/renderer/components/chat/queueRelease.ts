@@ -142,8 +142,59 @@ export function decideQueueRelease(input: DecideQueueReleaseInput): QueueRelease
  * `'rejected'`: the Host flatly refused to admit the turn (e.g. `session_busy`
  * fired before `normalizer.beginTurn`, so nothing was echoed and no turn
  * started) — requeue, exactly like `'skipped'`.
+ * `'pending'`: F2 (2026-08-18, §4.3) — the Host admitted the turn and it is
+ * STILL RUNNING; this renderer merely stopped waiting for the reply because
+ * its silence ceiling elapsed. Never requeue (the entry is spent, exactly like
+ * `'committed'`), and never treat it as a failure — nobody has said this turn
+ * is dead, and the only actor allowed to say so is the Host.
+ *
+ * ## P0 warning to anyone adding a fifth member (§4.3)
+ *
+ * NOT ONE of this type's six consumers is an exhaustive `switch` — they are
+ * all `if (x === 'committed')` / `if (a || b)` shapes, so a new member
+ * compiles clean and silently inherits some existing default branch. When
+ * `'pending'` was added, two of those defaults were `'resend'` and `true`,
+ * i.e. a one-click Retry armed on an already-admitted turn: the double-send
+ * this repo's A1 round removed. Every consumer below therefore states its
+ * `'pending'` answer EXPLICITLY, even where the default happened to be right,
+ * and `queueRelease.test.ts`'s `[P-1]`~`[P-7]` pin all six by hardcoded value.
+ * Do the same for the fifth.
  */
-export type RunEntryOutcome = 'committed' | 'skipped' | 'rejected';
+export type RunEntryOutcome = 'committed' | 'skipped' | 'rejected' | 'pending';
+
+/**
+ * F2 (2026-08-18 §4.2): how the renderer classifies a turn it has STOPPED
+ * WAITING on. This is NOT a failure classifier — there is no error anywhere on
+ * this path: the silence ceiling elapsing says nothing whatsoever about
+ * whether the turn is alive (`sendBudgets.ts` explains why the Host's own
+ * stall watchdog necessarily fires first). It answers exactly one question:
+ * did the Host ever take this turn?
+ *
+ * Deliberately kept separate from `decideRunEntryOutcome`, which routes the
+ * fatal-error paths. Same evidence, opposite premise: there, a fatal error has
+ * landed and the question is whether anything was spent; here, nothing at all
+ * has been said and the question is whether anyone is still working.
+ */
+export function decideAdmittedTimeoutOutcome(input: {
+  sawUserEcho: boolean;
+  sawAssistantProgress: boolean;
+}): 'pending' | 'rejected' {
+  return input.sawUserEcho || input.sawAssistantProgress ? 'pending' : 'rejected';
+}
+
+/**
+ * F2 (§4.3, consumption points 5 and 6): the Host took this turn — either
+ * `'committed'` (it finished, however it finished) or `'pending'` (it is still
+ * running and only this renderer walked away). Anything else means the turn
+ * never started, so the queue entry / draft is still the caller's to replay.
+ *
+ * Written as a predicate rather than as a two-name list at each call site
+ * precisely because a name list is what silently does the wrong thing the next
+ * time this vocabulary grows.
+ */
+export function isAdmittedOutcome(outcome: RunEntryOutcome): boolean {
+  return outcome === 'committed' || outcome === 'pending';
+}
 
 export interface DecideRunEntryOutcomeInput {
   /** A fatal `host.error` landed for this send attempt. */
@@ -225,6 +276,13 @@ export type RunSendOrigin = 'direct' | 'retry' | 'release';
  */
 export function shouldArmRetryable(outcome: RunEntryOutcome, origin: RunSendOrigin): boolean {
   if (outcome === 'committed') return false;
+  // F2 §4.3 consumption point 1 — MUST be explicit. The silent default for a
+  // new member here is `true`, and arming a one-click Retry on a turn the Host
+  // has already admitted (and is still running) is a genuine double-send: a
+  // second `chat.send`, a second `beginTurn`, a second echo. Same reasoning as
+  // `'committed'` one line above; the only difference is that this turn has
+  // not finished yet, which makes the duplicate WORSE, not better.
+  if (outcome === 'pending') return false;
   return !(outcome === 'rejected' && origin === 'release');
 }
 
@@ -244,6 +302,8 @@ export function shouldArmRetryable(outcome: RunEntryOutcome, origin: RunSendOrig
  *   still safe and still offered.
  * - `'none'` — `'rejected'` + `'release'`: the queue itself already owns
  *   recovery (`shouldPauseQueueOnRejection` below), nothing else needed.
+ *   F2 adds `'pending'` (any origin) to this row, and that addition is the
+ *   load-bearing one — see below.
  */
 export type FailureAffordance = 'resend' | 'restore-draft' | 'none';
 
@@ -252,7 +312,104 @@ export function decideFailureAffordance(
   origin: RunSendOrigin
 ): FailureAffordance {
   if (outcome === 'committed') return 'restore-draft';
+  // F2 §4.3 consumption point 2, and the executable form of the user's own
+  // ruling: input is replayed ONLY when the turn is CONFIRMED dead. A silence
+  // ceiling is a guess — the turn is very probably still running server-side,
+  // and this renderer is not entitled to a verdict about it. So: no draft
+  // restore (the user's text is already in the timeline as the echoed user
+  // bubble, selectable and copyable), no Retry, no error. The real restore
+  // still happens, later, if and when `session.failed` actually arrives (D1) —
+  // by which time it is a fact rather than a guess.
+  //
+  // The silent default here would have been `'resend'`, i.e. exactly the
+  // double-send affordance the line above removes for `'committed'`.
+  if (outcome === 'pending') return 'none';
   return shouldArmRetryable(outcome, origin) ? 'resend' : 'none';
+}
+
+/**
+ * F2 (2026-08-18 §5.3, decision D1) — provenance for a draft the app restored
+ * BY ITSELF.
+ *
+ * The hole this closes, verbatim from the triage: `restoreDraftIfComposerEmpty`
+ * only ever asked "is the composer empty", and the late-event cleanup only ever
+ * cleared `lastError` and `retryable` — it never took back the TEXT it had put
+ * in. So an automatic restore was indistinguishable from something the user
+ * typed, and nothing was ever allowed to undo it.
+ *
+ * D1 keeps automatic restore (on a CONFIRMED dead turn, never on a timeout), so
+ * the residual half still needs provenance: a `session.failed` synthesised by
+ * the Host-exit broadcast and the real end of the turn are separated by a time
+ * window, and a reply landing inside it must be able to take the draft back
+ * out — but ONLY if the user has not touched it since.
+ *
+ * As-built note (§5.4 step 1): the spec's marker also carried a `requestId`,
+ * to be verified alongside `sessionId` "when the protocol carries one". It does
+ * not — neither `session.failed` nor any progress event in this repo carries a
+ * requestId, and `isSessionFailedForSend` scopes by session alone. The field is
+ * therefore omitted rather than pinned at a permanent `null` beside an
+ * unreachable comparison; add it back, with the check, the day the protocol
+ * grows one.
+ *
+ * Two disciplines, both non-negotiable:
+ *  1. a late event may revoke the restore only while text AND attachments are
+ *     provably untouched;
+ *  2. once the user edits, the marker dies but the CONTENT STAYS. Never delete
+ *     by value equality — a user who retypes the identical sentence owns it.
+ */
+export interface RestoredDraftMarker {
+  sessionId: string;
+  /** What was written. Compared as a NECESSARY condition, never a sufficient one — see discipline 2. */
+  text: string;
+  /**
+   * Ids of the drafts written back.
+   *
+   * These are the load-bearing half for attachments, and they are IDENTITY, not
+   * value: draft ids come from a monotonic module-level sequence, so a user who
+   * re-pastes the very same image gets a NEW id and the marker correctly dies.
+   * A count could not tell "removed one, added one" from "untouched", and a
+   * revision counter cannot see mutations that originate inside the attachments
+   * hook (a paste never passes through this component).
+   */
+  draftIds: readonly string[];
+  /** Composer text revision AT the moment of restore — any later keystroke moves it. */
+  valueRevision: number;
+  /** Attachment revision as observed at restore time. Diagnostic; `draftIds` is what decides. */
+  attachmentRevision: number;
+}
+
+export interface RestoredDraftState {
+  sessionId: string;
+  text: string;
+  draftIds: readonly string[];
+  valueRevision: number;
+}
+
+/**
+ * Whether a late event may take back an automatically restored draft.
+ *
+ * Every clause is a veto, and the default answer is NO — leaving the user's
+ * composer alone is always the safe failure mode, while wrongly clearing it
+ * destroys input that exists nowhere else.
+ */
+export function shouldRevokeRestoredDraft(
+  marker: RestoredDraftMarker,
+  current: RestoredDraftState
+): boolean {
+  // 1. Scope. A marker from another session must never reach into the one the
+  //    user is looking at now.
+  if (marker.sessionId !== current.sessionId) return false;
+  // 2. The text half, by REVISION. This is what separates "still ours" from
+  //    "the user retyped the identical sentence": the second case moves the
+  //    revision even though every character matches.
+  if (marker.valueRevision !== current.valueRevision) return false;
+  // 3. The text half, by value — necessary, not sufficient. A mismatch here
+  //    with a matching revision would mean a writer bypassed `updateValue`,
+  //    and in that case we do not know what we are looking at, so we stop.
+  if (marker.text !== current.text) return false;
+  // 4. The attachment half, by identity over the whole list.
+  if (marker.draftIds.length !== current.draftIds.length) return false;
+  return marker.draftIds.every((id, index) => id === current.draftIds[index]);
 }
 
 /**
@@ -286,6 +443,12 @@ export function shouldPauseQueueOnRejection(
   outcome: RunEntryOutcome,
   origin: RunSendOrigin
 ): boolean {
+  // F2 §4.3 consumption point 3. The silent default (`false`) is already the
+  // right answer for `'pending'` — a released entry was spent at the commit
+  // point, so there is no restore->re-release loop to protect against — but it
+  // is written out rather than inherited: "correct by accident" is not a
+  // contract, and the next member may not be so lucky.
+  if (outcome === 'pending') return false;
   return outcome === 'rejected' && origin === 'release';
 }
 
@@ -350,6 +513,11 @@ export function shouldClearPauseOnSend(origin: RunSendOrigin): boolean {
  * that write).
  */
 export function shouldClearRetryableOnOutcome(outcome: RunEntryOutcome): boolean {
+  // F2 §4.3 consumption point 4. `'pending'` proves nothing in either
+  // direction — the turn has neither succeeded nor failed — so it clears
+  // nothing. Explicit for the same reason as point 3 above; the default
+  // happens to agree.
+  if (outcome === 'pending') return false;
   return outcome === 'committed';
 }
 

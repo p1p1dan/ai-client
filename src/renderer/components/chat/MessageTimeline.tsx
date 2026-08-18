@@ -27,8 +27,11 @@ import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
-import { type TurnSendStatus, useTurnSendStatusStore } from '@/stores/turnSendStatus';
-import { sendTimeoutMs } from './attachmentLimits';
+import {
+  type PendingReplyWatch,
+  type TurnSendStatus,
+  useTurnSendStatusStore,
+} from '@/stores/turnSendStatus';
 import { AUTH_REQUIRED_ERROR_VIEW, isAuthRequiredError } from './authRequiredError';
 import { ChatMarkdown } from './ChatMarkdown';
 import { deriveStreamingBlockIds, shouldRenderMarkdown } from './chatMarkdownPolicy';
@@ -77,6 +80,7 @@ import {
 } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
+import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
@@ -232,6 +236,16 @@ export function MessageTimeline({
   const sendBaseline = useTurnSendStatusStore((state) =>
     state.baseline && state.baseline.sessionId === sessionId ? state.baseline : null
   );
+  // F2 (2026-08-18 §4.5): the SECOND slot — a turn the Host admitted and is
+  // still running, which the composer has stopped waiting on. Session-scoped
+  // exactly like the two above. It exists because `runSend`'s `finally` clears
+  // `status` the instant the wait ends: without it the turn head (and the Stop
+  // button living inside it) would vanish at the ceiling, on a turn that is
+  // demonstrably still going. Deliberately NOT folded into `status` — the two
+  // are armed and cleared in the same breath, so one slot would cancel out.
+  const pendingReply = useTurnSendStatusStore((state) =>
+    state.pendingReply && state.pendingReply.sessionId === sessionId ? state.pendingReply : null
+  );
   // The CLI's own transport-retry loop, read straight off the red-line store —
   // `deriveTurnStatus` appends it to the same copy the composer used to show.
   const sessionRetry = useChatSessionsStore(
@@ -284,7 +298,11 @@ export function MessageTimeline({
     turnsRef.current = next;
     return next;
   }, [sessionMessages]);
-  const nowMs = useSecondsTick(inFlightSession || sendStatus != null);
+  // F2: `pendingReply` joins the enable set so the seconds keep running after
+  // the composer's snapshot is cleared. `inFlightSession` alone is not enough —
+  // the session status can settle before the Host's real terminal arrives, and
+  // a frozen head is exactly the "failed clock" symptom this batch removes.
+  const nowMs = useSecondsTick(inFlightSession || sendStatus != null || pendingReply != null);
   const footerNowMs = useMinuteTick();
 
   // Which turn does an in-flight send describe? During the handshake there is
@@ -475,6 +493,9 @@ export function MessageTimeline({
                     sessionStatus={status}
                     inFlightSession={inFlightSession}
                     sendStatus={isLastTurn ? attachedSendStatus : null}
+                    // F2 §4.5: same last-turn-only discipline as `nowMs` — a
+                    // pending reply belongs to the turn the send opened.
+                    pendingReply={isLastTurn ? pendingReply : null}
                     baselineKnown={sendBaseline != null}
                     baselineMessageId={sendBaseline?.messageId ?? null}
                     // T-33: session-scoped retry belongs to the turn actually
@@ -848,6 +869,8 @@ interface ChatTurnProps {
   /** The session is in flight for turn-shell purposes, `waiting_*` included (`isTurnInFlight`, F12). */
   inFlightSession: boolean;
   sendStatus: TurnSendStatus | null;
+  /** F2 §4.5: the Host still owes a reply this renderer stopped waiting for. `null` for every turn but the last. */
+  pendingReply: PendingReplyWatch | null;
   /** A send-begin baseline exists for this session (`turnSendStatus.baseline`). */
   baselineKnown: boolean;
   /** Last message id in the bucket when this session's last send began. */
@@ -898,6 +921,7 @@ const ChatTurn = memo(function ChatTurn({
   sessionStatus,
   inFlightSession,
   sendStatus,
+  pendingReply,
   baselineKnown,
   baselineMessageId,
   retry,
@@ -954,13 +978,25 @@ const ChatTurn = memo(function ChatTurn({
     !inFlight && isLastTurn && inFlightSession && !turnComplete && firstAssistant
       ? (getMetadata(firstAssistant.id)?.startedAt ?? null)
       : null;
-  const turnActive = inFlight || streamStartedAt != null;
+  // F2 (2026-08-18 §4.5): the third way a turn can be active. `inFlight` dies
+  // with the composer's snapshot and `streamStartedAt` needs a first assistant
+  // message — so a turn the Host admitted, never answered, and never failed had
+  // NEITHER, and its head silently disappeared at the ceiling. That is the
+  // "lost stopwatch" defect: the turn was still running, and the UI stopped
+  // showing it (taking the Stop button with it).
+  const pendingActive = isLastTurn && pendingReply != null;
+  const turnActive = inFlight || streamStartedAt != null || pendingActive;
   const elapsedSeconds =
     inFlight && sendStatus
       ? sendStatus.elapsedSeconds
       : streamStartedAt != null
         ? Math.max(0, Math.floor((nowMs - streamStartedAt) / 1000))
-        : 0;
+        : // Recomputed from the arm time rather than carried forward, so no
+          // second ticker has to exist: `useSecondsTick` above already runs for
+          // exactly as long as this watch does.
+          pendingActive && pendingReply
+          ? Math.max(0, Math.floor((nowMs - pendingReply.turnStartedAtMs) / 1000))
+          : 0;
 
   // T-33 (review F1, round 2): the turn's progress stamp — block count PLUS
   // streamed characters. A resumed call may append into an EXISTING text
@@ -1232,8 +1268,18 @@ const ChatTurn = memo(function ChatTurn({
   );
 });
 
-/** Text-only reply budget — the "(up to Ns)" figure for an in-flight turn with no composer snapshot of its own. */
-const DEFAULT_REPLY_BUDGET_MS = sendTimeoutMs(0);
+/**
+ * Fallback reply budget — the "(up to Ns)" figure for an in-flight turn with no
+ * composer snapshot of its own.
+ *
+ * F2 (2026-08-18 §1.3): re-sourced from the retired byte-scaled `sendTimeoutMs(0)`
+ * (45s) to the renderer's silence ceiling. This was `sendTimeoutMs`'s LAST
+ * consumer, so the whole formula retires with this line. The figure is no
+ * longer a prediction of when anything happens — reaching it is not a verdict
+ * (see `sendBudgets.ts`) — which is why the `slow` copy above 45s deliberately
+ * stops printing it at all.
+ */
+const DEFAULT_REPLY_BUDGET_MS = SEND_SILENCE_CEILING_MS;
 
 function findLastAssistant(messages: readonly ChatMessage[]): ChatMessage | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {

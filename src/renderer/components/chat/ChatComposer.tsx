@@ -78,19 +78,23 @@ import {
 import { resolveResumeModel } from './models';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
+  decideAdmittedTimeoutOutcome,
   decideFailureAffordance,
   decidePendingResolution,
   decideRunEntryOutcome,
   decideSendAction,
   deriveActionButtons,
   deriveQueueStripModel,
+  isAdmittedOutcome,
   isRunningStatus,
+  type RestoredDraftMarker,
   type RunEntryOutcome,
   type RunSendOrigin,
   shouldClearPauseOnSend,
   shouldClearRetryableOnOutcome,
   shouldPauseQueueOnRejection,
   shouldRetryBusySend,
+  shouldRevokeRestoredDraft,
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
@@ -295,6 +299,29 @@ async function waitUntil(
 }
 
 /**
+ * F2 (2026-08-18 §4.2): why `runSend` stopped waiting — the FIRST of the two
+ * layers. It answers only that question; whether the Host ever took the turn is
+ * the second layer's (`decideAdmittedTimeoutOutcome`), and the two are
+ * deliberately not merged: one is about this renderer, the other about the Host.
+ *
+ * Spelled as a union rather than the old `boolean` because the exits are not
+ * two but four, and `false` used to mean both "the budget ran out" and "the
+ * user pressed Stop and the Host never answered" — which is how a Stop came to
+ * be reported with a no-progress error card. As explicit `case` labels these
+ * also give the source-scan guards (`composerStopStatic.test.ts`) an anchor
+ * that survives renaming any local variable.
+ */
+type WaitResult =
+  /** A release condition fired: progress, a permission/question park, or a fatal error. */
+  | 'progress'
+  /** THIS attempt's own `session.stopped` / `session.completed` reached the wire. */
+  | 'terminal'
+  /** A newer generation superseded this attempt (Stop, or a fresh send). */
+  | 'cancelled'
+  /** The silence ceiling (or the absolute loop bound) elapsed. NOT a verdict. */
+  | 'ceiling';
+
+/**
  * Fixed-deadline expiry rule, for the two handshake waits whose semantics did
  * NOT change: a create/resume acknowledgement either arrives promptly or the
  * Host is not answering, and no liveness frame for a session that does not
@@ -343,6 +370,11 @@ export function ChatComposer({
   const beginTurnSend = useTurnSendStatusStore((state) => state.begin);
   const updateTurnSend = useTurnSendStatusStore((state) => state.update);
   const endTurnSend = useTurnSendStatusStore((state) => state.end);
+  // F2 §4.5: the second slot's two actions. Kept as separate selectors for the
+  // same reason the three above are — a whole-store subscription would
+  // re-render the composer on every seconds tick the turn head publishes.
+  const armPendingReply = useTurnSendStatusStore((state) => state.armPendingReply);
+  const clearPendingReply = useTurnSendStatusStore((state) => state.clearPendingReply);
   // Review batch F3: the ownership token of the send THIS instance currently
   // holds the status slot for, so the unmount cleanup below can only ever clear
   // its own snapshot — never one a surviving instance published in the
@@ -365,13 +397,21 @@ export function ChatComposer({
   // already told the Host to abort the turn the user was looking at,
   // silently starting a turn they had just explicitly cancelled.
   const sendGenerationRef = useRef(0);
-  // R10 (round-2 iteration-2 review): the 45s-abandon branch below (F2) keeps
-  // the turn running server-side instead of stopping it — a correct answer
-  // can still land seconds later. This tracks WHICH session/lastError pair
-  // that branch armed so a small effect (below) can clear the stale banner
-  // + retryable the moment real progress for that same session arrives,
-  // instead of crowning a correct answer with a red failure banner and an
-  // armed Retry that would double-send.
+  // F2 (2026-08-18 §4.2/§5.1): the `'pending'` branch's own record of a turn
+  // the Host ADMITTED and is still running, which this renderer stopped waiting
+  // for. It is not a failure marker any more — its predecessor
+  // (`abandonMarkerRef`) existed to un-say a red banner the abandon branch had
+  // just fabricated, and that branch no longer fabricates anything. What it
+  // carries now is the found-material for the ONE case that may still replay
+  // the input: if a real `session.failed` arrives later, the turn is CONFIRMED
+  // dead and D1 puts the payload back (with provenance — see
+  // `restoredDraftRef`). If instead a late reply, a `session.completed` or a
+  // Stop arrives, this is dropped in silence and the composer was never
+  // touched at all.
+  //
+  // Deliberately holds no `error`: the ceiling path writes no `lastError` and
+  // arms no `retryable`, so it has no products of its own to clean up, and
+  // clearing someone else's would be overreach.
   //
   // S4 (round-2 iteration-3 review): `assistantCursor` (count of
   // assistant-with-blocks messages observed AT ARM TIME) is the monotonic
@@ -380,12 +420,26 @@ export function ChatComposer({
   // session's REPLAYED history already satisfies that unconditional check,
   // so ANY unrelated status/message change used to wipe this marker (and the
   // user's payload with it) the instant it fired.
-  const abandonMarkerRef = useRef<{
+  const pendingReplyRef = useRef<{
     sessionId: string;
-    error: string;
     committed: { text: string; drafts: readonly AttachmentDraft[] };
     assistantCursor: number;
   } | null>(null);
+  // §5.3 (D1 connected): provenance for a draft this component restored BY
+  // ITSELF, and the only thing a late event is ever allowed to take back out.
+  const restoredDraftRef = useRef<RestoredDraftMarker | null>(null);
+  // Monotonic revision of the composer's text, bumped by `updateValue` — the
+  // single write path for `value`. This is what distinguishes "still the draft
+  // we restored" from "the user retyped the identical sentence": the second
+  // moves this counter even though every character matches.
+  const valueRevisionRef = useRef(0);
+  // The attachment half of the same question. Ids rather than a count, because
+  // a count cannot see "removed one, added one" — and ids come from a
+  // monotonic sequence, so a re-paste of the same image is a different id.
+  // Mirrored through an effect because a paste never passes through this
+  // component: the hook's own state is the only complete observation point.
+  const draftIdsRef = useRef<readonly string[]>([]);
+  const attachmentRevisionRef = useRef(0);
   // A1 (round-4 point-check fix): a fresh-value mirror of the composer's own
   // `value` state. `runSend` is a plain closure re-created every render, so
   // an ALREADY-RUNNING call's committed-outcome draft-restore (it can fire
@@ -407,6 +461,10 @@ export function ChatComposer({
   const valueRef = useRef(value);
   const updateValue = useCallback((next: string) => {
     valueRef.current = next;
+    // F2 §5.3: bumped on EVERY write, including our own restore — the marker
+    // records the value AFTER the restore, so any later keystroke moves it out
+    // of match and the restore becomes the user's to keep.
+    valueRevisionRef.current += 1;
     setValue(next);
   }, []);
   // Round-4 point-check fix (Codex 2.3): the empty->session mode switch
@@ -521,6 +579,72 @@ export function ChatComposer({
   const { clearDrafts: clearAttachmentDrafts, dismissNotice: dismissAttachmentNotice } =
     attachments;
 
+  // F2 §5.3: the attachment half of the restored-draft provenance. It has to be
+  // mirrored out of the hook's own state rather than counted at this
+  // component's call sites, because the two most common mutations — a paste and
+  // a file pick — happen entirely inside the hook and never pass through here.
+  // One render behind by construction, which is harmless for the only consumer:
+  // a late runtime event arriving seconds after the restore.
+  useEffect(() => {
+    draftIdsRef.current = attachments.drafts.map((draft) => draft.id);
+    attachmentRevisionRef.current += 1;
+  }, [attachments.drafts]);
+
+  // A1's draft restore, LIFTED out of `runSend` (F2 §5.3): it now has two
+  // callers — the `'committed'` failure path inside `runSend`, and the
+  // confirmed-death listener further down (D1) which fires long after that
+  // closure is gone. Both must write the SAME provenance marker, so there can
+  // only be one of these.
+  //
+  // Reads the FRESH mirrors (`valueRef`, synced synchronously by `updateValue`;
+  // `getLiveDraftCount`, the hook's own ref) rather than render-closure values,
+  // because this can fire tens of seconds after the render that armed it — by
+  // which time the user may have started typing something else that must never
+  // be clobbered.
+  const restoreDraftIfComposerEmpty = useCallback(
+    (sessionId: string, payload: { text: string; drafts: readonly AttachmentDraft[] }) => {
+      const composerIsEmpty =
+        valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
+      if (!composerIsEmpty) return;
+      if (payload.text) updateValue(payload.text);
+      if (payload.drafts.length > 0) attachments.addDrafts(payload.drafts);
+      // Written AFTER the two writes above, so `valueRevision` is the revision
+      // the restore itself produced. "This draft is ours, not the user's."
+      restoredDraftRef.current = {
+        sessionId,
+        text: payload.text,
+        draftIds: payload.drafts.map((draft) => draft.id),
+        valueRevision: valueRevisionRef.current,
+        attachmentRevision: attachmentRevisionRef.current,
+      };
+    },
+    [attachments, updateValue]
+  );
+
+  // Step 7 of the late-event cleanup chain (§5.4). Asymmetric on purpose:
+  // revoking wrongly destroys input that exists nowhere else, while failing to
+  // revoke leaves a visible duplicate the user can delete — so every clause of
+  // `shouldRevokeRestoredDraft` is a veto and the default is to leave it alone.
+  // The marker is dropped either way (step 8): once a late event has been
+  // evaluated against it, it has had its one chance.
+  const revokeRestoredDraftIfUntouched = useCallback(
+    (sessionId: string) => {
+      const marker = restoredDraftRef.current;
+      if (!marker) return;
+      const revoke = shouldRevokeRestoredDraft(marker, {
+        sessionId,
+        text: valueRef.current,
+        draftIds: draftIdsRef.current,
+        valueRevision: valueRevisionRef.current,
+      });
+      restoredDraftRef.current = null;
+      if (!revoke) return;
+      updateValue('');
+      if (marker.draftIds.length > 0) attachments.removeDrafts(marker.draftIds);
+    },
+    [attachments, updateValue]
+  );
+
   // Drafts belong to the session they were pasted into. The Composer is mounted
   // once with no key, so without this a screenshot pasted in session A would
   // ride along with the next message sent from session B — real image tokens
@@ -596,7 +720,13 @@ export function ChatComposer({
   // captured before that message can land.
   const maybeApplyFirstMessageTitle = useCallback(
     (sessionId: string, text: string, outcome: RunEntryOutcome, hadUserMessage: boolean) => {
-      if (outcome !== 'committed') return;
+      // F2 (§4.3 consumption point 6): ADMITTED, not `=== 'committed'`. This is
+      // the one row of the six where the silent default was wrong in the other
+      // direction — a first message whose reply timed out is still in the CLI's
+      // own transcript, so the chat should carry its name. Leaving it untitled
+      // would have been a second, quieter way of pretending the turn never
+      // happened.
+      if (!isAdmittedOutcome(outcome)) return;
       if (hadUserMessage) return;
       void applyAutoSessionTitle(sessionId, text);
     },
@@ -1001,6 +1131,11 @@ export function ChatComposer({
     // attachment bytes have identically zero effect on it. Opened here, at
     // dispatch time, so the absolute loop bound covers the handshake too.
     const budget = createSendWaitBudget(Date.now());
+    // F2 §4.5: when the wait this send is about to open began, so a
+    // `'pending'` turn head can recompute its own seconds without a second
+    // ticker. Re-stamped at dispatch (below) so it names the AWAITING phase,
+    // the one the user is actually watching, rather than the handshake.
+    let turnStartedAtMs = Date.now();
 
     // 2026-07-28 continuity fix: decide, off a store snapshot and BEFORE any
     // IPC, whether the Host registry entry is still alive (direct send — no
@@ -1032,7 +1167,12 @@ export function ChatComposer({
     // (see below) had nothing to anchor to except A's own committed object —
     // which `handleRetry` deliberately replays, making a fresh B's outcome
     // look identical to A's by value.
-    abandonMarkerRef.current = null;
+    //
+    // F2: the store slot goes with it. A new turn on this session makes the
+    // previous turn's head moot — whatever the Host is still doing with it, the
+    // head the user is now watching belongs to THIS send.
+    pendingReplyRef.current = null;
+    clearPendingReply(sessionId);
     // A skip warning belongs to the paste that produced it, not to the next
     // turn. Sending is one of the three clear triggers (next attach / Send / x).
     dismissAttachmentNotice();
@@ -1074,26 +1214,6 @@ export function ChatComposer({
       useMessageQueueStore.getState().clearPause(sessionId);
     }
     const committed = { text: trimmed, drafts };
-    // A1 (round-4 point-check fix): puts `committed`'s payload back into the
-    // visible composer draft — the affordance a `'committed'` outcome now
-    // gets instead of a silently-armed one-click resend (see
-    // `decideFailureAffordance`). Reads the FRESH `valueRef` mirror (synced
-    // synchronously by `updateValue`, F4 fix) and the attachments hook's own
-    // live draft count (`getLiveDraftCount` — F4 fix) instead of the
-    // `value`/`attachments` captured by this closure at call time, because
-    // this can fire tens of seconds after the render that started it, during
-    // which the user may already have started typing something new — that
-    // new content must never be clobbered.
-    const restoreDraftIfComposerEmpty = (payload: {
-      text: string;
-      drafts: readonly AttachmentDraft[];
-    }) => {
-      const composerIsEmpty =
-        valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
-      if (!composerIsEmpty) return;
-      if (payload.text) updateValue(payload.text);
-      if (payload.drafts.length > 0) attachments.addDrafts(payload.drafts);
-    };
     // R1 (round-2 iteration-2 review): the single place every non-success
     // return below now funnels through — `decideFailureAffordance` is the
     // ONLY place that decides whether this outcome arms the round Retry
@@ -1117,7 +1237,10 @@ export function ChatComposer({
       if (affordance === 'resend') {
         setRetryable(committed);
       } else if (affordance === 'restore-draft') {
-        restoreDraftIfComposerEmpty(committed);
+        // F2 §5.3: the lifted, provenance-writing version (see its definition
+        // above) — the same one the confirmed-death listener uses, so both
+        // automatic restores are revocable by exactly the same rule.
+        restoreDraftIfComposerEmpty(sessionId, committed);
       }
       if (shouldPauseQueueOnRejection(outcome, origin)) {
         useMessageQueueStore.getState().pauseSession(sessionId, 'send-rejected');
@@ -1430,7 +1553,7 @@ export function ChatComposer({
     };
 
     /** Send the turn, then wait for assistant / tool / permission / terminal progress. */
-    const sendAndWait = async (): Promise<boolean> => {
+    const sendAndWait = async (): Promise<WaitResult> => {
       // Stop-hang fix (2026-08-10), companion to the cancellation check in
       // the wait below: never DISPATCH a turn the user has already cancelled.
       // Stop is live from the moment `setSending(true)` runs — the whole
@@ -1445,7 +1568,7 @@ export function ChatComposer({
       // and a direct send gets its payload back. Covers all three call sites
       // (first send, busy-retry resend, `session_not_found` fallback resend)
       // by living here rather than at any one of them.
-      if (sendGenerationRef.current !== myGeneration) return false;
+      if (sendGenerationRef.current !== myGeneration) return 'cancelled';
       // Round-6 verify major: the store fallback in the wait below may only
       // accept a reply THIS send produced. Captured before dispatch — an
       // absolute "any runtime assistant exists" check is satisfied by the
@@ -1483,10 +1606,11 @@ export function ChatComposer({
       // T-19: `value`/attachments were already consumed at runSend's commit
       // point (decision 2.2) — no clearing here.
       phaseStartedAtRef.current = Date.now();
+      turnStartedAtMs = phaseStartedAtRef.current;
       updateTurnSend(sendOwner, { elapsedSeconds: 0, phase: 'awaiting' });
 
       // Running alone is not success — wait for assistant / tool / permission / terminal.
-      return waitUntil(
+      const released = await waitUntil(
         () => {
           // Stop-hang fix (2026-08-10), FIRST because a stopped turn can also
           // carry a stale `fatalHostError` from earlier in the same attempt
@@ -1536,6 +1660,16 @@ export function ChatComposer({
         },
         () => budget.isExpired(Date.now())
       );
+
+      // §4.2 layer one. Classified HERE, the instant the wait returns, so the
+      // answer cannot drift: the flags below are written synchronously by the
+      // listener, while anything read out of the store later is subject to
+      // `chatSessions.ts`'s batched 16ms flush (throttled further in a
+      // background window). Order mirrors the predicate's own: a stopped turn
+      // may also carry a stale `fatalHostError` and must still read as a Stop.
+      if (sawSessionStopped || sawSessionCompleted) return 'terminal';
+      if (sendGenerationRef.current !== myGeneration) return 'cancelled';
+      return released ? 'progress' : 'ceiling';
     };
 
     // T-19: every non-success path below now calls `setRetryable(committed)`
@@ -1627,7 +1761,7 @@ export function ChatComposer({
       // 'direct': the Host registry entry is already alive — no close/create
       // round-trip, straight to send below.
 
-      let ok = await sendAndWait();
+      let waitResult = await sendAndWait();
 
       // Round-2 P0 fix (queue-loss): the Host's `session.running` admission
       // gate can outlive the renderer-visible `idle`/`completed` status by a
@@ -1674,7 +1808,7 @@ export function ChatComposer({
         fatalHostError = null;
         fatalHostErrorCode = null;
         useChatSessionsStore.setState({ lastError: null });
-        ok = await sendAndWait();
+        waitResult = await sendAndWait();
       }
 
       if (cancelledDuringBusyBackoff) {
@@ -1715,7 +1849,7 @@ export function ChatComposer({
             decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
           );
         }
-        ok = await sendAndWait();
+        waitResult = await sendAndWait();
       }
 
       // R3: no `useChatSessionsStore.getState().lastError` read here — see
@@ -1740,171 +1874,181 @@ export function ChatComposer({
         return finalizeOutcome(outcome);
       }
 
-      // Stop-hang fix (2026-08-10): this attempt ENDED — the Host said so on
-      // the wire (`session.stopped` for a Stop, `session.completed` for a
-      // turn that finished without producing a single assistant block), or
-      // `handleStop` bumped the generation and the confirmation is still in
-      // flight.
+      // F2 (2026-08-18 §4.2) — the SECOND layer, for the one exit where the
+      // Host never gave a verdict at all. Everything it does is what the old
+      // 45s abandon branch did; what changed is WHEN it is allowed to run.
       //
-      // Classified HERE, ahead of the success gate below, because that gate
-      // reads `statusAfter`, and the store applies runtime events on a
-      // batched 16ms flush (`chatSessions.ts`'s `initRuntime`) — often much
-      // later in a background window, where the flush timer is throttled. The
-      // wait above releases the instant the event lands, so the status it
-      // would read here is routinely still `'running'`: leaving classification
-      // to that gate makes the SAME user action come out as a clean end or as
-      // the 45s abandon depending on a race with a timer.
-      //
-      // Neither ending is a failure or an abandonment: no `abandonError`, no
-      // abandon marker (there is no still-running turn left for one to wait
-      // on), and deliberately NO `unbindHost()` — the binding is healthy, and
-      // dropping it would force the next message through a resume handshake
-      // it does not need.
-      if (sawSessionStopped || sawSessionCompleted || sendGenerationRef.current !== myGeneration) {
-        useChatSessionsStore.setState({ lastError: null });
-        // Admission evidence still decides the outcome — same classifier as
-        // every other exit. An echoed/progressed turn is SPENT ('committed':
-        // the text is already in the timeline, and quite possibly in the
-        // CLI's own transcript, so a resend would double-send it). A turn the
-        // Host never admitted is 'rejected', so a release-origin entry goes
-        // back on the queue instead of being swallowed (decision 3.3) and a
-        // direct/Retry-origin one gets its payload back via
-        // `decideFailureAffordance`.
-        const stopOutcome = decideRunEntryOutcome({
-          fatalHostError: true,
-          sawAssistantProgress,
-          sawUserEcho,
-        });
-        if (stopOutcome === 'committed') {
-          // Same clean exit as the success gate below (invariant 3 in this
-          // function's S3 header) — a turn the Host admitted and then ended
-          // is a turn that FINISHED, not one that failed, so it must not hand
-          // the user a Retry or replay its payload back into a composer they
-          // have moved on from.
-          setRetryable(null);
-          return 'committed';
-        }
-        return finalizeOutcome(stopOutcome);
-      }
+      // Kept out of the `switch` below, and given a name, for two reasons: the
+      // `'ceiling'` case then reads as the decision it is rather than as a wall
+      // of diagnostics, and the negative source-guards `[S-1]`~`[S-7]` can scan
+      // that case for the four things a still-running turn must never get.
+      const abandonUnadmittedTurn = async (): Promise<RunEntryOutcome> => {
+        unbindHost();
+        // F2 (round-2 review fix): the renderer is giving up on this turn with
+        // no terminal event. For a turn with NO admission evidence at all that
+        // is as close to proof as this side ever gets — nothing was echoed, so
+        // nothing was started, so nothing can be double-sent by putting it
+        // back. This branch used to fire an implicit `chat.stop` here (a5) —
+        // removed, because the code must not press Stop FOR the user: a5 could
+        // kill a turn that was about to succeed. Background-burn loops are
+        // caught host-side by the TTFT watchdog's evidence-gated abort (F1).
+        const state = useChatSessionsStore.getState();
+        const session = state.sessions.find((item) => item.id === sessionId);
+        const hostAfter = await window.electronAPI.chat.getHostStatus().catch((err: unknown) => ({
+          error: err instanceof Error ? err.message : String(err),
+        }));
 
+        // a3: this used to end with "Check Claude auth / API in your
+        // CLAUDE_CONFIG_DIR settings.json" unconditionally — wrong on this
+        // machine (OAuth via ~/.claude/.credentials.json, settings.json's `env`
+        // is empty) and misleading in general: it sends the user chasing local
+        // config for what the investigation report traced to a CLI-side
+        // transport retry loop. Branch on what rawEvents actually shows instead
+        // — a1 now makes api_retry visible there, so this is often decisive.
+        // F12: `sawNetworkRetry` (tracked structurally in the listener above,
+        // from `session.status.payload.retry`) replaces a prior substring sniff
+        // over formatted event strings, which could false-positive on the
+        // watchdogs' own failure copy (e.g. "transport-layer retry loop") that
+        // also contains the word "retry".
+        const hint = sawNetworkRetry
+          ? 'rawEvents shows a network retry loop — likely a transient upstream connection issue; Retry usually recovers once it stabilizes.'
+          : "no data reached the Host at all — check the Context panel's Host stderr rows (or the Host log's [cli-stderr] lines) for a spawn or connection failure.";
+        const abandonError = [
+          'No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event).',
+          `status=${session?.status ?? 'n/a'}`,
+          `rawEvents=[${formatSeenEvents(seenEvents)}]`,
+          `hostAfter=${JSON.stringify(hostAfter)}`,
+          `sessionId=${sessionId}`,
+          `cwd=${workspacePath}`,
+          `Click Retry to resend, or Stop — ${hint}`,
+        ].join(' | ');
+        useChatSessionsStore.setState({ lastError: abandonError });
+        // A1's `'committed'` half of this branch is gone: an ADMITTED turn no
+        // longer reaches here at all (it takes the `'pending'` exit above), so
+        // there is no admitted-but-abandoned marker left to arm, and the
+        // closing advice no longer has to hedge about which of the two happened.
+        return finalizeOutcome('rejected');
+      };
+
+      // The status read the success gate needs. Taken once, here, so the
+      // discriminated switch below never has to reach back into the store —
+      // `chatSessions.ts` applies runtime events on a batched 16ms flush
+      // (throttled further in a background window), so a read INSIDE a branch
+      // races the very event that produced the branch.
       const statusAfter = useChatSessionsStore
         .getState()
         .sessions.find((s) => s.id === sessionId)?.status;
-      if (
-        // m14 fix: `sawAssistantProgress` alone must count as success even
-        // when `ok` came back false — `waitUntil`'s timeout check and this
-        // read race against the SAME event stream, so a narrow window exists
-        // where progress lands just after the timeout fires. Without this, an
+      const sawSuccess =
+        // m14 fix: `sawAssistantProgress` alone must count as success even when
+        // the wait came back without it — the wait's expiry check and this read
+        // race the SAME event stream, so a narrow window exists where progress
+        // lands just after the budget elapses. Without this, an
         // already-delivered, already-answered turn gets marked failed.
-        (ok || sawAssistantProgress) &&
+        (waitResult === 'progress' || sawAssistantProgress) &&
         (sawAssistantProgress ||
           statusAfter === 'waiting_permission' ||
           statusAfter === 'waiting_question' ||
-          statusAfter === 'idle')
-      ) {
-        // Success — clear any stale failure UI so a ghost Retry can't
-        // resurface later (e.g. prior failed stream settled and pushed an
-        // assistant bubble).
-        setRetryable(null);
-        useChatSessionsStore.setState({ lastError: null });
-        return 'committed';
+          statusAfter === 'idle');
+      // A predicate that released without producing a verdict is, from this
+      // side, the same event as a silence expiry: we stopped waiting and the
+      // Host has said nothing. Normalised here so the switch has exactly ONE
+      // "we stopped waiting" exit instead of two that must be kept in step.
+      const settled: WaitResult =
+        waitResult === 'terminal' || waitResult === 'cancelled'
+          ? waitResult
+          : sawSuccess
+            ? 'progress'
+            : 'ceiling';
+
+      switch (settled) {
+        case 'ceiling': {
+          // §4.2 layer two. NOT a failure classifier — there is no error here.
+          // The renderer's budget elapsing says nothing about the turn: the
+          // Host's own stall watchdog fires first by construction
+          // (`sendBudgets.ts`), so silence on this side is a fact about this
+          // side only.
+          const ceilingOutcome = decideAdmittedTimeoutOutcome({
+            sawUserEcho,
+            sawAssistantProgress,
+          });
+          if (ceilingOutcome === 'pending') {
+            // The Host TOOK this turn and, as far as anyone knows, is still
+            // running it. Four things this branch must never do — each one was
+            // in the old abandon path, and each one was a lie told about a live
+            // turn: no `unbindHost()` (the binding is healthy, and dropping it
+            // forces the next message through a resume it does not need), no
+            // `lastError` (nobody has reported a failure), no diagnostic error
+            // card, and no draft restore / Retry arming (the text is already in
+            // the timeline as the echoed user bubble — replaying it would be a
+            // guess, and a double-send if the guess is wrong).
+            //
+            // Two things it does instead: remember the found-material in case a
+            // REAL `session.failed` arrives later (D1 restores it then, when it
+            // is a fact), and keep the turn head — with its Stop button — alive.
+            pendingReplyRef.current = {
+              sessionId,
+              committed,
+              assistantCursor: countAssistantMessagesWithBlocks(
+                useChatSessionsStore.getState().messages[sessionId] ?? []
+              ),
+            };
+            armPendingReply({ sessionId, turnStartedAtMs });
+            return 'pending';
+          }
+          // No echo, no progress: the Host never admitted this turn, so the old
+          // treatment is still exactly right and is preserved whole.
+          return abandonUnadmittedTurn();
+        }
+        case 'terminal':
+        case 'cancelled': {
+          // Stop-hang fix (2026-08-10): this attempt ENDED — the Host said so
+          // on the wire (`session.stopped` for a Stop, `session.completed` for
+          // a turn that finished without producing a single assistant block),
+          // or `handleStop` bumped the generation and the confirmation is still
+          // in flight.
+          //
+          // As its own case rather than an `if` ahead of the success gate: the
+          // ordering that used to matter (this must be decided BEFORE anything
+          // reads `statusAfter`, or the same user action comes out as a clean
+          // end or as an abandon depending on a flush timer) is now structural
+          // — the labels are mutually exclusive, so no gate below can claim it.
+          //
+          // Neither ending is a failure or an abandonment: no error card, no
+          // pending watch (there is no still-running turn left to watch), and
+          // deliberately NO `unbindHost()` — the binding is healthy.
+          useChatSessionsStore.setState({ lastError: null });
+          // Admission evidence still decides the outcome — same classifier as
+          // every other exit. An echoed/progressed turn is SPENT ('committed':
+          // the text is already in the timeline, and quite possibly in the
+          // CLI's own transcript, so a resend would double-send it). A turn the
+          // Host never admitted is 'rejected', so a release-origin entry goes
+          // back on the queue instead of being swallowed (decision 3.3) and a
+          // direct/Retry-origin one gets its payload back via
+          // `decideFailureAffordance`.
+          const stopOutcome = decideRunEntryOutcome({
+            fatalHostError: true,
+            sawAssistantProgress,
+            sawUserEcho,
+          });
+          if (stopOutcome === 'committed') {
+            // Same clean exit as the success case below — a turn the Host
+            // admitted and then ended is a turn that FINISHED, not one that
+            // failed, so it must not hand the user a Retry or replay its
+            // payload into a composer they have moved on from.
+            setRetryable(null);
+            return 'committed';
+          }
+          return finalizeOutcome(stopOutcome);
+        }
+        case 'progress': {
+          // Success — clear any stale failure UI so a ghost Retry can't
+          // resurface later (e.g. prior failed stream settled and pushed an
+          // assistant bubble).
+          setRetryable(null);
+          useChatSessionsStore.setState({ lastError: null });
+          return 'committed';
+        }
       }
-
-      unbindHost();
-      // F2 (round-2 review fix): the renderer is giving up on this turn with
-      // no terminal event, but that alone is not proof the turn is actually
-      // dead — waitUntil's timeout and the event stream race (see the m14
-      // comment above), so a healthy turn can still land right after this
-      // point. This branch used to fire an implicit `chat.stop` here (a5) to
-      // stop the CLI from burning retries/quota in the background — but the
-      // copy below already hands the user an explicit choice ("Click Retry
-      // to resend, or Stop"), and the code must not press Stop FOR them: a5
-      // could kill a turn that was about to succeed. Background-burn loops
-      // are now caught host-side by the TTFT watchdog's evidence-gated abort
-      // (F1) instead of a renderer-side guess.
-      const state = useChatSessionsStore.getState();
-      const session = state.sessions.find((item) => item.id === sessionId);
-      // S4/iteration-4 fix: snapshot the assistant-cursor HERE — synchronously,
-      // at the same point as the success check above (line ~1094) — instead of
-      // after the `getHostStatus()` await below. A reply that lands INSIDE
-      // that IPC round-trip must not be baked into the marker's own baseline:
-      // reading the cursor after the await would already include it, so the
-      // clearing effect's `currentCursor > marker.assistantCursor` could never
-      // go true and the stale banner + Retry would be permanent, not transient.
-      const assistantCursor = countAssistantMessagesWithBlocks(state.messages[sessionId] ?? []);
-      const hostAfter = await window.electronAPI.chat.getHostStatus().catch((err: unknown) => ({
-        error: err instanceof Error ? err.message : String(err),
-      }));
-
-      // a3: this used to end with "Check Claude auth / API in your
-      // CLAUDE_CONFIG_DIR settings.json" unconditionally — wrong on this
-      // machine (OAuth via ~/.claude/.credentials.json, settings.json's `env`
-      // is empty) and misleading in general: it sends the user chasing local
-      // config for what the investigation report traced to a CLI-side
-      // transport retry loop. Branch on what rawEvents actually shows instead
-      // — a1 now makes api_retry visible there, so this is often decisive.
-      // F12: `sawNetworkRetry` (tracked structurally in the listener above,
-      // from `session.status.payload.retry`) replaces a prior substring sniff
-      // over formatted event strings, which could false-positive on the
-      // watchdogs' own failure copy (e.g. "transport-layer retry loop") that
-      // also contains the word "retry".
-      const hint = sawNetworkRetry
-        ? 'rawEvents shows a network retry loop — likely a transient upstream connection issue; Retry usually recovers once it stabilizes.'
-        : "no data reached the Host at all — check the Context panel's Host stderr rows (or the Host log's [cli-stderr] lines) for a spawn or connection failure.";
-
-      // R2: this is the "post-timeout with zero echo/progress" exit —
-      // classify honestly instead of hardcoding 'committed'. `sawUserEcho`
-      // true still means the Host DID admit the turn (F2's whole premise:
-      // it keeps running server-side), so that case stays 'committed'; a
-      // turn that never even echoed is safe (and necessary) to put back on
-      // the queue. Computed BEFORE `abandonError` below (A1 fix) so the
-      // closing sentence can honestly describe which of the two happened.
-      const timeoutOutcome = decideRunEntryOutcome({
-        fatalHostError: true,
-        sawAssistantProgress,
-        sawUserEcho,
-      });
-      // A1 (round-4 point-check fix): 'committed' here means the Host DID
-      // echo this turn's user message before the renderer gave up waiting —
-      // the turn may still be running server-side (F2 deliberately does not
-      // Stop it), so "Click Retry to resend" would silently double-send the
-      // identical text as a second turn (this was THE primary trigger the
-      // retry-doublesend diagnosis traced the bug to). Only a truly
-      // evidence-free timeout ('rejected' — no echo at all, nothing was ever
-      // admitted) is safe to describe as resendable via Retry.
-      const closingAdvice =
-        timeoutOutcome === 'committed'
-          ? 'The message was admitted by the Host but no reply has arrived yet — wait for a late reply, or edit and send a new message.'
-          : `Click Retry to resend, or Stop — ${hint}`;
-      const abandonError = [
-        'No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event).',
-        `status=${session?.status ?? 'n/a'}`,
-        `rawEvents=[${formatSeenEvents(seenEvents)}]`,
-        `hostAfter=${JSON.stringify(hostAfter)}`,
-        `sessionId=${sessionId}`,
-        `cwd=${workspacePath}`,
-        closingAdvice,
-      ].join(' | ');
-      useChatSessionsStore.setState({ lastError: abandonError });
-      // R10: only an admitted-but-still-running turn (F2 deliberately does
-      // not stop it) can still land a real answer later — arm the marker so
-      // the effect below can clear this stale banner + retryable once that
-      // happens.
-      if (timeoutOutcome === 'committed') {
-        // S4: `assistantCursor` is the fresh-off-the-store snapshot taken
-        // above (not the `activeMessages` render closure, which may be
-        // stale/for a different session by the time this async branch runs,
-        // and not re-read here — see the comment at its capture site for why
-        // it must predate the `getHostStatus()` await) — the clearing effect
-        // only fires once THIS count advances.
-        abandonMarkerRef.current = {
-          sessionId,
-          error: abandonError,
-          committed,
-          assistantCursor,
-        };
-      }
-      return finalizeOutcome(timeoutOutcome);
     } catch (err) {
       unbindHost();
       useChatSessionsStore.setState({
@@ -1973,78 +2117,94 @@ export function ChatComposer({
     []
   );
 
-  // R10 (round-2 iteration-2 review): the 45s-abandon branch above armed
-  // `abandonMarkerRef` for a turn F2 deliberately left running server-side.
-  // Once THIS session shows real NEW progress, clear the stale banner +
-  // retryable it armed, so a correct late answer is not crowned with a red
-  // failure banner and a Retry that would double-send.
+  // F2 (2026-08-18 §5.4) — the late-event cleanup chain, ORDERED.
   //
-  // S4 (round-2 iteration-3 review): "real NEW progress" — not just "an
-  // assistant message exists". A resumed session's REPLAYED history already
-  // satisfies the latter unconditionally, so the old check fired on the
-  // FIRST unrelated status/message change (a user Stop, a session switch, a
-  // later unrelated session.failed) and wiped the banner + the armed Retry
-  // snapshot — plus the user's payload — even though the abandoned turn
-  // itself produced nothing. `assistantCursor` (recorded at arm time, see
-  // above) makes the assistant-message branch fire only once the count
-  // ADVANCES past that snapshot. `waiting_permission`/`waiting_question`
-  // stay as unconditional signals — those statuses are only ever set by a
-  // LIVE host event (never by history replay), so they cannot be spuriously
-  // "already true" the way accumulated history can.
-  const clearAbandonMarkerIfMatch = useCallback(
-    (marker: NonNullable<typeof abandonMarkerRef.current>) => {
-      abandonMarkerRef.current = null;
-      useChatSessionsStore.setState((state) =>
-        state.lastError === marker.error ? { lastError: null } : {}
-      );
-      // S5: identity-preserving via the marker's OWN `committed` object
-      // reference (`runSend` builds a fresh `{ text, drafts }` literal every
-      // call — see its own commit point), not text/drafts VALUE equality.
-      // `handleRetry` replays the marker's own text/drafts snapshot, so a
-      // retry attempt's fresh `committed` object always has matching text
-      // and even the SAME `drafts` array reference — value equality let a
-      // genuinely NEW failure's `retryable` snapshot get cleared by a stale
-      // marker from the turn that preceded it.
-      setRetryable((current) => (current === marker.committed ? null : current));
+  // A turn this renderer stopped waiting for can end in three ways, and the
+  // ORDER of the steps below is itself the contract: cleanup must run BEFORE
+  // the reducer applies the new fact, or the cleared state overwrites it.
+  //
+  //  1. verify the sessionId — never clean up across turns or sessions;
+  //  2. read and FREEZE the two markers;
+  //  3. judge "landed" through `resolveAbandonProgress` (which re-bases the
+  //     armed cursor downward when the replay-coverage merge folds runtime
+  //     assistant messages away — a real defect, not a guard);
+  //  4. clear the pending watch (store slot AND ref), handing the turn head
+  //     back to the streaming/terminal clock;
+  //  5-6. (retired with the abandon branch — the ceiling path writes no
+  //     `lastError` and arms no `retryable`, so it has no products of its own
+  //     to withdraw, and withdrawing another writer's would be overreach);
+  //  7. revoke an automatically restored draft, but ONLY while it is provably
+  //     still ours (`shouldRevokeRestoredDraft`);
+  //  8. drop the markers; the reducer applies the new fact last.
+  const resolvePendingReplyLanded = useCallback(
+    (sessionId: string) => {
+      // Steps 4 and 8 for the watch. Idempotent by session, so a late clear for
+      // a session the user has already left cannot blank the current one.
+      pendingReplyRef.current = null;
+      clearPendingReply(sessionId);
+      // Step 7 (+ step 8 for the draft marker, which it drops either way).
+      revokeRestoredDraftIfUntouched(sessionId);
     },
-    []
+    [clearPendingReply, revokeRestoredDraftIfUntouched]
   );
 
+  // Real NEW progress on the watched session — not just "an assistant message
+  // exists". A resumed session's REPLAYED history satisfies the latter
+  // unconditionally, which is why `assistantCursor` (recorded at arm time) has
+  // to ADVANCE before this fires. `waiting_permission`/`waiting_question` stay
+  // unconditional: those statuses are only ever set by a LIVE host event, so
+  // they cannot be spuriously "already true" the way accumulated history can.
   useEffect(() => {
-    const marker = abandonMarkerRef.current;
-    if (!marker || marker.sessionId !== activeSessionId) return;
-    // Round-6 review B2: one pure step — see resolveAbandonProgress for why
-    // the armed cursor re-bases downward when the replay-coverage merge
-    // folds runtime assistant messages away.
+    const watch = pendingReplyRef.current;
+    if (!watch || watch.sessionId !== activeSessionId) return;
+    // Round-6 review B2: one pure step — see `resolveAbandonProgress`.
     const step = resolveAbandonProgress({
-      armedCursor: marker.assistantCursor,
+      armedCursor: watch.assistantCursor,
       currentCursor: countAssistantMessagesWithBlocks(activeMessages ?? []),
       waitingInteraction:
         activeSession?.status === 'waiting_permission' ||
         activeSession?.status === 'waiting_question',
     });
-    marker.assistantCursor = step.nextArmedCursor;
+    watch.assistantCursor = step.nextArmedCursor;
     if (!step.landed) return;
-    clearAbandonMarkerIfMatch(marker);
-  }, [activeSessionId, activeSession?.status, activeMessages, clearAbandonMarkerIfMatch]);
+    resolvePendingReplyLanded(watch.sessionId);
+  }, [activeSessionId, activeSession?.status, activeMessages, resolvePendingReplyLanded]);
 
-  // S4: the OTHER legitimate clearing signal — a genuine `session.completed`
-  // for the armed session (a turn that lands with zero NEW assistant blocks,
-  // e.g. a completion with only non-block side effects). `chatSessions.ts`
-  // collapses BOTH `session.completed` and `session.stopped` to the same
-  // `'idle'` status, so the effect above (derived store state only) cannot
-  // tell a real completion apart from a user Stop — this listens to the raw
-  // wire event directly instead. Mount-once: every identifier it closes over
-  // (`abandonMarkerRef`, `clearAbandonMarkerIfMatch`, `subscribeRuntimeEvent`)
-  // is stable, so this never needs to resubscribe.
+  // The OTHER two wire endings, both read straight off the event stream:
+  // `chatSessions.ts` collapses `session.completed` AND `session.stopped` into
+  // the same `'idle'` status, so the effect above (derived state only) cannot
+  // tell a real completion from a user Stop.
+  //
+  // `session.failed` is the third, and it is the only one that changes
+  // anything: it is CONFIRMED DEATH (§6.1 — the single red-card entry point),
+  // so D1 applies and the payload goes back to the composer. This is the causal
+  // order the whole batch exists to restore — the user waits, the Host says it
+  // failed, and only THEN does the text come back, with a red card that is
+  // telling the truth. `chatSessions.ts` (red-line) already writes that card
+  // from the same event; nothing here duplicates it.
+  //
+  // Mount-once: every identifier closed over is stable.
   useEffect(() => {
     const unsubscribe = subscribeRuntimeEvent((event) => {
-      const marker = abandonMarkerRef.current;
-      if (!marker || !isSessionCompletedForSend(event, marker.sessionId)) return;
-      clearAbandonMarkerIfMatch(marker);
+      const watch = pendingReplyRef.current;
+      if (!watch) return;
+      // Step 1: scope first, always.
+      if (isSessionFailedForSend(event, watch.sessionId)) {
+        // Step 2: freeze the payload before step 4 drops the watch.
+        const committed = watch.committed;
+        resolvePendingReplyLanded(watch.sessionId);
+        restoreDraftIfComposerEmpty(watch.sessionId, committed);
+        return;
+      }
+      if (isSessionCompletedForSend(event, watch.sessionId)) {
+        // A clean completion with zero new assistant blocks. The turn ended
+        // fine; the found-material is dropped in silence and the composer is
+        // never touched.
+        resolvePendingReplyLanded(watch.sessionId);
+      }
     });
     return unsubscribe;
-  }, [clearAbandonMarkerIfMatch]);
+  }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);
 
   // T-19 fix review (R5): the strip's failed-row Retry/Discard wiring
   // (`retryQueueHead` / `handleStripRetry`) is removed along with batch 3's

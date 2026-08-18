@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { QueuedMessage } from '../messageQueue';
@@ -7,6 +10,7 @@ import {
   canStartTurn,
   type DecideRunEntryOutcomeInput,
   type DecideSendActionInput,
+  decideAdmittedTimeoutOutcome,
   decideFailureAffordance,
   decidePendingResolution,
   decideQueueRelease,
@@ -15,8 +19,10 @@ import {
   deriveActionButtons,
   deriveQueueStripModel,
   type FailureAffordance,
+  isAdmittedOutcome,
   isRunningStatus,
   QUEUE_PERMISSION_HINT,
+  type RestoredDraftMarker,
   type RunEntryOutcome,
   type RunSendOrigin,
   shouldArmRetryable,
@@ -24,7 +30,11 @@ import {
   shouldClearRetryableOnOutcome,
   shouldPauseQueueOnRejection,
   shouldRetryBusySend,
+  shouldRevokeRestoredDraft,
 } from '../queueRelease';
+
+/** `[P-7]` reads `useQueueRelease.ts`'s source — a hook this node suite cannot render. */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ALL_STATUSES: readonly SessionRuntimeStatus[] = [
   'idle',
@@ -655,7 +665,7 @@ describe('shouldArmRetryable (R1, round-2 iteration-2 review; A1 round-4 point-c
 
 describe('decideFailureAffordance (A1, round-4 point-check fix)', () => {
   const ORIGINS: readonly RunSendOrigin[] = ['direct', 'retry', 'release'];
-  const OUTCOMES: readonly RunEntryOutcome[] = ['committed', 'skipped', 'rejected'];
+  const OUTCOMES: readonly RunEntryOutcome[] = ['committed', 'skipped', 'rejected', 'pending'];
 
   it("is 'restore-draft' for 'committed', regardless of origin", () => {
     for (const origin of ORIGINS) {
@@ -678,11 +688,13 @@ describe('decideFailureAffordance (A1, round-4 point-check fix)', () => {
     expect(decideFailureAffordance('rejected', 'retry')).toBe('resend');
   });
 
-  it('full 3x3 matrix over every outcome/origin pair', () => {
+  it('full matrix over every outcome/origin pair', () => {
     const expected: Record<RunEntryOutcome, Record<RunSendOrigin, FailureAffordance>> = {
       committed: { direct: 'restore-draft', retry: 'restore-draft', release: 'restore-draft' },
       skipped: { direct: 'resend', retry: 'resend', release: 'resend' },
       rejected: { direct: 'resend', retry: 'resend', release: 'none' },
+      // F2 §4.3 point 2: a guess never replays input. See `[P-2]`.
+      pending: { direct: 'none', retry: 'none', release: 'none' },
     };
     for (const outcome of OUTCOMES) {
       for (const origin of ORIGINS) {
@@ -727,6 +739,8 @@ describe('shouldPauseQueueOnRejection (S1, round-2 iteration-3 review; generaliz
       committed: { direct: false, retry: false, release: false },
       skipped: { direct: false, retry: false, release: false },
       rejected: { direct: false, retry: false, release: true },
+      // F2 §4.3 point 3: the entry was spent at the commit point.
+      pending: { direct: false, retry: false, release: false },
     };
     for (const outcome of Object.keys(expected) as RunEntryOutcome[]) {
       for (const origin of ORIGINS) {
@@ -919,8 +933,375 @@ describe('Stop exit composition (2026-08-10 stop-hang fix)', () => {
       committed: false,
       skipped: true,
       rejected: true,
+      // F2 §4.3 point 5: admitted, therefore never requeued.
+      pending: false,
     };
     expect(requeued[decideRunEntryOutcome(echoedStop)]).toBe(false);
     expect(requeued[decideRunEntryOutcome(unadmittedStop)]).toBe(true);
+  });
+});
+
+/**
+ * F2 S3 §4.3 — the `'pending'` outcome, asserted at all six consumption points.
+ *
+ * WHY THIS GROUP IS P0. Adding a member to `RunEntryOutcome` produces ZERO
+ * compile errors: not one of the six consumers is an exhaustive `switch`, they
+ * are all `if (x === 'committed')` / `if (a || b)` shapes. So a new member
+ * silently inherits whatever the existing default branch does — and for two of
+ * the six that default is `'resend'` / `true`, i.e. a one-click Retry armed on
+ * a turn the Host ALREADY admitted. That is the double-send this repo's A1
+ * round removed; it would come straight back, with no red test and no red
+ * compiler, from an edit that merely widened a union.
+ *
+ * Hence: every one of the six is pinned here explicitly, by hardcoded value —
+ * never by calling another production function to produce the expectation
+ * (see the tautology note on `shouldPauseQueueOnRejection` above).
+ *
+ * Consumption points (spec §4.3 table):
+ *   1 `shouldArmRetryable`            -> `[P-3]`
+ *   2 `decideFailureAffordance`       -> `[P-2]` (load-bearing: the user's ruling)
+ *   3 `shouldPauseQueueOnRejection`   -> `[P-4]`
+ *   4 `shouldClearRetryableOnOutcome` -> `[P-4b]`
+ *   5 `useQueueRelease`'s requeue gate-> `[P-5]` + `[P-7]` (source guard)
+ *   6 `maybeApplyFirstMessageTitle`   -> `[P-5]` + `composerStopStatic.test.ts`
+ */
+describe("RunEntryOutcome 'pending' — six consumption points (F2 S3 §4.3, P0)", () => {
+  const ORIGINS: readonly RunSendOrigin[] = ['direct', 'retry', 'release'];
+  const ALL_OUTCOMES: readonly RunEntryOutcome[] = ['committed', 'skipped', 'rejected', 'pending'];
+
+  /**
+   * The classifier itself. NOT a failure classifier — there is no error on
+   * this path at all: the renderer's silence ceiling elapsed, which says
+   * nothing about whether the turn is alive (the Host owns that verdict, and
+   * its own stall watchdog fires first). All this decides is whether the Host
+   * ever took the turn.
+   */
+  it('[P-1] decideAdmittedTimeoutOutcome: admission evidence, four-row truth table', () => {
+    expect(decideAdmittedTimeoutOutcome({ sawUserEcho: false, sawAssistantProgress: false })).toBe(
+      'rejected'
+    );
+    expect(decideAdmittedTimeoutOutcome({ sawUserEcho: true, sawAssistantProgress: false })).toBe(
+      'pending'
+    );
+    expect(decideAdmittedTimeoutOutcome({ sawUserEcho: false, sawAssistantProgress: true })).toBe(
+      'pending'
+    );
+    expect(decideAdmittedTimeoutOutcome({ sawUserEcho: true, sawAssistantProgress: true })).toBe(
+      'pending'
+    );
+  });
+
+  /**
+   * LOAD-BEARING (spec §12.2 assertion 4, and the executable form of the
+   * user's own ruling: "only a CONFIRMED dead turn may replay the input"). A
+   * silence ceiling is a guess, not evidence — so it restores nothing and
+   * offers nothing. The silent default here would have been `'resend'`.
+   */
+  it("[P-2] consumption point 2 — decideFailureAffordance('pending', *) is 'none' for every origin", () => {
+    for (const origin of ORIGINS) {
+      expect(decideFailureAffordance('pending', origin)).toBe('none');
+    }
+  });
+
+  /**
+   * `[P-2b]` — the STRUCTURAL half, and the one that actually bites.
+   *
+   * As-built finding (mutation M6): deleting `decideFailureAffordance`'s
+   * `'pending'` branch does NOT change its answer today, so no behavioural
+   * assertion can go red on it. The spec's §4.3 table predicted a silent
+   * default of `'resend'` there; the real default is `'none'`, because this
+   * function delegates its non-`'committed'` half to `shouldArmRetryable`,
+   * which has a `'pending'` branch of its own returning `false`.
+   *
+   * The two branches MASK each other, which is worse than either being wrong
+   * alone: each looks redundant in isolation, so either could be "simplified
+   * away" by a reviewer who checked that the tests still pass — and deleting
+   * BOTH restores `'resend'`, i.e. the double-send. (The joint deletion is
+   * covered behaviourally by `[P-2]`; that mutation was run and is red.)
+   *
+   * So the explicit branch is pinned over the source. It is not decoration:
+   * it is what makes this function's answer independent of a decision that
+   * lives in another function and could change for its own reasons.
+   */
+  it('[P-2b] decideFailureAffordance answers for `pending` explicitly, not by delegation', () => {
+    const moduleSource = readFileSync(path.resolve(__dirname, '../queueRelease.ts'), 'utf8');
+    const body = moduleSource.slice(
+      moduleSource.indexOf('export function decideFailureAffordance('),
+      moduleSource.indexOf('export function shouldPauseQueueOnRejection(')
+    );
+    expect(body).toContain("if (outcome === 'pending') return 'none';");
+    // ...and it is decided BEFORE the delegation, so the delegation can never
+    // be what produces the answer.
+    expect(body.indexOf("if (outcome === 'pending') return 'none';")).toBeLessThan(
+      body.indexOf('shouldArmRetryable(outcome, origin)')
+    );
+  });
+
+  /**
+   * The turn is already in the timeline and quite possibly in the CLI's own
+   * transcript; a one-click resend would be a second `chat.send`, a second
+   * `beginTurn`, a second echo. The silent default here would have been
+   * `true` — the exact defect A1 removed for `'committed'`.
+   */
+  it("[P-3] consumption point 1 — shouldArmRetryable('pending', *) is false for every origin", () => {
+    for (const origin of ORIGINS) {
+      expect(shouldArmRetryable('pending', origin)).toBe(false);
+    }
+  });
+
+  /**
+   * The silent default (`false`) happens to be correct here, which is exactly
+   * why it is written out explicitly in the implementation and pinned here:
+   * "correct by accident" is not a contract. The queue entry was spent at the
+   * commit point, so there is no restore->re-release loop to protect against.
+   */
+  it("[P-4] consumption point 3 — shouldPauseQueueOnRejection('pending', *) is false for every origin", () => {
+    for (const origin of ORIGINS) {
+      expect(shouldPauseQueueOnRejection('pending', origin)).toBe(false);
+    }
+  });
+
+  /**
+   * `'pending'` proves nothing, so it clears nothing. (`runSend`'s entry
+   * already cleared `retryable` at its commit point; this is about the
+   * `handleRetry` result gate.)
+   */
+  it("[P-4b] consumption point 4 — shouldClearRetryableOnOutcome('pending') is false", () => {
+    expect(shouldClearRetryableOnOutcome('pending')).toBe(false);
+  });
+
+  /**
+   * The shared predicate consumption points 5 and 6 are rewritten in terms of.
+   * "Admitted" is the honest question both of them were really asking:
+   *  - point 5 (`useQueueRelease`): may this entry go back on the queue?
+   *    Admitted means NO — the Host has it, a requeue would double-send.
+   *  - point 6 (`maybeApplyFirstMessageTitle`): did this turn's text reach the
+   *    CLI transcript? Admitted means YES — so a first message that timed out
+   *    still names the chat. (This is the one row of the §4.3 table where the
+   *    silent default was WRONG in the other direction: it would have skipped
+   *    the title.)
+   */
+  it('[P-5] consumption points 5 & 6 — isAdmittedOutcome over the complete four-value vocabulary', () => {
+    const expected: Record<RunEntryOutcome, boolean> = {
+      committed: true,
+      pending: true,
+      skipped: false,
+      rejected: false,
+    };
+    for (const outcome of ALL_OUTCOMES) {
+      expect(isAdmittedOutcome(outcome)).toBe(expected[outcome]);
+    }
+    // Point 5 restated as the requeue gate itself reads it, so the direction
+    // cannot be inverted without a red test.
+    expect(ALL_OUTCOMES.filter((outcome) => !isAdmittedOutcome(outcome))).toEqual([
+      'skipped',
+      'rejected',
+    ]);
+  });
+
+  /**
+   * Regression protection for the three PRE-EXISTING members: adding a fourth
+   * must not perturb any of them. Hardcoded, and deliberately restating rows
+   * the groups above already cover — a widening edit that "simplifies" one of
+   * these four functions is exactly what this is here to catch.
+   */
+  it('[P-6] the three pre-existing outcomes keep their complete tables, unchanged', () => {
+    const affordance: Record<RunEntryOutcome, Record<RunSendOrigin, FailureAffordance>> = {
+      committed: { direct: 'restore-draft', retry: 'restore-draft', release: 'restore-draft' },
+      skipped: { direct: 'resend', retry: 'resend', release: 'resend' },
+      rejected: { direct: 'resend', retry: 'resend', release: 'none' },
+      pending: { direct: 'none', retry: 'none', release: 'none' },
+    };
+    const arm: Record<RunEntryOutcome, Record<RunSendOrigin, boolean>> = {
+      committed: { direct: false, retry: false, release: false },
+      skipped: { direct: true, retry: true, release: true },
+      rejected: { direct: true, retry: true, release: false },
+      pending: { direct: false, retry: false, release: false },
+    };
+    const pause: Record<RunEntryOutcome, Record<RunSendOrigin, boolean>> = {
+      committed: { direct: false, retry: false, release: false },
+      skipped: { direct: false, retry: false, release: false },
+      rejected: { direct: false, retry: false, release: true },
+      pending: { direct: false, retry: false, release: false },
+    };
+    const clearRetryable: Record<RunEntryOutcome, boolean> = {
+      committed: true,
+      skipped: false,
+      rejected: false,
+      pending: false,
+    };
+    for (const outcome of ALL_OUTCOMES) {
+      expect(shouldClearRetryableOnOutcome(outcome)).toBe(clearRetryable[outcome]);
+      for (const origin of ORIGINS) {
+        expect(decideFailureAffordance(outcome, origin)).toBe(affordance[outcome][origin]);
+        expect(shouldArmRetryable(outcome, origin)).toBe(arm[outcome][origin]);
+        expect(shouldPauseQueueOnRejection(outcome, origin)).toBe(pause[outcome][origin]);
+      }
+    }
+  });
+
+  /**
+   * §4.4's invariant, in place of the fifth send gate B asked for. A
+   * `'pending'` turn is one the Host admitted and has NOT ended — no terminal
+   * event has been emitted, so the session status is still one of the running
+   * four. Over that whole set the queue holds and `canStartTurn` is false, so
+   * nothing can start a second turn while a reply is still owed.
+   *
+   * The complementary half is that the two RELEASING statuses are disjoint
+   * from the running set: "pendingReply armed AND the queue released" is not a
+   * state this machine can be in, which is why no new latch is needed.
+   */
+  it('[Q-1] a pending reply cannot coexist with a queue release or a new turn', () => {
+    const runningStatuses = ALL_STATUSES.filter(isRunningStatus);
+    expect(runningStatuses).toEqual([
+      'starting',
+      'running',
+      'waiting_permission',
+      'waiting_question',
+    ]);
+    for (const status of runningStatuses) {
+      const decision = decideQueueRelease({
+        sessionId: 's1',
+        entries: [{ id: 'q1' }],
+        paused: null,
+        hasTarget: true,
+        disabled: false,
+        sending: false,
+        inFlight: false,
+        status,
+      });
+      expect(decision).toEqual({ type: 'hold', reason: 'not-idle' });
+      // `busy` is `isStoppable(status)` in the composer, which delegates to
+      // `isRunningStatus` — the same predicate, so the two gates cannot drift.
+      expect(canStartTurn(baseCanStartTurn({ busy: isRunningStatus(status) }))).toBe(false);
+    }
+    // Disjoint by construction: the release set and the running set share no
+    // member, so the "pending + released" combination is unconstructible.
+    expect(RELEASING_STATUSES.filter(isRunningStatus)).toEqual([]);
+  });
+
+  /**
+   * Consumption point 5 lives in a React hook (`useQueueRelease.ts`), which
+   * this node-environment suite cannot render — so its rewrite is pinned over
+   * the SOURCE, the same posture `composerStopStatic.test.ts` takes for
+   * `runSend`'s own closure-local facts.
+   *
+   * The old form enumerated the two non-admitted members by name. That is
+   * precisely the shape that silently does the right thing today and the wrong
+   * thing the moment a fifth member appears; `!isAdmittedOutcome(result)` is
+   * structurally correct for any future vocabulary.
+   */
+  it('[P-7] consumption point 5 — useQueueRelease requeues on !isAdmittedOutcome, not on a name list', () => {
+    const hookSource = readFileSync(path.resolve(__dirname, '../useQueueRelease.ts'), 'utf8');
+    expect(hookSource).toContain('if (!isAdmittedOutcome(result))');
+    expect(hookSource).not.toContain("result === 'skipped' || result === 'rejected'");
+    expect(hookSource).toContain('import { decideQueueRelease, isAdmittedOutcome');
+  });
+});
+
+/**
+ * F2 S3 §5.3 / §12.1 — `[D-2]` and `[D-3]`: provenance for an automatically
+ * restored draft.
+ *
+ * D1 kept automatic restore for a CONFIRMED dead turn, so the residual half
+ * needs a way to be taken back: a `session.failed` synthesised by the Host-exit
+ * broadcast and the real end of the turn are separated by a window, and a reply
+ * landing inside it must be able to undo the restore.
+ *
+ * The whole point is asymmetry. Revoking wrongly destroys text that exists
+ * nowhere else; NOT revoking leaves a duplicate the user can see and delete.
+ * So every clause is a veto and the default is "leave it alone".
+ */
+describe('shouldRevokeRestoredDraft (F2 S3 §5.3, D1 provenance)', () => {
+  const marker: RestoredDraftMarker = {
+    sessionId: 's1',
+    text: 'give me the whole function',
+    draftIds: ['att-a', 'att-b'],
+    valueRevision: 7,
+    attachmentRevision: 3,
+  };
+  const untouched = {
+    sessionId: 's1',
+    text: 'give me the whole function',
+    draftIds: ['att-a', 'att-b'] as readonly string[],
+    valueRevision: 7,
+  };
+
+  it('[D-2] revokes only while text AND attachments are provably untouched', () => {
+    expect(shouldRevokeRestoredDraft(marker, untouched)).toBe(true);
+  });
+
+  it('[D-2] a moved text revision vetoes it', () => {
+    expect(shouldRevokeRestoredDraft(marker, { ...untouched, valueRevision: 8 })).toBe(false);
+  });
+
+  it('[D-2] any change to the attachment list vetoes it — added, removed or swapped', () => {
+    expect(
+      shouldRevokeRestoredDraft(marker, { ...untouched, draftIds: ['att-a', 'att-b', 'att-c'] })
+    ).toBe(false);
+    expect(shouldRevokeRestoredDraft(marker, { ...untouched, draftIds: ['att-a'] })).toBe(false);
+    // The case a count cannot see: one removed, one added, same length.
+    expect(shouldRevokeRestoredDraft(marker, { ...untouched, draftIds: ['att-a', 'att-c'] })).toBe(
+      false
+    );
+    // Order is part of identity too.
+    expect(shouldRevokeRestoredDraft(marker, { ...untouched, draftIds: ['att-b', 'att-a'] })).toBe(
+      false
+    );
+  });
+
+  /**
+   * `[D-3]` — THE discipline. The user retypes, character for character, the
+   * same sentence the app had put there. Value equality holds; the revision
+   * does not. A value-equality implementation would delete what the user just
+   * typed, which is the defect this marker exists to make impossible.
+   */
+  it('[D-3] never revokes by value equality: an identical retype belongs to the user', () => {
+    // The sharpest form, and the one a value-equality implementation gets
+    // wrong: a TEXT-ONLY restore, which the user clears and then retypes
+    // character for character. Every value in sight matches — same text, same
+    // (empty) attachment list, same session. The ONLY thing that differs is the
+    // revision, because the user's own keystrokes moved it.
+    //
+    // Deliberately not carrying an attachment difference: that would let the
+    // draft-id clause carry the assertion and leave the revision clause
+    // untested, which is exactly the shape a mutation of that clause would
+    // survive.
+    const textOnly: RestoredDraftMarker = { ...marker, draftIds: [] };
+    const retyped = {
+      ...untouched,
+      text: marker.text,
+      draftIds: [] as readonly string[],
+      valueRevision: marker.valueRevision + 5,
+    };
+    expect(retyped.text).toBe(textOnly.text);
+    expect(retyped.draftIds).toEqual(textOnly.draftIds);
+    expect(shouldRevokeRestoredDraft(textOnly, retyped)).toBe(false);
+
+    // The same discipline with attachments in play: re-pasted images get fresh
+    // ids from the monotonic sequence, so identity separates them too.
+    expect(
+      shouldRevokeRestoredDraft(marker, {
+        ...untouched,
+        text: marker.text,
+        valueRevision: 12,
+        draftIds: ['att-c', 'att-d'],
+      })
+    ).toBe(false);
+  });
+
+  it('[D-3] a matching revision with mismatched text is still a veto — an unknown writer means stop', () => {
+    expect(shouldRevokeRestoredDraft(marker, { ...untouched, text: 'something else' })).toBe(false);
+  });
+
+  it('[D-2] never reaches across sessions', () => {
+    expect(shouldRevokeRestoredDraft(marker, { ...untouched, sessionId: 's2' })).toBe(false);
+  });
+
+  it('[D-2] a text-only restore (no attachments) is handled by the same rule', () => {
+    const textOnly: RestoredDraftMarker = { ...marker, draftIds: [] };
+    expect(shouldRevokeRestoredDraft(textOnly, { ...untouched, draftIds: [] })).toBe(true);
+    // The user attached something afterwards — no longer purely ours.
+    expect(shouldRevokeRestoredDraft(textOnly, { ...untouched, draftIds: ['att-z'] })).toBe(false);
   });
 });

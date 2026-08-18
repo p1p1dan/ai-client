@@ -14,7 +14,7 @@ import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { useEffect, useRef } from 'react';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
-import { decideQueueRelease, type RunEntryOutcome } from './queueRelease';
+import { decideQueueRelease, isAdmittedOutcome, type RunEntryOutcome } from './queueRelease';
 
 export interface UseQueueReleaseInput {
   sessionId: string | null;
@@ -81,7 +81,17 @@ export function useQueueRelease(input: UseQueueReleaseInput): void {
         // the Host flatly refused to admit ('rejected' — no echo, no turn
         // started), puts the entry right back at the front of the queue
         // instead of dropping it.
-        if (result === 'skipped' || result === 'rejected') {
+        //
+        // F2 (§4.3 consumption point 5): asked as "was this turn ADMITTED?"
+        // rather than as a list of the two names that happen to mean "no"
+        // today. Behaviour is identical for the three pre-existing outcomes;
+        // what changes is that `'pending'` — a turn the Host took and is still
+        // running, which this renderer merely stopped waiting for — is
+        // STRUCTURALLY excluded from requeueing, instead of being excluded by
+        // the accident of not appearing in a name list. Requeueing it would
+        // release the identical text as a second turn while the first is still
+        // in flight.
+        if (!isAdmittedOutcome(result)) {
           useMessageQueueStore.getState().restoreHead(entry);
         }
       })

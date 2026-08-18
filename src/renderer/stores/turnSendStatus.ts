@@ -113,10 +113,33 @@ export interface TurnSendBaseline {
   messageId: string | null;
 }
 
+/**
+ * F2 (2026-08-18 §4.5): a turn the Host admitted and is still running, which
+ * THIS renderer has stopped waiting on. Display-only: it is what keeps the turn
+ * head — and the Stop button inside it — alive after the silence ceiling
+ * elapses, instead of the head vanishing while the turn is demonstrably still
+ * going. Deliberately carries NO payload: the committed text/attachments stay
+ * in `ChatComposer`'s own `pendingReplyRef`, so user data never enters a store
+ * a devtools session would serialise, and this slot stays small enough to
+ * assert whole.
+ */
+export interface PendingReplyWatch {
+  sessionId: string;
+  /** When the wait this watch replaces began, ms — the turn head recomputes its seconds from it. */
+  turnStartedAtMs: number;
+}
+
 interface TurnSendStatusStore {
   status: OwnedTurnSendStatus | null;
   /** The most recent send's baseline. NOT cleared by `end` — see `TurnSendBaseline`. */
   baseline: TurnSendBaseline | null;
+  /**
+   * F2: the second slot. Independent of `status` on purpose — it is armed
+   * exactly when `status` is being torn down (`runSend`'s `finally` clears the
+   * snapshot the instant the renderer stops waiting), so sharing one slot would
+   * make the two cancel each other out.
+   */
+  pendingReply: PendingReplyWatch | null;
   /**
    * Publish a fresh snapshot at the send's commit point, taking ownership of
    * the slot. Replaces any stale one and returns the token every later call
@@ -131,6 +154,10 @@ interface TurnSendStatusStore {
   update: (owner: TurnSendOwner, patch: Partial<Omit<TurnSendStatus, 'sessionId'>>) => void;
   /** Clear the snapshot — the send is no longer in flight, whatever its outcome. No-op unless `owner` still holds the slot. */
   end: (owner: TurnSendOwner) => void;
+  /** Arm the pending-reply watch. Replaces any previous one — one composer, one send at a time. */
+  armPendingReply: (watch: PendingReplyWatch) => void;
+  /** Clear it, idempotently and only for the matching session (a late clear for a session the user already left must not blank the current one). */
+  clearPendingReply: (sessionId: string) => void;
 }
 
 /**
@@ -143,6 +170,7 @@ let nextOwner = 0;
 export const useTurnSendStatusStore = create<TurnSendStatusStore>()((set) => ({
   status: null,
   baseline: null,
+  pendingReply: null,
   begin: (status, baselineMessageId) => {
     nextOwner += 1;
     const owner = nextOwner;
@@ -162,4 +190,7 @@ export const useTurnSendStatusStore = create<TurnSendStatusStore>()((set) => ({
         : state
     ),
   end: (owner) => set((state) => (state.status?.owner === owner ? { status: null } : state)),
+  armPendingReply: (watch) => set({ pendingReply: watch }),
+  clearPendingReply: (sessionId) =>
+    set((state) => (state.pendingReply?.sessionId === sessionId ? { pendingReply: null } : state)),
 }));

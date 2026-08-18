@@ -162,3 +162,65 @@ describe('turnSendStatus baseline (F2/F4 residue)', () => {
     });
   });
 });
+
+/**
+ * F2 (2026-08-18 §4.5): the pending-reply watch — the second, independent
+ * slot that keeps the turn head (and its Stop button) alive after `status` is
+ * torn down but the Host-admitted turn is still actually running.
+ */
+describe('turnSendStatus pendingReply (F2 §4.5)', () => {
+  const { begin, end, armPendingReply, clearPendingReply } = useTurnSendStatusStore.getState();
+
+  beforeEach(() => {
+    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+  });
+
+  it('[PR-1] armPendingReply publishes the watch, and a later arm replaces it', () => {
+    armPendingReply({ sessionId: 's1', turnStartedAtMs: 1000 });
+    expect(useTurnSendStatusStore.getState().pendingReply).toEqual({
+      sessionId: 's1',
+      turnStartedAtMs: 1000,
+    });
+
+    armPendingReply({ sessionId: 's2', turnStartedAtMs: 2000 });
+    expect(useTurnSendStatusStore.getState().pendingReply).toEqual({
+      sessionId: 's2',
+      turnStartedAtMs: 2000,
+    });
+  });
+
+  it('[PR-2] clearPendingReply with the matching sessionId clears it to null', () => {
+    armPendingReply({ sessionId: 's1', turnStartedAtMs: 1000 });
+    clearPendingReply('s1');
+    expect(useTurnSendStatusStore.getState().pendingReply).toBeNull();
+  });
+
+  it('[PR-3] clearPendingReply is a no-op unless the sessionId matches, and on an already-null slot', () => {
+    const watch = { sessionId: 's1', turnStartedAtMs: 1000 };
+    armPendingReply(watch);
+    const before = useTurnSendStatusStore.getState().pendingReply;
+
+    clearPendingReply('s2');
+    expect(useTurnSendStatusStore.getState().pendingReply).toBe(before);
+
+    // Also a no-op against the initial, already-null slot — must not throw.
+    useTurnSendStatusStore.setState({ pendingReply: null });
+    expect(() => clearPendingReply('s1')).not.toThrow();
+    expect(useTurnSendStatusStore.getState().pendingReply).toBeNull();
+  });
+
+  // `runSend`'s `finally` arms the watch and calls `end` right after, in the
+  // same breath. If the two shared one slot, `end` would blank the watch it
+  // was just handed, and the turn head would vanish at the exact moment it is
+  // supposed to take over.
+  it('[PR-4] status and pendingReply are independent slots', () => {
+    const owner = begin(snapshot('s1'), null);
+    armPendingReply({ sessionId: 's1', turnStartedAtMs: 500 });
+    end(owner);
+    expect(useTurnSendStatusStore.getState().status).toBeNull();
+    expect(useTurnSendStatusStore.getState().pendingReply).toEqual({
+      sessionId: 's1',
+      turnStartedAtMs: 500,
+    });
+  });
+});

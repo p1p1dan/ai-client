@@ -7,10 +7,7 @@ import {
   largeAttachmentHint,
   MAX_IMAGE_EDGE_PX,
   planImageAttachment,
-  SEND_BASE_TIMEOUT_MS,
-  SEND_TIMEOUT_CEILING_MS,
   SUPPORTED_IMAGE_MEDIA_TYPES,
-  sendTimeoutMs,
 } from '../attachmentLimits';
 
 const LIMITS: AttachmentLimits = {
@@ -218,41 +215,7 @@ describe('largeAttachmentHint (T-18 E6)', () => {
  * `[C-01]` / `[C-02]` in `sendBudgets.test.ts`; renumbering them would have
  * hidden the fact that the direction flipped.
  *
- * `[T-01]`~`[T-05]` stay green only because `sendTimeoutMs` still has one
- * caller (`MessageTimeline.tsx`'s `DEFAULT_REPLY_BUDGET_MS`, S3's file). They
- * retire together with the function itself in S3 — a live formula with no pin
- * would be worse than a pin on a deprecated one.
+ * `[T-01]`~`[T-05]` retired together with `sendTimeoutMs` itself in F2 S3 (the
+ * byte-scaled timeout formula is void — see spec §1.3 / §12.1). There are no
+ * more timeout-related cases in this file.
  */
-describe('sendTimeoutMs (T-18 T-01..T-05, deprecated — retires with the function in F2 S3)', () => {
-  it('[T-01] is bit-for-bit unchanged on the text-only path', () => {
-    expect(sendTimeoutMs(0)).toBe(45_000);
-    expect(sendTimeoutMs(0)).toBe(SEND_BASE_TIMEOUT_MS);
-    expect(sendTimeoutMs(-1)).toBe(45_000);
-  });
-
-  it('[T-02] gives a 150 KB screenshot far more room than the old 45s', () => {
-    const budget = sendTimeoutMs(150 * KB);
-    expect(budget).toBe(75_000);
-    expect(budget).toBeGreaterThan(45_000);
-    // The former `< HOST_STALL_TIMEOUT_MS` assertion was a restatement of the
-    // retired `[T-06]` invariant and moved with it to `sendBudgets.test.ts`.
-  });
-
-  it('[T-03] barely moves for a tiny image', () => {
-    expect(sendTimeoutMs(70)).toBe(75_000);
-  });
-
-  it('[T-04] budgets on total bytes, not on the largest item', () => {
-    expect(sendTimeoutMs(100 * KB + 52 * KB)).toBe(sendTimeoutMs(152 * KB));
-    expect(sendTimeoutMs(2 * MB)).toBe(105_000);
-  });
-
-  it('[T-05] is clamped and monotonic', () => {
-    expect(sendTimeoutMs(5 * MB)).toBe(SEND_TIMEOUT_CEILING_MS);
-    expect(sendTimeoutMs(10 * MB)).toBe(SEND_TIMEOUT_CEILING_MS);
-    const points = [0, 60 * KB, 152 * KB, 2 * MB, 5 * MB].map(sendTimeoutMs);
-    for (let i = 1; i < points.length; i += 1) {
-      expect(points[i]).toBeGreaterThanOrEqual(points[i - 1]);
-    }
-  });
-});
