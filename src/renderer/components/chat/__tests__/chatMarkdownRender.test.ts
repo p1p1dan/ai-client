@@ -473,3 +473,33 @@ describe('F-C6: the code renderer reduces children to text, never stringifies a 
     expect(html).not.toContain('[object Object]');
   });
 });
+
+// ---------------------------------------------------------------------------
+// F-C6h: strikethrough is strict GFM — bare tildes are prose, not delimiters
+// ---------------------------------------------------------------------------
+
+describe('F-C6: single tildes are range separators, not strikethrough', () => {
+  /**
+   * The 2026-08-17 inspection screenshot, verbatim. With micromark's default
+   * `singleTilde: true` the first `~` of `20~40` paired with the first `~` of
+   * `1~2` and struck everything between them.
+   */
+  it('F-C6: two CJK numeric ranges in one paragraph render with their tildes intact', () => {
+    const html = render('30 µm 划片道才 1.7 px，一个 20~40 µm 的崩边只有 1~2 px\n');
+    expect(html).not.toContain('<del');
+    expect(html).toContain('20~40 µm');
+    expect(html).toContain('1~2 px');
+  });
+
+  it('F-C6: ranges survive inside a table cell, where the screenshot bug lived', () => {
+    const html = render('| 任务 | 说明 |\n| --- | --- |\n| 崩边 | 20~40 µm 只有 1~2 px |\n');
+    expect(html).not.toContain('<del');
+    expect(html).toContain('20~40 µm 只有 1~2 px');
+  });
+
+  it('F-C6: double-tilde strikethrough still works, so GFM proper is intact', () => {
+    const html = render('~~deprecated~~ current\n');
+    expect(html).toContain('<del');
+    expect(html).toContain('deprecated');
+  });
+});

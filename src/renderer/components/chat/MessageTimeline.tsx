@@ -531,8 +531,13 @@ export function MessageTimeline({
                         {lastError}
                       </p>
                     )}
+                    {/* F3 fast-fix batch: affordance-neutral on purpose. Whether
+                        this failure armed the composer's Retry button or restored
+                        the draft into the input is decided by queueRelease's
+                        outcome — this card cannot see which, so it must not name
+                        a button that may not exist (2026-08-17 inspection F2-d). */}
                     <p className="mt-1 text-muted-foreground">
-                      已产内容保留。在下方输入框点 Retry 重发上条消息。
+                      已产内容保留。可从下方输入框重发上条消息。
                     </p>
                     {pendingPermissions.some((item) => item.sessionId === sessionId) && (
                       <Button

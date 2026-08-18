@@ -541,15 +541,16 @@ export class ClaudeRuntime {
     text: string;
     attachments?: SessionAttachment[];
     /**
-     * Per-turn override; falls back to the session default.
+     * Per-turn statement, not an override with a fallback: omitted means the
+     * composer's Default state and the key is dropped from query() (F3).
      * Untrusted at this boundary (raw NDJSON payload) — normalized below.
      */
     effort?: unknown;
     /**
-     * Per-turn model override; falls back to the session default from
-     * create/resume. Purely additive — mirrors `effort` above. Backward
-     * compatible: AGENT_HOST_PROTOCOL_VERSION stays 1, an old Host ignores
-     * this field from a new Renderer.
+     * Per-turn statement — omitted means Automatic and the key is dropped
+     * from query() (F3); the renderer re-states an explicit pick every send.
+     * Backward compatible: AGENT_HOST_PROTOCOL_VERSION stays 1, an old Host
+     * ignores this field from a new Renderer.
      * Untrusted at this boundary (raw NDJSON payload) — normalized below.
      */
     model?: unknown;
@@ -597,15 +598,18 @@ export class ClaudeRuntime {
     }
 
     const queryFn = await this.ensureSdk();
-    // Per-turn effort wins; otherwise the session default from create/resume.
-    const effort = normalizeEffort(input.effort) ?? session.effort;
-    // Per-turn model wins; otherwise the session default from create/resume.
-    // Re-pin onto the registry entry (mirrors T-19's continuity fix for
-    // effort) so a LATER send that omits it keeps this explicit choice
-    // instead of falling back to whatever the session was created with.
+    // Per-turn only (F3, 2026-08-17 inspection): an omitted model/effort IS
+    // the composer's Automatic/Default state, not "no opinion". The renderer
+    // re-states an explicit pick on every send (resolveResumeModel / T-20
+    // toWireEffort), so falling back to the registry entry here — or re-pinning
+    // onto it, as the pre-F3 code did — resurrects a choice the composer
+    // already cleared: the trigger shows "Automatic" while the wire silently
+    // re-sends the old pin until the Host process restarts. `session.model`/
+    // `session.effort` remain the create/resume record for status surfaces;
+    // they no longer feed the query.
+    const effort = normalizeEffort(input.effort);
     const model =
-      typeof input.model === 'string' && input.model.trim() ? input.model.trim() : session.model;
-    if (model) session.model = model;
+      typeof input.model === 'string' && input.model.trim() ? input.model.trim() : undefined;
     // Read ONCE per turn, off the registry entry, so the option below and any
     // later reader of this turn agree. There is still no per-send override:
     // S4's mid-session change writes the registry entry (`updatePermission`)

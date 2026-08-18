@@ -702,6 +702,13 @@ export const CHAT_MARKDOWN_POLICY = {
   /** Applied in this order. Both are already dependencies; neither can emit HTML. */
   remarkPlugins: ['remark-gfm', 'remark-breaks'] as const,
   /**
+   * Strikethrough is `~~double-tilde~~` only (strict GFM). The micromark
+   * default (`singleTilde: true`) also pairs bare `~`, and CJK prose uses a
+   * bare tilde as a numeric range separator (`20~40 µm`) — two ranges in one
+   * paragraph struck everything between them (F1, 2026-08-17 inspection).
+   */
+  remarkGfmOptions: { singleTilde: false } as const,
+  /**
    * MUST stay empty. `rehype-raw` is in `package.json`, and it is the single
    * switch that would turn model-authored HTML into live DOM. With no rehype
    * plugin at all, `react-markdown` hands raw HTML to React as text.

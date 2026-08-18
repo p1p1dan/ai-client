@@ -1,6 +1,6 @@
 import { Image as ImageIcon } from 'lucide-react';
 import { isValidElement, memo } from 'react';
-import Markdown, { type Components } from 'react-markdown';
+import Markdown, { type Components, type Options as MarkdownOptions } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { CodeInline } from '@/components/ui/ident';
@@ -76,7 +76,16 @@ import {
  * array is the same object. The thing that actually keeps the pipeline off the
  * one-second turn clock is the `memo` at the bottom of this file.
  */
-const REMARK_PLUGINS = [remarkGfm, remarkBreaks];
+/**
+ * `singleTilde: false`: GFM proper only strikes `~~text~~`. The micromark
+ * default additionally pairs single tildes, and CJK technical prose uses a
+ * bare `~` as a range separator (`20~40 µm`) — two ranges in one paragraph
+ * would strike everything between them (F1, 2026-08-17 inspection).
+ */
+const REMARK_PLUGINS: NonNullable<MarkdownOptions['remarkPlugins']> = [
+  [remarkGfm, { singleTilde: false }],
+  remarkBreaks,
+];
 
 /** Deliberately empty — see rule 1 above. Passed explicitly so it is a wiring fact, not a default. */
 const REHYPE_PLUGINS: [] = [];

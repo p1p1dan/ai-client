@@ -91,34 +91,40 @@ describe('claudeRuntime query options — thinking shape (#8)', () => {
   });
 });
 
-describe('claudeRuntime query options — effort threading (T-20 base)', () => {
-  it('applies the session default effort from session.create', async () => {
-    const captured: CapturedOptions[] = [];
-    const rt = makeRuntime(captured);
-    rt.createSession({ sessionId: 's4', workspacePath: process.cwd(), effort: 'high' });
-    await rt.send({ sessionId: 's4', text: 'hi' });
-
-    // Top-level option — NOT output_config.effort (SDK 0.3.218 Options.effort).
-    expect(captured[0].effort).toBe('high');
-    expect(captured[0]).not.toHaveProperty('output_config');
-  });
-
-  it('lets a per-send effort override the session default', async () => {
+describe('claudeRuntime query options — effort threading (T-20 base, F3 per-turn contract)', () => {
+  // F3 (2026-08-17 inspection): a send's effort is a per-turn STATEMENT, not
+  // an override with a registry fallback. The renderer re-states an explicit
+  // pick on every send (T-20 toWireEffort); an omitted key IS the composer's
+  // "Default" state, so the registry record must never leak into query().
+  it('a send with an explicit effort threads it as a top-level option', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's5', workspacePath: process.cwd(), effort: 'low' });
     await rt.send({ sessionId: 's5', text: 'hi', effort: 'xhigh' });
 
+    // Top-level option — NOT output_config.effort (SDK 0.3.218 Options.effort).
     expect(captured[0].effort).toBe('xhigh');
+    expect(captured[0]).not.toHaveProperty('output_config');
   });
 
-  it('falls back to the session default when a send omits effort', async () => {
+  it('an omitted send effort omits the key even when create configured one (F3)', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's6', workspacePath: process.cwd(), effort: 'medium' });
     await rt.send({ sessionId: 's6', text: 'hi' });
 
-    expect(captured[0].effort).toBe('medium');
+    expect(captured[0]).not.toHaveProperty('effort');
+  });
+
+  it('explicit effort on turn N does not leak into an omitting turn N+1 (F3)', async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 's4', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's4', text: 'first', effort: 'high' });
+    await rt.send({ sessionId: 's4', text: 'second' });
+
+    expect(captured[0].effort).toBe('high');
+    expect(captured[1]).not.toHaveProperty('effort');
   });
 
   it('drops an unknown effort value instead of forwarding it to the API', async () => {
@@ -131,13 +137,13 @@ describe('claudeRuntime query options — effort threading (T-20 base)', () => {
     expect(captured[0]).not.toHaveProperty('effort');
   });
 
-  it('keeps the session default when a send carries an invalid override', async () => {
+  it('an invalid per-send effort is dropped, not replaced by the registry record (F3)', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's8', workspacePath: process.cwd(), effort: 'high' });
     await rt.send({ sessionId: 's8', text: 'hi', effort: 'turbo' });
 
-    expect(captured[0].effort).toBe('high');
+    expect(captured[0]).not.toHaveProperty('effort');
   });
 });
 
@@ -277,12 +283,17 @@ describe('claudeRuntime — self-reported agent (S2 b, producer side)', () => {
   });
 });
 
-describe('claudeRuntime query options — resume must re-pin model/effort (2026-07-29 cache probe)', () => {
-  // cli.js is re-spawned per turn; a resume without an explicit model falls back
-  // to the CLI default model — a silent model switch AND a guaranteed full
-  // prompt-cache rewrite (captured live: fresh turn carried the context-1m beta
-  // + "(1M context)" inside the Bash tool description, resumed turn did not).
-  it('threads model, effort, and resume identity into query() after resumeSession', async () => {
+describe('claudeRuntime query options — resume identity + F3 per-turn model/effort', () => {
+  // History handoff. The 2026-07-29 cache probe caught a live silent model
+  // switch + full prompt-cache rewrite when a resume-era send omitted the
+  // model, and the Host grew a registry fallback to compensate. That was the
+  // pre-D48 world: the renderer stated a model only at create/resume. Since
+  // D48 S2 the renderer re-states the pick on EVERY send (resolveResumeModel
+  // is the single formula for create, resume, and send), so cache continuity
+  // is owned by the renderer — and the Host fallback flipped from protective
+  // to harmful: it resurrected picks the composer had already cleared back to
+  // Automatic (F3, 2026-08-17 inspection). An omitted key now stays omitted.
+  it('threads resume identity, and a send states its own model/effort', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.resumeSession({
@@ -292,14 +303,14 @@ describe('claudeRuntime query options — resume must re-pin model/effort (2026-
       model: 'sonnet',
       effort: 'high',
     });
-    await rt.send({ sessionId: 's9', text: 'hi' });
+    await rt.send({ sessionId: 's9', text: 'hi', model: 'sonnet', effort: 'high' });
 
     expect(captured[0].model).toBe('sonnet');
     expect(captured[0].effort).toBe('high');
     expect(captured[0].resume).toBe('rt-uuid-9');
   });
 
-  it('merges model/effort onto an existing registry entry on resume', async () => {
+  it('a resume-carried model does not leak into an omitting send (F3 Automatic)', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's10', workspacePath: process.cwd() });
@@ -312,11 +323,12 @@ describe('claudeRuntime query options — resume must re-pin model/effort (2026-
     });
     await rt.send({ sessionId: 's10', text: 'hi' });
 
-    expect(captured[0].model).toBe('opus');
-    expect(captured[0].effort).toBe('medium');
+    expect(captured[0]).not.toHaveProperty('model');
+    expect(captured[0]).not.toHaveProperty('effort');
+    expect(captured[0].resume).toBe('rt-uuid-10');
   });
 
-  it('drops an invalid effort on resume instead of forwarding it', async () => {
+  it('drops an invalid effort at the resume boundary; a later explicit send works', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.resumeSession({
@@ -327,9 +339,10 @@ describe('claudeRuntime query options — resume must re-pin model/effort (2026-
       effort: 'turbo',
     });
     await rt.send({ sessionId: 's11', text: 'hi' });
+    await rt.send({ sessionId: 's11', text: 'again', effort: 'high' });
 
-    expect(captured[0].model).toBe('sonnet');
     expect(captured[0]).not.toHaveProperty('effort');
+    expect(captured[1].effort).toBe('high');
   });
 });
 
@@ -352,16 +365,19 @@ describe('claudeRuntime query options — per-send model override (round-2 P0 mo
     expect(captured[0].model).toBe('haiku');
   });
 
-  it('keeps the session default when a send omits model', async () => {
+  it('an omitted send model omits the key even when create configured one (F3 Automatic)', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's14', workspacePath: process.cwd(), model: 'opus' });
     await rt.send({ sessionId: 's14', text: 'hi' });
 
-    expect(captured[0].model).toBe('opus');
+    expect(captured[0]).not.toHaveProperty('model');
   });
 
-  it('re-pins an explicit per-send model so a LATER send that omits it keeps the choice', async () => {
+  // THE F3 regression (2026-08-17 inspection): explicit pick on turn N, back
+  // to Automatic on turn N+1 within one live Host process. The pre-F3 re-pin
+  // kept sending turn N's model while the trigger showed "Automatic".
+  it('an explicit model on turn N does not leak into an omitting turn N+1 (F3)', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's15', workspacePath: process.cwd(), model: 'sonnet' });
@@ -369,16 +385,16 @@ describe('claudeRuntime query options — per-send model override (round-2 P0 mo
     await rt.send({ sessionId: 's15', text: 'second' });
 
     expect(captured[0].model).toBe('opus');
-    expect(captured[1].model).toBe('opus');
+    expect(captured[1]).not.toHaveProperty('model');
   });
 
-  it('ignores a non-string model override and falls back to the session default', async () => {
+  it('a non-string model is dropped, not replaced by the registry record (F3)', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's16', workspacePath: process.cwd(), model: 'sonnet' });
     await rt.send({ sessionId: 's16', text: 'hi', model: 42 });
 
-    expect(captured[0].model).toBe('sonnet');
+    expect(captured[0]).not.toHaveProperty('model');
   });
 
   it('omits model entirely when neither the session nor the send configured one', async () => {

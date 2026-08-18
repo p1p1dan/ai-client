@@ -213,7 +213,11 @@ export function MarkdownPreview({ content, filePath, rootPath }: MarkdownPreview
 
   return (
     <div className="p-4 text-sm text-foreground select-text">
-      <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      {/* singleTilde: false — bare `~` is a CJK range separator, not strikethrough (F1). */}
+      <Markdown
+        remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkBreaks]}
+        components={components}
+      >
         {content}
       </Markdown>
     </div>

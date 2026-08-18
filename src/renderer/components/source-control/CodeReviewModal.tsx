@@ -369,7 +369,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                 ) : displayContent ? (
                   <div className="text-sm text-foreground select-text">
                     <Markdown
-                      remarkPlugins={[remarkGfm, remarkBreaks]}
+                      remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkBreaks]}
                       components={markdownComponents}
                     >
                       {displayContent}

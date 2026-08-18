@@ -161,18 +161,27 @@ function formatRuntimeEvent(event: { type: string; payload?: unknown }): string 
           // explains a "hung" turn — previously eventNormalizer dropped
           // api_retry entirely, so this event never reached the log.
           retry?: { attempt?: number; maxRetries?: number };
+          // F2-g (2026-08-17 inspection): without the role, the user-echo
+          // message.started/delta/completed trio reads as assistant progress
+          // in rawEvents=[...] and the "no progress" diagnostic looks
+          // self-contradicting.
+          role?: string;
         })
       : null;
   const code = payload?.code;
   const message = payload?.message ?? payload?.error;
   const status = payload?.status;
   const retry = payload?.retry;
+  const role = payload?.role;
   if (code || message) {
     return `${event.type}(${code ?? ''}${code && message ? ': ' : ''}${message ?? ''})`;
   }
   if (status) {
     const retrySuffix = retry ? `,retry ${retry.attempt ?? '?'}/${retry.maxRetries ?? '?'}` : '';
     return `${event.type}(${status}${retrySuffix})`;
+  }
+  if (role) {
+    return `${event.type}(${role})`;
   }
   return event.type;
 }
