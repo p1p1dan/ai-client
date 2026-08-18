@@ -214,3 +214,12 @@ bash source `.bashrc` 报 cannot execute binary file；转 node 链路（CLI Rea
 - **不变量固化**：`scrollStateCss.test.ts`（styles 目录任何 scroll-state 块 paint-only 白名单）+ `chatTimelineLayout.test.ts` F10 三例（无条件裸 clamp）+ `messageTimelineScroll.test.ts` 五例（缩高钳制不可武装 + 幂等）。变异三臂全咬合。
 - **文档修正**：design-system.md scroll-state 节改退役记录（lightningcss 教训保留）；reply-anatomy 规格附 as-built 修正；probe 结论标注「解析性≠可用性」。
 - **GUI 点验项**（不可断言半边）：20+ 行提问 + 短回复，两种视口高度下慢滚过边界——无闪动、滚动行程单调。随下轮点验批执行。
+
+## F2 追加现场证据（2026-08-18 用户截图两张，test.5，Claude Opus 5/Medium）
+
+**同屏自相矛盾标本**：蓝色重试横幅「Upstream error 503 — retrying 3/10, the turn is still running ·
+Next attempt in 2s」与红色报错「No assistant/tool progress after send」同时在屏，后者的 rawEvents 内
+明确含 `session.status(running,retry 1/10)` 活性帧——45s 预算对真活性帧视而不见的原文实证（缺陷 1），
+且回显输入与「the turn is still running」并存（缺陷 2 的可见形态）。已注入 F2 rev.2 §12 作
+**incident 回归夹具**（规范 #8 + D5 拍板回退性依据）：断言该序列下 300s 活性预算被 retry 帧复位、
+绝不进判死/回显分支；负控「重试横幅可见时不得出现 no-progress 报错」。
