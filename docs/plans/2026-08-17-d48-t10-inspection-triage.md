@@ -193,3 +193,9 @@ bash source `.bashrc` 报 cannot execute binary file；转 node 链路（CLI Rea
 3. **thread/fork：Claude 先行，Codex 缓议**——v1 只做 Claude 臂（SDK 进程内、免费、风险低）；
    Codex thread/fork 待真回合探针验证后单独重批。S2 硬约束暂不动。
 4. F8（historyReader 分支盲）另立票；F9（TSD）待用户判别测试结果，暂不动工。
+5. **F5 对比稿拍板（2026-08-18 用户，对比稿 `docs/design/2026-08-18-f5-chat-readability-draft.html`）**：
+   **D1-b**（行高 1.625 舒适档，用现成 leading-relaxed 零新增 token）+ **D2-b**（次要层提档：muted-foreground
+   取 Flexoki 官方色阶亮 7.20/暗 6.70，工具参数色修到过 AA）+ **D3-c 与 D3-b 并用**（用户消息非对称右对齐
+   85% 宽 accent 底 + 助手加中性容器——用户在设计员明示三层嵌套框反对意见后仍选并用，施工规格须解嵌套：
+   助手盒内代码块/表格边框去重方案由规格给出，实现方保留否决权上报）+ **无背景图**（阅读底票不立）。
+   连带：正式修订 D26④ 与 phase0a「助手无容器」条款（按归档纪律走修订记录，不静默漂移）。
