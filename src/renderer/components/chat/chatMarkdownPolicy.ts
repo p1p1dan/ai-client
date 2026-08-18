@@ -48,8 +48,8 @@
  * is banned below 18px because it collides CJK glyphs — which leaves **two**
  * axes (weight 400 vs 600, colour) for six levels. This module therefore
  * collapses six levels into three ranks and buys a third axis that D25 does not
- * spend: the SECTION-BREAK space above the heading, drawn from the two spacing
- * tiers the turn layout already owns (10px within-turn / 20px between-turn).
+ * spend: the SECTION-BREAK space above the heading, drawn from prose's own two
+ * spacing tiers (14px block / 24px section — see `BLOCK_GAP` / `SECTION_GAP`).
  * Pretending to six distinguishable ranks would mean inventing a font-size
  * tier, which is the one thing D25 forbids outright.
  *
@@ -391,13 +391,26 @@ export function deriveStreamingBlockIds(input: {
 /**
  * Vertical rhythm inside one prose block, in Tailwind spacing steps.
  *
- * Both values are the turn layout's own tiers, re-used rather than re-invented:
- * `2.5` = 10px is P-17's "within a turn" beat (`turnBodyClass()`'s gap), `5` =
- * 20px is A07 `:846`'s turn-to-turn beat. No third tier is introduced, which is
- * what F-C4 pins.
+ * Prose owns its OWN two tiers: `3.5` = 14px between blocks, `6` = 24px to open
+ * a section. Both come from F5 D1-b (user decision, 2026-08-18 — see
+ * `docs/plans/2026-08-18-f456-readability-composer-spec.md` §1, drawn from the
+ * readability comparison), the same decision that took body leading to 1.625.
+ *
+ * They are deliberately NOT the turn skeleton's 10 / 20 any more. That coupling
+ * is what this note used to record, and breaking it IS the change rather than an
+ * oversight: the skeleton's beat is interface structure (band, head, footer)
+ * while these two are long-form reading rhythm, and the two get revised for
+ * different reasons — the same argument that keeps `--text-meta` and
+ * `--text-code` as two tokens although both are 13px. Re-coupling would also
+ * mean re-deciding a value that is not free: the 20px turn beat is
+ * `readingColumnSpacingClass()`'s `space-y-2.5` plus `turnBubbleBandClass()`'s
+ * `py-2.5`, and that padding doubles as the pinned bubble's opaque buffer.
+ *
+ * What F-C4 actually pins is untouched: prose has exactly TWO tiers and invents
+ * no third. Only the values those tiers hold have changed.
  */
-const BLOCK_GAP = 'mt-2.5 first:mt-0';
-const SECTION_GAP = 'mt-5 first:mt-0';
+const BLOCK_GAP = 'mt-3.5 first:mt-0';
+const SECTION_GAP = 'mt-6 first:mt-0';
 
 /**
  * The Markdown root — one flex item inside `turnBodyClass()`.
@@ -423,7 +436,7 @@ const SECTION_GAP = 'mt-5 first:mt-0';
  * (found in T-29 GUI review).
  */
 export function chatMarkdownRootClass(): string {
-  return 'min-w-0 select-text break-words text-markdown leading-normal text-foreground';
+  return 'min-w-0 select-text break-words text-markdown leading-relaxed text-foreground';
 }
 
 export function chatMarkdownParagraphClass(): string {
@@ -451,14 +464,17 @@ export function chatMarkdownHeadingClass(level: 1 | 2 | 3 | 4 | 5 | 6): string {
 /**
  * Bullet / ordered lists.
  *
- * `[&_ul]:mt-1` / `[&_ol]:mt-1` re-tighten NESTED lists: without them a sublist
- * inherits the 10px block gap and a three-level outline reads as three separate
- * paragraphs. Descendant variants beat the plain `mt-2.5` on specificity, which
- * is the mechanism — but the measured result is 0px, not the 4px this comment
- * used to claim: a nested list is its `<li>`'s first ELEMENT child (the text
- * node does not count), so `first:mt-0` at 0-2-0 outranks the descendant rule
- * at 0-1-1. Flush is the wanted rendering; the utility stays as the guard for
- * the sublist that is NOT first (a list item with prose above its sublist).
+ * `[&_ul]:mt-1.5` / `[&_ol]:mt-1.5` re-tighten NESTED lists: without them a
+ * sublist inherits the 14px block gap and a three-level outline reads as three
+ * separate paragraphs. Descendant variants beat the plain `mt-3.5` on
+ * specificity, which is the mechanism — but the measured result is 0px, not the
+ * 6px the utility spells: a nested list is its `<li>`'s first ELEMENT child (the
+ * text node does not count), so `first:mt-0` at 0-2-0 outranks the descendant
+ * rule at 0-1-1. Flush is the wanted rendering; the utility stays as the guard
+ * for the sublist that is NOT first (a list item with prose above its sublist).
+ * D1-b sets that guard to the ITEM spacing rather than a tier of its own,
+ * because the one case it bites — prose, then a sublist, inside one item — is
+ * an item-to-item distance by definition.
  *
  * `[&_li.task-list-item]:list-none` is the GFM task-list case. `remark-gfm`
  * marks those items with `.task-list-item` and every GFM stylesheet hides their
@@ -470,9 +486,9 @@ export function chatMarkdownHeadingClass(level: 1 | 2 | 3 | 4 | 5 | 6): string {
 export function chatMarkdownListClass(ordered: boolean): string {
   return [
     BLOCK_GAP,
-    'ml-5 list-outside space-y-1',
+    'ml-5 list-outside space-y-1.5',
     ordered ? 'list-decimal' : 'list-disc',
-    '[&_ul]:mt-1 [&_ol]:mt-1',
+    '[&_ul]:mt-1.5 [&_ol]:mt-1.5',
     '[&_li.task-list-item]:list-none',
   ].join(' ');
 }
@@ -506,7 +522,7 @@ export function chatMarkdownLinkClass(): string {
  * the sticky chain (F-C4).
  */
 export function chatMarkdownCodeBlockClass(): string {
-  return `${BLOCK_GAP} overflow-x-auto rounded-sm border border-border bg-muted/50 p-2.5 text-code leading-snug`;
+  return `${BLOCK_GAP} overflow-x-auto rounded-sm border border-border bg-muted/50 p-3 text-code leading-normal`;
 }
 
 /** GFM table, wrapped so the horizontal scroll is the TABLE's, not the column's. */
@@ -520,8 +536,8 @@ export function chatMarkdownTableClass(): string {
 
 export function chatMarkdownTableCellClass(kind: 'head' | 'body'): string {
   return kind === 'head'
-    ? 'border border-border bg-muted/50 px-2.5 py-1 text-left font-semibold'
-    : 'border border-border px-2.5 py-1';
+    ? 'border border-border bg-muted/50 px-2.5 py-1.5 text-left font-semibold'
+    : 'border border-border px-2.5 py-1.5';
 }
 
 export function chatMarkdownBlockquoteClass(): string {
@@ -538,7 +554,7 @@ export function chatMarkdownHrClass(): string {
  * Keyed off `remark-gfm`'s `footnotes` class rather than applied to every
  * `<section>`, because the component map overrides the ELEMENT and markdown has
  * no other way to produce one today — a future plugin that does would otherwise
- * silently inherit a footnote's spacing. `SECTION_GAP` (20px) rather than the
+ * silently inherit a footnote's spacing. `SECTION_GAP` (24px) rather than the
  * block tier: this is the boundary between the answer and its apparatus, which
  * is the same weight as a top-level heading's break.
  *

@@ -38,6 +38,7 @@ import { deriveStreamingBlockIds, shouldRenderMarkdown } from './chatMarkdownPol
 import {
   chatTurnClass,
   readingColumnSpacingClass,
+  turnAnswerContainerClass,
   turnBodyClass,
   turnBubbleBandClass,
   turnCopyButtonClass,
@@ -726,9 +727,11 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
  *    item by item by `TurnItemView` (same block order, T-05 D-5);
  *  - system / error -> `NoticeMessage`, still the `Alert` primitive.
  *
- * The bubble's own shape (A07 `:849-855` — 16/16/4/16 corners, `--card` fill,
- * primary-8% border) is byte-for-byte what P-09 landed; T-31 adds nothing to it
- * but the two CSS hooks the pinned state needs.
+ * The bubble's corners are still A07 `:849-855`'s 16/16/4/16. Its face and edge
+ * are NOT: P-09 landed `--card` + a primary-8% border, and F5 D3-c (2026-08-18)
+ * replaced both with `--accent` + `--input` because the old pair measured 1.027
+ * against the timeline surface — the bubble was, in effect, not drawn. See the
+ * decision note on the `<article>` below.
  */
 function UserBubble({ message }: { message: ChatMessage }) {
   // user messages only ever carry `text` blocks (chatSessions.ts attaches
@@ -736,32 +739,59 @@ function UserBubble({ message }: { message: ChatMessage }) {
   // to role: 'assistant' messages, live and replayed alike).
   const textBlocks = message.blocks.filter((block) => block.type === 'text');
   // §5.6: the full prompt stays reachable by hover and screen reader in every
-  // state, which is what makes the pinned three-line clamp safe.
+  // state, which is what makes the unconditional six-line clamp safe (F10 —
+  // the clamp is no longer pinned-only, and it is six lines, not three).
   const fullText = textBlocks
     .map((block) => block.text ?? '')
     .filter((text) => text.length > 0)
     .join('\n\n');
 
   return (
-    // D26 ④: the bubble spans the reading column. The old 85% width cap and
-    // the right-alignment that positioned it inside that slack are both gone —
-    // with a full-width box there is no slack left to align within, so the pair
-    // would only be dead weight the next reader has to reason about. Role is
-    // still unmistakable without them: the sharp bottom-right corner, the
-    // `--card` fill and the border are what say "this is the prompt", and none
-    // of the three changes here (§10-C's "corner radius / padding / fill /
-    // attachment chip layout unchanged" holds byte for byte).
-    <article>
+    // D31 (user decision 2026-08-13, `openchamber-chat-refactor-ledger.md:75`)
+    // overturned D26 ④ and put the bubble back on the right at 85%; F5 D3-c
+    // (user decision 2026-08-18) is the batch that executes it. D26 ④ — "the
+    // bubble spans the reading column, 85% and right-alignment are dead
+    // weight" — is void in the code from here on, as it already was in the
+    // ledger; the ledger is append-only, so this comment is the code-side
+    // record rather than an edit to it.
+    //
+    // What makes the two roles distinguishable is SHAPE on this side: the
+    // right edge, the 85% cap, the sharp bottom-right tail that finally points
+    // at an edge it was drawn for, and a face that is actually visible. The
+    // assistant side is drawn by BOUNDARY instead (see
+    // `turnAnswerContainerClass()`), deliberately not by the same means.
+    //
+    // "Actually visible" is measured, not asserted. The old `--card` face read
+    // 1.027 (light) / 1.049 (dark) against the timeline background and the old
+    // primary-8% border read 1.111 / 1.102 against that face — both under any
+    // discriminable threshold, which is the precise reason the bubble looked
+    // undifferentiated. `--accent` + `--input` measure 1.161 / 1.292 for the
+    // face and 1.350 / 1.322 for the edge, with body text at 16.17 / 8.81 (AAA)
+    // on top of it.
+    <article className="flex justify-end">
       <div
         className={cn(
-          'space-y-2 rounded-lg border px-4 py-2.5',
-          // T-30 P-09: A07 `.fx-user-bubble` (`:849-855`) — 16/16/4/16 corners
-          // (sharp bottom-right "tail" toward the right-aligned edge), --card
-          // fill, primary-8% border. The old note about assistant needing
-          // bg-accent for contrast against `bg-card/50` no longer applies —
-          // T-05 already made assistant bubble-less, so user is free to sit
-          // on the same --card surface as the rest of the shell.
-          'rounded-br-xs border-primary/8 bg-card'
+          // `min-w-0` is not decoration and not interchangeable with the cap:
+          // the `<article>` above is a flex line, so this box is a flex item,
+          // whose `min-width` resolves to `auto` (= its min-content width) —
+          // and `min-width` outranks `max-width`. One unbreakable run (a long
+          // URL, one long word) pushes min-content past 85% and the cap is
+          // silently ignored, full width returns, and only for some content,
+          // so review never sees it. The prose half of the same fix is
+          // `break-words` on the paragraph below.
+          'min-w-0 max-w-[85%] space-y-2 rounded-lg border px-4 py-2.5',
+          // T-30 P-09: A07 `.fx-user-bubble` (`:849-855`) — 16/16/4/16 corners,
+          // the sharp bottom-right "tail" pointing at the right-aligned edge it
+          // was drawn for (D26 ④ had left it pointing at nothing).
+          //
+          // The face and edge are D3-c's, not P-09's. The note that used to sit
+          // here read the other way round — "assistant needs bg-accent for
+          // contrast, so user is free to stay on --card" — and D3-c inverts it:
+          // assistant has no face at all now, and `--accent` belongs to the
+          // user bubble. `--input` is the edge for the same reason it edges
+          // text inputs (design-system.md:102, "fill semantics"): this box is
+          // the echo of what the operator typed.
+          'rounded-br-xs border-input bg-accent'
         )}
         title={fullText || undefined}
       >
@@ -775,7 +805,12 @@ function UserBubble({ message }: { message: ChatMessage }) {
             {message.attachments.map((attachment, index) => (
               <span
                 key={`${message.id}-attachment-${index}`}
-                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-border bg-muted/50 px-1.5 text-meta text-foreground"
+                // D3-c: `border-border` measured ≈1.36 on the old `--card`
+                // face but only 1.208 / 1.115 on `--accent` — invisible in
+                // dark. The chip follows the bubble's own edge onto `--input`
+                // (1.350 / 1.322). Its `bg-muted/50` fill stays as it was: the
+                // chip is shaped by its edge and icon, not by its fill.
+                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-input bg-muted/50 px-1.5 text-meta text-foreground"
               >
                 {attachment.kind === 'image' ? (
                   <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
@@ -800,7 +835,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
           {textBlocks.map((block) => (
             <p
               key={block.id}
-              className="whitespace-pre-wrap text-markdown leading-normal text-foreground"
+              className="whitespace-pre-wrap break-words text-markdown leading-relaxed text-foreground"
             >
               {block.text}
             </p>
@@ -1257,7 +1292,17 @@ const ChatTurn = memo(function ChatTurn({
             {process.map(renderItem)}
           </>
         )}
-        {answer.length > 0 && <div className={turnBodyClass()}>{answer.map(renderItem)}</div>}
+        {/* D3-b: the answer segment — and ONLY it — gets the neutral container.
+            `splitTurnBody` defines `answer` as the trailing run of `text`
+            items, so this box can never wrap a tool group, a permission card
+            or a question card; those stay in `process`, which already has its
+            own collapsible shell. Note the two sibling `turnBodyClass()` calls
+            above read almost identically: the container belongs on THIS one. */}
+        {answer.length > 0 && (
+          <div className={cn(turnBodyClass(), turnAnswerContainerClass())}>
+            {answer.map(renderItem)}
+          </div>
+        )}
         {/* F13: an in-flight turn's prose is half an answer, and a Copy button
             that silently yields it is worse than no button — the clipboard
             gives no sign the text was truncated. Restored history turns are NOT
@@ -1507,7 +1552,7 @@ function TurnItemView({
         return <ChatMarkdown text={text} />;
       }
       return (
-        <p className="text-markdown leading-normal text-foreground whitespace-pre-wrap select-text">
+        <p className="text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text">
           {text}
         </p>
       );

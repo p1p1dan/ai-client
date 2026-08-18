@@ -587,7 +587,12 @@ describe('F-C4: the markdown root cannot break the pinned bubble (sticky chain)'
   it('F-C4: the root is body copy and drops the plain-text renderer\u2019s pre-wrap', () => {
     const cls = chatMarkdownRootClass();
     expect(cls).toContain('text-markdown');
-    expect(cls).toContain('leading-normal');
+    // D1-b: 1.625, not 1.5. The negative is not redundant — this is a bare
+    // string, not a `cn()` call, so tailwind-merge never sees it and two
+    // `leading-*` classes would simply coexist, with the CSS cascade (not the
+    // write order) deciding. "Added the new one" must not pass on its own.
+    expect(cls).toContain('leading-relaxed');
+    expect(cls).not.toContain('leading-normal');
     expect(cls).toContain('break-words');
     // `globals.css` disables `user-select` on `*`; `.select-text` is the only
     // way back in. Dropping it makes the prose un-selectable (T-29 GUI review).
@@ -630,30 +635,58 @@ describe('F-C4: heading rank is carried by weight + colour + section gap, never 
     }
   });
 
-  it('F-C4: h1-h3 open a section (20px), h4-h6 sit on the block beat (10px)', () => {
+  it('F-C4: h1-h3 open a section (24px), h4-h6 sit on the block beat (14px)', () => {
     for (const level of [1, 2, 3] as const) {
-      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(20);
+      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(24);
     }
     for (const level of [4, 5, 6] as const) {
-      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(10);
+      expect(marginTopPx(chatMarkdownHeadingClass(level)), `h${level}`).toBe(14);
     }
   });
 });
 
-describe('F-C4: block rhythm reuses the turn layout\u2019s two tiers, inventing none', () => {
-  it('F-C4: every block gap is either the 10px within-turn tier or the 20px section tier', () => {
+describe('F-C4: prose owns its two tiers and still invents no third (D1-b)', () => {
+  it('F-C4: every block gap is either the 14px block tier or the 24px section tier', () => {
     for (const { name, cls } of ALL_BLOCK_CLASSES) {
-      expect([10, 20], `${name}: ${cls}`).toContain(marginTopPx(cls));
+      expect([14, 24], `${name}: ${cls}`).toContain(marginTopPx(cls));
     }
   });
 
-  // The 10px tier is not a number picked here — it is `turnBodyClass()`'s own
-  // gap (P-17), so the two move together or this fails.
-  it('F-C4: the 10px tier is literally the turn body gap', () => {
+  /**
+   * Replaces `F-C4: the 10px tier is literally the turn body gap`, which
+   * asserted the opposite arrangement: that the prose block tier and
+   * `turnBodyClass()`'s gap were the SAME number, pinned to each other. D1-b
+   * decoupled them deliberately (prose reads at 14 / 24, the turn skeleton
+   * keeps 10 / 20), so that assertion is not re-valued — its load-bearing
+   * claim is gone, and re-numbering it would leave a test pinning a coupling
+   * nobody intends. The decoupling gets its own positive evidence instead.
+   */
+  it('[D1-1] the prose tiers are D1-b’s own, explicitly decoupled from the skeleton', () => {
+    // ① / ② the two prose tiers, spelled out so a failure names which moved.
+    expect(marginTopPx(chatMarkdownParagraphClass())).toBe(14);
+    expect(marginTopPx(chatMarkdownHeadingClass(1))).toBe(24);
+    // ③ the skeleton was NOT dragged along: P-17's 10px within-turn beat is
+    //    still 10px, and `turnBodyClass()` feeds `QuestionCard` and the tool
+    //    shells, which set no size of their own.
     const bodyGap = /(?:^|\s)gap-([0-9]+(?:\.[0-9]+)?)(?:\s|$)/.exec(turnBodyClass());
     expect(bodyGap).not.toBeNull();
-    expect(Number(bodyGap?.[1]) * SPACING_STEP_PX).toBe(10);
-    expect(marginTopPx(chatMarkdownParagraphClass())).toBe(10);
+    const skeletonGapPx = Number(bodyGap?.[1]) * SPACING_STEP_PX;
+    expect(skeletonGapPx).toBe(10);
+    // ④ the decoupling itself, asserted positively rather than left implicit
+    //    in ①. Without this line, an edit that re-couples BOTH sides (prose
+    //    back to 10, skeleton unchanged) is caught only by ①'s literal — and
+    //    an edit that moves them together is caught by nothing at all.
+    expect(marginTopPx(chatMarkdownParagraphClass())).not.toBe(skeletonGapPx);
+  });
+
+  // Strictly stronger than the `toContain([14, 24])` check above: that one
+  // passes when every block collapses onto a SINGLE tier (14 is in the list,
+  // and so is 24). "Prose has exactly two tiers" is the part of F-C4 that D1-b
+  // did not change, so it needs an assertion that a collapse can fail.
+  it('[D1-2] there are exactly two tiers — never a third, and never one', () => {
+    const tiers = new Set(ALL_BLOCK_CLASSES.map(({ cls }) => marginTopPx(cls)));
+    expect(tiers.size, `tiers: ${[...tiers].join(', ')}`).toBe(2);
+    expect([...tiers].sort((a, b) => a - b)).toEqual([14, 24]);
   });
 
   it('F-C4: every block neutralises its own leading gap when it is first', () => {
@@ -773,12 +806,12 @@ describe('F-C4: the remaining surfaces', () => {
     }
   });
 
-  // The footnote apparatus is separated from the answer by the 20px SECTION
+  // The footnote apparatus is separated from the answer by the 24px SECTION
   // tier, and the rule is keyed off `remark-gfm`'s own class so no other
   // `<section>` can inherit it.
   it('F-C4: the footnote block separates on the section tier, and nothing else does', () => {
     const footnotes = chatMarkdownFootnotesClass('footnotes');
-    expect(marginTopPx(footnotes)).toBe(20);
+    expect(marginTopPx(footnotes)).toBe(24);
     expect(footnotes).toContain('text-muted-foreground');
     // Any other section — including one whose class merely CONTAINS the word —
     // gets nothing.

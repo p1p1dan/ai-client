@@ -70,7 +70,7 @@ describe('F-C6: remark-gfm cannot overwrite what the policy sets', () => {
     // The policy half — the same values the pure-function test pins.
     expect(ul).toContain('ml-5');
     expect(ul).toContain('list-disc');
-    expect(ul).toContain('mt-2.5');
+    expect(ul).toContain('mt-3.5');
     // The plugin half, which the marker-suppression rule keys off.
     expect(ul).toContain('contains-task-list');
     expect(html).toContain('task-list-item');
@@ -176,7 +176,7 @@ describe('F-C6: GFM footnotes degrade to text rather than to broken links', () =
     const html = render('note[^1]\n\n[^1]: body\n');
     const section = classOf(html, 'section');
     expect(section).toContain('footnotes');
-    expect(section).toContain('mt-5');
+    expect(section).toContain('mt-6');
     // `sr-only` is what keeps the "Footnotes" label out of the visual flow.
     expect(classOf(html, 'h2')).toContain('sr-only');
   });
@@ -253,7 +253,7 @@ describe('F-C6: prose blocks carry their policy classes', () => {
   it('F-C6: blockquote, hr and paragraph all reach the DOM styled', () => {
     expect(classOf(render('> quoted\n'), 'blockquote')).toContain('border-l-2');
     expect(classOf(render('---\n'), 'hr')).toContain('border-border');
-    expect(classOf(render('just prose\n'), 'p')).toContain('mt-2.5');
+    expect(classOf(render('just prose\n'), 'p')).toContain('mt-3.5');
   });
 
   /**
@@ -295,9 +295,15 @@ describe('F-C6: the reading column’s own invariants are asserted, not only its
     // what lets the rendered prose be selected at all (T-29 GUI review).
     expect(root).toContain('select-text');
     // D25's 15px body tier and its line height, pinned explicitly rather than
-    // inherited — the same reason every heading spells `text-markdown`.
+    // inherited — the same reason every heading spells `text-markdown`. The two
+    // are separate decisions, not one: the 15px is D25's, the 1.625 is F5 D1-b's
+    // (2026-08-18) and replaced D25-era 1.5. `text-markdown` carries the size
+    // ONLY, so nothing propagates between them — which is why this rendered
+    // assertion and `chatMarkdownPolicy.test.ts`'s class-assembly one are two
+    // layers of evidence rather than one restated twice.
     expect(root).toContain('text-markdown');
-    expect(root).toContain('leading-normal');
+    expect(root).toContain('leading-relaxed');
+    expect(root).not.toContain('leading-normal');
     expect(root).toContain('text-foreground');
     // `whitespace-pre-wrap` is the PRE-T-29 plain-text renderer's class and must
     // not come back: on top of `remark-breaks` it doubles every blank line.

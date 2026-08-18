@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import { stripComments } from './stripComments';
 
 /**
  * T-31 review batch, F8: wiring smoke. BRITTLE BY DESIGN.
@@ -52,11 +53,12 @@ import { describe, expect, it } from 'vitest';
  * A deliberate deviation from the review directive, stated so it is not
  * mistaken for an oversight: the negative assertions run against `SYNTAX`,
  * which keeps string literals, rather than against a projection that also
- * blanks them. Two of the four negatives (`max-w-[85%]`, `justify-end`) are
- * class names — string literals are precisely what they must forbid, and
- * blanking strings would make them vacuous, which is the failure mode F15
- * removed from the layout suite. Comments were the actual leak, and the AST
- * closes that exactly.
+ * blanks them. Class-name prohibitions are exactly what string literals carry,
+ * and blanking strings would make them vacuous — the failure mode F15 removed
+ * from the layout suite. (`max-w-[85%]` and `justify-end` used to be two such
+ * negatives; F5 D3-c, 2026-08-18, turned both into required positives on the
+ * user bubble, and they are now node-level assertions — see `[D3-1]`.)
+ * Comments were the actual leak, and the AST closes that exactly.
  *
  * ## What this costs, stated plainly
  *
@@ -198,6 +200,198 @@ function expectUnwired(token: string): void {
     SYNTAX.includes(token),
     `wiring token must be gone from MessageTimeline.tsx: ${token}`
   ).toBe(false);
+}
+
+/** Occurrences of a literal (not a pattern) in the comment-blanked source. */
+function countIn(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
+
+// ---------------------------------------------------------------------------
+// Node-level locator (F456 §8.2) — the projections above cannot say WHERE
+// ---------------------------------------------------------------------------
+
+/**
+ * `expectCalled` / `expectUnwired` answer "does this token appear anywhere in
+ * the file", which is the wrong question for a class that must sit on ONE
+ * specific element. `expectCalled('flex justify-end')` passes with the class
+ * parked on any JSX node in the file; `expectUnwired('bg-card')` demands the
+ * token be gone from the WHOLE file when the contract is only about the user
+ * bubble. Both are false-precision, and D3-c's contract is entirely positional.
+ *
+ * The locator below walks the real AST instead: a named top-level function, its
+ * root JSX element, then a path of tag names through STRUCTURAL children. A
+ * structural child is a JSX element reachable without crossing another JSX
+ * element, so a ternary, an `&&`, a `{…}` container and a `.map()` callback are
+ * all transparent — which is what makes `['article', 'div', 'div', 'span']`
+ * describe the attachment chip regardless of the conditionals wrapping it.
+ *
+ * `nodeClassName` returns the attribute's LITERAL text and throws otherwise:
+ * moving a class string into a variable to dodge these assertions has to fail
+ * loudly rather than silently pass.
+ */
+type JsxNode = ts.JsxElement | ts.JsxSelfClosingElement;
+
+function isJsxNode(node: ts.Node): node is JsxNode {
+  return ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node);
+}
+
+function tagNameOf(node: JsxNode): string {
+  return (ts.isJsxElement(node) ? node.openingElement.tagName : node.tagName).getText(sourceFile);
+}
+
+/** JSX elements reachable from `node` without crossing another JSX element. */
+function jsxChildrenOf(node: JsxNode): JsxNode[] {
+  if (!ts.isJsxElement(node)) return [];
+  const out: JsxNode[] = [];
+  const walk = (child: ts.Node): void => {
+    if (isJsxNode(child)) {
+      out.push(child);
+      return;
+    }
+    ts.forEachChild(child, walk);
+  };
+  for (const child of node.children) walk(child);
+  return out;
+}
+
+function firstJsxIn(node: ts.Node): JsxNode | undefined {
+  let found: JsxNode | undefined;
+  const walk = (candidate: ts.Node): void => {
+    if (found) return;
+    if (isJsxNode(candidate)) {
+      found = candidate;
+      return;
+    }
+    ts.forEachChild(candidate, walk);
+  };
+  ts.forEachChild(node, walk);
+  return found;
+}
+
+function topLevelFunction(fnName: string): ts.FunctionDeclaration {
+  const fn = sourceFile.statements.find(
+    (statement): statement is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(statement) && statement.name?.text === fnName
+  );
+  if (!fn?.body) throw new Error(`no top-level \`function ${fnName}\` in MessageTimeline.tsx`);
+  return fn;
+}
+
+/** Walk a tag-name path from the root JSX element of top-level `function fnName`. */
+function jsxNodeAt(fnName: string, path: readonly string[]): JsxNode {
+  const fn = topLevelFunction(fnName);
+  let current = firstJsxIn(fn.body as ts.Block);
+  if (!current) throw new Error(`\`function ${fnName}\` renders no JSX`);
+  if (tagNameOf(current) !== path[0]) {
+    throw new Error(`${fnName}'s root is <${tagNameOf(current)}>, not <${path[0]}>`);
+  }
+  for (const [index, segment] of path.slice(1).entries()) {
+    const next: JsxNode | undefined = jsxChildrenOf(current).find(
+      (child) => tagNameOf(child) === segment
+    );
+    if (!next) {
+      throw new Error(`no <${segment}> under ${fnName} ${path.slice(0, index + 1).join(' > ')}`);
+    }
+    current = next;
+  }
+  return current;
+}
+
+function classNameInitializerOf(node: JsxNode): NonNullable<ts.JsxAttribute['initializer']> {
+  const attributes = ts.isJsxElement(node) ? node.openingElement.attributes : node.attributes;
+  const attribute = attributes.properties.find(
+    (property): property is ts.JsxAttribute =>
+      ts.isJsxAttribute(property) && property.name.getText(sourceFile) === 'className'
+  );
+  if (!attribute?.initializer) throw new Error(`<${tagNameOf(node)}> carries no className`);
+  return attribute.initializer;
+}
+
+/** The element's `className` as a literal string; throws if it hides behind an expression. */
+function nodeClassName(fnName: string, path: readonly string[]): string {
+  const initializer = classNameInitializerOf(jsxNodeAt(fnName, path));
+  if (ts.isStringLiteral(initializer)) return initializer.text;
+  if (
+    ts.isJsxExpression(initializer) &&
+    initializer.expression &&
+    ts.isStringLiteral(initializer.expression)
+  ) {
+    return initializer.expression.text;
+  }
+  throw new Error(`className on ${fnName} ${path.join(' > ')} is not a string literal`);
+}
+
+/** The literal arguments of a `className={cn(…)}`; throws on any non-literal argument. */
+function nodeClassNameArgs(fnName: string, path: readonly string[]): string[] {
+  const initializer = classNameInitializerOf(jsxNodeAt(fnName, path));
+  if (
+    !ts.isJsxExpression(initializer) ||
+    !initializer.expression ||
+    !ts.isCallExpression(initializer.expression)
+  ) {
+    throw new Error(`className on ${fnName} ${path.join(' > ')} is not a \`cn(…)\` call`);
+  }
+  return initializer.expression.arguments.map((argument) => {
+    if (!ts.isStringLiteral(argument)) {
+      throw new Error(`non-literal \`cn()\` argument on ${fnName} ${path.join(' > ')}`);
+    }
+    return argument.text;
+  });
+}
+
+/** Raw (comment-blanked) text of a node — for subtree prohibitions and expression attributes. */
+function nodeSource(node: ts.Node): string {
+  return flatten(BLANKED.slice(node.getStart(sourceFile), node.getEnd()));
+}
+
+/** First JSX element with `tag` anywhere below `node`, in source order. */
+function descendantJsx(node: JsxNode, tag: string): JsxNode {
+  let found: JsxNode | undefined;
+  const walk = (candidate: ts.Node): void => {
+    if (found) return;
+    if (isJsxNode(candidate) && tagNameOf(candidate) === tag) {
+      found = candidate;
+      return;
+    }
+    ts.forEachChild(candidate, walk);
+  };
+  ts.forEachChild(node, walk);
+  if (!found) throw new Error(`no <${tag}> below <${tagNameOf(node)}>`);
+  return found;
+}
+
+/** Text of the element's className attribute value, expression and all. */
+function classNameExpressionOf(node: JsxNode): string {
+  return nodeSource(classNameInitializerOf(node));
+}
+
+/** The JSX element rendered directly by `<guard> && <element/>`. */
+function jsxGuardedBy(guard: string): JsxNode {
+  let found: JsxNode | undefined;
+  const walk = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+      nodeSource(node.left) === guard
+    ) {
+      // A multi-line JSX right-hand side is parenthesised by the formatter;
+      // that is punctuation, not a layer, so it is unwrapped rather than
+      // treated as an indirection.
+      let right: ts.Expression = node.right;
+      while (ts.isParenthesizedExpression(right)) right = right.expression;
+      if (!isJsxNode(right)) {
+        throw new Error(`\`${guard} && …\` does not render a JSX element directly`);
+      }
+      found = right;
+      return;
+    }
+    ts.forEachChild(node, walk);
+  };
+  ts.forEachChild(sourceFile, walk);
+  if (!found) throw new Error(`no \`${guard} && <jsx/>\` in MessageTimeline.tsx`);
+  return found;
 }
 
 describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
@@ -404,7 +598,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The streaming branch is still the plain-text paragraph, unchanged.
     expectWired("const text = item.block.text ?? '';");
     expectCalled(
-      'className="text-markdown leading-normal text-foreground whitespace-pre-wrap select-text"'
+      'className="text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text"'
     );
   });
 
@@ -428,11 +622,20 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   it('T-29: user bubble and notice bodies stay plain text', () => {
     // Both paragraphs still exist and still pre-wrap. The class-string order is
     // what distinguishes them from `TurnItemView`'s streaming fallback, which
-    // spells the same utilities in the opposite order.
-    expect(
-      (SYNTAX.match(/whitespace-pre-wrap text-markdown/g) ?? []).length,
-      'the user bubble and NoticeMessage paragraphs must both survive verbatim'
-    ).toBe(2);
+    // spells the same utilities in the opposite order (`text-markdown` first).
+    //
+    // These used to be counted through their shared `whitespace-pre-wrap
+    // text-markdown` prefix. D3-c inserted `break-words` into the user bubble's
+    // string (§3.2's `min-width: auto` pair), so the prefix is no longer shared
+    // and each paragraph is now pinned as a whole string — strictly stronger
+    // than the prefix count it replaces, and it still fails if either is
+    // deleted or routed into markdown.
+    for (const cls of [
+      'whitespace-pre-wrap break-words text-markdown leading-relaxed text-foreground',
+      'select-text whitespace-pre-wrap text-markdown text-foreground',
+    ]) {
+      expect(countIn(SYNTAX, cls), `paragraph must survive verbatim: ${cls}`).toBe(1);
+    }
   });
 
   // F13's sibling: the copy payload is the RAW markdown source, so the button
@@ -442,15 +645,83 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('buildTurnCopyTextFromItems(items)');
   });
 
-  // D26 ④: the user bubble spans the reading column. Both tokens are named in
-  // the comment that explains their removal, so these only mean anything with
-  // comments blanked — and both are class-name STRINGS, which is why the
-  // negative projection keeps string literals.
-  it('D26 ④: the user bubble is full width', () => {
-    expectUnwired('max-w-[85%]');
-    expectUnwired('justify-end');
-    // …but the FOOTER's own right alignment is a different element and stays.
+  // D31 (2026-08-13) overturned D26 ④ and F5 D3-c (2026-08-18) executes it: the
+  // bubble is right-aligned and capped again. The retired assertion here was
+  // `expectUnwired('max-w-[85%]' / 'justify-end')` — its load-bearing claim
+  // ("both tokens are gone") is now false in the opposite direction, so it is
+  // replaced rather than inverted, and every half runs through the node-level
+  // locator: file-wide presence would pass with these classes parked on any
+  // element in the file, which proves nothing about the bubble.
+  it('[D3-1] D31: the user bubble is right-aligned and capped at 85%', () => {
+    // ① the row the bubble sits at the end of.
+    expect(nodeClassName('UserBubble', ['article'])).toBe('flex justify-end');
+    const [base, role] = nodeClassNameArgs('UserBubble', ['article', 'div']);
+    // ② the cap and the shrink release are ONE assertion, not two: a flex
+    //    item's `min-width` resolves to `auto`, and `min-width` outranks
+    //    `max-width`, so `max-w-[85%]` alone is silently defeated by any
+    //    content without a break opportunity (a long URL, one long word) and
+    //    the bubble goes full width again — only for some content, which is
+    //    why review never catches it.
+    expect(base).toContain('max-w-[85%]');
+    expect(base).toContain('min-w-0');
+    // ③ the role layer, verbatim: `--accent` face + `--input` edge (§3.3).
+    expect(role).toBe('rounded-br-xs border-input bg-accent');
+    // ④ the other half of ②, on the prose that has to break, plus D1-b's
+    //    line height (the bubble reads at the same rhythm as assistant prose).
+    const body = classNameExpressionOf(
+      descendantJsx(jsxNodeAt('UserBubble', ['article', 'div']), 'p')
+    );
+    expect(body).toContain('break-words');
+    expect(body).toContain('leading-relaxed');
+    // …and the FOOTER's own right alignment is a different element, untouched.
     expectCalled('turnFooterClass()');
+  });
+
+  // The subtree form is required: `expectUnwired('bg-card')` would demand the
+  // token be gone from the WHOLE file, which is a different (and wrong)
+  // contract — `bg-card` is legitimate elsewhere in the timeline.
+  it('[D3-2] the bubble no longer sits on the card surface', () => {
+    expect(nodeSource(topLevelFunction('UserBubble'))).not.toContain('bg-card');
+  });
+
+  // On `bg-card` the chip's `border-border` measured ≈1.36; on `bg-accent` it
+  // drops to 1.115 in dark, i.e. effectively invisible. It follows the bubble's
+  // own edge onto `--input` (§3.4 ③).
+  it('[D3-3] the attachment chip edge follows the bubble onto --input', () => {
+    const chip = nodeClassName('UserBubble', ['article', 'div', 'div', 'span']);
+    expect(chip).toContain('border border-input');
+    expect(chip).not.toContain('border-border');
+  });
+
+  // F10's unconditional six-line clamp budgets VISIBLE PROSE lines. Moving the
+  // attachment strip inside it would silently spend that budget on chips, and
+  // no class assertion anywhere else in this repo would notice — the classes
+  // would all still be present, just on a different parent.
+  it('[D3-8] the six-line clamp wraps the prose only, never the attachment chips', () => {
+    const children = jsxChildrenOf(jsxNodeAt('UserBubble', ['article', 'div']));
+    expect(children.map(tagNameOf), 'attachment strip first, clamped prose second').toEqual([
+      'div',
+      'div',
+    ]);
+    expect(classNameExpressionOf(children[0])).toContain('flex flex-wrap');
+    expect(classNameExpressionOf(children[1])).toBe('{userBubbleTextClass()}');
+    const clamped = jsxChildrenOf(children[1]);
+    expect(clamped.map(tagNameOf), 'the clamp holds paragraphs and nothing else').toEqual(['p']);
+    expect(nodeSource(children[1])).toContain('textBlocks.map(');
+    expect(nodeSource(children[1])).not.toContain('attachment');
+  });
+
+  // `turnBodyClass()` appears three times in `ChatTurn` (turn body, process
+  // panel, answer) and the three call sites read almost identically, so "the
+  // container is called once" is not evidence of WHERE. The guard expression is.
+  it('[D3-7] the assistant container is mounted on the answer segment, exactly once', () => {
+    const answerSegment = jsxGuardedBy('answer.length > 0');
+    expect(classNameExpressionOf(answerSegment)).toBe(
+      '{cn(turnBodyClass(), turnAnswerContainerClass())}'
+    );
+    // …and nowhere else: a second mount would put a box around the process
+    // segment, which already has its own collapsible shell.
+    expect(countIn(SYNTAX, 'turnAnswerContainerClass()')).toBe(1);
   });
 
   // T-33: the retry banner is derived by the pure function and mounted in BOTH
@@ -599,5 +870,78 @@ describe('T-29 repo-wide: ChatMarkdown has exactly one call site in src/', () =>
       'ChatMarkdown must be imported/referenced nowhere under src/ except MessageTimeline.tsx ' +
         '(its own module is excluded from the scan)'
     ).toEqual(['renderer/components/chat/MessageTimeline.tsx']);
+  });
+});
+
+/**
+ * F5 D1-b `[INV-D1-1]`: the prose density change is asserted as a pair of
+ * counts, because either half alone is blind.
+ *
+ * There is NO token propagation between the three prose surfaces: `text-markdown`
+ * carries the 15px size only, and every line height in this directory is spelled
+ * as its own literal class. So changing the markdown root does not drag the user
+ * bubble or the streaming fallback along, and nothing stops a future edit from
+ * moving one and forgetting the others — or from moving all nine at once.
+ *
+ * A presence check ("`leading-relaxed` appears") cannot see either failure. Two
+ * counts asserted together can: the positive count catches the missed surface,
+ * and the negative count catches the over-applied one. The six that must stay
+ * on `leading-normal` are the reverse gate — they are UI elements (`QuestionCard`
+ * ×3, `ToolRows`' single-line rows, `turnBodyClass()`'s inherited baseline, and
+ * `EnhancedInput`'s textarea), not long-form prose, and D1-b was authorised for
+ * prose only.
+ */
+describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest do not', () => {
+  const CHAT_DIR = path.dirname(FILE);
+
+  function chatSourceFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === '__tests__') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...chatSourceFiles(full));
+      else if (/\.tsx?$/.test(entry.name)) out.push(full);
+    }
+    return out;
+  }
+
+  const CHAT_FILES = chatSourceFiles(CHAT_DIR);
+  /** Comments stripped: every line height quoted in prose below would otherwise be counted. */
+  const CHAT_CODE = CHAT_FILES.map((file) => stripComments(readFileSync(file, 'utf8'), file)).join(
+    '\n'
+  );
+
+  it('the scanned corpus is non-trivial, or both counts below are vacuous', () => {
+    expect(CHAT_FILES.length).toBeGreaterThan(20);
+    expect(CHAT_CODE.length).toBeGreaterThan(10_000);
+    // Comment stripping is load-bearing here: `chatTimelineLayout.ts` quotes
+    // `leading-normal` in the doc comment that explains why it keeps it.
+    expect(CHAT_CODE).not.toContain('comes from that same article');
+  });
+
+  it('exactly the three prose surfaces carry the 1.625 tier', () => {
+    expect(countIn(CHAT_CODE, 'leading-relaxed'), 'root + user bubble + streaming fallback').toBe(
+      3
+    );
+    // Spelled out so a failure names the surface, not just the count.
+    expect(CHAT_CODE).toContain('break-words text-markdown leading-relaxed text-foreground');
+    expect(CHAT_CODE).toContain(
+      'whitespace-pre-wrap break-words text-markdown leading-relaxed text-foreground'
+    );
+    expect(CHAT_CODE).toContain(
+      'text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text'
+    );
+  });
+
+  it('the six non-prose surfaces are still on 1.5, and so is the turn skeleton', () => {
+    // Six kept surfaces + the code block, which D1-b moved UP to 1.5 from
+    // `leading-snug` (§1.2 ⑥) and therefore joins this count rather than the
+    // one above. Both numbers move if anyone applies the change wholesale.
+    expect(countIn(CHAT_CODE, 'leading-normal'), 'six UI surfaces + the code block').toBe(7);
+    // The skeleton itself: `turnBodyClass()` feeds components that set no size
+    // of their own, so relaxing it would resize `QuestionCard` and the tool
+    // shells — outside D1-b's authorisation.
+    expect(CHAT_CODE).toContain('flex flex-col gap-2.5 text-markdown leading-normal');
+    expect(CHAT_CODE).toContain('text-left text-markdown leading-normal');
   });
 });

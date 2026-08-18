@@ -846,18 +846,24 @@ tr:last-child td { border-bottom: 0; }
   gap: 20px;
 }
 .fx-user { display: flex; justify-content: flex-end; }
+/* 修订 2026-08-18 · F5 D3-c：面 --card → --accent、线 primary-8% → --input。
+   旧值实测对页面底只有 1.027/1.049（面）与 1.111/1.102（线），即气泡等于没画出来；
+   新值为 1.161/1.292 与 1.350/1.322。结构两行（justify-end / max-width 85%）不动。 */
 .fx-user-bubble {
   max-width: 85%;
   padding: 10px 16px;
-  background: var(--card);
-  border: 1px solid color-mix(in oklab, var(--primary) 8%, transparent);
+  background: var(--accent);
+  border: 1px solid var(--input);
   border-radius: var(--r-lg) var(--r-lg) var(--r-xs) var(--r-lg);
   font-size: var(--t-md);
-  line-height: 1.5;
+  line-height: 1.625;
 }
-.fx-assistant { font-size: var(--t-md); line-height: 1.5; }
+/* 修订 2026-08-18 · F5 D1-b：行高 1.5 → 1.625、段距 10px → 14px。
+   段距两份基线原本就不一致（本页 10px、phase0a 12px），本次一并对齐到 14px。
+   助手中性容器条款（D3-b）归 phase0a 基线，本页不重复声明。 */
+.fx-assistant { font-size: var(--t-md); line-height: 1.625; }
 .fx-assistant > p { max-width: none; margin: 0; }
-.fx-assistant > p + p { margin-top: 10px; }
+.fx-assistant > p + p { margin-top: 14px; }
 /* ------------------------------------------------------------
    v2 · 工具行（D24：形态源从 openchamber 改为 Cursor）
    动词开头 · 无图标 · 无边框 · 无底色 · 灰阶单行。
@@ -1231,6 +1237,12 @@ button.ct-row { cursor: pointer; }
     <b>设计全文</b> plans/2026-07-29-sidebar-composer-target-bar-design.md
     <b>同族基线</b> design/phase0a-openchamber-alignment.html（A01/A05/A06）
     <b>日期</b> 2026-07-29
+    <b>修订 2026-08-18 · F5 批</b>
+    正文行高 1.5→1.625（<code>.fx-assistant</code> / <code>.fx-user-bubble</code>，原 <code>:858</code> / <code>:856</code>）·
+    段距 10px→14px（<code>.fx-assistant &gt; p + p</code>，原 <code>:860</code>；两份基线原本就不一致，本次一并对齐）·
+    用户气泡面 <code>--card</code>→<code>--accent</code>、线 primary-8%→<code>--input</code>（原 <code>:852-853</code>）。
+    结构行 <code>justify-end</code> / <code>max-width:85%</code> 不动；助手中性容器条款归 phase0a 基线。
+    依据 = F5 D1-b / D3-b / D3-c（2026-08-18 用户拍板，台账 <code>docs/plans/openchamber-chat-refactor-ledger.md</code>，决策号由集成者落笔）+ <code>docs/plans/2026-08-18-f456-readability-composer-spec.md</code>。
   </div>
   <div class="ask">
     <b>⚠️ 时效标注（2026-07-30 / 07-31 · D25 + T-30 批 2 连带）</b>

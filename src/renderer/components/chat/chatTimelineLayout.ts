@@ -79,7 +79,9 @@ export function turnBubbleBandClass(): string {
  * edge exists anywhere in the timeline, so the loop is structurally
  * impossible (engine-independent, unlike a hysteresis tuning). The full
  * prompt stays reachable via the bubble's `title`; a user-owned expand
- * toggle is F456-batch work.
+ * toggle is a follow-up ticket, NOT part of the F456 batch — that batch's
+ * four decisions (2026-08-18) do not include it, and this note used to claim
+ * otherwise.
  */
 export function userBubbleTextClass(): string {
   return 'select-text space-y-2 line-clamp-6';
@@ -166,4 +168,46 @@ export function turnFooterClass(): string {
  */
 export function turnCopyButtonClass(): string {
   return 'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-hover';
+}
+
+/**
+ * The assistant's answer segment: one neutral container per turn (F5 D3-b,
+ * user decision 2026-08-18).
+ *
+ * ## Edge only, never a face — and that is the whole design
+ *
+ * The comparison draft asked for `bg-muted + border-border` here. Measured, that
+ * fill destroys more than it draws: inline code chips are `bg-muted` (1.000
+ * against it — they vanish outright), fenced blocks are `bg-muted/50`, which
+ * composites to exactly `muted` on a `muted` parent (1.000 again), and the
+ * container itself only reaches 1.072 / 1.057 against `--background`, i.e.
+ * below the discriminable threshold. `design-system.md:93-101` already forbids
+ * the shape for that reason: two panel levels are expressed with `--border`,
+ * never with `bg-secondary` vs `bg-muted`. So the container spends a border and
+ * nothing else, and every inner surface keeps today's numbers unchanged.
+ *
+ * ## Division of labour with the user bubble (D3-c) — do not "unify" these
+ *
+ * The user side is told apart by SHAPE: right-aligned, capped at 85%, on a
+ * coloured face (`bg-accent`). This side is told apart by BOUNDARY: full width,
+ * no face, one ring of `--border`. The asymmetry is deliberate. Making the
+ * assistant container coloured too, or giving the user bubble a full-width
+ * outline "for consistency", collapses both into "everything is a card", where
+ * the two roles read MORE alike than they do today — which is precisely the
+ * objection D3-b was approved over. Changing either half means re-opening that
+ * decision, not tidying up.
+ *
+ * The 14px inset is `chatMarkdownPolicy.ts`'s `BLOCK_GAP`, not a new number:
+ * "container edge to first block" is the same distance as "block to block".
+ * `first:mt-0` already keeps the first block from stacking its own margin on
+ * top, so no negative offset is needed.
+ *
+ * Mounted on the `answer` segment only (`splitTurnBody`: the trailing run of
+ * `text` items), so it is at most one box per turn and can never contain a tool
+ * group, a permission card or a question card — those live in `process`, which
+ * has its own collapsible shell. A turn whose answer is empty gets no box at
+ * all, which is honest: it is not an answer.
+ */
+export function turnAnswerContainerClass(): string {
+  return 'rounded-sm border border-border p-3.5';
 }

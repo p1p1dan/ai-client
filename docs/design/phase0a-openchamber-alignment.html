@@ -351,6 +351,9 @@ code {
   --s-muted-fg: #686663;
   --s-elevated: #fbfaf2;
   --s-subtle: #f7f4ec;
+  /* 修订 2026-08-18 · F5 D3-c：本页 07-28 调色板早于 --accent/--muted/--secondary 三者分家，
+     故新增此枚。取值 = a07 基线的 --accent oklch(0.9422 0.0122 96.43) 换算，非本页自创。 */
+  --s-accent: #EEECE3;
   --i-border: #DAD8CE;
   --i-border-hover: #CECDC3;
   --i-selection: #76736f30;
@@ -388,6 +391,7 @@ code {
   --s-muted-fg: #807e79;
   --s-elevated: #1c1a19;
   --s-subtle: #1e1d1c;
+  --s-accent: #2D2B2B;          /* = a07 --accent oklch(0.2912 0.0029 17.32) */
   --i-border: #343331;
   --i-border-hover: #403E3C;
   --i-selection: #f4f4f41f;
@@ -416,21 +420,33 @@ code {
   gap: 1.5rem;
 }
 
-/* 用户气泡：右对齐, max-w 85%, 圆角 xl 但右下角收 sm */
+/* 用户气泡：右对齐, max-w 85%, 圆角 xl 但右下角收 sm；面 = accent，线 = input
+   修订 2026-08-18 · F5 D3-c：面 --s-elevated → --s-accent、线 primary-5% → --i-border-hover(=--input)。
+   结构两行（justify-end / max-width 85%）自始未变，代码侧是回到本页，不是本页迁就代码。 */
 .fx-user { display: flex; justify-content: flex-end; }
 .fx-user-bubble {
   max-width: 85%;
   padding: 0.75rem 1.25rem;
-  background: var(--s-elevated);
-  border: 1px solid color-mix(in srgb, var(--p-base) 5%, transparent);
+  background: var(--s-accent);
+  border: 1px solid var(--i-border-hover);
   border-radius: var(--r-xl) var(--r-xl) var(--r-sm) var(--r-xl);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.625;
 }
 
-/* 助手：完全平铺，无容器 */
-.fx-assistant { font-size: 15px; line-height: 1.5; }
-.fx-assistant > p + p { margin-top: 0.75rem; }
+/* 助手：满宽中性容器（只描边不换底），无色面
+   修订 2026-08-18 · F5 D3-b：原条款为「完全平铺，无容器」。容器只花一圈 --i-border，
+   底色仍是页面底 —— 换底会把内联代码芯片与代码块合成到 1.000（同色），等于删掉它们。
+   与用户气泡的分工：那侧靠形状（右对齐 + 85% + 有色面），这侧靠边界（满宽 + 无色面 + 一圈线）。
+   修订 2026-08-18 · F5 D1-b：行高 1.5 → 1.625、段距 0.75rem(12px) → 14px。 */
+.fx-assistant {
+  font-size: 15px;
+  line-height: 1.625;
+  border: 1px solid var(--i-border);
+  border-radius: var(--r-sm);
+  padding: 14px;
+}
+.fx-assistant > p + p { margin-top: 14px; }
 
 /* 助手底部 footer 元信息 */
 .fx-footer {
@@ -860,6 +876,14 @@ li { margin-bottom: 0.35rem; }
     <span><b>目标</b> ai-client feat/openchamber-chat-refactor</span>
     <span><b>默认主题</b> Flexoki Light / Dark</span>
     <span><b>日期</b> 2026-07-28</span>
+    <span><b>修订 2026-08-18 · F5 批</b>
+      助手条款「完全平铺，无容器」→「满宽中性容器（只描边不换底）」（<code>.fx-assistant</code>，原 <code>:431-432</code>）·
+      正文行高 1.5→1.625（<code>.fx-assistant</code> / <code>.fx-user-bubble</code>，原 <code>:432</code> / <code>:427</code>）·
+      段距 0.75rem(12px)→14px（<code>.fx-assistant &gt; p + p</code>，原 <code>:433</code>）·
+      用户气泡面 <code>--s-elevated</code>→<code>--s-accent</code>、线 primary-5%→<code>--i-border-hover</code>（原 <code>:424-425</code>）·
+      新增 <code>--s-accent</code> 一枚（本页 07-28 调色板早于 accent/muted/secondary 分家）。
+      结构行 <code>justify-end</code> / <code>max-width:85%</code> <b>一字未动</b>——D26④ 曾令代码偏离本页，D31 已推翻，本次是代码回归。
+      依据 = F5 D1-b / D3-b / D3-c（2026-08-18 用户拍板，台账 <code>docs/plans/openchamber-chat-refactor-ledger.md</code>，决策号由集成者落笔）+ <code>docs/plans/2026-08-18-f456-readability-composer-spec.md</code>。</span>
   </div>
   <div class="ask">
     <b>⚠️ 时效标注（2026-07-30，D25 连带）</b>

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { COLLAPSIBLE_PANEL_BASE_CLASS } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { chatMarkdownParagraphClass } from '../chatMarkdownPolicy';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
+  turnAnswerContainerClass,
   turnBodyClass,
   turnBubbleBandClass,
   turnCopyButtonClass,
@@ -237,5 +239,57 @@ describe('turn footer (F-B15)', () => {
     const cls = turnCopyButtonClass();
     expect(cls).not.toContain('opacity-0');
     expect(cls).not.toContain('group-hover:');
+  });
+});
+
+/**
+ * F5 D3-b (user decision 2026-08-18): the assistant's answer segment gets one
+ * neutral container per turn.
+ *
+ * The decision was taken over a designer objection ("three nested boxes"), and
+ * the resolution was to spend a BORDER and nothing else. Everything below
+ * guards that resolution, because the tempting edit — "give it a faint fill so
+ * it reads as a container" — is exactly what the measurements ruled out:
+ * `bg-muted` puts inline code chips and fenced blocks at 1.000 against their
+ * own parent, i.e. it deletes them.
+ */
+describe('turnAnswerContainerClass (F5 D3-b)', () => {
+  // The named degradation: someone adds `bg-muted` to make the container "a
+  // bit more visible", and silently erases every inline code chip and fenced
+  // block inside it. That is the whole reason candidate B was chosen over A.
+  it('[D3-4] draws with an edge and never with a face', () => {
+    const cls = turnAnswerContainerClass();
+    expect(cls).toContain('border border-border');
+    expect(cls, 'a fill here composites inner code surfaces to 1.000').not.toMatch(/(?:^|\s)bg-/);
+  });
+
+  // Cross-module equality, so "changed one side only" fails. The container's
+  // inset is not a number chosen here: "container edge to first block" is the
+  // same distance as "block to block", which `chatMarkdownPolicy.ts` owns.
+  it('[D3-5] the inset is the prose block tier, not a new number', () => {
+    expect(spacingPx(turnAnswerContainerClass(), 'p')).toBe(
+      spacingPx(chatMarkdownParagraphClass(), 'mt')
+    );
+    expect(spacingPx(turnAnswerContainerClass(), 'p')).toBe(14);
+  });
+
+  /**
+   * A SHAPE lock, not a safety assertion — the distinction matters and is the
+   * reason this replaces an earlier draft that claimed the container sat on the
+   * sticky chain. It does not: the sticky element is the bubble band, and this
+   * container hangs off the band's following SIBLING, so it cannot re-parent
+   * the band's containing block and `overflow-hidden` here would not unstick
+   * anything. `chatTimelineLayout.ts`'s F-B8 / F-B10 prohibitions name "the
+   * pinned bubble band and its containing block", which this is not.
+   *
+   * What the whitelist actually guards: this container's entire job is one
+   * ring and one inset. Any addition — a shadow, a ring, a fill, a transform —
+   * is a design change that has to go back through the spec, not a tidy-up,
+   * and a whitelist catches the additions nobody thought to enumerate.
+   */
+  it('[D3-6′] is exactly one ring and one inset, with nothing else attached', () => {
+    expect(new Set(turnAnswerContainerClass().split(/\s+/))).toEqual(
+      new Set(['rounded-sm', 'border', 'border-border', 'p-3.5'])
+    );
   });
 });
