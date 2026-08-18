@@ -26,7 +26,8 @@
  * `DEFAULT_ATTACHMENT_LIMITS.maxImageBytes`. It cannot import that constant —
  * `@shared` is loaded by the main process, the renderer budgets are renderer
  * code — so the mirror is asserted instead, the same technique
- * `HOST_STALL_TIMEOUT_MS` uses for the agent-host boundary.
+ * `sendBudgets.ts`'s Host mirrors use for the agent-host boundary (F2 S2
+ * moved those mirrors out of `attachmentLimits.ts`; this size mirror stays).
  *
  * It exists so that a renderer bug (or a compromised renderer) cannot ask the
  * main process to pull an arbitrarily large file into memory: `maxBytes` is
