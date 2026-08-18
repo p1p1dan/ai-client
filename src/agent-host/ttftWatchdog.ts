@@ -4,14 +4,26 @@
  *
  * Distinct from claudeRuntime.ts's existing C-14 stall watchdog, which
  * re-arms on every productive event and tolerates up to
- * DEFAULT_STALL_TIMEOUT_MS (120s) of silence BETWEEN them (a long-running
+ * DEFAULT_STALL_TIMEOUT_MS (195s) of silence BETWEEN them (a long-running
  * tool call must not be killed). This watchdog only ever cares about the gap
  * between queryFn() returning and the FIRST productive event of the turn —
  * the exact gap a `system/api_retry` loop (or a dead spawn) fills with
- * nothing useful. Its budget is intentionally much shorter (30-35s, always
- * below the renderer's SEND_BASE_TIMEOUT_MS of 45s — see
- * attachmentLimits.ts's INVARIANT comment) so the Host's precise failure
- * reaches the UI before the Composer's generic timeout fallback does.
+ * nothing useful.
+ *
+ * F2 (2026-08-18 watchdog redesign) — the cross-process invariant this budget
+ * belongs to was REVERSED, so read the ordering as two different things:
+ *
+ *   HOST_TTFT (32s) < HOST_STALL (195s) < renderer silence ceiling (300s)
+ *
+ * The first two are two segments of ONE turn lifeline (before the first sign
+ * of life / after it). The renderer's ceiling is not a third watchdog and not
+ * a verdict at all — it is the point where one renderer stops waiting locally.
+ * It sits ABOVE the stall budget precisely so the Host, which is the only side
+ * holding the evidence and the only side able to actually abort, always speaks
+ * first. The renderer half lives in sendBudgets.ts (F2 S2 moves it out of
+ * attachmentLimits.ts, whose old "renderer speaks first" INVARIANT block is
+ * deleted by that slice); the full reasoning is in
+ * docs/plans/2026-08-18-f2-watchdog-redesign-spec.md §1.
  *
  * Pulled out of claudeRuntime.ts as a small, pure, injectable-timer class so
  * the arm/markProductive/dispose state machine can be unit tested without
@@ -94,6 +106,28 @@ export class TtftWatchdog {
       this.firedFlag = true;
       this.onTimeout();
     }, this.timeoutMs);
+  }
+
+  /**
+   * F2 (2026-08-18) §3.2: the TTFT phase ended WITHOUT evidence of failure.
+   * Close the table permanently (like markProductive) AND clear firedFlag
+   * (like resetFired): from here the rolling stall watchdog is the only
+   * observer, and when IT fires, claudeRuntime's stallErrorMessage() must pick
+   * the STALL branch — a 195s failure must never be reported with this
+   * watchdog's "no first response within 32000ms" wording (spec §0.5 new
+   * finding 4; the same trap resetFired() below already documents once).
+   *
+   * Deliberately NOT `markProductive()`: this branch fires precisely when
+   * nothing productive happened, and a method whose name asserts the opposite
+   * is a lie the next reader has to unpick.
+   */
+  markDegraded(): void {
+    this.satisfied = true;
+    if (this.handle) {
+      this.clearTimeoutFn(this.handle);
+      this.handle = null;
+    }
+    this.firedFlag = false;
   }
 
   /**

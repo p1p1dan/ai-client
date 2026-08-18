@@ -13,6 +13,7 @@ import { CLAUDE_CODE_AGENT, CLAUDE_CODE_AGENT_ARM } from '../shared/types/agentW
 import {
   claudePermissionPreference,
   DANGEROUS_PERMISSION_MODE,
+  type SessionLivenessNote,
   type SessionPermissionMode,
   type SessionPermissionPolicy,
   type SessionPermissionPreference,
@@ -105,14 +106,60 @@ function resolveStallTimeoutMs(): number {
 /**
  * a4 (2026-07-30 net-visibility batch): one-shot "time to first productive
  * event" budget — deliberately far shorter than DEFAULT_STALL_TIMEOUT_MS
- * (120s) above, and MUST stay below the renderer's SEND_BASE_TIMEOUT_MS
- * (45s, src/renderer/components/chat/attachmentLimits.ts) so the Host's
- * precise failure reaches the UI before the Composer's generic "no progress"
- * fallback fires. See ttftWatchdog.ts for why this is a separate mechanism
- * from the stall watchdog rather than just a shorter stall timeout.
+ * (195s) above. The two are two segments of ONE turn lifeline: this budget
+ * watches the gap before the first sign of life, the stall budget watches the
+ * gaps after it. See ttftWatchdog.ts for why this is a separate mechanism
+ * rather than just a shorter stall timeout.
+ *
+ * F2 (2026-08-18 watchdog redesign): the old note here required this to stay
+ * BELOW the renderer's 45s send budget so the Host would win a race against
+ * the Composer's generic "no progress" fallback. That invariant is REVERSED:
+ * the renderer no longer renders a verdict at all, its budget became a 300s
+ * SILENCE ceiling that sits ABOVE the stall budget, and the Host — the only
+ * side holding the evidence and the only side that can actually abort — is
+ * now structurally guaranteed to speak first. Nothing on this side needs to
+ * beat a renderer deadline any more.
  * <= 0 disables it (mirrors resolveStallTimeoutMs's convention).
  */
 const DEFAULT_TTFT_TIMEOUT_MS = 32_000;
+
+/**
+ * F2 (2026-08-18) §2.4: the ONLY event types that count as model progress —
+ * they satisfy the TTFT watchdog and re-arm the stall watchdog. Module scope
+ * (was a per-send local) so the vocabulary can be pinned by a test as a set,
+ * because membership here is a judgement and not a list: `system` events are
+ * control-plane, and an invalid model puts the CLI into an endless `api_retry`
+ * loop that streams them forever. Admit `system` and a hang re-arms its own
+ * watchdog — the C-14 detector stops detecting.
+ *
+ * FROZEN: not one member is to be added. `claudeRuntimePartialStall.test.ts`
+ * and [E-5] in `claudeRuntimeOptions.test.ts` both go red on any edit, and
+ * that red is correct.
+ */
+export const PRODUCTIVE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'assistant',
+  'user',
+  'result',
+  'tool_progress',
+  'stream_event',
+]);
+
+/**
+ * F2 (2026-08-18) §2.5: read one `api_retry` field off the RAW SDK event
+ * (snake_case, e.g. `max_retries`). A missing field is `null` — "no evidence"
+ * — and NEVER `0`.
+ *
+ * This is load-bearing, not defensive style. The NORMALIZED wire payload
+ * bottoms both fields out to `0` (`eventNormalizer.ts`:
+ * `typeof msg.attempt === 'number' ? msg.attempt : 0`). An abort gate reading
+ * that projection instead would compute `0 >= 0` on a retry frame that simply
+ * omitted the fields, and kill the turn on its FIRST retry — worse than the
+ * behavior this batch exists to fix. `session.status.payload.retry` serves
+ * display and diagnostics only; the gate keys here.
+ */
+function readRawRetryField(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 function resolveTtftTimeoutMs(): number {
   const raw = process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS;
@@ -149,6 +196,24 @@ function resolveTtftTimeoutMs(): number {
  */
 export function resolveSubagentActivityEnabled(): boolean {
   const raw = process.env.AICLIENT_HOST_SUBAGENT_ACTIVITY;
+  if (raw === undefined || raw === '') return true;
+  return raw !== '0';
+}
+
+/**
+ * F2 (2026-08-18) §9.2 — QUIET bit for the watchdog liveness note, shaped
+ * deliberately like `resolveSubagentActivityEnabled` above.
+ *
+ * `'0'` stops EMITTING a diagnostic frame nobody is consuming; it does not
+ * restore any previous judgement, because there is no previous judgement to
+ * restore — the decision to abort or not is taken on the same evidence in both
+ * positions. This is a test seam and an ops knob (wire-snapshot determinism is
+ * its main real use), NOT a product rollout gate.
+ *
+ * Read per send, so a test can flip it between turns.
+ */
+export function resolveLivenessNoteEnabled(): boolean {
+  const raw = process.env.AICLIENT_HOST_LIVENESS_NOTE;
   if (raw === undefined || raw === '') return true;
   return raw !== '0';
 }
@@ -718,17 +783,61 @@ export class ClaudeRuntime {
     // healthy turn and, worse, Retry resends the exact same slow prompt into
     // the exact same timeout (a deterministic failure loop). `onTimeout`
     // below mirrors the stall watchdog's own pending/open-tool guard, and
-    // additionally requires positive evidence of a transport problem
-    // (`sawApiRetry`) or total silence (`!sawAnySdkEvent` — not even
-    // `system/init` arrived, i.e. a dead spawn/auth failure) before
-    // committing to abort; anything short of that just re-arms for another
-    // window instead of firing.
+    // additionally requires positive evidence before committing to abort.
+    //
+    // F2 (2026-08-18) §3.2/§3.3: that evidence is now exactly two shapes, and
+    // an expired window that matches neither ENDS the TTFT phase instead of
+    // re-arming forever:
+    //   - the SDK's own retry budget is exhausted (`attempt >= maxRetries` off
+    //     the RAW event — a single `api_retry` is NOT evidence; it used to be,
+    //     and it killed turns that would have succeeded on attempt 2);
+    //   - total silence, not even `system/init`, for TWO windows (one window
+    //     is not enough: a cold start — first `npx` fetch, slow disk, AV scan
+    //     — can legitimately push the child's first frame past one budget).
     const ttftTimeoutMs = resolveTtftTimeoutMs();
+    const livenessNoteEnabled = resolveLivenessNoteEnabled();
     let sawAnySdkEvent = false;
-    let sawApiRetry = false;
+    /**
+     * Most recent `api_retry` frame's raw fields — `null` means "that frame
+     * did not say", which is never treated as a number (§2.5 / readRawRetryField).
+     */
+    let lastRetryAttempt: number | null = null;
+    let lastRetryMaxRetries: number | null = null;
+    /** How many TTFT windows have expired this turn (§3.3's second window). */
+    let ttftWindowsElapsed = 0;
+    /**
+     * F2 §3.4: one watchdog window elapsed and the watchdog DECLINED to abort.
+     * Optional field on `session.status`, so every consumer that already
+     * switches on that type gets it without a new case and the protocol
+     * version stays 1.
+     *
+     * The status carried is the session's CURRENT one rather than a hardcoded
+     * 'running': `PermissionBridge`/`QuestionBridge` emit
+     * `waiting_permission`/`waiting_question` WITHOUT ever writing
+     * `HostSession.status` (see `resolveCompensationStatus`'s R14 note), so a
+     * bare 'running' here would knock the renderer out of a parked state that
+     * is still entirely correct — precisely the desync that helper exists to
+     * repair.
+     */
+    const emitLivenessNote = (note: SessionLivenessNote) => {
+      if (!livenessNoteEnabled) return;
+      this.opts.emit({
+        type: 'session.status',
+        sessionId: session.sessionId,
+        requestId: input.requestId,
+        payload: {
+          status: resolveCompensationStatus(session, {
+            permission: this.permissions.hasPending(session.sessionId),
+            question: this.questions.hasPending(session.sessionId),
+          }),
+          liveness: note,
+        },
+      });
+    };
     const ttftWatchdog = new TtftWatchdog({
       timeoutMs: ttftTimeoutMs,
       onTimeout: () => {
+        ttftWindowsElapsed += 1;
         // F14 minor m12: a Stop click (or the stall watchdog) may have
         // already aborted this turn in the same tick this timer fires — do
         // not relabel an already-stopped turn as a TTFT failure by setting
@@ -744,33 +853,79 @@ export class ClaudeRuntime {
           ttftWatchdog.resetFired();
           return;
         }
+        // Branch B — an interactive pause is a LEGAL silence, not missing
+        // evidence: the turn is parked on the USER (or on a local tool run),
+        // which is the one thing a timeout must never punish. Split into two
+        // checks, not one `||`, so the note names the branch that actually ran
+        // instead of guessing a reason after the fact. Re-arms, and pointedly
+        // does NOT degrade: later windows must still be able to speak.
         if (
           this.permissions.hasPending(session.sessionId) ||
-          this.questions.hasPending(session.sessionId) ||
-          normalizer.hasOpenTools()
+          this.questions.hasPending(session.sessionId)
         ) {
+          emitLivenessNote({
+            source: 'ttft',
+            budgetMs: ttftTimeoutMs,
+            reason: 'awaiting_user',
+            degraded: false,
+          });
           ttftWatchdog.rearm();
           return;
         }
-        // R9 (round-2 iteration-2 review, accepted trade-off — documented,
-        // not loosened): this gate structurally cannot fire for a turn that
-        // emits `system/init` (sawAnySdkEvent becomes true) and then goes
-        // silent forever with no `api_retry` — that shape re-arms
-        // unconditionally below and is left entirely to the much longer
-        // 120s stall watchdog (DEFAULT_STALL_TIMEOUT_MS), which is
-        // indistinguishable, by design, from a healthy long-running turn.
-        // Narrowing the doc invariant above (TTFT always beats the
-        // renderer's 45s budget) to the two shapes this gate DOES cover —
-        // an observed `api_retry`, or total silence — is the honest
-        // framing; a third evidence signal to close this gap is future
-        // work, not this batch's.
-        if (!(sawApiRetry || !sawAnySdkEvent)) {
-          // Evidence does not support a transport failure — a healthy turn
-          // just taking a while. Keep watching (a later api_retry can still
-          // fire it) instead of ever killing a turn on time budget alone.
+        if (normalizer.hasOpenTools()) {
+          emitLivenessNote({
+            source: 'ttft',
+            budgetMs: ttftTimeoutMs,
+            reason: 'tool_running',
+            degraded: false,
+          });
           ttftWatchdog.rearm();
           return;
         }
+        // R9 (round-2 iteration-2 review) — RE-FRAMED by F2 (2026-08-18) §3.1,
+        // because "the Host is fully defeated here" was an over-statement:
+        //
+        // A turn that emits `system/init` (sawAnySdkEvent becomes true) and
+        // then goes silent forever with no exhausted retry is DELIBERATELY
+        // handed to the 195s stall watchdog (DEFAULT_STALL_TIMEOUT_MS): its
+        // shape is indistinguishable, by design, from a healthy long-running
+        // turn, and the stall watchdog is the observer whose budget matches
+        // that ambiguity. What used to fail here was the old cross-process
+        // invariant ("TTFT always beats the renderer's 45s budget"), not the
+        // Host: with the renderer's ceiling raised above the stall budget, the
+        // stall watchdog still speaks first, and it speaks with evidence.
+        //
+        // So this branch does not need a third evidence signal (both blind
+        // tracks agreed, and stderr substring sniffing is a trap this repo has
+        // already been burned by — F12's note in ChatComposer). It needs to
+        // STOP: one diagnostic frame, then the TTFT table closes for good via
+        // markDegraded(), which also clears `hasFired` so the eventual stall
+        // failure is reported in the stall's own words rather than claiming
+        // "no first response within 32000ms" 195 seconds in (§0.5 finding 4).
+        const sdkRetriesExhausted =
+          lastRetryAttempt !== null &&
+          lastRetryMaxRetries !== null &&
+          lastRetryAttempt >= lastRetryMaxRetries;
+        const deadSpawnConfirmed = !sawAnySdkEvent && ttftWindowsElapsed >= 2;
+        if (!(sdkRetriesExhausted || deadSpawnConfirmed)) {
+          // Branch C — evidence does not support blaming transport.
+          // The one exception to "stop watching": total silence in the FIRST
+          // window buys a second one (a cold-starting child, not a dead one).
+          const secondWindowOwed = !sawAnySdkEvent;
+          emitLivenessNote({
+            source: 'ttft',
+            budgetMs: ttftTimeoutMs,
+            reason: 'insufficient_evidence',
+            degraded: !secondWindowOwed,
+          });
+          if (secondWindowOwed) {
+            ttftWatchdog.rearm();
+          } else {
+            ttftWatchdog.markDegraded();
+          }
+          return;
+        }
+        // Branch D — evidence landed.
         stalled = true;
         this.log(
           `TTFT watchdog: no first productive event within ${ttftTimeoutMs}ms on ${session.sessionId} — aborting turn`
@@ -787,18 +942,6 @@ export class ClaudeRuntime {
         : `Host stall watchdog: no model progress for ${stallTimeoutMs}ms ` +
           '(model/gateway hang or endless retry — check model name and gateway ' +
           'health; tune via AICLIENT_HOST_STALL_TIMEOUT_MS, 0 disables)';
-    // Only model-productive events reset the watchdog. `system` events are
-    // control-plane: an invalid model puts the CLI into an endless api_retry
-    // loop that streams system events forever — they must not count as
-    // progress or the hang becomes undetectable (C-14 gateway repro).
-    const PRODUCTIVE_EVENT_TYPES = new Set([
-      'assistant',
-      'user',
-      'result',
-      'tool_progress',
-      'stream_event',
-    ]);
-
     const prompt = input.attachments?.length
       ? buildPromptWithAttachments(input.text, input.attachments)
       : input.text;
@@ -947,7 +1090,13 @@ export class ClaudeRuntime {
         const eventType = String((event as { type?: string })?.type ?? '');
         sawAnySdkEvent = true;
         if (eventType === 'system' && (event as { subtype?: string })?.subtype === 'api_retry') {
-          sawApiRetry = true;
+          // F2 §2.5: keep the MOST RECENT frame's raw numbers. The evidence
+          // gate wants "the SDK itself has given up", which only these two
+          // fields can say; a frame that omits them says nothing, and saying
+          // nothing must not decay into `0`.
+          const rawRetry = event as { attempt?: unknown; max_retries?: unknown };
+          lastRetryAttempt = readRawRetryField(rawRetry.attempt);
+          lastRetryMaxRetries = readRawRetryField(rawRetry.max_retries);
         }
         if (PRODUCTIVE_EVENT_TYPES.has(eventType)) {
           armStallTimer();

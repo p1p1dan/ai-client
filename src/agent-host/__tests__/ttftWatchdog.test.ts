@@ -17,11 +17,15 @@ function makeFakeTimers() {
       cleared.push(handle as unknown as number);
       scheduled.delete(handle as unknown as number);
     },
-    /** Manually invoke the most recently scheduled callback, as if it fired. */
+    /** Manually invoke the most recently scheduled callback, as if it fired.
+     * The entry is removed FIRST: a one-shot timer is no longer scheduled by
+     * the time its callback runs, so `scheduledCount()` stays a faithful
+     * "timers still on the clock" reading across a fire. */
     fireLatest: () => {
       const handles = [...scheduled.keys()];
       const handle = handles[handles.length - 1];
       const entry = scheduled.get(handle);
+      scheduled.delete(handle);
       entry?.callback();
     },
     scheduledCount: () => scheduled.size,
@@ -122,7 +126,74 @@ describe('TtftWatchdog', () => {
     expect(timers.scheduledCount()).toBe(1);
   });
 
-  it('rearm() from inside onTimeout reschedules instead of leaving hasFired true (F1 policy re-arm)', () => {
+  it('rearm() schedules a fresh window and clears hasFired (MECHANISM only)', () => {
+    // F2 (2026-08-18) §12.1: the POLICY of when a timeout may re-arm — parked
+    // on a prompt, or the one allowed second window for a totally silent spawn
+    // — belongs to claudeRuntime's onTimeout and is asserted there
+    // (claudeRuntimeOptions.test.ts [E-2] / [E-4] / the two-window case). This
+    // class only owes the mechanism: rearm() bypasses the "already fired"
+    // guard, resets hasFired, and puts a new timer on the clock.
+    const timers = makeFakeTimers();
+    const onTimeout = vi.fn();
+    const wd = new TtftWatchdog({
+      timeoutMs: 30_000,
+      onTimeout,
+      setTimeoutFn: timers.setTimeoutFn,
+      clearTimeoutFn: timers.clearTimeoutFn,
+    });
+
+    wd.arm();
+    timers.fireLatest();
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(wd.hasFired).toBe(true);
+
+    wd.rearm();
+    // The caller declined to treat that window as a real failure — hasFired
+    // must read false again, and a fresh timer must be on the clock.
+    expect(wd.hasFired).toBe(false);
+    expect(timers.scheduledCount()).toBe(1);
+
+    timers.fireLatest();
+    expect(onTimeout).toHaveBeenCalledTimes(2);
+  });
+
+  it('[TW-1] markDegraded() clears the pending timer, resets hasFired, and permanently disarms', () => {
+    // F2 §3.2 + new finding 4: the TTFT phase ended with no evidence of
+    // failure. The table closes for good (only the rolling stall watchdog
+    // observes from here) AND firedFlag clears, so that a LATER 195s stall
+    // failure is reported with the stall wording instead of the TTFT one
+    // (stallErrorMessage() picks its branch off hasFired).
+    const timers = makeFakeTimers();
+    const onTimeout = vi.fn();
+    const wd = new TtftWatchdog({
+      timeoutMs: 30_000,
+      onTimeout,
+      setTimeoutFn: timers.setTimeoutFn,
+      clearTimeoutFn: timers.clearTimeoutFn,
+    });
+
+    wd.arm();
+    expect(timers.scheduledCount()).toBe(1);
+
+    wd.markDegraded();
+
+    // (1) the stale `true` that would mislabel a later stall failure is gone
+    expect(wd.hasFired).toBe(false);
+    // (3) the injected clear ran exactly once
+    expect(timers.clearedCount()).toBe(1);
+    expect(timers.scheduledCount()).toBe(0);
+
+    // (2) arm() and rearm() are both no-ops from here — permanently disarmed
+    wd.arm();
+    wd.rearm();
+    expect(timers.scheduledCount()).toBe(0);
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
+  it('[TW-1b] markDegraded() called from inside a fired onTimeout leaves hasFired false and schedules nothing', () => {
+    // The real call sequence: the wrapper sets firedFlag BEFORE invoking
+    // onTimeout (ttftWatchdog.ts:62/:94) and has already nulled the handle, so
+    // markDegraded's job here is purely the flag + the permanent close.
     const timers = makeFakeTimers();
     const onTimeout = vi.fn();
     let wd!: TtftWatchdog;
@@ -130,7 +201,7 @@ describe('TtftWatchdog', () => {
       timeoutMs: 30_000,
       onTimeout: () => {
         onTimeout();
-        wd.rearm();
+        wd.markDegraded();
       },
       setTimeoutFn: timers.setTimeoutFn,
       clearTimeoutFn: timers.clearTimeoutFn,
@@ -140,14 +211,13 @@ describe('TtftWatchdog', () => {
     timers.fireLatest();
 
     expect(onTimeout).toHaveBeenCalledTimes(1);
-    // The callback declined to treat this as a real failure — hasFired must
-    // read false again.
     expect(wd.hasFired).toBe(false);
+    expect(timers.scheduledCount()).toBe(0);
 
-    // A second window can still fire for real (proves rearm() actually
-    // scheduled a fresh timer rather than leaving the watchdog dead).
-    timers.fireLatest();
-    expect(onTimeout).toHaveBeenCalledTimes(2);
+    wd.rearm();
+    wd.arm();
+    expect(timers.scheduledCount()).toBe(0);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
   });
 
   it('rearm() is a no-op once markProductive() has satisfied the watchdog', () => {

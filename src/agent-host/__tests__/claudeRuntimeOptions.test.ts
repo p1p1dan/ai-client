@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ClaudeRuntime,
   normalizeEffort,
+  PRODUCTIVE_EVENT_TYPES,
   resolveHostPartialMessagesEnabled,
   resolveSubagentActivityEnabled,
 } from '../claudeRuntime.ts';
@@ -522,6 +523,44 @@ function makeHangingQueryFn() {
   };
 }
 
+/**
+ * F2 (2026-08-18 watchdog redesign) §3.4: a watchdog window that elapsed
+ * WITHOUT the watchdog committing to abort rides on `session.status` as an
+ * optional `liveness` note. Collector used by the [E-*] cases below.
+ */
+type LivenessNote = {
+  source: string;
+  budgetMs: number;
+  reason: string;
+  degraded: boolean;
+};
+
+function livenessNotes(events: Record<string, unknown>[]): LivenessNote[] {
+  const notes: LivenessNote[] = [];
+  for (const event of events) {
+    if (event.type !== 'session.status') continue;
+    const note = (event.payload as { liveness?: LivenessNote } | undefined)?.liveness;
+    if (note) notes.push(note);
+  }
+  return notes;
+}
+
+/** The status a liveness note rode on — proves the note never clobbers a parked state. */
+function livenessNoteStatuses(events: Record<string, unknown>[]): string[] {
+  const statuses: string[] = [];
+  for (const event of events) {
+    if (event.type !== 'session.status') continue;
+    const payload = event.payload as { status?: string; liveness?: LivenessNote } | undefined;
+    if (payload?.liveness) statuses.push(String(payload.status));
+  }
+  return statuses;
+}
+
+function failedMessage(events: Record<string, unknown>[]): string {
+  const failed = events.find((e) => e.type === 'session.failed');
+  return String((failed?.payload as { error?: string } | undefined)?.error ?? '');
+}
+
 /** Fake queryFn: one productive event immediately, then a result after `delayMs`. */
 function makeDelayedResultQueryFn(delayMs: number) {
   return (_params: {
@@ -567,16 +606,26 @@ function makeSlowToUnwindQueryFn(unwindDelayAfterAbortMs: number) {
 describe('claudeRuntime TTFT watchdog (a4)', () => {
   const savedTtft = process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS;
   const savedStall = process.env.AICLIENT_HOST_STALL_TIMEOUT_MS;
+  const savedLivenessNote = process.env.AICLIENT_HOST_LIVENESS_NOTE;
 
   afterEach(() => {
     if (savedTtft === undefined) delete process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS;
     else process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = savedTtft;
     if (savedStall === undefined) delete process.env.AICLIENT_HOST_STALL_TIMEOUT_MS;
     else process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = savedStall;
+    if (savedLivenessNote === undefined) delete process.env.AICLIENT_HOST_LIVENESS_NOTE;
+    else process.env.AICLIENT_HOST_LIVENESS_NOTE = savedLivenessNote;
   });
 
-  it('fires with its own message well before the (much longer) stall watchdog when no productive event ever arrives', async () => {
-    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '50';
+  it('[E-0] total silence fails with its own message — but only on the SECOND window (F2 §3.3)', async () => {
+    // F2 (2026-08-18) §3.3: `!sawAnySdkEvent` (not even `system/init` arrived)
+    // stays real evidence of a dead spawn / auth failure, but it is demoted to
+    // SECOND-window evidence: a cold start (first `npx` fetch, slow disk, AV
+    // scan) can legitimately push the CLI child's first frame past one budget,
+    // and killing it there makes Retry a deterministic failure loop. The first
+    // window declines with a diagnostic note and re-arms — the ONE re-arm this
+    // branch is allowed — and the second window commits.
+    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '40';
     process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '5000';
     const events: Record<string, unknown>[] = [];
     const rt = new ClaudeRuntime({
@@ -592,13 +641,24 @@ describe('claudeRuntime TTFT watchdog (a4)', () => {
 
     await rt.send({ sessionId: 'ttft-1', text: 'hi' });
 
+    // Exactly one declined window stands between the send and the abort.
+    const notes = livenessNotes(events);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toEqual({
+      source: 'ttft',
+      budgetMs: 40,
+      reason: 'insufficient_evidence',
+      // the silent-spawn shape re-arms rather than closing the table — the
+      // second window is where the evidence becomes sufficient.
+      degraded: false,
+    });
+
     const failed = events.find((e) => e.type === 'session.failed');
     expect(failed).toBeTruthy();
-    const message = String((failed?.payload as { error?: string } | undefined)?.error ?? '');
     // F14 minor m7: the message itself (not a wall-clock race against the
     // 5000ms stall timeout, which is flaky under load) proves TTFT — not
     // stall — fired.
-    expect(message).toContain('TTFT watchdog');
+    expect(failedMessage(events)).toContain('TTFT watchdog');
   });
 
   it('never fires once a productive event has arrived, even past the TTFT budget', async () => {
@@ -662,9 +722,11 @@ describe('claudeRuntime TTFT watchdog (a4)', () => {
     expect(events.some((e) => e.type === 'session.completed')).toBe(true);
   });
 
-  /** Fake queryFn: init, one api_retry, then hangs until aborted — a genuine
-   * transport retry loop with no productive event ever arriving. */
-  function makeRetryLoopQueryFn() {
+  /** Fake queryFn: init, one api_retry carrying exactly `retryFields`, then
+   * hangs until aborted — a transport retry loop with no productive event ever
+   * arriving. `retryFields` is spread RAW (snake_case, like the SDK's own
+   * event) so a frame can also be modelled with the fields MISSING. */
+  function makeRetryLoopQueryFn(retryFields: Record<string, unknown>) {
     return (params: {
       prompt: string | AsyncIterable<unknown>;
       options?: Record<string, unknown>;
@@ -675,9 +737,8 @@ describe('claudeRuntime TTFT watchdog (a4)', () => {
         yield {
           type: 'system',
           subtype: 'api_retry',
-          attempt: 1,
-          max_retries: 10,
           error: 'upstream 529',
+          ...retryFields,
         };
         await new Promise<void>((resolve) => {
           if (abort.signal.aborted) {
@@ -692,28 +753,85 @@ describe('claudeRuntime TTFT watchdog (a4)', () => {
     };
   }
 
-  it('F1: fires once sawApiRetry evidence lands, even though a prior (non-productive) event already arrived', async () => {
-    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '50';
-    process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '5000';
-    const events: Record<string, unknown>[] = [];
-    const rt = new ClaudeRuntime({
+  function makeRetryRuntime(
+    events: Record<string, unknown>[],
+    retryFields: Record<string, unknown>
+  ) {
+    return new ClaudeRuntime({
       driver: 'agent-sdk',
       cliPath: 'unused-in-fake',
       env: {},
       emit: (e) => events.push(e),
       log: () => undefined,
       registry: new SessionRegistry(),
-      queryFn: makeRetryLoopQueryFn(),
+      queryFn: makeRetryLoopQueryFn(retryFields),
     });
+  }
+
+  it('[E-1 boundary] fires once the SDK itself has given up — attempt === maxRetries (F2 §2.5)', async () => {
+    // F2 §2.5 / decision D3: a BARE `sawApiRetry` is not evidence — it killed
+    // turns that would have succeeded on attempt 2. The replacement carries its
+    // own proof and costs no new constant: the SDK's own retry budget is
+    // exhausted. `attempt === maxRetries` is the first qualifying value, so it
+    // is the boundary that must fire.
+    // The stall budget is deliberately short but still 4x the TTFT one: the
+    // message discriminates WHICH watchdog spoke (F14 minor m7 — never a
+    // wall-clock race), and a gate that failed to fire here would end up in
+    // the stall's arms instead of hanging the suite for its whole timeout.
+    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '50';
+    process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '200';
+    const events: Record<string, unknown>[] = [];
+    const rt = makeRetryRuntime(events, { attempt: 10, max_retries: 10 });
     rt.createSession({ sessionId: 'ttft-4', workspacePath: process.cwd() });
 
     await rt.send({ sessionId: 'ttft-4', text: 'hi' });
 
     const failed = events.find((e) => e.type === 'session.failed');
     expect(failed).toBeTruthy();
-    const message = String((failed?.payload as { error?: string } | undefined)?.error ?? '');
-    // F14 minor m7: message discriminator, not a flaky wall-clock race.
-    expect(message).toContain('TTFT watchdog');
+    expect(failedMessage(events)).toContain('TTFT watchdog');
+    expect(failedMessage(events)).not.toContain('stall watchdog');
+  });
+
+  it('[E-1] a single api_retry (1/10) is NOT abort evidence — the turn is left to the stall watchdog', async () => {
+    // The incident sample [I-1] (spec §0.4) in one assertion: the CLI is
+    // actively retrying, the turn is alive, and the old gate killed it anyway.
+    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '30';
+    process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '200';
+    const events: Record<string, unknown>[] = [];
+    const rt = makeRetryRuntime(events, { attempt: 1, max_retries: 10 });
+    rt.createSession({ sessionId: 'ttft-4b', workspacePath: process.cwd() });
+
+    await rt.send({ sessionId: 'ttft-4b', text: 'hi' });
+
+    const message = failedMessage(events);
+    expect(message).toContain('stall watchdog');
+    expect(message).not.toContain('TTFT watchdog');
+    // exactly one degrade note, then silence — the TTFT table closed itself
+    // instead of re-arming every window (F2 §3.2, no heartbeat).
+    expect(livenessNotes(events)).toHaveLength(1);
+    expect(livenessNotes(events)[0]).toMatchObject({
+      reason: 'insufficient_evidence',
+      degraded: true,
+    });
+  });
+
+  it('[E-1b] an api_retry frame MISSING attempt/max_retries is not evidence either (no 0 >= 0)', async () => {
+    // F2 §2.5 trap: the NORMALIZED wire payload bottoms both fields out to `0`
+    // (eventNormalizer.ts's `typeof msg.attempt === 'number' ? msg.attempt : 0`).
+    // A gate keyed on that projection would read `0 >= 0` and abort on the
+    // FIRST retry — worse than the behavior being fixed. The gate must key on
+    // the RAW SDK event and treat a missing field as "no evidence", never as 0.
+    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '30';
+    process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '200';
+    const events: Record<string, unknown>[] = [];
+    const rt = makeRetryRuntime(events, {});
+    rt.createSession({ sessionId: 'ttft-4c', workspacePath: process.cwd() });
+
+    await rt.send({ sessionId: 'ttft-4c', text: 'hi' });
+
+    const message = failedMessage(events);
+    expect(message).toContain('stall watchdog');
+    expect(message).not.toContain('TTFT watchdog');
   });
 
   /** Fake queryFn: parks on canUseTool (Bash) before any productive event,
@@ -780,6 +898,145 @@ describe('claudeRuntime TTFT watchdog (a4)', () => {
     expect(events.some((e) => e.type === 'session.completed')).toBe(true);
   });
 
+  it('[E-2] a window that elapses while parked on a permission reports awaiting_user and does NOT degrade the table', async () => {
+    // F2 §2.3 / §3.2 branch B: parking on a prompt is a LEGAL pause, not
+    // missing evidence. It re-arms (so later windows still speak) and it must
+    // never carry `degraded: true` — only the insufficient-evidence branch
+    // closes the table. Guards mutation M19 (reason hard-wired to
+    // 'insufficient_evidence').
+    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '30';
+    process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '5000';
+    const events: Record<string, unknown>[] = [];
+    const rt = new ClaudeRuntime({
+      driver: 'agent-sdk',
+      cliPath: 'unused-in-fake',
+      env: {},
+      emit: (e) => events.push(e),
+      log: () => undefined,
+      registry: new SessionRegistry(),
+      queryFn: makePermissionParkedQueryFn(),
+    });
+    rt.createSession({ sessionId: 'ttft-7', workspacePath: process.cwd() });
+
+    const sendPromise = rt.send({ sessionId: 'ttft-7', text: 'hi' });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const notes = livenessNotes(events);
+    // Several windows elapsed while the prompt sat unanswered: more than one
+    // note is itself the proof that this branch re-armed instead of degrading.
+    expect(notes.length).toBeGreaterThanOrEqual(2);
+    for (const note of notes) {
+      expect(note.source).toBe('ttft');
+      expect(note.reason).toBe('awaiting_user');
+      expect(note.degraded).toBe(false);
+      expect(note.budgetMs).toBe(30);
+    }
+    // The note rides on the session's CURRENT status: announcing a bare
+    // 'running' here would clobber the renderer's parked state (the bridges
+    // emit 'waiting_permission' without ever writing HostSession.status — see
+    // resolveCompensationStatus's R14 note).
+    expect(new Set(livenessNoteStatuses(events))).toEqual(new Set(['waiting_permission']));
+    expect(events.some((e) => e.type === 'session.failed')).toBe(false);
+
+    const requested = events.find((e) => e.type === 'permission.requested');
+    const permissionId = (requested?.payload as { permissionId?: string } | undefined)
+      ?.permissionId as string;
+    rt.respondPermission({ sessionId: 'ttft-7', permissionId, allow: true });
+
+    await sendPromise;
+    expect(events.some((e) => e.type === 'session.completed')).toBe(true);
+  });
+
+  /** Fake queryFn: `system/init` lands, then the stream goes silent forever —
+   * the R9 shape. `sawAnySdkEvent` is true, so total-silence evidence never
+   * applies; nothing ever produces, so the stall watchdog is the real
+   * terminator. */
+  function makeSilentAfterInitQueryFn() {
+    return (params: {
+      prompt: string | AsyncIterable<unknown>;
+      options?: Record<string, unknown>;
+    }) => {
+      const abort = params.options?.abortController as AbortController;
+      const iterable = (async function* () {
+        yield { type: 'system', subtype: 'init', session_id: 'rt-r9' };
+        await new Promise<void>((resolve) => {
+          if (abort.signal.aborted) {
+            resolve();
+            return;
+          }
+          abort.signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+        throw new Error('AbortError: aborted');
+      })();
+      return Object.assign(iterable, { close: () => undefined });
+    };
+  }
+
+  it('[E-4] R9: init then permanent silence degrades ONCE and dies as an honest STALL — never with the TTFT wording', async () => {
+    // F2 §3.1 + new finding 4 (P0). The R9 shape is deliberately handed to the
+    // stall watchdog; the TTFT table closes after one window. The honesty half:
+    // markDegraded() also clears firedFlag, so the 195s failure is reported as
+    // a stall — a message claiming "no first response within 30ms" arriving
+    // 200ms later would be less honest than the behavior being fixed.
+    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '30';
+    process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '200';
+    const events: Record<string, unknown>[] = [];
+    const rt = new ClaudeRuntime({
+      driver: 'agent-sdk',
+      cliPath: 'unused-in-fake',
+      env: {},
+      emit: (e) => events.push(e),
+      log: () => undefined,
+      registry: new SessionRegistry(),
+      queryFn: makeSilentAfterInitQueryFn(),
+    });
+    rt.createSession({ sessionId: 'ttft-8', workspacePath: process.cwd() });
+
+    await rt.send({ sessionId: 'ttft-8', text: 'hi' });
+
+    const notes = livenessNotes(events);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toEqual({
+      source: 'ttft',
+      budgetMs: 30,
+      reason: 'insufficient_evidence',
+      degraded: true,
+    });
+
+    expect(events.some((e) => e.type === 'session.failed')).toBe(true);
+    const message = failedMessage(events);
+    expect(message).toContain('stall watchdog');
+    expect(message).not.toContain('no first response within');
+  });
+
+  it('[E-3] AICLIENT_HOST_LIVENESS_NOTE=0 emits no note at all and changes no verdict', async () => {
+    // F2 §9.2: the env bit is a QUIET switch (a test seam / ops knob), not a
+    // product rollout gate — it stops paying for a frame nobody consumes, and
+    // the judgement path is byte-for-byte the same.
+    process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '30';
+    process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '200';
+    process.env.AICLIENT_HOST_LIVENESS_NOTE = '0';
+    const events: Record<string, unknown>[] = [];
+    const rt = new ClaudeRuntime({
+      driver: 'agent-sdk',
+      cliPath: 'unused-in-fake',
+      env: {},
+      emit: (e) => events.push(e),
+      log: () => undefined,
+      registry: new SessionRegistry(),
+      queryFn: makeSilentAfterInitQueryFn(),
+    });
+    rt.createSession({ sessionId: 'ttft-9', workspacePath: process.cwd() });
+
+    await rt.send({ sessionId: 'ttft-9', text: 'hi' });
+
+    expect(livenessNotes(events)).toHaveLength(0);
+    // Same verdict as [E-4] with the note on: stall, not TTFT.
+    const message = failedMessage(events);
+    expect(message).toContain('stall watchdog');
+    expect(message).not.toContain('no first response within');
+  });
+
   it('R7 + S6 (round-2 iteration-3 review): an early Stop before the TTFT deadline, with a stream slow enough to also outlive the stall deadline, still ends as an honest session.stopped — neither watchdog may relabel an already-aborted turn as a failure', async () => {
     process.env.AICLIENT_HOST_TTFT_TIMEOUT_MS = '20';
     process.env.AICLIENT_HOST_STALL_TIMEOUT_MS = '60';
@@ -814,6 +1071,19 @@ describe('claudeRuntime TTFT watchdog (a4)', () => {
     expect(events.some((e) => e.type === 'session.failed')).toBe(false);
     const stopped = events.find((e) => e.type === 'session.stopped');
     expect(stopped).toBeTruthy();
+  });
+});
+
+describe('claudeRuntime PRODUCTIVE_EVENT_TYPES — frozen vocabulary (F2 §2.4)', () => {
+  it('[E-5] is EXACTLY the five model-productive SDK top-level types', () => {
+    // Membership is a judgement, not a list: every member re-arms the stall
+    // watchdog and satisfies TTFT. Adding `system` would destroy the C-14
+    // detector outright — an invalid model streams `api_retry` forever, and a
+    // hang that re-arms its own watchdog is undetectable. `toEqual` on the set
+    // (not `.has()` probes) is what makes an ADDITION red too.
+    expect(PRODUCTIVE_EVENT_TYPES).toEqual(
+      new Set(['assistant', 'user', 'result', 'tool_progress', 'stream_event'])
+    );
   });
 });
 
