@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events';
 import type { AgentHostCommand } from '@shared/types/agentHost';
-import type { RuntimeEvent, RuntimeEventType } from '@shared/types/runtimeEvents';
+import type {
+  RuntimeEvent,
+  RuntimeEventType,
+  SessionRuntimeStatus,
+} from '@shared/types/runtimeEvents';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // AgentHostManager only touches `electron.app` inside startInternal() (process spawn path),
@@ -602,5 +606,194 @@ describe('AgentHostManager host-failure diagnostics', () => {
     proc.emit('exit', { code: null, signal: 'SIGTERM' });
 
     expect(logSpy.error).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * F2 S5 (2026-08-18 watchdog redesign, spec §6.2) — the Host-exit broadcast.
+ *
+ * Before this slice, a non-clean Host `exit`/`error` only wrote
+ * `this.state`/logs (E8 in the spec) — every session this process still
+ * considered open stayed silently pinned at `'running'` forever, with no
+ * terminal event ever reaching the renderer. This closes that gap by
+ * maintaining an open-session ledger off the SAME event stream every
+ * RuntimeEvent already flows through (`attachProcessHandlers`'s 'event'
+ * listener), and broadcasting `session.status(disconnected)` +
+ * `session.failed` for every session still open at the moment of a non-clean
+ * death — reusing `this.eventHandlers`, the exact channel `chat.ts`'s
+ * `broadcastRuntimeEvent` and `SessionIndexService.handleRuntimeEvent` are
+ * already subscribed to. No new IPC channel.
+ *
+ * The ledger tracks the SESSION's lifecycle, not one turn: `session.created`/
+ * `session.resumed` open an entry, and every subsequent `session.status`
+ * keeps it current — `idle`/`failed`/`completed`/`disconnected` close it,
+ * anything else (`running`, `waiting_permission`, `waiting_question`,
+ * `starting`, `stopping`) (re)opens it. That "(re)opens" half is what makes
+ * `[S5-7]` below hold: a session going idle after its FIRST turn must not
+ * permanently retire it for a crash during its SECOND.
+ */
+describe('AgentHostManager Host-exit broadcast (F2 S5 §6.2)', () => {
+  async function attached() {
+    const { AgentHostManager } = await import('../AgentHostManager');
+    const manager = new AgentHostManager();
+    const proc = new FakeAgentHostProcess();
+    const internals = manager as unknown as {
+      process: FakeAgentHostProcess | null;
+      state: string;
+      attachProcessHandlers(p: FakeAgentHostProcess): void;
+    };
+    internals.attachProcessHandlers(proc);
+    internals.process = proc;
+    internals.state = 'ready';
+    const dispatched: RuntimeEvent[] = [];
+    manager.onEvent((event) => dispatched.push(event));
+    return { manager, proc, dispatched };
+  }
+
+  function createdEvent(sessionId: string, seq = 1): RuntimeEvent {
+    return {
+      type: 'session.created',
+      sessionId,
+      seq,
+      timestamp: Date.now(),
+      payload: {},
+    };
+  }
+
+  function statusEvent(sessionId: string, status: SessionRuntimeStatus, seq = 1): RuntimeEvent {
+    return {
+      type: 'session.status',
+      sessionId,
+      seq,
+      timestamp: Date.now(),
+      payload: { status },
+    };
+  }
+
+  it('[S5-1] broadcasts session.status(disconnected) then session.failed exactly once for an open session on an unclean exit', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    const forS1 = dispatched.filter((e) => e.sessionId === 's1');
+    // [created, status(running), status(disconnected), failed]
+    const broadcastPart = forS1.slice(2);
+    expect(broadcastPart.map((e) => e.type)).toEqual(['session.status', 'session.failed']);
+    expect(broadcastPart[0]).toMatchObject({ payload: { status: 'disconnected' } });
+    expect(broadcastPart[1]).toMatchObject({
+      payload: { error: expect.stringContaining('Agent Host exited') },
+    });
+  });
+
+  it('[S5-2] covers every open session, not just one — "broadcasts once and covers every open session"', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+    proc.emit('event', createdEvent('s2'));
+    proc.emit('event', statusEvent('s2', 'waiting_permission'));
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    const failedIds = dispatched.filter((e) => e.type === 'session.failed').map((e) => e.sessionId);
+    expect(failedIds.sort()).toEqual(['s1', 's2']);
+  });
+
+  it('[S5-3] a clean shutdown (code 0) is an intentional shutdown — no broadcast', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+
+    proc.emit('exit', { code: 0, signal: null });
+
+    expect(dispatched.some((e) => e.type === 'session.failed')).toBe(false);
+  });
+
+  it('[S5-4] a clean shutdown (SIGTERM) is an intentional shutdown — no broadcast', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+
+    proc.emit('exit', { code: null, signal: 'SIGTERM' });
+
+    expect(dispatched.some((e) => e.type === 'session.failed')).toBe(false);
+  });
+
+  it('[S5-5][M18 negative control] an idle session is excluded — nothing was in flight to fail', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'idle'));
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    expect(dispatched.some((e) => e.sessionId === 's1' && e.type === 'session.failed')).toBe(false);
+  });
+
+  it('[S5-6][M18 negative control] an explicitly closed session (disconnected) stays excluded from a later crash', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+    proc.emit('event', statusEvent('s1', 'disconnected')); // explicit close path (claudeRuntime.close / codexRuntime.close)
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    expect(dispatched.some((e) => e.sessionId === 's1' && e.type === 'session.failed')).toBe(false);
+  });
+
+  it('[S5-7] crash-mid-turn fixture: a crash during a SECOND turn is still covered, not just the first', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'idle')); // turn 1: create -> idle
+    proc.emit('event', statusEvent('s1', 'running')); // turn 1 starts
+    proc.emit('event', statusEvent('s1', 'idle')); // turn 1 ends
+    proc.emit('event', statusEvent('s1', 'running')); // turn 2 starts — the crash lands here
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    expect(dispatched.some((e) => e.sessionId === 's1' && e.type === 'session.failed')).toBe(true);
+  });
+
+  it('[S5-8][M17] session.failed is present, not merely session.status(disconnected)', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    const types = dispatched.filter((e) => e.sessionId === 's1').map((e) => e.type);
+    expect(types).toContain('session.failed');
+  });
+
+  it('[S5-9] an `error` with no following `exit` still broadcasts', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+
+    proc.emit('error', new Error('spawn ENOENT'));
+
+    expect(dispatched.some((e) => e.sessionId === 's1' && e.type === 'session.failed')).toBe(true);
+  });
+
+  it('[S5-10] `error` followed by `exit` for the same failure dedups to exactly one broadcast', async () => {
+    const { proc, dispatched } = await attached();
+    proc.emit('event', createdEvent('s1'));
+    proc.emit('event', statusEvent('s1', 'running'));
+
+    proc.emit('error', new Error('spawn ENOENT'));
+    proc.emit('exit', { code: 1, signal: null });
+
+    const failedCount = dispatched.filter(
+      (e) => e.sessionId === 's1' && e.type === 'session.failed'
+    ).length;
+    expect(failedCount).toBe(1);
+  });
+
+  it('[S5-11] no open sessions means no synthetic event at all on an unclean exit', async () => {
+    const { proc, dispatched } = await attached();
+
+    proc.emit('exit', { code: 1, signal: null });
+
+    expect(dispatched).toHaveLength(0);
   });
 });

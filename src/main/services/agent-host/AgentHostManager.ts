@@ -21,6 +21,9 @@ import type {
   RuntimeEventType,
   SessionHistoryListedEvent,
   SessionPermissionUpdatedEvent,
+  SessionRuntimeStatus,
+  SessionStatusEvent,
+  SessionTerminalEvent,
 } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import { app } from 'electron';
@@ -33,6 +36,20 @@ import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostSt
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
 
 const CODEX_HOME_DIR_NAME = 'codex-home';
+
+/**
+ * F2 S5 (2026-08-18 watchdog redesign, spec §6.2) — the four
+ * `SessionRuntimeStatus` values that mean "this session has nothing in
+ * flight right now." Any OTHER status (`starting`, `running`,
+ * `waiting_permission`, `waiting_question`, `stopping`) means a Host crash at
+ * that instant would silently orphan the session — see `openSessions` below.
+ */
+const CLOSED_SESSION_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
+  'idle',
+  'failed',
+  'completed',
+  'disconnected',
+]);
 
 /**
  * D47 S3b §1 — the three Codex managed-credentials `buildAgentHostEnv` inputs,
@@ -98,6 +115,23 @@ export class AgentHostManager {
   // S3 slice 6 (A5): same capture-off-`host.ready` pattern as `settings` above —
   // `null` until this process lifetime has seen at least one `host.ready`.
   private capabilities: AgentHostCapabilitiesInfo | null = null;
+  // F2 S5 (2026-08-18, spec §6.2) — the open-session ledger the Host-exit
+  // broadcast scopes itself to. Maintained off the SAME event stream every
+  // RuntimeEvent already flows through (`attachProcessHandlers`'s 'event'
+  // listener) — no new pipeline. Entry: `session.created` / `session.resumed`,
+  // and any `session.status` NOT in `CLOSED_SESSION_STATUSES` (this is what
+  // covers a session's second and later turns, not just its first). Exit:
+  // `session.status` IN `CLOSED_SESSION_STATUSES` — `disconnected` already
+  // covers an explicit `session.close` (both runtimes emit it from their own
+  // `close()`), so explicit close needs no separate handling here.
+  private readonly openSessions = new Set<string>();
+  // F2 S5 — monotonic seq for Main-synthesized events. By the time the
+  // Host-exit broadcast runs, the Host process (and its own seq counter,
+  // owned by `src/agent-host/index.ts`) is gone, so Main stamps its own.
+  // Downstream consumers never enforce strict seq continuity — it is an
+  // out-of-order hint, not audited that precisely — so a Main-local counter
+  // is a legitimate encoding for these synthetic events.
+  private syntheticEventSeq = 0;
 
   getStatus(): {
     state: AgentHostState;
@@ -412,6 +446,7 @@ export class AgentHostManager {
    */
   private attachProcessHandlers(proc: AgentHostProcess): void {
     proc.on('event', (event: RuntimeEvent) => {
+      this.trackOpenSession(event);
       for (const handler of this.eventHandlers) {
         handler(event);
       }
@@ -436,6 +471,48 @@ export class AgentHostManager {
 
     let stderrPending = '';
     let recentStderr: string[] = [];
+    // F2 S5 — scoped to THIS process's lifecycle, like `stderrPending` /
+    // `recentStderr` above: a fresh Host spawn (a fresh `attachProcessHandlers`
+    // call) gets a fresh flag. Prevents a double broadcast when 'error' fires
+    // first (a spawn-level failure) and Node then also emits 'exit' for the
+    // same failure.
+    let hostExitBroadcastSent = false;
+
+    /**
+     * F2 S5 §6.2 — the ONE broadcast for a non-clean Host death, scoped to
+     * whatever `openSessions` says is still open at that instant.
+     * `session.status(disconnected)` first (an existing `SessionRuntimeStatus`
+     * member, zero protocol addition), then `session.failed` — the ONLY
+     * judgment-carrying red-card entry per §6.1, which is what lets the
+     * renderer's existing `isSessionFailedForSend` channel pick this up with
+     * no new wiring on that side either. Dispatched through
+     * `dispatchSyntheticEvent`, i.e. the same `this.eventHandlers` set every
+     * real Host event already flows through — `chat.ts`'s
+     * `broadcastRuntimeEvent` and `SessionIndexService.handleRuntimeEvent`
+     * both see it exactly as if the (now-dead) Host had sent it.
+     */
+    const broadcastHostExit = (message: string) => {
+      if (hostExitBroadcastSent) return;
+      hostExitBroadcastSent = true;
+      const sessionIds = [...this.openSessions];
+      this.openSessions.clear();
+      for (const sessionId of sessionIds) {
+        this.dispatchSyntheticEvent({
+          type: 'session.status',
+          sessionId,
+          seq: this.nextSyntheticSeq(),
+          timestamp: Date.now(),
+          payload: { status: 'disconnected' },
+        } satisfies SessionStatusEvent);
+        this.dispatchSyntheticEvent({
+          type: 'session.failed',
+          sessionId,
+          seq: this.nextSyntheticSeq(),
+          timestamp: Date.now(),
+          payload: { error: message },
+        } satisfies SessionTerminalEvent);
+      }
+    };
 
     /**
      * Replay the buffered tail at `error` level. File logging ships at 'error'
@@ -467,6 +544,12 @@ export class AgentHostManager {
       if (this.process === proc) {
         this.state = 'error';
       }
+      // F2 S5: a spawn-level 'error' has no code/signal — it is never our own
+      // clean shutdown() path — and may or may not be followed by 'exit'
+      // (Node's behavior here is platform-dependent). Broadcast unconditionally
+      // so "error with no exit" (§6.2) is still covered; `hostExitBroadcastSent`
+      // dedups against a following 'exit' for the same failure.
+      broadcastHostExit(`Agent Host process error: ${err.message}`);
     });
 
     proc.on('exit', (payload?: { code: number | null; signal: string | null }) => {
@@ -486,6 +569,11 @@ export class AgentHostManager {
       } else {
         log.error(`[agent-host] exited code=${code} signal=${signal}`);
         dumpRecentStderr('unexpected exit');
+        // F2 S5 §6.2: a non-clean exit means every session this process still
+        // considered open just lost its Host without a verdict — broadcast so
+        // none of them are left showing 'running' forever (the S3 queue-hold
+        // gap this slice is the strong-order prerequisite for).
+        broadcastHostExit(`Agent Host exited (code=${code} signal=${signal})`);
       }
       recentStderr = [];
 
@@ -494,6 +582,44 @@ export class AgentHostManager {
         this.state = 'stopped';
       }
     });
+  }
+
+  /**
+   * F2 S5 (2026-08-18, spec §6.2) — keeps `openSessions` current off the SAME
+   * event stream every RuntimeEvent already flows through; no new listener.
+   */
+  private trackOpenSession(event: RuntimeEvent): void {
+    const sessionId = event.sessionId;
+    if (!sessionId) return;
+    if (event.type === 'session.created' || event.type === 'session.resumed') {
+      this.openSessions.add(sessionId);
+      return;
+    }
+    if (event.type === 'session.status') {
+      const status = (event as SessionStatusEvent).payload.status;
+      if (CLOSED_SESSION_STATUSES.has(status)) {
+        this.openSessions.delete(sessionId);
+      } else {
+        this.openSessions.add(sessionId);
+      }
+    }
+  }
+
+  private nextSyntheticSeq(): number {
+    this.syntheticEventSeq += 1;
+    return this.syntheticEventSeq;
+  }
+
+  /**
+   * F2 S5 — dispatch a Main-synthesized RuntimeEvent through the same
+   * forwarding point real Host events go through (`this.eventHandlers`).
+   * Zero new IPC channel: `chat.ts`'s `broadcastRuntimeEvent` and
+   * `SessionIndexService.handleRuntimeEvent` are both already subscribed.
+   */
+  private dispatchSyntheticEvent(event: RuntimeEvent): void {
+    for (const handler of this.eventHandlers) {
+      handler(event);
+    }
   }
 
   private async startInternal(): Promise<void> {
