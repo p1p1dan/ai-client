@@ -361,14 +361,18 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('formatTime: (ms) => formatRelativeTimestamp(ms, nowMs)');
   });
 
-  // §5: the pinned band's two classes must stay in ONE `cn(...)` call — the
-  // scroll-state container (`fx-turn-band`) and the sticky positioning belong
-  // to the same element, and splitting them is how the clamp silently stops
-  // matching. Both tokens are string literals in wiring position, which is why
-  // `CALL_SITES` keeps string contents.
-  it('§5: the sticky band and its scroll-state container are one element', () => {
-    expectCalled("cn(turnBubbleBandClass(), 'fx-turn-band')");
-    expectCalled('fx-turn-bubble-text');
+  // §5 (F10 as-built): the band renders through its class function alone and
+  // the bubble text through `userBubbleTextClass()` — the unconditional-clamp
+  // fallback (§5.6-B). The scroll-state container hooks are GONE by design:
+  // the pinned-only clamp coupled scroll position to layout height and
+  // oscillated. The negatives keep either hook from quietly coming back.
+  it('§5: the sticky band and the clamped bubble use their class functions', () => {
+    expectCalled('turnBubbleBandClass()');
+    expectCalled('userBubbleTextClass()');
+    expect(SYNTAX, 'fx-turn-band must not return (F10)').not.toContain('fx-turn-band');
+    expect(SYNTAX, 'fx-turn-bubble-text must not return (F10)').not.toContain(
+      'fx-turn-bubble-text'
+    );
   });
 
   // The panel's opt-out of Base UI's measured-height mechanism (see
@@ -410,15 +414,17 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // heads, triggers, status rows — deliberately stays non-selectable, which is
   // why this is pinned per surface instead of once on the timeline root.
   it('message content opts back into text selection', () => {
-    expectCalled('className="fx-turn-bubble-text select-text space-y-2"');
+    // The user bubble's `select-text` moved into `userBubbleTextClass()`
+    // (asserted in `chatTimelineLayout.test.ts`); the wiring half is the §5
+    // call assertion above.
     expectCalled('className="select-text whitespace-pre-wrap text-markdown text-foreground"');
   });
 
   // The three surfaces T-29 deliberately does NOT touch. Each is model-adjacent
   // enough that "add markdown here too" is a plausible future edit, and each has
-  // a reason not to: the user bubble is the operator's own prompt under a
-  // three-line pinned clamp, a notice is an `Alert` body, and tool IN/OUT is a
-  // mono transcript.
+  // a reason not to: the user bubble is the operator's own prompt under an
+  // unconditional line clamp (F10), a notice is an `Alert` body, and tool
+  // IN/OUT is a mono transcript.
   it('T-29: user bubble and notice bodies stay plain text', () => {
     // Both paragraphs still exist and still pre-wrap. The class-string order is
     // what distinguishes them from `TurnItemView`'s streaming fallback, which

@@ -42,6 +42,7 @@ import {
   turnHeadClass,
   turnProcessPanelClass,
   turnProcessShellClass,
+  userBubbleTextClass,
 } from './chatTimelineLayout';
 import {
   defaultTurnProcessOpen,
@@ -66,7 +67,7 @@ import {
   formatRelativeTimestamp,
   type MessageMetadata,
 } from './messageMetadata';
-import { shouldStickToBottom } from './messageTimelineScroll';
+import { nextFollowState } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { QuestionCard } from './QuestionCard';
 import {
@@ -339,20 +340,32 @@ export function MessageTimeline({
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const lastScrollHeightRef = useRef(0);
 
   // Track whether the user is anchored to the bottom. Read fresh on every
   // native scroll event so a manual scroll-up is never fought by auto-scroll,
-  // and scrolling back down re-arms following.
+  // and scrolling back down re-arms following. Arming goes through
+  // `nextFollowState` so a browser clamp-induced scroll (content shrank, the
+  // engine clamped `scrollTop` to the new max and fired `scroll`) cannot
+  // re-arm the follower — the F10 amplifier.
   // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId triggers re-querying the viewport node, which base-ui remounts across the null <-> id transition
   useEffect(() => {
     const viewport = findViewport(scrollRootRef.current);
     if (!viewport) return undefined;
+    // F10-a: the timeline does its own bottom-following, so Chromium scroll
+    // anchoring buys nothing here — and a height change in a stuck band above
+    // the anchor node makes anchoring itself drive a collapse/expand loop.
+    viewport.style.overflowAnchor = 'none';
+    lastScrollHeightRef.current = viewport.scrollHeight;
     const handleScroll = () => {
-      stickToBottomRef.current = shouldStickToBottom(
-        viewport.scrollTop,
-        viewport.scrollHeight,
-        viewport.clientHeight
-      );
+      stickToBottomRef.current = nextFollowState({
+        scrollTop: viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+        clientHeight: viewport.clientHeight,
+        prevScrollHeight: lastScrollHeightRef.current,
+        following: stickToBottomRef.current,
+      });
+      lastScrollHeightRef.current = viewport.scrollHeight;
     };
     viewport.addEventListener('scroll', handleScroll, { passive: true });
     return () => viewport.removeEventListener('scroll', handleScroll);
@@ -367,6 +380,7 @@ export function MessageTimeline({
     const viewport = findViewport(scrollRootRef.current);
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
+      lastScrollHeightRef.current = viewport.scrollHeight;
     }
   }, [sessionId]);
 
@@ -384,6 +398,9 @@ export function MessageTimeline({
       if (stickToBottomRef.current) {
         viewport.scrollTop = viewport.scrollHeight;
       }
+      // Keep the height record current even when not following, so the next
+      // scroll event's height-change check compares against this frame.
+      lastScrollHeightRef.current = viewport.scrollHeight;
     });
     observer.observe(content);
     return () => observer.disconnect();
@@ -754,11 +771,11 @@ function UserBubble({ message }: { message: ChatMessage }) {
             ))}
           </div>
         ) : null}
-        {/* `fx-turn-bubble-text` carries no styling of its own — it is the
-            target of the `@container scroll-state(stuck: top)` rule in
-            `styles/scroll-state.css`, which clamps the prompt to three lines
-            ONLY while its band is pinned (§5.6-A). Unpinned, it does nothing. */}
-        <div className="fx-turn-bubble-text select-text space-y-2">
+        {/* Unconditional clamp (§5.6-B fallback, F10): the pinned-only
+            scroll-state clamp oscillated — see `userBubbleTextClass()`'s
+            header for the loop. `title` above keeps the full prompt
+            reachable in every state. */}
+        <div className={userBubbleTextClass()}>
           {textBlocks.map((block) => (
             <p
               key={block.id}
@@ -1143,14 +1160,12 @@ const ChatTurn = memo(function ChatTurn({
         // the release rule — when the turn's box leaves the top of the viewport
         // the bubble is pushed out and the next turn's takes over, so there is
         // no scroll listener, no IntersectionObserver and no `activeTurnId`
-        // state anywhere in this file (§5.3).
-        // `fx-turn-band` only declares the scroll-state query container the
-        // pinned-state clamp needs (`styles/scroll-state.css`, §5.6-A; engine
-        // support probed in `src/agent-host/spikes/scroll-state-probe.js`,
-        // and that file explains why the rule cannot live in globals.css).
+        // state anywhere in this file (§5.3). The former `fx-turn-band`
+        // scroll-state query container is gone with the pinned-only clamp it
+        // served (F10 — see `userBubbleTextClass()`).
         // NOT ASSERTABLE:
         // that sticky resolves against `ScrollArea.Viewport` (§6.2 ①③).
-        <div className={cn(turnBubbleBandClass(), 'fx-turn-band')}>
+        <div className={turnBubbleBandClass()}>
           <UserBubble message={turn.user} />
         </div>
       )}

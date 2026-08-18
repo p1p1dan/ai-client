@@ -65,6 +65,27 @@ export function turnBubbleBandClass(): string {
 }
 
 /**
+ * The prompt text inside the band — clamped UNCONDITIONALLY (§5.6-B, the
+ * spec's own pre-authorised fallback; adopted as-built by F10, 2026-08-18).
+ *
+ * The pinned-only clamp it replaces (`@container scroll-state(stuck: top)`
+ * → `-webkit-line-clamp: 3`, §5.6-A) created a scroll-position →
+ * layout-height edge: collapsing the stuck band shrank `scrollHeight`, the
+ * browser re-clamped `scrollTop` back below the sticky threshold, the band
+ * un-stuck and re-expanded, and the stick-to-bottom follower pushed the
+ * offset up again — a per-frame collapse/expand oscillation on any long
+ * prompt whose turn sits at the bottom of the document. An unconditional
+ * clamp makes band height a function of content alone: no scroll → height
+ * edge exists anywhere in the timeline, so the loop is structurally
+ * impossible (engine-independent, unlike a hysteresis tuning). The full
+ * prompt stays reachable via the bubble's `title`; a user-owned expand
+ * toggle is F456-batch work.
+ */
+export function userBubbleTextClass(): string {
+  return 'select-text space-y-2 line-clamp-6';
+}
+
+/**
  * Everything after the band: turn head, process shell, answer, footer.
  * `gap-2.5` is P-17's 10px "within a turn" tier and stays the single source of
  * it, inherited from the pre-T-31 `<article className="flex flex-col gap-2.5">`

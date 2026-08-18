@@ -11,6 +11,7 @@ import {
   turnHeadClass,
   turnProcessPanelClass,
   turnProcessShellClass,
+  userBubbleTextClass,
 } from '../chatTimelineLayout';
 
 /** Tailwind's spacing scale: one step is 4px (`py-2.5` -> 10px). */
@@ -178,25 +179,32 @@ describe('turnProcessShellClass (F11)', () => {
   });
 });
 
-describe('the sticky band survives its render-site composition (F8③)', () => {
-  // `MessageTimeline` renders the band as `cn(turnBubbleBandClass(),
-  // 'fx-turn-band')`. F-B8 asserts the first half; what reaches the DOM is the
-  // merge, and `fx-turn-band` is the scroll-state query container — a class
-  // that must not smuggle in any of the four properties that silently turn
-  // `position: sticky` off.
-  const merged = cn(turnBubbleBandClass(), 'fx-turn-band');
-
-  it('keeps the sticky positioning', () => {
-    expect(merged).toContain('sticky');
-    expect(merged).toContain('top-0');
-    expect(merged).toContain('fx-turn-band');
+describe('userBubbleTextClass (F10 — the unconditional clamp)', () => {
+  // The pinned-only clamp (`@container scroll-state(stuck: top)`) coupled
+  // scroll position to layout height and oscillated: collapse → scrollHeight
+  // shrinks → browser clamps scrollTop below the sticky threshold → expand →
+  // follower pushes the offset back. The fix is structural: the clamp must be
+  // UNCONDITIONAL, so band height depends on content alone and no scroll →
+  // height edge exists. These assertions pin exactly that.
+  it('F10: clamps the prompt with a bare, unconditional line-clamp utility', () => {
+    const cls = userBubbleTextClass();
+    // Bare utility — no variant prefix (`hover:`, `group-*:`, `data-[...]:`),
+    // which is what "unconditional" means in a Tailwind class string.
+    expect(cls).toMatch(/(?:^|\s)line-clamp-\d+(?:\s|$)/);
+    expect(cls).not.toMatch(/:line-clamp/);
+    const lines = Number(/line-clamp-(\d+)/.exec(cls)?.[1]);
+    expect(lines).toBeGreaterThanOrEqual(3);
   });
 
-  it('acquires nothing that would silently kill sticky', () => {
-    expect(merged).not.toMatch(/overflow-/);
-    expect(merged).not.toMatch(/transform/);
-    expect(merged).not.toMatch(/filter/);
-    expect(merged).not.toMatch(/(?:^|\s)contain-/);
+  it('F10: keeps the selection opt-in and the paragraph rhythm', () => {
+    const cls = userBubbleTextClass();
+    expect(cls).toContain('select-text');
+    expect(cls).toContain('space-y-2');
+  });
+
+  it('F10: carries no scroll-state hook — the coupling must not return', () => {
+    expect(userBubbleTextClass()).not.toContain('fx-');
+    expect(turnBubbleBandClass()).not.toContain('fx-');
   });
 });
 
