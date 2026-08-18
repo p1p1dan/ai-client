@@ -59,7 +59,7 @@
 1. **T-10 打包版 GUI 点验**（用户；[清单](../../../plans/t10-packaged-gui-checklist.md) + [加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md)，出发前必做 M1~M4）→ CP2 汇报。
 2. ~~**T-11 M2 加密机现场验收**~~ ✅ 2026-08-15 现场六项全过（含白名单⑥）→ CP5，Phase 0 正式 Go（open-q #7 关闭）。
 3. **GUI 统一点测残项**（T-04 待网关 / T-06 / T-07 补强 / T-20 / T-03 / T-18 附件人工项）——清单见 [implementation-status 用户线](./implementation-status.md)。
-4. **开发线推进中（2026-08-15）**：意外发现小批（三条 console 级 + #13 dark:）已落地 `5dab201`；当前主攻 multi-agent 切片 5，其后按新立项队列（见 [implementation-status Next Target](./implementation-status.md)）。
+4. **开发线推进中（2026-08-18）**：D48+T-10 用户点验分诊 F1~F11 全线出清——快修批/F10（前落）+ **F2 超时重设计五片（D49）** + **F456 可读性与 Composer 四片（D50）** + **F11 重发历史重复修复（D51）** 全部施工收口（全量 vitest 4724 例；台账三行 + as-built 各归位）。残余：GUI 点验批（G-1~G-11+新增项，含 D3-b 否决权条件①③裁定）/ F7 回退分叉 v1 规格待开 / F8 分支盲票 / F9 TSD 判别测试待用户 / Q3 全局语言口径待拍板。
 
 ## Deferred
 

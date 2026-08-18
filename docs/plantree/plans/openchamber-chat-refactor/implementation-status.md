@@ -94,7 +94,7 @@
 - （2026-08-10 批遗留）`stopActiveSession()` 与 handleStop 的 pause 目标在送中途切会话时分叉（stop 应收显式 sessionId）；MessageTimeline:494 的 Stop 未 bump generation
 - （2026-08-10 批遗留）Stop-before-echo 的 release-origin 回合 pause 文案误标 send-rejected（冻结正确、文案误导，下次直发即清）
 - （2026-08-10 批遗留）remote 工作区 git 面板恒 not-git（gitEnabled 从未赋值，存量缺口）——新加的判定路径显示会让它现场显形
-- （2026-08-10 批遗留）历史图片真位图缩略图另立需求（现为 metadata chip；image block 无处放文件名属 Host 侧限制）；纯图无文字消息同进程 resume 可能双气泡（宁多勿丢方向内，fold 可按附件身份匹配收口）
+- （2026-08-10 批遗留）历史图片真位图缩略图另立需求（现为 metadata chip；image block 无处放文件名属 Host 侧限制）；~~纯图无文字消息同进程 resume 可能双气泡~~ → **2026-08-18 F11 批已修**（`bc732f8` 定位空洞认领+附件档分档身份，D51；uuid 改道 F11-b 另立票）
 - （2026-08-10 批遗留）启动 3-5s 总时长未治理（本批只治白屏观感）：窗口创建前 await 链 + 渲染层两层懒加载，需先补启动时间戳埋点
 - （2026-08-10 批遗留）send 等待谓词仍为内联闭包，抽 shouldReleaseSendWait 纯函数可直接单测（敏感区重构另排）
 - （D29 复核观察项）空仓库文件夹点击仍零可见后果（#28 心智在空仓场景未闭合）；激活恒取最新无「上次看的那条」记忆；面板按 project 粒度跟随（Temp 内多目录、同仓多 worktree 间不跟随，系 T-26 取消 workspace 树层级的结构性结果）；文件夹头无 aria-expanded/live-region（既存小瑕）
