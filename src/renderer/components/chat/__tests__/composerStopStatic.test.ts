@@ -104,10 +104,21 @@ describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', 
   });
 });
 
-/** `sendAndWait`'s post-dispatch wait predicate, source text only. */
+/**
+ * `sendAndWait`'s post-dispatch wait predicate, source text only.
+ *
+ * F2 (2026-08-18): the closing anchor moved from `}, timeoutMs);` to the
+ * injected expiry rule — `waitUntil` now takes an `expired()` predicate rather
+ * than a fixed number of milliseconds. The six groups below are unchanged and
+ * are themselves the regression evidence for that signature change.
+ */
 function waitPredicateBody(): string {
-  const start = only('return waitUntil(() => {');
-  const end = source.indexOf('}, timeoutMs);', start);
+  // Anchored on tokens the formatter cannot reflow: the sole `return
+  // waitUntil(` call, and the injected expiry rule that closes its argument
+  // list. The previous anchors carried their own line breaks and broke the
+  // moment biome rewrapped the multi-line call.
+  const start = only('return waitUntil(');
+  const end = source.indexOf('() => budget.isExpired(Date.now())', start);
   expect(end).toBeGreaterThan(start);
   return source.slice(start, end);
 }
@@ -297,5 +308,64 @@ describe('runSend Stop exit is a clean end, not the 45s abandon (2026-08-10)', (
     expect(body).toContain('decideRunEntryOutcome({');
     expect(body).toContain('sawUserEcho');
     expect(body).toContain('finalizeOutcome(');
+  });
+});
+
+/**
+ * F2 S2 (2026-08-18) — the liveness wiring, `[S-6]`.
+ *
+ * `classifyTurnLiveness` is deliberately a SECOND function rather than a third
+ * member on `AssistantProgressSignal`: a three-member union invites a
+ * `!== 'ignore'` read, which is precisely the "let message.delta count as
+ * progress" regression the triage forbids. That separation is a fact about
+ * `runSend`'s listener, and the listener is a `.tsx`-local closure — so it is
+ * asserted over the source, the same posture the groups above take.
+ *
+ * `classifyAssistantProgress`'s own contamination surface is why this matters:
+ * its verdict feeds the wait release, the admission decision AND Retry arming,
+ * so a single widening would poison all three at once.
+ */
+describe('liveness budget wiring (F2 S-6)', () => {
+  it('[S-6] progress and liveness are classified by two separate calls, each exactly once', () => {
+    const progressAt = only(
+      "classifyAssistantProgress(event, assistantMessageIds) === 'assistant'"
+    );
+    const livenessAt = only("classifyTurnLiveness(event, sessionId) === 'liveness'");
+    // Adjacent inside the same runtime-event listener, so a reader sees the
+    // two questions side by side and cannot mistake one for the other.
+    expect(livenessAt).toBeGreaterThan(progressAt);
+    expect(livenessAt - progressAt).toBeLessThan(600);
+  });
+
+  it('[S-6] only the liveness classifier resets the wait budget', () => {
+    const markAt = only('budget.markLiveness(');
+    const livenessAt = only("classifyTurnLiveness(event, sessionId) === 'liveness'");
+    expect(markAt).toBeGreaterThan(livenessAt);
+    // One budget, opened once per send.
+    expect(offsets('createSendWaitBudget(')).toHaveLength(1);
+  });
+
+  /**
+   * "Producer with no consumer" discipline (§3.4): S1 emits
+   * `session.status.payload.liveness`, and this batch owes it TWO reachable
+   * readers. The first is `classifyTurnLiveness` (covered by `[L-3]`, which
+   * feeds it a real liveness note). The second is the `rawEvents=[...]`
+   * diagnostic string — a `.tsx`-local function, hence a source guard.
+   */
+  it('[S-6] formatRuntimeEvent consumes the liveness note into the rawEvents diagnostic', () => {
+    expect(source).toContain('const liveness = payload?.liveness;');
+    const suffixAt = only('const livenessSuffix = liveness');
+    // Declared once and interpolated once. A declaration with no use would be
+    // exactly the "producer with no consumer" shell this guard rejects.
+    const uses = offsets('livenessSuffix');
+    expect(uses).toHaveLength(2);
+    expect(uses[1]).toBeGreaterThan(suffixAt);
+  });
+
+  it('[S-6] the main wait expires on the resettable budget, and the handshakes keep fixed deadlines', () => {
+    expect(offsets('budget.isExpired(Date.now())')).toHaveLength(1);
+    expect(offsets('deadlineAt(5000)')).toHaveLength(2);
+    // The retired byte-scaled formula must not come back through any door.
+    expect(source).not.toContain('sendTimeoutMs(');
   });
 });

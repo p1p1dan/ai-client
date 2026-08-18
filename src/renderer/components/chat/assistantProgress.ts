@@ -8,6 +8,8 @@ export interface ProgressEvent {
 
 export type AssistantProgressSignal = 'assistant' | 'ignore';
 
+export type TurnLivenessSignal = 'liveness' | 'ignore';
+
 function readStringField(payload: unknown, field: string): string {
   if (payload && typeof payload === 'object' && field in payload) {
     const value = (payload as Record<string, unknown>)[field];
@@ -309,4 +311,76 @@ export function classifyAssistantProgress(
     default:
       return 'ignore';
   }
+}
+
+/**
+ * F2 (2026-08-18): the renderer's liveness word list — the `transport` layer
+ * of the three-layer contract (`productive` / `interactive` / `transport`)
+ * that the Host and the renderer share as DOCUMENTATION, not as a runtime
+ * module (the two axes' event vocabularies do not intersect at all).
+ *
+ * Membership rules, one line each:
+ *  - message.* (ANY role): the Host is writing for THIS session. The user-echo
+ *    trio is admission evidence, hence liveness — but deliberately NOT
+ *    progress (see classifyAssistantProgress).
+ *  - thinking.* / tool.* / permission.requested / question.requested: already
+ *    progress, so containment forces them in.
+ *  - permission.resolved / question.resolved: the user answered, the turn
+ *    should continue; without these, "model thinks for a long time after an
+ *    answer" reads as silence.
+ *  - session.status (ANY status, including `retry` and the F2 `liveness`
+ *    note): the Host process is alive and talking about this session. The
+ *    retry case is the whole point — "the CLI is retrying" is not "wedged".
+ *  - session.stderr: the CLI subprocess is alive and emitting.
+ *  - usage.updated: interim token tick, the model is producing.
+ *  - subagent.activity: a subagent is running while the main stream can stay
+ *    legitimately quiet for a long time.
+ *  - session.created / resumed / updated / settingsEcho / permissionUpdated:
+ *    handshake and mid-turn setting frames, proof the Host is responding.
+ *
+ * Deliberately ABSENT: session.history / historyListed (replay, unrelated to
+ * this turn), host.error (a verdict with its own channel, not liveness), and
+ * the three terminals session.completed / failed / stopped (they END the wait
+ * rather than extend it).
+ */
+const TURN_LIVENESS_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'message.started',
+  'message.delta',
+  'message.completed',
+  'thinking.started',
+  'thinking.delta',
+  'thinking.completed',
+  'tool.started',
+  'tool.updated',
+  'tool.completed',
+  'permission.requested',
+  'permission.resolved',
+  'question.requested',
+  'question.resolved',
+  'session.status',
+  'session.stderr',
+  'usage.updated',
+  'subagent.activity',
+  'session.created',
+  'session.resumed',
+  'session.updated',
+  'session.settingsEcho',
+  'session.permissionUpdated',
+]);
+
+/**
+ * F2 (2026-08-18): "the Host is still talking ABOUT THIS SESSION" — strictly
+ * WIDER than classifyAssistantProgress and deliberately a SEPARATE function.
+ * Widening the progress union instead would invite `!== 'ignore'`, i.e. exactly
+ * the "let message.delta count as progress" regression the triage forbids.
+ * Consumers: the renderer's silence budget ONLY. Never an admission or a
+ * Retry-arming signal.
+ *
+ * Session scope first: an event for another session — or with no session at
+ * all (only `host.error`'s `session_not_found`) — is never this turn's
+ * liveness.
+ */
+export function classifyTurnLiveness(event: ProgressEvent, sessionId: string): TurnLivenessSignal {
+  if (event.sessionId !== sessionId) return 'ignore';
+  return TURN_LIVENESS_EVENT_TYPES.has(event.type) ? 'liveness' : 'ignore';
 }

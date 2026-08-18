@@ -4,8 +4,6 @@ import {
   type AttachmentLimits,
   admitAttachment,
   DEFAULT_ATTACHMENT_LIMITS,
-  HOST_STALL_TIMEOUT_MS,
-  HOST_TTFT_TIMEOUT_MS,
   largeAttachmentHint,
   MAX_IMAGE_EDGE_PX,
   planImageAttachment,
@@ -117,7 +115,7 @@ describe('admitAttachment (T-18 A-01..A-08)', () => {
 });
 
 /**
- * D4 (round-5) mirror lock — same technique as HOST_STALL_TIMEOUT_MS below.
+ * D4 (round-5) mirror lock — same technique as `sendBudgets.ts`'s Host mirrors.
  *
  * The main process cannot import these renderer budgets (they are renderer
  * code, and main must not depend on the Composer), so it carries ONE number of
@@ -213,7 +211,19 @@ describe('largeAttachmentHint (T-18 E6)', () => {
   });
 });
 
-describe('sendTimeoutMs (T-18 T-01..T-06)', () => {
+/**
+ * F2 (2026-08-18 §12.1): `[T-06]` and `[a4]` are RETIRED here rather than
+ * renumbered — both locked the OLD invariant direction ("the renderer's
+ * ceiling elapses first"), which is now reversed. Their successors are
+ * `[C-01]` / `[C-02]` in `sendBudgets.test.ts`; renumbering them would have
+ * hidden the fact that the direction flipped.
+ *
+ * `[T-01]`~`[T-05]` stay green only because `sendTimeoutMs` still has one
+ * caller (`MessageTimeline.tsx`'s `DEFAULT_REPLY_BUDGET_MS`, S3's file). They
+ * retire together with the function itself in S3 — a live formula with no pin
+ * would be worse than a pin on a deprecated one.
+ */
+describe('sendTimeoutMs (T-18 T-01..T-05, deprecated — retires with the function in F2 S3)', () => {
   it('[T-01] is bit-for-bit unchanged on the text-only path', () => {
     expect(sendTimeoutMs(0)).toBe(45_000);
     expect(sendTimeoutMs(0)).toBe(SEND_BASE_TIMEOUT_MS);
@@ -224,7 +234,8 @@ describe('sendTimeoutMs (T-18 T-01..T-06)', () => {
     const budget = sendTimeoutMs(150 * KB);
     expect(budget).toBe(75_000);
     expect(budget).toBeGreaterThan(45_000);
-    expect(budget).toBeLessThan(HOST_STALL_TIMEOUT_MS);
+    // The former `< HOST_STALL_TIMEOUT_MS` assertion was a restatement of the
+    // retired `[T-06]` invariant and moved with it to `sendBudgets.test.ts`.
   });
 
   it('[T-03] barely moves for a tiny image', () => {
@@ -243,20 +254,5 @@ describe('sendTimeoutMs (T-18 T-01..T-06)', () => {
     for (let i = 1; i < points.length; i += 1) {
       expect(points[i]).toBeGreaterThanOrEqual(points[i - 1]);
     }
-  });
-
-  it('[T-06] INVARIANT: the ceiling stays under the Host stall watchdog (renderer speaks first here, by design)', () => {
-    // claudeRuntime.ts DEFAULT_STALL_TIMEOUT_MS = 195_000. This margin means
-    // the RENDERER's ceiling elapses first on a large-attachment send whose
-    // turn already produced a first productive event.
-    expect(SEND_TIMEOUT_CEILING_MS).toBeLessThan(HOST_STALL_TIMEOUT_MS);
-    expect(sendTimeoutMs(DEFAULT_ATTACHMENT_LIMITS.maxTotalBytes)).toBeLessThan(
-      HOST_STALL_TIMEOUT_MS
-    );
-  });
-
-  it('[a4] INVARIANT: the Host TTFT watchdog stays under the text-only send budget, so the Host DOES speak first for a turn that never produces a first event', () => {
-    expect(HOST_TTFT_TIMEOUT_MS).toBeLessThan(SEND_BASE_TIMEOUT_MS);
-    expect(HOST_TTFT_TIMEOUT_MS).toBeLessThan(sendTimeoutMs(0));
   });
 });

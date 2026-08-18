@@ -28,6 +28,7 @@ import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
+  classifyTurnLiveness,
   collectAssistantMessageIds,
   countAssistantMessagesWithBlocks,
   hasNewAssistantMessage,
@@ -41,7 +42,7 @@ import {
   resolveAbandonProgress,
   resolvePendingHostError,
 } from './assistantProgress';
-import { largeAttachmentHint, sendTimeoutMs } from './attachmentLimits';
+import { largeAttachmentHint } from './attachmentLimits';
 import {
   type AttachmentDraft,
   shouldRenderThumbnail,
@@ -92,6 +93,7 @@ import {
   shouldRetryBusySend,
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
+import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { useComposerAttachments } from './useComposerAttachments';
@@ -161,6 +163,12 @@ function formatRuntimeEvent(event: { type: string; payload?: unknown }): string 
           // explains a "hung" turn — previously eventNormalizer dropped
           // api_retry entirely, so this event never reached the log.
           retry?: { attempt?: number; maxRetries?: number };
+          // F2 (2026-08-18): a Host watchdog window elapsed and the watchdog
+          // DECLINED to abort. Printing it is half of what makes this batch
+          // diagnosable — without it, `rawEvents=[...]` cannot distinguish
+          // "the Host looked and decided the turn is alive" from "nothing
+          // happened at all".
+          liveness?: { source?: string; reason?: string; degraded?: boolean };
           // F2-g (2026-08-17 inspection): without the role, the user-echo
           // message.started/delta/completed trio reads as assistant progress
           // in rawEvents=[...] and the "no progress" diagnostic looks
@@ -172,13 +180,19 @@ function formatRuntimeEvent(event: { type: string; payload?: unknown }): string 
   const message = payload?.message ?? payload?.error;
   const status = payload?.status;
   const retry = payload?.retry;
+  const liveness = payload?.liveness;
   const role = payload?.role;
   if (code || message) {
     return `${event.type}(${code ?? ''}${code && message ? ': ' : ''}${message ?? ''})`;
   }
   if (status) {
     const retrySuffix = retry ? `,retry ${retry.attempt ?? '?'}/${retry.maxRetries ?? '?'}` : '';
-    return `${event.type}(${status}${retrySuffix})`;
+    // `degraded` is only ever set by the one branch that permanently closes
+    // the TTFT table, so `ttft-degraded` loses nothing that `reason` carried.
+    const livenessSuffix = liveness
+      ? `,${liveness.source ?? '?'}-${liveness.degraded ? 'degraded' : (liveness.reason ?? '?')}`
+      : '';
+    return `${event.type}(${status}${retrySuffix}${livenessSuffix})`;
   }
   if (role) {
     return `${event.type}(${role})`;
@@ -207,7 +221,7 @@ interface AttachmentChipProps {
  * One attachment chip.
  *
  * Memoised on purpose: the send status line ticks once a second for up to
- * SEND_TIMEOUT_CEILING_MS, and re-deriving `data:${mediaType};base64,${data}`
+ * SEND_SILENCE_CEILING_MS, and re-deriving `data:${mediaType};base64,${data}`
  * on every one of those renders would flatten a multi-MB string per tick for
  * the whole wait. With stable props React skips this subtree entirely.
  */
@@ -256,18 +270,39 @@ const AttachmentChip = memo(function AttachmentChip({
   );
 });
 
-/** Wait until predicate, or timeout. Returns false on timeout. */
+/**
+ * Wait until `predicate` holds, or until `expired` says to stop. Returns false
+ * on expiry.
+ *
+ * F2 (2026-08-18): the expiry RULE is injected instead of a fixed `timeoutMs`.
+ * The old form (`Date.now() - start < timeoutMs`) had zero reset conditions,
+ * so a turn that was demonstrably alive — `session.status(running, retry 1/10)`
+ * frames arriving from the Host the whole time — still ran out of budget on
+ * schedule and was then reported as a failure. The two handshake waits keep a
+ * fixed deadline (`deadlineAt`); the main wait passes a RESETTABLE silence
+ * budget (`sendBudgets.ts`).
+ */
 async function waitUntil(
   predicate: () => boolean,
-  timeoutMs: number,
+  expired: () => boolean,
   stepMs = 50
 ): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  while (!expired()) {
     if (predicate()) return true;
     await sleep(stepMs);
   }
   return predicate();
+}
+
+/**
+ * Fixed-deadline expiry rule, for the two handshake waits whose semantics did
+ * NOT change: a create/resume acknowledgement either arrives promptly or the
+ * Host is not answering, and no liveness frame for a session that does not
+ * exist yet could reset anything.
+ */
+function deadlineAt(durationMs: number): () => boolean {
+  const at = Date.now() + durationMs;
+  return () => Date.now() >= at;
 }
 
 export function ChatComposer({
@@ -960,9 +995,12 @@ export function ChatComposer({
       settingsHydrated,
     });
     const wireAttachments = toWireAttachments(drafts);
-    // RAW bytes (pre-base64) — the same unit every limit is expressed in.
-    const attachmentBytes = totalAttachmentBytes(drafts);
-    const timeoutMs = sendTimeoutMs(attachmentBytes);
+    // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
+    // longer a fixed deadline predicted from the payload size — it is a
+    // silence budget that ANY liveness frame for this session resets, so
+    // attachment bytes have identically zero effect on it. Opened here, at
+    // dispatch time, so the absolute loop bound covers the handshake too.
+    const budget = createSendWaitBudget(Date.now());
 
     // 2026-07-28 continuity fix: decide, off a store snapshot and BEFORE any
     // IPC, whether the Host registry entry is still alive (direct send — no
@@ -1119,7 +1157,7 @@ export function ChatComposer({
         sessionId,
         phase: 'handshake',
         elapsedSeconds: 0,
-        budgetMs: timeoutMs,
+        budgetMs: SEND_SILENCE_CEILING_MS,
         attachmentCount: drafts.length,
         attachmentBytes: totalAttachmentBytes(drafts),
       },
@@ -1241,6 +1279,13 @@ export function ChatComposer({
         }
         if (classifyAssistantProgress(event, assistantMessageIds) === 'assistant') {
           sawAssistantProgress = true;
+        }
+        // F2 (2026-08-18): deliberately a SECOND, wider classifier standing
+        // next to the first — liveness is NOT progress. It resets the silence
+        // budget and nothing else: it never arms Retry, and it is never
+        // admission evidence.
+        if (classifyTurnLiveness(event, sessionId) === 'liveness') {
+          budget.markLiveness(Date.now());
         }
         if (
           event.type === 'session.status' &&
@@ -1368,7 +1413,10 @@ export function ChatComposer({
       });
       setCurrentRequestId(createResult?.requestId ?? null);
 
-      const created = await waitUntil(() => sawSessionCreated || Boolean(fatalHostError), 5000);
+      const created = await waitUntil(
+        () => sawSessionCreated || Boolean(fatalHostError),
+        deadlineAt(5000)
+      );
       if (fatalHostError) return 'fatal';
       if (!created) return 'timeout';
 
@@ -1430,59 +1478,64 @@ export function ChatComposer({
       // would sit unresolved instead of being admitted immediately.
       setCurrentRequestId(sendResult?.requestId ?? null);
       // The payload is with the Host now, so the status line may say so — and
-      // the clock restarts, because `timeoutMs` budgets this phase alone.
+      // the displayed clock restarts, because this phase is the one the
+      // silence budget actually watches.
       // T-19: `value`/attachments were already consumed at runSend's commit
       // point (decision 2.2) — no clearing here.
       phaseStartedAtRef.current = Date.now();
       updateTurnSend(sendOwner, { elapsedSeconds: 0, phase: 'awaiting' });
 
       // Running alone is not success — wait for assistant / tool / permission / terminal.
-      return waitUntil(() => {
-        // Stop-hang fix (2026-08-10), FIRST because a stopped turn can also
-        // carry a stale `fatalHostError` from earlier in the same attempt
-        // (e.g. a `session_busy` the busy loop already moved past) and must
-        // still read as a Stop, not as a failure.
-        //
-        // The two flags are this turn's own terminal wire events; the store
-        // collapses both into `'idle'`, which is not in the release set
-        // below, so neither used to end this wait at all.
-        if (sawSessionStopped || sawSessionCompleted) return true;
-        // F6's cancellation token, now read by the MAIN wait and not just by
-        // the `session_busy` backoff loop. This is the only release condition
-        // that still works when the Host never answers the Stop (no
-        // `session.stopped` will ever arrive) — the case that made the button
-        // look dead for a full 45s. `myGeneration` is snapshotted AFTER
-        // `runSend`'s own entry bump (asserted in composerStopStatic.test.ts),
-        // so a fresh attempt never starts out looking cancelled. `handleStop`
-        // is the only OTHER writer that can reach the ref while this attempt
-        // runs (`inFlightRef` makes a second concurrent `runSend` — direct,
-        // Retry or queue release — return `'skipped'` before it can bump);
-        // if that latch ever goes away, "a newer attempt supersedes this one"
-        // is the same intent and the same correct release.
-        if (sendGenerationRef.current !== myGeneration) return true;
-        if (fatalHostError) return true;
-        if (sawAssistantProgress) return true;
-        // R3 (round-2 iteration-2 review): no `state.lastError` read here —
-        // that field is process-global (chatSessions.ts's `session.failed`
-        // case sets it for ANY session), so a background session's failure
-        // used to be able to short-circuit this wait. `fatalHostError`
-        // above already carries THIS session's own `session.failed` (see
-        // the listener's `isSessionFailedForSend` branch); `session?.status`
-        // below stays scoped the same way.
-        const state = useChatSessionsStore.getState();
-        const session = state.sessions.find((item) => item.id === sessionId);
-        if (session?.status === 'failed') return true;
-        if (session?.status === 'waiting_permission' || session?.status === 'waiting_question') {
-          return true;
-        }
-        // Round-6 review N1 + verify major: only an assistant id that did
-        // not exist at dispatch time counts — `h:*` replay rows and the
-        // previous turn's reply are both excluded by the baseline.
-        return hasNewAssistantMessage(state.messages[sessionId] ?? [], assistantBaseline);
-        // T-18: the budget scales with the payload and is clamped below the
-        // Host stall watchdog. sendTimeoutMs(0) is still exactly 45000, so the
-        // text-only path waits precisely as long as it did before.
-      }, timeoutMs);
+      return waitUntil(
+        () => {
+          // Stop-hang fix (2026-08-10), FIRST because a stopped turn can also
+          // carry a stale `fatalHostError` from earlier in the same attempt
+          // (e.g. a `session_busy` the busy loop already moved past) and must
+          // still read as a Stop, not as a failure.
+          //
+          // The two flags are this turn's own terminal wire events; the store
+          // collapses both into `'idle'`, which is not in the release set
+          // below, so neither used to end this wait at all.
+          if (sawSessionStopped || sawSessionCompleted) return true;
+          // F6's cancellation token, now read by the MAIN wait and not just by
+          // the `session_busy` backoff loop. This is the only release condition
+          // that still works when the Host never answers the Stop (no
+          // `session.stopped` will ever arrive) — the case that made the button
+          // look dead for a full 45s. `myGeneration` is snapshotted AFTER
+          // `runSend`'s own entry bump (asserted in composerStopStatic.test.ts),
+          // so a fresh attempt never starts out looking cancelled. `handleStop`
+          // is the only OTHER writer that can reach the ref while this attempt
+          // runs (`inFlightRef` makes a second concurrent `runSend` — direct,
+          // Retry or queue release — return `'skipped'` before it can bump);
+          // if that latch ever goes away, "a newer attempt supersedes this one"
+          // is the same intent and the same correct release.
+          if (sendGenerationRef.current !== myGeneration) return true;
+          if (fatalHostError) return true;
+          if (sawAssistantProgress) return true;
+          // R3 (round-2 iteration-2 review): no `state.lastError` read here —
+          // that field is process-global (chatSessions.ts's `session.failed`
+          // case sets it for ANY session), so a background session's failure
+          // used to be able to short-circuit this wait. `fatalHostError`
+          // above already carries THIS session's own `session.failed` (see
+          // the listener's `isSessionFailedForSend` branch); `session?.status`
+          // below stays scoped the same way.
+          const state = useChatSessionsStore.getState();
+          const session = state.sessions.find((item) => item.id === sessionId);
+          if (session?.status === 'failed') return true;
+          if (session?.status === 'waiting_permission' || session?.status === 'waiting_question') {
+            return true;
+          }
+          // Round-6 review N1 + verify major: only an assistant id that did
+          // not exist at dispatch time counts — `h:*` replay rows and the
+          // previous turn's reply are both excluded by the baseline.
+          return hasNewAssistantMessage(state.messages[sessionId] ?? [], assistantBaseline);
+          // F2 (2026-08-18): expiry is now "this session has been SILENT for
+          // SEND_SILENCE_CEILING_MS", not "N ms have passed since dispatch".
+          // Reaching it is not a verdict about the turn — the Host owns that,
+          // and its own stall watchdog fires first (see sendBudgets.ts).
+        },
+        () => budget.isExpired(Date.now())
+      );
     };
 
     // T-19: every non-success path below now calls `setRetryable(committed)`
@@ -1535,7 +1588,10 @@ export function ChatComposer({
           .catch(() => undefined);
         setCurrentRequestId(resumeResult?.requestId ?? null);
 
-        const resumed = await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), 5000);
+        const resumed = await waitUntil(
+          () => sawSessionResumed || Boolean(fatalHostError),
+          deadlineAt(5000)
+        );
         if (!resumed || fatalHostError) {
           // Resume failed or timed out (stale identity / Host hiccup / etc.)
           // — fall through ONCE to a fresh session rather than fail the turn.

@@ -605,7 +605,7 @@ export function shouldRenderTargetRow(input: {
  * "Failed"), never the full message.
  *
  * T-31 §3.2 (F-B11): `sending` no longer shows this line at all. The waiting
- * copy it used to gate ("Waiting for Agent Host reply · 12s (up to 45s)")
+ * copy it used to gate ("Waiting for Agent Host reply · 12s (up to 300s)")
  * describes the turn in flight, not the draft in hand, so it moved to the turn
  * head, where it gets the full reading-column width instead of the middle of a
  * 42px row. Leaving the condition here would print the same fact twice, in two

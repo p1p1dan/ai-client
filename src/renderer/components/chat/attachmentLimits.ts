@@ -1,12 +1,18 @@
 /**
- * T-18 attachment budgets and the send-wait budget — one file so a re-measure
- * only ever touches one place, and so the limit checks and the timeout formula
- * cannot drift apart.
+ * T-18 attachment budgets — one file so a re-measure only ever touches one
+ * place, and one set of user-facing sentences.
  *
  * Numbers come from the 2026-07-27 re-measure on the shared test gateway plus
  * the published API limits; the older `0.36 s/KB` latency fit did NOT
  * reproduce (150 KB -> 11.2s, 500 KB -> 9.5s, 2 MB -> 10.6s the same day), so
  * nothing here is derived from a size/latency model.
+ *
+ * F2 (2026-08-18): the send-wait half moved to `sendBudgets.ts`. This file's
+ * former second reason-to-exist ("the limit checks and the timeout formula
+ * cannot drift apart") no longer holds — once the wait became a RESETTABLE
+ * silence table, the user echo resets it at t~=0 and attachment bytes have
+ * exactly zero effect on it, so there is nothing left for the two halves to
+ * drift about.
  *
  * §12 verification first: __tests__/attachmentLimits.test.ts.
  */
@@ -162,47 +168,47 @@ export function largeAttachmentHint(
   return null;
 }
 
-/** Unchanged text-path budget — the exact value runSend used before T-18. */
+/**
+ * DEPRECATED as a whole (F2 2026-08-18, §1.3) — the byte-scaled send budget is
+ * retired, and with it the old "the renderer speaks first" INVARIANT block
+ * that used to sit here. The authoritative (REVERSED) cross-program invariant,
+ * the two Host mirrors and the live budgets are in `sendBudgets.ts`.
+ *
+ * Why the formula died rather than moved: `normalizer.beginTurn` emits the
+ * user echo BEFORE the query starts, so a resettable silence table is reset at
+ * t~=0 on every send — byte scaling has identically zero effect on it. The
+ * size metadata the Composer still shows never went through here anyway
+ * (`composerSendingLine` takes `attachmentCount` / `attachmentBytes` as its
+ * own inputs, and `largeAttachmentHint` above is independent).
+ *
+ * ONE caller remains: `MessageTimeline.tsx`'s `DEFAULT_REPLY_BUDGET_MS`. F2 S2
+ * removed both `ChatComposer.tsx` call sites; `MessageTimeline.tsx` is S3's
+ * exclusive file, and S3 deletes this block together with that last consumer
+ * (re-sourced to `SEND_SILENCE_CEILING_MS`). Do not add a new caller.
+ */
+
+/** @deprecated F2 S3 removes this with `sendTimeoutMs`. */
 export const SEND_BASE_TIMEOUT_MS = 45_000;
 
 /**
  * Not an upload-speed model: measured latency is size-independent
- * (2 MB -> 10.6s, 150 KB -> 11.2s on the same day). This is headroom for
- * gateway variance, which spanned ~8x on the same payload class across days.
+ * (2 MB -> 10.6s, 150 KB -> 11.2s on the same day). This was headroom for
+ * gateway variance, which spanned ~8x on the same payload class across days —
+ * the measurement `attachments.ts`'s "gateway latency varies" copy cites.
+ *
+ * @deprecated F2 S3 removes this with `sendTimeoutMs`.
  */
 export const SEND_MS_PER_MB = 30_000;
 
-/**
- * Documentation mirror of claudeRuntime.ts DEFAULT_STALL_TIMEOUT_MS. It cannot
- * be imported (src/agent-host is a separate program), so the invariant below
- * is locked by a unit test instead.
- */
-export const HOST_STALL_TIMEOUT_MS = 195_000;
-
-/**
- * Documentation mirror of claudeRuntime.ts's a4 (2026-07-30) one-shot TTFT
- * ("time to first productive event") watchdog default. Same cross-program
- * constraint as HOST_STALL_TIMEOUT_MS above — cannot import agent-host code —
- * so this is a second unit-test-locked mirror value.
- */
-export const HOST_TTFT_TIMEOUT_MS = 32_000;
-
-/**
- * INVARIANT (corrected 2026-07-30, a4): SEND_TIMEOUT_CEILING_MS (180s) is
- * LESS than HOST_STALL_TIMEOUT_MS (195s), so for a turn that HAS already
- * produced a first productive event, the renderer's ceiling elapses FIRST,
- * not the Host's. Raised from 115s to 180s to accommodate image-heavy turns
- * where model inference alone can take 2+ minutes.
- *
- * What DOES protect the common case — a turn that never produces a first
- * productive event at all (api_retry loop, dead spawn) — is the Host's new
- * TTFT watchdog above: HOST_TTFT_TIMEOUT_MS (32s) is always below
- * SEND_BASE_TIMEOUT_MS (45s), so for that failure mode the Host speaks first
- * with its precise message, before the renderer's fallback ever fires.
- */
+/** @deprecated F2 S3 removes this with `sendTimeoutMs`. */
 export const SEND_TIMEOUT_CEILING_MS = 180_000;
 
-/** Wait budget for one send. attachmentBytes = total RAW bytes (pre-base64). */
+/**
+ * Wait budget for one send. attachmentBytes = total RAW bytes (pre-base64).
+ *
+ * @deprecated F2 (2026-08-18): use `SEND_SILENCE_CEILING_MS` from
+ * `sendBudgets.ts`. See the block above for the removal plan.
+ */
 export function sendTimeoutMs(attachmentBytes: number): number {
   if (attachmentBytes <= 0) return SEND_BASE_TIMEOUT_MS;
   const scaled = SEND_BASE_TIMEOUT_MS + Math.ceil(attachmentBytes / (1024 * 1024)) * SEND_MS_PER_MB;

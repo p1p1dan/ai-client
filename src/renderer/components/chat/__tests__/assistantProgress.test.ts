@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyAssistantProgress,
+  classifyTurnLiveness,
   collectAssistantMessageIds,
   countAssistantMessagesWithBlocks,
   hasNewAssistantMessage,
@@ -628,5 +629,127 @@ describe('resolvePendingHostError (F2b, round-4 Codex re-review, second pass)', 
     expect(
       resolvePendingHostError([first, second], { sessionId: 'session-a', requestId: 'req-current' })
     ).toBe(first);
+  });
+});
+
+/**
+ * F2 S2 (2026-08-18) — `classifyTurnLiveness`.
+ *
+ * The renderer's silence budget asks a STRICTLY WIDER question than
+ * `classifyAssistantProgress`: "is the Host still talking about this session?"
+ * The two are deliberately separate functions rather than a third member on
+ * `AssistantProgressSignal`, because a three-member union invites a
+ * `!== 'ignore'` read, which is exactly the "let message.delta count as
+ * progress" regression the triage forbids. `[L-1]` locks the containment and
+ * `[L-2]` locks the gap between them — both have to hold at once.
+ */
+const ALL_RUNTIME_EVENT_TYPES = [
+  'host.ready',
+  'host.error',
+  'session.created',
+  'session.resumed',
+  'session.updated',
+  'session.permissionUpdated',
+  'session.settingsEcho',
+  'session.history',
+  'session.historyListed',
+  'session.status',
+  'session.stderr',
+  'message.started',
+  'message.delta',
+  'message.completed',
+  'thinking.started',
+  'thinking.delta',
+  'thinking.completed',
+  'tool.started',
+  'tool.updated',
+  'tool.completed',
+  'permission.requested',
+  'permission.resolved',
+  'question.requested',
+  'question.resolved',
+  'usage.updated',
+  'subagent.activity',
+  'session.completed',
+  'session.failed',
+  'session.stopped',
+] as const;
+
+describe('classifyTurnLiveness (F2 L-1..L-5)', () => {
+  it('[L-1] containment: every event classified as assistant PROGRESS is also LIVENESS', () => {
+    let progressCount = 0;
+    for (const type of ALL_RUNTIME_EVENT_TYPES) {
+      // Seeded so message.delta / message.completed can reach 'assistant' —
+      // the containment has to be checked against the widest progress set.
+      const ids = new Set<string>(['m-1']);
+      const probe = event(type, { role: 'assistant', messageId: 'm-1' });
+      if (classifyAssistantProgress(probe, ids) === 'assistant') {
+        progressCount += 1;
+        expect(classifyTurnLiveness(probe, 'session-live')).toBe('liveness');
+      }
+    }
+    // Non-vacuity: a broken probe that produced zero progress events would
+    // otherwise "pass" this containment trivially.
+    expect(progressCount).toBe(11);
+  });
+
+  it('[L-2] the user echo is LIVENESS but NOT progress — the two functions really are separate', () => {
+    const ids = new Set<string>();
+    const echo = event('message.started', { role: 'user', messageId: 'u-1' });
+    expect(classifyAssistantProgress(echo, ids)).toBe('ignore');
+    expect(classifyTurnLiveness(echo, 'session-live')).toBe('liveness');
+    expect(ids.size).toBe(0);
+  });
+
+  it('[L-3] transport-layer frames count as liveness: session.status (bare / retry / liveness note), stderr, usage, subagent', () => {
+    expect(
+      classifyTurnLiveness(event('session.status', { status: 'running' }), 'session-live')
+    ).toBe('liveness');
+    expect(
+      classifyTurnLiveness(
+        event('session.status', { status: 'running', retry: { attempt: 1, maxRetries: 10 } }),
+        'session-live'
+      )
+    ).toBe('liveness');
+    expect(
+      classifyTurnLiveness(
+        event('session.status', {
+          status: 'running',
+          liveness: {
+            source: 'ttft',
+            budgetMs: 32_000,
+            reason: 'insufficient_evidence',
+            degraded: true,
+          },
+        }),
+        'session-live'
+      )
+    ).toBe('liveness');
+    expect(classifyTurnLiveness(event('session.stderr', { line: 'x' }), 'session-live')).toBe(
+      'liveness'
+    );
+    expect(classifyTurnLiveness(event('usage.updated', {}), 'session-live')).toBe('liveness');
+    expect(classifyTurnLiveness(event('subagent.activity', {}), 'session-live')).toBe('liveness');
+  });
+
+  it('[L-4] terminals and verdicts are NOT liveness — they end the wait instead of extending it', () => {
+    for (const type of ['session.completed', 'session.failed', 'session.stopped', 'host.error']) {
+      expect(classifyTurnLiveness(event(type, {}), 'session-live')).toBe('ignore');
+    }
+    // Replay / listing frames say nothing about THIS turn.
+    expect(classifyTurnLiveness(event('session.history', {}), 'session-live')).toBe('ignore');
+    expect(classifyTurnLiveness(event('session.historyListed', {}), 'session-live')).toBe('ignore');
+  });
+
+  it('[L-5] events for another session — or with no session at all — are always ignored', () => {
+    expect(
+      classifyTurnLiveness(
+        { type: 'session.status', sessionId: 'session-other', payload: { status: 'running' } },
+        'session-live'
+      )
+    ).toBe('ignore');
+    expect(classifyTurnLiveness({ type: 'host.error', payload: {} }, 'session-live')).toBe(
+      'ignore'
+    );
   });
 });
