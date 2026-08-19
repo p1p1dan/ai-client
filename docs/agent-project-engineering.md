@@ -191,3 +191,23 @@ traces/    run traces
 - [ ] Failing cases tagged (§14)
 - [ ] Agent-facing interface exposed (§11)
 - [ ] "Verify first, change second" order (§12); manual testing as supplement only (§16)
+
+---
+
+## Appendix A — Borrowed disciplines (added 2026-08-18)
+
+Three rules adopted from the DeepSeek Harness study ([`plans/2026-08-18-deepseek-harness-study.md`](plans/2026-08-18-deepseek-harness-study.md) §4). They refine §2 (structured trace) and §4 (process assertions) rather than extending the fixed 1–16 index.
+
+### A1. `model-visible ⟺ logged`
+- **Rule:** everything that reaches a model request MUST be reconstructable from the session log, and a runtime invariant MUST assert it. Adding a model-visible input therefore means adding a log event — never a side channel read at request time.
+- **Why here:** our slice-5 defect class (re-projection dropping `reasoning` / `exec`) is exactly this rule not holding.
+- **Acceptance:** for each new model-visible input, one log event + one replay test proving the request is byte-reproducible from the log alone.
+
+### A2. Projection units are pure, versioned folds
+- **Rule:** a projection unit is `init()` / `apply(state, event)` / `view(state)` — three pure **synchronous** functions — plus an integer `stateVersion`. `apply` MUST return the **same reference** for events it does not care about (`Object.is` ⇒ zero downstream work). Bump `stateVersion` whenever serialized fields or fold semantics change, so persisted cache rows from an older unit are **discarded**, not forward-applied into garbage.
+- **Acceptance:** every projection has a version field and a test arm proving a stale-version cache row is dropped rather than folded forward.
+
+### A3. Empty shells must state their reason, and a gate must enforce it
+- **Rule:** when a module has no invariant / no check / no implementation to contribute, it MUST still declare that explicitly, starting with `No runtime invariant:` (or the equivalent marker) and explaining **why this specific module has none**. A mechanical gate MUST reject unexplained empty shells, missing registrations, and non-empty checks that ignore their reporter.
+- **Why here:** this is the machine-enforced form of our "same-name empty shell / absent producer / hardcoded belief" spec-review lens, which is currently manual and therefore skippable.
+- **Acceptance:** a `verify-*` script in the gate chain that fails on an unexplained empty shell.
