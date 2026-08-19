@@ -882,3 +882,7 @@ rev.1 写的是「把 `build-agent-host.mjs` 里的三个函数改成可注入�
 ### 可采信免重验（A 轨复核成立，rev.2 未改动）
 
 §3.1 三处 pin 依据 · §3.5 三条证据的存在性 · §6.2-S2 的 e4 依据 · §0.3-B（`codex.js` 的 `require.resolve` 解析链）· ELF 魔数 · `codex-package.json` 七字段 · `--version` 输出 · §5.1/§5.4/§10.1 全段 · `build-agent-host.mjs` 全部行号。
+
+## §14 拍板收口（2026-08-19，D54）
+
+§11 十项去向：Q1/Q2/Q8 = 首跑观察项（continue-on-error → 回填 → 转硬门禁）；Q3 = 不做 CI 真回合 smoke（cch 事前报量铁律，S3 归手工/加密机点验）；Q4 = 保留 code-mode-host（§0.2-② 保守决策，施工时进程树闭合因果）；Q5 = mac 显式设计形态成立（提示文案随 mac 票）；**Q6 = PR 级门禁另立票后做（用户拍板）**；**Q7 = 升级票排 2b 收官后、flag 转 on 前（用户拍板）**；Q9 = refreshPath 本批不加闸；Q10 = GUI 逃生口另立 settings 票。**本规格就此定稿，P1 开工。**
