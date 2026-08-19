@@ -322,8 +322,11 @@ function readTurnErrorMessage(turnError: unknown): string | null {
  * (`onError`) is the one that must never let a `willRetry:true` frame reach a
  * terminal event — see that function's docstring.
  */
-export function classifyCodexTurnError(error: unknown): 'codex_credentials_missing' | null {
+export function classifyCodexTurnError(
+  error: unknown,
+): 'codex_credentials_missing' | 'codex_context_window_exceeded' | null {
   if (!isRecord(error)) return null;
+  if (error.codexErrorInfo === 'contextWindowExceeded') return 'codex_context_window_exceeded';
   if (error.codexErrorInfo !== 'other') return null;
   const message = str(error.message);
   if (!message) return null;
@@ -679,6 +682,13 @@ export class CodexNormalizer {
     // failed turn.
     const failed = (status !== null && status !== 'completed') || hasError;
 
+    if (status !== null && !['completed', 'interrupted', 'failed'].includes(status)) {
+      this.log('codex turn/completed: unexpected status value (treated as failed)', {
+        sessionId: this.sessionId,
+        status,
+      });
+    }
+
     this.finishOpenBlocks();
     if (this.turn.terminalEmitted) {
       // D47 S4a point ③ (exactly-once): an `error` notification already
@@ -728,8 +738,11 @@ export class CodexNormalizer {
     const record = isRecord(params) ? params : undefined;
     const willRetry = record?.willRetry === true;
     const errorPayload = record?.error;
-    const message = readTurnErrorMessage(errorPayload) ?? 'codex reported an error';
     const classification = classifyCodexTurnError(errorPayload);
+    const message =
+      classification === 'codex_context_window_exceeded'
+        ? 'context window exceeded — start a new session or compact the context'
+        : (readTurnErrorMessage(errorPayload) ?? 'codex reported an error');
 
     if (willRetry) {
       this.log('codex turn error notification (retrying, not terminal)', {

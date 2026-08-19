@@ -1,6 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { createInterface } from 'node:readline';
+
 import type { AgentHostCommand } from '@shared/types/agentHost';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { killProcessTree } from '../../utils/processUtils';
@@ -57,8 +57,15 @@ export class AgentHostProcess extends EventEmitter {
       );
       this.child = child;
 
-      const stdout = createInterface({ input: child.stdout });
-      stdout.on('line', (line) => this.handleStdoutLine(line));
+      let _stdoutBuf = '';
+      child.stdout.on('data', (chunk: Buffer) => {
+        _stdoutBuf += chunk.toString('utf8');
+        let idx: number;
+        while ((idx = _stdoutBuf.indexOf('\n')) !== -1) {
+          this.handleStdoutLine(_stdoutBuf.slice(0, idx).replace(/\r$/, ''));
+          _stdoutBuf = _stdoutBuf.slice(idx + 1);
+        }
+      });
 
       child.stderr.on('data', (chunk: Buffer) => {
         this.emit('stderr', chunk.toString('utf8'));

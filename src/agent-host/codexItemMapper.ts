@@ -215,6 +215,13 @@ export interface CodexItemMapping {
   role: 'user' | 'assistant' | null;
   blocks: CodexBlock[];
   skipReason: CodexItemSkipReason | null;
+  /**
+   * `agentMessage.phase` from the wire. Non-null only for `agent_message` items;
+   * null for everything else. Known values: `'final_answer'`, `'commentary'`,
+   * `null` (Codex fallback for untagged providers). Unknown values are passed
+   * through verbatim so the caller can log without this function throwing.
+   */
+  phase: string | null;
   /** Always populated — a dropped item must be explainable from one log line. */
   note: string;
 }
@@ -443,6 +450,7 @@ function mapped(partial: Partial<CodexItemMapping> & { note: string }): CodexIte
     role: null,
     blocks: [],
     skipReason: null,
+    phase: null,
     ...partial,
   };
 }
@@ -513,6 +521,12 @@ export function mapCodexItem(item: unknown): CodexItemMapping {
     }
     case 'agent_message': {
       const { text, truncated } = clampText(typeof item.text === 'string' ? item.text : '');
+      const phase =
+        item.phase === undefined || item.phase === null
+          ? null
+          : typeof item.phase === 'string'
+            ? item.phase
+            : null;
       const block: CodexBlock = { type: 'text', id: `${base}:text`, text };
       if (truncated) block.truncated = true;
       return mapped({
@@ -521,6 +535,7 @@ export function mapCodexItem(item: unknown): CodexItemMapping {
         mode: rule.mode,
         role: 'assistant',
         blocks: [block],
+        phase,
         note: rule.note,
       });
     }

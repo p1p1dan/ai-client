@@ -597,6 +597,28 @@ describe('classifyCodexTurnError (D47 S4a point ②, pure function)', () => {
       expect(classifyCodexTurnError(junk)).toBeNull();
     }
   });
+
+  it('classifies codexErrorInfo:"contextWindowExceeded" as codex_context_window_exceeded', () => {
+    expect(
+      classifyCodexTurnError({ codexErrorInfo: 'contextWindowExceeded', message: 'context window exceeded' })
+    ).toBe('codex_context_window_exceeded');
+  });
+
+  it('contextWindowExceeded is recognised regardless of message content', () => {
+    expect(
+      classifyCodexTurnError({ codexErrorInfo: 'contextWindowExceeded' })
+    ).toBe('codex_context_window_exceeded');
+  });
+
+  it('contextWindowExceeded does not fall through to the credentials_missing path', () => {
+    // codexErrorInfo:'contextWindowExceeded' must be caught BEFORE the 'other' guard.
+    const result = classifyCodexTurnError({
+      codexErrorInfo: 'contextWindowExceeded',
+      message: 'Missing environment variable: `AICLIENT_CODEX_API_KEY`.',
+    });
+    expect(result).toBe('codex_context_window_exceeded');
+    expect(result).not.toBe('codex_credentials_missing');
+  });
 });
 
 /**
@@ -658,6 +680,22 @@ describe('E4 fixture replay — exactly-once credential classification (D47 S4a 
     const failed = events.filter((e) => e.type === 'session.failed');
     expect(failed).toHaveLength(1);
     expect(failed[0]?.payload?.error).toBe('internal model error');
+  });
+
+  it('contextWindowExceeded surfaces a directed UI message instead of the raw wire text', () => {
+    const { events, normalizer } = harness();
+    normalizer.ingest(CODEX_ERROR_METHOD, {
+      error: { codexErrorInfo: 'contextWindowExceeded', message: 'Context window size exceeded' },
+      willRetry: false,
+      threadId: THREAD,
+      turnId: 't-ctx',
+    });
+
+    const failed = events.filter((e) => e.type === 'session.failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.payload?.error).toBe(
+      'context window exceeded — start a new session or compact the context'
+    );
   });
 
   it('a named error followed by teardown (no turn/completed ever arrives) still emits exactly one terminal event', () => {

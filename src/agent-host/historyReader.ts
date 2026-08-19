@@ -16,7 +16,6 @@ import { createReadStream } from 'node:fs';
 import { open, readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { createInterface } from 'node:readline';
 import type {
   HistoryAttachment,
   HistoryBlock,
@@ -366,18 +365,23 @@ interface LineSource {
 
 function openStreamLines(filePath: string): LineSource {
   const stream = createReadStream(filePath, { encoding: 'utf-8' });
-  const rl = createInterface({ input: stream, crlfDelay: Number.POSITIVE_INFINITY });
   let closed = false;
   return {
-    iterate: () => rl,
+    iterate: async function* () {
+      let buf = '';
+      for await (const chunk of stream) {
+        buf += chunk as string;
+        let idx: number;
+        while ((idx = buf.indexOf('\n')) !== -1) {
+          yield buf.slice(0, idx).replace(/\r$/, '');
+          buf = buf.slice(idx + 1);
+        }
+      }
+      if (buf.length > 0) yield buf.replace(/\r$/, '');
+    },
     close: () => {
       if (closed) return;
       closed = true;
-      try {
-        rl.close();
-      } catch {
-        // ignore
-      }
       try {
         stream.destroy();
       } catch {

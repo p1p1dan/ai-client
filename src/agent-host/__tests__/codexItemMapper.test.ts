@@ -125,6 +125,36 @@ describe('recorded items project into blocks', () => {
     expect((mapping.blocks[0] as { text: string }).text).toContain('probe_b.txt');
   });
 
+  it('agentMessage with phase:final_answer exposes phase on the mapping', () => {
+    const mapping = mapCodexItem({ type: 'agentMessage', id: 'am-1', text: 'done', phase: 'final_answer' });
+    expect(mapping.outcome).toBe('rendered');
+    expect(mapping.phase).toBe('final_answer');
+    expect(mapping.blocks[0]).toMatchObject({ type: 'text', text: 'done' });
+  });
+
+  it('agentMessage with phase:commentary exposes phase on the mapping (same render path as final_answer)', () => {
+    const mapping = mapCodexItem({ type: 'agentMessage', id: 'am-2', text: 'thinking aloud', phase: 'commentary' });
+    expect(mapping.outcome).toBe('rendered');
+    expect(mapping.phase).toBe('commentary');
+    expect(mapping.blocks[0]).toMatchObject({ type: 'text', text: 'thinking aloud' });
+  });
+
+  it('agentMessage with an unknown phase value passes it through instead of throwing', () => {
+    const mapping = mapCodexItem({ type: 'agentMessage', id: 'am-3', text: 'hi', phase: 'future_phase_x' });
+    expect(mapping.outcome).toBe('rendered');
+    expect(mapping.phase).toBe('future_phase_x');
+  });
+
+  it('agentMessage with phase:null maps to phase:null on the mapping', () => {
+    const mapping = mapCodexItem({ type: 'agentMessage', id: 'am-4', text: 'hi', phase: null });
+    expect(mapping.phase).toBeNull();
+  });
+
+  it('non-agentMessage items always have phase:null on the mapping', () => {
+    const mapping = mapCodexItem({ type: 'reasoning', id: 'rs-1', summary: [{ type: 'summary_text', text: 'x' }] });
+    expect(mapping.phase).toBeNull();
+  });
+
   it('reasoning becomes a thinking block carrying the summary', () => {
     const mapping = mapCodexItem(itemAt(FILECHANGE_TURN, 4));
     expect(mapping.blocks).toEqual([
