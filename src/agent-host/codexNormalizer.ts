@@ -323,7 +323,7 @@ function readTurnErrorMessage(turnError: unknown): string | null {
  * terminal event — see that function's docstring.
  */
 export function classifyCodexTurnError(
-  error: unknown,
+  error: unknown
 ): 'codex_credentials_missing' | 'codex_context_window_exceeded' | null {
   if (!isRecord(error)) return null;
   if (error.codexErrorInfo === 'contextWindowExceeded') return 'codex_context_window_exceeded';

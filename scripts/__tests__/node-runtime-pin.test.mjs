@@ -30,10 +30,7 @@ import {
 
 describe('bundled Node runtime table (C9)', () => {
   it('lists exactly the platforms this build ships a runtime for', () => {
-    expect(Object.keys(BUNDLED_NODE_RUNTIME_BINARIES).sort()).toEqual([
-      'linux-x64',
-      'win32-x64',
-    ]);
+    expect(Object.keys(BUNDLED_NODE_RUNTIME_BINARIES).sort()).toEqual(['linux-x64', 'win32-x64']);
   });
 
   it('agrees key-for-key with the build-side pin table', () => {

@@ -600,14 +600,17 @@ describe('classifyCodexTurnError (D47 S4a point ②, pure function)', () => {
 
   it('classifies codexErrorInfo:"contextWindowExceeded" as codex_context_window_exceeded', () => {
     expect(
-      classifyCodexTurnError({ codexErrorInfo: 'contextWindowExceeded', message: 'context window exceeded' })
+      classifyCodexTurnError({
+        codexErrorInfo: 'contextWindowExceeded',
+        message: 'context window exceeded',
+      })
     ).toBe('codex_context_window_exceeded');
   });
 
   it('contextWindowExceeded is recognised regardless of message content', () => {
-    expect(
-      classifyCodexTurnError({ codexErrorInfo: 'contextWindowExceeded' })
-    ).toBe('codex_context_window_exceeded');
+    expect(classifyCodexTurnError({ codexErrorInfo: 'contextWindowExceeded' })).toBe(
+      'codex_context_window_exceeded'
+    );
   });
 
   it('contextWindowExceeded does not fall through to the credentials_missing path', () => {

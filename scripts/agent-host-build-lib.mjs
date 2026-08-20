@@ -193,7 +193,9 @@ export function preflightHostDeps({ root, platform, arch }) {
     );
   }
   if (platform !== 'win32' && (entryStat.mode & 0o111) === 0) {
-    fail(`codex binary not executable: ${manifest.entrypoint} (mode ${entryStat.mode.toString(8)})`);
+    fail(
+      `codex binary not executable: ${manifest.entrypoint} (mode ${entryStat.mode.toString(8)})`
+    );
   }
 
   // 5. no foreign platform packages in the install (R2: 347MB × 5).
@@ -367,9 +369,7 @@ export function verifyArtifact({ outDir, platform, arch, pins }) {
     if (!fs.existsSync(mainPkgJson)) {
       failures.push('missing node_modules/@openai/codex/package.json');
     } else if (pin && readJson(mainPkgJson).version !== pin) {
-      failures.push(
-        `@openai/codex version ${readJson(mainPkgJson).version} != pinned ${pin}`
-      );
+      failures.push(`@openai/codex version ${readJson(mainPkgJson).version} != pinned ${pin}`);
     }
 
     codexPkgRel = resolveCodexPlatformPkgRel(nodeModules, platform, arch);
