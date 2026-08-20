@@ -1,14 +1,25 @@
 #!/usr/bin/env node
 /**
- * Fetch + verify the pinned Node.js runtime bundled into the packaged
- * Windows app (C-15 / D17).
+ * Fetch + verify the pinned Node.js runtime bundled into the packaged app
+ * (C-15 / D17, multi-platform since D36).
  *
- * Downloads the official win-x64 zip (falling back to a mirror), verifies
- * its SHA-256 against the pin in node-runtime-pin.mjs, extracts node.exe
- * into out-node-runtime/, and sanity-checks `node.exe --version`.
+ * Downloads the official archive for the target platform (falling back to a
+ * mirror), verifies its SHA-256 against the pin in node-runtime-pin.mjs,
+ * extracts the node binary into out-node-runtime/, and sanity-checks
+ * `<binary> --version`.
+ *
+ *   node scripts/fetch-node-runtime.mjs                      # host platform
+ *   node scripts/fetch-node-runtime.mjs --platform linux-x64 # explicit
+ *   node scripts/fetch-node-runtime.mjs --force              # ignore the cache
+ *
+ * A platform with no pin (mac today) prints a skip notice and exits 0 — NOT a
+ * failure. `dist:prereq` chains this into build:mac/build:mac:unsigned/
+ * build:mac:debug, and "mac is out of scope for this batch" must not mean
+ * "the mac build now breaks" (packaging spec §5.3).
  *
  * Idempotent: a matching out-node-runtime/PIN.json skips the network
- * round-trip entirely. Pass --force to refetch regardless.
+ * round-trip entirely. The cache is keyed on version AND platform, so a win
+ * cache can never masquerade as a linux one.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -19,13 +30,27 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { NODE_RUNTIME_PIN } from './node-runtime-pin.mjs';
+import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 const outDir = join(repoRoot, 'out-node-runtime');
-const nodeExePath = join(outDir, 'node.exe');
 const pinJsonPath = join(outDir, 'PIN.json');
+
+/** `--platform <key>`, defaulting to the host. */
+function resolveTargetPin(argv) {
+  const flagIndex = argv.indexOf('--platform');
+  if (flagIndex === -1) {
+    return {
+      key: `${process.platform}-${process.arch}`,
+      pin: nodeRuntimePinFor(process.platform, process.arch),
+    };
+  }
+  const key = argv[flagIndex + 1];
+  if (!key) fail('--platform requires a value, e.g. --platform linux-x64');
+  const [platform, arch] = key.split('-');
+  return { key, pin: nodeRuntimePinFor(platform, arch) };
+}
 
 function fail(message) {
   console.error(`[fetch-node-runtime] ERROR: ${message}`);
@@ -46,11 +71,13 @@ async function fileExists(filePath) {
   return info?.isFile() ?? false;
 }
 
-async function alreadySatisfied() {
-  if (!(await fileExists(nodeExePath)) || !(await fileExists(pinJsonPath))) return false;
+async function alreadySatisfied(pin, outPath) {
+  if (!(await fileExists(outPath)) || !(await fileExists(pinJsonPath))) return false;
   try {
-    const pin = JSON.parse(await readFile(pinJsonPath, 'utf8'));
-    return pin.version === NODE_RUNTIME_PIN.version;
+    const cached = JSON.parse(await readFile(pinJsonPath, 'utf8'));
+    // Both fields: version alone would let a win-x64 cache satisfy a linux-x64
+    // request, silently shipping node.exe inside a Linux package.
+    return cached.version === NODE_RUNTIME_VERSION && cached.platformKey === pin.platformKey;
   } catch {
     return false;
   }
@@ -61,9 +88,9 @@ async function alreadySatisfied() {
 // the mirror) since it indicates a corrupted/tampered download, not a
 // transient network issue.
 // ---------------------------------------------------------------------------
-async function downloadZip(destinationPath) {
+async function downloadArchive(pin, destinationPath) {
   const networkErrors = [];
-  for (const url of NODE_RUNTIME_PIN.urls) {
+  for (const url of pin.urls) {
     console.log(`[fetch-node-runtime] downloading ${url}`);
     let response;
     try {
@@ -84,11 +111,11 @@ async function downloadZip(destinationPath) {
     await writeFile(destinationPath, buffer);
 
     const actual = await sha256File(destinationPath);
-    if (actual !== NODE_RUNTIME_PIN.zipSha256) {
+    if (actual !== pin.sha256) {
       await rm(destinationPath, { force: true });
       fail(
         `checksum mismatch downloading ${url}\n` +
-          `  expected: ${NODE_RUNTIME_PIN.zipSha256}\n` +
+          `  expected: ${pin.sha256}\n` +
           `  actual:   ${actual}`
       );
     }
@@ -97,7 +124,7 @@ async function downloadZip(destinationPath) {
 
   fail(
     `all download URLs failed:\n  ${networkErrors.join('\n  ')}\n` +
-      `If offline, manually place the zip at ${destinationPath} and re-run.`
+      `If offline, manually place the archive at ${destinationPath} and re-run.`
   );
 }
 
@@ -117,74 +144,117 @@ function resolveTarCommand() {
   return 'tar';
 }
 
-async function extractNodeExe(zipPath, extractDir) {
-  const tarCommand = resolveTarCommand();
+async function extractNodeBinary(pin, archivePath, extractDir) {
+  const isTarGz = pin.archiveName.endsWith('.tar.gz');
+  // .zip keeps the bsdtar path above; .tar.gz needs an explicit -z.
+  const tarCommand = isTarGz ? 'tar' : resolveTarCommand();
+  const args = isTarGz
+    ? ['-xzf', archivePath, '-C', extractDir]
+    : ['-xf', archivePath, '-C', extractDir];
   try {
-    execFileSync(tarCommand, ['-xf', zipPath, '-C', extractDir], {
-      stdio: 'pipe',
-      windowsHide: true,
-    });
+    execFileSync(tarCommand, args, { stdio: 'pipe', windowsHide: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    fail(`"${tarCommand}" failed to extract the Node runtime zip: ${message}`);
+    fail(`"${tarCommand}" failed to extract the Node runtime archive: ${message}`);
   }
 
-  const folderName = NODE_RUNTIME_PIN.zipName.replace(/\.zip$/, '');
-  const extractedExe = join(extractDir, folderName, 'node.exe');
-  if (!(await fileExists(extractedExe))) {
-    fail(`extracted archive is missing ${folderName}/node.exe`);
+  const folderName = pin.archiveName.replace(/\.(zip|tar\.gz)$/, '');
+  const extracted = join(extractDir, folderName, ...pin.binaryRel.split('/'));
+  if (!(await fileExists(extracted))) {
+    fail(`extracted archive is missing ${folderName}/${pin.binaryRel}`);
   }
-  return extractedExe;
+  return extracted;
 }
 
 async function main() {
   const force = process.argv.includes('--force');
+  const { key, pin } = resolveTargetPin(process.argv);
 
-  if (!force && (await alreadySatisfied())) {
+  // No pin for this platform: skip, do not fail. See the header note.
+  if (!pin) {
     console.log(
-      `[fetch-node-runtime] skip — out-node-runtime/node.exe already matches pin v${NODE_RUNTIME_PIN.version}`
+      `[fetch-node-runtime] skip — no bundled Node runtime pinned for ${key}; ` +
+        `the app will fall back to machine Node discovery on this platform.`
+    );
+    return;
+  }
+
+  const outPath = join(outDir, pin.outName);
+
+  if (!force && (await alreadySatisfied(pin, outPath))) {
+    console.log(
+      `[fetch-node-runtime] skip — out-node-runtime/${pin.outName} already matches ` +
+        `pin v${NODE_RUNTIME_VERSION} (${pin.platformKey})`
     );
     return;
   }
 
   await mkdir(outDir, { recursive: true });
 
-  const zipPath = join(outDir, `.tmp-${NODE_RUNTIME_PIN.zipName}`);
-  await rm(zipPath, { force: true });
+  const archivePath = join(outDir, `.tmp-${pin.archiveName}`);
+  await rm(archivePath, { force: true });
 
-  const fetchedFrom = await downloadZip(zipPath);
+  const fetchedFrom = await downloadArchive(pin, archivePath);
 
   const extractDir = await mkdtemp(join(tmpdir(), 'aiclient-node-runtime-'));
   try {
-    const extractedExe = await extractNodeExe(zipPath, extractDir);
-    await copyFile(extractedExe, nodeExePath);
+    const extracted = await extractNodeBinary(pin, archivePath, extractDir);
+    await copyFile(extracted, outPath);
   } finally {
     await rm(extractDir, { recursive: true, force: true }).catch(() => {});
-    await rm(zipPath, { force: true }).catch(() => {});
+    await rm(archivePath, { force: true }).catch(() => {});
   }
 
-  const versionOutput = execFileSync(nodeExePath, ['--version'], {
-    windowsHide: true,
-    encoding: 'utf8',
-  }).trim();
-  const expectedVersion = `v${NODE_RUNTIME_PIN.version}`;
-  if (versionOutput !== expectedVersion) {
-    fail(`node.exe --version reported "${versionOutput}", expected "${expectedVersion}"`);
+  // copyFile preserves mode, but assert rather than assume: without the exec
+  // bit the version check below fails with a bare EACCES that names nothing.
+  if (process.platform !== 'win32' && pin.outName !== 'node.exe') {
+    const mode = (await stat(outPath)).mode;
+    if ((mode & 0o111) === 0) {
+      fail(
+        `extracted ${pin.outName} is not executable (mode ${(mode & 0o777).toString(8)}) — ` +
+          `the archive or the copy lost the exec bit`
+      );
+    }
+  }
+
+  // Only self-check when the binary can actually run on this host.
+  const runnable = pin.platformKey === `${process.platform}-${process.arch}`;
+  const expectedVersion = `v${NODE_RUNTIME_VERSION}`;
+  if (runnable) {
+    const versionOutput = execFileSync(outPath, ['--version'], {
+      windowsHide: true,
+      encoding: 'utf8',
+    }).trim();
+    if (versionOutput !== expectedVersion) {
+      fail(`${pin.outName} --version reported "${versionOutput}", expected "${expectedVersion}"`);
+    }
+  } else {
+    console.log(
+      `[fetch-node-runtime] note — cross-platform fetch (${pin.platformKey} on ` +
+        `${process.platform}-${process.arch}); skipping the --version self-check`
+    );
   }
 
   await writeFile(
     pinJsonPath,
     `${JSON.stringify(
-      { version: NODE_RUNTIME_PIN.version, zipSha256: NODE_RUNTIME_PIN.zipSha256, fetchedFrom },
+      {
+        version: NODE_RUNTIME_VERSION,
+        platformKey: pin.platformKey,
+        sha256: pin.sha256,
+        outName: pin.outName,
+        fetchedFrom,
+      },
       null,
       2
     )}\n`,
     'utf8'
   );
 
-  const mb = ((await stat(nodeExePath)).size / 1024 / 1024).toFixed(1);
+  const mb = ((await stat(outPath)).size / 1024 / 1024).toFixed(1);
   console.log(
-    `[fetch-node-runtime] OK — ${expectedVersion} (${mb}MB) at out-node-runtime/node.exe (from ${fetchedFrom})`
+    `[fetch-node-runtime] OK — ${expectedVersion} ${pin.platformKey} (${mb}MB) at ` +
+      `out-node-runtime/${pin.outName} (from ${fetchedFrom})`
   );
 }
 
