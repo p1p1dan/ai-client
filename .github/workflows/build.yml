@@ -11,7 +11,72 @@ permissions:
   packages: read
 
 jobs:
+  # D41 — every packaging path goes through the four gates first. Without this
+  # a red gate still produced a full release: build-app has no dependencies of
+  # its own, and build-remote-runtime-linux uploads its asset straight into the
+  # release job. Both now hang off `gate`.
+  #
+  # timeout-minutes across this workflow are provisional placeholders, not
+  # measured values: most jobs had no timeout at all, so a single hang burned
+  # the 360-minute default. Replace with ceil(3N/10)*10 from the first green
+  # run's duration N (packaging spec §5.6).
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Get pnpm store directory
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # --omit=optional on purpose: the gates need types and tests, not
+      # cometix's cli.js or codex's ~347MB platform package. cometix's
+      # install.cjs only console.errors when its platform package is missing,
+      # so this does not fail. If a gate turns red purely from the missing
+      # optional packages, fall back to a full `npm ci` and accept the time —
+      # never make the tests skip on a missing package.
+      - name: Install agent-host dependencies
+        run: npm ci --omit=optional
+        working-directory: src/agent-host
+
+      # Four gates run serially, never chained into one command: the combined
+      # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
+      - name: Gate 1/4 — typecheck
+        run: pnpm typecheck
+
+      - name: Gate 2/4 — typecheck:agent-host
+        run: pnpm typecheck:agent-host
+
+      - name: Gate 3/4 — lint
+        run: pnpm lint
+
+      - name: Gate 4/4 — test
+        run: pnpm test
+
   build-app:
+    needs: [gate]
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -54,6 +119,7 @@ jobs:
 
   build-windows:
     needs: build-app
+    timeout-minutes: 90
     # Pin to windows-2022: windows-latest 已升级到 windows-2025，仅装 VS 2026 (path \18\),
     # 而 @electron/rebuild@4.0.1 bundled node-gyp@11.5.0 的 find-visualstudio.js 白名单
     # 只到 [2019, 2022]，找不到 VS 2026 → "Could not find any Visual Studio installation".
@@ -126,14 +192,18 @@ jobs:
       - name: Build agent-host artifact
         run: node scripts/build-agent-host.mjs
 
+      # Key on the pin file's hash, not a hardcoded version: actions/cache never
+      # overwrites an existing key, so a literal key survives a pin bump and
+      # keeps restoring the stale runtime — the cache silently stops working and
+      # nobody notices.
       - name: Cache bundled Node runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: out-node-runtime
-          key: node-runtime-24.18.0-win-x64
+          key: node-runtime-${{ runner.os }}-${{ hashFiles('scripts/node-runtime-pin.mjs') }}
 
       - name: Fetch bundled Node runtime
-        run: node scripts/fetch-node-runtime.mjs
+        run: node scripts/fetch-node-runtime.mjs --platform win32-x64
 
       - name: Build Windows
         run: npx electron-builder --win --x64
@@ -168,6 +238,7 @@ jobs:
 
   build-linux:
     needs: build-app
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -223,18 +294,19 @@ jobs:
       - name: Build agent-host artifact
         run: node scripts/build-agent-host.mjs
 
+      - name: Cache bundled Node runtime
+        uses: actions/cache@v5
+        with:
+          path: out-node-runtime
+          key: node-runtime-${{ runner.os }}-${{ hashFiles('scripts/node-runtime-pin.mjs') }}
+
+      - name: Fetch bundled Node runtime
+        run: node scripts/fetch-node-runtime.mjs --platform linux-x64
+
       - name: Build Linux
         run: npx electron-builder --linux --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Linux packages ship no bundled runtime (C-15 is win-only), so the
-      # packaged-state Node check needs machine Node 24 — the same contract a
-      # Linux user machine must satisfy. Node 20 above is only for the build.
-      - name: Setup Node.js 24 (packaged-state verify)
-        uses: actions/setup-node@v5
-        with:
-          node-version: '24'
 
       - name: Verify packaged agent-host (structure)
         run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --skip-smoke
@@ -251,6 +323,8 @@ jobs:
           if-no-files-found: error
 
   build-remote-runtime-linux:
+    needs: [gate]
+    timeout-minutes: 60
     strategy:
       matrix:
         include:

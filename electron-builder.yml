@@ -44,9 +44,13 @@ files:
   - "!node_modules/shiki/dist/themes/**"
   - "!node_modules/@shikijs/langs/**"
   - "!node_modules/@shikijs/themes/**"
-  # Exclude AI SDK bundled CLI binaries (we use system-installed CLIs via custom spawn)
-  # @openai/codex vendor: ~326MB of pre-built binaries for all platforms
-  - "!node_modules/@openai/codex/vendor/**"
+  # Exclude the Agent SDK's bundled CLI binaries from the root asar. Both agent
+  # CLIs (Claude and Codex) are shipped inside resources/agent-host by
+  # scripts/afterPack.mjs instead, so the root bundle carries no agent CLI at
+  # all. Do NOT add exclusions for agent CLI packages that are not root
+  # dependencies — a rule that can never match reads as evidence that the
+  # package IS a root dependency, which is how the previous Codex rule survived
+  # for so long.
   # @anthropic-ai/claude-agent-sdk: ~68MB of CLI and WASM files
   - "!node_modules/@anthropic-ai/claude-agent-sdk/vendor/**"
   - "!node_modules/@anthropic-ai/claude-agent-sdk/cli.js"
@@ -156,6 +160,10 @@ extraResources:
   # node_modules tree and the parallel copy races rcedit. It is copied by
   # scripts/afterPack.mjs instead (plain files, never asar: on TSD machines
   # only the whitelisted external node.exe can read them).
+  # SIZE: that artifact now carries the bundled Codex CLI and its platform
+  # package, taking it from ~51MB to ~388MB (measured linux-x64, 2026-08-20).
+  # Moving it back under extraResources would therefore be expensive as well as
+  # broken — the parallel copy would race rcedit over ~388MB.
 compression: maximum
 
 mac:
