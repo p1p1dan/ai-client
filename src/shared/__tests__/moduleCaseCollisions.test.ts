@@ -39,7 +39,7 @@ import { describe, expect, it } from 'vitest';
  * resolves wrong on the same case-insensitive filesystems, just via Node's
  * resolver instead of Vite's. Checked and deliberately left out: `packages/`
  * is Go, not JS/TS; `build/` holds only binary icons and an entitlements
- * plist; `.vflow/`, `.codex/`, `.github/` and `resources/` carry no tracked
+ * plist; `.codex/`, `.github/` and `resources/` carry no tracked
  * `.ts/.tsx/.js/.jsx/.mjs/.cjs` files as of this writing. There is no
  * `spikes/` directory in this repo.
  */

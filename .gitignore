@@ -44,12 +44,8 @@ build/cer.p12
 docs/superpowers/
 openspec/
 
-# vflow
-.vflow/journal/
-.vflow/.runtime/
-.vflow/tasks/
-resources/vflow/
-resources/vflow-pkg/
+# vflow (feature removed in D16; ignore stray scaffolding from a global vflow CLI)
+.vflow/
 
 # Build / debug artifacts not meant for the repo
 bugOutput/
