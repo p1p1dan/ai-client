@@ -2,6 +2,8 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
+
 /**
  * electron-builder afterPack hook.
  *
@@ -56,28 +58,72 @@ function copyAgentHost(context) {
 }
 
 /**
- * Copy the bundled Node runtime into resources/node-runtime (C-15 / D17).
- * Windows targets only — the bundled node.exe exists to satisfy the TSD
+ * Copy the bundled Node runtime into resources/node-runtime (C-15 / D17, D36).
+ *
+ * Driven by NODE_RUNTIME_PINS rather than a hardcoded platform test: any
+ * platform with a pin gets its runtime bundled, any platform without one is
+ * skipped. On Windows the bundled node.exe additionally satisfies the TSD
  * whitelist-by-process-name story and the "no user-installed Node" case.
+ *
+ * Reads context.electronPlatformName, never process.platform — only the former
+ * is correct when cross-compiling.
+ *
  * Serial afterPack copy for the same rcedit-race reason as copyAgentHost.
  */
 function copyNodeRuntime(context) {
-  if (context.electronPlatformName !== 'win32') return;
+  const platform = context.electronPlatformName;
+  const arch = context.arch === undefined ? 'x64' : archToKey(context.arch);
+  const pin = nodeRuntimePinFor(platform, arch);
+  if (!pin) {
+    console.log(
+      `[afterPack] skip bundled Node runtime — no pin for ${platform}-${arch}; ` +
+        `this platform falls back to machine Node discovery`
+    );
+    return;
+  }
+
   const src = path.join(context.packager.info.projectDir, 'out-node-runtime');
-  if (!fs.existsSync(path.join(src, 'node.exe'))) {
+  const srcBinary = path.join(src, pin.outName);
+  if (!fs.existsSync(srcBinary)) {
     throw new Error(
-      `[afterPack] out-node-runtime missing node.exe at ${src} — run "pnpm fetch:node-runtime" first`
+      `[afterPack] out-node-runtime missing ${pin.outName} at ${src} — run ` +
+        `"node scripts/fetch-node-runtime.mjs --platform ${pin.platformKey}" first`
     );
   }
+
   const dest = path.join(context.appOutDir, 'resources', 'node-runtime');
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(dest, { recursive: true });
-  fs.copyFileSync(path.join(src, 'node.exe'), path.join(dest, 'node.exe'));
+  const destBinary = path.join(dest, pin.outName);
+  fs.copyFileSync(srcBinary, destBinary);
+
+  // copyFileSync preserves mode, but assert instead of assuming: a runtime
+  // without the exec bit fails on the user's machine, not here.
+  if (platform !== 'win32') {
+    const mode = fs.statSync(destBinary).mode;
+    if ((mode & 0o111) === 0) {
+      throw new Error(
+        `[afterPack] bundled ${pin.outName} lost its exec bit (mode ` +
+          `${(mode & 0o777).toString(8)}) while copying into ${dest}`
+      );
+    }
+  }
+
   const pinJson = path.join(src, 'PIN.json');
   if (fs.existsSync(pinJson)) {
     fs.copyFileSync(pinJson, path.join(dest, 'PIN.json'));
   }
-  console.log(`[afterPack] Copied bundled Node runtime -> ${dest}`);
+  console.log(
+    `[afterPack] Copied bundled Node runtime v${NODE_RUNTIME_VERSION} ` +
+      `(${pin.platformKey}) -> ${dest}`
+  );
+}
+
+/** electron-builder's Arch enum -> the arch half of our pin keys. */
+function archToKey(arch) {
+  if (typeof arch === 'string') return arch;
+  // Arch: ia32=0, x64=1, armv7l=2, arm64=3, universal=4
+  return { 0: 'ia32', 1: 'x64', 2: 'armv7l', 3: 'arm64', 4: 'universal' }[arch] ?? 'x64';
 }
 
 function fixTsdEncryption(rootDir) {

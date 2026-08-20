@@ -30,7 +30,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NODE_RUNTIME_PIN } from './node-runtime-pin.mjs';
+import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -224,10 +224,23 @@ function resolveNode24() {
 // 3.5: Bundled Node runtime (C-15) — exists, version-pinned, runnable.
 // ---------------------------------------------------------------------------
 function checkNodeRuntime(appDir) {
-  if (process.platform !== 'win32') return null;
-  const execPath = path.join(appDir, 'resources', 'node-runtime', 'node.exe');
-  if (!check('bundled node.exe present (resources/node-runtime)', fs.existsSync(execPath))) {
+  const pin = nodeRuntimePinFor(process.platform, process.arch);
+  if (!pin) return null;
+  const execPath = path.join(appDir, 'resources', 'node-runtime', pin.outName);
+  if (!check(`bundled ${pin.outName} present (resources/node-runtime)`, fs.existsSync(execPath))) {
     return null;
+  }
+  if (process.platform !== 'win32') {
+    const mode = fs.statSync(execPath).mode;
+    if (
+      !check(
+        `bundled ${pin.outName} executable`,
+        (mode & 0o111) !== 0,
+        `mode ${(mode & 0o777).toString(8)}`
+      )
+    ) {
+      return null;
+    }
   }
   let version = '';
   try {
@@ -235,15 +248,15 @@ function checkNodeRuntime(appDir) {
       .toString()
       .trim();
   } catch (err) {
-    check('bundled node.exe runnable', false, String(err));
+    check(`bundled ${pin.outName} runnable`, false, String(err));
     return null;
   }
-  const expected = `v${NODE_RUNTIME_PIN.version}`;
+  const expected = `v${NODE_RUNTIME_VERSION}`;
   if (!check(`bundled node version ${expected}`, version === expected, `got ${version}`)) {
     return null;
   }
   const mb = (fs.statSync(execPath).size / (1024 * 1024)).toFixed(1);
-  console.log(`[verify-packaged-app] bundled node.exe: ${version}, ${mb}MB`);
+  console.log(`[verify-packaged-app] bundled ${pin.outName}: ${version}, ${mb}MB`);
   return { execPath, version, source: 'bundled' };
 }
 
@@ -315,6 +328,22 @@ async function main() {
   checkStructure(args.appDir);
 
   const bundled = checkNodeRuntime(args.appDir);
+
+  // 改判 ④ — the load-bearing assertion of D36. A platform WITH a pin must
+  // produce a working bundled runtime, asserted on its own and deliberately
+  // NOT folded into the `node24 || bundled` OR below. Without this, a broken
+  // bundled runtime is invisible: NodeRuntimeResolver.probeNodeBinary only
+  // `continue`s past a candidate that fails to probe, so the app silently
+  // falls back to machine Node and CI — which has Node 24 installed — stays
+  // green while shipping a runtime that does not work on a bare user machine.
+  const runtimePin = nodeRuntimePinFor(process.platform, process.arch);
+  if (runtimePin) {
+    check(
+      `bundled Node runtime usable for ${runtimePin.platformKey} (independent of machine Node)`,
+      Boolean(bundled),
+      bundled ? `${bundled.version} at ${bundled.execPath}` : 'bundled runtime missing or unusable'
+    );
+  }
 
   const node24 = resolveNode24();
   check(
