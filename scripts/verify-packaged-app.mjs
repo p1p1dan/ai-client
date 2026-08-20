@@ -558,6 +558,277 @@ async function checkSmoke(appDir, node24) {
 }
 
 // ---------------------------------------------------------------------------
+// 4.5: Codex smoke — two zero-quota levels (spec §6.2). Neither spends credit
+// nor needs credentials; the real-turn level (S3) stays out of CI entirely.
+// ---------------------------------------------------------------------------
+
+/** Response and exit budgets are timed SEPARATELY: one combined timeout would
+ * misdiagnose "replied but never exits" as "never started". Seeds are the 10x
+ * band over the measured 178-188ms initialize; refill from real runs. */
+const CODEX_RESPONSE_TIMEOUT_MS = 2000;
+const CODEX_EXIT_TIMEOUT_MS = 2000;
+/** app-server is long-lived; an unbounded `stdout +=` would eat CI memory when
+ * it misbehaves. The existing Claude smoke accumulates without a cap — not a
+ * pattern to copy. */
+const CODEX_STDOUT_BYTE_CAP = 1024 * 1024;
+const CODEX_STDOUT_LINE_CAP = 200;
+
+/**
+ * Platforms whose `initialize` reply shape has actually been observed, and are
+ * therefore past step one of the spec §6.2 two-step. Enforced there, observed
+ * everywhere else.
+ *
+ * Keyed on RECORDED EVIDENCE, never on what happened at run time: branching on
+ * "did it start?" is the forbidden "assert if it works, skip if it doesn't"
+ * shape. A platform only joins this list once a real run's frame is pasted
+ * below.
+ *
+ * linux-x64 observed 2026-08-20 against the packaged layout:
+ *   {"id":1,"result":{"userAgent":"…/0.145.0 (Ubuntu 26.4.0; x86_64) …",
+ *    "codexHome":"<the temp dir we passed>","platformFamily":"unix",
+ *    "platformOs":"linux"}}  — exited cleanly after stdin close.
+ * win32-x64: no evidence yet; the first Windows CI run prints its frame here.
+ */
+const CODEX_S2_ENFORCED_PLATFORMS = ['linux-x64'];
+
+/**
+ * Kill the whole tree, not just the direct child. The chain is three deep —
+ * node → codex.js → the native codex binary — so `child.kill()` alone leaves
+ * the native process alive on the runner, where it can hold the job open.
+ */
+function killTree(child) {
+  if (!child || child.killed) return;
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill', ['/T', '/F', '/PID', String(child.pid)], { stdio: 'ignore' });
+    } else {
+      // spawned detached, so the pid doubles as the process-group id
+      process.kill(-child.pid, 'SIGKILL');
+    }
+  } catch {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** S1 — `node <codex.js> --version`. Proves the launcher is readable, the
+ * platform package resolves, and the native binary actually executes. */
+function runCodexVersionSmoke(runtime, codexJs) {
+  return new Promise((resolve) => {
+    const child = spawn(runtime.execPath, [codexJs, '--version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      killTree(child);
+      resolve({
+        ok: false,
+        reason: `no exit within ${CODEX_EXIT_TIMEOUT_MS * 5}ms`,
+        stdout,
+        stderr,
+      });
+    }, CODEX_EXIT_TIMEOUT_MS * 5);
+    child.stdout.on('data', (b) => {
+      stdout += b.toString('utf8');
+    });
+    child.stderr.on('data', (b) => {
+      stderr += b.toString('utf8');
+    });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({ ok: false, reason: String(err), stdout, stderr });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ ok: code === 0, code, stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
+}
+
+/** S2 — spawn `app-server`, send exactly one `initialize`, read the reply.
+ * Zero quota: initialize is answered even with no credentials present. */
+function runCodexAppServerSmoke(runtime, codexJs, codexHome) {
+  return new Promise((resolve) => {
+    const child = spawn(runtime.execPath, [codexJs, 'app-server'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
+      windowsHide: true,
+      env: { ...process.env, CODEX_HOME: codexHome },
+    });
+
+    let buf = '';
+    let bytes = 0;
+    let lines = 0;
+    let settled = false;
+    let firstFrame = null;
+    let stderr = '';
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(responseTimer);
+      clearTimeout(exitTimer);
+      if (!result.exited) killTree(child);
+      resolve(result);
+    };
+
+    const responseTimer = setTimeout(
+      () =>
+        finish({
+          ok: false,
+          reason: `no initialize reply within ${CODEX_RESPONSE_TIMEOUT_MS}ms`,
+          stderr,
+        }),
+      CODEX_RESPONSE_TIMEOUT_MS
+    );
+    let exitTimer = setTimeout(() => {}, 0);
+
+    child.stderr.on('data', (b) => {
+      stderr += b.toString('utf8').slice(0, 4096);
+    });
+
+    child.stdout.on('data', (b) => {
+      bytes += b.length;
+      if (bytes > CODEX_STDOUT_BYTE_CAP) {
+        finish({ ok: false, reason: `stdout exceeded ${CODEX_STDOUT_BYTE_CAP}B cap`, stderr });
+        return;
+      }
+      buf += b.toString('utf8');
+      let idx = buf.indexOf('\n');
+      while (idx !== -1) {
+        const line = buf.slice(0, idx).replace(/\r$/, '');
+        buf = buf.slice(idx + 1);
+        lines += 1;
+        if (lines > CODEX_STDOUT_LINE_CAP) {
+          finish({
+            ok: false,
+            reason: `stdout exceeded ${CODEX_STDOUT_LINE_CAP}-line cap`,
+            stderr,
+          });
+          return;
+        }
+        if (line.trim() && firstFrame === null) {
+          try {
+            firstFrame = JSON.parse(line);
+          } catch {
+            firstFrame = { _unparsed: line.slice(0, 400) };
+          }
+          clearTimeout(responseTimer);
+          // Got the reply; close stdin and give it its own budget to exit.
+          try {
+            child.stdin.end();
+          } catch {
+            /* already closed */
+          }
+          exitTimer = setTimeout(
+            () => finish({ ok: true, frame: firstFrame, exited: false, exitClean: false, stderr }),
+            CODEX_EXIT_TIMEOUT_MS
+          );
+        }
+        idx = buf.indexOf('\n');
+      }
+    });
+
+    child.on('error', (err) => finish({ ok: false, reason: String(err), exited: true, stderr }));
+    child.on('close', () =>
+      finish(
+        firstFrame
+          ? { ok: true, frame: firstFrame, exited: true, exitClean: true, stderr }
+          : { ok: false, reason: 'exited before replying', exited: true, stderr }
+      )
+    );
+
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { clientInfo: { name: 'aiclient-verify', version: '0', title: 'AiClient verify' } },
+      })}\n`
+    );
+  });
+}
+
+async function checkCodexSmoke(appDir, runtime, codexPin) {
+  const codexJs = path.join(
+    appDir,
+    'resources',
+    'agent-host',
+    'node_modules',
+    '@openai',
+    'codex',
+    'bin',
+    'codex.js'
+  );
+  if (!check('codex smoke: packaged launcher present', isUsableFile(codexJs))) return;
+
+  // S1 — exact version match. `includes('codex')` would let a wrong pin pass.
+  const s1 = await runCodexVersionSmoke(runtime, codexJs);
+  const expected = `codex-cli ${codexPin}`;
+  check(
+    `codex S1 smoke: --version === "${expected}"`,
+    s1.ok && s1.stdout === expected,
+    s1.ok
+      ? `got "${s1.stdout}"`
+      : `${s1.reason ?? `exit ${s1.code}`}${s1.stderr ? ` | ${s1.stderr.slice(0, 200)}` : ''}`
+  );
+
+  // S2 — three-level process chain under the packaged layout, which S1 cannot
+  // prove. Observation mode on first run (spec §6.2 two-step): Windows has zero
+  // evidence for app-server's behaviour without auth.json.
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'aiclient-codex-smoke-'));
+  try {
+    const s2 = await runCodexAppServerSmoke(runtime, codexJs, codexHome);
+    const platformKey = `${process.platform}-${process.arch}`;
+    const frameJson = s2.ok ? JSON.stringify(s2.frame) : '';
+
+    // Always print the raw observation, enforced or not — this is what the
+    // next platform's entry in CODEX_S2_ENFORCED_PLATFORMS gets written from.
+    console.log(
+      s2.ok
+        ? `[verify-packaged-app] codex S2 frame (${platformKey}): exited=${s2.exited} ` +
+            `clean=${s2.exitClean} ${frameJson.slice(0, 500)}`
+        : `[verify-packaged-app] codex S2 failure (${platformKey}): ${s2.reason}` +
+            `${s2.stderr ? ` | stderr: ${s2.stderr.slice(0, 300)}` : ''}`
+    );
+
+    if (CODEX_S2_ENFORCED_PLATFORMS.includes(platformKey)) {
+      // Three-level process chain proven under the packaged layout — the half
+      // S1 cannot reach. All three assertions are platform-independent
+      // semantics, so they stay meaningful wherever this is turned on.
+      if (check('codex S2 smoke: app-server replied to initialize', s2.ok, s2.reason ?? '')) {
+        const result = s2.frame?.result ?? {};
+        check(
+          'codex S2 smoke: initialize echoed our CODEX_HOME',
+          result.codexHome === codexHome,
+          `got ${result.codexHome}`
+        );
+        check(
+          'codex S2 smoke: platformOs matches this platform',
+          result.platformOs === (process.platform === 'win32' ? 'windows' : process.platform),
+          `got ${result.platformOs}`
+        );
+        check('codex S2 smoke: process exited cleanly after stdin close', s2.exitClean === true);
+      }
+    } else {
+      console.log(
+        `[verify-packaged-app] codex S2 is OBSERVE-ONLY on ${platformKey} — no recorded ` +
+          `frame shape yet. Paste the frame above into CODEX_S2_ENFORCED_PLATFORMS in ` +
+          `scripts/verify-packaged-app.mjs to make it enforcing (spec §6.2 two-step).`
+      );
+    }
+  } finally {
+    fs.rmSync(codexHome, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -592,6 +863,39 @@ async function main() {
 
   // Bundled runtime first (C-15): proves a user machine without Node works.
   const smokeRuntime = bundled ?? node24;
+
+  // Codex smoke sits here on purpose: it needs `bundled`, but it is NOT part of
+  // the Claude smoke's condition chain below.
+  if (!args.skipCodexSmoke && isCodexShippedPlatform(process.platform, process.arch)) {
+    if (!smokeRuntime) {
+      // Deliberately NOT the existing "skip, no runtime available" branch: on a
+      // platform that HAS a pin, having no runtime is itself the D36 failure.
+      check('codex smoke runtime available', false, 'no bundled or machine Node 24');
+    } else if (failures.length > 0) {
+      console.log('[verify-packaged-app] codex smoke skipped — structure already failed');
+    } else {
+      const hostPkg = path.join(
+        args.appDir,
+        'resources',
+        'agent-host',
+        'node_modules',
+        '@openai',
+        'codex',
+        'package.json'
+      );
+      const codexPin = fs.existsSync(hostPkg)
+        ? JSON.parse(fs.readFileSync(hostPkg, 'utf8')).version
+        : null;
+      if (!check('codex smoke: pin readable from packaged package.json', Boolean(codexPin))) {
+        // fall through; the structure section already reported the detail
+      } else {
+        await checkCodexSmoke(args.appDir, smokeRuntime, codexPin);
+      }
+    }
+  } else if (args.skipCodexSmoke) {
+    console.log('[verify-packaged-app] codex smoke skipped (--skip-codex-smoke)');
+  }
+
   if (!args.skipSmoke && smokeRuntime && failures.length === 0) {
     console.log(
       `[verify-packaged-app] smoke runtime: ${smokeRuntime.source} ${smokeRuntime.execPath}`
