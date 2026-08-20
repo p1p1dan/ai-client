@@ -136,7 +136,8 @@ function tsdFixBundleOnWindows() {
 /** Report line carries the raw codex byte count so every CI run leaves a size
  * baseline for the packaging gate to regress against (spec §3.6). */
 function reportOk({ pins, codexBytes, codexPkgRel }) {
-  const mb = (dirSize(outDir) / 1024 / 1024).toFixed(1);
+  const totalBytes = dirSize(outDir);
+  const mb = (totalBytes / 1024 / 1024).toFixed(1);
   const parts = [
     `cometix ${pins['@cometix/claude-code']}`,
     `sdk ${pins['@anthropic-ai/claude-agent-sdk']}`,
@@ -146,7 +147,12 @@ function reportOk({ pins, codexBytes, codexPkgRel }) {
   } else {
     parts.push(`codex not shipped for ${platform}-${arch}`);
   }
-  console.log(`[build-agent-host] OK — ${mb}MB at out-agent-host/ (${parts.join(', ')})`);
+  // Exact byte count alongside the MB: the packaging budget (packaging spec
+  // §6.3) is filled in from this line, and a rounded MB would bake half a
+  // megabyte of headroom that was never measured into the gate.
+  console.log(
+    `[build-agent-host] OK — ${mb}MB (${totalBytes}B) at out-agent-host/ (${parts.join(', ')})`
+  );
 }
 
 async function main() {
