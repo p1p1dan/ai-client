@@ -30,18 +30,39 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { foreignCodexPlatformRels, resolveCodexPlatformPkgRel } from './agent-host-build-lib.mjs';
+import {
+  codexBinaryName,
+  codexPlatformKey,
+  codexTargetTriple,
+  isCodexShippedPlatform,
+} from './codex-platform.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
+import {
+  evaluateAgentHostSize,
+  evaluateCodexBinarySize,
+  formatBytes,
+  topDirectories,
+} from './packaging-budget.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function parseArgs(argv) {
-  const args = { appDir: path.join(repoRoot, 'dist', 'win-unpacked'), skipSmoke: false };
+  const args = {
+    appDir: path.join(repoRoot, 'dist', 'win-unpacked'),
+    skipSmoke: false,
+    skipCodexSmoke: false,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--app-dir') {
       args.appDir = path.resolve(argv[i + 1] ?? '');
       i += 1;
     } else if (argv[i] === '--skip-smoke') {
       args.skipSmoke = true;
+    } else if (argv[i] === '--skip-codex-smoke') {
+      // Independent of --skip-smoke on purpose: lets D36/D41 troubleshooting
+      // disable just this section without losing the Claude-side smoke.
+      args.skipCodexSmoke = true;
     } else {
       console.error(`[verify-packaged-app] unknown argument: ${argv[i]}`);
       process.exit(1);
@@ -93,6 +114,174 @@ function expectedCometixPin() {
 // ---------------------------------------------------------------------------
 // 1 + 2: structure checks
 // ---------------------------------------------------------------------------
+/** Raw leading bytes, for magic-number checks. */
+function firstBytesBuffer(file, n) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(n);
+    const read = fs.readSync(fd, buf, 0, n, 0);
+    return buf.subarray(0, read);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * D9 — a path counts as a usable file only when it IS a file with content.
+ * `existsSync` says yes to a same-named directory and to a zero-byte stub.
+ */
+function isUsableFile(file) {
+  try {
+    const st = fs.statSync(file);
+    return st.isFile() && st.size > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * D2 — TSD header scan.
+ *
+ * Deliberately has NO `if (exists)` guard: the previous shape produced no
+ * assertion at all when the file was missing, so the check silently evaporated
+ * exactly when something was wrong (spec §10.1 "同名空壳"). Every path passed
+ * here is one mustExist already asserted, so a missing file is a real failure.
+ */
+function checkNoTsdHeader(label, file) {
+  if (!fs.existsSync(file)) {
+    check(`no TSD header in ${label}`, false, 'file missing');
+    return;
+  }
+  check(`no TSD header in ${label}`, !firstBytes(file, 16).startsWith('%TSD'));
+}
+
+/**
+ * The §3.6 mustExist/mustNotExist contract, re-asserted on the PACKAGED tree.
+ * Shares codex-platform.mjs and agent-host-build-lib.mjs with the build-time
+ * verifier rather than restating the table — a second copy would drift.
+ */
+function checkCodexStructure(hostDir) {
+  const platform = process.platform;
+  const arch = process.arch;
+  const nodeModules = path.join(hostDir, 'node_modules');
+
+  if (!isCodexShippedPlatform(platform, arch)) {
+    // Whitelist arm (mac): nothing from @openai may ship at all (改判 ⑧).
+    check(
+      `pruned: no agent-host/node_modules/@openai (codex not shipped for ${platform}-${arch})`,
+      !fs.existsSync(path.join(nodeModules, '@openai'))
+    );
+    return null;
+  }
+
+  const key = codexPlatformKey(platform, arch);
+  const triple = codexTargetTriple(platform, arch);
+
+  const launcher = path.join(nodeModules, '@openai', 'codex', 'bin', 'codex.js');
+  // D9: isUsableFile, not existsSync — a directory named codex.js would pass
+  // the latter and then fail at spawn time with a useless error.
+  check('agent-host codex launcher (bin/codex.js is a real file)', isUsableFile(launcher));
+  check(
+    'pruned: no agent-host/node_modules/@openai/codex/vendor',
+    !fs.existsSync(path.join(nodeModules, '@openai', 'codex', 'vendor')),
+    'main package must have no vendor dir'
+  );
+
+  const pkgRel = resolveCodexPlatformPkgRel(nodeModules, platform, arch);
+  if (!check(`agent-host codex platform package (${key})`, Boolean(pkgRel))) return null;
+
+  const pkgDir = path.join(nodeModules, ...pkgRel.split('/'));
+  const vendorDir = path.join(pkgDir, 'vendor', triple);
+  const manifestPath = path.join(vendorDir, 'codex-package.json');
+
+  let manifest = null;
+  if (check(`agent-host codex vendor manifest (${triple})`, fs.existsSync(manifestPath))) {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    check(
+      'codex vendor manifest target matches this platform',
+      manifest.target === triple,
+      `got ${manifest.target}`
+    );
+    // Directory names come from the manifest, never hardcoded: the win32
+    // variant's layout is unmeasured (spec §11-Q1).
+    for (const dirKey of ['pathDir', 'resourcesDir']) {
+      const dirName = manifest[dirKey];
+      if (!check(`codex manifest declares ${dirKey}`, Boolean(dirName))) continue;
+      check(
+        `agent-host codex vendor/${dirName} (manifest.${dirKey})`,
+        fs.existsSync(path.join(vendorDir, dirName))
+      );
+    }
+  }
+
+  const binName = codexBinaryName(platform);
+  const entry = path.join(vendorDir, 'bin', binName);
+  let codexBytes = null;
+  if (check(`agent-host codex entry binary (${binName})`, isUsableFile(entry))) {
+    const st = fs.statSync(entry);
+    codexBytes = st.size;
+
+    // Single-file floor: catches truncation, LFS pointers and placeholders.
+    const verdict = evaluateCodexBinarySize(st.size);
+    check(
+      `codex entry binary >= ${formatBytes(verdict.floor)}`,
+      verdict.status === 'ok',
+      formatBytes(st.size)
+    );
+
+    // D1 — magic number. Stronger than "not %TSD": it also rejects truncation,
+    // placeholders and anything rewritten into a different format.
+    const magic = firstBytesBuffer(entry, 4);
+    if (platform === 'win32') {
+      check(
+        'codex entry binary is a PE image (MZ)',
+        magic.subarray(0, 2).toString('latin1') === 'MZ',
+        magic.toString('hex')
+      );
+    } else {
+      check(
+        'codex entry binary is an ELF image (\x7fELF)',
+        magic.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])),
+        magic.toString('hex')
+      );
+      // D3 — exec bit at the end of the packaging chain.
+      check(
+        'codex entry binary is executable',
+        (st.mode & 0o111) !== 0,
+        `mode ${(st.mode & 0o777).toString(8)}`
+      );
+    }
+  }
+
+  // Kept on purpose (spec §3.5) — assert so nobody prunes it as an obvious
+  // 44MiB saving without redoing that analysis.
+  const hostBin = path.join(
+    vendorDir,
+    'bin',
+    platform === 'win32' ? 'codex-code-mode-host.exe' : 'codex-code-mode-host'
+  );
+  check('agent-host codex code-mode host present', isUsableFile(hostBin), 'spec §3.5 keeps this');
+
+  // D2 — TSD scan over the codex files. afterPack.fixTsdEncryption only
+  // rewrites .js/.cjs/.mjs, so the native binaries never pass through it: that
+  // is "implicitly correct" and has never been verified at this size on a real
+  // TSD machine. This makes it explicit.
+  checkNoTsdHeader('codex bin/codex.js', launcher);
+  checkNoTsdHeader(`codex vendor/${triple}/bin/${binName}`, entry);
+  checkNoTsdHeader(`codex vendor/${triple}/bin/${path.basename(hostBin)}`, hostBin);
+
+  // Foreign platform packages, both layouts (spec §3.6-9: 5 platforms x 2).
+  for (const rel of foreignCodexPlatformRels(platform, arch)) {
+    check(
+      `pruned: no agent-host/node_modules/${rel}`,
+      !fs.existsSync(path.join(nodeModules, ...rel.split('/'))),
+      'foreign platform package'
+    );
+  }
+
+  return { pkgRel, codexBytes };
+}
+
 function checkStructure(appDir) {
   console.log(`[verify-packaged-app] app dir: ${appDir}`);
   if (!check('app dir exists', fs.existsSync(appDir))) return;
@@ -143,15 +332,62 @@ function checkStructure(appDir) {
   }
 
   // TSD sanity: shipped files must be plain bytes readable by any process.
+  // No exists guard — these are mustExist paths asserted just above, and the
+  // old guarded form produced no assertion at all when the file was missing.
   for (const rel of ['index.js', 'node_modules/@cometix/claude-code/cli.js']) {
-    const file = path.join(hostDir, rel);
-    if (fs.existsSync(file)) {
-      check(`no TSD header in ${rel}`, !firstBytes(file, 16).startsWith('%TSD'));
+    checkNoTsdHeader(rel, path.join(hostDir, rel));
+  }
+
+  const codex = checkCodexStructure(hostDir);
+
+  // ---- Size gate (REQ-14, spec §6.3) -------------------------------------
+  const totalBytes = dirSize(hostDir);
+  const platformKey = `${process.platform}-${process.arch}`;
+  const verdict = evaluateAgentHostSize(platformKey, totalBytes);
+  console.log(
+    `[verify-packaged-app] resources/agent-host size: ${formatBytes(totalBytes)} (${totalBytes}B)`
+  );
+
+  if (verdict.status === 'no-budget') {
+    // Not a pass. Budgets are filled in from a real run's measured bytes; a
+    // platform with none is PENDING, and saying "ok" here would let it read
+    // as green forever (spec §11-Q1 two-step).
+    console.log(
+      `[verify-packaged-app] PENDING size budget for ${platformKey} — ` +
+        `no measured baseline yet. Fill PACKAGING_BUDGET['${platformKey}'] in ` +
+        `scripts/packaging-budget.mjs from the bytes printed above, then this ` +
+        `gate becomes enforcing.`
+    );
+  } else {
+    const range = `${formatBytes(verdict.floor)}..${formatBytes(verdict.ceiling)}`;
+    const ok = check(
+      `agent-host size within budget (${range})`,
+      verdict.status === 'ok',
+      formatBytes(totalBytes)
+    );
+    if (!ok) {
+      // D7 — a gate that says "12MB over" without saying who grew makes the
+      // next person re-derive the breakdown by hand.
+      const why = verdict.status === 'over' ? 'over ceiling' : 'under floor';
+      console.log(`[verify-packaged-app] size breakdown (${why}), top 10 by bytes:`);
+      for (const entry of topDirectories(hostDir, 10)) {
+        console.log(
+          `    ${formatBytes(entry.bytes).padStart(10)}  ${entry.name}${entry.isDirectory ? '/' : ''}`
+        );
+      }
+      const nm = path.join(hostDir, 'node_modules');
+      if (fs.existsSync(nm)) {
+        console.log('[verify-packaged-app] node_modules top 10:');
+        for (const entry of topDirectories(nm, 10)) {
+          console.log(
+            `    ${formatBytes(entry.bytes).padStart(10)}  node_modules/${entry.name}${entry.isDirectory ? '/' : ''}`
+          );
+        }
+      }
     }
   }
 
-  const mb = (dirSize(hostDir) / 1024 / 1024).toFixed(1);
-  console.log(`[verify-packaged-app] resources/agent-host size: ${mb}MB`);
+  return codex;
 }
 
 // ---------------------------------------------------------------------------
