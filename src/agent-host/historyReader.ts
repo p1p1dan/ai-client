@@ -371,10 +371,11 @@ function openStreamLines(filePath: string): LineSource {
       let buf = '';
       for await (const chunk of stream) {
         buf += chunk as string;
-        let idx: number;
-        while ((idx = buf.indexOf('\n')) !== -1) {
+        let idx = buf.indexOf('\n');
+        while (idx !== -1) {
           yield buf.slice(0, idx).replace(/\r$/, '');
           buf = buf.slice(idx + 1);
+          idx = buf.indexOf('\n');
         }
       }
       if (buf.length > 0) yield buf.replace(/\r$/, '');

@@ -60,10 +60,11 @@ export class AgentHostProcess extends EventEmitter {
       let _stdoutBuf = '';
       child.stdout.on('data', (chunk: Buffer) => {
         _stdoutBuf += chunk.toString('utf8');
-        let idx: number;
-        while ((idx = _stdoutBuf.indexOf('\n')) !== -1) {
+        let idx = _stdoutBuf.indexOf('\n');
+        while (idx !== -1) {
           this.handleStdoutLine(_stdoutBuf.slice(0, idx).replace(/\r$/, ''));
           _stdoutBuf = _stdoutBuf.slice(idx + 1);
+          idx = _stdoutBuf.indexOf('\n');
         }
       });
 

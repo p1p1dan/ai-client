@@ -967,10 +967,11 @@ async function* lfLines(input: NodeJS.ReadableStream): AsyncGenerator<string> {
   let buf = '';
   for await (const chunk of input) {
     buf += typeof chunk === 'string' ? chunk : (chunk as Buffer).toString('utf8');
-    let idx: number;
-    while ((idx = buf.indexOf('\n')) !== -1) {
+    let idx = buf.indexOf('\n');
+    while (idx !== -1) {
       yield buf.slice(0, idx).replace(/\r$/, '');
       buf = buf.slice(idx + 1);
+      idx = buf.indexOf('\n');
     }
   }
   if (buf.length > 0 && buf.trim().length > 0) yield buf.replace(/\r$/, '');
