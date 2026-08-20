@@ -71,11 +71,10 @@ describe('ship whitelist (A2c)', () => {
     expect(isCodexShippedPlatform('win32', 'arm64')).toBe(false);
   });
 
-  // The other half of A2c — key-set equality against NODE_RUNTIME_PINS — is
-  // deliberately NOT written here: node-runtime-pin.mjs still exports the
-  // single-platform NODE_RUNTIME_PIN (win-x64 only). The multi-platform table
-  // is D36/P3 work, and asserting against a table that does not exist yet would
-  // be exactly the "同名空壳" this spec forbids (§10.1). It lands as C9 with P3.
+  // The other half of A2c — key-set equality against NODE_RUNTIME_PINS — landed
+  // with P3/D36 and lives in src/shared/agentHost/__tests__/nodeRuntimePin.test.ts,
+  // where all three tables (Node pins, codex whitelist, Main's runtime lookup)
+  // are pinned against each other in one place (spec C9).
 });
 
 describe('codexPlatformPkgCandidates (A2b — kills the double-scope defect)', () => {

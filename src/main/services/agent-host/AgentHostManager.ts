@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs';
 import path from 'node:path';
 import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
+import { bundledNodeRuntimeBinaryFor } from '@shared/agentHost/nodeRuntimePin';
 import {
   AGENT_HOST_PROTOCOL_VERSION,
   type AgentHostCommand,
@@ -677,20 +678,27 @@ export class AgentHostManager {
 }
 
 /**
- * Packaged Windows builds ship a pinned node.exe under resources/node-runtime
- * (C-15/D17) — preferred over machine Node discovery. Dev returns undefined
- * so development behavior is unchanged.
+ * Packaged builds ship a pinned Node runtime under resources/node-runtime
+ * (C-15/D17, multi-platform since D36) — preferred over machine Node
+ * discovery. Dev returns undefined so development behavior is unchanged.
  *
- * Windows-only on purpose: the whole chain is win-x64 (fetch-node-runtime.mjs
- * downloads the Windows zip, afterPack.mjs copies node.exe, verify-packaged-app
- * asserts it). On packaged macOS/Linux there is no bundled runtime to find, so
- * returning a path here only fed the resolver a candidate that could never
- * exist; those platforms fall back to machine Node discovery by design.
+ * Gated on NODE_RUNTIME_PINS rather than on Windows: every platform we bundle
+ * a runtime for gets one returned, and platforms without a pin (mac today)
+ * return undefined so the resolver is never handed a candidate that cannot
+ * exist. The previous "Windows-only on purpose" note is obsolete — the chain
+ * is win-x64 + linux-x64 as of D36.
+ *
+ * NOTE FOR REVERTS: this function is the single switch that decides whether an
+ * already-installed Linux user's Agent Host keeps using their machine Node or
+ * moves to the bundled 24.18.0. That is a runtime replacement, not a pure
+ * addition, so this change is kept as its own commit — revert this one commit
+ * to put Linux back on machine Node (packaging spec §5.4 risk register).
  */
 export function getBundledNodeRuntimePath(): string | undefined {
   if (!app.isPackaged) return undefined;
-  if (process.platform !== 'win32') return undefined;
-  return path.join(process.resourcesPath, 'node-runtime', 'node.exe');
+  const binaryName = bundledNodeRuntimeBinaryFor(process.platform, process.arch);
+  if (!binaryName) return undefined;
+  return path.join(process.resourcesPath, 'node-runtime', binaryName);
 }
 
 /**
