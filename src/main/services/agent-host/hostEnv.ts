@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { AgentHostDriver } from '@shared/types/agentHost';
 
 /**
@@ -44,7 +45,58 @@ import type { AgentHostDriver } from '@shared/types/agentHost';
  * `undefined` — which is also why the pre-existing five-key `toEqual` test
  * in `hostEnv.test.ts` keeps passing unmodified: `toEqual` ignores
  * `undefined`-valued object properties.
+ *
+ * Packaging spec §4.2 — `codexJsPath` is the DELIBERATE OPPOSITE of the D47
+ * trio above: it is conditionally spread in, so a `undefined` value means the
+ * key is not an own property at all. The two rules differ because the two keys
+ * defend against opposite failures:
+ *
+ * - The D47 trio carries CREDENTIALS. A stray shell/dev-inherited value leaking
+ *   into the Host is a contamination bug, so those keys are always present and
+ *   explicitly `undefined` to override anything inherited from `process.env`.
+ * - `AICLIENT_CODEX_JS_PATH` is a PATH, and the Host treats a user-set value as
+ *   an escape hatch (`codexNodeEntry.ts:297`, candidate rule 1). Overriding it
+ *   with `undefined` would slam that escape hatch shut for anyone who set the
+ *   variable deliberately. Omitting the key instead lets the user's value pass
+ *   straight through `AgentHostProcess.start()`'s `{...process.env, ...env}`.
+ *
+ * So: never "make it consistent" with the trio — the asymmetry IS the design.
  */
+/**
+ * Read side lives in `src/agent-host/codexNodeEntry.ts:100`. The key name is
+ * duplicated as a literal on each side on purpose: Main and the Agent Host are
+ * separate builds and Main imports nothing from `src/agent-host` — the exact
+ * same arrangement `AICLIENT_NODE_EXEC_PATH` already uses.
+ */
+export const CODEX_JS_PATH_ENV_KEY = 'AICLIENT_CODEX_JS_PATH';
+
+/** Basename of the Node-executable Codex entry point (REQ-8). */
+const CODEX_JS_BASENAME = 'codex.js';
+
+/**
+ * `<dir(hostEntry)>/node_modules/@openai/codex/bin/codex.js` — pure, no IO.
+ *
+ * Derived from the Host entry path rather than re-deriving
+ * `process.resourcesPath` because `resolveHostEntryPath()` is already the one
+ * source of truth for "where the Host artifact lives", and `node_modules` is
+ * its sibling in BOTH shapes: packaged (`afterPack.copyAgentHost` copies the
+ * whole tree) and dev (`src/agent-host/node_modules`). A second derivation
+ * would silently point at a non-existent path in the dev branch.
+ *
+ * Same-platform by construction: Main derives a path for the machine it is
+ * running on, so `node:path`'s host bindings are the correct ones here.
+ */
+export function deriveBundledCodexJsPath(hostEntryPath: string): string {
+  return path.join(
+    path.dirname(hostEntryPath),
+    'node_modules',
+    '@openai',
+    'codex',
+    'bin',
+    CODEX_JS_BASENAME
+  );
+}
+
 export interface AgentHostEnvInput {
   driver: AgentHostDriver;
   cometixVersion: string;
@@ -57,6 +109,8 @@ export interface AgentHostEnvInput {
   codexApiKey: string | undefined;
   /** `<userData>/codex-home` when managed mode is on (same directory Main materializes `config.toml` into — `src/main/services/auth/codexHome.ts`), `undefined` when off. Lets `ensureCodexHome` (agent-host) validate the managed `config.toml` exists there instead of guessing a path. */
   codexHomeManagedDir: string | undefined;
+  /** Absolute path to the bundled `codex.js`, or `undefined` to omit the key entirely so a user-set value survives (packaging spec §4.2). Conditionally spread — see the header note on why this is the opposite of the trio above. */
+  codexJsPath?: string;
 }
 
 export function buildAgentHostEnv(input: AgentHostEnvInput): NodeJS.ProcessEnv {
@@ -69,5 +123,7 @@ export function buildAgentHostEnv(input: AgentHostEnvInput): NodeJS.ProcessEnv {
     AICLIENT_CODEX_MANAGED: input.codexManaged,
     AICLIENT_CODEX_API_KEY: input.codexApiKey,
     AICLIENT_CODEX_HOME_MANAGED_DIR: input.codexHomeManagedDir,
+    // Conditional on purpose: an absent key lets a user-set value pass through.
+    ...(input.codexJsPath ? { [CODEX_JS_PATH_ENV_KEY]: input.codexJsPath } : {}),
   };
 }

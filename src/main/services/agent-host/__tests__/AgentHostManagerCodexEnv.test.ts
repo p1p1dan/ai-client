@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import nodePath from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * D47 S3b §1 / I5 epoch barrier — `resolveCodexManagedHostEnv()` (the
@@ -196,5 +199,124 @@ describe('AgentHostManager I5 epoch barrier — shutdown-in-flight gates ensureS
     // "新 host 读新快照": the (stubbed) spawn observed the POST-shutdown
     // vault value, not the one that was current when the old Host started.
     expect(spawnSnapshots).toEqual(['sk-new-epoch']);
+  });
+});
+
+/**
+ * Packaging spec §7.2 B4 / B5 — the three injection criteria for
+ * `AICLIENT_CODEX_JS_PATH` and the seam that feeds them to `buildAgentHostEnv`.
+ */
+describe('resolveCodexJsPathForEnv (B4 — three criteria)', () => {
+  let tmp: string;
+  const ENV_KEY = 'AICLIENT_CODEX_JS_PATH';
+  const original = process.env[ENV_KEY];
+
+  /** Build a Host entry whose sibling node_modules holds a real codex.js. */
+  function makeBundle(root: string, { size = 32 } = {}): string {
+    const entry = nodePath.join(root, 'agent-host', 'index.js');
+    const codexJs = nodePath.join(
+      root,
+      'agent-host',
+      'node_modules',
+      '@openai',
+      'codex',
+      'bin',
+      'codex.js'
+    );
+    fs.mkdirSync(nodePath.dirname(entry), { recursive: true });
+    fs.writeFileSync(entry, '// host\n');
+    fs.mkdirSync(nodePath.dirname(codexJs), { recursive: true });
+    fs.writeFileSync(codexJs, 'x'.repeat(size));
+    return entry;
+  }
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'codex-js-path-'));
+    delete process.env[ENV_KEY];
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    if (original === undefined) delete process.env[ENV_KEY];
+    else process.env[ENV_KEY] = original;
+  });
+
+  it('arm 2: not set + bundled file present → injects the bundled path', async () => {
+    const entry = makeBundle(tmp);
+    const { resolveCodexJsPathForEnv } = await import('../AgentHostManager');
+    expect(resolveCodexJsPathForEnv(entry)).toBe(
+      nodePath.join(tmp, 'agent-host', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+    );
+  });
+
+  it('arm 1: user already set the variable → omits, so their value survives', async () => {
+    const entry = makeBundle(tmp);
+    process.env[ENV_KEY] = '/opt/mycodex/bin/codex.js';
+    const { resolveCodexJsPathForEnv } = await import('../AgentHostManager');
+    // M7 arm: dropping the "user env wins" criterion would return the bundled
+    // path here and silently override a deliberately-set escape hatch.
+    expect(resolveCodexJsPathForEnv(entry)).toBeUndefined();
+  });
+
+  it('arm 1: a whitespace-only value does not count as set', async () => {
+    const entry = makeBundle(tmp);
+    process.env[ENV_KEY] = '   ';
+    const { resolveCodexJsPathForEnv } = await import('../AgentHostManager');
+    expect(resolveCodexJsPathForEnv(entry)).toBe(
+      nodePath.join(tmp, 'agent-host', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+    );
+  });
+
+  it('arm 3: not set + bundled file missing → omits (mac / broken build / dev)', async () => {
+    const entry = nodePath.join(tmp, 'agent-host', 'index.js');
+    fs.mkdirSync(nodePath.dirname(entry), { recursive: true });
+    fs.writeFileSync(entry, '// host\n');
+    const { resolveCodexJsPathForEnv } = await import('../AgentHostManager');
+    expect(resolveCodexJsPathForEnv(entry)).toBeUndefined();
+  });
+
+  it('arm 3: a same-named DIRECTORY is not usable (M17 — isFile, not exists)', async () => {
+    const entry = nodePath.join(tmp, 'agent-host', 'index.js');
+    fs.mkdirSync(nodePath.dirname(entry), { recursive: true });
+    fs.writeFileSync(entry, '// host\n');
+    fs.mkdirSync(
+      nodePath.join(tmp, 'agent-host', 'node_modules', '@openai', 'codex', 'bin', 'codex.js'),
+      { recursive: true }
+    );
+    const { resolveCodexJsPathForEnv } = await import('../AgentHostManager');
+    expect(resolveCodexJsPathForEnv(entry)).toBeUndefined();
+  });
+
+  it('arm 3: a zero-byte codex.js is not usable', async () => {
+    const entry = makeBundle(tmp, { size: 0 });
+    const { resolveCodexJsPathForEnv } = await import('../AgentHostManager');
+    expect(resolveCodexJsPathForEnv(entry)).toBeUndefined();
+  });
+});
+
+describe('AgentHostManager seam (B5)', () => {
+  const source = fs.readFileSync(
+    nodePath.resolve(import.meta.dirname, '..', 'AgentHostManager.ts'),
+    'utf8'
+  );
+
+  it('derives the path from the resolved Host entry, not a second resourcesPath join', () => {
+    expect(source).toContain('const codexJsPath = resolveCodexJsPathForEnv(hostEntryPath);');
+    // A second derivation would be a second source of truth and would point at
+    // a non-existent path in the dev branch.
+    expect(source).not.toContain("path.join(process.resourcesPath, 'agent-host', 'node_modules'");
+  });
+
+  it('feeds that derived value into buildAgentHostEnv', () => {
+    expect(source).toContain('buildAgentHostEnv({');
+    expect(source).toContain('codexJsPath,');
+  });
+
+  it('keeps all three criteria inside the one tested resolver', () => {
+    // The criteria are asserted behaviourally above; this pins that they stay
+    // in the resolver instead of being re-inlined at the call site where the
+    // behaviour arms would no longer reach them.
+    expect(source).toContain('const userOverride = process.env[CODEX_JS_PATH_ENV_KEY]?.trim();');
+    expect(source).toContain('return isUsableFile(bundled) ? bundled : undefined;');
   });
 });

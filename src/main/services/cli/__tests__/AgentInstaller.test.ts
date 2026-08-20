@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const spawnMock = vi.fn();
 const existsSyncMock = vi.fn();
@@ -65,8 +65,24 @@ function createSpawnProcess({
   return child;
 }
 
+/**
+ * Every write-side entry point is Windows-gated (packaging spec §4.3, R5), so a
+ * test exercising one has to say which platform it is on. This whole file drives
+ * the Windows toolchain (`cmd.exe`, `powershell.exe`), which was always its
+ * implicit assumption — the gate just makes it explicit.
+ */
+function setPlatform(value: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value, configurable: true });
+}
+const REAL_PLATFORM = process.platform;
+
 describe('AgentInstaller', () => {
+  beforeEach(() => {
+    setPlatform('win32');
+  });
+
   afterEach(() => {
+    setPlatform(REAL_PLATFORM);
     spawnMock.mockReset();
     existsSyncMock.mockReset();
     unlinkSyncMock.mockReset();
@@ -161,5 +177,83 @@ describe('AgentInstaller', () => {
 
     await expect(installer.installAgent('claude')).resolves.toBeUndefined();
     expect(npmAttempts).toBe(2);
+  });
+});
+
+/**
+ * Packaging spec §7.2 B6 / B7 (R5, 改判 ⑥) — the write-side entry points are
+ * Windows-only; the probe members must stay callable everywhere.
+ */
+describe('AgentInstaller platform gate (B6, B7)', () => {
+  afterEach(() => {
+    setPlatform(REAL_PLATFORM);
+    spawnMock.mockReset();
+    existsSyncMock.mockReset();
+    detectOneMock.mockReset();
+  });
+
+  for (const platform of ['linux', 'darwin'] as const) {
+    describe(`on ${platform}`, () => {
+      beforeEach(() => {
+        setPlatform(platform);
+      });
+
+      it('installGit throws and names the platform requirement', async () => {
+        const { AgentInstaller } = await import('../AgentInstaller');
+        await expect(new AgentInstaller().installGit()).rejects.toThrow(/Windows-only/);
+      });
+
+      it('installNode throws', async () => {
+        const { AgentInstaller } = await import('../AgentInstaller');
+        await expect(new AgentInstaller().installNode()).rejects.toThrow(/Windows-only/);
+      });
+
+      it('installAgent throws', async () => {
+        const { AgentInstaller } = await import('../AgentInstaller');
+        await expect(new AgentInstaller().installAgent('claude')).rejects.toThrow(/Windows-only/);
+      });
+
+      it('downgradeClaudeToNodeVersion throws', async () => {
+        const { AgentInstaller } = await import('../AgentInstaller');
+        await expect(new AgentInstaller().downgradeClaudeToNodeVersion()).rejects.toThrow(
+          /Windows-only/
+        );
+      });
+
+      it('installAll does NOT throw — it returns the InstallResult contract', async () => {
+        // M15 arm: the orchestrator's gate must stay inside the try. Throwing
+        // out of installAll would reach the renderer as an unclassified IPC
+        // error instead of {success:false, errors:[...]}.
+        const { AgentInstaller } = await import('../AgentInstaller');
+        const result = await new AgentInstaller().installAll(['claude'], vi.fn());
+
+        expect(result.success).toBe(false);
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toMatch(/Windows-only/);
+        expect(result.cancelled).toBeUndefined();
+      });
+
+      it('B7 negative control: checkPrerequisites stays callable', async () => {
+        // OnboardingService calls this on every platform (改判 ⑥). Gating it
+        // would take Linux/mac onboarding down entirely.
+        spawnMock.mockImplementation(() => createSpawnProcess({ exitCode: 1 }));
+        existsSyncMock.mockReturnValue(false);
+
+        const { AgentInstaller } = await import('../AgentInstaller');
+        const status = await new AgentInstaller().checkPrerequisites();
+
+        expect(status.gitInstalled).toBe(false);
+        expect(status.nodeInstalled).toBe(false);
+      });
+    });
+  }
+
+  it('does not gate the write entry points on win32', async () => {
+    setPlatform('win32');
+    const { AgentInstaller } = await import('../AgentInstaller');
+    const installer = new AgentInstaller();
+    installer.cancel();
+    // Reaches the cancellation check rather than the platform gate.
+    await expect(installer.installGit()).rejects.toThrow(/cancelled/i);
   });
 });

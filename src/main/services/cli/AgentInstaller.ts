@@ -235,6 +235,7 @@ export class AgentInstaller {
   }
 
   async installGit(onUpdate?: (message: string) => void): Promise<void> {
+    this.ensureWindowsOnly('installGit');
     this.ensureNotCancelled();
 
     if (await this.checkWingetAvailable()) {
@@ -282,6 +283,7 @@ export class AgentInstaller {
   }
 
   async installNode(onUpdate?: (message: string) => void): Promise<void> {
+    this.ensureWindowsOnly('installNode');
     this.ensureNotCancelled();
 
     if (await this.checkWingetAvailable()) {
@@ -337,7 +339,16 @@ export class AgentInstaller {
     }
   }
 
+  /**
+   * Packaging spec §4.3 — since the app now ships Codex inside the artifact
+   * (`resources/agent-host/node_modules/@openai/codex`), the global
+   * `npm install -g @openai/codex` this performs is a FALLBACK path, no longer
+   * a precondition for Codex being usable. It is kept for three cases: mac is
+   * outside this batch's ship whitelist (D52-②) and still needs it; users who
+   * bring their own codex; and manual recovery when the bundled copy is broken.
+   */
   async installAgent(agentId: InstallAgentId): Promise<void> {
+    this.ensureWindowsOnly('installAgent');
     this.ensureNotCancelled();
 
     // Claude Code 2.1.113+ ships as a Bun binary, which is not in the TEC
@@ -390,6 +401,7 @@ export class AgentInstaller {
    * "downgrade from Bun" action so the resulting install state is clean.
    */
   async downgradeClaudeToNodeVersion(onProgress?: (message: string) => void): Promise<void> {
+    this.ensureWindowsOnly('downgradeClaudeToNodeVersion');
     this.ensureNotCancelled();
 
     onProgress?.('Removing existing Claude Code build...');
@@ -421,6 +433,13 @@ export class AgentInstaller {
     };
 
     try {
+      // Inside the try on purpose: the catch below turns this into
+      // `{success:false, errors:[...]}`. Throwing out of installAll would break
+      // the InstallResult contract the IPC/renderer layer consumes, leaving the
+      // user with an unclassified IPC error (packaging spec §4.3, must not be
+      // "unified" with the four throwing entry points).
+      this.ensureWindowsOnly('installAll');
+
       const initialPrerequisites = await this.checkPrerequisites();
 
       if (initialPrerequisites.gitInstalled) {
@@ -526,6 +545,27 @@ export class AgentInstaller {
   private ensureNotCancelled(): void {
     if (this.abortController.signal.aborted) {
       throw new InstallAbortedError();
+    }
+  }
+
+  /**
+   * Every write-side entry point here drives `cmd.exe` / PowerShell / msiexec
+   * (`runCmd` is `runCommand('cmd.exe', ['/d','/s','/c', ...])`). On any other
+   * platform those spawns fail with a raw `spawn cmd.exe ENOENT`, which tells
+   * the user nothing about what actually went wrong (packaging spec §4.3, R5).
+   *
+   * Deliberately NOT applied to the probe members (`checkPrerequisites`,
+   * `refreshPath`, `detectGit`, `detectNode`, `checkWingetAvailable`):
+   * `OnboardingService` calls `checkPrerequisites()` on every platform, so
+   * gating those would take Linux/mac onboarding down entirely (改判 ⑥).
+   */
+  private ensureWindowsOnly(member: string): void {
+    if (process.platform !== 'win32') {
+      throw new Error(
+        `AgentInstaller.${member} is Windows-only — it drives the ` +
+          `cmd.exe/PowerShell/msiexec toolchain, which is not available on ` +
+          `${process.platform}. Install the CLI manually on this platform.`
+      );
     }
   }
 

@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import path from 'node:path';
 import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
 import {
@@ -31,7 +32,7 @@ import log from '../../utils/logger';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { AgentHostProcess } from './AgentHostProcess';
-import { buildAgentHostEnv } from './hostEnv';
+import { buildAgentHostEnv, CODEX_JS_PATH_ENV_KEY, deriveBundledCodexJsPath } from './hostEnv';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
 
@@ -634,6 +635,7 @@ export class AgentHostManager {
 
     const hostEntryPath = resolveHostEntryPath();
     const useStripTypes = hostEntryPath.endsWith('.ts');
+    const codexJsPath = resolveCodexJsPathForEnv(hostEntryPath);
     // D47 S3b §1 — resolved fresh on every spawn (never cached on `this`), so
     // a Host that (re)starts after a login/logout regenerate always reads the
     // CURRENT vault snapshot instead of whatever was true the last time a
@@ -653,6 +655,7 @@ export class AgentHostManager {
         codexManaged: codexManagedEnv.codexManaged,
         codexApiKey: codexManagedEnv.codexApiKey,
         codexHomeManagedDir: codexManagedEnv.codexHomeManagedDir,
+        codexJsPath,
       }),
     });
 
@@ -688,6 +691,40 @@ export function getBundledNodeRuntimePath(): string | undefined {
   if (!app.isPackaged) return undefined;
   if (process.platform !== 'win32') return undefined;
   return path.join(process.resourcesPath, 'node-runtime', 'node.exe');
+}
+
+/**
+ * `statSync().isFile()` rather than `existsSync()`: a same-named directory or a
+ * zero-byte leftover must count as unusable. Feeding a non-file path into the
+ * env would push the failure from "diagnosable in Main" out to "the Host
+ * explodes at spawn time" (packaging spec §4.2, B-8).
+ */
+function isUsableFile(candidate: string): boolean {
+  try {
+    const stat = statSync(candidate);
+    return stat.isFile() && stat.size > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The three injection criteria (packaging spec §4.2), in order:
+ *
+ * 1. A non-empty user-set `AICLIENT_CODEX_JS_PATH` wins — we omit the key so
+ *    their value passes through untouched. This escape hatch is only reachable
+ *    when the app is launched from a terminal or the variable is set at system
+ *    level; Dock/desktop launches do not inherit a login shell (改判 ③).
+ * 2. Otherwise inject the bundled path when it is a real, non-empty file.
+ * 3. Otherwise omit the key, leaving the Host's candidate rules 2/3/4 to find a
+ *    user-global install — the pre-existing behaviour on mac and on any build
+ *    without a bundled codex.
+ */
+export function resolveCodexJsPathForEnv(hostEntryPath: string): string | undefined {
+  const userOverride = process.env[CODEX_JS_PATH_ENV_KEY]?.trim();
+  if (userOverride) return undefined;
+  const bundled = deriveBundledCodexJsPath(hostEntryPath);
+  return isUsableFile(bundled) ? bundled : undefined;
 }
 
 function resolveHostEntryPath(): string {

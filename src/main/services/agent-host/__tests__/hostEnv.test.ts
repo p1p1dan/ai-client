@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildAgentHostEnv } from '../hostEnv';
+import { buildAgentHostEnv, deriveBundledCodexJsPath } from '../hostEnv';
 
 const INPUT = {
   driver: 'agent-sdk',
@@ -140,5 +140,74 @@ describe('the Host env contract is wired to the resolver, not to a literal', () 
     // Falsifies a partial revert that keeps buildAgentHostEnv but re-adds the
     // old two-key object next to it.
     expect(source).not.toContain('AICLIENT_AGENT_HOST_DRIVER: this.driver');
+  });
+});
+
+/**
+ * Packaging spec §7.2 B1 / B2 / B3 — the bundled Codex path derivation and the
+ * conditional `AICLIENT_CODEX_JS_PATH` key.
+ */
+describe('deriveBundledCodexJsPath (B1, B2)', () => {
+  it('puts node_modules next to the packaged Host entry', () => {
+    expect(deriveBundledCodexJsPath('/opt/app/resources/agent-host/index.js')).toBe(
+      '/opt/app/resources/agent-host/node_modules/@openai/codex/bin/codex.js'
+    );
+  });
+
+  it('puts node_modules next to the dev Host entry', () => {
+    // Dev shape: the sibling node_modules is src/agent-host/node_modules, which
+    // is why this derives from the entry path instead of process.resourcesPath.
+    expect(deriveBundledCodexJsPath('/repo/src/agent-host/index.ts')).toBe(
+      '/repo/src/agent-host/node_modules/@openai/codex/bin/codex.js'
+    );
+  });
+
+  it('always lands on the Node-executable codex.js (REQ-8)', () => {
+    for (const entry of [
+      '/opt/app/resources/agent-host/index.js',
+      '/repo/src/agent-host/index.ts',
+      'C:\\Program Files\\AiClient\\resources\\agent-host\\index.js',
+    ]) {
+      expect(path.basename(deriveBundledCodexJsPath(entry))).toBe('codex.js');
+    }
+  });
+});
+
+describe('buildAgentHostEnv — codexJsPath is conditional (B3)', () => {
+  it('emits the key when a path is supplied', () => {
+    const env = buildAgentHostEnv({
+      ...INPUT,
+      ...CODEX_UNMANAGED_INPUT,
+      codexJsPath: '/opt/app/resources/agent-host/node_modules/@openai/codex/bin/codex.js',
+    });
+    expect(env.AICLIENT_CODEX_JS_PATH).toBe(
+      '/opt/app/resources/agent-host/node_modules/@openai/codex/bin/codex.js'
+    );
+  });
+
+  it('omits the key entirely when undefined — NOT present-with-undefined', () => {
+    // Object.keys, never toEqual: toEqual ignores undefined-valued properties,
+    // so the "key always present, value undefined" mutation (M6) would sail
+    // straight through a toEqual assertion. That mutation matters because an
+    // own property with value undefined OVERRIDES the inherited process.env
+    // value in AgentHostProcess.start(), slamming the user's escape hatch shut.
+    const keys = Object.keys(
+      buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT, codexJsPath: undefined })
+    );
+    expect(keys).not.toContain('AICLIENT_CODEX_JS_PATH');
+  });
+
+  it('omits the key when it is not passed at all', () => {
+    const keys = Object.keys(buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT }));
+    expect(keys).not.toContain('AICLIENT_CODEX_JS_PATH');
+  });
+
+  it('contrasts with the D47 trio, which stays present-with-undefined', () => {
+    // The asymmetry is the design (see hostEnv.ts header): credentials must
+    // override inherited env, a path must not.
+    const keys = Object.keys(buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT }));
+    expect(keys).toContain('AICLIENT_CODEX_MANAGED');
+    expect(keys).toContain('AICLIENT_CODEX_API_KEY');
+    expect(keys).toContain('AICLIENT_CODEX_HOME_MANAGED_DIR');
   });
 });
