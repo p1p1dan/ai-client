@@ -4,6 +4,9 @@
 |---|---|---|
 | `@cometix/claude-code` | **2.1.212** | npm tarball SHA256 `85c43e15b6ad0a28f7df833724262b100098db76a27c50b212c9e75b6d3ca404` |
 | `@anthropic-ai/claude-agent-sdk` | **0.3.218** | Phase 0 dual-path spike |
+| `@openai/codex` | **0.145.0** | Intersection of fixture-capture version (`src/agent-host/__tests__/fixtures/codex/README.md`) and blessing-record version (`src/main/services/auth/__tests__/fixtures/README.md:41`) — see `docs/plans/2026-08-19-stage4-packaging-spec.md` §3.1 |
+
+Do not bump `@openai/codex` without following the upgrade rule in the packaging spec §3.1 (re-run blessing, re-diff the contract snapshot, re-audit fixture shape assumptions).
 
 ## Cometix tarball
 
