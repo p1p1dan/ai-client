@@ -16,13 +16,16 @@ jobs:
   # its own, and build-remote-runtime-linux uploads its asset straight into the
   # release job. Both now hang off `gate`.
   #
-  # timeout-minutes across this workflow are provisional placeholders, not
-  # measured values: most jobs had no timeout at all, so a single hang burned
-  # the 360-minute default. Replace with ceil(3N/10)*10 from the first green
-  # run's duration N (packaging spec §5.6).
+  # timeout-minutes = ceil(3N/10)*10 from the first fully green run's measured
+  # duration N (packaging spec §5.6), run 32442630099 on 2026-08-21:
+  #   gate 2m25s -> 10 | build-app 2m09s -> 10 | build-windows 6m23s -> 20
+  #   build-linux 6m22s -> 20 | build-remote-runtime-linux 1m18s -> 10
+  # That run built both packaging jobs on COLD electron/npm caches, so N is a
+  # conservative reading. generate-release-notes keeps its 10 (tag-only, never
+  # ran here). Raise a value if a job legitimately grows, do not delete it.
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -82,7 +85,7 @@ jobs:
 
   build-app:
     needs: [gate]
-    timeout-minutes: 60
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -125,7 +128,7 @@ jobs:
 
   build-windows:
     needs: build-app
-    timeout-minutes: 90
+    timeout-minutes: 20
     # Pin to windows-2022: windows-latest 已升级到 windows-2025，仅装 VS 2026 (path \18\),
     # 而 @electron/rebuild@4.0.1 bundled node-gyp@11.5.0 的 find-visualstudio.js 白名单
     # 只到 [2019, 2022]，找不到 VS 2026 → "Could not find any Visual Studio installation".
@@ -191,10 +194,20 @@ jobs:
       # REQ-7: agent-host runs its own `npm ci`, which re-downloaded every
       # package on every run. Keyed on the lockfile hash so a dependency bump
       # cannot keep restoring a stale cache.
+      #
+      # The path is asked of npm, never assumed: the first run cached
+      # ~\AppData\Local\npm-cache (npm's documented Windows default) and saved
+      # nothing at all, because hosted Windows runners preset npm_config_cache
+      # elsewhere. A cache step pointing at a non-existent directory fails
+      # silently — it just never restores anything.
+      - name: Resolve npm cache dir
+        shell: pwsh
+        run: echo "NPM_CACHE_DIR=$(npm config get cache)" >> $env:GITHUB_ENV
+
       - name: Cache agent-host npm cache
         uses: actions/cache@v5
         with:
-          path: ~\AppData\Local\npm-cache
+          path: ${{ env.NPM_CACHE_DIR }}
           key: ${{ runner.os }}-agenthost-npm-${{ hashFiles('src/agent-host/package-lock.json') }}
           restore-keys: ${{ runner.os }}-agenthost-npm-
 
@@ -207,10 +220,13 @@ jobs:
 
       # REQ-7 accounting. The cache-entry and disk figures are the inputs for
       # the first run's baseline; they are printed, never gated on.
+      # Every filesystem drive, not just C:. The workspace lives on D: on hosted
+      # Windows runners, so the first run's three C: readings were identical
+      # (80.2 GB free throughout) and said nothing about the packaging cost.
       - name: Report npm cache size and disk (REQ-7)
         shell: pwsh
         run: |
-          $cache = "$env:LOCALAPPDATA\npm-cache"
+          $cache = "$env:NPM_CACHE_DIR"
           if (Test-Path $cache) {
             $bytes = (Get-ChildItem $cache -Recurse -File -ErrorAction SilentlyContinue |
               Measure-Object -Property Length -Sum).Sum
@@ -218,7 +234,7 @@ jobs:
           } else {
             Write-Host "npm cache: $cache absent"
           }
-          Get-PSDrive C | Format-Table -AutoSize
+          Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
       # Spec §11-Q1 evidence: this repo has never produced a Windows artifact,
       # so the vendor layout, the per-file bytes and codex.exe's real size are
@@ -227,12 +243,11 @@ jobs:
       - name: Inspect codex payload (spec §11-Q1 evidence)
         run: node scripts/inspect-codex-payload.mjs
 
-      # --observe: Q1 items report instead of failing on this first Windows run.
-      # It is inert on platforms listed in CODEX_MEASURED_PLATFORMS, so once the
-      # measured values are filled in this line stops softening anything — and
-      # should then be deleted (spec §11-Q1 step two).
+      # Step two of spec §11-Q1: run 32442630099 measured every Q1 item and all
+      # of them passed, so win32-x64 joined CODEX_MEASURED_PLATFORMS and the
+      # --observe flag is gone. They are hard gates here now.
       - name: Build agent-host artifact
-        run: node scripts/build-agent-host.mjs --observe
+        run: node scripts/build-agent-host.mjs
 
       # Key on the pin file's hash, not a hardcoded version: actions/cache never
       # overwrites an existing key, so a literal key survives a pin bump and
@@ -249,7 +264,7 @@ jobs:
 
       - name: Report disk before packaging (REQ-7)
         shell: pwsh
-        run: Get-PSDrive C | Format-Table -AutoSize
+        run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
       - name: Build Windows
         run: npx electron-builder --win --x64
@@ -258,12 +273,10 @@ jobs:
 
       - name: Report disk after packaging (REQ-7)
         shell: pwsh
-        run: Get-PSDrive C | Format-Table -AutoSize
+        run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
-      # --observe as above: first Windows run records the Q1 items (manifest
-      # layout, 200 MiB floor, --version output) instead of failing on them.
       - name: Verify packaged agent-host (structure)
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --skip-smoke --observe
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --skip-smoke
 
       # Without these, a workflow_dispatch run builds a Windows package and then
       # throws it away — the only way to obtain a test build was a Windows machine.
@@ -290,7 +303,7 @@ jobs:
 
   build-linux:
     needs: build-app
-    timeout-minutes: 90
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -403,7 +416,7 @@ jobs:
 
   build-remote-runtime-linux:
     needs: [gate]
-    timeout-minutes: 60
+    timeout-minutes: 10
     strategy:
       matrix:
         include:

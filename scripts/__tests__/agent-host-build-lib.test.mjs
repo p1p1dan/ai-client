@@ -610,22 +610,39 @@ describe('q1ObserveApplies (spec §11-Q1)', () => {
   it('lists exactly the platforms this repo has measured', () => {
     // Literal, not derived: adding a platform here is the act that promotes its
     // Q1 items from observed to enforced, so it must be a deliberate edit.
-    expect(CODEX_MEASURED_PLATFORMS).toEqual(['linux-x64']);
+    // win32-x64 joined on 2026-08-21 from CI run 32442630099.
+    expect(CODEX_MEASURED_PLATFORMS).toEqual(['linux-x64', 'win32-x64']);
   });
 
-  it('is false for measured platforms and true for the rest', () => {
+  it('is false for every shipped platform now that both are measured', () => {
+    // This is the live regression guard: --observe must be inert on both
+    // platforms that actually ship codex.
     expect(q1ObserveApplies('linux', 'x64')).toBe(false);
-    expect(q1ObserveApplies('win32', 'x64')).toBe(true);
+    expect(q1ObserveApplies('win32', 'x64')).toBe(false);
+  });
+
+  it('is still true for a platform nobody has measured', () => {
     expect(q1ObserveApplies('darwin', 'arm64')).toBe(true);
+    expect(q1ObserveApplies('linux', 'arm64')).toBe(true);
   });
 });
+
+/** Stand-in for the next zero-evidence platform (mac/arm). Injected rather than
+ * faked into CODEX_MEASURED_PLATFORMS so the softening arm keeps coverage now
+ * that no shipped platform is unmeasured. */
+const unmeasured = () => true;
 
 describe('preflightHostDeps under --observe (spec §11-Q1)', () => {
   it('records the missing manifest instead of throwing, on an unmeasured platform', () => {
     const { vendorDir } = buildHostInstall(tmp, wx);
     fs.rmSync(path.join(vendorDir, 'codex-package.json'));
 
-    const result = preflightHostDeps({ root: tmp, ...wx, observe: true });
+    const result = preflightHostDeps({
+      root: tmp,
+      ...wx,
+      observe: true,
+      observeApplies: unmeasured,
+    });
     expect(result.observations.join('\n')).toMatch(/vendor manifest missing/);
     // The point of observing: the run continues and still produces readings.
     expect(result.pins['@openai/codex']).toBe(PIN);
@@ -638,20 +655,28 @@ describe('preflightHostDeps under --observe (spec §11-Q1)', () => {
     expect(() => preflightHostDeps({ root: tmp, ...wx })).toThrow(/vendor manifest missing/);
   });
 
-  it('is inert on a measured platform — the flag alone cannot soften linux', () => {
-    const { vendorDir } = buildHostInstall(tmp, lx);
-    fs.rmSync(path.join(vendorDir, 'codex-package.json'));
+  it('is inert on both measured platforms — the flag alone cannot soften them', () => {
+    for (const target of [lx, wx]) {
+      const root = fs.mkdtempSync(path.join(tmp, 'inert-'));
+      const { vendorDir } = buildHostInstall(root, target);
+      fs.rmSync(path.join(vendorDir, 'codex-package.json'));
 
-    expect(() => preflightHostDeps({ root: tmp, ...lx, observe: true })).toThrow(
-      /vendor manifest missing/
-    );
+      expect(() => preflightHostDeps({ root, ...target, observe: true })).toThrow(
+        /vendor manifest missing/
+      );
+    }
   });
 
   it('records an undersized entry binary but never a pin drift', () => {
     const { vendorDir, binName } = buildHostInstall(tmp, wx);
     writeSparse(path.join(vendorDir, 'bin', binName), 1024);
 
-    const observed = preflightHostDeps({ root: tmp, ...wx, observe: true });
+    const observed = preflightHostDeps({
+      root: tmp,
+      ...wx,
+      observe: true,
+      observeApplies: unmeasured,
+    });
     expect(observed.observations.join('\n')).toMatch(/suspiciously small/);
 
     // Version drift is a repo-derived truth, not a Windows unknown: softening
@@ -663,9 +688,9 @@ describe('preflightHostDeps under --observe (spec §11-Q1)', () => {
       pathDir: 'codex-path',
       resourcesDir: 'codex-resources',
     });
-    expect(() => preflightHostDeps({ root: tmp, ...wx, observe: true })).toThrow(
-      /vendor manifest mismatch/
-    );
+    expect(() =>
+      preflightHostDeps({ root: tmp, ...wx, observe: true, observeApplies: unmeasured })
+    ).toThrow(/vendor manifest mismatch/);
   });
 });
 
@@ -677,7 +702,13 @@ describe('verifyArtifact under --observe (spec §11-Q1)', () => {
     fs.rmSync(path.join(vendorDir, 'codex-path'), { recursive: true });
     writeSparse(path.join(vendorDir, 'bin', binName), 1024);
 
-    const result = verifyArtifact({ outDir: outDir(), ...wx, pins: PINS, observe: true });
+    const result = verifyArtifact({
+      outDir: outDir(),
+      ...wx,
+      pins: PINS,
+      observe: true,
+      observeApplies: unmeasured,
+    });
     const text = result.observations.join('\n');
     expect(text).toMatch(/codex-path/);
     expect(text).toMatch(/suspiciously small/);
@@ -702,15 +733,30 @@ describe('verifyArtifact under --observe (spec §11-Q1)', () => {
     );
   });
 
+  it('is inert on win32 too, now that it is measured', () => {
+    const { vendorDir } = buildArtifact(outDir(), wx);
+    fs.rmSync(path.join(vendorDir, 'codex-path'), { recursive: true });
+
+    expect(() => verifyArtifact({ outDir: outDir(), ...wx, pins: PINS, observe: true })).toThrow(
+      /codex-path/
+    );
+  });
+
   it('never softens a foreign platform package, even while observing', () => {
     buildArtifact(outDir(), wx);
     fs.mkdirSync(path.join(outDir(), 'node_modules', '@openai', 'codex-darwin-arm64'), {
       recursive: true,
     });
 
-    expect(() => verifyArtifact({ outDir: outDir(), ...wx, pins: PINS, observe: true })).toThrow(
-      /codex-darwin-arm64/
-    );
+    expect(() =>
+      verifyArtifact({
+        outDir: outDir(),
+        ...wx,
+        pins: PINS,
+        observe: true,
+        observeApplies: unmeasured,
+      })
+    ).toThrow(/codex-darwin-arm64/);
   });
 });
 

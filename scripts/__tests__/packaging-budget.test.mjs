@@ -91,18 +91,21 @@ describe('codex binary single-file floor — four points (D6)', () => {
 });
 
 describe('unbudgeted platforms report PENDING, never a silent pass', () => {
-  it('win32-x64 has no budget until a real Windows run measures it', () => {
-    // Copying the linux figures across would be invented data, and the gate
-    // would then be asserting against a number nobody measured.
-    expect(hasBudget('win32-x64')).toBe(false);
-    expect(agentHostFloor('win32-x64')).toBeNull();
-    expect(agentHostCeiling('win32-x64')).toBeNull();
+  it('win32-x64 is budgeted from the first Windows run, not from copied figures', () => {
+    // Filled in 2026-08-21 from CI run 32442630099. The assertion is on the
+    // measured total landing inside the band — a copy of the linux numbers
+    // would put 494.7MiB far above a 443.8MiB ceiling and fail here.
+    expect(hasBudget('win32-x64')).toBe(true);
+    expect(evaluateAgentHostSize('win32-x64', 518692428).status).toBe('ok');
+    expect(agentHostFloor('win32-x64')).toBe(466823185);
+    expect(agentHostCeiling('win32-x64')).toBe(591919521);
   });
 
   it('reports no-budget rather than ok for an unmeasured platform', () => {
     // The distinction matters: 'ok' would let a PENDING platform read as green.
-    expect(evaluateAgentHostSize('win32-x64', 123).status).toBe('no-budget');
+    // darwin is the live case — it has no budget and no shipped codex.
     expect(evaluateAgentHostSize('darwin-arm64', 123).status).toBe('no-budget');
+    expect(hasBudget('darwin-arm64')).toBe(false);
   });
 });
 

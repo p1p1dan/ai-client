@@ -33,7 +33,8 @@ export const ESBUILD_EXTERNAL = ['@anthropic-ai/claude-agent-sdk', '@cometix/cla
 /** Entry-binary size floor: guards against LFS pointers / truncated downloads,
  * NOT against version drift (that is the manifest's job). Derived from the
  * linux-x64 measurement of 296 MiB, floored to two thirds and rounded down.
- * The win32 binary's real size is unmeasured — see spec §11-Q1. */
+ * Holds for win32 too: codex.exe measured 359,245,096 B (342.6 MiB) on CI run
+ * 32442630099, well clear of the floor (spec §11-Q1-② closed). */
 export const CODEX_BINARY_FLOOR = 200 * 1024 * 1024;
 
 /**
@@ -47,9 +48,18 @@ export const CODEX_BINARY_FLOOR = 200 * 1024 * 1024;
  * gates on the next run. A flag that softened unconditionally would be one
  * forgotten line away from a permanent hole.
  */
-export const CODEX_MEASURED_PLATFORMS = ['linux-x64'];
+export const CODEX_MEASURED_PLATFORMS = ['linux-x64', 'win32-x64'];
 
-/** Whether spec §11-Q1 observation still applies to this platform. */
+/**
+ * Whether spec §11-Q1 observation still applies to this platform.
+ *
+ * Both shipped platforms are now measured, so in production this returns false
+ * everywhere that ships codex and the softening arm has no live consumer. It is
+ * kept — and injectable as `observeApplies` in the two functions below — for the
+ * NEXT platform to be added (mac/arm), which arrives with zero evidence exactly
+ * as win32 did. The injection seam exists so the softening arm keeps test
+ * coverage instead of rotting until then.
+ */
 export function q1ObserveApplies(platform, arch) {
   return !CODEX_MEASURED_PLATFORMS.includes(`${platform}-${arch}`);
 }
@@ -112,7 +122,13 @@ export function foreignCodexPlatformRels(platform, arch) {
  *            observations: string[]}}
  * @throws {Error} on any unhealthy install
  */
-export function preflightHostDeps({ root, platform, arch, observe = false }) {
+export function preflightHostDeps({
+  root,
+  platform,
+  arch,
+  observe = false,
+  observeApplies = q1ObserveApplies,
+}) {
   const hostRoot = path.join(root, 'src', 'agent-host');
   const hostNodeModules = path.join(hostRoot, 'node_modules');
   const observations = [];
@@ -123,7 +139,7 @@ export function preflightHostDeps({ root, platform, arch, observe = false }) {
   // unmeasured, so on the first run they are observed rather than enforced —
   // otherwise the run dies here and produces none of the evidence it exists to
   // collect. Everything else stays hard.
-  const soften = observe && q1ObserveApplies(platform, arch);
+  const soften = observe && observeApplies(platform, arch);
   const q1 = (message) => {
     if (soften) observations.push(message);
     else fail(message);
@@ -355,11 +371,18 @@ export function pruneResidualPlatformPackages({ outDir, platform, arch }) {
  *            codexPkgRel: string|null, observations: string[]}}
  * @throws {Error} listing every failed check
  */
-export function verifyArtifact({ outDir, platform, arch, pins, observe = false }) {
+export function verifyArtifact({
+  outDir,
+  platform,
+  arch,
+  pins,
+  observe = false,
+  observeApplies = q1ObserveApplies,
+}) {
   const failures = [];
   const observations = [];
   // Same §11-Q1 scope as preflight — see q1ObserveApplies.
-  const soften = observe && q1ObserveApplies(platform, arch);
+  const soften = observe && observeApplies(platform, arch);
   const q1 = (message) => {
     if (soften) observations.push(message);
     else failures.push(message);

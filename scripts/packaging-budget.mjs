@@ -38,13 +38,18 @@ export const PACKAGING_BUDGET = {
     h1: 0.1,
     h2: 0.15,
   },
-  // Deliberately null, NOT a guessed copy of the linux figures: this repo has
-  // never produced a Windows artifact, so any number here would be invented.
-  // The first Windows CI run prints the measured bytes (see the OK line in
-  // build-agent-host.mjs) and they get filled in then — spec §11-Q1 two-step.
-  // Until then the size gate reports PENDING on win32-x64 and is NOT counted
-  // as a pass.
-  'win32-x64': null,
+  'win32-x64': {
+    // Measured 2026-08-21 on the first Windows CI run (workflow_dispatch run
+    // 32442630099, build-agent-host budget-terms line): total 518,692,428 B.
+    // A0 is 2.1x linux's and P is 63 MB bigger — the Windows vendor payload
+    // carries codex-command-runner.exe and codex-windows-sandbox-setup.exe
+    // where linux carries bwrap and zsh, and codex.exe is 342.6 MiB against
+    // linux's 296.3 MiB. Same headroom split as linux (改判 ⑩).
+    baseAgentHost: 91535424,
+    codexPayload: 427157004,
+    h1: 0.1,
+    h2: 0.15,
+  },
 };
 
 export function hasBudget(platformKey) {

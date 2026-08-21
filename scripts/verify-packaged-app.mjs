@@ -696,9 +696,16 @@ const CODEX_STDOUT_LINE_CAP = 200;
  *   {"id":1,"result":{"userAgent":"…/0.145.0 (Ubuntu 26.4.0; x86_64) …",
  *    "codexHome":"<the temp dir we passed>","platformFamily":"unix",
  *    "platformOs":"linux"}}  — exited cleanly after stdin close.
- * win32-x64: no evidence yet; the first Windows CI run prints its frame here.
+ * win32-x64 observed 2026-08-21 on CI run 32442630099 against the packaged
+ * layout — app-server replied to `initialize` with no auth.json present, the
+ * open question §10.3 flagged as "Windows: zero evidence":
+ *   {"id":1,"result":{"userAgent":"aiclient-verify/0.145.0 (Windows 10.0.20348;
+ *    x86_64) unknown (aiclient-verify; 0)","codexHome":"C:\\Users\\runneradmin\\
+ *    AppData\\Local\\Temp\\aiclient-codex-smoke-qAWyh8","platformFamily":
+ *    "windows","platformOs":"windows"}}
+ * exited=true clean=true (code 0).
  */
-const CODEX_S2_ENFORCED_PLATFORMS = ['linux-x64'];
+const CODEX_S2_ENFORCED_PLATFORMS = ['linux-x64', 'win32-x64'];
 
 /**
  * Kill the whole tree, not just the direct child. The chain is three deep —
