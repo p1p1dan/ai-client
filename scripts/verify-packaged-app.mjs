@@ -30,13 +30,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { foreignCodexPlatformRels, resolveCodexPlatformPkgRel } from './agent-host-build-lib.mjs';
+import {
+  foreignCodexPlatformRels,
+  q1ObserveApplies,
+  resolveCodexPlatformPkgRel,
+} from './agent-host-build-lib.mjs';
 import {
   codexBinaryName,
   codexPlatformKey,
   codexTargetTriple,
   isCodexShippedPlatform,
 } from './codex-platform.mjs';
+import { describeExit, isCleanExit } from './codex-smoke-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 import {
   evaluateAgentHostSize,
@@ -52,6 +57,8 @@ function parseArgs(argv) {
     appDir: path.join(repoRoot, 'dist', 'win-unpacked'),
     skipSmoke: false,
     skipCodexSmoke: false,
+    observe: false,
+    codexPin: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--app-dir') {
@@ -59,6 +66,15 @@ function parseArgs(argv) {
       i += 1;
     } else if (argv[i] === '--skip-smoke') {
       args.skipSmoke = true;
+    } else if (argv[i] === '--observe') {
+      // Spec §11-Q1 step one. Inert on a platform already in
+      // CODEX_MEASURED_PLATFORMS, so it cannot soften a measured platform.
+      args.observe = true;
+    } else if (argv[i] === '--codex-pin') {
+      // For runs outside the repo (encrypted-machine spot checks): the expected
+      // version has to come from somewhere that is NOT the tree under test.
+      args.codexPin = argv[i + 1] ?? '';
+      i += 1;
     } else if (argv[i] === '--skip-codex-smoke') {
       // Independent of --skip-smoke on purpose: lets D36/D41 troubleshooting
       // disable just this section without losing the Claude-side smoke.
@@ -72,6 +88,11 @@ function parseArgs(argv) {
 }
 
 const failures = [];
+const observations = [];
+/** True while spec §11-Q1 observation is in effect for THIS platform. Set once
+ * in main() so every Q1 call site stays a one-liner. */
+let q1Observing = false;
+
 function check(label, ok, detail = '') {
   const suffix = detail ? ` (${detail})` : '';
   if (ok) {
@@ -81,6 +102,21 @@ function check(label, ok, detail = '') {
     failures.push(label);
   }
   return ok;
+}
+
+/**
+ * A check on a spec §11-Q1 zero-evidence item: the Windows vendor layout, the
+ * 200 MiB floor, and `codex.exe --version`'s exact output. On an unmeasured
+ * platform a miss is RECORDED, not failed — the first run exists to produce
+ * those readings, and dying on them yields no evidence at all. Returns whether
+ * it passed, so callers can still skip dependent work.
+ */
+function checkQ1(label, ok, detail = '') {
+  if (ok || !q1Observing) return check(label, ok, detail);
+  const suffix = detail ? ` (${detail})` : '';
+  console.log(`  OBS  ${label}${suffix}`);
+  observations.push(`${label}${suffix}`);
+  return false;
 }
 
 function dirSize(dir) {
@@ -101,6 +137,40 @@ function firstBytes(file, n) {
     return buf.subarray(0, read).toString('latin1');
   } finally {
     fs.closeSync(fd);
+  }
+}
+
+/**
+ * The codex pin as declared by the REPO, or --codex-pin. Never read from the
+ * packaged tree: an expected value taken from the artifact under test makes the
+ * assertion self-satisfying — main package, platform package, manifest and the
+ * native binary can all drift together to another version and still agree.
+ */
+function expectedCodexPin(override) {
+  if (override) return override;
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, 'src', 'agent-host', 'package.json'), 'utf8')
+    );
+    return pkg.dependencies?.['@openai/codex'] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isDirectory(dir) {
+  try {
+    return fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function readJsonOrNull(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
   }
 }
 
@@ -160,7 +230,7 @@ function checkNoTsdHeader(label, file) {
  * Shares codex-platform.mjs and agent-host-build-lib.mjs with the build-time
  * verifier rather than restating the table — a second copy would drift.
  */
-function checkCodexStructure(hostDir) {
+function checkCodexStructure(hostDir, codexPin) {
   const platform = process.platform;
   const arch = process.arch;
   const nodeModules = path.join(hostDir, 'node_modules');
@@ -187,6 +257,22 @@ function checkCodexStructure(hostDir) {
     'main package must have no vendor dir'
   );
 
+  // The main package.json is load-bearing at RUNTIME, not metadata: codex.js
+  // locates the platform package through require.resolve('<pkg>/package.json'),
+  // which needs this file and the platform one. Asserting them here keeps the
+  // structure section standing on its own under --skip-codex-smoke.
+  const mainPkgJson = path.join(nodeModules, '@openai', 'codex', 'package.json');
+  if (
+    check('agent-host codex main package.json (require.resolve entry)', isUsableFile(mainPkgJson))
+  ) {
+    const version = readJsonOrNull(mainPkgJson)?.version;
+    check(
+      `codex main package version === repo pin ${codexPin}`,
+      Boolean(codexPin) && version === codexPin,
+      `got ${version}`
+    );
+  }
+
   const pkgRel = resolveCodexPlatformPkgRel(nodeModules, platform, arch);
   if (!check(`agent-host codex platform package (${key})`, Boolean(pkgRel))) return null;
 
@@ -194,22 +280,42 @@ function checkCodexStructure(hostDir) {
   const vendorDir = path.join(pkgDir, 'vendor', triple);
   const manifestPath = path.join(vendorDir, 'codex-package.json');
 
+  // Second half of the require.resolve target, plus the §0.3-A alias version.
+  const platformPkgJson = path.join(pkgDir, 'package.json');
+  if (check(`agent-host codex platform package.json (${key})`, isUsableFile(platformPkgJson))) {
+    const version = readJsonOrNull(platformPkgJson)?.version;
+    const expected = codexPin ? `${codexPin}-${key}` : null;
+    check(
+      `codex platform package version === ${expected}`,
+      Boolean(expected) && version === expected,
+      `got ${version}`
+    );
+  }
+
   let manifest = null;
-  if (check(`agent-host codex vendor manifest (${triple})`, fs.existsSync(manifestPath))) {
-    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (checkQ1(`agent-host codex vendor manifest (${triple})`, isUsableFile(manifestPath))) {
+    manifest = readJsonOrNull(manifestPath);
     check(
       'codex vendor manifest target matches this platform',
-      manifest.target === triple,
-      `got ${manifest.target}`
+      manifest?.target === triple,
+      `got ${manifest?.target}`
+    );
+    // Third copy of the version. Asserting only `target` here left the packaged
+    // verifier blind to a whole-tree drift onto another version.
+    check(
+      `codex vendor manifest version === repo pin ${codexPin}`,
+      Boolean(codexPin) && manifest?.version === codexPin,
+      `got ${manifest?.version}`
     );
     // Directory names come from the manifest, never hardcoded: the win32
-    // variant's layout is unmeasured (spec §11-Q1).
+    // variant's layout is unmeasured (spec §11-Q1). isDirectory, not
+    // existsSync — a same-named plain file is not the directory codex reads.
     for (const dirKey of ['pathDir', 'resourcesDir']) {
-      const dirName = manifest[dirKey];
-      if (!check(`codex manifest declares ${dirKey}`, Boolean(dirName))) continue;
-      check(
-        `agent-host codex vendor/${dirName} (manifest.${dirKey})`,
-        fs.existsSync(path.join(vendorDir, dirName))
+      const dirName = manifest?.[dirKey];
+      if (!checkQ1(`codex manifest declares ${dirKey}`, Boolean(dirName))) continue;
+      checkQ1(
+        `agent-host codex vendor/${dirName} is a directory (manifest.${dirKey})`,
+        isDirectory(path.join(vendorDir, dirName))
       );
     }
   }
@@ -222,11 +328,14 @@ function checkCodexStructure(hostDir) {
     codexBytes = st.size;
 
     // Single-file floor: catches truncation, LFS pointers and placeholders.
+    // Q1-② — codex.exe's real size has never been measured, so on an
+    // unmeasured platform this reports rather than fails, and the printed bytes
+    // are what CODEX_BINARY_FLOOR gets re-derived from.
     const verdict = evaluateCodexBinarySize(st.size);
-    check(
+    checkQ1(
       `codex entry binary >= ${formatBytes(verdict.floor)}`,
       verdict.status === 'ok',
-      formatBytes(st.size)
+      `${formatBytes(st.size)} (${st.size}B)`
     );
 
     // D1 — magic number. Stronger than "not %TSD": it also rejects truncation,
@@ -282,7 +391,7 @@ function checkCodexStructure(hostDir) {
   return { pkgRel, codexBytes };
 }
 
-function checkStructure(appDir) {
+function checkStructure(appDir, codexPin) {
   console.log(`[verify-packaged-app] app dir: ${appDir}`);
   if (!check('app dir exists', fs.existsSync(appDir))) return;
 
@@ -338,7 +447,7 @@ function checkStructure(appDir) {
     checkNoTsdHeader(rel, path.join(hostDir, rel));
   }
 
-  const codex = checkCodexStructure(hostDir);
+  const codex = checkCodexStructure(hostDir, codexPin);
 
   // ---- Size gate (REQ-14, spec §6.3) -------------------------------------
   const totalBytes = dirSize(hostDir);
@@ -727,7 +836,15 @@ function runCodexAppServerSmoke(runtime, codexJs, codexHome) {
             /* already closed */
           }
           exitTimer = setTimeout(
-            () => finish({ ok: true, frame: firstFrame, exited: false, exitClean: false, stderr }),
+            () =>
+              finish({
+                ok: true,
+                frame: firstFrame,
+                exited: false,
+                exitClean: false,
+                exitStatus: `still running after ${CODEX_EXIT_TIMEOUT_MS}ms`,
+                stderr,
+              }),
             CODEX_EXIT_TIMEOUT_MS
           );
         }
@@ -736,11 +853,26 @@ function runCodexAppServerSmoke(runtime, codexJs, codexHome) {
     });
 
     child.on('error', (err) => finish({ ok: false, reason: String(err), exited: true, stderr }));
-    child.on('close', () =>
+    // `close` fires for exit 7 and for SIGKILL exactly as it does for a clean
+    // exit, so the status must be read off the event: ignoring both arguments
+    // turned "exited cleanly" into "close happened", which is always true here.
+    child.on('close', (code, signal) =>
       finish(
         firstFrame
-          ? { ok: true, frame: firstFrame, exited: true, exitClean: true, stderr }
-          : { ok: false, reason: 'exited before replying', exited: true, stderr }
+          ? {
+              ok: true,
+              frame: firstFrame,
+              exited: true,
+              exitClean: isCleanExit({ code, signal }),
+              exitStatus: describeExit({ code, signal }),
+              stderr,
+            }
+          : {
+              ok: false,
+              reason: `exited before replying (${describeExit({ code, signal })})`,
+              exited: true,
+              stderr,
+            }
       )
     );
 
@@ -771,7 +903,11 @@ async function checkCodexSmoke(appDir, runtime, codexPin) {
   // S1 — exact version match. `includes('codex')` would let a wrong pin pass.
   const s1 = await runCodexVersionSmoke(runtime, codexJs);
   const expected = `codex-cli ${codexPin}`;
-  check(
+  // Q1-③ — the exact stdout shape is measured on linux only. On an unmeasured
+  // platform a mismatch is recorded together with the raw output (which is what
+  // the assertion gets re-derived from) instead of failing the job. NEVER
+  // relaxed to `includes`: that would let a wrong pin pass everywhere forever.
+  checkQ1(
     `codex S1 smoke: --version === "${expected}"`,
     s1.ok && s1.stdout === expected,
     s1.ok
@@ -793,7 +929,7 @@ async function checkCodexSmoke(appDir, runtime, codexPin) {
     console.log(
       s2.ok
         ? `[verify-packaged-app] codex S2 frame (${platformKey}): exited=${s2.exited} ` +
-            `clean=${s2.exitClean} ${frameJson.slice(0, 500)}`
+            `clean=${s2.exitClean} (${s2.exitStatus}) ${frameJson.slice(0, 500)}`
         : `[verify-packaged-app] codex S2 failure (${platformKey}): ${s2.reason}` +
             `${s2.stderr ? ` | stderr: ${s2.stderr.slice(0, 300)}` : ''}`
     );
@@ -814,7 +950,11 @@ async function checkCodexSmoke(appDir, runtime, codexPin) {
           result.platformOs === (process.platform === 'win32' ? 'windows' : process.platform),
           `got ${result.platformOs}`
         );
-        check('codex S2 smoke: process exited cleanly after stdin close', s2.exitClean === true);
+        check(
+          'codex S2 smoke: process exited cleanly after stdin close',
+          s2.exitClean === true,
+          s2.exitStatus ?? ''
+        );
       }
     } else {
       console.log(
@@ -832,7 +972,30 @@ async function checkCodexSmoke(appDir, runtime, codexPin) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  checkStructure(args.appDir);
+  // Observation is scoped by RECORDED EVIDENCE, not by the flag alone: on a
+  // platform already in CODEX_MEASURED_PLATFORMS `--observe` does nothing, so
+  // the workflow line cannot quietly soften a gate that has evidence behind it.
+  q1Observing = args.observe && q1ObserveApplies(process.platform, process.arch);
+  if (args.observe && !q1Observing) {
+    console.log(
+      `[verify-packaged-app] --observe ignored: ${process.platform}-${process.arch} is already ` +
+        `measured (spec §11-Q1 step two)`
+    );
+  } else if (q1Observing) {
+    console.log(
+      `[verify-packaged-app] OBSERVE MODE for ${process.platform}-${process.arch} — spec §11-Q1 ` +
+        `items report instead of failing (step one)`
+    );
+  }
+
+  const codexPin = expectedCodexPin(args.codexPin);
+  check(
+    'codex pin resolvable from repo (not from the tree under test)',
+    Boolean(codexPin),
+    codexPin ?? 'pass --codex-pin <version> when running outside the repo'
+  );
+
+  checkStructure(args.appDir, codexPin);
 
   const bundled = checkNodeRuntime(args.appDir);
 
@@ -874,23 +1037,10 @@ async function main() {
     } else if (failures.length > 0) {
       console.log('[verify-packaged-app] codex smoke skipped — structure already failed');
     } else {
-      const hostPkg = path.join(
-        args.appDir,
-        'resources',
-        'agent-host',
-        'node_modules',
-        '@openai',
-        'codex',
-        'package.json'
-      );
-      const codexPin = fs.existsSync(hostPkg)
-        ? JSON.parse(fs.readFileSync(hostPkg, 'utf8')).version
-        : null;
-      if (!check('codex smoke: pin readable from packaged package.json', Boolean(codexPin))) {
-        // fall through; the structure section already reported the detail
-      } else {
-        await checkCodexSmoke(args.appDir, smokeRuntime, codexPin);
-      }
+      // The expected version is the repo's, never the packaged tree's: reading
+      // it back out of the artifact under test made S1 self-satisfying.
+      if (codexPin) await checkCodexSmoke(args.appDir, smokeRuntime, codexPin);
+      else console.log('[verify-packaged-app] codex smoke skipped — no expected pin');
     }
   } else if (args.skipCodexSmoke) {
     console.log('[verify-packaged-app] codex smoke skipped (--skip-codex-smoke)');
@@ -909,13 +1059,25 @@ async function main() {
     console.log('[verify-packaged-app] smoke skipped — no runtime available');
   }
 
+  if (observations.length > 0) {
+    console.log(
+      `[verify-packaged-app] OBSERVED ${observations.length} spec §11-Q1 item(s) — record these, ` +
+        `fill in the real values, then drop --observe so they become gates:`
+    );
+    for (const line of observations) console.log(`    - ${line}`);
+  }
+
   if (failures.length > 0) {
     console.error(
       `[verify-packaged-app] FAIL — ${failures.length} check(s): ${failures.join('; ')}`
     );
     process.exit(1);
   }
-  console.log('[verify-packaged-app] PASS');
+  console.log(
+    observations.length > 0
+      ? `[verify-packaged-app] PASS (with ${observations.length} observation(s) — NOT a full gate)`
+      : '[verify-packaged-app] PASS'
+  );
 }
 
 await main();

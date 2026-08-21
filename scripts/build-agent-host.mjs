@@ -135,7 +135,7 @@ function tsdFixBundleOnWindows() {
 
 /** Report line carries the raw codex byte count so every CI run leaves a size
  * baseline for the packaging gate to regress against (spec §3.6). */
-function reportOk({ pins, codexBytes, codexPkgRel }) {
+function reportOk({ pins, codexBytes, codexPayloadBytes, codexPkgRel }) {
   const totalBytes = dirSize(outDir);
   const mb = (totalBytes / 1024 / 1024).toFixed(1);
   const parts = [
@@ -143,9 +143,19 @@ function reportOk({ pins, codexBytes, codexPkgRel }) {
     `sdk ${pins['@anthropic-ai/claude-agent-sdk']}`,
   ];
   if (codexPkgRel) {
-    parts.push(`codex ${pins['@openai/codex']}/${platform}-${arch} ${codexBytes}B`);
+    parts.push(`codex ${pins['@openai/codex']}/${platform}-${arch} entry ${codexBytes}B`);
   } else {
     parts.push(`codex not shipped for ${platform}-${arch}`);
+  }
+  // Both budget terms, already split. Spec §6.3 defines P as the whole @openai
+  // payload, so a line carrying only the total and the entry binary cannot be
+  // decomposed into A0 and P — and PACKAGING_BUDGET needs both.
+  if (codexPayloadBytes !== null && codexPayloadBytes !== undefined) {
+    console.log(
+      `[build-agent-host] budget terms for PACKAGING_BUDGET['${platform}-${arch}']: ` +
+        `baseAgentHost=${totalBytes - codexPayloadBytes}B codexPayload=${codexPayloadBytes}B ` +
+        `(total ${totalBytes}B = A0 + P)`
+    );
   }
   // Exact byte count alongside the MB: the packaging budget (packaging spec
   // §6.3) is filled in from this line, and a rounded MB would bake half a
@@ -155,13 +165,30 @@ function reportOk({ pins, codexBytes, codexPkgRel }) {
   );
 }
 
+/** Spec §11-Q1 first-run observation. Inert on platforms already listed in
+ * CODEX_MEASURED_PLATFORMS, so leaving this flag in a workflow cannot soften a
+ * platform that already has evidence. */
+const observe = process.argv.slice(2).includes('--observe');
+
+function reportObservations(stage, observations) {
+  if (!observations?.length) return;
+  console.log(
+    `[build-agent-host] OBSERVE (${stage}, spec §11-Q1) — ${observations.length} unmet ` +
+      `expectation(s) recorded instead of failing; fill in the real values, then drop --observe:`
+  );
+  for (const line of observations) console.log(`    - ${line}`);
+}
+
 async function main() {
   const started = Date.now();
+  if (observe) console.log(`[build-agent-host] --observe requested for ${platform}-${arch}`);
   const {
     pins,
     codexPkgRel: sourceCodexRel,
     codexSkipped,
-  } = guard('preflight', () => preflightHostDeps({ root: repoRoot, platform, arch }));
+    observations: preflightObservations,
+  } = guard('preflight', () => preflightHostDeps({ root: repoRoot, platform, arch, observe }));
+  reportObservations('preflight', preflightObservations);
   if (codexSkipped) {
     console.log(`[build-agent-host] skip: codex not shipped for ${codexSkipped}`);
   } else {
@@ -179,10 +206,14 @@ async function main() {
   copyNodeModules();
   pruneResidualPlatformPackages({ outDir, platform, arch });
   tsdFixBundleOnWindows();
-  const { codexBytes, codexPkgRel } = guard('verify', () =>
-    verifyArtifact({ outDir, platform, arch, pins })
-  );
-  reportOk({ pins, codexBytes, codexPkgRel });
+  const {
+    codexBytes,
+    codexPayloadBytes,
+    codexPkgRel,
+    observations: verifyObservations,
+  } = guard('verify', () => verifyArtifact({ outDir, platform, arch, pins, observe }));
+  reportObservations('verify', verifyObservations);
+  reportOk({ pins, codexBytes, codexPayloadBytes, codexPkgRel });
   console.log(`[build-agent-host] done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

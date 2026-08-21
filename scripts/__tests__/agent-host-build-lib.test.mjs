@@ -7,14 +7,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   CODEX_BINARY_FLOOR,
+  CODEX_MEASURED_PLATFORMS,
   ESBUILD_EXTERNAL,
   foreignCodexPlatformRels,
   preflightHostDeps,
   pruneResidualPlatformPackages,
+  q1ObserveApplies,
   resolveCodexPlatformPkgRel,
   shouldCopy,
   verifyArtifact,
 } from '../agent-host-build-lib.mjs';
+import { codexBinaryName, codexTargetTriple } from '../codex-platform.mjs';
 
 /**
  * Packaging spec §7.1 A3 / A4 / A5 / A6 / A8 / A9 — the T2 construction layer.
@@ -94,20 +97,37 @@ function buildHostInstall(root, { layout = 'hoisted', platform = 'linux', arch =
 
   const pkgDir = path.join(nm, pkgRel);
   writeJson(path.join(pkgDir, 'package.json'), { name: '@openai/codex', version: `${PIN}-${key}` });
-  const vendorDir = path.join(pkgDir, 'vendor', LINUX_TRIPLE);
+  const triple = codexTargetTriple(platform, arch);
+  const binName = codexBinaryName(platform);
+  const vendorDir = path.join(pkgDir, 'vendor', triple);
   writeJson(path.join(vendorDir, 'codex-package.json'), {
     version: PIN,
-    target: LINUX_TRIPLE,
-    entrypoint: 'bin/codex',
+    target: triple,
+    entrypoint: `bin/${binName}`,
     pathDir: 'codex-path',
     resourcesDir: 'codex-resources',
   });
-  writeSparse(path.join(vendorDir, 'bin', 'codex'), OVER_FLOOR);
-  writeSparse(path.join(vendorDir, 'bin', 'codex-code-mode-host'), 1024);
+  writeSparse(path.join(vendorDir, 'bin', binName), OVER_FLOOR);
+  writeSparse(
+    path.join(
+      vendorDir,
+      'bin',
+      platform === 'win32' ? 'codex-code-mode-host.exe' : 'codex-code-mode-host'
+    ),
+    1024
+  );
   fs.mkdirSync(path.join(vendorDir, 'codex-path'), { recursive: true });
   fs.mkdirSync(path.join(vendorDir, 'codex-resources'), { recursive: true });
 
-  return { hostRoot, nm, pkgDir, vendorDir, pkgRel: pkgRel.split(path.sep).join('/') };
+  return {
+    hostRoot,
+    nm,
+    pkgDir,
+    vendorDir,
+    triple,
+    binName,
+    pkgRel: pkgRel.split(path.sep).join('/'),
+  };
 }
 
 /** A healthy linux-x64 out-agent-host artifact. */
@@ -133,20 +153,29 @@ function buildArtifact(outDir, { layout = 'hoisted', platform = 'linux', arch = 
 
   const pkgDir = path.join(nm, ...pkgRel.split('/'));
   writeJson(path.join(pkgDir, 'package.json'), { name: '@openai/codex', version: `${PIN}-${key}` });
-  const vendorDir = path.join(pkgDir, 'vendor', LINUX_TRIPLE);
+  const triple = codexTargetTriple(platform, arch);
+  const binName = codexBinaryName(platform);
+  const vendorDir = path.join(pkgDir, 'vendor', triple);
   writeJson(path.join(vendorDir, 'codex-package.json'), {
     version: PIN,
-    target: LINUX_TRIPLE,
-    entrypoint: 'bin/codex',
+    target: triple,
+    entrypoint: `bin/${binName}`,
     pathDir: 'codex-path',
     resourcesDir: 'codex-resources',
   });
-  writeSparse(path.join(vendorDir, 'bin', 'codex'), OVER_FLOOR);
-  writeSparse(path.join(vendorDir, 'bin', 'codex-code-mode-host'), 1024);
+  writeSparse(path.join(vendorDir, 'bin', binName), OVER_FLOOR);
+  writeSparse(
+    path.join(
+      vendorDir,
+      'bin',
+      platform === 'win32' ? 'codex-code-mode-host.exe' : 'codex-code-mode-host'
+    ),
+    1024
+  );
   fs.mkdirSync(path.join(vendorDir, 'codex-path'), { recursive: true });
   fs.mkdirSync(path.join(vendorDir, 'codex-resources'), { recursive: true });
 
-  return { nm, pkgDir, vendorDir, pkgRel };
+  return { nm, pkgDir, vendorDir, triple, binName, pkgRel };
 }
 
 const PINS = {
@@ -571,6 +600,158 @@ describe('src/agent-host/package-lock.json (A8)', () => {
     expect(found.sort()).toEqual(expected.map(([k]) => k).sort());
   });
 });
+
+// ---------------------------------------------------------------------------
+// Spec §11-Q1 two-step: observation is scoped by recorded evidence
+// ---------------------------------------------------------------------------
+const wx = { platform: 'win32', arch: 'x64' };
+
+describe('q1ObserveApplies (spec §11-Q1)', () => {
+  it('lists exactly the platforms this repo has measured', () => {
+    // Literal, not derived: adding a platform here is the act that promotes its
+    // Q1 items from observed to enforced, so it must be a deliberate edit.
+    expect(CODEX_MEASURED_PLATFORMS).toEqual(['linux-x64']);
+  });
+
+  it('is false for measured platforms and true for the rest', () => {
+    expect(q1ObserveApplies('linux', 'x64')).toBe(false);
+    expect(q1ObserveApplies('win32', 'x64')).toBe(true);
+    expect(q1ObserveApplies('darwin', 'arm64')).toBe(true);
+  });
+});
+
+describe('preflightHostDeps under --observe (spec §11-Q1)', () => {
+  it('records the missing manifest instead of throwing, on an unmeasured platform', () => {
+    const { vendorDir } = buildHostInstall(tmp, wx);
+    fs.rmSync(path.join(vendorDir, 'codex-package.json'));
+
+    const result = preflightHostDeps({ root: tmp, ...wx, observe: true });
+    expect(result.observations.join('\n')).toMatch(/vendor manifest missing/);
+    // The point of observing: the run continues and still produces readings.
+    expect(result.pins['@openai/codex']).toBe(PIN);
+  });
+
+  it('still throws on the same tree without --observe', () => {
+    const { vendorDir } = buildHostInstall(tmp, wx);
+    fs.rmSync(path.join(vendorDir, 'codex-package.json'));
+
+    expect(() => preflightHostDeps({ root: tmp, ...wx })).toThrow(/vendor manifest missing/);
+  });
+
+  it('is inert on a measured platform — the flag alone cannot soften linux', () => {
+    const { vendorDir } = buildHostInstall(tmp, lx);
+    fs.rmSync(path.join(vendorDir, 'codex-package.json'));
+
+    expect(() => preflightHostDeps({ root: tmp, ...lx, observe: true })).toThrow(
+      /vendor manifest missing/
+    );
+  });
+
+  it('records an undersized entry binary but never a pin drift', () => {
+    const { vendorDir, binName } = buildHostInstall(tmp, wx);
+    writeSparse(path.join(vendorDir, 'bin', binName), 1024);
+
+    const observed = preflightHostDeps({ root: tmp, ...wx, observe: true });
+    expect(observed.observations.join('\n')).toMatch(/suspiciously small/);
+
+    // Version drift is a repo-derived truth, not a Windows unknown: softening
+    // it would delete pin-drift detection on the very first Windows run.
+    writeJson(path.join(vendorDir, 'codex-package.json'), {
+      version: '0.147.0',
+      target: codexTargetTriple('win32', 'x64'),
+      entrypoint: `bin/${binName}`,
+      pathDir: 'codex-path',
+      resourcesDir: 'codex-resources',
+    });
+    expect(() => preflightHostDeps({ root: tmp, ...wx, observe: true })).toThrow(
+      /vendor manifest mismatch/
+    );
+  });
+});
+
+describe('verifyArtifact under --observe (spec §11-Q1)', () => {
+  const outDir = () => path.join(tmp, 'out-agent-host');
+
+  it('records missing layout dirs and an undersized binary, on an unmeasured platform', () => {
+    const { vendorDir, binName } = buildArtifact(outDir(), wx);
+    fs.rmSync(path.join(vendorDir, 'codex-path'), { recursive: true });
+    writeSparse(path.join(vendorDir, 'bin', binName), 1024);
+
+    const result = verifyArtifact({ outDir: outDir(), ...wx, pins: PINS, observe: true });
+    const text = result.observations.join('\n');
+    expect(text).toMatch(/codex-path/);
+    expect(text).toMatch(/suspiciously small/);
+  });
+
+  it('still throws on the same artifact without --observe', () => {
+    const { vendorDir, binName } = buildArtifact(outDir(), wx);
+    fs.rmSync(path.join(vendorDir, 'codex-path'), { recursive: true });
+    writeSparse(path.join(vendorDir, 'bin', binName), 1024);
+
+    expect(() => verifyArtifact({ outDir: outDir(), ...wx, pins: PINS })).toThrow(
+      /suspiciously small/
+    );
+  });
+
+  it('is inert on a measured platform', () => {
+    const { vendorDir } = buildArtifact(outDir(), lx);
+    fs.rmSync(path.join(vendorDir, 'codex-path'), { recursive: true });
+
+    expect(() => verifyArtifact({ outDir: outDir(), ...lx, pins: PINS, observe: true })).toThrow(
+      /codex-path/
+    );
+  });
+
+  it('never softens a foreign platform package, even while observing', () => {
+    buildArtifact(outDir(), wx);
+    fs.mkdirSync(path.join(outDir(), 'node_modules', '@openai', 'codex-darwin-arm64'), {
+      recursive: true,
+    });
+
+    expect(() => verifyArtifact({ outDir: outDir(), ...wx, pins: PINS, observe: true })).toThrow(
+      /codex-darwin-arm64/
+    );
+  });
+});
+
+describe('verifyArtifact budget terms (spec §6.3)', () => {
+  const outDir = () => path.join(tmp, 'out-agent-host');
+
+  it('reports the whole @openai payload, not just the entry binary', () => {
+    const { vendorDir, binName } = buildArtifact(outDir(), lx);
+    const result = verifyArtifact({ outDir: outDir(), ...lx, pins: PINS });
+
+    const entryBytes = fs.statSync(path.join(vendorDir, 'bin', binName)).size;
+    expect(result.codexBytes).toBe(entryBytes);
+    // P must exceed the entry binary — it also carries the main package, the
+    // code-mode host and the manifest. Equality here is the old bug: the OK
+    // line then reports A0 + P and P's largest file, which cannot be solved
+    // for either budget term.
+    expect(result.codexPayloadBytes).toBeGreaterThan(entryBytes);
+
+    const openaiBytes = dirSizeOf(path.join(outDir(), 'node_modules', '@openai'));
+    expect(result.codexPayloadBytes).toBe(openaiBytes);
+  });
+
+  it('reports null when the platform ships no codex', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(path.join(dir, 'node_modules', '@openai'), { recursive: true, force: true });
+
+    const result = verifyArtifact({ outDir: dir, platform: 'darwin', arch: 'arm64', pins: PINS });
+    expect(result.codexPayloadBytes).toBeNull();
+  });
+});
+
+/** Local byte walker, so the expectation does not reuse the lib's dirSize. */
+function dirSizeOf(dir) {
+  let total = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    total += entry.isDirectory() ? dirSizeOf(full) : fs.statSync(full).size;
+  }
+  return total;
+}
 
 // ---------------------------------------------------------------------------
 // Static discipline: this file must never import the CLI shell (spec §9).

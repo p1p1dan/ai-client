@@ -182,6 +182,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # REQ-7: agent-host runs its own `npm ci`, which re-downloaded every
+      # package on every run. Keyed on the lockfile hash so a dependency bump
+      # cannot keep restoring a stale cache.
+      - name: Cache agent-host npm cache
+        uses: actions/cache@v5
+        with:
+          path: ~\AppData\Local\npm-cache
+          key: ${{ runner.os }}-agenthost-npm-${{ hashFiles('src/agent-host/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-agenthost-npm-
+
       # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
       # src/agent-host is a standalone npm project; npm ci must include optional
       # deps so the cometix postinstall can copy cli.js + vendor/.
@@ -189,8 +199,34 @@ jobs:
         run: npm ci
         working-directory: src/agent-host
 
+      # REQ-7 accounting. The cache-entry and disk figures are the inputs for
+      # the first run's baseline; they are printed, never gated on.
+      - name: Report npm cache size and disk (REQ-7)
+        shell: pwsh
+        run: |
+          $cache = "$env:LOCALAPPDATA\npm-cache"
+          if (Test-Path $cache) {
+            $bytes = (Get-ChildItem $cache -Recurse -File -ErrorAction SilentlyContinue |
+              Measure-Object -Property Length -Sum).Sum
+            Write-Host "npm cache: $cache = $bytes B"
+          } else {
+            Write-Host "npm cache: $cache absent"
+          }
+          Get-PSDrive C | Format-Table -AutoSize
+
+      # Spec §11-Q1 evidence: this repo has never produced a Windows artifact,
+      # so the vendor layout, the per-file bytes and codex.exe's real size are
+      # all unmeasured. Print them BEFORE anything can fail on them — a run that
+      # dies inside a gate produces none of the readings the gate needs.
+      - name: Inspect codex payload (spec §11-Q1 evidence)
+        run: node scripts/inspect-codex-payload.mjs
+
+      # --observe: Q1 items report instead of failing on this first Windows run.
+      # It is inert on platforms listed in CODEX_MEASURED_PLATFORMS, so once the
+      # measured values are filled in this line stops softening anything — and
+      # should then be deleted (spec §11-Q1 step two).
       - name: Build agent-host artifact
-        run: node scripts/build-agent-host.mjs
+        run: node scripts/build-agent-host.mjs --observe
 
       # Key on the pin file's hash, not a hardcoded version: actions/cache never
       # overwrites an existing key, so a literal key survives a pin bump and
@@ -205,13 +241,23 @@ jobs:
       - name: Fetch bundled Node runtime
         run: node scripts/fetch-node-runtime.mjs --platform win32-x64
 
+      - name: Report disk before packaging (REQ-7)
+        shell: pwsh
+        run: Get-PSDrive C | Format-Table -AutoSize
+
       - name: Build Windows
         run: npx electron-builder --win --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Report disk after packaging (REQ-7)
+        shell: pwsh
+        run: Get-PSDrive C | Format-Table -AutoSize
+
+      # --observe as above: first Windows run records the Q1 items (manifest
+      # layout, 200 MiB floor, --version output) instead of failing on them.
       - name: Verify packaged agent-host (structure)
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --skip-smoke
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --skip-smoke --observe
 
       # Without these, a workflow_dispatch run builds a Windows package and then
       # throws it away — the only way to obtain a test build was a Windows machine.
@@ -286,11 +332,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # REQ-7, same reasoning as the Windows job.
+      - name: Cache agent-host npm cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-agenthost-npm-${{ hashFiles('src/agent-host/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-agenthost-npm-
+
       # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
       - name: Install agent-host dependencies
         run: npm ci
         working-directory: src/agent-host
 
+      - name: Report npm cache size and disk (REQ-7)
+        run: |
+          du -sb ~/.npm 2>/dev/null || echo "npm cache absent"
+          df -h /
+
+      # Prints the @openai tree file by file. Linux is already measured, so this
+      # is the comparison baseline for the Windows listing (spec §10.3 hoist
+      # belief: project installs hoist, global installs do not).
+      - name: Inspect codex payload (spec §11-Q1 evidence)
+        run: node scripts/inspect-codex-payload.mjs
+
+      # No --observe: linux-x64 is in CODEX_MEASURED_PLATFORMS, every Q1 item is
+      # a hard gate here.
       - name: Build agent-host artifact
         run: node scripts/build-agent-host.mjs
 
@@ -303,10 +370,16 @@ jobs:
       - name: Fetch bundled Node runtime
         run: node scripts/fetch-node-runtime.mjs --platform linux-x64
 
+      - name: Report disk before packaging (REQ-7)
+        run: df -h /
+
       - name: Build Linux
         run: npx electron-builder --linux --x64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report disk after packaging (REQ-7)
+        run: df -h /
 
       - name: Verify packaged agent-host (structure)
         run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --skip-smoke

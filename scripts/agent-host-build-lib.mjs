@@ -36,6 +36,24 @@ export const ESBUILD_EXTERNAL = ['@anthropic-ai/claude-agent-sdk', '@cometix/cla
  * The win32 binary's real size is unmeasured — see spec §11-Q1. */
 export const CODEX_BINARY_FLOOR = 200 * 1024 * 1024;
 
+/**
+ * Platforms whose codex payload has actually been measured in this repo, i.e.
+ * platforms past step one of the spec §11-Q1 two-step.
+ *
+ * This list — NOT a CLI flag — is what turns observation off. `observe: true`
+ * is inert for a platform listed here, so the flag can be left in the workflow
+ * without ever softening a platform that already has evidence, and adding a
+ * platform's measured numbers automatically promotes its Q1 items to hard
+ * gates on the next run. A flag that softened unconditionally would be one
+ * forgotten line away from a permanent hole.
+ */
+export const CODEX_MEASURED_PLATFORMS = ['linux-x64'];
+
+/** Whether spec §11-Q1 observation still applies to this platform. */
+export function q1ObserveApplies(platform, arch) {
+  return !CODEX_MEASURED_PLATFORMS.includes(`${platform}-${arch}`);
+}
+
 export function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
@@ -90,14 +108,25 @@ export function foreignCodexPlatformRels(platform, arch) {
 // ---------------------------------------------------------------------------
 
 /**
- * @returns {{pins: Record<string,string>, codexPkgRel: string|null}}
+ * @returns {{pins: Record<string,string>, codexPkgRel: string|null,
+ *            observations: string[]}}
  * @throws {Error} on any unhealthy install
  */
-export function preflightHostDeps({ root, platform, arch }) {
+export function preflightHostDeps({ root, platform, arch, observe = false }) {
   const hostRoot = path.join(root, 'src', 'agent-host');
   const hostNodeModules = path.join(hostRoot, 'node_modules');
+  const observations = [];
   const fail = (message) => {
     throw new Error(message);
+  };
+  // Spec §11-Q1: the Windows vendor layout and the entry binary's size are
+  // unmeasured, so on the first run they are observed rather than enforced —
+  // otherwise the run dies here and produces none of the evidence it exists to
+  // collect. Everything else stays hard.
+  const soften = observe && q1ObserveApplies(platform, arch);
+  const q1 = (message) => {
+    if (soften) observations.push(message);
+    else fail(message);
   };
 
   if (!fs.existsSync(hostNodeModules)) {
@@ -142,7 +171,7 @@ export function preflightHostDeps({ root, platform, arch }) {
   }
 
   if (!shipsCodex) {
-    return { pins, codexPkgRel: null, codexSkipped: `${platform}-${arch}` };
+    return { pins, codexPkgRel: null, codexSkipped: `${platform}-${arch}`, observations };
   }
 
   const key = codexPlatformKey(platform, arch);
@@ -169,33 +198,41 @@ export function preflightHostDeps({ root, platform, arch }) {
   const triple = codexTargetTriple(platform, arch);
   const vendorDir = path.join(codexPkgDir, 'vendor', triple);
   const manifestPath = path.join(vendorDir, 'codex-package.json');
+  // Conventional fallback path: under observation the size/exec readings below
+  // must still be produced when the manifest itself is what went missing.
+  let entryRel = `bin/${codexBinaryName(platform)}`;
   if (!fs.existsSync(manifestPath)) {
-    fail(`vendor manifest missing: ${codexPkgRel}/vendor/${triple}/codex-package.json`);
-  }
-  const manifest = readJson(manifestPath);
-  if (manifest.version !== pin || manifest.target !== triple) {
-    fail(
-      `vendor manifest mismatch: expected {version:${pin},target:${triple}}, ` +
-        `got {version:${manifest.version},target:${manifest.target}}`
-    );
-  }
-  const entrypoint = path.join(vendorDir, ...String(manifest.entrypoint).split('/'));
-  if (!fs.existsSync(entrypoint)) {
-    fail(`vendor manifest entrypoint missing: ${manifest.entrypoint}`);
+    q1(`vendor manifest missing: ${codexPkgRel}/vendor/${triple}/codex-package.json`);
+  } else {
+    const manifest = readJson(manifestPath);
+    // Version/target are repo-derived truths, not Windows unknowns — softening
+    // them would erase pin-drift detection, so they stay hard everywhere.
+    if (manifest.version !== pin || manifest.target !== triple) {
+      fail(
+        `vendor manifest mismatch: expected {version:${pin},target:${triple}}, ` +
+          `got {version:${manifest.version},target:${manifest.target}}`
+      );
+    }
+    entryRel = String(manifest.entrypoint);
+    if (!fs.existsSync(path.join(vendorDir, ...entryRel.split('/')))) {
+      fail(`vendor manifest entrypoint missing: ${entryRel}`);
+    }
   }
 
   // 4. entry binary sanity: size floor + exec bit (non-win32).
-  const entryStat = fs.statSync(entrypoint);
-  if (entryStat.size < CODEX_BINARY_FLOOR) {
-    fail(
-      `codex binary suspiciously small: ${entryStat.size}B < ${CODEX_BINARY_FLOOR}B ` +
-        `(${manifest.entrypoint})`
-    );
-  }
-  if (platform !== 'win32' && (entryStat.mode & 0o111) === 0) {
-    fail(
-      `codex binary not executable: ${manifest.entrypoint} (mode ${entryStat.mode.toString(8)})`
-    );
+  const entrypoint = path.join(vendorDir, ...entryRel.split('/'));
+  if (!fs.existsSync(entrypoint)) {
+    q1(`codex entry binary missing: ${entryRel}`);
+  } else {
+    const entryStat = fs.statSync(entrypoint);
+    if (entryStat.size < CODEX_BINARY_FLOOR) {
+      q1(
+        `codex binary suspiciously small: ${entryStat.size}B < ${CODEX_BINARY_FLOOR}B (${entryRel})`
+      );
+    }
+    if (platform !== 'win32' && (entryStat.mode & 0o111) === 0) {
+      fail(`codex binary not executable: ${entryRel} (mode ${entryStat.mode.toString(8)})`);
+    }
   }
 
   // 5. no foreign platform packages in the install (R2: 347MB × 5).
@@ -205,7 +242,7 @@ export function preflightHostDeps({ root, platform, arch }) {
     }
   }
 
-  return { pins, codexPkgRel, codexSkipped: null };
+  return { pins, codexPkgRel, codexSkipped: null, observations };
 }
 
 // ---------------------------------------------------------------------------
@@ -314,15 +351,26 @@ export function pruneResidualPlatformPackages({ outDir, platform, arch }) {
 // ---------------------------------------------------------------------------
 
 /**
- * @returns {{codexBytes: number|null, codexPkgRel: string|null}}
+ * @returns {{codexBytes: number|null, codexPayloadBytes: number|null,
+ *            codexPkgRel: string|null, observations: string[]}}
  * @throws {Error} listing every failed check
  */
-export function verifyArtifact({ outDir, platform, arch, pins }) {
+export function verifyArtifact({ outDir, platform, arch, pins, observe = false }) {
   const failures = [];
+  const observations = [];
+  // Same §11-Q1 scope as preflight — see q1ObserveApplies.
+  const soften = observe && q1ObserveApplies(platform, arch);
+  const q1 = (message) => {
+    if (soften) observations.push(message);
+    else failures.push(message);
+  };
   const nodeModules = path.join(outDir, 'node_modules');
   const abs = (rel) => path.join(outDir, ...rel.split('/'));
   const mustExist = (rel, note) => {
     if (!fs.existsSync(abs(rel))) failures.push(`missing ${rel}${note ? ` (${note})` : ''}`);
+  };
+  const q1MustExist = (rel, note) => {
+    if (!fs.existsSync(abs(rel))) q1(`missing ${rel}${note ? ` (${note})` : ''}`);
   };
   const mustNotExist = (rel, note) => {
     if (fs.existsSync(abs(rel))) failures.push(`must not ship ${rel}${note ? ` (${note})` : ''}`);
@@ -355,6 +403,7 @@ export function verifyArtifact({ outDir, platform, arch, pins }) {
   mustNotExist('node_modules/.bin', 'npm bin symlink dir');
 
   let codexBytes = null;
+  let codexPayloadBytes = null;
   let codexPkgRel = null;
 
   if (!isCodexShippedPlatform(platform, arch)) {
@@ -394,7 +443,7 @@ export function verifyArtifact({ outDir, platform, arch, pins }) {
 
       const manifestPath = abs(`${vendorRel}/codex-package.json`);
       if (!fs.existsSync(manifestPath)) {
-        failures.push(`missing ${vendorRel}/codex-package.json`);
+        q1(`missing ${vendorRel}/codex-package.json`);
       } else {
         const manifest = readJson(manifestPath);
         if (manifest.version !== pin || manifest.target !== triple) {
@@ -407,8 +456,8 @@ export function verifyArtifact({ outDir, platform, arch, pins }) {
         // variant's layout is unmeasured (spec §11-Q1).
         for (const dirKey of ['pathDir', 'resourcesDir']) {
           const dirName = manifest[dirKey];
-          if (!dirName) failures.push(`${vendorRel}/codex-package.json has no ${dirKey}`);
-          else mustExist(`${vendorRel}/${dirName}`, `manifest.${dirKey}`);
+          if (!dirName) q1(`${vendorRel}/codex-package.json has no ${dirKey}`);
+          else q1MustExist(`${vendorRel}/${dirName}`, `manifest.${dirKey}`);
         }
       }
 
@@ -416,12 +465,12 @@ export function verifyArtifact({ outDir, platform, arch, pins }) {
       const entryRel = `${vendorRel}/bin/${binName}`;
       const entryAbs = abs(entryRel);
       if (!fs.existsSync(entryAbs)) {
-        failures.push(`missing ${entryRel}`);
+        q1(`missing ${entryRel}`);
       } else {
         const stat = fs.statSync(entryAbs);
         codexBytes = stat.size;
         if (stat.size < CODEX_BINARY_FLOOR) {
-          failures.push(`${entryRel} suspiciously small: ${stat.size}B < ${CODEX_BINARY_FLOOR}B`);
+          q1(`${entryRel} suspiciously small: ${stat.size}B < ${CODEX_BINARY_FLOOR}B`);
         }
         if (platform !== 'win32' && (stat.mode & 0o111) === 0) {
           failures.push(`${entryRel} lost its exec bit (mode ${stat.mode.toString(8)})`);
@@ -437,10 +486,18 @@ export function verifyArtifact({ outDir, platform, arch, pins }) {
     for (const rel of foreignCodexPlatformRels(platform, arch)) {
       mustNotExist(`node_modules/${rel}`, 'foreign platform package');
     }
+
+    // `P` in the spec §6.3 budget: the WHOLE shipped @openai payload (main
+    // package + this platform's package after pruning), not the entry binary.
+    // Printing only the entry binary next to the total leaves `A0 + P` one
+    // equation short of solving for either term, which is exactly what blocks
+    // filling in PACKAGING_BUDGET for a platform that has never been measured.
+    const openaiDir = abs('node_modules/@openai');
+    if (fs.existsSync(openaiDir)) codexPayloadBytes = dirSize(openaiDir);
   }
 
   if (failures.length > 0) {
     throw new Error(`artifact verification failed:\n  - ${failures.join('\n  - ')}`);
   }
-  return { codexBytes, codexPkgRel };
+  return { codexBytes, codexPayloadBytes, codexPkgRel, observations };
 }
