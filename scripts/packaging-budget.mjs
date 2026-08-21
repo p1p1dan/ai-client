@@ -52,6 +52,38 @@ export const PACKAGING_BUDGET = {
   },
 };
 
+/**
+ * Secondary, WARN-only ceiling on the WHOLE app directory (spec §6.3):
+ *
+ *   size(appDir) <= 2 x (baseline appDir + P)
+ *
+ * Deliberately loose and deliberately not a red light: Electron/monaco volume
+ * swings have nothing to do with this batch and must not fail the packaging
+ * chain. It exists to catch total runaway, nothing finer.
+ *
+ * `baseline appDir` is the platform's app directory BEFORE codex was bundled.
+ * The spec records linux-unpacked ~= 413 MB, but with no stated unit — and
+ * §0.3's dimension discipline forbids turning an ambiguous MB into a byte
+ * constant. So these start null and get filled from a measured run, exactly
+ * like PACKAGING_BUDGET: the verifier prints the real bytes either way.
+ */
+export const APP_DIR_BASELINE = {
+  'linux-x64': null,
+  'win32-x64': null,
+};
+
+/**
+ * @returns {{status:'ok'|'over'|'no-baseline', bytes:number, ceiling:number|null}}
+ */
+export function evaluateAppDirSize(platformKey, bytes, codexPayloadBytes) {
+  const baseline = APP_DIR_BASELINE[platformKey];
+  if (baseline === null || baseline === undefined || codexPayloadBytes === null) {
+    return { status: 'no-baseline', bytes, ceiling: null };
+  }
+  const ceiling = 2 * (baseline + codexPayloadBytes);
+  return { status: bytes <= ceiling ? 'ok' : 'over', bytes, ceiling };
+}
+
 export function hasBudget(platformKey) {
   return Boolean(PACKAGING_BUDGET[platformKey]);
 }

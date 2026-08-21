@@ -10,9 +10,9 @@
  * on each side and pin them together with an assertion — the same arrangement
  * used for `AICLIENT_NODE_EXEC_PATH` and `COMETIX_PIN`.
  *
- * `src/shared/agentHost/__tests__/nodeRuntimePin.test.ts` asserts this table
- * and the build-side table agree key-for-key and name-for-name, so the two
- * cannot drift apart silently.
+ * `scripts/__tests__/node-runtime-pin.test.mjs` asserts this table and the
+ * build-side table agree key-for-key and name-for-name, so the two cannot
+ * drift apart silently.
  */
 export const BUNDLED_NODE_RUNTIME_BINARIES: Readonly<Record<string, string>> = {
   'win32-x64': 'node.exe',

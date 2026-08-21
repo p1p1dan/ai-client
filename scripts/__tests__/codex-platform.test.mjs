@@ -72,9 +72,9 @@ describe('ship whitelist (A2c)', () => {
   });
 
   // The other half of A2c — key-set equality against NODE_RUNTIME_PINS — landed
-  // with P3/D36 and lives in src/shared/agentHost/__tests__/nodeRuntimePin.test.ts,
-  // where all three tables (Node pins, codex whitelist, Main's runtime lookup)
-  // are pinned against each other in one place (spec C9).
+  // with P3/D36 and lives in ./node-runtime-pin.test.mjs, where all three
+  // tables (Node pins, codex whitelist, Main's runtime lookup) are pinned
+  // against each other in one place (spec C9).
 });
 
 describe('codexPlatformPkgCandidates (A2b — kills the double-scope defect)', () => {

@@ -691,8 +691,18 @@ export class AgentHostManager {
  * NOTE FOR REVERTS: this function is the single switch that decides whether an
  * already-installed Linux user's Agent Host keeps using their machine Node or
  * moves to the bundled 24.18.0. That is a runtime replacement, not a pure
- * addition, so this change is kept as its own commit — revert this one commit
- * to put Linux back on machine Node (packaging spec §5.4 risk register).
+ * addition (packaging spec §5.4 risk register).
+ *
+ * The rollback is THIS FUNCTION, not a commit revert. `b8cfe15` isolated the
+ * switch, but a later formatting pass (`485decc`) rewrote test files that
+ * commit had added, so `git revert b8cfe15` no longer applies cleanly —
+ * verified 2026-08-20 by reverse-applying the patch, which fails on
+ * scripts/__tests__/node-runtime-pin.test.mjs. Reverting it would also drop the
+ * three-table consistency tests, which have nothing to do with this switch.
+ *
+ * To put Linux back on machine Node: gate this function to win32 again
+ * (`if (process.platform !== 'win32') return undefined;`) and leave everything
+ * else in place.
  */
 export function getBundledNodeRuntimePath(): string | undefined {
   if (!app.isPackaged) return undefined;

@@ -45,6 +45,7 @@ import { describeExit, isCleanExit, samePathText } from './codex-smoke-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 import {
   evaluateAgentHostSize,
+  evaluateAppDirSize,
   evaluateCodexBinarySize,
   formatBytes,
   topDirectories,
@@ -388,7 +389,12 @@ function checkCodexStructure(hostDir, codexPin) {
     );
   }
 
-  return { pkgRel, codexBytes };
+  // `P` for the spec §6.3 secondary gate: the whole shipped @openai payload,
+  // the same term build-agent-host reports for the budget table.
+  const openaiDir = path.join(nodeModules, '@openai');
+  const codexPayloadBytes = fs.existsSync(openaiDir) ? dirSize(openaiDir) : null;
+
+  return { pkgRel, codexBytes, codexPayloadBytes };
 }
 
 function checkStructure(appDir, codexPin) {
@@ -980,6 +986,36 @@ async function checkCodexSmoke(appDir, runtime, codexPin) {
   }
 }
 
+/**
+ * Spec §6.3 secondary gate. WARN only, never a failure: this bound is about
+ * total runaway, and Electron/monaco swings unrelated to this batch must not
+ * turn the packaging chain red. The measured bytes are printed either way, so
+ * an unset baseline can be filled from a real run.
+ */
+function checkAppDirSize(appDir, structure) {
+  if (!fs.existsSync(appDir)) return;
+  const platformKey = `${process.platform}-${process.arch}`;
+  const bytes = dirSize(appDir);
+  const verdict = evaluateAppDirSize(platformKey, bytes, structure?.codexPayloadBytes ?? null);
+
+  console.log(`[verify-packaged-app] appDir total: ${formatBytes(bytes)} (${bytes}B)`);
+  if (verdict.status === 'no-baseline') {
+    console.log(
+      `[verify-packaged-app] PENDING appDir baseline for ${platformKey} — fill ` +
+        `APP_DIR_BASELINE in scripts/packaging-budget.mjs with this platform's ` +
+        `pre-codex appDir bytes to arm the spec §6.3 secondary warning.`
+    );
+    return;
+  }
+  if (verdict.status === 'over') {
+    console.warn(
+      `[verify-packaged-app] WARN appDir ${formatBytes(bytes)} exceeds ` +
+        `${formatBytes(verdict.ceiling)} = 2 x (baseline + codex payload). ` +
+        `Not a failure (spec §6.3), but something grew a lot.`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -1007,7 +1043,9 @@ async function main() {
     codexPin ?? 'pass --codex-pin <version> when running outside the repo'
   );
 
-  checkStructure(args.appDir, codexPin);
+  const structure = checkStructure(args.appDir, codexPin);
+
+  checkAppDirSize(args.appDir, structure);
 
   const bundled = checkNodeRuntime(args.appDir);
 

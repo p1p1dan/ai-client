@@ -290,6 +290,44 @@ preflight / mustExist / mustNotExist / verifier **四处共用同一函数**，�
 
 **施工时的闭合动作（必须做，做完把结论回填本节并升/降级）**：任选其一 —— ① **进程树取证**：跑一个真回合（或 S2 握手后的最小工具调用），`ps --forest` / Process Explorer 看是否出现 `codex-code-mode-host` 子进程；② **有/无对照**：临时移走该文件跑同一场景，观察是否报错。
 **闭合结果的三条去向**：证实消费 ⇒ 升级为 `[实测]`、mustExist 保留；证实不消费 ⇒ **另立 prune 票**（省 44 MiB），本规格不改；无法取证 ⇒ 维持 `[推测/保守决策]` 并在遗留登记。
+
+---
+
+#### 闭合结果（2026-08-21 回填，证据等级 `[推测]` → `[实测]`）
+
+三条并行取证，走的是**第三条路**：两条规定动作都做了，但决定性证据来自随包原生二进制自身，且**不花额度、不需凭据**。
+
+**① 进程树（linux-x64，随包布局，S2 握手）** —— 三级链成立，`code-mode-host` **未起**：
+```
+node out-node-runtime/node  →  codex.js app-server  →  vendor/…/bin/codex app-server
+descendants: 74026 …/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex app-server
+code-mode-host: NOT RUNNING
+```
+
+**② 有/无对照** —— 把 `bin/codex-code-mode-host`（46,139,288 B）临时移走，S1 `--version` 与 S2 `initialize` **均照常通过**。
+
+⇒ ①② 合起来只证明一件事：**握手与版本路径不依赖它**。这不是「不消费」的证据，因为 code mode 本来就只可能在**真回合**里进入，而真回合要凭据与额度（铁律 §1.2，归 S3）。若就此停手，结论只能停在「无法取证」。
+
+**③ 原生二进制的字符串证据（决定性）** —— `strings vendor/x86_64-unknown-linux-musl/bin/codex` 命中 **34 处** code-mode 运行时串，其中包含**只有真去 spawn 一个子进程才会存在**的那几类：
+
+| 命中 | 说明 |
+|---|---|
+| `spawned code-mode host has no stdin` / `has no stdout` | 拿到子进程句柄后检查 stdio —— 直接证明 spawn |
+| `code-mode host spawn coordinator closed` | 存在专门的 spawn 协调器 |
+| `timed out negotiating with the code-mode host` · `returned an invalid handshake response` · `sent a second handshake response` | 与该子进程有**握手协议** |
+| `code-mode host delegated for unknown cell/session` · `stale code-mode host generation` | cell/session 级委派与代号管理 |
+| **`CODEX_CODE_MODE_HOST_PATH`** | 上游给的**路径覆盖环境变量**（排障逃生口，本批不消费但登记） |
+| **`codex-code-mode-host`** | **精确文件名**，在字符串表中与上一条紧邻 |
+
+⇒ **裁定不变（保留），但证据等级升为 `[实测]`**：原生 codex 内置了对名为 `codex-code-mode-host` 的子进程的 spawn + 握手 + 委派全套协议，「`code_mode_only` ⇒ 需要那颗二进制」不再是名字上的推断。§0.2-② 与改判 ② 的「保守决策」定性同步升级；mustExist 第 6 条与 M5 变异臂的咬合力由此有了真实依据。
+
+**仍未证（不改变裁定）**：我们下发的默认模型在真回合中确会走到 code mode 分支、并解析到**随包这一份**（而非 PATH 上另一份）。这需要真回合 smoke（S3，要额度），维持不做。`CODEX_CODE_MODE_HOST_PATH` 的存在旁证了「按路径解析、可覆盖」。
+
+复现命令（本机 linux-x64，零成本）：
+```bash
+V=out-agent-host/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl
+strings -a $V/bin/codex | grep -iE 'code-mode host|CODEX_CODE_MODE_HOST_PATH|codex-code-mode-host'
+```
 **反证条件（将来要省这 44 MiB 必须先满足）**：① 上述闭合动作证实不消费，或有实证说明我们下发的每个 model 都不是 `code_mode_only`（D48-S2 的目录白名单落地后才可能有这个前提）；② prune 后跑一次**真回合** smoke（要额度，须先报量）。
 
 ### 3.6 mustExist / mustNotExist（`verifyArtifact`，`:220-250`）
@@ -794,7 +832,7 @@ rev.1 写的是「把 `build-agent-host.mjs` 里的三个函数改成可注入�
 | 「Windows 平台包的 vendor 布局与 linux 同形」**+「`codex.exe` ≥ 200 MiB」** | **零证据**（本机只有 linux-x64） | **统一归入 Q1 两步走**：mustExist 第 7/8 条改为**读上游 manifest 的 `pathDir`/`resourcesDir`** 而非硬编码目录名；首个 win CI 跑 `continue-on-error` 打印平台包文件清单与各文件字节 → 回填进本节与 `CODEX_BINARY_FLOOR` → 第二跑转硬门禁 |
 | 「`pathsEqual` 的路径比较对目标平台正确」 | `NodeRuntimeResolver` 的 `pathsEqual`/`path.normalize`（`:62-65`）用的是 **`node:path` 的宿主默认导出**，而该文件其它地方是靠 `options.platform` 描述目标平台的 | **本批不改**（属 REQ-9 保护面），但登记：D36 后 Linux/Windows 两条 bundled 路径都要过这个比较，**若将来出现「同一路径被判成两个候选」的重复探测，先看这里**。与 `codexNodeEntry.ts:117-119` 的 `pathApi(platform)` 做法对照（那边是对的）——B-12 |
 | 「`codex.js --version` 会输出 `codex-cli <ver>`」 | 本机 `[实测]`（经 shim，等价于 `node codex.js`） | D4 首跑即验证；若 win 上格式不同，按实测调整断言（**不许放宽成 includes**） |
-| 「npmmirror 有 linux tar.gz 镜像」 | `[推测]`（按 win 条目形状外推） | `curl -I` 验活；不通就只留官方源 |
+| 「npmmirror 有 linux tar.gz 镜像」 | **`[实测]` 2026-08-21 验活通过** | `curl -sIL` → `302` 至 `https://cdn.npmmirror.com/binaries/node/v24.18.0/node-v24.18.0-linux-x64.tar.gz` → `200 application/gzip`，`content-length: 57224421`（与官方源真下载的字节数逐字节相同），首 64 字节为真 gzip 头且内含 `node-v24.18.0-linux-x6…`。镜像**保留**。附带核实：下载走 `fetch()`，默认 `redirect: 'follow'`，故 302 不构成障碍 |
 | 「GitHub runner 磁盘够 480MB 包」 | 无核算 | §5.7 的 `df -h` 前后两测 |
 
 ---

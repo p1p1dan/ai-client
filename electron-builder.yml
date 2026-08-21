@@ -44,10 +44,11 @@ files:
   - "!node_modules/shiki/dist/themes/**"
   - "!node_modules/@shikijs/langs/**"
   - "!node_modules/@shikijs/themes/**"
-  # Exclude the Agent SDK's bundled CLI binaries from the root asar. Both agent
-  # CLIs (Claude and Codex) are shipped inside resources/agent-host by
-  # scripts/afterPack.mjs instead, so the root bundle carries no agent CLI at
-  # all. Do NOT add exclusions for agent CLI packages that are not root
+  # Exclude the Agent SDK's bundled CLI binaries from the root asar. The agent
+  # CLIs ship inside resources/agent-host via scripts/afterPack.mjs instead, so
+  # the root bundle carries no agent CLI at all — Claude on every platform,
+  # Codex only where it is whitelisted (win32/linux; mac ships no Codex at all,
+  # spec 改判 ⑧). Do NOT add exclusions for agent CLI packages that are not root
   # dependencies — a rule that can never match reads as evidence that the
   # package IS a root dependency, which is how the previous Codex rule survived
   # for so long.

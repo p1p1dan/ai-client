@@ -5,10 +5,12 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  APP_DIR_BASELINE,
   agentHostCeiling,
   agentHostFloor,
   CODEX_BINARY_FLOOR,
   evaluateAgentHostSize,
+  evaluateAppDirSize,
   evaluateCodexBinarySize,
   formatBytes,
   hasBudget,
@@ -150,5 +152,40 @@ describe('formatBytes', () => {
   it('renders MiB with one decimal', () => {
     expect(formatBytes(406599430)).toBe('387.8MiB');
     expect(formatBytes(0)).toBe('0.0MiB');
+  });
+});
+
+describe('evaluateAppDirSize — secondary WARN gate (spec §6.3)', () => {
+  const P = 363716282;
+
+  it('reports no-baseline until a platform is measured, never a silent ok', () => {
+    // Same discipline as PACKAGING_BUDGET: an unmeasured platform must read as
+    // PENDING, because 'ok' here would look like the gate had checked something.
+    expect(evaluateAppDirSize('linux-x64', 999, P).status).toBe('no-baseline');
+    expect(evaluateAppDirSize('darwin-arm64', 999, P).status).toBe('no-baseline');
+  });
+
+  it('reports no-baseline when the codex payload is unknown', () => {
+    // Without P the bound is not computable; guessing one would invent a gate.
+    expect(evaluateAppDirSize('linux-x64', 999, null).status).toBe('no-baseline');
+  });
+
+  it('passes at the ceiling and only warns above it, once a baseline exists', () => {
+    const baseline = 433000000;
+    const ceiling = 2 * (baseline + P);
+    const previous = APP_DIR_BASELINE['linux-x64'];
+    APP_DIR_BASELINE['linux-x64'] = baseline;
+    try {
+      // Inclusive upper bound, same convention as the agent-host budget.
+      expect(evaluateAppDirSize('linux-x64', ceiling, P)).toEqual({
+        status: 'ok',
+        bytes: ceiling,
+        ceiling,
+      });
+      expect(evaluateAppDirSize('linux-x64', ceiling + 1, P).status).toBe('over');
+      expect(evaluateAppDirSize('linux-x64', 1, P).status).toBe('ok');
+    } finally {
+      APP_DIR_BASELINE['linux-x64'] = previous;
+    }
   });
 });

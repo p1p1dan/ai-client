@@ -89,6 +89,24 @@ async function alreadySatisfied(pin, outPath) {
 // transient network issue.
 // ---------------------------------------------------------------------------
 async function downloadArchive(pin, destinationPath) {
+  // Honour an archive that is already sitting there and matches the pin. This
+  // is what makes the offline instruction at the bottom of this function
+  // actually work: it used to say "place the archive here and re-run" while
+  // main() deleted that very file before every attempt, so the only way to
+  // follow the advice was to have it ignored.
+  if (await fileExists(destinationPath)) {
+    if ((await sha256File(destinationPath)) === pin.sha256) {
+      console.log(`[fetch-node-runtime] using the archive already at ${destinationPath}`);
+      return `local file ${destinationPath}`;
+    }
+    // Wrong or half-written leftover: never extract it, never treat it as a
+    // network failure either.
+    console.warn(
+      `[fetch-node-runtime] discarding ${destinationPath}: checksum does not match the pin`
+    );
+    await rm(destinationPath, { force: true });
+  }
+
   const networkErrors = [];
   for (const url of pin.urls) {
     console.log(`[fetch-node-runtime] downloading ${url}`);
@@ -124,7 +142,8 @@ async function downloadArchive(pin, destinationPath) {
 
   fail(
     `all download URLs failed:\n  ${networkErrors.join('\n  ')}\n` +
-      `If offline, manually place the archive at ${destinationPath} and re-run.`
+      `If offline, place a verified ${pin.archiveName} at ${destinationPath} and re-run — ` +
+      `a file already there is used as-is when its SHA-256 matches the pin.`
   );
 }
 
@@ -191,8 +210,9 @@ async function main() {
 
   await mkdir(outDir, { recursive: true });
 
+  // Not removed here: downloadArchive decides, so a pin-matching archive placed
+  // by hand survives (offline path) while a mismatching leftover is discarded.
   const archivePath = join(outDir, `.tmp-${pin.archiveName}`);
-  await rm(archivePath, { force: true });
 
   const fetchedFrom = await downloadArchive(pin, archivePath);
 
