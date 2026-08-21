@@ -32,10 +32,16 @@ jobs:
         with:
           version: 10.26.2
 
+      # 24, not 20: the Host behaviour-lock tests spawn the real entry with
+      # `node --experimental-strip-types src/agent-host/index.ts`, and that flag
+      # only exists from Node 22.6 — Node 20 rejects it as an invalid argument
+      # and the child dies with exit 9 before emitting anything, so every test
+      # in protocolErrors.test.ts fails identically. 24 also matches
+      # src/agent-host/package.json engines (>=24), which is what actually runs.
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Get pnpm store directory
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV

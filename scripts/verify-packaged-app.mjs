@@ -1004,8 +1004,9 @@ async function main() {
   // NOT folded into the `node24 || bundled` OR below. Without this, a broken
   // bundled runtime is invisible: NodeRuntimeResolver.probeNodeBinary only
   // `continue`s past a candidate that fails to probe, so the app silently
-  // falls back to machine Node and CI — which has Node 24 installed — stays
-  // green while shipping a runtime that does not work on a bare user machine.
+  // falls back to machine Node, so any machine that has a usable Node on PATH
+  // stays green while shipping a runtime that does not work on a bare user
+  // machine.
   const runtimePin = nodeRuntimePinFor(process.platform, process.arch);
   if (runtimePin) {
     check(
