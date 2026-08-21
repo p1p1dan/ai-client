@@ -26,3 +26,20 @@ export function describeExit({ code, signal }) {
   if (code === null || code === undefined) return 'no exit status';
   return `code ${code}`;
 }
+
+/**
+ * Path equality for the S2 `codexHome` echo.
+ *
+ * Raw `===` is wrong on Windows: `os.tmpdir()` on a GitHub runner hands back the
+ * 8.3 short form (`C:\\Users\\RUNNER~1\\AppData\\Local\\Temp`) while codex reports the
+ * resolved long form, so the same directory compares unequal — the caller
+ * therefore canonicalises with `fs.realpathSync.native` before calling this, and
+ * this handles the remaining difference: Windows paths are case-insensitive.
+ * Same hazard the spec flags for NodeRuntimeResolver.pathsEqual (§10.3-B12).
+ *
+ * `platform` is injected so a Linux test box can exercise the win32 arm.
+ */
+export function samePathText(a, b, platform = process.platform) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  return platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}

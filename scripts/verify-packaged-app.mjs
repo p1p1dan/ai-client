@@ -41,7 +41,7 @@ import {
   codexTargetTriple,
   isCodexShippedPlatform,
 } from './codex-platform.mjs';
-import { describeExit, isCleanExit } from './codex-smoke-lib.mjs';
+import { describeExit, isCleanExit, samePathText } from './codex-smoke-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 import {
   evaluateAgentHostSize,
@@ -925,7 +925,12 @@ async function checkCodexSmoke(appDir, runtime, codexPin) {
   // S2 — three-level process chain under the packaged layout, which S1 cannot
   // prove. Observation mode on first run (spec §6.2 two-step): Windows has zero
   // evidence for app-server's behaviour without auth.json.
-  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'aiclient-codex-smoke-'));
+  // realpath, not the raw mkdtemp result: os.tmpdir() yields an 8.3 short path
+  // on Windows runners and codex echoes the resolved long form, so the echo
+  // assertion below would fail on the very directory we just handed it.
+  const codexHome = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'aiclient-codex-smoke-'))
+  );
   try {
     const s2 = await runCodexAppServerSmoke(runtime, codexJs, codexHome);
     const platformKey = `${process.platform}-${process.arch}`;
@@ -949,8 +954,8 @@ async function checkCodexSmoke(appDir, runtime, codexPin) {
         const result = s2.frame?.result ?? {};
         check(
           'codex S2 smoke: initialize echoed our CODEX_HOME',
-          result.codexHome === codexHome,
-          `got ${result.codexHome}`
+          samePathText(result.codexHome, codexHome),
+          `got ${result.codexHome}, sent ${codexHome}`
         );
         check(
           'codex S2 smoke: platformOs matches this platform',

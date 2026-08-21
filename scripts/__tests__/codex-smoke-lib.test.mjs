@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { describeExit, isCleanExit } from '../codex-smoke-lib.mjs';
+import { describeExit, isCleanExit, samePathText } from '../codex-smoke-lib.mjs';
 
 /**
  * Packaging spec §6.2 — the S2 "干净退出" assertion.
@@ -48,5 +48,31 @@ describe('describeExit', () => {
 
   it('says so when neither is available', () => {
     expect(describeExit({ code: null, signal: null })).toBe('no exit status');
+  });
+});
+
+describe('samePathText (S2 codexHome echo)', () => {
+  it('is case-insensitive on win32 — the same path in different case is the same path', () => {
+    expect(
+      samePathText(
+        'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\x',
+        'C:\\Users\\RunnerAdmin\\AppData\\Local\\Temp\\x',
+        'win32'
+      )
+    ).toBe(true);
+  });
+
+  it('is case-sensitive off win32', () => {
+    expect(samePathText('/tmp/AiClient', '/tmp/aiclient', 'linux')).toBe(false);
+    expect(samePathText('/tmp/x', '/tmp/x', 'linux')).toBe(true);
+  });
+
+  it('still rejects a genuinely different directory', () => {
+    // The relaxation must not turn the echo assertion into a tautology.
+    expect(
+      samePathText('C:\\Users\\runneradmin\\AppData\\Local\\Temp\\a', 'C:\\Temp\\b', 'win32')
+    ).toBe(false);
+    expect(samePathText(undefined, '/tmp/x', 'linux')).toBe(false);
+    expect(samePathText('/tmp/x', undefined, 'linux')).toBe(false);
   });
 });
