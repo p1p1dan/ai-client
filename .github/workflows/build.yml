@@ -35,12 +35,14 @@ jobs:
         with:
           version: 10.26.2
 
-      # 24, not 20: the Host behaviour-lock tests spawn the real entry with
-      # `node --experimental-strip-types src/agent-host/index.ts`, and that flag
-      # only exists from Node 22.6 — Node 20 rejects it as an invalid argument
-      # and the child dies with exit 9 before emitting anything, so every test
-      # in protocolErrors.test.ts fails identically. 24 also matches
-      # src/agent-host/package.json engines (>=24), which is what actually runs.
+      # 24 across every job (user decision, 2026-08-21), matching
+      # src/agent-host/package.json engines (>=24) — the version that actually
+      # runs the Host. It started here out of necessity: the behaviour-lock tests
+      # spawn the real entry with `node --experimental-strip-types`, a flag that
+      # only exists from Node 22.6, so on Node 20 the child died with exit 9
+      # before emitting anything and every test in protocolErrors.test.ts failed
+      # identically. Leaving the other jobs on 20 would have kept three
+      # contradictory Node truths in the repo (.nvmrc 22 / CI 20 / engines 24).
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
@@ -99,7 +101,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Get pnpm store directory
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
@@ -153,7 +155,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@p1p1dan'
 
@@ -191,26 +193,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # REQ-7: agent-host runs its own `npm ci`, which re-downloaded every
-      # package on every run. Keyed on the lockfile hash so a dependency bump
-      # cannot keep restoring a stale cache.
+      # No agent-host npm cache here on purpose (REQ-7 accounting, decided
+      # 2026-08-21). It was measured on runs 32444722264 / 32448401467: with the
+      # cache restored, `npm ci` took 8s on Windows and 11s on Linux — against
+      # 7s and 11s with a cold cache. Zero gain, for a 278-362 MB entry competing
+      # with the electron/pnpm caches inside the repo's 10 GB LRU budget.
       #
-      # The path is asked of npm, never assumed: the first run cached
-      # ~\AppData\Local\npm-cache (npm's documented Windows default) and saved
-      # nothing at all, because hosted Windows runners preset npm_config_cache
-      # elsewhere. A cache step pointing at a non-existent directory fails
-      # silently — it just never restores anything.
-      - name: Resolve npm cache dir
-        shell: pwsh
-        run: echo "NPM_CACHE_DIR=$(npm config get cache)" >> $env:GITHUB_ENV
-
-      - name: Cache agent-host npm cache
-        uses: actions/cache@v5
-        with:
-          path: ${{ env.NPM_CACHE_DIR }}
-          key: ${{ runner.os }}-agenthost-npm-${{ hashFiles('src/agent-host/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-agenthost-npm-
-
       # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
       # src/agent-host is a standalone npm project; npm ci must include optional
       # deps so the cometix postinstall can copy cli.js + vendor/.
@@ -223,18 +211,9 @@ jobs:
       # Every filesystem drive, not just C:. The workspace lives on D: on hosted
       # Windows runners, so the first run's three C: readings were identical
       # (80.2 GB free throughout) and said nothing about the packaging cost.
-      - name: Report npm cache size and disk (REQ-7)
+      - name: Report disk after install (REQ-7)
         shell: pwsh
-        run: |
-          $cache = "$env:NPM_CACHE_DIR"
-          if (Test-Path $cache) {
-            $bytes = (Get-ChildItem $cache -Recurse -File -ErrorAction SilentlyContinue |
-              Measure-Object -Property Length -Sum).Sum
-            Write-Host "npm cache: $cache = $bytes B"
-          } else {
-            Write-Host "npm cache: $cache absent"
-          }
-          Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
+        run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
       # Spec §11-Q1 evidence: this repo has never produced a Windows artifact,
       # so the vendor layout, the per-file bytes and codex.exe's real size are
@@ -323,7 +302,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@p1p1dan'
 
@@ -351,23 +330,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # REQ-7, same reasoning as the Windows job.
-      - name: Cache agent-host npm cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-agenthost-npm-${{ hashFiles('src/agent-host/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-agenthost-npm-
-
+      # No agent-host npm cache — see the Windows job for the measurement.
+      #
       # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
       - name: Install agent-host dependencies
         run: npm ci
         working-directory: src/agent-host
 
-      - name: Report npm cache size and disk (REQ-7)
-        run: |
-          du -sb ~/.npm 2>/dev/null || echo "npm cache absent"
-          df -h /
+      - name: Report disk after install (REQ-7)
+        run: df -h /
 
       # Prints the @openai tree file by file. Linux is already measured, so this
       # is the comparison baseline for the Windows listing (spec §10.3 hoist
@@ -437,7 +408,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Get pnpm store directory
         run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV

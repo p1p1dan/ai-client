@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -122,6 +123,86 @@ describe('build.yml node runtime steps (C6, D36④)', () => {
       expect(cacheStep, job).toBeDefined();
       expect(cacheStep.with.key, job).toContain("hashFiles('scripts/node-runtime-pin.mjs')");
       expect(cacheStep.with.key, job).not.toMatch(/24\.18\.0/);
+    }
+  });
+});
+
+describe('local packaging is host-platform only (#9, user decision 2026-08-21)', () => {
+  const jobs = workflow.jobs;
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+
+  // dist:prereq stages HOST inputs (fetch-node-runtime defaults to
+  // process.platform, build-agent-host copies this machine's node-pty and codex
+  // platform package) while afterPack takes TARGET files. Every packaging entry
+  // point must refuse the mismatch before any of that work happens.
+  const guarded = [
+    ['build:win', 'win32-x64'],
+    ['build:linux', 'linux-x64'],
+    ['build:mac', 'darwin'],
+    ['build:mac:unsigned', 'darwin'],
+    ['build:mac:debug', 'darwin'],
+  ];
+
+  for (const [script, target] of guarded) {
+    it(`${script} asserts the target before dist:prereq`, () => {
+      const command = pkg.scripts[script];
+      expect(command, script).toBeDefined();
+      // Order matters: guarding after dist:prereq would still burn the download
+      // and the 400MB copy before refusing.
+      expect(command, script).toMatch(
+        new RegExp(`^node scripts/assert-build-target\\.mjs ${target} &&`)
+      );
+      expect(command.indexOf('assert-build-target'), script).toBeLessThan(
+        command.indexOf('dist:prereq')
+      );
+    });
+  }
+
+  it('the guard exits 0 for this host and 1 for a foreign target', () => {
+    const run = (target) =>
+      spawnSync(
+        process.execPath,
+        [path.join(repoRoot, 'scripts/assert-build-target.mjs'), target],
+        {
+          encoding: 'utf8',
+        }
+      );
+
+    expect(run(`${process.platform}-${process.arch}`).status).toBe(0);
+    expect(run(process.platform).status).toBe(0);
+
+    const foreign = run('nosuchplatform-x64');
+    expect(foreign.status).toBe(1);
+    // The message has to name both sides, or the reader cannot tell what to do.
+    expect(foreign.stderr).toContain('nosuchplatform-x64');
+    expect(foreign.stderr).toContain(`${process.platform}-${process.arch}`);
+  });
+
+  it('no agent-host npm cache step survives (REQ-7: measured zero gain)', () => {
+    for (const job of ['build-windows', 'build-linux']) {
+      const steps = jobs[job].steps.filter((step) => step.uses?.startsWith('actions/cache'));
+      const paths = steps.map((step) => String(step.with?.path ?? ''));
+      expect(
+        paths.some((p) => /npm-cache|\.npm/.test(p)),
+        job
+      ).toBe(false);
+    }
+  });
+
+  it('every job runs Node 24, matching src/agent-host engines', () => {
+    // Three contradictory Node truths (.nvmrc 22 / CI 20 / engines >=24) cost a
+    // full red CI run once already: Node 20 has no --experimental-strip-types.
+    const engines = JSON.parse(
+      readFileSync(path.join(repoRoot, 'src/agent-host/package.json'), 'utf8')
+    ).engines.node;
+    expect(engines).toBe('>=24');
+
+    for (const [name, job] of Object.entries(jobs)) {
+      const setup = job.steps?.filter((step) => step.uses?.startsWith('actions/setup-node')) ?? [];
+      for (const step of setup) {
+        expect(String(step.with['node-version']), name).toBe('24');
+      }
     }
   });
 });
