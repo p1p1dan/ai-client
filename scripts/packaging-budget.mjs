@@ -61,15 +61,25 @@ export const PACKAGING_BUDGET = {
  * swings have nothing to do with this batch and must not fail the packaging
  * chain. It exists to catch total runaway, nothing finer.
  *
- * `baseline appDir` is the platform's app directory BEFORE codex was bundled.
- * The spec records linux-unpacked ~= 413 MB, but with no stated unit — and
- * §0.3's dimension discipline forbids turning an ambiguous MB into a byte
- * constant. So these start null and get filled from a measured run, exactly
- * like PACKAGING_BUDGET: the verifier prints the real bytes either way.
+ * `baseline appDir` is the app directory WITHOUT the codex payload, measured
+ * on CI run 32448401467 (2026-08-21) as `appDir total - codexPayload`:
+ *
+ *   linux-x64  990,967,116 - 363,716,282 = 627,250,834
+ *   win32-x64  1,198,625,823 - 427,157,004 = 771,468,819
+ *
+ * AS-BUILT DEVIATION (spec §6.3 allows the implementer to re-cut this gate):
+ * the spec anchors the term on the PRE-codex app directory, "linux-unpacked
+ * = 413 MB". That number is not usable as written — it carries no unit (413 MB
+ * decimal and 413 MiB differ by 20 MB), it predates this batch's Electron and
+ * monaco movement, and Windows has no pre-codex measurement at all because the
+ * repo had never built one. Deriving it from a measured run instead makes the
+ * bound "twice today's app directory", which is looser than the spec's anchor
+ * and stated plainly here rather than hidden: this gate only ever claimed to
+ * catch total runaway, and it never turns anything red.
  */
 export const APP_DIR_BASELINE = {
-  'linux-x64': null,
-  'win32-x64': null,
+  'linux-x64': 627250834,
+  'win32-x64': 771468819,
 };
 
 /**

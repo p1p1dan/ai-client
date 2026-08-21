@@ -158,11 +158,24 @@ describe('formatBytes', () => {
 describe('evaluateAppDirSize — secondary WARN gate (spec §6.3)', () => {
   const P = 363716282;
 
-  it('reports no-baseline until a platform is measured, never a silent ok', () => {
+  it('reports no-baseline for an unmeasured platform, never a silent ok', () => {
     // Same discipline as PACKAGING_BUDGET: an unmeasured platform must read as
     // PENDING, because 'ok' here would look like the gate had checked something.
-    expect(evaluateAppDirSize('linux-x64', 999, P).status).toBe('no-baseline');
     expect(evaluateAppDirSize('darwin-arm64', 999, P).status).toBe('no-baseline');
+  });
+
+  it('passes both measured platforms at their real appDir sizes', () => {
+    // The bytes CI actually produced on run 32448401467.
+    expect(evaluateAppDirSize('linux-x64', 990967116, 363716282).status).toBe('ok');
+    expect(evaluateAppDirSize('win32-x64', 1198625823, 427157004).status).toBe('ok');
+  });
+
+  it('warns once the app directory doubles', () => {
+    // The bound is 2x(baseline + P); one byte past it must flip to 'over', or
+    // the gate is decoration.
+    const ceiling = 2 * (APP_DIR_BASELINE['linux-x64'] + 363716282);
+    expect(evaluateAppDirSize('linux-x64', ceiling, 363716282).status).toBe('ok');
+    expect(evaluateAppDirSize('linux-x64', ceiling + 1, 363716282).status).toBe('over');
   });
 
   it('reports no-baseline when the codex payload is unknown', () => {
@@ -170,22 +183,8 @@ describe('evaluateAppDirSize — secondary WARN gate (spec §6.3)', () => {
     expect(evaluateAppDirSize('linux-x64', 999, null).status).toBe('no-baseline');
   });
 
-  it('passes at the ceiling and only warns above it, once a baseline exists', () => {
-    const baseline = 433000000;
-    const ceiling = 2 * (baseline + P);
-    const previous = APP_DIR_BASELINE['linux-x64'];
-    APP_DIR_BASELINE['linux-x64'] = baseline;
-    try {
-      // Inclusive upper bound, same convention as the agent-host budget.
-      expect(evaluateAppDirSize('linux-x64', ceiling, P)).toEqual({
-        status: 'ok',
-        bytes: ceiling,
-        ceiling,
-      });
-      expect(evaluateAppDirSize('linux-x64', ceiling + 1, P).status).toBe('over');
-      expect(evaluateAppDirSize('linux-x64', 1, P).status).toBe('ok');
-    } finally {
-      APP_DIR_BASELINE['linux-x64'] = previous;
-    }
+  it('reports the ceiling it used, so a warning can be acted on', () => {
+    const ceiling = 2 * (APP_DIR_BASELINE['linux-x64'] + P);
+    expect(evaluateAppDirSize('linux-x64', 1, P)).toEqual({ status: 'ok', bytes: 1, ceiling });
   });
 });
