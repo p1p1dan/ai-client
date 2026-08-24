@@ -871,7 +871,22 @@ view.failed ? 'text-destructive' : 'text-muted-foreground'
 
 ⇒ **Denied 的色彩语义至今未经用户追认。** 本批合并会重新暴露这个视觉决策，**正是顺路补追认的时机** ⇒ §12 Q7。**不得默认它已生效。**
 
-**被拒的工具调用还有没有 `Ran X` 行**：⚠️【推测，须实测】按 SDK 语义，被 deny 的工具**不会执行**，故大概率**没有** `tool.started` ⇒ 没有 tool_call block ⇒ **配不上 ⇒ 走回落，独立行**。若属实，则「Denied 的合并形态」在 Claude 路径上**几乎不出现**，合并主要作用于 Allowed。⚠️ **这是唯一能推翻 §6.5 布局设计的未知量**，必须在真机上实测一次（§10 G-9），**不得凭推断施工**。
+**被拒的工具调用还有没有工具行**：✅ **【实测 2026-08-23，G-9 真机 deny】—— 有。rev.1/rev.2 的推测被推翻。**
+
+rev.1 的推测是：「被 deny 的工具不会执行 ⇒ 没有 `tool.started` ⇒ 没有 tool_call block ⇒ 配不上 ⇒ 走回落独立行」，并据此判断「Denied 的合并形态在 Claude 路径上几乎不出现，合并主要作用于 Allowed」。**实测四条全部相反**：
+
+| # | 实测事实（Write 工具，Default 档，真机点 Deny） |
+|---|---|
+| ① | **tool_call block 存在。** 折叠行渲染为 `Edited tmp/g9-deny-probe.txt`，可展开，内含工具输入 `{"file_path": "/tmp/g9-deny-probe.txt", "content": "probe\n"}` 与工具结果 `User denied permission` ⇒ 工具**走到了有 result 的程度**，不是「没发生过」 |
+| ② | **决议行独立存在且结构同构。** `Denied  Write — /tmp/g9-deny-probe.txt`，类串与工具行同族：`group/row flex w-full items-baseline gap-1.5 text-left text-markdown leading-normal text-destructive` + `shrink-0` 动词 span + `min-w-0 truncate` 参数 span |
+| ③ | **两行都已经是 `text-destructive`**（实测 `oklch(0.5042 0.1648 27.84)`），工具行走的是 `ToolRows.tsx:76-79` 的 `view.failed` 分支 |
+| ④ | **回合头把它计入**：`Worked for 2m 11s · 1 edit` |
+
+⇒ **§6.5 的布局设计成立**（Denied 场景下确实是待合并的两行），而不是「几乎不出现」。**FB7 的合并对 Denied 同样适用**，`[FB7-1]`/`[FB7-2]` 的夹具必须覆盖 Denied 态，不能只测 Allowed。
+
+⚠️ **连带订正 D24「灰阶」口径**：`[FB7-7]` 断言「徽记类串不含 `bg-` / `border` / 图标组件名」**仍然成立且必须保留**，但「**灰阶**纯文本」这个措辞在 Denied 场景下**本就不适用** —— `ToolRows.tsx` 的 failed 分支早有 `text-destructive` 先例，D28 连带项指的正是它。合并后 Denied 行为红色**不构成 R7 回滚 D24**。（Q7 的追认照旧要走，见 §12。）
+
+⚠️ **实测顺带发现一处既有文案缺陷（不在 FB7 范围，已另立票）**：动词是**完成式**（`Edited`；Bash 路径同理为 `Ran`），而操作**被拒、根本没执行**；回合头也把它算作 `1 edit`。折叠态单看 `Edited tmp/g9-deny-probe.txt` 是在说「改过了」，靠红色与展开后的 `User denied permission` 才救回来。**FB7 合并后这个矛盾会更显眼** —— 合并行会读成「`Edited …` · `Denied`」，自相矛盾摆在同一行。⇒ 见 [inbox 另立票](../plantree/ideas/inbox.md)。
 
 ### 6.5 裁定 D+E：D28「决议单行」语义的保留 + 合并行信息形态
 
