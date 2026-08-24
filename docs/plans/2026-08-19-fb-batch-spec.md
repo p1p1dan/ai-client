@@ -1,4 +1,4 @@
-# 0820 使用反馈批（FB 批）施工规格 rev.1
+# 0820 使用反馈批（FB 批）施工规格 rev.2
 
 > 上游分诊：`docs/plans/2026-08-19-usage-feedback-0820-triage.md`（FB1~FB11 全表 + §2 改判清单 + §4 D53 三项拍板）。
 > 本档只写规格，**不改任何生产代码**。
@@ -8,7 +8,9 @@
 | 项 | 值 |
 |---|---|
 | 日期 | 2026-08-19 |
-| **锚点基线 HEAD** | **`99dfd78`**（`docs(plans): D53 落账——0820 反馈批三项拍板收口`）—— 本档全部 `file:line` 在此 commit 实读重取 |
+| **锚点基线 HEAD** | **`99dfd78`**（`docs(plans): D53 落账——0820 反馈批三项拍板收口`）—— rev.1 全部 `file:line` 在此 commit 实读重取 |
+| **rev.2 复核 HEAD** | **`347ab26b`**（`99dfd78` 之后 34 个提交）——【实测】`git diff --name-only 99dfd78..347ab26b -- src/renderer` **零命中**，渲染端锚点整体仍有效（双轨各自抽验 60+ 条逐字全中）；但**阶段 4 打包链改过 `electron-builder.yml` / `scripts/**` / `package.json`**，凡涉这三处的锚点已在 rev.2 逐条重取 |
+| **rev.2 依据** | 双轨双盲评审 2026-08-23 重跑，合取 **3 blocker · 10 major · 7 minor ＝ 20 条修订项**，见 [仲裁档](./2026-08-19-fb-batch-review-arbitration.md) 与[两轨原文](./2026-08-19-fb-batch-reviews/) |
 | 上游批次边界 | **F456 批（D50）四片已 as-built 合入**（`b1b8f6c` / `1c5a797` / `1516623` / `19a65f7`），其产物 `turnAnswerContainerClass()` · `VERBS` · `↑↓` 双计数 · `stalled` 档 · `line-clamp-6` 全部**已在代码里**，本批在其之上施工 |
 | 用户拍板（不可讨论） | **D53 ①②③**（`openchamber-chat-refactor-ledger.md:97`）+ 用户 2026-08-19 反馈原文即拍板的六项 |
 | 决策号 | **不新立**。本批全部范围已由 **D53** 覆盖；施工中若产生新裁定，复取台账最大号后另立（当前最大 = D53） |
@@ -24,7 +26,7 @@
 
 1. **最大的技术不确定性在 FB1**，而它已被一条判据消解 —— 「**只在空行边界切分**」。CommonMark 的全部行内语法（未闭合行内 code、半截链接/图片、setext underline、GFM 表格分隔行）**都不能跨越空行**，因此这一条口径一次性消解了所有半截语法反例，无需逐类规则。剩余的跨空行块级容器只有围栏与 `$$`，用一个行扫描器的栈状态即可。
 2. **最大的工程量在 FB7，但它的核心难点是假的。** 分诊档 §1 FB7 写「合并需 permissionId↔toolCallId join，无纯模块做过」，D53 ② 写「需打通 permissionId↔toolCallId 关联」—— 【实测】**Claude 路径上二者本就是同一个字符串**，且这个相等已经引发过一次 P0 事故并被回归测试钉住。真正需要「打通」的只有 Codex 路径。⇒ L 档的核心不确定性消掉大半，剩下的是渲染形态与安全回落。
-3. **最大的隐藏风险在 FB9，且不在渲染层。** 两个地雷都在渲染代码之外：`electron-builder.yml:64` 已有一行 `"!node_modules/katex/**"`（mermaid 迁 CDN 时的遗留裁剪），不删则打包版公式**静默失效**；`globals.css:81-84` 的「无 bundled webfont」红线与 KaTeX 自带 woff2 字体正面冲突。
+3. **最大的隐藏风险在 FB9，且不在渲染层。** 两个地雷都在渲染代码之外：`electron-builder.yml:69`（rev.1 写 `:64`，阶段 4 后已漂）有一行 `"!node_modules/katex/**"`（mermaid 迁 CDN 时的遗留裁剪）—— ⚠️ **rev.2：「不删则打包版公式静默失效」这条因果尚未证明**（renderer 走独立 Vite 构建，katex 资产可能落 `out/renderer`），改为 **E-1 开工前构建取证**，见 §8.5；`globals.css:81-84` 的「无 bundled webfont」红线与 KaTeX 自带 woff2 字体正面冲突。
 4. **最脆弱的一件是 FB6，因为它没有安全网。**【实测】「head 是回合首子元素」这条事实**没有任何测试钉住** —— `ChatTurn` 是 `memo(function ChatTurn…)`，而 `messageTimelineWiring.test.ts` 的定位器只认 `ts.FunctionDeclaration`，其 JSX 子树从未进入任何 AST 断言。⇒ FB6 是**零回归网改造**，必须先补钉子再动结构。
 
 ### 本规格内已决、不再复议
@@ -93,7 +95,7 @@
 
 ### 0.4 锚点总表（高漂移文件用「符号名 + 行号 + 关键原文」三元锚）
 
-**纪律**：`MessageTimeline.tsx`（1748 行）· `toolCard.ts`（828 行）· `questionCardModel.ts`（754 行）三份为高漂移，行号只是索引，**关键原文才是判据**；施工时行号对不上，以符号名 + 原文重新定位，**不得按行号盲改**。施工前跑 `git log --oneline -1` 确认仍是 `99dfd78`，已前移则逐条复取。
+**纪律**：`MessageTimeline.tsx`（1748 行）· `toolCard.ts`（828 行）· `questionCardModel.ts`（754 行）三份为高漂移，行号只是索引，**关键原文才是判据**；施工时行号对不上，以符号名 + 原文重新定位，**不得按行号盲改**。施工前跑 `git log --oneline -1`：已前移到 `99dfd78` 之外时逐条复取。**rev.2 已按 `347ab26b` 复核过一轮**——渲染端零漂移，`electron-builder.yml` 与 `ChatCodeBlock.tsx` 两处行号已订正（见下表）。
 
 #### 0.4-a `MessageTimeline.tsx`
 
@@ -155,14 +157,14 @@
 | 同上 | `:142-148` | `formatWorkedForDuration`（有分钟档，**无小时档**） | §7 |
 | `ToolRows.tsx` | `:76-79` | `'group/row flex w-full items-baseline gap-1.5 text-left text-markdown leading-normal'` + `view.failed ? 'text-destructive' : 'text-muted-foreground'` | §6.4（Denied 的天然载体） |
 | `ChatCodeBlock.tsx` | `:32-39` | `export const ChatCodeBlock = memo(function ChatCodeBlock({ code, language })` | §2.2 |
-| 同上 | `:57-59` | `<pre className={chatMarkdownCodeBlockClass()}><code>` —— **`<pre>` 无 `relative`** | §2.2 |
+| 同上 | `:58-60`（rev.1 写 `:57-59`；`:57` 是 `return (`） | `<pre className={chatMarkdownCodeBlockClass()}><code>` —— **`<pre>` 无 `relative`** | §2.2 |
 | `ChatMarkdown.tsx` | `:85-91` | `REMARK_PLUGINS = [[remarkGfm, …], remarkBreaks]` · `const REHYPE_PLUGINS: [] = [];` | §8 |
 | 同上 | `:303-312` | `code: ({…}) => { if (isFencedCodeBlock(…)) return <ChatCodeBlock …/> }` | §2.2 |
 | 同上 | `:320-328` | `ChatMarkdown` memo 头注：`text is the only prop, so the comparison is exact.` | §1.4 |
 | `permissionBridge.ts` | `:38-42` | `function nextPermissionId(toolUseId?: string) { if (toolUseId && toolUseId.length > 0) return toolUseId; … return \`perm-${Date.now()}-${permSeq}\`; }` | §6.2 **本批最重要的一条取证** |
 | `codexRuntime.ts` | `:2505-2507` | `return \`codex:${sessionId}:${idKey(requestId)}\`;` | §6.2（Codex 路径异构） |
 | `stores/chatSessions.ts` | `:786-788` | `id: event.payload.permissionId,` / `type: 'permission_request',` / `permissionId: event.payload.permissionId,` | §6.2 |
-| `electron-builder.yml` | `:64` | `- "!node_modules/katex/**"` | §8.5 **地雷** |
+| `electron-builder.yml` | `:69`（rev.1 写 `:64`，阶段 4 后已漂：`:64` 现为 `- "!node_modules/cytoscape/**"`） | **主锚是原文** `- "!node_modules/katex/**"`；行号仅索引 —— **照行号盲删会删掉 cytoscape 排除而 katex 仍被裁** | §8.5 **地雷** |
 | `styles/globals.css` | `:81-84` | `No bundled webfont: this repo has no @font-face and no font assets; naming a non-system family here is a blank cheque (design-system red line)` | §8.4 **红线冲突** |
 
 ---
@@ -191,8 +193,21 @@
 **新增纯函数**（落 `chatMarkdownPolicy.ts`，与既有门函数同处，保证 node 环境可真值表化，且**留在已被 F-C5 源码扫描覆盖的文件内**）：
 
 ```
+// 内部机制：无状态切分
 splitClosedPrefix(text) -> { segments: string[]; openTail: string }
+
+// 对外唯一入口：纯状态转移函数（rev.2 新增，双轨评审 C-6）
+advanceClosedPrefix(text, previousHwm) -> { hwm: number; segments: string[]; openTail: string }
 ```
+
+**为什么对外入口必须带 `previousHwm`（rev.2 改判）**：rev.1 只定义了无状态的 `splitClosedPrefix`，却在 §1.3 要求「跨渲染保存 `max(hwm, …)`」、在 §1.5 把 hwm 塞进组件 `useRef` —— 结果是**单调性这条核心不变量落在组件里，纯模块测不到**，且 §9.2 的 M-01「`splitClosedPrefix` 去掉 hwm」**没有可删的对象**（该函数里本来就没有 hwm）。
+`advanceClosedPrefix` 把单调化收进纯函数：组件只负责存一个数字并把它传回来。
+
+**它的三条硬合同**：
+
+1. `hwm = max(previousHwm, splitClosedPrefix(text).closedLength)` —— 只增不减；
+2. 当本次安全切点**短于** `previousHwm` 时，**必须对 `text.slice(0, previousHwm)` 重新切分出同一组 segments**，而不是只把长度数字保留下来（只留数字会让 segments 与 hwm 不自洽，是 rev.1 的隐性缺口）；
+3. `openTail = text.slice(hwm)`。
 
 **三条规则，其余一律归 `openTail`**：
 
@@ -204,7 +219,8 @@ splitClosedPrefix(text) -> { segments: string[]; openTail: string }
 
 **为什么「只在空行切」能一次性消解全部反例**（这是本条最重要的论证）：
 
-【实测 CommonMark 语义】**所有行内语法都不能跨越空行** —— 未闭合的行内 code、`*强调*`、`[链接`、`![图片`、setext underline（`===`/`---` 必须紧贴段落，中间无空行）、GFM 表格的分隔行（表格内不含空行）。⇒ 用户指令里点名要逐类给判据的「未闭合的行内 code / 半截链接 / 半张表 / setext」**全部被 R-1 一条覆盖**，无需为它们各写一条规则。R-2 只处理**跨空行的块级容器**（围栏、数学块），R-3 只处理「空行后仍可能是同一块的延续」（loose list、缩进代码块、脚注定义续行、blockquote 续接）。
+【实测 CommonMark 语义】**所有行内语法都不能跨越空行** —— 未闭合的行内 code、`*强调*`、`[链接`、`![图片`、setext underline（`===`/`---` 必须紧贴段落，中间无空行）、GFM 表格的分隔行（表格内不含空行）。⇒ 用户指令里点名要逐类给判据的「未闭合的行内 code / 半截链接 / 半张表 / setext」**全部被 R-1 一条覆盖**，无需为它们各写一条规则。
+⚠️ **rev.2 收窄**：该全称判断只对**行内**语法成立。**跨空行的块级容器有三类**——围栏、`$$` 数学块、以及 **CommonMark HTML block 类型 1–5**（`<pre>`/`<script>`/`<style>`/`<textarea>`/注释/`<?`/`<!DOCTYPE`/`<![CDATA[`，它们以各自的结束条件而非空行终止）。前两类由 R-2 的栈处理，第三类为**已知偏差**（见下表末行）。R-2 只处理**跨空行的块级容器**（围栏、数学块），R-3 只处理「空行后仍可能是同一块的延续」（loose list、缩进代码块、脚注定义续行、blockquote 续接）。
 
 **逐类结论表**（用户指令要求逐类给出，此处给的是**该类为何不需要独立规则**）：
 
@@ -217,6 +233,7 @@ splitClosedPrefix(text) -> { segments: string[]; openTail: string }
 | `$$…$$` 数学块 | **R-2**（第三种围栏） | 与 FB9 联动；FB9 未落地前**无生产者**，见 §13 |
 | 标题 / 引用块 / thematic break | R-1 + R-3 | 引用块续接由 R-3 挡住 |
 | 半截链接 `[a](htt` / 图片 `![a](` | R-1 覆盖 | 不能跨空行 |
+| **HTML block（CommonMark 类型 1–5）** | **已知偏差**（rev.2 登记） | 可跨空行，R-2 栈**不跟踪**。后果被本路径的安全姿态限制住：裸 HTML 恒转义为文本（`chatMarkdownPolicy.ts:745-746` `rawHtml: 'escaped-text'`，运行时验证在 `chatMarkdownRender.test.ts:190-196`）⇒ 最坏只是转义文本的**块包裹层数**变化，无安全后果。与引用式链接定义同级，写进注释即可，不为它加规则 |
 
 **保守优先的具体口径**：**任何一条规则无法判定时，一律归 `openTail`。** 代价是「无空行的紧凑长回答」永远无切点 ⇒ `segments = []`，退化为**今天的纯文本行为**。这是**安全降级，不是缺陷** —— 它恰好等于 D26 现状。
 
@@ -240,6 +257,7 @@ splitClosedPrefix(text) -> { segments: string[]; openTail: string }
 
 1. 维护 `hwm = 已发布 closedPrefix 长度的最大值`；每次发布 `max(hwm, splitClosedPrefix(t).length)`。
    ⚠️ **「全量重算取 max」必须有跨渲染的记忆** —— 单纯每次重算取当次值**不够**，因为函数自身会返回更短值。
+   ⚠️ **rev.2**：这条记忆的**归属已改** —— 单调化收进纯函数 `advanceClosedPrefix(text, previousHwm)`（§1.2 三条硬合同），组件只负责存一个数字并传回；否则单调性这条核心不变量落在组件里、纯模块测不到，M-01 也无对象可删。
 2. hwm 冻结的代价（某个块被永久拆成两个同类块）在 `message.completed` 时由**现有整块 markdown 路径**一次性修正 —— 那正是 D26 已经接受并支付过的「最后一次重排」。
 3. **禁止**用 hwm 之外的手段（例如「渲染过就不再重算」）：那会让围栏闭合后的**正确合并**也一起丢失。
 
@@ -258,6 +276,10 @@ splitClosedPrefix(text) -> { segments: string[]; openTail: string }
 segments.map((s, i) => <ChatMarkdown key={i} text={s} />)
 ```
 
+⚠️ **rev.2 硬约束：段容器的 key 不得用数组下标。**（双轨评审 C-6，A 轨提出）
+上面这行示意里的 `key={i}` **只对 `<ChatMarkdown>` 本身安全**（它的 props 只有 `text`，重挂无状态可丢）。但 §4.5 C1 之后**每个 answer 段各有一个容器 `<div>`**，而 hwm 的 `useRef` 挂在段所属的组件实例上：一旦在流式段之前插入新段（工具组落地与文本块交错时会发生），下标整体后移 ⇒ **整棵子树重挂 ⇒ hwm 归零、已封存前缀回退** —— 正是 M-01 要守的那个退化，但它**发生在运行期，静态断言看不见**。
+⇒ **段容器的 key 取该段首个 item 的 `turnItemKey(items[0])`**；`[FB1-2]` 之外再加一条 wiring 源文断言「段容器 key 表达式不是裸下标」（`[FB1-5]`，见 §9.1）。
+
 已有段的字符串**恒等** ⇒ `ChatMarkdown` 的 memo 全部命中 ⇒ 总解析成本回到 **O(n)**。这也是 §1.2 让 `splitClosedPrefix` 返回 `segments: string[]` 而非单个 `closedPrefix` 字符串的原因。
 
 ⚠️ **施工陷阱（必须处理，否则观感回归）**：每段是**独立的 markdown 根**，`BLOCK_GAP` 的 `first:mt-0`（`chatMarkdownPolicy.ts:412` `'mt-3.5 first:mt-0'`）会让**段间距塌成 0px**。须在段容器上补间距，且**不得新造第三档**（F-C4「恰好两档」断言盯着这里，见 §1.6）。处置见 §12 Q1（本规格建议：段容器用 `space-y-3.5`，与 `BLOCK_GAP` 同档同值，不是新档）。
@@ -266,14 +288,21 @@ segments.map((s, i) => <ChatMarkdown key={i} text={s} />)
 
 ### 1.5 裁定 ④：memo 相容性（R3 的兑现）
 
-**结论：纯函数 + `useMemo(…, [text])` 落在 `TurnItemView` 的 `text` 分支内；hwm 用 `useRef`；一律不进 store、不新增 `ChatTurn` prop。**
+**结论（rev.2 改判落点）：新增 `TurnTextItem` 子组件承载 `useMemo(…, [text])` 与 hwm 的 `useRef`；由 `TurnItemView` 的 `text` 分支渲染 `<TurnTextItem …/>`；一律不进 store、不新增 `ChatTurn` prop。**
+
+⚠️ **为什么不能照 rev.1 写「落在 `TurnItemView` 的 `text` 分支内」**（双轨评审 C-6，两轨独立命中）：
+【实测】`TurnItemView`（`MessageTimeline.tsx:1523-1565`）是 `switch` + 早返回的多分支组件，把 hook 写进 `case 'text':` 是**条件调用 hook**，违反 React Hooks 规则。
+它今天恰好不炸，只因为 `turnItemKey`（`:1415-1423`）给不同 kind 发不同 key、同一实例的 `item.kind` 不会变 —— 这是**一条不该被依赖的隐性不变量**，而且 FB7 合并后 permission item 消失、key 组成正要发生变化。
+本仓已有成文纪律：`MessageTimeline.tsx:1619-1627` 写明 `toolGroup` 分支被拆成独立组件正是为了让 `useMemo` **legal**。⇒ 照此办理。
 
 | # | 论证 | 依据 |
 |---|---|---|
 | 1 | **不进 store** | `messageTimelineWiring.test.ts:589` 逐字 `chatSessions.ts is a red line`（R5，既有红线直接继承） |
 | 2 | **不新增 prop** | 切分只消费 `item.block.text` 与已有的 `streamingBlockId` ⇒ `ChatTurnProps` 不变 ⇒ `ChatTurn` memo 比较面不变 ⇒ `MessageTimeline.tsx:946-952` 的三根支柱（`stabilizeTurns` 身份 / 时钟只到最后回合 / `useCallback` 稳定）全部不动 |
 | 3 | **`STATIC_NOW_MS` 纪律** | 切分结果**只依赖 `text`**，不依赖 `nowMs` 或任何时钟。**明令禁止**用 `setInterval` / 节流定时器驱动重切 —— 那等于重造 `:173-182` 记录的「每秒改一个 prop、让 `React.memo` 失效」缺陷。重切**只由新 token 到达（`text` 变化）驱动** |
-| 4 | **hwm 落点** | `TurnItemView` 未被 memo，但组件实例由 `turnItemKey(item)` 决定；key 不变则 `useRef` 跨渲染存活 —— ⚠️ **该 key 稳定性须施工时实测确认**，不成立则须上提到 `ChatTurn` 的 `Map<blockId, number>`（见 §12 Q2） |
+| 4 | **hwm 落点** | hwm 的 `useRef` 落在 **`TurnTextItem` 顶层**；实例身份由 `turnItemKey(item)` 决定。✅ **rev.2：key 稳定性已确认，不必留到施工期** ——【实测】`turnItemKey`（`MessageTimeline.tsx:1415-1423`）对 `text` 走 `default` 分支返回 `item.block.id`，而流式追加只改 `block.text`、不改 `block.id`（`chatSessions.ts:482-490`）⇒ **key 在整段流式期恒定**，`useRef` 天然跨渲染存活。§12 Q2 的备案（上提到 `ChatTurn` 的 `Map<blockId, number>`）**不必启用**；两轨各自独立实证同一结论 |
+| 4b | **hook 合法性** | hook 一律在 `TurnTextItem` **函数体顶层**调用，**不得**写进 `TurnItemView` 的 `switch` 分支（rev.2 硬约束，见上） |
+| 4c | **段容器 key** | 段容器 key 取 `turnItemKey(items[0])`，**不得用数组下标** —— 否则流式期插段会重挂子树、hwm 归零（见 §1.4 陷阱） |
 | 5 | **影响面收敛** | 切分只在有 `streamingBlockId` 的块发生，即**只在在飞回合**；在飞回合本就每 token 重渲染，其余回合的 memo 完全不受影响 |
 
 ### 1.6 测试合同变更
@@ -325,6 +354,19 @@ segments.map((s, i) => <ChatMarkdown key={i} text={s} />)
 ⇒ **裁定：FB2 的按钮采用「常驻可见」的 ghost icon 形态，与 `TurnCopyButton` 同族。** 「悬浮」在分诊档里是**位置描述**（浮在代码块右上角），不是**显隐机制**；本规格按位置义施工，不引入 `opacity-0` / `group-hover:`。
 若评审坚持要弱化视觉存在感，**唯一允许的做法**是降低常态不透明度到仍可辨的档位并配 `focus-visible` 增强，**不得**做成 `opacity-0`（见 §12 Q3）。
 
+#### 2.3-a 弱化档位（rev.2 写死，D55 ③ 的兑现）
+
+D55 ③ 拍板「copy 按钮**常显低对比**、禁 hover-only」。rev.1 只写了「可降低常态不透明度到仍可辨档位」，**没有给出档位，也没有任何验收判据** —— 双轨评审 A-7 判 major。rev.2 定死：
+
+| 项 | 裁定 |
+|---|---|
+| **档位** | **`text-muted-foreground/60`** —— 【实测】这是仓内既有档，不是新造：`ChangesTree.tsx:193/205/274/286` · `RepositoryList.tsx:106` · `SourceControlPanel.tsx:889/938/1060` 八处 ghost icon 按钮都用它。**不得用任意值**（`opacity-[0.63]` 之类一律禁止，`docs/design-system.md` Token 分档纪律） |
+| **写法** | `cn(turnCopyButtonClass(), 'text-muted-foreground/60')` —— **`turnCopyButtonClass()` 本体一字不动**（§2.4 的「复用同一装配函数」因此仍然成立，见下） |
+| **hover / focus** | hover 沿用装配函数自带的 `hover:bg-hover`；另加 `focus-visible` 增强（键盘可达性，D55 ③ 明列） |
+| **验收判据（rev.1 完全缺席）** | ① 施工时按 F456 的色学链复核该档对底色的**非文本对比 ≥ 3:1**（WCAG 1.4.11），不足则升 `/70`；② `[FB2-1]` 补第三半断言（见 §9.1）；③ G-3 补「亮暗双主题下按钮常态可辨」一条 |
+
+⚠️ **为什么必须写这一节**：rev.1 的 §2.4 说「复用同一个类装配函数，**不新写类串**」，而 `turnCopyButtonClass()`（`chatTimelineLayout.ts:170-172`）返回串里**没有任何不透明度档** ⇒ 逐字照 rev.1 做出来的按钮与 `TurnCopyButton` **对比度完全相同**，兑现不了 D55 ③；要兑现就得加类，又与「不新写类串」冲突。rev.2 的解法是把「复用」的口径从「零附加类」收窄为「**装配方式复用、本体不动**」。
+
 ### 2.4 形态与复用范式
 
 **复用 `TurnCopyButton` 的 clipboard 范式**【实测 `MessageTimeline.tsx:1704-1739`】，逐条对齐：
@@ -334,10 +376,10 @@ segments.map((s, i) => <ChatMarkdown key={i} text={s} />)
 | API | `navigator.clipboard.writeText(text)`，**无 `execCommand` fallback**，失败静默 return | ✅ 逐条沿用（不为 FB2 新造 fallback —— 那会让两个按钮的失败行为不一致） |
 | 反馈 | `useState(copied)` + `setTimeout(1500)` 翻回 | ✅ |
 | 图标 | `lucide-react` 的 `Check` / `Copy` | ✅ |
-| 类串 | `turnCopyButtonClass()` = `'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-hover'` | ✅ **复用同一个类装配函数**，不新写类串 |
+| 类串 | `turnCopyButtonClass()` = `'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-hover'` | ✅ **装配方式复用同一个函数，本体一字不动**；外加一档常态弱化 —— `cn(turnCopyButtonClass(), 'text-muted-foreground/60')`（D55 ③，档位与判据见 §2.3-a）。⚠️ rev.1 此格写的是「不新写类串」，与 D55 ③ 互斥，rev.2 已收窄口径 |
 | a11y | `aria-label={label}` + `title={label}`，label ∈ {`Copied`, `Copy reply`} | ✅ 形态同构，文案改为 `Copy code` / `Copied` |
 
-**定位**：【实测】`ChatCodeBlock.tsx:57` 的 `<pre>` **没有 `relative`**，`chatMarkdownCodeBlockClass()`（`chatMarkdownPolicy.ts:524-526`）返回串里也没有。⇒ 需要定位上下文。两条路：
+**定位**：【实测】`ChatCodeBlock.tsx:58` 的 `<pre>` **没有 `relative`**，`chatMarkdownCodeBlockClass()`（`chatMarkdownPolicy.ts:524-526`）返回串里也没有。⇒ 需要定位上下文。两条路：
 
 - **（a，本规格取此）** 在 `ChatCodeBlock` 内**包一层 `relative` wrapper**，`<pre>` 保持原样。优点：`chatMarkdownCodeBlockClass()` 一字不动 ⇒ 该函数的既有断言（`chatMarkdownPolicy.test.ts:579` `overflow-x-auto`、`:702-703` 字号）全部不受影响。
 - **（b）** 给 `chatMarkdownCodeBlockClass()` 加 `relative`。⚠️ 该函数是**纯类装配**且被多条断言盯着，改它会把一次组件改动扩散到策略层。**不采纳。**
@@ -476,7 +518,8 @@ FB7 会改动 `TimelineItem` 的 kind 构成（§6.5）。两件的接口约定�
 
 1. **白名单，不得写成黑名单** —— `turnItemPlacement` 只枚举「恒可见」的 kind（今天是 `text`、`notice`），其余一律 `process`。这样 FB7 删掉 `permission`、或新增合并后的 kind，谓词**无需改动即仍然成立**。
 2. **新 kind 的默认归属是 `process`（可折叠）** —— 这是**安全的默认**：折进去的内容有 `hasUnresolvedPermission`（`chatTurn.ts:214-216`）+ `defaultTurnProcessOpen` 首返回（`:204`）双重强制展开兜底；反之若默认恒可见，FB7 合并后的工具行会全部跑出折叠组，**直接抵消 FB7 的减行目的**。
-3. **配一条对 `TurnItemKind` 联合穷尽的归属测试**（`satisfies Record<TurnItemKind, TurnSegmentKind>` 或逐成员断言），使 FB7 增删 kind 时**必红**。这是 FB4 与 FB7 之间**唯一的接口锁**。当前 5 个成员【实测 `toolCard.ts:114-119` + `chatTurn.ts:128`】：`text` / `question` / `permission` / `toolGroup` / `notice`。
+3. **配一条对 `TurnItemKind` 联合穷尽的归属测试**（**rev.2 写死为逐成员断言**，五个 kind 各一行：`text→answer` / `notice→notice` / `question`·`permission`·`toolGroup`→`process`），使 FB7 增删 kind 时**必红**。
+   ⚠️ rev.1 写的是「`satisfies Record<TurnItemKind, TurnSegmentKind>` **或**逐成员断言」二选一 —— 但 §4.2 把 `turnItemPlacement` 定义成**函数**，而 `satisfies Record<…>` 只能约束字面对象、**约束不了函数体** ⇒ 选那一支时 M-11（黑名单写法）会存活（`[FB4-2]` 的夹具 `[text, tool, text, tool, text]` 在黑名单实现下结果相同，也咬不到）。双轨评审 A-16，rev.2 去掉「或」。这是 FB4 与 FB7 之间**唯一的接口锁**。当前 5 个成员【实测 `toolCard.ts:114-119` + `chatTurn.ts:128`】：`text` / `question` / `permission` / `toolGroup` / `notice`。
 
 ### 4.4 裁定：空 process 时折叠头**仍渲染**，降级为非触发器
 
@@ -512,11 +555,24 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 | 真正的框中框来源 | **`notice`** —— `NoticeMessage` 自带 Alert 边框 ⇒ §4.2 把 notice 单列为**第三种段**，恒可见但**不进容器** |
 | 真实风险 | **碎片化观感** —— 一个回合出现 3~5 个小边框盒堆叠。**代码判不了，必须 GUI 点验**（§10 G-6） |
 
-**备选 C3**（仅在点验判定 C1 碎片化不可接受时启用）：仅当整个回合**只有一个 answer 段**时挂容器，多段时全部裸奔。代价是同一种内容在不同回合有两种外观。
+**备选 C3**（**施工方不得自行启用 —— 见下方红框**）：仅当整个回合**只有一个 answer 段**时挂容器，多段时全部裸奔。代价是同一种内容在不同回合有两种外观。
+
+> 🚫 **rev.2 blocker 订正：C1→C3 的降级权在用户手里，不在施工方手里。**
+>
+> rev.1 把这条写成「仅在点验判定 C1 碎片化不可接受时启用」（本节）与「若不可接受 ⇒ 启用备选 C3」（§10 G-6），等于把降级做成了施工方的一个点验分支。**这与地基批的明文保留冲突**：
+>
+> - `2026-08-18-f456-readability-composer-spec.md:1047-1049`：「由**用户拍板**是否降级为『只留 D3-c、撤 D3-b』或改走候选 A/C。**施工方不得自行撤销 D3-b** —— 它是用户在知情（设计员已反对）情况下的拍板，只有用户能推翻自己的拍板。」
+> - 同档 `:1928`（§10.4 禁止动作）：「施工方**不得自行撤销 D3-b**，也不得『折中』成 `bg-muted` 版」。
+> - 该保留已写进总台账 D50 行（`openchamber-chat-refactor-ledger.md:94`）：「**实现方否决权保留：§4.6 三条件**」。
+> - 同档 `:1962` 的 as-built 实录表明该否决权**至今未行使、仍然开着**（条件② 已当场证否，条件①③ 移交 GUI 点验）。
+>
+> ⇒ **正确流程**：G-6 判定碎片化不可接受时，走 F456 §4.6 三步上报 —— ① 出施工分支对照截图；② 在 F456 规格追加 §4.6-a 实作否决记录；③ **由用户拍板**降级方案（C3 / 撤 D3-b / 改走候选 A）。
+> ⇒ 本规格 §12.1 已因此追加 **Q14**（待用户拍板）。
+> ⇒ rev.1 文末「本规格已逐条核对，与总台账无一处冲突」**因此不成立**，已在 §附 订正。
 
 **连带必改**：
 - `chatTimelineLayout.ts:206-210` 头注的「**at most one box per turn**」在 C1 下成假话，**同批改写**；
-- `messageTimelineWiring.test.ts:717-725` `[D3-7]` 的 `countIn(…, 'turnAnswerContainerClass()') === 1` 语义要从「源码里出现一次」改成「只挂在 answer 段上」的结构断言；
+- `messageTimelineWiring.test.ts:717-725` `[D3-7]` 的 `countIn(…, 'turnAnswerContainerClass()') === 1` 语义要从「源码里出现一次」改成「只挂在 answer 段上」的结构断言 —— ⚠️ **rev.2：该重定义必须进 §9.1 断言清单**（rev.1 只在此处提了一句、清单里没有对应条目，导致 M-12 无人可咬），已登记为 **`[FB4-7]`**；
 - F456 变异臂 **M-15**（「容器挂到 `process.map` 一侧」→ `[D3-7]`，`f456 spec:1743`）随原设计失效，**必须重定义**（§9.2 M-12）。
 
 ### 4.6 折叠壳的实现约束（**取证发现的硬约束**）
@@ -536,6 +592,19 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 
 **本规格取 E1。** 理由：它是唯一**不作废任何既有资产**的方案，而 R4（`keepMounted`）是本批红线。
 
+#### 4.6-a E1 的三条附加硬约束（rev.2 新增，双轨评审合取）
+
+**① `disabled={permissionLock}` 会变成死 prop，必须迁移 + 换钉（A-5，major）。**
+【实测】今天的强制展开是**双保险**：`MessageTimeline.tsx:1259-1265` 既有 `open={processShellOpen}` 又有 `disabled={permissionLock}`，而 Base UI 的 `disabled` **只作用于它自己的 Trigger**（`CollapsibleTrigger.js:45-49` 把它喂给 `useButton`）。
+E1 把触发器换成 Root 之外的普通按钮后，各 Root 里**再没有 Trigger** ⇒ `disabled={permissionLock}` 成为**没有任何作用的 prop**；而既有断言只看字符串、**会继续绿**：`messageTimelineWiring.test.ts:481-484` 的 `expectCalled('disabled={permissionLock}')`。这是教科书式的**同名空壳**（§13 ① 已补录）。
+⇒ 硬约束：**新的普通 `<button>` 必须自带 `disabled={permissionLock}`**（或 `aria-disabled` + 阻断 `onClick`）；**各 `Collapsible.Root` 上的 `disabled` 必须删除**；`:481-484` 的 `expectCalled` 换钉到新按钮上（`[FB6-4]`，见 §9.1）。
+
+**② panel id 必须唯一且稳定（B 轨 Q12 附加条件）。**
+用一个稳定的 `useId()` 前缀生成全部 panel id（如 `${uid}-process-${segIndex}`），并断言：**id 集合唯一**、**触发器 `aria-controls` 枚举的集合与之恰好相同**。E1 是「每段一个受控 Root」，Panel 显式传 `id` 在每 Root 一 Panel 时无竞争（`CollapsiblePanel.js:30/66-74`：`id: idProp` 在 layout effect 里 `setPanelIdState`，卸载时清回）。
+
+**③ 多 Root 的 `open` 漏接要有静态半边（A 轨 Q12 附加条件）。**
+rev.1 把「某个段忘接 `open`」整条押在 G-15 一张截图上（§13 ② 自认「node 测试测不到」）。**静态半边是可以补的**：断言文件内 `open={processShellOpen}` 的出现次数 **==** process 段容器的渲染点数（`[FB6-6]`，见 §9.1）。G-15 仍保留为终验。
+
 ---
 
 ## §5 FB6 · 状态行移至回合底部（T-31 §4.7 改判）
@@ -552,16 +621,41 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 
 ### 5.2 裁定：DOM 形态与「跟随内容尾部」的实现
 
-**head 仍在 `turnBodyClass()` 这一层（`MessageTimeline.tsx:1250`），只是从首位移到 `TurnFooter` 之前的末位**，与各内容段是**兄弟**：
+**head 仍在 `turnBodyClass()` 这一层（`MessageTimeline.tsx:1250`），只是从首位移到末位** —— 且按 **D55 ①** 与 `TurnFooter` **合并成同一条 meta 行**：
 
-```
+```tsx
 <div className={turnBodyClass()}>
   {retryBanner}
   {segments.map(...)}            ← answer 容器 / notice / process 面板，交错（§4）
-  {head && <底部状态行 />}         ← ★ 新位置
-  <TurnFooter />
+  <div className={turnMetaRowClass()}>        ← ★ 唯一的底部 meta 行（D55 ①）
+    {collapsible ? (
+      <>
+        <TurnStatusContent … />                 ← 状态文本，非触发器
+        <button                                  ← ★ 唯一触发器：行尾独立 chevron
+          type="button"
+          aria-expanded={processShellOpen}
+          aria-controls={panelIds}               ← 空格分隔的多 panel id（§4.6-a ②）
+          disabled={permissionLock}              ← ★ 从 Collapsible.Root 迁来（§4.6-a ①）
+        ><ChevronDown … /></button>
+      </>
+    ) : (
+      <TurnStatusContent … />                   ← 无 process：纯统计行，无 chevron（§4.4）
+    )}
+    <span>{metadata}</span>                      ← 原 TurnFooter 文本（model · 相对时间）
+    {copyText.length > 0 && <TurnCopyButton text={copyText} />}   ← 兄弟控件，不在触发器内
+  </div>
 </div>
 ```
+
+> 🚫 **rev.2 blocker 订正（C-1，两轨互证，B 轨判 blocker 故取高）**
+>
+> rev.1 这里画的是**两个兄弟节点**（`{head && <底部状态行 />}` 后接 `<TurnFooter />`），而 **D55 ① 已拍板「底部状态行与 `TurnFooter` 合并成一行（回合底部单条 meta 行）」**（`openchamber-chat-refactor-ledger.md:99`）—— **拍板从未回灌施工正文**，这是 C-1 的根因。
+>
+> 而一旦合并，rev.1 §5.3 的「触发器 = 底部状态行**本身**」就会把 copy `<button>`（`MessageTimeline.tsx:1730-1738`，挂点 `:1696`）**套进触发器 `<button>` 里** —— HTML 非法（React 报 `validateDOMNesting`）、Tab 序与点击目标全坏。今天的 `CollapsibleTrigger`（`:1265-1275`）里只有 `TurnHeadContent` 与 chevron、**没有嵌套按钮**，所以这是本批新引入的问题。
+>
+> ⇒ **唯一合法 DOM（上面的骨架）三条硬约束**：① **合并行容器本身不是 `<button>`**；② 触发器是**行尾一个独立的 chevron 按钮**，也是全回合唯一触发器（G1′）；③ **copy 按钮与触发器是兄弟**，不得出现在触发器子树内（`[FB6-5]` 断言 + M-31 变异，见 §9）。
+>
+> **`TurnFooter` 的去向**：其内容并入 meta 行后，该组件要么退役、要么明确重定义为「meta 行右半段」——**不得留一个同名空壳**（§13 ① 已补录）。
 
 **「流式中跟随内容尾部」= 自然文档流末尾即可，不需要任何额外机制。**【实测】head 成为最后一个流内元素后，内容增长自然把它下推；`MessageTimeline.tsx:413-427` 的 `ResizeObserver` + `stickToBottomRef` 已经在跟随内容高度。
 
@@ -575,16 +669,17 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 
 | 候选 | 形态 | 优点 | 代价 |
 |---|---|---|---|
-| **G1（主推）** | 触发器 = **底部状态行本身**（chevron 在行尾），所有 process 段受它统一控制 | 全回合只有 **1 个**触发器，行数最省（与 FB7 减行同向）；`MessageTimeline.tsx:1183-1188` 的「head IS the trigger」既有语义**延续** | 触发器与 `TurnFooter` 相邻，误触概率上升；**展开方向朝上**，chevron 旋转语义（`:1268-1274` `processShellOpen && 'rotate-180'`）需重判 |
+| **~~G1~~（rev.1 主推，已改判）** | 触发器 = 底部状态行**本身**（整行可点） | 行数最省 | 🚫 **与 D55 ① 合并后 `<button>` 套 `<button>`**（见 §5.2 红框），**不可用** |
+| **G1′（rev.2 主推）** | 单条 meta 行内，**行尾一个独立 chevron `<button>`** 是全回合唯一触发器；状态文本、metadata、copy 按钮都是它的**兄弟** | 仍是全回合 **1 个**触发器（G1 的全部收益保留，与 FB7 减行同向）；`MessageTimeline.tsx:1183-1188` 的「head IS the trigger」语义**延续**（触发器仍在 head 那一行）；**可点区从整行缩到 24px 图标 ⇒ 误触风险反而下降** | **展开方向朝上**，chevron 旋转语义（`:1268-1274` `processShellOpen && 'rotate-180'`）需重判 |
 | G2 | 每个 process 段各带一个小触发器行（如 `Thought · 3 tools ⌄`），底部状态行只读不可点 | 折叠粒度更细；一 Root 一 Trigger 一 Panel，Base UI 用法零改动 | **触发器行数 = process 段数，铺屏反增，与 FB7 目标相悖**；每段 trigger 文案需新造（`Worked for` 是回合级的） |
 
-**本规格取 G1**（与 §4.6 的 E1 配套：多个受控 Panel + 一个 `aria-controls` 列出多 id 的按钮）。
+**本规格取 G1′**（与 §4.6 的 E1 配套：多个受控 Panel + 一个 `aria-controls` 列出多 id 的按钮；两轨在 Q13 上一致同意「单回合触发器」的选择，分歧只在形态，rev.2 按仲裁取「行尾独立 chevron」）。
 
 ⚠️ **以下四项必须由 GUI 点验确认，不得凭代码断定**（截图判据见 §10）：
 
 1. **chevron 朝向** —— 触发器在内容**下方**时，「折叠态该朝上还是朝下」**没有客观正解**，需对齐用户截图预期。判据：折叠/展开两态各截一图，箭头是否指向「内容会出现的方向」。
 2. **底部三行拥挤度** —— `[最后一段正文] → [状态行] → [footer]` 三条连续堆叠。⚠️【实测】`MessageTimeline.tsx:1683` `if (!line && copyText.length === 0) return null;`，而 `formatMessageMetadata`（`messageMetadata.ts:176-191`）在**只有 `model`** 时也返回非空 ⇒ **流式期 footer 可能已经渲染**。这是「谁在最底下」的关键事实，也是 §12 Q4 的由来。
-3. **G1 的误触** —— 状态行整行可点 + 紧邻 24px copy 按钮。
+3. **G1′ 的误触与可发现性** —— rev.1 此项判据是「状态行整行可点 + 紧邻 24px copy 按钮」，在 G1′ 下**已改写**：可点区已缩到行尾 24px chevron，误触风险下降，**待验的反而是可发现性**（用户能否看出这一行可展开）与两个 24px 按钮（chevron / copy）在同一行内是否挤。
 4. **多容器碎片化**（§4.5 C1 连带）。
 
 ### 5.4 裁定：`PendingTurnHead` 的去向 —— 保留、不改名、不合并
@@ -621,7 +716,9 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 
 这是本件最重要的一条风险声明。【实测，两条独立证据】：
 
-1. **「head 是回合首子元素」当前无任何测试钉住。** `vitest.config.ts:12` `environment: 'node'`，无 jsdom；`messageTimelineWiring.test.ts` 的 `topLevelFunction()` 只能定位 `ts.FunctionDeclaration`，而 `ChatTurn` 是 `const ChatTurn = memo(function ChatTurn(…))`（`MessageTimeline.tsx:954`）⇒ **其 JSX 子树从未进入任何 AST 断言**；全文件 `indexOf` / 顺序比较断言零命中。
+1. **「head 是回合首子元素」当前无任何测试钉住。** `vitest.config.ts:12` `environment: 'node'`，无 jsdom；`messageTimelineWiring.test.ts` 的 `topLevelFunction()` 只能定位 `ts.FunctionDeclaration`，而 `ChatTurn` 是 `const ChatTurn = memo(function ChatTurn(…))`（`MessageTimeline.tsx:954`）。
+⚠️ **rev.2 措辞收窄（A-11）**：rev.1 这里写「**其 JSX 子树从未进入任何 AST 断言**」，该表述**不成立** —— 同文件另有一个全文件游走的定位器 `jsxGuardedBy`（`messageTimelineWiring.test.ts:370-393`，末行 `ts.forEachChild(sourceFile, walk)`），它已经在 `[D3-7]`（`:717-721`）里对 `ChatTurn` 内部的 `answer.length > 0 && <div className={cn(turnBodyClass(), turnAnswerContainerClass())}>` 做过 AST 断言。
+**成立的表述是**：**没有任何断言钉住 `ChatTurn` 直接子元素的顺序**（`children[0]`/`children[1]` 顺序断言全文件只出现在 `[D3-8]` `:701-705`，目标是 `UserBubble`）。⇒ 本节结论与处置**不受影响**。
 2. **F456 的全部 33 发变异里，没有任何一发钉「head 在首 vs 尾」。**
 
 ⇒ **今天把 head 从顶部挪到底部，全量 vitest 会全绿。** 这正是「布局缺陷只在截图里显形」那一族风险的教科书形态。
@@ -629,6 +726,20 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 **处置（强制，不得省）**：**先补 AST 顺序断言，再动结构**。
 【实测】工法是现成的：`messageTimelineWiring.test.ts:233-302` 已有 `isJsxNode` / `tagNameOf` / `jsxChildrenOf`（`:245`）/ `classNameExpressionOf`（`:365`），且 `[D3-9]` 一带（`:701-712`）**已经在用 `children[0]` / `children[1]` 做位置断言**（只是目标是 `UserBubble`）。
 ⇒ 只需让定位器**支持 `memo(function …)` 形态**，即可对 `ChatTurn` 写同族断言。这笔工法扩建**计入片③ 工作量**，不得当成「顺手加一条断言」。
+
+#### 5.6-a 三步证据链（rev.2 新增，消除 rev.1 的红绿自相矛盾）
+
+⚠️ **rev.1 在这里自相矛盾**（B-3，major）：§9.0 总原则要求新断言「对着旧代码写、**跑绿**，再改代码看它红」，而 §9.2 的 M-16 又明定同一条 `[FB6-1]` 对旧代码「**必须红**」。**同一条断言不可能既绿又红**，照 rev.1 无法执行零回归网流程。
+
+rev.2 拆成两条断言、三步走：
+
+| 步 | 动作 | 断言 | 期望 |
+|---|---|---|---|
+| **1** | 扩定位器支持 `memo(function …)`；写**临时基线断言** `[FB6-0] head-before-content`（钉住**今天**的顺序：head 是首子元素） | `[FB6-0]` | 对旧代码 **绿** ← 这就是「钉子」，证明定位器真的看得见 `ChatTurn` 的子元素顺序 |
+| **2** | 移动生产结构（head 下移、合并 meta 行） | `[FB6-0]` | **变红** ← 证明钉子真的咬得住结构变化 |
+| **3** | 把 `[FB6-0]` 换成**永久断言** `[FB6-1] content-before-meta-row`（内容段在前、meta 行在后） | `[FB6-1]` | 对新代码 **绿**；再用 **M-16（把顺序改回 head 在首位）** 验证它 **红** |
+
+**纪律**：`[FB6-0]` 是一次性脚手架，第 3 步必须删除，**不得两条并存**（否则第二条恒红）。§9.2 的 M-16 映射到 `[FB6-1]`，不再映射到「对旧代码必须红」的那条。
 
 ---
 
@@ -654,7 +765,10 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 | ④ Store 落块 | `stores/chatSessions.ts:786-788` | `id: event.payload.permissionId,` / `type: 'permission_request',` / `permissionId: event.payload.permissionId,` | **block 上有独立的 `permissionId` 字段**（不只是 `id`），比用 `block.id` 更干净 |
 | ⑤ 回归钉（**生产者存在的实证**） | `stores/__tests__/chatSessionsCore.test.ts` Round-2 P0 注释 | `the Host uses the SDK toolUseID AS the permissionId, which is the SAME id \`tool.started\` already used for that turn's tool_call block` | 用例名 `appends a permission_request block even when a tool_call block already shares its id` —— 因二者同 id，去重守卫曾把 permission_request 块**静默吞掉**（fix `4019fed`） |
 
+| ⑥ 落块**归属**（rev.2 新增） | `stores/chatSessions.ts:702-704` vs `:747-754` | tool_call 用事件显式 `messageId`；permission 取「最后一条非历史 assistant 消息」，事件里没有 messageId | ⚠️ **两套规则不同，「同 message」不是结构保证** —— 见 §6.3-a |
+
 ⇒ **关联键天然存在，Claude 路径零协议改动。** 这条不是「类型上有字段」的推断，⑤ 是**运行时真有值**的实证（一个真实事故 + 一条回归测试）。
+⚠️ 但**已闭环的只是第 ①~⑤ 跳（id 相等）**；第 ⑥ 跳（同 message 归属）**未闭环**，rev.1 把两者混为一谈（见 §6.3-a 与 §13 ②）。
 
 **Codex 路径是异构的**【实测】：
 
@@ -676,17 +790,56 @@ collapsedLeavesNothing = segments.every((s) => s.kind === 'process')
 **算法**（纯函数，落 `toolCard.ts`，与 `buildTimelineItems` 同处以保持 node 可断言）：
 
 ```
-对每个 permission_request block P：
-  找同一 message 内 id === P.permissionId 的 tool_call block T
+对每个 **resolved === true** 的 permission_request block P：      ← ★ rev.2 新增前置（blocker）
+  找同一 turn 内 id === P.permissionId 的 tool_call block T        ← ★ rev.2 放宽搜索域（A-10）
   ├─ 命中 → P 的决议信息并入 T 所在的 run 行（不产出独立 item）
   └─ 未命中 → 原样产出独立的 { kind: 'permission' } item（＝今天的行为）
+
+resolved !== true 的 permission_request block：
+  一律原样产出独立的 { kind: 'permission' } item，**不参与 join**   ← ★ 硬约束
 ```
 
+> 🚫 **rev.2 blocker 订正（A-1）：未决授权卡绝不能进 join。**
+>
+> rev.1 的算法**没有任何 `resolved` 前置条件**，而未决 permission **必然命中 join 条件**：
+> 【实测】`stores/__tests__/chatSessionsCore.test.ts:535-565` 的用例 `appends a permission_request block even when a tool_call block already shares its id` 断言落块结果为 `['tool_call', 'permission_request']` —— 即**授权还在等用户时，tool_call block 已在同一 message 里**。
+>
+> 后果是**回合死锁**：【实测】`MessageTimeline.tsx:1578-1598` 的 `case 'permission':` 分支是**交互式授权卡**（`<QuestionCard variant="permission" canRespond={…} onRespondPermission={…}>`），而 `onRespondPermission` 在**全仓只有这一个 UI 调用点**（`ComposerPermissionTrigger.tsx` 是权限**档位**选择器，`composerPermissionModel.ts:1-3` 头注自陈 `the Composer's LIVE permission control`；`PendingQuestionDock.tsx` 只服务 question）。把它并成一行灰阶文本 ⇒ **用户无从 Allow/Deny，回合永久挂起**。
+>
+> 这正撞既有安全红线 `chatTurn.ts:192-196`：`it is the safety red line (burying an authorization card inside a collapsed shell re-opens round-2 point-check #5, "the permission card does not render"), and it must stay un-overridable by any rule added below it`。
+>
+> ⚠️ **本件自称最重要的 `[FB7-4]` 守恒律抓不到它** —— 被并进 run 的未决 permission 仍然「算一条」，守恒律照绿。`[FB4-6]` / `hasUnresolvedPermission`（`chatTurn.ts:214-216`）也只保证折叠壳被强制展开，**展开后里面什么也没有**。
+>
+> **现成依据**：`questionCardModel.ts:711` 的 `derivePermissionRowView` 早就有 `if (block.resolved !== true) return null;` —— D28 的单行形态本来就只覆盖已决态，rev.1 是把这条既有纪律漏掉了。
+> **配套**：§9.1 追加 `[FB7-8]`（未决 permission 必产出独立 item 且不被任何 toolGroup 吸收）；§9.2 追加 M-30（join 忽略 `resolved`）→ 应红 `[FB7-8]`。
 **三条安全边界（缺一不可）**：
 
 1. **回落是默认分支，不是异常分支** —— 未命中时走的是**今天已在生产的那条路径**，不是新写的降级路径。⇒ 回落路径的正确性由**既有测试**继续保障。
 2. **绝不允许「配不上就丢弃」** —— 授权记录是安全审计面（`defaultTurnProcessOpen` 首返回、`hasUnresolvedPermission` 都建立在它可见之上）。⇒ `[FB7-4]` 断言（§9.1）必须钉住：**任意输入下，输出里 permission 信息的条数 = 输入 permission block 的条数**（合并进 run 的算一条）。这是本件**最重要的一条断言**。
 3. **冲突处理** —— 同一 message 内 id 唯一（store 以 id 作块身份），故「同一回合内两次相同命令」**各有各的 toolCallId**，不构成歧义。⚠️ 若真出现重复 id，取**第一个未被认领的** T，且**不得**让一个 T 认领两个 P（`[FB7-5]`）。
+4. **搜索域是「同一 turn」而非「同一 message」（rev.2 改判，A-10）** —— 见下方。
+
+#### 6.3-a 「同 message」是假前提（rev.2 订正，A-10 major）
+
+rev.1 的 join 限定在「**同一 message 内**」，但【实测】两类 block 的落块目标是**两套不同规则**：
+
+| block | 落块规则 | 出处 |
+|---|---|---|
+| `tool_call` | 落到**事件显式指定的 `messageId`** | `stores/chatSessions.ts:702-713`：`const existing = bucket.find((item) => item.id === event.payload.messageId); if (!existing) return {};` |
+| `permission_request` | 落到「**最后一条非历史 assistant 消息**」——事件里**根本没有 messageId** | `stores/chatSessions.ts:747-754`：`const existing = [...bucket].reverse().find((item) => item.role === 'assistant' && !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)); const messageId = existing?.id ?? \`msg-perm-${event.payload.permissionId}\`;` |
+
+⇒ 二者在常见时序下重合（`chatSessionsCore.test.ts:535-565` 的单消息夹具证明了这一点），但**没有结构保证**：
+- 一旦 tool_call 之后又开了一条新的 assistant message，permission 会落到**新的那条**上、tool_call 留在旧的 ⇒ **join 恒不中**；
+- `existing` 为空时更是落进合成的 `msg-perm-…` 消息，那里永远没有 tool_call。
+
+后果是「**静默退回今天的两行形态**」——安全（授权记录不丢），但 FB7 的收益在这些场景下**无声归零**，而 `[FB7-1]`（同 message 夹具）会一直绿。
+
+**处置（二选一，rev.2 取①）**：
+① **搜索域放宽到同一 turn 的全部 assistant message** —— `flattenTurnItems` 已按 turn 聚合（`chatTurn.ts:148` 逐 message 调 `groupTimeline`），成本不变；
+② 维持同 message，但必须补一条**跨 message 夹具**把退化行为显式钉死。
+⇒ 无论取哪条，**§9.1 追加 `[FB7-9]`**：permission 与 tool_call 分处同一 turn 的两条 message 时的行为被显式钉住（合并 or 回落，二选一写死）。
+
+⚠️ 连带订正 §13 ②：rev.1 把「FB7 关联键的生产者」自评为**全批唯一「已闭环」**，但它实证的是「**两个 id 相等**」，**不是**「两个 block 同 message」——后者才是 §6.3 算法的前置条件。
 
 ### 6.4 裁定 C：Denied 形态与决议文案
 
@@ -859,7 +1012,7 @@ arg: `for ${formatWorkedForDuration(input.durationMs)}`
 | `chatMarkdownPolicy.test.ts:1094` | `expect([...CHAT_MARKDOWN_POLICY.remarkPlugins]).toEqual(['remark-gfm', 'remark-breaks']);` | **必红 · 改值**（加 `'remark-math'`） |
 | `chatMarkdownPolicy.test.ts:1146` | `expect(markdown).toContain('const REHYPE_PLUGINS: [] = [];');` | **必红 · 退役换新** —— 它钉的是**源文字面量**，类型从 `[]` 变了就必红 |
 | `chatMarkdownRender.test.ts:447-448` | `expect(wiring.rehypePlugins).toEqual([]); expect(wiring.remarkPlugins).toHaveLength(2);` | **必红 · 改值** |
-| `chatMarkdownPolicy.test.ts:1173-1179` | `FORBIDDEN_ON_PATH` 扫描，**硬编码 5 文件白名单**（`ChatMarkdown.tsx` / `ChatCodeBlock.tsx` / `chatMarkdownPolicy.ts` / `chatShiki.ts` / `ui/ident.tsx`） | ⚠️ **新增数学渲染文件不会被自动纳入** ⇒ 若 FB9 新建文件，**必须同步扩白名单**，否则留下一个不被扫描的洞（**不红，但是覆盖缺口** —— 这类「静默失去覆盖」比必红更危险） |
+| `chatMarkdownPolicy.test.ts:989-995` | **`MARKDOWN_PATH_FILES`** —— 硬编码 5 文件白名单（`ChatMarkdown.tsx` / `ChatCodeBlock.tsx` / `chatMarkdownPolicy.ts` / `chatShiki.ts` / `../ui/ident.tsx`） | ⚠️ **新增数学渲染文件不会被自动纳入** ⇒ 若 FB9 新建文件，**必须同步扩白名单**，否则留下一个不被扫描的洞（**不红，但是覆盖缺口** —— 这类「静默失去覆盖」比必红更危险）。<br>⚠️ **rev.2 订正（A-13）**：rev.1 把这张表叫成 `FORBIDDEN_ON_PATH` —— 那是**另一个东西**（`:1005` 起的**禁用构造表**：rehype-raw / dangerouslySetInnerHTML / `<img` / fetch 等 9 条），不是文件白名单。<br>⚠️ **连带（rev.1 未提，漏改即 typecheck 红）**：扩表时必须同步 `COMMENT_ONLY_PROSE`（`:1122-1128`），它是 `Record<(typeof MARKDOWN_PATH_FILES)[number], string>`，少一个键就编译不过 |
 | `chatMarkdownRender.test.ts:189-235` | F-C6 五条安全规则**渲染级**回归 | **不受影响，且必须全绿** —— 这是 §8.2 评审结论的运行时验证 |
 
 ### 8.4 ⚠️ 地雷一：字体红线正面冲突
@@ -883,11 +1036,11 @@ arg: `for ${formatWorkedForDuration(input.durationMs)}`
 | # | 路 | 判定 |
 |---|---|---|
 | **（a，优先）** | `rehype-katex` 传 **`output: 'mathml'`**，走 Chromium 原生 MathML 渲染 ⇒ **不需要 KaTeX 字体，CSS 需求也大幅缩减** | ⚠️【推测，须实测】Electron 39 = Chromium 142，MathML Core 自 Chromium 109 起可用。**本仓是单引擎环境，无跨浏览器顾虑**（同 T-31 §5.6 用 Chromium 版本推断 `scroll-state()` 的先例，那里也要求「必须一次 GUI 实测确认」）⇒ **同一纪律：必须 GUI 实测**（§10 G-10）。风险：MathML 的排版质量弱于 KaTeX HTML 输出 |
-| （b，退路） | 走 HTML 输出 + 打包 KaTeX 字体 | ⇒ **知情违反红线**，必须按 F456 §7.5 ③ 的**三处留痕**范式处置：① 台账「知情偏离」栏；② `globals.css:81-84` 头注就地补例外说明；③ §12 开放问题供评审复核。**不得只在规格里说一句就算完** |
+| （b，退路） | 走 HTML 输出 + 打包 KaTeX 字体 | 🚫 **rev.2：不得自动转入此路（B-6 ②）。** rev.1 允许「G-10 不满意 ⇒ 转 (b)，做三处留痕即可」，但 `docs/design-system.md:648-665` 把随包字体定为**独立的资产 / 打包 / 许可证立项**，不是一次留痕能覆盖的。⇒ **G-10 若判定 MathML 排版不可接受，片④ 标为阻塞**，须**另行取得字体立项与红线偏离授权**（用户拍板）后方可施工；三处留痕（① 台账「知情偏离」栏；② `globals.css:81-84` 头注就地补例外说明；③ §12 开放问题）是**授权之后**的记账义务，不是授权本身 |
 
 ### 8.5 ⚠️ 地雷二：打包链会静默吞掉 katex
 
-【实测 `electron-builder.yml:56-73`】mermaid 段（注释 `Mermaid and its heavy dependencies (~60MB total) - loaded from CDN at runtime`）内含：
+【实测 `electron-builder.yml:61-77`】mermaid 段（rev.1 写 `:56-73`，`:56-58` 其实是 claude-agent-sdk 的排除；注释 `Mermaid and its heavy dependencies (~60MB total) - loaded from CDN at runtime`）内含：
 
 ```yaml
 - "!node_modules/katex/**"
@@ -897,8 +1050,43 @@ katex 当年是 **mermaid 的依赖**被一并裁掉；`node_modules/katex` 与 
 
 ⇒ **FB9 引入 katex 后若不删这一行，打包版公式渲染会静默失效**（dev 正常、安装包异常，是最难排查的一类）。
 
-**裁定：本片必须删除 `electron-builder.yml:64` 那一行**，并在同处补一行注释说明「katex 现为 FB9 的直接依赖，不再随 mermaid 裁剪」。
-⚠️ 这也意味着 **FB9 的验收不能只在 dev 态做** —— 必须有一次**打包产物**的公式渲染确认（§10 G-11）。这是本批唯一需要出包验证的件。
+> 🚫 **rev.2 改判（B-6，major）：这条因果链尚未被证明，取证之前不得写成施工动作。**
+>
+> rev.1 直接裁定「本片必须删除 `electron-builder.yml:64` 那一行」，但**没有证明「不删就一定失效」**：
+> - 【实测】`electron-builder.yml:10-11` **同时打包** `out/**/*` 与 `node_modules/**/*`，而 KaTeX 的排除规则只作用于 `node_modules/katex/**`（现位于 `:69`，不是 `:64` —— 行号已漂，见 §0.4）；
+> - 【实测】renderer 是**独立 Vite 构建入口**（`electron.vite.config.ts:90-107`，输入为 renderer `index.html`）；
+> - 【推测】renderer 的依赖及其 CSS / 字体**很可能被 Vite 产入 `out/renderer`**。若如此，`!node_modules/katex/**` 对公式与 woff2 **均不起作用**，而 §9.2 的 M-29 就只是「让配置断言红」，**并不构成产品变异**。
+>
+> ⇒ **E-1 开工前取证（阻塞片④）**：依赖装齐后先跑一次真实构建（本机 linux-x64 即可，`scripts/assert-build-target.mjs:30` 只拦跨平台目标），确认 KaTeX 的 **JS / CSS / woff2 最终落在哪里** —— `out/renderer`、`app.asar` 里的 `node_modules`、还是别处。
+>
+> **按取证结论分两种落法**：
+> | 取证结论 | 落法 |
+> |---|---|
+> | 运行时**确实**消费 `node_modules/katex` | 维持 rev.1 裁定：删该行（**按原文定位，不按行号**）+ 补注释；保留 `[FB9-5]` 与 M-29 |
+> | 运行时**不**消费 `node_modules/katex`（Vite 已产入 `out/renderer`） | **删除** `[FB9-5]` 与 M-29 对「改 builder」的要求，改为断言**真实产物位置**（如「`out/renderer` 下存在 katex 的 CSS 产物」/「产物中无 KaTeX `.woff2`」）；builder 一字不动 |
+>
+> **在取证结论回填本节之前，施工方不得改 `electron-builder.yml`。**
+
+#### 8.5-a E-1 取证结论（2026-08-23 实跑，**因果被推翻**）
+
+**工法**：装齐 `remark-math` / `rehype-katex` / `katex` 后，用仓内同一份 Vite 做两次最小独立构建（lib 模式，只打探针入口；本机 3.35 GB 内存跑不动 `pnpm build` 的 `--max-old-space-size=4096`，全量构建会 OOM）。
+
+| 探针 | 内容 | 产物 | 结论 |
+|---|---|---|---|
+| **A** | `rehype-katex` + `remark-math`，`output: 'mathml'`，**不引 CSS** | 单文件 `probe.js` **557,624 B**；`katex` 出现 21 处；**字体文件 0 个**；bundle 内**零 `node_modules` 运行时引用** | KaTeX 的 JS **被 Vite 完整打进产物**；MathML 路**一个字体字节都不产生** |
+| **B** | 同上 + `import 'katex/dist/katex.min.css'` | `probe.js` 557,592 B + `probe.css` **1,459,700 B**（源 `katex.min.css` 仅 24,727 B）；内联 `data:font/woff2;base64` × 20、`woff` × 20、`ttf` × 20；`url()` **无任何仓外残留** | HTML 路会把 `node_modules/katex/dist/fonts` 的 **60 个字体（1.2 MB）全部搬进产物** |
+
+⇒ **`!node_modules/katex/**` 与公式能否渲染无关。** 两条路的 katex 资产**都落在 `out/` 之下**，运行时**从不读 `node_modules/katex`**。rev.1 的「不删则打包版公式静默失效」是**假因果**（B 轨 D-2 质疑成立）。
+
+**三条落法（rev.2 据此改判）**：
+
+1. **`electron-builder.yml` 一字不动，那行排除保留。** 它现在的作用只是「别把没人加载的 1.2 MB 死文件塞进包」——这是**收益**，不是地雷。片④ 的影响面因此**移除 `electron-builder.yml`**。
+2. **`[FB9-5]` 换承重命题**：从「builder 配置不含某行」（一条对产品行为**恒无效**的守卫）改成**产物级断言** —— **构建产物中不得出现任何 KaTeX 字体**（`out/renderer` 下无 `.woff2`/`.woff`/`.ttf` 属 katex，且 CSS 内无 `data:font/*;base64`）。这条**更强**：它把 `globals.css:81-84` 的「无 bundled webfont」红线**钉在产物层**，而不只是源码扫描层。
+3. **M-29 退役**（恢复 builder 排除行不构成产品变异），其位置由 **M-33（引入 `katex/dist/katex.min.css`）** 顶替 —— 探针 B 已实证它会真的把 1.2 MB 字体搬进产物，是**产物级真变异**。
+
+**残留未直接观测的一点（不影响结论）**：lib 模式下 Vite 把字体**内联**进 CSS；真实 renderer 构建（非 lib）会把它们**发成独立资产文件**（现成佐证：`out/renderer/assets/codicon-ngg6Pgfi.ttf`，来自 monaco codicon）。两种形态**都在 `out/` 之下**，对本节结论无影响；差异会在片④ 的 **G-11 出包点验**顺带证实。
+
+⚠️ 无论取证结果如何，**FB9 的验收都不能只在 dev 态做** —— 必须有一次**打包产物**的公式渲染确认（§10 G-11）。这是本批唯一需要出包验证的件。
 
 ### 8.6 裁定：行内 `$…$` **不启用**
 
@@ -914,6 +1102,21 @@ katex 当年是 **mermaid 的依赖**被一并裁掉；`node_modules/katex` 与 
 4. **可回退性**：块级先落地、行内另立票，是**单向安全**的顺序（先严后宽）；反之若先放开再收紧，用户会经历一次「本来能渲染的公式突然不渲染」。
 
 ⇒ 行内 `$…$` 记入 §12 Q9（另立票，需真实语料统计误伤率后再定）。
+
+#### 8.6-a 断言口径订正（rev.2，A-8 + B-7 + Q9 合取）
+
+**① `[FB9-2]` 的「行内选项关」不可判定，改为行为断言（Q9 两轨合取）。**
+rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关**」。但【推测，据现有资料】`remark-math` 当前主版本只提供 `singleDollarTextMath` 一个开关，其语义是「行内数学是否接受**单个** `$`」，**不是**「关闭行内数学」—— 关掉它之后 `$$x$$` 写在一行里仍会成为行内数学。⇒ 作为**必红断言**它不可判定。
+**改法**：`[FB9-2]` 落 `chatMarkdownRender.test.ts`，断**行为**不断选项名：`render('价格是 $5 到 $10')` 输出**不含** `<math`；`render('$PATH')` 原样保留；`render('$$e=mc^2$$')` 含 `<math`。配置项名按施工时实际版本文档填，维持 rev.1 「**不发明选项名**」的自律。
+
+**② `output: 'mathml'` 这条守着字体红线的裁定，rev.1 没有任何自动化守卫（A-8）。**
+§9.1 的 `[FB9-1..5]` 全是 policy 卡片比对与源文扫描，**没有一条钉住 `output: 'mathml'`，也没有一条禁止 `import 'katex/dist/katex.min.css'`** ⇒ 有人把 `output` 去掉（回到默认 `htmlAndMathml`）并顺手引入 katex.css，全批 vitest 全绿、红线被静默突破，只能靠 G-10 一张截图发现。
+**而本仓在 node 环境本来就能做渲染级断言**：【实测】`chatMarkdownRender.test.ts:1-29` 用 `renderToStaticMarkup(createElement(ChatMarkdown, { text }))`，`:189-196` 的 F-C6 已在用它。⇒ §8.2 ④「`rehype-katex` 是否走 raw 节点路径」这条【推测】**不必推迟到施工期**，一条 `render('$$e=mc^2$$')` 当场可判。
+**配套**：§9.1 追加 `[FB9-6]` / `[FB9-7]` / `[FB9-8]`，§9.2 追加 M-32 / M-33（见 §9）。
+
+**③ 数学输入缺运行时攻击臂（B-7）。**
+【实测】现有 F-C6 渲染安全组（`chatMarkdownRender.test.ts:189-235`）只覆盖裸 HTML、markdown image、checkbox 与代码文本，**零数学输入**，而 rev.1 §8.3 直接把这组判为「不受影响」。
+⇒ 新增数学安全组 `[FB9-9]`，至少四臂：`\href{javascript:alert(1)}{x}` · `\includegraphics{https://evil/x.png}` · `\htmlClass` / `\htmlStyle` · **解析失败时含 `<script>` 的源文本**。断言输出**不含** `<a href`、`<img`、`src=`、网络 URL、raw HTML 痕迹，并**正向确认**产生真实 `<math`。
 
 ---
 
@@ -932,59 +1135,73 @@ katex 当年是 **mermaid 的依赖**被一并裁掉；`node_modules/katex` 与 
 | 编号 | 落点 | 断言 | 抓什么 |
 |---|---|---|---|
 | `[FB1-1]` | `chatMarkdownPolicy.test.ts` | `splitClosedPrefix` 真值表：① 未闭合围栏 ⇒ 从开栏行起全在 `openTail`；② 闭合围栏后跟空行 ⇒ 成段；③ 半张表（表头无分隔行）⇒ 全在 `openTail`；④ 无空行长文本 ⇒ `segments === []`（退化为纯文本） | 切分口径被放宽成「见到换行就切」 |
-| `[FB1-2]` | 同上 | **单调性**：构造一条追加会使切点失效的输入（loose list 转换 / 缩进代码块延续 / 脚注定义续行），断言**已发布前缀不回退**（hwm 生效） | §1.3 的核心正确性；**没有这条，`splitClosedPrefix` 就是空壳**（§13 ①） |
+| `[FB1-2]` | 同上 | **单调性**（rev.2：针对 **`advanceClosedPrefix(text, previousHwm)`**，不再是无状态的 `splitClosedPrefix`）：构造一条追加会使切点失效的输入（loose list 转换 / 缩进代码块延续 / 脚注定义续行），断言 ① `hwm` 只增不减；② **本次切点短于 `previousHwm` 时，segments 由 `text.slice(0, previousHwm)` 重新切出**（不是只留一个数字） | §1.3 的核心正确性；**没有这条，`advanceClosedPrefix` 就是空壳**（§13 ①） |
 | `[FB1-3]` | 同上 | **纯函数性**：`A → B → A` 交错调用，第三次结果逐字等于第一次；模块无导出的可变状态 | 引入缓存 / 定时器 / 全局态 |
-| `[FB1-4]` | `messageTimelineWiring.test.ts` | 源文扫描：`TurnItemView` 的 text 分支内**不出现** `setInterval` / `setTimeout` / `Date.now` / `nowMs` | R3 的 `STATIC_NOW_MS` 纪律被绕过 |
-| `[FB2-1]` | `chatTimelineLayout.test.ts` | FB2 按钮复用 `turnCopyButtonClass()`，且该串**仍不含** `opacity-0` / `group-hover:` | F-B15 红线（§2.3） |
+| `[FB1-4]` | `messageTimelineWiring.test.ts` | 源文扫描：**`TurnTextItem` 函数体内**（rev.2 落点随 §1.5 改判，原写「`TurnItemView` 的 text 分支内」）**不出现** `setInterval` / `setTimeout` / `Date.now` / `nowMs` | R3 的 `STATIC_NOW_MS` 纪律被绕过 |
+| **`[FB1-5]`**（rev.2 新增） | `messageTimelineWiring.test.ts` | **段容器 key 不是裸下标** —— 源文断言段容器的 `key=` 表达式含 `turnItemKey(`，不得是 `key={i}` / `key={index}` 之类 | §1.4 陷阱：流式期插段导致子树重挂 ⇒ **hwm 归零、已封存前缀回退**（运行期退化，静态否则看不见） |
+| **`[FB1-6]`**（rev.2 新增） | `chatMarkdownPolicy.test.ts` | **确定性工作量断言**（给 M-04 一个客观红判据）：对一条固定的追加序列，统计「发生变化、需重新解析的 segment 总字符数」；分段实现应**近线性**，断言其不超过明确上限 | M-04（不分段）——rev.1 把这一发整个押在人工点验上，见 §9.2 订正 |
+| `[FB2-1]` | **`messageTimelineWiring.test.ts` 同族源文扫描**（rev.2 改落点；原写 `chatTimelineLayout.test.ts`，该文件只 import 纯类装配函数、`readFileSync` 零命中，**读不到 `ChatCodeBlock.tsx` 源码**） | 三半：① `ChatCodeBlock.tsx` 内 copy 按钮的 className 表达式含 `turnCopyButtonClass()`；② **整份文件**不出现 `opacity-0` / `group-hover:`；③（rev.2 新增）该表达式含 §2.3-a 定死的弱化档 `text-muted-foreground/60` | F-B15 红线（§2.3）+ D55 ③ 的兑现 |
 | `[FB2-2]` | `chatMarkdownPolicy.test.ts` | `chatMarkdownCodeBlockClass()` 返回串**逐字未变**（`relative` 加在 wrapper 不在它身上） | §2.4（b）路被误走 |
 | `[FB2-3]` | `messageTimelineWiring.test.ts` 或 `composerFormStatic` 同族源文扫描 | **`ChatCodeBlock` 的调用点仍只有 markdown 一处**；`ToolRows.tsx` 不 import 它 | §2.2 的「天然红线」**静默失效** |
 | `[FB3-1]` | `chatTimelineLayout.test.ts` | `userBubbleTextClass(false)` 含 `line-clamp-6`；`userBubbleTextClass(true)` **不含**任何 `line-clamp-` | 展开态没真的解除 clamp |
-| `[FB3-2]` | 同上（源文/类型层） | `userBubbleTextClass` 的入参**只能来自用户意图态** —— 断言 `UserBubble` 函数体内该调用的实参标识符**不出现** `pinned` / `stuck` / `scroll` / `intersect` 词根 | §3.3 的形式化不变量：**挡住下一个人把 `isPinned` 接回来**（F10 振荡回路复活） |
+| `[FB3-2]` | **`messageTimelineWiring.test.ts`**（rev.2 改落点，理由同 `[FB2-1]`；该文件已有 `SYNTAX` / `CALL_SITES` 两套 `MessageTimeline.tsx` 投影，`:120-141` 有现成工法） | `userBubbleTextClass` 的入参**只能来自用户意图态** —— 断言 `UserBubble` 函数体内该调用的实参标识符**不出现** `pinned` / `stuck` / `scroll` / `intersect` 词根 | §3.3 的形式化不变量：**挡住下一个人把 `isPinned` 接回来**（F10 振荡回路复活） |
 | `[FB3-3]` | `messageTimelineWiring.test.ts` | 气泡 `title={fullText \|\| undefined}` **仍在** | §3.4：把既有测试盲区补上 |
-| `[FB4-1]` | `chatTurn.test.ts` | `turnItemPlacement` 对 `TurnItemKind` **联合穷尽**（`satisfies Record<TurnItemKind, TurnSegmentKind>` 或逐成员），当前 5 成员 | **FB4↔FB7 唯一接口锁**（§4.3 ③）：FB7 增删 kind 时必红 |
+| `[FB4-1]` | `chatTurn.test.ts` | `turnItemPlacement` 对 `TurnItemKind` **逐成员断言**（rev.2 去掉「或 `satisfies Record<…>`」二选一，见 §4.3 ③）：`text→answer` / `notice→notice` / `question`·`permission`·`toolGroup`→`process`，当前 5 成员 | **FB4↔FB7 唯一接口锁**（§4.3 ③）：FB7 增删 kind 时必红 |
 | `[FB4-2]` | 同上 | `segmentTurnBody` 保序 + run-length：`[text, tool, text, tool, text]` ⇒ 5 段且 kind 序列为 `answer/process/answer/process/answer` | 谓词退化回二分 |
 | `[FB4-3]` | 同上 | **交错不合并**：`[text, text, tool]` ⇒ 2 段（两个 text 合成**一段**），验证「极大同类连续段」 | 每 item 一段（碎片化）或全合并（丢序） |
 | `[FB4-4]` | 同上 | **尾部 notice 不再连坐**：`[text, tool, text, notice]` ⇒ 前面的 text 段仍是 `answer`，notice 单独成段 | §4.1 被推翻的旧规则复活 |
-| `[FB4-5]` | 同上 | `collapsedLeavesNothing` 语义：全 process ⇒ true；含任一 text ⇒ false | §4.4 的恒假死开关 |
+| `[FB4-5]` | 同上 | `collapsedLeavesNothing` 语义：全 process ⇒ true；含任一 text ⇒ false；**（rev.2 补两臂）`process + notice` ⇒ false；`notice` only ⇒ false** —— 正确公式是 `segments.every(s => s.kind === 'process')`，`notice` 恒可见故不算「什么都不剩」 | §4.4 的恒假死开关；补臂后 M-14 才咬得住 |
 | `[FB4-6]` | `chatTurn.test.ts` | `defaultTurnProcessOpen` 的 `hasUnresolvedPermission` **仍是首返回** | 安全红线被重排 |
-| **`[FB6-1]`** | `messageTimelineWiring.test.ts`（**须先扩定位器支持 `memo(function …)`**） | **`ChatTurn` 的 direct-child 顺序**：band → 内容段 → **head** → `TurnFooter`，head 的 index **大于**所有内容段 | **§5.6 的零回归网** —— 这是本批最重要的新钉子 |
+| **`[FB4-7]`**（rev.2 新增） | `messageTimelineWiring.test.ts` | **重定义后的 `[D3-7]`**：`turnAnswerContainerClass()` **只出现在 `kind === 'answer'` 段的 className 表达式里**，process / notice 分支均不得出现（结构断言，替代旧的「源码里出现一次」计数） | §4.5 连带；**M-12 的唯一有效发射半边** —— rev.1 只在 §4.5 提了一句、断言清单里没有它 |
+| **`[FB6-0]`**（rev.2 新增，**一次性脚手架**） | `messageTimelineWiring.test.ts`（须先扩定位器支持 `memo(function …)`） | **临时基线**：`head-before-content` —— 钉住**今天**的顺序（head 是 `ChatTurn` 首子元素） | §5.6-a 三步证据链第 1 步：证明定位器真的看得见顺序。**第 3 步必须删除，不得与 `[FB6-1]` 并存** |
+| **`[FB6-1]`** | 同上 | **`ChatTurn` 的 direct-child 顺序**（rev.2 改口径）：band → 内容段 → **单条 meta 行**；meta 行的 index **大于**所有内容段。（rev.1 写的是 `… → head → TurnFooter` 两个节点，与 D55 ① 冲突，见 §5.2） | **§5.6 的零回归网** —— 这是本批最重要的新钉子 |
 | `[FB6-2]` | 同上 | 底部行**仍带 `truncate`**（单行不变量，§5.2） | 去 `truncate` ⇒ 高度反馈风险 |
 | `[FB6-3]` | `messageTimelinePendingStatic.test.ts` | `PendingTurnHead` **函数名未变** + `promptChars: sendStatus.promptChars` 仍是**必填无兜底** | §5.4 ②③ |
-| **`[FB7-1]`** | `toolCard.test.ts` | **Claude 路径 join**：permission block 的 `permissionId` 命中同 message 的 tool_call `block.id` ⇒ **不产出独立 permission item**，决议并入该 run | 合并没生效 |
+| **`[FB6-4]`**（rev.2 新增） | `messageTimelineWiring.test.ts` | 底部 meta 行的**触发器按钮自带 `disabled={permissionLock}`**；且**各 `Collapsible.Root` 上不再出现 `disabled=`**。`:481-484` 的既有 `expectCalled` 换钉到新按钮 | §4.6-a ①：E1 使原 prop 变死而旧断言仍绿（**同名空壳**） |
+| **`[FB6-5]`**（rev.2 新增） | 同上 | **copy 按钮不在触发器元素的子树内**（AST：`jsxChildrenOf` `:243-256` 可直接用） | §5.2 blocker：`<button>` 套 `<button>` |
+| **`[FB6-6]`**（rev.2 新增） | 同上 | 文件内 `open={processShellOpen}` 的出现次数 **==** process 段容器的渲染点数 | §4.6-a ③：多 Root 漏接 `open`（G-15 的**静态半边**，不再 100% 押在截图上） |
+| **`[FB6-7]`**（rev.2 新增） | 同上 | panel id 由**稳定 `useId()` 前缀**生成；断言 **id 集合唯一** 且触发器 `aria-controls` 枚举的集合与之**恰好相同** | §4.6-a ②：E1 的多 Panel id 竞争 |
+| **`[FB7-1]`** | `toolCard.test.ts` | **Claude 路径 join**：**已决**（`resolved === true`）permission block 的 `permissionId` 命中同 turn 的 tool_call `block.id` ⇒ **不产出独立 permission item**，决议并入该 run | 合并没生效 |
 | **`[FB7-2]`** | 同上 | **回落**：`permissionId` 无命中（合成 id / Codex 形态 `codex:…`）⇒ **原样产出独立 permission item** | 回落路径缺失 ⇒ 授权记录丢失 |
 | **`[FB7-3]`** | 同上 | permission **不再 flush 工具组**：`[tool, permission(命中), tool]` ⇒ **1 个 toolGroup**（今天是 2 个） | §6.5 的结构成因未消除 |
-| **`[FB7-4]`** | 同上 | **守恒律（本件最重要）**：任意输入下，输出中 permission 信息条数（合并进 run 的算一条）**恒等于**输入 permission block 条数 | §6.3 硬红线：**配不上就丢弃** |
+| **`[FB7-4]`** | 同上 | **守恒律**：任意输入下，输出中 permission 信息条数（合并进 run 的算一条）**恒等于**输入 permission block 条数 | §6.3 硬红线：**配不上就丢弃**。⚠️ rev.2 提醒：它**抓不到**「未决卡被并进 run」（那也算一条），故必须另有 `[FB7-8]` |
 | `[FB7-5]` | 同上 | 一个 tool_call **不得认领两个** permission | §6.3 ③ 冲突处理 |
 | `[FB7-6]` | 同上 / `questionCardModel.test.ts` | 合并行**保留 `auto: <reason>` 标注** | 重新制造「drained approval 与真实拒绝无法区分」的已修缺陷 |
 | `[FB7-7]` | `ToolRows` 类装配侧 | 徽记类串**不含** `bg-` / `border` / 图标组件名（D24 灰阶纯文本约束） | **R7 回滚 D24** |
+| **`[FB7-8]`**（rev.2 新增，**blocker 配套**） | `toolCard.test.ts` | **未决 permission（`resolved` 缺省 / `false`）必产出独立 `{ kind: 'permission' }` item，且不被任何 toolGroup 吸收** —— 即便同 turn 内存在 id 相同的 tool_call | §6.3 blocker：未决授权卡被并成灰阶单行 ⇒ 全仓唯一 Allow/Deny 入口消失 ⇒ **回合死锁** |
+| **`[FB7-9]`**（rev.2 新增） | 同上 | permission 与 tool_call **分处同一 turn 的两条 message** 时的行为被显式钉住（按 §6.3-a 取①：仍合并） | §6.3-a：「同 message」是假前提，两者落块规则不同 |
 | `[FB8-1]` | `turnTiming.test.ts` | **分钟级臂**：`formatThoughtRow({durationMs: 1_702_000})` ⇒ `arg` 含 `28m 22s`；且 `66_000` ⇒ `1m 6s`、`120_000` ⇒ `2m` | 裸秒复活 |
 | `[FB8-2]` | 同上 | **同源**：`formatThoughtRow` 的时长片段**逐字等于** `formatWorkedForDuration(同输入)` | §7.1 的「全仓一处定义」被复制回两份 |
 | `[FB9-1]` | `chatMarkdownPolicy.test.ts` | rehype 位**白名单**：只含 `rehype-katex`（不是「非空」） | 顺手再塞一个插件 |
-| `[FB9-2]` | 同上 | remark 位含 `remark-math`，且**块级选项开、行内选项关**（§8.6） | 行内 `$…$` 被顺手打开 |
+| `[FB9-2]` | **`chatMarkdownRender.test.ts`**（rev.2 改落点 + 改口径，见 §8.6-a ①） | **行为断言**（不断选项名）：`render('价格是 $5 到 $10')` **不含** `<math`；`render('$PATH')` 原样保留；`render('$$e=mc^2$$')` 含 `<math` | 行内 `$…$` 被顺手打开。⚠️ rev.1 写的「行内选项关」在 `remark-math` 当前 API 下**不可判定** |
 | `[FB9-3]` | 源文扫描 | `rehype-katex` 的配置对象里**不出现** `trust`、不出现 `macros` | §8.2 的 XSS 面 |
-| `[FB9-4]` | 沿用 F-C5 扫描 | 数学渲染涉及的文件**在 `FORBIDDEN_ON_PATH` 白名单内** | §8.3 的**覆盖缺口**（不红但失去扫描） |
-| `[FB9-5]` | 新增（构建配置侧） | `electron-builder.yml` **不含** `!node_modules/katex` | §8.5 地雷 —— 打包版静默失效 |
+| `[FB9-4]` | 沿用 F-C5 扫描 | 数学渲染涉及的文件**在 `MARKDOWN_PATH_FILES` 白名单内**（rev.2 订正符号名，`chatMarkdownPolicy.test.ts:989-995`；rev.1 误写成 `FORBIDDEN_ON_PATH`），**并同步 `COMMENT_ONLY_PROSE`**（`:1122-1128`，漏改即 typecheck 红） | §8.3 的**覆盖缺口**（不红但失去扫描） |
+| `[FB9-5]` | **`scripts/__tests__/packaging-config.test.mjs`** 或构建产物扫描（阶段 4 已有该承重点，`:22-57`；`vitest.config.ts:13` 已纳入全量） | ✅ **E-1 已取证，命题已换**（见 §8.5-a）：断言**构建产物中不存在任何 KaTeX 字体** —— `out/renderer` 下无属于 katex 的 `.woff2`/`.woff`/`.ttf`，且产出 CSS 内无 `data:font/*;base64`。<br>⚠️ rev.1 的原命题「`electron-builder.yml` 不含 `!node_modules/katex`」**已废弃** —— 实测运行时从不读 `node_modules/katex`，该守卫对产品行为恒无效 | **把字体红线钉在产物层**（比源码扫描强）；发射半边 = M-33 |
+| **`[FB9-6]`**（rev.2 新增） | 源文扫描（与 `[FB9-3]` 同处） | `rehype-katex` 配置对象**必须**含 `output: 'mathml'` | §8.4（a）路是**守着字体红线**的裁定，rev.1 对它零守卫 |
+| **`[FB9-7]`**（rev.2 新增） | 源文扫描（落 `fontDomainScan.test.ts` 同族） | 全仓 `src/**` 与打包入口**不出现** `katex/dist/*.css`；`src/**` **无新增 `@font-face`** | 有人顺手引入 katex.css ⇒ 静默突破 `globals.css:81-84` 字体红线 |
+| **`[FB9-8]`**（rev.2 新增） | `chatMarkdownRender.test.ts` | **渲染级**：`render('$$e=mc^2$$')` 输出含 `<math`、**不含** `<script`、**不含** `katex-html`（后者是 HTML 输出路径的指纹） | 同 `[FB9-6]`，从行为侧把 MathML 路钉死；顺带当场结掉 §8.2 ④ 那条「须施工时验证」的【推测】 |
+| **`[FB9-9]`**（rev.2 新增） | 同上（F-C6 安全组扩建） | **数学输入安全四臂**：`\href{javascript:alert(1)}{x}` · `\includegraphics{https://evil/x.png}` · `\htmlClass` / `\htmlStyle` · 解析失败时含 `<script>` 的源文本。断言输出**不含** `<a href`、`<img`、`src=`、网络 URL、raw HTML，并**正向确认**产生真实 `<math` | §8.2 的安全结论此前**只有配置扫描、零运行时攻击臂** |
 
 ### 9.2 变异清单（**零跳过纪律**：全部实跑，先跑变异确认红、再回退确认绿）
 
 | # | 变异 | 应红的断言（发射半边） |
 |---|---|---|
-| M-01 | `splitClosedPrefix` 去掉 hwm，每次取当次值 | `[FB1-2]` —— **本批最重要的一发**，它守住 §1.3 整个单调性论证 |
+| M-01 | **`advanceClosedPrefix` 去掉单调化**（直接返回 `splitClosedPrefix(text)` 的当次值，忽略 `previousHwm`） | `[FB1-2]` —— **本批最重要的一发**，它守住 §1.3 整个单调性论证。⚠️ rev.1 写「`splitClosedPrefix` 去掉 hwm」**无对象可删**（该纯函数里本就没有 hwm），故 §1.2 新设 `advanceClosedPrefix` 作为靶子 |
 | M-02 | 切点判据从「空行」放宽为「换行」 | `[FB1-1]①③` |
 | M-03 | 围栏闭合判定忽略长度（`>=N` 改 `===N`） | `[FB1-1]①` |
-| M-04 | 把整个 `closedPrefix` 喂给单个 `<ChatMarkdown>`（不分段） | ⚠️ **静态断言抓不到** —— 这一发的发射半边是 §10 G-2 的**性能点验**，必须在点验里显形（诚实记账：这是本批唯一没有静态守卫的设计裁定） |
+| M-04 | 把整个 `closedPrefix` 喂给单个 `<ChatMarkdown>`（不分段） | **`[FB1-6]`**（rev.2 新增的确定性工作量断言）—— G-2 性能点验降为**观感补充**，不再承担红/绿唯一裁决 |
 | M-05 | 用 `setInterval` 驱动重切 | `[FB1-3]` + `[FB1-4]` |
-| M-06 | FB2 按钮改 `opacity-0 group-hover:opacity-100` | `[FB2-1]` |
+| M-06 | FB2 按钮改 `opacity-0 group-hover:opacity-100` | `[FB2-1]`（**须落在改过落点后的源文扫描上** —— rev.1 的落点 `chatTimelineLayout.test.ts` 读不到 `ChatCodeBlock.tsx`，该发必存活） |
 | M-07 | 给 `chatMarkdownCodeBlockClass()` 加 `relative` | `[FB2-2]` |
 | M-08 | 让 `ToolRows` 复用 `ChatCodeBlock` | `[FB2-3]` —— 抓「天然红线静默失效」 |
 | M-09 | `userBubbleTextClass(true)` 仍返回 `line-clamp-6` | `[FB3-1]` |
-| M-10 | 把 `isPinned` 接回 `userBubbleTextClass` 入参 | `[FB3-2]` —— 抓 F10 振荡回路复活 |
+| M-10 | 把 `isPinned` 接回 `userBubbleTextClass` 入参 | `[FB3-2]`（同 M-06：**落点已改** `messageTimelineWiring.test.ts`，否则读不到源码、该发必存活。它守的正是 F10 振荡回路复活） |
 | M-11 | `turnItemPlacement` 写成黑名单（`kind !== 'toolGroup'` ⇒ answer） | `[FB4-1]` + `[FB4-2]` |
-| M-12 | answer 容器挂到 process 段一侧 | `[FB4-2]` + `[FB6-1]` —— ⚠️ **F456 的 M-15 由本发接替**（原 M-15 映射的 `[D3-7]` 唯一计数已随 §4.5 失效） |
+| M-12 | answer 容器挂到 process 段一侧 | **`[FB4-7]`**（rev.2 改映射）—— ⚠️ rev.1 映射的 `[FB4-2]`（纯分段断言）与 `[FB6-1]`（直接子元素顺序）**都咬不到挂点换边**：`segmentTurnBody` 返回值一字不变，直接子元素个数与次序也不变。**F456 的 M-15 由本发接替** |
 | M-13 | 尾部 notice 重新吞掉前面的 text 段 | `[FB4-4]` |
-| M-14 | `collapsedLeavesNothing` 退回 `answer.length === 0` | `[FB4-5]` |
+| M-14 | `collapsedLeavesNothing` 退回 `answer.length === 0`；**并加一臂：公式漏掉 `notice`（写成 `every(s => s.kind !== 'answer')`）** | `[FB4-5]`（**须含 rev.2 补的 `process + notice ⇒ false` 两臂**，否则第二臂咬不到） |
 | M-15 | `hasUnresolvedPermission` 从首返回挪到末尾 | `[FB4-6]` |
-| M-16 | head 留在首位（**只改断言不改结构**的反向验证） | `[FB6-1]` —— 这一发验的是**新钉子真的钉住了位置**；⚠️ 跑法：先补断言、对旧代码跑，**必须红** |
+| M-16 | 把顺序改回「head 在首位」 | `[FB6-1]` —— 验**新钉子真的钉住了位置**。⚠️ **rev.2 订正跑法**：rev.1 写「先补断言、对旧代码跑，必须红」，与 §9.0(a)「新断言对旧代码跑绿」**直接矛盾**（同一断言不可能既绿又红）。正确跑法见 §5.6-a 三步证据链：`[FB6-0]` 脚手架对旧码绿→结构移动后红→换成永久的 `[FB6-1]` 对新码绿→M-16 回退确认红 |
 | M-17 | 底部行去掉 `truncate` | `[FB6-2]` |
 | M-18 | `PendingTurnHead` 改名 / `promptChars` 加 `?? 0` | `[FB6-3]` |
 | M-19 | permission join 命中后**既并入 run 又保留独立 item** | `[FB7-4]`（守恒律，条数 = 2 ≠ 1） |
@@ -997,14 +1214,26 @@ katex 当年是 **mermaid 的依赖**被一并裁掉；`node_modules/katex` 与 
 | M-26 | rehype 位塞入第二个插件 | `[FB9-1]` |
 | M-27 | 打开行内 `$…$` | `[FB9-2]` |
 | M-28 | `rehype-katex` 传 `trust: true` | `[FB9-3]` |
-| M-29 | 恢复 `electron-builder.yml` 的 katex 排除行 | `[FB9-5]` |
+| ~~M-29~~ | ~~恢复 `electron-builder.yml` 的 katex 排除行~~ | 🚫 **已退役（E-1 取证后，§8.5-a）** —— 实测运行时不读 `node_modules/katex`，这一发不构成产品变异。其位置由 **M-33** 顶替：引入 `katex/dist/katex.min.css` 会真的把 60 个字体（1.2 MB）搬进产物，是产物级真变异 |
+| **M-30**（rev.2 新增） | join 忽略 `resolved`（未决 permission 也并入 run） | **`[FB7-8]`** —— blocker A-1 的发射半边。⚠️ `[FB7-4]` 守恒律**咬不到它**（并进 run 的仍算一条） |
+| **M-31**（rev.2 新增） | 把 copy 按钮塞进触发器 `<button>` 的子树里 | **`[FB6-5]`** —— blocker C-1 的发射半边 |
+| **M-32**（rev.2 新增） | 去掉 `output: 'mathml'`（回到默认 `htmlAndMathml`） | **`[FB9-6]`** + **`[FB9-8]`** |
+| **M-33**（rev.2 新增，**顶替退役的 M-29**） | 引入 `katex/dist/katex.min.css` | **`[FB9-7]`**（源码层）+ **`[FB9-5]`**（产物层）—— 抓字体红线被静默突破。E-1 探针 B 已实证：这一发会让产出 CSS 从 24.7 KB 涨到 1.46 MB，内联 20 woff2 + 20 woff + 20 ttf |
+| **M-34**（rev.2 新增） | 段容器 key 改成数组下标 | **`[FB1-5]`** —— 抓「流式期插段 ⇒ 子树重挂 ⇒ hwm 归零」 |
+| **M-35**（rev.2 新增） | 把 `disabled={permissionLock}` 留在 `Collapsible.Root` 上、不迁到新按钮 | **`[FB6-4]`** —— 抓 E1 引入的同名空壳 |
 
-**零跳过**：29 发全部实跑，不得以「显然会红」跳过。任一发存活 ⇒ 对应断言是空壳，**必须换承重行**而不是加一条同义断言。
-⚠️ **M-04 的诚实记账**：它是本批唯一**静态不可捕获**的变异，其发射半边在 GUI/性能点验里（§10 G-2）。规格显式记录这一点，避免它被当成「漏了一发」。
+**零跳过**：**34 发**（rev.1 为 29 发，rev.2 新增 M-30~M-35 共 6 发、退役 M-29 一发）全部实跑，不得以「显然会红」跳过。任一发存活 ⇒ 对应断言是空壳，**必须换承重行**而不是加一条同义断言。
+
+⚠️ **rev.2 订正：M-04 不再是「静态不可捕获」。** rev.1 把它记为「本批唯一没有静态守卫的设计裁定」，发射半边只有 §10 G-2 的性能点验；但 G-2（`:1019` 一带）只写「对比不分段实现的帧率」，**没有帧耗时 / 解析次数 / 退化比例的任何阈值** ⇒ 它没有客观的「红」判据，与本节「零跳过零存活」纪律**不相容**，也与 `docs/agent-project-engineering.md:174-175`（手工测试不得作为主要回归方式）冲突。
+⇒ 新增 `[FB1-6]` 确定性工作量断言承担红/绿裁决，G-2 保留为观感补充。**本批至此没有「静态不可捕获」的变异。**
+
+⚠️ **rev.2 记账：rev.1 有四发结构性空转臂**（双轨评审 C-5，两轨互证 M-12）——M-06 / M-10 落在读不到源码的 `chatTimelineLayout.test.ts`，M-12 映射的两条断言都不随挂点变化，M-14 的映射断言漏了 `notice` 臂。四发的映射与落点均已在上表订正。
 
 ### 9.3 变异分配（按片）
 
-① = M-24、M-25、M-01~M-03、M-05 · ② = M-19~M-23 · ③ = M-11~M-18、M-12 · ④ = M-04、M-26~M-29 · ⑤ = M-06~M-10
+① = M-01~M-03、M-05、M-24、M-25、**M-34** · ② = M-19~M-23、**M-30** · ③ = M-11~M-18、**M-31**、**M-35** · ④ = M-04、M-26~M-28、**M-32**、**M-33**（M-29 退役）· ⑤ = M-06~M-10
+
+⚠️ rev.1 的片③ 分配写成「M-11~M-18、M-12」，**M-12 重复列了一次**（它本就在 M-11~M-18 区间内），rev.2 已删。
 
 ---
 
@@ -1016,11 +1245,11 @@ katex 当年是 **mermaid 的依赖**被一并裁掉；`node_modules/katex` 与 
 | # | 场景 | 验什么（静态断言表达不了的部分） | 关联 |
 |---|---|---|---|
 | **G-1** | 流式输出一条含围栏代码块 + 列表 + 表格的长回答，**全程录制** | FB1 的核心观感：闭合块是否**实时**成型；未闭合尾部是否为纯文本；**有无任何已渲染内容回退成纯文本**（单调性的视觉验证） | §1.2 / §1.3 |
-| **G-2** | 同上，但用一条 **≥50KB** 的回答 + DevTools Performance | **M-04 的发射半边**：分段渲染是否真的让每帧解析成本恒定；对比「不分段」实现的帧率。⚠️ 同时兑现 §1.4 要求的**微基准实测**（单段解析耗时） | §1.4 / §9.2 M-04 |
-| **G-3** | 一个**超长单行**代码块（触发横向滚动）+ copy 按钮 | 按钮是否钉在右上角**不随横向滚动跑掉**（§2.4 的（a）路依据）；点击后 `Check` 反馈 | §2.4 |
+| **G-2** | 同上，但用一条 **≥50KB** 的回答 + DevTools Performance | **观感补充**（rev.2 降级）：分段渲染的实际帧率观感；兑现 §1.4 要求的**微基准实测**（单段解析耗时）。⚠️ **不再承担 M-04 的红/绿裁决** —— 该职责已交给 `[FB1-6]` 确定性工作量断言（rev.1 让它独任裁决，但本项从未定义任何阈值） | §1.4 / §9.2 M-04 |
+| **G-3** | 一个**超长单行**代码块（触发横向滚动）+ copy 按钮 | 按钮是否钉在右上角**不随横向滚动跑掉**（§2.4 的（a）路依据）；点击后 `Check` 反馈；**（rev.2 新增）亮暗双主题下 `text-muted-foreground/60` 常态是否仍可辨** —— D55 ③「低对比」此前无任何验收判据 | §2.4 / §2.3-a |
 | **G-4** | 六行以上的长用户提问，点击展开 / 收起 | FB3 交互可用性；展开态是否真的显示全文；`title` 悬停仍可达 | §3 |
 | **G-5** | 贴底跟随态下展开一条长提问 | §3.3 的**次生效应**：高度增长触发的一次滚动跟随，观感上是否可接受（**不是振荡，是一次性跳动**） | §3.3 |
-| **G-6** | 一个**多次交错**的回合（正文 → 工具 → 正文 → 工具 → 正文） | **FB4-C1 的碎片化风险**：3~5 个小边框盒堆叠是否可接受。若不可接受 ⇒ 启用备选 C3 | §4.5 |
+| **G-6** | 一个**多次交错**的回合（正文 → 工具 → 正文 → 工具 → 正文） | **FB4-C1 的碎片化风险**：3~5 个小边框盒堆叠是否可接受。🚫 **rev.2：判定不可接受时，施工方不得自行启用 C3** —— 走 F456 §4.6 三步上报，**由用户拍板**（见 §4.5 红框与 §12.1 **Q14**） | §4.5 / §12 Q14 |
 | **G-7** | 置顶气泡态 + 其下第一个元素是带边框的 answer 容器 | §5.5 的视觉变化：10px 间隔下是否显拥挤；band 遮盖是否仍完整（**无透明缝**） | §5.5 |
 | **G-8** | 长命令 + 长参数 + 决议徽记三者并存的工具行 | **FB7 的让位行为**：徽记 `shrink-0` 不截断、参数让位是否正确；**徽记的灰阶档位**（动词档 vs 参数档）当场定 | §6.5 |
 | **G-9** | ⚠️ **拒绝一次授权请求**（deny 实测） | **§6.4 的未知量**：被拒的工具**是否还有 `Ran X` 行**。这是**唯一能推翻 §6.5 布局设计的实测**，⚠️ **必须排在 FB7 施工之前** | §6.4 / §6.7 |
@@ -1030,7 +1259,7 @@ katex 当年是 **mermaid 的依赖**被一并裁掉；`node_modules/katex` 与 
 | **G-13** | 底部三行堆叠（流式中 + 完成后各一张） | §5.3 ②：`[正文] → [状态行] → [footer]` 是否需要合并（**Q4 的判据**） | §5.3 / §12 Q4 |
 | **G-14** | 握手窗口（`PendingTurnHead` 与最后回合底部状态行相邻） | §5.4 的新形态问题：两条状态行相邻是否被读作重复（**Q5 的判据**） | §5.4 |
 | **G-15** | 一个含 ≥2 个 process 段的回合，点一次折叠 | §4.6 E1 的**生产者缺席**检验：**全部段是否一起收起**（漏接 `open` 只会部分响应） | §4.6 / §13 ② |
-| **G-16** | 键盘 Tab 到底部状态行并回车 | G1 触发器的键盘可达性 + `aria-expanded` / `aria-controls` 生效（node 测试测不到） | §5.3 / §13 ② |
+| **G-16** | 键盘 Tab 到底部 meta 行并回车 | **G1′** 触发器（行尾独立 chevron 按钮）的键盘可达性 + `aria-expanded` / `aria-controls` 生效（node 测试测不到）；**（rev.2）另验 Tab 序 = chevron → copy 两个兄弟按钮**，而非嵌套 | §5.3 / §13 ② |
 
 ---
 
@@ -1047,25 +1276,40 @@ katex 当年是 **mermaid 的依赖**被一并裁掉；`node_modules/katex` 与 
 | FB1 | `TurnItemView` 的 text 分支 | `:1557-1564` |
 
 `chatTimelineLayout.ts` 被三件触及：FB3（`userBubbleTextClass`）· FB4/FB6（头注 + 可能的新类装配）· FB2（复用 `turnCopyButtonClass`，只读）。
-`chatMarkdownPolicy.ts` 被两件触及：FB1（新增 `splitClosedPrefix`）· FB9（policy 卡片）。
+`chatMarkdownPolicy.ts` 被两件触及：FB1（新增 `splitClosedPrefix` + `advanceClosedPrefix`）· FB9（policy 卡片）。
+
+**（rev.2 补：测试文件的混面 rev.1 完全没算，A-16）** —— 三份 `.test.ts` 各被两片触及：
+
+| 测试文件 | 被哪两片触及 | 纪律 |
+|---|---|---|
+| `messageTimelineWiring.test.ts` | ③（含 **AST 定位器扩建**）· ⑤ | **定位器扩建归片③ 独占**；⑤ rebase 时**不得回退**它 |
+| `chatMarkdownPolicy.test.ts` | ①（新增函数组）· ④（policy 卡片组） | 两组互不重叠，但同文件 ⇒ 谁后合谁 rebase |
+| `chatTimelineLayout.test.ts` | ③ · ⑤ | 同上 |
 
 ⇒ **不存在「每件各切一片」的零冲突方案**。按**文件簇 + 依赖序**切五片。
 
-### 11.2 五切片（依赖序：`① ∥ ⑤ → ② → ③ → ④`）
+### 11.2 五切片（真实依赖见下图；推荐调度 `① ∥ ⑤ → ② → ③ → ④`）
 
 | 片 | 内容 | 独占文件 | 依赖 / 并行 |
 |---|---|---|---|
-| **① 纯模型层** | **FB8**（`formatThoughtRow` 复用分钟换算）+ **FB1-a**（`splitClosedPrefix` 纯函数 + hwm 语义，**只落纯模块与测试，不接线**） | `turnTiming.ts` · `chatMarkdownPolicy.ts`（新增函数区）· `turnTiming.test.ts` · `chatMarkdownPolicy.test.ts`（新增组） | **与全部片并行**；零 UI、零组件依赖 |
+| **① 纯模型层** | **FB8**（`formatThoughtRow` 复用分钟换算）+ **FB1-a**（`splitClosedPrefix` + `advanceClosedPrefix` 两个纯函数（含 hwm 单调化），**只落纯模块与测试，不接线**） | `turnTiming.ts` · `chatMarkdownPolicy.ts`（新增函数区）· `turnTiming.test.ts` · `chatMarkdownPolicy.test.ts`（新增组） | **与全部片并行**；零 UI、零组件依赖 |
 | **② FB7**（最重，单列） | 双行合并：join + 回落 + 徽记 | `toolCard.ts` · `ToolRows.tsx` · `questionCardModel.ts`（可能）· `toolCard.test.ts` | ⚠️ **G-9 deny 实测必须先于本片施工**；本片产出的 `TurnItemKind` 构成是 ③ 的输入 |
 | **③ FB4 + FB6**（结构层） | 谓词改写 + head 移底 + 折叠壳重构 | `chatTurn.ts` · `MessageTimeline.tsx`（`ChatTurn` 区）· `chatTimelineLayout.ts` · `chatTurn.test.ts` · `messageTimelineWiring.test.ts`（**含 AST 定位器扩建**） | **依赖 ②** 的 kind 定案（§4.3 接口锁）。⚠️ **必须先补 `[FB6-1]` 钉子再动结构**（§5.6） |
-| **④ FB1-b + FB9**（markdown 渲染层） | 分段渲染接线 + LaTeX + 打包链 | `ChatMarkdown.tsx` · `chatMarkdownPolicy.ts`（policy 卡片区）· `MessageTimeline.tsx`（`TurnItemView` 区）· `package.json` · `electron-builder.yml` · `chatMarkdownRender.test.ts` | **依赖 ①**（消费 `splitClosedPrefix`）；与 ③ **同文件不同区** ⇒ **谁后合谁 rebase** |
+| **④ FB1-b + FB9**（markdown 渲染层） | 分段渲染接线 + LaTeX + 打包链 | `ChatMarkdown.tsx` · `chatMarkdownPolicy.ts`（policy 卡片区）· `MessageTimeline.tsx`（`TurnItemView` 区 + 新增 `TurnTextItem`）· `package.json` · **`pnpm-lock.yaml`**（rev.2 补：本仓是 pnpm，`package.json:12` `"packageManager": "pnpm@10.26.2"`；引三个包必动 lockfile，rev.1 漏列）· ~~`electron-builder.yml`~~（**E-1 已取证：一字不动**，§8.5-a）· `chatMarkdownRender.test.ts` · **`scripts/__tests__/packaging-config.test.mjs`**（rev.2 补：`[FB9-5]` 的落点，阶段 4 已有这份承重测试） | **依赖 ①**（消费 `advanceClosedPrefix`）；与 ③ **同文件不同区** ⇒ **谁后合谁 rebase**。✅ **E-1 已于 2026-08-23 取证完毕**，本片不再阻塞（§8.5-a） |
 | **⑤ FB2 + FB3**（叶子交互层） | 代码块 copy + 气泡展开 | `ChatCodeBlock.tsx` · `MessageTimeline.tsx`（`UserBubble` 区）· `chatTimelineLayout.ts`（`userBubbleTextClass`） | 与 ① 并行；与 ③ 同两份文件不同区 ⇒ **谁后合谁 rebase** |
 
 ```
-① ∥ ⑤ ──┐
-         ├─→ ② ──→ ③ ──→ ④（rebase 到 ③ 之上）
-G-9 实测 ─┘
+真实技术依赖（rev.2 订正，B-9）：
+  ① ──────────────→ ④          （④ 消费 ① 的 advanceClosedPrefix）
+  ② ──→ ③ ─────────→ ④          （③ 消费 ② 的 kind 定案；④ rebase 到 ③ 之上）
+  ⑤ 与 ③ 共享两份文件 ⇒ 择一先行，后者 rebase
+  G-9 deny 实测 ──→ ②            （前置，必须先于 ② 施工）
+
+推荐串行调度（非技术依赖，只是减少 rebase 与评审混面）：
+  ① ∥ ⑤ → ② → ③ → ④
 ```
+
+⚠️ **rev.2 订正**：rev.1 把上面第二块**称作依赖序**（`① ∥ ⑤ → ② → ③ → ④`），与本节表格里「片① **与全部片并行**」的说明**互相矛盾**，也与正文列出的真实依赖（只有 `②→③` 与 `①→④`）不符。rev.2 把两者分开写：**依赖是硬的，调度是建议的。**
 
 **三条切片理由**：
 
@@ -1079,25 +1323,29 @@ G-9 实测 ─┘
 |---|---|
 | **scoped vitest** | 本片独占文件对应的测试**全绿**；⚠️ **服务器内存有限，逐门串行跑，不得链式合跑**（曾 OOM `exit 137`）。⚠️ 测试只 import 纯模块，避免 node 环境 import 挂死 |
 | **变异臂** | 按 §9.3 分配跑完本片那一段，**零跳过零存活**；先跑变异确认红、再回退确认绿，全 md5 对账还原 |
+| **四门中的静态两门**（rev.2 新增，B-8） | `pnpm typecheck` + `pnpm lint` **各自串行绿** —— rev.1 的三件套只有 scoped vitest / 变异 / GUI，而正式质量门还含这两项（`package.json:30-35`）。片④ 尤其危险：scoped source-scan 可能全绿，却留下 TS 或 plugin-option 错误（`COMMENT_ONLY_PROSE` 的 `Record` 类型就是现成例子，见 `[FB9-4]`） |
 | **GUI 点验项** | 按下表逐项出图（亮暗双主题） |
 
 | 片 | scoped vitest | 变异 | GUI 点验项 |
 |---|---|---|---|
-| ① | `turnTiming.test.ts` · `chatMarkdownPolicy.test.ts` | M-01~M-03、M-05、M-24、M-25 | —— （纯模型层，无 UI） |
-| ② | `toolCard.test.ts` · `questionCardModel.test.ts` | M-19~M-23 | **G-9（前置）** · G-8 |
-| ③ | `chatTurn.test.ts` · `messageTimelineWiring.test.ts` · `chatTimelineLayout.test.ts` · `messageTimelinePendingStatic.test.ts` | M-11~M-18 | G-6 · G-7 · G-12 · G-13 · G-14 · G-15 · G-16 |
-| ④ | `chatMarkdownRender.test.ts` · `chatMarkdownPolicy.test.ts` | M-04（点验半边）· M-26~M-29 | G-1 · G-2 · **G-10** · **G-11（出包）** |
+| ① | `turnTiming.test.ts` · `chatMarkdownPolicy.test.ts` | M-01~M-03、M-05、M-24、M-25、**M-34** | —— （纯模型层，无 UI） |
+| ② | `toolCard.test.ts` · `questionCardModel.test.ts` | M-19~M-23 · **M-30** | **G-9（前置）** · G-8 |
+| ③ | `chatTurn.test.ts` · `messageTimelineWiring.test.ts` · `chatTimelineLayout.test.ts` · `messageTimelinePendingStatic.test.ts` | M-11~M-18 · **M-31** · **M-35** | G-6 · G-7 · G-12 · G-13 · G-14 · G-15 · G-16 |
+| ④ | `chatMarkdownRender.test.ts` · `chatMarkdownPolicy.test.ts` · **`scripts/__tests__/packaging-config.test.mjs`** | M-04 · M-26~M-28 · **M-32** · **M-33**（M-29 已退役） | G-1 · G-2 · **G-10** · **G-11（出包，顺带证实字体的产物形态）**；✅ E-1 前置已完成 |
 | ⑤ | `chatTimelineLayout.test.ts` · `messageTimelineWiring.test.ts` | M-06~M-10 | G-3 · G-4 · G-5 |
 
-**全批收口**：五片合并后再跑一次全量 vitest（基线：F456 as-built 记录为 **239 文件 / 4724 例**，本批应只增不减）；四门逐门串行绿；FB11 真机重评（分诊档 §1 FB11：FB1 修后重评，如仍块状再议两个合批常量）。
+**全批收口**：五片合并后再跑一次全量 vitest；四门逐门串行绿；FB11 真机重评（分诊档 §1 FB11：FB1 修后重评，如仍块状再议两个合批常量）。
+
+⚠️ **基线口径（rev.2 订正，C-4）**：**在施工分支起点当场复取** `pnpm test` 的 summary 行作为基线，**不再沿用 F456 的「239 文件 / 4724 例」**。
+理由：那是 D50/F456 的历史数字（`openchamber-chat-refactor-ledger.md:94`），而阶段 4 已经把 `scripts/__tests__/**/*.test.mjs` 纳入 `vitest.config.ts:13` 的 include 并新增 6 份（`packaging-config` / `packaging-budget` 等）——【实测】`99dfd78` 上 239 份，当前 HEAD **245 份**。拿旧基线比「只增不减」会**恒真，等于没有门**。
 
 ### 11.4 影响面全清单
 
-**生产代码（12 份）**：`turnTiming.ts`(①) · `chatMarkdownPolicy.ts`(①④) · `toolCard.ts`(②) · `ToolRows.tsx`(②) · `questionCardModel.ts`(②) · `chatTurn.ts`(③) · `MessageTimeline.tsx`(③④⑤) · `chatTimelineLayout.ts`(③⑤) · `ChatMarkdown.tsx`(④) · `ChatCodeBlock.tsx`(⑤) · `package.json`(④) · `electron-builder.yml`(④)
+**生产代码（rev.2：12 份 + 1 个新增组件；E-1 后 `electron-builder.yml` 移出）**：`turnTiming.ts`(①) · `chatMarkdownPolicy.ts`(①④) · `toolCard.ts`(②) · `ToolRows.tsx`(②) · `questionCardModel.ts`(②) · `chatTurn.ts`(③) · `MessageTimeline.tsx`(③④⑤，**含新增 `TurnTextItem` 子组件**，§1.5) · `chatTimelineLayout.ts`(③⑤) · `ChatMarkdown.tsx`(④) · `ChatCodeBlock.tsx`(⑤) · `package.json`(④) · **`pnpm-lock.yaml`(④)**
 
-**测试（10 份）**：`turnTiming.test.ts` · `chatMarkdownPolicy.test.ts` · `chatMarkdownRender.test.ts` · `toolCard.test.ts` · `questionCardModel.test.ts` · `chatTurn.test.ts` · `messageTimelineWiring.test.ts` · `chatTimelineLayout.test.ts` · `messageTimelinePendingStatic.test.ts` · `chatSessionsCore.test.ts`（**只读不改** —— §6.2 ⑤ 的地基，必须保持绿）
+**测试（rev.2：11 份）**：`turnTiming.test.ts` · `chatMarkdownPolicy.test.ts` · `chatMarkdownRender.test.ts` · `toolCard.test.ts` · `questionCardModel.test.ts` · `chatTurn.test.ts` · `messageTimelineWiring.test.ts` · `chatTimelineLayout.test.ts` · `messageTimelinePendingStatic.test.ts` · **`scripts/__tests__/packaging-config.test.mjs`**（rev.2 新增，`[FB9-5]` 落点）· `chatSessionsCore.test.ts`（**只读不改** —— §6.2 ⑤ 的地基，必须保持绿）
 
-**文档（4~5 份，归唯一集成者，单片施工者不得顺手改）**：本规格（as-built 回填）· `docs/plans/openchamber-chat-refactor-ledger.md`（D53 行补 as-built + §12 Q7/Q10 的追认与对账）· `docs/plantree/plans/openchamber-chat-refactor/{implementation-status,roadmap}.md` · 视 §8.4 结果可能追加 `globals.css` 头注例外说明
+**文档（rev.2：5~6 份，归唯一集成者，单片施工者不得顺手改）**：本规格（as-built 回填）· `docs/plans/openchamber-chat-refactor-ledger.md`（D53 行补 as-built + §12 Q7/Q10 的追认与对账）· `docs/plantree/plans/openchamber-chat-refactor/{implementation-status,roadmap}.md` · **`docs/plans/2026-08-18-f456-readability-composer-spec.md`**（rev.2 新增：若 G-6 触发 D3-b 否决权，须回填其 §4.6-a 实作否决记录，见 §4.5 与 Q14）· 视 §8.4 结果可能追加 `globals.css` 头注例外说明
 
 ⚠️ **规划文档改动纪律**：`docs/plans` 与 `docs/plantree` 的表格行含全角标点，**跳过 Edit 工具，直接用 python 做字节级替换**（本仓已在此处栽过三次）。
 
@@ -1105,7 +1353,7 @@ G-9 实测 ─┘
 
 ## §12 开放问题（单列）
 
-### 12.1 需**用户拍板**才能定形的（**六条**）
+### 12.1 需**用户拍板**才能定形的（rev.1 六条**已于 D55 全部拍板**；rev.2 新增 **Q14**，唯一未决）
 
 | # | 问题 | 本规格的建议 | 为什么必须问 |
 |---|---|---|---|
@@ -1116,15 +1364,21 @@ G-9 实测 ─┘
 | **Q3** | FB2 按钮的视觉存在感 —— 常驻可见（本规格裁定）是否够克制 | 常驻，但可降低常态不透明度到仍可辨档位 + `focus-visible` 增强 | 分诊档措辞是「悬浮」，而 F-B15 红线禁 hover-only（§2.3）—— 两者的调和需要用户对「克制程度」表态 |
 | **Q1** | FB1 分段容器的**段间距实现** | 段容器用 `space-y-3.5`（与 `BLOCK_GAP` **同档同值**，不是新档） | 分段后 `first:mt-0` 使段间距塌成 0px；补间距时若被判为「新造第三档」会撞 F-C4「恰好两档」断言（`chatMarkdownPolicy.test.ts:649/686/692`） |
 
-### 12.2 需**评审确认**的（技术判断，不必惊动用户；**五条**）
+> ✅ 以上六条**已于 2026-08-19 由用户拍板收口（D55）**，见文末。以下是 rev.2 新增、**尚未拍板**的一条。
 
-| # | 问题 | 本规格的判断 |
-|---|---|---|
-| Q2 | FB1 的 hwm 落点：`TurnItemView` 的 `useRef` 依赖 `turnItemKey` 稳定 | **须施工时实测**；不成立则上提到 `ChatTurn` 的 `Map<blockId, number>`（§1.5 ④） |
-| Q8 | 时长的**小时档**（`formatWorkedForDuration` 同样没有） | **本批不加**（§7.2 三条理由），另立票 |
-| Q9 | 行内 `$…$` 是否启用 | **不启用**（§8.6 四条理由）；需真实语料统计误伤率后再定 |
-| Q12 | §4.6 的折叠实现取 **E1**（多受控 Collapsible + 单按钮多 `aria-controls`）而非 E2（自建 `hidden`） | **取 E1** —— 唯一不作废既有资产（R4 `keepMounted` + `turnProcessPanelClass()` 整篇论证）的方案 |
-| Q13 | §5.3 的折叠触发器取 **G1**（回合级单触发器）而非 G2（段级多触发器） | **取 G1** —— G2 触发器行数 = 段数，铺屏反增，与 FB7 减行目的**正相反** |
+| # | 问题 | 本规格的建议 | 为什么必须问 |
+|---|---|---|---|
+| **Q14**（rev.2 新增，**待拍板**） | **FB4-C1「每段一容器」的碎片化是否可接受？不可接受时是降级到 C3（只有单 answer 段时才挂容器），还是撤 D3-b？** | **先按 C1 施工**（它是 §4.5 的主推），等 GUI 出图后再定；施工方**不得**自行降级 | 这条降级权**明文保留给用户**，不在施工方手里：F456 规格 `:1047-1049`「由**用户拍板**是否降级……**施工方不得自行撤销 D3-b** —— 它是用户在知情（设计员已反对）情况下的拍板，只有用户能推翻自己的拍板」；同档 `:1928` 列为**禁止动作**；总台账 D50 行（`ledger.md:94`）记有「**实现方否决权保留：§4.6 三条件**」，且 `:1962` 的 as-built 表明**至今未行使、仍然开着**。<br>**判据 = G-6**（多次交错回合的截图，亮暗双主题各一张）。<br>**流程**：G-6 判定不可接受 ⇒ 走 F456 §4.6 三步上报（① 施工分支对照截图 ② 在 F456 规格追加 §4.6-a 实作否决记录 ③ 用户拍板降级方案），**不得**在本批内自行切 C3。 |
+
+### 12.2 需**评审确认**的（技术判断，不必惊动用户；**五条 —— rev.2 已由双轨双盲评审合取收口**）
+
+| # | 问题 | rev.1 的判断 | **rev.2 合取结论（两轨双盲）** |
+|---|---|---|---|
+| Q2 | FB1 的 hwm 落点：`TurnItemView` 的 `useRef` 依赖 `turnItemKey` 稳定 | 须施工时实测；不成立则上提到 `ChatTurn` 的 `Map` | ✅ **方向同意（hwm 用 `useRef`、不进 store），落点写法推翻。** key 稳定性**已由两轨各自实证结掉**（`:1415-1423` 对 text 返回 `block.id`；追加只改 `text`）⇒ 标为**已确认**，备案不启用。但 hook **必须抽 `TurnTextItem` 子组件**（rev.1 写进 `switch` 分支是条件调用 hook；本仓 `:1619-1627` 已有「含 hook 分支拆独立组件」的成文纪律）。另追加**段容器 key 纪律**（`[FB1-5]`） |
+| Q8 | 时长的**小时档** | 本批不加，另立票 | ✅ **同意**（两轨一致）。补一条：FB8 落地后该票影响面由 1 处变 2 处（`Worked for` + `Thought for` 共享 `formatWorkedForDuration`，`turnTiming.ts:142-148`/`:164-172`），另立票须写明**同批点验两处** |
+| Q9 | 行内 `$…$` 是否启用 | 不启用 | ✅ **同意不启用**（两轨一致，且本仓是 shell 指令展示面，`$PATH`/`$5` 误伤率显著高于一般聊天应用）。⚠️ 但 `[FB9-2]` 的「块级开、行内关」**口径不可判定**（`remark-math` 只有 `singleDollarTextMath`，语义是「行内是否接受单 `$`」而非关闭行内数学）⇒ 改为**行为断言**，见 §8.6-a ① |
+| Q12 | 折叠实现取 **E1** | 取 E1 | ✅ **同意取 E1**（两轨各自实读 Base UI 三锚点确认「一 Root 一 panelId」成立）。**附三条硬约束**：① `disabled={permissionLock}` 迁移 + 换钉（`[FB6-4]`）；② 稳定 `useId()` 前缀 + id 唯一性与 `aria-controls` 集合断言（`[FB6-7]`）；③ `open` 漏接的**静态半边**（`[FB6-6]`），不再 100% 押在 G-15 一张截图上。详见 §4.6-a |
+| Q13 | 折叠触发器取 **G1** | 取 G1（触发器 = 底部状态行本身） | ⚠️ **同意「单回合触发器」的选择，形态改判为 G1′**（两轨一致判定 rev.1 表述与 D55 ① 冲突：整行做成 `<button>` 会把 copy `<button>` 套进去）。终态 = 单条 meta 行，**整行不是按钮**，行尾独立 chevron 按钮是唯一触发器，metadata 与 copy 是同行兄弟。见 §5.2 / §5.3 |
 
 ### 12.3 文档与台账类（**两条**）
 
@@ -1151,8 +1405,11 @@ G-9 实测 ─┘
 |---|---|
 | `splitTurnBody` 若保留名字改语义 | **整体改名 `segmentTurnBody`**，旧名**不得保留为 alias**（§4.2） |
 | `answerEmpty`（`chatTurn.ts:186` / `MessageTimeline.tsx:1161`）新模型下几乎恒 false | **改名 `collapsedLeavesNothing` 并重定义**；不改则 `chatTurn.test.ts:254` 变成**一条永远测不到真实路径的绿灯**（§4.4） |
-| `splitClosedPrefix` 只实现 R-2（围栏）而缺 R-3（前瞻）与 hwm | 函数名承诺的「结构闭合」即为空壳 ⇒ **验收锚点**：必须存在 loose-list 转换、缩进代码块延续、脚注定义续行三类反例的红→绿测试，以及 `[FB1-2]` 的 hwm 测试 |
+| `splitClosedPrefix` 只实现 R-2（围栏）而缺 R-3（前瞻）；`advanceClosedPrefix` 缺 hwm 单调化 | 函数名承诺的「结构闭合」即为空壳 ⇒ **验收锚点**：必须存在 loose-list 转换、缩进代码块延续、脚注定义续行三类反例的红→绿测试，以及 `[FB1-2]` 的 hwm 测试 |
 | `processOpen` / `collapsible` 变量名承袭「process 段」概念 | 语义扩为「所有可折叠项」时一并改名（连带 `messageTimelineWiring.test.ts:481-484` 换钉） |
+| **`disabled={permissionLock}`（`MessageTimeline.tsx:1262`）在 E1 下变成死 prop，而 `messageTimelineWiring.test.ts:483` 的 `expectCalled` 仍会绿**（rev.2 补录，A-5） | Base UI 的 `disabled` 只作用于**它自己的 Trigger**（`CollapsibleTrigger.js:45-49`），E1 把触发器换成 Root 之外的普通按钮后各 Root 里再无 Trigger ⇒ **必须把 prop 迁到新按钮、删掉 Root 上的 `disabled`、把 `:481-484` 换钉**（`[FB6-4]` + M-35，见 §4.6-a ①） |
+| **`TurnFooter` 在 D55 ① 合并后可能名存实亡**（rev.2 补录，C-1） | 其内容并入单条 meta 行后，该组件要么**退役**、要么**明确重定义为「meta 行右半段」** —— 不得留一个还在被 import、语义已空的同名组件（§5.2） |
+| **`advanceClosedPrefix` 若只实现无状态切分、把单调化留在组件里**（rev.2 补录） | 那么 `[FB1-2]` 测的就不是生产路径，M-01 也无对象可删 ⇒ **单调化必须在纯函数内**（§1.2 三条硬合同） |
 | `turnAnswerContainerClass` 头注 `at most one box per turn`（`chatTimelineLayout.ts:209`） | **与代码同批改** —— 典型的「头注比代码活得久」的假事实 |
 | `chatTimelineLayout.ts:22-23` `the 10px "section gap" to the head` | 同批改（§5.5） |
 | `MessageTimeline.tsx:936-944` `Renders, in order: …` | 同批改，**整段顺序作废**（§5.5） |
@@ -1169,7 +1426,8 @@ G-9 实测 ─┘
 | §4.6 E1 下多个受控 `Collapsible` 若有任一漏接 `open` ⇒ 点触发器只有**部分段**响应 | ⚠️ **node 测试测不到** ⇒ **G-15 强制点验**（含 ≥2 个 process 段的回合，点一次折叠，截图确认全部收起） |
 | 底部行做成普通 `<button>` 后漏 `aria-expanded` / `aria-controls` | wiring 层断言属性存在 + **G-16 键盘可达点验** |
 | `hasProcess` 与 `collapsible` 若各自独立算 ⇒ `turnHead.ts:341-345` 的「hasProcess 蕴含非空 head」不变量断裂，Collapsible 子树会在 metadata 到达时**重新挂载**（F2 已修过一次的缺陷） | 两处**必须由同一表达式派生**，并保留 `messageTimelineWiring.test.ts:426-432` 的等价钉 |
-| **FB7 关联键的生产者** | ✅ **已实证**：不是「类型上有 `permissionId` 字段」，而是 `permissionBridge.ts:38-42` 的赋值 + `chatSessions.ts:786-788` 的落块 + `chatSessionsCore.test.ts` 的 P0 回归钉（一个**真实事故**证明它运行时有值）。这是本批唯一一条**已闭环**的生产者验证 |
+| **FB7 关联键的生产者** | ⚠️ **rev.2 订正：只闭环了一半。** ✅ **「两个 id 相等」已实证** —— `permissionBridge.ts:38-42` 的赋值 + `chatSessions.ts:786-788` 的落块 + `chatSessionsCore.test.ts` 的 P0 回归钉（一个**真实事故**证明它运行时有值）。❌ **但「两个 block 同 message」未闭环** —— 而后者才是 §6.3 算法的前置条件：两类 block 的落块规则不同（`:702-713` 用事件 messageId vs `:747-754` 取最后一条 assistant message）。rev.1 把两者混为一谈、自评为「全批唯一已闭环」。处置见 §6.3-a + `[FB7-9]` |
+| **未决 permission 的交互面消失**（rev.2 新增，blocker A-1） | 【实测】`MessageTimeline.tsx:1578-1598` 的 `case 'permission':` 是**全仓唯一** Allow/Deny 交互面（`onRespondPermission` 只此一个 UI 调用点）。join 若不加 `resolved === true` 守卫，未决卡被并成灰阶单行 ⇒ **消费者存在、生产者被抹掉** ⇒ 回合死锁。检验 = `[FB7-8]` + M-30，**不能只靠 `[FB7-4]` 守恒律**（并进去的仍算一条） |
 | FB2 的 copy 按钮在**工具块**上的缺席 | ✅ **结构上不可能出现** —— `ChatCodeBlock` 到不了工具块（§2.2）；但 `[FB2-3]` 必须钉住这条路径不被打通 |
 
 ### ③ 硬编码信念（散落在测试 / 头注 / 本规格里的未证事实）
@@ -1187,7 +1445,10 @@ G-9 实测 ─┘
 | ⚠️ **「单段 markdown 解析耗时毫秒级/10KB」** | 本规格 §1.4 | **估计，无实测** —— 而**分段决策建立在它之上** ⇒ **施工前须以真实 100KB 回答实测一次**（G-2），否则 §1.4 的结论是信念而非证据 |
 | ⚠️ **「被 deny 的工具没有 `Ran X` 行」** | 本规格 §6.4 | **推测，未实测** —— 且它是**唯一能推翻 §6.5 布局设计**的未知量 ⇒ **G-9 必须排在 FB7 施工之前** |
 | ⚠️ **「Chromium 142 的 MathML 可用且质量可接受」** | 本规格 §8.4（a） | **知识推断，非实测**（同 T-31 §5.6 用 Chromium 版本推断 `scroll-state()` 的先例）⇒ **G-10 实测确认，失败转（b）路** |
-| ⚠️ **「`rehype-katex` 不走 raw 节点路径」** | 本规格 §8.2 ④ | **推测** ⇒ 施工时验证，F-C5 源码扫描继续覆盖 |
+| ⚠️ **「`rehype-katex` 不走 raw 节点路径」** | 本规格 §8.2 ④ | **rev.2 改判：不必等施工期。** 本仓 node 环境已能做渲染级断言（`chatMarkdownRender.test.ts:1-29` 的 `renderToStaticMarkup`），一条 `render('$$e=mc^2$$')` 当场可判 ⇒ 由 `[FB9-8]` + `[FB9-9]` 承担；F-C5 源码扫描继续覆盖 |
+| ~~「不删 `!node_modules/katex/**` 打包版公式就会失效」~~ | rev.1 §8.5 | ✅ **E-1 已取证并推翻（2026-08-23，§8.5-a）**：katex JS 被 Vite 完整打进产物、bundle 内零 `node_modules` 运行时引用；字体只在引 katex CSS 时出现、且同样落在 `out/` 下。该排除规则**与渲染无关**，保留只为不塞 1.2 MB 死文件。**信念已由【推测】转【实测】** |
+| ⚠️ **「permission 与 tool_call 落在同一 message」**（rev.2 新增，A-10） | rev.1 §6.3 算法 | **假前提**（两套落块规则）⇒ 搜索域改为「同一 turn」，并由 `[FB7-9]` 钉住跨 message 行为 |
+| ⚠️ **「`turnItemKey` 对流式 text 恒定」** | 本规格 §1.5 ④ | ✅ **rev.2 已结**：`MessageTimeline.tsx:1415-1423` 对 text 走 `default` 返回 `item.block.id`，追加只改 `text`（`chatSessions.ts:482-490`）⇒ 恒定。**两轨各自独立实证**，§12 Q2 的备案不必启用 |
 
 ---
 
@@ -1201,10 +1462,122 @@ G-9 实测 ─┘
 - **取证存档**：`docs/plans/2026-08-19-fb4-fb6-structure-spec.md`（FB4/FB6，**未注册**，去留见 §12 Q11）。
 - **权威顺序**（plantree 注册表所定）：ARD ＞ 执行计划 ＞ 总台账（决策）＞ plantree（状态）。
   本规格属**批次施工规格**，其内裁定在与分诊档冲突时以本规格为准，在与总台账决策冲突时以总台账为准。
-  ⚠️ 本规格已逐条核对，**与总台账无一处冲突**；但发现**一处措辞需订正**（D53 ② 的「需打通关联」，见 §12 Q10）。
+  ⚠️ **rev.2 订正（blocker A-2）**：rev.1 此处写「本规格已逐条核对，**与总台账无一处冲突**」—— **不成立**。
+  **有一处需上报**：总台账 D50 行（`openchamber-chat-refactor-ledger.md:94`）明文保留了「**实现方否决权：§4.6 三条件**」，即 D3-b 的降级只有用户能拍；而 rev.1 的 §4.5 / §10 G-6 把它写成了施工方的点验分支。已在 §4.5 红框订正，并追加 §12.1 **Q14** 交用户拍板。
+  另有**一处措辞需订正**（D53 ② 的「需打通关联」，见 §12 Q10 —— 已随 D55 ④ 入账）。
 - **下游**：本批落地后须回填 D53 行的 as-built、plantree 两份状态文件、本规格的 as-built 实录；
   FB11 真机重评结论另行记录。
 
 ## 拍板收口（2026-08-19，D55）
 
 需拍板六条去向：Q4 = **底部状态行与 TurnFooter 合并成一行**（用户拍板）；Q7 = **Denied 警示色追认**（用户拍板，D28 代拍项转正）；Q1 = 段间距同档同值（采纳建议）；Q3 = copy 按钮常显低对比、禁 hover-only（采纳建议）；Q5 = PendingTurnHead 相邻观感转 GUI 点验项；Q6 = itemId 本片不做、走安全回落（采纳建议）。Q10 = D53 ② 措辞勘误已入台账 D55 ④；Q11 = 子档已删。**本规格转双轨双盲评审。**
+
+---
+
+## §14 修订记录
+
+### rev.1 → rev.2（2026-08-23）
+
+**依据**：双轨双盲评审重跑（2026-08-19 首跑因推理网关持续 524 三次打断、零产出）。
+A 轨 Opus 2 blocker + 8 major + 6 minor；B 轨 Codex（`gpt-5.6-sol`，high effort）1 blocker + 7 major + 2 minor；**两轨判语均「修订后开工」**。
+合取规则 = 并集取全、严重度取高、修法冲突取保守。合取后 **3 blocker · 10 major · 7 minor ＝ 20 条**，全部已在本 rev.2 落实。
+两轨原文：[`2026-08-19-fb-batch-reviews/`](./2026-08-19-fb-batch-reviews/)；合取与裁定：[仲裁档](./2026-08-19-fb-batch-review-arbitration.md)。
+
+#### blocker（3）
+
+| # | 来源 | 改了什么 | 落点 |
+|---|---|---|---|
+| 1 | A 轨独有 | **permission join 加 `resolved === true` 前置** + 「未决一律独立产出、不参与 join」硬约束。未决卡必然命中 join（`chatSessionsCore.test.ts:535-565`），而 `MessageTimeline.tsx:1578-1598` 是**全仓唯一** Allow/Deny 交互面 ⇒ 合并即回合死锁，撞 `chatTurn.ts:192-196` 安全红线；`[FB7-4]` 守恒律抓不到 | §6.3 + `[FB7-8]` + M-30 |
+| 2 | A 轨独有 | **C1→C3 的降级权归还用户**。F456 `:1047-1049`/`:1928` 与总台账 D50 行明文保留该否决权，rev.1 把它写成施工方点验分支 | §4.5 红框 · §10 G-6 · **§12.1 Q14（新增，待拍板）** · 附录订正 |
+| 3 | 两轨互证（A major / B blocker，取高） | **D55 ① 回灌施工正文 + G1→G1′**。rev.1 的 DOM 骨架仍是两个兄弟节点，且「触发器 = 整行」会把 copy `<button>` 套进触发器 `<button>` | §5.2 骨架重写 · §5.3 G1′ · `[FB6-5]` + M-31 |
+
+#### major（10）
+
+| # | 来源 | 改了什么 |
+|---|---|---|
+| 4 | 互证（M-12 两轨同判） | **四发空转变异臂重接**：M-06 / M-10 落点改源文扫描族；M-12 映射改新增的 `[FB4-7]`；M-14 与 `[FB4-5]` 各补 `notice` 臂 |
+| 5 | 互证 | **FB1 合同重写**：新设纯状态转移函数 `advanceClosedPrefix(text, previousHwm)`（给 M-01 靶子）；hook 抽 `TurnTextItem`；补段容器 key 纪律（`[FB1-5]` + M-34） |
+| 6 | 互证 | `electron-builder.yml` 锚点 `:64`→`:69`，**改以排除项原文为主锚** |
+| 7 | 互证 | 片④ 影响面补 `pnpm-lock.yaml` 与 `scripts/__tests__/packaging-config.test.mjs`；`[FB9-5]` 落到该现有承重点；每片收口三件套补 `typecheck` + `lint` |
+| 8 | A 轨 | FB9 补 `[FB9-6]`（`output: 'mathml'` 守卫）· `[FB9-7]`（禁 katex CSS / 禁新增 `@font-face`）· `[FB9-8]`（渲染级 `<math` 断言）+ M-32 / M-33 |
+| 9 | B 轨 | FB9 补 `[FB9-9]` 数学输入**运行时攻击四臂**（`\href{javascript:}` / `\includegraphics` / `\htmlClass`·`\htmlStyle` / 解析失败含 `<script>`） |
+| 10 | A 轨 | **E1 使 `disabled={permissionLock}` 变死 prop**（同名空壳）⇒ 迁移 + 换钉（`[FB6-4]` + M-35），§13 ① 补录 |
+| 11 | A 轨 | **D55 ③「低对比」与「不新写类串」互斥且无判据** ⇒ 新增 §2.3-a：档位定死 `text-muted-foreground/60`（仓内既有档，八处先例）、写法 `cn(turnCopyButtonClass(), …)`、补 `[FB2-1]` 第三半与 G-3 判据 |
+| 12 | A 轨 | **「同 message」是假前提**（两套落块规则）⇒ 搜索域改「同一 turn」，§6.2 补第 ⑥ 跳，新增 `[FB7-9]`，§13 ② 的「已闭环」改为「只闭环一半」 |
+| 13 | B 轨 | **FB6 红绿顺序自相矛盾**（同一 `[FB6-1]` 被要求对旧码既绿又红）⇒ §5.6-a 三步证据链，新增一次性脚手架 `[FB6-0]` |
+| 14 | B 轨（裁定 D-1） | **M-04 无客观红判据** ⇒ 新增 `[FB1-6]` 确定性工作量断言，G-2 降为观感补充。本批至此**没有静态不可捕获的变异** |
+| 15 | B 轨（裁定 D-2） | **FB9 打包因果未证** ⇒ §8.5 改为 **E-1 开工前构建取证**；字体退路（b）**不得自动转入**，须另取立项/红线偏离授权 |
+
+#### minor（7）
+
+16. 全批基线改为施工分支起点当场复取（F456 的 239/4724 已过时，当前 245 文件）· 17. §5.6 措辞收窄为「直接子元素顺序」（`jsxGuardedBy` 能游走进 `ChatTurn` 子树）· 18. 三处行号更正（`chatTurn.ts:185` / `ChatCodeBlock.tsx:58` / mermaid 段 `:61-77`）· 19. `FORBIDDEN_ON_PATH` → `MARKDOWN_PATH_FILES` 并补 `COMMENT_ONLY_PROSE` 提醒 · 20. §1.2 补 HTML block 已知偏差、全称判断收窄为「行内」· 21. `[FB4-1]` 写死逐成员断言 + §11.1 补测试文件混面 + 删片③ 重复的 M-12 · 22. §11.2 依赖图与「推荐串行调度」分开写。
+
+#### 两条实质分歧的裁定
+
+- **D-1（M-04）取 B 轨**：A 轨只是「认可这笔记账诚实」、并未反对补断言；而 `docs/agent-project-engineering.md:174-175` 明禁手工测试作主要回归；补断言成本低。
+- **D-2（FB9 打包因果）不二选一**：两轨在事实层不矛盾（排除规则确实还在 `:69`），矛盾在「删不删是否真的决定公式存亡」⇒ 改为取证再定，取证前禁止改 builder。
+
+#### rev.2 的两个出口
+
+- **E-1（开工前取证，阻塞片④）**：KaTeX 的 JS / CSS / woff2 在真实构建产物里的落点。
+- **E-2（待用户拍板）**：**Q14** —— C1 碎片化的去留，判据 G-6，**看过 GUI 出图后再定**。
+
+⇒ **rev.2 定稿后可开工片① / 片⑤**（两片都不依赖 Q14 与 E-1）；**片③ 的 GUI 点验出图后回来定 Q14**；**片④ 须待 E-1 取证结论回填 §8.5**。
+
+---
+
+## §15 as-built 实录
+
+### 片① —— FB8 + FB1-a（2026-08-23 落地，`d704f7dd`）
+
+**门禁**：scoped vitest **128 例 / 2 文件全绿**（`turnTiming.test.ts` 33 · `chatMarkdownPolicy.test.ts` 95）· `pnpm typecheck` 0 红 · biome 本片四文件 0 红。
+**变异**：M-01 / M-02 / M-03 / M-05 / M-24 / M-25 **逐发咬红后复绿**，还原后 md5 与基线逐字节一致；另跑 **M-04 的纯模块半边**（见偏差 ⑤）。
+
+**产出**：
+- `turnTiming.ts` —— `formatThoughtRow` 改用 `formatWorkedForDuration`（FB8）。
+- `chatMarkdownPolicy.ts` —— 新增 `splitClosedPrefix` / `advanceClosedPrefix` 两个导出纯函数 + 内部 `cutBoundaries` / `segmentClosedText` / `stepFence`（FB1-a，**只落纯模块，未接线**）。
+
+#### 与 rev.2 的偏差（五条，全部登记）
+
+| # | 偏差 | 处置 |
+|---|---|---|
+| ① | **`[FB8-2]` 的纯行为断言是空转的** —— 规格写「时长片段逐字等于 `formatWorkedForDuration(同输入)`」，读起来像能咬住 M-24，**实测不能**：一份忠实复制的换算输出完全相同，M-24 **存活**（33 例全绿）。⚠️ 这是两轨评审都没抓到的一条（它们评的是规格文字，不是运行结果） | **补源码半边**：新增 `functionBody()` 定位器，断言 `formatThoughtRow` 体内调用 `formatWorkedForDuration(input.durationMs)`、体内无 `/ 1000` 与 `% 60`，且全文件 `% 60` 与 `Math.floor(seconds / 60)` **各只出现一次**。补后 M-24 咬红 |
+| ② | **`ClosedPrefixSplit` 增加 `closedLength` 字段** —— 规格 §1.2 的签名只写 `{ segments, openTail }`，但硬合同 1 自己引用了 `splitClosedPrefix(text).closedLength` | 按硬合同实现，返回类型三字段。签名以本节为准 |
+| ③ | **半张表的口径比规格更保守** —— 规格 §1.2 逐类表写「半张表恒在 `openTail`」，但 R-3 把 `\|` 开头的行列为续行标记 ⇒ **连它前面那一段也不结算**（`lead\n\n\| a \| b \|\n\| -` 的 `segments` 为空，不是 `['lead']`） | 维持实现（保守优先是 §1.2 的成文口径），`[FB1-1]` ③ 的断言按实际行为写死并注明理由 |
+| ④ | **M-34 分片写错** —— §9.3 把 M-34（段容器下标 key）分给片①，但它的断言 `[FB1-5]` 是 `MessageTimeline.tsx` 的 wiring 源文扫描，属 **FB1-b 接线 = 片④**。同理 M-05 的 `[FB1-4]` 半边也在片④ | **M-34 移至片④**；片① 只跑 M-05 的 `[FB1-3]` 半边（模块内无定时器/无可变导出），已咬红 |
+| ⑤ | **M-04 的纯模块半边当场可验** —— 裁定 D-1 只说要「确定性工作量断言」，未说何时能验 | `[FB1-6]` 以「跨流式序列累计重解析字符数 ≤ 全文长度」实现；把 `segmentClosedText` 改成返回单段（即「不分段」）后**咬红 7 条**（含 `[FB1-6]` 本身）⇒ **D-1 的裁定成立且已可执行**，不必等片④ |
+
+#### 顺带确认
+
+- `[FB1-2]` 的单调性用**真实流式退让**取证：`alpha\n\n1` 已结算 7 字符，下一 token 让它变成 `alpha\n\n1. item`（`1. ` 成为列表标记）⇒ 无状态切分退回 0，`advanceClosedPrefix` 守住 7。这条比规格举的三类反例更贴近生产。
+- 既有 `formatThoughtRow` 四条断言（含 12s 档）**未受影响**，与 §7.3 的判断一致。
+
+### 片⑤ —— FB2 + FB3（2026-08-23 落地，`d704f7dd`，与片① 同笔）
+
+**门禁**：scoped vitest **164 例 / 3 文件全绿**（`chatTimelineLayout.test.ts` · `messageTimelineWiring.test.ts` · `chatMarkdownPolicy.test.ts`）· `pnpm typecheck` 0 红 · biome 本片六文件 0 红。
+**变异**：**M-06 / M-07 / M-08 / M-09 / M-10 逐发咬红后复绿**，五份源文件还原后逐字节比对一致。
+
+**产出**：
+- `ChatCodeBlock.tsx` —— `relative` wrapper + `CodeCopyButton`（复用 `turnCopyButtonClass()` + `text-muted-foreground/60` + `focus-visible:text-foreground`；clipboard 行为逐条照抄 `TurnCopyButton`）。
+- `chatTimelineLayout.ts` —— `userBubbleTextClass(expanded: boolean)`，头注改写为 FB3 口径并把 §3.3 的不变量写进签名说明。
+- `MessageTimeline.tsx` —— `UserBubble` 内 `useState(false)` + `Show more` / `Show less` 切换按钮（`aria-expanded`）。
+
+#### 与 rev.2 的偏差（三条）
+
+| # | 偏差 | 处置 |
+|---|---|---|
+| ① | **`[FB2-1]` 落点取 `chatMarkdownPolicy.test.ts`**，不是 rev.2 写的「`messageTimelineWiring.test.ts` 同族」 | rev.2 的要求是「改到**读得到源码**的落点」。`ChatCodeBlock.tsx` 本就在该文件的 `MARKDOWN_PATH_FILES` 投影内（`:989-995`），且现成有 `readChatSource` / `strippedChatSource` 工法 ⇒ 落这里更自然，要求实质满足。`[FB2-2]` / `[FB2-3]` 同处 |
+| ② | **负向源码断言必须走 `strippedChatSource`（注释已剥离）** | 首跑即咬红，而红因是**自伤**：`ChatCodeBlock.tsx` 的头注为了解释「为什么禁止」而**逐字写了** `opacity-0` / `group-hover:`。⚠️ **这条工法教训对后续片有效**，尤其 `[FB9-7]`（禁 katex CSS / 禁 `@font-face`）与 `[FB9-3]`（禁 `trust`/`macros`）—— 规格里的禁用词一旦被写进解释性注释，未剥离的扫描必然假红 |
+| ③ | **FB3 的展开控件不做溢出测量，恒显（有意）** | 规格 §3.2 只规定了类函数签名与 `useState`，**未规定控件何时出现**。按「是否溢出六行」决定显隐要在气泡内读**元素几何** —— 正是 F10 拆掉的那条边（§3.3）。⇒ 有正文即渲染控件；**「短提问下常显是否可接受」转 G-4 点验**。若点验判不可接受，须**另立票**并先过 F10 回路复核，不在本片内自行加测量 |
+
+#### 同批更新的既有承重断言（两条，属「改值」非「退役」）
+
+| 断言 | 变更 | 承重命题 |
+|---|---|---|
+| `§5: the sticky band and the clamped bubble use their class functions` | `expectCalled('userBubbleTextClass()')` → `('userBubbleTextClass(expanded)')` | 命题「气泡文本经类函数渲染、`fx-` 钩子不得回归」**不变** |
+| `[D3-8]` | 直接子元素 `['div','div']` → `['div','div','button']` | 命题「chips 在前、被 clamp 的正文在后」**不变**；并**新增一条**：toggle 必须在 clamp **之外** —— 放进去会吃掉一行正文预算，而 F10 的六行预算算的是**可见正文行** |
+
+#### 顺带确认
+
+- **M-10 由 `[FB3-2]` 咬红**（另带两条既有断言），证明「钉**入参**而不是钉行为」这一选择有效：把 `isPinned` 接回入参在行为上当场看不出问题，只有参数断言拦得住。
+- `turnCopyButtonClass()` 本体经 `[FB2-1]` 反向断言确认**未被 FB2 污染**（不含 `absolute`、不含 `/60`）。
