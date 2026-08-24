@@ -138,7 +138,7 @@ function CodeCopyButton({ code }: { code: string }) {
       type="button"
       className={cn(
         turnCopyButtonClass(),
-        'absolute top-1.5 right-1.5 z-10 text-muted-foreground/60',
+        'absolute top-1.5 right-1.5 z-10 text-muted-foreground/70',
         'focus-visible:text-foreground'
       )}
       onClick={() => void handleCopy()}

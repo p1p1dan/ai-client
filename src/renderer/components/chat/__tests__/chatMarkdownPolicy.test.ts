@@ -1531,7 +1531,7 @@ describe('FB2: the prose code-block copy button', () => {
   // [FB2-1] c. D55 (3) asked for restraint, and "restraint" needs a value or it
   // cannot be verified. The tier is the repo's existing ghost-icon one.
   it('[FB2-1] the resting state drops exactly one tier, with a focus-visible lift', () => {
-    expect(source()).toContain('text-muted-foreground/60');
+    expect(source()).toContain('text-muted-foreground/70');
     expect(source()).toContain('focus-visible:');
     // No arbitrary values -- design-system.md token discipline.
     expect(code()).not.toMatch(/opacity-\[/);

@@ -856,7 +856,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
         {fullText.length > 0 ? (
           <button
             type="button"
-            className="self-start text-meta text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground"
+            className="self-start text-meta text-muted-foreground hover:text-foreground focus-visible:text-foreground"
             onClick={() => setExpanded((previous) => !previous)}
             aria-expanded={expanded}
           >
