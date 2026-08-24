@@ -735,6 +735,11 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
  * decision note on the `<article>` below.
  */
 function UserBubble({ message }: { message: ChatMessage }) {
+  // FB3: view-only state, deliberately not in the store (R5) -- same family as
+  // the process shell's `processOpen`. It is the ONLY input to the clamp, and
+  // it comes from a click; see `userBubbleTextClass`'s header for why nothing
+  // geometric may join it.
+  const [expanded, setExpanded] = useState(false);
   // user messages only ever carry `text` blocks (chatSessions.ts attaches
   // tool_call/tool_result/thinking/permission_request/question exclusively
   // to role: 'assistant' messages, live and replayed alike).
@@ -832,7 +837,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
             scroll-state clamp oscillated — see `userBubbleTextClass()`'s
             header for the loop. `title` above keeps the full prompt
             reachable in every state. */}
-        <div className={userBubbleTextClass()}>
+        <div className={userBubbleTextClass(expanded)}>
           {textBlocks.map((block) => (
             <p
               key={block.id}
@@ -842,6 +847,22 @@ function UserBubble({ message }: { message: ChatMessage }) {
             </p>
           ))}
         </div>
+        {/* FB3: the toggle is rendered whenever there is prompt text at all —
+            no measurement, on purpose. Deciding visibility from "does it
+            overflow?" would read element geometry inside this bubble, which is
+            the exact edge F10 removed. Whether a permanently visible control
+            under a SHORT prompt is acceptable is a look question, so it goes to
+            the G-4 point-check rather than being guessed at here. */}
+        {fullText.length > 0 ? (
+          <button
+            type="button"
+            className="self-start text-meta text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground"
+            onClick={() => setExpanded((previous) => !previous)}
+            aria-expanded={expanded}
+          >
+            {expanded ? 'Show less' : 'Show more'}
+          </button>
+        ) : null}
       </div>
     </article>
   );

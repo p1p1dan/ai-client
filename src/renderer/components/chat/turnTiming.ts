@@ -124,7 +124,9 @@ export function formatThoughtRow(input: {
   }
   return {
     verb: THOUGHT_VERB,
-    arg: `for ${Math.round(input.durationMs / 1000)}s`,
+    // FB8: share the turn head's duration formatter -- a bare `${seconds}s` here
+    // rendered "for 1702s". One definition of "how a minute is written", repo-wide.
+    arg: `for ${formatWorkedForDuration(input.durationMs)}`,
     argKind: 'prose',
   };
 }

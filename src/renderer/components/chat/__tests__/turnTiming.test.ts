@@ -1,13 +1,53 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
   deriveTurnStats,
   formatThoughtRow,
+  formatWorkedForDuration,
   formatWorkedForRow,
   initialTurnTimingRegistry,
   reduceTurnTiming,
   turnHasThinkingOnlyProcess,
 } from '../turnTiming';
+
+/**
+ * Source text of one top-level `export function name(...) { ... }` body.
+ * Skips the parameter list first -- an inline param type (`input: { ... }`)
+ * would otherwise be mistaken for the body.
+ */
+function functionBody(source: string, name: string): string {
+  const start = source.indexOf(`export function ${name}(`);
+  if (start === -1) throw new Error(`function ${name} not found`);
+  let parens = 0;
+  let afterParams = -1;
+  for (let i = source.indexOf('(', start); i < source.length; i += 1) {
+    if (source[i] === '(') parens += 1;
+    else if (source[i] === ')') {
+      parens -= 1;
+      if (parens === 0) {
+        afterParams = i + 1;
+        break;
+      }
+    }
+  }
+  if (afterParams === -1) throw new Error(`unbalanced parens in ${name}`);
+  const open = source.indexOf('{', afterParams);
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    else if (source[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, i + 1);
+    }
+  }
+  throw new Error(`unbalanced braces in ${name}`);
+}
+
+function countOccurrences(source: string, pattern: RegExp): number {
+  return source.match(pattern)?.length ?? 0;
+}
 
 function event(
   type: string,
@@ -95,6 +135,51 @@ describe('formatThoughtRow', () => {
   it('D25 §2.4: "briefly" and "for Ns" args are prose, not an identifier (sans, not mono)', () => {
     expect(formatThoughtRow({ durationMs: 3000 }).argKind).toBe('prose');
     expect(formatThoughtRow({ durationMs: 12_000 }).argKind).toBe('prose');
+  });
+
+  // [FB8-1] The reported defect: 1702000ms rendered as a bare "for 1702s".
+  it('[FB8-1] converts to minutes past 60s instead of printing bare seconds', () => {
+    expect(formatThoughtRow({ durationMs: 1_702_000 }).arg).toBe('for 28m 22s');
+    expect(formatThoughtRow({ durationMs: 66_000 }).arg).toBe('for 1m 6s');
+    expect(formatThoughtRow({ durationMs: 120_000 }).arg).toBe('for 2m');
+  });
+
+  it('[FB8-1] leaves the sub-minute arm untouched', () => {
+    expect(formatThoughtRow({ durationMs: 12_000 }).arg).toBe('for 12s');
+    expect(formatThoughtRow({ durationMs: 59_000 }).arg).toBe('for 59s');
+  });
+
+  // [FB8-2] One definition of "how a minute is written". A copied conversion
+  // would drift; this pins the two rows to the same formatter.
+  it('[FB8-2] the duration fragment is verbatim formatWorkedForDuration output', () => {
+    for (const ms of [5000, 12_000, 59_000, 60_000, 66_000, 120_000, 1_702_000, 7_200_000]) {
+      expect(formatThoughtRow({ durationMs: ms }).arg).toBe(`for ${formatWorkedForDuration(ms)}`);
+    }
+  });
+
+  // [FB8-2] source half. The behavioural assertion above cannot tell reuse from
+  // a faithful copy -- a duplicated conversion produces identical output and
+  // rides along green (verified: mutation M-24 survived the behavioural arm
+  // alone). Only the source can pin "one definition, repo-wide".
+  it('[FB8-2] formatThoughtRow calls the shared formatter, with no second seconds-to-minutes conversion', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('../turnTiming.ts', import.meta.url)),
+      'utf8'
+    );
+    const body = functionBody(source, 'formatThoughtRow');
+    expect(body).toContain('formatWorkedForDuration(input.durationMs)');
+    // The conversion's fingerprints must live in exactly one function.
+    expect(body).not.toMatch(/\/\s*1000/);
+    expect(body).not.toMatch(/%\s*60/);
+    expect(countOccurrences(source, /%\s*60/g)).toBe(1);
+    expect(countOccurrences(source, /Math\.floor\(seconds \/ 60\)/g)).toBe(1);
+  });
+
+  // §7.2 / Q8: no hour tier in this batch -- pinned so adding one is a
+  // deliberate, visible change to BOTH rows (it is a separate ticket).
+  it('[FB8-2] has no hour tier yet, in lockstep with the turn head', () => {
+    expect(formatThoughtRow({ durationMs: 3_600_000 }).arg).toBe('for 60m');
+    expect(formatWorkedForDuration(3_600_000)).toBe('60m');
   });
 });
 

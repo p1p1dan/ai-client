@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  advanceClosedPrefix,
   CHAT_CODE_FONT_STYLE,
   CHAT_CODE_LANGUAGES,
   CHAT_HIGHLIGHT_MAX_CHARS,
@@ -31,8 +32,14 @@ import {
   sanitizeMarkdownHref,
   shouldHighlightFence,
   shouldRenderMarkdown,
+  splitClosedPrefix,
 } from '../chatMarkdownPolicy';
-import { chatTurnClass, turnBodyClass, turnBubbleBandClass } from '../chatTimelineLayout';
+import {
+  chatTurnClass,
+  turnBodyClass,
+  turnBubbleBandClass,
+  turnCopyButtonClass,
+} from '../chatTimelineLayout';
 import { readDarkClass } from '../useDarkClass';
 import { stripComments } from './stripComments';
 
@@ -320,6 +327,183 @@ describe('F-C2: normalizeCodeLanguage', () => {
 // ---------------------------------------------------------------------------
 // F-C3: the streaming gate
 // ---------------------------------------------------------------------------
+
+describe('FB1: splitClosedPrefix / advanceClosedPrefix', () => {
+  // [FB1-1] Truth table. Each arm names the widening that would break it.
+  describe('[FB1-1] cut rules', () => {
+    it('① an unclosed fence keeps everything from its opening line in openTail', () => {
+      const text = 'intro\n\n```ts\nconst a = 1;\n\nconst b = 2;\n';
+      const { segments, openTail } = splitClosedPrefix(text);
+      expect(segments).toEqual(['intro']);
+      expect(openTail).toBe('```ts\nconst a = 1;\n\nconst b = 2;\n');
+    });
+
+    it('① a fence closes only on the same marker, at least as long, with no info string', () => {
+      const short = splitClosedPrefix('a\n\n````ts\nx\n```\n\nafter\n\ntail\n');
+      // ``` cannot close ````, so the fence is still open and nothing after it settles.
+      expect(short.segments).toEqual(['a']);
+
+      const long = splitClosedPrefix('a\n\n```ts\nx\n````\n\nafter\n\ntail\n');
+      expect(long.segments).toEqual(['a', '```ts\nx\n````', 'after']);
+    });
+
+    it('② a closed fence followed by a blank line settles as one segment', () => {
+      const text = 'para\n\n```js\nconst a = 1;\n```\n\nnext\n\nopen';
+      const { segments, openTail } = splitClosedPrefix(text);
+      expect(segments).toEqual(['para', '```js\nconst a = 1;\n```', 'next']);
+      expect(openTail).toBe('open');
+    });
+
+    it('③ a half-written table settles nothing -- R-3 voids the cut before a `|` line', () => {
+      const text = 'lead\n\n| a | b |\n| -';
+      const { segments, openTail } = splitClosedPrefix(text);
+      // Conservative on purpose: a `|` line may be continuing the block above,
+      // so neither the half table nor the paragraph before it is published.
+      expect(segments).toEqual([]);
+      expect(openTail).toBe(text);
+    });
+
+    it('③ inline constructs cannot cross a blank line, so they need no rule of their own', () => {
+      for (const half of ['`unclosed code', '[half link](htt', '![img](', '*emphasis']) {
+        const { segments, openTail } = splitClosedPrefix(`settled\n\n${half}`);
+        expect(segments).toEqual(['settled']);
+        expect(openTail).toBe(half);
+      }
+    });
+
+    it("④ text with no blank line yields no segments (degrades to today's plain text)", () => {
+      const text = 'one long answer with no blank line at all, streaming in';
+      const { segments, openTail, closedLength } = splitClosedPrefix(text);
+      expect(segments).toEqual([]);
+      expect(openTail).toBe(text);
+      expect(closedLength).toBe(0);
+    });
+
+    it('R-3: a boundary is void when the next line continues the previous block', () => {
+      // A loose-list continuation: the blank line is inside the list, not after it.
+      const loose = splitClosedPrefix('- one\n\n- two\n\nreal para\n\nopen');
+      expect(loose.segments).toEqual(['- one\n\n- two', 'real para']);
+
+      for (const cont of ['> quote', '    indented', '| a |']) {
+        const { segments } = splitClosedPrefix(`head\n\n${cont}\n\nafter\n\nopen`);
+        expect(segments[0]).toBe(`head\n\n${cont}`);
+      }
+    });
+
+    it('R-3: a trailing blank line is undecidable, so it does not settle the prefix', () => {
+      // The next token could still be `- item`, folding `para` into a loose list.
+      const { segments, openTail } = splitClosedPrefix('para\n\n');
+      expect(segments).toEqual([]);
+      expect(openTail).toBe('para\n\n');
+    });
+
+    it('$$ math blocks are tracked as a third fence (FB9 has no producer yet)', () => {
+      const open = splitClosedPrefix('lead\n\n$$\nE = mc^2\n\nmore\n');
+      expect(open.segments).toEqual(['lead']);
+
+      const closed = splitClosedPrefix('lead\n\n$$\nE = mc^2\n$$\n\nafter\n\nopen');
+      expect(closed.segments).toEqual(['lead', '$$\nE = mc^2\n$$', 'after']);
+    });
+  });
+
+  // [FB1-2] The core invariant. Without it the whole §1.3 argument is empty.
+  describe('[FB1-2] monotonicity (high-water mark)', () => {
+    it('never publishes less than it published before, when a cut is retroactively voided', () => {
+      // A real streaming retreat: `1` is an ordinary paragraph, `1. ` is a list
+      // marker -- one arriving character turns the line into a continuation and
+      // the stateless split gives the settled prefix back.
+      const before = 'alpha\n\n1';
+      const settled = splitClosedPrefix(before);
+      expect(settled.closedLength).toBe('alpha\n\n'.length);
+      expect(settled.segments).toEqual(['alpha']);
+
+      const after = 'alpha\n\n1. item';
+      expect(splitClosedPrefix(after).closedLength).toBe(0);
+
+      const advanced = advanceClosedPrefix(after, settled.closedLength);
+      expect(advanced.closedLength).toBe(settled.closedLength);
+      expect(advanced.segments).toEqual(['alpha']);
+      expect(advanced.openTail).toBe('1. item');
+    });
+
+    it('re-segments the frozen prefix instead of keeping a bare length', () => {
+      const frozenTo = 'a\n\nb\n\n'.length;
+      const advanced = advanceClosedPrefix('a\n\nb\n\n- item', frozenTo);
+      // Two segments, not one blob: `segments` and `hwm` must not disagree.
+      expect(advanced.segments).toEqual(['a', 'b']);
+      expect(advanced.closedLength).toBe(frozenTo);
+    });
+
+    it('the mark only ever rises across a streaming sequence', () => {
+      const full = 'alpha\n\nbeta\n\n- one\n\n- two\n\ngamma\n\ntail';
+      let hwm = 0;
+      let previous: string[] = [];
+      for (let i = 1; i <= full.length; i += 1) {
+        const step = advanceClosedPrefix(full.slice(0, i), hwm);
+        expect(step.closedLength).toBeGreaterThanOrEqual(hwm);
+        // Already-published segments are never rewritten.
+        expect(step.segments.slice(0, previous.length)).toEqual(previous);
+        hwm = step.closedLength;
+        previous = step.segments;
+      }
+    });
+  });
+
+  // [FB1-3] Purity. A cache or a timer here would reintroduce the strobing.
+  describe('[FB1-3] purity', () => {
+    it('A -> B -> A returns the first result verbatim', () => {
+      const a = 'one\n\ntwo\n\nopen';
+      const b = 'different\n\n```\nfence\n';
+      const first = splitClosedPrefix(a);
+      splitClosedPrefix(b);
+      expect(splitClosedPrefix(a)).toEqual(first);
+    });
+
+    it('advanceClosedPrefix is a function of its two arguments only', () => {
+      const text = 'one\n\ntwo\n\nopen';
+      expect(advanceClosedPrefix(text, 0)).toEqual(advanceClosedPrefix(text, 0));
+      expect(advanceClosedPrefix(text, 99)).not.toEqual(advanceClosedPrefix(text, 0));
+    });
+
+    it('the module exports no mutable state and starts no timer', () => {
+      const source = readChatSource('chatMarkdownPolicy.ts');
+      const body = source.slice(source.indexOf('function cutBoundaries'));
+      expect(body).not.toMatch(/setInterval|setTimeout|requestAnimationFrame|Date\.now/);
+      expect(body).not.toMatch(/^export (let|var) /m);
+    });
+  });
+
+  // [FB1-6] The objective half of M-04. Segmenting must keep re-parse work
+  // linear in the answer length; feeding one growing blob makes it quadratic.
+  it('[FB1-6] re-parse work stays linear across a streaming sequence', () => {
+    const full = [
+      'First paragraph of the answer.',
+      'Second paragraph, a little longer than the first one.',
+      '```ts\nconst x = 1;\nconst y = 2;\n```',
+      'Third paragraph closing things out.',
+      'Fourth paragraph so the sequence has some depth.',
+      'tail still streaming',
+    ].join('\n\n');
+
+    let hwm = 0;
+    let previous: string[] = [];
+    let reparsedChars = 0;
+    for (let i = 1; i <= full.length; i += 1) {
+      const step = advanceClosedPrefix(full.slice(0, i), hwm);
+      // Only segments that are new or changed would be re-parsed by React.memo.
+      step.segments.forEach((segment, index) => {
+        if (previous[index] !== segment) reparsedChars += segment.length;
+      });
+      hwm = step.closedLength;
+      previous = step.segments;
+    }
+
+    // Each settled segment is parsed exactly once, so the total is bounded by
+    // the answer length. A single-blob implementation re-parses the whole
+    // settled prefix on every tick -- O(n^2), ~40x this bound at n = 240.
+    expect(reparsedChars).toBeLessThanOrEqual(full.length);
+  });
+});
 
 describe('F-C3: shouldRenderMarkdown', () => {
   it('F-C3: the block still streaming stays plain text', () => {
@@ -1320,5 +1504,60 @@ describe('the shiki theme follows the applied dark class', () => {
     expect(readDarkClass(withClasses([]))).toBe(false);
     expect(readDarkClass(null)).toBe(false);
     expect(readDarkClass(undefined)).toBe(false);
+  });
+});
+describe('FB2: the prose code-block copy button', () => {
+  const source = (): string => readChatSource('ChatCodeBlock.tsx');
+  /** Negatives run on executable code only -- this file's own header NAMES the
+      forbidden pair while explaining why it is forbidden. */
+  const code = (): string => strippedChatSource('ChatCodeBlock.tsx');
+
+  // [FB2-1] a. Reuse, not a second button. `turnCopyButtonClass()` owns the
+  // 24px ghost-icon shape; FB2 adds a resting tier on top of it and nothing else.
+  it('[FB2-1] the button is assembled from turnCopyButtonClass(), body untouched', () => {
+    expect(source()).toContain('turnCopyButtonClass()');
+    // The shared function itself must not have grown an FB2-only class.
+    expect(turnCopyButtonClass()).not.toContain('absolute');
+    expect(turnCopyButtonClass()).not.toContain('/60');
+  });
+
+  // [FB2-1] b. F-B15: a control only a mouse can discover is unreachable by
+  // touch and keyboard. This is a red line, not a preference.
+  it('[FB2-1] the button is never hover-only', () => {
+    expect(code()).not.toContain('opacity-0');
+    expect(code()).not.toContain('group-hover:');
+  });
+
+  // [FB2-1] c. D55 (3) asked for restraint, and "restraint" needs a value or it
+  // cannot be verified. The tier is the repo's existing ghost-icon one.
+  it('[FB2-1] the resting state drops exactly one tier, with a focus-visible lift', () => {
+    expect(source()).toContain('text-muted-foreground/60');
+    expect(source()).toContain('focus-visible:');
+    // No arbitrary values -- design-system.md token discipline.
+    expect(code()).not.toMatch(/opacity-\[/);
+    expect(code()).not.toMatch(/text-muted-foreground\/\[/);
+  });
+
+  // [FB2-2] The (b) route -- putting `relative` on the shared class -- would
+  // spread one component change into the policy layer, where several
+  // assertions already pin this string.
+  it('[FB2-2] chatMarkdownCodeBlockClass() is unchanged; the wrapper carries the positioning', () => {
+    expect(chatMarkdownCodeBlockClass()).toBe(
+      'mt-3.5 first:mt-0 overflow-x-auto rounded-sm border border-border bg-muted/50 p-3 text-code leading-normal'
+    );
+    expect(chatMarkdownCodeBlockClass()).not.toContain('relative');
+    // `<pre>` is the scroll container, so the button must be parented above it
+    // or it rides away on a long line.
+    expect(source()).toContain('<div className="relative">');
+  });
+
+  // [FB2-3] D53 (1) keeps copy off tool input/output, and the render path is
+  // what enforces it: `ChatCodeBlock` is unreachable from `ToolRows`. That is a
+  // structural guarantee only for as long as nobody wires it up.
+  it('[FB2-3] ChatCodeBlock stays reachable from the markdown path only', () => {
+    const markdown = readChatSource('ChatMarkdown.tsx');
+    expect(markdown).toContain('<ChatCodeBlock');
+    expect(strippedChatSource('ToolRows.tsx')).not.toContain('ChatCodeBlock');
+    expect(strippedChatSource('turnCopy.ts')).not.toContain('ChatCodeBlock');
   });
 });

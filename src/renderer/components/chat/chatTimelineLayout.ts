@@ -79,13 +79,21 @@ export function turnBubbleBandClass(): string {
  * clamp makes band height a function of content alone: no scroll → height
  * edge exists anywhere in the timeline, so the loop is structurally
  * impossible (engine-independent, unlike a hysteresis tuning). The full
- * prompt stays reachable via the bubble's `title`; a user-owned expand
- * toggle is a follow-up ticket, NOT part of the F456 batch — that batch's
- * four decisions (2026-08-18) do not include it, and this note used to claim
- * otherwise.
+ * prompt stays reachable via the bubble's `title`; the user-owned expand
+ * toggle that was booked as a follow-up ticket is FB3, landed 2026-08-23.
+ *
+ * ## FB3 and the loop, restated (the invariant this signature carries)
+ *
+ * `expanded` MUST be user intent and nothing else. The oscillation above came
+ * from an edge that ran `scroll position -> clamp -> height -> scroll
+ * position`; a click is an outside event that no layout change can feed back
+ * into, so the cycle cannot re-form. Passing anything derived from scroll
+ * offset, element geometry or an `IntersectionObserver` here rebuilds that
+ * edge, whatever the parameter ends up being called -- which is why the
+ * argument, not the behaviour, is what `[FB3-2]` pins.
  */
-export function userBubbleTextClass(): string {
-  return 'select-text space-y-2 line-clamp-6';
+export function userBubbleTextClass(expanded: boolean): string {
+  return expanded ? 'select-text space-y-2' : 'select-text space-y-2 line-clamp-6';
 }
 
 /**

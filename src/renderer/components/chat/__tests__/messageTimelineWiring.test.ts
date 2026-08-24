@@ -555,14 +555,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('formatTime: (ms) => formatRelativeTimestamp(ms, nowMs)');
   });
 
-  // §5 (F10 as-built): the band renders through its class function alone and
-  // the bubble text through `userBubbleTextClass()` — the unconditional-clamp
-  // fallback (§5.6-B). The scroll-state container hooks are GONE by design:
-  // the pinned-only clamp coupled scroll position to layout height and
-  // oscillated. The negatives keep either hook from quietly coming back.
+  // §5 (F10 as-built, FB3 revision): the band renders through its class
+  // function alone and the bubble text through `userBubbleTextClass(expanded)`
+  // — still the unconditional-clamp fallback (§5.6-B) in the default state,
+  // now with a user-owned lift. The scroll-state container hooks stay GONE by
+  // design: the pinned-only clamp coupled scroll position to layout height and
+  // oscillated. The negatives keep either hook from quietly coming back, and
+  // `[FB3-2]` keeps the new argument from becoming a geometric one.
   it('§5: the sticky band and the clamped bubble use their class functions', () => {
     expectCalled('turnBubbleBandClass()');
-    expectCalled('userBubbleTextClass()');
+    expectCalled('userBubbleTextClass(expanded)');
     expect(SYNTAX, 'fx-turn-band must not return (F10)').not.toContain('fx-turn-band');
     expect(SYNTAX, 'fx-turn-bubble-text must not return (F10)').not.toContain(
       'fx-turn-bubble-text'
@@ -699,12 +701,15 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // would all still be present, just on a different parent.
   it('[D3-8] the six-line clamp wraps the prose only, never the attachment chips', () => {
     const children = jsxChildrenOf(jsxNodeAt('UserBubble', ['article', 'div']));
-    expect(children.map(tagNameOf), 'attachment strip first, clamped prose second').toEqual([
-      'div',
-      'div',
-    ]);
+    // FB3 appends the expand toggle as a THIRD child. The load-bearing claim is
+    // unchanged — chips first, clamped prose second — and the toggle sitting
+    // outside the clamp is part of it: inside, it would spend a prose line.
+    expect(
+      children.map(tagNameOf),
+      'attachment strip first, clamped prose second, toggle outside the clamp'
+    ).toEqual(['div', 'div', 'button']);
     expect(classNameExpressionOf(children[0])).toContain('flex flex-wrap');
-    expect(classNameExpressionOf(children[1])).toBe('{userBubbleTextClass()}');
+    expect(classNameExpressionOf(children[1])).toBe('{userBubbleTextClass(expanded)}');
     const clamped = jsxChildrenOf(children[1]);
     expect(clamped.map(tagNameOf), 'the clamp holds paragraphs and nothing else').toEqual(['p']);
     expect(nodeSource(children[1])).toContain('textBlocks.map(');
@@ -943,5 +948,34 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
     // shells — outside D1-b's authorisation.
     expect(CHAT_CODE).toContain('flex flex-col gap-2.5 text-markdown leading-normal');
     expect(CHAT_CODE).toContain('text-left text-markdown leading-normal');
+  });
+});
+describe('FB3: the user bubble expand toggle', () => {
+  // [FB3-2] The formal invariant from §3.3. F10 removed a scroll-position ->
+  // clamp -> height -> scroll-position cycle; FB3 reintroduces a clamp input,
+  // and the ONLY thing that keeps the cycle from re-forming is that the input
+  // is a click. Asserting the behaviour ("it is safe today") would not stop the
+  // next person from wiring `isPinned` back in, so this pins the ARGUMENT.
+  it('[FB3-2] userBubbleTextClass is driven by user intent, never by geometry', () => {
+    const calls = [...SYNTAX.matchAll(/userBubbleTextClass\(([^)]*)\)/g)].map((match) => match[1]);
+    expect(calls.length).toBeGreaterThan(0);
+    for (const argument of calls) {
+      expect(argument.trim()).not.toBe('');
+      expect(argument).not.toMatch(
+        /pinned|stuck|scroll|intersect|offsetTop|getBoundingClientRect/i
+      );
+    }
+  });
+
+  it('[FB3-2] the toggle is a real control, not a decorative span', () => {
+    expectWired('aria-expanded={expanded}');
+    expectCalled('setExpanded');
+  });
+
+  // [FB3-3] T-31 §5.6 requires the bubble's `title` to stay the full prompt in
+  // every state -- and it was never pinned by anything until now. FB3 keeps the
+  // clamp in the default state, so the requirement's premise still holds.
+  it('[FB3-3] the bubble keeps its full-text title fallback', () => {
+    expectWired('title={fullText || undefined}');
   });
 });

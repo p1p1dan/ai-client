@@ -327,6 +327,178 @@ export function shouldRenderMarkdown({ blockId, streamingBlockId }: MarkdownGate
   return blockId !== streamingBlockId;
 }
 
+/* ------------------------------------------------------------------ *
+ * FB1 -- progressive Markdown for the in-flight block (D26/T-29 recut)
+ *
+ * The gate above is all-or-nothing: a streaming block stays plain text
+ * until it completes. FB1 narrows that to the part of the text that can
+ * still change, by cutting only at BLANK LINES.
+ *
+ * Why blank lines settle it: every CommonMark *inline* construct dies at
+ * a blank line -- an unclosed inline code span, a half-written link or
+ * image, a setext underline, a GFM delimiter row. So a prefix that ends
+ * at a blank line cannot be reinterpreted by anything typed after it.
+ * Only *block containers* cross blank lines: fences, `$$` math, and HTML
+ * blocks (types 1-5). Fences and `$$` are tracked below; HTML blocks are
+ * a registered deviation -- this path escapes raw HTML to text anyway
+ * (`rawHtml: 'escaped-text'`), so the worst case is a different number of
+ * wrapper blocks around the same escaped characters.
+ *
+ * Anything a rule cannot decide stays in `openTail`. The degenerate case
+ * (a long answer with no blank line) yields no segments at all, i.e. the
+ * plain-text behaviour we have today -- a safe floor, not a defect.
+ * ------------------------------------------------------------------ */
+
+/** A line that would continue the block *before* the blank line, not start a new one. */
+const CONTINUATION_LINE = /^(?: {0,3}(?:[-*+]|\d{1,9}[.)])(?:\s|$)| {0,3}>| {4,}|\t| {0,3}\|)/;
+
+/** ``` or ~~~ with at most 3 leading spaces (4+ is an indented code block, not a fence). */
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+interface OpenFence {
+  marker: '`' | '~' | '$';
+  length: number;
+}
+
+/** Fence state transition for one line. Returns the next state. */
+function stepFence(line: string, open: OpenFence | null): OpenFence | null {
+  const trimmedEnd = line.trimEnd();
+  if (open?.marker === '$') {
+    return trimmedEnd === '$$' ? null : open;
+  }
+  if (open) {
+    const match = FENCE_LINE.exec(line);
+    if (!match) return open;
+    const [, run, info] = match;
+    // A closing fence is the same character, at least as long, and carries no info string.
+    if (run[0] === open.marker && run.length >= open.length && info.trim() === '') return null;
+    return open;
+  }
+  const match = FENCE_LINE.exec(line);
+  if (match) {
+    const [, run, info] = match;
+    const marker = run[0] as '`' | '~';
+    // An info string may not contain a backtick when the fence is made of backticks.
+    if (marker === '`' && info.includes('`')) return null;
+    return { marker, length: run.length };
+  }
+  // `$$` on its own line opens a math block; `$$ ... $$` on one line is self-contained.
+  const trimmed = trimmedEnd.trimStart();
+  if (trimmed === '$$') return { marker: '$', length: 2 };
+  if (trimmed.startsWith('$$') && !(trimmed.length > 4 && trimmed.endsWith('$$'))) {
+    return { marker: '$', length: 2 };
+  }
+  return null;
+}
+
+/**
+ * Offsets at which the text may be cut: just past a blank-line run that sits
+ * outside any fence AND is followed by a line that starts a new block.
+ *
+ * A boundary whose following line is not yet known is NOT emitted -- the next
+ * token could still be `- item`, which would fold the paragraph before it into
+ * a loose list. Undecidable means it stays open.
+ */
+function cutBoundaries(text: string): number[] {
+  const lines = text.split('\n');
+  const boundaries: number[] = [];
+  let fence: OpenFence | null = null;
+  let offset = 0;
+  let pendingBlank = -1;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const isLast = i === lines.length - 1;
+    const lineEnd = offset + line.length + (isLast ? 0 : 1);
+
+    if (fence === null && line.trim() === '') {
+      // Remember the end of the blank run; the boundary is only confirmed once
+      // a non-blank, non-continuation line follows it.
+      pendingBlank = lineEnd;
+    } else if (line.trim() !== '') {
+      if (fence === null && pendingBlank !== -1 && !CONTINUATION_LINE.test(line)) {
+        boundaries.push(pendingBlank);
+      }
+      pendingBlank = -1;
+      fence = stepFence(line, fence);
+    }
+
+    offset = lineEnd;
+  }
+
+  return boundaries;
+}
+
+/** Split an already-closed text at its boundaries; the remainder is the last segment. */
+function segmentClosedText(closed: string): string[] {
+  if (closed === '') return [];
+  const cuts = cutBoundaries(closed);
+  const segments: string[] = [];
+  let start = 0;
+  for (const cut of cuts) {
+    const chunk = closed.slice(start, cut).replace(/\n+$/, '');
+    if (chunk !== '') segments.push(chunk);
+    start = cut;
+  }
+  const tail = closed.slice(start).replace(/\n+$/, '');
+  if (tail !== '') segments.push(tail);
+  return segments;
+}
+
+/** Result of splitting a streaming text into settled segments and an open tail. */
+export interface ClosedPrefixSplit {
+  /** Settled blocks, in order. Each is a complete Markdown document on its own. */
+  segments: string[];
+  /** Everything after the last safe cut -- still plain text. */
+  openTail: string;
+  /** Character length of the settled prefix (`text.slice(0, closedLength)`). */
+  closedLength: number;
+}
+
+/**
+ * Stateless split of a streaming text at its last safe cut point.
+ *
+ * Stateless means it can return a SHORTER prefix than it did a token ago (an
+ * arriving `- item` can retroactively invalidate a boundary). Callers must not
+ * use this directly -- go through `advanceClosedPrefix`, which enforces the
+ * high-water mark. It is exported for the truth table only.
+ */
+export function splitClosedPrefix(text: string): ClosedPrefixSplit {
+  const boundaries = cutBoundaries(text);
+  const closedLength = boundaries.length > 0 ? boundaries[boundaries.length - 1] : 0;
+  return {
+    segments: segmentClosedText(text.slice(0, closedLength)),
+    openTail: text.slice(closedLength),
+    closedLength,
+  };
+}
+
+/**
+ * The monotonic entry point: never publishes less than it published before.
+ *
+ * The high-water mark lives here, in the pure function, and not in the
+ * component -- otherwise the one invariant that keeps already-rendered
+ * Markdown from flickering back to plain text would sit where the node-only
+ * suite cannot see it. The caller stores `hwm` and hands it back next tick.
+ *
+ * When the current safe cut falls short of the mark, the frozen prefix is
+ * re-segmented from `text.slice(0, hwm)` -- keeping a bare length around would
+ * let `segments` and `hwm` disagree. The cost of freezing (a block that stays
+ * split in two) is paid off by the full re-render on `message.completed`,
+ * which is the single reflow D26 already accepted.
+ */
+export function advanceClosedPrefix(text: string, previousHwm: number): ClosedPrefixSplit {
+  const fresh = splitClosedPrefix(text);
+  const hwm = Math.max(previousHwm, fresh.closedLength);
+  if (hwm <= fresh.closedLength) return fresh;
+  const frozen = text.slice(0, hwm);
+  return {
+    segments: segmentClosedText(frozen),
+    openTail: text.slice(hwm),
+    closedLength: hwm,
+  };
+}
+
 /** One body message, reduced to what the gate needs (see `deriveStreamingBlockIds`). */
 export interface StreamingGateMessage {
   id: string;

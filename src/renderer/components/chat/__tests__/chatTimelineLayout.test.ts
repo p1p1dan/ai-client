@@ -190,7 +190,7 @@ describe('userBubbleTextClass (F10 — the unconditional clamp)', () => {
   // UNCONDITIONAL, so band height depends on content alone and no scroll →
   // height edge exists. These assertions pin exactly that.
   it('F10: clamps the prompt with a bare, unconditional line-clamp utility', () => {
-    const cls = userBubbleTextClass();
+    const cls = userBubbleTextClass(false);
     // Bare utility — no variant prefix (`hover:`, `group-*:`, `data-[...]:`),
     // which is what "unconditional" means in a Tailwind class string.
     expect(cls).toMatch(/(?:^|\s)line-clamp-\d+(?:\s|$)/);
@@ -200,14 +200,34 @@ describe('userBubbleTextClass (F10 — the unconditional clamp)', () => {
   });
 
   it('F10: keeps the selection opt-in and the paragraph rhythm', () => {
-    const cls = userBubbleTextClass();
-    expect(cls).toContain('select-text');
-    expect(cls).toContain('space-y-2');
+    for (const expanded of [false, true]) {
+      const cls = userBubbleTextClass(expanded);
+      expect(cls).toContain('select-text');
+      expect(cls).toContain('space-y-2');
+    }
   });
 
   it('F10: carries no scroll-state hook — the coupling must not return', () => {
-    expect(userBubbleTextClass()).not.toContain('fx-');
+    expect(userBubbleTextClass(false)).not.toContain('fx-');
+    expect(userBubbleTextClass(true)).not.toContain('fx-');
     expect(turnBubbleBandClass()).not.toContain('fx-');
+  });
+
+  // [FB3-1] The expanded state must actually lift the clamp -- a toggle that
+  // flips a boolean while the class string keeps `line-clamp-6` would look
+  // wired and do nothing.
+  it('[FB3-1] the collapsed state clamps and the expanded state carries no clamp at all', () => {
+    expect(userBubbleTextClass(false)).toContain('line-clamp-6');
+    expect(userBubbleTextClass(true)).not.toMatch(/line-clamp-/);
+  });
+
+  // [FB3-1] The clamp stays unconditional WITHIN each state: F10's fix was to
+  // remove the variant-driven clamp, and FB3 must not smuggle it back as
+  // `group-*:`/`data-[...]:` on the collapsed string.
+  it('[FB3-1] neither state introduces a variant-driven clamp', () => {
+    for (const expanded of [false, true]) {
+      expect(userBubbleTextClass(expanded)).not.toMatch(/:line-clamp/);
+    }
   });
 });
 
