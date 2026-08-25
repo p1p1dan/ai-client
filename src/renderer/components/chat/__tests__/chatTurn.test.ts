@@ -1,15 +1,19 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
+  collapsedLeavesNothing,
   defaultTurnProcessOpen,
   flattenTurnItems,
   groupMessagesIntoTurns,
   hasUnresolvedPermission,
-  splitTurnBody,
+  segmentTurnBody,
   stabilizeTurns,
   type Turn,
   type TurnItem,
   turnHasFailure,
+  turnItemPlacement,
 } from '../chatTurn';
 
 let messageSeq = 0;
@@ -213,71 +217,113 @@ function item(kind: TurnItem['kind']): { kind: TurnItem['kind'] } {
   return { kind };
 }
 
-describe('splitTurnBody', () => {
-  it('F-B2: [think,tool,text,tool,text] splits 4 / 1', () => {
-    const items = ['toolGroup', 'toolGroup', 'text', 'toolGroup', 'text'].map((kind) =>
-      item(kind as TurnItem['kind'])
-    );
-    const { process, answer } = splitTurnBody(items);
-    expect(process).toHaveLength(4);
-    expect(answer).toHaveLength(1);
+describe('segmentTurnBody (FB4 — prose never collapses)', () => {
+  /**
+   * The interface lock between FB4 and FB7. Member by member on purpose: a
+   * `satisfies Record<TurnItemKind, …>` check would constrain a lookup table,
+   * but this is a function, and the black-list rewrite (`kind !== 'toolGroup'`
+   * -> answer) satisfies the type and breaks the meaning. FB7 adding or
+   * retiring a kind has to come through here.
+   */
+  it('[FB4-1] turnItemPlacement is a whitelist, asserted member by member', () => {
+    expect(turnItemPlacement('text')).toBe('answer');
+    expect(turnItemPlacement('notice')).toBe('notice');
+    expect(turnItemPlacement('question')).toBe('process');
+    expect(turnItemPlacement('permission')).toBe('process');
+    expect(turnItemPlacement('toolGroup')).toBe('process');
   });
 
-  it('F-B2: a single text block is all answer, no process (no collapsible shell renders)', () => {
-    const { process, answer } = splitTurnBody([item('text')]);
-    expect(process).toHaveLength(0);
-    expect(answer).toHaveLength(1);
+  it('[FB4-2] cuts maximal same-placement runs, in order', () => {
+    const kinds = ['text', 'toolGroup', 'text', 'toolGroup', 'text'] as const;
+    const segments = segmentTurnBody(kinds.map((kind) => item(kind)));
+    expect(segments.map((segment) => segment.kind)).toEqual([
+      'answer',
+      'process',
+      'answer',
+      'process',
+      'answer',
+    ]);
+    expect(segments.every((segment) => segment.items.length === 1)).toBe(true);
   });
 
-  it('F-B2: a turn ending in a tool row is all process, no answer', () => {
-    const { process, answer } = splitTurnBody([item('toolGroup')]);
-    expect(process).toHaveLength(1);
-    expect(answer).toHaveLength(0);
+  it('[FB4-3] adjacent same-placement items share ONE segment', () => {
+    const segments = segmentTurnBody([item('text'), item('text'), item('toolGroup')]);
+    expect(segments.map((segment) => segment.kind)).toEqual(['answer', 'process']);
+    expect(segments[0].items).toHaveLength(2);
   });
 
-  it('F-B2: a trailing run of text items all belongs to the answer', () => {
-    const { process, answer } = splitTurnBody([item('text'), item('text')]);
-    expect(process).toHaveLength(0);
-    expect(answer).toHaveLength(2);
-  });
-
-  it('F-B2: an unresolved permission stays in the process segment (block order, not promoted)', () => {
-    const { process, answer } = splitTurnBody([item('toolGroup'), item('permission')]);
-    expect(process.map((entry) => entry.kind)).toEqual(['toolGroup', 'permission']);
-    expect(answer).toHaveLength(0);
-  });
-
-  it('F-B2: a trailing notice terminates the answer tail (spec §4.4 is a literal text-tail rule)', () => {
-    const { process, answer } = splitTurnBody([item('text'), item('notice')]);
-    expect(process).toHaveLength(2);
-    expect(answer).toHaveLength(0);
-  });
-
-  it('F-B6: appending to the streaming text block does not move the split', () => {
-    const streamingBlock = text('partial');
-    const reply = assistant([thinking(), ...toolPair('Read'), streamingBlock]);
-    const before = splitTurnBody(flattenTurnItems(turnOf([reply])));
-    expect([before.process.length, before.answer.length]).toEqual([1, 1]);
-
-    streamingBlock.text = 'partial and then some more tokens';
-    const after = splitTurnBody(flattenTurnItems(turnOf([reply])));
-    expect([after.process.length, after.answer.length]).toEqual([
-      before.process.length,
-      before.answer.length,
+  /**
+   * The defect FB4 exists to fix. Under the old tail rule a turn ending in an
+   * error notice had `answer === []` and folded EVERY paragraph before it into
+   * the collapsed segment — the user's report was "my prose disappeared into
+   * Worked for".
+   */
+  it('[FB4-4] a trailing notice no longer drags the prose before it into the shell', () => {
+    const segments = segmentTurnBody([
+      item('text'),
+      item('toolGroup'),
+      item('text'),
+      item('notice'),
+    ]);
+    expect(segments.map((segment) => segment.kind)).toEqual([
+      'answer',
+      'process',
+      'answer',
+      'notice',
     ]);
   });
 
-  it('F-B6: a new tool call after the answer moves it into process exactly once', () => {
+  it('[FB4-5] collapsedLeavesNothing is true only when EVERY segment collapses', () => {
+    const of = (...kinds: TurnItem['kind'][]) => segmentTurnBody(kinds.map((kind) => item(kind)));
+    expect(collapsedLeavesNothing(of('toolGroup', 'permission'))).toBe(true);
+    expect(collapsedLeavesNothing(of('toolGroup', 'text'))).toBe(false);
+    // A notice renders outside the shell, so it is something left over. Without
+    // these two arms the formula could be written `every(s => s.kind !== 'answer')`
+    // and still pass.
+    expect(collapsedLeavesNothing(of('toolGroup', 'notice'))).toBe(false);
+    expect(collapsedLeavesNothing(of('notice'))).toBe(false);
+  });
+
+  it('F-B6: appending to the streaming text block does not move a boundary', () => {
+    const streamingBlock = text('partial');
+    const reply = assistant([thinking(), ...toolPair('Read'), streamingBlock]);
+    const before = segmentTurnBody(flattenTurnItems(turnOf([reply])));
+    expect(before.map((segment) => segment.kind)).toEqual(['process', 'answer']);
+
+    streamingBlock.text = 'partial and then some more tokens';
+    const after = segmentTurnBody(flattenTurnItems(turnOf([reply])));
+    expect(after.map((segment) => segment.kind)).toEqual(before.map((segment) => segment.kind));
+  });
+
+  /**
+   * The pre-FB4 counterpart of this case asserted the answer moved INTO process
+   * when a tool call arrived after it ("moves it into process exactly once").
+   * That is the behaviour being retired: the first paragraph now stays visible.
+   */
+  it('F-B6: a tool call after some prose leaves that prose outside the shell', () => {
     const reply = assistant([text('first pass')]);
-    expect(splitTurnBody(flattenTurnItems(turnOf([reply]))).answer).toHaveLength(1);
+    expect(segmentTurnBody(flattenTurnItems(turnOf([reply]))).map((s) => s.kind)).toEqual([
+      'answer',
+    ]);
 
     reply.blocks.push(...toolPair('Bash'));
-    const mid = splitTurnBody(flattenTurnItems(turnOf([reply])));
-    expect([mid.process.length, mid.answer.length]).toEqual([2, 0]);
+    expect(segmentTurnBody(flattenTurnItems(turnOf([reply]))).map((s) => s.kind)).toEqual([
+      'answer',
+      'process',
+    ]);
 
     reply.blocks.push(text('second pass'));
-    const settled = splitTurnBody(flattenTurnItems(turnOf([reply])));
-    expect([settled.process.length, settled.answer.length]).toEqual([2, 1]);
+    expect(segmentTurnBody(flattenTurnItems(turnOf([reply]))).map((s) => s.kind)).toEqual([
+      'answer',
+      'process',
+      'answer',
+    ]);
+  });
+
+  it('F-B2: an unresolved permission stays in the process segment (block order, not promoted)', () => {
+    const segments = segmentTurnBody([item('toolGroup'), item('permission')]);
+    expect(segments.map((segment) => segment.kind)).toEqual(['process']);
+    expect(segments[0].items.map((entry) => entry.kind)).toEqual(['toolGroup', 'permission']);
   });
 });
 
@@ -290,7 +336,7 @@ describe('defaultTurnProcessOpen', () => {
     isActive: false,
     hasUnresolvedPermission: false,
     hasFailure: false,
-    answerEmpty: false,
+    collapsedLeavesNothing: false,
   };
 
   it('F-B3: six-case truth table', () => {
@@ -304,16 +350,42 @@ describe('defaultTurnProcessOpen', () => {
         isActive: false,
         hasUnresolvedPermission: true,
         hasFailure: false,
-        answerEmpty: false,
+        collapsedLeavesNothing: false,
       })
     ).toBe(true);
     expect(defaultTurnProcessOpen({ ...closed, hasFailure: true })).toBe(true);
-    expect(defaultTurnProcessOpen({ ...closed, answerEmpty: true })).toBe(true);
+    expect(defaultTurnProcessOpen({ ...closed, collapsedLeavesNothing: true })).toBe(true);
     expect(defaultTurnProcessOpen(closed)).toBe(false);
   });
 
   it('F-B3: an omitted field reads as false (a completed history turn collapses)', () => {
     expect(defaultTurnProcessOpen({})).toBe(false);
+  });
+});
+
+describe('[FB4-6] the authorization red line keeps its position', () => {
+  const source = readFileSync(fileURLToPath(new URL('../chatTurn.ts', import.meta.url)), 'utf8');
+
+  /**
+   * `hasUnresolvedPermission` is a SEPARATE, FIRST return, not one disjunct
+   * among four. Folded into the `Boolean(a || b || c)` line below it the truth
+   * table is identical today — which is exactly why a behaviour assertion
+   * cannot tell the two apart — but the guarantee is gone: any rule added later
+   * that returns `false` would then be able to outrank it and bury a pending
+   * authorization card inside a collapsed shell.
+   */
+  it('the unresolved-permission branch is the first statement of the body', () => {
+    const start = source.indexOf('export function defaultTurnProcessOpen(');
+    expect(start, 'defaultTurnProcessOpen not found').toBeGreaterThan(-1);
+    const body = source.slice(source.indexOf('{', start), source.indexOf('\n}', start));
+    const statements = body
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && line !== '{');
+    expect(statements[0]).toBe('if (input.hasUnresolvedPermission) return true;');
+    // …and it is not ALSO a disjunct in the fallthrough, which would make the
+    // first return look redundant to the next person who reads it.
+    expect(statements[1]).not.toContain('hasUnresolvedPermission');
   });
 });
 

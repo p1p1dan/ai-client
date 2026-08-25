@@ -14,7 +14,7 @@ import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './too
  *     `Turn`s (§4.1 rule table).
  *  2. flatten   — `flattenTurnItems` concatenates one turn's body messages into
  *     a single ordered item list, reusing `groupTimeline` per assistant message.
- *  3. split/state — `splitTurnBody` (§4.4) plus the three predicates the
+ *  3. segment/state — `segmentTurnBody` (§4.4) plus the three predicates the
  *     collapsible shell's default state is derived from (§4.3).
  *
  * ## Judgement calls (spec left these to the implementation)
@@ -26,13 +26,18 @@ import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './too
  * message's blocks", so running it over a notice would mint `text` items that
  * are not assistant prose.
  *
- * **A `notice` therefore terminates the answer tail** (§4.4's rule is literal:
- * `answer` = the trailing run of `text` items). A turn that ends with an error
- * notice has `answer === []`, which sends the whole body into `process` — and
- * §4.3's `answerEmpty` rule then forces that shell open, so nothing is hidden.
- * The alternative (making notices transparent to the tail scan) was rejected:
- * it would render the notice *before* prose that arrived after it, breaking
- * T-05 D-5's "block order, position unchanged" ruling.
+ * **A `notice` is its own segment kind — it neither collapses nor enters the
+ * answer container.** FB4 retired the old tail rule ("`answer` = the trailing
+ * run of `text` items"), under which a turn ending in an error notice had
+ * `answer === []` and sent its ENTIRE body — every paragraph the model had
+ * written — into the collapsed process segment. That is the defect FB4 exists
+ * to fix, and it was a rule, not a bug: the tail scan was literal.
+ *
+ * What survives from that reasoning is the reason notices are not made
+ * transparent to the scan: doing so would render a notice *before* prose that
+ * arrived after it, breaking T-05 D-5's "block order, position unchanged"
+ * ruling. `segmentTurnBody` is run-length and order-preserving precisely so
+ * that ruling keeps holding.
  *
  * **`turnHasFailure` means `toolOk === false`**, not "the turn contains an
  * `error` message" — §4.3 names failed tool calls, and D26 ②'s row-level
@@ -94,7 +99,7 @@ export function groupMessagesIntoTurns(messages: readonly ChatMessage[]): Turn[]
  * object per turn on every call — and the red-line store hands the timeline a
  * fresh bucket array on every streamed token. Without this pass, one token
  * changes the identity of EVERY turn, so `React.memo` on the turn component
- * never holds and each token re-runs `flattenTurnItems` + `splitTurnBody` +
+ * never holds and each token re-runs `flattenTurnItems` + `segmentTurnBody` +
  * `deriveTurnStats` + `deriveToolGroupRows` across the whole session.
  *
  * The store's own update paths (`upsertMessage`) replace exactly the message
@@ -163,24 +168,82 @@ export function flattenTurnItems(turn: Turn): TurnItem[] {
   return joinResolvedPermissions(items);
 }
 
+/** Where an item sits relative to the collapsible shell. */
+export type TurnSegmentKind = 'answer' | 'notice' | 'process';
+
 /**
- * Split a flattened turn body into the collapsible process segment and the
- * always-visible answer (§4.4): `answer` is the trailing run of `text` items,
- * `process` is everything before it.
+ * The ONE place that decides whether an item is collapsible (§4.3).
  *
- * Streaming stability (F-B6): the criterion is a *tail* one and streaming appends
- * inside the last `text` block, so the split cannot oscillate while tokens
- * arrive — it only moves once, when a new non-text item pushes the old answer
- * into the process segment.
+ * A WHITELIST, deliberately: it names only the kinds that are always visible,
+ * and everything else — today `question` / `permission` / `toolGroup`, tomorrow
+ * whatever FB7 and its successors mint — falls to `process`. Written as a
+ * blacklist it would have the opposite failure mode: a new kind would default
+ * to always-visible and escape the shell, which is how a batch whose whole
+ * point is to REMOVE rows quietly starts adding them.
+ *
+ * `process` is also the safe default in the other direction: content folded
+ * into the shell still has `hasUnresolvedPermission` + `defaultTurnProcessOpen`'s
+ * first return to force it open, so nothing that needs an answer can hide there.
+ *
+ * `chatTurn.test.ts` asserts this member by member, not with a `satisfies`
+ * check on a lookup table: this is a function, and a `satisfies Record<…>` on a
+ * function body constrains nothing — the black-list mutation would survive it.
+ * This is the one interface lock between FB4 and FB7.
  */
-export function splitTurnBody<T extends { kind: TurnItemKind }>(
+export function turnItemPlacement(kind: TurnItemKind): TurnSegmentKind {
+  if (kind === 'text') return 'answer';
+  if (kind === 'notice') return 'notice';
+  return 'process';
+}
+
+export interface TurnSegment<T> {
+  kind: TurnSegmentKind;
+  items: T[];
+}
+
+/**
+ * Cut a flattened turn body into maximal runs of same-placement items (§4.2).
+ *
+ * Replaces `splitTurnBody`, whose `{process, answer}` shape carried the claim
+ * that a turn has ONE of each. Interleaving ("said something, ran a tool, said
+ * something else") makes several of each the normal case, so keeping those two
+ * field names would have left a pair of same-named holders whose meaning had
+ * silently changed.
+ *
+ * Order is preserved and never rearranged — see the head note on why notices
+ * are not made transparent (T-05 D-5).
+ *
+ * Streaming stability (F-B6): tokens append inside the last `text` block, so an
+ * arriving token changes an item's CONTENT, never its placement — the segment
+ * boundaries cannot oscillate while a turn streams. A new item can only append
+ * to the last segment or open one after it.
+ */
+export function segmentTurnBody<T extends { kind: TurnItemKind }>(
   items: readonly T[]
-): { process: T[]; answer: T[] } {
-  let start = items.length;
-  while (start > 0 && items[start - 1].kind === 'text') {
-    start -= 1;
+): TurnSegment<T>[] {
+  const segments: TurnSegment<T>[] = [];
+  for (const item of items) {
+    const kind = turnItemPlacement(item.kind);
+    const last = segments[segments.length - 1];
+    if (last && last.kind === kind) last.items.push(item);
+    else segments.push({ kind, items: [item] });
   }
-  return { process: items.slice(0, start), answer: items.slice(start) };
+  return segments;
+}
+
+/**
+ * Whether collapsing the shell would leave the turn as one bare row (§4.4).
+ *
+ * Replaces the old `answerEmpty` input, which meant "the trailing text run is
+ * empty". Under the segment model any text anywhere makes it false, so keeping
+ * the old name would have left a flag that is very nearly always false — a dead
+ * switch whose test still passes.
+ *
+ * `notice` counts as something left over: it renders outside the shell, so a
+ * turn of `process + notice` does NOT collapse to nothing.
+ */
+export function collapsedLeavesNothing<T>(segments: readonly TurnSegment<T>[]): boolean {
+  return segments.every((segment) => segment.kind === 'process');
 }
 
 export interface TurnProcessOpenInput {
@@ -190,8 +253,8 @@ export interface TurnProcessOpenInput {
   hasUnresolvedPermission?: boolean;
   /** The turn holds a failed tool call (see `turnHasFailure`). */
   hasFailure?: boolean;
-  /** `splitTurnBody(...).answer` is empty — collapsing would leave the turn as one bare row. */
-  answerEmpty?: boolean;
+  /** Collapsing would leave the turn as one bare row (see `collapsedLeavesNothing`). */
+  collapsedLeavesNothing?: boolean;
 }
 
 /**
@@ -210,7 +273,7 @@ export interface TurnProcessOpenInput {
  */
 export function defaultTurnProcessOpen(input: TurnProcessOpenInput): boolean {
   if (input.hasUnresolvedPermission) return true;
-  return Boolean(input.isActive || input.hasFailure || input.answerEmpty);
+  return Boolean(input.isActive || input.hasFailure || input.collapsedLeavesNothing);
 }
 
 /** A `permission_request` block still awaiting an Allow/Deny answer. */

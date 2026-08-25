@@ -9,8 +9,8 @@ import {
   turnBodyClass,
   turnBubbleBandClass,
   turnCopyButtonClass,
-  turnFooterClass,
   turnHeadClass,
+  turnMetaRowClass,
   turnProcessPanelClass,
   turnProcessShellClass,
   turnStatusToneClass,
@@ -241,9 +241,23 @@ describe('turnHeadClass', () => {
   });
 });
 
-describe('turn footer (F-B15)', () => {
-  it('F-B15: the footer is right-aligned', () => {
-    expect(turnFooterClass()).toContain('justify-end');
+describe('turn meta row (FB6 + F-B15)', () => {
+  /**
+   * `turnFooterClass()` retired with the footer row it named: FB6 merged the
+   * head and the footer into this one row, so a second class assembler would
+   * have been an export with no element to describe.
+   */
+  it('[FB6-2] the meta row is a single line whose ticking seconds cannot jitter it', () => {
+    const cls = turnMetaRowClass();
+    expect(cls).toContain('items-center');
+    expect(cls).toContain('tabular-nums');
+    expect(cls).toContain('text-meta');
+    // The status text is the only thing in the row that gives way, and it can
+    // only do that if the row lets it shrink.
+    expect(cls).toContain('min-w-0');
+    // The row carries a counter that changes every second; a row that can wrap
+    // can change HEIGHT every second, underneath a stick-to-bottom follower.
+    expect(cls).not.toContain('flex-wrap');
   });
 
   it('F-B15: the copy button is a 24px ghost icon button', () => {

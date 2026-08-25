@@ -17,7 +17,7 @@ import {
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -42,22 +42,24 @@ import {
   turnBodyClass,
   turnBubbleBandClass,
   turnCopyButtonClass,
-  turnFooterClass,
   turnHeadClass,
+  turnMetaRowClass,
   turnProcessPanelClass,
   turnProcessShellClass,
   turnStatusToneClass,
   userBubbleTextClass,
 } from './chatTimelineLayout';
 import {
+  collapsedLeavesNothing,
   defaultTurnProcessOpen,
   flattenTurnItems,
   groupMessagesIntoTurns,
   hasUnresolvedPermission,
-  splitTurnBody,
+  segmentTurnBody,
   stabilizeTurns,
   type Turn,
   type TurnItem,
+  type TurnSegment,
   turnHasFailure,
 } from './chatTurn';
 import {
@@ -954,12 +956,21 @@ interface ChatTurnProps {
 /**
  * T-31 §4.8: one turn — the container this whole spec exists to introduce.
  *
- * Renders, in order: the sticky user-bubble band (§5), the head slot (§4.7 —
- * status line while in flight, `Worked for Ns …` once complete, one slot with
- * two states), the collapsible process segment, the always-visible answer
- * segment (§4.4), and the trailing status bar (§4.6).
+ * Renders, in order: the sticky user-bubble band (§5), the turn's content
+ * segments in block order (answer prose outside the shell, notices outside it,
+ * tool/thinking/authorization inside a collapsible one — FB4), and finally ONE
+ * bottom meta row carrying the status slot, the collapse trigger, the model ·
+ * relative-time metadata and the copy button (FB6 + D55 ①).
  *
- * The head/trigger and the answer are deliberately siblings under one
+ * FB6 moved that row from the top of the turn to the bottom, which is where the
+ * user asked for it: while a turn streams, "Worked for Ns" belongs under the
+ * output being produced, not above it. T-31 §4.7's "one slot, two states"
+ * (status while in flight -> `Worked for Ns …` once complete) is UNCHANGED —
+ * this batch moved the slot's coordinates, not the number of slots, which is
+ * why `deriveTurnHeadModel` / `deriveTurnStatus` / `formatWorkedForRow` are
+ * untouched.
+ *
+ * The segments and the meta row are deliberately siblings under one
  * `turnBodyClass()`: P-17's 10px "within a turn" gap stays a single source,
  * inherited from the `<article className="flex flex-col gap-2.5">` that
  * `AssistantMessage` used to own before it was split in two.
@@ -997,7 +1008,7 @@ const ChatTurn = memo(function ChatTurn({
   // through it `groupTimeline`/`pairToolBlocks` over every block — a second
   // time on every render, clock ticks included.
   const items = useMemo(() => flattenTurnItems(turn), [turn]);
-  const { process, answer } = useMemo(() => splitTurnBody(items), [items]);
+  const segments = useMemo(() => segmentTurnBody(items), [items]);
   const copyText = useMemo(() => buildTurnCopyTextFromItems(items), [items]);
 
   // Turn-level metadata: the LAST assistant message's, because that is the one
@@ -1147,6 +1158,29 @@ const ChatTurn = memo(function ChatTurn({
   // `bare` rung below instead of saying "Thought".
   const thoughtOnly = useMemo(() => turnHasThinkingOnlyProcess(turnBlocks), [turnBlocks]);
 
+  // One expression, two consumers (`head.hasProcess` and `collapsible`): the
+  // turn-head model guarantees a non-null head whenever there is a process
+  // segment, and the trigger's existence is decided by that same fact. Deriving
+  // them separately is how the two drift apart.
+  const hasProcess = useMemo(
+    () => segments.some((segment) => segment.kind === 'process'),
+    [segments]
+  );
+
+  // FB6/E1: interleaving means SEVERAL process segments, and a Base UI
+  // `Collapsible.Root` owns exactly one panel id — so each segment gets its own
+  // controlled Root, and the one bottom trigger names all their panels in
+  // `aria-controls`. Ids come from a stable `useId()` prefix so they survive
+  // re-renders and cannot collide with another turn's.
+  const panelIdPrefix = useId();
+  const processPanelIds = useMemo(
+    () =>
+      segments
+        .map((segment, index) => (segment.kind === 'process' ? `${panelIdPrefix}p${index}` : null))
+        .filter((id): id is string => id !== null),
+    [segments, panelIdPrefix]
+  );
+
   // F1: the head degrades `status -> workedFor -> stats -> thought -> bare
   // chevron` instead of stopping at the first two. A restored history turn
   // has neither of the first two (no T-06 metadata is replayed), so it used
@@ -1159,7 +1193,7 @@ const ChatTurn = memo(function ChatTurn({
     status,
     workedFor,
     stats,
-    hasProcess: process.length > 0,
+    hasProcess,
     thoughtOnly,
   });
 
@@ -1179,7 +1213,7 @@ const ChatTurn = memo(function ChatTurn({
       isActive: turnActive,
       hasUnresolvedPermission: permissionLock,
       hasFailure: turnHasFailure(turn),
-      answerEmpty: answer.length === 0,
+      collapsedLeavesNothing: collapsedLeavesNothing(segments),
     })
   );
   // Controlled, not `defaultOpen`, for one reason: `permissionLock` can turn
@@ -1207,7 +1241,7 @@ const ChatTurn = memo(function ChatTurn({
   // decided by the process segment alone — which is also what stops the shell
   // from mounting and unmounting when metadata arrives mid-turn and flips the
   // head from null to non-null, remounting the whole subtree twice (F2).
-  const collapsible = process.length > 0;
+  const collapsible = hasProcess;
 
   // F-C3. The derivation itself is a pure function so the node suite can
   // truth-table it; what is decided HERE is only which inputs it gets:
@@ -1239,6 +1273,15 @@ const ChatTurn = memo(function ChatTurn({
     [turn.body, bodyMetadata, inFlightSession, isLastTurn]
   );
 
+  const metaLine = formatMessageMetadata(metadata, {
+    omitLatency: true,
+    formatTime: (ms) => formatRelativeTimestamp(ms, footerNowMs),
+  });
+  const metaCopyText = turnActive ? '' : copyText;
+  // An empty row would still spend one 10px beat of the turn body's gap, so the
+  // row exists only when it has something to say.
+  const showMetaRow = Boolean(head) || collapsible || Boolean(metaLine) || metaCopyText.length > 0;
+
   const renderItem = (item: TurnItem) => (
     <TurnItemView
       key={turnItemKey(item)}
@@ -1251,6 +1294,65 @@ const ChatTurn = memo(function ChatTurn({
       onRespondPermission={onRespondPermission}
     />
   );
+
+  const renderSegment = (segment: TurnSegment<TurnItem>, index: number) => {
+    // Keyed off the segment's FIRST item, not its index: an index key would
+    // remount every later segment the moment a new one opened mid-stream,
+    // throwing away the expanded tool bodies inside them.
+    const key = `${segment.kind}:${turnItemKey(segment.items[0])}`;
+    if (segment.kind === 'answer') {
+      // D3-b: the neutral container, on answer prose and nothing else. It can
+      // never wrap a tool group, a permission card or a question card — those
+      // are `process`, which has its own shell.
+      return (
+        <div key={key} className={cn(turnBodyClass(), turnAnswerContainerClass())}>
+          {segment.items.map(renderItem)}
+        </div>
+      );
+    }
+    if (segment.kind === 'notice') {
+      // `NoticeMessage` brings its own Alert border, so a notice stays OUT of
+      // the answer container — nesting the two would be a box in a box.
+      return (
+        <div key={key} className={turnBodyClass()}>
+          {segment.items.map(renderItem)}
+        </div>
+      );
+    }
+    return (
+      // F11: `Collapsible.Root` renders a bare `<div>`, so without a class of
+      // its own its children sat flush at 0px while every other pair inside the
+      // turn kept P-17's 10px beat.
+      //
+      // Controlled, and with NO trigger of its own: every process segment in a
+      // turn opens and closes together off one state, driven by the single
+      // chevron in the bottom meta row (E1). `disabled` is not passed here —
+      // Base UI routes it to a Root's own trigger, and this Root has none.
+      <Collapsible
+        key={key}
+        open={processShellOpen}
+        onOpenChange={setProcessOpen}
+        className={turnProcessShellClass()}
+      >
+        {/* F5: `keepMounted` is the whole of §10-C's "expanded tool rows
+            survive a collapse". Base UI's panel defaults to unmounting on
+            close, and this panel takes the `animationType: 'none'` path (see
+            `turnProcessPanelClass`), where "closed" means `mounted` goes false
+            in the same tick — so every IN/OUT body the user had opened inside
+            the process segment was destroyed and rebuilt at its default state
+            on every collapse/expand. Tailwind's preflight gives `[hidden]`
+            `display: none !important`, so the flex container below cannot
+            override the hidden state. */}
+        <CollapsibleContent
+          keepMounted
+          id={`${panelIdPrefix}p${index}`}
+          className={cn(turnProcessPanelClass(), turnBodyClass())}
+        >
+          {segment.items.map(renderItem)}
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
 
   return (
     <section className={chatTurnClass()}>
@@ -1273,69 +1375,56 @@ const ChatTurn = memo(function ChatTurn({
             banner describes the reply in progress, so it lives in the reply
             zone, not above the user's own message. */}
         {retryBanner && <RetryBanner view={retryBanner} />}
-        {collapsible ? (
-          // F11: `Collapsible.Root` renders a bare `<div>`, so without a class
-          // of its own the trigger row and the panel sat flush at 0px while
-          // every other pair inside the turn kept P-17's 10px beat.
-          <Collapsible
-            open={processShellOpen}
-            onOpenChange={setProcessOpen}
-            disabled={permissionLock}
-            className={turnProcessShellClass()}
-          >
-            <CollapsibleTrigger className={cn(turnHeadClass(), 'w-full disabled:cursor-default')}>
-              <TurnHeadContent head={head} />
-              {!permissionLock && (
+        {/* FB4: block order, all the way down. Prose and notices render where
+            they happened instead of being scraped to the end of the turn, and
+            only tool / thinking / authorization runs go inside a shell. The old
+            rule ("the answer is the TRAILING run of text items") sent every
+            earlier paragraph into the collapsed segment, and a turn that ended
+            in an error notice sent ALL of it. */}
+        {segments.map(renderSegment)}
+        {showMetaRow && (
+          // FB6 + D55 ①: the turn's one bottom meta row. NOT a <button> itself —
+          // it holds two of them (the collapse chevron and copy), and a button
+          // cannot contain a button. That is why the trigger is the trailing
+          // chevron rather than the whole row.
+          <div className={turnMetaRowClass()}>
+            <TurnHeadContent head={head} />
+            {collapsible && (
+              <button
+                type="button"
+                aria-expanded={processShellOpen}
+                aria-controls={processPanelIds.join(' ')}
+                // Migrated off `Collapsible.Root` (whose `disabled` only ever
+                // reached ITS OWN trigger — with the trigger moved out here,
+                // leaving it there would have been a prop with no effect and a
+                // test that still passed).
+                disabled={permissionLock}
+                className={cn(turnCopyButtonClass(), 'disabled:cursor-default')}
+                aria-label={processShellOpen ? 'Collapse turn details' : 'Expand turn details'}
+              >
                 <ChevronDown
                   className={cn(
                     'size-3.5 shrink-0 transition-transform duration-150',
-                    processShellOpen && 'rotate-180'
+                    // Inverted from the pre-FB6 head: the panel is now ABOVE
+                    // this row, so the arrow points at where content will
+                    // appear. Direction is a judgement call with no objective
+                    // answer — GUI point-check G-12 confirms it.
+                    !processShellOpen && 'rotate-180'
                   )}
                 />
-              )}
-            </CollapsibleTrigger>
-            {/* F5: `keepMounted` is the whole of §10-C's "expanded tool rows
-                survive a collapse". Base UI's panel defaults to unmounting on
-                close, and this panel takes the `animationType: 'none'` path
-                (see `turnProcessPanelClass`), where "closed" means `mounted`
-                goes false in the same tick — so every IN/OUT body the user had
-                opened inside the process segment was destroyed and rebuilt at
-                its default state on every collapse/expand. Tailwind's preflight
-                gives `[hidden]` `display: none !important`, so the flex
-                container below cannot override the hidden state. */}
-            <CollapsibleContent
-              keepMounted
-              className={cn(turnProcessPanelClass(), turnBodyClass())}
-            >
-              {process.map(renderItem)}
-            </CollapsibleContent>
-          </Collapsible>
-        ) : (
-          <>
-            {head && (
-              <div className={turnHeadClass()}>
-                <TurnHeadContent head={head} />
-              </div>
+              </button>
             )}
-            {process.map(renderItem)}
-          </>
-        )}
-        {/* D3-b: the answer segment — and ONLY it — gets the neutral container.
-            `splitTurnBody` defines `answer` as the trailing run of `text`
-            items, so this box can never wrap a tool group, a permission card
-            or a question card; those stay in `process`, which already has its
-            own collapsible shell. Note the two sibling `turnBodyClass()` calls
-            above read almost identically: the container belongs on THIS one. */}
-        {answer.length > 0 && (
-          <div className={cn(turnBodyClass(), turnAnswerContainerClass())}>
-            {answer.map(renderItem)}
+            <TurnMetaTail
+              line={metaLine}
+              completedAt={metadata?.completedAt}
+              // F13: an in-flight turn's prose is half an answer, and a Copy
+              // button that silently yields it is worse than no button — the
+              // clipboard gives no sign the text was truncated. Restored
+              // history turns are NOT in flight, so they keep theirs.
+              copyText={metaCopyText}
+            />
           </div>
         )}
-        {/* F13: an in-flight turn's prose is half an answer, and a Copy button
-            that silently yields it is worse than no button — the clipboard
-            gives no sign the text was truncated. Restored history turns are NOT
-            in flight, so they keep theirs. */}
-        <TurnFooter metadata={metadata} copyText={turnActive ? '' : copyText} nowMs={footerNowMs} />
       </div>
     </section>
   );
@@ -1687,35 +1776,43 @@ function ToolGroupItem({
  * at render time — so an idle session's ages froze at whatever they were when
  * the last render happened to run, and "just now" stayed "just now" for hours.
  */
-function TurnFooter({
-  metadata,
+/**
+ * The trailing half of the turn's bottom meta row: `model · 3m ago`, then copy.
+ *
+ * FB6 + D55 ①: this is the former `TurnFooter`, which used to be a ROW of its
+ * own at the bottom of the turn. Now that the head has moved down to join it,
+ * two rows would be two rows saying meta things about the same turn, so it was
+ * demoted to the tail of one row. Renamed rather than kept under the old name:
+ * `TurnFooter` returning a fragment instead of a footer row is precisely the
+ * kind of same-name-new-meaning that a stale test keeps passing over.
+ *
+ * `ml-auto` on the group, not on the individual pieces: it pins the pair to the
+ * trailing edge in one place, leaving the status text on the left free to give
+ * way (it is the only thing in the row that truncates).
+ */
+function TurnMetaTail({
+  line,
+  completedAt,
   copyText,
-  nowMs,
 }: {
-  metadata?: MessageMetadata;
+  /** Already formatted by the caller — this row's clock is the turn's, not a second one. */
+  line: string | null;
+  completedAt?: number | null;
   copyText: string;
-  /** Minute-resolution clock from `useMinuteTick`, the single source of "now" for the whole timeline's footers. */
-  nowMs: number;
 }) {
-  const line = formatMessageMetadata(metadata, {
-    omitLatency: true,
-    formatTime: (ms) => formatRelativeTimestamp(ms, nowMs),
-  });
   if (!line && copyText.length === 0) return null;
   return (
-    <div className={turnFooterClass()}>
+    <span className="ml-auto flex min-w-0 items-center gap-2">
       {line && (
         <span
           className="min-w-0 truncate"
-          title={
-            metadata?.completedAt != null ? formatAbsoluteTime(metadata.completedAt) : undefined
-          }
+          title={completedAt != null ? formatAbsoluteTime(completedAt) : undefined}
         >
           {line}
         </span>
       )}
       {copyText.length > 0 && <TurnCopyButton text={copyText} />}
-    </div>
+    </span>
   );
 }
 

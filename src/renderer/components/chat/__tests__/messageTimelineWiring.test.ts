@@ -269,19 +269,61 @@ function firstJsxIn(node: ts.Node): JsxNode | undefined {
   return found;
 }
 
-function topLevelFunction(fnName: string): ts.FunctionDeclaration {
-  const fn = sourceFile.statements.find(
+/**
+ * A top-level component, whether it is written as `function X() {}` or as
+ * `const X = memo(function X() {})`.
+ *
+ * The `memo` form is why `ChatTurn`'s child order went unpinned for so long:
+ * every locator here used to accept declarations only, so the one component
+ * whose layout this batch rearranges was the one component no positional
+ * assertion could reach. `memo` is load-bearing on `ChatTurn` (see its head
+ * note) and is not going away, so the locator learns the wrapper instead.
+ */
+function topLevelFunction(fnName: string): ts.FunctionDeclaration | ts.FunctionExpression {
+  const declared = sourceFile.statements.find(
     (statement): statement is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(statement) && statement.name?.text === fnName
   );
-  if (!fn?.body) throw new Error(`no top-level \`function ${fnName}\` in MessageTimeline.tsx`);
-  return fn;
+  if (declared?.body) return declared;
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== fnName) continue;
+      const initializer = declaration.initializer;
+      if (!initializer || !ts.isCallExpression(initializer)) continue;
+      const wrapped = initializer.arguments[0];
+      if (wrapped && ts.isFunctionExpression(wrapped) && wrapped.body) return wrapped;
+    }
+  }
+  throw new Error(
+    `no top-level \`${fnName}\` (function or memo(function …)) in MessageTimeline.tsx`
+  );
+}
+
+/**
+ * What the component actually renders: the JSX of its top-level `return`.
+ *
+ * NOT simply "the first JSX in the body" — `ChatTurn` defines a `renderItem`
+ * helper that closes over its props ABOVE the return, so a first-match walk
+ * lands on `<TurnItemView>` and every path from there is nonsense. Falls back
+ * to the first-match walk for the early-return components that predate this.
+ */
+function rootJsxOf(fn: ts.FunctionDeclaration | ts.FunctionExpression): JsxNode | undefined {
+  const body = fn.body as ts.Block;
+  for (const statement of body.statements) {
+    if (!ts.isReturnStatement(statement) || !statement.expression) continue;
+    let expression: ts.Expression = statement.expression;
+    while (ts.isParenthesizedExpression(expression)) expression = expression.expression;
+    if (isJsxNode(expression)) return expression;
+  }
+  return firstJsxIn(body);
 }
 
 /** Walk a tag-name path from the root JSX element of top-level `function fnName`. */
 function jsxNodeAt(fnName: string, path: readonly string[]): JsxNode {
   const fn = topLevelFunction(fnName);
-  let current = firstJsxIn(fn.body as ts.Block);
+  let current = rootJsxOf(fn);
   if (!current) throw new Error(`\`function ${fnName}\` renders no JSX`);
   if (tagNameOf(current) !== path[0]) {
     throw new Error(`${fnName}'s root is <${tagNameOf(current)}>, not <${path[0]}>`);
@@ -366,32 +408,42 @@ function classNameExpressionOf(node: JsxNode): string {
   return nodeSource(classNameInitializerOf(node));
 }
 
-/** The JSX element rendered directly by `<guard> && <element/>`. */
-function jsxGuardedBy(guard: string): JsxNode {
-  let found: JsxNode | undefined;
-  const walk = (node: ts.Node): void => {
-    if (found) return;
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
-      nodeSource(node.left) === guard
-    ) {
-      // A multi-line JSX right-hand side is parenthesised by the formatter;
-      // that is punctuation, not a layer, so it is unwrapped rather than
-      // treated as an indirection.
-      let right: ts.Expression = node.right;
-      while (ts.isParenthesizedExpression(right)) right = right.expression;
-      if (!isJsxNode(right)) {
-        throw new Error(`\`${guard} && …\` does not render a JSX element directly`);
-      }
-      found = right;
-      return;
-    }
-    ts.forEachChild(node, walk);
-  };
-  ts.forEachChild(sourceFile, walk);
-  if (!found) throw new Error(`no \`${guard} && <jsx/>\` in MessageTimeline.tsx`);
-  return found;
+/** `ChatTurn`'s `turnBodyClass()` wrapper — the element whose child ORDER FB6 rearranges. */
+function turnBodyNode(): JsxNode {
+  const section = jsxNodeAt('ChatTurn', ['section']);
+  const body = jsxChildrenOf(section).find((child) =>
+    classNameExpressionOf(child).includes('turnBodyClass()')
+  );
+  if (!body) throw new Error('ChatTurn renders no `turnBodyClass()` child');
+  return body;
+}
+
+/**
+ * Those children, classified by the role each plays in the turn's vertical
+ * order. Classification is by the class assembler the child mounts rather than
+ * by tag, because the same slot is spelled differently depending on the turn's
+ * shape (a `Collapsible` when there is a process segment, a bare `div` when
+ * there is not).
+ */
+function turnBodyChildKinds(): string[] {
+  const body = turnBodyNode();
+  const kinds: string[] = [];
+  for (const child of jsxChildrenOf(body)) {
+    const tag = tagNameOf(child);
+    // Components carry their classes internally; only the slots this batch
+    // rearranges name a class assembler at the call site.
+    const attributes = ts.isJsxElement(child) ? child.openingElement.attributes : child.attributes;
+    const hasClassName = attributes.properties.some(
+      (property) => ts.isJsxAttribute(property) && property.name.getText(sourceFile) === 'className'
+    );
+    const className = hasClassName ? classNameExpressionOf(child) : '';
+    if (tag === 'RetryBanner') kinds.push('retry');
+    else if (className.includes('turnAnswerContainerClass()')) kinds.push('answer');
+    else if (className.includes('turnMetaRowClass()')) kinds.push('meta');
+    else if (className.includes('turnHeadClass()') || tag === 'Collapsible') kinds.push('head');
+    else kinds.push(`?${tag}`);
+  }
+  return kinds;
 }
 
 describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
@@ -412,7 +464,7 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // distinction this file is built on is decoration. A plain statement inside
     // `memo(function ChatTurn(…) { … })` is the sharpest case: it is in the
     // file, and it is NOT in call position.
-    const statementOnly = 'const collapsible = process.length > 0;';
+    const statementOnly = 'const collapsible = hasProcess;';
     expect(SYNTAX).toContain(statementOnly);
     expect(CALL_SITES, 'a function body leaked into call position').not.toContain(statementOnly);
     // Negatives keep string literals, or class-name prohibitions mean nothing.
@@ -425,10 +477,12 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // `status ? … : workedFor ? … : null` ternary.
   it('F1: the head is built by deriveTurnHeadModel', () => {
     expectCalled('deriveTurnHeadModel(');
-    expectCalled('hasProcess: process.length > 0');
     // The trigger's existence is decided by the process segment alone — that is
-    // what stops the Collapsible subtree from remounting when metadata lands.
-    expectWired('const collapsible = process.length > 0;');
+    // what stops the Collapsible subtree from remounting when metadata lands —
+    // and the head model is told the SAME fact through the same binding, so the
+    // two cannot disagree about whether the turn has a process segment.
+    expectWired('const collapsible = hasProcess;');
+    expectCalled('hasProcess,');
   });
 
   // §4.2: the counts riding inside the head are the compact rendering.
@@ -533,7 +587,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
 
   // F13: a half-streamed answer must not be silently copyable.
   it('F13: copy is withheld while the turn is in flight', () => {
-    expectCalled("copyText={turnActive ? '' : copyText}");
+    expectWired("const metaCopyText = turnActive ? '' : copyText;");
+    expectCalled('copyText={metaCopyText}');
   });
 
   // F7: one flatten per turn, feeding both the render and the copy payload.
@@ -552,7 +607,9 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // F9: the footer's relative age must advance on its own clock.
   it('F9: the footer reads an injected clock, not Date.now() at render time', () => {
     expectCalled('useMinuteTick()');
-    expectCalled('formatTime: (ms) => formatRelativeTimestamp(ms, nowMs)');
+    // FB6 moved the formatting up into `ChatTurn` when the footer became the
+    // tail of the meta row: one row, one clock, named by the prop it arrives on.
+    expectCalled('formatTime: (ms) => formatRelativeTimestamp(ms, footerNowMs)');
   });
 
   // §5 (F10 as-built, FB3 revision): the band renders through its class
@@ -675,8 +732,8 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     );
     expect(body).toContain('break-words');
     expect(body).toContain('leading-relaxed');
-    // …and the FOOTER's own right alignment is a different element, untouched.
-    expectCalled('turnFooterClass()');
+    // …and the turn's meta row is a different element, with its own alignment.
+    expectCalled('turnMetaRowClass()');
   });
 
   // The subtree form is required: `expectUnwired('bg-card')` would demand the
@@ -719,14 +776,168 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // `turnBodyClass()` appears three times in `ChatTurn` (turn body, process
   // panel, answer) and the three call sites read almost identically, so "the
   // container is called once" is not evidence of WHERE. The guard expression is.
-  it('[D3-7] the assistant container is mounted on the answer segment, exactly once', () => {
-    const answerSegment = jsxGuardedBy('answer.length > 0');
-    expect(classNameExpressionOf(answerSegment)).toBe(
-      '{cn(turnBodyClass(), turnAnswerContainerClass())}'
+  /**
+   * `[D3-7]`, redefined for the segment model. The old form asserted the guard
+   * expression `answer.length > 0` plus "the container name appears once in the
+   * file". Neither survives FB4: there is no single answer segment any more, and
+   * a count of one is not evidence of WHERE — moving the mount from the answer
+   * branch to the process branch keeps the count at one and puts a box around
+   * the collapsible shell.
+   *
+   * So the claim is structural instead: the container is mounted inside
+   * `renderSegment`'s `answer` branch and nowhere else.
+   */
+  it('[FB4-7] the assistant container is mounted on answer segments and nothing else', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(countIn(turn, 'turnAnswerContainerClass()')).toBe(1);
+    const answerBranch = turn.slice(
+      turn.indexOf("if (segment.kind === 'answer')"),
+      turn.indexOf("if (segment.kind === 'notice')")
     );
-    // …and nowhere else: a second mount would put a box around the process
-    // segment, which already has its own collapsible shell.
-    expect(countIn(SYNTAX, 'turnAnswerContainerClass()')).toBe(1);
+    expect(answerBranch, 'the container is inside the answer branch').toContain(
+      'cn(turnBodyClass(), turnAnswerContainerClass())'
+    );
+    // …and the two branches that are NOT prose stay bare: a notice brings its
+    // own Alert border, and the process shell has its own container.
+    const rest = turn.slice(turn.indexOf("if (segment.kind === 'notice')"));
+    expect(rest).not.toContain('turnAnswerContainerClass()');
+  });
+
+  /**
+   * FB6's zero-regression net, and the reason this batch had to build one.
+   *
+   * Nothing pinned `ChatTurn`'s child ORDER before: the suite runs on
+   * `environment: 'node'` with no jsdom, and every positional locator here
+   * rejected `memo(function …)` — which is exactly how `ChatTurn` is written.
+   * Moving the head from the top of the turn to the bottom passed the entire
+   * suite untouched. This was landed as a temporary `[FB6-0]` pinning the OLD
+   * order first, watched go red when the structure moved, and only then
+   * rewritten into the permanent claim below.
+   *
+   * The claim: everything the model produced comes first, and the row that
+   * TALKS about the turn comes last. "Worked for 12s" belongs under the output
+   * it describes, not above it.
+   */
+  it('[FB6-1] every content segment precedes the single bottom meta row', () => {
+    const kinds = turnBodyChildKinds();
+    expect(kinds, 'the turn body renders content segments and a meta row').toEqual(
+      expect.arrayContaining(['meta'])
+    );
+    // Exactly one: the head row and the footer row merged (D55 ①), and two
+    // rows of turn metadata is the thing that merge removed.
+    expect(kinds.filter((kind) => kind === 'meta')).toHaveLength(1);
+    expect(kinds.indexOf('meta'), 'the meta row is last').toBe(kinds.length - 1);
+    // …and no head slot survives above the content.
+    expect(kinds).not.toContain('head');
+  });
+
+  /**
+   * The trigger moved out of `Collapsible.Root` and into the meta row, so the
+   * row now holds two buttons — and a `<button>` cannot contain a `<button>`.
+   * Making the whole row the trigger (the shape this batch originally drew)
+   * would nest copy inside it: illegal HTML, broken tab order, broken hit
+   * targets. The chevron being its own element is what keeps them siblings.
+   */
+  it('[FB6-5] the copy button is a sibling of the collapse trigger, never inside it', () => {
+    const metaRow = jsxChildrenOf(turnBodyNode()).find((child) => {
+      const attributes = ts.isJsxElement(child)
+        ? child.openingElement.attributes
+        : child.attributes;
+      return attributes.properties.some(
+        (property) =>
+          ts.isJsxAttribute(property) &&
+          property.name.getText(sourceFile) === 'className' &&
+          nodeSource(property.initializer as ts.Node).includes('turnMetaRowClass()')
+      );
+    });
+    if (!metaRow) throw new Error('ChatTurn renders no `turnMetaRowClass()` row');
+    expect(tagNameOf(metaRow), 'the row itself must not be a button').toBe('div');
+    const trigger = descendantJsx(metaRow, 'button');
+    // A WHITELIST of the trigger's subtree, not a blacklist of `TurnCopyButton`.
+    // Naming the forbidden component only catches it when it is spelled out
+    // inline; anything that RENDERS one — `TurnMetaTail` does — walks straight
+    // past a name check while nesting exactly the button this forbids.
+    expect(
+      jsxChildrenOf(trigger).map(tagNameOf),
+      'the trigger holds a chevron and nothing else'
+    ).toEqual(['ChevronDown']);
+    expect(nodeSource(metaRow), 'copy still renders, just outside the trigger').toContain(
+      'TurnMetaTail'
+    );
+    // …and it is a SIBLING of the trigger, not a descendant of it.
+    expect(jsxChildrenOf(metaRow).map(tagNameOf)).toContain('TurnMetaTail');
+  });
+
+  /**
+   * E1 gives every process segment its own controlled `Collapsible.Root`,
+   * because Base UI's Root owns exactly ONE panel id. The failure mode it
+   * creates is a segment that forgets to read the shared state and stops
+   * responding to the one trigger — visible only in a screenshot, unless the
+   * `open` binding and the render point are counted against each other.
+   */
+  it('[FB6-6] every process segment container reads the shared open state', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    // One binding, one render point: the segments are many, the shell that
+    // renders them is written once, so "a segment that forgot to read the
+    // state" is not expressible.
+    expect(countIn(turn, 'open={processShellOpen}')).toBe(1);
+    expect(countIn(turn, '<Collapsible ')).toBe(1);
+    expect(countIn(turn, '<CollapsibleContent')).toBe(1);
+    // …and `disabled` is gone from the Root, which after E1 has no trigger of
+    // its own for Base UI to route it to — it would be a prop with no effect
+    // that every string-matching test still passes. It lives on the meta row's
+    // button now (`[FB6-4]`).
+    expect(countIn(turn, 'disabled={permissionLock}')).toBe(1);
+    expect(
+      turn.slice(turn.indexOf('<Collapsible '), turn.indexOf('<CollapsibleContent'))
+    ).not.toContain('disabled');
+    // The Root has no trigger at all: the one trigger is in the meta row.
+    expect(turn).not.toContain('<CollapsibleTrigger');
+  });
+
+  /**
+   * The migrated lock. `disabled` on `Collapsible.Root` only ever reached that
+   * Root's own trigger; with the trigger moved out to the meta row, the lock
+   * has to move with it or the authorization red line ("a pending permission
+   * card can never be collapsed away") quietly stops holding.
+   */
+  it('[FB6-4] the permission lock rides the new trigger, not the old shell', () => {
+    const metaRowSource = nodeSource(turnBodyNode());
+    expect(metaRowSource).toContain('disabled={permissionLock}');
+    expect(metaRowSource).toContain('aria-expanded={processShellOpen}');
+  });
+
+  /**
+   * §5.2's single-line invariant. The row carries a counter that reprints every
+   * second; if its text could wrap, the row's HEIGHT would change every second
+   * underneath the stick-to-bottom follower. That is not an oscillation today
+   * (the height change does not depend on scroll position) — the assertion
+   * guards the boundary, not a live bug.
+   */
+  it('[FB6-2] the meta row truncates rather than wraps', () => {
+    const tail = nodeSource(topLevelFunction('TurnMetaTail'));
+    expect(tail).toContain('min-w-0 truncate');
+    const head = nodeSource(topLevelFunction('TurnHeadContent'));
+    expect(head).toContain('min-w-0 truncate');
+  });
+
+  /**
+   * One trigger, several panels: `aria-controls` has to enumerate all of them,
+   * and the ids have to be unique and stable across renders — which is what the
+   * `useId()` prefix is for. A literal id here would collide across turns.
+   */
+  it('[FB6-7] panel ids come from a stable useId prefix and the trigger names them all', () => {
+    expectCalled('useId()');
+    expectCalled("aria-controls={processPanelIds.join(' ')}");
+    // Assembled rather than written out: a literal `${…}` inside a plain string
+    // is exactly the typo biome's `noTemplateCurlyInString` exists to catch, so
+    // the probe is built instead of spelled.
+    const panelId = ['`', '$', '{panelIdPrefix}p', '$', '{index}', '`'].join('');
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn, 'the panel takes its id from the stable prefix').toContain(`id={${panelId}}`);
+    expect(turn, 'and the id list is built from the same expression').toContain(
+      `${panelId} : null`
+    );
   });
 
   // T-33: the retry banner is derived by the pure function and mounted in BOTH

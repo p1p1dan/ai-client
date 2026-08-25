@@ -19,8 +19,9 @@
  * ```
  * ReadingColumn space-y-2.5  = 10   previous turn's end -> this turn's band
  * band py-2.5                = 10   top: completes the 20px turn-to-turn beat
- *                              10   bottom: the 10px "section gap" to the head
- * turn body gap-2.5          = 10   head / process / answer / footer (P-17)
+ *                              10   bottom: the 10px "section gap" to the first
+ *                                   content segment (FB6 moved the head down)
+ * turn body gap-2.5          = 10   content segments / meta row (P-17)
  * ```
  *
  * Total between turns is still A07 `:846`'s 20px; only its composition changed
@@ -165,9 +166,25 @@ export function turnHeadClass(): string {
   return 'flex min-w-0 items-center gap-1.5 text-meta tabular-nums text-muted-foreground';
 }
 
-/** Trailing status bar: model · relative time · copy, right-aligned (§4.6). */
-export function turnFooterClass(): string {
-  return 'flex flex-wrap items-center justify-end gap-2 text-meta tabular-nums text-muted-foreground';
+/**
+ * FB6 + D55 ①: the turn's single bottom meta row — status/`Worked for`, the
+ * collapse trigger, the model · relative-time metadata, and the copy button,
+ * all on ONE line at the END of the turn.
+ *
+ * Replaces a head row at the top plus a footer row at the bottom. It keeps
+ * `turnHeadClass()`'s `min-w-0` (the status text truncates rather than wrapping
+ * — see `MessageTimeline`'s note on why this row must stay one line) and
+ * `turnFooterClass()`'s `justify-*` behaviour, but the status half is
+ * `flex-1` so the metadata and the two 24px buttons sit at the trailing edge
+ * while the ticking text gives way.
+ *
+ * `flex-wrap` is deliberately NOT here: the footer could wrap because its
+ * content was static, but this row carries a counter that changes every second,
+ * and a row that can wrap can change height every second under a
+ * stick-to-bottom follower.
+ */
+export function turnMetaRowClass(): string {
+  return 'flex min-w-0 items-center gap-2 text-meta tabular-nums text-muted-foreground';
 }
 
 /**
@@ -211,11 +228,17 @@ export function turnCopyButtonClass(): string {
  * `first:mt-0` already keeps the first block from stacking its own margin on
  * top, so no negative offset is needed.
  *
- * Mounted on the `answer` segment only (`splitTurnBody`: the trailing run of
- * `text` items), so it is at most one box per turn and can never contain a tool
- * group, a permission card or a question card — those live in `process`, which
- * has its own collapsible shell. A turn whose answer is empty gets no box at
- * all, which is honest: it is not an answer.
+ * Mounted on `answer` segments only, so it can never contain a tool group, a
+ * permission card or a question card — those are `process`, which has its own
+ * collapsible shell.
+ *
+ * FB4: ONE BOX PER ANSWER SEGMENT, not one per turn. An interleaved turn ("said
+ * something, ran a tool, said something else") now keeps its prose outside the
+ * shell in place, which means several boxes. That is the point of the change —
+ * the old rule folded every earlier paragraph into the collapsed segment — but
+ * it does make the box a repeating element rather than a singular one, and how
+ * that reads is a GUI question, not a code one (spec §10 G-6, Q14). A turn with
+ * no prose gets no box at all, which is honest: it is not an answer.
  */
 export function turnAnswerContainerClass(): string {
   return 'rounded-sm border border-border p-3.5';
