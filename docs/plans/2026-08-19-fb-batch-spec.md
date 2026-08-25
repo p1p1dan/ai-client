@@ -1319,7 +1319,7 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | **G-5** | 贴底跟随态下展开一条长提问 | §3.3 的**次生效应**：高度增长触发的一次滚动跟随，观感上是否可接受（**不是振荡，是一次性跳动**） | §3.3 |
 | **G-6** | 一个**多次交错**的回合（正文 → 工具 → 正文 → 工具 → 正文） | **FB4-C1 的碎片化风险**：3~5 个小边框盒堆叠是否可接受。🚫 **rev.2：判定不可接受时，施工方不得自行启用 C3** —— 走 F456 §4.6 三步上报，**由用户拍板**（见 §4.5 红框与 §12.1 **Q14**） | §4.5 / §12 Q14 |
 | **G-7** | 置顶气泡态 + 其下第一个元素是带边框的 answer 容器 | §5.5 的视觉变化：10px 间隔下是否显拥挤；band 遮盖是否仍完整（**无透明缝**） | §5.5 |
-| **G-8** | 长命令 + 长参数 + 决议徽记三者并存的工具行。⚠️ **rev.2-b：最坏用例写死为 `Denied, turn stopped`（四动词最长，20 字符）叠加 `auto: <reason>` 标注**，不得用 `Allowed`（7 字符）糊过去；**Allowed / Denied 两臂各一组，亮暗双主题** | **FB7 的让位行为**：徽记 `shrink-0` 不截断、参数让位是否正确；**档位当场定** —— ⚠️ rev.2-b 收窄为 §6.5-a 的**二选一**（动词档＝继承行色 / 参数档＝双臂派生），不是自由选灰值。<br>**另验**：① Denied 行里徽记与 dimmed-destructive 参数的层级是否仍读得出主次；② `failed:false` 载体上的**灰 `Denied` 徽记**是否可辨（§6.5-a 载体表第二行） | §6.5 / §6.5-a |
+| **G-8** | ✅ **已完成（2026-08-25）** —— 结果见 §15 片② 点验节。长命令 + 长参数 + 决议徽记三者并存的工具行。⚠️ **rev.2-b：最坏用例写死为 `Denied, turn stopped`（四动词最长，20 字符）叠加 `auto: <reason>` 标注**，不得用 `Allowed`（7 字符）糊过去；**Allowed / Denied 两臂各一组，亮暗双主题** | **FB7 的让位行为**：徽记 `shrink-0` 不截断、参数让位是否正确；**档位当场定** —— ⚠️ rev.2-b 收窄为 §6.5-a 的**二选一**（动词档＝继承行色 / 参数档＝双臂派生），不是自由选灰值。<br>**另验**：① Denied 行里徽记与 dimmed-destructive 参数的层级是否仍读得出主次；② `failed:false` 载体上的**灰 `Denied` 徽记**是否可辨（§6.5-a 载体表第二行） | §6.5 / §6.5-a |
 | **G-9** | ✅ **已完成（2026-08-23，真机 CDP，Write 工具 Default 档点 Deny）** | **§6.4 的未知量已结清 —— 推测被推翻**：被拒工具**有**完整 tool_call block（可展开、含输入与 `User denied permission` 结果），决议行独立同构，两行均已 `text-destructive`，回合头计入 `1 edit`。⇒ §6.5 布局设计成立、Denied 同样走合并；触发的追加形态设计已落 **§6.5-a**。实测证据与四条结论见 §6.4 | §6.4 / §6.5-a / §6.7 |
 | **G-10** | 一条含 `$$…$$` 的回答（MathML 输出路径） | §8.4（a）路的实证：Chromium 142 的 MathML 渲染质量是否可接受；**不可接受则转（b）路并启动红线偏离留痕** | §8.4 |
 | **G-11** | ⚠️ **打包产物**（非 dev 态）里的公式渲染 | §8.5 地雷的终验：`electron-builder.yml` 改动后 katex 是否真的进包。**本批唯一需要出包验证的项** | §8.5 |
@@ -1658,6 +1658,25 @@ rev.2 定稿时挂了两个出口（E-1 / E-2）与一条硬前置（G-9）。**
 
 **落地物**：`toolCard.ts`（+ join 层 `joinResolvedPermissions` / `countPermissionRecords` / 两个徽记类装配 / `ToolRun.permission` / `ToolRowView.permissionVerb`·`permissionAutoNote` / 聚合守卫）· `ToolRows.tsx`（`ToolRowPermission` 尾部渲染）· `chatTurn.ts`（`flattenTurnItems` 末尾接线）· 三个测试文件（toolCard +25 例、chatTurn +2 例、toolRowArg +2 例）。`questionCardModel.ts` **未改**（`derivePermissionVerb` / `derivePermissionAutoNote` 已是导出，直接复用）。
 
+#### 片② 的 GUI 点验 —— G-8（2026-08-25，真机 CDP，亮暗双主题）
+
+真机造了**三次授权往返**（Allow / Deny / 超长参数 Allow），全部在 Default 档下由人点按钮。
+
+| 项 | 结果 |
+|---|---|
+| **合并生效** | ✅ **PASS**。`Edited tmp/g8-allow-probe.txt · Allowed` 与 `Edited tmp/g8-deny-probe-with-a-deliberately-long-name.txt · Denied` 各占**一行**，独立决议行消失 |
+| **G-8 档位裁定** | ✅ **动词档（继承行色）确认**，§6.5-a 二选一取第一条。徽记类串两臂**同为 `shrink-0`、零颜色类**，实测解析色与动词**逐位相同**：<br>亮色 Allowed `oklch(0.4531 0.005 91.5)` · Denied `oklch(0.5042 0.1648 27.84)`<br>暗色 Allowed `oklch(0.6956 0.0103 93.62)` · Denied `oklch(0.597 0.1692 28.38)`<br>⇒ **一个类串、两种颜色**，正是 §6.5-a 禁止单臂硬编码所要的效果 |
+| **三级层次** | ✅ 动词 = 徽记 ＞ 参数。参数在两臂各自暗一档：Allowed 走 `text-tool-arg`（`oklab(0.5341 …)`），Denied 走 dimmed-destructive（`oklab(0.65087 0.101605 0.057451)`）—— §6.5-a 描述的双臂派生链在真机上成立 |
+| **让位行为（G-8 正题）** | ✅ **PASS**。156 字符提问造出的超长路径下实测：参数 span `w=583` **`scrollWidth > clientWidth` 即已截断**，徽记 `· Allowed` `w=62` **未截断**，动词 `w=44` 未截断。⇒ **参数是唯一让位者，闭集徽记不截断**，§6.5 截断纪律兑现 |
+| **`auto: <reason>` 臂** | ⏸ **未测** —— 真机构造不出 Host 代答（需 drain / timeout / session_closed）。夹具已覆盖（`[FB7-6]`），观感留待遇到时补 |
+| **载体三态** | 只实测到第一态（`failed: true`）—— Host 对 deny 恒回 `toolOk === false`。另两态（`failed:false` / 无 result 的 running）由 `[FB7-1]` 夹具钉住，真机暂无构造路径 |
+
+⚠️ **新发现（不是 FB7 引入，另立票）：授权记录不入 rollout ⇒ 恢复会话后合并行退化为裸工具行。**
+【实测】同一条 g9 拒绝回合，20h 后从 rollout 回放：工具行仍在（红色、展开后仍有 `User denied permission`），但 **`· Denied` 徽记没有，独立决议行也没有** —— 整个 `permission_request` 块不在转录里。
+⇒ 这不是 FB7 造成的：**合并前同样丢失**（G-9 当时那张 `Denied Write — …` 独立行也是 live 态才有的）。但它意味着**授权审计面只在 live 会话内存在**，恢复后归零。⇒ 见 [inbox 另立票](../plantree/ideas/inbox.md)。
+
+⚠️ **点验工法记账**：`Emulation.setDeviceMetricsOverride` **不触发本应用的布局重排** —— 视口压到 460px 时阅读列宽仍恒为 720px，且清除覆盖后布局不自动恢复（须 reload）。⇒ **测截断不要压视口，要造长参数**。
+
 #### 与 rev.2-b 的偏差（七条，全部登记）
 
 | # | 规格怎么写 | 实际怎么做 | 为什么 |
@@ -1666,7 +1685,7 @@ rev.2 定稿时挂了两个出口（E-1 / E-2）与一条硬前置（G-9）。**
 | ② | §6.6 判 `chatTurn.test.ts:187-191`（`an unresolved permission stays in the process segment`）**退役换新** | ❌ **未红，保留不动** | 它测的是 `splitTurnBody` 的纯 kind 序列，与 join 无关；且未决 permission 本就不参与 join（`[FB7-8]`），语义一字未变 |
 | ③ | §6.3 只写「不再 flush」 | **join 必须额外缝合被吸收 permission 两侧的工具组** | flush 发生在 message 层，turn 层的 join 只能**事后缝合**。缝合被严格限定为「本次刚移除过一个被吸收的 permission」，否则两条 message 各自的工具组（一条以工具收尾、下一条以工具开头）会被误并 —— `[FB7-3]` 为此专设反向臂 `does NOT stitch two groups that were already adjacent for other reasons` |
 | ④ | §6.5 只写「一个决议徽记，闭集 ⇒ `shrink-0` 不截断」 | **徽记拆成两个 span**：`permissionVerb`（闭集，`shrink-0`）+ `permissionAutoNote`（开集，`min-w-0 truncate`） | `auto: <reason>` **不是闭集**。若与决议词共用一个 `shrink-0` span，一条冗长的 Host 理由会把参数（文件路径 —— 用户最需要的那半）挤没。开集让位、闭集不让位，正是 §6.5 截断纪律的本意 |
-| ⑤ | §6.5-a 把 G-8 的档位收窄为二选一，具体哪条由点验定 | **施工取「动词档（继承行色）」** —— `toolRowPermissionClass()` 返回 `'shrink-0'`，**不带任何颜色类** | 需要一个候选才能出图。动词档不引入新色值、天然满足 `[FB7-7]` 的双臂形状约束（两臂都不含颜色类），且决议词与动词同亮、参数比它暗一档，层级自洽。**⚠️ 仍待 G-8 确认**，参数档是备选 |
+| ⑤ | §6.5-a 把 G-8 的档位收窄为二选一，具体哪条由点验定 | **施工取「动词档（继承行色）」** —— `toolRowPermissionClass()` 返回 `'shrink-0'`，**不带任何颜色类** | 需要一个候选才能出图。动词档不引入新色值、天然满足 `[FB7-7]` 的双臂形状约束（两臂都不含颜色类），且决议词与动词同亮、参数比它暗一档，层级自洽。✅ **G-8 已确认通过（2026-08-25）**，参数档不再需要 |
 | ⑥ | §9.1 无此条 | **新增 `[FB7-10]`：带 permission 的 run 不参与聚合** | 「Explored 3 files, 2 searches」折叠态会把决议藏进 detail body —— 那正是「授权记录被折叠掉」的形态，与 permission 红线同族。⇒ 携带决议的 run 强制独立成行 |
 | ⑦ | §9.1 `[FB7-4]` 只描述守恒律 | **新增导出 `countPermissionRecords()`** | 守恒律要能被断言，就得有一个「一条授权记录算一条」的**唯一口径**；散在测试里各写各的计数就是下一个空壳 |
 
@@ -1675,7 +1694,7 @@ rev.2 定稿时挂了两个出口（E-1 / E-2）与一条硬前置（G-9）。**
 - **`[FB7-6]` 补了源码半边**（片① M-24 的直接教训）：`Allowed` / `Denied` / `auto:` 这几个串**手抄一份也能让行为断言全绿**，所以另断言 `deriveToolRowView` 体内调用 `derivePermissionVerb(` / `derivePermissionAutoNote(`，且**剥注释后**的 `toolCard.ts` 全文不出现 `'Allowed` / `'Denied` / `'auto:` 字面量。剥注释是片⑤ 的教训（本节头注为解释「为什么不重抄」而写了这些词）。
 - **未制造循环依赖**：`toolCard.ts → questionCardModel.ts` 是值导入，反向的 `questionCardModel.ts:7` 只有 `import type { ToolRowView }`（类型擦除，运行期无环）。§6.6 的这条提醒已复核。
 - **`view.failed` 的来源一字未动**：`pairToolBlocks` 的 `result ? toolOk === false : false` 保持原样，M-37 专职守住这条。
-- **G-8 尚未做**（长命令 + 长参数 + `Denied, turn stopped` + `auto:` 四者并存的让位行为、以及 `failed:false` 载体上的灰 `Denied` 是否可辨）—— 留到片③ 的 GUI 批次一并做，与 G-5 同批。
+- **G-8 已做（2026-08-25）** —— 见上节。偏差 ⑤ 的「动词档待 G-8 确认」**已确认通过**，不再是待定项。仍未覆盖：`Denied, turn stopped` 与 `auto:` 并存的最坏宽度（真机构造不出）、`failed:false` 与 running 两种载体的观感。**G-5 仍未测**，留待片③ GUI 批次。
 
 ### 片⑤ —— FB2 + FB3（2026-08-23 落地，`d704f7dd`，与片① 同笔）
 
