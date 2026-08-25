@@ -1,4 +1,4 @@
-# 0820 使用反馈批（FB 批）施工规格 rev.2
+# 0820 使用反馈批（FB 批）施工规格 rev.2-b
 
 > 上游分诊：`docs/plans/2026-08-19-usage-feedback-0820-triage.md`（FB1~FB11 全表 + §2 改判清单 + §4 D53 三项拍板）。
 > 本档只写规格，**不改任何生产代码**。
@@ -11,6 +11,7 @@
 | **锚点基线 HEAD** | **`99dfd78`**（`docs(plans): D53 落账——0820 反馈批三项拍板收口`）—— rev.1 全部 `file:line` 在此 commit 实读重取 |
 | **rev.2 复核 HEAD** | **`347ab26b`**（`99dfd78` 之后 34 个提交）——【实测】`git diff --name-only 99dfd78..347ab26b -- src/renderer` **零命中**，渲染端锚点整体仍有效（双轨各自抽验 60+ 条逐字全中）；但**阶段 4 打包链改过 `electron-builder.yml` / `scripts/**` / `package.json`**，凡涉这三处的锚点已在 rev.2 逐条重取 |
 | **rev.2 依据** | 双轨双盲评审 2026-08-23 重跑，合取 **3 blocker · 10 major · 7 minor ＝ 20 条修订项**，见 [仲裁档](./2026-08-19-fb-batch-review-arbitration.md) 与[两轨原文](./2026-08-19-fb-batch-reviews/) |
+| **rev.2-b 依据** | rev.2 定稿后**两次开工前取证的回填**（§14）：**E-1**（构建取证，解阻塞片④）与 **G-9**（真机 deny，解阻塞片②）—— **两次都推翻了规格里的推测**。rev.2-b 的实质改动全部源自 G-9：新增 §6.5-a、`[FB7-1]`/`[FB7-2]` 夹具双臂化、`[FB7-7]` 口径订正、新增 M-36/M-37（零跳过 34 → **36 发**） |
 | 上游批次边界 | **F456 批（D50）四片已 as-built 合入**（`b1b8f6c` / `1c5a797` / `1516623` / `19a65f7`），其产物 `turnAnswerContainerClass()` · `VERBS` · `↑↓` 双计数 · `stalled` 档 · `line-clamp-6` 全部**已在代码里**，本批在其之上施工 |
 | 用户拍板（不可讨论） | **D53 ①②③**（`openchamber-chat-refactor-ledger.md:97`）+ 用户 2026-08-19 反馈原文即拍板的六项 |
 | 决策号 | **不新立**。本批全部范围已由 **D53** 覆盖；施工中若产生新裁定，复取台账最大号后另立（当前最大 = D53） |
@@ -900,6 +901,8 @@ case 'permission_request':
 
 ⇒ permission item **今天会 flush（打断）工具组**，这正是「两行」的结构成因。合并 = 让它**不再 flush**，而是把决议信息**并入对应 run**。
 
+⚠️ **G-9 后确认：这条结构成因在 Denied 下同样成立**（§6.4 实测 ①②）—— 被拒场景里 tool_call block 与 permission block **两个都在**，flush 照样发生、两行照样产出。⇒ 合并算法**无需分臂**，Allowed / Denied 走同一条路径；**分臂的只有徽记的颜色装配**（见 §6.5-a）。
+
 **D28「决议单行」语义的等价保留**：D28 的意图是「一次授权往返最终收敛成**一行**已决记录，不留下问答壳」。合并后该语义**不但保留还被加强** —— 从「独立的一行已决记录」变成「**工具行自身携带决议**」，行数从 2 降到 1，而「一次往返 = 一行」的不变量不变。
 
 **合并行的信息形态（受 D24 硬约束）**：
@@ -908,6 +911,7 @@ case 'permission_request':
 ⇒ **授权徽记必须是灰阶纯文本**，**不得**做成图标、彩色 chip 或带背景的标签 —— 那会直接回滚 D24。
 
 **三级灰体系**（既有）：`--foreground`（hover 时的动词）＞ `--muted-foreground`（动词档）＞ `--tool-arg`（参数档）。徽记应落在**动词档或参数档**，⚠️ **具体档位由 GUI 点验定**（§10 G-8），本规格不凭空指定。
+⚠️ **rev.2-b 收窄（G-9 后）**：「档位」在 Denied 存在后**不再等于选一个灰值**，而是选一条**双臂派生链** —— 见 §6.5-a。选错会在 Denied 行里制造灰红混排。
 
 **截断纪律**：合并后一行要承载「动词 + 参数 + 决议」，宽度压力上升。参照 `design-system.md` 的既有让位范式（sidebar 会话行：`标题 min-w-20 flex-1` 下限 · 闭集标签 `shrink-0` 不截断 · 唯一让位者 `min-w-0 max-w-24 shrink`）：
 
@@ -916,6 +920,50 @@ case 'permission_request':
 - 动词 `shrink-0`（`ToolRows.tsx:79` 已是）。
 
 ⚠️ 这条布局裁定**必须 GUI 点验**（长命令 + 长参数 + 决议徽记三者并存时的实际让位行为，§10 G-8）。
+
+#### 6.5-a Denied 臂的形态裁定（rev.2-b 新增，G-9 实测后的追加形态设计）
+
+§6.7 原写「若 deny 实测推翻推断，本片需追加一轮形态设计」。**该条件已触发**（§6.4），本节即那一轮设计。
+
+**发现：仓内早已有「双臂派生」范式，不是继承、也不是单臂硬编码。**【实测 `toolCard.ts:818-826`】
+
+```ts
+export function toolRowArgClass(view: Pick<ToolRowView, 'failed' | 'argKind'>): string {
+  const colorClass = cn(
+    'min-w-0 truncate',
+    view.failed
+      ? 'text-[color-mix(in_oklab,var(--destructive)_70%,var(--background))]'   // ← 失败臂的「参数档」
+      : 'text-tool-arg'                                                          // ← 常态臂的「参数档」
+  );
+```
+
+⇒ 「参数档」的语义是**比行色暗一档**，而它在两臂**各自派生**：常态臂从 `--muted-foreground` 派生（`globals.css:195` 的 85% 混色），失败臂从 `--destructive` 派生（70% 混色）。
+⇒ 与之对照，「动词档」是**不带颜色类、继承行色**【实测 `ToolRows.tsx:80`】：`const verbClass = cn('shrink-0', !view.failed && 'group-hover/row:text-foreground');` —— 只挂 hover 增强，没有基色。
+
+**裁定：G-8 的档位选择收窄为二选一，两条都是既有范式的复用，第三条路禁止。**
+
+| 档位 | 徽记颜色装配 | 范式出处 | Allowed 行 / Denied 行的实际观感 |
+|---|---|---|---|
+| **动词档** | **不带任何颜色类**，继承行色 | `ToolRows.tsx:80` `verbClass` | `--muted-foreground` / `--destructive`（与动词同亮） |
+| **参数档** | 走**同一个双臂三元式**（`failed ? dimmed-destructive : text-tool-arg`） | `toolCard.ts:818-826` | `--tool-arg` / dimmed-destructive（比动词暗一档） |
+| 🚫 **单臂硬编码** | 两臂都写同一个颜色 token | —— | `text-tool-arg` ⇒ **Denied 红行里一个灰徽记**；`text-destructive` ⇒ **Allowed 灰行里一个无端红字** |
+
+⚠️ **twMerge 陷阱必须一并继承**【实测 `toolCard.ts:801-810` 头注】：`text-tool-arg`、`text-[color-mix(...)]`、`text-code` 都被 tailwind-merge 判为 **text-COLOR** 类，**同一次 `cn()` 里两个会互吃**（先来的被丢）。徽记若走参数档，必须照抄既有工法 —— **先 `cn()` 解析颜色，再用字符串拼接接上非颜色后缀**，不得一把 `cn()` 全塞。
+
+**裁定：徽记不负责制造红色。** 红色的唯一来源仍是 `view.failed`（【实测 `toolCard.ts:63`】`const failed = result ? result.toolOk === false : false;` —— 来自 tool_result 的 `toolOk`）。
+🚫 **join 不得写 `failed = true`** 来「让 Denied 变红」：那会抹掉「**Allowed 但执行失败**」与「**Denied**」两种红行的区别 —— 而这两者今天正是靠**有没有徽记**区分的（真失败行无徽记）。⇒ `[FB7-1]` Denied 臂须显式断言 `view.failed` **不因 join 改变**。
+
+⚠️ **载体不是恒 failed —— 必须覆盖三种载体。** G-9 只测到 Write（Host 回了 `User denied permission`，`toolOk === false` ⇒ failed ⇒ 红）。但 `toolCard.ts:63` 的三元式说明还有两种可能载体：
+
+| 载体 | 触发条件 | 合并行观感 |
+|---|---|---|
+| `failed: true` | tool_result 的 `toolOk === false`（G-9 实测的那种） | 红行 + 红徽记 ✅ |
+| `failed: false` | tool_result 存在但 `toolOk !== false` | **灰行 + 灰 `Denied` 徽记** —— 语义靠「Denied」这个词本身承载 |
+| `status: 'running'` | **根本没有 tool_result**（`!result`） | **`Editing …`（进行时）+ `Denied` 徽记**，自相矛盾 |
+
+**处置**：本片**不改** `failed` 的来源，也**不为 Denied 特判**（修法冲突取保守）；但 `[FB7-1]` 的 Denied 臂**必须把三种载体的行为都钉死**，让形态成为显式合同而非偶然。第三种载体的自相矛盾属于「**被拒操作的动词与计数是完成式**」那张另立票的同一族（§6.4 末尾），**该票落地时会让这条夹具必红 —— 这是有意留的接力点，不是回归**。
+
+**Denied 下的截断纪律**：与 Allowed 完全相同（徽记 `shrink-0` / 参数 `min-w-0` 让位 / 动词 `shrink-0`）。⚠️ **最坏用例是 `Denied, turn stopped`**（20 字符，四个决议动词里最长）**叠加 `auto: <reason>` 标注** —— G-8 必须用这个组合做宽度点验，不能用 `Allowed`（7 字符）糊过去。
 
 ### 6.6 影响面与测试合同
 
@@ -934,7 +982,8 @@ case 'permission_request':
 ### 6.7 切片规模评估
 
 **本片独列，不与任何件合并**。理由：它是唯一同时触及**协议理解 + 纯模型层 + 组件层 + 台账追认**四个面的件，且它的产物（`TurnItemKind` 构成）是 FB4 的输入（§4.3 接口锁）。
-⚠️ **若 §6.4 的 deny 实测推翻了「Denied 几乎不出现在合并形态」的推断**，本片需追加一轮形态设计 ⇒ **实测必须排在施工前**，不是施工后（§10 G-9 的时序要求）。
+✅ **前置已解除（2026-08-23）**：§6.4 的 deny 实测**已推翻**「Denied 几乎不出现在合并形态」的推断 ⇒ 触发的那一轮追加形态设计**已落 §6.5-a**（双臂派生链裁定 + 三种载体的合同）。**实测排在施工前**这条时序要求已兑现（§10 G-9）。
+⇒ 施工输入较 rev.2 定稿多出三项：① 合并算法不分臂、徽记颜色分臂；② `[FB7-1]`/`[FB7-2]` 夹具须覆盖 Denied；③ join 不得改写 `view.failed`。
 
 ---
 
@@ -1177,13 +1226,13 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | **`[FB6-5]`**（rev.2 新增） | 同上 | **copy 按钮不在触发器元素的子树内**（AST：`jsxChildrenOf` `:243-256` 可直接用） | §5.2 blocker：`<button>` 套 `<button>` |
 | **`[FB6-6]`**（rev.2 新增） | 同上 | 文件内 `open={processShellOpen}` 的出现次数 **==** process 段容器的渲染点数 | §4.6-a ③：多 Root 漏接 `open`（G-15 的**静态半边**，不再 100% 押在截图上） |
 | **`[FB6-7]`**（rev.2 新增） | 同上 | panel id 由**稳定 `useId()` 前缀**生成；断言 **id 集合唯一** 且触发器 `aria-controls` 枚举的集合与之**恰好相同** | §4.6-a ②：E1 的多 Panel id 竞争 |
-| **`[FB7-1]`** | `toolCard.test.ts` | **Claude 路径 join**：**已决**（`resolved === true`）permission block 的 `permissionId` 命中同 turn 的 tool_call `block.id` ⇒ **不产出独立 permission item**，决议并入该 run | 合并没生效 |
-| **`[FB7-2]`** | 同上 | **回落**：`permissionId` 无命中（合成 id / Codex 形态 `codex:…`）⇒ **原样产出独立 permission item** | 回落路径缺失 ⇒ 授权记录丢失 |
+| **`[FB7-1]`** | `toolCard.test.ts` | **Claude 路径 join**：**已决**（`resolved === true`）permission block 的 `permissionId` 命中同 turn 的 tool_call `block.id` ⇒ **不产出独立 permission item**，决议并入该 run。<br>⚠️ **rev.2-b（G-9 后）：夹具必须双臂 —— Allowed 与 Denied 各一组，不得只测 Allowed**（实测证明 Denied 同样产出待合并的两行，§6.4）。<br>Denied 臂另含两条：① **载体三态**（`failed:true` / `failed:false` / 无 tool_result 的 `running`）的合并结果各自钉死（§6.5-a）；② **`view.failed` 不因 join 改变**（禁止用 join 制造红色） | 合并没生效；**Denied 路径整条没被测到**；join 越权改写失败态 |
+| **`[FB7-2]`** | 同上 | **回落**：`permissionId` 无命中（合成 id / Codex 形态 `codex:…`）⇒ **原样产出独立 permission item**。<br>⚠️ **rev.2-b：回落臂同样须含 Denied**（一条 `decision: 'deny'` 的已决 permission 配不上任何 tool_call）—— 回落是**授权审计面**，Denied 记录比 Allowed 更不能丢 | 回落路径缺失 ⇒ 授权记录丢失；**Denied 只在合并路径被测、回落路径裸奔** |
 | **`[FB7-3]`** | 同上 | permission **不再 flush 工具组**：`[tool, permission(命中), tool]` ⇒ **1 个 toolGroup**（今天是 2 个） | §6.5 的结构成因未消除 |
 | **`[FB7-4]`** | 同上 | **守恒律**：任意输入下，输出中 permission 信息条数（合并进 run 的算一条）**恒等于**输入 permission block 条数 | §6.3 硬红线：**配不上就丢弃**。⚠️ rev.2 提醒：它**抓不到**「未决卡被并进 run」（那也算一条），故必须另有 `[FB7-8]` |
 | `[FB7-5]` | 同上 | 一个 tool_call **不得认领两个** permission | §6.3 ③ 冲突处理 |
 | `[FB7-6]` | 同上 / `questionCardModel.test.ts` | 合并行**保留 `auto: <reason>` 标注** | 重新制造「drained approval 与真实拒绝无法区分」的已修缺陷 |
-| `[FB7-7]` | `ToolRows` 类装配侧 | 徽记类串**不含** `bg-` / `border` / 图标组件名（D24 灰阶纯文本约束） | **R7 回滚 D24** |
+| `[FB7-7]` | `ToolRows` 类装配侧 | 徽记类串**不含** `bg-` / `border` / 图标组件名（D24 约束）。<br>⚠️ **rev.2-b 口径订正（G-9 后）**：D24 的「**灰阶**纯文本」在 Denied 下**本就不适用** —— `ToolRows.tsx:76-79` 的 failed 分支早有 `text-destructive` 先例，D28 连带项指的正是它。**约束的实质是「无图标 · 无边框 · 无背景」，不是「必须是灰的」**；合并后 Denied 行为红色**不构成 R7 回滚 D24**。<br>⇒ 断言的颜色半边改为**双臂形状约束**：徽记类装配在 `failed:true` 与 `failed:false` 两种输入下，**要么两臂都不含任何 `text-` 颜色类**（动词档＝继承路），**要么两臂的颜色类取值不同**（参数档＝双臂派生路）。🚫 **禁止「两臂相同且带颜色类」**（单臂硬编码，§6.5-a 表第三行） | **R7 回滚 D24**（图标 / 边框 / 背景）；**单臂硬编码颜色** ⇒ Denied 红行里一个灰徽记，或 Allowed 灰行里一个无端红字 |
 | **`[FB7-8]`**（rev.2 新增，**blocker 配套**） | `toolCard.test.ts` | **未决 permission（`resolved` 缺省 / `false`）必产出独立 `{ kind: 'permission' }` item，且不被任何 toolGroup 吸收** —— 即便同 turn 内存在 id 相同的 tool_call | §6.3 blocker：未决授权卡被并成灰阶单行 ⇒ 全仓唯一 Allow/Deny 入口消失 ⇒ **回合死锁** |
 | **`[FB7-9]`**（rev.2 新增） | 同上 | permission 与 tool_call **分处同一 turn 的两条 message** 时的行为被显式钉住（按 §6.3-a 取①：仍合并） | §6.3-a：「同 message」是假前提，两者落块规则不同 |
 | `[FB8-1]` | `turnTiming.test.ts` | **分钟级臂**：`formatThoughtRow({durationMs: 1_702_000})` ⇒ `arg` 含 `28m 22s`；且 `66_000` ⇒ `1m 6s`、`120_000` ⇒ `2m` | 裸秒复活 |
@@ -1232,13 +1281,15 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | M-28 | `rehype-katex` 传 `trust: true` | `[FB9-3]` |
 | ~~M-29~~ | ~~恢复 `electron-builder.yml` 的 katex 排除行~~ | 🚫 **已退役（E-1 取证后，§8.5-a）** —— 实测运行时不读 `node_modules/katex`，这一发不构成产品变异。其位置由 **M-33** 顶替：引入 `katex/dist/katex.min.css` 会真的把 60 个字体（1.2 MB）搬进产物，是产物级真变异 |
 | **M-30**（rev.2 新增） | join 忽略 `resolved`（未决 permission 也并入 run） | **`[FB7-8]`** —— blocker A-1 的发射半边。⚠️ `[FB7-4]` 守恒律**咬不到它**（并进 run 的仍算一条） |
+| **M-36**（rev.2-b 新增，G-9 后） | 徽记颜色**单臂硬编码**（两臂都返回 `text-tool-arg`） | **`[FB7-7]` 的 rev.2-b 颜色半边** —— ⚠️ 原 `[FB7-7]`（只查 `bg-`/`border`/图标名）**咬不到它**：`text-tool-arg` 三样都不含，照绿。抓「Denied 红行里一个灰徽记」 |
+| **M-37**（rev.2-b 新增，G-9 后） | join 命中 Denied 时顺手写 `failed = true`（用 join 制造红色） | **`[FB7-1]` Denied 臂第 ② 条** —— 抹掉「Allowed 但执行失败」与「Denied」的区别（§6.5-a）。⚠️ 视觉上**更好看**，正因如此没有断言就一定会有人这么写 |
 | **M-31**（rev.2 新增） | 把 copy 按钮塞进触发器 `<button>` 的子树里 | **`[FB6-5]`** —— blocker C-1 的发射半边 |
 | **M-32**（rev.2 新增） | 去掉 `output: 'mathml'`（回到默认 `htmlAndMathml`） | **`[FB9-6]`** + **`[FB9-8]`** |
 | **M-33**（rev.2 新增，**顶替退役的 M-29**） | 引入 `katex/dist/katex.min.css` | **`[FB9-7]`**（源码层）+ **`[FB9-5]`**（产物层）—— 抓字体红线被静默突破。E-1 探针 B 已实证：这一发会让产出 CSS 从 24.7 KB 涨到 1.46 MB，内联 20 woff2 + 20 woff + 20 ttf |
 | **M-34**（rev.2 新增） | 段容器 key 改成数组下标 | **`[FB1-5]`** —— 抓「流式期插段 ⇒ 子树重挂 ⇒ hwm 归零」 |
 | **M-35**（rev.2 新增） | 把 `disabled={permissionLock}` 留在 `Collapsible.Root` 上、不迁到新按钮 | **`[FB6-4]`** —— 抓 E1 引入的同名空壳 |
 
-**零跳过**：**34 发**（rev.1 为 29 发，rev.2 新增 M-30~M-35 共 6 发、退役 M-29 一发）全部实跑，不得以「显然会红」跳过。任一发存活 ⇒ 对应断言是空壳，**必须换承重行**而不是加一条同义断言。
+**零跳过**：**36 发**（rev.1 为 29 发；rev.2 新增 M-30~M-35 共 6 发、退役 M-29 一发 ⇒ 34；**rev.2-b 于 G-9 实测后再新增 M-36 / M-37 两发** ⇒ 36）全部实跑，不得以「显然会红」跳过。任一发存活 ⇒ 对应断言是空壳，**必须换承重行**而不是加一条同义断言。
 
 ⚠️ **rev.2 订正：M-04 不再是「静态不可捕获」。** rev.1 把它记为「本批唯一没有静态守卫的设计裁定」，发射半边只有 §10 G-2 的性能点验；但 G-2（`:1019` 一带）只写「对比不分段实现的帧率」，**没有帧耗时 / 解析次数 / 退化比例的任何阈值** ⇒ 它没有客观的「红」判据，与本节「零跳过零存活」纪律**不相容**，也与 `docs/agent-project-engineering.md:174-175`（手工测试不得作为主要回归方式）冲突。
 ⇒ 新增 `[FB1-6]` 确定性工作量断言承担红/绿裁决，G-2 保留为观感补充。**本批至此没有「静态不可捕获」的变异。**
@@ -1247,7 +1298,7 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 
 ### 9.3 变异分配（按片）
 
-① = M-01~M-03、M-05、M-24、M-25、**M-34** · ② = M-19~M-23、**M-30** · ③ = M-11~M-18、**M-31**、**M-35** · ④ = M-04、M-26~M-28、**M-32**、**M-33**（M-29 退役）· ⑤ = M-06~M-10
+① = M-01~M-03、M-05、M-24、M-25、**M-34** · ② = M-19~M-23、**M-30**、**M-36**、**M-37** · ③ = M-11~M-18、**M-31**、**M-35** · ④ = M-04、M-26~M-28、**M-32**、**M-33**（M-29 退役）· ⑤ = M-06~M-10
 
 ⚠️ rev.1 的片③ 分配写成「M-11~M-18、M-12」，**M-12 重复列了一次**（它本就在 M-11~M-18 区间内），rev.2 已删。
 
@@ -1267,8 +1318,8 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | **G-5** | 贴底跟随态下展开一条长提问 | §3.3 的**次生效应**：高度增长触发的一次滚动跟随，观感上是否可接受（**不是振荡，是一次性跳动**） | §3.3 |
 | **G-6** | 一个**多次交错**的回合（正文 → 工具 → 正文 → 工具 → 正文） | **FB4-C1 的碎片化风险**：3~5 个小边框盒堆叠是否可接受。🚫 **rev.2：判定不可接受时，施工方不得自行启用 C3** —— 走 F456 §4.6 三步上报，**由用户拍板**（见 §4.5 红框与 §12.1 **Q14**） | §4.5 / §12 Q14 |
 | **G-7** | 置顶气泡态 + 其下第一个元素是带边框的 answer 容器 | §5.5 的视觉变化：10px 间隔下是否显拥挤；band 遮盖是否仍完整（**无透明缝**） | §5.5 |
-| **G-8** | 长命令 + 长参数 + 决议徽记三者并存的工具行 | **FB7 的让位行为**：徽记 `shrink-0` 不截断、参数让位是否正确；**徽记的灰阶档位**（动词档 vs 参数档）当场定 | §6.5 |
-| **G-9** | ⚠️ **拒绝一次授权请求**（deny 实测） | **§6.4 的未知量**：被拒的工具**是否还有 `Ran X` 行**。这是**唯一能推翻 §6.5 布局设计的实测**，⚠️ **必须排在 FB7 施工之前** | §6.4 / §6.7 |
+| **G-8** | 长命令 + 长参数 + 决议徽记三者并存的工具行。⚠️ **rev.2-b：最坏用例写死为 `Denied, turn stopped`（四动词最长，20 字符）叠加 `auto: <reason>` 标注**，不得用 `Allowed`（7 字符）糊过去；**Allowed / Denied 两臂各一组，亮暗双主题** | **FB7 的让位行为**：徽记 `shrink-0` 不截断、参数让位是否正确；**档位当场定** —— ⚠️ rev.2-b 收窄为 §6.5-a 的**二选一**（动词档＝继承行色 / 参数档＝双臂派生），不是自由选灰值。<br>**另验**：① Denied 行里徽记与 dimmed-destructive 参数的层级是否仍读得出主次；② `failed:false` 载体上的**灰 `Denied` 徽记**是否可辨（§6.5-a 载体表第二行） | §6.5 / §6.5-a |
+| **G-9** | ✅ **已完成（2026-08-23，真机 CDP，Write 工具 Default 档点 Deny）** | **§6.4 的未知量已结清 —— 推测被推翻**：被拒工具**有**完整 tool_call block（可展开、含输入与 `User denied permission` 结果），决议行独立同构，两行均已 `text-destructive`，回合头计入 `1 edit`。⇒ §6.5 布局设计成立、Denied 同样走合并；触发的追加形态设计已落 **§6.5-a**。实测证据与四条结论见 §6.4 | §6.4 / §6.5-a / §6.7 |
 | **G-10** | 一条含 `$$…$$` 的回答（MathML 输出路径） | §8.4（a）路的实证：Chromium 142 的 MathML 渲染质量是否可接受；**不可接受则转（b）路并启动红线偏离留痕** | §8.4 |
 | **G-11** | ⚠️ **打包产物**（非 dev 态）里的公式渲染 | §8.5 地雷的终验：`electron-builder.yml` 改动后 katex 是否真的进包。**本批唯一需要出包验证的项** | §8.5 |
 | **G-12** | 折叠 / 展开两态各一张（chevron 朝向） | §5.3 的四项确认之一：箭头是否指向「内容会出现的方向」 | §5.3 |
@@ -1309,7 +1360,7 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | 片 | 内容 | 独占文件 | 依赖 / 并行 |
 |---|---|---|---|
 | **① 纯模型层** | **FB8**（`formatThoughtRow` 复用分钟换算）+ **FB1-a**（`splitClosedPrefix` + `advanceClosedPrefix` 两个纯函数（含 hwm 单调化），**只落纯模块与测试，不接线**） | `turnTiming.ts` · `chatMarkdownPolicy.ts`（新增函数区）· `turnTiming.test.ts` · `chatMarkdownPolicy.test.ts`（新增组） | **与全部片并行**；零 UI、零组件依赖 |
-| **② FB7**（最重，单列） | 双行合并：join + 回落 + 徽记 | `toolCard.ts` · `ToolRows.tsx` · `questionCardModel.ts`（可能）· `toolCard.test.ts` | ⚠️ **G-9 deny 实测必须先于本片施工**；本片产出的 `TurnItemKind` 构成是 ③ 的输入 |
+| **② FB7**（最重，单列） | 双行合并：join + 回落 + 徽记 | `toolCard.ts` · `ToolRows.tsx` · `questionCardModel.ts`（可能）· `toolCard.test.ts` | ✅ **G-9 前置已完成（2026-08-23）**，本片可开工；追加形态设计见 §6.5-a。本片产出的 `TurnItemKind` 构成是 ③ 的输入 |
 | **③ FB4 + FB6**（结构层） | 谓词改写 + head 移底 + 折叠壳重构 | `chatTurn.ts` · `MessageTimeline.tsx`（`ChatTurn` 区）· `chatTimelineLayout.ts` · `chatTurn.test.ts` · `messageTimelineWiring.test.ts`（**含 AST 定位器扩建**） | **依赖 ②** 的 kind 定案（§4.3 接口锁）。⚠️ **必须先补 `[FB6-1]` 钉子再动结构**（§5.6） |
 | **④ FB1-b + FB9**（markdown 渲染层） | 分段渲染接线 + LaTeX + 打包链 | `ChatMarkdown.tsx` · `chatMarkdownPolicy.ts`（policy 卡片区）· `MessageTimeline.tsx`（`TurnItemView` 区 + 新增 `TurnTextItem`）· `package.json` · **`pnpm-lock.yaml`**（rev.2 补：本仓是 pnpm，`package.json:12` `"packageManager": "pnpm@10.26.2"`；引三个包必动 lockfile，rev.1 漏列）· ~~`electron-builder.yml`~~（**E-1 已取证：一字不动**，§8.5-a）· `chatMarkdownRender.test.ts` · **`scripts/__tests__/packaging-config.test.mjs`**（rev.2 补：`[FB9-5]` 的落点，阶段 4 已有这份承重测试） | **依赖 ①**（消费 `advanceClosedPrefix`）；与 ③ **同文件不同区** ⇒ **谁后合谁 rebase**。✅ **E-1 已于 2026-08-23 取证完毕**，本片不再阻塞（§8.5-a） |
 | **⑤ FB2 + FB3**（叶子交互层） | 代码块 copy + 气泡展开 | `ChatCodeBlock.tsx` · `MessageTimeline.tsx`（`UserBubble` 区）· `chatTimelineLayout.ts`（`userBubbleTextClass`） | 与 ① 并行；与 ③ 同两份文件不同区 ⇒ **谁后合谁 rebase** |
@@ -1319,7 +1370,7 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
   ① ──────────────→ ④          （④ 消费 ① 的 advanceClosedPrefix）
   ② ──→ ③ ─────────→ ④          （③ 消费 ② 的 kind 定案；④ rebase 到 ③ 之上）
   ⑤ 与 ③ 共享两份文件 ⇒ 择一先行，后者 rebase
-  G-9 deny 实测 ──→ ②            （前置，必须先于 ② 施工）
+  G-9 deny 实测 ──→ ②            （前置，✅ 2026-08-23 已完成）
 
 推荐串行调度（非技术依赖，只是减少 rebase 与评审混面）：
   ① ∥ ⑤ → ② → ③ → ④
@@ -1345,7 +1396,7 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | 片 | scoped vitest | 变异 | GUI 点验项 |
 |---|---|---|---|
 | ① | `turnTiming.test.ts` · `chatMarkdownPolicy.test.ts` | M-01~M-03、M-05、M-24、M-25、**M-34** | —— （纯模型层，无 UI） |
-| ② | `toolCard.test.ts` · `questionCardModel.test.ts` | M-19~M-23 · **M-30** | **G-9（前置）** · G-8 |
+| ② | `toolCard.test.ts` · `questionCardModel.test.ts` | M-19~M-23 · **M-30** · **M-36** · **M-37** | ~~G-9（前置，✅ 已完成）~~ · G-8 |
 | ③ | `chatTurn.test.ts` · `messageTimelineWiring.test.ts` · `chatTimelineLayout.test.ts` · `messageTimelinePendingStatic.test.ts` | M-11~M-18 · **M-31** · **M-35** | G-6 · G-7 · G-12 · G-13 · G-14 · G-15 · G-16 |
 | ④ | `chatMarkdownRender.test.ts` · `chatMarkdownPolicy.test.ts` · **`scripts/__tests__/packaging-config.test.mjs`** | M-04 · M-26~M-28 · **M-32** · **M-33**（M-29 已退役） | G-1 · G-2 · **G-10** · **G-11（出包，顺带证实字体的产物形态）**；✅ E-1 前置已完成 |
 | ⑤ | `chatTimelineLayout.test.ts` · `messageTimelineWiring.test.ts` | M-06~M-10 | G-3 · G-4 · G-5 |
@@ -1460,7 +1511,7 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | 「vitest 能覆盖回合结构」 | `vitest.config.ts:12 environment: 'node'` **明确否定** | 已有记录，本批**不得依赖它** |
 | ⚠️ **「flush 频率 ≈ 22 次/秒」** | 本规格 §1.4 | **从实读常量 45/16 推算**（常量是实测，推算是算术）；但**生成时长 20s/400s 是假设** |
 | ⚠️ **「单段 markdown 解析耗时毫秒级/10KB」** | 本规格 §1.4 | **估计，无实测** —— 而**分段决策建立在它之上** ⇒ **施工前须以真实 100KB 回答实测一次**（G-2），否则 §1.4 的结论是信念而非证据 |
-| ⚠️ **「被 deny 的工具没有 `Ran X` 行」** | 本规格 §6.4 | **推测，未实测** —— 且它是**唯一能推翻 §6.5 布局设计**的未知量 ⇒ **G-9 必须排在 FB7 施工之前** |
+| ~~⚠️ **「被 deny 的工具没有 `Ran X` 行」**~~ | 本规格 §6.4 | ✅ **已结清（2026-08-23，G-9 实测）—— 该信念是错的**：被拒工具**有**完整 tool_call block。这是本批**第二条被实测推翻的硬编码信念**（第一条是 FB9 的打包因果，E-1）。⇒ 处置见 §6.4 实测表 + §6.5-a |
 | ⚠️ **「Chromium 142 的 MathML 可用且质量可接受」** | 本规格 §8.4（a） | **知识推断，非实测**（同 T-31 §5.6 用 Chromium 版本推断 `scroll-state()` 的先例）⇒ **G-10 实测确认，失败转（b）路** |
 | ⚠️ **「`rehype-katex` 不走 raw 节点路径」** | 本规格 §8.2 ④ | **rev.2 改判：不必等施工期。** 本仓 node 环境已能做渲染级断言（`chatMarkdownRender.test.ts:1-29` 的 `renderToStaticMarkup`），一条 `render('$$e=mc^2$$')` 当场可判 ⇒ 由 `[FB9-8]` + `[FB9-9]` 承担；F-C5 源码扫描继续覆盖 |
 | ~~「不删 `!node_modules/katex/**` 打包版公式就会失效」~~ | rev.1 §8.5 | ✅ **E-1 已取证并推翻（2026-08-23，§8.5-a）**：katex JS 被 Vite 完整打进产物、bundle 内零 `node_modules` 运行时引用；字体只在引 katex CSS 时出现、且同样落在 `out/` 下。该排除规则**与渲染无关**，保留只为不塞 1.2 MB 死文件。**信念已由【推测】转【实测】** |
@@ -1540,6 +1591,25 @@ A 轨 Opus 2 blocker + 8 major + 6 minor；B 轨 Codex（`gpt-5.6-sol`，high ef
 - **E-2（待用户拍板）**：**Q14** —— C1 碎片化的去留，判据 G-6，**看过 GUI 出图后再定**。
 
 ⇒ **rev.2 定稿后可开工片① / 片⑤**（两片都不依赖 Q14 与 E-1）；**片③ 的 GUI 点验出图后回来定 Q14**；**片④ 须待 E-1 取证结论回填 §8.5**。
+
+### rev.2 → rev.2-b（2026-08-23，**两次开工前取证的回填**）
+
+rev.2 定稿时挂了两个出口（E-1 / E-2）与一条硬前置（G-9）。**两次取证都推翻了规格里的推测**，故不并入 rev.2、单列一版记账。
+
+| 取证 | 规格原来的推测 | 实测结论 | 落点 |
+|---|---|---|---|
+| **E-1**（构建，片④ 前置） | `electron-builder.yml` 的 `!node_modules/katex/**` 排除行会「静默吞掉 katex」，**必须删** | ❌ **因果不成立** —— 运行时**从不读** `node_modules/katex`（探针 A：`output:'mathml'` 下单 bundle 557 KB、katex 21 处、字体 0 个、零 `node_modules` 运行时引用）。builder **一字不动**；真正的字体风险来自引入 `katex.min.css`（探针 B：24.7 KB → **1.46 MB**，60 个字体全内联） | §8.5-a · `[FB9-5]` 改产物级 · **M-29 退役 → M-33 顶替** |
+| **G-9**（真机 deny，片② 前置） | 被拒工具不执行 ⇒ 无 tool_call block ⇒ 配不上 ⇒「**Denied 的合并形态在 Claude 路径上几乎不出现**」 | ❌ **四条全反** —— tool_call block **在**（可展开、含输入与 `User denied permission` 结果）；决议行独立且结构同构；两行**都已是** `text-destructive`；回合头计入 `1 edit`。⇒ §6.5 布局设计成立，**Denied 同样走合并** | §6.4 实测表 · **§6.5-a（新增）** · `[FB7-1]`/`[FB7-2]`/`[FB7-7]` · **M-36 / M-37** · §6.7 前置解除 |
+
+**rev.2-b 的实质改动（全部源自 G-9）**：
+
+1. **新增 §6.5-a** —— §6.7 所要求的「追加一轮形态设计」。核心是发现仓内早有**双臂派生**范式（`toolCard.ts:818-826`：参数档在常态臂从 `--muted-foreground` 派生、在失败臂从 `--destructive` 派生），⇒ G-8 的「档位」收窄为**二选一**（动词档＝不带颜色类继承行色 / 参数档＝双臂三元式），**单臂硬编码颜色被禁**。
+2. **`[FB7-1]`/`[FB7-2]` 夹具双臂化** —— Allowed 与 Denied 各一组；Denied 臂另钉**三种载体**（`failed:true` / `failed:false` / 无 tool_result 的 `running`）与「join 不得改写 `view.failed`」。
+3. **`[FB7-7]` 口径订正** —— D24 约束的实质是「无图标 · 无边框 · 无背景」，**不是「必须是灰的」**；颜色半边改为双臂形状约束。
+4. **M-36 / M-37 两发新变异** —— 分别抓「单臂硬编码颜色」（原 `[FB7-7]` 咬不到）与「用 join 制造红色」（视觉更好看，故没断言必被写出来）。零跳过总数 34 → **36 发**。
+5. **§13 ③ 结清一条硬编码信念** —— 「被 deny 的工具没有 `Ran X` 行」是错的。本批至此**两条硬编码信念被实测推翻**（另一条是 E-1 的打包因果）。
+
+⚠️ **方法论记账**：这两条都是**写码前取证**拦下的。若按 rev.1 的顺序（施工后点验），E-1 会让片④ 改错 builder 并留下一条恒无效的守卫，G-9 会让片② 的夹具**漏掉一半真实场景**（Denied）且很可能顺手写出 M-37 那种「join 制造红色」的实现。⇒ **「唯一能推翻设计的未知量必须排在施工前」这条纪律，本批兑现两次、命中两次。**
 
 ---
 
