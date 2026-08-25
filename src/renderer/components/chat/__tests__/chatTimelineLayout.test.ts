@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { COLLAPSIBLE_PANEL_BASE_CLASS } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
 import { chatMarkdownParagraphClass } from '../chatMarkdownPolicy';
 import {
   chatTurnClass,
@@ -11,7 +9,6 @@ import {
   turnCopyButtonClass,
   turnHeadClass,
   turnMetaRowClass,
-  turnProcessPanelClass,
   turnProcessShellClass,
   turnStatusToneClass,
   userBubbleTextClass,
@@ -91,75 +88,17 @@ describe('turn spacing arithmetic (F-B9)', () => {
   });
 });
 
-describe('turnProcessPanelClass', () => {
-  // Base UI freezes the panel at the `scrollHeight` it measured when it opened
-  // and clips the overflow. The process segment grows AFTER opening — tokens
-  // stream into it, and a tool row's IN/OUT body expands inside it — so the
-  // frozen height would swallow content with no visible cause. These three
-  // together are what opt the panel out of that mechanism.
-  it('opts the process panel out of the measured fixed-height mechanism', () => {
-    const cls = turnProcessPanelClass();
-    expect(cls).toContain('h-auto');
-    expect(cls).toContain('overflow-visible');
-    // The strategy switch: Base UI reads the computed style once and only takes
-    // the measuring path when a transition (or animation) is present. It probes
-    // the DURATION, so both halves are needed — `transition-none` on its own
-    // leaves the base class's `duration-150` in place and the probe still sees
-    // a transition.
-    expect(cls).toContain('transition-none');
-    expect(cls).toContain('duration-0');
-  });
-
-  it('neutralises the enter/exit height keyframes too', () => {
-    const cls = turnProcessPanelClass();
-    expect(cls).toContain('data-starting-style:h-auto');
-    expect(cls).toContain('data-ending-style:h-auto');
-  });
-
-  // Review batch F15/F8③: the two assertions that used to sit in the blocks
-  // above ("the override string does not contain `h-(--collapsible-panel-height)`",
-  // "…does not contain `data-*-style:h-0`") could never have failed — those are
-  // the BASE class's utilities, and the override never had them to begin with.
-  // They read like a guarantee about the rendered element and asserted nothing.
-  //
-  // What actually has to hold is the MERGE: `CollapsiblePanel` applies
-  // `cn(COLLAPSIBLE_PANEL_BASE_CLASS, className)`, and tailwind-merge has to
-  // resolve every one of those pairs in the override's favour. If it does not —
-  // a group rename in tailwind-merge, a variant modifier it stops recognising —
-  // the panel silently goes back to measuring its height and clipping the
-  // process segment. The base class is imported, never copied, so this fails
-  // the moment either side is edited on its own.
-  describe('F8③: the real merged panel class', () => {
-    const merged = cn(COLLAPSIBLE_PANEL_BASE_CLASS, turnProcessPanelClass());
-
-    it('the override survives the merge', () => {
-      expect(merged).toContain('h-auto');
-      expect(merged).toContain('overflow-visible');
-      expect(merged).toContain('transition-none');
-      expect(merged).toContain('duration-0');
-      expect(merged).toContain('data-starting-style:h-auto');
-      expect(merged).toContain('data-ending-style:h-auto');
-    });
-
-    it('every measured-height utility is actually gone from the merge', () => {
-      expect(merged).not.toContain('h-(--collapsible-panel-height)');
-      expect(merged).not.toContain('overflow-hidden');
-      expect(merged).not.toContain('transition-[height]');
-      expect(merged).not.toContain('duration-150');
-      expect(merged).not.toMatch(/data-(?:starting|ending)-style:h-0/);
-    });
-
-    // Guards the premise of the test above: if the base class ever stops
-    // carrying these, the negative assertions become vacuous again — exactly
-    // the failure this block was written to remove.
-    it('the base class is the one being overridden', () => {
-      expect(COLLAPSIBLE_PANEL_BASE_CLASS).toContain('h-(--collapsible-panel-height)');
-      expect(COLLAPSIBLE_PANEL_BASE_CLASS).toContain('overflow-hidden');
-      expect(COLLAPSIBLE_PANEL_BASE_CLASS).toContain('duration-150');
-    });
-  });
-});
-
+/**
+ * `turnProcessPanelClass()` and its whole block retired with the Base UI
+ * `Collapsible` they existed to neutralise (see `MessageTimeline`'s panel
+ * note): every class in the override — `h-auto`, `overflow-visible`,
+ * `transition-none duration-0`, the two `data-*-style` overrides — was there to
+ * opt that component out of measuring and clipping the panel height, and a
+ * plain `hidden` panel measures nothing. The one claim worth keeping is the
+ * prohibition, and it moved to the panel's own assertion in
+ * `messageTimelineWiring.test.ts`: no `overflow-hidden`, because it would make
+ * the panel a containing block and switch off the pinned band's sticky.
+ */
 describe('turnProcessShellClass (F11)', () => {
   // `Collapsible.Root` renders a bare `<div>`; without this the trigger row and
   // the panel sat flush at 0px while every other pair inside the turn kept

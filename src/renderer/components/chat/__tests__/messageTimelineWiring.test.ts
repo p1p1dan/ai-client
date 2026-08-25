@@ -523,11 +523,20 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectWired('state.baseline.sessionId === sessionId');
   });
 
-  // F5: without `keepMounted` the panel unmounts on collapse and every tool row
-  // the user had expanded inside it is destroyed (§10-C).
-  it('F5: the process panel is kept mounted across a collapse', () => {
-    expectCalled('<CollapsibleContent');
-    expectCalled('keepMounted');
+  /**
+   * F5's claim, carried across the panel rewrite: collapsing must not destroy
+   * the tool rows the user had expanded inside the process segment (§10-C).
+   *
+   * The mechanism changed and the guarantee got stronger. It used to be Base
+   * UI's `keepMounted` prop opting the panel out of unmounting on close; it is
+   * now a `hidden` attribute on a plain div, which cannot unmount anything at
+   * all. `[FB6-9]` holds the other half — that the panel is not conditionally
+   * rendered, which would put the unmount back by a different route.
+   */
+  it('F5: the process panel survives a collapse with its expanded rows intact', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn).toContain('hidden={!processShellOpen}');
+    expect(turn, 'nothing unmounts the panel').not.toContain('processShellOpen && (');
   });
 
   // §4.3's safety red line: the shell is force-open while a permission is
@@ -566,10 +575,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectWired('if (wasPermissionLockedRef.current && !permissionLock) setProcessOpen(true);');
   });
 
-  // F11: the shell root needs its own gap or the trigger and the panel sit
-  // flush at 0px.
-  it('F11: the collapsible root carries the process shell spacing', () => {
-    expectCalled('className={turnProcessShellClass()}');
+  // F11: the panel needs its own gap or its rows sit flush at 0px while every
+  // other pair inside the turn keeps P-17's 10px beat.
+  it('F11: the process panel carries the process shell spacing', () => {
+    expectCalled('cn(turnProcessShellClass(), turnBodyClass())');
   });
 
   // F12: `waiting_*` must count as in flight for the shell, or the head and the
@@ -628,11 +637,27 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     );
   });
 
-  // The panel's opt-out of Base UI's measured-height mechanism (see
-  // `chatTimelineLayout.turnProcessPanelClass`) is only in effect if the class
-  // is actually applied to the panel.
-  it('the process panel keeps its measured-height opt-out', () => {
-    expectCalled('cn(turnProcessPanelClass(), turnBodyClass())');
+  /**
+   * The process panel, after Base UI's `Collapsible` was measured out of the
+   * job (see `MessageTimeline`'s note on why it could not drive several panels
+   * from a trigger outside its Root).
+   *
+   * Two claims, both load-bearing:
+   *  - `hidden={!open}` rather than `{open && <div>}`. Conditional rendering
+   *    would unmount the subtree, destroying every tool row's expanded IN/OUT
+   *    body on collapse — the exact state §10-C promises the shell preserves,
+   *    and the reason `keepMounted` was a red line for this batch.
+   *  - no `overflow-hidden`, ever: it would make the panel a containing block
+   *    and silently switch off the pinned bubble band's `position: sticky`.
+   */
+  it('[FB6-9] the process panel hides without unmounting, and creates no containing block', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn).toContain('hidden={!processShellOpen}');
+    expect(turn, 'the panel is never conditionally rendered away').not.toContain(
+      'processShellOpen && ('
+    );
+    const panel = turn.slice(turn.indexOf('hidden={!processShellOpen}'));
+    expect(panel.slice(0, 220)).not.toContain('overflow-hidden');
   });
 
   // T-29: assistant prose is Markdown, and it is Markdown in exactly ONE place.
@@ -877,22 +902,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[FB6-6] every process segment container reads the shared open state', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
-    // One binding, one render point: the segments are many, the shell that
+    // One binding, one render point: the segments are many, the panel that
     // renders them is written once, so "a segment that forgot to read the
     // state" is not expressible.
-    expect(countIn(turn, 'open={processShellOpen}')).toBe(1);
-    expect(countIn(turn, '<Collapsible ')).toBe(1);
-    expect(countIn(turn, '<CollapsibleContent')).toBe(1);
-    // …and `disabled` is gone from the Root, which after E1 has no trigger of
-    // its own for Base UI to route it to — it would be a prop with no effect
-    // that every string-matching test still passes. It lives on the meta row's
-    // button now (`[FB6-4]`).
+    expect(countIn(turn, 'hidden={!processShellOpen}')).toBe(1);
+    // Base UI's Collapsible is out of this turn entirely: it clears a panel's
+    // `mounted` flag only from its own trigger, or when `keepMounted` is off —
+    // and this batch has the trigger outside the Root and needs `keepMounted`.
+    expect(turn).not.toContain('<Collapsible');
+    // The permission lock lives on the meta row's button, once (`[FB6-4]`).
     expect(countIn(turn, 'disabled={permissionLock}')).toBe(1);
-    expect(
-      turn.slice(turn.indexOf('<Collapsible '), turn.indexOf('<CollapsibleContent'))
-    ).not.toContain('disabled');
-    // The Root has no trigger at all: the one trigger is in the meta row.
-    expect(turn).not.toContain('<CollapsibleTrigger');
   });
 
   /**
@@ -905,6 +924,23 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     const metaRowSource = nodeSource(turnBodyNode());
     expect(metaRowSource).toContain('disabled={permissionLock}');
     expect(metaRowSource).toContain('aria-expanded={processShellOpen}');
+  });
+
+  /**
+   * The trigger has to actually TOGGLE.
+   *
+   * Found by a screenshot, not by this suite: the first cut of the meta row
+   * carried `aria-expanded`, `aria-controls`, `disabled` and the right subtree,
+   * and every assertion above passed — over a button with no `onClick` at all.
+   * Base UI used to wire that for us; moving the trigger out of
+   * `Collapsible.Root` handed the job back without saying so, and "correct ARIA
+   * on a dead control" is a shape no attribute check can tell from a live one.
+   */
+  it('[FB6-8] the trigger is wired to the open state, not just labelled with it', () => {
+    const trigger = descendantJsx(turnBodyNode(), 'button');
+    expect(nodeSource(trigger), 'the chevron button toggles processOpen').toContain(
+      'onClick={() => setProcessOpen((open) => !open)}'
+    );
   });
 
   /**

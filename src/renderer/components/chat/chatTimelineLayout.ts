@@ -113,44 +113,19 @@ export function turnBodyClass(): string {
 }
 
 /**
- * The turn's process shell panel (`CollapsibleContent`).
+ * The turn's process panel.
  *
- * `ui/collapsible.tsx`'s panel animates height, which Base UI implements by
- * measuring `scrollHeight` into `--collapsible-panel-height` and pairing it
- * with `overflow-hidden`. That measurement only re-runs on an open/close
- * transition — never on content growth — which is fine for the leaf rows it was
- * written for and wrong for this panel, whose content grows in two ordinary
- * ways: tokens streaming into the process segment, and the user expanding a
- * tool row's IN/OUT body inside it (the state §10-C promises the turn-level
- * shell preserves). Either one would be silently clipped at the height the
- * panel happened to have when it opened.
+ * FB4/FB6 retired `turnProcessPanelClass()` along with the Base UI
+ * `Collapsible` it existed to neutralise: every class in it (`h-auto`,
+ * `overflow-visible`, `transition-none duration-0`, the two `data-*-style`
+ * overrides) was there to opt that component OUT of measuring and clipping the
+ * panel's height. A plain `hidden` panel measures nothing, so there is nothing
+ * left to undo — see `MessageTimeline`'s note on why Base UI could not drive
+ * several panels from one外部 trigger.
  *
- * Setting `transition-none` is not just cosmetic: Base UI picks its animation
- * strategy by reading the panel's computed style once, and a panel with no
- * transition and no animation takes the `'none'` path, which skips the
- * measurement entirely and only toggles the `hidden` attribute. `duration-0`
- * has to ride along — the probe Base UI actually runs is on the computed
- * `transition-duration`, and `transition-none` alone leaves the base class's
- * `duration-150` standing (a different tailwind-merge group), which would put
- * the panel back on the measuring path. `h-auto` and the two `data-*-style`
- * overrides then make the leftover height utilities inert, and
- * `overflow-visible` restores normal flow. The cost is the 150ms height
- * animation; the alternative is content that disappears.
- */
-export function turnProcessPanelClass(): string {
-  return 'h-auto overflow-visible transition-none duration-0 data-starting-style:h-auto data-ending-style:h-auto';
-}
-
-/**
- * The turn's process shell root (`Collapsible.Root`).
- *
- * `Collapsible.Root` renders a plain `<div>`, so without this it was a block
- * box with no gap — the trigger row and the panel sat flush against each other
- * at 0px while every other pair inside the turn kept P-17's 10px beat (review
- * batch F11). Same tier as `turnBodyClass()`, so the shell's two children are
- * spaced exactly like the turn's own children; the 20px turn-to-turn
- * arithmetic in the header note is untouched, because this gap is *inside* a
- * turn body slot rather than between two of them.
+ * ⚠️ Never add `overflow-hidden` here: it would make this element a containing
+ * block and silently switch off the pinned bubble band's `position: sticky`
+ * (the standing prohibition in this file's head note).
  */
 export function turnProcessShellClass(): string {
   return 'flex flex-col gap-2.5';

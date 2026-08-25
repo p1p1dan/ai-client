@@ -44,7 +44,6 @@ import {
   turnCopyButtonClass,
   turnHeadClass,
   turnMetaRowClass,
-  turnProcessPanelClass,
   turnProcessShellClass,
   turnStatusToneClass,
   userBubbleTextClass,
@@ -1167,10 +1166,9 @@ const ChatTurn = memo(function ChatTurn({
     [segments]
   );
 
-  // FB6/E1: interleaving means SEVERAL process segments, and a Base UI
-  // `Collapsible.Root` owns exactly one panel id — so each segment gets its own
-  // controlled Root, and the one bottom trigger names all their panels in
-  // `aria-controls`. Ids come from a stable `useId()` prefix so they survive
+  // Interleaving means SEVERAL process panels per turn, all driven by one
+  // trigger down in the meta row, so that trigger has to name all of them in
+  // `aria-controls`. Ids come from a stable `useId()` prefix: they survive
   // re-renders and cannot collide with another turn's.
   const panelIdPrefix = useId();
   const processPanelIds = useMemo(
@@ -1320,37 +1318,38 @@ const ChatTurn = memo(function ChatTurn({
       );
     }
     return (
-      // F11: `Collapsible.Root` renders a bare `<div>`, so without a class of
-      // its own its children sat flush at 0px while every other pair inside the
-      // turn kept P-17's 10px beat.
-      //
-      // Controlled, and with NO trigger of its own: every process segment in a
-      // turn opens and closes together off one state, driven by the single
-      // chevron in the bottom meta row (E1). `disabled` is not passed here —
-      // Base UI routes it to a Root's own trigger, and this Root has none.
-      <Collapsible
+      /**
+       * A plain `hidden` panel, NOT `Collapsible` — measured, not chosen.
+       *
+       * Interleaving means several process segments per turn, and a Base UI
+       * `Collapsible.Root` owns exactly one panel id, so each segment needs its
+       * own Root driven by one shared state. That combination does not work:
+       * Base UI clears a panel's `mounted` flag in exactly two places
+       * (`useCollapsibleRoot`), and BOTH are unreachable here — one runs only
+       * from `CollapsibleTrigger` (this Root has no trigger; the one trigger is
+       * down in the meta row), the other is guarded by `!keepMounted` (we need
+       * `keepMounted`). The panel therefore opens and never closes again:
+       * `aria-expanded` flips, `data-ending-style` lands, and `hidden` is never
+       * applied. Verified on a real turn.
+       *
+       * `hidden` gets there directly, and gives the batch's `keepMounted` red
+       * line (§10-C: "expanded tool rows survive a collapse") more plainly than
+       * the prop did — the subtree is never unmounted, so a tool row's open
+       * IN/OUT body is still open when the turn is expanded again. Tailwind's
+       * preflight gives `[hidden]` `display: none !important`.
+       *
+       * NO `overflow-hidden` here, ever: it would create a containing block and
+       * silently break the pinned bubble band's `position: sticky`
+       * (`chatTimelineLayout.ts`'s standing prohibition).
+       */
+      <div
         key={key}
-        open={processShellOpen}
-        onOpenChange={setProcessOpen}
-        className={turnProcessShellClass()}
+        id={`${panelIdPrefix}p${index}`}
+        hidden={!processShellOpen}
+        className={cn(turnProcessShellClass(), turnBodyClass())}
       >
-        {/* F5: `keepMounted` is the whole of §10-C's "expanded tool rows
-            survive a collapse". Base UI's panel defaults to unmounting on
-            close, and this panel takes the `animationType: 'none'` path (see
-            `turnProcessPanelClass`), where "closed" means `mounted` goes false
-            in the same tick — so every IN/OUT body the user had opened inside
-            the process segment was destroyed and rebuilt at its default state
-            on every collapse/expand. Tailwind's preflight gives `[hidden]`
-            `display: none !important`, so the flex container below cannot
-            override the hidden state. */}
-        <CollapsibleContent
-          keepMounted
-          id={`${panelIdPrefix}p${index}`}
-          className={cn(turnProcessPanelClass(), turnBodyClass())}
-        >
-          {segment.items.map(renderItem)}
-        </CollapsibleContent>
-      </Collapsible>
+        {segment.items.map(renderItem)}
+      </div>
     );
   };
 
@@ -1394,6 +1393,11 @@ const ChatTurn = memo(function ChatTurn({
                 type="button"
                 aria-expanded={processShellOpen}
                 aria-controls={processPanelIds.join(' ')}
+                // The toggle itself. Moving the trigger out of
+                // `Collapsible.Root` means Base UI no longer wires this for us:
+                // the button is inert without it, and every `aria-*` assertion
+                // still passes over a control that does nothing.
+                onClick={() => setProcessOpen((open) => !open)}
                 // Migrated off `Collapsible.Root` (whose `disabled` only ever
                 // reached ITS OWN trigger — with the trigger moved out here,
                 // leaving it there would have been a prop with no effect and a
