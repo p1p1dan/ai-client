@@ -415,9 +415,9 @@ export interface ToolRowView {
   permissionAutoNote?: string;
   /**
    * T-34: initial open state for the row's Collapsible, evaluated at mount.
-   * `deriveToolRowView` never sets it — existing rows keep the failed-only
-   * auto-expand (`ToolRows.tsx` renders `view.defaultOpen ?? view.failed`).
-   * The subagent panel's header row sets it to open a LIVE panel by default.
+   * `deriveToolRowView` never sets it, and since 2026-08-25 nothing else opens
+   * a row either — `ToolRows.tsx` renders `view.defaultOpen ?? false`, so the
+   * subagent panel's LIVE header row is the only thing that starts open.
    */
   defaultOpen?: boolean;
 }
@@ -545,8 +545,8 @@ export const AGGREGATE_VERB: VerbPair = { done: 'Explored', running: 'Exploring'
  *  - M = Grep/Glob/WebSearch run count.
  *  - A zero segment is omitted; singular/plural follow the count.
  *  - `failed` is true when any child call's `toolOk === false` (T-05
- *    adversarial fix #2) — `ToolRows.tsx`'s existing `defaultOpen={view.failed}`
- *    chain then auto-expands the row, same as a single failed call.
+ *    adversarial fix #2), which colours the row; it no longer auto-expands it
+ *    (see `ToolRowView.defaultOpen`).
  *  - `detail` mirrors the entries' original order (thinking included, un-timed
  *    here — `deriveToolGroupRows` re-stamps thinking rows with real duration).
  */

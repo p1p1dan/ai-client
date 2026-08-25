@@ -76,11 +76,20 @@ describe('ToolRows.tsx — subagent panel mount', () => {
     expect(callSites.some((site) => site.includes('deriveSubagentPanelRows(lane'))).toBe(true);
   });
 
-  it('the Collapsible default honors view.defaultOpen with the failed fallback', () => {
-    expect(callSites).toContain('defaultOpen={view.defaultOpen ?? view.failed}');
-    // The old failed-only literal must be gone — a second Collapsible with
-    // the pre-T-34 default would silently ignore the panel's live-open rule.
+  /**
+   * T-34's `defaultOpen` is still the ONE thing that can open a row at mount —
+   * the live subagent panel sets it. What changed (2026-08-25, user decision)
+   * is the fallback: failures used to auto-expand (sign-off ②), and with the
+   * turn-level collapse retired that put a wall of output on screen for every
+   * failed or denied call. Red on the row and a click is enough.
+   */
+  it('the Collapsible default honors view.defaultOpen and nothing else', () => {
+    expect(callSites).toContain('defaultOpen={view.defaultOpen ?? false}');
+    // Neither the pre-T-34 failed-only literal nor the retired failed fallback
+    // may come back: either would ignore the panel's live-open rule, or
+    // re-open every failure.
     expect(callSites).not.toContain('defaultOpen={view.failed}');
+    expect(callSites).not.toContain('defaultOpen={view.defaultOpen ?? view.failed}');
   });
 });
 

@@ -101,7 +101,13 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
   const row = !view.expandable ? (
     <div className={rowClass}>{rowContent}</div>
   ) : (
-    <Collapsible defaultOpen={view.defaultOpen ?? view.failed}>
+    // 2026-08-25 (user decision): rows open only when something explicitly asks
+    // them to. Failures used to auto-expand (sign-off ②) — with the turn-level
+    // collapse gone, that put a wall of output on screen for every failed or
+    // denied call, in restored history and live turns alike. Red on the row and
+    // a click is enough. `defaultOpen` is still honoured: T-34's LIVE subagent
+    // panel sets it.
+    <Collapsible defaultOpen={view.defaultOpen ?? false}>
       <CollapsibleTrigger
         className={cn(rowClass, '[&[data-panel-open]>svg]:rotate-180')}
         // A Read row nests a real <button> inside the trigger for its

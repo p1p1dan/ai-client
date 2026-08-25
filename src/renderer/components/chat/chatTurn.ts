@@ -1,4 +1,4 @@
-import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
+import type { ChatMessage } from '@/stores/chatSessions';
 import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './toolCard';
 
 /**
@@ -14,8 +14,9 @@ import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './too
  *     `Turn`s (§4.1 rule table).
  *  2. flatten   — `flattenTurnItems` concatenates one turn's body messages into
  *     a single ordered item list, reusing `groupTimeline` per assistant message.
- *  3. segment/state — `segmentTurnBody` (§4.4) plus the three predicates the
- *     collapsible shell's default state is derived from (§4.3).
+ *  3. segments  — `segmentTurnBody` cuts that list into maximal runs of
+ *     same-placement items (§4.2/§4.4): prose and notices outside any shell,
+ *     tool / thinking / authorization runs in their own segments.
  *
  * ## Judgement calls (spec left these to the implementation)
  *
@@ -43,9 +44,8 @@ import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './too
  * `error` message" — §4.3 names failed tool calls, and D26 ②'s row-level
  * cluster rule keys off the same fact (spec §7.2 nests the two levels).
  *
- * There is no separate "collapsing is disabled" export: §4.3's "expanded and
- * not collapsible" case is exactly `hasUnresolvedPermission(turn)`, which the
- * `.tsx` wiring calls directly for the trigger's disabled state.
+ * There is no "collapsing is disabled" export, and since 2026-08-25 no
+ * collapsing at all — see the retirement note at the end of this file.
  */
 
 export interface Turn {
@@ -181,9 +181,9 @@ export type TurnSegmentKind = 'answer' | 'notice' | 'process';
  * to always-visible and escape the shell, which is how a batch whose whole
  * point is to REMOVE rows quietly starts adding them.
  *
- * `process` is also the safe default in the other direction: content folded
- * into the shell still has `hasUnresolvedPermission` + `defaultTurnProcessOpen`'s
- * first return to force it open, so nothing that needs an answer can hide there.
+ * `process` is also the safe default in the other direction: process segments
+ * render unconditionally, so nothing routed there can hide — not even the
+ * authorization card, which is the only Allow/Deny surface in the app.
  *
  * `chatTurn.test.ts` asserts this member by member, not with a `satisfies`
  * check on a lookup table: this is a function, and a `satisfies Record<…>` on a
@@ -232,68 +232,27 @@ export function segmentTurnBody<T extends { kind: TurnItemKind }>(
 }
 
 /**
- * Whether collapsing the shell would leave the turn as one bare row (§4.4).
+ * ⚠️ RETIRED (2026-08-25, user decision): `collapsedLeavesNothing`,
+ * `TurnProcessOpenInput`, `defaultTurnProcessOpen`, `hasUnresolvedPermission`
+ * and `turnHasFailure` all went with the turn-level collapse itself.
  *
- * Replaces the old `answerEmpty` input, which meant "the trailing text run is
- * empty". Under the segment model any text anywhere makes it false, so keeping
- * the old name would have left a flag that is very nearly always false — a dead
- * switch whose test still passes.
+ * The turn no longer has a shell to open or close. Every tool row already
+ * carries its own expander, and once FB4 stopped folding prose into the process
+ * segment there was little left for a second, turn-wide control to hide — so
+ * the chevron in the bottom meta row was removed and process segments are
+ * simply always rendered. The meta row keeps its text (`Worked for 24s · 2
+ * tools`, plus model and time); it is now purely a summary.
  *
- * `notice` counts as something left over: it renders outside the shell, so a
- * turn of `process + notice` does NOT collapse to nothing.
+ * What this does to the authorization red line: it satisfies it BY
+ * CONSTRUCTION. `defaultTurnProcessOpen`'s first return existed to force the
+ * shell open while a `permission_request` was unresolved, because a collapsed
+ * shell could bury the only Allow/Deny surface in the app (round-2 point-check
+ * #5). With no shell, a permission card cannot be hidden at all — the guarantee
+ * is structural now, not conditional, and `messageTimelineWiring.test.ts`
+ * asserts it as such: the process panel has no visibility binding and is never
+ * rendered conditionally.
+ *
+ * The other four retired because they existed solely to feed that one decision.
+ * An exported predicate nothing consumes is a shell waiting to be mistaken for
+ * a live rule (§13 ①), so they are deleted rather than left standing.
  */
-export function collapsedLeavesNothing<T>(segments: readonly TurnSegment<T>[]): boolean {
-  return segments.every((segment) => segment.kind === 'process');
-}
-
-export interface TurnProcessOpenInput {
-  /** The turn is still in flight. */
-  isActive?: boolean;
-  /** The turn holds an unresolved `permission_request` (see `hasUnresolvedPermission`). */
-  hasUnresolvedPermission?: boolean;
-  /** The turn holds a failed tool call (see `turnHasFailure`). */
-  hasFailure?: boolean;
-  /** Collapsing would leave the turn as one bare row (see `collapsedLeavesNothing`). */
-  collapsedLeavesNothing?: boolean;
-}
-
-/**
- * Default open state of a turn's process shell (§4.3 decision table).
- *
- * The unresolved-permission branch is a **separate, first return on purpose**:
- * it is the safety red line (burying an authorization card inside a collapsed
- * shell re-opens round-2 point-check #5, "the permission card does not
- * render"), and it must stay un-overridable by any rule added below it — even
- * one that would return `false`. The remaining three are plain disjuncts.
- *
- * Not represented here (and deliberately needing no state): a turn that
- * completes while mounted stays open, because `<Collapsible defaultOpen>` is
- * only evaluated at mount and an active→complete transition does not remount
- * the turn (same mechanism as `ToolRows.tsx`'s per-row `defaultOpen`).
- */
-export function defaultTurnProcessOpen(input: TurnProcessOpenInput): boolean {
-  if (input.hasUnresolvedPermission) return true;
-  return Boolean(input.isActive || input.hasFailure || input.collapsedLeavesNothing);
-}
-
-/** A `permission_request` block still awaiting an Allow/Deny answer. */
-function isUnresolvedPermissionBlock(block: ChatBlock): boolean {
-  return block.type === 'permission_request' && block.resolved !== true;
-}
-
-/** Whether the turn holds an unresolved permission card (§4.3 safety red line, F-B4). */
-export function hasUnresolvedPermission(turn: Turn): boolean {
-  return turn.body.some((message) => message.blocks.some(isUnresolvedPermissionBlock));
-}
-
-/**
- * Whether the turn holds a failed tool call (`tool_result.toolOk === false`).
- * Shared judgement with D26 ②'s row-level cluster rule (spec §7.2): the turn
- * level force-opens the shell, the row level still decides which failed rows
- * expand their output body.
- */
-export function turnHasFailure(turn: Turn): boolean {
-  return turn.body.some((message) =>
-    message.blocks.some((block) => block.type === 'tool_result' && block.toolOk === false)
-  );
-}

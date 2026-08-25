@@ -6,7 +6,6 @@ import type {
 } from '@shared/types/runtimeEvents';
 import {
   Check,
-  ChevronDown,
   ChevronRight,
   Copy,
   FileQuestion,
@@ -17,7 +16,7 @@ import {
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -49,17 +48,13 @@ import {
   userBubbleTextClass,
 } from './chatTimelineLayout';
 import {
-  collapsedLeavesNothing,
-  defaultTurnProcessOpen,
   flattenTurnItems,
   groupMessagesIntoTurns,
-  hasUnresolvedPermission,
   segmentTurnBody,
   stabilizeTurns,
   type Turn,
   type TurnItem,
   type TurnSegment,
-  turnHasFailure,
 } from './chatTurn';
 import {
   deriveHistoryNotice,
@@ -1157,36 +1152,17 @@ const ChatTurn = memo(function ChatTurn({
   // `bare` rung below instead of saying "Thought".
   const thoughtOnly = useMemo(() => turnHasThinkingOnlyProcess(turnBlocks), [turnBlocks]);
 
-  // One expression, two consumers (`head.hasProcess` and `collapsible`): the
-  // turn-head model guarantees a non-null head whenever there is a process
-  // segment, and the trigger's existence is decided by that same fact. Deriving
-  // them separately is how the two drift apart.
   const hasProcess = useMemo(
     () => segments.some((segment) => segment.kind === 'process'),
     [segments]
   );
 
-  // Interleaving means SEVERAL process panels per turn, all driven by one
-  // trigger down in the meta row, so that trigger has to name all of them in
-  // `aria-controls`. Ids come from a stable `useId()` prefix: they survive
-  // re-renders and cannot collide with another turn's.
-  const panelIdPrefix = useId();
-  const processPanelIds = useMemo(
-    () =>
-      segments
-        .map((segment, index) => (segment.kind === 'process' ? `${panelIdPrefix}p${index}` : null))
-        .filter((id): id is string => id !== null),
-    [segments, panelIdPrefix]
-  );
-
-  // F1: the head degrades `status -> workedFor -> stats -> thought -> bare
-  // chevron` instead of stopping at the first two. A restored history turn
-  // has neither of the first two (no T-06 metadata is replayed), so it used
-  // to get a null head — no trigger, `collapsible === false`, force-expanded
-  // — which made §4.3's "restored history defaults to collapsed" literally
-  // unreachable. Nothing below fabricates a duration; the fallbacks print
-  // counts derived from `blocks`, the D25 §2.4 bare "Thought" label, or no
-  // text at all (A07 :2399 intact).
+  // F1: the head degrades `status -> workedFor -> stats -> thought` instead of
+  // stopping at the first two. A restored history turn has neither of the first
+  // two (no T-06 metadata is replayed), so it used to get a null head and print
+  // nothing at all about a turn that plainly did work. Nothing below fabricates
+  // a duration; the fallbacks print counts derived from `blocks`, the D25 §2.4
+  // bare "Thought" label, or no text at all (A07 :2399 intact).
   const head = deriveTurnHeadModel({
     status,
     workedFor,
@@ -1194,52 +1170,6 @@ const ChatTurn = memo(function ChatTurn({
     hasProcess,
     thoughtOnly,
   });
-
-  // ---- Process shell (§4.3) ----
-
-  const permissionLock = hasUnresolvedPermission(turn);
-  // §4.3's "a turn that completes while mounted stays expanded" is the reason
-  // this is a lazy `useState` and not a derived value: the initializer runs
-  // ONCE, at the turn's mount, exactly like the `<Collapsible defaultOpen>` the
-  // spec describes (and like `ToolRows.tsx`'s per-row `defaultOpen`), so an
-  // active -> complete transition cannot collapse content the user is watching.
-  // NOT ASSERTABLE in a node-only vitest — this comment is the record (§6.2 ④).
-  // Holding the state HERE rather than inside the shell also means the shell
-  // may mount and unmount without ever re-deciding the open state.
-  const [processOpen, setProcessOpen] = useState(() =>
-    defaultTurnProcessOpen({
-      isActive: turnActive,
-      hasUnresolvedPermission: permissionLock,
-      hasFailure: turnHasFailure(turn),
-      collapsedLeavesNothing: collapsedLeavesNothing(segments),
-    })
-  );
-  // Controlled, not `defaultOpen`, for one reason: `permissionLock` can turn
-  // true AFTER the user has manually collapsed a running turn, and a disabled
-  // trigger over a collapsed panel would then bury the authorization card —
-  // the exact round-2 point-check #5 failure §4.3 calls the safety red line.
-  // Forcing `open` here makes that unreachable by construction.
-  const processShellOpen = permissionLock || processOpen;
-
-  // F10: the forced-open state above is released the instant the user answers,
-  // and if they had collapsed the turn before the card appeared the panel would
-  // snap shut under the cursor — the answered card, and whatever ran next,
-  // gone in the same frame they clicked. Adopting the forced state as the
-  // manual one keeps the shell exactly as it looks at the moment of the click;
-  // the user can still collapse it themselves afterwards.
-  const wasPermissionLockedRef = useRef(permissionLock);
-  useEffect(() => {
-    if (wasPermissionLockedRef.current && !permissionLock) setProcessOpen(true);
-    wasPermissionLockedRef.current = permissionLock;
-  }, [permissionLock]);
-
-  // The head IS the trigger (§4.8), and after F1 a turn with a process segment
-  // ALWAYS has one (`deriveTurnHeadModel` guarantees a non-null model whenever
-  // `hasProcess`, falling back to a text-less chevron row). So this is now
-  // decided by the process segment alone — which is also what stops the shell
-  // from mounting and unmounting when metadata arrives mid-turn and flips the
-  // head from null to non-null, remounting the whole subtree twice (F2).
-  const collapsible = hasProcess;
 
   // F-C3. The derivation itself is a pure function so the node suite can
   // truth-table it; what is decided HERE is only which inputs it gets:
@@ -1278,7 +1208,7 @@ const ChatTurn = memo(function ChatTurn({
   const metaCopyText = turnActive ? '' : copyText;
   // An empty row would still spend one 10px beat of the turn body's gap, so the
   // row exists only when it has something to say.
-  const showMetaRow = Boolean(head) || collapsible || Boolean(metaLine) || metaCopyText.length > 0;
+  const showMetaRow = Boolean(head) || Boolean(metaLine) || metaCopyText.length > 0;
 
   const renderItem = (item: TurnItem) => (
     <TurnItemView
@@ -1293,7 +1223,7 @@ const ChatTurn = memo(function ChatTurn({
     />
   );
 
-  const renderSegment = (segment: TurnSegment<TurnItem>, index: number) => {
+  const renderSegment = (segment: TurnSegment<TurnItem>) => {
     // Keyed off the segment's FIRST item, not its index: an index key would
     // remount every later segment the moment a new one opened mid-stream,
     // throwing away the expanded tool bodies inside them.
@@ -1319,35 +1249,21 @@ const ChatTurn = memo(function ChatTurn({
     }
     return (
       /**
-       * A plain `hidden` panel, NOT `Collapsible` — measured, not chosen.
+       * The process segment: tool runs, thinking, and authorization cards, in
+       * block order.
        *
-       * Interleaving means several process segments per turn, and a Base UI
-       * `Collapsible.Root` owns exactly one panel id, so each segment needs its
-       * own Root driven by one shared state. That combination does not work:
-       * Base UI clears a panel's `mounted` flag in exactly two places
-       * (`useCollapsibleRoot`), and BOTH are unreachable here — one runs only
-       * from `CollapsibleTrigger` (this Root has no trigger; the one trigger is
-       * down in the meta row), the other is guarded by `!keepMounted` (we need
-       * `keepMounted`). The panel therefore opens and never closes again:
-       * `aria-expanded` flips, `data-ending-style` lands, and `hidden` is never
-       * applied. Verified on a real turn.
-       *
-       * `hidden` gets there directly, and gives the batch's `keepMounted` red
-       * line (§10-C: "expanded tool rows survive a collapse") more plainly than
-       * the prop did — the subtree is never unmounted, so a tool row's open
-       * IN/OUT body is still open when the turn is expanded again. Tailwind's
-       * preflight gives `[hidden]` `display: none !important`.
+       * Rendered UNCONDITIONALLY (2026-08-25 user decision). There is no
+       * turn-level collapse any more — each tool row expands its own IN/OUT
+       * body, and that turned out to be the only granularity worth having once
+       * FB4 stopped folding prose in here. The authorization red line ("the
+       * Allow/Deny card can never be collapsed away") is satisfied by
+       * construction rather than by a forced-open rule.
        *
        * NO `overflow-hidden` here, ever: it would create a containing block and
        * silently break the pinned bubble band's `position: sticky`
        * (`chatTimelineLayout.ts`'s standing prohibition).
        */
-      <div
-        key={key}
-        id={`${panelIdPrefix}p${index}`}
-        hidden={!processShellOpen}
-        className={cn(turnProcessShellClass(), turnBodyClass())}
-      >
+      <div key={key} className={cn(turnProcessShellClass(), turnBodyClass())}>
         {segment.items.map(renderItem)}
       </div>
     );
@@ -1382,42 +1298,16 @@ const ChatTurn = memo(function ChatTurn({
             in an error notice sent ALL of it. */}
         {segments.map(renderSegment)}
         {showMetaRow && (
-          // FB6 + D55 ①: the turn's one bottom meta row. NOT a <button> itself —
-          // it holds two of them (the collapse chevron and copy), and a button
-          // cannot contain a button. That is why the trigger is the trailing
-          // chevron rather than the whole row.
+          // FB6 + D55 ①: the turn's one bottom meta row — status / `Worked for
+          // Ns · N tools`, then the model and relative time, then copy.
+          //
+          // A SUMMARY, not a control (2026-08-25 user decision). It used to end
+          // in a chevron that collapsed the whole turn's process segments; that
+          // went away because every tool row already carries its own expander,
+          // and after FB4 stopped folding prose into the process segment there
+          // was very little left for a second, turn-wide control to hide.
           <div className={turnMetaRowClass()}>
             <TurnHeadContent head={head} />
-            {collapsible && (
-              <button
-                type="button"
-                aria-expanded={processShellOpen}
-                aria-controls={processPanelIds.join(' ')}
-                // The toggle itself. Moving the trigger out of
-                // `Collapsible.Root` means Base UI no longer wires this for us:
-                // the button is inert without it, and every `aria-*` assertion
-                // still passes over a control that does nothing.
-                onClick={() => setProcessOpen((open) => !open)}
-                // Migrated off `Collapsible.Root` (whose `disabled` only ever
-                // reached ITS OWN trigger — with the trigger moved out here,
-                // leaving it there would have been a prop with no effect and a
-                // test that still passed).
-                disabled={permissionLock}
-                className={cn(turnCopyButtonClass(), 'disabled:cursor-default')}
-                aria-label={processShellOpen ? 'Collapse turn details' : 'Expand turn details'}
-              >
-                <ChevronDown
-                  className={cn(
-                    'size-3.5 shrink-0 transition-transform duration-150',
-                    // Inverted from the pre-FB6 head: the panel is now ABOVE
-                    // this row, so the arrow points at where content will
-                    // appear. Direction is a judgement call with no objective
-                    // answer — GUI point-check G-12 confirms it.
-                    !processShellOpen && 'rotate-180'
-                  )}
-                />
-              </button>
-            )}
             <TurnMetaTail
               line={metaLine}
               completedAt={metadata?.completedAt}

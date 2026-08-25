@@ -1,18 +1,12 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
-  collapsedLeavesNothing,
-  defaultTurnProcessOpen,
   flattenTurnItems,
   groupMessagesIntoTurns,
-  hasUnresolvedPermission,
   segmentTurnBody,
   stabilizeTurns,
   type Turn,
   type TurnItem,
-  turnHasFailure,
   turnItemPlacement,
 } from '../chatTurn';
 
@@ -37,8 +31,6 @@ function block(type: ChatBlock['type'], extra: Partial<ChatBlock> = {}): ChatBlo
 
 const text = (value: string) => block('text', { text: value });
 const thinking = (value = 'hmm') => block('thinking', { text: value });
-const permission = (resolved?: boolean) =>
-  block('permission_request', { permissionId: `p${blockSeq}`, resolved });
 
 function toolPair(toolName: string, opts: { ok?: boolean } = {}): ChatBlock[] {
   blockSeq += 1;
@@ -273,17 +265,6 @@ describe('segmentTurnBody (FB4 — prose never collapses)', () => {
     ]);
   });
 
-  it('[FB4-5] collapsedLeavesNothing is true only when EVERY segment collapses', () => {
-    const of = (...kinds: TurnItem['kind'][]) => segmentTurnBody(kinds.map((kind) => item(kind)));
-    expect(collapsedLeavesNothing(of('toolGroup', 'permission'))).toBe(true);
-    expect(collapsedLeavesNothing(of('toolGroup', 'text'))).toBe(false);
-    // A notice renders outside the shell, so it is something left over. Without
-    // these two arms the formula could be written `every(s => s.kind !== 'answer')`
-    // and still pass.
-    expect(collapsedLeavesNothing(of('toolGroup', 'notice'))).toBe(false);
-    expect(collapsedLeavesNothing(of('notice'))).toBe(false);
-  });
-
   it('F-B6: appending to the streaming text block does not move a boundary', () => {
     const streamingBlock = text('partial');
     const reply = assistant([thinking(), ...toolPair('Read'), streamingBlock]);
@@ -331,102 +312,17 @@ describe('segmentTurnBody (FB4 — prose never collapses)', () => {
 // F-B3 / F-B4 — collapsible default state
 // ---------------------------------------------------------------------------
 
-describe('defaultTurnProcessOpen', () => {
-  const closed = {
-    isActive: false,
-    hasUnresolvedPermission: false,
-    hasFailure: false,
-    collapsedLeavesNothing: false,
-  };
-
-  it('F-B3: six-case truth table', () => {
-    expect(defaultTurnProcessOpen({ ...closed, isActive: true })).toBe(true);
-    expect(defaultTurnProcessOpen({ ...closed, hasUnresolvedPermission: true })).toBe(true);
-    // Priority case: nothing else is true, and it is still open. Burying an
-    // unresolved authorization card inside a collapsed shell re-opens the
-    // round-2 point-check #5 failure surface, so this rule outranks the rest.
-    expect(
-      defaultTurnProcessOpen({
-        isActive: false,
-        hasUnresolvedPermission: true,
-        hasFailure: false,
-        collapsedLeavesNothing: false,
-      })
-    ).toBe(true);
-    expect(defaultTurnProcessOpen({ ...closed, hasFailure: true })).toBe(true);
-    expect(defaultTurnProcessOpen({ ...closed, collapsedLeavesNothing: true })).toBe(true);
-    expect(defaultTurnProcessOpen(closed)).toBe(false);
-  });
-
-  it('F-B3: an omitted field reads as false (a completed history turn collapses)', () => {
-    expect(defaultTurnProcessOpen({})).toBe(false);
-  });
-});
-
-describe('[FB4-6] the authorization red line keeps its position', () => {
-  const source = readFileSync(fileURLToPath(new URL('../chatTurn.ts', import.meta.url)), 'utf8');
-
-  /**
-   * `hasUnresolvedPermission` is a SEPARATE, FIRST return, not one disjunct
-   * among four. Folded into the `Boolean(a || b || c)` line below it the truth
-   * table is identical today — which is exactly why a behaviour assertion
-   * cannot tell the two apart — but the guarantee is gone: any rule added later
-   * that returns `false` would then be able to outrank it and bury a pending
-   * authorization card inside a collapsed shell.
-   */
-  it('the unresolved-permission branch is the first statement of the body', () => {
-    const start = source.indexOf('export function defaultTurnProcessOpen(');
-    expect(start, 'defaultTurnProcessOpen not found').toBeGreaterThan(-1);
-    const body = source.slice(source.indexOf('{', start), source.indexOf('\n}', start));
-    const statements = body
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && line !== '{');
-    expect(statements[0]).toBe('if (input.hasUnresolvedPermission) return true;');
-    // …and it is not ALSO a disjunct in the fallthrough, which would make the
-    // first return look redundant to the next person who reads it.
-    expect(statements[1]).not.toContain('hasUnresolvedPermission');
-  });
-});
-
-describe('hasUnresolvedPermission', () => {
-  it('F-B4: an unanswered permission_request is unresolved', () => {
-    expect(hasUnresolvedPermission(turnOf([assistant([permission()])]))).toBe(true);
-    expect(hasUnresolvedPermission(turnOf([assistant([permission(false)])]))).toBe(true);
-  });
-
-  it('F-B4: resolved: true is not unresolved', () => {
-    expect(hasUnresolvedPermission(turnOf([assistant([permission(true)])]))).toBe(false);
-  });
-
-  it('F-B4: a turn with no permission block at all is false', () => {
-    expect(hasUnresolvedPermission(turnOf([assistant([text('hi')])]))).toBe(false);
-    expect(hasUnresolvedPermission(turnOf([]))).toBe(false);
-  });
-
-  it('F-B4: scans every body message, not just the first', () => {
-    const turn = turnOf([assistant([text('hi')]), assistant([permission()])]);
-    expect(hasUnresolvedPermission(turn)).toBe(true);
-  });
-});
-
-describe('turnHasFailure', () => {
-  it('detects toolOk === false anywhere in the body', () => {
-    expect(turnHasFailure(turnOf([assistant(toolPair('Bash', { ok: false }))]))).toBe(true);
-  });
-
-  it('a successful turn is not a failure', () => {
-    expect(turnHasFailure(turnOf([assistant(toolPair('Bash'))]))).toBe(false);
-    expect(turnHasFailure(turnOf([]))).toBe(false);
-  });
-});
-
 /**
- * Review batch F7. The store hands the timeline a fresh bucket array on every
- * streamed token, so `groupMessagesIntoTurns` mints a fresh object for every
- * turn in the session — and `React.memo` on `ChatTurn` never holds. This pass
- * is what keeps a token's re-render cost proportional to the turn it landed in.
+ * ⚠️ RETIRED (2026-08-25, user decision): the `defaultTurnProcessOpen`,
+ * `[FB4-6]`, `hasUnresolvedPermission` and `turnHasFailure` blocks went with
+ * the turn-level collapse those functions served. See `chatTurn.ts`'s closing
+ * note for why the authorization red line got STRONGER rather than weaker —
+ * the process segment now renders unconditionally, so a pending Allow/Deny card
+ * cannot be hidden at all, and the guarantee is asserted structurally in
+ * `messageTimelineWiring.test.ts` instead of as a first-return ordering rule
+ * here.
  */
+
 describe('stabilizeTurns (F7)', () => {
   it('F7: an unchanged turn keeps its previous object identity', () => {
     const first = user([text('q1')]);
