@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import {
   classifyTool,
+  countPermissionRecords,
   deriveAggregateRow,
   deriveRepoName,
   deriveToolGroupRows,
@@ -10,13 +13,65 @@ import {
   formatToolArgKind,
   groupTimeline,
   isDelegationTool,
+  joinResolvedPermissions,
   normalizeToolOutput,
+  type PermissionJoinable,
   pairToolBlocks,
   shortPath,
   type ToolGroupEntry,
   type ToolRun,
+  toolRowPermissionClass,
+  toolRowPermissionNoteClass,
   toolVerb,
 } from '../toolCard';
+
+const toolCardSource = readFileSync(
+  fileURLToPath(new URL('../toolCard.ts', import.meta.url)),
+  'utf8'
+);
+
+/**
+ * Comments stripped. A negative scan must never be tripped by prose that spells
+ * out the very thing it forbids — the head notes below explain WHY the decision
+ * words are not re-spelled here, and would otherwise fail the rule they explain.
+ */
+const strippedToolCardSource = toolCardSource
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+
+/**
+ * Source text of one top-level `export function name(...) { ... }` body, read
+ * from the comment-stripped source. Skips the parameter list first — an inline
+ * param type (`view: { ... }`) would otherwise be mistaken for the body.
+ */
+function functionSource(name: string): string {
+  const source = strippedToolCardSource;
+  const start = source.indexOf(`export function ${name}`);
+  if (start === -1) throw new Error(`function ${name} not found`);
+  let parens = 0;
+  let afterParams = -1;
+  for (let i = source.indexOf('(', start); i < source.length; i += 1) {
+    if (source[i] === '(') parens += 1;
+    else if (source[i] === ')') {
+      parens -= 1;
+      if (parens === 0) {
+        afterParams = i + 1;
+        break;
+      }
+    }
+  }
+  if (afterParams === -1) throw new Error(`unbalanced parens in ${name}`);
+  const open = source.indexOf('{', afterParams);
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    else if (source[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, i + 1);
+    }
+  }
+  throw new Error(`unbalanced braces in ${name}`);
+}
 
 function call(id: string, toolName: string, input: unknown = {}): ChatBlock {
   return { id, type: 'tool_call', toolCallId: id, toolName, toolInput: input };
@@ -40,8 +95,8 @@ function thinkingBlock(id: string, text = 'thinking...'): ChatBlock {
   return { id, type: 'thinking', text };
 }
 
-function message(blocks: ChatBlock[]): ChatMessage {
-  return { id: 'm1', sessionId: 's1', role: 'assistant', blocks };
+function message(blocks: ChatBlock[], id = 'm1'): ChatMessage {
+  return { id, sessionId: 's1', role: 'assistant', blocks };
 }
 
 function makeRun(
@@ -617,5 +672,440 @@ describe('deriveRepoName / shortPath', () => {
   it('returns shortPath as-is when it has fewer segments than requested', () => {
     expect(shortPath('a.ts', 2)).toBe('a.ts');
     expect(shortPath('a/b.ts', 3)).toBe('a/b.ts');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FB7 — one authorization round-trip renders as ONE row
+// ---------------------------------------------------------------------------
+
+/**
+ * The tool_call block id IS the permission id on the Claude path, so a joining
+ * fixture passes the SAME string for both. A fixture that wants the fallback
+ * passes a permission id no tool_call carries (a synthesised `perm-…`, or the
+ * Codex `codex:<session>:<rpcId>` shape).
+ */
+function permission(id: string, overrides: Partial<ChatBlock> = {}): ChatBlock {
+  return {
+    id,
+    type: 'permission_request',
+    toolName: 'Write',
+    permissionId: id,
+    resolved: true,
+    allowed: true,
+    ...overrides,
+  };
+}
+
+/** What `flattenTurnItems` hands the join: every message's items, stamped and concatenated. */
+function turnItems(...messages: ChatMessage[]) {
+  return messages.flatMap((msg) =>
+    groupTimeline(msg).map((item) => ({ ...item, messageId: msg.id }))
+  );
+}
+
+function runsOf(items: readonly PermissionJoinable[]): ToolRun[] {
+  return items.flatMap((item) =>
+    item.kind === 'toolGroup'
+      ? item.entries.flatMap((entry) => (entry.kind === 'run' ? [entry.run] : []))
+      : []
+  );
+}
+
+function runFor(items: readonly PermissionJoinable[], blockId: string): ToolRun {
+  const run = runsOf(items).find((candidate) => candidate.blockId === blockId);
+  if (!run) throw new Error(`no run for block ${blockId}`);
+  return run;
+}
+
+describe('[FB7-1] a resolved permission merges into the tool row it settled', () => {
+  it('Allowed arm: the standalone permission item is gone and the run carries the decision', () => {
+    const items = turnItems(message([call('a', 'Write'), result('a'), permission('a')]));
+    expect(items.map((item) => item.kind)).toEqual(['toolGroup', 'permission']);
+
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup']);
+    expect(deriveToolRowView(runFor(joined, 'a')).permissionVerb).toBe('Allowed');
+  });
+
+  // G-9 (2026-08-23, real deny on a live turn) settled what this arm is worth:
+  // a denied call DOES get a tool_call block, with input and a
+  // "User denied permission" result, so the merged shape is not some rare
+  // corner — it is what every refusal looks like.
+  it('Denied arm: same merge, and the decision word is the refusal', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a', { toolOk: false, text: 'User denied permission' }),
+        permission('a', { allowed: false, permissionDecision: 'deny' }),
+      ])
+    );
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup']);
+
+    const view = deriveToolRowView(runFor(joined, 'a'));
+    expect(view.permissionVerb).toBe('Denied');
+    expect(view.failed).toBe(true);
+  });
+
+  it('Denied arm: "Denied, turn stopped" survives as its own word, not folded into Denied', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Bash'),
+        result('a', { toolOk: false }),
+        permission('a', { allowed: false, permissionDecision: 'cancel' }),
+      ])
+    );
+    const joined = joinResolvedPermissions(items);
+    expect(deriveToolRowView(runFor(joined, 'a')).permissionVerb).toBe('Denied, turn stopped');
+  });
+
+  /**
+   * The three carriers a denied decision can land on. Only the first is what
+   * G-9 observed; the other two follow from `pairToolBlocks`'s status rule
+   * (`result ? toolOk === false : running`) and are pinned so the shape is a
+   * contract rather than an accident.
+   *
+   * The third one reads as a contradiction on screen ("Editing x.txt · Denied")
+   * — that is the registered present/past-tense verb defect, tracked as its own
+   * ticket. When it lands, THIS case goes red on purpose: it is the handoff
+   * point, not a regression.
+   */
+  it('Denied arm: the badge does not depend on the carrier being failed or finished', () => {
+    const failedFree = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a', { toolOk: true }),
+        permission('a', { allowed: false, permissionDecision: 'deny' }),
+      ])
+    );
+    const settled = deriveToolRowView(runFor(joinResolvedPermissions(failedFree), 'a'));
+    expect(settled.permissionVerb).toBe('Denied');
+    expect(settled.failed).toBe(false);
+
+    const noResult = turnItems(
+      message([call('a', 'Write'), permission('a', { allowed: false, permissionDecision: 'deny' })])
+    );
+    const running = deriveToolRowView(runFor(joinResolvedPermissions(noResult), 'a'));
+    expect(running.permissionVerb).toBe('Denied');
+    expect(running.running).toBe(true);
+    expect(running.failed).toBe(false);
+  });
+
+  /**
+   * The join adds a record; it never edits the run's status. Colouring a denied
+   * row by writing `failed = true` here would erase the difference between
+   * "allowed, then the tool failed" and "denied" — the two are told apart by
+   * whether the row carries a decision at all, not by colour.
+   */
+  it('leaves run status exactly as pairToolBlocks computed it', () => {
+    const blocks = [call('a', 'Write'), result('a', { toolOk: true }), permission('a')];
+    const before = pairToolBlocks(blocks).map((run) => run.status);
+    const after = runsOf(joinResolvedPermissions(turnItems(message(blocks)))).map(
+      (run) => run.status
+    );
+    expect(after).toEqual(before);
+  });
+});
+
+describe('[FB7-2] an unpairable permission keeps its own row', () => {
+  it('Allowed arm: a synthesised perm-… id matches no tool_call and falls back', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a'),
+        permission('p1', { permissionId: 'perm-1755900000000-3' }),
+      ])
+    );
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup', 'permission']);
+    expect(runFor(joined, 'a').permission).toBeUndefined();
+  });
+
+  // The Codex path derives its permission id from the JSON-RPC request id, which
+  // has nothing to do with any tool item id — so EVERY Codex approval lands here.
+  it('Denied arm: the Codex correlation id falls back with the refusal intact', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Bash'),
+        result('a', { toolOk: false }),
+        permission('p1', {
+          permissionId: 'codex:s1:7',
+          allowed: false,
+          permissionDecision: 'deny',
+        }),
+      ])
+    );
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup', 'permission']);
+    expect(countPermissionRecords(joined)).toBe(1);
+  });
+});
+
+describe('[FB7-3] a merged permission no longer breaks the tool group', () => {
+  it('[tool, permission(hit), tool] becomes ONE group, not two', () => {
+    const items = turnItems(
+      message([call('a', 'Write'), result('a'), permission('a'), call('b', 'Read'), result('b')])
+    );
+    expect(items.map((item) => item.kind)).toEqual(['toolGroup', 'permission', 'toolGroup']);
+
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup']);
+    expect(runsOf(joined).map((run) => run.blockId)).toEqual(['a', 'b']);
+  });
+
+  it('does NOT stitch two groups that were already adjacent for other reasons', () => {
+    const items = turnItems(
+      message([call('a', 'Read'), result('a')], 'm1'),
+      message([call('b', 'Read'), result('b')], 'm2')
+    );
+    expect(joinResolvedPermissions(items).map((item) => item.kind)).toEqual([
+      'toolGroup',
+      'toolGroup',
+    ]);
+  });
+
+  it('an unpaired permission still breaks the group (the shape shipping today)', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a'),
+        permission('p1', { permissionId: 'perm-9' }),
+        call('b', 'Read'),
+        result('b'),
+      ])
+    );
+    expect(joinResolvedPermissions(items).map((item) => item.kind)).toEqual([
+      'toolGroup',
+      'permission',
+      'toolGroup',
+    ]);
+  });
+});
+
+describe('[FB7-4] authorization records are conserved', () => {
+  /**
+   * The one assertion this whole feature cannot be shipped without: a merged
+   * record still counts as one, and a record that could not be merged is never
+   * dropped. Authorization history is an audit surface — `defaultTurnProcessOpen`
+   * and `hasUnresolvedPermission` both assume it stays visible.
+   */
+  it('a mixed turn carries the same count before and after the join', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a'),
+        permission('a'),
+        call('b', 'Bash'),
+        result('b', { toolOk: false }),
+        permission('b', { allowed: false, permissionDecision: 'deny' }),
+        permission('p3', { permissionId: 'codex:s1:2' }),
+        permission('p4', { resolved: false }),
+      ])
+    );
+    expect(countPermissionRecords(items)).toBe(4);
+    expect(countPermissionRecords(joinResolvedPermissions(items))).toBe(4);
+  });
+
+  it('holds when nothing pairs at all', () => {
+    const items = turnItems(
+      message([
+        permission('p1', { permissionId: 'perm-1' }),
+        permission('p2', { permissionId: 'perm-2' }),
+      ])
+    );
+    expect(countPermissionRecords(joinResolvedPermissions(items))).toBe(2);
+  });
+});
+
+describe('[FB7-5] one tool_call never claims two permissions', () => {
+  it('the first claims, the second falls back rather than overwriting it', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a'),
+        permission('p1', { permissionId: 'a', permissionDecision: 'allow' }),
+        permission('p2', { permissionId: 'a', allowed: false, permissionDecision: 'deny' }),
+      ])
+    );
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup', 'permission']);
+    expect(runFor(joined, 'a').permission?.id).toBe('p1');
+    expect(countPermissionRecords(joined)).toBe(2);
+  });
+});
+
+describe('[FB7-6] the auto: provenance survives the merge', () => {
+  it('a Host-answered approval keeps its reason on the merged row', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a', { toolOk: false }),
+        permission('a', {
+          allowed: false,
+          permissionDecision: 'deny',
+          permissionAutoReason: 'timed_out',
+        }),
+      ])
+    );
+    const view = deriveToolRowView(runFor(joinResolvedPermissions(items), 'a'));
+    expect(view.permissionVerb).toBe('Denied');
+    expect(view.permissionAutoNote).toBe('auto: timed_out');
+  });
+
+  it('a human-answered approval carries no note', () => {
+    const items = turnItems(message([call('a', 'Write'), result('a'), permission('a')]));
+    expect(
+      deriveToolRowView(runFor(joinResolvedPermissions(items), 'a')).permissionAutoNote
+    ).toBeUndefined();
+  });
+
+  /**
+   * Source half. Both strings above are reproducible by hand, so a faithful
+   * copy of the decision vocabulary into this module would pass the behaviour
+   * assertions and still leave two definitions of "what a refusal is called"
+   * to drift apart (the [FB8-2] lesson). This pins the reuse itself.
+   */
+  it('reads the words through the shared derivations, never re-spells them', () => {
+    const body = functionSource('deriveToolRowView');
+    expect(body).toContain('derivePermissionVerb(');
+    expect(body).toContain('derivePermissionAutoNote(');
+    for (const word of ['Allowed', 'Denied', 'auto:']) {
+      expect(strippedToolCardSource).not.toContain(`'${word}`);
+    }
+  });
+});
+
+describe('[FB7-7] the decision badge stays a plain tool-row word (D24)', () => {
+  it('carries no chrome — no background, no border, no icon', () => {
+    for (const cls of [toolRowPermissionClass(), toolRowPermissionNoteClass()]) {
+      expect(cls).not.toMatch(/\bbg-/);
+      expect(cls).not.toMatch(/border/);
+      expect(cls).not.toMatch(/Icon|Chevron|lucide/);
+    }
+  });
+
+  /**
+   * The colour half, and the reason it is a SHAPE assertion rather than a value
+   * one: a denied row is already `text-destructive` and an allowed row is
+   * `text-muted-foreground`, so the badge must inherit. Pinning one token here
+   * would put a grey word inside a red row (or a red word inside a grey one),
+   * and pinning "the same token in both arms" is exactly the bug — so the rule
+   * is that these assemblers name no colour at all.
+   */
+  it('names no colour, so it inherits whichever colour the row already decided', () => {
+    for (const cls of [toolRowPermissionClass(), toolRowPermissionNoteClass()]) {
+      expect(cls).not.toMatch(/\btext-(?!markdown\b|left\b|code\b)/);
+    }
+    for (const name of ['toolRowPermissionClass', 'toolRowPermissionNoteClass']) {
+      expect(functionSource(name)).not.toContain('failed');
+    }
+  });
+
+  it('the closed-set decision word never truncates; the free-text note does', () => {
+    expect(toolRowPermissionClass()).toContain('shrink-0');
+    expect(toolRowPermissionClass()).not.toContain('truncate');
+    expect(toolRowPermissionNoteClass()).toContain('truncate');
+    expect(toolRowPermissionNoteClass()).toContain('min-w-0');
+  });
+});
+
+describe('[FB7-8] a pending permission is never merged away', () => {
+  /**
+   * The blocker this feature was one line away from shipping. An unresolved card
+   * matches the join condition perfectly — the store appends it while the
+   * tool_call block with the SAME id is already there — and
+   * `MessageTimeline.tsx`'s `case 'permission'` is the only Allow/Deny surface
+   * in the app. Merging it would leave the turn waiting forever on an answer the
+   * user has no way to give. Note that [FB7-4] cannot catch this: a card folded
+   * into a run still counts as one record.
+   */
+  it('keeps its own item even though a tool_call shares its id', () => {
+    for (const pending of [{ resolved: false }, {}]) {
+      const items = turnItems(
+        message([call('a', 'Write'), permission('a', { resolved: undefined, ...pending })])
+      );
+      const joined = joinResolvedPermissions(items);
+      expect(joined.map((item) => item.kind)).toEqual(['toolGroup', 'permission']);
+      expect(runFor(joined, 'a').permission).toBeUndefined();
+    }
+  });
+
+  it('does not stitch the groups around it either', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        permission('a', { resolved: false }),
+        call('b', 'Read'),
+        result('b'),
+      ])
+    );
+    expect(joinResolvedPermissions(items).map((item) => item.kind)).toEqual([
+      'toolGroup',
+      'permission',
+      'toolGroup',
+    ]);
+  });
+});
+
+describe('[FB7-9] the search domain is the turn, not one message', () => {
+  /**
+   * The store routes the two halves by different rules: a `tool_call` lands on
+   * the message its event names, a `permission_request` lands on "the last
+   * non-history assistant message". They coincide in the common ordering and
+   * nothing structural makes them, so a message-scoped join would quietly stop
+   * merging the moment a new assistant message opened in between — with every
+   * message-scoped test still green.
+   */
+  it('merges a permission that landed on a later message than its tool_call', () => {
+    const items = turnItems(
+      message([call('a', 'Write'), result('a')], 'm1'),
+      message([permission('a')], 'm2')
+    );
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup']);
+    expect(deriveToolRowView(runFor(joined, 'a')).permissionVerb).toBe('Allowed');
+  });
+
+  it('merges backwards across a message boundary too', () => {
+    const items = turnItems(
+      message([call('a', 'Write'), result('a')], 'm1'),
+      message([textBlock('t1'), call('b', 'Bash'), result('b')], 'm2'),
+      message([permission('a')], 'm3')
+    );
+    const joined = joinResolvedPermissions(items);
+    expect(joined.map((item) => item.kind)).toEqual(['toolGroup', 'text', 'toolGroup']);
+    expect(runFor(joined, 'a').permission?.id).toBe('a');
+  });
+});
+
+describe('[FB7-10] a row carrying a decision never aggregates away', () => {
+  /**
+   * "Explored 3 files, 2 searches" hides its members until the detail body is
+   * opened. An authorization record that only shows up after an expand is the
+   * collapsed-away-approval shape the permission red line exists to prevent, so
+   * a run that carries one renders standalone even when its neighbours would
+   * otherwise fold it in.
+   */
+  it('two explore runs still aggregate when neither carries a decision', () => {
+    const items = turnItems(
+      message([call('a', 'Read'), call('b', 'Read'), result('a'), result('b')])
+    );
+    const group = joinResolvedPermissions(items)[0];
+    if (group.kind !== 'toolGroup') throw new Error('expected a toolGroup');
+    const rows = deriveToolGroupRows(group.entries);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].body).toBe('detail');
+  });
+
+  it('but the one with a decision breaks out into its own visible row', () => {
+    const items = turnItems(
+      message([call('a', 'Read'), call('b', 'Read'), result('a'), result('b'), permission('b')])
+    );
+    const group = joinResolvedPermissions(items)[0];
+    if (group.kind !== 'toolGroup') throw new Error('expected a toolGroup');
+    const rows = deriveToolGroupRows(group.entries);
+    expect(rows.map((row) => row.permissionVerb)).toEqual([undefined, 'Allowed']);
+    expect(rows.every((row) => row.body !== 'detail')).toBe(true);
   });
 });

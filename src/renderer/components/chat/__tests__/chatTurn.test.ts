@@ -127,6 +127,63 @@ describe('groupMessagesIntoTurns', () => {
 // Flatten (turn body -> ordered items)
 // ---------------------------------------------------------------------------
 
+describe('flattenTurnItems · FB7 permission join wiring', () => {
+  /**
+   * The join lives in `toolCard.ts` and is exercised directly there; these two
+   * exist so the WIRING cannot rot silently. Dropping the call would leave
+   * every `joinResolvedPermissions` test green while the app went back to
+   * rendering two rows.
+   */
+  it('folds a resolved permission into the tool row it settled', () => {
+    const callId = 'tc-join';
+    const a1 = assistant([
+      {
+        id: `${callId}-call`,
+        type: 'tool_call',
+        toolCallId: callId,
+        toolName: 'Write',
+        toolInput: {},
+      },
+      { id: `${callId}-result`, type: 'tool_result', toolCallId: callId, toolOk: true },
+    ]);
+    // Second message on purpose: the store routes an approval to "the last
+    // non-history assistant message", not to the one the call landed on.
+    const a2 = assistant([
+      {
+        id: 'perm-join',
+        type: 'permission_request',
+        permissionId: `${callId}-call`,
+        toolName: 'Write',
+        resolved: true,
+        allowed: true,
+      },
+    ]);
+    const items = flattenTurnItems(turnOf([a1, a2]));
+    expect(items.map((entry) => entry.kind)).toEqual(['toolGroup']);
+  });
+
+  it('leaves a pending permission as its own item — the Allow/Deny surface must survive', () => {
+    const callId = 'tc-pending';
+    const a1 = assistant([
+      {
+        id: `${callId}-call`,
+        type: 'tool_call',
+        toolCallId: callId,
+        toolName: 'Write',
+        toolInput: {},
+      },
+      {
+        id: 'perm-pending',
+        type: 'permission_request',
+        permissionId: `${callId}-call`,
+        toolName: 'Write',
+      },
+    ]);
+    const items = flattenTurnItems(turnOf([a1]));
+    expect(items.map((entry) => entry.kind)).toEqual(['toolGroup', 'permission']);
+  });
+});
+
 describe('flattenTurnItems', () => {
   it('concatenates each assistant message in message order, stamping the source messageId', () => {
     const a1 = assistant([text('one')]);

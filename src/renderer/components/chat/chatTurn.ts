@@ -1,5 +1,5 @@
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
-import { groupTimeline, type TimelineItem } from './toolCard';
+import { groupTimeline, joinResolvedPermissions, type TimelineItem } from './toolCard';
 
 /**
  * T-31 turn layer (reply-anatomy spec §4). The timeline used to be a flat
@@ -140,6 +140,14 @@ export type TurnItemKind = TurnItem['kind'];
  * A `user` message cannot appear in a body (`groupMessagesIntoTurns` opens a
  * new turn for it); the `notice` fallback covers it defensively so this
  * function never silently drops a message it was handed.
+ *
+ * FB7: the flattened list then passes through `joinResolvedPermissions`, which
+ * folds each settled approval into the tool row it authorised. It runs HERE,
+ * once the whole turn is flat, because that is the smallest scope where both
+ * halves are guaranteed to be present — the store routes `tool_call` blocks to
+ * the message the event names but `permission_request` blocks to "the last
+ * non-history assistant message", so the pair is only co-located by ordering
+ * luck. Pending approvals pass through untouched and keep their own item.
  */
 export function flattenTurnItems(turn: Turn): TurnItem[] {
   const items: TurnItem[] = [];
@@ -152,7 +160,7 @@ export function flattenTurnItems(turn: Turn): TurnItem[] {
     }
     items.push({ kind: 'notice', message, messageId: message.id });
   }
-  return items;
+  return joinResolvedPermissions(items);
 }
 
 /**

@@ -1235,6 +1235,7 @@ rev.1 写「remark 位含 `remark-math`，且**块级选项开、行内选项关
 | `[FB7-7]` | `ToolRows` 类装配侧 | 徽记类串**不含** `bg-` / `border` / 图标组件名（D24 约束）。<br>⚠️ **rev.2-b 口径订正（G-9 后）**：D24 的「**灰阶**纯文本」在 Denied 下**本就不适用** —— `ToolRows.tsx:76-79` 的 failed 分支早有 `text-destructive` 先例，D28 连带项指的正是它。**约束的实质是「无图标 · 无边框 · 无背景」，不是「必须是灰的」**；合并后 Denied 行为红色**不构成 R7 回滚 D24**。<br>⇒ 断言的颜色半边改为**双臂形状约束**：徽记类装配在 `failed:true` 与 `failed:false` 两种输入下，**要么两臂都不含任何 `text-` 颜色类**（动词档＝继承路），**要么两臂的颜色类取值不同**（参数档＝双臂派生路）。🚫 **禁止「两臂相同且带颜色类」**（单臂硬编码，§6.5-a 表第三行） | **R7 回滚 D24**（图标 / 边框 / 背景）；**单臂硬编码颜色** ⇒ Denied 红行里一个灰徽记，或 Allowed 灰行里一个无端红字 |
 | **`[FB7-8]`**（rev.2 新增，**blocker 配套**） | `toolCard.test.ts` | **未决 permission（`resolved` 缺省 / `false`）必产出独立 `{ kind: 'permission' }` item，且不被任何 toolGroup 吸收** —— 即便同 turn 内存在 id 相同的 tool_call | §6.3 blocker：未决授权卡被并成灰阶单行 ⇒ 全仓唯一 Allow/Deny 入口消失 ⇒ **回合死锁** |
 | **`[FB7-9]`**（rev.2 新增） | 同上 | permission 与 tool_call **分处同一 turn 的两条 message** 时的行为被显式钉住（按 §6.3-a 取①：仍合并） | §6.3-a：「同 message」是假前提，两者落块规则不同 |
+| **`[FB7-10]`**（施工期新增，见 §15 片② 偏差 ⑥） | 同上 | **带 permission 的 run 不参与聚合**：两个 explore run 在无决议时仍聚合成一行；其中一个携带决议时**两行都独立**、决议行可见 | 「Explored 3 files, 2 searches」折叠态把授权记录藏进 detail body —— 与 permission 红线同族的「折叠掉授权」形态 |
 | `[FB8-1]` | `turnTiming.test.ts` | **分钟级臂**：`formatThoughtRow({durationMs: 1_702_000})` ⇒ `arg` 含 `28m 22s`；且 `66_000` ⇒ `1m 6s`、`120_000` ⇒ `2m` | 裸秒复活 |
 | `[FB8-2]` | 同上 | **同源**：`formatThoughtRow` 的时长片段**逐字等于** `formatWorkedForDuration(同输入)` | §7.1 的「全仓一处定义」被复制回两份 |
 | `[FB9-1]` | `chatMarkdownPolicy.test.ts` | rehype 位**白名单**：只含 `rehype-katex`（不是「非空」） | 顺手再塞一个插件 |
@@ -1638,6 +1639,43 @@ rev.2 定稿时挂了两个出口（E-1 / E-2）与一条硬前置（G-9）。**
 
 - `[FB1-2]` 的单调性用**真实流式退让**取证：`alpha\n\n1` 已结算 7 字符，下一 token 让它变成 `alpha\n\n1. item`（`1. ` 成为列表标记）⇒ 无状态切分退回 0，`advanceClosedPrefix` 守住 7。这条比规格举的三类反例更贴近生产。
 - 既有 `formatThoughtRow` 四条断言（含 12s 档）**未受影响**，与 §7.3 的判断一致。
+
+### 片② —— FB7 双行合并（2026-08-24 落地）
+
+**门禁**：chat + stores 全域 vitest **87 文件 / 2138 例全绿** · `pnpm typecheck` 0 红 · biome `src/renderer/components/chat` **161 文件 0 红**。
+**变异**：本片分配 8 发（M-19~M-23 · M-30 · **M-36** · **M-37**）**全部实跑、8/8 咬红、零存活**，md5 对账还原一致。
+
+| 发 | 咬红的断言 |
+|---|---|
+| M-19（并入后又保留独立 item） | `[FB7-1]` Allowed/Denied 两臂 + `flattenTurnItems` 接线 |
+| M-20（无命中时丢弃） | **`[FB7-4]` 守恒律**（规格预言的正是这条）+ `[FB7-5]` |
+| M-21（不缝合，仍两组） | `[FB7-3]` |
+| M-22（一个 call 认领两个） | `[FB7-5]` |
+| M-23（做成彩色 chip） | `[FB7-7]` chrome 半边 |
+| M-30（join 忽略 `resolved`） | **`[FB7-8]`**（blocker A-1 的发射半边）+ 接线的未决臂 |
+| **M-36**（徽记单臂硬编码 `text-tool-arg`） | **`[FB7-7]` 颜色半边** —— 原 `[FB7-7]` 确实咬不到（`text-tool-arg` 不含 `bg-`/`border`/图标名） |
+| **M-37**（join 顺手写 `failed = true`） | **`[FB7-1]` Denied 臂**的载体三态 + 「run status 不因 join 改变」 |
+
+**落地物**：`toolCard.ts`（+ join 层 `joinResolvedPermissions` / `countPermissionRecords` / 两个徽记类装配 / `ToolRun.permission` / `ToolRowView.permissionVerb`·`permissionAutoNote` / 聚合守卫）· `ToolRows.tsx`（`ToolRowPermission` 尾部渲染）· `chatTurn.ts`（`flattenTurnItems` 末尾接线）· 三个测试文件（toolCard +25 例、chatTurn +2 例、toolRowArg +2 例）。`questionCardModel.ts` **未改**（`derivePermissionVerb` / `derivePermissionAutoNote` 已是导出，直接复用）。
+
+#### 与 rev.2-b 的偏差（七条，全部登记）
+
+| # | 规格怎么写 | 实际怎么做 | 为什么 |
+|---|---|---|---|
+| ① | §6.6 判 `toolCard.test.ts:166-174`（`lets a permission block break the tool group`）**必红 + 退役换新**，称其为「本件核心承重断言」 | ❌ **未红，仍绿，且保留不退役** | join 落在 **turn 层**（§6.3-a 取①），`groupTimeline` 仍在 **message 层** flush。该断言的命题（permission 打断工具组）**在它自己那一层依然成立**，被推翻的是「打断之后就一直是两组」。新的 `[FB7-3]` 在 join 之后的层面钉住「合并成一个组」，两条各管一层、不冲突 |
+| ② | §6.6 判 `chatTurn.test.ts:187-191`（`an unresolved permission stays in the process segment`）**退役换新** | ❌ **未红，保留不动** | 它测的是 `splitTurnBody` 的纯 kind 序列，与 join 无关；且未决 permission 本就不参与 join（`[FB7-8]`），语义一字未变 |
+| ③ | §6.3 只写「不再 flush」 | **join 必须额外缝合被吸收 permission 两侧的工具组** | flush 发生在 message 层，turn 层的 join 只能**事后缝合**。缝合被严格限定为「本次刚移除过一个被吸收的 permission」，否则两条 message 各自的工具组（一条以工具收尾、下一条以工具开头）会被误并 —— `[FB7-3]` 为此专设反向臂 `does NOT stitch two groups that were already adjacent for other reasons` |
+| ④ | §6.5 只写「一个决议徽记，闭集 ⇒ `shrink-0` 不截断」 | **徽记拆成两个 span**：`permissionVerb`（闭集，`shrink-0`）+ `permissionAutoNote`（开集，`min-w-0 truncate`） | `auto: <reason>` **不是闭集**。若与决议词共用一个 `shrink-0` span，一条冗长的 Host 理由会把参数（文件路径 —— 用户最需要的那半）挤没。开集让位、闭集不让位，正是 §6.5 截断纪律的本意 |
+| ⑤ | §6.5-a 把 G-8 的档位收窄为二选一，具体哪条由点验定 | **施工取「动词档（继承行色）」** —— `toolRowPermissionClass()` 返回 `'shrink-0'`，**不带任何颜色类** | 需要一个候选才能出图。动词档不引入新色值、天然满足 `[FB7-7]` 的双臂形状约束（两臂都不含颜色类），且决议词与动词同亮、参数比它暗一档，层级自洽。**⚠️ 仍待 G-8 确认**，参数档是备选 |
+| ⑥ | §9.1 无此条 | **新增 `[FB7-10]`：带 permission 的 run 不参与聚合** | 「Explored 3 files, 2 searches」折叠态会把决议藏进 detail body —— 那正是「授权记录被折叠掉」的形态，与 permission 红线同族。⇒ 携带决议的 run 强制独立成行 |
+| ⑦ | §9.1 `[FB7-4]` 只描述守恒律 | **新增导出 `countPermissionRecords()`** | 守恒律要能被断言，就得有一个「一条授权记录算一条」的**唯一口径**；散在测试里各写各的计数就是下一个空壳 |
+
+#### 顺带确认
+
+- **`[FB7-6]` 补了源码半边**（片① M-24 的直接教训）：`Allowed` / `Denied` / `auto:` 这几个串**手抄一份也能让行为断言全绿**，所以另断言 `deriveToolRowView` 体内调用 `derivePermissionVerb(` / `derivePermissionAutoNote(`，且**剥注释后**的 `toolCard.ts` 全文不出现 `'Allowed` / `'Denied` / `'auto:` 字面量。剥注释是片⑤ 的教训（本节头注为解释「为什么不重抄」而写了这些词）。
+- **未制造循环依赖**：`toolCard.ts → questionCardModel.ts` 是值导入，反向的 `questionCardModel.ts:7` 只有 `import type { ToolRowView }`（类型擦除，运行期无环）。§6.6 的这条提醒已复核。
+- **`view.failed` 的来源一字未动**：`pairToolBlocks` 的 `result ? toolOk === false : false` 保持原样，M-37 专职守住这条。
+- **G-8 尚未做**（长命令 + 长参数 + `Denied, turn stopped` + `auto:` 四者并存的让位行为、以及 `failed:false` 载体上的灰 `Denied` 是否可辨）—— 留到片③ 的 GUI 批次一并做，与 G-5 同批。
 
 ### 片⑤ —— FB2 + FB3（2026-08-23 落地，`d704f7dd`，与片① 同笔）
 

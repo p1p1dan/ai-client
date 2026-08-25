@@ -11,6 +11,8 @@ import {
   isDelegationTool,
   type ToolRowView,
   toolRowArgClass,
+  toolRowPermissionClass,
+  toolRowPermissionNoteClass,
 } from './toolCard';
 
 /**
@@ -82,6 +84,7 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
     <>
       <span className={verbClass}>{view.verb}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
+      <ToolRowPermission view={view} />
     </>
   );
 
@@ -150,6 +153,30 @@ function SubagentActivity({
     <div className="ml-0.5 border-l border-border pl-3.5">
       <ToolGroup rows={rows} />
     </div>
+  );
+}
+
+/**
+ * FB7: the tail of a row that carries its own authorization record — the
+ * decision word, then the `auto:` note when the Host answered for the user.
+ * One round-trip now reads as ONE line ("Edited x.txt · Denied") instead of a
+ * tool row followed by a separate "Denied Write — x.txt".
+ *
+ * Neither span sets a colour: they inherit the row, so the decision is red on
+ * a denied row and grey on an allowed one without this file deciding twice
+ * what colour a refusal is. Rows that needed no approval render nothing here,
+ * which is what keeps "allowed but failed" (red, no badge) readable next to
+ * "denied" (red, badge).
+ */
+function ToolRowPermission({ view }: { view: ToolRowView }) {
+  if (!view.permissionVerb) return null;
+  return (
+    <>
+      <span className={toolRowPermissionClass()}>· {view.permissionVerb}</span>
+      {view.permissionAutoNote ? (
+        <span className={toolRowPermissionNoteClass()}>· {view.permissionAutoNote}</span>
+      ) : null}
+    </>
   );
 }
 

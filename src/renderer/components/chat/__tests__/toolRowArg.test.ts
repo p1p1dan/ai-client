@@ -74,3 +74,31 @@ describe('ToolRows.tsx <pre> bodies carry font-mono (D25 §2.1 M3a/M3b, static s
     expect(preClassMatches).toHaveLength(2);
   });
 });
+
+describe('[FB7-7] the decision badge renders as bare inherited text (D24, static source guard)', () => {
+  const source = readFileSync(path.join(__dirname, '..', 'ToolRows.tsx'), 'utf8');
+  const stripped = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const start = stripped.indexOf('function ToolRowPermission');
+  const body = stripped.slice(start, stripped.indexOf('\n}', start));
+
+  it('exists and is rendered from the row content, not bolted on elsewhere', () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(stripped).toContain('<ToolRowPermission view={view} />');
+  });
+
+  /**
+   * The badge takes its colour from the row: `text-destructive` on a denied or
+   * failed row, `text-muted-foreground` otherwise. Naming a colour here would
+   * mean a grey word inside a red row (or a red one inside a grey row), and
+   * naming the SAME colour in both cases is exactly that bug — so the component
+   * names none, and reads its classes from the two assemblers instead.
+   */
+  it('names no colour, no background, no border, and no icon of its own', () => {
+    expect(body).toContain('toolRowPermissionClass()');
+    expect(body).toContain('toolRowPermissionNoteClass()');
+    expect(body).not.toMatch(/\btext-(?!markdown\b)/);
+    expect(body).not.toMatch(/\bbg-/);
+    expect(body).not.toMatch(/border/);
+    expect(body).not.toMatch(/Icon|Chevron|lucide/);
+  });
+});
