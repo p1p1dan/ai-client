@@ -639,22 +639,100 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // `NoticeMessage`'s alert body). The real one is `TurnItemView`'s `text`
   // branch, which serves BOTH turn segments. These assertions pin that, so a
   // future edit that "helpfully" markdowns the other two fails here.
-  it('T-29: the text branch is gated by shouldRenderMarkdown and renders ChatMarkdown', () => {
+  it('T-29 / FB1-b: markdown renders in ONE component, and only from prose', () => {
     // The gate reads the streaming-block id the timeline already derives — not
     // a new store field (`chatSessions.ts` is a red line) and not a shape test.
     expectCalled('shouldRenderMarkdown({ blockId: item.block.id, streamingBlockId })');
     expectCalled('<ChatMarkdown');
-    // Exactly one markdown render site in the whole file. This is the assertion
-    // that keeps the user bubble, the notices and the tool rows out of it.
+    // FB1-b split the ONE render site into two, both inside `TurnTextItem`: the
+    // settled-segment map and the whole-text branch for a block that is not
+    // streaming. The claim that mattered is unchanged and is now stated as
+    // containment — the user bubble, the notices and the tool rows are still
+    // nowhere near markdown.
+    const prose = nodeSource(topLevelFunction('TurnTextItem'));
     expect(
       (CALL_SITES.match(/<ChatMarkdown/g) ?? []).length,
-      'assistant prose must have exactly ONE markdown render site'
-    ).toBe(1);
-    // The streaming branch is still the plain-text paragraph, unchanged.
-    expectWired("const text = item.block.text ?? '';");
+      'markdown renders from TurnTextItem and nothing else'
+    ).toBe((prose.match(/<ChatMarkdown/g) ?? []).length);
+    for (const other of ['UserBubble', 'NoticeMessage']) {
+      expect(
+        nodeSource(topLevelFunction(other)),
+        `${other} must not render markdown`
+      ).not.toContain('<ChatMarkdown');
+    }
+    // Unparsed prose still has exactly one spelling, shared by the streaming
+    // tail and the pre-gate block.
     expectCalled(
       'className="text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text"'
     );
+    // The bubble's own prompt echo (`:845`) reads at the same rhythm but is a
+    // different element with a different class order, so the count is of THIS
+    // string — assistant prose that has not been parsed.
+    const proseClass =
+      'text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text';
+    expect(
+      CALL_SITES.split(proseClass).length - 1,
+      'one definition of how unparsed assistant prose reads'
+    ).toBe(1);
+  });
+
+  /**
+   * FB1-b's own wiring. The pure functions were proved in isolation a slice
+   * earlier; these three lines are what actually makes them run.
+   *
+   * The high-water mark is the whole point: `splitClosedPrefix` is stateless and
+   * may return a SHORTER settled prefix than it did a token ago, which on screen
+   * is formatted text flashing back to plain. `advanceClosedPrefix` is the
+   * monotonic entry point, and it has to be the one called here.
+   */
+  it('[FB1-4] the progressive renderer is driven by text alone — no clock, no store', () => {
+    const prose = nodeSource(topLevelFunction('TurnTextItem'));
+    expect(prose, 'the monotonic entry point, not the stateless one').toContain(
+      'advanceClosedPrefix(text, closedHwmRef.current)'
+    );
+    expect(prose).not.toContain('splitClosedPrefix(');
+    // R3: re-cutting is driven by new tokens arriving, never by a timer. A
+    // periodic re-cut would re-create the "change a prop every second and lose
+    // `React.memo`" defect this file already carries a note about.
+    for (const banned of ['setInterval', 'setTimeout', 'Date.now', 'nowMs']) {
+      expect(prose, `${banned} must not drive the split`).not.toContain(banned);
+    }
+    // R5: no store, no new prop on the turn.
+    expect(prose).not.toContain('useChatSessionsStore');
+  });
+
+  /**
+   * The other half of `[FB1-6]`, and the reason it needs one.
+   *
+   * `[FB1-6]` proves the MODEL hands out linear work: `advanceClosedPrefix`
+   * returns settled text already cut into segments, each of which is parsed once
+   * and then memo-hits on its unchanged string. It cannot see what the RENDER
+   * does with them — re-joining the segments into a single `<ChatMarkdown>`
+   * produces identical output, leaves every pure-function assertion green, and
+   * re-parses the whole settled prefix on every flush. Measured on a 100KB
+   * answer over 40 flushes: 6379ms joined against 165ms segmented.
+   */
+  it('[FB1-7] settled segments render one <ChatMarkdown> each, never re-joined', () => {
+    const prose = nodeSource(topLevelFunction('TurnTextItem'));
+    expect(prose).toContain('split.segments.map(');
+    expect(prose, 'one element per segment, keyed by its own content').toContain(
+      '<ChatMarkdown key={segment} text={segment} />'
+    );
+    expect(prose, 'the joined shape is the whole defect').not.toMatch(/segments\s*\.join\(/);
+  });
+
+  /**
+   * The segment container's key. `hwm` lives in a `useRef` on `TurnTextItem`,
+   * so the component instance has to survive a cut point moving; an index key
+   * on the SEGMENT list would be fine (segments are append-only), but an index
+   * key on the turn's segment containers would remount this subtree whenever a
+   * tool group landed before it — hwm back to zero, settled text back to plain.
+   * That failure is invisible to every static check except this one.
+   */
+  it('[FB1-5] turn segment containers are keyed by identity, never by index', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn).toContain('turnItemKey(segment.items[0])');
+    expect(turn, 'no bare index key on a segment container').not.toMatch(/key=\{index\}/);
   });
 
   // Selection opt-in: `globals.css` sets `user-select: none` on `*`, so every

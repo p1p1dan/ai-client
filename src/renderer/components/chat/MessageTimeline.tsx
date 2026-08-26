@@ -33,7 +33,12 @@ import {
 } from '@/stores/turnSendStatus';
 import { AUTH_REQUIRED_ERROR_VIEW, isAuthRequiredError } from './authRequiredError';
 import { ChatMarkdown } from './ChatMarkdown';
-import { deriveStreamingBlockIds, shouldRenderMarkdown } from './chatMarkdownPolicy';
+import {
+  advanceClosedPrefix,
+  chatMarkdownSegmentGapClass,
+  deriveStreamingBlockIds,
+  shouldRenderMarkdown,
+} from './chatMarkdownPolicy';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
@@ -1518,6 +1523,80 @@ interface TurnItemViewProps {
 }
 
 /**
+ * Assistant prose that is not (yet) Markdown: the still-streaming tail, and
+ * whatever a text block is before the gate opens.
+ *
+ * ONE definition, used by both callers. Two copies of this class string would
+ * be two answers to "how does unparsed prose read", and `leading-relaxed` is
+ * counted file-wide by the layout suite for exactly that reason.
+ */
+function PlainProse({ text }: { text: string }) {
+  return (
+    <p className="text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text">
+      {text}
+    </p>
+  );
+}
+
+/**
+ * FB1-b: assistant prose, rendered progressively while it streams.
+ *
+ * Before this, the markdown gate was all-or-nothing — a streaming block stayed
+ * plain text until the whole turn finished, so a long answer arrived as an
+ * unformatted wall and snapped into shape at the end. `advanceClosedPrefix`
+ * narrows that to the part of the text that can still change: everything up to
+ * the last blank line is settled and gets parsed, the tail after it stays plain.
+ *
+ * Two things make this affordable, both measured before the wiring went in
+ * (100KB corpus, 40 flushes):
+ *
+ *  - SEGMENTS, not one growing document. Feeding the whole settled prefix to a
+ *    single `<ChatMarkdown>` re-parses all of it on every flush: 6379ms of
+ *    parsing across the sequence, against 165ms when each settled segment is
+ *    parsed once and then memo-hits on its unchanged string. Same output, 39x
+ *    the work.
+ *  - A STATELESS re-scan every flush. The cut scanner costs 1.71ms at its worst
+ *    (the full 100KB), so carrying an incremental fence-stack across flushes
+ *    would buy nothing.
+ *
+ * The high-water mark is what keeps already-rendered text from un-rendering:
+ * `splitClosedPrefix` is stateless and can legitimately return a SHORTER
+ * prefix than it did a token ago (a new line can re-open a construct that
+ * looked closed), which on screen is formatted text flashing back to plain.
+ * `advanceClosedPrefix` never publishes less than it published before, and the
+ * ref holding that mark survives because `turnItemKey` keys this component by
+ * `block.id` — streaming appends to `block.text` and never changes the id.
+ *
+ * The mark is written in an effect rather than during render: the render then
+ * reads the PREVIOUS mark, which is exactly the input `advanceClosedPrefix`
+ * documents, and nothing here mutates during render.
+ */
+function TurnTextItem({ text, streaming }: { text: string; streaming: boolean }) {
+  const closedHwmRef = useRef(0);
+  const split = useMemo(
+    () => (streaming ? advanceClosedPrefix(text, closedHwmRef.current) : null),
+    [text, streaming]
+  );
+  useEffect(() => {
+    if (split) closedHwmRef.current = split.closedLength;
+  }, [split]);
+
+  if (!split) return <ChatMarkdown text={text} />;
+  return (
+    <div className={chatMarkdownSegmentGapClass()}>
+      {/* `key` by content: segments are append-only and their strings are what
+          `ChatMarkdown`'s memo compares anyway, so an index key would be no
+          weaker — but content keys survive a cut point moving without
+          remounting the segments before it. */}
+      {split.segments.map((segment) => (
+        <ChatMarkdown key={segment} text={segment} />
+      ))}
+      {split.openTail.length > 0 && <PlainProse text={split.openTail} />}
+    </div>
+  );
+}
+
+/**
  * One flattened turn item. The five branches are `AssistantMessage`'s former
  * `groupTimeline` switch, moved verbatim so block order and every per-branch
  * ruling (T-05 D-4/D-5) survive the restructure, plus the `notice` branch
@@ -1556,17 +1635,13 @@ function TurnItemView({
      * history safe is that it carries no per-message metadata, which
      * `deriveStreamingBlockIds` reads as finished.
      */
-    case 'text': {
-      const text = item.block.text ?? '';
-      if (shouldRenderMarkdown({ blockId: item.block.id, streamingBlockId })) {
-        return <ChatMarkdown text={text} />;
-      }
+    case 'text':
       return (
-        <p className="text-markdown leading-relaxed text-foreground whitespace-pre-wrap select-text">
-          {text}
-        </p>
+        <TurnTextItem
+          text={item.block.text ?? ''}
+          streaming={!shouldRenderMarkdown({ blockId: item.block.id, streamingBlockId })}
+        />
       );
-    }
 
     case 'toolGroup':
       return (

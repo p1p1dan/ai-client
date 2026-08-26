@@ -21,6 +21,7 @@ import {
   chatMarkdownListClass,
   chatMarkdownParagraphClass,
   chatMarkdownRootClass,
+  chatMarkdownSegmentGapClass,
   chatMarkdownTableCellClass,
   chatMarkdownTableWrapClass,
   chatMarkdownUrlTransform,
@@ -505,8 +506,35 @@ describe('FB1: splitClosedPrefix / advanceClosedPrefix', () => {
   });
 });
 
+/**
+ * The segment container's gap. Each settled segment is its own markdown root, so
+ * `BLOCK_GAP`'s `first:mt-0` cancels the top margin on every one of them and the
+ * gap between segments would be 0px. The container has to put back exactly what
+ * the roots cancel — the same 14px, not a third spacing tier (D25 allows two).
+ */
+describe('[FB1-b] segment gap', () => {
+  it('restores the block gap between segments, at the block gap value', () => {
+    expect(chatMarkdownSegmentGapClass()).toBe('space-y-3.5');
+    // Read from the module rather than repeated as a literal: if `BLOCK_GAP`
+    // ever moves off 3.5, this fails instead of quietly disagreeing with it.
+    const source = readFileSync(
+      fileURLToPath(new URL('../chatMarkdownPolicy.ts', import.meta.url)),
+      'utf8'
+    );
+    const blockGap = /const BLOCK_GAP = 'mt-([0-9.]+) first:mt-0';/.exec(source);
+    expect(blockGap, 'BLOCK_GAP not found').not.toBeNull();
+    expect(chatMarkdownSegmentGapClass()).toContain(`-${blockGap?.[1]}`);
+  });
+});
+
 describe('F-C3: shouldRenderMarkdown', () => {
-  it('F-C3: the block still streaming stays plain text', () => {
+  /**
+   * FB1-b recut the meaning of `false` here. It used to mean "this block is
+   * plain text, whole"; it now means "this block goes to the PROGRESSIVE
+   * renderer" — settled blocks parsed, the still-changing tail left plain. The
+   * predicate is unchanged, and `TurnTextItem` is the one place that reads it.
+   */
+  it('F-C3: the block still streaming takes the progressive path, not whole-block markdown', () => {
     expect(shouldRenderMarkdown({ blockId: 'b3', streamingBlockId: 'b3' })).toBe(false);
   });
 
@@ -660,10 +688,14 @@ describe('F-C3: deriveStreamingBlockIds', () => {
     expect(deriveStreamingBlockIds({ messages: [], turnInFlight: false }).size).toBe(0);
   });
 
-  // The two halves of F-C3 meet here: what the derivation produces is what the
-  // gate consumes, so the end-to-end answer for restored history is "render
-  // Markdown" even though a turn is in flight.
-  it('F-C3: derivation and gate compose to the behaviour the ARD ruling states', () => {
+  /**
+   * The two halves of F-C3 meet here: what the derivation produces is what the
+   * gate consumes. The composed answer is unchanged for everything except the
+   * one block that is actually streaming — restored history and finished blocks
+   * still get whole-block Markdown even while a turn is in flight — and FB1-b
+   * changed only what the streaming block does with its `false`.
+   */
+  it('F-C3 / FB1-b: only the one streaming block takes the progressive path', () => {
     const messages = [
       { id: 'h:msg-1', lastBlockId: 'h:msg-1:block-0', tracked: false, completed: false },
       { id: 'live', lastBlockId: 'live-2', tracked: true, completed: false },
@@ -674,6 +706,14 @@ describe('F-C3: deriveStreamingBlockIds', () => {
     expect(gate('h:msg-1', 'h:msg-1:block-0')).toBe(true);
     expect(gate('live', 'live-1')).toBe(true);
     expect(gate('live', 'live-2')).toBe(false);
+
+    // …and the progressive path leaves the unsettled tail alone: a half-written
+    // fence is plain text until its closing line lands, which is the whole
+    // reason the cut is at blank lines and not at newlines.
+    const partial = 'done\n\n```ts\nconst a = 1;\n';
+    const split = advanceClosedPrefix(partial, 0);
+    expect(split.segments).toEqual(['done']);
+    expect(split.openTail).toContain('```ts');
   });
 });
 

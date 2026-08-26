@@ -446,6 +446,20 @@ function segmentClosedText(closed: string): string[] {
 }
 
 /** Result of splitting a streaming text into settled segments and an open tail. */
+/**
+ * Gap between two settled segments (FB1-b).
+ *
+ * Each segment is its OWN markdown root, so `BLOCK_GAP`'s `first:mt-0` fires on
+ * every one of them and the gap between segments collapses to 0px — the text
+ * would re-flow the moment a cut point moved. The container supplies what the
+ * roots cancel, at the SAME 14px `BLOCK_GAP` value: "segment to segment" has to
+ * read as "block to block", because that is what it is. Deliberately not a new
+ * spacing tier — D25 allows exactly two (14px block / 24px section).
+ */
+export function chatMarkdownSegmentGapClass(): string {
+  return 'space-y-3.5';
+}
+
 export interface ClosedPrefixSplit {
   /** Settled blocks, in order. Each is a complete Markdown document on its own. */
   segments: string[];
