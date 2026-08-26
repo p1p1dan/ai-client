@@ -269,6 +269,54 @@ describe('deriveTurnStats', () => {
     expect(deriveTurnStats(message(blocks))).toBe('1 tool call');
   });
 
+  /**
+   * A refused call did no work, so it is not work this turn did. The head used
+   * to say `1 edit` about a write the user had just declined — the same
+   * past-tense claim the row itself was making (G-9, 2026-08-23).
+   */
+  it('does not count a call whose authorization was refused', () => {
+    const refusedPermission: ChatBlock = {
+      id: 'p0',
+      type: 'permission_request',
+      permissionId: 'e0',
+      toolName: 'Write',
+      resolved: true,
+      allowed: false,
+      permissionDecision: 'deny',
+    };
+    const blocks: ChatBlock[] = [
+      call('e0', 'Edit', { file_path: 'a.ts' }),
+      result('e0', { toolOk: false }),
+      refusedPermission,
+    ];
+    expect(deriveTurnStats(message(blocks))).toBeNull();
+
+    // …and an ALLOWED one still counts, or the exclusion is just "never count".
+    const allowed: ChatBlock = {
+      ...refusedPermission,
+      id: 'p1',
+      allowed: true,
+      permissionDecision: 'allow',
+    };
+    expect(deriveTurnStats(message([blocks[0], blocks[1], allowed]))).toBe('1 edit');
+  });
+
+  it('a turn whose only call was refused reads as thinking-only, not as tool work', () => {
+    const blocks: ChatBlock[] = [
+      thinking('th0'),
+      call('e0', 'Edit', { file_path: 'a.ts' }),
+      result('e0', { toolOk: false }),
+      {
+        id: 'p0',
+        type: 'permission_request',
+        permissionId: 'e0',
+        resolved: true,
+        allowed: false,
+      },
+    ];
+    expect(turnHasThinkingOnlyProcess(blocks)).toBe(true);
+  });
+
   it('returns null when every count is zero', () => {
     expect(deriveTurnStats(message([]))).toBeNull();
     expect(deriveTurnStats(message([]), { style: 'compact' })).toBeNull();

@@ -396,30 +396,15 @@ export class AgentInstaller {
   }
 
   /**
-   * Uninstall a previously-installed Claude Code build (any version), then
-   * reinstall the pinned Node-compatible version. Used by the renderer's
-   * "downgrade from Bun" action so the resulting install state is clean.
+   * `downgradeClaudeToNodeVersion` retired here (2026-08-26) with the Bun
+   * banner that was its only caller. It uninstalled whatever Claude Code build
+   * was present and reinstalled the pin; with no detection to say a downgrade
+   * is wanted, an uninstall-and-reinstall with no trigger is a loaded gun.
+   *
+   * The pin itself is untouched — `installAgent` still installs
+   * `LAST_NODE_CLAUDE_VERSION`, which rests on the same assumption the banner
+   * did and is tracked separately (see that constant's note).
    */
-  async downgradeClaudeToNodeVersion(onProgress?: (message: string) => void): Promise<void> {
-    this.ensureWindowsOnly('downgradeClaudeToNodeVersion');
-    this.ensureNotCancelled();
-
-    onProgress?.('Removing existing Claude Code build...');
-    try {
-      await runCmd('npm uninstall -g @anthropic-ai/claude-code', {
-        signal: this.abortController.signal,
-      });
-    } catch (error) {
-      // Uninstall may legitimately fail if the package isn't installed via
-      // the same npm prefix; we still try to install over the top below.
-      console.warn('[AgentInstaller] uninstall failed (continuing):', error);
-    }
-
-    await this.refreshPath();
-    onProgress?.(`Installing Claude Code ${LAST_NODE_CLAUDE_VERSION}...`);
-    await this.installAgent('claude');
-  }
-
   async installAll(
     agents: InstallAgentId[],
     onProgress: (progress: InstallProgress) => void

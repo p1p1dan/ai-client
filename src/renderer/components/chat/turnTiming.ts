@@ -1,5 +1,5 @@
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
-import { classifyTool, pairToolBlocks } from './toolCard';
+import { classifyTool, pairToolBlocks, refusedToolCallIds } from './toolCard';
 
 /**
  * T-05 turn-timing side registry (T-06 pattern): folds `thinking.started` /
@@ -193,7 +193,11 @@ export function deriveTurnStats(
   message: ChatMessage,
   options: { style?: 'long' | 'compact' } = {}
 ): string | null {
-  const runs = pairToolBlocks(message.blocks);
+  // A refused call never ran, so it is not work this turn did. Counting it made
+  // the head say `1 edit` about a write the user had just declined — the same
+  // past-tense claim the row itself was making (§6.4, G-9).
+  const refused = refusedToolCallIds(message.blocks);
+  const runs = pairToolBlocks(message.blocks).filter((run) => !refused.has(run.blockId));
   const searchCount = runs.filter((run) => classifyTool(run.toolName) === 'search').length;
   const editCount = runs.filter((run) => EDIT_TOOL_NAMES.has(run.toolName)).length;
   const toolCount = runs.filter(
@@ -229,6 +233,9 @@ export function deriveTurnStats(
  * block-shape knowledge of its own).
  */
 export function turnHasThinkingOnlyProcess(blocks: readonly ChatBlock[]): boolean {
-  if (pairToolBlocks(blocks).length > 0) return false;
+  // Same exclusion as `deriveTurnStats`: a turn whose only "tool" was refused
+  // did no tool work, so if the rest is thinking, that is what it was.
+  const refused = refusedToolCallIds(blocks);
+  if (pairToolBlocks(blocks).some((run) => !refused.has(run.blockId))) return false;
   return blocks.some((block) => block.type === 'thinking');
 }

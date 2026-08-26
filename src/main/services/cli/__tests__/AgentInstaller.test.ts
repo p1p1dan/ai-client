@@ -213,12 +213,9 @@ describe('AgentInstaller platform gate (B6, B7)', () => {
         await expect(new AgentInstaller().installAgent('claude')).rejects.toThrow(/Windows-only/);
       });
 
-      it('downgradeClaudeToNodeVersion throws', async () => {
-        const { AgentInstaller } = await import('../AgentInstaller');
-        await expect(new AgentInstaller().downgradeClaudeToNodeVersion()).rejects.toThrow(
-          /Windows-only/
-        );
-      });
+      // `downgradeClaudeToNodeVersion` retired with the Bun banner that was its
+      // only caller (2026-08-26). The platform-gate arm it contributed is still
+      // covered by the four write-side entry points around it.
 
       it('installAll does NOT throw — it returns the InstallResult contract', async () => {
         // M15 arm: the orchestrator's gate must stay inside the try. Throwing

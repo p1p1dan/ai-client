@@ -443,7 +443,12 @@ interface ThinkingRowOptions {
 export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): ToolRowView {
   const running = run.status === 'running';
   const failed = run.status === 'failed';
-  const verb = toolVerb(run.toolName, running);
+  // A refused call never ran, so it must not be described in the past tense —
+  // the collapsed row is the only thing most readers see (§6.4, G-9).
+  const verb = toolVerb(
+    run.toolName,
+    toolRunWasRefused(run) ? 'refused' : running ? 'running' : 'done'
+  );
   const argDetail = formatToolArgDetail(run, options);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) ? run.output : undefined;
@@ -531,7 +536,15 @@ function isHitListTool(toolName: string): boolean {
   return toolName === 'Grep' || toolName === 'Glob';
 }
 
-export const AGGREGATE_VERB: VerbPair = { done: 'Explored', running: 'Exploring' };
+/**
+ * The aggregate row has no `refused` state: a run carrying an authorization
+ * record never aggregates in the first place (`[FB7-10]`), so the roll-up can
+ * only ever describe calls that actually ran.
+ */
+export const AGGREGATE_VERB: Pick<ToolVerbs, 'done' | 'running'> = {
+  done: 'Explored',
+  running: 'Exploring',
+};
 
 /**
  * Aggregate row for a run of `explore`-class calls. Only meant to be called
@@ -739,37 +752,91 @@ function applyThinkingDurations(
 // 4. Verb / argument formatting
 // ---------------------------------------------------------------------------
 
-export interface VerbPair {
+/**
+ * Three states, not two.
+ *
+ * `done` and `running` were the whole table until a real deny was observed on a
+ * live turn: a refused call still gets a `tool_call` block and a `tool_result`,
+ * so it rendered with the COMPLETED verb — `Edited tmp/x.txt` for a write that
+ * was refused and never happened. Colour and an expanded body carried the
+ * truth; the collapsed row, which is what a user reads, said the opposite.
+ *
+ * `refused` is the plain infinitive, so the row reads as a label for the
+ * operation that was blocked rather than a claim about the past: "Edit
+ * tmp/x.txt · Denied". It is spelled out per tool rather than derived, because
+ * there is no derivation — `Ran`→`Run`, `Grepped`→`Grep`, `Searched files`→
+ * `Search files`, `Read`→`Read` share no rule, and a wrong guess here writes
+ * bad English into the transcript.
+ */
+export interface ToolVerbs {
   done: string;
   running: string;
+  /** The operation that was asked for and refused — it never ran. */
+  refused: string;
 }
 
+export type ToolVerbState = 'done' | 'running' | 'refused';
+
 /** A07 :2539 verb table, plus our own `Edited` (A07-endorsed) / `Delegated` / `Fetched` additions. */
-export const TOOL_VERBS: Readonly<Record<string, VerbPair>> = {
-  Read: { done: 'Read', running: 'Reading' },
-  NotebookRead: { done: 'Read', running: 'Reading' },
-  Grep: { done: 'Grepped', running: 'Grepping' },
-  Glob: { done: 'Searched files', running: 'Searching files' },
-  WebSearch: { done: 'Searched', running: 'Searching' },
-  WebFetch: { done: 'Fetched', running: 'Fetching' },
-  Edit: { done: 'Edited', running: 'Editing' },
-  MultiEdit: { done: 'Edited', running: 'Editing' },
-  Write: { done: 'Edited', running: 'Editing' },
-  NotebookEdit: { done: 'Edited', running: 'Editing' },
-  Bash: { done: 'Ran', running: 'Running' },
-  BashOutput: { done: 'Ran', running: 'Running' },
-  KillShell: { done: 'Ran', running: 'Running' },
-  TodoWrite: { done: 'Planned', running: 'Planning' },
-  ExitPlanMode: { done: 'Planned', running: 'Planning' },
-  Task: { done: 'Delegated', running: 'Delegating' },
-  Agent: { done: 'Delegated', running: 'Delegating' },
+export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
+  Read: { done: 'Read', running: 'Reading', refused: 'Read' },
+  NotebookRead: { done: 'Read', running: 'Reading', refused: 'Read' },
+  Grep: { done: 'Grepped', running: 'Grepping', refused: 'Grep' },
+  Glob: { done: 'Searched files', running: 'Searching files', refused: 'Search files' },
+  WebSearch: { done: 'Searched', running: 'Searching', refused: 'Search' },
+  WebFetch: { done: 'Fetched', running: 'Fetching', refused: 'Fetch' },
+  Edit: { done: 'Edited', running: 'Editing', refused: 'Edit' },
+  MultiEdit: { done: 'Edited', running: 'Editing', refused: 'Edit' },
+  Write: { done: 'Edited', running: 'Editing', refused: 'Edit' },
+  NotebookEdit: { done: 'Edited', running: 'Editing', refused: 'Edit' },
+  Bash: { done: 'Ran', running: 'Running', refused: 'Run' },
+  BashOutput: { done: 'Ran', running: 'Running', refused: 'Run' },
+  KillShell: { done: 'Ran', running: 'Running', refused: 'Run' },
+  TodoWrite: { done: 'Planned', running: 'Planning', refused: 'Plan' },
+  ExitPlanMode: { done: 'Planned', running: 'Planning', refused: 'Plan' },
+  Task: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
+  Agent: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
 };
 
-export const UNKNOWN_TOOL_VERB: VerbPair = { done: 'Ran', running: 'Running' };
+export const UNKNOWN_TOOL_VERB: ToolVerbs = { done: 'Ran', running: 'Running', refused: 'Run' };
 
-export function toolVerb(toolName: string, running: boolean): string {
-  const pair = TOOL_VERBS[toolName] ?? UNKNOWN_TOOL_VERB;
-  return running ? pair.running : pair.done;
+export function toolVerb(toolName: string, state: ToolVerbState): string {
+  return (TOOL_VERBS[toolName] ?? UNKNOWN_TOOL_VERB)[state];
+}
+
+/**
+ * Was this call's own authorization refused — i.e. did the tool never run?
+ *
+ * `allowed === false` is the canonical test, not a decision-name list:
+ * `derivePermissionRowView` states the rule ("`allow_session` is an allow and
+ * `cancel` is a deny, and the Host derives this same boolean from the same
+ * decision"), and a second reading of the decision vocabulary here could
+ * disagree with the Host's.
+ *
+ * An UNRESOLVED permission is not a refusal — the user has not answered yet.
+ */
+export function toolRunWasRefused(run: Pick<ToolRun, 'permission'>): boolean {
+  const permission = run.permission;
+  return permission?.resolved === true && permission.allowed === false;
+}
+
+/**
+ * The `tool_call` block ids in this list whose authorization was refused.
+ *
+ * Lives here, next to `joinResolvedPermissions`, because this is the one module
+ * that knows `permissionId` and a `tool_call` block id are the same string on
+ * the Claude path. The turn-head counter needs the same fact but sees only raw
+ * blocks, and a second correlation written over there is a second place to get
+ * the key wrong.
+ */
+export function refusedToolCallIds(blocks: readonly ChatBlock[]): Set<string> {
+  const refused = new Set<string>();
+  for (const block of blocks) {
+    if (block.type !== 'permission_request') continue;
+    if (block.resolved !== true || block.allowed !== false) continue;
+    if (block.permissionId) refused.add(block.permissionId);
+  }
+  return refused;
 }
 
 export type ToolClass = 'read' | 'search' | 'action';

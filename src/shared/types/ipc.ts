@@ -289,8 +289,6 @@ export const IPC_CHANNELS = {
 
   // Claude runtime gate (TEC-encrypted environment compatibility)
   CLAUDE_RUNTIME_CHECK: 'claude:runtime:check',
-  CLAUDE_RUNTIME_DOWNGRADE: 'claude:runtime:downgrade',
-  CLAUDE_RUNTIME_DOWNGRADE_PROGRESS: 'claude:runtime:downgrade:progress',
   CLAUDE_RUNTIME_DISABLE_AUTO_UPDATES: 'claude:runtime:disableAutoUpdates',
 
   // Auth (D47 S2a) — managed-credentials mode probe. Path is not a secret;

@@ -18,11 +18,14 @@ import {
   type PermissionJoinable,
   pairToolBlocks,
   shortPath,
+  TOOL_VERBS,
   type ToolGroupEntry,
   type ToolRun,
   toolRowPermissionClass,
   toolRowPermissionNoteClass,
+  toolRunWasRefused,
   toolVerb,
+  UNKNOWN_TOOL_VERB,
 } from '../toolCard';
 
 const toolCardSource = readFileSync(
@@ -435,21 +438,21 @@ describe('deriveAggregateRow', () => {
 
 describe('toolVerb / classifyTool', () => {
   it('matches the A07 :2539 verb table', () => {
-    expect(toolVerb('Bash', false)).toBe('Ran');
-    expect(toolVerb('Bash', true)).toBe('Running');
-    expect(toolVerb('Grep', false)).toBe('Grepped');
-    expect(toolVerb('Grep', true)).toBe('Grepping');
-    expect(toolVerb('Glob', false)).toBe('Searched files');
-    expect(toolVerb('Glob', true)).toBe('Searching files');
-    expect(toolVerb('Read', false)).toBe('Read');
-    expect(toolVerb('Read', true)).toBe('Reading');
-    expect(toolVerb('Edit', false)).toBe('Edited');
-    expect(toolVerb('Edit', true)).toBe('Editing');
+    expect(toolVerb('Bash', 'done')).toBe('Ran');
+    expect(toolVerb('Bash', 'running')).toBe('Running');
+    expect(toolVerb('Grep', 'done')).toBe('Grepped');
+    expect(toolVerb('Grep', 'running')).toBe('Grepping');
+    expect(toolVerb('Glob', 'done')).toBe('Searched files');
+    expect(toolVerb('Glob', 'running')).toBe('Searching files');
+    expect(toolVerb('Read', 'done')).toBe('Read');
+    expect(toolVerb('Read', 'running')).toBe('Reading');
+    expect(toolVerb('Edit', 'done')).toBe('Edited');
+    expect(toolVerb('Edit', 'running')).toBe('Editing');
   });
 
   it('falls back to Ran/Running for an unknown tool name', () => {
-    expect(toolVerb('SomeUnknownTool', false)).toBe('Ran');
-    expect(toolVerb('SomeUnknownTool', true)).toBe('Running');
+    expect(toolVerb('SomeUnknownTool', 'done')).toBe('Ran');
+    expect(toolVerb('SomeUnknownTool', 'running')).toBe('Running');
   });
 
   it('classifies an mcp__server__tool call as action, so it never aggregates', () => {
@@ -461,8 +464,8 @@ describe('toolVerb / classifyTool', () => {
   // this, the live `Agent` rows fell through to the unknown-tool "Ran".
   it('treats Task and Agent as the same delegation tool', () => {
     for (const name of ['Task', 'Agent']) {
-      expect(toolVerb(name, false)).toBe('Delegated');
-      expect(toolVerb(name, true)).toBe('Delegating');
+      expect(toolVerb(name, 'done')).toBe('Delegated');
+      expect(toolVerb(name, 'running')).toBe('Delegating');
       expect(classifyTool(name)).toBe('action');
       expect(isDelegationTool(name)).toBe(true);
     }
@@ -1107,5 +1110,72 @@ describe('[FB7-10] a row carrying a decision never aggregates away', () => {
     const rows = deriveToolGroupRows(group.entries);
     expect(rows.map((row) => row.permissionVerb)).toEqual([undefined, 'Allowed']);
     expect(rows.every((row) => row.body !== 'detail')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A refused call never ran, and nothing may say otherwise
+// ---------------------------------------------------------------------------
+
+describe('refused calls are not described in the past tense', () => {
+  /**
+   * Found on a live turn (G-9): a denied Write still produces a `tool_call`
+   * block AND a `tool_result`, so the row rendered with the COMPLETED verb —
+   * `Edited tmp/x.txt` for a write that was refused and never happened. Red
+   * colour and the expanded body carried the truth; the collapsed row, which is
+   * what a reader actually sees, said the opposite. FB7 then merged the decision
+   * onto that same row, putting `Edited …` and `Denied` side by side.
+   */
+  it('a denied run reads as the operation, not as a completed action', () => {
+    const items = turnItems(
+      message([
+        call('a', 'Write'),
+        result('a', { toolOk: false, text: 'User denied permission' }),
+        permission('a', { allowed: false, permissionDecision: 'deny' }),
+      ])
+    );
+    const view = deriveToolRowView(runFor(joinResolvedPermissions(items), 'a'));
+    expect(view.verb, 'the past tense is the defect').toBe('Edit');
+    expect(view.permissionVerb).toBe('Denied');
+  });
+
+  it('an ALLOWED run keeps the completed verb', () => {
+    const items = turnItems(message([call('a', 'Write'), result('a'), permission('a')]));
+    expect(deriveToolRowView(runFor(joinResolvedPermissions(items), 'a')).verb).toBe('Edited');
+  });
+
+  it('an UNRESOLVED permission is not a refusal — the user has not answered', () => {
+    const items = turnItems(message([call('a', 'Write'), permission('a', { resolved: false })]));
+    // Still running, so still the present tense.
+    expect(deriveToolRowView(runFor(joinResolvedPermissions(items), 'a')).verb).toBe('Editing');
+  });
+
+  /**
+   * `allowed === false` is the test, not a decision-name list. `cancel`
+   * ("Denied, turn stopped") is a deny and `allow_session` is an allow, and the
+   * Host derives the same boolean from the same decision — a second reading of
+   * the vocabulary here could disagree with it.
+   */
+  it('reads the boolean, so every refusal decision counts and every allow does not', () => {
+    const refused = (overrides: Partial<ChatBlock>) =>
+      toolRunWasRefused({
+        permission: { id: 'p', type: 'permission_request', resolved: true, ...overrides },
+      });
+    expect(refused({ allowed: false, permissionDecision: 'deny' })).toBe(true);
+    expect(refused({ allowed: false, permissionDecision: 'cancel' })).toBe(true);
+    expect(refused({ allowed: true, permissionDecision: 'allow_session' })).toBe(false);
+    expect(toolRunWasRefused({ permission: undefined })).toBe(false);
+  });
+
+  it('every tool has a refused form, and none of them is the completed one', () => {
+    for (const [name, verbs] of Object.entries(TOOL_VERBS)) {
+      expect(verbs.refused, `${name} has no refused form`).toBeTruthy();
+      // `Read` is the one word that is legitimately both — English, not an
+      // oversight — so it is the only permitted collision.
+      if (verbs.done !== 'Read') {
+        expect(verbs.refused, `${name} still reads as completed`).not.toBe(verbs.done);
+      }
+    }
+    expect(UNKNOWN_TOOL_VERB.refused).toBe('Run');
   });
 });

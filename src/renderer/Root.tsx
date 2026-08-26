@@ -12,7 +12,6 @@ import { lazy, type ReactNode, Suspense, useEffect, useState } from 'react';
 import { DevToolsOverlay } from './components/DevToolsOverlay';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
-import { ClaudeRuntimeBanner } from './components/onboarding/ClaudeRuntimeBanner';
 import { ClaudeVsCodeOnlyShell } from './components/onboarding/ClaudeVsCodeOnlyShell';
 import { OnboardingShell } from './components/onboarding/OnboardingShell';
 import { Button } from './components/ui/button';
@@ -227,11 +226,11 @@ function RootWithOnboardingGate() {
         }
       : null);
 
-  // Once we know the CLI is on a Node-compatible build, eagerly disable
-  // Claude's bundled auto-updater so the next launch can't silently pull a
-  // Bun build that breaks on encrypted devices.
+  // Once a CLI is present, eagerly disable Claude's bundled auto-updater: the
+  // installs this app performs are pinned (`LAST_NODE_CLAUDE_VERSION`), and an
+  // updater that silently moves off that pin defeats the pin.
   useEffect(() => {
-    if (runtimeStatus?.kind === 'node-compatible') {
+    if (runtimeStatus?.kind === 'installed') {
       void window.electronAPI.claudeRuntime.disableAutoUpdates();
     }
   }, [runtimeStatus?.kind]);
@@ -404,16 +403,10 @@ function RootWithOnboardingGate() {
   // decision.shell === 'app'
   return (
     <AppShell
-      banner={
-        runtimeStatus ? (
-          <ClaudeRuntimeBanner
-            status={runtimeStatus}
-            onStatusChange={(next) => {
-              queryClient.setQueryData(['claudeRuntimeStatus'], next);
-            }}
-          />
-        ) : undefined
-      }
+      // The Bun-incompatibility banner was retired here (2026-08-26): its
+      // version threshold was stale, and a warning nobody has re-checked is
+      // worse than none. No replacement — the ruling was "retire, no detection".
+      banner={undefined}
     />
   );
 }

@@ -14,7 +14,7 @@ import type { AuthState } from '../types/auth';
 import type { ClaudeRuntimeStatus } from '../types/claudeRuntime';
 
 const HEALTHY_CLI = { claudeInstalled: true };
-const NODE_COMPATIBLE: ClaudeRuntimeStatus = { kind: 'node-compatible' };
+const NODE_COMPATIBLE: ClaudeRuntimeStatus = { kind: 'installed' };
 
 /** D47 S5 §1.1 — same vault -> AuthState mapping as `AuthStateService`'s (kept in lockstep by construction, verified independently by `AuthStateService.test.ts`'s own derivation table). */
 function stateForVault(vault: 'ok' | 'cleared' | 'rejected' | 'locked' | 'invalid'): AuthState {

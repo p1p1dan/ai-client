@@ -2,12 +2,12 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
-import { classifyClaudeCliVersion, compareSemver } from './ClaudeVersion';
+import { compareSemver } from './ClaudeVersion';
 import { cliDetector } from './CliDetector';
 
 export type { ClaudeRuntimeKind, ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
 export { LAST_NODE_CLAUDE_VERSION } from '@shared/types';
-export { classifyClaudeCliVersion, compareSemver } from './ClaudeVersion';
+export { compareSemver } from './ClaudeVersion';
 
 // Delegate `claude --version` detection to the same CliDetector used by the
 // post-registration onboarding check. CliDetector gives us: 60s timeout on
@@ -98,8 +98,11 @@ export class ClaudeRuntimeChecker {
 
     const cliVersion = await runVersionCheck();
     if (cliVersion) {
-      const kind = classifyClaudeCliVersion(cliVersion);
-      this.cached = { kind, cliVersion };
+      // `installed`, flat: the version-threshold classification retired with the
+      // Bun banner (2026-08-26). Answering "which runtime is this" needs a real
+      // probe of the binary, and the ruling was to stop guessing rather than to
+      // guess differently.
+      this.cached = { kind: 'installed', cliVersion };
       return this.cached;
     }
 
