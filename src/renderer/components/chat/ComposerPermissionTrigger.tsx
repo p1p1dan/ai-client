@@ -1,4 +1,8 @@
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
+import {
+  MOST_RESTRICTIVE_APPROVAL,
+  MOST_RESTRICTIVE_SANDBOX,
+} from '@shared/models/permissionTiers';
 import { type AgentWireName, CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import {
   claudePermissionPreference,
@@ -203,18 +207,6 @@ export function ComposerPermissionTrigger({
   const [draftPreference, setDraftPreference] = useState<SessionPermissionPreference | undefined>(
     () => readDraftPermission(sessionId, agent) ?? templatePreference
   );
-  /**
-   * Codex's posture is TWO axes, and a draft with no base has neither. Picking
-   * one axis cannot produce a complete preference, and inventing the other one
-   * would materialise a posture nobody chose into the session snapshot — so the
-   * half-pick lives here until its partner arrives, and only then is it stored.
-   * Claude never uses this: one pick there is a whole posture.
-   */
-  const [partialCodex, setPartialCodex] = useState<{
-    approvalPolicy?: string;
-    sandboxMode?: string;
-  }>({});
-
   const view = deriveComposerPermission({
     sessionId,
     agent,
@@ -239,7 +231,6 @@ export function ComposerPermissionTrigger({
     sessionRef.current = sessionId;
     setPending(null);
     setHeld(null);
-    setPartialCodex({});
     setDraftPreference(readDraftPermission(sessionId, agent) ?? templatePreference);
   }, [sessionId, agent, templatePreference]);
 
@@ -250,7 +241,6 @@ export function ComposerPermissionTrigger({
   useEffect(() => {
     if (agentRef.current === agent) return;
     agentRef.current = agent;
-    setPartialCodex({});
     setDraftPreference(readDraftPermission(sessionId, agent) ?? templatePreference);
   }, [agent, sessionId, templatePreference]);
 
@@ -323,7 +313,6 @@ export function ComposerPermissionTrigger({
   const commitDraft = (preference: SessionPermissionPreference) => {
     writeDraftPermission(sessionId, agent, preference);
     setDraftPreference(preference);
-    setPartialCodex({});
   };
 
   const requestDraft = (preference: SessionPermissionPreference) => {
@@ -337,31 +326,40 @@ export function ComposerPermissionTrigger({
   };
 
   /**
-   * The Codex draft's half-pick. With no base posture, one axis is not a
-   * preference — and the missing half must not be invented, because whatever is
-   * invented gets written into the session snapshot at first send and is what
-   * the agent then runs under.
+   * The Codex draft's pick. Codex's posture is a PAIR and the UI is two
+   * controls, so picking one dimension while the other has never been chosen has
+   * to complete the pair somehow.
+   *
+   * It completes it exactly the way the template layer does — with
+   * `MOST_RESTRICTIVE_*`, not with the Host's constant (which this side must not
+   * know) and not with a half-posture held until its partner arrives. That last
+   * one was this file's first attempt, and it was wrong twice over: it gave the
+   * same question two different answers depending on which control the user
+   * happened to open, and it left a pick silently doing nothing until a second,
+   * unrelated pick "released" it.
+   *
+   * Erring toward LESS capability is the point, and it is provably never toward
+   * a dangerous tier — `untrusted` and `read-only` are the strictest values of
+   * their dimensions (C13/D12).
    */
   const selectDraftCodex = (sectionId: 'approvalPolicy' | 'sandboxMode', itemId: string) => {
     const base = view.current && 'approvalPolicy' in view.current ? view.current : undefined;
-    const merged = {
-      approvalPolicy:
-        sectionId === 'approvalPolicy'
-          ? itemId
-          : (partialCodex.approvalPolicy ?? base?.approvalPolicy),
-      sandboxMode:
-        sectionId === 'sandboxMode' ? itemId : (partialCodex.sandboxMode ?? base?.sandboxMode),
-    };
     // Built and then VALIDATED, not cast: the two values come off menu ids, and
     // the shared reader is the same one the Host's dispatch uses — including its
     // refusal of a Codex arm carrying `networkAccess`.
-    const complete = codexPermissionPreference({ agent: CODEX_AGENT, ...merged }, CODEX_AGENT);
-    if (complete) {
-      requestDraft(complete);
-      return;
-    }
-    // Not yet a posture: remember the half and keep waiting for its partner.
-    setPartialCodex(merged);
+    const complete = codexPermissionPreference(
+      {
+        agent: CODEX_AGENT,
+        approvalPolicy:
+          sectionId === 'approvalPolicy'
+            ? itemId
+            : (base?.approvalPolicy ?? MOST_RESTRICTIVE_APPROVAL),
+        sandboxMode:
+          sectionId === 'sandboxMode' ? itemId : (base?.sandboxMode ?? MOST_RESTRICTIVE_SANDBOX),
+      },
+      CODEX_AGENT
+    );
+    if (complete) requestDraft(complete);
   };
 
   const handleSelect = (sectionId: ComposerPermissionMenuSection['id'], itemId: string) => {

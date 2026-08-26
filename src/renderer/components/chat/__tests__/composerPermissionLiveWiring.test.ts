@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  MOST_RESTRICTIVE_APPROVAL,
+  MOST_RESTRICTIVE_SANDBOX,
+} from '@shared/models/permissionTiers';
+import { isDangerousPermissionPreference } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import { composerModelTriggerClass } from '../middleColumnLayout';
 import { stripComments } from './stripComments';
@@ -84,6 +89,60 @@ describe('D15 — the control is absent on an old Host, not dead', () => {
     expect(
       only(composer, 'capabilityPermissionPolicy={hostStatus.capabilities?.permissionPolicy}')
     ).toBeGreaterThan(-1);
+  });
+});
+
+/**
+ * §5.4's "模板层与实时层逐条同口径", extended to the draft layer.
+ *
+ * Codex's posture is a pair behind two controls, so picking one dimension while
+ * the other has never been chosen has to complete the pair. There is exactly one
+ * right answer to that — `MOST_RESTRICTIVE_*` — and the draft path got a
+ * different one on its first cut: a half-posture held in component state until
+ * an unrelated second pick released it. Same question, two answers, decided by
+ * which control the user happened to open.
+ *
+ * Nothing caught it, because "both layers complete the pair the same way" was
+ * stated in a header and asserted nowhere.
+ */
+describe('the Codex pair is completed the same way everywhere', () => {
+  it('the draft path uses the shared most-restrictive constants, not its own', () => {
+    // Twice each: the import, and the one use. Imported rather than re-spelled
+    // is the whole claim — a local `'untrusted'` literal here would be a second
+    // definition of "strictest" that nothing keeps in step with the first.
+    expect(offsets(trigger, 'MOST_RESTRICTIVE_APPROVAL')).toHaveLength(2);
+    expect(offsets(trigger, 'MOST_RESTRICTIVE_SANDBOX')).toHaveLength(2);
+    expect(trigger).toContain("from '@shared/models/permissionTiers'");
+  });
+
+  /**
+   * The retired shape, kept out by name. A pick that does nothing visible until
+   * a later, unrelated pick completes it is worse than either alternative: the
+   * control appears broken, and the posture that eventually lands was assembled
+   * from two decisions the user made at different times about different things.
+   */
+  it('no half-posture is held anywhere in the trigger', () => {
+    expect(trigger).not.toContain('partialCodex');
+    expect(trigger, 'a pick either produces a whole posture or is refused').not.toMatch(
+      /setPartial/
+    );
+  });
+
+  /**
+   * And the strictest values really are the strictest — the completion may never
+   * hand out capability the user did not ask for, least of all a dangerous tier
+   * (C13/D12).
+   */
+  it('the strictest values are not dangerous ones', () => {
+    expect(MOST_RESTRICTIVE_APPROVAL).toBe('untrusted');
+    expect(MOST_RESTRICTIVE_SANDBOX).toBe('read-only');
+    expect(
+      isDangerousPermissionPreference({
+        agent: 'codex',
+        approvalPolicy: MOST_RESTRICTIVE_APPROVAL,
+        sandboxMode: MOST_RESTRICTIVE_SANDBOX,
+      })
+    ).toBe(false);
   });
 });
 
