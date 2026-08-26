@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { APP_STATE_DIR } from '@shared/defaultPaths';
 import type { RemotePlatform } from '@shared/types';
 import { app } from 'electron';
 import pkg from '../../../../package.json';
@@ -24,7 +25,7 @@ export interface RemoteRuntimeAsset {
 }
 
 export const MANAGED_REMOTE_NODE_VERSION = '20.19.0';
-export const MANAGED_REMOTE_RUNTIME_DIR = '.aiclient/remote-runtime';
+export const MANAGED_REMOTE_RUNTIME_DIR = `${APP_STATE_DIR}/remote-runtime`;
 
 const GITHUB_RELEASE_TAG = `v${pkg.version}`;
 const GITHUB_RELEASE_ASSET_BASE_URL = `https://github.com/p1p1dan/ai-client/releases/download/${GITHUB_RELEASE_TAG}`;

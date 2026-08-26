@@ -1,5 +1,27 @@
 export type PathSep = '/' | '\\';
 
+/**
+ * The app's own state directory under `$HOME` — settings, session state, and
+ * the remote-connection working files all live under it.
+ *
+ * ## Why this is a constant and not five string literals
+ *
+ * It used to be five: `SharedSessionState`, `RemoteAuthBroker`,
+ * `RemoteConnectionManager`, `RemoteRuntimeAssets` and the generated remote
+ * helper each spelled `'.aiclient'` themselves. Nothing tied them together,
+ * so the directory's identity was a convention rather than a fact — and a
+ * rename would have been five independent edits with no way to notice a
+ * missed one. `defaultPaths.test.ts` now scans the repo and fails if the
+ * literal reappears anywhere but here.
+ *
+ * A rename is planned (`.pilab`, D59 / plan `unified-credentials`), which is
+ * what forced the consolidation; changing the value here is deliberately NOT
+ * enough on its own — see that plan for the migration this directory needs
+ * (existing installs, and the orphaned copy left on already-connected remote
+ * machines).
+ */
+export const APP_STATE_DIR = '.aiclient';
+
 const JYWAI_ROOT_DIR = 'JYWAI';
 const TEMPORARY_DIR = 'temporary';
 const WORKSPACES_DIR = 'workspaces';

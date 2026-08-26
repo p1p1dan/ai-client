@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { APP_STATE_DIR } from '@shared/defaultPaths';
 import {
   type ConnectionProfile,
   type ConnectionTestResult,
@@ -417,7 +418,7 @@ function getRemoteSettingsPath(): string {
 }
 
 function getRemoteStateRoot(): string {
-  return join(process.env.HOME || process.env.USERPROFILE || app.getPath('home'), '.aiclient');
+  return join(process.env.HOME || process.env.USERPROFILE || app.getPath('home'), APP_STATE_DIR);
 }
 
 function getAppKnownHostsPath(): string {

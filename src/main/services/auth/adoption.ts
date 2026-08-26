@@ -24,6 +24,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { APP_STATE_DIR } from '@shared/defaultPaths';
 import { resolveManagedCredentialsEnabled } from './AuthStateService';
 import type { VaultPayload, VaultReadResult, VaultSaveResult } from './CredentialVault';
 import type { ClaudeHomeCredentials } from './claudeHome';
@@ -45,7 +46,7 @@ export type LegacyOnboardingReadResult =
 
 /** Malformed JSON never throws, never writes a marker — every failure mode collapses to `{status:'invalid'}`, which the orchestration treats identically to "not registered" (skip). */
 export function readLegacyOnboardingState(): LegacyOnboardingReadResult {
-  const settingsPath = join(homedir(), '.aiclient', 'settings.json');
+  const settingsPath = join(homedir(), APP_STATE_DIR, 'settings.json');
   if (!existsSync(settingsPath)) {
     return { status: 'absent' };
   }

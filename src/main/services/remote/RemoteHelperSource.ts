@@ -1,3 +1,4 @@
+import { APP_STATE_DIR } from '@shared/defaultPaths';
 import {
   GIT_LOG_FIELD_SEPARATOR,
   GIT_LOG_PRETTY_FORMAT,
@@ -32,8 +33,8 @@ const MAX_SESSION_REPLAY_CHARS = 65536;
 const EXEC_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const EXEC_COMMAND_OUTPUT_LIMIT_CHARS = 2 * 1024 * 1024;
 const REMOTE_PTY_UNAVAILABLE = 'REMOTE_PTY_UNAVAILABLE';
-const REMOTE_SETTINGS_PATH = '.aiclient/settings.json';
-const REMOTE_SESSION_STATE_PATH = '.aiclient/session-state.json';
+const REMOTE_SETTINGS_PATH = '${APP_STATE_DIR}/settings.json';
+const REMOTE_SESSION_STATE_PATH = '${APP_STATE_DIR}/session-state.json';
 const RUNTIME_MANIFEST_FILENAME = 'aiclient-remote-runtime-manifest.json';
 const GLOBAL_STATUS_CACHE_TTL = 300000;
 const AUTH_TOKEN_BYTES = 36;

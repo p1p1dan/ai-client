@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ManagedCodexConfigInput } from '@shared/codexManagedConfig';
+import { APP_STATE_DIR } from '@shared/defaultPaths';
 import type {
   OnboardingCliStatus,
   OnboardingCredentialsHealth,
@@ -107,7 +108,7 @@ class OnboardingService {
    */
   checkRegistration(): OnboardingState {
     try {
-      const settingsPath = path.join(os.homedir(), '.aiclient', 'settings.json');
+      const settingsPath = path.join(os.homedir(), APP_STATE_DIR, 'settings.json');
       if (!fs.existsSync(settingsPath)) {
         return { registered: false };
       }

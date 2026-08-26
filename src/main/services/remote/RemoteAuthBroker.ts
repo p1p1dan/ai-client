@@ -3,6 +3,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { APP_STATE_DIR } from '@shared/defaultPaths';
 import type {
   ConnectionProfile,
   RemoteAuthPrompt,
@@ -97,7 +98,11 @@ function normalizePromptSignature(promptText: string): string {
 }
 
 function getBrokerRoot(): string {
-  return join(process.env.HOME || process.env.USERPROFILE || homedir(), '.aiclient', 'remote-auth');
+  return join(
+    process.env.HOME || process.env.USERPROFILE || homedir(),
+    APP_STATE_DIR,
+    'remote-auth'
+  );
 }
 
 function normalizePromptText(promptText: string): string {
