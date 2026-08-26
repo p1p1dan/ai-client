@@ -85,9 +85,35 @@ export const PERMISSION_SCOPE_HINT_CLAUDE =
   'Applies from your next message — a turn already running keeps the tier it started with.';
 export const PERMISSION_SCOPE_HINT_CODEX = 'Applies immediately, to this thread.';
 
-export function permissionScopeHint(agent: AgentWireName): string {
+/**
+ * The draft's sentence, and it is a third one on purpose.
+ *
+ * Neither of the two above is true before a chat starts: nothing is "already
+ * running" to keep a tier, and nothing applies "immediately" because there is no
+ * thread. What a draft change actually does is decide what the FIRST message
+ * opens under — and, just as importantly, what it does not do is touch the
+ * default for other chats, which is the only way to say this before the draft
+ * control existed (change the template, change everything).
+ */
+export const PERMISSION_SCOPE_HINT_DRAFT =
+  'Applies when you send the first message in this chat. The default for new chats is untouched.';
+
+export function permissionScopeHint(agent: AgentWireName, draft = false): string {
+  if (draft) return PERMISSION_SCOPE_HINT_DRAFT;
   return agent === CODEX_AGENT ? PERMISSION_SCOPE_HINT_CODEX : PERMISSION_SCOPE_HINT_CLAUDE;
 }
+
+/**
+ * What the chip reads when a draft has neither a pick nor a template.
+ *
+ * A real state, and deliberately not a synthesized tier: the runtime's own
+ * constant lives in `agent-host`, a separate program this bundle cannot import,
+ * and inventing a second copy of it here is exactly the drift
+ * `RUNTIME_DEFAULT_OPTION` was introduced to avoid on the settings side. The
+ * chip says "whatever the runtime starts with" because that is all this side
+ * honestly knows.
+ */
+export const PERMISSION_RUNTIME_DEFAULT_LABEL = 'Default';
 
 /**
  * The live layer's permanent warning — present whether or not a dangerous tier
@@ -397,6 +423,16 @@ export interface ComposerPermissionInput {
   sending: boolean;
   /** The composer's own "there is nowhere to put this" kill switch. */
   disabled: boolean;
+  /**
+   * The zero-turn draft's own posture: what the user picked for THIS chat before
+   * it had a runtime, falling back to the agent template. `undefined` means
+   * neither exists, which is a real state — the chat will start on the runtime's
+   * own constant, a value this side deliberately does not know.
+   *
+   * Only consulted when there is NO echo. Once the runtime has spoken, its facts
+   * are the posture and this is stale by definition.
+   */
+  draftPreference?: SessionPermissionPreference | undefined;
 }
 
 /**
@@ -412,6 +448,15 @@ export interface ComposerPermissionView {
   rendered: boolean;
   /** Why not, when `rendered` is false — for assertions, not for the UI. */
   hiddenReason: 'capability_absent' | 'no_echo' | null;
+  /**
+   * The control is standing in for a chat that has not started: a change is
+   * recorded locally and materialised by the first send, NOT sent to a Host.
+   *
+   * The caller branches its handler on this. It also changes what the chip is
+   * claiming — "this is what the runtime says" versus "this is what it will
+   * start under" — which is why `scopeHint` differs too.
+   */
+  draft: boolean;
   /** The tier the runtime says this session is on. Absent whenever `rendered` is false. */
   current: SessionPermissionPreference | null;
   disabled: boolean;
@@ -492,6 +537,7 @@ export function deriveComposerPermission(input: ComposerPermissionInput): Compos
     labelKeys: [],
     pendingLabel: null,
     dangerousActive: false,
+    draft: false,
     scopeHint: permissionScopeHint(input.agent),
     titleTemplate: '',
     spokenTemplate: '',
@@ -507,11 +553,32 @@ export function deriveComposerPermission(input: ComposerPermissionInput): Compos
   // Codex segment: that capability EXISTS and is unavailable today.)
   if (input.capabilityPermissionPolicy !== true) return hidden('capability_absent');
 
-  const current = projectEchoedPreference(input.agent, input.facts);
-  if (!current) return hidden('no_echo');
+  /**
+   * Two layers, in one order: the runtime's echo, then the draft's own intent.
+   *
+   * The echo wins whenever it exists, and that is the whole safety argument —
+   * once a chat is running, what the chip claims is what the Host said, never
+   * what someone typed into a draft that has since been sent (a stale intent
+   * outranking a mid-session change is the silent-privilege swap R18 names).
+   *
+   * The draft layer exists because "no echo" used to mean "no control", and the
+   * consequence was that a chat could only START under the per-agent template:
+   * to open one chat under bypass you had to change what EVERY future chat opens
+   * under, or send a turn under the wrong posture and switch afterwards. Neither
+   * is a thing to ask of someone.
+   */
+  const echoed = projectEchoedPreference(input.agent, input.facts);
+  const draft = !echoed;
+  const current = echoed ?? input.draftPreference ?? null;
 
-  const labelKeys = permissionTierLabelKeys(current);
-  const scopeHint = permissionScopeHint(input.agent);
+  // A draft with no pick and no template is still a control worth rendering: the
+  // chat starts on the runtime's own constant, and the user's whole reason for
+  // opening this menu is to choose something else. `current === null` there is
+  // read as the runtime-default sentinel, not as "nothing to show".
+  if (!draft && !current) return hidden('no_echo');
+
+  const labelKeys = current ? permissionTierLabelKeys(current) : [PERMISSION_RUNTIME_DEFAULT_LABEL];
+  const scopeHint = permissionScopeHint(input.agent, draft);
 
   // Order matters only in that the FIRST true reason is the one shown, and the
   // running turn is the one a user is most likely to be looking at.
@@ -532,7 +599,7 @@ export function deriveComposerPermission(input: ComposerPermissionInput): Compos
   const pending =
     input.pending && input.pending.sessionId === input.sessionId ? input.pending : null;
   const pendingUnsettled =
-    pending && !samePermissionPreference(current, pending.preference) ? pending : null;
+    pending && !samePermissionPreference(current ?? undefined, pending.preference) ? pending : null;
   const pendingLabel: ComposerPermissionPendingLabel | null = input.inFlight
     ? { template: PERMISSION_PENDING_APPLYING, tierKeys: [] }
     : pendingUnsettled
@@ -545,25 +612,33 @@ export function deriveComposerPermission(input: ComposerPermissionInput): Compos
         }
       : null;
 
+  // With no current posture (a draft on the runtime constant) nothing is
+  // selected — the menu still offers every tier, it just does not claim one of
+  // them is in force. `''` matches no tier value, which is exactly the intent.
+  const claudeSelected = current && 'permissionMode' in current ? current.permissionMode : '';
+  const codexSelected =
+    current && 'approvalPolicy' in current
+      ? { approvalPolicy: current.approvalPolicy, sandboxMode: current.sandboxMode }
+      : { approvalPolicy: '', sandboxMode: '' };
   const sections: ComposerPermissionMenuSection[] =
-    'permissionMode' in current
+    input.agent === CODEX_AGENT
       ? [
-          {
-            id: 'permissionMode',
-            label: PERMISSION_SECTION_LABELS.permissionMode,
-            items: tierItems(CLAUDE_PERMISSION_TIERS, current.permissionMode),
-          },
-        ]
-      : [
           {
             id: 'approvalPolicy',
             label: PERMISSION_SECTION_LABELS.approvalPolicy,
-            items: tierItems(CODEX_APPROVAL_TIERS, current.approvalPolicy),
+            items: tierItems(CODEX_APPROVAL_TIERS, codexSelected.approvalPolicy),
           },
           {
             id: 'sandboxMode',
             label: PERMISSION_SECTION_LABELS.sandboxMode,
-            items: tierItems(CODEX_SANDBOX_TIERS, current.sandboxMode),
+            items: tierItems(CODEX_SANDBOX_TIERS, codexSelected.sandboxMode),
+          },
+        ]
+      : [
+          {
+            id: 'permissionMode',
+            label: PERMISSION_SECTION_LABELS.permissionMode,
+            items: tierItems(CLAUDE_PERMISSION_TIERS, claudeSelected),
           },
         ];
 
@@ -571,6 +646,7 @@ export function deriveComposerPermission(input: ComposerPermissionInput): Compos
     rendered: true,
     hiddenReason: null,
     current,
+    draft,
     disabled: disabledReason !== null,
     disabledReason,
     labelKeys,
@@ -587,7 +663,7 @@ export function deriveComposerPermission(input: ComposerPermissionInput): Compos
     // window is at least a full turn. Under-reporting danger is the one
     // direction this control must never be wrong in.
     dangerousActive:
-      isDangerousPermissionPreference(current) ||
+      isDangerousPermissionPreference(current ?? undefined) ||
       isDangerousPermissionPreference(pendingUnsettled?.preference),
     scopeHint,
     titleTemplate: disabledReason ? PERMISSION_TITLE_DISABLED : PERMISSION_TITLE_ENABLED,

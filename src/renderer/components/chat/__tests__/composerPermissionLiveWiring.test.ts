@@ -98,20 +98,46 @@ describe('D12 — every pick goes through the gate, and only the dialog confirms
     expect(ipc).toBeLessThan(requestStart);
   });
 
-  it('both submit call sites are downstream of the dangerous-tier decision', () => {
-    const gate = only(trigger, 'const action = decideLivePermissionAction(preference);');
-    const applyArm = only(trigger, 'void submit(action.preference, false);');
-    const confirmArm = only(trigger, 'if (confirmed) void submit(confirmed, true);');
-    expect(applyArm).toBeGreaterThan(gate);
+  /**
+   * The gate is now called from TWO request paths — a running chat asks the
+   * Host, a zero-turn draft records what its first message will open under —
+   * and the claim has to be restated as coverage rather than as a count.
+   *
+   * The old form asserted `decideLivePermissionAction` appeared exactly once,
+   * which was a proxy for "there is no second path". A second path exists on
+   * purpose now, so the assertion below says the load-bearing thing directly:
+   * EVERY request path passes through the gate, and every commit is downstream
+   * of one.
+   */
+  it('every request path is downstream of the dangerous-tier decision', () => {
+    const gates = offsets(trigger, 'const action = decideLivePermissionAction(preference);');
+    const requestPaths = [
+      only(trigger, 'const request = ('),
+      only(trigger, 'const requestDraft = ('),
+    ];
+    expect(gates, 'one gate per request path, no more and no fewer').toHaveLength(
+      requestPaths.length
+    );
+    // Each path opens before its own gate, and no path is left without one.
+    for (const [index, start] of requestPaths.sort((a, b) => a - b).entries()) {
+      expect(gates.sort((a, b) => a - b)[index]).toBeGreaterThan(start);
+    }
+
+    // The live arm: IPC only after the gate said "apply".
+    expect(only(trigger, 'void submit(action.preference, false);')).toBeGreaterThan(gates[0]);
+    // The draft arm: a local write, also only after the gate said "apply".
+    expect(only(trigger, 'commitDraft(action.preference);')).toBeGreaterThan(gates[0]);
+
     // The confirm arm sits in the dialog's footer, i.e. after the dialog exists
-    // at all — the value cannot be submitted before the dialog can show it.
-    expect(confirmArm).toBeGreaterThan(only(trigger, 'open={held !== null}'));
-    // And those two are the only CALLS: the declaration spells `const submit =
-    // async (`, so every `submit(` in the file is an invocation.
-    expect(offsets(trigger, 'submit(')).toEqual([
-      applyArm + 'void '.length,
-      confirmArm + 'if (confirmed) void '.length,
-    ]);
+    // at all — the value cannot be committed before the dialog can show it, on
+    // either path.
+    const dialog = only(trigger, 'open={held !== null}');
+    expect(only(trigger, 'if (view.draft) commitDraft(confirmed);')).toBeGreaterThan(dialog);
+    expect(only(trigger, 'else void submit(confirmed, true);')).toBeGreaterThan(dialog);
+
+    // And those are the only CALLS to the IPC path: the declaration spells
+    // `const submit = async (`, so every other `submit(` is an invocation.
+    expect(offsets(trigger, 'void submit(')).toHaveLength(2);
   });
 
   it('the confirmed flag is only ever asserted by the confirm arm', () => {

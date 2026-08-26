@@ -1,6 +1,10 @@
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
-import type { AgentWireName } from '@shared/types/agentWire';
-import type { SessionPermissionPreference } from '@shared/types/runtimeEvents';
+import { type AgentWireName, CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
+import {
+  claudePermissionPreference,
+  codexPermissionPreference,
+  type SessionPermissionPreference,
+} from '@shared/types/runtimeEvents';
 import { AlertTriangle, Check, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -42,6 +46,7 @@ import {
   composerPopupSide,
   type MiddleColumnMode,
 } from './middleColumnLayout';
+import { readDraftPermission, writeDraftPermission } from './sessionPreferenceStore';
 
 /**
  * D48 S4 §6.3 — the Composer's LIVE permission control.
@@ -86,6 +91,22 @@ interface ComposerPermissionTriggerProps {
   busy: boolean;
   sending: boolean;
   disabled?: boolean;
+  /**
+   * What a ZERO-TURN draft on this agent falls back to: the Settings template.
+   *
+   * Passed IN rather than read here, and that is D11, not tidiness. This file is
+   * the live layer, and the live layer must have no reach into the template
+   * layer at all — a chip that could read the template is one refactor away from
+   * writing it, and "turn this chat up" quietly becoming "turn every future chat
+   * up" is the silent privilege expansion R18 names. The Composer already holds
+   * `chatAgentDefaults` for the model and effort it resolves at send time; it
+   * hands over the one value, and the assertion that this file never names
+   * `chatAgentDefaults` / `agentDefaultPermission` / `@/stores/settings` keeps
+   * standing.
+   *
+   * Only ever consulted while there is no echo.
+   */
+  templatePreference?: SessionPermissionPreference | undefined;
 }
 
 /**
@@ -156,6 +177,7 @@ export function ComposerPermissionTrigger({
   busy,
   sending,
   disabled,
+  templatePreference,
 }: ComposerPermissionTriggerProps) {
   const { t } = useI18n();
   // Scalar selector: this component sits in a composer that re-renders on every
@@ -167,6 +189,31 @@ export function ComposerPermissionTrigger({
   // nowhere else — in particular not in the chip, which keeps showing the
   // echoed tier until the runtime says otherwise.
   const [held, setHeld] = useState<SessionPermissionPreference | null>(null);
+  /**
+   * What this chat will START under, while it is still a zero-turn draft.
+   *
+   * Seeded from storage (an earlier pick on this session+agent) falling back to
+   * the Settings template, and held in state so a pick repaints immediately —
+   * there is no echo coming to repaint it, which is the whole difference between
+   * this layer and the live one.
+   *
+   * `undefined` is a real value: neither picked nor templated, so the chat opens
+   * on the runtime's own constant.
+   */
+  const [draftPreference, setDraftPreference] = useState<SessionPermissionPreference | undefined>(
+    () => readDraftPermission(sessionId, agent) ?? templatePreference
+  );
+  /**
+   * Codex's posture is TWO axes, and a draft with no base has neither. Picking
+   * one axis cannot produce a complete preference, and inventing the other one
+   * would materialise a posture nobody chose into the session snapshot — so the
+   * half-pick lives here until its partner arrives, and only then is it stored.
+   * Claude never uses this: one pick there is a whole posture.
+   */
+  const [partialCodex, setPartialCodex] = useState<{
+    approvalPolicy?: string;
+    sandboxMode?: string;
+  }>({});
 
   const view = deriveComposerPermission({
     sessionId,
@@ -179,6 +226,7 @@ export function ComposerPermissionTrigger({
     busy,
     sending,
     disabled: Boolean(disabled),
+    draftPreference,
   });
 
   // This component is never remounted per session (`ChatWorkspace` renders one
@@ -191,7 +239,20 @@ export function ComposerPermissionTrigger({
     sessionRef.current = sessionId;
     setPending(null);
     setHeld(null);
-  }, [sessionId]);
+    setPartialCodex({});
+    setDraftPreference(readDraftPermission(sessionId, agent) ?? templatePreference);
+  }, [sessionId, agent, templatePreference]);
+
+  // Switching a zero-turn draft between runtimes has to return the user to what
+  // they picked on THAT axis, not to whatever the other one holds — the same
+  // rule `sessionPreferenceStore`'s header states for model and effort.
+  const agentRef = useRef(agent);
+  useEffect(() => {
+    if (agentRef.current === agent) return;
+    agentRef.current = agent;
+    setPartialCodex({});
+    setDraftPreference(readDraftPermission(sessionId, agent) ?? templatePreference);
+  }, [agent, sessionId, templatePreference]);
 
   // The pending marker is dropped when the FACTS agree with it, never when the
   // request returned: that is the same "the echo is the only evidence" rule the
@@ -248,7 +309,74 @@ export function ComposerPermissionTrigger({
     void submit(action.preference, false);
   };
 
+  /**
+   * A draft pick is recorded, not sent: there is no session for a Host to apply
+   * it to. `resolveDraftPermissionPreference` reads it back at the first send,
+   * where it outranks the template.
+   *
+   * It goes through the SAME dangerous-tier gate as the live path — the four
+   * requirements (a control, a standing warning, a second confirmation, never a
+   * default) do not get to lapse because a chat has not started yet. If anything
+   * the draft path is the one worth being strict about: it decides what the
+   * agent's FIRST action runs under.
+   */
+  const commitDraft = (preference: SessionPermissionPreference) => {
+    writeDraftPermission(sessionId, agent, preference);
+    setDraftPreference(preference);
+    setPartialCodex({});
+  };
+
+  const requestDraft = (preference: SessionPermissionPreference) => {
+    if (samePermissionPreference(preference, view.current ?? undefined)) return;
+    const action = decideLivePermissionAction(preference);
+    if (action.kind === 'confirm') {
+      setHeld(action.preference);
+      return;
+    }
+    commitDraft(action.preference);
+  };
+
+  /**
+   * The Codex draft's half-pick. With no base posture, one axis is not a
+   * preference — and the missing half must not be invented, because whatever is
+   * invented gets written into the session snapshot at first send and is what
+   * the agent then runs under.
+   */
+  const selectDraftCodex = (sectionId: 'approvalPolicy' | 'sandboxMode', itemId: string) => {
+    const base = view.current && 'approvalPolicy' in view.current ? view.current : undefined;
+    const merged = {
+      approvalPolicy:
+        sectionId === 'approvalPolicy'
+          ? itemId
+          : (partialCodex.approvalPolicy ?? base?.approvalPolicy),
+      sandboxMode:
+        sectionId === 'sandboxMode' ? itemId : (partialCodex.sandboxMode ?? base?.sandboxMode),
+    };
+    // Built and then VALIDATED, not cast: the two values come off menu ids, and
+    // the shared reader is the same one the Host's dispatch uses — including its
+    // refusal of a Codex arm carrying `networkAccess`.
+    const complete = codexPermissionPreference({ agent: CODEX_AGENT, ...merged }, CODEX_AGENT);
+    if (complete) {
+      requestDraft(complete);
+      return;
+    }
+    // Not yet a posture: remember the half and keep waiting for its partner.
+    setPartialCodex(merged);
+  };
+
   const handleSelect = (sectionId: ComposerPermissionMenuSection['id'], itemId: string) => {
+    if (view.draft) {
+      if (sectionId === 'permissionMode') {
+        const next = claudePermissionPreference(
+          { agent: CLAUDE_CODE_AGENT, permissionMode: itemId },
+          CLAUDE_CODE_AGENT
+        );
+        if (next) requestDraft(next);
+        return;
+      }
+      selectDraftCodex(sectionId, itemId);
+      return;
+    }
     if (!view.current) return;
     // Spelled out rather than built from a computed key: the patch keys are the
     // two arms of a discriminated union, and a `{[sectionId]: itemId}` object
@@ -353,7 +481,12 @@ export function ComposerPermissionTrigger({
               onClick={() => {
                 const confirmed = held;
                 setHeld(null);
-                if (confirmed) void submit(confirmed, true);
+                if (!confirmed) return;
+                // Same gate, two destinations: a running chat asks the Host, a
+                // draft records what its first message will open under. The
+                // confirmation itself is not optional in either case.
+                if (view.draft) commitDraft(confirmed);
+                else void submit(confirmed, true);
               }}
             >
               {t('Apply to this chat')}

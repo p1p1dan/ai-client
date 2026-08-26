@@ -246,6 +246,13 @@ export interface DraftPermissionInput {
   agent: AgentWireName;
   /** `false` until app settings finish their async rehydrate. */
   settingsHydrated: boolean;
+  /**
+   * What the user picked for THIS chat while it was still a zero-turn draft, or
+   * `undefined` when they did not pick anything (the ordinary case).
+   *
+   * Held per (session, agent) by `sessionPreferenceStore.readDraftPermission`.
+   */
+  draft?: SessionPermissionPreference | undefined;
 }
 
 /**
@@ -269,6 +276,19 @@ export interface DraftPermissionInput {
 export function resolveDraftPermissionPreference(
   input: DraftPermissionInput
 ): SessionPermissionPreference | undefined {
+  // The draft intent outranks the template, and is NOT gated on hydration.
+  //
+  // Those two go together. The hydration gate exists because the template can
+  // hold factory values nobody chose; a draft intent is by construction
+  // something the user picked in this window, so waiting on settings would only
+  // discard it. It has to outrank the template because that is the whole point:
+  // "start THIS chat under bypass" must not mean "change what every future chat
+  // starts under", which is the only way to say it before this existed.
+  //
+  // It cannot smuggle in a dangerous tier either: the only writer is the chip's
+  // own handler, which routes through the same confirmation gate as the live
+  // control (§8.0-Q3), and the storage layer re-validates on the way in.
+  if (input.draft && input.draft.agent === input.agent) return input.draft;
   if (!input.settingsHydrated) return undefined;
   return agentDefaultPermission(input.defaults, input.agent);
 }

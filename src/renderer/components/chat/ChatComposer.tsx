@@ -1,6 +1,7 @@
 import {
   agentDefaultEffort,
   agentDefaultModel,
+  agentDefaultPermission,
   resolveDraftPermissionPreference,
 } from '@shared/models/chatAgentDefaults';
 import { sessionAgent } from '@shared/types/agentWire';
@@ -101,6 +102,7 @@ import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
+import { clearDraftPermission, readDraftPermission } from './sessionPreferenceStore';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
@@ -1124,6 +1126,10 @@ export function ChatComposer({
       defaults: chatAgentDefaults,
       agent: turnAgent,
       settingsHydrated,
+      // What the user picked for THIS chat while it was still a draft. Outranks
+      // the template — "open this one under bypass" must not mean "change what
+      // every future chat opens under".
+      draft: readDraftPermission(sessionId, turnAgent) ?? undefined,
     });
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
@@ -1560,6 +1566,12 @@ export function ChatComposer({
           : [...state.hostBoundSessionIds, sessionId],
         lastError: null,
       }));
+      // The draft intent has done its job: it is in the create payload, and from
+      // here the session's own snapshot is the posture. Dropping it means a
+      // later mid-session change can never be outranked by what someone picked
+      // before the chat existed — the silent-privilege swap R18 names — and it
+      // keeps the map from growing a row per chat forever.
+      clearDraftPermission(sessionId);
       return 'ok';
     };
 
@@ -2606,10 +2618,16 @@ export function ChatComposer({
   // D48 S4 §6.3: the live permission chip. Its gate is the model trigger's
   // (`busy || sending`) and NOT the picker's `agentBindingLocked` — the whole
   // requirement is that an established chat can still change tier (D13). It
-  // renders only once the Host has echoed a posture for this session and only on
-  // a Host that reports `permissionPolicy`; an old Host gets no control rather
-  // than a dead one (D15), and an unsent draft has no posture to change (its
-  // starting tier comes from the Settings template at first send).
+  // Renders on any Host that reports `permissionPolicy`; an old Host gets no
+  // control rather than a dead one (D15).
+  //
+  // A zero-turn draft gets it too (2026-08-25). It used to be hidden there —
+  // the chip is a mirror of the Host's echo and a draft has no echo — but the
+  // consequence was that a chat could only START under the per-agent template:
+  // to open one under bypass you changed what every future chat opens under, or
+  // you sent a turn under the wrong posture and switched afterwards. In the
+  // draft state the control records an intent instead of sending a request, and
+  // `resolveDraftPermissionPreference` materialises it at the first send.
   const permissionControl = activeSessionId ? (
     <ComposerPermissionTrigger
       sessionId={activeSessionId}
@@ -2620,6 +2638,11 @@ export function ChatComposer({
       busy={busy}
       sending={sending}
       disabled={disabled}
+      // D11: the chip may not reach the template layer itself, so the one value
+      // it needs for a draft is handed over from here — the same
+      // `chatAgentDefaults` this component already resolves model and effort
+      // from at send time.
+      templatePreference={agentDefaultPermission(chatAgentDefaults, composerAgent)}
     />
   ) : null;
 

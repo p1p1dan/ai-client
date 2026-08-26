@@ -2,12 +2,16 @@ import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EFFORT_DEFAULT_ID, toWireEffort } from '../efforts';
 import {
+  clearDraftPermission,
+  readDraftPermission,
   readSessionEffort,
   readSessionModel,
   removeSessionEffort,
   removeSessionModel,
+  SESSION_DRAFT_PERMISSION_STORAGE_KEY,
   SESSION_EFFORT_STORAGE_KEY,
   SESSION_MODEL_STORAGE_KEY,
+  writeDraftPermission,
   writeSessionEffort,
   writeSessionModel,
 } from '../sessionPreferenceStore';
@@ -270,5 +274,92 @@ describe('sessionPreferenceStore — model', () => {
     } as unknown as Storage);
     expect(() => writeSessionModel('s1', CODEX_AGENT, 'gpt-5.6-sol')).not.toThrow();
     expect(readSessionModel('s1', CODEX_AGENT)).toBeNull();
+  });
+});
+
+/**
+ * The draft posture map (2026-08-25): what a zero-turn chat will START under.
+ *
+ * Storage-layer rules only — whether the chip should be rendered at all is
+ * `composerPermissionModel`'s question, and whether a pick outranks the template
+ * is `resolveDraftPermissionPreference`'s.
+ */
+describe('draft permission posture', () => {
+  const claude = { agent: 'claude-code', permissionMode: 'bypassPermissions' } as const;
+  const codex = { agent: 'codex', approvalPolicy: 'never', sandboxMode: 'read-only' } as const;
+
+  it('round-trips a posture for one (session, agent)', () => {
+    writeDraftPermission('s1', CLAUDE_CODE_AGENT, claude);
+    expect(readDraftPermission('s1', CLAUDE_CODE_AGENT)).toEqual(claude);
+  });
+
+  /**
+   * The same rule the model and effort maps carry: a zero-turn draft can be
+   * switched between runtimes freely, and switching away and back has to return
+   * the user to what they picked rather than to the template.
+   */
+  it('keeps the two agents apart on one session', () => {
+    writeDraftPermission('s1', CLAUDE_CODE_AGENT, claude);
+    writeDraftPermission('s1', CODEX_AGENT, codex);
+    expect(readDraftPermission('s1', CLAUDE_CODE_AGENT)).toEqual(claude);
+    expect(readDraftPermission('s1', CODEX_AGENT)).toEqual(codex);
+  });
+
+  /**
+   * Rejected on the way IN, like `writeSessionEffort`: a value that reached the
+   * create payload could pin a posture nobody chose into the session snapshot,
+   * and resume reads that snapshot forever.
+   */
+  it('refuses a posture addressed to the other agent', () => {
+    writeDraftPermission('s1', CODEX_AGENT, claude as never);
+    expect(readDraftPermission('s1', CODEX_AGENT)).toBeNull();
+    writeDraftPermission('s1', CLAUDE_CODE_AGENT, codex as never);
+    expect(readDraftPermission('s1', CLAUDE_CODE_AGENT)).toBeNull();
+    // …and NOTHING was written. The read guard would mask a bad value anyway,
+    // which is exactly why this half exists: `writeSessionEffort`'s header
+    // states the rule — rejecting on the way in rather than discarding on the
+    // way out, because discarding on read leaves the bad value on disk to be
+    // re-decided on every read, and the obvious fix (rewriting during a read)
+    // is forbidden by `sessionIndex.ts`'s no-migration-on-read rule.
+    expect(localStorage.getItem(SESSION_DRAFT_PERMISSION_STORAGE_KEY)).toBeNull();
+  });
+
+  it('refuses a tier outside the vocabulary', () => {
+    writeDraftPermission('s1', CLAUDE_CODE_AGENT, {
+      agent: 'claude-code',
+      permissionMode: 'ultra',
+    } as never);
+    expect(readDraftPermission('s1', CLAUDE_CODE_AGENT)).toBeNull();
+  });
+
+  /** A hand-edited blob must not become a posture on read either. */
+  it('refuses a stored value that no longer validates', () => {
+    localStorage.setItem(
+      SESSION_DRAFT_PERMISSION_STORAGE_KEY,
+      JSON.stringify({ s1: { 'claude-code': { agent: 'claude-code', permissionMode: 'ultra' } } })
+    );
+    expect(readDraftPermission('s1', CLAUDE_CODE_AGENT)).toBeNull();
+  });
+
+  /**
+   * Cleared once the chat has started. From the first turn on the session's own
+   * snapshot is the posture, and a leftover intent that could outrank a
+   * mid-session change is the silent-privilege swap R18 names.
+   */
+  it('clearing a session drops both agents and leaves other sessions alone', () => {
+    writeDraftPermission('s1', CLAUDE_CODE_AGENT, claude);
+    writeDraftPermission('s1', CODEX_AGENT, codex);
+    writeDraftPermission('s2', CLAUDE_CODE_AGENT, claude);
+    clearDraftPermission('s1');
+    expect(readDraftPermission('s1', CLAUDE_CODE_AGENT)).toBeNull();
+    expect(readDraftPermission('s1', CODEX_AGENT)).toBeNull();
+    expect(readDraftPermission('s2', CLAUDE_CODE_AGENT)).toEqual(claude);
+  });
+
+  it('never throws on a corrupt blob or an unavailable store', () => {
+    localStorage.setItem(SESSION_DRAFT_PERMISSION_STORAGE_KEY, 'not json{{');
+    expect(() => readDraftPermission('s1', CLAUDE_CODE_AGENT)).not.toThrow();
+    expect(readDraftPermission('s1', CLAUDE_CODE_AGENT)).toBeNull();
+    expect(() => clearDraftPermission('s1')).not.toThrow();
   });
 });

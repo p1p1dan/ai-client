@@ -16,8 +16,10 @@ import {
   LIVE_DANGEROUS_TIER_WARNING,
   NON_USER_CHOSEN_LIVE_ARMS,
   nextLivePreference,
+  PERMISSION_RUNTIME_DEFAULT_LABEL,
   PERMISSION_SCOPE_HINT_CLAUDE,
   PERMISSION_SCOPE_HINT_CODEX,
+  PERMISSION_SCOPE_HINT_DRAFT,
   PERMISSION_TIER_JOINER,
   permissionChangeSettled,
   permissionScopeHint,
@@ -160,12 +162,66 @@ describe('D15 — the capability gate hides the control, it does not grey it out
 });
 
 describe('D7 — the chip shows the echo, never the request', () => {
-  it('no echo, no control: an unsent draft has no posture to change', () => {
+  /**
+   * RETIRED PROPOSITION: "no echo, no control".
+   *
+   * That rule was true of the LIVE layer and was read as true of the product,
+   * and the consequence was that a chat could only start under the per-agent
+   * template: to open one chat under bypass you changed what every future chat
+   * opens under, or you sent a turn under the wrong posture and switched
+   * afterwards. The user's words, 2026-08-23: "我在还没开始聊天时应该也可以选择
+   * 模式……而不是非要等我第一条指令以 default 模式执行完后才能切到 bypass".
+   *
+   * What survives is the half that was actually load-bearing, and it is asserted
+   * right below: the chip never paints a REQUEST as a runtime fact. A draft
+   * change is not a request — nothing was asked of a Host — so there is no fact
+   * for it to misreport.
+   */
+  it('a draft renders the control and says so, rather than hiding it', () => {
     for (const facts of [undefined, {}, { permissionPolicy: undefined }]) {
       const view = deriveComposerPermission(input({ facts }));
-      expect(view.rendered).toBe(false);
-      expect(view.hiddenReason).toBe('no_echo');
+      expect(view.rendered).toBe(true);
+      expect(view.hiddenReason).toBeNull();
+      expect(view.draft, 'the caller has to branch its handler on this').toBe(true);
+      // The menu is fully offered…
+      expect(view.sections.length).toBeGreaterThan(0);
+      // …but nothing is claimed to be in force, because nothing is: with no pick
+      // and no template the chat opens on the runtime's own constant, a value
+      // this side deliberately does not know.
+      expect(view.current).toBeNull();
+      expect(view.labelKeys).toEqual([PERMISSION_RUNTIME_DEFAULT_LABEL]);
+      expect(view.sections.flatMap((s) => s.items).some((i) => i.selected)).toBe(false);
+      // And the sentence is the draft one — neither "your next message" nor
+      // "immediately" is true before a chat exists.
+      expect(view.scopeHint).toBe(PERMISSION_SCOPE_HINT_DRAFT);
     }
+  });
+
+  it('a draft with a pick shows THAT pick, and still reads as a draft', () => {
+    const view = deriveComposerPermission(
+      input({ facts: undefined, draftPreference: { agent: 'claude-code', permissionMode: 'plan' } })
+    );
+    expect(view.draft).toBe(true);
+    expect(tierText(view.labelKeys)).toBe('Plan');
+    expect(view.sections.flatMap((s) => s.items).find((i) => i.selected)?.id).toBe('plan');
+  });
+
+  /**
+   * The safety half, and the reason the echo is checked FIRST: once a chat is
+   * running, what the chip claims is what the Host said. A draft intent that
+   * outlived its send must never outrank a posture the user changed mid-session
+   * — that is the silent-privilege swap R18 names.
+   */
+  it('an echo always outranks a leftover draft intent', () => {
+    const view = deriveComposerPermission(
+      input({
+        facts: { permissionMode: 'default' },
+        draftPreference: { agent: 'claude-code', permissionMode: 'bypassPermissions' },
+      })
+    );
+    expect(view.draft).toBe(false);
+    expect(tierText(view.labelKeys)).toBe('Default');
+    expect(view.dangerousActive, 'the stale bypass must not colour a running chat').toBe(false);
   });
 
   it('the label is the echoed tier on both axes', () => {

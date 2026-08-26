@@ -372,3 +372,71 @@ describe('chat agent defaults — permission template (§5.4)', () => {
     }
   });
 });
+
+/**
+ * The draft intent layer (2026-08-25). Before it, a chat could only START under
+ * the per-agent template: to open ONE chat under bypass you changed what every
+ * future chat opens under, or you sent a turn under the wrong posture and
+ * switched afterwards.
+ */
+describe('resolveDraftPermissionPreference — the draft intent outranks the template', () => {
+  const template = {
+    byAgent: { 'claude-code': { permission: { agent: 'claude-code', permissionMode: 'plan' } } },
+  } as const;
+
+  it('a draft pick wins over the template', () => {
+    expect(
+      resolveDraftPermissionPreference({
+        defaults: template,
+        agent: CLAUDE_CODE_AGENT,
+        settingsHydrated: true,
+        draft: { agent: 'claude-code', permissionMode: 'acceptEdits' },
+      })
+    ).toEqual({ agent: 'claude-code', permissionMode: 'acceptEdits' });
+  });
+
+  /**
+   * The hydration gate guards the TEMPLATE, not the draft: the template can hold
+   * factory values nobody chose, while a draft intent is by construction
+   * something the user picked in this window. Waiting on settings would only
+   * discard it — and on a cold-start send that is precisely when it matters.
+   */
+  it('a draft pick is not gated on settings hydration', () => {
+    expect(
+      resolveDraftPermissionPreference({
+        defaults: undefined,
+        agent: CLAUDE_CODE_AGENT,
+        settingsHydrated: false,
+        draft: { agent: 'claude-code', permissionMode: 'bypassPermissions' },
+      })
+    ).toEqual({ agent: 'claude-code', permissionMode: 'bypassPermissions' });
+  });
+
+  it('a draft addressed to the OTHER agent is ignored, not cross-applied', () => {
+    expect(
+      resolveDraftPermissionPreference({
+        defaults: template,
+        agent: CLAUDE_CODE_AGENT,
+        settingsHydrated: true,
+        draft: { agent: 'codex', approvalPolicy: 'never', sandboxMode: 'danger-full-access' },
+      })
+    ).toEqual({ agent: 'claude-code', permissionMode: 'plan' });
+  });
+
+  /**
+   * C13 restated for the new layer: nothing here SYNTHESIZES a posture, so a
+   * dangerous tier can still only arrive by having been explicitly stored — by
+   * the chip's handler, which routes through the same confirmation gate as the
+   * live control.
+   */
+  it('with no draft and no template it still emits nothing, dangerous or otherwise', () => {
+    expect(
+      resolveDraftPermissionPreference({
+        defaults: undefined,
+        agent: CLAUDE_CODE_AGENT,
+        settingsHydrated: true,
+        draft: undefined,
+      })
+    ).toBeUndefined();
+  });
+});
