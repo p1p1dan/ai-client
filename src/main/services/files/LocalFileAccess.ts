@@ -75,3 +75,38 @@ export function isAllowedLocalFilePath(filePath: string): boolean {
 
   return false;
 }
+
+/**
+ * The guard for the WRITE primitives, as an assertion rather than a boolean.
+ *
+ * ## What it closes
+ *
+ * `file:copy` / `file:rename` / `file:move` / `file:delete` / `file:createDir`
+ * took whatever absolute path the renderer handed them. That made each of them
+ * a whole-disk primitive reachable from renderer code: `file:delete` defaults
+ * to `recursive: true`, and `file:copy` was once usable to overwrite a file
+ * inside an authorised attachment path and turn a read grant into a read of
+ * something else (that particular route is closed by the fd-snapshot check, but
+ * the primitive it abused was never narrowed).
+ *
+ * The roots are the ones the file tree already registers when it lists a
+ * repository (`file:list` with its `gitRoot`), which is exactly the set every
+ * legitimate caller works inside: the three renderer files that reach these
+ * channels are the file explorer, its hook, and the source-control panel.
+ *
+ * ## Why it throws instead of returning false
+ *
+ * A refused write must be visible. Returning false invites the caller to shrug
+ * and continue, and a silently-skipped delete looks to the user exactly like a
+ * delete that worked — which is worse than either alternative. The message
+ * names the path AND the reason, because the one plausible false positive is a
+ * root that was never registered (nothing listed it), and that is a bug in the
+ * caller worth reading rather than a security event.
+ */
+export function assertLocalPathWritable(filePath: string, operation: string): void {
+  if (isAllowedLocalFilePath(filePath)) return;
+  throw new Error(
+    `${operation}: refused — ${filePath} is outside every opened repository. ` +
+      'These channels only operate inside a workspace the file tree has listed.'
+  );
+}

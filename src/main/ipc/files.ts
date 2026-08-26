@@ -26,6 +26,7 @@ const readFileSafe = readFileTsdSafe;
 
 import { FileWatcher } from '../services/files/FileWatcher';
 import {
+  assertLocalPathWritable,
   registerAllowedLocalFileRoot,
   unregisterAllowedLocalFileRootsByOwner,
 } from '../services/files/LocalFileAccess';
@@ -579,6 +580,7 @@ export function registerFileHandlers(): void {
       return;
     }
 
+    assertLocalPathWritable(dirPath, 'file:createDir');
     await mkdir(dirPath, { recursive: true });
   });
 
@@ -588,6 +590,10 @@ export function registerFileHandlers(): void {
       return;
     }
 
+    // Both ends: checking only the source would let a rename walk a repo file
+    // out to any path on the disk.
+    assertLocalPathWritable(fromPath, 'file:rename');
+    assertLocalPathWritable(toPath, 'file:rename');
     await rename(fromPath, toPath);
   });
 
@@ -597,6 +603,8 @@ export function registerFileHandlers(): void {
       return;
     }
 
+    assertLocalPathWritable(fromPath, 'file:move');
+    assertLocalPathWritable(toPath, 'file:move');
     await rename(fromPath, toPath);
   });
 
@@ -608,6 +616,9 @@ export function registerFileHandlers(): void {
         return;
       }
 
+      // `recursive` defaults to TRUE on this channel, so an unguarded path here
+      // is an arbitrary recursive delete.
+      assertLocalPathWritable(targetPath, 'file:delete');
       await rm(targetPath, { recursive: options?.recursive ?? true, force: false });
     }
   );
@@ -835,6 +846,8 @@ export function registerFileHandlers(): void {
       throw createRemoteError('Copying between local and remote files is not supported');
     }
 
+    assertLocalPathWritable(sourcePath, 'file:copy');
+    assertLocalPathWritable(targetPath, 'file:copy');
     const sourceStats = await stat(sourcePath);
 
     if (sourceStats.isDirectory()) {
@@ -919,6 +932,11 @@ export function registerFileHandlers(): void {
         throw createRemoteError('Batch copy between local and remote files is not supported');
       }
 
+      // Before the loop, not inside it: a partially-applied batch is worse than
+      // a refused one, and the target directory is shared by every entry.
+      assertLocalPathWritable(targetDir, 'file:batchCopy');
+      for (const sourcePath of sources) assertLocalPathWritable(sourcePath, 'file:batchCopy');
+
       const success: string[] = [];
       const failed: Array<{ path: string; error: string }> = [];
 
@@ -980,6 +998,10 @@ export function registerFileHandlers(): void {
         }
         throw createRemoteError('Batch move between local and remote files is not supported');
       }
+
+      // As above: refuse the whole batch rather than half-apply it.
+      assertLocalPathWritable(targetDir, 'file:batchMove');
+      for (const sourcePath of sources) assertLocalPathWritable(sourcePath, 'file:batchMove');
 
       const success: string[] = [];
       const failed: Array<{ path: string; error: string }> = [];
