@@ -14,10 +14,15 @@
     "thread/start takes `sandbox` as a kebab-case STRING (read-only /",
     "workspace-write / danger-full-access) while turn/start and",
     "thread/settings/update take `sandboxPolicy` as a camelCase discriminated",
-    "OBJECT. Three call sites, two spellings [实测 06-probes §0.2]."
+    "OBJECT. Three call sites, two spellings [实测 06-probes §0.2].",
+    "",
+    "2026-08-26 UPGRADE 0.145.0 -> 0.149.1: re-generated against the newly pinned",
+    "binary and every block below came out IDENTICAL -- ThreadSettingsUpdateParams",
+    "(13 properties), SandboxPolicy (4 variants), AskForApproval, ThreadSettings,",
+    "ThreadSettingsUpdatedNotification. The stamp moved, the contract did not."
   ],
-  "codexVersion": "codex-cli 0.145.0",
-  "capturedAt": "2026-08-17",
+  "codexVersion": "codex-cli 0.149.1",
+  "capturedAt": "2026-08-26",
   "ThreadSettingsUpdateParams": {
     "required": ["threadId"],
     "propertyNames": [

@@ -702,9 +702,18 @@ const CODEX_STDOUT_LINE_CAP = 200;
  *   {"id":1,"result":{"userAgent":"…/0.145.0 (Ubuntu 26.4.0; x86_64) …",
  *    "codexHome":"<the temp dir we passed>","platformFamily":"unix",
  *    "platformOs":"linux"}}  — exited cleanly after stdin close.
+ * linux-x64 re-observed 2026-08-26 on the codex 0.149.1 bump, same shape,
+ * against a real `build:agent-host` artifact:
+ *   {"id":1,"result":{"userAgent":"aiclient-verify/0.149.1 (Ubuntu 26.4.0;
+ *    x86_64) VTE/8400 (aiclient-verify; 0)","codexHome":"<the temp dir we
+ *    passed>","platformFamily":"unix","platformOs":"linux"}}
+ * exited=true clean=true (code 0). 0.149.1 additionally emits a
+ * `configWarning` notification (project-local config untrusted) before exit —
+ * an already-modelled serverNotification, not a new frame family.
  * win32-x64 observed 2026-08-21 on CI run 32442630099 against the packaged
  * layout — app-server replied to `initialize` with no auth.json present, the
- * open question §10.3 flagged as "Windows: zero evidence":
+ * open question §10.3 flagged as "Windows: zero evidence". Recorded at codex
+ * 0.145.0; not yet re-observed at 0.149.1 (needs a Windows runner):
  *   {"id":1,"result":{"userAgent":"aiclient-verify/0.145.0 (Windows 10.0.20348;
  *    x86_64) unknown (aiclient-verify; 0)","codexHome":"C:\\Users\\runneradmin\\
  *    AppData\\Local\\Temp\\aiclient-codex-smoke-qAWyh8","platformFamily":

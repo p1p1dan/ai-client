@@ -59,6 +59,29 @@
 | `vendor/<triple>/codex-package.json` 内容 | `{"layoutVersion":1,"version":"0.145.0","target":"x86_64-unknown-linux-musl","variant":"codex","entrypoint":"bin/codex","resourcesDir":"codex-resources","pathDir":"codex-path"}` ← **上游自带的清单**，是比我们猜路径更强的断言源 |
 | `codex --version` | `codex-cli 0.145.0`（该 shim realpath 到 `bin/codex.js`，即 `node codex.js --version`） |
 
+**A-bis. 同一张表在 `@openai/codex@0.149.1` 上重测**（2026-08-26 升级票，`[实测]`；本机 `src/agent-host/node_modules` 内随包那份 + 解包上游 win32 tarball）
+
+| 项 | 0.145.0 | **0.149.1** | 判定 |
+|---|---|---|---|
+| 主包文件 | `bin/codex.js` 7,236 · `package.json` 1,082 · `README.md` 2,814 | `bin/codex.js` **7,236** · `package.json` **1,082** · `README.md` **3,334** | 只有 README 变（不进包） |
+| `optionalDependencies` | 六项别名 | **六项别名，键名与形态一字不变** | 不变 |
+| 平台包 `name`/`version` | `@openai/codex` / `0.145.0-linux-x64` | `@openai/codex` / **`0.149.1-linux-x64`** | 别名形态不变 |
+| 平台包文件数 | 8 | **8** | 目录布局不变 |
+| linux 入口二进制 `bin/codex` | 310,730,800 | **258,227,840**（246.3 MiB） | **缩小 52,502,960 B** |
+| linux `bin/codex-code-mode-host` | 46,139,288 | **57,886,648** | 增大 11,747,360 B |
+| linux 平台包合计 | 363,710,778 | **322,955,698** | −40,755,080 B |
+| **linux 有效负载 `P`** | 363,716,282 | **322,960,682** | 真产物 `build:agent-host` 逐字节印证 |
+| win32 入口 `codex.exe` | 359,245,096 | **297,481,008**（283.7 MiB） | 缩小 61,764,088 B |
+| **win32 有效负载 `P`** | 427,157,004 | **391,168,020** | 由 tarball 反算，算法对 0.145.0 逐字节自证 |
+| 文件权限 | 可执行件 0775 / 元文件 0664 | **同** | 不变 |
+| `bin/codex` 首 8 字节 | ELF | **ELF**（`7f 45 4c 46 02 01 01 00`） | 不变 |
+| `codex-package.json` 七键 | 见上 | **七键同名同形**，仅 `version` 变 `0.149.1` | 不变 |
+| `codex.js` 的 `PLATFORM_PACKAGE_BY_TARGET` | `:16-23` 六行 | **`:16-23`，六行逐字相同** | `codex-platform.mjs` 的表无需改 |
+| `require.resolve` 链行号（§0.3-B） | `:79-108` | **`:80-89`** | 行号漂移一行，逻辑不变 |
+
+> **这张表为什么必须重测**：`CODEX_BINARY_FLOOR` 与 §6.3 的**双边**预算都直接吃这些数。入口二进制缩了 17%，`P` 缩了 11% —— 上界毫无压力，但**下界会假红**（floor 365,854,456 vs 真产物 365,843,830，差 10,626 B）。「升级只看契约不看体积」在这一版就会翻车。
+> **`CODEX_BINARY_FLOOR = 200 MiB` 维持不变**：它对两个平台仍成立（linux 246.3 MiB / win32 283.7 MiB），但相对最小平台的比例从 ~67% 升到 ~81%，即**这个常量的推导式不再自我更新**，下次 bump 必须重新核对。
+
 **B. `bin/codex.js` 怎么找二进制**（`[读码]`，决定了 prune 的安全边界）
 
 `codex.js:79-108`：`require.resolve('<平台包名>/package.json')` → `dirname()` + `'vendor'`；失败才回落 `<__dirname>/../vendor`（主包没有 `vendor`，所以**回落必炸**）。
@@ -157,6 +180,20 @@
 
 **升级规则（本批不做，登记为独立票）**：codex 升级**不是**依赖 bump，而是一个**契约批**，最小动作三件——① 重跑 `codex --strict-config` blessing 并替换 fixture 字节；② 用仲裁 U-a 的零额度法 `codex app-server generate-json-schema --experimental` 出契约快照并 diff `CODEX_METHOD` 全表；③ 复核夹具形状假设（如 §4.5 改判① 的 `idle` 无 `activeFlags` 键）。
 **已知在野更新版本**：`docs/plans/2026-08-18-deepseek-harness-study.md:5` 记 `codex-cli 0.147.0`（外部研究档的证据 pin，不是我们的运行时）。本批**不采用**，登记进遗留（§11-Q7）。
+
+> ### ⚠️ 已过期：pin 现为 **0.149.1**（2026-08-26 升级票执行完毕，§11-Q7 关闭）
+>
+> 本节余下文字（pin `0.145.0`、lock 里六条 `0.145.0-<key>`）是 P1 施工当时的原文，**保留不改**是因为规格档记录的是当时的决策依据。**当前真值以 `src/agent-host/package.json` 与 `src/agent-host/PINNED.md` 为准。**
+>
+> 三件套的执行结果（全部 `[实测]` 2026-08-26）：
+>
+> - **①** blessing 重跑 PASS，且**生成器未动 ⇒ `codex-config.blessed.toml` 逐字节不变、无需替换**。本节写的「替换 fixture 字节」应读作「重跑并在生成器变了时才替换」。
+> - **②** 契约快照 diff **纯增量零删除**：clientRequest 126→150、serverNotification 70→75；serverRequest（11）与 threadItemTypes（18）连生成顺序都不变 ⇒ `CODEX_METHOD` 全表零改动。唯一动到形状的是 `ToolRequestUserInputParams` 的 required 新增 `isBlocking`（同版本把 `autoResolutionMs` 标为 deprecated）。
+> - **③** §4.5 改判① 的 `idle` 无 `activeFlags` 键**依然成立**；`ThreadStatus` 四态不变。
+>
+> **升级规则本身要补的一条（本次实证）**：三件套**不够** —— 还必须**重测承重表并回填预算**。codex 0.149.1 **缩小了约 40 MB**（linux 入口 310,730,800→258,227,840 B），而 §6.3 的预算是**双边**的，旧的 `codexPayload` 会把一个完全正确的产物判成 `under`（「codex 根本没进包」）。本次实测 floor 365,854,456 vs 真产物 365,843,830，**差 10,626 B 就是一次假红**。升级票从此按**四件套**走：blessing · 契约 diff · 夹具复核 · **预算重设**。
+>
+> **另一条方法论**：win32 的 `P` **不需要 Windows runner** 也能重测 —— 解包上游发布的平台包 tarball，按 `shouldCopy` 的 prune 规则手算即可。该算法对 0.145.0 反算，能**逐字节复现** CI 当时实测的 427,157,004 B 与 `codex.exe` 359,245,096 B，故可信。
 
 **lockfile 纪律（rev.2 新增，改判 ⑨）**：`src/agent-host/package-lock.json`（现 70,089 B `[实测]`）必须**与 `package.json` 同批重新生成并提交**。
 
@@ -852,7 +889,7 @@ rev.1 写的是「把 `build-agent-host.mjs` 里的三个函数改成可注入�
 | **Q4** | **`codex-code-mode-host` 保留 = +44 MiB** | 本规格 §3.5 裁定保留并给了反证条件 | 接受保留；省它另立票（需先有「不下发 code_mode_only 模型」的实证） |
 | **Q5** | **mac 线的既定形态**（rev.2 改写：从「破口」改为「显式设计」） | 改判 ⑧ 之后，mac 上是**三件同时成立**：① `fetch:node-runtime` 跳过（无 pin）；② **codex 整包不进产物**（白名单闸，防 347MB 未签名 Mach-O 进 `hardenedRuntime`+`notarize` 链）；③ `AgentInstaller` 五个写侧入口被平台闸挡住 ⇒ **mac 用户必须自己 `npm i -g @openai/codex`**，且 app 内没有任何引导 | 接受（D52-② 的直接后果），写进 mac 票的已知内容；**若认为「mac 用户完全无引导」不可接受，请拍板是否在本批补一条 mac 专属提示文案**（改动面小，但会牵动 onboarding golden-diff 测试面） |
 | **Q6** | **门禁只在出包时跑**：`build.yml` 的触发器是 `push: tags` + `workflow_dispatch`（`:3-7`），D41 的 gate 挂在同一 workflow ⇒ 合入 main 时不跑，打 tag 才发现红 | D41 原文只说「打包前置」，没说 PR 门禁；补 `on: pull_request` 属新增 workflow，超出本批范围 | 本批按 D41 原文只做打包前置；**是否另立 `ci.yml` 跑 PR 门禁**请拍板 |
-| **Q7** | **codex 0.147.0 升级票排期** | 在野已有更新版本（deepseek 研究档的证据 pin）；升级须走「blessing 重跑 + 契约快照 diff + 夹具复核」三件套 | 本批不做；升级票排在 2b 收官后、flag 转 on 之前或之后由用户定 |
+| ~~**Q7**~~ **已关闭（2026-08-26）** | ~~codex 0.147.0 升级票排期~~ | — | **已执行，但目标版本改判**：票写 0.147.0，执行时 npm `latest` 已是 **0.149.1**（0.147.0 已落后两个 minor），用户拍板取 latest。三件套全跑完，结论**纯增量零删除**；唯一动到形状的是 `ToolRequestUserInputParams` 多了 required 的 `isBlocking`。承重表见下方 §0.3-A 的 0.149.1 列。落账见 `src/agent-host/PINNED.md`。**连带发现两条**：① 预算的**下界**被迫重设（codex 缩了 40MB，旧 P 会把正确产物判成「codex 没进包」）；② `codexRuntime.ts` 一条 `[实测]` 注释（`thread/items/list` 是 -32601）**不复现**，A/B 实测证明 0.145.0 当时就不是 -32601 |
 | **Q8** | **`compression: maximum` 是否降档** | 新增 ~347MB 未压缩二进制，`maximum`（xz 极限档）可能让单步出包时间翻倍；连带 NSIS `differentialPackage: true`（`electron-builder.yml:207`）的 blockmap 生成 | 首跑实测；单步超过告警值（40 min，**可调告警值非硬门**）则提交降到 `normal` 的拍板（代价 = 安装包变大） |
 | **Q9**（rev.2 新增） | **`AgentInstaller.refreshPath()`(:218) 要不要加平台闸** | 它同样是 Windows 味（读注册表/刷新 PATH），但被 `installAll`/`installAgent` **内部**调用（`:254/:273/:301/:331/:367/:406`），也可能被将来的探测链复用。加闸位置错一次就重演「Linux onboarding 直接炸」（改判 ⑥ 的教训） | **本批不加闸**（写侧五入口已在更外层拦住）；是否单独加、以及加成 throw 还是 no-op，请拍板或另立票 |
 | **Q10**（rev.2 新增） | **面向 GUI 用户的 codex 路径逃生口** | `AICLIENT_CODEX_JS_PATH` 只在终端启动/系统级环境变量下可达（改判 ③）；GUI 常规启动的用户在随包 codex 损坏时**没有任何自救手段**（只能重装） | 建议**另立票**做 settings 显式路径项（与 `AICLIENT_NODE24_PATH` 的 settings 化诉求同族），本批不做 |

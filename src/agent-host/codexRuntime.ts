@@ -74,9 +74,22 @@ import { type TimerHandle, TtftWatchdog } from './ttftWatchdog.ts';
  * `thread/start`: same launch, same isolated home, same connection, and the link
  * it opens STAYS as the session's live link — resume is "continue this thread",
  * not "read it once". The transcript comes from the resume result itself
- * (`codexHistoryReader.ts`), because that result is the only place codex hands
- * a thread's items back: `thread/read` answers with `turns:[]` and
- * `thread/items/list` is -32601 on 0.145.0 [实测].
+ * (`codexHistoryReader.ts`).
+ *
+ * ⚠️ The reason recorded here used to be "`thread/read` answers with `turns:[]`
+ * and `thread/items/list` is -32601 [实测]". The second half does not
+ * reproduce. Re-probed 2026-08-26 during the codex 0.145.0 -> 0.149.1 upgrade,
+ * with the capabilities `buildInitializeParams` actually sends
+ * (`experimentalApi: true`), BOTH versions accept the method and fail only on
+ * the deliberately bogus thread id:
+ *   {"error":{"code":-32600,"message":"invalid thread id: …found `p` at 1"}}
+ * — i.e. it reached parameter validation, so the method is live and was live
+ * on 0.145.0 too. This is a stale note, not an upstream change.
+ *
+ * Nothing is re-wired on that finding here: reading the transcript out of the
+ * resume result still works and is still one round trip. But the paginated
+ * path is available if long-history hydration ever needs it — see
+ * docs/plantree/ideas/inbox.md.
  *
  * Two rules shape the order below and neither is cosmetic:
  *  - state + registry are bound BEFORE the first byte goes out (H11). The resume

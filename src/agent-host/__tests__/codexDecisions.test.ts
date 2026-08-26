@@ -322,7 +322,9 @@ describe('A23 — the dialect tables are pinned to the generated contract, both 
     expect(approvalSchema.codexVersion).toMatch(/\d+\.\d+\.\d+/);
     expect(approvalSchema.CommandExecutionApprovalDecision.oneOf.length).toBe(6);
     expect(approvalSchema.FileChangeApprovalDecision.oneOf.length).toBe(4);
-    expect(approvalSchema.ReviewDecision.oneOf.length).toBe(7);
+    // 7 -> 8 with codex 0.149.1 (approved_mcp_policy_amendment). The two live
+    // dialects did not move, which is the half that would have cost work.
+    expect(approvalSchema.ReviewDecision.oneOf.length).toBe(8);
   });
 
   const blocks: Array<[PendingKind, DecisionBlock, string[]]> = [
@@ -370,7 +372,17 @@ describe('A23 — the dialect tables are pinned to the generated contract, both 
     // would be valid for it, which is what this asserts.
     const legacyStrings = stringVariants(approvalSchema.ReviewDecision);
     const legacyObjects = objectVariants(approvalSchema.ReviewDecision);
-    expect(legacyStrings).toEqual(['approved', 'approved_for_session', 'timed_out', 'abort']);
+    // `approved_mcp_policy_amendment` arrived with codex 0.149.1 (2026-08-26).
+    // It is listed here because this assertion's job is to enumerate the legacy
+    // vocabulary exhaustively — a new legacy word that silently slipped past
+    // would weaken the "shares no word" claim below, which is the L5 nail.
+    expect(legacyStrings).toEqual([
+      'approved',
+      'approved_for_session',
+      'approved_mcp_policy_amendment',
+      'timed_out',
+      'abort',
+    ]);
     expect(legacyObjects).toEqual([
       'approved_execpolicy_amendment',
       'network_policy_amendment',

@@ -53,12 +53,15 @@ describe('agent-host size gate — four-point truth table (D6)', () => {
     expect(evaluateAgentHostSize(KEY, ceiling + 1).status).toBe('over');
   });
 
-  it('is not satisfied by a stray platform variant (+347MB)', () => {
+  it('is not satisfied by a stray platform variant (+308MB)', () => {
     // The stated design criterion for h1/h2: absorb normal upstream growth,
-    // never absorb one extra platform package.
-    const real = 406599430;
+    // never absorb one extra platform package. Both figures re-measured for
+    // codex 0.149.1 (2026-08-26): `real` is what a local build:agent-host
+    // reports, and one stray variant is now 308MiB rather than 347MiB because
+    // the upstream binary shrank.
+    const real = 365843830;
     expect(evaluateAgentHostSize(KEY, real).status).toBe('ok');
-    expect(evaluateAgentHostSize(KEY, real + 347 * 1024 * 1024).status).toBe('over');
+    expect(evaluateAgentHostSize(KEY, real + 308 * 1024 * 1024).status).toBe('over');
   });
 
   it('catches codex not being bundled at all', () => {
@@ -94,13 +97,15 @@ describe('codex binary single-file floor — four points (D6)', () => {
 
 describe('unbudgeted platforms report PENDING, never a silent pass', () => {
   it('win32-x64 is budgeted from the first Windows run, not from copied figures', () => {
-    // Filled in 2026-08-21 from CI run 32442630099. The assertion is on the
-    // measured total landing inside the band — a copy of the linux numbers
-    // would put 494.7MiB far above a 443.8MiB ceiling and fail here.
+    // A0 filled in 2026-08-21 from CI run 32442630099; P re-derived from the
+    // published 0.149.1 win32 tarball on 2026-08-26 (see packaging-budget.mjs
+    // for why that derivation is trusted). The assertion is on the expected
+    // total landing inside the band — a copy of the linux numbers would put
+    // 460.3MiB below a 414.3MiB floor and fail here.
     expect(hasBudget('win32-x64')).toBe(true);
-    expect(evaluateAgentHostSize('win32-x64', 518692428).status).toBe('ok');
-    expect(agentHostFloor('win32-x64')).toBe(466823185);
-    expect(agentHostCeiling('win32-x64')).toBe(591919521);
+    expect(evaluateAgentHostSize('win32-x64', 482703444).status).toBe('ok');
+    expect(agentHostFloor('win32-x64')).toBe(434433099);
+    expect(agentHostCeiling('win32-x64')).toBe(550532190);
   });
 
   it('reports no-budget rather than ok for an unmeasured platform', () => {
@@ -156,7 +161,7 @@ describe('formatBytes', () => {
 });
 
 describe('evaluateAppDirSize — secondary WARN gate (spec §6.3)', () => {
-  const P = 363716282;
+  const P = 322960682;
 
   it('reports no-baseline for an unmeasured platform, never a silent ok', () => {
     // Same discipline as PACKAGING_BUDGET: an unmeasured platform must read as
@@ -165,7 +170,10 @@ describe('evaluateAppDirSize — secondary WARN gate (spec §6.3)', () => {
   });
 
   it('passes both measured platforms at their real appDir sizes', () => {
-    // The bytes CI actually produced on run 32448401467.
+    // The bytes CI actually produced on run 32448401467, paired with the codex
+    // payload of that era (0.145.0). Left as the historical pair on purpose:
+    // it asserts the gate was green on a run that really happened, and
+    // APP_DIR_BASELINE — the PRE-codex term — does not move when codex does.
     expect(evaluateAppDirSize('linux-x64', 990967116, 363716282).status).toBe('ok');
     expect(evaluateAppDirSize('win32-x64', 1198625823, 427157004).status).toBe('ok');
   });
@@ -173,9 +181,9 @@ describe('evaluateAppDirSize — secondary WARN gate (spec §6.3)', () => {
   it('warns once the app directory doubles', () => {
     // The bound is 2x(baseline + P); one byte past it must flip to 'over', or
     // the gate is decoration.
-    const ceiling = 2 * (APP_DIR_BASELINE['linux-x64'] + 363716282);
-    expect(evaluateAppDirSize('linux-x64', ceiling, 363716282).status).toBe('ok');
-    expect(evaluateAppDirSize('linux-x64', ceiling + 1, 363716282).status).toBe('over');
+    const ceiling = 2 * (APP_DIR_BASELINE['linux-x64'] + P);
+    expect(evaluateAppDirSize('linux-x64', ceiling, P).status).toBe('ok');
+    expect(evaluateAppDirSize('linux-x64', ceiling + 1, P).status).toBe('over');
   });
 
   it('reports no-baseline when the codex payload is unknown', () => {

@@ -91,8 +91,14 @@ describe('the generated contract snapshot is usable at all', () => {
     // closed in the same slice that started SENDING a method off this list.
     // Exact counts, not `>`: a re-capture against a different codex build should
     // be a visible decision, and an under-sampled re-capture should be red.
-    expect(contract.clientRequest.length).toBe(126);
-    expect(contract.serverNotification.length).toBe(70);
+    //
+    // It worked. The 2026-08-26 bump to codex 0.149.1 landed here first, and
+    // the numbers below are the deliberate decision it forced: clientRequest
+    // 126 -> 150 and serverNotification 70 -> 75, with NOTHING removed from
+    // either family (both directions were diffed against a regenerated 0.145.0
+    // snapshot). serverRequest and threadItemTypes did not move at all.
+    expect(contract.clientRequest.length).toBe(150);
+    expect(contract.serverNotification.length).toBe(75);
     expect(contract.serverRequest.length).toBe(11);
     for (const method of [
       'initialize',

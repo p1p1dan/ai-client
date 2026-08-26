@@ -13,10 +13,21 @@
     "the descriptions ARE the security semantics.",
     "This is a COMMITTED STATIC SNAPSHOT. It does not discover drift by itself:",
     "when codex is upgraded the command above MUST be re-run and this file rebuilt,",
-    "or \"pinned\" only means pinned to a world that no longer exists."
+    "or \"pinned\" only means pinned to a world that no longer exists.",
+    "",
+    "2026-08-26 UPGRADE 0.145.0 -> 0.149.1: re-generated. serverRequestMethods is",
+    "byte-identical (same ELEVEN, same generated order). CommandExecutionApprovalDecision",
+    "(6 variants), FileChangeApprovalDecision (4), PermissionsRequestApprovalResponse,",
+    "McpServerElicitationRequestResponse and all five requestParams blocks came out",
+    "IDENTICAL. The ONE change is in ReviewDecision, the legacy dialect: a new string",
+    "variant approved_mcp_policy_amendment, inserted upstream between approved_for_session",
+    "and the network-policy object variant and copied verbatim below. It changes nothing",
+    "this round -- slice 4 spec L5 still leaves applyPatchApproval / execCommandApproval",
+    "out of SERVER_REQUEST_KINDS -- but it is one more way an Allow can widen scope",
+    "(\"across sessions\"), so it is recorded rather than skipped."
   ],
-  "codexVersion": "codex-cli 0.145.0",
-  "capturedAt": "2026-08-10",
+  "codexVersion": "codex-cli 0.149.1",
+  "capturedAt": "2026-08-26",
   "serverRequestMethods": {
     "_source": "ServerRequest.json (top-level oneOf, properties.method.enum[0] of each variant)",
     "_note": "ELEVEN variants. codex-method-contract.json lists ten and is wrong in both directions: it invents \"openai/form\" (that string is the `mode` enum inside McpServerElicitationRequestParams, never a method) and omits applyPatchApproval / execCommandApproval.",
@@ -159,6 +170,11 @@
         "description": "User has approved this request and wants future prompts in the same session-scoped approval cache to be automatically approved for the remainder of the session.",
         "type": "string",
         "enum": ["approved_for_session"]
+      },
+      {
+        "description": "User has approved this MCP tool call and wants to amend its policy so matching future calls are automatically approved across sessions.",
+        "type": "string",
+        "enum": ["approved_mcp_policy_amendment"]
       },
       {
         "description": "User chose to persist a network policy rule (allow/deny) for future requests to the same host.",

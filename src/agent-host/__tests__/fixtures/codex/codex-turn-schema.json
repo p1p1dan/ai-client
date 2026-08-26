@@ -6,10 +6,15 @@
     "this file pins the PARAM SHAPES the turn loop sends, so a guessed or dropped",
     "field shows up as a failing test instead of a -32602 at runtime on a machine",
     "we cannot reach. `required` / `propertyNames` are lifted verbatim from the",
-    "generated JSON Schema; propertyNames is the key list of `properties`."
+    "generated JSON Schema; propertyNames is the key list of `properties`.",
+    "",
+    "2026-08-26 UPGRADE 0.145.0 -> 0.149.1: re-generated against the newly pinned",
+    "binary and every block below came out IDENTICAL -- TurnStartParams (2 required /",
+    "20 properties), TurnInterruptParams, UserInput variants, UserInputText,",
+    "TurnStartResponse, Turn, TurnStatus. The stamp moved, the contract did not."
   ],
-  "codexVersion": "codex-cli 0.145.0",
-  "capturedAt": "2026-08-10",
+  "codexVersion": "codex-cli 0.149.1",
+  "capturedAt": "2026-08-26",
   "TurnStartParams": {
     "required": ["input", "threadId"],
     "propertyNames": [

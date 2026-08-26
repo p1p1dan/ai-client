@@ -57,7 +57,30 @@
 四者都是**已提交的静态快照，不会自己发现漂移**：codex 版本一升级，
 **必须手动重跑上面那条命令重生成**，否则“钉住了”只是钉住了一个过期的世界。
 
-⚠️ **`codex-method-contract.json` 的 `serverRequest` 一列是错的**（2026-08-10 切片 4 取证发现，同版本重生成对照）：
+> **⚠️ 本目录现在有两个版本口径，别混用**：上表的 `.jsonl` / `.json` **报文**夹具永远停在
+> **0.145.0**（真实抓取，花过额度，不可再取，也绝不重写）；下表四份**契约快照**已随
+> 2026-08-26 的升级票重生成到 **0.149.1**。两者不一致是正常的：一个是「当时线上真的长这样」，
+> 另一个是「今天的二进制承诺长这样」。**只有契约快照跟版本走。**
+
+### 2026-08-26 契约重生成（0.145.0 → 0.149.1）
+
+升级票的三件套之②。四份快照全部用新 pin 的二进制重跑
+`codex app-server generate-json-schema --experimental` 重生成，逐块与 0.145.0 对照，
+结论 **纯增量，零删除**：
+
+| 快照 | 结果 |
+|---|---|
+| `codex-method-contract.json` | clientRequest 126 → **150**（+24）、serverNotification 70 → **75**（+5）；**serverRequest 11 与 threadItemTypes 18 连生成顺序都逐字不变** |
+| `codex-question-schema.json` | **唯一被改动形状的一份**：`ToolRequestUserInputParams` 新增 `isBlocking: boolean` 且**进了 `required`**；同版本把 `autoResolutionMs` 标为 `@deprecated`（上游原话「Use `isBlocking` to decide whether the request should block」） |
+| `codex-turn-schema.json` | 全部逐字不变（TurnStartParams 20 键 / TurnStatus 四态 / UserInput 七变体） |
+| `codex-settings-schema.json` | 全部逐字不变（ThreadSettingsUpdateParams 13 键 / SandboxPolicy 四变体 / AskForApproval） |
+| `codex-approval-schema.json` | 三类审批请求参数与两套 v2 决策方言逐字不变；legacy `ReviewDecision` 新增一个字符串变体 `approved_mcp_policy_amendment` |
+
+**未随本次重生成变化的假设**（逐条复核过）：`ThreadStatus` 四态与
+「`idle` 臂没有 `activeFlags` 键」（切片 5 §4.5 改判① 的承重前提）**依然成立**。
+
+
+⚠️ **【已修复，保留作方法论备忘】`codex-method-contract.json` 的 `serverRequest` 一列曾经是错的**（2026-08-10 切片 4 取证发现，同版本重生成对照；2026-08-17 backfill 补齐另两族，2026-08-26 重生成后三族均与二进制一致）：
 它把 `openai/form` 当成方法名（那其实是 `McpServerElicitationRequestParams` 里 `mode` 字段的枚举值），
 又漏掉两个真实的服务端请求 `applyPatchApproval` / `execCommandApproval`。真值 **11 条**见
 `codex-approval-schema.json` 的 `serverRequestMethods`（提取口径：`ServerRequest.json` 顶层 `oneOf` 各变体的

@@ -4,7 +4,7 @@
  * and their unit tests.
  *
  * No IO, no `process` reads: every function takes platform/arch as arguments.
- * Source of truth = @openai/codex@0.145.0 bin/codex.js:16-23
+ * Source of truth = @openai/codex@0.149.1 bin/codex.js:16-23
  * (PLATFORM_PACKAGE_BY_TARGET), transcribed 2026-08-19.
  */
 

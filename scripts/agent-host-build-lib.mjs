@@ -31,10 +31,19 @@ import {
 export const ESBUILD_EXTERNAL = ['@anthropic-ai/claude-agent-sdk', '@cometix/claude-code'];
 
 /** Entry-binary size floor: guards against LFS pointers / truncated downloads,
- * NOT against version drift (that is the manifest's job). Derived from the
- * linux-x64 measurement of 296 MiB, floored to two thirds and rounded down.
- * Holds for win32 too: codex.exe measured 359,245,096 B (342.6 MiB) on CI run
- * 32442630099, well clear of the floor (spec §11-Q1-② closed). */
+ * NOT against version drift (that is the manifest's job).
+ *
+ * Originally derived from codex 0.145.0's linux-x64 entry binary (296 MiB),
+ * floored to two thirds. Both terms of that derivation shrank in 0.149.1 —
+ * linux 310,730,800 B -> 258,227,840 B (246.3 MiB) and win32
+ * 359,245,096 B -> 297,481,008 B (283.7 MiB), both re-measured 2026-08-26 —
+ * so the constant is now ~81% of the smaller platform rather than ~67%.
+ *
+ * It is deliberately NOT lowered to restore the old ratio: a truncation guard
+ * only gets weaker by moving down, and 200 MiB still clears every shipped
+ * platform. What this DOES mean is that the ratio is no longer self-renewing:
+ * re-check this constant on every codex bump, and if an upstream binary ever
+ * lands under ~250 MiB, re-derive rather than assume. */
 export const CODEX_BINARY_FLOOR = 200 * 1024 * 1024;
 
 /**

@@ -1,6 +1,6 @@
 # Roadmap — 多 Agent 接入
 
-> 状态：**In Progress — S3 施工线全落 + D47 全收官 + 阶段 3 D48 四切片全落（2026-08-17）+ **阶段 4「2b 打包链」施工收口（2026-08-21，C7/C8 达成 + 复审 13 条全清）**，下一阶段 = pi 第三后端评估 spike（阶段 5，候选）**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工；切片 5/6 均于 2026-08-15 收口）。
+> 状态：**In Progress — S3 施工线全落 + D47 全收官 + 阶段 3 D48 四切片全落（2026-08-17）+ **阶段 4「2b 打包链」施工收口（2026-08-21，C7/C8 达成 + 复审 13 条全清）** + **codex pin 0.145.0 → 0.149.1 升级票收口（2026-08-26，D54 ② / §11-Q7 关闭）**，下一阶段 = pi 第三后端评估 spike（阶段 5，候选）**（2026-08-06 同日四连：解冻 → S1 spike → S2 设计 → S3 开工；切片 5/6 均于 2026-08-15 收口）。
 >
 > ✅ **解冻裁定（用户 2026-08-06）**：原话「multi-agent 支线解冻 开干」。
 > 2026-08-05 的「后置」裁定（原话「先做 B，优先把现有 Claude 客户端任务大致完成后，再考虑 codex 支线」）
@@ -8,6 +8,36 @@
 > **S1 spike 自即日进入执行。**
 
 ## Done
+
+- **2026-08-26 codex pin 升级 `0.145.0` → `0.149.1` ✅ 收口**（D54 ② 升级票，规格 §11-Q7 关闭）——
+  票写 0.147.0，执行时该版本已落后两个 minor（npm `latest` = 0.149.1），**用户拍板取 latest**：
+  三件套工作量与目标版本无关，锚旧版等于短期内再来一遍。
+  **契约结论：纯增量，零删除。** clientRequest 126→150、serverNotification 70→75；
+  **serverRequest（11）与 threadItemTypes（18）连生成顺序都逐字不变 ⇒ `CODEX_METHOD` 全表零改动**。
+  四份契约快照全部用新二进制重生成：turn / settings 逐字不变，approval 只多一个 legacy
+  `ReviewDecision` 变体，question 是唯一动到形状的一份（`ToolRequestUserInputParams` 新增
+  **required** 的 `isBlocking`，同版本把 `autoResolutionMs` 标为 deprecated）。
+  blessing 在 0.149.1 上 PASS，且**生成器未动 ⇒ blessed fixture 逐字节不变、无需替换**。
+  夹具形状复核：`ThreadStatus` 四态与「`idle` 无 `activeFlags`」（切片 5 §4.5 改判①）**仍成立**；
+  `.jsonl` 报文夹具**保持 0.145.0 不动**（真实抓取、花过额度、不可再取），
+  与契约快照的版本口径分叉已写进夹具 README。
+  真产物验证：`build:agent-host` 出件 365,843,830 B，S1 `--version` = `codex-cli 0.149.1`，
+  S2 `initialize` 往返回包正确且干净退出（code 0）。
+  四门全绿：typecheck 0（含 agent-host）· biome 995 文件 0 · **vitest 247 文件 5007 例**；
+  **变异 7/7 咬红**（预算两平台 P · lock PIN · isBlocking required · autoResolutionMs 存在 ·
+  legacy 新变体 · clientRequest 计数），md5 对账还原。
+  ⚠️ **本批三条带走的教训**：
+  ① **升级票是四件套不是三件套** —— 必须**重设体积预算**。codex 缩了约 40MB，而 §6.3 预算**双边**，
+  旧 `codexPayload` 下 floor 365,854,456 vs 真产物 365,843,830，**差 10,626 B 就把正确产物判成
+  「codex 根本没进包」**。规格 §3.1 已补这条。
+  ② **win32 的 `P` 不需要 Windows runner** —— 解包上游平台包 tarball 按 `shouldCopy` 手算；
+  该算法对 0.145.0 反算能**逐字节复现** CI 实测的 427,157,004 B 与 `codex.exe` 359,245,096 B。
+  ③ **A/B 实测推翻一条 `[实测]` 注释**：`codexRuntime.ts` 写「`thread/items/list` 是 -32601」，
+  但带 `experimentalApi: true` 打过去，**0.145.0 与 0.149.1 都不是 -32601** ——
+  该注释从写下起就错（非本次引入）。本批只订正注释未改设计，分页水合路径登记进 inbox（与 F7 同族）。
+  **未做**：Windows runner 上的真产物复验（`P` 为反算值）· GUI 真机回合点验 · 未走双轨双盲评审。
+  落账：`src/agent-host/PINNED.md`（四件套 as-run 表）· 规格 §0.3-A-bis / §3.1 / §11-Q7 ·
+  [inbox](../../ideas/inbox.md) 五条（含三条新发现）。
 
 - **2026-08-06 S2 — 直连 Codex 接入设计 ✅ 收口**（S1 当日接着做完）——产出
   [S2 设计档](../../../plans/2026-08-06-s2-codex-integration-design.md)（389 行，单一施工档）。

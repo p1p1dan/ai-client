@@ -21,10 +21,18 @@
  * SESSION-level `model` override (`codexRuntime.ts:210`/`1479`), so a global
  * `model` in `config.toml` would only ever apply to the (never-taken) no-model
  * path. Omitting it means "no session model" falls through to whatever the
- * `codex` binary's OWN built-in default is (0.145.0 [实测]: `gpt-5.6-sol`) —
- * a `codex` upgrade can silently change that default. Registered, not fixed
- * here: pinning OUR OWN default would be a second source of truth that drifts
- * from the binary's actual behavior.
+ * `codex` binary's OWN built-in default is — a `codex` upgrade can silently
+ * change that default. Registered, not fixed here: pinning OUR OWN default
+ * would be a second source of truth that drifts from the binary's actual
+ * behavior.
+ *
+ * It is not, however, unobservable. `model/list` answers over app-server with
+ * NO auth and NO turn, so the default costs nothing to re-check on a bump:
+ * initialize with `experimentalApi: true`, send `model/list`, read the entry
+ * whose `isDefault` is true.
+ *   0.145.0 [实测]: gpt-5.6-sol (default), gpt-5.6-terra, gpt-5.6-luna,
+ *                   gpt-5.5, gpt-5.2
+ *   0.149.1 [实测 2026-08-26]: identical list, `gpt-5.6-sol` still default.
  *
  * ## Why no context-window keys
  *

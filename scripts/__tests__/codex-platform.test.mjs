@@ -22,7 +22,8 @@ import {
 
 describe('codex platform matrix (A1)', () => {
   it('maps all six platform keys to the upstream target triples verbatim', () => {
-    // Source of truth: @openai/codex@0.145.0 bin/codex.js:16-23.
+    // Source of truth: @openai/codex@0.149.1 bin/codex.js:16-23 (table
+    // re-read verbatim on the 2026-08-26 bump — all six rows unchanged).
     expect(CODEX_PLATFORM_DIRS).toEqual({
       'linux-x64': 'x86_64-unknown-linux-musl',
       'linux-arm64': 'aarch64-unknown-linux-musl',

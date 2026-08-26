@@ -374,6 +374,27 @@ describe('the bridge and the generated contract agree, in both directions', () =
     expect(Array.isArray(body.answers.q.answers)).toBe(true);
   });
 
+  it('pins the isBlocking / autoResolutionMs deprecation the bridge has not acted on', () => {
+    // codex 0.149.1 (2026-08-26) added `isBlocking` as a REQUIRED param and
+    // marked `autoResolutionMs` deprecated in its favour. The bridge still
+    // forwards only `autoResolutionMs`.
+    //
+    // This assertion exists because NOTHING ELSE HERE CAN GO RED ON THAT. The
+    // params check above is a one-way whitelist — "reads no field the contract
+    // does not declare" — so a new contract field only ever widens the set it
+    // allows, and the suite stayed green through the entire bump. The gap is
+    // real but invisible, which is the空转 shape the batch discipline keeps
+    // catching after the fact.
+    //
+    // So pin both halves. `isBlocking` being required is what makes the
+    // follow-up worth doing; `autoResolutionMs` still being declared is what
+    // makes today's forward legal. Upstream dropping the deprecated key turns
+    // this red on the bump that does it, rather than at a user's machine.
+    expect(questionSchema.ToolRequestUserInputParams.required).toContain('isBlocking');
+    expect(questionSchema.ToolRequestUserInputParams.propertyNames).toContain('autoResolutionMs');
+    expect(paramKeys.has('isBlocking')).toBe(false);
+  });
+
   it('records the nullable options type the fault-tolerant read depends on', () => {
     // The fixture README once claimed this nullability was fake. It is not,
     // and the tolerant read above is justified by exactly this node.

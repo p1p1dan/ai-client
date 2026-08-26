@@ -27,26 +27,47 @@ export { CODEX_BINARY_FLOOR };
  * no history for. One combined percentage lets A0's normal growth borrow P's
  * room and vice versa, costing resolution on both sides. h1/h2 are engineering
  * judgements, not measurements — the criterion is "absorbs normal upstream
- * growth, does NOT absorb one stray platform variant (+347MB ≈ +87%)".
+ * growth, does NOT absorb one stray platform variant". At codex 0.149.1 a
+ * stray linux variant is +308MB ≈ +84% (it was +347MB ≈ +87% at 0.145.0);
+ * re-check that the criterion still holds whenever P is re-baselined.
  */
 export const PACKAGING_BUDGET = {
   'linux-x64': {
-    // Measured 2026-08-19; re-verified 2026-08-20 against a real build:
-    // dirSize(out-agent-host) = 406,599,430 B vs A0+P = 406,504,952 B (+0.023%).
+    // A0 measured 2026-08-19. P re-measured 2026-08-26 for the codex
+    // 0.145.0 -> 0.149.1 upgrade: a real `build:agent-host` reports
+    // codexPayload=322,960,682 B, matching the figure derived from the
+    // published tarball to the byte. Codex SHRANK by 40,755,600 B, which is
+    // why P had to move: the old term put the floor at 365,854,456 and the
+    // new artifact at 365,843,830 would have gone red as "codex not bundled".
+    // A0 is deliberately NOT refreshed here — the same build measures
+    // 42,883,148 B (+94,478 B, +0.22%), and that drift is in-repo dependency
+    // creep this ticket did not cause. h1 exists to absorb exactly that.
     baseAgentHost: 42788670,
-    codexPayload: 363716282,
+    codexPayload: 322960682,
     h1: 0.1,
     h2: 0.15,
   },
   'win32-x64': {
-    // Measured 2026-08-21 on the first Windows CI run (workflow_dispatch run
-    // 32442630099, build-agent-host budget-terms line): total 518,692,428 B.
-    // A0 is 2.1x linux's and P is 63 MB bigger — the Windows vendor payload
-    // carries codex-command-runner.exe and codex-windows-sandbox-setup.exe
-    // where linux carries bwrap and zsh, and codex.exe is 342.6 MiB against
-    // linux's 296.3 MiB. Same headroom split as linux (改判 ⑩).
+    // A0 measured 2026-08-21 on the first Windows CI run (workflow_dispatch run
+    // 32442630099, build-agent-host budget-terms line). A0 is 2.1x linux's —
+    // the Windows vendor payload carries codex-command-runner.exe and
+    // codex-windows-sandbox-setup.exe where linux carries bwrap and zsh.
+    //
+    // P re-measured 2026-08-26 for the 0.145.0 -> 0.149.1 upgrade WITHOUT a
+    // Windows runner, by unpacking the published @openai/codex@0.149.1-win32-x64
+    // tarball and applying shouldCopy's prune rules by hand:
+    //   8 files = 391,163,036 B, minus README.md 3,334 B (the .md rule),
+    //   plus the main package's 8,318 B (bin/codex.js + package.json)
+    //   = 391,168,020 B.
+    // That derivation is not a guess — run against the 0.145.0 tarball it
+    // reproduces 427,157,004 B exactly, i.e. the byte CI itself measured, and
+    // on linux it reproduces the byte a real local build reports. It also
+    // recovers codex.exe = 359,245,096 B, the figure recorded in
+    // agent-host-build-lib.mjs from that same CI run. codex.exe is now
+    // 297,481,008 B (283.7 MiB) against linux's 246.3 MiB.
+    // Same headroom split as linux (改判 ⑩).
     baseAgentHost: 91535424,
-    codexPayload: 427157004,
+    codexPayload: 391168020,
     h1: 0.1,
     h2: 0.15,
   },

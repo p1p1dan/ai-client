@@ -28,7 +28,7 @@ import { codexBinaryName, codexTargetTriple } from '../codex-platform.mjs';
  * worker (spec §9). A static assertion at the bottom pins that rule.
  */
 
-const PIN = '0.145.0';
+const PIN = '0.149.1';
 const COMETIX_PIN = '2.1.212';
 const SDK_PIN = '0.3.218';
 const LINUX_TRIPLE = 'x86_64-unknown-linux-musl';
@@ -229,7 +229,7 @@ describe('preflightHostDeps (A3, A5)', () => {
     // M3 arm: comparing against the bare pin instead of `${pin}-${key}` must not pass.
     writeJson(path.join(pkgDir, 'package.json'), { name: '@openai/codex', version: PIN });
     expect(() => preflightHostDeps({ root: tmp, ...lx })).toThrow(
-      /expected 0\.145\.0-linux-x64, got 0\.145\.0/
+      /expected 0\.149\.1-linux-x64, got 0\.149\.1/
     );
   });
 
@@ -408,7 +408,7 @@ describe('verifyArtifact (A4)', () => {
     const { nm } = buildArtifact(outDir());
     writeJson(path.join(nm, '@openai', 'codex', 'package.json'), { version: '0.147.0' });
     expect(() => verifyArtifact({ outDir: outDir(), ...lx, pins: PINS })).toThrow(
-      /@openai\/codex version 0\.147\.0 != pinned 0\.145\.0/
+      /@openai\/codex version 0\.147\.0 != pinned 0\.149\.1/
     );
   });
 
@@ -416,7 +416,7 @@ describe('verifyArtifact (A4)', () => {
     const { pkgDir } = buildArtifact(outDir());
     writeJson(path.join(pkgDir, 'package.json'), { name: '@openai/codex', version: PIN });
     expect(() => verifyArtifact({ outDir: outDir(), ...lx, pins: PINS })).toThrow(
-      /expected 0\.145\.0-linux-x64, got 0\.145\.0/
+      /expected 0\.149\.1-linux-x64, got 0\.149\.1/
     );
   });
 
@@ -570,12 +570,12 @@ describe('src/agent-host/package-lock.json (A8)', () => {
 
   // Expected keys are hand-written literals, not generated from the matrix.
   const expected = [
-    ['node_modules/@openai/codex-darwin-arm64', '0.145.0-darwin-arm64', 'darwin', 'arm64'],
-    ['node_modules/@openai/codex-darwin-x64', '0.145.0-darwin-x64', 'darwin', 'x64'],
-    ['node_modules/@openai/codex-linux-arm64', '0.145.0-linux-arm64', 'linux', 'arm64'],
-    ['node_modules/@openai/codex-linux-x64', '0.145.0-linux-x64', 'linux', 'x64'],
-    ['node_modules/@openai/codex-win32-arm64', '0.145.0-win32-arm64', 'win32', 'arm64'],
-    ['node_modules/@openai/codex-win32-x64', '0.145.0-win32-x64', 'win32', 'x64'],
+    ['node_modules/@openai/codex-darwin-arm64', '0.149.1-darwin-arm64', 'darwin', 'arm64'],
+    ['node_modules/@openai/codex-darwin-x64', '0.149.1-darwin-x64', 'darwin', 'x64'],
+    ['node_modules/@openai/codex-linux-arm64', '0.149.1-linux-arm64', 'linux', 'arm64'],
+    ['node_modules/@openai/codex-linux-x64', '0.149.1-linux-x64', 'linux', 'x64'],
+    ['node_modules/@openai/codex-win32-arm64', '0.149.1-win32-arm64', 'win32', 'arm64'],
+    ['node_modules/@openai/codex-win32-x64', '0.149.1-win32-x64', 'win32', 'x64'],
   ];
 
   it('declares the codex pin exactly, without a range prefix', () => {
