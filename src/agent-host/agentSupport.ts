@@ -1,6 +1,6 @@
 /**
- * Which agents THIS Host build will accept — the flag, the current-computed
- * capabilities registry, and the initialize orchestration that builds it.
+ * Which agents THIS Host build will accept — the current-computed capabilities
+ * registry and the initialize orchestration that builds it.
  *
  * ## Why this is its own module
  *
@@ -21,33 +21,48 @@
 import type { AgentWireName } from '../shared/types/agentWire.ts';
 import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '../shared/types/agentWire.ts';
 
-/** S3 slice 2 feature flag (standard #6: ship behind a flag, run both positions). */
-export const CODEX_FLAG_ENV = 'AICLIENT_AGENT_CODEX';
-
 /**
- * Is the Codex runtime switched on?
+ * ## Why there is no `AICLIENT_AGENT_CODEX` flag any more (2026-08-26, 用户拍板)
  *
- * ONLY `'1'` is on. This reads the opposite way round from the existing
- * kill-switch `AICLIENT_HOST_SUBAGENT_ACTIVITY` (`claudeRuntime.ts`), which
- * defaults ON and treats anything but `'0'` as on — that one guards a shipped
- * fix, this one guards an unfinished runtime, so absent/misspelled/`'true'`
- * must all mean off. A permissive reader here would turn Codex on for a user
- * who wrote `AICLIENT_AGENT_CODEX=false`.
+ * There used to be one: `'1'` to turn Codex on, absent/anything-else to keep
+ * it off, guarding what was then an unfinished runtime (S3 slice 2, standard
+ * #6). The runtime finished — S3's six slices, D48's four, and the 2b
+ * packaging chain all landed, and codex now ships INSIDE the app — so the
+ * flag's stated job was done.
  *
- * The env is read per call, not captured at module load, so a test can flip
- * positions between assertions without re-importing (same convention as
- * `resolveSubagentActivityEnabled`). Main passes the normalized `'1'`/`'0'`;
- * the strictness here is what makes any other value harmless.
+ * It was also unreachable, which is the half that decided this. The flag's
+ * only path into the Host was `AgentHostProcess.start()` spreading
+ * `process.env`, i.e. it could only ever be set by whoever launched Electron.
+ * A user who double-clicks a desktop icon or a Dock entry gets the desktop
+ * session's environment — `~/.bashrc` and `~/.zshrc` are never read — so on
+ * Linux and macOS there was no way for a packaged user to switch Codex on at
+ * all: no settings toggle (deliberately: `hostEnv.ts` refuses to inject this
+ * key, to avoid a second place deciding what it means), no menu, and exporting
+ * it in a terminal does nothing unless the app is launched from that terminal.
+ * A switch the product's actual users cannot reach is not a rollout control;
+ * it is an off switch welded shut.
+ *
+ * So availability is now decided ONLY by things that are true or false about
+ * the machine — credentials, a resolvable entry, a preparable home — and every
+ * one of those already has its own reason code below.
+ *
+ * **Consequence worth knowing**: `prepareHome()` used to be short-circuited by
+ * the off position (the flag arm was deliberately side-effect-free). It now
+ * runs on every Host start, for every user, including ones who never open
+ * Codex. In the fallback branch that means creating `<userData>/codex-home/`,
+ * projecting the user's `~/.codex/config.toml` into it, and copying their
+ * `auth.json` if it is newer. It only ever READS `~/.codex` — never writes
+ * there — and it is idempotent, but it is no longer free.
  */
-export function resolveCodexEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[CODEX_FLAG_ENV] === '1';
-}
 
 /**
- * D47 S4 §1 (rev.2) — the explicit managed-mode marker. `'1'` only, same
- * strictness as {@link CODEX_FLAG_ENV}: this is NOT reused from the presence
- * of a base URL or any other side-channel (rev.1's "a" was independently
- * struck down by both review tracks), and no other spelling counts as on.
+ * D47 S4 §1 (rev.2) — the explicit managed-mode marker. `'1'` ONLY: this is
+ * NOT reused from the presence of a base URL or any other side-channel
+ * (rev.1's "a" was independently struck down by both review tracks), and no
+ * other spelling counts as on. (That strictness used to be stated by
+ * reference to the retired `AICLIENT_AGENT_CODEX` flag; it stands on its own
+ * — a permissive reader here would put a user who wrote
+ * `AICLIENT_CODEX_MANAGED=false` into managed mode.)
  *
  * The literal string appears EXACTLY ONCE in `src/agent-host` — right here —
  * and every one of the resolver's readers (the registry below, `codexHome.ts`,
@@ -103,12 +118,12 @@ export function resolveCodexCredentialMode(
 /**
  * Why `codex` is (or is not) in `HostAgentRegistry.agents` this run — carried
  * alongside the boolean so a refusal message (and a support log) can say WHICH
- * of the four gates stopped it, without inventing a new wire error code
- * (S3 slice 6 spec §2 point 7; `credentials_missing` added D47 S4a). Only set
- * when `available` is false.
+ * of the three gates stopped it, without inventing a new wire error code
+ * (S3 slice 6 spec §2 point 7; `credentials_missing` added D47 S4a;
+ * `flag_off` retired 2026-08-26 with the flag itself). Only set when
+ * `available` is false.
  */
 export type HostAgentAvailabilityReason =
-  | 'flag_off'
   | 'credentials_missing'
   | 'entry_missing'
   | 'home_prepare_failed';
@@ -146,27 +161,24 @@ export interface BuildHostAgentRegistryInput {
 }
 
 /**
- * A2/A3 (arbitration doc §2.1): codex availability = flag × credential mode ×
- * entry resolution × isolated-home preparation, computed fresh from the four
- * gates rather than read off a flag-only snapshot.
+ * A2/A3 (arbitration doc §2.1): codex availability = credential mode × entry
+ * resolution × isolated-home preparation, computed fresh from the three gates
+ * every run. (It was four gates until 2026-08-26; the flag is gone — see the
+ * module header for why.)
  *
- * Short-circuits deliberately, in gate ORDER (§1): `flag_off` never calls
- * {@link resolveCodexCredentialMode} or either probe (A2's "flag off 时不碰
- * fs" — the off position must stay side-effect-free); `credentials_missing`
- * (marker on, key absent/blank) never calls `probeEntry`/`prepareHome` either
- * — there is no point resolving an entry or preparing a home for a session
- * that cannot authenticate; `entry_missing` never calls `prepareHome`.
+ * Short-circuits deliberately, in gate ORDER (§1): `credentials_missing`
+ * (marker on, key absent/blank) never calls `probeEntry`/`prepareHome` — there
+ * is no point resolving an entry or preparing a home for a session that cannot
+ * authenticate; `entry_missing` never calls `prepareHome`.
  *
- * Negative control (§1): flag on + marker ABSENT (not `'1'`) resolves to
+ * Negative control (§1): marker ABSENT (not `'1'`) resolves to
  * `{mode:'fallback'}`, which is NOT `credentials_missing` — it falls straight
- * through to the existing entry/home checks exactly as before D47 S4.
+ * through to the entry/home checks exactly as before D47 S4.
  */
 export function buildHostAgentRegistry(input: BuildHostAgentRegistryInput): HostAgentRegistry {
   const detail: HostAgentDetail[] = [{ agent: CLAUDE_CODE_AGENT, available: true }];
 
-  if (!resolveCodexEnabled(input.env)) {
-    detail.push({ agent: CODEX_AGENT, available: false, reason: 'flag_off' });
-  } else if (resolveCodexCredentialMode(input.env).mode === 'managed_missing_credentials') {
+  if (resolveCodexCredentialMode(input.env).mode === 'managed_missing_credentials') {
     detail.push({ agent: CODEX_AGENT, available: false, reason: 'credentials_missing' });
   } else if (!input.probeEntry()) {
     detail.push({ agent: CODEX_AGENT, available: false, reason: 'entry_missing' });
@@ -214,20 +226,18 @@ export function resetHostAgentRegistryForTests(): void {
 /**
  * Human-readable clue for `HostAgentDetail.reason`, folded into the
  * `agent_unsupported` wire message (S3 slice 6 spec §2 point 7) so the message
- * says WHICH of the four gates stopped Codex — flag never turned on, managed
- * credentials are missing, this machine has no resolvable entry, or the
- * isolated home could not be prepared — without adding a new error code.
+ * says WHICH of the three gates stopped Codex — managed credentials are
+ * missing, this machine has no resolvable entry, or the isolated home could
+ * not be prepared — without adding a new error code.
  *
- * Four distinct substrings on purpose, and — new discipline as of D47 S4a —
+ * Three distinct substrings on purpose, and — discipline as of D47 S4a —
  * pairwise NON-CONTAINING: no one clue may be a substring of another. A plain
- * `Set.size` check (this file's test used to stop there) only proves the four
+ * `Set.size` check (this file's test used to stop there) only proves the
  * strings are not equal; it does not catch one clue merely EXTENDING another,
  * which would still confuse a caller that does `message.includes(clue)`.
  */
 export function describeHostAgentReason(reason: HostAgentAvailabilityReason): string {
   switch (reason) {
-    case 'flag_off':
-      return `the ${CODEX_FLAG_ENV} feature flag is off for this Host build`;
     case 'credentials_missing':
       return `the ${CODEX_MANAGED_API_KEY_ENV} environment variable is required for managed Codex credentials but is missing or empty`;
     case 'entry_missing':

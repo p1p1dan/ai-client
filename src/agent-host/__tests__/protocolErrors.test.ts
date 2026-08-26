@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AGENT_HOST_PROTOCOL_VERSION } from '../../shared/types/agentHost.ts';
-import { CODEX_FLAG_ENV, describeHostAgentReason } from '../agentSupport.ts';
+import { describeHostAgentReason } from '../agentSupport.ts';
 import { CODEX_JS_PATH_ENV, NODE_EXEC_PATH_ENV } from '../codexNodeEntry.ts';
 
 /**
@@ -46,21 +46,38 @@ class HostHarness {
   private exitWaiters: Array<(info: { code: number | null }) => void> = [];
 
   /**
-   * S3 slice 6 (C1/F13): `envOverride` layers onto the child's env on top of
-   * an explicit `AICLIENT_AGENT_CODEX: ''` pin — every harness defaults to
-   * the OFF position regardless of what the test RUNNER's own environment has
-   * set. The flag on/off gate (spec §4) re-runs this whole suite a second
-   * time with `AICLIENT_AGENT_CODEX=1` set OUTSIDE vitest, and without this
-   * pin every "off" assertion in this file would silently start asserting
-   * against an ON Host during that second run — that drift is exactly what
-   * F13 found. A test that wants the on position passes it explicitly.
+   * S3 slice 6 (C1/F13): `envOverride` layers onto a default that pins Codex
+   * to a KNOWN-UNAVAILABLE position, so every "off" assertion in this file
+   * asserts against the same Host no matter what the test runner's own
+   * machine has installed.
+   *
+   * This used to be one line — `AICLIENT_AGENT_CODEX: ''`, the flag's off
+   * position. The flag was retired on 2026-08-26 (see agentSupport.ts's module
+   * header), so the pin is now the same four-candidate starve the on-arm tests
+   * below already use: no env override, an empty PATH (kills path_shim and
+   * path_node_sibling), and a node exec path under a directory that does not
+   * exist (kills node_sibling). Without it, `resolveCodexLaunch` would find
+   * the codex this very repo now bundles under `src/agent-host/node_modules`
+   * and the reason would drift from `entry_missing` to `home_prepare_failed`
+   * on some boxes and not others — machine-dependent, which is exactly the
+   * drift F13 found the first time.
+   *
+   * Starving PATH is safe for the Claude half: its bootstrap resolves cli.js
+   * through node module resolution (`cometix.ts`), never PATH. A test that
+   * wants Codex available passes the fixtures explicitly.
    */
   constructor(envOverride: NodeJS.ProcessEnv = {}) {
     this.child = spawn(process.execPath, ['--experimental-strip-types', HOST_ENTRY], {
       cwd: REPO_ROOT,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
-      env: { ...process.env, [CODEX_FLAG_ENV]: '', ...envOverride },
+      env: {
+        ...process.env,
+        [CODEX_JS_PATH_ENV]: path.join(REPO_ROOT, 'no-such-codex-root', 'codex.js'),
+        [NODE_EXEC_PATH_ENV]: path.join(REPO_ROOT, 'no-such-node-root', 'bin', 'node'),
+        PATH: '',
+        ...envOverride,
+      },
     });
 
     const rl = createInterface({ input: this.child.stdout });
@@ -313,14 +330,13 @@ describe('agent-host protocol error paths (spawned process)', () => {
       // a downgraded user gets "unsupported" with nothing to act on.
       expect(String(event.payload?.message)).toContain('codex');
       expect(String(event.payload?.message)).toContain('claude-code');
-      // Pinned to the flag_off REASON specifically, not merely "unavailable":
-      // in an environment where AICLIENT_CODEX_HOME happens to be unset too
-      // (true for every plain `vitest run`, since only Main injects it),
-      // codex ends up unavailable via home_prepare_failed regardless of the
-      // flag position, which would leave the two assertions above green even
-      // if the harness's off-pin (constructor doc above) were silently
-      // dropped. This is the assertion the on/off gate actually needs.
-      expect(String(event.payload?.message)).toContain(describeHostAgentReason('flag_off'));
+      // Pinned to a SPECIFIC reason, not merely "unavailable": the two
+      // assertions above would stay green on any unavailable Codex, including
+      // one that became unavailable by accident. `entry_missing` is what the
+      // harness's four-candidate starve (constructor doc above) guarantees —
+      // if that pin were ever dropped, a box with a resolvable codex would
+      // report `home_prepare_failed` instead and this line would catch it.
+      expect(String(event.payload?.message)).toContain(describeHostAgentReason('entry_missing'));
 
       // G1 (off runtime half, O18): the refusal must be a dead end — no
       // session.created/session.status trails it within a bounded window,
@@ -700,7 +716,6 @@ describe('agent-host flag on/off gate — protocolErrors non-hermetic retrofit (
       writeFileSync(entryPath, '// fixture codex.js entry, existence-only\n');
 
       const harness = spawnHarness({
-        [CODEX_FLAG_ENV]: '1',
         // Candidate #1 in resolveCodexLaunch's search order (codexNodeEntry.ts)
         // — checked before path_shim/node_sibling/path_node_sibling.
         [CODEX_JS_PATH_ENV]: entryPath,
@@ -754,7 +769,6 @@ describe('agent-host flag on/off gate — protocolErrors non-hermetic retrofit (
       //      instead of the real node binary that launched this Host
       //   4. path_node_sibling → covered by the same empty PATH as (2)
       const harness = spawnHarness({
-        [CODEX_FLAG_ENV]: '1',
         [CODEX_JS_PATH_ENV]: path.join(tmpRoot, 'nowhere', 'codex.js'),
         [NODE_EXEC_PATH_ENV]: path.join(tmpRoot, 'no-such-node-root', 'bin', 'node'),
         PATH: '',
@@ -814,7 +828,6 @@ describe('agent-host flag on/off gate — protocolErrors non-hermetic retrofit (
       // (ensureRuntime → loadClaudeSettingsEnv/resolveCometixCli) resolves
       // its cli.js via node module resolution (cometix.ts), never PATH.
       const onHarness = spawnHarness({
-        [CODEX_FLAG_ENV]: '1',
         [CODEX_JS_PATH_ENV]: path.join(tmpRoot, 'equiv-nowhere', 'codex.js'),
         [NODE_EXEC_PATH_ENV]: path.join(tmpRoot, 'equiv-no-node-root', 'bin', 'node'),
         PATH: '',

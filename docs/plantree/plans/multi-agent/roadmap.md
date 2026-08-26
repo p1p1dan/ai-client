@@ -9,6 +9,21 @@
 
 ## Done
 
+- **2026-08-26 D58 — Codex 默认打开，`AICLIENT_AGENT_CODEX` flag 退役 ✅**（用户拍板，原话
+  「直接打开就行了，要什么设置按钮变量的」）——`buildHostAgentRegistry` 四闸降三闸，
+  可用性只由「关于这台机器为真为假的事实」决定（凭据模式 × 入口可解析 × 隔离 home 可准备）。
+  **退役的决定性理由不是「运行时完工」，是「这开关用户够不到」**：flag 只能经
+  `AgentHostProcess.start()` 的 `{...process.env}` 继承 ⇒ 只有从终端启动 Electron 才设得上；
+  桌面图标 / Dock 启动拿到的是桌面会话环境，**不读 `~/.bashrc` / `~/.zshrc`**，而
+  `hostEnv.ts:26` 刻意不注入、设置层也没有对应开关 ⇒ Linux/macOS 上打包用户**物理上开不了**。
+  **连带行为变更（已写进模块头）**：`prepareHome()` 不再被 off 位短路，每次 Host 启动都会跑 ——
+  建 `<userData>/codex-home/`、投影用户 `~/.codex/config.toml`、`auth.json` 更新则拷贝；
+  只读不写、幂等，但不再免费。
+  **零额度实证**：只给 Main 本就注入的两个变量起 Host，`host.ready` 广播
+  `capabilities.agents = ["claude-code","codex"]`，隔离 home 生成 `config.toml` + `auth.json`。
+  四门全绿（typecheck 0 · biome 995 文件 0 · **vitest 247 文件 5003 例**）· 变异 2/2 咬红 · md5 还原。
+  **未做**：GUI 真机跑一轮 Codex 对话。落账见总台账 D58。
+
 - **2026-08-26 codex pin 升级 `0.145.0` → `0.149.1` ✅ 收口**（D54 ② 升级票，规格 §11-Q7 关闭）——
   票写 0.147.0，执行时该版本已落后两个 minor（npm `latest` = 0.149.1），**用户拍板取 latest**：
   三件套工作量与目标版本无关，锚旧版等于短期内再来一遍。
