@@ -100,6 +100,29 @@
     "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
     monospace;
 
+  /*
+   * FB9: the face MathML is drawn with.
+   *
+   * Same four rules as `--font-sans` above, and rule 4 in particular: every
+   * name here is a face the OS already ships, so this adds no `@font-face` and
+   * no font asset. Chromium's `math` generic is the terminator, exactly like
+   * `sans-serif` / `monospace` are for the two tokens above.
+   *
+   * It is needed because that generic is not enough on its own. Chromium draws
+   * MathML through a font's OpenType `MATH` table — fraction bars, stretchy
+   * brackets and radical signs all come from it — and on Linux the `math`
+   * generic resolves through fontconfig, which typically has no `math` alias at
+   * all. Measured on this machine: with the generic alone a fraction rendered
+   * with a near-invisible bar and its numerator overlapping its denominator;
+   * naming `Noto Sans Math` fixed it outright. macOS and Windows resolve the
+   * generic to STIX Two Math / Cambria Math already, so they are named here for
+   * determinism rather than because they were broken.
+   */
+  --font-math:
+    "STIX Two Math", "Cambria Math", "Latin Modern Math", "Noto Sans Math",
+    "XITS Math", "TeX Gyre Termes Math",
+    math;
+
   --font-heading: var(--font-sans);
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
@@ -243,6 +266,17 @@
 @layer base {
   * {
     @apply border-border;
+  }
+
+  /*
+   * FB9: MathML draws from a font's OpenType `MATH` table, and Chromium's
+   * `math` generic does not reliably resolve to one on Linux (no fontconfig
+   * alias). Without this a fraction's bar is near-invisible and its numerator
+   * sits on its denominator — measured, then fixed by naming the face.
+   * See `--font-math` for why this adds no font asset.
+   */
+  math {
+    font-family: var(--font-math);
   }
 
   html {

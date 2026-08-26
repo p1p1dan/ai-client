@@ -79,3 +79,50 @@ describe('[D2-1] globals.css minor-tier token value lock (F456 D2-b)', () => {
     expect(darkBlock).not.toContain('--tool-arg');
   });
 });
+
+/**
+ * FB9's font token, and the red line it has to stay on the right side of.
+ *
+ * `globals.css` states it directly: "this repo has no @font-face and no font
+ * assets; naming a non-system family here is a blank cheque". `--font-math` is
+ * the third font token, and it is allowed for the same reason the other two
+ * are — every name in it is a face the OS already ships. KaTeX's own faces are
+ * the thing the rule forbids, and `rehype-katex` is configured with
+ * `output: 'mathml'` precisely so they are never needed.
+ */
+describe('--font-math (FB9): a system fallback chain, never a bundled face', () => {
+  const declaration = /--font-math:\s*([^;]+);/.exec(source)?.[1] ?? '';
+
+  it('exists and terminates on the `math` generic', () => {
+    expect(declaration, '--font-math not found in globals.css').not.toBe('');
+    expect(declaration.trim().split(',').at(-1)?.trim()).toBe('math');
+  });
+
+  /**
+   * The list is why MathML renders at all on Linux: Chromium draws fraction
+   * bars and stretchy brackets from a font's OpenType `MATH` table, and the
+   * `math` generic resolves through fontconfig, which usually has no alias for
+   * it. Measured on this machine — with the generic alone a fraction bar was
+   * near-invisible and the numerator overlapped the denominator.
+   */
+  it('names one face per platform, so the generic is a fallback and not the plan', () => {
+    for (const face of ['STIX Two Math', 'Cambria Math', 'Noto Sans Math']) {
+      expect(declaration, `${face} covers one of the three platforms`).toContain(face);
+    }
+  });
+
+  it('brings no webfont with it — the whole stylesheet still declares no face', () => {
+    // Comments stripped: the red line's own wording names `@font-face`, and a
+    // rule that fails because it explains itself is a rule nobody keeps.
+    const css = source.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(css, 'a bundled face is the red line, math or not').not.toContain('@font-face');
+    expect(css).not.toMatch(/url\(["']?[^)]*\.(?:woff2?|ttf|otf|eot)/);
+  });
+
+  it('is applied to MathML and to nothing else', () => {
+    expect(source).toMatch(/\bmath\s*\{\s*font-family:\s*var\(--font-math\);\s*\}/);
+    // One consumer: a second one would mean some non-MathML element quietly
+    // reading a face chosen for symbols.
+    expect(source.split('var(--font-math)').length - 1).toBe(1);
+  });
+});
