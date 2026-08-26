@@ -7,6 +7,7 @@ import { Dialog, DialogPopup, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
+import { uniqueId } from '@/lib/uniqueId';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { BUILTIN_AGENT_INFO, BUILTIN_AGENTS } from './constants';
@@ -295,7 +296,7 @@ export function AgentSettings({ repoPath }: { repoPath?: string }) {
   };
 
   const handleAddAgent = (agent: Omit<CustomAgent, 'id'>) => {
-    const id = `custom-${Date.now()}`;
+    const id = uniqueId('custom');
     addCustomAgent({ ...agent, id });
     setIsAddingAgent(false);
   };

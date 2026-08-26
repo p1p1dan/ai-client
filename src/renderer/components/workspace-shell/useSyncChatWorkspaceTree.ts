@@ -14,6 +14,7 @@ import {
   hasDismissedSessions,
 } from '@/components/chat/sessionIndex/dismissedSessions';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
+import { uniqueId } from '@/lib/uniqueId';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
 import {
@@ -147,7 +148,7 @@ function rebindSessionsToTree(
   for (let i = 0; i < remapped.length; i++) {
     const session = remapped[i];
     if (session?.id === 'session-live') {
-      const nextId = `session-live-${Date.now()}`;
+      const nextId = uniqueId('session-live');
       nextBound.delete('session-live');
       remapped[i] = {
         ...session,

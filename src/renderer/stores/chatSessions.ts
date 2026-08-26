@@ -23,6 +23,7 @@ import { isChatAgentBindingLocked } from '@/components/chat/sessionBinding';
 // `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
 // store. Read by the `sendMessage` ghost-session guard below.
 import { isSessionDismissed } from '@/components/chat/sessionIndex/dismissedSessions';
+import { uniqueId } from '@/lib/uniqueId';
 // Leaf module as well (shared-types import only) — see its header for the
 // replay-coverage rules the `session.history` reducer delegates to, and for
 // the resume snapshot registry that bounds which messages a replay may fold.
@@ -1134,10 +1135,10 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
           [activeSessionId]: [
             ...(get().messages[activeSessionId] ?? []),
             {
-              id: `msg-error-${Date.now()}`,
+              id: uniqueId('msg-error'),
               sessionId: activeSessionId,
               role: 'error',
-              blocks: [{ id: `err-${Date.now()}`, type: 'text', text: message }],
+              blocks: [{ id: uniqueId('err'), type: 'text', text: message }],
             },
           ],
         },

@@ -1,5 +1,6 @@
 import type { CloneProgress } from '@shared/types';
 import { create } from 'zustand';
+import { uniqueId } from '@/lib/uniqueId';
 
 export interface CloneTask {
   id: string;
@@ -38,7 +39,7 @@ export const useCloneTasksStore = create<CloneTasksState>()((set, get) => ({
   activeTaskId: null,
 
   addTask: (taskData) => {
-    const id = `clone-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const id = uniqueId('clone');
     const task: CloneTask = {
       ...taskData,
       id,

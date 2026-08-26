@@ -11,6 +11,7 @@ import {
   isPlaceholderTitle,
 } from '@/components/chat/sessionIndex/sessionTitle';
 import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessionIndex';
+import { uniqueId } from '@/lib/uniqueId';
 import { type ChatSession, useChatSessionsStore } from './chatSessions';
 
 /**
@@ -27,7 +28,7 @@ export function createChatSessionOnWorkspace(
     return null;
   }
 
-  const sessionId = `session-${Date.now()}`;
+  const sessionId = uniqueId('session');
   const session: ChatSession = {
     id: sessionId,
     projectId: workspace.projectId,

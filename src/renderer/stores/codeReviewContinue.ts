@@ -1,5 +1,6 @@
 import type { AIProvider } from '@shared/types';
 import { create } from 'zustand';
+import { uniqueId } from '@/lib/uniqueId';
 
 export type ReviewStatus = 'idle' | 'initializing' | 'streaming' | 'complete' | 'error';
 
@@ -175,7 +176,7 @@ export async function startCodeReview(
   }
 
   // Generate reviewId for IPC flow control
-  const reviewId = `review-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const reviewId = uniqueId('review');
 
   // Generate UUID as sessionId for Claude session persistence
   const sessionId = crypto.randomUUID();
