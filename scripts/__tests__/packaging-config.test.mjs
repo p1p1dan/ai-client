@@ -206,3 +206,38 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     }
   });
 });
+
+describe('[FB9-5] the no-bundled-webfont red line has an artifact-level gate', () => {
+  const gate = readFileSync(new URL('../assert-no-webfonts.mjs', import.meta.url), 'utf8');
+
+  /**
+   * The source scan in `chatMarkdownPolicy.test.ts` forbids the one import that
+   * would pull KaTeX's faces in. This asserts the OTHER half exists: something
+   * checks the built output, where the rule actually lives, and it runs in the
+   * pipeline rather than as a unit test that skips itself when `out/` is absent.
+   */
+  it('the gate scans the built renderer for font assets and inlined faces', () => {
+    expect(gate).toContain("join(ROOT, 'out', 'renderer')");
+    for (const ext of ['.woff2', '.woff', '.ttf', '.otf']) {
+      expect(gate, `${ext} must be caught`).toContain(ext);
+    }
+    // A face inlined as a data URI never lands as a file — that is exactly what
+    // importing `katex.min.css` does, so scanning for files alone would miss it.
+    expect(gate).toContain('@font-face');
+    expect(gate).toMatch(/data:\(\?:font/);
+    // Absent output is a failure, not a pass: a gate that green-lights when it
+    // cannot see anything is worse than no gate.
+    expect(gate).toContain('does not exist');
+  });
+
+  it('the gate runs before packaging, on every platform build', () => {
+    const scripts = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+    ).scripts;
+    expect(scripts['dist:prereq']).toContain('assert-no-webfonts.mjs');
+    // …and after the build that produces what it scans.
+    expect(scripts['dist:prereq'].indexOf('pnpm build')).toBeLessThan(
+      scripts['dist:prereq'].indexOf('assert-no-webfonts.mjs')
+    );
+  });
+});

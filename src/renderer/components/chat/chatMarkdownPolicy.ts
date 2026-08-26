@@ -901,8 +901,8 @@ export function chatCodeTokenStyle(token: ChatCodeToken): {
  * field claims — the object on its own would only assert that someone typed it.
  */
 export const CHAT_MARKDOWN_POLICY = {
-  /** Applied in this order. Both are already dependencies; neither can emit HTML. */
-  remarkPlugins: ['remark-gfm', 'remark-breaks'] as const,
+  /** Applied in this order. None of them can emit HTML. */
+  remarkPlugins: ['remark-gfm', 'remark-breaks', 'remark-math'] as const,
   /**
    * Strikethrough is `~~double-tilde~~` only (strict GFM). The micromark
    * default (`singleTilde: true`) also pairs bare `~`, and CJK prose uses a
@@ -911,11 +911,19 @@ export const CHAT_MARKDOWN_POLICY = {
    */
   remarkGfmOptions: { singleTilde: false } as const,
   /**
-   * MUST stay empty. `rehype-raw` is in `package.json`, and it is the single
-   * switch that would turn model-authored HTML into live DOM. With no rehype
-   * plugin at all, `react-markdown` hands raw HTML to React as text.
+   * A WHITELIST of exactly one. `rehype-raw` is in `package.json`, and it is
+   * the single switch that would turn model-authored HTML into live DOM — this
+   * position used to be empty for that reason, and the guarantee now comes from
+   * naming what may be here rather than from the list being empty.
+   *
+   * `rehype-katex` earns its place because it emits a hast node tree that
+   * `react-markdown` renders as ordinary React elements — no HTML string, no
+   * `dangerouslySetInnerHTML`, no `raw` node path (confirmed by rendering, not
+   * by reading: see `chatMarkdownRender.test.ts`'s math group). It is
+   * configured with `output: 'mathml'` so it needs none of KaTeX's bundled
+   * webfonts, and without `trust` or `macros`, its two XSS-bearing options.
    */
-  rehypePlugins: [] as const,
+  rehypePlugins: ['rehype-katex'] as const,
   allowedHrefProtocols: CHAT_MARKDOWN_ALLOWED_PROTOCOLS,
   /** How each non-prose element is handled. */
   elements: {

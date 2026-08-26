@@ -444,8 +444,8 @@ describe('F-C6: the code renderer reduces children to text, never stringifies a 
     // The vacuity guard for the two tests below: if this stops describing the
     // real wiring, they are exercising a closure nobody renders.
     const wiring = chatMarkdownWiring();
-    expect(wiring.rehypePlugins).toEqual([]);
-    expect(wiring.remarkPlugins).toHaveLength(2);
+    expect(wiring.rehypePlugins).toHaveLength(1);
+    expect(wiring.remarkPlugins).toHaveLength(3);
     expect(typeof wiring.urlTransform).toBe('function');
     expect(typeof wiring.components.code).toBe('function');
   });
@@ -507,5 +507,107 @@ describe('F-C6: single tildes are range separators, not strikethrough', () => {
     const html = render('~~deprecated~~ current\n');
     expect(html).toContain('<del');
     expect(html).toContain('deprecated');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FB9: block math, rendered — the half no config scan can reach
+// ---------------------------------------------------------------------------
+
+describe('FB9: math renders as native MathML, and only where it was asked for', () => {
+  /**
+   * `[FB9-8]`. `output: 'mathml'` is what keeps KaTeX's bundled webfonts out of
+   * this repo, and it is a plugin OPTION — a scan can read that the string is
+   * present, but only a render can tell that it took effect. `katex-html` is the
+   * fingerprint of the other output path: if it appears, the font red line is
+   * one stylesheet import away from falling.
+   */
+  it('[FB9-8] a display formula produces <math>, with no HTML-renderer fingerprint', () => {
+    const html = render('$$e=mc^2$$');
+    expect(html).toContain('<math');
+    expect(html, 'the HTML output path would want 60 font files').not.toContain('katex-html');
+    expect(html).not.toContain('<script');
+    // …and the formula actually rendered rather than falling through as text.
+    expect(html).toMatch(/<mi[^>]*>e<\/mi>/);
+  });
+
+  /**
+   * `[FB9-2]`. Inline `$…$` is OFF, asserted by behaviour rather than by option
+   * name: `remark-math`'s switch is `singleDollarTextMath`, whose documented
+   * meaning is "does a single `$` open inline math" — a name-based assertion
+   * would be pinning a spelling, not the rule.
+   *
+   * This matters more here than in a general chat app: the content this window
+   * exists to show is shell commands.
+   */
+  it('[FB9-2] a single dollar is ordinary text — prices, $PATH, ranges', () => {
+    for (const source of ['价格是 $5 到 $10', 'echo $PATH', 'from $1 to $2 per unit']) {
+      expect(render(source), source).not.toContain('<math');
+    }
+    expect(render('echo $PATH')).toContain('$PATH');
+    // …while the block form still works, including on its own line.
+    expect(render('$$a+b$$')).toContain('<math');
+  });
+
+  /**
+   * `[FB9-9]`. The security review concluded that KaTeX's XSS surface lives in
+   * `trust` and `macros`, and that neither is passed. That was a reading of the
+   * config; this attacks the renderer.
+   *
+   * Every arm is a construct that becomes dangerous exactly when `trust` is on.
+   */
+  it('[FB9-9] math input cannot emit links, images, network URLs or raw HTML', () => {
+    const attacks = [
+      '$$\\href{javascript:alert(1)}{x}$$',
+      '$$\\url{javascript:alert(1)}$$',
+      '$$\\includegraphics{https://evil.example.com/x.png}$$',
+      '$$\\htmlClass{evil}{x}$$',
+      '$$\\htmlStyle{position:fixed}{x}$$',
+      '$$<script>alert(1)</script>$$',
+      '$$\\text{<img src=x onerror=alert(1)>}$$',
+    ];
+    for (const attack of attacks) {
+      const html = render(attack);
+      // No executable or fetching element, in any form.
+      expect(html, attack).not.toContain('<a href');
+      expect(html, attack).not.toContain('<img');
+      expect(html, attack).not.toContain('<script');
+      // Attribute-shaped, deliberately: `\text{<img src=x onerror=…>}` renders
+      // as ESCAPED characters inside `<mtext>`, so the bare substrings `src=`
+      // and `onerror=` do survive — as text that can never become an attribute.
+      // The invariant is that no ELEMENT carries them.
+      expect(html, attack).not.toMatch(/<[^>]*\ssrc=/);
+      expect(html, attack).not.toMatch(/<[^>]*\son[a-z]+=/);
+      // …and the commands that WOULD produce them under `trust: true` render as
+      // KaTeX's red error mark instead. Measured: `\\href` comes out as
+      // `<mstyle mathcolor="#cc0000"><mtext>\\href</mtext></mstyle>`.
+      if (attack.includes('href') || attack.includes('includegraphics')) {
+        expect(html, attack).toContain('#cc0000');
+      }
+      /**
+       * The hostile string survives in ONE place: `<annotation
+       * encoding="application/x-tex">`, which carries the original TeX source.
+       * That is a MathML semantic annotation — not rendered, not clickable, not
+       * fetched — so it is an acceptable place for it, and saying so explicitly
+       * is the point of stripping it here rather than banning the substring
+       * outright (which would have failed on a harmless echo and taught the
+       * next reader nothing).
+       */
+      const rendered = html.replace(/<annotation\b[^>]*>[\s\S]*?<\/annotation>/g, '');
+      expect(rendered, attack).not.toContain('javascript:');
+      expect(rendered, attack).not.toContain('evil.example.com');
+    }
+  });
+
+  /**
+   * A malformed formula must not take the message down, and must not echo its
+   * source back as live markup — `throwOnError: false` renders KaTeX's own
+   * error text instead.
+   */
+  it('[FB9-9] a malformed formula degrades to text, not to an exception or raw HTML', () => {
+    const html = render('before\n\n$$\\frac{1}{$$\n\nafter');
+    expect(html).toContain('before');
+    expect(html).toContain('after');
+    expect(html).not.toContain('<script');
   });
 });

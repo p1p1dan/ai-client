@@ -1,8 +1,10 @@
 import { Image as ImageIcon } from 'lucide-react';
 import { isValidElement, memo } from 'react';
 import Markdown, { type Components, type Options as MarkdownOptions } from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import { CodeInline } from '@/components/ui/ident';
 import { cn } from '@/lib/utils';
 import { ChatCodeBlock } from './ChatCodeBlock';
@@ -85,10 +87,38 @@ import {
 const REMARK_PLUGINS: NonNullable<MarkdownOptions['remarkPlugins']> = [
   [remarkGfm, { singleTilde: false }],
   remarkBreaks,
+  // FB9: block math only. `singleDollarTextMath: false` stops a single `$` from
+  // opening inline math, and this app's core content is shell commands — `$PATH`,
+  // `$HOME`, `$5`, template strings and regexes are all ordinary text here, and
+  // the model's output is not ours to escape. Users asked for `$$…$$`; inline is
+  // a separate decision that can be made later on real data (widening a rule is
+  // safe, narrowing one takes formatting away from someone).
+  [remarkMath, { singleDollarTextMath: false }],
 ];
 
-/** Deliberately empty — see rule 1 above. Passed explicitly so it is a wiring fact, not a default. */
-const REHYPE_PLUGINS: [] = [];
+/**
+ * FB9: exactly one rehype plugin, and its options are the security surface.
+ *
+ * `output: 'mathml'` is load-bearing, not a preference: KaTeX's HTML output
+ * ships its own `@font-face` declarations and `.woff2` files, and this repo has
+ * a standing red line against bundled webfonts (`globals.css`: "no @font-face
+ * and no font assets"). Measured before this landed — importing
+ * `katex/dist/katex.min.css` takes the produced CSS from 24.7KB to 1.46MB with
+ * 60 font files inlined. MathML is rendered natively by Chromium and needs
+ * none of it.
+ *
+ * `trust` and `macros` are the two options with a known XSS surface (`trust`
+ * enables `\href` / `\url` / `\includegraphics`; `macros` accepts injected
+ * definitions). Neither is passed, and neither may be added — asserted in
+ * `chatMarkdownPolicy.test.ts` and attacked directly in
+ * `chatMarkdownRender.test.ts`.
+ *
+ * `throwOnError: false` keeps a malformed formula from taking the whole message
+ * down; KaTeX renders its own error text rather than echoing the source as HTML.
+ */
+const REHYPE_PLUGINS: NonNullable<MarkdownOptions['rehypePlugins']> = [
+  [rehypeKatex, { output: 'mathml', throwOnError: false, strict: 'ignore' }],
+];
 
 /**
  * `children` reduced to a plain string, for the code branches.

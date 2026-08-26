@@ -1308,14 +1308,60 @@ const FALSE_GREEN_SHAPES: ReadonlyArray<{ shape: string; source: string; hidden:
 ];
 
 describe('F-C5: the component map\u2019s security posture is enumerable', () => {
-  it('F-C5: the rehype plugin list is empty, and that is the no-rehype-raw rule', () => {
-    expect(CHAT_MARKDOWN_POLICY.rehypePlugins).toEqual([]);
+  /**
+   * `[FB9-1]`. This position used to be asserted EMPTY, and "empty" was the
+   * whole of the no-rehype-raw rule. FB9 puts one plugin here, so the guarantee
+   * has to be restated as a whitelist: a list of exactly one named plugin says
+   * the same thing about `rehype-raw` and keeps saying it when someone adds a
+   * second one "while they are in there".
+   */
+  it('[FB9-1] the rehype position is a whitelist of exactly one, not merely non-empty', () => {
+    expect([...CHAT_MARKDOWN_POLICY.rehypePlugins]).toEqual(['rehype-katex']);
     expect(CHAT_MARKDOWN_POLICY.rawHtml).toBe('escaped-text');
     expect(CHAT_MARKDOWN_POLICY.innerHtml).toBe('never');
   });
 
-  it('F-C5: the remark plugins are the two HTML-incapable ones', () => {
-    expect([...CHAT_MARKDOWN_POLICY.remarkPlugins]).toEqual(['remark-gfm', 'remark-breaks']);
+  it('F-C5: the remark plugins are the three HTML-incapable ones', () => {
+    expect([...CHAT_MARKDOWN_POLICY.remarkPlugins]).toEqual([
+      'remark-gfm',
+      'remark-breaks',
+      'remark-math',
+    ]);
+  });
+
+  /**
+   * `[FB9-3]` / `[FB9-6]`: the two options that carry KaTeX's XSS surface, and
+   * the one that keeps the font red line.
+   *
+   * `trust` turns on `\href` / `\url` / `\includegraphics`; `macros` accepts
+   * injected definitions. Neither is passed. `output: 'mathml'` is what makes
+   * KaTeX's bundled webfonts unnecessary — drop it and the HTML renderer comes
+   * back, wanting 60 font files this repo has a standing rule against.
+   */
+  it('[FB9-3]/[FB9-6] the katex options carry no trust, no macros, and stay on MathML', () => {
+    const markdown = readChatSource('ChatMarkdown.tsx');
+    const config = /\[rehypeKatex,\s*(\{[^}]*\})\]/.exec(markdown);
+    expect(config, 'rehype-katex is not configured inline as expected').not.toBeNull();
+    const options = config?.[1] ?? '';
+    expect(options).toContain("output: 'mathml'");
+    expect(options, 'trust enables \\href / \\includegraphics').not.toContain('trust');
+    expect(options, 'macros accepts injected definitions').not.toContain('macros');
+  });
+
+  /**
+   * `[FB9-7]`: KaTeX's stylesheet is the other way the font red line falls.
+   * Importing `katex/dist/katex.min.css` inlines 20 woff2 + 20 woff + 20 ttf —
+   * measured: the produced CSS goes from 24.7KB to 1.46MB. Nothing under
+   * `src/**` may pull it in, and nothing may declare a face of its own.
+   */
+  it('[FB9-7] no katex stylesheet, and no new @font-face anywhere in src', () => {
+    for (const file of MARKDOWN_PATH_FILES) {
+      // Comments stripped: the head note on `REHYPE_PLUGINS` spells out the very
+      // import it forbids, and explaining a rule must not break it.
+      const src = strippedChatSource(file);
+      expect(src, `${file} must not import a katex stylesheet`).not.toMatch(/katex[^'"]*\.css/);
+      expect(src, `${file} must not declare a webfont`).not.toContain('@font-face');
+    }
   });
 
   it('F-C5: images are inert and nothing on this path touches the network', () => {
@@ -1367,7 +1413,13 @@ describe('F-C5: the rendering path really does what the policy claims', () => {
     const markdown = sources.find((entry) => entry.file === 'ChatMarkdown.tsx')?.src ?? '';
     expect(markdown).toContain('rehypePlugins={REHYPE_PLUGINS}');
     expect(markdown).toContain('urlTransform={chatMarkdownUrlTransform}');
-    expect(markdown).toContain('const REHYPE_PLUGINS: [] = [];');
+    // FB9 gave this position a type and a member; the load-bearing half is that
+    // the list is still passed EXPLICITLY, so what runs is a wiring fact rather
+    // than react-markdown's default.
+    expect(markdown).toContain(
+      "const REHYPE_PLUGINS: NonNullable<MarkdownOptions['rehypePlugins']> = ["
+    );
+    expect(markdown).toContain('rehypeKatex');
   });
 
   /**
