@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
 import type { AgentHostDriver } from '@shared/types/agentHost';
 
 /**
@@ -94,6 +95,42 @@ export function deriveBundledCodexJsPath(hostEntryPath: string): string {
     'codex',
     'bin',
     CODEX_JS_BASENAME
+  );
+}
+
+/**
+ * `<dir(hostEntry)>/node_modules/@cometix/claude-code/cli.js` — pure, no IO.
+ *
+ * The runtime this app actually talks to. `@cometix/claude-code` is an
+ * unofficial NODE build of Claude Code, pinned and shipped inside the Host
+ * bundle, and `agent-host/cometix.ts` hands its path to the Agent SDK as
+ * `pathToClaudeCodeExecutable`. A user's globally-installed `claude` is not it
+ * and never was — which is why "is Claude available" must be answered from
+ * here rather than from a `claude --version` probe.
+ *
+ * Same derivation as `deriveBundledCodexJsPath` above, for the same reason:
+ * `resolveHostEntryPath()` is the one source of truth for where the Host
+ * artifact lives, and `node_modules` is its sibling in both the packaged and
+ * the dev shape.
+ *
+ * `cli.js` only. `agent-host/cometix.ts` also tries `cli.mjs` as a second
+ * candidate, but that is its business at spawn time; this path exists to answer
+ * "did the bundle ship", and a bundle whose `cli.js` is missing is broken
+ * whatever else is beside it.
+ */
+export function deriveBundledCometixCliPath(hostEntryPath: string): string {
+  // Segments split off `COMETIX_PIN.name`, not spelled here. Two reasons, and
+  // the second one is the load-bearing one: the package name has exactly one
+  // definition (bumping the pin cannot leave a stale path behind), and writing
+  // the second half of `@cometix/claude-code` as a literal would put the string
+  // `claude-code` in a file that has nothing to do with the agent-binding
+  // literal of the same spelling — which `agentWireStatic.test.ts` refuses, and
+  // is right to refuse, since it cannot tell a package path from a wire name.
+  return path.join(
+    path.dirname(hostEntryPath),
+    'node_modules',
+    ...COMETIX_PIN.name.split('/'),
+    'cli.js'
   );
 }
 

@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
 import { describe, expect, it } from 'vitest';
-import { buildAgentHostEnv, deriveBundledCodexJsPath } from '../hostEnv';
+import {
+  buildAgentHostEnv,
+  deriveBundledCodexJsPath,
+  deriveBundledCometixCliPath,
+} from '../hostEnv';
 
 const INPUT = {
   driver: 'agent-sdk',
@@ -209,5 +214,42 @@ describe('buildAgentHostEnv — codexJsPath is conditional (B3)', () => {
     expect(keys).toContain('AICLIENT_CODEX_MANAGED');
     expect(keys).toContain('AICLIENT_CODEX_API_KEY');
     expect(keys).toContain('AICLIENT_CODEX_HOME_MANAGED_DIR');
+  });
+});
+
+/**
+ * The bundled Claude runtime's path, and why the checker asks for it.
+ *
+ * Conversations run on the pinned `@cometix/claude-code` build inside the Host
+ * bundle — an unofficial NODE build handed to the Agent SDK as
+ * `pathToClaudeCodeExecutable`. A user's globally installed `claude` was never
+ * on that path, so gating the app on `claude --version` asked a question whose
+ * answer did not matter.
+ */
+describe('deriveBundledCometixCliPath', () => {
+  it('sits beside the Host entry, in both shapes', () => {
+    expect(deriveBundledCometixCliPath('/res/agent-host/index.js')).toBe(
+      path.join('/res/agent-host', 'node_modules', ...COMETIX_PIN.name.split('/'), 'cli.js')
+    );
+    expect(deriveBundledCometixCliPath('/repo/src/agent-host/index.ts')).toBe(
+      path.join('/repo/src/agent-host', 'node_modules', ...COMETIX_PIN.name.split('/'), 'cli.js')
+    );
+  });
+
+  /**
+   * Derived from the Host entry, never from a second reading of
+   * `process.resourcesPath` — the same rule `deriveBundledCodexJsPath` states.
+   * A second derivation would point at nothing in the dev branch.
+   */
+  it('shares one node_modules with the bundled codex path', () => {
+    const entry = '/res/agent-host/index.js';
+    const nodeModulesOf = (p: string) =>
+      p.slice(0, p.indexOf('node_modules') + 'node_modules'.length);
+    expect(nodeModulesOf(deriveBundledCometixCliPath(entry))).toBe(
+      nodeModulesOf(deriveBundledCodexJsPath(entry))
+    );
+    expect(nodeModulesOf(deriveBundledCometixCliPath(entry))).toBe(
+      path.join('/res/agent-host', 'node_modules')
+    );
   });
 });

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { LAST_NODE_CLAUDE_VERSION } from '@shared/types';
 import { describe, expect, it } from 'vitest';
 import { compareSemver } from '../ClaudeVersion';
@@ -36,3 +38,49 @@ describe('compareSemver', () => {
  * every install to it, which rests on the same assumption and is tracked
  * separately (see the constant's own note).
  */
+
+/**
+ * The order the checker asks its questions in, asserted on the source.
+ *
+ * A behaviour test would need the real filesystem layout and Electron's `app`,
+ * neither of which exists in this node-env suite — but the load-bearing claim
+ * is ORDER, and order is readable: the bundled runtime is consulted BEFORE the
+ * `claude --version` probe, so a working install is never sent to onboarding to
+ * install a CLI that nothing will run.
+ */
+describe('detect asks the bundled runtime first (2026-08-26)', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('../ClaudeRuntimeChecker.ts', import.meta.url)),
+    'utf8'
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  it('checks the bundled cometix path before probing a global CLI', () => {
+    const bundled = source.indexOf('deriveBundledCometixCliPath(');
+    const probe = source.indexOf('await runVersionCheck()');
+    expect(bundled, 'the bundled runtime is not consulted at all').toBeGreaterThan(-1);
+    expect(probe).toBeGreaterThan(-1);
+    expect(bundled, 'the global probe must not come first').toBeLessThan(probe);
+  });
+
+  /**
+   * The version it reports is the pin, not a number parsed out of a process:
+   * the bundle ships one known build, and re-deriving its version by executing
+   * something would be a second source of truth for a fact we already hold.
+   */
+  it('reports the pinned version rather than shelling out for one', () => {
+    expect(source).toContain('COMETIX_PIN.version');
+  });
+
+  /**
+   * The fallback chain is kept, not deleted. It is reached only when the bundle
+   * is missing — a broken install, or a dev tree with no `agent-host/node_modules`
+   * — and deleting it would turn that case into a dead end instead of a
+   * degraded one.
+   */
+  it('keeps the pre-existing chain as the broken-bundle fallback', () => {
+    expect(source).toContain('detectVsCodeClaudeExtension()');
+    expect(source).toContain("kind: 'not-installed'");
+  });
+});

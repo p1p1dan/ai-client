@@ -745,7 +745,11 @@ export function resolveCodexJsPathForEnv(hostEntryPath: string): string | undefi
   return isUsableFile(bundled) ? bundled : undefined;
 }
 
-function resolveHostEntryPath(): string {
+/**
+ * Where the Host artifact lives — the one source of truth, exported because
+ * `ClaudeRuntimeChecker` derives the bundled Claude runtime's path from it too.
+ */
+export function resolveHostEntryPath(): string {
   // Packaged: prebuilt JS under resources/agent-host.
   // Dev: TypeScript entry via Node 24 --experimental-strip-types.
   if (app.isPackaged) {

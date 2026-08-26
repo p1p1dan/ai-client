@@ -1,7 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
 import type { ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
+import { resolveHostEntryPath } from '../agent-host/AgentHostManager';
+import { deriveBundledCometixCliPath } from '../agent-host/hostEnv';
 import { compareSemver } from './ClaudeVersion';
 import { cliDetector } from './CliDetector';
 
@@ -96,6 +99,28 @@ export class ClaudeRuntimeChecker {
       return this.cached;
     }
 
+    // The runtime this app actually uses, asked first (2026-08-26).
+    //
+    // Conversations run on the pinned `@cometix/claude-code` build shipped
+    // inside the Host bundle — an unofficial NODE build of Claude Code, handed
+    // to the Agent SDK as `pathToClaudeCodeExecutable`. A user's globally
+    // installed `claude` has never been part of that path, so gating the whole
+    // app on `claude --version` was asking a question whose answer did not
+    // matter: someone with a perfectly working bundle was sent to an onboarding
+    // step to install a CLI nothing would ever run.
+    //
+    // It also retires the version limit that hung off the same probe: the Bun
+    // threshold was about official builds, and cometix is a Node build, so it
+    // never applied to what we actually execute.
+    if (existsSync(deriveBundledCometixCliPath(resolveHostEntryPath()))) {
+      this.cached = { kind: 'installed', cliVersion: COMETIX_PIN.version };
+      return this.cached;
+    }
+
+    // Everything below is the pre-2026-08-26 chain, reached only when the
+    // bundle is missing — a broken installation, or a dev tree with no
+    // `agent-host/node_modules`. Kept rather than deleted so that case still
+    // degrades to something usable instead of a dead end.
     const cliVersion = await runVersionCheck();
     if (cliVersion) {
       // `installed`, flat: the version-threshold classification retired with the
