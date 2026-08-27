@@ -86,8 +86,10 @@ receivedAt: string
 
 ## 文件
 
-- [roadmap.md](./roadmap.md) — 阶段与状态
-- [open-questions.md](./open-questions.md) — 未决问题
+- [implementation-status.md](./implementation-status.md) — **恢复工作先读这个**：当前位置、Active TODO、未解风险、关键文件
+- [roadmap.md](./roadmap.md) — 阶段与状态（逐批明细）
+- [open-questions.md](./open-questions.md) — 未决问题（**2026-08-27 已全部关闭**）
+- [topics/discarded-approaches.md](./topics/discarded-approaches.md) — 废案：试过什么、为什么废、取证在哪
 
 ## 权威顺序
 

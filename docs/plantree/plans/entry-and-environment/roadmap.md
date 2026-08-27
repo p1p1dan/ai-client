@@ -1,7 +1,10 @@
 # Roadmap — 应用入口与环境依赖
 
-> 状态：**Planning**。三条待拍板未清（见 [open-questions](./open-questions.md)），**不可进 execute**。
-> 依赖链决定了顺序：登录页是**最后一步，不是第一步**。
+> 状态：**Planning → E1 可开工**（2026-08-27）。立项时的三条待拍板已全部拍完
+> （[D63/D64/D65](../../../plans/openchamber-chat-refactor-ledger.md)），A1 已随
+> unified-credentials S3 落地，E1 的前置（`settingSources`）也已由
+> [D67](../../../plans/openchamber-chat-refactor-ledger.md) 解开。
+> 依赖链仍然决定顺序：登录页是**最后一步，不是第一步**。
 
 ## 依赖链
 
@@ -26,8 +29,12 @@ S0' codex 侧（unified-credentials，前置已清）─────────
 已知的凭据来源至少三处：`~/.claude/.credentials.json`（官方订阅 OAuth）·
 `~/.claude/settings.json` 的 `env` · 进程环境变量。
 
-**已知的两个坑**（都已取证，见 [kickoff §1.6](../../../plans/2026-08-27-entry-design/kickoff.md)）：
-- 我们今天传 `settingSources: []`，**主动屏蔽了第二处** ⇒ 这条不解决，探测结论对那类用户无意义。
+**已知的两个坑**：
+- ~~我们传 `settingSources: []`，主动屏蔽了用户自己的 `settings.json`~~ ——
+  ✅ **2026-08-27 已解开**（[D67](../../../plans/openchamber-chat-refactor-ledger.md) ·
+  [取证](../../../plans/2026-08-27-settingsources-spike/README.md)）：现在读三层
+  （`['user','project','local']`），用户自己配的 url 与密钥**在我们软件里是真的生效的**，
+  所以「本机能不能用」这个探测**现在才有意义** —— 此前哪怕探到了也是假的。
 - codex 侧「检测到有配置」**不等于**「能用」：[E2](../../../plans/2026-08-26-s0-spikes/e2-codex-resume-and-inherited-keys.md)
   实测用户 config 里一行遗留 `profile =` 就能让会话起不来。
 

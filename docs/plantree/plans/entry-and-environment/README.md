@@ -4,7 +4,8 @@
 > 并给出想要的启动首屏形态（两按钮登录页）与一条硬约束（登录不许影响本地环境）。
 > 立项讨论与已核实事实的原文：[kickoff](../../../plans/2026-08-27-entry-design/kickoff.md)。
 
-**状态：Planning**（三条待拍板未清，尚不可进 execute）
+**状态：Planning**（立项时的三条待拍板 **2026-08-27 已全部拍完** → [D63/D64/D65](../../../plans/openchamber-chat-refactor-ledger.md)；
+A1 已随 unified-credentials S3 落地；**E1 的前置也已解开，是下一件可开工的事**）
 
 ## Scope
 
@@ -37,8 +38,8 @@
 
 ## 文件
 
-- [roadmap.md](./roadmap.md) — 阶段与依赖链
-- [open-questions.md](./open-questions.md) — **三条待拍板**
+- [roadmap.md](./roadmap.md) — 阶段与依赖链（**下一件 = E1**）
+- [open-questions.md](./open-questions.md) — 立项时的三条**已全部关闭**
 - [kickoff](../../../plans/2026-08-27-entry-design/kickoff.md) — 立项讨论原文 + 登录页视觉参照
 
 ## 权威顺序

@@ -137,6 +137,9 @@
 | 日期 | 节点 | 结果 | 关键提交 |
 |---|---|---|---|
 | 2026-07-23 | 文档基线：ARD + CONTEXT | ✅ | `ed93202` |
+| 2026-08-27 | **凭据/配置线单日收官七笔**：S2 改名+凭据迁入 · S0' codex 侧 · S0'-b 配置错误落地 · S3+D64 凭据模式 · settingSources 取证与打开 | ✅ 四门全绿（typecheck 0 含 agent-host · biome 1000 文件 0 · **vitest 248 文件 5009 例**）；变异逐批咬红（S2 8/9、S0' codex 9/9、S0'-b 8/9、S3 8/8、settingSources 3/3，两个存活项各自定性为「死代码」与「断言测的是默认值」并已修）；真机复核逐批做过 | `18da2d7f` `7785ee1c` `24b3d3f4` `972934d5` `4f1e6897` `f791e6f4` `d29fc871` `024990f8` |
+| 2026-08-27 | 拍板 **D63~D67**（登录页放行策略 · 凭据模式落盘 · 启动探测去留 · 终端 codex 归属 · settingSources 完全照配置办） | ✅ 五项均有实测依据，非判断题；其中 D67 的第一版实现（`managedSettings: ask['*']`）被用户当场推翻并删除，理由与废案索引同源 | 见各 D 行 |
+| 2026-08-27 | 取证三份落库：[E2 codex resume/继承键](2026-08-26-s0-spikes/e2-codex-resume-and-inherited-keys.md) · [settingSources](2026-08-27-settingsources-spike/README.md) · [废案索引](../plantree/plans/unified-credentials/topics/discarded-approaches.md) | ✅ 前两份含完整复现命令与环境前提（**探针必须 Node 24 + 必须设 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`**，两条都是踩过才知道的）；废案索引记六个废案 + 五类探针翻车 | — |
 | 2026-07-23 | Phase 0：Node24 Resolver / Host 骨架 / Cometix pin / 双路线 spike | ✅ Conditional | `e36dbbe` |
 | 2026-07-23 | Phase 1：四区 Workspace Shell + Mock Runtime | ✅ | `259e863` |
 | 2026-07-23 | Phase 0 报告（初版，后有纠正） | ✅ | `335ba02` |
