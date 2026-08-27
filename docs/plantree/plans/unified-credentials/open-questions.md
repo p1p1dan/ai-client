@@ -56,39 +56,23 @@ package `name` 改了会连带换掉 `<userData>` 和刚定下来的 profile 段
 而 codex 没有任何环境变量能改 `base_url` —— 所以不是「补不补」的取舍，是「补的代价是把 D60 刚拿掉的东西请回来」。
 **分界清楚**：agent 会话走公司网关，终端走用户自己的环境。
 
-## #6 `settingSources: []` 让 CLAUDE.md 完全不进上下文，要不要改
+## ~~#6 `settingSources: []` 让 CLAUDE.md 完全不进上下文，要不要改~~ ✅ 已关闭
 
-**状态**：✅ **取证已完成**（2026-08-27，[取证档](../../../plans/2026-08-27-settingsources-spike/README.md)）
-—— 结论是**可以改**，但**剩两条待拍板**，所以本条仍未关闭。
+**状态**：✅ 2026-08-27 **取证 + 拍板 + 落地**（[D67](../../../plans/openchamber-chat-refactor-ledger.md) ·
+[取证档](../../../plans/2026-08-27-settingsources-spike/README.md)）。
 
-**取证结论**：
+**落地形态**：`settingSources: ['user', 'project']`，**不加任何覆盖**。
+两份 CLAUDE.md、用户的 env / hooks / model 全部回来；权限卡的行为与官方 Claude Code 命令行一致。
 
-1. **当初设它的理由是对的，今天仍成立** —— 仓库里提交的 `.claude/settings.json` 中一条
-   `permissions.allow`，**确实会整个跳过 `canUseTool`**（C3/D0 实测：工具直接执行，权限卡从不出现）。
-2. **代价也是真的** —— `[]` 之下什么都不载入：用户与项目的 `CLAUDE.md` 都不进模型上下文，
-   用户 `settings.json` 里的 `env` / `hooks` / `model` 也全不生效（A① / B1 实测）。
-3. **替代品成立，且只要一行** —— `managedSettings: { permissions: { ask: ['*'] } }`
-   把被 allow 跳过的工具**摁回 `canUseTool`**（D2/D3/D4 实测）。通配 `'*'` 就够，**不必枚举规则名** ——
-   原先记的「需要另找压制手段」比预想便宜得多。
-   `deny` 也能挡，但方式是**硬拒**、`canUseTool` 根本不被调用（D1），不是我们要的。
+**关键取证**（都是实测，不是推断）：
+- 当初设 `[]` 的理由**成立** —— 配置里一条 `permissions.allow` 确实会整个跳过 `canUseTool`（§C3）。
+- 代价也**成立** —— `[]` 之下什么都不载入（§A①）。
+- 打开 `project` 会让**仓库提交的 hooks 真的执行**（§F），SDK 对它没有信任过滤（对 `defaultMode` 有）。
 
-**剩下的两条待拍板**（施工前必须定）：
+**已知并接受的代价**：配置里的免问规则会让对应动作不弹卡（Z 组后两行）。用户拍板接受。
 
-- **① 权限卡的粒度**：`ask:['*']` 让**每一次**工具调用都弹卡，比今天更严 ——
-  今天连我们自己也让内置安全清单自动放行一部分（E 组实测：`echo` 今天 0 次卡，候选方案下 1 次）。
-  接受这个更严的形态？还是收窄成 `['Bash','Write','Edit']` 这种「有副作用的才弹」？
-- **② 开 `project` 会一并载入仓库提交的 `hooks`** —— 那是会执行的命令，来自 git。
-  `defaultMode` 有 SDK 的信任过滤兜着（A③ 实测 `bypassPermissions` 被丢弃），**`hooks` 没有**。
-  **本轮未测 hooks 是否真的会被执行**，这是开工前该补的一发。
-
-⚠️ **另有一条文档与实测不一致**：SDK 文档称 `managedSettings` 被 restrictive-only 过滤、
-`permissions.allow` 会被丢弃；`resolveSettings` 显示**没有被丢弃**（A⑥）。
-文档同时声明 `resolveSettings` 报告的是「原始层叠、不是安全判定」，所以两者不一定矛盾 ——
-但**在把 `managedSettings` 当安全边界用之前，须单独测一次执行期行为**。
-
-**下游**：本条是 [entry-and-environment E1](../entry-and-environment/roadmap.md)
-（「使用本机已有配置」按钮的真探测）的前置 —— 不解决它，对「自己在 `~/.claude/settings.json` 里配了
-url+key」的用户，那个探测的结论必然是错的。
+**未决余量**（不阻塞，另记）：要不要连 `'local'` 一起开（未测其独立行为）·
+`managedSettings` 的 restrictive-only 过滤文档与实测不一致（本批未用它）。
 
 ## ~~#7 取消隔离后，用户的 `mcp_servers` / `developer_instructions` 要不要继承~~ ✅ 已关闭
 

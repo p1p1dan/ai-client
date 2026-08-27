@@ -6,6 +6,15 @@
 > 离线成立：所有请求打到本机 `127.0.0.1` 的假 Messages 端点（`mockapi.mjs`），它一定回一个
 > `tool_use`，于是「工具调用有没有过 `canUseTool`」变成确定性的、可观测的事实。
 
+## 拍板（2026-08-27，用户当场问答）
+
+- **权限卡**：只问有副作用的 —— 读文件、找文件、搜内容照旧自动放行。
+- **配置文件**：`~/.claude` 与项目里的**都读**，并**完全照它写的办**（原话「完全照配置办」）。
+  一度实现过一层覆盖（`managedSettings: { permissions: { ask: ['*'] } }`），
+  经用户指出后**去掉了** —— 见 §H/§甲乙丙。
+
+**最终形态**：`settingSources: ['user', 'project']`，**不加任何覆盖**。
+
 ## 结论（≤10 行）
 
 1. **`settingSources: []` 当初设它的理由是对的，而且今天仍然成立。**
@@ -129,29 +138,117 @@ PROBE_ROOT=$PWD $N probeE.mjs   # 卡的频次对比
 
 `probeB.mjs` 已删除 —— 它测的是那条没匹配上的规则，留着只会误导；教训写在 §B 组。
 
+⚠️ **这些脚本被 `biome.json` 排除在 lint 之外**（`!docs/plans/**/*.mjs`，与既有的 `!docs/design` 同类）。
+它们是**冻结的实验存档**：改动之后就不再对应本档记录的那些数字，所以不该被格式化规则推着改。
+要重新验证就照上面的命令跑，要改就当成写一个新探针。
+
+---
+
+---
+
+## F 组 — 仓库里的 hooks 会不会真的被执行
+
+「hooks」= 配置文件里写的「AI 每次动手之前，先替我跑一遍这条命令」。命令内容任意。
+关键在于项目那份配置**跟着 git 走** —— 是仓库作者写的，不是用户写的。
+
+夹具：项目 `.claude/settings.json` 里放一条 `PreToolUse` hook，命令是 `touch <哨兵文件>`。
+
+| 配置 | hook 被执行 |
+|---|---|
+| 今天 `settingSources: []` | ❌ 不会 |
+| 打开 `['user','project']` | ✅ **会** |
+
+⇒ **确认：这是真风险，不是理论风险。** 对照：同一份文件若试图把 `defaultMode` 调成
+`bypassPermissions`，SDK **会拒绝**（A③ 实测的信任过滤）—— 但对 hooks **没有这道防线**。
+**已由用户拍板接受**（「两个都读，接受这个风险」）。
+
+---
+
+## G / H 组 — 「只问有副作用的」如果做成工具名单，会漏
+
+拿到工具全集（G 组，`system.init` 回显）：**29 个** ——
+`Task · AskUserQuestion · Bash · CronCreate · CronDelete · CronList · Edit · EnterPlanMode ·
+ExitPlanMode · EnterWorktree · ExitWorktree · Glob · Grep · NotebookEdit · Read · ReportFindings ·
+ScheduleWakeup · SendMessage · Skill · TaskCreate · TaskGet · TaskList · TaskOutput · TaskStop ·
+TaskUpdate · WebFetch · WebSearch · Workflow · Write`。
+
+最初随口举的 `['Bash','Write','Edit']` 三个名单，H 组实测**会漏**：
+
+| 场景 | 权限卡 |
+|---|---|
+| 访问网页 · 无免问规则 · 名单只含那三个 | 1 张 ✅ |
+| 访问网页 · **有免问规则** · 名单只含那三个 | **0 张** ❌ **漏了** |
+| 访问网页 · 有免问规则 · 名单里加上它 | 1 张 ✅ |
+
+⇒ **手工维护的工具名单会腐烂**：命令行工具下次升级新增一个，它不在名单里就**静默失效**，
+而且失效方向是**放行**。这条是后来放弃名单方案的直接原因。
+
+---
+
+## I 组 — 今天到底哪些工具会弹卡
+
+名单要想「保持今天手感」，就得先知道今天是什么样。`settingSources: []` 下逐个实测：
+
+| 自动放行 | 弹卡 |
+|---|---|
+| `Read` · `Glob` · `Grep` | `Bash` · `Write` · `Edit` · `WebFetch` · `WebSearch` |
+
+（`NotebookEdit` / `Task` 在本轮夹具下也显示自动放行，但**未能排除「参数不合法、在权限检查之前就失败」**
+这一可能 —— 与 §B 组同类的陷阱。结论不采信，需要时另测。）
+
+---
+
+## Z 组 — 最终形态端到端复核
+
+`settingSources: ['user','project']`，**不加任何覆盖**：
+
+| 场景 | 权限卡 | 用户 CLAUDE.md | 项目 CLAUDE.md |
+|---|---|---|---|
+| 读文件 | 0 张 ✅ | ✅ 在 | ✅ 在 |
+| 跑命令 | 1 张 ✅ | ✅ 在 | ✅ 在 |
+| 跑命令 + 配置里有免问规则 | **0 张** | ✅ 在 | ✅ 在 |
+| 访问网页 + 配置里有免问规则 | **0 张** | ✅ 在 | ✅ 在 |
+
+后两行是**已接受的代价**，作为事实记在这里，不是缺陷。
+
+---
+
+## 甲乙丙 — 为什么最后没有加那层覆盖
+
+实现过一版 `managedSettings: { permissions: { ask: ['*'] } }`，用户当场指出问题：
+**「配置文件里那份是什么就是什么样，我们为什么要去干涉它？」**
+
+这个反问是对的，而且指出了那版实现的真缺陷：**它分不清两个来源**。
+
+| 文件 | 谁写的 | 覆盖它意味着 |
+|---|---|---|
+| `~/.claude/settings.json` | **用户自己** | 推翻用户自己写的「别问我」—— 与 D60/D61「用户环境原样生效」直接冲突 |
+| `<项目>/.claude/settings.json` | **仓库作者**（跟 git 来） | 才是真正要防的那个 |
+
+三个落法摆给用户：**甲** 完全照配置办 · **乙** 保留覆盖 · **丙** 用 `resolveSettings` 的
+provenance（每条规则来自哪一层）只挡仓库那份。**拍板取甲。**
+
+支撑甲的关键一条：用户在同一轮已经接受了**更大**的风险 —— 仓库的 hooks 能跑任意命令，
+连工具调用都不需要（§F）。为了**更小**的那个去覆盖用户自己的文件，逻辑上站不住。
+
+**净效果**：权限卡的行为与官方 Claude Code 命令行**完全一致**。我们不再比自己内嵌的工具更严。
+
 ---
 
 ## 对设计的含义
 
-**可以拿掉 `settingSources: []`，代价是一条待拍板。**
-
-推荐形态：
+**已落地形态**：
 
 ```ts
-settingSources: ['user', 'project'],          // 用户与项目的 CLAUDE.md、env、hooks 回来
-managedSettings: { permissions: { ask: ['*'] } },  // 每次工具调用都回到我们的权限卡
+settingSources: ['user', 'project'],   // 两份 CLAUDE.md、env、hooks、model 全部回来
+// 不加任何覆盖 —— 见上方「甲乙丙」
 ```
 
-**待拍板 #1 —— 权限卡的粒度**：`ask:['*']` 让每个工具都弹卡（比今天更严，E 组）。
-接受？还是收窄到 `['Bash','Write','Edit']` 这种「有副作用的才弹」？
+**留下的未决**：
 
-**待拍板 #2 —— 要不要连 `'local'` 一起开**：`.claude/settings.local.json` 是本机未提交的文件，
-理论上比 `project` 更可信；但它也不在仓库评审范围内。本轮没测它的独立行为。
-
-⚠️ **顺带要知道的两件事**：
-- 打开 `project` 会一并载入**仓库提交的 `hooks`**（A③ 实测）—— 那是会执行的命令，来自 git。
-  `defaultMode` 有 SDK 的信任过滤兜着，**`hooks` 没有**。本轮**未测** hooks 是否真的会被执行，
-  这是开工前该补的一发。
-- SDK 文档说 `managedSettings` 会 restrictive-only 过滤掉 `permissions.allow`，
-  但 `resolveSettings` 显示**没有过滤**（A⑥）。文档同时声明 `resolveSettings`「报告的是原始层叠、不是安全判定」，
-  所以两者不一定矛盾 —— 但**在把 `managedSettings` 当安全边界用之前，这条必须单独测一次执行期行为**。
+- **要不要连 `'local'` 一起开** —— `.claude/settings.local.json` 是本机未提交的文件，
+  理论上比 `project` 更可信（不进 git、不被别人写）。本轮**未测它的独立行为**，也未拍板。
+- **SDK 文档与实测不一致一处**：文档称 `managedSettings` 被 restrictive-only 过滤、
+  `permissions.allow` 会被丢弃；`resolveSettings` 显示**没有被丢弃**（A⑥）。
+  本批最终没用 `managedSettings`，所以不阻塞 —— 但**将来若要把它当安全边界用，这条必须先单独测执行期行为**。
+- **`NotebookEdit` / `Task` 今天是不是真的自动放行** —— I 组未能排除「参数不合法提前失败」，结论不采信。

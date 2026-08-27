@@ -980,9 +980,43 @@ export class ClaudeRuntime {
           // Expose built-in Claude Code tools so Permission/Tool cards can fire.
           // Do NOT set bare allowedTools — that auto-approves and shadows canUseTool.
           tools: { type: 'preset', preset: 'claude_code' },
-          // Isolate from filesystem permission.allow rules that would shadow canUseTool.
-          // Credentials still come from options.env (loaded from settings.json).
-          settingSources: [],
+          // The user's own `~/.claude` and the project's `.claude` are loaded
+          // again — which is what puts BOTH CLAUDE.md files back into the
+          // model's context, along with the user's env, hooks and model
+          // preference. It was `[]` until this slice, and `[]` loaded nothing
+          // at all: `resolveSettings` with `[]` reports no sources, no
+          // permissions, no env, no hooks [实测, spike §A①].
+          //
+          // ## What this knowingly gives up, and why
+          //
+          // A `permissions.allow` entry in either file DOES skip `canUseTool`
+          // entirely — the tool runs and no permission card appears
+          // [实测 spike §C3, with C1/C2 proving the rule was live, so C3 is not
+          // a rule that merely failed to match]. That is exactly what `[]` was
+          // protecting, and the protection was real.
+          //
+          // It is given up on purpose (user ruling 2026-08-27, 「完全照配置办」).
+          // A blanket override was written first and then removed, because it
+          // could not tell the two files apart and so paid for the second with
+          // the first:
+          //
+          //  - `~/.claude/settings.json` is the USER'S. Someone who wrote "stop
+          //    asking me about `git status`" meant it. Overriding that is us
+          //    deciding we know better, and it contradicts the direction D60 and
+          //    D61 set — the user's own environment takes effect as written.
+          //  - `<project>/.claude/settings.json` arrives with the repo. That one
+          //    is a real exposure, and it is accepted alongside the larger one
+          //    already accepted in the same breath: opening `project` also runs
+          //    repo-committed HOOKS, which are arbitrary commands that need no
+          //    tool call at all [实测 spike §F①]. Next to that, "the repo can
+          //    make some tool calls quiet" is the smaller half.
+          //
+          // Net effect: the permission card now behaves exactly as the official
+          // Claude Code CLI does on the same machine. We are no longer stricter
+          // than the tool we embed — which is also why nothing here needs to
+          // enumerate tool names, a list that would have rotted on the first
+          // CLI upgrade [spike §G/§H measured the leak that list would leave].
+          settingSources: ['user', 'project'],
           // #8: adaptive thinking with visible summaries. `display:'summarized'`
           // is required — the default `omitted` streams empty thinking text.
           // See THINKING_CONFIG above for the probe evidence.

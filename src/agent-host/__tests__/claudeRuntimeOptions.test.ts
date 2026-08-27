@@ -56,6 +56,62 @@ function makeRuntime(captured: CapturedOptions[]): ClaudeRuntime {
   });
 }
 
+/**
+ * The settings cascade (取证档 `docs/plans/2026-08-27-settingsources-spike/`).
+ *
+ * `settingSources` was `[]` until this slice, and `[]` loads NOTHING — no
+ * CLAUDE.md, no env, no hooks, no model preference [实测 spike §A①]. Opening it
+ * is what puts both CLAUDE.md files back into the model's context.
+ *
+ * Nothing accompanies it. A `managedSettings: { permissions: { ask: ['*'] } }`
+ * was written alongside — it forces every tool back through `canUseTool` even
+ * when a settings file pre-approved it [实测 spike §D4] — and then removed by
+ * ruling (2026-08-27, 「完全照配置办」): it could not tell the user's own file
+ * from the repo's, so protecting against the repo meant overriding the user.
+ * See `claudeRuntime.ts` at this option for the full reasoning.
+ */
+describe('claudeRuntime query options — settings cascade', () => {
+  it("loads the user's and the project's settings, which is what restores CLAUDE.md", async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 's1', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's1', text: 'hi' });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].settingSources).toEqual(['user', 'project']);
+  });
+
+  /**
+   * `[]` is the one spelling that must never come back by accident: it is the
+   * regression this slice exists to undo, and it is silent — nothing fails, the
+   * model simply never sees the instructions the user wrote for it.
+   */
+  it('never falls back to loading no settings at all', async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 's1', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's1', text: 'hi' });
+
+    expect(captured[0].settingSources).not.toEqual([]);
+  });
+
+  /**
+   * The removed override, pinned as an absence.
+   *
+   * Without this the option could drift back in as a "safety improvement" and
+   * look like one — while quietly overriding what a user wrote in their own
+   * `~/.claude/settings.json`, which is the thing the ruling said not to do.
+   */
+  it('does not override the permission decisions those settings express', async () => {
+    const captured: CapturedOptions[] = [];
+    const rt = makeRuntime(captured);
+    rt.createSession({ sessionId: 's1', workspacePath: process.cwd() });
+    await rt.send({ sessionId: 's1', text: 'hi' });
+
+    expect(captured[0].managedSettings).toBeUndefined();
+  });
+});
+
 describe('claudeRuntime query options — thinking shape (#8)', () => {
   it('sends adaptive thinking with summarized display', async () => {
     const captured: CapturedOptions[] = [];

@@ -56,7 +56,8 @@
       "!**/out-node-runtime",
       "!**/*.min.js",
       "!**/*.css",
-      "!docs/design"
+      "!docs/design",
+      "!docs/plans/**/*.mjs"
     ]
   }
 }
