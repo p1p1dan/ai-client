@@ -10,11 +10,33 @@
 并把我们自己的配置目录收拢成一个。
 
 **In scope**：目录合并与改名（`~/.aiclient` → `~/.pilab`，凭据从 `<userData>/credentials/` 迁入）·
-`AICLIENT_MANAGED_CREDENTIALS` 转默认开 · 存量用户衔接 · 目录字面量收敛成单一常量 ·
-为第三 agent（pi）预留 vault arm。
+**取消隔离 home、凭据改经 env 直送（D60 新增）** · `AICLIENT_MANAGED_CREDENTIALS` 转默认开 ·
+存量用户衔接 · 目录字面量收敛成单一常量 · 为第三 agent（pi）预留 vault arm。
 
 **Out of scope**：pi 后端本身的接入（属 [multi-agent](../multi-agent/README.md) 阶段 5 候选）·
-登录/注册流程本身的改动 · 凭据轮换与刷新策略（现有 `AuthStateService` 不动）。
+登录/注册流程本身的改动 · 凭据轮换与刷新策略（现有 `AuthStateService` 不动）·
+**`settingSources: []` 与 CLAUDE.md 上下文（D60 明确另立项，见 [open-q #6](./open-questions.md)）**。
+
+## 方向修正（2026-08-26，[D60](../../../plans/openchamber-chat-refactor-ledger.md)）
+
+立项当天下午，用户追问「隔离目录会不会让 CLAUDE.md / commands/ / skills/ 失效」，取证后**方向改了**：
+
+> **隔离 home 降级为「只隔离凭据」——取消 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` 整体重定向。**
+
+三条互相独立的机制被分开（详见 D60 与 [open-q 附-5](./open-questions.md)）：
+
+| 失效项 | 源头 | 今天状态 | 与隔离目录 |
+|---|---|---|---|
+| CLAUDE.md 不进模型上下文 | `claudeRuntime.ts:985` 的 `settingSources: []` | **已失效** | **无关**，另立项 |
+| 用户级 `commands/`/`skills/`/plugins/hooks | `CLAUDE_CONFIG_DIR` 整体重定向 | flag 开才失效 | 直接相关 |
+| codex 全局 `AGENTS.md` + 整棵配置树 | `ensureCodexHome` 只搬两个文件 | **已失效**（不受 flag 控制） | 直接相关 |
+
+**为什么取消而不是扩大投影**：重定向从来不是凭据注入的必要条件。仓内已有反例 ——
+codex 的 key 走 `hostEnv.ts:161` 的 `AICLIENT_CODEX_API_KEY` 直接进 env，全程不碰文件；
+Claude 侧却绕了一趟磁盘（Main 写 `<claude-home>/settings.json` → Host `loadClaudeSettingsEnv()` 读回来）。
+**正因为凭据经「文件」传递，才不得不控制「目录」，一旦控制目录就顺带劫持了整棵配置树。**
+投影方案的成本随 agent 家数线性增长，与 [D58](../../../plans/openchamber-chat-refactor-ledger.md)
+「够不到的开关不是灰度」同构。
 
 ## 起点认知（2026-08-26 实测，不是设想）
 
