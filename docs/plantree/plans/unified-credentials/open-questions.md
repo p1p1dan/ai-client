@@ -58,30 +58,37 @@ package `name` 改了会连带换掉 `<userData>` 和刚定下来的 profile 段
 
 ## #6 `settingSources: []` 让 CLAUDE.md 完全不进上下文，要不要改
 
-**状态**：待立项（D60 明确**不在本 plan 内**，登记在此只为不丢）
+**状态**：✅ **取证已完成**（2026-08-27，[取证档](../../../plans/2026-08-27-settingsources-spike/README.md)）
+—— 结论是**可以改**，但**剩两条待拍板**，所以本条仍未关闭。
 
-`claudeRuntime.ts:985` 传 `settingSources: []`，SDK 文档原文：
-`Must include 'project' to load CLAUDE.md files`（`sdk.d.ts:1889`）
-⇒ **用户级与项目级 CLAUDE.md 今天都不进模型上下文**，且这与隔离目录**无关**，
-D60 落地后也不会自动恢复。
+**取证结论**：
 
-它当初是为一个真实理由设的（`claudeRuntime.ts:983` 注释）：
-避免 settings.json 的 `permissions.allow` **阴影掉 `canUseTool`** —— 权限卡是本产品的承重面，
-不能被用户 settings 里的一条 allow 规则悄悄绕过。
+1. **当初设它的理由是对的，今天仍成立** —— 仓库里提交的 `.claude/settings.json` 中一条
+   `permissions.allow`，**确实会整个跳过 `canUseTool`**（C3/D0 实测：工具直接执行，权限卡从不出现）。
+2. **代价也是真的** —— `[]` 之下什么都不载入：用户与项目的 `CLAUDE.md` 都不进模型上下文，
+   用户 `settings.json` 里的 `env` / `hooks` / `model` 也全不生效（A① / B1 实测）。
+3. **替代品成立，且只要一行** —— `managedSettings: { permissions: { ask: ['*'] } }`
+   把被 allow 跳过的工具**摁回 `canUseTool`**（D2/D3/D4 实测）。通配 `'*'` 就够，**不必枚举规则名** ——
+   原先记的「需要另找压制手段」比预想便宜得多。
+   `deny` 也能挡，但方式是**硬拒**、`canUseTool` 根本不被调用（D1），不是我们要的。
 
-**改的话要同时解决**：`settingSources: ['project']` 会一并载入项目 `.claude/settings.json` 的 permissions；
-需要另找压制手段（候选：`managedSettings` 的 restrictive 策略层 —— `sdk.d.ts` 说它走
-`permissions.deny`/`ask` 白名单过滤，可能正好是为这类场景准备的，**未取证**）。
+**剩下的两条待拍板**（施工前必须定）：
 
-**建议**：单独立项，不混进凭据批。
+- **① 权限卡的粒度**：`ask:['*']` 让**每一次**工具调用都弹卡，比今天更严 ——
+  今天连我们自己也让内置安全清单自动放行一部分（E 组实测：`echo` 今天 0 次卡，候选方案下 1 次）。
+  接受这个更严的形态？还是收窄成 `['Bash','Write','Edit']` 这种「有副作用的才弹」？
+- **② 开 `project` 会一并载入仓库提交的 `hooks`** —— 那是会执行的命令，来自 git。
+  `defaultMode` 有 SDK 的信任过滤兜着（A③ 实测 `bypassPermissions` 被丢弃），**`hooks` 没有**。
+  **本轮未测 hooks 是否真的会被执行**，这是开工前该补的一发。
 
-⚠️ **2026-08-27 升级为「有下游在等」**：本条不再只是一件挂着的事。
-[entry-and-environment](../entry-and-environment/README.md) 的第二个按钮（「使用本机已有配置」）
-要判断的正是「不注入时用户自己能不能拿到凭据」，而 `settingSources: []`
-**主动屏蔽了 `~/.claude/settings.json`** —— 对「自己在那份文件里配了 url+key」的用户，
-这个探测的结论必然是错的。⇒ 本条是
-[那边 open-q #1](../entry-and-environment/open-questions.md) 的前置，
-排期上不能无限期挂着。
+⚠️ **另有一条文档与实测不一致**：SDK 文档称 `managedSettings` 被 restrictive-only 过滤、
+`permissions.allow` 会被丢弃；`resolveSettings` 显示**没有被丢弃**（A⑥）。
+文档同时声明 `resolveSettings` 报告的是「原始层叠、不是安全判定」，所以两者不一定矛盾 ——
+但**在把 `managedSettings` 当安全边界用之前，须单独测一次执行期行为**。
+
+**下游**：本条是 [entry-and-environment E1](../entry-and-environment/roadmap.md)
+（「使用本机已有配置」按钮的真探测）的前置 —— 不解决它，对「自己在 `~/.claude/settings.json` 里配了
+url+key」的用户，那个探测的结论必然是错的。
 
 ## ~~#7 取消隔离后，用户的 `mcp_servers` / `developer_instructions` 要不要继承~~ ✅ 已关闭
 

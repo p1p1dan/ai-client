@@ -31,7 +31,10 @@ S0' codex 侧（unified-credentials，前置已清）─────────
 - codex 侧「检测到有配置」**不等于**「能用」：[E2](../../../plans/2026-08-26-s0-spikes/e2-codex-resume-and-inherited-keys.md)
   实测用户 config 里一行遗留 `profile =` 就能让会话起不来。
 
-**依赖**：unified-credentials 的 open-q #6 先有结论。
+**依赖**：unified-credentials 的 open-q #6 —— ✅ **取证已完成**
+（[取证档](../../../plans/2026-08-27-settingsources-spike/README.md)，2026-08-27）：
+`settingSources` 可以打开，`managedSettings: { permissions: { ask: ['*'] } }` 一行就能把权限卡摁回来。
+**但还剩两条待拍板**（权限卡粒度 · 仓库提交的 hooks 会不会被执行），E1 开工前须定。
 
 ### ~~A1 — 凭据模式建模~~ ✅ 已落地（2026-08-27，与 unified-credentials S3 同轮）
 
