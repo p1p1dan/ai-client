@@ -63,6 +63,12 @@ function makeRuntime(captured: CapturedOptions[]): ClaudeRuntime {
  * CLAUDE.md, no env, no hooks, no model preference [实测 spike §A①]. Opening it
  * is what puts both CLAUDE.md files back into the model's context.
  *
+ * All THREE tiers, and `'local'` is not an afterthought: it is
+ * `<project>/.claude/settings.local.json`, gitignored by the CLI itself, so it
+ * belongs to the user exactly as `'user'` does — the same author writing in a
+ * different place [实测 spike §L: its rules do not apply without it, and do
+ * with it].
+ *
  * Nothing accompanies it. A `managedSettings: { permissions: { ask: ['*'] } }`
  * was written alongside — it forces every tool back through `canUseTool` even
  * when a settings file pre-approved it [实测 spike §D4] — and then removed by
@@ -71,14 +77,14 @@ function makeRuntime(captured: CapturedOptions[]): ClaudeRuntime {
  * See `claudeRuntime.ts` at this option for the full reasoning.
  */
 describe('claudeRuntime query options — settings cascade', () => {
-  it("loads the user's and the project's settings, which is what restores CLAUDE.md", async () => {
+  it('loads all three settings tiers, which is what restores CLAUDE.md', async () => {
     const captured: CapturedOptions[] = [];
     const rt = makeRuntime(captured);
     rt.createSession({ sessionId: 's1', workspacePath: process.cwd() });
     await rt.send({ sessionId: 's1', text: 'hi' });
 
     expect(captured).toHaveLength(1);
-    expect(captured[0].settingSources).toEqual(['user', 'project']);
+    expect(captured[0].settingSources).toEqual(['user', 'project', 'local']);
   });
 
   /**

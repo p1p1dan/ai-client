@@ -61,7 +61,7 @@ package `name` 改了会连带换掉 `<userData>` 和刚定下来的 profile 段
 **状态**：✅ 2026-08-27 **取证 + 拍板 + 落地**（[D67](../../../plans/openchamber-chat-refactor-ledger.md) ·
 [取证档](../../../plans/2026-08-27-settingsources-spike/README.md)）。
 
-**落地形态**：`settingSources: ['user', 'project']`，**不加任何覆盖**。
+**落地形态**：`settingSources: ['user', 'project', 'local']`，**不加任何覆盖**。
 两份 CLAUDE.md、用户的 env / hooks / model 全部回来；权限卡的行为与官方 Claude Code 命令行一致。
 
 **关键取证**（都是实测，不是推断）：
@@ -71,8 +71,7 @@ package `name` 改了会连带换掉 `<userData>` 和刚定下来的 profile 段
 
 **已知并接受的代价**：配置里的免问规则会让对应动作不弹卡（Z 组后两行）。用户拍板接受。
 
-**未决余量**（不阻塞，另记）：要不要连 `'local'` 一起开（未测其独立行为）·
-`managedSettings` 的 restrictive-only 过滤文档与实测不一致（本批未用它）。
+**未决余量**（不阻塞，另记）：`managedSettings` 的 restrictive-only 过滤文档与实测不一致（本批未用它）。
 
 ## ~~#7 取消隔离后，用户的 `mcp_servers` / `developer_instructions` 要不要继承~~ ✅ 已关闭
 

@@ -1016,7 +1016,20 @@ export class ClaudeRuntime {
           // than the tool we embed — which is also why nothing here needs to
           // enumerate tool names, a list that would have rotted on the first
           // CLI upgrade [spike §G/§H measured the leak that list would leave].
-          settingSources: ['user', 'project'],
+          //
+          // `'local'` is `<project>/.claude/settings.local.json` — the third
+          // tier, and it belongs to the USER, not the repo: the CLI's own
+          // `.gitignore` keeps it out of version control, so it is the file a
+          // person accumulates their own "stop asking me about this" choices in
+          // while working on one project. Including it is the same ruling as
+          // `'user'`, applied to the same author writing in a different place.
+          // It is also the LEAST exposed of the three: `'project'` can arrive
+          // with a clone, this one cannot.
+          // [实测 spike §L] with only `settings.local.json` populated,
+          // `['user','project']` loads nothing and its allow rule does not
+          // apply (1 card); adding `'local'` loads it and the rule applies
+          // (0 cards) — the before/after that makes this line load-bearing.
+          settingSources: ['user', 'project', 'local'],
           // #8: adaptive thinking with visible summaries. `display:'summarized'`
           // is required — the default `omitted` streams empty thinking text.
           // See THINKING_CONFIG above for the probe evidence.

@@ -13,7 +13,9 @@
   一度实现过一层覆盖（`managedSettings: { permissions: { ask: ['*'] } }`），
   经用户指出后**去掉了** —— 见 §H/§甲乙丙。
 
-**最终形态**：`settingSources: ['user', 'project']`，**不加任何覆盖**。
+- **三层都读**（追加拍板，见 §L）：用户级 · 项目级 · **本机级**。
+
+**最终形态**：`settingSources: ['user', 'project', 'local']`，**不加任何覆盖**。
 
 ## 结论（≤10 行）
 
@@ -235,19 +237,51 @@ provenance（每条规则来自哪一层）只挡仓库那份。**拍板取甲�
 
 ---
 
+---
+
+## L 组 — 第三层 `settings.local.json` 的独立行为
+
+前面几轮只测过「三层一起开」的合并结果，没单独验证过第三层。它是
+`<项目>/.claude/settings.local.json`，**归属与用户级相同**：命令行工具自己的 `.gitignore`
+把它挡在版本控制外，所以**只可能是用户自己写的**，是一个人在某个项目里攒「以后别问我这条」的地方。
+它也是三层里**暴露面最小**的 —— 项目级会跟着 clone 来，这一层不会。
+
+夹具：只有本机级那份有内容（免问规则 + env + model），用户级与项目级刻意留空，
+让效果只可能来自它。
+
+| `settingSources` | 载入的层 | 免问清单 | env | model |
+|---|---|---|---|---|
+| `['user','project']` | **无** | 无 | 无 | 无 |
+| `['user','project','local']` | local | ✅ 读到 | ✅ 读到 | ✅ 读到 |
+| `['local']` 单开 | local | ✅ 读到 | ✅ 读到 | ✅ 读到 |
+
+真跑一回合（免问规则**只**写在本机级那份里）：
+
+| `settingSources` | 权限卡 | 含义 |
+|---|---|---|
+| `['user','project']` | **1 张** | 没读到那条规则 |
+| `['user','project','local']` | **0 张** | 读到了，并照办 |
+
+**M 组 · 本仓真实文件复核**：本仓 `.claude/settings.local.json` 里写的是 `{"outputStyle":"Concise"}`
+（用户自己设的，被 `.gitignore:38` 挡着不进 git）。改之前 `outputStyle` **读不到**，
+改之后读到 `Concise` —— 前后对照干净。
+
+⇒ **拍板加上**（用户 2026-08-27「开吧，测完就改」）。理由与 `'user'` 同一条：
+**同样是用户自己写的东西，不该因为放在项目目录里就不算数。**
+
+---
+
 ## 对设计的含义
 
 **已落地形态**：
 
 ```ts
-settingSources: ['user', 'project'],   // 两份 CLAUDE.md、env、hooks、model 全部回来
+settingSources: ['user', 'project', 'local'],   // 两份 CLAUDE.md、env、hooks、model 全部回来
 // 不加任何覆盖 —— 见上方「甲乙丙」
 ```
 
 **留下的未决**：
 
-- **要不要连 `'local'` 一起开** —— `.claude/settings.local.json` 是本机未提交的文件，
-  理论上比 `project` 更可信（不进 git、不被别人写）。本轮**未测它的独立行为**，也未拍板。
 - **SDK 文档与实测不一致一处**：文档称 `managedSettings` 被 restrictive-only 过滤、
   `permissions.allow` 会被丢弃；`resolveSettings` 显示**没有被丢弃**（A⑥）。
   本批最终没用 `managedSettings`，所以不阻塞 —— 但**将来若要把它当安全边界用，这条必须先单独测执行期行为**。
