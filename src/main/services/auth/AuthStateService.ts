@@ -6,6 +6,13 @@
  * FIVE `AuthState` arms (`@shared/types/auth`, the S5 authoritative DTO —
  * replaces this file's own S1-local 3-arm type).
  *
+ * D64/S3 — "are managed credentials on" MOVED OUT of this file. It used to be
+ * `resolveManagedCredentialsEnabled(env)`, answerable from an environment
+ * variable and therefore pure; the answer now comes from
+ * `~/.pilab/<profile>/settings.json`, which needs `electron`. Rather than end
+ * this module's purity, the resolved value is INJECTED — see the `managed`
+ * option below. `services/auth/credentialMode.ts` is where it comes from.
+ *
  * S5 wires this into `main/ipc/auth.ts` (`auth.getGateSnapshot` /
  * `auth.stateChanged`), the spawn gate (`main/ipc/chat.ts` /
  * `SessionManager.create`), and the I9 logout orchestration
@@ -15,18 +22,6 @@
 
 import type { AuthState } from '@shared/types/auth';
 import type { VaultReadResult } from './CredentialVault';
-
-export const MANAGED_CREDENTIALS_FLAG_ENV = 'AICLIENT_MANAGED_CREDENTIALS';
-
-/**
- * Strict `'1'` only (S1 spec §2.6) — every other spelling, including a
- * shell-inherited truthy-looking value, must read as off. Read per call, not
- * captured at module load, matching `resolveCodexEnabled`'s convention
- * (`agentSupport.ts`) so tests can flip positions without re-importing.
- */
-export function resolveManagedCredentialsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[MANAGED_CREDENTIALS_FLAG_ENV] === '1';
-}
 
 export interface AuthStateVault {
   read(): VaultReadResult;
@@ -46,6 +41,17 @@ export interface AuthStateMigrationSignal {
 
 export interface AuthStateServiceOptions {
   vault: AuthStateVault;
+  /**
+   * D64/S3 — "are managed credentials on right now", injected rather than read.
+   *
+   * A FUNCTION, not a boolean: the answer is a user setting now, so it can
+   * change while this service is alive (the login page writes it, and a login
+   * writes it too). Capturing it once would freeze the gate on whatever was
+   * true at construction. Defaults to `true` — every pre-D64 caller, including
+   * this file's own tests, was written against a service that only ever ran
+   * with managed credentials on.
+   */
+  managed?: () => boolean;
   env?: NodeJS.ProcessEnv;
   /** Defaults to a no-op — every production caller (`services/auth/index.ts`) supplies the real lazy-imported `agentHostManager`. */
   agentHost?: AuthStateAgentHost;
@@ -149,6 +155,7 @@ function statesEqual(a: AuthState, b: AuthState): boolean {
 
 export class AuthStateService {
   private readonly vault: AuthStateVault;
+  private readonly managed: () => boolean;
   private readonly env?: NodeJS.ProcessEnv;
   private readonly agentHost: AuthStateAgentHost;
   private readonly now: () => Date;
@@ -169,6 +176,7 @@ export class AuthStateService {
 
   constructor(options: AuthStateServiceOptions) {
     this.vault = options.vault;
+    this.managed = options.managed ?? (() => true);
     this.env = options.env;
     this.agentHost = options.agentHost ?? { shutdown: async () => {} };
     this.now = options.now ?? (() => new Date());
@@ -184,14 +192,14 @@ export class AuthStateService {
   /**
    * Recomputes the snapshot and notifies every subscriber IFF the value
    * actually changed (D47 S5 §1.2 — upgraded from S1's "always notify
-   * exactly once"). Flag off short-circuits BEFORE `vault.read()` is called —
-   * zero filesystem IO is a hard requirement (S1 spec §2.4), not just a fast
+   * exactly once"). Local mode short-circuits BEFORE `vault.read()` is called
+   * — zero filesystem IO is a hard requirement (S1 spec §2.4), not just a fast
    * path. Also releases the `beginLogout()` latch — see its field comment.
    */
   refresh(): AuthState {
     this.logoutInProgress = false;
     this.refreshed = true;
-    const enabled = resolveManagedCredentialsEnabled(this.env ?? process.env);
+    const enabled = this.managed();
     const next = enabled
       ? mapVaultResultToAuthState(this.vault.read(), this.migrationSignal())
       : DEFAULT_STATE;

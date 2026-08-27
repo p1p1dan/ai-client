@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  AuthStateService,
-  type AuthStateVault,
-  MANAGED_CREDENTIALS_FLAG_ENV,
-  resolveManagedCredentialsEnabled,
-} from '../AuthStateService';
+import { AuthStateService, type AuthStateVault } from '../AuthStateService';
 import type { VaultReadResult } from '../CredentialVault';
 
 /**
@@ -17,27 +12,14 @@ function fakeVault(result: VaultReadResult): AuthStateVault {
   return { read: vi.fn(() => result), markInvalidated: vi.fn(async () => {}) };
 }
 
-describe('resolveManagedCredentialsEnabled', () => {
-  it('is on only for the exact string "1"', () => {
-    expect(resolveManagedCredentialsEnabled({ [MANAGED_CREDENTIALS_FLAG_ENV]: '1' })).toBe(true);
-  });
-
-  it('is off for absent, empty, and every truthy-looking spelling (falsifies a permissive reader)', () => {
-    for (const raw of ['', '0', 'true', 'True', 'yes', 'on', '2', ' 1', '1 ']) {
-      expect(resolveManagedCredentialsEnabled({ [MANAGED_CREDENTIALS_FLAG_ENV]: raw })).toBe(false);
-    }
-    expect(resolveManagedCredentialsEnabled({})).toBe(false);
-  });
-
-  it('re-reads the environment on every call', () => {
-    const env: NodeJS.ProcessEnv = {};
-    expect(resolveManagedCredentialsEnabled(env)).toBe(false);
-    env[MANAGED_CREDENTIALS_FLAG_ENV] = '1';
-    expect(resolveManagedCredentialsEnabled(env)).toBe(true);
-  });
-});
-
-const ON_ENV = { [MANAGED_CREDENTIALS_FLAG_ENV]: '1' };
+/**
+ * D64/S3 — "are managed credentials on" is INJECTED now, not read from an env
+ * var this service resolves itself. The rule that produces it moved to
+ * `@shared/credentialMode` and has its own tests; what belongs here is only
+ * that this service honours whichever answer it is handed.
+ */
+const ON_ENV = { managed: () => true };
+const OFF_ENV = { managed: () => false };
 
 describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => {
   it('maps vault "ok" to authenticated/email/unknown', () => {
@@ -58,7 +40,7 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
         },
       },
     });
-    const service = new AuthStateService({ vault, env: ON_ENV });
+    const service = new AuthStateService({ vault, ...ON_ENV });
     expect(service.refresh()).toEqual({
       status: 'authenticated',
       email: 'user@jcdz.cc',
@@ -67,14 +49,14 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
   });
 
   it('maps vault "absent" to signed_out with lastEmail null', () => {
-    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), env: ON_ENV });
+    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), ...ON_ENV });
     expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: null });
   });
 
   it('maps vault "cleared" to signed_out, carrying lastEmail', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'cleared', lastEmail: 'past@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: 'past@jcdz.cc' });
   });
@@ -82,7 +64,7 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
   it('maps vault "locked" to its own `locked` arm, never signed_out or credentials_invalid', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'locked', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     expect(service.refresh()).toEqual({ status: 'locked', lastEmail: 'user@jcdz.cc' });
   });
@@ -90,7 +72,7 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
   it('maps vault "unsupported" to signed_out (unchanged S1 rule)', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'unsupported', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: 'user@jcdz.cc' });
   });
@@ -98,7 +80,7 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
   it('maps vault "rejected" to credentials_invalid: rejected', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'rejected', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     expect(service.refresh()).toEqual({
       status: 'credentials_invalid',
@@ -110,7 +92,7 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
   it('maps vault "invalid/malformed_json" and "invalid/schema_invalid" to credentials_invalid: corrupt', () => {
     const serviceA = new AuthStateService({
       vault: fakeVault({ status: 'invalid', reason: 'malformed_json' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     expect(serviceA.refresh()).toEqual({
       status: 'credentials_invalid',
@@ -120,7 +102,7 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
 
     const serviceB = new AuthStateService({
       vault: fakeVault({ status: 'invalid', reason: 'schema_invalid' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     expect(serviceB.refresh()).toEqual({
       status: 'credentials_invalid',
@@ -132,7 +114,7 @@ describe('AuthStateService — five-arm derivation table (D47 S5 §1.1)', () => 
   it('maps vault "invalid/decrypt_failed" to credentials_invalid: decrypt_failed', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'invalid', reason: 'decrypt_failed', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     expect(service.refresh()).toEqual({
       status: 'credentials_invalid',
@@ -146,7 +128,7 @@ describe('AuthStateService — migrationSignal / migration_incomplete (D47 S6 §
   it('vault absent + migrationSignal incomplete produces credentials_invalid/migration_incomplete with the legacy email', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'absent' }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: () => ({ migrationIncomplete: true, legacyEmail: 'legacy@jcdz.cc' }),
     });
     expect(service.refresh()).toEqual({
@@ -159,14 +141,14 @@ describe('AuthStateService — migrationSignal / migration_incomplete (D47 S6 §
   it('vault absent + migrationSignal NOT incomplete is still a plain signed_out', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'absent' }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: () => ({ migrationIncomplete: false, legacyEmail: null }),
     });
     expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: null });
   });
 
   it('no migrationSignal injected at all defaults to the no-op signal (plain signed_out on absent)', () => {
-    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), env: ON_ENV });
+    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), ...ON_ENV });
     expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: null });
   });
 
@@ -175,14 +157,14 @@ describe('AuthStateService — migrationSignal / migration_incomplete (D47 S6 §
 
     const cleared = new AuthStateService({
       vault: fakeVault({ status: 'cleared', lastEmail: 'past@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: incompleteSignal,
     });
     expect(cleared.refresh()).toEqual({ status: 'signed_out', lastEmail: 'past@jcdz.cc' });
 
     const rejected = new AuthStateService({
       vault: fakeVault({ status: 'rejected', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: incompleteSignal,
     });
     expect(rejected.refresh()).toEqual({
@@ -193,21 +175,21 @@ describe('AuthStateService — migrationSignal / migration_incomplete (D47 S6 §
 
     const locked = new AuthStateService({
       vault: fakeVault({ status: 'locked', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: incompleteSignal,
     });
     expect(locked.refresh()).toEqual({ status: 'locked', lastEmail: 'user@jcdz.cc' });
 
     const unsupported = new AuthStateService({
       vault: fakeVault({ status: 'unsupported', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: incompleteSignal,
     });
     expect(unsupported.refresh()).toEqual({ status: 'signed_out', lastEmail: 'user@jcdz.cc' });
 
     const invalid = new AuthStateService({
       vault: fakeVault({ status: 'invalid', reason: 'decrypt_failed', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: incompleteSignal,
     });
     expect(invalid.refresh()).toEqual({
@@ -234,7 +216,7 @@ describe('AuthStateService — migrationSignal / migration_incomplete (D47 S6 §
           },
         },
       }),
-      env: ON_ENV,
+      ...ON_ENV,
       migrationSignal: incompleteSignal,
     });
     expect(ok.refresh()).toEqual({
@@ -254,7 +236,7 @@ describe('AuthStateService — subscription lifecycle, value-changed-only broadc
     // default, to exercise the "did change" path.
     const service = new AuthStateService({
       vault: fakeVault({ status: 'locked', lastEmail: 'user@jcdz.cc' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     const listener = vi.fn();
     service.onChange(listener);
@@ -267,7 +249,7 @@ describe('AuthStateService — subscription lifecycle, value-changed-only broadc
 
   it('a second refresh() with an unchanged value does NOT notify again', () => {
     const vault = fakeVault({ status: 'locked', lastEmail: 'user@jcdz.cc' });
-    const service = new AuthStateService({ vault, env: ON_ENV });
+    const service = new AuthStateService({ vault, ...ON_ENV });
     const listener = vi.fn();
     service.onChange(listener);
 
@@ -278,7 +260,7 @@ describe('AuthStateService — subscription lifecycle, value-changed-only broadc
   });
 
   it('the pre-refresh default already equals a plain signed_out/null vault outcome, so the first refresh() does NOT broadcast', () => {
-    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), env: ON_ENV });
+    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), ...ON_ENV });
     const listener = vi.fn();
     service.onChange(listener);
 
@@ -294,7 +276,7 @@ describe('AuthStateService — subscription lifecycle, value-changed-only broadc
       read: vi.fn(() => current),
       markInvalidated: vi.fn(async () => {}),
     };
-    const service = new AuthStateService({ vault, env: ON_ENV });
+    const service = new AuthStateService({ vault, ...ON_ENV });
     const listener = vi.fn();
     service.refresh();
     service.onChange(listener);
@@ -307,7 +289,7 @@ describe('AuthStateService — subscription lifecycle, value-changed-only broadc
   });
 
   it('the returned unsubscribe function stops further notifications', () => {
-    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), env: ON_ENV });
+    const service = new AuthStateService({ vault: fakeVault({ status: 'absent' }), ...ON_ENV });
     const listener = vi.fn();
     const unsubscribe = service.onChange(listener);
 
@@ -319,17 +301,17 @@ describe('AuthStateService — subscription lifecycle, value-changed-only broadc
 
   it('getState() returns the cached snapshot without ever calling vault.read()', () => {
     const vault = fakeVault({ status: 'absent' });
-    const service = new AuthStateService({ vault, env: ON_ENV });
+    const service = new AuthStateService({ vault, ...ON_ENV });
 
     expect(service.getState()).toEqual({ status: 'signed_out', lastEmail: null });
     expect(vault.read).not.toHaveBeenCalled();
   });
 });
 
-describe('AuthStateService — flag off is signed_out with zero filesystem IO', () => {
-  it('refresh() never calls vault.read() when the flag is off', () => {
+describe('AuthStateService — local mode is signed_out with zero filesystem IO', () => {
+  it('refresh() never calls vault.read() in local mode', () => {
     const vault = fakeVault({ status: 'absent' });
-    const service = new AuthStateService({ vault, env: {} });
+    const service = new AuthStateService({ vault, ...OFF_ENV });
 
     const state = service.refresh();
 
@@ -339,16 +321,20 @@ describe('AuthStateService — flag off is signed_out with zero filesystem IO', 
 
   it('getState() is signed_out before any refresh(), also with zero IO', () => {
     const vault = fakeVault({ status: 'absent' });
-    const service = new AuthStateService({ vault, env: {} });
+    const service = new AuthStateService({ vault, ...OFF_ENV });
 
     expect(service.getState()).toEqual({ status: 'signed_out', lastEmail: null });
     expect(vault.read).not.toHaveBeenCalled();
   });
 
-  it('a shell-inherited "true" spelling still means off — zero IO, matching the strict flag matrix', () => {
-    // Vault would report "ok" (authenticated) if the flag were mistakenly
-    // read as on — a permissive reader (`=== '1' || === 'true'`) would flip
-    // both this state AND the IO count.
+  /**
+   * The spelling matrix that used to live here (`'true'` must not read as on)
+   * moved with the rule itself to `shared/__tests__/credentialMode.test.ts`.
+   * What is still THIS file's business is that a `false` answer costs no IO
+   * even when the vault would have reported `ok` — i.e. the short-circuit is
+   * before `vault.read()`, not after it.
+   */
+  it('skips the vault entirely in local mode, even when it would have said ok', () => {
     const vault = fakeVault({
       status: 'ok',
       doc: {
@@ -366,14 +352,9 @@ describe('AuthStateService — flag off is signed_out with zero filesystem IO', 
         },
       },
     });
-    const service = new AuthStateService({
-      vault,
-      env: { [MANAGED_CREDENTIALS_FLAG_ENV]: 'true' },
-    });
+    const service = new AuthStateService({ vault, ...OFF_ENV });
 
-    const state = service.refresh();
-
-    expect(state).toEqual({ status: 'signed_out', lastEmail: null });
+    expect(service.refresh()).toEqual({ status: 'signed_out', lastEmail: null });
     expect(vault.read).not.toHaveBeenCalled();
   });
 });
@@ -412,7 +393,7 @@ describe('AuthStateService — markRejected() orchestration (D47 S5 §2, B-track
     };
     const service = new AuthStateService({
       vault,
-      env: ON_ENV,
+      ...ON_ENV,
       agentHost,
       now: () => new Date('2026-08-15T12:00:00.000Z'),
     });
@@ -436,7 +417,7 @@ describe('AuthStateService — markRejected() orchestration (D47 S5 §2, B-track
   it('defaults to a no-op agent host when none is injected', async () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'rejected', lastEmail: null }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     await expect(service.markRejected()).resolves.toBeUndefined();
   });
@@ -465,7 +446,7 @@ describe('AuthStateService — logout latch (D47 S5 §3 I9 checkpoint ①)', () 
       read: vi.fn(() => vaultStatus),
       markInvalidated: vi.fn(async () => {}),
     };
-    const service = new AuthStateService({ vault, env: ON_ENV });
+    const service = new AuthStateService({ vault, ...ON_ENV });
 
     expect(service.isAuthenticatedForSpawn()).toBe(false); // before any refresh
     service.refresh();
@@ -503,7 +484,7 @@ describe('AuthStateService — reportRemoteHealthy (D47 S5 §2)', () => {
         },
       },
     });
-    const service = new AuthStateService({ vault, env: ON_ENV });
+    const service = new AuthStateService({ vault, ...ON_ENV });
     service.refresh();
     const readCallsBefore = vi.mocked(vault.read).mock.calls.length;
     const listener = vi.fn();
@@ -527,7 +508,7 @@ describe('AuthStateService — reportRemoteHealthy (D47 S5 §2)', () => {
   it('is a no-op outside authenticated', () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'absent' }),
-      env: ON_ENV,
+      ...ON_ENV,
     });
     service.refresh();
     const listener = vi.fn();

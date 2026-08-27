@@ -57,6 +57,7 @@ import {
   promoteVaultCrypto,
 } from './services/auth';
 import { ensureVaultAdoption } from './services/auth/adoption';
+import { resolveManagedCredentialsEnabled } from './services/auth/credentialMode';
 import {
   activateManagedCredentials,
   ensureUserClaudeJsonOnboarded,
@@ -790,7 +791,12 @@ app
     // very next `regenerateFromVault()` read below already sees a freshly
     // adopted vault instead of materializing an empty codex-home that would
     // force a needless re-login. Flag-off is a zero-FS-IO no-op.
-    await ensureVaultAdoption(getCredentialVault(), app.getPath('userData'));
+    // D64/S3 — the mode is resolved HERE and passed down: `adoption.ts` is a
+    // pure module whose import bans are asserted, so it cannot read the
+    // settings file this answer now lives in.
+    await ensureVaultAdoption(getCredentialVault(), app.getPath('userData'), {
+      managed: resolveManagedCredentialsEnabled(),
+    });
 
     await regenerateFromVault();
 

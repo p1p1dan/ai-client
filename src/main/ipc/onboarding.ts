@@ -2,7 +2,7 @@ import type { InstallAgentId, OnboardingSendCodeRequest } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { BrowserWindow, ipcMain, session } from 'electron';
 import { getAuthStateService, getCredentialVault } from '../services/auth';
-import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
+import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import { AgentInstaller } from '../services/cli/AgentInstaller';
 import { onboardingService } from '../services/onboarding/OnboardingService';
 import { sessionManager } from '../services/session/SessionManager';

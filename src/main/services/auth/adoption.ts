@@ -25,7 +25,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { buildAppStateRoot, buildLegacyAppStateRoot } from '@shared/appStateLayout';
-import { resolveManagedCredentialsEnabled } from './AuthStateService';
 import type { VaultPayload, VaultReadResult, VaultSaveResult } from './CredentialVault';
 import type { ClaudeCredentials } from './claudeHome';
 import { writeManagedFile } from './managedFileWriter';
@@ -410,9 +409,25 @@ let lastOutcome: VaultAdoptionOutcome | null = null;
 export function ensureVaultAdoption(
   vault: AdoptionVault,
   userDataDir: string,
-  options: { now?: () => Date; env?: NodeJS.ProcessEnv } = {}
+  /**
+   * D64/S3 — `managed` is INJECTED, not read.
+   *
+   * It used to be `resolveManagedCredentialsEnabled(options.env)`, which was
+   * pure because the answer lived in an environment variable. It now lives in
+   * `settings.json`, and reading that needs `electron` — which this module is
+   * contractually not allowed to touch (`adoptionStaticImportBans.test.ts`).
+   * The caller (`main/index.ts`) already has the answer.
+   *
+   * Defaults to `true` so every pre-D64 caller keeps its exact behaviour: this
+   * function's only other arm is a no-op skip.
+   */
+  options: { now?: () => Date; env?: NodeJS.ProcessEnv; managed?: boolean } = {}
 ): Promise<VaultAdoptionOutcome> {
-  if (!resolveManagedCredentialsEnabled(options.env)) {
+  if (options.managed === false) {
+    // Reason name kept from the flag era on purpose: it is a wire-visible
+    // string that support logs already contain, and renaming it would break
+    // the trail for no behavioural gain. It now means "local mode", which is
+    // the same condition under a different control.
     const result: VaultAdoptionOutcome = { kind: 'skipped', reason: 'flag_off' };
     lastOutcome = result;
     currentLatch = Promise.resolve();

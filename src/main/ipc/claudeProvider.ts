@@ -1,7 +1,7 @@
 import type { ClaudeProvider, ClaudeSettings, RepositoryRuntimeContext } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import { type BrowserWindow, ipcMain } from 'electron';
-import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
+import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import {
   applyProvider,
   applyProviderToClaudeSettings,

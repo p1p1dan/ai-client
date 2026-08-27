@@ -39,7 +39,9 @@ vi.mock('../../auth', () => ({
   getCredentialVault: () => ({ read: vaultReadMock }),
 }));
 
-vi.mock('../../auth/AuthStateService', () => ({
+// D64/S3 — the resolver moved out of `AuthStateService` (which is a pure
+// module) into `credentialMode.ts`, which reads the settings file.
+vi.mock('../../auth/credentialMode', () => ({
   resolveManagedCredentialsEnabled: () => managedFlagMock(),
 }));
 

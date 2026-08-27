@@ -66,7 +66,14 @@ const cookiesRemoveMock = vi.fn(async () => {
 });
 
 vi.mock('electron', () => ({
-  app: { isPackaged: false },
+  // D64/S3 — the mode resolver falls through to the settings file when the
+  // dev-only override is not set, and reading it needs `<userData>`.
+  app: {
+    isPackaged: false,
+    getPath: vi.fn((name: string) =>
+      name === 'userData' ? '/tmp/aiclient-test-userdata' : '/tmp'
+    ),
+  },
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
   ipcMain: { handle: vi.fn() },
   session: { defaultSession: { cookies: { remove: cookiesRemoveMock } } },

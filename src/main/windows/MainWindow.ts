@@ -15,7 +15,7 @@ import {
 } from '@shared/windowTheme';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { getAuthStateService } from '../services/auth';
-import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
+import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import { claudeRuntimeChecker } from '../services/cli/ClaudeRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
 import { onboardingService } from '../services/onboarding';

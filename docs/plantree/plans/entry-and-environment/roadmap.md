@@ -33,7 +33,13 @@ S0' codex 侧（unified-credentials，前置已清）─────────
 
 **依赖**：unified-credentials 的 open-q #6 先有结论。
 
-### A1 — 凭据模式建模（待拍板 #2 落地）
+### ~~A1 — 凭据模式建模~~ ✅ 已落地（2026-08-27，与 unified-credentials S3 同轮）
+
+`~/.pilab/<profile>/settings.json` 里的 `credentialMode`，规则在 `@shared/credentialMode`。
+**写入口目前只有「登录」** —— 用户可见的二选一正是下面 A2 要补的那一半。
+**留给 A2 同轮定**：能否中途切换、切换时在途会话怎么办。
+
+### ~~A1 原文~~（保留作对照）
 
 把「用哪套凭据」从 `AICLIENT_MANAGED_CREDENTIALS` 这个**构建期开关**变成**运行期状态**。
 需要决定：存在哪（大概率 `~/.pilab/<profile>/settings.json`）· 能否中途切换 · 切换时已有会话怎么办。
@@ -60,7 +66,7 @@ S0' codex 侧（unified-credentials，前置已清）─────────
 register-code → result`），改成两按钮首屏等于**重画 `resolveGateDecision`**。
 好消息：它是纯函数、有完整单测。
 
-**依赖**：E1（第二个按钮的可用性判据）· A1（两个按钮分别代表哪种凭据模式）·
+**依赖**：E1（第二个按钮的可用性判据）· ~~A1~~（已落地：两个按钮分别写 `credentialMode` 的两个值）·
 A3（门禁不再因系统 CLI 缺失而拦人）· unified-credentials S3（「登录」这条路真的不碰本地环境）。
 
 ## Deferred

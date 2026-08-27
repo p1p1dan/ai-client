@@ -118,6 +118,18 @@ const STRIPPED_KEYS = [
  * (from dev.env, or the original shell env captured before stripping) keeps
  * managed credentials on for the dev child process; anything else, including
  * an inherited-but-wrong-shaped value, is forced to `'0'`.
+ *
+ * D64/S3 — this variable is no longer THE switch, it is a DEV-ONLY OVERRIDE of
+ * one. The real answer now lives in `~/.pilab/<profile>/settings.json` and is a
+ * user's choice; the env var only wins in an unpackaged build
+ * (`shared/credentialMode.ts`), which is exactly this script's case.
+ *
+ * The forced `'0'` therefore means something it did not mean before. It used to
+ * be "off"; it is now "force LOCAL", overriding whatever the settings file
+ * records. That is the right default for `pnpm dev` — a dev run should not
+ * silently pick up a managed session from a settings file — but it does mean a
+ * developer wanting the settings file to decide has to remove the key from
+ * `dev.env` rather than set it to `0`.
  */
 function resolveManagedCredentialsForDev(explicitValue) {
   return explicitValue === '1' ? '1' : '0';
@@ -254,7 +266,9 @@ function buildChildEnv(allowLocal) {
     `[dev]   ${env.ANTHROPIC_AUTH_TOKEN ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY'} = ${maskSecret(env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY)}`
   );
   console.log(`[dev]   CLAUDE_CONFIG_DIR  = ${env.CLAUDE_CONFIG_DIR}`);
-  console.log(`[dev]   AICLIENT_MANAGED_CREDENTIALS = ${env[MANAGED_CREDENTIALS_KEY]}`);
+  console.log(
+    `[dev]   AICLIENT_MANAGED_CREDENTIALS = ${env[MANAGED_CREDENTIALS_KEY]} (dev-only override; '1'=managed, '0'=force local)`
+  );
   // D47 S5 §1.3 — the resolved value of the login-gate escape hatch
   // (`resolveSkipAuthGate`, src/shared/devFlags.ts). Not stripped/redacted:
   // it is a plain boolean-shaped switch, never a credential.

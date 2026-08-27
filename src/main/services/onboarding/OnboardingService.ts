@@ -11,7 +11,7 @@ import { net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
-import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { resolveManagedCredentialsEnabled, setCredentialMode } from '../auth/credentialMode';
 import { redactLogArgs } from '../auth/redact';
 import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
@@ -42,7 +42,7 @@ export function removeOpenAiApiKey(authObj: Record<string, unknown>): Record<str
 /**
  * D47 S6 §2 (A-M5) — pure surgical removal for the flag-off logout path:
  * removes only the `[model_providers.jyw]` table this app itself writes
- * (`upsertCodexConfigToml`'s counterpart), preserving every other table,
+ * (the write side that put it there, deleted with S3), preserving every other table,
  * root-level key, comment, and blank line a user's own `config.toml` may
  * carry. The top-level `model_provider = "jyw"` root line is removed ONLY
  * when its value is EXACTLY `"jyw"` — deleting a differently-valued root
@@ -202,8 +202,8 @@ class OnboardingService {
 
     // Defensive guard: the server may answer ok=true while the response body
     // is missing required Claude / Codex credentials. Catch that here so we
-    // don't hand a partially-populated payload to writeClaudeConfig and end up
-    // overwriting good local config with garbage.
+    // don't hand a partially-populated payload to the vault and end up
+    // storing garbage that every later spawn would then inject.
     const claudeAuthToken = result.data.config?.claude?.authToken;
     const codexApiKey = result.data.config?.codex?.apiKey;
     if (
@@ -223,21 +223,21 @@ class OnboardingService {
       };
     }
 
-    // D47 S6 §2 — stop dual-write: flag-on means the managed vault (below)
-    // is the sole credential source of truth, so the legacy
-    // `~/.claude`/`~/.codex`/`~/.claude.json` writes below (all three of
-    // `persistCredentialFiles`'s writers: writeClaudeConfig/writeCodexConfig/
-    // ensureClaudeOnboardingComplete) are dead weight that only races the
-    // bytes the vault now owns. `saveOnboardingState` a few lines down is
-    // deliberately NOT part of this gate — `onboarding.serverUrl` still gets
-    // written every login regardless of the flag (both the flag-off rollback
-    // path and adoption's own corroborating source, §1, depend on it — A-M3).
-    if (
-      !resolveManagedCredentialsEnabled() &&
-      !this.persistCredentialFiles(result, normalizedServerUrl)
-    ) {
-      return { ok: false, error: 'Failed to write CLI credentials' };
-    }
+    // D47 S6 §2 / S3 — there is no dual write left to stop. The legacy writers
+    // (`persistCredentialFiles` → writeClaudeConfig / writeCodexConfig /
+    // ensureClaudeOnboardingComplete) are DELETED: they wrote the user's own
+    // `~/.claude/settings.json` and `~/.codex/*`, which is precisely what D60
+    // and S0' spent two slices removing, and after the line below no login can
+    // reach them anyway. `saveOnboardingState` a few lines down is unaffected —
+    // `onboarding.serverUrl` is still written every login, because the local
+    // arm of the gate and adoption's corroborating source both read it (A-M3).
+    //
+    // D64/S3 — signing in IS choosing managed credentials. Recorded before any
+    // branch below reads the mode, so a machine that was in `local` cannot take
+    // half of each path: write the user's own `~/.claude/settings.json` (the
+    // legacy behaviour) AND skip the vault. It is also what makes the choice
+    // durable — the next launch resolves to `managed` without asking again.
+    setCredentialMode('managed');
 
     const cchServerUrl = this.deriveCchBaseUrl(
       result.data.config.claude.baseUrl,
@@ -381,10 +381,19 @@ class OnboardingService {
         ? currentRegistration.registeredAt
         : undefined;
 
-      if (!resolveManagedCredentialsEnabled()) {
-        this.removeClaudeCredentials();
-        this.removeCodexConfig();
-      }
+      // S3 — unconditional, where it used to run only in the legacy arm.
+      //
+      // These remove keys only WE ever wrote: `ANTHROPIC_BASE_URL` /
+      // `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
+      // from the user's `settings.json`, and the `[model_providers.jyw]` table
+      // from their `config.toml`. Current builds never write them — but builds
+      // before S3 did, and this is the ONLY path that undoes it. Gated on the
+      // mode, a user who upgrades and then signs out would keep our gateway
+      // pinned in their own config forever, with nothing left that could clear
+      // it. Both removers are surgical rewrites, never deletes, so a file with
+      // none of our keys in it comes back unchanged.
+      this.removeClaudeCredentials();
+      this.removeCodexConfig();
       return mergeSettingsPatch({
         onboarding: { registered: false, email, serverUrl, registeredAt },
       });
@@ -447,256 +456,6 @@ class OnboardingService {
       codexApiKey,
       codexBaseUrl,
     };
-  }
-
-  private persistCredentialFiles(
-    result: OnboardingRegisterResponse,
-    normalizedServerUrl: string
-  ): boolean {
-    const credentials = this.getCredentialWriteInputs(result, normalizedServerUrl);
-    if (!credentials) {
-      return false;
-    }
-
-    if (!this.writeClaudeConfig(credentials.claudeBaseUrl, credentials.claudeAuthToken)) {
-      return false;
-    }
-    if (!this.writeCodexConfig(credentials.codexApiKey, credentials.codexBaseUrl)) {
-      return false;
-    }
-    return this.ensureClaudeOnboardingComplete();
-  }
-
-  private writeClaudeConfig(baseUrl: string, authToken: string): boolean {
-    const claudeDir = path.join(os.homedir(), '.claude');
-    const settingsPath = path.join(claudeDir, 'settings.json');
-
-    // Log intent up front, routed through redactLogArgs so the token never
-    // lands in logs / DevTools output — not even the first six characters,
-    // which the old tokenPreview leaked (D47 S1 §2.5, B-track 1.6). Keep the
-    // baseUrl visible because it's the most common source of routing confusion.
-    console.log(
-      ...redactLogArgs([
-        `[OnboardingService] writeClaudeConfig intent: baseUrl=${baseUrl}, token=${authToken}, tokenPresent=${Boolean(authToken)}`,
-      ])
-    );
-
-    // Retry once: covers the transient case where antivirus / a sibling
-    // settings.json writer (ClaudeHookManager, ClaudeProviderManager) holds
-    // the file for a few ms. We always read-back after writing to verify the
-    // env actually landed — a write that "succeeds" but read-back shows no
-    // env means another writer raced us and lost the data.
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      try {
-        fs.mkdirSync(claudeDir, { recursive: true, mode: 0o700 });
-
-        const existingSettings = this.readJsonIfExists(settingsPath) as Record<string, unknown>;
-        if (fs.existsSync(settingsPath)) {
-          fs.copyFileSync(settingsPath, `${settingsPath}.bak`);
-        }
-
-        // Drop ANTHROPIC_API_KEY from the existing env: the Anthropic SDK
-        // prefers x-api-key over ANTHROPIC_AUTH_TOKEN, so leaving an old
-        // ANTHROPIC_API_KEY in place would silently shadow the new token we
-        // are about to write.
-        const existingEnv = this.readEnvRecord(existingSettings.env);
-        if ('ANTHROPIC_API_KEY' in existingEnv) {
-          console.warn(
-            '[OnboardingService] writeClaudeConfig removing existing ANTHROPIC_API_KEY to avoid shadowing ANTHROPIC_AUTH_TOKEN'
-          );
-          delete existingEnv.ANTHROPIC_API_KEY;
-        }
-        const nextEnv = {
-          ...existingEnv,
-          ANTHROPIC_BASE_URL: baseUrl,
-          ANTHROPIC_AUTH_TOKEN: authToken,
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        };
-
-        // Strip top-level apiKeyHelper: Claude CLI prefers its dynamic output
-        // over the env block we just wrote, which would bypass the credentials
-        // entirely. The .bak file already exists if the user wants to recover
-        // the original helper command.
-        const sanitizedSettings: Record<string, unknown> = { ...existingSettings };
-        if ('apiKeyHelper' in sanitizedSettings) {
-          console.warn(
-            '[OnboardingService] writeClaudeConfig removing top-level apiKeyHelper to avoid overriding env credentials'
-          );
-          delete sanitizedSettings.apiKeyHelper;
-        }
-
-        // Bypass the WebFetch preflight check — its upstream request often fails
-        // behind the JYW proxy and blocks users from browsing pages.
-        const nextSettings = {
-          ...sanitizedSettings,
-          env: nextEnv,
-          skipWebFetchPreflight: true,
-        };
-        fs.writeFileSync(settingsPath, `${JSON.stringify(nextSettings, null, 2)}\n`, {
-          encoding: 'utf-8',
-          mode: 0o600,
-        });
-
-        // Verify: re-parse the file we just wrote and confirm env survived.
-        const verifyRaw = fs.readFileSync(settingsPath, 'utf-8');
-        const verifyParsed = JSON.parse(verifyRaw) as Record<string, unknown>;
-        const verifyEnv = this.readEnvRecord(verifyParsed.env);
-        if (
-          verifyEnv.ANTHROPIC_BASE_URL === baseUrl &&
-          verifyEnv.ANTHROPIC_AUTH_TOKEN === authToken
-        ) {
-          console.log(`[OnboardingService] writeClaudeConfig attempt ${attempt} verified ok`);
-          return true;
-        }
-
-        console.warn(
-          `[OnboardingService] writeClaudeConfig attempt ${attempt} verify failed; topKeys=${Object.keys(
-            verifyParsed
-          ).join(',')}`
-        );
-      } catch (error) {
-        console.error(`[OnboardingService] writeClaudeConfig attempt ${attempt} threw:`, error);
-      }
-    }
-
-    return false;
-  }
-
-  private writeCodexConfig(apiKey: string, baseUrl: string): boolean {
-    try {
-      const codexDir = path.join(os.homedir(), '.codex');
-      fs.mkdirSync(codexDir, { recursive: true, mode: 0o700 });
-
-      const configPath = path.join(codexDir, 'config.toml');
-      const authPath = path.join(codexDir, 'auth.json');
-
-      let originalConfig = '';
-      if (fs.existsSync(configPath)) {
-        fs.copyFileSync(configPath, `${configPath}.bak`);
-        originalConfig = fs.readFileSync(configPath, 'utf-8');
-      }
-      if (fs.existsSync(authPath)) {
-        fs.copyFileSync(authPath, `${authPath}.bak`);
-      }
-
-      const nextConfig = this.upsertCodexConfigToml(originalConfig, baseUrl);
-      fs.writeFileSync(configPath, nextConfig, { encoding: 'utf-8', mode: 0o600 });
-
-      const existingAuth = this.readJsonIfExists(authPath) as Record<string, unknown>;
-      const nextAuth = { ...existingAuth, OPENAI_API_KEY: apiKey };
-      fs.writeFileSync(authPath, `${JSON.stringify(nextAuth, null, 2)}\n`, {
-        encoding: 'utf-8',
-        mode: 0o600,
-      });
-
-      return true;
-    } catch (error) {
-      console.error('[OnboardingService] Failed to write Codex config:', error);
-      return false;
-    }
-  }
-
-  private upsertCodexConfigToml(original: string, baseUrl: string): string {
-    type Block = { header: string | null; bodyLines: string[] };
-    type UpsertMode = 'ifMissing' | 'force';
-    type UpsertItem = { key: string; literal: string; mode: UpsertMode };
-    type UpsertGroup = { section: string | null; items: UpsertItem[] };
-
-    const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const headerRegex = /^\s*\[([^\]]+)\]\s*$/;
-
-    const trimmed = original.endsWith('\n') ? original.slice(0, -1) : original;
-    const lines = trimmed === '' ? [] : trimmed.split('\n');
-
-    const blocks: Block[] = [{ header: null, bodyLines: [] }];
-    for (const line of lines) {
-      const headerMatch = line.match(headerRegex);
-      if (headerMatch) {
-        blocks.push({ header: headerMatch[1], bodyLines: [] });
-      } else {
-        blocks[blocks.length - 1].bodyLines.push(line);
-      }
-    }
-
-    const groups: UpsertGroup[] = [
-      {
-        section: null,
-        items: [{ key: 'model_provider', literal: '"jyw"', mode: 'force' }],
-      },
-      {
-        section: 'model_providers.jyw',
-        items: [
-          { key: 'name', literal: '"jyw"', mode: 'ifMissing' },
-          { key: 'base_url', literal: `"${baseUrl}"`, mode: 'force' },
-          { key: 'wire_api', literal: '"responses"', mode: 'ifMissing' },
-          { key: 'requires_openai_auth', literal: 'true', mode: 'ifMissing' },
-          { key: 'model_context_window', literal: '1000000', mode: 'ifMissing' },
-          { key: 'model_auto_compact_token_limit', literal: '9000000', mode: 'ifMissing' },
-        ],
-      },
-    ];
-
-    for (const group of groups) {
-      let block = blocks.find((b) => b.header === group.section);
-      if (!block) {
-        const prev = blocks[blocks.length - 1];
-        if (prev.bodyLines.length > 0 && prev.bodyLines[prev.bodyLines.length - 1] !== '') {
-          prev.bodyLines.push('');
-        }
-        block = { header: group.section, bodyLines: [] };
-        blocks.push(block);
-      }
-
-      for (const item of group.items) {
-        const keyRegex = new RegExp(`^\\s*${escapeRegExp(item.key)}\\s*=`);
-        const lineIdx = block.bodyLines.findIndex((l) => keyRegex.test(l));
-
-        if (lineIdx >= 0) {
-          if (item.mode === 'force') {
-            block.bodyLines[lineIdx] = `${item.key} = ${item.literal}`;
-          }
-        } else {
-          block.bodyLines.push(`${item.key} = ${item.literal}`);
-        }
-      }
-    }
-
-    const parts: string[] = [];
-    for (const block of blocks) {
-      if (block.header !== null) {
-        parts.push(`[${block.header}]`);
-      }
-      for (const line of block.bodyLines) {
-        parts.push(line);
-      }
-    }
-
-    let result = parts.join('\n');
-    if (!result.endsWith('\n')) {
-      result += '\n';
-    }
-    return result;
-  }
-
-  private ensureClaudeOnboardingComplete(): boolean {
-    try {
-      const claudeJsonPath = path.join(os.homedir(), '.claude.json');
-      const existing = this.readJsonIfExists(claudeJsonPath) as Record<string, unknown>;
-
-      if (existing.hasCompletedOnboarding === true) {
-        return true;
-      }
-
-      const next = { ...existing, hasCompletedOnboarding: true };
-      fs.writeFileSync(claudeJsonPath, `${JSON.stringify(next, null, 2)}\n`, {
-        encoding: 'utf-8',
-        mode: 0o600,
-      });
-      return true;
-    } catch (error) {
-      console.error('[OnboardingService] Failed to update .claude.json:', error);
-      return false;
-    }
   }
 
   private removeClaudeCredentials(): void {

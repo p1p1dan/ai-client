@@ -13,8 +13,8 @@ import {
 } from '@shared/types';
 import { BrowserWindow, type WebContents } from 'electron';
 import { getCredentialVault } from '../auth';
-import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { ensureWorkspaceTrusted, getEffectiveClaudeJsonPath } from '../auth/claudeHome';
+import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { assertAgentSpawnAllowed } from '../auth/spawnGate';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
 import { isRemoteVirtualPath, parseRemoteVirtualPath } from '../remote/RemotePath';

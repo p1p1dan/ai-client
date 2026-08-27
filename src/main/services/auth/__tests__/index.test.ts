@@ -112,9 +112,11 @@ describe('getAuthStateService — wired to the same vault singleton', () => {
 
     const authState = authIndex.getAuthStateService();
     const snapshot = authState.refresh();
-    // Flag is off in this test's process env (not set) — AuthStateService's
-    // own zero-IO gate applies regardless of what the vault holds.
-    expect(snapshot).toEqual({ status: 'signed_out', lastEmail: null });
+    // D64/S3 — with nothing recorded the mode resolves to MANAGED (first run
+    // signs in), so the service reads the vault instead of short-circuiting.
+    // That is what this case is for: proving the singleton is wired to the
+    // SAME vault the save above went through.
+    expect(snapshot).toMatchObject({ status: 'authenticated' });
   });
 });
 

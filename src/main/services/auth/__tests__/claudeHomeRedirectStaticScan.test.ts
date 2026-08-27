@@ -36,9 +36,9 @@ const BASELINE: Record<string, { count: number; reason: string }> = {
       'Remote-machine template segment (generates code that runs on the REMOTE host, not this process) — I8 exempt.',
   },
   'src/main/services/onboarding/OnboardingService.ts': {
-    count: 4,
+    count: 2,
     reason:
-      'Legacy double-write body (writeClaudeConfig/ensureClaudeOnboardingComplete/removeClaudeCredentials/checkCredentialsHealth) — left at ~/.claude by design until S5/S6 collapse legacy writers into the managed path.',
+      "S3 deleted the legacy WRITERS (writeClaudeConfig / ensureClaudeOnboardingComplete), taking two of the original four hits with them — no login can reach them once signing in records `credentialMode: managed`. The two that remain are `removeClaudeCredentials` (logout) and `checkCredentialsHealth` (read-only), both deliberately kept: the remover is the ONLY path that undoes what pre-S3 builds wrote into the user's own ~/.claude/settings.json, and the health check is what the local arm of the gate reads.",
   },
   'src/main/services/claude/ClaudeIdeBridge.ts': {
     count: 1,

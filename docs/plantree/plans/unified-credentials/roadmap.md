@@ -1,12 +1,58 @@
 # Roadmap — 统一凭据目录与托管凭据转默认
 
 > 状态：**In Progress** —— S1 · **S0'（Claude 侧 + codex 侧）** · **S2** 均已落地。
-> **S0'-b 已收尾，S0' 整条完成。**下一件 = **S3**，但它的形状取决于 [entry-and-environment 的 D64](../entry-and-environment/README.md)，须同轮定。
+> **S0' 整条完成，S3 与 D64 已合并落地。**下一件 = **S4**（pi arm）。原先写「S3 的形状取决于 [entry-and-environment 的 D64](../entry-and-environment/README.md)」—— 已按此同轮做完。
 > **2026-08-26 [D60](../../../plans/openchamber-chat-refactor-ledger.md) 重塑了 S2 之后的形状**：
 > 隔离 home 降级为「只隔离凭据」，取消 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` 整体重定向。
 > 连带 open-q #2 关闭、#5 修法定案；新增前置切片 **S0'**。未决项见 [open-questions](./open-questions.md)。
 
 ## Done
+
+- **2026-08-27 S3 + [D64](../../../plans/openchamber-chat-refactor-ledger.md) 合并落地：凭据模式从构建期开关变成运行期状态** ——
+  `AICLIENT_MANAGED_CREDENTIALS` 退役为**仅开发期**逃生口，真正的答案存进 `~/.pilab/<profile>/settings.json`。
+
+  **为什么必须合并做**：S3 原本是「退役 flag」，D64 把它改成「把 flag 换成用户可见的状态」——
+  两者落地形态不同，分开做就会先落一个马上要推翻的东西。
+
+  **规则**（纯模块 `@shared/credentialMode`，优先级从高到低）：
+  ① 开发期 env 覆盖（`'1'`→managed，`'0'`→local），**打包后一律忽略**；
+  ② settings.json 里记下的选择；③ 没有记录 → `managed`。
+
+  **③ 是用户拍板，不是兜底**（2026-08-27「首次必须登录」）：配置里没有这个键就视为首次，首次必须登录。
+  **代价已明示并接受**：从没走过公司登录的老用户升级后会被拦在登录页一次，包括一直用自己 key 干活的人。
+  登录过的人不受影响 —— `adoption.ts` 开机把他们的凭据收编进 vault，解析为 `managed` 直接进主界面。
+
+  **`'0'` 现在是显式 local，不再等同于「不是 1」**：旧 flag 下「off」和「未设」是一回事，现在不是。
+  这条在测试面上是最大的一处语义变化 —— 十来处「delete 掉变量 = 关」的用例必须改成显式 `'0'`。
+
+  **分层**：`AuthStateService` 与 `adoption.ts` 都是**契约上的纯模块**（后者的 import 禁令有静态扫描守着），
+  而答案现在要读 settings.json（需要 electron）。所以把 `resolveManagedCredentialsEnabled` **移出** `AuthStateService`，
+  电感依赖落在新的 `main/services/auth/credentialMode.ts`，两个纯模块改为**接收**已解析的模式：
+  `AuthStateService` 收一个 `managed: () => boolean`（**函数不是布尔值** —— 模式现在会在服务存活期间变），
+  `ensureVaultAdoption` 收 `managed: boolean`。13 个消费方只改 import 一行。
+
+  **登录即选择 managed**，写在任何读模式的分支**之前**。少了这个顺序，一台处于 `local` 的机器登录时会**各取一半**：
+  写用户自己的 `~/.claude/settings.json`（D60 与 S0' 花两个切片拿掉的东西）**并且**跳过 vault。
+
+  **连带删掉遗留写入侧**（`persistCredentialFiles` / `writeClaudeConfig` / `writeCodexConfig` /
+  `ensureClaudeOnboardingComplete` / `upsertCodexConfigToml`）—— 上一条之后没有任何登录能走到它们。
+  **登出侧的清理刻意保留，并从「仅 local 分支」改为无条件**：它删的是只有我们写过的键
+  （`ANTHROPIC_*` 三个 + `[model_providers.jyw]` 表），而 **S3 之前的构建确实写过**；
+  继续按模式设闸的话，升级后再登出的用户会把我们的网关永久钉在自己配置里，且再没有任何路径能清掉。
+
+  **变异 8/8 咬红**，其中 Q7 第一次是**存活**的，原因值得记：
+  「登录后 `getCredentialMode()` 是 managed」这条断言看着对、其实什么都没证明 ——
+  键不存在时解析器本来就答 `managed`，**默认值把写入盖住了**。改成直接读文件里的键才咬得住。
+  （本会话第三次出现「断言看着对、变异证明它没用」。）
+
+  四门：typecheck 0（含 agent-host）· biome 1000 文件 0 · **vitest 248 文件 5006 例**。
+  真机四位置复核：未打包 `'1'`→managed · 未打包 `'0'`→local · 未打包未设→managed ·
+  **已打包 + 环境设 `'0'` → 仍 managed**（用户够不到的变量决定不了他们的行为）。
+
+  ⚠️ **切换入口尚不存在**：能写这个值的只有「登录」。用户可见的二选一要等
+  [entry-and-environment 的 A2 登录页](../entry-and-environment/roadmap.md)。
+  ⚠️ **留给登录页同轮定**：能否中途切换、切换时在途会话怎么办。当前形态是「读取不缓存 ⇒ 下次 spawn 生效」，
+  在途会话保持原模式直到重开。
 
 - **2026-08-27 S0'-b 配置加载失败的错误落地 ✅ 已落地** —— S0' 收尾，也是 [D63](../../../plans/openchamber-chat-refactor-ledger.md) 的连带要求。
 
@@ -275,7 +321,9 @@ posture 那半 `-c` 补得回来，这半补不回来：`-c mcp_servers={}` 整�
 
 **S2 的开工前置已全部出清**（#1 profile 分层 · #3 远端孤儿 · #4 目录名二次确认），可进 execute。
 
-### S3 — `AICLIENT_MANAGED_CREDENTIALS` 转默认开（形状已被 D60 缩小）
+### ~~S3 — `AICLIENT_MANAGED_CREDENTIALS` 转默认开~~ ✅ 已落地（2026-08-27，与 D64 合并，见 Done）
+
+以下为立项时的设计原文，保留作为 as-built 对照。
 
 退役 flag，让托管凭据成为唯一路径 —— 与 [D58](../../../plans/openchamber-chat-refactor-ledger.md) 对 codex flag 做的事同型。
 

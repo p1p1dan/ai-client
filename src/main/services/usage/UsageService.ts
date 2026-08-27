@@ -5,7 +5,7 @@ import type { UsageStatsResult } from '@shared/types';
 import { net } from 'electron';
 import { getAuthProbeScheduler, getAuthStateService, getCredentialVault } from '../auth';
 import { classifyAuthLoginResponse } from '../auth/AuthProbeScheduler';
-import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { onboardingService } from '../onboarding';
 
 function coerceFiniteNumber(value: unknown): number | null {

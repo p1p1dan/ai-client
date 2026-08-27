@@ -31,8 +31,13 @@ import { resetManagedFileWriterQueuesForTests } from '../managedFileWriter';
  * used by `OnboardingService.test.ts` for exactly that reason.
  */
 
-const FLAG_ON = { AICLIENT_MANAGED_CREDENTIALS: '1' };
-const FLAG_OFF = {};
+const FLAG_ON = { managed: true };
+/**
+ * D64/S3 — the mode is INJECTED now, not read from an env var. `managed:false`
+ * is what "local mode" looks like at this module's boundary; the rule that
+ * produces it lives in `@shared/credentialMode` with its own tests.
+ */
+const FLAG_OFF = { managed: false };
 const FIXED_NOW = () => new Date('2026-08-15T00:00:00.000Z');
 
 // Deliberately NOT under the `__ONBOARDING_SERVICE_URL__` family below, so
@@ -378,7 +383,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         ANTHROPIC_BASE_URL: 'https://api.example.com',
         ANTHROPIC_AUTH_TOKEN: 'tok',
       });
-      const outcome = await ensureVaultAdoption(vault, userDataDir, { env: FLAG_OFF });
+      const outcome = await ensureVaultAdoption(vault, userDataDir, FLAG_OFF);
       expect(outcome).toEqual({ kind: 'skipped', reason: 'flag_off' });
       expect(vault.saveCalls).toEqual([]);
       expect(existsSync(markerPath())).toBe(false);
@@ -416,7 +421,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
     for (const { label, result } of nonAbsentStatuses) {
       it(`status '${label}' skips with reason vault_not_absent (vaultStatus='${label}')`, async () => {
         const vault = createFakeVault(result);
-        const outcome = await ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON });
+        const outcome = await ensureVaultAdoption(vault, userDataDir, FLAG_ON);
         expect(outcome).toEqual({
           kind: 'skipped',
           reason: 'vault_not_absent',
@@ -430,7 +435,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
       // No legacy file at all → falls through to legacy_not_registered, NOT
       // vault_not_absent — proves 'absent' is the one arm that keeps going.
       const vault = absentVault();
-      const outcome = await ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(vault, userDataDir, FLAG_ON);
       expect(outcome).toEqual({ kind: 'skipped', reason: 'legacy_not_registered' });
     });
   });
@@ -441,7 +446,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
       const vault = absentVault();
       // Deliberately leave legacy files absent — if the marker check didn't
       // run first, this would instead report legacy_not_registered.
-      const outcome = await ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(vault, userDataDir, FLAG_ON);
       expect(outcome).toEqual({ kind: 'skipped', reason: 'marker_present' });
       expect(vault.saveCalls).toEqual([]);
     });
@@ -449,19 +454,19 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
   describe('ensureVaultAdoption — legacy_not_registered', () => {
     it('collapses legacy absent into this reason', async () => {
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({ kind: 'skipped', reason: 'legacy_not_registered' });
     });
 
     it('collapses legacy invalid into this reason', async () => {
       writeRawFile(legacySettingsPath(), '{not json');
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({ kind: 'skipped', reason: 'legacy_not_registered' });
     });
 
     it('collapses legacy registered:false into this reason', async () => {
       writeLegacyOnboarding({ registered: false, email: 'user@example.com' });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({ kind: 'skipped', reason: 'legacy_not_registered' });
     });
   });
@@ -472,7 +477,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
     });
 
     it('claude settings.json entirely absent', async () => {
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({
         kind: 'skipped',
         reason: 'claude_credentials_missing',
@@ -482,7 +487,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
     it('env:{} present but empty', async () => {
       writeClaudeCredentials({});
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({
         kind: 'skipped',
         reason: 'claude_credentials_missing',
@@ -492,20 +497,20 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
     it('env present but ANTHROPIC_BASE_URL key missing', async () => {
       writeClaudeCredentials({ ANTHROPIC_AUTH_TOKEN: 'tok' });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome.kind).toBe('skipped');
       expect(outcome.kind === 'skipped' && outcome.reason).toBe('claude_credentials_missing');
     });
 
     it('env present but ANTHROPIC_AUTH_TOKEN key missing', async () => {
       writeClaudeCredentials({ ANTHROPIC_BASE_URL: 'https://api.example.com' });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome.kind === 'skipped' && outcome.reason).toBe('claude_credentials_missing');
     });
 
     it('ANTHROPIC_BASE_URL is an empty string', async () => {
       writeClaudeCredentials({ ANTHROPIC_BASE_URL: '', ANTHROPIC_AUTH_TOKEN: 'tok' });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome.kind === 'skipped' && outcome.reason).toBe('claude_credentials_missing');
     });
 
@@ -514,13 +519,13 @@ describe('adoption.ts (D47 S6 §1)', () => {
         ANTHROPIC_BASE_URL: 'https://api.example.com',
         ANTHROPIC_AUTH_TOKEN: '',
       });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome.kind === 'skipped' && outcome.reason).toBe('claude_credentials_missing');
     });
 
     it('legacyEmail is carried through as null when the legacy email itself was empty', async () => {
       writeLegacyOnboarding({ registered: true, email: '' });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({
         kind: 'skipped',
         reason: 'claude_credentials_missing',
@@ -543,7 +548,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         ANTHROPIC_BASE_URL: 'https://other-host.test/v1',
         ANTHROPIC_AUTH_TOKEN: 'tok',
       });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({
         kind: 'skipped',
         reason: 'guard_rejected',
@@ -557,7 +562,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         ANTHROPIC_BASE_URL: 'not a url at all',
         ANTHROPIC_AUTH_TOKEN: 'tok',
       });
-      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(outcome).toEqual({
         kind: 'skipped',
         reason: 'guard_rejected',
@@ -581,7 +586,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         { status: 'absent' },
         { ok: false, reason: 'crypto_not_ready' }
       );
-      const outcome = await ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(vault, userDataDir, FLAG_ON);
       expect(outcome).toEqual({
         kind: 'skipped',
         reason: 'save_failed',
@@ -595,7 +600,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         { status: 'absent' },
         { ok: false, reason: 'unsupported_version' }
       );
-      const outcome = await ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON });
+      const outcome = await ensureVaultAdoption(vault, userDataDir, FLAG_ON);
       expect(outcome).toEqual({
         kind: 'skipped',
         reason: 'save_failed',
@@ -616,7 +621,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
     it('saves a payload with the same-key doctrine, null userId, and derived cchBaseUrl', async () => {
       const vault = absentVault();
       const outcome = await ensureVaultAdoption(vault, userDataDir, {
-        env: FLAG_ON,
+        ...FLAG_ON,
         now: FIXED_NOW,
       });
       expect(outcome).toEqual({ kind: 'adopted' });
@@ -632,7 +637,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
     it('writes the marker file atomically with version + adoptedAt after a successful save', async () => {
       const vault = absentVault();
-      await ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON, now: FIXED_NOW });
+      await ensureVaultAdoption(vault, userDataDir, { ...FLAG_ON, now: FIXED_NOW });
       expect(existsSync(markerPath())).toBe(true);
       const marker = JSON.parse(readFileSync(markerPath(), 'utf-8')) as {
         version: number;
@@ -643,11 +648,11 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
     it('a second call after the marker was written skips as marker_present, even against a fresh absent vault', async () => {
       const firstVault = absentVault();
-      await ensureVaultAdoption(firstVault, userDataDir, { env: FLAG_ON, now: FIXED_NOW });
+      await ensureVaultAdoption(firstVault, userDataDir, { ...FLAG_ON, now: FIXED_NOW });
 
       const secondVault = absentVault();
       const outcome = await ensureVaultAdoption(secondVault, userDataDir, {
-        env: FLAG_ON,
+        ...FLAG_ON,
         now: FIXED_NOW,
       });
       expect(outcome).toEqual({ kind: 'skipped', reason: 'marker_present' });
@@ -661,7 +666,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         ANTHROPIC_AUTH_TOKEN: 'claude-token-xyz',
       });
       const vault = absentVault();
-      await ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON, now: FIXED_NOW });
+      await ensureVaultAdoption(vault, userDataDir, { ...FLAG_ON, now: FIXED_NOW });
       expect(vault.saveCalls[0]?.identity.email).toBe('');
     });
 
@@ -674,7 +679,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
       it('absent: no ~/.codex/auth.json at all', async () => {
         const outcome = await ensureVaultAdoption(absentVault(), userDataDir, {
-          env: FLAG_ON,
+          ...FLAG_ON,
           now: FIXED_NOW,
         });
         expect(outcome).toEqual({ kind: 'adopted' });
@@ -684,7 +689,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
       it('absent: ChatGPT-OAuth-shaped auth.json with no OPENAI_API_KEY field', async () => {
         writeJsonFile(codexAuthPath(), { tokens: { access_token: 'oauth-token' } });
         const outcome = await ensureVaultAdoption(absentVault(), userDataDir, {
-          env: FLAG_ON,
+          ...FLAG_ON,
           now: FIXED_NOW,
         });
         expect(outcome).toEqual({ kind: 'adopted' });
@@ -694,7 +699,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
       it('corroborated: OPENAI_API_KEY matches the claude token', async () => {
         writeJsonFile(codexAuthPath(), { OPENAI_API_KEY: 'claude-token-xyz' });
         const outcome = await ensureVaultAdoption(absentVault(), userDataDir, {
-          env: FLAG_ON,
+          ...FLAG_ON,
           now: FIXED_NOW,
         });
         expect(outcome).toEqual({ kind: 'adopted' });
@@ -704,7 +709,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
       it('divergent: OPENAI_API_KEY differs from the claude token — adoption still proceeds', async () => {
         writeJsonFile(codexAuthPath(), { OPENAI_API_KEY: 'a-totally-different-key' });
         const outcome = await ensureVaultAdoption(absentVault(), userDataDir, {
-          env: FLAG_ON,
+          ...FLAG_ON,
           now: FIXED_NOW,
         });
         expect(outcome).toEqual({ kind: 'adopted' });
@@ -719,14 +724,14 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
   describe('getAdoptionLatch', () => {
     it('resolves immediately on flag-off', async () => {
-      const outcome = ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_OFF });
+      const outcome = ensureVaultAdoption(absentVault(), userDataDir, FLAG_OFF);
       await outcome;
       await expect(getAdoptionLatch()).resolves.toBeUndefined();
     });
 
     it('resolves immediately for every already-settled skip outcome', async () => {
       // legacy_not_registered — a fast synchronous skip path.
-      await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       await expect(getAdoptionLatch()).resolves.toBeUndefined();
     });
 
@@ -746,7 +751,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         save: () => savePromise,
       };
 
-      const outcomePromise = ensureVaultAdoption(vault, userDataDir, { env: FLAG_ON });
+      const outcomePromise = ensureVaultAdoption(vault, userDataDir, FLAG_ON);
 
       let latchSettled = false;
       const latchWatch = getAdoptionLatch().then(() => {
@@ -779,7 +784,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
     it('reflects claude_credentials_missing outcomes', async () => {
       writeLegacyOnboarding({ registered: true, email: 'user@example.com' });
-      await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(getMigrationIncompleteSignal()).toEqual({
         migrationIncomplete: true,
         legacyEmail: 'user@example.com',
@@ -796,7 +801,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         ANTHROPIC_BASE_URL: 'https://other-host.test/v1',
         ANTHROPIC_AUTH_TOKEN: 'tok',
       });
-      await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(getMigrationIncompleteSignal()).toEqual({
         migrationIncomplete: true,
         legacyEmail: 'user@example.com',
@@ -809,7 +814,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         ANTHROPIC_BASE_URL: 'https://api.example.com/v1',
         ANTHROPIC_AUTH_TOKEN: 'tok',
       });
-      await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON, now: FIXED_NOW });
+      await ensureVaultAdoption(absentVault(), userDataDir, { ...FLAG_ON, now: FIXED_NOW });
       expect(getMigrationIncompleteSignal()).toEqual({
         migrationIncomplete: false,
         legacyEmail: null,
@@ -817,7 +822,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
     });
 
     it('does not flag legacy_not_registered as incomplete', async () => {
-      await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
+      await ensureVaultAdoption(absentVault(), userDataDir, FLAG_ON);
       expect(getMigrationIncompleteSignal()).toEqual({
         migrationIncomplete: false,
         legacyEmail: null,
@@ -825,7 +830,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
     });
 
     it('does not flag flag_off as incomplete', async () => {
-      await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_OFF });
+      await ensureVaultAdoption(absentVault(), userDataDir, FLAG_OFF);
       expect(getMigrationIncompleteSignal()).toEqual({
         migrationIncomplete: false,
         legacyEmail: null,

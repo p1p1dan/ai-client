@@ -31,7 +31,7 @@ import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import { app } from 'electron';
 import log from '../../utils/logger';
 import { getCredentialVault } from '../auth';
-import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getDevCredentialSeed } from '../auth/managedCredentialsStartup';
 import { AgentHostProcess } from './AgentHostProcess';
 import { buildAgentHostEnv, CODEX_JS_PATH_ENV_KEY, deriveBundledCodexJsPath } from './hostEnv';

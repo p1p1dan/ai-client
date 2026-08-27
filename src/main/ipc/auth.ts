@@ -13,8 +13,8 @@ import { IPC_CHANNELS } from '@shared/types';
 import type { AuthState } from '@shared/types/auth';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { getAuthProbeScheduler, getAuthStateService } from '../services/auth';
-import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
 import { getAdoptionLatch } from '../services/auth/adoption';
+import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import { onboardingService } from '../services/onboarding';
 
 /**

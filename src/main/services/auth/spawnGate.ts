@@ -14,7 +14,7 @@
 import { resolveSpawnGateDecision } from '@shared/authGate';
 import { resolveSkipAuthGate } from '@shared/devFlags';
 import { app } from 'electron';
-import { resolveManagedCredentialsEnabled } from './AuthStateService';
+import { resolveManagedCredentialsEnabled } from './credentialMode';
 import { getAuthStateService } from './index';
 
 export function assertAgentSpawnAllowed(): void {

@@ -20,6 +20,7 @@ import { type AuthProbeFetchResponse, AuthProbeScheduler } from './AuthProbeSche
 import { AuthStateService } from './AuthStateService';
 import { getMigrationIncompleteSignal } from './adoption';
 import { CredentialVault, type VaultCrypto } from './CredentialVault';
+import { resolveManagedCredentialsEnabled } from './credentialMode';
 
 /** Placeholder adapter the vault starts with — `save()` refuses until `promoteVaultCrypto` swaps this out. */
 const inertCrypto: VaultCrypto = {
@@ -76,6 +77,10 @@ export function getAuthStateService(): AuthStateService {
   if (!cachedAuthStateService) {
     cachedAuthStateService = new AuthStateService({
       vault: getCredentialVault(),
+      // D64/S3 — a getter, not a captured boolean: the mode is a user setting
+      // now, and a login (or the login page) can change it while this
+      // singleton is alive.
+      managed: resolveManagedCredentialsEnabled,
       agentHost: { shutdown: shutdownRealAgentHost },
       // D47 S6 §1.4 — sourced from `adoption.ts`'s last boot-time outcome.
       migrationSignal: getMigrationIncompleteSignal,

@@ -39,6 +39,16 @@ vi.mock('../../cli/AgentInstaller', () => ({
   })),
 }));
 
+/**
+ * S3 removed five cases from this file, all of them about the legacy credential
+ * WRITERS — `writeClaudeConfig` (settings.json env block, the `ANTHROPIC_API_KEY`
+ * strip, the `apiKeyHelper` strip) and `writeCodexConfig` (the `config.toml`
+ * upsert, the `auth.json` merge). Those functions are deleted: signing in now
+ * records `credentialMode: managed`, and no login can reach them.
+ *
+ * The logout-side removers are NOT gone and keep their coverage below — they
+ * are the only path that undoes what pre-S3 builds wrote into a user's own files.
+ */
 describe('OnboardingService', () => {
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;
@@ -83,181 +93,44 @@ describe('OnboardingService', () => {
     rmSync(tempHome, { recursive: true, force: true });
   });
 
-  it('persists credentials to CLI config files and preserves existing settings', async () => {
-    const settingsPath = join(appStateRoot(), 'settings.json');
-    mkdirSync(appStateRoot(), { recursive: true });
-    writeFileSync(
-      settingsPath,
-      JSON.stringify(
-        {
-          'aiclient-settings': {
-            state: {
-              language: 'zh',
-            },
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    const claudeDir = join(tempHome, '.claude');
-    mkdirSync(claudeDir, { recursive: true });
-    const claudeSettingsPath = join(claudeDir, 'settings.json');
-    writeFileSync(
-      claudeSettingsPath,
-      JSON.stringify(
-        {
-          hooks: {
-            Stop: [{ command: 'echo stop' }],
-          },
-          permissions: {
-            allow: ['Read'],
-            deny: [],
-          },
-          env: {
-            ANTHROPIC_BASE_URL: 'https://old.example.com/v1',
-            ANTHROPIC_AUTH_TOKEN: 'old-token',
-            SOME_EXISTING_ENV: 'keep-me',
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    const codexDir = join(tempHome, '.codex');
-    mkdirSync(codexDir, { recursive: true });
-    const codexConfigPath = join(codexDir, 'config.toml');
-    const codexAuthPath = join(codexDir, 'auth.json');
-    writeFileSync(
-      codexConfigPath,
-      '# user comments top\nmodel = "user-custom-model"\nmodel_provider = "old"\n\n[profiles.custom]\nname = "my-profile"\nextra = 42\n'
-    );
-    writeFileSync(
-      codexAuthPath,
-      JSON.stringify({ OPENAI_API_KEY: 'old-key', OPENAI_ORG: 'org1' }, null, 2)
-    );
-
-    const claudeJsonPath = join(tempHome, '.claude.json');
-    writeFileSync(
-      claudeJsonPath,
-      JSON.stringify({ mcpServers: { test: { command: 'node' } } }, null, 2)
-    );
-
-    const originalClaudeSettings = readFileSync(claudeSettingsPath, 'utf-8');
-    const originalCodexConfig = readFileSync(codexConfigPath, 'utf-8');
-    const originalCodexAuth = readFileSync(codexAuthPath, 'utf-8');
-    const originalClaudeJson = readFileSync(claudeJsonPath, 'utf-8');
-
+  /**
+   * D64/S3 — the load-bearing assertion of this slice.
+   *
+   * Signing in IS choosing managed credentials, and it is recorded BEFORE any
+   * branch reads the mode. Without that ordering a machine sitting in `local`
+   * would take half of each path on login: write the user's own
+   * `~/.claude/settings.json` (the legacy behaviour D60 and S0' spent two
+   * slices removing) AND skip the vault, leaving it signed in with nothing
+   * stored.
+   */
+  it("S3: a successful login records credentialMode:'managed'", async () => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
     fetchMock.mockResolvedValue({
       json: async () => ({
         ok: true,
         data: {
-          user: { id: 1, name: 'Test User' },
-          apiKey: 'unused-top-level-key',
           config: {
-            claude: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              authToken: 'claude-token',
-            },
-            codex: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              apiKey: 'codex-key',
-            },
+            claude: { baseUrl: 'https://cch.example.com/v1', authToken: 'sk-ant-login-token' },
+            codex: { baseUrl: 'https://cch.example.com/v1', apiKey: 'sk-ant-login-token' },
           },
         },
       }),
     });
 
-    const { readSettings } = await import('../../../ipc/settings');
     const { onboardingService } = await import('../OnboardingService');
+    const { CREDENTIAL_MODE_SETTING_KEY } = await import('@shared/credentialMode');
 
-    expect(readSettings()).toEqual({
-      'aiclient-settings': {
-        state: {
-          language: 'zh',
-        },
-      },
-    });
+    await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
 
-    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
-
-    expect(result.ok).toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://onboarding-test.example.com/api/onboarding/verify-and-register',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'user@jcdz.cc', code: '123456' }),
-      }
-    );
-    expect(readSettings()).toMatchObject({
-      'aiclient-settings': {
-        state: {
-          language: 'zh',
-        },
-      },
-      onboarding: {
-        registered: true,
-        email: 'user@jcdz.cc',
-        serverUrl: 'https://cch-test.example.com',
-      },
-    });
-    expect(onboardingService.checkRegistration()).toMatchObject({
-      registered: true,
-      email: 'user@jcdz.cc',
-    });
-
-    expect(existsSync(`${claudeSettingsPath}.bak`)).toBe(true);
-    expect(readFileSync(`${claudeSettingsPath}.bak`, 'utf-8')).toBe(originalClaudeSettings);
-
-    const updatedClaudeSettings = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as {
-      env?: Record<string, unknown>;
-      hooks?: unknown;
-      permissions?: unknown;
-      skipWebFetchPreflight?: unknown;
-    };
-    expect(updatedClaudeSettings.hooks).toEqual({ Stop: [{ command: 'echo stop' }] });
-    expect(updatedClaudeSettings.permissions).toEqual({ allow: ['Read'], deny: [] });
-    expect(updatedClaudeSettings.env).toMatchObject({
-      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
-      ANTHROPIC_AUTH_TOKEN: 'claude-token',
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      SOME_EXISTING_ENV: 'keep-me',
-    });
-    expect(updatedClaudeSettings.skipWebFetchPreflight).toBe(true);
-
-    expect(existsSync(`${codexConfigPath}.bak`)).toBe(true);
-    expect(readFileSync(`${codexConfigPath}.bak`, 'utf-8')).toBe(originalCodexConfig);
-    expect(existsSync(`${codexAuthPath}.bak`)).toBe(true);
-    expect(readFileSync(`${codexAuthPath}.bak`, 'utf-8')).toBe(originalCodexAuth);
-
-    const updatedCodexConfig = readFileSync(codexConfigPath, 'utf-8');
-    expect(updatedCodexConfig).toMatch(/# user comments top/);
-    expect(updatedCodexConfig).toMatch(/model = "user-custom-model"/);
-    expect(updatedCodexConfig).toMatch(/model_provider = "jyw"/);
-    expect(updatedCodexConfig).not.toMatch(/model_provider = "old"/);
-    expect(updatedCodexConfig).toMatch(/\[profiles\.custom\]/);
-    expect(updatedCodexConfig).toMatch(/name = "my-profile"/);
-    expect(updatedCodexConfig).toMatch(/extra = 42/);
-    expect(updatedCodexConfig).toMatch(/\[model_providers\.jyw\]/);
-    expect(updatedCodexConfig).toMatch(/base_url = "https:\/\/cch-test\.example\.com\/v1"/);
-    expect(updatedCodexConfig).toMatch(/wire_api = "responses"/);
-    expect(JSON.parse(readFileSync(codexAuthPath, 'utf-8'))).toEqual({
-      OPENAI_API_KEY: 'codex-key',
-      OPENAI_ORG: 'org1',
-    });
-
-    const updatedClaudeJson = JSON.parse(readFileSync(claudeJsonPath, 'utf-8')) as Record<
-      string,
-      unknown
-    >;
-    expect(updatedClaudeJson).toMatchObject({
-      mcpServers: { test: { command: 'node' } },
-      hasCompletedOnboarding: true,
-    });
-    expect(readFileSync(claudeJsonPath, 'utf-8')).not.toBe(originalClaudeJson);
+    // Asserted against the FILE, not through `getCredentialMode()`.
+    //
+    // Reading it back through the resolver looked equivalent and proved
+    // nothing: with the key absent the resolver answers `managed` anyway (the
+    // first-run default), so deleting the write left the assertion green. A
+    // mutation caught it. The written KEY is the only thing that distinguishes
+    // "recorded" from "defaulted".
+    const written = JSON.parse(readFileSync(join(appStateRoot(), 'settings.json'), 'utf-8'));
+    expect(written[CREDENTIAL_MODE_SETTING_KEY]).toBe('managed');
   });
 
   it("logout removes local CLI credentials surgically — config.toml/auth.json are REWRITTEN, never deleted, and a user's own unrelated provider/keys/comments/files survive (D47 S6 §2, re-anchored)", async () => {
@@ -446,195 +319,6 @@ describe('OnboardingService', () => {
     expect(result.data?.attemptsLeft).toBe(4);
     // No state should be persisted on failure.
     expect(onboardingService.checkRegistration().registered).toBe(false);
-  });
-
-  it('upserts base_url but preserves custom keys inside existing [model_providers.jyw] block', async () => {
-    const codexDir = join(tempHome, '.codex');
-    mkdirSync(codexDir, { recursive: true });
-    const codexConfigPath = join(codexDir, 'config.toml');
-    writeFileSync(
-      codexConfigPath,
-      '[model_providers.jyw]\nname = "custom-name"\nbase_url = "https://other.example.com/v1"\ncustom_extra = "keep-me"\n'
-    );
-
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        ok: true,
-        data: {
-          user: { id: 1, name: 'Test User' },
-          apiKey: 'unused-top-level-key',
-          config: {
-            claude: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              authToken: 'claude-token',
-            },
-            codex: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              apiKey: 'codex-key',
-            },
-          },
-        },
-      }),
-    });
-
-    const { onboardingService } = await import('../OnboardingService');
-    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
-    expect(result.ok).toBe(true);
-
-    const updated = readFileSync(codexConfigPath, 'utf-8');
-    expect(updated).toMatch(/name = "custom-name"/);
-    expect(updated).toMatch(/base_url = "https:\/\/cch-test\.example\.com\/v1"/);
-    expect(updated).not.toMatch(/base_url = "https:\/\/other\.example\.com/);
-    expect(updated).toMatch(/custom_extra = "keep-me"/);
-  });
-
-  it('merges auth.json preserving unrelated keys', async () => {
-    const codexDir = join(tempHome, '.codex');
-    mkdirSync(codexDir, { recursive: true });
-    const codexAuthPath = join(codexDir, 'auth.json');
-    writeFileSync(
-      codexAuthPath,
-      JSON.stringify({ OPENAI_API_KEY: 'old', OPENAI_ORG: 'org1', custom: true }, null, 2)
-    );
-
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        ok: true,
-        data: {
-          user: { id: 1, name: 'Test User' },
-          apiKey: 'unused-top-level-key',
-          config: {
-            claude: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              authToken: 'claude-token',
-            },
-            codex: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              apiKey: 'codex-key',
-            },
-          },
-        },
-      }),
-    });
-
-    const { onboardingService } = await import('../OnboardingService');
-    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
-    expect(result.ok).toBe(true);
-
-    expect(JSON.parse(readFileSync(codexAuthPath, 'utf-8'))).toEqual({
-      OPENAI_API_KEY: 'codex-key',
-      OPENAI_ORG: 'org1',
-      custom: true,
-    });
-  });
-
-  it('clears existing ANTHROPIC_API_KEY when registering so it does not shadow ANTHROPIC_AUTH_TOKEN', async () => {
-    const claudeDir = join(tempHome, '.claude');
-    mkdirSync(claudeDir, { recursive: true });
-    const claudeSettingsPath = join(claudeDir, 'settings.json');
-    writeFileSync(
-      claudeSettingsPath,
-      JSON.stringify(
-        {
-          env: {
-            ANTHROPIC_API_KEY: 'sk-ant-old-xxx',
-            ANTHROPIC_BASE_URL: 'https://old.example.com/v1',
-            ANTHROPIC_AUTH_TOKEN: 'old-token',
-            SOME_EXISTING_ENV: 'keep-me',
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        ok: true,
-        data: {
-          user: { id: 1, name: 'Test User' },
-          apiKey: 'unused-top-level-key',
-          config: {
-            claude: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              authToken: 'claude-token',
-            },
-            codex: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              apiKey: 'codex-key',
-            },
-          },
-        },
-      }),
-    });
-
-    const { onboardingService } = await import('../OnboardingService');
-    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
-    expect(result.ok).toBe(true);
-
-    const updated = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as {
-      env?: Record<string, unknown>;
-    };
-    expect(updated.env).toBeDefined();
-    expect(updated.env).not.toHaveProperty('ANTHROPIC_API_KEY');
-    expect(updated.env).toMatchObject({
-      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
-      ANTHROPIC_AUTH_TOKEN: 'claude-token',
-      SOME_EXISTING_ENV: 'keep-me',
-    });
-  });
-
-  it('removes top-level apiKeyHelper when registering so it does not override env credentials', async () => {
-    const claudeDir = join(tempHome, '.claude');
-    mkdirSync(claudeDir, { recursive: true });
-    const claudeSettingsPath = join(claudeDir, 'settings.json');
-    writeFileSync(
-      claudeSettingsPath,
-      JSON.stringify(
-        {
-          apiKeyHelper: '/bin/echo old-key',
-          permissions: { allow: ['Read'], deny: [] },
-          hooks: { Stop: [{ command: 'echo stop' }] },
-          env: {
-            SOME_EXISTING_ENV: 'keep-me',
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        ok: true,
-        data: {
-          user: { id: 1, name: 'Test User' },
-          apiKey: 'unused-top-level-key',
-          config: {
-            claude: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              authToken: 'claude-token',
-            },
-            codex: {
-              baseUrl: 'https://cch-test.example.com/v1',
-              apiKey: 'codex-key',
-            },
-          },
-        },
-      }),
-    });
-
-    const { onboardingService } = await import('../OnboardingService');
-    const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
-    expect(result.ok).toBe(true);
-
-    const updated = JSON.parse(readFileSync(claudeSettingsPath, 'utf-8')) as Record<
-      string,
-      unknown
-    >;
-    expect(updated).not.toHaveProperty('apiKeyHelper');
-    expect(updated.permissions).toEqual({ allow: ['Read'], deny: [] });
-    expect(updated.hooks).toEqual({ Stop: [{ command: 'echo stop' }] });
   });
 
   it('rejects registration when server returns ok=true but data.config is missing required credentials', async () => {

@@ -87,6 +87,10 @@ describe('UsageService', () => {
     mkdirSync(tempHome, { recursive: true });
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
+    // D64/S3 — unset now resolves to MANAGED (first run signs in). Most cases
+    // here exercise the LOCAL arm, so that is the default for this suite; the
+    // managed cases below set `'1'` themselves.
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
     fetchMock.mockReset();
     reportExternalLoginResponseMock.mockReset();
     vaultReadMock.mockReset();

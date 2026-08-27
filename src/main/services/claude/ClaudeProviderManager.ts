@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import type { ClaudeProvider, ClaudeSettings } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import type { BrowserWindow } from 'electron';
-import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 
 function getClaudeConfigDir(): string {
   if (process.env.CLAUDE_CONFIG_DIR) {

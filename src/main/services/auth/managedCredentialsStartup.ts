@@ -37,8 +37,8 @@
 
 import { app } from 'electron';
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
-import { resolveManagedCredentialsEnabled } from './AuthStateService';
 import { generateClaudeJson, getEffectiveClaudeJsonPath } from './claudeHome';
+import { resolveManagedCredentialsEnabled } from './credentialMode';
 import { writeSettingsFile } from './managedFileWriter';
 
 /** Managed credentials on? Set by `activateManagedCredentials()`, read by the two functions below. */

@@ -3,11 +3,24 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// D64/S3 — `credentialMode.ts` reads `app.isPackaged` (the dev-only override is
+// forced off in a packaged build). `isPackaged:false` keeps that override live,
+// which is how this suite still drives the four-arm matrix below.
+vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getPath: vi.fn((name: string) =>
+      name === 'userData' ? '/tmp/aiclient-test-userdata' : '/tmp'
+    ),
+  },
+}));
+
+import { CREDENTIAL_MODE_ENV as MANAGED_CREDENTIALS_FLAG_ENV } from '@shared/credentialMode';
 import {
   initClaudeProviderWatcher,
   toggleClaudeProviderWatcher,
 } from '../../../ipc/claudeProvider';
-import { MANAGED_CREDENTIALS_FLAG_ENV } from '../../auth/AuthStateService';
 import { trimManagedProviderExtracted, unwatchClaudeSettings } from '../ClaudeProviderManager';
 
 function fakeWindow(): BrowserWindow {
@@ -108,7 +121,10 @@ describe('watchClaudeSettings managed gate — four-arm matrix', () => {
   });
 
   it('user off + managed off: init never calls watchClaudeSettings at all', () => {
-    delete process.env[MANAGED_CREDENTIALS_FLAG_ENV];
+    // D64/S3 — deleting the var no longer means "off": with nothing recorded
+    // the mode resolves to MANAGED (first run signs in). A test that means
+    // LOCAL now says so with the override's explicit `'0'`.
+    process.env[MANAGED_CREDENTIALS_FLAG_ENV] = '0';
     initClaudeProviderWatcher(fakeWindow(), false);
     expect(loggedStart()).toBe(false);
     expect(loggedSkip()).toBe(false);
@@ -122,7 +138,7 @@ describe('watchClaudeSettings managed gate — four-arm matrix', () => {
   });
 
   it('user on + managed off: init DOES start the watcher (the only arm that starts)', () => {
-    delete process.env[MANAGED_CREDENTIALS_FLAG_ENV];
+    process.env[MANAGED_CREDENTIALS_FLAG_ENV] = '0';
     initClaudeProviderWatcher(fakeWindow(), true);
     expect(loggedStart()).toBe(true);
     expect(loggedSkip()).toBe(false);
@@ -136,7 +152,7 @@ describe('watchClaudeSettings managed gate — four-arm matrix', () => {
   });
 
   it('toggle entry point: user on + managed off starts the watcher', () => {
-    delete process.env[MANAGED_CREDENTIALS_FLAG_ENV];
+    process.env[MANAGED_CREDENTIALS_FLAG_ENV] = '0';
     initClaudeProviderWatcher(fakeWindow(), false); // register window, do not start yet
     toggleClaudeProviderWatcher(true);
     expect(loggedStart()).toBe(true);
@@ -152,19 +168,19 @@ describe('watchClaudeSettings managed gate — four-arm matrix', () => {
   });
 
   /**
-   * Mutation pin (D47 S2 §3-8, s2b-mutation-plan pair 7): `resolveManagedCredentialsEnabled`
-   * is a strict `=== '1'` check (S1 §2.6) — every other spelling, including a
-   * shell-inherited truthy-looking value, must read as off. A loose reader
-   * at this choke point (e.g. `Boolean(process.env[...])`) would still pass
-   * every other arm in this matrix (they only ever set `'1'` or leave it
-   * unset) but silently start gating on `'true'`, `'yes'`, etc. This case
-   * exercises exactly that spelling and asserts it behaves identically to
-   * "managed off" — the watcher starts.
+   * D64/S3 flipped what this case proves, and the flip is the point.
+   *
+   * Under the old flag, `'true'` was "not exactly 1" and therefore OFF, so the
+   * watcher started. The variable is now a dev-only OVERRIDE with two spellings
+   * (`'1'`, `'0'`); anything else is not an override at all and falls through to
+   * the recorded choice — which, with nothing recorded, is `managed`. So a loose
+   * spelling now lands on the opposite arm, and silently: exactly why the strict
+   * matrix is still worth a test.
    */
-  it('user on + managed flag set to a loose truthy spelling ("true", not "1"): still starts the watcher — strict \'1\' contract (S1 §2.6)', () => {
+  it("user on + a loose spelling ('true') is not the override — falls through to the recorded choice, which is managed", () => {
     process.env[MANAGED_CREDENTIALS_FLAG_ENV] = 'true';
     initClaudeProviderWatcher(fakeWindow(), true);
-    expect(loggedStart()).toBe(true);
-    expect(loggedSkip()).toBe(false);
+    expect(loggedStart()).toBe(false);
+    expect(loggedSkip()).toBe(true);
   });
 });

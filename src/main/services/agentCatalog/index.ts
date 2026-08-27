@@ -11,7 +11,7 @@
 
 import { net } from 'electron';
 import { getAuthStateService, getCredentialVault } from '../auth';
-import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { type AgentCatalogCredentials, AgentCatalogService } from './AgentCatalogService';
 
 /**
