@@ -31,9 +31,8 @@ import {
 import { ClaudeRuntime, resolveSubagentActivityEnabled } from './claudeRuntime.ts';
 import { loadClaudeSettingsEnv } from './claudeSettings.ts';
 import { isPermissionDecisionId } from './codexDecisions.ts';
-import { ensureCodexHome } from './codexHome.ts';
 import { resolveCodexLaunch } from './codexNodeEntry.ts';
-import { CODEX_PERMISSION_DEFAULT, CodexRuntime } from './codexRuntime.ts';
+import { CodexRuntime } from './codexRuntime.ts';
 import { resolveCometixCli } from './cometix.ts';
 import { listSessionHistory } from './historyReader.ts';
 import { COMETIX_PIN } from './pin.ts';
@@ -239,11 +238,12 @@ async function ensureRuntime(): Promise<ClaudeRuntime> {
 }
 
 /**
- * Injected by Main (`main/services/agent-host/hostEnv.ts`). Both are values the
- * Host cannot compute: `<userData>/codex-home` needs Electron's `app`, and the
- * app version lives in the packaged `package.json`.
+ * Injected by Main (`main/services/agent-host/hostEnv.ts`) — the app version
+ * lives in the packaged `package.json`, which the Host cannot read for itself.
+ *
+ * `AICLIENT_CODEX_HOME` used to sit beside it and is gone with S0' (D60): there
+ * is no app-owned Codex home any more, so there is no path for Main to own.
  */
-const CODEX_HOME_ENV = 'AICLIENT_CODEX_HOME';
 const APP_VERSION_ENV = 'AICLIENT_APP_VERSION';
 
 /**
@@ -256,28 +256,6 @@ function probeCodexEntry(): boolean {
 }
 
 /**
- * S3 slice 6 (A2): the registry's real home preparation. Same isolated-home
- * recipe `openConnection` runs per session (`codexRuntime.ts`), run once here
- * to DECIDE availability rather than to launch anything — a missing
- * `AICLIENT_CODEX_HOME` throws through `ensureCodexHome` exactly like an empty
- * `homeDir` always has, and `buildHostAgentRegistry` folds that into
- * `home_prepare_failed` (F7: this env is Main-injected and non-empty in
- * production, so that fold-in — not a dedicated reason — is the expected path
- * for a dev/test invocation that skipped Main).
- */
-function prepareCodexHome(): void {
-  ensureCodexHome({
-    homeDir: process.env[CODEX_HOME_ENV]?.trim() ?? '',
-    // H9 layer 1 (codexRuntime.ts): the SAME posture object every Codex
-    // session's `thread/start` sends, so the registry's availability check
-    // prepares the isolated home for the posture sessions will actually run
-    // under, not a different one.
-    permission: CODEX_PERMISSION_DEFAULT,
-    log: (...args: unknown[]) => log('[codex-home]', ...args),
-  });
-}
-
-/**
  * S3 slice 6 (A1/A3): the single call site every command handler goes through
  * to read the capabilities registry — memoized single-flight in
  * `agentSupport.ts`, so whichever of `host.initialize` / early
@@ -285,43 +263,31 @@ function prepareCodexHome(): void {
  * actually builds it (F15), and every later call just reads that same result.
  */
 function getHostAgentRegistry(): HostAgentRegistry {
-  return ensureHostAgentRegistry({ probeEntry: probeCodexEntry, prepareHome: prepareCodexHome });
+  return ensureHostAgentRegistry({ probeEntry: probeCodexEntry });
 }
 
 /**
- * Build the Codex runtime on first use, or refuse.
+ * Build the Codex runtime on first use.
  *
- * A missing `AICLIENT_CODEX_HOME` is an explicit `agent_unsupported`, NOT a
- * guessed default: the directory holds a copy of the user's credential and the
- * deny-by-default config projection, so a fallback path would seed both
- * somewhere nobody looks — and would be a second answer to "where is the
- * isolated home", which Main already answers (arbitration doc §4).
+ * It used to be able to REFUSE: a missing `AICLIENT_CODEX_HOME` produced an
+ * explicit `agent_unsupported`, on the reasoning that guessing a path would
+ * seed a copy of the user's credential somewhere nobody looks. S0' (D60)
+ * removed the path, and with it the thing that could be missing — codex reads
+ * the user's own `~/.codex`, and the credential never touches a file at all.
+ *
+ * The remaining gates live where they always did: `buildHostAgentRegistry`
+ * decides whether codex is advertised at all, and `openConnection` reports an
+ * unresolvable entry point per session.
  */
-function ensureCodexRuntime(cmd: HostCommand): CodexRuntime | null {
-  if (codexRuntime) return codexRuntime;
-  const codexHomeDir = process.env[CODEX_HOME_ENV]?.trim();
-  if (!codexHomeDir) {
-    emit({
-      type: 'host.error',
-      ...(typeof cmd.payload?.sessionId === 'string' && cmd.payload.sessionId
-        ? { sessionId: cmd.payload.sessionId }
-        : {}),
-      requestId: cmd.requestId,
-      payload: {
-        code: 'agent_unsupported',
-        message: `${cmd.type ?? 'command'}: this Host was started without ${CODEX_HOME_ENV}, so the isolated Codex home is unknown and no Codex session can run`,
-        fatal: false,
-      },
+function ensureCodexRuntime(): CodexRuntime {
+  if (!codexRuntime) {
+    codexRuntime = new CodexRuntime({
+      emit,
+      log,
+      registry,
+      appVersion: process.env[APP_VERSION_ENV] ?? '',
     });
-    return null;
   }
-  codexRuntime = new CodexRuntime({
-    emit,
-    log,
-    registry,
-    codexHomeDir,
-    appVersion: process.env[APP_VERSION_ENV] ?? '',
-  });
   return codexRuntime;
 }
 
@@ -331,12 +297,16 @@ function ensureCodexRuntime(cmd: HostCommand): CodexRuntime | null {
  * answer, and the two would drift the first time an agent is added (S2 C5).
  *
  * `null` means the refusal has already been emitted and the caller must stop.
+ * No arm returns it today — the Codex arm could, until S0' (D60) removed the
+ * only condition it refused on — but the signature stays nullable because the
+ * callers' "refusal already emitted, stop here" contract is the right shape for
+ * the next agent, and narrowing it would be undone by that agent.
  */
 async function runtimeForAgent(
   agent: AgentWireName,
-  cmd: HostCommand
+  _cmd: HostCommand
 ): Promise<SessionRuntime | null> {
-  if (agent === CODEX_AGENT) return ensureCodexRuntime(cmd);
+  if (agent === CODEX_AGENT) return ensureCodexRuntime();
   return ensureRuntime();
 }
 

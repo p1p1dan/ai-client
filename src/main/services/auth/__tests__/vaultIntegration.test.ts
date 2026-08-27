@@ -109,10 +109,11 @@ describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored 
     //  - D60 dropped the managed settings.json too. The Claude credential's
     //    only exit is now the Agent Host's env, so that is what this asserts
     //    — through `buildAgentHostEnv`, the exact function the spawn path
-    //    calls. Codex still exits through a config.toml.
+    //    calls. S0' moved Codex onto the same channel — its provider table is
+    //    assembled from `AICLIENT_CODEX_BASE_URL`/`AICLIENT_CODEX_API_KEY` as
+    //    `-c` overrides at spawn — so neither agent has a file any more.
     const { buildAgentHostEnv } = await import('../../agent-host/hostEnv');
     const { resolveClaudeManagedHostEnv } = await import('../../agent-host/AgentHostManager');
-    const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
 
     const readResult = authIndex.getCredentialVault().read();
     expect(readResult.status).toBe('ok');
@@ -124,24 +125,26 @@ describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored 
     expect(payload.codex.baseUrl).toBe('https://cch-test.example.com/v1');
     expect(payload.codex.apiKey).toBe(token); // same-key doctrine (D47 S6 §1 point 2)
 
-    const claudeHostEnv = buildAgentHostEnv({
+    const { resolveCodexManagedHostEnv } = await import('../../agent-host/AgentHostManager');
+    const hostEnv = buildAgentHostEnv({
       driver: 'agent-sdk',
       cometixVersion: '0.0.0-test',
       nodeExecPath: '/node',
       appVersion: '0.0.0-test',
-      codexHomeDir: '/codex-home',
-      codexManaged: undefined,
-      codexApiKey: undefined,
-      codexHomeManagedDir: undefined,
+      ...resolveCodexManagedHostEnv(),
       ...resolveClaudeManagedHostEnv(),
     });
-    expect(claudeHostEnv).toMatchObject({
+
+    // Both agents now leave through the SAME channel — the Host's env, built by
+    // the exact function the spawn path calls. Codex's half used to be asserted
+    // against a generated `config.toml`; S0' (D60) removed the file, and the
+    // provider table is assembled from these two values as `-c` overrides.
+    expect(hostEnv).toMatchObject({
       AICLIENT_CLAUDE_BASE_URL: 'https://cch-test.example.com/v1',
       AICLIENT_CLAUDE_AUTH_TOKEN: token,
+      AICLIENT_CODEX_BASE_URL: 'https://cch-test.example.com/v1',
+      AICLIENT_CODEX_API_KEY: token,
     });
-
-    const codexToml = generateManagedCodexConfigToml({ baseUrl: payload.codex.baseUrl });
-    expect(codexToml).toContain('base_url = "https://cch-test.example.com/v1"');
   });
 });
 

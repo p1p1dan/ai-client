@@ -67,12 +67,12 @@ describe('resolveCodexManagedHostEnv (D47 S3b §1)', () => {
     expect(resolveCodexManagedHostEnv()).toEqual({
       codexManaged: undefined,
       codexApiKey: undefined,
-      codexHomeManagedDir: undefined,
+      codexBaseUrl: undefined,
     });
     expect(vaultReadMock).not.toHaveBeenCalled();
   });
 
-  it('flag on + vault ok: marker + api key + managed dir all populated', async () => {
+  it('flag on + vault ok: marker + both credential halves populated', async () => {
     managedFlagMock.mockReturnValue(true);
     vaultReadMock.mockReturnValue({
       status: 'ok',
@@ -83,7 +83,7 @@ describe('resolveCodexManagedHostEnv (D47 S3b §1)', () => {
     expect(resolveCodexManagedHostEnv()).toEqual({
       codexManaged: '1',
       codexApiKey: 'sk-vault-key',
-      codexHomeManagedDir: '/userdata/codex-home',
+      codexBaseUrl: 'https://cch.example/v1',
     });
   });
 
@@ -92,15 +92,15 @@ describe('resolveCodexManagedHostEnv (D47 S3b §1)', () => {
     'locked',
     'unsupported',
     'invalid',
-  ])('flag on + vault %s: marker + dir still populated, api key undefined (agent-host resolver turns this into managed_missing_credentials)', async (status) => {
+  ])('flag on + vault %s: marker still populated, both credential halves undefined (agent-host resolver turns this into managed_missing_credentials)', async (status) => {
     managedFlagMock.mockReturnValue(true);
     vaultReadMock.mockReturnValue({ status });
     const { resolveCodexManagedHostEnv } = await import('../AgentHostManager');
 
     const result = resolveCodexManagedHostEnv();
     expect(result.codexManaged).toBe('1');
-    expect(result.codexHomeManagedDir).toBe('/userdata/codex-home');
     expect(result.codexApiKey).toBeUndefined();
+    expect(result.codexBaseUrl).toBeUndefined();
   });
 
   it('reads the vault fresh every call — no caching across calls', async () => {

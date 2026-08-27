@@ -18,20 +18,22 @@ import type { AgentHostDriver } from '@shared/types/agentHost';
  *   spawns would break it silently. Passing it explicitly lets each half be
  *   asserted on its own: Main asserts it injects the resolved path, the Host
  *   asserts it reads this key.
- * - `codexHomeDir` / `appVersion`: derived from Electron's `app`, which the
- *   Host has no access to. The Host deliberately has NO fallback for the home
- *   directory — a missing value is an explicit error, not a guessed path,
- *   because a second default would be a second source of truth.
+ * - `appVersion`: derived from Electron's `app`, which the Host has no access
+ *   to. (`codexHomeDir` sat here until S0'/D60 for the same reason; there is no
+ *   app-owned Codex home left to name.)
  *
  * Deliberately absent: `AICLIENT_AGENT_CODEX`. `AgentHostProcess.start()`
  * spreads `process.env` into the child, so a flag the user sets in their shell
  * already reaches the Host; injecting it here would add a second place that
  * decides what the flag means.
  *
- * D47 S3b §1 — `codexManaged` / `codexApiKey` / `codexHomeManagedDir`: the
+ * D47 S3b §1 / S0' (D60) — `codexManaged` / `codexApiKey` / `codexBaseUrl`: the
  * three Codex managed-credentials keys `AgentHostManager` resolves from the
  * managed-credentials flag + a vault snapshot (`AuthStateService`/
- * `CredentialVault`) at spawn time. Unlike every other field on this
+ * `CredentialVault`) at spawn time. The third used to be
+ * `codexHomeManagedDir`, a path; it is now the provider's base URL, because the
+ * Host assembles the provider table as `-c` overrides instead of reading a
+ * `config.toml` out of a directory we owned. Unlike every other field on this
  * interface, this trio is INTENTIONALLY ALWAYS PRESENT ON THE RETURNED
  * OBJECT — including when the value is `undefined` — never conditionally
  * spread in. `AgentHostProcess.start()` builds the child's env as
@@ -155,13 +157,12 @@ export interface AgentHostEnvInput {
   cometixVersion: string;
   nodeExecPath: string;
   appVersion: string;
-  codexHomeDir: string;
   /** `'1'` when Codex managed-credentials mode is on; `undefined` otherwise. Never any other string — the agent-host resolver (`agentSupport.ts`, S4a) reads this literally as `env.AICLIENT_CODEX_MANAGED !== '1'`. */
   codexManaged: string | undefined;
   /** The vault's `codex.apiKey`. `undefined` when managed mode is off, OR managed mode is on but the vault has no usable Codex credentials yet (agent-host's resolver turns that into `managed_missing_credentials`, not this file's concern). */
   codexApiKey: string | undefined;
-  /** `<userData>/codex-home` when managed mode is on (same directory Main materializes `config.toml` into — `src/main/services/auth/codexHome.ts`), `undefined` when off. Lets `ensureCodexHome` (agent-host) validate the managed `config.toml` exists there instead of guessing a path. */
-  codexHomeManagedDir: string | undefined;
+  /** The vault's `codex.baseUrl` (S0'/D60). Same always-present-even-when-`undefined` rule as its two siblings. The Host turns it into `-c model_providers.<id>.base_url=…` at spawn; nothing writes it to disk. */
+  codexBaseUrl: string | undefined;
   /** The vault's `claude.baseUrl` (S0'/D60). Same always-present-even-when-`undefined` rule as the Codex trio above: this is a credential-adjacent key, so a stray inherited value must be overridden, not merely left alone. */
   claudeBaseUrl: string | undefined;
   /** The vault's `claude.authToken` (S0'/D60). `undefined` when managed mode is off, or on but the vault holds no usable Claude credentials yet — the Host then falls back to the user's own `settings.json`, exactly as it did before managed mode existed. */
@@ -176,10 +177,13 @@ export function buildAgentHostEnv(input: AgentHostEnvInput): NodeJS.ProcessEnv {
     AICLIENT_COMETIX_VERSION: input.cometixVersion,
     AICLIENT_NODE_EXEC_PATH: input.nodeExecPath,
     AICLIENT_APP_VERSION: input.appVersion,
-    AICLIENT_CODEX_HOME: input.codexHomeDir,
     AICLIENT_CODEX_MANAGED: input.codexManaged,
     AICLIENT_CODEX_API_KEY: input.codexApiKey,
-    AICLIENT_CODEX_HOME_MANAGED_DIR: input.codexHomeManagedDir,
+    // S0' (D60): the provider's base URL travels as a VALUE. Before, it was
+    // baked into a `config.toml` Main generated, and reaching that file meant
+    // pointing `CODEX_HOME` at a directory we owned — which took the user's
+    // whole `~/.codex` tree away as a side effect.
+    AICLIENT_CODEX_BASE_URL: input.codexBaseUrl,
     // S0' (D60): the Claude credential reaches the Host as ENV, not as a file
     // in a directory we forced `CLAUDE_CONFIG_DIR` to point at. This is the
     // whole substitution — see `claudeSettings.ts` (agent-host) for the read

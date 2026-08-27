@@ -88,11 +88,22 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
     else process.env.AICLIENT_MANAGED_CREDENTIALS = originalFlag;
   });
 
-  function codexHomeDir(): string {
+  function _codexHomeDir(): string {
     return join(userDataDir, 'codex-home');
   }
 
-  it('② flag on + vault ok: injects CODEX_HOME + AICLIENT_CODEX_API_KEY', async () => {
+  /**
+   * S0' (D60) inverted this pair. They used to assert that a local PTY got
+   * `CODEX_HOME` (pointed at the app-owned home) plus `AICLIENT_CODEX_API_KEY`.
+   * Both halves were needed together — the key only authenticated because the
+   * `config.toml` in that directory named it via `env_key`.
+   *
+   * The directory is gone and the pair cannot be split: the key alone means
+   * nothing to a user's own `~/.codex`, and no environment variable can point
+   * codex at a different `base_url`. So a terminal `codex` runs on the user's
+   * own configuration, and these assert that we add nothing.
+   */
+  it("S0': flag on + vault ok — no Codex keys are injected into a local PTY", async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     vaultReadMock.mockReturnValue({
       status: 'ok',
@@ -106,11 +117,9 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
 
     await manager.create(1, { cwd: '/repo/local', kind: 'terminal' });
 
-    const passedOptions = createSpy.mock.calls[0][0];
-    expect(passedOptions.env).toEqual({
-      CODEX_HOME: codexHomeDir(),
-      AICLIENT_CODEX_API_KEY: 'sk-vault-key',
-    });
+    const passedEnv = (createSpy.mock.calls[0][0].env ?? {}) as Record<string, string>;
+    expect('CODEX_HOME' in passedEnv).toBe(false);
+    expect('AICLIENT_CODEX_API_KEY' in passedEnv).toBe(false);
   });
 
   it.each([
@@ -118,7 +127,7 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
     'locked',
     'unsupported',
     'invalid',
-  ])('vault %s (flag on): CODEX_HOME still injected, AICLIENT_CODEX_API_KEY key OMITTED (not merely undefined)', async (status) => {
+  ])("S0': vault %s (flag on) — still nothing, and no crash", async (status) => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     vaultReadMock.mockReturnValue({ status });
 
@@ -129,8 +138,8 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
 
     await manager.create(1, { cwd: '/repo/local', kind: 'terminal' });
 
-    const passedEnv = createSpy.mock.calls[0][0].env as Record<string, string>;
-    expect(passedEnv.CODEX_HOME).toBe(codexHomeDir());
+    const passedEnv = (createSpy.mock.calls[0][0].env ?? {}) as Record<string, string>;
+    expect('CODEX_HOME' in passedEnv).toBe(false);
     expect('AICLIENT_CODEX_API_KEY' in passedEnv).toBe(false);
   });
 
@@ -149,12 +158,16 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
     await manager.create(1, {
       cwd: '/repo/local',
       kind: 'terminal',
-      env: { CODEX_HOME: '/renderer/stale/dir', AICLIENT_CODEX_API_KEY: 'sk-renderer-stale' },
+      env: { CODEX_HOME: '/renderer/chosen/dir', AICLIENT_CODEX_API_KEY: 'sk-renderer' },
     });
 
     const passedEnv = createSpy.mock.calls[0][0].env as Record<string, string>;
-    expect(passedEnv.CODEX_HOME).toBe(codexHomeDir());
-    expect(passedEnv.AICLIENT_CODEX_API_KEY).toBe('sk-main-key');
+    // S0' inverted the direction for the Codex keys: Main no longer supplies
+    // them, so a caller-supplied value has nothing to lose to and passes
+    // through untouched. The "Main wins" rule itself is unchanged and is now
+    // asserted on the Claude keys, which Main does still supply.
+    expect(passedEnv.CODEX_HOME).toBe('/renderer/chosen/dir');
+    expect(passedEnv.AICLIENT_CODEX_API_KEY).toBe('sk-renderer');
   });
 
   it('③ does not mutate the caller-supplied options object (or its env sub-object) in place', async () => {
@@ -168,6 +181,19 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
     const manager = new SessionManager();
     vi.spyOn(manager.localPtyManager, 'allocateId').mockReturnValue('s1');
     const createSpy = vi.spyOn(manager.localPtyManager, 'create').mockImplementation(() => 's1');
+
+    // A CLAUDE arm is what makes a copy happen at all now: S0' retired the
+    // Codex injector, so a vault holding only codex credentials leaves the
+    // options untouched (correctly) and there would be nothing to assert about.
+    vaultReadMock.mockReturnValue({
+      status: 'ok',
+      doc: {
+        payload: {
+          codex: { apiKey: 'sk-vault-key', baseUrl: 'https://cch.example/v1' },
+          claude: { baseUrl: 'https://cch.example/v1', authToken: 'claude-token' },
+        },
+      },
+    });
 
     const originalEnv = { SOME_RENDERER_KEY: 'renderer-value' };
     const options = { cwd: '/repo/local', kind: 'terminal' as const, env: originalEnv };
@@ -280,7 +306,7 @@ describe('end-to-end local PTY spawn env (D47 S3b — real PtyManager, mocked no
     else process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
   });
 
-  it('flag on: the real pty.spawn() call carries a USER-set CLAUDE_CONFIG_DIR through untouched, alongside the Main-injected Codex keys', async () => {
+  it('flag on: the real pty.spawn() call carries a USER-set CLAUDE_CONFIG_DIR through untouched', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     // Stands in for a user who set the variable themselves. Post-D60 nothing
     // in the app sets it, so inheritance is the ONLY way it can get here —
@@ -308,8 +334,10 @@ describe('end-to-end local PTY spawn env (D47 S3b — real PtyManager, mocked no
     expect(spawnMock).toHaveBeenCalledTimes(1);
     const spawnEnv = spawnMock.mock.calls[0][2].env as Record<string, string>;
     expect(spawnEnv.CLAUDE_CONFIG_DIR).toBe(join(userDataDir, 'user-chosen-config'));
-    expect(spawnEnv.CODEX_HOME).toBe(join(userDataDir, 'codex-home'));
-    expect(spawnEnv.AICLIENT_CODEX_API_KEY).toBe('sk-e2e-key');
+    // S0': no Codex keys are added by us any more — see the note on the
+    // injection tests above.
+    expect('CODEX_HOME' in spawnEnv).toBe(false);
+    expect('AICLIENT_CODEX_API_KEY' in spawnEnv).toBe(false);
   });
 
   it('flag on: the real pty.spawn() call carries the vault Claude credential as ANTHROPIC_* (D60)', async () => {
@@ -364,6 +392,6 @@ describe('end-to-end local PTY spawn env (D47 S3b — real PtyManager, mocked no
 
     const spawnEnv = spawnMock.mock.calls[0][2].env as Record<string, string>;
     expect(spawnEnv.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
-    expect(spawnEnv.AICLIENT_CODEX_API_KEY).toBe('sk-e2e-key');
+    expect('AICLIENT_CODEX_API_KEY' in spawnEnv).toBe(false);
   });
 });

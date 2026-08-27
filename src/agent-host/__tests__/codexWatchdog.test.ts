@@ -18,7 +18,6 @@ import {
   CODEX_TTFT_TIMEOUT_MS,
   CODEX_TURN_START_TIMEOUT_MS,
   CodexRuntime,
-  type CodexRuntimeOptions,
   decideCodexWatchdogAction,
   resolveCodexStallTimeoutMs,
   resolveCodexTtftTimeoutMs,
@@ -211,7 +210,6 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     log: (...args) =>
       logs.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')),
     registry,
-    codexHomeDir: HOME_DIR,
     appVersion: '9.9.9-test',
     now: () => 1_700_000_000_000,
     env: options.env ?? {},
@@ -219,12 +217,6 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     startTimeout: collectTimers(deadlines),
     connect,
     resolveLaunch: () => ({ ok: true, plan: PLAN }),
-    ensureHome: (seen: Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]) => ({
-      mode: 'projected' as const,
-      homeDir: seen.homeDir,
-      projection: { toml: '', kept: [], dropped: [] },
-      authCopied: false,
-    }),
   });
 
   const harness: Harness = {

@@ -1,19 +1,17 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { ManagedCodexConfigInput } from '@shared/codexManagedConfig';
 import type {
   OnboardingCliStatus,
   OnboardingCredentialsHealth,
   OnboardingSendCodeResponse,
   OnboardingState,
 } from '@shared/types';
-import { app, net } from 'electron';
+import { net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
-import { type CodexHomeRegenerateSource, regenerateManagedCodexHome } from '../auth/codexHome';
 import { redactLogArgs } from '../auth/redact';
 import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
@@ -268,27 +266,18 @@ class OnboardingService {
         onboardingState.registeredAt ?? new Date().toISOString()
       );
 
-      // D60: there is no longer a Claude side to regenerate — the credential
-      // reaches the Agent Host and the terminal PTY as env, read fresh from
-      // the vault on every spawn, so the Host restart below is the entire
-      // propagation mechanism. Codex still needs a file on disk.
-      const credentialsForClaudeHome = this.getCredentialWriteInputs(result, normalizedServerUrl);
-      if (credentialsForClaudeHome) {
-        // D47 S3b §2: written off the already-in-hand credentials object,
-        // never a vault re-read — a `vault.save` failure above must not
-        // leave a freshly-logged-in user without a working codex config
-        // (A-track M4).
-        await this.regenerateManagedCodexHomeConfig(
-          { baseUrl: credentialsForClaudeHome.codexBaseUrl },
-          'login'
-        );
-        // I5 epoch barrier (A-track M10, upgraded to a hard AWAIT by D47 S3b
-        // — the renderer must not observe login success while a Host that
-        // cached the old/absent env is still alive): drop any running Host
-        // so the very next `ensureStarted()` spawns one that reads the fresh
-        // env this regenerate just wrote.
-        await this.shutdownAgentHostAfterRegenerate();
-      }
+      // D60 removed the Claude regenerate; S0' removed the Codex one. NEITHER
+      // agent has a file to write any more — both credentials reach the Agent
+      // Host as env, read fresh from the vault on every spawn — so the Host
+      // restart below is now the ENTIRE propagation mechanism rather than the
+      // last step of one.
+      //
+      // I5 epoch barrier (A-track M10, a hard AWAIT since D47 S3b): the
+      // renderer must not observe login success while a Host that cached the
+      // old (or absent) credential env is still alive. Dropping it here means
+      // the very next `ensureStarted()` spawns one that reads the vault this
+      // login just wrote.
+      await this.shutdownAgentHostAfterRegenerate();
     }
 
     return result;
@@ -302,6 +291,10 @@ class OnboardingService {
    * `__tests__` files' `vi.mock('electron', ...)` scope). A dynamic import
    * keeps that cost paid only when managed credentials are actually on and a
    * regenerate actually ran.
+   *
+   * Name kept from when a regenerate preceded it (S0' removed the last one):
+   * this is still "the shutdown that makes a credential change take effect",
+   * and renaming it would break the trail from the I5 barrier's own notes.
    */
   private async shutdownAgentHostAfterRegenerate(): Promise<void> {
     try {
@@ -309,31 +302,6 @@ class OnboardingService {
       await agentHostManager.shutdown();
     } catch (error) {
       console.warn('[OnboardingService] Failed to shut down agent host after regenerate:', error);
-    }
-  }
-
-  /**
-   * D47 S3b §2 — writes
-   * `<codex-home>/config.toml` + sidecar from a credentials object (login),
-   * or leaves `config.toml`'s bytes untouched (`null` — logout's "config
-   * 保留" contract, see `codexHome.ts`'s module header). Always deletes a
-   * stale `codex-home/auth.json` regardless (double safety alongside
-   * agent-host's own managed-mode deletion, S4a). Best-effort, same as the
-   * claude-home sibling — a failure here must not turn a successful
-   * login/logout into a rejected one.
-   */
-  private async regenerateManagedCodexHomeConfig(
-    credentials: ManagedCodexConfigInput | null,
-    source: CodexHomeRegenerateSource
-  ): Promise<void> {
-    try {
-      await regenerateManagedCodexHome({
-        userDataDir: app.getPath('userData'),
-        source,
-        credentials,
-      });
-    } catch (error) {
-      console.warn('[OnboardingService] Failed to regenerate managed codex-home config:', error);
     }
   }
 
@@ -427,23 +395,24 @@ class OnboardingService {
   }
 
   /**
-   * D47 S5 §3 I9 checkpoint ⑤ — logout's deterministic no-credential
-   * regenerate. Codex-home's `config.toml` is left exactly as-is
-   * (`credentials: null` — see `codexHome.ts`'s module header for why logout
-   * has no "no-credentials config" form to write), but its stale `auth.json`
-   * still gets deleted.
+   * Logout's managed-side work — now nothing, and kept as an explicit no-op.
    *
-   * D60 removed the Claude half: there is no managed settings.json to blank
-   * out, and a logged-out app simply stops handing a credential to the next
-   * Host spawn. That is strictly SAFER than the old behavior — the credential
-   * never sat in a file that a failed logout could leave behind.
+   * It used to leave codex-home's `config.toml` untouched while deleting its
+   * stale `auth.json`; D60 had already removed the Claude half. S0' removed the
+   * codex home itself, so there is no file to leave alone and none to delete.
    *
-   * Host shutdown is NOT called here — it moved to
-   * `performLogoutSequence()`'s own checkpoint ③, strictly BEFORE this one,
-   * per the I9 restructure ("shutdown 从 regenerate 链尾摘出").
+   * A logged-out app simply stops handing a credential to the next Host spawn.
+   * That is strictly SAFER than what it replaced — the credential never sat in
+   * a file that a failed logout could leave behind.
+   *
+   * Kept rather than deleted because `performLogoutSequence()` documents an
+   * ORDERED set of checkpoints and this is one of them; its position (strictly
+   * after checkpoint ③'s Host shutdown, per the I9 restructure "shutdown 从
+   * regenerate 链尾摘出") is a fact about that sequence. Remove it when the
+   * sequence is re-examined, not as a side effect of this slice.
    */
   async regenerateManagedHomesForLogout(): Promise<void> {
-    await this.regenerateManagedCodexHomeConfig(null, 'logout');
+    return;
   }
 
   private normalizeEmail(email: string): string {

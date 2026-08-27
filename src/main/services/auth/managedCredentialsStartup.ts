@@ -39,8 +39,6 @@ import { app } from 'electron';
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
 import { resolveManagedCredentialsEnabled } from './AuthStateService';
 import { generateClaudeJson, getEffectiveClaudeJsonPath } from './claudeHome';
-import { regenerateManagedCodexHome } from './codexHome';
-import { getCredentialVault } from './index';
 import { writeSettingsFile } from './managedFileWriter';
 
 /** Managed credentials on? Set by `activateManagedCredentials()`, read by the two functions below. */
@@ -125,33 +123,28 @@ export async function ensureUserClaudeJsonOnboarded(): Promise<void> {
 }
 
 /**
- * Phase ③ — MUST only run after the first `BrowserWindow` is constructed
- * (same upgrade-latch prerequisite as `promoteVaultCrypto`).
+ * Phase ③ — retired with S0' (D60), kept as an exported no-op.
  *
- * D60 shrank this to the codex half. The Claude credential no longer needs
- * materializing at all: `AgentHostManager` reads the vault fresh on every
- * Host spawn and passes the credential as env, so a login/logout is picked up
- * by the Host restart that already follows it — there is no file to keep in
- * sync, and therefore no window in which a file could be stale.
+ * D60 shrank this to the codex half and left a comment explaining why the
+ * Claude half no longer needed materialising: `AgentHostManager` reads the
+ * vault fresh on every Host spawn and passes the credential as env, so a
+ * login/logout is picked up by the Host restart that already follows it.
  *
- * Codex still needs a `config.toml` on disk, so its regenerate tick stays.
- * Every non-`'ok'` vault status — including `absent` — maps to "leave
- * config.toml's bytes exactly as they are": a `locked` keyring at boot is a
- * TEMPORARY state, not "no credentials", and rewriting on it would silently
- * wipe a working config on every restart (the B1 failure mode).
+ * S0' finished the job. Codex takes the same route now — its provider table is
+ * assembled as `-c` overrides at spawn time from
+ * `AICLIENT_CODEX_BASE_URL`/`AICLIENT_CODEX_API_KEY` — so there is no
+ * `config.toml` to keep in sync either, and therefore no window in which a file
+ * could be stale.
+ *
+ * The function stays rather than being deleted at the call site: `main/index.ts`
+ * documents a THREE-PHASE startup order, and phase ③'s position in that order
+ * (after the first window, after crypto promotion, after adoption) is a fact
+ * about the sequence worth keeping visible even when the phase has no work.
+ * Delete it when the phase itself is re-examined, not as a side effect of this
+ * slice.
  */
 export async function regenerateFromVault(): Promise<void> {
-  if (!managedActive) {
-    return;
-  }
-
-  const result = getCredentialVault().read();
-
-  await regenerateManagedCodexHome({
-    userDataDir: app.getPath('userData'),
-    source: 'startup',
-    credentials: result.status === 'ok' ? { baseUrl: result.doc.payload.codex.baseUrl } : null,
-  });
+  return;
 }
 
 /** Test-only: reset module state between test cases (mirrors `resetAuthSingletonsForTests`). */

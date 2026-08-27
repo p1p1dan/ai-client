@@ -38,8 +38,6 @@ import { buildAgentHostEnv, CODEX_JS_PATH_ENV_KEY, deriveBundledCodexJsPath } fr
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
 
-const CODEX_HOME_DIR_NAME = 'codex-home';
-
 /**
  * F2 S5 (2026-08-18 watchdog redesign, spec §6.2) — the four
  * `SessionRuntimeStatus` values that mean "this session has nothing in
@@ -55,27 +53,40 @@ const CLOSED_SESSION_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
 ]);
 
 /**
- * D47 S3b §1 — the three Codex managed-credentials `buildAgentHostEnv` inputs,
- * resolved from the managed-credentials flag + a FRESH vault snapshot (never
- * cached across Host restarts, so a login/logout that happened while the Host
- * was down is picked up the next time `ensureStarted()` spawns a new one —
+ * D47 S3b §1 / S0' (D60) — the Codex managed-credentials `buildAgentHostEnv`
+ * inputs, resolved from the managed-credentials flag + a FRESH vault snapshot
+ * (never cached across Host restarts, so a login/logout that happened while the
+ * Host was down is picked up the next time `ensureStarted()` spawns a new one —
  * this is what the I5 epoch barrier below exists to make possible). Flag off
- * returns all three `undefined` — `hostEnv.ts`'s "继承污染防御" contract
- * needs that to kill any stray inherited value, not merely omit the key.
+ * returns every field `undefined` — `hostEnv.ts`'s "继承污染防御" contract needs
+ * that to kill any stray inherited value, not merely omit the key.
+ *
+ * S0' replaced the third field. It used to be `codexHomeManagedDir`, the
+ * app-owned directory Main generated a `config.toml` into; it is now
+ * `codexBaseUrl`, the same value that `config.toml` used to carry as
+ * `base_url`. The Host assembles the provider table as `-c` overrides at spawn
+ * time (`codexConfigOverrides.ts`), so the fact travels as a value instead of
+ * as a file — and the user's `~/.codex` is theirs again.
+ *
+ * Both halves or neither: the Host's own resolver refuses a base URL without a
+ * key and a key without a base URL, because half a credential is not a degraded
+ * credential but a differently-wrong one. Nothing here re-implements that
+ * check; it just supplies whatever the vault held.
  */
 export function resolveCodexManagedHostEnv(): {
   codexManaged: string | undefined;
   codexApiKey: string | undefined;
-  codexHomeManagedDir: string | undefined;
+  codexBaseUrl: string | undefined;
 } {
   if (!resolveManagedCredentialsEnabled()) {
-    return { codexManaged: undefined, codexApiKey: undefined, codexHomeManagedDir: undefined };
+    return { codexManaged: undefined, codexApiKey: undefined, codexBaseUrl: undefined };
   }
-  const codexHomeManagedDir = path.join(app.getPath('userData'), CODEX_HOME_DIR_NAME);
   const vaultResult = getCredentialVault().read();
-  const codexApiKey =
-    vaultResult.status === 'ok' ? vaultResult.doc.payload.codex.apiKey : undefined;
-  return { codexManaged: '1', codexApiKey, codexHomeManagedDir };
+  // Optional-chained for the same reason the Claude arm is: an older vault
+  // document may have no `codex` arm at all, and that must read as "no managed
+  // credential" rather than throwing inside a spawn.
+  const codex = vaultResult.status === 'ok' ? vaultResult.doc.payload.codex : undefined;
+  return { codexManaged: '1', codexApiKey: codex?.apiKey, codexBaseUrl: codex?.baseUrl };
 }
 
 /**
@@ -709,10 +720,9 @@ export class AgentHostManager {
         cometixVersion: COMETIX_PIN.version,
         nodeExecPath: resolved.runtime.execPath,
         appVersion: app.getVersion(),
-        codexHomeDir: path.join(app.getPath('userData'), CODEX_HOME_DIR_NAME),
         codexManaged: codexManagedEnv.codexManaged,
         codexApiKey: codexManagedEnv.codexApiKey,
-        codexHomeManagedDir: codexManagedEnv.codexHomeManagedDir,
+        codexBaseUrl: codexManagedEnv.codexBaseUrl,
         codexJsPath,
         claudeBaseUrl: claudeManagedEnv.claudeBaseUrl,
         claudeAuthToken: claudeManagedEnv.claudeAuthToken,

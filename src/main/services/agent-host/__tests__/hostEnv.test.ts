@@ -13,7 +13,6 @@ const INPUT = {
   cometixVersion: '2.1.112',
   nodeExecPath: '/opt/app/resources/node-runtime/node',
   appVersion: '0.4.0-test.2',
-  codexHomeDir: '/home/u/.config/AiClient/codex-home',
 } as const;
 
 // D47 S3b §1 — the three Codex managed-credentials keys. Every INPUT literal
@@ -25,12 +24,12 @@ const INPUT = {
 const CODEX_MANAGED_INPUT = {
   codexManaged: '1',
   codexApiKey: 'sk-managed-test-key',
-  codexHomeManagedDir: '/home/u/.config/AiClient/codex-home',
+  codexBaseUrl: 'https://gateway.example.com/v1',
 } as const;
 const CODEX_UNMANAGED_INPUT = {
   codexManaged: undefined,
   codexApiKey: undefined,
-  codexHomeManagedDir: undefined,
+  codexBaseUrl: undefined,
 } as const;
 
 describe('buildAgentHostEnv', () => {
@@ -47,7 +46,6 @@ describe('buildAgentHostEnv', () => {
       AICLIENT_COMETIX_VERSION: '2.1.112',
       AICLIENT_NODE_EXEC_PATH: '/opt/app/resources/node-runtime/node',
       AICLIENT_APP_VERSION: '0.4.0-test.2',
-      AICLIENT_CODEX_HOME: '/home/u/.config/AiClient/codex-home',
     });
   });
 
@@ -82,10 +80,9 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
       AICLIENT_COMETIX_VERSION: '2.1.112',
       AICLIENT_NODE_EXEC_PATH: '/opt/app/resources/node-runtime/node',
       AICLIENT_APP_VERSION: '0.4.0-test.2',
-      AICLIENT_CODEX_HOME: '/home/u/.config/AiClient/codex-home',
       AICLIENT_CODEX_MANAGED: '1',
       AICLIENT_CODEX_API_KEY: 'sk-managed-test-key',
-      AICLIENT_CODEX_HOME_MANAGED_DIR: '/home/u/.config/AiClient/codex-home',
+      AICLIENT_CODEX_BASE_URL: 'https://gateway.example.com/v1',
     });
   });
 
@@ -94,12 +91,12 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
       ...INPUT,
       codexManaged: '1',
       codexApiKey: undefined,
-      codexHomeManagedDir: '/home/u/.config/AiClient/codex-home',
+      codexBaseUrl: 'https://gateway.example.com/v1',
       claudeBaseUrl: undefined,
       claudeAuthToken: undefined,
     });
     expect(result.AICLIENT_CODEX_MANAGED).toBe('1');
-    expect(result.AICLIENT_CODEX_HOME_MANAGED_DIR).toBe('/home/u/.config/AiClient/codex-home');
+    expect(result.AICLIENT_CODEX_BASE_URL).toBe('https://gateway.example.com/v1');
     expect(result.AICLIENT_CODEX_API_KEY).toBeUndefined();
   });
 
@@ -112,14 +109,14 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
     });
     expect(result.AICLIENT_CODEX_MANAGED).toBeUndefined();
     expect(result.AICLIENT_CODEX_API_KEY).toBeUndefined();
-    expect(result.AICLIENT_CODEX_HOME_MANAGED_DIR).toBeUndefined();
+    expect(result.AICLIENT_CODEX_BASE_URL).toBeUndefined();
   });
 
   it('continuation-pollution defense: the three keys are OWN PROPERTIES of the returned object even when undefined, not simply omitted — this is what lets a `{...process.env, ...buildAgentHostEnv(...)}` spread (AgentHostProcess.start()) OVERRIDE a stray shell/dev-inherited value instead of leaving it untouched (D47 S34 spec rev.2 §1 "继承污染防御"). Matrix: preset the OPPOSITE (inherited-looking) value on each key before asserting.', () => {
     const pollutedLikeInherited = {
       AICLIENT_CODEX_MANAGED: '1',
       AICLIENT_CODEX_API_KEY: 'sk-stray-inherited-value',
-      AICLIENT_CODEX_HOME_MANAGED_DIR: '/some/stray/inherited/dir',
+      AICLIENT_CODEX_BASE_URL: 'https://stray-inherited.example.com/v1',
     };
     const result = buildAgentHostEnv({
       ...INPUT,
@@ -135,12 +132,12 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
       expect.arrayContaining([
         'AICLIENT_CODEX_MANAGED',
         'AICLIENT_CODEX_API_KEY',
-        'AICLIENT_CODEX_HOME_MANAGED_DIR',
+        'AICLIENT_CODEX_BASE_URL',
       ])
     );
     expect('AICLIENT_CODEX_MANAGED' in result).toBe(true);
     expect('AICLIENT_CODEX_API_KEY' in result).toBe(true);
-    expect('AICLIENT_CODEX_HOME_MANAGED_DIR' in result).toBe(true);
+    expect('AICLIENT_CODEX_BASE_URL' in result).toBe(true);
 
     // The actual override behavior `AgentHostProcess.start()` relies on:
     // spreading `result` LAST over a stand-in for "inherited env" kills every
@@ -148,7 +145,7 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
     const merged = { ...pollutedLikeInherited, ...result };
     expect(merged.AICLIENT_CODEX_MANAGED).toBeUndefined();
     expect(merged.AICLIENT_CODEX_API_KEY).toBeUndefined();
-    expect(merged.AICLIENT_CODEX_HOME_MANAGED_DIR).toBeUndefined();
+    expect(merged.AICLIENT_CODEX_BASE_URL).toBeUndefined();
   });
 });
 
@@ -268,7 +265,7 @@ describe('buildAgentHostEnv — codexJsPath is conditional (B3)', () => {
     );
     expect(keys).toContain('AICLIENT_CODEX_MANAGED');
     expect(keys).toContain('AICLIENT_CODEX_API_KEY');
-    expect(keys).toContain('AICLIENT_CODEX_HOME_MANAGED_DIR');
+    expect(keys).toContain('AICLIENT_CODEX_BASE_URL');
   });
 });
 

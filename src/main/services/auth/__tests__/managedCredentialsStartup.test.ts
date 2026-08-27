@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -275,23 +283,36 @@ describe('managedCredentialsStartup (D60)', () => {
     });
   });
 
-  describe('flag on — phase ③ also materializes codex-home (D47 S3b §2, the last managed home still backed by a file)', () => {
+  /**
+   * S0' (D60) replaced this whole describe block.
+   *
+   * What stood here: phase ③ materialised `<userData>/codex-home` — generating
+   * `config.toml` from the vault, preserving its bytes on a `locked` vault,
+   * declining to write one when the vault was absent, and deleting a stale
+   * `auth.json` on every pass. Four tests, all about a directory.
+   *
+   * There is no directory. Codex reads the user's own `~/.codex`, and the
+   * provider table is assembled as `-c` overrides at spawn time from
+   * `AICLIENT_CODEX_BASE_URL`/`AICLIENT_CODEX_API_KEY`. So the property worth
+   * pinning inverted: phase ③ must now write NOTHING.
+   */
+  describe("flag on — phase ③ writes nothing (S0'/D60)", () => {
     function codexHomeDir(): string {
       return join(userDataDir, 'codex-home');
     }
-    function codexConfigPath(): string {
-      return join(codexHomeDir(), 'config.toml');
+
+    async function runPhaseThree(): Promise<void> {
+      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
+        await import('../managedCredentialsStartup');
+      activateManagedCredentials();
+      await ensureUserClaudeJsonOnboarded();
+      await regenerateFromVault();
     }
 
-    async function setupPromoted(cryptoAvailable: boolean) {
+    it('creates no codex-home, even with a fully populated vault', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
       const authIndex = await import('../index');
-      authIndex.getCredentialVault().promoteCrypto(fakeCrypto(cryptoAvailable));
-      return authIndex;
-    }
-
-    it('vault ok: writes codex-home/config.toml from vault.codex.baseUrl', async () => {
-      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-      const authIndex = await setupPromoted(true);
+      authIndex.getCredentialVault().promoteCrypto(fakeCrypto(true));
       await authIndex.getCredentialVault().save({
         identity: { email: 'a@jcdz.cc', userId: 1 },
         cchBaseUrl: 'https://cch.example.com',
@@ -300,80 +321,40 @@ describe('managedCredentialsStartup (D60)', () => {
         receivedAt: new Date().toISOString(),
       });
 
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-        await import('../managedCredentialsStartup');
-      activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
-      await regenerateFromVault();
+      await runPhaseThree();
 
-      const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
-      expect(readFileSync(codexConfigPath(), 'utf-8')).toBe(
-        generateManagedCodexConfigToml({ baseUrl: 'https://vault-codex.example.com/v1' })
-      );
+      expect(existsSync(codexHomeDir())).toBe(false);
     });
 
-    it('vault absent: does not create codex-home/config.toml (no dev-seed fallback for codex)', async () => {
+    /**
+     * The negative control that would catch a regeneration quietly coming back:
+     * a directory that already exists must not gain a `config.toml` either.
+     */
+    it('leaves an existing codex-home directory untouched', async () => {
       process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-        await import('../managedCredentialsStartup');
-      activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
-      await regenerateFromVault();
-
-      // The claude side still gets an empty-env settings.json (existing
-      // contract, unaffected) — codex has no equivalent "write empty" form.
-      expect(existsSync(codexConfigPath())).toBe(false);
-    });
-
-    it('vault locked: existing codex-home/config.toml bytes are preserved untouched', async () => {
-      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-      const authIndex = await setupPromoted(true);
-      await authIndex.getCredentialVault().save({
-        identity: { email: 'a@jcdz.cc', userId: 1 },
-        cchBaseUrl: 'https://cch.example.com',
-        claude: { baseUrl: 'https://vault.example.com/v1', authToken: 'vault-token' },
-        codex: { baseUrl: 'https://vault-codex.example.com/v1', apiKey: 'vault-codex-key' },
-        receivedAt: new Date().toISOString(),
-      });
-      vi.resetModules();
-      const authIndex2 = await import('../index');
-      authIndex2.getCredentialVault().promoteCrypto(fakeCrypto(false));
-
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-        await import('../managedCredentialsStartup');
-      activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
-
       mkdirSync(codexHomeDir(), { recursive: true });
-      const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
-      const existingBytes = generateManagedCodexConfigToml({
-        baseUrl: 'https://existing-codex.example.com/v1',
-      });
-      writeFileSync(codexConfigPath(), existingBytes, 'utf-8');
 
-      expect(authIndex2.getCredentialVault().read().status).toBe('locked');
+      await runPhaseThree();
 
-      await regenerateFromVault();
-
-      expect(readFileSync(codexConfigPath(), 'utf-8')).toBe(existingBytes);
+      expect(readdirSync(codexHomeDir())).toEqual([]);
     });
 
-    it('also deletes a stale codex-home/auth.json on every phase ③ pass, regardless of vault status', async () => {
+    /**
+     * A leftover from a pre-S0' install. Phase ③ used to delete it on every
+     * pass; it no longer touches the directory at all, so the file survives.
+     * Harmless — nothing reads that path any more — but asserted rather than
+     * assumed, because "we stopped deleting it" is exactly the kind of change
+     * that should be visible in a test rather than discovered on a machine.
+     */
+    it('does not delete a stale auth.json left by an older build', async () => {
       process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-        await import('../managedCredentialsStartup');
-      activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
-
       mkdirSync(codexHomeDir(), { recursive: true });
       const staleAuthPath = join(codexHomeDir(), 'auth.json');
       writeFileSync(staleAuthPath, JSON.stringify({ OPENAI_API_KEY: 'stale' }), 'utf-8');
 
-      await regenerateFromVault();
+      await runPhaseThree();
 
-      expect(existsSync(staleAuthPath)).toBe(false);
+      expect(existsSync(staleAuthPath)).toBe(true);
     });
   });
 });

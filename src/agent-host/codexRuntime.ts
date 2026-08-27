@@ -18,6 +18,7 @@ import type {
   HistoryReadErrorCode,
 } from '../shared/types/sessionHistory.ts';
 import { CODEX_MANAGED_API_KEY_ENV, resolveCodexCredentialMode } from './agentSupport.ts';
+import { buildCodexConfigOverrides } from './codexConfigOverrides.ts';
 import {
   CODEX_INITIALIZE_TIMEOUT_MS,
   type CodexConnectFactory,
@@ -28,7 +29,6 @@ import {
 } from './codexConnection.ts';
 import { readOfferedDecisions, toWireDecision } from './codexDecisions.ts';
 import { reprojectCodexHistory } from './codexHistoryReader.ts';
-import { ensureCodexHome } from './codexHome.ts';
 import {
   type CodexEntryResolution,
   type CodexLaunchPlan,
@@ -131,12 +131,24 @@ export type CodexSessionPermissionPolicy = Extract<SessionPermissionPolicy, { ag
  * machine, and inheriting it would silently switch off every approval prompt.
  *
  * ONE constant, TWO carriers (H9). `buildThreadStartParams` puts it on the wire
- * for a new thread; `ensureCodexHome` writes the same two fields into the
- * isolated `config.toml`, because a RESUMED thread re-derives its posture from
- * that file and never from the parameters the thread was created with [实测].
+ * for a new thread; `buildCodexConfigOverrides` puts the same two fields on the
+ * SPAWN LINE, because a RESUMED thread re-derives its posture from the config
+ * layer and never from the parameters the thread was created with [实测].
  * Both carriers read this object, so there is still exactly one source — and
- * `codexHome.ts` takes it as an argument rather than importing it, which is what
- * keeps the dependency edge one-way.
+ * `codexConfigOverrides.ts` takes it as an argument rather than importing it,
+ * which is what keeps the dependency edge one-way.
+ *
+ * S0' (D60) changed WHICH config layer the second carrier writes to: it was a
+ * `config.toml` in an app-owned CODEX_HOME, it is now `-c` flags on the argv.
+ * [E2 A-P2 实测] confirms the substitution survives the case that motivated the
+ * second carrier in the first place — a cross-process resume.
+ *
+ * ⚠️ [E2 A-4 实测] also corrected a claim that used to stand here: on 0.149.1
+ * `approval_policy` at RESUME comes from the thread's own rollout, and NEITHER
+ * `-c` NOR a `config.toml` can move it. Changing this constant therefore does
+ * NOT re-posture old threads — it makes them fail `verifyResumePosture` and
+ * become unopenable. `sandbox_mode` behaves the opposite way and does follow
+ * the current config layer. See that report before changing either value.
  *
  * ## `networkAccess` is NOT ours to send, and NOT ours to guess either
  *
@@ -1099,16 +1111,12 @@ export interface CodexRuntimeOptions {
   emit: EmitFn;
   log?: LogFn;
   registry: SessionRegistry;
-  /** `<userData>/codex-home`, injected by Main. The Host never guesses it. */
-  codexHomeDir: string;
   /** Reported to OpenAI inside the User-Agent via `clientInfo.version`. */
   appVersion: string;
   /** Test seam — replaces the real `child_process` spawn. */
   connect?: CodexConnectFactory;
   /** Test seam — replaces the fs probes of the entry-point resolver. */
   resolveLaunch?: () => CodexEntryResolution;
-  /** Test seam — replaces the isolated-home seeding. */
-  ensureHome?: typeof ensureCodexHome;
   /**
    * Test seam — the clock the idle sweeper reads. Every timestamp it compares
    * comes from here, so a fake clock moves "how long ago" without moving real
@@ -1714,7 +1722,6 @@ export class CodexRuntime {
       pid: state.connection.pid,
       source: opened.plan.source,
       codexJsPath: opened.plan.codexJsPath,
-      homeDir: opened.homeDir,
     });
 
     void this.startThread(state, input);
@@ -1748,8 +1755,8 @@ export class CodexRuntime {
      */
     policy?: CodexSessionPermissionPolicy;
   }):
-    | { ok: true; state: CodexSessionState; homeDir: string; plan: CodexLaunchPlan }
-    | { ok: false; stage: 'entry' | 'home' | 'spawn'; message: string } {
+    | { ok: true; state: CodexSessionState; plan: CodexLaunchPlan }
+    | { ok: false; stage: 'entry' | 'spawn'; message: string } {
     const { sessionId, workspacePath } = input;
     const policy = input.policy ?? CODEX_PERMISSION_DEFAULT;
     const resolution = (this.opts.resolveLaunch ?? resolveCodexLaunch)();
@@ -1764,74 +1771,60 @@ export class CodexRuntime {
       return { ok: false, stage: 'entry', message: resolution.message };
     }
 
-    let homeDir: string;
-    try {
-      const home = (this.opts.ensureHome ?? ensureCodexHome)({
-        homeDir: this.opts.codexHomeDir,
-        // H9 layer 1: the SAME object `buildThreadStartParams` sends. A resumed
-        // thread re-derives its posture from this file, so the posture has to
-        // reach the disk as well as the wire.
-        //
-        // D48 S3 caveat (as-built, §5.5): this isolated home is ONE directory
-        // per Host process, so the file is rewritten on every connection open.
-        // Sequential opens are correct — each spawn reads the file this call
-        // just wrote — but two sessions with DIFFERENT postures opening
-        // concurrently could interleave the write with the other's spawn. Not
-        // reachable from today's UI (create and resume are serialized by the
-        // renderer's own send path) and out of S3's scope to fix properly,
-        // which needs a per-session home; registered as spec §8.2-L13.
-        permission: policy,
-        // D47 S4a: the SAME env object the spawn-env build below reads (one of
-        // `resolveCodexCredentialMode`'s four readers, §1) — so a mode decided
-        // for the home cannot disagree with the mode decided for the env a few
-        // lines later in this same call.
-        env: this.opts.env,
-        log: (...args: unknown[]) => this.log('[codex-home]', ...args),
-      });
-      homeDir = home.homeDir;
-    } catch (err) {
-      return {
-        ok: false,
-        stage: 'home',
-        message: `could not prepare the isolated CODEX_HOME: ${errorMessage(err)}`,
-      };
-    }
-
-    // The other half of the isolation. `codexHome.ts` wrote a deny-by-default
-    // projection into `homeDir`; this is what makes codex READ that directory
-    // instead of `~/.codex`. Without it every drop in the projection is undone
-    // and the session silently inherits `developer_instructions` and
-    // `danger-full-access`.
+    // S0' codex side (D60) — what used to be here was: materialise an
+    // app-owned CODEX_HOME, write a deny-by-default `config.toml` projection
+    // into it, delete any `auth.json` beside it, then point codex at that
+    // directory. All three are gone, and `CODEX_HOME` is no longer set at all:
+    // codex reads the user's own `~/.codex` (or whatever THEY pointed
+    // `CODEX_HOME` at), so their global `AGENTS.md` and the whole
+    // `agents`/`hooks`/`skills`/`plugins` tree is back structurally — no
+    // projection to keep current, nothing to adopt.
     //
-    // FALLBACK: the rest of the environment is inherited whole, deliberately,
-    // and this branch is UNCHANGED by D47 S4a (spec: "fallback 全继承现状").
-    // NOTE for whoever revisits this: once a Claude session has run,
-    // `ensureRuntime()` has copied `~/.claude/settings.json`'s env (including
-    // `ANTHROPIC_AUTH_TOKEN`) onto this process, so those variables reach the
-    // codex child too. Filtering them looks tempting and is NOT done here,
-    // because a user whose codex `model_providers.<id>.env_key` names one of
-    // them would lose authentication with a confusing error — the projection
-    // keeps `env_key`, so that configuration is reachable. Registered as an open
-    // question rather than settled by guess.
-    //
-    // MANAGED (D47 S4a, §2 S4a): the credential landscape is the opposite —
-    // Main already told us exactly which one key codex needs
-    // (`AICLIENT_CODEX_API_KEY`, injected onto AND read off this SAME opts.env
-    // / process.env by `resolveCodexCredentialMode`) — so inherited credential
-    // shaped vars are a LIABILITY here, not a reachability feature: an
-    // `ANTHROPIC_*` var surviving onto a managed codex child could shadow the
-    // one credential `config.toml`'s `env_key` indirection actually names.
+    // Everything the file used to say is now said on the command line. See
+    // `codexConfigOverrides.ts` for the measurements behind that swap; the two
+    // that make it legal are E1 R5 (our `-c` posture beats a user config
+    // pinning `danger-full-access`) and E2 A-P2 (it still does after a
+    // cross-process resume).
     const credentialMode = resolveCodexCredentialMode(this.opts.env ?? process.env);
+
+    // MANAGED: Main told us exactly which key codex needs and where to send it,
+    // so inherited credential-shaped vars are a LIABILITY — an `ANTHROPIC_*`
+    // var surviving onto a managed child could shadow the one credential our
+    // `env_key` override actually names.
+    //
+    // FALLBACK: the environment is inherited whole, unchanged from before D60.
+    // A user whose own `model_providers.<id>.env_key` names an inherited
+    // variable would lose authentication with a confusing error if we filtered
+    // here, and their config is now reachable in full.
+    //
+    // Neither arm sets `CODEX_HOME`. That is the D60 change stated as code: a
+    // key we do not write is a directory we do not take away.
     const env: NodeJS.ProcessEnv =
       credentialMode.mode === 'fallback'
-        ? { ...process.env, CODEX_HOME: homeDir }
+        ? { ...process.env }
         : {
             ...stripCredentialEnv(this.opts.env ?? process.env),
-            CODEX_HOME: homeDir,
             ...(credentialMode.mode === 'managed'
               ? { [CODEX_MANAGED_API_KEY_ENV]: credentialMode.apiKey }
               : {}),
           };
+
+    // The posture rides BOTH carriers from one object (H9 layer 1): these `-c`
+    // flags and `state.policy`, which is what `thread/start` then sends. Passed
+    // down from `input.policy` rather than read twice, so the two cannot drift.
+    const plan: CodexLaunchPlan = {
+      ...resolution.plan,
+      args: [
+        ...resolution.plan.args,
+        ...buildCodexConfigOverrides({
+          posture: { approvalPolicy: policy.approvalPolicy, sandboxMode: policy.sandboxMode },
+          // Fallback and `managed_missing_credentials` both mean "we are not
+          // supplying a provider". They differ upstream (the registry refuses
+          // to advertise codex at all in the second case), not here.
+          provider: credentialMode.mode === 'managed' ? { baseUrl: credentialMode.baseUrl } : null,
+        }),
+      ],
+    };
 
     const connect = this.opts.connect ?? spawnCodexConnection;
     // The exit handler has to name the state this connection belongs to, and the
@@ -1845,7 +1838,7 @@ export class CodexRuntime {
     let connection: CodexConnection;
     try {
       connection = connect({
-        plan: resolution.plan,
+        plan,
         env,
         cwd: workspacePath,
         handlers: {
@@ -1896,7 +1889,7 @@ export class CodexRuntime {
     };
     owner.state = state;
 
-    return { ok: true, homeDir, plan: resolution.plan, state };
+    return { ok: true, plan, state };
   }
 
   /**
@@ -1994,22 +1987,22 @@ export class CodexRuntime {
   }
 
   /**
-   * Did codex actually adopt the isolated home? Log-only: the answer changes
-   * nothing we can do at this point, but "codex read ~/.codex after all" is the
-   * single most useful line in a report about a session that inherited
-   * `developer_instructions`.
+   * Log which `CODEX_HOME` codex actually used.
+   *
+   * Before S0' this compared codex's echo against the directory we injected and
+   * warned on a mismatch. There is nothing to compare against any more — D60
+   * stopped injecting one on purpose, so whatever codex reports IS the right
+   * answer (the user's `~/.codex`, or a `CODEX_HOME` they set themselves).
+   *
+   * Kept as a plain log line rather than deleted: "which config tree was this
+   * session actually reading" is the first question worth asking about a
+   * session that behaved as if some other machine's settings were in force, and
+   * it is not answerable after the fact from anything else we record.
    */
   private checkHomeEcho(sessionId: string, initResult: unknown): void {
     const reported = isRecord(initResult) ? initResult.codexHome : undefined;
     if (typeof reported !== 'string') return;
-    const strip = (p: string): string => p.replace(/[\\/]+$/, '');
-    if (strip(reported) !== strip(this.opts.codexHomeDir)) {
-      this.log('WARN codex reported a different CODEX_HOME than we injected', {
-        sessionId,
-        reported,
-        expected: this.opts.codexHomeDir,
-      });
-    }
+    this.log('codex home in use', { sessionId, codexHome: reported });
   }
 
   /**
@@ -3757,7 +3750,6 @@ export class CodexRuntime {
       threadId,
       pid: state.connection.pid,
       source: opened.plan.source,
-      homeDir: opened.homeDir,
     });
 
     try {

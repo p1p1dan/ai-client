@@ -8,7 +8,11 @@ import {
   type SessionPermissionPreference,
 } from '../../shared/types/runtimeEvents.ts';
 import type { SessionIndexEntry } from '../../shared/types/sessionIndex.ts';
-import { CODEX_MANAGED_API_KEY_ENV, CODEX_MANAGED_ENV } from '../agentSupport.ts';
+import {
+  CODEX_MANAGED_API_KEY_ENV,
+  CODEX_MANAGED_BASE_URL_ENV,
+  CODEX_MANAGED_ENV,
+} from '../agentSupport.ts';
 import {
   type CodexConnectFactory,
   type CodexConnectionCore,
@@ -31,7 +35,6 @@ import {
   CODEX_SWEEP_INTERVAL_MS,
   type CodexIdleView,
   CodexRuntime,
-  type CodexRuntimeOptions,
   compareSandboxEcho,
   isCodexIdleSweepable,
   resolveCodexIdleTimeoutMs,
@@ -313,8 +316,18 @@ interface Harness {
   /** Ordered transport transcript: `write:<method>` / `reply:<id>` / `kill:<reason>`. */
   ops: string[];
   connectInputs: Array<Parameters<CodexConnectFactory>[0]>;
-  /** Every call the runtime made into the isolated-home builder, in order. */
-  ensureHomeInputs: Array<Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]>;
+  /**
+   * The `-c key=value` entries on the Nth spawn's argv.
+   *
+   * S0' (D60) made this the SECOND CARRIER of the posture (H9 layer 1). It used
+   * to be a `config.toml` written into an app-owned CODEX_HOME, and the harness
+   * observed it by recording the calls into the home builder. There is no home
+   * and no builder now — the same facts are on the command line, so that is
+   * where the assertions read them.
+   */
+  spawnOverrides: (index?: number) => string[];
+  /** The posture the Nth spawn actually carries, parsed back out of its argv. */
+  spawnPosture: (index?: number) => { approvalPolicy: string; sandboxMode: string };
   /** Our outbound requests, parsed. */
   requestFor(method: string): OutboundFrame;
   /** Every outbound frame for a method — a second turn writes a second turn/start. */
@@ -380,9 +393,7 @@ interface HarnessOptions {
    */
   resumeWindowFrames?: Array<Record<string, unknown>>;
   resolveLaunch?: () => CodexEntryResolution;
-  ensureHome?: CodexRuntimeOptions['ensureHome'];
   appVersion?: string;
-  codexHomeDir?: string;
   /**
    * The idle sweeper's environment. Defaults to EMPTY, not to `process.env`:
    * a developer with `AICLIENT_CODEX_IDLE_TIMEOUT_SECS` exported would
@@ -392,13 +403,41 @@ interface HarnessOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+/** Pull the `-c` values off a recorded spawn, in order. */
+function readOverrides(
+  connectInputs: Array<Parameters<CodexConnectFactory>[0]>,
+  index: number
+): string[] {
+  const input = connectInputs[index];
+  if (!input) throw new Error(`no spawn recorded at index ${index}`);
+  const args = input.plan.args;
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '-c') out.push(String(args[i + 1]));
+  }
+  return out;
+}
+
+/** The posture a recorded spawn carries, read back out of its own argv. */
+function readPosture(
+  connectInputs: Array<Parameters<CodexConnectFactory>[0]>,
+  index: number
+): { approvalPolicy: string; sandboxMode: string } {
+  const entries = readOverrides(connectInputs, index);
+  const readKey = (key: string): string => {
+    const hit = entries.find((e) => e.startsWith(`${key}=`));
+    if (!hit) throw new Error(`spawn ${index} carried no ${key}; saw ${entries.join(' ')}`);
+    return JSON.parse(hit.slice(key.length + 1)) as string;
+  };
+  return { approvalPolicy: readKey('approval_policy'), sandboxMode: readKey('sandbox_mode') };
+}
+
 function makeHarness(options: HarnessOptions = {}): Harness {
   const events: Array<Record<string, unknown>> = [];
   const logs: string[] = [];
   const ops: string[] = [];
   const written: OutboundFrame[] = [];
   const connectInputs: Array<Parameters<CodexConnectFactory>[0]> = [];
-  const ensureHomeInputs: Array<Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]> = [];
   const connections: ConnectionSlice[] = [];
   const intervals: FakeTimer[] = [];
   const deadlines: FakeTimer[] = [];
@@ -534,7 +573,6 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     log: (...args) =>
       logs.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')),
     registry,
-    codexHomeDir: options.codexHomeDir ?? HOME_DIR,
     appVersion: options.appVersion ?? '9.9.9-test',
     now: () => clock,
     env: options.env ?? {},
@@ -542,21 +580,6 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     startTimeout: collectTimers(deadlines),
     connect,
     resolveLaunch: options.resolveLaunch ?? (() => ({ ok: true, plan: PLAN })),
-    ensureHome: (input) => {
-      // Recorded before delegating, so the H9 layer-1 WIRING (which posture the
-      // runtime hands the home builder) is observable — `codexHome.test.ts` can
-      // only pin what the projection does with a posture it is given.
-      ensureHomeInputs.push(input);
-      return (
-        options.ensureHome ??
-        ((seen: Parameters<NonNullable<CodexRuntimeOptions['ensureHome']>>[0]) => ({
-          mode: 'projected' as const,
-          homeDir: seen.homeDir,
-          projection: { toml: '', kept: [], dropped: [] },
-          authCopied: false,
-        }))
-      )(input);
-    },
   });
 
   const harness: Harness = {
@@ -566,7 +589,8 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     logs,
     ops,
     connectInputs,
-    ensureHomeInputs,
+    spawnOverrides: (index = 0) => readOverrides(connectInputs, index),
+    spawnPosture: (index = 0) => readPosture(connectInputs, index),
     requestFor: (method) => {
       const frame = written.find((f) => f.method === method);
       if (!frame) throw new Error(`no outbound request for ${method}; saw ${ops.join(', ')}`);
@@ -864,26 +888,39 @@ describe('codexRuntime — handshake identity and isolation', () => {
     expect(buildInitializeParams(' 1.2.3 ').clientInfo.version).toBe('1.2.3');
   });
 
-  it('spawns with CODEX_HOME pointing at the isolated directory', async () => {
-    // The projection in `codexHome.ts` is only half the isolation; without this
-    // env var codex reads `~/.codex` and every dropped key comes back.
+  it("S0': spawns into the workspace with the bundled entry, and no CODEX_HOME", async () => {
+    // This used to assert `env.CODEX_HOME === HOME_DIR`: the projection was only
+    // half the isolation, and without the env var codex read `~/.codex` and
+    // every dropped key came back. D60 made reading `~/.codex` the POINT.
     const h = await startedSession();
     const input = h.connectInputs[0];
 
-    expect(input.env.CODEX_HOME).toBe(HOME_DIR);
+    expect(input.env).not.toHaveProperty('CODEX_HOME');
     expect(input.cwd).toBe('/work/repo');
     expect(input.plan.codexJsPath.endsWith('codex.js')).toBe(true);
-    // …and the home it points at was seeded with the session's own posture
-    // (H9 layer 1). Identity, so create and resume cannot be handed two
-    // different objects that merely look alike today.
-    expect(h.ensureHomeInputs[0].permission).toBe(CODEX_PERMISSION_DEFAULT);
+    // …and the argv it spawned with carries the session's own posture (H9
+    // layer 1, second carrier — a `config.toml` until S0'/D60 moved it here).
+    expect(h.spawnPosture(0)).toEqual({
+      approvalPolicy: CODEX_PERMISSION_DEFAULT.approvalPolicy,
+      sandboxMode: CODEX_PERMISSION_DEFAULT.sandboxMode,
+    });
   });
 
-  it('managed mode: spawn env carries the isolated CODEX_HOME too (not just the fallback path)', async () => {
-    const h = await startedSession('s1', {
-      env: { [CODEX_MANAGED_ENV]: '1', [CODEX_MANAGED_API_KEY_ENV]: 'sk-live' },
+  it("S0': no arm sets CODEX_HOME — the user's own config tree is what codex reads", async () => {
+    // The assertion D60 turns on. Both arms used to inject an app-owned home;
+    // injecting one is what took the user's global AGENTS.md, agents/, hooks/,
+    // skills/ and plugins/ away without saying so.
+    const fallback = await startedSession('s-fb');
+    expect(fallback.connectInputs[0].env).not.toHaveProperty('CODEX_HOME');
+
+    const managed = await startedSession('s1', {
+      env: {
+        [CODEX_MANAGED_ENV]: '1',
+        [CODEX_MANAGED_API_KEY_ENV]: 'sk-live',
+        [CODEX_MANAGED_BASE_URL_ENV]: 'https://gateway.example.com/v1',
+      },
     });
-    expect(h.connectInputs[0].env.CODEX_HOME).toBe(HOME_DIR);
+    expect(managed.connectInputs[0].env).not.toHaveProperty('CODEX_HOME');
   });
 
   it('sends the initialized notification after the initialize response', async () => {
@@ -896,20 +933,17 @@ describe('codexRuntime — handshake identity and isolation', () => {
     ]);
   });
 
-  it('warns, without failing, when codex reports a home other than the one injected', async () => {
-    // "codex read ~/.codex after all" is the single most useful line in a report
-    // about a session that inherited `developer_instructions` — and it is only
-    // a WARN, because by then the session is already usable.
-    const quiet = await startedSession();
-    expect(quiet.logs.some((line) => line.includes('different CODEX_HOME'))).toBe(false);
+  it("S0': logs which CODEX_HOME codex actually used, and never warns about it", async () => {
+    // This used to compare codex's echo against the directory we injected and
+    // WARN on a mismatch. D60 stopped injecting one, so whatever codex reports
+    // IS the right answer — but "which config tree was this session reading" is
+    // still the first question worth asking about a session that behaved as if
+    // some other machine's settings were in force, so the line stays.
+    const h = await startedSession();
 
-    // Same fake codex (it answers with HOME_DIR), different injected home.
-    const loud = makeHarness({ codexHomeDir: '/some/other/home' });
-    loud.runtime.createSession({ sessionId: 's-home', workspacePath: '/work/repo' });
-    await loud.waitForEvent('session.created');
-
-    expect(loud.logs.some((line) => line.includes('different CODEX_HOME'))).toBe(true);
-    expect(loud.event('host.error')).toBeUndefined();
+    expect(h.logs.some((line) => line.includes('codex home in use'))).toBe(true);
+    expect(h.logs.some((line) => line.includes('different CODEX_HOME'))).toBe(false);
+    expect(h.event('host.error')).toBeUndefined();
   });
 
   it('omits model from thread/start when the session has none, and sends it when it does', () => {
@@ -920,10 +954,10 @@ describe('codexRuntime — handshake identity and isolation', () => {
 });
 
 /**
- * D47 S4a §2 — managed-mode spawn env. Fallback mode's env-building line is
- * UNCHANGED by this slice (`{...process.env, CODEX_HOME}`, spec: "fallback
- * 全继承现状") — its zero-diff coverage is the existing
- * "spawns with CODEX_HOME pointing at the isolated directory" case above.
+ * D47 S4a §2 — managed-mode spawn env. Fallback mode inherits the environment
+ * whole (spec: "fallback 全继承现状"); its coverage is the
+ * "spawns into the workspace with the bundled entry, and no CODEX_HOME" case
+ * above. Since S0' (D60) NEITHER arm sets `CODEX_HOME`.
  * Everything here is the MANAGED branch, asserted through the same
  * `connectInputs` harness seam (B 轨 M4: no separately-exported helper test).
  */
@@ -931,6 +965,9 @@ describe('codexRuntime — managed spawn env (D47 S4a §2)', () => {
   const MANAGED_ENV: NodeJS.ProcessEnv = {
     [CODEX_MANAGED_ENV]: '1',
     [CODEX_MANAGED_API_KEY_ENV]: 'sk-live-managed',
+    // S0': managed mode needs BOTH halves, or the resolver reports
+    // `managed_missing_credentials` instead.
+    [CODEX_MANAGED_BASE_URL_ENV]: 'https://gateway.example.com/v1',
   };
 
   it('strips every ANTHROPIC_-prefixed var, including one this build has never heard of (mutation ⑤ sentinel)', async () => {
@@ -952,15 +989,18 @@ describe('codexRuntime — managed spawn env (D47 S4a §2)', () => {
     expect(env.ANTHROPIC_FUTURE_SENTINEL).toBeUndefined();
   });
 
-  it('injects AICLIENT_CODEX_API_KEY and CODEX_HOME, and keeps an unrelated var (targeted strip, not a wholesale wipe)', async () => {
+  it('injects AICLIENT_CODEX_API_KEY and keeps an unrelated var (targeted strip, not a wholesale wipe)', async () => {
     const h = await startedSession('s1', {
       env: { ...MANAGED_ENV, SOME_UNRELATED_VAR: 'keep-me' },
     });
     const env = h.connectInputs[0].env;
 
     expect(env[CODEX_MANAGED_API_KEY_ENV]).toBe('sk-live-managed');
-    expect(env.CODEX_HOME).toBe(HOME_DIR);
     expect(env.SOME_UNRELATED_VAR).toBe('keep-me');
+    // The base URL does NOT need to reach the child: it is on the argv.
+    expect(h.spawnOverrides(0)).toContain(
+      'model_providers.jyw.base_url="https://gateway.example.com/v1"'
+    );
   });
 
   it('managed_missing_credentials (marker on, key absent) strips credential-shaped vars but injects no api key — defence in depth even though the registry should refuse first', async () => {
@@ -971,7 +1011,9 @@ describe('codexRuntime — managed spawn env (D47 S4a §2)', () => {
 
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env[CODEX_MANAGED_API_KEY_ENV]).toBeUndefined();
-    expect(env.CODEX_HOME).toBe(HOME_DIR);
+    // No provider table either — an incomplete credential must not produce a
+    // half-built provider that codex would then fail to authenticate against.
+    expect(h.spawnOverrides(0).some((e) => e.startsWith('model_provider'))).toBe(false);
   });
 
   it('create/resume/revive all share the same openConnection wiring — one smoke test per path (B 轨 M4)', async () => {
@@ -1086,19 +1128,86 @@ describe('codexRuntime — create failures leave nothing behind', () => {
     expect(h.connectInputs).toHaveLength(1);
   });
 
-  it('reports a CODEX_HOME that cannot be prepared instead of running unisolated', async () => {
-    // Falsifies "seed failed, carry on": a session that starts without the
-    // projection inherits developer_instructions and danger-full-access.
+  it("S0': a spawn no longer has a filesystem step that can fail before it", async () => {
+    // What stood here: `ensureHome` throwing EACCES produced
+    // `session_create_failed` with a CODEX_HOME message, on the reasoning that
+    // a session starting without the projection would inherit
+    // `developer_instructions` and `danger-full-access`.
+    //
+    // Neither half survives S0'. There is no projection to fail (D60), and
+    // inheriting the user's `developer_instructions` is now the INTENDED
+    // behaviour (D61) — while the posture is forced on the argv, so it cannot
+    // be inherited at all. The remaining pre-spawn failure is the entry-point
+    // resolver, which has always been reported on its own stage.
     const h = makeHarness({
-      ensureHome: () => {
-        throw new Error('EACCES: permission denied');
-      },
+      resolveLaunch: () => ({
+        ok: false,
+        code: 'codex_entry_unresolved',
+        message: 'no codex.js on this machine',
+        inspected: [],
+      }),
     });
-    h.runtime.createSession({ sessionId: 's-home-fail', workspacePath: '/work' });
+    h.runtime.createSession({ sessionId: 's-entry-fail', workspacePath: '/work' });
+
+    // `agent_unsupported`, not `session_create_failed`: an unresolvable entry
+    // is "this machine cannot run codex", which is the answer the entry stage
+    // has always given — it never shared the home stage's code.
+    expect(payload(h.event('host.error')).code).toBe('agent_unsupported');
+    expect(h.connectInputs).toHaveLength(0);
+  });
+
+  it('keeps the user machine layout out of the event and in the log', async () => {
+    // The inspected paths are the most useful line in a support log and the
+    // worst thing to push into a UI toast.
+    const h = makeHarness({
+      resolveLaunch: () => ({
+        ok: false,
+        code: 'codex_entry_unresolved',
+        message: 'Codex entry not found.',
+        inspected: [{ path: '/home/someone/secret-project/codex.js', reason: 'not-found' }],
+      }),
+    });
+    h.runtime.createSession({ sessionId: 's-bad2', workspacePath: '/work' });
+
+    expect(JSON.stringify(h.events)).not.toContain('secret-project');
+    expect(h.logs.some((line) => line.includes('secret-project'))).toBe(true);
+  });
+
+  it('reports a failed handshake, tears the process down and unregisters the session', async () => {
+    const h = makeHarness({
+      threadStartError: { code: -32602, message: 'invalid params' },
+    });
+    h.runtime.createSession({ sessionId: 's-fail', workspacePath: '/work', requestId: 'req-f' });
+    await h.waitFor(() => h.events.some((e) => e.type === 'host.error'), 'host.error');
+
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe('session_create_failed');
+    expect(error?.sessionId).toBe('s-fail');
+    expect(error?.requestId).toBe('req-f');
+    // No half-open session: no created event, no registry row, process killed.
+    expect(h.event('session.created')).toBeUndefined();
+    expect(h.registry.get('s-fail')).toBeUndefined();
+    expect(h.ops.some((op) => op.startsWith('kill:'))).toBe(true);
+  });
+
+  it('fails the create when thread/start answers without a thread id', async () => {
+    // Without it no turn can ever be addressed, so a "successful" create would
+    // hand back a session that is dead on arrival.
+    const h = makeHarness({ threadStartResult: { approvalPolicy: 'on-request' } });
+    h.runtime.createSession({ sessionId: 's-noid', workspacePath: '/work' });
+    await h.waitFor(() => h.events.some((e) => e.type === 'host.error'), 'host.error');
+
+    expect(payload(h.event('host.error')).message).toContain('thread id');
+    expect(h.event('session.created')).toBeUndefined();
+  });
+
+  it('refuses a duplicate sessionId without touching the existing session', async () => {
+    const h = await startedSession();
+    h.events.length = 0;
+    h.runtime.createSession({ sessionId: 's1', workspacePath: '/work/repo' });
 
     expect(payload(h.event('host.error')).code).toBe('session_create_failed');
-    expect(payload(h.event('host.error')).message).toContain('CODEX_HOME');
-    expect(h.connectInputs).toHaveLength(0);
+    expect(h.connectInputs).toHaveLength(1);
   });
 });
 
@@ -1473,9 +1582,11 @@ describe('codexRuntime — resume replays a cold thread (G6)', () => {
     // source of the posture and the echo check below is the only proof it took.
     // `codexHome.test.ts` pins what the projection DOES with this object; this
     // pins which object it gets.
-    expect(h.ensureHomeInputs).toHaveLength(1);
-    expect(h.ensureHomeInputs[0].permission).toBe(CODEX_PERMISSION_DEFAULT);
-    expect(h.ensureHomeInputs[0].homeDir).toBe(HOME_DIR);
+    expect(h.connectInputs).toHaveLength(1);
+    expect(h.spawnPosture(0)).toEqual({
+      approvalPolicy: CODEX_PERMISSION_DEFAULT.approvalPolicy,
+      sandboxMode: CODEX_PERMISSION_DEFAULT.sandboxMode,
+    });
   });
 
   it('binds state and the registry BEFORE the handshake is answered (H11)', async () => {
@@ -4118,8 +4229,11 @@ describe('codexRuntime — send() revives a swept session (G9/G13)', () => {
     // H9 stays double-layered on this path too: the isolated home is re-seeded
     // with the same posture object (layer 1), and the echo is verified below in
     // its own case (layer 2).
-    expect(h.ensureHomeInputs).toHaveLength(2);
-    expect(h.ensureHomeInputs[1].permission).toBe(CODEX_PERMISSION_DEFAULT);
+    expect(h.connectInputs).toHaveLength(2);
+    expect(h.spawnPosture(1)).toEqual({
+      approvalPolicy: CODEX_PERMISSION_DEFAULT.approvalPolicy,
+      sandboxMode: CODEX_PERMISSION_DEFAULT.sandboxMode,
+    });
     // Quiet. Nothing that would repaint the conversation, and no error either.
     expect(h.eventsOf('session.resumed')).toEqual([]);
     expect(h.eventsOf('session.history')).toEqual([]);
@@ -4818,7 +4932,7 @@ describe('codexRuntime — a requested posture reaches every carrier (C11)', () 
     const start = h.requestFor('thread/start');
     const created = payload(h.event('session.created'));
     const advertised = created.permissionPolicy as { approvalPolicy: string; sandboxMode: string };
-    const home = h.ensureHomeInputs[0].permission;
+    const home = h.spawnPosture(0);
     const stored = h.registry.get('s1')?.permissionPreference as { approvalPolicy: string };
 
     // Four captures compared to each other, never to a literal (the paradigm the
@@ -4898,7 +5012,10 @@ describe('codexRuntime — a requested posture reaches every carrier (C11)', () 
     // The two dimensions we ask for are the constant's; the third one is the
     // harness echo's, which is the only place it can come from.
     expect(created.permissionPolicy).toEqual({ ...CODEX_PERMISSION_DEFAULT, networkAccess: false });
-    expect(h.ensureHomeInputs[0].permission).toBe(CODEX_PERMISSION_DEFAULT);
+    expect(h.spawnPosture(0)).toEqual({
+      approvalPolicy: CODEX_PERMISSION_DEFAULT.approvalPolicy,
+      sandboxMode: CODEX_PERMISSION_DEFAULT.sandboxMode,
+    });
     expect(h.registry.get('s1')?.permissionPreference).toBeUndefined();
   });
 
@@ -4927,7 +5044,7 @@ describe('codexRuntime — a requested posture reaches every carrier (C11)', () 
 
     const resumed = payload(h.event('session.resumed'));
     const advertised = resumed.permissionPolicy as { approvalPolicy: string; sandboxMode: string };
-    const home = h.ensureHomeInputs[0].permission;
+    const home = h.spawnPosture(0);
 
     // Captures compared to each other: the file the thread re-derives its
     // posture from, the posture `assertResumePosture` verified against, and the
@@ -4984,9 +5101,11 @@ describe('codexRuntime — a requested posture reaches every carrier (C11)', () 
 
     // The revive has no command to read a preference from — only the registry
     // row — so this is the assertion that keeps the field on the row.
-    expect(h.ensureHomeInputs).toHaveLength(2);
-    expect(h.ensureHomeInputs[1].permission.approvalPolicy).toBe('untrusted');
-    expect(h.ensureHomeInputs[1].permission.sandboxMode).toBe('read-only');
+    expect(h.connectInputs).toHaveLength(2);
+    expect(h.spawnPosture(1)).toEqual({
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only',
+    });
     expect(h.eventsOf('host.error')).toEqual([]);
   });
 });
@@ -5474,9 +5593,11 @@ describe('codexRuntime — a swept session can still be retuned (D48 S4 terminal
 
     // The isolated home is where a codex thread's posture actually comes from
     // [实测], so this is the frame that proves the change reached the process.
-    expect(h.ensureHomeInputs).toHaveLength(2);
-    expect(h.ensureHomeInputs[1].permission.approvalPolicy).toBe('untrusted');
-    expect(h.ensureHomeInputs[1].permission.sandboxMode).toBe('read-only');
+    expect(h.connectInputs).toHaveLength(2);
+    expect(h.spawnPosture(1)).toEqual({
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only',
+    });
     // `assertResumePosture` compares the echo against exactly that, so a revive
     // under the OLD posture fails the send rather than running the wrong tier.
     expect(h.eventsOf(CODEX_REVIVE_FAILED_CODE)).toEqual([]);
