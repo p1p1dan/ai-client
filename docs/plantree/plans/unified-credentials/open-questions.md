@@ -27,14 +27,34 @@
   取证结论保留（见 [附-5](#附-5-取证原文)），但三个候选修法里**不选①扩大投影、不选③UI 明示，选「取消隔离」**。
   剩余的是施工而非问题：codex 侧今天已在失效，止血归 roadmap 的 **S0'**。
 
-## #4 目录名最终是不是 `.pilab`
+## #4 品牌口径四不像（原「目录名最终是不是 `.pilab`」）
 
-**状态**：✅ 2026-08-26 **二次确认取 `.pilab`**（用户当轮举例写了 `.aiclient`，反查确认后维持原拍板），
-本条降级为一条纯提醒
+**状态**：目录名那半 ✅ **已随 S2 落地**（2026-08-27，`~/.pilab/<profile>/`）；
+**品牌口径统一仍未决**，本条改为只跟这半
 
-用户 2026-08-26 拍板改叫 `.pilab`。登记此条只为提醒：**改名要趁早**（用户基数越大迁移越贵），
-且与产品名 / `appId: com.aiclient.app` / `productName: AiClient` / package `jyw-ai-client` 四者
-现在已经四不像。若将来要统一品牌口径，`.pilab` 会是第五个名字 —— 值得在改名同批把口径一起定了。
+改名本身办完了。剩下的是当初记这条时提醒的另一半，S2 **刻意没动**：
+
+| 名字 | 出处 | S2 后 |
+|---|---|---|
+| `.pilab` | `APP_STATE_DIR` | 新 |
+| `com.aiclient.app` | `electron-builder.yml` 的 `appId` | 未动 |
+| `AiClient` | `electron-builder.yml` 的 `productName` | 未动 |
+| `jyw-ai-client` | package `name`（也是 `<userData>` 与 profile 段的名字） | 未动 |
+| `.aiclient-generated` | codex 托管 home 的 sidecar 文件名 | 未动 |
+
+S2 没动它们是对的：`appId` 改了等于换一个应用（旧安装不再被认作同一个），
+package `name` 改了会连带换掉 `<userData>` 和刚定下来的 profile 段名。
+**这两件都是各自独立的迁移，不该搭在目录改名这一批里。**
+留在这里是为了别忘：现在是**五个**名字，不是四个。
+
+## ~~#8 应用内终端的 codex 不再走公司网关，要不要补~~ ✅ 已关闭
+
+**状态**：✅ 2026-08-27 拍板 **选项①「接受」**（[D66](../../../plans/openchamber-chat-refactor-ledger.md)，
+用户原话「终端不走公司网关也没事」）。
+
+取证与三个选项的原文见 D66。要点：这两半（`CODEX_HOME` + key）**拆不开**，
+而 codex 没有任何环境变量能改 `base_url` —— 所以不是「补不补」的取舍，是「补的代价是把 D60 刚拿掉的东西请回来」。
+**分界清楚**：agent 会话走公司网关，终端走用户自己的环境。
 
 ## #6 `settingSources: []` 让 CLAUDE.md 完全不进上下文，要不要改
 
@@ -54,6 +74,14 @@ D60 落地后也不会自动恢复。
 `permissions.deny`/`ask` 白名单过滤，可能正好是为这类场景准备的，**未取证**）。
 
 **建议**：单独立项，不混进凭据批。
+
+⚠️ **2026-08-27 升级为「有下游在等」**：本条不再只是一件挂着的事。
+[entry-and-environment](../entry-and-environment/README.md) 的第二个按钮（「使用本机已有配置」）
+要判断的正是「不注入时用户自己能不能拿到凭据」，而 `settingSources: []`
+**主动屏蔽了 `~/.claude/settings.json`** —— 对「自己在那份文件里配了 url+key」的用户，
+这个探测的结论必然是错的。⇒ 本条是
+[那边 open-q #1](../entry-and-environment/open-questions.md) 的前置，
+排期上不能无限期挂着。
 
 ## ~~#7 取消隔离后，用户的 `mcp_servers` / `developer_instructions` 要不要继承~~ ✅ 已关闭
 
