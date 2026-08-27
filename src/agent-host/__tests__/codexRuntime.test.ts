@@ -1091,6 +1091,67 @@ describe('codexRuntime — create failures leave nothing behind', () => {
     expect(h.logs.some((line) => line.includes('secret-project'))).toBe(true);
   });
 
+  /**
+   * S0'-b — the one start failure the user can fix, reported as such.
+   *
+   * Reachable only since S0' (D60) made the user's own `~/.codex/config.toml`
+   * load-bearing: before that we generated the config into a directory we
+   * owned, so a defect in theirs could not reach us. The message is codex's
+   * own, verbatim from E2's D2 probe.
+   */
+  it("S0'-b: a broken user config.toml is reported with its file and line, not as a generic failure", async () => {
+    const h = makeHarness({
+      threadStartError: {
+        code: -32600,
+        message:
+          'failed to load configuration: /home/u/.codex/config.toml:2:10: extra `=`, expected nothing',
+      },
+    });
+    h.runtime.createSession({ sessionId: 's-cfg', workspacePath: '/work', requestId: 'req-c' });
+    await h.waitFor(() => h.events.some((e) => e.type === 'host.error'), 'host.error');
+
+    const error = h.event('host.error');
+    expect(payload(error).code).toBe('codex_config_invalid');
+    const message = String(payload(error).message);
+    expect(message).toContain('/home/u/.codex/config.toml');
+    expect(message).toContain('line 2');
+    expect(message).toContain('extra `=`, expected nothing');
+    expect(error?.requestId).toBe('req-c');
+  });
+
+  /**
+   * The legacy-profile message carries NO path, so the file can only be named
+   * from the `codexHome` codex echoed at `initialize`. This is the assertion
+   * that keeps that echo recorded rather than merely logged.
+   */
+  it("S0'-b: names the failing file from the initialize echo when the message has no path", async () => {
+    const h = makeHarness({
+      threadStartError: {
+        code: -32600,
+        message:
+          'failed to load configuration: legacy `profile = "userprof"` config is no longer supported; use `--profile userprof` with `userprof.config.toml` instead',
+      },
+    });
+    h.runtime.createSession({ sessionId: 's-cfg2', workspacePath: '/work' });
+    await h.waitFor(() => h.events.some((e) => e.type === 'host.error'), 'host.error');
+
+    const message = String(payload(h.event('host.error')).message);
+    // HOME_DIR is what the fake codex echoes as its `codexHome`.
+    expect(message).toContain(`${HOME_DIR}/config.toml`);
+    expect(message).toContain('userprof.config.toml');
+  });
+
+  /** The negative control: an unrelated failure must NOT be dressed as a config problem. */
+  it("S0'-b: an ordinary start failure keeps the generic code", async () => {
+    const h = makeHarness({
+      threadStartError: { code: -32602, message: 'invalid params' },
+    });
+    h.runtime.createSession({ sessionId: 's-plain', workspacePath: '/work' });
+    await h.waitFor(() => h.events.some((e) => e.type === 'host.error'), 'host.error');
+
+    expect(payload(h.event('host.error')).code).toBe('session_create_failed');
+  });
+
   it('reports a failed handshake, tears the process down and unregisters the session', async () => {
     const h = makeHarness({
       threadStartError: { code: -32602, message: 'invalid params' },

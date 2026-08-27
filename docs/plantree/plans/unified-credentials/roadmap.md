@@ -1,12 +1,42 @@
 # Roadmap — 统一凭据目录与托管凭据转默认
 
 > 状态：**In Progress** —— S1 · **S0'（Claude 侧 + codex 侧）** · **S2** 均已落地。
-> 下一件 = **S3**，但它的形状取决于 [entry-and-environment 的 D64](../entry-and-environment/README.md)，须同轮定。
+> **S0'-b 已收尾，S0' 整条完成。**下一件 = **S3**，但它的形状取决于 [entry-and-environment 的 D64](../entry-and-environment/README.md)，须同轮定。
 > **2026-08-26 [D60](../../../plans/openchamber-chat-refactor-ledger.md) 重塑了 S2 之后的形状**：
 > 隔离 home 降级为「只隔离凭据」，取消 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` 整体重定向。
 > 连带 open-q #2 关闭、#5 修法定案；新增前置切片 **S0'**。未决项见 [open-questions](./open-questions.md)。
 
 ## Done
+
+- **2026-08-27 S0'-b 配置加载失败的错误落地 ✅ 已落地** —— S0' 收尾，也是 [D63](../../../plans/openchamber-chat-refactor-ledger.md) 的连带要求。
+
+  **为什么必须做**：S0' 让用户自己的 `~/.codex/config.toml` 变成承重件，
+  于是我们第一次要报一类**以前根本到不了我们**的失败（原先隔离目录把它整个屏蔽了 —— 是遮住，不是处理过）。
+  而 D63 拍的是「判断不了就放行」，**放行只有在失败说得清楚时才站得住**，否则那条拍板只是把成本转嫁给用户。
+
+  **两类致命失败**（[E2 D 组](../../../plans/2026-08-26-s0-spikes/e2-codex-resume-and-inherited-keys.md)已量过边界：
+  未知键 / 类型错 / 未激活的 `[profiles.x]` 表**都无害**）：
+  ① **TOML 语法错** —— 报文带 `<路径>:<行>:<列>: <原因>`；
+  ② **遗留 `profile = "x"` 根行** —— 报文**不带任何路径**。
+  后者是真会发生的那个：`profile = "x"` 曾是官方写法（新参数类型直接叫 `CONFIG_PROFILE_V2`），
+  用户什么都没做错；而他们系统里的 `codex` 若是老版本，**在自己终端里照常能用** ——
+  症状是「我终端里 codex 好好的，AiClient 里起不来」。
+
+  **实现**：纯模块 `agent-host/codexConfigError.ts`（分类 + 成文），接进 `startThread` 的失败分支，
+  给出独立错误码 `codex_config_invalid`；`checkHomeEcho` 现在**记录** codex 回显的 `codexHome`，
+  因为遗留-profile 那条报文没有路径，这个回显是**唯一**能说出「哪个文件」的来源。
+  codex 的原话**原样引用不改写** —— 它比我们能写的更准，用户拿它去搜也搜得到。
+  `configWarning` 通知（握手后、拒绝前推的同一份文本）只记日志不发事件，一个问题不报两次。
+
+  **变异 8/9 咬红**，第 9 个的处理值得记：位置正则的注释**连写错两版** ——
+  先归因给贪婪匹配、再归因给末尾锚点，两次都被「杀不掉的变异」戳穿。
+  查清后订正为：挡住 Windows 盘符的其实是 `:(\d+):(\d+): ` 这个**数字要求**本身（`C:` 后面是反斜杠不是数字）；
+  真正承重的是**惰性**路径组（报文里出现第二个位置时，第一个才是出错的文件，贪婪会指错文件指错行）——
+  这条已由新用例咬红；末尾锚点确实**冗余**，注释里如实写明「杀不掉、不是防线」而不是给它编一个理由。
+
+  **真机端到端**：拿随包 codex 喂两份坏配置 + 一份干净配置，
+  坏的两份分别归类为 `legacy_profile` / `syntax_error` 并输出带文件、行列、修法的整句；
+  干净那份不被改写（负控）。四门：typecheck 0（含 agent-host）· biome 997 文件 0 · **vitest 247 文件 5000 例**。
 
 - **2026-08-27 S0' codex 侧 ✅ 已落地（`7785ee1c`）** —— 隔离 home 整个下线，凭据与 provider 改经 `-c` + env 注入。
 
@@ -142,7 +172,9 @@
 
 ## Next（按依赖序）
 
-### S0' — 取消隔离 home，凭据改经 env 直送（D60 主体）· **Claude 侧 ✅ 已落地，codex 侧待施工**
+### ~~S0' — 取消隔离 home，凭据改经 env 直送（D60 主体）~~ ✅ **整条已落地**（Claude 侧 `77ff5dd4` · codex 侧 `7785ee1c` · 收尾 S0'-b）
+
+以下为立项时的设计原文，保留作为 as-built 对照。
 
 **排最前的理由**：codex 侧的配置树丢失**今天已经在影响用户**（`ensureCodexHome` 不受托管 flag 控制），
 且 S3 的形状完全取决于本切片的结果。
@@ -242,23 +274,6 @@ posture 那半 `-c` 补得回来，这半补不回来：`-c mcp_servers={}` 整�
    ⇒ **S2 多一条交付物：发布说明必须写明这一项**，否则用户会当成 bug 报上来。
 
 **S2 的开工前置已全部出清**（#1 profile 分层 · #3 远端孤儿 · #4 目录名二次确认），可进 execute。
-
-### S0'-b — 配置加载失败的错误落地（S0' 的收尾，**未做**）
-
-[E2 D 组实测](../../../plans/2026-08-26-s0-spikes/e2-codex-resume-and-inherited-keys.md)：
-取消隔离后用户 `~/.codex/config.toml` 变成承重件，而 **TOML 语法错**或**遗留 `profile = "x"` 根行**
-会让 `thread/start` 回 `-32600 failed to load configuration`，且 **`-c` 救不回来**
-（`-c` 在配置加载成功之后才合并，加载本身失败就没有合并这一步）。
-爆炸半径已量：未知键 / 类型错 / 未激活的 `[profiles.x]` 表**都无害**，只有这两类致命。
-
-**要做的**：codex 在 `initialize` 阶段就推一条 `configWarning` 通知，带**文件路径 + 行号 + 原因**；
-`thread/start` 随后回 `-32600`。这两条都不要降级成通用会话失败，要把 codex 自己给的原文带到 UI。
-
-**为什么必须做**：① 这是 S0' **引入**的回归（今天隔离 home 把它整个屏蔽了）；
-② `profile =` 在老版本 codex 里合法且常见，用户系统装的 codex 可能还认，
-现象会是"我终端里 codex 好好的，AiClient 里起不来"；
-③ [D63](../../../plans/openchamber-chat-refactor-ledger.md) 拍了「探不到也放行」，
-**放行的前提就是失败时说得清楚**，否则等于把排查成本转嫁给用户。
 
 ### S3 — `AICLIENT_MANAGED_CREDENTIALS` 转默认开（形状已被 D60 缩小）
 

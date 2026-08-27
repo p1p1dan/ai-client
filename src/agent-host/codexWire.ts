@@ -105,6 +105,17 @@ export const MAX_FRAME_BUFFER_BYTES = 32 * 1024 * 1024;
  * entry below against that snapshot, which also turns a codex upgrade that
  * renames a method into a failing test instead of a runtime 'method not found'.
  */
+/**
+ * Codex's own "I could not load your config" announcement, pushed right after
+ * `initialize` [实测 E2 D 组].
+ *
+ * Kept OUT of `CODEX_METHOD` on purpose: that table is pinned against the
+ * binary's generated method inventory (`generate-json-schema`), which lists
+ * methods WE may call. This is a notification codex sends unprompted, so it
+ * would fail that contract test while being perfectly real.
+ */
+export const CODEX_CONFIG_WARNING_METHOD = 'configWarning';
+
 export const CODEX_METHOD = {
   initialize: 'initialize',
   initialized: 'initialized',

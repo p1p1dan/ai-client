@@ -18,6 +18,10 @@ import type {
   HistoryReadErrorCode,
 } from '../shared/types/sessionHistory.ts';
 import { CODEX_MANAGED_API_KEY_ENV, resolveCodexCredentialMode } from './agentSupport.ts';
+import {
+  classifyCodexConfigLoadFailure,
+  describeCodexConfigLoadFailure,
+} from './codexConfigError.ts';
 import { buildCodexConfigOverrides } from './codexConfigOverrides.ts';
 import {
   CODEX_INITIALIZE_TIMEOUT_MS,
@@ -46,7 +50,13 @@ import {
 import { readAutoResolutionMs, toCodexAnswerBody, toQuestionItems } from './codexQuestionBridge.ts';
 import { buildThreadSettingsUpdateParams, readThreadSettings } from './codexSettingsUpdate.ts';
 import { readThreadStatus } from './codexStatus.ts';
-import { CODEX_METHOD, idKey, JSONRPC_METHOD_NOT_FOUND, type JsonRpcId } from './codexWire.ts';
+import {
+  CODEX_CONFIG_WARNING_METHOD,
+  CODEX_METHOD,
+  idKey,
+  JSONRPC_METHOD_NOT_FOUND,
+  type JsonRpcId,
+} from './codexWire.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
 import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
 import { type TimerHandle, TtftWatchdog } from './ttftWatchdog.ts';
@@ -1175,6 +1185,16 @@ interface CodexSessionState {
   connection: CodexConnection;
   pending: PendingServerRequestTable;
   threadId?: string;
+  /**
+   * The `CODEX_HOME` codex reported at `initialize`, once it has answered.
+   *
+   * S0'-b: kept so a later config-load failure can name the failing FILE. The
+   * `legacy profile` form of that failure carries no path of its own
+   * [实测 E2 D6], and since S0' we do not choose the directory either — codex's
+   * own echo is the only source. `undefined` before the handshake answers, and
+   * on any run where codex did not echo the key.
+   */
+  codexHome?: string;
   /** The one turn this session may have in flight, or `null`. */
   turn: CodexTurnState | null;
   /** Set by `teardown` so exit / close / dispose cannot drain the same table twice. */
@@ -1911,7 +1931,7 @@ export class CodexRuntime {
         buildInitializeParams(this.opts.appVersion),
         CODEX_INITIALIZE_TIMEOUT_MS
       );
-      this.checkHomeEcho(sessionId, init);
+      this.checkHomeEcho(state, init);
       state.connection.notify(CODEX_METHOD.initialized, {});
 
       const params = buildThreadStartParams({
@@ -1979,6 +1999,23 @@ export class CodexRuntime {
       this.log('codex session start failed', { sessionId, error: errorMessage(err) });
       this.teardown(state, 'session_closed', `start failed: ${errorMessage(err)}`);
       this.opts.registry.delete(sessionId);
+
+      // S0'-b — a broken `~/.codex/config.toml` is the ONE start failure whose
+      // cause is entirely on the user's side and entirely fixable by them, so
+      // it gets its own code and codex's own words instead of being folded into
+      // the generic `session.create: <whatever>`. Reachable only since S0'
+      // (D60) made the user's file load-bearing; before that we generated the
+      // config ourselves and a defect in theirs could not reach us.
+      const configFailure = classifyCodexConfigLoadFailure(errorMessage(err));
+      if (configFailure) {
+        this.fail(
+          'codex_config_invalid',
+          describeCodexConfigLoadFailure(configFailure, state.codexHome ?? null),
+          { sessionId, requestId: input.requestId }
+        );
+        return;
+      }
+
       this.fail('session_create_failed', `session.create: ${errorMessage(err)}`, {
         sessionId,
         requestId: input.requestId,
@@ -1999,10 +2036,14 @@ export class CodexRuntime {
    * session that behaved as if some other machine's settings were in force, and
    * it is not answerable after the fact from anything else we record.
    */
-  private checkHomeEcho(sessionId: string, initResult: unknown): void {
+  private checkHomeEcho(state: CodexSessionState, initResult: unknown): void {
     const reported = isRecord(initResult) ? initResult.codexHome : undefined;
     if (typeof reported !== 'string') return;
-    this.log('codex home in use', { sessionId, codexHome: reported });
+    // Recorded, not only logged (S0'-b): a `legacy profile` config failure
+    // carries NO path of its own [实测 E2 D6], so this echo is the only place
+    // the failing file's name can come from.
+    state.codexHome = reported;
+    this.log('codex home in use', { sessionId: state.sessionId, codexHome: reported });
   }
 
   /**
@@ -2017,6 +2058,23 @@ export class CodexRuntime {
     if (!state) return;
     if (n.method === CODEX_METHOD.statusChanged) {
       this.onStatusChanged(state, n.params);
+      return;
+    }
+
+    // S0'-b — codex announces a config it could not load HERE first, right
+    // after `initialize`, and only rejects `thread/start` afterwards
+    // [实测 E2 D 组: both frames carry the same text]. Logged rather than
+    // emitted: the rejection is what reaches the user, and emitting from both
+    // would report one problem twice. The value of the earlier line is the
+    // support trace — it survives even when the session teardown that follows
+    // makes the rejection hard to attribute.
+    if (n.method === CODEX_CONFIG_WARNING_METHOD) {
+      const details = isRecord(n.params) ? n.params.details : undefined;
+      this.log('WARN codex rejected its configuration', {
+        sessionId,
+        summary: isRecord(n.params) ? n.params.summary : undefined,
+        details,
+      });
       return;
     }
 
@@ -3512,7 +3570,7 @@ export class CodexRuntime {
       buildInitializeParams(this.opts.appVersion),
       CODEX_INITIALIZE_TIMEOUT_MS
     );
-    this.checkHomeEcho(state.sessionId, init);
+    this.checkHomeEcho(state, init);
     state.connection.notify(CODEX_METHOD.initialized, {});
     const result = await state.connection.request(CODEX_METHOD.threadResume, { threadId });
     const detail = assertResumePosture(state.policy, result);
@@ -3758,7 +3816,7 @@ export class CodexRuntime {
         buildInitializeParams(this.opts.appVersion),
         CODEX_INITIALIZE_TIMEOUT_MS
       );
-      this.checkHomeEcho(sessionId, init);
+      this.checkHomeEcho(state, init);
       state.connection.notify(CODEX_METHOD.initialized, {});
 
       // EXACTLY one key. `thread/resume` takes overrides (cwd, model, posture)
