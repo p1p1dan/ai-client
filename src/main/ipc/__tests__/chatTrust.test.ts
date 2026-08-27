@@ -57,6 +57,7 @@ declare global {
 
 describe('chat.ts trust call matrix entries ①② (D47 S2a)', () => {
   const originalFlag = process.env.AICLIENT_MANAGED_CREDENTIALS;
+  const originalConfigDir = process.env.CLAUDE_CONFIG_DIR;
   const originalSkip = process.env.AICLIENT_SKIP_AUTH_GATE;
   let userDataDir: string;
 
@@ -69,6 +70,7 @@ describe('chat.ts trust call matrix entries ①② (D47 S2a)', () => {
     resumeSessionMock.mockClear();
     userDataDir = mkdtempSync(join(tmpdir(), 'chat-trust-'));
     globalThis.__testUserDataDir = userDataDir;
+    process.env.CLAUDE_CONFIG_DIR = userDataDir;
     resetManagedFileWriterQueuesForTests();
     // D47 S5 §3 — this suite is about the trust-write ordering, not the spawn
     // gate (covered by `chatSpawnGate.test.ts`); the escape hatch keeps these
@@ -85,12 +87,20 @@ describe('chat.ts trust call matrix entries ①② (D47 S2a)', () => {
     rmSync(userDataDir, { recursive: true, force: true });
     if (originalFlag === undefined) delete process.env.AICLIENT_MANAGED_CREDENTIALS;
     else process.env.AICLIENT_MANAGED_CREDENTIALS = originalFlag;
+    if (originalConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = originalConfigDir;
     if (originalSkip === undefined) delete process.env.AICLIENT_SKIP_AUTH_GATE;
     else process.env.AICLIENT_SKIP_AUTH_GATE = originalSkip;
   });
 
+  /**
+   * D60: the trust entry now lands in the USER's `.claude.json`, not a managed
+   * home. The test points `CLAUDE_CONFIG_DIR` at a temp dir to keep the write
+   * out of the real `$HOME` — which doubles as the assertion that we HONOR a
+   * user-set `CLAUDE_CONFIG_DIR` even though we no longer set one ourselves.
+   */
   function claudeJsonPath(): string {
-    return join(userDataDir, 'claude-home', '.claude.json');
+    return join(userDataDir, '.claude.json');
   }
 
   it('CHAT_CREATE_SESSION: trust write lands before recordCreated/createSession are called (fake helper before fake spawn)', async () => {

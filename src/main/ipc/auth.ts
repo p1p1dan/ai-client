@@ -15,7 +15,6 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { getAuthProbeScheduler, getAuthStateService } from '../services/auth';
 import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
 import { getAdoptionLatch } from '../services/auth/adoption';
-import { getManagedClaudeHomeDir } from '../services/auth/claudeHome';
 import { onboardingService } from '../services/onboarding';
 
 /**
@@ -63,15 +62,16 @@ function ensureAuthChangeBridge(): void {
 export function registerAuthHandlers(): void {
   ensureAuthChangeBridge();
 
-  // Migrated verbatim from `claudeRuntime.ts` (D47 S2a §1-S2b-⑤ comment
-  // preserved) — renderer's Provider/UI layer still consumes it unchanged.
-  ipcMain.handle(IPC_CHANNELS.AUTH_MANAGED_MODE, () => {
-    const managed = resolveManagedCredentialsEnabled();
-    return {
-      managed,
-      claudeHomeDir: managed ? getManagedClaudeHomeDir(app.getPath('userData')) : null,
-    };
-  });
+  // `claudeHomeDir` is ALWAYS `null` since D60 — there is no managed
+  // claude-home any more. The field is kept rather than removed so the IPC
+  // shape and its renderer consumers (`useManagedMode`, `App.tsx`'s session
+  // path candidates) stay unchanged; `App.tsx` already treats `null` as "just
+  // use the user config dir", which is now the only correct answer. Removing
+  // the field is a separate, renderer-side cleanup.
+  ipcMain.handle(IPC_CHANNELS.AUTH_MANAGED_MODE, () => ({
+    managed: resolveManagedCredentialsEnabled(),
+    claudeHomeDir: null,
+  }));
 
   ipcMain.handle(IPC_CHANNELS.AUTH_GET_GATE_SNAPSHOT, async () => {
     // D47 S6 §1.5 — front-loaded: a caller that races the boot sequence

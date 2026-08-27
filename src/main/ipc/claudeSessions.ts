@@ -1,9 +1,5 @@
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { IPC_CHANNELS } from '@shared/types';
-import { app, ipcMain } from 'electron';
-import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
-import { getManagedClaudeHomeDir } from '../services/auth/claudeHome';
+import { ipcMain } from 'electron';
 import {
   type ClaudeSessionRoot,
   ClaudeSessionScanner,
@@ -11,27 +7,23 @@ import {
 } from '../services/claude/ClaudeSessionScanner';
 
 /**
- * Lazy dual-root resolver (D47 S2b §1 Scanner): flag-off returns the
- * pre-refactor single legacy root unchanged. Flag-on prepends the managed
- * `<userData>/claude-home` root ahead of literal `~/.claude` — NOT
- * `resolveLegacyClaudeSessionRoot()`, because when the flag is on
- * `CLAUDE_CONFIG_DIR` itself has been globally redirected to the managed
- * home by `main/index.ts`'s two-phase startup, so re-reading it here would
- * just point back at the managed root and silently drop the legacy one.
- * Invoked fresh on every call — never captured at module-load time — so the
- * module-level singleton below stays correct regardless of when the flag
- * settles relative to import order (ESM hoisting, D47 S2 §0.1).
+ * D60 collapsed this back to a single root.
+ *
+ * It used to prepend a managed `<userData>/claude-home` root ahead of the
+ * user's own, because managed mode had globally redirected
+ * `CLAUDE_CONFIG_DIR` at that directory and sessions written under it would
+ * otherwise be invisible. With the redirection gone there is only ever one
+ * place Claude Code writes sessions, and `resolveLegacyClaudeSessionRoot()`
+ * already resolves it correctly for both cases: `CLAUDE_CONFIG_DIR` when the
+ * USER set it, `~/.claude` otherwise.
+ *
+ * Sessions recorded under an old managed home are not migrated. They were
+ * only ever reachable while the flag was on, they are history rather than
+ * state, and re-homing them would mean writing into a directory we are in the
+ * middle of retiring.
  */
 function resolveClaudeSessionRoots(): ClaudeSessionRoot[] {
-  if (!resolveManagedCredentialsEnabled()) {
-    return [resolveLegacyClaudeSessionRoot()];
-  }
-  const managed: ClaudeSessionRoot = {
-    dir: getManagedClaudeHomeDir(app.getPath('userData')),
-    kind: 'managed',
-  };
-  const legacy: ClaudeSessionRoot = { dir: path.join(os.homedir(), '.claude'), kind: 'legacy' };
-  return [managed, legacy];
+  return [resolveLegacyClaudeSessionRoot()];
 }
 
 const scanner = new ClaudeSessionScanner({ resolveRoots: resolveClaudeSessionRoots });

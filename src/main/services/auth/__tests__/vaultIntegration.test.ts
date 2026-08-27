@@ -89,7 +89,7 @@ function successFetchResponse(token: string) {
 }
 
 describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored D47 S6 §3)', () => {
-  it('vault claude/codex baseUrls + claude authToken feed generateClaudeSettings()/generateManagedCodexConfigToml() to reproduce the exact managed-home content the runtime regenerate step writes', async () => {
+  it('vault claude/codex baseUrls + claude authToken reach the runtime — Claude as Host env (D60), Codex as config.toml', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     const token = 'claude-secret-token-abc';
     fetchMock.mockResolvedValue(successFetchResponse(token));
@@ -102,17 +102,16 @@ describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored 
     const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     expect(result.ok).toBe(true);
 
-    // Stop-dual-write (D47 S6 §2): flag-on never writes ~/.claude or
-    // ~/.codex anymore, so there is no independent legacy-file writer left
-    // to diff the vault against (the old S1-era version of this test read
-    // those files back off disk). Re-anchored instead to re-derive the
-    // managed-home outputs from the vault's own saved fields through the
-    // SAME pure generators `managedClaudeHomeStartup.ts`/`codexHome.ts`'s
-    // regenerate step calls, and check the result against the fixture's
-    // known literal values — still an independent-path parity proof (vault
-    // write path vs. generator function), just without a legacy write step
-    // in between.
-    const { generateClaudeSettings } = await import('../claudeHome');
+    // Parity proof between the vault WRITE path and the runtime READ path,
+    // re-anchored twice:
+    //  - D47 S6 §2 dropped the legacy-file diff (flag-on stopped writing
+    //    ~/.claude and ~/.codex, so there was no second writer to compare).
+    //  - D60 dropped the managed settings.json too. The Claude credential's
+    //    only exit is now the Agent Host's env, so that is what this asserts
+    //    — through `buildAgentHostEnv`, the exact function the spawn path
+    //    calls. Codex still exits through a config.toml.
+    const { buildAgentHostEnv } = await import('../../agent-host/hostEnv');
+    const { resolveClaudeManagedHostEnv } = await import('../../agent-host/AgentHostManager');
     const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
 
     const readResult = authIndex.getCredentialVault().read();
@@ -125,13 +124,20 @@ describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored 
     expect(payload.codex.baseUrl).toBe('https://cch-test.example.com/v1');
     expect(payload.codex.apiKey).toBe(token); // same-key doctrine (D47 S6 §1 point 2)
 
-    const claudeSettings = generateClaudeSettings({
-      baseUrl: payload.claude.baseUrl,
-      authToken: payload.claude.authToken,
+    const claudeHostEnv = buildAgentHostEnv({
+      driver: 'agent-sdk',
+      cometixVersion: '0.0.0-test',
+      nodeExecPath: '/node',
+      appVersion: '0.0.0-test',
+      codexHomeDir: '/codex-home',
+      codexManaged: undefined,
+      codexApiKey: undefined,
+      codexHomeManagedDir: undefined,
+      ...resolveClaudeManagedHostEnv(),
     });
-    expect(claudeSettings.env).toMatchObject({
-      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
-      ANTHROPIC_AUTH_TOKEN: token,
+    expect(claudeHostEnv).toMatchObject({
+      AICLIENT_CLAUDE_BASE_URL: 'https://cch-test.example.com/v1',
+      AICLIENT_CLAUDE_AUTH_TOKEN: token,
     });
 
     const codexToml = generateManagedCodexConfigToml({ baseUrl: payload.codex.baseUrl });

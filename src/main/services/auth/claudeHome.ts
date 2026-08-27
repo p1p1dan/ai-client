@@ -1,79 +1,60 @@
 /**
- * D47 S2a §1/§2 — pure generators for the managed claude-home tree. Zero
+ * Pure helpers for the two Claude Code JSON files this app touches. Zero
  * `electron` import: every path is passed in by the caller.
- * `main/index.ts` (skeleton + regenerate), `OnboardingService` (login/logout
- * regenerate) and the trust call matrix (`main/ipc/chat.ts`,
- * `SessionManager.create`) own the electron-facing orchestration; this
- * module only knows how to produce the JSON shapes and the trust mutation.
+ *
+ * ## What changed in S0' (D60)
+ *
+ * This module used to generate a whole managed claude-home — a directory
+ * `<userData>/claude-home` that Main pointed `CLAUDE_CONFIG_DIR` at, holding
+ * our own `settings.json`, `.claude.json`, a generated-artifact sidecar, and
+ * empty `commands/` + `skills/` folders. That directory is gone: it was the
+ * mechanism that made the user's real `~/.claude` invisible (their CLAUDE.md,
+ * commands, skills and plugins went with it), and the only thing it actually
+ * bought — getting our credential to the runtime — is now done by handing the
+ * credential over as env (`hostEnv.ts`).
+ *
+ * What remains is the one file we still legitimately need to touch: the
+ * user's own `.claude.json`, and only for trust/onboarding state, which is a
+ * MERGE into their file (their existing keys always win), never a rewrite.
+ * `settings.json` is now entirely theirs — we neither read it for credentials
+ * with priority nor write it at all.
  */
 
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { writeSettingsFile } from './managedFileWriter';
 
-const CLAUDE_HOME_DIR_NAME = 'claude-home';
-
-/** `<userData>/claude-home` — the managed redirect target for `CLAUDE_CONFIG_DIR`. */
-export function getManagedClaudeHomeDir(userDataDir: string): string {
-  return join(userDataDir, CLAUDE_HOME_DIR_NAME);
-}
-
-/** Sidecar filename (D47 S2a §1) — never a settings.json/.claude.json key ("no unknown keys" contract). */
-export const AICLIENT_GENERATED_SIDECAR_NAME = '.aiclient-generated';
-
-export interface GeneratedSidecarStamp {
-  version: string;
-  commit: string;
-  generatedAt: string;
+/**
+ * Where Claude Code keeps `.claude.json`.
+ *
+ * Note the asymmetry with `settings.json`, which lives INSIDE `~/.claude`:
+ * `.claude.json` normally sits at the top level as `~/.claude.json`, and
+ * Claude Code's own `CLAUDE_CONFIG_DIR` handling relocates it to
+ * `$CLAUDE_CONFIG_DIR/.claude.json` — not `$CLAUDE_CONFIG_DIR/.claude/…`.
+ * Same rule as `McpManager.ts`'s reader, deliberately duplicated rather than
+ * shared: that module reads MCP config and this one writes trust state, and
+ * coupling them would make either one's move drag the other along.
+ *
+ * We honor `CLAUDE_CONFIG_DIR` but no longer SET it (D60) — it is Claude
+ * Code's public convention, so a user who sets it deliberately still gets
+ * what they asked for.
+ */
+export function getEffectiveClaudeJsonPath(): string {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  if (configDir) {
+    return join(configDir, '.claude.json');
+  }
+  return join(homedir(), '.claude.json');
 }
 
 /**
- * D47 S2a §1 — the generated-artifact header: `<claude-home>/.aiclient-generated`
- * (version/commit/timestamp). Kept OUT of settings.json entirely — the spec
- * explicitly bans stuffing unverified keys into settings.json
- * (`__generated__` was never CLI-verified), so this ships as a sibling file
- * instead.
+ * A Claude credential pair, wherever it came from. Named for what it IS, not
+ * for the directory it used to be written into — `adoption.ts` reads one out
+ * of the user's own `settings.json`, and nothing writes one to disk any more.
  */
-export function generateSidecarStamp(
-  version: string,
-  commit: string,
-  generatedAt: string = new Date().toISOString()
-): GeneratedSidecarStamp {
-  return { version, commit, generatedAt };
-}
-
-export interface ClaudeHomeCredentials {
+export interface ClaudeCredentials {
   baseUrl: string;
   authToken: string;
-}
-
-export interface ClaudeSettingsPatch {
-  env: Record<string, string>;
-  autoUpdates: false;
-  skipWebFetchPreflight: true;
-}
-
-/**
- * D47 S2a §2 — the managed settings.json key set: `env` (3 keys, or `{}`
- * when there are no credentials to write) + `autoUpdates:false` +
- * `skipWebFetchPreflight:true`. Returns a PATCH, not a full document —
- * callers spread it over the freshly-read `current` inside a
- * `managedFileWriter.writeSettingsFile` mutator so foreign keys
- * (hooks/statusLine/enabledPlugins/unknown) survive untouched.
- */
-export function generateClaudeSettings(
-  credentials: ClaudeHomeCredentials | null
-): ClaudeSettingsPatch {
-  return {
-    env: credentials
-      ? {
-          ANTHROPIC_BASE_URL: credentials.baseUrl,
-          ANTHROPIC_AUTH_TOKEN: credentials.authToken,
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        }
-      : {},
-    autoUpdates: false,
-    skipWebFetchPreflight: true,
-  };
 }
 
 /** Minimal fresh `.claude.json`: pre-completed onboarding, empty project trust map. */

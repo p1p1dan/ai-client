@@ -37,12 +37,14 @@ declare global {
 
 describe('SessionManager.create trust call matrix entry ③ (D47 S2a)', () => {
   const originalFlag = process.env.AICLIENT_MANAGED_CREDENTIALS;
+  const originalConfigDir = process.env.CLAUDE_CONFIG_DIR;
   let userDataDir: string;
 
   beforeEach(() => {
     vi.resetModules();
     userDataDir = mkdtempSync(join(tmpdir(), 'session-manager-trust-'));
     globalThis.__testUserDataDir = userDataDir;
+    process.env.CLAUDE_CONFIG_DIR = userDataDir;
     resetManagedFileWriterQueuesForTests();
   });
 
@@ -51,10 +53,18 @@ describe('SessionManager.create trust call matrix entry ③ (D47 S2a)', () => {
     rmSync(userDataDir, { recursive: true, force: true });
     if (originalFlag === undefined) delete process.env.AICLIENT_MANAGED_CREDENTIALS;
     else process.env.AICLIENT_MANAGED_CREDENTIALS = originalFlag;
+    if (originalConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = originalConfigDir;
   });
 
+  /**
+   * D60: the trust entry now lands in the USER's `.claude.json`, not a managed
+   * home. The test points `CLAUDE_CONFIG_DIR` at a temp dir to keep the write
+   * out of the real `$HOME` — which doubles as the assertion that we HONOR a
+   * user-set `CLAUDE_CONFIG_DIR` even though we no longer set one ourselves.
+   */
   function claudeJsonPath(): string {
-    return join(userDataDir, 'claude-home', '.claude.json');
+    return join(userDataDir, '.claude.json');
   }
 
   it('flag on + local cwd: trust write completes before the PTY spawn fires', async () => {

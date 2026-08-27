@@ -109,13 +109,13 @@ async function registerAndGetHandlers() {
 }
 
 describe('auth:managedMode (migrated from claudeRuntime.ts, D47 S5 §1.2)', () => {
-  it('flag on: {managed:true, claudeHomeDir}', async () => {
+  // D60: `claudeHomeDir` is null in BOTH positions now — there is no managed
+  // claude-home to point at. The field is retained only so the IPC shape and
+  // its renderer consumers stay unchanged.
+  it('flag on: {managed:true, claudeHomeDir:null}', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     const h = await registerAndGetHandlers();
-    expect(h.get('auth:managedMode')?.()).toEqual({
-      managed: true,
-      claudeHomeDir: join(userDataDir, 'claude-home'),
-    });
+    expect(h.get('auth:managedMode')?.()).toEqual({ managed: true, claudeHomeDir: null });
   });
 
   it('flag off: {managed:false, claudeHomeDir:null}', async () => {

@@ -71,6 +71,22 @@ import type { AgentHostDriver } from '@shared/types/agentHost';
  */
 export const CODEX_JS_PATH_ENV_KEY = 'AICLIENT_CODEX_JS_PATH';
 
+/**
+ * S0' (D60) — the two keys carrying the vault's Claude credential to the Host.
+ *
+ * Read side: `src/agent-host/claudeSettings.ts`. As with every other key in
+ * this file, the name is spelled as a literal on BOTH sides on purpose — Main
+ * and the Agent Host are separate builds and Main imports nothing from
+ * `src/agent-host`.
+ *
+ * Deliberately NOT named `ANTHROPIC_*`: those names are the user's to set, and
+ * `codexRuntime.ts`'s managed branch strips the whole `ANTHROPIC_` prefix off a
+ * managed Codex child. A credential of ours wearing a user-owned name would be
+ * both stripped by that rule and indistinguishable from an inherited one.
+ */
+export const CLAUDE_MANAGED_BASE_URL_ENV_KEY = 'AICLIENT_CLAUDE_BASE_URL';
+export const CLAUDE_MANAGED_AUTH_TOKEN_ENV_KEY = 'AICLIENT_CLAUDE_AUTH_TOKEN';
+
 /** Basename of the Node-executable Codex entry point (REQ-8). */
 const CODEX_JS_BASENAME = 'codex.js';
 
@@ -146,6 +162,10 @@ export interface AgentHostEnvInput {
   codexApiKey: string | undefined;
   /** `<userData>/codex-home` when managed mode is on (same directory Main materializes `config.toml` into — `src/main/services/auth/codexHome.ts`), `undefined` when off. Lets `ensureCodexHome` (agent-host) validate the managed `config.toml` exists there instead of guessing a path. */
   codexHomeManagedDir: string | undefined;
+  /** The vault's `claude.baseUrl` (S0'/D60). Same always-present-even-when-`undefined` rule as the Codex trio above: this is a credential-adjacent key, so a stray inherited value must be overridden, not merely left alone. */
+  claudeBaseUrl: string | undefined;
+  /** The vault's `claude.authToken` (S0'/D60). `undefined` when managed mode is off, or on but the vault holds no usable Claude credentials yet — the Host then falls back to the user's own `settings.json`, exactly as it did before managed mode existed. */
+  claudeAuthToken: string | undefined;
   /** Absolute path to the bundled `codex.js`, or `undefined` to omit the key entirely so a user-set value survives (packaging spec §4.2). Conditionally spread — see the header note on why this is the opposite of the trio above. */
   codexJsPath?: string;
 }
@@ -160,6 +180,12 @@ export function buildAgentHostEnv(input: AgentHostEnvInput): NodeJS.ProcessEnv {
     AICLIENT_CODEX_MANAGED: input.codexManaged,
     AICLIENT_CODEX_API_KEY: input.codexApiKey,
     AICLIENT_CODEX_HOME_MANAGED_DIR: input.codexHomeManagedDir,
+    // S0' (D60): the Claude credential reaches the Host as ENV, not as a file
+    // in a directory we forced `CLAUDE_CONFIG_DIR` to point at. This is the
+    // whole substitution — see `claudeSettings.ts` (agent-host) for the read
+    // side and its precedence rule over the user's own settings.json.
+    [CLAUDE_MANAGED_BASE_URL_ENV_KEY]: input.claudeBaseUrl,
+    [CLAUDE_MANAGED_AUTH_TOKEN_ENV_KEY]: input.claudeAuthToken,
     // Conditional on purpose: an absent key lets a user-set value pass through.
     ...(input.codexJsPath ? { [CODEX_JS_PATH_ENV_KEY]: input.codexJsPath } : {}),
   };

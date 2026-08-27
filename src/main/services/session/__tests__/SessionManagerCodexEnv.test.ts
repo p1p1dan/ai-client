@@ -241,17 +241,21 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
 });
 
 /**
- * D47 S34 spec rev.2 §2 S3b — "claude 侧 pin": CODEX_HOME/AICLIENT_CODEX_API_KEY
- * flow through `SessionManager`'s own `options.env` construction (proven
- * above); `CLAUDE_CONFIG_DIR` flows through a COMPLETELY DIFFERENT path —
- * `activateManagedClaudeHome()` sets it on `process.env` for the whole Main
- * process (`managedClaudeHomeStartup.ts`, S2a), and `PtyManager.create`'s
- * `finalEnv` starts with `{...process.env, ...}`. This slice never touches
- * that mechanism, so this is a REGRESSION PIN, not new behavior: it keeps
- * `PtyManager` REAL (mocking only the underlying `node-pty` binding) to prove
- * the full chain — Main process env → PtyManager merge → the actual
- * `pty.spawn` call — still carries `CLAUDE_CONFIG_DIR` alongside the new
- * Codex keys, rather than trusting the claim by inspection alone.
+ * End-to-end pin over the REAL `PtyManager` (only the underlying `node-pty`
+ * binding is mocked), proving the full chain — Main process env → PtyManager
+ * merge → the actual `pty.spawn` call — rather than trusting inspection.
+ *
+ * Two different mechanisms meet here:
+ *  - `CODEX_HOME`/`AICLIENT_CODEX_API_KEY` and (since D60)
+ *    `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN` are built into
+ *    `SessionManager`'s own `options.env`.
+ *  - `CLAUDE_CONFIG_DIR` arrives by inheritance: `PtyManager.create`'s
+ *    `finalEnv` starts with `{...process.env, ...}`.
+ *
+ * D60 changed what that second one MEANS. Main no longer sets the variable,
+ * so it now reaches the PTY only when the USER set it — which is exactly the
+ * behavior worth pinning, since the whole point of the release is that a
+ * terminal session sees the user's own Claude Code home.
  */
 describe('end-to-end local PTY spawn env (D47 S3b — real PtyManager, mocked node-pty)', () => {
   const originalFlag = process.env.AICLIENT_MANAGED_CREDENTIALS;
@@ -276,12 +280,12 @@ describe('end-to-end local PTY spawn env (D47 S3b — real PtyManager, mocked no
     else process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
   });
 
-  it('flag on: the real pty.spawn() call carries CLAUDE_CONFIG_DIR (inherited from process.env) AND the Main-injected CODEX_HOME/AICLIENT_CODEX_API_KEY together', async () => {
+  it('flag on: the real pty.spawn() call carries a USER-set CLAUDE_CONFIG_DIR through untouched, alongside the Main-injected Codex keys', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-    // Mirrors what `activateManagedClaudeHome()` does at boot — this slice
-    // doesn't call it (out of scope), so the pin sets the same process.env
-    // key directly.
-    process.env.CLAUDE_CONFIG_DIR = join(userDataDir, 'claude-home');
+    // Stands in for a user who set the variable themselves. Post-D60 nothing
+    // in the app sets it, so inheritance is the ONLY way it can get here —
+    // which is what makes this assertion meaningful rather than tautological.
+    process.env.CLAUDE_CONFIG_DIR = join(userDataDir, 'user-chosen-config');
     vaultReadMock.mockReturnValue({
       status: 'ok',
       doc: { payload: { codex: { apiKey: 'sk-e2e-key', baseUrl: 'https://cch.example/v1' } } },
@@ -303,8 +307,63 @@ describe('end-to-end local PTY spawn env (D47 S3b — real PtyManager, mocked no
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
     const spawnEnv = spawnMock.mock.calls[0][2].env as Record<string, string>;
-    expect(spawnEnv.CLAUDE_CONFIG_DIR).toBe(join(userDataDir, 'claude-home'));
+    expect(spawnEnv.CLAUDE_CONFIG_DIR).toBe(join(userDataDir, 'user-chosen-config'));
     expect(spawnEnv.CODEX_HOME).toBe(join(userDataDir, 'codex-home'));
+    expect(spawnEnv.AICLIENT_CODEX_API_KEY).toBe('sk-e2e-key');
+  });
+
+  it('flag on: the real pty.spawn() call carries the vault Claude credential as ANTHROPIC_* (D60)', async () => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+    delete process.env.CLAUDE_CONFIG_DIR;
+    vaultReadMock.mockReturnValue({
+      status: 'ok',
+      doc: {
+        payload: {
+          claude: { baseUrl: 'https://gateway.example/v1', authToken: 'pty-claude-token' },
+          codex: { apiKey: 'sk-e2e-key', baseUrl: 'https://cch.example/v1' },
+        },
+      },
+    });
+
+    const { SessionManager } = await import('../SessionManager');
+    const manager = new SessionManager();
+    vi.spyOn(manager.localPtyManager, 'allocateId').mockReturnValue('s1');
+
+    await manager.create(1, {
+      cwd: '/repo/local',
+      kind: 'terminal',
+      shell: process.execPath,
+      args: [],
+    });
+
+    const spawnEnv = spawnMock.mock.calls[0][2].env as Record<string, string>;
+    expect(spawnEnv.ANTHROPIC_BASE_URL).toBe('https://gateway.example/v1');
+    expect(spawnEnv.ANTHROPIC_AUTH_TOKEN).toBe('pty-claude-token');
+    // The user's own home is NOT redirected out from under them — this is the
+    // half of D60 that gives their CLAUDE.md/commands/skills back.
+    expect(spawnEnv.CLAUDE_CONFIG_DIR).toBeUndefined();
+  });
+
+  it('flag on but the vault has no Claude arm (older document): no ANTHROPIC_* keys, and no crash', async () => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+    vaultReadMock.mockReturnValue({
+      status: 'ok',
+      doc: { payload: { codex: { apiKey: 'sk-e2e-key', baseUrl: 'https://cch.example/v1' } } },
+    });
+
+    const { SessionManager } = await import('../SessionManager');
+    const manager = new SessionManager();
+    vi.spyOn(manager.localPtyManager, 'allocateId').mockReturnValue('s1');
+
+    await manager.create(1, {
+      cwd: '/repo/local',
+      kind: 'terminal',
+      shell: process.execPath,
+      args: [],
+    });
+
+    const spawnEnv = spawnMock.mock.calls[0][2].env as Record<string, string>;
+    expect(spawnEnv.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
     expect(spawnEnv.AICLIENT_CODEX_API_KEY).toBe('sk-e2e-key');
   });
 });

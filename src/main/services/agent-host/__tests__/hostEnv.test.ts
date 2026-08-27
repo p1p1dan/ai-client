@@ -35,7 +35,14 @@ const CODEX_UNMANAGED_INPUT = {
 
 describe('buildAgentHostEnv', () => {
   it('passes every Main-owned value through unchanged (pre-S3b five keys, unmodified since before D47 S3b — undefined-valued new keys are invisible to toEqual)', () => {
-    expect(buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT })).toEqual({
+    expect(
+      buildAgentHostEnv({
+        ...INPUT,
+        ...CODEX_UNMANAGED_INPUT,
+        claudeBaseUrl: undefined,
+        claudeAuthToken: undefined,
+      })
+    ).toEqual({
       AICLIENT_AGENT_HOST_DRIVER: 'agent-sdk',
       AICLIENT_COMETIX_VERSION: '2.1.112',
       AICLIENT_NODE_EXEC_PATH: '/opt/app/resources/node-runtime/node',
@@ -48,15 +55,29 @@ describe('buildAgentHostEnv', () => {
     // AgentHostProcess.start() spreads process.env into the child, so the flag
     // already reaches the Host. Injecting it here would create a second place
     // that decides what the flag means. Falsifies: "add it for symmetry".
-    expect(Object.keys(buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT }))).not.toContain(
-      'AICLIENT_AGENT_CODEX'
-    );
+    expect(
+      Object.keys(
+        buildAgentHostEnv({
+          ...INPUT,
+          ...CODEX_UNMANAGED_INPUT,
+          claudeBaseUrl: undefined,
+          claudeAuthToken: undefined,
+        })
+      )
+    ).not.toContain('AICLIENT_AGENT_CODEX');
   });
 });
 
 describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 spec rev.2 §1, A-track B3)', () => {
   it('managed on: emits the marker + api key + managed dir verbatim', () => {
-    expect(buildAgentHostEnv({ ...INPUT, ...CODEX_MANAGED_INPUT })).toEqual({
+    expect(
+      buildAgentHostEnv({
+        ...INPUT,
+        ...CODEX_MANAGED_INPUT,
+        claudeBaseUrl: undefined,
+        claudeAuthToken: undefined,
+      })
+    ).toEqual({
       AICLIENT_AGENT_HOST_DRIVER: 'agent-sdk',
       AICLIENT_COMETIX_VERSION: '2.1.112',
       AICLIENT_NODE_EXEC_PATH: '/opt/app/resources/node-runtime/node',
@@ -74,6 +95,8 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
       codexManaged: '1',
       codexApiKey: undefined,
       codexHomeManagedDir: '/home/u/.config/AiClient/codex-home',
+      claudeBaseUrl: undefined,
+      claudeAuthToken: undefined,
     });
     expect(result.AICLIENT_CODEX_MANAGED).toBe('1');
     expect(result.AICLIENT_CODEX_HOME_MANAGED_DIR).toBe('/home/u/.config/AiClient/codex-home');
@@ -81,7 +104,12 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
   });
 
   it('flag-off arm = all three keys undefined (not merely absent)', () => {
-    const result = buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT });
+    const result = buildAgentHostEnv({
+      ...INPUT,
+      ...CODEX_UNMANAGED_INPUT,
+      claudeBaseUrl: undefined,
+      claudeAuthToken: undefined,
+    });
     expect(result.AICLIENT_CODEX_MANAGED).toBeUndefined();
     expect(result.AICLIENT_CODEX_API_KEY).toBeUndefined();
     expect(result.AICLIENT_CODEX_HOME_MANAGED_DIR).toBeUndefined();
@@ -93,7 +121,12 @@ describe('buildAgentHostEnv — Codex managed-credentials three keys (D47 S34 sp
       AICLIENT_CODEX_API_KEY: 'sk-stray-inherited-value',
       AICLIENT_CODEX_HOME_MANAGED_DIR: '/some/stray/inherited/dir',
     };
-    const result = buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT });
+    const result = buildAgentHostEnv({
+      ...INPUT,
+      ...CODEX_UNMANAGED_INPUT,
+      claudeBaseUrl: undefined,
+      claudeAuthToken: undefined,
+    });
 
     // The three keys must be present as OWN properties (proving a spread of
     // `result` over `pollutedLikeInherited` would overwrite every one of
@@ -183,6 +216,8 @@ describe('buildAgentHostEnv — codexJsPath is conditional (B3)', () => {
     const env = buildAgentHostEnv({
       ...INPUT,
       ...CODEX_UNMANAGED_INPUT,
+      claudeBaseUrl: undefined,
+      claudeAuthToken: undefined,
       codexJsPath: '/opt/app/resources/agent-host/node_modules/@openai/codex/bin/codex.js',
     });
     expect(env.AICLIENT_CODEX_JS_PATH).toBe(
@@ -197,20 +232,40 @@ describe('buildAgentHostEnv — codexJsPath is conditional (B3)', () => {
     // own property with value undefined OVERRIDES the inherited process.env
     // value in AgentHostProcess.start(), slamming the user's escape hatch shut.
     const keys = Object.keys(
-      buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT, codexJsPath: undefined })
+      buildAgentHostEnv({
+        ...INPUT,
+        ...CODEX_UNMANAGED_INPUT,
+        claudeBaseUrl: undefined,
+        claudeAuthToken: undefined,
+        codexJsPath: undefined,
+      })
     );
     expect(keys).not.toContain('AICLIENT_CODEX_JS_PATH');
   });
 
   it('omits the key when it is not passed at all', () => {
-    const keys = Object.keys(buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT }));
+    const keys = Object.keys(
+      buildAgentHostEnv({
+        ...INPUT,
+        ...CODEX_UNMANAGED_INPUT,
+        claudeBaseUrl: undefined,
+        claudeAuthToken: undefined,
+      })
+    );
     expect(keys).not.toContain('AICLIENT_CODEX_JS_PATH');
   });
 
   it('contrasts with the D47 trio, which stays present-with-undefined', () => {
     // The asymmetry is the design (see hostEnv.ts header): credentials must
     // override inherited env, a path must not.
-    const keys = Object.keys(buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT }));
+    const keys = Object.keys(
+      buildAgentHostEnv({
+        ...INPUT,
+        ...CODEX_UNMANAGED_INPUT,
+        claudeBaseUrl: undefined,
+        claudeAuthToken: undefined,
+      })
+    );
     expect(keys).toContain('AICLIENT_CODEX_MANAGED');
     expect(keys).toContain('AICLIENT_CODEX_API_KEY');
     expect(keys).toContain('AICLIENT_CODEX_HOME_MANAGED_DIR');
@@ -251,5 +306,49 @@ describe('deriveBundledCometixCliPath', () => {
     expect(nodeModulesOf(deriveBundledCometixCliPath(entry))).toBe(
       path.join('/res/agent-host', 'node_modules')
     );
+  });
+});
+
+/**
+ * S0' (D60) — the two Claude credential keys. They follow the Codex trio's
+ * always-present-even-when-undefined rule rather than the `codexJsPath`
+ * omit-when-undefined rule, because they carry credential material: a stray
+ * inherited value must be OVERRIDDEN, not merely left alone.
+ */
+describe('buildAgentHostEnv — Claude managed-credential keys (D60)', () => {
+  const CLAUDE_MANAGED = {
+    claudeBaseUrl: 'https://gateway.example.com/v1',
+    claudeAuthToken: 'vault-claude-token',
+  } as const;
+  const CLAUDE_UNMANAGED = {
+    claudeBaseUrl: undefined,
+    claudeAuthToken: undefined,
+  } as const;
+
+  it('managed on: emits base URL + auth token verbatim', () => {
+    const env = buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT, ...CLAUDE_MANAGED });
+    expect(env.AICLIENT_CLAUDE_BASE_URL).toBe('https://gateway.example.com/v1');
+    expect(env.AICLIENT_CLAUDE_AUTH_TOKEN).toBe('vault-claude-token');
+  });
+
+  it('managed off: both keys are PRESENT and undefined, so an inherited value is killed rather than passed through', () => {
+    // The distinction that matters: `AgentHostProcess.start()` spreads
+    // `{...process.env, ...env}`, so an OMITTED key lets a shell-inherited
+    // value survive into the Host. Falsifies "just omit them when off".
+    const env = buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT, ...CLAUDE_UNMANAGED });
+    expect(Object.keys(env)).toContain('AICLIENT_CLAUDE_BASE_URL');
+    expect(Object.keys(env)).toContain('AICLIENT_CLAUDE_AUTH_TOKEN');
+    expect(env.AICLIENT_CLAUDE_BASE_URL).toBeUndefined();
+    expect(env.AICLIENT_CLAUDE_AUTH_TOKEN).toBeUndefined();
+  });
+
+  it('does not inject ANTHROPIC_-named keys — those names belong to the user', () => {
+    // A credential of ours wearing a user-owned name would be stripped by
+    // `codexRuntime.ts`'s whole-prefix strip AND indistinguishable from an
+    // inherited one. Falsifies "just call them ANTHROPIC_*".
+    const keys = Object.keys(
+      buildAgentHostEnv({ ...INPUT, ...CODEX_UNMANAGED_INPUT, ...CLAUDE_MANAGED })
+    );
+    expect(keys.filter((k) => k.startsWith('ANTHROPIC_'))).toEqual([]);
   });
 });

@@ -100,7 +100,17 @@ const STRIPPED_PREFIX = CREDENTIAL_ENV_PREFIX;
 // "credential" var Main needs to redact), so it stays local rather than
 // living in the shared list.
 const MANAGED_CREDENTIALS_KEY = 'AICLIENT_MANAGED_CREDENTIALS';
-const STRIPPED_KEYS = [...CREDENTIAL_ENV_KEYS, MANAGED_CREDENTIALS_KEY];
+// D60: `CLAUDE_CONFIG_DIR` left the shared credential list (Main must not
+// delete a path the user chose). dev.js still clears it, because dev.js
+// immediately sets its OWN isolated config dir below — clearing a variable
+// you are about to overwrite is this script's business, not the shared
+// list's. Same local-append arrangement as MANAGED_CREDENTIALS_KEY above.
+const DEV_ISOLATED_CONFIG_DIR_KEY = 'CLAUDE_CONFIG_DIR';
+const STRIPPED_KEYS = [
+  ...CREDENTIAL_ENV_KEYS,
+  MANAGED_CREDENTIALS_KEY,
+  DEV_ISOLATED_CONFIG_DIR_KEY,
+];
 
 /**
  * D47 S1 §2.6 (A-track "dev 轮可开" + B-track "不被继承环境意外打开", 合取):

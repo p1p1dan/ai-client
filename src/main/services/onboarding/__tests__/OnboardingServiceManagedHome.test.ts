@@ -124,7 +124,7 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     });
   }
 
-  it('login (flag on) regenerates managed settings.json + codex-home/config.toml from the credentials object, and AWAITS host shutdown before returning (D47 S3b I5 epoch barrier)', async () => {
+  it('login (flag on) regenerates codex-home/config.toml, writes NO Claude file at all (D60), and AWAITS host shutdown before returning (D47 S3b I5 epoch barrier)', async () => {
     mockRegisterResponse();
 
     const { onboardingService } = await import('../OnboardingService');
@@ -135,18 +135,11 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     // already resolved by the time verifyAndRegister's own promise settled.
     expect(shutdownMock).toHaveBeenCalledTimes(1);
 
-    const managed = JSON.parse(readFileSync(settingsPath(), 'utf-8')) as {
-      env: Record<string, string>;
-      autoUpdates: boolean;
-      skipWebFetchPreflight: boolean;
-    };
-    expect(managed.env).toEqual({
-      ANTHROPIC_BASE_URL: 'https://cch-test.example.com/v1',
-      ANTHROPIC_AUTH_TOKEN: 'claude-token',
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-    });
-    expect(managed.autoUpdates).toBe(false);
-    expect(managed.skipWebFetchPreflight).toBe(true);
+    // D60: login writes nothing on the Claude side. The awaited shutdown
+    // above IS the propagation mechanism — the next Host spawn reads the
+    // fresh vault and passes the credential as env. A file here would be a
+    // regression, so this asserts its absence rather than its content.
+    expect(existsSync(settingsPath())).toBe(false);
 
     const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
     expect(readFileSync(codexConfigPath(), 'utf-8')).toBe(
@@ -181,16 +174,16 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     expect(existsSync(codexAuthPath())).toBe(false);
   });
 
-  it('regenerateManagedHomesForLogout() (flag on) regenerates managed settings.json to an empty env, leaves codex-home/config.toml bytes untouched, deletes stale auth.json — and does NOT itself shut down the host (D47 S5 §3 I9: shutdown moved OUT to performLogoutSequence checkpoint ③)', async () => {
+  it('regenerateManagedHomesForLogout() (flag on) leaves codex-home/config.toml bytes untouched, deletes stale auth.json, touches no Claude file (D60) — and does NOT itself shut down the host (D47 S5 §3 I9: shutdown moved OUT to performLogoutSequence checkpoint ③)', async () => {
+    // A leftover managed settings.json from a pre-D60 install: logout must
+    // neither read nor rewrite it. Blanking it out is no longer how logout
+    // takes the credential away — not handing one to the next Host spawn is.
     mkdirSync(join(userDataDir, 'claude-home'), { recursive: true });
-    writeFileSync(
-      settingsPath(),
-      JSON.stringify({
-        env: { ANTHROPIC_BASE_URL: 'https://old', ANTHROPIC_AUTH_TOKEN: 'old-token' },
-        hooks: { Stop: ['keep-me'] },
-      }),
-      'utf-8'
-    );
+    const staleClaudeBytes = JSON.stringify({
+      env: { ANTHROPIC_BASE_URL: 'https://old', ANTHROPIC_AUTH_TOKEN: 'old-token' },
+      hooks: { Stop: ['keep-me'] },
+    });
+    writeFileSync(settingsPath(), staleClaudeBytes, 'utf-8');
     mkdirSync(join(userDataDir, 'codex-home'), { recursive: true });
     const { generateManagedCodexConfigToml } = await import('@shared/codexManagedConfig');
     const existingCodexBytes = generateManagedCodexConfigToml({
@@ -202,12 +195,7 @@ describe('OnboardingService managed-home regenerate (D47 S2a §1 claude-home / S
     const { onboardingService } = await import('../OnboardingService');
     await onboardingService.regenerateManagedHomesForLogout();
 
-    const managed = JSON.parse(readFileSync(settingsPath(), 'utf-8')) as {
-      env: Record<string, string>;
-      hooks?: unknown;
-    };
-    expect(managed.env).toEqual({});
-    expect(managed.hooks).toEqual({ Stop: ['keep-me'] });
+    expect(readFileSync(settingsPath(), 'utf-8')).toBe(staleClaudeBytes);
     // I9 restructure: this method no longer shuts down the host itself —
     // `performLogoutSequence()` (main/ipc/onboarding.ts) does that BEFORE
     // calling this, as its own checkpoint ③. Covered end-to-end in

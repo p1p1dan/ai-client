@@ -13,13 +13,7 @@ import { app, net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
-import {
-  type ClaudeHomeCredentials,
-  generateClaudeSettings,
-  getManagedClaudeHomeDir,
-} from '../auth/claudeHome';
 import { type CodexHomeRegenerateSource, regenerateManagedCodexHome } from '../auth/codexHome';
-import { writeSettingsFile } from '../auth/managedFileWriter';
 import { redactLogArgs } from '../auth/redact';
 import { AgentInstaller } from '../cli/AgentInstaller';
 import { cliDetector } from '../cli/CliDetector';
@@ -274,19 +268,16 @@ class OnboardingService {
         onboardingState.registeredAt ?? new Date().toISOString()
       );
 
-      // D47 S2a §1: regenerate the managed claude-home settings.json using
-      // the CREDENTIALS OBJECT WE ALREADY HAVE, not a vault re-read — a
-      // vault.save failure above must not leave a freshly-logged-in user
-      // without a working managed env (A-track M4).
+      // D60: there is no longer a Claude side to regenerate — the credential
+      // reaches the Agent Host and the terminal PTY as env, read fresh from
+      // the vault on every spawn, so the Host restart below is the entire
+      // propagation mechanism. Codex still needs a file on disk.
       const credentialsForClaudeHome = this.getCredentialWriteInputs(result, normalizedServerUrl);
       if (credentialsForClaudeHome) {
-        await this.regenerateManagedClaudeHomeSettings({
-          baseUrl: credentialsForClaudeHome.claudeBaseUrl,
-          authToken: credentialsForClaudeHome.claudeAuthToken,
-        });
-        // D47 S3b §2: codex-home rides the same login regenerate tick, off
-        // the same already-in-hand credentials object (never a vault
-        // re-read, same A-track M4 reasoning as claude above).
+        // D47 S3b §2: written off the already-in-hand credentials object,
+        // never a vault re-read — a `vault.save` failure above must not
+        // leave a freshly-logged-in user without a working codex config
+        // (A-track M4).
         await this.regenerateManagedCodexHomeConfig(
           { baseUrl: credentialsForClaudeHome.codexBaseUrl },
           'login'
@@ -322,30 +313,7 @@ class OnboardingService {
   }
 
   /**
-   * D47 S2a §1 — writes the managed `<claude-home>/settings.json` env
-   * section directly from a credentials object (login) or `null` (logout).
-   * Never reads the vault: the caller already knows what it wants written.
-   * Best-effort — a failure here must not turn a successful legacy
-   * login/logout into a rejected one.
-   */
-  private async regenerateManagedClaudeHomeSettings(
-    credentials: ClaudeHomeCredentials | null
-  ): Promise<void> {
-    try {
-      const claudeHomeDir = getManagedClaudeHomeDir(app.getPath('userData'));
-      const settingsPath = path.join(claudeHomeDir, 'settings.json');
-      await writeSettingsFile(settingsPath, (current) => ({
-        ...current,
-        ...generateClaudeSettings(credentials),
-      }));
-    } catch (error) {
-      console.warn('[OnboardingService] Failed to regenerate managed claude-home settings:', error);
-    }
-  }
-
-  /**
-   * D47 S3b §2 — the codex-home counterpart of
-   * `regenerateManagedClaudeHomeSettings` above: writes
+   * D47 S3b §2 — writes
    * `<codex-home>/config.toml` + sidecar from a credentials object (login),
    * or leaves `config.toml`'s bytes untouched (`null` — logout's "config
    * 保留" contract, see `codexHome.ts`'s module header). Always deletes a
@@ -460,19 +428,21 @@ class OnboardingService {
 
   /**
    * D47 S5 §3 I9 checkpoint ⑤ — logout's deterministic no-credential
-   * regenerate, covering BOTH managed homes off the same tick: claude-home's
-   * env section goes empty (unchanged S2a behavior); codex-home's
-   * `config.toml` is left exactly as-is (`credentials: null` — see
-   * `codexHome.ts`'s module header for why logout has no "no-credentials
-   * config" form to write), but its stale `auth.json` still gets deleted.
-   * Public (was private through S3b) — `performLogoutSequence()` calls this
-   * directly, no longer via a fire-and-forget promise stashed on `this`.
-   * Host shutdown is NO LONGER called at the end of this method — it moved
-   * to `performLogoutSequence()`'s own checkpoint ③, strictly BEFORE this
-   * one, per the I9 restructure ("shutdown 从 regenerate 链尾摘出").
+   * regenerate. Codex-home's `config.toml` is left exactly as-is
+   * (`credentials: null` — see `codexHome.ts`'s module header for why logout
+   * has no "no-credentials config" form to write), but its stale `auth.json`
+   * still gets deleted.
+   *
+   * D60 removed the Claude half: there is no managed settings.json to blank
+   * out, and a logged-out app simply stops handing a credential to the next
+   * Host spawn. That is strictly SAFER than the old behavior — the credential
+   * never sat in a file that a failed logout could leave behind.
+   *
+   * Host shutdown is NOT called here — it moved to
+   * `performLogoutSequence()`'s own checkpoint ③, strictly BEFORE this one,
+   * per the I9 restructure ("shutdown 从 regenerate 链尾摘出").
    */
   async regenerateManagedHomesForLogout(): Promise<void> {
-    await this.regenerateManagedClaudeHomeSettings(null);
     await this.regenerateManagedCodexHomeConfig(null, 'logout');
   }
 

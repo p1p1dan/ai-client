@@ -3,7 +3,7 @@
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { isModelAllowedForAgent } from '@shared/models/familyWhitelist';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
@@ -25,26 +25,29 @@ import {
 } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import { agentHostManager } from '../services/agent-host/AgentHostManager';
 import { resolveManagedCredentialsEnabled } from '../services/auth/AuthStateService';
-import { ensureWorkspaceTrusted, getManagedClaudeHomeDir } from '../services/auth/claudeHome';
+import { ensureWorkspaceTrusted, getEffectiveClaudeJsonPath } from '../services/auth/claudeHome';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
 import { isRemoteVirtualPath } from '../services/remote/RemotePath';
 
 /**
- * D47 S2a trust call matrix (spec §1) — entries ①②: `CHAT_CREATE_SESSION`
- * and `CHAT_RESUME_SESSION` await this BEFORE `recordCreated`/`createSession`
- * (or the resume equivalents). flag off, or a remote virtual path (I8), is a
- * no-op — trust marking only applies to the managed local `.claude.json`.
+ * Trust call matrix entries ①②: `CHAT_CREATE_SESSION` and
+ * `CHAT_RESUME_SESSION` await this BEFORE `recordCreated`/`createSession`
+ * (or the resume equivalents). Flag off, or a remote virtual path (I8), is a
+ * no-op.
+ *
+ * D60 changed WHICH `.claude.json` this marks: the managed home's is gone, so
+ * it is now the user's own. That is a merge of one `projects[<path>]` entry
+ * into their file — the same entry Claude Code writes itself when a user
+ * accepts its trust dialog — not a rewrite of anything they own.
  */
 async function ensureWorkspaceTrustedForChat(workspacePath: string | undefined): Promise<void> {
   if (!resolveManagedCredentialsEnabled()) return;
   if (!workspacePath || isRemoteVirtualPath(workspacePath)) return;
-  const claudeHomeDir = getManagedClaudeHomeDir(app.getPath('userData'));
-  const claudeJsonPath = join(claudeHomeDir, '.claude.json');
-  await ensureWorkspaceTrusted(claudeJsonPath, resolve(workspacePath));
+  await ensureWorkspaceTrusted(getEffectiveClaudeJsonPath(), resolve(workspacePath));
 }
 
 /**

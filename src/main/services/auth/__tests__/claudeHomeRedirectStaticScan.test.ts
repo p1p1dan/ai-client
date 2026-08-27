@@ -3,13 +3,24 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * D47 S2a §1 §3-6 — file-level allowlist + per-file HIT-COUNT baseline for
+ * File-level allowlist + per-file HIT-COUNT baseline for
  * `homedir()`-joined-with-`.claude` literals under `src/main`. Every
  * legitimate hit is enumerated below with a reason; any NEW hit (a file not
  * in the table) or any COUNT DRIFT on a listed file (higher OR lower) turns
- * this red — new code must go through `CLAUDE_CONFIG_DIR`-aware helpers
- * (matching the "9 跟随者" precedent already in this codebase), not a fresh
- * hardcoded `~/.claude` path.
+ * this red.
+ *
+ * ## What it defends, before and after D60
+ *
+ * Before: new code had to go through a `CLAUDE_CONFIG_DIR`-aware helper
+ * rather than hardcode `~/.claude`, because the variable was redirected at a
+ * managed home and a hardcoded path would silently read the wrong one.
+ *
+ * After: we no longer redirect the variable — but the rule survives with a
+ * different justification, which is why this file was kept rather than
+ * deleted. A user who sets `CLAUDE_CONFIG_DIR` themselves still expects every
+ * part of this app to honor it, and a fresh hardcoded `~/.claude` would
+ * silently ignore them. The allowlist is now the list of places entitled to
+ * spell the DEFAULT, not the list of places exempt from a redirect.
  *
  * Rebuilding this table: run the count function below over `src/main` and
  * diff against BASELINE. Do not bump a count without adding a reason.
@@ -28,11 +39,6 @@ const BASELINE: Record<string, { count: number; reason: string }> = {
     count: 4,
     reason:
       'Legacy double-write body (writeClaudeConfig/ensureClaudeOnboardingComplete/removeClaudeCredentials/checkCredentialsHealth) — left at ~/.claude by design until S5/S6 collapse legacy writers into the managed path.',
-  },
-  'src/main/services/auth/managedClaudeHomeStartup.ts': {
-    count: 1,
-    reason:
-      'One-time CLAUDE.md adoption COPY SOURCE (D47 S2a f 裁定) — reads the legacy ~/.claude/CLAUDE.md to seed the managed home once; never a write target for this path.',
   },
   'src/main/services/claude/ClaudeIdeBridge.ts': {
     count: 1,
@@ -83,10 +89,10 @@ const BASELINE: Record<string, { count: number; reason: string }> = {
     count: 1,
     reason: 'D47 S2a follower (this slice): settings.json base follows CLAUDE_CONFIG_DIR.',
   },
-  'src/main/ipc/claudeSessions.ts': {
+  'src/main/services/auth/claudeHome.ts': {
     count: 1,
     reason:
-      'S2b Scanner dual-source infra: literal legacy-root constant (kind:"legacy"), not a redirect follower by design — paired with a managed root elsewhere in the same file.',
+      "D60: getEffectiveClaudeJsonPath's `~/.claude.json` default. This is the ONE place entitled to spell it — the rule's authority, not an exemption from it. (Matched by prefix: the scanner sees `'.claude` inside `'.claude.json'`.)",
   },
   'src/main/services/auth/adoption.ts': {
     count: 1,

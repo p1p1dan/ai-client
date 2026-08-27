@@ -10,7 +10,6 @@ describe('credential-env-keys (D47 S2a §1 shared strip list)', () => {
     expect(CREDENTIAL_ENV_PREFIX).toBe('ANTHROPIC_');
     expect(CREDENTIAL_ENV_KEYS).toEqual([
       'CLAUDE_CODE_OAUTH_TOKEN',
-      'CLAUDE_CONFIG_DIR',
       'CLAUDE_CODE_USE_BEDROCK',
       'CLAUDE_CODE_USE_VERTEX',
       'AWS_BEARER_TOKEN_BEDROCK',
@@ -37,6 +36,9 @@ describe('credential-env-keys (D47 S2a §1 shared strip list)', () => {
     expect(isCredentialEnvKey('HOME')).toBe(false);
     expect(isCredentialEnvKey('AICLIENT_MANAGED_CREDENTIALS')).toBe(false);
     expect(isCredentialEnvKey('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC')).toBe(false);
+    // D60: a path the user chose, not credential material. Stripping it would
+    // delete a deliberate `CLAUDE_CONFIG_DIR` now that Main no longer sets one.
+    expect(isCredentialEnvKey('CLAUDE_CONFIG_DIR')).toBe(false);
     // Prefix match must be a real prefix, not a substring anywhere.
     expect(isCredentialEnvKey('MY_ANTHROPIC_TOKEN')).toBe(false);
   });

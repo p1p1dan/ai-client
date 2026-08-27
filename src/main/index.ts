@@ -50,10 +50,10 @@ import {
 } from './services/auth';
 import { ensureVaultAdoption } from './services/auth/adoption';
 import {
-  activateManagedClaudeHome,
-  ensureManagedHomeSkeleton,
+  activateManagedCredentials,
+  ensureUserClaudeJsonOnboarded,
   regenerateFromVault,
-} from './services/auth/managedClaudeHomeStartup';
+} from './services/auth/managedCredentialsStartup';
 import { registerClaudeBridgeIpcHandlers } from './services/claude/ClaudeIdeBridge';
 import { unwatchClaudeSettings } from './services/claude/ClaudeProviderManager';
 import {
@@ -145,14 +145,14 @@ if (isDev) {
   app.setPath('userData', join(app.getPath('appData'), `${app.getName()}-${profile}`));
 }
 
-// D47 S2a §1 phase ① — right after `setPath('userData')`, before any
-// service action: flag on ⇒ redirect `CLAUDE_CONFIG_DIR` to
-// `<userData>/claude-home` and build the directory SKELETON only (never
-// touches settings.json's `env` — phase ③ / `regenerateFromVault`, called
-// after the first window is constructed further down, owns that). Both
-// functions are no-ops when the managed-credentials flag is off.
-activateManagedClaudeHome();
-await ensureManagedHomeSkeleton();
+// Phase ① — right after `setPath('userData')`, before any service action.
+// D60: this no longer redirects `CLAUDE_CONFIG_DIR`; it strips
+// credential-shaped vars inherited from the shell, then makes sure the
+// user's own `.claude.json` reports completed onboarding (a merge that never
+// overwrites their keys). Both are no-ops when the managed-credentials flag
+// is off.
+activateManagedCredentials();
+await ensureUserClaudeJsonOnboarded();
 
 // Register URL scheme handler (must be done before app is ready)
 if (process.defaultApp) {
@@ -749,7 +749,7 @@ app
     cleanupWindowHandlers = registerWindowHandlers();
     mainWindow = openLocalWindow({ isDark: getInitialWindowIsDark() });
 
-    // D47 S2a §1 phase ③ — only safe now: `openLocalWindow` constructs the
+    // Phase ③ — only safe now: `openLocalWindow` constructs the
     // first `BrowserWindow`, which synchronously fires `browser-window-created`
     // (the upgrade latch registered above), so `promoteVaultCrypto` has
     // already installed the real crypto adapter by this point.
@@ -757,8 +757,8 @@ app
     // D47 S6 §1.5 — adoption runs AFTER crypto promotion and BEFORE
     // `regenerateFromVault()`: on a match it calls `vault.save()`, so the
     // very next `regenerateFromVault()` read below already sees a freshly
-    // adopted vault instead of materializing an empty claude-home/codex-home
-    // that would force a needless re-login. Flag-off is a zero-FS-IO no-op.
+    // adopted vault instead of materializing an empty codex-home that would
+    // force a needless re-login. Flag-off is a zero-FS-IO no-op.
     await ensureVaultAdoption(getCredentialVault(), app.getPath('userData'));
 
     await regenerateFromVault();

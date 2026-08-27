@@ -93,3 +93,143 @@ describe('loadClaudeSettingsEnv — authTokenType precedence', () => {
     expect(diagnostics.authTokenType).toBe('none');
   });
 });
+
+/**
+ * S0' (D60) — the precedence rule that REPLACES `CLAUDE_CONFIG_DIR`
+ * redirection.
+ *
+ * Before D60 our credential could not lose to a user's settings.json, because
+ * the redirect made ours the only settings.json in sight. Now both exist, and
+ * this rule is the whole of what keeps a stale token in a user's file from
+ * silently shadowing the account they logged into the app with. Every case
+ * here is load-bearing in that specific sense.
+ */
+describe('loadClaudeSettingsEnv — managed credential precedence (D60)', () => {
+  const saved = {
+    authToken: process.env.ANTHROPIC_AUTH_TOKEN,
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    baseUrl: process.env.ANTHROPIC_BASE_URL,
+    managedBaseUrl: process.env.AICLIENT_CLAUDE_BASE_URL,
+    managedAuthToken: process.env.AICLIENT_CLAUDE_AUTH_TOKEN,
+    disableTraffic: process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,
+  };
+
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_BASE_URL;
+    delete process.env.AICLIENT_CLAUDE_BASE_URL;
+    delete process.env.AICLIENT_CLAUDE_AUTH_TOKEN;
+    delete process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC;
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'claude-settings-managed-'));
+  });
+
+  afterEach(async () => {
+    for (const [key, value] of [
+      ['ANTHROPIC_AUTH_TOKEN', saved.authToken],
+      ['ANTHROPIC_API_KEY', saved.apiKey],
+      ['ANTHROPIC_BASE_URL', saved.baseUrl],
+      ['AICLIENT_CLAUDE_BASE_URL', saved.managedBaseUrl],
+      ['AICLIENT_CLAUDE_AUTH_TOKEN', saved.managedAuthToken],
+      ['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', saved.disableTraffic],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeUserSettings(env: Record<string, string>): Promise<string> {
+    const settingsPath = path.join(tmpDir, 'settings.json');
+    await writeFile(settingsPath, JSON.stringify({ env }), 'utf8');
+    return settingsPath;
+  }
+
+  it("the managed credential OVERRIDES a stale token in the user's own settings.json", async () => {
+    process.env.AICLIENT_CLAUDE_BASE_URL = 'https://managed.example.com/v1';
+    process.env.AICLIENT_CLAUDE_AUTH_TOKEN = 'managed-token';
+    const settingsPath = await writeUserSettings({
+      ANTHROPIC_BASE_URL: 'https://user-stale.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'user-stale-token',
+    });
+
+    const { env, diagnostics } = await loadClaudeSettingsEnv(settingsPath);
+
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://managed.example.com/v1');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('managed-token');
+    expect(diagnostics.credentialSource).toBe('managed');
+  });
+
+  it("falls back to the user's settings.json when there is no managed credential", async () => {
+    const settingsPath = await writeUserSettings({
+      ANTHROPIC_BASE_URL: 'https://user-own.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'user-own-token',
+    });
+
+    const { env, diagnostics } = await loadClaudeSettingsEnv(settingsPath);
+
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://user-own.example.com/v1');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('user-own-token');
+    expect(diagnostics.credentialSource).toBe('settings');
+  });
+
+  it('a HALF managed credential is ignored entirely — never paired with the other half from the user file', async () => {
+    // Falsifies "just take whichever half is present": our base URL combined
+    // with their token is a cross-account request, worse than either source
+    // used whole.
+    process.env.AICLIENT_CLAUDE_BASE_URL = 'https://managed.example.com/v1';
+    const settingsPath = await writeUserSettings({
+      ANTHROPIC_BASE_URL: 'https://user-own.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'user-own-token',
+    });
+
+    const { env, diagnostics } = await loadClaudeSettingsEnv(settingsPath);
+
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://user-own.example.com/v1');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('user-own-token');
+    expect(diagnostics.credentialSource).toBe('settings');
+  });
+
+  it('the managed credential drops a stale ANTHROPIC_API_KEY that would otherwise race the token', async () => {
+    process.env.AICLIENT_CLAUDE_BASE_URL = 'https://managed.example.com/v1';
+    process.env.AICLIENT_CLAUDE_AUTH_TOKEN = 'managed-token';
+    const settingsPath = await writeUserSettings({ ANTHROPIC_API_KEY: 'user-stale-api-key' });
+
+    const { env } = await loadClaudeSettingsEnv(settingsPath);
+
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('managed-token');
+  });
+
+  it('applies even when the user has NO settings.json at all (the common first-run case)', async () => {
+    process.env.AICLIENT_CLAUDE_BASE_URL = 'https://managed.example.com/v1';
+    process.env.AICLIENT_CLAUDE_AUTH_TOKEN = 'managed-token';
+
+    const { env, diagnostics } = await loadClaudeSettingsEnv(
+      path.join(tmpDir, 'does-not-exist.json')
+    );
+
+    expect(diagnostics.loaded).toBe(false);
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('managed-token');
+    expect(diagnostics.credentialSource).toBe('managed');
+  });
+
+  it('carries our own posture key as env, since there is no managed settings.json to write it into', async () => {
+    process.env.AICLIENT_CLAUDE_BASE_URL = 'https://managed.example.com/v1';
+    process.env.AICLIENT_CLAUDE_AUTH_TOKEN = 'managed-token';
+
+    const { env } = await loadClaudeSettingsEnv(path.join(tmpDir, 'does-not-exist.json'));
+
+    expect(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1');
+  });
+
+  it('does NOT set the posture key when there is no managed credential (flag-off stays byte-identical)', async () => {
+    const settingsPath = await writeUserSettings({ ANTHROPIC_AUTH_TOKEN: 'user-own-token' });
+
+    const { env } = await loadClaudeSettingsEnv(settingsPath);
+
+    expect(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBeUndefined();
+  });
+});

@@ -29,8 +29,32 @@ import {
   generateManagedCodexConfigToml,
   type ManagedCodexConfigInput,
 } from '@shared/codexManagedConfig';
-import { AICLIENT_GENERATED_SIDECAR_NAME } from './claudeHome';
+
 import { writeManagedFile } from './managedFileWriter';
+
+/**
+ * Sidecar filename for the generated-artifact header, written beside a
+ * generated `config.toml` — never a key INSIDE it ("no unknown keys").
+ *
+ * Lived in `claudeHome.ts` until D60, back when both managed homes wrote one.
+ * The managed claude-home is gone, so it moved to its only remaining consumer
+ * rather than staying behind as a Claude-shaped export nothing Claude uses.
+ */
+export const AICLIENT_GENERATED_SIDECAR_NAME = '.aiclient-generated';
+
+export interface GeneratedSidecarStamp {
+  version: string;
+  commit: string;
+  generatedAt: string;
+}
+
+export function generateSidecarStamp(
+  version: string,
+  commit: string,
+  generatedAt: string = new Date().toISOString()
+): GeneratedSidecarStamp {
+  return { version, commit, generatedAt };
+}
 
 const CODEX_HOME_DIR_NAME = 'codex-home';
 const CODEX_CONFIG_BASENAME = 'config.toml';

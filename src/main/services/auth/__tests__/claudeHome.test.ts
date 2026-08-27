@@ -5,53 +5,28 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ensureWorkspaceTrusted,
   generateClaudeJson,
-  generateClaudeSettings,
-  getManagedClaudeHomeDir,
+  getEffectiveClaudeJsonPath,
 } from '../claudeHome';
 import { resetManagedFileWriterQueuesForTests } from '../managedFileWriter';
 
-describe('claudeHome (D47 S2a §1/§2 pure generators)', () => {
-  describe('getManagedClaudeHomeDir', () => {
-    it('joins userData with claude-home', () => {
-      expect(getManagedClaudeHomeDir('/tmp/userData')).toBe(
-        path.join('/tmp/userData', 'claude-home')
+describe('claudeHome — the two Claude Code JSON files this app touches', () => {
+  describe('getEffectiveClaudeJsonPath (D60)', () => {
+    const original = process.env.CLAUDE_CONFIG_DIR;
+    afterEach(() => {
+      if (original === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = original;
+    });
+
+    it('defaults to the TOP-LEVEL ~/.claude.json, not ~/.claude/.claude.json', () => {
+      delete process.env.CLAUDE_CONFIG_DIR;
+      expect(getEffectiveClaudeJsonPath()).toBe(path.join(os.homedir(), '.claude.json'));
+    });
+
+    it('follows a CLAUDE_CONFIG_DIR the USER set (we no longer set it ourselves)', () => {
+      process.env.CLAUDE_CONFIG_DIR = '/tmp/user-chosen-config';
+      expect(getEffectiveClaudeJsonPath()).toBe(
+        path.join('/tmp/user-chosen-config', '.claude.json')
       );
-    });
-  });
-
-  describe('generateClaudeSettings', () => {
-    it('produces the 3-key env + autoUpdates:false + skipWebFetchPreflight:true patch when credentials are present', () => {
-      const patch = generateClaudeSettings({
-        baseUrl: 'https://api.example.com',
-        authToken: 'sk-test',
-      });
-      expect(patch).toEqual({
-        env: {
-          ANTHROPIC_BASE_URL: 'https://api.example.com',
-          ANTHROPIC_AUTH_TOKEN: 'sk-test',
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        },
-        autoUpdates: false,
-        skipWebFetchPreflight: true,
-      });
-    });
-
-    it('produces an empty env when credentials are null (no-credential absent case)', () => {
-      const patch = generateClaudeSettings(null);
-      expect(patch).toEqual({
-        env: {},
-        autoUpdates: false,
-        skipWebFetchPreflight: true,
-      });
-    });
-
-    it('is deterministic / pure (same input -> deep-equal output, no shared references)', () => {
-      const credentials = { baseUrl: 'https://x', authToken: 'sk-1' };
-      const a = generateClaudeSettings(credentials);
-      const b = generateClaudeSettings(credentials);
-      expect(a).toEqual(b);
-      expect(a).not.toBe(b);
-      expect(a.env).not.toBe(b.env);
     });
   });
 

@@ -32,6 +32,7 @@ import { app } from 'electron';
 import log from '../../utils/logger';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
+import { getDevCredentialSeed } from '../auth/managedCredentialsStartup';
 import { AgentHostProcess } from './AgentHostProcess';
 import { buildAgentHostEnv, CODEX_JS_PATH_ENV_KEY, deriveBundledCodexJsPath } from './hostEnv';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
@@ -75,6 +76,60 @@ export function resolveCodexManagedHostEnv(): {
   const codexApiKey =
     vaultResult.status === 'ok' ? vaultResult.doc.payload.codex.apiKey : undefined;
   return { codexManaged: '1', codexApiKey, codexHomeManagedDir };
+}
+
+/**
+ * S0' (D60) — the Claude half of the same idea, and the REPLACEMENT for what
+ * `CLAUDE_CONFIG_DIR` redirection used to buy.
+ *
+ * Before D60 the vault's Claude credential reached the Host by being written
+ * into `<userData>/claude-home/settings.json`, which only worked because Main
+ * had pointed `CLAUDE_CONFIG_DIR` at that directory — and pointing it there is
+ * exactly what made the user's own `~/.claude` (CLAUDE.md, commands/, skills/,
+ * plugins/) invisible. Handing the credential over as env removes the reason
+ * to control the directory at all.
+ *
+ * Same freshness contract as `resolveCodexManagedHostEnv`: resolved per spawn,
+ * never cached on the manager, so a login/logout that happened while the Host
+ * was down is picked up by the next spawn.
+ *
+ * Flag off returns both `undefined` — `hostEnv.ts`'s contamination defense
+ * needs the keys PRESENT and undefined to kill a stray inherited value, not
+ * merely omitted.
+ */
+export function resolveClaudeManagedHostEnv(): {
+  claudeBaseUrl: string | undefined;
+  claudeAuthToken: string | undefined;
+} {
+  if (!resolveManagedCredentialsEnabled()) {
+    return { claudeBaseUrl: undefined, claudeAuthToken: undefined };
+  }
+  const vaultResult = getCredentialVault().read();
+  if (vaultResult.status === 'ok') {
+    // Optional-chained for the same reason as `SessionManager`'s twin: an
+    // older vault document has no `claude` arm, and a missing arm must read
+    // as "no managed credential", not as a crash during Host spawn.
+    const baseUrl = vaultResult.doc.payload.claude?.baseUrl;
+    const authToken = vaultResult.doc.payload.claude?.authToken;
+    if (baseUrl && authToken) {
+      return { claudeBaseUrl: baseUrl, claudeAuthToken: authToken };
+    }
+  }
+  // Dev fallback (A-track M9): a dev machine whose vault is still `absent`
+  // would otherwise spawn a Host with no credentials at all. Packaged builds
+  // never have a seed — `activateManagedCredentials` only captures one when
+  // `app.isPackaged` is false.
+  //
+  // Every OTHER non-`ok` status falls through to the same `undefined` pair,
+  // and that is deliberate rather than an oversight: the Host then reads the
+  // user's own settings.json, exactly as it did before managed mode existed.
+  // A `locked` keyring at boot is a TEMPORARY state, not "no credentials"
+  // (the same B1 reasoning `regenerateFromVault` follows for codex).
+  const seed = getDevCredentialSeed();
+  if (seed && (vaultResult.status === 'absent' || vaultResult.status === 'cleared')) {
+    return { claudeBaseUrl: seed.baseUrl, claudeAuthToken: seed.authToken };
+  }
+  return { claudeBaseUrl: undefined, claudeAuthToken: undefined };
 }
 
 export type AgentHostState = 'stopped' | 'starting' | 'ready' | 'error';
@@ -643,6 +698,8 @@ export class AgentHostManager {
     // Host came up (the I5 epoch barrier on `ensureStarted`/`shutdown` above
     // is what makes "always fresh at spawn time" actually hold).
     const codexManagedEnv = resolveCodexManagedHostEnv();
+    // S0' (D60): same per-spawn freshness rule as the Codex resolver above.
+    const claudeManagedEnv = resolveClaudeManagedHostEnv();
     const proc = new AgentHostProcess({
       nodeExecPath: resolved.runtime.execPath,
       hostEntryPath,
@@ -657,6 +714,8 @@ export class AgentHostManager {
         codexApiKey: codexManagedEnv.codexApiKey,
         codexHomeManagedDir: codexManagedEnv.codexHomeManagedDir,
         codexJsPath,
+        claudeBaseUrl: claudeManagedEnv.claudeBaseUrl,
+        claudeAuthToken: claudeManagedEnv.claudeAuthToken,
       }),
     });
 

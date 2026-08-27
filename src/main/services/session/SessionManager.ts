@@ -1,4 +1,4 @@
-import { join, resolve as resolvePath } from 'node:path';
+import { resolve as resolvePath } from 'node:path';
 import {
   IPC_CHANNELS,
   type SessionAttachOptions,
@@ -14,7 +14,7 @@ import {
 import { app, BrowserWindow, type WebContents } from 'electron';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
-import { ensureWorkspaceTrusted, getManagedClaudeHomeDir } from '../auth/claudeHome';
+import { ensureWorkspaceTrusted, getEffectiveClaudeJsonPath } from '../auth/claudeHome';
 import { getManagedCodexHomeDir } from '../auth/codexHome';
 import { assertAgentSpawnAllowed } from '../auth/spawnGate';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
@@ -88,6 +88,54 @@ function withManagedCodexEnv(options: SessionCreateOptions): SessionCreateOption
   };
 }
 
+/**
+ * S0' (D60) — the Claude credential for a local terminal PTY.
+ *
+ * A user who types `claude` in our terminal is running the real CLI, which
+ * authenticates from `ANTHROPIC_*` env or from their own settings.json. Before
+ * D60 they got ours by inheriting the redirected `CLAUDE_CONFIG_DIR` — which
+ * also handed them our stripped-down home instead of their own commands,
+ * skills and CLAUDE.md. Now they get the credential and keep their home.
+ *
+ * Unlike the Codex twin above these keys are `ANTHROPIC_*`, the names the CLI
+ * actually reads; there is no indirection to point at a private name here.
+ * They are spread LAST so Main's values win over a renderer-supplied
+ * same-named key, matching the Codex "合并向" rule.
+ *
+ * `null` (flag off) returns the SAME `options` reference — not even a shallow
+ * copy, so a user's own shell `ANTHROPIC_AUTH_TOKEN` stays exactly as they
+ * set it ("this slice didn't touch that key" ≠ "the key doesn't exist").
+ * Both halves must be present for the same reason `claudeSettings.ts` requires
+ * both: a base URL paired with someone else's token is a cross-account
+ * request.
+ */
+function withManagedClaudeEnv(options: SessionCreateOptions): SessionCreateOptions {
+  if (!resolveManagedCredentialsEnabled()) {
+    return options;
+  }
+  const vaultResult = getCredentialVault().read();
+  if (vaultResult.status !== 'ok') {
+    return options;
+  }
+  // Optional-chained, not destructured: `payload.claude` is absent in older
+  // vault documents (and in any fixture written before the arm existed), and
+  // a missing arm must degrade to "no managed credential" exactly like an
+  // empty one — never throw inside a session create.
+  const baseUrl = vaultResult.doc.payload.claude?.baseUrl;
+  const authToken = vaultResult.doc.payload.claude?.authToken;
+  if (!baseUrl || !authToken) {
+    return options;
+  }
+  return {
+    ...options,
+    env: {
+      ...options.env,
+      ANTHROPIC_BASE_URL: baseUrl,
+      ANTHROPIC_AUTH_TOKEN: authToken,
+    },
+  };
+}
+
 function getWindowId(target: BrowserWindow | WebContents | number): number {
   if (typeof target === 'number') {
     return target;
@@ -153,9 +201,8 @@ export class SessionManager {
   private async ensureWorkspaceTrustedForLocalCreate(cwd: string | undefined): Promise<void> {
     if (!resolveManagedCredentialsEnabled()) return;
     if (!cwd) return;
-    const claudeHomeDir = getManagedClaudeHomeDir(app.getPath('userData'));
-    const claudeJsonPath = join(claudeHomeDir, '.claude.json');
-    await ensureWorkspaceTrusted(claudeJsonPath, resolvePath(cwd));
+    // D60: the user's own `.claude.json`, merged — see the chat.ts twin.
+    await ensureWorkspaceTrusted(getEffectiveClaudeJsonPath(), resolvePath(cwd));
   }
 
   async attach(
@@ -456,7 +503,9 @@ export class SessionManager {
 
     try {
       this.localPtyManager.create(
-        withManagedCodexEnv(options),
+        // Both injectors are no-ops (same object reference) when the
+        // managed-credentials flag is off — composing them keeps that.
+        withManagedClaudeEnv(withManagedCodexEnv(options)),
         (data) => this.handleLocalData(sessionId, data),
         (exitCode, signal) => {
           this.handleLocalExit(sessionId, exitCode, signal);

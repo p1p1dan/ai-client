@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -147,12 +147,12 @@ describe('startup orchestration trace — adoption-read -> vault-save -> marker,
     registerAuthHandlers();
 
     const { ensureVaultAdoption } = await import('../adoption');
-    const { activateManagedClaudeHome, ensureManagedHomeSkeleton, regenerateFromVault } =
-      await import('../managedClaudeHomeStartup');
+    const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
+      await import('../managedCredentialsStartup');
 
     // Real production sequence (main/index.ts ~L154-155, ~L762-775).
-    activateManagedClaudeHome();
-    await ensureManagedHomeSkeleton();
+    activateManagedCredentials();
+    await ensureUserClaudeJsonOnboarded();
 
     const adoptionOutcome = await ensureVaultAdoption(authIndex.getCredentialVault(), userDataDir);
     expect(adoptionOutcome).toEqual({ kind: 'adopted' });
@@ -188,12 +188,16 @@ describe('startup orchestration trace — adoption-read -> vault-save -> marker,
     expect(probeUrl).toBe(`${legacyServerUrl}/api/auth/login`);
     expect(JSON.parse(probeInit.body)).toEqual({ key: legacyToken });
 
-    // "regenerate" landed the adopted credentials into the managed home
-    // immediately — a freshly-adopted vault is visible without a re-login.
-    const claudeHomeSettingsPath = join(userDataDir, 'claude-home', 'settings.json');
-    const settings = JSON.parse(readFileSync(claudeHomeSettingsPath, 'utf-8'));
-    expect(settings.env.ANTHROPIC_AUTH_TOKEN).toBe(legacyToken);
-    expect(settings.env.ANTHROPIC_BASE_URL).toBe(legacyBaseUrl);
+    // The adopted credentials are visible to the runtime immediately — a
+    // freshly-adopted vault needs no re-login. D60 moved this from "landed in
+    // the managed home's settings.json" to "resolves out of the vault at Host
+    // spawn time", which is a STRONGER form of the same guarantee: there is
+    // no file that could be written late, or left stale.
+    const { resolveClaudeManagedHostEnv } = await import('../../agent-host/AgentHostManager');
+    expect(resolveClaudeManagedHostEnv()).toEqual({
+      claudeBaseUrl: legacyBaseUrl,
+      claudeAuthToken: legacyToken,
+    });
 
     // "refresh" landed authenticated, off the SAME vault adoption wrote —
     // `remoteHealth` is `'valid'` here (not the freshly-computed `'unknown'`

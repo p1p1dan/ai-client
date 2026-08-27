@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import { APP_STATE_DIR } from '@shared/defaultPaths';
 import { resolveManagedCredentialsEnabled } from './AuthStateService';
 import type { VaultPayload, VaultReadResult, VaultSaveResult } from './CredentialVault';
-import type { ClaudeHomeCredentials } from './claudeHome';
+import type { ClaudeCredentials } from './claudeHome';
 import { writeManagedFile } from './managedFileWriter';
 
 const ADOPTION_MARKER_FILE_NAME = '.adopted-v1';
@@ -82,7 +82,7 @@ export function readLegacyOnboardingState(): LegacyOnboardingReadResult {
  * judgment: no `env` key / `env:{}` / an empty-string value on either field
  * all count as missing.
  */
-function readClaudeHomeCredentials(): ClaudeHomeCredentials | null {
+function readClaudeCredentials(): ClaudeCredentials | null {
   const settingsPath = join(homedir(), '.claude', 'settings.json');
   if (!existsSync(settingsPath)) {
     return null;
@@ -326,7 +326,7 @@ async function performAdoption(
     return { kind: 'skipped', reason: 'legacy_not_registered' };
   }
 
-  const claudeCredentials = readClaudeHomeCredentials();
+  const claudeCredentials = readClaudeCredentials();
   if (!claudeCredentials) {
     return { kind: 'skipped', reason: 'claude_credentials_missing', legacyEmail: legacy.email };
   }
