@@ -1,11 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { APP_STATE_DIR } from '@shared/defaultPaths';
 import type { SessionStorageDocument, SessionTodoTask } from '@shared/types';
-import { app } from 'electron';
+import { getAppStateRoot } from './appStatePaths';
 
 const STORAGE_VERSION = 2;
-const SHARED_STATE_DIR = APP_STATE_DIR;
 const SETTINGS_FILENAME = 'settings.json';
 const SESSION_FILENAME = 'session-state.json';
 const SETTINGS_MIGRATION_MARKER = '.local-settings-migrated';
@@ -32,7 +30,7 @@ function now(): number {
 }
 
 function getSharedRoot(): string {
-  return join(process.env.HOME || process.env.USERPROFILE || app.getPath('home'), SHARED_STATE_DIR);
+  return getAppStateRoot();
 }
 
 function getSettingsPath(): string {

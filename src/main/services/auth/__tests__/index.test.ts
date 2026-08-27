@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildAppStateRoot } from '@shared/appStateLayout';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VaultPayload } from '../CredentialVault';
 
@@ -40,16 +41,28 @@ function makePayload(): VaultPayload {
 }
 
 let tmpRoot: string;
+let tmpHome: string;
+const originalHome = process.env.HOME;
+const originalUserProfile = process.env.USERPROFILE;
 
 beforeEach(() => {
   vi.resetModules();
   tmpRoot = mkdtempSync(join(tmpdir(), 'aiclient-auth-index-'));
+  // S2 moved the vault out of `<userData>` and into `$HOME/.pilab/<profile>`,
+  // so `$HOME` has to be redirected too — otherwise this test would write a
+  // vault into the developer's real home directory.
+  tmpHome = mkdtempSync(join(tmpdir(), 'aiclient-auth-index-home-'));
+  process.env.HOME = tmpHome;
+  process.env.USERPROFILE = tmpHome;
   state.userDataPath = '/initial/aiclient-userdata';
   state.encryptionAvailable = false;
 });
 
 afterEach(() => {
+  process.env.HOME = originalHome;
+  process.env.USERPROFILE = originalUserProfile;
   rmSync(tmpRoot, { recursive: true, force: true });
+  rmSync(tmpHome, { recursive: true, force: true });
 });
 
 describe('getCredentialVault — lazy baseDir resolution (A-track B1)', () => {
@@ -65,7 +78,13 @@ describe('getCredentialVault — lazy baseDir resolution (A-track B1)', () => {
     vault.promoteCrypto({ available: () => false, encrypt: (s) => s, decrypt: (s) => s });
     await vault.save(makePayload());
 
-    expect(existsSync(join(tmpRoot, 'credentials', 'vault.json'))).toBe(true);
+    // The lazy property is unchanged by S2 — only the destination moved:
+    // `<userData>`'s basename is now the profile segment of the state root,
+    // so a module-scope capture would still put the vault under
+    // `/initial/aiclient-userdata`'s name instead of this one.
+    expect(existsSync(join(buildAppStateRoot(tmpHome, tmpRoot), 'credentials', 'vault.json'))).toBe(
+      true
+    );
   });
 
   it('memoizes the vault instance across calls (singleton)', async () => {

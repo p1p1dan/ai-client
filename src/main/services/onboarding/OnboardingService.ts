@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ManagedCodexConfigInput } from '@shared/codexManagedConfig';
-import { APP_STATE_DIR } from '@shared/defaultPaths';
 import type {
   OnboardingCliStatus,
   OnboardingCredentialsHealth,
@@ -11,6 +10,7 @@ import type {
 } from '@shared/types';
 import { app, net } from 'electron';
 import { mergeSettingsPatch } from '../../ipc/settings';
+import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/AuthStateService';
 import { type CodexHomeRegenerateSource, regenerateManagedCodexHome } from '../auth/codexHome';
@@ -98,11 +98,11 @@ export function removeJywProviderFromToml(toml: string): string {
 class OnboardingService {
   /**
    * Check if user has already completed onboarding.
-   * Reads the onboarding field from ~/.aiclient/settings.json.
+   * Reads the onboarding field from the app state root's settings.json.
    */
   checkRegistration(): OnboardingState {
     try {
-      const settingsPath = path.join(os.homedir(), APP_STATE_DIR, 'settings.json');
+      const settingsPath = path.join(getAppStateRoot(), 'settings.json');
       if (!fs.existsSync(settingsPath)) {
         return { registered: false };
       }
@@ -374,7 +374,7 @@ class OnboardingService {
   /**
    * Logout current user — the LEGACY (flag-agnostic) half only: removes
    * local `~/.claude`/`~/.codex` CLI credential files and merges
-   * `onboarding.registered = false` into `~/.aiclient/settings.json`.
+   * `onboarding.registered = false` into the app state root's settings.json.
    *
    * D47 S5 §3 I9 restructure: the vault clear, managed-home regenerate, and
    * Agent Host shutdown steps MOVED OUT to
@@ -802,7 +802,7 @@ class OnboardingService {
   }
 
   /**
-   * Save onboarding state to ~/.aiclient/settings.json
+   * Save onboarding state to the app state root's settings.json
    */
   private saveOnboardingState(state: OnboardingState): boolean {
     try {

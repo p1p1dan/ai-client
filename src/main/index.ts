@@ -2,6 +2,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { pathToFileURL, URL } from 'node:url';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
+import { APP_STATE_DIR } from '@shared/defaultPaths';
 import { type Locale, normalizeLocale } from '@shared/i18n';
 import { IPC_CHANNELS, type ProxySettings } from '@shared/types';
 import { customProtocolUriToPath, type SupportedFileUrlPlatform } from '@shared/utils/fileUrl';
@@ -42,6 +43,13 @@ import { initClaudeProviderWatcher } from './ipc/claudeProvider';
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
+import { migrateAppState } from './services/appStateMigration';
+import {
+  CREDENTIALS_DIR_NAME,
+  getAppStateRoot,
+  getCredentialsDir,
+  getLegacyAppStateRoot,
+} from './services/appStatePaths';
 import {
   createRealVaultCrypto,
   getAuthStateService,
@@ -143,6 +151,29 @@ function sanitizeProfileName(input: string): string {
 if (isDev) {
   const profile = sanitizeProfileName(process.env.AICLIENT_PROFILE || '') || 'dev';
   app.setPath('userData', join(app.getPath('appData'), `${app.getName()}-${profile}`));
+}
+
+// Phase ⓪ — S2, and it must be the FIRST thing after `setPath('userData')`.
+// `~/.aiclient` became `~/.pilab/<profile>`, and the credential vault moved
+// out of `<userData>` into that same root. Everything below reads one of
+// those paths, so an install that has not been carried across yet would come
+// up looking like a brand-new machine — which for the vault means "please log
+// in again", the one outcome this slice is not allowed to produce.
+// Never throws: a machine that cannot be migrated still has to start.
+const appStateMigration = migrateAppState({
+  legacyRoot: getLegacyAppStateRoot(),
+  legacyCredentialsDir: join(app.getPath('userData'), CREDENTIALS_DIR_NAME),
+  newRoot: getAppStateRoot(),
+  newCredentialsDir: getCredentialsDir(),
+});
+if (appStateMigration.kind === 'migrated') {
+  console.log(
+    `[appState] migrated to ${APP_STATE_DIR}: copied=${appStateMigration.copied.length} kept-existing=${appStateMigration.skippedExisting.length}`
+  );
+} else if (appStateMigration.kind === 'failed') {
+  console.error(
+    `[appState] migration failed after ${appStateMigration.copied.length} file(s): ${appStateMigration.error}`
+  );
 }
 
 // Phase ① — right after `setPath('userData')`, before any service action.

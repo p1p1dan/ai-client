@@ -1,6 +1,6 @@
 /**
  * D47 S6 §1 — legacy-credential adoption. On a machine that already
- * completed the LEGACY onboarding flow (`~/.aiclient/settings.json` +
+ * completed the LEGACY onboarding flow (the app's own `settings.json` +
  * `~/.claude/settings.json`), promote those bytes into the S1 vault ONCE,
  * so flipping the managed-credentials flag on an already-registered machine
  * does not force a re-login.
@@ -24,7 +24,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { APP_STATE_DIR } from '@shared/defaultPaths';
+import { buildAppStateRoot, buildLegacyAppStateRoot } from '@shared/appStateLayout';
 import { resolveManagedCredentialsEnabled } from './AuthStateService';
 import type { VaultPayload, VaultReadResult, VaultSaveResult } from './CredentialVault';
 import type { ClaudeCredentials } from './claudeHome';
@@ -44,10 +44,36 @@ export type LegacyOnboardingReadResult =
   | { status: 'invalid' }
   | { status: 'present'; registered: boolean; email: string | null; serverUrl: string | null };
 
-/** Malformed JSON never throws, never writes a marker — every failure mode collapses to `{status:'invalid'}`, which the orchestration treats identically to "not registered" (skip). */
-export function readLegacyOnboardingState(): LegacyOnboardingReadResult {
-  const settingsPath = join(homedir(), APP_STATE_DIR, 'settings.json');
-  if (!existsSync(settingsPath)) {
+/**
+ * Malformed JSON never throws, never writes a marker — every failure mode
+ * collapses to `{status:'invalid'}`, which the orchestration treats
+ * identically to "not registered" (skip).
+ *
+ * ## Two roots, and why the fallback is not optional (S2)
+ *
+ * `userDataDir` is a PARAMETER, not something this module looks up: reading
+ * `app.getPath` here would put `electron` into a file whose whole contract is
+ * "pure, reads two legacy sources, writes only through the vault port"
+ * (`adoptionStaticImportBans.test.ts`). The caller already has it.
+ *
+ * The rename moved this file to `~/.pilab/<profile>/settings.json`, and
+ * `appStateMigration.ts` copies an existing one across at boot. The current
+ * root is therefore the right place to look, and it is looked at FIRST.
+ *
+ * The legacy root is still consulted when the current one has nothing,
+ * because this module's whole job is "do not make an existing user log in
+ * again" — and a migration that failed, or a `$HOME` that changed under the
+ * app, must not be the thing that costs them their session. Reading a stale
+ * legacy file is harmless here: the payload is only ever used to CORROBORATE
+ * credentials read from `~/.claude/settings.json`, never as a credential
+ * itself.
+ */
+export function readLegacyOnboardingState(userDataDir: string): LegacyOnboardingReadResult {
+  const settingsPath = [
+    join(buildAppStateRoot(homedir(), userDataDir), 'settings.json'),
+    join(buildLegacyAppStateRoot(homedir()), 'settings.json'),
+  ].find((candidate) => existsSync(candidate));
+  if (!settingsPath) {
     return { status: 'absent' };
   }
 
@@ -321,7 +347,7 @@ async function performAdoption(
     return { kind: 'skipped', reason: 'marker_present' };
   }
 
-  const legacy = readLegacyOnboardingState();
+  const legacy = readLegacyOnboardingState(userDataDir);
   if (legacy.status !== 'present' || !legacy.registered) {
     return { kind: 'skipped', reason: 'legacy_not_registered' };
   }

@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
+import { buildAppStateRoot } from '@shared/appStateLayout';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VaultCrypto } from '../CredentialVault';
 
@@ -238,23 +239,24 @@ describe('stop-dual-write mutation trace — flag-on verifyAndRegister never tou
       expect(vaultRead.doc.payload.claude.authToken).toBe(token);
     }
 
-    // Corroboration #4 — the untargeted `~/.aiclient/settings.json` write
+    // Corroboration #4 — the untargeted write to the app's OWN settings.json
     // (deliberately NOT part of the stop-dual-write gate — `onboarding.
     // serverUrl` still gets written every login regardless of the flag, D47
     // S6 §2 A-M3) both landed on real disk AND shows up in the raw
     // (unfiltered) fs trace, proving the spy wired into this test is the
     // SAME instance the production write chain actually runs through.
-    const aiclientSettingsPath = join(tempHome, '.aiclient', 'settings.json');
-    expect(existsSync(aiclientSettingsPath)).toBe(true);
-    const savedOnboarding = JSON.parse(readFileSync(aiclientSettingsPath, 'utf-8'));
+    // S2 moved that file from `~/.aiclient/` to `~/.pilab/<profile>/`; the
+    // point of the corroboration is unchanged.
+    const appStateRoot = buildAppStateRoot(tempHome, userDataDir);
+    const appSettingsPath = join(appStateRoot, 'settings.json');
+    expect(existsSync(appSettingsPath)).toBe(true);
+    const savedOnboarding = JSON.parse(readFileSync(appSettingsPath, 'utf-8'));
     expect(savedOnboarding.onboarding.registered).toBe(true);
     expect(
       fsCallTrace.some(
         (call) =>
           call.method === 'writeFileSync' &&
-          call.args.some(
-            (arg) => typeof arg === 'string' && arg.startsWith(join(tempHome, '.aiclient'))
-          )
+          call.args.some((arg) => typeof arg === 'string' && arg.startsWith(appStateRoot))
       )
     ).toBe(true);
 

@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { buildAppStateRoot } from '@shared/appStateLayout';
+import { LEGACY_APP_STATE_DIR } from '@shared/defaultPaths';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type AdoptionVault,
@@ -79,8 +81,19 @@ describe('adoption.ts (D47 S6 §1)', () => {
     writeFileSync(path, content, 'utf-8');
   }
 
-  function aiclientSettingsPath(): string {
-    return join(homeDir, '.aiclient', 'settings.json');
+  /**
+   * The PRE-RENAME location. Most cases below still seed here on purpose: it
+   * is the "machine that was never migrated" arm of the S2 fallback, and it
+   * is the arm that carries the "never make an existing user log in again"
+   * promise.
+   */
+  function legacySettingsPath(): string {
+    return join(homeDir, LEGACY_APP_STATE_DIR, 'settings.json');
+  }
+
+  /** The post-rename location: `~/.pilab/<profile>/settings.json`. */
+  function currentSettingsPath(): string {
+    return join(buildAppStateRoot(homeDir, userDataDir), 'settings.json');
   }
 
   function claudeSettingsPath(): string {
@@ -96,7 +109,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
     email?: string | null;
     serverUrl?: string | null;
   }): void {
-    writeJsonFile(aiclientSettingsPath(), {
+    writeJsonFile(legacySettingsPath(), {
       onboarding: {
         registered: opts.registered,
         email: opts.email ?? undefined,
@@ -137,32 +150,32 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
   describe('readLegacyOnboardingState', () => {
     it('absent: settings.json missing', () => {
-      expect(readLegacyOnboardingState()).toEqual({ status: 'absent' });
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({ status: 'absent' });
     });
 
     it('invalid: malformed JSON', () => {
-      writeRawFile(aiclientSettingsPath(), '{not json');
-      expect(readLegacyOnboardingState()).toEqual({ status: 'invalid' });
+      writeRawFile(legacySettingsPath(), '{not json');
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({ status: 'invalid' });
     });
 
     it('invalid: top-level value is not an object (array)', () => {
-      writeRawFile(aiclientSettingsPath(), '[]');
-      expect(readLegacyOnboardingState()).toEqual({ status: 'invalid' });
+      writeRawFile(legacySettingsPath(), '[]');
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({ status: 'invalid' });
     });
 
     it('invalid: top-level value is not an object (string)', () => {
-      writeRawFile(aiclientSettingsPath(), '"hello"');
-      expect(readLegacyOnboardingState()).toEqual({ status: 'invalid' });
+      writeRawFile(legacySettingsPath(), '"hello"');
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({ status: 'invalid' });
     });
 
     it('invalid: missing onboarding key', () => {
-      writeJsonFile(aiclientSettingsPath(), { somethingElse: true });
-      expect(readLegacyOnboardingState()).toEqual({ status: 'invalid' });
+      writeJsonFile(legacySettingsPath(), { somethingElse: true });
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({ status: 'invalid' });
     });
 
     it('invalid: onboarding key present but not an object', () => {
-      writeJsonFile(aiclientSettingsPath(), { onboarding: 'not-an-object' });
-      expect(readLegacyOnboardingState()).toEqual({ status: 'invalid' });
+      writeJsonFile(legacySettingsPath(), { onboarding: 'not-an-object' });
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({ status: 'invalid' });
     });
 
     it('present: registered true with email + serverUrl', () => {
@@ -171,7 +184,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         email: 'user@example.com',
         serverUrl: 'https://custom-legacy.test',
       });
-      expect(readLegacyOnboardingState()).toEqual({
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({
         status: 'present',
         registered: true,
         email: 'user@example.com',
@@ -181,40 +194,80 @@ describe('adoption.ts (D47 S6 §1)', () => {
 
     it('present: registered explicitly false', () => {
       writeLegacyOnboarding({ registered: false, email: 'user@example.com' });
-      const result = readLegacyOnboardingState();
+      const result = readLegacyOnboardingState(userDataDir);
       expect(result.status).toBe('present');
       expect(result.status === 'present' && result.registered).toBe(false);
     });
 
     it('present: registered field missing collapses to false', () => {
-      writeJsonFile(aiclientSettingsPath(), { onboarding: { email: 'user@example.com' } });
-      const result = readLegacyOnboardingState();
+      writeJsonFile(legacySettingsPath(), { onboarding: { email: 'user@example.com' } });
+      const result = readLegacyOnboardingState(userDataDir);
       expect(result.status).toBe('present');
       expect(result.status === 'present' && result.registered).toBe(false);
     });
 
     it('present: empty-string email collapses to null', () => {
       writeLegacyOnboarding({ registered: true, email: '' });
-      const result = readLegacyOnboardingState();
+      const result = readLegacyOnboardingState(userDataDir);
       expect(result.status === 'present' && result.email).toBeNull();
     });
 
     it('present: missing email collapses to null', () => {
-      writeJsonFile(aiclientSettingsPath(), { onboarding: { registered: true } });
-      const result = readLegacyOnboardingState();
+      writeJsonFile(legacySettingsPath(), { onboarding: { registered: true } });
+      const result = readLegacyOnboardingState(userDataDir);
       expect(result.status === 'present' && result.email).toBeNull();
     });
 
     it('present: empty-string serverUrl collapses to null', () => {
       writeLegacyOnboarding({ registered: true, email: 'user@example.com', serverUrl: '' });
-      const result = readLegacyOnboardingState();
+      const result = readLegacyOnboardingState(userDataDir);
       expect(result.status === 'present' && result.serverUrl).toBeNull();
     });
 
     it('present: missing serverUrl collapses to null', () => {
       writeLegacyOnboarding({ registered: true, email: 'user@example.com' });
-      const result = readLegacyOnboardingState();
+      const result = readLegacyOnboardingState(userDataDir);
       expect(result.status === 'present' && result.serverUrl).toBeNull();
+    });
+
+    // -------------------------------------------------------------------
+    // S2 — two roots. Everything above seeds the PRE-RENAME path, so it
+    // already covers the "never migrated" fallback; these cover the other
+    // two positions.
+    // -------------------------------------------------------------------
+
+    it('S2: reads the post-rename root, which is where the migration puts it', () => {
+      writeJsonFile(currentSettingsPath(), {
+        onboarding: { registered: true, email: 'migrated@example.com' },
+      });
+      expect(readLegacyOnboardingState(userDataDir)).toEqual({
+        status: 'present',
+        registered: true,
+        email: 'migrated@example.com',
+        serverUrl: null,
+      });
+    });
+
+    it('S2: the post-rename root wins when both exist', () => {
+      writeJsonFile(legacySettingsPath(), {
+        onboarding: { registered: true, email: 'stale@example.com' },
+      });
+      writeJsonFile(currentSettingsPath(), {
+        onboarding: { registered: true, email: 'current@example.com' },
+      });
+      const result = readLegacyOnboardingState(userDataDir);
+      expect(result.status === 'present' && result.email).toBe('current@example.com');
+    });
+
+    it('S2: a different profile does not see this profile settings', () => {
+      writeJsonFile(currentSettingsPath(), {
+        onboarding: { registered: true, email: 'prod@example.com' },
+      });
+      // Another install (`<userData>` differs) with no legacy file to fall
+      // back to must read nothing at all — that separation IS the profile layer.
+      expect(readLegacyOnboardingState(join(dirname(userDataDir), 'someone-else'))).toEqual({
+        status: 'absent',
+      });
     });
   });
 
@@ -401,7 +454,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
     });
 
     it('collapses legacy invalid into this reason', async () => {
-      writeRawFile(aiclientSettingsPath(), '{not json');
+      writeRawFile(legacySettingsPath(), '{not json');
       const outcome = await ensureVaultAdoption(absentVault(), userDataDir, { env: FLAG_ON });
       expect(outcome).toEqual({ kind: 'skipped', reason: 'legacy_not_registered' });
     });

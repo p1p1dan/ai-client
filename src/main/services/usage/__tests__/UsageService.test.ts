@@ -1,9 +1,12 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildAppStateRoot } from '@shared/appStateLayout';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchMock = vi.fn();
+/** Stands in for `<userData>`'s basename — S2's profile segment. */
+const MOCK_USER_DATA_NAME = 'jyw-ai-client-test';
 const reportExternalLoginResponseMock = vi.fn();
 const vaultReadMock = vi.fn(() => ({ status: 'absent' }) as const);
 const authStateGetStateMock = vi.fn(() => ({ status: 'authenticated' }) as { status: string });
@@ -25,6 +28,15 @@ const { mockFsExistsSync, mockFsReadFileSync } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   net: {
     fetch: fetchMock,
+  },
+  // S2: `OnboardingService.checkRegistration()` resolves the app state root
+  // through `app.getPath('userData')` — its basename is the profile segment.
+  // Answered with a fixed name so the root this test seeds is the root the
+  // production code reads.
+  app: {
+    getPath: vi.fn((name: string) =>
+      name === 'userData' ? join(tmpdir(), MOCK_USER_DATA_NAME) : tmpdir()
+    ),
   },
 }));
 
@@ -108,10 +120,15 @@ describe('UsageService', () => {
     rmSync(tempHome, { recursive: true, force: true });
   });
 
+  /** `~/.pilab/<profile>` — the app's own state root since S2. */
+  function appStateRoot(): string {
+    return buildAppStateRoot(tempHome, join(tmpdir(), MOCK_USER_DATA_NAME));
+  }
+
   function writeOnboardingState(serverUrl = 'https://cch.example.com/'): void {
-    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
+    mkdirSync(appStateRoot(), { recursive: true });
     writeFileSync(
-      join(tempHome, '.aiclient', 'settings.json'),
+      join(appStateRoot(), 'settings.json'),
       JSON.stringify(
         { onboarding: { registered: true, email: 'user@jcdz.cc', serverUrl } },
         null,

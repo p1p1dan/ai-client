@@ -1,9 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildAppStateRoot } from '@shared/appStateLayout';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchMock = vi.fn();
+/** Stands in for `<userData>`'s basename — S2's profile segment. */
+const MOCK_USER_DATA_NAME = 'jyw-ai-client-test';
 const checkPrerequisitesMock = vi.fn();
 
 vi.mock('electron', () => ({
@@ -12,7 +15,12 @@ vi.mock('electron', () => ({
   },
   app: {
     on: vi.fn(),
-    getPath: vi.fn(() => tmpdir()),
+    // `userData` is answered explicitly: S2 derives the app state root's
+    // profile segment from its basename, so a test that let it default would
+    // be asserting against whatever `tmpdir()` happens to be called.
+    getPath: vi.fn((name: string) =>
+      name === 'userData' ? join(tmpdir(), MOCK_USER_DATA_NAME) : tmpdir()
+    ),
   },
   ipcMain: {
     handle: vi.fn(),
@@ -36,6 +44,15 @@ describe('OnboardingService', () => {
   const originalUserProfile = process.env.USERPROFILE;
 
   let tempHome: string;
+
+  /**
+   * `~/.pilab/<profile>` — where the app's own `settings.json` lives since S2
+   * (it was `~/.aiclient/settings.json`). Built through the production helper
+   * so the test cannot drift from the layout it is exercising.
+   */
+  function appStateRoot(): string {
+    return buildAppStateRoot(tempHome, join(tmpdir(), MOCK_USER_DATA_NAME));
+  }
 
   beforeEach(() => {
     tempHome = join(
@@ -67,8 +84,8 @@ describe('OnboardingService', () => {
   });
 
   it('persists credentials to CLI config files and preserves existing settings', async () => {
-    const settingsPath = join(tempHome, '.aiclient', 'settings.json');
-    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
+    const settingsPath = join(appStateRoot(), 'settings.json');
+    mkdirSync(appStateRoot(), { recursive: true });
     writeFileSync(
       settingsPath,
       JSON.stringify(
@@ -246,9 +263,9 @@ describe('OnboardingService', () => {
   it("logout removes local CLI credentials surgically — config.toml/auth.json are REWRITTEN, never deleted, and a user's own unrelated provider/keys/comments/files survive (D47 S6 §2, re-anchored)", async () => {
     const { onboardingService } = await import('../OnboardingService');
 
-    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
+    mkdirSync(appStateRoot(), { recursive: true });
     writeFileSync(
-      join(tempHome, '.aiclient', 'settings.json'),
+      join(appStateRoot(), 'settings.json'),
       JSON.stringify({ onboarding: { registered: true } })
     );
 
@@ -331,9 +348,9 @@ describe('OnboardingService', () => {
   it('D47 S5 §0-3 regression — logout re-pastes email instead of letting the shallow settings merge silently drop it', async () => {
     const { onboardingService } = await import('../OnboardingService');
 
-    mkdirSync(join(tempHome, '.aiclient'), { recursive: true });
+    mkdirSync(appStateRoot(), { recursive: true });
     writeFileSync(
-      join(tempHome, '.aiclient', 'settings.json'),
+      join(appStateRoot(), 'settings.json'),
       JSON.stringify({
         onboarding: {
           registered: true,
@@ -346,9 +363,9 @@ describe('OnboardingService', () => {
 
     expect(onboardingService.logout()).toBe(true);
 
-    const settings = JSON.parse(
-      readFileSync(join(tempHome, '.aiclient', 'settings.json'), 'utf-8')
-    ) as { onboarding: { registered: boolean; email?: string } };
+    const settings = JSON.parse(readFileSync(join(appStateRoot(), 'settings.json'), 'utf-8')) as {
+      onboarding: { registered: boolean; email?: string };
+    };
     expect(settings.onboarding.registered).toBe(false);
     // The bug (pre-fix): a bare `{onboarding:{registered:false}}` patch is a
     // SHALLOW merge (`{...base, ...patch}`) that replaces the whole

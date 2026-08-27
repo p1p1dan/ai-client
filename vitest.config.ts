@@ -11,5 +11,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/__tests__/**/*.test.ts', 'scripts/__tests__/**/*.test.mjs'],
+    // Keeps every test process off the developer's real `$HOME`. See the file
+    // for the S2 incident that made it necessary.
+    setupFiles: ['src/__tests__/setup/hermeticHome.ts'],
   },
 });

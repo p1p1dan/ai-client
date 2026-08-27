@@ -1092,10 +1092,10 @@ export const zhTranslations: Record<string, string> = {
     '填写与 ssh 命令相同的目标字符串。',
   'Helper install directory': '助手安装目录',
   'Runtime install directory': '运行时安装目录',
-  'Optional override, for example ~/.aiclient/remote-helper':
-    '可选覆盖目录，例如 ~/.aiclient/remote-helper',
-  'Optional override, for example ~/.aiclient/remote-runtime':
-    '可选覆盖目录，例如 ~/.aiclient/remote-runtime',
+  'Optional override, for example ~/.pilab/remote-helper':
+    '可选覆盖目录，例如 ~/.pilab/remote-helper',
+  'Optional override, for example ~/.pilab/remote-runtime':
+    '可选覆盖目录，例如 ~/.pilab/remote-runtime',
   'Remote Helper': '远程助手',
   'Managed Remote Runtime': '托管远程运行时',
   'Install, refresh, update, or remove the helper on the selected remote host.':

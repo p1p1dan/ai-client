@@ -23,6 +23,7 @@ import { app, BrowserWindow } from 'electron';
 import * as pty from 'node-pty';
 import { killProcessTree } from '../../utils/processUtils';
 import { getEnvForCommand } from '../../utils/shell';
+import { getAppStateRoot } from '../appStatePaths';
 import { readSharedSessionState, readSharedSettings } from '../SharedSessionState';
 import { RemoteAuthBroker } from './RemoteAuthBroker';
 import { getRemoteServerSource, REMOTE_SERVER_VERSION } from './RemoteHelperSource';
@@ -418,7 +419,7 @@ function getRemoteSettingsPath(): string {
 }
 
 function getRemoteStateRoot(): string {
-  return join(process.env.HOME || process.env.USERPROFILE || app.getPath('home'), APP_STATE_DIR);
+  return getAppStateRoot();
 }
 
 function getAppKnownHostsPath(): string {
@@ -1372,7 +1373,11 @@ export class RemoteConnectionManager {
     settingsPath: string;
     sessionStatePath: string;
   } {
-    const rootDir = normalizeRemotePath(`${runtime.homeDir}/.aiclient`);
+    // `runtime.homeDir` is the REMOTE machine's home, so this is the
+    // no-profile-layer shape (`defaultPaths.ts`, "Local vs remote"). It was a
+    // bare literal until S2 — and S1's single-source scan did not catch it,
+    // because that scan only looked for the name behind an opening quote.
+    const rootDir = normalizeRemotePath(`${runtime.homeDir}/${APP_STATE_DIR}`);
     return {
       rootDir,
       settingsPath: normalizeRemotePath(`${rootDir}/${REMOTE_SHARED_SETTINGS_FILENAME}`),

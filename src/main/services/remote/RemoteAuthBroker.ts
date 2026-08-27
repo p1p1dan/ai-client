@@ -1,9 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import net from 'node:net';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { APP_STATE_DIR } from '@shared/defaultPaths';
 import type {
   ConnectionProfile,
   RemoteAuthPrompt,
@@ -11,6 +9,7 @@ import type {
   RemoteAuthResponse,
 } from '@shared/types';
 import { BrowserWindow } from 'electron';
+import { getAppStateRoot } from '../appStatePaths';
 import type { HostVerificationPrompt } from './RemoteHostVerification';
 import { parseHostVerificationPrompt } from './RemoteHostVerification';
 import { createRemoteError, translateRemote } from './RemoteI18n';
@@ -98,11 +97,7 @@ function normalizePromptSignature(promptText: string): string {
 }
 
 function getBrokerRoot(): string {
-  return join(
-    process.env.HOME || process.env.USERPROFILE || homedir(),
-    APP_STATE_DIR,
-    'remote-auth'
-  );
+  return join(getAppStateRoot(), 'remote-auth');
 }
 
 function normalizePromptText(promptText: string): string {

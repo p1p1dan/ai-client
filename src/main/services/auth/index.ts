@@ -14,14 +14,12 @@
  * not at import time — this factory follows the same shape (A-track B1).
  */
 
-import { join } from 'node:path';
-import { app, net, safeStorage } from 'electron';
+import { net, safeStorage } from 'electron';
+import { getCredentialsDir } from '../appStatePaths';
 import { type AuthProbeFetchResponse, AuthProbeScheduler } from './AuthProbeScheduler';
 import { AuthStateService } from './AuthStateService';
 import { getMigrationIncompleteSignal } from './adoption';
 import { CredentialVault, type VaultCrypto } from './CredentialVault';
-
-const CREDENTIALS_DIR_NAME = 'credentials';
 
 /** Placeholder adapter the vault starts with — `save()` refuses until `promoteVaultCrypto` swaps this out. */
 const inertCrypto: VaultCrypto = {
@@ -45,10 +43,18 @@ function createSafeStorageCrypto(): VaultCrypto {
 let cachedVault: CredentialVault | null = null;
 let cachedAuthStateService: AuthStateService | null = null;
 
+/**
+ * S2 moved the vault out of `<userData>/credentials` and into
+ * `~/.pilab/<profile>/credentials` — the user's ruling that our own files
+ * belong in our own directory, not in Electron's. `getCredentialsDir()` keeps
+ * the per-install isolation `<userData>`'s `-dev` suffix used to give for
+ * free; `appStateMigration.ts` carries an existing vault across so nobody is
+ * asked to log in again. Still lazy, for the same reason as before: the root
+ * depends on `app.setPath('userData', …)`, which runs after imports.
+ */
 export function getCredentialVault(): CredentialVault {
   if (!cachedVault) {
-    const baseDir = join(app.getPath('userData'), CREDENTIALS_DIR_NAME);
-    cachedVault = new CredentialVault({ baseDir, crypto: inertCrypto });
+    cachedVault = new CredentialVault({ baseDir: getCredentialsDir(), crypto: inertCrypto });
   }
   return cachedVault;
 }
