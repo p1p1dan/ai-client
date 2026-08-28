@@ -151,6 +151,28 @@ describe('assertAgentSpawnAllowed — managed × skipAuthGate × vault matrix (D
     expect(() => assertAgentSpawnAllowed()).toThrow(/auth_required/);
   });
 
+  // T-A2b — the wiring half: `assertAgentSpawnAllowed` must read the welcome
+  // screen's latch, not just the recorded mode. The rule itself is proven in
+  // `shared/__tests__/authGate.test.ts`; these two prove Main hands it the
+  // entry at all, in the two directions where entry and file disagree.
+  it('entered on `Use my own setup` allows spawn even while the recorded mode says managed', async () => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+    await setupVault('cleared');
+    const { markAppEntered } = await import('../appEntry');
+    markAppEntered('local');
+    const { assertAgentSpawnAllowed } = await import('../spawnGate');
+    expect(() => assertAgentSpawnAllowed()).not.toThrow();
+  });
+
+  it('entered on the company account still rejects when that account is gone, whatever the file says', async () => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
+    await setupVault('cleared');
+    const { markAppEntered } = await import('../appEntry');
+    markAppEntered('managed');
+    const { assertAgentSpawnAllowed } = await import('../spawnGate');
+    expect(() => assertAgentSpawnAllowed()).toThrow(/auth_required/);
+  });
+
   it('a packaged build forces skipAuthGate off even with the env var set — vault=cleared still rejects', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     process.env.AICLIENT_SKIP_AUTH_GATE = '1';

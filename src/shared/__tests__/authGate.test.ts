@@ -18,6 +18,7 @@ import {
   INITIAL_AUTH_GATE_ARG_PREFIX,
   parseInitialAuthGateArg,
   resolveGateDecision,
+  resolveSpawnCredentialMode,
   resolveSpawnGateDecision,
 } from '../authGate';
 import type { AuthState } from '../types/auth';
@@ -403,6 +404,7 @@ describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
     // there is no account for a spawn to require.
     expect(
       resolveSpawnGateDecision({
+        entryMode: null,
         managed: false,
         skipAuthGate: false,
         authenticatedForSpawn: false,
@@ -414,6 +416,7 @@ describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
   it('skipAuthGate always allows even when not authenticated', () => {
     expect(
       resolveSpawnGateDecision({
+        entryMode: null,
         managed: true,
         skipAuthGate: true,
         authenticatedForSpawn: false,
@@ -425,6 +428,7 @@ describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
   it('managed + authenticatedForSpawn allows', () => {
     expect(
       resolveSpawnGateDecision({
+        entryMode: null,
         managed: true,
         skipAuthGate: false,
         authenticatedForSpawn: true,
@@ -435,6 +439,7 @@ describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
 
   it('managed + not authenticated rejects with a structured auth_required envelope', () => {
     const decision = resolveSpawnGateDecision({
+      entryMode: null,
       managed: true,
       skipAuthGate: false,
       authenticatedForSpawn: false,
@@ -448,12 +453,14 @@ describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
 
   it('locked gets a distinguishable message from a plain signed_out rejection', () => {
     const lockedDecision = resolveSpawnGateDecision({
+      entryMode: null,
       managed: true,
       skipAuthGate: false,
       authenticatedForSpawn: false,
       state: LOCKED,
     });
     const signedOutDecision = resolveSpawnGateDecision({
+      entryMode: null,
       managed: true,
       skipAuthGate: false,
       authenticatedForSpawn: false,
@@ -464,6 +471,47 @@ describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
     if (!lockedDecision.ok && !signedOutDecision.ok) {
       expect(lockedDecision.error.message).not.toBe(signedOutDecision.error.message);
     }
+  });
+  // T-A2b — the entry, not the stored mode, decides. Every case above leaves
+  // `entryMode: null` (a spawn racing the welcome screen), which is the only
+  // situation where `managed` still answers.
+  it('a run entered on `Use my own setup` allows, even while the file still says managed', () => {
+    // The exact shape that broke on a real machine: the welcome screen wrote
+    // `local`, a renderer settings save put `managed` back, and every action
+    // answered "sign-in required" with nothing to click.
+    expect(
+      resolveSpawnGateDecision({
+        entryMode: 'local',
+        managed: true,
+        skipAuthGate: false,
+        authenticatedForSpawn: false,
+        state: SIGNED_OUT,
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it('a run entered on the company account still requires that account', () => {
+    // The boundary the change must NOT dissolve: signing out mid-run has to go
+    // on rejecting spawns, or a logged-out user silently keeps working on
+    // whatever credentials their own machine happens to hold.
+    const decision = resolveSpawnGateDecision({
+      entryMode: 'managed',
+      managed: false,
+      skipAuthGate: false,
+      authenticatedForSpawn: false,
+      state: SIGNED_OUT,
+    });
+    expect(decision).toEqual({
+      ok: false,
+      error: { code: 'auth_required', message: expect.any(String) },
+    });
+  });
+
+  it('resolveSpawnCredentialMode: the entry wins, the recorded mode only stands in', () => {
+    expect(resolveSpawnCredentialMode({ entryMode: 'local', managed: true })).toBe('local');
+    expect(resolveSpawnCredentialMode({ entryMode: 'managed', managed: false })).toBe('managed');
+    expect(resolveSpawnCredentialMode({ entryMode: null, managed: true })).toBe('managed');
+    expect(resolveSpawnCredentialMode({ entryMode: null, managed: false })).toBe('local');
   });
 });
 

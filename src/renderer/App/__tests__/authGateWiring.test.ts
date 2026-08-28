@@ -230,7 +230,7 @@ describe('A2 two-button welcome screen (static)', () => {
     const body = stripped.slice(stripped.indexOf('AUTH_ENTER_APP'));
     const handlerBody = body.slice(0, body.indexOf('});'));
     expect(handlerBody).toContain('setCredentialMode(mode)');
-    expect(handlerBody).toContain('markAppEntered()');
+    expect(handlerBody).toContain('markAppEntered(mode)');
     for (const term of ['Vault', 'signOut', 'markRejected']) {
       expect(handlerBody).not.toContain(term);
     }

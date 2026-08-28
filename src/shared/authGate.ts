@@ -10,6 +10,7 @@
  * WindowTitleBar/UserProfileCard (the three-state chip) respectively.
  */
 
+import type { CredentialMode } from './credentialMode';
 import type { AuthState } from './types/auth';
 import type { ClaudeRuntimeStatus } from './types/claudeRuntime';
 
@@ -277,7 +278,26 @@ export function deriveUserProfilePresentation(state: AuthState): UserProfilePres
 // ---------------------------------------------------------------------------
 
 export interface SpawnGateInput {
-  /** `resolveManagedCredentialsEnabled()` — the gate only ever applies when managed credentials are on; legacy (flag-off) spawning is always allowed. */
+  /**
+   * `getAppEntryMode()` — WHICH BUTTON let the user in this run, or `null`
+   * when they have not come through the welcome screen yet.
+   *
+   * T-A2b. This is the authority, and `managed` below is only the fallback for
+   * a spawn that races the welcome screen. The gate used to ask `managed`
+   * alone, which was the same question until A2: before it, nobody could reach
+   * the main window without signing in, so "managed mode + not signed in"
+   * was unreachable. A2 made "in the app, deliberately not signed in" a normal
+   * state — the entire point of the second button — and the branch fired for
+   * the first time on a real machine, answering every action with
+   * "sign-in required" and offering nothing to click.
+   *
+   * Asking the ENTRY instead of the stored mode also stops one clobbered
+   * settings file from producing that dead end: the run's own choice cannot
+   * be rewritten underneath it (see `main/ipc/settings.ts`'s Main-owned-key
+   * guard for the write that used to do exactly that).
+   */
+  entryMode: CredentialMode | null;
+  /** `resolveManagedCredentialsEnabled()` — the recorded choice, consulted only before an entry exists. */
   managed: boolean;
   skipAuthGate: boolean;
   /** `AuthStateService.isAuthenticatedForSpawn()` — already folds in the I9 checkpoint-① logout latch. */
@@ -297,8 +317,29 @@ export interface SpawnGateRejected {
 
 export type SpawnGateDecision = SpawnGateAllowed | SpawnGateRejected;
 
+/**
+ * Which credentials THIS run is meant to spawn with.
+ *
+ * The entry wins whenever there is one, because it is the question the user
+ * was actually asked. The recorded mode answers only for a spawn that happens
+ * before they have picked — in practice a startup race, since no session UI
+ * exists until the welcome screen is dismissed.
+ *
+ * Exported so `spawnGate.ts`'s zero-IO fast path and this function cannot
+ * drift apart: one rule, two readers.
+ */
+export function resolveSpawnCredentialMode(input: {
+  entryMode: CredentialMode | null;
+  managed: boolean;
+}): CredentialMode {
+  return input.entryMode ?? (input.managed ? 'managed' : 'local');
+}
+
 export function resolveSpawnGateDecision(input: SpawnGateInput): SpawnGateDecision {
-  if (!input.managed) return { ok: true };
+  // `local` means we inject nothing, so there is no credential to be missing
+  // and nothing to sign in to — whether that is this run's entry or the
+  // recorded mode standing in for one.
+  if (resolveSpawnCredentialMode(input) === 'local') return { ok: true };
   if (input.skipAuthGate) return { ok: true };
   if (input.authenticatedForSpawn) return { ok: true };
 

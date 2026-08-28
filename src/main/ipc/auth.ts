@@ -131,7 +131,7 @@ export function registerAuthHandlers(): void {
       return { ok: false, error: `Unknown credential mode: ${String(mode)}` };
     }
     setCredentialMode(mode);
-    markAppEntered();
+    markAppEntered(mode);
     return { ok: true };
   });
 

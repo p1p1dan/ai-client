@@ -25,19 +25,35 @@
  * feeding one pure function — the "换服务两处同变" invariant D47 S5 §1.4 set up.
  */
 
-let enteredThisRun = false;
+import type { CredentialMode } from '@shared/credentialMode';
+
+/**
+ * `null` until the user picks; afterwards WHICH of the two buttons they picked.
+ *
+ * T-A2b widened this from a bare boolean. The latch already answered "has the
+ * user picked yet"; the spawn gate needs the other half of the same fact —
+ * WHAT they picked — because "sign-in required" is only ever the right answer
+ * for a run entered on the company account. Reading the recorded mode instead
+ * asks a stored preference a question about this run, and the two can disagree.
+ */
+let entryModeThisRun: CredentialMode | null = null;
 
 /** Read by `auth.getGateSnapshot` and by `MainWindow.isAppMountedFor`. */
 export function hasEnteredApp(): boolean {
-  return enteredThisRun;
+  return entryModeThisRun !== null;
+}
+
+/** Read by the spawn gate (`spawnGate.ts`) — `null` means "has not picked yet". */
+export function getAppEntryMode(): CredentialMode | null {
+  return entryModeThisRun;
 }
 
 /** Latched by `auth:enterApp` — the welcome screen's three ways in. */
-export function markAppEntered(): void {
-  enteredThisRun = true;
+export function markAppEntered(mode: CredentialMode): void {
+  entryModeThisRun = mode;
 }
 
 /** Test-only: module state has to be resettable between cases. */
 export function resetAppEntryForTests(): void {
-  enteredThisRun = false;
+  entryModeThisRun = null;
 }
