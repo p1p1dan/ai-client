@@ -55,7 +55,8 @@ $env:CLAUDE_CONFIG_DIR='<脚本打印的配置目录路径>'
 
 | 作业 | artifact | 内容 | 条件 | 保留 |
 |---|---|---|---|---|
-| build-windows | `windows-installers` | `dist/*.exe`（NSIS 安装版 + portable） | 恒上传 | 14 天 |
+| build-windows | `windows-installer` | `dist/*Setup*.exe` + `.blockmap`（**NSIS 安装版**） | 恒上传 | 14 天 |
+| build-windows | `windows-portable` | `dist/*portable*.exe`（免安装版） | 恒上传 | 14 天 |
 | build-windows | `windows-unpacked` | `dist/win-unpacked/**` | 仅 `workflow_dispatch` | 7 天 |
 | build-linux | `linux-packages` | `*.AppImage` / `*.deb` | 仅 `workflow_dispatch` | 7 天 |
 
@@ -70,7 +71,7 @@ electron-builder 的 draft 发布也只在 tag 触发时发生——**手动触�
 2. 加密机现场项（T-11）与真机 GUI 九项**CI 永远替代不了**，口径不变：加密机相关项永不在开发机标注通过。
 
 **带哪个去加密机**：优先 `windows-unpacked`（测试方案 §1.3 坑 3 的理由：portable 每次解到临时目录，
-随包 node.exe 绝对路径会漂移）；`windows-installers` 里的 **NSIS 安装版**装完路径固定，是等价的可用替代
+随包 node.exe 绝对路径会漂移）；`windows-installer` 里的 **NSIS 安装版**装完路径固定，是等价的可用替代
 （也是测试方案 §4-R3「未签名 exe 被拒/`%TEMP%` 禁执行」时的退路）。
 
 **版本新鲜度警告**：上一个已知 Windows 包是 **157 个提交前的 0.3.4**（2026-07-24），

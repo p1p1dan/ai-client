@@ -260,11 +260,28 @@ jobs:
       # Without these, a workflow_dispatch run builds a Windows package and then
       # throws it away — the only way to obtain a test build was a Windows machine.
       # Tag runs also publish a draft release; these artifacts are the fallback.
-      - name: Upload Windows installers
+      # Split from one `dist/*.exe` artifact into two (2026-08-28, user request).
+      # The single artifact swept BOTH exes together, so downloading the
+      # installer meant pulling the portable build with it — 522 MB zipped for
+      # something the tester only needed half of. The `win` target list is
+      # unchanged: both are still built, they are just fetched separately.
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v5
         with:
-          name: windows-installers
-          path: dist/*.exe
+          name: windows-installer
+          # The `.blockmap` rides along on purpose: `nsis.differentialPackage`
+          # produces it, and NSIS needs it beside the exe to do a delta update.
+          path: |
+            dist/*Setup*.exe
+            dist/*Setup*.exe.blockmap
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload Windows portable
+        uses: actions/upload-artifact@v5
+        with:
+          name: windows-portable
+          path: dist/*portable*.exe
           retention-days: 14
           if-no-files-found: error
 

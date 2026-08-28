@@ -75,7 +75,7 @@
      ⑦ 失败后 chip 保留且 Retry 带着附件重发；健康会话里粘图**不应**出现 Retry 按钮。
 2. **T-06 补测**（网关已恢复，元数据行 / 红色 Stop / 失败卡 + Retry 无重影）——实现已落地，唯一完全未测的任务。
 3. **T-10 打包版点验**（用户）：**动手照 [现场操作单](../../../plans/2026-08-10-field-test-sheet.md) 做**（每条只写「怎么做/看什么/算不算过」）；背景与依据见 [清单](../../../plans/t10-packaged-gui-checklist.md) + [加密机测试方案](../../../plans/2026-08-06-encrypted-machine-test-plan.md) → **CP2 汇报**。
-   **2026-08-09 起出包不再必须有 Windows 机器**：Actions → Build → Run workflow → 下载 `windows-unpacked` / `windows-installers`（见清单「CI 出包路径」节）。**限度**：CI 跑 `--skip-smoke`，只关掉 M2 结构半边，全量 25 项仍须真机跑。
+   **2026-08-09 起出包不再必须有 Windows 机器**：Actions → Build → Run workflow → 下载 `windows-unpacked` / `windows-installer`（2026-08-28 起安装版与 portable **拆成两个 artifact**，只要装机测试就只下前者；见清单「CI 出包路径」节）。**限度**：CI 跑 `--skip-smoke`，只关掉 M2 结构半边，全量 25 项仍须真机跑。
    含并入的真机残留：T-24 真机 Windows 项（第 8 项）· A2/0-nonies ⑪ Win10 字重与 D25 §6.2 五项真机指标（第 9 项）。
 4. ~~**T-11 加密机现场六项**~~ ✅ 2026-08-15 现场全过（含白名单⑥ TSD 实证）→ CP5，Phase 0 正式 Go；open-q #7 关闭。
 6. **T-21 收尾截图**：默认主题下中英混排三场景 + 6 处 `normal-case` 豁免目视（open-q #10），截图入台账后转 Done。
