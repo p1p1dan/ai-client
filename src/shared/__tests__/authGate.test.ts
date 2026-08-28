@@ -1,10 +1,20 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+// Reused, not re-implemented: this repo already owns ONE comment stripper, and
+// its doc comment enumerates five shapes in which the two-regex version people
+// keep writing deletes CODE — always in the direction that makes a negative
+// assertion pass. Test-only import, hence reaching across into the renderer
+// tree; the helper's own header lists suites outside its directory as intended
+// callers.
+import { stripComments } from '../../renderer/components/chat/__tests__/stripComments';
 import {
   AUTH_GATE_SNAPSHOT_QUERY_KEY,
   AUTH_OPEN_ONBOARDING_EVENT,
   buildInitialAuthGateArg,
   deriveOnboardingEntry,
   deriveUserProfilePresentation,
+  deriveWelcomeEntry,
   INITIAL_AUTH_GATE_ARG_PREFIX,
   parseInitialAuthGateArg,
   resolveGateDecision,
@@ -13,7 +23,6 @@ import {
 import type { AuthState } from '../types/auth';
 import type { ClaudeRuntimeStatus } from '../types/claudeRuntime';
 
-const HEALTHY_CLI = { claudeInstalled: true };
 const NODE_COMPATIBLE: ClaudeRuntimeStatus = { kind: 'installed' };
 
 /** D47 S5 §1.1 — same vault -> AuthState mapping as `AuthStateService`'s (kept in lockstep by construction, verified independently by `AuthStateService.test.ts`'s own derivation table). */
@@ -32,56 +41,53 @@ function stateForVault(vault: 'ok' | 'cleared' | 'rejected' | 'locked' | 'invali
   }
 }
 
-describe('resolveGateDecision — 20-cell matrix (D47 S5 §4: flag × gate × vault)', () => {
+describe('resolveGateDecision — 20-cell matrix (A2 rev.2: entered × gate × vault)', () => {
   const VAULTS = ['ok', 'cleared', 'rejected', 'locked', 'invalid'] as const;
-
+  /**
+   * The axis that replaced `flag`/`mode`. The welcome screen is the startup
+   * screen (user ruling 2026-08-27:「就是启动首屏，每次都出现」), so what decides
+   * routing is not a stored preference but a session fact: has the person
+   * picked a way in yet, in THIS process.
+   *
+   * The credential mode is absent from this table on purpose — it no longer
+   * reaches the gate at all, and re-introducing it would be the very entangling
+   * the ruling undid.
+   */
   type Row = {
-    flag: boolean;
+    entered: boolean;
     gate: boolean;
     vault: (typeof VAULTS)[number];
-    shell: 'loading' | 'app' | 'onboarding' | 'vscode-only' | 'detection-failed';
-    onboardingReason?: 'first_run' | 'expired' | 'signed_out';
+    shell:
+      | 'loading'
+      | 'app'
+      | 'welcome'
+      | 'onboarding'
+      | 'runtime-unavailable'
+      | 'detection-failed';
+    welcomePrimary?: 'sign-in' | 'continue';
   };
 
   const rows: Row[] = [];
-  for (const flag of [true, false]) {
+  for (const entered of [true, false]) {
     for (const gate of [true, false]) {
       for (const vault of VAULTS) {
-        if (gate) {
-          // Adjudicated dead corner (S5 §4): flag-on+gate-on ⇒ shell=app
-          // regardless of vault. Extended here to flag-off+gate-on too — the
-          // escape hatch is unconditional (matches the pre-S5
-          // `SKIP_ONBOARDING_GATE` literal early-return behavior).
-          rows.push({ flag, gate, vault, shell: 'app' });
+        if (gate || entered) {
+          // `gate` is the unconditional dev escape hatch; `entered` is the
+          // person having already answered the screen this run. Both mean
+          // "App", for every account state — including `locked`, so a keyring
+          // that locks after someone is inside never yanks them back out.
+          rows.push({ entered, gate, vault, shell: 'app' });
           continue;
         }
-        if (!flag) {
-          // Adjudicated dead corner: flag-off first frame ⇒ legacy chain
-          // folding, no `useManagedMode` participation. Convention for this
-          // table: `legacyRegistered = (vault === 'ok')`.
-          rows.push(
-            vault === 'ok'
-              ? { flag, gate, vault, shell: 'app' }
-              : { flag, gate, vault, shell: 'onboarding', onboardingReason: 'first_run' }
-          );
-          continue;
-        }
-        // flag-on, gate-off: state-driven.
         switch (vault) {
           case 'ok':
-            rows.push({ flag, gate, vault, shell: 'app' });
-            break;
-          case 'cleared':
-            rows.push({ flag, gate, vault, shell: 'onboarding', onboardingReason: 'signed_out' });
-            break;
-          case 'rejected':
-          case 'invalid':
-            rows.push({ flag, gate, vault, shell: 'onboarding', onboardingReason: 'expired' });
+            rows.push({ entered, gate, vault, shell: 'welcome', welcomePrimary: 'continue' });
             break;
           case 'locked':
-            // Adjudicated dead corner: flag-on+locked ⇒ LoadingShell, never
-            // the login page.
-            rows.push({ flag, gate, vault, shell: 'loading' });
+            rows.push({ entered, gate, vault, shell: 'loading' });
+            break;
+          default:
+            rows.push({ entered, gate, vault, shell: 'welcome', welcomePrimary: 'sign-in' });
             break;
         }
       }
@@ -92,24 +98,38 @@ describe('resolveGateDecision — 20-cell matrix (D47 S5 §4: flag × gate × va
     expect(rows).toHaveLength(20);
   });
 
-  it.each(rows)('flag=$flag gate=$gate vault=$vault -> shell=$shell', ({
-    flag,
+  it.each(rows)('entered=$entered gate=$gate vault=$vault -> shell=$shell', ({
+    entered,
     gate,
     vault,
     shell,
-    onboardingReason,
+    welcomePrimary,
   }) => {
     const decision = resolveGateDecision({
       state: stateForVault(vault),
-      managed: flag,
+      entered,
       skipAuthGate: gate,
-      cliStatus: HEALTHY_CLI,
       runtimeStatus: NODE_COMPATIBLE,
-      legacyRegistered: vault === 'ok',
     });
     expect(decision.shell).toBe(shell);
-    if (onboardingReason) {
-      expect(decision.onboarding?.reason).toBe(onboardingReason);
+    if (welcomePrimary) {
+      expect(decision.welcome?.primary).toBe(welcomePrimary);
+    }
+  });
+
+  it('A2 rev.2 — a fresh run always lands on the welcome screen, whatever the account says', () => {
+    // The ruling stated as one assertion: nothing about being signed in, or
+    // having used the app before, may skip the screen. Only `entered` (this
+    // run) and the dev escape hatch do.
+    for (const vault of VAULTS) {
+      if (vault === 'locked') continue; // still resolving; covered above
+      const decision = resolveGateDecision({
+        state: stateForVault(vault),
+        entered: false,
+        skipAuthGate: false,
+        runtimeStatus: NODE_COMPATIBLE,
+      });
+      expect(decision.shell).toBe('welcome');
     }
   });
 });
@@ -118,11 +138,9 @@ describe('resolveGateDecision — runtime detection precedence', () => {
   it('skipAuthGate short-circuits even when runtimeStatus is null (matches the pre-S5 unconditional early return)', () => {
     const decision = resolveGateDecision({
       state: { status: 'unknown' },
-      managed: true,
+      entered: false,
       skipAuthGate: true,
-      cliStatus: null,
       runtimeStatus: null,
-      legacyRegistered: false,
     });
     expect(decision.shell).toBe('app');
   });
@@ -130,11 +148,9 @@ describe('resolveGateDecision — runtime detection precedence', () => {
   it('runtimeStatus null (still detecting) -> loading', () => {
     const decision = resolveGateDecision({
       state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
-      managed: true,
+      entered: false,
       skipAuthGate: false,
-      cliStatus: null,
       runtimeStatus: null,
-      legacyRegistered: true,
     });
     expect(decision.shell).toBe('loading');
   });
@@ -142,86 +158,96 @@ describe('resolveGateDecision — runtime detection precedence', () => {
   it('detection-failed -> detection-failed, regardless of managed/state', () => {
     const decision = resolveGateDecision({
       state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
-      managed: true,
+      entered: false,
       skipAuthGate: false,
-      cliStatus: null,
       runtimeStatus: { kind: 'detection-failed', error: 'boom' },
-      legacyRegistered: true,
     });
     expect(decision.shell).toBe('detection-failed');
   });
 
-  it('vscode-extension-only -> vscode-only', () => {
-    const decision = resolveGateDecision({
-      state: { status: 'signed_out', lastEmail: null },
-      managed: true,
-      skipAuthGate: false,
-      cliStatus: null,
-      runtimeStatus: { kind: 'vscode-extension-only' },
-      legacyRegistered: false,
-    });
-    expect(decision.shell).toBe('vscode-only');
+  it('A2 — vscode-extension-only and not-installed are ONE outcome: runtime-unavailable', () => {
+    // They stopped being different facts on 2026-08-26, when
+    // `ClaudeRuntimeChecker.detect()` began answering `installed` off the
+    // bundled cometix cli.js first: after that, BOTH kinds are reachable only
+    // when our own bundle is missing. The old `vscode-only` shell offered to
+    // install a system Claude CLI, which this build never executes — an offer
+    // that could not have fixed the problem it was shown for.
+    for (const kind of ['vscode-extension-only', 'not-installed'] as const) {
+      const decision = resolveGateDecision({
+        state: { status: 'signed_out', lastEmail: null },
+        entered: false,
+        skipAuthGate: false,
+        runtimeStatus: { kind },
+      });
+      expect(decision.shell).toBe('runtime-unavailable');
+    }
   });
 
-  it('mutation target ④ analogue — a null cliStatus never blocks (skip, not loading)', () => {
+  it('A3/D65 — a healthy bundled runtime never blocks; no input can say the user lacks a system CLI', () => {
+    // This replaces the retired `cliStatus` arm. It used to read "a null
+    // cliStatus never blocks (skip, not loading)"; the input is gone, so the
+    // property worth pinning is the one that took its place: with a healthy
+    // runtime there is NO field on `ResolveGateDecisionInput` capable of
+    // expressing "the user has no `claude` on their PATH", so nothing can route
+    // to a CLI-install dead end. `welcome` (not `app`) is the A2 rev.2 landing
+    // for a fresh run — the point here is that it is not `runtime-unavailable`.
     const decision = resolveGateDecision({
       state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
-      managed: true,
+      entered: false,
       skipAuthGate: false,
-      cliStatus: null,
       runtimeStatus: NODE_COMPATIBLE,
-      legacyRegistered: true,
     });
-    expect(decision.shell).toBe('app');
+    expect(decision.shell).toBe('welcome');
+
+    // And once they are through it, the same healthy runtime mounts App.
+    expect(
+      resolveGateDecision({
+        state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
+        entered: true,
+        skipAuthGate: false,
+        runtimeStatus: NODE_COMPATIBLE,
+      }).shell
+    ).toBe('app');
   });
 
-  it('runtimeStatus.kind "not-installed" forces onboarding even with no cliStatus at all (MainWindow.isAppMountedFor precedent — APP_MOUNTABLE_RUNTIME_KINDS excluded it)', () => {
+  it('runtime availability outranks a perfectly good account', () => {
+    // Nothing runs without the bundled runtime, so this must beat even an
+    // authenticated user with a recorded mode — otherwise App mounts onto a
+    // runtime that cannot start a session.
     const decision = resolveGateDecision({
       state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
-      managed: true,
+      entered: false,
       skipAuthGate: false,
-      cliStatus: null,
       runtimeStatus: { kind: 'not-installed' },
-      legacyRegistered: true,
     });
-    expect(decision.shell).toBe('onboarding');
+    expect(decision.shell).toBe('runtime-unavailable');
   });
 
-  it('D47 S5 cross-check — managed+authenticated+legacyRegistered:false does not stall on Loading (Root.tsx cliStatus enablement fix)', () => {
-    // Outside the 20-cell matrix on purpose: that table always ties
-    // `legacyRegistered` to `vault === 'ok'` (true when authenticated). This
-    // deliberately decouples them to pin the exact shape of the LoadingShell
-    // deadlock Root.tsx used to hit — its `cliStatus` react-query was gated
-    // `enabled: legacyRegistered` (a flag-off-only signal), so a managed +
-    // authenticated user with `legacyRegistered:false` never fired the CLI
-    // detection query at all, leaving `cliStatus` permanently `null` and the
-    // gate stuck. The fix (`enabled: Boolean(gateQuery.data)`) lives in
-    // Root.tsx, but the contract it depends on is right here:
-    // `resolveGateDecision`'s managed branch must never read `legacyRegistered`
-    // and must treat a null `cliStatus` as "skip the extra check", not "still
-    // loading" — so this combination resolves straight to `app`.
-    const decision = resolveGateDecision({
-      state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
-      managed: true,
-      skipAuthGate: false,
-      cliStatus: null,
-      runtimeStatus: NODE_COMPATIBLE,
-      legacyRegistered: false,
-    });
-    expect(decision.shell).toBe('app');
-  });
+  it('A3/D65 negative control — authGate.ts carries no system-CLI probe term anywhere in its CODE', () => {
+    // The behavioural arms above can only prove that the term is not reachable
+    // through the inputs they happen to pass. This one proves it is not in the
+    // module at all, so re-introducing `cliStatus` (or reading `claudeInstalled`
+    // off some other carrier) fails here rather than silently restoring the
+    // defect D65 retired.
+    //
+    // ⚠️ Comments are stripped FIRST, and that is load-bearing, not tidiness:
+    // `resolveGateDecision`'s own doc block explains the retirement by naming
+    // `cliStatus.claudeInstalled` and `CliDetector` in prose. Scanning the raw
+    // file would match that explanation and fail on a correct implementation —
+    // the self-inflicted red this repo has hit three times before (0820 batch
+    // §16: "负向源码断言必须剥注释").
+    const path = fileURLToPath(new URL('../authGate.ts', import.meta.url));
+    const code = stripComments(readFileSync(path, 'utf8'), path);
 
-  it('a present cliStatus with claudeInstalled:false forces onboarding even when authenticated', () => {
-    const decision = resolveGateDecision({
-      state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
-      managed: true,
-      skipAuthGate: false,
-      cliStatus: { claudeInstalled: false },
-      runtimeStatus: NODE_COMPATIBLE,
-      legacyRegistered: true,
-    });
-    expect(decision.shell).toBe('onboarding');
-    expect(decision.onboarding?.initialStep).toBe('cli-check');
+    // Guard the guard: the strip BLANKS rather than deletes, so length never
+    // changes and cannot be used to ask "did this do anything". Pin a token
+    // that must survive instead, or an over-reaching strip would make every
+    // assertion below pass vacuously.
+    expect(code).toContain('resolveGateDecision');
+
+    for (const term of ['cliStatus', 'claudeInstalled', 'CliDetector', 'detectOne']) {
+      expect(code).not.toContain(term);
+    }
   });
 });
 
@@ -234,9 +260,12 @@ describe('deriveOnboardingEntry (D47 S5 §1.4, mutation target ⑥ — lastEmail
     });
   });
 
-  it('signed_out with lastEmail null is first_run/cli-check with an empty pre-fill', () => {
+  it('A2 — signed_out with no lastEmail is first_run/register-email with an empty pre-fill', () => {
+    // Was `cli-check` until A2 retired that step: the sign-in sub-flow now
+    // starts at the email field, and the welcome screen is what sits in front
+    // of it.
     expect(deriveOnboardingEntry({ status: 'signed_out', lastEmail: null })).toEqual({
-      initialStep: 'cli-check',
+      initialStep: 'register-email',
       reason: 'first_run',
       initialEmail: '',
     });
@@ -311,6 +340,53 @@ describe('deriveUserProfilePresentation (D47 S5 §1.4 — three-state chip)', ()
   });
 });
 
+describe('deriveWelcomeEntry (A2) — which primary button the welcome screen shows', () => {
+  it('authenticated offers Continue, carrying the account it would continue with', () => {
+    // The user's own words: 「如果用户登录过，则理应无需 log in」. The email is
+    // part of the contract, not decoration — `Continue as <email>` is what
+    // makes it obvious WHICH account is about to be used.
+    expect(
+      deriveWelcomeEntry({ status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' })
+    ).toEqual({ primary: 'continue', email: 'a@jcdz.cc', notice: null });
+  });
+
+  it('signed_out offers Sign in and carries no email', () => {
+    expect(deriveWelcomeEntry({ status: 'signed_out', lastEmail: 'a@jcdz.cc' })).toEqual({
+      primary: 'sign-in',
+      email: null,
+      notice: null,
+    });
+  });
+
+  it('credentials_invalid offers Sign in with an expired notice — NOT Continue', () => {
+    // All four sub-reasons fold into one user-facing fact, matching
+    // `deriveOnboardingEntry`. `continue` would be a lie here: there is
+    // nothing usable to continue with, which is exactly why the email is
+    // dropped even though `lastEmail` is known.
+    for (const reason of [
+      'rejected',
+      'corrupt',
+      'decrypt_failed',
+      'migration_incomplete',
+    ] as const) {
+      expect(
+        deriveWelcomeEntry({ status: 'credentials_invalid', reason, lastEmail: 'a@jcdz.cc' })
+      ).toEqual({
+        primary: 'sign-in',
+        email: null,
+        notice: 'expired',
+      });
+    }
+  });
+
+  it('locked and unknown are not answers yet, so they produce no entry', () => {
+    // Returning an entry here would put a button on screen and then swap it
+    // when the keyring unlocks. The gate holds `loading` for both instead.
+    expect(deriveWelcomeEntry({ status: 'locked', lastEmail: 'a@jcdz.cc' })).toBeNull();
+    expect(deriveWelcomeEntry({ status: 'unknown' })).toBeNull();
+  });
+});
+
 describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
   const AUTHENTICATED: AuthState = {
     status: 'authenticated',
@@ -320,7 +396,11 @@ describe('resolveSpawnGateDecision (D47 S5 §3)', () => {
   const SIGNED_OUT: AuthState = { status: 'signed_out', lastEmail: null };
   const LOCKED: AuthState = { status: 'locked', lastEmail: 'a@jcdz.cc' };
 
-  it('flag off always allows, regardless of state', () => {
+  it('local mode always allows, regardless of state', () => {
+    // `managed:false` is `credentialMode === 'local'` since D64 (it was the
+    // build-time flag being off before that). The meaning here is unchanged
+    // and is the point of the second welcome button: we inject nothing, so
+    // there is no account for a spawn to require.
     expect(
       resolveSpawnGateDecision({
         managed: false,

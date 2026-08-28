@@ -88,6 +88,21 @@ export const zhTranslations: Record<string, string> = {
   '" to "': '"移动到"',
   '"?': '"?',
   "Don't show again": '不再提醒',
+  'Continue as {{email}}': '以 {{email}} 继续',
+  'Log in with work email': '用工作邮箱登录',
+  'Use my own setup': '使用本机已有配置',
+  'Git worktrees, with agents that work in them.': 'Git 工作树，以及在其中干活的 agent。',
+  'Runs on the managed gateway. Nothing is written to your machine.':
+    '走我们托管的网关，不往你的机器上写任何东西。',
+  'Runs on the Claude Code and Codex configuration already on this machine.':
+    '直接用这台机器上已有的 Claude Code 与 Codex 配置。',
+  'Your session expired. Sign in again.': '登录已失效，请重新登录。',
+  'Git was not found on this computer': '这台电脑上没有找到 Git',
+  'Worktrees, branches and source control need Git. Everything else still works.':
+    '工作树、分支与源代码管理需要 Git，其余功能不受影响。',
+  'Install Git': '安装 Git',
+  'Get Git': '去下载 Git',
+  Dismiss: '关闭',
   'Check for updates later': '稍后',
   'Check for updates': '检查更新',
   'Check failed': '检查失败',

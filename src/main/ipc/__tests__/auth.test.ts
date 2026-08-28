@@ -125,7 +125,7 @@ describe('auth:managedMode (migrated from claudeRuntime.ts, D47 S5 §1.2)', () =
   });
 });
 
-describe('auth:getGateSnapshot — flag off, legacy folding at the IPC-handler layer (D47 S5 §1.2)', () => {
+describe('auth:getGateSnapshot — local credentials still fold the legacy state for the profile chip (A2)', () => {
   it('unregistered -> signed_out, lastEmail from the (absent) onboarding email', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
     checkRegistrationMock.mockReturnValue({ registered: false });
@@ -133,9 +133,12 @@ describe('auth:getGateSnapshot — flag off, legacy folding at the IPC-handler l
 
     const snapshot = await h.get('auth:getGateSnapshot')?.();
 
+    // A2 rev.2 — `entered` replaces the `managed` + `legacyRegistered` pair.
+    // The folded `state` survives because the profile chip renders it; what
+    // changed is that the GATE no longer routes on it, so a user on their own
+    // credentials is never sent into registration.
     expect(snapshot).toEqual({
-      managed: false,
-      legacyRegistered: false,
+      entered: false,
       state: { status: 'signed_out', lastEmail: null },
       skipAuthGate: false,
     });
@@ -151,8 +154,7 @@ describe('auth:getGateSnapshot — flag off, legacy folding at the IPC-handler l
     const snapshot = await h.get('auth:getGateSnapshot')?.();
 
     expect(snapshot).toEqual({
-      managed: false,
-      legacyRegistered: false,
+      entered: false,
       state: { status: 'credentials_invalid', reason: 'corrupt', lastEmail: 'user@jcdz.cc' },
       skipAuthGate: false,
     });
@@ -167,8 +169,7 @@ describe('auth:getGateSnapshot — flag off, legacy folding at the IPC-handler l
     const snapshot = await h.get('auth:getGateSnapshot')?.();
 
     expect(snapshot).toEqual({
-      managed: false,
-      legacyRegistered: true,
+      entered: false,
       state: { status: 'authenticated', email: 'user@jcdz.cc', remoteHealth: 'unknown' },
       skipAuthGate: false,
     });
@@ -186,8 +187,7 @@ describe('auth:getGateSnapshot — flag on, lazy-refresh latch (D47 S5 §1.3)', 
     const snapshot = await h.get('auth:getGateSnapshot')?.();
 
     expect(snapshot).toEqual({
-      managed: true,
-      legacyRegistered: true,
+      entered: false,
       state: { status: 'authenticated', email: 'user@jcdz.cc', remoteHealth: 'unknown' },
       skipAuthGate: false,
     });

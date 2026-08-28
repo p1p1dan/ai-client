@@ -14,7 +14,11 @@ import type { AuthState } from '@shared/types/auth';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { getAuthProbeScheduler, getAuthStateService } from '../services/auth';
 import { getAdoptionLatch } from '../services/auth/adoption';
-import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
+import { hasEnteredApp, markAppEntered } from '../services/auth/appEntry';
+import {
+  resolveManagedCredentialsEnabled,
+  setCredentialMode,
+} from '../services/auth/credentialMode';
 import { onboardingService } from '../services/onboarding';
 
 /**
@@ -82,15 +86,18 @@ export function registerAuthHandlers(): void {
     // flag-off (adoption never even calls `vault.read()` there).
     await getAdoptionLatch();
 
-    const managed = resolveManagedCredentialsEnabled();
+    // A2 rev.2 — the gate needs the ACCOUNT and one session fact ("has the
+    // user picked a way in yet"). The credential mode is deliberately absent:
+    // the welcome screen shows every launch, so the mode no longer routes
+    // anything and goes back to its D64 job of deciding what a spawn injects.
+    const entered = hasEnteredApp();
     const skipAuthGate = resolveSkipAuthGate({ env: process.env, isPackaged: app.isPackaged });
-    if (!managed) {
-      const state = deriveLegacyAuthState();
-      // `legacyRegistered` (consumed by `resolveGateDecision`'s renderer/
-      // MainWindow call sites) is derived FROM the same folded `state` —
-      // one fact, never two independently-computed booleans that could
-      // drift apart.
-      return { managed, legacyRegistered: state.status === 'authenticated', state, skipAuthGate };
+    if (!resolveManagedCredentialsEnabled()) {
+      // Running on the user's own credentials: there is no vault to derive an
+      // AuthState from, so the legacy registration read is what feeds the
+      // profile chip. It no longer decides ROUTING — that was the defect where
+      // a `local` user got asked to register.
+      return { entered, state: deriveLegacyAuthState(), skipAuthGate };
     }
     const authStateService = getAuthStateService();
     // Lazy latch (D47 S5 §1.3): the very first caller (normally the
@@ -102,7 +109,30 @@ export function registerAuthHandlers(): void {
       authStateService.refresh();
     }
     const state = authStateService.getState();
-    return { managed, legacyRegistered: state.status === 'authenticated', state, skipAuthGate };
+    return { entered, state, skipAuthGate };
+  });
+
+  /**
+   * A2 — all three ways through the welcome screen land here: `Continue as …`,
+   * a completed sign-in, and `Use my own setup`.
+   *
+   * ONE call because they are one act — "I pick this, let me in" — and splitting
+   * it would allow the two halves to disagree: a recorded mode with no entry
+   * leaves the user staring at the screen they just answered, and an entry with
+   * no recorded mode spawns sessions under whatever the file happened to say.
+   *
+   * Recording the mode is all it writes. It deliberately does NOT touch the
+   * vault, clear credentials, or sign anyone out: a user who tries their own
+   * setup and comes back must still be signed in, which is exactly why D64 keeps
+   * the choice and the credentials in separate files.
+   */
+  ipcMain.handle(IPC_CHANNELS.AUTH_ENTER_APP, async (_event, mode: unknown) => {
+    if (mode !== 'managed' && mode !== 'local') {
+      return { ok: false, error: `Unknown credential mode: ${String(mode)}` };
+    }
+    setCredentialMode(mode);
+    markAppEntered();
+    return { ok: true };
   });
 
   // Dev-only injection (D47 S5 §5 GUI point-check ⑧) — registered ONLY when

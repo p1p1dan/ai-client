@@ -15,33 +15,33 @@ import {
 } from '@shared/windowTheme';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { getAuthStateService } from '../services/auth';
-import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
+import { hasEnteredApp } from '../services/auth/appEntry';
 import { claudeRuntimeChecker } from '../services/cli/ClaudeRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
-import { onboardingService } from '../services/onboarding';
 import { sessionManager } from '../services/session/SessionManager';
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
 
 /**
  * D47 S5 §1.4 — Main's own call site for the shared `resolveGateDecision`
  * (the same function Root uses), so "换服务两处同变" is enforced by the two
- * call sites sharing one implementation rather than by convention. No
- * `cliStatus` on this side (no cheap synchronous source in Main) —
- * `resolveGateDecision` treats a `null` `cliStatus` as "skip that extra
- * check", matching this function's pre-S5 behavior exactly
- * (`runtimeStatus.kind === 'not-installed'` alone already excluded
- * not-installed from "mounted").
+ * call sites sharing one implementation rather than by convention.
+ *
+ * There used to be a note here explaining why Main passes no `cliStatus` (no
+ * cheap synchronous source on this side). A3/D65 retired that input from the
+ * gate entirely — see `resolveGateDecision` — so the asymmetry it apologised
+ * for no longer exists: both call sites now supply the same four fields.
+ *
+ * `hasEnteredApp()` is the reason the welcome-screen latch lives in Main rather
+ * than the renderer: this function has to answer synchronously and has no
+ * renderer state to read.
  */
 function isAppMountedFor(): boolean {
   const skipAuthGate = resolveSkipAuthGate({ env: process.env, isPackaged: app.isPackaged });
-  const managed = resolveManagedCredentialsEnabled();
   const decision = resolveGateDecision({
     state: getAuthStateService().getState(),
-    managed,
+    entered: hasEnteredApp(),
     skipAuthGate,
-    cliStatus: null,
     runtimeStatus: claudeRuntimeChecker.getCached(),
-    legacyRegistered: onboardingService.checkRegistration().registered,
   });
   return decision.shell === 'app';
 }

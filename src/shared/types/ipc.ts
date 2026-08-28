@@ -298,6 +298,7 @@ export const IPC_CHANNELS = {
   // `{managed, state, skipAuthGate}` atomic read `resolveGateDecision`
   // consumes; `stateChanged` is the value-changed-only push.
   AUTH_GET_GATE_SNAPSHOT: 'auth:getGateSnapshot',
+  AUTH_ENTER_APP: 'auth:enterApp',
   AUTH_STATE_CHANGED: 'auth:stateChanged',
   // Dev-only (D47 S5 §5 GUI point-check ⑧) — registered ONLY when
   // `!app.isPackaged`; forces `vault.markInvalidated` so the failed-login
@@ -351,6 +352,7 @@ export const IPC_CHANNELS = {
   ONBOARDING_DETECT_CLI: 'onboarding:detectCli',
   ONBOARDING_CHECK_PREREQUISITES: 'onboarding:checkPrerequisites',
   ONBOARDING_INSTALL_AGENTS: 'onboarding:installAgents',
+  ONBOARDING_INSTALL_GIT: 'onboarding:installGit',
   ONBOARDING_INSTALL_PROGRESS: 'onboarding:installProgress',
   ONBOARDING_CANCEL_INSTALL: 'onboarding:cancelInstall',
   ONBOARDING_LOGOUT: 'onboarding:logout',

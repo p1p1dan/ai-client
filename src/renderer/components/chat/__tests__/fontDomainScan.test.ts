@@ -100,7 +100,6 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/files/editorDefinitionProvider.ts',
   'components/git/AddRepositoryDialog.tsx',
   'components/git/FileChanges.tsx',
-  'components/onboarding/ClaudeVsCodeOnlyShell.tsx',
   'components/onboarding/OnboardingView.tsx',
   'components/repository/RepositorySettingsDialog.tsx',
   'components/sessions/ProjectGroup.tsx',

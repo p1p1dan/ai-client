@@ -6,17 +6,10 @@ import { OnboardingView, type OnboardingViewProps } from './OnboardingView';
 
 export interface OnboardingShellProps {
   onComplete: () => void;
-  /**
-   * True when the user has already registered in a previous session but the
-   * required CLI is still missing (typical of the register-only flow). In
-   * this mode the view skips the registration step — credentials are already
-   * persisted — and goes straight from CLI install to completion.
-   */
-  alreadyRegistered?: boolean;
   /** Forwarded to OnboardingView — override the starting step. */
   initialStep?: OnboardingViewProps['initialStep'];
-  /** Forwarded to OnboardingView — override the starting mode. */
-  initialMode?: OnboardingViewProps['initialMode'];
+  /** Forwarded to OnboardingView — return to the welcome screen. */
+  onBack?: OnboardingViewProps['onBack'];
   /**
    * D47 S5: why the gate routed here — `deriveOnboardingEntry` (@shared/authGate)
    * output, passed straight through to OnboardingView for copy selection
@@ -38,9 +31,8 @@ export interface OnboardingShellProps {
  */
 export function OnboardingShell({
   onComplete,
-  alreadyRegistered,
   initialStep,
-  initialMode,
+  onBack,
   reason,
   initialEmail,
 }: OnboardingShellProps) {
@@ -51,12 +43,11 @@ export function OnboardingShell({
       <DevToolsOverlay />
       <div className="relative flex flex-1 items-center justify-center overflow-auto p-4">
         <OnboardingView
-          onComplete={onComplete}
-          alreadyRegistered={alreadyRegistered}
-          initialStep={initialStep}
-          initialMode={initialMode}
-          reason={reason}
           initialEmail={initialEmail}
+          initialStep={initialStep}
+          onBack={onBack}
+          onComplete={onComplete}
+          reason={reason}
         />
       </div>
     </div>

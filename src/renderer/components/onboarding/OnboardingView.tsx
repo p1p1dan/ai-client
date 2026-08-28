@@ -1,41 +1,30 @@
 import type { AuthGateOnboardingReason } from '@shared/authGate';
 import type {
-  InstallAgentId,
-  InstallProgress,
-  InstallStepId,
-  OnboardingCliStatus,
   OnboardingErrorCode,
   OnboardingRegisterClientResponse,
   OnboardingSendCodeResponse,
 } from '@shared/types';
-import {
-  AlertCircleIcon,
-  CheckCircle2Icon,
-  ChevronRightIcon,
-  Loader2Icon,
-  MailIcon,
-  ServerIcon,
-  TerminalIcon,
-} from 'lucide-react';
+import { AlertCircleIcon, CheckCircle2Icon, Loader2Icon, MailIcon, ServerIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-type Step = 'cli-check' | 'cli-install' | 'register-email' | 'register-code' | 'result';
-type OnboardingMode = 'standard' | 'register-only' | 'vscode-extension';
+/**
+ * A2 — `cli-check` / `cli-install` retired.
+ *
+ * Both existed to probe and install `git` / `node` / `claude` / `codex` before
+ * letting anyone in. A3/D65 established that three of those four ship inside
+ * this app (so the probe decided nothing) and moved the fourth — git, the one
+ * real dependency — to a non-blocking notice in the app itself
+ * (`GitMissingNotice`). What is left here is the sign-in sub-flow that the
+ * welcome screen's primary button opens.
+ */
+type Step = 'register-email' | 'register-code' | 'result';
 
-const INSTALL_GUIDE_URL = 'https://api-doc.pipidan.xyz/installation.html';
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
 const CODE_LENGTH = 6;
-
-const INSTALL_STEP_LABELS: Record<InstallStepId, string> = {
-  git: 'Git',
-  node: 'Node.js',
-  claude: 'Claude Code',
-  codex: 'Codex',
-};
 
 // Map machine-readable server errors to user-facing Chinese strings.
 function describeOnboardingError(
@@ -81,66 +70,11 @@ function isValidEmailFormat(email: string): boolean {
   return ALLOWED_EMAIL_SUFFIXES.some((suffix) => trimmed.endsWith(suffix));
 }
 
-function createFallbackCliStatus(): OnboardingCliStatus {
-  return {
-    gitInstalled: false,
-    nodeInstalled: false,
-    wingetAvailable: false,
-    claudeInstalled: false,
-    codexInstalled: false,
-  };
-}
-
-function createInitialInstallProgress(): Record<InstallStepId, InstallProgress> {
-  return {
-    git: { step: 'git', status: 'pending' },
-    node: { step: 'node', status: 'pending' },
-    claude: { step: 'claude', status: 'pending' },
-    codex: { step: 'codex', status: 'pending' },
-  };
-}
-
-function areAllToolsInstalled(status: OnboardingCliStatus): boolean {
-  return (
-    status.gitInstalled && status.nodeInstalled && status.claudeInstalled && status.codexInstalled
-  );
-}
-
-function getInstallTargets(status: OnboardingCliStatus | null): InstallAgentId[] {
-  if (!status) {
-    return ['claude', 'codex'];
-  }
-
-  const targets: InstallAgentId[] = [];
-  if (!status.claudeInstalled) {
-    targets.push('claude');
-  }
-  if (!status.codexInstalled) {
-    targets.push('codex');
-  }
-  return targets;
-}
-
 export interface OnboardingViewProps {
   onComplete: () => void;
   className?: string;
-  /**
-   * User already has credentials persisted but the CLI is missing. The view
-   * stays on the CLI install track and bypasses the registration step.
-   */
-  alreadyRegistered?: boolean;
-  /**
-   * Override the initial step. Useful for skipping CLI detection when the
-   * caller already knows the user doesn't need it (e.g. VSCode-extension-only
-   * users who just want to register).
-   */
+  /** Override the initial step. Defaults to `register-email`, the only entry A2 leaves. */
   initialStep?: Step;
-  /**
-   * Override the initial mode. 'vscode-extension' hides CLI-install prompts in
-   * the registration copy and switches the success page to "return to VSCode"
-   * with an optional "continue installing CLI" button.
-   */
-  initialMode?: OnboardingMode;
   /**
    * D47 S5: why the gate routed here (`deriveOnboardingEntry`, @shared/authGate).
    * `'expired'` swaps the register-email copy for a re-verification message
@@ -150,27 +84,19 @@ export interface OnboardingViewProps {
   reason?: AuthGateOnboardingReason;
   /** Prefill for the email step — `AuthState.lastEmail`, when known. */
   initialEmail?: string | null;
+  /** A2 — leave the sign-in sub-flow and return to the welcome screen. Omit to hide the control. */
+  onBack?: () => void;
 }
 
 export function OnboardingView({
   onComplete,
   className,
-  alreadyRegistered = false,
   initialStep,
-  initialMode,
   reason,
   initialEmail,
+  onBack,
 }: OnboardingViewProps) {
-  const [step, setStep] = useState<Step>(initialStep ?? 'cli-check');
-  const [mode, setMode] = useState<OnboardingMode>(initialMode ?? 'standard');
-  const [cliStatus, setCliStatus] = useState<OnboardingCliStatus | null>(null);
-  const [cliLoading, setCliLoading] = useState(false);
-
-  const [installing, setInstalling] = useState(false);
-  const [installError, setInstallError] = useState<string | null>(null);
-  const [installProgress, setInstallProgress] = useState<Record<InstallStepId, InstallProgress>>(
-    () => createInitialInstallProgress()
-  );
+  const [step, setStep] = useState<Step>(initialStep ?? 'register-email');
 
   const [serverUrl] = useState<string>(() => {
     const injected =
@@ -196,100 +122,12 @@ export function OnboardingView({
     null
   );
 
-  const detectCli = useCallback(
-    async (options?: { autoAdvance?: boolean }) => {
-      setCliLoading(true);
-      try {
-        const status = await window.electronAPI.onboarding.detectCli();
-        setCliStatus(status);
-        if (options?.autoAdvance && areAllToolsInstalled(status)) {
-          if (alreadyRegistered) {
-            onComplete();
-          } else {
-            setStep('register-email');
-          }
-        }
-        return status;
-      } catch {
-        const fallbackStatus = createFallbackCliStatus();
-        setCliStatus(fallbackStatus);
-        return fallbackStatus;
-      } finally {
-        setCliLoading(false);
-      }
-    },
-    [alreadyRegistered, onComplete]
-  );
-
-  useEffect(() => {
-    return window.electronAPI.onboarding.onInstallProgress((progress) => {
-      setInstallProgress((current) => ({
-        ...current,
-        [progress.step]: progress,
-      }));
-    });
-  }, []);
-
-  useEffect(() => {
-    if (step === 'cli-check') {
-      void detectCli({ autoAdvance: true });
-    }
-  }, [step, detectCli]);
-
   // Tick down the resend cooldown each second while we're on the code step.
   useEffect(() => {
     if (resendCountdown <= 0) return;
     const timer = setTimeout(() => setResendCountdown((n) => n - 1), 1_000);
     return () => clearTimeout(timer);
   }, [resendCountdown]);
-
-  const handleInstall = useCallback(async () => {
-    setInstallError(null);
-    setInstallProgress(createInitialInstallProgress());
-    setInstalling(true);
-    setStep('cli-install');
-
-    try {
-      const result = await window.electronAPI.onboarding.installAgents(
-        getInstallTargets(cliStatus)
-      );
-      const refreshedStatus = await detectCli();
-
-      if (result.cancelled) {
-        setStep('cli-check');
-        return;
-      }
-
-      if (refreshedStatus.claudeInstalled) {
-        if (alreadyRegistered) {
-          onComplete();
-        } else {
-          setStep('register-email');
-        }
-        return;
-      }
-
-      setInstallError(result.errors[0] || '安装失败。');
-    } catch (error) {
-      setInstallError(error instanceof Error ? error.message : '安装失败。');
-    } finally {
-      setInstalling(false);
-    }
-  }, [cliStatus, detectCli, alreadyRegistered, onComplete]);
-
-  const handleCancelInstall = useCallback(async () => {
-    if (!installing) {
-      setStep('cli-check');
-      return;
-    }
-
-    try {
-      await window.electronAPI.onboarding.cancelInstall();
-    } catch {
-      setInstallError('取消安装失败。');
-      setInstalling(false);
-    }
-  }, [installing]);
 
   const handleSendCode = useCallback(
     async (opts?: { resend?: boolean }) => {
@@ -347,42 +185,6 @@ export function OnboardingView({
 
   const canSendCode = isValidEmailFormat(email) && !sendingCode;
   const canVerify = code.trim().length === CODE_LENGTH && !verifying;
-  const hasMissingTools = cliStatus
-    ? !cliStatus.gitInstalled ||
-      !cliStatus.nodeInstalled ||
-      !cliStatus.claudeInstalled ||
-      !cliStatus.codexInstalled
-    : false;
-
-  const handleOpenInstallGuide = () => {
-    void window.electronAPI.shell.openExternal(INSTALL_GUIDE_URL);
-  };
-
-  const handleRegisterOnly = () => {
-    setMode('register-only');
-    setSendCodeError(null);
-    setVerifyError(null);
-    setRegisterResult(null);
-    setStep('register-email');
-  };
-
-  const handleReturnToInstall = () => {
-    setMode('standard');
-    setSendCodeError(null);
-    setVerifyError(null);
-    setRegisterResult(null);
-    setStep('cli-check');
-  };
-
-  const handleContinueInstallFromVscode = () => {
-    setMode('standard');
-    setRegisterResult(null);
-    setStep('cli-check');
-  };
-
-  const handleQuitApp = () => {
-    void window.electronAPI.app.quit();
-  };
 
   return (
     <div
@@ -391,177 +193,13 @@ export function OnboardingView({
         className
       )}
     >
-      {step === 'cli-check' && (
-        <>
-          <SectionHeader
-            icon={<TerminalIcon className="h-5 w-5 text-muted-foreground" />}
-            title="CLI 环境检查"
-            description="初始化将先校验基础环境,再安装必需的 Claude Code(Codex 为可选)。"
-          />
-          <SectionBody>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  基础环境
-                </p>
-                <CliRow
-                  name="Git"
-                  installed={cliStatus?.gitInstalled}
-                  version={cliStatus?.gitVersion}
-                  loading={cliLoading}
-                />
-                <CliRow
-                  name="Node.js"
-                  installed={cliStatus?.nodeInstalled}
-                  version={cliStatus?.nodeVersion}
-                  loading={cliLoading}
-                  missingLabel={
-                    cliStatus?.nodeVersion ? `${cliStatus.nodeVersion}(需 ≥ 18)` : undefined
-                  }
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  CLI 工具
-                </p>
-                <CliRow
-                  name="Claude Code"
-                  installed={cliStatus?.claudeInstalled}
-                  version={cliStatus?.claudeVersion}
-                  loading={cliLoading}
-                />
-                <CliRow
-                  name="Codex"
-                  installed={cliStatus?.codexInstalled}
-                  version={cliStatus?.codexVersion}
-                  loading={cliLoading}
-                />
-              </div>
-
-              {cliStatus && !cliStatus.wingetAvailable && hasMissingTools && (
-                <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  未检测到 `winget`,安装程序将尽量通过直接下载方式完成安装。
-                </div>
-              )}
-
-              {cliStatus && !cliStatus.claudeInstalled && (
-                <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  继续注册前需先安装 Claude Code。
-                </div>
-              )}
-
-              {cliStatus && hasMissingTools && (
-                <div className="flex flex-col gap-2 rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  <span>
-                    自动安装可能需要管理员权限。若 Node.js 安装失败,请关闭应用并以
-                    <span className="font-medium text-foreground">管理员身份</span>
-                    重新启动;仍然失败可参考安装指南手动配置(
-                    <button
-                      type="button"
-                      onClick={handleOpenInstallGuide}
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
-                      {INSTALL_GUIDE_URL}
-                    </button>
-                    ){alreadyRegistered ? '。' : ',或先仅完成注册。'}
-                  </span>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={handleOpenInstallGuide}>
-                      打开安装指南
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </SectionBody>
-          <SectionFooter>
-            {hasMissingTools && !alreadyRegistered && (
-              <Button variant="outline" onClick={handleRegisterOnly} disabled={cliLoading}>
-                仅完成注册
-              </Button>
-            )}
-            {hasMissingTools && (
-              <Button variant="outline" onClick={handleInstall} disabled={cliLoading}>
-                一键安装
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                if (alreadyRegistered) {
-                  onComplete();
-                } else {
-                  setStep('register-email');
-                }
-              }}
-              disabled={cliLoading || !cliStatus?.claudeInstalled}
-            >
-              {alreadyRegistered ? '完成' : '继续'}
-              <ChevronRightIcon className="ml-1 h-4 w-4" />
-            </Button>
-          </SectionFooter>
-        </>
-      )}
-
-      {step === 'cli-install' && (
-        <>
-          <SectionHeader
-            icon={<TerminalIcon className="h-5 w-5 text-muted-foreground" />}
-            title="正在安装 CLI 工具"
-            description="将先安装基础环境,随后安装缺失的 Agent CLI。"
-          />
-          <SectionBody>
-            <div className="flex flex-col gap-3">
-              {(['git', 'node', 'claude', 'codex'] as const).map((installStep) => (
-                <InstallProgressRow
-                  key={installStep}
-                  name={INSTALL_STEP_LABELS[installStep]}
-                  progress={installProgress[installStep]}
-                />
-              ))}
-
-              {installError && (
-                <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
-                  <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{installError}</span>
-                </div>
-              )}
-            </div>
-          </SectionBody>
-          <SectionFooter>
-            {installing ? (
-              <Button variant="outline" onClick={handleCancelInstall}>
-                取消
-              </Button>
-            ) : installError ? (
-              <>
-                <Button variant="outline" onClick={() => setStep('cli-check')}>
-                  返回
-                </Button>
-                <Button onClick={handleInstall}>重试</Button>
-              </>
-            ) : (
-              <Button variant="outline" onClick={() => setStep('cli-check')}>
-                返回
-              </Button>
-            )}
-          </SectionFooter>
-        </>
-      )}
-
       {step === 'register-email' && (
         <>
           <SectionHeader
             icon={<ServerIcon className="h-5 w-5 text-muted-foreground" />}
             title="注册"
             description={
-              reason === 'expired'
-                ? '登录已失效，请重新验证邮箱。'
-                : mode === 'register-only'
-                  ? '当前仅写入本地配置与环境变量,CLI 工具可稍后安装。'
-                  : mode === 'vscode-extension'
-                    ? '检测到 VSCode Claude 扩展,仅需完成邮箱注册即可直接在 VSCode 中使用。'
-                    : '输入邮箱以接收验证码。'
+              reason === 'expired' ? '登录已失效，请重新验证邮箱。' : '输入邮箱以接收验证码。'
             }
           />
           <SectionBody>
@@ -595,16 +233,6 @@ export function OnboardingView({
                   仅接受 {ALLOWED_EMAIL_SUFFIXES.join(' / ')} 后缀。
                 </p>
               </div>
-              {mode === 'register-only' && (
-                <div className="rounded-lg border border-warning/28 bg-warning/6 px-3 py-2 text-sm text-muted-foreground">
-                  此步骤仅写入本地配置与环境变量,CLI 工具可稍后安装。
-                </div>
-              )}
-              {mode === 'vscode-extension' && (
-                <div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                  凭据将写入 ~/.claude/settings.json,注册完成后请返回 VSCode 直接使用 Claude 扩展。
-                </div>
-              )}
               {sendCodeError && (
                 <div className="flex items-start gap-2 rounded-lg border border-destructive/32 bg-destructive/4 p-3 text-sm text-destructive">
                   <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
@@ -614,10 +242,10 @@ export function OnboardingView({
             </div>
           </SectionBody>
           <SectionFooter>
-            {/* D47 S5: a dead end once the login has expired — there is no CLI
-                re-check to go back to, only the email step ahead. */}
-            {reason !== 'expired' && (
-              <Button variant="outline" onClick={handleReturnToInstall} disabled={sendingCode}>
+            {/* A2: "back" now means the welcome screen — the only thing behind
+                this step. Absent when the caller gives it nowhere to go. */}
+            {onBack && (
+              <Button disabled={sendingCode} onClick={onBack} variant="outline">
                 返回
               </Button>
             )}
@@ -709,21 +337,9 @@ export function OnboardingView({
       {step === 'result' && registerResult?.ok && (
         <>
           <SectionHeader
+            description="Claude Code 与 Codex 的凭据已在本次会话中生效。"
             icon={<CheckCircle2Icon className="h-5 w-5 text-success" />}
-            title={
-              mode === 'register-only'
-                ? '注册信息已保存'
-                : mode === 'vscode-extension'
-                  ? '注册完成,环境已生效'
-                  : '初始化完成'
-            }
-            description={
-              mode === 'register-only'
-                ? '本地配置与环境变量已写入,CLI 工具仍需安装后方可使用。'
-                : mode === 'vscode-extension'
-                  ? '凭据已写入 ~/.claude/settings.json,请返回 VSCode 使用 Claude 扩展。'
-                  : '环境配置已全部完成。'
-            }
+            title="登录完成"
           />
           <SectionBody>
             <div className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -736,43 +352,16 @@ export function OnboardingView({
                   。
                 </p>
               )}
-              {mode === 'register-only' ? (
-                <p>凭据已写入本地配置,Claude Code 与 Codex 安装完成后即可使用。</p>
-              ) : mode === 'vscode-extension' ? (
-                <p>
-                  返回 VSCode 即可直接使用 Claude 扩展。如需在 AiClient 内使用,可继续安装 CLI 环境。
-                </p>
-              ) : (
-                <p>Claude Code 与 Codex 的凭据已在本次会话中生效。</p>
-              )}
+              {/* A2 retired the three-way `mode` fork here. `register-only` and
+                  `vscode-extension` both described worlds where the app could
+                  not run yet — CLI not installed, or the user meant to work in
+                  VSCode instead — and neither exists now that Claude Code,
+                  Codex and Node all ship inside this build. */}
+              <p>随时可以在设置里切换回使用本机自己的配置。</p>
             </div>
           </SectionBody>
           <SectionFooter>
-            {mode === 'register-only' ? (
-              <>
-                <Button variant="outline" onClick={handleQuitApp}>
-                  退出应用
-                </Button>
-                <Button onClick={handleReturnToInstall}>返回安装</Button>
-              </>
-            ) : mode === 'vscode-extension' ? (
-              <>
-                {/* normal-case: mixed zh/en literal, the cva base lowercases "CLI" */}
-                <Button
-                  className="normal-case"
-                  variant="outline"
-                  onClick={handleContinueInstallFromVscode}
-                >
-                  继续安装 CLI 环境
-                </Button>
-                {/* normal-case: mixed zh/en literal, the cva base lowercases "VSCode" */}
-                <Button className="normal-case" onClick={handleQuitApp}>
-                  返回 VSCode 使用
-                </Button>
-              </>
-            ) : (
-              <Button onClick={onComplete}>开始使用</Button>
-            )}
+            <Button onClick={onComplete}>开始使用</Button>
           </SectionFooter>
         </>
       )}
@@ -810,80 +399,4 @@ function SectionFooter({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
-}
-
-function CliRow({
-  name,
-  installed,
-  version,
-  loading,
-  missingLabel,
-}: {
-  name: string;
-  installed?: boolean;
-  version?: string;
-  loading: boolean;
-  missingLabel?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-      <span className="text-sm font-medium">{name}</span>
-      <div className="flex items-center gap-1.5 text-sm">
-        {loading ? (
-          <Loader2Icon className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : installed ? (
-          <>
-            <CheckCircle2Icon className="h-4 w-4 text-success" />
-            <span className="text-muted-foreground">{version || '已安装'}</span>
-          </>
-        ) : (
-          <>
-            <AlertCircleIcon className="h-4 w-4 text-warning" />
-            <span className="text-muted-foreground">{missingLabel || '未检测到'}</span>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function InstallProgressRow({ name, progress }: { name: string; progress: InstallProgress }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-      <span className="text-sm font-medium">{name}</span>
-      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        {progress.status === 'installing' ? (
-          <Loader2Icon className="h-4 w-4 animate-spin text-primary" />
-        ) : progress.status === 'done' ? (
-          <CheckCircle2Icon className="h-4 w-4 text-success" />
-        ) : progress.status === 'error' ? (
-          <AlertCircleIcon className="h-4 w-4 text-destructive" />
-        ) : progress.status === 'skipped' ? (
-          <CheckCircle2Icon className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />
-        )}
-        <span>{getProgressLabel(progress)}</span>
-      </div>
-    </div>
-  );
-}
-
-function getProgressLabel(progress: InstallProgress): string {
-  if (progress.message) {
-    return progress.message;
-  }
-
-  switch (progress.status) {
-    case 'installing':
-      return '安装中…';
-    case 'done':
-      return '已完成';
-    case 'skipped':
-      return '已跳过';
-    case 'error':
-      return '失败';
-    default:
-      return '等待中';
-  }
 }

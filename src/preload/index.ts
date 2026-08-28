@@ -790,6 +790,8 @@ const electronAPI = {
       agents: import('@shared/types').InstallAgentId[]
     ): Promise<import('@shared/types').InstallResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_INSTALL_AGENTS, agents),
+    installGit: (): Promise<import('@shared/types').OnboardingInstallGitResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_INSTALL_GIT),
     cancelInstall: (): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CANCEL_INSTALL),
     onInstallProgress: (
@@ -1068,11 +1070,16 @@ const electronAPI = {
     // method bodies stay untouched (S5 spec §1.2). No dedicated shared type
     // exists for this yet; inlined here rather than guessing an export name.
     getGateSnapshot: (): Promise<{
-      managed: boolean;
-      legacyRegistered: boolean;
+      /** A2 — has the user already come through the welcome screen this run. */
+      entered: boolean;
       state: import('@shared/types/auth').AuthState;
       skipAuthGate: boolean;
     }> => ipcRenderer.invoke(IPC_CHANNELS.AUTH_GET_GATE_SNAPSHOT),
+    /** A2 — record the credential mode the user picked AND let them into the app. One act, one call. */
+    enterApp: (
+      mode: import('@shared/credentialMode').CredentialMode
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.AUTH_ENTER_APP, mode),
     onStateChanged: (
       callback: (state: import('@shared/types/auth').AuthState) => void
     ): (() => void) => {

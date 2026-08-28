@@ -80,6 +80,15 @@ export interface InstallResult {
   errors: string[];
 }
 
+/**
+ * A3 (D65) — outcome of the git-only install offered by the missing-git notice.
+ * A result object, not a throw: the caller is a non-blocking notice.
+ */
+export interface OnboardingInstallGitResult {
+  ok: boolean;
+  error?: string;
+}
+
 export interface OnboardingCliStatus extends OnboardingPrerequisiteStatus {
   claudeInstalled: boolean;
   claudeVersion?: string;

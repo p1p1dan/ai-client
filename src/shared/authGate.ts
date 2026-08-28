@@ -17,15 +17,31 @@ import type { ClaudeRuntimeStatus } from './types/claudeRuntime';
 // resolveGateDecision
 // ---------------------------------------------------------------------------
 
-export type AuthGateShell = 'loading' | 'app' | 'onboarding' | 'vscode-only' | 'detection-failed';
+/**
+ * A2 — `welcome` is the two-button first screen; `runtime-unavailable` replaces
+ * the former `vscode-only` shell and absorbs `not-installed` with it (see
+ * `resolveGateDecision`).
+ */
+export type AuthGateShell =
+  | 'loading'
+  | 'app'
+  | 'welcome'
+  | 'onboarding'
+  | 'runtime-unavailable'
+  | 'detection-failed';
 
-/** Mirrors `OnboardingView.tsx`'s local `Step` union structurally — shared code cannot import a renderer-local type, so this is the shared vocabulary S5b's OnboardingView maps 1:1 onto. */
-export type AuthGateOnboardingStep =
-  | 'cli-check'
-  | 'cli-install'
-  | 'register-email'
-  | 'register-code'
-  | 'result';
+/**
+ * Mirrors `OnboardingView.tsx`'s local `Step` union structurally — shared code
+ * cannot import a renderer-local type, so this is the shared vocabulary
+ * OnboardingView maps 1:1 onto.
+ *
+ * A2 dropped `cli-check` / `cli-install`: the probes they ran were retired by
+ * A3/D65 (nothing they detect decides anything — Claude Code, Codex and Node
+ * all ship inside this app), and the screen they lived on is replaced by
+ * `welcome`. What remains is the sign-in sub-flow the welcome screen's primary
+ * button opens.
+ */
+export type AuthGateOnboardingStep = 'register-email' | 'register-code' | 'result';
 
 export type AuthGateOnboardingReason = 'first_run' | 'expired' | 'signed_out';
 
@@ -35,35 +51,48 @@ export interface AuthGateOnboardingEntry {
   initialEmail: string;
 }
 
-/** Minimal slice of `OnboardingCliStatus` this module actually reads. */
-export interface AuthGateCliStatus {
-  claudeInstalled: boolean;
+/**
+ * A2 — which half of the welcome screen's first button to render.
+ *
+ * `sign-in` is state A (nobody is signed in). `continue` is state B: someone
+ * IS signed in and must not be asked to do it again — the primary button just
+ * says "use that account", which is the user's 「进入公司配置」.
+ */
+export interface AuthGateWelcomeEntry {
+  primary: 'sign-in' | 'continue';
+  /** The account `continue` would use. `null` for `sign-in`. */
+  email: string | null;
+  /** A one-line reason to show above the buttons; `null` for an ordinary first run. */
+  notice: 'expired' | null;
 }
 
 export interface ResolveGateDecisionInput {
-  /** Current `AuthState` (from `AuthStateService`, or the argv-delivered initial snapshot). Ignored when `managed` is false — see `legacyRegistered`. */
+  /** Current `AuthState` (from `AuthStateService`, or the argv-delivered initial snapshot). */
   state: AuthState;
-  /** `resolveManagedCredentialsEnabled()`. */
-  managed: boolean;
+  /**
+   * A2 rev.2 — has the user already come through the welcome screen in THIS
+   * process (`hasEnteredApp()`).
+   *
+   * This is the only thing besides runtime health that can put App on screen,
+   * and it is deliberately the whole story. Earlier drafts fed the gate the
+   * recorded credential mode instead, so that a returning user could skip the
+   * screen; the ruling was the opposite (「就是启动首屏，每次都出现」), which
+   * takes the credential mode out of routing altogether and leaves it doing
+   * only the job D64 gave it — deciding which credentials a spawn injects.
+   */
+  entered: boolean;
   /** `resolveSkipAuthGate({env, isPackaged})` — the dev/team-track escape hatch. */
   skipAuthGate: boolean;
-  /** `null` while still detecting. Only `claudeInstalled` is read. */
-  cliStatus: AuthGateCliStatus | null;
   /** `null` while still detecting. */
   runtimeStatus: ClaudeRuntimeStatus | null;
-  /**
-   * Flag-off legacy gate signal — folds `onboardingService.checkRegistration().registered`
-   * AND a healthy `checkCredentialsHealth()` into one boolean (computed by the
-   * `auth.getGateSnapshot` IPC handler; S5 spec §1.2 "折算只在 IPC handler
-   * 层，不改 OnboardingService 方法体"). Ignored when `managed` is true.
-   */
-  legacyRegistered: boolean;
 }
 
 export interface GateDecision {
   shell: AuthGateShell;
   /** Present only when `shell === 'onboarding'`. */
   onboarding?: AuthGateOnboardingEntry;
+  /** Present only when `shell === 'welcome'`. */
+  welcome?: AuthGateWelcomeEntry;
 }
 
 /**
@@ -80,7 +109,7 @@ export function deriveOnboardingEntry(state: AuthState): AuthGateOnboardingEntry
     case 'signed_out':
       return state.lastEmail
         ? { initialStep: 'register-email', reason: 'signed_out', initialEmail: state.lastEmail }
-        : { initialStep: 'cli-check', reason: 'first_run', initialEmail: '' };
+        : { initialStep: 'register-email', reason: 'first_run', initialEmail: '' };
     case 'credentials_invalid':
       return {
         initialStep: 'register-email',
@@ -95,17 +124,69 @@ export function deriveOnboardingEntry(state: AuthState): AuthGateOnboardingEntry
 }
 
 /**
- * D47 S5 §1.4 — priority order, top to bottom:
+ * A2 — the welcome screen's own derivation, kept as a separate exported pure
+ * function for the same reason `deriveOnboardingEntry` is one: the screen needs
+ * it to render, and a test needs it without a DOM.
+ *
+ * `locked` and `unknown` return `null` because they are not answers yet — the
+ * gate holds `loading` for both rather than guessing which button to show and
+ * then swapping it under the user a moment later.
+ */
+export function deriveWelcomeEntry(state: AuthState): AuthGateWelcomeEntry | null {
+  switch (state.status) {
+    case 'authenticated':
+      return { primary: 'continue', email: state.email, notice: null };
+    case 'signed_out':
+      return { primary: 'sign-in', email: null, notice: null };
+    case 'credentials_invalid':
+      // Same folding as `deriveOnboardingEntry`: all four sub-reasons read as
+      // "your session needs re-verifying". The button is `sign-in`, not
+      // `continue` — there is nothing to continue with.
+      return { primary: 'sign-in', email: null, notice: 'expired' };
+    case 'locked':
+    case 'unknown':
+      return null;
+  }
+}
+
+/**
+ * Priority order, top to bottom:
+ *
  *  1. `skipAuthGate` — the escape hatch bypasses EVERYTHING unconditionally,
  *     including runtime detection (matches the pre-S5 `SKIP_ONBOARDING_GATE`
  *     literal behavior: `if (SKIP_ONBOARDING_GATE) return <SkippedOnboardingApp/>`
  *     ran before any query in `Root.tsx`).
- *  2. Runtime detection state (`loading` / `detection-failed` / `vscode-only`)
- *     — a hard blocker regardless of managed/legacy auth state, both flows
- *     need the CLI runtime to exist before App can mount.
- *  3. `managed` ? `state`-driven five-arm branch : `legacyRegistered`-driven
- *     two-branch (S5 §4: "flag-off 首帧 ⇒ argv 快照走旧链折算，无
- *     useManagedMode 参与").
+ *  2. Runtime availability — a hard blocker regardless of credential mode or
+ *     auth state: nothing runs without the bundled runtime.
+ *  3. `entered` — the user has already picked a way in this run.
+ *  4. Otherwise: the welcome screen, whose primary button the ACCOUNT decides
+ *     (`deriveWelcomeEntry`) and nothing else.
+ *
+ * ## A2 — what replaced the old two-branch shape, and why
+ *
+ * The gate used to fork on `managed`: true took a five-arm `AuthState` branch,
+ * false took a `legacyRegistered` two-arm branch. That shape came from
+ * `AICLIENT_MANAGED_CREDENTIALS` being a BUILD-TIME flag, where "flag off"
+ * meant an older product with its own registration chain.
+ *
+ * D64 turned the flag into a stored user choice, and that quietly broke the
+ * fork: `resolveManagedCredentialsEnabled()` returns false for `local` too, so
+ * a user who deliberately picked their own API key was sent down the legacy
+ * branch and told to register — the exact opposite of what they chose. Both
+ * inputs are gone; nothing about credentials reaches this function any more.
+ *
+ * ## The credential mode is NOT an input here, and that is the design
+ *
+ * An intermediate draft fed it in, so that a user with a recorded choice could
+ * skip the welcome screen. The ruling went the other way
+ * (「就是启动首屏，每次都出现」), and the result is simpler than the thing it
+ * replaced: routing depends on the account and on whether the user has picked
+ * yet, while the credential mode goes back to doing only what D64 named it for
+ * — deciding which credentials a spawn injects. Two questions that were briefly
+ * entangled are separate again.
+ *
+ * It also removes the need for a separate "switch credential source" entry
+ * point: quitting and reopening puts the same two buttons back on screen.
  */
 export function resolveGateDecision(input: ResolveGateDecisionInput): GateDecision {
   if (input.skipAuthGate) {
@@ -117,55 +198,45 @@ export function resolveGateDecision(input: ResolveGateDecisionInput): GateDecisi
   if (input.runtimeStatus.kind === 'detection-failed') {
     return { shell: 'detection-failed' };
   }
-  if (input.runtimeStatus.kind === 'vscode-extension-only') {
-    return { shell: 'vscode-only' };
+
+  // A2 — `not-installed` and `vscode-extension-only` are ONE outcome now.
+  //
+  // Since 2026-08-26 `ClaudeRuntimeChecker.detect()` answers `installed` off
+  // the bundled `@cometix/claude-code` before anything else runs, so both of
+  // these kinds are reachable only when that bundle is missing: a broken
+  // installation, or a dev tree with no `agent-host/node_modules`. They are
+  // therefore the same fact wearing two names, and the old `vscode-only`
+  // shell's offer — "install the Claude CLI and come back" — was not merely
+  // dead but WRONG: a system CLI is never what we execute, so installing one
+  // would not have fixed the user's problem.
+  if (
+    input.runtimeStatus.kind === 'not-installed' ||
+    input.runtimeStatus.kind === 'vscode-extension-only'
+  ) {
+    return { shell: 'runtime-unavailable' };
   }
 
-  // `runtimeStatus.kind === 'not-installed'` is the authoritative "no usable
-  // Claude Code" signal (matches the pre-S5 `MainWindow.ts`
-  // `APP_MOUNTABLE_RUNTIME_KINDS` set, which excluded it from "mounted" —
-  // only `node-compatible`/`bun-incompatible` counted). `cliStatus` is a
-  // SECOND, purely ADDITIVE check on top of that: `null` (not yet detected,
-  // or a caller — e.g. `MainWindow.isAppMountedFor`, which has no cheap
-  // synchronous way to obtain it — that never supplies one at all) means
-  // "skip this extra check", not "still loading". This is the A-track M4
-  // "cliStatus 分叉...一并收敛" fix: `cliStatus.claudeInstalled` only adds the
-  // narrower self-heal case of "was registered, CLI got removed since" when a
-  // caller has that signal on hand.
-  const cliMissing =
-    input.runtimeStatus.kind === 'not-installed' ||
-    (input.cliStatus !== null && !input.cliStatus.claudeInstalled);
-  const cliCheckEntry: AuthGateOnboardingEntry = {
-    initialStep: 'cli-check',
-    reason: 'first_run',
-    initialEmail: '',
-  };
-
-  if (!input.managed) {
-    if (!input.legacyRegistered || cliMissing) {
-      return { shell: 'onboarding', onboarding: cliCheckEntry };
-    }
+  // The user has already picked a way in this run. Checked BEFORE the account
+  // state below on purpose: a keyring that locks after they are inside must not
+  // pull a working App back to a spinner.
+  if (input.entered) {
     return { shell: 'app' };
   }
 
-  switch (input.state.status) {
-    case 'unknown':
-    case 'locked':
-      // `locked` (D47 S5 §1.1 rev.2 self-correction): a merely-locked keyring
-      // is not "signed out" — Root shows LoadingShell and waits for the next
-      // `auth.stateChanged` to promote once unlocked, never routes to
-      // onboarding.
-      return { shell: 'loading' };
-    case 'authenticated':
-      return cliMissing ? { shell: 'onboarding', onboarding: cliCheckEntry } : { shell: 'app' };
-    case 'signed_out':
-    case 'credentials_invalid': {
-      const onboarding = deriveOnboardingEntry(input.state);
-      // Unreachable in practice (both arms always produce an entry), kept
-      // for exhaustiveness rather than a non-null assertion.
-      return onboarding ? { shell: 'onboarding', onboarding } : { shell: 'loading' };
-    }
-  }
+  // `locked` / `unknown` are not answers yet, so there is no honest primary
+  // button to draw. Root holds LoadingShell and the next `auth.stateChanged`
+  // resolves it — never a screen that swaps its own button a moment later.
+  return welcomeShell(deriveWelcomeEntry(input.state));
+}
+
+/**
+ * `deriveWelcomeEntry` returns `null` only for `locked`/`unknown`, which the
+ * switch above has already routed to `loading` — so this is an exhaustiveness
+ * guard, not a reachable fallback. It degrades to `loading` rather than
+ * asserting: a welcome screen with no primary button is worse than a spinner.
+ */
+function welcomeShell(entry: AuthGateWelcomeEntry | null): GateDecision {
+  return entry ? { shell: 'welcome', welcome: entry } : { shell: 'loading' };
 }
 
 // ---------------------------------------------------------------------------

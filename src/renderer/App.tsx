@@ -61,6 +61,7 @@ import { AddRepositoryDialog } from './components/git';
 import { CloneProgressFloat } from './components/git/CloneProgressFloat';
 import { ActionPanel } from './components/layout/ActionPanel';
 import { BackgroundLayer } from './components/layout/BackgroundLayer';
+import { GitMissingNotice } from './components/layout/GitMissingNotice';
 import { MainContent } from './components/layout/MainContent';
 import { RepositorySidebar } from './components/layout/RepositorySidebar';
 import { TemporaryWorkspacePanel } from './components/layout/TemporaryWorkspacePanel';
@@ -1976,6 +1977,11 @@ export default function App() {
 
         {/* Update Notification */}
         <UpdateNotification autoUpdateEnabled={autoUpdateEnabled} />
+
+        {/* A3/D65 — git is a real dependency of a worktree manager, so the check
+            survives the onboarding probes that were retired; it just no longer
+            blocks the way in. */}
+        <GitMissingNotice />
 
         {/* Unsaved Prompt Host */}
         <UnsavedPromptHost />

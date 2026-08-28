@@ -189,6 +189,44 @@ export function registerOnboardingHandlers(): void {
     }
   );
 
+  /**
+   * A3 (D65) — git only, deliberately narrow.
+   *
+   * `installAll` would have worked (an empty agent list skips both agents and
+   * still runs the git prerequisite), and it is the wrong tool: it also
+   * installs Node.js, which this app has BUNDLED since `resources/node-runtime`
+   * — so reusing it would put a second Node on the user's machine to satisfy a
+   * requirement we already satisfy ourselves. `installGit` carries its own
+   * `ensureWindowsOnly` guard, so the platform rule is enforced in Main rather
+   * than trusted from the renderer.
+   *
+   * Returns a result object instead of throwing: the caller is a non-blocking
+   * notice, and an unhandled IPC rejection there would surface as an
+   * unclassified error next to a message whose whole point is to stay calm.
+   */
+  ipcMain.handle(IPC_CHANNELS.ONBOARDING_INSTALL_GIT, async () => {
+    if (activeInstaller) {
+      return { ok: false, error: 'Another onboarding installation is already in progress.' };
+    }
+
+    const installer = new AgentInstaller();
+    activeInstaller = installer;
+
+    try {
+      await installer.installGit();
+      const { gitInstalled } = await installer.checkPrerequisites();
+      return gitInstalled
+        ? { ok: true }
+        : { ok: false, error: 'Git still could not be detected after installation.' };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      if (activeInstaller === installer) {
+        activeInstaller = null;
+      }
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.ONBOARDING_CANCEL_INSTALL, async () => {
     if (!activeInstaller) {
       return false;
