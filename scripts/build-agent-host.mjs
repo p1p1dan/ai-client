@@ -74,16 +74,26 @@ async function bundle() {
   } catch {
     fail('esbuild not resolvable from repo root — run "pnpm install" first');
   }
-  await esbuild.build({
-    entryPoints: [path.join(hostRoot, 'index.ts')],
-    outfile: path.join(outDir, 'index.js'),
+  const common = {
     bundle: true,
     platform: 'node',
     format: 'esm',
     target: 'node22',
     sourcemap: false,
     external: ESBUILD_EXTERNAL,
-  });
+  };
+  await Promise.all([
+    esbuild.build({
+      entryPoints: [path.join(hostRoot, 'index.ts')],
+      outfile: path.join(outDir, 'index.js'),
+      ...common,
+    }),
+    esbuild.build({
+      entryPoints: [path.join(hostRoot, 'piHost.ts')],
+      outfile: path.join(outDir, 'piHost.js'),
+      ...common,
+    }),
+  ]);
 }
 
 // Hand-rolled recursive copy instead of fs.cpSync({filter}): on the Windows
@@ -124,13 +134,16 @@ function copyNodeModules() {
 // node_modules copies are fixed later by afterPack on the final resources dir.
 function tsdFixBundleOnWindows() {
   if (platform !== 'win32') return;
-  const target = path.join(outDir, 'index.js');
-  fs.writeFileSync(`${target}.tmp.bin`, fs.readFileSync(target));
-  const psScript =
-    `[System.IO.File]::Copy('${target}.tmp.bin','${target}',$true); ` +
-    `Remove-Item '${target}.tmp.bin' -Force`;
-  const b64 = Buffer.from(psScript, 'utf16le').toString('base64');
-  execSync(`powershell -EncodedCommand ${b64}`, { stdio: 'pipe' });
+  for (const name of ['index.js', 'piHost.js']) {
+    const target = path.join(outDir, name);
+    if (!fs.existsSync(target)) continue;
+    fs.writeFileSync(`${target}.tmp.bin`, fs.readFileSync(target));
+    const psScript =
+      `[System.IO.File]::Copy('${target}.tmp.bin','${target}',$true); ` +
+      `Remove-Item '${target}.tmp.bin' -Force`;
+    const b64 = Buffer.from(psScript, 'utf16le').toString('base64');
+    execSync(`powershell -EncodedCommand ${b64}`, { stdio: 'pipe' });
+  }
 }
 
 /** Report line carries the raw codex byte count so every CI run leaves a size

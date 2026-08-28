@@ -40,7 +40,7 @@
  * `'claude'` is deliberately unused — it is reserved for a future agent that
  * talks to the Anthropic API directly instead of driving the Claude Code CLI.
  */
-export const AGENT_WIRE_NAMES = ['claude-code', 'codex'] as const;
+export const AGENT_WIRE_NAMES = ['claude-code', 'codex', 'pi'] as const;
 
 export type AgentWireName = (typeof AGENT_WIRE_NAMES)[number];
 
@@ -48,6 +48,7 @@ export type AgentWireName = (typeof AGENT_WIRE_NAMES)[number];
 export const AGENT_DISPLAY_NAMES: Record<AgentWireName, string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
+  pi: 'Pi',
 };
 
 /**
@@ -99,6 +100,11 @@ export const CLAUDE_CODE_AGENT_ARM = AGENT_WIRE_NAMES[0];
  * rule (no `.agent ?? '<literal>'`) and the axis-cast rule (no cross-axis `as`).
  */
 export const CODEX_AGENT: AgentWireName = 'codex';
+
+/**
+ * Pi agent's own name, same "who am I" role as {@link CLAUDE_CODE_AGENT}.
+ */
+export const PI_AGENT: AgentWireName = 'pi';
 
 export function isAgentWireName(value: unknown): value is AgentWireName {
   return typeof value === 'string' && (AGENT_WIRE_NAMES as readonly string[]).includes(value);

@@ -28,7 +28,7 @@ import {
  * runtime. Codex is NOT here on purpose: it is spawned as an external CLI and
  * never imported, so listing it would be a no-op that misleads the next reader
  * (packaging spec §0.2-①). */
-export const ESBUILD_EXTERNAL = ['@anthropic-ai/claude-agent-sdk', '@cometix/claude-code'];
+export const ESBUILD_EXTERNAL = ['@anthropic-ai/claude-agent-sdk', '@cometix/claude-code', '@earendil-works/pi-coding-agent'];
 
 /** Entry-binary size floor: guards against LFS pointers / truncated downloads,
  * NOT against version drift (that is the manifest's job).

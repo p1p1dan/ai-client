@@ -893,7 +893,7 @@ describe('pinned wire facts', () => {
     // and reordering changes nothing except the day someone assumes an index.
     // Appending is the only legal edit, and it belongs with the reader that
     // can actually run the new agent.
-    expect(AGENT_WIRE_NAMES).toEqual(['claude-code', 'codex']);
+    expect(AGENT_WIRE_NAMES).toEqual(['claude-code', 'codex', 'pi']);
     expect(Object.keys(AGENT_DISPLAY_NAMES).sort()).toEqual([...AGENT_WIRE_NAMES].sort());
   });
 

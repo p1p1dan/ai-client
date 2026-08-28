@@ -190,11 +190,13 @@ const lx = { platform: 'linux', arch: 'x64' };
 // A6 — esbuild external list
 // ---------------------------------------------------------------------------
 describe('ESBUILD_EXTERNAL (A6)', () => {
-  it('is exactly the two runtime-resolved packages, in order', () => {
-    // Element-wise equality, not toContain: a stray third entry (e.g. codex,
-    // which is spawned as a CLI and never imported) must turn this red.
-    expect(ESBUILD_EXTERNAL).toEqual(['@anthropic-ai/claude-agent-sdk', '@cometix/claude-code']);
-    expect(ESBUILD_EXTERNAL).toHaveLength(2);
+  it('is exactly the runtime-resolved packages, in order', () => {
+    expect(ESBUILD_EXTERNAL).toEqual([
+      '@anthropic-ai/claude-agent-sdk',
+      '@cometix/claude-code',
+      '@earendil-works/pi-coding-agent',
+    ]);
+    expect(ESBUILD_EXTERNAL).toHaveLength(3);
   });
 });
 

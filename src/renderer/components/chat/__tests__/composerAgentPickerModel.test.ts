@@ -72,7 +72,7 @@ describe('A1 — deriveComposerAgentOptions truth table', () => {
 
     // Rendered, not hidden: the capability exists, this Host just cannot run
     // it right now (runtimeEvents.ts's own type note says disable, not hide).
-    expect(options).toHaveLength(2);
+    expect(options).toHaveLength(3);
     expect(optionFor(options, CODEX_AGENT)).toMatchObject({
       available: false,
       disabled: true,
@@ -114,7 +114,7 @@ describe('A1 — deriveComposerAgentOptions truth table', () => {
       hostState: 'ready',
     });
 
-    expect(options).toHaveLength(2);
+    expect(options).toHaveLength(3);
     expect(options.every((option) => option.available)).toBe(false);
     expect(options.every((option) => option.disabled)).toBe(true);
     expect(optionFor(options, CLAUDE_CODE_AGENT)?.reason).toBe(UNAVAILABLE_AGENT_REASON);
@@ -138,7 +138,7 @@ describe('A1 — deriveComposerAgentOptions truth table', () => {
         locked: false,
         hostState,
       });
-      expect(options).toHaveLength(2);
+      expect(options).toHaveLength(3);
       expect(options.every((option) => option.disabled)).toBe(true);
       expect(options.every((option) => option.available)).toBe(false);
       expect(options.every((option) => option.reason === HOST_NOT_READY_REASON)).toBe(true);
@@ -505,7 +505,7 @@ describe('deriveComposerAgentPicker — the single entry point the component cal
     expect(model.commitFallback).toBe(false);
     // Both segments stay inert until the answer is in — nothing is claimed
     // usable, and the selected one is the draft.
-    expect(model.options).toHaveLength(2);
+    expect(model.options).toHaveLength(3);
     expect(model.options.every((option) => option.disabled)).toBe(true);
     expect(optionFor(model.options, CODEX_AGENT)?.selected).toBe(true);
   });
