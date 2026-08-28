@@ -61,6 +61,27 @@ node scripts/dev.js
 **缺 `dev.env` 直接拒绝启动**（否则会用开发者本人的 Claude 登录计费）；确需本机凭证时
 显式加 `--allow-local-credentials`。
 
+⚠️ **两个坑，2026-08-28 实机踩到才发现，`dev.env.example` 都没写**：
+
+**① 开发模式不用随包 Node，机器上没有 Node 24 就起不了 Agent Host。**
+症状是主界面挂一条红条：`No Node 24 runtime found. Set AICLIENT_NODE24_PATH or install Node 24.`
+根因不是缺文件 —— `getBundledNodeRuntimePath()` 第一行就是「未打包时返回 `undefined`」
+（注释原文 "Dev returns undefined so development behavior is unchanged"），随包的那份 Node **只给打包版用**，
+开发模式故意去机器上找。仓里其实躺着一份可用的（`out-node-runtime/node`，实测 v24.18.0），
+在 `dev.env` 里指过去即可：
+
+```
+AICLIENT_NODE24_PATH=<仓库根>/out-node-runtime/node
+```
+
+**② `AICLIENT_MANAGED_CREDENTIALS` 会盖掉登录页上点的选择**，且优先级更高
+（[D64](../../plans/openchamber-chat-refactor-ledger.md)：开发期覆盖，仅未打包生效）。
+写 `1` 时，即使用户在启动首屏点了「使用本机已有配置」（`credentialMode` 确实写成了 `local`），
+起会话仍按托管模式走 —— 而托管模式下没登录会被
+spawn 闸拒掉，**表现为「历史对话打不开」「切了 agent 也起不来」，日志里是
+`auth_required: Sign-in required before starting an agent session.`**。
+要在开发模式下真正走本机配置那条路，改成 `AICLIENT_MANAGED_CREDENTIALS=0`。
+
 ⚠️ **不要用 `pnpm dev`**：pnpm 10 的 `verifyDepsBeforeRun` 会在跑脚本前重装依赖，
 冲掉 `electron-builder install-app-deps` 重建好的原生模块（见下方复原两步）。
 覆盖面缺口（打包版 / `pnpm preview` 不经 dev.js，仍走本机登录）见计划树 open-q **#14**。

@@ -153,11 +153,54 @@ D65 的三件事，本轮做完两件半；第三件半按用户裁定留给 A2�
   `resolveSpawnGateDecision`（它**合法地**保留 `managed` 入参）。已改为只切 `resolveGateDecision`
   的函数体，并加一条空切片守卫。
 
-**未做**：⚠️ **GUI 点验** —— 登录页、流光 logo、两态、亮暗双主题、`Continue as <email>` 的长邮箱截断，
-**一样都没在屏幕上看过**。这是本 plan 欠得最明显的一笔。
+#### GUI 点验 — 2026-08-28 做掉一半（真机 CDP 截图）
 
-⚠️ **品牌名暂用 `AICLIENT`**（取自 `electron-builder.yml` 的 `productName`）。仓内目前五个叫法，
-统一口径记在 [unified-credentials open-q #4](../unified-credentials/open-questions.md) 且为 Deferred。
+**手法**：`node scripts/dev.js --remote-debugging-port=9222` + 一个极小 CDP 客户端
+（`Page.captureScreenshot` / `Runtime.evaluate`，脚本在 scratchpad，未入仓）。
+
+**已验（✅）**：
+- 登录页确实是启动首屏，结构与参照一致（logo → 产品名 → 标语 → 两颗等宽纵向按钮 → 各一行小字）。
+- **亮暗双主题都正常**，暗色下 logo 转暖调，文字对比度无异常。
+- **流光真的在动** —— 隔 2 秒抓三帧，三帧互不相同。`x1.animVal` 在单次 evaluate 内不变会误判成「没动」，
+  **必须靠跨帧比对**（`getAttribute` 更不行，SMIL 不反映在基值上）。
+- **`use my own setup` 的写入通路端到端成立**：点完 `~/.pilab/<profile>/settings.json` 里
+  `credentialMode` 确实变成 `local`。
+
+**观感三条待定（都不是 bug，是取舍）**：
+1. **按钮文字被设计系统强制小写** —— 屏幕上是 `log in with work email`，DOM 里是正确的大小写，
+   `text-transform: lowercase` 来自 Button 的 cva 基类（仓内别处用 `className="normal-case"` 绕开）。
+   参照的 Cursor 用 `Log In` 首字母大写，而这两颗是全屏最重的元素。**要不要加 `normal-case`，待用户定。**
+2. **logo 偏小** —— 实测 72px，窗口 1718px 宽，占比约 4%；参照图里约占窗口宽 **1/8**（≈215px）。
+   现在更像图标而非品牌标识，流光也因为太小而不易察觉。（2026-08-28 的 logo 改版可一并处理。）
+3. **次按钮的说明文字折成两行**，右侧留白参差。
+
+**仍未验**：**B 态（`Continue as <email>`）没在屏幕上看过** —— 需要真的登录一次；
+长邮箱会不会把按钮撑破也因此未知。
+
+#### 2026-08-28 补充 — 登录页文案 + logo 动效改版（用户直接拍板，非本 plan 立项）
+
+用户绕过 kickoff 里「品牌口径统一为 Deferred」的范围，直接对**这一屏的可见文案**拍了板
+（不是仓库层面的五名统一，`electron-builder.yml` 的 `productName`、组件/文件名、
+`AICLIENT_*` 环境变量前缀等一律未动）：
+
+- `WelcomeView.tsx` 的 `PRODUCT_NAME`：`AICLIENT` → **`PILAB`**。
+- 标语：`Git worktrees, with agents that work in them.` → **`Just a really good one to code with ai.`**
+  （`src/shared/i18n.ts` 里旧标语的中文条目已删——不再被引用；新标语**暂无中文翻译**，
+  `t()` 未命中时按设计回落到英文 key，翻译词待用户自己定，不是本次施工的疏漏）。
+- `AiClientMark.tsx`：立方体**形状不变**（期间试过 π 符号 / 光环 / 多棱体 / 磨砂玻璃等好几版，
+  用户否掉后**明确要求改回最初的等轴测立方体**，代价是"和 Cursor 撞"那条顾虑也一并接受了）。
+  变的是动效机制：原来是一个跑遍三个面的橙/绿/蓝三色渐变（`animate` 跑 `x1`/`x2`）；
+  现在每个面画两遍——一层 `var(--primary)` 静态底色（不透明度维持原来的 0.95/0.75/0.55 分层），
+  另一层纯白、只动 `opacity`（0→0.5→0），三层顶/右/左依次错开 2 秒（共享 6s 周期的 1/3），
+  亮度峰值按这个顺序交棒，观感是一束光顺时针绕立方体转，不是三个面各闪各的。
+  `var(--primary)` 仍在用（主题自适应，`authGateWiring.test.ts` 的 `[A2-08]` 断言钉着这条，没有绕开）。
+- 全过程先在独立预览文件里迭代到用户明确说"敲定了"才落地产品代码，
+  随档留了一份：[`logo-concepts-preview.html`](../../../plans/2026-08-27-entry-design/logo-concepts-preview.html)
+  （5 轮改版都在同一个文件里叠代，末版即最终拍板的样子）。
+
+**验证**：typecheck 0 · biome 0（改动的 3 个文件）· **vitest 248 文件 5029 例全绿**
+（和 A2 落地时同一组数字，没有回归）。**未做**：GUI 点验——以上全部只在预览文件和自动化测试里看过，
+**没在真正跑起来的 Electron 窗口里看过一眼**，和上面 A2/A3 欠的那笔是同一笔债，一并留到点验批次。
 
 ### ~~T-A2a — 中途切换的入口~~ ❌ 作废（2026-08-27，[D71](../../../plans/openchamber-chat-refactor-ledger.md)）
 
@@ -168,6 +211,29 @@ D65 的三件事，本轮做完两件半；第三件半按用户裁定留给 A2�
 模式只能在**还没进门时**改，不存在「运行中切换」这个状态。
 
 ## Next（按依赖序）
+
+### T-A2b — spawn 闸仍按「A2 之前的世界」判人（**2026-08-28 实机撞到，待用户拍板**）
+
+**症状**（真机）：点「使用本机已有配置」进主界面后，**历史对话打不开、切了 agent 也起不来**，
+日志里三条一模一样的 `chat:resumeSession → auth_required: Sign-in required before starting an agent session.`
+
+**根因**：`assertAgentSpawnAllowed`（`main/services/auth/spawnGate.ts`）问的是
+**「是不是托管模式」**：托管 + 未登录 ⇒ 拒。这在 A2 之前永远碰不到 ——
+旧门禁根本不让「未登录」的人进主界面。**A2 把「人在主界面里、但没登录」变成了正常可达状态**
+（第二颗按钮的全部意义），那条拒绝分支于是第一次被走到。
+
+**产品里今天炸不了**：点第二颗按钮会写 `credentialMode='local'`，
+`resolveManagedCredentialsEnabled()` 读到 `local` 返回 false，闸直接放行。
+**开发模式里炸了**，因为 `dev.env` 的 `AICLIENT_MANAGED_CREDENTIALS=1` 覆盖了那个记录值
+（见 [baseline GUI 联调环境](../../baseline/test-and-release-gates.md) 坑 ②）。
+
+**为什么仍要立票**：挡住它的只剩「模式记对了」这一个条件，离出事只差一次配置不一致；
+而失败形态很难受 —— **人已经在主界面里、从没被要求登录过，然后每个动作都回一句
+「Sign-in required」，界面上没有任何可点的下一步**。
+
+**建议方向（未拍板）**：闸不该问「是不是托管模式」，而应问「**这次是怎么进来的**」——
+复用 A2 已有的会话闩（`services/auth/appEntry.ts` 的 `hasEnteredApp()`），
+或把进门时选的模式一并记进会话状态供闸读取。**这属于安全边界的改动，需用户点头再动。**
 
 ### T-E1a — 失败面两张票（**已由 [D68](../../../plans/openchamber-chat-refactor-ledger.md) 重定范围到登录线，低优先级，不再是 A2 前置**）
 
