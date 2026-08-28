@@ -5,7 +5,15 @@
 > 立项讨论与已核实事实的原文：[kickoff](../../../plans/2026-08-27-entry-design/kickoff.md)。
 
 **状态：Planning**（立项时的三条待拍板 **2026-08-27 已全部拍完** → [D63/D64/D65](../../../plans/openchamber-chat-refactor-ledger.md)；
-A1 已随 unified-credentials S3 落地；**E1 的前置也已解开，是下一件可开工的事**）
+A1 已随 unified-credentials S3 落地；**E1 取证同日已跑完并落档** →
+[E1 取证](../../../plans/2026-08-27-e1-local-credentials/README.md)，
+但其**产品建议当日即被 [D68](../../../plans/openchamber-chat-refactor-ledger.md) 整体推翻** ——
+两条路线彻底分开，**第二个按钮不做任何探测、也不为它做失败面**；
+**A3 与 A2 同日亦已落地** —— A3：门禁清债 + git 检查换成不拦人的提示 + 补上非 Windows 缺口；
+A2：两按钮登录页 + 门禁换轴 + onboarding 四步收成两步。
+⇒ **主线四件全部走完**。登录页按 [D71](../../../plans/openchamber-chat-refactor-ledger.md) 定为
+**每次启动都出现的首屏**（凭据模式因此整个退出门禁，T-A2a 连带作废 —— 重启就是切换）；
+剩 T-E1a（登录线失败面，低优先级）与全线欠的一笔 **GUI 点验**）
 
 ## Scope
 
@@ -39,8 +47,10 @@ A1 已随 unified-credentials S3 落地；**E1 的前置也已解开，是下一
 ## 文件
 
 - [roadmap.md](./roadmap.md) — 阶段与依赖链（**下一件 = E1**）
-- [open-questions.md](./open-questions.md) — 立项时的三条**已全部关闭**
+- [open-questions.md](./open-questions.md) — **当前无未决**（立项三条 D63/D64/D65，#4 由 D69 关闭）
 - [kickoff](../../../plans/2026-08-27-entry-design/kickoff.md) — 立项讨论原文 + 登录页视觉参照
+- [E1 取证](../../../plans/2026-08-27-e1-local-credentials/README.md) — 「本机已有配置」能探到什么（Claude 十一臂 + Codex 十四臂，全离线）。
+  ⚠️ 读它时注意角色：D68 之后它**不是设计输入**，而是**「为什么不该做这个探测」的实证依据**
 
 ## 权威顺序
 

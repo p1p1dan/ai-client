@@ -1,10 +1,23 @@
 # Open Questions — 应用入口与环境依赖
 
 > 只放未决问题。已定的进 [README](./README.md) / [roadmap](./roadmap.md)。
-> 三条都是**待用户拍板**，不是待调研（调研部分已在
-> [kickoff §1](../../../plans/2026-08-27-entry-design/kickoff.md) 做完）。
+> **当前无未决问题**：立项三条已由 D63/D64/D65 拍完，#4 已由 D69 拍完。
+> 新问题出现时追加到本文件。
 
-## 已关闭（存根）
+## 已关闭 —— #4 仓库能不能供凭据
+
+由 [E1 取证 §L5](../../../plans/2026-08-27-e1-local-credentials/README.md) 提出（2026-08-27），
+同日由 **[D69](../../../plans/openchamber-chat-refactor-ledger.md) 拍板「都读，维持原状」**（用户原话「都读，这都不是我们要操心的事」）。
+
+存根：一个 clone 来的仓库在 `.claude/settings.json` 里写一段 `env`，就能让我们的对话
+**带着它给的钥匙打到它给的地址**（实测 L5）。这一条在 D67 那轮**没有**摆在用户面前
+（当时量的是权限 / hooks / CLAUDE.md），故补问了一次 —— **知情后仍然接受**，
+`settingSources: ['user','project','local']` 一字不动。理由与 D67 同源：
+能挡它的手段正是 D67「甲乙丙」里被否掉的那类「我们去干涉用户的配置文件」。
+
+---
+
+## 已关闭 —— 2026-08-27 立项时的三条
 
 三条立项时的待拍板 **2026-08-27 全部拍完**，原文进总台账
 [D63 / D64 / D65](../../../plans/openchamber-chat-refactor-ledger.md)，此处只留存根与连带项。
@@ -27,10 +40,3 @@
   ⚠️ **落档时核出的范围修正**：退役的是**启动门禁那条链路**，**不是 `CliDetector` 本身** ——
   `AgentSettings.tsx` 仍在用 `cli.detectOne` 探测第三方与自定义 agent（droid / gemini / auggie / custom），
   那些确实没随包；远端 helper 也暴露同名 RPC。一刀切删会打断设置页。
-
----
-
-## 当前无未决问题
-
-三条已全部拍完，本 plan 的阻塞解除；剩下的是施工顺序问题，见 [roadmap](./roadmap.md)。
-新问题出现时追加到本文件。
