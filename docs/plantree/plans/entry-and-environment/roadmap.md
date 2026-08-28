@@ -210,9 +210,25 @@ D65 的三件事，本轮做完两件半；第三件半按用户裁定留给 A2�
 留一条记录以免有人再想一遍：**在途会话怎么办**这个问题也一并消失了 ——
 模式只能在**还没进门时**改，不存在「运行中切换」这个状态。
 
-## Next（按依赖序）
+### ~~T-A2b — spawn 闸仍按「A2 之前的世界」判人~~ ✅ 已拍板并落地（2026-08-28，[D72](../../../plans/openchamber-chat-refactor-ledger.md)）
 
-### T-A2b — spawn 闸仍按「A2 之前的世界」判人（**2026-08-28 实机撞到，待用户拍板**）
+立票时写的「产品里今天炸不了」**被用户真机证伪** —— 打包版（`71f9086f`）走「使用本地环境」照样满屏
+`auth_required`。真因是另一个 bug（见下面 T-CM1），但它恰好把立票理由演示了一遍：
+挡住这条拒绝分支的只有「模式记对了」一个条件，而那个条件被另一处代码单方面改写了。
+
+**已落地**：闸的判据换成**本次运行是从哪颗按钮进来的**。
+
+- `services/auth/appEntry.ts` 的会话闩由 `boolean` 拓宽为 `CredentialMode | null`
+  （`markAppEntered(mode)` / 新增 `getAppEntryMode()`，`hasEnteredApp()` 语义不变）。
+- `shared/authGate.ts` 新增 `resolveSpawnCredentialMode({entryMode, managed})`：**入口优先，记录的模式只做 fallback**，
+  只在「还没进门就发起 spawn」这种启动竞态里回答。`spawnGate.ts` 的零 IO 快路径与门禁本体共用这一个函数，两者不可能答不一样。
+- **边界没有被溶解**：从「公司账号」进来的运行，中途登出 / 凭据被拒**照旧拒绝** ——
+  否则登出的人会静默改用自己机器上的钥匙继续跑，那正是这道闸存在的理由。
+
+**验证**：typecheck 0 · biome 0 · vitest 249 文件 5038 例全绿。新增 5 条断言
+（shared 3 条覆盖规则本身、main 2 条覆盖 Main 有没有真把入口喂进去，取「入口与文件互相矛盾」的两个方向）。
+
+<details><summary>立票时的原文（保留）</summary>
 
 **症状**（真机）：点「使用本机已有配置」进主界面后，**历史对话打不开、切了 agent 也起不来**，
 日志里三条一模一样的 `chat:resumeSession → auth_required: Sign-in required before starting an agent session.`
@@ -235,6 +251,56 @@ D65 的三件事，本轮做完两件半；第三件半按用户裁定留给 A2�
 复用 A2 已有的会话闩（`services/auth/appEntry.ts` 的 `hasEnteredApp()`），
 或把进门时选的模式一并记进会话状态供闸读取。**这属于安全边界的改动，需用户点头再动。**
 
+</details>
+
+### ~~T-CM1 — `settings.json` 双缓存把 `credentialMode` 抹掉~~ ✅ 已修（2026-08-28，用户真机反馈批）
+
+**这一条才是 2026-08-28 两个真机症状的共同根因**，且它比 A2 老得多 —— A2 只是让它第一次有了可见后果。
+
+**机制**：`settings.json` 有两套互不通气的缓存。`main/ipc/settings.ts` 自己存一份，
+**由渲染进程第一次读时定格、此后永不刷新**；`credentialMode` 却由 `services/auth/credentialMode.ts`
+绕过它、经 `SharedSessionState` 直写。渲染进程的设置持久化是**读整份 → 改一个键 → 整份写回**
+（`renderer/stores/settings/storage.ts`，zustand persist），于是任何一次设置保存都把定格的旧值写回磁盘。
+
+- **症状①** 选「使用本地环境」后 codex/claude 全部 `auth_required`：写进去的 `local` 被抹掉 ⇒
+  读不到该键 ⇒ 按 D64 默认回 `managed` ⇒ 闸判「托管 + 未登录」⇒ 拒。
+- **症状②** 登录后 Claude 报 `Failed to authenticate ... Attention Required! | Cloudflare`：
+  上一轮测试留下的 `local` 被写回、覆盖掉登录时写的 `managed` ⇒ Agent Host 起进程时读到 `local` ⇒
+  **不注入公司 url+key** ⇒ Claude Code 退回用户本机 `~/.claude` 配置 ⇒ 请求打到 api.anthropic.com ⇒ 境内被 Cloudflare 拦。
+  用户自己先判对了这一条（原话「好像是因为用了我本地的环境，而并非注入」）。
+
+**修法**（用户在两个可选口径中选定「消除双缓存 + 主进程私有键写入保护」）：
+
+1. `ipc/settings.ts` 的模块级快照从「文件缓存」改名改义为**渲染进程待落盘负载**（`pendingRendererSettings`），
+   读一律经 `SharedSessionState`（那边本来就有 memo 且写时失效，第二层缓存只会制造分歧）。
+2. 渲染进程整份写回时，`credentialMode` / `onboarding` 两个主进程私有键**在落盘那一刻**从当前文件重取；
+   **缺失也照搬缺失** —— 缺失本身有含义（没记录过 = 首次运行 = 必须登录），所以渲染进程既不能改写、也不能凭空造出这个键。
+3. `mergeSettingsPatch` 不走该保护 —— 它正是**设置**这些键的那条路，套上去会把自己要打的补丁盖回去。
+
+**验证**：新增 `src/main/ipc/__tests__/settingsMainOwnedKeys.test.ts` 4 条。
+**反向咬红两发**：把双缓存改回旧写法 ⇒ 红 3；把私有键覆盖改成直通 ⇒ 红 2 —— 两半各自被独立钉住，不是一条断言兼职。
+
+## Next（按依赖序）
+
+### T-M1 — Codex 模型菜单为空 + `opus[1m]` 串到 Codex 会话上（**2026-08-28 用户截图批，已定性未修**）
+
+两条都在同一张截图里，但不是同一件事。
+
+**① `opus[1m] · unverified` 显示在 Codex 会话上。** 这个 id 来自 Host 上报的默认模型，
+也就是用户本机 `~/.claude/settings.json` 里的 `model` 字段。跨 agent 守卫
+（`shared/models/familyWhitelist.ts` 的 `resolveModelAgentOwner`）只拦**能证明属于另一方**的 id ——
+判据是 `claude-` / `gpt-` / `codex-` 前缀加三个 legacy 短名（`opus`/`sonnet`/`haiku`）。
+`opus[1m]` 一条都不匹配 ⇒ 判为「无主」⇒ 允许挂到 Codex 上。
+守卫的三值设计本身是对的（§4.4-6 要求被过滤掉的历史选择仍能在选它的会话里用），
+要改的是**判据够不够认得公司网关的命名**，不是把它改成成员资格测试。
+
+**② `No models offered for this agent — Automatic will be used`。**
+这句文案的含义是「网关答了，按 Codex 家族过滤后一个都不剩」（不是「取不到目录」，那是另一句 seed 文案）。
+⇒ 网关 `/v1/models` 返回的列表里没有 `gpt-` / `codex-` 形状的 id。
+
+**开工前必须先拿到的东西**：那台机器上网关 `/v1/models` 的**原始返回**。
+没有它无法判定是网关侧没配 Codex 模型，还是我们的家族过滤器不认它的命名 —— 两种修法完全相反。
+
 ### T-E1a — 失败面两张票（**已由 [D68](../../../plans/openchamber-chat-refactor-ledger.md) 重定范围到登录线，低优先级，不再是 A2 前置**）
 
 **D68 拍掉的是这两张票在「第二个按钮」那条路上的部分** —— 那条路上炸了就炸了，用户自己选的。
@@ -253,6 +319,11 @@ D65 的三件事，本轮做完两件半；第三件半按用户裁定留给 A2�
 
 ## Deferred
 
+- **`agent-host` 的 `process.env` 复制抹不掉删除动作**（2026-08-28 顺手发现，未修，非本次症状成因）——
+  `agent-host/index.ts` 把 `loadClaudeSettingsEnv()` 的结果**逐键复制**到 `process.env`，
+  而 `claudeSettings.ts` 对托管凭据做的是 `delete env.ANTHROPIC_API_KEY`：**删除复制不过去**。
+  CLI 子进程本次不受影响（SDK 实测 `xt ? {...xt} : {...process.env}`，给了 `options.env` 就不合并 `process.env`），
+  但 Host 自身环境里用户的 key 仍在，属潜在串号面。
 - **远端** —— 用户 2026-08-27 明确本轮不考虑。
 - **品牌口径统一** —— 现在是五个名字，记在
   [unified-credentials open-q #4](../unified-credentials/open-questions.md)，与本 plan 无依赖。
