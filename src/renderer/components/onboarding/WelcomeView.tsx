@@ -54,7 +54,7 @@ import { AiClientMark } from './AiClientMark';
  * editing a button label.
  */
 
-const PRODUCT_NAME = 'AICLIENT';
+const PRODUCT_NAME = 'PILAB';
 
 export interface WelcomeViewProps {
   entry: AuthGateWelcomeEntry;
@@ -96,7 +96,7 @@ export function WelcomeView({ entry, onSignIn, onContinue, onUseOwnSetup }: Welc
       <div className="flex flex-col items-center gap-2">
         <h1 className="font-semibold text-2xl tracking-[0.2em] text-foreground">{PRODUCT_NAME}</h1>
         <p className="text-muted-foreground text-sm">
-          {t('Git worktrees, with agents that work in them.')}
+          {t('Just a really good one to code with ai.')}
         </p>
       </div>
 

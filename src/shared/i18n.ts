@@ -91,7 +91,6 @@ export const zhTranslations: Record<string, string> = {
   'Continue as {{email}}': '以 {{email}} 继续',
   'Log in with work email': '用工作邮箱登录',
   'Use my own setup': '使用本机已有配置',
-  'Git worktrees, with agents that work in them.': 'Git 工作树，以及在其中干活的 agent。',
   'Runs on the managed gateway. Nothing is written to your machine.':
     '走我们托管的网关，不往你的机器上写任何东西。',
   'Runs on the Claude Code and Codex configuration already on this machine.':
