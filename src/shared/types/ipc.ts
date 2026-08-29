@@ -387,6 +387,14 @@ export const IPC_CHANNELS = {
   CHAT_UPDATE_PERMISSION: 'chat:updatePermission',
   CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
   CHAT_RESPOND_QUESTION: 'chat:respondQuestion',
+  /**
+   * T11 — answer one `extensionUi.request`. Its own channel rather than a
+   * variant of `chat:respondPermission`: the addressee is a bridge instance plus
+   * a dialog id, NOT a session, and the two must not share a route or Main would
+   * be tempted to look up a session that may already be gone by the time the
+   * user answers.
+   */
+  CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi',
   CHAT_LIST_SESSIONS: 'chat:listSessions',
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',

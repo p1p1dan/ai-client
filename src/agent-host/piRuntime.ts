@@ -6,7 +6,12 @@
 import { parsePiModelRef } from '../shared/piModelConfig.ts';
 import type { SessionAttachment } from '../shared/types/agentHost.ts';
 import { PI_AGENT } from '../shared/types/agentWire.ts';
+import type { ExtensionUiResponse } from '../shared/types/runtimeEvents.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
+import {
+  createPortableExtensionUiBridge,
+  type PortableExtensionUiBridge,
+} from './extensionUiBridge.ts';
 import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
 
 // ─── pi SDK type projections (lazy-imported, ESM-only) ───
@@ -56,9 +61,27 @@ type PiRuntimeFactory = (ctx: {
   sessionStartEvent?: unknown;
 }) => Promise<Record<string, unknown> & { services: PiServices; diagnostics: unknown[] }>;
 
+/**
+ * T11 — the SDK's Extension UI injection point (`ExtensionBindings`).
+ *
+ * `mode: 'rpc'` means "not a TUI", NOT "run the SDK in a subprocess". We hold
+ * the session object in-process (`createAgentSessionRuntime` below); the word is
+ * the SDK's for "the UI lives somewhere that answers over a wire", which for us
+ * is the renderer at the far end of the MessagePort.
+ *
+ * Optional because it is projected off a lazily-imported ESM module: an SDK
+ * build without it must degrade to "no extension UI", never crash the Host.
+ */
+interface PiExtensionBindings {
+  uiContext?: unknown;
+  mode?: 'rpc' | 'tui';
+  onError?: (error: unknown) => void;
+}
+
 interface PiSession {
   prompt: (text: string, opts?: Record<string, unknown>) => Promise<void>;
   subscribe: (callback: (event: PiAgentEvent) => void) => () => void;
+  bindExtensions?: (bindings: PiExtensionBindings) => Promise<void>;
   abort: () => Promise<void>;
   abortCompaction?: () => void;
   abortBranchSummary?: () => void;
@@ -121,10 +144,61 @@ export class PiAgentRuntime {
   private readonly opts: PiAgentRuntimeOptions;
   private abortController: AbortController | null = null;
   private turn: TurnState = newTurnState();
+  private readonly extensionUi: PortableExtensionUiBridge;
+  /**
+   * Who an extension UI request is attributed to.
+   *
+   * The SDK does not tell the bridge which session an extension spoke for — the
+   * `ExtensionUIContext` is bound once per runtime and called by ordinary
+   * function calls with no session argument. Since this Host holds ONE handle
+   * (and therefore one session object) at a time, "the session whose turn is
+   * running" is the honest answer rather than a guess. It is `undefined` during
+   * extension INIT, which is correct: nothing was running yet, so the request
+   * belongs to no session and the renderer shows it as app-level.
+   */
+  private currentSessionId: string | undefined;
 
   constructor(opts: PiAgentRuntimeOptions) {
     this.opts = opts;
     this.log = opts.log ?? ((...args) => console.error('[pi-runtime]', ...args));
+    // Built in the constructor, not in `ensureHandle`: `respondExtensionUi` must
+    // be answerable the moment the Host is up, and extensions emit UI calls
+    // during bind — i.e. before any handle exists to hang the bridge off.
+    this.extensionUi = createPortableExtensionUiBridge({
+      onRequest: (request) => {
+        this.opts.emit({
+          type: 'extensionUi.request',
+          ...(this.currentSessionId ? { sessionId: this.currentSessionId } : {}),
+          payload: {
+            runtimeId: request.runtimeId,
+            uiRequestId: request.uiRequestId,
+            method: request.method,
+            args: request.args,
+            ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}),
+          },
+        });
+      },
+      onCancel: (cancel) => {
+        this.opts.emit({
+          type: 'extensionUi.cancelled',
+          ...(this.currentSessionId ? { sessionId: this.currentSessionId } : {}),
+          payload: {
+            runtimeId: cancel.runtimeId,
+            uiRequestIds: cancel.uiRequestIds,
+            reason: cancel.reason,
+          },
+        });
+      },
+    });
+  }
+
+  /**
+   * Route one renderer answer to its parked dialog. `false` = it settled
+   * nothing: wrong bridge instance, already answered, or already timed out.
+   * All three are ordinary races, so the caller reports rather than throws.
+   */
+  respondExtensionUi(response: ExtensionUiResponse): boolean {
+    return this.extensionUi.respond(response);
   }
 
   private async ensureSdk(): Promise<PiSdkModule> {
@@ -164,8 +238,50 @@ export class PiAgentRuntime {
       sessionManager,
     });
 
+    // The session object is replaced on reload / fork / switch, and the
+    // extensions bound to the OLD one are gone with it. Draining here — before
+    // the swap, which is what this SDK hook is for — is what stops an extension
+    // from awaiting a dialog whose owner no longer exists.
+    handle.setBeforeSessionInvalidate?.(() => {
+      this.extensionUi.reload();
+    });
+
+    await this.bindExtensionUi(handle);
+
     this.handle = handle;
     return handle;
+  }
+
+  /**
+   * Hand the portable UI context to the SDK.
+   *
+   * Non-fatal by design: a session with no extension UI still answers prompts,
+   * whereas a Host that refuses to start because one extension failed to bind
+   * leaves the user with nothing. The failure is surfaced as a `host.error` the
+   * renderer can show, not swallowed.
+   */
+  private async bindExtensionUi(handle: PiRuntimeHandle): Promise<void> {
+    if (typeof handle.session.bindExtensions !== 'function') {
+      this.log('pi SDK has no bindExtensions(); extension UI is unavailable');
+      return;
+    }
+    try {
+      await handle.session.bindExtensions({
+        uiContext: this.extensionUi.uiContext,
+        mode: 'rpc',
+        onError: (error) => {
+          const detail = error instanceof Error ? error.message : String(error);
+          this.log(`extension error: ${detail}`);
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`bindExtensions failed: ${message}`);
+      this.opts.emit({
+        type: 'host.error',
+        payload: { code: 'extension_bind_failed', message, fatal: false },
+      });
+    }
   }
 
   private bindEvents(sessionId: string, session: PiSession, requestId?: string): void {
@@ -578,6 +694,9 @@ export class PiAgentRuntime {
     session.status = 'running';
     this.opts.registry.setStatus(session.sessionId, 'running');
     this.abortController = new AbortController();
+    // Set BEFORE the handle is built: extensions emit UI calls during bind, and
+    // this is the session that caused the bind to happen.
+    this.currentSessionId = session.sessionId;
 
     this.opts.emit({
       type: 'session.status',
@@ -649,12 +768,21 @@ export class PiAgentRuntime {
   closeSession(sessionId: string, _requestId?: string): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    // The dialogs parked for this session can never be answered now — its UI is
+    // gone. Draining them lets any extension still awaiting one finish with its
+    // fallback instead of hanging until the Host exits.
+    if (this.currentSessionId === sessionId) {
+      this.extensionUi.reload();
+      this.currentSessionId = undefined;
+    }
     this.opts.registry.delete(sessionId);
   }
 
   async dispose(): Promise<void> {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.extensionUi.dispose();
+    this.currentSessionId = undefined;
     this.handle = null;
     this.sdk = null;
   }

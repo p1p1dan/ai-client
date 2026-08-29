@@ -39,6 +39,7 @@ export type RuntimeEventType =
   | 'question.resolved'
   | 'usage.updated'
   | 'extensionUi.request'
+  | 'extensionUi.cancelled'
   | 'subagent.activity'
   | 'session.completed'
   | 'session.failed'
@@ -1249,6 +1250,48 @@ export interface ExtensionUiRequestedEvent extends RuntimeEventBase {
 }
 
 /**
+ * Why the bridge settled a dialog nobody answered.
+ *
+ * `timed_out` / `aborted` are the EXTENSION's own deadline and abort signal —
+ * both are handed to the bridge when the dialog opens, so the bridge is the only
+ * layer that can act on them. The other two are teardown.
+ */
+export type ExtensionUiCancelReason =
+  | 'timed_out'
+  | 'aborted'
+  | 'session_replaced'
+  | 'host_shutdown';
+
+/**
+ * These dialogs are dead — close them.
+ *
+ * ## Why the protocol needs this at all
+ *
+ * The BRIDGE owns the dialog timer (see `timeoutMs` above), so it can settle a
+ * blocked extension without the renderer being involved. Every such settle
+ * leaves a modal on screen that no longer maps to anything: answering it is
+ * harmless (the Host matches no pending entry and drops it) but the user is
+ * looking at a dialog that can never do anything, with no way to tell.
+ *
+ * The same applies to teardown. `reload()` drains on a session swap and
+ * `dispose()` on shutdown, and neither has a renderer round trip.
+ *
+ * So: whenever the bridge settles a dialog WITHOUT a user answer, it says so
+ * here. This is the only mechanism by which a modal closes for a reason other
+ * than the user closing it, which is why `reason` is carried — "it timed out"
+ * and "your session was replaced" are different things to tell someone.
+ */
+export interface ExtensionUiCancelledEvent extends RuntimeEventBase {
+  type: 'extensionUi.cancelled';
+  payload: {
+    runtimeId: string;
+    /** Never empty — the bridge does not announce a cancellation of nothing. */
+    uiRequestIds: string[];
+    reason: ExtensionUiCancelReason;
+  };
+}
+
+/**
  * The answer to one `extensionUi.request`, travelling back as the payload of the
  * `extensionUi.respond` command.
  *
@@ -1310,5 +1353,6 @@ export type RuntimeEvent =
   | QuestionResolvedEvent
   | UsageUpdatedEvent
   | ExtensionUiRequestedEvent
+  | ExtensionUiCancelledEvent
   | SubagentActivityEvent
   | SessionTerminalEvent;

@@ -9,6 +9,7 @@
  */
 
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
+import { readExtensionUiResponse } from '../shared/types/runtimeEvents.ts';
 import { PiAgentRuntime } from './piRuntime.ts';
 import { SessionRegistry } from './sessionRegistry.ts';
 
@@ -183,6 +184,26 @@ async function handleCommand(cmd: HostCommand): Promise<void> {
           return;
         }
         piRuntime.closeSession(sessionId, cmd.requestId);
+        break;
+      }
+
+      case 'extensionUi.respond': {
+        const response = readExtensionUiResponse(cmd.payload);
+        if (!response) {
+          emitError(
+            cmd.requestId,
+            'invalid_payload',
+            'extensionUi.respond requires runtimeId, uiRequestId and a boolean ok'
+          );
+          return;
+        }
+        // A response that settled nothing is NOT an error: the dialog may have
+        // timed out, been drained by a session swap, or been answered twice by a
+        // renderer that re-mounted. Logged for diagnosis, never surfaced as a
+        // failure the user has to act on.
+        if (!piRuntime.respondExtensionUi(response)) {
+          log('extensionUi.respond matched no pending dialog:', response.uiRequestId);
+        }
         break;
       }
 

@@ -7,6 +7,7 @@ import {
   type AgentHostCommand,
   type AgentHostDriver,
   DEFAULT_AGENT_HOST_DRIVER,
+  type ExtensionUiRespondCommand,
   type PermissionRespondCommand,
   type QuestionRespondCommand,
   type SessionCloseCommand,
@@ -377,6 +378,28 @@ export class AgentHostManager {
       protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
       requestId,
       type: 'permission.respond',
+      payload,
+    });
+    return requestId;
+  }
+
+  /**
+   * T11 — forward one renderer answer to the Host's Extension UI bridge.
+   *
+   * Fire-and-forget like the other respond commands: the Host settles the parked
+   * dialog and the extension continues. An answer that matched nothing (timed
+   * out, drained by a session swap, sent twice by a re-mounted renderer) is
+   * logged Host-side and is NOT an error here — the caller has no repair to make
+   * and blocking the UI on a race would be worse than dropping it.
+   */
+  async respondExtensionUi(
+    payload: ExtensionUiRespondCommand['payload'],
+    requestId = nextRequestId('extui')
+  ): Promise<string> {
+    await this.sendReady({
+      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
+      requestId,
+      type: 'extensionUi.respond',
       payload,
     });
     return requestId;

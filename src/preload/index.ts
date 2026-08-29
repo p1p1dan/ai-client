@@ -88,6 +88,7 @@ import type { AgentModelCatalog, ListAgentModelsRequest } from '@shared/types/ag
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
 import type { AgentWireName } from '@shared/types/agentWire';
 import type {
+  ExtensionUiResponse,
   HostReadyEvent,
   PermissionDecisionId,
   PermissionUpdateEffective,
@@ -1499,6 +1500,16 @@ const electronAPI = {
       cancel?: boolean;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_QUESTION, payload),
+    /**
+     * T11 — answer one `extensionUi.request`.
+     *
+     * `ok: false` means the user dismissed it, and the payload must then carry
+     * NO value: the Host substitutes the fallback it recorded when the dialog
+     * opened, which is the only place that knows a dismissed `confirm` is a
+     * refusal rather than an absent answer.
+     */
+    respondExtensionUi: (payload: ExtensionUiResponse): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI, payload),
     onRuntimeEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {
       const handler = (_: unknown, event: RuntimeEvent) => callback(event);
       ipcRenderer.on(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);

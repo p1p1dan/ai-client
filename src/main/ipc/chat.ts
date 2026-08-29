@@ -14,6 +14,7 @@ import {
   resolveAgentWireName,
 } from '@shared/types/agentWire';
 import type {
+  ExtensionUiResponse,
   PermissionDecisionId,
   PermissionUpdateEffective,
   RuntimeEvent,
@@ -493,6 +494,23 @@ export function registerChatHandlers(): void {
       }
     ): Promise<{ requestId: string }> => {
       const requestId = await agentHostManager.respondPermission(payload);
+      return { requestId };
+    }
+  );
+
+  /**
+   * T11 — the renderer's answer to one extension UI dialog.
+   *
+   * Main is a passthrough here, deliberately: it cannot validate the answer
+   * because it does not know what the extension asked or what it will do with
+   * the reply. The Host's bridge owns every check that matters (right bridge
+   * instance, dialog still pending, fallback on a dismissal), and duplicating
+   * half of them here would create a second place for them to drift.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI,
+    async (_e, payload: ExtensionUiResponse): Promise<{ requestId: string }> => {
+      const requestId = await agentHostManager.respondExtensionUi(payload);
       return { requestId };
     }
   );
