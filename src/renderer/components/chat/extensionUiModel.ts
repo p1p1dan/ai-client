@@ -36,9 +36,25 @@ export interface ExtensionUiState {
    * dropping the second request would hang whichever extension asked it.
    */
   pending: ExtensionUiPendingDialog[];
+  /**
+   * Answers that have left the renderer but whose IPC call has not come back.
+   *
+   * In the store rather than in the component's `useState` for one reason: the
+   * dialog must stay on screen until the Host has actually been told. It used to
+   * be removed the moment a button was pressed, so a failed IPC left the modal
+   * gone and the extension parked forever — nothing on screen, and a turn that
+   * never finishes.
+   */
+  sending: string[];
+  /** `uiRequestId` → why the last send failed. Shown on the dialog, which is still up. */
+  sendErrors: Record<string, string>;
 }
 
-export const initialExtensionUi: ExtensionUiState = { pending: [] };
+export const initialExtensionUi: ExtensionUiState = {
+  pending: [],
+  sending: [],
+  sendErrors: {},
+};
 
 /**
  * Fold one runtime event.
@@ -62,6 +78,7 @@ export function reduceExtensionUi(state: ExtensionUiState, event: RuntimeEvent):
       // other, and the second answer would be refused Host-side anyway.
       if (state.pending.some((p) => p.uiRequestId === uiRequestId)) return state;
       return {
+        ...state,
         pending: [
           ...state.pending,
           {
@@ -79,9 +96,29 @@ export function reduceExtensionUi(state: ExtensionUiState, event: RuntimeEvent):
       // The bridge settled these without us — timed out, session swapped, Host
       // shut down. Close them, or the user is looking at a modal that can no
       // longer do anything.
+      //
+      // Matched on runtimeId AND uiRequestId, never on the id alone: ids are
+      // minted per bridge, and every session now has its own bridge. A
+      // cancellation from session A that closed a live dialog of session B
+      // would take away B's only way to answer — and B's extension would then
+      // wait for an answer that can no longer be given.
       const dead = new Set(event.payload.uiRequestIds);
-      const next = state.pending.filter((p) => !dead.has(p.uiRequestId));
-      return next.length === state.pending.length ? state : { pending: next };
+      const runtimeId = event.payload.runtimeId;
+      const next = state.pending.filter(
+        (p) => !(p.runtimeId === runtimeId && dead.has(p.uiRequestId))
+      );
+      if (next.length === state.pending.length) return state;
+      const closed = new Set(
+        state.pending
+          .filter((p) => p.runtimeId === runtimeId && dead.has(p.uiRequestId))
+          .map((p) => p.uiRequestId)
+      );
+      return {
+        ...state,
+        pending: next,
+        sending: state.sending.filter((id) => !closed.has(id)),
+        sendErrors: withoutKeys(state.sendErrors, closed),
+      };
     }
 
     default:
@@ -89,13 +126,73 @@ export function reduceExtensionUi(state: ExtensionUiState, event: RuntimeEvent):
   }
 }
 
-/** Drop one dialog after its answer has been sent. */
+function withoutKeys(
+  record: Record<string, string>,
+  keys: ReadonlySet<string>
+): Record<string, string> {
+  const entries = Object.entries(record).filter(([key]) => !keys.has(key));
+  return entries.length === Object.keys(record).length ? record : Object.fromEntries(entries);
+}
+
+/** Drop one dialog after its answer has been ACKNOWLEDGED by the Host. */
 export function removeExtensionUiDialog(
   state: ExtensionUiState,
   uiRequestId: string
 ): ExtensionUiState {
   const next = state.pending.filter((p) => p.uiRequestId !== uiRequestId);
-  return next.length === state.pending.length ? state : { pending: next };
+  const one = new Set([uiRequestId]);
+  if (
+    next.length === state.pending.length &&
+    !state.sending.includes(uiRequestId) &&
+    !(uiRequestId in state.sendErrors)
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    pending: next,
+    sending: state.sending.filter((id) => id !== uiRequestId),
+    sendErrors: withoutKeys(state.sendErrors, one),
+  };
+}
+
+/**
+ * Mark an answer as in flight.
+ *
+ * This is BOTH the double-click guard and the "do not close yet" flag, which is
+ * why they are one piece of state: separating them is how the modal came to be
+ * removed on click while the send was still unresolved.
+ */
+export function markExtensionUiSending(
+  state: ExtensionUiState,
+  uiRequestId: string
+): ExtensionUiState {
+  if (state.sending.includes(uiRequestId)) return state;
+  return {
+    ...state,
+    sending: [...state.sending, uiRequestId],
+    sendErrors: withoutKeys(state.sendErrors, new Set([uiRequestId])),
+  };
+}
+
+/**
+ * The send failed: keep the dialog, release the guard, and say why.
+ *
+ * Retry rather than auto-cancel, deliberately. The Host never heard the answer,
+ * so its dialog is still parked and still answerable; sending a cancellation on
+ * the user's behalf would turn a transport hiccup into a denied tool call they
+ * never denied.
+ */
+export function failExtensionUiSend(
+  state: ExtensionUiState,
+  uiRequestId: string,
+  message: string
+): ExtensionUiState {
+  return {
+    ...state,
+    sending: state.sending.filter((id) => id !== uiRequestId),
+    sendErrors: { ...state.sendErrors, [uiRequestId]: message },
+  };
 }
 
 /** A dialog title split into a heading and the preformatted body under it. */
@@ -139,7 +236,9 @@ export function splitExtensionUiDialogText(title: string): ExtensionUiDialogText
  * first is still on screen — with no way to tell which extension asked what.
  */
 export function currentExtensionUiDialog(
-  state: ExtensionUiState
+  // Only the queue: a caller holding a `pending` array should not have to
+  // fabricate the send-tracking fields to ask which dialog is on top.
+  state: Pick<ExtensionUiState, 'pending'>
 ): ExtensionUiPendingDialog | undefined {
   return state.pending[0];
 }

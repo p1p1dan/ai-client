@@ -26,11 +26,12 @@ import {
 } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { agentHostManager } from '../services/agent-host/AgentHostManager';
 import { ensureWorkspaceTrusted, getEffectiveClaudeJsonPath } from '../services/auth/claudeHome';
 import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
+import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
 import { isRemoteVirtualPath } from '../services/remote/RemotePath';
 
@@ -175,9 +176,38 @@ async function resolveSessionAgentForDispatch(sessionId: string): Promise<AgentW
   return resolveAgentWireName(entry.agent);
 }
 
+/**
+ * Which window drove which session — see `extensionUiRouting.ts` for why a
+ * blocking dialog must not be broadcast.
+ */
+const extensionUiRouter = new ExtensionUiRouter({
+  isWindowAlive: (webContentsId) =>
+    BrowserWindow.getAllWindows().some(
+      (win) => !win.isDestroyed() && win.webContents.id === webContentsId
+    ),
+});
+
+/** The window that sent this IPC call, when it still exists. */
+function claimSessionForSender(
+  event: IpcMainInvokeEvent | undefined,
+  sessionId: string | undefined
+): void {
+  // A call with no identifiable sender claims nothing rather than throwing:
+  // routing is an optimisation over broadcast, and no handler may fail a
+  // session create because it could not work out which window asked.
+  const webContentsId = event?.sender?.id;
+  if (!sessionId || typeof webContentsId !== 'number') return;
+  extensionUiRouter.claimSession(sessionId, webContentsId);
+}
+
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
+  // `undefined` = every window, which is the rule for everything except a
+  // blocking Extension UI dialog. Narrowing the whole stream would break a
+  // second window that legitimately mirrors the same session.
+  const targets = extensionUiRouter.targetsFor(event);
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue;
+    if (targets && !targets.includes(win.webContents.id)) continue;
     try {
       win.webContents.send(IPC_CHANNELS.CHAT_RUNTIME_EVENT, event);
     } catch {
@@ -210,7 +240,7 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_CREATE_SESSION,
     async (
-      _e,
+      e,
       payload: {
         sessionId: string;
         workspacePath: string;
@@ -251,6 +281,8 @@ export function registerChatHandlers(): void {
         candidate: payload.permissionPreference,
       });
       await ensureWorkspaceTrustedForChat(payload.workspacePath);
+      // The window that created the chat owns it, for Extension UI routing.
+      claimSessionForSender(e, payload.sessionId);
       // One resolved value into BOTH the snapshot and the wire: the row and the
       // running session cannot disagree about what was asked for.
       const resolved = { ...payload, permissionPreference };
@@ -301,7 +333,7 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_RESUME_SESSION,
     async (
-      _e,
+      e,
       payload: {
         sessionId: string;
         runtimeIdentity: string;
@@ -313,6 +345,8 @@ export function registerChatHandlers(): void {
         agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
+      // The resuming window owns the session's approval prompts from here.
+      claimSessionForSender(e, payload.sessionId);
       // D47 S5 §3 — same gate as CHAT_CREATE_SESSION. Resuming a session that
       // already ran is still a fresh Agent Host spawn from Main's point of
       // view (a new `session.resume` command, possibly a new Host process) —
@@ -343,7 +377,7 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_SEND,
     async (
-      _e,
+      e,
       payload: {
         sessionId: string;
         text: string;
@@ -359,6 +393,9 @@ export function registerChatHandlers(): void {
         model?: string;
       }
     ): Promise<{ requestId: string }> => {
+      // Ownership follows the most recent driver: a session picked up in a
+      // second window must show ITS approval prompts there, not in the first.
+      claimSessionForSender(e, payload.sessionId);
       // B18 — a send carries no binding of its own, so the row decides. This is
       // the load-bearing arm: a per-turn model override is the ONE payload that can carry
       // a model the session was never created with.
@@ -382,6 +419,7 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_CLOSE_SESSION,
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
+      extensionUiRouter.releaseSession(payload.sessionId);
       const requestId = await agentHostManager.closeSession(payload);
       return { requestId };
     }
@@ -510,6 +548,11 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI,
     async (_e, payload: ExtensionUiResponse): Promise<{ requestId: string }> => {
+      // The dialog is settled either way this call goes: on success the Host
+      // resolved it, on failure the renderer keeps its own copy up and will
+      // retry with the same id. Forgetting the routing entry now is what stops
+      // the map growing by one per prompt for the life of the process.
+      extensionUiRouter.forgetRequest(payload.uiRequestId);
       const requestId = await agentHostManager.respondExtensionUi(payload);
       return { requestId };
     }

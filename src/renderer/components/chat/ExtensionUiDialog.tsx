@@ -45,33 +45,50 @@ export function ExtensionUiDialog() {
   // Keyed remount: `input` and `editor` hold draft text, and without a fresh
   // mount per request the next dialog would open pre-filled with the previous
   // one's answer.
-  return dialog ? <ExtensionUiDialogBody key={dialog.uiRequestId} pending={dialog} /> : null;
+  return dialog ? (
+    <ExtensionUiDialogBody
+      key={dialog.uiRequestId}
+      pending={dialog}
+      position={1}
+      total={pending.length}
+    />
+  ) : null;
 }
 
-function ExtensionUiDialogBody({ pending }: { pending: ExtensionUiPendingDialog }) {
+function ExtensionUiDialogBody({
+  pending,
+  position,
+  total,
+}: {
+  pending: ExtensionUiPendingDialog;
+  position: number;
+  total: number;
+}) {
   const { t } = useI18n();
   const answer = useExtensionUiStore((state) => state.answer);
   const dismiss = useExtensionUiStore((state) => state.dismiss);
   const { dialog, uiRequestId } = pending;
+  // Both live in the store: the dialog now stays up until the Host has actually
+  // been told, so "in flight" and "the send failed" are shared state, not a
+  // component's private flag that a remount would reset mid-call.
+  const sending = useExtensionUiStore((state) => state.sending.includes(uiRequestId));
+  const sendError = useExtensionUiStore((state) => state.sendErrors[uiRequestId]);
   // The permission prompt's whole body arrives inside the title slot — see
   // `splitExtensionUiDialogText`.
   const { heading, body } = splitExtensionUiDialogText(dialog.title);
+  // Never empty: an AlertDialog whose title renders nothing has no accessible
+  // name, and a screen reader announces a modal with no idea what it asks.
+  const title = heading.trim() || t('Extension request');
 
   const [text, setText] = useState(dialog.method === 'editor' ? (dialog.prefill ?? '') : '');
-  // Guards the window between the click and the store update: without it a
-  // double-click sends two answers, and the second is a wasted IPC round trip
-  // the Host refuses anyway.
-  const [sending, setSending] = useState(false);
 
   const submit = (value: unknown) => {
     if (sending) return;
-    setSending(true);
     void answer(uiRequestId, value);
   };
 
   const cancel = () => {
     if (sending) return;
-    setSending(true);
     void dismiss(uiRequestId);
   };
 
@@ -79,13 +96,25 @@ function ExtensionUiDialogBody({ pending }: { pending: ExtensionUiPendingDialog 
     <AlertDialog open onOpenChange={(next) => !next && cancel()}>
       <AlertDialogPopup className="sm:max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>{heading}</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           {dialog.method === 'confirm' && dialog.message ? (
             <AlertDialogDescription className="whitespace-pre-wrap">
               {dialog.message}
             </AlertDialogDescription>
           ) : null}
         </AlertDialogHeader>
+
+        {/*
+         * Only when there IS a queue. One dialog at a time is the rule (see
+         * `currentExtensionUiDialog`), so without this the user has no way to
+         * know that answering opens another one rather than returning to the
+         * chat.
+         */}
+        {total > 1 ? (
+          <p className="px-6 pb-1 text-meta text-muted-foreground">
+            {t('Request')} {position}/{total}
+          </p>
+        ) : null}
 
         {/*
          * Monospace and pre-wrapped: this body is laid out by the extension for
@@ -113,20 +142,33 @@ function ExtensionUiDialogBody({ pending }: { pending: ExtensionUiPendingDialog 
         ) : null}
 
         {dialog.method === 'select' ? (
-          <div className="grid gap-1 px-6 pb-2">
+          // `role="group"` with a name, because these options are MUTUALLY
+          // EXCLUSIVE and a bare stack of buttons says nothing about that: a
+          // screen reader would read four unrelated commands rather than one
+          // question with four answers. Not a radiogroup — picking an option
+          // here submits immediately, it does not set a value the user then
+          // confirms, and announcing them as radios would promise a state that
+          // does not exist.
+          <div role="group" aria-label={title} className="grid gap-1 px-6 pb-2">
             {dialog.options.map((option, index) => (
-              <button
+              <Button
                 // Options are plain strings and MAY repeat (two tools with the
                 // same name in a permission prompt), so the index is the only
                 // stable key here.
                 key={`${index}-${option}`}
                 type="button"
+                variant="outline"
+                size="sm"
+                // The project's own control rather than a hand-rolled button:
+                // focus ring, disabled treatment and hover states then match
+                // every other button in the app instead of approximating them.
+                className="h-auto w-full justify-start whitespace-normal px-3 py-2 text-left"
                 disabled={sending}
-                className="rounded-md border border-border/50 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/50 disabled:opacity-50"
+                autoFocus={index === 0}
                 onClick={() => submit(option)}
               >
                 {option}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}
@@ -159,6 +201,18 @@ function ExtensionUiDialogBody({ pending }: { pending: ExtensionUiPendingDialog 
               onChange={(e) => setText(e.target.value)}
             />
           </div>
+        ) : null}
+
+        {/*
+         * The send failed and the dialog is STILL UP on purpose: the Host never
+         * heard the answer, so its own dialog is still parked and pressing again
+         * is a real retry. `role="alert"` because this appears after the user
+         * acted and is the only sign the action did not land.
+         */}
+        {sendError ? (
+          <p role="alert" className="px-6 pb-2 text-meta text-destructive">
+            {t('Could not send your answer. Please try again.')} {sendError}
+          </p>
         ) : null}
 
         <AlertDialogFooter className="gap-2 sm:gap-2">

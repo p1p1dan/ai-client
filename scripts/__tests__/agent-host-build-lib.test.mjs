@@ -5,10 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { serializeDefaultPermissionPolicy } from '../../src/agent-host/permissionPolicy.mjs';
 import {
   CODEX_BINARY_FLOOR,
   CODEX_MEASURED_PLATFORMS,
   ESBUILD_EXTERNAL,
+  ensureDevPermissionPolicy,
   foreignCodexPlatformRels,
   preflightHostDeps,
   pruneResidualPlatformPackages,
@@ -16,6 +18,8 @@ import {
   resolveCodexPlatformPkgRel,
   shouldCopy,
   verifyArtifact,
+  verifyBundledPermissionPolicy,
+  writeBundledPermissionPolicy,
 } from '../agent-host-build-lib.mjs';
 import { codexBinaryName, codexTargetTriple } from '../codex-platform.mjs';
 
@@ -141,6 +145,33 @@ function buildArtifact(outDir, { layout = 'hoisted', platform = 'linux', arch = 
   fs.mkdirSync(path.join(nm, '@cometix', 'claude-code', 'vendor'), { recursive: true });
   writeFile(path.join(nm, '@anthropic-ai', 'claude-agent-sdk', 'sdk.mjs'), '// sdk\n');
   fs.mkdirSync(path.join(nm, 'node-pty', 'build', 'Release'), { recursive: true });
+
+  // T08-a — the permission gate's runtime files and every bundled licence.
+  // Part of the BASE artifact, not an opt-in: a build that ships without them
+  // is a build whose tool calls run unattended, which is what verifyArtifact
+  // now refuses.
+  writeJson(path.join(nm, '@gotgenes', 'pi-permission-system', 'package.json'), {
+    name: '@gotgenes/pi-permission-system',
+    pi: { extensions: ['./src/index.ts'] },
+  });
+  writeFile(path.join(nm, '@gotgenes', 'pi-permission-system', 'src', 'index.ts'), '// entry\n');
+  writeFile(path.join(nm, 'tree-sitter-bash', 'tree-sitter-bash.wasm'), 'wasm');
+  // T08-c: the shipped default policy is part of a healthy artifact — the real
+  // build writes it after the prune, so the fixture carries it too.
+  writeFile(
+    path.join(nm, '@gotgenes', 'pi-permission-system', 'config.json'),
+    serializeDefaultPermissionPolicy()
+  );
+  for (const [name, licenseFile] of [
+    ['@gotgenes/pi-permission-system', 'LICENSE'],
+    ['tree-sitter-bash', 'LICENSE'],
+    ['web-tree-sitter', 'LICENSE'],
+    ['zod', 'LICENSE'],
+    ['node-addon-api', 'LICENSE.md'],
+    ['node-gyp-build', 'LICENSE'],
+  ]) {
+    writeFile(path.join(nm, ...name.split('/'), licenseFile), 'MIT\n');
+  }
 
   const key = `${platform}-${arch}`;
   const pkgRel =
@@ -876,6 +907,218 @@ describe('verifyArtifact budget terms (spec §6.3)', () => {
 
     const result = verifyArtifact({ outDir: dir, platform: 'darwin', arch: 'arm64', pins: PINS });
     expect(result.codexPayloadBytes).toBeNull();
+  });
+});
+
+/**
+ * T08-a — the permission gate has to be IN the artifact, with the notices its
+ * licences require.
+ *
+ * Each of these is a shape a real build has produced or could produce, and each
+ * one fails silently at runtime: a plugin directory with no entry loads nothing,
+ * a missing WASM grammar makes the bash surface unevaluable, and a stripped
+ * licence is an obligation quietly broken. None of them shows up as an error
+ * anywhere else.
+ */
+describe('verifyArtifact — permission gate and licences', () => {
+  const outDir = () => path.join(tmp, 'out-gate');
+  const verifyLinux = (dir) =>
+    verifyArtifact({ outDir: dir, platform: 'linux', arch: 'x64', pins: PINS });
+
+  it('passes on an artifact that ships the whole gate', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    expect(() => verifyLinux(dir)).not.toThrow();
+  });
+
+  /** The half-copied package: present, and unable to load. */
+  it('refuses a permission plugin with no entry point', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(path.join(dir, 'node_modules', '@gotgenes', 'pi-permission-system', 'src'), {
+      recursive: true,
+      force: true,
+    });
+    expect(() => verifyLinux(dir)).toThrow(/pi-permission-system\/src\/index\.ts/);
+  });
+
+  it('refuses an artifact with no permission plugin at all', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(path.join(dir, 'node_modules', '@gotgenes'), { recursive: true, force: true });
+    expect(() => verifyLinux(dir)).toThrow(/pi-permission-system/);
+  });
+
+  it('refuses an artifact with no bash grammar for the plugin to parse with', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(path.join(dir, 'node_modules', 'tree-sitter-bash', 'tree-sitter-bash.wasm'));
+    expect(() => verifyLinux(dir)).toThrow(/tree-sitter-bash\.wasm/);
+  });
+
+  /** The two the audit named: transitive, shipped, and stripped by the blanket rule. */
+  it('refuses a shipped package whose licence was stripped', () => {
+    for (const [name, licenseFile] of [
+      ['node-addon-api', 'LICENSE.md'],
+      ['node-gyp-build', 'LICENSE'],
+      ['zod', 'LICENSE'],
+    ]) {
+      const dir = outDir();
+      buildArtifact(dir, lx);
+      fs.rmSync(path.join(dir, 'node_modules', ...name.split('/'), licenseFile));
+      expect(() => verifyLinux(dir)).toThrow(new RegExp(`${name}.*without a licence`));
+    }
+  });
+
+  /** Absent is fine — the obligation only exists for what actually ships. */
+  it('says nothing about a licence-bearing package that is not in the artifact', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(path.join(dir, 'node_modules', 'node-addon-api'), { recursive: true, force: true });
+    expect(() => verifyLinux(dir)).not.toThrow();
+  });
+
+  it('accepts any spelling of the licence file name', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    const zod = path.join(dir, 'node_modules', 'zod');
+    fs.rmSync(path.join(zod, 'LICENSE'));
+    fs.writeFileSync(path.join(zod, 'licence.txt'), 'MIT\n');
+    expect(() => verifyLinux(dir)).not.toThrow();
+  });
+});
+
+/**
+ * T08-c — the shipped default permission policy, in the artifact.
+ *
+ * Every case below is a way for the file to be present and useless. A policy
+ * that has quietly become permissive parses fine, loads fine, and produces a
+ * session that looks entirely normal — which is the whole problem.
+ */
+describe('shipped permission policy in the artifact', () => {
+  const outDir = () => path.join(tmp, 'out-policy');
+  const policyPath = (dir) =>
+    path.join(dir, 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json');
+  const verifyLinux = (dir) =>
+    verifyArtifact({ outDir: dir, platform: 'linux', arch: 'x64', pins: PINS });
+
+  it('writes the policy the module defines, into the artifact only', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(policyPath(dir));
+
+    const written = writeBundledPermissionPolicy(dir);
+    expect(written).toBe(policyPath(dir));
+    expect(fs.readFileSync(written, 'utf8')).toBe(serializeDefaultPermissionPolicy());
+  });
+
+  /**
+   * T08-c slice 2 — dev must enforce the same policy the packaged app does.
+   *
+   * `permissionPlugin.ts` resolves the plugin relative to the running Host
+   * entry, which in dev is `src/agent-host/`. Before this helper existed that
+   * directory had no `config.json`, so a dev build fell back to the plugin's own
+   * bare defaults — SAFE (it asks about everything), and therefore silent: the
+   * symptom is extra prompts, while the missing half (`.env` refused outright)
+   * just never happens.
+   */
+  describe('ensureDevPermissionPolicy', () => {
+    const devRoot = () => path.join(tmp, 'checkout');
+    const devPolicyPath = () => policyPath(path.join(devRoot(), 'src', 'agent-host'));
+
+    it('writes the same bytes into the checkout that the artifact gets', () => {
+      buildArtifact(path.join(devRoot(), 'src', 'agent-host'), lx);
+      fs.rmSync(devPolicyPath());
+
+      const result = ensureDevPermissionPolicy(devRoot());
+      expect(result).toEqual({ written: true, path: devPolicyPath() });
+      expect(fs.readFileSync(devPolicyPath(), 'utf8')).toBe(serializeDefaultPermissionPolicy());
+    });
+
+    /** A checkout with no deps is a `pnpm install` away; it must not block dev. */
+    it('reports rather than throws when the plugin is not installed', () => {
+      fs.mkdirSync(devRoot(), { recursive: true });
+      const result = ensureDevPermissionPolicy(devRoot());
+      expect(result.written).toBe(false);
+      expect(result.reason).toMatch(/pnpm install/);
+    });
+
+    /** The parity is dev's own step — building still leaves the checkout alone. */
+    it('is not reached by a build, which writes only the directory it is given', () => {
+      buildArtifact(path.join(devRoot(), 'src', 'agent-host'), lx);
+      fs.rmSync(devPolicyPath());
+      const artifact = outDir();
+      buildArtifact(artifact, lx);
+
+      writeBundledPermissionPolicy(artifact);
+      expect(fs.existsSync(devPolicyPath())).toBe(false);
+    });
+  });
+
+  /** A build that lost the plugin must say so, not scatter a config into thin air. */
+  it('refuses to write when the plugin did not survive the copy', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(path.join(dir, 'node_modules', '@gotgenes'), { recursive: true, force: true });
+    expect(() => writeBundledPermissionPolicy(dir)).toThrow(/did not survive the copy/);
+  });
+
+  it('passes verification on a healthy artifact', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    expect(verifyBundledPermissionPolicy(dir)).toEqual([]);
+    expect(() => verifyLinux(dir)).not.toThrow();
+  });
+
+  it('fails verification when the policy is missing or unparseable', () => {
+    const dir = outDir();
+    buildArtifact(dir, lx);
+    fs.rmSync(policyPath(dir));
+    expect(() => verifyLinux(dir)).toThrow(/missing .*pi-permission-system\/config\.json/);
+
+    fs.writeFileSync(policyPath(dir), '{ not json');
+    expect(() => verifyLinux(dir)).toThrow(/not valid JSON/);
+  });
+
+  /**
+   * The four floors. Each of these is a one-word edit that turns the shipped
+   * policy into no policy at all, and none of them is visible at runtime.
+   */
+  it('fails verification on a policy that has gone permissive', () => {
+    const cases = [
+      [
+        (policy) => {
+          policy.permission['*'] = 'allow';
+        },
+        /permission\["\*"\] must be "ask"/,
+      ],
+      [
+        (policy) => {
+          policy.permission.bash['*'] = 'allow';
+        },
+        /bash\["\*"\] must be "ask"/,
+      ],
+      [
+        (policy) => {
+          policy.permission.external_directory['*'] = 'allow';
+        },
+        /external_directory\["\*"\] must be "ask"/,
+      ],
+      [
+        (policy) => {
+          policy.yoloMode = true;
+        },
+        /yoloMode must be false/,
+      ],
+    ];
+    for (const [mutate, expected] of cases) {
+      const dir = outDir();
+      buildArtifact(dir, lx);
+      const policy = JSON.parse(fs.readFileSync(policyPath(dir), 'utf8'));
+      mutate(policy);
+      fs.writeFileSync(policyPath(dir), JSON.stringify(policy, null, 2));
+      expect(() => verifyLinux(dir)).toThrow(expected);
+    }
   });
 });
 

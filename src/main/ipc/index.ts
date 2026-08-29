@@ -37,6 +37,7 @@ import { registerLogHandlers } from './log';
 import { registerNotificationHandlers } from './notification';
 import { registerOnboardingHandlers } from './onboarding';
 import { registerPiModelHandlers } from './piModels';
+import { registerPiPermissionHandlers } from './piPermissions';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
 import {
@@ -89,6 +90,7 @@ export function registerIpcHandlers(): void {
   registerTodoHandlers();
   registerOnboardingHandlers();
   registerPiModelHandlers();
+  registerPiPermissionHandlers();
   registerUsageHandlers();
 }
 

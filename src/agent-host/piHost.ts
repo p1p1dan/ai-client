@@ -10,6 +10,13 @@
 
 import { AGENT_HOST_PROTOCOL_VERSION } from '../shared/types/agentHost.ts';
 import { readExtensionUiResponse } from '../shared/types/runtimeEvents.ts';
+import {
+  hasSendableContent,
+  PERMISSION_PREFERENCE_UNSUPPORTED,
+  readAttachments,
+  readEffort,
+  rejectsPermissionPreference,
+} from './piHostCommands.ts';
 import { PiAgentRuntime } from './piRuntime.ts';
 import { SessionRegistry } from './sessionRegistry.ts';
 
@@ -96,6 +103,12 @@ async function handleCommand(cmd: HostCommand): Promise<void> {
             nodeVersion: process.version,
             capabilities: {
               agents: ['pi'],
+              // Declared FALSE rather than omitted. Omission reads as "old Host
+              // build, unknown"; this Host knows the answer — pi's posture lives
+              // in the permission plugin's own rules, so no `permissionPreference`
+              // sent here would ever be applied, and the renderer must not offer
+              // a control that silently does nothing.
+              permissionPolicy: false,
             },
           },
         });
@@ -114,10 +127,20 @@ async function handleCommand(cmd: HostCommand): Promise<void> {
           );
           return;
         }
+        if (rejectsPermissionPreference(p)) {
+          emitError(cmd.requestId, 'unsupported_capability', PERMISSION_PREFERENCE_UNSUPPORTED);
+          return;
+        }
+        const effort = readEffort(p?.effort);
+        if (!effort.ok) {
+          emitError(cmd.requestId, 'invalid_payload', `session.create got an unknown effort level`);
+          return;
+        }
         piRuntime.createSession({
           sessionId,
           workspacePath,
           model: typeof p?.model === 'string' ? p.model : undefined,
+          effort: effort.effort,
           requestId: cmd.requestId,
         });
         break;
@@ -136,11 +159,21 @@ async function handleCommand(cmd: HostCommand): Promise<void> {
           );
           return;
         }
+        if (rejectsPermissionPreference(p)) {
+          emitError(cmd.requestId, 'unsupported_capability', PERMISSION_PREFERENCE_UNSUPPORTED);
+          return;
+        }
+        const effort = readEffort(p?.effort);
+        if (!effort.ok) {
+          emitError(cmd.requestId, 'invalid_payload', `session.resume got an unknown effort level`);
+          return;
+        }
         piRuntime.resumeSession({
           sessionId,
           workspacePath,
           runtimeIdentity,
           model: typeof p?.model === 'string' ? p.model : undefined,
+          effort: effort.effort,
           requestId: cmd.requestId,
         });
         break;
@@ -150,15 +183,31 @@ async function handleCommand(cmd: HostCommand): Promise<void> {
         const p = cmd.payload;
         const sessionId = String(p?.sessionId ?? '');
         const text = String(p?.text ?? '');
-        if (!sessionId || !text) {
-          emitError(cmd.requestId, 'invalid_payload', 'session.send requires sessionId and text');
+        const attachments = readAttachments(p?.attachments);
+        if (!attachments.ok) {
+          emitError(cmd.requestId, 'invalid_payload', `session.send: ${attachments.reason}`);
+          return;
+        }
+        if (!sessionId || !hasSendableContent(text, attachments.attachments)) {
+          emitError(
+            cmd.requestId,
+            'invalid_payload',
+            'session.send requires sessionId and either text or attachments'
+          );
+          return;
+        }
+        const effort = readEffort(p?.effort);
+        if (!effort.ok) {
+          emitError(cmd.requestId, 'invalid_payload', 'session.send got an unknown effort level');
           return;
         }
         void piRuntime
           .send({
             sessionId,
             text,
+            ...(attachments.attachments ? { attachments: attachments.attachments } : {}),
             model: typeof p?.model === 'string' ? p.model : undefined,
+            effort: effort.effort,
             requestId: cmd.requestId,
           })
           .catch((err) => {

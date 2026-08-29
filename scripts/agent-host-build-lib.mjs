@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { serializeDefaultPermissionPolicy } from '../src/agent-host/permissionPolicy.mjs';
 import {
   CODEX_PLATFORM_DIRS,
   codexBinaryName,
@@ -280,15 +281,140 @@ export function preflightHostDeps({
 
 /**
  * T08-a — packages bundled for the permission system, whose LICENSE files must
- * travel with the binary. All four are MIT/Apache-style licences that require
- * the copyright notice to be distributed with the software.
+ * travel with the binary. All MIT/Apache-style licences that require the
+ * copyright notice to be distributed with the software.
+ *
+ * The list is derived from what actually SHIPS, not from what the permission
+ * plugin declares: `node-addon-api` and `node-gyp-build` arrive transitively
+ * (via `tree-sitter-bash` and `node-pty`), were present in every artifact, and
+ * had their licences dropped by the blanket rule below — the exact obligation
+ * this set exists to meet. `verifyArtifact` now checks the whole set against the
+ * built tree, so a package that ships without its notice fails the build rather
+ * than waiting for someone to notice.
  */
 export const LICENSE_BEARING_PACKAGES = new Set([
   '@gotgenes/pi-permission-system',
   'tree-sitter-bash',
   'web-tree-sitter',
   'zod',
+  'node-addon-api',
+  'node-gyp-build',
 ]);
+
+/** Where the bundled plugin reads a distributor default from. */
+export const BUNDLED_PERMISSION_POLICY_REL =
+  'node_modules/@gotgenes/pi-permission-system/config.json';
+
+/**
+ * T08-c — write the shipped permission policy into the bundled plugin.
+ *
+ * The plugin reads `<extensionRoot>/config.json` as its LOWEST-precedence
+ * scope, so this is a default the user's own agentDir config overrides rather
+ * than a setting we impose.
+ *
+ * Takes the directory to write into rather than deciding it, because there are
+ * two and they are written by different things: the BUILD writes the artifact,
+ * and `pnpm dev` writes the checkout through {@link ensureDevPermissionPolicy}.
+ * Running a build still does not touch the checkout — the parity is dev's own
+ * explicit step, not a side effect of building.
+ */
+export function writeBundledPermissionPolicy(outDir) {
+  const target = path.join(outDir, ...BUNDLED_PERMISSION_POLICY_REL.split('/'));
+  if (!fs.existsSync(path.dirname(target))) {
+    throw new Error(
+      `cannot write the permission policy: ${path.dirname(target)} is missing — the plugin did not survive the copy`
+    );
+  }
+  fs.writeFileSync(target, serializeDefaultPermissionPolicy());
+  return target;
+}
+
+/** In dev the Host runs from here, and resolves its plugin from this directory. */
+export const DEV_AGENT_HOST_DIR_REL = 'src/agent-host';
+
+/**
+ * Give `pnpm dev` the same shipped policy the packaged app has.
+ *
+ * Without this the two do not enforce the same rules. `permissionPlugin.ts`
+ * resolves the plugin relative to the running Host entry, which in dev is
+ * `src/agent-host/` — a directory the build never writes — so a developer (or
+ * anyone doing acceptance on a dev build) got the plugin's own bare fallback
+ * instead of our policy. That fallback is SAFE (it asks about everything), which
+ * is exactly why the gap could sit there unnoticed: the symptom is extra
+ * prompts, and the missing half is silent. `cat .env` would prompt rather than
+ * being refused outright, and a test of the shipped deny list would pass for
+ * the wrong reason.
+ *
+ * Returns rather than throws when the plugin is not installed: a checkout with
+ * no `node_modules` is a `pnpm install` away, and blocking `pnpm dev` on it
+ * would be the wrong trade. The Host refuses to start a session with no gate
+ * anyway, so the fail-closed behaviour does not depend on this.
+ */
+export function ensureDevPermissionPolicy(repoRoot) {
+  const outDir = path.join(repoRoot, ...DEV_AGENT_HOST_DIR_REL.split('/'));
+  const pluginDir = path.dirname(path.join(outDir, ...BUNDLED_PERMISSION_POLICY_REL.split('/')));
+  if (!fs.existsSync(pluginDir)) {
+    return { written: false, reason: `${pluginDir} is missing — run pnpm install` };
+  }
+  return { written: true, path: writeBundledPermissionPolicy(outDir) };
+}
+
+/**
+ * The three properties of the shipped policy that, if lost, would leave a
+ * plausible-looking config with no gate in it.
+ *
+ * Checked against the ARTIFACT rather than the source module: a build that
+ * writes the file and then prunes or truncates it fails here, and an edit that
+ * loosens the policy without meaning to fails here too. Deliberately narrow —
+ * this is a floor, not a copy of the policy.
+ */
+export function verifyBundledPermissionPolicy(outDir) {
+  const target = path.join(outDir, ...BUNDLED_PERMISSION_POLICY_REL.split('/'));
+  if (!fs.existsSync(target)) return [`missing ${BUNDLED_PERMISSION_POLICY_REL}`];
+  let parsed;
+  try {
+    parsed = readJson(target);
+  } catch (error) {
+    return [`${BUNDLED_PERMISSION_POLICY_REL} is not valid JSON: ${error.message}`];
+  }
+  const failures = [];
+  const permission = parsed.permission ?? {};
+  // A permissive universal fallback would silently cover every surface the
+  // policy does not name, including extension tools nobody has seen yet.
+  if (permission['*'] !== 'ask') failures.push('shipped policy: permission["*"] must be "ask"');
+  // The plugin's own docs: a config whose top-level `*` is permissive with no
+  // bash rule lets every command inherit it. Ours must state bash outright.
+  if (permission.bash?.['*'] !== 'ask') {
+    failures.push('shipped policy: permission.bash["*"] must be "ask"');
+  }
+  // Leaving the working directory is the worktree boundary (D-Q9 decision 3).
+  if (permission.external_directory?.['*'] !== 'ask') {
+    failures.push('shipped policy: permission.external_directory["*"] must be "ask"');
+  }
+  // Yolo re-permits even the wrapper floors; it must never ship on.
+  if (parsed.yoloMode !== false) failures.push('shipped policy: yoloMode must be false');
+  return failures;
+}
+
+/** Names a licence file: `LICENSE`, `LICENCE.md`, `license.txt`, … */
+export function isLicenseFileName(base) {
+  return /^licen[cs]e(\.|$)/i.test(base);
+}
+
+/**
+ * The licence file inside `packageDir`, or `null`.
+ *
+ * Top level only, and by name: a licence quoted inside a README is not a
+ * distributed notice, and descending would turn a dependency's own vendored
+ * licences into a false pass for the package itself.
+ */
+export function findLicenseFile(packageDir) {
+  if (!fs.existsSync(packageDir)) return null;
+  for (const entry of fs.readdirSync(packageDir, { withFileTypes: true })) {
+    if (entry.isFile() && isLicenseFileName(entry.name)) return entry.name;
+  }
+  return null;
+}
 
 export function shouldCopy(rel, { platform, arch, hasPtyPrebuild }) {
   if (rel === '') return true;
@@ -369,15 +495,15 @@ export function shouldCopy(rel, { platform, arch, hasPtyPrebuild }) {
     if (parts.length === 1) return true;
     if (parts.length !== 2) return false;
     // LICENSE included: this branch returns before the licence rule below.
-    return base === 'package.json' || base.endsWith('.wasm') || /^licen[cs]e(\.|$)/i.test(base);
+    return base === 'package.json' || base.endsWith('.wasm') || isLicenseFileName(base);
   }
 
   // T08-a: MIT obliges us to ship the copyright notice with the binary, so the
   // packages bundled for the permission system keep theirs. (The blanket drop
   // below predates this and covers the rest of the tree — a wider audit is its
   // own task, not something to smuggle in here.)
-  if (LICENSE_BEARING_PACKAGES.has(top) && /^licen[cs]e(\.|$)/i.test(base)) return true;
-  if (/^licen[cs]e(\.|$)/i.test(base)) return false;
+  if (LICENSE_BEARING_PACKAGES.has(top) && isLicenseFileName(base)) return true;
+  if (isLicenseFileName(base)) return false;
   if (
     base.endsWith('.ts') ||
     base.endsWith('.d.mts') ||
@@ -469,6 +595,37 @@ export function verifyArtifact({
     'node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs',
   ]) {
     mustExist(rel);
+  }
+
+  // T08-a — the permission gate's runtime files.
+  //
+  // Asserted individually rather than as "the directory exists": the packaging
+  // filter treats this package specially (it keeps `.ts`, which the generic rule
+  // drops), so a tree that is present but missing its ENTRY is a real outcome —
+  // and the Host would then start with no gate, which looks exactly like a
+  // session where nothing needed approval.
+  for (const rel of [
+    'node_modules/@gotgenes/pi-permission-system/package.json',
+    'node_modules/@gotgenes/pi-permission-system/src/index.ts',
+    // The plugin parses bash through the WASM grammar only; without it the bash
+    // surface cannot be evaluated at all.
+    'node_modules/tree-sitter-bash/tree-sitter-bash.wasm',
+  ]) {
+    mustExist(rel, 'permission gate');
+  }
+
+  failures.push(...verifyBundledPermissionPolicy(outDir));
+
+  // MIT/Apache obliges us to distribute the copyright notice with the binary.
+  // Driven off what is IN the artifact, not off a hand-kept list of what we
+  // think ships: `node-addon-api` and `node-gyp-build` arrive transitively and
+  // shipped for months with their notices stripped by the blanket licence drop.
+  for (const name of LICENSE_BEARING_PACKAGES) {
+    const packageDir = abs(`node_modules/${name}`);
+    if (!fs.existsSync(packageDir)) continue;
+    if (!findLicenseFile(packageDir)) {
+      failures.push(`node_modules/${name} ships without a licence file`);
+    }
   }
 
   const ptyBinaries = [

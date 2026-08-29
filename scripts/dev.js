@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensureDevPermissionPolicy } from './agent-host-build-lib.mjs';
 import { CREDENTIAL_ENV_KEYS, CREDENTIAL_ENV_PREFIX } from './credential-env-keys.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -278,6 +279,17 @@ function buildChildEnv(allowLocal) {
   }
   return env;
 }
+
+// T08-c — give the dev Host the same shipped permission policy the packaged app
+// has. The Host resolves its plugin relative to its own entry, which in dev is
+// `src/agent-host/`; without this the two builds enforce different rules and the
+// difference is silent (dev just asks about more things).
+const devPolicy = ensureDevPermissionPolicy(root);
+console.log(
+  devPolicy.written
+    ? `[dev] permission policy: ${devPolicy.path}`
+    : `[dev] permission policy NOT written: ${devPolicy.reason}`
+);
 
 // Start electron-vite in a new process group so we can kill the entire tree
 // On Linux, --no-sandbox is needed when unprivileged user namespaces are disabled.

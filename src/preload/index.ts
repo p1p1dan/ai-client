@@ -8,6 +8,11 @@ import type {
   SyncPiModelsRequest,
 } from '@shared/piModelConfig';
 import type {
+  PermissionPolicyRequest,
+  PermissionPolicySnapshot,
+  UpdatePermissionPolicyRequest,
+} from '@shared/piPermissionPolicy';
+import type {
   AgentCliInfo,
   AgentMetadata,
   AppCloseRequestPayload,
@@ -1540,6 +1545,22 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_SYNC, payload),
     openAdmin: (endpointUrl?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_OPEN_ADMIN, endpointUrl),
+  },
+
+  /**
+   * T08-c — the pi permission policy. `update`/`reset` REJECT on the local
+   * route (the policy is the user's own `~/.pi`, which this app does not write),
+   * so callers must surface the error rather than assume a save happened.
+   */
+  piPermissions: {
+    get: (payload?: PermissionPolicyRequest): Promise<PermissionPolicySnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_PERMISSIONS_GET, payload),
+    update: (payload: UpdatePermissionPolicyRequest): Promise<PermissionPolicySnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_PERMISSIONS_UPDATE, payload),
+    reset: (payload?: PermissionPolicyRequest): Promise<PermissionPolicySnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_PERMISSIONS_RESET, payload),
+    reveal: (path: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_PERMISSIONS_REVEAL, path),
   },
 
   // Agent Host diagnostics

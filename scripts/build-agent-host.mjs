@@ -39,6 +39,7 @@ import {
   pruneResidualPlatformPackages,
   shouldCopy,
   verifyArtifact,
+  writeBundledPermissionPolicy,
 } from './agent-host-build-lib.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -218,6 +219,9 @@ async function main() {
   );
   copyNodeModules();
   pruneResidualPlatformPackages({ outDir, platform, arch });
+  // After the prune, so a residual sweep can never delete the policy we just
+  // wrote; before verify, which asserts it is there and still says "ask".
+  guard('policy', () => writeBundledPermissionPolicy(outDir));
   tsdFixBundleOnWindows();
   const {
     codexBytes,

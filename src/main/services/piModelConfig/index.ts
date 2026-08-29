@@ -5,6 +5,7 @@ import {
   PI_MANAGED_AGENT_DIR_NAME,
   PI_MODEL_MANAGEMENT_URL_ENV,
   PI_MODEL_MANAGEMENT_URL_SETTING_KEY,
+  PI_PROJECT_TRUST_ENV,
   type PiModelSyncResult,
   type PiModelSyncState,
 } from '@shared/piModelConfig';
@@ -115,7 +116,14 @@ export function clearManagedPiCredential(): void {
 }
 
 export function resolveManagedPiHostEnv(): Record<string, string> {
-  return resolveManagedCredentialsEnabled() ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {};
+  const managed = resolveManagedCredentialsEnabled();
+  return {
+    // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
+    // is how the Host recognises an old Main build, and it must not be able to
+    // confuse that with a deliberate `'0'`.
+    [PI_PROJECT_TRUST_ENV]: managed ? '0' : '1',
+    ...(managed ? { PI_CODING_AGENT_DIR: getManagedPiAgentDir() } : {}),
+  };
 }
 
 export function resolveManagedPiPtyEnv(): Record<string, string> {

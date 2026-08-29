@@ -19,6 +19,7 @@
     "postinstall": "electron-builder install-app-deps",
     "build:agent-host": "node scripts/build-agent-host.mjs",
     "verify:packaged": "node scripts/verify-packaged-app.mjs",
+    "smoke:permission-plugin": "node --experimental-strip-types src/agent-host/spikes/t08a-permission-plugin-smoke.ts out-agent-host",
     "prepare:test-config": "node scripts/make-test-claude-config.mjs",
     "fetch:node-runtime": "node scripts/fetch-node-runtime.mjs",
     "dist:prereq": "pnpm build && node scripts/assert-no-webfonts.mjs && pnpm build:agent-host && pnpm fetch:node-runtime",

@@ -233,6 +233,12 @@ export const IPC_CHANNELS = {
   PI_MODELS_SYNC: 'piModels:sync',
   PI_MODELS_OPEN_ADMIN: 'piModels:openAdmin',
 
+  // T08-c — the pi permission policy: read every scope, write the one we own.
+  PI_PERMISSIONS_GET: 'piPermissions:get',
+  PI_PERMISSIONS_UPDATE: 'piPermissions:update',
+  PI_PERMISSIONS_RESET: 'piPermissions:reset',
+  PI_PERMISSIONS_REVEAL: 'piPermissions:reveal',
+
   // Notification
   NOTIFICATION_SHOW: 'notification:show',
   NOTIFICATION_CLICK: 'notification:click',

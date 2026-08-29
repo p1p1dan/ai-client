@@ -2,6 +2,18 @@
 
 **日期**：2026-08-28
 
+> **2026-08-29 后续**：本档描述的是首轮落地。外部审计随后在这批代码里发现 13 个
+> 问题（权限 fail-open、多会话共用一个 handle、Stop 不排空弹窗、两处 Runtime
+> Event 契约漂移等），已逐条修复——本档下面几处结论已被推翻，以
+> [phase2-audit-fixes.md](./phase2-audit-fixes.md) 为准：
+>
+> - 「插件缺失时上报不抛」→ 现在是 **fail-closed，不建 session**；
+> - `permissionPlugin.test.ts` 的去重断言已重写（git URL 当时匹配不上，是
+>   false negative）；
+> - 「体积增量 +6.4MB」不含本次补回的 `node-addon-api` / `node-gyp-build` 许可证；
+> - 「遗留：第三方 LICENSE 聚合是全仓既存缺口」仍然成立，但白名单从四个包扩到
+>   六个，且 `verifyArtifact` 现在会强制检查「产物里有这个包就必须有它的许可证」。
+
 ## 落地范围
 
 | 任务 | 证据 |

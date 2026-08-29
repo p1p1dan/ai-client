@@ -1,19 +1,46 @@
 /**
  * Pi Runtime Adapter — @earendil-works/pi-coding-agent SDK.
  * Emits AiClient Runtime Events; no Electron deps.
+ *
+ * ## One runtime per session, not one per process
+ *
+ * This product is a WORKTREE manager: two chats are routinely two different
+ * checkouts of the same repo. A single shared pi session handle would run
+ * `/repo-b`'s tools inside `/repo-a`, let the permission plugin judge paths
+ * against the wrong root, and cross the two chats' events, approvals and aborts.
+ * So everything that can belong to one session does: the pi runtime handle, the
+ * event subscription, the AbortController, the streaming projection state, and
+ * the Extension UI bridge all live in a per-session record ({@link PiSessionState})
+ * keyed by our own `sessionId`.
+ *
+ * ## Tools do not run without a permission gate
+ *
+ * `ensureState` REFUSES to build a runtime whose tool calls would be ungated —
+ * see {@link PermissionGateUnavailableError}. That is a deliberate trade: a
+ * session that will not start is visible and diagnosable, whereas a session that
+ * starts with no gate looks exactly like a session where nothing needed
+ * approval.
  */
 
-import { parsePiModelRef } from '../shared/piModelConfig.ts';
-import type { SessionAttachment } from '../shared/types/agentHost.ts';
+import { PI_PROJECT_TRUST_ENV, parsePiModelRef } from '../shared/piModelConfig.ts';
+import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import { PI_AGENT } from '../shared/types/agentWire.ts';
-import type { ExtensionUiResponse } from '../shared/types/runtimeEvents.ts';
+import type {
+  ExtensionUiCancelReason,
+  ExtensionUiResponse,
+  RuntimeEventDraft,
+} from '../shared/types/runtimeEvents.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
 import {
   createPortableExtensionUiBridge,
   type PortableExtensionUiBridge,
 } from './extensionUiBridge.ts';
 import { createPermissionActivityObserver } from './permissionActivity.ts';
-import { decidePermissionPlugin } from './permissionPlugin.ts';
+import {
+  decidePermissionPlugin,
+  type PermissionPluginDecision,
+  verifyPermissionExtensionLoaded,
+} from './permissionPlugin.ts';
 import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
 
 // ─── pi SDK type projections (lazy-imported, ESM-only) ───
@@ -57,8 +84,16 @@ interface PiModel {
   name?: string;
 }
 
+/** pi's `LoadExtensionsResult`, narrowed to what the permission check reads. */
+interface PiLoadedExtensions {
+  extensions?: Array<{ path?: unknown; resolvedPath?: unknown }>;
+  errors?: Array<{ path?: unknown; error?: unknown }>;
+}
+
 interface PiServices {
   modelRuntime: { getModel: (provider: string, id: string) => PiModel | undefined };
+  /** Optional: an SDK build without it degrades to "we cannot verify the load". */
+  resourceLoader?: { getExtensions?: () => PiLoadedExtensions };
   diagnostics?: unknown[];
   cwd: string;
   agentDir: string;
@@ -84,7 +119,8 @@ type PiRuntimeFactory = (ctx: {
  * is the renderer at the far end of the MessagePort.
  *
  * Optional because it is projected off a lazily-imported ESM module: an SDK
- * build without it must degrade to "no extension UI", never crash the Host.
+ * build without it is a build whose extensions cannot ask the user anything,
+ * which for a permission plugin means it cannot gate — see `bindExtensionUi`.
  */
 interface PiExtensionBindings {
   uiContext?: unknown;
@@ -92,8 +128,22 @@ interface PiExtensionBindings {
   onError?: (error: unknown) => void;
 }
 
+/** pi's `ImageContent` (`@earendil-works/pi-ai`) — the only attachment slot `prompt()` has. */
+interface PiImageContent {
+  type: 'image';
+  data: string;
+  mimeType: string;
+}
+
+interface PiPromptOptions {
+  images?: PiImageContent[];
+}
+
+/** pi's `ThinkingLevel`; our `SessionEffortLevel` is a subset of it. */
+type PiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 interface PiSession {
-  prompt: (text: string, opts?: Record<string, unknown>) => Promise<void>;
+  prompt: (text: string, opts?: PiPromptOptions) => Promise<void>;
   subscribe: (callback: (event: PiAgentEvent) => void) => () => void;
   bindExtensions?: (bindings: PiExtensionBindings) => Promise<void>;
   abort: () => Promise<void>;
@@ -105,6 +155,8 @@ interface PiSession {
   sessionFile?: string;
   model?: PiModel;
   setModel: (model: PiModel, options?: { persist?: boolean }) => Promise<void>;
+  /** Optional: absent on an SDK build that predates per-session thinking levels. */
+  setThinkingLevel?: (level: PiThinkingLevel, options?: { persist?: boolean }) => void;
   [key: string]: unknown;
 }
 
@@ -120,6 +172,26 @@ export interface PiAgentEvent {
   [key: string]: unknown;
 }
 
+// ─── errors ───
+
+/**
+ * No permission gate could be established for this session, so no session was
+ * created.
+ *
+ * Thrown rather than reported: every caller of `ensureState` is on the path to
+ * running tool calls, and there is no correct way to continue. `code` travels
+ * onto the `host.error` the user sees, so "the plugin is missing" and "the
+ * plugin loaded but could not be bound to a UI" stay distinguishable.
+ */
+export class PermissionGateUnavailableError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'PermissionGateUnavailableError';
+    this.code = code;
+  }
+}
+
 // ─── PiAgentRuntime class ───
 
 export interface PiAgentRuntimeOptions {
@@ -128,6 +200,15 @@ export interface PiAgentRuntimeOptions {
   registry: SessionRegistry;
   /** Test seam; production lazy-imports the ESM-only Pi SDK. */
   loadSdk?: () => Promise<unknown>;
+  /**
+   * Test seam over the gate decision.
+   *
+   * Production reads the bundle beside the Host entry, which a unit test cannot
+   * take away — and "there is no permission plugin" is exactly the state that
+   * most needs a test. Injecting the decision is the only way to write one
+   * without deleting files out of the developer's checkout.
+   */
+  decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
 }
 
 interface TurnState {
@@ -150,69 +231,87 @@ function newTurnState(): TurnState {
   };
 }
 
+/**
+ * Everything one AiClient session owns inside this Host.
+ *
+ * Created before the pi runtime exists (the bridge must be answerable while
+ * extensions bind, and `stop()` must be able to abort a send that is still
+ * building its handle), so `handle` is nullable for exactly that window.
+ */
+interface PiSessionState {
+  readonly sessionId: string;
+  /** The checkout this session's tools run in. A change means a NEW runtime. */
+  readonly workspacePath: string;
+  readonly extensionUi: PortableExtensionUiBridge;
+  handle: PiRuntimeHandle | null;
+  /** In-flight `createAgentSessionRuntime`, so two sends never build two runtimes. */
+  building: Promise<PiRuntimeHandle> | null;
+  unsubscribe: (() => void) | null;
+  abortController: AbortController | null;
+  turn: TurnState;
+}
+
 export class PiAgentRuntime {
   private sdk: PiSdkModule | null = null;
-  private handle: PiRuntimeHandle | null = null;
-  private unsubscribe: (() => void) | null = null;
+  private readonly states = new Map<string, PiSessionState>();
   private readonly log: LogFn;
   private readonly opts: PiAgentRuntimeOptions;
-  private abortController: AbortController | null = null;
-  private turn: TurnState = newTurnState();
-  private readonly extensionUi: PortableExtensionUiBridge;
-  /**
-   * Who an extension UI request is attributed to.
-   *
-   * The SDK does not tell the bridge which session an extension spoke for — the
-   * `ExtensionUIContext` is bound once per runtime and called by ordinary
-   * function calls with no session argument. Since this Host holds ONE handle
-   * (and therefore one session object) at a time, "the session whose turn is
-   * running" is the honest answer rather than a guess. It is `undefined` during
-   * extension INIT, which is correct: nothing was running yet, so the request
-   * belongs to no session and the renderer shows it as app-level.
-   */
-  private currentSessionId: string | undefined;
 
   constructor(opts: PiAgentRuntimeOptions) {
     this.opts = opts;
     this.log = opts.log ?? ((...args) => console.error('[pi-runtime]', ...args));
-    // Built in the constructor, not in `ensureHandle`: `respondExtensionUi` must
-    // be answerable the moment the Host is up, and extensions emit UI calls
-    // during bind — i.e. before any handle exists to hang the bridge off.
-    this.extensionUi = createPortableExtensionUiBridge({
-      onRequest: (request) => {
-        this.opts.emit({
-          type: 'extensionUi.request',
-          ...(this.currentSessionId ? { sessionId: this.currentSessionId } : {}),
-          payload: {
-            runtimeId: request.runtimeId,
-            uiRequestId: request.uiRequestId,
-            method: request.method,
-            args: request.args,
-            ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}),
-          },
-        });
-      },
-      onCancel: (cancel) => {
-        this.opts.emit({
-          type: 'extensionUi.cancelled',
-          ...(this.currentSessionId ? { sessionId: this.currentSessionId } : {}),
-          payload: {
-            runtimeId: cancel.runtimeId,
-            uiRequestIds: cancel.uiRequestIds,
-            reason: cancel.reason,
-          },
-        });
-      },
-    });
+  }
+
+  /**
+   * The one typed door to the wire.
+   *
+   * `EmitFn` takes an open record, which is how `isError` and `errorMessage`
+   * once reached the renderer under names no consumer reads. Everything this
+   * class emits goes through here instead, so a payload that is not a
+   * `RuntimeEvent` fails to compile.
+   */
+  private emit(event: RuntimeEventDraft): void {
+    this.opts.emit(event);
   }
 
   /**
    * Route one renderer answer to its parked dialog. `false` = it settled
    * nothing: wrong bridge instance, already answered, or already timed out.
    * All three are ordinary races, so the caller reports rather than throws.
+   *
+   * The `runtimeId` search is what makes this session-safe: every session has
+   * its own bridge, and an answer can only settle a dialog on the bridge that
+   * asked. An answer aimed at a session that has since been rebuilt matches
+   * nothing.
    */
   respondExtensionUi(response: ExtensionUiResponse): boolean {
-    return this.extensionUi.respond(response);
+    for (const state of this.states.values()) {
+      if (state.extensionUi.runtimeId === response.runtimeId) {
+        return state.extensionUi.respond(response);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * May a repository's own `.pi/` scope contribute to this session?
+   *
+   * T08-c (D-Q9 decision 4). The managed route answers `'0'`: we promise that
+   * build works and answer for what it permits, so a repo the user cloned must
+   * not be able to ship a `.pi/extensions/pi-permission-system/config.json`
+   * that turns the gate off. The local route answers `'1'`: that machine is
+   * theirs, and what their own checkouts configure is their call.
+   *
+   * Defaults to trusted when the key is ABSENT, which is only an old Main
+   * build — the same posture that shipped before this decision, so a version
+   * skew changes nothing rather than silently tightening. Any value other than
+   * the two words is read as `'0'`: a garbled env var must fail toward the
+   * safer side, not toward the historical one.
+   */
+  private projectTrusted(): boolean {
+    const raw = process.env[PI_PROJECT_TRUST_ENV];
+    if (raw === undefined) return true;
+    return raw.trim() === '1';
   }
 
   private async ensureSdk(): Promise<PiSdkModule> {
@@ -224,49 +323,124 @@ export class PiAgentRuntime {
     return this.sdk;
   }
 
-  private async ensureHandle(workspacePath: string): Promise<PiRuntimeHandle> {
-    if (this.handle) return this.handle;
+  /**
+   * The per-session record, created on demand.
+   *
+   * A session whose `workspacePath` changed gets a fresh record and a fresh
+   * runtime: the old one is bound to the old checkout, and reusing it is the
+   * cross-worktree bug this class is organized to prevent.
+   */
+  private getOrCreateState(session: HostSession): PiSessionState {
+    const existing = this.states.get(session.sessionId);
+    if (existing) {
+      if (existing.workspacePath === session.workspacePath) return existing;
+      this.log(
+        `session ${session.sessionId} moved from ${existing.workspacePath} to ${session.workspacePath}; rebuilding its runtime`
+      );
+      this.teardownState(existing, 'session_replaced');
+      this.states.delete(session.sessionId);
+    }
+    const sessionId = session.sessionId;
+    const state: PiSessionState = {
+      sessionId,
+      workspacePath: session.workspacePath,
+      // Built before the handle: extensions emit UI calls during bind, i.e.
+      // before any pi session object exists to hang a bridge off.
+      extensionUi: createPortableExtensionUiBridge({
+        onRequest: (request) => {
+          this.emit({
+            type: 'extensionUi.request',
+            sessionId,
+            payload: {
+              runtimeId: request.runtimeId,
+              uiRequestId: request.uiRequestId,
+              method: request.method,
+              args: request.args,
+              ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}),
+            },
+          });
+        },
+        onCancel: (cancel) => {
+          this.emit({
+            type: 'extensionUi.cancelled',
+            sessionId,
+            payload: {
+              runtimeId: cancel.runtimeId,
+              uiRequestIds: cancel.uiRequestIds,
+              reason: cancel.reason,
+            },
+          });
+        },
+      }),
+      handle: null,
+      building: null,
+      unsubscribe: null,
+      abortController: null,
+      turn: newTurnState(),
+    };
+    this.states.set(sessionId, state);
+    return state;
+  }
 
+  /**
+   * Build (or reuse) this session's pi runtime.
+   *
+   * Throws {@link PermissionGateUnavailableError} rather than returning a
+   * runtime whose tools would run unattended.
+   */
+  private async ensureHandle(state: PiSessionState): Promise<PiRuntimeHandle> {
+    if (state.handle) return state.handle;
+    if (state.building) return state.building;
+    const building = this.buildHandle(state);
+    state.building = building;
+    try {
+      const handle = await building;
+      state.handle = handle;
+      return handle;
+    } finally {
+      state.building = null;
+    }
+  }
+
+  private async buildHandle(state: PiSessionState): Promise<PiRuntimeHandle> {
     const sdk = await this.ensureSdk();
     const agentDir = sdk.getAgentDir();
     const sessionDir = `${agentDir}/sessions`;
-    const sessionManager = sdk.SessionManager.create(workspacePath, sessionDir);
+    const sessionManager = sdk.SessionManager.create(state.workspacePath, sessionDir);
+
+    // Assigned by the factory below, read after the runtime resolves. Belt and
+    // braces: the factory throws when the gate is unavailable, and this second
+    // read catches an SDK that swallowed the throw.
+    let gate: PermissionPluginDecision | undefined;
+    let gateVerification: { ok: boolean; detail?: string } | undefined;
 
     const createRuntime: PiRuntimeFactory = async ({ cwd, sessionManager: sm }) => {
-      const settingsManager = sdk.SettingsManager.create(cwd, agentDir, { projectTrusted: true });
+      const settingsManager = sdk.SettingsManager.create(cwd, agentDir, {
+        projectTrusted: this.projectTrusted(),
+      });
       // T08-a: load the bundled permission plugin unless the user's own pi
-      // config already loads it — two copies would prompt twice per tool call.
-      const permissionPlugin = decidePermissionPlugin([
+      // config is CONFIRMED to load it — two copies would prompt twice per tool
+      // call, and an unconfirmed skip would leave no gate at all.
+      const configured = [
         ...readConfiguredPackages(settingsManager.getGlobalSettings?.()),
         ...readConfiguredPackages(settingsManager.getProjectSettings?.()),
-      ]);
-      if (permissionPlugin.reason === 'missing') {
-        // Never silent: without the plugin every tool runs unattended, and that
-        // is indistinguishable from "nothing needed approval" unless we say so.
-        this.log('permission plugin not found in the bundle — tool approval is DISABLED');
-        this.opts.emit({
-          type: 'host.error',
-          payload: {
-            code: 'permission_plugin_missing',
-            message:
-              'The bundled permission system could not be found; tool calls will not be gated.',
-            fatal: false,
-          },
-        });
-      } else {
-        this.log(`permission plugin: ${permissionPlugin.reason}`);
+      ];
+      const decision = (this.opts.decidePermissionGate ?? decidePermissionPlugin)(configured);
+      gate = decision;
+      if (!decision.gated) {
+        throw new PermissionGateUnavailableError(
+          'permission_plugin_missing',
+          `Tool approval is unavailable: ${decision.detail ?? 'the permission system could not be loaded'}`
+        );
       }
+      this.log(`permission plugin: ${decision.reason}`);
       // T08-b: watch the plugin's broadcasts so the timeline records what was
       // gated — including the `policy_allow` decisions that never raise a
       // dialog, which are otherwise indistinguishable from no gate at all.
       const activityObserver = createPermissionActivityObserver({
         log: this.log,
         onActivity: (payload) => {
-          this.opts.emit({
-            type: 'permission.activity',
-            ...(this.currentSessionId ? { sessionId: this.currentSessionId } : {}),
-            payload,
-          });
+          this.emit({ type: 'permission.activity', sessionId: state.sessionId, payload });
         },
       });
 
@@ -275,14 +449,27 @@ export class PiAgentRuntime {
         agentDir,
         settingsManager,
         resourceLoaderOptions: {
-          ...(permissionPlugin.additionalExtensionPaths.length > 0
-            ? { additionalExtensionPaths: permissionPlugin.additionalExtensionPaths }
+          ...(decision.additionalExtensionPaths.length > 0
+            ? { additionalExtensionPaths: decision.additionalExtensionPaths }
             : {}),
           extensionFactories: [
             { name: 'aiclient-permission-activity', factory: activityObserver, hidden: true },
           ],
         },
       });
+      // The extension list is the only place a load FAILURE shows up: pi
+      // collects the error and keeps going, so a plugin that threw on import
+      // looks identical to one that is quietly allowing everything.
+      gateVerification = verifyPermissionExtensionLoaded(
+        services.resourceLoader?.getExtensions?.(),
+        decision.additionalExtensionPaths
+      );
+      if (!gateVerification.ok) {
+        throw new PermissionGateUnavailableError(
+          'permission_plugin_load_failed',
+          `Tool approval is unavailable: ${gateVerification.detail ?? 'the permission extension did not load'}`
+        );
+      }
       return {
         ...(await sdk.createAgentSessionFromServices({ services, sessionManager: sm })),
         services,
@@ -291,61 +478,76 @@ export class PiAgentRuntime {
     };
 
     const handle = await sdk.createAgentSessionRuntime(createRuntime, {
-      cwd: workspacePath,
+      cwd: state.workspacePath,
       agentDir,
       sessionManager,
     });
+
+    if (!gate?.gated) {
+      throw new PermissionGateUnavailableError(
+        'permission_plugin_missing',
+        `Tool approval is unavailable: ${gate?.detail ?? 'the permission system could not be loaded'}`
+      );
+    }
+    if (gateVerification && !gateVerification.ok) {
+      throw new PermissionGateUnavailableError(
+        'permission_plugin_load_failed',
+        `Tool approval is unavailable: ${gateVerification.detail ?? 'the permission extension did not load'}`
+      );
+    }
 
     // The session object is replaced on reload / fork / switch, and the
     // extensions bound to the OLD one are gone with it. Draining here — before
     // the swap, which is what this SDK hook is for — is what stops an extension
     // from awaiting a dialog whose owner no longer exists.
     handle.setBeforeSessionInvalidate?.(() => {
-      this.extensionUi.reload();
+      state.extensionUi.reload();
     });
 
-    await this.bindExtensionUi(handle);
-
-    this.handle = handle;
+    await this.bindExtensionUi(state, handle);
     return handle;
   }
 
   /**
    * Hand the portable UI context to the SDK.
    *
-   * Non-fatal by design: a session with no extension UI still answers prompts,
-   * whereas a Host that refuses to start because one extension failed to bind
-   * leaves the user with nothing. The failure is surfaced as a `host.error` the
-   * renderer can show, not swallowed.
+   * FAIL-CLOSED, and this is the change that makes the gate real: the permission
+   * plugin asks through `ui.select`, so a session with no extension UI is a
+   * session whose gate cannot ask anything. Starting it anyway would leave the
+   * plugin to fall back on its own, in a mode nobody here has measured, while
+   * the user sees a chat that looks completely normal.
    */
-  private async bindExtensionUi(handle: PiRuntimeHandle): Promise<void> {
+  private async bindExtensionUi(state: PiSessionState, handle: PiRuntimeHandle): Promise<void> {
     if (typeof handle.session.bindExtensions !== 'function') {
-      this.log('pi SDK has no bindExtensions(); extension UI is unavailable');
-      return;
+      throw new PermissionGateUnavailableError(
+        'extension_bind_unsupported',
+        'Tool approval is unavailable: this pi SDK build cannot bind an approval UI (no bindExtensions)'
+      );
     }
     try {
       await handle.session.bindExtensions({
-        uiContext: this.extensionUi.uiContext,
+        uiContext: state.extensionUi.uiContext,
         mode: 'rpc',
         onError: (error) => {
           const detail = error instanceof Error ? error.message : String(error);
-          this.log(`extension error: ${detail}`);
+          this.log(`extension error in session ${state.sessionId}: ${detail}`);
         },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.log(`bindExtensions failed: ${message}`);
-      this.opts.emit({
-        type: 'host.error',
-        payload: { code: 'extension_bind_failed', message, fatal: false },
-      });
+      throw new PermissionGateUnavailableError(
+        'extension_bind_failed',
+        `Tool approval is unavailable: binding the approval UI failed — ${message}`
+      );
     }
   }
 
-  private bindEvents(sessionId: string, session: PiSession, requestId?: string): void {
-    this.unsubscribe?.();
-    this.unsubscribe = session.subscribe((event: PiAgentEvent) => {
-      this.projectEvent(sessionId, event, requestId);
+  private bindEvents(state: PiSessionState, requestId?: string): void {
+    const session = state.handle?.session;
+    if (!session) return;
+    state.unsubscribe?.();
+    state.unsubscribe = session.subscribe((event: PiAgentEvent) => {
+      this.projectEvent(state, event, requestId);
     });
   }
 
@@ -371,68 +573,94 @@ export class PiAgentRuntime {
     session.model = selected;
   }
 
-  private ensureAssistant(sessionId: string, requestId?: string): string {
-    if (!this.turn.assistantMessageId) {
-      this.turn.assistantMessageId = `asst-${sessionId}-${Date.now()}`;
-      this.turn.textBlockId = `${this.turn.assistantMessageId}-text`;
-      this.turn.thinkingBlockId = `${this.turn.assistantMessageId}-thinking`;
-      this.turn.textSnapshot = '';
-      this.turn.thinkingSnapshot = '';
-      this.turn.thinkingStarted = false;
+  /**
+   * Apply this turn's reasoning effort.
+   *
+   * Our five effort words are a subset of pi's `ThinkingLevel`, so the mapping
+   * is the identity — but the CALL is not optional: `effort` was accepted on the
+   * wire and never applied, which is a request the user made and the Host
+   * silently ignored. An SDK build with no `setThinkingLevel` says so instead.
+   */
+  private applyEffort(
+    handle: PiRuntimeHandle,
+    session: HostSession,
+    requestedEffort: SessionEffortLevel | undefined
+  ): void {
+    const effort = requestedEffort ?? session.effort;
+    if (!effort) return;
+    if (typeof handle.session.setThinkingLevel !== 'function') {
+      throw new Error(
+        `This pi SDK build cannot apply a reasoning effort ("${effort}"): AgentSession.setThinkingLevel is unavailable`
+      );
+    }
+    handle.session.setThinkingLevel(effort, { persist: false });
+    session.effort = effort;
+  }
 
-      const model = this.handle?.session?.model;
-      this.opts.emit({
+  private ensureAssistant(state: PiSessionState, requestId?: string): string {
+    const turn = state.turn;
+    if (!turn.assistantMessageId) {
+      turn.assistantMessageId = `asst-${state.sessionId}-${Date.now()}`;
+      turn.textBlockId = `${turn.assistantMessageId}-text`;
+      turn.thinkingBlockId = `${turn.assistantMessageId}-thinking`;
+      turn.textSnapshot = '';
+      turn.thinkingSnapshot = '';
+      turn.thinkingStarted = false;
+
+      const model = state.handle?.session?.model;
+      this.emit({
         type: 'message.started',
-        sessionId,
+        sessionId: state.sessionId,
         requestId,
         payload: {
-          messageId: this.turn.assistantMessageId,
+          messageId: turn.assistantMessageId,
           role: 'assistant',
           ...(model ? { model: `${model.provider}/${model.id}` } : {}),
         },
       });
     }
-    return this.turn.assistantMessageId;
+    return turn.assistantMessageId;
   }
 
-  private emitTextDelta(sessionId: string, text: string, requestId?: string): void {
+  private emitTextDelta(state: PiSessionState, text: string, requestId?: string): void {
     if (!text) return;
-    const messageId = this.ensureAssistant(sessionId, requestId);
-    this.opts.emit({
+    const messageId = this.ensureAssistant(state, requestId);
+    this.emit({
       type: 'message.delta',
-      sessionId,
+      sessionId: state.sessionId,
       requestId,
-      payload: { messageId, blockId: this.turn.textBlockId, text },
+      payload: { messageId, blockId: state.turn.textBlockId ?? `${messageId}-text`, text },
     });
   }
 
-  private emitThinkingDelta(sessionId: string, text: string, requestId?: string): void {
+  private emitThinkingDelta(state: PiSessionState, text: string, requestId?: string): void {
     if (!text) return;
-    const messageId = this.ensureAssistant(sessionId, requestId);
-    if (!this.turn.thinkingStarted) {
-      this.turn.thinkingStarted = true;
-      this.opts.emit({
+    const messageId = this.ensureAssistant(state, requestId);
+    const blockId = state.turn.thinkingBlockId ?? `${messageId}-thinking`;
+    if (!state.turn.thinkingStarted) {
+      state.turn.thinkingStarted = true;
+      this.emit({
         type: 'thinking.started',
-        sessionId,
+        sessionId: state.sessionId,
         requestId,
-        payload: { messageId, blockId: this.turn.thinkingBlockId },
+        payload: { messageId, blockId },
       });
     }
-    this.opts.emit({
+    this.emit({
       type: 'thinking.delta',
-      sessionId,
+      sessionId: state.sessionId,
       requestId,
-      payload: { messageId, blockId: this.turn.thinkingBlockId, text },
+      payload: { messageId, blockId, text },
     });
   }
 
-  private projectEvent(sessionId: string, event: PiAgentEvent, requestId?: string): void {
-    const emit = this.opts.emit;
+  private projectEvent(state: PiSessionState, event: PiAgentEvent, requestId?: string): void {
+    const sessionId = state.sessionId;
 
     switch (event.type) {
       case 'agent_start':
-        this.turn = newTurnState();
-        emit({
+        state.turn = newTurnState();
+        this.emit({
           type: 'session.status',
           sessionId,
           requestId,
@@ -441,13 +669,13 @@ export class PiAgentRuntime {
         break;
 
       case 'agent_settled':
-        emit({
+        this.emit({
           type: 'session.completed',
           sessionId,
           requestId,
           payload: {},
         });
-        emit({
+        this.emit({
           type: 'session.status',
           sessionId,
           requestId,
@@ -460,7 +688,7 @@ export class PiAgentRuntime {
         if (msg?.role === 'user') {
           const userMsgId = `user-${sessionId}-${Date.now()}`;
           const userBlockId = `${userMsgId}-text`;
-          emit({
+          this.emit({
             type: 'message.started',
             sessionId,
             requestId,
@@ -468,21 +696,21 @@ export class PiAgentRuntime {
           });
           const text = extractTextContent(msg.content) ?? '';
           if (text) {
-            emit({
+            this.emit({
               type: 'message.delta',
               sessionId,
               requestId,
               payload: { messageId: userMsgId, blockId: userBlockId, text },
             });
           }
-          emit({
+          this.emit({
             type: 'message.completed',
             sessionId,
             requestId,
             payload: { messageId: userMsgId },
           });
         } else if (msg?.role === 'assistant') {
-          this.ensureAssistant(sessionId, requestId);
+          this.ensureAssistant(state, requestId);
         }
         break;
       }
@@ -503,43 +731,43 @@ export class PiAgentRuntime {
             .filter((c) => c.type === 'text')
             .map((c) => c.text || '')
             .join('');
-          if (fullText.length > this.turn.textSnapshot.length) {
-            const chunk = fullText.slice(this.turn.textSnapshot.length);
-            this.turn.textSnapshot = fullText;
-            this.emitTextDelta(sessionId, chunk, requestId);
+          if (fullText.length > state.turn.textSnapshot.length) {
+            const chunk = fullText.slice(state.turn.textSnapshot.length);
+            state.turn.textSnapshot = fullText;
+            this.emitTextDelta(state, chunk, requestId);
           }
 
           const fullThinking = msg.content
             .filter((c) => c.type === 'thinking')
             .map((c) => c.thinking || '')
             .join('');
-          if (fullThinking.length > this.turn.thinkingSnapshot.length) {
-            const chunk = fullThinking.slice(this.turn.thinkingSnapshot.length);
-            this.turn.thinkingSnapshot = fullThinking;
-            this.emitThinkingDelta(sessionId, chunk, requestId);
+          if (fullThinking.length > state.turn.thinkingSnapshot.length) {
+            const chunk = fullThinking.slice(state.turn.thinkingSnapshot.length);
+            state.turn.thinkingSnapshot = fullThinking;
+            this.emitThinkingDelta(state, chunk, requestId);
           }
         } else if (ame) {
           if (ame.type === 'text_delta' && typeof ame.delta === 'string' && ame.delta) {
-            this.turn.textSnapshot += ame.delta;
-            this.emitTextDelta(sessionId, ame.delta, requestId);
+            state.turn.textSnapshot += ame.delta;
+            this.emitTextDelta(state, ame.delta, requestId);
           } else if (ame.type === 'text_end' && typeof ame.content === 'string' && ame.content) {
-            if (ame.content.length > this.turn.textSnapshot.length) {
-              const chunk = ame.content.slice(this.turn.textSnapshot.length);
-              this.turn.textSnapshot = ame.content;
-              this.emitTextDelta(sessionId, chunk, requestId);
+            if (ame.content.length > state.turn.textSnapshot.length) {
+              const chunk = ame.content.slice(state.turn.textSnapshot.length);
+              state.turn.textSnapshot = ame.content;
+              this.emitTextDelta(state, chunk, requestId);
             }
           } else if (ame.type === 'thinking_delta' && typeof ame.delta === 'string' && ame.delta) {
-            this.turn.thinkingSnapshot += ame.delta;
-            this.emitThinkingDelta(sessionId, ame.delta, requestId);
+            state.turn.thinkingSnapshot += ame.delta;
+            this.emitThinkingDelta(state, ame.delta, requestId);
           } else if (
             ame.type === 'thinking_end' &&
             typeof ame.content === 'string' &&
             ame.content
           ) {
-            if (ame.content.length > this.turn.thinkingSnapshot.length) {
-              const chunk = ame.content.slice(this.turn.thinkingSnapshot.length);
-              this.turn.thinkingSnapshot = ame.content;
-              this.emitThinkingDelta(sessionId, chunk, requestId);
+            if (ame.content.length > state.turn.thinkingSnapshot.length) {
+              const chunk = ame.content.slice(state.turn.thinkingSnapshot.length);
+              state.turn.thinkingSnapshot = ame.content;
+              this.emitThinkingDelta(state, chunk, requestId);
             }
           }
         }
@@ -552,20 +780,25 @@ export class PiAgentRuntime {
           | undefined;
         if (msg?.role !== 'assistant') break;
 
-        const messageId = this.turn.assistantMessageId;
+        const messageId = state.turn.assistantMessageId;
         if (
           msg.stopReason === 'stop' ||
           msg.stopReason === 'length' ||
           msg.stopReason === 'toolUse'
         ) {
-          emit({
-            type: 'message.completed',
-            sessionId,
-            requestId,
-            payload: { messageId, reason: msg.stopReason },
-          });
+          if (messageId) {
+            // No `reason` field: the contract's payload is `{ messageId }`, no
+            // other runtime sends one, and no consumer reads one. An extra key
+            // on the wire is a field somebody later assumes is load-bearing.
+            this.emit({
+              type: 'message.completed',
+              sessionId,
+              requestId,
+              payload: { messageId },
+            });
+          }
         } else if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {
-          emit({
+          this.emit({
             type: 'session.failed',
             sessionId,
             requestId,
@@ -574,21 +807,21 @@ export class PiAgentRuntime {
             },
           });
         }
-        this.turn.textSnapshot = '';
-        this.turn.thinkingSnapshot = '';
+        state.turn.textSnapshot = '';
+        state.turn.thinkingSnapshot = '';
         break;
       }
 
       case 'tool_execution_start': {
-        const messageId = this.ensureAssistant(sessionId, requestId);
-        emit({
+        const messageId = this.ensureAssistant(state, requestId);
+        this.emit({
           type: 'tool.started',
           sessionId,
           requestId,
           payload: {
             messageId,
-            toolCallId: event.toolCallId as string,
-            name: event.toolName as string,
+            toolCallId: String(event.toolCallId ?? ''),
+            name: String(event.toolName ?? ''),
             input: event.args ?? {},
           },
         });
@@ -596,43 +829,45 @@ export class PiAgentRuntime {
       }
 
       case 'tool_execution_end': {
-        const result = event.result as unknown;
-        let output = '';
-        if (typeof result === 'string') {
-          output = result;
-        } else if (result && typeof result === 'object' && 'content' in result) {
-          const content = (result as { content: unknown }).content;
-          output = typeof content === 'string' ? content : JSON.stringify(content);
-        } else if (result !== undefined) {
-          output = JSON.stringify(result);
-        }
-        emit({
+        // `isError` is pi's word; `ok` is the protocol's. Emitting pi's put a
+        // failed tool on screen as a success with its error text in the output
+        // slot, because no renderer reads `isError`.
+        const failed = event.isError === true;
+        const output = readToolOutput(event.result);
+        const messageId = state.turn.assistantMessageId ?? this.ensureAssistant(state, requestId);
+        this.emit({
           type: 'tool.completed',
           sessionId,
           requestId,
           payload: {
-            messageId: this.turn.assistantMessageId,
-            toolCallId: event.toolCallId as string,
-            name: event.toolName as string,
+            messageId,
+            toolCallId: String(event.toolCallId ?? ''),
+            ok: !failed,
             output,
-            isError: (event.isError as boolean) ?? false,
+            // Only on a failure, and never empty: the renderer shows this string
+            // as the reason, and an empty one reads as "failed, no idea why".
+            ...(failed ? { error: output || 'Tool call failed' } : {}),
           },
         });
         break;
       }
 
       case 'auto_retry_start':
-        emit({
+        this.emit({
           type: 'session.status',
           sessionId,
           requestId,
           payload: {
             status: 'running',
             retry: {
-              attempt: (event.attempt as number) ?? 0,
-              maxRetries: (event.maxAttempts as number) ?? 0,
-              delayMs: (event.delayMs as number) ?? 0,
-              errorMessage: (event.errorMessage as string) ?? '',
+              attempt: numberOr(event.attempt, 0),
+              maxRetries: numberOr(event.maxAttempts, 0),
+              delayMs: numberOr(event.delayMs, 0),
+              // Contract names: `error` is the label, `errorStatus` the HTTP
+              // status when there is one. pi sends `errorMessage`, which the
+              // retry banner and context surface both read past.
+              error: stringOr(event.errorMessage, ''),
+              errorStatus: stringOrNull(event.errorStatus),
             },
           },
         });
@@ -647,6 +882,7 @@ export class PiAgentRuntime {
     sessionId: string;
     workspacePath: string;
     model?: string;
+    effort?: SessionEffortLevel;
     requestId?: string;
   }): void {
     const session = this.opts.registry.create({
@@ -654,14 +890,15 @@ export class PiAgentRuntime {
       workspacePath: input.workspacePath,
       agent: PI_AGENT,
       model: input.model,
+      effort: input.effort,
     });
-    this.opts.emit({
+    this.emit({
       type: 'session.created',
       sessionId: session.sessionId,
       requestId: input.requestId,
       payload: { agent: PI_AGENT },
     });
-    this.opts.emit({
+    this.emit({
       type: 'session.status',
       sessionId: session.sessionId,
       requestId: input.requestId,
@@ -674,11 +911,12 @@ export class PiAgentRuntime {
     workspacePath: string;
     runtimeIdentity: string;
     model?: string;
+    effort?: SessionEffortLevel;
     requestId?: string;
   }): void {
     const current = this.opts.registry.get(input.sessionId);
     if (current?.running) {
-      this.opts.emit({
+      this.emit({
         type: 'host.error',
         sessionId: input.sessionId,
         requestId: input.requestId,
@@ -696,8 +934,9 @@ export class PiAgentRuntime {
       runtimeIdentity: input.runtimeIdentity,
       agent: PI_AGENT,
       model: input.model,
+      effort: input.effort,
     });
-    this.opts.emit({
+    this.emit({
       type: 'session.resumed',
       sessionId: session.sessionId,
       requestId: input.requestId,
@@ -706,7 +945,7 @@ export class PiAgentRuntime {
         runtimeIdentity: session.runtimeIdentity,
       },
     });
-    this.opts.emit({
+    this.emit({
       type: 'session.status',
       sessionId: session.sessionId,
       requestId: input.requestId,
@@ -719,11 +958,12 @@ export class PiAgentRuntime {
     text: string;
     attachments?: SessionAttachment[];
     model?: string;
+    effort?: SessionEffortLevel;
     requestId?: string;
   }): Promise<void> {
     const session = this.opts.registry.get(input.sessionId);
     if (!session) {
-      this.opts.emit({
+      this.emit({
         type: 'host.error',
         requestId: input.requestId,
         payload: {
@@ -735,7 +975,7 @@ export class PiAgentRuntime {
       return;
     }
     if (session.running) {
-      this.opts.emit({
+      this.emit({
         type: 'host.error',
         sessionId: session.sessionId,
         requestId: input.requestId,
@@ -748,15 +988,13 @@ export class PiAgentRuntime {
       return;
     }
 
+    const state = this.getOrCreateState(session);
     session.running = true;
     session.status = 'running';
     this.opts.registry.setStatus(session.sessionId, 'running');
-    this.abortController = new AbortController();
-    // Set BEFORE the handle is built: extensions emit UI calls during bind, and
-    // this is the session that caused the bind to happen.
-    this.currentSessionId = session.sessionId;
+    state.abortController = new AbortController();
 
-    this.opts.emit({
+    this.emit({
       type: 'session.status',
       sessionId: session.sessionId,
       requestId: input.requestId,
@@ -764,19 +1002,40 @@ export class PiAgentRuntime {
     });
 
     try {
-      const handle = await this.ensureHandle(session.workspacePath);
+      // Built before the runtime: an attachment this Host cannot deliver must
+      // fail the send, not be dropped somewhere the user cannot see.
+      const { text, options } = buildPrompt(input.text, input.attachments);
+      const handle = await this.ensureHandle(state);
       await this.applySelectedModel(handle, session, input.model);
-      this.bindEvents(session.sessionId, handle.session, input.requestId);
+      this.applyEffort(handle, session, input.effort);
+      this.bindEvents(state, input.requestId);
 
       if (handle.session.sessionFile && !session.runtimeIdentity) {
         session.runtimeIdentity = handle.session.sessionFile;
       }
 
-      await handle.session.prompt(input.text);
+      await handle.session.prompt(text, options);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (this.abortController?.signal.aborted) {
-        this.opts.emit({
+      if (err instanceof PermissionGateUnavailableError) {
+        // Fatal by design. A non-fatal `host.error` is dropped by the renderer's
+        // host-status reducer, and this is precisely the failure a user must not
+        // be able to miss: without a gate, tool calls would run unattended.
+        this.log(`permission gate unavailable for ${session.sessionId}: ${message}`);
+        this.emit({
+          type: 'host.error',
+          sessionId: session.sessionId,
+          requestId: input.requestId,
+          payload: { code: err.code, message, fatal: true },
+        });
+        this.emit({
+          type: 'session.failed',
+          sessionId: session.sessionId,
+          requestId: input.requestId,
+          payload: { error: message },
+        });
+      } else if (state.abortController?.signal.aborted) {
+        this.emit({
           type: 'session.stopped',
           sessionId: session.sessionId,
           requestId: input.requestId,
@@ -784,7 +1043,7 @@ export class PiAgentRuntime {
         });
       } else {
         this.log(`send failed for ${session.sessionId}: ${message}`);
-        this.opts.emit({
+        this.emit({
           type: 'session.failed',
           sessionId: session.sessionId,
           requestId: input.requestId,
@@ -795,8 +1054,8 @@ export class PiAgentRuntime {
       session.running = false;
       session.status = 'idle';
       this.opts.registry.setStatus(session.sessionId, 'idle');
-      this.abortController = null;
-      this.opts.emit({
+      state.abortController = null;
+      this.emit({
         type: 'session.status',
         sessionId: session.sessionId,
         requestId: input.requestId,
@@ -805,50 +1064,156 @@ export class PiAgentRuntime {
     }
   }
 
+  /**
+   * Stop ONE session.
+   *
+   * Cancelling the parked dialogs is not cleanup, it is the stop: an extension
+   * blocked inside `ui.select` holds the turn open, and `session.abort()` does
+   * not reach it. Draining first settles that Promise with the dialog's recorded
+   * fallback (a dismissed permission prompt is a denial), so the turn can
+   * actually unwind instead of waiting out a timeout that may not exist.
+   */
   stop(sessionId: string): void {
+    const state = this.states.get(sessionId);
+    if (!state) return;
     const session = this.opts.registry.get(sessionId);
     if (!session?.running) return;
 
-    this.abortController?.abort();
+    state.extensionUi.cancelAll('aborted');
+    state.abortController?.abort();
 
-    if (this.handle?.session) {
+    const piSession = state.handle?.session;
+    if (piSession) {
       try {
-        this.handle.session.abortCompaction?.();
-        this.handle.session.abortBranchSummary?.();
-        this.handle.session.abortBash?.();
+        piSession.abortCompaction?.();
+        piSession.abortBranchSummary?.();
+        piSession.abortBash?.();
       } catch {
         /* best-effort */
       }
-      void this.handle.session.abort().catch(() => undefined);
+      void piSession.abort().catch(() => undefined);
     }
   }
 
   closeSession(sessionId: string, _requestId?: string): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
-    // The dialogs parked for this session can never be answered now — its UI is
-    // gone. Draining them lets any extension still awaiting one finish with its
-    // fallback instead of hanging until the Host exits.
-    if (this.currentSessionId === sessionId) {
-      this.extensionUi.reload();
-      this.currentSessionId = undefined;
+    const state = this.states.get(sessionId);
+    if (state) {
+      this.teardownState(state, 'session_closed');
+      this.states.delete(sessionId);
     }
     this.opts.registry.delete(sessionId);
   }
 
+  /**
+   * Drop one session's runtime. Touches nothing that belongs to another
+   * session — a close of A must leave B streaming.
+   */
+  private teardownState(state: PiSessionState, reason: ExtensionUiCancelReason): void {
+    state.unsubscribe?.();
+    state.unsubscribe = null;
+    state.abortController?.abort();
+    state.abortController = null;
+    // The dialogs parked for this session can never be answered now — its UI is
+    // gone. Draining them lets any extension still awaiting one finish with its
+    // fallback instead of hanging until the Host exits.
+    state.extensionUi.cancelAll(reason);
+    state.extensionUi.dispose();
+    // Aborting the pi session is part of the teardown, not a nicety: closing a
+    // session while its turn is in flight otherwise leaves that turn running
+    // inside a runtime nothing is listening to any more.
+    const piSession = state.handle?.session;
+    if (piSession) void piSession.abort().catch(() => undefined);
+    state.handle = null;
+    state.building = null;
+  }
+
   async dispose(): Promise<void> {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
-    this.extensionUi.dispose();
-    this.currentSessionId = undefined;
-    this.handle = null;
+    for (const state of this.states.values()) {
+      this.teardownState(state, 'host_shutdown');
+    }
+    this.states.clear();
     this.sdk = null;
+  }
+
+  /** Diagnostics / tests: how many sessions hold a live runtime record. */
+  activeSessionCount(): number {
+    return this.states.size;
   }
 }
 
 /** `settings.packages` when the SDK build exposes it; `[]` when it does not. */
 function readConfiguredPackages(settings: { packages?: unknown } | undefined): unknown[] {
   return Array.isArray(settings?.packages) ? settings.packages : [];
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function stringOr(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+/** `null` is the contract's "no HTTP status", which is the common transport case. */
+function stringOrNull(value: unknown): string | null {
+  if (typeof value === 'string' && value) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+/** pi's tool result → the string the timeline shows. */
+function readToolOutput(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (result && typeof result === 'object' && 'content' in result) {
+    const content = (result as { content: unknown }).content;
+    return typeof content === 'string' ? content : JSON.stringify(content);
+  }
+  if (result === undefined) return '';
+  return JSON.stringify(result);
+}
+
+/**
+ * Turn one send into pi's `prompt(text, options)` arguments.
+ *
+ * pi has exactly one attachment slot — `options.images`, an `ImageContent[]`.
+ * Text attachments have no slot, so they are appended to the prompt as labelled
+ * blocks: that is where a text document's content belongs in a message with no
+ * document type, and it is visible to both the model and the transcript. What
+ * must NOT happen is the third option, which is what happened before: accepting
+ * the attachment on the wire and sending a prompt without it.
+ *
+ * An attachment kind this Host has no mapping for throws, so the send fails with
+ * a message naming it rather than quietly losing it.
+ */
+export function buildPrompt(
+  text: string,
+  attachments: SessionAttachment[] | undefined
+): { text: string; options?: PiPromptOptions } {
+  if (!attachments || attachments.length === 0) return { text };
+  const images: PiImageContent[] = [];
+  const documents: string[] = [];
+  for (const attachment of attachments) {
+    if (attachment.kind === 'image') {
+      images.push({
+        type: 'image',
+        data: attachment.data,
+        mimeType: attachment.mediaType || 'image/png',
+      });
+    } else if (attachment.kind === 'text') {
+      const title = attachment.name ?? 'attachment';
+      documents.push(`--- ${title} ---\n${attachment.data}`);
+    } else {
+      throw new Error(
+        `Unsupported attachment kind for the pi backend: ${String((attachment as { kind: unknown }).kind)}`
+      );
+    }
+  }
+  const promptText =
+    documents.length > 0 ? [text, ...documents].filter(Boolean).join('\n\n') : text;
+  return {
+    text: promptText,
+    ...(images.length > 0 ? { options: { images } } : {}),
+  };
 }
 
 function extractTextContent(content: unknown): string | undefined {

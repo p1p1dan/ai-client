@@ -2,7 +2,9 @@ import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { create } from 'zustand';
 import {
   type ExtensionUiState,
+  failExtensionUiSend,
   initialExtensionUi,
+  markExtensionUiSending,
   reduceExtensionUi,
   removeExtensionUiDialog,
 } from '@/components/chat/extensionUiModel';
@@ -20,12 +22,12 @@ interface ExtensionUiStoreState extends ExtensionUiState {
   listening: boolean;
   init: () => () => void;
   /**
-   * Send the user's answer and close the dialog.
+   * Send the user's answer, and close the dialog once the Host has it.
    *
-   * The dialog is dropped locally REGARDLESS of what the IPC call does. A
-   * failed send means the Host never heard us, and the extension will be
-   * settled by the bridge's own timeout or teardown — whereas leaving the modal
-   * up would trap the user in a dialog whose button no longer does anything.
+   * The dialog stays up until the IPC call RESOLVES. Dropping it on click was
+   * the failure this replaces: a rejected call left nothing on screen while the
+   * Host's dialog stayed parked, so the extension waited forever and the turn
+   * never finished, with no way for the user to tell or retry.
    */
   answer: (uiRequestId: string, value: unknown) => Promise<void>;
   /** Dismiss without answering: the Host substitutes the method's fallback. */
@@ -71,13 +73,17 @@ async function respond(
   ok: boolean,
   value: unknown
 ): Promise<void> {
-  const dialog = get().pending.find((p) => p.uiRequestId === uiRequestId);
+  const state = get();
+  const dialog = state.pending.find((p) => p.uiRequestId === uiRequestId);
   // Already gone — cancelled by the bridge, or answered twice by a re-mounted
   // component. Sending anyway would be refused Host-side; not sending is the
   // same outcome without the round trip.
   if (!dialog) return;
+  // Double-click guard. It lives in the store, not in the component, so a
+  // remount cannot reset it mid-flight.
+  if (state.sending.includes(uiRequestId)) return;
 
-  set((state) => removeExtensionUiDialog(state, uiRequestId));
+  set((current) => markExtensionUiSending(current, uiRequestId));
 
   try {
     await window.electronAPI.chat.respondExtensionUi({
@@ -88,7 +94,11 @@ async function respond(
       // and a value riding along would invite a reader to use it.
       ...(ok ? { value } : {}),
     });
+    set((current) => removeExtensionUiDialog(current, uiRequestId));
   } catch (err) {
-    console.error('[extensionUi] failed to send response', err);
+    // The Host never heard us, so its dialog is still parked and still
+    // answerable. Keep ours up, say what happened, and let them press again.
+    const message = err instanceof Error ? err.message : String(err);
+    set((current) => failExtensionUiSend(current, uiRequestId, message));
   }
 }

@@ -6,6 +6,26 @@ export const PI_AUTH_FILE_NAME = 'auth.json';
 export const PI_MODEL_SYNC_STATE_FILE_NAME = 'managed-models-state.json';
 export const PI_MODEL_MANAGEMENT_URL_SETTING_KEY = 'piModelManagementUrl';
 export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
+
+/**
+ * T08-c (D-Q9 decision 4) — whether the pi Host may load a repository's own
+ * `.pi/` scope.
+ *
+ * `'1'` = trusted (the local-environment route: the machine is the user's, and
+ * what a repo they cloned is allowed to configure is their call).
+ * `'0'` = withheld (the managed route: we promise this build works and answer
+ * for what it permits, so a cloned repo may not loosen the policy).
+ *
+ * Carried as an env var because the Host is a separate process that has no
+ * access to the credential mode. Read as an explicit tri-state — an ABSENT key
+ * means an old Main build, which must not be read as either answer.
+ *
+ * Blast radius worth knowing: this is pi's own `projectTrusted`, so `'0'` also
+ * stops a repo's `.pi/settings.json` from contributing packages and models —
+ * not just permission rules. That is deliberate: a cloned repo adding a package
+ * is a cloned repo running code.
+ */
+export const PI_PROJECT_TRUST_ENV = 'AICLIENT_PI_TRUST_PROJECT_CONFIG';
 export const DEFAULT_PI_MODEL_MANAGEMENT_URL = 'http://127.0.0.1:3210/api/v1/models-config';
 
 export const PI_MODEL_APIS = [

@@ -15,6 +15,13 @@ import {
   type HistoryMessage,
 } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
+// Leaf module (no imports of its own): the permission-activity record shape and
+// its merge rule, shared with the row that renders it so the store cannot fold
+// a decision the view would describe differently.
+import {
+  mergePermissionActivity,
+  type PermissionActivityRecord,
+} from '@/components/chat/permissionActivityRow';
 // Leaf module too (one type import): the single "this session's binding is
 // settled" criterion, shared with the composer chain and the agent picker so
 // the store's own guard cannot drift away from the UI's.
@@ -55,6 +62,13 @@ export type ChatBlockType =
   | 'tool_call'
   | 'tool_result'
   | 'permission_request'
+  /**
+   * T08-b: a gate the pi permission plugin RESOLVED, as opposed to one it is
+   * asking about. Never answerable — the plugin asks through the Extension UI
+   * modal and broadcasts these purely so the transcript can record what was
+   * decided, including the `policy_allow` decisions nobody was asked about.
+   */
+  | 'permission_activity'
   | 'question';
 
 export interface ChatProject {
@@ -151,6 +165,8 @@ export interface ChatBlock {
   permissionAutoReason?: PermissionAutoReason;
   /** S2 (c): offered decisions this build could not model and dropped. */
   omittedDecisionCount?: number;
+  /** T08-b: set on `permission_activity` blocks only — the gate and its outcome. */
+  permissionActivity?: PermissionActivityRecord;
   questionId?: string;
   questions?: QuestionItem[];
   questionOutcome?: 'answered' | 'cancelled' | 'rejected';
@@ -740,6 +756,63 @@ export function applyRuntimeEvent(
             toolOutput: event.payload.output,
             text: event.payload.error,
           },
+        ],
+      };
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
+    }
+
+    /**
+     * T08-b — record what the permission plugin decided.
+     *
+     * ONE block per `requestId`, not one per broadcast: the plugin emits a
+     * `prompt` and then a `decision` for the same gate, and appending both would
+     * put every approval in the transcript twice. The prompt opens the row, the
+     * decision fills it in — which is also what makes the outcome survive the
+     * modal closing.
+     *
+     * Attached to the turn's latest assistant message, in block order, so the
+     * row sits next to the tool call it gated. An event for a session with no
+     * messages yet (or one already closed) is dropped: `withBucket` would
+     * materialize a bucket for a session the user cannot see.
+     */
+    case 'permission.activity': {
+      const bucket = state.messages[sessionId];
+      if (!bucket || bucket.length === 0) return {};
+      const target = [...bucket]
+        .reverse()
+        .find(
+          (item) => item.role === 'assistant' && !item.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+        );
+      if (!target) return {};
+
+      const incoming: PermissionActivityRecord = { ...event.payload };
+      const blockId = `perm-activity-${event.payload.requestId}`;
+      const existingIndex = target.blocks.findIndex(
+        (block) =>
+          block.type === 'permission_activity' &&
+          block.permissionActivity?.requestId === event.payload.requestId
+      );
+
+      if (existingIndex >= 0) {
+        const existing = target.blocks[existingIndex];
+        const previous = existing?.permissionActivity;
+        if (!existing || !previous) return {};
+        const merged = mergePermissionActivity(previous, incoming);
+        // Redelivery of an event that changes nothing must not rebuild the
+        // message — the timeline re-renders off reference equality.
+        if (merged === previous) return {};
+        const blocks = [...target.blocks];
+        blocks[existingIndex] = { ...existing, permissionActivity: merged };
+        return {
+          messages: withBucket(state, sessionId, upsertMessage(bucket, { ...target, blocks })),
+        };
+      }
+
+      const updated: ChatMessage = {
+        ...target,
+        blocks: [
+          ...target.blocks,
+          { id: blockId, type: 'permission_activity', permissionActivity: incoming },
         ],
       };
       return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };

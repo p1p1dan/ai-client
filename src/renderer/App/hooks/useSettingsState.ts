@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { SettingsCategory } from '@/components/settings/constants';
+import { isSettingsCategory, type SettingsCategory } from '@/components/settings/constants';
 import { useSettingsStore } from '@/stores/settings';
 import type { TabId } from '../constants';
 
@@ -12,22 +12,10 @@ export function useSettingsState(
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>(() => {
     try {
       const saved = localStorage.getItem('aiclient-settings-active-category');
-      const validCategories: SettingsCategory[] = [
-        'general',
-        'appearance',
-        'editor',
-        'keybindings',
-        'agent',
-        'ai',
-        'piModels',
-        'integration',
-        'hapi',
-        'remote',
-        'webInspector',
-      ];
-      return saved && validCategories.includes(saved as SettingsCategory)
-        ? (saved as SettingsCategory)
-        : 'general';
+      // Validated against the one category list, not a copy of it: a pane that
+      // was missing from the copy opened once and never reopened after a
+      // restart, and nothing about that reads as a bug.
+      return isSettingsCategory(saved) ? saved : 'general';
     } catch {
       return 'general';
     }

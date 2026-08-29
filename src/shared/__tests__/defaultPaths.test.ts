@@ -159,8 +159,23 @@ describe('APP_STATE_DIR is the single source of truth for the app state dir', ()
     path.join('src', 'renderer', 'components', 'settings', 'RemoteSettings.tsx'),
   ];
 
+  /**
+   * A POLICY PATTERN, not a path this code resolves — D11's `path` deny that
+   * stops an agent reading the credential store we injected for it. It cannot
+   * import the constant: the module is `.mjs` so the build script can import it
+   * (a `.mjs` cannot import a `.ts`), and that is the whole reason it exists in
+   * that form.
+   *
+   * Listed rather than skipped, on the same rule as DISPLAY_TEXT above — but
+   * the forcing function for this one is stronger and lives elsewhere:
+   * `agent-host/__tests__/permissionPolicy.test.ts` asserts the pattern is
+   * built from `APP_STATE_DIR`, so a rename that misses this file goes red
+   * there rather than silently unprotecting the vault.
+   */
+  const POLICY_PATTERN = [path.join('src', 'agent-host', 'permissionPolicy.mjs')];
+
   it('appears in no source file but its own definition', () => {
-    expect(scanFor(APP_STATE_DIR, [DEFINITION, ...DISPLAY_TEXT])).toEqual([]);
+    expect(scanFor(APP_STATE_DIR, [DEFINITION, ...DISPLAY_TEXT, ...POLICY_PATTERN])).toEqual([]);
   });
 
   /**

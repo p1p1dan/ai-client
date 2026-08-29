@@ -55,7 +55,12 @@ describe('useExtensionUiStore', () => {
       },
     } as unknown as typeof globalThis.window;
 
-    useExtensionUiStore.setState({ pending: [], listening: false });
+    useExtensionUiStore.setState({
+      pending: [],
+      sending: [],
+      sendErrors: {},
+      listening: false,
+    });
   });
 
   afterEach(() => {
@@ -125,13 +130,57 @@ describe('useExtensionUiStore', () => {
     });
 
     /**
-     * A failed send means the Host never heard us, and the bridge's own timeout
-     * or teardown will settle the extension. Keeping the modal up instead would
-     * trap the user in a dialog whose buttons no longer do anything.
+     * A failed send means the Host never heard us — so its dialog is STILL
+     * PARKED and still answerable. Closing ours would leave nothing on screen
+     * and an extension waiting forever, which is a turn that never ends with no
+     * way for the user to tell. Keep it up, say why, allow a retry.
      */
-    it('still closes the dialog when the send fails', async () => {
+    it('keeps the dialog and reports the failure when the send fails', async () => {
       respondSpy.mockRejectedValueOnce(new Error('ipc down'));
       await expect(useExtensionUiStore.getState().answer('q1', 'a')).resolves.toBeUndefined();
+
+      const state = useExtensionUiStore.getState();
+      expect(state.pending.map((p) => p.uiRequestId)).toEqual(['q1']);
+      expect(state.sendErrors.q1).toContain('ipc down');
+      // The guard is released, or the retry would be refused as a double-click.
+      expect(state.sending).toEqual([]);
+    });
+
+    it('lets the user retry after a failed send, and closes on success', async () => {
+      respondSpy.mockRejectedValueOnce(new Error('ipc down'));
+      await useExtensionUiStore.getState().answer('q1', 'a');
+      await useExtensionUiStore.getState().answer('q1', 'a');
+
+      expect(respondSpy).toHaveBeenCalledTimes(2);
+      const state = useExtensionUiStore.getState();
+      expect(state.pending).toEqual([]);
+      expect(state.sendErrors).toEqual({});
+    });
+
+    /** A Host that already tore the dialog down cancels it; ours must follow. */
+    it('drops a dialog the Host cancelled while a send was in flight', async () => {
+      let release: (() => void) | undefined;
+      respondSpy.mockImplementationOnce(
+        () =>
+          new Promise<{ requestId: string }>((resolve) => {
+            release = () => resolve({ requestId: 'r' });
+          })
+      );
+      const inFlight = useExtensionUiStore.getState().answer('q1', 'a');
+      expect(useExtensionUiStore.getState().sending).toEqual(['q1']);
+
+      captured?.({
+        type: 'extensionUi.cancelled',
+        seq: 9,
+        timestamp: 2,
+        sessionId: 's1',
+        payload: { runtimeId: 'rt-9', uiRequestIds: ['q1'], reason: 'host_shutdown' },
+      });
+      expect(useExtensionUiStore.getState().pending).toEqual([]);
+      expect(useExtensionUiStore.getState().sending).toEqual([]);
+
+      release?.();
+      await inFlight;
       expect(useExtensionUiStore.getState().pending).toEqual([]);
     });
   });

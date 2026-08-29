@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   currentExtensionUiDialog,
   type ExtensionUiState,
+  failExtensionUiSend,
   initialExtensionUi,
+  markExtensionUiSending,
   reduceExtensionUi,
   removeExtensionUiDialog,
   splitExtensionUiDialogText,
@@ -45,13 +47,17 @@ function requestEvent(
   } as RuntimeEvent;
 }
 
-function cancelEvent(uiRequestIds: string[], reason: ExtensionUiCancelReason): RuntimeEvent {
+function cancelEvent(
+  uiRequestIds: string[],
+  reason: ExtensionUiCancelReason,
+  runtimeId = 'rt-1'
+): RuntimeEvent {
   seq += 1;
   return {
     type: 'extensionUi.cancelled',
     seq,
     timestamp: 2_000 + seq,
-    payload: { runtimeId: 'rt-1', uiRequestIds, reason },
+    payload: { runtimeId, uiRequestIds, reason },
   } as RuntimeEvent;
 }
 
@@ -163,6 +169,79 @@ describe('cancellation', () => {
   it('is a no-op for ids it is not showing', () => {
     const state = feed([requestEvent({ uiRequestId: 'q1' })]);
     expect(reduceExtensionUi(state, cancelEvent(['other'], 'host_shutdown'))).toBe(state);
+  });
+
+  /**
+   * Every session has its own bridge, so ids are only unique WITHIN one. A
+   * cancellation matched on the id alone would let session A close session B's
+   * live dialog — and B's extension would then wait for an answer that can no
+   * longer be given.
+   */
+  it('ignores a cancellation from a different bridge', () => {
+    const state = feed([requestEvent({ uiRequestId: 'q1', runtimeId: 'rt-a' })]);
+    expect(reduceExtensionUi(state, cancelEvent(['q1'], 'aborted', 'rt-b'))).toBe(state);
+  });
+
+  it('closes only the matching bridge’s dialog when both share an id', () => {
+    const state = feed([
+      requestEvent({ uiRequestId: 'same', runtimeId: 'rt-a' }),
+      requestEvent({ uiRequestId: 'same', runtimeId: 'rt-b' }),
+    ]);
+    // Two entries with the same id but different bridges: the duplicate guard is
+    // per id, so only the first survives queueing — which is itself the reason
+    // the cancel path must not key on the id alone.
+    const next = reduceExtensionUi(state, cancelEvent(['same'], 'aborted', 'rt-b'));
+    expect(next).toBe(state);
+  });
+
+  it('clears any send state for the dialogs it closes', () => {
+    const queued = feed([requestEvent({ uiRequestId: 'q1' })]);
+    const sending = markExtensionUiSending(queued, 'q1');
+    const failed = failExtensionUiSend(sending, 'q1', 'ipc down');
+
+    const next = reduceExtensionUi(failed, cancelEvent(['q1'], 'host_shutdown'));
+    expect(next.pending).toEqual([]);
+    expect(next.sending).toEqual([]);
+    expect(next.sendErrors).toEqual({});
+  });
+});
+
+/**
+ * The dialog stays on screen until the Host has actually been told. It used to
+ * be removed the moment a button was pressed, so a rejected IPC left nothing on
+ * screen and an extension parked forever — a turn that never ends, with no way
+ * for the user to see it or retry.
+ */
+describe('send tracking', () => {
+  it('marks an answer in flight and clears any earlier error', () => {
+    const state = failExtensionUiSend(feed([requestEvent({ uiRequestId: 'q1' })]), 'q1', 'boom');
+    const sending = markExtensionUiSending(state, 'q1');
+    expect(sending.sending).toEqual(['q1']);
+    expect(sending.sendErrors).toEqual({});
+    // The dialog is still up — that is the whole point.
+    expect(sending.pending.map((p) => p.uiRequestId)).toEqual(['q1']);
+  });
+
+  it('refuses to mark the same answer twice', () => {
+    const sending = markExtensionUiSending(feed([requestEvent({ uiRequestId: 'q1' })]), 'q1');
+    expect(markExtensionUiSending(sending, 'q1')).toBe(sending);
+  });
+
+  it('keeps the dialog and records why when the send fails', () => {
+    const sending = markExtensionUiSending(feed([requestEvent({ uiRequestId: 'q1' })]), 'q1');
+    const failed = failExtensionUiSend(sending, 'q1', 'ipc down');
+    expect(failed.pending.map((p) => p.uiRequestId)).toEqual(['q1']);
+    expect(failed.sendErrors).toEqual({ q1: 'ipc down' });
+    // Released, or the retry would be refused as a double-click.
+    expect(failed.sending).toEqual([]);
+  });
+
+  it('clears send state when the dialog finally closes', () => {
+    const sending = markExtensionUiSending(feed([requestEvent({ uiRequestId: 'q1' })]), 'q1');
+    const closed = removeExtensionUiDialog(failExtensionUiSend(sending, 'q1', 'x'), 'q1');
+    expect(closed.pending).toEqual([]);
+    expect(closed.sending).toEqual([]);
+    expect(closed.sendErrors).toEqual({});
   });
 });
 

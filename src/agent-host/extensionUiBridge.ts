@@ -107,6 +107,17 @@ export interface PortableExtensionUiBridge {
   respond(response: ExtensionUiResponse): boolean;
   /** Session replaced (reload / fork / switch): drain dialogs, clear display state. */
   reload(): void;
+  /**
+   * Settle every parked dialog now, with the reason to tell the renderer.
+   *
+   * This is what a Stop must call. Aborting the pi session only unblocks the
+   * MODEL loop: an extension sitting inside `ui.select` is awaiting a Promise
+   * that lives here, so without this the turn cannot finish, the modal stays on
+   * screen, and the session waits out the extension's own timeout — if it set
+   * one at all. Display state is deliberately left alone; the session is still
+   * alive and its status chips still belong to it.
+   */
+  cancelAll(reason: ExtensionUiCancelReason): void;
   dispose(): void;
   /** Diagnostics only — how many calls are still parked. */
   pendingCount(): number;
@@ -378,6 +389,10 @@ export function createPortableExtensionUiBridge(
       cancelPending('session_replaced');
       clearPortableState();
       unsupported.clear();
+    },
+    cancelAll(reason) {
+      if (disposed) return;
+      cancelPending(reason);
     },
     dispose() {
       if (disposed) return;

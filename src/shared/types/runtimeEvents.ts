@@ -1232,10 +1232,18 @@ export function readExtensionUiDialogArgs(
  * it would make Main's command-correlation table match an event that was never a
  * reply.
  *
- * `runtimeId` identifies the BRIDGE INSTANCE, not the session. It changes every
- * time the runtime's session object is replaced (reload / fork / switch), which
- * is what makes a late answer to a dialog from the previous session detectably
- * stale instead of silently applied to whatever now holds the same slot.
+ * `runtimeId` identifies the BRIDGE INSTANCE. There is one bridge per HOST
+ * SESSION (`piRuntime.ts` keys them by `sessionId`), and a new one is minted
+ * whenever that session's runtime is rebuilt — closed and reopened, or moved to
+ * a different workspace. It is therefore neither process-global nor per-turn.
+ *
+ * An in-place session swap (reload / fork / switch) keeps the bridge and DRAINS
+ * it instead: every parked dialog is settled and announced through
+ * `extensionUi.cancelled`, so a late answer to one of them matches no pending
+ * entry and is refused. Staleness is caught by the pair — `runtimeId` says
+ * "wrong bridge", the pending map says "no such open dialog" — and a consumer
+ * must check both. Deleting a dialog on `uiRequestId` alone would let a
+ * cancellation from another bridge close a live one.
  */
 export interface ExtensionUiRequestedEvent extends RuntimeEventBase {
   type: 'extensionUi.request';
@@ -1253,14 +1261,19 @@ export interface ExtensionUiRequestedEvent extends RuntimeEventBase {
 /**
  * Why the bridge settled a dialog nobody answered.
  *
- * `timed_out` / `aborted` are the EXTENSION's own deadline and abort signal —
- * both are handed to the bridge when the dialog opens, so the bridge is the only
- * layer that can act on them. The other two are teardown.
+ * `timed_out` is the EXTENSION's own deadline, handed to the bridge when the
+ * dialog opens, so the bridge is the only layer that can act on it. `aborted`
+ * covers both the extension's own abort signal and a user Stop — a Stop must
+ * drain the parked dialogs, because aborting the pi session does not reach an
+ * extension blocked inside `ui.select`. The last three are teardown:
+ * `session_replaced` on an in-place reload / fork / switch, `session_closed`
+ * when the session itself goes away, `host_shutdown` on exit.
  */
 export type ExtensionUiCancelReason =
   | 'timed_out'
   | 'aborted'
   | 'session_replaced'
+  | 'session_closed'
   | 'host_shutdown';
 
 /**
@@ -1421,3 +1434,25 @@ export type RuntimeEvent =
   | PermissionActivityEvent
   | SubagentActivityEvent
   | SessionTerminalEvent;
+
+/**
+ * A Runtime Event as a RUNTIME writes it — everything except the two fields the
+ * Host entry stamps on the way out (`seq`, `timestamp`).
+ *
+ * The Host's `EmitFn` takes `Record<string, unknown>`, which is what let
+ * `tool.completed` ship an `isError` field and `session.status.retry` an
+ * `errorMessage` field: both compiled, both travelled, neither was read by any
+ * consumer, and a failed tool rendered as a successful one for as long as that
+ * lasted. A runtime that types its emit calls as this union gets that class of
+ * drift as a compile error instead.
+ *
+ * Distributed over the union MEMBER by member so the discriminant survives:
+ * a bare `Omit<RuntimeEvent, …>` would collapse `type` and `payload` into their
+ * own unions and stop cross-checking each other. Distributing over `type`
+ * literals instead would not work either — several members legitimately carry a
+ * union there (`'session.completed' | 'session.failed' | 'session.stopped'`),
+ * and `Extract` by one literal would miss them.
+ */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+export type RuntimeEventDraft = DistributiveOmit<RuntimeEvent, 'seq' | 'timestamp'>;

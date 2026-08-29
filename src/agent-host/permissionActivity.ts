@@ -38,10 +38,18 @@ import type { RuntimeEvent } from '../shared/types/runtimeEvents.ts';
 export const PERMISSIONS_UI_PROMPT_CHANNEL = 'permissions:ui_prompt';
 export const PERMISSIONS_DECISION_CHANNEL = 'permissions:decision';
 
-/** The slice of pi's `ExtensionAPI` this observer touches. */
+/**
+ * The slice of pi's `ExtensionAPI` this observer touches.
+ *
+ * `on` returns an unsubscribe function OR nothing — written as `| undefined`
+ * rather than `| void`, which reads as "this union member is the absence of a
+ * return" and is what `noConfusingVoidType` flags. Nothing here unsubscribes
+ * (the observer lives as long as its session), so the return is only ever
+ * discarded; the type exists to describe pi's shape honestly.
+ */
 interface PermissionEventApi {
   events?: {
-    on?: (channel: string, handler: (data: unknown) => void) => (() => void) | void;
+    on?: (channel: string, handler: (data: unknown) => void) => (() => void) | undefined;
   };
 }
 

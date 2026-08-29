@@ -36,8 +36,8 @@
 | T11 | Extension UI bridge：utilityProcess ↔ Main ↔ preload ↔ renderer | **Done (2026-08-28)** | 移植 pix `extension-ui-bridge.ts` → `src/agent-host/extensionUiBridge.ts`，接 `bindExtensions({ uiContext, mode:'rpc' })`。迟到响应/会话切换/重复应答由 runtimeId + pending map 双重判重；`setBeforeSessionInvalidate` 接 reload |
 | T08 | Portable UI 原语：select / confirm / input | **Done (2026-08-28)** | 用 @coss/ui `AlertDialog`（design-system 组件优先），未手搓遮罩。含 editor。挂载于 ChatWorkspace 且不受 session 模式限制——扩展在 bind 期就可能发问 |
 | T08-a | 随包并固定 `@gotgenes/pi-permission-system` | **Done (2026-08-28)** | pin 27.0.1；经 `additionalExtensionPaths` 传绝对本地路径（传目录不传文件：exports 入口与 pi 入口不是同一个文件）；用户已自装则不注入，否则每次工具调用弹两次。打包过滤特判 `.ts` 保留（该包运行入口是 TS）与 tree-sitter-bash 只留 wasm。+6.4MB |
-| T08-b | 权限审批闭环：插件 ask → GUI → decision | **Done (2026-08-28)** | 确认非 TUI 走 `ui.select`/`ui.input`，四选项实跑捕获。补两处缺口：① 多行标题拆分（提示正文整段塞在标题位，是用户判断的全部依据）；② 内联扩展订阅 `permissions:ui_prompt`/`permissions:decision` → `permission.activity`（`policy_allow` 不弹窗，这是「被闸过」的唯一证据） |
-| T08-c | 默认权限策略与设置面 | Blocked | open-q Q9 待用户拍板默认 policy；至少覆盖工具/bash/path/external_directory，必须 fail-closed。**当前不带任何 policy 文件，插件自身兜底一律 ask**，故不阻塞其余 Phase 2 |
+| T08-b | 权限审批闭环：插件 ask → GUI → decision | **代码完成，验收未过（2026-08-29 降级）** | 确认非 TUI 走 `ui.select`/`ui.input`，四选项实跑捕获。补两处缺口：① 多行标题拆分（提示正文整段塞在标题位，是用户判断的全部依据）；② 内联扩展订阅 `permissions:ui_prompt`/`permissions:decision` → `permission.activity`（`policy_allow` 不弹窗，这是「被闸过」的唯一证据）。2026-08-29 审计修复批补齐 timeline 落地、Stop 排空、IPC 失败恢复与窗口路由。**从 Done 降级**：真机「模型发起工具调用 → 弹窗 → 允许/拒绝」这条链一次都没跑通过，Done 需要它 |
+| T08-c | 默认权限策略与设置面 | **代码完成（两切片），验收未过 (2026-08-29)** | Q9 已拍板收口 → [D11](./decisions/011-default-permission-policy.md)。**切片 1**：务实档策略随包写进产物内插件目录的 `config.json`（最低优先级，用户/受管 agentDir 配置永远压得过它，绝不写用户的 `~/.pi`）+ path deny 面含 `~/<APP_STATE_DIR>/*` 保护自家凭据库 + `projectTrusted` 按凭据模式分叉（受管 `false`，本机 `true`）+ 构建期写入与产物断言 + smoke 升级绊线。**切片 2**：设置面 GUI —— 按插件语义镜像三层合并并显示来源归属，只让**受管 agentDir 那一层**可编辑（本机路线抛错拒写，红线同 T08-a），危险选择走二次确认，`yoloMode` 只报不给开关。同批修掉 dev 下随包策略根本不生效的不一致（`ensureDevPermissionPolicy`）。证据见 [evidence/t08c-permission-settings-panel.md](./evidence/t08c-permission-settings-panel.md)。**验收仍欠**：面板点验 + 策略真机生效 |
 | T09 | Portable UI 原语：notify / setStatus / setWidget | Deferred | 标题栏通知 + 状态芯片 + Composer 卡片；非权限主线，可后置 |
 | T10 | 三级能力分层框架：Portable / Semantic no-op / TUI-only | Deferred | 降级策略 + `unsupported` 诊断信号；不阻塞首版权限审批 |
 
@@ -89,7 +89,11 @@
 - T06-b — 启动阻塞修复（循环块 + env undefined）
 - T06/T06-a — 冒烟通过（2026-08-28 真机：流式回复正常显示）
 - T19~T23 — Phase 5 模型配置链路全落（本地/受管目录、模型选择、管理端同步、TUI 注入）；证据见 [evidence/phase5-model-config.md](./evidence/phase5-model-config.md)
-- T07/T11/T08/T08-a/T08-b — Phase 2 除 T08-c 外全落（契约、桥接、四种对话原语、权限插件随包、审批闭环）；证据见 [evidence/phase2-extension-ui-permission.md](./evidence/phase2-extension-ui-permission.md)
+- T07/T11/T08/T08-a — Phase 2 前四件已完成（契约、桥接、四种对话原语、权限插件随包）；证据见 [evidence/phase2-extension-ui-permission.md](./evidence/phase2-extension-ui-permission.md)
+- **T08-b 与 T08-c 均代码完成但未验收**（真机审批 E2E + 策略真机生效未跑）；**T09/T10 仍 Deferred**。⇒ **Phase 2 未整体完成**
+- T08-c 切片 1 — 默认权限策略与信任边界（D11 四条拍板全部落地）；证据见 [evidence/t08c-default-permission-policy.md](./evidence/t08c-default-permission-policy.md)
+- T08-c 切片 2 — 权限策略设置面（查看三层生效结果 + 编辑受管层）；同批修掉 dev/打包策略不一致与设置分类清单的双份手写；证据见 [evidence/t08c-permission-settings-panel.md](./evidence/t08c-permission-settings-panel.md)
+- 2026-08-29 外部审计修复批：13 项发现逐条成立并修复（权限 fail-closed、多会话隔离、Stop 生命周期、Runtime Event 契约、附件/effort、permission.activity 落地、IPC 失败恢复、窗口路由、去重规则、runtimeId 生命周期、打包与许可证、可访问性、Biome）；证据见 [evidence/phase2-audit-fixes.md](./evidence/phase2-audit-fixes.md)
 
 ## 2026-08-28 本会话关键修改文件
 

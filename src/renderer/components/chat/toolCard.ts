@@ -125,6 +125,12 @@ export type TimelineItem =
   | { kind: 'text'; block: ChatBlock; blockIndex: number }
   | { kind: 'question'; block: ChatBlock; blockIndex: number }
   | { kind: 'permission'; block: ChatBlock; blockIndex: number }
+  /**
+   * T08-b: one or more RESOLVED gates, in block order. Several because one tool
+   * call runs several gates, and a row apiece would bury the tool it gated.
+   * Never answerable — see `ChatBlockType`'s `permission_activity`.
+   */
+  | { kind: 'permissionActivity'; blocks: ChatBlock[]; blockIndex: number }
   /** A contiguous tool/thinking stream (A07's `.ct` group). */
   | { kind: 'toolGroup'; entries: ToolGroupEntry[]; blockIndex: number };
 
@@ -178,6 +184,20 @@ export function groupTimeline(message: ChatMessage): TimelineItem[] {
         flush();
         items.push({ kind: 'permission', block, blockIndex });
         break;
+      case 'permission_activity': {
+        // Coalesced with the immediately preceding activity item rather than
+        // pushed as its own: the gate fires once per surface, so a bash call
+        // with a path check produces two records back to back and two rows
+        // would read as two separate approvals.
+        const last = items.at(-1);
+        if (last?.kind === 'permissionActivity' && currentGroup.length === 0) {
+          last.blocks.push(block);
+          break;
+        }
+        flush();
+        items.push({ kind: 'permissionActivity', blocks: [block], blockIndex });
+        break;
+      }
       case 'thinking':
         if (currentGroupBlockIndex === null) currentGroupBlockIndex = blockIndex;
         currentGroup.push({ kind: 'thinking', block, blockIndex });

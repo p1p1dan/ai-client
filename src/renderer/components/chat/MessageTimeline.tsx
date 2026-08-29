@@ -75,6 +75,7 @@ import {
 } from './messageMetadata';
 import { nextFollowState } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
+import { PermissionActivityRows } from './PermissionActivityRows';
 import { QuestionCard } from './QuestionCard';
 import {
   canRespondToPermission,
@@ -1425,6 +1426,11 @@ function turnItemKey(item: TurnItem): string {
   switch (item.kind) {
     case 'toolGroup':
       return `${item.messageId}~group-${item.blockIndex}`;
+    case 'permissionActivity':
+      // The first block's id, not the index: the item grows as more gates for
+      // the same tool call arrive, and keying on a count would remount the row
+      // every time one landed.
+      return item.blocks[0]?.id ?? `${item.messageId}~perm-${item.blockIndex}`;
     case 'notice':
       return `${item.messageId}~notice`;
     default:
@@ -1675,6 +1681,12 @@ function TurnItemView({
           }
         />
       );
+
+    case 'permissionActivity':
+      // T08-b: the record of what the permission plugin decided. Not a card and
+      // not answerable — the plugin's question is the Extension UI modal, and
+      // this row exists so the answer survives the modal closing.
+      return <PermissionActivityRows blocks={item.blocks} />;
 
     case 'question': {
       // T-05 (D-4): the live, answerable card lives in `PendingQuestionDock`
