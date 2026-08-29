@@ -32,12 +32,12 @@
 
 | ID | 任务 | 状态 | 说明 |
 |---|---|---|---|
-| T07 | 定义 renderer ↔ agent-host 的 Extension UI contracts | Planned | 优先直接移植 pi-app 的 worker-frame / IPC contract 形状；覆盖 request id、挂起/取消、select/input/confirm 响应 |
-| T11 | Extension UI bridge：utilityProcess ↔ Main ↔ preload ↔ renderer | Planned | 参照 pi-app bridge/worker RPC 直接取用；必须处理迟到响应、会话切换、host 崩溃、重复应答 |
-| T08 | Portable UI 原语：select / confirm / input | Planned | 直接取用 pi-app `ExtensionDialogShell`/`questionnaire-dialog`/confirm 结构，套本仓主题；布局可调整，不受旧气泡内表单约束 |
-| T08-a | 随包并固定 `@gotgenes/pi-permission-system` | Planned | MIT；不能依赖用户全局已装。确定 pin、随包/受管 agentDir 加载方式、License notice；本地模式与登录隔离模式均须可用 |
-| T08-b | 权限审批闭环：插件 ask → GUI → decision | Planned | 非 TUI 走 `ui.select/input`：Yes / Yes for session / No / No with reason；覆盖 `permissions:ui_prompt` / `permissions:decision`、子代理转发、挂起与取消 |
-| T08-c | 默认权限策略与设置面 | Blocked | open-q Q9 待用户拍板默认 policy；至少覆盖工具/bash/path/external_directory，必须 fail-closed |
+| T07 | 定义 renderer ↔ agent-host 的 Extension UI contracts | **Done (2026-08-28)** | 走 pix contracts 体系。`extensionUi.request` 事件 + `extensionUi.respond` 命令 + 14 个 portable 方法表；两个边界守卫。另新增 `extensionUi.cancelled`：超时计时器在 bridge 侧，会话切换/关停也只在 bridge 侧，不告知渲染端就会留下点了没反应的僵尸弹窗 |
+| T11 | Extension UI bridge：utilityProcess ↔ Main ↔ preload ↔ renderer | **Done (2026-08-28)** | 移植 pix `extension-ui-bridge.ts` → `src/agent-host/extensionUiBridge.ts`，接 `bindExtensions({ uiContext, mode:'rpc' })`。迟到响应/会话切换/重复应答由 runtimeId + pending map 双重判重；`setBeforeSessionInvalidate` 接 reload |
+| T08 | Portable UI 原语：select / confirm / input | **Done (2026-08-28)** | 用 @coss/ui `AlertDialog`（design-system 组件优先），未手搓遮罩。含 editor。挂载于 ChatWorkspace 且不受 session 模式限制——扩展在 bind 期就可能发问 |
+| T08-a | 随包并固定 `@gotgenes/pi-permission-system` | **Done (2026-08-28)** | pin 27.0.1；经 `additionalExtensionPaths` 传绝对本地路径（传目录不传文件：exports 入口与 pi 入口不是同一个文件）；用户已自装则不注入，否则每次工具调用弹两次。打包过滤特判 `.ts` 保留（该包运行入口是 TS）与 tree-sitter-bash 只留 wasm。+6.4MB |
+| T08-b | 权限审批闭环：插件 ask → GUI → decision | **Done (2026-08-28)** | 确认非 TUI 走 `ui.select`/`ui.input`，四选项实跑捕获。补两处缺口：① 多行标题拆分（提示正文整段塞在标题位，是用户判断的全部依据）；② 内联扩展订阅 `permissions:ui_prompt`/`permissions:decision` → `permission.activity`（`policy_allow` 不弹窗，这是「被闸过」的唯一证据） |
+| T08-c | 默认权限策略与设置面 | Blocked | open-q Q9 待用户拍板默认 policy；至少覆盖工具/bash/path/external_directory，必须 fail-closed。**当前不带任何 policy 文件，插件自身兜底一律 ask**，故不阻塞其余 Phase 2 |
 | T09 | Portable UI 原语：notify / setStatus / setWidget | Deferred | 标题栏通知 + 状态芯片 + Composer 卡片；非权限主线，可后置 |
 | T10 | 三级能力分层框架：Portable / Semantic no-op / TUI-only | Deferred | 降级策略 + `unsupported` 诊断信号；不阻塞首版权限审批 |
 
@@ -89,6 +89,7 @@
 - T06-b — 启动阻塞修复（循环块 + env undefined）
 - T06/T06-a — 冒烟通过（2026-08-28 真机：流式回复正常显示）
 - T19~T23 — Phase 5 模型配置链路全落（本地/受管目录、模型选择、管理端同步、TUI 注入）；证据见 [evidence/phase5-model-config.md](./evidence/phase5-model-config.md)
+- T07/T11/T08/T08-a/T08-b — Phase 2 除 T08-c 外全落（契约、桥接、四种对话原语、权限插件随包、审批闭环）；证据见 [evidence/phase2-extension-ui-permission.md](./evidence/phase2-extension-ui-permission.md)
 
 ## 2026-08-28 本会话关键修改文件
 

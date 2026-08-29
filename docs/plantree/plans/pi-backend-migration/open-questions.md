@@ -56,6 +56,12 @@ pi SDK 是纯 JS 包（21.4MB），无平台二进制。作为 npm 依赖安装�
 
 **待用户拍板**（T08-c 开工前）。在此之前 T07/T11/T08/T08-a/T08-b 可做协议、桥接、插件随包与 UI 闭环，但不得自造默认安全策略。
 
+**2026-08-28 更新（T08-a/T08-b 落地后）**：前置五项已全部完成，且**没有**自造任何默认策略——随包的插件不带 policy 配置文件。实测插件自身兜底为所有 surface 一律 `ask`（`rule.ts:112` `defaultAction ?? "ask"`，另有 `rule.ts:86` 显式 `origin: "fail-closed"` 分支）。
+
+因此当前状态是「全部询问」，安全但话多：每次读文件、每条 bash 都会弹窗。Q9 要决定的实质是**把哪些 surface 从 ask 放宽到 allow**，属于「减少打扰」而非「补上防护」——这改变了它的紧迫性，但不改变它仍需用户拍板这一点（放宽安全边界不是可以替用户默认的事）。
+
+拍板时可参考插件 `config/config.example.json` 的示例分档，以及 `schemas/permissions.schema.json` 里对 `path` / `external_directory` 两个横切面的说明：`path` deny 无法被单工具 allow 覆盖；`external_directory` 的 ask 也无法被 `path` allow 放宽（最严格者胜）。
+
 ## 已尝试但失败的方案
 
 ### F1 — 直接从 `assistantMessageEvent.delta` 读取文本增量
