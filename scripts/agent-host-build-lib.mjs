@@ -28,7 +28,11 @@ import {
  * runtime. Codex is NOT here on purpose: it is spawned as an external CLI and
  * never imported, so listing it would be a no-op that misleads the next reader
  * (packaging spec §0.2-①). */
-export const ESBUILD_EXTERNAL = ['@anthropic-ai/claude-agent-sdk', '@cometix/claude-code', '@earendil-works/pi-coding-agent'];
+export const ESBUILD_EXTERNAL = [
+  '@anthropic-ai/claude-agent-sdk',
+  '@cometix/claude-code',
+  '@earendil-works/pi-coding-agent',
+];
 
 /** Entry-binary size floor: guards against LFS pointers / truncated downloads,
  * NOT against version drift (that is the manifest's job).
@@ -274,10 +278,23 @@ export function preflightHostDeps({
 // Copy filter.
 // ---------------------------------------------------------------------------
 
+/**
+ * T08-a — packages bundled for the permission system, whose LICENSE files must
+ * travel with the binary. All four are MIT/Apache-style licences that require
+ * the copyright notice to be distributed with the software.
+ */
+export const LICENSE_BEARING_PACKAGES = new Set([
+  '@gotgenes/pi-permission-system',
+  'tree-sitter-bash',
+  'web-tree-sitter',
+  'zod',
+]);
+
 export function shouldCopy(rel, { platform, arch, hasPtyPrebuild }) {
   if (rel === '') return true;
   const parts = rel.split('/');
   const top = topPackage(parts);
+  const base = parts[parts.length - 1];
 
   if (parts[0] === '.bin' || parts[0] === '.package-lock.json') return false;
   if (/^@anthropic-ai\/claude-agent-sdk-.+/.test(top)) return false;
@@ -323,7 +340,43 @@ export function shouldCopy(rel, { platform, arch, hasPtyPrebuild }) {
   // Cometix vendor ships runtime assets (ripgrep etc.) — keep verbatim.
   if (rel.startsWith('@cometix/claude-code/vendor/')) return true;
 
-  const base = parts[parts.length - 1];
+  // T08-a — @gotgenes/pi-permission-system (MIT) is bundled so tool approval
+  // works without the user having installed anything globally.
+  //
+  // Its runtime entry is TYPESCRIPT: package.json declares
+  // `pi.extensions: ["./src/index.ts"]` and `dist/` holds nothing but a
+  // `.d.ts`. pi strips types when it loads an extension, so the generic
+  // `.ts` drop below would ship this package with no entry point at all —
+  // a permission system that silently fails to load is worse than none,
+  // because the absence looks exactly like "nothing needed approval".
+  if (top === '@gotgenes/pi-permission-system') {
+    // Docs are the only real weight here and never load at runtime.
+    if (rel.includes('/docs/')) return false;
+    if (/^(README|CHANGELOG)\./i.test(base)) return false;
+    return true;
+  }
+
+  // tree-sitter-bash: the plugin parses bash through the WASM grammar only
+  // (`require.resolve("tree-sitter-bash/tree-sitter-bash.wasm")` in its
+  // access-intent/bash/parser.ts). The prebuilt `.node` bindings (8.4MB, six
+  // platforms) and the C grammar sources (9.8MB) are never loaded — shipping
+  // them would add ~18MB of dead weight per install, and the foreign-platform
+  // binaries would repeat the R2 mistake `@openai` guards against above.
+  if (top === 'tree-sitter-bash') {
+    // The walker asks about the package DIRECTORY before descending into it, so
+    // this arm must say yes to it or the whole package is skipped and the bash
+    // parser has no grammar to load.
+    if (parts.length === 1) return true;
+    if (parts.length !== 2) return false;
+    // LICENSE included: this branch returns before the licence rule below.
+    return base === 'package.json' || base.endsWith('.wasm') || /^licen[cs]e(\.|$)/i.test(base);
+  }
+
+  // T08-a: MIT obliges us to ship the copyright notice with the binary, so the
+  // packages bundled for the permission system keep theirs. (The blanket drop
+  // below predates this and covers the rest of the tree — a wider audit is its
+  // own task, not something to smuggle in here.)
+  if (LICENSE_BEARING_PACKAGES.has(top) && /^licen[cs]e(\.|$)/i.test(base)) return true;
   if (/^licen[cs]e(\.|$)/i.test(base)) return false;
   if (
     base.endsWith('.ts') ||

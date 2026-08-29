@@ -341,6 +341,94 @@ describe('shouldCopy (A9, M1, M14)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T08-a — the bundled permission plugin and its tree-sitter dependency
+// ---------------------------------------------------------------------------
+describe('shouldCopy (T08-a permission plugin)', () => {
+  const opts = { ...lx, hasPtyPrebuild: false };
+  const PLUGIN = '@gotgenes/pi-permission-system';
+
+  /**
+   * The one that would silently break the feature: this package declares
+   * `pi.extensions: ["./src/index.ts"]` and ships no runtime JS at all, so the
+   * generic `.ts` drop would produce a plugin with no entry point — and an
+   * ungated tool call looks exactly like one that needed no approval.
+   */
+  it('keeps the TypeScript sources the plugin actually runs from', () => {
+    expect(shouldCopy(`${PLUGIN}/src/index.ts`, opts)).toBe(true);
+    expect(shouldCopy(`${PLUGIN}/src/service.ts`, opts)).toBe(true);
+    expect(shouldCopy(`${PLUGIN}/src/access-intent/bash/parser.ts`, opts)).toBe(true);
+    expect(shouldCopy(`${PLUGIN}/package.json`, opts)).toBe(true);
+    expect(shouldCopy(`${PLUGIN}/schemas/permissions.schema.json`, opts)).toBe(true);
+  });
+
+  /** MIT: the copyright notice ships with the binary. */
+  it('keeps the licence for every package bundled for the permission system', () => {
+    expect(shouldCopy(`${PLUGIN}/LICENSE`, opts)).toBe(true);
+    expect(shouldCopy('tree-sitter-bash/LICENSE', opts)).toBe(true);
+    expect(shouldCopy('web-tree-sitter/LICENSE', opts)).toBe(true);
+    expect(shouldCopy('zod/LICENSE', opts)).toBe(true);
+  });
+
+  it('drops the plugin documentation, which never loads at runtime', () => {
+    expect(shouldCopy(`${PLUGIN}/docs/guides/getting-started.md`, opts)).toBe(false);
+    expect(shouldCopy(`${PLUGIN}/README.md`, opts)).toBe(false);
+    expect(shouldCopy(`${PLUGIN}/CHANGELOG.md`, opts)).toBe(false);
+  });
+
+  /**
+   * The plugin parses bash through the WASM grammar only. The prebuilt `.node`
+   * bindings (six platforms, 8.4MB) and the C sources (9.8MB) are dead weight,
+   * and shipping foreign-platform binaries is the R2 mistake the @openai rules
+   * above exist to prevent.
+   */
+  /**
+   * The walker asks about a DIRECTORY before descending into it, so a rule that
+   * only answers for files inside the package silently skips the package
+   * entirely. Caught by a real build, not by the file-level assertions below.
+   */
+  it('admits the package directories themselves so the walker descends', () => {
+    expect(shouldCopy('tree-sitter-bash', opts)).toBe(true);
+    expect(shouldCopy('@gotgenes', opts)).toBe(true);
+    expect(shouldCopy(PLUGIN, opts)).toBe(true);
+    expect(shouldCopy('web-tree-sitter', opts)).toBe(true);
+  });
+
+  it('keeps only the wasm grammar from tree-sitter-bash', () => {
+    expect(shouldCopy('tree-sitter-bash/tree-sitter-bash.wasm', opts)).toBe(true);
+    expect(shouldCopy('tree-sitter-bash/package.json', opts)).toBe(true);
+    expect(shouldCopy('tree-sitter-bash/prebuilds/linux-x64/tree-sitter-bash.node', opts)).toBe(
+      false
+    );
+    expect(shouldCopy('tree-sitter-bash/prebuilds/darwin-arm64/tree-sitter-bash.node', opts)).toBe(
+      false
+    );
+    expect(shouldCopy('tree-sitter-bash/src/parser.c', opts)).toBe(false);
+    expect(shouldCopy('tree-sitter-bash/bindings/node/index.js', opts)).toBe(false);
+    expect(shouldCopy('tree-sitter-bash/grammar.js', opts)).toBe(false);
+  });
+
+  /** web-tree-sitter loads its own wasm through the generic rules. */
+  it('keeps the web-tree-sitter runtime and its wasm', () => {
+    expect(shouldCopy('web-tree-sitter/web-tree-sitter.wasm', opts)).toBe(true);
+    expect(shouldCopy('web-tree-sitter/web-tree-sitter.js', opts)).toBe(true);
+    expect(shouldCopy('web-tree-sitter/web-tree-sitter.cjs', opts)).toBe(true);
+    expect(shouldCopy('web-tree-sitter/web-tree-sitter.js.map', opts)).toBe(false);
+  });
+
+  /** The licence carve-out is scoped — it must not un-drop the whole tree. */
+  it('does not widen the licence exemption to unrelated packages', () => {
+    expect(shouldCopy('some-pkg/LICENSE', opts)).toBe(false);
+    expect(shouldCopy('@anthropic-ai/claude-agent-sdk/LICENSE', opts)).toBe(false);
+  });
+
+  /** The .ts carve-out is scoped too. */
+  it('does not widen the TypeScript exemption to unrelated packages', () => {
+    expect(shouldCopy('@gotgenes/some-other-package/src/index.ts', opts)).toBe(false);
+    expect(shouldCopy('zod/index.d.ts', opts)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // A4 — verifyArtifact must-exist / must-not-exist red arms
 // ---------------------------------------------------------------------------
 describe('verifyArtifact (A4)', () => {

@@ -12,12 +12,14 @@
     "spike:lifecycle": "node --experimental-strip-types spikes/host-lifecycle-spike.ts",
     "smoke:phase2": "node --experimental-strip-types spikes/phase2-sdk-runtime-smoke.ts",
     "smoke:permission": "node --experimental-strip-types spikes/phase2-permission-smoke.ts",
-    "smoke:permission-unit": "node --experimental-strip-types spikes/phase2-permission-bridge-unit.ts"
+    "smoke:permission-unit": "node --experimental-strip-types spikes/phase2-permission-bridge-unit.ts",
+    "smoke:permission-plugin": "node --experimental-strip-types spikes/t08a-permission-plugin-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.218",
     "@cometix/claude-code": "2.1.212",
     "@earendil-works/pi-coding-agent": "^0.84.3",
+    "@gotgenes/pi-permission-system": "27.0.1",
     "@openai/codex": "0.149.1"
   },
   "engines": {

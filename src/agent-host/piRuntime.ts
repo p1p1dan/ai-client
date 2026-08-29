@@ -12,6 +12,7 @@ import {
   createPortableExtensionUiBridge,
   type PortableExtensionUiBridge,
 } from './extensionUiBridge.ts';
+import { decidePermissionPlugin } from './permissionPlugin.ts';
 import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
 
 // ─── pi SDK type projections (lazy-imported, ESM-only) ───
@@ -33,8 +34,20 @@ interface PiSdkModule {
     inMemory: (cwd: string) => PiSessionMgr;
   };
   SettingsManager: {
-    create: (cwd: string, agentDir: string, opts: { projectTrusted: boolean }) => unknown;
+    create: (cwd: string, agentDir: string, opts: { projectTrusted: boolean }) => PiSettingsManager;
   };
+}
+
+/**
+ * The slice of pi's `SettingsManager` this Host reads: the user's configured
+ * extension packages, so the bundled permission plugin is not loaded twice
+ * (T08-a). Both getters are optional — an SDK build without them must degrade
+ * to "we cannot tell", never crash the Host.
+ */
+interface PiSettingsManager {
+  getGlobalSettings?: () => { packages?: unknown };
+  getProjectSettings?: () => { packages?: unknown };
+  [key: string]: unknown;
 }
 
 interface PiModel {
@@ -220,10 +233,39 @@ export class PiAgentRuntime {
 
     const createRuntime: PiRuntimeFactory = async ({ cwd, sessionManager: sm }) => {
       const settingsManager = sdk.SettingsManager.create(cwd, agentDir, { projectTrusted: true });
+      // T08-a: load the bundled permission plugin unless the user's own pi
+      // config already loads it — two copies would prompt twice per tool call.
+      const permissionPlugin = decidePermissionPlugin([
+        ...readConfiguredPackages(settingsManager.getGlobalSettings?.()),
+        ...readConfiguredPackages(settingsManager.getProjectSettings?.()),
+      ]);
+      if (permissionPlugin.reason === 'missing') {
+        // Never silent: without the plugin every tool runs unattended, and that
+        // is indistinguishable from "nothing needed approval" unless we say so.
+        this.log('permission plugin not found in the bundle — tool approval is DISABLED');
+        this.opts.emit({
+          type: 'host.error',
+          payload: {
+            code: 'permission_plugin_missing',
+            message:
+              'The bundled permission system could not be found; tool calls will not be gated.',
+            fatal: false,
+          },
+        });
+      } else {
+        this.log(`permission plugin: ${permissionPlugin.reason}`);
+      }
       const services = await sdk.createAgentSessionServices({
         cwd,
         agentDir,
         settingsManager,
+        ...(permissionPlugin.additionalExtensionPaths.length > 0
+          ? {
+              resourceLoaderOptions: {
+                additionalExtensionPaths: permissionPlugin.additionalExtensionPaths,
+              },
+            }
+          : {}),
       });
       return {
         ...(await sdk.createAgentSessionFromServices({ services, sessionManager: sm })),
@@ -786,6 +828,11 @@ export class PiAgentRuntime {
     this.handle = null;
     this.sdk = null;
   }
+}
+
+/** `settings.packages` when the SDK build exposes it; `[]` when it does not. */
+function readConfiguredPackages(settings: { packages?: unknown } | undefined): unknown[] {
+  return Array.isArray(settings?.packages) ? settings.packages : [];
 }
 
 function extractTextContent(content: unknown): string | undefined {
