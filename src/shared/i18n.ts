@@ -881,6 +881,8 @@ export const zhTranslations: Record<string, string> = {
   '"Hide While Running" mode requires "Enhanced Notification". Display mode will be switched to "Always Show".':
     '「运行时隐藏」模式需要「增强通知」支持。显示模式将切换为「始终显示」。',
   Confirm: '确定',
+  // T08 — extension UI input/editor dialogs.
+  Submit: '提交',
   'Image too large': '图片过大',
   'Max image size is {{size}}MB': '单张图片最大 {{size}}MB',
   'Too many images': '图片数量过多',

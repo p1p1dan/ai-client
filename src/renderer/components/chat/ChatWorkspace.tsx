@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { ChatComposer } from './ChatComposer';
+import { ExtensionUiDialog } from './ExtensionUiDialog';
 import { HostStatusBanner } from './HostStatusBanner';
 import { selectHistoryError } from './historyError';
 import { MessageTimeline } from './MessageTimeline';
@@ -133,6 +135,14 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     return useSubagentActivityStore.getState().init();
   }, []);
 
+  useEffect(() => {
+    // T11: same latch discipline as the two above. Owned at app level and not
+    // by the dialog component, which by definition is not mounted until a
+    // request has already arrived — a listener installed there could never see
+    // the event that would have created its own dialog.
+    return useExtensionUiStore.getState().init();
+  }, []);
+
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).
   useEffect(() => {
@@ -183,6 +193,12 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           onSendStart={markSendAttempt}
         />
       </div>
+      {/*
+       * Outside the `mode === 'session'` guard on purpose: an extension can ask
+       * during bind, before any session view exists, and that call is blocked
+       * just the same. The component renders nothing when no dialog is pending.
+       */}
+      <ExtensionUiDialog />
     </section>
   );
 }
