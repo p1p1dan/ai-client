@@ -4,7 +4,11 @@
  */
 
 import type { AgentWireName } from './agentWire';
-import type { PermissionDecisionId, SessionPermissionPreference } from './runtimeEvents';
+import type {
+  ExtensionUiResponse,
+  PermissionDecisionId,
+  SessionPermissionPreference,
+} from './runtimeEvents';
 
 /**
  * Stays 1. Multi-agent support (S2) is additive only — optional fields, new
@@ -38,7 +42,8 @@ export type AgentHostCommandType =
   | 'session.listHistory'
   | 'session.updatePermission'
   | 'permission.respond'
-  | 'question.respond';
+  | 'question.respond'
+  | 'extensionUi.respond';
 
 export interface AgentHostCommandBase {
   protocolVersion: typeof AGENT_HOST_PROTOCOL_VERSION;
@@ -297,6 +302,26 @@ export interface QuestionRespondCommand extends AgentHostCommandBase {
   };
 }
 
+/**
+ * T07 — the answer to one `extensionUi.request` event (see `runtimeEvents.ts`).
+ *
+ * NOT session-scoped, unlike every other respond command here: the addressee is
+ * a bridge instance plus a dialog id, and the Host resolves it from those two
+ * alone. Adding a `sessionId` would invite Main to route on it, and the session
+ * that was running when the extension asked may already be gone by the time the
+ * user answers — which is precisely the case `runtimeId` exists to make
+ * detectable rather than to paper over.
+ *
+ * Protocol version stays 1: a new member of an open command union, answered by
+ * an old Host with a correlated `host.error{not_implemented}` (piHost's default
+ * arm) — a clean per-command failure, not a broken handshake. Same reasoning as
+ * `session.updatePermission` above.
+ */
+export interface ExtensionUiRespondCommand extends AgentHostCommandBase {
+  type: 'extensionUi.respond';
+  payload: ExtensionUiResponse;
+}
+
 export type AgentHostCommand =
   | HostInitializeCommand
   | HostShutdownCommand
@@ -308,7 +333,8 @@ export type AgentHostCommand =
   | SessionListHistoryCommand
   | SessionUpdatePermissionCommand
   | PermissionRespondCommand
-  | QuestionRespondCommand;
+  | QuestionRespondCommand
+  | ExtensionUiRespondCommand;
 
 /** Host driver selected in Phase 0. */
 export type AgentHostDriver = 'agent-sdk' | 'stream-json';

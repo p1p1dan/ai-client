@@ -38,6 +38,7 @@ export type RuntimeEventType =
   | 'question.requested'
   | 'question.resolved'
   | 'usage.updated'
+  | 'extensionUi.request'
   | 'subagent.activity'
   | 'session.completed'
   | 'session.failed'
@@ -1071,6 +1072,218 @@ export interface SubagentActivityEvent extends RuntimeEventBase {
   payload: SubagentActivityPayload;
 }
 
+/**
+ * T07 — Extension UI, the third and last way an agent turn can stop and ask the
+ * user something (after `permission.requested` and `question.requested`).
+ *
+ * ## Why this exists at all
+ *
+ * pi extensions are written against a TUI: they call `ui.select(...)`,
+ * `ui.confirm(...)`, `ui.setStatus(...)` on an `ExtensionUIContext` that pi
+ * normally backs with an ANSI terminal. We are not a terminal, so the Host binds
+ * a PORTABLE stand-in (`extensionUiBridge.ts`) that turns each of those calls
+ * into one of these events and parks the extension's Promise until the answer
+ * comes back as an `extensionUi.respond` command. `@gotgenes/pi-permission-system`
+ * asks for tool approval through exactly this path (T08-b), which is why the
+ * bridge is a prerequisite for permissions rather than a nice-to-have.
+ *
+ * ## Why it is NOT modelled on permission.requested
+ *
+ * A permission request is one shape with one vocabulary of answers, and the Host
+ * knows what it means. An extension UI request is whatever the extension asked
+ * for, and the Host is a passthrough — it cannot validate the semantics because
+ * it does not know which extension is asking or why. So `method` + `args` stay
+ * open and the renderer narrows them (`readExtensionUiDialogArgs` below); folding
+ * this into the permission union would have made the Host claim an understanding
+ * it does not have.
+ */
+export const EXTENSION_UI_METHODS = [
+  'select',
+  'confirm',
+  'input',
+  'editor',
+  'notify',
+  'setStatus',
+  'setWorkingMessage',
+  'setWorkingVisible',
+  'setWorkingIndicator',
+  'setHiddenThinkingLabel',
+  'setWidget',
+  'setTitle',
+  'setEditorText',
+  /** The bridge met a TUI-only method it cannot honour; `args` is `{ method }`. */
+  'unsupported',
+] as const;
+
+export type ExtensionUiMethod = (typeof EXTENSION_UI_METHODS)[number];
+
+/**
+ * The four methods that BLOCK: the extension is awaiting a Promise and the turn
+ * does not advance until this session answers. Everything else in the table is
+ * fire-and-forget display state and must never be given a dialog.
+ *
+ * The split is load-bearing on both sides — the renderer decides whether to open
+ * a modal off it, and the Host decides whether to keep a pending entry off it —
+ * so it lives here once instead of being re-derived as two lists that drift.
+ */
+export const EXTENSION_UI_DIALOG_METHODS = ['select', 'confirm', 'input', 'editor'] as const;
+
+export type ExtensionUiDialogMethod = (typeof EXTENSION_UI_DIALOG_METHODS)[number];
+
+export function isExtensionUiMethod(value: unknown): value is ExtensionUiMethod {
+  return typeof value === 'string' && (EXTENSION_UI_METHODS as readonly string[]).includes(value);
+}
+
+export function isExtensionUiDialogMethod(value: unknown): value is ExtensionUiDialogMethod {
+  return (
+    typeof value === 'string' && (EXTENSION_UI_DIALOG_METHODS as readonly string[]).includes(value)
+  );
+}
+
+/** `ui.select(title, options)` — pick one string, or dismiss. */
+export interface ExtensionUiSelectArgs {
+  title: string;
+  options: string[];
+}
+
+/** `ui.confirm(title, message)` — yes/no. Dismissal is a NO, never a yes. */
+export interface ExtensionUiConfirmArgs {
+  title: string;
+  message: string;
+}
+
+/** `ui.input(title, placeholder?)` — free text, or dismiss. */
+export interface ExtensionUiInputArgs {
+  title: string;
+  placeholder?: string;
+}
+
+/** `ui.editor(title, prefill?)` — multi-line text, or dismiss. */
+export interface ExtensionUiEditorArgs {
+  title: string;
+  prefill?: string;
+}
+
+export type ExtensionUiDialogArgs =
+  | ({ method: 'select' } & ExtensionUiSelectArgs)
+  | ({ method: 'confirm' } & ExtensionUiConfirmArgs)
+  | ({ method: 'input' } & ExtensionUiInputArgs)
+  | ({ method: 'editor' } & ExtensionUiEditorArgs);
+
+/**
+ * Untrusted `(method, args)` → a dialog this renderer can actually draw.
+ *
+ * `undefined` means "do not open a modal": either the method is not a dialog, or
+ * the extension sent a shape we cannot render. The caller must then leave the
+ * request pending for the BRIDGE's fallback to settle (the bridge already
+ * carries the right no-answer value per method — `false` for confirm,
+ * `undefined` for the rest), because a renderer that invents an answer here
+ * would be answering on the user's behalf. Refusing to draw is safe; guessing
+ * what an unrenderable dialog meant is not.
+ *
+ * `options` is filtered rather than refused: a select whose list is partly
+ * malformed is still answerable from the entries that are strings, and dropping
+ * the whole dialog would strand a turn that a human could have finished. An
+ * EMPTY result is refused, because a picker with nothing to pick is not one.
+ */
+export function readExtensionUiDialogArgs(
+  method: unknown,
+  args: unknown
+): ExtensionUiDialogArgs | undefined {
+  if (!isExtensionUiDialogMethod(method)) return undefined;
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return undefined;
+  const raw = args as Record<string, unknown>;
+  const title = typeof raw.title === 'string' ? raw.title : undefined;
+  if (title === undefined) return undefined;
+
+  switch (method) {
+    case 'select': {
+      if (!Array.isArray(raw.options)) return undefined;
+      const options = raw.options.filter((o): o is string => typeof o === 'string');
+      return options.length > 0 ? { method, title, options } : undefined;
+    }
+    case 'confirm':
+      return typeof raw.message === 'string'
+        ? { method, title, message: raw.message }
+        : { method, title, message: '' };
+    case 'input':
+      return {
+        method,
+        title,
+        ...(typeof raw.placeholder === 'string' ? { placeholder: raw.placeholder } : {}),
+      };
+    case 'editor':
+      return {
+        method,
+        title,
+        ...(typeof raw.prefill === 'string' ? { prefill: raw.prefill } : {}),
+      };
+  }
+}
+
+/**
+ * One extension UI call, on its way out to the renderer.
+ *
+ * `uiRequestId` and NOT the base `requestId`, deliberately: the base field means
+ * "this event answers that COMMAND" everywhere else in this protocol, and this
+ * event answers no command — the extension spoke on its own, mid-turn. Reusing
+ * it would make Main's command-correlation table match an event that was never a
+ * reply.
+ *
+ * `runtimeId` identifies the BRIDGE INSTANCE, not the session. It changes every
+ * time the runtime's session object is replaced (reload / fork / switch), which
+ * is what makes a late answer to a dialog from the previous session detectably
+ * stale instead of silently applied to whatever now holds the same slot.
+ */
+export interface ExtensionUiRequestedEvent extends RuntimeEventBase {
+  type: 'extensionUi.request';
+  payload: {
+    runtimeId: string;
+    uiRequestId: string;
+    method: ExtensionUiMethod;
+    /** Open by construction — see the type doc. Narrow with `readExtensionUiDialogArgs`. */
+    args: unknown;
+    /** Extension-supplied deadline; the BRIDGE owns the timer, not the renderer. */
+    timeoutMs?: number;
+  };
+}
+
+/**
+ * The answer to one `extensionUi.request`, travelling back as the payload of the
+ * `extensionUi.respond` command.
+ *
+ * `ok: false` does NOT carry a value — it means "nobody answered" (dismissed,
+ * closed, torn down), and the bridge substitutes the fallback it recorded when
+ * the dialog opened. That is the only place a no-answer value is decided, so a
+ * dismissal can never be mistaken for a confirmation.
+ */
+export interface ExtensionUiResponse {
+  runtimeId: string;
+  uiRequestId: string;
+  ok: boolean;
+  value?: unknown;
+  error?: string;
+}
+
+/** Protocol-boundary guard: untrusted JSON → a response the bridge may act on. */
+export function readExtensionUiResponse(value: unknown): ExtensionUiResponse | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.runtimeId !== 'string' || !raw.runtimeId) return undefined;
+  if (typeof raw.uiRequestId !== 'string' || !raw.uiRequestId) return undefined;
+  // `ok` is the discriminant between "the user answered" and "substitute the
+  // fallback", so a missing or non-boolean one is refused rather than coerced —
+  // a truthy string would turn a dismissal into an answer.
+  if (typeof raw.ok !== 'boolean') return undefined;
+  return {
+    runtimeId: raw.runtimeId,
+    uiRequestId: raw.uiRequestId,
+    ok: raw.ok,
+    ...('value' in raw ? { value: raw.value } : {}),
+    ...(typeof raw.error === 'string' ? { error: raw.error } : {}),
+  };
+}
+
 /** Union of events Host may emit. */
 export type RuntimeEvent =
   | HostReadyEvent
@@ -1096,5 +1309,6 @@ export type RuntimeEvent =
   | QuestionRequestedEvent
   | QuestionResolvedEvent
   | UsageUpdatedEvent
+  | ExtensionUiRequestedEvent
   | SubagentActivityEvent
   | SessionTerminalEvent;
