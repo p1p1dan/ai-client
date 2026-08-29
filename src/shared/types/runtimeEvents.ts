@@ -40,6 +40,7 @@ export type RuntimeEventType =
   | 'usage.updated'
   | 'extensionUi.request'
   | 'extensionUi.cancelled'
+  | 'permission.activity'
   | 'subagent.activity'
   | 'session.completed'
   | 'session.failed'
@@ -1327,6 +1328,69 @@ export function readExtensionUiResponse(value: unknown): ExtensionUiResponse | u
   };
 }
 
+/**
+ * T08-b — what the permission plugin BROADCAST, as opposed to what it asked.
+ *
+ * ## Why this is not `permission.requested`
+ *
+ * `permission.requested` is a QUESTION: the Host is parked waiting for a
+ * `permission.respond` command, and the renderer's card is the thing that
+ * answers it. These events answer nothing. `@gotgenes/pi-permission-system`
+ * asks its question through `extensionUi.request` (it calls `ui.select`), and
+ * emits these on pi's extension event bus purely so observers can watch —
+ * the plugin's own emit helpers swallow listener errors precisely because "a
+ * consumer failure must not block the permission dialog itself".
+ *
+ * Routing them onto `permission.requested` would therefore put a card with live
+ * Allow/Deny buttons on screen next to the real modal, and pressing them would
+ * send a `permission.respond` that no runtime is waiting for.
+ *
+ * ## What it is for
+ *
+ * The record. After the user answers the modal, the decision should survive in
+ * the timeline — which tool was asked about, what was decided, and whether the
+ * policy decided it without asking at all. `policy_allow` never raises a dialog,
+ * so this is the ONLY evidence that a tool call was gated rather than unchecked.
+ */
+export type PermissionActivityPhase = 'prompt' | 'decision';
+
+/**
+ * How a decision was reached, verbatim from the plugin's own vocabulary.
+ *
+ * Deliberately a plain `string` and not a union: this is a third-party
+ * package's enum on a best-effort broadcast, and a closed union here would mean
+ * a plugin upgrade that adds a resolution silently fails our own guard. The
+ * renderer displays it and must not branch on values it has not seen.
+ */
+export interface PermissionActivityEvent extends RuntimeEventBase {
+  type: 'permission.activity';
+  payload: {
+    phase: PermissionActivityPhase;
+    /** The plugin's request id. One tool call runs several gates, hence several. */
+    requestId: string;
+    /** e.g. `bash`, `read`, `mcp`, `skill`, `external_directory`. */
+    surface?: string;
+    /** The command / path / tool name that was evaluated. */
+    value?: string;
+    agentName?: string;
+    /** `decision` phase only. */
+    result?: 'allow' | 'deny';
+    /** `decision` phase only — e.g. `user_approved`, `policy_allow`, `gate_error`. */
+    resolution?: string;
+    /** `decision` phase only — which config scope supplied the winning rule. */
+    origin?: string;
+    /** `decision` phase only — the pattern the winning rule matched. */
+    matchedPattern?: string;
+    /**
+     * The ask came from a SUBAGENT and was forwarded to this session to answer.
+     * Worth surfacing on its own: approving a subagent's request is not the same
+     * act as approving one's own, and the two are otherwise indistinguishable.
+     */
+    forwarded?: boolean;
+    requesterAgentName?: string;
+  };
+}
+
 /** Union of events Host may emit. */
 export type RuntimeEvent =
   | HostReadyEvent
@@ -1354,5 +1418,6 @@ export type RuntimeEvent =
   | UsageUpdatedEvent
   | ExtensionUiRequestedEvent
   | ExtensionUiCancelledEvent
+  | PermissionActivityEvent
   | SubagentActivityEvent
   | SessionTerminalEvent;

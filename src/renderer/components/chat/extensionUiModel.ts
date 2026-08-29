@@ -98,6 +98,39 @@ export function removeExtensionUiDialog(
   return next.length === state.pending.length ? state : { pending: next };
 }
 
+/** A dialog title split into a heading and the preformatted body under it. */
+export interface ExtensionUiDialogText {
+  heading: string;
+  /** Absent when the extension sent a single-line title. */
+  body?: string;
+}
+
+/**
+ * T08-b — split a dialog title into what to headline and what to show below it.
+ *
+ * pi's `ui.select(title, options)` has ONE text slot, so an extension with more
+ * to say than a heading packs it into that slot with newlines.
+ * `@gotgenes/pi-permission-system` does exactly this: it calls
+ * `ui.select(\`${title}\n${message}\`, …)` where `message` is a multi-line
+ * rendered prompt body — the tool, the command, the paths being touched.
+ *
+ * That body is the entire basis on which someone approves or denies a tool call.
+ * Rendering the whole blob as one heading would run it together into an
+ * unreadable line and lose the structure the decision depends on, so the first
+ * line becomes the heading and the rest is kept verbatim for monospace display.
+ *
+ * Trailing blank lines are dropped (the renderer pads to a row budget it was
+ * given for a terminal); interior ones are kept, because they are the body's own
+ * paragraph breaks.
+ */
+export function splitExtensionUiDialogText(title: string): ExtensionUiDialogText {
+  const newline = title.indexOf('\n');
+  if (newline === -1) return { heading: title };
+  const heading = title.slice(0, newline);
+  const body = title.slice(newline + 1).replace(/\s+$/, '');
+  return body ? { heading, body } : { heading };
+}
+
 /**
  * The dialog to show right now, or `undefined`.
  *

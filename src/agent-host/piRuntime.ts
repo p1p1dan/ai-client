@@ -12,6 +12,7 @@ import {
   createPortableExtensionUiBridge,
   type PortableExtensionUiBridge,
 } from './extensionUiBridge.ts';
+import { createPermissionActivityObserver } from './permissionActivity.ts';
 import { decidePermissionPlugin } from './permissionPlugin.ts';
 import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
 
@@ -255,17 +256,32 @@ export class PiAgentRuntime {
       } else {
         this.log(`permission plugin: ${permissionPlugin.reason}`);
       }
+      // T08-b: watch the plugin's broadcasts so the timeline records what was
+      // gated — including the `policy_allow` decisions that never raise a
+      // dialog, which are otherwise indistinguishable from no gate at all.
+      const activityObserver = createPermissionActivityObserver({
+        log: this.log,
+        onActivity: (payload) => {
+          this.opts.emit({
+            type: 'permission.activity',
+            ...(this.currentSessionId ? { sessionId: this.currentSessionId } : {}),
+            payload,
+          });
+        },
+      });
+
       const services = await sdk.createAgentSessionServices({
         cwd,
         agentDir,
         settingsManager,
-        ...(permissionPlugin.additionalExtensionPaths.length > 0
-          ? {
-              resourceLoaderOptions: {
-                additionalExtensionPaths: permissionPlugin.additionalExtensionPaths,
-              },
-            }
-          : {}),
+        resourceLoaderOptions: {
+          ...(permissionPlugin.additionalExtensionPaths.length > 0
+            ? { additionalExtensionPaths: permissionPlugin.additionalExtensionPaths }
+            : {}),
+          extensionFactories: [
+            { name: 'aiclient-permission-activity', factory: activityObserver, hidden: true },
+          ],
+        },
       });
       return {
         ...(await sdk.createAgentSessionFromServices({ services, sessionManager: sm })),

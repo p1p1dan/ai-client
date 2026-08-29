@@ -136,6 +136,109 @@ describe('useExtensionUiStore', () => {
     });
   });
 
+  /**
+   * T08-b — the permission approval loop, end to end through this store.
+   *
+   * The four options are verbatim what `@gotgenes/pi-permission-system` emits:
+   * captured by running its own `requestPermissionDecisionFromUi` against a
+   * recording `ui`, not transcribed from its docs. If the plugin ever renames
+   * one, this test still passes (the store is agnostic) — what it pins is that
+   * the answer travels back UNCHANGED, because the plugin matches the returned
+   * string against its option list and anything else is read as a denial.
+   */
+  describe('permission approval loop', () => {
+    const OPTIONS = ['Yes', 'Yes, for this session', 'No', 'No, provide reason'];
+
+    function permissionPrompt(uiRequestId: string): RuntimeEvent {
+      return {
+        type: 'extensionUi.request',
+        seq: 1,
+        timestamp: 1,
+        sessionId: 's1',
+        payload: {
+          runtimeId: 'rt-1',
+          uiRequestId,
+          method: 'select',
+          args: {
+            title: 'Allow bash?\nTool: bash\nCommand: rm -rf /tmp/build',
+            options: OPTIONS,
+          },
+        },
+      } as RuntimeEvent;
+    }
+
+    it('sends the chosen option back verbatim', async () => {
+      useExtensionUiStore.getState().init();
+      captured?.(permissionPrompt('p1'));
+      await useExtensionUiStore.getState().answer('p1', 'Yes, for this session');
+      expect(lastPayload()).toMatchObject({ ok: true, value: 'Yes, for this session' });
+    });
+
+    /**
+     * Fail-closed, and the reason it is safe: a dismissal sends NO value, the
+     * Host substitutes `undefined` for a select, and the plugin's own
+     * `requestPermissionDecisionFromUi` falls through an unmatched selection to
+     * `createDeniedPermissionDecision()`. Closing the box denies the tool call.
+     */
+    it('turns a dismissal into a no-value response, which the plugin reads as deny', async () => {
+      useExtensionUiStore.getState().init();
+      captured?.(permissionPrompt('p2'));
+      await useExtensionUiStore.getState().dismiss('p2');
+      const payload = lastPayload();
+      expect(payload.ok).toBe(false);
+      expect('value' in payload).toBe(false);
+    });
+
+    /** The scope follow-up is a second select on the same path — nothing special. */
+    it('handles the session-scope follow-up as an ordinary second dialog', async () => {
+      useExtensionUiStore.getState().init();
+      captured?.(permissionPrompt('p3'));
+      await useExtensionUiStore.getState().answer('p3', 'Yes, for this session');
+      captured?.({
+        type: 'extensionUi.request',
+        seq: 2,
+        timestamp: 2,
+        sessionId: 's1',
+        payload: {
+          runtimeId: 'rt-1',
+          uiRequestId: 'p3-scope',
+          method: 'select',
+          args: {
+            title: 'Allow bash?\nApply this session grant to:',
+            options: ['This subagent only', 'The whole session'],
+          },
+        },
+      } as RuntimeEvent);
+      expect(useExtensionUiStore.getState().pending.map((p) => p.uiRequestId)).toEqual([
+        'p3-scope',
+      ]);
+      await useExtensionUiStore.getState().answer('p3-scope', 'This subagent only');
+      expect(lastPayload()).toMatchObject({ value: 'This subagent only' });
+    });
+
+    /** "No, provide reason" opens an input whose text is the denial reason. */
+    it('carries the denial reason from the follow-up input', async () => {
+      useExtensionUiStore.getState().init();
+      captured?.({
+        type: 'extensionUi.request',
+        seq: 3,
+        timestamp: 3,
+        sessionId: 's1',
+        payload: {
+          runtimeId: 'rt-1',
+          uiRequestId: 'p4-reason',
+          method: 'input',
+          args: {
+            title: 'Allow bash?\nShare why this request was denied (optional).',
+            placeholder: 'Reason shown back to the agent',
+          },
+        },
+      } as RuntimeEvent);
+      await useExtensionUiStore.getState().answer('p4-reason', 'Too destructive');
+      expect(lastPayload()).toMatchObject({ ok: true, value: 'Too destructive' });
+    });
+  });
+
   describe('cancellation from the Host', () => {
     it('drops a dialog the bridge already settled', () => {
       useExtensionUiStore.getState().init();

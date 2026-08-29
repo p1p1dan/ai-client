@@ -6,6 +6,7 @@ import {
   initialExtensionUi,
   reduceExtensionUi,
   removeExtensionUiDialog,
+  splitExtensionUiDialogText,
 } from '../extensionUiModel';
 
 /**
@@ -162,6 +163,42 @@ describe('cancellation', () => {
   it('is a no-op for ids it is not showing', () => {
     const state = feed([requestEvent({ uiRequestId: 'q1' })]);
     expect(reduceExtensionUi(state, cancelEvent(['other'], 'host_shutdown'))).toBe(state);
+  });
+});
+
+/**
+ * T08-b — `ui.select` has ONE text slot, so an extension with more to say packs
+ * it in with newlines. `@gotgenes/pi-permission-system` calls
+ * `ui.select(`${title}\n${renderedBody}`, …)`, and that body is the entire basis
+ * on which someone approves or denies a tool call.
+ */
+describe('splitExtensionUiDialogText', () => {
+  it('leaves an ordinary single-line title alone', () => {
+    expect(splitExtensionUiDialogText('Pick a branch')).toEqual({ heading: 'Pick a branch' });
+  });
+
+  it('splits the permission prompt into a heading and its rendered body', () => {
+    const parsed = splitExtensionUiDialogText(
+      ['Allow bash?', 'Tool: bash', 'Command: rm -rf /tmp/build', 'Paths:', '  /tmp/build'].join(
+        '\n'
+      )
+    );
+    expect(parsed.heading).toBe('Allow bash?');
+    expect(parsed.body).toBe('Tool: bash\nCommand: rm -rf /tmp/build\nPaths:\n  /tmp/build');
+  });
+
+  /** The body is laid out for a terminal: its own blank lines are structure. */
+  it('keeps interior blank lines but trims the row-budget padding at the end', () => {
+    const parsed = splitExtensionUiDialogText('Heading\nfirst\n\nsecond\n\n   \n');
+    expect(parsed.body).toBe('first\n\nsecond');
+  });
+
+  it('reports no body when only padding followed the heading', () => {
+    expect(splitExtensionUiDialogText('Heading\n\n  \n')).toEqual({ heading: 'Heading' });
+  });
+
+  it('tolerates an empty heading rather than losing the body', () => {
+    expect(splitExtensionUiDialogText('\nbody text')).toEqual({ heading: '', body: 'body text' });
   });
 });
 

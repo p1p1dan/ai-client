@@ -8,11 +8,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Ident } from '@/components/ui/ident';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/i18n';
 import { useExtensionUiStore } from '@/stores/extensionUi';
-import { currentExtensionUiDialog, type ExtensionUiPendingDialog } from './extensionUiModel';
+import {
+  currentExtensionUiDialog,
+  type ExtensionUiPendingDialog,
+  splitExtensionUiDialogText,
+} from './extensionUiModel';
 
 /**
  * T08 — the Portable UI primitives: select / confirm / input / editor.
@@ -48,6 +53,9 @@ function ExtensionUiDialogBody({ pending }: { pending: ExtensionUiPendingDialog 
   const answer = useExtensionUiStore((state) => state.answer);
   const dismiss = useExtensionUiStore((state) => state.dismiss);
   const { dialog, uiRequestId } = pending;
+  // The permission prompt's whole body arrives inside the title slot — see
+  // `splitExtensionUiDialogText`.
+  const { heading, body } = splitExtensionUiDialogText(dialog.title);
 
   const [text, setText] = useState(dialog.method === 'editor' ? (dialog.prefill ?? '') : '');
   // Guards the window between the click and the store update: without it a
@@ -71,13 +79,38 @@ function ExtensionUiDialogBody({ pending }: { pending: ExtensionUiPendingDialog 
     <AlertDialog open onOpenChange={(next) => !next && cancel()}>
       <AlertDialogPopup className="sm:max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
+          <AlertDialogTitle>{heading}</AlertDialogTitle>
           {dialog.method === 'confirm' && dialog.message ? (
             <AlertDialogDescription className="whitespace-pre-wrap">
               {dialog.message}
             </AlertDialogDescription>
           ) : null}
         </AlertDialogHeader>
+
+        {/*
+         * Monospace and pre-wrapped: this body is laid out by the extension for
+         * a terminal (aligned labels, wrapped commands), so a proportional font
+         * would break the alignment it was rendered with. Scrollable because a
+         * bash approval can list many paths, and a prompt that overflows the
+         * viewport would put its own buttons out of reach.
+         */}
+        {body ? (
+          <div className="px-6 pb-2">
+            <Ident
+              // `Ident` rather than a raw `font-mono` (D25 §2.5: the optical
+              // compensation lives in one place) and rather than `CodeBlock`
+              // (this is a rendered label/value listing, not source — syntax
+              // highlighting it would assert a language it does not have).
+              // `whitespace-pre-wrap` keeps the alignment the extension laid out
+              // for a terminal; scrollable because a bash approval can list many
+              // paths, and a prompt that overflows would put its own buttons out
+              // of reach.
+              className="block max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-muted-foreground"
+            >
+              {body}
+            </Ident>
+          </div>
+        ) : null}
 
         {dialog.method === 'select' ? (
           <div className="grid gap-1 px-6 pb-2">
