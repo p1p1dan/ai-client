@@ -228,6 +228,11 @@ export const IPC_CHANNELS = {
   SETTINGS_READ: 'settings:read',
   SETTINGS_WRITE: 'settings:write',
 
+  // Phase 5 — managed Pi model metadata sync (keys never cross this IPC).
+  PI_MODELS_GET_STATUS: 'piModels:getStatus',
+  PI_MODELS_SYNC: 'piModels:sync',
+  PI_MODELS_OPEN_ADMIN: 'piModels:openAdmin',
+
   // Notification
   NOTIFICATION_SHOW: 'notification:show',
   NOTIFICATION_CLICK: 'notification:click',

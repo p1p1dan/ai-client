@@ -631,6 +631,7 @@ describe('adoption.ts (D47 S6 §1)', () => {
         cchBaseUrl: 'https://api.example.com',
         claude: { baseUrl: 'https://api.example.com/v1', authToken: 'claude-token-xyz' },
         codex: { baseUrl: 'https://api.example.com/v1', apiKey: 'claude-token-xyz' },
+        pi: { baseUrl: 'https://api.example.com/v1', apiKey: 'claude-token-xyz' },
         receivedAt: FIXED_NOW().toISOString(),
       });
     });

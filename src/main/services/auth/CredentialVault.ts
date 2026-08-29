@@ -54,6 +54,8 @@ export interface VaultPayload {
   cchBaseUrl: string;
   claude: { baseUrl: string; authToken: string };
   codex: { baseUrl: string; apiKey: string };
+  /** Phase 5 / S4: Pi reuses the company key but keeps its own future-proof arm. */
+  pi?: { baseUrl: string; apiKey: string };
   receivedAt: string;
 }
 

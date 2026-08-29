@@ -102,10 +102,9 @@ export function shouldRequestCatalog(input: {
   if (input.force) return true;
   const cached = input.cached;
   if (!cached) return true;
-  // Anything that is not a live proxy answer is worth re-asking for as soon as
-  // the Host is up: a seed/stale record is a record of a FAILURE, and holding it
-  // for the full TTL would keep the failure on screen long after the cause is gone.
-  if (cached.source !== 'proxy') return true;
+  // Proxy, managed and local are authoritative answers. Seed/stale records are
+  // failures and should be retried immediately once the Host is available.
+  if (!['proxy', 'managed', 'local'].includes(cached.source)) return true;
   if (cached.fetchedAt === null) return true;
   return input.now - cached.fetchedAt >= (input.ttlMs ?? CATALOG_REFRESH_TTL_MS);
 }

@@ -8,6 +8,7 @@ import {
   Server,
   Settings,
   Share2,
+  SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
 import * as React from 'react';
@@ -25,6 +26,7 @@ import { GeneralSettings } from './GeneralSettings';
 import { HapiSettings } from './HapiSettings';
 import { IntegrationSettings } from './IntegrationSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
+import { PiModelManagementSettings } from './PiModelManagementSettings';
 import { RemoteSettings } from './RemoteSettings';
 import { WebInspectorSettings } from './WebInspectorSettings';
 
@@ -65,6 +67,7 @@ export function SettingsDialog({
     { id: 'keybindings', icon: Keyboard, label: t('Keybindings') },
     { id: 'agent', icon: Bot, label: t('Agent') },
     { id: 'ai', icon: Sparkles, label: t('AI') },
+    { id: 'piModels', icon: SlidersHorizontal, label: 'Pi Models' },
     { id: 'integration', icon: Link, label: t('Claude Integration') },
     { id: 'hapi', icon: Share2, label: t('Remote Sharing') },
     { id: 'remote', icon: Server, label: t('Remote Connection') },
@@ -139,6 +142,7 @@ export function SettingsDialog({
             {activeCategory === 'keybindings' && <KeybindingsSettings />}
             {activeCategory === 'agent' && <AgentSettings />}
             {activeCategory === 'ai' && <AISettings />}
+            {activeCategory === 'piModels' && <PiModelManagementSettings />}
             {activeCategory === 'integration' && (
               <IntegrationSettings scrollToProvider={scrollToProvider} />
             )}

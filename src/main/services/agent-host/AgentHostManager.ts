@@ -34,6 +34,7 @@ import log from '../../utils/logger';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getDevCredentialSeed } from '../auth/managedCredentialsStartup';
+import { resolveManagedPiHostEnv } from '../piModelConfig';
 import { AgentHostProcess } from './AgentHostProcess';
 import { buildAgentHostEnv, CODEX_JS_PATH_ENV_KEY, deriveBundledCodexJsPath } from './hostEnv';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
@@ -717,6 +718,7 @@ export class AgentHostManager {
     const proc = new PiHostProcess({
       hostEntryPath,
       execArgv: useStripTypes ? ['--experimental-strip-types'] : [],
+      env: resolveManagedPiHostEnv(),
     });
 
     this.attachProcessHandlers(proc);

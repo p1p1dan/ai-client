@@ -3,6 +3,11 @@ import { homedir } from 'node:os';
 import 'electron-log/preload.js';
 import type { Locale } from '@shared/i18n';
 import type {
+  PiModelManagementSettings,
+  PiModelSyncResult,
+  SyncPiModelsRequest,
+} from '@shared/piModelConfig';
+import type {
   AgentCliInfo,
   AgentMetadata,
   AppCloseRequestPayload,
@@ -1515,6 +1520,15 @@ const electronAPI = {
      */
     listAgentModels: (payload: ListAgentModelsRequest): Promise<AgentModelCatalog> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_AGENT_MODELS, payload),
+  },
+
+  piModels: {
+    getStatus: (): Promise<PiModelManagementSettings> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_GET_STATUS),
+    sync: (payload?: SyncPiModelsRequest): Promise<PiModelSyncResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_SYNC, payload),
+    openAdmin: (endpointUrl?: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_MODELS_OPEN_ADMIN, endpointUrl),
   },
 
   // Agent Host diagnostics

@@ -323,6 +323,7 @@ class OnboardingService {
         cchBaseUrl: cchServerUrl,
         claude: { baseUrl: credentials.claudeBaseUrl, authToken: credentials.claudeAuthToken },
         codex: { baseUrl: credentials.codexBaseUrl, apiKey: credentials.codexApiKey },
+        pi: { baseUrl: credentials.codexBaseUrl, apiKey: credentials.codexApiKey },
         receivedAt,
       });
       if (!saveResult.ok) {
@@ -421,7 +422,8 @@ class OnboardingService {
    * sequence is re-examined, not as a side effect of this slice.
    */
   async regenerateManagedHomesForLogout(): Promise<void> {
-    return;
+    const { clearManagedPiCredential } = await import('../piModelConfig');
+    clearManagedPiCredential();
   }
 
   private normalizeEmail(email: string): string {

@@ -375,6 +375,7 @@ async function performAdoption(
     cchBaseUrl,
     claude: { baseUrl: claudeCredentials.baseUrl, authToken: claudeCredentials.authToken },
     codex: { baseUrl: `${cchBaseUrl}/v1`, apiKey: claudeCredentials.authToken },
+    pi: { baseUrl: `${cchBaseUrl}/v1`, apiKey: claudeCredentials.authToken },
     receivedAt: now().toISOString(),
   };
 

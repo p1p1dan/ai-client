@@ -12,6 +12,7 @@
 import { net } from 'electron';
 import { getAuthStateService, getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
+import { readPiModelCatalog, syncManagedPiModels } from '../piModelConfig';
 import { type AgentCatalogCredentials, AgentCatalogService } from './AgentCatalogService';
 
 /**
@@ -47,6 +48,12 @@ export function getAgentCatalogService(): AgentCatalogService {
     cachedService = new AgentCatalogService({
       fetchFn: (url, init) => net.fetch(url, init),
       readCredentials: readCatalogCredentials,
+      readPiCatalog: async (force) => {
+        if (force && resolveManagedCredentialsEnabled()) {
+          await syncManagedPiModels(undefined, { force: true });
+        }
+        return readPiModelCatalog();
+      },
       log: (...args) => console.info(...args),
     });
   }

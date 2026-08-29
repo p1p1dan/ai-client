@@ -5,6 +5,7 @@ import { getAuthStateService, getCredentialVault } from '../services/auth';
 import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import { AgentInstaller } from '../services/cli/AgentInstaller';
 import { onboardingService } from '../services/onboarding/OnboardingService';
+import { syncManagedPiModels } from '../services/piModelConfig';
 import { sessionManager } from '../services/session/SessionManager';
 import { createVerifyAndRegisterHandler } from './onboardingHandlers';
 
@@ -149,7 +150,11 @@ export function registerOnboardingHandlers(): void {
       // Login-success trigger (S5 §1.2), symmetric to logout step ⑦ below:
       // refresh recomputes from the freshly-saved vault, and the
       // value-changed broadcast kicks the probe scheduler once.
-      onSuccess: () => getAuthStateService().refresh(),
+      onSuccess: async () => {
+        getAuthStateService().refresh();
+        const result = await syncManagedPiModels(undefined, { force: true });
+        if (!result.ok) console.warn('[onboarding] Pi model sync skipped:', result.error);
+      },
     })
   );
 

@@ -52,13 +52,15 @@ export class PiHostProcess extends EventEmitter {
     if (this.isRunning || this.starting) return;
     this.starting = true;
     try {
+      const env: Record<string, string> = {};
+      for (const [k, v] of Object.entries(process.env)) {
+        if (k !== 'ELECTRON_RUN_AS_NODE' && v !== undefined) env[k] = v;
+      }
+      Object.assign(env, this.options.env ?? {});
+
       const child = utilityProcess.fork(this.options.hostEntryPath, [], {
         execArgv: this.options.execArgv,
-        env: {
-          ...process.env,
-          ...(this.options.env ?? {}),
-          ELECTRON_RUN_AS_NODE: undefined as unknown as string,
-        },
+        env,
         stdio: 'pipe',
       });
 

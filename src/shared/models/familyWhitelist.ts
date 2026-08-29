@@ -45,7 +45,7 @@
  */
 
 import type { AgentModelOption } from '../types/agentCatalog';
-import { type AgentWireName, CLAUDE_CODE_AGENT, CODEX_AGENT } from '../types/agentWire';
+import { type AgentWireName, CLAUDE_CODE_AGENT, CODEX_AGENT, PI_AGENT } from '../types/agentWire';
 
 /**
  * The Claude families this app ships, in MENU ORDER (most capable first).
@@ -265,6 +265,9 @@ export function filterAgentModelCatalog(
   rawIds: readonly string[]
 ): AgentModelOption[] {
   const ids = normalizeIds(rawIds);
+  if (agent === PI_AGENT) {
+    return ids.map((id) => ({ id, label: id.includes('/') ? id.slice(id.indexOf('/') + 1) : id }));
+  }
   return agent === CODEX_AGENT ? filterCodex(ids) : filterClaude(ids);
 }
 
@@ -287,6 +290,7 @@ export function filterAgentModelCatalog(
 export function resolveModelAgentOwner(modelId: string): AgentWireName | null {
   const id = modelId.trim();
   if (id.length === 0) return null;
+  if (id.includes('/') && id.indexOf('/') > 0 && id.indexOf('/') < id.length - 1) return PI_AGENT;
   if (id.startsWith('claude-') || CLAUDE_LEGACY_SHORT_NAMES.includes(id)) return CLAUDE_CODE_AGENT;
   if (id.startsWith('gpt-') || id.startsWith('codex-')) return CODEX_AGENT;
   return null;

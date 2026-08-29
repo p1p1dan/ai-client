@@ -67,6 +67,11 @@ describe('chat:listAgentModels', () => {
     expect(listCalls).toEqual([{ agent: 'codex', force: false }]);
   });
 
+  it('accepts the Pi wire name', async () => {
+    await invoke({ agent: 'pi' });
+    expect(listCalls).toEqual([{ agent: 'pi', force: false }]);
+  });
+
   it('passes force through only when it is exactly true', async () => {
     await invoke({ agent: 'claude-code', force: true });
     await invoke({ agent: 'claude-code', force: 'yes' });

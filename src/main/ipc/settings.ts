@@ -1,4 +1,3 @@
-import { CREDENTIAL_MODE_SETTING_KEY } from '@shared/credentialMode';
 import { IPC_CHANNELS } from '@shared/types';
 import { app, ipcMain } from 'electron';
 import {
@@ -7,6 +6,10 @@ import {
   writeSharedSettingsToSession,
 } from '../services/SharedSessionState';
 import { toggleClaudeProviderWatcher } from './claudeProvider';
+
+// Inlined to break circular chunk: shell -> settings -> shell.
+// Canonical definition: src/shared/credentialMode.ts
+const CREDENTIAL_MODE_SETTING_KEY = 'credentialMode';
 
 /**
  * The renderer's not-yet-flushed settings object, or `null` when nothing is

@@ -122,6 +122,32 @@ function idsOf(catalog: { models: Array<{ id: string }> }): string[] {
 }
 
 describe('B1 — the four-level fallback, one rung per case', () => {
+  it('Pi bypasses vault/network/family filtering and returns provider/model ids', async () => {
+    const calls: string[] = [];
+    const service = new AgentCatalogService({
+      fetchFn: async (url) => {
+        calls.push(url);
+        return { ok: true, status: 200, text: async () => CLAUDE_BODY };
+      },
+      readCredentials: () => {
+        throw new Error('Pi must not read Claude/Codex credentials');
+      },
+      readPiCatalog: () => ({
+        agent: 'pi',
+        models: [{ id: 'glm/glm-5', label: 'GLM 5' }],
+        source: 'local',
+        stale: false,
+        fetchedAt: 1,
+      }),
+    });
+
+    await expect(service.list({ agent: 'pi' })).resolves.toMatchObject({
+      source: 'local',
+      models: [{ id: 'glm/glm-5', label: 'GLM 5' }],
+    });
+    expect(calls).toEqual([]);
+  });
+
   it('① a live answer is proxy/fresh, family-filtered', async () => {
     const h = makeHarness();
     const catalog = await h.service.list({ agent: 'claude-code' });

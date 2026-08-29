@@ -38,4 +38,8 @@
 | [open-questions.md](./open-questions.md) | 未决问题 |
 | [topics/architecture.md](./topics/architecture.md) | 架构方案：四层隔离 + 进程模型 |
 | [topics/extension-ui.md](./topics/extension-ui.md) | 扩展 UI 三级能力分层方案 |
-| [decisions/](./decisions/) | 已拍板决策 |
+| [topics/model-config.md](./topics/model-config.md) | 模型配置：现状诊断、pi-app 参考架构、目标架构（D8） |
+| [topics/timeline-reference.md](./topics/timeline-reference.md) | pi-app 时间线体系调查与映射表（D9） |
+| [implementation-status.md](./implementation-status.md) | 当前交接：Phase 5 已完成、下一目标与验证 |
+| [evidence/phase5-model-config.md](./evidence/phase5-model-config.md) | Phase 5 落地与验证证据 |
+| [decisions/](./decisions/) | 已拍板决策（含 [D8 模型配置策略](./decisions/008-model-config-strategy.md) · [D9 时间线参照 pi-app](./decisions/009-timeline-reference-piapp.md) · [D10 TUI 公司配置](./decisions/010-tui-managed-pi-config.md)） |

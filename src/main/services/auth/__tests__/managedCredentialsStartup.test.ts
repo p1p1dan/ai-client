@@ -29,6 +29,21 @@ import { resetManagedFileWriterQueuesForTests } from '../managedFileWriter';
  */
 
 const state = { userDataPath: '' };
+const modelFetchMock = vi.fn(async () => ({
+  ok: true,
+  status: 200,
+  text: async () =>
+    JSON.stringify({
+      version: 1,
+      providers: {
+        pilab: {
+          baseUrl: 'https://vault.example.com/v1',
+          api: 'openai-responses',
+          models: [{ id: 'gpt-5.6-sol' }],
+        },
+      },
+    }),
+}));
 
 vi.mock('electron', () => ({
   app: {
@@ -36,6 +51,7 @@ vi.mock('electron', () => ({
     getVersion: vi.fn(() => '0.0.0-test'),
     getPath: vi.fn((name: string) => (name === 'userData' ? state.userDataPath : tmpdir())),
   },
+  net: { fetch: modelFetchMock },
 }));
 
 function fakeCrypto(available: boolean): VaultCrypto {
@@ -60,6 +76,7 @@ describe('managedCredentialsStartup (D60)', () => {
   beforeEach(() => {
     vi.resetModules();
     resetManagedFileWriterQueuesForTests();
+    modelFetchMock.mockClear();
     userDataDir = mkdtempSync(join(tmpdir(), 'managed-startup-userdata-'));
     homeDir = mkdtempSync(join(tmpdir(), 'managed-startup-home-'));
     state.userDataPath = userDataDir;

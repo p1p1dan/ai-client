@@ -53,7 +53,7 @@ export interface VerifyAndRegisterHooks {
    * (GUI round 2026-08-15 caught the miss: without this, a fresh login left
    * the gate snapshot at the stale pre-login `signed_out` forever.)
    */
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
 }
 
 export function createVerifyAndRegisterHandler(
@@ -67,7 +67,7 @@ export function createVerifyAndRegisterHandler(
     const full = await service.verifyAndRegister(request.email, request.code);
     const response = toRendererRegisterResponse(full);
     if (response.ok) {
-      hooks.onSuccess?.();
+      await hooks.onSuccess?.();
     }
     return response;
   };

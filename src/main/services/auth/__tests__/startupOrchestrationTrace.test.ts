@@ -131,9 +131,25 @@ describe('startup orchestration trace — adoption-read -> vault-save -> marker,
     // a definitively-'unknown' (non-rejecting) response so the probe this
     // test itself triggers never mutates the vault out from under the
     // assertions below.
-    fetchMock.mockResolvedValue({
-      status: 200,
-      text: async () => '{"ok":true}',
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/api/v1/models-config')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              version: 1,
+              providers: {
+                pilab: {
+                  baseUrl: legacyBaseUrl,
+                  api: 'openai-responses',
+                  models: [{ id: 'gpt-5.6-sol' }],
+                },
+              },
+            }),
+        };
+      }
+      return { ok: true, status: 200, text: async () => '{"ok":true}' };
     });
 
     const authIndex = await import('../index');
@@ -180,11 +196,15 @@ describe('startup orchestration trace — adoption-read -> vault-save -> marker,
     // deterministic (not timing-dependent) way to wait for "fetch" to land.
     await authIndex.getAuthProbeScheduler().probeOnce();
 
-    // "fetch" — exactly once, hitting the probe endpoint, carrying the
-    // ADOPTED token (not empty/placeholder) — proves the probe ran off the
-    // freshly-adopted vault snapshot, not a stale/empty one.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [probeUrl, probeInit] = fetchMock.mock.calls[0] as [string, { body: string }];
+    // Two startup fetches now exist: Phase 5's metadata-only Pi model sync,
+    // then the auth probe. Find the POST probe explicitly and assert it still
+    // runs exactly once with the freshly adopted token.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const probeCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).endsWith('/api/auth/login')
+    );
+    expect(probeCalls).toHaveLength(1);
+    const [probeUrl, probeInit] = probeCalls[0] as [string, { body: string }];
     expect(probeUrl).toBe(`${legacyServerUrl}/api/auth/login`);
     expect(JSON.parse(probeInit.body)).toEqual({ key: legacyToken });
 

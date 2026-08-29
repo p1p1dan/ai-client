@@ -26,7 +26,7 @@
  */
 
 import type { AgentModelOption } from '../types/agentCatalog';
-import { type AgentWireName, CODEX_AGENT } from '../types/agentWire';
+import { type AgentWireName, CODEX_AGENT, PI_AGENT } from '../types/agentWire';
 
 /** The date the ids below were read off the gateway. Part of the provenance, not decoration. */
 export const SEED_CATALOG_CAPTURED_AT = '2026-08-16';
@@ -57,7 +57,14 @@ export const CODEX_SEED_MODELS: readonly AgentModelOption[] = [
   { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
 ];
 
+export const PI_SEED_MODELS: readonly AgentModelOption[] = [
+  { id: 'pilab/gpt-5.6-luna', label: 'GPT-5.6 Luna' },
+  { id: 'pilab/gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+  { id: 'pilab/gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+];
+
 export function seedCatalogFor(agent: AgentWireName): readonly AgentModelOption[] {
+  if (agent === PI_AGENT) return PI_SEED_MODELS;
   return agent === CODEX_AGENT ? CODEX_SEED_MODELS : CLAUDE_SEED_MODELS;
 }
 

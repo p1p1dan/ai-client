@@ -52,7 +52,7 @@ const CODEX_LIVE_IDS = [
   'gpt-image-2',
 ];
 
-function idsOf(agent: 'claude-code' | 'codex', raw: readonly string[]): string[] {
+function idsOf(agent: 'claude-code' | 'codex' | 'pi', raw: readonly string[]): string[] {
   return filterAgentModelCatalog(agent, raw).map((option) => option.id);
 }
 
@@ -89,6 +89,22 @@ describe('B9 — the recorded gateway lists filter down to exactly the seed six'
         )
       ).toEqual(seeded);
     }
+  });
+});
+
+describe('Phase 5 — Pi bypasses Claude/Codex family filtering', () => {
+  it('keeps arbitrary provider/model ids and their deterministic input order', () => {
+    expect(idsOf('pi', ['glm/glm-5', 'dan/deepseek-v4', 'glm/glm-5'])).toEqual([
+      'glm/glm-5',
+      'dan/deepseek-v4',
+    ]);
+  });
+
+  it('owns composite ids so they cannot cross into Claude or Codex sessions', () => {
+    expect(resolveModelAgentOwner('glm/glm-5')).toBe('pi');
+    expect(isModelAllowedForAgent('pi', 'glm/glm-5')).toBe(true);
+    expect(isModelAllowedForAgent('claude-code', 'glm/glm-5')).toBe(false);
+    expect(isModelAllowedForAgent('codex', 'glm/glm-5')).toBe(false);
   });
 });
 

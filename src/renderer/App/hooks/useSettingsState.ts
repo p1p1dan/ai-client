@@ -19,6 +19,7 @@ export function useSettingsState(
         'keybindings',
         'agent',
         'ai',
+        'piModels',
         'integration',
         'hapi',
         'remote',

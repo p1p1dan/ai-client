@@ -145,6 +145,18 @@ describe('shouldRequestCatalog (§4.1: lazy, never at startup)', () => {
     ).toBe(true);
   });
 
+  it('holds local and managed Pi catalogs for the same TTL as live proxy data', () => {
+    for (const source of ['local', 'managed'] as const) {
+      expect(
+        shouldRequestCatalog({
+          ...base,
+          hostState: 'ready',
+          cached: proxyCatalog({ source, fetchedAt: NOW }),
+        })
+      ).toBe(false);
+    }
+  });
+
   it('force skips the TTL', () => {
     expect(
       shouldRequestCatalog({ ...base, hostState: 'ready', cached: proxyCatalog(), force: true })

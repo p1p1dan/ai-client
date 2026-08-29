@@ -35,7 +35,7 @@ export interface AgentModelOption {
  *   the catalog is unreachable when it sees this; it must NOT render it as a
  *   normal catalog (arbitration §2.2 ∧ B "不得伪装可用目录").
  */
-export type AgentModelCatalogSource = 'proxy' | 'stale-cache' | 'seed';
+export type AgentModelCatalogSource = 'proxy' | 'managed' | 'local' | 'stale-cache' | 'seed';
 
 /**
  * Why a result is not `proxy`.

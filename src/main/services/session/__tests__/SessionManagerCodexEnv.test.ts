@@ -43,6 +43,8 @@ vi.mock('../../auth', () => ({
   getCredentialVault: () => ({ read: vaultReadMock }),
 }));
 
+vi.mock('../../auth/spawnGate', () => ({ assertAgentSpawnAllowed: vi.fn() }));
+
 /**
  * Real `node-pty` never runs under vitest — this fake is only used by the
  * "end-to-end spawn env" describe block below, which keeps `PtyManager`
@@ -222,6 +224,36 @@ describe('SessionManager.create local-PTY Codex env injection (D47 S3b §2, B-tr
 
     expect(createSpy.mock.calls[0][0]).toBe(options);
     expect(vaultReadMock).not.toHaveBeenCalled();
+  });
+
+  it('Q8: managed agent PTYs receive PI_CODING_AGENT_DIR, plain terminals do not', async () => {
+    process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+    vaultReadMock.mockReturnValue({
+      status: 'ok',
+      doc: {
+        payload: {
+          claude: { baseUrl: 'https://gateway.example/v1', authToken: 'claude-token' },
+          codex: { apiKey: 'company-key', baseUrl: 'https://cch.example/v1' },
+        },
+      },
+    });
+
+    const { SessionManager } = await import('../SessionManager');
+    const manager = new SessionManager();
+    vi.spyOn(manager.localPtyManager, 'allocateId')
+      .mockReturnValueOnce('agent-1')
+      .mockReturnValueOnce('terminal-1');
+    const createSpy = vi
+      .spyOn(manager.localPtyManager, 'create')
+      .mockImplementation((_options, _onData, _onExit, providedId) => providedId || 's1');
+
+    await manager.create(1, { cwd: '/repo/local', kind: 'agent' });
+    await manager.create(1, { cwd: '/repo/local', kind: 'terminal' });
+
+    const agentEnv = createSpy.mock.calls[0][0].env as Record<string, string>;
+    const terminalEnv = createSpy.mock.calls[1][0].env as Record<string, string>;
+    expect(agentEnv.PI_CODING_AGENT_DIR).toMatch(/\.pilab\/.+\/pi-agent$/);
+    expect(terminalEnv.PI_CODING_AGENT_DIR).toBeUndefined();
   });
 
   it('⑤ remote path: never injects CODEX_HOME/AICLIENT_CODEX_API_KEY, even with the flag on', async () => {

@@ -8,8 +8,8 @@
 
 ## Current Phase
 
-**S0' / S1 / S2 / S3 全部落地，本 plan 的 open questions 已全部关闭。**
-只剩 S4（为 pi 预留 vault arm），等 pi 立项后再做 —— 不是阻塞项。
+**S0' / S1 / S2 / S3 / S4 全部落地，本 plan 已完成。**
+S4 于 2026-08-28 随 pi-backend-migration Phase 5 完成：可选 `VaultPayload.pi` arm、登录与 adoption 写入、旧文档回退兼容。
 
 工作重心已转移到 [entry-and-environment](../entry-and-environment/README.md)：它的第一件
 （E1 本机可用性探测）前置刚被本批解开。
@@ -28,9 +28,8 @@
 ## Active TODO
 
 1. **E1**（属 entry-and-environment）—— 「使用本机已有配置」按钮的本机可用性探测。**前置已清，可开工。**
-2. **S4** —— 为 pi 预留 vault arm。等 pi 立项，不阻塞。
-3. 复核 `verifyResumePosture` 的两条可达例外（见下方风险 ①）。
-4. 补测 `managedSettings` 的执行期过滤行为（见下方风险 ②）。
+2. 复核 `verifyResumePosture` 的两条可达例外（见下方风险 ①）。
+3. 补测 `managedSettings` 的执行期过滤行为（见下方风险 ②）。
 
 ## Blocked By
 

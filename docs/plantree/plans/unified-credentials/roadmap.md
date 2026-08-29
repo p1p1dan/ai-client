@@ -1,7 +1,7 @@
 # Roadmap — 统一凭据目录与托管凭据转默认
 
-> 状态：**In Progress** —— S1 · **S0'（Claude 侧 + codex 侧）** · **S2** 均已落地。
-> **S0' 整条完成，S3 与 D64 已合并落地。**下一件 = **S4**（pi arm）。原先写「S3 的形状取决于 [entry-and-environment 的 D64](../entry-and-environment/README.md)」—— 已按此同轮做完。
+> 状态：**Done** —— S0' / S1 / S2 / S3 / **S4** 全部落地。
+> **S4 于 2026-08-28 随 pi-backend-migration Phase 5 合并完成**：`VaultPayload.pi?` 可选 arm + 登录/收编同 key 写入；旧 vault 文档无该 arm 时继续按 codex arm 兼容读取。
 > **2026-08-26 [D60](../../../plans/openchamber-chat-refactor-ledger.md) 重塑了 S2 之后的形状**：
 > 隔离 home 降级为「只隔离凭据」，取消 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` 整体重定向。
 > 连带 open-q #2 关闭、#5 修法定案；新增前置切片 **S0'**。未决项见 [open-questions](./open-questions.md)。
@@ -339,11 +339,14 @@ posture 那半 `-c` 补得回来，这半补不回来：`-c mcp_servers={}` 整�
 两者的落地形态不同。⇒ **S3 与 [那边的待拍板 #2](../entry-and-environment/open-questions.md) 必须同轮定**，
 否则 S3 会先落一个马上要推翻的形态。
 
-### S4 — 为 pi 预留 vault arm
+### S4 — 为 pi 预留 vault arm ✅ Done (2026-08-28)
 
-`VaultPayload` 加第三个 arm 的形状与迁移（vault 有 `SCHEMA_VERSION`，加字段要走版本位）。
-**不做 pi 接入本身**，只保证加家不需要动架构。排在 pi 立项之后或与之合并。
-D60 之后这条更便宜：加一家 = 加一对 env 键，不再是加一棵投影树。
+随 [pi-backend-migration Phase 5](../pi-backend-migration/evidence/phase5-model-config.md) 合并落地：
+
+- `VaultPayload` 新增可选 `pi?: {baseUrl, apiKey}`；登录与 legacy adoption 同步写入；
+- 读取保持兼容：旧 vault 无 pi arm 时退到 codex arm，不要求重登；
+- 这是 schema v1 内的**可选加法**，未升 envelope version——旧 reader 本来忽略未知 payload 字段，新 reader 也接受字段缺失；若做 required 字段或改变既有 arm 语义才需要版本迁移；
+- 实际 Pi 接入、隔离 agentDir、models/auth 分离与 TUI 注入由 pi plan 承担。
 
 ## Deferred
 

@@ -3,10 +3,11 @@
  * Emits AiClient Runtime Events; no Electron deps.
  */
 
+import { parsePiModelRef } from '../shared/piModelConfig.ts';
 import type { SessionAttachment } from '../shared/types/agentHost.ts';
 import { PI_AGENT } from '../shared/types/agentWire.ts';
 import type { EmitFn, LogFn } from './eventNormalizer.ts';
-import type { SessionRegistry } from './sessionRegistry.ts';
+import type { HostSession, SessionRegistry } from './sessionRegistry.ts';
 
 // ─── pi SDK type projections (lazy-imported, ESM-only) ───
 
@@ -31,8 +32,14 @@ interface PiSdkModule {
   };
 }
 
+interface PiModel {
+  provider: string;
+  id: string;
+  name?: string;
+}
+
 interface PiServices {
-  modelRuntime: { getModel: (provider: string, id: string) => unknown };
+  modelRuntime: { getModel: (provider: string, id: string) => PiModel | undefined };
   diagnostics?: unknown[];
   cwd: string;
   agentDir: string;
@@ -59,7 +66,8 @@ interface PiSession {
   clearQueue?: () => void;
   sessionId: string;
   sessionFile?: string;
-  model?: { provider: string; id: string; name: string };
+  model?: PiModel;
+  setModel: (model: PiModel, options?: { persist?: boolean }) => Promise<void>;
   [key: string]: unknown;
 }
 
@@ -81,6 +89,28 @@ export interface PiAgentRuntimeOptions {
   emit: EmitFn;
   log?: LogFn;
   registry: SessionRegistry;
+  /** Test seam; production lazy-imports the ESM-only Pi SDK. */
+  loadSdk?: () => Promise<unknown>;
+}
+
+interface TurnState {
+  assistantMessageId: string | null;
+  textBlockId: string | null;
+  thinkingBlockId: string | null;
+  textSnapshot: string;
+  thinkingSnapshot: string;
+  thinkingStarted: boolean;
+}
+
+function newTurnState(): TurnState {
+  return {
+    assistantMessageId: null,
+    textBlockId: null,
+    thinkingBlockId: null,
+    textSnapshot: '',
+    thinkingSnapshot: '',
+    thinkingStarted: false,
+  };
 }
 
 export class PiAgentRuntime {
@@ -90,6 +120,7 @@ export class PiAgentRuntime {
   private readonly log: LogFn;
   private readonly opts: PiAgentRuntimeOptions;
   private abortController: AbortController | null = null;
+  private turn: TurnState = newTurnState();
 
   constructor(opts: PiAgentRuntimeOptions) {
     this.opts = opts;
@@ -98,8 +129,10 @@ export class PiAgentRuntime {
 
   private async ensureSdk(): Promise<PiSdkModule> {
     if (this.sdk) return this.sdk;
-    const mod = await import('@earendil-works/pi-coding-agent');
-    this.sdk = mod as unknown as PiSdkModule;
+    const mod = this.opts.loadSdk
+      ? await this.opts.loadSdk()
+      : await import('@earendil-works/pi-coding-agent');
+    this.sdk = mod as PiSdkModule;
     return this.sdk;
   }
 
@@ -142,11 +175,89 @@ export class PiAgentRuntime {
     });
   }
 
+  private async applySelectedModel(
+    handle: PiRuntimeHandle,
+    session: HostSession,
+    requestedModel: string | undefined
+  ): Promise<void> {
+    const selected = requestedModel?.trim() || session.model?.trim();
+    if (!selected) return;
+    const ref = parsePiModelRef(selected);
+    if (!ref) {
+      throw new Error(`Invalid Pi model reference: ${selected}. Expected provider/model`);
+    }
+    const model = handle.services.modelRuntime.getModel(ref.provider, ref.modelId);
+    if (!model) throw new Error(`Pi model not found: ${selected}`);
+    if (
+      handle.session.model?.provider !== ref.provider ||
+      handle.session.model?.id !== ref.modelId
+    ) {
+      await handle.session.setModel(model, { persist: false });
+    }
+    session.model = selected;
+  }
+
+  private ensureAssistant(sessionId: string, requestId?: string): string {
+    if (!this.turn.assistantMessageId) {
+      this.turn.assistantMessageId = `asst-${sessionId}-${Date.now()}`;
+      this.turn.textBlockId = `${this.turn.assistantMessageId}-text`;
+      this.turn.thinkingBlockId = `${this.turn.assistantMessageId}-thinking`;
+      this.turn.textSnapshot = '';
+      this.turn.thinkingSnapshot = '';
+      this.turn.thinkingStarted = false;
+
+      const model = this.handle?.session?.model;
+      this.opts.emit({
+        type: 'message.started',
+        sessionId,
+        requestId,
+        payload: {
+          messageId: this.turn.assistantMessageId,
+          role: 'assistant',
+          ...(model ? { model: `${model.provider}/${model.id}` } : {}),
+        },
+      });
+    }
+    return this.turn.assistantMessageId;
+  }
+
+  private emitTextDelta(sessionId: string, text: string, requestId?: string): void {
+    if (!text) return;
+    const messageId = this.ensureAssistant(sessionId, requestId);
+    this.opts.emit({
+      type: 'message.delta',
+      sessionId,
+      requestId,
+      payload: { messageId, blockId: this.turn.textBlockId, text },
+    });
+  }
+
+  private emitThinkingDelta(sessionId: string, text: string, requestId?: string): void {
+    if (!text) return;
+    const messageId = this.ensureAssistant(sessionId, requestId);
+    if (!this.turn.thinkingStarted) {
+      this.turn.thinkingStarted = true;
+      this.opts.emit({
+        type: 'thinking.started',
+        sessionId,
+        requestId,
+        payload: { messageId, blockId: this.turn.thinkingBlockId },
+      });
+    }
+    this.opts.emit({
+      type: 'thinking.delta',
+      sessionId,
+      requestId,
+      payload: { messageId, blockId: this.turn.thinkingBlockId, text },
+    });
+  }
+
   private projectEvent(sessionId: string, event: PiAgentEvent, requestId?: string): void {
     const emit = this.opts.emit;
 
     switch (event.type) {
       case 'agent_start':
+        this.turn = newTurnState();
         emit({
           type: 'session.status',
           sessionId,
@@ -173,58 +284,101 @@ export class PiAgentRuntime {
       case 'message_start': {
         const msg = event.message as { role?: string; content?: unknown } | undefined;
         if (msg?.role === 'user') {
+          const userMsgId = `user-${sessionId}-${Date.now()}`;
+          const userBlockId = `${userMsgId}-text`;
           emit({
             type: 'message.started',
             sessionId,
             requestId,
-            payload: { role: 'user', text: extractTextContent(msg.content) ?? '' },
+            payload: { messageId: userMsgId, role: 'user' },
+          });
+          const text = extractTextContent(msg.content) ?? '';
+          if (text) {
+            emit({
+              type: 'message.delta',
+              sessionId,
+              requestId,
+              payload: { messageId: userMsgId, blockId: userBlockId, text },
+            });
+          }
+          emit({
+            type: 'message.completed',
+            sessionId,
+            requestId,
+            payload: { messageId: userMsgId },
           });
         } else if (msg?.role === 'assistant') {
-          emit({
-            type: 'message.started',
-            sessionId,
-            requestId,
-            payload: { role: 'assistant' },
-          });
+          this.ensureAssistant(sessionId, requestId);
         }
         break;
       }
 
       case 'message_update': {
-        const update = event.assistantMessageEvent as
+        const msg = event.message as
           | {
-              type: string;
-              delta: string;
+              role?: string;
+              content?: Array<{ type: string; text?: string; thinking?: string }> | string;
             }
           | undefined;
-        if (update?.type === 'text_delta') {
-          emit({
-            type: 'message.delta',
-            sessionId,
-            requestId,
-            payload: { delta: update.delta },
-          });
-        } else if (update?.type === 'thinking_delta') {
-          emit({
-            type: 'message.delta',
-            sessionId,
-            requestId,
-            payload: { delta: update.delta, thinking: true },
-          });
+        const ame = event.assistantMessageEvent as
+          | { type?: string; delta?: string; content?: string }
+          | undefined;
+
+        if (msg?.role === 'assistant' && Array.isArray(msg.content)) {
+          const fullText = msg.content
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text || '')
+            .join('');
+          if (fullText.length > this.turn.textSnapshot.length) {
+            const chunk = fullText.slice(this.turn.textSnapshot.length);
+            this.turn.textSnapshot = fullText;
+            this.emitTextDelta(sessionId, chunk, requestId);
+          }
+
+          const fullThinking = msg.content
+            .filter((c) => c.type === 'thinking')
+            .map((c) => c.thinking || '')
+            .join('');
+          if (fullThinking.length > this.turn.thinkingSnapshot.length) {
+            const chunk = fullThinking.slice(this.turn.thinkingSnapshot.length);
+            this.turn.thinkingSnapshot = fullThinking;
+            this.emitThinkingDelta(sessionId, chunk, requestId);
+          }
+        } else if (ame) {
+          if (ame.type === 'text_delta' && typeof ame.delta === 'string' && ame.delta) {
+            this.turn.textSnapshot += ame.delta;
+            this.emitTextDelta(sessionId, ame.delta, requestId);
+          } else if (ame.type === 'text_end' && typeof ame.content === 'string' && ame.content) {
+            if (ame.content.length > this.turn.textSnapshot.length) {
+              const chunk = ame.content.slice(this.turn.textSnapshot.length);
+              this.turn.textSnapshot = ame.content;
+              this.emitTextDelta(sessionId, chunk, requestId);
+            }
+          } else if (ame.type === 'thinking_delta' && typeof ame.delta === 'string' && ame.delta) {
+            this.turn.thinkingSnapshot += ame.delta;
+            this.emitThinkingDelta(sessionId, ame.delta, requestId);
+          } else if (
+            ame.type === 'thinking_end' &&
+            typeof ame.content === 'string' &&
+            ame.content
+          ) {
+            if (ame.content.length > this.turn.thinkingSnapshot.length) {
+              const chunk = ame.content.slice(this.turn.thinkingSnapshot.length);
+              this.turn.thinkingSnapshot = ame.content;
+              this.emitThinkingDelta(sessionId, chunk, requestId);
+            }
+          }
         }
         break;
       }
 
       case 'message_end': {
         const msg = event.message as
-          | {
-              role?: string;
-              stopReason?: string;
-              errorMessage?: string;
-            }
+          | { role?: string; stopReason?: string; errorMessage?: string }
           | undefined;
         if (msg?.role !== 'assistant') break;
 
+        const messageId = this.turn.assistantMessageId;
         if (
           msg.stopReason === 'stop' ||
           msg.stopReason === 'length' ||
@@ -234,7 +388,7 @@ export class PiAgentRuntime {
             type: 'message.completed',
             sessionId,
             requestId,
-            payload: { reason: msg.stopReason },
+            payload: { messageId, reason: msg.stopReason },
           });
         } else if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {
           emit({
@@ -246,18 +400,22 @@ export class PiAgentRuntime {
             },
           });
         }
+        this.turn.textSnapshot = '';
+        this.turn.thinkingSnapshot = '';
         break;
       }
 
       case 'tool_execution_start': {
+        const messageId = this.ensureAssistant(sessionId, requestId);
         emit({
           type: 'tool.started',
           sessionId,
           requestId,
           payload: {
-            toolName: event.toolName as string,
+            messageId,
             toolCallId: event.toolCallId as string,
-            input: event.args ? JSON.stringify(event.args) : '',
+            name: event.toolName as string,
+            input: event.args ?? {},
           },
         });
         break;
@@ -279,8 +437,9 @@ export class PiAgentRuntime {
           sessionId,
           requestId,
           payload: {
-            toolName: event.toolName as string,
+            messageId: this.turn.assistantMessageId,
             toolCallId: event.toolCallId as string,
+            name: event.toolName as string,
             output,
             isError: (event.isError as boolean) ?? false,
           },
@@ -429,6 +588,7 @@ export class PiAgentRuntime {
 
     try {
       const handle = await this.ensureHandle(session.workspacePath);
+      await this.applySelectedModel(handle, session, input.model);
       this.bindEvents(session.sessionId, handle.session, input.requestId);
 
       if (handle.session.sessionFile && !session.runtimeIdentity) {
@@ -486,7 +646,7 @@ export class PiAgentRuntime {
     }
   }
 
-  closeSession(sessionId: string, requestId?: string): void {
+  closeSession(sessionId: string, _requestId?: string): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.opts.registry.delete(sessionId);

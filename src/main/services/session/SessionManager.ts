@@ -16,6 +16,7 @@ import { getCredentialVault } from '../auth';
 import { ensureWorkspaceTrusted, getEffectiveClaudeJsonPath } from '../auth/claudeHome';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { assertAgentSpawnAllowed } from '../auth/spawnGate';
+import { resolveManagedPiPtyEnv } from '../piModelConfig';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
 import { isRemoteVirtualPath, parseRemoteVirtualPath } from '../remote/RemotePath';
 import { PtyManager } from '../terminal/PtyManager';
@@ -99,6 +100,18 @@ function withManagedClaudeEnv(options: SessionCreateOptions): SessionCreateOptio
       ...options.env,
       ANTHROPIC_BASE_URL: baseUrl,
       ANTHROPIC_AUTH_TOKEN: authToken,
+    },
+  };
+}
+
+/** Q8: agent PTYs inherit the managed Pi directory, whose auth.json carries the company key. */
+function withManagedPiEnv(options: SessionCreateOptions): SessionCreateOptions {
+  if (options.kind !== 'agent' || !resolveManagedCredentialsEnabled()) return options;
+  return {
+    ...options,
+    env: {
+      ...options.env,
+      ...resolveManagedPiPtyEnv(),
     },
   };
 }
@@ -474,7 +487,7 @@ export class SessionManager {
         // managed-credentials flag is off. The Codex injector that used to be
         // composed here retired with S0'/D60 — see the note above
         // `withManagedClaudeEnv` for why it has no replacement.
-        withManagedClaudeEnv(options),
+        withManagedPiEnv(withManagedClaudeEnv(options)),
         (data) => this.handleLocalData(sessionId, data),
         (exitCode, signal) => {
           this.handleLocalExit(sessionId, exitCode, signal);

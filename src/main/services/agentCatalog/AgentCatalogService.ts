@@ -52,7 +52,7 @@ import type {
   AgentModelCatalogError,
   AgentModelOption,
 } from '@shared/types/agentCatalog';
-import { type AgentWireName, CODEX_AGENT } from '@shared/types/agentWire';
+import { type AgentWireName, CODEX_AGENT, PI_AGENT } from '@shared/types/agentWire';
 
 /** Default freshness window for a proxy answer (§4.1). */
 export const AGENT_CATALOG_TTL_MS = 10 * 60 * 1000;
@@ -85,6 +85,8 @@ export interface AgentCatalogServiceOptions {
   fetchFn: AgentCatalogFetch;
   /** Re-resolved on EVERY call, exactly like `UsageService` — never cached. */
   readCredentials: () => AgentCatalogCredentials;
+  /** Pi owns its local/managed models.json path and never queries the Claude/Codex gateway. */
+  readPiCatalog?: (force: boolean) => Promise<AgentModelCatalog> | AgentModelCatalog;
   now?: () => number;
   ttlMs?: number;
   timeoutMs?: number;
@@ -195,6 +197,9 @@ function defaultDigest(secret: string): string {
 export class AgentCatalogService {
   private readonly fetchFn: AgentCatalogFetch;
   private readonly readCredentials: () => AgentCatalogCredentials;
+  private readonly readPiCatalog?: (
+    force: boolean
+  ) => Promise<AgentModelCatalog> | AgentModelCatalog;
   private readonly now: () => number;
   private readonly ttlMs: number;
   private readonly timeoutMs: number;
@@ -208,6 +213,7 @@ export class AgentCatalogService {
   constructor(options: AgentCatalogServiceOptions) {
     this.fetchFn = options.fetchFn;
     this.readCredentials = options.readCredentials;
+    this.readPiCatalog = options.readPiCatalog;
     this.now = options.now ?? (() => Date.now());
     this.ttlMs = options.ttlMs ?? AGENT_CATALOG_TTL_MS;
     this.timeoutMs = options.timeoutMs ?? AGENT_CATALOG_TIMEOUT_MS;
@@ -217,6 +223,17 @@ export class AgentCatalogService {
 
   async list(input: { agent: AgentWireName; force?: boolean }): Promise<AgentModelCatalog> {
     const { agent } = input;
+    if (agent === PI_AGENT) {
+      if (!this.readPiCatalog) return this.seedResult(agent, 'invalid-response');
+      try {
+        return await this.readPiCatalog(input.force === true);
+      } catch (error) {
+        this.log('[agent-catalog] Pi catalog read failed', {
+          error: error instanceof Error ? error.name : 'unknown',
+        });
+        return this.seedResult(agent, 'invalid-response');
+      }
+    }
     const credentials = this.readCredentials();
     if (credentials.status !== 'ok') {
       // A narrow exit, not an error: no network call, no throw, no spinner.

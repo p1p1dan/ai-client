@@ -144,7 +144,12 @@ export async function ensureUserClaudeJsonOnboarded(): Promise<void> {
  * slice.
  */
 export async function regenerateFromVault(): Promise<void> {
-  return;
+  if (!managedActive) return;
+  const { syncManagedPiModels } = await import('../piModelConfig');
+  const result = await syncManagedPiModels();
+  if (!result.ok) {
+    console.warn('[managed-credentials] Pi model sync skipped:', result.error);
+  }
 }
 
 /** Test-only: reset module state between test cases (mirrors `resetAuthSingletonsForTests`). */

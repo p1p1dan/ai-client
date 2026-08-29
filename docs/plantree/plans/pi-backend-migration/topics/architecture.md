@@ -14,7 +14,7 @@ React Renderer → Preload (contextBridge) → Electron Main → utilityProcess 
 | 通信协议 | stdin/stdout NDJSON | MessagePort（或保留 NDJSON 待定，见 Q1） |
 | 后端 SDK | `@anthropic-ai/claude-code` Agent SDK | `@earendil-works/pi-coding-agent` |
 | Runtime 适配 | `claudeRuntime.ts` + `eventNormalizer.ts` | `piRuntime.ts` + 适配后的 eventNormalizer |
-| 权限模型 | Claude canUseTool + permission mode | pi SDK 权限模型（待调研） |
+| 权限模型 | Claude canUseTool + permission mode | `projectTrusted` 工作区信任 + `@gotgenes/pi-permission-system`（allow/ask/deny；非 TUI 经 Extension UI `select/input` 审批，D9 rev.2） |
 | 配置存储 | `~/.claude/` | `~/.pi/agent/` |
 
 ### 保持不变的部分

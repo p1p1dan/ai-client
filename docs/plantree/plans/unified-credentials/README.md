@@ -57,10 +57,11 @@ identity:   { email, userId }
 cchBaseUrl: string
 claude:     { baseUrl, authToken }   // 每家一对 url+key
 codex:      { baseUrl, apiKey }
+pi?:        { baseUrl, apiKey }        // S4，旧文档可缺省
 receivedAt: string
 ```
 
-加 pi 即加第三个 arm，**架构上无障碍**。
+Pi 第三 arm 已于 2026-08-28 随 [pi-backend-migration Phase 5](../pi-backend-migration/evidence/phase5-model-config.md) 落地；旧文档缺省时兼容回退到 codex arm。
 
 ## 三条承重事实（决定本 plan 的形状）
 
@@ -82,7 +83,7 @@ receivedAt: string
 - **同源教训**：[D58](../../../plans/openchamber-chat-refactor-ledger.md) 刚退役了 `AICLIENT_AGENT_CODEX` —— 
   理由是「GUI 用户够不到的开关不是灰度控制」。`AICLIENT_MANAGED_CREDENTIALS` 是**同一个病**，
   本 plan 的 ④ 就是对它做同样的事，但它更重（会改写 Claude 的 settings.json）。
-- **pi 接入**：本 plan 只预留 arm，不做接入。
+- **pi 接入**：S4 的 vault arm 已完成；实际模型配置、运行期与 TUI 接入见 [pi-backend-migration](../pi-backend-migration/README.md)。
 
 ## 文件
 

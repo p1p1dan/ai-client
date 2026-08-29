@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "updatedAt": "2026-08-28T00:00:00.000Z",
+  "providers": {
+    "pilab": {
+      "name": "PILAB Company Gateway",
+      "baseUrl": "http://127.0.0.1:4000/v1",
+      "api": "openai-responses",
+      "authHeader": true,
+      "models": [
+        {
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 272000,
+          "maxTokens": 128000
+        }
+      ]
+    }
+  }
+}

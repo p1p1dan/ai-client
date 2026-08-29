@@ -36,6 +36,7 @@ import { remoteConnectionManager } from '../services/remote/RemoteConnectionMana
 import { registerLogHandlers } from './log';
 import { registerNotificationHandlers } from './notification';
 import { registerOnboardingHandlers } from './onboarding';
+import { registerPiModelHandlers } from './piModels';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
 import {
@@ -87,6 +88,7 @@ export function registerIpcHandlers(): void {
   registerTmuxHandlers();
   registerTodoHandlers();
   registerOnboardingHandlers();
+  registerPiModelHandlers();
   registerUsageHandlers();
 }
 
