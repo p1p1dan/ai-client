@@ -43,4 +43,5 @@
 | [implementation-status.md](./implementation-status.md) | 当前交接：2026-08-30 真机反馈后的近期主线、阻塞与验证 |
 | [2026-08-30 真机反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md) | 11 条反馈、截图事实、T12-e′/T08/T13/T24~T27 子节点与验收口径 |
 | [evidence/phase5-model-config.md](./evidence/phase5-model-config.md) | Phase 5 落地与验证证据 |
+| [evidence/2026-08-30-urgent-stabilization-m1-m3.md](./evidence/2026-08-30-urgent-stabilization-m1-m3.md) | T12-e′/T24/T26/T27/T13 右键切片的提交、复核与 282/5517 门禁 |
 | [decisions/](./decisions/) | 已拍板决策（含 [D8 模型配置策略](./decisions/008-model-config-strategy.md) · [D9 时间线参照 pi-app](./decisions/009-timeline-reference-piapp.md) · [D10 TUI 公司配置](./decisions/010-tui-managed-pi-config.md)） |

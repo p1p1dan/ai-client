@@ -1,16 +1,19 @@
 # Implementation Status — Pi Backend Migration
 
-**Last Verified**：2026-08-30（悬停条反转后）· 完整 vitest **277 files / 5494 tests** 全绿；
-typecheck（主仓）0；Biome `src` + `scripts` **1058 文件 · 0 error / 0 warning**。
-以下为 2026-08-29（T12 后）的上一次完整核对记录，`build:agent-host` 与打包门未在 T12-d 批重跑
-（本批只动渲染层与一处 i18n 常量，不触及 agent-host 产物）。
+**Last Verified**：2026-08-30（紧急稳定化 M1/M2/M3）· 完整 vitest
+**282 files / 5517 tests** 全绿（`--testTimeout=15000`；默认 5s 仅 chatShiki 首次 grammar
+装载偶发超时，单文件复跑 2.64s 通过）；主仓与 agent-host typecheck 均 0；Biome
+`src` + `scripts` **1066 文件 · 0 error / 0 warning**；`git diff --check` 通过。
+本批只改 renderer/store 与计划文档，不触及 agent-host 产物，故不重跑 build/smoke。
+真机 dev + CDP 另验：零仓库无 textarea；pending 80ms 内出现并由真实 Pi echo 接管；45 回合
+历史顶部发送后 120ms 滚到精确底部（5316/5316）；右键菜单、Archive 确认/取消/确认均通过。
 
 **上一次完整核对（2026-08-29，T12 后）**：完整 vitest **269 files / 5395 tests** 全绿（T08-c 切片 2 后为 269/5397，净 −2 是 FB3 三例退役换 T12 两例，见 T12 证据档 §3）；typecheck（主仓）全绿；Biome `src` + `scripts` **0 error / 0 warning**；`build:agent-host` 成功（394.3MB）；打包产物权限闸 smoke 通过（`smoke:permission-plugin` → `PERMISSION GATE INTACT`）。完整 Electron build 因当前 VM 仅 3.3 GiB、脚本固定 4 GiB heap 出现内存压力，沿用既有处置不重跑。`pnpm lint`（全仓）另有 1 个**既存**错误，来自未跟踪文件 `docs/plans/2026-08-27-entry-design/logo-concepts-preview.html`，与本仓代码无关。
 
 ## Current Phase
 
 **Phase 1 Done；Phase 5 主链 Done、追加 T25；Phase 2 审批链真机已贯通但形态与策略验收未收口；
-Phase 3 的 T12 全系已完成并经真实回合确认，2026-08-30 反馈新增/激活 T12-e′、T13、T24、T26、T27。**
+Phase 3 的 T12 全系与紧急稳定化 M1/M2/M3 已完成：T12-e′、T24、T26、T27、T13 右键切片均 Done。**
 
 - **T08-b 链路前置已满足**：真机 allow / session allow / deny、工具执行与被拒工具均正常。
   未完成项改为用户明确要求的**聊天区域内联审批层**；窗口级 `AlertDialog` 形态退役待施工。
@@ -21,9 +24,9 @@ Phase 3 的 T12 全系已完成并经真实回合确认，2026-08-30 反馈新�
 - **T12 真实回合验证通过**：用户确认正文顺序、思考时间、流式代码块、底部锚点、悬停条、
   被拒工具与长回合均正常。连续 read 未出现 `Explored 2 files` 仅留低优先级复验，不把
   T12-d 整体降级。
-- **近期反馈批**：T12-e′ 无仓库隐藏输入区；T24 发送/重试时序；T26 主动发送滚底；
-  T13 会话右键菜单；T27 仓库移除后左树清理。完整子节点与验收见
-  [2026-08-30 真机点测反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md)。
+- **近期反馈批已落地**：T12-e′ 无仓库隐藏输入区、T24 pending/权威 echo、T26 主动发送
+  滚底、T13 Rename + Archive 确认菜单、T27 仓库移除与迟到事件清理均 Done。提交、复核与
+  验证见 [紧急稳定化 M1/M2/M3](./evidence/2026-08-30-urgent-stabilization-m1-m3.md)。
 - **模型体验追加 T25**：标签分组 + 模型级 effort，归 Phase 5 follow-up；schema 契约见
   [Q11](./open-questions.md#q11--模型标签与模型级-effort-的配置契约)。T09 / T10 / T14 / T15
   继续 Deferred。
@@ -67,13 +70,19 @@ Phase 3 的 T12 全系已完成并经真实回合确认，2026-08-30 反馈新�
 
 - **通过**：T08-b 权限控制与执行；T12 正文顺序、思考时间、流式代码块、锚点、悬停条、
   被拒工具、长回合。
-- **新缺陷/改判**：T12-e′、T24、T26、T27；T13 右键直接 archive 的交互需重做；
-  T08-b 改为内联审批；T08-c 进入 Q10 策略命中调查；T25 进入 Q11 schema 设计。
+- **已在紧急稳定化批次解决**：T12-e′、T24、T26、T27 与 T13 右键管理切片。
+  **仍待**：T08-b 内联审批、T08-c/Q10 策略命中、T25/Q11 schema。
 - **截图事实**：设置页显示随包默认生效、用户层未创建；连续 read 产生三行独立工具记录；
   edit/read 的 activity 显示首次用户批准、后续 session pattern 放行。截图原件路径见分诊档。
 - 本次只更新计划树与交接文档，**没有代码改动，也没有重跑门禁**；Last Verified 仍沿用页首记录。
 
 ## Last Landed
+
+**2026-08-30 紧急稳定化 M1/M2/M3**：空仓库/仓库移除闭环、pending 发送反馈与显式滚底、
+会话 Rename + Archive 右键菜单全部落地。实现提交为 `8bd7f86b`、`8e93c04b`、
+`ace66886`、`73ef8800`、`17623597`、`dcf4b823`；两轮对抗复核发现的跨仓库重绑、迟到
+事件复活、echo 一对多、重复 echo 与 queue release 滚动问题均已收口。证据见
+[evidence/2026-08-30-urgent-stabilization-m1-m3.md](./evidence/2026-08-30-urgent-stabilization-m1-m3.md)。
 
 **2026-08-30 悬停操作条改为预留高度 —— T12-b 一条设计决定被用户推翻**（T12-d 之后，同日）。
 
@@ -262,16 +271,14 @@ path deny 面 · external_directory 一律 ask · 项目配置按凭据模式分
 
 ## Active TODO
 
-1. **T12-e′ + T27（空仓库闭环）**：无仓库时提升欢迎卡并隐藏 Composer；修复移除最后
-   一个仓库后 chatSessions 树不清空、仍可新建会话的问题。两项必须一起验“添加 ↔ 移除”。
-2. **T24 + T26（发送体验）**：先抓 send/create/resume/retry/Host echo 的真实时序，
-   再决定 pending 占位或乐观气泡；主动发送同时触发 `MessageTimeline.jumpToBottom()`。
-3. **T08-b + T08-c/Q10（权限收口）**：把窗口级 modal 改为聊天区内联审批；用 activity
-   记录查明普通 read 与 `.pilab` 为什么偏离 D11，再决定修实现还是改判策略。
-4. **T13（会话右键管理）**：右键不再直接 archive；菜单至少含 Rename + Archive，且有
-   明确确认、撤销或可发现恢复入口。永久删除与 fork/rewind 不混进本切片。
-5. **T25/Q11（模型菜单规格）**：先定 tags 与模型级 effort 的 schema/兼容规则，再做
-   分组子菜单；优先复用 `reasoning` / `thinkingLevelMap`，避免平行能力表。
+1. **T08-b（权限形态）**：把窗口级 modal 改为聊天区内联审批，保持现有 bridge/store 协议。
+2. **T08-c/Q10（策略验收）**：抓 activity 的 surface/value/origin/matchedPattern，解释普通
+   read 与 `.pilab` 偏离 D11 的原因，再决定修实现还是正式改判策略。
+3. **T25/Q11（模型菜单规格）**：先定 tags 与模型级 effort 的 schema/兼容规则，再做
+   分组子菜单；优先复用 `reasoning` / `thinkingLevelMap`。
+4. **M1/M2/M3 发布前真机 smoke**：真实添加→移除→重加、真实 Host 首条/Retry、鼠标与键盘
+   打开会话菜单；自动化和 dev 启动已通过，但无人值守环境未完成这些人工手感验证。
+5. **Deferred 排序**：T09/T10/T14/T15/T16~T18 继续后置，未经新排序不启动。
 
 ## Blocked By
 
@@ -283,16 +290,15 @@ path deny 面 · external_directory 一律 ask · 项目配置按凭据模式分
 
 - **本轮入口**：先读 [2026-08-30 真机反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md)，
   再按 Active TODO 取批。截图原件在 `/home/ai/code/test/`。
-- **空仓库不是一个 render guard**：`ChatWelcomeCard` 当前由 `ChatComposer` 自己渲染；
-  T12-e′ 要隐藏 Composer 时必须先把欢迎卡提升/复用到 `ChatWorkspace`，否则添加按钮一起没了。
-- **仓库移除 stale 的已定位边界**：App repository state 已删，LeftNav 读的 chat tree 未删；
-  `useSyncChatWorkspaceTree` 对空 workspaces 直接 return，最后一份非空快照保留到 Reload。
-- **发送延迟不是“乐观渲染慢”**：当前根本没有乐观插入，用户消息等 Host admission 后的
-  权威 echo。T24 要先抓 create/resume/send/retry 时序；T26 的滚底则是独立显式 send 信号。
+- **空仓库闭环已落**：欢迎卡已提升到 `ChatWorkspace`；无 cwd 不挂载 Composer。空 tree
+  会清 chatSessions 及相邻 session stores，并以 retirement tombstone 拒绝迟到事件。
+- **pending 不是第二份 transcript**：`pendingUserMessages` 只作显示；attempt 与 wire
+  user `message.started` 的确切 messageId 按 session FIFO 配对，权威 bucket 落地后删除。
+- **滚底只认用户意图**：direct / retry / 明确 enqueue 会 jump；自动 queue release 不 jump。
 - **F6 不要修**：“我的设置未创建”是设计空态，随包默认已显示生效；自动创建空文件会
   制造第二份无意义配置。该批真正的问题是 Q10 的 read/`.pilab` 命中偏差。
-- **右键不是 delete**：`SessionRow.onContextMenu` 当前直接 archive；菜单文案与恢复路径要按
-  archive 语义设计，除非另立永久删除能力。
+- **右键管理已落**：Base UI Context Menu 只提供 Rename + Archive；右键本身无副作用，
+  Archive 必经确认。永久 Delete / fork / rewind 仍未实现。
 - **权限弹窗怎么来的**：pi 扩展调 `ui.select` → `extensionUiBridge` 转成 `extensionUi.request` 事件 → MessagePort → main → renderer 的 `useExtensionUiStore` → `ExtensionUiDialog`。用户选择经 `chat:respondExtensionUi` 原路回去。
 - **关掉弹窗＝拒绝**：dismiss 只发 `ok:false` 不带 value，由 Host 侧 bridge 补开窗时记下的 fallback（confirm 是 `false`，其余是 `undefined`）。渲染端从不自己挑这个值。
 - **权限插件在哪**：`src/agent-host/node_modules/@gotgenes/pi-permission-system`（pin 27.0.1），随 `build:agent-host` 进 `out-agent-host/node_modules/`。用户 `~/.pi/agent/settings.json` 里已自装同名包时不注入。
