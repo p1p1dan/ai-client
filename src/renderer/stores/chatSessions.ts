@@ -521,14 +521,6 @@ export function applyRuntimeEvent(
     return {};
   }
 
-  // Repository/session removal is authoritative. Runtime events are batched,
-  // so a frame already queued before closeSession can arrive after the row and
-  // all its buckets were cleared; ignoring unknown session ids prevents that
-  // late frame from resurrecting ghost bindings, messages or permission cards.
-  if (!state.sessions.some((session) => session.id === sessionId)) {
-    return {};
-  }
-
   switch (event.type) {
     case 'session.created':
     case 'session.resumed': {
@@ -1040,6 +1032,14 @@ export function applyRuntimeEvent(
  * Each event sees the effects of earlier events in the batch; the returned
  * partial is equivalent to applying the events one set() at a time.
  */
+export function filterRuntimeEventsForLiveSessions(
+  events: readonly RuntimeEvent[],
+  sessionIds: readonly string[]
+): RuntimeEvent[] {
+  const live = new Set(sessionIds);
+  return events.filter((event) => event.sessionId == null || live.has(event.sessionId));
+}
+
 export function applyRuntimeEvents(
   state: ChatSessionsState,
   events: RuntimeEvent[]
@@ -1306,7 +1306,10 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       if (queue.length === 0) {
         return;
       }
-      const batch = queue;
+      const batch = filterRuntimeEventsForLiveSessions(
+        queue,
+        get().sessions.map((session) => session.id)
+      );
       queue = [];
       set((state) => ({ ...applyRuntimeEvents(state, batch) }));
 
@@ -1331,6 +1334,12 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     };
 
     const unsubscribe = subscribeRuntimeEvent((event) => {
+      // Drop frames that arrive after repository/session removal. The queue is
+      // filtered again at flush time to close the inverse race: a frame queued
+      // while the row existed, followed by removal before the 16ms batch lands.
+      if (event.sessionId && !get().sessions.some((session) => session.id === event.sessionId)) {
+        return;
+      }
       if (event.type === 'message.started' && event.sessionId && event.payload.role === 'user') {
         usePendingUserMessagesStore
           .getState()

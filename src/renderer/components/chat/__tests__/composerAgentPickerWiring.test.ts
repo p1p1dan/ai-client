@@ -158,7 +158,7 @@ describe('A3 (composer path) — the create payload states the pre-IPC binding',
 
 describe('A6 / A12 — what has to happen before the send commits', () => {
   it('onSendStart is called exactly once, and after every guard', () => {
-    const commit = only(composer, 'onSendStart?.();');
+    const commit = only(composer, 'onSendStart?.(origin)');
     const canSendGuard = only(composer, 'if (!canSend || !activeSessionId || !cwd) {');
     const inFlightGuard = only(composer, "if (inFlightRef.current) return 'skipped';");
     expect(commit).toBeGreaterThan(canSendGuard);
@@ -169,14 +169,14 @@ describe('A6 / A12 — what has to happen before the send commits', () => {
     // The latch is what docks the middle column and locks the binding the same
     // frame; behind the create it would leave a window in which the user can
     // repoint a session whose create is already in flight.
-    const commit = only(composer, 'onSendStart?.();');
+    const commit = only(composer, 'onSendStart?.(origin)');
     expect(commit).toBeLessThan(only(composer, 'await window.electronAPI.chat.ensureHost();'));
     expect(commit).toBeLessThan(only(composer, 'await window.electronAPI.chat.createSession({'));
   });
 
   it('A12: the unavailable-agent guard bails out before the latch and before inFlight', () => {
     const guard = only(composer, 'if (!isSendableAgent(knownAgents, agentAtEntry)) {');
-    const commit = only(composer, 'onSendStart?.();');
+    const commit = only(composer, 'onSendStart?.(origin)');
     const claimInFlight = only(composer, 'inFlightRef.current = true;');
     expect(guard).toBeLessThan(commit);
     // Returning after the in-flight ref is claimed would wedge the composer

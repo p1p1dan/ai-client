@@ -6,6 +6,7 @@ import {
   type ChatMessage,
   type ChatSession,
   type ChatSessionsState,
+  filterRuntimeEventsForLiveSessions,
   useChatSessionsStore,
 } from '../chatSessions';
 import { resetRuntimeEventBus } from '../runtimeEventBus';
@@ -218,7 +219,9 @@ describe('applyRuntimeEvents — fold semantics', () => {
       },
     ];
 
-    expect(applyRuntimeEvents(removed, events)).toEqual({});
+    expect(filterRuntimeEventsForLiveSessions(events, [])).toEqual([]);
+    expect(filterRuntimeEventsForLiveSessions(events, [SESSION_ID])).toEqual(events);
+    expect(applyRuntimeEvents(removed, filterRuntimeEventsForLiveSessions(events, []))).toEqual({});
   });
 
   it('returns {} for an empty batch', () => {
