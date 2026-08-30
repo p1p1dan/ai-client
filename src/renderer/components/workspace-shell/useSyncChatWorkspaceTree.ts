@@ -15,7 +15,12 @@ import {
 } from '@/components/chat/sessionIndex/dismissedSessions';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { uniqueId } from '@/lib/uniqueId';
-import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
+import {
+  type ChatSession,
+  type ChatSessionsState,
+  type ChatWorkspace,
+  useChatSessionsStore,
+} from '@/stores/chatSessions';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
 import {
   deriveChatWorkspaceTree,
@@ -41,14 +46,14 @@ function readRepositoriesFromStorage(): Repository[] {
   }
 }
 
-function createLiveSession(workspace: ChatWorkspace, now = Date.now()): ChatSession {
+function createLiveSession(workspace: ChatWorkspace): ChatSession {
   return {
-    id: `session-live-${now}`,
+    id: uniqueId('session-live'),
     projectId: workspace.projectId,
     workspaceId: workspace.id,
     title: LIVE_SESSION_TITLE,
     status: 'idle',
-    updatedAt: now,
+    updatedAt: Date.now(),
   };
 }
 
@@ -173,20 +178,30 @@ function rebindSessionsToTree(
 }
 
 /** Store slice the tree sync reads. */
-export interface TreeSyncPrevState {
-  sessions: ChatSession[];
-  hostBoundSessionIds: string[];
-  activeSessionId: string | null;
-  recentSessionIds: string[];
-}
+export type TreeSyncPrevState = Pick<
+  ChatSessionsState,
+  | 'sessions'
+  | 'hostBoundSessionIds'
+  | 'activeSessionId'
+  | 'recentSessionIds'
+  | 'messages'
+  | 'historyErrors'
+  | 'pendingPermissions'
+  | 'pendingQuestion'
+>;
 
 /** Session-shaped part of the store patch the tree sync writes. */
-export interface TreeSyncPatch {
-  sessions: ChatSession[];
-  hostBoundSessionIds: string[];
-  activeSessionId: string | null;
-  recentSessionIds: string[];
-}
+export type TreeSyncPatch = Pick<
+  ChatSessionsState,
+  | 'sessions'
+  | 'hostBoundSessionIds'
+  | 'activeSessionId'
+  | 'recentSessionIds'
+  | 'messages'
+  | 'historyErrors'
+  | 'pendingPermissions'
+  | 'pendingQuestion'
+>;
 
 /**
  * The session half of a tree-sync write, as a pure function so vitest can
@@ -237,11 +252,28 @@ export function resolveTreeSyncPatch(input: {
     .filter((id, index, arr) => arr.indexOf(id) === index && exists(id))
     .slice(0, 20);
 
+  const liveSessionIds = new Set(sessions.map((session) => session.id));
+  const messages = Object.fromEntries(
+    Object.entries(prev.messages).filter(([sessionId]) => liveSessionIds.has(sessionId))
+  );
+  const historyErrors = Object.fromEntries(
+    Object.entries(prev.historyErrors).filter(([sessionId]) => liveSessionIds.has(sessionId))
+  );
+
   return {
     sessions,
     hostBoundSessionIds: rebound.hostBoundSessionIds,
     activeSessionId,
     recentSessionIds,
+    messages,
+    historyErrors,
+    pendingPermissions: prev.pendingPermissions.filter((item) =>
+      liveSessionIds.has(item.sessionId)
+    ),
+    pendingQuestion:
+      prev.pendingQuestion && liveSessionIds.has(prev.pendingQuestion.sessionId)
+        ? prev.pendingQuestion
+        : null,
   };
 }
 
@@ -422,25 +454,41 @@ export function useSyncChatWorkspaceTree({
   const signatureRef = useRef<string>('');
 
   useEffect(() => {
-    // Never clobber DEMO/Live with an empty tree while repos are still hydrating.
-    if (tree.workspaces.length === 0) {
-      return;
-    }
-
     const signature = workspaceTreeSignature(tree.projects, tree.workspaces, preferredWorkspaceId);
     if (signature === signatureRef.current) {
       return;
     }
     signatureRef.current = signature;
 
+    const prev = useChatSessionsStore.getState();
+    const sessionPatch = resolveTreeSyncPatch({
+      prev,
+      workspaces: tree.workspaces,
+      preferredWorkspaceId,
+    });
+    const liveSessionIds = new Set(sessionPatch.sessions.map((session) => session.id));
+
+    // A repository removal can retire a bound session without going through
+    // the row-level Close/Archive actions. Reap those runtimes best-effort so
+    // an empty nav never leaves an unreachable agent running in the Host.
+    for (const sessionId of prev.hostBoundSessionIds) {
+      if (!liveSessionIds.has(sessionId)) {
+        try {
+          void Promise.resolve(window.electronAPI.chat.closeSession({ sessionId })).catch(() => {});
+        } catch {
+          // Host/channel already unavailable — the renderer state still clears.
+        }
+      }
+    }
+
+    // Empty is a real tree state, not a hydration no-op. `storedRepos` above
+    // already protects the pre-hydration frame when localStorage has repos;
+    // once both props and storage are empty we must clear the last non-empty
+    // snapshot immediately (T27-a).
     useChatSessionsStore.setState({
       projects: tree.projects,
       workspaces: tree.workspaces,
-      ...resolveTreeSyncPatch({
-        prev: useChatSessionsStore.getState(),
-        workspaces: tree.workspaces,
-        preferredWorkspaceId,
-      }),
+      ...sessionPatch,
     });
   }, [tree.projects, tree.workspaces, preferredWorkspaceId]);
 }

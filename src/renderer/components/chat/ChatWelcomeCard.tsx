@@ -2,7 +2,7 @@ import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import { ChevronDown, FolderOpen, FolderPlus, GitBranch, Server } from 'lucide-react';
 import { Menu, MenuPopup } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
-import { composerMenuItemClass, type MiddleColumnMode } from './middleColumnLayout';
+import { composerMenuItemClass } from './middleColumnLayout';
 
 /**
  * T12-e — the surface shown above the composer when no working directory has
@@ -14,12 +14,10 @@ import { composerMenuItemClass, type MiddleColumnMode } from './middleColumnLayo
  * report was that it looks like the app is broken; it also told the user to
  * pass a CLI flag, which is not a thing a desktop user does.
  *
- * Shape follows pi-app's `ProjectHomeView` (user decision, 2026-08-29, after
- * comparing three sketches): a centred folder button with a menu, a one-line
- * explanation under it, and — the part that was explicitly chosen over the
- * user's own first suggestion — **the composer stays visible below**. Their
- * reason for overruling themselves: picking a folder should not make the whole
- * right-hand side swap out from under you.
+ * Shape follows pi-app's `ProjectHomeView`: a centred folder button with a
+ * menu and a one-line explanation. T12-e′ records the 2026-08-30 field-test
+ * reversal: this card now owns the whole empty-repository surface, so no
+ * composer is mounted below it until a real working directory exists.
  *
  * The menu offers the same three entries as the folder dropdown's footer
  * (`TargetFolderSelect`) and delegates to the same `onAddRepository` callback.
@@ -27,13 +25,11 @@ import { composerMenuItemClass, type MiddleColumnMode } from './middleColumnLayo
  * be two things to keep in sync; this is one path with two entrances.
  */
 interface ChatWelcomeCardProps {
-  /** Which way the popup opens — same constraint the composer menus have. */
-  mode: MiddleColumnMode;
   /** Opens the shared AddRepositoryDialog, owned by App. */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
 }
 
-export function ChatWelcomeCard({ mode, onAddRepository }: ChatWelcomeCardProps) {
+export function ChatWelcomeCard({ onAddRepository }: ChatWelcomeCardProps) {
   const { t } = useI18n();
 
   return (
@@ -51,11 +47,7 @@ export function ChatWelcomeCard({ mode, onAddRepository }: ChatWelcomeCardProps)
           <MenuPopup
             align="center"
             className="min-w-52 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
-            // `mode` is always 'empty' here today (the card only renders when
-            // there is nothing to talk to), but the side is derived rather
-            // than hardcoded so this does not become the one menu in the card
-            // that opens the wrong way if it is ever reused.
-            side={mode === 'empty' ? 'bottom' : 'top'}
+            side="bottom"
           >
             <MenuPrimitive.Item
               className={composerMenuItemClass()}

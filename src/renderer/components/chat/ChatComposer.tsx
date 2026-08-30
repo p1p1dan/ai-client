@@ -51,7 +51,6 @@ import {
   totalAttachmentBytes,
   toWireAttachments,
 } from './attachments';
-import { ChatWelcomeCard } from './ChatWelcomeCard';
 import { ComposerAgentPicker } from './ComposerAgentPicker';
 import { ComposerAttachMenu } from './ComposerAttachMenu';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
@@ -2756,17 +2755,9 @@ export function ChatComposer({
     // div in ChatWorkspace (`middleColumnHostClass`) owns the padding and the
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
-      {/* T12-e: the four "cannot send" states used to share ONE red monospace
-            box. `deriveChatEmptySurface` splits them into a fault (keeps the
-            box — that is the right shape for something going wrong) and a
-            setup step (gets the guided card). The original Round-2 P0 fix
-            still holds inside it: a workspace can be "present" but not
-            targetable (demo placeholder / empty path), so `hasCwd` is checked
-            separately and that state still surfaces — as guidance now, rather
-            than as an error the user cannot act on. */}
-      {emptySurface === 'welcome' && (
-        <ChatWelcomeCard mode={mode} onAddRepository={onAddRepository} />
-      )}
+      {/* T12-e′ moves the no-repository welcome surface to ChatWorkspace and
+            does not mount this component at all in that state. Real failures
+            still belong immediately above the composer. */}
       {emptySurface === 'error-notice' && (
         <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all">
           {statusHint}

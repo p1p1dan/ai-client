@@ -69,9 +69,11 @@ describe('deriveChatEmptySurface', () => {
  * wrong reason (the repo has been bitten by this three times — see the 0820
  * batch's §16 discipline note).
  */
-describe('[T12-e wiring] the composer actually renders both surfaces', () => {
+describe('[T12-e′ wiring] the workspace owns the no-repository surface', () => {
   const COMPOSER = path.join(__dirname, '..', 'ChatComposer.tsx');
+  const WORKSPACE = path.join(__dirname, '..', 'ChatWorkspace.tsx');
   const SOURCE = stripComments(readFileSync(COMPOSER, 'utf8'), 'ChatComposer.tsx');
+  const WORKSPACE_SOURCE = stripComments(readFileSync(WORKSPACE, 'utf8'), 'ChatWorkspace.tsx');
 
   it('derives the surface from the shared function, not a second hand-written condition', () => {
     expect(SOURCE).toContain('deriveChatEmptySurface(');
@@ -81,9 +83,12 @@ describe('[T12-e wiring] the composer actually renders both surfaces', () => {
     expect(SOURCE).not.toContain('lastError || !activeSessionId || !activeWorkspace || !cwd');
   });
 
-  it('renders the welcome card on the welcome surface', () => {
-    expect(SOURCE).toContain("emptySurface === 'welcome'");
-    expect(SOURCE).toContain('<ChatWelcomeCard');
+  it('renders the welcome card outside ChatComposer and does not mount the composer without a cwd', () => {
+    expect(SOURCE).not.toContain('<ChatWelcomeCard');
+    expect(WORKSPACE_SOURCE).toContain('hasWorkingDirectory ?');
+    expect(WORKSPACE_SOURCE).toMatch(
+      /hasWorkingDirectory \?[\s\S]{0,500}<ChatComposer[\s\S]{0,800}: \([\s\S]{0,500}<ChatWelcomeCard/
+    );
   });
 
   it('still renders the red diagnostic box on the error surface', () => {
@@ -105,6 +110,8 @@ describe('[T12-e wiring] the composer actually renders both surfaces', () => {
   it('passes the add-repository handler through, so the button is not dead', () => {
     // A guided card whose only control does nothing is worse than the red box
     // it replaced — that box at least told the truth.
-    expect(SOURCE).toMatch(/<ChatWelcomeCard[\s\S]{0,200}onAddRepository=\{onAddRepository\}/);
+    expect(WORKSPACE_SOURCE).toMatch(
+      /<ChatWelcomeCard[\s\S]{0,200}onAddRepository=\{onAddRepository\}/
+    );
   });
 });

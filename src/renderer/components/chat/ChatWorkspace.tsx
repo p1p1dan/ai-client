@@ -6,6 +6,7 @@ import { useMessageQueueStore } from '@/stores/messageQueue';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { ChatComposer } from './ChatComposer';
+import { ChatWelcomeCard } from './ChatWelcomeCard';
 import { ExtensionUiDialog } from './ExtensionUiDialog';
 import { HostStatusBanner } from './HostStatusBanner';
 import { selectHistoryError } from './historyError';
@@ -16,6 +17,7 @@ import {
   rememberSendAttempt,
 } from './middleColumnLayout';
 import { PendingQuestionDock } from './PendingQuestionDock';
+import { ReadingColumn } from './ReadingColumn';
 import { isChatAgentBindingLocked } from './sessionBinding';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
@@ -53,6 +55,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   // T-05: repo name tail for Grep/Glob rows ("… in ai-client").
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const repoName = deriveRepoName(activeWorkspace?.path);
+  const hasWorkingDirectory = workspaces.some((workspace) => workspace.path.trim().length > 0);
 
   // T-28: sticky latch of sessions that have started a send this app run —
   // deriveMiddleColumnMode needs this to dock the composer the instant Enter
@@ -80,6 +83,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     hasHistoryError,
     status: activeSession?.status ?? 'idle',
   });
+  const renderedMode = hasWorkingDirectory ? mode : 'empty';
 
   // D48 S1: the same triple the mode derivation above runs on, folded by the
   // shared criterion instead of a second hand-written disjunction. It is
@@ -174,7 +178,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   return (
     <section className={cn('flex min-h-0 flex-col', className)}>
       <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
-      {mode === 'session' && (
+      {renderedMode === 'session' && (
         <MessageTimeline
           sessionId={activeSessionId}
           status={activeSession?.status ?? 'idle'}
@@ -182,16 +186,25 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           repoName={repoName}
         />
       )}
-      {mode === 'session' && <PendingQuestionDock sessionId={activeSessionId} />}
-      <div className={middleColumnHostClass(mode)}>
-        <ChatComposer
-          agentBindingLocked={agentBindingLocked}
-          agentSendAttempted={sendAttempted}
-          mode={mode}
-          disabled={!activeSessionId}
-          onAddRepository={onAddRepository}
-          onSendStart={markSendAttempt}
-        />
+      {renderedMode === 'session' && <PendingQuestionDock sessionId={activeSessionId} />}
+      <div className={middleColumnHostClass(renderedMode)}>
+        {hasWorkingDirectory ? (
+          <ChatComposer
+            agentBindingLocked={agentBindingLocked}
+            agentSendAttempted={sendAttempted}
+            mode={renderedMode}
+            disabled={!activeSessionId}
+            onAddRepository={onAddRepository}
+            onSendStart={markSendAttempt}
+          />
+        ) : (
+          // T12-e′: the empty repository surface owns the welcome card. It
+          // cannot live inside ChatComposer because this state deliberately
+          // does not mount an input or send button at all.
+          <ReadingColumn>
+            <ChatWelcomeCard onAddRepository={onAddRepository} />
+          </ReadingColumn>
+        )}
       </div>
       {/*
        * Outside the `mode === 'session'` guard on purpose: an extension can ask

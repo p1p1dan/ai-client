@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   markSessionDismissed,
@@ -37,6 +39,10 @@ function prevState(overrides: Partial<TreeSyncPrevState> = {}): TreeSyncPrevStat
     hostBoundSessionIds: [],
     activeSessionId: null,
     recentSessionIds: [],
+    messages: {},
+    historyErrors: {},
+    pendingPermissions: [],
+    pendingQuestion: null,
     ...overrides,
   };
 }
@@ -129,6 +135,85 @@ describe('resolveTreeSyncPatch — activeSessionId handover', () => {
     );
 
     expect(result.activeSessionId).toBe('s2');
+  });
+});
+
+describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
+  it('the hook writes an empty tree instead of returning before the store update', () => {
+    const source = readFileSync(path.join(__dirname, '..', 'useSyncChatWorkspaceTree.ts'), 'utf8');
+
+    expect(source).not.toMatch(/if \(tree\.workspaces\.length === 0\) \{\s*return;/);
+    expect(source).toContain('projects: tree.projects');
+    expect(source).toContain('workspaces: tree.workspaces');
+  });
+
+  it('clears sessions, selection, runtime bindings and every per-session bucket', () => {
+    const result = resolveTreeSyncPatch({
+      prev: prevState({
+        sessions: [session('s1')],
+        hostBoundSessionIds: ['s1'],
+        activeSessionId: 's1',
+        recentSessionIds: ['s1'],
+        messages: { s1: [] },
+        historyErrors: { s1: 'read failed' },
+        pendingPermissions: [{ sessionId: 's1', permissionId: 'p1', messageId: 'm1' }],
+        pendingQuestion: { sessionId: 's1', questionId: 'q1', messageId: 'm2' },
+      }),
+      workspaces: [],
+      preferredWorkspaceId: null,
+    });
+
+    expect(result).toEqual({
+      sessions: [],
+      hostBoundSessionIds: [],
+      activeSessionId: null,
+      recentSessionIds: [],
+      messages: {},
+      historyErrors: {},
+      pendingPermissions: [],
+      pendingQuestion: null,
+    });
+  });
+
+  it('supports add → remove-last → re-add without retaining or duplicating the old session', () => {
+    const added = patch(prevState());
+    const firstSessionId = added.sessions[0]?.id;
+    expect(firstSessionId).toBeTruthy();
+
+    const removed = resolveTreeSyncPatch({
+      prev: { ...prevState(), ...added },
+      workspaces: [],
+      preferredWorkspaceId: null,
+    });
+    expect(removed.sessions).toEqual([]);
+
+    const readded = patch({ ...prevState(), ...removed });
+    expect(readded.sessions).toHaveLength(1);
+    expect(readded.sessions[0]?.id).not.toBe(firstSessionId);
+    expect(new Set(readded.sessions.map((item) => item.id)).size).toBe(1);
+  });
+
+  it('keeps only buckets belonging to sessions that survived a non-empty rebind', () => {
+    const result = patch(
+      prevState({
+        sessions: [session('s1')],
+        activeSessionId: 's1',
+        messages: { s1: [], removed: [] },
+        historyErrors: { s1: 'keep', removed: 'drop' },
+        pendingPermissions: [
+          { sessionId: 's1', permissionId: 'p1', messageId: 'm1' },
+          { sessionId: 'removed', permissionId: 'p2', messageId: 'm2' },
+        ],
+        pendingQuestion: { sessionId: 'removed', questionId: 'q1', messageId: 'm3' },
+      })
+    );
+
+    expect(result.messages).toEqual({ s1: [] });
+    expect(result.historyErrors).toEqual({ s1: 'keep' });
+    expect(result.pendingPermissions).toEqual([
+      { sessionId: 's1', permissionId: 'p1', messageId: 'm1' },
+    ]);
+    expect(result.pendingQuestion).toBeNull();
   });
 });
 
