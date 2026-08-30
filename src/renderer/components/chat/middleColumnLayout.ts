@@ -773,6 +773,14 @@ export function composerPlaceholder(input: {
   sending: boolean;
   hasSession: boolean;
   hasWorkspace: boolean;
+  /**
+   * T12-e: the resolved working directory. Separate from `hasWorkspace`
+   * because a workspace can be present but not targetable (an empty path, so
+   * a fake cwd can never reach spawn) — the state a fresh install is in.
+   * Optional so callers that genuinely do not know keep their old behaviour
+   * rather than silently claiming "no directory".
+   */
+  hasCwd?: boolean;
   attachmentCount: number;
   /** T-05: this session has a pending question dock showing. */
   pendingQuestion?: boolean;
@@ -826,6 +834,13 @@ export function composerPlaceholder(input: {
   }
   if (!input.hasWorkspace) {
     return 'Active session has no workspace…';
+  }
+  // T12-e: a workspace that is present but has no path fell through this
+  // ladder to the terminal `Cannot send right now…`, i.e. the least
+  // informative string in the function was what a FRESH INSTALL saw. Point at
+  // the welcome card's button instead — the two now say the same thing.
+  if (input.hasCwd === false) {
+    return 'Choose a working directory to start…';
   }
   if (input.canSend) {
     return input.mode === 'session' ? 'Send follow-up…' : 'Message Claude via Agent Host…';

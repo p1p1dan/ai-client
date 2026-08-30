@@ -51,12 +51,14 @@ import {
   totalAttachmentBytes,
   toWireAttachments,
 } from './attachments';
+import { ChatWelcomeCard } from './ChatWelcomeCard';
 import { ComposerAgentPicker } from './ComposerAgentPicker';
 import { ComposerAttachMenu } from './ComposerAttachMenu';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
 import { ComposerPermissionTrigger } from './ComposerPermissionTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
+import { deriveChatEmptySurface } from './chatEmptyState';
 import { AGENT_UNAVAILABLE_SEND_ERROR, isSendableAgent } from './composerAgentPickerModel';
 import { resolveActiveTarget } from './composerTarget';
 import { resolveEffortSelection, toWireEffort } from './efforts';
@@ -2294,12 +2296,22 @@ export function ChatComposer({
     void stopActiveSession();
   };
 
-  // F14 minor m2: must mirror the error banner's condition below
-  // (`lastError || !activeSessionId || !activeWorkspace || !cwd`) — without
-  // `!cwd` here, a workspace that is "present" but not targetable (demo
-  // placeholder / empty path) shows the banner while `statusTone` stays the
-  // neutral color and `largeHint` can still win over `statusHint`.
-  const hasStatusError = Boolean(lastError || !activeSessionId || !activeWorkspace || !cwd);
+  // T12-e: one derivation, two readers. `emptySurface` decides WHICH surface
+  // sits above the composer (guided card vs red diagnostic box); `statusTone`
+  // below asks the narrower question "is the status line's text a fault".
+  //
+  // F14 minor m2 (still live): `statusTone` must agree with whatever puts the
+  // red box on screen — without the `!cwd` term, a workspace that is "present"
+  // but not targetable (demo placeholder / empty path) showed the banner while
+  // `statusTone` stayed neutral and `largeHint` could still win over
+  // `statusHint`. Deriving both from the same call is what keeps them agreeing.
+  const emptySurface = deriveChatEmptySurface({
+    hasError: Boolean(lastError),
+    hasSession: Boolean(activeSessionId),
+    hasWorkspace: Boolean(activeWorkspace),
+    hasCwd: Boolean(cwd),
+  });
+  const hasStatusError = emptySurface === 'error-notice';
   const readingLine =
     attachments.reading > 0
       ? `Reading ${attachments.reading} file${attachments.reading > 1 ? 's' : ''}…`
@@ -2530,6 +2542,7 @@ export function ChatComposer({
         sending,
         hasSession: Boolean(activeSessionId),
         hasWorkspace: Boolean(activeWorkspace),
+        hasCwd: Boolean(cwd),
         attachmentCount: attachments.drafts.length,
         pendingQuestion: pendingQuestionHere,
         queuedCount,
@@ -2743,12 +2756,18 @@ export function ChatComposer({
     // div in ChatWorkspace (`middleColumnHostClass`) owns the padding and the
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
-      {/* Round-2 P0 fix: `!cwd` must gate this banner too — a workspace can be
-            "present" but not targetable (demo placeholder / empty path), and
-            without this the informative `statusHint` text computed for that
-            state (below) never surfaces; Send is silently disabled with no
-            visible reason. */}
-      {(lastError || !activeSessionId || !activeWorkspace || !cwd) && (
+      {/* T12-e: the four "cannot send" states used to share ONE red monospace
+            box. `deriveChatEmptySurface` splits them into a fault (keeps the
+            box — that is the right shape for something going wrong) and a
+            setup step (gets the guided card). The original Round-2 P0 fix
+            still holds inside it: a workspace can be "present" but not
+            targetable (demo placeholder / empty path), so `hasCwd` is checked
+            separately and that state still surfaces — as guidance now, rather
+            than as an error the user cannot act on. */}
+      {emptySurface === 'welcome' && (
+        <ChatWelcomeCard mode={mode} onAddRepository={onAddRepository} />
+      )}
+      {emptySurface === 'error-notice' && (
         <div className="mb-2 max-h-28 overflow-auto rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 font-mono text-code text-destructive whitespace-pre-wrap break-all">
           {statusHint}
         </div>

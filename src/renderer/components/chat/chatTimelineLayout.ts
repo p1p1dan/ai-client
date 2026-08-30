@@ -215,42 +215,67 @@ export function turnHeadClass(): string {
  * rule is retired rather than quietly bent, and the cost is recorded here:
  * keyboard-only and touch-only users cannot reach Copy from the timeline.
  *
- * ## Mechanism
+ * ## Mechanism — and why it is the OPPOSITE of what T12-b shipped
  *
- * `grid-rows-[0fr] -> [1fr]` is the animate-height-to-auto trick, taken from
- * pi-app verbatim. It matters that the collapsed state is a real ZERO-height
- * row rather than `opacity-0`: an always-present 28px strip under every turn
- * would spend the same vertical budget the meta row just gave back, which would
- * make this change cosmetic instead of actual. `motion-reduce:transition-none`
- * is ours, not pi-app's — the repo honours the OS setting everywhere else.
+ * The strip reserves its height at all times and only fades in. Hovering a turn
+ * therefore changes nothing about the layout: the row below stays exactly where
+ * it was.
+ *
+ * T12-b shipped the other choice — `grid-rows-[0fr] -> [1fr]`, pi-app's
+ * animate-height-to-auto trick — and argued for it explicitly: a strip that
+ * always occupies its height spends the vertical budget removing the meta row
+ * had just given back. **The user overruled that on 2026-08-30**, having seen
+ * it in the running app: growing a row under the cursor shoves everything below
+ * it down, and reading text that jumps as the mouse moves across it is worse
+ * than 24px of permanent whitespace. So the earlier reasoning is not wrong
+ * about the cost — it just weighed a cost the user does not accept paying.
+ *
+ * Concretely: the collapsed strip is now 24px tall and transparent, and
+ * `turnActionsInnerClass()` is REQUIRED to carry that definite height (see its
+ * note, which used to prohibit exactly that).
+ *
+ * No `pointer-events-none` on the transparent state, deliberately. It looks
+ * like the obvious companion to `opacity-0` and it would be dead weight: the
+ * pointer cannot reach an invisible strip without first entering the turn, and
+ * entering the turn is what makes it visible. The state "transparent and
+ * clickable" is unreachable.
+ *
+ * `motion-reduce:transition-none` is ours, not pi-app's — the repo honours the
+ * OS setting everywhere else.
  */
 export function turnActionsSlotClass(): string {
-  return 'grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-150 ease-out group-hover/turn:grid-rows-[1fr] group-hover/turn:opacity-100 motion-reduce:transition-none';
+  return 'opacity-0 transition-opacity duration-150 ease-out group-hover/turn:opacity-100 motion-reduce:transition-none';
 }
 
 /**
- * The strip's inner row — the grid item the `0fr` track has to be able to
- * squash.
+ * The strip's inner row.
  *
- * `overflow-hidden` + `min-h-0` are the two halves of that: the first clips the
- * content that no longer fits, the second removes the automatic minimum size a
- * grid item otherwise contributes to its track.
+ * ⚠️ **This row must carry a definite height, and it must equal the button's.**
+ * That is a straight reversal of the prohibition that stood here until
+ * 2026-08-30, and the history is worth keeping because both halves were true at
+ * different times:
  *
- * ⚠️ **This row must never carry a fixed height.** A definite `height` on a grid
- * item is not squashable, so the `auto` half of the track's implied
- * `minmax(auto, 0fr)` resolves to that height and the collapsed strip stands at
- * full size with `opacity: 0` — present, invisible, and still spending its
- * vertical budget. It shipped that way for one build here (`h-7`, copied
- * straight from pi-app's `.message-actions-slot-inner`) and every class
- * assertion stayed green, because each individual class was exactly what the
- * spec called for. Measured in the browser: `grid-template-rows` resolved to
- * `28px`; dropping the fixed height took it to `0px`.
+ *  - Under T12-b's `grid-rows-[0fr]` collapse, a definite height was a DEFECT.
+ *    A grid item with a fixed height is not squashable, so the `auto` half of
+ *    the implied `minmax(auto, 0fr)` resolved to it and the "collapsed" strip
+ *    stood at full size, invisible but still spending its space. It shipped
+ *    that way for one build (`h-7`, copied from pi-app) with every class
+ *    assertion green — measured in the browser at `28px`, `0px` once the height
+ *    came off.
+ *  - Under the reserved-space strip the user asked for, a definite height is
+ *    the REQUIREMENT. Height that comes from content is height that appears
+ *    when the content does, and the transparent strip has to occupy the same
+ *    space as the visible one or the hover still moves the page.
  *
- * The row's height therefore comes from its content — the 24px copy button —
- * which is also why the button's own `size-6` is load-bearing here.
+ * `h-6` is 24px, the copy button's own `size-6`. Those two numbers are one
+ * number: if the button tier ever changes, this must change with it, or the
+ * strip either clips the button or reserves more room than it needs.
+ *
+ * `overflow-hidden` and `min-h-0` retired with the `0fr` track — they existed
+ * only to make that track clip rather than merely shrink.
  */
 export function turnActionsInnerClass(): string {
-  return 'flex min-h-0 items-center gap-1.5 overflow-hidden text-meta tabular-nums text-muted-foreground';
+  return 'flex h-6 items-center gap-1.5 text-meta tabular-nums text-muted-foreground';
 }
 
 /**

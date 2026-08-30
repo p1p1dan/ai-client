@@ -1,9 +1,14 @@
 import { ChevronDown } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
+import {
+  readToolExpandMemory,
+  resolveToolRowOpen,
+  useToolExpansionStore,
+} from '@/stores/toolExpansion';
 import { HitListPopover } from './HitListPopover';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
 import {
@@ -14,6 +19,7 @@ import {
   toolRowPermissionClass,
   toolRowPermissionNoteClass,
 } from './toolCard';
+import type { ToolDiff } from './toolDiff';
 
 /**
  * T-05 batch 2/4: bare tool-row rendering (A07 screen 5, groups A-E), plus
@@ -47,10 +53,17 @@ function openFileTarget(target: FileLinkTarget, source: FileOpenIntent['source']
 interface ToolGroupProps {
   rows: ToolRowView[];
   onOpenFile?: (target: FileLinkTarget) => void;
+  /**
+   * T12-d: which session's expand memory these rows belong to. Optional
+   * because `QuestionCard` renders a lone `ToolRow` outside any timeline —
+   * without a session there is simply nothing to remember, which is the right
+   * answer for a permission card's one-off row.
+   */
+  sessionId?: string;
 }
 
 /** Renders one `.ct` group — the A07 unit that wraps a contiguous tool/thinking stream. */
-export function ToolGroup({ rows, onOpenFile }: ToolGroupProps) {
+export function ToolGroup({ rows, onOpenFile, sessionId }: ToolGroupProps) {
   if (rows.length === 0) return null;
   return (
     // T-30 P-17: no own margin — the parent `AssistantMessage` article owns
@@ -59,7 +72,7 @@ export function ToolGroup({ rows, onOpenFile }: ToolGroupProps) {
     // replacing it.
     <div className="flex flex-col gap-1">
       {rows.map((row) => (
-        <ToolRow key={row.key} view={row} depth={0} onOpenFile={onOpenFile} />
+        <ToolRow key={row.key} view={row} depth={0} onOpenFile={onOpenFile} sessionId={sessionId} />
       ))}
     </div>
   );
@@ -70,10 +83,23 @@ interface ToolRowProps {
   /** Always 0 — detail rows never indent further (A07 :2517). Kept for assertion readability. */
   depth?: 0;
   onOpenFile?: (target: FileLinkTarget) => void;
+  /** T12-d: session scope for the expand memory. See `ToolGroupProps`. */
+  sessionId?: string;
 }
 
 /** One `.ct-row`: verb + arg, optionally expandable into an output/detail/thinking body. */
-export function ToolRow({ view, onOpenFile }: ToolRowProps) {
+export function ToolRow({ view, onOpenFile, sessionId }: ToolRowProps) {
+  // T12-d: the row's opening state, seeded ONCE from the session's memory.
+  //
+  // Seeded rather than controlled, deliberately. `defaultOpen` is read by the
+  // collapsible at mount only, and that is what preserves T-34's live subagent
+  // panel: its `defaultOpen: true` disappears the moment the lane stops being
+  // live, and a controlled `open` bound to the same expression would slam the
+  // panel shut under a reader mid-sentence. Seeding also makes the aggregation
+  // case work for free — an aggregate that swallows an open row is a NEW
+  // mount, so it evaluates `resolveToolRowOpen` against fresh memory.
+  const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
+  const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
   const rowClass = cn(
     'group/row flex w-full items-baseline gap-1.5 text-left text-markdown leading-normal',
     view.failed ? 'text-destructive' : 'text-muted-foreground'
@@ -95,7 +121,11 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
   // above it. Non-delegation rows return the exact pre-T-34 tree.
   const subagentSlot =
     view.toolName && isDelegationTool(view.toolName) && view.toolCallId ? (
-      <SubagentActivity parentToolCallId={view.toolCallId} parentRunning={view.running} />
+      <SubagentActivity
+        parentToolCallId={view.toolCallId}
+        parentRunning={view.running}
+        sessionId={sessionId}
+      />
     ) : null;
 
   const row = !view.expandable ? (
@@ -106,8 +136,13 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
     // collapse gone, that put a wall of output on screen for every failed or
     // denied call, in restored history and live turns alike. Red on the row and
     // a click is enough. `defaultOpen` is still honoured: T-34's LIVE subagent
-    // panel sets it.
-    <Collapsible defaultOpen={view.defaultOpen ?? false}>
+    // panel sets it, and T12-d's remembered choice outranks it.
+    <Collapsible
+      defaultOpen={initialOpen}
+      onOpenChange={(open) => {
+        if (sessionId) setToolRowExpanded(sessionId, view.key, open);
+      }}
+    >
       <CollapsibleTrigger
         className={cn(rowClass, '[&[data-panel-open]>svg]:rotate-180')}
         // A Read row nests a real <button> inside the trigger for its
@@ -121,7 +156,7 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
         <ChevronDown className="size-[13px] shrink-0 self-center text-tool-arg transition-transform duration-150" />
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <ToolRowBody view={view} onOpenFile={onOpenFile} />
+        <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
       </CollapsibleContent>
     </Collapsible>
   );
@@ -145,9 +180,11 @@ export function ToolRow({ view, onOpenFile }: ToolRowProps) {
 function SubagentActivity({
   parentToolCallId,
   parentRunning,
+  sessionId,
 }: {
   parentToolCallId: string;
   parentRunning: boolean;
+  sessionId?: string;
 }) {
   const lane = useSubagentActivityStore((s) => s.lanes[parentToolCallId] ?? null);
   const rows = useMemo(
@@ -157,7 +194,7 @@ function SubagentActivity({
   if (rows.length === 0) return null;
   return (
     <div className="ml-0.5 border-l border-border pl-3.5">
-      <ToolGroup rows={rows} />
+      <ToolGroup rows={rows} sessionId={sessionId} />
     </div>
   );
 }
@@ -245,9 +282,11 @@ function ToolRowArg({
 function ToolRowBody({
   view,
   onOpenFile,
+  sessionId,
 }: {
   view: ToolRowView;
   onOpenFile?: (target: FileLinkTarget) => void;
+  sessionId?: string;
 }) {
   // Round-10 inspection ⑤ (user ruling): when a row expands into BOTH an
   // input segment and an output body, they share ONE scroll container — the
@@ -272,11 +311,66 @@ function ToolRowBody({
   }
   return (
     <>
+      {view.diff && <ToolRowDiffSegment diff={view.diff} />}
       {view.input && (
         <ToolRowInputSegment input={view.input} maxHeightClass={view.inputMaxHeightClass} />
       )}
-      <ToolRowOutputSegment view={view} onOpenFile={onOpenFile} />
+      <ToolRowOutputSegment view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
     </>
+  );
+}
+
+/**
+ * T12-b slice 2: the file change an `edit`/`write` call describes, rendered as
+ * a diff instead of as the raw `oldText`/`newText` JSON that used to sit here.
+ *
+ * Colours come from the semantic `--success` / `--destructive` tokens, not a
+ * raw green/red palette: `StatusLine.tsx` already spells `+N` / `-N` that way,
+ * and the reference implementation's `text-green-600 dark:text-green-400`
+ * would have been both a second vocabulary for the same idea and a violation
+ * of the design system's "no raw palette" rule.
+ */
+function ToolRowDiffSegment({ diff }: { diff: ToolDiff }) {
+  return (
+    <div className="ml-0.5 border-l border-border pl-3.5">
+      <div className="flex items-center gap-2 pt-1 pb-1 text-meta tabular-nums">
+        <span className="text-success">+{diff.added}</span>
+        <span className="text-destructive">-{diff.removed}</span>
+      </div>
+      <div className="max-h-72 overflow-auto pb-2 font-mono text-code leading-[1.55]">
+        {diff.rows.map((row, index) => (
+          <div
+            // Rows are positional and can repeat verbatim (two identical blank
+            // lines are ordinary), so the index IS the identity here.
+            key={`${index}-${row.kind}`}
+            className={cn(
+              'flex',
+              row.kind === 'add' && 'bg-success/10',
+              row.kind === 'del' && 'bg-destructive/10'
+            )}
+          >
+            <span
+              className={cn(
+                'w-4 shrink-0 select-none text-center',
+                row.kind === 'add' && 'text-success',
+                row.kind === 'del' && 'text-destructive',
+                row.kind === 'same' && 'text-muted-foreground/40'
+              )}
+            >
+              {row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}
+            </span>
+            <span
+              className={cn(
+                'min-w-0 flex-1 select-text whitespace-pre-wrap break-all px-1',
+                row.kind === 'same' ? 'text-muted-foreground/70' : 'text-foreground'
+              )}
+            >
+              {row.text}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -305,9 +399,11 @@ function ToolRowInputSegment({
 function ToolRowOutputSegment({
   view,
   onOpenFile,
+  sessionId,
 }: {
   view: ToolRowView;
   onOpenFile?: (target: FileLinkTarget) => void;
+  sessionId?: string;
 }) {
   switch (view.body) {
     case 'output':
@@ -327,7 +423,13 @@ function ToolRowOutputSegment({
       return (
         <div className="mt-1 flex flex-col gap-1">
           {(view.detail ?? []).map((row) => (
-            <ToolRow key={row.key} view={row} depth={0} onOpenFile={onOpenFile} />
+            <ToolRow
+              key={row.key}
+              view={row}
+              depth={0}
+              onOpenFile={onOpenFile}
+              sessionId={sessionId}
+            />
           ))}
         </div>
       );

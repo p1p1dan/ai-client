@@ -762,6 +762,26 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   });
 
   /**
+   * T12-c (user decision, 2026-08-30: 按 pi-app 的来). The model can hand back
+   * an `openFence` and nothing on screen would change if the render dropped it
+   * — every pure-function assertion in `piMarkdownSplitComparison.test.ts`
+   * stays green, because they only ever call the splitter.
+   */
+  it('[FB1-8] a streaming code fence is rendered as Markdown, and separately from the settled segments', () => {
+    const prose = nodeSource(topLevelFunction('TurnTextItem'));
+    expect(prose, 'the open fence must reach the parser').toContain(
+      '<ChatMarkdown text={split.openFence} />'
+    );
+    // It must NOT be keyed by content: this chunk is meant to update in place
+    // as it grows. A content key would remount the code block on every token,
+    // which is a new mount (and a lost scroll/selection) per flush.
+    expect(prose).not.toContain('key={split.openFence}');
+    // And the plain tail must still exist — the prose before a fence is still
+    // in flight and must not be parsed.
+    expect(prose).toContain('<PlainProse text={split.openTail} />');
+  });
+
+  /**
    * The segment container's key. `hwm` lives in a `useRef` on `TurnTextItem`,
    * so the component instance has to survive a cut point moving; an index key
    * on the SEGMENT list would be fine (segments are append-only), but an index
@@ -1260,5 +1280,116 @@ describe('T12: the prompt bubble reads no geometry (the invariant FB3 carried)',
     for (const argument of calls) {
       expect(argument.trim()).toBe('');
     }
+  });
+});
+
+/**
+ * T12-d — the bottom anchor.
+ *
+ * The pure decision (`shouldShowJumpToBottom`) is truth-tabled in
+ * `messageTimelineScroll.test.ts`. This block covers the layer that file
+ * cannot: that the component actually reaches for it, from BOTH places that
+ * can change the answer, and that the button it paints is not the shape this
+ * timeline has spent several batches proving it must not have.
+ */
+describe('T12-d: the jump-to-bottom button', () => {
+  const timeline = nodeSource(topLevelFunction('MessageTimeline'));
+
+  it('the visibility decision comes from the shared predicate, not a second copy', () => {
+    expectCalled('shouldShowJumpToBottom(');
+    // The threshold lives in the pure module; a literal here would be a second
+    // answer to "how far is far enough", free to drift from the first.
+    expect(timeline, 'no inline threshold literal').not.toContain('140');
+  });
+
+  /**
+   * Both writers are load-bearing and they cover disjoint cases. A scroll
+   * event alone misses the one that matters most: while the user reads history
+   * during a live turn the viewport never moves, so only content growth —
+   * seen by the ResizeObserver — can reveal that the live end has run away.
+   */
+  it('is synced from both the scroll handler and the growth observer', () => {
+    const syncs = [...timeline.matchAll(/syncJumpToBottom\(viewport\)/g)];
+    expect(syncs.length, 'scroll alone leaves a streaming turn without a button').toBe(2);
+  });
+
+  it('the click re-arms the follower — the one place allowed to', () => {
+    const jump = timeline.slice(timeline.indexOf('const jumpToBottom'));
+    const body = jump.slice(0, jump.indexOf('}, []);') + 7);
+    expect(body).toContain('stickToBottomRef.current = true');
+    expect(body).toContain('viewport.scrollTop = viewport.scrollHeight');
+    // Written BEFORE the scroll event this provokes, so `nextFollowState` sees
+    // an unchanged height at the bottom and agrees instead of overwriting.
+    expect(body.indexOf('lastScrollHeightRef.current')).toBeLessThan(
+      body.indexOf('viewport.scrollTop =')
+    );
+  });
+
+  it('a session switch clears the affordance instead of inheriting it', () => {
+    expect(timeline).toContain('setShowJumpToBottom(false)');
+  });
+
+  /**
+   * The button is positioned against the WRAPPER, not the scrollport. Inside
+   * the viewport an absolute child scrolls away with the content and a sticky
+   * one is the exact shape `chatTimelineLayout.ts` prohibits after F10.
+   */
+  it('renders outside the scrollport and carries no sticky/fixed hook', () => {
+    const anchorIndex = timeline.indexOf('showJumpToBottom && (');
+    expect(anchorIndex).toBeGreaterThan(timeline.indexOf('</ScrollArea>'));
+    const button = timeline.slice(anchorIndex);
+    expect(button).toContain('absolute right-3 bottom-3');
+    expect(button, 'sticky must not come back through this door').not.toMatch(
+      /(?:^|\s)(?:sticky|fixed)(?:\s|-)/
+    );
+  });
+
+  /**
+   * `F-B15` reversed the "never hover-only" red line for the turn action strip,
+   * on the argument that its actions exist elsewhere too. That argument does
+   * not transfer: this button is the ONLY way back to a running stream, so it
+   * stays a real, focusable control whose visibility is geometry alone.
+   */
+  it('is a real button, labelled, and never gated on hover', () => {
+    const button = timeline.slice(timeline.indexOf('showJumpToBottom && ('));
+    expect(button).toContain('type="button"');
+    expect(button).toContain('aria-label={t(');
+    for (const banned of ['group-hover', 'opacity-0', 'invisible']) {
+      expect(button, `the anchor must not be hover-gated: ${banned}`).not.toContain(banned);
+    }
+  });
+});
+
+/**
+ * T12-d — the tool-row expand memory needs a session to key on, and the ONLY
+ * way it reaches `ToolRows.tsx` is this prop chain. Every hop is asserted:
+ * dropping any one of them leaves the rows silently unremembered, which is
+ * precisely the failure `subagentWiring.test.ts` cannot see from the other end.
+ */
+describe('T12-d: sessionId reaches the tool rows', () => {
+  /**
+   * Asserted hop BY hop, inside the element that performs it. A file-wide
+   * count is not enough and the first draft of this test proved it: dropping
+   * the `ChatTurn` hop left four other `sessionId={sessionId}` attributes
+   * standing — `HistoryErrorNotice` carries one too — so the count stayed
+   * satisfied while the chain was broken at its first link.
+   */
+  it.each([
+    ['MessageTimeline', 'ChatTurn'],
+    ['ChatTurn', 'TurnItemView'],
+    ['TurnItemView', 'ToolGroupItem'],
+  ])('%s forwards sessionId to <%s>', (parent, child) => {
+    const source = nodeSource(topLevelFunction(parent));
+    const element = new RegExp(`<${child}\\b[^>]*>`, 's').exec(source);
+    expect(element, `no <${child}> element found in ${parent}`).not.toBeNull();
+    expect(
+      (element as RegExpExecArray)[0],
+      `a dropped hop leaves every tool row below it silently unremembered`
+    ).toContain('sessionId={sessionId}');
+  });
+
+  it('the group receives it at the single ToolGroup call site', () => {
+    const toolGroupItem = nodeSource(topLevelFunction('ToolGroupItem'));
+    expect(toolGroupItem).toContain('<ToolGroup rows={rows} sessionId={sessionId} />');
   });
 });

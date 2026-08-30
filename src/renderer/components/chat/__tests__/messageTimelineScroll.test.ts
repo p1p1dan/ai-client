@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { nextFollowState, shouldStickToBottom } from '../messageTimelineScroll';
+import {
+  JUMP_TO_BOTTOM_THRESHOLD_PX,
+  nextFollowState,
+  STICK_TO_BOTTOM_THRESHOLD_PX,
+  shouldShowJumpToBottom,
+  shouldStickToBottom,
+} from '../messageTimelineScroll';
 
 describe('shouldStickToBottom', () => {
   it('follows when the viewport is exactly at the bottom', () => {
@@ -96,5 +102,46 @@ describe('nextFollowState (F10-b — the follower step function)', () => {
         expect(twice).toBe(once);
       }
     }
+  });
+});
+
+describe('shouldShowJumpToBottom (T12-d — the bottom anchor)', () => {
+  it('offers nothing while the viewport is at the bottom', () => {
+    expect(shouldShowJumpToBottom(500, 1000, 500)).toBe(false);
+  });
+
+  it('offers nothing for content that fits without overflow', () => {
+    // Distance is negative here; a button would be pure noise on a short
+    // transcript that has no "below" at all.
+    expect(shouldShowJumpToBottom(0, 300, 500)).toBe(false);
+  });
+
+  it('appears once the user is far enough up to have lost the live end', () => {
+    expect(shouldShowJumpToBottom(0, 1000, 500)).toBe(true); // 500px up
+  });
+
+  /**
+   * The band between the two thresholds is real and deliberate: the follower
+   * disarms at 40px so a nudge is respected immediately, while the button
+   * waits for 140px so it does not blink into existence on that same nudge.
+   * Asserting the band keeps a future "simplification" from collapsing the two
+   * constants into one and quietly changing whichever behaviour it did not
+   * mean to.
+   */
+  it('stays silent inside the dead band above the follow threshold', () => {
+    const insideBand = 1000 - 500 - 100; // scrollTop leaving 100px below
+    expect(shouldStickToBottom(insideBand, 1000, 500)).toBe(false); // no longer following
+    expect(shouldShowJumpToBottom(insideBand, 1000, 500)).toBe(false); // but not yet worth a button
+    expect(JUMP_TO_BOTTOM_THRESHOLD_PX).toBeGreaterThan(STICK_TO_BOTTOM_THRESHOLD_PX);
+  });
+
+  it('is a strict threshold — exactly at the limit is still not worth a button', () => {
+    expect(shouldShowJumpToBottom(1000 - 500 - 140, 1000, 500)).toBe(false);
+    expect(shouldShowJumpToBottom(1000 - 500 - 141, 1000, 500)).toBe(true);
+  });
+
+  it('honors a custom threshold', () => {
+    expect(shouldShowJumpToBottom(0, 1000, 500, 600)).toBe(false); // distance 500 <= 600
+    expect(shouldShowJumpToBottom(0, 1000, 500, 400)).toBe(true); // distance 500 > 400
   });
 });

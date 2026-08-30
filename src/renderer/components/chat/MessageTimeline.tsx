@@ -5,6 +5,7 @@ import type {
   SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
 import {
+  ArrowDown,
   Check,
   ChevronRight,
   Copy,
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -73,7 +75,7 @@ import {
 // relative form ("3 minutes ago") and the `model · time` composer are both
 // unused here — see `chatTimelineLayout.ts`'s `turnMetaRowClass()` note.
 import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
-import { nextFollowState } from './messageTimelineScroll';
+import { nextFollowState, shouldShowJumpToBottom } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { PermissionActivityRows } from './PermissionActivityRows';
 import { QuestionCard } from './QuestionCard';
@@ -175,6 +177,7 @@ export function MessageTimeline({
   thinkingEnabled,
   repoName = null,
 }: MessageTimelineProps) {
+  const { t } = useI18n();
   // C-08b: subscribe to this session's bucket only — other sessions' streams
   // no longer re-render this timeline.
   const bucket = useChatSessionsStore((state) =>
@@ -340,6 +343,45 @@ export function MessageTimeline({
   const stickToBottomRef = useRef(true);
   const lastScrollHeightRef = useRef(0);
 
+  // T12-d: the jump-to-bottom affordance. Unlike the follow flag this one has
+  // to be state — it paints a button — so it is mirrored in a ref and written
+  // only on a genuine flip. Both writers below run on every scroll and every
+  // resize frame of a streaming turn; a bare `setState` there would hand React
+  // a render pass per token to throw away.
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const showJumpToBottomRef = useRef(false);
+  const syncJumpToBottom = useCallback((viewport: HTMLElement) => {
+    const next = shouldShowJumpToBottom(
+      viewport.scrollTop,
+      viewport.scrollHeight,
+      viewport.clientHeight
+    );
+    if (next === showJumpToBottomRef.current) return;
+    showJumpToBottomRef.current = next;
+    setShowJumpToBottom(next);
+  }, []);
+
+  /**
+   * Re-anchor on demand. This is the ONE place allowed to re-arm the follower
+   * from a click: `nextFollowState` deliberately refuses to arm on any scroll
+   * event it cannot attribute to intent (F10-b), and a button press is that
+   * intent, stated directly rather than inferred from geometry.
+   *
+   * `lastScrollHeightRef` is updated BEFORE the browser dispatches the scroll
+   * event this write provokes, so the handler sees an unchanged height at the
+   * bottom — `nextFollowState`'s "genuine arrival" case — and agrees with the
+   * flag set here instead of overwriting it on the next frame.
+   */
+  const jumpToBottom = useCallback(() => {
+    const viewport = findViewport(scrollRootRef.current);
+    if (!viewport) return;
+    stickToBottomRef.current = true;
+    lastScrollHeightRef.current = viewport.scrollHeight;
+    viewport.scrollTop = viewport.scrollHeight;
+    showJumpToBottomRef.current = false;
+    setShowJumpToBottom(false);
+  }, []);
+
   // Track whether the user is anchored to the bottom. Read fresh on every
   // native scroll event so a manual scroll-up is never fought by auto-scroll,
   // and scrolling back down re-arms following. Arming goes through
@@ -364,10 +406,11 @@ export function MessageTimeline({
         following: stickToBottomRef.current,
       });
       lastScrollHeightRef.current = viewport.scrollHeight;
+      syncJumpToBottom(viewport);
     };
     viewport.addEventListener('scroll', handleScroll, { passive: true });
     return () => viewport.removeEventListener('scroll', handleScroll);
-  }, [sessionId]);
+  }, [sessionId, syncJumpToBottom]);
 
   // Session switch: always jump to the bottom of the new session's history
   // and re-arm following — a previous session's scroll-up must not carry
@@ -375,6 +418,11 @@ export function MessageTimeline({
   // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId triggers the jump-to-bottom on session switch
   useEffect(() => {
     stickToBottomRef.current = true;
+    // The new session opens at its own bottom, so the affordance starts hidden
+    // — carrying the previous session's `true` over would paint a button that
+    // has nothing above it to jump past.
+    showJumpToBottomRef.current = false;
+    setShowJumpToBottom(false);
     const viewport = findViewport(scrollRootRef.current);
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
@@ -399,10 +447,14 @@ export function MessageTimeline({
       // Keep the height record current even when not following, so the next
       // scroll event's height-change check compares against this frame.
       lastScrollHeightRef.current = viewport.scrollHeight;
+      // T12-d: growth is the ONLY way the button appears during a stream the
+      // user has scrolled away from — no scroll event fires while the content
+      // grows underneath a stationary viewport.
+      syncJumpToBottom(viewport);
     });
     observer.observe(content);
     return () => observer.disconnect();
-  }, [sessionId]);
+  }, [sessionId, syncJumpToBottom]);
 
   if (!sessionId) {
     return (
@@ -413,7 +465,13 @@ export function MessageTimeline({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
+    // T12-d: `relative` is the jump button's containing block, and it is on the
+    // wrapper rather than inside the viewport on purpose — an absolutely
+    // positioned child of the SCROLLPORT would scroll away with the content,
+    // and a `sticky` one inside it is the shape `chatTimelineLayout.ts`
+    // prohibits outright (F10). Out here the button neither scrolls nor
+    // participates in the timeline's layout at all.
+    <div className="relative flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
       {/* Round-2 V-b, as narrowed by T-31 §5.7 and simplified again by T12.
           Conclusion ① is back to its original form: this viewport contains no
           sticky or fixed element at all (T-31's per-turn bubble band retired —
@@ -463,6 +521,7 @@ export function MessageTimeline({
                   <ChatTurn
                     key={turn.id}
                     turn={turn}
+                    sessionId={sessionId}
                     isLastTurn={isLastTurn}
                     sessionStatus={status}
                     inFlightSession={inFlightSession}
@@ -567,6 +626,28 @@ export function MessageTimeline({
           </ReadingColumn>
         </div>
       </ScrollArea>
+      {/* T12-d: the bottom anchor. Shape is the app's OWN — `ShellTerminal`
+          and `AgentTerminal` have carried this exact button for as long as
+          they have had scrollback, and a second vocabulary for "jump to the
+          live end" in the same window would be the worse choice even though
+          the reference implementation centres its own pill instead.
+
+          Visibility is geometry, never hover: `F-B15`'s reversal bought the
+          turn action strip a hover-only life, and the argument that made that
+          acceptable (a duplicate of an action available elsewhere) does not
+          transfer to the only way back to a running stream. It is a real
+          <button>, so it is reachable by keyboard whenever it is on screen. */}
+      {showJumpToBottom && (
+        <button
+          type="button"
+          onClick={jumpToBottom}
+          className="absolute right-3 bottom-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary/80 text-primary-foreground shadow-lg transition-all hover:scale-105 hover:bg-primary active:scale-95"
+          title={t('Scroll to bottom')}
+          aria-label={t('Scroll to bottom')}
+        >
+          <ArrowDown className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
@@ -829,6 +910,11 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
 
 interface ChatTurnProps {
   turn: Turn;
+  /**
+   * T12-d: session scope for the tool-row expand memory. Stable for the life of
+   * the timeline, so handing it to a memoized turn costs nothing.
+   */
+  sessionId: string;
   /** Only the last turn can be in flight, and only it carries the session's failure state. */
   isLastTurn: boolean;
   sessionStatus: SessionRuntimeStatus;
@@ -890,6 +976,7 @@ interface ChatTurnProps {
  */
 const ChatTurn = memo(function ChatTurn({
   turn,
+  sessionId,
   isLastTurn,
   sessionStatus,
   inFlightSession,
@@ -1107,6 +1194,7 @@ const ChatTurn = memo(function ChatTurn({
     <TurnItemView
       key={turnItemKey(item)}
       item={item}
+      sessionId={sessionId}
       thinkingEnabled={thinkingEnabled}
       repoName={repoName}
       streamingBlockId={streamingBlockIdByMessage.get(item.messageId) ?? null}
@@ -1200,7 +1288,12 @@ const ChatTurn = memo(function ChatTurn({
             hovering anywhere in the turn (`group/turn` on the section above).
             Deliberately hover-only per the 2026-08-29 user decision; the
             accessibility cost that buys is recorded on
-            `turnActionsSlotClass()`. */}
+            `turnActionsSlotClass()`.
+
+            2026-08-30: the strip RESERVES its height and only fades, so
+            hovering no longer pushes the turn below it down. The reasoning for
+            the collapse it replaces — and why the user overruled it — is on
+            `turnActionsSlotClass()` too. */}
         {showActions && (
           <div className={turnActionsSlotClass()}>
             <div className={turnActionsInnerClass()}>
@@ -1360,6 +1453,8 @@ function TurnStatusContent({ status }: { status: TurnStatus }) {
 
 interface TurnItemViewProps {
   item: TurnItem;
+  /** T12-d: session scope for the tool-row expand memory. */
+  sessionId: string;
   thinkingEnabled: boolean;
   repoName?: string | null;
   /** The one block in this item's source message that may still be streaming, if any. */
@@ -1443,6 +1538,20 @@ function TurnTextItem({ text, streaming }: { text: string; streaming: boolean })
         <ChatMarkdown key={segment} text={segment} />
       ))}
       {split.openTail.length > 0 && <PlainProse text={split.openTail} />}
+      {/* T12-c (user decision, 2026-08-30: 按 pi-app 的来): a code fence that
+          is still being written renders as Markdown, not as plain text — a
+          long code block is most of a coding agent's output, and it used to
+          sit here unformatted for its entire stream.
+
+          Unlike a `segment` this string GROWS, so it re-parses on every flush.
+          That cost is bounded by the current code block rather than by the
+          whole answer, which is the distinction that made the all-in-one
+          approach 39x more expensive (see this component's head note).
+
+          No `key` on content here on purpose: this chunk is meant to update in
+          place as it grows, where the settled segments above are keyed by
+          content precisely because they never do. */}
+      {split.openFence && <ChatMarkdown text={split.openFence} />}
     </div>
   );
 }
@@ -1456,6 +1565,7 @@ function TurnTextItem({ text, streaming }: { text: string; streaming: boolean })
  */
 function TurnItemView({
   item,
+  sessionId,
   thinkingEnabled,
   repoName,
   streamingBlockId,
@@ -1498,6 +1608,7 @@ function TurnItemView({
       return (
         <ToolGroupItem
           item={item}
+          sessionId={sessionId}
           thinkingEnabled={thinkingEnabled}
           repoName={repoName}
           streamingBlockId={streamingBlockId}
@@ -1564,12 +1675,14 @@ function TurnItemView({
  */
 function ToolGroupItem({
   item,
+  sessionId,
   thinkingEnabled,
   repoName,
   streamingBlockId,
   getThinkingDurationMs,
 }: {
   item: Extract<TurnItem, { kind: 'toolGroup' }>;
+  sessionId: string;
   thinkingEnabled: boolean;
   repoName?: string | null;
   streamingBlockId: string | null;
@@ -1584,7 +1697,7 @@ function ToolGroupItem({
       }),
     [item.entries, thinkingEnabled, repoName, getThinkingDurationMs, streamingBlockId]
   );
-  return <ToolGroup rows={rows} />;
+  return <ToolGroup rows={rows} sessionId={sessionId} />;
 }
 
 /*

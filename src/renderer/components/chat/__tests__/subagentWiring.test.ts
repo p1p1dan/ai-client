@@ -77,19 +77,53 @@ describe('ToolRows.tsx — subagent panel mount', () => {
   });
 
   /**
-   * T-34's `defaultOpen` is still the ONE thing that can open a row at mount —
-   * the live subagent panel sets it. What changed (2026-08-25, user decision)
+   * T-34's `defaultOpen` opens a row at mount when nothing else has an opinion
+   * — the live subagent panel sets it. What changed (2026-08-25, user decision)
    * is the fallback: failures used to auto-expand (sign-off ②), and with the
    * turn-level collapse retired that put a wall of output on screen for every
    * failed or denied call. Red on the row and a click is enough.
+   *
+   * T12-d moved the expression, not the rule. The decision is now
+   * `resolveToolRowOpen`, whose LAST rule is `defaultOpen ?? false` — the same
+   * answer this assertion used to read literally — with a remembered user
+   * choice ahead of it. The negatives are unchanged and still load-bearing:
+   * `view.failed` must not re-enter the mount decision by any route.
    */
-  it('the Collapsible default honors view.defaultOpen and nothing else', () => {
-    expect(callSites).toContain('defaultOpen={view.defaultOpen ?? false}');
+  it('the Collapsible default is the resolved open state, seeded once at mount', () => {
+    expect(callSites).toContain('defaultOpen={initialOpen}');
+    expect(
+      callSites.some((site) =>
+        site.includes('resolveToolRowOpen(view, readToolExpandMemory(sessionId))')
+      ),
+      'the seed must come from the resolver, not from a second copy of its rules'
+    ).toBe(true);
     // Neither the pre-T-34 failed-only literal nor the retired failed fallback
     // may come back: either would ignore the panel's live-open rule, or
     // re-open every failure.
     expect(callSites).not.toContain('defaultOpen={view.failed}');
     expect(callSites).not.toContain('defaultOpen={view.defaultOpen ?? view.failed}');
+    expect(
+      callSites.some((site) => site.startsWith('defaultOpen=') && site.includes('failed')),
+      'no failed-driven expression may reach the mount decision'
+    ).toBe(false);
+  });
+
+  /**
+   * T12-d: the memory is WRITE-THROUGH on the user's own toggle and read only
+   * at mount. A `open={...}` prop here instead would be the regression this
+   * design exists to avoid: T-34's `defaultOpen: true` disappears the moment
+   * the subagent lane stops being live, so a controlled binding would slam the
+   * panel shut under a reader mid-sentence.
+   */
+  it('records the user toggle and never binds the row as controlled', () => {
+    expect(
+      callSites.some((site) => site.includes('setToolRowExpanded(sessionId, view.key, open)')),
+      'the toggle must be written to the session memory'
+    ).toBe(true);
+    expect(
+      callSites.some((site) => /^open=\{/.test(site)),
+      'a controlled `open` would re-close the live subagent panel when it settles'
+    ).toBe(false);
   });
 });
 

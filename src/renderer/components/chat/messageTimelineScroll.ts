@@ -26,6 +26,43 @@ export function shouldStickToBottom(
   return distanceFromBottom <= threshold;
 }
 
+/**
+ * Distance (px) below which the jump-to-bottom button has nothing to offer.
+ *
+ * Deliberately WIDER than `STICK_TO_BOTTOM_THRESHOLD_PX`, and the two answer
+ * different questions. 40px asks "is the user still following?", and it has to
+ * be tight or a deliberate nudge upward keeps getting overridden by
+ * auto-scroll. This one asks "is there enough hidden below to be worth a
+ * button?", and a tight answer to THAT paints a button for a 41px scroll —
+ * an affordance that blinks in and out while reading is worse than none.
+ * 140px is the reference implementation's measured choice
+ * (`TIMELINE_NEAR_BOTTOM_PX`) for the same judgement.
+ *
+ * The gap between the two is a real dead band: between 40 and 140px from the
+ * bottom the timeline no longer follows and no button is offered. It closes
+ * itself — content growing below is what widens the distance — and it is the
+ * price of not making either threshold lie about what it measures.
+ */
+export const JUMP_TO_BOTTOM_THRESHOLD_PX = 140;
+
+/**
+ * Whether to offer the jump-to-bottom button, from viewport geometry alone.
+ *
+ * Geometry, NOT the follow flag: `nextFollowState` can report "not following"
+ * while the viewport sits at the very bottom (rule 2 — a height-change frame
+ * carries no evidence of intent, so the previous flag is kept). Binding the
+ * button to that flag would draw "jump to bottom" while the user is already
+ * looking at the bottom.
+ */
+export function shouldShowJumpToBottom(
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number,
+  threshold: number = JUMP_TO_BOTTOM_THRESHOLD_PX
+): boolean {
+  return scrollHeight - clientHeight - scrollTop > threshold;
+}
+
 export interface FollowStateInput {
   scrollTop: number;
   scrollHeight: number;

@@ -1,7 +1,13 @@
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
+import { PI_TOOL_NAMES } from './piToolNames';
 import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
+import { deriveToolDiff, type ToolDiff } from './toolDiff';
 import { formatThoughtRow } from './turnTiming';
+
+// Re-exported so the pi tool vocabulary keeps ONE public entry point even
+// though the constant itself had to move out to break an import cycle.
+export { PI_TOOL_NAMES } from './piToolNames';
 
 /**
  * T-05 tool-row pure view model (A07 screen 5, groups A-F). Three layers:
@@ -408,6 +414,13 @@ export interface ToolRowView {
   input?: string;
   /** Scroll-window class for `input` — always 240px, independent of tool. */
   inputMaxHeightClass?: string;
+  /**
+   * T12-b slice 2: a file change rendered as a diff instead of as raw
+   * argument JSON. Present only for `edit`/`write`-shaped calls that have
+   * settled; mutually exclusive with `input` by construction (see
+   * `deriveToolRowView`) because the two would show the same bytes twice.
+   */
+  diff?: ToolDiff;
   /** Detail rows when `body === 'detail'` — flat, never indented further. */
   detail?: ToolRowView[];
   /** Read row's clickable file target (A07 F①). */
@@ -477,7 +490,13 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // A running call's input can still change before it settles, so the input
   // segment only appears once the call is done (T-05 adversarial fix #3).
   const inputBody = running ? undefined : deriveToolInputBody(run);
-  const expandable = showOutputBody || Boolean(inputBody);
+  // T12-b slice 2: for `edit`/`write` the arguments ARE the change, so the
+  // diff replaces the raw argument JSON. Same `!running` gate as `inputBody`
+  // and for the same reason — the arguments can still change until the call
+  // settles, and a diff that redraws mid-call reads as the file being edited
+  // twice.
+  const diff = running ? null : deriveToolDiff(run);
+  const expandable = showOutputBody || Boolean(inputBody) || Boolean(diff);
 
   return {
     key: run.blockId,
@@ -490,8 +509,12 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     body: showOutputBody ? 'output' : undefined,
     output: showOutputBody ? run.output : undefined,
     outputMaxHeightClass: showOutputBody ? outputMaxHeightClass(run.toolName) : undefined,
-    input: inputBody,
-    inputMaxHeightClass: inputBody ? INPUT_MAX_HEIGHT_CLASS : undefined,
+    // The diff SUPERSEDES the raw argument body rather than sitting next to
+    // it: they carry the same information, and showing both would put an
+    // escaped `oldText` blob directly under the readable rendering of itself.
+    input: diff ? undefined : inputBody,
+    inputMaxHeightClass: !diff && inputBody ? INPUT_MAX_HEIGHT_CLASS : undefined,
+    diff: diff ?? undefined,
     link,
     hitSource,
     toolName: run.toolName,
@@ -595,7 +618,12 @@ export function deriveAggregateRow(
 
   const uniqueFiles = new Set<string>();
   for (const entry of readEntries) {
-    const path = stringField(asRecord(entry.run.input), 'file_path');
+    // Both dialects: Claude's `file_path`, pi's `path` (T12-b). Reading only
+    // one of them falls back to `toolCallId`, which is unique per call, so the
+    // same file read twice would count as two files — a dedupe that silently
+    // stops deduping.
+    const rec = asRecord(entry.run.input);
+    const path = stringField(rec, 'file_path') ?? stringField(rec, 'path');
     uniqueFiles.add(path ?? entry.run.toolCallId);
   }
   const fileCount = uniqueFiles.size;
@@ -797,8 +825,29 @@ export interface ToolVerbs {
 
 export type ToolVerbState = 'done' | 'running' | 'refused';
 
-/** A07 :2539 verb table, plus our own `Edited` (A07-endorsed) / `Delegated` / `Fetched` additions. */
+/**
+ * A07 :2539 verb table, plus our own `Edited` (A07-endorsed) / `Delegated` /
+ * `Fetched` additions, plus pi's lowercase built-ins (T12-b).
+ *
+ * pi's verbs deliberately reuse the existing English rather than inventing a
+ * second dialect: `grep` gets `Grepped` like `Grep`, `find` gets
+ * `Searched files` like `Glob` (both are "find files by glob pattern"), and
+ * `write` gets `Edited` like `Write`. `ls` is the one pi tool with no Claude
+ * counterpart, hence the only new verb triple in this batch.
+ */
 export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
+  [PI_TOOL_NAMES.read]: { done: 'Read', running: 'Reading', refused: 'Read' },
+  [PI_TOOL_NAMES.edit]: { done: 'Edited', running: 'Editing', refused: 'Edit' },
+  [PI_TOOL_NAMES.write]: { done: 'Edited', running: 'Editing', refused: 'Edit' },
+  [PI_TOOL_NAMES.bash]: { done: 'Ran', running: 'Running', refused: 'Run' },
+  [PI_TOOL_NAMES.powershell]: { done: 'Ran', running: 'Running', refused: 'Run' },
+  [PI_TOOL_NAMES.grep]: { done: 'Grepped', running: 'Grepping', refused: 'Grep' },
+  [PI_TOOL_NAMES.find]: {
+    done: 'Searched files',
+    running: 'Searching files',
+    refused: 'Search files',
+  },
+  [PI_TOOL_NAMES.ls]: { done: 'Listed', running: 'Listing', refused: 'List' },
   Read: { done: 'Read', running: 'Reading', refused: 'Read' },
   NotebookRead: { done: 'Read', running: 'Reading', refused: 'Read' },
   Grep: { done: 'Grepped', running: 'Grepping', refused: 'Grep' },
@@ -875,8 +924,18 @@ export function isDelegationTool(toolName: string): boolean {
   return DELEGATION_TOOL_NAMES.has(toolName);
 }
 
-const READ_TOOL_NAMES = new Set(['Read', 'NotebookRead']);
-const SEARCH_TOOL_NAMES = new Set(['Grep', 'Glob', 'WebSearch']);
+// `ls` counts as a SEARCH, not a read: the aggregate row phrases reads as
+// "N files" and dedupes them by path, and a directory listing is neither a file
+// nor something you read twice by accident. "N searches" is the honest bucket.
+const READ_TOOL_NAMES = new Set(['Read', 'NotebookRead', PI_TOOL_NAMES.read]);
+const SEARCH_TOOL_NAMES = new Set([
+  'Grep',
+  'Glob',
+  'WebSearch',
+  PI_TOOL_NAMES.grep,
+  PI_TOOL_NAMES.find,
+  PI_TOOL_NAMES.ls,
+]);
 
 /** Decides whether a tool participates in aggregation, and which bucket it counts into. */
 export function classifyTool(toolName: string): ToolClass {
@@ -934,6 +993,56 @@ function formatToolArgDetail(
   let raw: string | undefined;
   let kind: ToolArgKind | undefined;
   switch (run.toolName) {
+    // ─── pi built-ins (T12-b). Argument names per the SDK schemas; see
+    // `PI_TOOL_NAMES`. Without these every pi call fell to `default:`, whose
+    // probe order is `command ?? description ?? path ?? … ?? pattern` — so a
+    // `grep` showed its PATH ("src") instead of what was searched for
+    // ("TODO"), and every path rendered proportional instead of mono.
+    case PI_TOOL_NAMES.read: {
+      const path = stringField(rec, 'path');
+      if (path) {
+        const offset = numberField(rec, 'offset');
+        if (offset != null) {
+          const limit = numberField(rec, 'limit');
+          const endLine = limit != null ? offset + limit - 1 : offset;
+          raw = `${shortPath(path)} L${offset}-${endLine}`;
+        } else {
+          raw = shortPath(path);
+        }
+        kind = 'ident';
+      }
+      break;
+    }
+    case PI_TOOL_NAMES.edit:
+    case PI_TOOL_NAMES.write: {
+      const path = stringField(rec, 'path');
+      raw = path ? shortPath(path) : undefined;
+      if (raw) kind = 'ident';
+      break;
+    }
+    case PI_TOOL_NAMES.grep:
+    case PI_TOOL_NAMES.find: {
+      // The pattern is the point of the call; `path`/`glob` only narrow it.
+      const pattern = stringField(rec, 'pattern');
+      raw = pattern && repoName ? `${pattern} in ${repoName}` : pattern;
+      break;
+    }
+    case PI_TOOL_NAMES.ls: {
+      // `path` is OPTIONAL on pi's `ls` — an argument-less call lists the
+      // working directory, so say that rather than rendering a bare verb.
+      const path = stringField(rec, 'path');
+      raw = path ? shortPath(path) : 'working directory';
+      kind = path ? 'ident' : 'prose';
+      break;
+    }
+    case PI_TOOL_NAMES.bash:
+    case PI_TOOL_NAMES.powershell: {
+      // pi's bash schema has `command` and `timeout` only — no `description`
+      // sibling, so unlike Claude's Bash there is no prose alternative here.
+      raw = stringField(rec, 'command');
+      if (raw) kind = 'ident';
+      break;
+    }
     case 'Read':
     case 'NotebookRead': {
       const path = stringField(rec, 'file_path');

@@ -241,47 +241,68 @@ describe('turnHeadClass', () => {
  */
 describe('turn hover action strip (T12-b)', () => {
   /**
-   * The collapsed state has to be genuinely zero-height. An `opacity-0` strip
-   * that still occupies 28px under every turn would spend the same vertical
-   * budget the meta row just gave back — the change would look like a cleanup
-   * and be a no-op. `grid-rows-[0fr] -> [1fr]` is the animate-to-auto trick
-   * pi-app uses; `overflow-hidden` + `min-h-0` on the inner row are what make
-   * the `0fr` actually clip rather than just shrink the track.
+   * REVERSED on 2026-08-30 by user decision, after seeing it in the running
+   * app: hovering a turn must not move anything.
+   *
+   * The assertion this replaces required the opposite — a genuinely zero-height
+   * collapsed strip (`grid-rows-[0fr] -> [1fr]`), on the argument that an
+   * always-present strip spends the vertical budget removing the meta row had
+   * just given back. That cost is real and is still real; the user weighed it
+   * against text that shifts under the cursor and chose the whitespace.
+   *
+   * So the strip now reserves its height and only fades. The negative half is
+   * what keeps the old behaviour from creeping back: NO height animation of any
+   * kind on this strip, because every one of them moves the page.
    */
-  it('T12-b: the collapsed strip is a zero-height row, not a transparent one', () => {
+  it('T12-d follow-up: the strip reserves its height and only fades', () => {
     const slot = turnActionsSlotClass();
-    expect(slot).toContain('grid-rows-[0fr]');
-    expect(slot).toContain('group-hover/turn:grid-rows-[1fr]');
-    const inner = turnActionsInnerClass();
-    expect(inner, 'without these the 0fr track shrinks but the content paints on').toContain(
-      'overflow-hidden'
+    expect(slot).toContain('opacity-0');
+    expect(slot).toContain('group-hover/turn:opacity-100');
+    expect(slot, 'only opacity may transition, or the hover moves the page').toContain(
+      'transition-opacity'
     );
-    expect(inner).toContain('min-h-0');
+    for (const banned of ['grid-rows-[0fr]', 'grid-rows-[1fr]', 'grid-template-rows', 'h-0']) {
+      expect(slot, `a height animation shifts the turn below: ${banned}`).not.toContain(banned);
+    }
+    // `hidden` / `max-h-0` reach the same place by a different route.
+    expect(slot).not.toMatch(/(?:^|\s)(?:hidden|max-h-0|scale-y-0)(?:\s|$)/);
   });
 
   /**
-   * The defect this batch actually shipped for one build, caught by measuring
-   * the browser rather than by any of the assertions above.
-   *
-   * `h-7` on the inner row — copied verbatim from pi-app's
-   * `.message-actions-slot-inner` — made the grid item a definite height, which
-   * a `0fr` track cannot squash: `grid-template-rows` resolved to `28px`, so the
-   * "collapsed" strip stood at full size with `opacity: 0`, spending exactly the
-   * vertical budget removing the meta row was supposed to give back.
-   *
-   * Every class the spec called for was present and every assertion was green,
-   * because the failure is in the INTERACTION between `grid-rows-[0fr]` and a
-   * sibling utility, not in any one class. So the assertion is a prohibition:
-   * no height utility on this row, ever.
+   * The transparent state stays clickable on purpose — see the note on
+   * `turnActionsSlotClass()`. `pointer-events-none` looks like the natural
+   * companion to `opacity-0`, but the pointer cannot be over an invisible strip
+   * without already being inside the turn, and being inside the turn is what
+   * makes it visible. Adding the guard would protect a state nothing can enter.
    */
-  it('T12-b: the squashable row carries no fixed height (measured, not inferred)', () => {
+  it('the transparent state is not additionally gated on pointer-events', () => {
+    expect(turnActionsSlotClass()).not.toContain('pointer-events-none');
+  });
+
+  /**
+   * ALSO REVERSED on 2026-08-30, and the reversal is exact: the assertion this
+   * replaces prohibited any height utility on this row.
+   *
+   * Both versions were correct for their mechanism. Under `grid-rows-[0fr]` a
+   * definite height was the defect that shipped for one build (`h-7` from
+   * pi-app; a fixed-height grid item is not squashable, so the collapsed strip
+   * measured 28px in the browser while every class assertion stayed green).
+   * Under a reserved-space strip a definite height is the whole point: height
+   * that comes from content appears when the content does, which is the hover
+   * shift all over again.
+   *
+   * The two numbers must stay one number, so this reads the button's tier
+   * rather than hard-coding 24px twice.
+   */
+  it('T12-d follow-up: the inner row reserves exactly the button’s height', () => {
     const inner = turnActionsInnerClass();
-    expect(inner, 'a definite height makes the 0fr track un-collapsible').not.toMatch(
-      /(?:^|\s)(?:h|min-h|size)-(?!0(?:\s|$))[\w.[\]/-]+/
-    );
-    // The row's height comes from the button instead, which is why its 24px is
-    // load-bearing rather than decorative.
+    expect(inner, 'content-derived height reappears with the content').toContain('h-6');
+    // Same tier, asserted from the button's own class so the pair cannot drift.
     expect(turnCopyButtonClass()).toContain('size-6');
+    // The `0fr` squash machinery retired with the track it served; leaving it
+    // behind would clip a strip that no longer collapses.
+    expect(inner).not.toContain('min-h-0');
+    expect(inner).not.toContain('overflow-hidden');
   });
 
   // The hover scope is a NAMED group. Tool rows and the thinking chain inside

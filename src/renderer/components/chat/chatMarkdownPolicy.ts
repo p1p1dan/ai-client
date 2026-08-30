@@ -465,8 +465,77 @@ export interface ClosedPrefixSplit {
   segments: string[];
   /** Everything after the last safe cut -- still plain text. */
   openTail: string;
+  /**
+   * T12-c (user decision, 2026-08-30: 按 pi-app 的来): the still-OPEN code
+   * fence at the end of the tail, to be rendered as Markdown rather than as
+   * plain text.
+   *
+   * Why this is safe, and why it is a different argument from the blank-line
+   * rule above: **inside a fence, content is literal.** Appending lines cannot
+   * reinterpret the lines already there — only the block's END can move. And
+   * CommonMark closes an unterminated fence at end of document (verified
+   * against this app's own parser), so `"```ts\nfoo"` parses as a complete
+   * `code` node with `lang: 'ts'`. Rendering the fence-so-far therefore shows
+   * exactly the lines it already has, correctly highlighted, and the real
+   * closing fence later only ADDS lines — no reflow of what is on screen.
+   *
+   * The problem this fixes: a long code block used to sit in `openTail` as
+   * unformatted plain text for its whole stream, which is most of the output
+   * of a coding agent.
+   *
+   * Deliberately NOT part of `closedLength`: it is not settled, so the
+   * high-water mark must not advance over it. It is also not a `segment`, so
+   * the memoised settled segments (the measured 39x saving) keep their
+   * append-only property while this one chunk re-parses per flush.
+   */
+  openFence?: string;
   /** Character length of the settled prefix (`text.slice(0, closedLength)`). */
   closedLength: number;
+}
+
+/**
+ * Offset within `tail` where a still-open fence begins, or `null` when the tail
+ * ends outside any fence.
+ *
+ * Only an UNTERMINATED fence qualifies. A fence that opened and closed inside
+ * the tail is followed by text that is ordinary Markdown again, and that text
+ * is still in flight — handing it to the parser would re-introduce exactly the
+ * mid-construct reinterpretation the blank-line rule exists to prevent.
+ */
+function openFenceOffset(tail: string): number | null {
+  const lines = tail.split('\n');
+  // `fenceStart` IS the open/closed state: an offset while a fence is open,
+  // `null` the moment it closes. Tracking the fence object separately and then
+  // testing both would give two sources for one fact — and the second test
+  // would be dead, because they can never disagree.
+  let fence: OpenFence | null = null;
+  let fenceStart: number | null = null;
+  let offset = 0;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.trim() !== '') {
+      const before = fence;
+      fence = stepFence(line, fence);
+      if (before === null && fence !== null) fenceStart = offset;
+      else if (fence === null) fenceStart = null;
+    }
+    offset += line.length + (i === lines.length - 1 ? 0 : 1);
+  }
+
+  return fenceStart;
+}
+
+/** Cut a raw tail into its plain part and its still-open fence, if any. */
+function splitOpenTail(rawTail: string): { openTail: string; openFence?: string } {
+  const fenceAt = openFenceOffset(rawTail);
+  if (fenceAt === null) return { openTail: rawTail };
+  return {
+    // Trailing newlines removed for the same reason `segmentClosedText` does
+    // it: the gap between the plain part and the fence is the container's job.
+    openTail: rawTail.slice(0, fenceAt).replace(/\n+$/, ''),
+    openFence: rawTail.slice(fenceAt),
+  };
 }
 
 /**
@@ -482,7 +551,7 @@ export function splitClosedPrefix(text: string): ClosedPrefixSplit {
   const closedLength = boundaries.length > 0 ? boundaries[boundaries.length - 1] : 0;
   return {
     segments: segmentClosedText(text.slice(0, closedLength)),
-    openTail: text.slice(closedLength),
+    ...splitOpenTail(text.slice(closedLength)),
     closedLength,
   };
 }
@@ -508,7 +577,7 @@ export function advanceClosedPrefix(text: string, previousHwm: number): ClosedPr
   const frozen = text.slice(0, hwm);
   return {
     segments: segmentClosedText(frozen),
-    openTail: text.slice(hwm),
+    ...splitOpenTail(text.slice(hwm)),
     closedLength: hwm,
   };
 }

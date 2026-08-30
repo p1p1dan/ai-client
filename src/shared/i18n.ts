@@ -398,6 +398,9 @@ export const zhTranslations: Record<string, string> = {
   'Search worktrees...': '搜索 worktree...',
   'Search worktrees': '搜索 worktree',
   'Search sessions': '搜索 Session',
+  // Shared by the two terminals' scrollback buttons and the chat timeline's
+  // bottom anchor (T12-d) — one wording for one gesture, in both places.
+  'Scroll to bottom': '滚动到底部',
   'New chat': '新建对话',
   // D1 (round-5): header "New" button title, dynamic target discoverability.
   'New session in {{folder}}': '在 {{folder}} 中新建会话',
@@ -1897,6 +1900,12 @@ export const zhTranslations: Record<string, string> = {
   'Session is running — stop it before changing the target': '会话运行中——先停止再切换目标',
   'This chat already has messages — a new chat will start on the new target':
     '当前会话已有消息——将在新目标下新建对话',
+
+  // T12-e: welcome card shown above the composer when no working directory
+  // has been picked yet (replaces a red "looks broken" diagnostic box).
+  'Choose a working directory': '选择工作目录',
+  'No working directory yet': '还没有工作目录',
+  'Pick a folder first — the agent works inside it.': '先选一个目录，AI 就在这个目录里干活。',
 
   // T-27: Composer target bar (D22) — footer action rows (batch 3).
   // 'New Folder' already exists above (worktree/temp-session UI) — reused as-is.

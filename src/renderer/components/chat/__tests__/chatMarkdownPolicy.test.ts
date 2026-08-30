@@ -327,11 +327,28 @@ describe('F-C2: normalizeCodeLanguage', () => {
 describe('FB1: splitClosedPrefix / advanceClosedPrefix', () => {
   // [FB1-1] Truth table. Each arm names the widening that would break it.
   describe('[FB1-1] cut rules', () => {
-    it('① an unclosed fence keeps everything from its opening line in openTail', () => {
+    it('① an unclosed fence never SETTLES, and now streams as Markdown rather than plain text', () => {
+      // Proposition rewritten, not relaxed (T12-c, user decision 2026-08-30:
+      // 按 pi-app 的来). What this arm has always protected is that an open
+      // fence must not become a settled segment — a blank line INSIDE code is
+      // ordinary and must not cut the block. That half is unchanged and still
+      // asserted below.
+      //
+      // What changed is only where the un-settled fence is RENDERED: it moves
+      // from `openTail` (plain text for the whole stream — most of a coding
+      // agent's output) to `openFence`, which is parsed. Safe for a different
+      // reason than the blank-line rule: inside a fence content is literal, so
+      // appending cannot reinterpret the lines already there.
       const text = 'intro\n\n```ts\nconst a = 1;\n\nconst b = 2;\n';
-      const { segments, openTail } = splitClosedPrefix(text);
+      const { segments, openTail, openFence, closedLength } = splitClosedPrefix(text);
+
       expect(segments).toEqual(['intro']);
-      expect(openTail).toBe('```ts\nconst a = 1;\n\nconst b = 2;\n');
+      // The load-bearing half: the fence did NOT settle.
+      expect(closedLength).toBe('intro\n\n'.length);
+      expect(segments.join('\n')).not.toContain('```ts');
+      // The blank line inside the code did not cut it.
+      expect(openFence).toBe('```ts\nconst a = 1;\n\nconst b = 2;\n');
+      expect(openTail).toBe('');
     });
 
     it('① a fence closes only on the same marker, at least as long, with no info string', () => {
@@ -702,13 +719,15 @@ describe('F-C3: deriveStreamingBlockIds', () => {
     expect(gate('live', 'live-1')).toBe(true);
     expect(gate('live', 'live-2')).toBe(false);
 
-    // …and the progressive path leaves the unsettled tail alone: a half-written
-    // fence is plain text until its closing line lands, which is the whole
-    // reason the cut is at blank lines and not at newlines.
+    // …and the progressive path still does not SETTLE a half-written fence
+    // (that is what the blank-line cut buys). Since T12-c it hands the open
+    // fence to `openFence` instead of leaving it as plain text, so the code
+    // block is highlighted while it streams — see the `[FB1-1] ①` arm.
     const partial = 'done\n\n```ts\nconst a = 1;\n';
     const split = advanceClosedPrefix(partial, 0);
     expect(split.segments).toEqual(['done']);
-    expect(split.openTail).toContain('```ts');
+    expect(split.openFence).toContain('```ts');
+    expect(split.closedLength).toBe('done\n\n'.length);
   });
 });
 
