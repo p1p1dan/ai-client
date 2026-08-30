@@ -52,6 +52,7 @@
 | `73ef8800` | 会话移除、pending 回显边界加固 |
 | `17623597` | 已移除会话迟到事件过滤 |
 | `dcf4b823` | retirement tombstone、显式 enqueue 滚底与 echo 幂等收口 |
+| `afc66ae5` | Archive/Close 同步写 retirement tombstone，阻断行级移除后的迟到事件 |
 
 ## 对抗复核
 

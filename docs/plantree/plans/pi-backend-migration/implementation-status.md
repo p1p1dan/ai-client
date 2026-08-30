@@ -80,7 +80,7 @@ Phase 3 的 T12 全系与紧急稳定化 M1/M2/M3 已完成：T12-e′、T24、T
 
 **2026-08-30 紧急稳定化 M1/M2/M3**：空仓库/仓库移除闭环、pending 发送反馈与显式滚底、
 会话 Rename + Archive 右键菜单全部落地。实现提交为 `8bd7f86b`、`8e93c04b`、
-`ace66886`、`73ef8800`、`17623597`、`dcf4b823`；两轮对抗复核发现的跨仓库重绑、迟到
+`ace66886`、`73ef8800`、`17623597`、`dcf4b823`、`afc66ae5`；两轮对抗复核发现的跨仓库重绑、迟到
 事件复活、echo 一对多、重复 echo 与 queue release 滚动问题均已收口。证据见
 [evidence/2026-08-30-urgent-stabilization-m1-m3.md](./evidence/2026-08-30-urgent-stabilization-m1-m3.md)。
 
