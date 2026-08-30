@@ -9,32 +9,24 @@ typecheck（主仓）0；Biome `src` + `scripts` **1058 文件 · 0 error / 0 wa
 
 ## Current Phase
 
-**Phase 1 与 Phase 5 已完成；Phase 2 未整体完成；Phase 3 的 T12 全系已完成（T12 / a / b / c / d / e），
-Phase 3 余下 T13 ~ T15 仍 Deferred。**
+**Phase 1 Done；Phase 5 主链 Done、追加 T25；Phase 2 审批链真机已贯通但形态与策略验收未收口；
+Phase 3 的 T12 全系已完成并经真实回合确认，2026-08-30 反馈新增/激活 T12-e′、T13、T24、T26、T27。**
 
-区分「代码施工完成」和「真实 E2E 验收完成」——这两件事在 Phase 2 上不一致：
-
-- **代码施工完成**：T07 / T11 / T08 / T08-a / T08-b，加 2026-08-29 的审计修复批
-  （13 项全修）。证据见
-  [phase2-extension-ui-permission.md](./evidence/phase2-extension-ui-permission.md)
-  与 [phase2-audit-fixes.md](./evidence/phase2-audit-fixes.md)。
-- **未完成**：T08-b **真机审批 E2E 一次都没跑通**（因此从 Done 降级）；
-  T08-c 两个切片**代码完成但验收未过**（面板未点验、策略未在真机上验证生效）；
-  **T09 / T10 为 Deferred**。所以不能写「Phase 2 已完成」。
-- **Q9 已关闭（[D11](./decisions/011-default-permission-policy.md)）**，T08-c 切片 1
-  已落地：随包**务实档**默认策略（读放行 / 改询问 / bash 只读白名单 / mcp 仅发现类 /
-  external_directory 一律 ask），path deny 面含 `.env` 系列、私钥与自家凭据库；
-  项目级 `.pi/` 配置**受管模式不生效、本机模式生效**。证据见
-  [t08c-default-permission-policy.md](./evidence/t08c-default-permission-policy.md)。
-- 权限姿态的准确说法（已随 D11 改变）：**随包带一份最低优先级的默认策略**，用户
-  自己 agentDir 里的配置整条压过它；未被任何规则命中的请求仍落 `ask`
-  （`rule.ts:112` `defaultAction ?? "ask"`）。另有一条插件硬编码的自动放行：
-  **只读工具读 Pi 基础设施目录一律 allow**。
-- Phase 3 已起手：**T12 Done**（用户 2026-08-29 指示「Phase 2 点验推迟，先做 T12」，
-  同日看图确认「整体效果满意」并拍板删掉 meta 行）。Phase 2 的真机 E2E 验收**没有取消，
-  只是排在后面**。下一件是 T12-a（display-items / turn-groups 数据建模）。
-- 同日新增 **T12-e**（用户真机反馈）：没加仓库时输入框上方红框恒亮、文案是开发者口径，
-  观感像报错；改法取 pi-app 的欢迎/引导页。**未开工**，形态已拍板（照抄 pi-app）。
+- **T08-b 链路前置已满足**：真机 allow / session allow / deny、工具执行与被拒工具均正常。
+  未完成项改为用户明确要求的**聊天区域内联审批层**；窗口级 `AlertDialog` 形态退役待施工。
+- **T08-c 设置面 GUI 已点验正常**，且显示“随包默认 · 生效中”。“我的设置未创建”是
+  预期空态，只在第一次保存用户规则时物化，**不自动创建空文件**。真正未收口的是
+  [Q10](./open-questions.md#q10--真机权限行为与-d11-策略不一致)：普通 read 与
+  `~/.pilab/` 的真机行为没有按 D11 命中。
+- **T12 真实回合验证通过**：用户确认正文顺序、思考时间、流式代码块、底部锚点、悬停条、
+  被拒工具与长回合均正常。连续 read 未出现 `Explored 2 files` 仅留低优先级复验，不把
+  T12-d 整体降级。
+- **近期反馈批**：T12-e′ 无仓库隐藏输入区；T24 发送/重试时序；T26 主动发送滚底；
+  T13 会话右键菜单；T27 仓库移除后左树清理。完整子节点与验收见
+  [2026-08-30 真机点测反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md)。
+- **模型体验追加 T25**：标签分组 + 模型级 effort，归 Phase 5 follow-up；schema 契约见
+  [Q11](./open-questions.md#q11--模型标签与模型级-effort-的配置契约)。T09 / T10 / T14 / T15
+  继续 Deferred。
 - 同日 **T12-a 已 Done，但结论与原计划相反**（[D12](./decisions/012-timeline-data-model.md)）：
   评估后**不移植** pi-app 的 display-items —— 缺陷不在渲染建模层，在 `piRuntime` 把
   一整轮 pi 运行塞进一条消息一个正文块，导致多步回合里第二段正文被粘在第一段后面、
@@ -70,6 +62,16 @@ Phase 3 余下 T13 ~ T15 仍 Deferred。**
   而 pi 真正的提问通路是 Extension UI，也就是 T08 已完成的四原语；
   `piRuntime.ts` 全文 **0 次**发过 `question` 事件，本仓那套 `QuestionCard` 在 pi 上够不着。
   证据见 [t12d-expand-memory-and-bottom-anchor.md](./evidence/t12d-expand-memory-and-bottom-anchor.md)。
+
+## Latest Field Test — 2026-08-30
+
+- **通过**：T08-b 权限控制与执行；T12 正文顺序、思考时间、流式代码块、锚点、悬停条、
+  被拒工具、长回合。
+- **新缺陷/改判**：T12-e′、T24、T26、T27；T13 右键直接 archive 的交互需重做；
+  T08-b 改为内联审批；T08-c 进入 Q10 策略命中调查；T25 进入 Q11 schema 设计。
+- **截图事实**：设置页显示随包默认生效、用户层未创建；连续 read 产生三行独立工具记录；
+  edit/read 的 activity 显示首次用户批准、后续 session pattern 放行。截图原件路径见分诊档。
+- 本次只更新计划树与交接文档，**没有代码改动，也没有重跑门禁**；Last Verified 仍沿用页首记录。
 
 ## Last Landed
 
@@ -260,48 +262,37 @@ path deny 面 · external_directory 一律 ask · 项目配置按凭据模式分
 
 ## Active TODO
 
-1. **真机端到端验收（T08-b 的 Done 前置）**：模型发起工具调用 → 插件拦截 →
-   GUI 弹窗 → 允许 / 拒绝 / 关窗三种走法 → 工具执行或不执行。链路各段均有测试与
-   实跑证据，但整条链首次贯通需要真实模型调用。
-2. **GUI 点验**：权限活动行四种 tone × 亮暗双主题；弹窗的 select 按钮组、
-   `Request N/M`、发送失败提示；**权限策略设置面**（危险二次确认、「位置未变」徽章、
-   规则增删、只读横幅）。一样都没在屏幕上看过。
-3. **多窗口真机验证**：路由有 13 例单测，两个真实 BrowserWindow 的行为未实测。
-4. **策略真机验证**（并入上面的 E2E 批）：`cat .env` 应被直接拒而非弹窗；
-   `git status` 不弹窗而 `git commit` 弹窗；受管模式下仓库自带 `.pi/` 配置无效。
-   **验收若在 `node scripts/dev.js` 下跑，先确认启动日志里有 `[dev] permission policy: …`**
-   ——这条是切片 2 才补上的 dev/打包一致性，没有它随包策略不生效，第一条会误判。
-5. **T12-a 的真机验证**（代码已 Done，见下）：需要一次真实的多步工具回合，确认 pi
-   的实际事件顺序与 SDK 类型声明一致 —— 这是本批最大的一条未验证假设。顺带补两件
-   T12 也没能覆盖的：流式态观感、悬停条的 `HH:MM`（合成 transcript 不走 runtime
-   event bus，拿不到 `completedAt`）。
-6. ~~Phase 3 续做：**T12-d**~~ ✅ **已完成（2026-08-30，含真机 GUI 十一图）**。
-   **T12 全系（T12 / a / b / c / d / e）到此全部 Done**。T12-d 的四件事只有两件成立：
-   展开记忆与底部锚点做了；跟随滚动我们已有且比参照实现多覆盖一种情况；
-   问卷挂在 pi-app 的逐扩展适配器层（本 plan 非目标），而 pi 的提问通路本就是
-   T08 的 Extension UI。read/grep/bash/ls 的结构化预览仍**刻意未做**（T12-b 的决定）。
-   Phase 3 余下 **T13 / T14 / T15 仍 Deferred**，需要先拿到用户的排序意见。
-7. ~~**T12-e 无工作目录首屏**~~ ✅ **已完成（2026-08-29，含真机 GUI 三图）**：没加仓库时
-   输入框上方那个红框恒亮，看起来像程序报错。已核实成因不是错误路径 ——
-   `DEMO_WORKSPACES` 的 `path` 是空串（刻意，防止假 cwd 进 spawn），所以
-   `activeWorkspace` 有值而 `cwd` 为 null，落进 `ChatComposer.tsx:2751` 那条
-   把「缺会话 / 缺工作区 / 缺 cwd / 真错误」四种情况**共用同一个 destructive 样式**
-   的分支。改法取 pi-app 的 `ProjectHomeView`（居中选目录按钮 + 最近目录卡 + 副标题）。
-   **形态同日已拍板 = 完全照抄 pi-app，输入框照常留在下方**：用户看过三张示意图后
-   自己推翻了「右侧对话框不要直接显示」那条原始建议，理由是加完目录界面不整块跳。
-   已落地并出了亮/菜单/暗三张真机图。⚠️ **GUI 又抓到一个断言抓不到的缺陷**：卡片
-   已经在好好说话了，输入框 placeholder 仍写着 `Cannot send right now…`（那条 if
-   阶梯少了「有工作区但没有路径」的分支，全新安装看到的是最没信息量的兜底句），
-   已补。证据见 [t12e-welcome-card.md](./evidence/t12e-welcome-card.md)。
-   **未做**：没真的走一遍「点按钮→添加仓库→卡片消失」的完整闭环。
+1. **T12-e′ + T27（空仓库闭环）**：无仓库时提升欢迎卡并隐藏 Composer；修复移除最后
+   一个仓库后 chatSessions 树不清空、仍可新建会话的问题。两项必须一起验“添加 ↔ 移除”。
+2. **T24 + T26（发送体验）**：先抓 send/create/resume/retry/Host echo 的真实时序，
+   再决定 pending 占位或乐观气泡；主动发送同时触发 `MessageTimeline.jumpToBottom()`。
+3. **T08-b + T08-c/Q10（权限收口）**：把窗口级 modal 改为聊天区内联审批；用 activity
+   记录查明普通 read 与 `.pilab` 为什么偏离 D11，再决定修实现还是改判策略。
+4. **T13（会话右键管理）**：右键不再直接 archive；菜单至少含 Rename + Archive，且有
+   明确确认、撤销或可发现恢复入口。永久删除与 fork/rewind 不混进本切片。
+5. **T25/Q11（模型菜单规格）**：先定 tags 与模型级 effort 的 schema/兼容规则，再做
+   分组子菜单；优先复用 `reasoning` / `thinkingLevelMap`，避免平行能力表。
 
 ## Blocked By
 
-- 无阻塞项。Q9 已关闭，T08-c 两个切片均已施工。
-- T08-b 与 T08-c 的**验收**都在等同一件事：真机 E2E。不是代码阻塞。
+- **Q10** 阻塞 T08-c 策略验收；需先拿真实 activity 的 surface/value/origin/matchedPattern。
+- **Q11** 阻塞 T25 正式施工；云端标签与 effort 兼容契约未定。
+- 其余项无外部阻塞。多窗口路由真机验证仍欠，但不阻塞上述反馈批。
 
 ## Handoff
 
+- **本轮入口**：先读 [2026-08-30 真机反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md)，
+  再按 Active TODO 取批。截图原件在 `/home/ai/code/test/`。
+- **空仓库不是一个 render guard**：`ChatWelcomeCard` 当前由 `ChatComposer` 自己渲染；
+  T12-e′ 要隐藏 Composer 时必须先把欢迎卡提升/复用到 `ChatWorkspace`，否则添加按钮一起没了。
+- **仓库移除 stale 的已定位边界**：App repository state 已删，LeftNav 读的 chat tree 未删；
+  `useSyncChatWorkspaceTree` 对空 workspaces 直接 return，最后一份非空快照保留到 Reload。
+- **发送延迟不是“乐观渲染慢”**：当前根本没有乐观插入，用户消息等 Host admission 后的
+  权威 echo。T24 要先抓 create/resume/send/retry 时序；T26 的滚底则是独立显式 send 信号。
+- **F6 不要修**：“我的设置未创建”是设计空态，随包默认已显示生效；自动创建空文件会
+  制造第二份无意义配置。该批真正的问题是 Q10 的 read/`.pilab` 命中偏差。
+- **右键不是 delete**：`SessionRow.onContextMenu` 当前直接 archive；菜单文案与恢复路径要按
+  archive 语义设计，除非另立永久删除能力。
 - **权限弹窗怎么来的**：pi 扩展调 `ui.select` → `extensionUiBridge` 转成 `extensionUi.request` 事件 → MessagePort → main → renderer 的 `useExtensionUiStore` → `ExtensionUiDialog`。用户选择经 `chat:respondExtensionUi` 原路回去。
 - **关掉弹窗＝拒绝**：dismiss 只发 `ok:false` 不带 value，由 Host 侧 bridge 补开窗时记下的 fallback（confirm 是 `false`，其余是 `undefined`）。渲染端从不自己挑这个值。
 - **权限插件在哪**：`src/agent-host/node_modules/@gotgenes/pi-permission-system`（pin 27.0.1），随 `build:agent-host` 进 `out-agent-host/node_modules/`。用户 `~/.pi/agent/settings.json` 里已自装同名包时不注入。
