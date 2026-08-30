@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveSendStatusBinding,
-  deriveTurnHeadModel,
   hasLiveTurnEvidence,
   isTurnInFlight,
   isTurnOpenedByCurrentSend,
   ownsSessionFailure,
   type SendStatusBindingInput,
   type TurnFailureOwnershipInput,
-  type TurnHeadInput,
   type TurnHeadMetadata,
   type TurnOpenedBySendInput,
 } from '../turnHead';
-import type { TurnStatus } from '../turnStatus';
-import type { WorkedForRowText } from '../turnTiming';
 
 /**
  * T-31 review batch, F1 / F2 / F4 / F12.
@@ -26,117 +22,21 @@ import type { WorkedForRowText } from '../turnTiming';
  * all). Hence: truth tables, with the history case present in every one.
  */
 
-const STATUS: TurnStatus = { kind: 'awaiting', text: 'Waiting for the model…' };
-const WORKED_FOR: WorkedForRowText = {
-  verb: 'Worked for',
-  arg: '1m 6s · 3 tools, 11 searches',
-  argKind: 'prose',
-};
-
-const headInput = (over: Partial<TurnHeadInput> = {}): TurnHeadInput => ({
-  status: null,
-  workedFor: null,
-  stats: null,
-  hasProcess: false,
-  thoughtOnly: false,
-  ...over,
-});
-
-describe('deriveTurnHeadModel (F1)', () => {
-  it('prefers the in-flight status over everything else', () => {
-    const head = deriveTurnHeadModel(
-      headInput({ status: STATUS, workedFor: WORKED_FOR, stats: '3 tools', hasProcess: true })
-    );
-    expect(head).toEqual({ kind: 'status', status: STATUS });
-  });
-
-  it('falls back to the completed row when there is no live status', () => {
-    const head = deriveTurnHeadModel(
-      headInput({ workedFor: WORKED_FOR, stats: '3 tools', hasProcess: true })
-    );
-    expect(head).toEqual({ kind: 'workedFor', row: WORKED_FOR });
-  });
-
-  // The whole reason this chain exists: a replayed history turn has neither a
-  // status nor a latency, so both rungs above return null. Before F1 that meant
-  // no head, which meant no trigger, which meant `collapsible === false` and a
-  // force-expanded turn — §4.3's "restored history defaults to collapsed" was
-  // unreachable and the reference shot's default state never appeared.
-  it('F1: a restored history turn degrades to its call counts, not to nothing', () => {
-    const head = deriveTurnHeadModel(
-      headInput({ stats: '3 tools, 11 searches', hasProcess: true })
-    );
-    expect(head).toEqual({ kind: 'stats', text: '3 tools, 11 searches' });
-  });
-
-  it('F1: with no counts either, a turn with a process segment still gets a bare trigger', () => {
-    expect(deriveTurnHeadModel(headInput({ hasProcess: true }))).toEqual({ kind: 'bare' });
-  });
-
-  // A replayed turn whose entire process is one thought has no tool run to
-  // count, so `stats` is null — before this rung existed the chain fell
-  // straight to `bare`, discarding the one thing the turn actually has to
-  // say. D25 §2.4's bare "Thought, no arg" convention, one level up from the
-  // per-row shape it was written for.
-  it('thoughtOnly: a thinking-only process degrades to "Thought", not to a bare chevron', () => {
-    const head = deriveTurnHeadModel(headInput({ hasProcess: true, thoughtOnly: true }));
-    expect(head).toEqual({ kind: 'thought' });
-  });
-
-  // Priority: `thoughtOnly` sits BELOW `stats` in the chain — a turn that also
-  // ran a tool has real counts to print, and `deriveTurnStats` only sets
-  // `thoughtOnly` when it counted zero tool runs, but the two inputs are
-  // independent at this layer, so the ordering itself must be asserted.
-  it('thoughtOnly: stats still wins over "Thought" when both are set', () => {
-    const head = deriveTurnHeadModel(
-      headInput({ hasProcess: true, thoughtOnly: true, stats: '3 tools' })
-    );
-    expect(head).toEqual({ kind: 'stats', text: '3 tools' });
-  });
-
-  // Mutation check: with `thoughtOnly` false, the chain must still fall all
-  // the way to `bare` — proves the new rung does not swallow the pre-existing
-  // "no counts, no thought, but still a process segment" case.
-  it('thoughtOnly: false leaves the bare-chevron case reachable', () => {
-    expect(deriveTurnHeadModel(headInput({ hasProcess: true, thoughtOnly: false }))).toEqual({
-      kind: 'bare',
-    });
-  });
-
-  // The contrapositive is the invariant `MessageTimeline` relies on to decide
-  // `collapsible` from `process.length > 0` alone.
-  it('F1: hasProcess always yields a head — for every combination of the other four', () => {
-    for (const status of [null, STATUS]) {
-      for (const workedFor of [null, WORKED_FOR]) {
-        for (const stats of [null, '', '2 tools']) {
-          for (const thoughtOnly of [false, true]) {
-            expect(
-              deriveTurnHeadModel(
-                headInput({ status, workedFor, stats, hasProcess: true, thoughtOnly })
-              )
-            ).not.toBeNull();
-          }
-        }
-      }
-    }
-  });
-
-  it('F1: with nothing to say and nothing to collapse, there is no head row at all', () => {
-    expect(deriveTurnHeadModel(headInput())).toBeNull();
-    expect(deriveTurnHeadModel(headInput({ stats: '' }))).toBeNull();
-  });
-
-  // A07 :2399 — the fallbacks print counts derived from `blocks`, never a
-  // duration nothing measured. Nothing below may ever grow a "0s" branch.
-  it('F1: no fallback rung fabricates a duration', () => {
-    const stats = deriveTurnHeadModel(headInput({ stats: '3 tools', hasProcess: true }));
-    expect(JSON.stringify(stats)).not.toMatch(/\d+\s*s\b/);
-    expect(JSON.stringify(deriveTurnHeadModel(headInput({ hasProcess: true })))).not.toMatch(/\d/);
-    expect(
-      JSON.stringify(deriveTurnHeadModel(headInput({ hasProcess: true, thoughtOnly: true })))
-    ).not.toMatch(/\d/);
-  });
-});
+/*
+ * `deriveTurnHeadModel (F1)` and its fixtures retired with the turn meta row
+ * (T12-b, user decision 2026-08-29).
+ *
+ * F1's truth table asked: what may a turn with NO metadata say about itself?
+ * Its four fallback rungs (`workedFor` / `stats` / `thought` / `bare`) existed
+ * so a restored history turn — which replays no T-06 metadata — printed
+ * something rather than nothing. A finished turn now prints nothing by design,
+ * restored or not, so the question has no answer to test.
+ *
+ * The rung that survived is `status`, and it is covered where it is now
+ * derived: `turnStatus.test.ts`. The other F1 half — "`hasProcess` implies a
+ * non-null head", which let `collapsible` be decided without waiting for
+ * metadata — expired earlier with D56's retirement of turn-level collapse.
+ */
 
 describe('hasLiveTurnEvidence (F2 / F4 shared judgement)', () => {
   it('true only for a message that started and never completed', () => {

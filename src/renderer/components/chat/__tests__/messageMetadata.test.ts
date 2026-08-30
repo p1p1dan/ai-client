@@ -3,10 +3,8 @@ import { formatRelativeAge } from '@/lib/relativeTime';
 import {
   defaultFormatTime,
   formatAbsoluteTime,
-  formatMessageMetadata,
   formatRelativeTimestamp,
   initialMetadataRegistry,
-  type MessageMetadata,
   reduceMessageMetadata,
 } from '../messageMetadata';
 
@@ -234,47 +232,13 @@ describe('reduceMessageMetadata (T-06)', () => {
     expect(reduceMessageMetadata(base, event('host.ready', {}))).toBe(base);
   });
 
-  it('formatMessageMetadata renders model · latency · time', () => {
-    const meta: MessageMetadata = {
-      startedAt: 1000,
-      completedAt: 2200,
-      latencyMs: 1200,
-      model: 'sonnet',
-    };
-    const line = formatMessageMetadata(meta, { formatTime: () => '10:30' });
-    expect(line).toBe('sonnet · 1.2s · 10:30');
-  });
-
-  it('formatMessageMetadata omits missing fields', () => {
-    expect(formatMessageMetadata(undefined)).toBeNull();
-    expect(formatMessageMetadata({ model: null })).toBeNull();
-    expect(formatMessageMetadata({ completedAt: 2200 }, { formatTime: () => '10:30' })).toBe(
-      '10:30'
-    );
-    expect(formatMessageMetadata({ latencyMs: -1 })).toBeNull();
-  });
-
-  it('formatMessageMetadata with omitLatency: true drops the latency segment (T-05 "model · time")', () => {
-    const meta: MessageMetadata = {
-      startedAt: 1000,
-      completedAt: 2200,
-      latencyMs: 1200,
-      model: 'claude-opus-5',
-    };
-    const line = formatMessageMetadata(meta, { formatTime: () => '07:41', omitLatency: true });
-    expect(line).toBe('claude-opus-5 · 07:41');
-  });
-
-  it('formatMessageMetadata default behavior (no options) is unchanged by the omitLatency addition', () => {
-    const meta: MessageMetadata = {
-      startedAt: 1000,
-      completedAt: 2200,
-      latencyMs: 1200,
-      model: 'sonnet',
-    };
-    const line = formatMessageMetadata(meta, { formatTime: () => '10:30' });
-    expect(line).toBe('sonnet · 1.2s · 10:30');
-  });
+  /*
+   * The four `formatMessageMetadata` cases here retired with that function
+   * (T12-b): it composed the turn meta row's `model · latency · time` line, and
+   * the row is gone. `reduceMessageMetadata` above still fills the registry —
+   * `MessageMetadata` is read by the timeline for `completedAt` (the hover
+   * strip's `HH:MM`) and by the context surface for usage.
+   */
 });
 
 // F-B13 (T-31 §4.6 / polish-audit P-18): the footer timestamp is relative now.
@@ -320,14 +284,6 @@ describe('relative timestamps (F-B13)', () => {
     expect(defaultFormatTime(now - 3 * DAY)).toBe('3d ago');
   });
 
-  it('F-B13: formatMessageMetadata now defaults to the relative timestamp', () => {
-    const meta: MessageMetadata = {
-      model: 'claude-opus-5',
-      completedAt: Date.now() - 3 * 3600_000,
-    };
-    expect(formatMessageMetadata(meta, { omitLatency: true })).toBe('claude-opus-5 · 3h ago');
-  });
-
   // The precision the relative form trades away is restored on hover (§10-D),
   // so the absolute formatter stays exported rather than being deleted.
   it('F-B13: the absolute clock time stays available for the title attribute', () => {
@@ -349,18 +305,11 @@ describe('relative timestamps (F-B13)', () => {
     expect(formatRelativeTimestamp(completedAt, NOW + HOUR)).toBe('1h ago');
   });
 
-  // The wiring F9 actually depends on: the injected `formatTime` must be what
-  // renders the footer's timestamp segment, not the wall-clock default.
-  it('F9: formatMessageMetadata renders the injected clock, not Date.now()', () => {
-    const meta: MessageMetadata = { model: 'claude-opus-5', completedAt: NOW };
-    const at = (now: number) =>
-      formatMessageMetadata(meta, {
-        omitLatency: true,
-        formatTime: (ms) => formatRelativeTimestamp(ms, now),
-      });
-    expect(at(NOW + 5_000)).toBe('claude-opus-5 · just now');
-    expect(at(NOW + MINUTE)).toBe('claude-opus-5 · 1m ago');
-    // A clock far from the wall clock proves the default was not consulted.
-    expect(at(NOW + 400 * DAY)).toBe('claude-opus-5 · 1y ago');
-  });
+  /*
+   * `F-B13: formatMessageMetadata defaults to the relative timestamp` and
+   * `F9: … renders the injected clock` both retired with that function (T12-b).
+   * The property F9 existed to protect — a timestamp read against a later clock
+   * must age — is still asserted directly above on `formatRelativeTimestamp`,
+   * which the sidebar continues to use.
+   */
 });

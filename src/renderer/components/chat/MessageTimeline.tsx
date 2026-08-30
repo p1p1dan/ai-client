@@ -42,14 +42,15 @@ import {
 import {
   chatTurnClass,
   readingColumnSpacingClass,
-  turnAnswerContainerClass,
+  turnActionsInnerClass,
+  turnActionsSlotClass,
   turnBodyClass,
-  turnBubbleBandClass,
   turnCopyButtonClass,
   turnHeadClass,
-  turnMetaRowClass,
   turnProcessShellClass,
   turnStatusToneClass,
+  userBubbleClass,
+  userBubbleRowClass,
   userBubbleTextClass,
 } from './chatTimelineLayout';
 import {
@@ -67,12 +68,11 @@ import {
   type HistoryErrorView,
   selectHistoryError,
 } from './historyError';
-import {
-  formatAbsoluteTime,
-  formatMessageMetadata,
-  formatRelativeTimestamp,
-  type MessageMetadata,
-} from './messageMetadata';
+// T12-b: `formatMessageMetadata` / `formatRelativeTimestamp` left with the meta
+// row. The strip that replaced it shows a bare wall clock (`14:32`), so the
+// relative form ("3 minutes ago") and the `model · time` composer are both
+// unused here — see `chatTimelineLayout.ts`'s `turnMetaRowClass()` note.
+import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
 import { nextFollowState } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { PermissionActivityRows } from './PermissionActivityRows';
@@ -91,11 +91,9 @@ import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import {
   deriveSendStatusBinding,
-  deriveTurnHeadModel,
   hasLiveTurnEvidence,
   isTurnInFlight,
   ownsSessionFailure,
-  type TurnHeadModel,
 } from './turnHead';
 import {
   deriveTurnStatus,
@@ -103,13 +101,10 @@ import {
   latestErrorNoticeText,
   type TurnStatus,
 } from './turnStatus';
-import {
-  deriveTurnStats,
-  formatWorkedForRow,
-  THOUGHT_VERB,
-  turnHasThinkingOnlyProcess,
-  type WorkedForRowText,
-} from './turnTiming';
+// T12-b: `deriveTurnStats` / `formatWorkedForRow` / `THOUGHT_VERB` /
+// `turnHasThinkingOnlyProcess` all fed the retired meta row's completed state.
+// They stay exported from `turnTiming.ts` because the per-tool-row and subagent
+// surfaces still use them; only this file stopped asking.
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -144,33 +139,15 @@ function useSecondsTick(enabled: boolean): number {
   return now;
 }
 
-/**
- * The clock the footer's relative timestamps are read against (review batch
- * F9), always running.
- *
- * `formatMessageMetadata`'s default renderer reads `Date.now()` itself, so a
- * footer rendered as "just now" stayed "just now" until something ELSE forced
- * that turn to re-render — in an idle session, nothing does, and the whole
- * transcript froze its ages at whatever they were when the last token landed.
- * The clock is passed explicitly instead, which also makes the formatter a pure
- * function of its arguments (`formatRelativeTimestamp(ms, now)`) and therefore
- * assertable.
- *
- * A minute is the finest bucket `formatRelativeAge` has, so a 60s beat is the
- * cheapest tick that can never be visibly late; unlike `useSecondsTick` it must
- * run even when nothing is in flight, since ageing is exactly what happens
- * while nothing is in flight.
+/*
+ * `useMinuteTick` retired with the meta row (T12-b). F9 built it because the
+ * footer printed a RELATIVE age ("just now", "3h ago") and nothing re-renders
+ * an idle transcript, so every age froze at whatever it was when the last token
+ * landed. The hover strip prints an absolute `HH:MM` instead, which stays
+ * correct forever without a clock — so the tick, the `footerNowMs` prop it fed,
+ * and F9's assertion all retire together, rather than leaving an interval
+ * running once a minute for a value nobody reads.
  */
-const RELATIVE_TIME_TICK_MS = 60_000;
-
-function useMinuteTick(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), RELATIVE_TIME_TICK_MS);
-    return () => window.clearInterval(id);
-  }, []);
-  return now;
-}
 
 /**
  * `nowMs` for a turn that is not the one in flight (review batch F7).
@@ -307,7 +284,6 @@ export function MessageTimeline({
   // the session status can settle before the Host's real terminal arrives, and
   // a frozen head is exactly the "failed clock" symptom this batch removes.
   const nowMs = useSecondsTick(inFlightSession || sendStatus != null || pendingReply != null);
-  const footerNowMs = useMinuteTick();
 
   // Which turn does an in-flight send describe? During the handshake there is
   // no answer yet: the user's own message is echoed by the Host (`beginTurn`),
@@ -438,34 +414,28 @@ export function MessageTimeline({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" ref={scrollRootRef}>
-      {/* Round-2 V-b, updated by T-31 §5.7. Conclusion ① CHANGED: this viewport
-          now contains a per-turn sticky user-bubble band (spec §5, class in
-          `turnBubbleBandClass`). It is NOT the kind of element V-b ruled out —
-          it lives inside the viewport and inside the content flow, not as a
-          layer above the scrolled content — so the "floating header overlaps
-          the timeline" failure surface V-b closed stays closed. Nothing above
-          this viewport (MessageTimeline/ChatWorkspace/HostStatusBanner/
-          WindowTitleBar) is sticky/fixed/absolute; that audit still holds.
-          Conclusion ② unchanged: the "half a row cut off at the top"
-          screenshot is the stick-to-bottom effect below
+      {/* Round-2 V-b, as narrowed by T-31 §5.7 and simplified again by T12.
+          Conclusion ① is back to its original form: this viewport contains no
+          sticky or fixed element at all (T-31's per-turn bubble band retired —
+          see `chatTimelineLayout.ts`), and nothing above it
+          (MessageTimeline/ChatWorkspace/HostStatusBanner/WindowTitleBar) is
+          either. The "floating header overlaps the timeline" failure surface
+          stays closed. Conclusion ② unchanged: the "half a row cut off at the
+          top" screenshot is the stick-to-bottom effect below
           (`viewport.scrollTop = viewport.scrollHeight` on every resize while
           `stickToBottomRef` is true) — a turn taller than the viewport
           necessarily scrolls its own top above the fold, expected chat-UI
-          behavior, not an overlap bug. Conclusion ③ narrowed: `scrollFade` is
-          now BOTTOM-ONLY (§5.5-A). The top fade existed to soften that hard
-          clip, and the clip is gone — the top of the viewport is always an
-          opaque bubble band now. Kept at four edges it would instead render
-          the pinned bubble half-transparent, i.e. defeat §5 outright.
-          NOT ASSERTABLE (vitest is node-only, §6.2): that `position: sticky`
-          actually resolves against `ScrollArea.Viewport`, and how the viewport
-          mask paints against a pinned band. Both are GUI-check items. */}
+          behavior, not an overlap bug. Conclusion ③: `scrollFade` stays
+          BOTTOM-ONLY. It was narrowed to soften the hard bottom clip under the
+          composer; a top fade has nothing left to do now that no band is pinned
+          up there, and adding one back would only wash out live prose. */}
       <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
         {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 45rem/60rem (D25 §3.4) reading width (T-22 spec §2.13). */}
         <div className={TIMELINE_PADDING_CLASS} ref={contentRef}>
-          {/* T-05 (A07 `.tl` :846): 20px turn spacing — still 20 in total, but
-              T-31 §5.4 split it into 10 here + 10 of band padding, so the band
-              can double as the pinned bubble's opaque buffer (F-B9). */}
+          {/* T-05 (A07 `.tl` :846): 20px turn spacing. T-31 §5.4 had split it
+              into 10 here + 10 of sticky-band padding; T12 retired the band, so
+              the whole beat is back in one place (F-B9). */}
           <ReadingColumn className={readingColumnSpacingClass()}>
             {historyNotice.kind === 'error' && (
               // Keyed by session: detail/retry state must not follow the user
@@ -514,7 +484,6 @@ export function MessageTimeline({
                     // prop across an interim tick, or `memo` on `ChatTurn`
                     // stops holding session-wide the moment a turn is streaming.
                     outputTokensDisplay={isLastTurn ? outputTokensDisplay : null}
-                    footerNowMs={footerNowMs}
                     getMetadata={getMeta}
                     thinkingEnabled={thinkingEnabled}
                     repoName={repoName}
@@ -722,87 +691,40 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
 }
 
 /**
- * T-05 (D-1) -> T-30 (P-08/P-09/P-11) -> T-31 §4.8: the three role forms are
+ * T-05 (D-1) -> T-30 (P-08/P-11) -> T-31 §4.8 -> T12: the three role forms are
  * unchanged, but they are no longer selected by a single `MessageBubble`
  * dispatcher over a flat message list. `ChatTurn` below owns the ordering now:
- *  - user -> this `.fx-user-bubble`, hoisted into the turn's sticky band;
+ *  - user -> this bubble, the first row of the turn;
  *  - assistant -> its blocks, flattened by `flattenTurnItems` and rendered
  *    item by item by `TurnItemView` (same block order, T-05 D-5);
  *  - system / error -> `NoticeMessage`, still the `Alert` primitive.
  *
- * The bubble's corners are still A07 `:849-855`'s 16/16/4/16. Its face and edge
- * are NOT: P-09 landed `--card` + a primary-8% border, and F5 D3-c (2026-08-18)
- * replaced both with `--accent` + `--input` because the old pair measured 1.027
- * against the timeline surface — the bubble was, in effect, not drawn. See the
- * decision note on the `<article>` below.
+ * T12 (2026-08-29) takes pi-app's `.timeline-user-bubble` form: an ordinary row
+ * in the flow (no sticky band), 80% cap, sharp corner at the TOP-right, and no
+ * line clamp — so no `Show more` toggle either. `userBubbleClass()`'s header has
+ * the causal chain and the one trade it accepts (a very long pasted prompt now
+ * renders at full height).
+ *
+ * The face and edge are still F5 D3-c's `--accent` + `--input`, and that half is
+ * deliberately NOT taken from pi-app: measured, the face alone reads 1.161
+ * (light) / 1.292 (dark) against the timeline surface, which is where "the
+ * bubble is, in effect, not drawn" starts. The edge carries the rest.
  */
 function UserBubble({ message }: { message: ChatMessage }) {
-  // FB3: view-only state, deliberately not in the store (R5) -- same family as
-  // the process shell's `processOpen`. It is the ONLY input to the clamp, and
-  // it comes from a click; see `userBubbleTextClass`'s header for why nothing
-  // geometric may join it.
-  const [expanded, setExpanded] = useState(false);
   // user messages only ever carry `text` blocks (chatSessions.ts attaches
   // tool_call/tool_result/thinking/permission_request/question exclusively
   // to role: 'assistant' messages, live and replayed alike).
   const textBlocks = message.blocks.filter((block) => block.type === 'text');
-  // §5.6: the full prompt stays reachable by hover and screen reader in every
-  // state, which is what makes the unconditional six-line clamp safe (F10 —
-  // the clamp is no longer pinned-only, and it is six lines, not three).
-  const fullText = textBlocks
-    .map((block) => block.text ?? '')
-    .filter((text) => text.length > 0)
-    .join('\n\n');
 
   return (
-    // D31 (user decision 2026-08-13, `openchamber-chat-refactor-ledger.md:75`)
-    // overturned D26 ④ and put the bubble back on the right at 85%; F5 D3-c
-    // (user decision 2026-08-18) is the batch that executes it. D26 ④ — "the
-    // bubble spans the reading column, 85% and right-alignment are dead
-    // weight" — is void in the code from here on, as it already was in the
-    // ledger; the ledger is append-only, so this comment is the code-side
-    // record rather than an edit to it.
-    //
-    // What makes the two roles distinguishable is SHAPE on this side: the
-    // right edge, the 85% cap, the sharp bottom-right tail that finally points
-    // at an edge it was drawn for, and a face that is actually visible. The
-    // assistant side is drawn by BOUNDARY instead (see
-    // `turnAnswerContainerClass()`), deliberately not by the same means.
-    //
-    // "Actually visible" is measured, not asserted. The old `--card` face read
-    // 1.027 (light) / 1.049 (dark) against the timeline background and the old
-    // primary-8% border read 1.111 / 1.102 against that face — both under any
-    // discriminable threshold, which is the precise reason the bubble looked
-    // undifferentiated. `--accent` + `--input` measure 1.161 / 1.292 for the
-    // face and 1.350 / 1.322 for the edge, with body text at 16.17 / 8.81 (AAA)
-    // on top of it.
-    <article className="flex justify-end">
-      <div
-        className={cn(
-          // `min-w-0` is not decoration and not interchangeable with the cap:
-          // the `<article>` above is a flex line, so this box is a flex item,
-          // whose `min-width` resolves to `auto` (= its min-content width) —
-          // and `min-width` outranks `max-width`. One unbreakable run (a long
-          // URL, one long word) pushes min-content past 85% and the cap is
-          // silently ignored, full width returns, and only for some content,
-          // so review never sees it. The prose half of the same fix is
-          // `break-words` on the paragraph below.
-          'min-w-0 max-w-[85%] space-y-2 rounded-lg border px-4 py-2.5',
-          // T-30 P-09: A07 `.fx-user-bubble` (`:849-855`) — 16/16/4/16 corners,
-          // the sharp bottom-right "tail" pointing at the right-aligned edge it
-          // was drawn for (D26 ④ had left it pointing at nothing).
-          //
-          // The face and edge are D3-c's, not P-09's. The note that used to sit
-          // here read the other way round — "assistant needs bg-accent for
-          // contrast, so user is free to stay on --card" — and D3-c inverts it:
-          // assistant has no face at all now, and `--accent` belongs to the
-          // user bubble. `--input` is the edge for the same reason it edges
-          // text inputs (design-system.md:102, "fill semantics"): this box is
-          // the echo of what the operator typed.
-          'rounded-br-xs border-input bg-accent'
-        )}
-        title={fullText || undefined}
-      >
+    // What makes the two roles distinguishable is SHAPE on this side: the right
+    // edge, the 80% cap, the sharp corner pointing back at the composer, and a
+    // face that is actually visible. The assistant side is NOT drawn at all —
+    // full reading width, no face, no edge — and that asymmetry is the whole
+    // role signal now that the answer container has retired (see
+    // `chatTimelineLayout.ts`'s note where it used to be defined).
+    <article className={userBubbleRowClass()}>
+      <div className={userBubbleClass()}>
         {/* Round-2 P0 (Chat attachments): read-only echo of what this turn sent,
             metadata only (no bytes, no size — never threaded over the wire).
             Visual language mirrors ChatComposer's AttachmentChip (icon +
@@ -835,11 +757,12 @@ function UserBubble({ message }: { message: ChatMessage }) {
             ))}
           </div>
         ) : null}
-        {/* Unconditional clamp (§5.6-B fallback, F10): the pinned-only
-            scroll-state clamp oscillated — see `userBubbleTextClass()`'s
-            header for the loop. `title` above keeps the full prompt
-            reachable in every state. */}
-        <div className={userBubbleTextClass(expanded)}>
+        {/* T12: the prompt in full. No clamp and no `Show more` — both retired
+            with the sticky band that made them necessary (`userBubbleClass()`'s
+            header carries the chain). `title` retired with them: with nothing
+            hidden there is nothing for a tooltip to reveal, and a `title` on a
+            long prompt is a screen-sized tooltip. */}
+        <div className={userBubbleTextClass()}>
           {textBlocks.map((block) => (
             <p
               key={block.id}
@@ -849,22 +772,6 @@ function UserBubble({ message }: { message: ChatMessage }) {
             </p>
           ))}
         </div>
-        {/* FB3: the toggle is rendered whenever there is prompt text at all —
-            no measurement, on purpose. Deciding visibility from "does it
-            overflow?" would read element geometry inside this bubble, which is
-            the exact edge F10 removed. Whether a permanently visible control
-            under a SHORT prompt is acceptable is a look question, so it goes to
-            the G-4 point-check rather than being guessed at here. */}
-        {fullText.length > 0 ? (
-          <button
-            type="button"
-            className="self-start text-meta text-muted-foreground hover:text-foreground focus-visible:text-foreground"
-            onClick={() => setExpanded((previous) => !previous)}
-            aria-expanded={expanded}
-          >
-            {expanded ? 'Show less' : 'Show more'}
-          </button>
-        ) : null}
       </div>
     </article>
   );
@@ -939,8 +846,6 @@ interface ChatTurnProps {
   nowMs: number;
   /** D33: the live output-token estimate, `isLastTurn`-gated the same way as `nowMs`/`retry`. `null` for every turn but the last. */
   outputTokensDisplay: number | null;
-  /** Minute clock for the footer's relative timestamp (`useMinuteTick`, F9). */
-  footerNowMs: number;
   getMetadata: (messageId: string) => MessageMetadata | undefined;
   thinkingEnabled: boolean;
   repoName?: string | null;
@@ -995,7 +900,6 @@ const ChatTurn = memo(function ChatTurn({
   retry,
   nowMs,
   outputTokensDisplay,
-  footerNowMs,
   getMetadata,
   thinkingEnabled,
   repoName,
@@ -1139,43 +1043,23 @@ const ChatTurn = memo(function ChatTurn({
     }),
   });
 
-  // §4.2 (A07 v3 revision): the call counts used to be this row's EXPAND body;
-  // round-4's collapsed/expanded pair showed the body is the process segment,
-  // so the counts moved up into the collapsed row's arg. Counted across the
-  // whole turn, not one message — `deriveTurnStats` only reads `blocks`.
-  const turnBlocks = useMemo(() => turn.body.flatMap((message) => message.blocks), [turn.body]);
-  const stats = useMemo(
-    () =>
-      lastAssistant
-        ? deriveTurnStats({ ...lastAssistant, blocks: turnBlocks }, { style: 'compact' })
-        : null,
-    [lastAssistant, turnBlocks]
-  );
-  const workedFor = formatWorkedForRow(metadata?.latencyMs, stats);
-  // A turn whose process is one bare thought (no tool run) scores zero on
-  // every `deriveTurnStats` bucket — see `turnHasThinkingOnlyProcess`'s
-  // header comment for why that used to fall through to the label-less
-  // `bare` rung below instead of saying "Thought".
-  const thoughtOnly = useMemo(() => turnHasThinkingOnlyProcess(turnBlocks), [turnBlocks]);
-
-  const hasProcess = useMemo(
-    () => segments.some((segment) => segment.kind === 'process'),
-    [segments]
-  );
-
-  // F1: the head degrades `status -> workedFor -> stats -> thought` instead of
-  // stopping at the first two. A restored history turn has neither of the first
-  // two (no T-06 metadata is replayed), so it used to get a null head and print
-  // nothing at all about a turn that plainly did work. Nothing below fabricates
-  // a duration; the fallbacks print counts derived from `blocks`, the D25 §2.4
-  // bare "Thought" label, or no text at all (A07 :2399 intact).
-  const head = deriveTurnHeadModel({
-    status,
-    workedFor,
-    stats,
-    hasProcess,
-    thoughtOnly,
-  });
+  /*
+   * T12-b retired `deriveTurnHeadModel` and the `status -> workedFor -> stats
+   * -> thought` degradation chain behind it.
+   *
+   * F1 had built that chain so a RESTORED history turn — which replays no T-06
+   * metadata, so it has neither a status nor a latency — would still print
+   * something about a turn that plainly did work (`2 tools`, or the bare
+   * `Thought` label). Under pi-app's model that is no longer a gap to fill: a
+   * finished turn says nothing about itself, restored or not, so the fallback
+   * rungs have nothing left to fall back FROM.
+   *
+   * What survives is the top rung alone, and it is the one that was never
+   * cosmetic: `status` is the only thing on screen saying the turn is still
+   * running, stalled, retrying or failed. F2's "lost stopwatch" defect was
+   * precisely this row going missing while work continued, so it is rendered
+   * below on its own rather than folded into anything.
+   */
 
   // F-C3. The derivation itself is a pure function so the node suite can
   // truth-table it; what is decided HERE is only which inputs it gets:
@@ -1207,14 +1091,17 @@ const ChatTurn = memo(function ChatTurn({
     [turn.body, bodyMetadata, inFlightSession, isLastTurn]
   );
 
-  const metaLine = formatMessageMetadata(metadata, {
-    omitLatency: true,
-    formatTime: (ms) => formatRelativeTimestamp(ms, footerNowMs),
-  });
-  const metaCopyText = turnActive ? '' : copyText;
-  // An empty row would still spend one 10px beat of the turn body's gap, so the
-  // row exists only when it has something to say.
-  const showMetaRow = Boolean(head) || Boolean(metaLine) || metaCopyText.length > 0;
+  // F13: an in-flight turn's prose is half an answer, and a Copy button that
+  // silently yields it is worse than no button — the clipboard gives no sign
+  // the text was truncated. Restored history turns are NOT in flight, so they
+  // keep theirs. (T12-b moved this from the meta row to the hover strip; the
+  // rule is unchanged, only its host is.)
+  const actionsCopyText = turnActive ? '' : copyText;
+  // A zero-height collapsed strip costs nothing, but the turn body's 10px gap
+  // is spent on it either way — so it exists only when it has an action to
+  // offer. `completedAt` alone is not enough: a bare clock with no button is a
+  // statistic, and statistics are what this batch removed.
+  const showActions = actionsCopyText.length > 0;
 
   const renderItem = (item: TurnItem) => (
     <TurnItemView
@@ -1235,11 +1122,14 @@ const ChatTurn = memo(function ChatTurn({
     // throwing away the expanded tool bodies inside them.
     const key = `${segment.kind}:${turnItemKey(segment.items[0])}`;
     if (segment.kind === 'answer') {
-      // D3-b: the neutral container, on answer prose and nothing else. It can
-      // never wrap a tool group, a permission card or a question card — those
-      // are `process`, which has its own shell.
+      // T12: bare prose. The `turnAnswerContainerClass()` ring that used to
+      // wrap this retired with the box model it belonged to — after FB4 made
+      // answer segments repeat within a turn, one ring per prose run stacked
+      // several boxes inside a single reply (Q14). The role signal moved
+      // entirely to the user side's shape; see the note in
+      // `chatTimelineLayout.ts` where the container used to be defined.
       return (
-        <div key={key} className={cn(turnBodyClass(), turnAnswerContainerClass())}>
+        <div key={key} className={turnBodyClass()}>
           {segment.items.map(renderItem)}
         </div>
       );
@@ -1277,20 +1167,13 @@ const ChatTurn = memo(function ChatTurn({
 
   return (
     <section className={chatTurnClass()}>
-      {turn.user && (
-        // §5.1-A: plain CSS sticky, scoped by this `<section>`. That scoping IS
-        // the release rule — when the turn's box leaves the top of the viewport
-        // the bubble is pushed out and the next turn's takes over, so there is
-        // no scroll listener, no IntersectionObserver and no `activeTurnId`
-        // state anywhere in this file (§5.3). The former `fx-turn-band`
-        // scroll-state query container is gone with the pinned-only clamp it
-        // served (F10 — see `userBubbleTextClass()`).
-        // NOT ASSERTABLE:
-        // that sticky resolves against `ScrollArea.Viewport` (§6.2 ①③).
-        <div className={turnBubbleBandClass()}>
-          <UserBubble message={turn.user} />
-        </div>
-      )}
+      {/* T12: an ordinary first row, not a pinned band. The `sticky top-0`
+          wrapper that used to be here is gone along with the clamp and the
+          toggle it forced (`chatTimelineLayout.ts` head note). What it bought —
+          "you can always see which prompt you are reading the reply to" — is
+          paid for instead by the reading rhythm: 20px between turns against
+          10px inside one. */}
+      {turn.user && <UserBubble message={turn.user} />}
       <div className={turnBodyClass()}>
         {/* T-33: top of the turn body, below the pinned bubble band — the
             banner describes the reply in progress, so it lives in the reply
@@ -1303,26 +1186,29 @@ const ChatTurn = memo(function ChatTurn({
             earlier paragraph into the collapsed segment, and a turn that ended
             in an error notice sent ALL of it. */}
         {segments.map(renderSegment)}
-        {showMetaRow && (
-          // FB6 + D55 ①: the turn's one bottom meta row — status / `Worked for
-          // Ns · N tools`, then the model and relative time, then copy.
-          //
-          // A SUMMARY, not a control (2026-08-25 user decision). It used to end
-          // in a chevron that collapsed the whole turn's process segments; that
-          // went away because every tool row already carries its own expander,
-          // and after FB4 stopped folding prose into the process segment there
-          // was very little left for a second, turn-wide control to hide.
-          <div className={turnMetaRowClass()}>
-            <TurnHeadContent head={head} />
-            <TurnMetaTail
-              line={metaLine}
-              completedAt={metadata?.completedAt}
-              // F13: an in-flight turn's prose is half an answer, and a Copy
-              // button that silently yields it is worse than no button — the
-              // clipboard gives no sign the text was truncated. Restored
-              // history turns are NOT in flight, so they keep theirs.
-              copyText={metaCopyText}
-            />
+        {/* T12-b: the running status, and ONLY while it is running. FB6's
+            position is kept — under the output it describes, not above it —
+            but the row no longer has a completed state (`Worked for 12s ·
+            2 tools` retired with the meta row). A finished turn renders
+            nothing here at all, which is the point of the change. */}
+        {status && (
+          <div className={turnHeadClass()}>
+            <TurnStatusContent status={status} />
+          </div>
+        )}
+        {/* T12-b: the hover strip — copy and the wall clock, revealed by
+            hovering anywhere in the turn (`group/turn` on the section above).
+            Deliberately hover-only per the 2026-08-29 user decision; the
+            accessibility cost that buys is recorded on
+            `turnActionsSlotClass()`. */}
+        {showActions && (
+          <div className={turnActionsSlotClass()}>
+            <div className={turnActionsInnerClass()}>
+              <TurnCopyButton text={actionsCopyText} />
+              {metadata?.completedAt != null && (
+                <span className="shrink-0">{formatAbsoluteTime(metadata.completedAt)}</span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1438,46 +1324,15 @@ function turnItemKey(item: TurnItem): string {
   }
 }
 
-/**
- * The head slot's four rendered states (§4.7, extended by F1's degradation
- * chain in `deriveTurnHeadModel`).
- *
- * `stats` and `bare` only ever appear on a turn with no T-06 metadata — in
- * practice a restored history turn. They are what give such a turn a trigger,
- * and therefore a default-collapsed process segment, without printing a
- * duration nothing measured.
+/*
+ * `TurnHeadContent` retired with the degradation chain it switched on (T12-b).
+ * Its four non-status branches — `workedFor`, `stats`, `thought`, `bare` —
+ * existed to say SOMETHING about a finished turn even when no duration had been
+ * measured (F1's concern, aimed at restored history turns). A finished turn now
+ * says nothing about itself by design, so `ChatTurn` renders `TurnStatusContent`
+ * directly and only while the turn is live, exactly as `PendingTurnHead` does.
+ * `WorkedForContent` went with it.
  */
-function TurnHeadContent({ head }: { head: TurnHeadModel | null }) {
-  // Unreachable from the collapsible trigger — `deriveTurnHeadModel` only
-  // returns null when there is no process segment either — but the invariant
-  // lives in that function, not in the type, so it is honoured rather than
-  // asserted away.
-  if (!head) return null;
-  switch (head.kind) {
-    case 'status':
-      return <TurnStatusContent status={head.status} />;
-    case 'workedFor':
-      return <WorkedForContent row={head.row} />;
-    case 'stats':
-      // No verb: "Worked for" would be a claim about time, and this row exists
-      // precisely because the time is unknown.
-      return (
-        <span className="min-w-0 truncate" title={head.text}>
-          {head.text}
-        </span>
-      );
-    case 'thought':
-      // D25 §2.4's bare "Thought" (no arg — no duration to print for a
-      // replayed turn), applied to the turn head instead of the per-row
-      // shape. `THOUGHT_VERB` is the same constant `turnTiming.formatThoughtRow`
-      // renders for the individual row, imported rather than re-spelled so the
-      // two labels cannot drift apart.
-      return <span className="shrink-0">{THOUGHT_VERB}</span>;
-    default:
-      // `bare` — the chevron the trigger renders beside this is the whole row.
-      return null;
-  }
-}
 
 /**
  * Head slot, in-flight state (§4.7). Spinner and colour follow `kind`, which
@@ -1499,16 +1354,6 @@ function TurnStatusContent({ status }: { status: TurnStatus }) {
       <span className={cn('min-w-0 truncate', turnStatusToneClass(status.kind))} title={text}>
         {text}
       </span>
-    </>
-  );
-}
-
-/** Head slot, complete state (§4.7): `Worked for 1m 6s · 3 tools, 11 searches`. */
-function WorkedForContent({ row }: { row: WorkedForRowText }) {
-  return (
-    <>
-      <span className="shrink-0">{row.verb}</span>
-      <span className="min-w-0 truncate">{row.arg}</span>
     </>
   );
 }
@@ -1742,60 +1587,15 @@ function ToolGroupItem({
   return <ToolGroup rows={rows} />;
 }
 
-/**
- * Trailing status bar (§4.6 / P-34): model · relative time · copy, right
- * aligned.
- *
- * No duration here (§9-δ): the turn's elapsed time is the head's job, and
- * printing the same number twice was what A07 `:1871` removed. The reference
- * shot's footer agrees — it reads `3h ago` and nothing else.
- *
- * The relative timestamp keeps `formatRelativeAge`'s bucket table (P-18) and
- * the precision it trades away is restored on hover through `title`, matching
- * the sidebar's policy (§10-D). F9: the clock is passed IN rather than read
- * from `formatMessageMetadata`'s `defaultFormatTime`, which called `Date.now()`
- * at render time — so an idle session's ages froze at whatever they were when
- * the last render happened to run, and "just now" stayed "just now" for hours.
+/*
+ * `TurnMetaTail` retired with the meta row (T12-b, user decision 2026-08-29).
+ * It rendered `model · 3 minutes ago` plus the copy button at the trailing edge
+ * of that row. Copy moved to `ChatTurn`'s hover strip; the model name and the
+ * relative age were dropped outright, and with them F9's whole minute-clock
+ * apparatus — the strip shows an absolute `HH:MM` that never needs re-rendering
+ * as it ages. See `chatTimelineLayout.ts`'s `turnMetaRowClass()` note for what
+ * pi-app does with each of the four things this row used to carry.
  */
-/**
- * The trailing half of the turn's bottom meta row: `model · 3m ago`, then copy.
- *
- * FB6 + D55 ①: this is the former `TurnFooter`, which used to be a ROW of its
- * own at the bottom of the turn. Now that the head has moved down to join it,
- * two rows would be two rows saying meta things about the same turn, so it was
- * demoted to the tail of one row. Renamed rather than kept under the old name:
- * `TurnFooter` returning a fragment instead of a footer row is precisely the
- * kind of same-name-new-meaning that a stale test keeps passing over.
- *
- * `ml-auto` on the group, not on the individual pieces: it pins the pair to the
- * trailing edge in one place, leaving the status text on the left free to give
- * way (it is the only thing in the row that truncates).
- */
-function TurnMetaTail({
-  line,
-  completedAt,
-  copyText,
-}: {
-  /** Already formatted by the caller — this row's clock is the turn's, not a second one. */
-  line: string | null;
-  completedAt?: number | null;
-  copyText: string;
-}) {
-  if (!line && copyText.length === 0) return null;
-  return (
-    <span className="ml-auto flex min-w-0 items-center gap-2">
-      {line && (
-        <span
-          className="min-w-0 truncate"
-          title={completedAt != null ? formatAbsoluteTime(completedAt) : undefined}
-        >
-          {line}
-        </span>
-      )}
-      {copyText.length > 0 && <TurnCopyButton text={copyText} />}
-    </span>
-  );
-}
 
 /** Copy the turn's prose (never tool input/output — see `buildTurnCopyText`), then confirm for 1.5s. */
 const COPY_CONFIRM_MS = 1500;

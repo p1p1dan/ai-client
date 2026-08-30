@@ -163,32 +163,17 @@ export function reduceMessageMetadata(
   }
 }
 
-/**
- * Build the display line for an assistant bubble from metadata, e.g.
- * "Sonnet · 1.2s · 3h ago" or "Sonnet · 3h ago" when latency/usage missing.
- * Returns null when nothing useful is available.
+/*
+ * `formatMessageMetadata` retired with the turn meta row (T12-b, user decision
+ * 2026-08-29). It composed `claude-opus-5 · 3h ago` — a model name and a
+ * relative age — and that row is gone: the hover strip that replaced it shows
+ * an absolute `HH:MM` and nothing else, and "which model is this session on" is
+ * already answered permanently by the composer's model chip.
  *
- * `omitLatency` (T-05): the footer line drops its own latency segment once
- * the turn-level "Worked for Ns" row (A07 :2398) takes over that duty —
- * `MessageTimeline` always passes `true` for the new assistant footer, e.g.
- * "claude-opus-5 · 3h ago" (A07 :1776-1782, timestamp form updated by P-18).
+ * `defaultFormatTime` stays: `formatRelativeTimestamp` below is still the
+ * sidebar's phrasing layer over `formatRelativeAge`, and this is its
+ * clock-reading wrapper.
  */
-export function formatMessageMetadata(
-  metadata: MessageMetadata | undefined,
-  options: { formatTime?: (ms: number) => string; omitLatency?: boolean } = {}
-): string | null {
-  if (!metadata) return null;
-  const parts: string[] = [];
-  if (metadata.model) parts.push(metadata.model);
-  if (!options.omitLatency && metadata.latencyMs != null && metadata.latencyMs >= 0) {
-    parts.push(`${(metadata.latencyMs / 1000).toFixed(1)}s`);
-  }
-  if (metadata.completedAt != null) {
-    const fmt = options.formatTime ?? defaultFormatTime;
-    parts.push(fmt(metadata.completedAt));
-  }
-  return parts.length > 0 ? parts.join(' · ') : null;
-}
 
 /**
  * Relative timestamp for the turn footer (T-31 §4.6 / polish-audit P-18):

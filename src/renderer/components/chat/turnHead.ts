@@ -1,7 +1,5 @@
 import { HISTORY_MESSAGE_ID_PREFIX } from '@shared/types/sessionHistory';
 import type { SendPhase } from './attachments';
-import type { TurnStatus } from './turnStatus';
-import type { WorkedForRowText } from './turnTiming';
 
 /**
  * T-31 turn-head decision layer (review batch F1 / F2 / F4 / F12).
@@ -286,67 +284,23 @@ export function ownsSessionFailure(input: TurnFailureOwnershipInput): boolean {
   return input.hasLiveMessage;
 }
 
-/**
- * What the turn head renders (§4.7, extended by F1's degradation chain).
+/*
+ * `TurnHeadModel` / `TurnHeadInput` / `deriveTurnHeadModel` retired with the
+ * turn meta row (T12-b, user decision 2026-08-29: follow pi-app and delete it).
  *
- * `stats` and `bare` are new. Before them the head was `status ?? workedFor`,
- * and BOTH are null for a restored history turn — replayed messages carry no
- * T-06 metadata, so `formatWorkedForRow` returns null rather than fabricating
- * seconds (A07 :2399, still honoured: nothing below invents a duration). A null
- * head meant no trigger, which meant `collapsible === false`, which meant every
- * restored turn was force-expanded — §4.3's "restored history defaults to
- * collapsed" was unreachable, and the reference shot's default state never
- * appeared for the one case it was drawn for.
+ * The chain was `status ?? workedFor ?? stats ?? thought ?? bare`, and the last
+ * four rungs all answered one question: what should a FINISHED turn say about
+ * itself when no duration was ever measured? F1 added them because a restored
+ * history turn replays no T-06 metadata, so it used to print nothing at all
+ * about a turn that plainly did work.
+ *
+ * Under pi-app's model a finished turn says nothing about itself, restored or
+ * not — so the question the rungs answered no longer arises. Only the top rung
+ * survives, and `MessageTimeline` now renders it directly: `status` is the sole
+ * on-screen evidence that a turn is running, stalled, retrying or failed, which
+ * is why F2's "lost stopwatch" defect was about this row and not the others.
+ *
+ * The other half of F1's claim — "`hasProcess` implies a non-null head", which
+ * let `collapsible` be decided without waiting for metadata — expired earlier,
+ * when D56 retired turn-level collapse entirely (2026-08-25).
  */
-export type TurnHeadModel =
-  | { kind: 'status'; status: TurnStatus }
-  | { kind: 'workedFor'; row: WorkedForRowText }
-  | { kind: 'stats'; text: string }
-  | { kind: 'thought' }
-  | { kind: 'bare' };
-
-export interface TurnHeadInput {
-  /** In-flight status row, if any (`deriveTurnStatus`). */
-  status: TurnStatus | null;
-  /** Completed `Worked for Ns …` row, if any (`formatWorkedForRow`). */
-  workedFor: WorkedForRowText | null;
-  /** Turn call counts (`deriveTurnStats(…, { style: 'compact' })`), if any. */
-  stats: string | null;
-  /** The turn has a process segment, i.e. the head has something to collapse. */
-  hasProcess: boolean;
-  /**
-   * The process segment is thinking and nothing else — no tool run at all
-   * (`turnTiming.turnHasThinkingOnlyProcess`). `stats` is null in exactly this
-   * case (it only counts tool runs), so without this rung a replayed turn
-   * whose entire process is one thought degraded straight to `bare` — a
-   * chevron with no label, even though the turn has something to say.
-   */
-  thoughtOnly: boolean;
-}
-
-/**
- * The head's degradation chain: `status ?? workedFor ?? stats ?? thought ?? bare`.
- *
- * The last three rungs exist for turns with no latency to print:
- *  - `stats` reuses the call counts the completed row would have carried
- *    ("3 tools, 11 searches") — real, derived from `blocks`, no invented time;
- *  - `thought` is the D25 §2.4 "bare Thought, no arg" label, for a turn whose
- *    process is thinking-only (so `stats` has nothing to count);
- *  - `bare` is a text-less chevron trigger, for a turn whose counts are all
- *    zero, is not thinking-only either, but still has a process segment to
- *    hide.
- *
- * Returns `null` only when there is nothing to say AND nothing to collapse, in
- * which case the turn renders flat with no head row — the same shape it had
- * before. The invariant the `.tsx` layer relies on is the contrapositive:
- * **`hasProcess` implies a non-null head**, so `collapsible` can be decided by
- * `process.length > 0` alone and can no longer flip when metadata arrives (the
- * remount F2 traced the status-bar failure to).
- */
-export function deriveTurnHeadModel(input: TurnHeadInput): TurnHeadModel | null {
-  if (input.status) return { kind: 'status', status: input.status };
-  if (input.workedFor) return { kind: 'workedFor', row: input.workedFor };
-  if (input.stats) return { kind: 'stats', text: input.stats };
-  if (input.thoughtOnly) return { kind: 'thought' };
-  return input.hasProcess ? { kind: 'bare' } : null;
-}

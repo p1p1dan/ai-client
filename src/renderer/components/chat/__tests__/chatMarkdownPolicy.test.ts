@@ -35,12 +35,7 @@ import {
   shouldRenderMarkdown,
   splitClosedPrefix,
 } from '../chatMarkdownPolicy';
-import {
-  chatTurnClass,
-  turnBodyClass,
-  turnBubbleBandClass,
-  turnCopyButtonClass,
-} from '../chatTimelineLayout';
+import { chatTurnClass, turnBodyClass, turnCopyButtonClass } from '../chatTimelineLayout';
 import { readDarkClass } from '../useDarkClass';
 import { stripComments } from './stripComments';
 
@@ -771,12 +766,20 @@ const ALL_BLOCK_CLASSES: ReadonlyArray<{ name: string; cls: string }> = [
   { name: 'footnotes', cls: chatMarkdownFootnotesClass('footnotes') },
 ];
 
-describe('F-C4: the markdown root cannot break the pinned bubble (sticky chain)', () => {
-  // T-31's user bubble is a plain `position: sticky` scoped by the turn
-  // `<section>`. Each of these four properties either turns sticky off or
-  // re-parents its containing block, and the failure is invisible in review —
-  // the bubble simply stops pinning. The prohibition is asserted, not commented,
-  // for the same reason F-B8/F-B10 assert it on the band and the section.
+/**
+ * F-C4, restated for T12.
+ *
+ * The original claim was about a sticky chain: the user bubble was pinned with
+ * `position: sticky`, and an `overflow` / `transform` / `filter` / `contain` on
+ * any ancestor silently switched that off. T12 retired the pinned band, so that
+ * premise is void — but the prohibition itself is NOT, for a second and now
+ * sole reason: horizontal scrolling in this subtree belongs to the code-block
+ * and table LEAVES (asserted below). An `overflow-*` on the root, or on the
+ * turn container above it, clips those leaves instead of letting them scroll —
+ * a wide table simply loses its right-hand columns, silently, with every class
+ * assertion elsewhere still green.
+ */
+describe('F-C4: wide content scrolls at the leaves, so no ancestor may clip', () => {
   it('F-C4: the root carries no overflow / transform / filter / contain', () => {
     const cls = chatMarkdownRootClass();
     expect(cls).not.toMatch(/overflow-/);
@@ -785,15 +788,15 @@ describe('F-C4: the markdown root cannot break the pinned bubble (sticky chain)'
     expect(cls).not.toMatch(/(?:^|\s)contain-/);
   });
 
-  // The premise of the assertion above: these are the two elements the root
-  // sits inside, and both are still clean. If either grew an overflow, the root
-  // being clean would stop meaning anything.
-  it('F-C4: the containing-block constraint T-31 landed is still in force', () => {
-    for (const cls of [chatTurnClass(), turnBubbleBandClass()]) {
-      expect(cls).not.toMatch(/overflow-/);
-      expect(cls).not.toMatch(/transform/);
-      expect(cls).not.toMatch(/(?:^|\s)contain-/);
-    }
+  // The premise of the assertion above: the turn container the root sits inside
+  // is still clean. If it grew an overflow, the root being clean would stop
+  // meaning anything — the clip would just happen one level up.
+  // (`turnBubbleBandClass()` used to be checked here too; it no longer exists.)
+  it('F-C4: the turn container above the root does not clip either', () => {
+    const cls = chatTurnClass();
+    expect(cls).not.toMatch(/overflow-/);
+    expect(cls).not.toMatch(/transform/);
+    expect(cls).not.toMatch(/(?:^|\s)contain-/);
   });
 
   // …and the horizontal scroll that a wide code block / table genuinely needs

@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { chatMarkdownParagraphClass } from '../chatMarkdownPolicy';
 import {
   chatTurnClass,
   readingColumnSpacingClass,
-  turnAnswerContainerClass,
+  turnActionsInnerClass,
+  turnActionsSlotClass,
   turnBodyClass,
-  turnBubbleBandClass,
   turnCopyButtonClass,
   turnHeadClass,
-  turnMetaRowClass,
   turnProcessShellClass,
   turnStatusToneClass,
+  userBubbleClass,
+  userBubbleRowClass,
   userBubbleTextClass,
 } from '../chatTimelineLayout';
 
@@ -28,32 +28,43 @@ function spacingPx(classes: string, prefix: string): number {
   return spacingStep(classes, prefix) * SPACING_STEP_PX;
 }
 
-describe('turnBubbleBandClass (F-B8)', () => {
-  it('F-B8: pins to the top of the viewport on an opaque, layered band', () => {
-    const cls = turnBubbleBandClass();
-    expect(cls).toContain('sticky');
-    expect(cls).toContain('top-0');
-    expect(cls).toContain('py-2.5');
-    // The timeline surface, not `bg-card`: the band has to hide content
-    // scrolling underneath it, and a card fill would read as a second panel.
-    expect(cls).toContain('bg-background');
-    expect(cls).toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
-  });
-
-  // Each of these silently disables `position: sticky` (or re-parents its
-  // containing block). The failure mode is invisible in review — the element
-  // just stops sticking — so the prohibition is asserted rather than commented.
-  it('F-B8: carries nothing that would silently kill sticky', () => {
-    const cls = turnBubbleBandClass();
-    expect(cls).not.toMatch(/overflow-/);
-    expect(cls).not.toMatch(/transform/);
-    expect(cls).not.toMatch(/filter/);
-    expect(cls).not.toMatch(/(?:^|\s)contain-/);
+/**
+ * T12 retired `turnBubbleBandClass()` — the `position: sticky` band that pinned
+ * the user's prompt to the top of the viewport — and with it the F-B8 sticky
+ * prohibitions, because there is no longer a sticky element for an ancestor's
+ * `overflow` / `transform` / `contain` to switch off.
+ *
+ * The claim worth keeping from that block is the NEGATIVE one, and it moves
+ * here: no element in the turn chrome may pin itself back without the rest of
+ * the chain being rebuilt. A `sticky` reintroduced on its own would bring back
+ * F10's oscillation (scroll position -> clamp -> height -> scroll position),
+ * which is precisely what this batch removed the preconditions for.
+ */
+describe('T12: the turn chrome pins nothing', () => {
+  it('T12: no turn-level class assembler carries a sticky/fixed hook', () => {
+    for (const cls of [
+      chatTurnClass(),
+      userBubbleRowClass(),
+      userBubbleClass(),
+      userBubbleTextClass(),
+      turnBodyClass(),
+      turnHeadClass(),
+      turnActionsSlotClass(),
+      turnActionsInnerClass(),
+    ]) {
+      expect(cls, `sticky must not return without the rest of the chain: ${cls}`).not.toMatch(
+        /(?:^|\s)(?:sticky|fixed)(?:\s|$)/
+      );
+      expect(cls).not.toMatch(/(?:^|\s)z-\d+(?:\s|$)/);
+    }
   });
 });
 
 describe('chatTurnClass (F-B10)', () => {
-  it('F-B10: the per-turn section stays a clean sticky containing block', () => {
+  // Not a sticky prohibition any more (T12) — a clipping one. The turn contains
+  // markdown whose wide code blocks and tables scroll at their own leaves; an
+  // `overflow-*` here clips them instead, silently.
+  it('F-B10: the per-turn section never clips its own content', () => {
     const cls = chatTurnClass();
     expect(cls).not.toContain('overflow-hidden');
     expect(cls).not.toMatch(/overflow-/);
@@ -61,30 +72,39 @@ describe('chatTurnClass (F-B10)', () => {
     expect(cls).not.toMatch(/transform/);
   });
 
-  it('F-B10: owns no gap of its own — the band bottom padding is the bubble-to-head beat', () => {
-    expect(chatTurnClass()).not.toMatch(/(?:^|\s)gap-/);
+  // The 10px that used to be the band's BOTTOM padding: prompt -> first content
+  // segment. It had to land somewhere when the band retired, and the section is
+  // the only element that spans both.
+  it('F-B10: owns the 10px prompt-to-body beat the band used to pad', () => {
+    expect(spacingPx(chatTurnClass(), 'gap')).toBe(10);
     expect(chatTurnClass()).not.toMatch(/(?:^|\s)space-y-/);
   });
 });
 
 describe('turn spacing arithmetic (F-B9)', () => {
-  // §5.4: the 20px turn-to-turn beat (A07 :846) is unchanged in TOTAL, but its
-  // composition moved from one 20px gap to 10 + 10. Reading `space-y-2.5`
-  // alone looks like the rhythm was halved; this assertion is what says it
-  // was not, and it fails the moment either half is edited on its own.
-  it('F-B9: ReadingColumn spacing + band top padding === 20px between turns', () => {
-    const columnGap = spacingPx(readingColumnSpacingClass(), 'space-y');
-    const bandPadding = spacingPx(turnBubbleBandClass(), 'py');
-    expect(columnGap).toBe(10);
-    expect(bandPadding).toBe(10);
-    expect(columnGap + bandPadding).toBe(20);
+  /**
+   * The 20px turn-to-turn beat (A07 :846) is unchanged in TOTAL across T12 —
+   * only its composition moved back. T-31 had split it into 10px of
+   * `ReadingColumn` gap plus 10px of sticky-band top padding; with the band
+   * gone, `space-y-2.5` alone would have silently HALVED the rhythm between
+   * turns, and nothing else in the suite would have noticed. That regression is
+   * the whole reason this assertion is written as an absolute number rather
+   * than as a relation between two live values.
+   */
+  it('F-B9: the whole 20px turn-to-turn beat lives in ReadingColumn', () => {
+    expect(spacingPx(readingColumnSpacingClass(), 'space-y')).toBe(20);
   });
 
-  it('F-B9: the band padding equals the 10px within-turn tier (P-17)', () => {
-    const bandPadding = spacingPx(turnBubbleBandClass(), 'py');
-    const bodyGap = spacingPx(turnBodyClass(), 'gap');
-    expect(bandPadding).toBe(bodyGap);
-    expect(bodyGap).toBe(10);
+  // …and it has to be strictly bigger than the within-turn tier, or a reply and
+  // the next prompt read as one block. This is the relation the absolute
+  // numbers above exist to protect.
+  it('F-B9: turn-to-turn spacing is double the 10px within-turn tier (P-17)', () => {
+    const between = spacingPx(readingColumnSpacingClass(), 'space-y');
+    const within = spacingPx(turnBodyClass(), 'gap');
+    expect(within).toBe(10);
+    expect(between).toBe(within * 2);
+    // The prompt-to-body gap is the within-turn tier too, not a third number.
+    expect(spacingPx(chatTurnClass(), 'gap')).toBe(within);
   });
 });
 
@@ -121,52 +141,85 @@ describe('turnProcessShellClass (F11)', () => {
   });
 });
 
-describe('userBubbleTextClass (F10 — the unconditional clamp)', () => {
-  // The pinned-only clamp (`@container scroll-state(stuck: top)`) coupled
-  // scroll position to layout height and oscillated: collapse → scrollHeight
-  // shrinks → browser clamps scrollTop below the sticky threshold → expand →
-  // follower pushes the offset back. The fix is structural: the clamp must be
-  // UNCONDITIONAL, so band height depends on content alone and no scroll →
-  // height edge exists. These assertions pin exactly that.
-  it('F10: clamps the prompt with a bare, unconditional line-clamp utility', () => {
-    const cls = userBubbleTextClass(false);
-    // Bare utility — no variant prefix (`hover:`, `group-*:`, `data-[...]:`),
-    // which is what "unconditional" means in a Tailwind class string.
-    expect(cls).toMatch(/(?:^|\s)line-clamp-\d+(?:\s|$)/);
+/**
+ * The user's prompt (T12 — pi-app `.timeline-user-bubble`, retokenised).
+ *
+ * Three things retired together here and the causal order is the point:
+ * `turnBubbleBandClass()`'s `position: sticky` forced F10's unconditional
+ * six-line clamp (the pinned-only clamp coupled scroll position to layout
+ * height and oscillated), and the clamp forced FB3's always-visible
+ * `Show more`. Removing the first removes the reason for the other two.
+ *
+ * ⚠️ What that costs, stated rather than hidden: a very long pasted prompt now
+ * renders at full height. pi-app accepts the same trade. If a clamp comes back,
+ * it must NOT come back together with a sticky band.
+ */
+describe('userBubbleTextClass / userBubbleClass (T12)', () => {
+  it('T12: the prompt is no longer clamped, in any form', () => {
+    const cls = userBubbleTextClass();
+    expect(cls).not.toMatch(/line-clamp/);
+    // Including as a variant — a `group-hover:line-clamp-6` would be the same
+    // defect wearing a different prefix.
     expect(cls).not.toMatch(/:line-clamp/);
-    const lines = Number(/line-clamp-(\d+)/.exec(cls)?.[1]);
-    expect(lines).toBeGreaterThanOrEqual(3);
   });
 
-  it('F10: keeps the selection opt-in and the paragraph rhythm', () => {
-    for (const expanded of [false, true]) {
-      const cls = userBubbleTextClass(expanded);
-      expect(cls).toContain('select-text');
-      expect(cls).toContain('space-y-2');
-    }
+  it('T12: keeps the selection opt-in and the paragraph rhythm', () => {
+    // `globals.css` sets `user-select: none` on `*`, so without `select-text`
+    // the operator's own prompt can only be copied through a button.
+    expect(userBubbleTextClass()).toContain('select-text');
+    expect(userBubbleTextClass()).toContain('space-y-2');
   });
 
-  it('F10: carries no scroll-state hook — the coupling must not return', () => {
-    expect(userBubbleTextClass(false)).not.toContain('fx-');
-    expect(userBubbleTextClass(true)).not.toContain('fx-');
-    expect(turnBubbleBandClass()).not.toContain('fx-');
+  it('T12: carries no scroll-state hook — F10 coupling must not return', () => {
+    expect(userBubbleTextClass()).not.toContain('fx-');
+    expect(userBubbleClass()).not.toContain('fx-');
   });
 
-  // [FB3-1] The expanded state must actually lift the clamp -- a toggle that
-  // flips a boolean while the class string keeps `line-clamp-6` would look
-  // wired and do nothing.
-  it('[FB3-1] the collapsed state clamps and the expanded state carries no clamp at all', () => {
-    expect(userBubbleTextClass(false)).toContain('line-clamp-6');
-    expect(userBubbleTextClass(true)).not.toMatch(/line-clamp-/);
+  /**
+   * The cap and the shrink release are ONE claim, not two. This box is a flex
+   * item, so its `min-width` resolves to `auto` (= min-content) and `min-width`
+   * outranks `max-width`: `max-w-[80%]` alone is silently defeated by any
+   * content with no break opportunity (a long URL, one long word), the bubble
+   * goes full width, and it does so for SOME content only — which is why review
+   * never catches it.
+   */
+  it('T12: the 80% cap comes with the min-width release that makes it hold', () => {
+    const cls = userBubbleClass();
+    expect(cls).toContain('max-w-[80%]');
+    expect(cls).toContain('min-w-0');
   });
 
-  // [FB3-1] The clamp stays unconditional WITHIN each state: F10's fix was to
-  // remove the variant-driven clamp, and FB3 must not smuggle it back as
-  // `group-*:`/`data-[...]:` on the collapsed string.
-  it('[FB3-1] neither state introduces a variant-driven clamp', () => {
-    for (const expanded of [false, true]) {
-      expect(userBubbleTextClass(expanded)).not.toMatch(/:line-clamp/);
-    }
+  /**
+   * The role signal. The assistant side has no face and no edge at all now
+   * (`turnAnswerContainerClass()` retired), so everything that says "this is
+   * the operator, not the model" is on this one element: right alignment, a
+   * visible face, and one sharp corner pointing back at the composer.
+   *
+   * The face/edge pair is F5 D3-c's measured one and is deliberately NOT
+   * pi-app's (which has no edge): the face alone reads 1.161 light / 1.292 dark
+   * against the timeline surface, and the edge carries the remaining
+   * definition at 1.350 / 1.322.
+   */
+  it('T12: right-aligned, faced, and edged — the whole role signal', () => {
+    expect(userBubbleRowClass()).toContain('justify-end');
+    const cls = userBubbleClass();
+    expect(cls).toContain('bg-accent');
+    expect(cls).toContain('border border-input');
+    // The corner MOVED from bottom-right to top-right (pi-app's form): it now
+    // points back at the composer the message was typed in.
+    expect(cls).toContain('rounded-tr-xs');
+    expect(cls, 'the old bottom-right tail is not kept alongside it').not.toContain(
+      'rounded-br-xs'
+    );
+  });
+
+  // Radii are token steps, never raw pixels (design-system.md Border Radius):
+  // `rounded-md` is the 12px tier for containers ≥32px tall, `rounded-*-xs` the
+  // 4px inset tier. An arbitrary `rounded-[10px]` here would read as a one-off.
+  it('T12: the bubble radii are design-system tiers, not arbitrary values', () => {
+    const cls = userBubbleClass();
+    expect(cls).toContain('rounded-md');
+    expect(cls).not.toMatch(/rounded-\[/);
   });
 });
 
@@ -180,91 +233,143 @@ describe('turnHeadClass', () => {
   });
 });
 
-describe('turn meta row (FB6 + F-B15)', () => {
+/**
+ * T12-b: the meta row (`turnMetaRowClass()`) is gone, and with it `[FB6-2]`.
+ * What replaced it is the hover strip, and the two things worth pinning about
+ * that are its MECHANISM (a real zero-height row, not a transparent one) and
+ * the exact scope of the F-B15 reversal.
+ */
+describe('turn hover action strip (T12-b)', () => {
   /**
-   * `turnFooterClass()` retired with the footer row it named: FB6 merged the
-   * head and the footer into this one row, so a second class assembler would
-   * have been an export with no element to describe.
+   * The collapsed state has to be genuinely zero-height. An `opacity-0` strip
+   * that still occupies 28px under every turn would spend the same vertical
+   * budget the meta row just gave back — the change would look like a cleanup
+   * and be a no-op. `grid-rows-[0fr] -> [1fr]` is the animate-to-auto trick
+   * pi-app uses; `overflow-hidden` + `min-h-0` on the inner row are what make
+   * the `0fr` actually clip rather than just shrink the track.
    */
-  it('[FB6-2] the meta row is a single line whose ticking seconds cannot jitter it', () => {
-    const cls = turnMetaRowClass();
-    expect(cls).toContain('items-center');
-    expect(cls).toContain('tabular-nums');
-    expect(cls).toContain('text-meta');
-    // The status text is the only thing in the row that gives way, and it can
-    // only do that if the row lets it shrink.
-    expect(cls).toContain('min-w-0');
-    // The row carries a counter that changes every second; a row that can wrap
-    // can change HEIGHT every second, underneath a stick-to-bottom follower.
-    expect(cls).not.toContain('flex-wrap');
+  it('T12-b: the collapsed strip is a zero-height row, not a transparent one', () => {
+    const slot = turnActionsSlotClass();
+    expect(slot).toContain('grid-rows-[0fr]');
+    expect(slot).toContain('group-hover/turn:grid-rows-[1fr]');
+    const inner = turnActionsInnerClass();
+    expect(inner, 'without these the 0fr track shrinks but the content paints on').toContain(
+      'overflow-hidden'
+    );
+    expect(inner).toContain('min-h-0');
   });
 
-  it('F-B15: the copy button is a 24px ghost icon button', () => {
+  /**
+   * The defect this batch actually shipped for one build, caught by measuring
+   * the browser rather than by any of the assertions above.
+   *
+   * `h-7` on the inner row — copied verbatim from pi-app's
+   * `.message-actions-slot-inner` — made the grid item a definite height, which
+   * a `0fr` track cannot squash: `grid-template-rows` resolved to `28px`, so the
+   * "collapsed" strip stood at full size with `opacity: 0`, spending exactly the
+   * vertical budget removing the meta row was supposed to give back.
+   *
+   * Every class the spec called for was present and every assertion was green,
+   * because the failure is in the INTERACTION between `grid-rows-[0fr]` and a
+   * sibling utility, not in any one class. So the assertion is a prohibition:
+   * no height utility on this row, ever.
+   */
+  it('T12-b: the squashable row carries no fixed height (measured, not inferred)', () => {
+    const inner = turnActionsInnerClass();
+    expect(inner, 'a definite height makes the 0fr track un-collapsible').not.toMatch(
+      /(?:^|\s)(?:h|min-h|size)-(?!0(?:\s|$))[\w.[\]/-]+/
+    );
+    // The row's height comes from the button instead, which is why its 24px is
+    // load-bearing rather than decorative.
+    expect(turnCopyButtonClass()).toContain('size-6');
+  });
+
+  // The hover scope is a NAMED group. Tool rows and the thinking chain inside
+  // the turn run their own hover groups; an anonymous `group` here would become
+  // the nearest ancestor for some of them and silently change what they react
+  // to.
+  it('T12-b: the strip reacts to the turn group by name, never an anonymous one', () => {
+    expect(chatTurnClass()).toContain('group/turn');
+    // A bare `group` alongside it would make this element the nearest anonymous
+    // ancestor for every `group-hover:` inside the turn.
+    expect(chatTurnClass()).not.toMatch(/(?:^|\s)group(?:\s|$)/);
+    // Every hover variant in the slot is scoped to that name — an unscoped
+    // `group-hover:` would bind to whichever group happens to be nearest.
+    for (const utility of turnActionsSlotClass().split(/\s+/)) {
+      if (!utility.startsWith('group-hover')) continue;
+      expect(utility, 'unscoped group-hover in the strip').toMatch(/^group-hover\/turn:/);
+    }
+    expect(turnActionsSlotClass()).toContain('group-hover/turn:');
+  });
+
+  it('T12-b: the OS reduced-motion setting is honoured', () => {
+    expect(turnActionsSlotClass()).toContain('motion-reduce:transition-none');
+  });
+
+  it('the copy button is a 24px ghost icon button', () => {
     const cls = turnCopyButtonClass();
     expect(cls).toContain('size-6');
     expect(cls).toContain('rounded-sm');
     expect(cls).toContain('hover:bg-hover');
   });
 
-  // A control only a mouse can discover is unreachable by touch and by
-  // keyboard — hover-only is the failure this button was specified against
-  // (§4.6), not a style preference.
-  it('F-B15: the copy button is never hover-only', () => {
+  /**
+   * `F-B15` REVERSED, deliberately and by name.
+   *
+   * The old rule was "the copy button is never hover-only", because a control
+   * only a mouse can discover is unreachable by touch and by keyboard. The user
+   * overruled it on 2026-08-29 in favour of matching pi-app exactly, having
+   * been shown that cost. So the strip may hide, and this asserts the one piece
+   * of the old rule that survives: the reveal lives on the CONTAINER, never on
+   * the button. A button that also faded would mean two independent things had
+   * to agree before a click could land — the classic "it's visible but it
+   * doesn't work" bug.
+   */
+  it('T12-b: the reveal is on the container; the button itself never fades', () => {
     const cls = turnCopyButtonClass();
     expect(cls).not.toContain('opacity-0');
-    expect(cls).not.toContain('group-hover:');
+    expect(cls).not.toContain('group-hover');
+    expect(cls).not.toContain('pointer-events-none');
   });
 });
 
 /**
- * F5 D3-b (user decision 2026-08-18): the assistant's answer segment gets one
- * neutral container per turn.
+ * T12: the assistant's answer segment has no container of its own.
  *
- * The decision was taken over a designer objection ("three nested boxes"), and
- * the resolution was to spend a BORDER and nothing else. Everything below
- * guards that resolution, because the tempting edit — "give it a faint fill so
- * it reads as a container" — is exactly what the measurements ruled out:
- * `bg-muted` puts inline code chips and fenced blocks at 1.000 against their
- * own parent, i.e. it deletes them.
+ * `turnAnswerContainerClass()` (F5 D3-b, 2026-08-18) put one `rounded-sm border
+ * border-border p-3.5` ring around each answer segment. It is gone — pi-app
+ * renders reply prose bare, and after FB4 made answer segments repeat within a
+ * turn, that ring had become one box per prose run: a single reply could be
+ * three stacked boxes with tool rows between them (the look question Q14 left
+ * open).
+ *
+ * The role signal is now an ASYMMETRY rather than two kinds of box — the user
+ * side is a shaped object, the agent side is not an object at all. What that
+ * makes assertable is a prohibition rather than a shape, and it is the one
+ * below: nothing in the turn body may grow a face or an edge, because the first
+ * edit that does re-creates "everything is a card" from the other direction.
  */
-describe('turnAnswerContainerClass (F5 D3-b)', () => {
-  // The named degradation: someone adds `bg-muted` to make the container "a
-  // bit more visible", and silently erases every inline code chip and fenced
-  // block inside it. That is the whole reason candidate B was chosen over A.
-  it('[D3-4] draws with an edge and never with a face', () => {
-    const cls = turnAnswerContainerClass();
-    expect(cls).toContain('border border-border');
-    expect(cls, 'a fill here composites inner code surfaces to 1.000').not.toMatch(/(?:^|\s)bg-/);
-  });
-
-  // Cross-module equality, so "changed one side only" fails. The container's
-  // inset is not a number chosen here: "container edge to first block" is the
-  // same distance as "block to block", which `chatMarkdownPolicy.ts` owns.
-  it('[D3-5] the inset is the prose block tier, not a new number', () => {
-    expect(spacingPx(turnAnswerContainerClass(), 'p')).toBe(
-      spacingPx(chatMarkdownParagraphClass(), 'mt')
+describe('assistant answer segment (T12 — no container)', () => {
+  it('T12: the answer segment mounts the body class and nothing else', () => {
+    // `turnBodyClass()` is what the answer branch renders; if it ever acquires
+    // a fill or a ring, the container is back under a different name.
+    const cls = turnBodyClass();
+    expect(cls, 'a face here re-creates the retired answer box').not.toMatch(/(?:^|\s)bg-/);
+    expect(cls, 'an edge here re-creates the retired answer box').not.toMatch(
+      /(?:^|\s)(?:border|ring)(?:-|\s|$)/
     );
-    expect(spacingPx(turnAnswerContainerClass(), 'p')).toBe(14);
+    expect(cls).not.toMatch(/(?:^|\s)shadow-/);
   });
 
   /**
-   * A SHAPE lock, not a safety assertion — the distinction matters and is the
-   * reason this replaces an earlier draft that claimed the container sat on the
-   * sticky chain. It does not: the sticky element is the bubble band, and this
-   * container hangs off the band's following SIBLING, so it cannot re-parent
-   * the band's containing block and `overflow-hidden` here would not unstick
-   * anything. `chatTimelineLayout.ts`'s F-B8 / F-B10 prohibitions name "the
-   * pinned bubble band and its containing block", which this is not.
-   *
-   * What the whitelist actually guards: this container's entire job is one
-   * ring and one inset. Any addition — a shadow, a ring, a fill, a transform —
-   * is a design change that has to go back through the spec, not a tidy-up,
-   * and a whitelist catches the additions nobody thought to enumerate.
+   * The named degradation, kept from D3-4 because it is still true and still
+   * the tempting edit: a `bg-muted` container would put inline code chips
+   * (`bg-muted`) and fenced blocks (`bg-muted/50`) at 1.000 against their own
+   * parent — i.e. delete them. That measurement is why the answer surface must
+   * stay the timeline surface, with or without a ring.
    */
-  it('[D3-6′] is exactly one ring and one inset, with nothing else attached', () => {
-    expect(new Set(turnAnswerContainerClass().split(/\s+/))).toEqual(
-      new Set(['rounded-sm', 'border', 'border-border', 'p-3.5'])
-    );
+  it('T12: the prose sits directly on the timeline surface, with no inset', () => {
+    expect(turnBodyClass()).not.toMatch(/(?:^|\s)p[xy]?-/);
   });
 });
 

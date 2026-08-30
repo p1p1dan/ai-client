@@ -1,10 +1,10 @@
 # Implementation Status — Pi Backend Migration
 
-**Last Verified**：2026-08-29（T08-c 切片 2 后）· 完整 vitest **269 files / 5397 tests** 全绿；typecheck（主仓 + agent-host）全绿；Biome `src` + `scripts` **0 error / 0 warning**；`build:agent-host` 成功（394.3MB）；打包产物权限闸 smoke 通过（`smoke:permission-plugin` → `PERMISSION GATE INTACT`）。完整 Electron build 因当前 VM 仅 3.3 GiB、脚本固定 4 GiB heap 出现内存压力，沿用既有处置不重跑。`pnpm lint`（全仓）另有 1 个**既存**错误，来自未跟踪文件 `docs/plans/2026-08-27-entry-design/logo-concepts-preview.html`，与本仓代码无关。
+**Last Verified**：2026-08-29（T12 后）· 完整 vitest **269 files / 5395 tests** 全绿（T08-c 切片 2 后为 269/5397，净 −2 是 FB3 三例退役换 T12 两例，见 T12 证据档 §3）；typecheck（主仓）全绿；Biome `src` + `scripts` **0 error / 0 warning**；`build:agent-host` 成功（394.3MB）；打包产物权限闸 smoke 通过（`smoke:permission-plugin` → `PERMISSION GATE INTACT`）。完整 Electron build 因当前 VM 仅 3.3 GiB、脚本固定 4 GiB heap 出现内存压力，沿用既有处置不重跑。`pnpm lint`（全仓）另有 1 个**既存**错误，来自未跟踪文件 `docs/plans/2026-08-27-entry-design/logo-concepts-preview.html`，与本仓代码无关。
 
 ## Current Phase
 
-**Phase 1 与 Phase 5 已完成；Phase 2 未整体完成。**
+**Phase 1 与 Phase 5 已完成；Phase 2 未整体完成；Phase 3 已起手（T12 代码完成，等用户看图）。**
 
 区分「代码施工完成」和「真实 E2E 验收完成」——这两件事在 Phase 2 上不一致：
 
@@ -24,10 +24,64 @@
   自己 agentDir 里的配置整条压过它；未被任何规则命中的请求仍落 `ask`
   （`rule.ts:112` `defaultAction ?? "ask"`）。另有一条插件硬编码的自动放行：
   **只读工具读 Pi 基础设施目录一律 allow**。
-- 下一阶段：真机 E2E 验收（含策略实际生效三条）→ Phase 3 GUI 时间线与气泡重构
-  （T12 起）。
+- Phase 3 已起手：**T12 Done**（用户 2026-08-29 指示「Phase 2 点验推迟，先做 T12」，
+  同日看图确认「整体效果满意」并拍板删掉 meta 行）。Phase 2 的真机 E2E 验收**没有取消，
+  只是排在后面**。下一件是 T12-a（display-items / turn-groups 数据建模）。
 
 ## Last Landed
+
+**2026-08-29 T12-b —— meta 行退役，换成悬停操作条**（同日，T12-a 之后）。
+用户看图后拍板「跟随 pi-app 删掉 meta」，复制按钮的放置给了三选一，用户选
+**「完全照抄 pi-app」**。于是 `Worked for 12s · 2 tools`、模型名、相对时间**全部丢掉**，
+复制与 `HH:MM` 进一条**悬停才出现**的操作条。
+
+**先核过 pi-app 到底丢了什么**（逐项读源码，非推测）：复制和时间戳它**留着**，只是挪进
+悬停条；思考时长挪到思考块写成 `Thought for Xs`；模型名挪到输入框常驻；**回合总时长和
+工具数是真的不显示** —— 实证是它 `timeline-turn-timing.ts` 里算这个数的两个函数还在，
+但全仓零调用方，是删 footer 之后留下的死代码。
+
+**`F-B15` 红线经用户知情后明确反转**：原规则是「复制按钮永远不能悬停才出现，因为键盘和
+触屏够不到」。代价已如实告知并被接受，所以红线**反转而不是悄悄放宽**，代价写进
+`turnActionsSlotClass()` 头注。保留下来的那半条写成断言：**遮蔽只能在容器上，绝不能在
+按钮自己身上** —— 按钮若也带 `opacity-0`，就成了「两件事都得同意才点得动」。
+
+**进行中的状态行保留**。它跟 meta 行只是**碰巧共用一个槽**：`Awaiting first token 8s` /
+`Stalled` / `Failed` 是唯一说明「还在跑」的东西，F2 的「秒表丢了」缺陷就是这行在还没跑完时
+消失。现在跑完什么都不显示，跑的时候照旧。连带退役 `deriveTurnHeadModel` 的四个降级档 ——
+它们回答的都是「没量到时长的已完成回合该说点什么」，而现在的答案是「什么都不说」。
+
+⚠️ **GUI 抓到一个断言抓不到的缺陷**：折叠态操作条实测 **28px 而不是 0**，
+也就是「收起来了但照样占位置」，正好把删 meta 行省下的竖向预算又花回去。
+根因是 `h-7` 从 pi-app 原样抄来，而 grid item 一旦有确定高度就压不扁。
+**三个类一个不缺、每条单看都对、断言全绿** —— 失效在类与类的相互作用里。
+已修（行高改由 24px 按钮决定）并补了「此行不许有任何高度类」的钉子，把 `h-7` 加回去立刻咬红。
+
+四门：typecheck 0 · biome 1045 文件 0/0 · **vitest 269 文件 5381 例** · 变异 8/8 咬红。
+真机 CDP 实测：折叠两条均 `height:0`；真悬停第二个回合后**只有第二条**打开（24px），
+证明 `group/turn` 的按回合作用域成立。
+
+**2026-08-29 T12-a —— 时间线外壳与气泡视觉基线**（Phase 3 起手）。
+提问气泡取 pi-app 形状（右对齐 · 80% 上限 · 切角从右下换到**右上** ·
+`12px 4px 12px 12px` · **不再六行截断**），模型回复**去掉每段一个的边框盒**，
+钉住提问的 `sticky` 吸顶条整条退役。
+
+**这三件本来就是一条因果链，只有第一环是当初真想要的**：吸顶条会跟贴底滚动打架
+（收起→变矮→`scrollTop` 被夹回→又展开，逐帧震荡），所以 F10 加了无条件截断；
+截断藏掉了正文，所以 FB3 加了恒显的 `Show more`。去掉吸顶条，后两件失去存在理由。
+反向纪律已写成断言：任何回合级 class 函数长出 `sticky`/`fixed`/`z-*` 即红 ——
+单独把吸顶条加回来会原样复现 F10 的震荡。
+
+角色区分改由**不对称**承担：用户侧是个物件（有形状、有面、有切角），模型侧根本不是物件
+（占满阅读宽度、无面、无边）。给模型侧「为了一致」加个环，会从另一头到达 D3-b 反对的
+「什么都是卡片」。
+
+改动文件：`chatTimelineLayout.ts`（退役两个 class 函数 + 新增两个 + 节奏算术重组）·
+`MessageTimeline.tsx`（`UserBubble` 去 state/去按钮/去 title；吸顶条 wrapper 删除；
+answer 分支去容器）· 三份测试逐条**改写立论**（不是放宽）。
+证据与四张截图见 [t12-timeline-shell-baseline.md](./evidence/t12-timeline-shell-baseline.md)。
+
+⚠️ 截图里的时间线内容是**注入的合成 transcript**（走真渲染路径，但流式态没被覆盖）。
+当时留给用户裁定的「meta 行保留还是删掉」已由同日 T12-b 结案：删掉。
 
 **2026-08-29 T08-c 切片 2 —— 权限策略设置面**（同日，切片 1 之后）。
 应用内第一次能读到权限闸的判断依据：按插件语义镜像三层合并（随包默认 < 受管/用户
@@ -101,7 +155,9 @@ path deny 面 · external_directory 一律 ask · 项目配置按凭据模式分
    `git status` 不弹窗而 `git commit` 弹窗；受管模式下仓库自带 `.pi/` 配置无效。
    **验收若在 `node scripts/dev.js` 下跑，先确认启动日志里有 `[dev] permission policy: …`**
    ——这条是切片 2 才补上的 dev/打包一致性，没有它随包策略不生效，第一条会误判。
-5. Phase 3：T12 时间线外壳 + 气泡视觉基线（直接取用 pi-app）。
+5. Phase 3 续做：**T12-a** display-items / turn-groups 数据建模（T12 本身已 Done）。
+   顺带在真实回合上补两件 T12 没能覆盖的：流式态观感、悬停条的 `HH:MM`
+   （合成 transcript 不走 runtime event bus，拿不到 `completedAt`）。
 
 ## Blocked By
 

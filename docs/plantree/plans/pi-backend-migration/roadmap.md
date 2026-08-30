@@ -47,7 +47,7 @@
 
 | ID | 任务 | 状态 | 说明 |
 |---|---|---|---|
-| T12 | 时间线外壳 + 输入/输出气泡视觉基线 | Deferred | 直接取用 pi-app timeline/turn chrome 的结构与交互，套本仓颜色、字体、圆角与 @coss/ui；先出亮暗双主题 GUI 图供用户验收，不要求保持现有气泡布局 |
+| T12 | 时间线外壳 + 输入/输出气泡视觉基线 | **Done（2026-08-29，用户看图确认「整体效果满意」）** | **T12-a 视觉基线**：提问气泡右对齐 80% + 右上切角（实测 `12px 4px 12px 12px`）+ **不再截断**；模型回复**去掉边框盒**；**`sticky` 吸顶条整条退役** —— 三件是同一条因果链（吸顶条→截断→`Show more`），一起退役。**T12-b meta 行退役**（用户拍板跟随 pi-app）：`Worked for · N tools` / 模型名 / 相对时间全部丢掉，复制 + `HH:MM` 进**悬停操作条**（`grid-rows-[0fr]→[1fr]`，`group/turn` 按回合作用域）；**`F-B15` 红线经用户知情后明确反转**（hover-only，键盘/触屏拿不到复制）；**进行中的状态行保留**（它与 meta 行只是碰巧共用一个槽，删掉会重现 F2「秒表丢了」）。四门全绿（typecheck 0 · biome 1045 文件 0/0 · **vitest 269 文件 5381 例**）· **变异 16/16 咬红**（两轮各 8）· 亮暗双主题真机 CDP 截图 7 张。⚠️ **GUI 抓到一个断言抓不到的缺陷**：折叠态操作条实测 28px 而非 0（`h-7` 从 pi-app 抄来，grid item 有确定高度就压不扁），三个类一个不缺、断言全绿 —— 已修并补「此行不许有任何高度类」的实测型钉子。⚠️ 未覆盖：流式态 · 悬停条的 `HH:MM`（合成 transcript 不走 event bus，拿不到 `completedAt`）· `fork`/`rewind`（归 T13）。证据见 [evidence/t12-timeline-shell-baseline.md](./evidence/t12-timeline-shell-baseline.md) |
 | T12-a | display-items / turn-groups 数据建模 | Deferred | 优先直接移植 `timeline-display-items`/`timeline-turn-groups`；若现有 `chatTurn.ts` 能低成本承载则复用，否则替换，不为保留旧代码增加适配层 |
 | T12-b | 工具行人话摘要、diff 徽记、原生预览 | Deferred | 直接移植 `tool-call-row`、`buildToolSummary`、`tool-previews`：Edit/Write diff、Read、Grep/Find、Bash、Ls；声明模板→原生预览→通用 default 三层 fallback |
 | T12-c | 思考链、流式文本与 Markdown | Deferred | 直接取用 `thinking-chain-block`、`stream-text-reveal`；pi-app 与本仓 FB1-b markdown 分段实测对比后择优，不预设保留旧实现 |
@@ -94,6 +94,7 @@
 - T08-c 切片 1 — 默认权限策略与信任边界（D11 四条拍板全部落地）；证据见 [evidence/t08c-default-permission-policy.md](./evidence/t08c-default-permission-policy.md)
 - T08-c 切片 2 — 权限策略设置面（查看三层生效结果 + 编辑受管层）；同批修掉 dev/打包策略不一致与设置分类清单的双份手写；证据见 [evidence/t08c-permission-settings-panel.md](./evidence/t08c-permission-settings-panel.md)
 - 2026-08-29 外部审计修复批：13 项发现逐条成立并修复（权限 fail-closed、多会话隔离、Stop 生命周期、Runtime Event 契约、附件/effort、permission.activity 落地、IPC 失败恢复、窗口路由、去重规则、runtimeId 生命周期、打包与许可证、可访问性、Biome）；证据见 [evidence/phase2-audit-fixes.md](./evidence/phase2-audit-fixes.md)
+- **T12 — 时间线外壳 + 气泡视觉基线（Phase 3 起手，用户已看图确认）**：气泡取 pi-app 形态 + 回复去盒 + 吸顶条退役 + meta 行退役换悬停操作条；证据与七张亮暗截图见 [evidence/t12-timeline-shell-baseline.md](./evidence/t12-timeline-shell-baseline.md)
 
 ## 2026-08-28 本会话关键修改文件
 

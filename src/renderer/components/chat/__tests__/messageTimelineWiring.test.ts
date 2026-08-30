@@ -364,23 +364,13 @@ function nodeClassName(fnName: string, path: readonly string[]): string {
   throw new Error(`className on ${fnName} ${path.join(' > ')} is not a string literal`);
 }
 
-/** The literal arguments of a `className={cn(…)}`; throws on any non-literal argument. */
-function nodeClassNameArgs(fnName: string, path: readonly string[]): string[] {
-  const initializer = classNameInitializerOf(jsxNodeAt(fnName, path));
-  if (
-    !ts.isJsxExpression(initializer) ||
-    !initializer.expression ||
-    !ts.isCallExpression(initializer.expression)
-  ) {
-    throw new Error(`className on ${fnName} ${path.join(' > ')} is not a \`cn(…)\` call`);
-  }
-  return initializer.expression.arguments.map((argument) => {
-    if (!ts.isStringLiteral(argument)) {
-      throw new Error(`non-literal \`cn()\` argument on ${fnName} ${path.join(' > ')}`);
-    }
-    return argument.text;
-  });
-}
+/*
+ * `nodeClassNameArgs` — the literal arguments of a `className={cn(…)}` — retired
+ * with T12. Its only caller was `[D3-1]`, which read the user bubble's two-part
+ * `cn('min-w-0 max-w-[85%] …', 'rounded-br-xs …')`; the bubble now mounts
+ * `userBubbleClass()` instead, whose contents are asserted as a return value in
+ * `chatTimelineLayout.test.ts` rather than as JSX text.
+ */
 
 /** Raw (comment-blanked) text of a node — for subtree prohibitions and expression attributes. */
 function nodeSource(node: ts.Node): string {
@@ -408,11 +398,27 @@ function classNameExpressionOf(node: JsxNode): string {
   return nodeSource(classNameInitializerOf(node));
 }
 
-/** `ChatTurn`'s `turnBodyClass()` wrapper — the element whose child ORDER FB6 rearranges. */
+/** The element's className expression, or `''` when it carries none. */
+function classNameExpressionOrEmpty(node: JsxNode): string {
+  try {
+    return classNameExpressionOf(node);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * `ChatTurn`'s `turnBodyClass()` wrapper — the element whose child ORDER FB6
+ * rearranges.
+ *
+ * T12: the section's first child is now a bare `<UserBubble>` with no className
+ * of its own (the `turnBubbleBandClass()` wrapper it used to sit in retired), so
+ * the search has to tolerate a className-less sibling rather than throw on one.
+ */
 function turnBodyNode(): JsxNode {
   const section = jsxNodeAt('ChatTurn', ['section']);
   const body = jsxChildrenOf(section).find((child) =>
-    classNameExpressionOf(child).includes('turnBodyClass()')
+    classNameExpressionOrEmpty(child).includes('turnBodyClass()')
   );
   if (!body) throw new Error('ChatTurn renders no `turnBodyClass()` child');
   return body;
@@ -438,9 +444,8 @@ function turnBodyChildKinds(): string[] {
     );
     const className = hasClassName ? classNameExpressionOf(child) : '';
     if (tag === 'RetryBanner') kinds.push('retry');
-    else if (className.includes('turnAnswerContainerClass()')) kinds.push('answer');
-    else if (className.includes('turnMetaRowClass()')) kinds.push('meta');
-    else if (className.includes('turnHeadClass()') || tag === 'Collapsible') kinds.push('head');
+    else if (className.includes('turnActionsSlotClass()')) kinds.push('actions');
+    else if (className.includes('turnHeadClass()')) kinds.push('status');
     else kinds.push(`?${tag}`);
   }
   return kinds;
@@ -464,28 +469,38 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // distinction this file is built on is decoration. A plain statement inside
     // `memo(function ChatTurn(…) { … })` is the sharpest case: it is in the
     // file, and it is NOT in call position.
-    const statementOnly = "const metaCopyText = turnActive ? '' : copyText;";
+    const statementOnly = "const actionsCopyText = turnActive ? '' : copyText;";
     expect(SYNTAX).toContain(statementOnly);
     expect(CALL_SITES, 'a function body leaked into call position').not.toContain(statementOnly);
     // Negatives keep string literals, or class-name prohibitions mean nothing.
+    // (Was `rounded-br-xs`, which T12 moved out of this file into
+    // `userBubbleClass()`; the attachment chip's fill is the nearest surviving
+    // class literal that is unambiguously code and not prose.)
     expect(SYNTAX, 'string literals must survive for the negatives to bite').toContain(
-      'rounded-br-xs'
+      'bg-muted/50'
     );
   });
 
-  // F1: the head must come from the degradation chain, not from an inline
-  // `status ? … : workedFor ? … : null` ternary.
-  it('F1: the head is built by deriveTurnHeadModel', () => {
-    expectCalled('deriveTurnHeadModel(');
-    // The degradation chain is fed the turn's real shape, not a guess: whether
-    // there is a process segment comes from the segments themselves.
-    expectWired("segments.some((segment) => segment.kind === 'process')");
-    expectCalled('hasProcess,');
-  });
-
-  // §4.2: the counts riding inside the head are the compact rendering.
-  it('the head counts use the compact stats style', () => {
-    expectCalled("{ style: 'compact' }");
+  /**
+   * `F1: the head is built by deriveTurnHeadModel` and `the head counts use the
+   * compact stats style` both retired with the meta row (T12-b).
+   *
+   * F1's degradation chain answered "what should a FINISHED turn say about
+   * itself when nothing measured a duration". A finished turn now says nothing,
+   * so the chain, its compact `deriveTurnStats` argument and the `hasProcess`
+   * input went with it (see `turnHead.ts`'s retirement note).
+   *
+   * What replaces them is below: the one surviving rung is wired straight
+   * through, and it is gated on being live.
+   */
+  it('T12-b: the turn renders the running status directly, and only while running', () => {
+    const turn = nodeSource(topLevelFunction('ChatTurn'));
+    expect(turn, 'the degradation chain must not come back').not.toContain('deriveTurnHeadModel');
+    expectCalled('deriveTurnStatus(');
+    // F2's "lost stopwatch": this row going missing while work continues IS the
+    // defect, so the gate must be the status itself, never a completion test.
+    expect(turn).toContain('{status && (');
+    expect(turn).toContain('<TurnStatusContent status={status} />');
   });
 
   // F2: the in-flight snapshot is bound by evidence, never by "no latency".
@@ -588,10 +603,16 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectWired('!inFlight && isLastTurn && inFlightSession && !turnComplete && firstAssistant');
   });
 
-  // F13: a half-streamed answer must not be silently copyable.
+  // F13: a half-streamed answer must not be silently copyable — the clipboard
+  // gives no sign the text was truncated. T12-b moved the button from the meta
+  // row to the hover strip; the rule is unchanged, only its host is.
   it('F13: copy is withheld while the turn is in flight', () => {
-    expectWired("const metaCopyText = turnActive ? '' : copyText;");
-    expectCalled('copyText={metaCopyText}');
+    expectWired("const actionsCopyText = turnActive ? '' : copyText;");
+    expectCalled('<TurnCopyButton');
+    expectCalled('text={actionsCopyText}');
+    // …and the gate reaches the strip itself, so an in-flight turn shows no
+    // empty strip on hover either.
+    expectWired('const showActions = actionsCopyText.length > 0;');
   });
 
   // F7: one flatten per turn, feeding both the render and the copy payload.
@@ -607,28 +628,47 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('sendStatus={isLastTurn ? attachedSendStatus : null}');
   });
 
-  // F9: the footer's relative age must advance on its own clock.
-  it('F9: the footer reads an injected clock, not Date.now() at render time', () => {
-    expectCalled('useMinuteTick()');
-    // FB6 moved the formatting up into `ChatTurn` when the footer became the
-    // tail of the meta row: one row, one clock, named by the prop it arrives on.
-    expectCalled('formatTime: (ms) => formatRelativeTimestamp(ms, footerNowMs)');
+  /**
+   * `F9: the footer reads an injected clock` retired with the meta row (T12-b).
+   *
+   * F9 existed because the footer printed a RELATIVE age and nothing re-renders
+   * an idle transcript, so every age froze at whatever it was when the last
+   * token landed. The hover strip prints an absolute `HH:MM`, which stays
+   * correct forever without a clock — so F9's defect class cannot recur here,
+   * and this is what says the relative form did not sneak back in with its
+   * stale-clock problem attached.
+   */
+  it('T12-b: the strip shows an absolute clock, so no ticking clock is needed', () => {
+    expectCalled('formatAbsoluteTime(metadata.completedAt)');
+    for (const gone of ['useMinuteTick', 'footerNowMs', 'formatRelativeTimestamp']) {
+      expect(SYNTAX, `the relative-age apparatus must not return: ${gone}`).not.toContain(gone);
+    }
   });
 
-  // §5 (F10 as-built, FB3 revision): the band renders through its class
-  // function alone and the bubble text through `userBubbleTextClass(expanded)`
-  // — still the unconditional-clamp fallback (§5.6-B) in the default state,
-  // now with a user-owned lift. The scroll-state container hooks stay GONE by
-  // design: the pinned-only clamp coupled scroll position to layout height and
-  // oscillated. The negatives keep either hook from quietly coming back, and
-  // `[FB3-2]` keeps the new argument from becoming a geometric one.
-  it('§5: the sticky band and the clamped bubble use their class functions', () => {
-    expectCalled('turnBubbleBandClass()');
-    expectCalled('userBubbleTextClass(expanded)');
+  /**
+   * T12 (replaces §5's band assertions). The bubble now renders through three
+   * class functions and no wrapper: `userBubbleRowClass()` aligns it,
+   * `userBubbleClass()` shapes it, `userBubbleTextClass()` sets the prose.
+   *
+   * The negatives are the load-bearing half. `turnBubbleBandClass` was the
+   * `position: sticky` band, and the two `fx-` hooks were the scroll-state
+   * query container that made the clamp pinned-only. All three are gone, and
+   * they must stay gone TOGETHER: bringing the band back without the rest
+   * re-creates F10's oscillation (scroll position -> clamp -> height -> scroll
+   * position), which is the whole reason the clamp existed in the first place.
+   */
+  it('T12: the bubble renders through its class functions, with no sticky band', () => {
+    expectCalled('userBubbleRowClass()');
+    expectCalled('userBubbleClass()');
+    expectCalled('userBubbleTextClass()');
+    expect(SYNTAX, 'the sticky band must not return (T12)').not.toContain('turnBubbleBandClass');
     expect(SYNTAX, 'fx-turn-band must not return (F10)').not.toContain('fx-turn-band');
     expect(SYNTAX, 'fx-turn-bubble-text must not return (F10)').not.toContain(
       'fx-turn-bubble-text'
     );
+    // The clamp and its toggle retired with the band — see `userBubbleClass()`.
+    expect(SYNTAX, 'the prompt clamp must not return on its own').not.toContain('line-clamp');
+    expect(SYNTAX, 'the Show more toggle retired with the clamp').not.toContain('Show more');
   });
 
   // T-29: assistant prose is Markdown, and it is Markdown in exactly ONE place.
@@ -778,36 +818,39 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('buildTurnCopyTextFromItems(items)');
   });
 
-  // D31 (2026-08-13) overturned D26 ④ and F5 D3-c (2026-08-18) executes it: the
-  // bubble is right-aligned and capped again. The retired assertion here was
-  // `expectUnwired('max-w-[85%]' / 'justify-end')` — its load-bearing claim
-  // ("both tokens are gone") is now false in the opposite direction, so it is
-  // replaced rather than inverted, and every half runs through the node-level
-  // locator: file-wide presence would pass with these classes parked on any
-  // element in the file, which proves nothing about the bubble.
-  it('[D3-1] D31: the user bubble is right-aligned and capped at 85%', () => {
-    // ① the row the bubble sits at the end of.
-    expect(nodeClassName('UserBubble', ['article'])).toBe('flex justify-end');
-    const [base, role] = nodeClassNameArgs('UserBubble', ['article', 'div']);
-    // ② the cap and the shrink release are ONE assertion, not two: a flex
-    //    item's `min-width` resolves to `auto`, and `min-width` outranks
-    //    `max-width`, so `max-w-[85%]` alone is silently defeated by any
-    //    content without a break opportunity (a long URL, one long word) and
-    //    the bubble goes full width again — only for some content, which is
-    //    why review never catches it.
-    expect(base).toContain('max-w-[85%]');
-    expect(base).toContain('min-w-0');
-    // ③ the role layer, verbatim: `--accent` face + `--input` edge (§3.3).
-    expect(role).toBe('rounded-br-xs border-input bg-accent');
-    // ④ the other half of ②, on the prose that has to break, plus D1-b's
-    //    line height (the bubble reads at the same rhythm as assistant prose).
+  /**
+   * `[D3-1]`, rewritten for T12. The claim is unchanged in kind — the bubble is
+   * right-aligned, capped and shaped — but WHERE it is stated moved: the two
+   * inline literals this used to read (`'flex justify-end'` and the `cn(…)`
+   * pair) are now `userBubbleRowClass()` / `userBubbleClass()`, whose contents
+   * `chatTimelineLayout.test.ts` asserts directly.
+   *
+   * So this half asserts the WIRING — that the bubble mounts those two
+   * functions and nothing hand-rolled — which is the part a node-environment
+   * suite can only see through the AST. Splitting it this way is strictly
+   * stronger than the old form: the class contents are now checked as return
+   * values rather than as JSX text, so a `cn(…)` argument reordering can no
+   * longer break the test without breaking anything real.
+   */
+  it('[D3-1] T12: the bubble mounts its row and box classes, not inline literals', () => {
+    // ① the row the bubble sits at the end of, and ② the box itself.
+    expect(classNameExpressionOf(jsxNodeAt('UserBubble', ['article']))).toBe(
+      '{userBubbleRowClass()}'
+    );
+    expect(classNameExpressionOf(jsxNodeAt('UserBubble', ['article', 'div']))).toBe(
+      '{userBubbleClass()}'
+    );
+    // ③ the prose that has to break — the other half of the cap: a flex item's
+    //    `min-width` resolves to `auto` and outranks `max-width`, so without a
+    //    break opportunity one long URL takes the bubble full width again.
+    //    Plus D1-b's line height (the bubble reads at assistant-prose rhythm).
     const body = classNameExpressionOf(
       descendantJsx(jsxNodeAt('UserBubble', ['article', 'div']), 'p')
     );
     expect(body).toContain('break-words');
     expect(body).toContain('leading-relaxed');
-    // …and the turn's meta row is a different element, with its own alignment.
-    expectCalled('turnMetaRowClass()');
+    // …and the hover strip that replaced the meta row is a different element.
+    expectCalled('turnActionsSlotClass()');
   });
 
   // The subtree form is required: `expectUnwired('bg-card')` would demand the
@@ -826,23 +869,24 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(chip).not.toContain('border-border');
   });
 
-  // F10's unconditional six-line clamp budgets VISIBLE PROSE lines. Moving the
-  // attachment strip inside it would silently spend that budget on chips, and
-  // no class assertion anywhere else in this repo would notice — the classes
-  // would all still be present, just on a different parent.
-  it('[D3-8] the six-line clamp wraps the prose only, never the attachment chips', () => {
+  /**
+   * `[D3-8]`, restated for T12. It used to protect the six-line clamp's line
+   * budget from being spent on attachment chips. There is no clamp any more,
+   * but the separation it enforced is still load-bearing for a second reason:
+   * `userBubbleTextClass()` carries `select-text`, and the chips are metadata,
+   * not prose. Folding the strip inside the prose container would silently make
+   * a "copy the prompt" drag select filenames as if the operator had typed
+   * them. FB3's third child — the `Show more` toggle — is gone with the clamp.
+   */
+  it('[D3-8] the prose container holds paragraphs only, never the attachment chips', () => {
     const children = jsxChildrenOf(jsxNodeAt('UserBubble', ['article', 'div']));
-    // FB3 appends the expand toggle as a THIRD child. The load-bearing claim is
-    // unchanged — chips first, clamped prose second — and the toggle sitting
-    // outside the clamp is part of it: inside, it would spend a prose line.
-    expect(
-      children.map(tagNameOf),
-      'attachment strip first, clamped prose second, toggle outside the clamp'
-    ).toEqual(['div', 'div', 'button']);
+    expect(children.map(tagNameOf), 'attachment strip first, prose second').toEqual(['div', 'div']);
     expect(classNameExpressionOf(children[0])).toContain('flex flex-wrap');
-    expect(classNameExpressionOf(children[1])).toBe('{userBubbleTextClass(expanded)}');
-    const clamped = jsxChildrenOf(children[1]);
-    expect(clamped.map(tagNameOf), 'the clamp holds paragraphs and nothing else').toEqual(['p']);
+    expect(classNameExpressionOf(children[1])).toBe('{userBubbleTextClass()}');
+    const prose = jsxChildrenOf(children[1]);
+    expect(prose.map(tagNameOf), 'the prose container holds paragraphs and nothing else').toEqual([
+      'p',
+    ]);
     expect(nodeSource(children[1])).toContain('textBlocks.map(');
     expect(nodeSource(children[1])).not.toContain('attachment');
   });
@@ -851,30 +895,34 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // panel, answer) and the three call sites read almost identically, so "the
   // container is called once" is not evidence of WHERE. The guard expression is.
   /**
-   * `[D3-7]`, redefined for the segment model. The old form asserted the guard
-   * expression `answer.length > 0` plus "the container name appears once in the
-   * file". Neither survives FB4: there is no single answer segment any more, and
-   * a count of one is not evidence of WHERE — moving the mount from the answer
-   * branch to the process branch keeps the count at one and puts a box around
-   * the collapsible shell.
+   * `[FB4-7]`, inverted by T12. It used to pin WHERE the answer container was
+   * mounted (the `answer` branch and nowhere else). The container is gone, so
+   * the claim becomes a prohibition: no segment branch draws a box.
    *
-   * So the claim is structural instead: the container is mounted inside
-   * `renderSegment`'s `answer` branch and nowhere else.
+   * Stated over the whole `renderSegment` body rather than over one branch,
+   * because the failure this now guards is a re-introduction anywhere — the
+   * process branch is just as tempting a home for "let's put a border around
+   * the tool runs" and would land the same "everything is a card" result the
+   * asymmetry was chosen to avoid.
    */
-  it('[FB4-7] the assistant container is mounted on answer segments and nothing else', () => {
+  it('[FB4-7] no segment branch wraps its content in a container', () => {
     const turn = nodeSource(topLevelFunction('ChatTurn'));
-    expect(countIn(turn, 'turnAnswerContainerClass()')).toBe(1);
-    const answerBranch = turn.slice(
-      turn.indexOf("if (segment.kind === 'answer')"),
-      turn.indexOf("if (segment.kind === 'notice')")
+    expect(turn, 'the retired answer ring must not come back').not.toContain(
+      'turnAnswerContainerClass'
     );
-    expect(answerBranch, 'the container is inside the answer branch').toContain(
-      'cn(turnBodyClass(), turnAnswerContainerClass())'
+    const renderSegment = turn.slice(
+      turn.indexOf('const renderSegment ='),
+      turn.indexOf('return (\n    <section')
     );
-    // …and the two branches that are NOT prose stay bare: a notice brings its
-    // own Alert border, and the process shell has its own container.
-    const rest = turn.slice(turn.indexOf("if (segment.kind === 'notice')"));
-    expect(rest).not.toContain('turnAnswerContainerClass()');
+    expect(
+      renderSegment.length,
+      'the slice must be non-trivial or this proves nothing'
+    ).toBeGreaterThan(200);
+    for (const box of ['border-border', 'rounded-sm', 'bg-muted', 'bg-card', 'shadow-']) {
+      expect(renderSegment, `a segment branch grew a container: ${box}`).not.toContain(box);
+    }
+    // The process branch keeps its own shell — spacing only, no face, no edge.
+    expect(renderSegment).toContain('cn(turnProcessShellClass(), turnBodyClass())');
   });
 
   /**
@@ -892,40 +940,43 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    * TALKS about the turn comes last. "Worked for 12s" belongs under the output
    * it describes, not above it.
    */
-  it('[FB6-1] every content segment precedes the single bottom meta row', () => {
+  it('[FB6-1] every content segment precedes the trailing status and action rows', () => {
     const kinds = turnBodyChildKinds();
-    expect(kinds, 'the turn body renders content segments and a meta row').toEqual(
-      expect.arrayContaining(['meta'])
-    );
-    // Exactly one: the head row and the footer row merged (D55 ①), and two
-    // rows of turn metadata is the thing that merge removed.
-    expect(kinds.filter((kind) => kind === 'meta')).toHaveLength(1);
-    expect(kinds.indexOf('meta'), 'the meta row is last').toBe(kinds.length - 1);
-    // …and no head slot survives above the content.
-    expect(kinds).not.toContain('head');
+    // FB6's claim, unchanged by T12-b: everything the model produced comes
+    // first, and the rows that TALK about the turn come last. What changed is
+    // WHICH rows those are — the single meta row split back into a live-only
+    // status row and a hover action strip.
+    expect(kinds).toContain('status');
+    expect(kinds).toContain('actions');
+    expect(kinds.filter((kind) => kind === 'status')).toHaveLength(1);
+    expect(kinds.filter((kind) => kind === 'actions')).toHaveLength(1);
+    // The strip is last, and the status sits immediately above it.
+    expect(kinds.indexOf('actions'), 'the action strip is last').toBe(kinds.length - 1);
+    expect(kinds.indexOf('status')).toBe(kinds.length - 2);
+    // …and nothing chrome-like survives ABOVE the content (`retry` is a banner
+    // about the reply in progress, not a summary of it).
+    expect(kinds.slice(0, -2).every((kind) => kind === 'retry' || kind.startsWith('?'))).toBe(true);
   });
 
   /**
-   * The meta row holds controls (copy today), so it must never itself become a
-   * `<button>` — a button cannot contain a button. This was live once: the
-   * original FB6 sketch made the whole row the collapse trigger, which would
-   * have nested copy inside it. The collapse is gone, copy is not.
+   * `[FB6-5]`, carried over to the strip that replaced the meta row.
+   *
+   * The row holds a control, so it must never itself become a `<button>` — a
+   * button cannot contain a button. This was live once: the original FB6 sketch
+   * made the whole row the collapse trigger, which would have nested copy
+   * inside it. The collapse is gone; copy is not, and now it sits inside two
+   * nested divs whose only jobs are the reveal and the clipping.
    */
-  it('[FB6-5] the meta row is a container, not a control', () => {
-    const metaRow = jsxChildrenOf(turnBodyNode()).find((child) => {
-      const attributes = ts.isJsxElement(child)
-        ? child.openingElement.attributes
-        : child.attributes;
-      return attributes.properties.some(
-        (property) =>
-          ts.isJsxAttribute(property) &&
-          property.name.getText(sourceFile) === 'className' &&
-          nodeSource(property.initializer as ts.Node).includes('turnMetaRowClass()')
-      );
-    });
-    if (!metaRow) throw new Error('ChatTurn renders no `turnMetaRowClass()` row');
-    expect(tagNameOf(metaRow), 'the row itself must not be a button').toBe('div');
-    expect(jsxChildrenOf(metaRow).map(tagNameOf)).toEqual(['TurnHeadContent', 'TurnMetaTail']);
+  it('[FB6-5] the action strip is a container, not a control', () => {
+    const strip = jsxChildrenOf(turnBodyNode()).find((child) =>
+      classNameExpressionOrEmpty(child).includes('turnActionsSlotClass()')
+    );
+    if (!strip) throw new Error('ChatTurn renders no `turnActionsSlotClass()` strip');
+    expect(tagNameOf(strip), 'the slot itself must not be a button').toBe('div');
+    const inner = jsxChildrenOf(strip);
+    expect(inner.map(tagNameOf)).toEqual(['div']);
+    expect(classNameExpressionOrEmpty(inner[0])).toContain('turnActionsInnerClass()');
+    expect(tagNameOf(inner[0]), 'the inner row must not be a button either').toBe('div');
   });
 
   /**
@@ -1167,32 +1218,47 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
     expect(CHAT_CODE).toContain('text-left text-markdown leading-normal');
   });
 });
-describe('FB3: the user bubble expand toggle', () => {
-  // [FB3-2] The formal invariant from §3.3. F10 removed a scroll-position ->
-  // clamp -> height -> scroll-position cycle; FB3 reintroduces a clamp input,
-  // and the ONLY thing that keeps the cycle from re-forming is that the input
-  // is a click. Asserting the behaviour ("it is safe today") would not stop the
-  // next person from wiring `isPinned` back in, so this pins the ARGUMENT.
-  it('[FB3-2] userBubbleTextClass is driven by user intent, never by geometry', () => {
-    const calls = [...SYNTAX.matchAll(/userBubbleTextClass\(([^)]*)\)/g)].map((match) => match[1]);
-    expect(calls.length).toBeGreaterThan(0);
-    for (const argument of calls) {
-      expect(argument.trim()).not.toBe('');
-      expect(argument).not.toMatch(
-        /pinned|stuck|scroll|intersect|offsetTop|getBoundingClientRect/i
-      );
+/**
+ * `[FB3-*]`, retired and replaced by T12.
+ *
+ * FB3 added a user-owned `Show more` toggle to lift F10's unconditional
+ * six-line clamp on the prompt. T12 removed the clamp itself — it existed only
+ * to stop the sticky band's scroll-position -> height oscillation, and there is
+ * no sticky band any more — so there is nothing left for a toggle to lift, and
+ * `[FB3-2]` / `[FB3-3]` have no subject.
+ *
+ * The INVARIANT they carried is the part worth keeping, and it is the reason
+ * this block still exists rather than being deleted: whatever ends up sizing the
+ * prompt must never be a function of geometry. `[FB3-2]` pinned that by
+ * inspecting the argument to `userBubbleTextClass`; with the argument gone, the
+ * strongest available form is that the bubble subtree reads no geometry at all.
+ */
+describe('T12: the prompt bubble reads no geometry (the invariant FB3 carried)', () => {
+  it('T12: nothing in UserBubble measures the DOM or the scroll position', () => {
+    const bubble = nodeSource(topLevelFunction('UserBubble'));
+    expect(bubble.length, 'the slice must be non-trivial or this proves nothing').toBeGreaterThan(
+      200
+    );
+    for (const probe of [
+      'getBoundingClientRect',
+      'IntersectionObserver',
+      'ResizeObserver',
+      'scrollHeight',
+      'clientHeight',
+      'offsetTop',
+      'useRef',
+    ]) {
+      expect(bubble, `the prompt must not be sized by geometry: ${probe}`).not.toContain(probe);
     }
   });
 
-  it('[FB3-2] the toggle is a real control, not a decorative span', () => {
-    expectWired('aria-expanded={expanded}');
-    expectCalled('setExpanded');
-  });
-
-  // [FB3-3] T-31 §5.6 requires the bubble's `title` to stay the full prompt in
-  // every state -- and it was never pinned by anything until now. FB3 keeps the
-  // clamp in the default state, so the requirement's premise still holds.
-  it('[FB3-3] the bubble keeps its full-text title fallback', () => {
-    expectWired('title={fullText || undefined}');
+  // The class function is now a constant, so "driven by user intent" degrades
+  // to "driven by nothing" — which is strictly safer and is what this pins.
+  it('T12: userBubbleTextClass is called with no argument at all', () => {
+    const calls = [...SYNTAX.matchAll(/userBubbleTextClass\(([^)]*)\)/g)].map((match) => match[1]);
+    expect(calls.length).toBeGreaterThan(0);
+    for (const argument of calls) {
+      expect(argument.trim()).toBe('');
+    }
   });
 });
