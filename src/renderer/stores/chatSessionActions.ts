@@ -13,6 +13,7 @@ import {
 import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessionIndex';
 import { uniqueId } from '@/lib/uniqueId';
 import { type ChatSession, useChatSessionsStore } from './chatSessions';
+import { markSessionsLive } from './sessionRetirement';
 
 /**
  * Moved verbatim (function body unchanged) from
@@ -38,6 +39,7 @@ export function createChatSessionOnWorkspace(
     updatedAt: Date.now(),
   };
 
+  markSessionsLive([sessionId]);
   useChatSessionsStore.setState({
     sessions: [session, ...state.sessions],
     activeSessionId: sessionId,

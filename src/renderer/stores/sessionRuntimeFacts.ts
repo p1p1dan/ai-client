@@ -6,6 +6,7 @@ import {
   type SessionRuntimeFactsState,
 } from '@/components/workspace-shell/surfaces/contextSurfaceModel';
 import { subscribeRuntimeEvent } from './runtimeEventBus';
+import { isSessionRetired } from './sessionRetirement';
 
 /**
  * T-14: adjacent store for facts the red-line `chatSessions.ts` does not
@@ -46,6 +47,7 @@ export const useSessionRuntimeFactsStore = create<SessionRuntimeFactsStoreState>
     set({ listening: true });
 
     const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
+      if (isSessionRetired(event.sessionId)) return;
       // Return `state` itself (not a new object) when the reducer produced no
       // change so zustand's `Object.is` check short-circuits `setState` and
       // skips notifying subscribers.

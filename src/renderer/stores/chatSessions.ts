@@ -43,6 +43,7 @@ import { usePendingUserMessagesStore } from './pendingUserMessages';
 // Refcounted fan-out over preload's single `chat:runtimeEvent` IPC listener —
 // see its header for why every renderer subscriber shares one.
 import { subscribeRuntimeEvent } from './runtimeEventBus';
+import { isSessionRetired } from './sessionRetirement';
 
 export type WorkspaceKind = 'main' | 'worktree' | 'remote' | 'temp';
 
@@ -1032,12 +1033,11 @@ export function applyRuntimeEvent(
  * Each event sees the effects of earlier events in the batch; the returned
  * partial is equivalent to applying the events one set() at a time.
  */
-export function filterRuntimeEventsForLiveSessions(
+export function filterRetiredRuntimeEvents(
   events: readonly RuntimeEvent[],
-  sessionIds: readonly string[]
+  retired: (sessionId: string | null | undefined) => boolean = isSessionRetired
 ): RuntimeEvent[] {
-  const live = new Set(sessionIds);
-  return events.filter((event) => event.sessionId == null || live.has(event.sessionId));
+  return events.filter((event) => !retired(event.sessionId));
 }
 
 export function applyRuntimeEvents(
@@ -1306,10 +1306,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       if (queue.length === 0) {
         return;
       }
-      const batch = filterRuntimeEventsForLiveSessions(
-        queue,
-        get().sessions.map((session) => session.id)
-      );
+      const batch = filterRetiredRuntimeEvents(queue);
       queue = [];
       set((state) => ({ ...applyRuntimeEvents(state, batch) }));
 
@@ -1337,9 +1334,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       // Drop frames that arrive after repository/session removal. The queue is
       // filtered again at flush time to close the inverse race: a frame queued
       // while the row existed, followed by removal before the 16ms batch lands.
-      if (event.sessionId && !get().sessions.some((session) => session.id === event.sessionId)) {
-        return;
-      }
+      if (isSessionRetired(event.sessionId)) return;
       if (event.type === 'message.started' && event.sessionId && event.payload.role === 'user') {
         usePendingUserMessagesStore
           .getState()

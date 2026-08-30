@@ -9,6 +9,7 @@ import {
   removeExtensionUiDialog,
 } from '@/components/chat/extensionUiModel';
 import { subscribeRuntimeEvent } from './runtimeEventBus';
+import { isSessionRetired } from './sessionRetirement';
 
 /**
  * T11/T08 — pending Extension UI dialogs.
@@ -45,6 +46,7 @@ export const useExtensionUiStore = create<ExtensionUiStoreState>()((set, get) =>
     set({ listening: true });
 
     const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
+      if (isSessionRetired(event.sessionId)) return;
       set((state) => {
         const next = reduceExtensionUi(state, event);
         return next === state ? state : next;

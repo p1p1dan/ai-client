@@ -6,6 +6,7 @@ import {
   type SubagentActivityState,
 } from '@/components/chat/subagentActivityModel';
 import { subscribeRuntimeEvent } from './runtimeEventBus';
+import { isSessionRetired } from './sessionRetirement';
 
 /**
  * T-34: adjacent store for live subagent activity — the red-line
@@ -34,6 +35,7 @@ export const useSubagentActivityStore = create<SubagentActivityStoreState>()((se
     set({ listening: true });
 
     const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
+      if (isSessionRetired(event.sessionId)) return;
       set((state) => {
         const next = reduceSubagentActivity(state, event);
         return next === state ? state : next;

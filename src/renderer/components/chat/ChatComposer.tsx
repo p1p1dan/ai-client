@@ -794,6 +794,10 @@ export function ChatComposer({
       return;
     }
     setQueueNotice(null);
+    // T26: enqueue is itself an explicit user Send and should return the
+    // reader to the live edge now. Its later automatic release is deliberately
+    // excluded from scrolling by ChatWorkspace's origin check.
+    onSendStart?.('direct');
     // Commit-point consumption for the enqueue path, mirroring runSend's
     // (decision 2.2): the draft is now owned by the queue entry.
     updateValue('');

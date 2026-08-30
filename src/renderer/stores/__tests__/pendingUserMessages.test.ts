@@ -49,6 +49,11 @@ describe('pending user message reconciliation', () => {
     expect(afterFirstEcho?.[1]?.attemptId).toBe('attempt-2');
     expect(afterFirstEcho?.[1]?.authoritativeMessageId).toBeUndefined();
 
+    usePendingUserMessagesStore.getState().acknowledgeNext('s1', 'echo-1');
+    expect(
+      usePendingUserMessagesStore.getState().bySession.s1?.[1]?.authoritativeMessageId
+    ).toBeUndefined();
+
     usePendingUserMessagesStore.getState().acknowledgeNext('s1', 'echo-2');
     expect(usePendingUserMessagesStore.getState().bySession.s1).toEqual([
       expect.objectContaining({ attemptId: 'attempt-1', authoritativeMessageId: 'echo-1' }),

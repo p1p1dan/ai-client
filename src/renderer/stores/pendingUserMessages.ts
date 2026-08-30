@@ -46,6 +46,9 @@ export const usePendingUserMessagesStore = create<PendingUserMessagesStore>()((s
     set((state) => {
       const messages = state.bySession[sessionId];
       if (!messages || messages.length === 0) return state;
+      // Runtime events may be redelivered. One authoritative id owns exactly
+      // one pending attempt; replaying it must never advance the FIFO again.
+      if (messages.some((message) => message.authoritativeMessageId === messageId)) return state;
       const index = messages.findIndex((message) => message.authoritativeMessageId == null);
       if (index < 0) return state;
       const next = [...messages];

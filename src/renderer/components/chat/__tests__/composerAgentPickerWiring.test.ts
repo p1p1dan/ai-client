@@ -157,7 +157,8 @@ describe('A3 (composer path) — the create payload states the pre-IPC binding',
 });
 
 describe('A6 / A12 — what has to happen before the send commits', () => {
-  it('onSendStart is called exactly once, and after every guard', () => {
+  it('runSend publishes its start after every guard, while explicit enqueue has its own notification', () => {
+    expect(offsets(composer, 'onSendStart?.(')).toHaveLength(2);
     const commit = only(composer, 'onSendStart?.(origin)');
     const canSendGuard = only(composer, 'if (!canSend || !activeSessionId || !cwd) {');
     const inFlightGuard = only(composer, "if (inFlightRef.current) return 'skipped';");
@@ -165,7 +166,7 @@ describe('A6 / A12 — what has to happen before the send commits', () => {
     expect(commit).toBeGreaterThan(inFlightGuard);
   });
 
-  it('the commit is still ahead of the first IPC of the turn', () => {
+  it('the runSend commit is still ahead of the first IPC of the turn', () => {
     // The latch is what docks the middle column and locks the binding the same
     // frame; behind the create it would leave a window in which the user can
     // repoint a session whose create is already in flight.

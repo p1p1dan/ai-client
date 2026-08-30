@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ExtensionUiState } from '@/components/chat/extensionUiModel';
 import type { SubagentActivityState } from '@/components/chat/subagentActivityModel';
@@ -8,6 +10,14 @@ import {
 } from '../sessionLifecycle';
 
 describe('session lifecycle pruning', () => {
+  it('gates every adjacent runtime listener against the retirement tombstone', () => {
+    for (const file of ['sessionRuntimeFacts.ts', 'subagentActivity.ts', 'extensionUi.ts']) {
+      const source = readFileSync(path.join(__dirname, '..', file), 'utf8');
+      expect(source).toContain('isSessionRetired(event.sessionId)');
+      expect(source).toContain('return;');
+    }
+  });
+
   it('prunes ordinary session-keyed records', () => {
     expect(pruneRecordBySession({ keep: 1, drop: 2 }, ['keep'])).toEqual({ keep: 1 });
   });

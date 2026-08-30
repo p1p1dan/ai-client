@@ -22,7 +22,7 @@ const sessionsStore = stripComments(
 
 describe('T24/T26 send experience wiring', () => {
   it('publishes an attempt-identified pending user message before the first Host await', () => {
-    const sendStart = composer.indexOf('onSendStart?.(origin)');
+    const sendStart = composer.lastIndexOf('onSendStart?.(origin)');
     const publish = composer.indexOf('usePendingUserMessagesStore.getState().publish({');
     const ensureHost = composer.indexOf('await window.electronAPI.chat.ensureHost()', publish);
 
@@ -42,7 +42,8 @@ describe('T24/T26 send experience wiring', () => {
     expect(timeline).toContain('isPendingUserMessage(message)');
   });
 
-  it('turns an explicit Send into a timeline jump request without changing passive follow logic', () => {
+  it('turns direct, retry and explicit enqueue into a jump without scrolling on passive release', () => {
+    expect(composer).toContain("onSendStart?.('direct')");
     expect(workspace).toContain("if (origin !== 'release')");
     expect(workspace).toContain('setSendJumpRequest((request) => request + 1)');
     expect(workspace).toContain('jumpToBottomRequest={sendJumpRequest}');

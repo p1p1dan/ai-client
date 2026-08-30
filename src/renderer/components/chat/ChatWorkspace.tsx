@@ -5,6 +5,7 @@ import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
+import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { ChatComposer } from './ChatComposer';
@@ -171,6 +172,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   // same rationale and same trigger as the `sendAttempts` prune above.
   useEffect(() => {
     const sessionIds = sessions.map((session) => session.id);
+    markSessionsLive(sessionIds);
     useMessageQueueStore.getState().pruneSessions(sessionIds);
     usePendingUserMessagesStore.getState().pruneSessions(sessionIds);
     pruneSessionScopedRendererState(sessionIds);

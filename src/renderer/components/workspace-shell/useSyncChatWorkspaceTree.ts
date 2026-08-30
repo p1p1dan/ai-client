@@ -21,6 +21,7 @@ import {
   type ChatWorkspace,
   useChatSessionsStore,
 } from '@/stores/chatSessions';
+import { markSessionsLive, markSessionsRetired } from '@/stores/sessionRetirement';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
 import {
   deriveChatWorkspaceTree,
@@ -470,6 +471,12 @@ export function useSyncChatWorkspaceTree({
       preferredWorkspaceId,
     });
     const liveSessionIds = new Set(sessionPatch.sessions.map((session) => session.id));
+    markSessionsRetired(
+      prev.sessions
+        .filter((session) => !liveSessionIds.has(session.id))
+        .map((session) => session.id)
+    );
+    markSessionsLive([...liveSessionIds]);
 
     // A repository removal can retire a bound session without going through
     // the row-level Close/Archive actions. Reap those runtimes best-effort so
