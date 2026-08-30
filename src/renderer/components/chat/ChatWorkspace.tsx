@@ -4,6 +4,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
+import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { ChatComposer } from './ChatComposer';
@@ -18,6 +19,7 @@ import {
   rememberSendAttempt,
 } from './middleColumnLayout';
 import { PendingQuestionDock } from './PendingQuestionDock';
+import type { RunSendOrigin } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { isChatAgentBindingLocked } from './sessionBinding';
 import { isThinkingCapable } from './thinkingCard';
@@ -63,17 +65,19 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   // is pressed, without waiting for the store's first echoed message.
   const [sendAttempts, setSendAttempts] = useState<readonly string[]>([]);
   const [sendJumpRequest, setSendJumpRequest] = useState(0);
-  const markSendAttempt = useCallback(() => {
+  const markSendAttempt = useCallback((origin: RunSendOrigin) => {
     // Read the current id off the store instead of closing over the
     // render-time `activeSessionId` — this callback is handed to ChatComposer
     // and must stay correct even if the active session changed since the
     // render that created it.
     const currentSessionId = useChatSessionsStore.getState().activeSessionId;
     setSendAttempts((prev) => rememberSendAttempt(prev, currentSessionId));
-    // T26: a deliberate Send is user intent to return to the live edge. This
-    // signal is separate from passive output-following, which still respects
-    // a reader who merely scrolled up and did not send anything.
-    setSendJumpRequest((request) => request + 1);
+    // T26: only a deliberate Send/Retry is user intent to return to the live
+    // edge. A queued entry may auto-release much later, after the reader has
+    // scrolled up again, so `release` must not force their position.
+    if (origin !== 'release') {
+      setSendJumpRequest((request) => request + 1);
+    }
   }, []);
 
   // One read of the latch for this render: the mode derivation, the binding
@@ -169,6 +173,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     const sessionIds = sessions.map((session) => session.id);
     useMessageQueueStore.getState().pruneSessions(sessionIds);
     usePendingUserMessagesStore.getState().pruneSessions(sessionIds);
+    pruneSessionScopedRendererState(sessionIds);
   }, [sessions]);
 
   // After tree sync, activeSessionId can point at a removed demo id — pick a live one.

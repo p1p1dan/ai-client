@@ -117,8 +117,8 @@ interface ChatComposerProps {
   disabled?: boolean;
   /** Opens the shared AddRepositoryDialog (owned by App) — see ComposerTargetBar. */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
-  /** T-28: fires once runSend's guards pass, before the send starts — feeds the sticky `sendAttempted` latch in ChatWorkspace. */
-  onSendStart?: () => void;
+  /** Fires once runSend's guards pass. Origin lets ChatWorkspace distinguish an explicit Send/Retry from an automatic queue release. */
+  onSendStart?: (origin: RunSendOrigin) => void;
   /**
    * D48 S1: whether this session's agent binding is already settled
    * (`isChatAgentBindingLocked`). Computed in `ChatWorkspace` because the
@@ -1192,7 +1192,7 @@ export function ChatComposer({
     // instead of waiting for the first echoed message (handleRetry reuses
     // runSend, so a retry re-docks too, which is correct: the column must
     // not bounce back to centered on a failed first send).
-    onSendStart?.();
+    onSendStart?.(origin);
 
     // T-19 commit point (design decision 2.2): every guard above has passed —
     // this is the point of no return, still synchronous and still before the
@@ -1319,7 +1319,6 @@ export function ChatComposer({
         mediaType: draft.mediaType,
         ...(draft.name ? { name: draft.name } : {}),
       })),
-      baselineMessageId,
       startedAt: Date.now(),
     });
     sendOwnerRef.current = sendOwner;

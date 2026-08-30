@@ -28,7 +28,6 @@ import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import {
-  hasAuthoritativeUserEcho,
   isPendingUserMessage,
   type PendingUserMessage,
   pendingUserToChatMessage,
@@ -199,7 +198,6 @@ export function MessageTimeline({
       ? (state.bySession[sessionId] ?? EMPTY_PENDING_USER_MESSAGES)
       : EMPTY_PENDING_USER_MESSAGES
   );
-  const clearPendingUserMessage = usePendingUserMessagesStore((state) => state.clear);
   const respondPermission = useChatSessionsStore((state) => state.respondPermission);
   const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
   const canRespondPermission = useMemo(
@@ -266,20 +264,16 @@ export function MessageTimeline({
 
   const sessionMessages = useMemo(() => {
     const authoritative = bucket ?? [];
+    const authoritativeIds = new Set(authoritative.map((message) => message.id));
     const visiblePending = pendingUserMessages
-      .filter((pending) => !hasAuthoritativeUserEcho(authoritative, pending))
+      .filter(
+        (pending) =>
+          pending.authoritativeMessageId == null ||
+          !authoritativeIds.has(pending.authoritativeMessageId)
+      )
       .map(pendingUserToChatMessage);
     return visiblePending.length > 0 ? [...authoritative, ...visiblePending] : authoritative;
   }, [bucket, pendingUserMessages]);
-
-  useEffect(() => {
-    const authoritative = bucket ?? [];
-    for (const pending of pendingUserMessages) {
-      if (hasAuthoritativeUserEcho(authoritative, pending)) {
-        clearPendingUserMessage(pending.attemptId);
-      }
-    }
-  }, [bucket, clearPendingUserMessage, pendingUserMessages]);
 
   const historyNotice = useMemo(
     () =>

@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ChatMessage } from '../chatSessions';
 import {
-  hasAuthoritativeUserEcho,
   isPendingUserMessage,
   type PendingUserMessage,
   pendingUserToChatMessage,
@@ -14,14 +12,9 @@ function pending(overrides: Partial<PendingUserMessage> = {}): PendingUserMessag
     sessionId: 's1',
     text: 'hi',
     attachments: [],
-    baselineMessageId: null,
     startedAt: 100,
     ...overrides,
   };
-}
-
-function message(id: string, role: ChatMessage['role']): ChatMessage {
-  return { id, sessionId: 's1', role, blocks: [] };
 }
 
 beforeEach(() => {
@@ -43,34 +36,24 @@ describe('pending user message reconciliation', () => {
     ).toEqual(['attempt-2']);
   });
 
-  it('recognises only an authoritative user message after the commit baseline', () => {
-    const item = pending({ baselineMessageId: 'old-assistant' });
+  it('pairs identical consecutive prompts one-to-one with FIFO authoritative echo ids', () => {
+    const store = usePendingUserMessagesStore.getState();
+    store.publish(pending());
+    store.publish(pending({ attemptId: 'attempt-2', text: 'hi' }));
 
-    expect(
-      hasAuthoritativeUserEcho(
-        [message('old-user', 'user'), message('old-assistant', 'assistant')],
-        item
-      )
-    ).toBe(false);
-    expect(
-      hasAuthoritativeUserEcho(
-        [
-          message('old-user', 'user'),
-          message('old-assistant', 'assistant'),
-          message('new-user', 'user'),
-        ],
-        item
-      )
-    ).toBe(true);
-  });
+    usePendingUserMessagesStore.getState().acknowledgeNext('s1', 'echo-1');
+    const afterFirstEcho = usePendingUserMessagesStore.getState().bySession.s1;
+    expect(afterFirstEcho?.[0]).toEqual(
+      expect.objectContaining({ attemptId: 'attempt-1', authoritativeMessageId: 'echo-1' })
+    );
+    expect(afterFirstEcho?.[1]?.attemptId).toBe('attempt-2');
+    expect(afterFirstEcho?.[1]?.authoritativeMessageId).toBeUndefined();
 
-  it('does not guess when a non-null baseline disappeared during a history replacement', () => {
-    expect(
-      hasAuthoritativeUserEcho(
-        [message('new-user', 'user')],
-        pending({ baselineMessageId: 'missing' })
-      )
-    ).toBe(false);
+    usePendingUserMessagesStore.getState().acknowledgeNext('s1', 'echo-2');
+    expect(usePendingUserMessagesStore.getState().bySession.s1).toEqual([
+      expect.objectContaining({ attemptId: 'attempt-1', authoritativeMessageId: 'echo-1' }),
+      expect.objectContaining({ attemptId: 'attempt-2', authoritativeMessageId: 'echo-2' }),
+    ]);
   });
 
   it('converts to a display-only user message with attachment metadata', () => {

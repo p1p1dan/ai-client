@@ -127,8 +127,11 @@ function rebindSessionsToTree(
       continue;
     }
 
-    // Orphan: only rebind if Host never saw this session (cwd would otherwise stick).
-    if (bound.has(session.id)) {
+    // Orphan: only rebind a true unsent draft. A restored session may not be
+    // currently Host-bound yet still carry a persisted runtime identity; moving
+    // that identity to another repository would resume one checkout's history
+    // against another checkout's cwd.
+    if (bound.has(session.id) || session.runtimeIdentity != null) {
       continue;
     }
 

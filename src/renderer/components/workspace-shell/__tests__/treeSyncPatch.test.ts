@@ -193,6 +193,24 @@ describe('resolveTreeSyncPatch — empty workspace tree (T27-a)', () => {
     expect(new Set(readded.sessions.map((item) => item.id)).size).toBe(1);
   });
 
+  it('drops a restored runtime session when its repository disappears instead of rebinding it', () => {
+    const restored = session('restored', {
+      workspaceId: 'removed-workspace',
+      projectId: 'removed-project',
+      runtimeIdentity: 'pi-session-1',
+    });
+
+    const result = patch(
+      prevState({
+        sessions: [restored],
+        activeSessionId: restored.id,
+      })
+    );
+
+    expect(result.sessions).toEqual([]);
+    expect(result.activeSessionId).toBeNull();
+  });
+
   it('keeps only buckets belonging to sessions that survived a non-empty rebind', () => {
     const result = patch(
       prevState({

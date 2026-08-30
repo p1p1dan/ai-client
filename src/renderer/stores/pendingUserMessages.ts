@@ -14,14 +14,16 @@ export interface PendingUserMessage {
   sessionId: string;
   text: string;
   attachments: ChatMessageAttachment[];
-  /** Last authoritative message id present when this attempt committed. */
-  baselineMessageId: string | null;
   startedAt: number;
+  /** Set from the matching wire `message.started`; cleared after that id reaches chatSessions. */
+  authoritativeMessageId?: string;
 }
 
 interface PendingUserMessagesStore {
   bySession: Record<string, PendingUserMessage[]>;
   publish: (message: PendingUserMessage) => void;
+  /** Pair exactly one attempt with one authoritative user echo (FIFO). */
+  acknowledgeNext: (sessionId: string, messageId: string) => void;
   clear: (attemptId: string) => void;
   pruneSessions: (sessionIds: readonly string[]) => void;
 }
@@ -40,6 +42,16 @@ export const usePendingUserMessagesStore = create<PendingUserMessagesStore>()((s
         ],
       },
     })),
+  acknowledgeNext: (sessionId, messageId) =>
+    set((state) => {
+      const messages = state.bySession[sessionId];
+      if (!messages || messages.length === 0) return state;
+      const index = messages.findIndex((message) => message.authoritativeMessageId == null);
+      if (index < 0) return state;
+      const next = [...messages];
+      next[index] = { ...next[index], authoritativeMessageId: messageId };
+      return { bySession: { ...state.bySession, [sessionId]: next } };
+    }),
   clear: (attemptId) =>
     set((state) => {
       let changed = false;
@@ -62,22 +74,6 @@ export const usePendingUserMessagesStore = create<PendingUserMessagesStore>()((s
         : { bySession };
     }),
 }));
-
-/**
- * Whether the Host echo belonging after this attempt's commit baseline has
- * reached the authoritative chat bucket.
- */
-export function hasAuthoritativeUserEcho(
-  messages: readonly ChatMessage[],
-  pending: PendingUserMessage
-): boolean {
-  const baselineIndex =
-    pending.baselineMessageId == null
-      ? -1
-      : messages.findIndex((message) => message.id === pending.baselineMessageId);
-  if (pending.baselineMessageId != null && baselineIndex < 0) return false;
-  return messages.slice(baselineIndex + 1).some((message) => message.role === 'user');
-}
 
 /** Render-only ChatMessage shape consumed by the existing turn pipeline. */
 export function pendingUserToChatMessage(pending: PendingUserMessage): ChatMessage {

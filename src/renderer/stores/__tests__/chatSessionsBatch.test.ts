@@ -64,7 +64,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 
 describe('applyRuntimeEvents — fold semantics', () => {
   it('sees earlier same-batch effects: message.started then two deltas concatenate on the just-created message', () => {
-    const state = baseState();
+    const state = baseState({ sessions: [makeSession()] });
     const events: RuntimeEvent[] = [
       {
         type: 'message.started',
@@ -190,6 +190,35 @@ describe('applyRuntimeEvents — fold semantics', () => {
     expect(Object.keys(patch)).toEqual(
       expect.arrayContaining(['messages', 'sessions', 'pendingPermissions'])
     );
+  });
+
+  it('ignores late events after repository removal deleted the session', () => {
+    const removed = baseState({ sessions: [], hostBoundSessionIds: [], messages: {} });
+    const events: RuntimeEvent[] = [
+      {
+        type: 'session.created',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { runtimeIdentity: 'late-runtime' },
+      },
+      {
+        type: 'message.started',
+        seq: 2,
+        sessionId: SESSION_ID,
+        timestamp: 2,
+        payload: { messageId: 'late-message', role: 'user' },
+      },
+      {
+        type: 'permission.requested',
+        seq: 3,
+        sessionId: SESSION_ID,
+        timestamp: 3,
+        payload: { permissionId: 'late-permission', toolName: 'read' },
+      },
+    ];
+
+    expect(applyRuntimeEvents(removed, events)).toEqual({});
   });
 
   it('returns {} for an empty batch', () => {

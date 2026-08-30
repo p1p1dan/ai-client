@@ -39,6 +39,7 @@ import {
   snapshotResumeCandidates,
   takeResumeSnapshot,
 } from './historyReplayMerge';
+import { usePendingUserMessagesStore } from './pendingUserMessages';
 // Refcounted fan-out over preload's single `chat:runtimeEvent` IPC listener —
 // see its header for why every renderer subscriber shares one.
 import { subscribeRuntimeEvent } from './runtimeEventBus';
@@ -517,6 +518,14 @@ export function applyRuntimeEvent(
 ): Partial<ChatSessionsState> {
   const sessionId = event.sessionId;
   if (!sessionId) {
+    return {};
+  }
+
+  // Repository/session removal is authoritative. Runtime events are batched,
+  // so a frame already queued before closeSession can arrive after the row and
+  // all its buckets were cleared; ignoring unknown session ids prevents that
+  // late frame from resurrecting ghost bindings, messages or permission cards.
+  if (!state.sessions.some((session) => session.id === sessionId)) {
     return {};
   }
 
@@ -1300,9 +1309,33 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       const batch = queue;
       queue = [];
       set((state) => ({ ...applyRuntimeEvents(state, batch) }));
+
+      // T24: wire admission and authoritative store insertion are two stages.
+      // Once the exact message id acknowledged above has reached its bucket,
+      // retire the display-only pending bubble — for every session, not only
+      // whichever timeline happens to be mounted.
+      const nextState = get();
+      const pendingStore = usePendingUserMessagesStore.getState();
+      for (const pendingMessages of Object.values(pendingStore.bySession)) {
+        for (const pending of pendingMessages) {
+          if (
+            pending.authoritativeMessageId != null &&
+            (nextState.messages[pending.sessionId] ?? []).some(
+              (message) => message.id === pending.authoritativeMessageId
+            )
+          ) {
+            pendingStore.clear(pending.attemptId);
+          }
+        }
+      }
     };
 
     const unsubscribe = subscribeRuntimeEvent((event) => {
+      if (event.type === 'message.started' && event.sessionId && event.payload.role === 'user') {
+        usePendingUserMessagesStore
+          .getState()
+          .acknowledgeNext(event.sessionId, event.payload.messageId);
+      }
       queue.push(event);
       if (queue.length >= RUNTIME_EVENT_MAX_QUEUE) {
         if (flushTimer !== null) {
