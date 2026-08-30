@@ -27,6 +27,13 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import {
+  hasAuthoritativeUserEcho,
+  isPendingUserMessage,
+  type PendingUserMessage,
+  pendingUserToChatMessage,
+  usePendingUserMessagesStore,
+} from '@/stores/pendingUserMessages';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import {
   type PendingReplyWatch,
@@ -161,6 +168,7 @@ function useSecondsTick(enabled: boolean): number {
  * ticks; the value is never read.
  */
 const STATIC_NOW_MS = 0;
+const EMPTY_PENDING_USER_MESSAGES: PendingUserMessage[] = [];
 
 interface MessageTimelineProps {
   sessionId: string | null;
@@ -169,6 +177,8 @@ interface MessageTimelineProps {
   thinkingEnabled: boolean;
   /** T-05: repo name tail for Grep/Glob rows ("… in ai-client"); wired by ChatWorkspace in batch 3. */
   repoName?: string | null;
+  /** T26: increments on an explicit user Send; passive output growth does not touch it. */
+  jumpToBottomRequest?: number;
 }
 
 export function MessageTimeline({
@@ -176,6 +186,7 @@ export function MessageTimeline({
   status,
   thinkingEnabled,
   repoName = null,
+  jumpToBottomRequest = 0,
 }: MessageTimelineProps) {
   const { t } = useI18n();
   // C-08b: subscribe to this session's bucket only — other sessions' streams
@@ -183,6 +194,12 @@ export function MessageTimeline({
   const bucket = useChatSessionsStore((state) =>
     sessionId ? state.messages[sessionId] : undefined
   );
+  const pendingUserMessages = usePendingUserMessagesStore((state) =>
+    sessionId
+      ? (state.bySession[sessionId] ?? EMPTY_PENDING_USER_MESSAGES)
+      : EMPTY_PENDING_USER_MESSAGES
+  );
+  const clearPendingUserMessage = usePendingUserMessagesStore((state) => state.clear);
   const respondPermission = useChatSessionsStore((state) => state.respondPermission);
   const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
   const canRespondPermission = useMemo(
@@ -247,7 +264,22 @@ export function MessageTimeline({
   const { get: getMeta } = useMessageMetadata(sessionId);
   const { getThinking } = useTurnTiming(sessionId);
 
-  const sessionMessages = useMemo(() => bucket ?? [], [bucket]);
+  const sessionMessages = useMemo(() => {
+    const authoritative = bucket ?? [];
+    const visiblePending = pendingUserMessages
+      .filter((pending) => !hasAuthoritativeUserEcho(authoritative, pending))
+      .map(pendingUserToChatMessage);
+    return visiblePending.length > 0 ? [...authoritative, ...visiblePending] : authoritative;
+  }, [bucket, pendingUserMessages]);
+
+  useEffect(() => {
+    const authoritative = bucket ?? [];
+    for (const pending of pendingUserMessages) {
+      if (hasAuthoritativeUserEcho(authoritative, pending)) {
+        clearPendingUserMessage(pending.attemptId);
+      }
+    }
+  }, [bucket, clearPendingUserMessage, pendingUserMessages]);
 
   const historyNotice = useMemo(
     () =>
@@ -381,6 +413,11 @@ export function MessageTimeline({
     showJumpToBottomRef.current = false;
     setShowJumpToBottom(false);
   }, []);
+
+  useEffect(() => {
+    if (jumpToBottomRequest <= 0) return;
+    jumpToBottom();
+  }, [jumpToBottom, jumpToBottomRequest]);
 
   // Track whether the user is anchored to the bottom. Read fresh on every
   // native scroll event so a manual scroll-up is never fought by auto-scroll,
@@ -792,10 +829,12 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
  * bubble is, in effect, not drawn" starts. The edge carries the rest.
  */
 function UserBubble({ message }: { message: ChatMessage }) {
+  const { t } = useI18n();
   // user messages only ever carry `text` blocks (chatSessions.ts attaches
   // tool_call/tool_result/thinking/permission_request/question exclusively
   // to role: 'assistant' messages, live and replayed alike).
   const textBlocks = message.blocks.filter((block) => block.type === 'text');
+  const pending = isPendingUserMessage(message);
 
   return (
     // What makes the two roles distinguishable is SHAPE on this side: the right
@@ -853,6 +892,12 @@ function UserBubble({ message }: { message: ChatMessage }) {
             </p>
           ))}
         </div>
+        {pending && (
+          <div className="mt-1 flex items-center justify-end gap-1 text-meta text-muted-foreground">
+            <Spinner className="size-3 shrink-0" />
+            <span>{t('Sending…')}</span>
+          </div>
+        )}
       </div>
     </article>
   );

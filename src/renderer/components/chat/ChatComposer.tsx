@@ -24,6 +24,7 @@ import { applyAutoSessionTitle } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
@@ -1222,6 +1223,7 @@ export function ChatComposer({
       useMessageQueueStore.getState().clearPause(sessionId);
     }
     const committed = { text: trimmed, drafts };
+    let pendingAttemptId: string | null = null;
     // R1 (round-2 iteration-2 review): the single place every non-success
     // return below now funnels through — `decideFailureAffordance` is the
     // ONLY place that decides whether this outcome arms the round Retry
@@ -1241,6 +1243,9 @@ export function ChatComposer({
     // handshake-failure class, not just `session_busy` exhaustion (see
     // `shouldPauseQueueOnRejection`'s header in queueRelease.ts).
     const finalizeOutcome = (outcome: RunEntryOutcome): RunEntryOutcome => {
+      if (outcome === 'rejected' && pendingAttemptId) {
+        usePendingUserMessagesStore.getState().clear(pendingAttemptId);
+      }
       const affordance = decideFailureAffordance(outcome, origin);
       if (affordance === 'resend') {
         setRetryable(committed);
@@ -1304,6 +1309,19 @@ export function ChatComposer({
       },
       baselineMessageId
     );
+    pendingAttemptId = `${sessionId}:${sendOwner}`;
+    usePendingUserMessagesStore.getState().publish({
+      attemptId: pendingAttemptId,
+      sessionId,
+      text: committed.text,
+      attachments: drafts.map((draft) => ({
+        kind: draft.kind,
+        mediaType: draft.mediaType,
+        ...(draft.name ? { name: draft.name } : {}),
+      })),
+      baselineMessageId,
+      startedAt: Date.now(),
+    });
     sendOwnerRef.current = sendOwner;
     phaseStartedAtRef.current = Date.now();
     const ticker = window.setInterval(() => {

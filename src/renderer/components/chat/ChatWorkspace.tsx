@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useMessageQueueStore } from '@/stores/messageQueue';
+import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { ChatComposer } from './ChatComposer';
@@ -61,6 +62,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   // deriveMiddleColumnMode needs this to dock the composer the instant Enter
   // is pressed, without waiting for the store's first echoed message.
   const [sendAttempts, setSendAttempts] = useState<readonly string[]>([]);
+  const [sendJumpRequest, setSendJumpRequest] = useState(0);
   const markSendAttempt = useCallback(() => {
     // Read the current id off the store instead of closing over the
     // render-time `activeSessionId` — this callback is handed to ChatComposer
@@ -68,6 +70,10 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     // render that created it.
     const currentSessionId = useChatSessionsStore.getState().activeSessionId;
     setSendAttempts((prev) => rememberSendAttempt(prev, currentSessionId));
+    // T26: a deliberate Send is user intent to return to the live edge. This
+    // signal is separate from passive output-following, which still respects
+    // a reader who merely scrolled up and did not send anything.
+    setSendJumpRequest((request) => request + 1);
   }, []);
 
   // One read of the latch for this render: the mode derivation, the binding
@@ -160,7 +166,9 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   // longer exist (deleted / retired by tree sync / fork not followed) —
   // same rationale and same trigger as the `sendAttempts` prune above.
   useEffect(() => {
-    useMessageQueueStore.getState().pruneSessions(sessions.map((session) => session.id));
+    const sessionIds = sessions.map((session) => session.id);
+    useMessageQueueStore.getState().pruneSessions(sessionIds);
+    usePendingUserMessagesStore.getState().pruneSessions(sessionIds);
   }, [sessions]);
 
   // After tree sync, activeSessionId can point at a removed demo id — pick a live one.
@@ -184,6 +192,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           status={activeSession?.status ?? 'idle'}
           thinkingEnabled={thinkingEnabled}
           repoName={repoName}
+          jumpToBottomRequest={sendJumpRequest}
         />
       )}
       {renderedMode === 'session' && <PendingQuestionDock sessionId={activeSessionId} />}

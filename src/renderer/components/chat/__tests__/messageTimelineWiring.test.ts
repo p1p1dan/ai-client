@@ -900,9 +900,14 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
    */
   it('[D3-8] the prose container holds paragraphs only, never the attachment chips', () => {
     const children = jsxChildrenOf(jsxNodeAt('UserBubble', ['article', 'div']));
-    expect(children.map(tagNameOf), 'attachment strip first, prose second').toEqual(['div', 'div']);
+    expect(children.map(tagNameOf), 'attachment strip, prose, then pending status').toEqual([
+      'div',
+      'div',
+      'div',
+    ]);
     expect(classNameExpressionOf(children[0])).toContain('flex flex-wrap');
     expect(classNameExpressionOf(children[1])).toBe('{userBubbleTextClass()}');
+    expect(classNameExpressionOf(children[2])).toContain('text-muted-foreground');
     const prose = jsxChildrenOf(children[1]);
     expect(prose.map(tagNameOf), 'the prose container holds paragraphs and nothing else').toEqual([
       'p',
