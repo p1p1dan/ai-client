@@ -218,6 +218,22 @@ interface TurnState {
   textSnapshot: string;
   thinkingSnapshot: string;
   thinkingStarted: boolean;
+  /**
+   * T12-c: `thinking.completed` has been emitted for the open thinking block.
+   *
+   * pi has no "thinking ended" event — thinking is just content blocks that
+   * stop growing — so the Host has to decide the boundary and say so. Without
+   * it `reduceTurnTiming` only ever sees `thinking.started`, `durationMs`
+   * stays null, and every thought on the pi backend renders as a bare
+   * `Thought` with no duration.
+   */
+  thinkingCompleted: boolean;
+  /**
+   * pi ended the assistant message this container was opened for, so the next
+   * PROSE (or thinking) belongs to a new one. Tools deliberately keep using the
+   * open container — see `openProseMessage`.
+   */
+  proseClosed: boolean;
 }
 
 function newTurnState(): TurnState {
@@ -228,6 +244,8 @@ function newTurnState(): TurnState {
     textSnapshot: '',
     thinkingSnapshot: '',
     thinkingStarted: false,
+    thinkingCompleted: false,
+    proseClosed: false,
   };
 }
 
@@ -249,6 +267,17 @@ interface PiSessionState {
   unsubscribe: (() => void) | null;
   abortController: AbortController | null;
   turn: TurnState;
+  /**
+   * Monotonic suffix for assistant message ids, session-scoped rather than
+   * turn-scoped so ids stay unique across `agent_start` boundaries too.
+   *
+   * `Date.now()` alone is not enough: pi closes one assistant message and opens
+   * the next within the same millisecond routinely (prose ends, a tool starts),
+   * and two messages sharing an id silently collapse back into one — which is
+   * the exact defect `closeAssistantMessage` exists to fix, reintroduced one
+   * layer down and invisible to any test that does not run a real clock.
+   */
+  assistantSeq: number;
 }
 
 export class PiAgentRuntime {
@@ -377,6 +406,7 @@ export class PiAgentRuntime {
       unsubscribe: null,
       abortController: null,
       turn: newTurnState(),
+      assistantSeq: 0,
     };
     this.states.set(sessionId, state);
     return state;
@@ -597,15 +627,108 @@ export class PiAgentRuntime {
     session.effort = effort;
   }
 
+  /**
+   * pi ended an assistant message: the NEXT prose belongs to a new container,
+   * the tools that follow do not.
+   *
+   * Why a flag and not an immediate reset. One `agent_start` brackets many pi
+   * turns (the SDK's `turn_end` carries a `turnIndex`), so a tool-using answer
+   * is `prose -> tool -> prose` across SEPARATE assistant messages. Two
+   * different things go wrong at that boundary, and they pull in opposite
+   * directions:
+   *
+   *  - Reusing one container for the whole run made `appendTextBlock`
+   *    concatenate every prose chunk into the FIRST text block: the second
+   *    paragraph was glued onto the first with no separator and rendered ahead
+   *    of the tool row that had actually preceded it.
+   *  - Resetting the container outright fixes that but splits a sequential
+   *    tool run — `grep`, then `grep`, then `read`, each its own pi turn —
+   *    into one tool group per tool, because `groupTimeline` groups within a
+   *    message and each tool would land in a different one.
+   *
+   * Closing only the PROSE stream satisfies both: `openProseMessage` rolls the
+   * container when text or thinking arrives, while `ensureAssistant` (the tool
+   * path) keeps using the open one. So `prose -> t1 -> t2 -> prose` becomes
+   * `[prose, t1, t2]` + `[prose]` — right order, tools still one group.
+   *
+   * The renderer's ordering contract (T-05 D-5, "block order, position
+   * unchanged") was intact the whole time; it was never being handed the order.
+   */
+  private closeProseStream(state: PiSessionState, requestId?: string): void {
+    const turn = state.turn;
+    // Before the flags reset: a message that thought and then ended without
+    // ever writing prose (it went straight to a tool call) still has to close
+    // its thought, or that block's duration never resolves.
+    this.completeThinking(state, requestId);
+    turn.proseClosed = true;
+    turn.textSnapshot = '';
+    turn.thinkingSnapshot = '';
+  }
+
+  /**
+   * T12-c: say when a thought ended.
+   *
+   * pi has no "thinking ended" event — thinking is content blocks that simply
+   * stop growing — so the Host has to pick the boundary. Two things end a
+   * thought, and both are here:
+   *
+   *  - the model starts ANSWERING (`emitTextDelta`), which is the true end of
+   *    thinking and the tighter of the two measurements; or
+   *  - the message ends first (`closeProseStream`), which covers a turn that
+   *    thought and then went straight to a tool call.
+   *
+   * Idempotent via `thinkingCompleted`, because both paths can fire for the
+   * same block and a second `thinking.completed` would overwrite `durationMs`
+   * with the LATER timestamp — quietly inflating every thought that was
+   * followed by prose.
+   */
+  private completeThinking(state: PiSessionState, requestId?: string): void {
+    const turn = state.turn;
+    if (!turn.thinkingStarted || turn.thinkingCompleted) return;
+    const messageId = turn.assistantMessageId;
+    const blockId = turn.thinkingBlockId;
+    if (!messageId || !blockId) return;
+    turn.thinkingCompleted = true;
+    this.emit({
+      type: 'thinking.completed',
+      sessionId: state.sessionId,
+      requestId,
+      payload: { messageId, blockId },
+    });
+  }
+
+  /**
+   * Open the container the next prose/thinking delta belongs to, rolling to a
+   * fresh one if pi has ended the message the current container was opened for.
+   *
+   * Only the prose path calls this. `tool_execution_*` calls `ensureAssistant`
+   * directly and therefore never rolls — that is the whole point (see
+   * `closeProseStream`).
+   */
+  private openProseMessage(state: PiSessionState, requestId?: string): string {
+    const turn = state.turn;
+    if (turn.proseClosed) {
+      turn.proseClosed = false;
+      turn.assistantMessageId = null;
+      turn.textBlockId = null;
+      turn.thinkingBlockId = null;
+      turn.thinkingStarted = false;
+      turn.thinkingCompleted = false;
+    }
+    return this.ensureAssistant(state, requestId);
+  }
+
   private ensureAssistant(state: PiSessionState, requestId?: string): string {
     const turn = state.turn;
     if (!turn.assistantMessageId) {
-      turn.assistantMessageId = `asst-${state.sessionId}-${Date.now()}`;
+      state.assistantSeq += 1;
+      turn.assistantMessageId = `asst-${state.sessionId}-${Date.now()}-${state.assistantSeq}`;
       turn.textBlockId = `${turn.assistantMessageId}-text`;
       turn.thinkingBlockId = `${turn.assistantMessageId}-thinking`;
       turn.textSnapshot = '';
       turn.thinkingSnapshot = '';
       turn.thinkingStarted = false;
+      turn.thinkingCompleted = false;
 
       const model = state.handle?.session?.model;
       this.emit({
@@ -624,7 +747,11 @@ export class PiAgentRuntime {
 
   private emitTextDelta(state: PiSessionState, text: string, requestId?: string): void {
     if (!text) return;
-    const messageId = this.ensureAssistant(state, requestId);
+    // BEFORE `openProseMessage`, which may roll to a fresh container and take
+    // the thinking block's id with it: the thought that just ended belongs to
+    // the container that is still open right now.
+    this.completeThinking(state, requestId);
+    const messageId = this.openProseMessage(state, requestId);
     this.emit({
       type: 'message.delta',
       sessionId: state.sessionId,
@@ -635,7 +762,7 @@ export class PiAgentRuntime {
 
   private emitThinkingDelta(state: PiSessionState, text: string, requestId?: string): void {
     if (!text) return;
-    const messageId = this.ensureAssistant(state, requestId);
+    const messageId = this.openProseMessage(state, requestId);
     const blockId = state.turn.thinkingBlockId ?? `${messageId}-thinking`;
     if (!state.turn.thinkingStarted) {
       state.turn.thinkingStarted = true;
@@ -780,7 +907,11 @@ export class PiAgentRuntime {
           | undefined;
         if (msg?.role !== 'assistant') break;
 
-        const messageId = state.turn.assistantMessageId;
+        // `proseClosed` already true = pi ended a message this container never
+        // opened for (a tool-only turn between two prose turns). The container
+        // was completed at ITS OWN message_end; completing it again would stamp
+        // a second `completedAt` on a message that has not changed since.
+        const messageId = state.turn.proseClosed ? null : state.turn.assistantMessageId;
         if (
           msg.stopReason === 'stop' ||
           msg.stopReason === 'length' ||
@@ -807,8 +938,7 @@ export class PiAgentRuntime {
             },
           });
         }
-        state.turn.textSnapshot = '';
-        state.turn.thinkingSnapshot = '';
+        this.closeProseStream(state, requestId);
         break;
       }
 
