@@ -1,6 +1,11 @@
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
+import {
+  isSessionRetired,
+  markSessionsLive,
+  resetSessionRetirementForTests,
+} from '@/stores/sessionRetirement';
 import { mergeSessionIndex } from '../sessionIndexMerge';
 import {
   applySessionIndexRefresh,
@@ -70,6 +75,7 @@ function seedStore(
   sessions: ChatSession[],
   extra: Partial<Parameters<typeof useChatSessionsStore.setState>[0]> = {}
 ) {
+  markSessionsLive(sessions.map((item) => item.id));
   useChatSessionsStore.setState({
     projects: [{ id: 'p1', name: 'repo' }],
     workspaces,
@@ -90,6 +96,7 @@ const refresh = vi.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
   resetDismissedSessionRows();
+  resetSessionRetirementForTests();
   refresh.mockClear();
 });
 
@@ -125,6 +132,7 @@ describe('archiveSessionIndexEntry — indexed session (unchanged happy path)', 
     // pointing at it for the length of the round-trip (or forever, if the
     // refresh fails) — so the handover is already done when refresh runs.
     expect(seen).toEqual([{ ids: ['s2'], active: 's2' }]);
+    expect(isSessionRetired('s1')).toBe(true);
   });
 
   it('un-archiving neither removes a row nor detaches anything', async () => {
@@ -288,6 +296,7 @@ describe('closeSessionAndRemoveRow — detach + drop the row for this run', () =
 
     expect(api.closeSession).toHaveBeenCalledWith({ sessionId: 's1' });
     expect(useChatSessionsStore.getState().sessions.map((item) => item.id)).toEqual(['s2']);
+    expect(isSessionRetired('s1')).toBe(true);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 

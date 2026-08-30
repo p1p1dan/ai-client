@@ -2,6 +2,7 @@ import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { useCallback, useEffect, useState } from 'react';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
+import { markSessionsLive, markSessionsRetired } from '@/stores/sessionRetirement';
 import { dropDismissedSessions, markSessionDismissed, undismissSession } from './dismissedSessions';
 import { mergeSessionIndex, recentSessionIdsFromIndex } from './sessionIndexMerge';
 
@@ -250,6 +251,7 @@ function removeSessionRow(sessionId: string): void {
     return;
   }
 
+  markSessionsRetired([sessionId]);
   const sessions = state.sessions.filter((item) => item.id !== sessionId);
   const neighbour = sessions[index] ?? sessions[index - 1];
   const messages = { ...state.messages };
@@ -339,9 +341,11 @@ export async function archiveSessionIndexEntry(
       // already gone, and the merge discards it either way.
       removeSessionRow(sessionId);
     } else {
-      // Un-archiving must also lift a dismissal left by an earlier fallback,
-      // otherwise the row would stay hidden for the rest of the run.
+      // Un-archiving must also lift a dismissal/tombstone left by an earlier
+      // fallback, otherwise the row would stay hidden and reject runtime events
+      // for the rest of the run.
       undismissSession(sessionId);
+      markSessionsLive([sessionId]);
     }
     await refresh();
     return true;
