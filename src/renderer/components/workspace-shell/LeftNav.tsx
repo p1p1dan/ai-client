@@ -1,3 +1,4 @@
+import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import type { TempWorkspaceItem } from '@shared/types';
 import {
   Archive,
@@ -11,6 +12,7 @@ import {
   ListFilter,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -38,6 +40,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
+import { MenuItem, MenuPopup } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useI18n } from '@/i18n';
@@ -688,8 +691,10 @@ function SessionRow({
   onArchive,
   onDeleteTemp,
 }: SessionRowProps) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(row.title);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   const commitRename = () => {
     const trimmed = draft.trim();
@@ -699,6 +704,20 @@ function SessionRow({
       setDraft(row.title);
     }
     setEditing(false);
+  };
+
+  const beginRename = () => {
+    setDraft(row.title);
+    setEditing(true);
+  };
+
+  const requestArchive = () => {
+    setArchiveConfirmOpen(true);
+  };
+
+  const confirmArchive = () => {
+    setArchiveConfirmOpen(false);
+    onArchive();
   };
 
   if (editing) {
@@ -726,90 +745,80 @@ function SessionRow({
   }
 
   return (
-    <div
-      className={cn(
-        // --hover / --selection are two distinct steps of the same Flexoki
-        // interactive ramp; neither takes a /N modifier.
-        // The two are mutually exclusive on purpose: `hover:bg-hover` compiles to
-        // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
-        // (0,1,0), so pointing at the active row would repaint it as an ordinary
-        // hovered row and erase the selection.
-        // overflow-hidden is load-bearing, not cosmetic: `min-w-20` on the title
-        // makes the row's minimum content size exceed the track at the default
-        // sidebar width, and without it the trailing items would spill past the
-        // rounded edge instead of the branch chip absorbing the deficit.
-        'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-ui',
-        active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
-      )}
-      onClick={onSelect}
-      onDoubleClick={() => {
-        // Re-seed on entry: the mount-time draft goes stale when the title
-        // changes externally (rename from the Recent twin of this row, or a
-        // persisted title landing via mergeSessionIndex) — committing that
-        // stale draft would silently revert the rename.
-        setDraft(row.title);
-        setEditing(true);
-      }}
-      onContextMenu={(event) => {
-        // Right-click archive keeps the focus row without stealing the click.
-        event.preventDefault();
-        onArchive();
-      }}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-      title={row.title}
-    >
-      {row.busy && (
-        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running" />
-      )}
-      {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
+    <>
+      <ContextMenuPrimitive.Root>
+        <ContextMenuPrimitive.Trigger
+          className={cn(
+            // --hover / --selection are two distinct steps of the same Flexoki
+            // interactive ramp; neither takes a /N modifier.
+            // The two are mutually exclusive on purpose: `hover:bg-hover` compiles to
+            // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
+            // (0,1,0), so pointing at the active row would repaint it as an ordinary
+            // hovered row and erase the selection.
+            // overflow-hidden is load-bearing, not cosmetic: `min-w-20` on the title
+            // makes the row's minimum content size exceed the track at the default
+            // sidebar width, and without it the trailing items would spill past the
+            // rounded edge instead of the branch chip absorbing the deficit.
+            'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-ui',
+            active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
+          )}
+          onClick={onSelect}
+          onDoubleClick={beginRename}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              onSelect();
+            }
+          }}
+          title={row.title}
+        >
+          {row.busy && (
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running" />
+          )}
+          {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
           the row's identity and the only user-authored text on it, so it gets a
           floor and everything else yields to it. Without the floor `flex-1
           min-w-0` shrinks to whatever is left, and at SIDEBAR_DEFAULT_WIDTH the
           leftovers are ~16px — a bare ellipsis. Budget for an indented row at
           the 280px default: 280 - 16 (p-2) - 12 (pl-3) - 16 (px-2) = 236px, and
           the agent chip alone claims ~63 of it. */}
-      <span className="min-w-20 flex-1 truncate">{row.title}</span>
-      {row.failed && (
-        <Badge variant="destructive" size="sm" className="shrink-0">
-          failed
-        </Badge>
-      )}
-      {/* S2 (b/C14): agent before branch — which runtime answers is the more
+          <span className="min-w-20 flex-1 truncate">{row.title}</span>
+          {row.failed && (
+            <Badge variant="destructive" size="sm" className="shrink-0">
+              failed
+            </Badge>
+          )}
+          {/* S2 (b/C14): agent before branch — which runtime answers is the more
           load-bearing fact, and the chip budget for this row is two. Same
           Badge shape as the branch chip so the pair reads as one rank.
           shrink-0 with no max-w: the label comes from AGENT_DISPLAY_NAMES, a
           closed two-value vocabulary, so it has a known ceiling and truncating
           it would only ever produce a worse rendering of a fact that fits. */}
-      <Badge variant="outline" size="sm" className="shrink-0" title={row.agentChip.label}>
-        {row.agentChip.label}
-      </Badge>
-      {row.chip && (
-        // The branch chip is the row's sole yielder. It is the only trailing
-        // item whose text is unbounded user data, and it is the only one that
-        // is recoverable elsewhere (row `title` tooltip + the Composer target
-        // bar, T-27), so when the row runs out of width this is what gives —
-        // never the title. `shrink` + `min-w-0` is what lets flexbox route the
-        // deficit here; dropping either sends it back to the title.
-        <Badge
-          variant="outline"
-          size="sm"
-          className="min-w-0 max-w-24 shrink"
-          title={row.chip.label}
-        >
-          {/* Inner span, not `truncate` on the Badge: Badge is `inline-flex`,
+          <Badge variant="outline" size="sm" className="shrink-0" title={row.agentChip.label}>
+            {row.agentChip.label}
+          </Badge>
+          {row.chip && (
+            // The branch chip is the row's sole yielder. It is the only trailing
+            // item whose text is unbounded user data, and it is the only one that
+            // is recoverable elsewhere (row `title` tooltip + the Composer target
+            // bar, T-27), so when the row runs out of width this is what gives —
+            // never the title. `shrink` + `min-w-0` is what lets flexbox route the
+            // deficit here; dropping either sends it back to the title.
+            <Badge
+              variant="outline"
+              size="sm"
+              className="min-w-0 max-w-24 shrink"
+              title={row.chip.label}
+            >
+              {/* Inner span, not `truncate` on the Badge: Badge is `inline-flex`,
               and text-overflow does not ellipsize the anonymous flex item that
               bare text becomes — it needs a real block child to clip. */}
-          <span className="min-w-0 truncate">{row.chip.label}</span>
-        </Badge>
-      )}
-      {/* Age and actions swap on hover; the shared width box is what actually
+              <span className="min-w-0 truncate">{row.chip.label}</span>
+            </Badge>
+          )}
+          {/* Age and actions swap on hover; the shared width box is what actually
           keeps the row from jumping — the two are different natural widths (a
           relative age is ~21px, two icon buttons are 40px), so before the
           fixed box the swap silently re-flowed every other item. The row has
@@ -818,49 +827,83 @@ function SessionRow({
           them from the tab order). Temp rows get a third (delete) button, so
           both this span and the actions box below widen to `w-[60px]`
           together — otherwise only the temp rows would jump on hover. */}
-      <span
-        className={cn(
-          'shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden',
-          onDeleteTemp ? 'w-[60px]' : 'w-10'
-        )}
-      >
-        {formatRelativeAge(row.updatedAt, now)}
-      </span>
-      <div
-        className={cn(
-          'hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex',
-          onDeleteTemp ? 'w-[60px]' : 'w-10'
-        )}
-      >
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="h-5 w-5"
-          aria-label="Archive session"
-          title="Archive"
-          onClick={(event) => {
-            event.stopPropagation();
-            onArchive();
-          }}
-        >
-          <Archive className="h-3 w-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="h-5 w-5"
-          aria-label="Close session"
-          title="Close"
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-        >
-          <X className="h-3 w-3" />
-        </Button>
-        {onDeleteTemp && <DeleteTempButton onDelete={onDeleteTemp} />}
-      </div>
-    </div>
+          <span
+            className={cn(
+              'shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden',
+              onDeleteTemp ? 'w-[60px]' : 'w-10'
+            )}
+          >
+            {formatRelativeAge(row.updatedAt, now)}
+          </span>
+          <div
+            className={cn(
+              'hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex',
+              onDeleteTemp ? 'w-[60px]' : 'w-10'
+            )}
+          >
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="h-5 w-5"
+              aria-label="Archive session"
+              title="Archive"
+              onClick={(event) => {
+                event.stopPropagation();
+                requestArchive();
+              }}
+            >
+              <Archive className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="h-5 w-5"
+              aria-label="Close session"
+              title="Close"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClose();
+              }}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+            {onDeleteTemp && <DeleteTempButton onDelete={onDeleteTemp} />}
+          </div>
+        </ContextMenuPrimitive.Trigger>
+
+        <MenuPopup align="start" side="bottom" className="min-w-40">
+          <MenuItem onClick={beginRename}>
+            <Pencil className="size-4" />
+            {t('Rename')}
+          </MenuItem>
+          <MenuItem variant="destructive" onClick={requestArchive}>
+            <Archive className="size-4" />
+            {t('Archive')}
+          </MenuItem>
+        </MenuPopup>
+      </ContextMenuPrimitive.Root>
+
+      <AlertDialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Archive session')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('Archive “{{name}}”? It will be removed from the sidebar.', {
+                name: row.title,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setArchiveConfirmOpen(false)}>
+              {t('Cancel')}
+            </Button>
+            <Button variant="destructive" onClick={confirmArchive}>
+              {t('Archive')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </>
   );
 }
 
