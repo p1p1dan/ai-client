@@ -13,7 +13,7 @@
  *
  * ## Why the bridge holds the object rather than proxying a subprocess
  *
- * `piRuntime.ts` runs the SDK EMBEDDED (`createAgentSessionRuntime`), so the
+ * `PiWorkerSession` runs the SDK embedded (`createAgentSessionRuntime`), so the
  * `ExtensionUIContext` we pass to `bindExtensions` is called in-process, by
  * ordinary function calls, on the utilityProcess's own event loop. There is no
  * serialization boundary between the extension and this file — which is exactly

@@ -1,7 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { createPiSdkStub } from '../../src/agent-host/__tests__/fixtures/piSdkStub.ts';
-import { PiAgentRuntime } from '../../src/agent-host/piRuntime.ts';
-import { SessionRegistry } from '../../src/agent-host/sessionRegistry.ts';
+import { PiWorkerSession } from '../../src/agent-host/piWorkerSession.ts';
 import {
   createEmptyState,
   enqueue,
@@ -18,18 +17,24 @@ const GATED = {
   gated: true,
 };
 
-it('releases three queued messages through PiAgentRuntime after a long Pi turn in strict FIFO', async () => {
+it('releases three queued messages through PiWorkerSession after a long Pi turn in strict FIFO', async () => {
   const stub = createPiSdkStub({ manualPrompt: true });
-  const runtime = new PiAgentRuntime({
-    registry: new SessionRegistry(),
+  const runtime = new PiWorkerSession({
+    logicalSessionId: 's1',
+    cwd: '/repo',
+    projectTrusted: false,
     emit: () => undefined,
     log: () => undefined,
     loadSdk: async () => stub.sdk,
     decidePermissionGate: () => GATED,
   });
-  runtime.createSession({ sessionId: 's1', workspacePath: '/repo' });
+  await runtime.bootstrap();
 
-  const longTurn = runtime.send({ sessionId: 's1', text: 'long-running turn' });
+  await runtime.startSend({
+    logicalSessionId: 's1',
+    requestId: 'long-turn',
+    text: 'long-running turn',
+  });
   await vi.waitFor(() => expect(stub.sessionFor('/repo')?.prompts).toHaveLength(1));
 
   const queued = [
@@ -60,8 +65,9 @@ it('releases three queued messages through PiAgentRuntime after a long Pi turn i
   }
 
   stub.finishPrompt('/repo');
-  await longTurn;
+  stub.sessionFor('/repo')?.emit({ type: 'agent_settled' });
 
+  let requestSequence = 0;
   const operations = {
     takeHead: (sessionId) => {
       const result = takeHead(state, sessionId);
@@ -76,8 +82,10 @@ it('releases three queued messages through PiAgentRuntime after a long Pi turn i
     },
     runEntry: async (entry) => {
       const promptCount = stub.sessionFor('/repo')?.prompts.length ?? 0;
-      const send = runtime.send({
-        sessionId: entry.sessionId,
+      requestSequence += 1;
+      await runtime.startSend({
+        logicalSessionId: entry.sessionId,
+        requestId: `queued-${requestSequence}`,
         text: entry.text,
         attachments: [...entry.attachments],
       });
@@ -85,7 +93,7 @@ it('releases three queued messages through PiAgentRuntime after a long Pi turn i
         expect(stub.sessionFor('/repo')?.prompts).toHaveLength(promptCount + 1)
       );
       stub.finishPrompt('/repo');
-      await send;
+      stub.sessionFor('/repo')?.emit({ type: 'agent_settled' });
       return 'committed';
     },
   };

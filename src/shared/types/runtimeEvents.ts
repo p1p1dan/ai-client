@@ -1281,8 +1281,8 @@ export function readExtensionUiDialogArgs(
  * it would make Main's command-correlation table match an event that was never a
  * reply.
  *
- * `runtimeId` identifies the BRIDGE INSTANCE. There is one bridge per HOST
- * SESSION (`piRuntime.ts` keys them by `sessionId`), and a new one is minted
+ * `runtimeId` identifies the BRIDGE INSTANCE. There is one bridge per Pi
+ * WorkerSession, and a new one is minted
  * whenever that session's runtime is rebuilt — closed and reopened, or moved to
  * a different workspace. It is therefore neither process-global nor per-turn.
  *

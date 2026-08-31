@@ -26,4 +26,5 @@ export * from './shell';
 export * from './tempWorkspace';
 export * from './terminal';
 export * from './usage';
+export * from './workerRpc';
 export * from './worktree';

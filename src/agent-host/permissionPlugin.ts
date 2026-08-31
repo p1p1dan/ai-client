@@ -65,9 +65,9 @@ const PERMISSION_PLUGIN_UNSCOPED = PERMISSION_PLUGIN_PACKAGE.split('/').pop() as
  * Where the bundled copy lives, relative to the Host entry.
  *
  * The same shape in dev and packaged, which is why it is a constant rather than
- * two branches: esbuild emits `out-agent-host/piHost.js` beside the pruned
- * `out-agent-host/node_modules/`, and in dev `src/agent-host/piHost.ts` sits
- * beside `src/agent-host/node_modules/`. The pi SDK is already resolved this way
+ * two branches: esbuild emits `out-agent-host/worker.js` beside the pruned
+ * `out-agent-host/node_modules/`, and in dev `src/agent-host/worker.ts` sits
+ * beside `src/agent-host/node_modules/`. The Pi SDK is already resolved this way
  * (T04) — this is the same sibling-node_modules contract, not a new one.
  */
 const BUNDLED_RELATIVE_PATH = ['node_modules', '@gotgenes', 'pi-permission-system'];
@@ -420,7 +420,7 @@ export interface PermissionPluginDecision {
   /**
    * True when a permission gate is known to be in place for this session.
    * `false` is a REFUSAL TO PROCEED upstream, not a warning — see
-   * `piRuntime.ts`, which turns it into a session-level security error rather
+   * `PiWorkerSession`, which turns it into a session-level security error rather
    * than starting a runtime whose tools would run unattended.
    */
   gated: boolean;

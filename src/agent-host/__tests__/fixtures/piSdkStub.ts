@@ -1,5 +1,5 @@
 /**
- * A stand-in for the pi SDK, shaped by what `piRuntime.ts` actually calls.
+ * A stand-in for the Pi SDK, shaped by what `PiWorkerSession` calls.
  *
  * Two things it deliberately models rather than stubs away, because both are
  * where the interesting failures live:
@@ -29,13 +29,23 @@ export interface StubPiSession {
   thinkingLevels: string[];
   prompts: Array<{ text: string; options?: { images?: unknown[] } }>;
   aborted: boolean;
+  disposed: boolean;
+  queueCleared: boolean;
+  compactionAborted: boolean;
+  branchSummaryAborted: boolean;
+  bashAborted: boolean;
   boundUiContext: unknown;
   /** Push one pi event into whatever the runtime subscribed with. */
   emit(event: StubPiEvent): void;
   prompt(text: string, options?: { images?: unknown[] }): Promise<void>;
   subscribe(cb: (event: StubPiEvent) => void): () => void;
   bindExtensions?(bindings: { uiContext?: unknown; mode?: string }): Promise<void>;
+  clearQueue(): { steering: unknown[]; followUp: unknown[] };
+  abortCompaction(): void;
+  abortBranchSummary(): void;
+  abortBash(): void;
   abort(): Promise<void>;
+  dispose(): void;
   setModel(model: { provider: string; id: string; name?: string }): Promise<void>;
   setThinkingLevel?(level: string): void;
 }
@@ -56,6 +66,10 @@ export interface PiSdkStubOptions {
   configuredPackages?: unknown[];
   /** Hold `prompt()` open until the test resolves it. */
   manualPrompt?: boolean;
+  /** Reject prompt immediately with this message. */
+  promptError?: string;
+  /** Reject abort with this message. */
+  abortError?: string;
 }
 
 export interface PiSdkStub {
@@ -92,12 +106,18 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
       thinkingLevels: [],
       prompts: [],
       aborted: false,
+      disposed: false,
+      queueCleared: false,
+      compactionAborted: false,
+      branchSummaryAborted: false,
+      bashAborted: false,
       boundUiContext: undefined,
       emit(event) {
         listener?.(event);
       },
       async prompt(text, promptOptions) {
         session.prompts.push({ text, ...(promptOptions ? { options: promptOptions } : {}) });
+        if (options.promptError) throw new Error(options.promptError);
         if (!options.manualPrompt) return;
         await new Promise<void>((resolve) => pendingPrompts.set(cwd, resolve));
       },
@@ -107,10 +127,27 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
           listener = undefined;
         };
       },
+      clearQueue() {
+        session.queueCleared = true;
+        return { steering: [], followUp: [] };
+      },
+      abortCompaction() {
+        session.compactionAborted = true;
+      },
+      abortBranchSummary() {
+        session.branchSummaryAborted = true;
+      },
+      abortBash() {
+        session.bashAborted = true;
+      },
       async abort() {
         session.aborted = true;
+        if (options.abortError) throw new Error(options.abortError);
         pendingPrompts.get(cwd)?.();
         pendingPrompts.delete(cwd);
+      },
+      dispose() {
+        session.disposed = true;
       },
       async setModel(model) {
         session.model = model;

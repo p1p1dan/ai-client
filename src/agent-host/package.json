@@ -3,11 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Node 24 Agent Host — Cometix + Claude runtime (stdio NDJSON)",
-  "main": "index.ts",
+  "description": "Pi AgentSession utility worker runtime",
+  "main": "worker.ts",
   "scripts": {
     "postinstall": "node ../../scripts/patch-pi-permission-system.mjs",
-    "start": "node --experimental-strip-types index.ts",
     "spike:sdk": "node --experimental-strip-types spikes/agent-sdk-spike.ts",
     "spike:stream-json": "node --experimental-strip-types spikes/stream-json-spike.ts",
     "spike:lifecycle": "node --experimental-strip-types spikes/host-lifecycle-spike.ts",
@@ -17,10 +16,12 @@
     "smoke:permission-plugin": "node --experimental-strip-types spikes/t08a-permission-plugin-smoke.ts"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@gotgenes/pi-permission-system": "27.0.1"
+  },
+  "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.218",
     "@cometix/claude-code": "2.1.212",
-    "@earendil-works/pi-coding-agent": "^0.84.3",
-    "@gotgenes/pi-permission-system": "27.0.1",
     "@openai/codex": "0.149.1"
   },
   "engines": {
