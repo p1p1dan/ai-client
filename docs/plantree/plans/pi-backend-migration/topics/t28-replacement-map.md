@@ -3,13 +3,13 @@
 Role: topic-capsule
 Status: accepted Phase A baseline
 Phase: A / T28
-Authority: [D14](../decisions/014-pi-only-product-and-conversation-import.md)、[D15](../decisions/015-main-owned-worker-manager.md)、[roadmap](../roadmap.md)
+Authority: [D14](../decisions/014-pi-only-product-and-conversation-import.md)、[D15](../decisions/015-main-owned-worker-manager.md)、[D16](../decisions/016-delete-obsolete-paths-with-replacement.md)、[roadmap](../roadmap.md)
 Read when: 实施 T29、T34、T35、T36，或判断含 Claude/Codex/Agent Host 名称的文件能否删除
 Related: [reference repositories](./reference-repositories.md)、[Phase A evidence](../evidence/2026-08-31-phase-a-t28.md)
 
 ## 结论
 
-Phase A/T28 已完成文件级 inventory。当前实现是 transition source，不是目标拓扑：
+Phase A/T28 已完成文件级 inventory；T29 已按本映射落地 single WorkerSlot vertical slice，并删除 singleton Pi transition boundary。当前实现已进入目标拓扑的单-slot 阶段，bounded pool/owner 仍属于 T30：
 
 ```text
 Renderer → Preload → Electron Main WorkerManager
@@ -17,7 +17,7 @@ Renderer → Preload → Electron Main WorkerManager
 → one utilityProcess + one Pi AgentSession per slot
 ```
 
-本阶段**未删除或修改产品实现代码**。后续只能按本映射的依赖顺序实施，不能按 `claude`、`codex`、`agent-host` 文件名机械删除。
+T28 本身未删除或修改产品实现代码；T29-a/b/c 的实际 landing 与删除证据见 [T29-c evidence](../evidence/2026-08-31-t29c-single-slot-closure.md)。后续仍只能按本映射的依赖顺序实施，不能按 `claude`、`codex`、`agent-host` 文件名机械删除。
 
 ## 分类词汇
 
@@ -25,8 +25,8 @@ Renderer → Preload → Electron Main WorkerManager
 |---|---|---|
 | `retain` | 责任与 Pi-only 目标一致 | 保留；只做必要命名/ownership 补强 |
 | `adapt` | 行为或实现有价值，但 transport、identity、owner 或 contract 要变 | 在 T29–T36 对应切片适配 |
-| `replace` | 当前 topology/入口/contract 不能留在目标架构 | 替代者闭环后删除旧文件 |
-| `delete` | 无目标 runtime、迁移或产品角色 | 在 T35 或对应 cleanup 删除 |
+| `replace` | 当前 topology/入口/contract 不能留在目标架构 | 替代者在当前切片闭环后立即删除旧文件/consumer/artifact，不等待 T35 |
+| `delete` | 无目标 runtime、迁移或产品角色 | 确认无保留 invariant 后尽早删除；T35 只做 absence audit |
 | `migration-only` | 仅允许只读 legacy scan/parse/adoption/evidence | T34 隔离；禁止 import execution runtime |
 
 `adapt/delete split` 表示同一文件混合了两种职责；实施前必须先拆文件，不能整文件保留或整文件删除。
@@ -40,7 +40,8 @@ Renderer → Preload → Electron Main WorkerManager
 5. Codex ASR 在当前 checkout **没有生产实现**。唯一 realtime method 名称来自测试 fixture，不足以保留 `@openai/codex` execution dependency。
 6. Pi model/provider metadata、managed/local credential mode、permission policy、Cycle 1/2 queue/timeline/Extension UI 行为保留并适配。
 7. GUI/TUI、one-shot AI、Claude integration 和 packaging 是独立 legacy execution 轴，不能因不在 Composer picker 中就漏出 Pi-only cleanup。
-8. T35 删除前必须有静态 import ban，证明 migration readers 不依赖 Claude/Codex runtime/launcher/connection。
+8. 每个 execution 删除批次都必须有静态 import 检查；T34 migration readers 还必须有专门 import ban，证明其不依赖 Claude/Codex runtime/launcher/connection。
+9. Git history 是 legacy 恢复路径；活动源码树不保留 runtime fallback、compatibility alias 或 transition artifact。
 
 ## 详细文件图
 
@@ -54,7 +55,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 | 资产 | 分类 | 保护理由 / 替代条件 |
 |---|---|---|
-| Claude/Codex conversation runtime | `delete` | T29–T34 replacement 完成后由 T35 删除 |
+| Claude/Codex conversation runtime | `delete` | 按 consumer/行为替代切片分批立即删除；不再集中等待 T35 |
 | `historyReader.ts`、`codexHistoryReader.ts`、`codexItemMapper.ts` | `migration-only` | T34 source adapter 候选；只读、无 spawn/RPC |
 | `ClaudeSessionScanner.ts` | `migration-only` | Claude scan/preview/dedupe/TSD-safe reader 候选 |
 | Codex ASR | not found | 不以 method fixture 推断 feature；若未来存在须另建 owner/IPC/tests |
@@ -69,16 +70,16 @@ Renderer → Preload → Electron Main WorkerManager
 
 ```text
 T29 worker RPC + single WorkerSlot
-  → replace PiHostProcess/piHost singleton boundaries
+  → immediately delete PiHostProcess/piHost singleton boundaries/artifacts
 T30 pool/remap/generation/owner
-  → replace AgentHostManager global lifecycle
+  → immediately delete AgentHostManager/global Host lifecycle
 T31 Cycle 1/2 behavior reattachment
-  → remove old singleton receive/send authority
+  → delete each replaced old receive/send/agent/backend branch in the same slice
 T32/T33 Pi history/tree
-  → retire Host legacy history/resume contracts
+  → delete replaced Host history/resume contracts as they land
 T34 isolate read-only adapters
-  → protect only migration-only Claude/Codex files
-T35 delete execution/runtime/picker/dependencies/scripts
+  → delete remaining Claude/Codex execution and protect only migration-only sources
+T35 static absence audit, not a deferred deletion bucket
 T36 replace terminal/Node/CLI packaging with pix-based Pi TUI
 ```
 

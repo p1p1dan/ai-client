@@ -58,7 +58,7 @@ Parent: [T28 replacement map](../t28-replacement-map.md)
 | `piHostCommands.test.ts` | `adapt`：Worker RPC validation。 |
 | `piRuntimeMessageBoundaries.test.ts`, `piRuntimeModelSelection.test.ts`, `piRuntimeSessions.test.ts` | `adapt`：单 AgentSession WorkerSlot；移除 multi-session registry assumptions。 |
 | `stderrRedaction.test.ts`, `subagentProjection.test.ts` | `adapt`：保留 security/privacy assertions，接 Pi worker producer。 |
-| `coalescingEmitter.test.ts`, `ttftWatchdog.test.ts` | `adapt`：改为 Pi worker pressure/timeout semantics；若 implementation 无消费者再由 T35 删除。 |
+| `coalescingEmitter.test.ts`, `ttftWatchdog.test.ts` | `adapt`：改为 Pi worker pressure/timeout semantics；若 implementation 无消费者，在当前替代切片立即删除。 |
 | `fixtures/piSdkStub.ts` | `adapt` 为 worker SDK fixture。 |
 
 ### 3.2 Claude execution tests — delete after behavior port

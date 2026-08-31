@@ -228,4 +228,4 @@ T34 必须先把 `migration-only` files 移入独立 import namespace，并满�
 - unmapped tool/custom 只读展示；
 - provenance/dedupe manifest。
 
-T35 才能删除：Claude/Codex execution services、IPC、preload methods、renderer picker/settings、SDK/CLI dependencies、dead tests/scripts。Codex ASR 没有实现，不构成删除例外。
+按 D16，Claude/Codex execution services、IPC、preload methods、renderer picker/settings、SDK/CLI dependencies、dead tests/scripts 在对应 consumer 替代切片中立即删除；T35 只验证其已经不存在。Codex ASR 没有实现，不构成删除例外。

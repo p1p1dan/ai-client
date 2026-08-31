@@ -45,7 +45,7 @@ Parent: [T28 replacement map](../t28-replacement-map.md)
 | `src/agent-host/permissionPolicy.d.mts` | `adapt` | 随 policy module 新路径同步。 |
 | `src/agent-host/stderrRedaction.ts` | `adapt` | 保留为 worker/extension/Pi CLI 共用的 secret/path redaction。 |
 | `src/agent-host/subagentProjection.ts` | `adapt` | 保留 privacy/size cap；生产者改为 Pi AgentSession event。 |
-| `src/agent-host/coalescingEmitter.ts` | `adapt` | 作为 T31 event-pressure helper 候选移入 Pi projection 边界；若新 projection 无消费者，须以 import/load evidence 证明后再由 T35 删除。 |
+| `src/agent-host/coalescingEmitter.ts` | `adapt` | 作为 T31 event-pressure helper 候选移入 Pi projection 边界；若当前新 projection 无消费者，以 import/load evidence 证明后立即删除，不等待 T35。 |
 | `src/agent-host/ttftWatchdog.ts` | `adapt` | generic timer 归入 WorkerSlot diagnostics；重新定义 Pi timeout/terminal semantics，不继承 legacy 常量。 |
 
 ### 2.2 Claude conversation execution

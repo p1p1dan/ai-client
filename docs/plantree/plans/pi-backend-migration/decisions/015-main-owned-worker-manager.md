@@ -116,7 +116,7 @@ Renderer 不依赖 worker PID 或物理进程路径，只消费稳定 IPC/Runtim
 
 ## 影响
 
-- 现有 singleton `PiHostProcess`/`AgentHostManager` 只作为替换来源，不是最终边界。
+- 现有 singleton `PiHostProcess`/`AgentHostManager` 只作为替换来源，不是兼容边界；按 [D16](./016-delete-obsolete-paths-with-replacement.md) 在对应 WorkerSlot/WorkerManager 切片验收后立即删除。
 - Cycle 1/2 的产品行为继续有效，但 transport、routing、reset 和 ownership 必须重新挂到 WorkerSlot。
 - History/resume/tree/rewind/fork 在 WorkerSlot 内通过 Pi SessionManager 实现。
 - 新 roadmap 必须先完成单 slot 纵切和 bounded pool，再进行 history、legacy deletion、migration 与 TUI release。

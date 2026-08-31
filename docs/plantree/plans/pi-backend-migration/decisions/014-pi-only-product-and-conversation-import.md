@@ -76,5 +76,5 @@ read-only source adapter
 
 - [D5](./005-disable-claude-codex.md) 被替代。
 - 旧 multi-agent 计划降为历史参考。
-- WorkerManager、history/resume、import 完成并验证后，legacy execution paths 才进入实际删除阶段。
-- 发布回滚仅是应用版本回滚，不再是产品内切换 legacy runtime。
+- 删除时机由 [D16](./016-delete-obsolete-paths-with-replacement.md) 收紧：替代切片验证后立即删除对应 legacy authority，不等待 WorkerManager/history/import 全部完成；真正需要的只读 source reader 先隔离为 migration-only。
+- 发布与开发回滚使用 Git/应用版本，不在活动工作树或产品内保留 legacy runtime fallback。

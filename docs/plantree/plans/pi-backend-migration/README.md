@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase A / T28 replacement baseline 已完成；下一实现纵切为 T29 single WorkerSlot。
+> **当前阶段**：Phase B / T30 Main-owned bounded WorkerManager；T29-a/b/c single WorkerSlot vertical slice 已完成。
 
 ## 目标
 
@@ -22,6 +22,7 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 - 产品范围以 [D14](./decisions/014-pi-only-product-and-conversation-import.md) 为准。
 - 进程与 ownership 以 [D15](./decisions/015-main-owned-worker-manager.md) 为准。
+- legacy 保留时机以 [D16](./decisions/016-delete-obsolete-paths-with-replacement.md) 为准：替代即删除，Git 负责回退，不维护运行时兼容路径。
 - Main 持有 WorkerManager；Pi SDK 不直接运行在 Main。
 - 每个 WorkerSlot 对应独立 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
 - Cycle 1/2 已完成行为和证据保留；singleton transport/owner 部分适配或替换，不把真实完成记录改回 Pending。
@@ -30,7 +31,8 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 非目标
 
-- 本次计划整理不直接删除实现代码或 package dependencies。
+- 不为“以后也许回退”保留 legacy runtime、entry、artifact、dependency 或 product switch；需要恢复时使用 Git。
+- 不按名称机械删除 migration-only reader、Pi security/product behavior 或 runtime-neutral infrastructure。
 - 不重写 React/@coss/ui 设计系统。
 - 不复制 pi-app 的私有 SDK deep import、固定 disposal sleep 或无确认 rewind。
 - 不复制 pix 的全局 CLI 安装、Ghostty 私有 patch、同 JSONL 双写或第二套 supervisor。
@@ -67,7 +69,7 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 1. [Plantree root](../../README.md)
 2. [Pi-only 重排映射](../../indexes/pi-only-realignment-map.md)
-3. [决策索引](./decisions/README.md) → [D14](./decisions/014-pi-only-product-and-conversation-import.md) → [D15](./decisions/015-main-owned-worker-manager.md)
+3. [决策索引](./decisions/README.md) → [D14](./decisions/014-pi-only-product-and-conversation-import.md) → [D15](./decisions/015-main-owned-worker-manager.md) → [D16](./decisions/016-delete-obsolete-paths-with-replacement.md)
 4. [Roadmap](./roadmap.md) — 唯一活动任务状态/顺序权威
 5. [Implementation status](./implementation-status.md) — 当前交接
 6. [Architecture capsule](./topics/architecture.md) 与 [reference repositories](./topics/reference-repositories.md)
@@ -91,4 +93,4 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 当前出口
 
-T28 文件级替换/删除边界已完成；当前直接实施 T29 单 WorkerSlot 纵切。T29 未闭环前，不把 history、TUI 或 legacy deletion 焊到旧 singleton host 上。
+T28 文件级替换/删除边界与 T29 single WorkerSlot vertical slice 已完成：typed RPC/lifecycle、per-slot utility worker + one Pi AgentSession、`newSession → send → stream → stop → dispose`、唯一 terminal state、app-close orphan census、worker-only packaging，以及 singleton Pi entry/router/source 删除。当前进入 T30 bounded WorkerManager identity/remap/capacity/restart；history/TUI 不焊到旧 host，旧路径也不作为兼容 fallback 保留。

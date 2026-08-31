@@ -8,8 +8,8 @@
 |---|---|---|
 | Cycle 1/2 产品能力 | **Done** | 已有 evidence；按 replacement impact 保留或适配 |
 | Pi-only replacement baseline | **Done** | T28 文件级 retain/adapt/replace/delete/migration-only map + evidence |
-| Worker foundation | **Next** | 单 WorkerSlot create/send/stream/stop/dispose 闭环 |
-| Pool + behavior reattachment | Planned | bounded pool；Cycle 1/2 行为重挂 |
+| Worker foundation | **Done** | T29-a/b/c：RPC、bootstrap、send/stream/stop/dispose、worker-only artifact 与 singleton Pi 删除 |
+| Pool + behavior reattachment | **Next** | T30 bounded pool；随后 Cycle 1/2 行为重挂 |
 | History/tree/import/removal/TUI | Planned | Pi-native lifecycle、legacy import、Pi-only cleanup、pix TUI |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
@@ -56,22 +56,23 @@
 
 ## Phase B — Worker foundation
 
-### T29 — Single WorkerSlot vertical slice — **Next**
+### T29 — Single WorkerSlot vertical slice — **Done**
 
-- **T29-a**：移植/适配 pi-app worker RPC、transport、request ID、timeout、dispose 与 crash contract。
-- **T29-b**：utility worker entry + Pi AgentSession bootstrap；接 managed agentDir/auth/models/project trust。
-- **T29-c**：`newSession → send → stream → stop → dispose` 通过一个 WorkerSlot 完整闭环。
+- **T29-a — Done**：已落 typed Worker RPC、utilityProcess transport、request ID/pending timeout、generation stale filtering、ACK + process-exit-confirmed dispose 与 crash cleanup contract；见 [evidence](./evidence/2026-08-31-t29a-worker-rpc.md)。
+- **T29-b — Done**：已落 per-slot utility worker entry、serialized correlated dispatch、exactly-one Pi AgentSession bootstrap、managed/local agentDir/auth/models、project trust、fail-closed permission 与真实 Electron utilityProcess probe；见 [evidence](./evidence/2026-08-31-t29b-worker-bootstrap.md)。
+- **T29-c — Done**：`newSession → send → text/thinking/tool/custom stream → stop → dispose` 通过一个 WorkerSlot 完整闭环；send admission 不阻塞 stop，terminal verdict 唯一，app-close PID census 无 orphan；worker artifact 只保留 `worker.js`，singleton `piHost.ts`/`piRuntime.ts`/`PiHostProcess` 与 transition packaging 已删除。见 [evidence](./evidence/2026-08-31-t29c-single-slot-closure.md)。
 
-**验收**：单会话不依赖旧 `PiHostProcess`；RuntimeEvent 与 stop terminal state 正确；worker 退出无 orphan。
+**验收**：单会话不依赖旧 `PiHostProcess`；RuntimeEvent 与 stop terminal state 正确；worker 退出无 orphan；Agent Host artifact 只保留实际 worker entry，不再构建 singleton Pi fallback。T29 总验收已满足。
 
-### T30 — Main-owned bounded WorkerManager — **Planned**
+### T30 — Main-owned bounded WorkerManager — **Next**
 
 - **T30-a Identity/remap**：workspace temporary key → normalized session-file key 原子 remap。
 - **T30-b Capacity/eviction**：foreground、active turn、pending blocking request、idle reclaim、capacity error。
 - **T30-c Crash/restart**：generation 防迟到事件、有界 restart、atomic disposal。
 - **T30-d Isolation**：active/background、多窗口 owner 与 session-switch race。
+- **T30-e Old manager removal**：consumer 切到 WorkerManager 后删除 `AgentHostManager`、`AgentHostProcess`、legacy host env/router/exports 与对应 tests，不保留 compatibility facade。
 
-**验收**：多 slot 无跨会话串流；安全达到容量；单 worker crash 不影响其他 slot。
+**验收**：多 slot 无跨会话串流；安全达到容量；单 worker crash 不影响其他 slot；Main 无 singleton Agent Host lifecycle authority。
 
 ## Phase C — Reattach completed product behavior
 
@@ -82,7 +83,7 @@
 - **T31-c Extension UI**：inline approval、display state、owner routing、reset/dispose。
 - **T31-d Models/auth/permissions**：catalog、effort、managed config、project trust 和四种 decision path。
 
-**验收**：Cycle 1/2 focused tests 和 GUI smoke 在 WorkerSlot 架构下重新通过；旧 singleton 路径不再接收新 session。
+**验收**：Cycle 1/2 focused tests 和 GUI smoke 在 WorkerSlot 架构下重新通过；每组行为重挂后同步删除对应 old Host/agent/backend branches，而不是只停止接收新 session。
 
 ## Phase D — Pi-native session lifecycle
 
@@ -113,14 +114,16 @@
 
 ## Phase F — Remove legacy execution paths
 
-### T35 — Pi-only code and product cleanup — **Planned**
+### T35 — Pi-only absence audit — **Planned**
 
-- **T35-a**：删除 Claude/Codex conversation runtime、bridges 和 execution dependencies。
-- **T35-b**：删除 backend discriminants、multi-runtime dispatch、agent binding 和旧 create/send/resume branches。
-- **T35-c**：删除 agent picker、runtime icon/wording、rollback settings 与 dead IPC/tests。
-- **T35-d**：保护 Codex ASR、migration readers、evidence 等非 execution 资产。
+D16 将实际删除前移到 T29–T34 各替代切片；T35 不再承担一次性大批量 cleanup。
 
-**验收**：活动对话 runtime 只有 Pi；import reader 无执行能力；无 legacy SDK dependency、死菜单或死 contract。
+- **T35-a**：静态扫描残留 Claude/Codex conversation execution imports、backend discriminants、multi-runtime dispatch 和 compatibility alias。
+- **T35-b**：扫描残留 SDK/CLI dependencies、build entry、artifact、IPC/preload method、dead tests/fixtures/scripts。
+- **T35-c**：扫描 agent picker、runtime icon/wording、rollback settings 和旧 create/send/resume product branches。
+- **T35-d**：证明保留项仅为隔离后的 migration readers、Pi-only behavior、通用基础设施、evidence/license；Codex ASR 不以 fixture 伪装成产品实现。
+
+**验收**：活动代码和产物只有 Pi execution；import reader 无执行能力；无 legacy SDK dependency、死菜单、死 contract 或 transition artifact。
 
 ## Phase G — pix-based Pi TUI
 
