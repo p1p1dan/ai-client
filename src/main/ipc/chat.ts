@@ -3,16 +3,10 @@
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
-import { resolve } from 'node:path';
 import { isModelAllowedForAgent } from '@shared/models/familyWhitelist';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
-import {
-  type AgentWireName,
-  CLAUDE_CODE_AGENT,
-  CODEX_AGENT,
-  resolveAgentWireName,
-} from '@shared/types/agentWire';
+import { type AgentWireName, PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
 import type {
   ExtensionUiResponse,
   PermissionDecisionId,
@@ -20,37 +14,13 @@ import type {
   RuntimeEvent,
   SessionPermissionPreference,
 } from '@shared/types/runtimeEvents';
-import {
-  permissionChangeNeedsConfirmation,
-  readSessionPermissionPreference,
-} from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
-import { agentHostManager } from '../services/agent-host/AgentHostManager';
-import { ensureWorkspaceTrusted, getEffectiveClaudeJsonPath } from '../services/auth/claudeHome';
-import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
+import { piSingleSlotRuntime } from '../services/agent-host/PiSingleSlotRuntime';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
-import { isRemoteVirtualPath } from '../services/remote/RemotePath';
-
-/**
- * Trust call matrix entries ①②: `CHAT_CREATE_SESSION` and
- * `CHAT_RESUME_SESSION` await this BEFORE `recordCreated`/`createSession`
- * (or the resume equivalents). Flag off, or a remote virtual path (I8), is a
- * no-op.
- *
- * D60 changed WHICH `.claude.json` this marks: the managed home's is gone, so
- * it is now the user's own. That is a merge of one `projects[<path>]` entry
- * into their file — the same entry Claude Code writes itself when a user
- * accepts its trust dialog — not a rewrite of anything they own.
- */
-async function ensureWorkspaceTrustedForChat(workspacePath: string | undefined): Promise<void> {
-  if (!resolveManagedCredentialsEnabled()) return;
-  if (!workspacePath || isRemoteVirtualPath(workspacePath)) return;
-  await ensureWorkspaceTrusted(getEffectiveClaudeJsonPath(), resolve(workspacePath));
-}
 
 /**
  * D48 §4.3/§4.6-1 (B18) — the cross-agent model guard, and the reason it lives
@@ -85,82 +55,6 @@ function assertModelMatchesAgent(agent: AgentWireName | null, model: unknown): v
       `${agent} — pick a model from this agent's catalog`
   );
 }
-
-/**
- * D48 S3 §5.5 — Main is the session snapshot's keeper, so it is also the one
- * place that decides which posture a create/resume actually carries.
- *
- * Three rules, in this order:
- *
- *  1. A row that already holds a posture WINS over anything the renderer sends.
- *     `chat:createSession` runs again every time the Host registry entry was
- *     dropped (restart, crash, unbind), and by then the global template may say
- *     something else — re-capturing it would let a Settings edit retune an
- *     existing chat through the back door, which is precisely what §5.5-2 says
- *     resume must never do. Resume passes no candidate at all for the same
- *     reason: it REPLAYS, it does not re-derive.
- *  2. Otherwise the renderer's template is taken, but only after being
- *     validated: it arrives as raw IPC JSON, and the value decides what a
- *     session may do unattended.
- *
- *     "Otherwise" covers a case worth naming, because the §5.4 copy ("existing
- *     sessions keep the posture captured when they were first sent") does not
- *     describe it: a row that EXISTS but never captured a posture. There are
- *     two ways to get one — a chat that predates D48, and a first send that
- *     happened before the settings store had hydrated (C15) — and both of them
- *     take today's template on the next `chat:createSession`. That is
- *     deliberate rather than overlooked, and the alternative was measured: the
- *     only in-band signal that would separate "old row" from "brand-new row" is
- *     the row's own existence, and `chat:registerSession` (R5 D2) writes a row
- *     for every chat the moment it appears in the sidebar — long before its
- *     first send. Refusing the candidate whenever a row exists would therefore
- *     refuse it for EVERY session, i.e. delete the S3 write side. The residual
- *     exposure is bounded to postureless rows and is pinned by the timing
- *     assertion in `chatPermissionPreferenceGuard.test.ts` (§5.5-5): once a row
- *     has a posture, no template can move it.
- *  3. A posture addressed to a DIFFERENT agent than the session is refused
- *     outright, before `recordCreated` — a row claiming a posture the session
- *     could never have run is the same class of lie B18 refuses for `model`.
- *     The Host refuses it a second time at dispatch (§5.7-C10); this one is
- *     what keeps the refusal ahead of the persisted row.
- *
- * Thrown as `code: message`, same as `assertModelMatchesAgent` — only
- * `.message` survives `ipcRenderer.invoke`.
- */
-async function resolveSessionPermissionPreference(input: {
-  sessionId: string;
-  agent: AgentWireName | null;
-  candidate?: unknown;
-}): Promise<SessionPermissionPreference | undefined> {
-  const entry = await sessionIndexService.get(input.sessionId);
-  const captured = entry?.permissionPreference;
-  if (captured) {
-    // Re-validated even though we wrote it: this came back off disk.
-    const parsed = readSessionPermissionPreference(captured, PREFERENCE_AGENTS);
-    if (parsed && (input.agent === null || parsed.agent === input.agent)) return parsed;
-    // A snapshot that no longer matches its own row (hand-edited file, a build
-    // that changed a binding) degrades to the runtime constant rather than to
-    // the current template — "we do not know" must not become "use today's".
-    return undefined;
-  }
-  if (input.candidate === undefined || input.candidate === null) return undefined;
-  const parsed = readSessionPermissionPreference(input.candidate, PREFERENCE_AGENTS);
-  if (!parsed) {
-    throw new Error(
-      'invalid_permission_preference: the requested permission posture is not a shape this build ' +
-        'accepts (networkAccess is reported by the runtime and is never a request field)'
-    );
-  }
-  if (input.agent !== null && parsed.agent !== input.agent) {
-    throw new Error(
-      `permission_agent_mismatch: a ${parsed.agent} permission posture cannot be applied to a ` +
-        `${input.agent} session — a session's posture and its agent are one decision`
-    );
-  }
-  return parsed;
-}
-
-const PREFERENCE_AGENTS = { claudeCode: CLAUDE_CODE_AGENT, codex: CODEX_AGENT } as const;
 
 /**
  * Which runtime a `chat:send` is going to reach.
@@ -221,20 +115,20 @@ let eventBridgeAttached = false;
 function ensureEventBridge(): void {
   if (eventBridgeAttached) return;
   eventBridgeAttached = true;
-  agentHostManager.onEvent(broadcastRuntimeEvent);
-  agentHostManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
+  piSingleSlotRuntime.onEvent(broadcastRuntimeEvent);
+  piSingleSlotRuntime.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
 }
 
 export function registerChatHandlers(): void {
   ensureEventBridge();
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async (_e, driver?: AgentHostDriver) => {
-    await agentHostManager.ensureStarted(driver);
-    return agentHostManager.getStatus();
+  ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async (_e, _driver?: AgentHostDriver) => {
+    await piSingleSlotRuntime.ensureReady();
+    return piSingleSlotRuntime.getStatus();
   });
 
   ipcMain.handle(IPC_CHANNELS.CHAT_GET_HOST_STATUS, async () => {
-    return agentHostManager.getStatus();
+    return piSingleSlotRuntime.getStatus();
   });
 
   ipcMain.handle(
@@ -270,24 +164,17 @@ export function registerChatHandlers(): void {
       // (SessionManager.create's own kind==='agent' check is the sibling
       // enforcement point for the PTY-agent path).
       assertAgentSpawnAllowed();
-      const requestedAgent = resolveAgentWireName(payload.agent);
-      // B18 — before `recordCreated`, so a refused create leaves no index row
-      // claiming a model the session could never have run.
-      assertModelMatchesAgent(requestedAgent, payload.model);
-      // Same "before the row exists" rule, for the posture (C10).
-      const permissionPreference = await resolveSessionPermissionPreference({
-        sessionId: payload.sessionId,
-        agent: requestedAgent,
-        candidate: payload.permissionPreference,
-      });
-      await ensureWorkspaceTrustedForChat(payload.workspacePath);
+      // T29-c is Pi-only. The old agent field remains on the preload contract
+      // until T31 removes the picker, but it no longer selects an execution
+      // runtime or permission dialect.
+      assertModelMatchesAgent(PI_AGENT, payload.model);
       // The window that created the chat owns it, for Extension UI routing.
       claimSessionForSender(e, payload.sessionId);
       // One resolved value into BOTH the snapshot and the wire: the row and the
       // running session cannot disagree about what was asked for.
-      const resolved = { ...payload, permissionPreference };
+      const resolved = { ...payload, agent: PI_AGENT, permissionPreference: undefined };
       await sessionIndexService.recordCreated(resolved);
-      const requestId = await agentHostManager.createSession(resolved);
+      const requestId = await piSingleSlotRuntime.createSession(resolved);
       return { requestId };
     }
   );
@@ -345,32 +232,11 @@ export function registerChatHandlers(): void {
         agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
-      // The resuming window owns the session's approval prompts from here.
+      // Real Pi JSONL resume lands in T32. T29-c deliberately refuses rather
+      // than routing the session back through the deleted singleton Pi host.
       claimSessionForSender(e, payload.sessionId);
-      // D47 S5 §3 — same gate as CHAT_CREATE_SESSION. Resuming a session that
-      // already ran is still a fresh Agent Host spawn from Main's point of
-      // view (a new `session.resume` command, possibly a new Host process) —
-      // it is NOT the `attach` exemption (attach reconnects to an ALREADY
-      // running in-process session, no new credentials touched).
-      assertAgentSpawnAllowed();
-      // B18 — the resume payload names the binding explicitly (it pairs with
-      // `runtimeIdentity`), so the guard reads it rather than the index row.
-      assertModelMatchesAgent(resolveAgentWireName(payload.agent), payload.model);
-      // D48 S3 §5.5-2 / C9 — the posture comes off the SESSION SNAPSHOT and
-      // from nowhere else. No candidate is passed, so there is no code path by
-      // which a resume could pick up a template edited after this chat started:
-      // the renderer is not even given the chance to send one.
-      const permissionPreference = await resolveSessionPermissionPreference({
-        sessionId: payload.sessionId,
-        agent: resolveAgentWireName(payload.agent),
-      });
-      await ensureWorkspaceTrustedForChat(payload.workspacePath);
-      await sessionIndexService.recordResumed(payload);
-      const requestId = await agentHostManager.resumeSession({
-        ...payload,
-        permissionPreference,
-      });
-      return { requestId };
+      void payload.runtimeIdentity;
+      throw new Error('pi_resume_not_implemented: Pi session resume lands in T32');
     }
   );
 
@@ -403,7 +269,7 @@ export function registerChatHandlers(): void {
         await resolveSessionAgentForDispatch(payload.sessionId),
         payload.model
       );
-      const requestId = await agentHostManager.sendMessage(payload);
+      const requestId = await piSingleSlotRuntime.send(payload);
       return { requestId };
     }
   );
@@ -411,7 +277,7 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_STOP,
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
-      const requestId = await agentHostManager.stopSession(payload);
+      const requestId = await piSingleSlotRuntime.stop(payload.sessionId);
       return { requestId };
     }
   );
@@ -420,7 +286,7 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_CLOSE_SESSION,
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
       extensionUiRouter.releaseSession(payload.sessionId);
-      const requestId = await agentHostManager.closeSession(payload);
+      const requestId = await piSingleSlotRuntime.closeSession(payload.sessionId);
       return { requestId };
     }
   );
@@ -466,56 +332,11 @@ export function registerChatHandlers(): void {
       preference: SessionPermissionPreference;
       effective: PermissionUpdateEffective;
     }> => {
-      const agent = await resolveSessionAgentForDispatch(payload.sessionId);
-      if (agent === null) {
-        // Unlike `chat:send`'s guard, an unresolvable binding is fatal here.
-        // Send can stand down and let the Host route the message; this command
-        // would have to pick which half of the preference union to validate,
-        // and picking wrong means validating nothing.
-        throw new Error(
-          `session_binding_unknown: no indexed agent for session ${payload.sessionId} — a ` +
-            'permission change needs to know which runtime it is addressed to'
-        );
-      }
-      const parsed = readSessionPermissionPreference(
-        payload.permissionPreference,
-        PREFERENCE_AGENTS
+      void payload.permissionPreference;
+      void payload.dangerousConfirmed;
+      throw new Error(
+        `pi_permission_update_not_implemented: session ${payload.sessionId} uses the Pi permission extension`
       );
-      if (!parsed) {
-        throw new Error(
-          'invalid_permission_preference: the requested permission posture is not a shape this ' +
-            'build accepts (networkAccess is reported by the runtime and is never a request field)'
-        );
-      }
-      if (parsed.agent !== agent) {
-        throw new Error(
-          `permission_agent_mismatch: a ${parsed.agent} permission posture cannot be applied to a ` +
-            `${agent} session — a session's posture and its agent are one decision`
-        );
-      }
-      if (permissionChangeNeedsConfirmation(parsed, payload.dangerousConfirmed)) {
-        throw new Error(
-          'dangerous_tier_unconfirmed: this tier removes a safety boundary and was not confirmed ' +
-            '— it is never applied on the strength of the request alone'
-        );
-      }
-      const event = await agentHostManager.updateSessionPermission({
-        sessionId: payload.sessionId,
-        permissionPreference: parsed,
-        ...(payload.dangerousConfirmed === true ? { dangerousConfirmed: true } : {}),
-      });
-      // Confirmed. The snapshot is the value every later resume replays, so it
-      // is written from the event's own echo rather than from what we sent —
-      // one truth, and it is the runtime's.
-      await sessionIndexService.setPermissionPreference(
-        payload.sessionId,
-        event.payload.preference
-      );
-      return {
-        requestId: event.requestId ?? '',
-        preference: event.payload.preference,
-        effective: event.payload.effective,
-      };
     }
   );
 
@@ -531,8 +352,10 @@ export function registerChatHandlers(): void {
         decision?: PermissionDecisionId;
       }
     ): Promise<{ requestId: string }> => {
-      const requestId = await agentHostManager.respondPermission(payload);
-      return { requestId };
+      void payload;
+      throw new Error(
+        'pi_permission_response_unsupported: Pi approvals use Extension UI responses'
+      );
     }
   );
 
@@ -553,7 +376,7 @@ export function registerChatHandlers(): void {
       // retry with the same id. Forgetting the routing entry now is what stops
       // the map growing by one per prompt for the life of the process.
       extensionUiRouter.forgetRequest(payload.uiRequestId);
-      const requestId = await agentHostManager.respondExtensionUi(payload);
+      const requestId = await piSingleSlotRuntime.respondExtensionUi(payload);
       return { requestId };
     }
   );
@@ -570,8 +393,8 @@ export function registerChatHandlers(): void {
         cancel?: boolean;
       }
     ): Promise<{ requestId: string }> => {
-      const requestId = await agentHostManager.respondQuestion(payload);
-      return { requestId };
+      void payload;
+      throw new Error('pi_question_response_unsupported: Pi questions use Extension UI responses');
     }
   );
 
@@ -596,7 +419,8 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_LIST_HISTORY,
     async (_e, workspacePath: string): Promise<HistorySessionSummary[]> => {
-      return agentHostManager.listHistory(workspacePath);
+      void workspacePath;
+      return [];
     }
   );
 }

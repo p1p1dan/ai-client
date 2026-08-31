@@ -99,8 +99,18 @@ export async function cleanupAllResources(): Promise<void> {
   // Previous approach ran steps serially with per-step 3000ms timeouts, which
   // could stack up to ~15s total — triggering the force-exit while async cleanup
   // was still running and causing double-cleanup of node-pty native resources.
-  const TOTAL_ASYNC_TIMEOUT = 5500;
-  const deadline = new Promise<void>((resolve) => setTimeout(resolve, TOTAL_ASYNC_TIMEOUT));
+  // WorkerSlot's worst graceful path is 3s dispose ACK + 3s exit confirmation.
+  // Keep this above that 6s contract and below Main's 8s force-exit timer.
+  const TOTAL_ASYNC_TIMEOUT = 7000;
+  let deadlineTimer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    deadlineTimer = setTimeout(() => {
+      // Graceful worker disposal exhausted its ACK+exit budget. Detach routing
+      // and kill synchronously before Main's outer 8s force-exit timer fires.
+      cleanupAgentHostSync();
+      resolve();
+    }, TOTAL_ASYNC_TIMEOUT);
+  });
 
   const safeRun = async (fn: () => Promise<void>, label: string): Promise<void> => {
     try {
@@ -131,11 +141,15 @@ export async function cleanupAllResources(): Promise<void> {
       safeRun(() => stopAllFileWatchers(), 'fileWatchers'),
       // Claude completions file watcher
       safeRun(() => stopClaudeCompletionsWatchers(), 'claudeCompletions'),
+      // Pi WorkerSlot + remaining legacy host authority. Worker cleanup starts
+      // inside the global deadline so app quit cannot leave a utility process.
+      safeRun(() => cleanupAgentHost(), 'agentHost'),
       // Temp files
       safeRun(() => cleanupTempFiles(), 'tempFiles'),
     ]),
     deadline,
   ]);
+  if (deadlineTimer) clearTimeout(deadlineTimer);
 
   // Fast synchronous cleanup (runs after async steps or deadline)
   try {
@@ -151,7 +165,6 @@ export async function cleanupAllResources(): Promise<void> {
   disposeClaudeIdeBridge();
   await remoteConnectionManager.cleanup();
   await cleanupTodo();
-  await cleanupAgentHost();
 }
 
 /**

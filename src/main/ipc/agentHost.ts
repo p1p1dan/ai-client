@@ -7,6 +7,7 @@ import {
   getBundledNodeRuntimePath,
 } from '../services/agent-host/AgentHostManager';
 import { resolveNode24Runtime } from '../services/agent-host/NodeRuntimeResolver';
+import { piSingleSlotRuntime } from '../services/agent-host/PiSingleSlotRuntime';
 
 export function registerAgentHostHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.AGENT_HOST_RESOLVE_NODE, async () => {
@@ -35,9 +36,13 @@ export function registerAgentHostHandlers(): void {
 }
 
 export async function cleanupAgentHost(): Promise<void> {
-  await agentHostManager.shutdown();
+  await Promise.allSettled([
+    piSingleSlotRuntime.disposeAll('app-shutdown'),
+    agentHostManager.shutdown(),
+  ]);
 }
 
 export function cleanupAgentHostSync(): void {
+  piSingleSlotRuntime.forceKillAllNow();
   void agentHostManager.shutdown();
 }

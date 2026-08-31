@@ -18,7 +18,6 @@ import {
   type SessionStopCommand,
   type SessionUpdatePermissionCommand,
 } from '@shared/types/agentHost';
-import type { AgentWireName } from '@shared/types/agentWire';
 import type {
   HostReadyEvent,
   RuntimeEvent,
@@ -35,19 +34,10 @@ import log from '../../utils/logger';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getDevCredentialSeed } from '../auth/managedCredentialsStartup';
-import { resolveManagedPiHostEnv } from '../piModelConfig';
 import { AgentHostProcess } from './AgentHostProcess';
 import { buildAgentHostEnv, CODEX_JS_PATH_ENV_KEY, deriveBundledCodexJsPath } from './hostEnv';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { resolveNode24Runtime } from './NodeRuntimeResolver';
-import { PiHostProcess } from './PiHostProcess';
-
-/**
- * D5 (Pi Backend Migration): which backend the Host spawns.
- * Hardcoded to 'pi' for Phase 1. Code for Claude/Codex is preserved,
- * flipping this back to 'claude-code' restores the original behavior.
- */
-const ACTIVE_BACKEND: AgentWireName = 'pi';
 
 /**
  * F2 S5 (2026-08-18 watchdog redesign, spec §6.2) — the four
@@ -173,7 +163,7 @@ function nextRequestId(prefix: string): string {
  * Owns the single Agent Host child process lifecycle for the Electron Main process.
  */
 export class AgentHostManager {
-  private process: AgentHostProcess | PiHostProcess | null = null;
+  private process: AgentHostProcess | null = null;
   private state: AgentHostState = 'stopped';
   private driver: AgentHostDriver = DEFAULT_AGENT_HOST_DRIVER;
   private readyPromise: Promise<void> | null = null;
@@ -545,7 +535,7 @@ export class AgentHostManager {
    * `error` event on an EventEmitter throws — a spawn failure would have taken
    * the Main process down instead of degrading to an error state.
    */
-  private attachProcessHandlers(proc: AgentHostProcess | PiHostProcess): void {
+  private attachProcessHandlers(proc: AgentHostProcess): void {
     proc.on('event', (event: RuntimeEvent) => {
       this.trackOpenSession(event);
       for (const handler of this.eventHandlers) {
@@ -725,38 +715,7 @@ export class AgentHostManager {
 
   private async startInternal(): Promise<void> {
     this.state = 'starting';
-
-    if (ACTIVE_BACKEND === 'pi') {
-      await this.startPiHost();
-      return;
-    }
-
     await this.startLegacyHost();
-  }
-
-  /** D5: pi backend — utilityProcess + MessagePort. */
-  private async startPiHost(): Promise<void> {
-    const hostEntryPath = resolvePiHostEntryPath();
-    const useStripTypes = hostEntryPath.endsWith('.ts');
-    const proc = new PiHostProcess({
-      hostEntryPath,
-      execArgv: useStripTypes ? ['--experimental-strip-types'] : [],
-      env: resolveManagedPiHostEnv(),
-    });
-
-    this.attachProcessHandlers(proc);
-    this.process = proc;
-    await proc.start();
-
-    proc.send({
-      protocolVersion: AGENT_HOST_PROTOCOL_VERSION,
-      requestId: `init-${Date.now()}`,
-      type: 'host.initialize',
-      payload: {},
-    });
-
-    await waitForReady(proc, 15000);
-    this.state = 'ready';
   }
 
   /** Legacy Claude/Codex backend — independent Node process + NDJSON. */
@@ -890,15 +849,7 @@ export function resolveHostEntryPath(): string {
   return path.join(app.getAppPath(), 'src', 'agent-host', 'index.ts');
 }
 
-/** D5: pi backend entry point — piHost.ts in dev, piHost.js packaged. */
-function resolvePiHostEntryPath(): string {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'agent-host', 'piHost.js');
-  }
-  return path.join(app.getAppPath(), 'src', 'agent-host', 'piHost.ts');
-}
-
-function waitForReady(proc: AgentHostProcess | PiHostProcess, timeoutMs: number): Promise<void> {
+function waitForReady(proc: AgentHostProcess, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
