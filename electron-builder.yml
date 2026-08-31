@@ -44,18 +44,6 @@ files:
   - "!node_modules/shiki/dist/themes/**"
   - "!node_modules/@shikijs/langs/**"
   - "!node_modules/@shikijs/themes/**"
-  # Exclude the Agent SDK's bundled CLI binaries from the root asar. The agent
-  # CLIs ship inside resources/agent-host via scripts/afterPack.mjs instead, so
-  # the root bundle carries no agent CLI at all — Claude on every platform,
-  # Codex only where it is whitelisted (win32/linux; mac ships no Codex at all,
-  # spec 改判 ⑧). Do NOT add exclusions for agent CLI packages that are not root
-  # dependencies — a rule that can never match reads as evidence that the
-  # package IS a root dependency, which is how the previous Codex rule survived
-  # for so long.
-  # @anthropic-ai/claude-agent-sdk: ~68MB of CLI and WASM files
-  - "!node_modules/@anthropic-ai/claude-agent-sdk/vendor/**"
-  - "!node_modules/@anthropic-ai/claude-agent-sdk/cli.js"
-  - "!node_modules/@anthropic-ai/claude-agent-sdk/*.wasm"
   # Cloudflared: ~38MB pre-downloaded binary (we download at runtime to userData/bin)
   - "!node_modules/cloudflared/bin/**"
   # Mermaid and its heavy dependencies (~60MB total) - loaded from CDN at runtime
@@ -156,15 +144,10 @@ extraResources:
     filter:
       - "package.json"
       - "lib/**/*"
-  # NOTE: the Agent Host artifact (out-agent-host -> resources/agent-host) is
-  # deliberately NOT an extraResources entry — electron-builder drops its
-  # node_modules tree and the parallel copy races rcedit. It is copied by
-  # scripts/afterPack.mjs instead (plain files, never asar: on TSD machines
-  # only the whitelisted external node.exe can read them).
-  # SIZE: that artifact now carries the bundled Codex CLI and its platform
-  # package, taking it from ~51MB to ~388MB (measured linux-x64, 2026-08-20).
-  # Moving it back under extraResources would therefore be expensive as well as
-  # broken — the parallel copy would race rcedit over ~388MB.
+  # The worker-only Pi artifact is copied by scripts/afterPack.mjs instead of
+  # extraResources because electron-builder drops its node_modules tree there.
+  # It remains plain files so utilityProcess can resolve the Pi SDK and bundled
+  # permission extension.
 compression: maximum
 
 mac:

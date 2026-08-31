@@ -2,9 +2,9 @@
  * Refuse a local cross-platform package build.
  *
  * `dist:prereq` prepares HOST-platform inputs — fetch-node-runtime defaults to
- * process.platform/arch, and build-agent-host copies this machine's node-pty
- * and codex platform package — while afterPack.mjs deliberately takes files for
- * the TARGET platform (context.electronPlatformName). Running `build:win` on
+ * process.platform/arch, and build-agent-host prunes native Pi dependencies for
+ * this machine — while afterPack.mjs deliberately takes files for the TARGET
+ * platform (context.electronPlatformName). Running `build:win` on
  * Linux therefore stages a Linux runtime and then asks for node.exe: it either
  * dies deep inside packaging or, worse, produces a package with the wrong
  * platform's binaries in it.
@@ -35,7 +35,7 @@ if (!matches) {
   console.error(
     `[assert-build-target] refusing to build ${target} on ${hostKey}.\n` +
       `  Local packaging is host-platform only: dist:prereq stages this machine's\n` +
-      `  Node runtime, node-pty and codex platform package, while afterPack takes\n` +
+      `  Node runtime and Pi worker dependencies, while afterPack takes\n` +
       `  the target platform's files — the two would not agree.\n` +
       `  Build ${target} on CI instead (Actions -> Build -> Run workflow), or run\n` +
       `  this command on a ${target} machine.`

@@ -18,41 +18,39 @@ const builderYmlText = readFileSync(path.join(repoRoot, 'electron-builder.yml'),
 const builderYml = yaml.load(builderYmlText);
 const workflowText = readFileSync(path.join(repoRoot, '.github', 'workflows', 'build.yml'), 'utf8');
 const workflow = yaml.load(workflowText);
+const workerPackage = JSON.parse(
+  readFileSync(path.join(repoRoot, 'src', 'agent-host', 'package.json'), 'utf8')
+);
 
 describe('electron-builder.yml (C4)', () => {
-  it('has no exclusion rule for the Codex package in files:', () => {
-    // The rule targeted the ROOT node_modules, where the codex package has
-    // never existed — it was dead from the day it was written, and its comment
-    // ("we use system-installed CLIs") contradicts REQ-1 now that we bundle it.
-    const excludes = (builderYml.files ?? []).filter(
-      (entry) => typeof entry === 'string' && entry.startsWith('!')
-    );
-    expect(excludes.filter((e) => e.includes('@openai'))).toEqual([]);
-  });
-
-  it('does not mention the codex package name anywhere in the file', () => {
-    // Comments included: a rule that can never match reads as evidence that
-    // the package IS a root dependency. Parsed-YAML-only checking would miss a
-    // comment reintroducing exactly that misreading.
+  it('contains no legacy Claude/Codex execution packaging rules', () => {
     expect(builderYmlText).not.toContain('@openai/codex');
-  });
-
-  it('still excludes the Agent SDK binaries it is actually responsible for', () => {
-    // Falsifies "deleted one line too many".
-    const files = builderYml.files ?? [];
-    expect(files).toContain('!node_modules/@anthropic-ai/claude-agent-sdk/vendor/**');
-    expect(files).toContain('!node_modules/@anthropic-ai/claude-agent-sdk/cli.js');
+    expect(builderYmlText).not.toContain('@anthropic-ai/claude-agent-sdk');
+    expect(builderYmlText).not.toContain('@cometix/claude-code');
   });
 
   it('keeps the agent-host artifact out of extraResources', () => {
-    // It is copied by afterPack instead; an extraResources entry drops its
-    // node_modules tree and races rcedit over ~388MB.
+    // It is copied by afterPack instead; extraResources drops node_modules.
     const extra = builderYml.extraResources ?? [];
     for (const entry of extra) {
       const from = typeof entry === 'string' ? entry : entry.from;
       expect(from).not.toContain('out-agent-host');
       expect(from).not.toContain('agent-host');
     }
+  });
+});
+
+describe('worker package dependency boundary', () => {
+  it('ships only Pi runtime and permission dependencies', () => {
+    expect(Object.keys(workerPackage.dependencies).sort()).toEqual([
+      '@earendil-works/pi-coding-agent',
+      '@gotgenes/pi-permission-system',
+    ]);
+    expect(Object.keys(workerPackage.devDependencies).sort()).toEqual([
+      '@anthropic-ai/claude-agent-sdk',
+      '@cometix/claude-code',
+      '@openai/codex',
+    ]);
   });
 });
 
@@ -133,8 +131,8 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
   const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 
   // dist:prereq stages HOST inputs (fetch-node-runtime defaults to
-  // process.platform, build-agent-host copies this machine's node-pty and codex
-  // platform package) while afterPack takes TARGET files. Every packaging entry
+  // process.platform and build-agent-host prunes target-specific Pi dependencies)
+  // while afterPack takes TARGET files. Every packaging entry
   // point must refuse the mismatch before any of that work happens.
   const guarded = [
     ['build:win', 'win32-x64'],
@@ -188,6 +186,14 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
         job
       ).toBe(false);
     }
+  });
+
+  it('installs legacy execution dependencies only in the test gate, never packaging jobs', () => {
+    const installRun = (job) =>
+      jobs[job].steps.find((step) => step['working-directory'] === 'src/agent-host')?.run;
+    expect(installRun('gate')).toBe('npm ci --omit=optional');
+    expect(installRun('build-windows')).toBe('npm ci --omit=dev --omit=optional');
+    expect(installRun('build-linux')).toBe('npm ci --omit=dev --omit=optional');
   });
 
   it('every job runs Node 24, matching src/agent-host engines', () => {

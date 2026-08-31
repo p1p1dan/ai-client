@@ -24,8 +24,8 @@ export default async function afterPack(context) {
 
   const targets = [
     path.join(context.appOutDir, 'resources', 'app.asar.unpacked'),
-    // Agent Host artifact — read by the external whitelisted node.exe on TSD
-    // machines, but must stay unencrypted for non-TSD installs.
+    // Pi worker artifact — loaded by an Electron utilityProcess and kept as
+    // plain files so the SDK and permission extension remain resolvable.
     path.join(context.appOutDir, 'resources', 'agent-host'),
   ];
   for (const dir of targets) {
@@ -34,22 +34,27 @@ export default async function afterPack(context) {
 }
 
 /**
- * Copy the Agent Host artifact into resources/agent-host.
+ * Copy the worker-only Pi artifact into resources/agent-host.
  *
- * Done here instead of extraResources for two reasons:
- *   1. electron-builder injects !**\/node_modules\/** into every extraResources
- *      copy (app-builder-lib fileMatcher), silently dropping the artifact's
- *      node_modules tree.
- *   2. The 87MB parallel copy raced rcedit's version-resource rewrite of
- *      AiClient.exe ("Unable to commit changes"); afterPack runs sequentially
- *      after packing, so there is no contention.
+ * Done here instead of extraResources because electron-builder injects a
+ * node_modules exclusion into that copy path. afterPack also keeps the copy
+ * serial with Windows executable resource rewriting.
  */
 function copyAgentHost(context) {
   const src = path.join(context.packager.info.projectDir, 'out-agent-host');
-  if (!fs.existsSync(path.join(src, 'index.js'))) {
+  if (
+    !fs.existsSync(path.join(src, 'worker.js')) ||
+    !fs.existsSync(path.join(src, 'package.json')) ||
+    !fs.existsSync(path.join(src, 'node_modules', '@gotgenes', 'pi-permission-system'))
+  ) {
     throw new Error(
-      `[afterPack] out-agent-host missing or incomplete at ${src} — run "pnpm build:agent-host" first`
+      `[afterPack] worker-only out-agent-host missing or incomplete at ${src} — run "pnpm build:agent-host" first`
     );
+  }
+  for (const obsolete of ['index.js', 'piHost.js']) {
+    if (fs.existsSync(path.join(src, obsolete))) {
+      throw new Error(`[afterPack] obsolete transition artifact still exists: ${obsolete}`);
+    }
   }
   const dest = path.join(context.appOutDir, 'resources', 'agent-host');
   fs.rmSync(dest, { recursive: true, force: true });

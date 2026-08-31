@@ -61,12 +61,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # --omit=optional on purpose: the gates need types and tests, not
-      # cometix's cli.js or codex's ~347MB platform package. cometix's
-      # install.cjs only console.errors when its platform package is missing,
-      # so this does not fail. If a gate turns red purely from the missing
-      # optional packages, fall back to a full `npm ci` and accept the time —
-      # never make the tests skip on a missing package.
+      # The Pi utility worker does not ship legacy CLI platform payloads.
       - name: Install agent-host dependencies
         run: npm ci --omit=optional
         working-directory: src/agent-host
@@ -193,17 +188,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # No agent-host npm cache here on purpose (REQ-7 accounting, decided
-      # 2026-08-21). It was measured on runs 32444722264 / 32448401467: with the
-      # cache restored, `npm ci` took 8s on Windows and 11s on Linux — against
-      # 7s and 11s with a cold cache. Zero gain, for a 278-362 MB entry competing
-      # with the electron/pnpm caches inside the repo's 10 GB LRU budget.
-      #
-      # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
-      # src/agent-host is a standalone npm project; npm ci must include optional
-      # deps so the cometix postinstall can copy cli.js + vendor/.
+      # Standalone Pi worker package. Legacy execution dependencies are dev-only
+      # and omitted from packaging installs together with optional platform CLIs.
       - name: Install agent-host dependencies
-        run: npm ci
+        run: npm ci --omit=dev --omit=optional
         working-directory: src/agent-host
 
       # REQ-7 accounting. The cache-entry and disk figures are the inputs for
@@ -215,17 +203,7 @@ jobs:
         shell: pwsh
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
-      # Spec §11-Q1 evidence: this repo has never produced a Windows artifact,
-      # so the vendor layout, the per-file bytes and codex.exe's real size are
-      # all unmeasured. Print them BEFORE anything can fail on them — a run that
-      # dies inside a gate produces none of the readings the gate needs.
-      - name: Inspect codex payload (spec §11-Q1 evidence)
-        run: node scripts/inspect-codex-payload.mjs
-
-      # Step two of spec §11-Q1: run 32442630099 measured every Q1 item and all
-      # of them passed, so win32-x64 joined CODEX_MEASURED_PLATFORMS and the
-      # --observe flag is gone. They are hard gates here now.
-      - name: Build agent-host artifact
+      - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
       # T08-a: the gate has to WORK in the artifact, not merely be present.
@@ -263,8 +241,8 @@ jobs:
         shell: pwsh
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
-      - name: Verify packaged agent-host (structure)
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --skip-smoke
+      - name: Verify packaged Pi worker
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked
 
       # Without these, a workflow_dispatch run builds a Windows package and then
       # throws it away — the only way to obtain a test build was a Windows machine.
@@ -356,25 +334,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # No agent-host npm cache — see the Windows job for the measurement.
-      #
-      # Agent Host artifact (extraResources: out-agent-host -> resources/agent-host).
+      # Standalone Pi worker package; omit dev-only legacy execution dependencies
+      # and optional platform CLI payloads.
       - name: Install agent-host dependencies
-        run: npm ci
+        run: npm ci --omit=dev --omit=optional
         working-directory: src/agent-host
 
       - name: Report disk after install (REQ-7)
         run: df -h /
 
-      # Prints the @openai tree file by file. Linux is already measured, so this
-      # is the comparison baseline for the Windows listing (spec §10.3 hoist
-      # belief: project installs hoist, global installs do not).
-      - name: Inspect codex payload (spec §11-Q1 evidence)
-        run: node scripts/inspect-codex-payload.mjs
-
-      # No --observe: linux-x64 is in CODEX_MEASURED_PLATFORMS, every Q1 item is
-      # a hard gate here.
-      - name: Build agent-host artifact
+      - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
       # Same gate as the Windows job — see the note there.
@@ -401,8 +370,8 @@ jobs:
       - name: Report disk after packaging (REQ-7)
         run: df -h /
 
-      - name: Verify packaged agent-host (structure)
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --skip-smoke
+      - name: Verify packaged Pi worker
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked
 
       - name: Upload Linux packages
         if: github.event_name == 'workflow_dispatch'

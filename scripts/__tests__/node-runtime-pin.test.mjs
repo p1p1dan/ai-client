@@ -4,7 +4,6 @@ import {
   BUNDLED_NODE_RUNTIME_BINARIES,
   bundledNodeRuntimeBinaryFor,
 } from '../../src/shared/agentHost/nodeRuntimePin';
-import { CODEX_SHIPPED_PLATFORMS } from '../codex-platform.mjs';
 import {
   NODE_RUNTIME_PINS,
   NODE_RUNTIME_VERSION,
@@ -12,16 +11,10 @@ import {
 } from '../node-runtime-pin.mjs';
 
 /**
- * Packaging spec C1 / C2 / C9 + the second half of A2c.
+ * Packaging spec C1 / C2 / C9.
  *
- * Three tables have to agree or the packaged app is incoherent:
- *   - scripts/node-runtime-pin.mjs          which platforms get a bundled Node
- *   - scripts/codex-platform.mjs            which platforms get a bundled codex
- *   - src/shared/agentHost/nodeRuntimePin   what Main looks for at runtime
- *
- * A platform shipping codex but no Node has an agent host with nothing to run
- * it; a platform whose Main looks for the wrong binary name silently falls back
- * to machine Node. Neither shows up as a build failure, so it is pinned here.
+ * The build-side pin table and Main-side lookup table must agree. A mismatched
+ * binary name silently falls back to machine Node, so the relation is pinned.
  *
  * Lives under scripts/__tests__ rather than next to the Main-side module on
  * purpose: it imports untyped .mjs, which vitest resolves happily but tsc
@@ -57,11 +50,7 @@ describe('bundled Node runtime table (C9)', () => {
   });
 });
 
-describe('Node runtime pins vs codex ship whitelist (A2c second half, C9)', () => {
-  it('has identical key sets — codex and Node ship together or not at all', () => {
-    expect(Object.keys(NODE_RUNTIME_PINS).sort()).toEqual([...CODEX_SHIPPED_PLATFORMS].sort());
-  });
-
+describe('Node runtime pins', () => {
   it('pins one shared version across every platform', () => {
     for (const pin of Object.values(NODE_RUNTIME_PINS)) {
       expect(pin.archiveName).toContain(NODE_RUNTIME_VERSION);

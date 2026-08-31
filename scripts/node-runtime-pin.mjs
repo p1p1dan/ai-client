@@ -1,11 +1,8 @@
 /**
  * Pinned Node runtime bundled into the packaged app (C-15 / D17, D36).
  *
- * Both platforms share one version. Adding a platform means adding a row here
- * plus a matching entry in CODEX_SHIPPED_PLATFORMS (scripts/codex-platform.mjs)
- * — the two key sets are asserted equal (packaging spec C9/A2c), because a
- * platform that ships codex but has no Node pin would produce an app whose
- * bundled agent host has nothing to run it with.
+ * Both platforms share one version. The build-side table is asserted against
+ * Main's runtime lookup table so afterPack and runtime resolution cannot drift.
  *
  * SHA-256 values are transcribed verbatim from the official
  * https://nodejs.org/dist/v24.18.0/SHASUMS256.txt (fetched 2026-08-20T07:52:21Z).
@@ -23,8 +20,7 @@ function runtimeUrls(archiveName) {
 }
 
 /**
- * Keyed by `<platform>-<arch>` in the same shape codex-platform.mjs uses, so
- * the two tables can be compared key-for-key.
+ * Keyed by `<platform>-<arch>`.
  *
  * - `binaryRel`: path of the node binary INSIDE the extracted archive folder.
  * - `outName`: what it is called in out-node-runtime/.
