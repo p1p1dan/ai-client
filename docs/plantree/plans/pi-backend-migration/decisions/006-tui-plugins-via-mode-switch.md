@@ -1,6 +1,10 @@
 # D6 — TUI-only 插件通过模式切换使用，后续按需写 GUI 渲染器
 
-**状态**：已拍板（2026-08-28）
+> **状态：Active / revised for pix-based TUI（2026-08-31）**
+>
+> GUI 中透明降级与按需专属 renderer 的结论继续有效；真实切换、PTY、single-writer authority 和 Pi CLI packaging 由 [D15](./015-main-owned-worker-manager.md) 与 roadmap T36 实现，主要参考 pix。
+
+**原状态**：已拍板（2026-08-28）
 
 ## 决策
 

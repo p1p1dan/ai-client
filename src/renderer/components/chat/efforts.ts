@@ -12,6 +12,7 @@
  * additionally drops any value it does not recognize (normalizeEffort).
  */
 
+import type { AgentModelOption } from '@shared/types/agentCatalog';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 
 export interface ChatEffort {
@@ -98,4 +99,31 @@ export function toWireEffort(selection: string | null | undefined): SessionEffor
 /** Label for a selection, including the sentinel. */
 export function effortLabel(selection: string): string {
   return CHAT_EFFORTS.find((effort) => effort.id === selection)?.label ?? 'Default';
+}
+
+/**
+ * T25 model capability projection. Legacy/non-Pi options have no metadata and
+ * retain the existing five-level behavior. Pi may explicitly disable reasoning
+ * or provide a thinkingLevelMap; when the map is present, only non-null mapped
+ * levels are declared supported.
+ */
+export function effortsForModel(
+  model: Pick<AgentModelOption, 'reasoning' | 'thinkingLevelMap'> | undefined
+): ChatEffort[] {
+  if (!model || (model.reasoning === undefined && !model.thinkingLevelMap)) {
+    return CHAT_EFFORTS;
+  }
+  if (model.reasoning === false) return [];
+  if (!model.thinkingLevelMap) return CHAT_EFFORTS;
+  return CHAT_EFFORTS.filter((effort) => model.thinkingLevelMap?.[effort.id] != null);
+}
+
+export function reconcileEffortForModel(
+  selection: string | null | undefined,
+  model: Pick<AgentModelOption, 'reasoning' | 'thinkingLevelMap'> | undefined
+): EffortSelection {
+  if (!selection || selection === EFFORT_DEFAULT_ID) return EFFORT_DEFAULT_ID;
+  return effortsForModel(model).some((effort) => effort.id === selection)
+    ? (selection as SessionEffortLevel)
+    : EFFORT_DEFAULT_ID;
 }

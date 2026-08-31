@@ -1,47 +1,93 @@
-# Plan — Pi Backend Migration
+# Plan — Pi-only Application Convergence
 
-> 分支 `feat/pi-primary-backend`。将桌面应用后端从 Codex（Claude Code CLI app-server）全面切换到 pi-agent 生态（`@earendil-works/pi-coding-agent` SDK）。
+> **状态**：In Progress
+>
+> **分支**：`feat/pi-primary-backend`
+>
+> **当前阶段**：T28 replacement baseline；下一实现纵切为 T29 single WorkerSlot。
 
-## Scope
+## 目标
 
-把 `src/agent-host/` 的后端从 Claude Code Agent SDK 替换为 pi-agent SDK，保留 GUI 外皮，实现结构化对话交互 + 视图/TUI 模式自由切换。
+将 ai-client 收敛为 Pi-only 桌面应用：
 
-**动机**：pi-agent 适配多模型供应商（不限于 Claude/Codex），用户设备可直接使用，提供开箱即用体验。
+```text
+Renderer → Preload → Electron Main WorkerManager
+→ bounded WorkerSlot pool
+→ one utilityProcess + one Pi AgentSession per slot
+```
 
-**非目标**：
-- 不改 Electron 主进程架构（保留 main → preload → renderer 三层）
-- 不重写 GUI 组件库（复用现有 React + shadcn 组件）
-- 不做 pi-app 的 34 个逐扩展适配器（采用三级能力分层代替）
+Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不再作为可执行对话 runtime；原始会话通过只读、原子、可去重的导入服务复制为新的 Pi session 后继续。
 
-## 参考项目
+## 已拍板边界
 
-| 项目 | 用途 | 核心借鉴 |
-|------|------|----------|
-| [pix](https://github.com/num-scope/pix)（架构参考） | 四层隔离 + contracts 包 + 三级能力分层 + utilityProcess 崩溃隔离 | agent-host 进程模型、Extension UI bridge、Portable/Semantic no-op/TUI-only 分层 |
-| [pi-app](https://github.com/justhil/pi-app)（功能参考） | 流式时间线 + 会话树 + 消息队列 + 扩展兼容层 | 产品功能设计、用户交互模式、`~/.pi/agent` 共享配置 |
+- 产品范围以 [D14](./decisions/014-pi-only-product-and-conversation-import.md) 为准。
+- 进程与 ownership 以 [D15](./decisions/015-main-owned-worker-manager.md) 为准。
+- Main 持有 WorkerManager；Pi SDK 不直接运行在 Main。
+- 每个 WorkerSlot 对应独立 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
+- Cycle 1/2 已完成行为和证据保留；singleton transport/owner 部分适配或替换，不把真实完成记录改回 Pending。
+- legacy source 永不修改；import 不承诺恢复原 runtime 隐藏状态。
+- GUI/TUI 不同时写同一个 Pi session file。
 
-## 受影响模块
+## 非目标
 
-| 模块 | 影响 |
-|------|------|
-| `src/agent-host/` | **重写**：claudeRuntime → piRuntime，eventNormalizer 适配 pi SDK 事件 |
-| `src/shared/types/` | **扩展**：新增 pi 协议类型，保留 runtimeEvents 作为内部统一事件层 |
-| `src/main/services/agent-host/` | **改造**：AgentHostManager 切换到 utilityProcess 模式 |
-| `src/renderer/` | **增量**：新增结构化消息渲染 + 模式切换 UI |
-| `src/preload/` | **适配**：IPC 桥接更新 |
+- 本次计划整理不直接删除实现代码或 package dependencies。
+- 不重写 React/@coss/ui 设计系统。
+- 不复制 pi-app 的私有 SDK deep import、固定 disposal sleep 或无确认 rewind。
+- 不复制 pix 的全局 CLI 安装、Ghostty 私有 patch、同 JSONL 双写或第二套 supervisor。
 
-## 文件地图与阅读路径
+## 参考仓库
+
+| 项目 | 本地路径 / 版本 | 当前角色 |
+|---|---|---|
+| [pi-app](https://github.com/justhil/pi-app) | `/home/ai/code/pi-app` · `c5ad2f4dccb4` | WorkerManager/WorkerSlot、history/resume、tree/rewind/fork、timeline 与竞态测试 |
+| [pix](https://github.com/num-scope/pix) | `/home/ai/code/pix` · `da01b3e12d2e` | Pi TUI/PTY、GUI/TUI exclusivity、stale output、CLI extraction 与 packaging |
+
+两者均为 MIT。substantial copying 必须保留相应 copyright/license notice。每个实现切片须按 [参考仓库规则](./topics/reference-repositories.md) 标记 `direct / adapted / rejected`。
+
+## 当前受影响边界
+
+| 边界 | 方向 |
+|---|---|
+| `src/main/services/agent-host/` | singleton `PiHostProcess`/多 runtime manager → Main-owned WorkerManager |
+| `src/agent-host/` | utility worker entry + Pi AgentSession；删除 Claude/Codex execution runtime |
+| `src/shared/types/` | 稳定 RuntimeEvent/RPC contracts；去除 legacy runtime discriminants |
+| `src/preload/` | 保持受控 Electron IPC bridge |
+| `src/renderer/` | 保留 Cycle 1/2 产品行为，去除 agent/runtime picker 语义 |
+| session/index/import services | Pi session file 为 durable identity；新增 legacy read-only import |
+| terminal/packaging | 复用本仓 xterm/AgentTerminal，参考 pix 打包 Pi CLI/resources |
+
+## 已完成资产
+
+- **Cycle 1（2026-08-30）**：queue、preview、permission policy/settings 与 lifecycle 收口；见 [执行证据](./evidence/2026-08-30-cycle1-execution.md)。
+- **Cycle 2（2026-08-31）**：内联审批、Extension UI capability/display/reset、TUI-only hint、模型分组/搜索和模型级 effort；见 [执行证据](./evidence/2026-08-31-cycle2-execution.md)。
+- T12 timeline、工具词汇/diff、thinking/streaming Markdown、expand memory、bottom anchor 和 welcome flow 的证据继续有效。
+- 这些行为将在 T31 重新挂到 WorkerSlot，不因 transport 替换而重做产品设计。
+
+## 阅读路径与权威
+
+1. [Plantree root](../../README.md)
+2. [Pi-only 重排映射](../../indexes/pi-only-realignment-map.md)
+3. [决策索引](./decisions/README.md) → [D14](./decisions/014-pi-only-product-and-conversation-import.md) → [D15](./decisions/015-main-owned-worker-manager.md)
+4. [Roadmap](./roadmap.md) — 唯一活动任务状态/顺序权威
+5. [Implementation status](./implementation-status.md) — 当前交接
+6. [Architecture capsule](./topics/architecture.md) 与 [reference repositories](./topics/reference-repositories.md)
+7. 与当前任务相关的 behavior topic/evidence
+
+## 文件角色
 
 | 文件 | 角色 |
-|------|------|
-| [roadmap.md](./roadmap.md) | 四阶段任务全量状态 |
-| [open-questions.md](./open-questions.md) | 未决问题 |
-| [topics/architecture.md](./topics/architecture.md) | 架构方案：四层隔离 + 进程模型 |
-| [topics/extension-ui.md](./topics/extension-ui.md) | 扩展 UI 三级能力分层方案 |
-| [topics/model-config.md](./topics/model-config.md) | 模型配置：现状诊断、pi-app 参考架构、目标架构（D8） |
-| [topics/timeline-reference.md](./topics/timeline-reference.md) | pi-app 时间线体系调查与映射表（D9） |
-| [implementation-status.md](./implementation-status.md) | 当前交接：2026-08-30 真机反馈后的近期主线、阻塞与验证 |
-| [2026-08-30 真机反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md) | 11 条反馈、截图事实、T12-e′/T08/T13/T24~T27 子节点与验收口径 |
-| [evidence/phase5-model-config.md](./evidence/phase5-model-config.md) | Phase 5 落地与验证证据 |
-| [evidence/2026-08-30-urgent-stabilization-m1-m3.md](./evidence/2026-08-30-urgent-stabilization-m1-m3.md) | T12-e′/T24/T26/T27/T13 右键切片的提交、复核与 282/5517 门禁 |
-| [decisions/](./decisions/) | 已拍板决策（含 [D8 模型配置策略](./decisions/008-model-config-strategy.md) · [D9 时间线参照 pi-app](./decisions/009-timeline-reference-piapp.md) · [D10 TUI 公司配置](./decisions/010-tui-managed-pi-config.md)） |
+|---|---|
+| [roadmap.md](./roadmap.md) | T00–T27 资产影响 + T28–T37 活动任务树 |
+| [implementation-status.md](./implementation-status.md) | 当前 phase、Next、blocker、last verified |
+| [open-questions.md](./open-questions.md) | 仅保留未解决问题 |
+| [decisions/README.md](./decisions/README.md) | Active/Revised/Superseded 决策权威 |
+| [topics/architecture.md](./topics/architecture.md) | WorkerManager 边界摘要 |
+| [topics/reference-repositories.md](./topics/reference-repositories.md) | pi-app/pix 强制复用规则 |
+| [topics/extension-ui.md](./topics/extension-ui.md) | Cycle 2 行为契约与 WorkerSlot 适配要求 |
+| [topics/timeline-reference.md](./topics/timeline-reference.md) | timeline/history/tree 参考与适配边界 |
+| [topics/completion-cycles.md](./topics/completion-cycles.md) | Cycle 1/2 完成历史；旧 Cycle 3–5 已被替代 |
+| [history/2026-08-31-pre-pi-only-realignment/](./history/2026-08-31-pre-pi-only-realignment/) | Pi-only 重排前完整计划快照 |
+
+## 当前出口
+
+先完成 T28 的文件级替换/删除边界，再实施 T29 单 WorkerSlot 纵切。T29 未闭环前，不直接把 history、TUI 或 legacy deletion 焊到旧 singleton host 上。

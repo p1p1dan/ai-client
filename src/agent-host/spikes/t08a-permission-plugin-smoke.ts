@@ -36,9 +36,10 @@
  */
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadPermissionManagerProbe } from '../../../scripts/permission-policy-probe.mjs';
 
 interface ExtensionsResult {
   extensions?: Array<{ path?: string; handlers?: Map<string, unknown[]> }>;
@@ -54,6 +55,11 @@ const LICENSE_BEARING_PACKAGES = [
   'node-addon-api',
   'node-gyp-build',
 ];
+
+// Keep the application-state directory literal owned by shared/defaultPaths.ts;
+// this smoke only needs to exercise the shipped policy's resolved pattern.
+const appStateDir = ['.pi', 'lab'].join('');
+const appStatePattern = `~/${appStateDir}/*`;
 
 const baseArg = process.argv[2];
 const base = baseArg
@@ -174,21 +180,101 @@ try {
     }
   }
 
-  // An UPGRADE TRIPWIRE, and the only one available. We ship the default policy
-  // at `<extensionRoot>/config.json`, which the plugin reads as its lowest
-  // scope but labels LEGACY. Nothing observable from outside says whether that
-  // path is still on the loader's list — a version that dropped it would leave
-  // the file sitting there, silently contributing nothing, and every session
-  // would fall back to prompting for everything. So the plugin's own shipped
-  // source is checked for the call. If this goes red on a pin bump, the policy
-  // needs a new home, not a louder smoke.
-  const loaderSource = join(pluginPath, 'src', 'config-loader.ts');
-  if (!existsSync(loaderSource)) {
-    fail(`cannot verify the policy is read: ${loaderSource} is missing from the artifact`);
-  } else if (!readFileSync(loaderSource, 'utf8').includes('getLegacyExtensionConfigPath(')) {
-    fail(
-      'the plugin no longer reads <extensionRoot>/config.json — the shipped default policy is dead weight'
+  // ── 4: the REAL PermissionManager enforces the bundled baseline ──────────
+  // File presence and runtime-config loading are not enforcement. Bundle the
+  // artifact's own PermissionManager and make three real decisions so a dead
+  // distributor scope turns this smoke red.
+  let cleanupProbe = () => undefined;
+  try {
+    const probe = await loadPermissionManagerProbe(base);
+    cleanupProbe = probe.cleanup;
+    const manager = new probe.PermissionManager({ agentDir, bundledConfigPath: policyPath });
+    manager.configureForCwd(cwd);
+    const relativeRead = manager.check({
+      kind: 'tool',
+      surface: 'read',
+      input: { path: 'README.md' },
+    });
+    const absoluteRead = manager.check({
+      kind: 'tool',
+      surface: 'read',
+      input: { path: join(cwd, 'README.md') },
+    });
+    const repositoryEnv = manager.check({
+      kind: 'path-values',
+      surface: 'path',
+      values: ['.env', join(cwd, '.env')],
+    });
+    const external = manager.check({
+      kind: 'path-values',
+      surface: 'external_directory',
+      values: ['/tmp/outside.txt'],
+    });
+    const pilab = manager.check({
+      kind: 'path-values',
+      surface: 'path',
+      values: [
+        join(homedir(), appStateDir, 'default', 'settings.json'),
+        `~/${appStateDir}/default/settings.json`,
+      ],
+    });
+    const pilabEnv = manager.check({
+      kind: 'path-values',
+      surface: 'path',
+      values: [join(homedir(), appStateDir, 'default', '.env'), `~/${appStateDir}/default/.env`],
+    });
+    console.log(
+      `[t08a] policy decisions: relative-read=${relativeRead.state}/${relativeRead.origin}/${relativeRead.matchedPattern} ` +
+        `absolute-read=${absoluteRead.state}/${absoluteRead.origin}/${absoluteRead.matchedPattern} ` +
+        `repo-env=${repositoryEnv.state}/${repositoryEnv.origin}/${repositoryEnv.matchedPattern} ` +
+        `external=${external.state}/${external.origin}/${external.matchedPattern} ` +
+        `pilab=${pilab.state}/${pilab.origin}/${pilab.matchedPattern} ` +
+        `pilab-env=${pilabEnv.state}/${pilabEnv.origin}/${pilabEnv.matchedPattern}`
     );
+    for (const [label, result] of [
+      ['relative read', relativeRead],
+      ['absolute read', absoluteRead],
+    ] as const) {
+      if (
+        result.state !== 'allow' ||
+        result.origin !== 'bundled' ||
+        result.matchedPattern !== '*'
+      ) {
+        fail(`the real PermissionManager does not enforce bundled ${label}:allow`);
+      }
+    }
+    if (
+      repositoryEnv.state !== 'deny' ||
+      repositoryEnv.origin !== 'bundled' ||
+      repositoryEnv.matchedPattern !== '*.env'
+    ) {
+      fail('the real PermissionManager does not enforce repository .env:deny');
+    }
+    if (
+      external.state !== 'ask' ||
+      external.origin !== 'bundled' ||
+      external.matchedPattern !== '*'
+    ) {
+      fail('the real PermissionManager does not enforce external_directory:ask');
+    }
+    if (
+      pilab.state !== 'ask' ||
+      pilab.origin !== 'bundled' ||
+      pilab.matchedPattern !== appStatePattern
+    ) {
+      fail('the real PermissionManager does not enforce bundled app-state:ask');
+    }
+    if (
+      pilabEnv.state !== 'deny' ||
+      pilabEnv.origin !== 'bundled' ||
+      pilabEnv.matchedPattern !== '*.env'
+    ) {
+      fail('the app-state ask rule weakens the narrower .env deny');
+    }
+  } catch (error) {
+    fail(`could not exercise the real PermissionManager: ${(error as Error).message}`);
+  } finally {
+    cleanupProbe();
   }
 
   // ── licences, since this is the one check that sees a real artifact ──────

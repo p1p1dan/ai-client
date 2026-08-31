@@ -19,11 +19,11 @@ function router(alive: number[] = [WIN_A, WIN_B]) {
   return { instance, kill: (id: number) => living.delete(id) };
 }
 
-function request(uiRequestId: string, sessionId?: string) {
+function request(uiRequestId: string, sessionId?: string, method = 'select') {
   return {
     type: 'extensionUi.request',
     ...(sessionId ? { sessionId } : {}),
-    payload: { runtimeId: 'rt-1', uiRequestId, method: 'select', args: {} },
+    payload: { runtimeId: 'rt-1', uiRequestId, method, args: {} },
   };
 }
 
@@ -114,6 +114,20 @@ describe('ExtensionUiRouter', () => {
     for (const type of ['message.delta', 'tool.completed', 'permission.activity']) {
       expect(instance.targetsFor({ type, sessionId: 's1' })).toBeUndefined();
     }
+  });
+
+  it('routes fire-and-forget methods to one owner without retaining request state', () => {
+    const { instance } = router();
+    instance.claimSession('s1', WIN_A);
+    for (const method of ['notify', 'setStatus', 'setWidget', 'unsupported']) {
+      expect(instance.targetsFor(request(`u-${method}`, 's1', method))).toEqual([WIN_A]);
+    }
+    expect(instance.pendingRequestCount()).toBe(0);
+  });
+
+  it('broadcasts fire-and-forget state only when no live owner is known', () => {
+    const { instance } = router();
+    expect(instance.targetsFor(request('u-notify', 'unclaimed', 'notify'))).toBeUndefined();
   });
 
   /** Both settle paths must free the entry, or the map grows per prompt forever. */

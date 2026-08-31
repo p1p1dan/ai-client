@@ -1,5 +1,7 @@
 # Topic — ACP 接不接：判断依据与证据链
 
+> **状态：Historical evidence。** Multi-agent product direction 已由 [Pi-only D14](../../pi-backend-migration/decisions/014-pi-only-product-and-conversation-import.md) 替代；本文只保留 ACP/Codex 当时的取证与理由。
+>
 > 结论产生于 2026-08-04 会话，2026-08-05 补落库。事实均已复核（复核标记见各条）。
 
 ## ACP 是什么

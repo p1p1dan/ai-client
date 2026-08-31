@@ -1,10 +1,23 @@
 # Risk Hotspots
 
-| 风险 | 现状与缓解 | 清零路径 |
+| 风险 | 必须保持的不变量 | 清零/验证路径 |
 |---|---|---|
-| **加密机 / TSD** | 白名单「按进程名」口径是用户转述、未实证；Host 读密文会显性报 `encrypted_unreadable`（非静默空） | T-11 现场六项（含白名单⑥：任意路径 node.exe 读 TSD、随包 node）→ CP5 转正式 Go |
-| **CC JSONL 格式漂移** | 历史格式属 CC 内部实现 | Cometix pin `2.1.212`（SHA256 校验）；historyReader 宽容解析（未知行跳过分账不崩）；崩溃兜底=ARD 后置「历史快照」 |
-| **网关瞬态** | 双端点同时刻齐挂实测过；偶发「400 thinking 格式无效」（重跑即过） | C-14 看门狗显性 failed；备用网关 `api.vllmproxy.com`（执行计划 §4）；GUI 复现按 session.failed 处理，不回滚 thinking 默认开 |
-| **SDK 未文档化不变量** | Question 自由文本 response 注入依赖「SDK 不对 updatedInput 二次校验」；bare allow 被 cli.js 静默作废重问 | cli.js 已 pin；网关 smoke response 场景即回归钉子；Host/index 双层校验拒空响应 |
-| **打包体积** | portable 141MB（随包 node +21MB） | 可接受性待用户确认（open question）；不可接受则回退五源寻径为主 |
-| **共树并发**（已消除） | 曾双向提交对撞（474ad21） | 2026-07-24 双轨合一、工作树独占；若恢复并行先恢复 pathspec + 避让纪律 |
+| Slot identity/remap | temporary workspace key → session file 原子 remap；不能双 authority | T29/T30 remap failure/duplicate create tests |
+| Cross-session leakage | 所有 event/response 带 session + runtime + generation；owner route 单一 | multi-slot/session-switch/late-event tests |
+| UtilityProcess orphan | stop/crash/app close 后无残留 worker | disposeAll、process census、packaged close smoke |
+| Pool OOM/resource churn | bounded capacity；active/pending slot 不淘汰；安全 capacity error | low-capacity tests、idle reclaim、长时 RAM/swap 观察 |
+| Worker crash/restart loop | 单 slot failure 隔离；restart 有界；旧 generation 丢弃 | crash injection、restart budget、other-slot continuity |
+| Extension UI stranded request | crash/reload/rewind/retire 必须 cancel/reset | blocking/display lifecycle tests + GUI smoke |
+| Pi session corruption | Main/renderer 不直接写 JSONL；rewind/fork 用 Pi native APIs | incomplete/corrupt fixtures、branch hard acceptance |
+| Legacy source mutation | import source hash 前后相同；temporary target atomic publish | read-only adapters、failure injection、dedupe tests |
+| Import semantic overclaim | 只承诺历史继续，不恢复 hidden runtime state | provenance、unmapped tool read-only UI、copy wording review |
+| GUI/TUI double writer | 同 durable session 只有一个 write authority | exclusivity guard、flush/open ACK、crash/return tests |
+| Pi CLI/resources packaging | external bundled Node 能解析 Resources，不能假设 root asar 可读 | afterPack/verifier、platform packaged smoke |
+| Permission bypass | plugin/gate fail closed；managed/local project trust 明确 | resolver matrix、bundled smoke、four-decision GUI |
+| Managed credential/config leak | key 不进 models.json/argv/log；Main-owned settings key 不被 renderer 覆盖 | redaction tests、settings ownership tests、packaged logs |
+| Reference code license | substantial copying 保留 MIT notice | T28–T37 reuse ledger + release license audit |
+| Dirty shared worktree | 不覆盖并发 Cycle 1/2 未提交改动 | scoped edits、status/diff audit、no broad formatter writes |
+
+## Current host resource constraint
+
+开发机约 3.3 GiB RAM。完整 Vitest、全量 build、Electron Builder、Agent Host packaging 必须串行且按根 `AGENTS.md` 拆分；无法安全运行的 packaged gate留给 CI/高资源主机，不能用反复重试制造 swap/OOM。

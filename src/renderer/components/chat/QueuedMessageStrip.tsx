@@ -16,7 +16,7 @@
  * in the pure layer as a dormant field for a future T-19b; this view simply
  * does not consume them anymore.
  */
-import { Pencil, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, X } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { queueStripWrapperClass } from './middleColumnLayout';
 import type { QueueStripEntryModel, QueueStripModel } from './queueRelease';
@@ -32,11 +32,19 @@ export interface QueuedMessageStripProps {
   onResume: () => void;
   /** Pencil / click-row — `takeEntryIntoDraft` swap (decision 5.3). */
   onEdit: (entryId: string) => void;
+  /** Exchange with the adjacent row while preserving message identity/payload. */
+  onMove: (entryId: string, direction: 'up' | 'down') => void;
   /** X — remove/discard (decision 5.3). */
   onRemove: (entryId: string) => void;
 }
 
-export function QueuedMessageStrip({ model, onResume, onEdit, onRemove }: QueuedMessageStripProps) {
+export function QueuedMessageStrip({
+  model,
+  onResume,
+  onEdit,
+  onMove,
+  onRemove,
+}: QueuedMessageStripProps) {
   const { t } = useI18n();
 
   if (!model.visible) return null;
@@ -61,7 +69,13 @@ export function QueuedMessageStrip({ model, onResume, onEdit, onRemove }: Queued
         </div>
       )}
       {model.entries.map((entry) => (
-        <QueueEntryRow key={entry.id} entry={entry} onEdit={onEdit} onRemove={onRemove} />
+        <QueueEntryRow
+          key={entry.id}
+          entry={entry}
+          onEdit={onEdit}
+          onMove={onMove}
+          onRemove={onRemove}
+        />
       ))}
     </div>
   );
@@ -70,10 +84,12 @@ export function QueuedMessageStrip({ model, onResume, onEdit, onRemove }: Queued
 function QueueEntryRow({
   entry,
   onEdit,
+  onMove,
   onRemove,
 }: {
   entry: QueueStripEntryModel;
   onEdit: (entryId: string) => void;
+  onMove: (entryId: string, direction: 'up' | 'down') => void;
   onRemove: (entryId: string) => void;
 }) {
   return (
@@ -98,6 +114,30 @@ function QueueEntryRow({
           {entry.attachmentCount} file{entry.attachmentCount > 1 ? 's' : ''}
         </span>
       )}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onMove(entry.id, 'up');
+        }}
+        disabled={!entry.canMoveUp}
+        aria-label="Move queued message up"
+        className={ICON_BUTTON_CLASS}
+      >
+        <ArrowUp className="size-3" />
+      </button>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onMove(entry.id, 'down');
+        }}
+        disabled={!entry.canMoveDown}
+        aria-label="Move queued message down"
+        className={ICON_BUTTON_CLASS}
+      >
+        <ArrowDown className="size-3" />
+      </button>
       <button
         type="button"
         onClick={(event) => {

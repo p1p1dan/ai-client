@@ -1,7 +1,9 @@
 import {
+  EXTENSION_UI_CAPABILITIES,
   EXTENSION_UI_DIALOG_METHODS,
   EXTENSION_UI_METHODS,
   type ExtensionUiMethod,
+  extensionUiCapability,
   isExtensionUiDialogMethod,
   isExtensionUiMethod,
   readExtensionUiDialogArgs,
@@ -51,6 +53,17 @@ describe('extension UI method tables', () => {
       expect(isExtensionUiMethod(bogus)).toBe(false);
       expect(isExtensionUiDialogMethod(bogus)).toBe(false);
     }
+  });
+
+  it('classifies portable, semantic no-op and TUI-only context methods once', () => {
+    expect(extensionUiCapability('select')).toBe('portable');
+    expect(extensionUiCapability('setStatus')).toBe('portable');
+    expect(extensionUiCapability('getEditorText')).toBe('semantic-noop');
+    expect(extensionUiCapability('setFooter')).toBe('tui-only');
+    expect(extensionUiCapability('someFutureApi')).toBe('tui-only');
+    expect(Object.values(EXTENSION_UI_CAPABILITIES)).toContain('portable');
+    expect(Object.values(EXTENSION_UI_CAPABILITIES)).toContain('semantic-noop');
+    expect(Object.values(EXTENSION_UI_CAPABILITIES)).toContain('tui-only');
   });
 });
 

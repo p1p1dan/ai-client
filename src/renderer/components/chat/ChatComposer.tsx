@@ -753,6 +753,7 @@ export function ChatComposer({
       inFlight: inFlightRef.current,
       hasContent: Boolean(trimmed) || attachments.drafts.length > 0,
       reading: attachments.reading,
+      hasQueuedEntries: queuedCount > 0,
     });
 
     if (action === 'blocked') return;
@@ -2278,6 +2279,11 @@ export function ChatComposer({
     attachments.addDrafts(outcome.payload.attachments);
   };
 
+  const handleQueueEntryMove = (entryId: string, direction: 'up' | 'down') => {
+    if (!activeSessionId) return;
+    useMessageQueueStore.getState().moveEntry(activeSessionId, entryId, direction);
+  };
+
   // X — decision 5.3's delete.
   const handleQueueEntryRemove = (entryId: string) => {
     if (!activeSessionId) return;
@@ -2708,6 +2714,7 @@ export function ChatComposer({
     sending,
     hasFailed: canRetry,
     hasDraftContent: Boolean(value.trim()) || attachments.drafts.length > 0,
+    hasQueuedEntries: queuedCount > 0,
   });
 
   const actionButtons = (
@@ -2806,6 +2813,7 @@ export function ChatComposer({
           model={queueStripModel}
           onResume={handleQueueResume}
           onEdit={handleQueueEntryEdit}
+          onMove={handleQueueEntryMove}
           onRemove={handleQueueEntryRemove}
         />
       )}

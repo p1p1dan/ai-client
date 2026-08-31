@@ -16,7 +16,13 @@
  * Kept free of React so it is testable under the repo's node-env vitest.
  */
 
-import { CHAT_EFFORTS, EFFORT_DEFAULT_ID, effortLabel, isEffortLevel } from './efforts';
+import {
+  CHAT_EFFORTS,
+  type ChatEffort,
+  EFFORT_DEFAULT_ID,
+  effortLabel,
+  isEffortLevel,
+} from './efforts';
 import type { ChatModel } from './models';
 
 // ---- Trigger label ----
@@ -76,6 +82,9 @@ export interface ComposerMenuItem {
    * is what lets the label say so.
    */
   verified?: boolean;
+  tags?: string[];
+  reasoning?: boolean;
+  thinkingLevelMap?: ChatModel['thinkingLevelMap'];
 }
 
 export interface ComposerMenuSection {
@@ -130,8 +139,11 @@ export function composerModelMenuModel(input: {
    * nothing about agents.
    */
   unknownModelLabel?: string;
+  /** T25 model-declared levels; defaults to the legacy shared catalog. */
+  efforts?: readonly ChatEffort[];
 }): ComposerModelMenuViewModel {
   const { options } = input;
+  const efforts = input.efforts ?? CHAT_EFFORTS;
 
   // A stored selection outside the catalog is PREPENDED as its own row rather
   // than redirecting the check mark to `options[0]`. D48 S2 made this the ONLY
@@ -157,11 +169,17 @@ export function composerModelMenuModel(input: {
     unknownModel ?? (modelInCatalog ? selectedModel : (options[0]?.id ?? null));
 
   const selectedEffort = input.selectedEffort;
+  const capabilityScoped = input.efforts !== undefined;
+  const selectedEffortSupported =
+    isEffortLevel(selectedEffort) && efforts.some((effort) => effort.id === selectedEffort);
   const unknownEffort =
-    selectedEffort && selectedEffort !== EFFORT_DEFAULT_ID && !isEffortLevel(selectedEffort)
+    !capabilityScoped &&
+    selectedEffort &&
+    selectedEffort !== EFFORT_DEFAULT_ID &&
+    !isEffortLevel(selectedEffort)
       ? selectedEffort
       : null;
-  const effectiveEffort = isEffortLevel(selectedEffort)
+  const effectiveEffort = selectedEffortSupported
     ? selectedEffort
     : (unknownEffort ?? EFFORT_DEFAULT_ID);
 
@@ -181,6 +199,9 @@ export function composerModelMenuModel(input: {
       label: option.label,
       selected: option.id === effectiveModel,
       ...(option.verified === undefined ? {} : { verified: option.verified }),
+      ...(option.tags ? { tags: [...option.tags] } : {}),
+      ...(option.reasoning !== undefined ? { reasoning: option.reasoning } : {}),
+      ...(option.thinkingLevelMap ? { thinkingLevelMap: { ...option.thinkingLevelMap } } : {}),
     })),
   ];
 
@@ -195,7 +216,7 @@ export function composerModelMenuModel(input: {
       label: 'Default',
       selected: effectiveEffort === EFFORT_DEFAULT_ID,
     },
-    ...CHAT_EFFORTS.map((effort) => ({
+    ...efforts.map((effort) => ({
       id: effort.id as string,
       label: effort.label,
       hint: effort.hint,

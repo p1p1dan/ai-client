@@ -18,4 +18,8 @@ export interface FileReadResult {
   detectedEncoding: string;
   confidence: number;
   isBinary?: boolean;
+  /** Refused before allocating the full file buffer. */
+  tooLarge?: boolean;
+  byteLength?: number;
+  maxPreviewBytes?: number;
 }

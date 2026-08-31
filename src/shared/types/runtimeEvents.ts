@@ -40,6 +40,7 @@ export type RuntimeEventType =
   | 'usage.updated'
   | 'extensionUi.request'
   | 'extensionUi.cancelled'
+  | 'extensionUi.reset'
   | 'permission.activity'
   | 'subagent.activity'
   | 'session.completed'
@@ -1132,6 +1133,54 @@ export const EXTENSION_UI_DIALOG_METHODS = ['select', 'confirm', 'input', 'edito
 
 export type ExtensionUiDialogMethod = (typeof EXTENSION_UI_DIALOG_METHODS)[number];
 
+/**
+ * T10 — one capability table for the pi ExtensionUIContext surface.
+ *
+ * `portable` has a real GUI/local implementation, `semantic-noop` can safely do
+ * nothing (or return a stable local fallback) without lying to the extension,
+ * and `tui-only` must be reported so the renderer can offer a TUI path. Future
+ * methods deliberately fall into `tui-only` instead of throwing from the Proxy.
+ */
+export type ExtensionUiCapability = 'portable' | 'semantic-noop' | 'tui-only';
+
+export const EXTENSION_UI_CAPABILITIES = {
+  select: 'portable',
+  confirm: 'portable',
+  input: 'portable',
+  editor: 'portable',
+  notify: 'portable',
+  setStatus: 'portable',
+  setWidget: 'portable',
+  setWorkingMessage: 'semantic-noop',
+  setWorkingVisible: 'semantic-noop',
+  setWorkingIndicator: 'semantic-noop',
+  setHiddenThinkingLabel: 'semantic-noop',
+  setTitle: 'semantic-noop',
+  pasteToEditor: 'semantic-noop',
+  setEditorText: 'semantic-noop',
+  getEditorText: 'semantic-noop',
+  getAllThemes: 'semantic-noop',
+  getTheme: 'semantic-noop',
+  setTheme: 'semantic-noop',
+  getToolsExpanded: 'semantic-noop',
+  onTerminalInput: 'tui-only',
+  custom: 'tui-only',
+  addAutocompleteProvider: 'tui-only',
+  setFooter: 'tui-only',
+  setHeader: 'tui-only',
+  setEditorComponent: 'tui-only',
+  getEditorComponent: 'semantic-noop',
+  setToolsExpanded: 'tui-only',
+} as const satisfies Record<string, ExtensionUiCapability>;
+
+export type KnownExtensionUiContextMethod = keyof typeof EXTENSION_UI_CAPABILITIES;
+
+export function extensionUiCapability(method: string): ExtensionUiCapability {
+  return method in EXTENSION_UI_CAPABILITIES
+    ? EXTENSION_UI_CAPABILITIES[method as KnownExtensionUiContextMethod]
+    : 'tui-only';
+}
+
 export function isExtensionUiMethod(value: unknown): value is ExtensionUiMethod {
   return typeof value === 'string' && (EXTENSION_UI_METHODS as readonly string[]).includes(value);
 }
@@ -1306,6 +1355,21 @@ export interface ExtensionUiCancelledEvent extends RuntimeEventBase {
 }
 
 /**
+ * The bridge's in-place runtime was reloaded or disposed. Renderer display
+ * state is keyed by runtimeId, so this explicit event clears statuses, widgets
+ * and unsupported diagnostics even when there was no blocking dialog whose
+ * cancellation could otherwise reveal the lifecycle boundary.
+ */
+export interface ExtensionUiResetEvent extends RuntimeEventBase {
+  type: 'extensionUi.reset';
+  sessionId: string;
+  payload: {
+    runtimeId: string;
+    reason: 'session_replaced' | 'session_closed' | 'host_shutdown';
+  };
+}
+
+/**
  * The answer to one `extensionUi.request`, travelling back as the payload of the
  * `extensionUi.respond` command.
  *
@@ -1381,8 +1445,10 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
     phase: PermissionActivityPhase;
     /** The plugin's request id. One tool call runs several gates, hence several. */
     requestId: string;
-    /** e.g. `bash`, `read`, `mcp`, `skill`, `external_directory`. */
+    /** Actual gate surface, e.g. `path` or `external_directory`. */
     surface?: string;
+    /** Prompt display/tool surface when it differs from the actual gate. */
+    toolSurface?: string;
     /** The command / path / tool name that was evaluated. */
     value?: string;
     agentName?: string;
@@ -1392,7 +1458,7 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
     resolution?: string;
     /** `decision` phase only — which config scope supplied the winning rule. */
     origin?: string;
-    /** `decision` phase only — the pattern the winning rule matched. */
+    /** The rule pattern, when the plugin exposes it for this phase. */
     matchedPattern?: string;
     /**
      * The ask came from a SUBAGENT and was forwarded to this session to answer.
@@ -1431,6 +1497,7 @@ export type RuntimeEvent =
   | UsageUpdatedEvent
   | ExtensionUiRequestedEvent
   | ExtensionUiCancelledEvent
+  | ExtensionUiResetEvent
   | PermissionActivityEvent
   | SubagentActivityEvent
   | SessionTerminalEvent;

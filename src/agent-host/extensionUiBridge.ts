@@ -31,10 +31,11 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type {
-  ExtensionUiCancelReason,
-  ExtensionUiMethod,
-  ExtensionUiResponse,
+import {
+  type ExtensionUiCancelReason,
+  type ExtensionUiMethod,
+  type ExtensionUiResponse,
+  extensionUiCapability,
 } from '../shared/types/runtimeEvents.ts';
 
 /** The four methods whose caller is awaiting a Promise. */
@@ -98,6 +99,13 @@ export interface ExtensionUiCancel {
   reason: ExtensionUiCancelReason;
 }
 
+export type ExtensionUiResetReason = 'session_replaced' | 'session_closed' | 'host_shutdown';
+
+export interface ExtensionUiReset {
+  runtimeId: string;
+  reason: ExtensionUiResetReason;
+}
+
 export interface PortableExtensionUiBridge {
   /** The bridge instance id, echoed on every request and checked on every response. */
   readonly runtimeId: string;
@@ -118,7 +126,7 @@ export interface PortableExtensionUiBridge {
    * alive and its status chips still belong to it.
    */
   cancelAll(reason: ExtensionUiCancelReason): void;
-  dispose(): void;
+  dispose(reason?: ExtensionUiResetReason): void;
   /** Diagnostics only — how many calls are still parked. */
   pendingCount(): number;
 }
@@ -132,6 +140,8 @@ export interface PortableExtensionUiBridgeOptions {
    * a modal the bridge already closed — see `ExtensionUiCancelledEvent`.
    */
   onCancel?(cancel: ExtensionUiCancel): void;
+  /** Clear renderer display state even when no blocking dialog was open. */
+  onReset?(reset: ExtensionUiReset): void;
 }
 
 export function createPortableExtensionUiBridge(
@@ -191,6 +201,14 @@ export function createPortableExtensionUiBridge(
     }
   }
 
+  function emitReset(reason: ExtensionUiResetReason): void {
+    try {
+      options.onReset?.({ runtimeId, reason });
+    } catch {
+      /* swallowed — reset is best-effort renderer cleanup */
+    }
+  }
+
   /** Settle one dialog nobody answered, and tell the renderer to close it. */
   function cancelOne(uiRequestId: string, value: unknown, reason: ExtensionUiCancelReason): void {
     const settled: string[] = [];
@@ -226,7 +244,7 @@ export function createPortableExtensionUiBridge(
 
   /** Announce a TUI-only method ONCE — extensions call these in render loops. */
   function reportUnsupported(method: string): void {
-    if (unsupported.has(method)) return;
+    if (extensionUiCapability(method) !== 'tui-only' || unsupported.has(method)) return;
     unsupported.add(method);
     emit('unsupported', { method });
   }
@@ -305,7 +323,10 @@ export function createPortableExtensionUiBridge(
       // A widget built from a pi TUI COMPONENT cannot cross the wire; only the
       // serializable array form can. Say so once instead of sending a blob the
       // renderer would have to guess at.
-      if (content !== undefined && !Array.isArray(content)) {
+      if (
+        content !== undefined &&
+        (!Array.isArray(content) || !content.every((line) => typeof line === 'string'))
+      ) {
         reportUnsupported('setWidget.component');
         return;
       }
@@ -389,12 +410,13 @@ export function createPortableExtensionUiBridge(
       cancelPending('session_replaced');
       clearPortableState();
       unsupported.clear();
+      emitReset('session_replaced');
     },
     cancelAll(reason) {
       if (disposed) return;
       cancelPending(reason);
     },
-    dispose() {
+    dispose(reason = 'host_shutdown') {
       if (disposed) return;
       // Order matters: flip the flag first so a continuation that runs during
       // the drain takes the fast `Promise.resolve(fallback)` path instead of
@@ -402,6 +424,8 @@ export function createPortableExtensionUiBridge(
       disposed = true;
       cancelPending('host_shutdown');
       clearPortableState();
+      unsupported.clear();
+      emitReset(reason);
       pending.clear();
     },
     pendingCount: () => pending.size,

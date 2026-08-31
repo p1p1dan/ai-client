@@ -96,6 +96,7 @@ function baseSendAction(overrides: Partial<DecideSendActionInput> = {}): DecideS
     inFlight: false,
     hasContent: true,
     reading: 0,
+    hasQueuedEntries: false,
     ...overrides,
   };
 }
@@ -129,21 +130,32 @@ describe('decideSendAction', () => {
     expect(decideSendAction(baseSendAction({ inFlight: true }))).toBe('enqueue');
   });
 
-  it('sends directly when idle with a target and content', () => {
+  it('enqueues behind an existing queue even after Stop has settled the runtime idle', () => {
+    expect(decideSendAction(baseSendAction({ hasQueuedEntries: true }))).toBe('enqueue');
+  });
+
+  it('sends directly when idle with a target, content and no existing queue', () => {
     expect(decideSendAction(baseSendAction())).toBe('send');
   });
 
-  it('consistency: decideSendAction === "send" iff canStartTurn === true (content/reading fixed satisfied)', () => {
+  it('consistency: decideSendAction === "send" iff canStartTurn and queue ownership both allow it', () => {
     const bools = [true, false];
     for (const hasTarget of bools) {
       for (const disabled of bools) {
         for (const busy of bools) {
           for (const sending of bools) {
             for (const inFlight of bools) {
-              const shared = { hasTarget, disabled, busy, sending, inFlight };
-              const action = decideSendAction({ ...shared, hasContent: true, reading: 0 });
-              const canStart = canStartTurn(shared);
-              expect(action === 'send').toBe(canStart);
+              for (const hasQueuedEntries of bools) {
+                const shared = { hasTarget, disabled, busy, sending, inFlight };
+                const action = decideSendAction({
+                  ...shared,
+                  hasContent: true,
+                  reading: 0,
+                  hasQueuedEntries,
+                });
+                const canStart = canStartTurn(shared) && !hasQueuedEntries;
+                expect(action === 'send').toBe(canStart);
+              }
             }
           }
         }
@@ -394,6 +406,7 @@ describe('deriveActionButtons', () => {
         sending: false,
         hasFailed: false,
         hasDraftContent: true,
+        hasQueuedEntries: false,
       })
     ).toEqual([{ kind: 'send', disabled: false }]);
   });
@@ -405,6 +418,7 @@ describe('deriveActionButtons', () => {
         sending: false,
         hasFailed: true,
         hasDraftContent: true,
+        hasQueuedEntries: false,
       })
     ).toEqual([
       { kind: 'retry', disabled: false },
@@ -419,6 +433,7 @@ describe('deriveActionButtons', () => {
         sending: false,
         hasFailed: false,
         hasDraftContent: true,
+        hasQueuedEntries: false,
       })
     ).toEqual([
       { kind: 'stop', disabled: false },
@@ -433,6 +448,7 @@ describe('deriveActionButtons', () => {
         sending: false,
         hasFailed: false,
         hasDraftContent: false,
+        hasQueuedEntries: false,
       })
     ).toEqual([
       { kind: 'stop', disabled: false },
@@ -447,11 +463,24 @@ describe('deriveActionButtons', () => {
         sending: true,
         hasFailed: false,
         hasDraftContent: true,
+        hasQueuedEntries: false,
       })
     ).toEqual([
       { kind: 'stop', disabled: false },
       { kind: 'enqueue', disabled: false },
     ]);
+  });
+
+  it('idle with queued predecessors keeps the next draft in enqueue mode', () => {
+    expect(
+      deriveActionButtons({
+        status: 'idle',
+        sending: false,
+        hasFailed: false,
+        hasDraftContent: true,
+        hasQueuedEntries: true,
+      })
+    ).toEqual([{ kind: 'enqueue', disabled: false }]);
   });
 
   it('property: retry and stop never appear together, across every status x failure combo', () => {
@@ -462,6 +491,7 @@ describe('deriveActionButtons', () => {
           sending: false,
           hasFailed,
           hasDraftContent: true,
+          hasQueuedEntries: false,
         });
         const kinds = buttons.map((b) => b.kind) as ActionButtonKind[];
         const hasBoth = kinds.includes('retry') && kinds.includes('stop');
@@ -489,13 +519,18 @@ describe('deriveQueueStripModel', () => {
     ).toEqual({ visible: false, entries: [], pausedLabel: null, permissionHint: null });
   });
 
-  it('numbers entries from 1', () => {
+  it('numbers entries from 1 and derives adjacent-move boundaries', () => {
     const model = deriveQueueStripModel({
       entries: [entry({ id: 'q-1' }), entry({ id: 'q-2' }), entry({ id: 'q-3' })],
       paused: null,
       hasPendingPermissionHere: false,
     });
     expect(model.entries.map((e) => e.index)).toEqual([1, 2, 3]);
+    expect(model.entries.map(({ canMoveUp, canMoveDown }) => [canMoveUp, canMoveDown])).toEqual([
+      [false, true],
+      [true, true],
+      [true, false],
+    ]);
   });
 
   it('shows the paused caption with the waiting count when paused by the user (Stop)', () => {
@@ -1191,11 +1226,14 @@ describe("RunEntryOutcome 'pending' — six consumption points (F2 S3 §4.3, P0)
    * thing the moment a fifth member appears; `!isAdmittedOutcome(result)` is
    * structurally correct for any future vocabulary.
    */
-  it('[P-7] consumption point 5 — useQueueRelease requeues on !isAdmittedOutcome, not on a name list', () => {
-    const hookSource = readFileSync(path.resolve(__dirname, '../useQueueRelease.ts'), 'utf8');
-    expect(hookSource).toContain('if (!isAdmittedOutcome(result))');
-    expect(hookSource).not.toContain("result === 'skipped' || result === 'rejected'");
-    expect(hookSource).toContain('import { decideQueueRelease, isAdmittedOutcome');
+  it('[P-7] consumption point 5 — the release transaction asks isAdmittedOutcome, not a name list', () => {
+    const transactionSource = readFileSync(
+      path.resolve(__dirname, '../queueReleaseTransaction.ts'),
+      'utf8'
+    );
+    expect(transactionSource).toContain('if (isAdmittedOutcome(outcome))');
+    expect(transactionSource).not.toContain("outcome === 'skipped' || outcome === 'rejected'");
+    expect(transactionSource).toContain('import { isAdmittedOutcome');
   });
 });
 

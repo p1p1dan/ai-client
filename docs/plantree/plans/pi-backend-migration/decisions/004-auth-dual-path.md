@@ -1,8 +1,14 @@
 # D4 — 认证双路径：企业自动注入 + 本地 GUI 配置窗口
 
-**状态**：已拍板（2026-08-28）
+> **状态：Revised（2026-08-31）**
+>
+> 双路径产品语义继续有效，但原文“企业/本地都写 `~/.pi/agent/settings.json`”已被实现事实修订：managed/login 使用 `~/.pilab/<profile>/pi-agent/` 的隔离 agentDir，`models.json` 与 `auth.json` 分离；local/BYOK 使用用户自己的 Pi setup，应用不接管其整棵配置。凭据 vault 位于 `~/.pilab/<profile>/credentials/vault.json`，key 不进入 models.json。
+>
+> WorkerSlot/TUI 启动按 credential mode 注入正确 agentDir/environment；Main-owned credential mode 不允许 renderer 整份 settings 写回覆盖。模型同步、catalog 和 effort 以 D8/T19–T25 已落实现为准。
 
-## 决策
+**原状态**：已拍板（2026-08-28）
+
+## 原决策（保留历史背景）
 
 沿用现有双路径登录设计，适配 pi 后端：
 

@@ -12,6 +12,15 @@ import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, protocol } from 'e
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([
   {
+    scheme: 'local-file',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
+  {
     scheme: 'local-image',
     privileges: {
       standard: true,
@@ -66,8 +75,9 @@ import {
 import { registerClaudeBridgeIpcHandlers } from './services/claude/ClaudeIdeBridge';
 import { unwatchClaudeSettings } from './services/claude/ClaudeProviderManager';
 import {
-  isAllowedLocalFilePath,
+  LOCAL_FILE_PREVIEW_MAX_BYTES,
   registerAllowedLocalFileRoot,
+  resolveAllowedLocalFileReadPath,
 } from './services/files/LocalFileAccess';
 import { checkGitInstalled } from './services/git/checkGit';
 import { gitAutoFetchService } from './services/git/GitAutoFetchService';
@@ -461,7 +471,7 @@ app
     await migrateLegacyTodoIfNeeded();
 
     // Register protocol to handle local file:// URLs for markdown images
-    protocol.handle('local-file', (request) => {
+    protocol.handle('local-file', async (request) => {
       try {
         const filePath = customProtocolUriToPath(
           request.url,
@@ -472,11 +482,16 @@ app
           return new Response('Bad Request', { status: 400 });
         }
 
-        if (!isAllowedLocalFilePath(filePath)) {
+        const authorizedPath = resolveAllowedLocalFileReadPath(filePath);
+        if (!authorizedPath) {
           return new Response('Forbidden', { status: 403 });
         }
+        const info = statSync(authorizedPath);
+        if (info.size > LOCAL_FILE_PREVIEW_MAX_BYTES) {
+          return new Response('Payload Too Large', { status: 413 });
+        }
 
-        return net.fetch(pathToFileURL(filePath).toString());
+        return net.fetch(pathToFileURL(authorizedPath).toString());
       } catch {
         return new Response('Bad Request', { status: 400 });
       }

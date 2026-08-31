@@ -1052,7 +1052,7 @@
                 <h2>关键线路</h2>
                 <p>上排是代码线（我做），下排是真机线（你做）。两条并行，交汇点在 CP2 / CP5。</p>
               </div>
-              <a class="source-link" href="./plans/openchamber-chat-refactor/implementation-status.md">查看当前状态源 ↗</a>
+              <a class="source-link" href="../plans/openchamber-chat-refactor/implementation-status.md">查看当前状态源 ↗</a>
             </div>
             <div class="route">
               <div class="route-step current" data-search-item data-status="next">
@@ -1082,7 +1082,7 @@
                 <h2>Phase 地图</h2>
                 <p>Phase 状态取总台账；日常任务状态取 plantree。</p>
               </div>
-              <a class="source-link" href="../plans/openchamber-chat-refactor-ledger.md">查看 Phase 权威源 ↗</a>
+              <a class="source-link" href="../../plans/openchamber-chat-refactor-ledger.md">查看 Phase 权威源 ↗</a>
             </div>
             <div class="phase-grid">
               <article class="phase-card" data-search-item data-status="pending">
@@ -1130,7 +1130,7 @@
                 <h2>任务看板</h2>
                 <p>四列 = 已完成 / 在建 / 等外部或等你 / 后置未承诺。完整证据请进台账。</p>
               </div>
-              <a class="source-link" href="./plans/openchamber-chat-refactor/roadmap.md">查看完整 Roadmap ↗</a>
+              <a class="source-link" href="../plans/openchamber-chat-refactor/roadmap.md">查看完整 Roadmap ↗</a>
             </div>
             <div class="board">
               <div class="board-column">
@@ -1139,27 +1139,27 @@
                   <article class="task-card" data-search-item data-status="done">
                     <div class="task-top"><span class="task-id">主线开发线 × 7</span><span class="status-chip status-done">2026-08-06</span></div>
                     <h3>T-32 · T-12~T-15 · T-23 · T-16 · T-33 · T-35 · T-34</h3><p>第十二轮 GUI 点验一次性验收；右栏骨架回归 A08、四 surface、违规清理、壳开关、重试横幅、stderr 进 UI、子 agent 实况。</p>
-                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/roadmap.md">Roadmap</a><a href="../plans/ledger-claude-mainline.md">主线台账</a></div>
+                    <div class="task-links"><a href="../plans/openchamber-chat-refactor/roadmap.md">Roadmap</a><a href="../../plans/ledger-claude-mainline.md">主线台账</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="done">
                     <div class="task-top"><span class="task-id">观感对齐链</span><span class="status-chip status-done">八轮点验</span></div>
                     <h3>T-22 / T-05 / T-31 / T-30 / T-29 / T-19 / T-24</h3><p>三列壳、工具行问答卡、回复解剖、字体分域、Markdown 渲染、消息队列、添加仓库通路。</p>
-                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/history/2026-0728-0803-archive.md">点验归档</a></div>
+                    <div class="task-links"><a href="../plans/openchamber-chat-refactor/history/2026-0728-0803-archive.md">点验归档</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="done">
                     <div class="task-top"><span class="task-id">C-01…C-15</span><span class="status-chip status-done">Done</span></div>
                     <h3>Host / 协议 / 打包底座</h3><p>打包链、Question、Resume、Session Index、附件、看门狗、随包 Node。</p>
-                    <div class="task-links"><a href="../plans/ledger-claude-mainline.md">主线台账</a></div>
+                    <div class="task-links"><a href="../../plans/ledger-claude-mainline.md">主线台账</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="done">
                     <div class="task-top"><span class="task-id">S1 / S2 / S3-0 / S3-1</span><span class="hash">bc531c7 · 7fa1270 · 0314216</span></div>
                     <h3>multi-agent 前四步</h3><p>spike 裁定不接 ACP（直连更便宜）→ 直连接入设计收口 → 类型骨架 + agent 绑定回流链落地。</p>
-                    <div class="task-links"><a href="./plans/multi-agent/roadmap.md">支线 Roadmap</a></div>
+                    <div class="task-links"><a href="../plans/multi-agent/roadmap.md">支线 Roadmap</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="done">
                     <div class="task-top"><span class="task-id">测试机五问题</span><span class="hash">9a6cc01</span></div>
                     <h3>08-07 反馈修复批</h3><p>附件重放去重 · 超时抬到 3 分钟 · 新壳补仓库移除 · 分支查询加重试。<strong>已修待真机复验。</strong></p>
-                    <div class="task-links"><a href="../plans/2026-08-06-encrypted-machine-test-plan.md">回归清单 4b</a></div>
+                    <div class="task-links"><a href="../../plans/2026-08-06-encrypted-machine-test-plan.md">回归清单 4b</a></div>
                   </article>
                 </div>
               </div>
@@ -1170,7 +1170,7 @@
                   <article class="task-card" data-search-item data-status="next">
                     <div class="task-top"><span class="task-id">S3 切片 2</span><span class="status-chip status-next">下一件</span></div>
                     <h3>Codex 客户端骨架</h3><p>JSON-RPC 客户端（服务端请求走自有 id 空间且从 0 起）+ 单一 <code>pendingServerRequests</code> 表 + 单一 status mapper + 隔离 <code>CODEX_HOME</code>。</p>
-                    <div class="task-links"><a href="../plans/2026-08-06-s2-codex-integration-design.md">S2 设计档 §3</a></div>
+                    <div class="task-links"><a href="../../plans/2026-08-06-s2-codex-integration-design.md">S2 设计档 §3</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="next">
                     <div class="task-top"><span class="task-id">S3 切片 3 / 4</span><span class="status-chip status-next">待 2</span></div>
@@ -1189,12 +1189,12 @@
                   <article class="task-card" data-search-item data-status="blocked">
                     <div class="task-top"><span class="task-id">M1~M4</span><span class="status-chip status-blocked">出包前必做</span></div>
                     <h3>换 Windows 机器出包</h3><p>Linux 三处硬断（GNU tar 解 zip / 缺 node.exe 中止 / 根 node_modules 全是 Linux ELF）。另需 Windows 上跑 verify:packaged、定死凭证注入、查清加密机白名单 node 路径。</p>
-                    <div class="task-links"><a href="../plans/t10-packaged-gui-checklist.md">T-10 清单</a></div>
+                    <div class="task-links"><a href="../../plans/t10-packaged-gui-checklist.md">T-10 清单</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="pending">
                     <div class="task-top"><span class="task-id">T-10 + 4b</span><span class="status-chip status-pending">13 项</span></div>
                     <h3>打包版点验 + 五问题回归</h3><p>九项通用（含 Win10 字重真机核）+ 四项回归 R1~R4。到手先在 About 核对版本是 test.2。</p>
-                    <div class="task-links"><a href="../plans/2026-08-06-encrypted-machine-test-plan.md">测试方案</a></div>
+                    <div class="task-links"><a href="../../plans/2026-08-06-encrypted-machine-test-plan.md">测试方案</a></div>
                   </article>
                   <article class="task-card" data-search-item data-status="blocked">
                     <div class="task-top"><span class="task-id">T-11</span><span class="status-chip status-blocked">加密机现场</span></div>
@@ -1237,7 +1237,7 @@
                   <article class="task-card" data-search-item data-status="deferred">
                     <div class="task-top"><span class="task-id">21 + 11</span><span class="status-chip status-open">账面</span></div>
                     <h3>未决问题 21 条 · backlog 约 11 张</h3><p>详见下方「阻塞与未决」区与 implementation-status 的 backlog 串。</p>
-                    <div class="task-links"><a href="./plans/openchamber-chat-refactor/open-questions.md">Open Questions</a></div>
+                    <div class="task-links"><a href="../plans/openchamber-chat-refactor/open-questions.md">Open Questions</a></div>
                   </article>
                 </div>
               </div>
@@ -1250,7 +1250,7 @@
                 <h2>全量任务索引</h2>
                 <p>覆盖 A / C / T 全部编号，另补 multi-agent 的 S 系列切片与打包线 M 系列；用上方搜索可直接定位。</p>
               </div>
-              <a class="source-link" href="../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md">查看任务定义权威源 ↗</a>
+              <a class="source-link" href="../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md">查看任务定义权威源 ↗</a>
             </div>
             <div class="registry-grid">
               <div class="registry-group">
@@ -1364,7 +1364,7 @@
                 <h2>人工点验地图</h2>
                 <p>全部 23 项都在你手上，且都排在「出包」之后。这是当前项目的真实瓶颈。</p>
               </div>
-              <a class="source-link" href="../plans/2026-08-06-encrypted-machine-test-plan.md">打开测试方案原文 ↗</a>
+              <a class="source-link" href="../../plans/2026-08-06-encrypted-machine-test-plan.md">打开测试方案原文 ↗</a>
             </div>
             <div class="split">
               <div class="panel check-groups">
@@ -1409,7 +1409,7 @@
                 <p>lint ✅（32 条诊断全在 a08 基线 HTML，非产品代码）/ typecheck ✅ / typecheck:agent-host ✅ / vitest <strong>133 文件 2481 例 0 红</strong>。</p>
                 <p><strong>口径变更：</strong>原「Linux 上必然失败的 3 例 Windows-only」已于 2026-08-06 修复（用 <code>process.platform</code> 桩真跑 Windows 分支），<strong>现行口径是全绿，不再有豁免例</strong>。</p>
                 <p><strong>已知脆弱点：</strong><code>agentWireStatic</code> AST 扫描单跑 3057ms / 限 5000ms，满载并发下会假红一次、重跑即绿。</p>
-                <a class="source-link" href="./baseline/test-and-release-gates.md">查看测试与 GUI 门禁 ↗</a>
+                <a class="source-link" href="../baseline/test-and-release-gates.md">查看测试与 GUI 门禁 ↗</a>
               </aside>
             </div>
           </section>
@@ -1420,7 +1420,7 @@
                 <h2>阻塞与未决问题</h2>
                 <p>左列是硬阻塞（不解决就走不动），右列是待决策与账面债。已关闭问题不进入本区。</p>
               </div>
-              <a class="source-link" href="./plans/openchamber-chat-refactor/open-questions.md">查看全部 Open Questions ↗</a>
+              <a class="source-link" href="../plans/openchamber-chat-refactor/open-questions.md">查看全部 Open Questions ↗</a>
             </div>
             <div class="split">
               <div class="panel question-list">
@@ -1484,16 +1484,16 @@
                 <h2>Ideas Inbox</h2>
                 <p>低承诺想法，不计入路线承诺；成熟后再 promote。</p>
               </div>
-              <a class="source-link" href="./ideas/inbox.md">打开 Ideas 原文 ↗</a>
+              <a class="source-link" href="../ideas/inbox.md">打开 Ideas 原文 ↗</a>
             </div>
             <div class="idea-list">
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>长会话虚拟化与千 block 压测</strong><span>是否需要取决于 C-12 压测数据，不提前承诺。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>已有分支物化为 worktree</strong><span>IPC 底层已支持，缺「从已有分支建 worktree」的产品路径。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>真附件选择</strong><span>当前 ⊕ 是 Add file context；真附件选择涉及 renderer 读字节 IPC 与限额。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>Slash command</strong><span>你明确优先级不高；需先定义命令目录来源与发送语义。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>工具行复合 arg 渲染</strong><span>把 pattern 的 mono 域与「in repo」等散文域拆分呈现。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>安全加固批</strong><span>FILE_COPY/RENAME/MOVE 三条 IPC 仍是全盘写原语，宜比照根白名单收敛。</span></a>
-              <a href="./ideas/inbox.md" data-search-item data-status="deferred"><strong>会话 ID 毫秒碰撞</strong><span><code>session-${Date.now()}</code> 同毫秒双击 New 会撞 ID；改 randomUUID 需动红线 store。</span></a>
+              <a href="../ideas/inbox.md" data-search-item data-status="deferred"><strong>长会话虚拟化与千 block 压测</strong><span>是否需要取决于 C-12 压测数据，不提前承诺。</span></a>
+              <a href="../ideas/inbox.md" data-search-item data-status="deferred"><strong>已有分支物化为 worktree</strong><span>IPC 底层已支持，缺「从已有分支建 worktree」的产品路径。</span></a>
+              <a href="../ideas/inbox.md" data-search-item data-status="deferred"><strong>真附件选择</strong><span>当前 ⊕ 是 Add file context；真附件选择涉及 renderer 读字节 IPC 与限额。</span></a>
+              <a href="../ideas/inbox.md" data-search-item data-status="deferred"><strong>Slash command</strong><span>你明确优先级不高；需先定义命令目录来源与发送语义。</span></a>
+              <a href="../ideas/inbox.md" data-search-item data-status="deferred"><strong>工具行复合 arg 渲染</strong><span>把 pattern 的 mono 域与「in repo」等散文域拆分呈现。</span></a>
+              <a href="../ideas/inbox.md" data-search-item data-status="deferred"><strong>安全加固批</strong><span>FILE_COPY/RENAME/MOVE 三条 IPC 仍是全盘写原语，宜比照根白名单收敛。</span></a>
+              <a href="../ideas/inbox.md" data-search-item data-status="deferred"><strong>会话 ID 毫秒碰撞</strong><span><code>session-${Date.now()}</code> 同毫秒双击 New 会撞 ID；改 randomUUID 需动红线 store。</span></a>
             </div>
           </section>
 
@@ -1505,14 +1505,14 @@
               </div>
             </div>
             <div class="evidence-list">
-              <a href="../plans/2026-07-23-openchamber-chat-refactor-ard.md"><strong>1 · ARD — 架构权威</strong><span>目标结构与架构裁定；发生冲突时优先级最高。</span></a>
-              <a href="../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md"><strong>2 · 执行计划 — 任务定义</strong><span>C/T 编号、验收标准、依赖、测试凭证与执行顺序。</span></a>
-              <a href="../plans/openchamber-chat-refactor-ledger.md"><strong>3 · 总台账 — Phase / 决策 / 检查点</strong><span>append-only 的 D1…D26、Phase 总览和 CP-x 里程碑证据。</span></a>
-              <a href="./plans/openchamber-chat-refactor/implementation-status.md"><strong>4 · Implementation Status — 当前快照</strong><span>当前阶段、最近落地、最近验证、用户线、阻塞与交接。</span></a>
-              <a href="./plans/openchamber-chat-refactor/roadmap.md"><strong>5 · Roadmap — 任务状态</strong><span>Done / In Progress / Next / Deferred；状态类信息以 plantree 为准。</span></a>
-              <a href="./baseline/README.md"><strong>6 · Baseline — 项目事实层</strong><span>模块图、运行时流、存储、测试与发布门禁、风险热点。</span></a>
-              <a href="./plans/multi-agent/README.md"><strong>7 · multi-agent — 支线计划</strong><span>Codex 直连的 S1 spike / S2 设计 / S3 六切片与支线未决问题。</span></a>
-              <a href="../plans/t10-packaged-gui-checklist.md"><strong>8 · T-10 打包版清单 — 出包与点验</strong><span>出发前必做 M1~M6 + 九项通用点验；配套加密机测试方案含步骤 4b 回归。</span></a>
+              <a href="../../plans/2026-07-23-openchamber-chat-refactor-ard.md"><strong>1 · ARD — 架构权威</strong><span>目标结构与架构裁定；发生冲突时优先级最高。</span></a>
+              <a href="../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md"><strong>2 · 执行计划 — 任务定义</strong><span>C/T 编号、验收标准、依赖、测试凭证与执行顺序。</span></a>
+              <a href="../../plans/openchamber-chat-refactor-ledger.md"><strong>3 · 总台账 — Phase / 决策 / 检查点</strong><span>append-only 的 D1…D26、Phase 总览和 CP-x 里程碑证据。</span></a>
+              <a href="../plans/openchamber-chat-refactor/implementation-status.md"><strong>4 · Implementation Status — 当前快照</strong><span>当前阶段、最近落地、最近验证、用户线、阻塞与交接。</span></a>
+              <a href="../plans/openchamber-chat-refactor/roadmap.md"><strong>5 · Roadmap — 任务状态</strong><span>Done / In Progress / Next / Deferred；状态类信息以 plantree 为准。</span></a>
+              <a href="../baseline/README.md"><strong>6 · Baseline — 项目事实层</strong><span>模块图、运行时流、存储、测试与发布门禁、风险热点。</span></a>
+              <a href="../plans/multi-agent/README.md"><strong>7 · multi-agent — 支线计划</strong><span>Codex 直连的 S1 spike / S2 设计 / S3 六切片与支线未决问题。</span></a>
+              <a href="../../plans/t10-packaged-gui-checklist.md"><strong>8 · T-10 打包版清单 — 出包与点验</strong><span>出发前必做 M1~M6 + 九项通用点验；配套加密机测试方案含步骤 4b 回归。</span></a>
             </div>
           </section>
 

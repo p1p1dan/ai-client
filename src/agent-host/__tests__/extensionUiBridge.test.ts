@@ -5,6 +5,7 @@ import {
   type createPortableTheme,
   type ExtensionUiCancel,
   type ExtensionUiRequest,
+  type ExtensionUiReset,
 } from '../extensionUiBridge.ts';
 
 /**
@@ -20,6 +21,7 @@ import {
 interface Harness {
   requests: ExtensionUiRequest[];
   cancels: ExtensionUiCancel[];
+  resets: ExtensionUiReset[];
   bridge: ReturnType<typeof createPortableExtensionUiBridge>;
   ui: Record<string, (...args: unknown[]) => unknown>;
   last(): ExtensionUiRequest;
@@ -29,6 +31,7 @@ interface Harness {
 function harness(options?: { onRequest?: (r: ExtensionUiRequest) => void }): Harness {
   const requests: ExtensionUiRequest[] = [];
   const cancels: ExtensionUiCancel[] = [];
+  const resets: ExtensionUiReset[] = [];
   const bridge = createPortableExtensionUiBridge({
     runtimeId: 'runtime-1',
     onRequest: (request) => {
@@ -36,6 +39,7 @@ function harness(options?: { onRequest?: (r: ExtensionUiRequest) => void }): Har
       options?.onRequest?.(request);
     },
     onCancel: (cancel) => cancels.push(cancel),
+    onReset: (reset) => resets.push(reset),
   });
   const ui = bridge.uiContext as Record<string, (...args: unknown[]) => unknown>;
   const last = () => {
@@ -46,6 +50,7 @@ function harness(options?: { onRequest?: (r: ExtensionUiRequest) => void }): Har
   return {
     requests,
     cancels,
+    resets,
     bridge,
     ui,
     last,
@@ -243,7 +248,7 @@ describe('reload and dispose', () => {
   it('tells the renderer to clear the display state it set', () => {
     const h = harness();
     h.ui.setStatus('lint', 'running');
-    h.ui.setWidget('panel', [{ text: 'x' }]);
+    h.ui.setWidget('panel', ['x']);
     h.ui.setTitle('Working');
     h.ui.setWorkingVisible(true);
     h.requests.length = 0;
@@ -265,6 +270,18 @@ describe('reload and dispose', () => {
 
     h.bridge.reload();
     expect(h.requests.filter((r) => r.method === 'setStatus')).toHaveLength(0);
+  });
+
+  it('announces a runtime reset even when no dialog or display key was open', () => {
+    const h = harness();
+    h.bridge.reload();
+    expect(h.resets).toEqual([{ runtimeId: 'runtime-1', reason: 'session_replaced' }]);
+  });
+
+  it('carries the teardown reason when disposed', () => {
+    const h = harness();
+    h.bridge.dispose('session_closed');
+    expect(h.resets).toEqual([{ runtimeId: 'runtime-1', reason: 'session_closed' }]);
   });
 
   it('settles pending dialogs on dispose and refuses everything after', async () => {
@@ -289,6 +306,14 @@ describe('reload and dispose', () => {
 });
 
 describe('degradation for TUI-only surface', () => {
+  it('keeps semantic no-ops quiet instead of presenting them as failures', () => {
+    const h = harness();
+    h.ui.setWorkingMessage('working');
+    h.ui.setTitle('title');
+    h.ui.getEditorComponent();
+    expect(h.requests.filter((request) => request.method === 'unsupported')).toEqual([]);
+  });
+
   it('reports an unsupported method once, not once per call', () => {
     const h = harness();
     h.ui.setFooter();
@@ -313,14 +338,17 @@ describe('degradation for TUI-only surface', () => {
     expect(h.last().args).toEqual({ method: 'someFutureApi' });
   });
 
-  /** A widget built from a pi TUI component cannot cross the wire; only arrays can. */
-  it('refuses a non-array widget body but forwards an array one', () => {
+  /** A widget built from pi TUI components cannot cross the wire; only string lines can. */
+  it('refuses component widgets but forwards a string array', () => {
     const h = harness();
     h.ui.setWidget('k', { component: 'Box' });
     expect(h.last().method).toBe('unsupported');
     expect(h.last().args).toEqual({ method: 'setWidget.component' });
 
-    h.ui.setWidget('k', [{ text: 'ok' }]);
+    h.ui.setWidget('k', [{ text: 'still a component' }]);
+    expect(h.requests.filter((request) => request.method === 'unsupported')).toHaveLength(1);
+
+    h.ui.setWidget('k', ['ok']);
     expect(h.last().method).toBe('setWidget');
   });
 

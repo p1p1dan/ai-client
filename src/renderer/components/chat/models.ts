@@ -49,6 +49,9 @@ import { type AgentWireName, CLAUDE_CODE_AGENT } from '@shared/types/agentWire';
 export interface ChatModel {
   id: string;
   label: string;
+  tags?: string[];
+  reasoning?: boolean;
+  thinkingLevelMap?: AgentModelOption['thinkingLevelMap'];
   /**
    * `true` for a row the live catalog actually listed. Absent on `Automatic`
    * (which is not a model) and on a prepended leftover (which is the whole
@@ -126,8 +129,61 @@ export function modelScopeHint(agent: AgentWireName): string {
 export function modelOptionsFor(catalog: readonly AgentModelOption[]): ChatModel[] {
   return [
     { id: AUTOMATIC_MODEL_ID, label: AUTOMATIC_MODEL_LABEL },
-    ...catalog.map((option) => ({ id: option.id, label: option.label, verified: true })),
+    ...catalog.map((option) => ({
+      id: option.id,
+      label: option.label,
+      verified: true,
+      ...(option.tags ? { tags: [...option.tags] } : {}),
+      ...(option.reasoning !== undefined ? { reasoning: option.reasoning } : {}),
+      ...(option.thinkingLevelMap ? { thinkingLevelMap: { ...option.thinkingLevelMap } } : {}),
+    })),
   ];
+}
+
+export interface ChatModelGroup {
+  id: string;
+  label: string;
+  items: ChatModel[];
+}
+
+/** Match label/id and every tag; secondary tags are search-only, never groups. */
+export function filterChatModels<T extends ChatModel>(models: readonly T[], query: string): T[] {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return [...models];
+  return models.filter((model) =>
+    [model.label, model.id, ...(model.tags ?? [])].some((value) =>
+      value.toLocaleLowerCase().includes(needle)
+    )
+  );
+}
+
+/**
+ * T25: a model appears in exactly one group — its first configured tag. Group
+ * order is stable first appearance, so the management site's model/tag order
+ * survives to the menu. Untagged models share one deterministic fallback.
+ */
+export function groupChatModels(
+  models: readonly ChatModel[],
+  fallbackLabel = 'Other models'
+): { direct: ChatModel[]; groups: ChatModelGroup[] } {
+  const direct: ChatModel[] = [];
+  const groups: ChatModelGroup[] = [];
+  const byLabel = new Map<string, ChatModelGroup>();
+  for (const model of models) {
+    if (model.id === AUTOMATIC_MODEL_ID || model.verified === false) {
+      direct.push(model);
+      continue;
+    }
+    const primary = model.tags?.find((tag) => tag.trim().length > 0)?.trim() || fallbackLabel;
+    let group = byLabel.get(primary);
+    if (!group) {
+      group = { id: primary, label: primary, items: [] };
+      byLabel.set(primary, group);
+      groups.push(group);
+    }
+    group.items.push(model);
+  }
+  return { direct, groups };
 }
 
 /** `undefined` (i.e. omit the key) for `Automatic`, blank, or nothing stored. */

@@ -13,6 +13,7 @@ import {
   PI_AUTH_FILE_NAME,
   PI_MODEL_SYNC_STATE_FILE_NAME,
   PI_MODELS_FILE_NAME,
+  type PiManagedModelDefinition,
   type PiManagedModelsConfig,
   type PiModelSyncResult,
   type PiModelSyncState,
@@ -24,6 +25,7 @@ import { toPiModelsJson, validatePiManagedModelsConfig } from './configValidatio
 
 const MAX_CONFIG_BYTES = 2 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 5000;
+const PI_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 export interface PiModelConfigFetchResponse {
   ok: boolean;
@@ -86,29 +88,58 @@ function readValidatedModels(path: string): PiManagedModelsConfig | null {
   }
 }
 
-function readLocalModelOptions(
-  path: string
-): Array<{ providerId: string; id: string; name?: string }> {
+function readLocalModelOptions(path: string): Array<{
+  providerId: string;
+  model: Pick<PiManagedModelDefinition, 'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap'>;
+}> {
   if (!existsSync(path)) return [];
   try {
     const parsed = readJson(path);
     if (!parsed || typeof parsed !== 'object' || !('providers' in parsed)) return [];
     const providers = (parsed as { providers: unknown }).providers;
     if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return [];
-    const out: Array<{ providerId: string; id: string; name?: string }> = [];
+    const out: Array<{
+      providerId: string;
+      model: Pick<
+        PiManagedModelDefinition,
+        'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap'
+      >;
+    }> = [];
     for (const [providerId, rawProvider] of Object.entries(providers)) {
       if (!rawProvider || typeof rawProvider !== 'object' || Array.isArray(rawProvider)) continue;
       const models = (rawProvider as { models?: unknown }).models;
       if (!Array.isArray(models)) continue;
       for (const rawModel of models) {
         if (!rawModel || typeof rawModel !== 'object' || Array.isArray(rawModel)) continue;
-        const id = (rawModel as { id?: unknown }).id;
-        const name = (rawModel as { name?: unknown }).name;
+        const raw = rawModel as Record<string, unknown>;
+        const id = raw.id;
+        const name = raw.name;
         if (typeof id !== 'string' || !id.trim()) continue;
+        const tags = Array.isArray(raw.tags)
+          ? raw.tags.filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim()))
+          : undefined;
+        let thinkingLevelMap: PiManagedModelDefinition['thinkingLevelMap'];
+        if (
+          raw.thinkingLevelMap &&
+          typeof raw.thinkingLevelMap === 'object' &&
+          !Array.isArray(raw.thinkingLevelMap)
+        ) {
+          thinkingLevelMap = {};
+          const rawMap = raw.thinkingLevelMap as Record<string, unknown>;
+          for (const level of PI_THINKING_LEVELS) {
+            const mapped = rawMap[level];
+            if (typeof mapped === 'string' || mapped === null) thinkingLevelMap[level] = mapped;
+          }
+        }
         out.push({
           providerId,
-          id: id.trim(),
-          ...(typeof name === 'string' && name.trim() ? { name: name.trim() } : {}),
+          model: {
+            id: id.trim(),
+            ...(typeof name === 'string' && name.trim() ? { name: name.trim() } : {}),
+            ...(tags ? { tags: [...new Set(tags.map((tag) => tag.trim()))] } : {}),
+            ...(typeof raw.reasoning === 'boolean' ? { reasoning: raw.reasoning } : {}),
+            ...(thinkingLevelMap ? { thinkingLevelMap: { ...thinkingLevelMap } } : {}),
+          },
         });
       }
     }
@@ -284,13 +315,14 @@ export class PiModelConfigService {
             error: 'invalid-response',
           };
     }
-    const models = (
-      config
-        ? Object.entries(config.providers).flatMap(([providerId, provider]) =>
-            provider.models.map((model) => piModelOption(providerId, model))
-          )
-        : localModels.map((model) => piModelOption(model.providerId, model))
-    ).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+    // Preserve provider/model configuration order. T25 derives primary tag
+    // group order from the first model carrying each tag; alphabetizing here
+    // would silently replace cloud-managed order with locale collation.
+    const models = config
+      ? Object.entries(config.providers).flatMap(([providerId, provider]) =>
+          provider.models.map((model) => piModelOption(providerId, model))
+        )
+      : localModels.map(({ providerId, model }) => piModelOption(providerId, model));
     const state = this.readState();
     const source = sourceOverride ?? state.source;
     const catalogSource = source === 'remote' ? 'managed' : source === 'local' ? 'local' : source;

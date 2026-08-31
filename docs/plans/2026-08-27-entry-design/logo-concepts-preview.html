@@ -1,0 +1,677 @@
+<title>Pilab Mark Concepts</title>
+<style>
+  :root {
+    --page-bg: oklch(0.9931 0.012 96.42);
+    --page-card: oklch(0.9837 0.0106 100.82);
+    --page-fg: oklch(0.1696 0.0017 17.32);
+    --page-muted: oklch(0.4531 0.005 91.5);
+    --page-border: oklch(0.881 0.0137 97.46);
+    --page-accent: oklch(0.5665 0.1523 45.02);
+    --page-accent-fg: oklch(0.9931 0.012 96.42);
+    --radius-xs: 0.25rem;
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Ubuntu",
+      "Cantarell", "Noto Sans", "Liberation Sans", Arial, "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC",
+      "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --page-bg: oklch(0.1981 0.0032 17.43);
+      --page-card: oklch(0.2197 0.0037 48.55);
+      --page-fg: oklch(0.8463 0.0137 102.05);
+      --page-muted: oklch(0.6956 0.0103 93.62);
+      --page-border: oklch(0.3214 0.0038 84.58);
+      --page-accent: oklch(0.6576 0.1539 49.3);
+      --page-accent-fg: oklch(0.1981 0.0032 17.43);
+    }
+  }
+  :root[data-theme='dark'] {
+    --page-bg: oklch(0.1981 0.0032 17.43);
+    --page-card: oklch(0.2197 0.0037 48.55);
+    --page-fg: oklch(0.8463 0.0137 102.05);
+    --page-muted: oklch(0.6956 0.0103 93.62);
+    --page-border: oklch(0.3214 0.0038 84.58);
+    --page-accent: oklch(0.6576 0.1539 49.3);
+    --page-accent-fg: oklch(0.1981 0.0032 17.43);
+  }
+
+  .stage-root[data-app-theme='light'] {
+    --stage-bg: oklch(0.9931 0.012 96.42);
+    --stage-fg: oklch(0.1696 0.0017 17.32);
+    --stage-muted: oklch(0.4531 0.005 91.5);
+    --stage-border: oklch(0.881 0.0137 97.46);
+    --stage-input: oklch(0.8463 0.0137 102.05);
+    --stage-primary: oklch(0.5665 0.1523 45.02);
+    --stage-primary-fg: oklch(0.9931 0.012 96.42);
+    --stage-shadow: 0 0% 0% / 0.16;
+  }
+  .stage-root[data-app-theme='dark'] {
+    --stage-bg: oklch(0.1981 0.0032 17.43);
+    --stage-fg: oklch(0.8463 0.0137 102.05);
+    --stage-muted: oklch(0.6956 0.0103 93.62);
+    --stage-border: oklch(0.3214 0.0038 84.58);
+    --stage-input: oklch(0.3651 0.0044 67.69);
+    --stage-primary: oklch(0.6576 0.1539 49.3);
+    --stage-primary-fg: oklch(0.1981 0.0032 17.43);
+    --stage-shadow: 0 0% 0% / 0.5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--page-bg);
+    color: var(--page-fg);
+    font-family: var(--font-sans);
+    margin: 0;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+
+  .eyebrow {
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--page-accent); margin: 0 0 0.75rem;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 1.25rem + 1.4vw, 2.15rem); font-weight: 700; line-height: 1.25;
+    letter-spacing: -0.01em; margin: 0 0 0.9rem; text-wrap: balance;
+  }
+  .intro { font-size: 0.975rem; line-height: 1.7; color: var(--page-muted); max-width: 66ch; margin: 0 0 0.6rem; }
+  .intro strong { color: var(--page-fg); font-weight: 600; }
+  header { margin-bottom: 2.25rem; }
+
+  .group-label { font-size: 0.72rem; color: var(--page-muted); padding: 0 0.4rem 0 0.5rem; align-self: center; white-space: nowrap; }
+  .controls {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem;
+    background: var(--page-card); border: 1px solid var(--page-border); border-radius: var(--radius-md);
+    padding: 0.5rem; margin-bottom: 1.25rem;
+  }
+  .control-group { display: flex; align-items: center; }
+  .tabs { display: flex; gap: 0.25rem; }
+  .tab {
+    position: relative; height: 2.25rem; padding: 0 0.85rem; display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: inherit; font-size: 0.85rem; font-weight: 500; color: var(--page-muted);
+    background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .tab:hover { color: var(--page-fg); }
+  .tab[aria-selected='true'] { color: var(--page-accent-fg); background: var(--page-accent); }
+  .tab .swatch { width: 0.7rem; height: 0.7rem; border-radius: 999px; display: inline-block; }
+  .tab:focus-visible, .theme-btn:focus-visible, .rail-card:focus-visible, .word-btn:focus-visible {
+    outline: 2px solid var(--page-accent); outline-offset: 2px;
+  }
+  .side-controls { display: flex; align-items: center; gap: 0.6rem; }
+  .theme-switch, .word-switch {
+    display: flex; background: var(--page-bg); border: 1px solid var(--page-border);
+    border-radius: var(--radius-sm); padding: 0.15rem; gap: 0.15rem;
+  }
+  .theme-btn, .word-btn {
+    height: 1.7rem; padding: 0 0.7rem; font-family: inherit; font-size: 0.78rem; font-weight: 500;
+    color: var(--page-muted); background: transparent; border: none; border-radius: calc(var(--radius-sm) - 0.15rem);
+    cursor: pointer;
+  }
+  .theme-btn[aria-pressed='true'], .word-btn[aria-pressed='true'] {
+    background: var(--page-card); color: var(--page-fg); box-shadow: 0 1px 2px oklch(0 0 0 / 0.08);
+  }
+
+  .stage-wrap { display: flex; justify-content: center; margin-bottom: 0.6rem; }
+  .stage-window {
+    width: 100%; max-width: 560px; background: var(--stage-bg); border: 1px solid var(--stage-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 24px 60px -28px oklch(var(--stage-shadow)), 0 2px 10px -4px oklch(var(--stage-shadow));
+    overflow: hidden;
+  }
+  .stage-titlebar {
+    height: 2.1rem; display: flex; align-items: center; justify-content: flex-end; gap: 0.65rem;
+    padding: 0 0.85rem; color: var(--stage-muted); font-size: 0.8rem; user-select: none;
+  }
+  .stage-body { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2rem; padding: 0.75rem 2.5rem 3rem; }
+  .mark-slot { display: flex; align-items: center; justify-content: center; height: 100px; }
+  .stage-name-group { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+  .stage-name { font-size: 1.5rem; font-weight: 600; letter-spacing: 0.2em; color: var(--stage-fg); margin: 0; }
+  .stage-tagline { font-size: 0.875rem; color: var(--stage-muted); margin: 0; line-height: 1.5; }
+  .stage-tagline .aside { font-style: italic; font-size: 0.8em; opacity: 0.82; }
+  .stage-actions { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 300px; }
+  .stage-btn-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  .stage-btn { width: 100%; height: 2.75rem; font-family: inherit; font-size: 0.9rem; font-weight: 500; border-radius: var(--radius-sm); cursor: default; }
+  .stage-btn.primary { background: var(--stage-primary); color: var(--stage-primary-fg); border: none; }
+  .stage-btn.outline { background: transparent; color: var(--stage-fg); border: 1px solid var(--stage-input); }
+  .stage-caption { font-size: 0.75rem; color: var(--stage-muted); margin: 0; line-height: 1.4; }
+  .stage-note { text-align: center; font-size: 0.78rem; color: var(--page-muted); margin: 0.6rem 0 2rem; }
+
+  .rail-heading { font-size: 0.95rem; font-weight: 600; margin: 0 0 1rem; }
+  .rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+  @media (max-width: 640px) { .rail { grid-template-columns: 1fr; } }
+  .rail-card {
+    position: relative; text-align: left; background: var(--page-card); border: 1px solid var(--page-border);
+    border-radius: var(--radius-md); padding: 1.1rem 1.1rem 1.25rem; cursor: pointer; font-family: inherit;
+    display: flex; flex-direction: column; gap: 0.7rem;
+  }
+  .rail-card[aria-pressed='true'] { border-color: var(--page-accent); box-shadow: 0 0 0 1px var(--page-accent); }
+  .rail-mark { display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; }
+  .rail-title { font-size: 0.9rem; font-weight: 600; margin: 0; color: var(--page-fg); }
+  .rail-desc { font-size: 0.8rem; color: var(--page-muted); line-height: 1.55; margin: 0; }
+
+  footer { border-top: 1px solid var(--page-border); padding-top: 1.25rem; font-size: 0.825rem; color: var(--page-muted); line-height: 1.7; }
+  footer strong { color: var(--page-fg); font-weight: 600; }
+
+  @keyframes smoke-drift-1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(6px,-5px) scale(1.15); } }
+  @keyframes smoke-drift-2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-5px,6px) scale(0.88); } }
+  @keyframes smoke-drift-3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(5px,5px) scale(1.1); } }
+  @keyframes smoke-drift-4 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-6px,-4px) scale(0.9); } }
+  .smoke-1 { animation: smoke-drift-1 10s ease-in-out infinite; }
+  .smoke-2 { animation: smoke-drift-2 13s ease-in-out infinite; animation-delay: -4s; }
+  .smoke-3 { animation: smoke-drift-3 15s ease-in-out infinite; animation-delay: -7s; }
+  .smoke-4 { animation: smoke-drift-4 17.5s ease-in-out infinite; animation-delay: -10s; }
+
+  @keyframes sweep-move {
+    0% { transform: translateX(-90px) rotate(24deg); }
+    38% { transform: translateX(210px) rotate(24deg); }
+    100% { transform: translateX(210px) rotate(24deg); }
+  }
+  .sweep-bar { animation: sweep-move 4.6s ease-in-out infinite; }
+
+  @keyframes prism-chase { to { stroke-dashoffset: -294; } }
+  .prism-edge { animation: prism-chase 3.2s linear infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .smoke-1, .smoke-2, .smoke-3, .smoke-4, .sweep-bar, .prism-edge { animation: none; opacity: 0; }
+  }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">登录页 · Logo 提案 · 第五轮</p>
+    <h1>换成真通透的磨砂玻璃，动效给你三种挑</h1>
+    <p class="intro">
+      材质换了：三个面现在是<strong>真正半透明</strong>（不透明度只有 0.26–0.5，背景会透出来），叠了一层浅白的
+      "奶油感"雾化，再盖一层极细的磨砂颗粒噪点——不再是实心色块调不透明度，是真的磨砂玻璃。深浅分层逻辑不变
+      （顶面最透亮、左面最深）。
+    </p>
+    <p class="intro">
+      动效做了三种，互相独立、可以来回切着比：
+    </p>
+    <p class="intro">
+      <strong>烟雾</strong>——四团更大更柔的白色雾气各自锁在自己那个面里，缓慢飘；
+      <strong>反光扫光</strong>——一条更慢更软的斜向亮带整体扫过（比第一轮那版慢了一大截，扫完还会停一下）；
+      <strong>炫彩棱光</strong>——一圈彩虹色的光沿棱边匀速追逐跑动，这个是纯装饰效果，跟选的单色无关；
+      <strong>渐变流光（复刻最初版）</strong>——回到最早那版"颜色本身流动"的机制，只用一个色相且整体调浅了；
+      三个面共用同一个 6 秒节奏，起始时间依次错开 2 秒（顶→右→左），亮度峰值就会按这个顺序依次交棒，
+      观感上是同一束光沿顺时针绕着立方体转，不是三个面各干各的。这版<strong>不带磨砂/雾化</strong>，是原始那种更实的实色渐变质感，方便你和
+      "反光扫光 + 磨砂"直接对比。
+    </p>
+    <p class="intro">
+      新加一张卡片<strong>"流光 + 反光"</strong>：磨砂玻璃打底（haze + 颗粒噪点），面的颜色按渐变流光那套顺时针接力明暗，
+      再叠一道反光扫光那道斜向亮带扫过表面——内部在呼吸、表面在反光，是两层不同性质的"光"叠在一起，而不是二选一。
+    </p>
+    <p class="intro">
+      标语也给了几个更俏皮的版本，顶部"标语"标签可以切换着看；看完这些，这轮应该就能定下来了。
+    </p>
+  </header>
+
+  <div class="controls">
+    <div class="control-group">
+      <span class="group-label">配色</span>
+      <div class="tabs" role="tablist" aria-label="配色">
+        <button class="tab" data-palette="amber" role="tab" aria-selected="true">
+          <span class="swatch" style="background:oklch(0.62 0.15 45)"></span>琥珀
+        </button>
+        <button class="tab" data-palette="graphite" role="tab" aria-selected="false">
+          <span class="swatch" style="background:oklch(0.5 0 0)"></span>石墨
+        </button>
+        <button class="tab" data-palette="sapphire" role="tab" aria-selected="false">
+          <span class="swatch" style="background:oklch(0.5 0.13 255)"></span>藏蓝
+        </button>
+      </div>
+    </div>
+    <div class="side-controls">
+      <div class="word-switch" role="group" aria-label="对比排版">
+        <button class="word-btn" data-word-btn="PILAB" aria-pressed="true">PILAB</button>
+        <button class="word-btn" data-word-btn="AICLIENT" aria-pressed="false">AICLIENT</button>
+      </div>
+      <div class="theme-switch" role="group" aria-label="预览主题">
+        <button class="theme-btn" data-theme-btn="light" aria-pressed="true">浅色</button>
+        <button class="theme-btn" data-theme-btn="dark" aria-pressed="false">深色</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control-group">
+      <span class="group-label">标语</span>
+      <div class="tabs" role="tablist" aria-label="标语">
+        <button class="tab" data-tagline="0" role="tab" aria-selected="true">原句</button>
+        <button class="tab" data-tagline="1" role="tab" aria-selected="false">allegedly</button>
+        <button class="tab" data-tagline="2" role="tab" aria-selected="false">vibe code</button>
+        <button class="tab" data-tagline="3" role="tab" aria-selected="false">两句式</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="stage-window stage-root" data-app-theme="light">
+      <div class="stage-titlebar"><span>─</span><span>▢</span><span>✕</span></div>
+      <div class="stage-body">
+        <div class="mark-slot" id="stageMarkSlot"></div>
+        <div class="stage-name-group">
+          <p class="stage-name" id="stageName">PILAB</p>
+          <p class="stage-tagline" id="stageTagline"><span class="aside">(One of)</span> the best way to code with ai</p>
+        </div>
+        <div class="stage-actions">
+          <div class="stage-btn-group">
+            <button class="stage-btn primary">Log in with work email</button>
+            <p class="stage-caption">Runs on the managed gateway. Nothing is written to your machine.</p>
+          </div>
+          <div class="stage-btn-group">
+            <button class="stage-btn outline">Use my own setup</button>
+            <p class="stage-caption">Runs on the Claude Code and Codex configuration already on this machine.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="stage-note">窗口边框、按钮颜色仍是产品里真实的 token；变的只是图标和文字。</p>
+
+  <h2 class="rail-heading">三种动效对照（点卡片切换主预览）</h2>
+  <div class="rail">
+    <button class="rail-card" data-anim="smoke" aria-pressed="true">
+      <div class="rail-mark" data-rail="smoke"></div>
+      <p class="rail-title">烟雾</p>
+      <p class="rail-desc">四团柔雾各自锁在自己的面里飘，最贴近"胶质缓流"的手感，最稳重。</p>
+    </button>
+    <button class="rail-card" data-anim="sweep" aria-pressed="false">
+      <div class="rail-mark" data-rail="sweep"></div>
+      <p class="rail-title">反光扫光</p>
+      <p class="rail-desc">整块斜向扫过的亮带，比第一版慢很多、扫完会停顿——更像玻璃反光，不是"闪一下"。</p>
+    </button>
+    <button class="rail-card" data-anim="prism" aria-pressed="false">
+      <div class="rail-mark" data-rail="prism"></div>
+      <p class="rail-title">炫彩棱光</p>
+      <p class="rail-desc">彩虹光沿棱边匀速追逐，最"炫"的一个，装饰性强，和登录页整体气质是否匹配需要你判断。</p>
+    </button>
+    <button class="rail-card" data-anim="flow" aria-pressed="false">
+      <div class="rail-mark" data-rail="flow"></div>
+      <p class="rail-title">渐变流光（复刻最初版）</p>
+      <p class="rail-desc">单色、调浅；三面同节奏错峰 2 秒依次交棒（顶→右→左），像一束光顺时针绕立方体转，不带磨砂。</p>
+    </button>
+    <button class="rail-card" data-anim="combo" aria-pressed="false">
+      <div class="rail-mark" data-rail="combo"></div>
+      <p class="rail-title">流光 + 反光</p>
+      <p class="rail-desc">磨砂玻璃打底，面色按顺时针接力明暗（渐变流光那套），外面再叠一道斜向反光扫过——内里在呼吸，表面在反光，两种"光"分层。</p>
+    </button>
+  </div>
+
+  <footer>
+    <strong>状态：</strong>仍然只是本地预览文件，<code>AiClientMark.tsx</code> 和 <code>WelcomeView.tsx</code>
+    没有改动。定下材质细节 + 动效 + 配色之后再落地——落地时炫彩棱光那种纯装饰效果会视性能开销做取舍。
+  </footer>
+</main>
+
+<script>
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  var uid = 0;
+  function nextId(prefix) { uid += 1; return prefix + '-' + uid; }
+  function el(tag, attrs, children) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    (children || []).forEach(function (c) { e.appendChild(c); });
+    return e;
+  }
+
+  var PALETTE_BASE = {
+    amber: 'oklch(0.55 0.14 45)',
+    graphite: 'oklch(0.45 0 0)',
+    sapphire: 'oklch(0.45 0.12 255)',
+  };
+  // [resting tone, peak-bright tone] per palette, same hue as PALETTE_BASE —
+  // used by the "flow" variant. Lighter overall than a first pass at this
+  // (raised both ends) per direct feedback.
+  var FLOW_STOPS = {
+    amber: ['oklch(0.72 0.11 45)', 'oklch(0.93 0.06 45)'],
+    graphite: ['oklch(0.68 0 0)', 'oklch(0.92 0 0)'],
+    sapphire: ['oklch(0.66 0.09 255)', 'oklch(0.9 0.05 255)'],
+  };
+
+  var FACES = {
+    top: { d: 'M60,14 L104,39 L60,64 L16,39 Z', fillOp: '0.5', hazeOp: '0.24' },
+    right: { d: 'M104,39 L104,85 L60,110 L60,64 Z', fillOp: '0.38', hazeOp: '0.15' },
+    left: { d: 'M16,39 L60,64 L60,110 L16,85 Z', fillOp: '0.26', hazeOp: '0.08' },
+  };
+  var OUTLINE = 'M60,14 L104,39 L104,85 L60,110 L16,85 L16,39 Z';
+  var SEAMS = ['M16,39 L60,64 L104,39', 'M60,64 L60,110'];
+
+  function blurFilter(id, dev) {
+    return el('filter', { id: id, x: '-80%', y: '-80%', width: '260%', height: '260%' }, [
+      el('feGaussianBlur', { stdDeviation: dev }),
+    ]);
+  }
+
+  function grainFilter(id) {
+    return el('filter', { id: id, x: '0', y: '0', width: '100%', height: '100%' }, [
+      el('feTurbulence', { type: 'fractalNoise', baseFrequency: '0.85', numOctaves: '2', seed: '5', result: 'n' }),
+      el('feColorMatrix', {
+        in: 'n', type: 'matrix',
+        values: '0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0',
+      }),
+    ]);
+  }
+
+  function radialBlob(id, color, peak) {
+    return el('radialGradient', { id: id }, [
+      el('stop', { offset: '0%', 'stop-color': color, 'stop-opacity': String(peak) }),
+      el('stop', { offset: '100%', 'stop-color': color, 'stop-opacity': '0' }),
+    ]);
+  }
+
+  function faceClip(key) {
+    var id = nextId('clip');
+    return { id: id, def: el('clipPath', { id: id }, [el('path', { d: FACES[key].d })]) };
+  }
+
+  function buildStatic(base, defs) {
+    var facesGroup = el('g', {}, Object.keys(FACES).map(function (key) {
+      var f = FACES[key];
+      return el('path', { d: f.d, fill: base, opacity: f.fillOp });
+    }));
+    var hazeGroup = el('g', {}, Object.keys(FACES).map(function (key) {
+      var f = FACES[key];
+      return el('path', { d: f.d, fill: 'white', opacity: f.hazeOp });
+    }));
+
+    var outlineClipId = nextId('clip');
+    defs.push(el('clipPath', { id: outlineClipId }, [el('path', { d: OUTLINE })]));
+    var grainId = nextId('grain');
+    defs.push(grainFilter(grainId));
+    var grain = el('g', { 'clip-path': 'url(#' + outlineClipId + ')' }, [
+      el('rect', { x: '0', y: '0', width: '120', height: '120', filter: 'url(#' + grainId + ')', 'mix-blend-mode': 'overlay', opacity: '0.5' }),
+    ]);
+
+    var edgesGroup = el(
+      'g',
+      { opacity: '0.3', stroke: 'var(--stage-fg)', 'stroke-width': '1.5', 'stroke-linejoin': 'round', fill: 'none' },
+      [el('path', { d: OUTLINE })].concat(SEAMS.map(function (d) { return el('path', { d: d }); }))
+    );
+
+    return { facesGroup: facesGroup, hazeGroup: hazeGroup, grain: grain, edgesGroup: edgesGroup, outlineClipId: outlineClipId };
+  }
+
+  function buildSmokeAnim(defs) {
+    var specs = [
+      { face: 'top', cx: 46, cy: 30, r: 15, cls: 'smoke-1' },
+      { face: 'top', cx: 78, cy: 47, r: 12, cls: 'smoke-2' },
+      { face: 'left', cx: 34, cy: 72, r: 16, cls: 'smoke-3' },
+      { face: 'right', cx: 86, cy: 76, r: 16, cls: 'smoke-4' },
+    ];
+    var byFace = {};
+    var out = el('g', {});
+    specs.forEach(function (s) {
+      if (!byFace[s.face]) {
+        var clip = faceClip(s.face);
+        defs.push(clip.def);
+        byFace[s.face] = el('g', { 'clip-path': 'url(#' + clip.id + ')' });
+        out.appendChild(byFace[s.face]);
+      }
+      var gid = nextId('smoke-grad');
+      var fid = nextId('smoke-blur');
+      defs.push(radialBlob(gid, 'white', 0.4));
+      defs.push(blurFilter(fid, '7'));
+      byFace[s.face].appendChild(el('circle', {
+        class: s.cls, cx: String(s.cx), cy: String(s.cy), r: String(s.r),
+        fill: 'url(#' + gid + ')', filter: 'url(#' + fid + ')',
+      }));
+    });
+    return out;
+  }
+
+  function buildSweepAnim(defs, outlineClipId) {
+    var gid = nextId('sweep-grad');
+    defs.push(el('linearGradient', { id: gid, x1: '0', y1: '0', x2: '1', y2: '0' }, [
+      el('stop', { offset: '0%', 'stop-color': 'white', 'stop-opacity': '0' }),
+      el('stop', { offset: '50%', 'stop-color': 'white', 'stop-opacity': '0.55' }),
+      el('stop', { offset: '100%', 'stop-color': 'white', 'stop-opacity': '0' }),
+    ]));
+    var fid = nextId('sweep-blur');
+    defs.push(blurFilter(fid, '3'));
+    var bar = el('rect', {
+      class: 'sweep-bar', x: '-90', y: '-30', width: '50', height: '190',
+      fill: 'url(#' + gid + ')', filter: 'url(#' + fid + ')',
+    });
+    return el('g', { 'clip-path': 'url(#' + outlineClipId + ')' }, [bar]);
+  }
+
+  function buildPrismAnim(defs) {
+    var gid = nextId('prism-grad');
+    var hues = [0, 45, 90, 150, 200, 260, 310, 360];
+    defs.push(el('linearGradient', { id: gid, x1: '0', y1: '0', x2: '1', y2: '1' },
+      hues.map(function (h, i) {
+        return el('stop', { offset: (i / (hues.length - 1) * 100) + '%', 'stop-color': 'oklch(0.75 0.17 ' + h + ')' });
+      })
+    ));
+    var fid = nextId('prism-blur');
+    defs.push(blurFilter(fid, '1.2'));
+    return el('path', {
+      class: 'prism-edge', d: OUTLINE, fill: 'none', stroke: 'url(#' + gid + ')',
+      'stroke-width': '3', 'stroke-linecap': 'round', 'stroke-dasharray': '55 239',
+      filter: 'url(#' + fid + ')', opacity: '0.9',
+    });
+  }
+
+  // Revives the very first mechanism's spirit (light itself moves through
+  // the faces, not a highlight riding on top of a fixed color) but as one
+  // relay: each face pulses resting-tone -> bright -> resting-tone on the
+  // SAME 6s period, started 2s apart in the order top -> right -> left. That
+  // 2s stagger is exactly a third of the period, so the brightness peak
+  // visibly hands off face to face — top peaks, then right, then left, then
+  // back to top — which reads as one loop travelling clockwise around the
+  // cube rather than three faces doing unrelated things. (Clockwise here
+  // because top -> right -> left is the clockwise order of this isometric
+  // layout's visible perimeter.) Every face gets the full, unmistakable
+  // peak at its turn, so the low-opacity left face no longer reads as
+  // "barely moving" the way a subtler, independent animation did.
+  function buildFlowCube(size, paletteKey) {
+    var tones = FLOW_STOPS[paletteKey];
+    var base = tones[0];
+    var bright = tones[1];
+
+    function pulsingFace(d, opacity, begin) {
+      return el('path', { d: d, fill: base, opacity: opacity }, [
+        el('animate', {
+          attributeName: 'fill', begin: begin, calcMode: 'spline', dur: '6s',
+          keySplines: '0.42 0 0.58 1; 0.42 0 0.58 1', keyTimes: '0; 0.5; 1',
+          repeatCount: 'indefinite', values: base + ';' + bright + ';' + base,
+        }),
+      ]);
+    }
+
+    var facesGroup = el('g', {}, [
+      pulsingFace(FACES.top.d, '0.95', '-2s'),
+      pulsingFace(FACES.right.d, '0.75', '0s'),
+      pulsingFace(FACES.left.d, '0.55', '2s'),
+    ]);
+    var edgesGroup = el(
+      'g',
+      { opacity: '0.28', stroke: 'var(--stage-fg)', 'stroke-width': '1.5', 'stroke-linejoin': 'round', fill: 'none' },
+      [el('path', { d: OUTLINE })].concat(SEAMS.map(function (d) { return el('path', { d: d }); }))
+    );
+
+    return el(
+      'svg',
+      {
+        viewBox: '0 0 120 120', width: size, height: size,
+        style: 'filter: drop-shadow(0 8px 12px oklch(0 0 0 / 0.2))',
+        'aria-hidden': 'true', role: 'presentation',
+      },
+      [el('title', {}, [document.createTextNode('Pilab')]), facesGroup, edgesGroup]
+    );
+  }
+
+  // Layers the clockwise relay pulse (buildFlowCube's face animation) as the
+  // FILL under the frosted haze/grain/sweep stack the other three anim modes
+  // share, instead of a flat static tint. Two different qualities of light
+  // at once: a slow warm glow circulating inside the glass, and a faster
+  // cool reflection gliding across its surface — kept as their own layers on
+  // purpose, since collapsing them into one animation would hide the one
+  // that's supposed to read as coming from inside the material.
+  function buildComboCube(size, paletteKey) {
+    var tones = FLOW_STOPS[paletteKey];
+    var base = tones[0];
+    var bright = tones[1];
+    var defs = [];
+
+    function pulsingFace(d, opacity, begin) {
+      return el('path', { d: d, fill: base, opacity: opacity }, [
+        el('animate', {
+          attributeName: 'fill', begin: begin, calcMode: 'spline', dur: '6s',
+          keySplines: '0.42 0 0.58 1; 0.42 0 0.58 1', keyTimes: '0; 0.5; 1',
+          repeatCount: 'indefinite', values: base + ';' + bright + ';' + base,
+        }),
+      ]);
+    }
+    var facesGroup = el('g', {}, [
+      pulsingFace(FACES.top.d, FACES.top.fillOp, '-2s'),
+      pulsingFace(FACES.right.d, FACES.right.fillOp, '0s'),
+      pulsingFace(FACES.left.d, FACES.left.fillOp, '2s'),
+    ]);
+    var hazeGroup = el('g', {}, Object.keys(FACES).map(function (key) {
+      var f = FACES[key];
+      return el('path', { d: f.d, fill: 'white', opacity: f.hazeOp });
+    }));
+
+    var outlineClipId = nextId('clip');
+    defs.push(el('clipPath', { id: outlineClipId }, [el('path', { d: OUTLINE })]));
+    var grainId = nextId('grain');
+    defs.push(grainFilter(grainId));
+    var grain = el('g', { 'clip-path': 'url(#' + outlineClipId + ')' }, [
+      el('rect', { x: '0', y: '0', width: '120', height: '120', filter: 'url(#' + grainId + ')', 'mix-blend-mode': 'overlay', opacity: '0.5' }),
+    ]);
+
+    var edgesGroup = el(
+      'g',
+      { opacity: '0.3', stroke: 'var(--stage-fg)', 'stroke-width': '1.5', 'stroke-linejoin': 'round', fill: 'none' },
+      [el('path', { d: OUTLINE })].concat(SEAMS.map(function (d) { return el('path', { d: d }); }))
+    );
+
+    var sweepLayer = buildSweepAnim(defs, outlineClipId);
+
+    return el(
+      'svg',
+      {
+        viewBox: '0 0 120 120', width: size, height: size,
+        style: 'filter: drop-shadow(0 8px 12px oklch(0 0 0 / 0.2))',
+        'aria-hidden': 'true', role: 'presentation',
+      },
+      [el('title', {}, [document.createTextNode('Pilab')]), el('defs', {}, defs), facesGroup, hazeGroup, grain, edgesGroup, sweepLayer]
+    );
+  }
+
+  function buildCube(size, paletteKey, animKey) {
+    if (animKey === 'flow') return buildFlowCube(size, paletteKey);
+    if (animKey === 'combo') return buildComboCube(size, paletteKey);
+    var base = PALETTE_BASE[paletteKey];
+    var defs = [];
+    var s = buildStatic(base, defs);
+
+    var animEl;
+    if (animKey === 'smoke') animEl = buildSmokeAnim(defs);
+    else if (animKey === 'sweep') animEl = buildSweepAnim(defs, s.outlineClipId);
+    else animEl = buildPrismAnim(defs);
+
+    var children = [s.facesGroup, s.hazeGroup, s.grain, s.edgesGroup, animEl];
+
+    return el(
+      'svg',
+      {
+        viewBox: '0 0 120 120', width: size, height: size,
+        style: 'filter: drop-shadow(0 8px 12px oklch(0 0 0 / 0.2))',
+        'aria-hidden': 'true', role: 'presentation',
+      },
+      [el('title', {}, [document.createTextNode('Pilab')]), el('defs', {}, defs)].concat(children)
+    );
+  }
+
+  var TAGLINES = [
+    '<span class="aside">(One of)</span> the best way to code with ai',
+    '<span class="aside">(One of)</span> the best way to code with ai, allegedly',
+    '<span class="aside">(One of)</span> the best way to vibe code with ai',
+    'Not <em>the</em> best way to code with ai. Just a really good one.',
+  ];
+
+  var stageSlot = document.getElementById('stageMarkSlot');
+  var railSlots = {
+    smoke: document.querySelector('[data-rail="smoke"]'),
+    sweep: document.querySelector('[data-rail="sweep"]'),
+    prism: document.querySelector('[data-rail="prism"]'),
+    flow: document.querySelector('[data-rail="flow"]'),
+    combo: document.querySelector('[data-rail="combo"]'),
+  };
+
+  var currentPalette = 'amber';
+  var currentAnim = 'combo';
+  var word = 'PILAB';
+  var taglineIdx = 0;
+
+  function renderStageMark() {
+    stageSlot.innerHTML = '';
+    stageSlot.appendChild(buildCube(96, currentPalette, currentAnim));
+  }
+  function renderRail() {
+    Object.keys(railSlots).forEach(function (key) {
+      railSlots[key].innerHTML = '';
+      railSlots[key].appendChild(buildCube(56, currentPalette, key));
+    });
+  }
+  function renderName() { document.getElementById('stageName').textContent = word; }
+  function renderTagline() { document.getElementById('stageTagline').innerHTML = TAGLINES[taglineIdx]; }
+
+  function selectPalette(key) {
+    currentPalette = key;
+    document.querySelectorAll('[data-palette]').forEach(function (t) {
+      t.setAttribute('aria-selected', String(t.getAttribute('data-palette') === key));
+    });
+    renderStageMark();
+    renderRail();
+  }
+  function selectAnim(key) {
+    currentAnim = key;
+    document.querySelectorAll('.rail-card').forEach(function (c) {
+      c.setAttribute('aria-pressed', String(c.getAttribute('data-anim') === key));
+    });
+    renderStageMark();
+  }
+  function selectTagline(idx) {
+    taglineIdx = idx;
+    document.querySelectorAll('[data-tagline]').forEach(function (t) {
+      t.setAttribute('aria-selected', String(Number(t.getAttribute('data-tagline')) === idx));
+    });
+    renderTagline();
+  }
+
+  document.querySelectorAll('[data-palette]').forEach(function (t) {
+    t.addEventListener('click', function () { selectPalette(t.getAttribute('data-palette')); });
+  });
+  document.querySelectorAll('[data-tagline]').forEach(function (t) {
+    t.addEventListener('click', function () { selectTagline(Number(t.getAttribute('data-tagline'))); });
+  });
+  document.querySelectorAll('.rail-card').forEach(function (c) {
+    c.addEventListener('click', function () { selectAnim(c.getAttribute('data-anim')); });
+  });
+  document.querySelectorAll('.word-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      word = b.getAttribute('data-word-btn');
+      document.querySelectorAll('.word-btn').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+      renderName();
+    });
+  });
+  document.querySelectorAll('.theme-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var theme = b.getAttribute('data-theme-btn');
+      document.querySelector('.stage-root').setAttribute('data-app-theme', theme);
+      document.querySelectorAll('.theme-btn').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+
+  renderRail();
+  selectAnim('combo');
+})();
+</script>

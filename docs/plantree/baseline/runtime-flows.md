@@ -1,30 +1,91 @@
 # Runtime Flows
 
-## 发送主链
+> 以下是 D15 目标 flow。当前 singleton `PiHostProcess` 仍在，T29/T30 完成前必须在 implementation status 中显式区分 transition 与 target。
 
-Composer → `store.sendMessage(text, attachments?)` → IPC `chat:send` → AgentHostManager →
-Host stdin（NDJSON `session.send`）→ SDK `query()` 流 → `eventNormalizer` 归一 →
-stdout Runtime Event → Main 广播 `CHAT_RUNTIME_EVENT` → renderer **16ms 批处理队列** →
-`applyRuntimeEvents` 折叠 → 分桶 reducer → UI（时间线只订阅本会话桶）。
+## Create / send / stream
 
-- 附件（C-13）：`attachments[]={kind:'image'|'text', mediaType, data, name?}`，Host 侧包成 SDK 消息流；path 不进协议。
-- 流结束无 result：normalizer `finishTurn()` 补终态（有输出→completed，无→failed），杜绝 UI 永驻 running。
+```text
+Composer/store
+→ preload IPC
+→ Main WorkerManager locate/create WorkerSlot
+→ slot RPC over MessagePort
+→ utility worker Pi AgentSession create/open/send
+→ Pi events projected to RuntimeEvent
+→ Main validates slot generation + routes to owner window
+→ renderer batches/reduces into session bucket
+→ timeline/composer surfaces
+```
 
-## Permission / Question
+- create 初期可用 workspace temporary key；Pi session file 建立后原子 remap。
+- attachments 通过 contract 传 bytes/metadata，不把任意 host path 当可信 payload。
+- terminal state 必须唯一：completed / failed / stopped；流结束缺 terminal event 时由 worker fail closed/projection 补齐，不让 UI 永驻 busy。
 
-SDK `canUseTool` → dispatcher：AskUserQuestion → questionBridge，其余 → permissionBridge →
-停靠 pending + 发 `permission.requested` / `question.requested` → UI 卡 →
-`chat:respondPermission({allow})` / `chat:respondQuestion({answers?|response?|cancel?})` → 单次 settle → 会话续跑。
-Question 三条硬约束（answers key 逐字 / multiSelect 用 ", " / answers-response 互斥）见总台账 C-04 行。
+## Stop / dispose / crash
 
-## Resume 历史
+```text
+stop(session)
+→ WorkerManager selects authoritative slot
+→ slot abort/stop RPC
+→ Pi turn settles
+→ pending RPC + Extension UI + active turn cleared
+→ terminal RuntimeEvent
+```
 
-点击历史会话 → `chat:resumeSession` → Host `historyReader` 读 CC JSONL（uuid 文件名定位、宽容解析、TSD magic → `encrypted_unreadable`）→
-事件序 `session.resumed → session.history（消息 id h:* 前缀）→ status idle` → store 桶内幂等替换灌入。
-running 会话 resume 被拒（`session_busy`）。列表数据源 = `chat:listSessions`（索引）+ `chat:listHistory`（盘上）。
+- crash/dispose 同时清 owner route、blocking request、display reset 和 stale generation。
+- bounded restart；反复失败进入可恢复错误，不无限拉起。
+- foreground/active turn/pending blocking request 的 slot 不可 idle-evict。
 
-## 看门狗（C-14）
+## Extension UI / permission
 
-send 循环 120s 无**生产性事件**（assistant/user/result/tool_progress/stream_event 才算；system 控制面不算）→
-abort + 显性 `session.failed`。豁免：permission/question 挂起、本地工具执行中（openTools）。
-`AICLIENT_HOST_STALL_TIMEOUT_MS` 可配，0 禁用。
+```text
+Pi extension ui.select/confirm/input/editor
+→ worker Extension UI bridge
+→ blocking request tagged session/runtime/generation/requestId
+→ Main owner route
+→ session-local inline dock
+→ correlated response back to same WorkerSlot
+```
+
+`notify/setStatus/setWidget/unsupported` 是 fire-and-forget display event，不进入 blocking map。slot reload/crash/dispose 发 reset/retirement；后台 session 只显示 badge，不用全局 modal。
+
+## Real resume / history
+
+```text
+resume(sessionId, runtimeIdentity/sessionFile)
+→ WorkerManager locate/create slot
+→ Pi SessionManager.open(sessionFile)
+→ branch-aware history + incomplete recovery
+→ session.resumed
+→ session.history(entries preserving Pi entryId)
+→ idle
+```
+
+missing/corrupt/cross-cwd 必须可诊断；不创建空文件覆盖 source，不用裁剪 renderer 数组伪装 rewind。
+
+## Tree / rewind / fork
+
+- tree 查询带 session key + request generation，迟到响应丢弃。
+- rewind idle-only，调用 Pi native navigation；保留后续 branch。
+- fork 从 entry 创建独立 Pi session file、application session row 和 WorkerSlot；源 session 不变。
+- 操作前后清理 queue/pending/Extension UI/runtime facts，防跨会话继续流。
+
+## Legacy import
+
+```text
+read-only Claude/Codex source
+→ ImportedConversation
+→ validate/project
+→ temporary Pi JSONL
+→ Pi reader validation
+→ atomic publish + dedupe/provenance
+→ session index
+```
+
+source 不 rename/move/delete/modify；无法映射 tool 只读展示，不重新执行；失败不暴露半成品。
+
+## GUI / TUI mode
+
+- Main/WorkerManager 是 single-writer authority。
+- TUI launch 使用随包 Node/Pi CLI absolute path 和正确 agentDir/cwd。
+- 未证明 flush/open handoff 前，只承诺同 workspace/config 的新 TUI session。
+- GUI 与 TUI 不同时写同一 Pi session file；旧 PTY/worker generation output 必须过滤。

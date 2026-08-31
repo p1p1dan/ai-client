@@ -108,10 +108,8 @@ export type EnqueueResult =
  * Stop-hang fix (2026-08-10) — the queue's pause semantics, stated once:
  * **Stop freezes the queue; the user's next message thaws it.**
  *
- * - EMPTY bucket, ANY reason -> cleared. Unchanged m2 rule: an empty paused
- *   bucket renders nothing at all (`deriveQueueStripModel` collapses the whole
- *   strip when there are no entries), so it has no Resume link to offer and
- *   would hold the incoming message back invisibly.
+ * - EMPTY bucket -> unpaused. `pauseSession` no longer creates empty buckets:
+ *   there is nothing to freeze, and a missing bucket may mean lifecycle prune.
  * - NON-EMPTY bucket, `'stopped'` -> cleared (NEW; supersedes m2's "a
  *   non-empty bucket keeps its pause"). m2 reasoned that enqueuing a follow-up
  *   is not "a new turn starting", so a Stopped queue should wait for an
@@ -216,10 +214,13 @@ export function takeHead(
  * (round-2 P0: the Host flatly refused to admit the turn, e.g. `session_busy`)
  * after `takeHead` already popped the entry, or when `runEntry` rejects
  * outright — decision 3.3's "never swallow a message" guarantee.
- * Works even when the bucket does not exist yet (a prune could have raced it away).
+ * A missing bucket means lifecycle pruning won the race (Archive/repository
+ * removal). In that case restoration MUST be a no-op: recreating the bucket
+ * would resurrect hidden queue state for a session the UI no longer owns.
  */
 export function restoreHead(state: MessageQueueState, entry: QueuedMessage): MessageQueueState {
-  const bucket = state.bySession[entry.sessionId] ?? EMPTY_QUEUE;
+  const bucket = state.bySession[entry.sessionId];
+  if (!bucket) return state;
   return {
     bySession: {
       ...state.bySession,
@@ -244,6 +245,36 @@ export function removeEntry(
     bySession: {
       ...state.bySession,
       [sessionId]: { ...bucket, entries: bucket.entries.filter((entry) => entry.id !== entryId) },
+    },
+  };
+}
+
+export type QueueMoveDirection = 'up' | 'down';
+
+/**
+ * Exchange one queued entry with its adjacent neighbour. Identity, payload,
+ * queuedAt and pause state all stay attached to the entry; only FIFO position
+ * changes. Boundary/unknown moves are no-ops with the same state reference.
+ */
+export function moveEntry(
+  state: MessageQueueState,
+  sessionId: string,
+  entryId: string,
+  direction: QueueMoveDirection
+): MessageQueueState {
+  const bucket = state.bySession[sessionId];
+  if (!bucket) return state;
+  const index = bucket.entries.findIndex((entry) => entry.id === entryId);
+  if (index === -1) return state;
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= bucket.entries.length) return state;
+
+  const entries = [...bucket.entries];
+  [entries[index], entries[targetIndex]] = [entries[targetIndex], entries[index]];
+  return {
+    bySession: {
+      ...state.bySession,
+      [sessionId]: { ...bucket, entries },
     },
   };
 }
@@ -326,8 +357,11 @@ export function pauseSession(
   sessionId: string,
   reason: QueuePauseReason = 'stopped'
 ): MessageQueueState {
-  const bucket = state.bySession[sessionId] ?? EMPTY_QUEUE;
-  if (bucket.paused === reason) return state;
+  const bucket = state.bySession[sessionId];
+  // No entries means there is nothing to freeze. More importantly, a missing
+  // bucket may have been lifecycle-pruned while a release was in flight;
+  // recreating it here would undo Archive/repository removal.
+  if (!bucket || bucket.paused === reason) return state;
   return {
     bySession: { ...state.bySession, [sessionId]: { ...bucket, paused: reason } },
   };

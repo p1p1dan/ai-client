@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
+import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
@@ -10,7 +11,13 @@ import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { ChatComposer } from './ChatComposer';
 import { ChatWelcomeCard } from './ChatWelcomeCard';
-import { ExtensionUiDialog } from './ExtensionUiDialog';
+import { ExtensionUiDialog, ExtensionUiInlineDock } from './ExtensionUiDialog';
+import {
+  ExtensionUiNotificationEffects,
+  ExtensionUiStatusChips,
+  ExtensionUiUnsupportedNotice,
+  ExtensionUiWidgets,
+} from './ExtensionUiSurfaces';
 import { HostStatusBanner } from './HostStatusBanner';
 import { selectHistoryError } from './historyError';
 import { MessageTimeline } from './MessageTimeline';
@@ -158,6 +165,13 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     return useExtensionUiStore.getState().init();
   }, []);
 
+  useEffect(() => {
+    // T10: fire-and-forget status/widget/unsupported events need the same
+    // app-lifetime listener ownership. A leaf chip cannot install this listener:
+    // the event that creates the first chip would already have passed.
+    return useExtensionUiDisplayStore.getState().init();
+  }, []);
+
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).
   useEffect(() => {
@@ -203,6 +217,10 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
         />
       )}
       {renderedMode === 'session' && <PendingQuestionDock sessionId={activeSessionId} />}
+      <ExtensionUiStatusChips sessionId={activeSessionId} />
+      <ExtensionUiUnsupportedNotice sessionId={activeSessionId} />
+      <ExtensionUiInlineDock sessionId={activeSessionId} />
+      <ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />
       <div className={middleColumnHostClass(renderedMode)}>
         {hasWorkingDirectory ? (
           <ChatComposer
@@ -222,11 +240,11 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           </ReadingColumn>
         )}
       </div>
-      {/*
-       * Outside the `mode === 'session'` guard on purpose: an extension can ask
-       * during bind, before any session view exists, and that call is blocked
-       * just the same. The component renders nothing when no dialog is pending.
-       */}
+      <ExtensionUiWidgets sessionId={activeSessionId} placement="belowEditor" />
+      <ExtensionUiNotificationEffects />
+      {/* A truly session-less bind request has no conversation surface yet.
+       * Only that exceptional shape may use the global fallback; every normal
+       * request is rendered by ExtensionUiInlineDock in its owning session. */}
       <ExtensionUiDialog />
     </section>
   );

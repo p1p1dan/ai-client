@@ -229,16 +229,47 @@ export function splitExtensionUiDialogText(title: string): ExtensionUiDialogText
 }
 
 /**
- * The dialog to show right now, or `undefined`.
+ * The first dialog in the process-wide arrival queue.
  *
- * Strictly one at a time even when several are queued: these are modal
- * questions, and stacking them would let a user answer the second while the
- * first is still on screen — with no way to tell which extension asked what.
+ * Kept for diagnostics and reducer tests. The rendered UI no longer consumes
+ * this selector directly: T08-b makes session-bound requests independent so a
+ * background session cannot cover or queue-block the conversation the user is
+ * currently reading.
  */
 export function currentExtensionUiDialog(
-  // Only the queue: a caller holding a `pending` array should not have to
-  // fabricate the send-tracking fields to ask which dialog is on top.
   state: Pick<ExtensionUiState, 'pending'>
 ): ExtensionUiPendingDialog | undefined {
   return state.pending[0];
+}
+
+/** The oldest blocking request owned by one session. FIFO is session-local. */
+export function currentExtensionUiDialogForSession(
+  state: Pick<ExtensionUiState, 'pending'>,
+  sessionId: string | null | undefined
+): ExtensionUiPendingDialog | undefined {
+  if (!sessionId) return undefined;
+  return state.pending.find((dialog) => dialog.sessionId === sessionId);
+}
+
+/**
+ * Requests emitted while an extension is binding have no session surface yet.
+ * They retain the global dialog fallback; a real session request must never use
+ * it, otherwise a background approval becomes a window-wide interruption.
+ */
+export function currentUnscopedExtensionUiDialog(
+  state: Pick<ExtensionUiState, 'pending'>
+): ExtensionUiPendingDialog | undefined {
+  return state.pending.find((dialog) => dialog.sessionId == null);
+}
+
+export function extensionUiPendingCountForSession(
+  pending: readonly ExtensionUiPendingDialog[],
+  sessionId: string | null | undefined
+): number {
+  if (!sessionId) return 0;
+  let count = 0;
+  for (const dialog of pending) {
+    if (dialog.sessionId === sessionId) count += 1;
+  }
+  return count;
 }

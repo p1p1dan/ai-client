@@ -1,12 +1,48 @@
 # Storage & State
 
-| 数据 | 位置 | 归属/说明 |
+## Durable state
+
+| 数据 | 位置/权威 | 说明 |
 |---|---|---|
-| 会话索引 | `userData/session-index.json` | Main `SessionIndexService`；原子写（tmp+rename）、懒加载、串行 flush；损坏 JSON warn 后空索引启动 |
-| 会话历史正文 | `~/.claude/projects/**/*.jsonl`（CC 原生） | **Host（白名单 Node）读**，Main 不读——加密机上是 TSD 密文（决策 D11）；本地只存索引 |
-| Chat 运行态 | renderer zustand `chatSessions.ts` | messages 按 sessionId 分桶；pendingPermission/pendingQuestion 单槽；historyErrors 按会话 |
-| 消息元数据 | renderer `messageMetadata.ts` 侧表 | 团队侧注册表模式（不进红线 store）；latency/model/usage |
-| 会话→模型映射 | localStorage `aiclient:chat:session-models` | `useSessionModel`，守卫 JSON.parse |
-| Host 凭证 | `~/.claude/settings.json` env 段 | Host 启动加载并注入自身 process.env；诊断脱敏进 `host.ready.settings` |
-| 测试凭证 | 临时 `CLAUDE_CONFIG_DIR`（网关） | 执行计划 §4 统一约定；spikes 自动注入；**禁改用户本机 settings.json** |
-| 打包产物 | `resources/agent-host/`（87MB 明文不入 asar）+ `resources/node-runtime/node.exe`（随包 Node 24.18.0） | afterPack 串行拷贝；TSD `.tmp.bin` 修复同钩子 |
+| App settings | `~/.pilab/<profile>/settings.json` | credential mode、产品设置；Main-owned keys 不允许 renderer 整份写回覆盖 |
+| Credential vault | `~/.pilab/<profile>/credentials/vault.json` | safeStorage envelope；Pi arm 可选；不把 key 写进 models.json |
+| Managed Pi agentDir | `~/.pilab/<profile>/pi-agent/` | isolated `models.json` / `auth.json` / settings/packages；登录模式使用 |
+| Local Pi config | 用户自己的 Pi agentDir | local/BYOK 模式；应用不接管或重写整棵用户配置 |
+| Session index | Electron `userData/session-index.json` | Main `SessionIndexService`；产品导航、logical session 与 runtimeIdentity/sessionFile |
+| Pi conversation history | Pi native session JSONL | durable conversation/branch identity；WorkerSlot 内由 Pi SessionManager 读写 |
+| Import manifest | T34 待定位置 | source identity/hash、importer version、target session、dedupe/failure state |
+| Legacy Claude/Codex source | 原工具目录 | **只读 migration source**；永不 move/rename/delete/modify |
+
+## Transient state
+
+| 数据 | Owner | 生命周期 |
+|---|---|---|
+| Worker pool/slot map | Main WorkerManager | app lifetime；slot idle/crash/dispose 可回收 |
+| Slot pending RPC/generation/active turn | WorkerSlot | slot generation；restart 必须清空 |
+| Pi AgentSession/SessionManager | utility worker | worker process / opened durable session |
+| Chat messages/timeline buckets | renderer Zustand | logical session；history hydration 可替换/merge |
+| Queue/pending user messages | renderer session store | memory-only 首版；retirement/archive/repository remove 清理 |
+| Blocking Extension UI | renderer dialog store + Main slot route | request/session/runtime/generation；ACK/cancel/reset/close 清理 |
+| Status/widget/unsupported/notifications | renderer display store | session/runtime；reset/retirement 清理，有 bounds |
+| TUI PTY state | Main terminal controller | session/generation；exit/dispose and mode switch cleanup |
+
+## Identity rules
+
+- logical application `sessionId` 用于 UI/store/navigation。
+- normalized Pi `sessionFile` 是 durable Pi runtime identity。
+- `runtimeIdentity` 是应用持久映射，不得混用为 transient worker PID。
+- `worker generation` 只用于过滤迟到事件，不落为 session identity。
+- workspace/cwd 是安全约束和 create temporary key 的组成，不替代 session file。
+
+## Import provenance
+
+建议双写：
+
+1. Pi JSONL custom provenance entry，使 session 自描述；
+2. 独立 manifest，使跨 importer 版本 dedupe 和失败恢复可控。
+
+分享 transcript 时不得无条件暴露绝对 source path；可存 hash/stable identity，并把本机绝对路径限制在私有 manifest。
+
+## Transition notes
+
+当前代码仍含 Claude/Codex history/config/runtime state。它们在 T28 分类前只作为 replacement/migration source；新功能不得继续向 legacy execution storage 增加权威。

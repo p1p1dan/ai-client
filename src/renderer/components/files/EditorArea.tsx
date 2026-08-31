@@ -132,6 +132,12 @@ function isMarkdownFile(path: string | null): boolean {
   return ext === 'md' || ext === 'markdown';
 }
 
+function formatPreviewBytes(bytes?: number): string {
+  if (!bytes || bytes < 1024) return `${bytes ?? 0} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 interface EditorAreaProps {
   tabs: EditorTab[];
   activeTab: EditorTab | null;
@@ -1449,6 +1455,19 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
                     : {})}
                   sideBySideInlineBreakpoint={700}
                 />
+              ) : activeTab.isTooLarge ? (
+                <Empty className="flex-1">
+                  <EmptyMedia variant="icon">
+                    <FileX className="h-4.5 w-4.5" />
+                  </EmptyMedia>
+                  <EmptyHeader>
+                    <EmptyTitle>{t('File is too large to preview')}</EmptyTitle>
+                    <EmptyDescription>
+                      {formatPreviewBytes(activeTab.byteLength)} · {t('Preview limit')}{' '}
+                      {formatPreviewBytes(activeTab.maxPreviewBytes)}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               ) : activeTab.isUnsupported ? (
                 <Empty className="flex-1">
                   <EmptyMedia variant="icon">

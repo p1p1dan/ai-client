@@ -72,11 +72,16 @@ export function projectUiPromptEvent(data: unknown): ActivityPayload | undefined
   const requestId = str(raw.requestId);
   if (!requestId) return undefined;
   const forwarding = raw.forwarding as Record<string, unknown> | null | undefined;
+  const request = raw.request as Record<string, unknown> | null | undefined;
+  const toolSurface = str(raw.surface);
+  const gateSurface = str(request?.surface) ?? toolSurface;
   return {
     phase: 'prompt',
     requestId,
-    ...(str(raw.surface) ? { surface: str(raw.surface) } : {}),
+    ...(gateSurface ? { surface: gateSurface } : {}),
+    ...(toolSurface && toolSurface !== gateSurface ? { toolSurface } : {}),
     ...(str(raw.value) ? { value: str(raw.value) } : {}),
+    ...(str(request?.matchedPattern) ? { matchedPattern: str(request?.matchedPattern) } : {}),
     ...(str(raw.agentName) ? { agentName: str(raw.agentName) } : {}),
     // Present-and-non-null is the plugin's own signal for "this came from a
     // subagent"; the key exists as `null` on an ordinary local prompt.

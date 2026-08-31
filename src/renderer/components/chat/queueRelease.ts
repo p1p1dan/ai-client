@@ -48,6 +48,8 @@ export interface DecideSendActionInput extends CanStartTurnInput {
   hasContent: boolean;
   /** Attachments still being read/encoded — `useComposerAttachments().reading`. */
   reading: number;
+  /** Existing entries own the next turn even if Stop has already settled idle. */
+  hasQueuedEntries: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ export function decideSendAction(input: DecideSendActionInput): SendAction {
   if (!input.hasTarget || input.disabled) return 'blocked';
   if (!input.hasContent) return 'blocked';
   if (input.reading > 0) return 'blocked';
-  if (input.busy || input.sending || input.inFlight) return 'enqueue';
+  if (input.hasQueuedEntries || input.busy || input.sending || input.inFlight) return 'enqueue';
   return 'send';
 }
 
@@ -192,7 +194,9 @@ export function decideAdmittedTimeoutOutcome(input: {
  * precisely because a name list is what silently does the wrong thing the next
  * time this vocabulary grows.
  */
-export function isAdmittedOutcome(outcome: RunEntryOutcome): boolean {
+export function isAdmittedOutcome(
+  outcome: RunEntryOutcome
+): outcome is Extract<RunEntryOutcome, 'committed' | 'pending'> {
   return outcome === 'committed' || outcome === 'pending';
 }
 
@@ -587,6 +591,8 @@ export interface DeriveActionButtonsInput {
   hasFailed: boolean;
   /** Trimmed text non-empty OR at least one attachment draft present. */
   hasDraftContent: boolean;
+  /** A non-empty queue keeps FIFO ownership even after the runtime settles idle. */
+  hasQueuedEntries: boolean;
 }
 
 /**
@@ -602,6 +608,9 @@ export function deriveActionButtons(input: DeriveActionButtonsInput): readonly A
       { kind: 'stop', disabled: false },
       { kind: 'enqueue', disabled: !input.hasDraftContent },
     ];
+  }
+  if (input.hasQueuedEntries) {
+    return [{ kind: 'enqueue', disabled: !input.hasDraftContent }];
   }
   if (input.hasFailed) {
     return [
@@ -623,6 +632,8 @@ export interface QueueStripEntryModel {
   index: number;
   preview: string;
   attachmentCount: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   failed: boolean;
   failureMessage?: string;
 }
@@ -667,6 +678,8 @@ export function deriveQueueStripModel(input: DeriveQueueStripModelInput): QueueS
       index: index + 1,
       preview: entry.text,
       attachmentCount: entry.attachments.length,
+      canMoveUp: index > 0,
+      canMoveDown: index < input.entries.length - 1,
       failed: entry.failure != null,
       ...(entry.failure ? { failureMessage: entry.failure.message } : {}),
     })),

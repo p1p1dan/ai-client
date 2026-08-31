@@ -55,7 +55,7 @@ describe('shipped permission policy — the fallbacks', () => {
   });
 });
 
-describe('shipped permission policy — the path deny face (D-Q9 decision 2)', () => {
+describe('shipped permission policy — the path approval/deny face (D11 rev.2)', () => {
   it('starts permissive and narrows, because the last match wins', () => {
     expect(orderOf(path, '*')).toBe(0);
   });
@@ -75,17 +75,12 @@ describe('shipped permission policy — the path deny face (D-Q9 decision 2)', (
     }
   });
 
-  /**
-   * The one that protects US. `~/.pilab` holds the company credential this app
-   * injected for the agent; an agent that can read it can exfiltrate the key it
-   * was given.
-   */
-  it('denies our own credential store, keyed off the real directory name', () => {
-    // Read from the constant, not spelled out: `defaultPaths.test.ts` allows
-    // `permissionPolicy.mjs` to hardcode the name (it is a `.mjs` and cannot
-    // import a `.ts`), so THIS is the assertion that makes a rename of the app
-    // state directory fail loudly instead of quietly unprotecting the vault.
-    expect(path[`~/${APP_STATE_DIR}/*`]).toBe('deny');
+  it('asks for ordinary app-state access but keeps narrower secrets denied', () => {
+    const appStatePattern = `~/${APP_STATE_DIR}/*`;
+    expect(path[appStatePattern]).toBe('ask');
+    for (const sensitive of ['*.env', '*.env.*', '~/.ssh/*', '*.pem', '*.key']) {
+      expect(orderOf(path, sensitive)).toBeGreaterThan(orderOf(path, appStatePattern));
+    }
   });
 });
 
@@ -146,15 +141,11 @@ describe('shipped permission policy — 务实档 (D-Q9 decision 1)', () => {
     expect((permission.skill as Rules)['*']).toBe('ask');
   });
 
-  /**
-   * D-Q9 decision 3. For a WORKTREE manager this is the boundary that stops a
-   * session in `/repo-a` from reaching into `/repo-b`, and it was chosen with
-   * no pre-seeded cache allowlist on purpose.
-   */
-  it('asks before leaving the working directory, with nothing pre-allowed', () => {
+  it('asks before ordinary external access and avoids a duplicate `.pilab` prompt', () => {
     const external = permission.external_directory as Rules;
     expect(external['*']).toBe('ask');
-    expect(Object.keys(external)).toEqual(['*']);
+    expect(external[`~/${APP_STATE_DIR}/*`]).toBe('allow');
+    expect(orderOf(external, `~/${APP_STATE_DIR}/*`)).toBeGreaterThan(orderOf(external, '*'));
   });
 });
 

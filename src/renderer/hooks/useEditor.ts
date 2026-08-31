@@ -42,31 +42,49 @@ export function useEditor() {
       if (!tab || tab.isDirty) return;
 
       try {
-        const { content, isBinary } = await window.electronAPI.file.read(path);
-        if (isBinary) return;
+        const result = await window.electronAPI.file.read(path);
+        const { content, encoding, isBinary, tooLarge, byteLength, maxPreviewBytes } = result;
         // Re-check after async IO to avoid race conditions
         const latestTab = useEditorStore.getState().tabs.find((t) => t.path === path);
-        if (latestTab && !latestTab.isDirty && latestTab.content !== content) {
+        if (!latestTab || latestTab.isDirty) return;
+        if (isBinary || tooLarge) {
+          openFile({
+            path,
+            content: '',
+            encoding,
+            isDirty: false,
+            isUnsupported: isUnsupportedBinaryFile(path, isBinary),
+            isTooLarge: tooLarge,
+            byteLength,
+            maxPreviewBytes,
+          });
+          return;
+        }
+        if (latestTab.content !== content) {
           updateFileContent(path, content, false);
         }
       } catch {
         // File may have been deleted or become inaccessible
       }
     },
-    [updateFileContent]
+    [openFile, updateFileContent]
   );
 
   const loadFile = useMutation({
     mutationFn: async (path: string) => {
-      const { content, encoding, isBinary } = await window.electronAPI.file.read(path);
+      const result = await window.electronAPI.file.read(path);
+      const { content, encoding, isBinary, tooLarge, byteLength, maxPreviewBytes } = result;
       openFile({
         path,
         content,
         encoding,
         isDirty: false,
         isUnsupported: isUnsupportedBinaryFile(path, isBinary),
+        isTooLarge: tooLarge,
+        byteLength,
+        maxPreviewBytes,
       });
-      return { content, encoding, isBinary };
+      return result;
     },
   });
 
@@ -109,7 +127,8 @@ export function useEditor() {
         refreshFileContent(path);
       } else {
         try {
-          const { content, encoding, isBinary } = await window.electronAPI.file.read(path);
+          const { content, encoding, isBinary, tooLarge, byteLength, maxPreviewBytes } =
+            await window.electronAPI.file.read(path);
           // Re-check right after the async read, before any side effect
           // lands — a caller-provided guard can veto a stale request here.
           if (isNavigationRequestAborted(options?.stillValid)) {
@@ -121,6 +140,9 @@ export function useEditor() {
             encoding,
             isDirty: false,
             isUnsupported: isUnsupportedBinaryFile(path, isBinary),
+            isTooLarge: tooLarge,
+            byteLength,
+            maxPreviewBytes,
           });
         } catch {
           return;

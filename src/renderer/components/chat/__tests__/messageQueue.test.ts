@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ATTACHMENT_LIMITS } from '../attachmentLimits';
 import type { AttachmentDraft } from '../attachments';
@@ -7,6 +10,7 @@ import {
   DEFAULT_ENQUEUE_LIMITS,
   enqueue,
   type MessageQueueState,
+  moveEntry,
   pauseSession,
   pruneSessions,
   type QueuedMessage,
@@ -130,16 +134,6 @@ describe('enqueue', () => {
     expect(result.state).toBe(state);
   });
 
-  it('clears an active pause on a successful admission into an EMPTY bucket', () => {
-    let state = createEmptyState();
-    state = pauseSession(state, 's1');
-    expect(selectSessionQueue(state, 's1').paused).toBe('stopped');
-    const result = enqueue(state, message({ sessionId: 's1' }));
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(selectSessionQueue(result.state, 's1').paused).toBeNull();
-  });
-
   // Stop-hang fix (2026-08-10) — this REPLACES m2's "a non-empty bucket keeps
   // its pause". The queue semantics are now stated as one rule: **Stop
   // freezes the queue; the user's next message thaws it.** m2's version only
@@ -184,19 +178,6 @@ describe('enqueue', () => {
     if (!second.ok) return;
     expect(selectSessionQueue(second.state, 's1').paused).toBe('send-rejected');
     expect(selectSessionQueue(second.state, 's1').entries).toHaveLength(2);
-  });
-
-  // The empty-bucket rule is unchanged and still clears EITHER reason — an
-  // empty paused bucket renders nothing at all (`deriveQueueStripModel`
-  // collapses the whole strip), so it has no Resume affordance to offer and
-  // must never be able to hold a future message back invisibly.
-  it('still clears a send-rejected pause on admission into an EMPTY bucket', () => {
-    let state = createEmptyState();
-    state = pauseSession(state, 's1', 'send-rejected');
-    const result = enqueue(state, message({ sessionId: 's1' }));
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(selectSessionQueue(result.state, 's1').paused).toBeNull();
   });
 
   // A rejected admission changes nothing — including the pause. The queue
@@ -289,11 +270,12 @@ describe('restoreHead', () => {
     expect(selectSessionQueue(restored, 's1').entries.map((e) => e.id)).toEqual([a.id, b.id, c.id]);
   });
 
-  it('works even when the target bucket does not exist yet', () => {
+  it('does not recreate a bucket removed by lifecycle pruning', () => {
     const state = createEmptyState();
     const entry = message({ sessionId: 's1' });
     const restored = restoreHead(state, entry);
-    expect(selectSessionQueue(restored, 's1').entries).toEqual([entry]);
+    expect(restored).toBe(state);
+    expect(selectSessionQueue(restored, 's1').entries).toEqual([]);
   });
 });
 
@@ -322,6 +304,43 @@ describe('removeEntry', () => {
     const state = createEmptyState();
     const next = removeEntry(state, 'unknown', 'missing-id');
     expect(next).toBe(state);
+  });
+});
+
+describe('moveEntry', () => {
+  function seedState(): { state: MessageQueueState; entries: QueuedMessage[] } {
+    let state = createEmptyState();
+    const entries = [
+      message({ sessionId: 's1', text: 'first' }),
+      message({ sessionId: 's1', text: 'second' }),
+      message({ sessionId: 's1', text: 'third' }),
+    ];
+    for (const entry of entries) {
+      const result = enqueue(state, entry);
+      if (result.ok) state = result.state;
+    }
+    return { state, entries };
+  }
+
+  it('exchanges an entry with its previous neighbour', () => {
+    const { state, entries } = seedState();
+    const next = moveEntry(state, 's1', entries[1].id, 'up');
+    expect(selectSessionQueue(next, 's1').entries).toEqual([entries[1], entries[0], entries[2]]);
+  });
+
+  it('exchanges an entry with its next neighbour without changing payload identity', () => {
+    const { state, entries } = seedState();
+    const next = moveEntry(state, 's1', entries[1].id, 'down');
+    expect(selectSessionQueue(next, 's1').entries).toEqual([entries[0], entries[2], entries[1]]);
+    expect(selectSessionQueue(next, 's1').entries[2]).toBe(entries[1]);
+  });
+
+  it('returns the same state for boundary, unknown entry and unknown session moves', () => {
+    const { state, entries } = seedState();
+    expect(moveEntry(state, 's1', entries[0].id, 'up')).toBe(state);
+    expect(moveEntry(state, 's1', entries[2].id, 'down')).toBe(state);
+    expect(moveEntry(state, 's1', 'missing', 'up')).toBe(state);
+    expect(moveEntry(state, 'missing', entries[1].id, 'down')).toBe(state);
   });
 });
 
@@ -430,25 +449,35 @@ describe('takeEntryIntoDraft', () => {
 });
 
 describe('pauseSession / clearPause', () => {
-  it('sets the pause reason on the session bucket', () => {
-    const state = pauseSession(createEmptyState(), 's1');
+  function queuedState(sessionId = 's1'): MessageQueueState {
+    const result = enqueue(createEmptyState(), message({ sessionId }));
+    if (!result.ok) throw new Error(result.message);
+    return result.state;
+  }
+
+  it('sets the pause reason on a session bucket with waiting entries', () => {
+    const state = pauseSession(queuedState(), 's1');
     expect(selectSessionQueue(state, 's1').paused).toBe('stopped');
   });
 
+  it('does not create an empty bucket merely to record a pause', () => {
+    const state = createEmptyState();
+    expect(pauseSession(state, 's1')).toBe(state);
+  });
+
   it('is idempotent: pausing an already-paused session with the same reason returns the same reference', () => {
-    const first = pauseSession(createEmptyState(), 's1');
+    const first = pauseSession(queuedState(), 's1');
     const second = pauseSession(first, 's1');
     expect(second).toBe(first);
   });
 
   it('pauses sessions independently', () => {
-    let state = createEmptyState();
-    state = pauseSession(state, 's1');
+    const state = pauseSession(queuedState(), 's1');
     expect(selectSessionQueue(state, 's2').paused).toBeNull();
   });
 
   it('clears the pause reason', () => {
-    const paused = pauseSession(createEmptyState(), 's1');
+    const paused = pauseSession(queuedState(), 's1');
     const cleared = clearPause(paused, 's1');
     expect(selectSessionQueue(cleared, 's1').paused).toBeNull();
   });
@@ -459,12 +488,12 @@ describe('pauseSession / clearPause', () => {
   // see ChatComposer.tsx's `finalizeOutcome` / queueRelease.ts's
   // `shouldPauseQueueOnRejection`.
   it('accepts the "send-rejected" reason and reports it distinctly from "stopped"', () => {
-    const state = pauseSession(createEmptyState(), 's1', 'send-rejected');
+    const state = pauseSession(queuedState(), 's1', 'send-rejected');
     expect(selectSessionQueue(state, 's1').paused).toBe('send-rejected');
   });
 
   it('pausing with a DIFFERENT reason while already paused still updates (not idempotent across reasons)', () => {
-    const stopped = pauseSession(createEmptyState(), 's1', 'stopped');
+    const stopped = pauseSession(queuedState(), 's1', 'stopped');
     const sendRejected = pauseSession(stopped, 's1', 'send-rejected');
     expect(sendRejected).not.toBe(stopped);
     expect(selectSessionQueue(sendRejected, 's1').paused).toBe('send-rejected');
@@ -500,6 +529,17 @@ describe('pruneSessions', () => {
     const result = enqueue(state, message({ sessionId: 's1' }));
     if (result.ok) state = result.state;
     expect(pruneSessions(state, ['s1', 's2'])).toBe(state);
+  });
+});
+
+describe('memory-only product contract', () => {
+  it('the queue store has no persistence or browser-storage dependency', () => {
+    const dirname = path.dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(path.resolve(dirname, '../../../stores/messageQueue.ts'), 'utf8');
+    expect(source).not.toContain('persist(');
+    expect(source).not.toContain('localStorage');
+    expect(source).not.toContain('electronStorage');
+    expect(createEmptyState()).toEqual({ bySession: {} });
   });
 });
 

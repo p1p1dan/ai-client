@@ -2,7 +2,10 @@ import type { ExtensionUiCancelReason, RuntimeEvent } from '@shared/types/runtim
 import { describe, expect, it } from 'vitest';
 import {
   currentExtensionUiDialog,
+  currentExtensionUiDialogForSession,
+  currentUnscopedExtensionUiDialog,
   type ExtensionUiState,
+  extensionUiPendingCountForSession,
   failExtensionUiSend,
   initialExtensionUi,
   markExtensionUiSending,
@@ -107,6 +110,29 @@ describe('queuing requests', () => {
     const once = feed([requestEvent({ uiRequestId: 'q1' })]);
     const twice = reduceExtensionUi(once, requestEvent({ uiRequestId: 'q1' }));
     expect(twice).toBe(once);
+  });
+
+  it('selects independent FIFO heads for active and background sessions', () => {
+    const state = feed([
+      requestEvent({ uiRequestId: 'a1', sessionId: 'a' }),
+      requestEvent({ uiRequestId: 'b1', sessionId: 'b' }),
+      requestEvent({ uiRequestId: 'a2', sessionId: 'a' }),
+    ]);
+
+    expect(currentExtensionUiDialogForSession(state, 'a')?.uiRequestId).toBe('a1');
+    expect(currentExtensionUiDialogForSession(state, 'b')?.uiRequestId).toBe('b1');
+    expect(extensionUiPendingCountForSession(state.pending, 'a')).toBe(2);
+    expect(extensionUiPendingCountForSession(state.pending, 'b')).toBe(1);
+    expect(currentExtensionUiDialogForSession(state, 'missing')).toBeUndefined();
+  });
+
+  it('keeps session-less bind requests on the exceptional fallback only', () => {
+    const state = feed([
+      requestEvent({ uiRequestId: 'scoped', sessionId: 'a' }),
+      requestEvent({ uiRequestId: 'unscoped' }),
+    ]);
+    expect(currentUnscopedExtensionUiDialog(state)?.uiRequestId).toBe('unscoped');
+    expect(currentExtensionUiDialogForSession(state, 'a')?.uiRequestId).toBe('scoped');
   });
 });
 

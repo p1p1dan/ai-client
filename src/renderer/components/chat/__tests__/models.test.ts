@@ -6,6 +6,8 @@ import {
   AUTOMATIC_MODEL_LABEL,
   CLAUDE_MODEL_SCOPE_HINT,
   CODEX_MODEL_SCOPE_HINT,
+  filterChatModels,
+  groupChatModels,
   isLegacyClaudeShortName,
   modelOptionsFor,
   modelScopeHint,
@@ -35,6 +37,45 @@ function storedModels(entries: Record<string, string>) {
   return (sessionId: string, agent: AgentWireName): string | null =>
     entries[`${sessionId}:${agent}`] ?? null;
 }
+
+describe('T25 model grouping', () => {
+  it('uses only the first tag, keeps first-appearance group order and never duplicates a model', () => {
+    const grouped = groupChatModels(
+      modelOptionsFor([
+        { id: 'p/a', label: 'A', tags: ['国产', 'reasoning'] },
+        { id: 'p/b', label: 'B', tags: ['GPT'] },
+        { id: 'p/c', label: 'C', tags: ['国产'] },
+        { id: 'p/d', label: 'D' },
+      ])
+    );
+    expect(grouped.direct.map((item) => item.id)).toEqual([AUTOMATIC_MODEL_ID]);
+    expect(grouped.groups.map((group) => group.label)).toEqual(['国产', 'GPT', 'Other models']);
+    expect(grouped.groups.map((group) => group.items.map((item) => item.id))).toEqual([
+      ['p/a', 'p/c'],
+      ['p/b'],
+      ['p/d'],
+    ]);
+  });
+
+  it('uses secondary tags for filtering without creating duplicate groups', () => {
+    const models = [
+      { id: 'p/a', label: 'Model A', tags: ['国产', 'reasoning'], verified: true },
+      { id: 'p/b', label: 'Model B', tags: ['GPT'], verified: true },
+    ];
+    expect(filterChatModels(models, 'reasoning').map((model) => model.id)).toEqual(['p/a']);
+    expect(filterChatModels(models, 'model b').map((model) => model.id)).toEqual(['p/b']);
+    expect(groupChatModels(models).groups.map((group) => group.label)).toEqual(['国产', 'GPT']);
+  });
+
+  it('keeps a selected unverified leftover directly reachable', () => {
+    const grouped = groupChatModels([
+      { id: AUTOMATIC_MODEL_ID, label: 'Automatic' },
+      { id: 'gone', label: 'gone · unverified', verified: false },
+      { id: 'p/a', label: 'A', tags: ['GPT'], verified: true },
+    ]);
+    expect(grouped.direct.map((item) => item.id)).toEqual([AUTOMATIC_MODEL_ID, 'gone']);
+  });
+});
 
 describe('modelOptionsFor / Automatic (改判 #10, B11)', () => {
   it('leads with Automatic and keeps the catalog verbatim and in order', () => {

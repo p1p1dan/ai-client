@@ -16,6 +16,7 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldQuestion,
   Trash2,
   X,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { createChatSessionOnWorkspace } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useResumeSession } from '../chat/sessionIndex/useResumeSession';
 import { useSessionIndex, useSessionIndexMutations } from '../chat/sessionIndex/useSessionIndex';
 import { useResolvedSessionModel } from '../chat/useResolvedSessionModel';
@@ -153,6 +155,15 @@ export function LeftNav({
   const sessions = useChatSessionsStore((state) => state.sessions);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const selectSession = useChatSessionsStore((state) => state.selectSession);
+  const extensionUiPending = useExtensionUiStore((state) => state.pending);
+  const pendingApprovalCountBySession = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const request of extensionUiPending) {
+      if (!request.sessionId) continue;
+      counts.set(request.sessionId, (counts.get(request.sessionId) ?? 0) + 1);
+    }
+    return counts;
+  }, [extensionUiPending]);
 
   // T-02: hydrate + mutate the persisted session index (chat:listSessions /
   // renameSession / archiveSession / closeSession).
@@ -414,6 +425,9 @@ export function LeftNav({
                             row={row}
                             now={now}
                             active={activeSessionId === row.sessionId}
+                            pendingApprovalCount={
+                              pendingApprovalCountBySession.get(row.sessionId) ?? 0
+                            }
                             onSelect={() => handleSelectSession(row.sessionId)}
                             onClose={() => void close(row.sessionId)}
                             onRename={(title) => void rename(row.sessionId, title)}
@@ -586,6 +600,9 @@ export function LeftNav({
                                   row={row}
                                   now={now}
                                   active={activeSessionId === row.sessionId}
+                                  pendingApprovalCount={
+                                    pendingApprovalCountBySession.get(row.sessionId) ?? 0
+                                  }
                                   onSelect={() => handleSelectSession(row.sessionId)}
                                   onClose={() => void close(row.sessionId)}
                                   onRename={(title) => void rename(row.sessionId, title)}
@@ -672,6 +689,7 @@ interface SessionRowProps {
   row: SidebarSessionRow;
   now: number;
   active: boolean;
+  pendingApprovalCount: number;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
@@ -685,6 +703,7 @@ function SessionRow({
   row,
   now,
   active,
+  pendingApprovalCount,
   onSelect,
   onClose,
   onRename,
@@ -785,6 +804,22 @@ function SessionRow({
           the 280px default: 280 - 16 (p-2) - 12 (pl-3) - 16 (px-2) = 236px, and
           the agent chip alone claims ~63 of it. */}
           <span className="min-w-20 flex-1 truncate">{row.title}</span>
+          {pendingApprovalCount > 0 && (
+            <Badge
+              variant="warning"
+              size="sm"
+              className="shrink-0 gap-0.5 tabular-nums"
+              aria-label={t('{{count}} pending approval requests', {
+                count: pendingApprovalCount,
+              })}
+              title={t('{{count}} pending approval requests', {
+                count: pendingApprovalCount,
+              })}
+            >
+              <ShieldQuestion className="size-3" />
+              {pendingApprovalCount}
+            </Badge>
+          )}
           {row.failed && (
             <Badge variant="destructive" size="sm" className="shrink-0">
               failed

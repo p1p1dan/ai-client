@@ -1,5 +1,7 @@
 # Topic — 现有代码的 agent 无关面 vs Claude 专属面
 
+> **状态：Historical replacement input。** 旧 agent-neutral/Claude-specific 分类可供 T28/T35 使用，但不能据此恢复多 runtime 产品方向。
+>
 > 这张边界决定 Codex 接入的真实成本。结论产生于 2026-08-04 会话（当轮实测），2026-08-05 补落库。
 
 ## 问答卡：只有最底下 303 行是 Claude 专属

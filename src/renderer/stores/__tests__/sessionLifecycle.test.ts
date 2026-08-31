@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  initialExtensionUiDisplay,
+  reduceExtensionUiDisplay,
+} from '@/components/chat/extensionUiDisplayModel';
 import type { ExtensionUiState } from '@/components/chat/extensionUiModel';
 import type { SubagentActivityState } from '@/components/chat/subagentActivityModel';
 import {
@@ -11,7 +15,12 @@ import {
 
 describe('session lifecycle pruning', () => {
   it('gates every adjacent runtime listener against the retirement tombstone', () => {
-    for (const file of ['sessionRuntimeFacts.ts', 'subagentActivity.ts', 'extensionUi.ts']) {
+    for (const file of [
+      'sessionRuntimeFacts.ts',
+      'subagentActivity.ts',
+      'extensionUi.ts',
+      'extensionUiDisplay.ts',
+    ]) {
       const source = readFileSync(path.join(__dirname, '..', file), 'utf8');
       expect(source).toContain('isSessionRetired(event.sessionId)');
       expect(source).toContain('return;');
@@ -54,6 +63,26 @@ describe('session lifecycle pruning', () => {
       sending: [],
       sendErrors: {},
     });
+  });
+
+  it('prunes the fire-and-forget Extension UI store with the shared lifecycle', () => {
+    const display = reduceExtensionUiDisplay(initialExtensionUiDisplay, {
+      type: 'extensionUi.request',
+      seq: 1,
+      timestamp: 1,
+      sessionId: 'drop',
+      payload: {
+        runtimeId: 'r1',
+        uiRequestId: 'u1',
+        method: 'setStatus',
+        args: { key: 'lint', text: 'running' },
+      },
+    });
+    // The public coordinator must mention the display store; the pure reducer's
+    // own pruning behavior is covered in extensionUiDisplayModel.test.ts.
+    const source = readFileSync(path.join(__dirname, '..', 'sessionLifecycle.ts'), 'utf8');
+    expect(source).toContain('useExtensionUiDisplayStore.setState');
+    expect(Object.keys(display.statuses)).toHaveLength(1);
   });
 
   it('drops subagent lanes and indexes belonging to removed sessions', () => {

@@ -1,12 +1,5 @@
+import { X } from 'lucide-react';
 import { useState } from 'react';
-import {
-  AlertDialog,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Input } from '@/components/ui/input';
@@ -14,48 +7,64 @@ import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/i18n';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import {
-  currentExtensionUiDialog,
+  currentExtensionUiDialogForSession,
+  currentUnscopedExtensionUiDialog,
   type ExtensionUiPendingDialog,
+  extensionUiPendingCountForSession,
   splitExtensionUiDialogText,
 } from './extensionUiModel';
 
 /**
- * T08 — the Portable UI primitives: select / confirm / input / editor.
- *
- * A pi extension calling `ui.select(...)` is BLOCKED on this dialog — its turn
- * does not advance until the user answers or the Host's bridge times it out. Two
- * consequences shape everything below:
- *
- *  1. **Dismissal is an answer.** Escape, the backdrop and Cancel all send
- *     `ok: false`, which makes the Host substitute the fallback recorded when
- *     the dialog opened (`false` for a confirm, `undefined` for the rest). The
- *     renderer never picks that value itself — it only says "nobody answered".
- *  2. **The dialog can vanish underneath the user.** `extensionUi.cancelled`
- *     removes it from the store, and this component follows. A modal that stayed
- *     up after the extension stopped waiting would be a button that does nothing.
- *
- * `@gotgenes/pi-permission-system` asks for tool approval through this exact
- * component (T08-b) — the permission prompt IS a `ui.select` with Yes / Yes for
- * session / No / No with reason.
+ * Session-less bind requests are exceptional, but they still must not restore
+ * the removed window-wide modal. They use the same non-modal dock as ordinary
+ * session requests and appear next to the Composer until the bridge settles.
  */
 export function ExtensionUiDialog() {
   const pending = useExtensionUiStore((state) => state.pending);
-  const dialog = currentExtensionUiDialog({ pending });
-
-  // Keyed remount: `input` and `editor` hold draft text, and without a fresh
-  // mount per request the next dialog would open pre-filled with the previous
-  // one's answer.
-  return dialog ? (
-    <ExtensionUiDialogBody
-      key={dialog.uiRequestId}
-      pending={dialog}
-      position={1}
-      total={pending.length}
-    />
+  const request = currentUnscopedExtensionUiDialog({ pending });
+  const total = pending.filter((item) => item.sessionId == null).length;
+  return request ? (
+    <ExtensionUiDock key={request.uiRequestId} pending={request} total={total} />
   ) : null;
 }
 
-function ExtensionUiDialogBody({
+/**
+ * T08-b — blocking Extension UI rendered inside the conversation that owns it.
+ * Each session has its own FIFO; background requests remain visible only as a
+ * sidebar badge until that session becomes active.
+ */
+export function ExtensionUiInlineDock({ sessionId }: { sessionId: string | null }) {
+  const pending = useExtensionUiStore((state) => state.pending);
+  const request = currentExtensionUiDialogForSession({ pending }, sessionId);
+  const total = extensionUiPendingCountForSession(pending, sessionId);
+  return request ? (
+    <ExtensionUiDock key={request.uiRequestId} pending={request} total={total} />
+  ) : null;
+}
+
+function ExtensionUiDock({ pending, total }: { pending: ExtensionUiPendingDialog; total: number }) {
+  const { dialog } = pending;
+  const { heading } = splitExtensionUiDialogText(dialog.title);
+  return (
+    <div className="shrink-0 px-6 pb-2">
+      <div className="mx-auto w-full max-w-reading">
+        <section
+          aria-label={heading.trim() || 'Extension request'}
+          className="rounded-md border border-warning/30 bg-warning/8"
+        >
+          <ExtensionUiRequestContent pending={pending} position={1} total={total} />
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Container-independent request content. The bridge/store semantics remain the
+ * same after removing the modal: keyed drafts, acknowledged close,
+ * retry-after-IPC-failure and dismissal fallback all live here once.
+ */
+function ExtensionUiRequestContent({
   pending,
   position,
   total,
@@ -68,174 +77,127 @@ function ExtensionUiDialogBody({
   const answer = useExtensionUiStore((state) => state.answer);
   const dismiss = useExtensionUiStore((state) => state.dismiss);
   const { dialog, uiRequestId } = pending;
-  // Both live in the store: the dialog now stays up until the Host has actually
-  // been told, so "in flight" and "the send failed" are shared state, not a
-  // component's private flag that a remount would reset mid-call.
   const sending = useExtensionUiStore((state) => state.sending.includes(uiRequestId));
   const sendError = useExtensionUiStore((state) => state.sendErrors[uiRequestId]);
-  // The permission prompt's whole body arrives inside the title slot — see
-  // `splitExtensionUiDialogText`.
   const { heading, body } = splitExtensionUiDialogText(dialog.title);
-  // Never empty: an AlertDialog whose title renders nothing has no accessible
-  // name, and a screen reader announces a modal with no idea what it asks.
   const title = heading.trim() || t('Extension request');
-
   const [text, setText] = useState(dialog.method === 'editor' ? (dialog.prefill ?? '') : '');
 
   const submit = (value: unknown) => {
-    if (sending) return;
-    void answer(uiRequestId, value);
+    if (!sending) void answer(uiRequestId, value);
   };
-
   const cancel = () => {
-    if (sending) return;
-    void dismiss(uiRequestId);
+    if (!sending) void dismiss(uiRequestId);
   };
 
   return (
-    <AlertDialog open onOpenChange={(next) => !next && cancel()}>
-      <AlertDialogPopup className="sm:max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
+    <>
+      <div className="flex items-start gap-2 px-3 pt-3 pb-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-ui font-semibold text-foreground">{title}</h2>
           {dialog.method === 'confirm' && dialog.message ? (
-            <AlertDialogDescription className="whitespace-pre-wrap">
+            <p className="mt-1 whitespace-pre-wrap text-meta text-muted-foreground">
               {dialog.message}
-            </AlertDialogDescription>
+            </p>
           ) : null}
-        </AlertDialogHeader>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('Cancel')}
+          title={t('Cancel')}
+          disabled={sending}
+          onClick={cancel}
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
 
-        {/*
-         * Only when there IS a queue. One dialog at a time is the rule (see
-         * `currentExtensionUiDialog`), so without this the user has no way to
-         * know that answering opens another one rather than returning to the
-         * chat.
-         */}
-        {total > 1 ? (
-          <p className="px-6 pb-1 text-meta text-muted-foreground">
-            {t('Request')} {position}/{total}
-          </p>
-        ) : null}
+      {total > 1 ? (
+        <p className="px-3 pb-1 text-meta text-muted-foreground tabular-nums">
+          {t('Request')} {position}/{total}
+        </p>
+      ) : null}
 
-        {/*
-         * Monospace and pre-wrapped: this body is laid out by the extension for
-         * a terminal (aligned labels, wrapped commands), so a proportional font
-         * would break the alignment it was rendered with. Scrollable because a
-         * bash approval can list many paths, and a prompt that overflows the
-         * viewport would put its own buttons out of reach.
-         */}
-        {body ? (
-          <div className="px-6 pb-2">
-            <Ident
-              // `Ident` rather than a raw `font-mono` (D25 §2.5: the optical
-              // compensation lives in one place) and rather than `CodeBlock`
-              // (this is a rendered label/value listing, not source — syntax
-              // highlighting it would assert a language it does not have).
-              // `whitespace-pre-wrap` keeps the alignment the extension laid out
-              // for a terminal; scrollable because a bash approval can list many
-              // paths, and a prompt that overflows would put its own buttons out
-              // of reach.
-              className="block max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-muted-foreground"
+      {body ? (
+        <div className="px-3 pb-2">
+          <Ident className="block max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-muted-foreground">
+            {body}
+          </Ident>
+        </div>
+      ) : null}
+
+      {dialog.method === 'select' ? (
+        <div role="group" aria-label={title} className="grid gap-1 px-3 pb-2">
+          {dialog.options.map((option, index) => (
+            <Button
+              key={`${index}-${option}`}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-auto w-full justify-start whitespace-normal px-3 py-2 text-left normal-case"
+              disabled={sending}
+              autoFocus={index === 0}
+              onClick={() => submit(option)}
             >
-              {body}
-            </Ident>
-          </div>
-        ) : null}
+              {option}
+            </Button>
+          ))}
+        </div>
+      ) : null}
 
-        {dialog.method === 'select' ? (
-          // `role="group"` with a name, because these options are MUTUALLY
-          // EXCLUSIVE and a bare stack of buttons says nothing about that: a
-          // screen reader would read four unrelated commands rather than one
-          // question with four answers. Not a radiogroup — picking an option
-          // here submits immediately, it does not set a value the user then
-          // confirms, and announcing them as radios would promise a state that
-          // does not exist.
-          <div role="group" aria-label={title} className="grid gap-1 px-6 pb-2">
-            {dialog.options.map((option, index) => (
-              <Button
-                // Options are plain strings and MAY repeat (two tools with the
-                // same name in a permission prompt), so the index is the only
-                // stable key here.
-                key={`${index}-${option}`}
-                type="button"
-                variant="outline"
-                size="sm"
-                // The project's own control rather than a hand-rolled button:
-                // focus ring, disabled treatment and hover states then match
-                // every other button in the app instead of approximating them.
-                className="h-auto w-full justify-start whitespace-normal px-3 py-2 text-left"
-                disabled={sending}
-                autoFocus={index === 0}
-                onClick={() => submit(option)}
-              >
-                {option}
-              </Button>
-            ))}
-          </div>
-        ) : null}
+      {dialog.method === 'input' ? (
+        <div className="px-3 pb-2">
+          <Input
+            autoFocus
+            value={text}
+            placeholder={dialog.placeholder ?? ''}
+            disabled={sending}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                submit(text);
+              }
+            }}
+          />
+        </div>
+      ) : null}
 
-        {dialog.method === 'input' ? (
-          <div className="px-6 pb-2">
-            <Input
-              autoFocus
-              value={text}
-              placeholder={dialog.placeholder ?? ''}
-              disabled={sending}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  submit(text);
-                }
-              }}
-            />
-          </div>
-        ) : null}
+      {dialog.method === 'editor' ? (
+        <div className="px-3 pb-2">
+          <Textarea
+            autoFocus
+            rows={8}
+            value={text}
+            disabled={sending}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </div>
+      ) : null}
 
-        {dialog.method === 'editor' ? (
-          <div className="px-6 pb-2">
-            <Textarea
-              autoFocus
-              rows={8}
-              value={text}
-              disabled={sending}
-              onChange={(e) => setText(e.target.value)}
-            />
-          </div>
-        ) : null}
+      {sendError ? (
+        <p role="alert" className="px-3 pb-2 text-meta text-destructive">
+          {t('Could not send your answer. Please try again.')} {sendError}
+        </p>
+      ) : null}
 
-        {/*
-         * The send failed and the dialog is STILL UP on purpose: the Host never
-         * heard the answer, so its own dialog is still parked and pressing again
-         * is a real retry. `role="alert"` because this appears after the user
-         * acted and is the only sign the action did not land.
-         */}
-        {sendError ? (
-          <p role="alert" className="px-6 pb-2 text-meta text-destructive">
-            {t('Could not send your answer. Please try again.')} {sendError}
-          </p>
-        ) : null}
-
-        <AlertDialogFooter className="gap-2 sm:gap-2">
-          {/*
-           * Cancel is present on every method, `select` included: a picker with
-           * no way out would trap the user until the extension's own timeout,
-           * and some extensions set none.
-           */}
-          <Button variant="outline" size="sm" disabled={sending} onClick={cancel}>
-            {t('Cancel')}
+      <div className="flex flex-wrap justify-end gap-2 px-3 pb-3">
+        <Button variant="outline" size="sm" disabled={sending} onClick={cancel}>
+          {t('Cancel')}
+        </Button>
+        {dialog.method === 'confirm' ? (
+          <Button size="sm" disabled={sending} onClick={() => submit(true)}>
+            {t('Confirm')}
           </Button>
-          {dialog.method === 'confirm' ? (
-            <Button size="sm" disabled={sending} onClick={() => submit(true)}>
-              {t('Confirm')}
-            </Button>
-          ) : null}
-          {dialog.method === 'input' || dialog.method === 'editor' ? (
-            <Button size="sm" disabled={sending} onClick={() => submit(text)}>
-              {t('Submit')}
-            </Button>
-          ) : null}
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
+        ) : null}
+        {dialog.method === 'input' || dialog.method === 'editor' ? (
+          <Button size="sm" disabled={sending} onClick={() => submit(text)}>
+            {t('Submit')}
+          </Button>
+        ) : null}
+      </div>
+    </>
   );
 }

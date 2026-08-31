@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { toLocalFileUrl } from '@/lib/localFileUrl';
 import { cn } from '@/lib/utils';
 import { getPDFJS, type PDFDocumentProxy, type PDFLoadingTask } from './pdfSetup';
+import { clampPdfScale } from './previewResourceLimits';
 
 interface PdfPreviewProps {
   path: string;
@@ -19,6 +20,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -27,8 +29,10 @@ export function PdfPreview({ path }: PdfPreviewProps) {
 
   // Convert file path to local-file:// URL (Electron custom protocol)
   const pdfUrl = useMemo(() => {
-    return toLocalFileUrl(path);
-  }, [path]);
+    const url = new URL(toLocalFileUrl(path));
+    url.searchParams.set('retry', String(retryKey));
+    return url.toString();
+  }, [path, retryKey]);
 
   const cancelInFlightWork = useCallback(() => {
     renderTaskRef.current?.cancel();
@@ -46,6 +50,11 @@ export function PdfPreview({ path }: PdfPreviewProps) {
     async function loadPDF() {
       setLoading(true);
       setError(null);
+      setPdfDoc(null);
+      setCurrentPage(1);
+      setScale(1);
+      setZoomMode('fit-width');
+      setRendering(false);
 
       try {
         const pdfjs = await getPDFJS();
@@ -125,6 +134,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
           finalScale = Math.min(widthScale, heightScale);
         }
 
+        finalScale = clampPdfScale(viewport.width, viewport.height, finalScale);
         const scaledViewport = page.getViewport({ scale: finalScale });
 
         // 设置 canvas 尺寸
@@ -223,7 +233,14 @@ export function PdfPreview({ path }: PdfPreviewProps) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
         <div className="text-sm text-destructive">{error}</div>
-        <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setError(null);
+            setRetryKey((value) => value + 1);
+          }}
+        >
           重试
         </Button>
       </div>

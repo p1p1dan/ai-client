@@ -1,5 +1,7 @@
 # Topic — codeg 参照事实
 
+> **状态：Historical reference。** 不再作为当前 backend/agent roadmap；可供 T28 legacy inventory 和 T34 migration source 研究。
+>
 > 参照物：**`/home/dan/projects/codeg`（本机路径，非外部链接）**。
 > 用户 2026-08-04 提出「它的 UI、产品功能、设计思路和用户画像与本项目十分接近，且已支持多 agent」。
 

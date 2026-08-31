@@ -11,6 +11,9 @@ export interface EditorTab {
   encoding?: string;
   viewState?: unknown;
   isUnsupported?: boolean;
+  isTooLarge?: boolean;
+  byteLength?: number;
+  maxPreviewBytes?: number;
   // External change conflict: set when file is modified externally while user has unsaved edits
   hasExternalChange?: boolean;
   externalContent?: string;

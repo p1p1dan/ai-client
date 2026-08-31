@@ -1,6 +1,10 @@
 # D1 — 架构路线：pix 架构 + pi-app 功能
 
-**状态**：已拍板（2026-08-28）
+> **状态：Superseded（2026-08-31）**
+>
+> “不移植 pi-app WorkerManager”的拓扑结论已由 [D15 — Electron Main 持有 bounded WorkerManager](./015-main-owned-worker-manager.md) 替代。本文保留 2026-08-28 的原始背景；pix 的能力分层参考仍有效，后续主要用于 Pi TUI/PTY/CLI packaging。
+
+**原状态**：已拍板（2026-08-28）
 
 ## 决策
 

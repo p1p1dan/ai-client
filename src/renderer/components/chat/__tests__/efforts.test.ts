@@ -3,7 +3,9 @@ import {
   CHAT_EFFORTS,
   EFFORT_DEFAULT_ID,
   effortLabel,
+  effortsForModel,
   isEffortLevel,
+  reconcileEffortForModel,
   resolveEffortSelection,
   toWireEffort,
 } from '../efforts';
@@ -104,6 +106,28 @@ describe('resolveEffortSelection (§4.3 priority chain)', () => {
     expect(toWireEffort(resolveEffortSelection(null, 'high'))).toBe('high');
     expect(toWireEffort(resolveEffortSelection(EFFORT_DEFAULT_ID, 'high'))).toBeUndefined();
     expect(toWireEffort(resolveEffortSelection(null, null))).toBeUndefined();
+  });
+});
+
+describe('T25 model-level effort capability', () => {
+  it('keeps legacy catalogs on the existing five levels', () => {
+    expect(effortsForModel(undefined).map((effort) => effort.id)).toEqual(
+      CHAT_EFFORTS.map((effort) => effort.id)
+    );
+  });
+
+  it('hides all explicit efforts when reasoning is disabled', () => {
+    expect(effortsForModel({ reasoning: false })).toEqual([]);
+  });
+
+  it('uses non-null thinkingLevelMap entries as the declared supported set', () => {
+    const model = {
+      reasoning: true,
+      thinkingLevelMap: { low: 'low', medium: null, high: 'high', max: null },
+    };
+    expect(effortsForModel(model).map((effort) => effort.id)).toEqual(['low', 'high']);
+    expect(reconcileEffortForModel('high', model)).toBe('high');
+    expect(reconcileEffortForModel('max', model)).toBe(EFFORT_DEFAULT_ID);
   });
 });
 

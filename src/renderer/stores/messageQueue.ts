@@ -17,9 +17,11 @@ import {
   type EnqueueResult,
   enqueue as enqueueReducer,
   type MessageQueueState,
+  moveEntry as moveEntryReducer,
   pauseSession as pauseSessionReducer,
   pruneSessions as pruneSessionsReducer,
   type QueuedMessage,
+  type QueueMoveDirection,
   type QueuePauseReason,
   removeEntry as removeEntryReducer,
   restoreHead as restoreHeadReducer,
@@ -35,6 +37,7 @@ interface MessageQueueStore {
   takeHead: (sessionId: string) => QueuedMessage | null;
   restoreHead: (entry: QueuedMessage) => void;
   removeEntry: (sessionId: string, entryId: string) => void;
+  moveEntry: (sessionId: string, entryId: string, direction: QueueMoveDirection) => void;
   takeEntryIntoDraft: (
     sessionId: string,
     entryId: string,
@@ -64,6 +67,9 @@ export const useMessageQueueStore = create<MessageQueueStore>()((set, get) => ({
 
   removeEntry: (sessionId, entryId) =>
     set({ state: removeEntryReducer(get().state, sessionId, entryId) }),
+
+  moveEntry: (sessionId, entryId, direction) =>
+    set({ state: moveEntryReducer(get().state, sessionId, entryId, direction) }),
 
   takeEntryIntoDraft: (sessionId, entryId, currentDraft) => {
     const { state, result } = takeEntryIntoDraftReducer(

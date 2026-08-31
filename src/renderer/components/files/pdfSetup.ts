@@ -1,9 +1,7 @@
-// PDF.js CDN URL (从 CDN 动态加载，不打包到应用中)
-const PDFJS_CDN_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.624/build/pdf.min.mjs';
-const PDFJS_WORKER_CDN_URL =
-  'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.624/build/pdf.worker.min.mjs';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&url';
 
-// PDF.js 类型定义
+// Narrow local types keep the renderer independent from PDF.js's broad DOM
+// declarations while the runtime itself is bundled locally by Vite.
 export interface PDFDocumentProxy {
   numPages: number;
   getPage: (pageNumber: number) => Promise<PDFPageProxy>;
@@ -38,45 +36,27 @@ export interface PDFLoadingTask {
 }
 
 export interface PDFJS {
-  getDocument: (params: {
-    url?: string;
-    data?: Uint8Array;
-    cMapUrl?: string;
-    cMapPacked?: boolean;
-  }) => PDFLoadingTask;
-  GlobalWorkerOptions: {
-    workerSrc: string;
-  };
+  getDocument: (params: { url?: string; data?: Uint8Array }) => PDFLoadingTask;
+  GlobalWorkerOptions: { workerSrc: string };
 }
 
-// 单例缓存
 let pdfjsPromise: Promise<PDFJS> | null = null;
-let pdfjsInstance: PDFJS | null = null;
 
-/**
- * 从 CDN 动态加载 PDF.js
- * 使用缓存确保只加载一次
- */
+/** Load the application-local PDF.js bundle and application-local Vite worker. */
 export async function getPDFJS(): Promise<PDFJS> {
-  if (pdfjsInstance) {
-    return pdfjsInstance;
-  }
-
   if (!pdfjsPromise) {
-    pdfjsPromise = import(/* @vite-ignore */ PDFJS_CDN_URL)
-      .then((mod) => {
-        const pdfjs = mod as PDFJS;
-        // 配置 worker
-        pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_CDN_URL;
-        pdfjsInstance = pdfjs;
+    pdfjsPromise = import('pdfjs-dist')
+      .then((module) => {
+        const pdfjs = module as unknown as PDFJS;
+        pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
         return pdfjs;
       })
       .catch((error) => {
-        // 加载失败时重置 promise，允许重试
         pdfjsPromise = null;
-        throw new Error(`PDF.js 加载失败: ${error.message}`);
+        throw new Error(
+          `PDF.js failed to load: ${error instanceof Error ? error.message : String(error)}`
+        );
       });
   }
-
   return pdfjsPromise;
 }

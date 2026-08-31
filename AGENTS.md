@@ -6,7 +6,7 @@
 
 ## OVERVIEW
 
-AiClient - Git Worktree 管理器 + 多 AI Agent 集成。Electron 39 + React 19 + TypeScript 5.9 + Tailwind 4。
+AiClient 正在收敛为 Pi-only Git Worktree + AI coding desktop application。Electron 39 + React 19 + TypeScript 5.9 + Tailwind 4。当前 checkout 仍含 Claude/Codex legacy runtime，删除边界由 Pi migration T28/T35 管理。
 
 ## STRUCTURE
 
@@ -32,9 +32,20 @@ jyw-ai-client/
 | UI 组件 | `src/renderer/components/ui/` | @coss/ui 组件，52 个文件 |
 | Git 操作 | `src/main/services/git/` | simple-git 封装 |
 | 终端 | `src/main/services/terminal/` + `src/renderer/hooks/useXterm.ts` | node-pty + xterm.js |
-| AI Agent | `src/main/services/claude/` | Claude IDE Bridge (7 文件) |
+| Pi runtime/worker | `src/main/services/agent-host/` + `src/agent-host/` | 过渡态仍含 singleton PiHost 与 Claude/Codex；目标是 Main WorkerManager + per-slot utilityProcess |
 | 类型定义 | `src/shared/types/*.ts` | 15 个类型文件，ipc.ts 最重要 |
 | 设计规范 | `docs/design-system.md` | **UI 开发必读** |
+
+## MANDATORY REFERENCE REPOSITORIES（Pi 迁移必读）
+
+Pi Backend Migration 不是从零设计。任何相关新会话、实现切片或复审必须先打开对应本地参考仓源码与测试，并明确“直接移植 / 适配移植 / 不采用”：
+
+| 仓库 | 本地路径 | 上游 | 主要用途 |
+|---|---|---|---|
+| pi-app | `/home/ai/code/pi-app` | `https://github.com/justhil/pi-app` | **WorkerManager/WorkerSlot 主参考**；Pi-native history/resume、session tree、rewind/fork、时间线与竞态测试 |
+| pix | `/home/ai/code/pix` | `https://github.com/num-scope/pix` | **Pi TUI/PTY/CLI packaging 主参考**；single-writer guard、stale output、资源提取与 terminal tests |
+
+两者均为 MIT。大量直接复制须保留对应 copyright/license notice。详细文件地图与复用规则见 `docs/plantree/plans/pi-backend-migration/topics/reference-repositories.md`。目标边界以 D14/D15 为准：renderer → preload → Electron Main WorkerManager → bounded WorkerSlot → one utilityProcess/Pi AgentSession per slot；Pi SDK 不直接进 Main，不保留额外 singleton supervisor。参考实现冲突时，以本仓已拍板产品语义、安全边界和 Cycle 1/2 已验证行为为准。
 
 ## CONVENTIONS
 
@@ -86,6 +97,18 @@ Tab 栏:   h-9 (36px)
 - TypeScript: `text-blue-500`
 - JavaScript: `text-yellow-400`
 
+## RESOURCE SAFETY（当前主机强制约束）
+
+当前开发主机资源有限（约 3.3 GiB RAM，根分区约 30 GiB）。所有 Agent 必须把避免 OOM、Swap 抖动和磁盘耗尽作为硬性执行约束：
+
+1. **重任务前先检查资源**：运行 `free -h`、`df -h . /tmp`，并确认没有遗留的 `vite`、`vitest`、`tsc`、`esbuild`、Electron Builder 或 Agent Host 构建进程。
+2. **禁止并行运行重任务**：全量 Vitest、Agent Host 构建/打包、Electron 打包、全量 typecheck/lint 必须串行执行；不得放入并行 tool call，也不得同时启动多个重型子 Agent。
+3. **测试必须小批次**：优先单文件或少量相关测试，并强制 `--maxWorkers=1 --no-file-parallelism`。不得在本机直接运行一次性全量 Vitest；全量门禁应拆成多个小批次，批次之间复查资源。
+4. **本机禁止整套生产构建**：不得直接运行 `pnpm build` 或 `dist:prereq`。确需构建证据时，必须拆分 Main、Preload、Renderer/资产或 Agent Host 阶段，逐阶段执行、检查和清理；无法安全拆分时记录待由 CI/高资源主机验证，不能硬跑。
+5. **构建限制 Node 堆**：获准执行的单阶段 Node 构建默认使用 `NODE_OPTIONS=--max-old-space-size=1536`；若该上限不足，必须停止并重新评估，不能直接无上限重跑。
+6. **每个批次后复查并清理**：确认进程已退出，检查 RAM/Swap/磁盘；及时删除临时 probe、失败的临时打包目录和不再需要的大型产物，但不得删除需要验证或属于用户的文件。
+7. **资源不足时不得硬跑**：可先执行静态检查、进一步拆分测试或记录待验证项；不能用并行或反复重试的方式把主机拖垮。
+
 ## COMMANDS
 
 ```bash
@@ -106,7 +129,7 @@ pnpm lint:fix         # biome check --write
 
 ## NOTES
 
-- **无自动化测试** — 项目依赖 TypeScript + Biome 保证质量
+- **有自动化测试** — Vitest 覆盖 main/renderer/agent-host contracts 与纯逻辑；当前低资源主机必须小批串行运行
 - **原生模块** — `node-pty`, `@parcel/watcher` 需 `postinstall` 编译
 - **Settings Store 巨大** — `settings.ts` 37KB，修改前仔细阅读结构
 - **Claude IDE Bridge** — `src/main/services/claude/ClaudeIdeBridge.ts` 是 MCP 集成核心

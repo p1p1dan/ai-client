@@ -1,115 +1,156 @@
-# Roadmap — Pi Backend Migration
+# Roadmap — Pi-only Application Convergence
 
-## Phase 1 — 接 SDK + 打包（后端替换）
+> 本文件是任务 ID、状态和实施顺序的唯一权威。D13 的旧 Cycle 3–5 与 singleton-host 排期已被本路线替代；完整旧内容见 [重排前快照](./history/2026-08-31-pre-pi-only-realignment/roadmap.md)。
 
-> 参考：pix `agent-host`（utilityProcess 架构） + pi-app SDK 集成方式
-> 进程模型：utilityProcess + MessagePort（D3 rev2）
-> Phase 1 实施顺序：T01 → T02 → T03 → T05 → T00 → T04 → T06（已完成）
->
-> **2026-08-28 重新规划后的近期主线（仅规划，未授权施工）**：
-> 1. **模型闭环**：T19 本地模型目录 → T20 选中模型真实生效；
-> 2. **权限闭环**：T07 contracts → T11 bridge → T08 UI 原语 → T08-a 插件随包 → T08-b 审批闭环（T08-c 默认策略等 Q9）；
-> 3. **GUI 体验重构**：T12 气泡/时间线外壳 → T12-a~d 工具、思考、流式与交互（直接取用 pi-app MIT 实现）；
-> 4. **受管模式**：T21 隔离 agentDir + key 注入；T22 等公司管理页；T23 随 T16。
->
-> 排序原则：先补「选了不能生效/无审批」等功能缺口，再做气泡与工具显示；本仓独有但参照项目没有的按钮/附加功能后置。
+## 状态摘要
 
-| ID | 任务 | 状态 | 说明 |
+| 阶段 | 状态 | 出口 |
+|---|---|---|
+| Cycle 1/2 产品能力 | **Done** | 已有 evidence；按 replacement impact 保留或适配 |
+| Pi-only plan realignment | **In Progress** | D14/D15、T28–T37 与基线一致 |
+| Worker foundation | **Next** | 单 WorkerSlot create/send/stream/stop/dispose 闭环 |
+| Pool + behavior reattachment | Planned | bounded pool；Cycle 1/2 行为重挂 |
+| History/tree/import/removal/TUI | Planned | Pi-native lifecycle、legacy import、Pi-only cleanup、pix TUI |
+| Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
+
+## T00–T27：已落资产与替换影响
+
+这些 ID 保留原完成事实，不重新编号或改回 Pending。
+
+| ID | 已落能力 | 状态 | Replacement impact |
 |---|---|---|---|
-| T00 | 屏蔽 Claude/Codex 路径（D5） | **Done** | `ACTIVE_BACKEND = 'pi'` 硬编码在 `AgentHostManager.ts`，走 `PiHostProcess`（utilityProcess），Claude/Codex 代码完整保留 |
-| T01 | 安装 pi SDK + piRuntime.ts 核心逻辑 | **Done** | SDK 已装、`piRuntime.ts`（事件映射 + session 生命周期）、`agentWire.ts` 已加 `'pi'`、5038 测试全绿 |
-| T02 | utilityProcess 入口 + MessagePort IPC 层 | **Done** | `piHost.ts`（utilityProcess 入口，接收 MessagePort 命令，分发到 PiAgentRuntime） |
-| T03 | main 进程接入：spawn utilityProcess + 命令路由 | **Done** | `PiHostProcess.ts`（utilityProcess.fork + MessagePort 双向通信，同 AgentHostProcess 事件接口） |
-| T04 | pi SDK 打包进安装包（D7） | **Done** | `ESBUILD_EXTERNAL` 加 pi SDK、`piHost.ts` 作为第二入口、agent-host deps 加 pi SDK、构建验证通过（piHost.js 18KB + pi SDK in node_modules） |
-| T05 | 工作区信任适配（原名「权限桥接」） | **Done** | `projectTrusted: true` 只解决工作区是否可信，**不等于用户权限审批已完成**；工具审批另由 T08 系列接 `pi-permission-system`（D9 rev.2） |
-| T06 | 冒烟测试：pi SDK 会话创建 → 发消息 → 收流式回复 → 会话关闭 | **Done (2026-08-28)** | 真机实测：发 `hi` 流式回复正常，Q6 事件映射验证通过；模型菜单错位另立 D8/T19 |
-| T06-a | 事件映射修复：piRuntime.ts `projectEvent` 重写对齐 EventNormalizer 输出格式 | **Done** | 修复三类缺陷：① 缺 messageId/blockId（渲染器靠它们定位消息块）；② message_update 只看 assistantMessageEvent.delta，忽略 event.message.content 快照（pi SDK 主要用快照发文本）；③ 缺 thinking.started/thinking.delta 事件。2026-08-28 真机验证通过 |
-| T06-b | 启动阻塞修复 | **Done** | ① `CREDENTIAL_MODE_SETTING_KEY` 循环块：vite 自动拆块 `shell→settings→shell`，pi SDK 依赖树变化触发，内联常量断开循环；② `utilityProcess.fork()` env 不接受 undefined 值：改为显式过滤 `ELECTRON_RUN_AS_NODE` |
+| T00 | `ACTIVE_BACKEND='pi'` 屏蔽 legacy backend | Done | **Delete after migration**：由 D14 的 Pi-only contracts 取代 |
+| T01 | Pi SDK + `piRuntime` 核心事件/session 逻辑 | Done | **Adapt**：拆入 utility worker/Pi AgentSession |
+| T02 | `piHost.ts` utilityProcess entry + MessagePort | Done | **Replace**：作为 T29 worker entry 的来源，不保留 singleton entry |
+| T03 | `PiHostProcess` Main spawn/router | Done | **Replace**：由 WorkerManager/WorkerSlot 取代 |
+| T04 | Pi SDK/Agent Host 打包 | Done | **Replace packaging topology**：worker bundle + Pi CLI/resources |
+| T05 | `projectTrusted` 工作区信任 | Done | **Retain/Adapt**：按 slot 启动环境应用 |
+| T06/T06-a/T06-b | Pi smoke、RuntimeEvent projection、启动修复 | Done | **Retain behavior / Adapt host** |
+| T07 | Extension UI contracts | Done | **Retain/Adapt**：增加 slot/generation ownership |
+| T08/T08-a/T08-b/T08-c | portable UI、permission plugin、内联审批、默认策略 | Done | **Retain behavior / Adapt routing and reset** |
+| T09/T10/T11 | notify/status/widget、capability layer、bridge | Done | **Retain behavior / Adapt to WorkerSlot** |
+| T12/T12-a…e′ | timeline、tool、thinking、streaming、scroll、welcome | Done | **Retain**；不因 backend topology 重写视觉语义 |
+| T13 | Rename/Archive 右键切片 | Partial asset | **Retain completed slice**；history/tree/rewind/fork 由 T32/T33 接管 |
+| T14 | in-memory queue/pending release | Done with env recheck | **Retain/Adapt**：busy/stop/session retirement 接 slot |
+| T15 | workspace preview/safety | Done with packaged recheck | **Retain**；高资源 packaged smoke 留 T37 |
+| T16 | 旧 singleton-host GUI↔TUI 方案 | Planned only | **Superseded**：由 T36 pix-based TUI 取代 |
+| T17 | TUI-only hint 第一切片 | Done | **Retain/Adapt**；真实动作归 T36 |
+| T18 | 展示模式持久化旧方案 | Planned only | **Adapt**：纳入 T36，禁止历史 session 自动 spawn |
+| T19–T23 | Pi model/auth/managed agentDir/TUI config | Done | **Retain/Adapt**：环境注入移到 WorkerSlot/TUI launch |
+| T24 | pending send/authoritative echo | Done | **Retain/Adapt**：attempt/echo 绑定 slot runtime |
+| T25 | model tags/search/group/effort | Done | **Retain** |
+| T26 | explicit-send bottom jump | Done | **Retain** |
+| T27 | repository retirement/tombstone cleanup | Done | **Retain/Adapt**：同时 dispose/retire slots |
 
-## Phase 2 — Extension UI + 权限审批（D9 rev.2，提前到时间线重造之前）
+精确历史、测试和截图见 [Cycle 1](./evidence/2026-08-30-cycle1-execution.md)、[Cycle 2](./evidence/2026-08-31-cycle2-execution.md) 与各 T12 evidence。当前自动门禁不等于 WorkerManager 架构已落地。
 
-> 参考：pi-app `features/extension-ui/` + worker RPC、pix `packages/contracts` / `EXTENSION_UI.md`、`@gotgenes/pi-permission-system`。**默认能直接取用 MIT 代码就取用**，不为维持旧布局重复实现。执行依赖：T07 → T11 → T08 → T08-a/b/c；完成后才进入 T12。
+## Phase A — Pi-only replacement baseline
 
-| ID | 任务 | 状态 | 说明 |
-|---|---|---|---|
-| T07 | 定义 renderer ↔ agent-host 的 Extension UI contracts | **Done (2026-08-28)** | 走 pix contracts 体系。`extensionUi.request` 事件 + `extensionUi.respond` 命令 + 14 个 portable 方法表；两个边界守卫。另新增 `extensionUi.cancelled`：超时计时器在 bridge 侧，会话切换/关停也只在 bridge 侧，不告知渲染端就会留下点了没反应的僵尸弹窗 |
-| T11 | Extension UI bridge：utilityProcess ↔ Main ↔ preload ↔ renderer | **Done (2026-08-28)** | 移植 pix `extension-ui-bridge.ts` → `src/agent-host/extensionUiBridge.ts`，接 `bindExtensions({ uiContext, mode:'rpc' })`。迟到响应/会话切换/重复应答由 runtimeId + pending map 双重判重；`setBeforeSessionInvalidate` 接 reload |
-| T08 | Portable UI 原语：select / confirm / input | **Done (2026-08-28)** | 用 @coss/ui `AlertDialog`（design-system 组件优先），未手搓遮罩。含 editor。挂载于 ChatWorkspace 且不受 session 模式限制——扩展在 bind 期就可能发问 |
-| T08-a | 随包并固定 `@gotgenes/pi-permission-system` | **Done (2026-08-28)** | pin 27.0.1；经 `additionalExtensionPaths` 传绝对本地路径（传目录不传文件：exports 入口与 pi 入口不是同一个文件）；用户已自装则不注入，否则每次工具调用弹两次。打包过滤特判 `.ts` 保留（该包运行入口是 TS）与 tree-sitter-bash 只留 wasm。+6.4MB |
-| T08-b | 权限审批闭环：插件 ask → GUI → decision | **真机审批链已贯通；内联形态待施工（2026-08-30 F3）** | 代码面已含 `ui.select`/`ui.input` 四选项、permission activity 审批轨迹、Stop 排空、IPC 失败恢复与窗口路由。2026-08-30 真机已确认 allow/deny、session allow、工具执行与被拒工具均正常，原“整链一次没跑通”的 Done 前置已满足。**剩余不是链路缺失而是形态改判**：窗口级 `AlertDialog` 过于阻断，改为聊天区域内浮现的审批层/卡，只阻断当前待决工具；Host bridge 与 store 协议保持。子节点验收见 [真机反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md#t08-b--内联权限审批) |
-| T08-c | 默认权限策略与设置面 | **GUI 点验通过；策略真实命中未验收（2026-08-30 F4/F5）** | Q9 已拍板收口 → [D11](./decisions/011-default-permission-policy.md)。两切片代码与构建/smoke 均已完成；2026-08-30 设置面真机显示正常，并明确显示“随包默认 · 生效中”。**F6 改判为正常空态**：“我的设置”只在用户第一次保存自定义规则后创建，不能为了去掉“未创建”自动造空文件。真正未过的是**运行时行为与 D11 不一致**：仓库内首个普通 read 仍询问（后续由 session pattern 放行），而访问 `~/.pilab/` 也询问而非命中既定 deny；edit 询问本来就是 D11 预期，不能与 read 混称“所有操作都有问题”。调查需核对 surface/value、path 与 external_directory 联合判定、`~`/绝对路径规范化和 activity origin；最终策略取 ask 还是 deny 见 [Q10](./open-questions.md#q10--真机权限行为与-d11-策略不一致)。子节点与验收见 [真机反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md#t08-c--q10--策略真实命中调查) |
-| T09 | Portable UI 原语：notify / setStatus / setWidget | Deferred | 标题栏通知 + 状态芯片 + Composer 卡片；非权限主线，可后置 |
-| T10 | 三级能力分层框架：Portable / Semantic no-op / TUI-only | Deferred | 降级策略 + `unsupported` 诊断信号；不阻塞首版权限审批 |
+### T28 — Pi-only architecture and deletion boundary — **Next**
 
-## Phase 3 — GUI 时间线与气泡重构（D9 rev.2：直接取用 pi-app，保持本仓风格）
+- **T28-a Runtime inventory**：盘点 `AgentHostManager`、`AgentHostProcess`、`PiHostProcess`、`src/agent-host`、contracts、IPC、renderer agent semantics 与 packaging dependencies。
+- **T28-b Asset classification**：逐文件标记 `retain / adapt / replace / delete / migration-only`，对 Cycle 1/2 行为建立 replacement map。
+- **T28-c Legacy boundary**：区分 conversation runtime、history parser/import adapter、Codex ASR、provider/model metadata、UI 文案和 tests/evidence。
 
-> 皮肤风格与主题令牌保留，但**布局、气泡形态、按钮位置均可调整**；用户明确认为当前气泡偏丑。pi-app 为 MIT，默认直接取用/改写其实现。我们独有而参照项目没有的按钮/功能降优先级，不阻塞核心体验。前置：T08 权限审批链完成。
+**验收**：文件级影响表完整；未删除实现代码；每个 legacy 路径有替代者或保留理由。
 
-| ID | 任务 | 状态 | 说明 |
-|---|---|---|---|
-| T12 | 时间线外壳 + 输入/输出气泡视觉基线 | **Done（2026-08-29，用户看图确认「整体效果满意」）** | **T12-a 视觉基线**：提问气泡右对齐 80% + 右上切角（实测 `12px 4px 12px 12px`）+ **不再截断**；模型回复**去掉边框盒**；**`sticky` 吸顶条整条退役** —— 三件是同一条因果链（吸顶条→截断→`Show more`），一起退役。**T12-b meta 行退役**（用户拍板跟随 pi-app）：`Worked for · N tools` / 模型名 / 相对时间全部丢掉，复制 + `HH:MM` 进**悬停操作条**（原为 `grid-rows-[0fr]→[1fr]`，`group/turn` 按回合作用域；⚠️ **该动画机制已于 2026-08-30 被用户推翻** —— 实机上悬停时长出一行会把下面的内容整片顶下去，改为**恒定预留 24px 只切透明度**，详见 T12-d 行）；**`F-B15` 红线经用户知情后明确反转**（hover-only，键盘/触屏拿不到复制）；**进行中的状态行保留**（它与 meta 行只是碰巧共用一个槽，删掉会重现 F2「秒表丢了」）。四门全绿（typecheck 0 · biome 1045 文件 0/0 · **vitest 269 文件 5381 例**）· **变异 16/16 咬红**（两轮各 8）· 亮暗双主题真机 CDP 截图 7 张。⚠️ **GUI 抓到一个断言抓不到的缺陷**：折叠态操作条实测 28px 而非 0（`h-7` 从 pi-app 抄来，grid item 有确定高度就压不扁），三个类一个不缺、断言全绿 —— 已修并补「此行不许有任何高度类」的实测型钉子。2026-08-30 真机反馈确认流式代码块与悬停条表现正常；`fork`/`rewind` 仍归 T13。证据见 [evidence/t12-timeline-shell-baseline.md](./evidence/t12-timeline-shell-baseline.md) |
-| T12-a | display-items / turn-groups 数据建模 | **Done（2026-08-29）—— 评估后改道，见 [D12](./decisions/012-timeline-data-model.md)** | **结论：不移植 pi-app 的 display-items，改修上游。**评估推翻了本行原本的设想：真正的缺陷不在渲染建模层，而在 `piRuntime` —— 一整轮 pi 运行被塞进**一条**助手消息、**一个**正文块，于是第二段正文被无分隔符粘到第一段后面、并渲染在它其实晚于的工具行**前面**（探针实测 `"Let me read the file.The file says X."`）。下游全程无辜：`groupTimeline` 本就按块序遍历、`segmentTurnBody` 保序，**只是从没拿到正确顺序**。移植不成立的三条依据：① pi-app 同样把一条消息的 text 块 join 成一个字符串、thinking 另存一字段（且注释写明是对齐 pi 自家 TUI），**在同一处丢同样的东西**；② 它的「工具聚簇遇正文封口」与我们 `groupTimeline` 的「攒工具组遇正文 flush」是同一个想法，只是 item 粒度 vs block 粒度；③ 它没有 permission/question item，也没有 FB7 join，整套移植要把这些再焊回去，还会夹带一次未经拍板的渲染形态变更。**实现取「只关正文流」而非「关整个容器」**：第一版直接置空 `assistantMessageId`，修好正文顺序却当场制造回归 —— 连续工具串（grep→grep→read，各自独立 pi turn）被切成一条消息一个工具，五步搜索渲染成五张卡；改为 `message_end` 只关正文流，工具继续挂已开容器，两个诉求同时满足。连带修两处：**同毫秒 id 碰撞**（实测非理论风险，去掉计数器后真实时钟下 4/6 变红）与**重复 `message.completed`**。四门：typecheck 0（含 agent-host）· biome 1047 文件 0/0 · **vitest 271 文件 5390 例**（基线 269/5381）· **变异 4 发全咬红**。⚠️ **M2 第一轮存活** —— 守卫写了但零断言钉它，补断言后才咬红，属 0820 批 §16 空转臂同型第八发。**2026-08-30 真机补验通过**：用户确认真实长回合中的正文顺序正常；该项不再欠“真实多步工具回合”验证。`turn_start`/`turn_end` 仍未建模（pi 明确给了 `turnIndex`，我们仍在靠 `message_end` 推断），另立票。证据见 [evidence/t12a-message-boundaries.md](./evidence/t12a-message-boundaries.md) |
-| T12-b | 工具行人话摘要、diff 徽记、原生预览 | **切片 1 + 切片 2 均 Done（2026-08-29，含真机 GUI 图）** | **切片 1 = 工具行改说 pi 的方言**。评估 T12-b 时先撞上一个更基础的缺陷：pi 的内置工具名是**小写**的（`read`/`edit`/`write`/`bash`/`powershell`/`grep`/`find`/`ls`，取自 SDK `dist/core/tools/*.js` 的 `name:` 字面量），而 `toolCard.ts` 四张表全是 Claude 的大写名，**一个都不重合** ⇒ 每次查表静默 miss。探针实测：七个内置工具**全部**渲染成 `{ verb: 'Ran', class: 'action' }`，且 `grep` 显示的是**路径**而不是 pattern。四处各自坏：`TOOL_VERBS` 全落 unknown 兜底 · `classifyTool` 全归 action ⇒ **工具聚合在 pi 上从没触发过** · `deriveAggregateRow` 按 `file_path` 去重（pi 用 `path`）⇒ 退化成按 `toolCallId`，同文件读两次算两个 · `formatToolArgDetail` 落 `default:` 分支（探测顺序 `command ?? … ?? path ?? … ?? pattern`）⇒ grep 显示路径、且 `argKind` 为空使路径按比例字体而非等宽。**与 T12-a 同族**：后端换了 pi，渲染层还在按 Claude 词汇表查表。改法：新增 `PI_TOOL_NAMES` 单一来源 + 补齐四处，动词**刻意复用既有英文**不另造方言（`grep`→`Grepped`、`find`→`Searched files` 同 `Glob`、`write`→`Edited`），`ls` 是唯一新造的三元组；`ls` 归 **search 不归 read**（聚合把 read 说成「N files」并按路径去重，目录列表既不是文件也不会被重复读）。23 例新测（含**防复发兜底**：遍历 `PI_TOOL_NAMES`，除 bash/powershell 外落 `Ran` 即红）· **变异 6/6 咬红** · 四门：typecheck 0 · biome 1048 文件 0/0 · **vitest 272 文件 5413 例**（T12-a 后 271/5390）· **既有测试零破坏**。**切片 2 = edit/write 的 diff 预览**。**范围从三层改成两层**：pi-app 的 `tool-card-registry`/`tool-card-templates` 走 `adapters.json.catalog` IPC + `AdapterJson.toolCard.template`，即它的 **extension-compat 适配器层**，而本 plan README 已把「34 个逐扩展适配器」列为**非目标** ⇒ 第一层对我们不存在，实际是「原生预览 + 通用 default」。**本切片只做 edit/write**：其余工具（read/grep/bash/ls）的输出今天已经是纯文本、在 `<pre>` 里读着没问题，而 `edit` 展开后是 `oldText`/`newText` 两坨转义 JSON —— 全应用**唯一会改用户文件**的调用却是最难读的那个。新增 `toolDiff.ts`（纯逻辑）+ `ToolRowDiffSegment`。四条设计取舍：① **从参数推导不从输出推导**（pi 的 edit 返回成功文案不是补丁；副作用是运行中与**被拒**的调用同样能看，被拒时「本来要改成什么」正是最该看见的）· ② **自己写 LCS 不装包**（位置对齐比较在行数变化时就错：开头插一行后面全判改动；而 `diff` 只是**传递依赖**、唯一直接依赖 `@pierre/diffs` 在 `src/` 里零引用，35 行有测试的教科书算法是更小的负债）· ③ **diff 取代原始参数体而非并列**（同一批字节，并列等于在可读渲染正下方再贴一遍转义版）· ④ **颜色用 `--success`/`--destructive` 语义 token**（同 `StatusLine` 的 `+N`/`-N` 口径；pi-app 的 `text-green-600 dark:text-green-400` 既是第二套词汇也违反「不写原始色阶」）。⚠️ **被自己的测试抓到一处死分支**：`editPairs` 写了兼容 Claude 的 `old_string`/`new_string`，但外层工具名闸只认小写 `edit` ⇒ 那份兼容**永远跑不到**（注释比代码活得久的经典形状），已放宽名闸。连带把 `PI_TOOL_NAMES` 抽到 `piToolNames.ts`——`toolCard`↔`toolDiff` 互相 import 会成环，本仓在 bundle 层被这形状咬过。17 例新测（5 算法 + 7 推导 + **5 行视图接线**，没有最后这组模型可以完全正确却无人渲染）· **变异 5/5 咬红** · 四门：typecheck 0 · biome 1054 文件 0/0 · **vitest 274 文件 5442 例**。**GUI 真机两图**（亮/暗）：行首读作 `Edited src/greet.ts`（切片 1 动词修复实机生效，改前是 `Ran`），展开后 `+3 -3`、红底删除、绿底新增、未变的 `}` 灰色；LCS 正确把结尾 `}` 判成公共行而非整段全改。**2026-08-30 真机 edit/read 回合与被拒工具显示已通过**（含 activity 截图）。⚠️ **仍未做**：read/grep/bash/ls 的结构化预览（刻意）· 超长 diff 性能压测。证据见 [evidence/t12b-pi-tool-vocabulary.md](./evidence/t12b-pi-tool-vocabulary.md) |
-| T12-c | 思考链、流式文本与 Markdown | **Done（2026-08-30）** | **又是一处同族的静默失效**：探针查出 `piRuntime` 里 `thinking.completed` 出现 **0 次**（只发 started），而 `reduceTurnTiming` 用 `completed − started` 算时长 ⇒ `durationMs` 恒 null ⇒ `formatThoughtRow` 落「历史消息」分支返回**光秃秃的 `Thought`** —— **pi 上每一次思考都是这样**。⚠️ 那条分支本身不是 bug（恢复的历史确实没有计时，硬编数字更糟），它只是在回答一个当时没人问的问题。**根因**：pi 没有「思考结束」事件，thinking 只是 content block 停止增长，**边界得由 Host 自己定**。取两个边界（`completeThinking`）：**模型开始作答**（真正的结束时刻，两者中更紧的测量）· **消息先结束了**（覆盖「想完直接调工具、一个字没写」）。**必须幂等** —— 同一块两条路都会触发，第二次会用更晚的时间戳覆盖 `durationMs`，7 秒思考会因为消息一分钟后才结束被报成 60 秒（渲染侧测试直接演示了这条）。发射点在换容器**之前**（换容器会把 thinking 块 id 一起换掉）。**② markdown 分段：实测对比后保留我们的，但这是取舍不是对方有缺陷（结论经用户追问后订正）**。初版我写「pi-app 会把前缀切在未闭合 fence 里、提交半边渲染成未闭合 fence」并据此判优 —— **用户追问「差异在哪、凭什么说我们的更好」，追问是对的**：我只测了那个**函数**、没看调用方，也没验证 CommonMark 对未闭合 fence 的实际行为。**补测后的事实**：未闭合 fence **不是错误**，CommonMark 在文档末尾自动闭合，用本应用真在用的 `mdast-util-from-markdown` 实测得到的是一个 `{type:'code', lang:'ts'}` 的**完整合法、高亮正常、只是短一点**的代码块。**逐行流式实测**（13 行含空行的代码块）：3–9 步**两边完全相同**，pi-app 只在 **10–13** 步领先（在代码块内的空行处切了一刀），且**代码块无空行时两边提交字符数完全相等**。⚠️ 10–13 这个区间是**实测出来的、与我的预测不符**（我以为停在 12，实际到 13，因为我们是在块后面的空行上才结算而不是在 fence 行上）。⇒ 真实取舍 = **「早出但会重排」vs「晚出但稳定」**：我们的优势是已提交段落语义永不被重新解释（头注有 CommonMark 论证）；他们的优势是长代码块更早出高亮，而我们的代价是**整块在闭合前一直无高亮纯文本**。**「保留我们的」= 没有足够理由换，不等于对方是坏的**。**⇒ 同日用户拍板「可以按照 pi-app 的来」，于是行为已改**：`ClosedPrefixSplit` 新增 `openFence`，尾巴里**尚未闭合**的代码块交给 `<ChatMarkdown>` 渲染，其余尾巴仍是纯文本。**没有照抄它的机制** —— 那会撤掉实测过的 39× 优化（它把整个已提交前缀当一份文档每帧重解析，我们是分段+memo，100KB/40 帧 6379ms vs 165ms）。安全性是另一套论证：**fence 内部内容是字面量**，追加不可能重解释已有行，能变的只有块在哪结束。⚠️ **这一点上我们的结果反而比 pi-app 好**：他们的已提交前缀在闭合 fence 到达时要重切、几行会从纯文本跳进块里，我们的块**只增不改**。刻意边界：只处理未闭合 fence（已闭合 fence 后面的散文仍是在途文本）；`closedLength` 不含 `openFence`（高水位线不许越过未 settle 的东西）。**真机 CDP 实测两图**：写到一半的代码块渲染成完整样式代码块、`pre` 里 **42 个高亮 span**（实测计数）；追加剩余行+闭合 fence 后块从 **5 行长到 9 行而 `top` 保持 179px 不变** ⇒ 只追加不重排。⚠️ **fence 这批变异第一轮两发存活**：① `openFence` 吞掉 fence 前面的在途散文（**真缺口**，补断言后咬红）· ② `fence !== null` 守卫经核是**等价变异**（`fenceStart` 闭合时已置空），已删冗余那半避免留死判断。**③ 刻意没取两样**：`stream-text-reveal` 的 2 字符淡出（纯视觉修饰，源码自陈 "no buffer delay"，而 T12 视觉基线用户刚确认过）· `ThinkingChainBlock` 按 hash 四选一的随机 live 文案（我们的稳定文案信息量相同且更好）。19 例新测 · **变异 3/3（思考）+ 5/5（fence）咬红** · 四门：typecheck 0 · biome 1056 文件 0/0 · **vitest 276 文件 5461 例**。**2026-08-30 思考时长与流式代码块真机反馈通过**；**超长代码块的每帧重解析开销未压测**；暗色流式代码块未出图。证据见 [evidence/t12c-thinking-and-markdown.md](./evidence/t12c-thinking-and-markdown.md) |
-| T12-d | 展开记忆、跟随滚动、底部锚点、问卷 | **Done（2026-08-30，含真机 GUI 十一图）—— 四件里只有两件成立** | **① 展开记忆（做了，且是 T12-b 制造出来的新可达路径）**：工具行的开合原本完全活在 `Collapsible` 实例里，组件一卸载就没了。真正扎人的不是切会话，是**聚合把这一行吞掉** —— 探针实测一个回合两次连续 `read`：`[block-a "Read a.ts"]` → 第二次完成后变成 `[block-a~agg "Explored 2 files"]`，**用户打开的那一行在顶层不存在了**，只作为收起容器里的孩子存在。于是「我正在读一个文件的输出，agent 又读了下一个，我在看的东西就没了」。**这条路 T12-b 之前不可达**（`classifyTool` 对小写工具名全 miss ⇒ 聚合从没触发过），修好词汇表也就把这个形状放了出来。**只记住那一行不够**：它会展开在一个收起的容器里面，照样看不见 ⇒ `resolveToolRowOpen` 第二条规则「`detail` 里有被记住展开的孩子，本行也展开」，而行自身的显式选择永远压过它（否则聚合永远关不上）。**取种子不受控**：`defaultOpen` 只在挂载读一次，这正是保住 T-34 的原因 —— 实时子代理面板的 `defaultOpen: true` 会在通道不再 live 时消失，受控 `open` 会在读者读到一半时把面板拍上；而聚合吞行本来就是一次新挂载，取种子让那个场景免费成立。`readToolExpandMemory` **不订阅**（订阅会让每次开合重渲染所有工具行而屏幕毫无变化）。**刻意没取** pi-app 的「自动展开运行中回合最后 N 个工具」—— 它反转 2026-08-25 记在 `ToolRows.tsx` 的用户决定；断言钉的是后果（遍历真派生的每一行，谁自己开了谁红）。**② 底部锚点（做了）**：两个终端早有「滚到底部」圆钮，聊天时间线一颗没有。**两个阈值不是一个**：40px 答「还在跟随吗」（必须紧），140px 答「下面藏的值不值一颗按钮」（紧的答案会让 41px 滑动画出按钮，闪进闪出比没有更糟）；**中间是一条真实死区**，已写成断言防止后人「简化」成一个常量。可见性**取几何不取跟随标志** —— `nextFollowState` 会在视口就在底部时报「没跟随」（规则 2），绑它会在用户正看着底部时画出「跳到底部」。位置挂在**滚动容器外面**的 wrapper（视口内的 absolute 会随内容滚走，sticky 是 F10 后明令禁止的形状）。形状取**本仓自己的**而非 pi-app 居中药丸 —— 同一窗口对同一手势两套词汇更差；顺带补了 `Scroll to bottom` 的中文（两个终端一直缺译文）。**`F-B15` 不适用**：那条反转的理由是「动作在别处也有」，而这颗按钮是回到运行中回合的唯一入口 ⇒ 真 `<button>` + `aria-label`，`group-hover`/`opacity-0`/`invisible` 一个都不许出现。**③ 跟随滚动：不动**。`nextFollowState` 已经在做，且比 pi-app 的 `isTimelineNearBottom` 多回答一种情况 —— 内容在视口底部上方缩短时浏览器把 `scrollTop` 夹到新最大值、正好落在底部并抛 `scroll`，用那一帧武装跟随器就是 F10 放大器的那一半；对方的判据只有「离底多远」，表达不了这一帧。**④ 问卷：不做，与 T12-b 切片 2 同源**。pi-app 的问卷挂在 `resolveV2ByPluginName`（`extension-compat/adapter-loader.js`）上，即**逐扩展适配器层**，而本 plan README 非目标第 2 条就是「不做 34 个逐扩展适配器」。另一半事实：`piRuntime.ts` **从不发 `question` 事件**（0 次命中）⇒ 本仓 `QuestionCard` 在 pi 上够不着，它是 Claude 的 AskUserQuestion 路径；pi 的提问通路是 Extension UI，即 T08 已完成的四原语 ⇒ roadmap 原文那句是对的，且它同时意味着**这件事已经不欠了**。**真机实测**：聚合吞行后 panels `[199,146]`（两层都开）对照清空记忆后 `[]`（修之前的样子）；切走 `[]` 切回 `[199,146]`；按钮 distance 0→false · 100px（死区内）→false · 2511→true(32×32 absolute) · 点击后→false；**增长路径单独隔离**：停底 false → 上滑 100px false → 内容在静止视口下长起来 **true**（全程无 scroll 事件，只有 ResizeObserver 看得见）。净增 32 例 · **变异 15 发，14 首轮咬红**。⚠️ **M7 首轮存活值得记**：断言写的是「`sessionId={sessionId}` 至少出现 4 次」，删掉 `ChatTurn` 那一跳后**还剩 4 个**（`HistoryErrorNotice` 自己也带一个），计数照样满足而链条第一环已断 —— 改成逐跳断言后 M7~M10 全红，计数式断言的经典失效形状。四门：typecheck 0 · biome 1058 文件 0/0 · **vitest 277 文件 5494 例**（T12-c 后 276/5461）。**2026-08-30 真实 pi 长回合、底部锚点与悬停条反馈通过**；连续 read 未出现聚合，暂记低优先级复验（permission activity 行可能打断连续工具组）· 超长 transcript 下按钮抖动未压测 · 记忆不落盘也不清理 · 聚合行 key 跟随首个孩子，首孩换了记忆会丢（真实回合是追加所以不会变，但无断言）。**⑤ 同日追加：悬停操作条改为预留高度（用户反馈后的决定反转）**。用户实机反馈「鼠标放到某个回复上显示复制按钮时，内容会上下移动」。这正是 T12-b 明确选过的那一半：当时选 `grid-rows-[0fr]→[1fr]` 并写明理由 —— 折叠态必须是真零高度，否则每回合底下常驻 24px 空白、等于把删 meta 行省下的预算又花回去。那条理由没错，只是替用户权衡了一个用户不接受的代价；**用户看实机后的判断是：在光标下面长出一行、把下面的字全顶下去，比 24px 永久空白更难受**。改法：`turnActionsSlotClass()` 去掉 grid 与高度动画只留 `opacity` 过渡；`turnActionsInnerClass()` **必须**带确定高度 `h-6`（与按钮 `size-6` 同档），并去掉只为 `0fr` 轨道服务的 `min-h-0`/`overflow-hidden`。这把 T12-b「此行不许有任何高度类」的钉子**整条反转** —— 两版对各自机制都成立，所以断言改写立论而非放宽，旧版失效原因保留在注释里。**没加 `pointer-events-none`**：指针要落到透明条上必须先进入该回合，而进入即显形，「透明且可点」这个状态到不了。**真机对照实测**：新机制 idle/hover/离开三次 `turnTops` 读数完全相同 `[-199,5,209,413]`、条高恒 24px；把旧 grid 装回去做对照，折叠 `[0,0,0,0]`、强制展开 `[24,24,24,24]`（`grid-template-rows: 24px`）⇒ 每次悬停推低 24px，正是用户报的现象。（展开态是**强制**成 revealed 量的，不依赖 CDP 能否触发真 `:hover`—— 实测中 `Input.dispatchMouseEvent` 对 `:hover` 的结算有一拍延迟，靠它做对照会读到误导数字。）变异 5 发全咬红。⚠️ **未改**：键盘 Tab 到复制按钮仍不显形（`focus-within` 没加）—— 这是 F-B15 反转留下的**既有**代价而非本次引入，位置已预留、补上是零布局成本，但用户只要求「放鼠标时显示出来就行」，未擅自扩张。证据见 [evidence/t12d-expand-memory-and-bottom-anchor.md](./evidence/t12d-expand-memory-and-bottom-anchor.md) |
-| T12-e | 无工作目录时的首屏：红色警告 → 欢迎/引导页 | **Done（2026-08-29）→ 部分反转（2026-08-30 F1）** | **现状实测**：零仓库启动时 `DEMO_WORKSPACES` 的 `path` 是空串（`chatSessions.ts:309-324`，刻意为之），于是 `activeWorkspace` 有值但 `cwd` 为 null ⇒ `ChatComposer.tsx:2751` 那个 `border-destructive/40 bg-destructive/10 text-destructive` 的等宽红框**恒亮**，文案还是开发者口径 `No repository registered — launch with --open-path=<repo> (or add a repository) first.`。用户原话：这让人觉得「软件坏了报错」。**pi-app 的做法**（`app.tsx:325-341` + `components/app/project-home-view.tsx`）：无项目时中列渲染 `ProjectHomeView` —— 居中 hero 标题、一颗「选择项目」按钮、弹出卡列最近项目 + 「打开其他文件夹」，**输入框以 `heroMode` 常驻**，全程零红色。**落点**：`ChatWorkspace.tsx`（`mode === 'empty'` 且无 cwd 时渲染引导页）+ 把红框条件从 `lastError \|\| !activeSessionId \|\| !activeWorkspace \|\| !cwd` 收窄到只剩真错误。`onAddRepository` 已经一路穿到 `ChatWorkspace`（App 的 `handleOpenRepositoryDialog`），按钮不需要新通路。**形态已拍板（2026-08-29，用户看图三选一）＝完全照抄 pi-app**：居中「选择工作目录」按钮 + 一行副标题，**输入框照常留在下方**。⇒ 用户原建议里的「右侧对话框不要直接显示」被他自己看图后推翻，理由是加完目录界面不整块跳。**已落地**：新增 `chatEmptyState.ts` 把「发不出去」拆成**故障**（保留红框——故障就该长这样）与**没配置**（引导卡）两件事，顺序承重（真错误压过欢迎卡，否则「没选目录时发生的错误」会被一张无法提及它的卡片吞掉；两者都缺时反过来优先欢迎卡，因为选目录是用户**能做**的那一步）；新增 `ChatWelcomeCard.tsx`，菜单三项复用文件夹下拉页脚的同一批文案与同一个 `onAddRepository` 回调（两个入口一条通路）；`hasStatusError` 改读同一个派生结果而非第二份手写条件（F14 minor m2 记的就是这两者漂移）。**GUI 真机 CDP 实测三图**（亮/菜单/暗，`getComputedStyle` 实测 13px+15px+12px 圆角）。⚠️ **GUI 抓到一个断言抓不到的缺陷（空转臂同型第九发）**：卡片已经在好好说话了，**输入框 placeholder 仍写着 `Cannot send right now…`** —— `composerPlaceholder` 的 if 阶梯有「没有会话」「没有工作区」两个分支，**唯独没有「有工作区但没有路径」**，于是全新安装看到的是整个函数里最没信息量的兜底句；已补 `hasCwd` 分支改说 `Choose a working directory to start…`，真机热更新后实测已变。12 例新测（**7 例真值表 + 5 例接线扫描**——真值表全绿的同时把 composer 里的 `'welcome'` 分支整段删掉、也就是把本批成果删干净，真值表**照样全绿**，故接线扫描是必需的）· **变异 4/4 咬红**（含删分支那发）· 四门：typecheck 0 · biome 1051 文件 0/0 · **vitest 273 文件 5425 例**。⚠️ **未做**：没真的走一遍「点按钮→添加仓库→卡片消失」的完整闭环（只确认菜单打开、三项在位、回调已接线）。证据见 [evidence/t12e-welcome-card.md](./evidence/t12e-welcome-card.md) |
-| T12-e′ | 无仓库时隐藏聊天输入区（T12-e 决定反转） | **Done（2026-08-30，M1）** | `ChatWelcomeCard` 已提升到 `ChatWorkspace` empty surface；无真实 cwd 时不挂载 Composer，添加仓库后恢复，移除最后仓库后随 T27 反向回欢迎态。证据见 [紧急稳定化批次](./evidence/2026-08-30-urgent-stabilization-m1-m3.md) |
-| T13 | 会话管理：右键菜单 / 历史浏览 / 分支回退 | **右键管理切片 Done（2026-08-30，M3）；其余 Deferred** | Base UI Context Menu 已落地：右键只开菜单，含 Rename + Archive；菜单与 hover Archive 都先确认，取消无副作用，未伪装成 Delete。真正永久删除、历史浏览、fork/rewind 仍 Deferred。证据见 [紧急稳定化批次](./evidence/2026-08-30-urgent-stabilization-m1-m3.md) |
-| T14 | 消息队列：agent 运行时可继续输入 | Deferred | 直接取用 `composer-pending-queue` 及相关状态模型 |
-| T15 | 工作区文件预览集成 | Deferred | 多标签浏览、行级源码查看；非首轮气泡/工具体验阻塞项 |
-| T24 | 消息发送时序与重试体验 | **Done（2026-08-30，M2）** | **T24-a**：guard 通过后立即显示 display-only pending user bubble，不写入权威 transcript。**T24-b**：attempt id + session FIFO 与 wire `message.started` 的确切 messageId 一对一配对；重复 echo 幂等、相同文本不互吞；rejected 沿原 retry/draft authority 恢复，resume→create 与 busy retry 既有门禁全绿。证据见 [紧急稳定化批次](./evidence/2026-08-30-urgent-stabilization-m1-m3.md) |
-| T26 | 发送消息后主动滚动到底部 | **Done（2026-08-30，M2）** | direct / retry / 明确 enqueue 通过 `ChatComposer → ChatWorkspace → MessageTimeline.jumpToBottom()` 发显式 jump；后续流式由既有 follower 接管。自动 queue release 不触发 jump，避免用户后来浏览历史时被动拉回。证据见 [紧急稳定化批次](./evidence/2026-08-30-urgent-stabilization-m1-m3.md) |
-| T27 | 仓库移除后的左侧树同步 | **Done（2026-08-30，M1）** | **T27-a** 空树写入完整清理 patch并关闭失联 runtime；**T27-b** 陈旧 workspace 不能新建会话，恢复会话不跨仓库重绑，run-scoped tombstone 拒绝 chatSessions 与相邻 stores 的迟到事件；移除最后仓库与同路径重加有测试。证据见 [紧急稳定化批次](./evidence/2026-08-30-urgent-stabilization-m1-m3.md) |
+## Phase B — Worker foundation
 
-## Phase 4 — 模式切换
+### T29 — Single WorkerSlot vertical slice — **Planned**
 
-> 参考：pix 视图/TUI 切换
+- **T29-a**：移植/适配 pi-app worker RPC、transport、request ID、timeout、dispose 与 crash contract。
+- **T29-b**：utility worker entry + Pi AgentSession bootstrap；接 managed agentDir/auth/models/project trust。
+- **T29-c**：`newSession → send → stream → stop → dispose` 通过一个 WorkerSlot 完整闭环。
 
-| ID | 任务 | 状态 | 说明 |
-|---|---|---|---|
-| T16 | GUI 视图模式 ↔ TUI 直通模式切换机制 | Deferred | 一键切换，保留 xterm 作为 TUI 直通 |
-| T17 | TUI-only 功能降级 UI 提示 | Deferred | 明确告知用户"此功能在 GUI 模式下不支持" |
-| T18 | 模式状态持久化 | Deferred | 用户偏好记住上次模式 |
+**验收**：单会话不依赖旧 `PiHostProcess`；RuntimeEvent 与 stop terminal state 正确；worker 退出无 orphan。
 
-## Phase 5 — 模型配置链路（D8）
+### T30 — Main-owned bounded WorkerManager — **Planned**
 
-> 2026-08-28 立项。背景、pi-app 参考架构与目标架构见 [topics/model-config.md](./topics/model-config.md)；拍板见 [decisions/008](./decisions/008-model-config-strategy.md)。核心：**先读本地，管理页就绪后切换（D8-d）；key 永不进 models.json（D8-c）；隔离 agentDir（D8-a）**。
+- **T30-a Identity/remap**：workspace temporary key → normalized session-file key 原子 remap。
+- **T30-b Capacity/eviction**：foreground、active turn、pending blocking request、idle reclaim、capacity error。
+- **T30-c Crash/restart**：generation 防迟到事件、有界 restart、atomic disposal。
+- **T30-d Isolation**：active/background、多窗口 owner 与 session-switch race。
 
-| ID | 任务 | 状态 | 说明 |
-|---|---|---|---|
-| T19 | GUI 模型菜单对 pi 改读本地 pi 配置 | **Done (2026-08-28)** | Pi 独立目录分支读取本地/受管 `models.json` → `provider/model`；不读 Claude/Codex vault、不发网关请求、不经家族白名单 |
-| T20 | 模型选择闭环：`session.create`/`send` 的 model 参数接通 pi SDK `getModel(provider, id)` | **Done (2026-08-28)** | `applySelectedModel()` 在 prompt 前调用 `getModel()` + `session.setModel()`；create 默认、send override、非法/不存在模型均有测试 |
-| T21 | 隔离 agentDir（方案 B）：`PI_CODING_AGENT_DIR` 指向 `~/.pilab` 下受管目录 + 登录模式 key 注入 | **Done (2026-08-28)** | `~/.pilab/<profile>/pi-agent`；models/auth 分离，vault 新增可选 pi arm；utilityProcess 只在登录模式注入目录，本机模式零注入 |
-| T22 | 管理页同步：登录模式启动拉取 → 校验 → 写隔离目录 | **Done (2026-08-28)** | `pnpm model-admin` 本地端口管理页 + GET/PUT API；启动/登录/手动同步；远端失败 → stale cache → 默认配置；设置页可改部署 URL |
-| T23 | TUI 直通模式的模型配置策略 | **Done (2026-08-28, D10)** | 用户拍板 Q8：登录模式 agent PTY 注入 `PI_CODING_AGENT_DIR`，TUI 与 GUI 共用公司模型；普通 terminal/local/remote 不注入 |
-| T25 | 模型选择菜单分类与模型级 effort | **Pending（2026-08-30 F9）** | 模型多时不再展开一张长表，顶层按 claude / gpt / 国产等标签分组，进入子菜单选模型；标签由云端管理站点维护并同步到本地。子节点：**T25-a schema/catalog**——Pi 配置新增/透传 `tags`，`AgentModelOption` 不再只剩 id/label；模型级 effort 优先复用已经存在的 `reasoning` / `thinkingLevelMap`，不另造平行能力表。**T25-b picker UI**——按标签分组、无标签兜底组、当前模型可定位、切模型后非法旧 effort 安全降级。云端字段与兼容 fallback 见 [Q11](./open-questions.md#q11--模型标签与模型级-effort-的配置契约)；参考 pi-app |
+**验收**：多 slot 无跨会话串流；安全达到容量；单 worker crash 不影响其他 slot。
 
-## Done
+## Phase C — Reattach completed product behavior
 
-- T01 — pi SDK + piRuntime.ts 核心逻辑
-- T02 — piHost.ts（utilityProcess 入口）
-- T03 — PiHostProcess.ts（main 进程侧）
-- T05 — 工作区信任适配（projectTrusted；用户权限审批另见 T08 系列）
-- T00 — 屏蔽 Claude/Codex（ACTIVE_BACKEND = 'pi'）
-- T04 — 打包（esbuild + node_modules）
-- T06-b — 启动阻塞修复（循环块 + env undefined）
-- T06/T06-a — 冒烟通过（2026-08-28 真机：流式回复正常显示）
-- T19~T23 — Phase 5 模型配置链路全落（本地/受管目录、模型选择、管理端同步、TUI 注入）；证据见 [evidence/phase5-model-config.md](./evidence/phase5-model-config.md)
-- T07/T11/T08/T08-a — Phase 2 前四件已完成（契约、桥接、四种对话原语、权限插件随包）；证据见 [evidence/phase2-extension-ui-permission.md](./evidence/phase2-extension-ui-permission.md)
-- **T08-b 审批链真机已贯通但内联形态待施工；T08-c GUI 已点验、策略命中 Q10 未收口**；**T09/T10 仍 Deferred**。⇒ **Phase 2 未整体完成**
-- T08-c 切片 1 — 默认权限策略与信任边界（D11 四条拍板全部落地）；证据见 [evidence/t08c-default-permission-policy.md](./evidence/t08c-default-permission-policy.md)
-- T08-c 切片 2 — 权限策略设置面（查看三层生效结果 + 编辑受管层）；同批修掉 dev/打包策略不一致与设置分类清单的双份手写；证据见 [evidence/t08c-permission-settings-panel.md](./evidence/t08c-permission-settings-panel.md)
-- 2026-08-29 外部审计修复批：13 项发现逐条成立并修复（权限 fail-closed、多会话隔离、Stop 生命周期、Runtime Event 契约、附件/effort、permission.activity 落地、IPC 失败恢复、窗口路由、去重规则、runtimeId 生命周期、打包与许可证、可访问性、Biome）；证据见 [evidence/phase2-audit-fixes.md](./evidence/phase2-audit-fixes.md)
-- **T12 — 时间线外壳 + 气泡视觉基线（Phase 3 起手，用户已看图确认）**：气泡取 pi-app 形态 + 回复去盒 + 吸顶条退役 + meta 行退役换悬停操作条；证据与七张亮暗截图见 [evidence/t12-timeline-shell-baseline.md](./evidence/t12-timeline-shell-baseline.md)
-- **T12 全系已完成（2026-08-30）**：T12 / T12-a / T12-b（两切片）/ T12-c / T12-d / T12-e 全部 Done。**T12-d 四件里只有两件成立**：展开记忆与底部锚点做了，跟随滚动我们已有且更完整，问卷挂在 pi-app 的逐扩展适配器层（本 plan 非目标）且 pi 的提问通路本就是 T08 的 Extension UI。证据见 [evidence/t12d-expand-memory-and-bottom-anchor.md](./evidence/t12d-expand-memory-and-bottom-anchor.md)
-- **2026-08-30 真机反馈检查点**：T08-b allow/deny 与工具执行链已贯通；T12 的正文顺序、思考时间、流式代码块、底部锚点、悬停条、被拒工具和长回合均通过。新增/激活 T12-e′、T13、T24~T27；T08-c 的“我的设置未创建”改判为正常空态，真正问题是 read 与 `.pilab` 的实际命中行为偏离 D11。完整分诊与子节点见 [2026-08-30 真机点测反馈分诊](../../../plans/2026-08-30-field-test-feedback-triage.md)
-- **T12-e 部分反转（2026-08-30 F1）**：用户真实使用后推翻先前「保留输入框」的决定。无仓库时聊天输入框会误导用户以为可以直接使用，改为只显示添加仓库按钮。T12-e′ 已在 M1 落地。
-- **紧急稳定化 M1/M2/M3 Done（2026-08-30）**：T12-e′、T24、T26、T27 与 T13 右键切片全部完成；完整提交、对抗复核与 282/5517 门禁见 [evidence/2026-08-30-urgent-stabilization-m1-m3.md](./evidence/2026-08-30-urgent-stabilization-m1-m3.md)。
+### T31 — Cycle 1/2 behavior reattachment — **Planned**
 
-## 2026-08-28 本会话关键修改文件
+- **T31-a RuntimeEvent/streaming**：text/thinking/tool/custom 与 timeline ordering。
+- **T31-b Queue/pending/attachments**：busy enqueue、release、retry、stop 与 retirement。
+- **T31-c Extension UI**：inline approval、display state、owner routing、reset/dispose。
+- **T31-d Models/auth/permissions**：catalog、effort、managed config、project trust 和四种 decision path。
 
-| 文件 | 变化 |
-|------|------|
-| `src/agent-host/piRuntime.ts` | **重写 `projectEvent()`**：新增 `TurnState` 状态追踪（messageId/blockId/textSnapshot/thinkingSnapshot），快照→增量转换，对齐 EventNormalizer 输出格式（`message.started` 带 messageId、`message.delta` 带 blockId/text、`thinking.started`/`thinking.delta` 独立事件、`tool.started` 带 messageId/name/input）。新增 `ensureAssistant()`/`emitTextDelta()`/`emitThinkingDelta()` 三个辅助方法 |
-| `src/main/ipc/settings.ts` | `CREDENTIAL_MODE_SETTING_KEY` 从 `@shared/credentialMode` 导入改为本地内联常量，断开 vite 循环块 `shell→settings→shell` |
-| `src/main/services/agent-host/PiHostProcess.ts` | `utilityProcess.fork()` 的 env 参数：从 `{...process.env, ELECTRON_RUN_AS_NODE: undefined}` 改为显式过滤（遍历 process.env 跳过该键） |
+**验收**：Cycle 1/2 focused tests 和 GUI smoke 在 WorkerSlot 架构下重新通过；旧 singleton 路径不再接收新 session。
+
+## Phase D — Pi-native session lifecycle
+
+### T32 — History and real resume — **Planned**
+
+- **T32-a**：直接复用/适配 pi-app branch-aware JSONL timeline、pagination 与 incomplete recovery。
+- **T32-b**：`SessionManager.open(sessionFile)` 后发 `session.resumed → session.history → idle`。
+- **T32-c**：missing/corrupt/cross-cwd、duplicate click、restart、late hydration、switch race。
+
+### T33 — Session tree, rewind and fork — **Planned**
+
+- **T33-a**：迭代 session tree、node limit、request generation/stale response guard。
+- **T33-b**：idle-only rewind + 明确确认；保留后续分支，不截断 JSONL。
+- **T33-c**：从 entry fork 独立 session file、session row 和 WorkerSlot；源会话不变。
+
+**硬验收**：A→B→C，回退到 A 后发 D，B/C 与 D 两分支均可浏览；从 A fork 后源/新会话独立继续。
+
+## Phase E — Legacy conversation migration
+
+### T34 — Read-only Claude/Codex import service — **Planned**
+
+- **T34-a**：`ImportedConversation` 中间模型与 schema version。
+- **T34-b**：Claude/Codex read-only source adapters；可选旧 ai-client index adapter。
+- **T34-c**：temporary Pi JSONL → validate → atomic publish；dedupe/provenance manifest。
+- **T34-d**：scan/preview/select/import/report/open UI。
+
+**验收**：source hash 不变；重复导入不重复；失败无半成品；无法映射 tool 只读展示；导入后可由 Pi 继续。
+
+## Phase F — Remove legacy execution paths
+
+### T35 — Pi-only code and product cleanup — **Planned**
+
+- **T35-a**：删除 Claude/Codex conversation runtime、bridges 和 execution dependencies。
+- **T35-b**：删除 backend discriminants、multi-runtime dispatch、agent binding 和旧 create/send/resume branches。
+- **T35-c**：删除 agent picker、runtime icon/wording、rollback settings 与 dead IPC/tests。
+- **T35-d**：保护 Codex ASR、migration readers、evidence 等非 execution 资产。
+
+**验收**：活动对话 runtime 只有 Pi；import reader 无执行能力；无 legacy SDK dependency、死菜单或死 contract。
+
+## Phase G — pix-based Pi TUI
+
+### T36 — Pi TUI, PTY and CLI packaging — **Planned**
+
+- **T36-a**：Pi CLI/production dependencies 放入 Resources，可由随包运行时解析。
+- **T36-b**：参考 pix `PiTuiPtyController`、session identity、generation/stale output、resize/input/exit。
+- **T36-c**：GUI/TUI 单写 authority、mode switch、crash/return-to-GUI reopen。
+- **T36-d**：复用本仓 xterm/AgentTerminal；接 T17 action 与 T18 默认模式。
+
+**验收**：不依赖系统 PATH；GUI/TUI 不双写；打包态启动、退出、崩溃和旧输出过滤通过。
+
+## Phase H — Release candidate
+
+### T37 — Pi-only release gates — **Planned**
+
+- **T37-a Automated**：WorkerManager/slot/history/tree/import/TUI tests、两套 typecheck、Biome、diff check。
+- **T37-b Resource/longevity**：bounded pool、idle reclaim、reopen、memory、orphan process/PTY。
+- **T37-c GUI/packaged smoke**：multi-session、permissions、queue、history、import、TUI、crash recovery。
+- **T37-d Release**：license notices、migration docs、release notes、内部运行后扩大范围。
+
+## Dependencies
+
+```text
+T28 → T29 → T30 → T31 → T32 → T33
+                    ├────→ T34 → T35
+                    └────→ T36
+T33 + T35 + T36 → T37
+```
+
+- T34 source-reader inventory 可在 T32/T33 期间研究，但 atomic writer 应复用已验证的 Pi history/session contract。
+- T35 只能在 T34 保留必要 source adapters 后执行。
+- Cycle 1 的真账号 queue GUI 复点与高资源 packaged preview smoke 作为并行环境欠项，不阻塞 T28/T29，但必须在 T37 关闭。

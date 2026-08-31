@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 
 type AllowedLocalFileOwner = number | string;
@@ -7,6 +8,9 @@ interface AllowedRootEntry {
 }
 
 const allowedRoots = new Map<string, AllowedRootEntry>();
+
+/** Upper bound for image/PDF/Markdown resources served into the renderer. */
+export const LOCAL_FILE_PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
 
 /**
  * Exported for `PickedAttachmentAccess`, which compares user-picked paths with
@@ -74,6 +78,40 @@ export function isAllowedLocalFilePath(filePath: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Read authorization is physical, not lexical: both the requested file and
+ * each registered root are resolved through the filesystem before containment
+ * is checked. This blocks a symlink inside a workspace from reaching a target
+ * outside it while leaving the lexical write guard able to authorize creation
+ * of paths that do not exist yet.
+ */
+export function resolveAllowedLocalFileReadPath(filePath: string): string | null {
+  if (allowedRoots.size === 0) return null;
+
+  let realFile: string;
+  try {
+    realFile = normalizePathForComparison(realpathSync.native(filePath));
+  } catch {
+    return null;
+  }
+
+  for (const root of allowedRoots.keys()) {
+    let realRoot: string;
+    try {
+      realRoot = normalizePathForComparison(realpathSync.native(root));
+    } catch {
+      continue;
+    }
+    if (realFile === realRoot || realFile.startsWith(`${realRoot}${path.sep}`)) return realFile;
+  }
+
+  return null;
+}
+
+export function isAllowedLocalFileReadPath(filePath: string): boolean {
+  return resolveAllowedLocalFileReadPath(filePath) !== null;
 }
 
 /**

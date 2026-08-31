@@ -1,0 +1,100 @@
+# Test & Release Gates
+
+## 提交门禁（DoD，执行计划 §4）
+
+- **四绿**（2026-08-06 起，原为三绿）：
+  1. `pnpm typecheck`（根 tsconfig，**排除 src/agent-host/**）
+  2. `pnpm typecheck:agent-host`（`-p src/agent-host/tsconfig.json`，266 文件）——**S3 切片 1 新增的第四道门**。
+     补的正是上一行括号里那个盲区：根门对 `src/agent-host/**` 实测编译 **0 个文件**，
+     单独跑立刻暴出 8 个真错，`git stash` 退回 HEAD 复验为 0（即为本轮引入）。
+     该盲区此前只靠「Host 门禁」的单测侧面兜底，类型层长期无人看守。
+  3. `pnpm lint`（biome，**0 诊断基线**自 C-09 `ce5a577`；`.gitattributes` 锁代码文件 eol=lf）
+  4. `pnpm test`（vitest；**2026-08-10 时点 152 文件 3160 例，0 红**（S3 切片 4 落地态 `7f357c2`；2026-08-06 时点曾为 133 文件 2479 例））
+
+  > **口径纠正（2026-08-06）**：2026-08-05 之前若干条台账记「三绿」，但 HEAD 上实测**恒有 3 例红**
+  > （`ShellDetector` ×2 + `CliDetector` ×1）。它们并非 flaky，也不是「在 Linux 上无意义」——
+  > 而是**从未模拟过 Windows**，依赖宿主真的是 Windows，在别的平台上恒红。
+  > 已于本日修复（测试侧加 `process.platform` 桩，抢在动态 import 之前；产品代码零改动），
+  > 四门首次同时为真。**教训**：「三绿」写进台账前必须是当次实跑输出，不得沿抄上一行。
+- 提交规范 Conventional Commits 中文描述（分类表见 `CLAUDE.md`）。
+- 加密机相关项**永不**在开发机标注通过。
+
+## Host 门禁（typecheck 盲区的补位）
+
+- vitest 单测：`src/agent-host/__tests__/`（historyReader / eventNormalizer / permissionBridge / **protocolErrors 真子进程 NDJSON**）。
+- spikes smoke：`src/agent-host/spikes/*-smoke.ts`（网关凭证由 `testCredentials.ts` 自动注入，零配置）。
+
+## 打包门禁
+
+- `pnpm verify:packaged` 25 项：app 壳 / agent-host 结构与剪枝 / TSD header 哨兵 / Node24 寻径 / **随包 node.exe 直跑网关 PONG**。
+- 打包链：`pnpm dist:prereq` → electron-builder → afterPack 串行拷贝（勿回退 extraResources——rcedit 竞态先例见主线台账 C-02 行）。
+
+## CI
+
+- `.github/workflows/build.yml`：tag 触发，双平台打包 + agent-host 构建 + 结构断言。
+- **无测试作业**（C-09 期间发现）——是否补 test/lint 步骤见 open-questions。
+
+## GUI 联调环境
+
+> **2026-07-29 变更**：凭证改为启动期从 `dev.env` 注入，启动器统一走 `node scripts/dev.js`。
+> 下方旧口径（手工设 `CLAUDE_CONFIG_DIR` + `pnpm dev`）仍能用，但不再是主路径。
+
+一次性准备：把仓库根的 `dev.env.example` 复制成 `dev.env`（已 gitignore），填入自己的网关与 key：
+
+```bash
+cp dev.env.example dev.env
+# ANTHROPIC_BASE_URL=https://your-gateway.example
+# ANTHROPIC_AUTH_TOKEN=sk-...
+# AICLIENT_TRUSTED_WORKSPACES=/abs/path/to/other-repo   # 可选，仓库根总是预信任
+```
+
+之后每次启动：
+
+```bash
+node scripts/dev.js
+```
+
+`dev.js` 在拉起 Electron 前做三件事：**剥离** shell 继承的全部 `ANTHROPIC_*` 及
+`CLAUDE_CODE_OAUTH_TOKEN` / `CLAUDE_CONFIG_DIR` / bedrock / vertex 变量；**注入**仅 `dev.env`
+声明的值；**隔离** `CLAUDE_CONFIG_DIR` 到 `node_modules/.cache/aiclient-dev-credentials/`，
+使 cli.js 够不到本机 `~/.claude/settings.json` 与 `.credentials.json`。
+**缺 `dev.env` 直接拒绝启动**（否则会用开发者本人的 Claude 登录计费）；确需本机凭证时
+显式加 `--allow-local-credentials`。
+
+⚠️ **两个坑，2026-08-28 实机踩到才发现，`dev.env.example` 都没写**：
+
+**① 开发模式不用随包 Node，机器上没有 Node 24 就起不了 Agent Host。**
+症状是主界面挂一条红条：`No Node 24 runtime found. Set AICLIENT_NODE24_PATH or install Node 24.`
+根因不是缺文件 —— `getBundledNodeRuntimePath()` 第一行就是「未打包时返回 `undefined`」
+（注释原文 "Dev returns undefined so development behavior is unchanged"），随包的那份 Node **只给打包版用**，
+开发模式故意去机器上找。仓里其实躺着一份可用的（`out-node-runtime/node`，实测 v24.18.0），
+在 `dev.env` 里指过去即可：
+
+```
+AICLIENT_NODE24_PATH=<仓库根>/out-node-runtime/node
+```
+
+**② `AICLIENT_MANAGED_CREDENTIALS` 会盖掉登录页上点的选择**，且优先级更高
+（[D64](../../../plans/openchamber-chat-refactor-ledger.md)：开发期覆盖，仅未打包生效）。
+写 `1` 时，即使用户在启动首屏点了「使用本机已有配置」（`credentialMode` 确实写成了 `local`），
+起会话仍按托管模式走 —— 而托管模式下没登录会被
+spawn 闸拒掉，**表现为「历史对话打不开」「切了 agent 也起不来」，日志里是
+`auth_required: Sign-in required before starting an agent session.`**。
+要在开发模式下真正走本机配置那条路，改成 `AICLIENT_MANAGED_CREDENTIALS=0`。
+
+⚠️ **不要用 `pnpm dev`**：pnpm 10 的 `verifyDepsBeforeRun` 会在跑脚本前重装依赖，
+冲掉 `electron-builder install-app-deps` 重建好的原生模块（见下方复原两步）。
+覆盖面缺口（打包版 / `pnpm preview` 不经 dev.js，仍走本机登录）见计划树 open-q **#14**。
+
+**Linux 机每次 `pnpm install` 后必须两步复原**（否则 app 起不来、T-07 集成 6 例红）：
+① `npx electron-builder install-app-deps`（重建 sqlite3 等 Electron ABI；无需代理，Electron 头文件缓存在 `~/.electron-gyp/`）；
+② 把 `src/agent-host/node_modules/@cometix/claude-code/vendor/ripgrep/x64-linux/rg` 拷进
+`node_modules/@vscode/ripgrep/bin/rg`（postinstall 被 GitHub 403 挡）。下载类脚本另需 `NODE_USE_ENV_PROXY=1`。
+
+首启无仓库可用 `node scripts/dev.js --open-path=<仓库绝对路径>` 注册仓库；T-24 后新壳已有完整添加通路
+（LeftNav 入口 + Composer 目标栏 + 整壳拖放），`--open-path` 不再是唯一通路。
+新壳开关：Settings → Appearance → OpenChamber Workspace Shell（T-16 后为真开关、默认开启，关闭立即回旧壳）。
+
+## D47 登录管理分发纪律（2026-08-15，S5 规格 rev.2 裁定）
+
+~~S6（存量收编）落地前，分发构建不得开启 `AICLIENT_MANAGED_CREDENTIALS`~~——**已解除（2026-08-16）**：S6 落地 `8cfef4d` + 真机零重登证据（flag-off 造场 → flag-on 冷启动收编直进主界面，见 [GUI 报告附二](../../../plans/2026-08-15-d47-gui-checklist.md)）。flag 默认仍 off，何时转 on 属发布决策。

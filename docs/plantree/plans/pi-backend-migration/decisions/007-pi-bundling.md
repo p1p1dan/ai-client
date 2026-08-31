@@ -1,6 +1,10 @@
 # D7 — pi SDK 打包：作为 npm 依赖随包，用户无需安装
 
-**状态**：已拍板（2026-08-28）
+> **状态：Revised / historical packaging strategy（2026-08-31）**
+>
+> “用户无需单独安装 Pi”继续有效；SDK 可留在 asar 且由 singleton host 直接读取的假设不再是目标。Worker bundle、Pi CLI 与 production dependencies 的 Resources/extraction 方案由 [D15](./015-main-owned-worker-manager.md) 及新 roadmap 的 T36/T37 收口。
+
+**原状态**：已拍板（2026-08-28）
 
 ## 决策
 

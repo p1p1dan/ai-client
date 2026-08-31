@@ -40,6 +40,8 @@ export type PiModelApi = (typeof PI_MODEL_APIS)[number];
 export interface PiManagedModelDefinition {
   id: string;
   name?: string;
+  /** Ordered labels from the management site; the first is the primary group. */
+  tags?: string[];
   api?: PiModelApi;
   reasoning?: boolean;
   input?: Array<'text' | 'image'>;
@@ -106,10 +108,13 @@ export function parsePiModelRef(value: string): { provider: string; modelId: str
 
 export function piModelOption(
   providerId: string,
-  model: Pick<PiManagedModelDefinition, 'id' | 'name'>
+  model: Pick<PiManagedModelDefinition, 'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap'>
 ): AgentModelOption {
   return {
     id: `${providerId}/${model.id}`,
     label: model.name?.trim() || model.id,
+    ...(model.tags ? { tags: [...model.tags] } : {}),
+    ...(model.reasoning !== undefined ? { reasoning: model.reasoning } : {}),
+    ...(model.thinkingLevelMap ? { thinkingLevelMap: { ...model.thinkingLevelMap } } : {}),
   };
 }

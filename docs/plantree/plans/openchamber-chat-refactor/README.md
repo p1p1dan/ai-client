@@ -1,33 +1,34 @@
-# Plan — OpenChamber 气泡对话重构
+# Completed Plan — OpenChamber Chat/Product Baseline
 
-> 分支 `feat/openchamber-chat-refactor`。2026-07-24 双轨合一后单线推进（原 C-xx 主线 + T-xx 团队轨任务池统一由本计划管理）。
+> **状态**：Completed product baseline。原 Claude-era activity view 已归档；当前 conversation architecture 与任务权威是 [Pi-only plan](../pi-backend-migration/README.md)。
 
-## Scope
+## 保留价值
 
-旧 AgentPanel 终端式聊天 → **三列 + 44px 导轨** Workspace Shell 气泡对话（仅 Claude 进气泡，其他 Agent 暂留终端模式）。里程碑 M1 打包链 ~ M5 收口，见执行计划。
+本计划建立了当前桌面产品外壳与大量 runtime-neutral 行为：
 
-> **2026-07-28 口径变更**：原「四区 Workspace Shell」已被 **D19** 撤销（改为三列 + 导轨 + surface 模型，**无底部面板**）；同时 **D18** 把对齐范围从「仅架构与布局」扩到**观感**（Flexoki 主题 + 全等宽字体 + 卡片形态）。原文见总台账 D18 / D19 / D20，本树不复制。
+- 三列 + rail Workspace Shell、surface registry 和 responsive layout；
+- chat timeline、Composer、tool rows、thinking、Markdown、attachments；
+- queue/pending/retry/stop 与 session buckets；
+- repository/worktree、files/editor/preview、git 和 terminal surfaces；
+- welcome/entry、theme、i18n、accessibility 与 GUI/packaged testing lessons。
 
-## 文件地图与阅读路径
+Cycle 1/2 及 Pi T12 已在这些资产上继续演进。它们属于 `retain` 或 `adapt`，不是随 Claude/Codex runtime 一起删除的 legacy UI。
 
-| 文件 | 角色 |
+## 不再活动
+
+- Claude 主线、Codex/multi-agent 登录或 runtime Next；
+- 旧 C-xx/T-xx 队列作为当前实施顺序；
+- 旧 AgentPanel/Claude JSONL/permission/question bridge 作为产品权威；
+- 由本计划驱动新的 backend 设计。
+
+## 阅读路径
+
+| 文件 | 当前角色 |
 |---|---|
-| [implementation-status.md](./implementation-status.md) | **先读**：当前阶段 / Active TODO / 阻塞 / 最近落地 |
-| [roadmap.md](./roadmap.md) | Done / In Progress / Next / Deferred 全量任务状态 |
-| [open-questions.md](./open-questions.md) | 未决问题（多数等用户拍板或现场实证） |
+| [roadmap.md](./roadmap.md) | 历史里程碑摘要和 Pi-only 复用分类 |
+| [implementation-status.md](./implementation-status.md) | completed handoff |
+| [open-questions.md](./open-questions.md) | 遗留项重新归口，不含活动 Claude backlog |
+| [history/](./history/) | 详细点验、旧 active state 与决策叙事 |
+| [重排前快照](./history/2026-08-31-pre-pi-only-realignment/) | 2026-08-31 前三份活动文档全文 |
 
-## 权威链（冲突时依此序）
-
-1. [ARD](../../../plans/2026-07-23-openchamber-chat-refactor-ard.md) — 架构权威
-2. [执行计划](../../../plans/2026-07-23-openchamber-chat-refactor-execution-plan.md) — 任务定义、验收标准、协议变更纪律、**测试凭证（§4）**
-3. [总台账](../../../plans/openchamber-chat-refactor-ledger.md) — 已拍板决策 **D1~D20（含历史空号 D4/D5/D7/D13，实为 16 行，以总台账决策表为准）**（2026-07-28 新增 D18/D19/D20；D6 被 D18 撤销、D15 被 D19 撤销，被撤销行按 append-only 原样保留）、里程碑检查点（CP-x）
-4. 过程记录档案：[主线台账](../../../plans/ledger-claude-mainline.md)（C-xx）/ [团队台账](../../../plans/ledger-team-track.md)（T-xx，已移交）
-5. 本计划三文件 — 当前活动状态唯一视图
-
-专项文档：[session.history 协议](../../../plans/2026-07-24-c06-session-history-protocol-draft.md)（CP4 定稿=T-03 契约）· [T-10 点验清单](../../../plans/t10-packaged-gui-checklist.md) · [Phase 0 报告](../../../plans/phase0-report.md)
-
-**观感对齐基线**：[`docs/design/phase0a-openchamber-alignment.html`](../../../design/phase0a-openchamber-alignment.html) —— A01 / A05 / A06 的统一产物（2026-07-28 用户已验收）。视觉 token、三列 + 导轨骨架、工具行与问答卡形态**以它为唯一基线**，业务组件不得自行发明视觉值。
-
-## 维护惯例
-
-任务落地 → 台账档案加行（证据+hash）→ 刷新 implementation-status / roadmap；里程碑与 CP 结果回填总台账检查点表。
+视觉实现仍须遵守 [`docs/design-system.md`](../../../design-system.md) 和已接受基线；Pi-only transport 替换不得无理由重做已验证产品交互。

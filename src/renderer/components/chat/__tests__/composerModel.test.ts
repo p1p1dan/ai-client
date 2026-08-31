@@ -114,6 +114,17 @@ describe('composerModelMenuModel', () => {
     expect(menu.sections[0].items.filter((item) => item.selected)).toHaveLength(1);
   });
 
+  it('T25 filters effort rows and falls an illegal old selection back to Default', () => {
+    const menu = composerModelMenuModel({
+      options: CLAUDE_OPTIONS,
+      selectedModel: 'claude-sonnet-5',
+      selectedEffort: 'max',
+      efforts: CHAT_EFFORTS.filter((effort) => effort.id === 'low' || effort.id === 'high'),
+    });
+    expect(menu.sections[1].items.map((item) => item.id)).toEqual(['default', 'low', 'high']);
+    expect(menu.sections[1].items.find((item) => item.selected)?.id).toBe('default');
+  });
+
   it('F-A16: exactly one row is selected in each section', () => {
     const menu = composerModelMenuModel({
       options: CLAUDE_OPTIONS,

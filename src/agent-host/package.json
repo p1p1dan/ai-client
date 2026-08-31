@@ -6,6 +6,7 @@
   "description": "Node 24 Agent Host — Cometix + Claude runtime (stdio NDJSON)",
   "main": "index.ts",
   "scripts": {
+    "postinstall": "node ../../scripts/patch-pi-permission-system.mjs",
     "start": "node --experimental-strip-types index.ts",
     "spike:sdk": "node --experimental-strip-types spikes/agent-sdk-spike.ts",
     "spike:stream-json": "node --experimental-strip-types spikes/stream-json-spike.ts",

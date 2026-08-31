@@ -1,6 +1,5 @@
 import { rmSync } from 'node:fs';
 import { copyFile, mkdir, open, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import {
   type AttachmentReadOptions,
@@ -11,18 +10,7 @@ import {
 } from '@shared/types';
 import { app, BrowserWindow, ipcMain, shell, type WebContents } from 'electron';
 import iconv from 'iconv-lite';
-
-// isbinaryfile is CJS; use createRequire to bypass ESM linker in ASAR
-const { isBinaryFile } = createRequire(import.meta.url)('isbinaryfile') as {
-  isBinaryFile: typeof import('isbinaryfile')['isBinaryFile'];
-};
-
 import jschardet from 'jschardet';
-
-import { readFileTsdSafe } from '../utils/tsdSafeRead';
-
-// Backwards-compatible alias kept for clarity at call sites.
-const readFileSafe = readFileTsdSafe;
 
 import { FileWatcher } from '../services/files/FileWatcher';
 import {
@@ -31,6 +19,7 @@ import {
   unregisterAllowedLocalFileRootsByOwner,
 } from '../services/files/LocalFileAccess';
 import { takePickedAttachmentPath } from '../services/files/PickedAttachmentAccess';
+import { readPreviewFile } from '../services/files/previewFileRead';
 import { createSimpleGit, normalizeGitRelativePath } from '../services/git/runtime';
 import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { createRemoteError } from '../services/remote/RemoteI18n';
@@ -453,39 +442,30 @@ export function registerFileHandlers(): void {
       return remoteRepositoryBackend.readFile(filePath);
     }
 
-    // Design Decision: Binary File Detection
-    // ----------------------------------------
-    // We detect binary files BEFORE reading the full content to avoid:
-    // 1. Loading large binary files (videos, executables) into memory
-    // 2. Performance issues from decoding binary content as text
-    // 3. Monaco editor freezing when rendering binary garbage
-    //
-    // The isbinaryfile library only reads the first 512 bytes for detection.
-    // If detection fails, we fall back to treating it as a text file.
-    // The renderer decides whether to show "unsupported" message based on
-    // file extension (images/PDFs have dedicated preview components).
-    // Read file first (with TSD decryption fallback for packaged app)
-    const buffer = await readFileSafe(filePath);
-
-    let isBinary = false;
-    try {
-      // Pass buffer directly to avoid a second file read
-      isBinary = await isBinaryFile(buffer, buffer.length);
-    } catch {
-      // If binary detection fails, assume it's a text file and continue
+    const preview = await readPreviewFile(filePath);
+    if (preview.kind === 'too-large') {
+      return {
+        content: '',
+        encoding: 'binary',
+        detectedEncoding: 'binary',
+        confidence: 1,
+        tooLarge: true,
+        byteLength: preview.byteLength,
+        maxPreviewBytes: preview.maxBytes,
+      };
     }
-
-    if (isBinary) {
+    if (preview.kind === 'binary') {
       return {
         content: '',
         encoding: 'binary',
         detectedEncoding: 'binary',
         confidence: 1,
         isBinary: true,
+        byteLength: preview.byteLength,
       };
     }
 
-    // buffer already read above
+    const { buffer } = preview;
     const { encoding: detectedEncoding, confidence } = detectEncoding(buffer);
 
     let content: string;
@@ -493,10 +473,22 @@ export function registerFileHandlers(): void {
       content = iconv.decode(buffer, detectedEncoding);
     } catch {
       content = buffer.toString('utf-8');
-      return { content, encoding: 'utf-8', detectedEncoding: 'utf-8', confidence: 0 };
+      return {
+        content,
+        encoding: 'utf-8',
+        detectedEncoding: 'utf-8',
+        confidence: 0,
+        byteLength: preview.byteLength,
+      };
     }
 
-    return { content, encoding: detectedEncoding, detectedEncoding, confidence };
+    return {
+      content,
+      encoding: detectedEncoding,
+      detectedEncoding,
+      confidence,
+      byteLength: preview.byteLength,
+    };
   });
 
   /**

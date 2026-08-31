@@ -18,7 +18,9 @@ const REMOTE_CONFIG = {
         {
           id: 'deepseek-v4',
           name: 'DeepSeek V4',
+          tags: ['国产', 'reasoning'],
           reasoning: true,
+          thinkingLevelMap: { low: 'low', high: 'high', max: null },
           contextWindow: 128000,
           maxTokens: 32000,
         },
@@ -71,7 +73,15 @@ describe('PiModelConfigService', () => {
     ).toMatchObject({
       source: 'managed',
       stale: false,
-      models: [{ id: 'dan/deepseek-v4', label: 'DeepSeek V4' }],
+      models: [
+        {
+          id: 'dan/deepseek-v4',
+          label: 'DeepSeek V4',
+          tags: ['国产', 'reasoning'],
+          reasoning: true,
+          thinkingLevelMap: { low: 'low', high: 'high', max: null },
+        },
+      ],
     });
   });
 
@@ -165,7 +175,15 @@ describe('PiModelConfigService', () => {
           glm: {
             baseUrl: 'https://glm.example/v1',
             apiKey: '$GLM_KEY',
-            models: [{ id: 'glm-5' }, { id: 'glm-5-air', name: 'GLM 5 Air' }],
+            models: [
+              {
+                id: 'glm-5',
+                tags: ['国产', 'fast'],
+                reasoning: true,
+                thinkingLevelMap: { low: 'low', medium: 'medium', high: 42 },
+              },
+              { id: 'glm-5-air', name: 'GLM 5 Air' },
+            ],
           },
         },
       })
@@ -176,14 +194,49 @@ describe('PiModelConfigService', () => {
       source: 'local',
       stale: false,
       models: [
+        {
+          id: 'glm/glm-5',
+          label: 'glm-5',
+          tags: ['国产', 'fast'],
+          reasoning: true,
+          thinkingLevelMap: { low: 'low', medium: 'medium' },
+        },
         { id: 'glm/glm-5-air', label: 'GLM 5 Air' },
-        { id: 'glm/glm-5', label: 'glm-5' },
       ],
     });
   });
 });
 
 describe('validatePiManagedModelsConfig', () => {
+  it('accepts ordered tags and remains compatible when tags are absent', () => {
+    const validated = validatePiManagedModelsConfig(REMOTE_CONFIG);
+    expect(validated.providers.dan.models[0]?.tags).toEqual(['国产', 'reasoning']);
+    const withoutTags = validatePiManagedModelsConfig({
+      ...REMOTE_CONFIG,
+      providers: {
+        dan: {
+          ...REMOTE_CONFIG.providers.dan,
+          models: [{ id: 'plain', reasoning: false }],
+        },
+      },
+    });
+    expect(withoutTags.providers.dan.models[0]?.tags).toBeUndefined();
+  });
+
+  it('rejects malformed tags', () => {
+    expect(() =>
+      validatePiManagedModelsConfig({
+        ...REMOTE_CONFIG,
+        providers: {
+          dan: {
+            ...REMOTE_CONFIG.providers.dan,
+            models: [{ id: 'bad', tags: ['ok', ''] }],
+          },
+        },
+      })
+    ).toThrow(/tags\[1\]/);
+  });
+
   it('rejects credentials in provider or model metadata', () => {
     expect(() =>
       validatePiManagedModelsConfig({

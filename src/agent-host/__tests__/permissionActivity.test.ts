@@ -52,6 +52,22 @@ describe('projectUiPromptEvent', () => {
     });
   });
 
+  it('uses the nested request surface for cross-cutting gates and retains the tool surface', () => {
+    expect(
+      projectUiPromptEvent({
+        ...PROMPT,
+        surface: 'read',
+        value: '~/.pilab/default/settings.json',
+        request: { surface: 'path', matchedPattern: '~/.pilab/*' },
+      })
+    ).toMatchObject({
+      phase: 'prompt',
+      surface: 'path',
+      toolSurface: 'read',
+      matchedPattern: '~/.pilab/*',
+    });
+  });
+
   /**
    * Approving a SUBAGENT's request is a different act from approving one's own,
    * and the two are otherwise indistinguishable in the timeline.

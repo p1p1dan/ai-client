@@ -400,6 +400,16 @@ export class PiAgentRuntime {
             },
           });
         },
+        onReset: (reset) => {
+          this.emit({
+            type: 'extensionUi.reset',
+            sessionId,
+            payload: {
+              runtimeId: reset.runtimeId,
+              reason: reset.reason,
+            },
+          });
+        },
       }),
       handle: null,
       building: null,
@@ -1247,7 +1257,9 @@ export class PiAgentRuntime {
     // gone. Draining them lets any extension still awaiting one finish with its
     // fallback instead of hanging until the Host exits.
     state.extensionUi.cancelAll(reason);
-    state.extensionUi.dispose();
+    state.extensionUi.dispose(
+      reason === 'session_replaced' || reason === 'session_closed' ? reason : 'host_shutdown'
+    );
     // Aborting the pi session is part of the teardown, not a nicety: closing a
     // session while its turn is in flight otherwise leaves that turn running
     // inside a runtime nothing is listening to any more.

@@ -4,9 +4,10 @@
  * ## Where this ends up, and why there
  *
  * The build writes it to `<bundled plugin>/config.json` inside the artifact.
- * That is the LOWEST-precedence scope `@gotgenes/pi-permission-system` reads
- * (`config-loader.ts` step 2, ahead of the global config), which gives exactly
- * the layering this decision needs:
+ * AiClient's pinned-package patch exposes that file to PermissionManager as an
+ * explicit `bundled` scope below global/project/agent policy. Upstream 27.0.1's
+ * legacy runtime-config loader alone does NOT enforce its `permission` block;
+ * `scripts/patch-pi-permission-system.mjs` closes that integration gap.
  *
  *   随包默认 (this file)  <  用户 / 受管 agentDir 配置  <  项目 `.pi/` 配置
  *
@@ -21,11 +22,8 @@
  *  - **The user always wins.** Anything they put in their own agentDir config
  *    overrides this wholesale, per surface.
  *
- * ⚠️ The plugin calls that path LEGACY and emits a "move it to …" warning
- * through `ctx.ui.notify`. Today the renderer drops `notify` (T09 is Deferred),
- * so it is invisible; when T09 lands, that warning becomes user-visible advice
- * to move a file inside our own read-only artifact. See the follow-up note in
- * the T08-c decision record.
+ * The plugin's runtime-knob loader still labels that file LEGACY and may emit a
+ * move-it warning, but policy enforcement no longer depends on that loader.
  *
  * ## Why `.mjs` and not `.json`
  *
@@ -51,6 +49,9 @@
  */
 const PATH_RULES = {
   '*': 'allow',
+  // Broad application-state boundary. This MUST precede narrower secret rules
+  // so `.pilab/**/.env`, PEM and key files remain deny under last-match-wins.
+  '~/.pilab/*': 'ask',
   // Environment files carry secrets by convention; the example template does not.
   // The `.example` exception MUST follow the two denies it carves out of.
   '*.env': 'deny',
@@ -62,9 +63,6 @@ const PATH_RULES = {
   '*.key': 'deny',
   'id_rsa*': 'deny',
   '~/.aws/credentials': 'deny',
-  // Our own credential store. An agent reading this would be reading the
-  // company key we injected for it, which is the one file it must never see.
-  '~/.pilab/*': 'deny',
 };
 
 /**
@@ -158,10 +156,10 @@ export const AICLIENT_DEFAULT_PERMISSION_POLICY = {
     bash: BASH_RULES,
     mcp: MCP_RULES,
     skill: { '*': 'ask' },
-    // D-Q9 decision 3: leaving the working directory always asks, with no
-    // pre-seeded cache allowlist. For a WORKTREE manager this is the boundary
-    // that keeps a session in `/repo-a` from reaching into `/repo-b`.
-    external_directory: { '*': 'ask' },
+    // D11 rev.2: ordinary external paths ask. `.pilab` is already asked by the
+    // earlier cross-cutting path gate, so allow it here only to avoid a duplicate
+    // second prompt; this carve-out never bypasses the path decision.
+    external_directory: { '*': 'ask', '~/.pilab/*': 'allow' },
   },
 };
 

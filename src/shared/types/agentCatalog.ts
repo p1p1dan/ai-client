@@ -17,12 +17,19 @@
  * ids, labels and provenance (§0.1-2). Every field below is safe to log.
  */
 
+import type { SessionEffortLevel } from './agentHost';
 import type { AgentWireName } from './agentWire';
 
 /** One selectable model. `label` is UI copy only and is never compared against. */
 export interface AgentModelOption {
   id: string;
   label: string;
+  /** Ordered cloud/config labels. The first is the sole primary menu group. */
+  tags?: string[];
+  /** Pi model capability metadata; absent on legacy/non-Pi catalogs. */
+  reasoning?: boolean;
+  /** Reused directly for model-level effort availability; never duplicated into another table. */
+  thinkingLevelMap?: Partial<Record<SessionEffortLevel | 'off' | 'minimal', string | null>>;
 }
 
 /**

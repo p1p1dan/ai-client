@@ -14,7 +14,8 @@ import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { useEffect, useRef } from 'react';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
-import { decideQueueRelease, isAdmittedOutcome, type RunEntryOutcome } from './queueRelease';
+import { decideQueueRelease, type RunEntryOutcome } from './queueRelease';
+import { releaseQueueHead } from './queueReleaseTransaction';
 
 export interface UseQueueReleaseInput {
   sessionId: string | null;
@@ -62,44 +63,15 @@ export function useQueueRelease(input: UseQueueReleaseInput): void {
     if (decision.type !== 'release') return;
 
     releasingRef.current = true;
-    const entry = useMessageQueueStore.getState().takeHead(sessionId);
-    if (!entry) {
-      // raced away (e.g. removed via the strip) — nothing to release
+    const store = useMessageQueueStore.getState();
+    void releaseQueueHead(sessionId, {
+      takeHead: store.takeHead,
+      restoreHead: (entry) => useMessageQueueStore.getState().restoreHead(entry),
+      pauseRejected: (releasedSessionId) =>
+        useMessageQueueStore.getState().pauseSession(releasedSessionId, 'send-rejected'),
+      runEntry,
+    }).finally(() => {
       releasingRef.current = false;
-      return;
-    }
-    // Round-2 P0 fix: `takeHead` above already popped the entry — from this
-    // point on ANY unexpected outcome (a rejection thrown before runEntry's
-    // own try/catch, e.g. toWireAttachments/onSendStart) must not silently
-    // drop it. `.catch` restores it exactly like a 'skipped'/'rejected'
-    // result would, and `.finally` is the only place that reliably clears
-    // the latch — a `.then`-only reset never runs on a rejection, which used
-    // to freeze this session's queue forever.
-    void runEntry(entry)
-      .then((result: RunEntryOutcome) => {
-        // Never swallow: a guard-fail inside runEntry ('skipped'), or a turn
-        // the Host flatly refused to admit ('rejected' — no echo, no turn
-        // started), puts the entry right back at the front of the queue
-        // instead of dropping it.
-        //
-        // F2 (§4.3 consumption point 5): asked as "was this turn ADMITTED?"
-        // rather than as a list of the two names that happen to mean "no"
-        // today. Behaviour is identical for the three pre-existing outcomes;
-        // what changes is that `'pending'` — a turn the Host took and is still
-        // running, which this renderer merely stopped waiting for — is
-        // STRUCTURALLY excluded from requeueing, instead of being excluded by
-        // the accident of not appearing in a name list. Requeueing it would
-        // release the identical text as a second turn while the first is still
-        // in flight.
-        if (!isAdmittedOutcome(result)) {
-          useMessageQueueStore.getState().restoreHead(entry);
-        }
-      })
-      .catch(() => {
-        useMessageQueueStore.getState().restoreHead(entry);
-      })
-      .finally(() => {
-        releasingRef.current = false;
-      });
+    });
   }, [sessionId, queue, hasTarget, disabled, sending, status, isInFlight, runEntry]);
 }

@@ -1,6 +1,10 @@
 # D5 — 先屏蔽 Claude/Codex 路径，代码不删
 
-**状态**：已拍板（2026-08-28）
+> **状态：Superseded（2026-08-31）**
+>
+> “保留 execution runtime 并可随时切回”的产品方向已由 [D14 — Pi-only 产品范围与 legacy 会话导入](./014-pi-only-product-and-conversation-import.md) 替代。本文只保留当时 Phase 1 的过渡理由，不再驱动实现。
+
+**原状态**：已拍板（2026-08-28）
 
 ## 决策
 

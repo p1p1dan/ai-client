@@ -5,73 +5,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from '@/components/ui/code-block';
 import { MermaidRenderer } from '@/components/ui/mermaid-renderer';
-import { toLocalFileBaseUrl } from '@/lib/localFileUrl';
-
-const URL_SCHEME_REGEX = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
-
-function getDirname(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
-  const idx = normalized.lastIndexOf('/');
-  if (idx === -1) return '';
-  return idx === 0 ? '/' : normalized.slice(0, idx);
-}
-
-function normalizePathnameForCompare(pathname: string): string {
-  const platform = window.electronAPI.env.platform;
-  const normalized = pathname.replace(/\/+$/, '');
-  if (platform === 'win32' || platform === 'darwin') return normalized.toLowerCase();
-  return normalized;
-}
-
-function resolveImageSrc(
-  src: string | undefined,
-  markdownFilePath: string,
-  rootPath?: string
-): string | undefined {
-  if (!src) return undefined;
-
-  const raw = src.trim();
-  if (!raw) return undefined;
-
-  // External images / data URIs are allowed.
-  if (
-    raw.startsWith('http://') ||
-    raw.startsWith('https://') ||
-    raw.startsWith('data:') ||
-    raw.startsWith('blob:')
-  ) {
-    return raw;
-  }
-
-  // Protocol-relative URL (//example.com/img.png) → default to https.
-  if (raw.startsWith('//')) {
-    return `https:${raw}`;
-  }
-
-  // Disallow explicit schemes like file:, local-file:, javascript:, etc.
-  if (URL_SCHEME_REGEX.test(raw)) {
-    return undefined;
-  }
-
-  if (!rootPath) return undefined;
-
-  const rootBaseUrl = toLocalFileBaseUrl(rootPath);
-  const fileDirBaseUrl = toLocalFileBaseUrl(getDirname(markdownFilePath));
-
-  const normalizedSrc = raw.replace(/\\/g, '/');
-  const resolvedUrl = normalizedSrc.startsWith('/')
-    ? new URL(normalizedSrc.slice(1), rootBaseUrl)
-    : new URL(normalizedSrc, fileDirBaseUrl);
-
-  const rootPathname = normalizePathnameForCompare(rootBaseUrl.pathname);
-  const resolvedPathname = normalizePathnameForCompare(resolvedUrl.pathname);
-
-  if (resolvedPathname !== rootPathname && !resolvedPathname.startsWith(`${rootPathname}/`)) {
-    return undefined;
-  }
-
-  return resolvedUrl.toString();
-}
+import { resolveMarkdownImageSrc } from './markdownImagePolicy';
 
 function createMarkdownComponents(markdownFilePath: string, rootPath?: string): Components {
   return {
@@ -190,7 +124,12 @@ function createMarkdownComponents(markdownFilePath: string, rootPath?: string): 
     img: ({ src, alt, ...props }) => (
       <img
         className="my-4 max-w-full rounded-md"
-        src={resolveImageSrc(src, markdownFilePath, rootPath)}
+        src={resolveMarkdownImageSrc({
+          src,
+          markdownFilePath,
+          rootPath,
+          platform: window.electronAPI.env.platform,
+        })}
         alt={alt}
         loading="lazy"
         {...props}

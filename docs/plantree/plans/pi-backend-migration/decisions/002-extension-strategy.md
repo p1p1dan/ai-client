@@ -1,6 +1,10 @@
 # D2 — 插件策略：三级能力分层
 
-**状态**：已拍板（2026-08-28）
+> **状态：Active / revised for WorkerSlot（2026-08-31）**
+>
+> 能力分类与 Cycle 2 产品行为继续有效；blocking/display request 的 ownership、reset 和 stale-event 过滤按 [D15](./015-main-owned-worker-manager.md) 绑定到 WorkerSlot/session/runtime generation。
+
+**原状态**：已拍板（2026-08-28）
 
 ## 决策
 

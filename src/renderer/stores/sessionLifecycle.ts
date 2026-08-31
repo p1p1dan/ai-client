@@ -1,7 +1,12 @@
+import {
+  type ExtensionUiDisplayState,
+  pruneExtensionUiDisplayState,
+} from '@/components/chat/extensionUiDisplayModel';
 import type { ExtensionUiState } from '@/components/chat/extensionUiModel';
 import type { SubagentActivityState } from '@/components/chat/subagentActivityModel';
 import type { SessionRuntimeFactsState } from '@/components/workspace-shell/surfaces/contextSurfaceModel';
 import { useExtensionUiStore } from './extensionUi';
+import { useExtensionUiDisplayStore } from './extensionUiDisplay';
 import { useSessionRuntimeFactsStore } from './sessionRuntimeFacts';
 import { useSubagentActivityStore } from './subagentActivity';
 import { useToolExpansionStore } from './toolExpansion';
@@ -67,5 +72,8 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
     bySession: pruneRecordBySession(state.bySession, sessionIds),
   }));
   useExtensionUiStore.setState((state) => pruneExtensionUiState(state, sessionIds));
+  useExtensionUiDisplayStore.setState((state) =>
+    pruneExtensionUiDisplayState(state as ExtensionUiDisplayState, sessionIds)
+  );
   useSubagentActivityStore.setState((state) => pruneSubagentActivityState(state, sessionIds));
 }

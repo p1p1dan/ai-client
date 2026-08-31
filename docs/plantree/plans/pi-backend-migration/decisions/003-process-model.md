@@ -1,6 +1,10 @@
 # D3 — 进程模型：直接走 utilityProcess + MessagePort
 
-**状态**：已拍板（2026-08-28，rev2）
+> **状态：Revised / partially active（2026-08-31）**
+>
+> utilityProcess、MessagePort、崩溃隔离与“不建设一次性 NDJSON bridge”继续有效；单个全局 pi agent-host 的拓扑与回退假设由 [D15 — Electron Main 持有 bounded WorkerManager](./015-main-owned-worker-manager.md) 修订为 Main-owned pool + one utilityProcess per WorkerSlot。
+
+**原状态**：已拍板（2026-08-28，rev2）
 
 ## 决策
 

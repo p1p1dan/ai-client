@@ -1,3 +1,5 @@
+import { isExtensionUiDialogMethod } from '@shared/types/runtimeEvents';
+
 /**
  * Which window owns a blocking Extension UI request — T11 / audit item 8.
  *
@@ -84,14 +86,25 @@ export class ExtensionUiRouter {
   }
 
   /**
-   * Where one event goes. `undefined` means "everywhere", which stays the rule
-   * for every event that is not a blocking dialog — narrowing the whole stream
-   * would break any window that legitimately mirrors another's session.
+   * Where one event goes. `undefined` means "everywhere". Ordinary runtime
+   * events still broadcast, while Extension UI display state follows the same
+   * session owner as its dialog WITHOUT entering requestTarget. That avoids one
+   * notify becoming a toast in the owner plus duplicate OS notifications in
+   * every unfocused mirror window.
    */
   targetsFor(event: RoutableEvent): ExtensionUiTargets {
     if (event.type === 'extensionUi.request') {
-      const uiRequestId = readString(event.payload, 'uiRequestId');
+      // T10: notify/status/widget/unsupported are fire-and-forget. They follow
+      // the session owner so one notify has one delivery surface, but never
+      // enter requestTarget — no renderer answers them, and remembering them
+      // would leak one entry per call for the life of Main.
+      const method = readString(event.payload, 'method');
       const owner = event.sessionId ? this.ownerOf(event.sessionId) : undefined;
+      if (!isExtensionUiDialogMethod(method)) {
+        return owner === undefined ? undefined : [owner];
+      }
+
+      const uiRequestId = readString(event.payload, 'uiRequestId');
       if (uiRequestId) this.requestTarget.set(uiRequestId, owner ?? 'broadcast');
       // No sessionId at all is an extension asking during INIT: it belongs to no
       // chat, so every window is as correct as any other.

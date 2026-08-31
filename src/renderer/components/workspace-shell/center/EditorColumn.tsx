@@ -34,6 +34,10 @@ import { useSettingsStore } from '@/stores/settings';
 import { requestUnsavedChoice } from '@/stores/unsavedPrompt';
 import { SURFACE_ESCAPE_HOLD_ATTR } from '../shellLayoutModel';
 import {
+  type CloseEditorTabResult,
+  closeEditorTabsSequentially,
+} from '../surfaces/closeEditorTabsSequentially';
+import {
   decideUnsavedCloseAction,
   shouldPromptUnsavedClose,
 } from '../surfaces/editorTabCloseDecision';
@@ -201,9 +205,9 @@ export function EditorColumn() {
   // T-13 coordinator ruling, unchanged: a dirty tab goes through the SAME
   // unsaved-changes confirmation the old shell uses. Silently discarding edits
   // on close is a data-loss regression, not an acceptable scope cut.
-  const handleTabClose = useCallback(
-    async (path: string) => {
-      const tab = tabs.find((item) => item.path === path);
+  const closeTabWithDecision = useCallback(
+    async (path: string): Promise<CloseEditorTabResult> => {
+      const tab = useEditorStore.getState().tabs.find((item) => item.path === path);
       const prompt = shouldPromptUnsavedClose({
         isDirty: tab?.isDirty ?? false,
         autoSave: editorAutoSave,
@@ -216,7 +220,7 @@ export function EditorColumn() {
       }
 
       const action = decideUnsavedCloseAction(choice);
-      if (action === 'cancel') return;
+      if (action === 'cancel') return 'cancelled';
 
       if (action === 'save-then-close') {
         try {
@@ -224,13 +228,51 @@ export function EditorColumn() {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           toastManager.add({ type: 'error', title: t('Save failed'), description: message });
-          return;
+          return 'failed';
         }
       }
 
       closeFile(path);
+      return 'closed';
     },
-    [tabs, editorAutoSave, saveFile, closeFile, t]
+    [editorAutoSave, saveFile, closeFile, t]
+  );
+
+  const handleTabClose = useCallback(
+    async (path: string) => {
+      await closeTabWithDecision(path);
+    },
+    [closeTabWithDecision]
+  );
+
+  const closePaths = useCallback(
+    async (paths: readonly string[]) => {
+      await closeEditorTabsSequentially(paths, closeTabWithDecision);
+    },
+    [closeTabWithDecision]
+  );
+  const handleCloseOthers = useCallback(
+    (keepPath: string) =>
+      closePaths(tabs.filter((tab) => tab.path !== keepPath).map((tab) => tab.path)),
+    [closePaths, tabs]
+  );
+  const handleCloseAll = useCallback(
+    () => closePaths(tabs.map((tab) => tab.path)),
+    [closePaths, tabs]
+  );
+  const handleCloseLeft = useCallback(
+    (path: string) => {
+      const index = tabs.findIndex((tab) => tab.path === path);
+      return closePaths(index > 0 ? tabs.slice(0, index).map((tab) => tab.path) : []);
+    },
+    [closePaths, tabs]
+  );
+  const handleCloseRight = useCallback(
+    (path: string) => {
+      const index = tabs.findIndex((tab) => tab.path === path);
+      return closePaths(index >= 0 ? tabs.slice(index + 1).map((tab) => tab.path) : []);
+    },
+    [closePaths, tabs]
   );
 
   const handleSave = useCallback((path: string) => saveFile.mutate(path), [saveFile]);
@@ -286,6 +328,10 @@ export function EditorColumn() {
           rootPath={rootPath}
           onTabClick={handleTabClick}
           onTabClose={handleTabClose}
+          onCloseOthers={handleCloseOthers}
+          onCloseAll={handleCloseAll}
+          onCloseLeft={handleCloseLeft}
+          onCloseRight={handleCloseRight}
           onNavigateToFile={navigateToFile}
           onTabReorder={reorderTabs}
           onContentChange={updateFileContent}

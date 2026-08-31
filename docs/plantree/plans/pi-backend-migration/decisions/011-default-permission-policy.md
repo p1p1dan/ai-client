@@ -1,6 +1,7 @@
-# D11 — 默认权限策略（Q9 收口）
+# D11 — 默认权限策略（Q9 收口，rev.2）
 
-> 用户拍板 2026-08-29，四问四答，Q9 就此关闭。施工票 T08-c。
+> 初次拍板 2026-08-29；2026-08-30 随 [D13](./013-completion-scope-and-product-semantics.md)
+> 改判 `~/.pilab/*`：**deny → ask**。其余策略不变。施工票 T08-c。
 > 提案依据是对 `@gotgenes/pi-permission-system@27.0.1` 的源码与文档实测，
 > 不是从文档转述——三条会改变判断的实测事实见文末。
 
@@ -18,14 +19,17 @@ bash 默认询问、只读命令白名单放行；mcp 仅发现类（`mcp_status
 `write`/`edit` 取 `ask` 而非插件示例配置里的 `deny`：对编码 agent 而言 `deny`
 等于让它做不了它存在的目的。
 
-**b. path 横切 deny 面 = 提案原清单。**
+**b. path 横切 deny 面 = `.env` / 私钥 / SSH / AWS 凭据；`~/.pilab/*` 改为 ask。**
 `.env` / `.env.*`（`.env.example` 例外，且必须排在两条 deny 之后）、`~/.ssh/*`、
-`*.pem`、`*.key`、`id_rsa*`、`~/.aws/credentials`、**`~/.pilab/*`**。
+`*.pem`、`*.key`、`id_rsa*`、`~/.aws/credentials` 继续 deny。
 
-最后一条是拦住 agent 读**我们自己注入给它的公司凭据**——能读到它就能把钥匙带走。
+`~/.pilab/*` 初版为了阻止 agent 读取应用注入的公司凭据而设为 deny；2026-08-30 用户在
+真机体验后正式改判为 **ask**：仍需明确授权，但不再无条件拒绝。Cycle 1 随后先关闭
+Q10 根因（bundled policy 未进入真实 ruleset），再修改并验证随包规则，没有用产品改判
+掩盖配置加载缺陷。
 
-`path` 是横切面且 **deny 不可被单工具 allow 覆盖**，这正是 `cat *` 敢放行的原因：
-`cat .env` 在到达 bash 规则之前就被 path 闸拒了。
+`path` 是横切面且 deny 不可被单工具 allow 覆盖，故 `.env` 等敏感文件仍会在到达
+read/bash 工具规则前直接被拒；`.pilab` 则在 path 闸进入审批。
 
 **c. external_directory 默认 `ask`，不预置缓存白名单。**
 对 worktree 管理器而言这条边界就是产品核心——它是阻止 `/repo-a` 的会话去动
@@ -34,7 +38,7 @@ bash 默认询问、只读命令白名单放行；mcp 仅发现类（`mcp_status
 
 **d. 项目级 `.pi/` 配置：受管模式不允许放宽，本机模式允许。**
 落地为 pi 的 `projectTrusted`：受管（登录公司账号）路线传 `false`，本机路线传
-`true`。与 [D68](../../../plans/openchamber-chat-refactor-ledger.md)「两条路线彻底
+`true`。与 [D68](../../../../plans/openchamber-chat-refactor-ledger.md)「两条路线彻底
 分开」同构——公司路线的可用性与它允许什么由我们负责，用户自己的机器上他自己负责。
 
 ⚠️ **连带影响必须知道**：`projectTrusted` 是 pi 自己的开关，不只管权限插件。
@@ -54,11 +58,16 @@ bash 默认询问、只读命令白名单放行；mcp 仅发现类（`mcp_status
 
 **随包默认写进 `<产物内插件目录>/config.json`**，构建期生成，运行期只读。
 
-插件读四层，本文件在最低一层：
+AiClient 的固定版本补丁让插件读五层，本文件在最低一层：
 
 ```
-随包默认（本决策）  <  用户 / 受管 agentDir 配置  <  项目 `.pi/` 配置
+随包 bundled（本决策） < global < project < agent < project-agent < session
 ```
+
+上游 27.0.1 原本**不会**把 `<extensionRoot>/config.json` 的 `permission` 送入
+`PermissionManager`；它只经过 legacy runtime-knob loader，规范化时被丢弃。Cycle 1
+通过 `scripts/patch-pi-permission-system.mjs` 增加真实 `bundled` scope，并由 Agent Host
+postinstall 在 dev/CI fresh install 后可重复应用。升级插件版本会触发版本绊线，必须重审。
 
 三条理由，每条都排除了一个看起来更直接的做法：
 
@@ -68,10 +77,9 @@ bash 默认询问、只读命令白名单放行；mcp 仅发现类（`mcp_status
   同步问题——正是 T-CM1 双缓存那个形状。
 - **用户永远能压过它。** 他自己 agentDir 里的配置整条覆盖我们的。
 
-⚠️ **已知代价**：插件把这个路径标为 LEGACY，每次加载会经 `ctx.ui.notify` 发一条
-「把它移到 …」的警告。今天渲染端丢弃 `notify`（T09 Deferred）所以不可见；**T09 落地
-后它会变成一条用户可见、但让他去移动一个只读产物内文件的建议**——届时要么过滤这条
-特定警告，要么给策略换个落点。已登记为 T09 的前置注意事项。
+⚠️ **legacy 通知仍存在，但不再承担策略执行。** 上游 runtime-knob loader 仍可能把
+这个路径标为 LEGACY 并经 `ctx.ui.notify` 建议移动；真实 permission enforcement 已走
+`bundled` scope。T09 落地 notify 时仍应过滤这条针对只读产物文件的误导性建议。
 
 ⚠️ **2026-08-29 补记（切片 2 发现）**：本决策只说了「写进产物」，而插件是按**运行中
 Host 入口**解析插件目录的——dev 下那是 `src/agent-host/`，构建从不写它。于是
@@ -81,10 +89,10 @@ Host 入口**解析插件目录的——dev 下那是 `src/agent-host/`，构建
 一致性是 dev 自己的显式步骤。**真机验收若在 dev 下进行，先确认启动日志里有
 `[dev] permission policy: …`。**
 
-**升级绊线**：`smoke:permission-plugin` 扫描产物里插件自己的
-`src/config-loader.ts`，要求它仍然调用 `getLegacyExtensionConfigPath(`。插件哪天
-删掉这条路径，smoke 会红——否则我们的默认策略会变成静默不生效的死文件，而症状
-只是「什么都开始弹窗了」。
+**升级绊线**：postinstall patch 严格要求插件版本为 27.0.1，锚点不唯一或版本变化就
+直接失败；`permissionPolicyIntegration.test.ts` 与 `smoke:permission-plugin` 会调用真实
+PermissionManager，核对 `origin=bundled` 与 matched pattern。不能再用“文件存在”或
+legacy loader 源码扫描代替执行证据。
 
 ## 实测事实（会改变判断的三条）
 
@@ -105,4 +113,5 @@ Host 入口**解析插件目录的——dev 下那是 `src/agent-host/`，构建
 本决策 + T08-c 切片 1 覆盖**默认策略与信任边界**。设置面 GUI 是切片 2，已于同日施工，
 见 [evidence/t08c-permission-settings-panel.md](../evidence/t08c-permission-settings-panel.md)。
 切片 2 未改动本决策的任何一条，只是把结果显示出来，并把**受管 agentDir 那一层**
-做成可编辑（本机路线因红线保持只读）。两个切片的**验收**都还欠真机。
+做成可编辑（本机路线因红线保持只读）。Cycle 1 已完成 Q10 根因、真实 resolver、dev/产物
+一致性与 `.pilab` ask 自动验收；真账号 GUI activity 复点见 Cycle 1 证据中的人工项。

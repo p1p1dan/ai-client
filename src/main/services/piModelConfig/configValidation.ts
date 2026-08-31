@@ -42,6 +42,17 @@ function validateModel(value: unknown, field: string): PiManagedModelDefinition 
   const id = typeof value.id === 'string' ? value.id.trim() : '';
   if (!id) throw new Error(`${field}.id is required`);
   const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : undefined;
+  let tags: string[] | undefined;
+  if (value.tags !== undefined) {
+    if (!Array.isArray(value.tags)) throw new Error(`${field}.tags must be an array`);
+    const normalized = value.tags.map((tag, index) => {
+      if (typeof tag !== 'string' || !tag.trim()) {
+        throw new Error(`${field}.tags[${index}] must be a non-empty string`);
+      }
+      return tag.trim();
+    });
+    tags = [...new Set(normalized)];
+  }
   const api = value.api === undefined ? undefined : validateApi(value.api, `${field}.api`);
   const reasoning = value.reasoning === undefined ? undefined : Boolean(value.reasoning);
 
@@ -75,6 +86,7 @@ function validateModel(value: unknown, field: string): PiManagedModelDefinition 
   return {
     id,
     ...(name ? { name } : {}),
+    ...(tags ? { tags } : {}),
     ...(api ? { api } : {}),
     ...(value.reasoning !== undefined ? { reasoning } : {}),
     ...(input ? { input } : {}),

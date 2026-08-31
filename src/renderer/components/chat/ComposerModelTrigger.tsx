@@ -5,9 +5,20 @@ import {
   withAgentPreference,
 } from '@shared/models/chatAgentDefaults';
 import type { AgentWireName } from '@shared/types/agentWire';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Menu, MenuGroup, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
+import { Input } from '@/components/ui/input';
+import {
+  Menu,
+  MenuGroup,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+} from '@/components/ui/menu';
+import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { catalogModels } from './agentModelCatalog';
 import {
@@ -16,7 +27,12 @@ import {
   composerModelLabelParts,
   composerModelMenuModel,
 } from './composerModel';
-import { EFFORT_DEFAULT_ID, resolveEffortSelection } from './efforts';
+import {
+  EFFORT_DEFAULT_ID,
+  effortsForModel,
+  reconcileEffortForModel,
+  resolveEffortSelection,
+} from './efforts';
 import type { HostStatus } from './hostStatus';
 import {
   composerMenuGroupLabelClass,
@@ -30,6 +46,8 @@ import {
 import {
   AUTOMATIC_MODEL_ID,
   AUTOMATIC_MODEL_LABEL,
+  filterChatModels,
+  groupChatModels,
   modelOptionsFor,
   modelScopeHint,
   reconcileModelSelection,
@@ -97,40 +115,103 @@ interface ComposerModelTriggerProps {
  * `components/ui/menu.tsx`'s `MenuItem` and why the font-size tokens are
  * written as plain strings.
  */
+function MenuRadioRows({
+  items,
+  selectedId,
+  onSelect,
+}: {
+  items: readonly ComposerMenuItem[];
+  selectedId: string | null;
+  onSelect: (itemId: string) => void;
+}) {
+  return (
+    <MenuRadioGroup
+      value={selectedId}
+      onValueChange={(value) => {
+        if (typeof value === 'string') onSelect(value);
+      }}
+    >
+      {items.map((item) => (
+        <MenuPrimitive.RadioItem
+          key={item.id}
+          value={item.id}
+          className={composerMenuItemClass()}
+          title={item.hint}
+        >
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          <MenuPrimitive.RadioItemIndicator className="shrink-0">
+            <Check className="size-3.5" />
+          </MenuPrimitive.RadioItemIndicator>
+        </MenuPrimitive.RadioItem>
+      ))}
+    </MenuRadioGroup>
+  );
+}
+
 function ModelMenuSection({
   section,
   onSelect,
+  query = '',
+  fallbackGroupLabel = 'Other models',
 }: {
   section: ComposerMenuSection;
   onSelect: (sectionId: ComposerMenuSection['id'], itemId: string) => void;
+  query?: string;
+  fallbackGroupLabel?: string;
 }) {
   const selectedId = section.items.find((item) => item.selected)?.id ?? null;
+  if (section.id === 'model') {
+    const direct = section.items.filter(
+      (item) => item.id === AUTOMATIC_MODEL_ID || item.verified === false
+    );
+    const matches = filterChatModels(
+      section.items.filter((item) => item.id !== AUTOMATIC_MODEL_ID && item.verified !== false),
+      query
+    );
+    const grouped = groupChatModels([...direct, ...matches], fallbackGroupLabel);
+    return (
+      <MenuGroup>
+        <MenuPrimitive.GroupLabel className={composerMenuGroupLabelClass()}>
+          {section.label}
+        </MenuPrimitive.GroupLabel>
+        <MenuRadioRows
+          items={grouped.direct as ComposerMenuItem[]}
+          selectedId={selectedId}
+          onSelect={(itemId) => onSelect(section.id, itemId)}
+        />
+        {grouped.groups.map((group) => {
+          const items = group.items as ComposerMenuItem[];
+          const selected = items.some((item) => item.id === selectedId);
+          return (
+            <MenuSub key={group.id}>
+              <MenuSubTrigger className={composerMenuItemClass()}>
+                <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                {selected ? <Check className="size-3.5 shrink-0" /> : null}
+              </MenuSubTrigger>
+              <MenuSubPopup className="min-w-52 rounded-md before:rounded-[calc(var(--radius-md)-1px)]">
+                <MenuRadioRows
+                  items={items}
+                  selectedId={selectedId}
+                  onSelect={(itemId) => onSelect(section.id, itemId)}
+                />
+              </MenuSubPopup>
+            </MenuSub>
+          );
+        })}
+      </MenuGroup>
+    );
+  }
 
   return (
     <MenuGroup>
       <MenuPrimitive.GroupLabel className={composerMenuGroupLabelClass()}>
         {section.label}
       </MenuPrimitive.GroupLabel>
-      <MenuRadioGroup
-        value={selectedId}
-        onValueChange={(value) => {
-          if (typeof value === 'string') onSelect(section.id, value);
-        }}
-      >
-        {section.items.map((item: ComposerMenuItem) => (
-          <MenuPrimitive.RadioItem
-            key={item.id}
-            value={item.id}
-            className={composerMenuItemClass()}
-            title={item.hint}
-          >
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            <MenuPrimitive.RadioItemIndicator className="shrink-0">
-              <Check className="size-3.5" />
-            </MenuPrimitive.RadioItemIndicator>
-          </MenuPrimitive.RadioItem>
-        ))}
-      </MenuRadioGroup>
+      <MenuRadioRows
+        items={section.items}
+        selectedId={selectedId}
+        onSelect={(itemId) => onSelect(section.id, itemId)}
+      />
     </MenuGroup>
   );
 }
@@ -143,6 +224,7 @@ export function ComposerModelTrigger({
   mode,
   disabled,
 }: ComposerModelTriggerProps) {
+  const { t } = useI18n();
   const { getSessionModel, setSessionModel, clearSessionModel } = useSessionModel();
   const { getSessionEffort, setSessionEffort } = useSessionEffort();
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
@@ -170,6 +252,7 @@ export function ComposerModelTrigger({
         agentDefaultEffort(chatAgentDefaults, agent)
       ) ?? EFFORT_DEFAULT_ID
   );
+  const [modelQuery, setModelQuery] = useState('');
 
   // Which (session, agent) the displayed value was resolved for. This component
   // is NEVER remounted per session — `ChatWorkspace` renders one `ChatComposer`
@@ -211,10 +294,9 @@ export function ComposerModelTrigger({
     getSessionModel,
   ]);
 
-  // Session or agent switched: re-read this pair's own effort. Unlike the model
-  // there is no catalog to wait for — the five levels are one shared vocabulary
-  // on both axes [实测 调查 04 探测 E/G], so the value is decided the instant the
-  // pair is known.
+  // Session or agent switched: re-read this pair's own effort. T25 applies the
+  // selected model's capability in the reconciliation effect below once its
+  // catalog metadata is known.
   useEffect(() => {
     setEffort(
       resolveEffortSelection(
@@ -225,6 +307,28 @@ export function ComposerModelTrigger({
   }, [sessionId, agent, chatAgentDefaults, getSessionEffort]);
 
   const options = modelOptionsFor(catalogOptions);
+  const selectedCatalogModel = catalogOptions.find((option) => option.id === model);
+  const availableEfforts = effortsForModel(selectedCatalogModel);
+
+  useEffect(() => {
+    const reconciled = reconcileEffortForModel(effort, selectedCatalogModel);
+    if (reconciled === effort) return;
+    // Store the explicit Default sentinel on this (session, agent) pair. That
+    // outranks an incompatible template, while updating the template itself
+    // keeps the next draft from resurrecting the illegal value. The Context
+    // mirror and create/send/resume wire read those same two stores.
+    setEffort(reconciled);
+    setSessionEffort(sessionId, agent, reconciled);
+    setChatAgentDefaults(withAgentPreference(chatAgentDefaults, agent, { effort: reconciled }));
+  }, [
+    agent,
+    chatAgentDefaults,
+    effort,
+    selectedCatalogModel,
+    sessionId,
+    setChatAgentDefaults,
+    setSessionEffort,
+  ]);
   const inCatalog = catalogOptions.some((option) => option.id === model);
   const isAutomatic = model === AUTOMATIC_MODEL_ID;
   // The label the prepended row carries, and the label the TRIGGER carries, are
@@ -240,6 +344,7 @@ export function ComposerModelTrigger({
     selectedModel: model,
     selectedEffort: effort,
     unknownModelLabel: unknownLabel,
+    efforts: availableEfforts,
   });
 
   const handleSelect = (sectionId: ComposerMenuSection['id'], itemId: string) => {
@@ -255,11 +360,19 @@ export function ComposerModelTrigger({
       } else {
         setSessionModel(sessionId, agent, itemId);
       }
+      const nextModel = catalogOptions.find((option) => option.id === itemId);
+      const nextEffort = reconcileEffortForModel(effort, nextModel);
+      if (nextEffort !== effort) {
+        setEffort(nextEffort);
+        setSessionEffort(sessionId, agent, nextEffort);
+      }
       // §4.3: an explicit pick also becomes this agent's template, so the next
-      // new draft on the same agent starts where the user left off.
+      // new draft on the same agent starts where the user left off. T25 updates
+      // model and any forced effort fallback in ONE template write.
       setChatAgentDefaults(
         withAgentPreference(chatAgentDefaults, agent, {
           model: itemId === AUTOMATIC_MODEL_ID ? undefined : itemId,
+          ...(nextEffort !== effort ? { effort: nextEffort } : {}),
         })
       );
       return;
@@ -293,6 +406,7 @@ export function ComposerModelTrigger({
       // is what `REFRESHING_CATALOG_NOTICE` is for.
       onOpenChange={(open) => {
         if (open) refresh();
+        else setModelQuery('');
       }}
     >
       <MenuPrimitive.Trigger
@@ -314,10 +428,29 @@ export function ComposerModelTrigger({
         className="min-w-40 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
         side={composerPopupSide(mode)}
       >
+        <div className="relative px-1 pb-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            size="sm"
+            value={modelQuery}
+            onChange={(event) => setModelQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') event.stopPropagation();
+            }}
+            placeholder={t('Search models')}
+            className="h-7 pl-7"
+            aria-label={t('Search models')}
+          />
+        </div>
         {menu.sections.map((section, index) => (
           <div key={section.id}>
             {index > 0 && <MenuSeparator />}
-            <ModelMenuSection section={section} onSelect={handleSelect} />
+            <ModelMenuSection
+              section={section}
+              onSelect={handleSelect}
+              query={section.id === 'model' ? modelQuery : ''}
+              fallbackGroupLabel={t('Other models')}
+            />
           </div>
         ))}
         {/* §4.3-5: catalog provenance is a STATUS row, never a radio item — a
