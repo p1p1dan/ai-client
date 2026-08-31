@@ -111,4 +111,4 @@
 - 旧 dashboard 已移动为 [`../history/dashboard-2026-08-06.html`](../history/dashboard-2026-08-06.html)，退出活动导航。
 - 旧 baseline 已保存于 [`../history/2026-08-31-pre-pi-only-baseline/`](../history/2026-08-31-pre-pi-only-baseline/)。
 - Pi plan 和四个外围 plan 的重排前活动文档均保存在各自 `history/2026-08-31-pre-pi-only-realignment/`。
-- 当前实施入口为 T28；本映射继续用于 T28/T35 逐文件 replacement/removal 审计。
+- T28 文件级 replacement/removal map 已完成；当前实施入口为 T29，本映射与 [T28 map](../plans/pi-backend-migration/topics/t28-replacement-map.md) 继续约束 T35 删除审计。

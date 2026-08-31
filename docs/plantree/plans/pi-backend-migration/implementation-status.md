@@ -1,47 +1,45 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Plan realignment complete enough to enter T28; WorkerManager implementation has not started.
+**Current Phase**：Phase A / T28 complete；进入 Phase B / T29 single WorkerSlot vertical slice。
 
-**Next Target**：[T28](./roadmap.md#t28--pi-only-architecture-and-deletion-boundary--next) file-level replacement/deletion map, then T29 single WorkerSlot vertical slice.
+**Next Target**：[T29](./roadmap.md#t29--single-workerslot-vertical-slice--next) `newSession → send → stream → stop → dispose`，不依赖旧 `PiHostProcess`。
 
-**Last Landed**：2026-08-31 Cycle 2 product surfaces and gates; see [Cycle 2 evidence](./evidence/2026-08-31-cycle2-execution.md).
+**Last Landed**：2026-08-31 Phase A 文件级 replacement/deletion baseline；见 [T28 map](./topics/t28-replacement-map.md) 与 [evidence](./evidence/2026-08-31-phase-a-t28.md)。
 
-**Last Verified**：2026-08-31 — main and Agent Host typecheck 0; Biome `src` + `scripts` 1094 files clean; integrated Cycle 2 16 files / 260 tests, plus 28 and 16 focused reruns; `git diff --check` clean; Electron/CDP inline approval, badges, status/widget/TUI-only notice and grouped model menu smoke passed.
+**Last Verified**：2026-08-31 — replacement map path/link audit、changed-file scope audit、`git diff --check`；Phase A 未修改 product code，未运行不必要的 full Vitest/build。
 
 ## Current architecture decision
 
-- [D14](./decisions/014-pi-only-product-and-conversation-import.md)：应用成为 Pi-only；Claude/Codex execution runtime 最终删除，历史通过只读 import 保留。
-- [D15](./decisions/015-main-owned-worker-manager.md)：Electron Main 持有 bounded WorkerManager；每 WorkerSlot 一个 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
-- 现有 `PiHostProcess`/`AgentHostManager` 和 multi-runtime code 仍在实现中，属于 T28/T29 的替换来源，不是目标边界。
-- D13 的旧 Cycle 3 history-first、Cycle 4 TUI、Cycle 5 RC 排期已失效；当前顺序以 [roadmap](./roadmap.md) T28–T37 为准。
+- [D14](./decisions/014-pi-only-product-and-conversation-import.md)：Claude/Codex execution runtime 最终删除；历史只通过只读、原子、可去重 import 保留。
+- [D15](./decisions/015-main-owned-worker-manager.md)：Main 持有 bounded WorkerManager；每 WorkerSlot 一个 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
+- [T28 map](./topics/t28-replacement-map.md) 是 T29/T34/T35/T36 的文件级删除/保护 authority；按文件名机械删除被禁止。
 
-## Preserved completed behavior
+## Phase A done
 
-- Cycle 1：queue/pending、preview safety、permission policy/settings、repository/session retirement。
-- Cycle 2：session-local inline approval、Extension UI capability/display/reset、owner-targeted fire-and-forget、TUI-only hint、grouped searchable model picker 和 model-level effort。
-- T12 timeline/tool/thinking/streaming/scroll/welcome 及 T24/T26/T27 产品行为保持。
-- 上述行为将在 T31 重新挂到 WorkerSlot；不因 transport/topology 替换而重做产品设计或抹除 evidence。
+- `AgentHostManager`/`PiHostProcess`/standalone Host、worker modules、contracts、IPC/preload、renderer semantics、services、credentials、terminal、packaging、tests/spikes 已分类。
+- Cycle 1/2 queue/pending/timeline/Extension UI/model/permission behavior 已标记 retain/adapt，并要求 slot generation isolation。
+- Claude/Codex history readers 与 Claude scanner 已标记 migration-only；execution imports 被禁止。
+- Codex ASR production implementation 未找到；method fixture 不构成保留 Codex dependency 的证据。
+- pi-app/pix 对应 source/tests 已读，并登记 direct candidate / adapt / reject 与 MIT notice 规则。
 
 ## Active TODO
 
-1. **T28-a**：盘点 singleton host、多 runtime、renderer agent semantics 与 packaging 文件边界。
-2. **T28-b**：将实现文件分类为 retain/adapt/replace/delete/migration-only。
-3. **T28-c**：单独保护 Codex ASR、legacy readers、evidence 和 provider/model metadata。
-4. **T29 plan-ready check**：对照 pi-app WorkerManager/WorkerSlot，确定单 slot RPC、worker entry、stop/dispose 验收。
-5. **并行环境欠项**：真账号 queue GUI 复点；高资源主机 packaged preview/PDF/Monaco/local-file smoke。
+1. **T29-a**：落 Worker RPC、request ID、timeout、generation、dispose/crash contract。
+2. **T29-b**：落一个 utility worker + one Pi AgentSession bootstrap，接 managed agentDir/auth/models/project trust/permission。
+3. **T29-c**：完成 `newSession → send → stream → stop → dispose` focused tests 与 orphan census。
+4. **T30 ready-check**：T29 通过后再收口 pool capacity/remap/eviction/restart。
+5. **并行环境欠项**：真账号 queue GUI 复点；高资源主机 packaged preview/PDF/Monaco/local-file smoke（T37 前关闭）。
 
 ## Blocked By / risks
 
-- 当前无产品决策阻塞 T28/T29。
-- 当前 3.3 GiB 主机不得运行完整 production build 或并行重任务；单文件/小批测试与分阶段构建继续遵守根 `AGENTS.md`。
-- Worker pool 默认容量仍待 Q12 收口，但不阻塞单 WorkerSlot。
-- T35 删除不得早于 T34 保存必要 source adapters；import 原文件必须保持只读。
-- T36 必须证明 GUI/TUI 单写 authority 和 packaged Pi CLI 路径，不能复制同 JSONL takeover。
+- T29 无产品决策 blocker；Q12 pool 默认容量不阻塞单 slot。
+- 当前 3.3 GiB 主机继续按根 `AGENTS.md` 小批串行测试，禁止 full build/full Vitest。
+- T35 deletion 仍被 T34 read-only adapter isolation 和 T29–T33 replacement 闭环阻塞。
+- T36 必须证明 bundled absolute Pi CLI path 与 GUI/TUI single-writer。
 
 ## Handoff
 
-1. 读 [decision index](./decisions/README.md)、[D14](./decisions/014-pi-only-product-and-conversation-import.md)、[D15](./decisions/015-main-owned-worker-manager.md) 和 [reference repositories](./topics/reference-repositories.md)。
-2. 直接检查 `/home/ai/code/pi-app` 的 WorkerManager/WorkerSlot/worker tests；记录 direct/adapted/rejected。
-3. T28 只产出文件级 implementation map，不删除代码。
-4. T29 先完成一个 slot 的 `newSession → send → stream → stop → dispose`，再扩 pool/history。
-5. Cycle 1/2 evidence 和重排前长交接保存在 [history snapshot](./history/2026-08-31-pre-pi-only-realignment/)。
+1. 先读 [T28 runtime/contracts map](./topics/t28-replacement-map/runtime-and-contracts.md) 与 [tests/reference map](./topics/t28-replacement-map/packaging-tests-and-references.md)。
+2. T29 从 pi-app WorkerSlot/transport/session-isolation tests 移植主体，适配本仓 RuntimeEvent/owner/permission；substantial copying 保留 MIT notice。
+3. 第一切片只做单 slot，不焊 pool/history/import/TUI 到旧 singleton。
+4. stop/dispose 不用固定 sleep 代替明确 ACK/terminal contract；完成后检查无 orphan utilityProcess。

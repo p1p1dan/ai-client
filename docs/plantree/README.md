@@ -43,7 +43,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Architecture realignment complete enough for T28 | Cycle 1/2 product behavior + D14/D15 plan baseline | T28 file-level replacement map → T29 single WorkerSlot |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase A / T28 complete；Phase B Worker foundation | T28 file-level replacement map + evidence | T29 single WorkerSlot |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -65,7 +65,7 @@ T28 replacement baseline
 → T37 release candidate
 ```
 
-当前 Next 是 **T28**，不是旧 Cycle 3 history-first，也不是 Codex/multi-agent 后续。
+当前 Next 是 **T29 single WorkerSlot**，不是旧 Cycle 3 history-first，也不是 Codex/multi-agent 后续。
 
 ## Stable evidence and history
 

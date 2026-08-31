@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：T28 replacement baseline；下一实现纵切为 T29 single WorkerSlot。
+> **当前阶段**：Phase A / T28 replacement baseline 已完成；下一实现纵切为 T29 single WorkerSlot。
 
 ## 目标
 
@@ -82,6 +82,7 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 | [open-questions.md](./open-questions.md) | 仅保留未解决问题 |
 | [decisions/README.md](./decisions/README.md) | Active/Revised/Superseded 决策权威 |
 | [topics/architecture.md](./topics/architecture.md) | WorkerManager 边界摘要 |
+| [topics/t28-replacement-map.md](./topics/t28-replacement-map.md) | Phase A 文件级 retain/adapt/replace/delete/migration-only authority |
 | [topics/reference-repositories.md](./topics/reference-repositories.md) | pi-app/pix 强制复用规则 |
 | [topics/extension-ui.md](./topics/extension-ui.md) | Cycle 2 行为契约与 WorkerSlot 适配要求 |
 | [topics/timeline-reference.md](./topics/timeline-reference.md) | timeline/history/tree 参考与适配边界 |
@@ -90,4 +91,4 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 当前出口
 
-先完成 T28 的文件级替换/删除边界，再实施 T29 单 WorkerSlot 纵切。T29 未闭环前，不直接把 history、TUI 或 legacy deletion 焊到旧 singleton host 上。
+T28 文件级替换/删除边界已完成；当前直接实施 T29 单 WorkerSlot 纵切。T29 未闭环前，不把 history、TUI 或 legacy deletion 焊到旧 singleton host 上。

@@ -7,7 +7,7 @@
 | 阶段 | 状态 | 出口 |
 |---|---|---|
 | Cycle 1/2 产品能力 | **Done** | 已有 evidence；按 replacement impact 保留或适配 |
-| Pi-only plan realignment | **In Progress** | D14/D15、T28–T37 与基线一致 |
+| Pi-only replacement baseline | **Done** | T28 文件级 retain/adapt/replace/delete/migration-only map + evidence |
 | Worker foundation | **Next** | 单 WorkerSlot create/send/stream/stop/dispose 闭环 |
 | Pool + behavior reattachment | Planned | bounded pool；Cycle 1/2 行为重挂 |
 | History/tree/import/removal/TUI | Planned | Pi-native lifecycle、legacy import、Pi-only cleanup、pix TUI |
@@ -46,17 +46,17 @@
 
 ## Phase A — Pi-only replacement baseline
 
-### T28 — Pi-only architecture and deletion boundary — **Next**
+### T28 — Pi-only architecture and deletion boundary — **Done**
 
-- **T28-a Runtime inventory**：盘点 `AgentHostManager`、`AgentHostProcess`、`PiHostProcess`、`src/agent-host`、contracts、IPC、renderer agent semantics 与 packaging dependencies。
-- **T28-b Asset classification**：逐文件标记 `retain / adapt / replace / delete / migration-only`，对 Cycle 1/2 行为建立 replacement map。
-- **T28-c Legacy boundary**：区分 conversation runtime、history parser/import adapter、Codex ASR、provider/model metadata、UI 文案和 tests/evidence。
+- **T28-a Runtime inventory**：已盘点 `AgentHostManager`、`AgentHostProcess`、`PiHostProcess`、`src/agent-host`、contracts、IPC、renderer agent semantics、services、credentials、terminal、packaging 和 tests/spikes。
+- **T28-b Asset classification**：已建立逐文件 `retain / adapt / replace / delete / migration-only` map，并保护 Cycle 1/2 queue/timeline/Extension UI/model/permission behavior。
+- **T28-c Legacy boundary**：已区分 conversation execution、read-only history/import、未实现的 Codex ASR、Pi provider/model metadata、UI wording、tests/evidence 和 one-shot/terminal execution axes。
 
-**验收**：文件级影响表完整；未删除实现代码；每个 legacy 路径有替代者或保留理由。
+**验收证据**：[T28 replacement map](./topics/t28-replacement-map.md) · [Phase A evidence](./evidence/2026-08-31-phase-a-t28.md)。Phase A 只修改 plantree 文档，未删除实现代码；每个 legacy area 有替代者、删除条件或保留理由。
 
 ## Phase B — Worker foundation
 
-### T29 — Single WorkerSlot vertical slice — **Planned**
+### T29 — Single WorkerSlot vertical slice — **Next**
 
 - **T29-a**：移植/适配 pi-app worker RPC、transport、request ID、timeout、dispose 与 crash contract。
 - **T29-b**：utility worker entry + Pi AgentSession bootstrap；接 managed agentDir/auth/models/project trust。
