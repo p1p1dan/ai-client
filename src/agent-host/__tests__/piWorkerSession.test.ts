@@ -63,6 +63,7 @@ describe('PiWorkerSession', () => {
       session.startSend({
         logicalSessionId: 'logical-1',
         requestId: 'turn-1',
+        attemptId: 'attempt-1',
         text: 'hello',
         model: 'dan/deepseek-v4',
         effort: 'xhigh',
@@ -87,13 +88,44 @@ describe('PiWorkerSession', () => {
       requestId: 'turn-1',
       payload: { status: 'running' },
     });
+
+    piSession?.emit({
+      type: 'message_start',
+      message: { role: 'user', content: [{ type: 'text', text: 'expanded SDK prompt' }] },
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'message.started',
+        requestId: 'turn-1',
+        payload: {
+          messageId: 'user-logical-1-1',
+          role: 'user',
+          attemptId: 'attempt-1',
+          attachments: [
+            { kind: 'text', mediaType: 'text/plain', name: 'notes.txt' },
+            { kind: 'image', mediaType: 'image/png' },
+          ],
+        },
+      })
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'message.delta',
+        payload: expect.objectContaining({ text: 'hello' }),
+      })
+    );
   });
 
-  it('projects thinking, prose, tools, and prose-after-tool in source order', async () => {
+  it('projects thinking, prose, tools, custom rows, and prose-after-boundary in source order', async () => {
     const stub = createPiSdkStub({ manualPrompt: true });
     const events: RuntimeEventDraft[] = [];
     const session = createSession(stub, events);
-    await session.startSend({ logicalSessionId: 'logical-1', requestId: 'turn-1', text: 'go' });
+    await session.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'attempt-1',
+      text: 'go',
+    });
     const pi = stub.sessionFor('/repo');
 
     pi?.emit({ type: 'agent_start' });
@@ -116,11 +148,40 @@ describe('PiWorkerSession', () => {
       args: { path: 'a.ts' },
     });
     pi?.emit({
+      type: 'tool_execution_update',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      args: { path: 'b.ts' },
+    });
+    pi?.emit({
       type: 'tool_execution_end',
       toolCallId: 'tool-1',
       toolName: 'read',
       result: { content: 'done' },
       isError: false,
+    });
+    const toJson = vi.fn(() => ({ leaked: true }));
+    pi?.emit({
+      type: 'message_end',
+      message: {
+        role: 'custom',
+        customType: 'extension.note',
+        content: [{ type: 'text', text: 'visible' }],
+        details: { count: 1, factory: () => 'not serializable', toJSON: toJson },
+      },
+    });
+    pi?.emit({
+      type: 'message_end',
+      message: {
+        role: 'custom',
+        customType: 'extension.hidden',
+        content: 'hidden',
+        display: false,
+      },
+    });
+    pi?.emit({
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'extension.entry', data: { ok: true } },
     });
     pi?.emit({
       type: 'message_update',
@@ -135,7 +196,10 @@ describe('PiWorkerSession', () => {
         'thinking.completed',
         'message.delta',
         'tool.started',
+        'tool.updated',
         'tool.completed',
+        'custom.message',
+        'custom.entry',
         'session.completed',
       ].includes(event.type)
     );
@@ -145,16 +209,89 @@ describe('PiWorkerSession', () => {
       'thinking.completed',
       'message.delta',
       'tool.started',
+      'tool.updated',
       'tool.completed',
+      'custom.message',
+      'custom.entry',
       'message.delta',
       'session.completed',
     ]);
+    expect(events).not.toContainEqual(
+      expect.objectContaining({
+        type: 'custom.message',
+        payload: expect.objectContaining({ customType: 'extension.hidden' }),
+      })
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'custom.message',
+        payload: expect.objectContaining({
+          customType: 'extension.note',
+          content: expect.stringContaining('"count": 1'),
+        }),
+      })
+    );
+    expect(toJson).not.toHaveBeenCalled();
     const messageIds = events.flatMap((event) =>
       event.type === 'message.started' && event.payload.role === 'assistant'
         ? [event.payload.messageId]
         : []
     );
     expect(new Set(messageIds).size).toBe(messageIds.length);
+    expect(messageIds).toHaveLength(2);
+  });
+
+  it('uses cumulative snapshots first and falls back to deltas without dropping or duplicating text', async () => {
+    const stub = createPiSdkStub({ manualPrompt: true });
+    const events: RuntimeEventDraft[] = [];
+    const session = createSession(stub, events);
+    await session.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-stream',
+      attemptId: 'attempt-stream',
+      text: 'go',
+    });
+    const pi = stub.sessionFor('/repo');
+
+    pi?.emit({
+      type: 'message_update',
+      message: { role: 'assistant', content: [] },
+      assistantMessageEvent: { type: 'text_delta', delta: 'ha' },
+    });
+    pi?.emit({
+      type: 'message_update',
+      message: { role: 'assistant', content: [] },
+      assistantMessageEvent: { type: 'text_delta', delta: 'ha' },
+    });
+    pi?.emit({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'haha' }] },
+      assistantMessageEvent: { type: 'text_end', content: 'haha' },
+    });
+    for (const text of ['haha!', 'haha!!']) {
+      pi?.emit({
+        type: 'message_update',
+        message: { role: 'assistant', content: [{ type: 'text', text }] },
+        assistantMessageEvent: { type: 'text_delta', delta: '!' },
+      });
+    }
+    pi?.emit({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'haha' }] },
+      assistantMessageEvent: { type: 'text_end', content: 'haha' },
+    });
+    pi?.emit({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'haha!!' }] },
+      assistantMessageEvent: { type: 'toolcall_delta', delta: '{"path":"secret"}' },
+    });
+
+    const chunks = events.flatMap((event) =>
+      event.type === 'message.delta' ? [event.payload.text] : []
+    );
+    expect(chunks).toEqual(['ha', 'ha', '!', '!']);
+    expect(chunks.join('')).toBe('haha!!');
+    expect(chunks.join('')).not.toContain('secret');
   });
 
   it('stop drains helpers and emits exactly one stopped terminal', async () => {
@@ -164,6 +301,7 @@ describe('PiWorkerSession', () => {
     await session.startSend({
       logicalSessionId: 'logical-1',
       requestId: 'turn-stop',
+      attemptId: 'attempt-stop',
       text: 'hold',
     });
 
@@ -201,6 +339,7 @@ describe('PiWorkerSession', () => {
     await session.startSend({
       logicalSessionId: 'logical-1',
       requestId: 'turn-abort-fail',
+      attemptId: 'attempt-abort-fail',
       text: 'go',
     });
 
@@ -224,7 +363,12 @@ describe('PiWorkerSession', () => {
     const stub = createPiSdkStub({ promptError: 'provider unavailable' });
     const events: RuntimeEventDraft[] = [];
     const session = createSession(stub, events);
-    await session.startSend({ logicalSessionId: 'logical-1', requestId: 'turn-fail', text: 'go' });
+    await session.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-fail',
+      attemptId: 'attempt-fail',
+      text: 'go',
+    });
     await vi.waitFor(() => {
       expect(events.some((event) => event.type === 'session.failed')).toBe(true);
     });
@@ -236,9 +380,19 @@ describe('PiWorkerSession', () => {
   it('rejects mismatched sessions, concurrent sends, and bootstrap after disposal', async () => {
     const stub = createPiSdkStub({ manualPrompt: true });
     const session = createSession(stub, []);
-    await session.startSend({ logicalSessionId: 'logical-1', requestId: 'turn-1', text: 'go' });
+    await session.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'attempt-1',
+      text: 'go',
+    });
     await expect(
-      session.startSend({ logicalSessionId: 'logical-1', requestId: 'turn-2', text: 'again' })
+      session.startSend({
+        logicalSessionId: 'logical-1',
+        requestId: 'turn-2',
+        attemptId: 'attempt-2',
+        text: 'again',
+      })
     ).rejects.toMatchObject({ code: 'WORKER_SESSION_BUSY', retryable: true });
     await expect(session.stop({ logicalSessionId: 'other', reason: 'user' })).rejects.toMatchObject(
       { code: 'WORKER_SESSION_MISMATCH' }

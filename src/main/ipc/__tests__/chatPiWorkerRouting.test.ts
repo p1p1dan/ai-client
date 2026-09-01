@@ -98,16 +98,25 @@ describe('Pi WorkerSlot chat routing', () => {
     ).resolves.toEqual({ requestId: 'create-1' });
 
     expect(recordCreated).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 's1', agent: 'pi', permissionPreference: undefined })
+      expect.objectContaining({ sessionId: 's1', agent: 'pi' })
     );
-    expect(createSession).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 's1', agent: 'pi', model: 'glm/glm-5', effort: 'high' })
-    );
+    expect(createSession).toHaveBeenCalledWith({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      model: 'glm/glm-5',
+      effort: 'high',
+      ownerWebContentsId: 7,
+    });
   });
 
   it('routes send, stop, close, and Extension UI responses to the Pi authority', async () => {
     await expect(
-      invoke('chat:send', { sessionId: 's1', text: 'hello', effort: 'xhigh' })
+      invoke('chat:send', {
+        sessionId: 's1',
+        attemptId: 'attempt-s1',
+        text: 'hello',
+        effort: 'xhigh',
+      })
     ).resolves.toEqual({ requestId: 'send-1' });
     await expect(invoke('chat:stop', { sessionId: 's1' })).resolves.toEqual({
       requestId: 'stop-1',
@@ -125,6 +134,7 @@ describe('Pi WorkerSlot chat routing', () => {
 
     expect(send).toHaveBeenCalledWith({
       sessionId: 's1',
+      attemptId: 'attempt-s1',
       text: 'hello',
       effort: 'xhigh',
       ownerWebContentsId: 7,
@@ -160,7 +170,7 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(handleRuntimeEvent).toHaveBeenCalledWith(event);
   });
 
-  it('refuses resume and legacy permission/question routes instead of reviving a singleton host', async () => {
+  it('refuses resume and exposes no legacy permission/question handler', async () => {
     await expect(
       invoke('chat:resumeSession', {
         sessionId: 's1',
@@ -168,11 +178,8 @@ describe('Pi WorkerSlot chat routing', () => {
         workspacePath: '/repo',
       })
     ).rejects.toThrow(/pi_resume_not_implemented/);
-    await expect(
-      invoke('chat:respondPermission', { sessionId: 's1', permissionId: 'p1', allow: false })
-    ).rejects.toThrow(/Pi approvals use Extension UI/);
-    await expect(
-      invoke('chat:respondQuestion', { sessionId: 's1', questionId: 'q1', cancel: true })
-    ).rejects.toThrow(/Pi questions use Extension UI/);
+    expect(handlers.has('chat:updatePermission')).toBe(false);
+    expect(handlers.has('chat:respondPermission')).toBe(false);
+    expect(handlers.has('chat:respondQuestion')).toBe(false);
   });
 });

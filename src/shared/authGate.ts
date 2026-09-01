@@ -12,7 +12,7 @@
 
 import type { CredentialMode } from './credentialMode';
 import type { AuthState } from './types/auth';
-import type { ClaudeRuntimeStatus } from './types/claudeRuntime';
+import type { PiRuntimeStatus } from './types/piRuntime';
 
 // ---------------------------------------------------------------------------
 // resolveGateDecision
@@ -85,7 +85,7 @@ export interface ResolveGateDecisionInput {
   /** `resolveSkipAuthGate({env, isPackaged})` — the dev/team-track escape hatch. */
   skipAuthGate: boolean;
   /** `null` while still detecting. */
-  runtimeStatus: ClaudeRuntimeStatus | null;
+  runtimeStatus: PiRuntimeStatus | null;
 }
 
 export interface GateDecision {
@@ -210,10 +210,7 @@ export function resolveGateDecision(input: ResolveGateDecisionInput): GateDecisi
   // shell's offer — "install the Claude CLI and come back" — was not merely
   // dead but WRONG: a system CLI is never what we execute, so installing one
   // would not have fixed the user's problem.
-  if (
-    input.runtimeStatus.kind === 'not-installed' ||
-    input.runtimeStatus.kind === 'vscode-extension-only'
-  ) {
+  if (input.runtimeStatus.kind === 'unavailable') {
     return { shell: 'runtime-unavailable' };
   }
 

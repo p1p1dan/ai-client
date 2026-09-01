@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { ChatAgentDefaultsSection } from '@/components/settings/ChatAgentDefaultsSection';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -249,13 +248,6 @@ export function AISettings() {
           {t('Configure AI-powered features for code generation and review')}
         </p>
       </div>
-
-      {/* D48 S3 §5.4 — chat agent permission templates. Deliberately NOT in
-          AgentSettings.tsx: that panel manages terminal/CLI agents
-          (`BuiltinAgentId`), a different axis from a chat session's
-          `AgentWireName` binding, and merging the two is how a value from one
-          table ends up driving the other. */}
-      <ChatAgentDefaultsSection />
 
       {/* Commit Message Generator Section */}
       <div className="border-t pt-6">

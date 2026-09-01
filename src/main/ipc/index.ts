@@ -14,7 +14,6 @@ import {
 } from './claudeCompletions';
 import { registerClaudeConfigHandlers } from './claudeConfig';
 import { registerClaudeProviderHandlers } from './claudeProvider';
-import { registerClaudeRuntimeHandlers } from './claudeRuntime';
 import { registerClaudeSessionsHandlers } from './claudeSessions';
 import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
@@ -28,6 +27,7 @@ import {
 import { registerFolderHandlers } from './folder';
 import { clearAllGitServices, registerGitHandlers } from './git';
 import { autoStartHapi, cleanupHapi, cleanupHapiSync, registerHapiHandlers } from './hapi';
+import { registerPiRuntimeHandlers } from './piRuntime';
 import { cleanupWorkerManager, cleanupWorkerManagerSync } from './workerManager';
 
 export { autoStartHapi };
@@ -82,7 +82,7 @@ export function registerIpcHandlers(): void {
   registerClaudeConfigHandlers();
   registerClaudeCompletionsHandlers();
   registerClaudeSessionsHandlers();
-  registerClaudeRuntimeHandlers();
+  registerPiRuntimeHandlers();
   registerWebInspectorHandlers();
   registerTempWorkspaceHandlers();
   registerTmuxHandlers();

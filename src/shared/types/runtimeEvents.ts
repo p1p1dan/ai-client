@@ -33,6 +33,8 @@ export type RuntimeEventType =
   | 'tool.started'
   | 'tool.updated'
   | 'tool.completed'
+  | 'custom.message'
+  | 'custom.entry'
   | 'permission.requested'
   | 'permission.resolved'
   | 'question.requested'
@@ -221,6 +223,8 @@ export interface MessageStartedEvent extends RuntimeEventBase {
   payload: {
     messageId: string;
     role: 'user' | 'assistant' | 'system' | 'error';
+    /** Renderer-owned pending-send identity, present on authoritative Pi user echoes. */
+    attemptId?: string;
     /**
      * Round-2 P0 (optional-field addition, protocol version unchanged): user
      * turn's attachment metadata, when the turn carried any. Old
@@ -285,6 +289,26 @@ export interface ToolCompletedEvent extends RuntimeEventBase {
     output?: unknown;
     error?: string;
   };
+}
+
+interface CustomTimelinePayload {
+  messageId: string;
+  customType: string;
+  content: string;
+}
+
+/** Generic serializable fallback for a Pi extension custom message. */
+export interface CustomMessageEvent extends RuntimeEventBase {
+  type: 'custom.message';
+  sessionId: string;
+  payload: CustomTimelinePayload;
+}
+
+/** Generic serializable fallback for a Pi extension custom session entry. */
+export interface CustomEntryEvent extends RuntimeEventBase {
+  type: 'custom.entry';
+  sessionId: string;
+  payload: CustomTimelinePayload;
 }
 
 /**
@@ -1490,6 +1514,8 @@ export type RuntimeEvent =
   | ToolStartedEvent
   | ToolUpdatedEvent
   | ToolCompletedEvent
+  | CustomMessageEvent
+  | CustomEntryEvent
   | PermissionRequestedEvent
   | PermissionResolvedEvent
   | QuestionRequestedEvent

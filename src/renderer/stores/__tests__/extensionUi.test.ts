@@ -83,6 +83,47 @@ describe('useExtensionUiStore', () => {
       captured?.(requestEvent('q1'));
       expect(useExtensionUiStore.getState().pending.map((p) => p.uiRequestId)).toEqual(['q1']);
     });
+
+    it('keeps A/B dialogs isolated when one slot is cancelled and the other answers', async () => {
+      useExtensionUiStore.getState().init();
+      captured?.(requestEvent('qa', 'runtime-a'));
+      captured?.({
+        ...requestEvent('qb', 'runtime-b'),
+        sessionId: 's2',
+        seq: 2,
+      });
+      expect(
+        useExtensionUiStore
+          .getState()
+          .pending.map((dialog) => [dialog.sessionId, dialog.runtimeId, dialog.uiRequestId])
+      ).toEqual([
+        ['s1', 'runtime-a', 'qa'],
+        ['s2', 'runtime-b', 'qb'],
+      ]);
+
+      captured?.({
+        type: 'extensionUi.cancelled',
+        seq: 3,
+        timestamp: 3,
+        sessionId: 's1',
+        payload: {
+          runtimeId: 'runtime-a',
+          uiRequestIds: ['qa'],
+          reason: 'session_replaced',
+        },
+      });
+      expect(useExtensionUiStore.getState().pending.map((dialog) => dialog.uiRequestId)).toEqual([
+        'qb',
+      ]);
+
+      await useExtensionUiStore.getState().answer('qb', 'b');
+      expect(lastPayload()).toEqual({
+        runtimeId: 'runtime-b',
+        uiRequestId: 'qb',
+        ok: true,
+        value: 'b',
+      });
+    });
   });
 
   describe('answering', () => {

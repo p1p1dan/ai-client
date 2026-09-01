@@ -1,10 +1,5 @@
-import {
-  agentDefaultEffort,
-  agentDefaultModel,
-  agentDefaultPermission,
-  resolveDraftPermissionPreference,
-} from '@shared/models/chatAgentDefaults';
-import { sessionAgent } from '@shared/types/agentWire';
+import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
+import { PI_AGENT } from '@shared/types/agentWire';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { FileSearchResult } from '@shared/types/search';
 import {
@@ -26,7 +21,7 @@ import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
-import { useSettingsHydrated, useSettingsStore } from '@/stores/settings';
+import { useSettingsStore } from '@/stores/settings';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import {
   classifyAssistantProgress,
@@ -52,14 +47,11 @@ import {
   totalAttachmentBytes,
   toWireAttachments,
 } from './attachments';
-import { ComposerAgentPicker } from './ComposerAgentPicker';
 import { ComposerAttachMenu } from './ComposerAttachMenu';
 import { ComposerModelTrigger } from './ComposerModelTrigger';
-import { ComposerPermissionTrigger } from './ComposerPermissionTrigger';
 import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { deriveChatEmptySurface } from './chatEmptyState';
-import { AGENT_UNAVAILABLE_SEND_ERROR, isSendableAgent } from './composerAgentPickerModel';
 import { resolveActiveTarget } from './composerTarget';
 import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
@@ -84,7 +76,6 @@ import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
   decideAdmittedTimeoutOutcome,
   decideFailureAffordance,
-  decidePendingResolution,
   decideRunEntryOutcome,
   decideSendAction,
   deriveActionButtons,
@@ -104,7 +95,6 @@ import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { decideSendPreamble } from './sendPreamble';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
-import { clearDraftPermission, readDraftPermission } from './sessionPreferenceStore';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useHostStatus } from './useHostStatus';
 import { useQueueRelease } from './useQueueRelease';
@@ -119,19 +109,6 @@ interface ChatComposerProps {
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
   /** Fires once runSend's guards pass. Origin lets ChatWorkspace distinguish an explicit Send/Retry from an automatic queue release. */
   onSendStart?: (origin: RunSendOrigin) => void;
-  /**
-   * D48 S1: whether this session's agent binding is already settled
-   * (`isChatAgentBindingLocked`). Computed in `ChatWorkspace` because the
-   * `sendAttempted` half of that criterion is its local latch and never
-   * reaches a store — see `sessionBinding.ts`.
-   */
-  agentBindingLocked?: boolean;
-  /**
-   * D48 S1: the raw `sendAttempted` latch behind `agentBindingLocked`'s first
-   * arm, passed unfolded because `setDraftSessionAgent`'s option of that name
-   * is a contract about that one fact — see `ComposerAgentPicker`'s prop doc.
-   */
-  agentSendAttempted?: boolean;
 }
 
 /** T-07③: popup page size. Kept next to the truncation hint that reports it. */
@@ -337,14 +314,7 @@ function deadlineAt(durationMs: number): () => boolean {
   return () => Date.now() >= at;
 }
 
-export function ChatComposer({
-  mode,
-  disabled,
-  onAddRepository,
-  onSendStart,
-  agentBindingLocked = false,
-  agentSendAttempted = false,
-}: ChatComposerProps) {
+export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   // T-19 fix review (R5): reverted from batch 3's queue-based "failure
@@ -491,7 +461,6 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
   const stopActiveSession = useChatSessionsStore((state) => state.stopActiveSession);
-  const respondQuestion = useChatSessionsStore((state) => state.respondQuestion);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
@@ -557,23 +526,13 @@ export function ChatComposer({
   const canSend = Boolean(activeSessionId && cwd && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
-  // D48 S2 §4.3-1: the model trigger is handed the SAME binding the agent
-  // picker shows — `sessionAgent` is the one reader that knows what an unset
-  // binding means, and two independent resolutions of "which agent" is how a
-  // menu ends up offering the other runtime's catalog.
-  const composerAgent = sessionAgent(activeSession ?? {});
+  const composerAgent = PI_AGENT;
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
-  // D48 S3 §5.5-3 (C15): app settings rehydrate over an async IPC round trip,
-  // and the posture a first send materialises is PERMANENT for that session
-  // (resume replays the snapshot and never revisits the template). Sending a
-  // factory value that nobody chose would pin it forever, so the send path has
-  // to know whether what it is reading is real yet.
-  const settingsHydrated = useSettingsHydrated();
   // R11 (round-2 iteration-2 review): the same Host-reported default the
   // resume paths (LeftNav/MessageTimeline) already resolve through — so the
   // live send path and ModelSelect's own display never diverge from what a
   // resume just pinned onto the Host registry entry.
-  const { status: hostStatus, retry: retryHost } = useHostStatus();
+  const { status: hostStatus } = useHostStatus();
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
   // T-19 decision 2.1: paste unlocks whenever the textarea does — only
@@ -803,27 +762,6 @@ export function ChatComposer({
     // (decision 2.2): the draft is now owned by the queue entry.
     updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
-
-    // Decision 4: a pending question on THIS session must never deadlock the
-    // queue behind an answer the user chose not to give — cancel it
-    // (non-destructive: SDK-side `allow` + empty answers, never a real
-    // rejection). A pending permission is left alone; the strip's hint
-    // (batch 3) explains why nothing sent yet.
-    const resolution = decidePendingResolution({
-      status: activeSession?.status ?? 'idle',
-      hasPendingQuestionHere: pendingQuestionHere,
-      hasPendingPermissionHere: pendingPermissionHere,
-    });
-    if (resolution.cancelQuestion) {
-      // m8 fix: a failed cancel must be visible — otherwise the queue looks
-      // permanently stuck with no explanation (status stays waiting_question,
-      // so decideQueueRelease holds `not-idle` forever with no hint why).
-      void respondQuestion({ cancel: true }).then((ok) => {
-        if (!ok) {
-          setQueueNotice('Could not dismiss the pending question — try answering it directly.');
-        }
-      });
-    }
   };
 
   // T-07 @ 文件搜索：150ms 防抖，cwd 缺失或 mention 关闭时清空结果。
@@ -1065,25 +1003,7 @@ export function ChatComposer({
       return 'skipped';
     }
     if (inFlightRef.current) return 'skipped';
-    // D48 S1 (A12): the Host has told us which agents it can run — refuse a
-    // turn bound to one that is not on that list instead of letting the create
-    // come back `agent_unsupported` after the draft is already consumed and
-    // the picker already locked. `undefined` (a Host build that predates the
-    // capability) deliberately does NOT trigger this; `isSendableAgent` owns
-    // that distinction and is truth-tabled next door.
-    //
-    // Placed with the other guard-fail returns, i.e. BEFORE `inFlightRef` is
-    // claimed and before `onSendStart?.()`: returning after either would wedge
-    // the composer shut for the run, or lock the binding for a turn that never
-    // went out.
-    const knownAgents = hostStatus.capabilities?.agents;
-    const agentAtEntry = sessionAgent(
-      useChatSessionsStore.getState().sessions.find((item) => item.id === activeSessionId) ?? {}
-    );
-    if (!isSendableAgent(knownAgents, agentAtEntry)) {
-      useChatSessionsStore.setState({ lastError: AGENT_UNAVAILABLE_SEND_ERROR });
-      return 'skipped';
-    }
+    const turnAgent = PI_AGENT;
     inFlightRef.current = true;
     inFlightSessionIdRef.current = activeSessionId;
     // F6: this attempt's cancellation token — handleStop bumps the shared
@@ -1094,12 +1014,6 @@ export function ChatComposer({
 
     const sessionId = activeSessionId;
     const workspacePath = cwd;
-    // D48 S2: `agentAtEntry` is the binding this turn was admitted under (read
-    // off the store snapshot the guard above already took), and both selections
-    // are keyed by it — which catalog a model id came from is not a detail the
-    // wire can recover, so resolving against the wrong agent would send a Claude
-    // id to Codex and be refused in Main (B18).
-    const turnAgent = agentAtEntry;
     // R11, D48 S2 form: an explicit per-(session, agent) choice, else this
     // agent's template, else NOTHING — `undefined` means `Automatic`, i.e. the
     // key leaves the payload and the runtime's own default serves the turn
@@ -1119,25 +1033,6 @@ export function ChatComposer({
         agentDefaultEffort(chatAgentDefaults, turnAgent)
       )
     );
-    // D48 S3 §5.5 — the permission template, resolved at the SAME commit point
-    // as the model and effort above, keyed by the SAME `turnAgent`, and for the
-    // same reason: which agent a posture belongs to is not something the wire
-    // can recover afterwards. `undefined` (no template, or settings not yet
-    // hydrated) drops the key entirely, so the runtime's own safe constant
-    // applies — byte for byte the pre-D48 path.
-    //
-    // Only the create payload carries it. A resume takes its posture from the
-    // session snapshot, which Main reads off the index row; this side does not
-    // get to re-supply a template for a chat that already started (C9).
-    const permissionPreference = resolveDraftPermissionPreference({
-      defaults: chatAgentDefaults,
-      agent: turnAgent,
-      settingsHydrated,
-      // What the user picked for THIS chat while it was still a draft. Outranks
-      // the template — "open this one under bypass" must not mean "change what
-      // every future chat opens under".
-      draft: readDraftPermission(sessionId, turnAgent) ?? undefined,
-    });
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
     // longer a fixed deadline predicted from the payload size — it is a
@@ -1161,10 +1056,6 @@ export function ChatComposer({
     const hostBound = preState.hostBoundSessionIds.includes(sessionId);
     const preSession = preState.sessions.find((session) => session.id === sessionId);
     const knownIdentity = preSession?.runtimeIdentity ?? null;
-    // S2 (b): read off the same pre-IPC snapshot as the identity above — the
-    // two travel together (a resume handle only means something paired with
-    // the agent that issued it) and must describe the same instant.
-    const agent = sessionAgent(preSession ?? {});
     const preamble = decideSendPreamble({ hostBound, runtimeIdentity: knownIdentity });
 
     // Starting a fresh send invalidates any prior failure's retryable prompt:
@@ -1314,9 +1205,10 @@ export function ChatComposer({
       },
       baselineMessageId
     );
-    pendingAttemptId = `${sessionId}:${sendOwner}`;
+    const attemptId = `${sessionId}:${sendOwner}`;
+    pendingAttemptId = attemptId;
     usePendingUserMessagesStore.getState().publish({
-      attemptId: pendingAttemptId,
+      attemptId,
       sessionId,
       text: committed.text,
       attachments: drafts.map((draft) => ({
@@ -1437,7 +1329,7 @@ export function ChatComposer({
       if (event.sessionId === sessionId) {
         // R15: pulled out to a pure, unit-tested helper (assistantProgress.ts)
         // instead of the inline field-poke this used to be.
-        if (isUserEchoForSend(event, sessionId)) {
+        if (isUserEchoForSend(event, sessionId, attemptId)) {
           sawUserEcho = true;
         }
         if (classifyAssistantProgress(event, assistantMessageIds) === 'assistant') {
@@ -1543,12 +1435,11 @@ export function ChatComposer({
       });
     };
 
-    /** close → sleep(120) → create → wait for session.created. */
+    /** Create or claim the session's authoritative WorkerSlot, then wait for its event. */
     const runCreateSequence = async (): Promise<'ok' | 'fatal' | 'timeout'> => {
-      // Drop Host registry entry so createSession is not "Session already exists".
-      await window.electronAPI.chat.closeSession({ sessionId }).catch(() => undefined);
-      await sleep(120);
-
+      // WorkerManager.createSession is idempotent for an existing logical
+      // session. Never close/sleep/recreate here: that was a singleton Host
+      // registry workaround and would discard an authoritative slot.
       sawSessionCreated = false;
       // F2b (round-4 Codex re-review): reset BEFORE dispatch, not just after
       // the response resolves — without this, `currentRequestId` still held
@@ -1568,11 +1459,7 @@ export function ChatComposer({
         // key on some paths, and "no model" has to be indistinguishable from
         // "field not supported" for the runtime default to apply.
         ...(model ? { model } : {}),
-        agent,
         ...(effort ? { effort } : {}),
-        // Same B11 rule as `model`: absent, never an `undefined` value — "no
-        // template" has to be indistinguishable from "field not supported".
-        ...(permissionPreference ? { permissionPreference } : {}),
       });
       setCurrentRequestId(createResult?.requestId ?? null);
 
@@ -1589,12 +1476,6 @@ export function ChatComposer({
           : [...state.hostBoundSessionIds, sessionId],
         lastError: null,
       }));
-      // The draft intent has done its job: it is in the create payload, and from
-      // here the session's own snapshot is the posture. Dropping it means a
-      // later mid-session change can never be outranked by what someone picked
-      // before the chat existed — the silent-privilege swap R18 names — and it
-      // keeps the map from growing a row per chat forever.
-      clearDraftPermission(sessionId);
       return 'ok';
     };
 
@@ -1632,6 +1513,7 @@ export function ChatComposer({
       setCurrentRequestId(null);
       const sendResult = await window.electronAPI.chat.send({
         sessionId,
+        attemptId,
         text: trimmed,
         // Same B11 rule as the create payload above. On the Codex axis this key
         // is what D40's `turn/start` override rides on, and an override is
@@ -1762,7 +1644,6 @@ export function ChatComposer({
             // model to nothing EXPLICITLY, which is not what `Automatic` means —
             // it means the field never existed.
             ...(model ? { model } : {}),
-            agent,
             ...(effort ? { effort } : {}),
           })
           .catch(() => undefined);
@@ -2626,62 +2507,9 @@ export function ChatComposer({
     <ComposerModelTrigger
       sessionId={activeSessionId}
       agent={composerAgent}
-      hostDefaultModel={hostStatus.settings?.model}
       hostState={hostStatus.state}
       mode={mode}
       disabled={disabled || busy || sending}
-    />
-  ) : null;
-
-  // D48 S1: the chat-agent entry point, `capabilities.agents`'s first UI
-  // consumer. Its gate is deliberately NOT the model trigger's
-  // `disabled || busy || sending`: a model change applies to the next turn, so
-  // it only has to stand down while one is running, whereas an agent change
-  // never applies to an existing session at all. `locked` is the whole rule,
-  // and `disabled` stays only as the "there is nowhere to put this draft"
-  // kill switch. Adding busy/sending on top would be a second, weaker copy of
-  // the lock: once a turn is in flight the `sendAttempted` latch has already
-  // set `locked`.
-  const agentPicker = activeSessionId ? (
-    <ComposerAgentPicker
-      sessionId={activeSessionId}
-      agents={hostStatus.capabilities?.agents}
-      hostState={hostStatus.state}
-      locked={agentBindingLocked}
-      sendAttempted={agentSendAttempted}
-      disabled={disabled}
-      onRetryHost={() => void retryHost()}
-    />
-  ) : null;
-
-  // D48 S4 §6.3: the live permission chip. Its gate is the model trigger's
-  // (`busy || sending`) and NOT the picker's `agentBindingLocked` — the whole
-  // requirement is that an established chat can still change tier (D13). It
-  // Renders on any Host that reports `permissionPolicy`; an old Host gets no
-  // control rather than a dead one (D15).
-  //
-  // A zero-turn draft gets it too (2026-08-25). It used to be hidden there —
-  // the chip is a mirror of the Host's echo and a draft has no echo — but the
-  // consequence was that a chat could only START under the per-agent template:
-  // to open one under bypass you changed what every future chat opens under, or
-  // you sent a turn under the wrong posture and switched afterwards. In the
-  // draft state the control records an intent instead of sending a request, and
-  // `resolveDraftPermissionPreference` materialises it at the first send.
-  const permissionControl = activeSessionId ? (
-    <ComposerPermissionTrigger
-      sessionId={activeSessionId}
-      agent={composerAgent}
-      capabilityPermissionPolicy={hostStatus.capabilities?.permissionPolicy}
-      hostState={hostStatus.state}
-      mode={mode}
-      busy={busy}
-      sending={sending}
-      disabled={disabled}
-      // D11: the chip may not reach the template layer itself, so the one value
-      // it needs for a draft is handed over from here — the same
-      // `chatAgentDefaults` this component already resolves model and effort
-      // from at send time.
-      templatePreference={agentDefaultPermission(chatAgentDefaults, composerAgent)}
     />
   ) : null;
 
@@ -2926,9 +2754,7 @@ export function ChatComposer({
                 cross-asserted against each other. */}
             <div className={composerBarClass('session')}>
               {attachButton}
-              {agentPicker}
               {modelEffortControls}
-              {permissionControl}
               <div className={composerActionGroupClass()}>{actionButtons}</div>
             </div>
           </div>
@@ -2943,15 +2769,10 @@ export function ChatComposer({
                   status → actions, so the two controls that start a message
                   sit together at the left and the status text takes whatever
                   space is left instead of owning the leading position.
-                  D48 S1 §3.2 extends that same reasoning by one slot: the
-                  agent comes BEFORE the model, because which models exist is
-                  a function of which agent runs the chat — reading order
-                  follows the causal order. */}
+                  Pi-only keeps model/effort as the sole runtime selection. */}
             <div className={composerBarClass('empty')}>
               {attachButton}
-              {agentPicker}
               {modelEffortControls}
-              {permissionControl}
               {renderStatusLine('flex min-w-0 flex-1 items-center gap-1.5')}
               <div className={composerActionGroupClass()}>{actionButtons}</div>
             </div>

@@ -22,8 +22,8 @@ export interface PendingUserMessage {
 interface PendingUserMessagesStore {
   bySession: Record<string, PendingUserMessage[]>;
   publish: (message: PendingUserMessage) => void;
-  /** Pair exactly one attempt with one authoritative user echo (FIFO). */
-  acknowledgeNext: (sessionId: string, messageId: string) => void;
+  /** Pair one renderer attempt with its exact authoritative Pi user echo. */
+  acknowledgeAttempt: (sessionId: string, attemptId: string, messageId: string) => void;
   clear: (attemptId: string) => void;
   pruneSessions: (sessionIds: readonly string[]) => void;
 }
@@ -42,17 +42,25 @@ export const usePendingUserMessagesStore = create<PendingUserMessagesStore>()((s
         ],
       },
     })),
-  acknowledgeNext: (sessionId, messageId) =>
+  acknowledgeAttempt: (sessionId, attemptId, messageId) =>
     set((state) => {
       const messages = state.bySession[sessionId];
       if (!messages || messages.length === 0) return state;
-      // Runtime events may be redelivered. One authoritative id owns exactly
-      // one pending attempt; replaying it must never advance the FIFO again.
-      if (messages.some((message) => message.authoritativeMessageId === messageId)) return state;
-      const index = messages.findIndex((message) => message.authoritativeMessageId == null);
+      const index = messages.findIndex((message) => message.attemptId === attemptId);
       if (index < 0) return state;
+      const current = messages[index];
+      if (!current || current.authoritativeMessageId === messageId) return state;
+      if (
+        current.authoritativeMessageId != null ||
+        messages.some(
+          (message, messageIndex) =>
+            messageIndex !== index && message.authoritativeMessageId === messageId
+        )
+      ) {
+        return state;
+      }
       const next = [...messages];
-      next[index] = { ...next[index], authoritativeMessageId: messageId };
+      next[index] = { ...current, authoritativeMessageId: messageId };
       return { bySession: { ...state.bySession, [sessionId]: next } };
     }),
   clear: (attemptId) =>

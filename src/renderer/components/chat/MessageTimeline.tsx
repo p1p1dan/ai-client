@@ -198,8 +198,8 @@ export function MessageTimeline({
       ? (state.bySession[sessionId] ?? EMPTY_PENDING_USER_MESSAGES)
       : EMPTY_PENDING_USER_MESSAGES
   );
-  const respondPermission = useChatSessionsStore((state) => state.respondPermission);
   const pendingPermissions = useChatSessionsStore((state) => state.pendingPermissions);
+  const respondPermission = async () => false;
   const canRespondPermission = useMemo(
     () => (permissionId: string | undefined) =>
       canRespondToPermission(pendingPermissions, sessionId, permissionId),

@@ -51,6 +51,9 @@ interface TurnProjection {
 interface ActiveTurn {
   token: number;
   requestId: string;
+  attemptId: string;
+  userText: string;
+  attachmentMetadata: Array<{ kind: 'image' | 'text'; mediaType: string; name?: string }>;
   stopRequested: boolean;
   terminal: boolean;
   pendingError: string | null;
@@ -129,6 +132,95 @@ function extractTextContent(content: unknown): string | undefined {
   return undefined;
 }
 
+function extractAllTextContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (typeof part !== 'object' || part === null || !('type' in part)) return '';
+      const typed = part as { type: unknown; text?: unknown };
+      return typed.type === 'text' && typeof typed.text === 'string' ? typed.text : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+type StreamUpdateSource = 'delta' | 'snapshot';
+
+function takeStreamUpdate(
+  previous: string,
+  update: string,
+  source: StreamUpdateSource
+): { chunk: string; cumulative: string } {
+  if (!update) return { chunk: '', cumulative: previous };
+  if (source === 'delta') return { chunk: update, cumulative: previous + update };
+  if (!previous) return { chunk: update, cumulative: update };
+  if (update === previous || previous.startsWith(update)) {
+    return { chunk: '', cumulative: previous };
+  }
+  if (update.startsWith(previous)) {
+    return { chunk: update.slice(previous.length), cumulative: update };
+  }
+
+  const maxOverlap = Math.min(previous.length, Math.max(0, update.length - 1), 64);
+  for (let length = maxOverlap; length >= 2; length -= 1) {
+    if (previous.endsWith(update.slice(0, length))) {
+      return { chunk: update.slice(length), cumulative: previous + update.slice(length) };
+    }
+  }
+  return { chunk: update, cumulative: previous + update };
+}
+
+const CUSTOM_TIMELINE_CONTENT_MAX = 16_000;
+
+function sanitizeCustomValue(
+  value: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): unknown {
+  if (depth > 8) return '[truncated]';
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'bigint') return String(value);
+  if (typeof value === 'function' || typeof value === 'symbol') return undefined;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => sanitizeCustomValue(item, depth + 1, seen))
+      .filter((item) => item !== undefined);
+  }
+  if (typeof value !== 'object') return String(value);
+  if (seen.has(value)) return '[circular]';
+  seen.add(value);
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const next = sanitizeCustomValue(item, depth + 1, seen);
+    if (next !== undefined) sanitized[key] = next;
+  }
+  return sanitized;
+}
+
+function serializeCustomValue(value: unknown): string {
+  if (value === undefined) return '';
+  try {
+    return JSON.stringify(sanitizeCustomValue(value), null, 2) ?? '';
+  } catch {
+    return '[unserializable value]';
+  }
+}
+
+function customTimelineContent(content: unknown, details: unknown): string {
+  const text = extractAllTextContent(content);
+  const serialized = serializeCustomValue(details);
+  const combined = serialized
+    ? `${text ? `${text}\n\n` : ''}\`\`\`json\n${serialized}\n\`\`\``
+    : text;
+  if (combined.length <= CUSTOM_TIMELINE_CONTENT_MAX) return combined;
+  return `${combined.slice(0, CUSTOM_TIMELINE_CONTENT_MAX)}\n[truncated]`;
+}
+
 export function buildPiWorkerPrompt(
   text: string,
   attachments: SessionAttachment[] | undefined
@@ -171,6 +263,7 @@ export class PiWorkerSession {
   private activeTurn: ActiveTurn | null = null;
   private turnSequence = 0;
   private assistantSequence = 0;
+  private customSequence = 0;
   private disposed = false;
 
   constructor(options: PiWorkerSessionOptions) {
@@ -241,6 +334,13 @@ export class PiWorkerSession {
     const turn: ActiveTurn = {
       token: ++this.turnSequence,
       requestId: input.requestId,
+      attemptId: input.attemptId,
+      userText: input.text,
+      attachmentMetadata: (input.attachments ?? []).map((attachment) => ({
+        kind: attachment.kind,
+        mediaType: attachment.mediaType,
+        ...(attachment.name ? { name: attachment.name } : {}),
+      })),
       stopRequested: false,
       terminal: false,
       pendingError: null,
@@ -377,9 +477,16 @@ export class PiWorkerSession {
             type: 'message.started',
             sessionId,
             requestId,
-            payload: { messageId, role: 'user' },
+            payload: {
+              messageId,
+              role: 'user',
+              attemptId: turn.attemptId,
+              ...(turn.attachmentMetadata.length > 0
+                ? { attachments: turn.attachmentMetadata }
+                : {}),
+            },
           });
-          const text = extractTextContent(message.content) ?? '';
+          const text = turn.userText || extractTextContent(message.content) || '';
           if (text) {
             this.emit({
               type: 'message.delta',
@@ -401,38 +508,83 @@ export class PiWorkerSession {
         const update = event.assistantMessageEvent as
           | { type?: string; delta?: string; content?: string }
           | undefined;
-        if (message?.role === 'assistant' && Array.isArray(message.content)) {
-          const fullText = message.content
-            .filter((part) => part.type === 'text')
-            .map((part) => part.text ?? '')
-            .join('');
-          if (fullText.length > projection.textSnapshot.length) {
-            const chunk = fullText.slice(projection.textSnapshot.length);
-            projection.textSnapshot = fullText;
-            this.emitTextDelta(turn, chunk);
-          }
-          const fullThinking = message.content
-            .filter((part) => part.type === 'thinking')
-            .map((part) => part.thinking ?? '')
-            .join('');
-          if (fullThinking.length > projection.thinkingSnapshot.length) {
-            const chunk = fullThinking.slice(projection.thinkingSnapshot.length);
-            projection.thinkingSnapshot = fullThinking;
-            this.emitThinkingDelta(turn, chunk);
-          }
-        } else if (update?.type === 'text_delta' && update.delta) {
-          projection.textSnapshot += update.delta;
-          this.emitTextDelta(turn, update.delta);
-        } else if (update?.type === 'thinking_delta' && update.delta) {
-          projection.thinkingSnapshot += update.delta;
-          this.emitThinkingDelta(turn, update.delta);
+        const fullText =
+          message?.role === 'assistant' && Array.isArray(message.content)
+            ? message.content
+                .filter((part) => part.type === 'text')
+                .map((part) => part.text ?? '')
+                .join('')
+            : '';
+        const fullThinking =
+          message?.role === 'assistant' && Array.isArray(message.content)
+            ? message.content
+                .filter((part) => part.type === 'thinking')
+                .map((part) => part.thinking ?? '')
+                .join('')
+            : '';
+
+        let textUpdate: { value: string; source: StreamUpdateSource } | null = null;
+        if (fullText) textUpdate = { value: fullText, source: 'snapshot' };
+        else if (update?.type === 'text_delta' && update.delta) {
+          textUpdate = { value: update.delta, source: 'delta' };
+        } else if (update?.type === 'text_end' && update.content) {
+          textUpdate = { value: update.content, source: 'snapshot' };
+        }
+        if (textUpdate) {
+          const next = takeStreamUpdate(
+            projection.textSnapshot,
+            textUpdate.value,
+            textUpdate.source
+          );
+          projection.textSnapshot = next.cumulative;
+          this.emitTextDelta(turn, next.chunk);
+        }
+
+        let thinkingUpdate: { value: string; source: StreamUpdateSource } | null = null;
+        if (fullThinking) thinkingUpdate = { value: fullThinking, source: 'snapshot' };
+        else if (update?.type === 'thinking_delta' && update.delta) {
+          thinkingUpdate = { value: update.delta, source: 'delta' };
+        } else if (update?.type === 'thinking_end' && update.content) {
+          thinkingUpdate = { value: update.content, source: 'snapshot' };
+        }
+        if (thinkingUpdate) {
+          const next = takeStreamUpdate(
+            projection.thinkingSnapshot,
+            thinkingUpdate.value,
+            thinkingUpdate.source
+          );
+          projection.thinkingSnapshot = next.cumulative;
+          this.emitThinkingDelta(turn, next.chunk);
         }
         break;
       }
       case 'message_end': {
         const message = event.message as
-          | { role?: string; stopReason?: string; errorMessage?: string }
+          | {
+              role?: string;
+              stopReason?: string;
+              errorMessage?: string;
+              customType?: string;
+              content?: unknown;
+              display?: boolean;
+              details?: unknown;
+            }
           | undefined;
+        if (message?.role === 'custom') {
+          if (message.display === false || !message.customType) break;
+          this.closeProseStream(turn);
+          this.emit({
+            type: 'custom.message',
+            sessionId,
+            requestId,
+            payload: {
+              messageId: this.nextCustomMessageId(turn),
+              customType: message.customType,
+              content: customTimelineContent(message.content, message.details),
+            },
+          });
+          break;
+        }
         if (message?.role !== 'assistant') break;
         const messageId = projection.proseClosed ? null : projection.assistantMessageId;
         if (messageId && ['stop', 'length', 'toolUse'].includes(message.stopReason ?? '')) {
@@ -452,7 +604,26 @@ export class PiWorkerSession {
         this.closeProseStream(turn);
         break;
       }
+      case 'entry_appended': {
+        const entry = event.entry as
+          | { type?: string; customType?: string; data?: unknown }
+          | undefined;
+        if (entry?.type !== 'custom' || !entry.customType) break;
+        this.closeProseStream(turn);
+        this.emit({
+          type: 'custom.entry',
+          sessionId,
+          requestId,
+          payload: {
+            messageId: this.nextCustomMessageId(turn),
+            customType: entry.customType,
+            content: customTimelineContent(undefined, entry.data),
+          },
+        });
+        break;
+      }
       case 'tool_execution_start': {
+        this.closeProseStream(turn);
         const messageId = this.ensureAssistant(turn);
         this.emit({
           type: 'tool.started',
@@ -528,8 +699,6 @@ export class PiWorkerSession {
       projection.assistantMessageId = messageId;
       projection.textBlockId = `${messageId}-text`;
       projection.thinkingBlockId = `${messageId}-thinking`;
-      projection.textSnapshot = '';
-      projection.thinkingSnapshot = '';
       projection.thinkingStarted = false;
       projection.thinkingCompleted = false;
       const model = this.handle?.session.model;
@@ -618,6 +787,11 @@ export class PiWorkerSession {
       requestId: turn.requestId,
       payload: { messageId, blockId, text },
     });
+  }
+
+  private nextCustomMessageId(turn: ActiveTurn): string {
+    this.customSequence += 1;
+    return `custom-${this.logicalSessionId}-${turn.token}-${this.customSequence}`;
   }
 
   private finishTurn(

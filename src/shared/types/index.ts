@@ -14,6 +14,7 @@ export * from './git';
 export * from './ipc';
 export * from './mcp';
 export * from './onboarding';
+export * from './piRuntime';
 export * from './plugins';
 export * from './prompts';
 export * from './remote';

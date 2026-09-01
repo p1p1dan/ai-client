@@ -187,6 +187,7 @@ async function main(): Promise<void> {
       {
         logicalSessionId: 'probe-explicit',
         requestId: firstTurn,
+        attemptId: 'probe-attempt-explicit',
         text: 'stream then wait',
       }
     );
@@ -230,6 +231,7 @@ async function main(): Promise<void> {
     await closing.slot.request<WorkerSendResult, WorkerSendPayload>('worker.send', {
       logicalSessionId: 'probe-app-close',
       requestId: closeTurn,
+      attemptId: 'probe-attempt-app-close',
       text: 'hold until app quit',
     });
     await waitForEvent(

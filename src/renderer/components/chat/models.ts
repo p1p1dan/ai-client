@@ -42,9 +42,8 @@
  * tabled under the repo's node-env vitest (`pureModuleImports.test.ts`).
  */
 
-import { CLAUDE_LEGACY_SHORT_NAMES, isModelAllowedForAgent } from '@shared/models/familyWhitelist';
 import type { AgentModelOption } from '@shared/types/agentCatalog';
-import { type AgentWireName, CLAUDE_CODE_AGENT } from '@shared/types/agentWire';
+import type { AgentWireName } from '@shared/types/agentWire';
 
 export interface ChatModel {
   id: string;
@@ -72,57 +71,14 @@ export const AUTOMATIC_MODEL_ID = 'automatic';
 
 export const AUTOMATIC_MODEL_LABEL = 'Automatic';
 
-/** `true` for the three pre-D48 Claude short names, and only on the Claude axis. */
-export function isLegacyClaudeShortName(agent: AgentWireName, modelId: string): boolean {
-  return agent === CLAUDE_CODE_AGENT && CLAUDE_LEGACY_SHORT_NAMES.includes(modelId);
-}
-
-function titleCase(token: string): string {
-  return token.length === 0 ? token : token[0].toUpperCase() + token.slice(1);
-}
-
-/**
- * The label for a selection that is not in the catalog.
- *
- * Two spellings, because the two cases mean different things to the user:
- * `Sonnet (legacy alias)` says "this is the old short name you picked, and the
- * CLI still translates it" (§4.4-1/§4.4-3), while `gpt-5.5 · unverified` says
- * "this id is yours, we simply cannot confirm it against today's catalog"
- * (§4.4-6). Neither is a promise that the id routes; both are honest about
- * which kind of leftover it is.
- */
-export function unverifiedModelLabel(agent: AgentWireName, modelId: string): string {
-  if (isLegacyClaudeShortName(agent, modelId)) {
-    return `${titleCase(modelId)} (legacy alias)`;
-  }
+export function unverifiedModelLabel(_agent: AgentWireName, modelId: string): string {
   return `${modelId} · unverified`;
 }
 
-/**
- * How far a model pick reaches on the Claude axis — one turn, and only one.
- *
- * Every Claude turn reopens `query()` with the options it was handed
- * [实测 06-probes P2], so a pick is re-stated per turn and changing it back is
- * free.
- */
-export const CLAUDE_MODEL_SCOPE_HINT = 'applies to the next turn';
+export const PI_MODEL_SCOPE_HINT = 'applies to the next turn';
 
-/**
- * How far a model pick reaches on the Codex axis — the whole thread.
- *
- * §4.6 防线 ① 连带口径, and it is a wire fact rather than a wording preference:
- * a `turn/start` override is written into the thread's standing settings and
- * broadcast back as `thread/settings/updated`, so turn N+1 keeps running the
- * model picked at turn N even though it sends no override at all
- * [实测 06-probes P1]. There is NO per-message model semantics on this axis, so
- * the two axes must not share one sentence — a per-turn phrasing here would be
- * plainly false.
- */
-export const CODEX_MODEL_SCOPE_HINT = 'applies to this thread from now on';
-
-/** The axis-dependent scope sentence for the model control (§4.6 防线 ①). */
-export function modelScopeHint(agent: AgentWireName): string {
-  return agent === CLAUDE_CODE_AGENT ? CLAUDE_MODEL_SCOPE_HINT : CODEX_MODEL_SCOPE_HINT;
+export function modelScopeHint(_agent?: AgentWireName): string {
+  return PI_MODEL_SCOPE_HINT;
 }
 
 /** The rows the menu offers: `Automatic` first, then the live catalog verbatim. */
@@ -207,12 +163,11 @@ function catalogHas(catalog: readonly AgentModelOption[], modelId: string): bool
  * as in Main because a `sonnet` reaching a Codex draft should be corrected where
  * the user can see it, not surfaced as an IPC rejection at send time.
  */
-function usableFor(agent: AgentWireName, candidate: string | null | undefined): string | null {
+function usableFor(_agent: AgentWireName, candidate: string | null | undefined): string | null {
   if (typeof candidate !== 'string') return null;
   const trimmed = candidate.trim();
-  if (trimmed.length === 0) return null;
-  if (trimmed === AUTOMATIC_MODEL_ID) return null;
-  return isModelAllowedForAgent(agent, trimmed) ? trimmed : null;
+  if (trimmed.length === 0 || trimmed === AUTOMATIC_MODEL_ID) return null;
+  return trimmed;
 }
 
 export interface ModelSelectionInput {

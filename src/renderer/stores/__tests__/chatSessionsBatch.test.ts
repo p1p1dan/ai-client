@@ -31,11 +31,8 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     lastError: null,
     historyErrors: {},
     selectSession: () => {},
-    setDraftSessionAgent: () => false,
     sendMessage: async () => {},
     stopActiveSession: async () => {},
-    respondPermission: async (_permissionId: string, _allow: boolean) => false,
-    respondQuestion: async () => false,
     initRuntime: () => () => {},
     ...overrides,
   };
@@ -102,6 +99,155 @@ describe('applyRuntimeEvents — fold semantics', () => {
         },
       ],
     });
+  });
+
+  it('keeps interleaved background streams in separate buckets and preserves tool/custom boundaries on reattachment', () => {
+    const otherSessionId = 'session-2';
+    const state = baseState({
+      sessions: [makeSession(), makeSession({ id: otherSessionId })],
+      activeSessionId: otherSessionId,
+    });
+    const events: RuntimeEvent[] = [
+      {
+        type: 'message.started',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { messageId: 'a1', role: 'assistant' },
+      },
+      {
+        type: 'message.delta',
+        seq: 2,
+        sessionId: SESSION_ID,
+        timestamp: 2,
+        payload: { messageId: 'a1', blockId: 'a-text', text: 'A1' },
+      },
+      {
+        type: 'message.started',
+        seq: 3,
+        sessionId: otherSessionId,
+        timestamp: 3,
+        payload: { messageId: 'b1', role: 'assistant' },
+      },
+      {
+        type: 'thinking.started',
+        seq: 4,
+        sessionId: otherSessionId,
+        timestamp: 4,
+        payload: { messageId: 'b1', blockId: 'b-thinking' },
+      },
+      {
+        type: 'thinking.delta',
+        seq: 5,
+        sessionId: otherSessionId,
+        timestamp: 5,
+        payload: { messageId: 'b1', blockId: 'b-thinking', text: 'plan' },
+      },
+      {
+        type: 'tool.started',
+        seq: 6,
+        sessionId: otherSessionId,
+        timestamp: 6,
+        payload: {
+          messageId: 'b1',
+          toolCallId: 'tool-b',
+          name: 'read',
+          input: { path: 'before.ts' },
+        },
+      },
+      {
+        type: 'tool.updated',
+        seq: 7,
+        sessionId: otherSessionId,
+        timestamp: 7,
+        payload: {
+          messageId: 'b1',
+          toolCallId: 'tool-b',
+          input: { path: 'after.ts' },
+        },
+      },
+      {
+        type: 'tool.completed',
+        seq: 8,
+        sessionId: otherSessionId,
+        timestamp: 8,
+        payload: {
+          messageId: 'b1',
+          toolCallId: 'tool-b',
+          ok: true,
+          output: 'done',
+        },
+      },
+      {
+        type: 'custom.message',
+        seq: 9,
+        sessionId: otherSessionId,
+        timestamp: 9,
+        payload: {
+          messageId: 'custom-b',
+          customType: 'extension.note',
+          content: 'visible',
+        },
+      },
+      {
+        type: 'message.started',
+        seq: 10,
+        sessionId: otherSessionId,
+        timestamp: 10,
+        payload: { messageId: 'b2', role: 'assistant' },
+      },
+      {
+        type: 'message.delta',
+        seq: 11,
+        sessionId: otherSessionId,
+        timestamp: 11,
+        payload: { messageId: 'b2', blockId: 'b-text', text: 'after' },
+      },
+      {
+        type: 'message.delta',
+        seq: 12,
+        sessionId: SESSION_ID,
+        timestamp: 12,
+        payload: { messageId: 'a1', blockId: 'a-text', text: 'A2' },
+      },
+    ];
+
+    const patch = applyRuntimeEvents(state, events);
+    const next = { ...state, ...patch, activeSessionId: SESSION_ID };
+
+    expect(next.messages[SESSION_ID]).toEqual([
+      expect.objectContaining({
+        id: 'a1',
+        blocks: [{ id: 'a-text', type: 'text', text: 'A1A2' }],
+      }),
+    ]);
+    expect(next.messages[otherSessionId]?.map((message) => [message.id, message.role])).toEqual([
+      ['b1', 'assistant'],
+      ['custom-b', 'system'],
+      ['b2', 'assistant'],
+    ]);
+    expect(next.messages[otherSessionId]?.[0]?.blocks).toEqual([
+      { id: 'b-thinking', type: 'thinking', text: 'plan' },
+      {
+        id: 'tool-b',
+        type: 'tool_call',
+        toolCallId: 'tool-b',
+        toolName: 'read',
+        toolInput: { path: 'after.ts' },
+      },
+      {
+        id: 'tool-b-result',
+        type: 'tool_result',
+        toolCallId: 'tool-b',
+        toolOk: true,
+        toolOutput: 'done',
+        text: undefined,
+      },
+    ]);
+    expect(next.messages[otherSessionId]?.[1]?.blocks[0]?.text).toBe('extension.note\nvisible');
+    expect(next.messages[otherSessionId]?.[2]?.blocks).toEqual([
+      { id: 'b-text', type: 'text', text: 'after' },
+    ]);
   });
 
   it('is equivalent to applying each event one at a time and merging every step', () => {

@@ -13,9 +13,6 @@ importers:
 
   .:
     dependencies:
-      '@agentclientprotocol/sdk':
-        specifier: ^0.12.0
-        version: 0.12.0(zod@4.3.5)
       '@base-ui/react':
         specifier: ^1.0.0
         version: 1.1.0(@types/react@19.2.8)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -238,11 +235,6 @@ packages:
 
   7zip-bin@5.2.0:
     resolution: {integrity: sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A==}
-
-  '@agentclientprotocol/sdk@0.12.0':
-    resolution: {integrity: sha512-V8uH/KK1t7utqyJmTA7y7DzKu6+jKFIXM+ZVouz8E55j8Ej2RV42rEvPKn3/PpBJlliI5crcGk1qQhZ7VwaepA==}
-    peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
 
   '@anthropic-ai/sdk@0.91.1':
     resolution: {integrity: sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw==}
@@ -4329,10 +4321,6 @@ packages:
 snapshots:
 
   7zip-bin@5.2.0: {}
-
-  '@agentclientprotocol/sdk@0.12.0(zod@4.3.5)':
-    dependencies:
-      zod: 4.3.5
 
   '@anthropic-ai/sdk@0.91.1(zod@4.3.5)':
     dependencies:

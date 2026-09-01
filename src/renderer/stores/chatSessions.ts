@@ -1,4 +1,4 @@
-import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
+import type { AgentWireName } from '@shared/types/agentWire';
 import type {
   PermissionAutoReason,
   PermissionDecisionId,
@@ -22,10 +22,6 @@ import {
   mergePermissionActivity,
   type PermissionActivityRecord,
 } from '@/components/chat/permissionActivityRow';
-// Leaf module too (one type import): the single "this session's binding is
-// settled" criterion, shared with the composer chain and the agent picker so
-// the store's own guard cannot drift away from the UI's.
-import { isChatAgentBindingLocked } from '@/components/chat/sessionBinding';
 // Leaf module (no imports of its own) on purpose: importing the hook module
 // `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
 // store. Read by the `sendMessage` ghost-session guard below.
@@ -266,11 +262,6 @@ export interface ChatSessionsState {
    * is not a default, and an unsent live-only session has no index entry for
    * it to become a second default in.
    */
-  setDraftSessionAgent: (
-    sessionId: string,
-    agent: AgentWireName,
-    options: { sendAttempted: boolean }
-  ) => boolean;
   sendMessage: (text: string, attachments?: ChatSendAttachment[]) => Promise<void>;
   stopActiveSession: () => Promise<void>;
   /**
@@ -286,16 +277,6 @@ export interface ChatSessionsState {
    * never re-derived: `allow` is computed from it once, at the card's call
    * site, so the two can never contradict each other here.
    */
-  respondPermission: (
-    permissionId: string,
-    allow: boolean,
-    decision?: PermissionDecisionId
-  ) => Promise<boolean>;
-  respondQuestion: (input: {
-    answers?: Record<string, string>;
-    response?: string;
-    cancel?: boolean;
-  }) => Promise<boolean>;
   /** Subscribe to Host Runtime Events; returns unsubscribe. */
   initRuntime: () => () => void;
 }
@@ -740,6 +721,24 @@ export function applyRuntimeEvent(
       return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
     }
 
+    case 'tool.updated': {
+      if (event.payload.input === undefined) return {};
+      const bucket = state.messages[sessionId] ?? [];
+      const existing = bucket.find((item) => item.id === event.payload.messageId);
+      if (!existing) return {};
+      const blockIndex = existing.blocks.findIndex(
+        (block) => block.type === 'tool_call' && block.toolCallId === event.payload.toolCallId
+      );
+      if (blockIndex < 0) return {};
+      const current = existing.blocks[blockIndex];
+      if (!current || current.toolInput === event.payload.input) return {};
+      const blocks = [...existing.blocks];
+      blocks[blockIndex] = { ...current, toolInput: event.payload.input };
+      return {
+        messages: withBucket(state, sessionId, upsertMessage(bucket, { ...existing, blocks })),
+      };
+    }
+
     case 'tool.completed': {
       const bucket = state.messages[sessionId] ?? [];
       const existing = bucket.find((item) => item.id === event.payload.messageId);
@@ -761,6 +760,21 @@ export function applyRuntimeEvent(
         ],
       };
       return { messages: withBucket(state, sessionId, upsertMessage(bucket, updated)) };
+    }
+
+    case 'custom.message':
+    case 'custom.entry': {
+      const content = event.payload.content
+        ? `${event.payload.customType}\n${event.payload.content}`
+        : event.payload.customType;
+      const message: ChatMessage = {
+        id: event.payload.messageId,
+        sessionId,
+        role: 'system',
+        blocks: [{ id: `${event.payload.messageId}-text`, type: 'text', text: content }],
+      };
+      const bucket = state.messages[sessionId] ?? [];
+      return { messages: withBucket(state, sessionId, upsertMessage(bucket, message)) };
     }
 
     /**
@@ -1098,36 +1112,6 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
     set({ activeSessionId: sessionId });
   },
 
-  /** D48 S1 — see the interface above for why this is additive and narrow. */
-  setDraftSessionAgent: (sessionId, agent, options) => {
-    const state = get();
-    const session = state.sessions.find((item) => item.id === sessionId);
-    if (!session) {
-      return false;
-    }
-    // Same single criterion the picker and the target bar read, reached
-    // through the same symbol — a hand-written copy here is how one arm goes
-    // missing and a restored session becomes re-pointable.
-    if (
-      isChatAgentBindingLocked({
-        sendAttempted: options.sendAttempted,
-        hostBound: state.hostBoundSessionIds.includes(sessionId),
-        hasRuntimeIdentity: session.runtimeIdentity != null,
-      })
-    ) {
-      return false;
-    }
-    if (session.agent === agent) {
-      return true;
-    }
-    set({
-      sessions: state.sessions.map((item) =>
-        item.id === sessionId ? { ...item, agent, updatedAt: Date.now() } : item
-      ),
-    });
-    return true;
-  },
-
   /**
    * R5 round-2 (A5) — approved additive change to this red-line store.
    *
@@ -1178,10 +1162,6 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
         await window.electronAPI.chat.createSession({
           sessionId: activeSessionId,
           workspacePath: workspace.path,
-          // S2 (b): the binding is decided renderer-side and stated on every
-          // create — never left for the Host to assume. `sessionAgent` is the
-          // one reader that knows what an unset binding means.
-          agent: sessionAgent(session),
         });
         // A5 guard 2: the session went away while `createSession` was in
         // flight. The Host now holds a runtime the UI can never reach — reap
@@ -1203,6 +1183,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
 
       await window.electronAPI.chat.send({
         sessionId: activeSessionId,
+        attemptId: uniqueId('send-attempt'),
         text: trimmed,
         ...(attachments?.length ? { attachments } : {}),
       });
@@ -1240,54 +1221,6 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       set({
         lastError: err instanceof Error ? err.message : String(err),
       });
-    }
-  },
-
-  respondPermission: async (permissionId, allow, decision) => {
-    // Find the entry's own sessionId — never activeSessionId — to preserve
-    // existing cross-session behavior; a stale click (id no longer parked)
-    // is not a failure, so it returns false without an IPC call or lastError.
-    const entry = get().pendingPermissions.find((item) => item.permissionId === permissionId);
-    if (!entry) {
-      return false;
-    }
-
-    try {
-      await window.electronAPI.chat.respondPermission({
-        sessionId: entry.sessionId,
-        permissionId: entry.permissionId,
-        allow,
-        // Omitted rather than sent as undefined: absent means "the boolean
-        // says it all", which is exactly the Claude-side payload.
-        ...(decision ? { decision } : {}),
-      });
-      return true;
-    } catch (err) {
-      set({
-        lastError: err instanceof Error ? err.message : String(err),
-      });
-      return false;
-    }
-  },
-
-  respondQuestion: async (input) => {
-    const { pendingQuestion } = get();
-    if (!pendingQuestion) {
-      return false;
-    }
-
-    try {
-      await window.electronAPI.chat.respondQuestion({
-        sessionId: pendingQuestion.sessionId,
-        questionId: pendingQuestion.questionId,
-        ...input,
-      });
-      return true;
-    } catch (err) {
-      set({
-        lastError: err instanceof Error ? err.message : String(err),
-      });
-      return false;
     }
   },
 
@@ -1335,10 +1268,15 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       // filtered again at flush time to close the inverse race: a frame queued
       // while the row existed, followed by removal before the 16ms batch lands.
       if (isSessionRetired(event.sessionId)) return;
-      if (event.type === 'message.started' && event.sessionId && event.payload.role === 'user') {
+      if (
+        event.type === 'message.started' &&
+        event.sessionId &&
+        event.payload.role === 'user' &&
+        event.payload.attemptId
+      ) {
         usePendingUserMessagesStore
           .getState()
-          .acknowledgeNext(event.sessionId, event.payload.messageId);
+          .acknowledgeAttempt(event.sessionId, event.payload.attemptId, event.payload.messageId);
       }
       queue.push(event);
       if (queue.length >= RUNTIME_EVENT_MAX_QUEUE) {

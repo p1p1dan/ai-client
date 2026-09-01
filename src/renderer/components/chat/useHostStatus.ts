@@ -60,12 +60,14 @@ export function useHostStatus(): HostStatusSnapshot {
             if (typeof snapshot?.state === 'string') {
               next.state = snapshot.state as HostStatus['state'];
             }
-            if (typeof snapshot?.pid === 'number') next.pid = snapshot.pid;
-            else if (prev.state !== 'error' && next.state !== 'ready') next.pid = undefined;
-            // S7: same additive copy as the prime above — keeps `settings`
-            // fresh across a Host restart this poll observes without a
-            // runtime event (e.g. the tab was backgrounded when it fired).
-            if (snapshot) next.settings = snapshot.settings;
+            if (snapshot) {
+              next.capacity = snapshot.capacity;
+              next.slots = snapshot.slots;
+              next.active = snapshot.active;
+              next.restarting = snapshot.restarting;
+              next.errors = snapshot.errors;
+              next.capabilities = snapshot.capabilities;
+            }
             return next;
           });
         })

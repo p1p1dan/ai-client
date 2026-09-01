@@ -29,14 +29,17 @@ describe('T24/T26 send experience wiring', () => {
     expect(sendStart).toBeGreaterThan(-1);
     expect(publish).toBeGreaterThan(sendStart);
     expect(ensureHost).toBeGreaterThan(publish);
-    expect(composer).toMatch(/pendingAttemptId = `\$\{sessionId\}:\$\{sendOwner\}`/);
+    expect(composer).toMatch(/const attemptId = `\$\{sessionId\}:\$\{sendOwner\}`/);
+    expect(composer).toContain('attemptId,\n        text: trimmed');
     expect(composer).toContain("outcome === 'rejected' && pendingAttemptId");
   });
 
   it('pairs a pending attempt with the exact authoritative wire message id', () => {
     expect(sessionsStore).toContain("event.type === 'message.started'");
     expect(sessionsStore).toContain("event.payload.role === 'user'");
-    expect(sessionsStore).toContain('.acknowledgeNext(event.sessionId, event.payload.messageId)');
+    expect(sessionsStore).toContain(
+      '.acknowledgeAttempt(event.sessionId, event.payload.attemptId, event.payload.messageId)'
+    );
     expect(sessionsStore).toContain('message.id === pending.authoritativeMessageId');
     expect(timeline).toContain('pendingUserToChatMessage');
     expect(timeline).toContain('isPendingUserMessage(message)');

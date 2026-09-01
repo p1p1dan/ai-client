@@ -16,7 +16,7 @@ import {
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { getAuthStateService } from '../services/auth';
 import { hasEnteredApp } from '../services/auth/appEntry';
-import { claudeRuntimeChecker } from '../services/cli/ClaudeRuntimeChecker';
+import { piRuntimeChecker } from '../services/cli/PiRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
 import { sessionManager } from '../services/session/SessionManager';
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
@@ -41,7 +41,7 @@ function isAppMountedFor(): boolean {
     state: getAuthStateService().getState(),
     entered: hasEnteredApp(),
     skipAuthGate,
-    runtimeStatus: claudeRuntimeChecker.getCached(),
+    runtimeStatus: piRuntimeChecker.getCached(),
   });
   return decision.shell === 'app';
 }

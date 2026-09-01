@@ -136,10 +136,15 @@ export function resolvePendingHostError<E extends { sessionId?: string; requestI
  * unit-testable — a `.tsx`-only path with zero assertions is not acceptable
  * for this semantics.
  */
-export function isUserEchoForSend(event: ProgressEvent, sessionId: string): boolean {
+export function isUserEchoForSend(
+  event: ProgressEvent,
+  sessionId: string,
+  attemptId?: string
+): boolean {
   if (event.sessionId !== sessionId) return false;
   if (event.type !== 'message.started') return false;
-  return readStringField(event.payload, 'role') === 'user';
+  if (readStringField(event.payload, 'role') !== 'user') return false;
+  return attemptId === undefined || readStringField(event.payload, 'attemptId') === attemptId;
 }
 
 /**

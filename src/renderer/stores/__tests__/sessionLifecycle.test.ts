@@ -1,19 +1,29 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   initialExtensionUiDisplay,
   reduceExtensionUiDisplay,
 } from '@/components/chat/extensionUiDisplayModel';
 import type { ExtensionUiState } from '@/components/chat/extensionUiModel';
 import type { SubagentActivityState } from '@/components/chat/subagentActivityModel';
+import { useMessageQueueStore } from '../messageQueue';
+import { usePendingUserMessagesStore } from '../pendingUserMessages';
 import {
   pruneExtensionUiState,
   pruneRecordBySession,
+  pruneSessionScopedRendererState,
   pruneSubagentActivityState,
 } from '../sessionLifecycle';
+import { useTurnSendStatusStore } from '../turnSendStatus';
 
 describe('session lifecycle pruning', () => {
+  beforeEach(() => {
+    useMessageQueueStore.setState({ state: { bySession: {} } });
+    usePendingUserMessagesStore.setState({ bySession: {} });
+    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+  });
+
   it('gates every adjacent runtime listener against the retirement tombstone', () => {
     for (const file of [
       'sessionRuntimeFacts.ts',
@@ -29,6 +39,63 @@ describe('session lifecycle pruning', () => {
 
   it('prunes ordinary session-keyed records', () => {
     expect(pruneRecordBySession({ keep: 1, drop: 2 }, ['keep'])).toEqual({ keep: 1 });
+  });
+
+  it('atomically prunes queue, pending echo, and turn ownership for a removed session', () => {
+    const attachment = {
+      id: 'draft-1',
+      kind: 'text' as const,
+      mediaType: 'text/plain',
+      name: 'note.txt',
+      byteLength: 4,
+      data: 'note',
+    };
+    useMessageQueueStore.getState().enqueue({
+      id: 'queue-drop',
+      sessionId: 'drop',
+      text: 'queued',
+      attachments: [attachment],
+      queuedAt: 1,
+    });
+    useMessageQueueStore.getState().enqueue({
+      id: 'queue-keep',
+      sessionId: 'keep',
+      text: 'kept',
+      attachments: [],
+      queuedAt: 2,
+    });
+    usePendingUserMessagesStore.getState().publish({
+      attemptId: 'attempt-drop',
+      sessionId: 'drop',
+      text: 'pending',
+      attachments: [],
+      startedAt: 1,
+    });
+    useTurnSendStatusStore.getState().begin(
+      {
+        sessionId: 'drop',
+        phase: 'awaiting',
+        elapsedSeconds: 1,
+        budgetMs: 10,
+        attachmentCount: 1,
+        attachmentBytes: 4,
+        promptChars: 7,
+      },
+      null
+    );
+    useTurnSendStatusStore.getState().armPendingReply({ sessionId: 'drop', turnStartedAtMs: 1 });
+
+    pruneSessionScopedRendererState(['keep']);
+
+    expect(useMessageQueueStore.getState().state.bySession).toEqual({
+      keep: expect.objectContaining({ entries: [expect.objectContaining({ id: 'queue-keep' })] }),
+    });
+    expect(usePendingUserMessagesStore.getState().bySession).toEqual({});
+    expect(useTurnSendStatusStore.getState()).toMatchObject({
+      status: null,
+      baseline: null,
+      pendingReply: null,
+    });
   });
 
   it('drops extension dialogs, sending flags and errors for removed sessions', () => {

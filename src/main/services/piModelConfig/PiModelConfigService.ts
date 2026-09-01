@@ -20,7 +20,6 @@ import {
   piModelOption,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog, AgentModelCatalogError } from '@shared/types/agentCatalog';
-import { PI_AGENT } from '@shared/types/agentWire';
 import { toPiModelsJson, validatePiManagedModelsConfig } from './configValidation';
 
 const MAX_CONFIG_BYTES = 2 * 1024 * 1024;
@@ -300,14 +299,12 @@ export class PiModelConfigService {
     if (!config && localModels.length === 0) {
       return sourceOverride
         ? {
-            agent: PI_AGENT,
             models: [],
             source: 'local',
             stale: false,
             fetchedAt: safeMtime(this.modelsPath),
           }
         : {
-            agent: PI_AGENT,
             models: [],
             source: 'seed',
             stale: true,
@@ -330,7 +327,6 @@ export class PiModelConfigService {
     let error: AgentModelCatalogError | undefined;
     if (state.error) error = 'http';
     return {
-      agent: PI_AGENT,
       models,
       source: catalogSource,
       stale,

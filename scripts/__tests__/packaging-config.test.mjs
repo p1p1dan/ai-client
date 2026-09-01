@@ -46,11 +46,7 @@ describe('worker package dependency boundary', () => {
       '@earendil-works/pi-coding-agent',
       '@gotgenes/pi-permission-system',
     ]);
-    expect(Object.keys(workerPackage.devDependencies).sort()).toEqual([
-      '@anthropic-ai/claude-agent-sdk',
-      '@cometix/claude-code',
-      '@openai/codex',
-    ]);
+    expect(Object.keys(workerPackage.devDependencies ?? {})).toEqual([]);
   });
 });
 
@@ -188,7 +184,7 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     }
   });
 
-  it('installs legacy execution dependencies only in the test gate, never packaging jobs', () => {
+  it('uses the worker manifest in the gate and omits dev dependencies for packaging', () => {
     const installRun = (job) =>
       jobs[job].steps.find((step) => step['working-directory'] === 'src/agent-host')?.run;
     expect(installRun('gate')).toBe('npm ci --omit=optional');

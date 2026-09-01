@@ -162,6 +162,31 @@ describe('WorkerManager identity and capacity', () => {
     ]);
   });
 
+  it('reattaches an existing ready slot without closing or spawning another worker', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    h.events.length = 0;
+
+    const requestId = await create(h.manager, 's1', 22);
+
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.records[0].dispose).not.toHaveBeenCalled();
+    expect(h.events).toEqual([
+      expect.objectContaining({
+        type: 'session.created',
+        sessionId: 's1',
+        requestId,
+        payload: { agent: 'pi', runtimeIdentity: '/sessions/s1.jsonl' },
+      }),
+      expect.objectContaining({
+        type: 'session.status',
+        sessionId: 's1',
+        requestId,
+        payload: { status: 'idle' },
+      }),
+    ]);
+  });
+
   it('rejects a durable-key collision without stealing the existing authority', async () => {
     const h = createHarness();
     h.createSlot.mockImplementationOnce(h.createSlot.getMockImplementation() as never);
@@ -193,7 +218,9 @@ describe('WorkerManager identity and capacity', () => {
     const creating = create(h.manager, 's1');
     await vi.waitFor(() => expect(h.bindRuntimeIdentity).toHaveBeenCalledTimes(1));
 
-    await expect(h.manager.send({ sessionId: 's1', text: 'too early' })).rejects.toMatchObject({
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'attempt-early', text: 'too early' })
+    ).rejects.toMatchObject({
       code: 'session_not_found',
     });
     expect(h.events.some((event) => event.type === 'session.created')).toBe(false);
@@ -259,11 +286,21 @@ describe('WorkerManager identity and capacity', () => {
     expect(manager.getSlotSnapshots().map((slot) => slot.logicalSessionId)).toEqual(['foreground']);
   });
 
+  it('rejects an empty renderer attempt before contacting the slot', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: '   ', text: 'hello' })
+    ).rejects.toMatchObject({ code: 'invalid_send_attempt' });
+    expect(h.records[0].request).not.toHaveBeenCalled();
+  });
+
   it('protects active turns and blocking Extension UI requests from eviction', async () => {
     const h = createHarness({ capacity: 2 });
     await create(h.manager, 'active');
     await create(h.manager, 'blocking');
-    await h.manager.send({ sessionId: 'active', text: 'hello' });
+    await h.manager.send({ sessionId: 'active', attemptId: 'attempt-active', text: 'hello' });
     h.records[1].emit({
       type: 'extensionUi.request',
       sessionId: 'blocking',
@@ -284,6 +321,57 @@ describe('WorkerManager identity and capacity', () => {
 });
 
 describe('WorkerManager isolation and crash recovery', () => {
+  it('keeps interleaved multi-slot streams session-scoped and Main-sequenced', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1');
+    await create(h.manager, 's2');
+    h.events.length = 0;
+
+    h.records[0].emit({
+      type: 'message.started',
+      sessionId: 's1',
+      requestId: 'turn-a',
+      seq: 91,
+      timestamp: 91,
+      payload: { messageId: 'a1', role: 'assistant' },
+    });
+    h.records[1].emit({
+      type: 'message.started',
+      sessionId: 's2',
+      requestId: 'turn-b',
+      seq: 1,
+      timestamp: 1,
+      payload: { messageId: 'b1', role: 'assistant' },
+    });
+    h.records[0].emit({
+      type: 'message.delta',
+      sessionId: 's1',
+      requestId: 'turn-a',
+      seq: 92,
+      timestamp: 92,
+      payload: { messageId: 'a1', blockId: 'a-text', text: 'A' },
+    });
+    h.records[1].emit({
+      type: 'message.delta',
+      sessionId: 's2',
+      requestId: 'turn-b',
+      seq: 2,
+      timestamp: 2,
+      payload: { messageId: 'b1', blockId: 'b-text', text: 'B' },
+    });
+
+    expect(h.events.map((event) => [event.type, event.sessionId])).toEqual([
+      ['message.started', 's1'],
+      ['message.started', 's2'],
+      ['message.delta', 's1'],
+      ['message.delta', 's2'],
+    ]);
+    const managerSequences = h.events.map((event) => Number(event.seq));
+    expect(managerSequences).toEqual([...managerSequences].sort((left, right) => left - right));
+    expect(new Set(managerSequences)).toHaveLength(managerSequences.length);
+    expect(h.events.map((event) => event.timestamp)).not.toEqual([91, 1, 92, 2]);
+  });
+
   it('keeps one foreground session per window and releases only that window claims', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
@@ -354,6 +442,54 @@ describe('WorkerManager isolation and crash recovery', () => {
     });
   });
 
+  it('keeps display events non-blocking and resets each runtime on config invalidation', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    await create(h.manager, 's2', 22);
+    h.records[0].emit({
+      type: 'extensionUi.request',
+      sessionId: 's1',
+      payload: {
+        runtimeId: 'runtime-a',
+        uiRequestId: 'status-a',
+        method: 'setStatus',
+        args: { key: 'lint', text: 'running' },
+      },
+    });
+    h.records[1].emit({
+      type: 'extensionUi.request',
+      sessionId: 's2',
+      payload: {
+        runtimeId: 'runtime-b',
+        uiRequestId: 'widget-b',
+        method: 'setWidget',
+        args: { key: 'tests', content: ['running'] },
+      },
+    });
+
+    expect(h.manager.getSlotSnapshots().map((slot) => slot.pendingBlockingRequests)).toEqual([
+      0, 0,
+    ]);
+    await h.manager.invalidateAll();
+
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'extensionUi.reset',
+        sessionId: 's1',
+        payload: { runtimeId: 'runtime-a', reason: 'session_replaced' },
+      })
+    );
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'extensionUi.reset',
+        sessionId: 's2',
+        payload: { runtimeId: 'runtime-b', reason: 'session_replaced' },
+      })
+    );
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace');
+    expect(h.records[1].dispose).toHaveBeenCalledWith('slot-replace');
+  });
+
   it('routes a blocking response to its exact slot and rejects another window', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
@@ -386,11 +522,62 @@ describe('WorkerManager isolation and crash recovery', () => {
     expect(h.records[1].request).not.toHaveBeenCalled();
   });
 
+  it('closes one session with cancel/reset and rejects a stale response without touching another slot', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    await create(h.manager, 's2', 22);
+    h.records[0].emit({
+      type: 'extensionUi.request',
+      sessionId: 's1',
+      payload: {
+        runtimeId: 'runtime-a',
+        uiRequestId: 'ui-a',
+        method: 'confirm',
+        args: { message: 'allow?' },
+      },
+    });
+
+    await h.manager.closeSession('s1');
+
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'extensionUi.cancelled',
+        sessionId: 's1',
+        payload: {
+          runtimeId: 'runtime-a',
+          uiRequestIds: ['ui-a'],
+          reason: 'session_closed',
+        },
+      })
+    );
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'extensionUi.reset',
+        sessionId: 's1',
+        payload: { runtimeId: 'runtime-a', reason: 'session_closed' },
+      })
+    );
+    await expect(
+      h.manager.respondExtensionUi(
+        { runtimeId: 'runtime-a', uiRequestId: 'ui-a', ok: true, value: true },
+        11
+      )
+    ).rejects.toMatchObject({ code: 'extension_ui_request_not_found' });
+    expect(h.records[1].request).not.toHaveBeenCalled();
+    expect(h.manager.getSlotSnapshots()).toEqual([
+      expect.objectContaining({ logicalSessionId: 's2', state: 'ready' }),
+    ]);
+  });
+
   it('fails one active turn once, keeps the other slot, and reopens the same durable file', async () => {
     const h = createHarness();
     await create(h.manager, 's1');
     await create(h.manager, 's2');
-    const turnId = await h.manager.send({ sessionId: 's1', text: 'hello' });
+    const turnId = await h.manager.send({
+      sessionId: 's1',
+      attemptId: 'attempt-s1',
+      text: 'hello',
+    });
     h.records[0].emit({
       type: 'extensionUi.request',
       sessionId: 's1',
@@ -445,12 +632,27 @@ describe('WorkerManager isolation and crash recovery', () => {
 
     const beforeLate = h.events.length;
     h.records[0].emit({
-      type: 'session.completed',
+      type: 'message.delta',
       sessionId: 's1',
       requestId: 'late-old-generation',
-      payload: {},
+      payload: { messageId: 'old-a', blockId: 'old-a-text', text: 'stale A' },
     });
-    expect(h.events).toHaveLength(beforeLate);
+    h.records[1].emit({
+      type: 'message.delta',
+      sessionId: 's2',
+      requestId: 'live-b',
+      payload: { messageId: 'live-b', blockId: 'live-b-text', text: 'live B' },
+    });
+    expect(h.events).toHaveLength(beforeLate + 1);
+    expect(h.events.at(-1)).toMatchObject({
+      type: 'message.delta',
+      sessionId: 's2',
+      requestId: 'live-b',
+      payload: { text: 'live B' },
+    });
+    expect(h.events).not.toContainEqual(
+      expect.objectContaining({ requestId: 'late-old-generation' })
+    );
   });
 
   it('does not spawn a replacement when old-process exit is unconfirmed', async () => {

@@ -10,8 +10,8 @@
 | Pi-only replacement baseline | **Done** | T28 文件级 retain/adapt/replace/delete/migration-only map + evidence |
 | Worker foundation | **Done** | T29-a/b/c：RPC、bootstrap、send/stream/stop/dispose、worker-only artifact 与 singleton Pi 删除 |
 | Bounded WorkerManager | **Done** | T30 identity/remap/capacity/restart/owner + global manager deletion |
-| Cycle 1/2 behavior reattachment | **Next** | T31 queue/pending/Extension UI/models/permissions 重挂 |
-| History/tree/import/removal/TUI | Planned | Pi-native lifecycle、legacy import、Pi-only cleanup、pix TUI |
+| Cycle 1/2 behavior reattachment | **Done** | T31-a/b/c/d + legacy execution deletion；见2026-09-01 evidence |
+| History/tree/import/removal/TUI | **Next** | T32 Pi-native history/resume，随后T33 tree/rewind/fork |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
 ## T00–T27：已落资产与替换影响
@@ -77,14 +77,15 @@
 
 ## Phase C — Reattach completed product behavior
 
-### T31 — Cycle 1/2 behavior reattachment — **Next**
+### T31 — Cycle 1/2 behavior reattachment — **Done**
 
-- **T31-a RuntimeEvent/streaming**：text/thinking/tool/custom 与 timeline ordering。
-- **T31-b Queue/pending/attachments**：busy enqueue、release、retry、stop 与 retirement。
-- **T31-c Extension UI**：inline approval、display state、owner routing、reset/dispose。
-- **T31-d Models/auth/permissions**：catalog、effort、managed config、project trust 和四种 decision path。
+- **T31-a RuntimeEvent/streaming — Done**：snapshot/delta normalization、text/thinking/tool/custom ordering、multi-slot isolation、old-generation filtering与background bucket reattachment。
+- **T31-b Queue/pending/attachments — Done**：exact attempt echo、attachment metadata、busy retry、active-only queue release、stop与atomic retirement prune。
+- **T31-c Extension UI — Done**：inline approval、display state、exact owner/slot/generation routing、cancel/reset/dispose与background isolation。
+- **T31-d Models/auth/permissions — Done**：Pi-only catalog/runtime gate、model/effort scalar preference、managed/local config invalidation、project trust、permission activity与四种Extension UI decision path。
+- **Replacement deletion — Done**：Claude/Codex live worker producers/runtimes、agent picker、legacy permission/question channels、multi-agent catalog、SDK/CLI execution dependencies和obsolete tests/spikes已删除；T34 migration readers与T36 terminal infrastructure按T28 map保留。
 
-**验收**：Cycle 1/2 focused tests 和 GUI smoke 在 WorkerSlot 架构下重新通过；每组行为重挂后同步删除对应 old Host/agent/backend branches，而不是只停止接收新 session。
+**验收证据**：[T31 closure evidence](./evidence/2026-09-01-t31-behavior-reattachment.md) · [T31-a inventory](./topics/t31a-runtime-event-reattachment.md)。Cycle 1/2 focused regression、两套typecheck、scoped Biome、worker-only build、真实Electron双slot probe与dev GUI startup smoke通过。
 
 ## Phase D — Pi-native session lifecycle
 

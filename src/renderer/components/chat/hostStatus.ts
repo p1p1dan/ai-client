@@ -1,4 +1,4 @@
-import { type AgentWireName, isAgentWireName } from '@shared/types/agentWire';
+import { isAgentWireName } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 
 /**
@@ -20,11 +20,17 @@ export interface HostSettingsDiagnostics {
 
 export interface HostStatus {
   state: 'stopped' | 'starting' | 'ready' | 'error';
+  /** Accepted only when reading an old event; current WorkerManager omits them. */
   pid?: number;
   driver?: string;
   cometixVersion?: string;
   nodeVersion?: string;
   nodeExecPath?: string;
+  capacity?: number;
+  slots?: number;
+  active?: number;
+  restarting?: number;
+  errors?: number;
   settings?: HostSettingsDiagnostics | null;
   /**
    * Host capability flags. Unknown → undefined.
@@ -43,20 +49,12 @@ export interface HostStatus {
    *   surface then keeps its `permissionMode`-only behaviour instead of showing
    *   a blank row.
    */
-  capabilities?: { thinking?: boolean; agents?: AgentWireName[]; permissionPolicy?: boolean };
+  capabilities?: { thinking?: boolean; agents?: unknown[]; permissionPolicy?: boolean };
   lastFatalError?: string | null;
 }
 
-/**
- * Drop anything that is not a recognized `AgentWireName` before it reaches
- * `HostStatus` — shared by `reduceHostStatus` and `primeHostStatus` (O6: both
- * channels must filter the same way, not just both "carry the field").
- * `undefined` means "the source did not send an agents list at all", which is
- * different from "sent an empty/all-unrecognized list".
- */
-function filterAgentWireNames(value: unknown): AgentWireName[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.filter(isAgentWireName);
+function filterLegacyAgentNames(value: unknown): unknown[] | undefined {
+  return Array.isArray(value) ? value.filter(isAgentWireName) : undefined;
 }
 
 export const initialHostStatus: HostStatus = {
@@ -103,9 +101,7 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
         capRaw && typeof capRaw === 'object'
           ? {
               thinking: typeof thinkingRaw === 'boolean' ? thinkingRaw : undefined,
-              // S3 slice 6 (A6): same "capabilities key present → derive fresh
-              // from THIS event, never merge with prior" rule as `thinking`.
-              agents: filterAgentWireNames(agentsRaw),
+              agents: filterLegacyAgentNames(agentsRaw),
               // D48 S3 (N1): rides BOTH channels — see `primeHostStatus`, where
               // the same key is copied, and the `settings` history recorded in
               // its header for what happens when only one of the two is wired.
@@ -148,6 +144,11 @@ export interface HostStatusPrimeSnapshot {
   pid?: number;
   driver?: string;
   cometixVersion?: string;
+  capacity?: number;
+  slots?: number;
+  active?: number;
+  restarting?: number;
+  errors?: number;
   settings?: HostSettingsDiagnostics | null;
   /**
    * S3 slice 6 (A6): mirrors the Main runtime readiness capabilities snapshot.
@@ -184,9 +185,14 @@ export function primeHostStatus(
   return {
     ...prev,
     state: (snapshot?.state as HostStatus['state']) ?? prev.state,
-    pid: typeof snapshot?.pid === 'number' ? snapshot.pid : undefined,
+    pid: snapshot?.pid,
     driver: snapshot?.driver ?? prev.driver,
     cometixVersion: snapshot?.cometixVersion ?? prev.cometixVersion,
+    capacity: snapshot?.capacity ?? prev.capacity,
+    slots: snapshot?.slots ?? prev.slots,
+    active: snapshot?.active ?? prev.active,
+    restarting: snapshot?.restarting ?? prev.restarting,
+    errors: snapshot?.errors ?? prev.errors,
     // Adopt verbatim (including a confirmed `null`) whenever a snapshot
     // object actually arrived — only a failed/not-yet-resolved IPC call
     // (snapshot itself null/undefined) falls back to the prior value.
@@ -198,7 +204,7 @@ export function primeHostStatus(
     capabilities: primedCapabilities
       ? {
           thinking: primedCapabilities.thinking,
-          agents: filterAgentWireNames(primedCapabilities.agents),
+          agents: filterLegacyAgentNames(primedCapabilities.agents),
           // D48 S3 (N1), the second of the two channels. A consumer mounting on
           // a cold start learns everything from THIS call, so a key added to
           // `reduceHostStatus` alone reads as `undefined` here until the next

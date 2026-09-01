@@ -3,17 +3,10 @@
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
-import { isModelAllowedForAgent } from '@shared/models/familyWhitelist';
 import { IPC_CHANNELS } from '@shared/types';
-import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
-import { type AgentWireName, PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
-import type {
-  ExtensionUiResponse,
-  PermissionDecisionId,
-  PermissionUpdateEffective,
-  RuntimeEvent,
-  SessionPermissionPreference,
-} from '@shared/types/runtimeEvents';
+import type { SessionEffortLevel } from '@shared/types/agentHost';
+import { PI_AGENT } from '@shared/types/agentWire';
+import type { ExtensionUiResponse, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
@@ -21,53 +14,6 @@ import { workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
-
-/**
- * D48 §4.3/§4.6-1 (B18) — the cross-agent model guard, and the reason it lives
- * in Main rather than in the Agent Host.
- *
- * The Host child process holds neither a model catalog nor a gateway URL
- * [实测 `hostEnv.ts`: all eight injected keys enumerated, none of them a base
- * URL], so a check written there could only ever compare a string against
- * nothing — a guard that always passes, which is worse than no guard because it
- * reads like one. Main is the last place with enough context, so the refusal
- * happens BEFORE WorkerManager dispatches a turn to any slot.
- *
- * ## Why ownership and not catalog membership
- *
- * §4.4-6 requires a stored selection the family whitelist filtered out
- * (`gpt-5.5`, `claude-opus-4-6`) to keep working on the session that chose it. A
- * membership test would reject exactly those and reset the user to `Automatic` —
- * the silent model swap R11 exists to prevent, arriving through a different
- * door. So the guard refuses only what it can PROVE belongs to the other runtime
- * (`resolveModelAgentOwner`), and lets everything it cannot classify through.
- *
- * Thrown as `code: message` for the same reason `assertAgentSpawnAllowed` does:
- * only `.message` survives `ipcRenderer.invoke`.
- */
-function assertModelMatchesAgent(agent: AgentWireName | null, model: unknown): void {
-  if (agent === null) return;
-  if (typeof model !== 'string' || model.trim().length === 0) return;
-  if (isModelAllowedForAgent(agent, model.trim())) return;
-  throw new Error(
-    `model_agent_mismatch: model "${model.trim()}" belongs to another agent and cannot run on ` +
-      `${agent} — pick a model from this agent's catalog`
-  );
-}
-
-/**
- * Which runtime a `chat:send` is going to reach.
- *
- * `null` (not "assume Claude Code") when the row is missing or carries a slug
- * this build does not know: guessing would let the guard refuse a model that is
- * perfectly valid for the agent it is actually going to. An unresolvable binding
- * is a reason to stand down, not a reason to invent one.
- */
-async function resolveSessionAgentForDispatch(sessionId: string): Promise<AgentWireName | null> {
-  const entry = await sessionIndexService.get(sessionId);
-  if (!entry) return null;
-  return resolveAgentWireName(entry.agent);
-}
 
 /**
  * Which window drove which session — see `extensionUiRouting.ts` for why a
@@ -138,7 +84,7 @@ function ensureEventBridge(): void {
 export function registerChatHandlers(): void {
   ensureEventBridge();
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async (_e, _driver?: AgentHostDriver) => {
+  ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async () => {
     await workerManager.ensureReady();
     return workerManager.getStatus();
   });
@@ -155,24 +101,8 @@ export function registerChatHandlers(): void {
         sessionId: string;
         workspacePath: string;
         model?: string;
-        /** T-20 reasoning effort; Host drops unknown levels (normalizeEffort). */
+        /** T-20 reasoning effort; worker validates the Pi vocabulary. */
         effort?: SessionEffortLevel;
-        /**
-         * S2 (b): which runtime the renderer asked for. Main only relays it —
-         * it neither validates nor defaults it. The index row is authoritative
-         * only once the Host echoes the running agent back on `session.created`
-         * (see SessionIndexService.applyRuntimeEvent), which is why recording
-         * the requested value here is safe even if the Host cannot honour it.
-         */
-        agent?: AgentWireName;
-        /**
-         * D48 S3 §5.5 — the "Chat agent defaults" template the renderer read at
-         * the moment of this send. A CANDIDATE, not the decision: a session that
-         * already captured a posture keeps it (see
-         * `resolveSessionPermissionPreference`). Absent = the runtime constant,
-         * which is every pre-D48 caller and every unhydrated first send (C15).
-         */
-        permissionPreference?: SessionPermissionPreference;
       }
     ): Promise<{ requestId: string }> => {
       // D47 S5 §3 — agent-session-only spawn gate. `attach`/resume-of-an-
@@ -180,17 +110,21 @@ export function registerChatHandlers(): void {
       // (SessionManager.create's own kind==='agent' check is the sibling
       // enforcement point for the PTY-agent path).
       assertAgentSpawnAllowed();
-      // T29-c is Pi-only. The old agent field remains on the preload contract
-      // until T31 removes the picker, but it no longer selects an execution
-      // runtime or permission dialect.
-      assertModelMatchesAgent(PI_AGENT, payload.model);
-      // The window that created the chat owns it, for Extension UI routing.
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      // One resolved value into BOTH the snapshot and the wire: the row and the
-      // running session cannot disagree about what was asked for.
-      const resolved = { ...payload, agent: PI_AGENT, permissionPreference: undefined };
-      await sessionIndexService.recordCreated(resolved);
-      const requestId = await workerManager.createSession({ ...resolved, ownerWebContentsId });
+      await sessionIndexService.recordCreated({
+        sessionId: payload.sessionId,
+        workspacePath: payload.workspacePath,
+        ...(payload.model ? { model: payload.model } : {}),
+        ...(payload.effort ? { effort: payload.effort } : {}),
+        agent: PI_AGENT,
+      });
+      const requestId = await workerManager.createSession({
+        sessionId: payload.sessionId,
+        workspacePath: payload.workspacePath,
+        ...(payload.model ? { model: payload.model } : {}),
+        ...(payload.effort ? { effort: payload.effort } : {}),
+        ownerWebContentsId,
+      });
       return { requestId };
     }
   );
@@ -213,18 +147,10 @@ export function registerChatHandlers(): void {
         sessionId: string;
         workspacePath: string;
         model?: string;
-        /**
-         * S2 (b): the renderer's binding for a session that has never started
-         * a Host — this is the only chance the index gets to learn it before
-         * `mergeSessionIndex` would materialize the missing field as Claude
-         * Code and make the change permanent. Relayed, not validated:
-         * `recordCreated` keeps the persisted value when it is absent.
-         */
-        agent?: AgentWireName;
       }
     ): Promise<boolean> => {
       try {
-        await sessionIndexService.recordCreated(payload);
+        await sessionIndexService.recordCreated({ ...payload, agent: PI_AGENT });
         return true;
       } catch (error) {
         console.warn('[chat] Failed to register session in the index:', error);
@@ -242,10 +168,8 @@ export function registerChatHandlers(): void {
         runtimeIdentity: string;
         workspacePath: string;
         model?: string;
-        /** T-20 reasoning effort; Host drops unknown levels (normalizeEffort). */
+        /** T-20 reasoning effort; worker validates the Pi vocabulary. */
         effort?: SessionEffortLevel;
-        /** S2 (b): which runtime resumes it; pairs with `runtimeIdentity`. */
-        agent?: AgentWireName;
       }
     ): Promise<{ requestId: string }> => {
       // Real Pi JSONL resume lands in T32. T29-c deliberately refuses rather
@@ -262,6 +186,7 @@ export function registerChatHandlers(): void {
       e,
       payload: {
         sessionId: string;
+        attemptId: string;
         text: string;
         attachments?: Array<{
           kind: 'image' | 'text';
@@ -278,13 +203,6 @@ export function registerChatHandlers(): void {
       // Ownership follows the most recent driver: a session picked up in a
       // second window must show ITS approval prompts there, not in the first.
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      // B18 — a send carries no binding of its own, so the row decides. This is
-      // the load-bearing arm: a per-turn model override is the ONE payload that can carry
-      // a model the session was never created with.
-      assertModelMatchesAgent(
-        await resolveSessionAgentForDispatch(payload.sessionId),
-        payload.model
-      );
       const requestId = await workerManager.send({ ...payload, ownerWebContentsId });
       return { requestId };
     }
@@ -310,74 +228,6 @@ export function registerChatHandlers(): void {
   );
 
   /**
-   * D48 S4 §6.3 — change the posture of a session that is already running.
-   *
-   * Four things happen here and the ORDER is the design:
-   *
-   *  1. The session's binding comes off the INDEX ROW, never off the payload.
-   *     A posture is agent-shaped (`permissionMode` vs `approvalPolicy` +
-   *     `sandboxMode`), so letting the caller name the agent would let it pick
-   *     which arm gets validated — the same reason `chat:send`'s model guard
-   *     reads the row (B18).
-   *  2. The tier is validated and matched against that binding, exactly as
-   *     create/resume do (C10). Refused, never coerced.
-   *  3. R18 — a dangerous tier without an explicit confirmation is refused HERE,
-   *     before the Host is contacted at all. The renderer's dialog is a UX
-   *     affordance; this is the boundary that makes "we never expand privilege
-   *     silently" true for any caller, including one that bypassed the dialog.
-   *  4. Only after the Host CONFIRMS (a correlated `session.permissionUpdated`;
-   *     any failure rejects) is the session snapshot rewritten (D10). A failed
-   *     change must leave the row byte-identical, or the next resume would
-   *     replay a posture the session never ran under.
-   *
-   * What it deliberately does NOT do: touch the `ChatAgentDefaults` template
-   * (D11). A one-off change to one chat must not become the default for every
-   * chat created afterwards — that is the silent-privilege-expansion path R18
-   * names, and this handler has no import that could reach app settings.
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.CHAT_UPDATE_PERMISSION,
-    async (
-      _e,
-      payload: {
-        sessionId: string;
-        permissionPreference: SessionPermissionPreference;
-        /** R18: the second confirmation for a dangerous tier actually happened. */
-        dangerousConfirmed?: boolean;
-      }
-    ): Promise<{
-      requestId: string;
-      preference: SessionPermissionPreference;
-      effective: PermissionUpdateEffective;
-    }> => {
-      void payload.permissionPreference;
-      void payload.dangerousConfirmed;
-      throw new Error(
-        `pi_permission_update_not_implemented: session ${payload.sessionId} uses the Pi permission extension`
-      );
-    }
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.CHAT_RESPOND_PERMISSION,
-    async (
-      _e,
-      payload: {
-        sessionId: string;
-        permissionId: string;
-        allow: boolean;
-        /** S2 (c): the richer button, when the renderer had one. */
-        decision?: PermissionDecisionId;
-      }
-    ): Promise<{ requestId: string }> => {
-      void payload;
-      throw new Error(
-        'pi_permission_response_unsupported: Pi approvals use Extension UI responses'
-      );
-    }
-  );
-
-  /**
    * T11 — the renderer's answer to one extension UI dialog.
    *
    * Main is a passthrough here, deliberately: it cannot validate the answer
@@ -394,23 +244,6 @@ export function registerChatHandlers(): void {
       // a transient failure can be retried by the same owner.
       extensionUiRouter.forgetRequest(payload.uiRequestId);
       return { requestId };
-    }
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.CHAT_RESPOND_QUESTION,
-    async (
-      _e,
-      payload: {
-        sessionId: string;
-        questionId: string;
-        answers?: Record<string, string>;
-        response?: string;
-        cancel?: boolean;
-      }
-    ): Promise<{ requestId: string }> => {
-      void payload;
-      throw new Error('pi_question_response_unsupported: Pi questions use Extension UI responses');
     }
   );
 

@@ -232,10 +232,7 @@ export class WorkerManager {
 
   getStatus(): {
     state: WorkerManagerState;
-    driver: 'agent-sdk';
-    cometixVersion: string;
-    settings: null;
-    capabilities: { history: false; thinking: true; permissionPolicy: true; agents: ['pi'] };
+    capabilities: { history: false; thinking: true; permissionPolicy: true };
     capacity: number;
     slots: number;
     active: number;
@@ -245,10 +242,7 @@ export class WorkerManager {
     const entries = [...this.entriesBySession.values()];
     return {
       state: this.state,
-      driver: 'agent-sdk',
-      cometixVersion: 'pi-worker-pool',
-      settings: null,
-      capabilities: { history: false, thinking: true, permissionPolicy: true, agents: ['pi'] },
+      capabilities: { history: false, thinking: true, permissionPolicy: true },
       capacity: this.capacity,
       slots: entries.length,
       active: entries.filter((entry) => entry.activeRequestId !== null).length,
@@ -288,6 +282,20 @@ export class WorkerManager {
       if (existing && existing.state !== 'disposing') {
         this.claimEntry(existing, input.ownerWebContentsId);
         existing.lastUsedAt = this.now();
+        if (existing.state === 'ready' && existing.sessionFile) {
+          this.dispatch({
+            type: 'session.created',
+            sessionId: existing.logicalSessionId,
+            requestId,
+            payload: { agent: PI_AGENT, runtimeIdentity: existing.sessionFile },
+          });
+          this.dispatch({
+            type: 'session.status',
+            sessionId: existing.logicalSessionId,
+            requestId,
+            payload: { status: existing.activeRequestId ? 'running' : 'idle' },
+          });
+        }
         return;
       }
 
@@ -404,6 +412,7 @@ export class WorkerManager {
 
   async send(input: {
     sessionId: string;
+    attemptId: string;
     text: string;
     attachments?: SessionAttachment[];
     model?: string;
@@ -411,6 +420,9 @@ export class WorkerManager {
     ownerWebContentsId?: number;
   }): Promise<string> {
     const entry = this.requireReadySession(input.sessionId);
+    if (!input.attemptId.trim()) {
+      throw new WorkerManagerError('invalid_send_attempt', 'Pi send attemptId must be non-empty');
+    }
     this.claimEntry(entry, input.ownerWebContentsId);
     if (entry.activeRequestId) {
       throw new WorkerManagerError(
@@ -423,6 +435,7 @@ export class WorkerManager {
     const payload: WorkerSendPayload = {
       logicalSessionId: input.sessionId,
       requestId,
+      attemptId: input.attemptId,
       text: input.text,
       ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(input.model ? { model: input.model } : {}),

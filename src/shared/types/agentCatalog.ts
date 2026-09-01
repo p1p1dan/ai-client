@@ -18,7 +18,6 @@
  */
 
 import type { SessionEffortLevel } from './agentHost';
-import type { AgentWireName } from './agentWire';
 
 /** One selectable model. `label` is UI copy only and is never compared against. */
 export interface AgentModelOption {
@@ -58,8 +57,7 @@ export type AgentModelCatalogError =
   | 'invalid-response';
 
 export interface AgentModelCatalog {
-  agent: AgentWireName;
-  /** Already family-filtered and in this repo's deterministic order (§4.2). */
+  /** Ordered exactly as Pi's managed/local configuration. */
   models: AgentModelOption[];
   source: AgentModelCatalogSource;
   /** `true` for anything that is not a live proxy answer. */
@@ -69,8 +67,7 @@ export interface AgentModelCatalog {
   error?: AgentModelCatalogError;
 }
 
-/** `chat:listAgentModels` request payload. `force` skips the TTL, never the single-flight. */
-export interface ListAgentModelsRequest {
-  agent: AgentWireName;
+/** Pi-only catalog request. `force` skips the TTL, never the single-flight. */
+export interface ListPiModelsRequest {
   force?: boolean;
 }

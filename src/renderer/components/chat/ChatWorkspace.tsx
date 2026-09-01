@@ -3,8 +3,6 @@ import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
 import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
-import { useMessageQueueStore } from '@/stores/messageQueue';
-import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
@@ -26,10 +24,8 @@ import {
   middleColumnHostClass,
   rememberSendAttempt,
 } from './middleColumnLayout';
-import { PendingQuestionDock } from './PendingQuestionDock';
 import type { RunSendOrigin } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
-import { isChatAgentBindingLocked } from './sessionBinding';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -103,20 +99,6 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   });
   const renderedMode = hasWorkingDirectory ? mode : 'empty';
 
-  // D48 S1: the same triple the mode derivation above runs on, folded by the
-  // shared criterion instead of a second hand-written disjunction. It is
-  // computed HERE and passed down because `sendAttempts` is this component's
-  // own state — `ChatComposer` only ever receives the write callback
-  // (`onSendStart`), and `turnSendStatus` is a one-slot in-flight snapshot,
-  // not a per-session sticky latch, so the composer genuinely cannot derive it.
-  // The raw latch goes down alongside the fold: the picker hands it to
-  // `setDraftSessionAgent`, whose option of that name is about this fact alone.
-  const agentBindingLocked = isChatAgentBindingLocked({
-    sendAttempted,
-    hostBound,
-    hasRuntimeIdentity: activeSession?.runtimeIdentity != null,
-  });
-
   useEffect(() => {
     // chatSessions.initRuntime() only subscribes once (runtimeReady latch).
     // React Strict Mode / shell remount unsubscribes on cleanup, then the latch
@@ -187,8 +169,6 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   useEffect(() => {
     const sessionIds = sessions.map((session) => session.id);
     markSessionsLive(sessionIds);
-    useMessageQueueStore.getState().pruneSessions(sessionIds);
-    usePendingUserMessagesStore.getState().pruneSessions(sessionIds);
     pruneSessionScopedRendererState(sessionIds);
   }, [sessions]);
 
@@ -216,7 +196,6 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           jumpToBottomRequest={sendJumpRequest}
         />
       )}
-      {renderedMode === 'session' && <PendingQuestionDock sessionId={activeSessionId} />}
       <ExtensionUiStatusChips sessionId={activeSessionId} />
       <ExtensionUiUnsupportedNotice sessionId={activeSessionId} />
       <ExtensionUiInlineDock sessionId={activeSessionId} />
@@ -224,8 +203,6 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
       <div className={middleColumnHostClass(renderedMode)}>
         {hasWorkingDirectory ? (
           <ChatComposer
-            agentBindingLocked={agentBindingLocked}
-            agentSendAttempted={sendAttempted}
             mode={renderedMode}
             disabled={!activeSessionId}
             onAddRepository={onAddRepository}

@@ -262,9 +262,7 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
   // the row located above. Order matters as much as presence: the group's whole
   // job is `ms-auto` tail-anchoring, which only reads correctly as the last
   // child. Row 2's own left-to-right order is pinned in the same breath (D48 S1
-  // §3.2: agent before model, because which models exist follows from which
-  // agent runs the chat).
-  it('[F6-5] session row 2 reads attach → agent → model → permission → actions, tail-anchored', () => {
+  it('[F6-5] Pi-only session row reads attach → model → actions, tail-anchored', () => {
     const rows = asJsxHost(unwrapParens(sessionModeTernary().whenTrue));
     const controlRow = meaningfulChildren(rows)
       .filter((child) => !isConditionalRender(child))
@@ -272,13 +270,7 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
     expect(controlRow).toBeDefined();
 
     const slots = meaningfulChildren(asJsxHost(controlRow as ts.JsxChild)).map(slotToken);
-    expect(slots).toEqual([
-      'attachButton',
-      'agentPicker',
-      'modelEffortControls',
-      'permissionControl',
-      'composerActionGroupClass()',
-    ]);
+    expect(slots).toEqual(['attachButton', 'modelEffortControls', 'composerActionGroupClass()']);
     expect(slots[slots.length - 1]).toBe('composerActionGroupClass()');
   });
 
@@ -304,9 +296,7 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
     expect(bottomBar).toBeDefined();
     expect(meaningfulChildren(asJsxHost(bottomBar as ts.JsxChild)).map(slotToken)).toEqual([
       'attachButton',
-      'agentPicker',
       'modelEffortControls',
-      'permissionControl',
       'renderStatusLine',
       'composerActionGroupClass()',
     ]);

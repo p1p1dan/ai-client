@@ -180,8 +180,16 @@ async function main(): Promise<void> {
       model: 'probe/probe-model',
       effort: 'low',
     });
-    const turnA = await manager.send({ sessionId: 'probe-a', text: 'stream A' });
-    const turnB = await manager.send({ sessionId: 'probe-b', text: 'stream B' });
+    const turnA = await manager.send({
+      sessionId: 'probe-a',
+      attemptId: 'probe-attempt-a',
+      text: 'stream A',
+    });
+    const turnB = await manager.send({
+      sessionId: 'probe-b',
+      attemptId: 'probe-attempt-b',
+      text: 'stream B',
+    });
     await Promise.all([
       waitForEvent(events, (event) => event.type === 'message.delta' && event.requestId === turnA),
       waitForEvent(events, (event) => event.type === 'message.delta' && event.requestId === turnB),

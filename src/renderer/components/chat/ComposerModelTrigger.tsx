@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/menu';
 import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
-import { catalogModels } from './agentModelCatalog';
 import {
   type ComposerMenuItem,
   type ComposerMenuSection,
@@ -54,7 +53,8 @@ import {
   resolveModelSelection,
   unverifiedModelLabel,
 } from './models';
-import { useAgentModelCatalog } from './useAgentModelCatalog';
+import { catalogModels } from './piModelCatalog';
+import { usePiModelCatalog } from './usePiModelCatalog';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
 
@@ -230,10 +230,7 @@ export function ComposerModelTrigger({
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
   const setChatAgentDefaults = useSettingsStore((state) => state.setChatAgentDefaults);
 
-  const { catalog, loaded, loading, status, refresh, retry } = useAgentModelCatalog(
-    agent,
-    hostState
-  );
+  const { catalog, loaded, loading, status, refresh, retry } = usePiModelCatalog(hostState);
   const catalogOptions = catalogModels(catalog);
 
   const [model, setModel] = useState<string>(() =>

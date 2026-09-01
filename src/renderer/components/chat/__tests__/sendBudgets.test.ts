@@ -13,62 +13,16 @@
  * Time is injected everywhere (`nowMs` arguments) — nothing here waits.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   createSendWaitBudget,
-  HOST_STALL_TIMEOUT_MS,
-  HOST_TTFT_TIMEOUT_MS,
   SEND_SILENCE_CEILING_MS,
   SEND_WAIT_LOOP_BOUND_MS,
 } from '../sendBudgets';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const HOST_RUNTIME_PATH = path.resolve(__dirname, '../../../../agent-host/claudeRuntime.ts');
-
-describe('send budget constants (F2 C-01/C-02)', () => {
-  it('[C-01] the ordered chain holds: TTFT < STALL < SILENCE <= LOOP_BOUND', () => {
-    expect(HOST_TTFT_TIMEOUT_MS).toBeLessThan(HOST_STALL_TIMEOUT_MS);
-    expect(HOST_STALL_TIMEOUT_MS).toBeLessThan(SEND_SILENCE_CEILING_MS);
+describe('send budget constants', () => {
+  it('keeps the renderer silence ceiling within the absolute loop bound', () => {
     expect(SEND_SILENCE_CEILING_MS).toBeLessThanOrEqual(SEND_WAIT_LOOP_BOUND_MS);
-  });
-
-  it('[C-02] REVERSED invariant: the renderer silence ceiling is ABOVE the Host stall watchdog, so the Host always speaks first', () => {
-    // The retired `[T-06]` asserted `SEND_TIMEOUT_CEILING_MS < HOST_STALL_TIMEOUT_MS`
-    // — literally the opposite claim. The R9 shape (system/init then permanent
-    // silence) is terminated by the STALL watchdog, and that is the only span
-    // in which the renderer is still waiting, so the ceiling has to outlive it.
-    expect(SEND_SILENCE_CEILING_MS).toBeGreaterThan(HOST_STALL_TIMEOUT_MS);
-  });
-});
-
-/**
- * [C-03] source mirror lock.
- *
- * `attachmentLimits.ts` claimed its mirrors were "locked by a unit test", but
- * the old test only compared the mirrors against EACH OTHER — both could drift
- * from the Host together and stay green. This reads the Host source text,
- * which is the only truth a renderer test can reach across the program
- * boundary (`src/agent-host` is a separate program and cannot be imported).
- */
-describe('Host mirror lock (F2 C-03)', () => {
-  const hostSource = readFileSync(HOST_RUNTIME_PATH, 'utf8');
-
-  function hostConstant(name: string): number {
-    const match = new RegExp(`\\bconst ${name} = ([0-9_]+);`).exec(hostSource);
-    // A rename must fail loudly rather than silently skip the comparison.
-    expect(match, `claudeRuntime.ts no longer declares ${name}`).not.toBeNull();
-    return Number((match as RegExpExecArray)[1].replace(/_/g, ''));
-  }
-
-  it('[C-03] HOST_STALL_TIMEOUT_MS mirrors claudeRuntime.ts DEFAULT_STALL_TIMEOUT_MS', () => {
-    expect(HOST_STALL_TIMEOUT_MS).toBe(hostConstant('DEFAULT_STALL_TIMEOUT_MS'));
-  });
-
-  it('[C-03] HOST_TTFT_TIMEOUT_MS mirrors claudeRuntime.ts DEFAULT_TTFT_TIMEOUT_MS', () => {
-    expect(HOST_TTFT_TIMEOUT_MS).toBe(hostConstant('DEFAULT_TTFT_TIMEOUT_MS'));
   });
 });
 

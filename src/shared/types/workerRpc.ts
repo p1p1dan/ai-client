@@ -88,6 +88,8 @@ export interface WorkerSendPayload {
   logicalSessionId: string;
   /** Product turn identity. Distinct from the transport RPC requestId. */
   requestId: string;
+  /** Renderer-owned identity for pending-user reconciliation. */
+  attemptId: string;
   text: string;
   attachments?: SessionAttachment[];
   model?: string;
@@ -210,6 +212,8 @@ export function isWorkerSendPayload(value: unknown): value is WorkerSendPayload 
     value.logicalSessionId.trim().length === 0 ||
     typeof value.requestId !== 'string' ||
     value.requestId.trim().length === 0 ||
+    typeof value.attemptId !== 'string' ||
+    value.attemptId.trim().length === 0 ||
     typeof value.text !== 'string'
   ) {
     return false;

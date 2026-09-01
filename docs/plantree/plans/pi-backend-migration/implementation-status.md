@@ -1,12 +1,12 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Phase C / T31 Cycle 1/2 behavior reattachment；T30 Main-owned bounded WorkerManager 已完成。
+**Current Phase**：Phase D / T32 Pi-native history and real resume；T31 Cycle 1/2 behavior reattachment已完成。
 
-**Next Target**：[T31](./roadmap.md#t31--cycle-12-behavior-reattachment--next) 将 queue/pending/attachments、Extension UI display/approval、models/auth/permissions 与 retirement behavior 完整重挂到 multi-slot WorkerManager，并同步删除每组被替代的 legacy execution branch。
+**Next Target**：[T32](./roadmap.md#t32--history-and-real-resume--planned) 在WorkerSlot内打开exact Pi session file，输出`session.resumed → session.history → idle`，补missing/corrupt/cross-cwd与renderer hydration race。
 
-**Last Landed**：2026-08-31 T30 normalized identity/remap、resource-aware bounded pool、foreground/active/blocking eviction protection、same-session bounded restart、multi-window owner isolation、parallel app-close disposal，以及最终 `AgentHostManager`/`AgentHostProcess`/legacy host env/router/lifecycle IPC 删除；见 [evidence](./evidence/2026-08-31-t30-worker-manager.md)。
+**Last Landed**：2026-09-01 T31-a/b/c/d closure：streaming、queue/pending/attachments、Extension UI、Pi-only models/runtime gate/auth/trust/permissions完整重挂，并删除Claude/Codex live worker execution、agent picker、legacy permission/question IPC和multi-agent catalog/dependencies；见 [evidence](./evidence/2026-09-01-t31-behavior-reattachment.md)。
 
-**Last Verified**：2026-08-31 — T30 WorkerManager/slot/worker/index/owner/cleanup focused 16 files / 134 tests；auth/onboarding/model/permission regressions 10 files / 108 tests；packaging scripts 3 files / 42 tests；Main + Agent Host typecheck；48 changed source/test/script files scoped Biome；diff check；worker-only build 92.8 MiB；真实 Electron 双 slot stream + app-close PID census。低资源主机串行执行，未运行 full Vitest/full Electron production build。
+**Last Verified**：2026-09-01 — worker/Manager 12 files / 173 tests；Main/auth/config 12 / 135；renderer 35 / 769；migration-reader 7 / 131；packaging 4 / 44；两套typecheck、72 changed files Biome、diff check；worker build 92.8 MiB；真实Electron双slot probe；Main/Preload/renderer dev startup smoke。未运行full Vitest或整套production build。
 
 ## Current architecture decision
 
@@ -16,20 +16,19 @@
 - [D17](./decisions/017-worker-pool-policy.md)：identity/remap、2/3/4 capacity、protected eviction、same-session bounded restart policy。
 - [T28 map](./topics/t28-replacement-map.md) 继续作为 T31/T34/T35/T36 的文件级删除/保护 authority。
 
-## T30 landed
+## T31 closure
 
-- **Identity**：temporary key 包含 normalized workspace + logical session + UUID；durable key 使用 normalized sessionFile；WorkerSlot diagnostic key 与 Manager map 一起 remap；SessionIndex atomic flush 后才发布 success。
-- **Capacity**：≤4 GiB 默认 2、≤8 GiB 默认 3、其余 4；启动覆盖 1..8；15m idle reclaim；foreground/active/blocking/lifecycle state 不淘汰。
-- **Crash**：slot-local terminal failure/Extension UI reset；旧 generation 丢弃；replacement `SessionManager.open(sessionFile)`；60s 内最多 2 次 restart。
-- **Owner**：每窗口一个 foreground session；不同窗口独立；blocking response 精确回 originating slot/generation/window；window close dismiss request。
-- **Lifecycle/deletion**：pool 并行 dispose、bootstrap 期间也持有 process；sync force-kill；global manager/process/env/router/lifecycle IPC 与 obsolete tests/spikes 删除。
+- **Behavior**：RuntimeEvent、queue/pending/attachments、Extension UI、models/auth/trust/permissions均消费WorkerManager/WorkerSlot authority。
+- **Identity**：pending echo使用exact attemptId；slot/generation/window owner与background session隔离通过focused tests。
+- **Deletion**：live Claude/Codex utility worker producer/runtime/dependencies、agent picker、legacy permission/question IPC和multi-agent catalog已删除；无compatibility facade。
+- **Protected boundaries**：T32 history hydration、T34 read-only readers、T36 terminal/Pi TUI按T28 map保留。
 
 ## Active TODO
 
-1. **T31-a**：RuntimeEvent/text/thinking/tool/custom/timeline ordering 在 multi-slot 下重挂并清旧 producer branches。
-2. **T31-b**：queue/pending/attachments、stop/retry/retirement 与 slot state 对齐。
-3. **T31-c/d**：Extension UI display/reset、models/auth/permissions 与 config invalidation 的完整 product regression。
-4. **并行环境欠项**：真账号 queue GUI 复点；高资源主机 packaged preview/PDF/Monaco/local-file smoke（T37 前关闭）。
+1. **T32-a/b**：Pi branch-aware timeline/incomplete recovery + WorkerSlot exact-file open与resumed/history/idle order。
+2. **T32-c**：missing/corrupt/cross-cwd、duplicate click、restart、late hydration与switch race。
+3. **T33 preparation**：只读参考tree/rewind/fork tests；不得提前在renderer裁剪history。
+4. **并行环境欠项**：真账号queue GUI复点；高资源主机packaged preview/PDF/Monaco/local-file smoke（T37前关闭）。
 
 ## Blocked By / risks
 
@@ -40,7 +39,7 @@
 
 ## Handoff
 
-1. 先读 [T30 evidence](./evidence/2026-08-31-t30-worker-manager.md)、[D17](./decisions/017-worker-pool-policy.md)、[T29-c evidence](./evidence/2026-08-31-t29c-single-slot-closure.md) 与 [T28 map](./topics/t28-replacement-map.md)。
-2. T31 直接消费 `workerManager`/managed slot metadata；不得恢复 `AgentHostManager`、legacy NDJSON entry 或 singleton lifecycle IPC。
-3. stop/status/background RPC 必须 session-targeted，不 fallback 到 foreground；blocking response 必须保留 exact origin。
-4. 每重挂一组 Cycle 1/2 behavior，同步删除其旧 Host/agent/backend source、tests、exports 与 scripts，并记录 evidence。
+1. 先读 [T31 closure evidence](./evidence/2026-09-01-t31-behavior-reattachment.md)、[timeline topic](./topics/timeline-reference.md)、[T30 evidence](./evidence/2026-08-31-t30-worker-manager.md) 与 [T28 map](./topics/t28-replacement-map.md)。
+2. T32只能在WorkerSlot内调用Pi SessionManager；Main/renderer不直接读写Pi JSONL。
+3. resume必须session-targeted并保持exact sessionFile；不得恢复legacy Host/history reader execution route。
+4. T34 migration-only readers继续隔离只读；T32不得顺手把import source当runtime resume。

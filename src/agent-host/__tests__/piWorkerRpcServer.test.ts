@@ -89,6 +89,7 @@ describe('PiWorkerRpcServer', () => {
       request('send-rpc', 'worker.send', {
         logicalSessionId: 'logical-1',
         requestId: 'turn-1',
+        attemptId: 'attempt-1',
         text: 'hold',
       })
     );
@@ -179,6 +180,7 @@ describe('PiWorkerRpcServer', () => {
       request('preboot', 'worker.send', {
         logicalSessionId: 'logical-1',
         requestId: 'turn',
+        attemptId: 'attempt-preboot',
         text: 'x',
       })
     );

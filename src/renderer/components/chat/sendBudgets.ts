@@ -3,29 +3,9 @@
  * out of `attachmentLimits.ts` so the attachment half and the timing half can
  * be re-measured independently. Pure module — no timer, no store, no React.
  *
- * REVERSED INVARIANT. This replaces the old "the renderer speaks first" block
- * that used to sit on `SEND_TIMEOUT_CEILING_MS`:
- *
- *   HOST_TTFT_TIMEOUT_MS (32s) < HOST_STALL_TIMEOUT_MS (195s)
- *     < SEND_SILENCE_CEILING_MS (300s) <= SEND_WAIT_LOOP_BOUND_MS (30min)
- *
- * It is NOT "three watchdogs ordered by size". It is two separate statements:
- *
- *  1. The first two are two SEGMENTS OF ONE turn lifeline, both inside the
- *     Host: TTFT covers the span before the first productive event, the
- *     rolling stall watchdog covers everything after it.
- *  2. The third does NOT compete with the stall watchdog over the same span.
- *     `runSend`'s main wait predicate releases on the FIRST 'assistant'
- *     signal, and `classifyAssistantProgress` counts permission / question /
- *     tool / thinking frames as that signal — so the renderer's budget is
- *     semantically a TTFT table and never lives long enough to reach the
- *     stall watchdog's territory. It has to exceed 195s only because the one
- *     shape that DOES keep the renderer waiting that long — a Host that
- *     emitted `system/init` and then went permanently silent — is terminated
- *     by the STALL watchdog, and the Host has to be the one to speak.
- *
- * Direction, therefore: the HOST is the only verdict-holder, and the renderer
- * reaching its ceiling says nothing at all about whether the turn is alive.
+ * Pi WorkerSlot is the only verdict-holder. The renderer budget merely stops
+ * a local wait after prolonged silence; it never synthesizes a terminal event,
+ * aborts another slot, or revives a legacy Host watchdog.
  *
  * §12 verification first: __tests__/sendBudgets.test.ts.
  */
@@ -47,22 +27,6 @@ export const SEND_SILENCE_CEILING_MS = 300_000;
  * disagreeing by 40x.
  */
 export const SEND_WAIT_LOOP_BOUND_MS = 1_800_000;
-
-/**
- * Documentation mirror of claudeRuntime.ts's DEFAULT_STALL_TIMEOUT_MS. It
- * cannot be imported (`src/agent-host` is a separate program), so `[C-03]`
- * locks it against the Host SOURCE TEXT. The predecessor of this comment
- * claimed a unit-test lock that only ever compared the two mirrors against
- * each other — they could drift from the Host together and stay green.
- */
-export const HOST_STALL_TIMEOUT_MS = 195_000;
-
-/**
- * Documentation mirror of claudeRuntime.ts's DEFAULT_TTFT_TIMEOUT_MS (the
- * "time to first productive event" watchdog). Same cross-program constraint
- * and the same source-text lock as HOST_STALL_TIMEOUT_MS above.
- */
-export const HOST_TTFT_TIMEOUT_MS = 32_000;
 
 /**
  * A resettable wait budget for one send.

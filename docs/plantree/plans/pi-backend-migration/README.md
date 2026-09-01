@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase C / T31 Cycle 1/2 behavior reattachment；T30 Main-owned bounded WorkerManager 已完成。
+> **当前阶段**：Phase D / T32 Pi-native history and real resume；T31 behavior reattachment已完成。
 
 ## 目标
 
@@ -88,9 +88,10 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 | [topics/reference-repositories.md](./topics/reference-repositories.md) | pi-app/pix 强制复用规则 |
 | [topics/extension-ui.md](./topics/extension-ui.md) | Cycle 2 行为契约与 WorkerSlot 适配要求 |
 | [topics/timeline-reference.md](./topics/timeline-reference.md) | timeline/history/tree 参考与适配边界 |
+| [topics/t31a-runtime-event-reattachment.md](./topics/t31a-runtime-event-reattachment.md) | T31-a producer→WorkerManager→renderer文件图、参考分类、focused matrix与legacy cleanup ledger |
 | [topics/completion-cycles.md](./topics/completion-cycles.md) | Cycle 1/2 完成历史；旧 Cycle 3–5 已被替代 |
 | [history/2026-08-31-pre-pi-only-realignment/](./history/2026-08-31-pre-pi-only-realignment/) | Pi-only 重排前完整计划快照 |
 
 ## 当前出口
 
-T28 文件级替换边界、T29 single WorkerSlot 和 T30 bounded WorkerManager 已完成：typed RPC/lifecycle、per-slot utility worker + one Pi AgentSession、normalized identity/remap、bounded capacity/idle reclaim、generation-aware same-session restart、multi-window owner isolation、parallel app-close cleanup，以及 global manager/process/env/router/lifecycle IPC 删除。当前进入 T31 Cycle 1/2 behavior reattachment；每组行为切到 pool 后同步删除对应 legacy execution branch，history/TUI 不焊到旧 host。
+T28 replacement boundary、T29 single WorkerSlot、T30 bounded WorkerManager与T31 Cycle 1/2 behavior reattachment均已完成。T31已闭环streaming、queue/pending/attachments、Extension UI、Pi-only models/runtime gate/auth/trust/permissions并删除replaced live Claude/Codex execution branches；见 [closure evidence](./evidence/2026-09-01-t31-behavior-reattachment.md)。当前Next为T32 Pi-native history/resume；history/import/TUI继续服从T28保护边界，不焊回旧host。

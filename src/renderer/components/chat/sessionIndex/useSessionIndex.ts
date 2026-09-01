@@ -2,6 +2,7 @@ import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { useCallback, useEffect, useState } from 'react';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
+import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive, markSessionsRetired } from '@/stores/sessionRetirement';
 import { dropDismissedSessions, markSessionDismissed, undismissSession } from './dismissedSessions';
 import { mergeSessionIndex, recentSessionIdsFromIndex } from './sessionIndexMerge';
@@ -270,6 +271,7 @@ function removeSessionRow(sessionId: string): void {
     pendingPermissions: state.pendingPermissions.filter((item) => item.sessionId !== sessionId),
     pendingQuestion: state.pendingQuestion?.sessionId === sessionId ? null : state.pendingQuestion,
   });
+  pruneSessionScopedRendererState(sessions.map((session) => session.id));
 }
 
 async function callArchive(sessionId: string, archived: boolean): Promise<boolean> {
@@ -386,6 +388,12 @@ export async function closeSessionAndRemoveRow(
   sessionId: string,
   refresh: () => Promise<void>
 ): Promise<boolean> {
+  // Tombstone and prune synchronously before the Main round-trip. Any worker
+  // frame racing the close is rejected by the runtime-event gate and cannot
+  // recreate queue/pending/Extension UI state for a row that already left.
+  markSessionDismissed(sessionId);
+  removeSessionRow(sessionId);
+
   let detached = true;
   try {
     await window.electronAPI.chat.closeSession({ sessionId });
@@ -393,8 +401,6 @@ export async function closeSessionAndRemoveRow(
     detached = false;
   }
 
-  markSessionDismissed(sessionId);
-  removeSessionRow(sessionId);
   // Refresh AFTER the removal so survivors' updatedAt is current; the
   // dismissal list keeps the merge from re-adding the row we just dropped.
   await refresh();

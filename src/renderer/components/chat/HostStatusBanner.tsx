@@ -1,6 +1,6 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { type HostStatus, isNode24ResolutionFailure } from './hostStatus';
+import type { HostStatus } from './hostStatus';
 
 /**
  * Compact diagnostics ribbon (T-09): shown only while the Host is not ready.
@@ -18,31 +18,22 @@ interface HostStatusBannerProps {
 }
 
 const STATE_TITLE: Record<HostStatus['state'], string> = {
-  stopped: 'Agent Host 已停止',
-  starting: 'Agent Host 正在启动…',
+  stopped: 'Pi session service 已停止',
+  starting: 'Pi session service 正在启动…',
   ready: '',
-  error: 'Agent Host 出错',
+  error: 'Pi session service 出错',
 };
 
 export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
   if (status.state === 'ready') return null;
 
   const isError = status.state === 'error';
-  const isNodeMissing = isError && isNode24ResolutionFailure(status);
-
-  const title = isNodeMissing
-    ? 'Agent Host 未就绪：未找到 Node 24 运行时'
-    : isError
-      ? (status.lastFatalError ?? STATE_TITLE.error)
-      : STATE_TITLE[status.state];
-
-  const guidance = isNodeMissing
-    ? '设置环境变量 AICLIENT_NODE24_PATH 指向 Node 24 可执行文件，或安装 Node 24 后点击 Retry'
-    : isError
-      ? '点击 Retry 重新启动 Agent Host'
-      : status.state === 'stopped'
-        ? '点击 Retry 拉起 Agent Host'
-        : '';
+  const title = isError ? (status.lastFatalError ?? STATE_TITLE.error) : STATE_TITLE[status.state];
+  const guidance = isError
+    ? '点击 Retry 重新初始化 Pi session service'
+    : status.state === 'stopped'
+      ? '点击 Retry 初始化 Pi session service'
+      : '';
 
   const diagnostics = formatDiagnostics(status);
   const Icon = isError ? AlertTriangle : RefreshCw;
@@ -78,19 +69,10 @@ export function HostStatusBanner({ status, onRetry }: HostStatusBannerProps) {
 
 function formatDiagnostics(status: HostStatus): string {
   const parts: string[] = [];
-  if (status.nodeVersion) parts.push(`Node ${status.nodeVersion}`);
-  if (status.nodeExecPath) parts.push(`path: ${status.nodeExecPath}`);
-  if (status.cometixVersion) parts.push(`Cometix ${status.cometixVersion}`);
-  if (status.driver) parts.push(`driver: ${status.driver}`);
-  if (status.pid) parts.push(`pid: ${status.pid}`);
-  const settings = status.settings;
-  if (settings) {
-    parts.push(
-      `auth=${settings.hasAuthToken ? 'ok' : 'missing'}`,
-      `baseUrl=${settings.hasBaseUrl ? 'ok' : 'missing'}`,
-      settings.baseHost ? `host=${settings.baseHost}` : '',
-      settings.model ? `model=${settings.model}` : ''
-    );
-  }
-  return parts.filter(Boolean).join(' · ');
+  if (status.capacity !== undefined) parts.push(`capacity=${status.capacity}`);
+  if (status.slots !== undefined) parts.push(`slots=${status.slots}`);
+  if (status.active !== undefined) parts.push(`active=${status.active}`);
+  if (status.restarting) parts.push(`restarting=${status.restarting}`);
+  if (status.errors) parts.push(`errors=${status.errors}`);
+  return parts.join(' · ');
 }

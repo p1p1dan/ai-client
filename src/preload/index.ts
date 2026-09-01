@@ -89,16 +89,9 @@ import type {
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentStopNotificationData } from '@shared/types/agent';
-import type { AgentModelCatalog, ListAgentModelsRequest } from '@shared/types/agentCatalog';
-import type { AgentHostDriver, SessionEffortLevel } from '@shared/types/agentHost';
-import type { AgentWireName } from '@shared/types/agentWire';
-import type {
-  ExtensionUiResponse,
-  HostReadyEvent,
-  PermissionDecisionId,
-  PermissionUpdateEffective,
-  SessionPermissionPreference,
-} from '@shared/types/runtimeEvents';
+import type { AgentModelCatalog, ListPiModelsRequest } from '@shared/types/agentCatalog';
+import type { SessionEffortLevel } from '@shared/types/agentHost';
+import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { parseInitialThemeArg } from '@shared/windowTheme';
@@ -1046,17 +1039,11 @@ const electronAPI = {
     },
   },
 
-  // Claude runtime gate (TEC-encrypted environment compatibility)
-  claudeRuntime: {
+  piRuntime: {
     check: (force?: boolean) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_RUNTIME_CHECK, force) as Promise<
-        import('@shared/types').ClaudeRuntimeStatus
+      ipcRenderer.invoke(IPC_CHANNELS.PI_RUNTIME_CHECK, force) as Promise<
+        import('@shared/types/piRuntime').PiRuntimeStatus
       >,
-    disableAutoUpdates: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_RUNTIME_DISABLE_AUTO_UPDATES) as Promise<{
-        success: boolean;
-        error?: string;
-      }>,
   },
 
   // Auth (D47 S2a) — managed-credentials mode probe (S1 spec §1 "不做" is
@@ -1384,22 +1371,23 @@ const electronAPI = {
 
   // OpenChamber Chat Runtime (Agent Host)
   chat: {
-    ensureHost: (
-      driver?: AgentHostDriver
-    ): Promise<{
+    ensureHost: (): Promise<{
       state: string;
-      pid?: number;
-      driver: AgentHostDriver;
-      cometixVersion: string;
-      // Legacy-compatible chat readiness diagnostics; WorkerManager supplies the snapshot.
-      settings: NonNullable<HostReadyEvent['payload']['settings']> | null;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST, driver),
+      capacity: number;
+      slots: number;
+      active: number;
+      restarting: number;
+      errors: number;
+      capabilities: { history: false; thinking: true; permissionPolicy: true };
+    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST),
     getHostStatus: (): Promise<{
       state: string;
-      pid?: number;
-      driver: AgentHostDriver;
-      cometixVersion: string;
-      settings: NonNullable<HostReadyEvent['payload']['settings']> | null;
+      capacity: number;
+      slots: number;
+      active: number;
+      restarting: number;
+      errors: number;
+      capabilities: { history: false; thinking: true; permissionPolicy: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HOST_STATUS),
     createSession: (payload: {
       sessionId: string;
@@ -1407,15 +1395,6 @@ const electronAPI = {
       model?: string;
       /** T-20 session default reasoning effort. */
       effort?: SessionEffortLevel;
-      /** S2 (b): which runtime to start; read off the session via `sessionAgent`. */
-      agent?: AgentWireName;
-      /**
-       * D48 S3 §5.5 — the "Chat agent defaults" template, as read at this send.
-       * Only a candidate: Main keeps a posture the session already captured.
-       * Absent (unhydrated settings, no template, an old renderer) = the
-       * runtime's own safe constant.
-       */
-      permissionPreference?: SessionPermissionPreference;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CREATE_SESSION, payload),
     /**
@@ -1426,12 +1405,6 @@ const electronAPI = {
       sessionId: string;
       workspacePath: string;
       model?: string;
-      /**
-       * S2 (b): the binding, for a session that has never started a Host and
-       * so has no `session.created` to report it. Absent means "don't touch
-       * the row's agent", not "Claude Code".
-       */
-      agent?: AgentWireName;
     }): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_REGISTER_SESSION, payload),
     resumeSession: (payload: {
       sessionId: string;
@@ -1440,12 +1413,11 @@ const electronAPI = {
       model?: string;
       /** T-20 session default reasoning effort. */
       effort?: SessionEffortLevel;
-      /** S2 (b): which runtime resumes it; pairs with the opaque `runtimeIdentity`. */
-      agent?: AgentWireName;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
     send: (payload: {
       sessionId: string;
+      attemptId: string;
       text: string;
       attachments?: Array<{
         kind: 'image' | 'text';
@@ -1462,49 +1434,6 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
     closeSession: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLOSE_SESSION, payload),
-    /**
-     * D48 S4 §6.3 — change the posture of a session that is already running.
-     *
-     * Rejects (never resolves with a failure shape) when the change did not
-     * land: an unconfirmed dangerous tier, a posture for the other agent, a
-     * running turn, a protocol error, an old Host that does not know the
-     * command. The caller rolls the control back to the tier the session was
-     * already on — nothing is retried and nothing is queued.
-     *
-     * The resolved `effective` says WHEN it applies, and the two axes differ:
-     * `immediately` on Codex (zero-turn, the open thread takes it) and
-     * `next_turn` on Claude (the tier is a `query()` option and every send opens
-     * a new query). Copy must read it rather than assume one of them.
-     */
-    updatePermission: (payload: {
-      sessionId: string;
-      permissionPreference: SessionPermissionPreference;
-      /** R18: the second confirmation for a dangerous tier actually happened. */
-      dangerousConfirmed?: boolean;
-    }): Promise<{
-      requestId: string;
-      preference: SessionPermissionPreference;
-      effective: PermissionUpdateEffective;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_UPDATE_PERMISSION, payload),
-    respondPermission: (payload: {
-      sessionId: string;
-      permissionId: string;
-      allow: boolean;
-      /**
-       * S2 (c): the richer button the user pressed. Absent = `allow ? 'allow'
-       * : 'deny'`; the two must never contradict each other.
-       */
-      decision?: PermissionDecisionId;
-    }): Promise<{ requestId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_PERMISSION, payload),
-    respondQuestion: (payload: {
-      sessionId: string;
-      questionId: string;
-      answers?: Record<string, string>;
-      response?: string;
-      cancel?: boolean;
-    }): Promise<{ requestId: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESPOND_QUESTION, payload),
     /**
      * T11 — answer one `extensionUi.request`.
      *
@@ -1534,8 +1463,8 @@ const electronAPI = {
      * bridge (§0.1-2). `force` skips the 10-minute TTL (Retry/Refresh), never
      * the single-flight.
      */
-    listAgentModels: (payload: ListAgentModelsRequest): Promise<AgentModelCatalog> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_AGENT_MODELS, payload),
+    listPiModels: (payload?: ListPiModelsRequest): Promise<AgentModelCatalog> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_PI_MODELS, payload),
   },
 
   piModels: {

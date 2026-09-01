@@ -218,7 +218,7 @@ describe('sendAndWait release set (2026-08-10 stop-hang fix)', () => {
     expect(gate).toBeLessThan(only('if (isSessionCompletedForSend(event, sessionId)) {'));
     // The echo itself is recorded earlier in the same listener, so an echo
     // and a terminal arriving in one batch still resolve in the right order.
-    expect(only('if (isUserEchoForSend(event, sessionId)) {')).toBeLessThan(gate);
+    expect(only('if (isUserEchoForSend(event, sessionId, attemptId)) {')).toBeLessThan(gate);
   });
 });
 

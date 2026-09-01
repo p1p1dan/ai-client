@@ -36,25 +36,24 @@ describe('pending user message reconciliation', () => {
     ).toEqual(['attempt-2']);
   });
 
-  it('pairs identical consecutive prompts one-to-one with FIFO authoritative echo ids', () => {
+  it('pairs identical consecutive prompts by exact attempt even when echoes arrive out of order', () => {
     const store = usePendingUserMessagesStore.getState();
     store.publish(pending());
     store.publish(pending({ attemptId: 'attempt-2', text: 'hi' }));
 
-    usePendingUserMessagesStore.getState().acknowledgeNext('s1', 'echo-1');
-    const afterFirstEcho = usePendingUserMessagesStore.getState().bySession.s1;
-    expect(afterFirstEcho?.[0]).toEqual(
-      expect.objectContaining({ attemptId: 'attempt-1', authoritativeMessageId: 'echo-1' })
-    );
-    expect(afterFirstEcho?.[1]?.attemptId).toBe('attempt-2');
-    expect(afterFirstEcho?.[1]?.authoritativeMessageId).toBeUndefined();
-
-    usePendingUserMessagesStore.getState().acknowledgeNext('s1', 'echo-1');
+    usePendingUserMessagesStore.getState().acknowledgeAttempt('s1', 'attempt-2', 'echo-2');
+    expect(usePendingUserMessagesStore.getState().bySession.s1).toEqual([
+      expect.objectContaining({ attemptId: 'attempt-1' }),
+      expect.objectContaining({ attemptId: 'attempt-2', authoritativeMessageId: 'echo-2' }),
+    ]);
     expect(
-      usePendingUserMessagesStore.getState().bySession.s1?.[1]?.authoritativeMessageId
+      usePendingUserMessagesStore.getState().bySession.s1?.[0]?.authoritativeMessageId
     ).toBeUndefined();
 
-    usePendingUserMessagesStore.getState().acknowledgeNext('s1', 'echo-2');
+    usePendingUserMessagesStore.getState().acknowledgeAttempt('s1', 'attempt-1', 'echo-1');
+    usePendingUserMessagesStore.getState().acknowledgeAttempt('s1', 'attempt-1', 'echo-redelivery');
+    usePendingUserMessagesStore.getState().acknowledgeAttempt('s2', 'attempt-1', 'wrong-session');
+
     expect(usePendingUserMessagesStore.getState().bySession.s1).toEqual([
       expect.objectContaining({ attemptId: 'attempt-1', authoritativeMessageId: 'echo-1' }),
       expect.objectContaining({ attemptId: 'attempt-2', authoritativeMessageId: 'echo-2' }),

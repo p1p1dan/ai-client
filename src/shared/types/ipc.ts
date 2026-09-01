@@ -298,9 +298,8 @@ export const IPC_CHANNELS = {
   CLAUDE_PLUGINS_MARKETPLACES_REMOVE: 'claude:plugins:marketplaces:remove',
   CLAUDE_PLUGINS_MARKETPLACES_REFRESH: 'claude:plugins:marketplaces:refresh',
 
-  // Claude runtime gate (TEC-encrypted environment compatibility)
-  CLAUDE_RUNTIME_CHECK: 'claude:runtime:check',
-  CLAUDE_RUNTIME_DISABLE_AUTO_UPDATES: 'claude:runtime:disableAutoUpdates',
+  // Pi worker runtime availability gate.
+  PI_RUNTIME_CHECK: 'pi:runtime:check',
 
   // Auth (D47 S2a) — managed-credentials mode probe. Path is not a secret;
   // renderer has no other way to learn the userData-relative claude-home dir.
@@ -384,34 +383,16 @@ export const IPC_CHANNELS = {
   CHAT_STOP: 'chat:stop',
   CHAT_CLOSE_SESSION: 'chat:closeSession',
   /**
-   * D48 S4 §6 — change the permission posture of a session that is already
-   * running. Its own channel rather than a field on `chat:send`: the Codex axis
-   * changes posture with zero turns, so this has to work when the user has typed
-   * nothing, and Main has to be able to REFUSE it (an unconfirmed dangerous
-   * tier, a posture for the other agent) without failing a message.
-   */
-  CHAT_UPDATE_PERMISSION: 'chat:updatePermission',
-  CHAT_RESPOND_PERMISSION: 'chat:respondPermission',
-  CHAT_RESPOND_QUESTION: 'chat:respondQuestion',
-  /**
-   * T11 — answer one `extensionUi.request`. Its own channel rather than a
-   * variant of `chat:respondPermission`: the addressee is a bridge instance plus
-   * a dialog id, NOT a session, and the two must not share a route or Main would
-   * be tempted to look up a session that may already be gone by the time the
-   * user answers.
+   * T11 — answer one portable `extensionUi.request`. The addressee is a bridge
+   * runtime plus dialog id, not a session or legacy permission dialect.
    */
   CHAT_RESPOND_EXTENSION_UI: 'chat:respondExtensionUi',
   CHAT_LIST_SESSIONS: 'chat:listSessions',
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',
   CHAT_LIST_HISTORY: 'chat:listHistory',
-  /**
-   * D48 S2 §4.1 — per-agent model catalog, answered by Main against the D47
-   * credential vault. Its own channel rather than a field on `getHostStatus`:
-   * the Agent Host has neither the credentials nor the gateway URL to answer it
-   * (`hostEnv.ts`), and the reply must never carry either.
-   */
-  CHAT_LIST_AGENT_MODELS: 'chat:listAgentModels',
+  /** Pi-only model catalog; no provider credential or base URL crosses IPC. */
+  CHAT_LIST_PI_MODELS: 'chat:listPiModels',
   /** Main → Renderer: Agent Host RuntimeEvent push */
   CHAT_RUNTIME_EVENT: 'chat:runtimeEvent',
 

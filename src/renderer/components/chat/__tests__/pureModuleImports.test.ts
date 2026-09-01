@@ -43,44 +43,12 @@ const TARGET_FILES = [
   // slice 0 — skipped below rather than failing, per the spec's own note.
   '../eventRing.ts',
   '../../workspace-shell/surfaces/contextSurfaceModel.ts',
-  // D48 S1: the agent picker's whole decision surface lives in these two, and
-  // their truth tables are the only automated coverage the picker gets (no
-  // `.tsx` renders under this config). A stray store import here would take
-  // both suites out at once, as an opaque runner hang rather than a red test.
   '../sessionBinding.ts',
-  '../composerAgentPickerModel.ts',
-  // D48 S2: the family whitelist and the seed table are read by Main (the
-  // catalog service), by the renderer's menu model and by tests. A store or
-  // React import in either would take the Main-side suite down as well as this
-  // one — and would be an import edge from `src/shared` into `src/renderer`,
-  // which nothing else in the tree has.
-  '../../../../shared/models/familyWhitelist.ts',
-  '../../../../shared/models/seedCatalog.ts',
-  // D48 S2 renderer half: the model SELECTION rules, the catalog's product
-  // copy, the (session, agent) storage layer and the app-settings template
-  // shape. Every branch the Composer's model trigger takes lives in one of
-  // these four — the `.tsx` itself is wiring — so a React or store import here
-  // would silently move a decision out of reach of every truth table in the
-  // slice, and take the suites with it.
+  // Pi-only model selection, catalog copy, session storage and defaults.
   '../models.ts',
-  '../agentModelCatalog.ts',
+  '../piModelCatalog.ts',
   '../sessionPreferenceStore.ts',
   '../../../../shared/models/chatAgentDefaults.ts',
-  // D48 S4 (§9.3): the sandbox shape mapping and the `thread/settings/update`
-  // parameter whitelist. It lives under `src/agent-host/` and is loaded by the
-  // Host under `--experimental-strip-types`, so a React or store import there
-  // would not merely take a suite down — it would be unloadable in the process
-  // that actually runs it.
-  '../../../../agent-host/codexSettingsUpdate.ts',
-  // D48 S4 renderer half: every branch of the live permission chip (the render
-  // gate, the idle gate, the echo projection, the dangerous-tier gate) plus the
-  // tier vocabulary both layers read. The `.tsx` beside it never renders under
-  // this config, so a store or React import here would move a security decision
-  // out of reach of every truth table in the slice — and the settings ban in
-  // particular is load-bearing: the live layer must NOT reach into the template
-  // layer's module, which is why the shared tier table exists.
-  '../composerPermissionModel.ts',
-  '../../../../shared/models/permissionTiers.ts',
 ] as const;
 
 /** Import statement lines only, `import type ...` lines excluded. */

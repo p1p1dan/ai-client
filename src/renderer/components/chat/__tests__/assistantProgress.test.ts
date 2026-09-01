@@ -255,6 +255,16 @@ describe('isUserEchoForSend (R15, round-2 iteration-2 review: pure wiring covera
     ).toBe(true);
   });
 
+  it('requires the exact attempt id when the caller provides one', () => {
+    const echo = event('message.started', {
+      messageId: 'u-1',
+      role: 'user',
+      attemptId: 'attempt-1',
+    });
+    expect(isUserEchoForSend(echo, 'session-live', 'attempt-1')).toBe(true);
+    expect(isUserEchoForSend(echo, 'session-live', 'attempt-2')).toBe(false);
+  });
+
   it('is false for a message.started{role: assistant} event — that is progress, not the echo', () => {
     expect(
       isUserEchoForSend(

@@ -7,9 +7,12 @@ import type { SubagentActivityState } from '@/components/chat/subagentActivityMo
 import type { SessionRuntimeFactsState } from '@/components/workspace-shell/surfaces/contextSurfaceModel';
 import { useExtensionUiStore } from './extensionUi';
 import { useExtensionUiDisplayStore } from './extensionUiDisplay';
+import { useMessageQueueStore } from './messageQueue';
+import { usePendingUserMessagesStore } from './pendingUserMessages';
 import { useSessionRuntimeFactsStore } from './sessionRuntimeFacts';
 import { useSubagentActivityStore } from './subagentActivity';
 import { useToolExpansionStore } from './toolExpansion';
+import { useTurnSendStatusStore } from './turnSendStatus';
 
 export function pruneRecordBySession<T>(
   record: Readonly<Record<string, T>>,
@@ -60,8 +63,17 @@ export function pruneSubagentActivityState(
   return { lanes: keptLanes, agentIndex, permissionOrigin, nextOrdinal: state.nextOrdinal };
 }
 
-/** Clear all adjacent session-keyed renderer stores after tree synchronization. */
+/** Clear every transient renderer projection for sessions absent from the live tree. */
 export function pruneSessionScopedRendererState(sessionIds: readonly string[]): void {
+  const live = new Set(sessionIds);
+  useMessageQueueStore.getState().pruneSessions(sessionIds);
+  usePendingUserMessagesStore.getState().pruneSessions(sessionIds);
+  useTurnSendStatusStore.setState((state) => ({
+    status: state.status && live.has(state.status.sessionId) ? state.status : null,
+    baseline: state.baseline && live.has(state.baseline.sessionId) ? state.baseline : null,
+    pendingReply:
+      state.pendingReply && live.has(state.pendingReply.sessionId) ? state.pendingReply : null,
+  }));
   useSessionRuntimeFactsStore.setState((state) => ({
     factsBySession: pruneRecordBySession(
       state.factsBySession as SessionRuntimeFactsState,

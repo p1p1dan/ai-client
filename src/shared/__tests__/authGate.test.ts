@@ -22,9 +22,9 @@ import {
   resolveSpawnGateDecision,
 } from '../authGate';
 import type { AuthState } from '../types/auth';
-import type { ClaudeRuntimeStatus } from '../types/claudeRuntime';
+import type { PiRuntimeStatus } from '../types/piRuntime';
 
-const NODE_COMPATIBLE: ClaudeRuntimeStatus = { kind: 'installed' };
+const PI_READY: PiRuntimeStatus = { kind: 'ready' };
 
 /** D47 S5 §1.1 — same vault -> AuthState mapping as `AuthStateService`'s (kept in lockstep by construction, verified independently by `AuthStateService.test.ts`'s own derivation table). */
 function stateForVault(vault: 'ok' | 'cleared' | 'rejected' | 'locked' | 'invalid'): AuthState {
@@ -110,7 +110,7 @@ describe('resolveGateDecision — 20-cell matrix (A2 rev.2: entered × gate × v
       state: stateForVault(vault),
       entered,
       skipAuthGate: gate,
-      runtimeStatus: NODE_COMPATIBLE,
+      runtimeStatus: PI_READY,
     });
     expect(decision.shell).toBe(shell);
     if (welcomePrimary) {
@@ -128,7 +128,7 @@ describe('resolveGateDecision — 20-cell matrix (A2 rev.2: entered × gate × v
         state: stateForVault(vault),
         entered: false,
         skipAuthGate: false,
-        runtimeStatus: NODE_COMPATIBLE,
+        runtimeStatus: PI_READY,
       });
       expect(decision.shell).toBe('welcome');
     }
@@ -166,22 +166,14 @@ describe('resolveGateDecision — runtime detection precedence', () => {
     expect(decision.shell).toBe('detection-failed');
   });
 
-  it('A2 — vscode-extension-only and not-installed are ONE outcome: runtime-unavailable', () => {
-    // They stopped being different facts on 2026-08-26, when
-    // `ClaudeRuntimeChecker.detect()` began answering `installed` off the
-    // bundled cometix cli.js first: after that, BOTH kinds are reachable only
-    // when our own bundle is missing. The old `vscode-only` shell offered to
-    // install a system Claude CLI, which this build never executes — an offer
-    // that could not have fixed the problem it was shown for.
-    for (const kind of ['vscode-extension-only', 'not-installed'] as const) {
-      const decision = resolveGateDecision({
-        state: { status: 'signed_out', lastEmail: null },
-        entered: false,
-        skipAuthGate: false,
-        runtimeStatus: { kind },
-      });
-      expect(decision.shell).toBe('runtime-unavailable');
-    }
+  it('an unavailable Pi worker routes to runtime-unavailable', () => {
+    const decision = resolveGateDecision({
+      state: { status: 'signed_out', lastEmail: null },
+      entered: false,
+      skipAuthGate: false,
+      runtimeStatus: { kind: 'unavailable' },
+    });
+    expect(decision.shell).toBe('runtime-unavailable');
   });
 
   it('A3/D65 — a healthy bundled runtime never blocks; no input can say the user lacks a system CLI', () => {
@@ -196,7 +188,7 @@ describe('resolveGateDecision — runtime detection precedence', () => {
       state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
       entered: false,
       skipAuthGate: false,
-      runtimeStatus: NODE_COMPATIBLE,
+      runtimeStatus: PI_READY,
     });
     expect(decision.shell).toBe('welcome');
 
@@ -206,7 +198,7 @@ describe('resolveGateDecision — runtime detection precedence', () => {
         state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
         entered: true,
         skipAuthGate: false,
-        runtimeStatus: NODE_COMPATIBLE,
+        runtimeStatus: PI_READY,
       }).shell
     ).toBe('app');
   });
@@ -219,7 +211,7 @@ describe('resolveGateDecision — runtime detection precedence', () => {
       state: { status: 'authenticated', email: 'a@jcdz.cc', remoteHealth: 'unknown' },
       entered: false,
       skipAuthGate: false,
-      runtimeStatus: { kind: 'not-installed' },
+      runtimeStatus: { kind: 'unavailable' },
     });
     expect(decision.shell).toBe('runtime-unavailable');
   });

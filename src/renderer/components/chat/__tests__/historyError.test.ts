@@ -461,11 +461,8 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       lastError: null,
       historyErrors: {},
       selectSession: () => {},
-      setDraftSessionAgent: () => false,
       sendMessage: async () => {},
       stopActiveSession: async () => {},
-      respondPermission: async (_permissionId: string, _allow: boolean) => false,
-      respondQuestion: async () => false,
       initRuntime: () => () => {},
     };
   }

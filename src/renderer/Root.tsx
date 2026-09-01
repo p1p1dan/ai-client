@@ -5,8 +5,8 @@ import {
   parseInitialAuthGateArg,
   resolveGateDecision,
 } from '@shared/authGate';
-import type { ClaudeRuntimeStatus } from '@shared/types';
 import type { AuthState } from '@shared/types/auth';
+import type { PiRuntimeStatus } from '@shared/types/piRuntime';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { lazy, type ReactNode, Suspense, useEffect, useState } from 'react';
@@ -166,18 +166,13 @@ function RootWithOnboardingGate() {
     });
   }, [queryClient]);
 
-  // Runtime gate: is the bundled Claude Code runtime resolvable at all. Since
-  // 2026-08-26 this answers off the bundled cometix cli.js first, so anything
-  // other than `installed` means OUR bundle is missing — see
-  // `resolveGateDecision`'s A2 note on why `not-installed` and
-  // `vscode-extension-only` collapsed into one outcome.
   const runtime = useQuery({
-    queryKey: ['claudeRuntimeStatus'],
-    queryFn: async () => window.electronAPI.claudeRuntime.check(false),
+    queryKey: ['piRuntimeStatus'],
+    queryFn: async () => window.electronAPI.piRuntime.check(false),
     staleTime: 1000 * 30,
     retry: 1,
   });
-  const [runtimeOverride, setRuntimeOverride] = useState<ClaudeRuntimeStatus | null>(null);
+  const [runtimeOverride, setRuntimeOverride] = useState<PiRuntimeStatus | null>(null);
   // A2 — the welcome screen's `Sign in` opens the email/code sub-flow in place.
   // Session-local intent, not gate state: the gate keeps saying `welcome` until
   // a mode is actually recorded, and this is only which of the two screens that
@@ -188,7 +183,7 @@ function RootWithOnboardingGate() {
   // against raw IPC rejections (process crash, channel teardown) by mapping
   // `runtime.isError` to a detection-failed status so the renderer always has
   // something explicit to show — never an indefinite LoadingShell.
-  const runtimeStatus: ClaudeRuntimeStatus | null =
+  const runtimeStatus: PiRuntimeStatus | null =
     runtimeOverride ??
     runtime.data ??
     (runtime.isError
@@ -198,18 +193,9 @@ function RootWithOnboardingGate() {
         }
       : null);
 
-  // Once a CLI is present, eagerly disable Claude's bundled auto-updater: the
-  // installs this app performs are pinned (`LAST_NODE_CLAUDE_VERSION`), and an
-  // updater that silently moves off that pin defeats the pin.
-  useEffect(() => {
-    if (runtimeStatus?.kind === 'installed') {
-      void window.electronAPI.claudeRuntime.disableAutoUpdates();
-    }
-  }, [runtimeStatus?.kind]);
-
   useEffect(() => {
     const handler = () => {
-      queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['piRuntimeStatus'] });
       queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
     };
     window.addEventListener(AUTH_OPEN_ONBOARDING_EVENT, handler);
@@ -251,22 +237,10 @@ function RootWithOnboardingGate() {
     return <LoadingShell />;
   }
 
-  // A2 — one branch for "our bundled runtime is not there".
-  //
-  // `not-installed` and `vscode-extension-only` both mean that, and the gate
-  // folds them into `runtime-unavailable`; the copy differs only so the message
-  // can name what was actually found. The old VSCode-only shell offered to
-  // install the Claude CLI, which this build never executes — an offer that
-  // could not have fixed the problem it was shown for — and it is retired with
-  // the branch.
   if (decision.shell === 'runtime-unavailable') {
     return (
       <RuntimeDetectionFailedShell
-        error={
-          runtimeStatus?.kind === 'vscode-extension-only'
-            ? '只找到 VSCode 扩展，没有找到随包的 Claude Code 运行时。'
-            : '没有找到随包的 Claude Code 运行时。'
-        }
+        error="没有找到随包的 Pi worker 运行时。"
         onRetry={() => {
           setRuntimeOverride(null);
           void runtime.refetch();
@@ -279,7 +253,7 @@ function RootWithOnboardingGate() {
   if (decision.shell === 'welcome' && decision.welcome) {
     const welcome = decision.welcome;
     const invalidateGate = () => {
-      queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['piRuntimeStatus'] });
       queryClient.invalidateQueries({ queryKey: ['usageStats'] });
       queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
     };
@@ -334,7 +308,7 @@ function RootWithOnboardingGate() {
         reason={entry.reason}
         initialEmail={entry.initialEmail}
         onComplete={() => {
-          queryClient.invalidateQueries({ queryKey: ['claudeRuntimeStatus'] });
+          queryClient.invalidateQueries({ queryKey: ['piRuntimeStatus'] });
           queryClient.invalidateQueries({ queryKey: ['usageStats'] });
           queryClient.invalidateQueries({ queryKey: AUTH_GATE_SNAPSHOT_QUERY_KEY });
         }}

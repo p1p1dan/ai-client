@@ -99,6 +99,7 @@ describe('worker RPC boundary guards', () => {
       isWorkerSendPayload({
         logicalSessionId: 'logical-1',
         requestId: 'turn-1',
+        attemptId: 'attempt-1',
         text: 'hello',
         model: 'glm/glm-5',
         effort: 'xhigh',
@@ -115,6 +116,7 @@ describe('worker RPC boundary guards', () => {
       isWorkerSendPayload({
         logicalSessionId: 'logical-1',
         requestId: 'turn-1',
+        attemptId: 'attempt-1',
         text: 'x',
         attachments: [{ kind: 'binary', mediaType: 'x', data: 'x' }],
       })
@@ -137,7 +139,12 @@ describe('worker RPC boundary guards', () => {
       kind: 'request',
       requestId: 'rpc-9',
       type: 'worker.send',
-      payload: { logicalSessionId: 'logical-1', requestId: 'turn-3', text: 'hello' },
+      payload: {
+        logicalSessionId: 'logical-1',
+        requestId: 'turn-3',
+        attemptId: 'attempt-3',
+        text: 'hello',
+      },
     };
     expect(isWorkerRpcRequest(request)).toBe(true);
     expect(request.requestId).not.toBe(request.payload.requestId);
