@@ -92,7 +92,6 @@ import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { AgentModelCatalog, ListPiModelsRequest } from '@shared/types/agentCatalog';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
-import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import { parseInitialThemeArg } from '@shared/windowTheme';
 import { contextBridge, ipcRenderer, shell, webUtils } from 'electron';
@@ -1378,7 +1377,7 @@ const electronAPI = {
       active: number;
       restarting: number;
       errors: number;
-      capabilities: { history: false; thinking: true; permissionPolicy: true };
+      capabilities: { history: true; thinking: true; permissionPolicy: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST),
     getHostStatus: (): Promise<{
       state: string;
@@ -1387,7 +1386,7 @@ const electronAPI = {
       active: number;
       restarting: number;
       errors: number;
-      capabilities: { history: false; thinking: true; permissionPolicy: true };
+      capabilities: { history: true; thinking: true; permissionPolicy: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HOST_STATUS),
     createSession: (payload: {
       sessionId: string;
@@ -1451,8 +1450,12 @@ const electronAPI = {
     },
     listSessions: (): Promise<SessionIndexEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSIONS),
-    listHistory: (workspacePath: string): Promise<HistorySessionSummary[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_HISTORY, workspacePath),
+    loadHistoryPage: (payload: {
+      sessionId: string;
+      offset: number;
+      limit?: number;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOAD_HISTORY_PAGE, payload),
     renameSession: (payload: { sessionId: string; title: string }): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RENAME_SESSION, payload),
     archiveSession: (payload: { sessionId: string; archived: boolean }): Promise<boolean> =>

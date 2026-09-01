@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { encodePiResumeError } from '../historyError';
 import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
 
 /**
@@ -10,8 +11,8 @@ import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
  * idle`; the red-line store already folds `session.history` into the
  * timeline (history messages use `h:` prefix, runtime messages untouched).
  *
- * Renderer-only: does not touch chatSessions.ts. Status display + first
- * user prompt preview come from index (listHistory) and the live store.
+ * Renderer-only: does not read Pi JSONL. Session metadata comes from the
+ * durable index; branch history arrives only through WorkerSlot RuntimeEvents.
  */
 
 export interface UseResumeSessionResult {
@@ -52,7 +53,15 @@ export function useResumeSession(): UseResumeSessionResult {
           });
         }
         return true;
-      } catch {
+      } catch (error) {
+        const encodedError = encodePiResumeError(error);
+        useChatSessionsStore.setState((current) => ({
+          lastError: encodedError.message,
+          historyErrors: {
+            ...current.historyErrors,
+            [sessionId]: encodedError.encoded,
+          },
+        }));
         return false;
       }
     },

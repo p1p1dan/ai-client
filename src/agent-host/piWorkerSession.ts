@@ -4,6 +4,8 @@ import type { ExtensionUiResponse, RuntimeEventDraft } from '../shared/types/run
 import type {
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
+  WorkerHistoryPayload,
+  WorkerHistoryResult,
   WorkerSendPayload,
   WorkerSendResult,
   WorkerStopPayload,
@@ -20,7 +22,10 @@ import {
   type PiRuntimeHandle,
   type PiSdkModule,
   type PiSession,
+  type PiSessionManager,
 } from './piAgentSessionBootstrap.ts';
+import { readPiSessionHistoryPage } from './piSessionTimeline.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 interface PiImageContent {
   type: 'image';
@@ -68,16 +73,7 @@ export interface PiWorkerSessionOptions extends WorkerBootstrapPayload {
   log?: (...args: unknown[]) => void;
 }
 
-export class PiWorkerSessionError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly retryable = false
-  ) {
-    super(message);
-    this.name = 'PiWorkerSessionError';
-  }
-}
+export { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 function selectedModel(handle: PiRuntimeHandle): string | undefined {
   const model = handle.session.model;
@@ -259,6 +255,7 @@ export class PiWorkerSession {
   private readonly extensionUi: PortableExtensionUiBridge;
   private bootstrapPromise: Promise<WorkerBootstrapResult> | null = null;
   private handle: PiRuntimeHandle | null = null;
+  private sessionManager: PiSessionManager | null = null;
   private unsubscribe: (() => void) | null = null;
   private activeTurn: ActiveTurn | null = null;
   private turnSequence = 0;
@@ -310,6 +307,29 @@ export class PiWorkerSession {
     }
     if (!this.bootstrapPromise) this.bootstrapPromise = this.bootstrapInternal();
     return this.bootstrapPromise;
+  }
+
+  async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    await this.bootstrap();
+    const manager = this.sessionManager;
+    const sessionFile = this.handle?.session.sessionFile;
+    if (!manager?.getBranch || !sessionFile) {
+      throw new PiWorkerSessionError(
+        'WORKER_HISTORY_UNAVAILABLE',
+        'Pi session does not expose branch history'
+      );
+    }
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile,
+      workspacePath: this.cwd,
+      page: readPiSessionHistoryPage(
+        { getBranch: () => manager.getBranch?.() ?? [] },
+        input.offset,
+        input.limit
+      ),
+    };
   }
 
   async startSend(input: WorkerSendPayload): Promise<WorkerSendResult> {
@@ -418,6 +438,7 @@ export class PiWorkerSession {
       }
     }
     this.handle = null;
+    this.sessionManager = null;
     if (handle?.dispose) await handle.dispose();
     else handle?.session.dispose?.();
   }
@@ -906,21 +927,62 @@ export class PiWorkerSession {
       );
     }
     this.handle = bootstrapped.handle;
+    this.sessionManager = bootstrapped.sessionManager;
     const model = selectedModel(bootstrapped.handle) ?? this.options.model;
+    const sessionFile = bootstrapped.handle.session.sessionFile;
+    let initialHistory: WorkerHistoryResult | undefined;
+    try {
+      initialHistory = this.options.sessionFile
+        ? await this.historyFromOpenedSession(bootstrapped.sessionManager, sessionFile)
+        : undefined;
+    } catch (error) {
+      this.handle = null;
+      this.sessionManager = null;
+      if (bootstrapped.handle.dispose) await bootstrapped.handle.dispose().catch(() => undefined);
+      else bootstrapped.handle.session.dispose?.();
+      throw error;
+    }
     return {
       bootstrapped: true,
       logicalSessionId: this.logicalSessionId,
       piSessionId: bootstrapped.handle.session.sessionId,
       cwd: this.cwd,
       agentDir: bootstrapped.agentDir,
-      ...(bootstrapped.handle.session.sessionFile
-        ? { sessionFile: bootstrapped.handle.session.sessionFile }
-        : {}),
+      ...(sessionFile ? { sessionFile } : {}),
+      ...(initialHistory ? { initialHistory } : {}),
       ...(model ? { model } : {}),
       ...(this.options.effort ? { effort: this.options.effort } : {}),
       projectTrusted: bootstrapped.projectTrusted,
       permissionGate: bootstrapped.permissionGate,
     };
+  }
+
+  private async historyFromOpenedSession(
+    manager: PiSessionManager,
+    sessionFile: string | undefined
+  ): Promise<WorkerHistoryResult> {
+    if (!sessionFile || !manager.getBranch) {
+      throw new PiWorkerSessionError(
+        'WORKER_HISTORY_UNAVAILABLE',
+        'Opened Pi session does not expose durable branch history'
+      );
+    }
+    try {
+      return {
+        logicalSessionId: this.logicalSessionId,
+        sessionFile,
+        workspacePath: this.cwd,
+        page: readPiSessionHistoryPage({ getBranch: () => manager.getBranch?.() ?? [] }),
+      };
+    } catch (error) {
+      throw error instanceof PiWorkerSessionError
+        ? error
+        : new PiWorkerSessionError(
+            'WORKER_SESSION_READ_FAILED',
+            `Failed to project Pi session history: ${error instanceof Error ? error.message : String(error)}`,
+            true
+          );
+    }
   }
 
   private emit(event: RuntimeEventDraft): void {

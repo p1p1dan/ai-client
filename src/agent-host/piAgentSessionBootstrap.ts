@@ -8,6 +8,12 @@ import {
   type PermissionPluginDecision,
   verifyPermissionExtensionLoaded,
 } from './permissionPlugin.ts';
+import {
+  assertPiSessionFileIdentity,
+  preflightPiSessionFile,
+  samePiSessionPath,
+} from './piSessionPreflight.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 export interface PiSettingsManager {
   getGlobalSettings?: () => { packages?: unknown };
@@ -36,6 +42,10 @@ export interface PiServices {
 }
 
 export interface PiSessionManager {
+  getBranch?: () => unknown[];
+  getCwd?: () => string;
+  getSessionFile?: () => string | undefined;
+  getSessionId?: () => string;
   [key: string]: unknown;
 }
 
@@ -137,6 +147,7 @@ export interface BootstrapPiAgentSessionOptions {
 
 export interface BootstrapPiAgentSessionResult {
   handle: PiRuntimeHandle;
+  sessionManager: PiSessionManager;
   agentDir: string;
   projectTrusted: boolean;
   permissionGate: 'bundled' | 'user_configured';
@@ -192,9 +203,51 @@ export async function bootstrapPiAgentSession(
   const agentDir = options.sdk.getAgentDir();
   if (!agentDir.trim()) throw new Error('Pi SDK returned an empty agentDir');
 
-  const sessionManager = options.sessionFile
-    ? options.sdk.SessionManager.open(options.sessionFile, undefined, options.cwd)
-    : options.sdk.SessionManager.create(options.cwd);
+  const sessionHeader = options.sessionFile
+    ? await preflightPiSessionFile(options.sessionFile, options.cwd)
+    : null;
+  if (options.sessionFile && sessionHeader) {
+    await assertPiSessionFileIdentity(options.sessionFile, sessionHeader.fileIdentity);
+  }
+  let sessionManager: PiSessionManager;
+  try {
+    // Do not pass a cwd override on resume: first let Pi retain the exact header
+    // workspace, then validate it below. An override would hide cross-cwd drift.
+    sessionManager = options.sessionFile
+      ? options.sdk.SessionManager.open(options.sessionFile)
+      : options.sdk.SessionManager.create(options.cwd);
+  } catch (error) {
+    throw new PiWorkerSessionError(
+      'WORKER_SESSION_FILE_CORRUPT',
+      `Failed to open Pi session ${options.sessionFile ?? ''}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  if (options.sessionFile) {
+    if (sessionHeader) {
+      await assertPiSessionFileIdentity(options.sessionFile, sessionHeader.fileIdentity);
+    }
+    const openedFile = sessionManager.getSessionFile?.() ?? options.sessionFile;
+    const openedCwd = sessionManager.getCwd?.() ?? sessionHeader?.cwd;
+    const openedSessionId = sessionManager.getSessionId?.() ?? sessionHeader?.sessionId;
+    if (!samePiSessionPath(openedFile, options.sessionFile)) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_IDENTITY_MISMATCH',
+        `Pi opened ${openedFile}, expected exact session file ${options.sessionFile}`
+      );
+    }
+    if (!openedCwd || !samePiSessionPath(openedCwd, options.cwd)) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_CWD_MISMATCH',
+        `Pi session workspace mismatch: expected ${options.cwd}, opened ${openedCwd ?? 'unknown'}`
+      );
+    }
+    if (sessionHeader && openedSessionId && openedSessionId !== sessionHeader.sessionId) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_IDENTITY_MISMATCH',
+        `Pi session id mismatch: header ${sessionHeader.sessionId}, opened ${openedSessionId}`
+      );
+    }
+  }
   let gate: PermissionPluginDecision | undefined;
   let gateVerified = false;
 
@@ -308,6 +361,7 @@ export async function bootstrapPiAgentSession(
   log(`permission plugin: ${gate.reason}`);
   return {
     handle,
+    sessionManager,
     agentDir,
     projectTrusted: options.projectTrusted,
     permissionGate: gate.reason,

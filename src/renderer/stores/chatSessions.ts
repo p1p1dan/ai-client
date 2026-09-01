@@ -31,6 +31,7 @@ import { uniqueId } from '@/lib/uniqueId';
 // replay-coverage rules the `session.history` reducer delegates to, and for
 // the resume snapshot registry that bounds which messages a replay may fold.
 import {
+  hasMatchingResumeSnapshot,
   mergeReplayedHistory,
   snapshotResumeCandidates,
   takeResumeSnapshot,
@@ -190,6 +191,9 @@ export interface ChatMessage {
   sessionId: string;
   role: 'user' | 'assistant' | 'system' | 'error';
   blocks: ChatBlock[];
+  /** Pi history leaf ended before a complete assistant response was saved. */
+  incomplete?: boolean;
+  stopReason?: string;
   /**
    * Round-2 P0 (optional-field addition, red-line discipline): user turn's
    * attachment metadata, when the turn carried any. Set once at
@@ -234,6 +238,10 @@ export interface ChatSessionsState {
   lastError: string | null;
   /** Non-fatal per-session history read errors, keyed by sessionId. Formatted `${code}: ${message}`. */
   historyErrors: Record<string, string>;
+  historyPagination?: Record<
+    string,
+    { nextOffset: number; hydratedCount: number; totalCount: number; hasMore: boolean }
+  >;
 
   selectSession: (sessionId: string) => void;
   /**
@@ -458,11 +466,20 @@ function mapHistoryMessageToChatMessage(
   const blocks = historyMessage.blocks
     .map(mapHistoryBlock)
     .filter((block): block is ChatBlock => block !== null);
+  if (historyMessage.incomplete && blocks.length === 0) {
+    blocks.push({
+      id: `${historyMessage.id}:interrupted`,
+      type: 'text',
+      text: 'Response interrupted before any assistant content was saved.',
+    });
+  }
   return {
     id: historyMessage.id,
     sessionId,
     role: historyMessage.role,
     blocks,
+    ...(historyMessage.incomplete ? { incomplete: true } : {}),
+    ...(historyMessage.stopReason ? { stopReason: historyMessage.stopReason } : {}),
     // Absent unless the history actually carried attachments — keeps exact-shape
     // assertions on attachment-free messages untouched (same rule as
     // `message.started`).
@@ -470,6 +487,15 @@ function mapHistoryMessageToChatMessage(
       ? { attachments: historyMessage.attachments.map(mapHistoryAttachment) }
       : {}),
   };
+}
+
+function mergeOlderHistoryPage(
+  current: readonly ChatMessage[],
+  older: readonly ChatMessage[]
+): ChatMessage[] {
+  const existingIds = new Set(current.map((message) => message.id));
+  const prepend = older.filter((message) => !existingIds.has(message.id));
+  return prepend.length === 0 ? [...current] : [...prepend, ...current];
 }
 
 function appendTextBlock(
@@ -553,6 +579,22 @@ export function applyRuntimeEvent(
 
     case 'session.history': {
       const { payload } = event;
+      if (
+        (payload.mode === 'initial' || payload.mode === 'refresh') &&
+        !hasMatchingResumeSnapshot(sessionId, event.requestId)
+      ) {
+        // A newer resume already replaced this hydration generation. Reject
+        // the whole stale event, including its error and runtime identity.
+        return {};
+      }
+      if (payload.mode === 'older') {
+        const pagination = state.historyPagination?.[sessionId];
+        if (!pagination || payload.offset !== pagination.nextOffset) {
+          // Duplicate, out-of-order, or pre-refresh page. Page coverage—not
+          // rendered h:* row count—is the authority for the next offset.
+          return {};
+        }
+      }
 
       // Replay-coverage merge (round-6 Bug B): a resume replays the whole
       // JSONL, so runtime echoes of turns the replay already contains must be
@@ -565,16 +607,14 @@ export function applyRuntimeEvent(
       const historyMessages = payload.messages.map((historyMessage) =>
         mapHistoryMessageToChatMessage(sessionId, historyMessage)
       );
-      const messages = withBucket(
-        state,
-        sessionId,
-        mergeReplayedHistory(bucket, historyMessages, {
-          historyReadFailed: payload.error != null,
-          // requestId-matched snapshot from this replay's own resume; null
-          // (stale replay / no resume seen) disables folding entirely.
-          snapshot: takeResumeSnapshot(sessionId, event.requestId),
-        })
-      );
+      const mergedBucket =
+        payload.mode === 'older'
+          ? mergeOlderHistoryPage(bucket, historyMessages)
+          : mergeReplayedHistory(bucket, historyMessages, {
+              historyReadFailed: payload.error != null,
+              snapshot: takeResumeSnapshot(sessionId, event.requestId),
+            });
+      const messages = withBucket(state, sessionId, mergedBucket);
 
       // Row creation is T-02's responsibility; only enrich an existing row.
       // updatedAt takes the last history message's timestamp — never Date.now(),
@@ -597,7 +637,20 @@ export function applyRuntimeEvent(
         delete historyErrors[sessionId];
       }
 
-      return { messages, sessions, historyErrors };
+      const hydratedCount = mergedBucket.filter((message) =>
+        message.id.startsWith(HISTORY_MESSAGE_ID_PREFIX)
+      ).length;
+      const historyPagination = {
+        ...state.historyPagination,
+        [sessionId]: {
+          nextOffset: Math.max(0, payload.offset ?? 0) + payload.messages.length,
+          hydratedCount,
+          totalCount: payload.totalCount ?? hydratedCount,
+          hasMore: payload.hasMore ?? false,
+        },
+      };
+
+      return { messages, sessions, historyErrors, historyPagination };
     }
 
     case 'session.status': {
@@ -1107,6 +1160,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   runtimeReady: false,
   lastError: null,
   historyErrors: {},
+  historyPagination: {},
 
   selectSession: (sessionId) => {
     set({ activeSessionId: sessionId });

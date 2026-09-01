@@ -1,12 +1,12 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Phase D / T32 Pi-native history and real resume；T31 Cycle 1/2 behavior reattachment已完成。
+**Current Phase**：Phase D / T33 session tree, rewind and fork；T32 Pi-native history and real resume已完成。
 
-**Next Target**：[T32](./roadmap.md#t32--history-and-real-resume--planned) 在WorkerSlot内打开exact Pi session file，输出`session.resumed → session.history → idle`，补missing/corrupt/cross-cwd与renderer hydration race。
+**Next Target**：[T33](./roadmap.md#t33--session-tree-rewind-and-fork--planned) 基于T32保留的Pi entry id与active branch实现tree iteration、idle-only rewind确认和independent fork。
 
-**Last Landed**：2026-09-01 T31-a/b/c/d closure：streaming、queue/pending/attachments、Extension UI、Pi-only models/runtime gate/auth/trust/permissions完整重挂，并删除Claude/Codex live worker execution、agent picker、legacy permission/question IPC和multi-agent catalog/dependencies；见 [evidence](./evidence/2026-09-01-t31-behavior-reattachment.md)。
+**Last Landed**：2026-09-01 T32-a/b/c closure：worker-owned active-branch timeline、pagination/incomplete recovery、exact-file preflight/open、transactional resume commit、resumed→history→idle、duplicate/restart/late hydration/switch races与known-file no-create-fallback；见 [evidence](./evidence/2026-09-01-t32-history-real-resume.md)。
 
-**Last Verified**：2026-09-01 — worker/Manager 12 files / 173 tests；Main/auth/config 12 / 135；renderer 35 / 769；migration-reader 7 / 131；packaging 4 / 44；两套typecheck、72 changed files Biome、diff check；worker build 92.8 MiB；真实Electron双slot probe；Main/Preload/renderer dev startup smoke。未运行full Vitest或整套production build。
+**Last Verified**：2026-09-01 — agent-host/shared 6 files / 40 tests；Main Worker/IPC/index 6 / 82；renderer history/resume/composer/liveness 12 / 436；两套typecheck、41-file Biome、diff/boundary scan；92.8 MiB worker-only build；真实Electron create→materialize→dispose→exact-file reopen→history→continue-stream probe，无orphan。未运行full Vitest或整套production build。
 
 ## Current architecture decision
 
@@ -21,25 +21,25 @@
 - **Behavior**：RuntimeEvent、queue/pending/attachments、Extension UI、models/auth/trust/permissions均消费WorkerManager/WorkerSlot authority。
 - **Identity**：pending echo使用exact attemptId；slot/generation/window owner与background session隔离通过focused tests。
 - **Deletion**：live Claude/Codex utility worker producer/runtime/dependencies、agent picker、legacy permission/question IPC和multi-agent catalog已删除；无compatibility facade。
-- **Protected boundaries**：T32 history hydration、T34 read-only readers、T36 terminal/Pi TUI按T28 map保留。
+- **Protected boundaries**：T32 history hydration已落地；T34 read-only readers、T36 terminal/Pi TUI继续按T28 map保留。
 
 ## Active TODO
 
-1. **T32-a/b**：Pi branch-aware timeline/incomplete recovery + WorkerSlot exact-file open与resumed/history/idle order。
-2. **T32-c**：missing/corrupt/cross-cwd、duplicate click、restart、late hydration与switch race。
-3. **T33 preparation**：只读参考tree/rewind/fork tests；不得提前在renderer裁剪history。
+1. **T33-a**：读取pi-app tree/branch tests，定义iteration/node-limit/request-generation contract。
+2. **T33-b**：idle-only rewind + 明确确认；保留后续分支，不截断JSONL。
+3. **T33-c**：从entry fork独立session file/index row/WorkerSlot，源会话不变。
 4. **并行环境欠项**：真账号queue GUI复点；高资源主机packaged preview/PDF/Monaco/local-file smoke（T37前关闭）。
 
 ## Blocked By / risks
 
 - T31 当前无产品决策 blocker；必须保留 Cycle 1/2 已验收行为，不因 transport replacement 重做 UX。
 - 当前 3.3 GiB 主机继续小批串行测试，禁止 full build/full Vitest。
-- T32 real resume/history 仍需 missing/corrupt/cross-cwd 与 renderer hydration；T30 的 `open(sessionFile)` 仅用于内部 crash replacement identity。
-- T35 deletion 仍被 T31–T34 replacement/import 闭环阻塞；T36 必须证明 bundled absolute Pi CLI path 与 GUI/TUI single-writer。
+- T33必须保持T32 active-branch/entry-id authority；不得由renderer裁剪history或把rewind实现为JSONL截断。
+- T35 deletion 仍被 T34 import 闭环阻塞；T36 必须证明 bundled absolute Pi CLI path 与 GUI/TUI single-writer。
 
 ## Handoff
 
-1. 先读 [T31 closure evidence](./evidence/2026-09-01-t31-behavior-reattachment.md)、[timeline topic](./topics/timeline-reference.md)、[T30 evidence](./evidence/2026-08-31-t30-worker-manager.md) 与 [T28 map](./topics/t28-replacement-map.md)。
-2. T32只能在WorkerSlot内调用Pi SessionManager；Main/renderer不直接读写Pi JSONL。
-3. resume必须session-targeted并保持exact sessionFile；不得恢复legacy Host/history reader execution route。
-4. T34 migration-only readers继续隔离只读；T32不得顺手把import source当runtime resume。
+1. 先读 [T32 evidence](./evidence/2026-09-01-t32-history-real-resume.md)、[timeline topic](./topics/timeline-reference.md)、[T30 evidence](./evidence/2026-08-31-t30-worker-manager.md) 与 [T28 map](./topics/t28-replacement-map.md)。
+2. T33继续只在WorkerSlot内调用Pi SessionManager；Main/renderer不直接读写Pi JSONL。
+3. tree/rewind/fork必须session-targeted并保持exact entry/session identity；不得恢复legacy Host/history reader execution route。
+4. T34 migration-only readers继续隔离只读；不得把import source当runtime tree/fork。

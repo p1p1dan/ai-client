@@ -80,31 +80,18 @@ describe('shouldResumeSession (T-03)', () => {
       sessionId: 's1',
       runtimeIdentity: 'persisted-rt',
       workspacePath: '/repo',
-      model: undefined,
-      // S2 slice 1: the resume handle is opaque and only interpretable
-      // together with the agent that issued it, so both travel as one.
-      agent: 'claude-code',
     });
   });
 
-  it('G13 — hands a codex row its own agent and threadId, not the Claude default', () => {
-    // S3 slice 5b: `runtimeIdentity` is opaque and means nothing without the
-    // agent beside it — a Codex threadId resumed as `claude-code` reaches the
-    // Claude runtime, which looks for a JSONL file named after a thread id and
-    // reports an empty history. Both fields therefore travel as one.
-    const threadId = '01a003a5-307f-77d1-b7a4-a5379a560067';
+  it('refuses legacy non-Pi identities instead of reviving a deleted execution route', () => {
     const result = shouldResumeSession(
-      session({ runtimeIdentity: threadId, agent: 'codex' }),
+      session({ runtimeIdentity: 'legacy-thread', agent: 'codex' }),
       workspace()
     );
 
-    expect(result.shouldResume).toBe(true);
-    expect(result.args).toEqual({
-      sessionId: 's1',
-      runtimeIdentity: threadId,
-      workspacePath: '/repo',
-      model: undefined,
-      agent: 'codex',
+    expect(result).toEqual({
+      shouldResume: false,
+      reason: 'unsupported-agent:codex',
     });
   });
 

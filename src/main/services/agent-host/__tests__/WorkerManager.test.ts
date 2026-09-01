@@ -24,6 +24,12 @@ function createHarness(
     capacity?: number;
     now?: () => number;
     bindRuntimeIdentity?: (sessionId: string, sessionFile: string) => Promise<void>;
+    commitResumed?: (input: {
+      sessionId: string;
+      workspacePath: string;
+      runtimeIdentity: string;
+      model?: string;
+    }) => Promise<void>;
     createFailureAfter?: number;
     maxRestartAttempts?: number;
   } = {}
@@ -33,6 +39,7 @@ function createHarness(
   const bindRuntimeIdentity = vi.fn(
     input.bindRuntimeIdentity ?? (async (_sessionId: string, _sessionFile: string) => undefined)
   );
+  const commitResumed = vi.fn(input.commitResumed ?? (async () => undefined));
   let createCount = 0;
   const createSlot = vi.fn(async (options: Record<string, unknown>) => {
     createCount += 1;
@@ -49,6 +56,25 @@ function createHarness(
     const request = vi.fn(async (type: string, payload: unknown) => {
       if (type === 'worker.send') {
         return { accepted: true, requestId: (payload as { requestId: string }).requestId };
+      }
+      if (type === 'worker.history') {
+        const historyPayload = payload as {
+          logicalSessionId: string;
+          offset?: number;
+          limit?: number;
+        };
+        return {
+          logicalSessionId: sessionId,
+          sessionFile,
+          workspacePath: String(options.cwd),
+          page: {
+            messages: [],
+            offset: historyPayload.offset ?? 0,
+            limit: historyPayload.limit ?? 80,
+            totalCount: 0,
+            hasMore: false,
+          },
+        };
       }
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.extensionUi.respond') return { handled: true };
@@ -99,6 +125,16 @@ function createHarness(
         cwd: String(options.cwd),
         agentDir: '/agent',
         sessionFile,
+        ...(options.sessionFile
+          ? {
+              initialHistory: {
+                logicalSessionId: sessionId,
+                sessionFile,
+                workspacePath: String(options.cwd),
+                page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+              },
+            }
+          : {}),
         projectTrusted: false,
         permissionGate: 'bundled',
       },
@@ -107,6 +143,7 @@ function createHarness(
   const manager = new WorkerManager({
     createSlot: createSlot as never,
     bindRuntimeIdentity,
+    commitResumed,
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
@@ -118,7 +155,7 @@ function createHarness(
       return () => `token-${++token}`;
     })(),
   });
-  return { manager, records, events, createSlot, bindRuntimeIdentity };
+  return { manager, records, events, createSlot, bindRuntimeIdentity, commitResumed };
 }
 
 async function create(
@@ -317,6 +354,212 @@ describe('WorkerManager identity and capacity', () => {
     });
     expect(h.records[0].dispose).not.toHaveBeenCalled();
     expect(h.records[1].dispose).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorkerManager Pi history and real resume', () => {
+  it('opens the exact durable file, commits it, then publishes resumed → history → idle', async () => {
+    const h = createHarness();
+    const requestId = await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+
+    expect(h.createSlot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logicalSessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        cwd: '/repo',
+      })
+    );
+    expect(h.commitResumed).toHaveBeenCalledWith({
+      sessionId: 's1',
+      workspacePath: '/repo',
+      runtimeIdentity: '/sessions/s1.jsonl',
+    });
+    expect(h.events.map((event) => [event.type, event.requestId])).toEqual([
+      ['session.resumed', requestId],
+      ['session.history', requestId],
+      ['session.status', requestId],
+    ]);
+    expect(h.events[1]).toMatchObject({
+      payload: {
+        mode: 'initial',
+        runtimeIdentity: '/sessions/s1.jsonl',
+        offset: 0,
+        limit: 80,
+        totalCount: 0,
+        hasMore: false,
+      },
+    });
+  });
+
+  it('coalesces concurrent duplicate resumes and rejects a conflicting exact file', async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = createHarness({ commitResumed: async () => gate });
+    const first = h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+    const duplicate = h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/repo',
+      ownerWebContentsId: 22,
+    });
+    await vi.waitFor(() => expect(h.commitResumed).toHaveBeenCalledTimes(1));
+    await expect(
+      h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/other.jsonl',
+        workspacePath: '/repo',
+      })
+    ).rejects.toMatchObject({ code: 'worker_resume_identity_conflict' });
+    release?.();
+    await expect(Promise.all([first, duplicate])).resolves.toEqual([
+      expect.stringMatching(/^resume-/),
+      expect.stringMatching(/^resume-/),
+    ]);
+    expect(await first).toBe(await duplicate);
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.events.filter((event) => event.type === 'session.resumed')).toHaveLength(1);
+
+    h.records[0].emit({
+      type: 'extensionUi.request',
+      sessionId: 's1',
+      payload: {
+        runtimeId: 'runtime-owner',
+        uiRequestId: 'ui-owner',
+        method: 'confirm',
+        args: { message: 'owner?' },
+      },
+    });
+    await expect(
+      h.manager.respondExtensionUi(
+        { runtimeId: 'runtime-owner', uiRequestId: 'ui-owner', ok: true, value: true },
+        11
+      )
+    ).rejects.toMatchObject({ code: 'extension_ui_owner_mismatch' });
+    await expect(
+      h.manager.respondExtensionUi(
+        { runtimeId: 'runtime-owner', uiRequestId: 'ui-owner', ok: true, value: true },
+        22
+      )
+    ).resolves.toMatch(/^extui-/);
+  });
+
+  it('reuses a ready exact slot for fresh history and paginates older rows without spawning', async () => {
+    const h = createHarness();
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/repo',
+    });
+    h.events.length = 0;
+    h.records[0].request.mockClear();
+
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/repo',
+    });
+    const pageRequestId = await h.manager.loadHistoryPage({
+      sessionId: 's1',
+      offset: 80,
+      limit: 40,
+    });
+
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.records[0].request).toHaveBeenNthCalledWith(1, 'worker.history', {
+      logicalSessionId: 's1',
+      offset: 0,
+      limit: 80,
+    });
+    expect(h.records[0].request).toHaveBeenNthCalledWith(2, 'worker.history', {
+      logicalSessionId: 's1',
+      offset: 80,
+      limit: 40,
+    });
+    expect(h.events.at(-1)).toMatchObject({
+      type: 'session.history',
+      requestId: pageRequestId,
+      payload: { mode: 'older', offset: 80, limit: 40 },
+    });
+  });
+
+  it('serializes older-page reads and rejects a page from a retired slot generation', async () => {
+    const h = createHarness();
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: '/sessions/s1.jsonl',
+      workspacePath: '/repo',
+    });
+    h.events.length = 0;
+    h.records[0].request.mockClear();
+
+    let releaseFirst: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const original = h.records[0].request.getMockImplementation();
+    h.records[0].request.mockImplementationOnce(async (...args: unknown[]) => {
+      await firstGate;
+      return original?.(...args);
+    });
+    const first = h.manager.loadHistoryPage({ sessionId: 's1', offset: 0, limit: 40 });
+    const second = h.manager.loadHistoryPage({ sessionId: 's1', offset: 40, limit: 40 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(h.records[0].request).toHaveBeenCalledTimes(1);
+    releaseFirst?.();
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(h.records[0].request).toHaveBeenCalledTimes(2);
+
+    let releaseStale: (() => void) | undefined;
+    const staleGate = new Promise<void>((resolve) => {
+      releaseStale = resolve;
+    });
+    h.records[0].request.mockImplementationOnce(async (...args: unknown[]) => {
+      await staleGate;
+      return original?.(...args);
+    });
+    const stale = h.manager.loadHistoryPage({ sessionId: 's1', offset: 80, limit: 40 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const close = h.manager.closeSession('s1');
+    await close;
+    releaseStale?.();
+    await expect(stale).rejects.toMatchObject({ code: 'worker_history_stale_generation' });
+    expect(
+      h.events.filter(
+        (event) =>
+          event.type === 'session.history' &&
+          (event.payload as { mode?: string } | undefined)?.mode === 'older'
+      )
+    ).toHaveLength(2);
+  });
+
+  it('disposes a partial resume and publishes nothing when the index commit fails', async () => {
+    const h = createHarness({
+      commitResumed: async () => {
+        throw new Error('disk full');
+      },
+    });
+    await expect(
+      h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+      })
+    ).rejects.toThrow(/disk full/);
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-dispose');
+    expect(h.manager.getSlotSnapshots()).toEqual([]);
+    expect(h.events).toEqual([]);
   });
 });
 
@@ -622,6 +865,22 @@ describe('WorkerManager isolation and crash recovery', () => {
       logicalSessionId: 's1',
       sessionFile: '/sessions/s1.jsonl',
       generation: 2,
+    });
+    const restartTriplet = h.events.filter(
+      (event) =>
+        typeof event.requestId === 'string' && String(event.requestId).startsWith('restart-')
+    );
+    expect(restartTriplet.map((event) => event.type)).toEqual([
+      'session.resumed',
+      'session.history',
+      'session.status',
+    ]);
+    expect(restartTriplet[1]).toMatchObject({
+      payload: {
+        runtimeIdentity: '/sessions/s1.jsonl',
+        workspacePath: '/repo',
+        mode: 'refresh',
+      },
     });
     expect(
       h.manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 's2')

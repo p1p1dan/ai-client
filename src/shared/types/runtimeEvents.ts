@@ -5,12 +5,7 @@
  */
 
 import type { AgentWireName } from './agentWire';
-import type {
-  HistoryMessage,
-  HistoryParseStats,
-  HistoryReadError,
-  HistorySessionSummary,
-} from './sessionHistory';
+import type { HistoryMessage, HistoryParseStats, HistoryReadError } from './sessionHistory';
 
 export type RuntimeEventType =
   | 'host.ready'
@@ -21,7 +16,6 @@ export type RuntimeEventType =
   | 'session.permissionUpdated'
   | 'session.settingsEcho'
   | 'session.history'
-  | 'session.historyListed'
   | 'session.status'
   | 'session.stderr'
   | 'message.started'
@@ -940,25 +934,23 @@ export interface SessionHistoryEvent extends RuntimeEventBase {
      * opaque and only interpretable together with the agent that issued it.
      */
     agent?: AgentWireName;
+    /** Initial/refresh replaces the hydrated prefix; older prepends one page. */
+    mode?: 'initial' | 'older' | 'refresh';
     /** Chronological. Message ids carry the `h:` contract prefix. */
     messages: HistoryMessage[];
-    /** True when messages were dropped by input/output caps. */
+    /** Number of newer projected messages skipped from the active branch leaf. */
+    offset?: number;
+    /** Normalized page size (1..500). */
+    limit?: number;
+    /** Total projected messages on the active Pi branch. */
+    totalCount?: number;
+    /** Whether an older page exists. */
+    hasMore?: boolean;
+    /** True when messages were dropped by pagination/input/output caps. */
     truncated: boolean;
     omittedCount: number;
     error?: HistoryReadError;
     parseStats?: HistoryParseStats;
-  };
-}
-
-/** Response to the session.listHistory command, correlated by requestId. Not session-scoped. */
-export interface SessionHistoryListedEvent extends RuntimeEventBase {
-  type: 'session.historyListed';
-  requestId: string;
-  payload: {
-    workspacePath: string;
-    /** Sorted lastMessageAt desc. */
-    sessions: HistorySessionSummary[];
-    error?: HistoryReadError;
   };
 }
 
@@ -1505,7 +1497,6 @@ export type RuntimeEvent =
   | SessionPermissionUpdatedEvent
   | SessionSettingsEchoEvent
   | SessionHistoryEvent
-  | SessionHistoryListedEvent
   | MessageStartedEvent
   | MessageDeltaEvent
   | MessageCompletedEvent

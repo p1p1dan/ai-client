@@ -8,6 +8,7 @@ import { applyRuntimeEvent, type ChatSession, type ChatSessionsState } from '@/s
 import {
   deriveHistoryNotice,
   deriveRetryControl,
+  encodePiResumeError,
   HISTORY_ERROR_DEAD_SESSION_HINT,
   HISTORY_ERROR_NON_FATAL_HINT,
   HISTORY_ERROR_UNSUPPORTED_HINT,
@@ -222,6 +223,20 @@ describe('parseHistoryError (T-03)', () => {
       expect(guidance).not.toContain('下面没有');
       expect(guidance).not.toContain('没有历史消息可显示');
     }
+  });
+});
+
+describe('encodePiResumeError (T32)', () => {
+  it.each([
+    ['WORKER_SESSION_FILE_NOT_FOUND: missing', 'jsonl_not_found'],
+    ['WORKER_SESSION_FILE_CORRUPT: bad header', 'session_file_corrupt'],
+    ['WORKER_SESSION_CWD_MISMATCH: wrong repo', 'session_cwd_mismatch'],
+    ['WORKER_RPC_TIMEOUT: slow', 'read_failed'],
+  ])('maps %s to %s', (message, code) => {
+    expect(encodePiResumeError(new Error(message))).toEqual({
+      message,
+      encoded: `${code}: ${message}`,
+    });
   });
 });
 
@@ -611,7 +626,12 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       // The reducer's WHOLE patch. `hostBoundSessionIds` and `activeSessionId`
       // are absent, i.e. unchanged: a history error must not un-bind the
       // session, which is what would actually disable the composer.
-      expect(Object.keys(patch).sort()).toEqual(['historyErrors', 'messages', 'sessions']);
+      expect(Object.keys(patch).sort()).toEqual([
+        'historyErrors',
+        'historyPagination',
+        'messages',
+        'sessions',
+      ]);
       const row = patch.sessions?.find((session) => session.id === SESSION_ID);
       expect(row?.status).toBe('idle');
 

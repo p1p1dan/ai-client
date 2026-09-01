@@ -1,5 +1,6 @@
 import type { SessionAttachment, SessionEffortLevel } from './agentHost';
 import type { ExtensionUiResponse, RuntimeEvent } from './runtimeEvents';
+import type { SessionHistoryPage } from './sessionHistory';
 
 /**
  * Main ↔ utility worker RPC protocol.
@@ -69,6 +70,13 @@ export interface WorkerBootstrapPayload {
   effort?: SessionEffortLevel;
 }
 
+export interface WorkerHistoryResult {
+  logicalSessionId: string;
+  sessionFile: string;
+  workspacePath: string;
+  page: SessionHistoryPage;
+}
+
 export interface WorkerBootstrapResult {
   bootstrapped: true;
   logicalSessionId: string;
@@ -76,6 +84,8 @@ export interface WorkerBootstrapResult {
   cwd: string;
   agentDir: string;
   sessionFile?: string;
+  /** Present only when bootstrap opened an existing exact Pi session file. */
+  initialHistory?: WorkerHistoryResult;
   model?: string;
   effort?: SessionEffortLevel;
   projectTrusted: boolean;
@@ -101,6 +111,12 @@ export interface WorkerSendResult {
   requestId: string;
 }
 
+export interface WorkerHistoryPayload {
+  logicalSessionId: string;
+  offset?: number;
+  limit?: number;
+}
+
 export interface WorkerStopPayload {
   logicalSessionId: string;
   reason: 'user' | 'dispose';
@@ -120,6 +136,7 @@ export interface WorkerExtensionUiResponseResult {
 }
 
 export type WorkerSendRequest = WorkerRpcRequest<'worker.send', WorkerSendPayload>;
+export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHistoryPayload>;
 export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayload>;
 export type WorkerExtensionUiResponseRequest = WorkerRpcRequest<
   'worker.extensionUi.respond',
@@ -165,6 +182,43 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
   return true;
 }
 
+function isSessionHistoryPage(value: unknown): value is SessionHistoryPage {
+  if (!isRecord(value) || !Array.isArray(value.messages)) return false;
+  if (
+    !Number.isSafeInteger(value.offset) ||
+    Number(value.offset) < 0 ||
+    !Number.isSafeInteger(value.limit) ||
+    Number(value.limit) < 1 ||
+    Number(value.limit) > 500 ||
+    !Number.isSafeInteger(value.totalCount) ||
+    Number(value.totalCount) < 0 ||
+    typeof value.hasMore !== 'boolean'
+  ) {
+    return false;
+  }
+  return value.messages.every(
+    (message) =>
+      isRecord(message) &&
+      typeof message.id === 'string' &&
+      message.id.startsWith('h:') &&
+      (message.role === 'user' || message.role === 'assistant' || message.role === 'system') &&
+      Array.isArray(message.blocks)
+  );
+}
+
+export function isWorkerHistoryResult(value: unknown): value is WorkerHistoryResult {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.trim().length > 0 &&
+    typeof value.sessionFile === 'string' &&
+    value.sessionFile.trim().length > 0 &&
+    typeof value.workspacePath === 'string' &&
+    value.workspacePath.trim().length > 0 &&
+    isSessionHistoryPage(value.page)
+  );
+}
+
 export function isWorkerBootstrapResult(value: unknown): value is WorkerBootstrapResult {
   if (!isRecord(value)) return false;
   if (
@@ -195,6 +249,9 @@ export function isWorkerBootstrapResult(value: unknown): value is WorkerBootstra
     return false;
   }
   if (value.effort !== undefined && !isWorkerEffort(value.effort)) return false;
+  if (value.initialHistory !== undefined && !isWorkerHistoryResult(value.initialHistory)) {
+    return false;
+  }
   return true;
 }
 
@@ -237,6 +294,29 @@ export function isWorkerSendResult(value: unknown): value is WorkerSendResult {
     typeof value.requestId === 'string' &&
     value.requestId.trim().length > 0
   );
+}
+
+export function isWorkerHistoryPayload(value: unknown): value is WorkerHistoryPayload {
+  if (
+    !isRecord(value) ||
+    typeof value.logicalSessionId !== 'string' ||
+    value.logicalSessionId.trim().length === 0
+  ) {
+    return false;
+  }
+  if (
+    value.offset !== undefined &&
+    (!Number.isSafeInteger(value.offset) || Number(value.offset) < 0)
+  ) {
+    return false;
+  }
+  if (
+    value.limit !== undefined &&
+    (!Number.isSafeInteger(value.limit) || Number(value.limit) < 1 || Number(value.limit) > 500)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function isWorkerStopPayload(value: unknown): value is WorkerStopPayload {

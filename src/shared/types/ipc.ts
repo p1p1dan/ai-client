@@ -390,7 +390,7 @@ export const IPC_CHANNELS = {
   CHAT_LIST_SESSIONS: 'chat:listSessions',
   CHAT_RENAME_SESSION: 'chat:renameSession',
   CHAT_ARCHIVE_SESSION: 'chat:archiveSession',
-  CHAT_LIST_HISTORY: 'chat:listHistory',
+  CHAT_LOAD_HISTORY_PAGE: 'chat:loadHistoryPage',
   /** Pi-only model catalog; no provider credential or base URL crosses IPC. */
   CHAT_LIST_PI_MODELS: 'chat:listPiModels',
   /** Main → Renderer: Agent Host RuntimeEvent push */

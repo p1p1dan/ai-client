@@ -10,10 +10,13 @@ import {
 } from '@shared/types/runtimeEvents';
 import {
   isWorkerExtensionUiResponseResult,
+  isWorkerHistoryResult,
   isWorkerSendResult,
   isWorkerStopResult,
   type WorkerExtensionUiResponsePayload,
   type WorkerExtensionUiResponseResult,
+  type WorkerHistoryPayload,
+  type WorkerHistoryResult,
   type WorkerRpcEvent,
   type WorkerSendPayload,
   type WorkerSendResult,
@@ -77,6 +80,12 @@ interface BlockingRequestOrigin {
 export interface WorkerManagerOptions {
   createSlot?: typeof createPiWorkerSlot;
   bindRuntimeIdentity?: (sessionId: string, sessionFile: string) => Promise<void>;
+  commitResumed?: (input: {
+    sessionId: string;
+    workspacePath: string;
+    runtimeIdentity: string;
+    model?: string;
+  }) => Promise<void>;
   onEvent?: (event: RuntimeEvent) => void;
   log?: (...args: unknown[]) => void;
   now?: () => number;
@@ -168,6 +177,7 @@ function readStringArray(payload: unknown, key: string): string[] {
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
+  private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
   private readonly handlers = new Set<(event: RuntimeEvent) => void>();
   private readonly log: (...args: unknown[]) => void;
   private readonly now: () => number;
@@ -180,6 +190,11 @@ export class WorkerManager {
   private readonly entriesBySession = new Map<string, ManagedSlot>();
   private readonly blockingRequests = new Map<string, BlockingRequestOrigin>();
   private readonly closingBlockingRequests = new Set<string>();
+  private readonly resumeFlights = new Map<
+    string,
+    { fingerprint: string; promise: Promise<string>; ownerWebContentsId?: number }
+  >();
+  private readonly historyPageFlights = new Map<string, Promise<void>>();
   /** Every spawned physical slot, including failed-disposal retired generations. */
   private readonly ownedSlots = new Set<WorkerSlot>();
   private eventSequence = 0;
@@ -191,6 +206,7 @@ export class WorkerManager {
   constructor(options: WorkerManagerOptions = {}) {
     this.createSlot = options.createSlot ?? createPiWorkerSlot;
     this.bindRuntimeIdentity = options.bindRuntimeIdentity ?? (async () => undefined);
+    this.commitResumed = options.commitResumed ?? (async () => undefined);
     this.log = options.log ?? (() => undefined);
     this.now = options.now ?? Date.now;
     this.createToken = options.createToken ?? randomUUID;
@@ -232,7 +248,7 @@ export class WorkerManager {
 
   getStatus(): {
     state: WorkerManagerState;
-    capabilities: { history: false; thinking: true; permissionPolicy: true };
+    capabilities: { history: true; thinking: true; permissionPolicy: true };
     capacity: number;
     slots: number;
     active: number;
@@ -242,7 +258,7 @@ export class WorkerManager {
     const entries = [...this.entriesBySession.values()];
     return {
       state: this.state,
-      capabilities: { history: false, thinking: true, permissionPolicy: true },
+      capabilities: { history: true, thinking: true, permissionPolicy: true },
       capacity: this.capacity,
       slots: entries.length,
       active: entries.filter((entry) => entry.activeRequestId !== null).length,
@@ -408,6 +424,233 @@ export class WorkerManager {
         throw error;
       }
     }).then(() => requestId);
+  }
+
+  resumeSession(input: {
+    sessionId: string;
+    sessionFile: string;
+    workspacePath: string;
+    model?: string;
+    effort?: SessionEffortLevel;
+    ownerWebContentsId?: number;
+  }): Promise<string> {
+    const sessionFile = normalizeWorkerPath(input.sessionFile, 'Pi session file');
+    const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
+    const fingerprint = JSON.stringify([sessionFile, cwd, input.model ?? '', input.effort ?? '']);
+    const existingFlight = this.resumeFlights.get(input.sessionId);
+    if (existingFlight) {
+      if (existingFlight.fingerprint !== fingerprint) {
+        return Promise.reject(
+          new WorkerManagerError(
+            'worker_resume_identity_conflict',
+            `Session ${input.sessionId} already has a different resume in flight`
+          )
+        );
+      }
+      existingFlight.ownerWebContentsId = input.ownerWebContentsId;
+      const readyEntry = this.entriesBySession.get(input.sessionId);
+      if (readyEntry?.state === 'ready') {
+        this.claimEntry(readyEntry, input.ownerWebContentsId);
+      }
+      return existingFlight.promise;
+    }
+
+    const requestId = nextRequestId('resume');
+    const promise = this.serialize(async () => {
+      let entry = this.entriesBySession.get(input.sessionId);
+      if (entry && entry.state !== 'disposing') {
+        if (!entry.sessionFile || sessionWorkerKey(sessionFile) !== entry.key) {
+          throw new WorkerManagerError(
+            'worker_resume_identity_conflict',
+            `Session ${input.sessionId} is already bound to another Pi session file`
+          );
+        }
+        if (entry.cwd !== cwd) {
+          throw new WorkerManagerError(
+            'worker_resume_cwd_conflict',
+            `Session ${input.sessionId} is already bound to workspace ${entry.cwd}`
+          );
+        }
+        if (entry.state !== 'ready' || !entry.slot) {
+          throw new WorkerManagerError(
+            'session_not_ready',
+            `Pi WorkerSlot for ${input.sessionId} is ${entry.state}`,
+            true
+          );
+        }
+        if (entry.activeRequestId || entry.pendingBlockingRequests.size > 0) {
+          throw new WorkerManagerError(
+            'session_busy',
+            `Session ${input.sessionId} cannot resume while active`,
+            true
+          );
+        }
+        this.claimEntry(entry, input.ownerWebContentsId);
+        const history = await this.readHistory(entry, 0, 80);
+        await this.commitResumed({
+          sessionId: input.sessionId,
+          workspacePath: cwd,
+          runtimeIdentity: sessionFile,
+          ...(input.model ? { model: input.model } : {}),
+        });
+        this.claimEntry(
+          entry,
+          this.resumeFlights.get(input.sessionId)?.ownerWebContentsId ?? input.ownerWebContentsId
+        );
+        this.publishHistoryTriplet(entry, requestId, history, 'initial');
+        return;
+      }
+
+      await this.reclaimIdleInternal();
+      if (this.entriesBySession.size >= this.capacity) {
+        const victim = this.selectEvictionCandidate();
+        if (!victim) {
+          throw new WorkerManagerError(
+            'worker_capacity_reached',
+            `Pi worker capacity ${this.capacity} is fully protected by foreground, active, or blocking sessions`,
+            true
+          );
+        }
+        await this.retireAndDispose(victim, 'slot-replace');
+      }
+
+      const durableKey = sessionWorkerKey(sessionFile);
+      const conflict = this.entriesByKey.get(durableKey);
+      if (conflict) {
+        throw new WorkerManagerError(
+          'worker_session_identity_conflict',
+          `Pi session file is already owned by logical session ${conflict.logicalSessionId}`
+        );
+      }
+      const timestamp = this.now();
+      entry = {
+        key: durableKey,
+        temporaryKey: durableKey,
+        logicalSessionId: input.sessionId,
+        cwd,
+        sessionFile,
+        slot: null,
+        bootstrap: null,
+        state: 'creating',
+        activeRequestId: null,
+        ownerWebContentsId: null,
+        acceptEvents: true,
+        pendingBlockingRequests: new Set(),
+        extensionRuntimeIds: new Set(),
+        lastUsedAt: timestamp,
+        lastIdleAt: timestamp,
+        restartAttempts: [],
+        generation: 1,
+        configGeneration: this.configGeneration,
+        error: null,
+      };
+      this.entriesByKey.set(durableKey, entry);
+      this.entriesBySession.set(input.sessionId, entry);
+      this.claimEntry(entry, input.ownerWebContentsId);
+      this.state = 'ready';
+
+      try {
+        const created = await this.spawnForEntry(entry, {
+          ...(input.model ? { model: input.model } : {}),
+          ...(input.effort ? { effort: input.effort } : {}),
+        });
+        const reopenedFile = created.bootstrap.sessionFile
+          ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Pi session file')
+          : null;
+        if (!reopenedFile || sessionWorkerKey(reopenedFile) !== durableKey) {
+          throw new WorkerManagerError(
+            'worker_resume_identity_mismatch',
+            'Pi worker did not open the requested exact session file'
+          );
+        }
+        const history = created.bootstrap.initialHistory;
+        if (!isWorkerHistoryResult(history)) {
+          throw new WorkerManagerError(
+            'worker_resume_history_missing',
+            'Pi worker did not return initial branch history'
+          );
+        }
+        this.validateHistoryResult(entry, history);
+        await this.commitResumed({
+          sessionId: input.sessionId,
+          workspacePath: cwd,
+          runtimeIdentity: sessionFile,
+          ...(input.model ? { model: input.model } : {}),
+        });
+        entry.bootstrap = { ...created.bootstrap, sessionFile: reopenedFile };
+        entry.state = 'ready';
+        entry.error = null;
+        entry.lastIdleAt = this.now();
+        this.claimEntry(
+          entry,
+          this.resumeFlights.get(input.sessionId)?.ownerWebContentsId ?? input.ownerWebContentsId
+        );
+        this.publishHistoryTriplet(entry, requestId, history, 'initial');
+      } catch (error) {
+        entry.error = error instanceof Error ? error.message : String(error);
+        await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
+        this.updateManagerState();
+        throw error;
+      }
+    }).then(() => requestId);
+    this.resumeFlights.set(input.sessionId, {
+      fingerprint,
+      promise,
+      ownerWebContentsId: input.ownerWebContentsId,
+    });
+    const clearFlight = () => {
+      if (this.resumeFlights.get(input.sessionId)?.promise === promise) {
+        this.resumeFlights.delete(input.sessionId);
+      }
+    };
+    void promise.then(clearFlight, clearFlight);
+    return promise;
+  }
+
+  async loadHistoryPage(input: {
+    sessionId: string;
+    offset: number;
+    limit?: number;
+    ownerWebContentsId?: number;
+  }): Promise<string> {
+    const requestId = nextRequestId('history');
+    const entry = this.requireReadySession(input.sessionId);
+    if (entry.activeRequestId) {
+      throw new WorkerManagerError(
+        'session_busy',
+        `Session ${input.sessionId} cannot paginate history while active`,
+        true
+      );
+    }
+    this.claimEntry(entry, input.ownerWebContentsId);
+    const slot = entry.slot;
+    const generation = entry.generation;
+    const assertAuthority = () => {
+      if (!slot || entry.slot !== slot || !this.isAuthoritative(entry, generation)) {
+        throw new WorkerManagerError(
+          'worker_history_stale_generation',
+          `History page for ${input.sessionId} arrived from a retired WorkerSlot`,
+          true
+        );
+      }
+    };
+    const previous = this.historyPageFlights.get(input.sessionId) ?? Promise.resolve();
+    const task = previous
+      .catch(() => undefined)
+      .then(async () => {
+        assertAuthority();
+        const history = await this.readHistory(entry, input.offset, input.limit ?? 80);
+        assertAuthority();
+        this.dispatchHistory(entry, requestId, history, 'older');
+      });
+    this.historyPageFlights.set(input.sessionId, task);
+    const clear = () => {
+      if (this.historyPageFlights.get(input.sessionId) === task) {
+        this.historyPageFlights.delete(input.sessionId);
+      }
+    };
+    void task.then(clear, clear);
+    return task.then(() => requestId);
   }
 
   async send(input: {
@@ -647,6 +890,85 @@ export class WorkerManager {
     entry.bootstrap = created.bootstrap;
     entry.generation = created.slot.generation;
     return created;
+  }
+
+  private async readHistory(
+    entry: ManagedSlot,
+    offset: number,
+    limit: number
+  ): Promise<WorkerHistoryResult> {
+    const result = await entry.slot?.request<WorkerHistoryResult, WorkerHistoryPayload>(
+      'worker.history',
+      { logicalSessionId: entry.logicalSessionId, offset, limit }
+    );
+    if (!isWorkerHistoryResult(result)) {
+      throw new WorkerManagerError(
+        'worker_invalid_history_result',
+        'Pi worker returned an invalid history page'
+      );
+    }
+    this.validateHistoryResult(entry, result);
+    return result;
+  }
+
+  private validateHistoryResult(entry: ManagedSlot, history: WorkerHistoryResult): void {
+    if (
+      history.logicalSessionId !== entry.logicalSessionId ||
+      sessionWorkerKey(history.sessionFile) !== entry.key ||
+      normalizeWorkerPath(history.workspacePath, 'History workspace') !== entry.cwd
+    ) {
+      throw new WorkerManagerError(
+        'worker_history_identity_mismatch',
+        'Pi worker history page does not match its authoritative slot identity'
+      );
+    }
+  }
+
+  private dispatchHistory(
+    entry: ManagedSlot,
+    requestId: string,
+    history: WorkerHistoryResult,
+    mode: 'initial' | 'older' | 'refresh'
+  ): void {
+    const page = history.page;
+    this.dispatch({
+      type: 'session.history',
+      sessionId: entry.logicalSessionId,
+      requestId,
+      payload: {
+        runtimeIdentity: history.sessionFile,
+        workspacePath: history.workspacePath,
+        mode,
+        messages: page.messages,
+        offset: page.offset,
+        limit: page.limit,
+        totalCount: page.totalCount,
+        hasMore: page.hasMore,
+        truncated: page.hasMore,
+        omittedCount: Math.max(0, page.totalCount - page.messages.length),
+      },
+    });
+  }
+
+  private publishHistoryTriplet(
+    entry: ManagedSlot,
+    requestId: string,
+    history: WorkerHistoryResult,
+    mode: 'initial' | 'refresh'
+  ): void {
+    this.dispatch({
+      type: 'session.resumed',
+      sessionId: entry.logicalSessionId,
+      requestId,
+      payload: { agent: PI_AGENT, runtimeIdentity: history.sessionFile },
+    });
+    this.dispatchHistory(entry, requestId, history, mode);
+    this.dispatch({
+      type: 'session.status',
+      sessionId: entry.logicalSessionId,
+      requestId,
+      payload: { status: 'idle' },
+    });
   }
 
   private requireReadySession(sessionId: string): ManagedSlot {
@@ -895,16 +1217,20 @@ export class WorkerManager {
           'Restarted worker did not reopen the authoritative Pi session file'
         );
       }
+      const history = created.bootstrap.initialHistory;
+      if (!isWorkerHistoryResult(history)) {
+        throw new WorkerManagerError(
+          'worker_restart_history_missing',
+          'Restarted Pi worker did not return branch history'
+        );
+      }
+      this.validateHistoryResult(entry, history);
       entry.bootstrap = { ...created.bootstrap, sessionFile: reopenedFile };
       entry.state = 'ready';
       entry.error = null;
       entry.lastIdleAt = this.now();
       this.state = 'ready';
-      this.dispatch({
-        type: 'session.status',
-        sessionId: entry.logicalSessionId,
-        payload: { status: 'idle' },
-      });
+      this.publishHistoryTriplet(entry, nextRequestId('restart'), history, 'refresh');
     } catch (error) {
       entry.state = 'crashed';
       entry.error = error instanceof Error ? error.message : String(error);
@@ -1021,4 +1347,5 @@ export class WorkerManager {
 export const workerManager = new WorkerManager({
   bindRuntimeIdentity: (sessionId, sessionFile) =>
     sessionIndexService.bindRuntimeIdentity(sessionId, sessionFile),
+  commitResumed: (input) => sessionIndexService.commitResumed(input),
 });

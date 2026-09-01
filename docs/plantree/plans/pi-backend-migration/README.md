@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase D / T32 Pi-native history and real resume；T31 behavior reattachment已完成。
+> **当前阶段**：Phase D / T33 session tree, rewind and fork；T32 history/real resume已完成。
 
 ## 目标
 
@@ -94,4 +94,4 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 当前出口
 
-T28 replacement boundary、T29 single WorkerSlot、T30 bounded WorkerManager与T31 Cycle 1/2 behavior reattachment均已完成。T31已闭环streaming、queue/pending/attachments、Extension UI、Pi-only models/runtime gate/auth/trust/permissions并删除replaced live Claude/Codex execution branches；见 [closure evidence](./evidence/2026-09-01-t31-behavior-reattachment.md)。当前Next为T32 Pi-native history/resume；history/import/TUI继续服从T28保护边界，不焊回旧host。
+T28 replacement boundary、T29 single WorkerSlot、T30 bounded WorkerManager、T31 Cycle 1/2 behavior reattachment与T32 Pi-native history/real resume均已完成。T32已闭环exact-file preflight/open、active-branch timeline、pagination/incomplete recovery、transactional resumed→history→idle、duplicate/restart/late hydration/switch race与known-file no-create-fallback；见 [closure evidence](./evidence/2026-09-01-t32-history-real-resume.md)。当前Next为T33 tree/rewind/fork；import/TUI继续服从T28保护边界，不焊回旧host。

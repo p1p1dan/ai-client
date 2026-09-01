@@ -1,6 +1,6 @@
 /**
- * Session history shapes for the `session.history` batch event and
- * `session.listHistory` command (C-06, CP4-finalized protocol).
+ * Session history shapes for Pi `session.history` hydration and isolated
+ * T34 legacy migration-reader adapters.
  * See docs/plans/2026-07-24-c06-session-history-protocol-draft.md
  */
 
@@ -54,14 +54,20 @@ export interface HistoryAttachment {
 }
 
 export interface HistoryMessage {
-  /** Stable id: `h:<first-jsonl-uuid>`. The `h:` prefix is contract. */
-  id: string;
-  role: 'user' | 'assistant';
-  /** Epoch ms from the JSONL timestamp when parseable. */
+  /** Stable renderer id derived from the Pi session entry id. */
+  id: `${typeof HISTORY_MESSAGE_ID_PREFIX}${string}`;
+  /** Exact Pi JSONL entry id. Required on Pi history; legacy T34 adapters may omit it. */
+  entryId?: string;
+  role: 'user' | 'assistant' | 'system';
+  /** Epoch ms from the Pi entry timestamp when parseable. */
   timestamp?: number;
-  /** Assistant messages: message.model of the first merged line. */
+  /** Assistant messages: provider/model when reported by Pi. */
   model?: string;
   blocks: HistoryBlock[];
+  /** Crash/abort left an assistant leaf without a complete visible response. */
+  incomplete?: boolean;
+  /** Pi stop reason retained for diagnostics and future rewind UI. */
+  stopReason?: string;
   /**
    * 2026-08-10 optional-field widening (protocol version unchanged, same
    * discipline as `message.started.attachments`): user turns only, present
@@ -88,7 +94,9 @@ export type HistoryReadErrorCode =
   | 'jsonl_not_found'
   | 'encrypted_unreadable'
   | 'read_failed'
-  | 'history_unsupported';
+  | 'history_unsupported'
+  | 'session_file_corrupt'
+  | 'session_cwd_mismatch';
 
 export interface HistoryReadError {
   code: HistoryReadErrorCode;
@@ -102,7 +110,20 @@ export interface HistoryParseStats {
   badLines: number;
 }
 
-/** Summary row for session.listHistory. */
+/** One chronological page selected backwards from the active Pi branch leaf. */
+export interface SessionHistoryPage {
+  messages: HistoryMessage[];
+  /** Number of newer projected messages skipped from the branch leaf. */
+  offset: number;
+  /** Normalized page limit (1..500). */
+  limit: number;
+  /** Total projected messages on the active branch. */
+  totalCount: number;
+  /** True when an older page exists before this page. */
+  hasMore: boolean;
+}
+
+/** Summary row retained only for T34 migration-reader compatibility. */
 export interface HistorySessionSummary {
   /**
    * The agent's own resume handle, opaque to us: a Claude Code JSONL basename,

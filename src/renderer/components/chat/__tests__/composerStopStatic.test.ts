@@ -259,7 +259,8 @@ describe('sendAndWait dispatch guard (2026-08-10 stop-hang fix)', () => {
     // Three dispatch sites, one guard: `sendAndWait` is the only place that
     // calls `chat.send`, so no caller can route around it.
     expect(offsets('window.electronAPI.chat.send(')).toHaveLength(1);
-    expect(offsets('await sendAndWait();')).toHaveLength(3);
+    // Initial send, busy retry, post-create send, and T32 exact-file reopen send.
+    expect(offsets('await sendAndWait();')).toHaveLength(4);
   });
 });
 
@@ -421,7 +422,8 @@ describe('liveness budget wiring (F2 S-6)', () => {
 
   it('[S-6] the main wait expires on the resettable budget, and the handshakes keep fixed deadlines', () => {
     expect(offsets('budget.isExpired(Date.now())')).toHaveLength(1);
-    expect(offsets('deadlineAt(5000)')).toHaveLength(2);
+    // Create handshake, explicit resume, and direct-binding exact-file reopen.
+    expect(offsets('deadlineAt(5000)')).toHaveLength(3);
     // The retired byte-scaled formula must not come back through any door.
     expect(source).not.toContain('sendTimeoutMs(');
   });

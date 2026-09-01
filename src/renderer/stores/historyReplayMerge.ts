@@ -185,6 +185,14 @@ export function snapshotResumeCandidates(
  * requestId match (a stale replay from an older resume must neither fold
  * anything nor destroy the snapshot the in-flight resume still owns).
  */
+export function hasMatchingResumeSnapshot(
+  sessionId: string,
+  requestId: string | undefined
+): boolean {
+  const snapshot = resumeSnapshots.get(sessionId);
+  return Boolean(snapshot && requestId && snapshot.requestId === requestId);
+}
+
 export function takeResumeSnapshot(
   sessionId: string,
   requestId: string | undefined

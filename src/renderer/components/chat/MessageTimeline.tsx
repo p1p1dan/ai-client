@@ -221,6 +221,31 @@ export function MessageTimeline({
   const historyError = useChatSessionsStore((state) =>
     selectHistoryError(state.historyErrors, sessionId)
   );
+  const historyPagination = useChatSessionsStore((state) =>
+    sessionId ? state.historyPagination?.[sessionId] : undefined
+  );
+  const [loadingOlderHistory, setLoadingOlderHistory] = useState(false);
+  const loadOlderHistory = useCallback(async () => {
+    if (!sessionId || !historyPagination?.hasMore || loadingOlderHistory) return;
+    setLoadingOlderHistory(true);
+    try {
+      await window.electronAPI.chat.loadHistoryPage({
+        sessionId,
+        offset: historyPagination.nextOffset,
+        limit: 80,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      useChatSessionsStore.setState((state) => ({
+        historyErrors: {
+          ...state.historyErrors,
+          [sessionId]: `read_failed: ${message}`,
+        },
+      }));
+    } finally {
+      setLoadingOlderHistory(false);
+    }
+  }, [historyPagination, loadingOlderHistory, sessionId]);
   // T-31 §3: the in-flight turn's status snapshot, published by ChatComposer.
   // Scoped to THIS session — the composer's send state is not per-session, so a
   // session switch mid-send must not paint this timeline's head with another
@@ -526,6 +551,20 @@ export function MessageTimeline({
               into 10 here + 10 of sticky-band padding; T12 retired the band, so
               the whole beat is back in one place (F-B9). */}
           <ReadingColumn className={readingColumnSpacingClass()}>
+            {historyPagination?.hasMore && (
+              <div className="flex justify-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={loadingOlderHistory || status !== 'idle'}
+                  onClick={() => void loadOlderHistory()}
+                >
+                  {loadingOlderHistory ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw />}
+                  Load earlier messages
+                </Button>
+              </div>
+            )}
             {historyNotice.kind === 'error' && (
               // Keyed by session: detail/retry state must not follow the user
               // across sessions when React reuses this slot.
@@ -696,6 +735,8 @@ const HISTORY_ERROR_ICON = {
   // S2 (d): this build has no reader for the session's agent. Distinct from
   // "not found" on purpose — nothing is missing, we just cannot read it here.
   history_unsupported: FileQuestion,
+  session_file_corrupt: TriangleAlert,
+  session_cwd_mismatch: FileQuestion,
   unknown: TriangleAlert,
 } as const;
 

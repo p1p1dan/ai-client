@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { PermissionPluginDecision } from '../permissionPlugin.ts';
@@ -10,10 +13,15 @@ const GATED: PermissionPluginDecision = {
   gated: true,
 };
 
-function createSession(stub: ReturnType<typeof createPiSdkStub>, events: RuntimeEventDraft[]) {
+function createSession(
+  stub: ReturnType<typeof createPiSdkStub>,
+  events: RuntimeEventDraft[],
+  sessionFile?: string
+) {
   return new PiWorkerSession({
     logicalSessionId: 'logical-1',
     cwd: '/repo',
+    ...(sessionFile ? { sessionFile } : {}),
     model: 'glm/glm-5',
     effort: 'high',
     projectTrusted: false,
@@ -51,6 +59,72 @@ describe('PiWorkerSession', () => {
     await session.dispose();
     await session.dispose();
     expect(stub.sessionFor('/repo')).toMatchObject({ disposed: true });
+  });
+
+  it('opens one exact file and returns its active-branch initial history page', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'aiclient-worker-resume-'));
+    const sessionFile = join(dir, 'session.jsonl');
+    await writeFile(sessionFile, '{"type":"session","id":"pi-resumed","cwd":"/repo"}\n', 'utf8');
+    const stub = createPiSdkStub({
+      openedSession: {
+        cwd: '/repo',
+        sessionId: 'pi-resumed',
+        sessionFile,
+        branch: [
+          {
+            type: 'message',
+            id: 'u1',
+            message: { role: 'user', content: [{ type: 'text', text: 'restored' }] },
+          },
+        ],
+      },
+    });
+    const events: RuntimeEventDraft[] = [];
+    const session = createSession(stub, events, sessionFile);
+    try {
+      await expect(session.bootstrap()).resolves.toMatchObject({
+        piSessionId: 'pi-resumed',
+        sessionFile,
+        initialHistory: {
+          logicalSessionId: 'logical-1',
+          sessionFile,
+          workspacePath: '/repo',
+          page: {
+            messages: [{ id: 'h:u1', entryId: 'u1', role: 'user' }],
+            offset: 0,
+            totalCount: 1,
+            hasMore: false,
+          },
+        },
+      });
+      await expect(
+        session.history({ logicalSessionId: 'logical-1', offset: 1, limit: 20 })
+      ).resolves.toMatchObject({
+        page: { messages: [], offset: 1, limit: 20, totalCount: 1, hasMore: false },
+      });
+    } finally {
+      await session.dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails missing and cross-cwd resume targets before creating any AgentSession', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'aiclient-worker-invalid-resume-'));
+    const missing = join(dir, 'missing.jsonl');
+    const missingStub = createPiSdkStub();
+    await expect(createSession(missingStub, [], missing).bootstrap()).rejects.toMatchObject({
+      code: 'WORKER_SESSION_FILE_NOT_FOUND',
+    });
+    expect(missingStub.sessions).toEqual([]);
+
+    const crossCwd = join(dir, 'cross.jsonl');
+    await writeFile(crossCwd, '{"type":"session","id":"pi-other","cwd":"/other"}\n', 'utf8');
+    const crossStub = createPiSdkStub();
+    await expect(createSession(crossStub, [], crossCwd).bootstrap()).rejects.toMatchObject({
+      code: 'WORKER_SESSION_CWD_MISMATCH',
+    });
+    expect(crossStub.sessions).toEqual([]);
+    await rm(dir, { recursive: true, force: true });
   });
 
   it('admits send before a held prompt settles and preserves attachments/model/effort', async () => {

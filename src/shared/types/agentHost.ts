@@ -39,7 +39,6 @@ export type AgentHostCommandType =
   | 'session.send'
   | 'session.stop'
   | 'session.close'
-  | 'session.listHistory'
   | 'session.updatePermission'
   | 'permission.respond'
   | 'question.respond'
@@ -193,24 +192,6 @@ export interface SessionCloseCommand extends AgentHostCommandBase {
 }
 
 /**
- * List historical sessions for a workspace (includes CLI-created sessions
- * unknown to the app index — Claude Code's live in ~/.claude/projects/).
- * Host replies with a session.historyListed event correlated by requestId.
- */
-export interface SessionListHistoryCommand extends AgentHostCommandBase {
-  type: 'session.listHistory';
-  payload: {
-    workspacePath: string;
-    /**
-     * S2 (d, C7): which agents to fan out to. Same name and same meaning as
-     * `capabilities.agents`. Absent = Claude Code only, i.e. today's behaviour
-     * byte for byte.
-     */
-    agents?: AgentWireName[];
-  };
-}
-
-/**
  * D48 S4 §6 — change the permission posture of a session that is ALREADY
  * running. The one command whose whole purpose is to move a value that
  * create/resume could only set once.
@@ -330,7 +311,6 @@ export type AgentHostCommand =
   | SessionSendCommand
   | SessionStopCommand
   | SessionCloseCommand
-  | SessionListHistoryCommand
   | SessionUpdatePermissionCommand
   | PermissionRespondCommand
   | QuestionRespondCommand

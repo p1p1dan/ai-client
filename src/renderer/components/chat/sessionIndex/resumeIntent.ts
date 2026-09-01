@@ -1,4 +1,4 @@
-import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
+import { PI_AGENT } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isPlaceholderTitle } from './sessionTitle';
@@ -22,8 +22,6 @@ export interface ResumeIntent {
     runtimeIdentity: string;
     workspacePath: string;
     model?: string;
-    /** S2 (b): which runtime resumes it — `runtimeIdentity` is opaque without it. */
-    agent: AgentWireName;
   };
   /** Reason the resume was skipped (for telemetry / diags). */
   reason?: string;
@@ -72,6 +70,9 @@ export function shouldResumeSession(
   if (!workspace) {
     return { shouldResume: false, reason: 'no-workspace' };
   }
+  if (session.agent && session.agent !== PI_AGENT) {
+    return { shouldResume: false, reason: `unsupported-agent:${session.agent}` };
+  }
   if (!workspace.path) {
     // Demo placeholder workspace (path '') — resuming against it would hand
     // the Host an empty cwd. Real workspaces always carry a repository path.
@@ -94,7 +95,6 @@ export function shouldResumeSession(
       // dropped rather than sent with an undefined value — "no model" has to be
       // indistinguishable from "field absent" for the runtime default to apply.
       ...(options.model ? { model: options.model } : {}),
-      agent: sessionAgent(session),
     },
   };
 }

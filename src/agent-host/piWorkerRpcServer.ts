@@ -2,6 +2,7 @@ import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEve
 import {
   isWorkerBootstrapPayload,
   isWorkerExtensionUiResponsePayload,
+  isWorkerHistoryPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
   isWorkerStopPayload,
@@ -10,6 +11,8 @@ import {
   type WorkerBootstrapResult,
   type WorkerDisposeResult,
   type WorkerExtensionUiResponseResult,
+  type WorkerHistoryPayload,
+  type WorkerHistoryResult,
   type WorkerRpcErrorPayload,
   type WorkerRpcErrorResponse,
   type WorkerRpcEvent,
@@ -34,6 +37,7 @@ export interface PiWorkerMessagePort {
 export interface PiWorkerRuntime {
   bootstrap(): Promise<WorkerBootstrapResult>;
   startSend(input: WorkerSendPayload): Promise<WorkerSendResult>;
+  history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   respondExtensionUi(response: Parameters<PiWorkerSession['respondExtensionUi']>[0]): boolean;
   dispose(): Promise<void>;
@@ -82,6 +86,7 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
   return (
     a.logicalSessionId === b.logicalSessionId &&
     a.cwd === b.cwd &&
+    a.sessionFile === b.sessionFile &&
     a.model === b.model &&
     a.effort === b.effort
   );
@@ -177,6 +182,9 @@ export class PiWorkerRpcServer {
         case 'worker.send':
           await this.handleSend(request);
           break;
+        case 'worker.history':
+          await this.handleHistory(request);
+          break;
         case 'worker.stop':
           await this.handleStop(request);
           break;
@@ -249,6 +257,21 @@ export class PiWorkerRpcServer {
     // out of band so the serialized RPC chain remains available to worker.stop.
     const result = await this.runtime.startSend(request.payload);
     this.respondSuccess(request, result);
+  }
+
+  private async handleHistory(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerHistoryPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.history requires logicalSessionId and valid offset/limit values',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.history(request.payload));
   }
 
   private async handleStop(request: WorkerRpcRequest): Promise<void> {

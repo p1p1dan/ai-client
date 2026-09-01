@@ -684,3 +684,173 @@ describe('applyRuntimeEvent — permission.requested excludes history messages (
     expect(patch.pendingPermissions?.[0].messageId).toBe('asst-1');
   });
 });
+
+describe('T32 Pi hydration generations and pagination', () => {
+  it('rejects a stale initial history event as a whole after a newer resume', () => {
+    const state = baseState({
+      sessions: [makeSession({ runtimeIdentity: '/sessions/new.jsonl' })],
+      messages: {
+        [SESSION_ID]: [
+          {
+            id: 'h:new',
+            sessionId: SESSION_ID,
+            role: 'user',
+            blocks: [{ id: 'h:new:text:0', type: 'text', text: 'new history' }],
+          },
+        ],
+      },
+      historyErrors: { [SESSION_ID]: 'read_failed: current error' },
+    });
+    const { state: resumed } = applyAll(state, [makeResumedEvent('req-new')]);
+    const stale = applyRuntimeEvent(
+      resumed,
+      makeHistoryEvent(
+        {
+          mode: 'initial',
+          runtimeIdentity: '/sessions/old.jsonl',
+          messages: HISTORY_MESSAGES,
+          error: { code: 'read_failed', message: 'stale failure' },
+        },
+        'req-old'
+      )
+    );
+
+    expect(stale).toEqual({});
+  });
+
+  it('prepends older pages idempotently and updates pagination metadata', () => {
+    const newest: ChatMessage = {
+      id: 'h:newest',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'h:newest:text:0', type: 'text', text: 'newest' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [newest] },
+      historyPagination: {
+        [SESSION_ID]: { nextOffset: 1, hydratedCount: 1, totalCount: 2, hasMore: true },
+      },
+    });
+    const olderMessages: HistoryMessage[] = [
+      {
+        id: 'h:oldest',
+        entryId: 'oldest',
+        role: 'user',
+        blocks: [{ type: 'text', id: 'h:oldest:text:0', text: 'oldest' }],
+      },
+    ];
+    const event = makeHistoryEvent({
+      mode: 'older',
+      messages: olderMessages,
+      offset: 1,
+      limit: 80,
+      totalCount: 2,
+      hasMore: false,
+    });
+    const first = applyRuntimeEvent(state, event);
+    const nextState = { ...state, ...first } as ChatSessionsState;
+    const second = applyRuntimeEvent(nextState, event);
+
+    expect(first.messages?.[SESSION_ID].map((message) => message.id)).toEqual([
+      'h:oldest',
+      'h:newest',
+    ]);
+    expect(second).toEqual({});
+    expect(first.historyPagination?.[SESSION_ID]).toEqual({
+      nextOffset: 2,
+      hydratedCount: 2,
+      totalCount: 2,
+      hasMore: false,
+    });
+  });
+
+  it('advances pagination by projected page coverage even when replay keeps a runtime attachment row', () => {
+    const anchor: ChatMessage = {
+      id: 'h:anchor',
+      sessionId: SESSION_ID,
+      role: 'assistant',
+      blocks: [{ id: 'h:anchor:text:0', type: 'text', text: 'anchor' }],
+    };
+    const runtimeAttachment: ChatMessage = {
+      id: 'user-runtime-image',
+      sessionId: SESSION_ID,
+      role: 'user',
+      blocks: [{ id: 'user-runtime-image:text:0', type: 'text', text: 'inspect image' }],
+      attachments: [{ kind: 'image', mediaType: 'image/png', name: 'screen.png' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [anchor, runtimeAttachment] },
+    });
+    const { state: resumed } = applyAll(state, [makeResumedEvent()]);
+    const patch = applyRuntimeEvent(
+      resumed,
+      makeHistoryEvent({
+        mode: 'initial',
+        messages: [
+          {
+            id: 'h:anchor',
+            entryId: 'anchor',
+            role: 'assistant',
+            blocks: [{ id: 'h:anchor:text:0', type: 'text', text: 'anchor' }],
+          },
+          {
+            id: 'h:image',
+            entryId: 'image',
+            role: 'user',
+            blocks: [{ id: 'h:image:text:0', type: 'text', text: 'inspect image' }],
+          },
+        ],
+        offset: 0,
+        limit: 80,
+        totalCount: 3,
+        hasMore: true,
+      })
+    );
+
+    expect(patch.messages?.[SESSION_ID].map((message) => message.id)).toEqual([
+      'h:anchor',
+      'user-runtime-image',
+    ]);
+    expect(patch.historyPagination?.[SESSION_ID]).toMatchObject({
+      nextOffset: 2,
+      hydratedCount: 1,
+      totalCount: 3,
+      hasMore: true,
+    });
+  });
+
+  it('keeps an interrupted empty Pi assistant visible with recovery metadata', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const { lastPatch } = applyAll(state, [
+      makeResumedEvent(),
+      makeHistoryEvent({
+        mode: 'initial',
+        messages: [
+          {
+            id: 'h:empty-assistant',
+            entryId: 'empty-assistant',
+            role: 'assistant',
+            blocks: [],
+            incomplete: true,
+            stopReason: 'interrupted',
+          },
+        ],
+        totalCount: 1,
+        hasMore: false,
+      }),
+    ]);
+    expect(lastPatch.messages?.[SESSION_ID]?.[0]).toMatchObject({
+      id: 'h:empty-assistant',
+      incomplete: true,
+      stopReason: 'interrupted',
+      blocks: [
+        {
+          type: 'text',
+          text: 'Response interrupted before any assistant content was saved.',
+        },
+      ],
+    });
+  });
+});

@@ -3,6 +3,8 @@ import {
   isWorkerBootstrapPayload,
   isWorkerBootstrapResult,
   isWorkerExtensionUiResponsePayload,
+  isWorkerHistoryPayload,
+  isWorkerHistoryResult,
   isWorkerRpcEvent,
   isWorkerRpcMessage,
   isWorkerRpcRequest,
@@ -79,6 +81,12 @@ describe('worker RPC boundary guards', () => {
         agentDir: '/managed/pi-agent',
         projectTrusted: false,
         permissionGate: 'bundled',
+        initialHistory: {
+          logicalSessionId: 'logical-1',
+          sessionFile: '/sessions/pi-1.jsonl',
+          workspacePath: '/repo',
+          page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+        },
       })
     ).toBe(true);
     expect(
@@ -90,6 +98,43 @@ describe('worker RPC boundary guards', () => {
         agentDir: '/managed/pi-agent',
         projectTrusted: false,
         permissionGate: 'missing',
+      })
+    ).toBe(false);
+  });
+
+  it('validates branch-history page requests and exact-session results', () => {
+    expect(isWorkerHistoryPayload({ logicalSessionId: 'logical-1', offset: 80, limit: 40 })).toBe(
+      true
+    );
+    expect(isWorkerHistoryPayload({ logicalSessionId: 'logical-1', offset: -1 })).toBe(false);
+    expect(isWorkerHistoryPayload({ logicalSessionId: 'logical-1', limit: 501 })).toBe(false);
+    expect(
+      isWorkerHistoryResult({
+        logicalSessionId: 'logical-1',
+        sessionFile: '/sessions/pi-1.jsonl',
+        workspacePath: '/repo',
+        page: {
+          messages: [
+            {
+              id: 'h:u1',
+              entryId: 'u1',
+              role: 'user',
+              blocks: [{ type: 'text', id: 'h:u1:text:0', text: 'hello' }],
+            },
+          ],
+          offset: 0,
+          limit: 80,
+          totalCount: 1,
+          hasMore: false,
+        },
+      })
+    ).toBe(true);
+    expect(
+      isWorkerHistoryResult({
+        logicalSessionId: 'logical-1',
+        sessionFile: '/sessions/pi-1.jsonl',
+        workspacePath: '/repo',
+        page: { messages: [], offset: 0, limit: 0, totalCount: 0, hasMore: false },
       })
     ).toBe(false);
   });

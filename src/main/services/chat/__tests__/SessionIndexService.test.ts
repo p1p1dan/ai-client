@@ -118,29 +118,21 @@ describe('SessionIndexService', () => {
     ]);
   });
 
-  it('enriches an entry with runtimeIdentity on session.resumed runtime events', async () => {
+  it('does not persist session.resumed outside the awaited resume transaction', async () => {
     const { SessionIndexService } = await import('../SessionIndexService');
     const service = new SessionIndexService();
     await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
 
-    const event: RuntimeEvent = {
+    service.handleRuntimeEvent({
       type: 'session.resumed',
       seq: 1,
       sessionId: 's1',
       timestamp: Date.now(),
-      payload: { runtimeIdentity: 'claude-runtime-1' },
-    };
-    service.handleRuntimeEvent(event);
-
-    // Poll the persisted file (not just the in-memory list) so this test only completes
-    // once the fire-and-forget event handler's flush has fully settled. Otherwise the
-    // pending write can land after this test's temp dir is torn down and pollute the
-    // next test with a stray ENOENT warning.
-    await vi.waitFor(() => {
-      const raw = readFileSync(join(userDataDir, 'session-index.json'), 'utf8');
-      const parsed = JSON.parse(raw) as SessionIndexEntry[];
-      expect(parsed[0]?.runtimeIdentity).toBe('claude-runtime-1');
+      payload: { runtimeIdentity: '/sessions/uncommitted.jsonl' },
     });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((await service.list())[0]?.runtimeIdentity).toBeUndefined();
   });
 
   it('enriches an entry with runtimeIdentity and bumps updatedAt on session.updated', async () => {
@@ -364,21 +356,29 @@ describe('SessionIndexService', () => {
       expect(list[0]).toMatchObject({ agent: 'codex', model: 'claude-x' });
     });
 
-    it('keeps the agent across a resume that does not repeat it', async () => {
+    it('commits a validated Pi resume without retargeting the durable identity', async () => {
       const { SessionIndexService } = await import('../SessionIndexService');
       const service = new SessionIndexService();
 
-      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'codex' });
-      await service.recordResumed({
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'pi' });
+      await service.bindRuntimeIdentity('s1', '/sessions/pi-1.jsonl');
+      await service.commitResumed({
         sessionId: 's1',
         workspacePath: '/ws/a',
-        runtimeIdentity: 'thread-1',
+        runtimeIdentity: '/sessions/pi-1.jsonl',
       });
 
       expect((await service.list())[0]).toMatchObject({
-        agent: 'codex',
-        runtimeIdentity: 'thread-1',
+        agent: 'pi',
+        runtimeIdentity: '/sessions/pi-1.jsonl',
       });
+      await expect(
+        service.commitResumed({
+          sessionId: 's1',
+          workspacePath: '/ws/a',
+          runtimeIdentity: '/sessions/other.jsonl',
+        })
+      ).rejects.toThrow(/identity mismatch/);
     });
 
     /**
@@ -485,23 +485,25 @@ describe('SessionIndexService', () => {
       });
     });
 
-    it('a runtimeIdentity-only event does not blank an already-known agent', async () => {
+    it('an uncommitted resumed event cannot retarget an already-known Pi row', async () => {
       const { SessionIndexService } = await import('../SessionIndexService');
       const service = new SessionIndexService();
-      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'codex' });
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'pi' });
+      await service.bindRuntimeIdentity('s1', '/sessions/pi-1.jsonl');
 
       service.handleRuntimeEvent({
         type: 'session.resumed',
         seq: 1,
         sessionId: 's1',
         timestamp: Date.now(),
-        payload: { runtimeIdentity: 'thread-1' },
+        payload: { runtimeIdentity: '/sessions/other.jsonl' },
       });
 
-      await vi.waitFor(() => {
-        expect(readIndexFile()[0]?.runtimeIdentity).toBe('thread-1');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(readIndexFile()[0]).toMatchObject({
+        runtimeIdentity: '/sessions/pi-1.jsonl',
+        agent: 'pi',
       });
-      expect(readIndexFile()[0]?.agent).toBe('codex');
     });
 
     it('the file stays a bare top-level array once entries carry an agent', async () => {

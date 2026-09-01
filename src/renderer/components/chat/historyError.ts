@@ -15,6 +15,18 @@ import { isSessionBusy } from './sessionIndex/resumeIntent';
 /** Contract codes plus a forward-compatible fallback. */
 export type HistoryErrorCode = HistoryReadErrorCode | 'unknown';
 
+export function encodePiResumeError(error: unknown): { message: string; encoded: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = message.includes('WORKER_SESSION_FILE_NOT_FOUND')
+    ? 'jsonl_not_found'
+    : message.includes('WORKER_SESSION_FILE_CORRUPT')
+      ? 'session_file_corrupt'
+      : message.includes('WORKER_SESSION_CWD_MISMATCH')
+        ? 'session_cwd_mismatch'
+        : 'read_failed';
+  return { message, encoded: `${code}: ${message}` };
+}
+
 export interface HistoryErrorView {
   code: HistoryErrorCode;
   /** Alert variant. Warning = nothing on disk; error = history exists but is unreadable. */
@@ -103,6 +115,20 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     retryable: false,
     continuationHint: HISTORY_ERROR_UNSUPPORTED_HINT,
   },
+  session_file_corrupt: {
+    severity: 'error',
+    title: 'Session history is damaged',
+    guidance: 'Pi 会话文件不是有效会话，应用没有修改或替换原文件。',
+    retryable: false,
+    continuationHint: '请保留原文件用于恢复；新建会话后再继续工作。',
+  },
+  session_cwd_mismatch: {
+    severity: 'error',
+    title: 'Session belongs to another workspace',
+    guidance: 'Pi 会话记录的工作区与当前仓库不一致，因此已拒绝静默重绑。',
+    retryable: false,
+    continuationHint: '请从该会话原本的工作区打开，或新建会话继续。',
+  },
   unknown: {
     severity: 'error',
     title: 'Failed to read history',
@@ -116,7 +142,9 @@ function toCode(value: string): HistoryErrorCode {
   return value === 'jsonl_not_found' ||
     value === 'encrypted_unreadable' ||
     value === 'read_failed' ||
-    value === 'history_unsupported'
+    value === 'history_unsupported' ||
+    value === 'session_file_corrupt' ||
+    value === 'session_cwd_mismatch'
     ? value
     : 'unknown';
 }

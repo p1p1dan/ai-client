@@ -40,6 +40,18 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
   return {
     bootstrap: async () => bootstrapResult(),
     startSend: async (input) => ({ accepted: true, requestId: input.requestId }),
+    history: async (input) => ({
+      logicalSessionId: input.logicalSessionId,
+      sessionFile: '/managed/pi-agent/sessions/one.jsonl',
+      workspacePath: '/repo',
+      page: {
+        messages: [],
+        offset: input.offset ?? 0,
+        limit: input.limit ?? 80,
+        totalCount: 0,
+        hasMore: false,
+      },
+    }),
     stop: async () => ({ stopped: true }),
     respondExtensionUi: () => true,
     dispose: async () => undefined,
@@ -63,6 +75,39 @@ describe('PiWorkerRpcServer', () => {
     await vi.waitFor(() => expect(messages).toHaveLength(2));
     expect(createRuntime).toHaveBeenCalledTimes(1);
     expect(messages.map((message) => message.requestId)).toEqual(['rpc-1', 'rpc-2']);
+  });
+
+  it('rejects a duplicate bootstrap that targets a different exact session file', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime,
+    });
+    server.receive(
+      request('first', 'worker.bootstrap', {
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+        sessionFile: '/sessions/one.jsonl',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('conflict', 'worker.bootstrap', {
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+        sessionFile: '/sessions/two.jsonl',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(messages[1]).toMatchObject({
+      requestId: 'conflict',
+      ok: false,
+      error: { code: 'WORKER_ALREADY_BOOTSTRAPPED' },
+    });
+    expect(createRuntime).toHaveBeenCalledTimes(1);
   });
 
   it('ACKs send admission before the held prompt completes and dispatches stop', async () => {

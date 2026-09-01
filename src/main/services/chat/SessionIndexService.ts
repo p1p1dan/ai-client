@@ -114,34 +114,43 @@ export class SessionIndexService {
     });
   }
 
-  async recordResumed(input: {
+  /**
+   * Awaited resume commit. The exact Pi file has already been opened and
+   * validated by its WorkerSlot; this method refuses to manufacture or retarget
+   * an index row and rolls back memory if the atomic flush fails.
+   */
+  async commitResumed(input: {
     sessionId: string;
     workspacePath: string;
     runtimeIdentity: string;
     model?: string;
-    /** Loose `string` on purpose — this is the disk side (SessionIndexEntry). */
-    agent?: string;
   }): Promise<void> {
     await this.ensureLoaded();
     await this.queueMutation(async () => {
       const existing = this.entries.get(input.sessionId);
-      this.entries.set(input.sessionId, {
-        sessionId: input.sessionId,
-        runtimeIdentity: input.runtimeIdentity,
-        agent: input.agent ?? existing?.agent,
+      if (!existing) {
+        throw new Error(`Session index row not found for resume: ${input.sessionId}`);
+      }
+      if (!existing.runtimeIdentity || existing.runtimeIdentity !== input.runtimeIdentity) {
+        throw new Error(
+          `Session index identity mismatch for ${input.sessionId}: expected ${existing.runtimeIdentity ?? 'none'}, got ${input.runtimeIdentity}`
+        );
+      }
+      const next: SessionIndexEntry = {
+        ...existing,
         workspacePath: input.workspacePath,
-        title: existing?.title ?? '',
-        model: input.model ?? existing?.model,
-        // Resume never re-captures: it replays what the row already holds. The
-        // field is listed only because this method rebuilds the entry field by
-        // field (see the class note above) and omitting it would DELETE the
-        // snapshot on the first resume — the exact shape of the `agent` bug the
-        // `?? existing` chain next to it exists to prevent.
-        permissionPreference: existing?.permissionPreference,
+        runtimeIdentity: input.runtimeIdentity,
+        agent: 'pi',
+        model: input.model ?? existing.model,
         updatedAt: now(),
-        archived: existing?.archived ?? false,
-      });
-      await this.flush();
+      };
+      this.entries.set(input.sessionId, next);
+      try {
+        await this.flush();
+      } catch (error) {
+        this.entries.set(input.sessionId, existing);
+        throw error;
+      }
     });
   }
 
@@ -227,7 +236,6 @@ export class SessionIndexService {
   handleRuntimeEvent(event: RuntimeEvent): void {
     switch (event.type) {
       case 'session.created':
-      case 'session.resumed':
       case 'session.updated':
       case 'session.completed':
       case 'session.failed':
@@ -255,8 +263,7 @@ export class SessionIndexService {
       }
 
       switch (event.type) {
-        case 'session.created':
-        case 'session.resumed': {
+        case 'session.created': {
           const runtimeIdentity = event.payload?.runtimeIdentity;
           const agent = event.payload?.agent;
           // A NEW Claude session reports no runtimeIdentity — the SDK issues one

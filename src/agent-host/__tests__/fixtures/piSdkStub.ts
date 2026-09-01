@@ -70,6 +70,8 @@ export interface PiSdkStubOptions {
   promptError?: string;
   /** Reject abort with this message. */
   abortError?: string;
+  /** Exact durable session exposed by SessionManager.open in resume tests. */
+  openedSession?: { cwd: string; sessionId: string; sessionFile: string; branch: unknown[] };
 }
 
 export interface PiSdkStub {
@@ -97,12 +99,15 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
       ['dan/deepseek-v4', { provider: 'dan', id: 'deepseek-v4', name: 'DeepSeek V4' }],
     ]);
 
-  function makeSession(cwd: string): StubPiSession {
+  function makeSession(
+    cwd: string,
+    identity?: { sessionId: string; sessionFile: string }
+  ): StubPiSession {
     let listener: ((event: StubPiEvent) => void) | undefined;
     const session: StubPiSession = {
-      sessionId: `pi-${cwd}`,
+      sessionId: identity?.sessionId ?? `pi-${cwd}`,
       cwd,
-      sessionFile: `${cwd}/session.jsonl`,
+      sessionFile: identity?.sessionFile ?? `${cwd}/session.jsonl`,
       thinkingLevels: [],
       prompts: [],
       aborted: false,
@@ -174,7 +179,12 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
     getAgentDir: () => '/tmp/pi-agent',
     SessionManager: {
       create: (cwd: string) => ({ cwd }),
-      open: () => ({}),
+      open: (sessionFile: string) => ({
+        getBranch: () => options.openedSession?.branch ?? [],
+        getCwd: () => options.openedSession?.cwd ?? '',
+        getSessionFile: () => options.openedSession?.sessionFile ?? sessionFile,
+        getSessionId: () => options.openedSession?.sessionId ?? '',
+      }),
       continueRecent: () => ({}),
       inMemory: () => ({}),
     },
@@ -206,7 +216,16 @@ export function createPiSdkStub(options: PiSdkStubOptions = {}): PiSdkStub {
     },
     createAgentSessionFromServices: async (opts: Record<string, unknown>) => {
       const services = opts.services as { cwd: string };
-      return { session: makeSession(services.cwd) };
+      const manager = opts.sessionManager as { getSessionFile?: () => string | undefined };
+      const openedFile = manager.getSessionFile?.();
+      const identity =
+        openedFile && options.openedSession
+          ? {
+              sessionId: options.openedSession.sessionId,
+              sessionFile: options.openedSession.sessionFile,
+            }
+          : undefined;
+      return { session: makeSession(services.cwd, identity) };
     },
     createAgentSessionRuntime: async (
       factory: (input: Record<string, unknown>) => Promise<Record<string, unknown>>,

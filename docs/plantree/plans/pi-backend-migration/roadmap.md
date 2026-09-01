@@ -11,7 +11,8 @@
 | Worker foundation | **Done** | T29-a/b/c：RPC、bootstrap、send/stream/stop/dispose、worker-only artifact 与 singleton Pi 删除 |
 | Bounded WorkerManager | **Done** | T30 identity/remap/capacity/restart/owner + global manager deletion |
 | Cycle 1/2 behavior reattachment | **Done** | T31-a/b/c/d + legacy execution deletion；见2026-09-01 evidence |
-| History/tree/import/removal/TUI | **Next** | T32 Pi-native history/resume，随后T33 tree/rewind/fork |
+| Pi-native history/resume | **Done** | T32 exact-file open、branch timeline、pagination、incomplete recovery与race closure |
+| Tree/import/removal/TUI | **Next** | T33 tree/rewind/fork，随后T34 import |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
 ## T00–T27：已落资产与替换影响
@@ -89,11 +90,13 @@
 
 ## Phase D — Pi-native session lifecycle
 
-### T32 — History and real resume — **Planned**
+### T32 — History and real resume — **Done**
 
-- **T32-a**：直接复用/适配 pi-app branch-aware JSONL timeline、pagination 与 incomplete recovery。
-- **T32-b**：`SessionManager.open(sessionFile)` 后发 `session.resumed → session.history → idle`。
-- **T32-c**：missing/corrupt/cross-cwd、duplicate click、restart、late hydration、switch race。
+- **T32-a — Done**：worker-owned `SessionManager.getBranch()` active-path投影、stable Pi entry id、backward pagination、tool result association、compaction/custom notice与incomplete leaf recovery。
+- **T32-b — Done**：bounded header preflight后`SessionManager.open(exact sessionFile)`；SDK identity复核、awaited SessionIndex resume transaction，然后同requestId发布`session.resumed → session.history → idle`。
+- **T32-c — Done**：missing/corrupt/cross-cwd fail-closed、duplicate flight coalescing、same-file restart hydration、whole-event stale guard、session switch isolation、older-page idempotence与known-file no-create-fallback。
+
+**验收证据**：[T32 history/real resume evidence](./evidence/2026-09-01-t32-history-real-resume.md)。Main/renderer不读Pi JSONL；legacy row不重新进入live execution；真实Electron utilityProcess完成create→materialize→dispose→exact-file reopen→history→继续stream且无orphan。
 
 ### T33 — Session tree, rewind and fork — **Planned**
 

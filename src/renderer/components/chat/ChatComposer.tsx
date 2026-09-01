@@ -57,6 +57,7 @@ import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
+import { encodePiResumeError } from './historyError';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
   composerActionGroupClass,
@@ -1634,6 +1635,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // F2b (round-4 Codex re-review): reset BEFORE dispatch — same
         // rationale as `runCreateSequence`'s reset above.
         setCurrentRequestId(null);
+        let resumeDispatchError: string | null = null;
         const resumeResult = await window.electronAPI.chat
           .resumeSession({
             sessionId,
@@ -1646,36 +1648,36 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             ...(model ? { model } : {}),
             ...(effort ? { effort } : {}),
           })
-          .catch(() => undefined);
+          .catch((error: unknown) => {
+            resumeDispatchError = error instanceof Error ? error.message : String(error);
+            return undefined;
+          });
         setCurrentRequestId(resumeResult?.requestId ?? null);
 
-        const resumed = await waitUntil(
-          () => sawSessionResumed || Boolean(fatalHostError),
-          deadlineAt(5000)
-        );
+        const resumed = resumeDispatchError
+          ? false
+          : await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), deadlineAt(5000));
         if (!resumed || fatalHostError) {
-          // Resume failed or timed out (stale identity / Host hiccup / etc.)
-          // — fall through ONCE to a fresh session rather than fail the turn.
-          fatalHostError = null;
-          fatalHostErrorCode = null;
-          useChatSessionsStore.setState({ lastError: null });
-
-          const seq = await runCreateSequence();
-          if (seq === 'fatal') {
-            // R2: resume->create fallback failed too — still nothing was
-            // ever sent to the Host.
-            unbindHost();
-            return finalizeOutcome(
-              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
-            );
-          }
-          if (seq === 'timeout') {
-            unbindHost();
-            setCreateTimeoutError();
-            return finalizeOutcome(
-              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
-            );
-          }
+          // A known Pi session file is authoritative. Never replace a missing,
+          // corrupt, or cross-cwd resume target with a fresh session: doing so
+          // silently loses the user's durable identity and sends the pending
+          // prompt into unrelated history.
+          const message =
+            resumeDispatchError ??
+            fatalHostError ??
+            'Pi session resume timed out before history hydration completed.';
+          const encodedError = encodePiResumeError(message);
+          useChatSessionsStore.setState((state) => ({
+            lastError: encodedError.message,
+            historyErrors: {
+              ...state.historyErrors,
+              [sessionId]: encodedError.encoded,
+            },
+          }));
+          unbindHost();
+          return finalizeOutcome(
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+          );
         } else {
           useChatSessionsStore.setState((state) => ({
             hostBoundSessionIds: state.hostBoundSessionIds.includes(sessionId)
@@ -1754,29 +1756,78 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }
 
       if (preamble.action === 'direct' && fatalHostErrorCode === 'session_not_found') {
-        // The Host dropped the registry entry behind our back (Host restart,
-        // a stale binding, etc.) — fall through ONCE to a fresh session and
-        // resend, instead of failing a turn the user has no way to recover.
         fatalHostError = null;
         fatalHostErrorCode = null;
         unbindHost();
         useChatSessionsStore.setState({ lastError: null });
 
-        const seq = await runCreateSequence();
-        if (seq === 'fatal') {
-          unbindHost();
-          return finalizeOutcome(
-            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
-          );
+        if (knownIdentity) {
+          // Eviction/restart can invalidate a renderer host-bound marker while
+          // the exact Pi file remains authoritative. Reopen that file; never
+          // replace it with a new session and unrelated history.
+          sawSessionResumed = false;
+          setCurrentRequestId(null);
+          let reopenError: string | null = null;
+          const reopen = await window.electronAPI.chat
+            .resumeSession({
+              sessionId,
+              runtimeIdentity: knownIdentity,
+              workspacePath,
+              ...(model ? { model } : {}),
+              ...(effort ? { effort } : {}),
+            })
+            .catch((error: unknown) => {
+              reopenError = error instanceof Error ? error.message : String(error);
+              return undefined;
+            });
+          setCurrentRequestId(reopen?.requestId ?? null);
+          const reopened = reopenError
+            ? false
+            : await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), deadlineAt(5000));
+          if (!reopened || fatalHostError) {
+            const encodedError = encodePiResumeError(
+              reopenError ??
+                fatalHostError ??
+                'Pi session resume timed out before history hydration completed.'
+            );
+            useChatSessionsStore.setState((state) => ({
+              lastError: encodedError.message,
+              historyErrors: {
+                ...state.historyErrors,
+                [sessionId]: encodedError.encoded,
+              },
+            }));
+            return finalizeOutcome(
+              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            );
+          }
+          useChatSessionsStore.setState((state) => ({
+            hostBoundSessionIds: state.hostBoundSessionIds.includes(sessionId)
+              ? state.hostBoundSessionIds
+              : [...state.hostBoundSessionIds, sessionId],
+            lastError: null,
+          }));
+          waitResult = await sendAndWait();
+        } else {
+          // A host-bound marker without any durable identity can only be a
+          // zero-turn session whose worker disappeared before Pi materialized
+          // a JSONL file. This is the sole safe create fallback.
+          const seq = await runCreateSequence();
+          if (seq === 'fatal') {
+            unbindHost();
+            return finalizeOutcome(
+              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            );
+          }
+          if (seq === 'timeout') {
+            unbindHost();
+            setCreateTimeoutError();
+            return finalizeOutcome(
+              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            );
+          }
+          waitResult = await sendAndWait();
         }
-        if (seq === 'timeout') {
-          unbindHost();
-          setCreateTimeoutError();
-          return finalizeOutcome(
-            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
-          );
-        }
-        waitResult = await sendAndWait();
       }
 
       // R3: no `useChatSessionsStore.getState().lastError` read here — see

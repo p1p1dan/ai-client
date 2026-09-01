@@ -126,48 +126,31 @@ describe('mergeSessionIndex materializes the agent binding', () => {
   });
 });
 
-/**
- * G13, renderer half — the whole string from a persisted row to the resume args.
- *
- * The Host half of this test lives in `agent-host/__tests__/codexRuntime.test.ts`
- * and asserts that `thread/resume` addresses exactly the `runtimeIdentity` it was
- * handed. Neither half is worth much alone: the failure they bracket is a resume
- * that reaches the right runtime with the wrong id, or the right id with the
- * wrong runtime, and both look like "the history is empty" on screen.
- */
-describe('G13 — a persisted codex row becomes codex resume args', () => {
-  const THREAD_ID = '01a003a5-307f-77d1-b7a4-a5379a560067';
-
-  it('carries the agent and the threadId from the index row into the resume args', () => {
+describe('T32 — legacy index bindings never re-enter live execution', () => {
+  it('keeps a Codex row visible for migration while refusing runtime resume', () => {
     const { sessions } = mergeSessionIndex(
       [],
-      [entry('s1', { agent: 'codex', runtimeIdentity: THREAD_ID })],
+      [entry('s1', { agent: 'codex', runtimeIdentity: 'legacy-thread' })],
       { workspaces }
     );
-    const intent = shouldResumeSession(sessions[0], workspaces[0]);
-
-    expect(sessions[0]).toMatchObject({ agent: 'codex', runtimeIdentity: THREAD_ID });
-    expect(intent.shouldResume).toBe(true);
-    expect(intent.args).toEqual({
-      sessionId: 's1',
-      runtimeIdentity: THREAD_ID,
-      workspacePath: '/repo',
-      model: undefined,
-      agent: 'codex',
+    expect(sessions[0]).toMatchObject({ agent: 'codex', runtimeIdentity: 'legacy-thread' });
+    expect(shouldResumeSession(sessions[0], workspaces[0])).toEqual({
+      shouldResume: false,
+      reason: 'unsupported-agent:codex',
     });
   });
 
-  it('does not hand a legacy row a codex binding just because it has a runtimeIdentity', () => {
-    // The negative control that makes the case above mean something: a row
-    // written before the field existed still resumes as Claude Code, so a merge
-    // that defaulted everything to `codex` would fail here rather than pass both.
+  it('treats a pre-agent-field row as legacy Claude data and refuses runtime resume', () => {
     const { sessions } = mergeSessionIndex([], [entry('s1', { runtimeIdentity: 'claude-uuid' })], {
       workspaces,
     });
-
-    expect(shouldResumeSession(sessions[0], workspaces[0]).args).toMatchObject({
+    expect(sessions[0]).toMatchObject({
       agent: 'claude-code',
       runtimeIdentity: 'claude-uuid',
+    });
+    expect(shouldResumeSession(sessions[0], workspaces[0])).toEqual({
+      shouldResume: false,
+      reason: 'unsupported-agent:claude-code',
     });
   });
 });

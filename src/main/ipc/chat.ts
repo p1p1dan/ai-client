@@ -7,7 +7,6 @@ import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT } from '@shared/types/agentWire';
 import type { ExtensionUiResponse, RuntimeEvent } from '@shared/types/runtimeEvents';
-import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { workerManager } from '../services/agent-host/WorkerManager';
@@ -172,11 +171,37 @@ export function registerChatHandlers(): void {
         effort?: SessionEffortLevel;
       }
     ): Promise<{ requestId: string }> => {
-      // Real Pi JSONL resume lands in T32. T29-c deliberately refuses rather
-      // than routing the session back through the deleted singleton Pi host.
-      claimSessionForSender(e, payload.sessionId);
-      void payload.runtimeIdentity;
-      throw new Error('pi_resume_not_implemented: Pi session resume lands in T32');
+      const row = await sessionIndexService.get(payload.sessionId);
+      if (!row?.runtimeIdentity) {
+        throw new Error(
+          `pi_session_not_found: No indexed Pi session file for ${payload.sessionId}`
+        );
+      }
+      if (row.agent !== PI_AGENT) {
+        throw new Error(
+          `pi_session_agent_mismatch: Session ${payload.sessionId} is not indexed as a Pi session`
+        );
+      }
+      if (row.runtimeIdentity !== payload.runtimeIdentity) {
+        throw new Error(
+          'pi_session_identity_mismatch: Indexed Pi session file does not match the resume request'
+        );
+      }
+      if (row.workspacePath !== payload.workspacePath) {
+        throw new Error(
+          'pi_session_workspace_mismatch: Indexed workspace does not match the resume request'
+        );
+      }
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      const requestId = await workerManager.resumeSession({
+        sessionId: payload.sessionId,
+        sessionFile: payload.runtimeIdentity,
+        workspacePath: payload.workspacePath,
+        ...(payload.model ? { model: payload.model } : {}),
+        ...(payload.effort ? { effort: payload.effort } : {}),
+        ownerWebContentsId,
+      });
+      return { requestId };
     }
   );
 
@@ -266,10 +291,17 @@ export function registerChatHandlers(): void {
   );
 
   ipcMain.handle(
-    IPC_CHANNELS.CHAT_LIST_HISTORY,
-    async (_e, workspacePath: string): Promise<HistorySessionSummary[]> => {
-      void workspacePath;
-      return [];
+    IPC_CHANNELS.CHAT_LOAD_HISTORY_PAGE,
+    async (
+      e,
+      payload: { sessionId: string; offset: number; limit?: number }
+    ): Promise<{ requestId: string }> => {
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      const requestId = await workerManager.loadHistoryPage({
+        ...payload,
+        ownerWebContentsId,
+      });
+      return { requestId };
     }
   );
 }

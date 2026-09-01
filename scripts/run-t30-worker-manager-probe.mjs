@@ -58,7 +58,9 @@ try {
   if (
     report.ok !== true ||
     report.sessions?.length !== 2 ||
-    report.streamedSessions?.length !== 2
+    report.streamedSessions?.length !== 2 ||
+    !report.resumedSession ||
+    report.resumeEventOrder?.join(',') !== 'session.resumed,session.history,session.status'
   ) {
     throw new Error(`invalid T30 probe report: ${JSON.stringify(report)}`);
   }

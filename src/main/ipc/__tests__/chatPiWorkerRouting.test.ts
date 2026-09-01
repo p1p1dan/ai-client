@@ -12,6 +12,8 @@ const handlers = new Map<string, Handler>();
 const runtimeEventHandlers: Array<(event: RuntimeEvent) => void> = [];
 let fakeWindows: FakeWindow[] = [];
 const createSession = vi.fn(async () => 'create-1');
+const resumeSession = vi.fn(async () => 'resume-1');
+const loadHistoryPage = vi.fn(async () => 'history-1');
 const send = vi.fn(async () => 'send-1');
 const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
@@ -37,6 +39,8 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     ensureReady,
     getStatus: vi.fn(() => ({ state: 'ready', driver: 'agent-sdk' })),
     createSession,
+    resumeSession,
+    loadHistoryPage,
     send,
     stop,
     closeSession,
@@ -49,7 +53,12 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
 
 vi.mock('../../services/chat/SessionIndexService', () => ({
   sessionIndexService: {
-    get: vi.fn(async (sessionId: string) => ({ sessionId, agent: 'pi' })),
+    get: vi.fn(async (sessionId: string) => ({
+      sessionId,
+      agent: 'pi',
+      workspacePath: '/repo',
+      runtimeIdentity: '/session.jsonl',
+    })),
     recordCreated,
     list: vi.fn(async () => []),
     rename: vi.fn(async () => true),
@@ -151,6 +160,42 @@ describe('Pi WorkerSlot chat routing', () => {
     );
   });
 
+  it('refuses a renderer workspace that disagrees with the indexed Pi row', async () => {
+    await expect(
+      invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: '/other-repo',
+      })
+    ).rejects.toThrow(/pi_session_workspace_mismatch/);
+    expect(resumeSession).not.toHaveBeenCalledWith(
+      expect.objectContaining({ workspacePath: '/other-repo' })
+    );
+  });
+
+  it('refuses a non-Pi index row before WorkerManager can interpret its opaque identity', async () => {
+    const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+    vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+      sessionId: 'legacy',
+      workspacePath: '/repo',
+      title: 'Legacy',
+      updatedAt: 1,
+      archived: false,
+      agent: 'codex',
+      runtimeIdentity: 'legacy-thread',
+    });
+    await expect(
+      invoke('chat:resumeSession', {
+        sessionId: 'legacy',
+        runtimeIdentity: 'legacy-thread',
+        workspacePath: '/repo',
+      })
+    ).rejects.toThrow(/pi_session_agent_mismatch/);
+    expect(resumeSession).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'legacy' })
+    );
+  });
+
   it('forwards one runtime stream to windows and SessionIndexService', () => {
     const sendToWindow = vi.fn();
     fakeWindows = [{ isDestroyed: () => false, webContents: { id: 7, send: sendToWindow } }];
@@ -170,14 +215,34 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(handleRuntimeEvent).toHaveBeenCalledWith(event);
   });
 
-  it('refuses resume and exposes no legacy permission/question handler', async () => {
+  it('routes exact-file resume and history pagination without legacy permission/question handlers', async () => {
     await expect(
       invoke('chat:resumeSession', {
         sessionId: 's1',
         runtimeIdentity: '/session.jsonl',
         workspacePath: '/repo',
+        model: 'glm/glm-5',
+        effort: 'high',
       })
-    ).rejects.toThrow(/pi_resume_not_implemented/);
+    ).resolves.toEqual({ requestId: 'resume-1' });
+    expect(resumeSession).toHaveBeenCalledWith({
+      sessionId: 's1',
+      sessionFile: '/session.jsonl',
+      workspacePath: '/repo',
+      model: 'glm/glm-5',
+      effort: 'high',
+      ownerWebContentsId: 7,
+    });
+    await expect(
+      invoke('chat:loadHistoryPage', { sessionId: 's1', offset: 80, limit: 40 })
+    ).resolves.toEqual({ requestId: 'history-1' });
+    expect(loadHistoryPage).toHaveBeenCalledWith({
+      sessionId: 's1',
+      offset: 80,
+      limit: 40,
+      ownerWebContentsId: 7,
+    });
+    expect(handlers.has('chat:listHistory')).toBe(false);
     expect(handlers.has('chat:updatePermission')).toBe(false);
     expect(handlers.has('chat:respondPermission')).toBe(false);
     expect(handlers.has('chat:respondQuestion')).toBe(false);

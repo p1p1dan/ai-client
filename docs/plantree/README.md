@@ -43,7 +43,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase D / T32 history and real resume | T31 behavior reattachment closure | T32 Pi-native history/resume |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase D / T33 tree, rewind and fork | T32 history/real resume closure | T33 Pi-native tree/rewind/fork |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -65,7 +65,7 @@ T28 replacement baseline
 → T37 release candidate
 ```
 
-当前Next是 **T32 Pi-native history/resume**。T31 streaming/queue/Extension UI/models/permissions与replacement deletion已闭环；不是旧singleton-host Cycle 3，也不是Codex/multi-agent后续。
+当前Next是 **T33 Pi-native tree/rewind/fork**。T32 exact-file resume、active-branch history、pagination/incomplete recovery与竞态已闭环；不是旧singleton-host Cycle 3，也不是Codex/multi-agent后续。
 
 ## Stable evidence and history
 
@@ -75,6 +75,7 @@ T28 replacement baseline
 - [T30 WorkerManager evidence](./plans/pi-backend-migration/evidence/2026-08-31-t30-worker-manager.md)
 - [T31-a streaming reattachment evidence](./plans/pi-backend-migration/evidence/2026-08-31-t31a-runtime-event-reattachment.md)
 - [T31 behavior reattachment closure](./plans/pi-backend-migration/evidence/2026-09-01-t31-behavior-reattachment.md)
+- [T32 history and real resume closure](./plans/pi-backend-migration/evidence/2026-09-01-t32-history-real-resume.md)
 - [Pre-Pi-only Pi plan snapshot](./plans/pi-backend-migration/history/2026-08-31-pre-pi-only-realignment/)
 - [Pre-Pi-only baseline snapshot](./history/2026-08-31-pre-pi-only-baseline/)
 - [Pre-Pi-only root registry](./history/2026-08-31-pre-pi-only-registry.md)

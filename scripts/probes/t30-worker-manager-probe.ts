@@ -161,6 +161,7 @@ async function main(): Promise<void> {
   const manager = new WorkerManager({
     createSlot,
     bindRuntimeIdentity: async () => undefined,
+    commitResumed: async () => undefined,
     capacity: 2,
     idleTimeoutMs: 0,
     idleSweepIntervalMs: 0,
@@ -180,6 +181,44 @@ async function main(): Promise<void> {
       model: 'probe/probe-model',
       effort: 'low',
     });
+
+    const initialA = manager
+      .getSlotSnapshots()
+      .find((slot) => slot.logicalSessionId === 'probe-a')?.sessionFile;
+    if (!initialA) throw new Error('probe-a durable session file missing before resume');
+    const seedTurn = await manager.send({
+      sessionId: 'probe-a',
+      attemptId: 'probe-seed-a',
+      text: 'materialize A',
+    });
+    await waitForEvent(
+      events,
+      (event) => event.type === 'message.delta' && event.requestId === seedTurn
+    );
+    await manager.closeSession('probe-a');
+    const resumeRequestId = await manager.resumeSession({
+      sessionId: 'probe-a',
+      sessionFile: initialA,
+      workspacePath: cwd,
+      model: 'probe/probe-model',
+      effort: 'low',
+    });
+    const resumeEvents = events.filter((event) => event.requestId === resumeRequestId);
+    if (
+      resumeEvents.map((event) => event.type).join(',') !==
+      'session.resumed,session.history,session.status'
+    ) {
+      throw new Error(`resume event order failure: ${JSON.stringify(resumeEvents)}`);
+    }
+    const hydrated = resumeEvents[1];
+    if (
+      hydrated?.type !== 'session.history' ||
+      hydrated.payload.runtimeIdentity !== initialA ||
+      hydrated.payload.workspacePath !== cwd
+    ) {
+      throw new Error(`resume hydration identity failure: ${JSON.stringify(hydrated)}`);
+    }
+
     const turnA = await manager.send({
       sessionId: 'probe-a',
       attemptId: 'probe-attempt-a',
@@ -222,6 +261,8 @@ async function main(): Promise<void> {
             events.filter((event) => event.type === 'message.delta').map((event) => event.sessionId)
           ),
         ],
+        resumedSession: initialA,
+        resumeEventOrder: resumeEvents.map((event) => event.type),
       })
     );
   } finally {

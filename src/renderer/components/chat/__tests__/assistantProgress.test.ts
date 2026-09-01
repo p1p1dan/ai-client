@@ -662,7 +662,6 @@ const ALL_RUNTIME_EVENT_TYPES = [
   'session.permissionUpdated',
   'session.settingsEcho',
   'session.history',
-  'session.historyListed',
   'session.status',
   'session.stderr',
   'message.started',
@@ -746,9 +745,8 @@ describe('classifyTurnLiveness (F2 L-1..L-5)', () => {
     for (const type of ['session.completed', 'session.failed', 'session.stopped', 'host.error']) {
       expect(classifyTurnLiveness(event(type, {}), 'session-live')).toBe('ignore');
     }
-    // Replay / listing frames say nothing about THIS turn.
+    // Replay frames say nothing about THIS turn.
     expect(classifyTurnLiveness(event('session.history', {}), 'session-live')).toBe('ignore');
-    expect(classifyTurnLiveness(event('session.historyListed', {}), 'session-live')).toBe('ignore');
   });
 
   it('[L-5] events for another session — or with no session at all — are always ignored', () => {
