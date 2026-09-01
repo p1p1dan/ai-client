@@ -49,7 +49,6 @@ export interface PiSessionManager {
   getSessionId?: () => string;
   getEntries?: () => unknown[];
   getEntry?: (id: string) => unknown | undefined;
-  getChildren?: (parentId: string) => unknown[];
   getLeafId?: () => string | null;
   getLabel?: (id: string) => string | undefined;
   branch?: (id: string) => void;
@@ -266,15 +265,16 @@ export async function bootstrapPiAgentSession(
   const checkpoint = options.leafCheckpoint;
   if (checkpoint) {
     const entries = sessionManager.getEntries?.() ?? [];
-    const tailEntry = [...entries]
-      .reverse()
-      .find(
-        (entry) =>
-          typeof entry === 'object' &&
-          entry !== null &&
-          typeof (entry as { id?: unknown }).id === 'string'
-      ) as { id: string } | undefined;
-    const currentTail = tailEntry?.id ?? null;
+    let currentTail: string | null = null;
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (typeof entry !== 'object' || entry === null) continue;
+      const id = (entry as { id?: unknown }).id;
+      if (typeof id === 'string') {
+        currentTail = id;
+        break;
+      }
+    }
     if (currentTail === checkpoint.fileTailEntryId) {
       if (checkpoint.activeEntryId === null) {
         if (!sessionManager.resetLeaf) {

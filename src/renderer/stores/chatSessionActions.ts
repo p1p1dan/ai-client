@@ -65,17 +65,12 @@ export function createChatSessionOnWorkspace(
   return sessionId;
 }
 
-/**
- * T-27 retarget: move the active session's projectId/workspaceId in place.
- * Returns whether a write happened. Does not check the three-tier rule —
- * callers must only invoke this when `planTargetChange(...).kind ===
- * 'retarget'` (the single source of truth for that rule lives in
- * `components/chat/composerTarget.ts`).
- */
+/** Materialize a committed Pi fork in its mounted workspace and select it. */
 export function materializeForkedChatSession(entry: SessionIndexEntry): boolean {
+  if (!entry.runtimeIdentity || entry.agent !== PI_AGENT) return false;
   const state = useChatSessionsStore.getState();
   const workspace = state.workspaces.find((item) => pathsEqual(item.path, entry.workspacePath));
-  if (!workspace || !entry.runtimeIdentity || entry.agent !== PI_AGENT) return false;
+  if (!workspace) return false;
   const session: ChatSession = {
     id: entry.sessionId,
     projectId: workspace.projectId,
@@ -102,6 +97,13 @@ export function materializeForkedChatSession(entry: SessionIndexEntry): boolean 
   return true;
 }
 
+/**
+ * T-27 retarget: move the active session's projectId/workspaceId in place.
+ * Returns whether a write happened. Does not check the three-tier rule —
+ * callers must only invoke this when `planTargetChange(...).kind ===
+ * 'retarget'` (the single source of truth for that rule lives in
+ * `components/chat/composerTarget.ts`).
+ */
 export function retargetChatSession(sessionId: string, workspaceId: string): boolean {
   const state = useChatSessionsStore.getState();
   const workspace = state.workspaces.find((item) => item.id === workspaceId);

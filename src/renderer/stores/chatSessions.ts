@@ -612,15 +612,17 @@ export function applyRuntimeEvent(
       const historyMessages = payload.messages.map((historyMessage) =>
         mapHistoryMessageToChatMessage(sessionId, historyMessage)
       );
-      const mergedBucket =
-        payload.mode === 'older'
-          ? mergeOlderHistoryPage(bucket, historyMessages)
-          : payload.mode === 'branch'
-            ? historyMessages
-            : mergeReplayedHistory(bucket, historyMessages, {
-                historyReadFailed: payload.error != null,
-                snapshot: takeResumeSnapshot(sessionId, event.requestId),
-              });
+      let mergedBucket: ChatMessage[];
+      if (payload.mode === 'older') {
+        mergedBucket = mergeOlderHistoryPage(bucket, historyMessages);
+      } else if (payload.mode === 'branch') {
+        mergedBucket = historyMessages;
+      } else {
+        mergedBucket = mergeReplayedHistory(bucket, historyMessages, {
+          historyReadFailed: payload.error != null,
+          snapshot: takeResumeSnapshot(sessionId, event.requestId),
+        });
+      }
       const messages = withBucket(state, sessionId, mergedBucket);
 
       // Row creation is T-02's responsibility; only enrich an existing row.

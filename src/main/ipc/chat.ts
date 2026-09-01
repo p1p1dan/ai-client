@@ -330,7 +330,7 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_REWIND_SESSION,
     async (
       e,
-      payload: { sessionId: string; entryId: string; confirmed: true }
+      payload: { sessionId: string; entryId: string; confirmed: boolean }
     ): Promise<Awaited<ReturnType<typeof workerManager.rewindSession>>> => {
       await requireIndexedPiSession(payload.sessionId);
       if (payload.confirmed !== true) {

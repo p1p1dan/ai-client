@@ -615,7 +615,6 @@ export class WorkerManager {
           );
         }
         this.validateHistoryResult(entry, history);
-        entry.leafCheckpoint = entry.bootstrap?.leaf ?? entry.leafCheckpoint;
         await this.commitResumed({
           sessionId: input.sessionId,
           workspacePath: cwd,
@@ -840,10 +839,7 @@ export class WorkerManager {
       try {
         await this.reclaimIdleInternal();
         if (this.entriesBySession.size >= this.capacity) {
-          const candidates = [...this.entriesBySession.values()]
-            .filter((entry) => entry !== source && this.isSafeToEvict(entry))
-            .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
-          const victim = candidates[0];
+          const victim = this.selectEvictionCandidate();
           if (!victim) {
             throw new WorkerManagerError(
               'worker_capacity_reached',
@@ -978,13 +974,14 @@ export class WorkerManager {
           });
           return { requestId, session: indexed };
         } catch (error) {
-          target.error = error instanceof Error ? error.message : String(error);
-          let discarded = indexCommitted;
-          if (!indexCommitted && target.slot) {
-            discarded = await this.discardForkFile(target, sessionFile);
-          }
-          if (!indexCommitted && !discarded) {
-            discarded = await this.discardForkFile(source, sessionFile);
+          let stagedFileDiscarded = true;
+          if (!indexCommitted) {
+            stagedFileDiscarded = target.slot
+              ? await this.discardForkFile(target, sessionFile)
+              : false;
+            if (!stagedFileDiscarded) {
+              stagedFileDiscarded = await this.discardForkFile(source, sessionFile);
+            }
           }
           let disposalError: unknown;
           try {
@@ -992,7 +989,7 @@ export class WorkerManager {
           } catch (cleanupError) {
             disposalError = cleanupError;
           }
-          if (!indexCommitted && !discarded) {
+          if (!stagedFileDiscarded) {
             throw new WorkerManagerError(
               'worker_fork_cleanup_failed',
               `Fork failed and the staged Pi file could not be confirmed removed: ${sessionFile}`,

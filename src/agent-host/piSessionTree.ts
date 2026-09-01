@@ -16,7 +16,6 @@ interface PiTreeEntry {
   customType?: unknown;
   content?: unknown;
   label?: unknown;
-  targetId?: unknown;
   name?: unknown;
   modelId?: unknown;
   provider?: unknown;
@@ -106,10 +105,17 @@ function normalizeEntry(
 
 export function readPiLeafCheckpoint(manager: PiTreeSessionManager): PiLeafCheckpoint {
   const entries = manager.getEntries?.() ?? [];
-  const tail = [...entries].reverse().map(normalizeEntry).find(Boolean) ?? null;
+  let fileTailEntryId: string | null = null;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = normalizeEntry(entries[index]);
+    if (entry) {
+      fileTailEntryId = entry.id;
+      break;
+    }
+  }
   return {
     activeEntryId: manager.getLeafId?.() ?? null,
-    fileTailEntryId: tail?.id ?? null,
+    fileTailEntryId,
   };
 }
 
@@ -156,6 +162,28 @@ export function buildPiSessionTreeSnapshot(input: {
   );
   const projected: SessionTreeNode[] = [];
   const visited = new Set<string>();
+  const projectNode = (
+    entry: PiTreeEntry & { id: string; parentId: string | null },
+    depth: number,
+    forkable: boolean
+  ): SessionTreeNode => {
+    const timestamp =
+      typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : Number.NaN;
+    const label = input.manager.getLabel?.(entry.id);
+    return {
+      id: entry.id,
+      parentId: entry.parentId,
+      depth,
+      entryType: typeof entry.type === 'string' ? entry.type : 'unknown',
+      ...entryPreview(entry),
+      ...(label ? { label } : {}),
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      childCount: (children.get(entry.id) ?? []).length,
+      forkable,
+      active: activeIds.has(entry.id),
+      leaf: leafId === entry.id,
+    };
+  };
   const stack = roots
     .slice()
     .reverse()
@@ -168,26 +196,9 @@ export function buildPiSessionTreeSnapshot(input: {
     if (!entry) continue;
     visited.add(next.id);
     const childIds = children.get(entry.id) ?? [];
-    const type = typeof entry.type === 'string' ? entry.type : 'unknown';
-    const preview = entryPreview(entry);
     const message = record(entry.message);
     const forkable = next.forkable || (entry.type === 'message' && message?.role === 'assistant');
-    const timestamp =
-      typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : Number.NaN;
-    const resolvedLabel = input.manager.getLabel?.(entry.id);
-    projected.push({
-      id: entry.id,
-      parentId: entry.parentId,
-      depth: next.depth,
-      entryType: type,
-      ...preview,
-      ...(resolvedLabel ? { label: resolvedLabel } : {}),
-      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
-      childCount: childIds.length,
-      forkable,
-      active: activeIds.has(entry.id),
-      leaf: leafId === entry.id,
-    });
+    projected.push(projectNode(entry, next.depth, forkable));
     for (let index = childIds.length - 1; index >= 0; index -= 1) {
       const childId = childIds[index];
       if (childId) stack.push({ id: childId, depth: next.depth + 1, forkable });
@@ -198,24 +209,13 @@ export function buildPiSessionTreeSnapshot(input: {
   if (visited.size < entries.length) {
     for (const entry of entries) {
       if (visited.has(entry.id)) continue;
-      const preview = entryPreview(entry);
-      const timestamp =
-        typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : Number.NaN;
-      projected.push({
-        id: entry.id,
-        parentId: entry.parentId,
-        depth: 0,
-        entryType: typeof entry.type === 'string' ? entry.type : 'unknown',
-        ...preview,
-        ...(input.manager.getLabel?.(entry.id)
-          ? { label: input.manager.getLabel?.(entry.id) }
-          : {}),
-        ...(Number.isFinite(timestamp) ? { timestamp } : {}),
-        childCount: (children.get(entry.id) ?? []).length,
-        forkable: entry.type === 'message' && record(entry.message)?.role === 'assistant',
-        active: activeIds.has(entry.id),
-        leaf: leafId === entry.id,
-      });
+      projected.push(
+        projectNode(
+          entry,
+          0,
+          entry.type === 'message' && record(entry.message)?.role === 'assistant'
+        )
+      );
       visited.add(entry.id);
     }
   }

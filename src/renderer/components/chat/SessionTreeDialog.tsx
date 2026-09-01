@@ -30,27 +30,33 @@ interface SessionTreeDialogProps {
   sessionId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  idle: boolean;
+  isIdle: boolean;
 }
 
-export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: SessionTreeDialogProps) {
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+export function SessionTreeDialog({
+  sessionId,
+  open,
+  onOpenChange,
+  isIdle,
+}: SessionTreeDialogProps) {
   const [snapshot, setSnapshot] = useState<SessionTreeSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [rewindTarget, setRewindTarget] = useState<SessionTreeNode | null>(null);
-  const [mutatingEntryId, setMutatingEntryId] = useState<string | null>(null);
+  const [mutationPending, setMutationPending] = useState(false);
   const branchRevision = useChatSessionsStore(
     (state) => state.historyBranchRevisions?.[sessionId] ?? 0
   );
   const requestSequence = useRef(0);
-  const latestBranchRevision = useRef(branchRevision);
 
   useEffect(() => {
-    // Reading the nonce makes the explicit Refresh button a real generation
-    // input rather than a dependency-only trigger hidden from the hook body.
+    // The explicit Refresh action advances this request generation.
     void refreshNonce;
-    latestBranchRevision.current = branchRevision;
     if (!open) {
       requestSequence.current += 1;
       setLoading(false);
@@ -59,7 +65,7 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
     const sequence = ++requestSequence.current;
     setSnapshot(null);
     setRewindTarget(null);
-    setMutatingEntryId(null);
+    setMutationPending(false);
     setLoading(true);
     setError(null);
     void window.electronAPI.chat
@@ -69,7 +75,7 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
           requestSequence.current !== sequence ||
           result.requestSequence !== sequence ||
           !result.sessionKey.startsWith(`${sessionId}:`) ||
-          result.branchRevision < latestBranchRevision.current
+          result.branchRevision < branchRevision
         ) {
           return;
         }
@@ -77,7 +83,7 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
       })
       .catch((cause) => {
         if (requestSequence.current !== sequence) return;
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setError(errorMessage(cause));
       })
       .finally(() => {
         if (requestSequence.current === sequence) setLoading(false);
@@ -91,8 +97,8 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
 
   const handleRewind = async () => {
     const target = rewindTarget;
-    if (!target || !idle || mutatingEntryId) return;
-    setMutatingEntryId(target.id);
+    if (!target || !isIdle || mutationPending) return;
+    setMutationPending(true);
     setError(null);
     requestSequence.current += 1;
     try {
@@ -105,15 +111,15 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
       setSnapshot(result.tree);
       setRewindTarget(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(errorMessage(cause));
     } finally {
-      setMutatingEntryId(null);
+      setMutationPending(false);
     }
   };
 
   const handleFork = async (node: SessionTreeNode) => {
-    if (!idle || mutatingEntryId) return;
-    setMutatingEntryId(node.id);
+    if (!isIdle || mutationPending) return;
+    setMutationPending(true);
     setError(null);
     requestSequence.current += 1;
     try {
@@ -128,9 +134,9 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
       }
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(errorMessage(cause));
     } finally {
-      setMutatingEntryId(null);
+      setMutationPending(false);
     }
   };
 
@@ -159,7 +165,7 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
                 type="button"
                 size="xs"
                 variant="ghost"
-                disabled={loading || mutatingEntryId !== null || !idle}
+                disabled={loading || mutationPending || !isIdle}
                 onClick={() => setRefreshNonce((value) => value + 1)}
               >
                 <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
@@ -199,7 +205,7 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
                     variant="ghost"
                     title="Rewind here"
                     aria-label="Rewind here"
-                    disabled={!idle || mutatingEntryId !== null || node.leaf}
+                    disabled={!isIdle || mutationPending || node.leaf}
                     onClick={() => setRewindTarget(node)}
                   >
                     <RotateCcw className="size-3.5" />
@@ -214,7 +220,7 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
                         : 'Fork becomes available after the first assistant response'
                     }
                     aria-label="Fork from here"
-                    disabled={!idle || mutatingEntryId !== null || !node.forkable}
+                    disabled={!isIdle || mutationPending || !node.forkable}
                     onClick={() => void handleFork(node)}
                   >
                     <Split className="size-3.5" />
@@ -255,7 +261,7 @@ export function SessionTreeDialog({ sessionId, open, onOpenChange, idle }: Sessi
             </Button>
             <Button
               type="button"
-              disabled={!idle || mutatingEntryId !== null}
+              disabled={!isIdle || mutationPending}
               onClick={() => void handleRewind()}
             >
               <RotateCcw />

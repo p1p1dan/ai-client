@@ -65,7 +65,7 @@ T28 replacement baseline
 → T37 release candidate
 ```
 
-当前Next是 **T34 read-only Claude/Codex conversation import**。T33 bounded tree、confirmed rewind、leaf restart与independent fork已闭环；import是只读source→新Pi session的migration service，不恢复legacy execution runtime。
+当前下一目标是 **T34 read-only Claude/Codex conversation import**。T33 的 bounded tree、confirmed rewind、leaf restart 与 independent fork 已闭环。T34 只读复制 legacy source 到新的 Pi session，不恢复 legacy execution runtime。
 
 ## Stable evidence and history
 

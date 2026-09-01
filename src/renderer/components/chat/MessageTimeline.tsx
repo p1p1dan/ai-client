@@ -233,6 +233,7 @@ export function MessageTimeline({
         )
       : false
   );
+  const isIdle = status === 'idle';
   const [treeOpen, setTreeOpen] = useState(false);
   const [loadingOlderHistory, setLoadingOlderHistory] = useState(false);
   const loadOlderHistory = useCallback(async () => {
@@ -567,7 +568,7 @@ export function MessageTimeline({
                   type="button"
                   variant="ghost"
                   size="xs"
-                  disabled={status !== 'idle'}
+                  disabled={!isIdle}
                   onClick={() => setTreeOpen(true)}
                 >
                   <GitBranch />
@@ -736,7 +737,7 @@ export function MessageTimeline({
         sessionId={sessionId}
         open={treeOpen}
         onOpenChange={setTreeOpen}
-        idle={status === 'idle'}
+        isIdle={isIdle}
       />
       {showJumpToBottom && (
         <button

@@ -250,7 +250,6 @@ async function main(): Promise<void> {
       events,
       (event) => event.type === 'session.completed' && event.requestId === requestId
     );
-    return requestId;
   };
 
   try {

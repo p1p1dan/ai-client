@@ -91,7 +91,7 @@ describe('SessionIndexService', () => {
     expect(persisted[0]?.runtimeIdentity).toBeUndefined();
   });
 
-  it('atomically persists Pi leaf checkpoints and one complete fork row', async () => {
+  it('persists Pi leaf checkpoints and one complete fork row', async () => {
     const { SessionIndexService } = await import('../SessionIndexService');
     const service = new SessionIndexService();
     await service.recordCreated({ sessionId: 'source', workspacePath: '/ws/a', agent: 'pi' });

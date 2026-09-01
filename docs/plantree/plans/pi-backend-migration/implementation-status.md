@@ -1,6 +1,6 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Phase E / T34 read-only Claude/Codex conversation import；T33 Pi-native tree, rewind and fork已完成。
+**Current Phase**：Phase E / T34 read-only Claude/Codex conversation import。
 
 **Next Target**：[T34](./roadmap.md#t34--read-only-claudecodex-import-service--planned) 定义`ImportedConversation`、隔离legacy read-only adapters，并建立temporary Pi JSONL → validate → atomic publish → dedupe/provenance transaction。
 
@@ -16,13 +16,9 @@
 - [D17](./decisions/017-worker-pool-policy.md)：identity/remap、2/3/4 capacity、protected eviction、same-session bounded restart policy。
 - [T28 map](./topics/t28-replacement-map.md) 继续作为 T34/T35/T36 的文件级删除/保护 authority。
 
-## T33 closure
+## Last landed summary
 
-- **Tree**：WorkerSlot内从已打开SessionManager迭代投影exact entry tree；backend 4000、UI 320；orphan root、active path/leaf/label/preview与stale guards闭环。
-- **Rewind**：Main+worker重检idle/无blocking UI，renderer明确AlertDialog确认；Pi native navigate不截断JSONL；branch history替换与targeted transient reset不混入旧分支。
-- **Leaf authority**：session index持久化active leaf + physical tail；exact reopen/crash restart只重放仍匹配的checkpoint，新append使旧checkpoint失效。
-- **Fork**：source worker使用separate SessionManager生成新file；Main新建atomic index row与independent WorkerSlot，commit前失败清file/slot，source row/file/slot/leaf不变。
-- **Hard acceptance**：真实utilityProcess证明A→B→C→rewind A→D两臂保留；A fork后source/new session独立并行继续且无orphan。
+T33 closed bounded tree projection, confirmed idle-only rewind with durable leaf replay, and independent transactional fork. Acceptance, race, and cleanup evidence are recorded in [T33 evidence](./evidence/2026-09-01-t33-tree-rewind-fork.md).
 
 ## Active TODO
 

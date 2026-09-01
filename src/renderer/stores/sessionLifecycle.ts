@@ -81,7 +81,7 @@ export function resetSessionScopedRendererState(sessionId: string): void {
     pendingReply: state.pendingReply?.sessionId === sessionId ? null : state.pendingReply,
   }));
   useSessionRuntimeFactsStore.setState((state) => ({
-    factsBySession: omitSession(state.factsBySession as SessionRuntimeFactsState, sessionId),
+    factsBySession: omitSession(state.factsBySession, sessionId),
   }));
   useToolExpansionStore.setState((state) => ({
     bySession: omitSession(state.bySession, sessionId),

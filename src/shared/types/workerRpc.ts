@@ -1,6 +1,11 @@
 import type { SessionAttachment, SessionEffortLevel } from './agentHost';
 import type { ExtensionUiResponse, RuntimeEvent } from './runtimeEvents';
-import type { PiLeafCheckpoint, SessionHistoryPage, SessionTreeSnapshot } from './sessionHistory';
+import {
+  PI_SESSION_TREE_BACKEND_LIMIT,
+  type PiLeafCheckpoint,
+  type SessionHistoryPage,
+  type SessionTreeSnapshot,
+} from './sessionHistory';
 
 /**
  * Main ↔ utility worker RPC protocol.
@@ -367,6 +372,16 @@ function isPiLeafCheckpoint(value: unknown): value is PiLeafCheckpoint {
   );
 }
 
+function isLogicalSessionPayload(
+  value: unknown
+): value is Record<string, unknown> & { logicalSessionId: string } {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.trim().length > 0
+  );
+}
+
 function isSessionTreeSnapshot(value: unknown): value is SessionTreeSnapshot {
   if (
     !isRecord(value) ||
@@ -379,7 +394,7 @@ function isSessionTreeSnapshot(value: unknown): value is SessionTreeSnapshot {
     Number(value.totalNodes) < 0 ||
     !Number.isSafeInteger(value.returnedNodes) ||
     Number(value.returnedNodes) < 0 ||
-    Number(value.returnedNodes) > 4_000 ||
+    Number(value.returnedNodes) > PI_SESSION_TREE_BACKEND_LIMIT ||
     typeof value.truncated !== 'boolean'
   ) {
     return false;
@@ -432,18 +447,12 @@ export function isWorkerHistoryPayload(value: unknown): value is WorkerHistoryPa
 }
 
 export function isWorkerTreePayload(value: unknown): value is WorkerTreePayload {
-  return (
-    isRecord(value) &&
-    typeof value.logicalSessionId === 'string' &&
-    value.logicalSessionId.trim().length > 0
-  );
+  return isLogicalSessionPayload(value);
 }
 
 export function isWorkerRewindPayload(value: unknown): value is WorkerRewindPayload {
   return (
-    isRecord(value) &&
-    typeof value.logicalSessionId === 'string' &&
-    value.logicalSessionId.trim().length > 0 &&
+    isLogicalSessionPayload(value) &&
     typeof value.targetEntryId === 'string' &&
     value.targetEntryId.trim().length > 0 &&
     value.confirmed === true
@@ -466,9 +475,7 @@ export function isWorkerRewindResult(value: unknown): value is WorkerRewindResul
 
 export function isWorkerForkPayload(value: unknown): value is WorkerForkPayload {
   return (
-    isRecord(value) &&
-    typeof value.logicalSessionId === 'string' &&
-    value.logicalSessionId.trim().length > 0 &&
+    isLogicalSessionPayload(value) &&
     typeof value.entryId === 'string' &&
     value.entryId.trim().length > 0
   );
@@ -489,9 +496,7 @@ export function isWorkerForkResult(value: unknown): value is WorkerForkResult {
 
 export function isWorkerDiscardForkPayload(value: unknown): value is WorkerDiscardForkPayload {
   return (
-    isRecord(value) &&
-    typeof value.logicalSessionId === 'string' &&
-    value.logicalSessionId.trim().length > 0 &&
+    isLogicalSessionPayload(value) &&
     typeof value.sessionFile === 'string' &&
     value.sessionFile.trim().length > 0
   );

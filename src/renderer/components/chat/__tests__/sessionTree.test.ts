@@ -38,7 +38,7 @@ describe('sessionTree display helpers', () => {
     expect(display.nodes[0]?.depth).toBe(0);
   });
 
-  it('prefers label, then preview, then type for row copy', () => {
+  it('prefers label, then preview, then entry type when role is absent', () => {
     const node = snapshot(1).nodes[0];
     expect(node).toBeDefined();
     if (!node) return;

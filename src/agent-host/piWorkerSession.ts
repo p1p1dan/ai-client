@@ -508,10 +508,6 @@ export class PiWorkerSession {
     return { discarded: true };
   }
 
-  confirmFork(sessionFile: string): void {
-    this.stagedForkFiles.delete(sessionFile);
-  }
-
   async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {
     this.assertLogicalSession(input.logicalSessionId);
     await this.bootstrap();

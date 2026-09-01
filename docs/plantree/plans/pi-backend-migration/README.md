@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase E / T34 read-only legacy conversation import；T33 tree/rewind/fork已完成。
+> **当前阶段**：Phase E / T34 read-only legacy conversation import。
 
 ## 目标
 
@@ -95,4 +95,4 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 当前出口
 
-T28 replacement boundary、T29 single WorkerSlot、T30 bounded WorkerManager、T31 behavior reattachment、T32 history/real resume与T33 tree/rewind/fork均已完成。T33已闭环bounded iterative tree、stale guards、confirmed idle-only native rewind、append-only branch preservation、durable leaf restart与independent fork transaction；见 [closure evidence](./evidence/2026-09-01-t33-tree-rewind-fork.md)。当前Next为T34 read-only legacy conversation import；T35/T36继续服从T28保护边界，不焊回旧host。
+T28–T33 均已完成；T33 closure 见 [evidence](./evidence/2026-09-01-t33-tree-rewind-fork.md)。当前下一目标为 T34 read-only legacy conversation import；T35/T36 继续服从 T28 保护边界，不恢复旧 host。

@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { PermissionPluginDecision } from '../permissionPlugin.ts';
 import { PiWorkerSession } from '../piWorkerSession.ts';
 
@@ -69,7 +68,6 @@ describe('PiWorkerSession tree, rewind, and independent fork', () => {
       resetLeaf: () => {
         sourceLeaf = null;
       },
-      buildSessionContext: () => ({ messages: [] }),
     };
     const stagingManager = {
       ...sourceManager,
@@ -144,13 +142,12 @@ describe('PiWorkerSession tree, rewind, and independent fork', () => {
         options: Record<string, unknown>
       ) => factory({ cwd: options.cwd, sessionManager: options.sessionManager }),
     };
-    const events: RuntimeEventDraft[] = [];
     const worker = new PiWorkerSession({
       logicalSessionId: 'logical-source',
       cwd: '/repo',
       sessionFile: sourceFile,
       projectTrusted: false,
-      emit: (event) => events.push(event),
+      emit: () => undefined,
       loadSdk: async () => sdk,
       decidePermissionGate: () => GATED,
     });
