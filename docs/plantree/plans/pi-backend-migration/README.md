@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase E / T34 read-only legacy conversation import。
+> **当前阶段**：Phase F / T35 Pi-only absence audit。
 
 ## 目标
 
@@ -89,10 +89,11 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 | [topics/extension-ui.md](./topics/extension-ui.md) | Cycle 2 行为契约与 WorkerSlot 适配要求 |
 | [topics/timeline-reference.md](./topics/timeline-reference.md) | timeline/history/tree 参考与适配边界 |
 | [topics/t33-tree-rewind-fork.md](./topics/t33-tree-rewind-fork.md) | T33 tree/rewind/fork实施契约、参考分类与验证矩阵 |
+| [topics/t34-legacy-import.md](./topics/t34-legacy-import.md) | T34 Claude-only import contract、transaction、UI与验收门禁 |
 | [topics/t31a-runtime-event-reattachment.md](./topics/t31a-runtime-event-reattachment.md) | T31-a producer→WorkerManager→renderer文件图、参考分类、focused matrix与legacy cleanup ledger |
 | [topics/completion-cycles.md](./topics/completion-cycles.md) | Cycle 1/2 完成历史；旧 Cycle 3–5 已被替代 |
 | [history/2026-08-31-pre-pi-only-realignment/](./history/2026-08-31-pre-pi-only-realignment/) | Pi-only 重排前完整计划快照 |
 
 ## 当前出口
 
-T28–T33 均已完成；T33 closure 见 [evidence](./evidence/2026-09-01-t33-tree-rewind-fork.md)。当前下一目标为 T34 read-only legacy conversation import；T35/T36 继续服从 T28 保护边界，不恢复旧 host。
+T28–T34 均已完成；T34 closure 见 [evidence](./evidence/2026-09-01-t34-legacy-import.md)。当前下一目标为 T35 Pi-only absence audit；T36继续服从T28保护边界，不恢复旧host。

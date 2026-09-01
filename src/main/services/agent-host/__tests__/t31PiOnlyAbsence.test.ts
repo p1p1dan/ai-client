@@ -75,7 +75,8 @@ describe('T31 Pi-only absence gate', () => {
 
   it('preserves migration-only readers without giving them an execution import', () => {
     for (const relative of [
-      'src/agent-host/historyReader.ts',
+      'src/main/services/legacyImport/ClaudeSessionScanner.ts',
+      'src/main/services/legacyImport/ClaudeSourceAdapter.ts',
       'src/agent-host/codexHistoryReader.ts',
       'src/agent-host/codexItemMapper.ts',
     ]) {

@@ -50,15 +50,10 @@ const BASELINE: Record<string, { count: number; reason: string }> = {
     reason:
       'Existing CLAUDE_CONFIG_DIR-aware follower (if/else form) — out of S2a file set, unmodified (S2b territory).',
   },
-  'src/main/services/claude/ClaudeSessionScanner.ts': {
+  'src/main/services/legacyImport/ClaudeSessionScanner.ts': {
     count: 1,
     reason:
-      'Existing CLAUDE_CONFIG_DIR-aware follower (`||` form) — S2b file set, unmodified by S2a.',
-  },
-  'src/main/services/claude/sessionLogReader.ts': {
-    count: 1,
-    reason:
-      'Existing CLAUDE_CONFIG_DIR-aware follower (`||` form) — out of S2a file set, unmodified.',
+      'T34 migration-only CLAUDE_CONFIG_DIR-aware source scanner; read-only and statically isolated from execution runtime.',
   },
   'src/main/services/claude/McpManager.ts': {
     count: 1,

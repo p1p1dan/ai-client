@@ -1,3 +1,7 @@
+import {
+  LEGACY_IMPORT_CUSTOM_TYPE_DISPLAY,
+  LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE,
+} from '../shared/types/legacyImport.ts';
 import type {
   HistoryAttachment,
   HistoryBlock,
@@ -125,6 +129,80 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
           },
         ],
       });
+      continue;
+    }
+    if (entry.type === 'custom') {
+      if (entry.customType === LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE) {
+        const data = recordOf(entry.data);
+        const sourceSessionId =
+          typeof data?.sourceSessionId === 'string' ? data.sourceSessionId : 'unknown';
+        const sourceKind = typeof data?.sourceKind === 'string' ? data.sourceKind : 'legacy';
+        messages.push({
+          id: messageId,
+          entryId: entry.id,
+          role: 'system',
+          ...(timestamp !== undefined ? { timestamp } : {}),
+          blocks: [
+            {
+              type: 'text',
+              id: stablePartId(messageId, 'provenance', 0),
+              text: `Imported read-only history from ${sourceKind} session ${sourceSessionId}. Continue in Pi; the original runtime state was not restored.`,
+            },
+          ],
+        });
+        continue;
+      }
+      if (entry.customType === LEGACY_IMPORT_CUSTOM_TYPE_DISPLAY) {
+        const data = recordOf(entry.data);
+        const title = typeof data?.title === 'string' ? data.title : 'Legacy history';
+        if (data?.displayKind === 'tool') {
+          const toolCallId =
+            typeof data.toolCallId === 'string' && data.toolCallId
+              ? data.toolCallId
+              : `${entry.id}-display`;
+          const toolName =
+            typeof data.toolName === 'string' && data.toolName ? data.toolName : title;
+          const output = typeof data.output === 'string' ? data.output : undefined;
+          messages.push({
+            id: messageId,
+            entryId: entry.id,
+            role: 'assistant',
+            ...(timestamp !== undefined ? { timestamp } : {}),
+            blocks: [
+              {
+                type: 'tool_call',
+                id: stablePartId(messageId, 'legacy-tool-call', 0),
+                toolCallId,
+                name: toolName,
+                ...(data.input !== undefined ? { input: data.input } : {}),
+              },
+              {
+                type: 'tool_result',
+                id: stablePartId(messageId, 'legacy-tool-result', 0),
+                toolCallId,
+                ok: data.isError !== true,
+                ...(output ? (data.isError === true ? { error: output } : { output }) : {}),
+              },
+            ],
+          });
+          continue;
+        }
+        const body = typeof data?.body === 'string' ? data.body : '';
+        messages.push({
+          id: messageId,
+          entryId: entry.id,
+          role: 'system',
+          ...(timestamp !== undefined ? { timestamp } : {}),
+          blocks: [
+            {
+              type: 'text',
+              id: stablePartId(messageId, 'legacy-display', 0),
+              text: body ? `${title}\n\n${body}` : title,
+            },
+          ],
+        });
+        continue;
+      }
       continue;
     }
     if (entry.type === 'custom_message') {

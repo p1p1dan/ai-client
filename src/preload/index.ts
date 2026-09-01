@@ -18,8 +18,6 @@ import type {
   AppCloseRequestPayload,
   AttachmentReadOptions,
   AttachmentReadResult,
-  ClaudeProject,
-  ClaudeSessionMeta,
   CloneProgress,
   CloneResult,
   CommitFileChange,
@@ -45,6 +43,10 @@ import type {
   GitStatus,
   GitSubmodule,
   GitWorktree,
+  LegacyImportBatchRequest,
+  LegacyImportBatchResult,
+  LegacyImportProject,
+  LegacyImportSessionPreview,
   McpServer,
   McpServerConfig,
   MergeConflict,
@@ -1166,12 +1168,14 @@ const electronAPI = {
     },
   },
 
-  // Claude Sessions (session history)
-  claudeSessions: {
-    listProjects: (): Promise<ClaudeProject[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_SESSIONS_LIST_PROJECTS),
-    getProjectSessions: (projectId: string): Promise<ClaudeSessionMeta[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_SESSIONS_GET_PROJECT_SESSIONS, projectId),
+  // Read-only legacy conversation import
+  legacyImport: {
+    listProjects: (): Promise<LegacyImportProject[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEGACY_IMPORT_LIST_PROJECTS),
+    listSessions: (projectId: string): Promise<LegacyImportSessionPreview[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEGACY_IMPORT_LIST_SESSIONS, projectId),
+    importBatch: (request: LegacyImportBatchRequest): Promise<LegacyImportBatchResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEGACY_IMPORT_BATCH, request),
   },
 
   // Search

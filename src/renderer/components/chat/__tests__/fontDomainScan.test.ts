@@ -102,7 +102,6 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/git/FileChanges.tsx',
   'components/onboarding/OnboardingView.tsx',
   'components/repository/RepositorySettingsDialog.tsx',
-  'components/sessions/ProjectGroup.tsx',
   'components/sessions/SessionItem.tsx',
   'components/sessions/SessionManagerView.tsx',
   'components/settings/GeneralSettings.tsx',

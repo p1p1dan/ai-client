@@ -1,10 +1,9 @@
 import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
 import type {
-  ClaudeProject,
-  ClaudeSessionMeta,
   GitWorktree,
   RemoteConnectionStatus,
+  SessionIndexEntry,
   WorktreeCreateOptions,
   WorktreeMergeOptions,
   WorktreeMergeResult,
@@ -86,7 +85,6 @@ import { addToast, toastManager } from './components/ui/toast';
 import { WorkspaceShell } from './components/workspace-shell';
 import { MergeEditor, MergeWorktreeDialog } from './components/worktree';
 import { useAutoFetchListener, useGitBranches, useGitInit } from './hooks/useGit';
-import { useManagedMode } from './hooks/useManagedMode';
 import { useWebInspector } from './hooks/useWebInspector';
 import {
   useWorktreeCreate,
@@ -99,6 +97,7 @@ import {
 } from './hooks/useWorktree';
 import { useI18n } from './i18n';
 import { useAgentSessionsStore } from './stores/agentSessions';
+import { materializeIndexedPiChatSession } from './stores/chatSessionActions';
 import { initCloneProgressListener } from './stores/cloneTasks';
 import { useEditorStore } from './stores/editor';
 import { useInitScriptStore } from './stores/initScript';
@@ -119,44 +118,6 @@ function createPlaceholderWorktree(path: string): GitWorktree {
     isLocked: false,
     prunable: false,
   };
-}
-
-async function resolveClaudeConfigDirForResumeSession(options: {
-  /** Provenance from `ClaudeSessionScanner` (D47 S2b §1 resume) — when present,
-   *  trust it directly instead of re-probing candidate paths ("不再猜"). */
-  configDir?: string | null;
-  /** Managed home dir from `auth.managedMode()`, used only in the no-meta fallback. */
-  claudeHomeDir?: string | null;
-  homeDir: string;
-  pathSep: string;
-  projectId: string;
-  sessionId: string;
-}): Promise<string | null> {
-  const { configDir, claudeHomeDir, homeDir, pathSep, projectId, sessionId } = options;
-
-  if (configDir) return configDir;
-
-  if (!homeDir) return null;
-
-  const userConfigDir = `${homeDir}${pathSep}.claude`;
-  const candidates = claudeHomeDir ? [claudeHomeDir, userConfigDir] : [userConfigDir];
-
-  const buildSessionPath = (dir: string) =>
-    `${dir}${pathSep}projects${pathSep}${projectId}${pathSep}${sessionId}.jsonl`;
-
-  const checks = await Promise.all(
-    candidates.map(async (dir) => {
-      try {
-        const exists = await window.electronAPI.file.exists(buildSessionPath(dir));
-        return { dir, exists };
-      } catch {
-        return { dir, exists: false };
-      }
-    })
-  );
-
-  const match = checks.find((c) => c.exists);
-  return match?.dir ?? null;
 }
 
 // Initialize global clone progress listener
@@ -463,7 +424,6 @@ export default function App() {
   const isWindows = window.electronAPI?.env.platform === 'win32';
   const pathSep = isWindows ? '\\' : '/';
   const homeDir = window.electronAPI?.env.HOME || '';
-  const { data: managedModeInfo } = useManagedMode();
   const effectiveTempBasePath = useMemo(
     () => getEffectiveTemporaryBasePath(defaultTemporaryPath, homeDir, pathSep),
     [defaultTemporaryPath, homeDir, pathSep]
@@ -1156,8 +1116,6 @@ export default function App() {
     ]
   );
 
-  const resumeClaudeSession = useAgentSessionsStore((s) => s.resumeClaudeSession);
-
   const handleSelectHome = useCallback(() => {
     setIsHomeViewActive(true);
 
@@ -1168,56 +1126,28 @@ export default function App() {
     }
   }, [activeTab, previousTab, settingsDisplayMode, setActiveTab, setPreviousTab]);
 
-  const handleResumeClaudeSession = useCallback(
-    async (session: ClaudeSessionMeta, project: ClaudeProject) => {
-      const targetPath = project.path;
-
-      const claudeConfigDir = await resolveClaudeConfigDirForResumeSession({
-        configDir: session.configDir,
-        claudeHomeDir: managedModeInfo.claudeHomeDir,
-        homeDir,
-        pathSep,
-        projectId: project.id,
-        sessionId: session.id,
+  const handleOpenImportedSession = useCallback(
+    (session: SessionIndexEntry) => {
+      const targetPath = session.workspacePath;
+      handleAddLocalRepository(targetPath, null);
+      setActiveWorktree(createPlaceholderWorktree(targetPath));
+      const materialized = materializeIndexedPiChatSession(session, {
+        createWorkspaceIfMissing: true,
+        workspaceName: getDisplayPathBasename(targetPath),
+        hostBound: false,
       });
-
-      if (!claudeConfigDir) {
-        const diagnostic = homeDir
-          ? `\n(诊断) 已检查以下路径是否存在：\n${homeDir}${pathSep}.claude${pathSep}projects${pathSep}${project.id}${pathSep}${session.id}.jsonl`
-          : '\n(诊断) 未能获取 HOME 目录，请确认系统环境变量 USERPROFILE/HOME 是否可用。';
+      if (!materialized) {
         addToast({
           type: 'error',
-          title: 'Claude 会话恢复失败',
-          description: `未找到对应的会话记录：${session.id}\n请点击“刷新”重新加载会话历史，或确认 CLAUDE_CONFIG_DIR 与会话来源一致。${diagnostic}`,
+          title: '无法打开导入会话',
+          description: '导入已完成，但新的 Pi 会话未能挂载到当前窗口。请刷新后重试。',
         });
         return;
       }
-
-      handleAddLocalRepository(targetPath, null);
-
-      // Resume sessions should not require Git/Worktree binding: always run the agent in the project folder.
-      // (Git features can still be used if the folder is a Git repo.)
-      setActiveWorktree(createPlaceholderWorktree(targetPath));
-
-      resumeClaudeSession({
-        repoPath: targetPath,
-        cwd: targetPath,
-        claudeSessionId: session.id,
-        claudeConfigDir,
-        name: session.firstMessage,
-      });
-
+      setIsHomeViewActive(false);
       handleTabChange('chat');
     },
-    [
-      handleAddLocalRepository,
-      handleTabChange,
-      homeDir,
-      managedModeInfo.claudeHomeDir,
-      pathSep,
-      resumeClaudeSession,
-      setActiveWorktree,
-    ]
+    [handleAddLocalRepository, handleTabChange, setActiveWorktree]
   );
 
   // Handle cloning a remote repository
@@ -1931,7 +1861,7 @@ export default function App() {
                 onToggleSettings={toggleSettings}
               />
             ) : (
-              <SessionManagerView onResumeSession={handleResumeClaudeSession} />
+              <SessionManagerView onOpenImported={handleOpenImportedSession} />
             )}
           </>
         )}

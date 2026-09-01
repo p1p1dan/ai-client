@@ -6,6 +6,7 @@ import {
   applyAutoSessionTitle,
   createChatSessionOnWorkspace,
   materializeForkedChatSession,
+  materializeIndexedPiChatSession,
   retargetChatSession,
 } from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
@@ -83,6 +84,31 @@ describe('materializeForkedChatSession', () => {
       status: 'idle',
     });
     expect(state.messages).toEqual({ source: [] });
+  });
+
+  it('materializes an imported Pi file as resumable rather than falsely host-bound', () => {
+    expect(
+      materializeIndexedPiChatSession(
+        {
+          sessionId: 'imported',
+          runtimeIdentity: '/sessions/imported.jsonl',
+          agent: 'pi',
+          workspacePath: '/repo',
+          title: 'Imported',
+          updatedAt: 42,
+          archived: false,
+        },
+        { createWorkspaceIfMissing: true, hostBound: false }
+      )
+    ).toBe(true);
+    const state = useChatSessionsStore.getState();
+    expect(state.hostBoundSessionIds).not.toContain('imported');
+    expect(
+      decideSendPreamble({
+        hostBound: state.hostBoundSessionIds.includes('imported'),
+        runtimeIdentity: state.sessions.find((item) => item.id === 'imported')?.runtimeIdentity,
+      })
+    ).toEqual({ action: 'resume', runtimeIdentity: '/sessions/imported.jsonl' });
   });
 
   it('refuses a fork whose indexed workspace is not mounted in this window', () => {

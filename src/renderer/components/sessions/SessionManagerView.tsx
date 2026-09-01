@@ -1,8 +1,9 @@
-import type { ClaudeProject, ClaudeSessionMeta } from '@shared/types';
+import type { LegacyImportItemResult, LegacyImportProject, SessionIndexEntry } from '@shared/types';
 import { getDisplayPathBasename } from '@shared/utils/path';
-import { ArrowLeft, Folder, LayoutGrid, List, RefreshCcw } from 'lucide-react';
+import { ArrowLeft, Folder, LayoutGrid, List, RefreshCcw, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Empty,
   EmptyDescription,
@@ -12,32 +13,74 @@ import {
 } from '@/components/ui/empty';
 import { Ident } from '@/components/ui/ident';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useClaudeProjectSessions, useClaudeProjects } from '@/hooks/useClaudeSessions';
+import {
+  useLegacyImportMutation,
+  useLegacyImportProjects,
+  useLegacyImportSessions,
+} from '@/hooks/useLegacyImport';
 import { cn } from '@/lib/utils';
 import { SessionItem } from './SessionItem';
 import { formatActivityLabel } from './time';
 
 interface SessionManagerViewProps {
   className?: string;
-  onResumeSession?: (session: ClaudeSessionMeta, project: ClaudeProject) => void;
+  onOpenImported?: (session: SessionIndexEntry) => void;
 }
 
-export function SessionManagerView({ className, onResumeSession }: SessionManagerViewProps) {
-  const projectsQuery = useClaudeProjects();
+export function SessionManagerView({ className, onOpenImported }: SessionManagerViewProps) {
+  const projectsQuery = useLegacyImportProjects();
   const projects = projectsQuery.data ?? [];
-
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
+  const [report, setReport] = useState<LegacyImportItemResult[]>([]);
+  const importMutation = useLegacyImportMutation();
 
   const selectedProject = useMemo(() => {
     if (!selectedProjectId) return null;
-    return projects.find((p) => p.id === selectedProjectId) ?? null;
+    return projects.find((project) => project.id === selectedProjectId) ?? null;
   }, [projects, selectedProjectId]);
-
-  const sessionsQuery = useClaudeProjectSessions(selectedProject?.id ?? null, {
+  const sessionsQuery = useLegacyImportSessions(selectedProject?.id ?? null, {
     enabled: !!selectedProject,
   });
   const sessions = sessionsQuery.data ?? [];
+  const allSelected = sessions.length > 0 && selectedSessionIds.size === sessions.length;
+  const someSelected = selectedSessionIds.size > 0 && !allSelected;
+  const reportBySession = useMemo(
+    () => new Map(report.map((item) => [item.source.sourceSessionId, item])),
+    [report]
+  );
+
+  const chooseProject = (project: LegacyImportProject) => {
+    setSelectedProjectId(project.id);
+    setSelectedSessionIds(new Set());
+    setReport([]);
+  };
+  const setSelected = (sessionId: string, selected: boolean) => {
+    setSelectedSessionIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(sessionId);
+      else next.delete(sessionId);
+      return next;
+    });
+  };
+  const toggleAll = (selected: boolean) => {
+    setSelectedSessionIds(selected ? new Set(sessions.map((session) => session.id)) : new Set());
+  };
+  const runImport = async () => {
+    if (!selectedProject || selectedSessionIds.size === 0) return;
+    const result = await importMutation.mutateAsync({
+      sources: sessions
+        .filter((session) => selectedSessionIds.has(session.id))
+        .map((session) => ({
+          sourceKind: 'claude-code' as const,
+          projectId: selectedProject.id,
+          sourceSessionId: session.id,
+        })),
+    });
+    setReport(result.results);
+    setSelectedSessionIds(new Set());
+  };
 
   return (
     <div className={cn('flex h-full min-w-0 flex-1 flex-col gap-4 p-4', className)}>
@@ -45,90 +88,142 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
         <>
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
-              <Button onClick={() => setSelectedProjectId(null)} size="sm" variant="secondary">
-                <ArrowLeft className="h-4 w-4" />
+              <Button
+                onClick={() => {
+                  setSelectedProjectId(null);
+                  setSelectedSessionIds(new Set());
+                  setReport([]);
+                }}
+                size="sm"
+                variant="secondary"
+              >
+                <ArrowLeft className="size-4" />
                 返回
               </Button>
               <div className="min-w-0">
                 <div className="min-w-0 truncate font-heading text-title leading-none tracking-[-0.01em]">
                   {getDisplayPathBasename(selectedProject.path)}
                 </div>
-                <div className="mt-1 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-                  <span className="min-w-0 flex-1 truncate font-mono" title={selectedProject.path}>
+                <div className="mt-1 flex min-w-0 items-center gap-2 text-meta text-muted-foreground">
+                  <span
+                    className="min-w-0 flex-1 truncate font-mono text-code tracking-normal"
+                    title={selectedProject.path}
+                  >
                     {selectedProject.path}
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums">{sessions.length} 个会话</span>
-                  {formatActivityLabel(selectedProject.lastActivityAt) ? (
-                    <span className="shrink-0 text-xs tabular-nums">
-                      {formatActivityLabel(selectedProject.lastActivityAt)}
-                    </span>
-                  ) : null}
+                  <span className="shrink-0 tabular-nums">{sessions.length} 个会话</span>
                 </div>
               </div>
             </div>
-
-            <Button
-              disabled={sessionsQuery.isFetching}
-              onClick={() => sessionsQuery.refetch()}
-              size="sm"
-              variant="secondary"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              刷新
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                disabled={sessionsQuery.isFetching || importMutation.isPending}
+                onClick={() => sessionsQuery.refetch()}
+                size="sm"
+                variant="secondary"
+              >
+                <RefreshCcw className="size-4" />
+                刷新
+              </Button>
+              <Button
+                disabled={selectedSessionIds.size === 0 || importMutation.isPending}
+                onClick={runImport}
+                size="sm"
+              >
+                <Upload className="size-4" />
+                {importMutation.isPending ? '正在导入…' : `导入所选 (${selectedSessionIds.size})`}
+              </Button>
+            </div>
           </div>
+
+          {sessions.length > 0 ? (
+            <label className="flex h-7 items-center gap-2 border-b px-2 text-ui text-muted-foreground">
+              <Checkbox
+                checked={allSelected}
+                disabled={importMutation.isPending}
+                indeterminate={someSelected}
+                onCheckedChange={(checked) => toggleAll(checked === true)}
+              />
+              全选当前项目
+            </label>
+          ) : null}
 
           {sessionsQuery.isLoading ? (
             <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
+              {Array.from({ length: 4 }).map((_, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: fixed skeleton list
+                <Skeleton className="h-14 w-full" key={index} />
+              ))}
             </div>
           ) : sessions.length === 0 ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <Folder className="h-4 w-4" />
+                  <Folder className="size-4" />
                 </EmptyMedia>
                 <EmptyTitle>未找到会话</EmptyTitle>
-                <EmptyDescription>该项目下没有可显示的 Claude 会话记录。</EmptyDescription>
+                <EmptyDescription>该项目下没有可导入的 Claude 会话记录。</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
             <div className="min-w-0 flex-1 space-y-1 overflow-auto">
-              {sessions.map((session) => (
-                <SessionItem
-                  key={session.id}
-                  onResumeSession={onResumeSession}
-                  project={selectedProject}
-                  session={session}
-                />
-              ))}
+              {sessions.map((session) => {
+                const item = reportBySession.get(session.id);
+                return (
+                  <div className="flex min-w-0 items-center gap-2" key={session.id}>
+                    <SessionItem
+                      disabled={importMutation.isPending}
+                      error={item?.error}
+                      onSelectedChange={(selected) => setSelected(session.id, selected)}
+                      result={item?.status}
+                      selected={selectedSessionIds.has(session.id)}
+                      session={session}
+                    />
+                    {item?.session && item.status !== 'failed' ? (
+                      <Button
+                        className="shrink-0"
+                        onClick={() => onOpenImported?.(item.session as SessionIndexEntry)}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        打开
+                      </Button>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           )}
+
+          {report.length > 0 ? (
+            <div className="rounded-md border bg-card p-3 text-meta">
+              导入报告：{report.filter((item) => item.status === 'imported').length} 个新快照，
+              {report.filter((item) => item.status === 'already-imported').length} 个已存在，
+              {report.filter((item) => item.status === 'failed').length}{' '}
+              个失败。导入完成后不会自动打开会话。
+            </div>
+          ) : null}
         </>
       ) : (
         <>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="font-heading text-title leading-none tracking-[-0.01em]">
-                会话历史
+                导入历史
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                扫描 <Ident>~/.claude/projects/</Ident> 的 Claude 会话
+              <div className="mt-1 text-meta text-muted-foreground">
+                从 <Ident>~/.claude/projects/</Ident> 只读复制历史，并在 Pi 中继续
               </div>
             </div>
-
             <div className="flex items-center gap-2">
-              <div className="flex items-center rounded-lg bg-muted p-0.5">
+              <div className="flex items-center rounded-sm bg-muted p-0.5">
                 <Button
                   aria-label="网格视图"
                   onClick={() => setViewMode('grid')}
                   size="icon-sm"
                   variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
                 >
-                  <LayoutGrid className="h-4 w-4" />
+                  <LayoutGrid className="size-4" />
                 </Button>
                 <Button
                   aria-label="列表视图"
@@ -136,17 +231,16 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                   size="icon-sm"
                   variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                 >
-                  <List className="h-4 w-4" />
+                  <List className="size-4" />
                 </Button>
               </div>
-
               <Button
                 disabled={projectsQuery.isFetching}
                 onClick={() => projectsQuery.refetch()}
                 size="sm"
                 variant="secondary"
               >
-                <RefreshCcw className="h-4 w-4" />
+                <RefreshCcw className="size-4" />
                 刷新
               </Button>
             </div>
@@ -159,21 +253,20 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                 viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'
               )}
             >
-              {Array.from({ length: 6 }).map((_, idx) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: static fixed-length skeleton, never reordered
-                <Skeleton className="h-24 w-full" key={idx} />
+              {Array.from({ length: 6 }).map((_, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: fixed skeleton list
+                <Skeleton className="h-24 w-full" key={index} />
               ))}
             </div>
           ) : projects.length === 0 ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <RefreshCcw className="h-4 w-4" />
+                  <RefreshCcw className="size-4" />
                 </EmptyMedia>
                 <EmptyTitle>未找到 Claude 会话</EmptyTitle>
                 <EmptyDescription>
-                  请确认本机已安装并使用过 Claude Code，且 <Ident>~/.claude/projects/</Ident>{' '}
-                  下存在会话记录。
+                  请确认本机使用过 Claude Code，且会话目录中存在 JSONL 记录。
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -186,60 +279,44 @@ export function SessionManagerView({ className, onResumeSession }: SessionManage
                 )}
               >
                 {projects.map((project) => {
-                  const projectName = getDisplayPathBasename(project.path);
                   const activityLabel = formatActivityLabel(project.lastActivityAt);
-
                   return (
                     <button
                       className={cn(
-                        'group w-full min-w-0 rounded-xl border bg-card text-left shadow-xs transition-colors hover:bg-accent',
+                        'group w-full min-w-0 rounded-md border bg-card text-left transition-colors hover:bg-accent/50',
                         viewMode === 'grid'
                           ? 'flex flex-col gap-3 p-4'
                           : 'flex items-center gap-3 p-3'
                       )}
                       key={project.id}
-                      onClick={() => setSelectedProjectId(project.id)}
+                      onClick={() => chooseProject(project)}
                       type="button"
                     >
                       <div
                         className={cn(
                           'flex min-w-0 items-start gap-3',
-                          viewMode === 'list' ? 'flex-1 items-center' : null
+                          viewMode === 'list' && 'flex-1 items-center'
                         )}
                       >
-                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Folder className="h-5 w-5" />
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <Folder className="size-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium text-foreground group-hover:text-primary transition-colors">
-                            {projectName}
+                          <div className="truncate font-semibold text-ui text-foreground group-hover:text-primary">
+                            {getDisplayPathBasename(project.path)}
                           </div>
                           <div
-                            className="mt-1 truncate font-mono text-xs text-muted-foreground"
+                            className="mt-1 truncate font-mono text-code tracking-normal text-muted-foreground"
                             title={project.path}
                           >
                             {project.path}
                           </div>
                         </div>
                       </div>
-
-                      {viewMode === 'grid' ? (
-                        <div className="flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-                          <span className="shrink-0 tabular-nums">
-                            {project.sessionCount} 个会话
-                          </span>
-                          {activityLabel ? (
-                            <span className="shrink-0 tabular-nums">{activityLabel}</span>
-                          ) : (
-                            <span className="shrink-0 tabular-nums">-</span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums">
-                          <span>{project.sessionCount} 个会话</span>
-                          {activityLabel ? <span>{activityLabel}</span> : <span>-</span>}
-                        </div>
-                      )}
+                      <div className="flex shrink-0 items-center justify-between gap-2 text-meta text-muted-foreground tabular-nums">
+                        <span>{project.sessionCount} 个会话</span>
+                        <span>{activityLabel || '-'}</span>
+                      </div>
                     </button>
                   );
                 })}

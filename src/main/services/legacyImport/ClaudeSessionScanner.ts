@@ -3,7 +3,11 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
-import type { ClaudeProject, ClaudeSessionMeta } from '@shared/types';
+import {
+  isLegacyImportPathSegment,
+  type LegacyImportProject,
+  type LegacyImportSessionPreview,
+} from '@shared/types';
 import {
   isFileTsdEncrypted,
   readFileTsdSafeBounded,
@@ -36,7 +40,7 @@ export interface ClaudeSessionScannerOptions {
    * Lazy provider — invoked once per public method call, never cached at
    * construction time. This mirrors the pre-refactor behavior (no
    * constructor at all; `getClaudeProjectsDir()` re-read `CLAUDE_CONFIG_DIR`
-   * on every call) so the module-level singleton (`claudeSessions.ts`) keeps
+   * on every call) so the module-level import service keeps
    * following env/flag changes made after import (D47 S2 §0.1 — "没有构造
    * 函数...今天能跟随重定向正因无构造期捕获").
    */
@@ -59,6 +63,15 @@ function getProjectsDir(root: ClaudeSessionRoot): string {
   return path.join(root.dir, 'projects');
 }
 
+function safeErrorCode(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  return typeof code === 'string' ? code : 'unknown';
+}
+
+function assertSafeSegment(value: string, label: string): void {
+  if (!isLegacyImportPathSegment(value)) throw new Error(`Invalid Claude ${label}`);
+}
+
 async function listRootProjectIds(root: ClaudeSessionRoot): Promise<string[]> {
   const projectsDir = getProjectsDir(root);
   try {
@@ -68,8 +81,7 @@ async function listRootProjectIds(root: ClaudeSessionRoot): Promise<string[]> {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === 'ENOENT') return [];
     console.error(
-      `[ClaudeSessionScanner] Failed to read projects dir for ${root.kind} root (${root.dir}):`,
-      error
+      `[ClaudeSessionScanner] Failed to read ${root.kind} projects directory (${safeErrorCode(error)})`
     );
     return [];
   }
@@ -83,11 +95,19 @@ async function listRootSessionFiles(root: ClaudeSessionRoot, projectId: string):
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === 'ENOENT') return [];
     console.error(
-      `[ClaudeSessionScanner] Failed to list sessions for ${root.kind} root project ${projectId}:`,
-      error
+      `[ClaudeSessionScanner] Failed to list ${root.kind} project ${projectId} sessions (${safeErrorCode(error)})`
     );
     return [];
   }
+}
+
+export interface ClaudeSessionSource {
+  projectId: string;
+  sessionId: string;
+  workspacePath: string;
+  configDir: string;
+  filePath: string;
+  rootKind: ClaudeSessionRootKind;
 }
 
 interface SessionFileCandidate {
@@ -107,6 +127,7 @@ async function collectSessionFileCandidates(
   roots: ClaudeSessionRoot[],
   projectId: string
 ): Promise<SessionFileCandidate[]> {
+  assertSafeSegment(projectId, 'project id');
   const perRoot = await Promise.all(
     roots.map(async (root) => {
       const fileNames = await listRootSessionFiles(root, projectId);
@@ -126,9 +147,7 @@ async function collectSessionFileCandidates(
             return candidate;
           } catch (error) {
             console.warn(
-              `[ClaudeSessionScanner] Failed to stat session file (${root.kind} root), skipping:`,
-              fullPath,
-              error
+              `[ClaudeSessionScanner] Failed to inspect ${root.kind} session ${path.basename(fileName, '.jsonl')} (${safeErrorCode(error)})`
             );
             return null;
           }
@@ -283,8 +302,7 @@ async function openJsonlReader(filePath: string): Promise<JsonlReader> {
         throw error;
       }
       console.warn(
-        `[ClaudeSessionScanner] Skipping oversized TSD JSONL: ${error.filePath} ` +
-          `(${error.size} bytes > ${error.limit} bytes)`
+        `[ClaudeSessionScanner] Skipping oversized encrypted session (${error.size} bytes > ${error.limit} bytes)`
       );
     }
     return {
@@ -342,8 +360,7 @@ async function readTailLines(filePath: string, lineCount: number): Promise<strin
         throw error;
       }
       console.warn(
-        `[ClaudeSessionScanner] Skipping tail of oversized TSD JSONL: ${error.filePath} ` +
-          `(${error.size} bytes > ${error.limit} bytes)`
+        `[ClaudeSessionScanner] Skipping tail of oversized encrypted session (${error.size} bytes > ${error.limit} bytes)`
       );
       return [];
     }
@@ -383,7 +400,9 @@ async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
   try {
     reader = await openJsonlReader(filePath);
   } catch (error) {
-    console.error(`[ClaudeSessionScanner] Failed to open JSONL ${filePath}:`, error);
+    console.error(
+      `[ClaudeSessionScanner] Failed to open session ${path.basename(filePath, '.jsonl')} (${safeErrorCode(error)})`
+    );
     return null;
   }
 
@@ -418,7 +437,9 @@ async function readInitCwdFromJsonl(filePath: string): Promise<string | null> {
       }
     }
   } catch (error) {
-    console.error(`[ClaudeSessionScanner] Failed while iterating JSONL ${filePath}:`, error);
+    console.error(
+      `[ClaudeSessionScanner] Failed while reading session ${path.basename(filePath, '.jsonl')} (${safeErrorCode(error)})`
+    );
     return null;
   } finally {
     reader.close();
@@ -443,14 +464,14 @@ export class ClaudeSessionScanner {
     return this.decodeProjectPathFromCandidates(projectId, candidates);
   }
 
-  async scanProjects(): Promise<ClaudeProject[]> {
+  async scanProjects(): Promise<LegacyImportProject[]> {
     const roots = this.resolveRoots();
 
     const projectIdSets = await Promise.all(roots.map((root) => listRootProjectIds(root)));
     const projectIds = [...new Set(projectIdSets.flat())];
 
     const projects = await Promise.all(
-      projectIds.map(async (projectId): Promise<ClaudeProject | null> => {
+      projectIds.map(async (projectId): Promise<LegacyImportProject | null> => {
         const candidates = await collectSessionFileCandidates(roots, projectId);
         if (candidates.length === 0) return null;
 
@@ -471,11 +492,11 @@ export class ClaudeSessionScanner {
     );
 
     return projects
-      .filter((p): p is ClaudeProject => !!p)
+      .filter((p): p is LegacyImportProject => !!p)
       .sort((a, b) => b.lastActivityAt - a.lastActivityAt);
   }
 
-  async getSessionsForProject(projectId: string): Promise<ClaudeSessionMeta[]> {
+  async getSessionsForProject(projectId: string): Promise<LegacyImportSessionPreview[]> {
     const roots = this.resolveRoots();
     const candidates = await collectSessionFileCandidates(roots, projectId);
     const winners = dedupeSessionCandidates(candidates);
@@ -488,8 +509,7 @@ export class ClaudeSessionScanner {
           // Per-session failures (e.g. TSD spawn/decrypt error) must not abort
           // the whole project scan. Drop this session and move on.
           console.error(
-            `[ClaudeSessionScanner] Failed to extract session meta for ${candidate.fullPath}:`,
-            error
+            `[ClaudeSessionScanner] Failed to inspect session ${candidate.sessionId} (${safeErrorCode(error)})`
           );
           return null;
         }
@@ -497,15 +517,36 @@ export class ClaudeSessionScanner {
     );
 
     return sessions
-      .filter((s): s is ClaudeSessionMeta => !!s)
+      .filter((s): s is LegacyImportSessionPreview => !!s)
       .sort((a, b) => (b.lastMessageAt ?? b.createdAt) - (a.lastMessageAt ?? a.createdAt));
+  }
+
+  async resolveSessionSource(
+    projectId: string,
+    sessionId: string
+  ): Promise<ClaudeSessionSource | null> {
+    assertSafeSegment(projectId, 'project id');
+    assertSafeSegment(sessionId, 'session id');
+    const candidates = await collectSessionFileCandidates(this.resolveRoots(), projectId);
+    const winner = dedupeSessionCandidates(candidates).find(
+      (candidate) => candidate.sessionId === sessionId
+    );
+    if (!winner) return null;
+    return {
+      projectId,
+      sessionId,
+      workspacePath: await this.decodeProjectPathFromCandidates(projectId, [winner]),
+      configDir: winner.root.dir,
+      filePath: winner.fullPath,
+      rootKind: winner.root.kind,
+    };
   }
 
   private async extractSessionMeta(
     projectId: string,
     candidate: SessionFileCandidate
-  ): Promise<ClaudeSessionMeta | null> {
-    const { fullPath: filePath, sessionId, root } = candidate;
+  ): Promise<LegacyImportSessionPreview | null> {
+    const { fullPath: filePath, sessionId } = candidate;
 
     let stat: Awaited<ReturnType<typeof fs.stat>> | null = null;
     try {
@@ -594,10 +635,7 @@ export class ClaudeSessionScanner {
       createdAt: createdAt ?? createdAtFallback,
       lastMessageAt: lastMessageAt ?? lastAtFallback,
       model,
-      // Provenance (D47 S2b §1 Scanner): which root this session's winning
-      // file actually lives under — resume uses this directly instead of
-      // re-guessing via candidate-path existence probes.
-      configDir: root.dir,
+      importedSnapshots: 0,
     };
   }
 

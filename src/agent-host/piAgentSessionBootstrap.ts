@@ -46,6 +46,7 @@ export interface PiSessionManager {
   getBranch?: (fromId?: string) => unknown[];
   getCwd?: () => string;
   getSessionFile?: () => string | undefined;
+  getSessionDir?: () => string;
   getSessionId?: () => string;
   getEntries?: () => unknown[];
   getEntry?: (id: string) => unknown | undefined;
@@ -54,6 +55,10 @@ export interface PiSessionManager {
   branch?: (id: string) => void;
   resetLeaf?: () => void;
   createBranchedSession?: (leafId: string) => string | undefined;
+  appendMessage?: (message: unknown) => string;
+  appendCustomEntry?: (customType: string, data?: unknown) => string;
+  appendSessionInfo?: (name: string) => string;
+  buildSessionContext?: () => { messages: unknown[]; thinkingLevel?: string; model?: unknown };
   [key: string]: unknown;
 }
 
@@ -119,7 +124,11 @@ export interface PiSdkModule {
   ) => Promise<PiRuntimeHandle>;
   getAgentDir: () => string;
   SessionManager: {
-    create: (cwd: string, sessionDir?: string) => PiSessionManager;
+    create: (
+      cwd: string,
+      sessionDir?: string,
+      options?: { id?: string; parentSession?: string }
+    ) => PiSessionManager;
     open: (sessionFile: string, sessionDir?: string, cwd?: string) => PiSessionManager;
     continueRecent: (cwd: string, sessionDir?: string) => PiSessionManager;
     inMemory: (cwd?: string) => PiSessionManager;

@@ -95,6 +95,7 @@ export class SessionIndexService {
         sessionId: input.sessionId,
         runtimeIdentity: existing?.runtimeIdentity,
         piLeaf: existing?.piLeaf,
+        legacyImport: existing?.legacyImport,
         agent: input.agent ?? existing?.agent,
         workspacePath: input.workspacePath,
         title: existing?.title ?? '',
@@ -190,16 +191,56 @@ export class SessionIndexService {
 
   /** Insert one complete independent fork row with a single atomic flush. */
   async createForked(input: SessionIndexEntry): Promise<SessionIndexEntry> {
+    return this.createIndependent(input, 'Fork');
+  }
+
+  /** Insert one complete imported Pi session row with a single atomic flush. */
+  async createImported(input: SessionIndexEntry): Promise<SessionIndexEntry> {
+    return this.createIndependent(input, 'Imported');
+  }
+
+  /** Remove only the exact uncommitted/failed import row; never retarget another session. */
+  async removeImported(
+    sessionId: string,
+    runtimeIdentity: string,
+    targetPiSessionId: string
+  ): Promise<boolean> {
+    await this.ensureLoaded();
+    return this.queueMutation(async () => {
+      const existing = this.entries.get(sessionId);
+      if (
+        !existing ||
+        existing.runtimeIdentity !== runtimeIdentity ||
+        existing.agent !== 'pi' ||
+        existing.legacyImport?.targetPiSessionId !== targetPiSessionId
+      ) {
+        return false;
+      }
+      this.entries.delete(sessionId);
+      try {
+        await this.flush();
+      } catch (error) {
+        this.entries.set(sessionId, existing);
+        throw error;
+      }
+      return true;
+    });
+  }
+
+  private async createIndependent(
+    input: SessionIndexEntry,
+    label: 'Fork' | 'Imported'
+  ): Promise<SessionIndexEntry> {
     await this.ensureLoaded();
     return this.queueMutation(async () => {
       if (this.entries.has(input.sessionId)) {
-        throw new Error(`Fork session id already exists: ${input.sessionId}`);
+        throw new Error(`${label} session id already exists: ${input.sessionId}`);
       }
       if (
         input.runtimeIdentity &&
         [...this.entries.values()].some((entry) => entry.runtimeIdentity === input.runtimeIdentity)
       ) {
-        throw new Error(`Fork runtime identity is already indexed: ${input.runtimeIdentity}`);
+        throw new Error(`${label} runtime identity is already indexed: ${input.runtimeIdentity}`);
       }
       const next: SessionIndexEntry = { ...input };
       this.entries.set(input.sessionId, next);

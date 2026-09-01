@@ -55,6 +55,18 @@ describe('ClaudeSessionScanner', () => {
     expect(projects[0]?.path).toBe(cwd);
   });
 
+  it('rejects project and session path traversal before filesystem access', async () => {
+    const scanner = new ClaudeSessionScanner({
+      resolveRoots: () => [resolveLegacyClaudeSessionRoot()],
+    });
+    await expect(scanner.getSessionsForProject('../tmp')).rejects.toThrow(
+      'Invalid Claude project id'
+    );
+    await expect(scanner.resolveSessionSource('project', '../session')).rejects.toThrow(
+      'Invalid Claude session id'
+    );
+  });
+
   it('extracts firstMessage when message.content is a string', async () => {
     const projectId = 'D--Projects-jyw-ai-jyw-ai-client';
     const projectDir = path.join(tempDir, 'projects', projectId);
@@ -264,24 +276,28 @@ describe('ClaudeSessionScanner dual-root (managed + legacy)', () => {
     return filePath;
   }
 
-  it('arm 1: session present only in managed root is included with configDir=managed', async () => {
+  it('arm 1: session present only in managed root resolves to the managed source', async () => {
     const projectId = 'proj-managed-only';
     await writeSession(managedDir, projectId, 'session-a', { mtime: new Date('2026-01-01') });
 
-    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+    const scanner = dualRootScanner();
+    const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]?.configDir).toBe(managedDir);
+    expect((await scanner.resolveSessionSource(projectId, 'session-a'))?.configDir).toBe(
+      managedDir
+    );
   });
 
-  it('arm 2: session present only in legacy root is included with configDir=legacy', async () => {
+  it('arm 2: session present only in legacy root resolves to the legacy source', async () => {
     const projectId = 'proj-legacy-only';
     await writeSession(legacyDir, projectId, 'session-b', { mtime: new Date('2026-01-01') });
 
-    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+    const scanner = dualRootScanner();
+    const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]?.configDir).toBe(legacyDir);
+    expect((await scanner.resolveSessionSource(projectId, 'session-b'))?.configDir).toBe(legacyDir);
   });
 
   it('arm 3 (utimes construction): same sessionId in both roots, managed strictly newer — managed wins, single entry', async () => {
@@ -293,10 +309,13 @@ describe('ClaudeSessionScanner dual-root (managed + legacy)', () => {
       mtime: new Date('2026-01-02T00:00:00Z'),
     });
 
-    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+    const scanner = dualRootScanner();
+    const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]?.configDir).toBe(managedDir);
+    expect((await scanner.resolveSessionSource(projectId, 'session-c'))?.configDir).toBe(
+      managedDir
+    );
   });
 
   it('arm 4 (utimes construction): same sessionId in both roots, legacy strictly newer — legacy wins, single entry', async () => {
@@ -308,10 +327,11 @@ describe('ClaudeSessionScanner dual-root (managed + legacy)', () => {
       mtime: new Date('2026-01-02T00:00:00Z'),
     });
 
-    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+    const scanner = dualRootScanner();
+    const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]?.configDir).toBe(legacyDir);
+    expect((await scanner.resolveSessionSource(projectId, 'session-d'))?.configDir).toBe(legacyDir);
   });
 
   it('arm 5: same sessionId in both roots with equal mtimeMs — managed wins the tie deterministically', async () => {
@@ -320,10 +340,13 @@ describe('ClaudeSessionScanner dual-root (managed + legacy)', () => {
     await writeSession(legacyDir, projectId, 'session-e', { mtime: tie });
     await writeSession(managedDir, projectId, 'session-e', { mtime: tie });
 
-    const sessions = await dualRootScanner().getSessionsForProject(projectId);
+    const scanner = dualRootScanner();
+    const sessions = await scanner.getSessionsForProject(projectId);
 
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]?.configDir).toBe(managedDir);
+    expect((await scanner.resolveSessionSource(projectId, 'session-e'))?.configDir).toBe(
+      managedDir
+    );
   });
 
   it('arm 6: same sessionId under two DIFFERENT projectIds is kept as two distinct entries (session key includes projectId)', async () => {
@@ -337,8 +360,12 @@ describe('ClaudeSessionScanner dual-root (managed + legacy)', () => {
 
     expect(sessionsX).toHaveLength(1);
     expect(sessionsY).toHaveLength(1);
-    expect(sessionsX[0]?.configDir).toBe(managedDir);
-    expect(sessionsY[0]?.configDir).toBe(legacyDir);
+    expect((await scanner.resolveSessionSource('proj-x', sameSessionId))?.configDir).toBe(
+      managedDir
+    );
+    expect((await scanner.resolveSessionSource('proj-y', sameSessionId))?.configDir).toBe(
+      legacyDir
+    );
   });
 
   it('scanProjects merges same-slug project across roots: dedup sessionCount + max lastActivityAt', async () => {

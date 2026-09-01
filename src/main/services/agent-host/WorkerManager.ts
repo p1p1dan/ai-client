@@ -2,6 +2,13 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
 import { PI_AGENT } from '@shared/types/agentWire';
+import type {
+  WorkerImportConversationPayload,
+  WorkerInspectImportedSessionPayload,
+  WorkerInspectImportedSessionResult,
+  WorkerReconcileImportedSessionPayload,
+  WorkerReconcileImportedSessionResult,
+} from '@shared/types/legacyImport';
 import {
   type ExtensionUiResponse,
   isExtensionUiDialogMethod,
@@ -38,6 +45,12 @@ import {
   type WorkerTreeResult,
 } from '@shared/types/workerRpc';
 import { sessionIndexService } from '../chat/SessionIndexService';
+import {
+  type CreatedPiImport,
+  createPiImport,
+  inspectPiImport,
+  reconcilePiImport,
+} from '../legacyImport/PiImportProcess';
 import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
 import { normalizeWorkerPath, sessionWorkerKey, workspaceWorkerKey } from './workerSessionKey';
@@ -110,6 +123,9 @@ export interface WorkerManagerOptions {
     piLeaf: PiLeafCheckpoint;
   }) => Promise<void>;
   createForked?: (entry: SessionIndexEntry) => Promise<SessionIndexEntry>;
+  createImport?: typeof createPiImport;
+  inspectImport?: typeof inspectPiImport;
+  reconcileImport?: typeof reconcilePiImport;
   onEvent?: (event: RuntimeEvent) => void;
   log?: (...args: unknown[]) => void;
   now?: () => number;
@@ -204,7 +220,13 @@ export class WorkerManager {
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
   private readonly commitPiLeaf: NonNullable<WorkerManagerOptions['commitPiLeaf']>;
   private readonly createForked: NonNullable<WorkerManagerOptions['createForked']>;
+  private readonly createImport: typeof createPiImport;
+  private readonly inspectImport: typeof inspectPiImport;
+  private readonly reconcileImport: typeof reconcilePiImport;
   private readonly handlers = new Set<(event: RuntimeEvent) => void>();
+  private importSlotActive = false;
+  private activeImport: CreatedPiImport | null = null;
+  private activeImportSlot: WorkerSlot | null = null;
   private readonly log: (...args: unknown[]) => void;
   private readonly now: () => number;
   private readonly createToken: () => string;
@@ -235,6 +257,9 @@ export class WorkerManager {
     this.commitResumed = options.commitResumed ?? (async () => undefined);
     this.commitPiLeaf = options.commitPiLeaf ?? (async () => undefined);
     this.createForked = options.createForked ?? (async (entry) => entry);
+    this.createImport = options.createImport ?? createPiImport;
+    this.inspectImport = options.inspectImport ?? inspectPiImport;
+    this.reconcileImport = options.reconcileImport ?? reconcilePiImport;
     this.log = options.log ?? (() => undefined);
     this.now = options.now ?? Date.now;
     this.createToken = options.createToken ?? randomUUID;
@@ -311,6 +336,140 @@ export class WorkerManager {
       lastIdleAt: entry.lastIdleAt,
       error: entry.error,
     }));
+  }
+
+  async createLegacyImport(payload: WorkerImportConversationPayload): Promise<CreatedPiImport> {
+    if (this.importSlotActive) {
+      throw new WorkerManagerError(
+        'worker_import_busy',
+        'Another legacy import WorkerSlot is active',
+        true
+      );
+    }
+    this.importSlotActive = true;
+    try {
+      const created = await this.createImport(payload, {
+        onSlotCreated: (slot) => {
+          this.activeImportSlot = slot;
+        },
+      });
+      if (
+        !this.importSlotActive ||
+        !this.activeImportSlot ||
+        this.activeImportSlot.state !== 'running'
+      ) {
+        created.forceKillNow();
+        throw new WorkerManagerError(
+          'worker_import_superseded',
+          'Legacy import lost WorkerManager lifecycle authority'
+        );
+      }
+      this.activeImport = created;
+      let released = false;
+      return {
+        result: created.result,
+        pid: created.pid,
+        discard: () => created.discard(),
+        dispose: async () => {
+          if (released) return;
+          try {
+            await created.dispose();
+            released = true;
+            if (this.activeImport === created) this.activeImport = null;
+            if (this.activeImportSlot?.state === 'disposed') this.activeImportSlot = null;
+            this.importSlotActive = false;
+          } catch (error) {
+            const killed = created.forceKillNow();
+            if (killed) {
+              released = true;
+              if (this.activeImport === created) this.activeImport = null;
+              this.activeImportSlot = null;
+              this.importSlotActive = false;
+            } else {
+              this.activeImport = created;
+              this.importSlotActive = true;
+            }
+            throw error;
+          }
+        },
+        forceKillNow: () => {
+          released = true;
+          const killed = created.forceKillNow();
+          if (this.activeImport === created) this.activeImport = null;
+          this.activeImportSlot = null;
+          this.importSlotActive = false;
+          return killed;
+        },
+      };
+    } catch (error) {
+      if (!this.activeImportSlot || this.activeImportSlot.state === 'disposed') {
+        this.activeImportSlot = null;
+        this.importSlotActive = false;
+      }
+      throw error;
+    }
+  }
+
+  async inspectLegacyImport(
+    payload: WorkerInspectImportedSessionPayload
+  ): Promise<WorkerInspectImportedSessionResult> {
+    if (this.importSlotActive) {
+      throw new WorkerManagerError(
+        'worker_import_busy',
+        'Legacy import inspection cannot run while an import WorkerSlot is active',
+        true
+      );
+    }
+    this.importSlotActive = true;
+    try {
+      const result = await this.inspectImport(payload, {
+        onSlotCreated: (slot) => {
+          this.activeImportSlot = slot;
+        },
+      });
+      this.activeImportSlot = null;
+      this.importSlotActive = false;
+      return result;
+    } catch (error) {
+      const slot = this.activeImportSlot;
+      const killed = !slot || slot.state === 'disposed' || slot.forceKillNow();
+      if (killed) {
+        this.activeImportSlot = null;
+        this.importSlotActive = false;
+      }
+      throw error;
+    }
+  }
+
+  async reconcileLegacyImport(
+    payload: WorkerReconcileImportedSessionPayload
+  ): Promise<WorkerReconcileImportedSessionResult> {
+    if (this.importSlotActive) {
+      throw new WorkerManagerError(
+        'worker_import_busy',
+        'Legacy import reconciliation cannot run while an import WorkerSlot is active',
+        true
+      );
+    }
+    this.importSlotActive = true;
+    try {
+      const result = await this.reconcileImport(payload, {
+        onSlotCreated: (slot) => {
+          this.activeImportSlot = slot;
+        },
+      });
+      this.activeImportSlot = null;
+      this.importSlotActive = false;
+      return result;
+    } catch (error) {
+      const slot = this.activeImportSlot;
+      const killed = !slot || slot.state === 'disposed' || slot.forceKillNow();
+      if (killed) {
+        this.activeImportSlot = null;
+        this.importSlotActive = false;
+      }
+      throw error;
+    }
   }
 
   createSession(input: {
@@ -1192,6 +1351,13 @@ export class WorkerManager {
         clearInterval(this.idleTimer);
         this.idleTimer = null;
       }
+      const activeImport = this.activeImport;
+      const activeImportSlot = this.activeImportSlot;
+      if (activeImport) await activeImport.dispose();
+      else if (activeImportSlot) await activeImportSlot.dispose(reason);
+      this.activeImport = null;
+      this.activeImportSlot = null;
+      this.importSlotActive = false;
       await this.disposeEntries([...this.entriesBySession.values()], reason);
       this.state = 'stopped';
     });
@@ -1204,6 +1370,11 @@ export class WorkerManager {
     }
     const entries = [...this.entriesBySession.values()];
     const slots = [...this.ownedSlots];
+    this.activeImport?.forceKillNow();
+    this.activeImportSlot?.forceKillNow();
+    this.activeImport = null;
+    this.activeImportSlot = null;
+    this.importSlotActive = false;
     this.entriesByKey.clear();
     this.entriesBySession.clear();
     this.blockingRequests.clear();

@@ -1,4 +1,15 @@
 import type { SessionAttachment, SessionEffortLevel } from './agentHost';
+import type {
+  WorkerDiscardImportedSessionPayload,
+  WorkerDiscardImportedSessionResult,
+  WorkerImportConversationPayload,
+  WorkerImportConversationResult,
+  WorkerInspectImportedSessionPayload,
+  WorkerInspectImportedSessionResult,
+  WorkerReconcileImportedSessionPayload,
+  WorkerReconcileImportedSessionResult,
+} from './legacyImport';
+import { isWorkerImportConversationPayload } from './legacyImport';
 import type { ExtensionUiResponse, RuntimeEvent } from './runtimeEvents';
 import {
   PI_SESSION_TREE_BACKEND_LIMIT,
@@ -101,6 +112,22 @@ export interface WorkerBootstrapResult {
 }
 
 export type WorkerBootstrapRequest = WorkerRpcRequest<'worker.bootstrap', WorkerBootstrapPayload>;
+export type WorkerImportConversationRequest = WorkerRpcRequest<
+  'worker.import',
+  WorkerImportConversationPayload
+>;
+export type WorkerInspectImportedSessionRequest = WorkerRpcRequest<
+  'worker.import.inspect',
+  WorkerInspectImportedSessionPayload
+>;
+export type WorkerReconcileImportedSessionRequest = WorkerRpcRequest<
+  'worker.import.reconcile',
+  WorkerReconcileImportedSessionPayload
+>;
+export type WorkerDiscardImportedSessionRequest = WorkerRpcRequest<
+  'worker.import.discard',
+  WorkerDiscardImportedSessionPayload
+>;
 
 export interface WorkerSendPayload {
   logicalSessionId: string;
@@ -494,6 +521,77 @@ export function isWorkerForkResult(value: unknown): value is WorkerForkResult {
   );
 }
 
+export function isWorkerImportResult(value: unknown): value is WorkerImportConversationResult {
+  return (
+    isRecord(value) &&
+    nonEmptyString(value.logicalSessionId) &&
+    nonEmptyString(value.piSessionId) &&
+    nonEmptyString(value.workspacePath) &&
+    nonEmptyString(value.stagedSessionFile) &&
+    nonEmptyString(value.finalSessionFile) &&
+    isPiLeafCheckpoint(value.leaf) &&
+    isWorkerHistoryResult(value.history)
+  );
+}
+
+export function isWorkerInspectImportedSessionPayload(
+  value: unknown
+): value is WorkerInspectImportedSessionPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    nonEmptyString(value.workspacePath) &&
+    nonEmptyString(value.targetPiSessionId)
+  );
+}
+
+export function isWorkerInspectImportedSessionResult(
+  value: unknown
+): value is WorkerInspectImportedSessionResult {
+  return (
+    isRecord(value) && Array.isArray(value.sessionFiles) && value.sessionFiles.every(nonEmptyString)
+  );
+}
+
+export function isWorkerReconcileImportedSessionPayload(
+  value: unknown
+): value is WorkerReconcileImportedSessionPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    nonEmptyString(value.workspacePath) &&
+    nonEmptyString(value.targetPiSessionId)
+  );
+}
+
+export function isWorkerReconcileImportedSessionResult(
+  value: unknown
+): value is WorkerReconcileImportedSessionResult {
+  return (
+    isRecord(value) &&
+    Number.isSafeInteger(value.removedFiles) &&
+    Number(value.removedFiles) >= 0 &&
+    Number.isSafeInteger(value.remainingFiles) &&
+    Number(value.remainingFiles) >= 0
+  );
+}
+
+export function isWorkerDiscardImportedSessionPayload(
+  value: unknown
+): value is WorkerDiscardImportedSessionPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    typeof value.sessionFile === 'string' &&
+    value.sessionFile.trim().length > 0
+  );
+}
+
+export function isWorkerDiscardImportedSessionResult(
+  value: unknown
+): value is WorkerDiscardImportedSessionResult {
+  return isRecord(value) && typeof value.discarded === 'boolean';
+}
+
+export { isWorkerImportConversationPayload };
+
 export function isWorkerDiscardForkPayload(value: unknown): value is WorkerDiscardForkPayload {
   return (
     isLogicalSessionPayload(value) &&
@@ -540,6 +638,10 @@ export function isWorkerExtensionUiResponseResult(
 
 export function isWorkerDisposeResult(value: unknown): value is WorkerDisposeResult {
   return isRecord(value) && value.disposed === true;
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

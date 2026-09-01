@@ -1,3 +1,4 @@
+import type { WorkerImportConversationPayload } from '@shared/types/legacyImport';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { WORKER_RPC_PROTOCOL_VERSION, type WorkerRpcEvent } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,34 @@ import {
   WorkerManager,
 } from '../WorkerManager';
 import type { WorkerSlotLifecycleEvent } from '../WorkerSlot';
+
+function importPayload(): WorkerImportConversationPayload {
+  return {
+    logicalSessionId: 'import-logical',
+    targetPiSessionId: 'import-pi',
+    conversation: {
+      schemaVersion: 1,
+      importerVersion: 'test',
+      sourceKind: 'claude-code',
+      stableSourceIdentity: 'source-hash',
+      sourceSessionId: 'legacy-session',
+      workspacePath: '/repo',
+      title: 'Imported',
+      sourceFingerprint: {
+        stableSourceIdentity: 'source-hash',
+        contentHash: 'content-hash',
+        size: 1,
+        mode: 0o100644,
+        mtimeMs: 1,
+      },
+      entries: [
+        { kind: 'user', text: 'hello' },
+        { kind: 'assistant', blocks: [{ type: 'text', text: 'answer' }] },
+      ],
+      diagnostics: [],
+    },
+  };
+}
 
 interface FakeSlotRecord {
   sessionId: string;
@@ -1274,6 +1303,129 @@ describe('WorkerManager isolation and crash recovery', () => {
     expect(h.records[0].forceKillNow).not.toHaveBeenCalled();
     h.manager.forceKillAllNow();
     expect(h.records[0].forceKillNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('owns the bounded legacy import slot and disposes it on app shutdown', async () => {
+    const dispose = vi.fn(async () => undefined);
+    const forceKillNow = vi.fn(() => true);
+    const createImport = vi.fn(async (_payload, options) => {
+      options?.onSlotCreated?.({ state: 'running', dispose, forceKillNow } as never);
+      return {
+        result: {
+          logicalSessionId: 'import-logical',
+          piSessionId: 'import-pi',
+          workspacePath: '/repo',
+          stagedSessionFile: '/sessions/.staging/import-pi.jsonl',
+          finalSessionFile: '/sessions/import-pi.jsonl',
+          leaf: { activeEntryId: 'leaf', fileTailEntryId: 'leaf' },
+          history: {
+            logicalSessionId: 'import-logical',
+            sessionFile: '/sessions/import-pi.jsonl',
+            workspacePath: '/repo',
+            page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+          },
+        },
+        pid: 7001,
+        discard: vi.fn(async () => true),
+        dispose,
+        forceKillNow,
+      };
+    });
+    const manager = new WorkerManager({
+      createImport,
+      reconcileImport: async () => ({ removedFiles: 0, remainingFiles: 0 }),
+      idleTimeoutMs: 0,
+      idleSweepIntervalMs: 0,
+    });
+    const imported = await manager.createLegacyImport(importPayload());
+    await expect(manager.createLegacyImport(importPayload())).rejects.toMatchObject({
+      code: 'worker_import_busy',
+    });
+    expect(imported.pid).toBe(7001);
+    await manager.disposeAll('app-shutdown');
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains import ownership when dispose and immediate force-kill both fail', async () => {
+    const dispose = vi.fn(async () => {
+      throw new Error('dispose failed');
+    });
+    const importForceKill = vi
+      .fn<() => boolean>()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const slotForceKill = vi.fn(() => true);
+    const createImport = vi.fn(async (_payload, options) => {
+      options?.onSlotCreated?.({
+        state: 'running',
+        dispose,
+        forceKillNow: slotForceKill,
+      } as never);
+      return {
+        result: {
+          logicalSessionId: 'import-logical',
+          piSessionId: 'import-pi',
+          workspacePath: '/repo',
+          stagedSessionFile: '/sessions/.staging/import-pi.jsonl',
+          finalSessionFile: '/sessions/import-pi.jsonl',
+          leaf: { activeEntryId: 'leaf', fileTailEntryId: 'leaf' },
+          history: {
+            logicalSessionId: 'import-logical',
+            sessionFile: '/sessions/import-pi.jsonl',
+            workspacePath: '/repo',
+            page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+          },
+        },
+        discard: vi.fn(async () => true),
+        dispose,
+        forceKillNow: importForceKill,
+      };
+    });
+    const manager = new WorkerManager({
+      createImport,
+      reconcileImport: async () => ({ removedFiles: 0, remainingFiles: 0 }),
+      idleTimeoutMs: 0,
+      idleSweepIntervalMs: 0,
+    });
+    const imported = await manager.createLegacyImport(importPayload());
+    await expect(imported.dispose()).rejects.toThrow('dispose failed');
+    await expect(manager.createLegacyImport(importPayload())).rejects.toMatchObject({
+      code: 'worker_import_busy',
+    });
+    manager.forceKillAllNow();
+    expect(importForceKill).toHaveBeenCalledTimes(2);
+    expect(slotForceKill).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks and force-kills an in-flight reconciliation WorkerSlot', async () => {
+    const forceKillNow = vi.fn(() => true);
+    const dispose = vi.fn(async () => undefined);
+    let finish: (() => void) | undefined;
+    const reconcileImport = vi.fn(
+      (_payload, options) =>
+        new Promise<{ removedFiles: number; remainingFiles: number }>((resolve) => {
+          options?.onSlotCreated?.({ state: 'running', dispose, forceKillNow } as never);
+          finish = () => resolve({ removedFiles: 1, remainingFiles: 0 });
+        })
+    );
+    const manager = new WorkerManager({
+      createImport: async () => {
+        throw new Error('unused');
+      },
+      reconcileImport,
+      idleTimeoutMs: 0,
+      idleSweepIntervalMs: 0,
+    });
+    const reconciling = manager.reconcileLegacyImport({
+      logicalSessionId: 'interrupted',
+      workspacePath: '/repo',
+      targetPiSessionId: 'import-pi',
+    });
+    await vi.waitFor(() => expect(reconcileImport).toHaveBeenCalledTimes(1));
+    manager.forceKillAllNow();
+    expect(forceKillNow).toHaveBeenCalledTimes(1);
+    finish?.();
+    await expect(reconciling).resolves.toEqual({ removedFiles: 1, remainingFiles: 0 });
   });
 
   it('starts every slot disposal before awaiting completion and force-kills all owned slots', async () => {

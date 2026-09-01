@@ -65,11 +65,36 @@ export function createChatSessionOnWorkspace(
   return sessionId;
 }
 
-/** Materialize a committed Pi fork in its mounted workspace and select it. */
-export function materializeForkedChatSession(entry: SessionIndexEntry): boolean {
+/** Materialize a committed indexed Pi session and select it. */
+export function materializeIndexedPiChatSession(
+  entry: SessionIndexEntry,
+  options?: {
+    createWorkspaceIfMissing?: boolean;
+    workspaceName?: string;
+    hostBound?: boolean;
+  }
+): boolean {
   if (!entry.runtimeIdentity || entry.agent !== PI_AGENT) return false;
-  const state = useChatSessionsStore.getState();
-  const workspace = state.workspaces.find((item) => pathsEqual(item.path, entry.workspacePath));
+  let state = useChatSessionsStore.getState();
+  let workspace = state.workspaces.find((item) => pathsEqual(item.path, entry.workspacePath));
+  if (!workspace && options?.createWorkspaceIfMissing) {
+    const projectId = uniqueId('project-import');
+    workspace = {
+      id: uniqueId('workspace-import'),
+      projectId,
+      name: options.workspaceName || 'Main',
+      kind: 'main',
+      path: entry.workspacePath,
+    };
+    useChatSessionsStore.setState({
+      projects: [
+        { id: projectId, name: options.workspaceName || entry.workspacePath },
+        ...state.projects,
+      ],
+      workspaces: [workspace, ...state.workspaces],
+    });
+    state = useChatSessionsStore.getState();
+  }
   if (!workspace) return false;
   const session: ChatSession = {
     id: entry.sessionId,
@@ -89,13 +114,19 @@ export function materializeForkedChatSession(entry: SessionIndexEntry): boolean 
       session.id,
       ...current.recentSessionIds.filter((id) => id !== session.id),
     ].slice(0, 20),
-    hostBoundSessionIds: current.hostBoundSessionIds.includes(session.id)
-      ? current.hostBoundSessionIds
-      : [...current.hostBoundSessionIds, session.id],
+    hostBoundSessionIds:
+      options?.hostBound === false
+        ? current.hostBoundSessionIds.filter((id) => id !== session.id)
+        : current.hostBoundSessionIds.includes(session.id)
+          ? current.hostBoundSessionIds
+          : [...current.hostBoundSessionIds, session.id],
     lastError: null,
   }));
   return true;
 }
+
+/** Backward-compatible name for the T33 fork caller. */
+export const materializeForkedChatSession = materializeIndexedPiChatSession;
 
 /**
  * T-27 retarget: move the active session's projectId/workspaceId in place.

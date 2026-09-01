@@ -2,9 +2,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { HISTORY_MESSAGE_ID_PREFIX } from '../../shared/types/sessionHistory.ts';
-import { CODEX_HISTORY_PAGINATION_KEYS, reprojectCodexHistory } from '../codexHistoryReader.ts';
+import {
+  CODEX_HISTORY_MAX_MESSAGES,
+  CODEX_HISTORY_OUTPUT_BUDGET_CHARS,
+  CODEX_HISTORY_PAGINATION_KEYS,
+  reprojectCodexHistory,
+} from '../codexHistoryReader.ts';
 import { CODEX_TOOL_OUTPUT_MAX_CHARS } from '../codexItemMapper.ts';
-import { HISTORY_MAX_MESSAGES, HISTORY_OUTPUT_BUDGET_CHARS } from '../historyReader.ts';
 
 /**
  * S3 slice 5b — `thread/resume` result -> `HistoryMessage[]` (G4/G5/G9a/G15).
@@ -305,7 +309,7 @@ describe('G15 — pagination honesty and the message cap', () => {
 
   it('evicts from the head at the shared message cap and counts what it dropped', () => {
     const overflow = 5;
-    const total = HISTORY_MAX_MESSAGES + overflow;
+    const total = CODEX_HISTORY_MAX_MESSAGES + overflow;
     const items = Array.from({ length: total }, (_, i) => ({
       type: 'userMessage',
       id: `item-${i + 1}`,
@@ -315,23 +319,23 @@ describe('G15 — pagination honesty and the message cap', () => {
       thread: { id: 'thread-cap', turns: [{ id: 'turn-cap', startedAt: 1, items }] },
     });
 
-    expect(out.messages).toHaveLength(HISTORY_MAX_MESSAGES);
+    expect(out.messages).toHaveLength(CODEX_HISTORY_MAX_MESSAGES);
     expect(out.omittedCount).toBe(overflow);
     expect(out.truncated).toBe(true);
     // Head eviction, not tail: the OLDEST messages go, the newest survive.
     expect(out.messages[0].id).toBe(
       `${HISTORY_MESSAGE_ID_PREFIX}codex:thread-cap:turn-cap:item-${overflow + 1}`
     );
-    expect(out.messages[HISTORY_MAX_MESSAGES - 1].id).toBe(
+    expect(out.messages[CODEX_HISTORY_MAX_MESSAGES - 1].id).toBe(
       `${HISTORY_MESSAGE_ID_PREFIX}codex:thread-cap:turn-cap:item-${total}`
     );
   });
 
   it('also evicts on the shared serialized-size budget, below the message cap', () => {
     const text = 'x'.repeat(CODEX_TOOL_OUTPUT_MAX_CHARS);
-    const total = Math.ceil(HISTORY_OUTPUT_BUDGET_CHARS / CODEX_TOOL_OUTPUT_MAX_CHARS) + 20;
+    const total = Math.ceil(CODEX_HISTORY_OUTPUT_BUDGET_CHARS / CODEX_TOOL_OUTPUT_MAX_CHARS) + 20;
     // Well under the message cap, so only the byte budget can evict here.
-    expect(total).toBeLessThan(HISTORY_MAX_MESSAGES);
+    expect(total).toBeLessThan(CODEX_HISTORY_MAX_MESSAGES);
     const items = Array.from({ length: total }, (_, i) => ({
       type: 'agentMessage',
       id: `item-${i + 1}`,

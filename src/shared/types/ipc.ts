@@ -283,9 +283,10 @@ export const IPC_CHANNELS = {
   CLAUDE_COMPLETIONS_LEARN: 'claude:completions:learn',
   CLAUDE_COMPLETIONS_UPDATED: 'claude:completions:updated',
 
-  // Claude Sessions (session history)
-  CLAUDE_SESSIONS_LIST_PROJECTS: 'claude:listProjects',
-  CLAUDE_SESSIONS_GET_PROJECT_SESSIONS: 'claude:getProjectSessions',
+  // Read-only legacy conversation import
+  LEGACY_IMPORT_LIST_PROJECTS: 'legacy-import:listProjects',
+  LEGACY_IMPORT_LIST_SESSIONS: 'legacy-import:listSessions',
+  LEGACY_IMPORT_BATCH: 'legacy-import:batch',
 
   // Claude Plugins Management
   CLAUDE_PLUGINS_LIST: 'claude:plugins:list',

@@ -21,6 +21,12 @@ export interface SessionIndexEntry {
   runtimeIdentity?: string;
   /** T33 active Pi branch checkpoint, validated against the current physical file tail. */
   piLeaf?: PiLeafCheckpoint;
+  /** T34 immutable import ownership proof used by crash reconciliation. */
+  legacyImport?: {
+    sourceKind: 'claude-code';
+    targetPiSessionId: string;
+    dedupeKey: string;
+  };
   /**
    * S2 (b): which agent runs this session. Deliberately typed `string` and not
    * `AgentWireName` — this is the DISK side, where a value written by a newer

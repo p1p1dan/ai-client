@@ -1,7 +1,9 @@
 import type { HistoryBlock, HistoryMessage } from '../shared/types/sessionHistory.ts';
 import { HISTORY_MESSAGE_ID_PREFIX } from '../shared/types/sessionHistory.ts';
 import { mapCodexItem, readCodexItemType } from './codexItemMapper.ts';
-import { HISTORY_MAX_MESSAGES, HISTORY_OUTPUT_BUDGET_CHARS } from './historyReader.ts';
+
+export const CODEX_HISTORY_MAX_MESSAGES = 1000;
+export const CODEX_HISTORY_OUTPUT_BUDGET_CHARS = 8 * 1024 * 1024;
 
 /**
  * Codex `thread/resume` result -> `HistoryMessage[]`. PURE, zero IO, zero state.
@@ -197,7 +199,10 @@ export function reprojectCodexHistory(
     const size = estimateSize(message);
     sizes.push(size);
     runningSize += size;
-    while (messages.length > HISTORY_MAX_MESSAGES || runningSize > HISTORY_OUTPUT_BUDGET_CHARS) {
+    while (
+      messages.length > CODEX_HISTORY_MAX_MESSAGES ||
+      runningSize > CODEX_HISTORY_OUTPUT_BUDGET_CHARS
+    ) {
       messages.shift();
       runningSize -= sizes.shift() ?? 0;
       omittedCount += 1;

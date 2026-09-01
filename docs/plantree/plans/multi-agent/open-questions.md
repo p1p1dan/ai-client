@@ -5,6 +5,6 @@
 需要继续处理的事项已重新归口：
 
 - legacy execution 删除边界、Codex ASR 保护 → [Pi roadmap T28/T35](../pi-backend-migration/roadmap.md)；
-- Claude/Codex 会话历史导入形状 → [Pi open questions Q14–Q16](../pi-backend-migration/open-questions.md)；
+- Claude会话导入形状已由 [Pi D18](../pi-backend-migration/decisions/018-t34-claude-import-semantics.md) 拍板并在T34闭环；Codex等待真实本地格式证据；
 - pool/idle/multi-session failure lessons → T29/T30；
 - 与 Pi-only 无关的 git/product backlog 若仍有价值，须重新立项，不从本文件恢复活动状态。

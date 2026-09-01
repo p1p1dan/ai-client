@@ -19,7 +19,6 @@ import {
   removeStopHook,
 } from './ClaudeHookManager';
 import { MCP_TOOLS } from './mcpTools';
-import { checkTaskCompletion, readLastAssistantMessages } from './sessionLogReader';
 
 type RawData = import('ws').RawData;
 type WebSocket = import('ws').WebSocket;
@@ -327,26 +326,7 @@ export async function startClaudeIdeBridge(
               // Stop event - agent has finished or been stopped
               console.log(`[ClaudeIdeBridge] → completed (Stop) ${sessionId?.slice(0, 8)}`);
 
-              // Check for task completion marker in session log (async)
-              let taskCompletionStatus: 'completed' | 'unknown' = 'unknown';
-
-              if (data.cwd) {
-                try {
-                  const lastMessages = await readLastAssistantMessages(data.cwd, sessionId, 3);
-                  if (lastMessages.length > 0) {
-                    const result = checkTaskCompletion(lastMessages);
-                    if (result.completed) {
-                      taskCompletionStatus = 'completed';
-                      console.log(`[ClaudeIdeBridge] Task completion marker detected`);
-                    }
-                  }
-                } catch (err) {
-                  console.warn(
-                    '[ClaudeIdeBridge] Failed to read session log for task completion:',
-                    err
-                  );
-                }
-              }
+              const taskCompletionStatus: 'unknown' = 'unknown';
 
               for (const window of BrowserWindow.getAllWindows()) {
                 if (!window.isDestroyed()) {

@@ -1,10 +1,24 @@
+import type {
+  WorkerDiscardImportedSessionPayload,
+  WorkerDiscardImportedSessionResult,
+  WorkerImportConversationPayload,
+  WorkerImportConversationResult,
+  WorkerInspectImportedSessionPayload,
+  WorkerInspectImportedSessionResult,
+  WorkerReconcileImportedSessionPayload,
+  WorkerReconcileImportedSessionResult,
+} from '../shared/types/legacyImport.ts';
 import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
 import {
   isWorkerBootstrapPayload,
   isWorkerDiscardForkPayload,
+  isWorkerDiscardImportedSessionPayload,
   isWorkerExtensionUiResponsePayload,
   isWorkerForkPayload,
   isWorkerHistoryPayload,
+  isWorkerImportConversationPayload,
+  isWorkerInspectImportedSessionPayload,
+  isWorkerReconcileImportedSessionPayload,
   isWorkerRewindPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
@@ -36,6 +50,7 @@ import {
   type WorkerTreeResult,
 } from '../shared/types/workerRpc.ts';
 import { PermissionGateUnavailableError } from './piAgentSessionBootstrap.ts';
+import { PiLegacyImportWriter } from './piLegacyImport.ts';
 import {
   PiWorkerSession,
   PiWorkerSessionError,
@@ -141,6 +156,7 @@ export class PiWorkerRpcServer {
   private chain = Promise.resolve();
   private bootstrapPayload: WorkerBootstrapPayload | null = null;
   private runtime: PiWorkerRuntime | null = null;
+  private importWriter: PiLegacyImportWriter | null = null;
   private disposed = false;
   private eventSequence = 0;
 
@@ -197,6 +213,18 @@ export class PiWorkerRpcServer {
         case 'worker.bootstrap':
           await this.handleBootstrap(request);
           break;
+        case 'worker.import':
+          await this.handleImport(request);
+          break;
+        case 'worker.import.discard':
+          await this.handleDiscardImport(request);
+          break;
+        case 'worker.import.inspect':
+          await this.handleInspectImport(request);
+          break;
+        case 'worker.import.reconcile':
+          await this.handleReconcileImport(request);
+          break;
         case 'worker.send':
           await this.handleSend(request);
           break;
@@ -234,6 +262,93 @@ export class PiWorkerRpcServer {
     } catch (error) {
       this.respondError(request, errorPayload(error));
     }
+  }
+
+  private async handleImport(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerImportConversationPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.import requires a valid versioned ImportedConversation',
+        retryable: false,
+      });
+      return;
+    }
+    if (this.runtime || this.bootstrapPayload) {
+      throw new PiWorkerSessionError(
+        'WORKER_IMPORT_SLOT_CONFLICT',
+        'A bootstrapped AgentSession worker cannot also perform an import'
+      );
+    }
+    if (!this.importWriter) {
+      const loadSdk = this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'));
+      this.importWriter = new PiLegacyImportWriter(loadSdk);
+    }
+    const result: WorkerImportConversationResult = await this.importWriter.create(
+      request.payload as WorkerImportConversationPayload
+    );
+    this.respondSuccess(request, result);
+  }
+
+  private async handleInspectImport(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerInspectImportedSessionPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.import.inspect requires workspacePath and targetPiSessionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.importWriter) {
+      const loadSdk = this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'));
+      this.importWriter = new PiLegacyImportWriter(loadSdk);
+    }
+    const payload = request.payload as WorkerInspectImportedSessionPayload;
+    const result: WorkerInspectImportedSessionResult = await this.importWriter.inspectInterrupted(
+      payload.workspacePath,
+      payload.targetPiSessionId
+    );
+    this.respondSuccess(request, result);
+  }
+
+  private async handleReconcileImport(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerReconcileImportedSessionPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.import.reconcile requires workspacePath and targetPiSessionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.importWriter) {
+      const loadSdk = this.options.loadSdk ?? (() => import('@earendil-works/pi-coding-agent'));
+      this.importWriter = new PiLegacyImportWriter(loadSdk);
+    }
+    const payload = request.payload as WorkerReconcileImportedSessionPayload;
+    const result: WorkerReconcileImportedSessionResult =
+      await this.importWriter.reconcileInterrupted(
+        payload.workspacePath,
+        payload.targetPiSessionId
+      );
+    this.respondSuccess(request, result);
+  }
+
+  private async handleDiscardImport(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerDiscardImportedSessionPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.import.discard requires logicalSessionId and sessionFile',
+        retryable: false,
+      });
+      return;
+    }
+    const payload = request.payload as WorkerDiscardImportedSessionPayload;
+    if (!this.importWriter) {
+      this.respondSuccess(request, {
+        discarded: false,
+      } satisfies WorkerDiscardImportedSessionResult);
+      return;
+    }
+    this.respondSuccess(request, await this.importWriter.discard(payload.sessionFile));
   }
 
   private async handleBootstrap(request: WorkerRpcRequest): Promise<void> {
@@ -430,6 +545,7 @@ export class PiWorkerRpcServer {
       this.disposed = true;
       await this.runtime?.dispose();
       this.runtime = null;
+      this.importWriter = null;
     }
     const result: WorkerDisposeResult = { disposed: true };
     this.respondSuccess(request, result);

@@ -17,6 +17,7 @@
 | [D15](./015-main-owned-worker-manager.md) | Main-owned WorkerManager | Main 持有 bounded pool；每 WorkerSlot 一个 utilityProcess/Pi AgentSession |
 | [D16](./016-delete-obsolete-paths-with-replacement.md) | 替代即删除 | 开发阶段不保留 legacy runtime/entry/artifact 兼容；替代切片同步删除旧 authority，Git 负责回退 |
 | [D17](./017-worker-pool-policy.md) | Worker pool policy | normalized identity/remap、resource-aware capacity、protected eviction、bounded same-session restart |
+| [D18](./018-t34-claude-import-semantics.md) | T34 Claude import semantics | Claude-only首版、线性root snapshot、display-only unmapped、manifest/dedupe与批量报告UI |
 
 ## Revised / partially active
 

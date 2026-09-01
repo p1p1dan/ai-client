@@ -13,7 +13,7 @@
 | Cycle 1/2 behavior reattachment | **Done** | T31-a/b/c/d + legacy execution deletion；见2026-09-01 evidence |
 | Pi-native history/resume | **Done** | T32 exact-file open、branch timeline、pagination、incomplete recovery与race closure |
 | Pi-native tree/rewind/fork | **Done** | T33 bounded tree、confirmed rewind、leaf restart与independent fork |
-| Legacy import/removal/TUI | **Next** | T34 read-only import，随后T35/T36 |
+| Legacy import/removal/TUI | **In Progress** | T34 Claude import Done；下一目标T35 absence audit，T36可并行 |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
 ## T00–T27：已落资产与替换影响
@@ -109,14 +109,18 @@
 
 ## Phase E — Legacy conversation migration
 
-### T34 — Read-only Claude/Codex import service — **Planned**
+### T34 — Read-only legacy import service — **Done**
 
-- **T34-a**：`ImportedConversation` 中间模型与 schema version。
-- **T34-b**：Claude/Codex read-only source adapters；可选旧 ai-client index adapter。
-- **T34-c**：temporary Pi JSONL → validate → atomic publish；dedupe/provenance manifest。
-- **T34-d**：scan/preview/select/import/report/open UI。
+当前闭环范围和产品语义由 [D18](./decisions/018-t34-claude-import-semantics.md) 与 [T34 contract](./topics/t34-legacy-import.md) 固定：Claude-only、线性独立root、不可变snapshot；Codex等待真实本地格式证据后作为独立adapter实施。
 
-**验收**：source hash 不变；重复导入不重复；失败无半成品；无法映射 tool 只读展示；导入后可由 Pi 继续。
+- **T34-a**：source-neutral `ImportedConversation` schema/version、provenance与display-only unmapped entry。
+- **T34-b**：隔离Claude read-only source adapter；旧index仅可辅助discovery；static import ban与source immutability。
+- **T34-c**：temporary Pi JSONL → Pi native validate → atomic publish；dedupe/single-flight/private manifest与crash reconciliation。
+- **T34-d**：scan/preview/checkbox select/import/report/explicit open UI；默认不选，完成后不自动打开。
+
+**验收**：source hash/size/mode/mtime不变；相同snapshot不重复、source增长生成新session；失败无可发现半成品；unmapped tool/custom只读展示且不进LLM context；导入后可由Pi继续。
+
+**验收证据**：[T34 Claude legacy import evidence](./evidence/2026-09-01-t34-legacy-import.md)。focused 18 files / 181 tests、两套typecheck、scoped Biome、worker-only build与真实Electron import→exact-open→continue→dispose probe通过。
 
 ## Phase F — Remove legacy execution paths
 
