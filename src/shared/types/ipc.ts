@@ -415,12 +415,6 @@ export const IPC_CHANNELS = {
   /** Main → Renderer: Agent Host RuntimeEvent push */
   CHAT_RUNTIME_EVENT: 'chat:runtimeEvent',
 
-  // Agent Host lifecycle (diagnostics / settings)
-  AGENT_HOST_RESOLVE_NODE: 'agentHost:resolveNode',
-  AGENT_HOST_GET_STATUS: 'agentHost:getStatus',
-  AGENT_HOST_START: 'agentHost:start',
-  AGENT_HOST_STOP: 'agentHost:stop',
-
   // Logging
   LOG_UPDATE_CONFIG: 'log:update-config',
   LOG_OPEN_FOLDER: 'log:open-folder',

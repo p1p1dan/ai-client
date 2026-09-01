@@ -277,31 +277,23 @@ class OnboardingService {
       // old (or absent) credential env is still alive. Dropping it here means
       // the very next `ensureStarted()` spawns one that reads the vault this
       // login just wrote.
-      await this.shutdownAgentHostAfterRegenerate();
+      await this.invalidateWorkersAfterCredentialChange();
     }
 
     return result;
   }
 
   /**
-   * Lazily imports `agentHostManager` (D47 S2a M10 wiring) instead of a
-   * static top-level import: `AgentHostManager.ts` pulls in a much heavier
-   * dependency graph (process spawning, logger, etc.) that this repo's
-   * vitest node environment can hang on importing eagerly (see sibling
-   * `__tests__` files' `vi.mock('electron', ...)` scope). A dynamic import
-   * keeps that cost paid only when managed credentials are actually on and a
-   * regenerate actually ran.
-   *
-   * Name kept from when a regenerate preceded it (S0' removed the last one):
-   * this is still "the shutdown that makes a credential change take effect",
-   * and renaming it would break the trail from the I5 barrier's own notes.
+   * Credential changes invalidate every live worker before login success is
+   * returned. WorkerManager serializes this against creation, so a racing new
+   * slot cannot survive with the previous credential/config generation.
    */
-  private async shutdownAgentHostAfterRegenerate(): Promise<void> {
+  private async invalidateWorkersAfterCredentialChange(): Promise<void> {
     try {
-      const { agentHostManager } = await import('../agent-host/AgentHostManager');
-      await agentHostManager.shutdown();
+      const { workerManager } = await import('../agent-host/WorkerManager');
+      await workerManager.invalidateAll();
     } catch (error) {
-      console.warn('[OnboardingService] Failed to shut down agent host after regenerate:', error);
+      console.warn('[OnboardingService] Failed to invalidate Pi workers:', error);
     }
   }
 

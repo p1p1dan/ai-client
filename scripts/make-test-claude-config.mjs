@@ -2,7 +2,7 @@
  * Create a reusable CLAUDE_CONFIG_DIR seeded with the shared test gateway
  * credentials, for GUI validation without touching ~/.claude/settings.json.
  *
- * Background: AgentHostProcess spawns the Host with {...process.env}, and the
+ * Background: the retired legacy Host inherited {...process.env}, and the
  * Host honors CLAUDE_CONFIG_DIR (claudeSettings.ts). So launching the app with
  * this env var pointed at a seeded dir routes all GUI sessions through the
  * test gateway. See execution plan §4 "测试凭证统一约定".

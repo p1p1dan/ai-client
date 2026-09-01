@@ -8,28 +8,6 @@
 
 **处理**：低优先级观察项。若再次出现，沿 `getAgentDir()`、空 `models.json`、default model 和 WorkerSlot bootstrap 顺序取证；不得用静默任意模型掩盖。
 
-## Q12 — Worker pool 默认容量与资源降级
-
-需要确定：
-
-- 普通机器默认 3 还是 4；
-- 是否按内存/平台自动降到 1–2；
-- 容量变化是启动设置、运行时设置还是只读诊断；
-- capacity error 的用户提示与重试入口。
-
-**当前建议**：协议不硬编码；普通默认 3–4，当前低资源开发环境 1–2。foreground、active turn、pending blocking request 不可淘汰。该问题不阻塞 T29 单 slot。
-
-## Q13 — WorkerSlot pool key 与原子 remap 细节
-
-已拍板方向是：新会话先用 normalized workspace temporary key，Pi 创建 session file 后 remap 到 normalized session-file key。
-
-仍需在 T29/T30 收口：
-
-- 同 workspace 同时创建两个新会话时 temporary key 的唯一性；
-- remap 与 session index 写入的原子顺序；
-- Windows 路径大小写/UNC、WSL transport 的 normalization；
-- remap 失败时 rollback/dispose 行为。
-
 ## Q14 — Legacy import 首版 source 范围
 
 候选来源：Claude Code、Codex、旧 ai-client session index。

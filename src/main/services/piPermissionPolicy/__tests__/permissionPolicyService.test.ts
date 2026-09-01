@@ -17,12 +17,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 let root: string;
 let managed: boolean;
 
-const hostEntry = () => join(root, 'host', 'index.js');
+const workerEntry = () => join(root, 'worker', 'worker.js');
 const managedAgentDir = () => join(root, 'managed-agent');
 const localAgentDir = () => join(root, 'user-home', '.pi', 'agent');
 
-vi.mock('../../agent-host/AgentHostManager', () => ({
-  resolveHostEntryPath: () => hostEntry(),
+vi.mock('../../agent-host/PiWorkerProcess', () => ({
+  resolveCurrentPiWorkerEntryPath: () => workerEntry(),
 }));
 vi.mock('../../auth/credentialMode', () => ({
   resolveManagedCredentialsEnabled: () => managed,
@@ -52,11 +52,11 @@ afterEach(() => {
 });
 
 describe('scope locations', () => {
-  it('reads the bundled policy from beside the Host entry, where the Host injects it', async () => {
+  it('reads the bundled policy from beside the Pi worker entry', async () => {
     const { resolveScopeLocations } = await service();
     const [bundled] = resolveScopeLocations('managed', managedAgentDir());
     expect(bundled?.path).toBe(
-      join(root, 'host', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json')
+      join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json')
     );
   });
 
@@ -96,7 +96,7 @@ describe('readPermissionPolicy', () => {
   it('merges the scopes it can read and says which one decided what', async () => {
     const { readPermissionPolicy, getGlobalPolicyPath } = await service();
     writeJson(
-      join(root, 'host', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
+      join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
       { permission: { write: 'ask', read: 'allow' } }
     );
     writeJson(getGlobalPolicyPath(managedAgentDir()), { permission: { write: 'deny' } });
@@ -199,7 +199,7 @@ describe('resetPermissionPolicy', () => {
     const { resetPermissionPolicy, getGlobalPolicyPath } = await service();
     const path = getGlobalPolicyPath(managedAgentDir());
     writeJson(
-      join(root, 'host', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
+      join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
       { permission: { write: 'ask' } }
     );
     writeJson(path, { permission: { write: 'allow' } });

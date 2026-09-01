@@ -127,6 +127,7 @@ export interface BootstrapPiAgentSessionOptions {
   cwd: string;
   projectTrusted: boolean;
   extensionUi: PortableExtensionUiBridge;
+  sessionFile?: string;
   model?: string;
   effort?: SessionEffortLevel;
   decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
@@ -191,7 +192,9 @@ export async function bootstrapPiAgentSession(
   const agentDir = options.sdk.getAgentDir();
   if (!agentDir.trim()) throw new Error('Pi SDK returned an empty agentDir');
 
-  const sessionManager = options.sdk.SessionManager.create(options.cwd);
+  const sessionManager = options.sessionFile
+    ? options.sdk.SessionManager.open(options.sessionFile, undefined, options.cwd)
+    : options.sdk.SessionManager.create(options.cwd);
   let gate: PermissionPluginDecision | undefined;
   let gateVerified = false;
 

@@ -51,13 +51,11 @@ vi.mock('../../services/onboarding', () => ({
   },
 }));
 
-// `AuthStateService.markRejected()` (via `services/auth/index.ts`'s real
-// factory) dynamic-imports `AgentHostManager` — mocked so this test file
-// never pulls in the real (heavy) dependency graph, same precedent as
-// `OnboardingServiceManagedHome.test.ts`.
-const agentHostShutdownMock = vi.fn(async () => {});
-vi.mock('../../services/agent-host/AgentHostManager', () => ({
-  agentHostManager: { shutdown: agentHostShutdownMock },
+// Credential rejection invalidates the real WorkerManager through a dynamic
+// import; mock the pool boundary so this IPC test stays process-free.
+const workerInvalidateMock = vi.fn(async () => {});
+vi.mock('../../services/agent-host/WorkerManager', () => ({
+  workerManager: { invalidateAll: workerInvalidateMock },
 }));
 
 function fakeCrypto(): VaultCrypto {
@@ -85,7 +83,7 @@ beforeEach(() => {
   sentWindows.length = 0;
   checkRegistrationMock.mockReset();
   checkCredentialsHealthMock.mockReset();
-  agentHostShutdownMock.mockClear();
+  workerInvalidateMock.mockClear();
   userDataDir = mkdtempSync(join(tmpdir(), 'aiclient-auth-ipc-'));
   state.userDataPath = userDataDir;
   state.isPackaged = false;

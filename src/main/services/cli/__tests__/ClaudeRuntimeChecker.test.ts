@@ -48,7 +48,7 @@ describe('compareSemver', () => {
  * `claude --version` probe, so a working install is never sent to onboarding to
  * install a CLI that nothing will run.
  */
-describe('detect asks the bundled runtime first (2026-08-26)', () => {
+describe('runtime gate checks only the Pi worker artifact (T30)', () => {
   const source = readFileSync(
     fileURLToPath(new URL('../ClaudeRuntimeChecker.ts', import.meta.url)),
     'utf8'
@@ -56,31 +56,14 @@ describe('detect asks the bundled runtime first (2026-08-26)', () => {
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');
 
-  it('checks the bundled cometix path before probing a global CLI', () => {
-    const bundled = source.indexOf('deriveBundledCometixCliPath(');
-    const probe = source.indexOf('await runVersionCheck()');
-    expect(bundled, 'the bundled runtime is not consulted at all').toBeGreaterThan(-1);
-    expect(probe).toBeGreaterThan(-1);
-    expect(bundled, 'the global probe must not come first').toBeLessThan(probe);
+  it('uses the neutral Pi worker entry resolver', () => {
+    expect(source).toContain('resolveCurrentPiWorkerEntryPath()');
+    expect(source).toContain("cliVersion: 'pi-worker'");
   });
 
-  /**
-   * The version it reports is the pin, not a number parsed out of a process:
-   * the bundle ships one known build, and re-deriving its version by executing
-   * something would be a second source of truth for a fact we already hold.
-   */
-  it('reports the pinned version rather than shelling out for one', () => {
-    expect(source).toContain('COMETIX_PIN.version');
-  });
-
-  /**
-   * The fallback chain is kept, not deleted. It is reached only when the bundle
-   * is missing — a broken install, or a dev tree with no `agent-host/node_modules`
-   * — and deleting it would turn that case into a dead end instead of a
-   * degraded one.
-   */
-  it('keeps the pre-existing chain as the broken-bundle fallback', () => {
-    expect(source).toContain('detectVsCodeClaudeExtension()');
-    expect(source).toContain("kind: 'not-installed'");
+  it('does not probe legacy Claude/Cometix runtime paths', () => {
+    expect(source).not.toContain('deriveBundledCometixCliPath');
+    expect(source).not.toContain('runVersionCheck');
+    expect(source).not.toContain('detectVsCodeClaudeExtension');
   });
 });

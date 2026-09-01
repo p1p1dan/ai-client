@@ -17,7 +17,7 @@ import type {
 import type { HistorySessionSummary } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
-import { piSingleSlotRuntime } from '../services/agent-host/PiSingleSlotRuntime';
+import { workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { ExtensionUiRouter } from '../services/chat/extensionUiRouting';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
@@ -31,8 +31,7 @@ import { sessionIndexService } from '../services/chat/SessionIndexService';
  * URL], so a check written there could only ever compare a string against
  * nothing — a guard that always passes, which is worse than no guard because it
  * reads like one. Main is the last place with enough context, so the refusal
- * happens BEFORE `agentHostManager` is called and therefore before any
- * `turn/start` frame exists.
+ * happens BEFORE WorkerManager dispatches a turn to any slot.
  *
  * ## Why ownership and not catalog membership
  *
@@ -82,16 +81,33 @@ const extensionUiRouter = new ExtensionUiRouter({
 });
 
 /** The window that sent this IPC call, when it still exists. */
+const windowCleanupAttached = new Set<number>();
+
+function ownerIdFor(event: IpcMainInvokeEvent | undefined): number | undefined {
+  const webContentsId = event?.sender?.id;
+  return typeof webContentsId === 'number' ? webContentsId : undefined;
+}
+
 function claimSessionForSender(
   event: IpcMainInvokeEvent | undefined,
   sessionId: string | undefined
-): void {
+): number | undefined {
   // A call with no identifiable sender claims nothing rather than throwing:
   // routing is an optimisation over broadcast, and no handler may fail a
   // session create because it could not work out which window asked.
-  const webContentsId = event?.sender?.id;
-  if (!sessionId || typeof webContentsId !== 'number') return;
+  const webContentsId = ownerIdFor(event);
+  if (!sessionId || webContentsId === undefined) return webContentsId;
   extensionUiRouter.claimSession(sessionId, webContentsId);
+  workerManager.claimSession(sessionId, webContentsId);
+  if (!windowCleanupAttached.has(webContentsId) && typeof event?.sender?.once === 'function') {
+    windowCleanupAttached.add(webContentsId);
+    event.sender.once('destroyed', () => {
+      windowCleanupAttached.delete(webContentsId);
+      extensionUiRouter.releaseWindow(webContentsId);
+      workerManager.releaseWindow(webContentsId);
+    });
+  }
+  return webContentsId;
 }
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
@@ -115,20 +131,20 @@ let eventBridgeAttached = false;
 function ensureEventBridge(): void {
   if (eventBridgeAttached) return;
   eventBridgeAttached = true;
-  piSingleSlotRuntime.onEvent(broadcastRuntimeEvent);
-  piSingleSlotRuntime.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
+  workerManager.onEvent(broadcastRuntimeEvent);
+  workerManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
 }
 
 export function registerChatHandlers(): void {
   ensureEventBridge();
 
   ipcMain.handle(IPC_CHANNELS.CHAT_ENSURE_HOST, async (_e, _driver?: AgentHostDriver) => {
-    await piSingleSlotRuntime.ensureReady();
-    return piSingleSlotRuntime.getStatus();
+    await workerManager.ensureReady();
+    return workerManager.getStatus();
   });
 
   ipcMain.handle(IPC_CHANNELS.CHAT_GET_HOST_STATUS, async () => {
-    return piSingleSlotRuntime.getStatus();
+    return workerManager.getStatus();
   });
 
   ipcMain.handle(
@@ -169,20 +185,20 @@ export function registerChatHandlers(): void {
       // runtime or permission dialect.
       assertModelMatchesAgent(PI_AGENT, payload.model);
       // The window that created the chat owns it, for Extension UI routing.
-      claimSessionForSender(e, payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // One resolved value into BOTH the snapshot and the wire: the row and the
       // running session cannot disagree about what was asked for.
       const resolved = { ...payload, agent: PI_AGENT, permissionPreference: undefined };
       await sessionIndexService.recordCreated(resolved);
-      const requestId = await piSingleSlotRuntime.createSession(resolved);
+      const requestId = await workerManager.createSession({ ...resolved, ownerWebContentsId });
       return { requestId };
     }
   );
 
   /**
    * R5 D2 — index-only registration. Deliberately does NOT touch
-   * `agentHostManager`: creating a chat in the sidebar must not spawn the
-   * Host process or a runtime session before the user has typed anything.
+   * WorkerManager: creating a chat in the sidebar must not spawn a utility
+   * worker or runtime session before the user has typed anything.
    * `recordCreated` upserts (it preserves an existing entry's title /
    * runtimeIdentity / archived bit), so calling this ahead of the lazy
    * `CHAT_CREATE_SESSION` on first send is idempotent in either order.
@@ -261,7 +277,7 @@ export function registerChatHandlers(): void {
     ): Promise<{ requestId: string }> => {
       // Ownership follows the most recent driver: a session picked up in a
       // second window must show ITS approval prompts there, not in the first.
-      claimSessionForSender(e, payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // B18 — a send carries no binding of its own, so the row decides. This is
       // the load-bearing arm: a per-turn model override is the ONE payload that can carry
       // a model the session was never created with.
@@ -269,15 +285,16 @@ export function registerChatHandlers(): void {
         await resolveSessionAgentForDispatch(payload.sessionId),
         payload.model
       );
-      const requestId = await piSingleSlotRuntime.send(payload);
+      const requestId = await workerManager.send({ ...payload, ownerWebContentsId });
       return { requestId };
     }
   );
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_STOP,
-    async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
-      const requestId = await piSingleSlotRuntime.stop(payload.sessionId);
+    async (e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
+      claimSessionForSender(e, payload.sessionId);
+      const requestId = await workerManager.stop(payload.sessionId);
       return { requestId };
     }
   );
@@ -286,7 +303,8 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_CLOSE_SESSION,
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
       extensionUiRouter.releaseSession(payload.sessionId);
-      const requestId = await piSingleSlotRuntime.closeSession(payload.sessionId);
+      workerManager.releaseSession(payload.sessionId);
+      const requestId = await workerManager.closeSession(payload.sessionId);
       return { requestId };
     }
   );
@@ -370,13 +388,11 @@ export function registerChatHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.CHAT_RESPOND_EXTENSION_UI,
-    async (_e, payload: ExtensionUiResponse): Promise<{ requestId: string }> => {
-      // The dialog is settled either way this call goes: on success the Host
-      // resolved it, on failure the renderer keeps its own copy up and will
-      // retry with the same id. Forgetting the routing entry now is what stops
-      // the map growing by one per prompt for the life of the process.
+    async (e, payload: ExtensionUiResponse): Promise<{ requestId: string }> => {
+      const requestId = await workerManager.respondExtensionUi(payload, ownerIdFor(e));
+      // Forget only after the authoritative slot acknowledges the response so
+      // a transient failure can be retried by the same owner.
       extensionUiRouter.forgetRequest(payload.uiRequestId);
-      const requestId = await piSingleSlotRuntime.respondExtensionUi(payload);
       return { requestId };
     }
   );

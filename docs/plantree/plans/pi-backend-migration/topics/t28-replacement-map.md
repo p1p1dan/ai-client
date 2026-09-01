@@ -4,12 +4,12 @@ Role: topic-capsule
 Status: accepted Phase A baseline
 Phase: A / T28
 Authority: [D14](../decisions/014-pi-only-product-and-conversation-import.md)、[D15](../decisions/015-main-owned-worker-manager.md)、[D16](../decisions/016-delete-obsolete-paths-with-replacement.md)、[roadmap](../roadmap.md)
-Read when: 实施 T29、T34、T35、T36，或判断含 Claude/Codex/Agent Host 名称的文件能否删除
+Read when: 实施 T31、T34、T35、T36，或判断含 Claude/Codex/Agent Host 名称的文件能否删除
 Related: [reference repositories](./reference-repositories.md)、[Phase A evidence](../evidence/2026-08-31-phase-a-t28.md)
 
 ## 结论
 
-Phase A/T28 已完成文件级 inventory；T29 已按本映射落地 single WorkerSlot vertical slice，并删除 singleton Pi transition boundary。当前实现已进入目标拓扑的单-slot 阶段，bounded pool/owner 仍属于 T30：
+Phase A/T28 已完成文件级 inventory；T29/T30 已按本映射落地 single WorkerSlot → bounded WorkerManager，并删除 singleton/global Agent Host transition boundary。当前实现已进入目标 pool topology：
 
 ```text
 Renderer → Preload → Electron Main WorkerManager
@@ -17,7 +17,7 @@ Renderer → Preload → Electron Main WorkerManager
 → one utilityProcess + one Pi AgentSession per slot
 ```
 
-T28 本身未删除或修改产品实现代码；T29-a/b/c 的实际 landing 与删除证据见 [T29-c evidence](../evidence/2026-08-31-t29c-single-slot-closure.md)。后续仍只能按本映射的依赖顺序实施，不能按 `claude`、`codex`、`agent-host` 文件名机械删除。
+T28 本身未删除或修改产品实现代码；T29/T30 的实际 landing 与删除证据见 [T29-c evidence](../evidence/2026-08-31-t29c-single-slot-closure.md) 与 [T30 evidence](../evidence/2026-08-31-t30-worker-manager.md)。后续仍只能按本映射的依赖顺序实施，不能按 `claude`、`codex`、`agent-host` 文件名机械删除。
 
 ## 分类词汇
 
@@ -70,9 +70,9 @@ T28 本身未删除或修改产品实现代码；T29-a/b/c 的实际 landing 与
 
 ```text
 T29 worker RPC + single WorkerSlot
-  → immediately delete PiHostProcess/piHost singleton boundaries/artifacts
+  → deleted PiHostProcess/piHost singleton boundaries/artifacts
 T30 pool/remap/generation/owner
-  → immediately delete AgentHostManager/global Host lifecycle
+  → deleted AgentHostManager/global Host lifecycle
 T31 Cycle 1/2 behavior reattachment
   → delete each replaced old receive/send/agent/backend branch in the same slice
 T32/T33 Pi history/tree
@@ -96,4 +96,4 @@ T29 first slice must provide one slot with:
 - no fixed sleep as the primary flush/dispose contract;
 - no orphan worker after stop/app close.
 
-Pool capacity defaults remain Q12/T30；它不阻塞单 slot。
+Pool capacity/identity policy 已由 [D17](../decisions/017-worker-pool-policy.md) 与 T30 evidence 收口。

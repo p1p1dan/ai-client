@@ -23,6 +23,7 @@ function harness(
 ) {
   const calls = {
     sessionManager: vi.fn(),
+    sessionManagerOpen: vi.fn(),
     settingsManager: vi.fn(),
     services: vi.fn(),
     sessionFromServices: vi.fn(),
@@ -69,7 +70,10 @@ function harness(
         calls.sessionManager(cwd, sessionDir);
         return { cwd, sessionDir };
       },
-      open: () => ({}),
+      open: (sessionFile, sessionDir, cwd) => {
+        calls.sessionManagerOpen(sessionFile, sessionDir, cwd);
+        return { sessionFile, sessionDir, cwd };
+      },
       continueRecent: () => ({}),
       inMemory: () => ({}),
     },
@@ -156,6 +160,25 @@ describe('bootstrapPiAgentSession', () => {
       projectTrusted: false,
       permissionGate: 'bundled',
     });
+  });
+
+  it('reopens an exact durable session file for a replacement worker generation', async () => {
+    const h = harness();
+    await bootstrapPiAgentSession({
+      sdk: h.sdk,
+      cwd: '/repo',
+      sessionFile: '/managed/pi-agent/sessions/session-1.jsonl',
+      projectTrusted: false,
+      extensionUi: h.extensionUi,
+      decidePermissionGate: () => h.gate,
+    });
+
+    expect(h.calls.sessionManager).not.toHaveBeenCalled();
+    expect(h.calls.sessionManagerOpen).toHaveBeenCalledWith(
+      '/managed/pi-agent/sessions/session-1.jsonl',
+      undefined,
+      '/repo'
+    );
   });
 
   it('keeps native model defaults when no model was requested', async () => {

@@ -34,8 +34,8 @@ import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '../shared/types/agentWire.ts';
  * flag's stated job was done.
  *
  * It was also unreachable, which is the half that decided this. The flag's
- * only path into the Host was `AgentHostProcess.start()` spreading
- * `process.env`, i.e. it could only ever be set by whoever launched Electron.
+ * only path was the deleted legacy Host inheriting `process.env`, i.e. it
+ * could only ever be set by whoever launched Electron.
  * A user who double-clicks a desktop icon or a Dock entry gets the desktop
  * session's environment — `~/.bashrc` and `~/.zshrc` are never read — so on
  * Linux and macOS there was no way for a packaged user to switch Codex on at

@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase B / T30 Main-owned bounded WorkerManager；T29-a/b/c single WorkerSlot vertical slice 已完成。
+> **当前阶段**：Phase C / T31 Cycle 1/2 behavior reattachment；T30 Main-owned bounded WorkerManager 已完成。
 
 ## 目标
 
@@ -93,4 +93,4 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 当前出口
 
-T28 文件级替换/删除边界与 T29 single WorkerSlot vertical slice 已完成：typed RPC/lifecycle、per-slot utility worker + one Pi AgentSession、`newSession → send → stream → stop → dispose`、唯一 terminal state、app-close orphan census、worker-only packaging，以及 singleton Pi entry/router/source 删除。当前进入 T30 bounded WorkerManager identity/remap/capacity/restart；history/TUI 不焊到旧 host，旧路径也不作为兼容 fallback 保留。
+T28 文件级替换边界、T29 single WorkerSlot 和 T30 bounded WorkerManager 已完成：typed RPC/lifecycle、per-slot utility worker + one Pi AgentSession、normalized identity/remap、bounded capacity/idle reclaim、generation-aware same-session restart、multi-window owner isolation、parallel app-close cleanup，以及 global manager/process/env/router/lifecycle IPC 删除。当前进入 T31 Cycle 1/2 behavior reattachment；每组行为切到 pool 后同步删除对应 legacy execution branch，history/TUI 不焊到旧 host。

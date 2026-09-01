@@ -55,6 +55,32 @@ class LoopbackTransport implements WorkerTransport {
 }
 
 describe('createPiWorkerSlot', () => {
+  it('exposes process ownership before bootstrap acknowledgement', async () => {
+    const transport = new LoopbackTransport();
+    const onSlotCreated = vi.fn();
+    const creating = createPiWorkerSlot({
+      slotKey: 'workspace:/repo',
+      logicalSessionId: 'logical-1',
+      cwd: '/repo',
+      createTransport: () => transport,
+      onSlotCreated,
+    });
+    await vi.waitFor(() => expect(transport.requests).toHaveLength(1));
+    expect(onSlotCreated).toHaveBeenCalledTimes(1);
+    expect(onSlotCreated.mock.calls[0][0].pid).toBe(4321);
+    transport.respond(transport.requests[0], {
+      bootstrapped: true,
+      logicalSessionId: 'logical-1',
+      piSessionId: 'pi-1',
+      cwd: '/repo',
+      agentDir: '/managed/pi-agent',
+      sessionFile: '/managed/pi-agent/sessions/one.jsonl',
+      projectTrusted: false,
+      permissionGate: 'bundled',
+    });
+    await creating;
+  });
+
   it('returns a slot only after one valid bootstrap acknowledgement', async () => {
     const transport = new LoopbackTransport();
     const creating = createPiWorkerSlot({

@@ -7,7 +7,7 @@
 | Key | 路径 | 当前/目标职责 |
 |---|---|---|
 | `MAIN` | `src/main/` | Electron lifecycle、IPC、window/session owner、service composition |
-| `WORKERS` | `src/main/services/agent-host/` | **目标**：Main-owned WorkerManager、bounded WorkerSlot、capacity/remap/crash/reclaim；当前仍含 singleton manager/process |
+| `WORKERS` | `src/main/services/agent-host/` | Main-owned WorkerManager、bounded WorkerSlot、capacity/remap/crash/reclaim；T30 已删除 singleton manager/process/env/router authority |
 | `PRELOAD` | `src/preload/` | contextBridge 与窄 IPC；不拥有 runtime state |
 | `RENDERER` | `src/renderer/` | React UI、Zustand session buckets、timeline、queue/pending、Extension UI surfaces、model/composer |
 | `PI_WORKER` | `src/agent-host/` | **目标**：utility worker entry、Pi AgentSession/SessionManager/extensions/RuntimeEvent projection |
@@ -37,8 +37,7 @@ RENDERER → PRELOAD → MAIN/WORKERS
 
 以下仍存在于代码，但不代表目标架构：
 
-- `AgentHostManager` 同时拥有 legacy `AgentHostProcess` 与 singleton `PiHostProcess`；
-- `claudeRuntime.ts`、`codexRuntime.ts`、bridges/readers/normalizers/settings/spikes；
+- `claudeRuntime.ts`、`codexRuntime.ts`、bridges/readers/normalizers/settings；global `AgentHostManager`/`AgentHostProcess`/NDJSON entry 已在 T30 删除；
 - shared/renderer 中 Claude/Codex agent discriminants、agent picker/binding；
 - agent-host package 中 Anthropic/Cometix/Codex dependencies；
 - standalone/bundled Node 24 与旧 Agent Host packaging assumptions。

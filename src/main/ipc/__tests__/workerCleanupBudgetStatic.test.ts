@@ -17,7 +17,9 @@ function number(source: string, name: string): number {
 describe('Pi worker app-cleanup budget', () => {
   it('starts worker cleanup inside the bounded parallel cleanup set', () => {
     const allSettled = cleanupSource.indexOf('Promise.allSettled([');
-    const workerCleanup = cleanupSource.indexOf("safeRun(() => cleanupAgentHost(), 'agentHost')");
+    const workerCleanup = cleanupSource.indexOf(
+      "safeRun(() => cleanupWorkerManager(), 'workerManager')"
+    );
     expect(allSettled).toBeGreaterThan(-1);
     expect(workerCleanup).toBeGreaterThan(allSettled);
   });
@@ -29,6 +31,6 @@ describe('Pi worker app-cleanup budget', () => {
     const exitBudget = number(slotSource, 'DEFAULT_EXIT_TIMEOUT_MS');
     expect(cleanupBudget).toBeGreaterThan(disposeBudget + exitBudget);
     expect(cleanupBudget).toBeLessThan(forceExitBudget);
-    expect(cleanupSource).toContain('cleanupAgentHostSync();');
+    expect(cleanupSource).toContain('cleanupWorkerManagerSync();');
   });
 });

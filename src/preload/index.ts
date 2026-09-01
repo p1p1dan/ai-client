@@ -1391,7 +1391,7 @@ const electronAPI = {
       pid?: number;
       driver: AgentHostDriver;
       cometixVersion: string;
-      // S7 (round-2 iteration-3 review): additive — AgentHostManager.getStatus() now includes it.
+      // Legacy-compatible chat readiness diagnostics; WorkerManager supplies the snapshot.
       settings: NonNullable<HostReadyEvent['payload']['settings']> | null;
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST, driver),
     getHostStatus: (): Promise<{
@@ -1561,15 +1561,6 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.PI_PERMISSIONS_RESET, payload),
     reveal: (path: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_PERMISSIONS_REVEAL, path),
-  },
-
-  // Agent Host diagnostics
-  agentHost: {
-    resolveNode: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_RESOLVE_NODE),
-    getStatus: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_GET_STATUS),
-    start: (driver?: AgentHostDriver): Promise<unknown> =>
-      ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_START, driver),
-    stop: (): Promise<unknown> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_HOST_STOP),
   },
 };
 

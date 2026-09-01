@@ -5,7 +5,7 @@ import type {
 } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { ipcMain, shell } from 'electron';
-import { agentHostManager } from '../services/agent-host/AgentHostManager';
+import { workerManager } from '../services/agent-host/WorkerManager';
 import { resolveManagedCredentialsEnabled } from '../services/auth/credentialMode';
 import {
   getPiModelManagementUrl,
@@ -39,7 +39,7 @@ export function registerPiModelHandlers(): void {
         ? setPiModelManagementUrl(payload.endpointUrl)
         : getPiModelManagementUrl();
       const result = await syncManagedPiModels(endpointUrl, { force: true });
-      if (result.ok) await agentHostManager.shutdown();
+      if (result.ok) await workerManager.invalidateAll();
       return result;
     }
   );

@@ -5,7 +5,6 @@ import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentHandlers } from './agent';
 import { registerAgentCatalogHandlers } from './agentCatalog';
-import { cleanupAgentHost, cleanupAgentHostSync, registerAgentHostHandlers } from './agentHost';
 import { registerAppHandlers } from './app';
 import { registerAuthHandlers } from './auth';
 import { registerChatHandlers } from './chat';
@@ -29,6 +28,7 @@ import {
 import { registerFolderHandlers } from './folder';
 import { clearAllGitServices, registerGitHandlers } from './git';
 import { autoStartHapi, cleanupHapi, cleanupHapiSync, registerHapiHandlers } from './hapi';
+import { cleanupWorkerManager, cleanupWorkerManagerSync } from './workerManager';
 
 export { autoStartHapi };
 
@@ -65,7 +65,6 @@ export function registerIpcHandlers(): void {
   registerSessionHandlers();
   registerSessionStorageHandlers();
   registerAgentHandlers();
-  registerAgentHostHandlers();
   registerChatHandlers();
   registerAgentCatalogHandlers();
   registerDialogHandlers();
@@ -107,7 +106,7 @@ export async function cleanupAllResources(): Promise<void> {
     deadlineTimer = setTimeout(() => {
       // Graceful worker disposal exhausted its ACK+exit budget. Detach routing
       // and kill synchronously before Main's outer 8s force-exit timer fires.
-      cleanupAgentHostSync();
+      cleanupWorkerManagerSync();
       resolve();
     }, TOTAL_ASYNC_TIMEOUT);
   });
@@ -141,9 +140,9 @@ export async function cleanupAllResources(): Promise<void> {
       safeRun(() => stopAllFileWatchers(), 'fileWatchers'),
       // Claude completions file watcher
       safeRun(() => stopClaudeCompletionsWatchers(), 'claudeCompletions'),
-      // Pi WorkerSlot + remaining legacy host authority. Worker cleanup starts
-      // inside the global deadline so app quit cannot leave a utility process.
-      safeRun(() => cleanupAgentHost(), 'agentHost'),
+      // Main-owned Pi WorkerManager. Pool disposal is parallel, so every slot
+      // receives the same global deadline and app quit leaves no utility process.
+      safeRun(() => cleanupWorkerManager(), 'workerManager'),
       // Temp files
       safeRun(() => cleanupTempFiles(), 'tempFiles'),
     ]),
@@ -210,8 +209,8 @@ export function cleanupAllResourcesSync(): void {
   // Close Todo database (sync — just nulls the reference, no async callback)
   cleanupTodoSync();
 
-  // Shut down Agent Host (best-effort sync kickoff)
-  cleanupAgentHostSync();
+  // Kill every Pi worker synchronously.
+  cleanupWorkerManagerSync();
 
   // Clean up temp files (sync)
   cleanupTempFilesSync();

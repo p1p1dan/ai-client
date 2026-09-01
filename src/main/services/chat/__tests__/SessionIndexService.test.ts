@@ -41,6 +41,64 @@ describe('SessionIndexService', () => {
     expect(typeof list[0].updatedAt).toBe('number');
   });
 
+  it('awaits and persists WorkerManager runtime-identity binding', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+    await service.bindRuntimeIdentity('s1', '/sessions/s1.jsonl');
+
+    expect((await service.get('s1'))?.runtimeIdentity).toBe('/sessions/s1.jsonl');
+    const persisted = JSON.parse(
+      readFileSync(join(userDataDir, 'session-index.json'), 'utf8')
+    ) as SessionIndexEntry[];
+    expect(persisted[0]?.runtimeIdentity).toBe('/sessions/s1.jsonl');
+  });
+
+  it('rolls back a failed binding before a queued mutation can persist it', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    let writes = 0;
+    let releaseFailedWrite: (() => void) | undefined;
+    const failedWriteGate = new Promise<void>((resolve) => {
+      releaseFailedWrite = resolve;
+    });
+    const writeAtomically = vi.fn(async (targetPath: string, data: unknown) => {
+      writes += 1;
+      if (writes === 2) {
+        await failedWriteGate;
+        throw new Error('simulated identity write failure');
+      }
+      writeFileSync(targetPath, JSON.stringify(data, null, 2));
+    });
+    const service = new SessionIndexService({ writeAtomically });
+    await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+    const binding = service.bindRuntimeIdentity('s1', '/sessions/rejected.jsonl');
+    const rename = service.rename('s1', 'Concurrent rename');
+    await vi.waitFor(() => expect(writeAtomically).toHaveBeenCalledTimes(2));
+    releaseFailedWrite?.();
+
+    await expect(binding).rejects.toThrow(/simulated identity write failure/);
+    await expect(rename).resolves.toBe(true);
+    expect(await service.get('s1')).toMatchObject({
+      title: 'Concurrent rename',
+      runtimeIdentity: undefined,
+    });
+    const persisted = JSON.parse(
+      readFileSync(join(userDataDir, 'session-index.json'), 'utf8')
+    ) as SessionIndexEntry[];
+    expect(persisted[0]).toMatchObject({ title: 'Concurrent rename' });
+    expect(persisted[0]?.runtimeIdentity).toBeUndefined();
+  });
+
+  it('refuses to bind a runtime identity without an indexed logical session', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await expect(service.bindRuntimeIdentity('missing', '/sessions/missing.jsonl')).rejects.toThrow(
+      /row not found/
+    );
+  });
+
   it('persists across instances: recordCreated + rename in instance A survive in a fresh instance B', async () => {
     const { SessionIndexService } = await import('../SessionIndexService');
     const serviceA = new SessionIndexService();

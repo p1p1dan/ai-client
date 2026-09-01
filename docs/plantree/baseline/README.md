@@ -6,7 +6,7 @@
 
 - 产品收敛为 **Pi-only**；Claude/Codex conversation runtime 进入 replacement/removal 路线。
 - 目标 runtime topology：Renderer → Preload → Main-owned WorkerManager → bounded WorkerSlot → utilityProcess Pi AgentSession。
-- 当前代码仍处于过渡态，保留 singleton `PiHostProcess`、旧 multi-runtime 和 legacy dependencies；不能把目标基线误读为已完成实现。
+- T30 已完成 Main-owned bounded WorkerManager 并删除 global Agent Host lifecycle authority；旧 Claude/Codex execution source/dependencies 仍按 T31/T34/T35 replacement/import 边界分批退出，不能把 WorkerManager 完成误读为全部 Pi-only cleanup 完成。
 - 方向、状态和任务权威见 [Pi-only plan](../plans/pi-backend-migration/README.md)、[D14](../plans/pi-backend-migration/decisions/014-pi-only-product-and-conversation-import.md)、[D15](../plans/pi-backend-migration/decisions/015-main-owned-worker-manager.md)。
 
 ## 文件

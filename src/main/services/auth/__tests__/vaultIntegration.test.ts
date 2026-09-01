@@ -88,8 +88,8 @@ function successFetchResponse(token: string) {
   };
 }
 
-describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored D47 S6 §3)', () => {
-  it('vault claude/codex baseUrls + claude authToken reach the runtime — Claude as Host env (D60), Codex as config.toml', async () => {
+describe('vault payload ↔ Pi worker bootstrap boundary', () => {
+  it('keeps credentials in the vault/managed Pi config and out of worker argv/env', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     const token = 'claude-secret-token-abc';
     fetchMock.mockResolvedValue(successFetchResponse(token));
@@ -102,49 +102,17 @@ describe('vault payload ↔ managed-home generator outputs (§3-1g, re-anchored 
     const result = await onboardingService.verifyAndRegister('user@jcdz.cc', '123456');
     expect(result.ok).toBe(true);
 
-    // Parity proof between the vault WRITE path and the runtime READ path,
-    // re-anchored twice:
-    //  - D47 S6 §2 dropped the legacy-file diff (flag-on stopped writing
-    //    ~/.claude and ~/.codex, so there was no second writer to compare).
-    //  - D60 dropped the managed settings.json too. The Claude credential's
-    //    only exit is now the Agent Host's env, so that is what this asserts
-    //    — through `buildAgentHostEnv`, the exact function the spawn path
-    //    calls. S0' moved Codex onto the same channel — its provider table is
-    //    assembled from `AICLIENT_CODEX_BASE_URL`/`AICLIENT_CODEX_API_KEY` as
-    //    `-c` overrides at spawn — so neither agent has a file any more.
-    const { buildAgentHostEnv } = await import('../../agent-host/hostEnv');
-    const { resolveClaudeManagedHostEnv } = await import('../../agent-host/AgentHostManager');
-
     const readResult = authIndex.getCredentialVault().read();
     expect(readResult.status).toBe('ok');
     if (readResult.status !== 'ok') return;
-    const { payload } = readResult.doc;
+    expect(readResult.doc.payload.pi?.apiKey).toBe(token);
 
-    expect(payload.claude.baseUrl).toBe('https://cch-test.example.com/v1');
-    expect(payload.claude.authToken).toBe(token);
-    expect(payload.codex.baseUrl).toBe('https://cch-test.example.com/v1');
-    expect(payload.codex.apiKey).toBe(token); // same-key doctrine (D47 S6 §1 point 2)
-
-    const { resolveCodexManagedHostEnv } = await import('../../agent-host/AgentHostManager');
-    const hostEnv = buildAgentHostEnv({
-      driver: 'agent-sdk',
-      cometixVersion: '0.0.0-test',
-      nodeExecPath: '/node',
-      appVersion: '0.0.0-test',
-      ...resolveCodexManagedHostEnv(),
-      ...resolveClaudeManagedHostEnv(),
-    });
-
-    // Both agents now leave through the SAME channel — the Host's env, built by
-    // the exact function the spawn path calls. Codex's half used to be asserted
-    // against a generated `config.toml`; S0' (D60) removed the file, and the
-    // provider table is assembled from these two values as `-c` overrides.
-    expect(hostEnv).toMatchObject({
-      AICLIENT_CLAUDE_BASE_URL: 'https://cch-test.example.com/v1',
-      AICLIENT_CLAUDE_AUTH_TOKEN: token,
-      AICLIENT_CODEX_BASE_URL: 'https://cch-test.example.com/v1',
-      AICLIENT_CODEX_API_KEY: token,
-    });
+    const { resolveManagedPiWorkerEnv } = await import('../../piModelConfig');
+    const workerEnv = resolveManagedPiWorkerEnv();
+    expect(workerEnv.PI_CODING_AGENT_DIR).toBeTruthy();
+    expect(JSON.stringify(workerEnv)).not.toContain(token);
+    expect(Object.keys(workerEnv)).not.toContain('AICLIENT_CLAUDE_AUTH_TOKEN');
+    expect(Object.keys(workerEnv)).not.toContain('AICLIENT_CODEX_API_KEY');
   });
 });
 

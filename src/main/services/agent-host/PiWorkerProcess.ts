@@ -28,6 +28,14 @@ export function resolvePiWorkerEntryPath(layout: PiWorkerEntryLayout): string {
     : path.join(layout.appPath, 'src', 'agent-host', 'worker.ts');
 }
 
+export function resolveCurrentPiWorkerEntryPath(): string {
+  return resolvePiWorkerEntryPath({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+  });
+}
+
 export function buildPiWorkerEnvironment(input: {
   generation: number;
   inheritedEnv?: NodeJS.ProcessEnv;
@@ -47,13 +55,7 @@ export function buildPiWorkerEnvironment(input: {
 
 /** Spawn one utility process for one WorkerSlot generation. */
 export function forkPiWorkerProcess(options: PiWorkerProcessOptions): ForkedPiWorker {
-  const entryPath =
-    options.entryPath ??
-    resolvePiWorkerEntryPath({
-      isPackaged: app.isPackaged,
-      appPath: app.getAppPath(),
-      resourcesPath: process.resourcesPath,
-    });
+  const entryPath = options.entryPath ?? resolveCurrentPiWorkerEntryPath();
   const processHandle = utilityProcess.fork(entryPath, [], {
     cwd: options.cwd,
     execArgv: entryPath.endsWith('.ts') ? ['--experimental-strip-types'] : [],

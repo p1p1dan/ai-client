@@ -8,7 +8,7 @@
 // Usage:
 //   UPSTREAM=<real base url> node spikes/capture-proxy.mjs [port=8791]
 //   then e.g.:  AICLIENT_TEST_BASE_URL=http://127.0.0.1:8791 \
-//               node --experimental-strip-types spikes/c06-resume-history-smoke.ts
+//               node --experimental-strip-types <probe-script>.ts
 // Dumps req-NNN.json / res-NNN.txt into $LOGDIR (default ./captures). Auth headers redacted.
 
 import { mkdirSync, writeFileSync } from 'node:fs';

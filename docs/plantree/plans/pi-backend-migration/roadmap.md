@@ -9,7 +9,8 @@
 | Cycle 1/2 产品能力 | **Done** | 已有 evidence；按 replacement impact 保留或适配 |
 | Pi-only replacement baseline | **Done** | T28 文件级 retain/adapt/replace/delete/migration-only map + evidence |
 | Worker foundation | **Done** | T29-a/b/c：RPC、bootstrap、send/stream/stop/dispose、worker-only artifact 与 singleton Pi 删除 |
-| Pool + behavior reattachment | **Next** | T30 bounded pool；随后 Cycle 1/2 行为重挂 |
+| Bounded WorkerManager | **Done** | T30 identity/remap/capacity/restart/owner + global manager deletion |
+| Cycle 1/2 behavior reattachment | **Next** | T31 queue/pending/Extension UI/models/permissions 重挂 |
 | History/tree/import/removal/TUI | Planned | Pi-native lifecycle、legacy import、Pi-only cleanup、pix TUI |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
@@ -64,19 +65,19 @@
 
 **验收**：单会话不依赖旧 `PiHostProcess`；RuntimeEvent 与 stop terminal state 正确；worker 退出无 orphan；Agent Host artifact 只保留实际 worker entry，不再构建 singleton Pi fallback。T29 总验收已满足。
 
-### T30 — Main-owned bounded WorkerManager — **Next**
+### T30 — Main-owned bounded WorkerManager — **Done**
 
-- **T30-a Identity/remap**：workspace temporary key → normalized session-file key 原子 remap。
-- **T30-b Capacity/eviction**：foreground、active turn、pending blocking request、idle reclaim、capacity error。
-- **T30-c Crash/restart**：generation 防迟到事件、有界 restart、atomic disposal。
-- **T30-d Isolation**：active/background、多窗口 owner 与 session-switch race。
-- **T30-e Old manager removal**：consumer 切到 WorkerManager 后删除 `AgentHostManager`、`AgentHostProcess`、legacy host env/router/exports 与对应 tests，不保留 compatibility facade。
+- **T30-a Identity/remap — Done**：unique normalized workspace/create key → normalized session-file key；awaited SessionIndex commit 后才发布 created，collision/index failure remove + dispose。
+- **T30-b Capacity/eviction — Done**：resource-aware 2/3/4 default、startup override 1..8、15m idle TTL、foreground/active/blocking/lifecycle protection、safe oldest-idle reclaim 与 retryable capacity error。
+- **T30-c Crash/restart — Done**：generation stale filtering、active turn single failure、Extension UI reset、same-session `SessionManager.open`、60s/2 bounded restart、parallel atomic disposal。
+- **T30-d Isolation — Done**：per-window foreground、session owner claim/release、exact blocking request origin、wrong-window refusal、window-close dismissal、multi-slot event isolation。
+- **T30-e Old manager removal — Done**：consumer 切到 WorkerManager；删除 `AgentHostManager`、`AgentHostProcess`、`PiSingleSlotRuntime`、legacy host env/router/lifecycle IPC/exports/tests/spikes，无 compatibility facade。
 
-**验收**：多 slot 无跨会话串流；安全达到容量；单 worker crash 不影响其他 slot；Main 无 singleton Agent Host lifecycle authority。
+**验收证据**：[T30 WorkerManager evidence](./evidence/2026-08-31-t30-worker-manager.md)。多 slot 无跨会话串流；安全达到容量；单 worker crash 不影响其他 slot；Main 无 singleton Agent Host lifecycle authority；真实 Electron 双 active worker app-close 无 orphan。
 
 ## Phase C — Reattach completed product behavior
 
-### T31 — Cycle 1/2 behavior reattachment — **Planned**
+### T31 — Cycle 1/2 behavior reattachment — **Next**
 
 - **T31-a RuntimeEvent/streaming**：text/thinking/tool/custom 与 timeline ordering。
 - **T31-b Queue/pending/attachments**：busy enqueue、release、retry、stop 与 retirement。

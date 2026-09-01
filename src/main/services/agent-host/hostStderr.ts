@@ -1,7 +1,7 @@
 /**
  * Host stderr line assembly (pure).
  *
- * `AgentHostProcess` emits raw stderr chunks: one chunk may carry several
+ * Utility workers emit raw stderr chunks: one chunk may carry several
  * lines, and it may end mid-line. Logging chunks verbatim interleaves partial
  * lines in main.log, which is what made the 2026-07-28 Linux launch failure
  * unreadable — the Host's own diagnostics never reached any sink at all.

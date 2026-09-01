@@ -1,45 +1,46 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Phase B / T30 Main-owned bounded WorkerManager；T29 single WorkerSlot vertical slice 已完成。
+**Current Phase**：Phase C / T31 Cycle 1/2 behavior reattachment；T30 Main-owned bounded WorkerManager 已完成。
 
-**Next Target**：[T30](./roadmap.md#t30--main-owned-bounded-workermanager--next) workspace temporary key → normalized session-file remap、capacity/eviction、crash/restart、owner isolation，并删除最终 `AgentHostManager`/`AgentHostProcess` global compatibility authority。
+**Next Target**：[T31](./roadmap.md#t31--cycle-12-behavior-reattachment--next) 将 queue/pending/attachments、Extension UI display/approval、models/auth/permissions 与 retirement behavior 完整重挂到 multi-slot WorkerManager，并同步删除每组被替代的 legacy execution branch。
 
-**Last Landed**：2026-08-31 T29-c `newSession → send → text/thinking/tool/custom stream → stop → dispose` 单 slot 闭环、唯一 terminal arbiter、Main chat cutover、app-close orphan census、worker-only artifact，以及 singleton Pi source/router/process 删除；见 [evidence](./evidence/2026-08-31-t29c-single-slot-closure.md)。
+**Last Landed**：2026-08-31 T30 normalized identity/remap、resource-aware bounded pool、foreground/active/blocking eviction protection、same-session bounded restart、multi-window owner isolation、parallel app-close disposal，以及最终 `AgentHostManager`/`AgentHostProcess`/legacy host env/router/lifecycle IPC 删除；见 [evidence](./evidence/2026-08-31-t30-worker-manager.md)。
 
-**Last Verified**：2026-08-31 — T29-c worker/Main/packaging/cleanup focused 14 files / 110 tests；renderer stop/progress/store regressions 5 files / 179 tests；Main + Agent Host typecheck；scoped Biome；worker-only Agent Host build 92.8 MiB；真实 Electron send/stream/stop/dispose + active app-close PID census；packaged worker bootstrap/dispose/exit smoke。低资源主机串行执行，未运行 full Vitest/full Electron production build。
+**Last Verified**：2026-08-31 — T30 WorkerManager/slot/worker/index/owner/cleanup focused 16 files / 134 tests；auth/onboarding/model/permission regressions 10 files / 108 tests；packaging scripts 3 files / 42 tests；Main + Agent Host typecheck；48 changed source/test/script files scoped Biome；diff check；worker-only build 92.8 MiB；真实 Electron 双 slot stream + app-close PID census。低资源主机串行执行，未运行 full Vitest/full Electron production build。
 
 ## Current architecture decision
 
 - [D14](./decisions/014-pi-only-product-and-conversation-import.md)：Claude/Codex execution runtime 删除；历史只通过只读、原子、可去重 import 保留。
 - [D15](./decisions/015-main-owned-worker-manager.md)：Main 持有 bounded WorkerManager；每 WorkerSlot 一个 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
-- [D16](./decisions/016-delete-obsolete-paths-with-replacement.md)：开发阶段替代即删除；不为过渡兼容保留旧 source/entry/artifact/dependency/alias，Git 是回退机制。
-- [T28 map](./topics/t28-replacement-map.md) 是 T30/T34/T35/T36 的文件级删除/保护 authority；按文件名机械删除被禁止。
+- [D16](./decisions/016-delete-obsolete-paths-with-replacement.md)：替代即删除；不保留 compatibility facade。
+- [D17](./decisions/017-worker-pool-policy.md)：identity/remap、2/3/4 capacity、protected eviction、same-session bounded restart policy。
+- [T28 map](./topics/t28-replacement-map.md) 继续作为 T31/T34/T35/T36 的文件级删除/保护 authority。
 
-## T29 landed
+## T30 landed
 
-- **T29-a**：typed Worker RPC、request correlation/timeout、generation stale filtering、ACK + process-exit-confirmed disposal。
-- **T29-b**：per-slot utility worker、serialized dispatch、exactly-one AgentSession、managed/local agentDir/auth/models、project trust 与 fail-closed permission bootstrap。
-- **T29-c**：send admission 不阻塞 stop；text/thinking/tool/custom RuntimeEvent；唯一 completed/failed/stopped verdict；Main single-slot routing；normal dispose + sync force kill；真实 app-close 无 orphan。
-- Packaging 只构建/验证 `worker.js`；旧 `index.js`、`piHost.js`、Claude/Cometix/Codex payload/scripts/budgets 已退出 artifact。
-- 已删除 `piHost.ts`、`piHostCommands.ts`、`piRuntime.ts`、`PiHostProcess.ts` 与旧 Pi tests；`AgentHostManager` 无 singleton Pi branch。
+- **Identity**：temporary key 包含 normalized workspace + logical session + UUID；durable key 使用 normalized sessionFile；WorkerSlot diagnostic key 与 Manager map 一起 remap；SessionIndex atomic flush 后才发布 success。
+- **Capacity**：≤4 GiB 默认 2、≤8 GiB 默认 3、其余 4；启动覆盖 1..8；15m idle reclaim；foreground/active/blocking/lifecycle state 不淘汰。
+- **Crash**：slot-local terminal failure/Extension UI reset；旧 generation 丢弃；replacement `SessionManager.open(sessionFile)`；60s 内最多 2 次 restart。
+- **Owner**：每窗口一个 foreground session；不同窗口独立；blocking response 精确回 originating slot/generation/window；window close dismiss request。
+- **Lifecycle/deletion**：pool 并行 dispose、bootstrap 期间也持有 process；sync force-kill；global manager/process/env/router/lifecycle IPC 与 obsolete tests/spikes 删除。
 
 ## Active TODO
 
-1. **T30-a**：workspace temporary key → normalized bootstrap `sessionFile` key 原子 remap；明确 duplicate create/session switch authority。
-2. **T30-b/c**：bounded capacity、idle eviction、active/pending protection、generation-aware crash/restart budget。
-3. **T30-d/e**：multi-window/session isolation 与 app lifecycle；consumer 切完即删除 `AgentHostManager`/`AgentHostProcess`/legacy host env/router/exports。
+1. **T31-a**：RuntimeEvent/text/thinking/tool/custom/timeline ordering 在 multi-slot 下重挂并清旧 producer branches。
+2. **T31-b**：queue/pending/attachments、stop/retry/retirement 与 slot state 对齐。
+3. **T31-c/d**：Extension UI display/reset、models/auth/permissions 与 config invalidation 的完整 product regression。
 4. **并行环境欠项**：真账号 queue GUI 复点；高资源主机 packaged preview/PDF/Monaco/local-file smoke（T37 前关闭）。
 
 ## Blocked By / risks
 
-- T30 无产品决策 blocker；Q12 pool 默认容量须在 T30 ready-check 内关闭。
-- 当前 3.3 GiB 主机继续按根 `AGENTS.md` 小批串行测试，禁止 full build/full Vitest。
-- T35 deletion 仍被 T34 read-only adapter isolation 和 T30–T33 replacement 闭环阻塞。
-- T36 必须证明 bundled absolute Pi CLI path 与 GUI/TUI single-writer。
+- T31 当前无产品决策 blocker；必须保留 Cycle 1/2 已验收行为，不因 transport replacement 重做 UX。
+- 当前 3.3 GiB 主机继续小批串行测试，禁止 full build/full Vitest。
+- T32 real resume/history 仍需 missing/corrupt/cross-cwd 与 renderer hydration；T30 的 `open(sessionFile)` 仅用于内部 crash replacement identity。
+- T35 deletion 仍被 T31–T34 replacement/import 闭环阻塞；T36 必须证明 bundled absolute Pi CLI path 与 GUI/TUI single-writer。
 
 ## Handoff
 
-1. 先读 [T29-c evidence](./evidence/2026-08-31-t29c-single-slot-closure.md)、[T29-b evidence](./evidence/2026-08-31-t29b-worker-bootstrap.md)、[T29-a evidence](./evidence/2026-08-31-t29a-worker-rpc.md) 与 [D15](./decisions/015-main-owned-worker-manager.md)。
-2. T30 直接提升 `PiSingleSlotRuntime`/`createPiWorkerSlot` 为 bounded WorkerManager；保持 send admission、turn terminal arbiter、generation filtering 与 app-close cleanup，不恢复 singleton facade。
-3. `bootstrap.sessionFile` 已是 durable identity 输入；T30 负责原子 remap 和 owner/pool policy，T32 才实现 `SessionManager.open(sessionFile)` resume/history。
-4. stop 不创建 worker；dispose 不用固定 sleep；signal path 必须保持同步 force kill。每个替代切片继续同步做 import/export/artifact/dependency 删除。
+1. 先读 [T30 evidence](./evidence/2026-08-31-t30-worker-manager.md)、[D17](./decisions/017-worker-pool-policy.md)、[T29-c evidence](./evidence/2026-08-31-t29c-single-slot-closure.md) 与 [T28 map](./topics/t28-replacement-map.md)。
+2. T31 直接消费 `workerManager`/managed slot metadata；不得恢复 `AgentHostManager`、legacy NDJSON entry 或 singleton lifecycle IPC。
+3. stop/status/background RPC 必须 session-targeted，不 fallback 到 foreground；blocking response 必须保留 exact origin。
+4. 每重挂一组 Cycle 1/2 behavior，同步删除其旧 Host/agent/backend source、tests、exports 与 scripts，并记录 evidence。

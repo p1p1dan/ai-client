@@ -11,20 +11,14 @@
  * CLAUDE.md.
  *
  * The redirection is what made all of that necessary — and what made the
- * user's real `~/.claude` invisible while it was on. D60 took it away: the
- * credential now travels to the Agent Host as env (`hostEnv.ts`), and to a
- * terminal PTY the same way (`SessionManager.ts`), so nothing needs to
- * control which directory Claude Code reads. The user's CLAUDE.md, commands,
- * skills, plugins and hooks are simply theirs again.
+ * user's real `~/.claude` invisible while it was on. D60 took it away. Pi now
+ * receives managed credentials through its isolated agentDir, while terminal
+ * compatibility remains separately owned by `SessionManager.ts`.
  *
  * What is left here is the small residue that is still genuinely ours:
- *  - stripping credential-shaped vars this process inherited from the OS
- *    shell, so a stray `ANTHROPIC_API_KEY` cannot shadow the managed one;
- *  - making sure the user's own `.claude.json` says onboarding is done, so a
- *    first-time user is not dropped into the CLI's theme/trust wizard inside
- *    our GUI (E2 evidence, 2026-08-15) — a MERGE into their file, never a
- *    rewrite;
- *  - the codex-home regenerate tick, which still needs a file on disk.
+ *  - stripping credential-shaped vars this process inherited from the OS;
+ *  - retaining the legacy CLI onboarding merge until T35 classifies it;
+ *  - synchronizing the managed Pi model/auth configuration.
  *
  * ## Why it is a separate module from `main/index.ts`
  *
@@ -35,7 +29,6 @@
  * export is a plain function `main/index.ts` calls at the right point.
  */
 
-import { app } from 'electron';
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
 import { generateClaudeJson, getEffectiveClaudeJsonPath } from './claudeHome';
 import { resolveManagedCredentialsEnabled } from './credentialMode';
@@ -43,26 +36,6 @@ import { writeSettingsFile } from './managedFileWriter';
 
 /** Managed credentials on? Set by `activateManagedCredentials()`, read by the two functions below. */
 let managedActive = false;
-
-/**
- * Dev-only, one-shot: `ANTHROPIC_*` captured before stripping.
- *
- * Kept because `resolveClaudeManagedHostEnv` (AgentHostManager) reads the
- * vault, and a dev machine with an `absent` vault would otherwise spawn a
- * Host with zero credentials — the A-track M9 failure. Exported through
- * {@link getDevCredentialSeed} rather than written into a file, matching how
- * the real credential now travels.
- */
-let devCredentialSeed: { baseUrl: string; authToken: string } | null = null;
-
-function captureDevCredentialSeedBeforeStrip(): void {
-  if (app.isPackaged) return;
-  const baseUrl = process.env.ANTHROPIC_BASE_URL;
-  const authToken = process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
-  if (baseUrl && authToken) {
-    devCredentialSeed = { baseUrl, authToken };
-  }
-}
 
 /** Strips every credential-shaped env var Main inherited from the OS/shell — shared list with `scripts/dev.js` so a stray host `ANTHROPIC_API_KEY` can't shadow the managed credentials. */
 function stripInheritedCredentialEnv(): void {
@@ -87,17 +60,8 @@ export function activateManagedCredentials(): void {
   if (!resolveManagedCredentialsEnabled()) {
     return;
   }
-  captureDevCredentialSeedBeforeStrip();
   stripInheritedCredentialEnv();
   managedActive = true;
-}
-
-/**
- * The dev fallback credential, or `null`. Read by `AgentHostManager` when the
- * vault has nothing usable — see {@link devCredentialSeed}.
- */
-export function getDevCredentialSeed(): { baseUrl: string; authToken: string } | null {
-  return devCredentialSeed;
 }
 
 /**
@@ -125,16 +89,8 @@ export async function ensureUserClaudeJsonOnboarded(): Promise<void> {
 /**
  * Phase ③ — retired with S0' (D60), kept as an exported no-op.
  *
- * D60 shrank this to the codex half and left a comment explaining why the
- * Claude half no longer needed materialising: `AgentHostManager` reads the
- * vault fresh on every Host spawn and passes the credential as env, so a
- * login/logout is picked up by the Host restart that already follows it.
- *
- * S0' finished the job. Codex takes the same route now — its provider table is
- * assembled as `-c` overrides at spawn time from
- * `AICLIENT_CODEX_BASE_URL`/`AICLIENT_CODEX_API_KEY` — so there is no
- * `config.toml` to keep in sync either, and therefore no window in which a file
- * could be stale.
+ * The legacy Claude/Codex materializers are gone. The remaining phase syncs
+ * managed Pi models/auth before WorkerManager can create a fresh generation.
  *
  * The function stays rather than being deleted at the call site: `main/index.ts`
  * documents a THREE-PHASE startup order, and phase ③'s position in that order
@@ -155,5 +111,4 @@ export async function regenerateFromVault(): Promise<void> {
 /** Test-only: reset module state between test cases (mirrors `resetAuthSingletonsForTests`). */
 export function resetManagedCredentialsStartupStateForTests(): void {
   managedActive = false;
-  devCredentialSeed = null;
 }

@@ -1,6 +1,6 @@
 # Runtime Flows
 
-> 以下是 D15 目标 flow。当前 singleton `PiHostProcess` 仍在，T29/T30 完成前必须在 implementation status 中显式区分 transition 与 target。
+> 以下是 D15 flow。T30 已落地 Main-owned bounded WorkerManager；T31–T36 继续在该 topology 上重挂 behavior/history/import/TUI，不恢复 singleton supervisor。
 
 ## Create / send / stream
 

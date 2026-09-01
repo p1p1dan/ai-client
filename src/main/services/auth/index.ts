@@ -61,16 +61,13 @@ export function getCredentialVault(): CredentialVault {
 }
 
 /**
- * D47 S5 §2 — `markRejected()`'s `agentHost.shutdown()` dependency, lazily
- * dynamic-imported (never a static top-level import): `AgentHostManager.ts`
- * pulls in a much heavier dependency graph (process spawning, logger, Node
- * runtime resolution) that this repo's vitest node environment can hang on
- * importing eagerly — same reasoning as
- * `OnboardingService.shutdownAgentHostAfterRegenerate`.
+ * D47 S5 §2 — credential rejection invalidates all live Pi workers before the
+ * refreshed auth state becomes visible. Dynamic import keeps Electron worker
+ * process dependencies out of pure auth tests.
  */
-async function shutdownRealAgentHost(): Promise<void> {
-  const { agentHostManager } = await import('../agent-host/AgentHostManager');
-  await agentHostManager.shutdown();
+async function invalidateRealWorkers(): Promise<void> {
+  const { workerManager } = await import('../agent-host/WorkerManager');
+  await workerManager.invalidateAll();
 }
 
 export function getAuthStateService(): AuthStateService {
@@ -81,7 +78,7 @@ export function getAuthStateService(): AuthStateService {
       // now, and a login (or the login page) can change it while this
       // singleton is alive.
       managed: resolveManagedCredentialsEnabled,
-      agentHost: { shutdown: shutdownRealAgentHost },
+      runtimeInvalidator: { invalidateAll: invalidateRealWorkers },
       // D47 S6 §1.4 — sourced from `adoption.ts`'s last boot-time outcome.
       migrationSignal: getMigrationIncompleteSignal,
     });

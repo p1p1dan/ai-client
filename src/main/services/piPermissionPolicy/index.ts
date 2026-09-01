@@ -7,10 +7,9 @@
  * They are the ones `@gotgenes/pi-permission-system` reads that this app has any
  * business showing:
  *
- *  - **bundled** — `<host dir>/node_modules/@gotgenes/pi-permission-system/config.json`,
- *    the policy we ship (D11). Derived from `resolveHostEntryPath()` so it is the
- *    same directory the Host hands pi as `additionalExtensionPaths`, in dev and
- *    packaged alike.
+ *  - **bundled** — `<worker dir>/node_modules/@gotgenes/pi-permission-system/config.json`,
+ *    the policy we ship (D11). Derived from the Pi worker entry so it is the
+ *    same artifact root in dev and packaged layouts.
  *  - **global** — `<agentDir>/extensions/pi-permission-system/config.json`.
  *  - **project** — `<repo>/.pi/extensions/pi-permission-system/config.json`.
  *
@@ -40,7 +39,7 @@ import {
   type PermissionPolicySnapshot,
   type PolicyPatch,
 } from '@shared/piPermissionPolicy';
-import { resolveHostEntryPath } from '../agent-host/AgentHostManager';
+import { resolveCurrentPiWorkerEntryPath } from '../agent-host/PiWorkerProcess';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getLocalPiAgentDir, getManagedPiAgentDir } from '../piModelConfig';
 import { readRawDocument, readScopes, type ScopeLocation, writeScopeDocument } from './policyStore';
@@ -65,7 +64,12 @@ export const LOCAL_ROUTE_READ_ONLY =
 
 /** The directory holding the bundled plugin — the same one the Host injects. */
 export function getBundledPluginDir(): string {
-  return join(dirname(resolveHostEntryPath()), 'node_modules', '@gotgenes', EXTENSION_ID);
+  return join(
+    dirname(resolveCurrentPiWorkerEntryPath()),
+    'node_modules',
+    '@gotgenes',
+    EXTENSION_ID
+  );
 }
 
 /** `<agentDir>/extensions/pi-permission-system/config.json`. */

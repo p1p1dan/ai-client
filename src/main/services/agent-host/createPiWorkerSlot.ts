@@ -23,6 +23,8 @@ export interface CreatePiWorkerSlotOptions
   slotKey: string;
   generation?: number;
   createTransport?: (input: { generation: number; cwd: string }) => WorkerTransport;
+  /** Exposes process ownership before bootstrap awaits, for app-close force kill. */
+  onSlotCreated?: (slot: WorkerSlot) => void;
   onEvent?: WorkerSlotOptions['onEvent'];
   onDiagnostic?: WorkerSlotOptions['onDiagnostic'];
   onLifecycle?: WorkerSlotOptions['onLifecycle'];
@@ -60,6 +62,7 @@ export async function createPiWorkerSlot(
     onLifecycle: options.onLifecycle,
     onStderr: options.onStderr,
   });
+  options.onSlotCreated?.(slot);
 
   try {
     const result = await slot.request<WorkerBootstrapResult, WorkerBootstrapPayload>(
@@ -67,6 +70,7 @@ export async function createPiWorkerSlot(
       {
         logicalSessionId: options.logicalSessionId,
         cwd: options.cwd,
+        ...(options.sessionFile ? { sessionFile: options.sessionFile } : {}),
         ...(options.model ? { model: options.model } : {}),
         ...(options.effort ? { effort: options.effort } : {}),
       }

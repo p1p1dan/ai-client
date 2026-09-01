@@ -360,7 +360,7 @@ describe('AuthStateService — local mode is signed_out with zero filesystem IO'
 });
 
 describe('AuthStateService — markRejected() orchestration (D47 S5 §2, B-track B5)', () => {
-  it('calls vault.markInvalidated, THEN agentHost.shutdown, THEN refresh — in that order', async () => {
+  it('calls vault.markInvalidated, THEN worker invalidation, THEN refresh — in that order', async () => {
     const order: string[] = [];
     let vaultStatus: VaultReadResult = {
       status: 'ok',
@@ -386,15 +386,15 @@ describe('AuthStateService — markRejected() orchestration (D47 S5 §2, B-track
         vaultStatus = { status: 'rejected', lastEmail: 'user@jcdz.cc' };
       }),
     };
-    const agentHost = {
-      shutdown: vi.fn(async () => {
-        order.push('shutdown');
+    const runtimeInvalidator = {
+      invalidateAll: vi.fn(async () => {
+        order.push('invalidateAll');
       }),
     };
     const service = new AuthStateService({
       vault,
       ...ON_ENV,
-      agentHost,
+      runtimeInvalidator,
       now: () => new Date('2026-08-15T12:00:00.000Z'),
     });
     service.refresh();
@@ -403,9 +403,9 @@ describe('AuthStateService — markRejected() orchestration (D47 S5 §2, B-track
 
     await service.markRejected();
 
-    expect(order).toEqual(['markInvalidated:2026-08-15T12:00:00.000Z', 'shutdown']);
+    expect(order).toEqual(['markInvalidated:2026-08-15T12:00:00.000Z', 'invalidateAll']);
     expect(vault.markInvalidated).toHaveBeenCalledWith('2026-08-15T12:00:00.000Z');
-    expect(agentHost.shutdown).toHaveBeenCalledTimes(1);
+    expect(runtimeInvalidator.invalidateAll).toHaveBeenCalledTimes(1);
     expect(service.getState()).toEqual({
       status: 'credentials_invalid',
       reason: 'rejected',
@@ -414,7 +414,7 @@ describe('AuthStateService — markRejected() orchestration (D47 S5 §2, B-track
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('defaults to a no-op agent host when none is injected', async () => {
+  it('defaults to a no-op runtime invalidator when none is injected', async () => {
     const service = new AuthStateService({
       vault: fakeVault({ status: 'rejected', lastEmail: null }),
       ...ON_ENV,

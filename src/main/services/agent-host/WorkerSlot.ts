@@ -121,10 +121,10 @@ function recordOf(value: unknown): Record<string, unknown> | null {
  * only establishes the single-slot authority used by the later WorkerManager.
  */
 export class WorkerSlot {
-  readonly slotKey: string;
   readonly cwd: string;
 
   private readonly instanceId = ++slotInstanceSequence;
+  private currentSlotKey: string;
   private readonly requestTimeoutMs: number;
   private readonly disposeTimeoutMs: number;
   private readonly exitTimeoutMs: number;
@@ -149,7 +149,7 @@ export class WorkerSlot {
   private disposePromise: Promise<void> | null = null;
 
   constructor(options: WorkerSlotOptions) {
-    this.slotKey = options.slotKey;
+    this.currentSlotKey = options.slotKey;
     this.cwd = options.cwd;
     this.transport = options.transport;
     this.currentGeneration = positiveGeneration(options.generation);
@@ -161,6 +161,23 @@ export class WorkerSlot {
     this.onLifecycle = options.onLifecycle;
     this.onStderr = options.onStderr;
     this.attachTransport(this.transport, this.currentGeneration);
+  }
+
+  get slotKey(): string {
+    return this.currentSlotKey;
+  }
+
+  /** Manager-only identity commit after workspace-key → session-file remap. */
+  remapSlotKey(nextSlotKey: string): void {
+    const normalized = nextSlotKey.trim();
+    if (!normalized) throw new Error('Worker slot key must be non-empty');
+    if (this.currentState !== 'running') {
+      throw new WorkerSlotError(
+        'WORKER_SLOT_NOT_RUNNING',
+        `Worker slot ${this.currentSlotKey} cannot remap while ${this.currentState}`
+      );
+    }
+    this.currentSlotKey = normalized;
   }
 
   get state(): WorkerSlotState {
@@ -262,12 +279,14 @@ export class WorkerSlot {
     );
     this.detachCurrentTransport();
     const killed = this.killCurrentTransport();
-    this.currentState = 'disposed';
-    this.onLifecycle?.({
-      type: 'disposed',
-      slotKey: this.slotKey,
-      generation: this.currentGeneration,
-    });
+    this.currentState = killed ? 'disposed' : 'dispose-failed';
+    if (killed) {
+      this.onLifecycle?.({
+        type: 'disposed',
+        slotKey: this.slotKey,
+        generation: this.currentGeneration,
+      });
+    }
     return killed;
   }
 
@@ -642,9 +661,10 @@ export class WorkerSlot {
 
   private killCurrentTransport(): boolean {
     if (this.transportKilled) return true;
-    this.transportKilled = true;
     try {
-      return this.transport.kill();
+      const killed = this.transport.kill();
+      if (killed) this.transportKilled = true;
+      return killed;
     } catch {
       return false;
     }

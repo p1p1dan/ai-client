@@ -28,8 +28,8 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('../../services/agent-host/PiSingleSlotRuntime', () => ({
-  piSingleSlotRuntime: {
+vi.mock('../../services/agent-host/WorkerManager', () => ({
+  workerManager: {
     onEvent: vi.fn((handler: (event: RuntimeEvent) => void) => {
       runtimeEventHandlers.push(handler);
       return () => undefined;
@@ -41,6 +41,9 @@ vi.mock('../../services/agent-host/PiSingleSlotRuntime', () => ({
     stop,
     closeSession,
     respondExtensionUi,
+    claimSession: vi.fn(),
+    releaseSession: vi.fn(),
+    releaseWindow: vi.fn(),
   },
 }));
 
@@ -120,14 +123,22 @@ describe('Pi WorkerSlot chat routing', () => {
       })
     ).resolves.toEqual({ requestId: 'extui-1' });
 
-    expect(send).toHaveBeenCalledWith({ sessionId: 's1', text: 'hello', effort: 'xhigh' });
+    expect(send).toHaveBeenCalledWith({
+      sessionId: 's1',
+      text: 'hello',
+      effort: 'xhigh',
+      ownerWebContentsId: 7,
+    });
     expect(stop).toHaveBeenCalledWith('s1');
     expect(closeSession).toHaveBeenCalledWith('s1');
-    expect(respondExtensionUi).toHaveBeenCalledWith({
-      runtimeId: 'runtime-1',
-      uiRequestId: 'ui-1',
-      ok: false,
-    });
+    expect(respondExtensionUi).toHaveBeenCalledWith(
+      {
+        runtimeId: 'runtime-1',
+        uiRequestId: 'ui-1',
+        ok: false,
+      },
+      7
+    );
   });
 
   it('forwards one runtime stream to windows and SessionIndexService', () => {

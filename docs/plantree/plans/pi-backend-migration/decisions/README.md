@@ -1,6 +1,6 @@
 # Pi-only migration 决策索引
 
-> 本文件是 D1–D16 当前权威状态的唯一索引。原决策保留当时背景与理由；`Superseded` 不代表删除历史，只代表它不能继续驱动新实现。
+> 本文件是 D1–D17 当前权威状态的唯一索引。原决策保留当时背景与理由；`Superseded` 不代表删除历史，只代表它不能继续驱动新实现。
 
 ## Active
 
@@ -16,6 +16,7 @@
 | [D14](./014-pi-only-product-and-conversation-import.md) | Pi-only 产品与会话导入 | 删除 legacy execution runtime；只读、原子、可去重地导入历史 |
 | [D15](./015-main-owned-worker-manager.md) | Main-owned WorkerManager | Main 持有 bounded pool；每 WorkerSlot 一个 utilityProcess/Pi AgentSession |
 | [D16](./016-delete-obsolete-paths-with-replacement.md) | 替代即删除 | 开发阶段不保留 legacy runtime/entry/artifact 兼容；替代切片同步删除旧 authority，Git 负责回退 |
+| [D17](./017-worker-pool-policy.md) | Worker pool policy | normalized identity/remap、resource-aware capacity、protected eviction、bounded same-session restart |
 
 ## Revised / partially active
 

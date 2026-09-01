@@ -1,8 +1,8 @@
 /**
  * D47 S1 §2.4 / D47 S5 §1.2-§1.4/§3 — the login-state state machine. Pure
  * module: it is handed a vault-like object (duck-typed against
- * `CredentialVault`, type-only import) and an optional agent-host-like object
- * (duck-typed against `AgentHostManager.shutdown()`), and computes one of the
+ * `CredentialVault`, type-only import) and an optional runtime invalidator,
+ * and computes one of the
  * FIVE `AuthState` arms (`@shared/types/auth`, the S5 authoritative DTO —
  * replaces this file's own S1-local 3-arm type).
  *
@@ -28,9 +28,9 @@ export interface AuthStateVault {
   markInvalidated(iso: string): Promise<void>;
 }
 
-/** Duck-typed against `AgentHostManager` — never imported directly (heavy dep graph, see `OnboardingService.shutdownAgentHostAfterRegenerate`'s module header for the same reasoning). */
-export interface AuthStateAgentHost {
-  shutdown(): Promise<void>;
+/** Pure dependency seam for invalidating worker generations after credential rejection. */
+export interface AuthStateRuntimeInvalidator {
+  invalidateAll(): Promise<void>;
 }
 
 /** D47 S6 §1.4 — see `adoption.ts`'s `AuthStateMigrationSignal` (duck-typed here rather than imported, keeping this file's own dependency surface unchanged). */
@@ -53,8 +53,8 @@ export interface AuthStateServiceOptions {
    */
   managed?: () => boolean;
   env?: NodeJS.ProcessEnv;
-  /** Defaults to a no-op — every production caller (`services/auth/index.ts`) supplies the real lazy-imported `agentHostManager`. */
-  agentHost?: AuthStateAgentHost;
+  /** Defaults to a no-op; production supplies the Main-owned WorkerManager. */
+  runtimeInvalidator?: AuthStateRuntimeInvalidator;
   /** Injectable clock for `markRejected()`'s `invalidatedAt` timestamp — defaults to `() => new Date()`. */
   now?: () => Date;
   /**
@@ -157,7 +157,7 @@ export class AuthStateService {
   private readonly vault: AuthStateVault;
   private readonly managed: () => boolean;
   private readonly env?: NodeJS.ProcessEnv;
-  private readonly agentHost: AuthStateAgentHost;
+  private readonly runtimeInvalidator: AuthStateRuntimeInvalidator;
   private readonly now: () => Date;
   private readonly migrationSignal: () => AuthStateMigrationSignal;
   private snapshot: AuthState = DEFAULT_STATE;
@@ -178,7 +178,7 @@ export class AuthStateService {
     this.vault = options.vault;
     this.managed = options.managed ?? (() => true);
     this.env = options.env;
-    this.agentHost = options.agentHost ?? { shutdown: async () => {} };
+    this.runtimeInvalidator = options.runtimeInvalidator ?? { invalidateAll: async () => {} };
     this.now = options.now ?? (() => new Date());
     this.migrationSignal =
       options.migrationSignal ?? (() => ({ migrationIncomplete: false, legacyEmail: null }));
@@ -244,16 +244,14 @@ export class AuthStateService {
   /**
    * D47 S5 §2 — `markRejected()` orchestration (B-track B5): flips the
    * vault's `invalidatedAt` (plaintext layer only, payload untouched),
-   * shuts down the Agent Host (kills the swept-revive internal path —
-   * `agent-host/codexRuntime.ts`'s send-time silent reopen can never fire
-   * once the whole Host process is gone), then `refresh()`s — which
+   * invalidates every Pi worker generation before `refresh()`s — which
    * re-derives `credentials_invalid: rejected` from the now-invalidated
    * vault and broadcasts exactly once (value changed).
    */
   async markRejected(): Promise<void> {
     const iso = this.now().toISOString();
     await this.vault.markInvalidated(iso);
-    await this.agentHost.shutdown();
+    await this.runtimeInvalidator.invalidateAll();
     this.refresh();
   }
 

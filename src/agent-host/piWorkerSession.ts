@@ -715,6 +715,7 @@ export class PiWorkerSession {
       cwd: this.cwd,
       projectTrusted: this.options.projectTrusted,
       extensionUi: this.extensionUi,
+      sessionFile: this.options.sessionFile,
       model: this.options.model,
       effort: this.options.effort,
       decidePermissionGate: this.options.decidePermissionGate,

@@ -63,6 +63,8 @@ export type WorkerRuntimeEventMessage = WorkerRpcEvent<'runtime.event', RuntimeE
 export interface WorkerBootstrapPayload {
   logicalSessionId: string;
   cwd: string;
+  /** Reopen this exact durable Pi session after a worker-generation restart. */
+  sessionFile?: string;
   model?: string;
   effort?: SessionEffortLevel;
 }
@@ -142,6 +144,12 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
     value.logicalSessionId.trim().length === 0 ||
     typeof value.cwd !== 'string' ||
     value.cwd.trim().length === 0
+  ) {
+    return false;
+  }
+  if (
+    value.sessionFile !== undefined &&
+    (typeof value.sessionFile !== 'string' || value.sessionFile.trim().length === 0)
   ) {
     return false;
   }

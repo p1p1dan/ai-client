@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import {
   CODEX_APPROVAL_POLICIES,
@@ -211,15 +209,10 @@ describe('isDangerousPermissionPreference (C13/C16 input)', () => {
 });
 
 /**
- * D48 S4 / R18 — the second-confirmation predicate, and the two walls that share
- * it.
+ * D48 S4 / R18 — the legacy second-confirmation predicate vocabulary.
  *
- * One predicate, because the failure being prevented is the two walls
- * DISAGREEING: Main accepting a confirmation the Host would reject (or the other
- * way round) is a wall with a door in it, and neither side's own test would show
- * it. The scan below is what keeps them on the same predicate — a hand-rolled
- * `=== true` at either call site would pass every behavioural assertion here and
- * still be a second copy waiting to drift.
+ * T30 deleted the executable NDJSON Host wall. These pure contract tests remain
+ * until T31/T35 removes the legacy Claude/Codex permission DTO itself.
  */
 describe('permissionChangeNeedsConfirmation — one gate, two walls (R18)', () => {
   const DANGEROUS = [
@@ -252,18 +245,5 @@ describe('permissionChangeNeedsConfirmation — one gate, two walls (R18)', () =
       }
     }
     expect(permissionChangeNeedsConfirmation(undefined, undefined)).toBe(false);
-  });
-
-  it('is the predicate BOTH walls call, rather than two spellings of the same idea', () => {
-    const root = path.resolve(import.meta.dirname, '..', '..', '..');
-    const walls = {
-      'main/ipc/chat.ts': readFileSync(path.join(root, 'main', 'ipc', 'chat.ts'), 'utf8'),
-      'agent-host/index.ts': readFileSync(path.join(root, 'agent-host', 'index.ts'), 'utf8'),
-    };
-    for (const [where, source] of Object.entries(walls)) {
-      expect(source, where).toContain('permissionChangeNeedsConfirmation(');
-      // And neither reimplements the comparison next to it.
-      expect(source, where).not.toContain('dangerousConfirmed !== true');
-    }
   });
 });

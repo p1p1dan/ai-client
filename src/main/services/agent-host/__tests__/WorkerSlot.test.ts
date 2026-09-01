@@ -118,6 +118,13 @@ afterEach(() => {
 });
 
 describe('WorkerSlot RPC correlation', () => {
+  it('commits a controlled diagnostic key remap while running', () => {
+    const { slot } = createSlot();
+    expect(slot.slotKey).toBe('slot-a');
+    slot.remapSlotKey('session:/sessions/a.jsonl');
+    expect(slot.slotKey).toBe('session:/sessions/a.jsonl');
+  });
+
   it('correlates out-of-order responses and keeps request IDs unique', async () => {
     const { slot, transport } = createSlot();
 
@@ -379,6 +386,11 @@ describe('WorkerSlot lifecycle', () => {
     expect(slot.state).toBe('dispose-failed');
     expect(transport.kill).toHaveBeenCalledTimes(1);
     expect(lifecycle).toEqual([]);
+
+    transport.kill.mockImplementation(() => true);
+    expect(slot.forceKillNow()).toBe(true);
+    expect(transport.kill).toHaveBeenCalledTimes(2);
+    expect(slot.state).toBe('disposed');
   });
 
   it('finishes as disposed when the worker exits before the dispose ACK', async () => {

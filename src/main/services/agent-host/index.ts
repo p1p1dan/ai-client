@@ -1,5 +1,3 @@
-export { AgentHostManager } from './AgentHostManager';
-export { AgentHostProcess } from './AgentHostProcess';
 export type {
   CreatedPiWorkerSlot,
   CreatePiWorkerSlotOptions,
@@ -10,7 +8,6 @@ export {
   type ResolveNodeRuntimeOptions,
   resolveNode24Runtime,
 } from './NodeRuntimeResolver';
-export { PiSingleSlotRuntime, piSingleSlotRuntime } from './PiSingleSlotRuntime';
 export type {
   ForkedPiWorker,
   PiWorkerEntryLayout,
@@ -19,8 +16,22 @@ export type {
 export {
   buildPiWorkerEnvironment,
   forkPiWorkerProcess,
+  resolveCurrentPiWorkerEntryPath,
   resolvePiWorkerEntryPath,
 } from './PiWorkerProcess';
+export type {
+  WorkerManagerEntryState,
+  WorkerManagerOptions,
+  WorkerManagerSlotSnapshot,
+  WorkerManagerState,
+} from './WorkerManager';
+export {
+  resolveDefaultWorkerCapacity,
+  resolveWorkerCapacity,
+  WorkerManager,
+  WorkerManagerError,
+  workerManager,
+} from './WorkerManager';
 export type {
   WorkerSlotDiagnostic,
   WorkerSlotErrorCode,
@@ -32,3 +43,9 @@ export type {
 export { WorkerSlot, WorkerSlotError } from './WorkerSlot';
 export type { WorkerTransport, WorkerTransportExit } from './WorkerTransport';
 export { createUtilityProcessWorkerTransport } from './WorkerTransport';
+export {
+  normalizedWorkerPathIdentity,
+  normalizeWorkerPath,
+  sessionWorkerKey,
+  workspaceWorkerKey,
+} from './workerSessionKey';

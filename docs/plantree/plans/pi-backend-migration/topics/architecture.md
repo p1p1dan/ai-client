@@ -1,8 +1,8 @@
 # Topic — Pi-only WorkerManager 架构
 
-> 架构决策权威是 [D15](../decisions/015-main-owned-worker-manager.md)；本文件只提供实现阅读 capsule。重排前 singleton-host 方案见 [history snapshot](../history/2026-08-31-pre-pi-only-realignment/topics/architecture.md)。
+> 架构决策权威是 [D15](../decisions/015-main-owned-worker-manager.md) 与 [D17](../decisions/017-worker-pool-policy.md)；T30 已落地本 topology，本文件提供实现阅读 capsule。重排前 singleton-host 方案见 [history snapshot](../history/2026-08-31-pre-pi-only-realignment/topics/architecture.md)。
 
-## 目标拓扑
+## 已落地拓扑
 
 ```text
 Renderer

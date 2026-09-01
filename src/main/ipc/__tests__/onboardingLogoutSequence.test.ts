@@ -87,8 +87,8 @@ vi.mock('../../services/session/SessionManager', () => ({
   },
 }));
 
-vi.mock('../../services/agent-host/AgentHostManager', () => ({
-  agentHostManager: { shutdown: shutdownMock },
+vi.mock('../../services/agent-host/WorkerManager', () => ({
+  workerManager: { invalidateAll: shutdownMock },
 }));
 
 vi.mock('../../services/auth', () => ({

@@ -1,146 +1,26 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { COMETIX_PIN } from '@shared/agentHost/cometixPin';
-import type { ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
-import { resolveHostEntryPath } from '../agent-host/AgentHostManager';
-import { deriveBundledCometixCliPath } from '../agent-host/hostEnv';
-import { compareSemver } from './ClaudeVersion';
-import { cliDetector } from './CliDetector';
+import { existsSync } from 'node:fs';
+import type { ClaudeRuntimeStatus } from '@shared/types';
+import { resolveCurrentPiWorkerEntryPath } from '../agent-host/PiWorkerProcess';
 
 export type { ClaudeRuntimeKind, ClaudeRuntimeStatus, VsCodeExtensionInfo } from '@shared/types';
 export { LAST_NODE_CLAUDE_VERSION } from '@shared/types';
 export { compareSemver } from './ClaudeVersion';
 
-// Delegate `claude --version` detection to the same CliDetector used by the
-// post-registration onboarding check. CliDetector gives us: 60s timeout on
-// Windows (vs 8s here, which routinely fired on cold cmd.exe + npm shim +
-// antivirus chains), and an execInPty fallback that loads the user's login
-// shell — picking up nvm / mise / volta / asdf installs that a bare
-// `sh -c claude --version` cannot see. Sharing one detector also guarantees
-// the runtime gate and the registered-state CLI check can never disagree.
-async function runVersionCheck(): Promise<string | null> {
-  try {
-    const info = await cliDetector.detectOne('claude');
-    if (info.installed && info.version) {
-      return info.version;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function getVsCodeExtensionRoots(): string[] {
-  const home = os.homedir();
-  // Real VSCode and the open-source builds (VSCodium, Cursor) all reuse the same layout.
-  return [
-    path.join(home, '.vscode', 'extensions'),
-    path.join(home, '.vscode-insiders', 'extensions'),
-    path.join(home, '.vscode-server', 'extensions'),
-    path.join(home, '.cursor', 'extensions'),
-    path.join(home, '.windsurf', 'extensions'),
-  ].filter((p) => {
-    try {
-      return existsSync(p);
-    } catch {
-      return false;
-    }
-  });
-}
-
-function detectVsCodeClaudeExtension(): VsCodeExtensionInfo | undefined {
-  const EXTENSION_PREFIX = 'anthropic.claude-code-';
-  for (const root of getVsCodeExtensionRoots()) {
-    let entries: string[] = [];
-    try {
-      entries = readdirSync(root);
-    } catch {
-      continue;
-    }
-    // Extension folder follows `<publisher>.<name>-<version>`. The official
-    // publisher is `anthropic` and the extension id is `claude-code`. When
-    // VSCode hasn't cleaned up older builds the directory contains multiple
-    // entries — sort by parsed semver (descending) so we always pick the
-    // highest version, matching VSCode's own load order.
-    const candidates = entries
-      .filter((name) => name.toLowerCase().startsWith(EXTENSION_PREFIX))
-      .map((name) => ({
-        dir: path.join(root, name),
-        folderVersion: name.slice(EXTENSION_PREFIX.length),
-      }))
-      .sort((a, b) => compareSemver(b.folderVersion, a.folderVersion));
-
-    for (const candidate of candidates) {
-      const pkgJsonPath = path.join(candidate.dir, 'package.json');
-      try {
-        const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as { version?: string };
-        // Trust package.json over the directory name — VSCode does the same.
-        const version =
-          typeof pkg.version === 'string' && pkg.version.length > 0
-            ? pkg.version
-            : candidate.folderVersion;
-        if (version) {
-          return { path: candidate.dir, version };
-        }
-      } catch {
-        // try the next candidate
-      }
-    }
-  }
-  return undefined;
-}
-
+/**
+ * Transition compatibility for the existing onboarding gate.
+ *
+ * The DTO/channel keeps its historical name until T35 removes the remaining
+ * renderer vocabulary, but the only runtime checked is the actual Pi worker
+ * entry. A global Claude CLI or VS Code extension can never satisfy this gate.
+ */
 export class ClaudeRuntimeChecker {
   private cached: ClaudeRuntimeStatus | null = null;
 
   async detect(force = false): Promise<ClaudeRuntimeStatus> {
-    if (!force && this.cached) {
-      return this.cached;
-    }
-
-    // The runtime this app actually uses, asked first (2026-08-26).
-    //
-    // Conversations run on the pinned `@cometix/claude-code` build shipped
-    // inside the Host bundle — an unofficial NODE build of Claude Code, handed
-    // to the Agent SDK as `pathToClaudeCodeExecutable`. A user's globally
-    // installed `claude` has never been part of that path, so gating the whole
-    // app on `claude --version` was asking a question whose answer did not
-    // matter: someone with a perfectly working bundle was sent to an onboarding
-    // step to install a CLI nothing would ever run.
-    //
-    // It also retires the version limit that hung off the same probe: the Bun
-    // threshold was about official builds, and cometix is a Node build, so it
-    // never applied to what we actually execute.
-    if (existsSync(deriveBundledCometixCliPath(resolveHostEntryPath()))) {
-      this.cached = { kind: 'installed', cliVersion: COMETIX_PIN.version };
-      return this.cached;
-    }
-
-    // Everything below is the pre-2026-08-26 chain, reached only when the
-    // bundle is missing — a broken installation, or a dev tree with no
-    // `agent-host/node_modules`. Kept rather than deleted so that case still
-    // degrades to something usable instead of a dead end.
-    const cliVersion = await runVersionCheck();
-    if (cliVersion) {
-      // `installed`, flat: the version-threshold classification retired with the
-      // Bun banner (2026-08-26). Answering "which runtime is this" needs a real
-      // probe of the binary, and the ruling was to stop guessing rather than to
-      // guess differently.
-      this.cached = { kind: 'installed', cliVersion };
-      return this.cached;
-    }
-
-    const extension = detectVsCodeClaudeExtension();
-    if (extension) {
-      this.cached = {
-        kind: 'vscode-extension-only',
-        vscodeExtension: extension,
-      };
-      return this.cached;
-    }
-
-    this.cached = { kind: 'not-installed' };
+    if (!force && this.cached) return this.cached;
+    this.cached = existsSync(resolveCurrentPiWorkerEntryPath())
+      ? { kind: 'installed', cliVersion: 'pi-worker' }
+      : { kind: 'not-installed' };
     return this.cached;
   }
 

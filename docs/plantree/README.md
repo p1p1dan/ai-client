@@ -43,7 +43,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase B / T30 bounded WorkerManager | T29-c single-slot closure + singleton Pi deletion | T30 identity/remap/capacity/restart |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase C / T31 behavior reattachment | T30 bounded WorkerManager + global host authority deletion | T31 queue/Extension UI/models/permissions |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -65,13 +65,14 @@ T28 replacement baseline
 → T37 release candidate
 ```
 
-当前 Next 是 **T30 Main-owned bounded WorkerManager**，不是旧 Cycle 3 history-first，也不是 Codex/multi-agent 后续。
+当前 Next 是 **T31 Cycle 1/2 behavior reattachment**，不是旧 Cycle 3 history-first，也不是 Codex/multi-agent 后续。
 
 ## Stable evidence and history
 
 - [Cycle 1 evidence](./plans/pi-backend-migration/evidence/2026-08-30-cycle1-execution.md)
 - [Cycle 2 evidence](./plans/pi-backend-migration/evidence/2026-08-31-cycle2-execution.md)
 - [Cycle 2 screenshots](./plans/pi-backend-migration/evidence/cycle2-screenshots/)
+- [T30 WorkerManager evidence](./plans/pi-backend-migration/evidence/2026-08-31-t30-worker-manager.md)
 - [Pre-Pi-only Pi plan snapshot](./plans/pi-backend-migration/history/2026-08-31-pre-pi-only-realignment/)
 - [Pre-Pi-only baseline snapshot](./history/2026-08-31-pre-pi-only-baseline/)
 - [Pre-Pi-only root registry](./history/2026-08-31-pre-pi-only-registry.md)

@@ -55,8 +55,8 @@ async function clearServerAuthCookie(serverUrl: string): Promise<void> {
  *     teardown starts (a `create`/`resume` call racing logout must see the
  *     gate already shut, not a stale `authenticated` snapshot).
  *  ② `terminateAllSessions()` — kill remote sessions, then await local PTYs.
- *  ③ `await agentHostManager.shutdown()` — flag-gated (matches the pre-S5
- *     "logout with managed credentials off never touches the Host" contract,
+ *  ③ `await workerManager.invalidateAll()` — flag-gated (matches the pre-S5
+ *     "logout with managed credentials off never touches the runtime" contract,
  *     `OnboardingServiceManagedHome.test.ts`'s own assertion). MOVED OUT of
  *     `regenerateManagedHomesForLogout`'s tail (I9: "shutdown 从 regenerate
  *     链尾摘出") — this eliminates the codex swept-revive window
@@ -96,10 +96,10 @@ export async function performLogoutSequence(): Promise<boolean> {
   // ③ — flag-gated; strictly before ④/⑤ (I9 restructure).
   if (resolveManagedCredentialsEnabled()) {
     try {
-      const { agentHostManager } = await import('../services/agent-host/AgentHostManager');
-      await agentHostManager.shutdown();
+      const { workerManager } = await import('../services/agent-host/WorkerManager');
+      await workerManager.invalidateAll();
     } catch (error) {
-      console.warn('[onboarding:logout] Failed to shut down agent host:', error);
+      console.warn('[onboarding:logout] Failed to invalidate Pi workers:', error);
     }
   }
 

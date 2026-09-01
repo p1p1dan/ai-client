@@ -208,17 +208,6 @@ describe('startup orchestration trace — adoption-read -> vault-save -> marker,
     expect(probeUrl).toBe(`${legacyServerUrl}/api/auth/login`);
     expect(JSON.parse(probeInit.body)).toEqual({ key: legacyToken });
 
-    // The adopted credentials are visible to the runtime immediately — a
-    // freshly-adopted vault needs no re-login. D60 moved this from "landed in
-    // the managed home's settings.json" to "resolves out of the vault at Host
-    // spawn time", which is a STRONGER form of the same guarantee: there is
-    // no file that could be written late, or left stale.
-    const { resolveClaudeManagedHostEnv } = await import('../../agent-host/AgentHostManager');
-    expect(resolveClaudeManagedHostEnv()).toEqual({
-      claudeBaseUrl: legacyBaseUrl,
-      claudeAuthToken: legacyToken,
-    });
-
     // "refresh" landed authenticated, off the SAME vault adoption wrote —
     // `remoteHealth` is `'valid'` here (not the freshly-computed `'unknown'`
     // refresh() itself would have produced) because the probe's 200 response

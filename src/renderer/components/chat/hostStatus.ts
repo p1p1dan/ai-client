@@ -150,8 +150,8 @@ export interface HostStatusPrimeSnapshot {
   cometixVersion?: string;
   settings?: HostSettingsDiagnostics | null;
   /**
-   * S3 slice 6 (A6): mirrors `AgentHostManager.getStatus().capabilities`
-   * (`AgentHostCapabilitiesInfo`). Optional/nullable exactly like `settings`
+   * S3 slice 6 (A6): mirrors the Main runtime readiness capabilities snapshot.
+   * Optional/nullable exactly like `settings`
    * above — an old Main build's snapshot simply omits the key.
    */
   capabilities?: { thinking?: boolean; agents?: unknown; permissionPolicy?: unknown } | null;
@@ -162,9 +162,8 @@ export interface HostStatusPrimeSnapshot {
  * placeholder/prior state — `useHostStatus.ts`'s prime call on mount.
  * Extracted so this merge (previously inline in the hook, and therefore
  * untestable under the node-env vitest config, which cannot render a React
- * hook) is a pure, unit-tested function. `settings` is now part of it:
- * `AgentHostManager.getStatus()` gained the field in this same batch, but
- * nothing copied it here — a consumer mounting after `host.ready` already
+ * hook) is a pure, unit-tested function. `settings` is part of the snapshot,
+ * so a consumer mounting after the readiness event already
  * fired (e.g. `HistoryErrorNotice`, only ever mounted in session mode) kept
  * reading `settings: undefined` forever, silently pinning the catalog
  * default model instead of the Host's own.
