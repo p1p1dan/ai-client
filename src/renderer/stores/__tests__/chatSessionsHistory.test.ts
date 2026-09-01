@@ -102,12 +102,14 @@ function applyAll(
 const HISTORY_MESSAGES: HistoryMessage[] = [
   {
     id: 'h:uuid-1',
+    entryId: 'uuid-1',
     role: 'user',
     timestamp: 1500,
     blocks: [{ type: 'text', id: 'h:uuid-1:0', text: 'hello from history' }],
   },
   {
     id: 'h:uuid-2',
+    entryId: 'uuid-2',
     role: 'assistant',
     timestamp: 1600,
     model: 'claude-sonnet',
@@ -133,6 +135,47 @@ const HISTORY_MESSAGES: HistoryMessage[] = [
 ];
 
 describe('applyRuntimeEvent — session.history (C-06)', () => {
+  it('preserves exact Pi entry ids and branch replacement drops the abandoned active path', () => {
+    const abandoned: ChatMessage = {
+      id: 'h:old-branch',
+      entryId: 'old-branch',
+      sessionId: SESSION_ID,
+      role: 'assistant',
+      blocks: [{ id: 'old', type: 'text', text: 'B/C branch' }],
+    };
+    const runtime: ChatMessage = {
+      id: 'asst-live',
+      sessionId: SESSION_ID,
+      role: 'assistant',
+      blocks: [{ id: 'live', type: 'text', text: 'must not survive branch replacement' }],
+    };
+    const state = baseState({
+      sessions: [makeSession()],
+      messages: { [SESSION_ID]: [abandoned, runtime] },
+    });
+    const patch = applyRuntimeEvent(
+      state,
+      makeHistoryEvent({
+        mode: 'branch',
+        messages: HISTORY_MESSAGES,
+        offset: 0,
+        limit: 80,
+        totalCount: 2,
+        hasMore: false,
+        branchRevision: 4,
+      })
+    );
+
+    expect(patch.messages?.[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+    ]);
+    expect(patch.messages?.[SESSION_ID]?.map((message) => message.entryId)).toEqual([
+      'uuid-1',
+      'uuid-2',
+    ]);
+    expect(patch.historyBranchRevisions).toEqual({ [SESSION_ID]: 4 });
+  });
   it('is idempotent: applying the same event twice yields the same messages/sessions/historyErrors', () => {
     const state = baseState({ sessions: [makeSession()] });
     const event = makeHistoryEvent({ messages: HISTORY_MESSAGES });

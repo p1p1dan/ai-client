@@ -73,6 +73,7 @@ export async function createPiWorkerSlot(
         ...(options.sessionFile ? { sessionFile: options.sessionFile } : {}),
         ...(options.model ? { model: options.model } : {}),
         ...(options.effort ? { effort: options.effort } : {}),
+        ...(options.leafCheckpoint ? { leafCheckpoint: options.leafCheckpoint } : {}),
       }
     );
     if (!isWorkerBootstrapResult(result)) {

@@ -31,6 +31,7 @@ function bootstrapResult(): WorkerBootstrapResult {
     cwd: '/repo',
     agentDir: '/managed/pi-agent',
     sessionFile: '/managed/pi-agent/sessions/one.jsonl',
+    leaf: { activeEntryId: null, fileTailEntryId: null },
     projectTrusted: false,
     permissionGate: 'bundled',
   };

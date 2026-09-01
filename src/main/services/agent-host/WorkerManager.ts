@@ -8,20 +8,34 @@ import {
   type RuntimeEvent,
   type RuntimeEventDraft,
 } from '@shared/types/runtimeEvents';
+import type { PiLeafCheckpoint, SessionTreeSnapshot } from '@shared/types/sessionHistory';
+import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import {
+  isWorkerDiscardForkResult,
   isWorkerExtensionUiResponseResult,
+  isWorkerForkResult,
   isWorkerHistoryResult,
+  isWorkerRewindResult,
   isWorkerSendResult,
   isWorkerStopResult,
+  isWorkerTreeResult,
+  type WorkerDiscardForkPayload,
+  type WorkerDiscardForkResult,
   type WorkerExtensionUiResponsePayload,
   type WorkerExtensionUiResponseResult,
+  type WorkerForkPayload,
+  type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerRewindPayload,
+  type WorkerRewindResult,
   type WorkerRpcEvent,
   type WorkerSendPayload,
   type WorkerSendResult,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerTreePayload,
+  type WorkerTreeResult,
 } from '@shared/types/workerRpc';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
@@ -68,6 +82,9 @@ interface ManagedSlot {
   generation: number;
   configGeneration: number;
   error: string | null;
+  leafCheckpoint: PiLeafCheckpoint | null;
+  branchRevision: number;
+  mutationInFlight: 'rewind' | 'fork' | null;
 }
 
 interface BlockingRequestOrigin {
@@ -85,7 +102,14 @@ export interface WorkerManagerOptions {
     workspacePath: string;
     runtimeIdentity: string;
     model?: string;
+    piLeaf?: PiLeafCheckpoint;
   }) => Promise<void>;
+  commitPiLeaf?: (input: {
+    sessionId: string;
+    runtimeIdentity: string;
+    piLeaf: PiLeafCheckpoint;
+  }) => Promise<void>;
+  createForked?: (entry: SessionIndexEntry) => Promise<SessionIndexEntry>;
   onEvent?: (event: RuntimeEvent) => void;
   log?: (...args: unknown[]) => void;
   now?: () => number;
@@ -178,6 +202,8 @@ export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
+  private readonly commitPiLeaf: NonNullable<WorkerManagerOptions['commitPiLeaf']>;
+  private readonly createForked: NonNullable<WorkerManagerOptions['createForked']>;
   private readonly handlers = new Set<(event: RuntimeEvent) => void>();
   private readonly log: (...args: unknown[]) => void;
   private readonly now: () => number;
@@ -207,6 +233,8 @@ export class WorkerManager {
     this.createSlot = options.createSlot ?? createPiWorkerSlot;
     this.bindRuntimeIdentity = options.bindRuntimeIdentity ?? (async () => undefined);
     this.commitResumed = options.commitResumed ?? (async () => undefined);
+    this.commitPiLeaf = options.commitPiLeaf ?? (async () => undefined);
+    this.createForked = options.createForked ?? (async (entry) => entry);
     this.log = options.log ?? (() => undefined);
     this.now = options.now ?? Date.now;
     this.createToken = options.createToken ?? randomUUID;
@@ -355,6 +383,9 @@ export class WorkerManager {
         generation: 1,
         configGeneration: this.configGeneration,
         error: null,
+        leafCheckpoint: null,
+        branchRevision: 0,
+        mutationInFlight: null,
       };
       this.entriesByKey.set(temporaryKey, entry);
       this.entriesBySession.set(input.sessionId, entry);
@@ -395,6 +426,7 @@ export class WorkerManager {
         this.entriesByKey.delete(entry.key);
         entry.key = durableKey;
         entry.sessionFile = sessionFile;
+        entry.leafCheckpoint = created.bootstrap.leaf;
         entry.bootstrap = { ...created.bootstrap, sessionFile };
         entry.lastIdleAt = this.now();
         this.entriesByKey.set(durableKey, entry);
@@ -432,11 +464,19 @@ export class WorkerManager {
     workspacePath: string;
     model?: string;
     effort?: SessionEffortLevel;
+    leafCheckpoint?: PiLeafCheckpoint;
     ownerWebContentsId?: number;
   }): Promise<string> {
     const sessionFile = normalizeWorkerPath(input.sessionFile, 'Pi session file');
     const cwd = normalizeWorkerPath(input.workspacePath, 'Workspace path');
-    const fingerprint = JSON.stringify([sessionFile, cwd, input.model ?? '', input.effort ?? '']);
+    const fingerprint = JSON.stringify([
+      sessionFile,
+      cwd,
+      input.model ?? '',
+      input.effort ?? '',
+      input.leafCheckpoint?.activeEntryId ?? '',
+      input.leafCheckpoint?.fileTailEntryId ?? '',
+    ]);
     const existingFlight = this.resumeFlights.get(input.sessionId);
     if (existingFlight) {
       if (existingFlight.fingerprint !== fingerprint) {
@@ -492,6 +532,7 @@ export class WorkerManager {
           workspacePath: cwd,
           runtimeIdentity: sessionFile,
           ...(input.model ? { model: input.model } : {}),
+          ...(entry.leafCheckpoint ? { piLeaf: entry.leafCheckpoint } : {}),
         });
         this.claimEntry(
           entry,
@@ -543,6 +584,9 @@ export class WorkerManager {
         generation: 1,
         configGeneration: this.configGeneration,
         error: null,
+        leafCheckpoint: input.leafCheckpoint ?? null,
+        branchRevision: 0,
+        mutationInFlight: null,
       };
       this.entriesByKey.set(durableKey, entry);
       this.entriesBySession.set(input.sessionId, entry);
@@ -571,12 +615,15 @@ export class WorkerManager {
           );
         }
         this.validateHistoryResult(entry, history);
+        entry.leafCheckpoint = entry.bootstrap?.leaf ?? entry.leafCheckpoint;
         await this.commitResumed({
           sessionId: input.sessionId,
           workspacePath: cwd,
           runtimeIdentity: sessionFile,
           ...(input.model ? { model: input.model } : {}),
+          piLeaf: created.bootstrap.leaf,
         });
+        entry.leafCheckpoint = created.bootstrap.leaf;
         entry.bootstrap = { ...created.bootstrap, sessionFile: reopenedFile };
         entry.state = 'ready';
         entry.error = null;
@@ -615,18 +662,18 @@ export class WorkerManager {
   }): Promise<string> {
     const requestId = nextRequestId('history');
     const entry = this.requireReadySession(input.sessionId);
-    if (entry.activeRequestId) {
-      throw new WorkerManagerError(
-        'session_busy',
-        `Session ${input.sessionId} cannot paginate history while active`,
-        true
-      );
-    }
+    this.assertIdleEntry(entry, 'paginate history');
     this.claimEntry(entry, input.ownerWebContentsId);
     const slot = entry.slot;
     const generation = entry.generation;
+    const branchRevision = entry.branchRevision;
     const assertAuthority = () => {
-      if (!slot || entry.slot !== slot || !this.isAuthoritative(entry, generation)) {
+      if (
+        !slot ||
+        entry.slot !== slot ||
+        !this.isAuthoritative(entry, generation) ||
+        entry.branchRevision !== branchRevision
+      ) {
         throw new WorkerManagerError(
           'worker_history_stale_generation',
           `History page for ${input.sessionId} arrived from a retired WorkerSlot`,
@@ -653,6 +700,325 @@ export class WorkerManager {
     return task.then(() => requestId);
   }
 
+  async getSessionTree(input: {
+    sessionId: string;
+    requestSequence: number;
+    ownerWebContentsId?: number;
+  }): Promise<{
+    sessionKey: string;
+    requestSequence: number;
+    branchRevision: number;
+    snapshot: SessionTreeSnapshot;
+  }> {
+    const entry = this.requireReadySession(input.sessionId);
+    this.assertIdleEntry(entry, 'load the session tree');
+    this.claimEntry(entry, input.ownerWebContentsId);
+    const slot = entry.slot;
+    const generation = entry.generation;
+    const branchRevision = entry.branchRevision;
+    const result = await this.readTree(entry);
+    if (
+      !slot ||
+      entry.slot !== slot ||
+      !this.isAuthoritative(entry, generation) ||
+      entry.branchRevision !== branchRevision
+    ) {
+      throw new WorkerManagerError(
+        'worker_tree_stale',
+        `Session tree for ${input.sessionId} lost slot or branch authority`,
+        true
+      );
+    }
+    return {
+      sessionKey: `${entry.logicalSessionId}:${entry.key}`,
+      requestSequence: input.requestSequence,
+      branchRevision,
+      snapshot: result.snapshot,
+    };
+  }
+
+  async rewindSession(input: {
+    sessionId: string;
+    entryId: string;
+    confirmed: true;
+    ownerWebContentsId?: number;
+  }): Promise<{
+    requestId: string;
+    sessionKey: string;
+    leaf: PiLeafCheckpoint;
+    editorText?: string;
+    tree: SessionTreeSnapshot;
+  }> {
+    if (input.confirmed !== true) {
+      throw new WorkerManagerError(
+        'rewind_confirmation_required',
+        'Session rewind requires explicit confirmation'
+      );
+    }
+    const requestId = nextRequestId('rewind');
+    return this.serialize(async () => {
+      const entry = this.requireReadySession(input.sessionId);
+      this.assertIdleEntry(entry, 'rewind');
+      this.claimEntry(entry, input.ownerWebContentsId);
+      entry.mutationInFlight = 'rewind';
+      try {
+        const slot = entry.slot;
+        const generation = entry.generation;
+        const result = await slot?.request<WorkerRewindResult, WorkerRewindPayload>(
+          'worker.rewind',
+          {
+            logicalSessionId: entry.logicalSessionId,
+            targetEntryId: input.entryId,
+            confirmed: true,
+          }
+        );
+        if (!isWorkerRewindResult(result)) {
+          throw new WorkerManagerError(
+            'worker_invalid_rewind_result',
+            'Pi worker returned an invalid rewind result'
+          );
+        }
+        this.validateHistoryResult(entry, result.history);
+        this.validateTreeResult(entry, result.tree);
+        if (!slot || entry.slot !== slot || !this.isAuthoritative(entry, generation)) {
+          throw new WorkerManagerError(
+            'worker_rewind_stale',
+            `Rewind for ${input.sessionId} arrived from a retired WorkerSlot`,
+            true
+          );
+        }
+        try {
+          await this.commitPiLeaf({
+            sessionId: entry.logicalSessionId,
+            runtimeIdentity: result.sessionFile,
+            piLeaf: result.leaf,
+          });
+        } catch (error) {
+          await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
+          throw error;
+        }
+        entry.leafCheckpoint = result.leaf;
+        entry.branchRevision += 1;
+        entry.lastUsedAt = this.now();
+        entry.lastIdleAt = this.now();
+        this.resetExtensionUi(entry, 'session_replaced');
+        this.dispatchHistory(entry, requestId, result.history, 'branch');
+        this.dispatch({
+          type: 'session.status',
+          sessionId: entry.logicalSessionId,
+          requestId,
+          payload: { status: 'idle' },
+        });
+        return {
+          requestId,
+          sessionKey: `${entry.logicalSessionId}:${entry.key}`,
+          leaf: result.leaf,
+          ...(result.editorText !== undefined ? { editorText: result.editorText } : {}),
+          tree: result.tree.snapshot,
+        };
+      } finally {
+        if (this.entriesBySession.get(entry.logicalSessionId) === entry) {
+          entry.mutationInFlight = null;
+        }
+      }
+    });
+  }
+
+  async forkSession(input: {
+    sourceSessionId: string;
+    entryId: string;
+    sourceTitle: string;
+    model?: string;
+    ownerWebContentsId?: number;
+  }): Promise<{ requestId: string; session: SessionIndexEntry }> {
+    const requestId = nextRequestId('fork');
+    return this.serialize(async () => {
+      const source = this.requireReadySession(input.sourceSessionId);
+      this.assertIdleEntry(source, 'fork');
+      this.claimEntry(source, input.ownerWebContentsId);
+      source.mutationInFlight = 'fork';
+      try {
+        await this.reclaimIdleInternal();
+        if (this.entriesBySession.size >= this.capacity) {
+          const candidates = [...this.entriesBySession.values()]
+            .filter((entry) => entry !== source && this.isSafeToEvict(entry))
+            .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
+          const victim = candidates[0];
+          if (!victim) {
+            throw new WorkerManagerError(
+              'worker_capacity_reached',
+              `Pi worker capacity ${this.capacity} has no safe slot for a fork`,
+              true
+            );
+          }
+          await this.retireAndDispose(victim, 'slot-replace');
+        }
+
+        const sourceSlot = source.slot;
+        const sourceGeneration = source.generation;
+        const fork = await sourceSlot?.request<WorkerForkResult, WorkerForkPayload>('worker.fork', {
+          logicalSessionId: source.logicalSessionId,
+          entryId: input.entryId,
+        });
+        if (!isWorkerForkResult(fork)) {
+          throw new WorkerManagerError(
+            'worker_invalid_fork_result',
+            'Pi worker returned an invalid fork result'
+          );
+        }
+        if (
+          !sourceSlot ||
+          source.slot !== sourceSlot ||
+          !this.isAuthoritative(source, sourceGeneration) ||
+          source.sessionFile !== fork.sourceSessionFile
+        ) {
+          throw new WorkerManagerError(
+            'worker_fork_stale',
+            `Fork source ${input.sourceSessionId} lost slot authority`,
+            true
+          );
+        }
+
+        const sessionId = `session-fork-${randomUUID()}`;
+        const sessionFile = normalizeWorkerPath(fork.sessionFile, 'Fork Pi session file');
+        const durableKey = sessionWorkerKey(sessionFile);
+        if (this.entriesByKey.has(durableKey) || this.entriesBySession.has(sessionId)) {
+          const discarded = await this.discardForkFile(source, sessionFile);
+          if (!discarded) {
+            throw new WorkerManagerError(
+              'worker_fork_cleanup_failed',
+              `Fork identity collided and the staged Pi file could not be removed: ${sessionFile}`,
+              true
+            );
+          }
+          throw new WorkerManagerError(
+            'worker_session_identity_conflict',
+            'Fork Pi session file is already owned'
+          );
+        }
+        const timestamp = this.now();
+        const target: ManagedSlot = {
+          key: durableKey,
+          temporaryKey: durableKey,
+          logicalSessionId: sessionId,
+          cwd: source.cwd,
+          sessionFile,
+          slot: null,
+          bootstrap: null,
+          state: 'creating',
+          activeRequestId: null,
+          ownerWebContentsId: null,
+          acceptEvents: true,
+          pendingBlockingRequests: new Set(),
+          extensionRuntimeIds: new Set(),
+          lastUsedAt: timestamp,
+          lastIdleAt: timestamp,
+          restartAttempts: [],
+          generation: 1,
+          configGeneration: this.configGeneration,
+          error: null,
+          leafCheckpoint: fork.leaf,
+          branchRevision: 0,
+          mutationInFlight: null,
+        };
+        this.entriesByKey.set(durableKey, target);
+        this.entriesBySession.set(sessionId, target);
+        this.claimEntry(target, input.ownerWebContentsId);
+        let indexCommitted = false;
+
+        try {
+          const created = await this.spawnForEntry(target, {
+            ...(input.model ? { model: input.model } : {}),
+          });
+          const reopenedFile = created.bootstrap.sessionFile
+            ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Fork Pi session file')
+            : null;
+          if (!reopenedFile || sessionWorkerKey(reopenedFile) !== durableKey) {
+            throw new WorkerManagerError(
+              'worker_fork_identity_mismatch',
+              'Fork WorkerSlot did not exact-open the generated Pi session file'
+            );
+          }
+          const history = created.bootstrap.initialHistory;
+          if (!isWorkerHistoryResult(history)) {
+            throw new WorkerManagerError(
+              'worker_fork_history_missing',
+              'Fork WorkerSlot did not return initial branch history'
+            );
+          }
+          this.validateHistoryResult(target, history);
+          target.bootstrap = { ...created.bootstrap, sessionFile: reopenedFile };
+          target.leafCheckpoint = created.bootstrap.leaf;
+          const indexed = await this.createForked({
+            sessionId,
+            runtimeIdentity: sessionFile,
+            piLeaf: created.bootstrap.leaf,
+            agent: PI_AGENT,
+            workspacePath: source.cwd,
+            title: `${input.sourceTitle || 'Session'} (fork)`,
+            ...(input.model ? { model: input.model } : {}),
+            updatedAt: this.now(),
+            archived: false,
+          });
+          indexCommitted = true;
+          target.state = 'ready';
+          target.error = null;
+          this.dispatch({
+            type: 'session.created',
+            sessionId,
+            requestId,
+            payload: { agent: PI_AGENT, runtimeIdentity: sessionFile },
+          });
+          this.dispatchHistory(target, requestId, history, 'initial');
+          this.dispatch({
+            type: 'session.status',
+            sessionId,
+            requestId,
+            payload: { status: 'idle' },
+          });
+          return { requestId, session: indexed };
+        } catch (error) {
+          target.error = error instanceof Error ? error.message : String(error);
+          let discarded = indexCommitted;
+          if (!indexCommitted && target.slot) {
+            discarded = await this.discardForkFile(target, sessionFile);
+          }
+          if (!indexCommitted && !discarded) {
+            discarded = await this.discardForkFile(source, sessionFile);
+          }
+          let disposalError: unknown;
+          try {
+            await this.retireAndDispose(target, 'slot-dispose');
+          } catch (cleanupError) {
+            disposalError = cleanupError;
+          }
+          if (!indexCommitted && !discarded) {
+            throw new WorkerManagerError(
+              'worker_fork_cleanup_failed',
+              `Fork failed and the staged Pi file could not be confirmed removed: ${sessionFile}`,
+              true
+            );
+          }
+          if (disposalError) {
+            throw new WorkerManagerError(
+              'worker_fork_cleanup_failed',
+              `Fork failed and the provisional WorkerSlot did not confirm disposal: ${disposalError instanceof Error ? disposalError.message : String(disposalError)}`,
+              true
+            );
+          }
+          throw error;
+        }
+      } finally {
+        if (
+          this.entriesBySession.get(source.logicalSessionId) === source &&
+          source.mutationInFlight === 'fork'
+        ) {
+          source.mutationInFlight = null;
+        }
+      }
+    });
+  }
+
   async send(input: {
     sessionId: string;
     attemptId: string;
@@ -667,10 +1033,12 @@ export class WorkerManager {
       throw new WorkerManagerError('invalid_send_attempt', 'Pi send attemptId must be non-empty');
     }
     this.claimEntry(entry, input.ownerWebContentsId);
-    if (entry.activeRequestId) {
+    if (entry.activeRequestId || entry.mutationInFlight !== null) {
       throw new WorkerManagerError(
         'session_busy',
-        `Session ${input.sessionId} already has active turn ${entry.activeRequestId}`,
+        entry.activeRequestId
+          ? `Session ${input.sessionId} already has active turn ${entry.activeRequestId}`
+          : `Session ${input.sessionId} is applying ${entry.mutationInFlight}`,
         true
       );
     }
@@ -864,6 +1232,7 @@ export class WorkerManager {
       cwd: entry.cwd,
       generation: entry.generation,
       ...(entry.sessionFile ? { sessionFile: entry.sessionFile } : {}),
+      ...(entry.leafCheckpoint ? { leafCheckpoint: entry.leafCheckpoint } : {}),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
@@ -890,6 +1259,68 @@ export class WorkerManager {
     entry.bootstrap = created.bootstrap;
     entry.generation = created.slot.generation;
     return created;
+  }
+
+  private assertIdleEntry(entry: ManagedSlot, action: string): void {
+    if (
+      entry.activeRequestId ||
+      entry.pendingBlockingRequests.size > 0 ||
+      entry.mutationInFlight !== null
+    ) {
+      throw new WorkerManagerError(
+        'session_busy',
+        `Session ${entry.logicalSessionId} cannot ${action} while active`,
+        true
+      );
+    }
+  }
+
+  private async readTree(entry: ManagedSlot): Promise<WorkerTreeResult> {
+    const result = await entry.slot?.request<WorkerTreeResult, WorkerTreePayload>('worker.tree', {
+      logicalSessionId: entry.logicalSessionId,
+    });
+    if (!isWorkerTreeResult(result)) {
+      throw new WorkerManagerError(
+        'worker_invalid_tree_result',
+        'Pi worker returned an invalid session tree'
+      );
+    }
+    this.validateTreeResult(entry, result);
+    return result;
+  }
+
+  private validateTreeResult(entry: ManagedSlot, result: WorkerTreeResult): void {
+    const snapshot = result.snapshot;
+    if (
+      snapshot.logicalSessionId !== entry.logicalSessionId ||
+      sessionWorkerKey(snapshot.sessionFile) !== entry.key ||
+      normalizeWorkerPath(snapshot.workspacePath, 'Tree workspace') !== entry.cwd
+    ) {
+      throw new WorkerManagerError(
+        'worker_tree_identity_mismatch',
+        'Pi worker session tree does not match its authoritative slot identity'
+      );
+    }
+  }
+
+  private async discardForkFile(owner: ManagedSlot, sessionFile: string): Promise<boolean> {
+    try {
+      const result = await owner.slot?.request<WorkerDiscardForkResult, WorkerDiscardForkPayload>(
+        'worker.fork.discard',
+        {
+          logicalSessionId: owner.logicalSessionId,
+          sessionFile,
+        }
+      );
+      if (!isWorkerDiscardForkResult(result) || !result.discarded) {
+        this.log('[worker-manager] fork discard was not acknowledged', sessionFile);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      this.log('[worker-manager] failed to discard uncommitted fork file', error);
+      return false;
+    }
   }
 
   private async readHistory(
@@ -928,7 +1359,7 @@ export class WorkerManager {
     entry: ManagedSlot,
     requestId: string,
     history: WorkerHistoryResult,
-    mode: 'initial' | 'older' | 'refresh'
+    mode: 'initial' | 'older' | 'refresh' | 'branch'
   ): void {
     const page = history.page;
     this.dispatch({
@@ -944,6 +1375,7 @@ export class WorkerManager {
         limit: page.limit,
         totalCount: page.totalCount,
         hasMore: page.hasMore,
+        branchRevision: entry.branchRevision,
         truncated: page.hasMore,
         omittedCount: Math.max(0, page.totalCount - page.messages.length),
       },
@@ -993,9 +1425,12 @@ export class WorkerManager {
     entry.lastUsedAt = this.now();
   }
 
-  private serialize(work: () => Promise<void>): Promise<void> {
+  private serialize<TResult>(work: () => Promise<TResult>): Promise<TResult> {
     const run = this.lifecycleChain.then(work);
-    this.lifecycleChain = run.catch(() => undefined);
+    this.lifecycleChain = run.then(
+      () => undefined,
+      () => undefined
+    );
     return run;
   }
 
@@ -1012,7 +1447,8 @@ export class WorkerManager {
       entry.state === 'ready' &&
       entry.ownerWebContentsId === null &&
       entry.activeRequestId === null &&
-      entry.pendingBlockingRequests.size === 0
+      entry.pendingBlockingRequests.size === 0 &&
+      entry.mutationInFlight === null
     );
   }
 
@@ -1120,6 +1556,7 @@ export class WorkerManager {
     ) {
       entry.activeRequestId = null;
       entry.lastIdleAt = this.now();
+      void this.syncLeafCheckpoint(entry, message.generation);
     }
     this.dispatch({ ...event, sessionId: event.sessionId ?? entry.logicalSessionId });
   }
@@ -1225,6 +1662,12 @@ export class WorkerManager {
         );
       }
       this.validateHistoryResult(entry, history);
+      await this.commitPiLeaf({
+        sessionId: entry.logicalSessionId,
+        runtimeIdentity: reopenedFile,
+        piLeaf: created.bootstrap.leaf,
+      });
+      entry.leafCheckpoint = created.bootstrap.leaf;
       entry.bootstrap = { ...created.bootstrap, sessionFile: reopenedFile };
       entry.state = 'ready';
       entry.error = null;
@@ -1246,6 +1689,29 @@ export class WorkerManager {
       this.entriesByKey.get(entry.key) === entry &&
       entry.generation === generation
     );
+  }
+
+  private async syncLeafCheckpoint(entry: ManagedSlot, generation: number): Promise<void> {
+    try {
+      if (!this.isAuthoritative(entry, generation) || entry.activeRequestId) return;
+      const tree = await this.readTree(entry);
+      if (!this.isAuthoritative(entry, generation)) return;
+      const leaf = tree.snapshot.leaf;
+      if (
+        entry.leafCheckpoint?.activeEntryId === leaf.activeEntryId &&
+        entry.leafCheckpoint?.fileTailEntryId === leaf.fileTailEntryId
+      ) {
+        return;
+      }
+      await this.commitPiLeaf({
+        sessionId: entry.logicalSessionId,
+        runtimeIdentity: tree.snapshot.sessionFile,
+        piLeaf: leaf,
+      });
+      if (this.isAuthoritative(entry, generation)) entry.leafCheckpoint = leaf;
+    } catch (error) {
+      this.log('[worker-manager] failed to persist Pi leaf checkpoint', error);
+    }
   }
 
   private async dismissBlockingRequestForClosedOwner(
@@ -1348,4 +1814,6 @@ export const workerManager = new WorkerManager({
   bindRuntimeIdentity: (sessionId, sessionFile) =>
     sessionIndexService.bindRuntimeIdentity(sessionId, sessionFile),
   commitResumed: (input) => sessionIndexService.commitResumed(input),
+  commitPiLeaf: (input) => sessionIndexService.commitPiLeaf(input),
+  createForked: (entry) => sessionIndexService.createForked(entry),
 });

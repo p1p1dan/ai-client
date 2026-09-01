@@ -194,6 +194,8 @@ export interface ChatMessage {
   /** Pi history leaf ended before a complete assistant response was saved. */
   incomplete?: boolean;
   stopReason?: string;
+  /** Exact Pi session entry id. Present only on persisted Pi history rows. */
+  entryId?: string;
   /**
    * Round-2 P0 (optional-field addition, red-line discipline): user turn's
    * attachment metadata, when the turn carried any. Set once at
@@ -242,6 +244,8 @@ export interface ChatSessionsState {
     string,
     { nextOffset: number; hydratedCount: number; totalCount: number; hasMore: boolean }
   >;
+  /** Latest Main-owned active-branch generation observed for each Pi session. */
+  historyBranchRevisions?: Record<string, number>;
 
   selectSession: (sessionId: string) => void;
   /**
@@ -480,6 +484,7 @@ function mapHistoryMessageToChatMessage(
     blocks,
     ...(historyMessage.incomplete ? { incomplete: true } : {}),
     ...(historyMessage.stopReason ? { stopReason: historyMessage.stopReason } : {}),
+    ...(historyMessage.entryId ? { entryId: historyMessage.entryId } : {}),
     // Absent unless the history actually carried attachments — keeps exact-shape
     // assertions on attachment-free messages untouched (same rule as
     // `message.started`).
@@ -610,10 +615,12 @@ export function applyRuntimeEvent(
       const mergedBucket =
         payload.mode === 'older'
           ? mergeOlderHistoryPage(bucket, historyMessages)
-          : mergeReplayedHistory(bucket, historyMessages, {
-              historyReadFailed: payload.error != null,
-              snapshot: takeResumeSnapshot(sessionId, event.requestId),
-            });
+          : payload.mode === 'branch'
+            ? historyMessages
+            : mergeReplayedHistory(bucket, historyMessages, {
+                historyReadFailed: payload.error != null,
+                snapshot: takeResumeSnapshot(sessionId, event.requestId),
+              });
       const messages = withBucket(state, sessionId, mergedBucket);
 
       // Row creation is T-02's responsibility; only enrich an existing row.
@@ -650,7 +657,21 @@ export function applyRuntimeEvent(
         },
       };
 
-      return { messages, sessions, historyErrors, historyPagination };
+      const historyBranchRevisions =
+        payload.branchRevision === undefined
+          ? state.historyBranchRevisions
+          : {
+              ...state.historyBranchRevisions,
+              [sessionId]: payload.branchRevision,
+            };
+
+      return {
+        messages,
+        sessions,
+        historyErrors,
+        historyPagination,
+        historyBranchRevisions,
+      };
     }
 
     case 'session.status': {
@@ -1161,6 +1182,7 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
   lastError: null,
   historyErrors: {},
   historyPagination: {},
+  historyBranchRevisions: {},
 
   selectSession: (sessionId) => {
     set({ activeSessionId: sessionId });

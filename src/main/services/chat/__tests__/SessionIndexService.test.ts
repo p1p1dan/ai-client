@@ -91,6 +91,44 @@ describe('SessionIndexService', () => {
     expect(persisted[0]?.runtimeIdentity).toBeUndefined();
   });
 
+  it('atomically persists Pi leaf checkpoints and one complete fork row', async () => {
+    const { SessionIndexService } = await import('../SessionIndexService');
+    const service = new SessionIndexService();
+    await service.recordCreated({ sessionId: 'source', workspacePath: '/ws/a', agent: 'pi' });
+    await service.bindRuntimeIdentity('source', '/sessions/source.jsonl');
+
+    await service.commitPiLeaf({
+      sessionId: 'source',
+      runtimeIdentity: '/sessions/source.jsonl',
+      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+    });
+    expect(await service.get('source')).toMatchObject({
+      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+    });
+
+    const forked = await service.createForked({
+      sessionId: 'forked',
+      runtimeIdentity: '/sessions/forked.jsonl',
+      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'a' },
+      agent: 'pi',
+      workspacePath: '/ws/a',
+      title: 'Source (fork)',
+      updatedAt: 42,
+      archived: false,
+    });
+    expect(forked).toMatchObject({ sessionId: 'forked', title: 'Source (fork)' });
+    expect(await service.list()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sessionId: 'source' }),
+        expect.objectContaining({
+          sessionId: 'forked',
+          runtimeIdentity: '/sessions/forked.jsonl',
+        }),
+      ])
+    );
+    await expect(service.createForked(forked)).rejects.toThrow(/already exists/);
+  });
+
   it('refuses to bind a runtime identity without an indexed logical session', async () => {
     const { SessionIndexService } = await import('../SessionIndexService');
     const service = new SessionIndexService();

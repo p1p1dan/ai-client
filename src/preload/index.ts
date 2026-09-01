@@ -71,6 +71,7 @@ import type {
   SessionOpenResult,
   SessionResizeOptions,
   SessionStateEvent,
+  SessionTreeSnapshot,
   ShellConfig,
   ShellInfo,
   TempWorkspaceCheckResult,
@@ -1456,6 +1457,31 @@ const electronAPI = {
       limit?: number;
     }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LOAD_HISTORY_PAGE, payload),
+    getSessionTree: (payload: {
+      sessionId: string;
+      requestSequence: number;
+    }): Promise<{
+      sessionKey: string;
+      requestSequence: number;
+      branchRevision: number;
+      snapshot: SessionTreeSnapshot;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_SESSION_TREE, payload),
+    rewindSession: (payload: {
+      sessionId: string;
+      entryId: string;
+      confirmed: true;
+    }): Promise<{
+      requestId: string;
+      sessionKey: string;
+      leaf: import('@shared/types').PiLeafCheckpoint;
+      editorText?: string;
+      tree: SessionTreeSnapshot;
+    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_REWIND_SESSION, payload),
+    forkSession: (payload: {
+      sessionId: string;
+      entryId: string;
+    }): Promise<{ requestId: string; session: SessionIndexEntry }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_FORK_SESSION, payload),
     renameSession: (payload: { sessionId: string; title: string }): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RENAME_SESSION, payload),
     archiveSession: (payload: { sessionId: string; archived: boolean }): Promise<boolean> =>

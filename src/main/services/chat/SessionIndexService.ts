@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RuntimeEvent, SessionPermissionPreference } from '@shared/types/runtimeEvents';
+import type { PiLeafCheckpoint } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { app } from 'electron';
 
@@ -93,6 +94,7 @@ export class SessionIndexService {
       this.entries.set(input.sessionId, {
         sessionId: input.sessionId,
         runtimeIdentity: existing?.runtimeIdentity,
+        piLeaf: existing?.piLeaf,
         agent: input.agent ?? existing?.agent,
         workspacePath: input.workspacePath,
         title: existing?.title ?? '',
@@ -124,6 +126,7 @@ export class SessionIndexService {
     workspacePath: string;
     runtimeIdentity: string;
     model?: string;
+    piLeaf?: PiLeafCheckpoint;
   }): Promise<void> {
     await this.ensureLoaded();
     await this.queueMutation(async () => {
@@ -142,6 +145,7 @@ export class SessionIndexService {
         runtimeIdentity: input.runtimeIdentity,
         agent: 'pi',
         model: input.model ?? existing.model,
+        piLeaf: input.piLeaf ?? existing.piLeaf,
         updatedAt: now(),
       };
       this.entries.set(input.sessionId, next);
@@ -151,6 +155,61 @@ export class SessionIndexService {
         this.entries.set(input.sessionId, existing);
         throw error;
       }
+    });
+  }
+
+  /** Atomically move the active Pi branch checkpoint for an exact indexed session. */
+  async commitPiLeaf(input: {
+    sessionId: string;
+    runtimeIdentity: string;
+    piLeaf: PiLeafCheckpoint;
+  }): Promise<void> {
+    await this.ensureLoaded();
+    await this.queueMutation(async () => {
+      const existing = this.entries.get(input.sessionId);
+      if (
+        !existing ||
+        existing.runtimeIdentity !== input.runtimeIdentity ||
+        existing.agent !== 'pi'
+      ) {
+        throw new Error(`Session index Pi identity mismatch for leaf commit: ${input.sessionId}`);
+      }
+      this.entries.set(input.sessionId, {
+        ...existing,
+        piLeaf: input.piLeaf,
+        updatedAt: now(),
+      });
+      try {
+        await this.flush();
+      } catch (error) {
+        this.entries.set(input.sessionId, existing);
+        throw error;
+      }
+    });
+  }
+
+  /** Insert one complete independent fork row with a single atomic flush. */
+  async createForked(input: SessionIndexEntry): Promise<SessionIndexEntry> {
+    await this.ensureLoaded();
+    return this.queueMutation(async () => {
+      if (this.entries.has(input.sessionId)) {
+        throw new Error(`Fork session id already exists: ${input.sessionId}`);
+      }
+      if (
+        input.runtimeIdentity &&
+        [...this.entries.values()].some((entry) => entry.runtimeIdentity === input.runtimeIdentity)
+      ) {
+        throw new Error(`Fork runtime identity is already indexed: ${input.runtimeIdentity}`);
+      }
+      const next: SessionIndexEntry = { ...input };
+      this.entries.set(input.sessionId, next);
+      try {
+        await this.flush();
+      } catch (error) {
+        this.entries.delete(input.sessionId);
+        throw error;
+      }
+      return { ...next };
     });
   }
 

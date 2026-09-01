@@ -1,3 +1,4 @@
+import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { WORKER_RPC_PROTOCOL_VERSION, type WorkerRpcEvent } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -30,6 +31,12 @@ function createHarness(
       runtimeIdentity: string;
       model?: string;
     }) => Promise<void>;
+    commitPiLeaf?: (input: {
+      sessionId: string;
+      runtimeIdentity: string;
+      piLeaf: { activeEntryId: string | null; fileTailEntryId: string | null };
+    }) => Promise<void>;
+    createForked?: (entry: SessionIndexEntry) => Promise<SessionIndexEntry>;
     createFailureAfter?: number;
     maxRestartAttempts?: number;
   } = {}
@@ -40,6 +47,8 @@ function createHarness(
     input.bindRuntimeIdentity ?? (async (_sessionId: string, _sessionFile: string) => undefined)
   );
   const commitResumed = vi.fn(input.commitResumed ?? (async () => undefined));
+  const commitPiLeaf = vi.fn(input.commitPiLeaf ?? (async () => undefined));
+  const createForked = vi.fn(input.createForked ?? (async (entry) => entry));
   let createCount = 0;
   const createSlot = vi.fn(async (options: Record<string, unknown>) => {
     createCount += 1;
@@ -76,6 +85,77 @@ function createHarness(
           },
         };
       }
+      if (type === 'worker.tree') {
+        return {
+          snapshot: {
+            logicalSessionId: sessionId,
+            sessionFile,
+            workspacePath: String(options.cwd),
+            leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
+            nodes: [
+              {
+                id: 'leaf-a',
+                parentId: null,
+                depth: 0,
+                entryType: 'message',
+                role: 'assistant',
+                preview: 'A',
+                childCount: 2,
+                forkable: true,
+                active: true,
+                leaf: true,
+              },
+            ],
+            totalNodes: 1,
+            returnedNodes: 1,
+            truncated: false,
+          },
+        };
+      }
+      if (type === 'worker.rewind') {
+        return {
+          logicalSessionId: sessionId,
+          sessionFile,
+          workspacePath: String(options.cwd),
+          targetEntryId: (payload as { targetEntryId: string }).targetEntryId,
+          leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
+          history: {
+            logicalSessionId: sessionId,
+            sessionFile,
+            workspacePath: String(options.cwd),
+            page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+          },
+          tree: {
+            snapshot: {
+              logicalSessionId: sessionId,
+              sessionFile,
+              workspacePath: String(options.cwd),
+              leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
+              nodes: [],
+              totalNodes: 0,
+              returnedNodes: 0,
+              truncated: false,
+            },
+          },
+        };
+      }
+      if (type === 'worker.fork') {
+        return {
+          logicalSessionId: sessionId,
+          sourceSessionFile: sessionFile,
+          sessionFile: '/sessions/forked.jsonl',
+          piSessionId: 'pi-forked',
+          workspacePath: String(options.cwd),
+          leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'leaf-a' },
+          history: {
+            logicalSessionId: sessionId,
+            sessionFile: '/sessions/forked.jsonl',
+            workspacePath: String(options.cwd),
+            page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+          },
+        };
+      }
+      if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.stop') return { stopped: true };
       if (type === 'worker.extensionUi.respond') return { handled: true };
       throw new Error(`unexpected request ${type}`);
@@ -125,6 +205,9 @@ function createHarness(
         cwd: String(options.cwd),
         agentDir: '/agent',
         sessionFile,
+        leaf: (options.leafCheckpoint as
+          | { activeEntryId: string | null; fileTailEntryId: string | null }
+          | undefined) ?? { activeEntryId: null, fileTailEntryId: null },
         ...(options.sessionFile
           ? {
               initialHistory: {
@@ -144,6 +227,8 @@ function createHarness(
     createSlot: createSlot as never,
     bindRuntimeIdentity,
     commitResumed,
+    commitPiLeaf,
+    createForked,
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
@@ -155,7 +240,16 @@ function createHarness(
       return () => `token-${++token}`;
     })(),
   });
-  return { manager, records, events, createSlot, bindRuntimeIdentity, commitResumed };
+  return {
+    manager,
+    records,
+    events,
+    createSlot,
+    bindRuntimeIdentity,
+    commitResumed,
+    commitPiLeaf,
+    createForked,
+  };
 }
 
 async function create(
@@ -171,6 +265,181 @@ async function create(
 }
 
 describe('WorkerManager identity and capacity', () => {
+  it('loads a generation-bound tree, rewinds with branch replacement, and forks an independent slot', async () => {
+    const h = createHarness();
+    await create(h.manager, 'source', 11);
+    h.events.length = 0;
+
+    await expect(
+      h.manager.getSessionTree({ sessionId: 'source', requestSequence: 7, ownerWebContentsId: 11 })
+    ).resolves.toMatchObject({
+      requestSequence: 7,
+      branchRevision: 0,
+      snapshot: { leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' } },
+    });
+
+    const rewound = await h.manager.rewindSession({
+      sessionId: 'source',
+      entryId: 'leaf-a',
+      confirmed: true,
+      ownerWebContentsId: 11,
+    });
+    expect(rewound).toMatchObject({
+      leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
+    });
+    expect(h.commitPiLeaf).toHaveBeenCalledWith({
+      sessionId: 'source',
+      runtimeIdentity: '/sessions/source.jsonl',
+      piLeaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
+    });
+    expect(h.events.map((event) => event.type)).toEqual(['session.history', 'session.status']);
+    expect(h.events[0]).toMatchObject({ payload: { mode: 'branch' } });
+
+    h.events.length = 0;
+    const forked = await h.manager.forkSession({
+      sourceSessionId: 'source',
+      entryId: 'leaf-a',
+      sourceTitle: 'Source',
+      ownerWebContentsId: 11,
+    });
+    expect(forked.session).toMatchObject({
+      runtimeIdentity: '/sessions/forked.jsonl',
+      title: 'Source (fork)',
+      agent: 'pi',
+    });
+    expect(h.records).toHaveLength(2);
+    expect(h.manager.getSlotSnapshots()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          logicalSessionId: 'source',
+          sessionFile: '/sessions/source.jsonl',
+        }),
+        expect.objectContaining({
+          logicalSessionId: forked.session.sessionId,
+          sessionFile: '/sessions/forked.jsonl',
+        }),
+      ])
+    );
+    expect(h.events.map((event) => event.type)).toEqual([
+      'session.created',
+      'session.history',
+      'session.status',
+    ]);
+    await expect(
+      h.manager.send({ sessionId: 'source', attemptId: 'after-fork', text: 'continue' })
+    ).resolves.toMatch(/^send-/);
+  });
+  it('discards an uncommitted fork through the provisional target before disposal', async () => {
+    const h = createHarness({
+      createForked: async () => {
+        throw new Error('fork index failed');
+      },
+    });
+    await create(h.manager, 'source');
+
+    await expect(
+      h.manager.forkSession({
+        sourceSessionId: 'source',
+        entryId: 'leaf-a',
+        sourceTitle: 'Source',
+      })
+    ).rejects.toThrow(/fork index failed/);
+
+    expect(h.records).toHaveLength(2);
+    expect(h.records[1].request).toHaveBeenCalledWith('worker.fork.discard', {
+      logicalSessionId: expect.stringMatching(/^session-fork-/),
+      sessionFile: '/sessions/forked.jsonl',
+    });
+    expect(h.records[1].dispose).toHaveBeenCalledWith('slot-dispose');
+    expect(h.manager.getSlotSnapshots()).toEqual([
+      expect.objectContaining({ logicalSessionId: 'source', state: 'ready' }),
+    ]);
+  });
+
+  it('surfaces provisional-slot disposal failure during fork rollback', async () => {
+    let rejectIndex: ((reason?: unknown) => void) | undefined;
+    const indexGate = new Promise<SessionIndexEntry>((_resolve, reject) => {
+      rejectIndex = reject;
+    });
+    const h = createHarness({ createForked: async () => indexGate });
+    await create(h.manager, 'source');
+
+    const forking = h.manager.forkSession({
+      sourceSessionId: 'source',
+      entryId: 'leaf-a',
+      sourceTitle: 'Source',
+    });
+    await vi.waitFor(() => expect(h.records).toHaveLength(2));
+    h.records[1].dispose.mockRejectedValueOnce(new Error('exit not confirmed'));
+    rejectIndex?.(new Error('fork index failed'));
+
+    await expect(forking).rejects.toMatchObject({
+      code: 'worker_fork_cleanup_failed',
+      message: expect.stringContaining('did not confirm disposal'),
+    });
+    h.manager.forceKillAllNow();
+    expect(h.records[1].forceKillNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserves the source against send while a rewind mutation is in flight', async () => {
+    const h = createHarness();
+    await create(h.manager, 'source');
+    const original = h.records[0].request.getMockImplementation();
+    let release: ((value: unknown) => void) | undefined;
+    h.records[0].request.mockImplementation((type: string, payload: unknown) => {
+      if (type !== 'worker.rewind') return original?.(type, payload);
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    });
+
+    const rewinding = h.manager.rewindSession({
+      sessionId: 'source',
+      entryId: 'leaf-a',
+      confirmed: true,
+    });
+    await vi.waitFor(() =>
+      expect(h.records[0].request).toHaveBeenCalledWith(
+        'worker.rewind',
+        expect.objectContaining({ targetEntryId: 'leaf-a' })
+      )
+    );
+    await expect(
+      h.manager.send({ sessionId: 'source', attemptId: 'during-rewind', text: 'race' })
+    ).rejects.toMatchObject({ code: 'session_busy' });
+    await expect(
+      h.manager.loadHistoryPage({ sessionId: 'source', offset: 0 })
+    ).rejects.toMatchObject({ code: 'session_busy' });
+    release?.({
+      logicalSessionId: 'source',
+      sessionFile: '/sessions/source.jsonl',
+      workspacePath: '/repo',
+      targetEntryId: 'leaf-a',
+      leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
+      history: {
+        logicalSessionId: 'source',
+        sessionFile: '/sessions/source.jsonl',
+        workspacePath: '/repo',
+        page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+      },
+      tree: {
+        snapshot: {
+          logicalSessionId: 'source',
+          sessionFile: '/sessions/source.jsonl',
+          workspacePath: '/repo',
+          leaf: { activeEntryId: 'leaf-a', fileTailEntryId: 'tail-c' },
+          nodes: [],
+          totalNodes: 0,
+          returnedNodes: 0,
+          truncated: false,
+        },
+      },
+    });
+    await expect(rewinding).resolves.toMatchObject({
+      requestId: expect.stringMatching(/^rewind-/),
+    });
+  });
+
   it('derives a resource-aware default and accepts only bounded startup overrides', () => {
     expect(resolveDefaultWorkerCapacity(3 * 1024 ** 3)).toBe(2);
     expect(resolveDefaultWorkerCapacity(6 * 1024 ** 3)).toBe(3);
@@ -378,6 +647,7 @@ describe('WorkerManager Pi history and real resume', () => {
       sessionId: 's1',
       workspacePath: '/repo',
       runtimeIdentity: '/sessions/s1.jsonl',
+      piLeaf: { activeEntryId: null, fileTailEntryId: null },
     });
     expect(h.events.map((event) => [event.type, event.requestId])).toEqual([
       ['session.resumed', requestId],
@@ -973,6 +1243,7 @@ describe('WorkerManager isolation and crash recovery', () => {
                 cwd: '/repo',
                 agentDir: '/agent',
                 sessionFile: '/sessions/pending.jsonl',
+                leaf: { activeEntryId: null, fileTailEntryId: null },
                 projectTrusted: false,
                 permissionGate: 'bundled',
               },

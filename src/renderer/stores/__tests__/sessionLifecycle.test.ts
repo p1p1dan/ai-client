@@ -14,6 +14,7 @@ import {
   pruneRecordBySession,
   pruneSessionScopedRendererState,
   pruneSubagentActivityState,
+  resetSessionScopedRendererState,
 } from '../sessionLifecycle';
 import { useTurnSendStatusStore } from '../turnSendStatus';
 
@@ -96,6 +97,37 @@ describe('session lifecycle pruning', () => {
       baseline: null,
       pendingReply: null,
     });
+  });
+
+  it('resets only one live session before a branch replacement', () => {
+    useMessageQueueStore.getState().enqueue({
+      id: 'drop-queue',
+      sessionId: 'drop',
+      text: 'drop',
+      attachments: [],
+      queuedAt: 1,
+    });
+    useMessageQueueStore.getState().enqueue({
+      id: 'keep-queue',
+      sessionId: 'keep',
+      text: 'keep',
+      attachments: [],
+      queuedAt: 2,
+    });
+    usePendingUserMessagesStore.getState().publish({
+      attemptId: 'drop-attempt',
+      sessionId: 'drop',
+      text: 'drop',
+      attachments: [],
+      startedAt: 1,
+    });
+
+    resetSessionScopedRendererState('drop');
+
+    expect(useMessageQueueStore.getState().state.bySession).toEqual({
+      keep: expect.objectContaining({ entries: [expect.objectContaining({ id: 'keep-queue' })] }),
+    });
+    expect(usePendingUserMessagesStore.getState().bySession).toEqual({});
   });
 
   it('drops extension dialogs, sending flags and errors for removed sessions', () => {

@@ -1,6 +1,7 @@
 import { parsePiModelRef } from '../shared/piModelConfig.ts';
 import type { SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { RuntimeEvent } from '../shared/types/runtimeEvents.ts';
+import type { PiLeafCheckpoint } from '../shared/types/sessionHistory.ts';
 import type { PortableExtensionUiBridge } from './extensionUiBridge.ts';
 import { createPermissionActivityObserver } from './permissionActivity.ts';
 import {
@@ -42,10 +43,18 @@ export interface PiServices {
 }
 
 export interface PiSessionManager {
-  getBranch?: () => unknown[];
+  getBranch?: (fromId?: string) => unknown[];
   getCwd?: () => string;
   getSessionFile?: () => string | undefined;
   getSessionId?: () => string;
+  getEntries?: () => unknown[];
+  getEntry?: (id: string) => unknown | undefined;
+  getChildren?: (parentId: string) => unknown[];
+  getLeafId?: () => string | null;
+  getLabel?: (id: string) => string | undefined;
+  branch?: (id: string) => void;
+  resetLeaf?: () => void;
+  createBranchedSession?: (leafId: string) => string | undefined;
   [key: string]: unknown;
 }
 
@@ -76,6 +85,11 @@ export interface PiSession {
   thinkingLevel?: PiThinkingLevel;
   setModel?: (model: PiModel, options?: { persist?: boolean }) => Promise<void>;
   setThinkingLevel?: (level: PiThinkingLevel, options?: { persist?: boolean }) => void;
+  navigateTree?: (
+    targetId: string,
+    options?: { summarize?: boolean }
+  ) => Promise<{ editorText?: string; cancelled: boolean; aborted?: boolean }>;
+  readonly isStreaming?: boolean;
   [key: string]: unknown;
 }
 
@@ -140,6 +154,7 @@ export interface BootstrapPiAgentSessionOptions {
   sessionFile?: string;
   model?: string;
   effort?: SessionEffortLevel;
+  leafCheckpoint?: PiLeafCheckpoint;
   decidePermissionGate?: (packages: unknown[]) => PermissionPluginDecision;
   onPermissionActivity?: (payload: PermissionActivityPayload) => void;
   log?: (...args: unknown[]) => void;
@@ -246,6 +261,44 @@ export async function bootstrapPiAgentSession(
         'WORKER_SESSION_IDENTITY_MISMATCH',
         `Pi session id mismatch: header ${sessionHeader.sessionId}, opened ${openedSessionId}`
       );
+    }
+  }
+  const checkpoint = options.leafCheckpoint;
+  if (checkpoint) {
+    const entries = sessionManager.getEntries?.() ?? [];
+    const tailEntry = [...entries]
+      .reverse()
+      .find(
+        (entry) =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as { id?: unknown }).id === 'string'
+      ) as { id: string } | undefined;
+    const currentTail = tailEntry?.id ?? null;
+    if (currentTail === checkpoint.fileTailEntryId) {
+      if (checkpoint.activeEntryId === null) {
+        if (!sessionManager.resetLeaf) {
+          throw new PiWorkerSessionError(
+            'WORKER_LEAF_UNAVAILABLE',
+            'Pi session cannot restore a root leaf checkpoint'
+          );
+        }
+        sessionManager.resetLeaf();
+      } else {
+        if (!sessionManager.getEntry?.(checkpoint.activeEntryId)) {
+          throw new PiWorkerSessionError(
+            'WORKER_LEAF_ENTRY_NOT_FOUND',
+            `Persisted Pi leaf ${checkpoint.activeEntryId} no longer exists`
+          );
+        }
+        if (!sessionManager.branch) {
+          throw new PiWorkerSessionError(
+            'WORKER_LEAF_UNAVAILABLE',
+            'Pi session cannot restore a branch leaf checkpoint'
+          );
+        }
+        sessionManager.branch(checkpoint.activeEntryId);
+      }
     }
   }
   let gate: PermissionPluginDecision | undefined;

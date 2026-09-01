@@ -1,6 +1,6 @@
 import type { SessionAttachment, SessionEffortLevel } from './agentHost';
 import type { ExtensionUiResponse, RuntimeEvent } from './runtimeEvents';
-import type { SessionHistoryPage } from './sessionHistory';
+import type { PiLeafCheckpoint, SessionHistoryPage, SessionTreeSnapshot } from './sessionHistory';
 
 /**
  * Main ↔ utility worker RPC protocol.
@@ -68,6 +68,8 @@ export interface WorkerBootstrapPayload {
   sessionFile?: string;
   model?: string;
   effort?: SessionEffortLevel;
+  /** Reapply a durable branch only while its recorded physical tail still matches. */
+  leafCheckpoint?: PiLeafCheckpoint;
 }
 
 export interface WorkerHistoryResult {
@@ -86,6 +88,7 @@ export interface WorkerBootstrapResult {
   sessionFile?: string;
   /** Present only when bootstrap opened an existing exact Pi session file. */
   initialHistory?: WorkerHistoryResult;
+  leaf: PiLeafCheckpoint;
   model?: string;
   effort?: SessionEffortLevel;
   projectTrusted: boolean;
@@ -117,6 +120,55 @@ export interface WorkerHistoryPayload {
   limit?: number;
 }
 
+export interface WorkerTreePayload {
+  logicalSessionId: string;
+}
+
+export interface WorkerTreeResult {
+  snapshot: SessionTreeSnapshot;
+}
+
+export interface WorkerRewindPayload {
+  logicalSessionId: string;
+  targetEntryId: string;
+  confirmed: true;
+}
+
+export interface WorkerRewindResult {
+  logicalSessionId: string;
+  sessionFile: string;
+  workspacePath: string;
+  targetEntryId: string;
+  editorText?: string;
+  leaf: PiLeafCheckpoint;
+  history: WorkerHistoryResult;
+  tree: WorkerTreeResult;
+}
+
+export interface WorkerForkPayload {
+  logicalSessionId: string;
+  entryId: string;
+}
+
+export interface WorkerForkResult {
+  logicalSessionId: string;
+  sourceSessionFile: string;
+  sessionFile: string;
+  piSessionId: string;
+  workspacePath: string;
+  leaf: PiLeafCheckpoint;
+  history: WorkerHistoryResult;
+}
+
+export interface WorkerDiscardForkPayload {
+  logicalSessionId: string;
+  sessionFile: string;
+}
+
+export interface WorkerDiscardForkResult {
+  discarded: boolean;
+}
+
 export interface WorkerStopPayload {
   logicalSessionId: string;
   reason: 'user' | 'dispose';
@@ -137,6 +189,13 @@ export interface WorkerExtensionUiResponseResult {
 
 export type WorkerSendRequest = WorkerRpcRequest<'worker.send', WorkerSendPayload>;
 export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHistoryPayload>;
+export type WorkerTreeRequest = WorkerRpcRequest<'worker.tree', WorkerTreePayload>;
+export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
+export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
+export type WorkerDiscardForkRequest = WorkerRpcRequest<
+  'worker.fork.discard',
+  WorkerDiscardForkPayload
+>;
 export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayload>;
 export type WorkerExtensionUiResponseRequest = WorkerRpcRequest<
   'worker.extensionUi.respond',
@@ -179,6 +238,9 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
     return false;
   }
   if (value.effort !== undefined && !isWorkerEffort(value.effort)) return false;
+  if (value.leafCheckpoint !== undefined && !isPiLeafCheckpoint(value.leafCheckpoint)) {
+    return false;
+  }
   return true;
 }
 
@@ -232,7 +294,8 @@ export function isWorkerBootstrapResult(value: unknown): value is WorkerBootstra
     typeof value.agentDir !== 'string' ||
     value.agentDir.trim().length === 0 ||
     typeof value.projectTrusted !== 'boolean' ||
-    (value.permissionGate !== 'bundled' && value.permissionGate !== 'user_configured')
+    (value.permissionGate !== 'bundled' && value.permissionGate !== 'user_configured') ||
+    !isPiLeafCheckpoint(value.leaf)
   ) {
     return false;
   }
@@ -296,6 +359,55 @@ export function isWorkerSendResult(value: unknown): value is WorkerSendResult {
   );
 }
 
+function isPiLeafCheckpoint(value: unknown): value is PiLeafCheckpoint {
+  return (
+    isRecord(value) &&
+    (value.activeEntryId === null || typeof value.activeEntryId === 'string') &&
+    (value.fileTailEntryId === null || typeof value.fileTailEntryId === 'string')
+  );
+}
+
+function isSessionTreeSnapshot(value: unknown): value is SessionTreeSnapshot {
+  if (
+    !isRecord(value) ||
+    typeof value.logicalSessionId !== 'string' ||
+    typeof value.sessionFile !== 'string' ||
+    typeof value.workspacePath !== 'string' ||
+    !isPiLeafCheckpoint(value.leaf) ||
+    !Array.isArray(value.nodes) ||
+    !Number.isSafeInteger(value.totalNodes) ||
+    Number(value.totalNodes) < 0 ||
+    !Number.isSafeInteger(value.returnedNodes) ||
+    Number(value.returnedNodes) < 0 ||
+    Number(value.returnedNodes) > 4_000 ||
+    typeof value.truncated !== 'boolean'
+  ) {
+    return false;
+  }
+  return (
+    value.nodes.length === value.returnedNodes &&
+    value.nodes.every((node) => {
+      if (!isRecord(node)) return false;
+      return (
+        typeof node.id === 'string' &&
+        (node.parentId === null || typeof node.parentId === 'string') &&
+        Number.isSafeInteger(node.depth) &&
+        Number(node.depth) >= 0 &&
+        typeof node.entryType === 'string' &&
+        Number.isSafeInteger(node.childCount) &&
+        Number(node.childCount) >= 0 &&
+        typeof node.forkable === 'boolean' &&
+        typeof node.active === 'boolean' &&
+        typeof node.leaf === 'boolean'
+      );
+    })
+  );
+}
+
+export function isWorkerTreeResult(value: unknown): value is WorkerTreeResult {
+  return isRecord(value) && isSessionTreeSnapshot(value.snapshot);
+}
+
 export function isWorkerHistoryPayload(value: unknown): value is WorkerHistoryPayload {
   if (
     !isRecord(value) ||
@@ -317,6 +429,76 @@ export function isWorkerHistoryPayload(value: unknown): value is WorkerHistoryPa
     return false;
   }
   return true;
+}
+
+export function isWorkerTreePayload(value: unknown): value is WorkerTreePayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.trim().length > 0
+  );
+}
+
+export function isWorkerRewindPayload(value: unknown): value is WorkerRewindPayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.trim().length > 0 &&
+    typeof value.targetEntryId === 'string' &&
+    value.targetEntryId.trim().length > 0 &&
+    value.confirmed === true
+  );
+}
+
+export function isWorkerRewindResult(value: unknown): value is WorkerRewindResult {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    typeof value.sessionFile === 'string' &&
+    typeof value.workspacePath === 'string' &&
+    typeof value.targetEntryId === 'string' &&
+    (value.editorText === undefined || typeof value.editorText === 'string') &&
+    isPiLeafCheckpoint(value.leaf) &&
+    isWorkerHistoryResult(value.history) &&
+    isWorkerTreeResult(value.tree)
+  );
+}
+
+export function isWorkerForkPayload(value: unknown): value is WorkerForkPayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.trim().length > 0 &&
+    typeof value.entryId === 'string' &&
+    value.entryId.trim().length > 0
+  );
+}
+
+export function isWorkerForkResult(value: unknown): value is WorkerForkResult {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    typeof value.sourceSessionFile === 'string' &&
+    typeof value.sessionFile === 'string' &&
+    typeof value.piSessionId === 'string' &&
+    typeof value.workspacePath === 'string' &&
+    isPiLeafCheckpoint(value.leaf) &&
+    isWorkerHistoryResult(value.history)
+  );
+}
+
+export function isWorkerDiscardForkPayload(value: unknown): value is WorkerDiscardForkPayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.trim().length > 0 &&
+    typeof value.sessionFile === 'string' &&
+    value.sessionFile.trim().length > 0
+  );
+}
+
+export function isWorkerDiscardForkResult(value: unknown): value is WorkerDiscardForkResult {
+  return isRecord(value) && typeof value.discarded === 'boolean';
 }
 
 export function isWorkerStopPayload(value: unknown): value is WorkerStopPayload {

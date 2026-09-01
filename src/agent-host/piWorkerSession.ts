@@ -1,11 +1,18 @@
+import { unlink } from 'node:fs/promises';
 import { parsePiModelRef } from '../shared/piModelConfig.ts';
 import type { SessionAttachment, SessionEffortLevel } from '../shared/types/agentHost.ts';
 import type { ExtensionUiResponse, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
 import type {
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
+  WorkerDiscardForkPayload,
+  WorkerDiscardForkResult,
+  WorkerForkPayload,
+  WorkerForkResult,
   WorkerHistoryPayload,
   WorkerHistoryResult,
+  WorkerRewindPayload,
+  WorkerRewindResult,
   WorkerSendPayload,
   WorkerSendResult,
   WorkerStopPayload,
@@ -24,7 +31,9 @@ import {
   type PiSession,
   type PiSessionManager,
 } from './piAgentSessionBootstrap.ts';
+import { preflightPiSessionFile, samePiSessionPath } from './piSessionPreflight.ts';
 import { readPiSessionHistoryPage } from './piSessionTimeline.ts';
+import { buildPiSessionTreeSnapshot, readPiLeafCheckpoint } from './piSessionTree.ts';
 import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 interface PiImageContent {
@@ -256,6 +265,8 @@ export class PiWorkerSession {
   private bootstrapPromise: Promise<WorkerBootstrapResult> | null = null;
   private handle: PiRuntimeHandle | null = null;
   private sessionManager: PiSessionManager | null = null;
+  private sdk: PiSdkModule | null = null;
+  private readonly stagedForkFiles = new Set<string>();
   private unsubscribe: (() => void) | null = null;
   private activeTurn: ActiveTurn | null = null;
   private turnSequence = 0;
@@ -307,6 +318,198 @@ export class PiWorkerSession {
     }
     if (!this.bootstrapPromise) this.bootstrapPromise = this.bootstrapInternal();
     return this.bootstrapPromise;
+  }
+
+  async tree(input: {
+    logicalSessionId: string;
+  }): Promise<{ snapshot: ReturnType<typeof buildPiSessionTreeSnapshot> }> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('load the session tree');
+    await this.bootstrap();
+    const manager = this.sessionManager;
+    const sessionFile = this.handle?.session.sessionFile;
+    if (!manager || !sessionFile) {
+      throw new PiWorkerSessionError('WORKER_TREE_UNAVAILABLE', 'Pi session tree is unavailable');
+    }
+    return {
+      snapshot: buildPiSessionTreeSnapshot({
+        manager,
+        logicalSessionId: this.logicalSessionId,
+        sessionFile,
+        workspacePath: this.cwd,
+      }),
+    };
+  }
+
+  async rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    if (input.confirmed !== true) {
+      throw new PiWorkerSessionError(
+        'WORKER_REWIND_CONFIRMATION_REQUIRED',
+        'Rewind requires explicit confirmation'
+      );
+    }
+    this.assertIdle('rewind the session');
+    await this.bootstrap();
+    const manager = this.sessionManager;
+    const handle = this.requireHandle();
+    const sessionFile = handle.session.sessionFile;
+    if (!manager?.getEntry?.(input.targetEntryId) || !sessionFile) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_ENTRY_NOT_FOUND',
+        `Pi session entry ${input.targetEntryId} was not found`
+      );
+    }
+    if (!handle.session.navigateTree) {
+      throw new PiWorkerSessionError(
+        'WORKER_REWIND_UNAVAILABLE',
+        'Pi session does not expose native tree navigation'
+      );
+    }
+    this.extensionUi.cancelAll('aborted');
+    const navigated = await handle.session.navigateTree(input.targetEntryId, { summarize: false });
+    if (navigated.cancelled) {
+      throw new PiWorkerSessionError('WORKER_REWIND_CANCELLED', 'Pi session rewind was cancelled');
+    }
+    const history = await this.historyFromOpenedSession(manager, sessionFile);
+    const tree = await this.tree({ logicalSessionId: this.logicalSessionId });
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile,
+      workspacePath: this.cwd,
+      targetEntryId: input.targetEntryId,
+      ...(navigated.editorText !== undefined ? { editorText: navigated.editorText } : {}),
+      leaf: readPiLeafCheckpoint(manager),
+      history,
+      tree,
+    };
+  }
+
+  async fork(input: WorkerForkPayload): Promise<WorkerForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.assertIdle('fork the session');
+    await this.bootstrap();
+    const sourceManager = this.sessionManager;
+    const sdk = this.sdk;
+    const sourceSessionFile = this.handle?.session.sessionFile;
+    if (!sourceManager?.getEntry?.(input.entryId) || !sdk || !sourceSessionFile) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_ENTRY_NOT_FOUND',
+        `Pi session entry ${input.entryId} was not found`
+      );
+    }
+    const forkPath = sourceManager.getBranch?.(input.entryId) ?? [];
+    const hasAssistant = forkPath.some((entry) => {
+      if (typeof entry !== 'object' || entry === null) return false;
+      const value = entry as { type?: unknown; message?: unknown };
+      if (value.type !== 'message' || typeof value.message !== 'object' || value.message === null) {
+        return false;
+      }
+      return (value.message as { role?: unknown }).role === 'assistant';
+    });
+    if (!hasAssistant) {
+      throw new PiWorkerSessionError(
+        'WORKER_FORK_PATH_NOT_MATERIALIZED',
+        'Fork from an entry after the first assistant response so Pi can materialize an independent session file'
+      );
+    }
+    const sourceLeaf = sourceManager.getLeafId?.() ?? null;
+    const sourceSessionId = sourceManager.getSessionId?.();
+    const stagingManager = sdk.SessionManager.open(sourceSessionFile);
+    if (
+      !samePiSessionPath(stagingManager.getSessionFile?.() ?? '', sourceSessionFile) ||
+      !samePiSessionPath(stagingManager.getCwd?.() ?? '', this.cwd) ||
+      stagingManager.getSessionId?.() !== sourceSessionId
+    ) {
+      throw new PiWorkerSessionError(
+        'WORKER_FORK_SOURCE_MISMATCH',
+        'Separate Pi fork manager did not reopen the authoritative source session'
+      );
+    }
+    if (!stagingManager.createBranchedSession) {
+      throw new PiWorkerSessionError(
+        'WORKER_FORK_UNAVAILABLE',
+        'Pi session does not expose native branched-session creation'
+      );
+    }
+    const sessionFile = stagingManager.createBranchedSession(input.entryId);
+    if (!sessionFile || samePiSessionPath(sessionFile, sourceSessionFile)) {
+      throw new PiWorkerSessionError(
+        'WORKER_FORK_FILE_MISSING',
+        'Pi did not create an independent fork session file'
+      );
+    }
+    try {
+      const header = await preflightPiSessionFile(sessionFile, this.cwd);
+      const forkManager = sdk.SessionManager.open(sessionFile);
+      if (
+        !samePiSessionPath(forkManager.getSessionFile?.() ?? '', sessionFile) ||
+        forkManager.getSessionId?.() !== header.sessionId
+      ) {
+        throw new PiWorkerSessionError(
+          'WORKER_FORK_IDENTITY_MISMATCH',
+          'Pi fork file identity did not survive exact reopen'
+        );
+      }
+      const history = await this.historyFromOpenedSession(forkManager, sessionFile);
+      if (
+        sourceManager.getLeafId?.() !== sourceLeaf ||
+        sourceManager.getSessionId?.() !== sourceSessionId ||
+        !samePiSessionPath(sourceManager.getSessionFile?.() ?? '', sourceSessionFile)
+      ) {
+        throw new PiWorkerSessionError(
+          'WORKER_FORK_MUTATED_SOURCE',
+          'Pi fork creation changed the live source session'
+        );
+      }
+      this.stagedForkFiles.add(sessionFile);
+      return {
+        logicalSessionId: this.logicalSessionId,
+        sourceSessionFile,
+        sessionFile,
+        piSessionId: header.sessionId,
+        workspacePath: this.cwd,
+        leaf: readPiLeafCheckpoint(forkManager),
+        history,
+      };
+    } catch (error) {
+      try {
+        await unlink(sessionFile);
+      } catch (cleanupError) {
+        if ((cleanupError as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+          throw new PiWorkerSessionError(
+            'WORKER_FORK_CLEANUP_FAILED',
+            `Fork creation failed (${error instanceof Error ? error.message : String(error)}) and the staged Pi file could not be removed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+            true
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  async discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    const staged = this.stagedForkFiles.delete(input.sessionFile);
+    const owned = samePiSessionPath(this.handle?.session.sessionFile ?? '', input.sessionFile);
+    if (!staged && !owned) return { discarded: false };
+    if (owned) await this.dispose();
+    try {
+      await unlink(input.sessionFile);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+        throw new PiWorkerSessionError(
+          'WORKER_FORK_DISCARD_FAILED',
+          `Failed to remove uncommitted Pi fork ${input.sessionFile}: ${error instanceof Error ? error.message : String(error)}`,
+          true
+        );
+      }
+    }
+    return { discarded: true };
+  }
+
+  confirmFork(sessionFile: string): void {
+    this.stagedForkFiles.delete(sessionFile);
   }
 
   async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {
@@ -439,6 +642,11 @@ export class PiWorkerSession {
     }
     this.handle = null;
     this.sessionManager = null;
+    this.sdk = null;
+    // Staged fork files are Main-owned after worker.fork returns. Only the
+    // explicit discard RPC may delete one; source-worker teardown must not
+    // race a successful index commit in another slot.
+    this.stagedForkFiles.clear();
     if (handle?.dispose) await handle.dispose();
     else handle?.session.dispose?.();
   }
@@ -884,6 +1092,26 @@ export class PiWorkerSession {
     session.setThinkingLevel(effort, { persist: false });
   }
 
+  private assertIdle(action: string): void {
+    if (this.disposed) {
+      throw new PiWorkerSessionError('WORKER_SESSION_DISPOSED', 'Pi worker session is disposed');
+    }
+    if (this.activeTurn && !this.activeTurn.terminal) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_BUSY',
+        `Session cannot ${action} while a turn is active`,
+        true
+      );
+    }
+    if (this.handle?.session.isStreaming === true) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_BUSY',
+        `Session cannot ${action} while Pi is streaming`,
+        true
+      );
+    }
+  }
+
   private assertLogicalSession(sessionId: string): void {
     if (sessionId !== this.logicalSessionId) {
       throw new PiWorkerSessionError(
@@ -905,6 +1133,7 @@ export class PiWorkerSession {
         ? await this.options.loadSdk()
         : await import('@earendil-works/pi-coding-agent')
     ) as PiSdkModule;
+    this.sdk = sdk;
     const bootstrapped = await bootstrapPiAgentSession({
       sdk,
       cwd: this.cwd,
@@ -913,6 +1142,7 @@ export class PiWorkerSession {
       sessionFile: this.options.sessionFile,
       model: this.options.model,
       effort: this.options.effort,
+      leafCheckpoint: this.options.leafCheckpoint,
       decidePermissionGate: this.options.decidePermissionGate,
       log: this.options.log,
       onPermissionActivity: (payload) =>
@@ -950,6 +1180,7 @@ export class PiWorkerSession {
       agentDir: bootstrapped.agentDir,
       ...(sessionFile ? { sessionFile } : {}),
       ...(initialHistory ? { initialHistory } : {}),
+      leaf: readPiLeafCheckpoint(bootstrapped.sessionManager),
       ...(model ? { model } : {}),
       ...(this.options.effort ? { effort: this.options.effort } : {}),
       projectTrusted: bootstrapped.projectTrusted,

@@ -12,6 +12,7 @@ import {
   FileQuestion,
   FileSearch,
   FileText,
+  GitBranch,
   Image as ImageIcon,
   RefreshCw,
   ShieldAlert,
@@ -92,6 +93,7 @@ import {
 } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
+import { SessionTreeDialog } from './SessionTreeDialog';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { ToolGroup } from './ToolRows';
@@ -224,6 +226,14 @@ export function MessageTimeline({
   const historyPagination = useChatSessionsStore((state) =>
     sessionId ? state.historyPagination?.[sessionId] : undefined
   );
+  const hasDurablePiSession = useChatSessionsStore((state) =>
+    sessionId
+      ? state.sessions.some(
+          (session) => session.id === sessionId && session.runtimeIdentity != null
+        )
+      : false
+  );
+  const [treeOpen, setTreeOpen] = useState(false);
   const [loadingOlderHistory, setLoadingOlderHistory] = useState(false);
   const loadOlderHistory = useCallback(async () => {
     if (!sessionId || !historyPagination?.hasMore || loadingOlderHistory) return;
@@ -551,6 +561,20 @@ export function MessageTimeline({
               into 10 here + 10 of sticky-band padding; T12 retired the band, so
               the whole beat is back in one place (F-B9). */}
           <ReadingColumn className={readingColumnSpacingClass()}>
+            {hasDurablePiSession && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  disabled={status !== 'idle'}
+                  onClick={() => setTreeOpen(true)}
+                >
+                  <GitBranch />
+                  Branches
+                </Button>
+              </div>
+            )}
             {historyPagination?.hasMore && (
               <div className="flex justify-center">
                 <Button
@@ -707,6 +731,13 @@ export function MessageTimeline({
           acceptable (a duplicate of an action available elsewhere) does not
           transfer to the only way back to a running stream. It is a real
           <button>, so it is reachable by keyboard whenever it is on screen. */}
+      <SessionTreeDialog
+        key={sessionId}
+        sessionId={sessionId}
+        open={treeOpen}
+        onOpenChange={setTreeOpen}
+        idle={status === 'idle'}
+      />
       {showJumpToBottom && (
         <button
           type="button"

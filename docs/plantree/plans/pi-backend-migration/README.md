@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase D / T33 session tree, rewind and fork；T32 history/real resume已完成。
+> **当前阶段**：Phase E / T34 read-only legacy conversation import；T33 tree/rewind/fork已完成。
 
 ## 目标
 
@@ -88,10 +88,11 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 | [topics/reference-repositories.md](./topics/reference-repositories.md) | pi-app/pix 强制复用规则 |
 | [topics/extension-ui.md](./topics/extension-ui.md) | Cycle 2 行为契约与 WorkerSlot 适配要求 |
 | [topics/timeline-reference.md](./topics/timeline-reference.md) | timeline/history/tree 参考与适配边界 |
+| [topics/t33-tree-rewind-fork.md](./topics/t33-tree-rewind-fork.md) | T33 tree/rewind/fork实施契约、参考分类与验证矩阵 |
 | [topics/t31a-runtime-event-reattachment.md](./topics/t31a-runtime-event-reattachment.md) | T31-a producer→WorkerManager→renderer文件图、参考分类、focused matrix与legacy cleanup ledger |
 | [topics/completion-cycles.md](./topics/completion-cycles.md) | Cycle 1/2 完成历史；旧 Cycle 3–5 已被替代 |
 | [history/2026-08-31-pre-pi-only-realignment/](./history/2026-08-31-pre-pi-only-realignment/) | Pi-only 重排前完整计划快照 |
 
 ## 当前出口
 
-T28 replacement boundary、T29 single WorkerSlot、T30 bounded WorkerManager、T31 Cycle 1/2 behavior reattachment与T32 Pi-native history/real resume均已完成。T32已闭环exact-file preflight/open、active-branch timeline、pagination/incomplete recovery、transactional resumed→history→idle、duplicate/restart/late hydration/switch race与known-file no-create-fallback；见 [closure evidence](./evidence/2026-09-01-t32-history-real-resume.md)。当前Next为T33 tree/rewind/fork；import/TUI继续服从T28保护边界，不焊回旧host。
+T28 replacement boundary、T29 single WorkerSlot、T30 bounded WorkerManager、T31 behavior reattachment、T32 history/real resume与T33 tree/rewind/fork均已完成。T33已闭环bounded iterative tree、stale guards、confirmed idle-only native rewind、append-only branch preservation、durable leaf restart与independent fork transaction；见 [closure evidence](./evidence/2026-09-01-t33-tree-rewind-fork.md)。当前Next为T34 read-only legacy conversation import；T35/T36继续服从T28保护边界，不焊回旧host。

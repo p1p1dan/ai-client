@@ -22,6 +22,7 @@ export * from './repositoryContext';
 export * from './runtimeEvents';
 export * from './search';
 export * from './session';
+export * from './sessionHistory';
 export * from './sessionIndex';
 export * from './shell';
 export * from './tempWorkspace';

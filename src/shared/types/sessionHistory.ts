@@ -34,6 +34,47 @@ export type HistoryBlock =
 /** Prefix of every history message id — the store's replace semantics key on it. */
 export const HISTORY_MESSAGE_ID_PREFIX = 'h:' as const;
 
+/** T33 hard bounds: worker projection and renderer display are deliberately separate. */
+export const PI_SESSION_TREE_BACKEND_LIMIT = 4_000;
+export const PI_SESSION_TREE_UI_LIMIT = 320;
+
+/**
+ * Active Pi branch checkpoint. `activeEntryId: null` means before the first
+ * root entry. `fileTailEntryId` invalidates a stale checkpoint after a new
+ * physical append has made the JSONL tail authoritative again.
+ */
+export interface PiLeafCheckpoint {
+  activeEntryId: string | null;
+  fileTailEntryId: string | null;
+}
+
+export interface SessionTreeNode {
+  id: string;
+  parentId: string | null;
+  depth: number;
+  entryType: string;
+  role?: string;
+  preview?: string;
+  label?: string;
+  timestamp?: number;
+  childCount: number;
+  /** Selected path contains at least one assistant message, so Pi materializes the fork file. */
+  forkable: boolean;
+  active: boolean;
+  leaf: boolean;
+}
+
+export interface SessionTreeSnapshot {
+  logicalSessionId: string;
+  sessionFile: string;
+  workspacePath: string;
+  leaf: PiLeafCheckpoint;
+  nodes: SessionTreeNode[];
+  totalNodes: number;
+  returnedNodes: number;
+  truncated: boolean;
+}
+
 /**
  * 2026-08-10: what a rebuilt user turn had attached — METADATA ONLY.
  *

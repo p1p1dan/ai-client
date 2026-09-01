@@ -14,6 +14,48 @@ let fakeWindows: FakeWindow[] = [];
 const createSession = vi.fn(async () => 'create-1');
 const resumeSession = vi.fn(async () => 'resume-1');
 const loadHistoryPage = vi.fn(async () => 'history-1');
+const getSessionTree = vi.fn(async () => ({
+  sessionKey: 's1:session:/session.jsonl',
+  requestSequence: 3,
+  branchRevision: 0,
+  snapshot: {
+    logicalSessionId: 's1',
+    sessionFile: '/session.jsonl',
+    workspacePath: '/repo',
+    leaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+    nodes: [],
+    totalNodes: 0,
+    returnedNodes: 0,
+    truncated: false,
+  },
+}));
+const rewindSession = vi.fn(async () => ({
+  requestId: 'rewind-1',
+  sessionKey: 's1:session:/session.jsonl',
+  leaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+  tree: {
+    logicalSessionId: 's1',
+    sessionFile: '/session.jsonl',
+    workspacePath: '/repo',
+    leaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+    nodes: [],
+    totalNodes: 0,
+    returnedNodes: 0,
+    truncated: false,
+  },
+}));
+const forkSession = vi.fn(async () => ({
+  requestId: 'fork-1',
+  session: {
+    sessionId: 'forked',
+    runtimeIdentity: '/forked.jsonl',
+    agent: 'pi',
+    workspacePath: '/repo',
+    title: 'Source (fork)',
+    updatedAt: 1,
+    archived: false,
+  },
+}));
 const send = vi.fn(async () => 'send-1');
 const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
@@ -41,6 +83,9 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     createSession,
     resumeSession,
     loadHistoryPage,
+    getSessionTree,
+    rewindSession,
+    forkSession,
     send,
     stop,
     closeSession,
@@ -57,6 +102,9 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
       sessionId,
       agent: 'pi',
       workspacePath: '/repo',
+      title: 'Source',
+      updatedAt: 1,
+      archived: false,
       runtimeIdentity: '/session.jsonl',
     })),
     recordCreated,
@@ -194,6 +242,43 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(resumeSession).not.toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'legacy' })
     );
+  });
+
+  it('routes tree, confirmed rewind, and fork by indexed session identity', async () => {
+    await expect(
+      invoke('chat:getSessionTree', { sessionId: 's1', requestSequence: 3 })
+    ).resolves.toMatchObject({ requestSequence: 3 });
+    expect(getSessionTree).toHaveBeenCalledWith({
+      sessionId: 's1',
+      requestSequence: 3,
+      ownerWebContentsId: 7,
+    });
+
+    await expect(
+      invoke('chat:rewindSession', { sessionId: 's1', entryId: 'a', confirmed: false })
+    ).rejects.toThrow(/rewind_confirmation_required/);
+    await expect(
+      invoke('chat:rewindSession', { sessionId: 's1', entryId: 'a', confirmed: true })
+    ).resolves.toMatchObject({ requestId: 'rewind-1' });
+    expect(rewindSession).toHaveBeenCalledWith({
+      sessionId: 's1',
+      entryId: 'a',
+      confirmed: true,
+      ownerWebContentsId: 7,
+    });
+
+    await expect(
+      invoke('chat:forkSession', { sessionId: 's1', entryId: 'a' })
+    ).resolves.toMatchObject({
+      requestId: 'fork-1',
+      session: { sessionId: 'forked' },
+    });
+    expect(forkSession).toHaveBeenCalledWith({
+      sourceSessionId: 's1',
+      entryId: 'a',
+      sourceTitle: 'Source',
+      ownerWebContentsId: 7,
+    });
   });
 
   it('forwards one runtime stream to windows and SessionIndexService', () => {

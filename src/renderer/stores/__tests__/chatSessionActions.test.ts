@@ -5,6 +5,7 @@ import { decideSendPreamble } from '@/components/chat/sendPreamble';
 import {
   applyAutoSessionTitle,
   createChatSessionOnWorkspace,
+  materializeForkedChatSession,
   retargetChatSession,
 } from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
@@ -45,6 +46,57 @@ beforeEach(() => {
     historyErrors: {},
     pendingPermissions: [],
     pendingQuestion: null,
+  });
+});
+
+describe('materializeForkedChatSession', () => {
+  it('adds, binds, and selects an indexed Pi fork without copying source transient state', () => {
+    const workspace = makeWorkspace({ path: '/repo/' });
+    const source = makeSession({ id: 'source' });
+    useChatSessionsStore.setState({
+      workspaces: [workspace],
+      sessions: [source],
+      recentSessionIds: ['source'],
+      hostBoundSessionIds: ['source'],
+      messages: { source: [] },
+    });
+
+    expect(
+      materializeForkedChatSession({
+        sessionId: 'forked',
+        runtimeIdentity: '/sessions/forked.jsonl',
+        agent: 'pi',
+        workspacePath: '/repo',
+        title: 'Source (fork)',
+        updatedAt: 42,
+        archived: false,
+      })
+    ).toBe(true);
+
+    const state = useChatSessionsStore.getState();
+    expect(state.activeSessionId).toBe('forked');
+    expect(state.hostBoundSessionIds).toEqual(['source', 'forked']);
+    expect(state.sessions[0]).toMatchObject({
+      id: 'forked',
+      runtimeIdentity: '/sessions/forked.jsonl',
+      agent: 'pi',
+      status: 'idle',
+    });
+    expect(state.messages).toEqual({ source: [] });
+  });
+
+  it('refuses a fork whose indexed workspace is not mounted in this window', () => {
+    expect(
+      materializeForkedChatSession({
+        sessionId: 'forked',
+        runtimeIdentity: '/sessions/forked.jsonl',
+        agent: 'pi',
+        workspacePath: '/missing',
+        title: 'Fork',
+        updatedAt: 1,
+        archived: false,
+      })
+    ).toBe(false);
   });
 });
 

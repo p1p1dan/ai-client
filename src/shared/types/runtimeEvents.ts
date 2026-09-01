@@ -935,7 +935,7 @@ export interface SessionHistoryEvent extends RuntimeEventBase {
      */
     agent?: AgentWireName;
     /** Initial/refresh replaces the hydrated prefix; older prepends one page. */
-    mode?: 'initial' | 'older' | 'refresh';
+    mode?: 'initial' | 'older' | 'refresh' | 'branch';
     /** Chronological. Message ids carry the `h:` contract prefix. */
     messages: HistoryMessage[];
     /** Number of newer projected messages skipped from the active branch leaf. */
@@ -946,6 +946,8 @@ export interface SessionHistoryEvent extends RuntimeEventBase {
     totalCount?: number;
     /** Whether an older page exists. */
     hasMore?: boolean;
+    /** T33 active-branch generation; tree dialogs reject older snapshots. */
+    branchRevision?: number;
     /** True when messages were dropped by pagination/input/output caps. */
     truncated: boolean;
     omittedCount: number;

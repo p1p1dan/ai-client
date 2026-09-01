@@ -75,6 +75,7 @@ describe('createPiWorkerSlot', () => {
       cwd: '/repo',
       agentDir: '/managed/pi-agent',
       sessionFile: '/managed/pi-agent/sessions/one.jsonl',
+      leaf: { activeEntryId: null, fileTailEntryId: null },
       projectTrusted: false,
       permissionGate: 'bundled',
     });
@@ -110,6 +111,7 @@ describe('createPiWorkerSlot', () => {
       cwd: '/repo',
       agentDir: '/managed/pi-agent',
       sessionFile: '/managed/pi-agent/sessions/one.jsonl',
+      leaf: { activeEntryId: null, fileTailEntryId: null },
       model: 'pilab/company-model',
       effort: 'high',
       projectTrusted: false,

@@ -8,6 +8,7 @@
  * markers, if ever needed, can only be optional per-entry fields.
  */
 import type { SessionPermissionPreference } from './runtimeEvents';
+import type { PiLeafCheckpoint } from './sessionHistory';
 
 export interface SessionIndexEntry {
   sessionId: string;
@@ -18,6 +19,8 @@ export interface SessionIndexEntry {
    * agent from this string's shape.
    */
   runtimeIdentity?: string;
+  /** T33 active Pi branch checkpoint, validated against the current physical file tail. */
+  piLeaf?: PiLeafCheckpoint;
   /**
    * S2 (b): which agent runs this session. Deliberately typed `string` and not
    * `AgentWireName` — this is the DISK side, where a value written by a newer

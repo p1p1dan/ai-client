@@ -1,18 +1,28 @@
 import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
 import {
   isWorkerBootstrapPayload,
+  isWorkerDiscardForkPayload,
   isWorkerExtensionUiResponsePayload,
+  isWorkerForkPayload,
   isWorkerHistoryPayload,
+  isWorkerRewindPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
   isWorkerStopPayload,
+  isWorkerTreePayload,
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
+  type WorkerDiscardForkPayload,
+  type WorkerDiscardForkResult,
   type WorkerDisposeResult,
   type WorkerExtensionUiResponseResult,
+  type WorkerForkPayload,
+  type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerRewindPayload,
+  type WorkerRewindResult,
   type WorkerRpcErrorPayload,
   type WorkerRpcErrorResponse,
   type WorkerRpcEvent,
@@ -22,6 +32,8 @@ import {
   type WorkerSendResult,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerTreePayload,
+  type WorkerTreeResult,
 } from '../shared/types/workerRpc.ts';
 import { PermissionGateUnavailableError } from './piAgentSessionBootstrap.ts';
 import {
@@ -38,6 +50,10 @@ export interface PiWorkerRuntime {
   bootstrap(): Promise<WorkerBootstrapResult>;
   startSend(input: WorkerSendPayload): Promise<WorkerSendResult>;
   history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult>;
+  tree?(input: WorkerTreePayload): Promise<WorkerTreeResult>;
+  rewind?(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
+  fork?(input: WorkerForkPayload): Promise<WorkerForkResult>;
+  discardFork?(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   respondExtensionUi(response: Parameters<PiWorkerSession['respondExtensionUi']>[0]): boolean;
   dispose(): Promise<void>;
@@ -88,7 +104,9 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
     a.cwd === b.cwd &&
     a.sessionFile === b.sessionFile &&
     a.model === b.model &&
-    a.effort === b.effort
+    a.effort === b.effort &&
+    a.leafCheckpoint?.activeEntryId === b.leafCheckpoint?.activeEntryId &&
+    a.leafCheckpoint?.fileTailEntryId === b.leafCheckpoint?.fileTailEntryId
   );
 }
 
@@ -185,6 +203,18 @@ export class PiWorkerRpcServer {
         case 'worker.history':
           await this.handleHistory(request);
           break;
+        case 'worker.tree':
+          await this.handleTree(request);
+          break;
+        case 'worker.rewind':
+          await this.handleRewind(request);
+          break;
+        case 'worker.fork':
+          await this.handleFork(request);
+          break;
+        case 'worker.fork.discard':
+          await this.handleDiscardFork(request);
+          break;
         case 'worker.stop':
           await this.handleStop(request);
           break;
@@ -272,6 +302,90 @@ export class PiWorkerRpcServer {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.history(request.payload));
+  }
+
+  private async handleTree(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerTreePayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.tree requires logicalSessionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    if (!this.runtime.tree) {
+      throw new PiWorkerSessionError(
+        'WORKER_TREE_UNAVAILABLE',
+        'Worker tree method is unavailable'
+      );
+    }
+    this.respondSuccess(request, await this.runtime.tree(request.payload));
+  }
+
+  private async handleRewind(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerRewindPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.rewind requires logicalSessionId, targetEntryId, and confirmed=true',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    if (!this.runtime.rewind) {
+      throw new PiWorkerSessionError(
+        'WORKER_REWIND_UNAVAILABLE',
+        'Worker rewind method is unavailable'
+      );
+    }
+    this.respondSuccess(request, await this.runtime.rewind(request.payload));
+  }
+
+  private async handleFork(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerForkPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.fork requires logicalSessionId and entryId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    if (!this.runtime.fork) {
+      throw new PiWorkerSessionError(
+        'WORKER_FORK_UNAVAILABLE',
+        'Worker fork method is unavailable'
+      );
+    }
+    this.respondSuccess(request, await this.runtime.fork(request.payload));
+  }
+
+  private async handleDiscardFork(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerDiscardForkPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.fork.discard requires logicalSessionId and sessionFile',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    if (!this.runtime.discardFork) {
+      throw new PiWorkerSessionError(
+        'WORKER_FORK_UNAVAILABLE',
+        'Worker fork discard method is unavailable'
+      );
+    }
+    this.respondSuccess(request, await this.runtime.discardFork(request.payload));
   }
 
   private async handleStop(request: WorkerRpcRequest): Promise<void> {

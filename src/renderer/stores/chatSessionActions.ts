@@ -6,6 +6,9 @@
  * "chat must not import workspace-shell" boundary.
  */
 
+import { PI_AGENT } from '@shared/types/agentWire';
+import type { SessionIndexEntry } from '@shared/types/sessionIndex';
+import { pathsEqual } from '@/App/storage';
 import {
   deriveSessionTitleFromFirstMessage,
   isPlaceholderTitle,
@@ -69,6 +72,36 @@ export function createChatSessionOnWorkspace(
  * 'retarget'` (the single source of truth for that rule lives in
  * `components/chat/composerTarget.ts`).
  */
+export function materializeForkedChatSession(entry: SessionIndexEntry): boolean {
+  const state = useChatSessionsStore.getState();
+  const workspace = state.workspaces.find((item) => pathsEqual(item.path, entry.workspacePath));
+  if (!workspace || !entry.runtimeIdentity || entry.agent !== PI_AGENT) return false;
+  const session: ChatSession = {
+    id: entry.sessionId,
+    projectId: workspace.projectId,
+    workspaceId: workspace.id,
+    title: entry.title || 'Forked chat',
+    status: 'idle',
+    updatedAt: entry.updatedAt,
+    runtimeIdentity: entry.runtimeIdentity,
+    agent: PI_AGENT,
+  };
+  markSessionsLive([entry.sessionId]);
+  useChatSessionsStore.setState((current) => ({
+    sessions: [session, ...current.sessions.filter((item) => item.id !== session.id)],
+    activeSessionId: session.id,
+    recentSessionIds: [
+      session.id,
+      ...current.recentSessionIds.filter((id) => id !== session.id),
+    ].slice(0, 20),
+    hostBoundSessionIds: current.hostBoundSessionIds.includes(session.id)
+      ? current.hostBoundSessionIds
+      : [...current.hostBoundSessionIds, session.id],
+    lastError: null,
+  }));
+  return true;
+}
+
 export function retargetChatSession(sessionId: string, workspaceId: string): boolean {
   const state = useChatSessionsStore.getState();
   const workspace = state.workspaces.find((item) => item.id === workspaceId);

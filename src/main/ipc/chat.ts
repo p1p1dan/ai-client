@@ -80,6 +80,19 @@ function ensureEventBridge(): void {
   workerManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
 }
 
+async function requireIndexedPiSession(
+  sessionId: string
+): Promise<SessionIndexEntry & { runtimeIdentity: string }> {
+  const row = await sessionIndexService.get(sessionId);
+  if (!row?.runtimeIdentity) {
+    throw new Error(`pi_session_not_found: No indexed Pi session file for ${sessionId}`);
+  }
+  if (row.agent !== PI_AGENT) {
+    throw new Error(`pi_session_agent_mismatch: Session ${sessionId} is not indexed as Pi`);
+  }
+  return row as SessionIndexEntry & { runtimeIdentity: string };
+}
+
 export function registerChatHandlers(): void {
   ensureEventBridge();
 
@@ -199,6 +212,7 @@ export function registerChatHandlers(): void {
         workspacePath: payload.workspacePath,
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
+        ...(row.piLeaf ? { leafCheckpoint: row.piLeaf } : {}),
         ownerWebContentsId,
       });
       return { requestId };
@@ -287,6 +301,64 @@ export function registerChatHandlers(): void {
     IPC_CHANNELS.CHAT_ARCHIVE_SESSION,
     async (_e, payload: { sessionId: string; archived: boolean }): Promise<boolean> => {
       return sessionIndexService.setArchived(payload.sessionId, payload.archived);
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_GET_SESSION_TREE,
+    async (
+      e,
+      payload: { sessionId: string; requestSequence: number }
+    ): Promise<Awaited<ReturnType<typeof workerManager.getSessionTree>>> => {
+      const row = await requireIndexedPiSession(payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      const result = await workerManager.getSessionTree({
+        sessionId: payload.sessionId,
+        requestSequence: payload.requestSequence,
+        ownerWebContentsId,
+      });
+      if (result.snapshot.sessionFile !== row.runtimeIdentity) {
+        throw new Error(
+          'pi_session_identity_mismatch: Tree slot does not match the indexed session'
+        );
+      }
+      return result;
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_REWIND_SESSION,
+    async (
+      e,
+      payload: { sessionId: string; entryId: string; confirmed: true }
+    ): Promise<Awaited<ReturnType<typeof workerManager.rewindSession>>> => {
+      await requireIndexedPiSession(payload.sessionId);
+      if (payload.confirmed !== true) {
+        throw new Error('rewind_confirmation_required: Rewind requires explicit confirmation');
+      }
+      return workerManager.rewindSession({
+        sessionId: payload.sessionId,
+        entryId: payload.entryId,
+        confirmed: true,
+        ownerWebContentsId: claimSessionForSender(e, payload.sessionId),
+      });
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_FORK_SESSION,
+    async (
+      e,
+      payload: { sessionId: string; entryId: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.forkSession>>> => {
+      const row = await requireIndexedPiSession(payload.sessionId);
+      return workerManager.forkSession({
+        sourceSessionId: payload.sessionId,
+        entryId: payload.entryId,
+        sourceTitle: row.title,
+        ...(row.model ? { model: row.model } : {}),
+        ownerWebContentsId: claimSessionForSender(e, payload.sessionId),
+      });
     }
   );
 

@@ -3,8 +3,12 @@ import {
   isWorkerBootstrapPayload,
   isWorkerBootstrapResult,
   isWorkerExtensionUiResponsePayload,
+  isWorkerForkPayload,
+  isWorkerForkResult,
   isWorkerHistoryPayload,
   isWorkerHistoryResult,
+  isWorkerRewindPayload,
+  isWorkerRewindResult,
   isWorkerRpcEvent,
   isWorkerRpcMessage,
   isWorkerRpcRequest,
@@ -13,6 +17,8 @@ import {
   isWorkerSendResult,
   isWorkerStopPayload,
   isWorkerStopResult,
+  isWorkerTreePayload,
+  isWorkerTreeResult,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../workerRpc';
 
@@ -81,6 +87,7 @@ describe('worker RPC boundary guards', () => {
         agentDir: '/managed/pi-agent',
         projectTrusted: false,
         permissionGate: 'bundled',
+        leaf: { activeEntryId: null, fileTailEntryId: null },
         initialHistory: {
           logicalSessionId: 'logical-1',
           sessionFile: '/sessions/pi-1.jsonl',
@@ -137,6 +144,75 @@ describe('worker RPC boundary guards', () => {
         page: { messages: [], offset: 0, limit: 0, totalCount: 0, hasMore: false },
       })
     ).toBe(false);
+  });
+
+  it('validates bounded tree, confirmed rewind, and independent fork results', () => {
+    const snapshot = {
+      logicalSessionId: 'logical-1',
+      sessionFile: '/sessions/pi-1.jsonl',
+      workspacePath: '/repo',
+      leaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+      nodes: [
+        {
+          id: 'a',
+          parentId: null,
+          depth: 0,
+          entryType: 'message',
+          childCount: 2,
+          forkable: true,
+          active: true,
+          leaf: true,
+        },
+      ],
+      totalNodes: 1,
+      returnedNodes: 1,
+      truncated: false,
+    };
+    const history = {
+      logicalSessionId: 'logical-1',
+      sessionFile: '/sessions/pi-1.jsonl',
+      workspacePath: '/repo',
+      page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+    };
+    expect(isWorkerTreePayload({ logicalSessionId: 'logical-1' })).toBe(true);
+    expect(isWorkerTreeResult({ snapshot })).toBe(true);
+    expect(
+      isWorkerRewindPayload({
+        logicalSessionId: 'logical-1',
+        targetEntryId: 'a',
+        confirmed: true,
+      })
+    ).toBe(true);
+    expect(
+      isWorkerRewindPayload({
+        logicalSessionId: 'logical-1',
+        targetEntryId: 'a',
+        confirmed: false,
+      })
+    ).toBe(false);
+    expect(
+      isWorkerRewindResult({
+        logicalSessionId: 'logical-1',
+        sessionFile: '/sessions/pi-1.jsonl',
+        workspacePath: '/repo',
+        targetEntryId: 'a',
+        leaf: snapshot.leaf,
+        history,
+        tree: { snapshot },
+      })
+    ).toBe(true);
+    expect(isWorkerForkPayload({ logicalSessionId: 'logical-1', entryId: 'a' })).toBe(true);
+    expect(
+      isWorkerForkResult({
+        logicalSessionId: 'logical-1',
+        sourceSessionFile: '/sessions/pi-1.jsonl',
+        sessionFile: '/sessions/pi-fork.jsonl',
+        piSessionId: 'pi-fork',
+        workspacePath: '/repo',
+        leaf: snapshot.leaf,
+        history: { ...history, sessionFile: '/sessions/pi-fork.jsonl' },
+      })
+    ).toBe(true);
   });
 
   it('validates send admission, stop, and Extension UI payloads', () => {

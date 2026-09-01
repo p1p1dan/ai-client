@@ -12,7 +12,8 @@
 | Bounded WorkerManager | **Done** | T30 identity/remap/capacity/restart/owner + global manager deletion |
 | Cycle 1/2 behavior reattachment | **Done** | T31-a/b/c/d + legacy execution deletion；见2026-09-01 evidence |
 | Pi-native history/resume | **Done** | T32 exact-file open、branch timeline、pagination、incomplete recovery与race closure |
-| Tree/import/removal/TUI | **Next** | T33 tree/rewind/fork，随后T34 import |
+| Pi-native tree/rewind/fork | **Done** | T33 bounded tree、confirmed rewind、leaf restart与independent fork |
+| Legacy import/removal/TUI | **Next** | T34 read-only import，随后T35/T36 |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
 ## T00–T27：已落资产与替换影响
@@ -98,13 +99,13 @@
 
 **验收证据**：[T32 history/real resume evidence](./evidence/2026-09-01-t32-history-real-resume.md)。Main/renderer不读Pi JSONL；legacy row不重新进入live execution；真实Electron utilityProcess完成create→materialize→dispose→exact-file reopen→history→继续stream且无orphan。
 
-### T33 — Session tree, rewind and fork — **Planned**
+### T33 — Session tree, rewind and fork — **Done**
 
-- **T33-a**：迭代 session tree、node limit、request generation/stale response guard。
-- **T33-b**：idle-only rewind + 明确确认；保留后续分支，不截断 JSONL。
-- **T33-c**：从 entry fork 独立 session file、session row 和 WorkerSlot；源会话不变。
+- **T33-a — Done**：worker-only iterative tree、4000 backend/320 UI node limit、session-key/request-sequence/generation/branch-revision stale guard。
+- **T33-b — Done**：Main+worker idle gate、明确确认、Pi native `navigateTree`、append-only branch preservation、durable leaf checkpoint/restart与branch-replace history。
+- **T33-c — Done**：separate-manager native fork、新Pi file、atomic complete index row、independent WorkerSlot与commit前rollback cleanup；源会话不变。
 
-**硬验收**：A→B→C，回退到 A 后发 D，B/C 与 D 两分支均可浏览；从 A fork 后源/新会话独立继续。
+**验收证据**：[T33 tree/rewind/fork evidence](./evidence/2026-09-01-t33-tree-rewind-fork.md)。真实Electron utilityProcess完成A→B→C→rewind A→D两臂浏览、restart leaf、A fork、源/新会话并行独立继续且无orphan。
 
 ## Phase E — Legacy conversation migration
 
