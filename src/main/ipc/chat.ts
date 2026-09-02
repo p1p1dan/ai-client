@@ -87,6 +87,26 @@ async function assertPiCompatibleIndexRow(sessionId: string): Promise<void> {
   }
 }
 
+/**
+ * Q17 — hand the session's JSONL back from terminal mode to the GUI.
+ *
+ * Deliberately kills the terminal rather than negotiating with it: the Pi CLI
+ * offers no flush-and-hand-over handshake, so "stop the other writer" is the
+ * only guarantee available. Best-effort by design — a send must not fail
+ * because a terminal that may not even exist could not be reaped.
+ */
+async function releaseTuiOwnership(sessionId: string): Promise<void> {
+  try {
+    const row = await sessionIndexService.get(sessionId);
+    const sessionFile = row?.runtimeIdentity;
+    if (!sessionFile) return;
+    const { releaseSessionForHostPrompt } = await import('./piTui');
+    await releaseSessionForHostPrompt(sessionFile);
+  } catch (error) {
+    console.warn('[chat] Failed to release Pi TUI ownership before send:', error);
+  }
+}
+
 async function requireIndexedPiSession(
   sessionId: string
 ): Promise<SessionIndexEntry & { runtimeIdentity: string }> {
@@ -248,6 +268,9 @@ export function registerChatHandlers(): void {
         model?: string;
       }
     ): Promise<{ requestId: string }> => {
+      // Q17 — a warm Pi terminal on this session must stop before the worker
+      // writes the same JSONL. Terminals on other sessions are untouched.
+      await releaseTuiOwnership(payload.sessionId);
       // Ownership follows the most recent driver: a session picked up in a
       // second window must show ITS approval prompts there, not in the first.
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);

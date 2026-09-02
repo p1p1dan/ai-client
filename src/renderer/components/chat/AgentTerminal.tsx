@@ -17,6 +17,11 @@ import { AUTH_REQUIRED_ERROR_VIEW, isAuthRequiredError } from './authRequiredErr
 interface AgentTerminalProps {
   id: string;
   cwd: string;
+  /**
+   * Q17: the chat session's durable JSONL. When present the terminal continues
+   * that conversation (`pi --session <file>`) instead of starting a new one.
+   */
+  sessionFile?: string;
   initialPrompt?: string;
   isActive?: boolean;
   canMerge?: boolean;
@@ -39,6 +44,7 @@ interface AgentTerminalProps {
 export function AgentTerminal({
   id,
   cwd,
+  sessionFile,
   initialPrompt,
   isActive = false,
   canMerge = false,
@@ -76,6 +82,7 @@ export function AgentTerminal({
     refreshRenderer,
   } = useXterm({
     piTuiTerminalId: id,
+    ...(sessionFile ? { piTuiSessionFile: sessionFile } : {}),
     cwd,
     initialCommand: isRemoteWorkspace ? undefined : initialPrompt,
     isActive: isActive && !isRemoteWorkspace,

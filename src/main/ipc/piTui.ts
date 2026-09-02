@@ -7,6 +7,15 @@ import {
   PiTuiPtyController,
   resolvePiTuiLaunchPlan,
 } from '../services/terminal/PiTuiPty';
+import { PiTuiExclusiveGuard } from '../services/terminal/piTuiSession';
+
+/**
+ * Q17: which chat session (if any) currently has a Pi terminal writing its
+ * JSONL. Process-wide and single-owner — GUI and TUI are mutually exclusive
+ * (`presentationMode` is one app-wide setting), and the GUI worker that would
+ * be the second writer is process-wide too.
+ */
+const sessionGuard = new PiTuiExclusiveGuard();
 
 const controllers = new Map<number, PiTuiPtyController>();
 const controllerPromises = new Map<number, Promise<PiTuiPtyController>>();
@@ -30,6 +39,10 @@ async function createController(windowId: number): Promise<PiTuiPtyController> {
         }
       },
       onExit: (event) => {
+        // The TUI died (user typed /exit, crash, dispose). Ownership must go
+        // back before the GUI's next send, or the session stays locked out of
+        // chat for the rest of the run.
+        if (event.sessionFile) sessionGuard.release(event.sessionFile);
         const window = BrowserWindow.fromId(windowId);
         if (window && !window.isDestroyed()) {
           window.webContents.send(IPC_CHANNELS.PI_TUI_EXIT, event);
@@ -91,6 +104,12 @@ export function registerPiTuiHandlers(): void {
     }
     const controller = await controllerFor(event.sender);
     assertOwner(event.sender, controller);
+    if (request.sessionFile) {
+      // Always transfer, never test-and-set: see PiTuiExclusiveGuard.transferTo
+      // for the desync failure pix hit with tryAcquire-only.
+      const acquired = sessionGuard.transferTo(request.sessionFile);
+      if (!acquired.ok) throw new Error(acquired.reason);
+    }
     return controller.open(request);
   });
   ipcMain.handle(IPC_CHANNELS.PI_TUI_WRITE, async (event, terminalId: string, data: string) => {
@@ -124,6 +143,23 @@ export function registerPiTuiHandlers(): void {
   });
 }
 
+/**
+ * Q17 — the GUI is about to write this session's JSONL, so any terminal on it
+ * must stop first. Called by the chat send path before it starts a turn.
+ */
+export async function releaseSessionForHostPrompt(sessionFile: string): Promise<void> {
+  if (!sessionFile.trim()) return;
+  await Promise.allSettled(
+    [...controllers.values()].map((controller) => controller.disposeSession(sessionFile))
+  );
+  sessionGuard.release(sessionFile);
+}
+
+/** Throws while a Pi terminal still owns a session (defence in depth). */
+export function assertHostPromptAllowed(): void {
+  sessionGuard.assertHostPromptAllowed();
+}
+
 export async function disposeAllPiTuiControllers(): Promise<void> {
   const windowIds = new Set([...controllers.keys(), ...controllerPromises.keys()]);
   for (const windowId of windowIds) disposedWindowIds.add(windowId);
@@ -132,6 +168,7 @@ export async function disposeAllPiTuiControllers(): Promise<void> {
   await Promise.allSettled(pending);
   await Promise.allSettled([...controllers.values()].map((controller) => controller.disposeAll()));
   controllers.clear();
+  sessionGuard.release();
   disposedWindowIds.clear();
 }
 
@@ -142,6 +179,7 @@ export function disposeAllPiTuiControllersSync(): void {
   controllerPromises.clear();
   for (const controller of controllers.values()) controller.disposeAllSync();
   controllers.clear();
+  sessionGuard.release();
 }
 
 export function disposePiTuiWindow(windowId: number): void {

@@ -15,6 +15,7 @@ import type { IPty } from 'node-pty';
 import * as nodePty from 'node-pty';
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
 import { resolveManagedPiPtyEnv } from '../piModelConfig';
+import { buildPiTuiArgs, normalizeSessionKey } from './piTuiSession';
 
 const MAX_SUSPENDED_REPLAY_CHARS = 65_536;
 const DEFAULT_MAX_LIVE_TERMINALS = 2;
@@ -44,6 +45,8 @@ export interface PiTuiCallbacks {
 interface LiveTerminal {
   terminalId: string;
   cwd: string;
+  /** Q17: the JSONL this terminal owns, normalized; '' when it started fresh. */
+  sessionKey: string;
   pty: PtyHandle;
   generation: number;
   suspended: boolean;
@@ -118,7 +121,8 @@ export function resolvePiTuiLaunchPlan(
     if (layout.platform === 'win32') env.Path = env.PATH;
   }
 
-  // No --session/--continue argument: T36 intentionally creates a new TUI session.
+  // Base argv only. The per-terminal `--session <file>` is appended at spawn
+  // time (Q17) because one launch plan serves every terminal in the window.
   return { cliPath, nodePath, args: [cliPath], env, useElectronNode };
 }
 
@@ -189,7 +193,7 @@ export class PiTuiPtyController {
     const generation = (this.#generations.get(request.terminalId) ?? 0) + 1;
     this.#generations.set(request.terminalId, generation);
     const prompt = request.initialPrompt?.trim();
-    const pty = this.#spawn(launch.nodePath, launch.args, {
+    const pty = this.#spawn(launch.nodePath, buildPiTuiArgs(launch.cliPath, request.sessionFile), {
       name: 'xterm-256color',
       cols: boundedDimension(request.cols, 20, 80),
       rows: boundedDimension(request.rows, 5, 24),
@@ -199,6 +203,7 @@ export class PiTuiPtyController {
     const live: LiveTerminal = {
       terminalId: request.terminalId,
       cwd: request.cwd,
+      sessionKey: normalizeSessionKey(request.sessionFile ?? ''),
       pty,
       generation,
       suspended: false,
@@ -221,7 +226,13 @@ export class PiTuiPtyController {
       if (!active || active.pty !== pty || active.generation !== generation) return;
       this.#live.delete(request.terminalId);
       this.#emitState(request.terminalId, 'dead');
-      this.#callbacks.onExit({ terminalId: request.terminalId, ...event });
+      this.#callbacks.onExit({
+        terminalId: request.terminalId,
+        ...event,
+        // Q17: Main releases session ownership on this event, so it has to say
+        // which session died — the live entry is already gone by now.
+        ...(request.sessionFile ? { sessionFile: request.sessionFile } : {}),
+      });
     });
     this.#emitState(request.terminalId, 'live');
     // Keep prompts out of argv/process listings. PTYs buffer early input until
@@ -257,6 +268,25 @@ export class PiTuiPtyController {
 
   dispose(terminalId: string): Promise<void> {
     return this.#enqueue(terminalId, () => this.#disposeNow(terminalId));
+  }
+
+  /**
+   * Q17: kill every terminal that owns `sessionFile`, so the GUI worker can
+   * take the JSONL back. Returns the terminal ids that were killed — the caller
+   * releases the ownership guard for them.
+   *
+   * Matching is on the normalized key, not the raw string: a path that reached
+   * the controller through `realpath` and one that came from an index row can
+   * differ by `/private` or case and still name the same file.
+   */
+  async disposeSession(sessionFile: string): Promise<string[]> {
+    const key = normalizeSessionKey(sessionFile);
+    if (!key) return [];
+    const targets = [...this.#live.values()]
+      .filter((live) => live.sessionKey === key)
+      .map((live) => live.terminalId);
+    await Promise.allSettled(targets.map((terminalId) => this.dispose(terminalId)));
+    return targets;
   }
 
   async disposeAll(): Promise<void> {

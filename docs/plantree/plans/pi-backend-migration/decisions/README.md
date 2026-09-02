@@ -1,6 +1,6 @@
 # Pi-only migration 决策索引
 
-> 本文件是 D1–D17 当前权威状态的唯一索引。原决策保留当时背景与理由；`Superseded` 不代表删除历史，只代表它不能继续驱动新实现。
+> 本文件是 D1–D19 当前权威状态的唯一索引。原决策保留当时背景与理由；`Superseded` 不代表删除历史，只代表它不能继续驱动新实现。
 
 ## Active
 
@@ -18,6 +18,7 @@
 | [D16](./016-delete-obsolete-paths-with-replacement.md) | 替代即删除 | 开发阶段不保留 legacy runtime/entry/artifact 兼容；替代切片同步删除旧 authority，Git 负责回退 |
 | [D17](./017-worker-pool-policy.md) | Worker pool policy | normalized identity/remap、resource-aware capacity、protected eviction、bounded same-session restart |
 | [D18](./018-t34-claude-import-semantics.md) | T34 Claude import semantics | Claude-only首版、线性root snapshot、display-only unmapped、manifest/dedupe与批量报告UI |
+| [D19](./019-tui-owns-the-gui-session-file.md) | TUI 接管 GUI 会话文件 | `pi --session <file>` 继续同一对话；单一所有者锁；GUI 发送前硬杀 TUI；关闭 Q17 |
 
 ## Revised / partially active
 

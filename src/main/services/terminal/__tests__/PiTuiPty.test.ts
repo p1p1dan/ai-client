@@ -167,3 +167,61 @@ describe('PiTuiPtyController', () => {
     await expect(controller.open({ terminalId: 'two', cwd: '/repo' })).rejects.toThrow('disposed');
   });
 });
+
+// Q17 — terminal mode continues the GUI's own conversation instead of starting
+// a parallel one, so the terminal has to be bound to that session's JSONL and
+// killable by it when the GUI takes the file back.
+describe('PiTuiPtyController — session binding (Q17)', () => {
+  it('runs `--session <file>` when the terminal continues a chat', async () => {
+    const { controller, spawnCalls } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo', sessionFile: '/repo/s.jsonl' });
+
+    expect(spawnCalls).toEqual([
+      { file: '/app/node', args: ['/app/pi/cli.js', '--session', '/repo/s.jsonl'] },
+    ]);
+  });
+
+  it('starts a fresh session when opened from a repo with no chat behind it', async () => {
+    const { controller, spawnCalls } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo' });
+
+    expect(spawnCalls).toEqual([{ file: '/app/node', args: ['/app/pi/cli.js'] }]);
+  });
+
+  it('disposeSession kills only the terminals on that JSONL', async () => {
+    const { controller, ptys } = harness();
+    await controller.open({ terminalId: 'mine', cwd: '/repo', sessionFile: '/repo/mine.jsonl' });
+    await controller.open({ terminalId: 'other', cwd: '/repo', sessionFile: '/repo/other.jsonl' });
+
+    const killed = await controller.disposeSession('/repo/mine.jsonl');
+
+    expect(killed).toEqual(['mine']);
+    expect(ptys[0]?.killed).toBe(true);
+    expect(ptys[1]?.killed).toBe(false);
+    expect(controller.status().terminalIds).toEqual(['other']);
+  });
+
+  it('disposeSession matches through path drift, so the GUI handback lands', async () => {
+    const { controller, ptys } = harness();
+    await controller.open({
+      terminalId: 'one',
+      cwd: '/repo',
+      sessionFile: '/private/var/s.jsonl',
+    });
+
+    // The index row says /var/…, the controller was told /private/var/… — the
+    // same file. A raw string compare would silently kill nothing and leave two
+    // writers on it.
+    expect(await controller.disposeSession('/VAR/s.jsonl')).toEqual(['one']);
+    expect(ptys[0]?.killed).toBe(true);
+  });
+
+  it('reports the session on exit so Main can release ownership', async () => {
+    const { controller, ptys, exits } = harness();
+    await controller.open({ terminalId: 'one', cwd: '/repo', sessionFile: '/repo/s.jsonl' });
+
+    ptys[0]?.emitExit(0);
+
+    expect(exits).toEqual([{ terminalId: 'one', exitCode: 0, sessionFile: '/repo/s.jsonl' }]);
+  });
+});

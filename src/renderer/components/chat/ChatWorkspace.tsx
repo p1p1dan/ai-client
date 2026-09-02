@@ -264,6 +264,12 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
             <AgentTerminal
               id={tuiTerminalId}
               cwd={activeWorkspacePath}
+              // Q17: continue this chat's own JSONL rather than opening a new
+              // session. Absent until the first send has bound a runtime, and
+              // an unbound chat has no conversation to continue anyway.
+              {...(activeSession?.runtimeIdentity
+                ? { sessionFile: activeSession.runtimeIdentity }
+                : {})}
               isActive
               onExit={() => {
                 setTuiTerminalId(null);

@@ -27,6 +27,12 @@ const SESSION_NAME_MAX_LENGTH = 36;
 
 export interface UseXtermOptions {
   piTuiTerminalId?: string;
+  /**
+   * Q17: the chat session's durable JSONL (its index row `runtimeIdentity`).
+   * Passing it makes the terminal continue that conversation and take
+   * interactive ownership of it; omitting it starts a fresh Pi session.
+   */
+  piTuiSessionFile?: string;
   backendSessionId?: string;
   cwd?: string;
   command?: {
@@ -119,6 +125,7 @@ function useTerminalSettings() {
 
 export function useXterm({
   piTuiTerminalId,
+  piTuiSessionFile,
   backendSessionId,
   cwd,
   command,
@@ -754,6 +761,7 @@ export function useXterm({
           cols: terminal.cols,
           rows: terminal.rows,
           initialPrompt: initialCommand,
+          ...(piTuiSessionFile ? { sessionFile: piTuiSessionFile } : {}),
         });
         setCurrentSessionId(opened.terminalId);
       } else {
