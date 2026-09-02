@@ -52,6 +52,7 @@ import {
   reconcilePiImport,
 } from '../legacyImport/PiImportProcess';
 import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
+import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
 import { normalizeWorkerPath, sessionWorkerKey, workspaceWorkerKey } from './workerSessionKey';
 
@@ -98,6 +99,10 @@ interface ManagedSlot {
   leafCheckpoint: PiLeafCheckpoint | null;
   branchRevision: number;
   mutationInFlight: 'rewind' | 'fork' | null;
+  /** Bytes after the last newline of this worker's stderr; see hostStderr.ts. */
+  stderrPending: string;
+  /** Last RECENT_STDERR_LIMIT stderr lines, replayed when the worker dies. */
+  recentStderr: string[];
 }
 
 interface BlockingRequestOrigin {
@@ -545,6 +550,8 @@ export class WorkerManager {
         leafCheckpoint: null,
         branchRevision: 0,
         mutationInFlight: null,
+        stderrPending: '',
+        recentStderr: [],
       };
       this.entriesByKey.set(temporaryKey, entry);
       this.entriesBySession.set(input.sessionId, entry);
@@ -746,6 +753,8 @@ export class WorkerManager {
         leafCheckpoint: input.leafCheckpoint ?? null,
         branchRevision: 0,
         mutationInFlight: null,
+        stderrPending: '',
+        recentStderr: [],
       };
       this.entriesByKey.set(durableKey, entry);
       this.entriesBySession.set(input.sessionId, entry);
@@ -1075,6 +1084,8 @@ export class WorkerManager {
           leafCheckpoint: fork.leaf,
           branchRevision: 0,
           mutationInFlight: null,
+          stderrPending: '',
+          recentStderr: [],
         };
         this.entriesByKey.set(durableKey, target);
         this.entriesBySession.set(sessionId, target);
@@ -1418,8 +1429,12 @@ export class WorkerManager {
           this.handleLifecycle(entry, expectedSlot, event);
         }
       },
-      onStderr: (chunk, generation) =>
-        this.log(`[pi-worker:${entry.logicalSessionId}:g${generation}:stderr]`, chunk),
+      onStderr: (chunk, generation) => this.absorbStderr(entry, generation, chunk),
+    }).catch((error: unknown) => {
+      // A worker that dies during bootstrap never reaches handleLifecycle, so
+      // this is the only place its own stderr can still be recovered.
+      this.dumpWorkerStderr(entry, 'failed to start');
+      throw error;
     });
     this.ownedSlots.add(created.slot);
     expectedSlot = created.slot;
@@ -1427,6 +1442,37 @@ export class WorkerManager {
     entry.bootstrap = created.bootstrap;
     entry.generation = created.slot.generation;
     return created;
+  }
+
+  /**
+   * Assemble the worker's stderr into whole lines and keep the tail.
+   *
+   * Chunks arrive split at arbitrary byte boundaries, so logging them verbatim
+   * interleaves half-lines — the reason hostStderr.ts exists. Lines go to the
+   * optional `log` sink (info level, off in the shipped configuration) and into
+   * a bounded buffer that `dumpWorkerStderr` replays at error level when the
+   * worker dies. Without that replay a boot crash reaches the user as a bare
+   * "Worker exited (code=1)" with the cause discarded.
+   */
+  private absorbStderr(entry: ManagedSlot, generation: number, chunk: string): void {
+    const drained = drainStderrLines(entry.stderrPending, chunk);
+    entry.stderrPending = drained.pending;
+    entry.recentStderr = pushRecentStderr(entry.recentStderr, drained.lines);
+    const prefix = `[pi-worker:${entry.logicalSessionId}:g${generation}:stderr]`;
+    for (const line of drained.lines) this.log(prefix, line);
+  }
+
+  /** Replay the dead worker's own diagnostics; clears the buffer. */
+  private dumpWorkerStderr(entry: ManagedSlot, reason: string): void {
+    const lines = [...entry.recentStderr, ...flushStderrPending(entry.stderrPending)];
+    entry.stderrPending = '';
+    entry.recentStderr = [];
+    if (lines.length === 0) return;
+    // console.error, not this.log: electron-log keeps error level even when
+    // file logging is off, which is the configuration nearly everyone runs.
+    console.error(
+      `[pi-worker:${entry.logicalSessionId}:g${entry.generation}] ${reason}; last ${lines.length} stderr line(s):\n${lines.join('\n')}`
+    );
   }
 
   private assertIdleEntry(entry: ManagedSlot, action: string): void {
@@ -1744,6 +1790,7 @@ export class WorkerManager {
     }
     entry.state = 'crashed';
     entry.error = event.error.message;
+    this.dumpWorkerStderr(entry, `crashed: ${event.error.message}`);
     this.resetExtensionUi(entry, 'host_shutdown');
     const activeRequestId = entry.activeRequestId;
     entry.activeRequestId = null;
@@ -1787,6 +1834,7 @@ export class WorkerManager {
     if (entry.restartAttempts.length >= this.maxRestartAttempts) {
       entry.state = 'error';
       entry.error = `Worker restart budget exhausted (${this.maxRestartAttempts} attempts per ${this.restartWindowMs}ms)`;
+      console.error(`[worker-manager] ${entry.logicalSessionId}: ${entry.error}`);
       this.updateManagerState();
       return;
     }
@@ -1845,6 +1893,12 @@ export class WorkerManager {
     } catch (error) {
       entry.state = 'crashed';
       entry.error = error instanceof Error ? error.message : String(error);
+      // Each failed attempt eats the restart budget, and exhausting it parks the
+      // session in `error` for good. Without this line the only trace of WHY is
+      // a field nobody reads, and the session just stops working.
+      console.error(
+        `[worker-manager] restart attempt ${entry.restartAttempts.length}/${this.maxRestartAttempts} failed for ${entry.logicalSessionId}: ${entry.error}`
+      );
       this.updateManagerState();
       void this.serialize(() => this.restartEntry(entry));
     }
