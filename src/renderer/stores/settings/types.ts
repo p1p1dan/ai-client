@@ -5,8 +5,6 @@ import type {
   ConnectionProfile,
   CustomAgent,
   GitHostMapping,
-  McpServer,
-  PromptPreset,
   ProxySettings,
   ShellConfig,
 } from '@shared/types';
@@ -196,10 +194,6 @@ export interface ClaudeCodeIntegrationSettings {
   statusLineEnabled: boolean; // Enable Status Line hook for displaying agent status
   statusLineFields: StatusLineFieldSettings; // Which fields to display in status line
   tmuxEnabled: boolean; // Enable tmux session wrapping for persistent terminal sessions
-  showProviderSwitcher: boolean; // Show provider switcher in SessionBar
-  enableProviderWatcher: boolean; // Enable watcher for Claude Code settings.json changes
-  enableProviderDisableFeature: boolean; // Enable/disable the provider temporary disable feature
-  providers: import('@shared/types').ClaudeProvider[];
   enhancedInputEnabled: boolean; // Enable enhanced input panel for Claude Code
   enhancedInputAutoPopup: 'always' | 'hideWhileRunning' | 'manual'; // Enhanced input auto popup mode
 }
@@ -386,10 +380,6 @@ export interface SettingsState {
   backgroundSizeMode: BackgroundSizeMode;
   _backgroundRefreshKey: number; // Transient: trigger folder re-scan (not persisted)
 
-  // MCP, Prompts management
-  mcpServers: McpServer[];
-  promptPresets: PromptPreset[];
-
   // Settings display mode
   settingsDisplayMode: SettingsDisplayMode;
   settingsModalPosition: { x: number; y: number } | null;
@@ -473,15 +463,6 @@ export interface SettingsState {
 
   // Setters - Claude Code Integration
   setClaudeCodeIntegration: (settings: Partial<ClaudeCodeIntegrationSettings>) => void;
-  addClaudeProvider: (provider: import('@shared/types').ClaudeProvider) => void;
-  updateClaudeProvider: (
-    id: string,
-    updates: Partial<import('@shared/types').ClaudeProvider>
-  ) => void;
-  removeClaudeProvider: (id: string) => void;
-  reorderClaudeProviders: (fromIndex: number, toIndex: number) => void;
-  setClaudeProviderEnabled: (id: string, enabled: boolean) => void;
-  setClaudeProviderOrder: (providers: import('@shared/types').ClaudeProvider[]) => void;
 
   // Setters - AI Features
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;
@@ -531,18 +512,6 @@ export interface SettingsState {
   setBackgroundSaturation: (saturation: number) => void;
   setBackgroundSizeMode: (mode: BackgroundSizeMode) => void;
   triggerBackgroundRefresh: () => void;
-
-  // Setters - MCP
-  addMcpServer: (server: McpServer) => void;
-  updateMcpServer: (id: string, updates: Partial<McpServer>) => void;
-  removeMcpServer: (id: string) => void;
-  setMcpServerEnabled: (id: string, enabled: boolean) => void;
-
-  // Setters - Prompts
-  addPromptPreset: (preset: PromptPreset) => void;
-  updatePromptPreset: (id: string, updates: Partial<PromptPreset>) => void;
-  removePromptPreset: (id: string) => void;
-  setPromptPresetEnabled: (id: string) => void;
 
   // Setters - Settings display
   setSettingsDisplayMode: (mode: SettingsDisplayMode) => void;

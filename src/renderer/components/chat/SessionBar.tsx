@@ -1,29 +1,10 @@
-import type { ClaudeProvider } from '@shared/types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Ban,
-  Check,
-  CheckCircle,
-  Circle,
-  GripVertical,
-  Plus,
-  Settings,
-  Sparkles,
-  Terminal,
-  X,
-} from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GripVertical, Plus, Settings, Sparkles, Terminal, X } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GlowCard, useGlowEffectEnabled } from '@/components/ui/glow-card';
-import { toastManager } from '@/components/ui/toast';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
-import { useManagedMode } from '@/hooks/useManagedMode';
 import { useSessionOutputState } from '@/hooks/useOutputState';
 import { useI18n } from '@/i18n';
-import {
-  clearClaudeProviderSwitch,
-  isClaudeProviderMatch,
-  markClaudeProviderSwitch,
-} from '@/lib/claudeProvider';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { AGENT_INFO } from '@/utils/agentSession';
@@ -55,7 +36,6 @@ export interface Session {
 interface SessionBarProps {
   sessions: Session[];
   activeSessionId: string | null;
-  repoPath?: string;
   onSelectSession: (id: string) => void;
   onCloseSession: (id: string) => void;
   onNewSession: () => void;
@@ -106,106 +86,6 @@ interface SessionTabProps {
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
 }
-
-interface ProviderMenuItemProps {
-  provider: ClaudeProvider;
-  isActive: boolean;
-  isDisabled: boolean;
-  isPending: boolean;
-  activeProviderId: string | undefined;
-  providers: ClaudeProvider[];
-  onApplyProvider: (provider: ClaudeProvider) => void;
-  onCloseMenu: () => void;
-  setClaudeProviderEnabled: (id: string, enabled: boolean) => void;
-  enableProviderDisableFeature: boolean;
-  t: (key: string) => string;
-}
-
-const ProviderMenuItem = React.memo(function ProviderMenuItem({
-  provider,
-  isActive,
-  isDisabled,
-  isPending,
-  activeProviderId,
-  providers,
-  onApplyProvider,
-  onCloseMenu,
-  setClaudeProviderEnabled,
-  enableProviderDisableFeature,
-  t,
-}: ProviderMenuItemProps) {
-  const effectiveIsDisabled = enableProviderDisableFeature ? isDisabled : false;
-
-  const handleSwitch = useCallback(() => {
-    if (!isActive && !effectiveIsDisabled) {
-      onApplyProvider(provider);
-      onCloseMenu();
-    }
-  }, [isActive, effectiveIsDisabled, provider, onApplyProvider, onCloseMenu]);
-
-  const handleToggleEnabled = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      const isCurrentlyEnabled = provider.enabled !== false;
-      setClaudeProviderEnabled(provider.id, !isCurrentlyEnabled);
-
-      // 禁用当前激活的 Provider 时，自动切换到下一个可用的 Provider
-      if (isCurrentlyEnabled && activeProviderId === provider.id) {
-        const nextEnabledProvider = providers.find(
-          (p) => p.id !== provider.id && p.enabled !== false
-        );
-        if (nextEnabledProvider) {
-          onApplyProvider(nextEnabledProvider);
-        }
-      }
-    },
-    [provider, activeProviderId, providers, setClaudeProviderEnabled, onApplyProvider]
-  );
-
-  return (
-    <div
-      className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground',
-        effectiveIsDisabled && 'opacity-50'
-      )}
-    >
-      <button
-        type="button"
-        onClick={handleSwitch}
-        disabled={isPending || effectiveIsDisabled}
-        className={cn(
-          'flex flex-1 items-center gap-2 whitespace-nowrap text-left',
-          isPending && 'cursor-not-allowed'
-        )}
-      >
-        {isActive ? (
-          <CheckCircle className="h-4 w-4 shrink-0" />
-        ) : (
-          <Circle className="h-4 w-4 shrink-0" />
-        )}
-        <span className={cn(effectiveIsDisabled && 'line-through')}>{provider.name}</span>
-      </button>
-
-      {/* 禁用/启用按钮 */}
-      {enableProviderDisableFeature && (
-        <Tooltip>
-          <TooltipTrigger render={<span />}>
-            <button
-              type="button"
-              onClick={handleToggleEnabled}
-              className="shrink-0 rounded p-0.5 opacity-60 hover:opacity-100"
-            >
-              {isDisabled ? <Check className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
-            </button>
-          </TooltipTrigger>
-          <TooltipPopup side="right">
-            {isDisabled ? t('Click to enable this Provider') : t('Click to disable this Provider')}
-          </TooltipPopup>
-        </Tooltip>
-      )}
-    </div>
-  );
-});
 
 /** Pick the best display name for a session tab */
 function getSessionDisplayName(session: {
@@ -446,7 +326,6 @@ function SessionTab({
 export function SessionBar({
   sessions,
   activeSessionId,
-  repoPath,
   onSelectSession,
   onCloseSession,
   onNewSession,
@@ -466,84 +345,8 @@ export function SessionBar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [showAgentMenu, setShowAgentMenu] = useState(false);
-  const [showProviderMenu, setShowProviderMenu] = useState(false);
   const [installedAgents, setInstalledAgents] = useState<Set<string>>(new Set());
   const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
-
-  // Provider 查询和切换逻辑
-  const { data: managedModeInfo } = useManagedMode();
-  const queryClient = useQueryClient();
-  const providers = useSettingsStore((s) => s.claudeCodeIntegration.providers);
-  const showProviderSwitcher = useSettingsStore(
-    (s) => s.claudeCodeIntegration.showProviderSwitcher ?? true
-  );
-  const setClaudeProviderEnabled = useSettingsStore((s) => s.setClaudeProviderEnabled);
-  const enableProviderDisableFeature = useSettingsStore(
-    (s) => s.claudeCodeIntegration.enableProviderDisableFeature ?? true
-  );
-
-  const { data: claudeData } = useQuery({
-    queryKey: ['claude-settings', repoPath ?? null],
-    queryFn: () => window.electronAPI.claudeProvider.readSettings(repoPath),
-    enabled: !state.collapsed && !managedModeInfo.managed, // 仅在展开且非托管状态查询
-    staleTime: 30000, // 30秒缓存避免频繁查询
-  });
-
-  // 计算当前激活的 Provider
-  const activeProvider = useMemo(() => {
-    const currentConfig = claudeData?.extracted;
-    if (!currentConfig) return null;
-    return providers.find((p) => isClaudeProviderMatch(p, currentConfig)) ?? null;
-  }, [providers, claudeData?.extracted]);
-
-  // Provider 切换 mutation
-  const applyProvider = useMutation({
-    mutationFn: (provider: ClaudeProvider) =>
-      window.electronAPI.claudeProvider.apply(repoPath, provider),
-    onSuccess: (success, provider) => {
-      if (!success) {
-        clearClaudeProviderSwitch();
-        toastManager.add({
-          type: 'error',
-          title: t('Switch failed'),
-        });
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['claude-settings', repoPath ?? null] });
-      toastManager.add({
-        type: 'success',
-        title: t('Provider switched'),
-        description: provider.name,
-      });
-    },
-    onError: (error) => {
-      clearClaudeProviderSwitch();
-      toastManager.add({
-        type: 'error',
-        title: t('Switch failed'),
-        description: error instanceof Error ? error.message : String(error),
-      });
-    },
-  });
-
-  // 截断 Provider 名称（最多 15 个字符）
-  const truncateProviderName = (name: string): string => {
-    if (name.length <= 15) return name;
-    return `${name.slice(0, 14)}...`;
-  };
-
-  // 稳定的 Provider 回调函数
-  const handleApplyProvider = useCallback(
-    (provider: ClaudeProvider) => {
-      markClaudeProviderSwitch(provider);
-      applyProvider.mutate(provider);
-    },
-    [applyProvider]
-  );
-
-  const handleCloseProviderMenu = useCallback(() => {
-    setShowProviderMenu(false);
-  }, []);
 
   // Tab drag reorder
   const draggedTabIndexRef = useRef<number | null>(null);
@@ -962,103 +765,6 @@ export function SessionBar({
                 </div>
               )}
             </div>
-
-            {/* Provider Tag - 仅在展开、设置启用且非托管模式时显示（D47 S2b §1 ④：托管模式下 Provider 入口隐藏） */}
-            {!state.collapsed && showProviderSwitcher && !managedModeInfo.managed && (
-              <>
-                <div className="mx-1 h-4 w-px bg-border" />
-
-                <div
-                  className="relative shrink-0"
-                  onMouseEnter={() => setShowProviderMenu(true)}
-                  onMouseLeave={() => setShowProviderMenu(false)}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setShowProviderMenu(!showProviderMenu)}
-                    className="flex h-7 max-w-40 min-w-0 shrink-0 items-center gap-1.5 rounded-full border px-3 text-ui text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors whitespace-nowrap"
-                    title={activeProvider?.name ?? t('Select Provider')}
-                  >
-                    <svg
-                      fill="currentColor"
-                      fillRule="evenodd"
-                      height="1em"
-                      className="h-3.5 w-3.5 shrink-0"
-                      viewBox="0 0 24 24"
-                      width="1em"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <title>Claude</title>
-                      <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" />
-                    </svg>
-                    {activeProvider ? (
-                      <span className="min-w-0 truncate">
-                        {truncateProviderName(activeProvider.name)}
-                      </span>
-                    ) : null}
-                  </button>
-
-                  {/* Provider 选择菜单 */}
-                  {showProviderMenu && providers.length > 0 && (
-                    <div
-                      className={cn(
-                        'absolute right-[-10px] z-50 min-w-32',
-                        // 根据工具栏位置决定菜单方向
-                        containerRef.current &&
-                          state.y > containerRef.current.getBoundingClientRect().height / 2
-                          ? 'bottom-full pb-1'
-                          : 'top-full pt-1'
-                      )}
-                    >
-                      <div className="rounded-lg border bg-popover p-1 shadow-lg">
-                        <div className="flex items-center justify-between px-2 py-1">
-                          <span className="text-ui text-muted-foreground whitespace-nowrap">
-                            {t('Select Provider')}
-                          </span>
-                          <Tooltip>
-                            <TooltipTrigger render={<span />}>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowProviderMenu(false);
-                                  window.dispatchEvent(new CustomEvent('open-settings-provider'));
-                                }}
-                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                              >
-                                <Settings className="h-3.5 w-3.5" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipPopup side="right">{t('Manage Providers')}</TooltipPopup>
-                          </Tooltip>
-                        </div>
-                        {providers.map((provider) => {
-                          const isActive = activeProvider?.id === provider.id;
-                          const isDisabled = provider.enabled === false;
-
-                          return (
-                            <ProviderMenuItem
-                              key={provider.id}
-                              provider={provider}
-                              isActive={isActive}
-                              isDisabled={isDisabled}
-                              isPending={applyProvider.isPending}
-                              activeProviderId={activeProvider?.id}
-                              providers={providers}
-                              onApplyProvider={handleApplyProvider}
-                              onCloseMenu={handleCloseProviderMenu}
-                              setClaudeProviderEnabled={setClaudeProviderEnabled}
-                              enableProviderDisableFeature={enableProviderDisableFeature}
-                              t={t}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
 
             {/* Quick Terminal Button - 在 Provider Switcher 之后 */}
             {!state.collapsed && onToggleQuickTerminal && (

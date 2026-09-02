@@ -7,7 +7,6 @@ import {
   type WorktreeRemoveOptions,
 } from '@shared/types';
 import { ipcMain } from 'electron';
-import { updateClaudeWorkspaceFolders } from '../services/claude/ClaudeIdeBridge';
 import { gitAutoFetchService } from '../services/git/GitAutoFetchService';
 import { WorktreeService } from '../services/git/WorktreeService';
 import { isRemoteVirtualPath } from '../services/remote/RemotePath';
@@ -92,10 +91,6 @@ export function registerWorktreeHandlers(): void {
       await service.remove(options);
     }
   );
-
-  ipcMain.handle(IPC_CHANNELS.WORKTREE_ACTIVATE, async (_, worktreePaths: string[]) => {
-    updateClaudeWorkspaceFolders(worktreePaths.filter((item) => !isRemoteVirtualPath(item)));
-  });
 
   // Merge handlers
   ipcMain.handle(

@@ -24,8 +24,6 @@ import {
 import {
   useAppLifecycle,
   useBackgroundImage,
-  useClaudeIntegration,
-  useClaudeProviderListener,
   useCodeReviewContinue,
   useFileDragDrop,
   useGroupSync,
@@ -202,14 +200,10 @@ export default function App() {
 
   const {
     settingsCategory,
-    scrollToProvider,
-    pendingProviderAction,
     settingsDialogOpen,
     settingsDisplayMode,
     forceSettingsModal,
     setSettingsCategory,
-    setScrollToProvider,
-    setPendingProviderAction,
     setSettingsDialogOpen,
     openSettings,
     toggleSettings,
@@ -501,7 +495,7 @@ export default function App() {
     [activeTab, activeWorktree, exitHomeView, setActiveTab, setPreviousTab, setWorktreeTabMap]
   );
 
-  useSettingsEvents(openSettings, setSettingsCategory, setScrollToProvider);
+  useSettingsEvents(openSettings, setSettingsCategory);
 
   // Keyboard shortcuts
   useAppKeyboardShortcuts({
@@ -557,12 +551,6 @@ export default function App() {
   useMenuActions(openSettings, setActionPanelOpen);
   const { confirmCloseAndRespond, cancelCloseAndRespond } = useAppLifecycle(
     panelState.setCloseDialogOpen
-  );
-  useClaudeProviderListener(
-    setSettingsCategory,
-    setScrollToProvider,
-    openSettings,
-    setPendingProviderAction
   );
 
   useEffect(() => {
@@ -711,7 +699,6 @@ export default function App() {
   // effect would close over the pre-hydration `repositories === []`, and
   // `saveRepositories([...[], newRepo])` would wipe out existing repos.
   useOpenPathListener(hydrated, repositories, saveRepositories, setSelectedRepoState);
-  useClaudeIntegration(activeWorktree?.path ?? null, true);
   useCodeReviewContinue(activeWorktree, handleTabChange);
   useWorktreeSync(worktrees, activeWorktree, worktreesFetching, setActiveWorktree, selectedRepo);
 
@@ -1413,29 +1400,6 @@ export default function App() {
     return window.electronAPI.worktree.getConflictContent(selectedRepo, file);
   };
 
-  useEffect(() => {
-    const isSettingsOpen =
-      (settingsDisplayMode === 'tab' && activeTab === 'settings') ||
-      (settingsDisplayMode === 'draggable-modal' && settingsDialogOpen);
-
-    if (!isSettingsOpen) return;
-    if (!pendingProviderAction) return;
-
-    const eventName =
-      pendingProviderAction === 'preview'
-        ? 'open-settings-provider-preview'
-        : 'open-settings-provider-save';
-
-    window.dispatchEvent(new CustomEvent(eventName));
-    setPendingProviderAction(null);
-  }, [
-    settingsDisplayMode,
-    settingsDialogOpen,
-    activeTab,
-    pendingProviderAction,
-    setPendingProviderAction,
-  ]);
-
   useBackgroundImage();
 
   return (
@@ -1857,7 +1821,6 @@ export default function App() {
                 }
                 settingsCategory={settingsCategory}
                 onCategoryChange={handleSettingsCategoryChange}
-                scrollToProvider={scrollToProvider}
                 onToggleSettings={toggleSettings}
               />
             ) : (
@@ -2007,7 +1970,6 @@ export default function App() {
             onOpenChange={setSettingsDialogOpen}
             activeCategory={settingsCategory}
             onCategoryChange={handleSettingsCategoryChange}
-            scrollToProvider={scrollToProvider}
           />
         )}
       </div>

@@ -235,8 +235,6 @@ export function migrateSettings(
       ...persisted.proxySettings,
     },
     agentDetectionStatus: migratedAgentDetectionStatus,
-    mcpServers: persisted.mcpServers ?? currentState.mcpServers,
-    promptPresets: persisted.promptPresets ?? currentState.promptPresets,
     quickTerminal: {
       ...currentState.quickTerminal,
       ...persisted.quickTerminal,

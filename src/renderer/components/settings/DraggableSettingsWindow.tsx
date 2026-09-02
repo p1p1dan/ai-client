@@ -15,7 +15,6 @@ interface DraggableSettingsWindowProps {
   onOpenChange: (open: boolean) => void;
   activeCategory?: SettingsCategory;
   onCategoryChange?: (category: SettingsCategory) => void;
-  scrollToProvider?: boolean;
   repoPath?: string;
 }
 
@@ -24,7 +23,6 @@ export function DraggableSettingsWindow({
   onOpenChange,
   activeCategory,
   onCategoryChange,
-  scrollToProvider,
   repoPath,
 }: DraggableSettingsWindowProps) {
   const { t } = useI18n();
@@ -222,7 +220,6 @@ export function DraggableSettingsWindow({
               <SettingsContent
                 activeCategory={activeCategory}
                 onCategoryChange={onCategoryChange}
-                scrollToProvider={scrollToProvider}
                 repoPath={repoPath}
               />
             </div>

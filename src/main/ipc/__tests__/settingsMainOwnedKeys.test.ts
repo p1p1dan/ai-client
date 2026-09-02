@@ -35,8 +35,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('../claudeProvider', () => ({ toggleClaudeProviderWatcher: vi.fn() }));
-
 let homeDir: string;
 const originalHome = process.env.HOME;
 

@@ -250,54 +250,10 @@ export const IPC_CHANNELS = {
   UPDATER_SET_AUTO_UPDATE_ENABLED: 'updater:setAutoUpdateEnabled',
   UPDATER_DOWNLOAD_UPDATE: 'updater:downloadUpdate',
 
-  // MCP (Claude IDE Bridge)
-  MCP_BRIDGE_SET_ENABLED: 'mcp:bridge:setEnabled',
-  MCP_BRIDGE_GET_STATUS: 'mcp:bridge:getStatus',
-  MCP_SELECTION_CHANGED: 'mcp:selection:changed',
-  MCP_AT_MENTIONED: 'mcp:at:mentioned',
-  MCP_STOP_HOOK_SET: 'mcp:stopHook:set',
-  MCP_STATUSLINE_HOOK_SET: 'mcp:statusLineHook:set',
-  MCP_STATUSLINE_HOOK_STATUS: 'mcp:statusLineHook:status',
-  MCP_PERMISSION_REQUEST_HOOK_SET: 'mcp:permissionRequestHook:set',
-  MCP_PERMISSION_REQUEST_HOOK_STATUS: 'mcp:permissionRequestHook:status',
-
-  // Claude Provider
-  CLAUDE_PROVIDER_READ_SETTINGS: 'claude:provider:readSettings',
-  CLAUDE_PROVIDER_APPLY: 'claude:provider:apply',
-  CLAUDE_PROVIDER_SETTINGS_CHANGED: 'claude:provider:settingsChanged',
-
-  // Claude MCP Management
-  CLAUDE_MCP_READ: 'claude:mcp:read',
-  CLAUDE_MCP_SYNC: 'claude:mcp:sync',
-  CLAUDE_MCP_UPSERT: 'claude:mcp:upsert',
-  CLAUDE_MCP_DELETE: 'claude:mcp:delete',
-
-  // Claude Prompts Management
-  CLAUDE_PROMPTS_READ: 'claude:prompts:read',
-  CLAUDE_PROMPTS_WRITE: 'claude:prompts:write',
-  CLAUDE_PROMPTS_BACKUP: 'claude:prompts:backup',
-
-  // Claude Slash Completions (/ commands + skills)
-  CLAUDE_COMPLETIONS_GET: 'claude:completions:get',
-  CLAUDE_COMPLETIONS_REFRESH: 'claude:completions:refresh',
-  CLAUDE_COMPLETIONS_LEARN: 'claude:completions:learn',
-  CLAUDE_COMPLETIONS_UPDATED: 'claude:completions:updated',
-
   // Read-only legacy conversation import
   LEGACY_IMPORT_LIST_PROJECTS: 'legacy-import:listProjects',
   LEGACY_IMPORT_LIST_SESSIONS: 'legacy-import:listSessions',
   LEGACY_IMPORT_BATCH: 'legacy-import:batch',
-
-  // Claude Plugins Management
-  CLAUDE_PLUGINS_LIST: 'claude:plugins:list',
-  CLAUDE_PLUGINS_SET_ENABLED: 'claude:plugins:setEnabled',
-  CLAUDE_PLUGINS_AVAILABLE: 'claude:plugins:available',
-  CLAUDE_PLUGINS_INSTALL: 'claude:plugins:install',
-  CLAUDE_PLUGINS_UNINSTALL: 'claude:plugins:uninstall',
-  CLAUDE_PLUGINS_MARKETPLACES_LIST: 'claude:plugins:marketplaces:list',
-  CLAUDE_PLUGINS_MARKETPLACES_ADD: 'claude:plugins:marketplaces:add',
-  CLAUDE_PLUGINS_MARKETPLACES_REMOVE: 'claude:plugins:marketplaces:remove',
-  CLAUDE_PLUGINS_MARKETPLACES_REFRESH: 'claude:plugins:marketplaces:refresh',
 
   // Pi worker runtime availability gate.
   PI_RUNTIME_CHECK: 'pi:runtime:check',

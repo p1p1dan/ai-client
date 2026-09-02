@@ -1,7 +1,5 @@
 export { useAppLifecycle } from './useAppLifecycle';
 export { useBackgroundImage } from './useBackgroundImage';
-export { useClaudeIntegration } from './useClaudeIntegration';
-export { useClaudeProviderListener } from './useClaudeProviderListener';
 export { useCodeReviewContinue } from './useCodeReviewContinue';
 export { useFileDragDrop } from './useFileDragDrop';
 export { useGroupSync } from './useGroupSync';

@@ -206,7 +206,6 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     terminalTheme,
     editorSettings,
     editorKeybindings,
-    claudeCodeIntegration,
     backgroundImageEnabled,
     backgroundOpacity,
   } = useSettingsStore();
@@ -296,7 +295,6 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   const applyExternalChange = useEditorStore((state) => state.applyExternalChange);
   const dismissExternalChange = useEditorStore((state) => state.dismissExternalChange);
   const themeDefinedRef = useRef(false);
-  const selectionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionWidgetRef = useRef<monaco.editor.IContentWidget | null>(null);
   const widgetRootRef = useRef<Root | null>(null);
   const widgetPositionRef = useRef<monaco.IPosition | null>(null);
@@ -1053,40 +1051,11 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
           widgetPositionRef.current = null;
         }
       }
-
-      // Send selection_changed notification to Claude Code (debounced)
-      if (claudeCodeIntegration.enabled) {
-        if (selectionDebounceRef.current) {
-          clearTimeout(selectionDebounceRef.current);
-        }
-        selectionDebounceRef.current = setTimeout(() => {
-          window.electronAPI.mcp.sendSelectionChanged({
-            text: selectedText,
-            filePath: currentTabPath,
-            fileUrl: toMonacoFileUri(currentTabPath),
-            selection: {
-              start: {
-                line: selection.startLineNumber,
-                character: selection.startColumn,
-              },
-              end: {
-                line: selection.endLineNumber,
-                character: selection.endColumn,
-              },
-              isEmpty: selection.isEmpty(),
-            },
-          });
-        }, claudeCodeIntegration.selectionChangedDebounce);
-      }
     });
 
     return () => {
       cursorDisposable.dispose();
       selectionDisposable.dispose();
-      if (selectionDebounceRef.current) {
-        clearTimeout(selectionDebounceRef.current);
-        selectionDebounceRef.current = null;
-      }
       const currentEditor = editorRef.current;
       if (selectionWidgetRef.current && currentEditor) {
         try {
@@ -1117,8 +1086,6 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     setCurrentCursorLine,
     write,
     focus,
-    claudeCodeIntegration.enabled,
-    claudeCodeIntegration.selectionChangedDebounce,
   ]);
 
   const handleEditorChange = useCallback(

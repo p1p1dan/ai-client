@@ -20,7 +20,6 @@ export const SETTINGS_CATEGORIES = [
   'ai',
   'piModels',
   'piPermissions',
-  'integration',
   'hapi',
   'remote',
   'webInspector',

@@ -5,7 +5,6 @@ import {
   writeSharedSettings,
   writeSharedSettingsToSession,
 } from '../services/SharedSessionState';
-import { toggleClaudeProviderWatcher } from './claudeProvider';
 
 // Inlined to break circular chunk: shell -> settings -> shell.
 // Canonical definition: src/shared/credentialMode.ts
@@ -152,15 +151,6 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.SETTINGS_WRITE, async (_, data: unknown) => {
     try {
       const newData = data as Record<string, unknown>;
-
-      // Detect enableProviderWatcher change and toggle watcher accordingly
-      const oldEnabled = (readSettings()?.claudeCodeIntegration as Record<string, unknown>)
-        ?.enableProviderWatcher;
-      const newEnabled = (newData.claudeCodeIntegration as Record<string, unknown>)
-        ?.enableProviderWatcher;
-      if (oldEnabled !== newEnabled) {
-        toggleClaudeProviderWatcher(newEnabled !== false);
-      }
 
       // 排队等待落盘（Main 私有键在落盘那一刻才取，见 withMainOwnedKeys）
       pendingRendererSettings = newData;

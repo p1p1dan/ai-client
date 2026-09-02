@@ -1,7 +1,7 @@
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
-import type { CustomAgent, McpServer, PromptPreset } from '@shared/types';
+import type { CustomAgent } from '@shared/types';
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -229,10 +229,6 @@ export function getInitialState() {
     backgroundSizeMode: 'cover' as BackgroundSizeMode,
     _backgroundRefreshKey: 0,
 
-    // MCP, Prompts defaults
-    mcpServers: [] as McpServer[],
-    promptPresets: [] as PromptPreset[],
-
     // Settings display mode
     settingsDisplayMode: 'tab' as const,
     settingsModalPosition: null,
@@ -431,64 +427,6 @@ export const useSettingsStore = create<SettingsState>()(
           claudeCodeIntegration: { ...state.claudeCodeIntegration, ...settings },
         })),
 
-      addClaudeProvider: (provider) =>
-        set((state) => ({
-          claudeCodeIntegration: {
-            ...state.claudeCodeIntegration,
-            providers: [...state.claudeCodeIntegration.providers, provider],
-          },
-        })),
-
-      updateClaudeProvider: (id, updates) =>
-        set((state) => ({
-          claudeCodeIntegration: {
-            ...state.claudeCodeIntegration,
-            providers: state.claudeCodeIntegration.providers.map((p) =>
-              p.id === id ? { ...p, ...updates } : p
-            ),
-          },
-        })),
-
-      removeClaudeProvider: (id) =>
-        set((state) => ({
-          claudeCodeIntegration: {
-            ...state.claudeCodeIntegration,
-            providers: state.claudeCodeIntegration.providers.filter((p) => p.id !== id),
-          },
-        })),
-
-      reorderClaudeProviders: (fromIndex, toIndex) =>
-        set((state) => {
-          const providers = [...state.claudeCodeIntegration.providers];
-          const [removed] = providers.splice(fromIndex, 1);
-          providers.splice(toIndex, 0, removed);
-          const reordered = providers.map((p, index) => ({ ...p, displayOrder: index }));
-          return {
-            claudeCodeIntegration: {
-              ...state.claudeCodeIntegration,
-              providers: reordered,
-            },
-          };
-        }),
-
-      setClaudeProviderEnabled: (id, enabled) =>
-        set((state) => ({
-          claudeCodeIntegration: {
-            ...state.claudeCodeIntegration,
-            providers: state.claudeCodeIntegration.providers.map((p) =>
-              p.id === id ? { ...p, enabled } : p
-            ),
-          },
-        })),
-
-      setClaudeProviderOrder: (providers) =>
-        set((state) => ({
-          claudeCodeIntegration: {
-            ...state.claudeCodeIntegration,
-            providers: providers.map((p, index) => ({ ...p, displayOrder: index })),
-          },
-        })),
-
       // AI Feature Setters
       setCommitMessageGenerator: (settings) =>
         set((state) => ({
@@ -662,57 +600,6 @@ export const useSettingsStore = create<SettingsState>()(
 
       triggerBackgroundRefresh: () =>
         set((state) => ({ _backgroundRefreshKey: state._backgroundRefreshKey + 1 })),
-
-      // MCP Setters
-      addMcpServer: (server) =>
-        set((state) => ({
-          mcpServers: [...state.mcpServers, server],
-        })),
-
-      updateMcpServer: (id, updates) =>
-        set((state) => ({
-          mcpServers: state.mcpServers.map((s) =>
-            s.id === id ? ({ ...s, ...updates } as McpServer) : s
-          ),
-        })),
-
-      removeMcpServer: (id) =>
-        set((state) => ({
-          mcpServers: state.mcpServers.filter((s) => s.id !== id),
-        })),
-
-      setMcpServerEnabled: (id, enabled) =>
-        set((state) => ({
-          mcpServers: state.mcpServers.map((s) =>
-            s.id === id ? ({ ...s, enabled } as McpServer) : s
-          ),
-        })),
-
-      // Prompt Setters
-      addPromptPreset: (preset) =>
-        set((state) => ({
-          promptPresets: [...state.promptPresets, preset],
-        })),
-
-      updatePromptPreset: (id, updates) =>
-        set((state) => ({
-          promptPresets: state.promptPresets.map((p) =>
-            p.id === id ? { ...p, ...updates, updatedAt: Date.now() } : p
-          ),
-        })),
-
-      removePromptPreset: (id) =>
-        set((state) => ({
-          promptPresets: state.promptPresets.filter((p) => p.id !== id),
-        })),
-
-      setPromptPresetEnabled: (id) =>
-        set((state) => ({
-          promptPresets: state.promptPresets.map((p) => ({
-            ...p,
-            enabled: p.id === id,
-          })),
-        })),
 
       // Settings Display Setters
       setSettingsDisplayMode: (mode) => set({ settingsDisplayMode: mode }),

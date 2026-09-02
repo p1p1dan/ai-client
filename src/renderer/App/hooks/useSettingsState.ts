@@ -20,10 +20,6 @@ export function useSettingsState(
       return 'general';
     }
   });
-  const [scrollToProvider, setScrollToProvider] = useState(false);
-  const [pendingProviderAction, setPendingProviderAction] = useState<'preview' | 'save' | null>(
-    null
-  );
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   const settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
@@ -113,14 +109,10 @@ export function useSettingsState(
 
   return {
     settingsCategory,
-    scrollToProvider,
-    pendingProviderAction,
     settingsDialogOpen,
     settingsDisplayMode,
     forceSettingsModal,
     setSettingsCategory,
-    setScrollToProvider,
-    setPendingProviderAction,
     setSettingsDialogOpen,
     openSettings,
     toggleSettings,

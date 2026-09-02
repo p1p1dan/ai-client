@@ -40,45 +40,10 @@ const BASELINE: Record<string, { count: number; reason: string }> = {
     reason:
       "S3 deleted the legacy WRITERS (writeClaudeConfig / ensureClaudeOnboardingComplete), taking two of the original four hits with them — no login can reach them once signing in records `credentialMode: managed`. The two that remain are `removeClaudeCredentials` (logout) and `checkCredentialsHealth` (read-only), both deliberately kept: the remover is the ONLY path that undoes what pre-S3 builds wrote into the user's own ~/.claude/settings.json, and the health check is what the local arm of the gate reads.",
   },
-  'src/main/services/claude/ClaudeIdeBridge.ts': {
-    count: 1,
-    reason:
-      'Existing CLAUDE_CONFIG_DIR-aware follower (if/else form) — out of S2a file set, unmodified.',
-  },
-  'src/main/services/claude/ClaudeProviderManager.ts': {
-    count: 1,
-    reason:
-      'Existing CLAUDE_CONFIG_DIR-aware follower (if/else form) — out of S2a file set, unmodified (S2b territory).',
-  },
   'src/main/services/legacyImport/ClaudeSessionScanner.ts': {
     count: 1,
     reason:
       'T34 migration-only CLAUDE_CONFIG_DIR-aware source scanner; read-only and statically isolated from execution runtime.',
-  },
-  'src/main/services/claude/McpManager.ts': {
-    count: 1,
-    reason:
-      'D47 S2a follower (this slice): .claude.json base follows CLAUDE_CONFIG_DIR when set, else legacy top-level ~/.claude.json.',
-  },
-  'src/main/services/claude/PluginsManager.ts': {
-    count: 1,
-    reason:
-      'D47 S2a follower (this slice): settings.json/plugins dir base follows CLAUDE_CONFIG_DIR.',
-  },
-  'src/main/services/claude/PromptsManager.ts': {
-    count: 1,
-    reason:
-      'D47 S2a follower (this slice): CLAUDE.md base follows CLAUDE_CONFIG_DIR (write itself stays outside managedFileWriter — plain text, not JSON).',
-  },
-  'src/main/services/claude/ClaudeCompletionsManager.ts': {
-    count: 2,
-    reason:
-      'U1 union semantics (kept as-is, D47 S2 spec §1): one follower form (getClaudeConfigDir, learned-cache path) + one always-include-home component of the union scan (getClaudeConfigDirs, commands/skills).',
-  },
-  'src/main/services/claude/ClaudeHookManager.ts': {
-    count: 1,
-    reason:
-      "Existing CLAUDE_CONFIG_DIR-aware follower (if/else form) — out of S2a file set (see as-built deviation note: mother spec §1 lists HookManager as a 4th settings.json writer for managedFileWriter, but S2a's assigned file set does not include this file; left unmodified, flagged for orchestrator follow-up).",
   },
   'src/main/services/cli/ClaudeRuntimeConfig.ts': {
     count: 1,

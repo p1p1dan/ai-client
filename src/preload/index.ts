@@ -47,8 +47,6 @@ import type {
   LegacyImportBatchResult,
   LegacyImportProject,
   LegacyImportSessionPreview,
-  McpServer,
-  McpServerConfig,
   MergeConflict,
   MergeConflictContent,
   MergeState,
@@ -983,64 +981,6 @@ const electronAPI = {
     },
   },
 
-  // MCP (Claude IDE Bridge)
-  mcp: {
-    setEnabled: (enabled: boolean, workspaceFolders?: string[]): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MCP_BRIDGE_SET_ENABLED, enabled, workspaceFolders),
-    getStatus: (): Promise<{ enabled: boolean; port: number | null }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MCP_BRIDGE_GET_STATUS),
-    sendSelectionChanged: (params: {
-      text: string;
-      filePath: string;
-      fileUrl: string;
-      selection: {
-        start: { line: number; character: number };
-        end: { line: number; character: number };
-        isEmpty: boolean;
-      };
-    }): void => {
-      ipcRenderer.send(IPC_CHANNELS.MCP_SELECTION_CHANGED, params);
-    },
-    sendAtMentioned: (params: { filePath: string; lineStart: number; lineEnd: number }): void => {
-      ipcRenderer.send(IPC_CHANNELS.MCP_AT_MENTIONED, params);
-    },
-    setStopHookEnabled: (enabled: boolean): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MCP_STOP_HOOK_SET, enabled),
-    setStatusLineHookEnabled: (enabled: boolean): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MCP_STATUSLINE_HOOK_SET, enabled),
-    getStatusLineHookStatus: (): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MCP_STATUSLINE_HOOK_STATUS),
-    setPermissionRequestHookEnabled: (enabled: boolean): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MCP_PERMISSION_REQUEST_HOOK_SET, enabled),
-    getPermissionRequestHookStatus: (): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.MCP_PERMISSION_REQUEST_HOOK_STATUS),
-  },
-
-  // Claude Provider
-  claudeProvider: {
-    readSettings: (
-      repoPath?: string
-    ): Promise<{
-      settings: import('@shared/types').ClaudeSettings | null;
-      extracted: Partial<import('@shared/types').ClaudeProvider> | null;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PROVIDER_READ_SETTINGS, repoPath),
-    apply: (
-      repoPath: string | undefined,
-      provider: import('@shared/types').ClaudeProvider
-    ): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PROVIDER_APPLY, repoPath, provider),
-    onSettingsChanged: (
-      callback: (data: {
-        settings: import('@shared/types').ClaudeSettings | null;
-        extracted: Partial<import('@shared/types').ClaudeProvider> | null;
-      }) => void
-    ): (() => void) => {
-      const handler = (_: unknown, data: Parameters<typeof callback>[0]) => callback(data);
-      ipcRenderer.on(IPC_CHANNELS.CLAUDE_PROVIDER_SETTINGS_CHANGED, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.CLAUDE_PROVIDER_SETTINGS_CHANGED, handler);
-    },
-  },
-
   piRuntime: {
     check: (force?: boolean) =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_RUNTIME_CHECK, force) as Promise<
@@ -1087,84 +1027,6 @@ const electronAPI = {
         callback(state);
       ipcRenderer.on(IPC_CHANNELS.AUTH_STATE_CHANGED, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.AUTH_STATE_CHANGED, handler);
-    },
-  },
-
-  // Claude Config (MCP, Prompts, Plugins)
-  claudeConfig: {
-    // MCP Management
-    mcp: {
-      read: (repoPath?: string): Promise<Record<string, McpServerConfig>> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MCP_READ, repoPath),
-      sync: (repoPath: string | undefined, servers: McpServer[]): Promise<boolean> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MCP_SYNC, repoPath, servers),
-      upsert: (repoPath: string | undefined, server: McpServer): Promise<boolean> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MCP_UPSERT, repoPath, server),
-      delete: (repoPath: string | undefined, serverId: string): Promise<boolean> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_MCP_DELETE, repoPath, serverId),
-    },
-    // Prompts Management
-    prompts: {
-      read: (repoPath?: string): Promise<string | null> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PROMPTS_READ, repoPath),
-      write: (repoPath: string | undefined, content: string): Promise<boolean> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PROMPTS_WRITE, repoPath, content),
-      backup: (repoPath?: string): Promise<string | null> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PROMPTS_BACKUP, repoPath),
-    },
-    // Plugins Management
-    plugins: {
-      list: (repoPath?: string): Promise<import('@shared/types').Plugin[]> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_LIST, repoPath),
-      setEnabled: (
-        repoPath: string | undefined,
-        pluginId: string,
-        enabled: boolean
-      ): Promise<boolean> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_SET_ENABLED, repoPath, pluginId, enabled),
-      available: (
-        repoPath: string | undefined,
-        marketplace?: string
-      ): Promise<import('@shared/types').AvailablePlugin[]> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_AVAILABLE, repoPath, marketplace),
-      install: (
-        repoPath: string | undefined,
-        pluginName: string,
-        marketplace?: string
-      ): Promise<boolean> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_INSTALL, repoPath, pluginName, marketplace),
-      uninstall: (repoPath: string | undefined, pluginId: string): Promise<boolean> =>
-        ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_UNINSTALL, repoPath, pluginId),
-      marketplaces: {
-        list: (repoPath?: string): Promise<import('@shared/types').PluginMarketplace[]> =>
-          ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_MARKETPLACES_LIST, repoPath),
-        add: (repoPath: string | undefined, repo: string): Promise<boolean> =>
-          ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_MARKETPLACES_ADD, repoPath, repo),
-        remove: (repoPath: string | undefined, name: string): Promise<boolean> =>
-          ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_MARKETPLACES_REMOVE, repoPath, name),
-        refresh: (repoPath: string | undefined, name?: string): Promise<boolean> =>
-          ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_PLUGINS_MARKETPLACES_REFRESH, repoPath, name),
-      },
-    },
-  },
-
-  // Claude Slash Completions (/ commands + skills)
-  claudeCompletions: {
-    get: (repoPath?: string): Promise<import('@shared/types').ClaudeSlashCompletionsSnapshot> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_COMPLETIONS_GET, repoPath),
-    refresh: (repoPath?: string): Promise<import('@shared/types').ClaudeSlashCompletionsSnapshot> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_COMPLETIONS_REFRESH, repoPath),
-    learn: (
-      repoPath: string | undefined,
-      label: string
-    ): Promise<import('@shared/types').ClaudeSlashCompletionsSnapshot> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLAUDE_COMPLETIONS_LEARN, repoPath, label),
-    onUpdated: (
-      callback: (data: import('@shared/types').ClaudeSlashCompletionsSnapshot) => void
-    ): (() => void) => {
-      const handler = (_: unknown, data: Parameters<typeof callback>[0]) => callback(data);
-      ipcRenderer.on(IPC_CHANNELS.CLAUDE_COMPLETIONS_UPDATED, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.CLAUDE_COMPLETIONS_UPDATED, handler);
     },
   },
 

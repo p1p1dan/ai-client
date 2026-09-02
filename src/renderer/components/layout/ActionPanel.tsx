@@ -1,8 +1,6 @@
-import type { ClaudeProvider, GitWorktree } from '@shared/types';
+import type { GitWorktree } from '@shared/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  CheckCircle,
-  Circle,
   Clock,
   ExternalLink,
   FolderOpen,
@@ -24,13 +22,7 @@ import {
 } from '@/components/ui/command';
 import { toastManager } from '@/components/ui/toast';
 import { useDetectedApps, useOpenWith } from '@/hooks/useAppDetector';
-import { useManagedMode } from '@/hooks/useManagedMode';
 import { useI18n } from '@/i18n';
-import {
-  clearClaudeProviderSwitch,
-  isClaudeProviderMatch,
-  markClaudeProviderSwitch,
-} from '@/lib/claudeProvider';
 import { cn } from '@/lib/utils';
 import { type TerminalKeybinding, useSettingsStore } from '@/stores/settings';
 
@@ -157,7 +149,6 @@ interface ActionPanelProps {
   repositoryCollapsed: boolean;
   worktreeCollapsed: boolean;
   projectPath?: string;
-  repoPath?: string;
   repositories?: Repository[];
   selectedRepoPath?: string;
   worktrees?: GitWorktree[];
@@ -192,7 +183,6 @@ export function ActionPanel({
   repositoryCollapsed,
   worktreeCollapsed,
   projectPath,
-  repoPath,
   repositories = [],
   selectedRepoPath,
   worktrees = [],
@@ -223,64 +213,8 @@ export function ActionPanel({
   // Recent commands
   const { recentIds, addRecentCommand } = useRecentCommands();
 
-  // Claude Provider
-  const { data: managedModeInfo } = useManagedMode();
-  const queryClient = useQueryClient();
-  const providers = useSettingsStore((s) => s.claudeCodeIntegration.providers);
-
-  const { data: claudeData } = useQuery({
-    queryKey: ['claude-settings', repoPath ?? null],
-    queryFn: () => window.electronAPI.claudeProvider.readSettings(repoPath),
-    enabled: open && !managedModeInfo.managed, // 只在面板打开且非托管状态查询
-  });
-
-  const activeProvider = React.useMemo(() => {
-    const currentConfig = claudeData?.extracted;
-    if (!currentConfig) return null;
-    return providers.find((p) => isClaudeProviderMatch(p, currentConfig)) ?? null;
-  }, [providers, claudeData?.extracted]);
-
-  const applyProvider = useMutation({
-    mutationFn: (provider: ClaudeProvider) =>
-      window.electronAPI.claudeProvider.apply(repoPath, provider),
-    onSuccess: (success, provider) => {
-      if (!success) {
-        clearClaudeProviderSwitch();
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['claude-settings', repoPath ?? null] });
-      toastManager.add({
-        type: 'success',
-        title: t('Provider switched'),
-        description: provider.name,
-      });
-    },
-    onError: () => {
-      clearClaudeProviderSwitch();
-    },
-  });
-
   const actionGroups: ActionGroup[] = React.useMemo(() => {
     const groups: ActionGroup[] = [];
-
-    // Claude Provider group (only show if providers exist and not managed —
-    // D47 S2b §1 ④: managed mode hides the provider entry entirely)
-    if (providers.length > 0 && !managedModeInfo.managed) {
-      groups.push({
-        label: 'Claude Provider',
-        items: providers.map((provider) => ({
-          id: `claude-provider-${provider.id}`,
-          label: provider.name,
-          icon: activeProvider?.id === provider.id ? CheckCircle : Circle,
-          action: () => {
-            if (activeProvider?.id !== provider.id) {
-              markClaudeProviderSwitch(provider);
-              applyProvider.mutate(provider);
-            }
-          },
-        })),
-      });
-    }
 
     groups.push(
       {
@@ -426,10 +360,6 @@ export function ActionPanel({
 
     return groups;
   }, [
-    providers,
-    activeProvider,
-    applyProvider,
-    managedModeInfo.managed,
     t,
     repositoryCollapsed,
     worktreeCollapsed,

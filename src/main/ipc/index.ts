@@ -1,6 +1,4 @@
 import { stopAllCodeReviews } from '../services/ai';
-import { disposeClaudeIdeBridge } from '../services/claude/ClaudeIdeBridge';
-import { autoUpdaterService } from '../services/updater/AutoUpdater';
 import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
 import { registerAgentHandlers } from './agent';
@@ -8,12 +6,6 @@ import { registerAgentCatalogHandlers } from './agentCatalog';
 import { registerAppHandlers } from './app';
 import { registerAuthHandlers } from './auth';
 import { registerChatHandlers } from './chat';
-import {
-  registerClaudeCompletionsHandlers,
-  stopClaudeCompletionsWatchers,
-} from './claudeCompletions';
-import { registerClaudeConfigHandlers } from './claudeConfig';
-import { registerClaudeProviderHandlers } from './claudeProvider';
 import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
 import {
@@ -78,9 +70,6 @@ export function registerIpcHandlers(): void {
   registerUpdaterHandlers();
   registerSearchHandlers();
   registerHapiHandlers();
-  registerClaudeProviderHandlers();
-  registerClaudeConfigHandlers();
-  registerClaudeCompletionsHandlers();
   registerLegacyImportHandlers();
   registerPiRuntimeHandlers();
   registerWebInspectorHandlers();
@@ -138,8 +127,6 @@ export async function cleanupAllResources(): Promise<void> {
       }, 'terminals'),
       // File system watchers
       safeRun(() => stopAllFileWatchers(), 'fileWatchers'),
-      // Claude completions file watcher
-      safeRun(() => stopClaudeCompletionsWatchers(), 'claudeCompletions'),
       // Main-owned Pi WorkerManager. Pool disposal is parallel, so every slot
       // receives the same global deadline and app quit leaves no utility process.
       safeRun(() => cleanupWorkerManager(), 'workerManager'),
@@ -160,8 +147,6 @@ export async function cleanupAllResources(): Promise<void> {
   stopAllCodeReviews();
   clearAllGitServices();
   clearAllWorktreeServices();
-  autoUpdaterService.cleanup();
-  disposeClaudeIdeBridge();
   await remoteConnectionManager.cleanup();
   await cleanupTodo();
 }
@@ -198,11 +183,6 @@ export function cleanupAllResourcesSync(): void {
   // Clear service caches (sync)
   clearAllGitServices();
   clearAllWorktreeServices();
-
-  autoUpdaterService.cleanup();
-
-  // Dispose Claude IDE Bridge (sync)
-  disposeClaudeIdeBridge();
 
   void remoteConnectionManager.cleanup();
 

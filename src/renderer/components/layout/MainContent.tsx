@@ -70,7 +70,6 @@ interface MainContentProps {
   isSettingsActive?: boolean;
   settingsCategory?: SettingsCategory;
   onCategoryChange?: (category: SettingsCategory) => void;
-  scrollToProvider?: boolean;
   onToggleSettings?: () => void;
   showOpenInMenu?: boolean;
   sourceControlEmptyTitle?: string;
@@ -100,7 +99,6 @@ export function MainContent({
   isSettingsActive = false,
   settingsCategory,
   onCategoryChange,
-  scrollToProvider,
   onToggleSettings,
   showOpenInMenu = true,
   sourceControlEmptyTitle,
@@ -664,7 +662,6 @@ export function MainContent({
                 <SettingsContent
                   activeCategory={settingsCategory}
                   onCategoryChange={onCategoryChange}
-                  scrollToProvider={scrollToProvider}
                 />
               </div>
             </div>

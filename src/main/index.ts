@@ -48,7 +48,6 @@ import {
   cleanupAllResourcesSync,
   registerIpcHandlers,
 } from './ipc';
-import { initClaudeProviderWatcher } from './ipc/claudeProvider';
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
@@ -72,8 +71,6 @@ import {
   ensureUserClaudeJsonOnboarded,
   regenerateFromVault,
 } from './services/auth/managedCredentialsStartup';
-import { registerClaudeBridgeIpcHandlers } from './services/claude/ClaudeIdeBridge';
-import { unwatchClaudeSettings } from './services/claude/ClaudeProviderManager';
 import {
   LOCAL_FILE_PREVIEW_MAX_BYTES,
   registerAllowedLocalFileRoot,
@@ -441,9 +438,6 @@ async function init(): Promise<void> {
 
   // Register IPC handlers
   registerIpcHandlers();
-
-  // Register Claude IDE Bridge IPC handlers (bridge starts when enabled in settings)
-  registerClaudeBridgeIpcHandlers();
 }
 
 app
@@ -829,13 +823,6 @@ app
     // Set main window for Web Inspector server (for IPC communication)
     webInspectorServer.setMainWindow(mainWindow);
 
-    // Initialize Claude Provider Watcher (only when enableProviderWatcher is true)
-    const appSettings = readSettings();
-    const providerWatcherEnabled =
-      (appSettings?.claudeCodeIntegration as Record<string, unknown>)?.enableProviderWatcher !==
-      false;
-    initClaudeProviderWatcher(mainWindow, providerWatcherEnabled);
-
     // Initialize auto-updater
     await initAutoUpdater(mainWindow);
 
@@ -904,7 +891,6 @@ app.on('will-quit', (event) => {
   console.log('[app] Will quit, cleaning up...');
   cleanupWindowHandlers?.();
   cleanupWindowHandlers = null;
-  unwatchClaudeSettings();
   gitAutoFetchService.cleanup();
 
   // Guard against double-cleanup: sync cleanup in the force-exit path must be
@@ -952,7 +938,6 @@ process.on('unhandledRejection', (reason) => {
 function handleShutdownSignal(signal: string): void {
   console.log(`[app] Received ${signal}, exiting...`);
   // Sync cleanup: kill child processes immediately
-  unwatchClaudeSettings();
   gitAutoFetchService.cleanup();
   cleanupAllResourcesSync();
   // Use app.exit() to bypass will-quit handler (already cleaned up)

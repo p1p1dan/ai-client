@@ -3,7 +3,6 @@ import {
   FileCode,
   Globe,
   Keyboard,
-  Link,
   Palette,
   Server,
   Settings,
@@ -24,7 +23,6 @@ import type { SettingsCategory } from './constants';
 import { EditorSettings } from './EditorSettings';
 import { GeneralSettings } from './GeneralSettings';
 import { HapiSettings } from './HapiSettings';
-import { IntegrationSettings } from './IntegrationSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
 import { RemoteSettings } from './RemoteSettings';
@@ -36,8 +34,6 @@ interface SettingsDialogProps {
   onOpenChange?: (open: boolean) => void;
   /** Initial category to show when dialog opens */
   initialCategory?: SettingsCategory;
-  /** Scroll to Claude Provider section (only works with integration category) */
-  scrollToProvider?: boolean;
 }
 
 export function SettingsDialog({
@@ -45,7 +41,6 @@ export function SettingsDialog({
   open,
   onOpenChange,
   initialCategory,
-  scrollToProvider,
 }: SettingsDialogProps) {
   const { t } = useI18n();
   const [activeCategory, setActiveCategory] = React.useState<SettingsCategory>(
@@ -68,7 +63,6 @@ export function SettingsDialog({
     { id: 'agent', icon: Bot, label: t('Agent') },
     { id: 'ai', icon: Sparkles, label: t('AI') },
     { id: 'piModels', icon: SlidersHorizontal, label: 'Pi Models' },
-    { id: 'integration', icon: Link, label: t('Claude Integration') },
     { id: 'hapi', icon: Share2, label: t('Remote Sharing') },
     { id: 'remote', icon: Server, label: t('Remote Connection') },
     { id: 'webInspector', icon: Globe, label: t('Web Inspector') },
@@ -143,9 +137,6 @@ export function SettingsDialog({
             {activeCategory === 'agent' && <AgentSettings />}
             {activeCategory === 'ai' && <AISettings />}
             {activeCategory === 'piModels' && <PiModelManagementSettings />}
-            {activeCategory === 'integration' && (
-              <IntegrationSettings scrollToProvider={scrollToProvider} />
-            )}
             {activeCategory === 'hapi' && <HapiSettings />}
             {activeCategory === 'remote' && <RemoteSettings />}
             {activeCategory === 'webInspector' && <WebInspectorSettings />}
