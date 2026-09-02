@@ -917,7 +917,7 @@ describe('composerPlaceholder', () => {
         hasWorkspace: true,
         attachmentCount: 0,
       })
-    ).toBe('Message Claude via Agent Host…');
+    ).toBe('Message Pi…');
   });
 
   it('reports sending / busy / no-session / no-workspace states identically in both modes', () => {
@@ -1175,7 +1175,7 @@ describe('composerPlaceholder', () => {
           attachmentCount: 0,
           queuedCount: 0,
         })
-      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Message Claude via Agent Host…');
+      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Message Pi…');
     }
   });
 

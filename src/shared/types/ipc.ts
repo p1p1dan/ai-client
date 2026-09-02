@@ -143,10 +143,6 @@ export const IPC_CHANNELS = {
   PI_TUI_EXIT: 'piTui:exit',
   PI_TUI_STATE: 'piTui:state',
 
-  AGENT_ASK_USER_QUESTION_NOTIFICATION: 'agent:askUserQuestion:notification',
-  AGENT_PRE_TOOL_USE_NOTIFICATION: 'agent:preToolUse:notification',
-  AGENT_STATUS_UPDATE: 'agent:status:update',
-
   // App
   APP_GET_PATH: 'app:getPath',
   APP_TAKE_PENDING_OPEN_PATH: 'app:takePendingOpenPath',
@@ -194,10 +190,10 @@ export const IPC_CHANNELS = {
   SESSION_STORAGE_IMPORT_LOCAL_STORAGE: 'sessionStorage:importLocalStorage',
   SESSION_STORAGE_IS_LEGACY_LOCAL_STORAGE_MIGRATED: 'sessionStorage:isLegacyLocalStorageMigrated',
   REMOTE_DIRECTORY_LIST: 'remote:directory:list',
-  REMOTE_HELPER_STATUS: 'remote:helper:status',
-  REMOTE_HELPER_INSTALL: 'remote:helper:install',
-  REMOTE_HELPER_UPDATE: 'remote:helper:update',
-  REMOTE_HELPER_DELETE: 'remote:helper:delete',
+  REMOTE_RUNTIME_STATUS: 'remote:helper:status',
+  REMOTE_RUNTIME_INSTALL: 'remote:helper:install',
+  REMOTE_RUNTIME_UPDATE: 'remote:helper:update',
+  REMOTE_RUNTIME_DELETE: 'remote:helper:delete',
   REMOTE_BROWSE_ROOTS: 'remote:browseRoots',
   REMOTE_AUTH_PROMPT: 'remote:auth:prompt',
   REMOTE_AUTH_RESPONSE: 'remote:auth:response',
@@ -214,9 +210,6 @@ export const IPC_CHANNELS = {
 
   // Git Validate Local Path
   GIT_VALIDATE_LOCAL_PATH: 'git:validate-local-path',
-
-  // CLI Detector
-  CLI_DETECT: 'cli:detect',
 
   // Tmux
   TMUX_CHECK: 'tmux:check',
@@ -265,9 +258,6 @@ export const IPC_CHANNELS = {
   // Pi worker runtime availability gate.
   PI_RUNTIME_CHECK: 'pi:runtime:check',
 
-  // Auth (D47 S2a) — managed-credentials mode probe. Path is not a secret;
-  // renderer has no other way to learn the userData-relative claude-home dir.
-  AUTH_MANAGED_MODE: 'auth:managedMode',
   // Auth (D47 S5) — login-state gate. `getGateSnapshot` is the single-call
   // `{managed, state, skipAuthGate}` atomic read `resolveGateDecision`
   // consumes; `stateChanged` is the value-changed-only push.

@@ -452,12 +452,8 @@ function scanInlineAgentDefaults(file: string, raw: string): string[] {
 /**
  * `'claude-code'` occurrences that are not on the provider axis.
  *
- * Two file-scoped exemptions survive, and only two:
- *
- *  1. `shared/types/agentWire.ts` — the one home, value position included.
- *  2. `shared/types/runtimeEvents.ts` in TYPE position only —
- *     `SessionPermissionPolicy` is a discriminated union and a discriminant has
- *     to be spelled out. A value-position literal there is still an offender.
+ * `shared/types/agentWire.ts` is the only file-scoped exemption: the one
+ * compatibility reader for persisted bindings owns the literal vocabulary.
  *
  * Everything else is decided per literal: `'claude-code'` is ALSO the name of a
  * PROVIDER (commit messages, code review, todo polish), so the exemption is
@@ -473,8 +469,6 @@ function scanLegacyLiterals(file: string, raw: string): string[] {
 
   eachNode(source, (node) => {
     if (!isStringish(node) || node.text !== LEGACY_LITERAL) return;
-    const typePosition = ts.isLiteralTypeNode(node.parent);
-    if (file === RUNTIME_EVENTS_MODULE && typePosition) return;
     if (literalAxisContext(node, facts) === 'AIProvider') return;
     offenders.push(`${rel(file)}:${lineOf(source, node)}`);
   });

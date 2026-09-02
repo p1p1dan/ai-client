@@ -12,8 +12,7 @@ function sanitizeRemoteProfiles(
     id: profile.id,
     name: profile.name,
     sshTarget: profile.sshTarget,
-    runtimeInstallDir: profile.runtimeInstallDir,
-    helperInstallDir: profile.helperInstallDir,
+    runtimeInstallDir: profile.runtimeInstallDir ?? profile.helperInstallDir,
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   }));
@@ -58,6 +57,7 @@ export function sanitizeLegacyAiSettings(
   delete next.agentDetectionStatus;
   delete next.customAgents;
   delete next.hapiSettings;
+  delete next.claudeCodeIntegration;
   for (const key of LEGACY_AI_FEATURE_KEYS) {
     const raw = next[key];
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
@@ -172,8 +172,7 @@ export function migrateSettings(
   // Migrate xterm keybindings from legacy formats
   const migratedXtermKeybindings = migrateXtermKeybindings(persisted, currentState);
 
-  // Migrate Claude Code integration settings
-  const migratedClaudeCodeIntegration = migrateClaudeCodeIntegration(persisted, currentState);
+  const migratedTerminalInput = migrateTerminalInput(persisted, currentState);
 
   const sanitizedPersisted = sanitizeLegacyAiSettings(persisted);
 
@@ -225,7 +224,7 @@ export function migrateSettings(
       ...currentState.editorSettings,
       ...persisted.editorSettings,
     },
-    claudeCodeIntegration: migratedClaudeCodeIntegration,
+    terminalInput: migratedTerminalInput,
     commitMessageGenerator: {
       ...currentState.commitMessageGenerator,
       ...sanitizedPersisted.commitMessageGenerator,
@@ -329,34 +328,36 @@ function migrateXtermKeybindings(
   };
 }
 
-/**
- * Migrate Claude Code integration settings
- */
-function migrateClaudeCodeIntegration(
+function migrateTerminalInput(
   persisted: Partial<SettingsState>,
   currentState: SettingsState
-): SettingsState['claudeCodeIntegration'] {
-  const merged = {
-    ...currentState.claudeCodeIntegration,
-    ...persisted.claudeCodeIntegration,
-    statusLineFields: {
-      ...currentState.claudeCodeIntegration.statusLineFields,
-      ...persisted.claudeCodeIntegration?.statusLineFields,
-    },
+): SettingsState['terminalInput'] {
+  const record = persisted as Record<string, unknown>;
+  const legacy = record.claudeCodeIntegration;
+  const legacyRecord =
+    legacy && typeof legacy === 'object' && !Array.isArray(legacy)
+      ? (legacy as Record<string, unknown>)
+      : undefined;
+  const current = persisted.terminalInput ?? legacyRecord;
+  const rawAutoPopup = current?.enhancedInputAutoPopup;
+  const enhancedInputAutoPopup =
+    typeof rawAutoPopup === 'boolean'
+      ? rawAutoPopup
+        ? 'hideWhileRunning'
+        : 'manual'
+      : rawAutoPopup === 'always' ||
+          rawAutoPopup === 'hideWhileRunning' ||
+          rawAutoPopup === 'manual'
+        ? rawAutoPopup
+        : currentState.terminalInput.enhancedInputAutoPopup;
+
+  return {
+    enhancedInputEnabled:
+      typeof current?.enhancedInputEnabled === 'boolean'
+        ? current.enhancedInputEnabled
+        : currentState.terminalInput.enhancedInputEnabled,
+    enhancedInputAutoPopup,
   };
-
-  // Migrate legacy boolean enhancedInputAutoPopup to new enum value
-  const legacyAutoPopup = persisted.claudeCodeIntegration?.enhancedInputAutoPopup;
-  if (typeof legacyAutoPopup === 'boolean') {
-    merged.enhancedInputAutoPopup = legacyAutoPopup ? 'hideWhileRunning' : 'manual';
-  }
-
-  // Fix inconsistent state: hideWhileRunning requires stopHookEnabled
-  if (merged.enhancedInputAutoPopup === 'hideWhileRunning' && !merged.stopHookEnabled) {
-    merged.enhancedInputAutoPopup = 'always';
-  }
-
-  return merged;
 }
 
 /**
@@ -372,7 +373,12 @@ export async function cleanupLegacyFields(): Promise<void> {
       | undefined;
 
     if (aiclientSettings?.state) {
-      const legacyFields = ['terminalKeybindings', 'agentKeybindings', 'terminalPaneKeybindings'];
+      const legacyFields = [
+        'terminalKeybindings',
+        'agentKeybindings',
+        'terminalPaneKeybindings',
+        'claudeCodeIntegration',
+      ];
       let changed = legacyFields.some((field) => field in aiclientSettings.state!);
 
       for (const field of legacyFields) {

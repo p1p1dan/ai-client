@@ -1,8 +1,5 @@
 /**
- * D47 S5 §1.2/§2/§3 — the login-state IPC surface. Two live channels
- * (`auth.getGateSnapshot` / `auth.stateChanged`) plus the S2a-era
- * `AUTH_MANAGED_MODE` probe, migrated here verbatim (S5 §1.2: "顺迁 S2b
- * 寄生在 claudeRuntime 的 AUTH_MANAGED_MODE"). Also owns wiring
+ * D47 S5 §1.2/§2/§3 — the login-state IPC surface. Owns wiring
  * `AuthStateService.onChange` to BOTH the multi-window broadcast and the
  * `AuthProbeScheduler` — the single place that turns "the state changed"
  * into everything downstream needs to know about it.
@@ -21,21 +18,12 @@ import {
 } from '../services/auth/credentialMode';
 import { onboardingService } from '../services/onboarding';
 
-/**
- * D47 S5 §1.2 — flag-off folding, IPC-handler-layer only (never changes
- * `OnboardingService`'s own method bodies): `checkRegistration()` +
- * `checkCredentialsHealth()` collapse into the SAME `AuthState` shape
- * `auth.getGateSnapshot` returns for the managed path, so a single `state`
- * field is meaningful regardless of the flag.
- */
+/** Local credential mode records account identity only. Pi resolves provider
+ * credentials at runtime; the startup gate must not probe legacy CLI files. */
 function deriveLegacyAuthState(): AuthState {
   const onboarding = onboardingService.checkRegistration();
   if (!onboarding.registered || !onboarding.email) {
     return { status: 'signed_out', lastEmail: onboarding.email ?? null };
-  }
-  const health = onboardingService.checkCredentialsHealth();
-  if (!health.claudeEnvOk || !health.codexAuthOk) {
-    return { status: 'credentials_invalid', reason: 'corrupt', lastEmail: onboarding.email };
   }
   return { status: 'authenticated', email: onboarding.email, remoteHealth: 'unknown' };
 }
@@ -65,17 +53,6 @@ function ensureAuthChangeBridge(): void {
 
 export function registerAuthHandlers(): void {
   ensureAuthChangeBridge();
-
-  // `claudeHomeDir` is ALWAYS `null` since D60 — there is no managed
-  // claude-home any more. The field is kept rather than removed so the IPC
-  // shape and its renderer consumers (`useManagedMode`, `App.tsx`'s session
-  // path candidates) stay unchanged; `App.tsx` already treats `null` as "just
-  // use the user config dir", which is now the only correct answer. Removing
-  // the field is a separate, renderer-side cleanup.
-  ipcMain.handle(IPC_CHANNELS.AUTH_MANAGED_MODE, () => ({
-    managed: resolveManagedCredentialsEnabled(),
-    claudeHomeDir: null,
-  }));
 
   ipcMain.handle(IPC_CHANNELS.AUTH_GET_GATE_SNAPSHOT, async () => {
     // D47 S6 §1.5 — front-loaded: a caller that races the boot sequence

@@ -6,7 +6,6 @@ import {
 } from '../git/gitLogFormat';
 
 export const REMOTE_SERVER_VERSION = '0.4.0';
-export const REMOTE_HELPER_VERSION = REMOTE_SERVER_VERSION;
 
 export function getRemoteServerSource(): string {
   return String.raw`#!/usr/bin/env node
@@ -2733,5 +2732,3 @@ main().catch((error) => {
 });
 `;
 }
-
-export const getRemoteHelperSource = getRemoteServerSource;

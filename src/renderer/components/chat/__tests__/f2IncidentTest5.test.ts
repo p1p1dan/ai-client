@@ -12,7 +12,7 @@
  *   |----------------|-----------------------------------------------------------------------------------|
  *   | blue banner    | `Upstream error 503 — retrying 3/10, the turn is still running · Next attempt in 2s · server_error 503` |
  *   | turn head      | `Waiting for Agent Host reply · Retry 1/10 · 39s (up to 45s)`                      |
- *   | red error card | `Error: No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event). \| status=running \| rawEvents=[session.resumed ; session.history ; session.status(idle) ; message.started ; message.delta ; message.completed ; session.status(running) ; session.settingsEcho ; session.stderr ; session.status(running) ; session.status(running,retry 1/10) ; session.stat…]` |
+ *   | red error card | `Error: No assistant/tool progress after send (status may still show idle/stopped — Host did not emit failed; the SDK stream likely hung or errored without a result event). \| status=running \| rawEvents=[session.resumed ; session.history ; session.status(idle) ; message.started ; message.delta ; message.completed ; session.status(running) ; session.stderr ; session.status(running) ; session.status(running,retry 1/10) ; session.stat…]` |
  *   | composer       | the user's own text, `给我完整的函数`, replayed into the input box                  |
  *
  * ## Why this is the batch's strongest positive control
@@ -83,7 +83,6 @@ const FRAMES: readonly { atMs: number; type: string; payload?: Record<string, un
   { atMs: 3_100, type: 'message.delta', payload: { messageId: 'u-1', blockId: 'b1', text: '给' } },
   { atMs: 3_200, type: 'message.completed', payload: { messageId: 'u-1' } },
   { atMs: 4_000, type: 'session.status', payload: { status: 'running' } },
-  { atMs: 5_000, type: 'session.settingsEcho' },
   { atMs: 6_000, type: 'session.stderr', payload: { line: 'some cli chatter' } },
   { atMs: 7_000, type: 'session.status', payload: { status: 'running' } },
   // THE frame. "The CLI is retrying", not "the CLI is wedged".

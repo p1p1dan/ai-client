@@ -143,33 +143,9 @@ export interface EditorSettings {
   gitBlameEnabled: boolean;
 }
 
-// Status Line display field settings
-export interface StatusLineFieldSettings {
-  model: boolean;
-  context: boolean;
-  cost: boolean;
-  duration: boolean;
-  lines: boolean;
-  tokens: boolean; // Input/Output tokens
-  cache: boolean; // Cache hit tokens
-  apiTime: boolean; // API duration vs total duration
-  currentDir: boolean; // Current working directory
-  projectDir: boolean; // Project directory
-  version: boolean; // Claude version
-}
-
-// Claude Code integration settings
-export interface ClaudeCodeIntegrationSettings {
-  enabled: boolean;
-  selectionChangedDebounce: number; // in milliseconds
-  atMentionedKeybinding: TerminalKeybinding;
-  stopHookEnabled: boolean; // Enable Stop hook for precise agent completion notifications
-  permissionRequestHookEnabled: boolean; // Enable PermissionRequest hook for AskUserQuestion notifications
-  statusLineEnabled: boolean; // Enable Status Line hook for displaying agent status
-  statusLineFields: StatusLineFieldSettings; // Which fields to display in status line
-  tmuxEnabled: boolean; // Enable tmux session wrapping for persistent terminal sessions
-  enhancedInputEnabled: boolean; // Enable enhanced input panel for Claude Code
-  enhancedInputAutoPopup: 'always' | 'hideWhileRunning' | 'manual'; // Enhanced input auto popup mode
+export interface TerminalInputSettings {
+  enhancedInputEnabled: boolean;
+  enhancedInputAutoPopup: 'always' | 'hideWhileRunning' | 'manual';
 }
 
 // Commit message generator settings
@@ -286,8 +262,8 @@ export interface SettingsState {
    */
   chatAgentDefaults: ChatAgentDefaults;
 
-  // Claude Code Integration
-  claudeCodeIntegration: ClaudeCodeIntegrationSettings;
+  // Terminal Input
+  terminalInput: TerminalInputSettings;
 
   // AI Features
   commitMessageGenerator: CommitMessageGeneratorSettings;
@@ -400,8 +376,8 @@ export interface SettingsState {
    */
   setChatAgentDefaults: (defaults: ChatAgentDefaults) => void;
 
-  // Setters - Claude Code Integration
-  setClaudeCodeIntegration: (settings: Partial<ClaudeCodeIntegrationSettings>) => void;
+  // Setters - Terminal Input
+  setTerminalInput: (settings: Partial<TerminalInputSettings>) => void;
 
   // Setters - AI Features
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;

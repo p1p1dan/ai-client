@@ -63,7 +63,6 @@ import { ensureVaultAdoption } from './services/auth/adoption';
 import { resolveManagedCredentialsEnabled } from './services/auth/credentialMode';
 import {
   activateManagedCredentials,
-  ensureUserClaudeJsonOnboarded,
   regenerateFromVault,
 } from './services/auth/managedCredentialsStartup';
 import {
@@ -180,13 +179,9 @@ if (appStateMigration.kind === 'migrated') {
 }
 
 // Phase ① — right after `setPath('userData')`, before any service action.
-// D60: this no longer redirects `CLAUDE_CONFIG_DIR`; it strips
-// credential-shaped vars inherited from the shell, then makes sure the
-// user's own `.claude.json` reports completed onboarding (a merge that never
-// overwrites their keys). Both are no-ops when the managed-credentials flag
-// is off.
+// Managed mode strips inherited credential-shaped variables before services
+// initialize. Local mode leaves the process environment untouched.
 activateManagedCredentials();
-await ensureUserClaudeJsonOnboarded();
 
 // Register URL scheme handler (must be done before app is ready)
 if (process.defaultApp) {
@@ -790,8 +785,8 @@ app
     // D47 S6 §1.5 — adoption runs AFTER crypto promotion and BEFORE
     // `regenerateFromVault()`: on a match it calls `vault.save()`, so the
     // very next `regenerateFromVault()` read below already sees a freshly
-    // adopted vault instead of materializing an empty codex-home that would
-    // force a needless re-login. Flag-off is a zero-FS-IO no-op.
+    // adopted vault before refreshing managed Pi configuration, avoiding a
+    // needless re-login. Flag-off is a zero-FS-IO no-op.
     // D64/S3 — the mode is resolved HERE and passed down: `adoption.ts` is a
     // pure module whose import bans are asserted, so it cannot read the
     // settings file this answer now lives in.

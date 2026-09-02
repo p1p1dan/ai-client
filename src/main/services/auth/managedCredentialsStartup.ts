@@ -17,7 +17,6 @@
  *
  * What is left here is the small residue that is still genuinely ours:
  *  - stripping credential-shaped vars this process inherited from the OS;
- *  - retaining the legacy CLI onboarding merge until T35 classifies it;
  *  - synchronizing the managed Pi model/auth configuration.
  *
  * ## Why it is a separate module from `main/index.ts`
@@ -30,9 +29,7 @@
  */
 
 import { isCredentialEnvKey } from '../../../../scripts/credential-env-keys.mjs';
-import { generateClaudeJson, getEffectiveClaudeJsonPath } from './claudeHome';
 import { resolveManagedCredentialsEnabled } from './credentialMode';
-import { writeSettingsFile } from './managedFileWriter';
 
 /** Managed credentials on? Set by `activateManagedCredentials()`, read by the two functions below. */
 let managedActive = false;
@@ -52,9 +49,7 @@ function stripInheritedCredentialEnv(): void {
  * managed-credentials flag is off; that is what the flag-off "env 零变异"
  * test asserts against, and it still holds.
  *
- * D60: this no longer sets `CLAUDE_CONFIG_DIR`. Whatever the user set stays
- * exactly as they set it — including nothing, which is the common case and
- * means Claude Code reads their own `~/.claude`.
+ * It does not redirect or modify any legacy CLI configuration directory.
  */
 export function activateManagedCredentials(): void {
   if (!resolveManagedCredentialsEnabled()) {
@@ -62,28 +57,6 @@ export function activateManagedCredentials(): void {
   }
   stripInheritedCredentialEnv();
   managedActive = true;
-}
-
-/**
- * Phase ① — make sure the user's `.claude.json` reports completed onboarding.
- *
- * A MERGE, and the direction matters: `{ ...generateClaudeJson(), ...current }`
- * puts the user's existing document LAST, so every key they already have wins
- * and we only fill in what is missing. For a user who has run Claude Code
- * before, this is a no-op; for a first-timer whose only Claude Code is ours,
- * it is what keeps the CLI from opening its theme/trust wizard inside our GUI
- * (E2 spike, 2026-08-15).
- *
- * No-op when managed mode is off.
- */
-export async function ensureUserClaudeJsonOnboarded(): Promise<void> {
-  if (!managedActive) {
-    return;
-  }
-  await writeSettingsFile(getEffectiveClaudeJsonPath(), (current) => ({
-    ...generateClaudeJson(),
-    ...current,
-  }));
 }
 
 /**

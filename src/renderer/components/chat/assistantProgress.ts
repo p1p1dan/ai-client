@@ -369,8 +369,6 @@ const TURN_LIVENESS_EVENT_TYPES: ReadonlySet<string> = new Set([
   'session.created',
   'session.resumed',
   'session.updated',
-  'session.settingsEcho',
-  'session.permissionUpdated',
 ]);
 
 /**

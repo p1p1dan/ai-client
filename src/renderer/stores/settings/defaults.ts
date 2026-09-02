@@ -2,7 +2,6 @@ import { normalizeLocale } from '@shared/i18n';
 import type { ProxySettings } from '@shared/types';
 import type {
   BranchNameGeneratorSettings,
-  ClaudeCodeIntegrationSettings,
   CodeReviewSettings,
   CommitMessageGeneratorSettings,
   EditorKeybindings,
@@ -17,7 +16,7 @@ import type {
   RepositoryListDisplayMode,
   SearchKeybindings,
   SourceControlKeybindings,
-  StatusLineFieldSettings,
+  TerminalInputSettings,
   TodoPolishSettings,
   WorkspaceKeybindings,
   XtermKeybindings,
@@ -136,33 +135,9 @@ In your output:
 
 {git_log}`;
 
-// Default status line field settings
-export const defaultStatusLineFieldSettings: StatusLineFieldSettings = {
-  model: true,
-  context: true,
-  cost: true,
-  duration: false,
-  lines: false,
-  tokens: false,
-  cache: false,
-  apiTime: false,
-  currentDir: false,
-  projectDir: false,
-  version: false,
-};
-
-// Default Claude Code integration settings
-export const defaultClaudeCodeIntegrationSettings: ClaudeCodeIntegrationSettings = {
-  enabled: true,
-  selectionChangedDebounce: 300,
-  atMentionedKeybinding: { key: 'm', meta: true, shift: true }, // Cmd/Ctrl+Shift+M
-  stopHookEnabled: true, // Enable Stop hook for precise agent completion notifications
-  permissionRequestHookEnabled: true, // Enable PermissionRequest hook for AskUserQuestion notifications
-  statusLineEnabled: false, // Disable Status Line hook by default
-  statusLineFields: defaultStatusLineFieldSettings,
-  tmuxEnabled: false, // Disable tmux wrapping by default
-  enhancedInputEnabled: false, // Disable enhanced input by default
-  enhancedInputAutoPopup: 'hideWhileRunning', // Hide while running by default
+export const defaultTerminalInputSettings: TerminalInputSettings = {
+  enhancedInputEnabled: false,
+  enhancedInputAutoPopup: 'hideWhileRunning',
 };
 
 // Default commit message generator settings

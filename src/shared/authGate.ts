@@ -200,16 +200,8 @@ export function resolveGateDecision(input: ResolveGateDecisionInput): GateDecisi
     return { shell: 'detection-failed' };
   }
 
-  // A2 — `not-installed` and `vscode-extension-only` are ONE outcome now.
-  //
-  // Since 2026-08-26 `ClaudeRuntimeChecker.detect()` answers `installed` off
-  // the bundled `@cometix/claude-code` before anything else runs, so both of
-  // these kinds are reachable only when that bundle is missing: a broken
-  // installation, or a dev tree with no `agent-host/node_modules`. They are
-  // therefore the same fact wearing two names, and the old `vscode-only`
-  // shell's offer — "install the Claude CLI and come back" — was not merely
-  // dead but WRONG: a system CLI is never what we execute, so installing one
-  // would not have fixed the user's problem.
+  // A bundled Pi runtime reported unavailable: this is a broken installation
+  // or incomplete development tree, never a request to install a system CLI.
   if (input.runtimeStatus.kind === 'unavailable') {
     return { shell: 'runtime-unavailable' };
   }

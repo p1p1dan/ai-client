@@ -12,7 +12,6 @@ import {
 import { updateRendererLogging } from '@/utils/logging';
 import {
   defaultBranchNameGeneratorSettings,
-  defaultClaudeCodeIntegrationSettings,
   defaultCodeReviewSettings,
   defaultCommitMessageGeneratorSettings,
   defaultEditorKeybindings,
@@ -28,6 +27,7 @@ import {
   defaultRepositoryListDisplayMode,
   defaultSearchKeybindings,
   defaultSourceControlKeybindings,
+  defaultTerminalInputSettings,
   defaultTodoEnabled,
   defaultTodoPolishSettings,
   defaultWorkspaceKeybindings,
@@ -171,8 +171,8 @@ export function getInitialState() {
     // draft on the legacy binding and every model on `Automatic`.
     chatAgentDefaults: EMPTY_CHAT_AGENT_DEFAULTS,
 
-    // Claude Code Integration
-    claudeCodeIntegration: defaultClaudeCodeIntegrationSettings,
+    // Terminal Input
+    terminalInput: defaultTerminalInputSettings,
 
     // AI Features
     commitMessageGenerator: defaultCommitMessageGeneratorSettings,
@@ -333,10 +333,10 @@ export const useSettingsStore = create<SettingsState>()(
 
       setChatAgentDefaults: (chatAgentDefaults) => set({ chatAgentDefaults }),
 
-      // Claude Code Integration Setters
-      setClaudeCodeIntegration: (settings) =>
+      // Terminal Input Setters
+      setTerminalInput: (settings) =>
         set((state) => ({
-          claudeCodeIntegration: { ...state.claudeCodeIntegration, ...settings },
+          terminalInput: { ...state.terminalInput, ...settings },
         })),
 
       // AI Feature Setters

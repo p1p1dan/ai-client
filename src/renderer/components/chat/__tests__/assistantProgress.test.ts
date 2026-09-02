@@ -659,8 +659,6 @@ const ALL_RUNTIME_EVENT_TYPES = [
   'session.created',
   'session.resumed',
   'session.updated',
-  'session.permissionUpdated',
-  'session.settingsEcho',
   'session.history',
   'session.status',
   'session.stderr',

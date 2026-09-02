@@ -9,18 +9,9 @@ import { describe, expect, it } from 'vitest';
  * in the table) or any COUNT DRIFT on a listed file (higher OR lower) turns
  * this red.
  *
- * ## What it defends, before and after D60
- *
- * Before: new code had to go through a `CLAUDE_CONFIG_DIR`-aware helper
- * rather than hardcode `~/.claude`, because the variable was redirected at a
- * managed home and a hardcoded path would silently read the wrong one.
- *
- * After: we no longer redirect the variable — but the rule survives with a
- * different justification, which is why this file was kept rather than
- * deleted. A user who sets `CLAUDE_CONFIG_DIR` themselves still expects every
- * part of this app to honor it, and a fresh hardcoded `~/.claude` would
- * silently ignore them. The allowlist is now the list of places entitled to
- * spell the DEFAULT, not the list of places exempt from a redirect.
+ * The remaining allowlist is restricted to migration-only reads and cleanup
+ * of credentials written by older app versions. No active runtime may add a
+ * Claude home dependency.
  *
  * Rebuilding this table: run the count function below over `src/main` and
  * diff against BASELINE. Do not bump a count without adding a reason.
@@ -30,29 +21,15 @@ const MAIN_DIR = join(process.cwd(), 'src', 'main');
 
 /** Absolute-repo-root-relative path -> exact expected hit count + reason. */
 const BASELINE: Record<string, { count: number; reason: string }> = {
-  'src/main/services/remote/RemoteHelperSource.ts': {
+  'src/main/services/onboarding/OnboardingService.ts': {
     count: 1,
     reason:
-      'Remote-machine template segment (generates code that runs on the REMOTE host, not this process) — I8 exempt.',
-  },
-  'src/main/services/onboarding/OnboardingService.ts': {
-    count: 2,
-    reason:
-      "S3 deleted the legacy WRITERS (writeClaudeConfig / ensureClaudeOnboardingComplete), taking two of the original four hits with them — no login can reach them once signing in records `credentialMode: managed`. The two that remain are `removeClaudeCredentials` (logout) and `checkCredentialsHealth` (read-only), both deliberately kept: the remover is the ONLY path that undoes what pre-S3 builds wrote into the user's own ~/.claude/settings.json, and the health check is what the local arm of the gate reads.",
+      'Logout-only cleanup of credentials written by older app versions; no active runtime reads this file.',
   },
   'src/main/services/legacyImport/ClaudeSessionScanner.ts': {
     count: 1,
     reason:
       'T34 migration-only CLAUDE_CONFIG_DIR-aware source scanner; read-only and statically isolated from execution runtime.',
-  },
-  'src/main/services/cli/ClaudeRuntimeConfig.ts': {
-    count: 1,
-    reason: 'D47 S2a follower (this slice): settings.json base follows CLAUDE_CONFIG_DIR.',
-  },
-  'src/main/services/auth/claudeHome.ts': {
-    count: 1,
-    reason:
-      "D60: getEffectiveClaudeJsonPath's `~/.claude.json` default. This is the ONE place entitled to spell it — the rule's authority, not an exemption from it. (Matched by prefix: the scanner sees `'.claude` inside `'.claude.json'`.)",
   },
   'src/main/services/auth/adoption.ts': {
     count: 1,

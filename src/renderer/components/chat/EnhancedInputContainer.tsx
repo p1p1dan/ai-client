@@ -28,7 +28,7 @@ export const EnhancedInputContainer = memo(function EnhancedInputContainer({
 
   // Get enhanced input mode setting
   const enhancedInputAutoPopup = useSettingsStore(
-    (state) => state.claudeCodeIntegration.enhancedInputAutoPopup
+    (state) => state.terminalInput.enhancedInputAutoPopup
   );
   const keepOpenAfterSend = enhancedInputAutoPopup === 'always';
 

@@ -18,9 +18,8 @@ import { AiClientMark } from './AiClientMark';
  * ## The two buttons are two different promises, and the copy has to say so
  *
  * Sign in routes every session through our managed gateway; we supply the
- * credential and we own it working. "Use my own setup" injects NOTHING — the
- * bundled Claude Code and Codex authenticate from whatever is already on the
- * machine, and whether that works is the user's own business
+ * credential and own its availability. "Use my own setup" leaves Pi to use
+ * the models and credentials already configured on the machine
  * ([D68](../../../../docs/plans/openchamber-chat-refactor-ledger.md):
  * 「能不能用、坏了怎么办全部归用户」).
  *
@@ -35,10 +34,8 @@ import { AiClientMark } from './AiClientMark';
  * ## Why the second button is not labelled "Bring your own key"
  *
  * That was the phrase the request arrived in, and it is narrower than the
- * route: E1 §L1 measured an ordinary Claude subscription login
- * (`~/.claude/.credentials.json`) authenticating on its own, no API key
- * anywhere. Labelling the button BYOK would tell every subscription user it is
- * not for them.
+ * route: Pi supports multiple local provider credential forms, not only raw
+ * API keys. Labelling the button BYOK would incorrectly exclude those users.
  *
  * ## Two states, one screen
  *
@@ -127,7 +124,7 @@ export function WelcomeView({ entry, onSignIn, onContinue, onUseOwnSetup }: Welc
             {t('Use my own setup')}
           </Button>
           <p className="text-muted-foreground text-xs">
-            {t('Runs on the Claude Code and Codex configuration already on this machine.')}
+            {t('Uses your local Pi models and credentials on this machine.')}
           </p>
         </div>
       </div>

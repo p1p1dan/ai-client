@@ -22,9 +22,8 @@ export const SEND_SILENCE_CEILING_MS = 300_000;
  * F2 (2026-08-18, decision D6): absolute upper bound of the 50ms polling
  * loop, so an endless liveness stream (stderr chatter / retry storm) cannot
  * keep it alive forever. NOT a third watchdog and NOT a verdict: expiry does
- * EXACTLY what a silence expiry does (the 'ceiling' branch). Aligned with
- * CODEX_TURN_START_TIMEOUT_MS (codexRuntime.ts) so the two programs stop
- * disagreeing by 40x.
+ * EXACTLY what a silence expiry does (the 'ceiling' branch). It is aligned
+ * with the worker-side turn-start bound so both layers stop waiting together.
  */
 export const SEND_WAIT_LOOP_BOUND_MS = 1_800_000;
 

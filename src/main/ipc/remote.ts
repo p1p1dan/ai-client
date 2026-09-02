@@ -47,20 +47,20 @@ export function registerRemoteHandlers(): void {
     }
   );
 
-  ipcMain.handle(IPC_CHANNELS.REMOTE_HELPER_STATUS, async (_, profileOrId) => {
-    return remoteConnectionManager.getHelperStatus(profileOrId as string | ConnectionProfile);
+  ipcMain.handle(IPC_CHANNELS.REMOTE_RUNTIME_STATUS, async (_, profileOrId) => {
+    return remoteConnectionManager.getRuntimeStatus(profileOrId as string | ConnectionProfile);
   });
 
-  ipcMain.handle(IPC_CHANNELS.REMOTE_HELPER_INSTALL, async (_, profileOrId) => {
-    return remoteConnectionManager.installHelperManually(profileOrId as string | ConnectionProfile);
+  ipcMain.handle(IPC_CHANNELS.REMOTE_RUNTIME_INSTALL, async (_, profileOrId) => {
+    return remoteConnectionManager.installRuntime(profileOrId as string | ConnectionProfile);
   });
 
-  ipcMain.handle(IPC_CHANNELS.REMOTE_HELPER_UPDATE, async (_, profileOrId) => {
-    return remoteConnectionManager.updateHelper(profileOrId as string | ConnectionProfile);
+  ipcMain.handle(IPC_CHANNELS.REMOTE_RUNTIME_UPDATE, async (_, profileOrId) => {
+    return remoteConnectionManager.updateRuntime(profileOrId as string | ConnectionProfile);
   });
 
-  ipcMain.handle(IPC_CHANNELS.REMOTE_HELPER_DELETE, async (_, profileOrId) => {
-    return remoteConnectionManager.deleteHelper(profileOrId as string | ConnectionProfile);
+  ipcMain.handle(IPC_CHANNELS.REMOTE_RUNTIME_DELETE, async (_, profileOrId) => {
+    return remoteConnectionManager.deleteRuntime(profileOrId as string | ConnectionProfile);
   });
 
   ipcMain.handle(IPC_CHANNELS.REMOTE_BROWSE_ROOTS, async (_, profileOrId) => {

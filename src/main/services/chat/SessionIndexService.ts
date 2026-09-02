@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { RuntimeEvent, SessionPermissionPreference } from '@shared/types/runtimeEvents';
+import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { PiLeafCheckpoint } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { app } from 'electron';
@@ -82,11 +82,6 @@ export class SessionIndexService {
     model?: string;
     /** Loose `string` on purpose — this is the disk side (SessionIndexEntry). */
     agent?: string;
-    /**
-     * D48 S3 §5.5-2 — the posture this session starts under. Merged
-     * FIRST-WRITE-WINS below, not last-write-wins like `model`.
-     */
-    permissionPreference?: SessionPermissionPreference;
   }): Promise<void> {
     await this.ensureLoaded();
     await this.queueMutation(async () => {
@@ -100,16 +95,6 @@ export class SessionIndexService {
         workspacePath: input.workspacePath,
         title: existing?.title ?? '',
         model: input.model ?? existing?.model,
-        // "The posture captured when they were FIRST sent" (§5.4 copy), so the
-        // persisted value wins over the incoming one — the opposite direction
-        // from `model` right above, and deliberately so. `chat:createSession`
-        // runs again whenever the Host registry entry was dropped (a restart, a
-        // crash, an unbind), and by then the global template may say something
-        // else; re-capturing it there would let a Settings edit silently retune
-        // an existing chat through the back door. S4's mid-session change is the
-        // one thing allowed to overwrite this, and it does so through
-        // `setPermissionPreference` below rather than through here.
-        permissionPreference: existing?.permissionPreference ?? input.permissionPreference,
         updatedAt: now(),
         archived: existing?.archived ?? false,
       });
@@ -255,26 +240,6 @@ export class SessionIndexService {
   }
 
   /**
-   * D48 S4 §6.3 / D10 — the ONE writer allowed to move a captured posture, and
-   * the reason `recordCreated`'s first-write-wins is safe.
-   *
-   * Every other path into this field is a CAPTURE (a template read at first
-   * send) and must never overwrite one that already exists, or a Settings edit
-   * would retune an existing chat behind the user's back. This one is not a
-   * capture: it records a change the user made to THIS session, on purpose, and
-   * it is the value the next resume replays — which is the whole point of
-   * storing the posture per session rather than reading the template again.
-   *
-   * Called only after the Host confirmed the change (Main awaits
-   * `session.permissionUpdated`), so a refused or failed update never reaches
-   * here and the row stays byte-identical.
-   *
-   * `false` for a session this index has never heard of, rather than creating a
-   * row: a posture with no session is a row with no workspace, and the callers
-   * that create rows (`recordCreated` / `recordResumed`) are the ones that know
-   * what else belongs in one.
-   */
-  /**
    * Awaited durable-identity commit used by WorkerManager's remap transaction.
    * A failed atomic flush restores the in-memory row so Main never advertises a
    * runtime identity that the session index did not persist.
@@ -293,20 +258,6 @@ export class SessionIndexService {
         this.entries.set(sessionId, existing);
         throw error;
       }
-    });
-  }
-
-  async setPermissionPreference(
-    sessionId: string,
-    permissionPreference: SessionPermissionPreference
-  ): Promise<boolean> {
-    await this.ensureLoaded();
-    return this.queueMutation(async () => {
-      const existing = this.entries.get(sessionId);
-      if (!existing) return false;
-      this.entries.set(sessionId, { ...existing, permissionPreference, updatedAt: now() });
-      await this.flush();
-      return true;
     });
   }
 
@@ -366,11 +317,8 @@ export class SessionIndexService {
         case 'session.created': {
           const runtimeIdentity = event.payload?.runtimeIdentity;
           const agent = event.payload?.agent;
-          // A NEW Claude session reports no runtimeIdentity — the SDK issues one
-          // on the first turn — so the old `if (!runtimeIdentity) return` dropped
-          // its whole payload. That was invisible while the payload held nothing
-          // else; now it would silently discard the binding on the one event that
-          // carries it, and the row would never learn which agent owns it.
+          // A new Pi session can receive its durable runtime identity on the
+          // first turn, so preserve an independently reported binding here.
           if (!runtimeIdentity && !agent) return;
           this.entries.set(event.sessionId as string, {
             ...existing,

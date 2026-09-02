@@ -6,14 +6,13 @@ import type { VaultCrypto, VaultPayload } from '../../services/auth/CredentialVa
 
 /**
  * D47 S5 §1.2/§2/§3 — `auth.getGateSnapshot` / `auth.stateChanged` /
- * `auth.devMarkInvalidated` + the migrated `auth.managedMode`. Drives the
+ * `auth.devMarkInvalidated`. Drives the
  * REAL `registerAuthHandlers()` against a real `CredentialVault` in a temp
  * `userData` dir (same style as `vaultIntegration.test.ts`), with
  * `onboardingService` mocked for the flag-off legacy-folding cases.
  */
 
 const checkRegistrationMock = vi.fn();
-const checkCredentialsHealthMock = vi.fn();
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
 const sentWindows: Array<{ channel: string; payload: unknown }> = [];
@@ -47,7 +46,6 @@ vi.mock('electron', () => ({
 vi.mock('../../services/onboarding', () => ({
   onboardingService: {
     checkRegistration: checkRegistrationMock,
-    checkCredentialsHealth: checkCredentialsHealthMock,
   },
 }));
 
@@ -82,7 +80,6 @@ beforeEach(() => {
   handlers.clear();
   sentWindows.length = 0;
   checkRegistrationMock.mockReset();
-  checkCredentialsHealthMock.mockReset();
   workerInvalidateMock.mockClear();
   userDataDir = mkdtempSync(join(tmpdir(), 'aiclient-auth-ipc-'));
   state.userDataPath = userDataDir;
@@ -106,23 +103,6 @@ async function registerAndGetHandlers() {
   return handlers;
 }
 
-describe('auth:managedMode (migrated from claudeRuntime.ts, D47 S5 §1.2)', () => {
-  // D60: `claudeHomeDir` is null in BOTH positions now — there is no managed
-  // claude-home to point at. The field is retained only so the IPC shape and
-  // its renderer consumers stay unchanged.
-  it('flag on: {managed:true, claudeHomeDir:null}', async () => {
-    process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-    const h = await registerAndGetHandlers();
-    expect(h.get('auth:managedMode')?.()).toEqual({ managed: true, claudeHomeDir: null });
-  });
-
-  it('flag off: {managed:false, claudeHomeDir:null}', async () => {
-    process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
-    const h = await registerAndGetHandlers();
-    expect(h.get('auth:managedMode')?.()).toEqual({ managed: false, claudeHomeDir: null });
-  });
-});
-
 describe('auth:getGateSnapshot — local credentials still fold the legacy state for the profile chip (A2)', () => {
   it('unregistered -> signed_out, lastEmail from the (absent) onboarding email', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
@@ -140,28 +120,11 @@ describe('auth:getGateSnapshot — local credentials still fold the legacy state
       state: { status: 'signed_out', lastEmail: null },
       skipAuthGate: false,
     });
-    expect(checkCredentialsHealthMock).not.toHaveBeenCalled();
   });
 
-  it('registered + unhealthy credentials -> credentials_invalid: corrupt, lastEmail pre-filled', async () => {
+  it('registered local identity -> authenticated without probing provider files', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
     checkRegistrationMock.mockReturnValue({ registered: true, email: 'user@jcdz.cc' });
-    checkCredentialsHealthMock.mockReturnValue({ claudeEnvOk: false, codexAuthOk: true });
-    const h = await registerAndGetHandlers();
-
-    const snapshot = await h.get('auth:getGateSnapshot')?.();
-
-    expect(snapshot).toEqual({
-      entered: false,
-      state: { status: 'credentials_invalid', reason: 'corrupt', lastEmail: 'user@jcdz.cc' },
-      skipAuthGate: false,
-    });
-  });
-
-  it('registered + healthy -> authenticated', async () => {
-    process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
-    checkRegistrationMock.mockReturnValue({ registered: true, email: 'user@jcdz.cc' });
-    checkCredentialsHealthMock.mockReturnValue({ claudeEnvOk: true, codexAuthOk: true });
     const h = await registerAndGetHandlers();
 
     const snapshot = await h.get('auth:getGateSnapshot')?.();

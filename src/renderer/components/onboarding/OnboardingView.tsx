@@ -14,10 +14,9 @@ import { cn } from '@/lib/utils';
 /**
  * A2 — `cli-check` / `cli-install` retired.
  *
- * Both existed to probe and install `git` / `node` / `claude` / `codex` before
- * letting anyone in. A3/D65 established that three of those four ship inside
- * this app (so the probe decided nothing) and moved the fourth — git, the one
- * real dependency — to a non-blocking notice in the app itself
+ * The old prerequisite flow probed several external CLIs before letting
+ * anyone in. Pi is bundled, and git—the one real external dependency—now has
+ * a non-blocking notice in the app itself
  * (`GitMissingNotice`). What is left here is the sign-in sub-flow that the
  * welcome screen's primary button opens.
  */
@@ -337,7 +336,7 @@ export function OnboardingView({
       {step === 'result' && registerResult?.ok && (
         <>
           <SectionHeader
-            description="Claude Code 与 Codex 的凭据已在本次会话中生效。"
+            description="Pi 模型与凭据已在本次会话中生效。"
             icon={<CheckCircle2Icon className="h-5 w-5 text-success" />}
             title="登录完成"
           />
@@ -352,11 +351,8 @@ export function OnboardingView({
                   。
                 </p>
               )}
-              {/* A2 retired the three-way `mode` fork here. `register-only` and
-                  `vscode-extension` both described worlds where the app could
-                  not run yet — CLI not installed, or the user meant to work in
-                  VSCode instead — and neither exists now that Claude Code,
-                  Codex and Node all ship inside this build. */}
+              {/* Pi and its managed runtime ship with the app, so successful
+                  registration can enter the product directly. */}
               <p>随时可以在设置里切换回使用本机自己的配置。</p>
             </div>
           </SectionBody>

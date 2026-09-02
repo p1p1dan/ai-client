@@ -629,7 +629,7 @@ export class PtyManager {
     const requestId = ++this.activityRequestCounter;
     const checkPromise = (async () => {
       try {
-        // Get entire process tree (shell + all child processes like Claude Code)
+        // Get the entire process tree (shell plus all child processes).
         const pids = await pidtree(pid, { root: true });
 
         if (pids.length === 0) {

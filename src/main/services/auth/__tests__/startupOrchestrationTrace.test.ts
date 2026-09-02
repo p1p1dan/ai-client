@@ -163,12 +163,12 @@ describe('startup orchestration trace — adoption-read -> vault-save -> marker,
     registerAuthHandlers();
 
     const { ensureVaultAdoption } = await import('../adoption');
-    const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-      await import('../managedCredentialsStartup');
+    const { activateManagedCredentials, regenerateFromVault } = await import(
+      '../managedCredentialsStartup'
+    );
 
     // Real production sequence (main/index.ts ~L154-155, ~L762-775).
     activateManagedCredentials();
-    await ensureUserClaudeJsonOnboarded();
 
     const adoptionOutcome = await ensureVaultAdoption(authIndex.getCredentialVault(), userDataDir);
     expect(adoptionOutcome).toEqual({ kind: 'adopted' });

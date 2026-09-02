@@ -4,7 +4,7 @@
  * electron-vite doesn't properly forward SIGINT to Electron subprocess.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureDevPermissionPolicy } from './agent-host-build-lib.mjs';
@@ -82,11 +82,9 @@ ensureLocalLinuxRuntimeBundle();
 // ---------------------------------------------------------------------------
 // Dev credentials (test/dev phase only)
 //
-// The Agent Host is spawned with {...process.env} and falls back to ~/.claude,
-// so a bare `pnpm dev` silently routes GUI sessions through the developer's own
-// Claude login. During development we pin credentials to `dev.env` instead:
-// every inherited ANTHROPIC_*/Claude credential var is stripped, then only what
-// `dev.env` declares is injected. Edit the file, restart dev — nothing else.
+// Strip inherited credential-shaped environment variables, then inject only
+// values explicitly declared in dev.env. Provider keys are consumed by Pi;
+// this script never creates or points at a legacy agent configuration.
 // ---------------------------------------------------------------------------
 
 const DEV_ENV_FILE = process.env.AICLIENT_DEV_ENV_FILE || join(root, 'dev.env');
@@ -101,17 +99,7 @@ const STRIPPED_PREFIX = CREDENTIAL_ENV_PREFIX;
 // "credential" var Main needs to redact), so it stays local rather than
 // living in the shared list.
 const MANAGED_CREDENTIALS_KEY = 'AICLIENT_MANAGED_CREDENTIALS';
-// D60: `CLAUDE_CONFIG_DIR` left the shared credential list (Main must not
-// delete a path the user chose). dev.js still clears it, because dev.js
-// immediately sets its OWN isolated config dir below — clearing a variable
-// you are about to overwrite is this script's business, not the shared
-// list's. Same local-append arrangement as MANAGED_CREDENTIALS_KEY above.
-const DEV_ISOLATED_CONFIG_DIR_KEY = 'CLAUDE_CONFIG_DIR';
-const STRIPPED_KEYS = [
-  ...CREDENTIAL_ENV_KEYS,
-  MANAGED_CREDENTIALS_KEY,
-  DEV_ISOLATED_CONFIG_DIR_KEY,
-];
+const STRIPPED_KEYS = [...CREDENTIAL_ENV_KEYS, MANAGED_CREDENTIALS_KEY];
 
 /**
  * D47 S1 §2.6 (A-track "dev 轮可开" + B-track "不被继承环境意外打开", 合取):
@@ -165,48 +153,6 @@ function maskSecret(value) {
   return value.length <= 8 ? '***' : `${value.slice(0, 6)}…***(${value.length} chars)`;
 }
 
-/**
- * Isolate CLAUDE_CONFIG_DIR so the CLI cannot reach ~/.claude/settings.json or
- * the OAuth credentials in ~/.claude/.credentials.json. Seeded from dev.env.
- */
-function seedIsolatedConfigDir(vars) {
-  const configDir = join(root, 'node_modules', '.cache', 'aiclient-dev-credentials');
-  const settingsEnv = {};
-  for (const key of ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']) {
-    if (vars[key]) settingsEnv[key] = vars[key];
-  }
-  const settings = { env: settingsEnv };
-  if (vars.ANTHROPIC_MODEL) settings.model = vars.ANTHROPIC_MODEL;
-
-  mkdirSync(configDir, { recursive: true });
-  writeFileSync(join(configDir, 'settings.json'), `${JSON.stringify(settings, null, 2)}\n`);
-
-  // Pre-trust the workspaces so cli.js does not park on the first-run trust prompt.
-  const claudeJsonPath = join(configDir, '.claude.json');
-  let config = { hasCompletedOnboarding: true, projects: {} };
-  if (existsSync(claudeJsonPath)) {
-    try {
-      const existing = JSON.parse(readFileSync(claudeJsonPath, 'utf8'));
-      config = { ...existing, hasCompletedOnboarding: true, projects: existing.projects ?? {} };
-    } catch {
-      // Unreadable — rewrite from scratch.
-    }
-  }
-  const trusted = (vars.AICLIENT_TRUSTED_WORKSPACES ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  for (const workspace of [root, ...trusted]) {
-    config.projects[workspace] = {
-      ...config.projects[workspace],
-      hasTrustDialogAccepted: true,
-      hasCompletedProjectOnboarding: true,
-    };
-  }
-  writeFileSync(claudeJsonPath, `${JSON.stringify(config, null, 2)}\n`);
-  return configDir;
-}
-
 function buildChildEnv(allowLocal) {
   const env = { ...process.env };
   // Captured before stripping so an explicit shell export still counts as
@@ -224,7 +170,7 @@ function buildChildEnv(allowLocal) {
 
   if (!existsSync(DEV_ENV_FILE)) {
     if (allowLocal) {
-      console.warn(`[dev] ${DEV_ENV_FILE} not found — running with LOCAL credentials (~/.claude).`);
+      console.warn(`[dev] ${DEV_ENV_FILE} not found — running with the local Pi configuration.`);
       const fallbackEnv = { ...process.env };
       fallbackEnv[MANAGED_CREDENTIALS_KEY] = resolveManagedCredentialsForDev(
         originalManagedCredentials
@@ -232,8 +178,7 @@ function buildChildEnv(allowLocal) {
       return fallbackEnv;
     }
     console.error(`[dev] Missing credentials file: ${DEV_ENV_FILE}`);
-    console.error('[dev] Refusing to start: the app would fall back to your personal ~/.claude');
-    console.error('[dev]   login and bill your own account.');
+    console.error('[dev] Refusing to start without an explicit dev credential source.');
     console.error('[dev] Fix: cp dev.env.example dev.env   # then put your key in it');
     console.error(
       '[dev] Override (not recommended): node scripts/dev.js --allow-local-credentials'
@@ -250,9 +195,6 @@ function buildChildEnv(allowLocal) {
   if (vars.ANTHROPIC_AUTH_TOKEN) delete vars.ANTHROPIC_API_KEY;
 
   Object.assign(env, vars);
-  if (!vars.CLAUDE_CONFIG_DIR) {
-    env.CLAUDE_CONFIG_DIR = seedIsolatedConfigDir(vars);
-  }
   // dev.env's own value wins if set; otherwise fall back to what the shell
   // had before stripping. Either way only an exact '1' survives.
   env[MANAGED_CREDENTIALS_KEY] = resolveManagedCredentialsForDev(
@@ -266,7 +208,6 @@ function buildChildEnv(allowLocal) {
   console.log(
     `[dev]   ${env.ANTHROPIC_AUTH_TOKEN ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY'} = ${maskSecret(env.ANTHROPIC_AUTH_TOKEN ?? env.ANTHROPIC_API_KEY)}`
   );
-  console.log(`[dev]   CLAUDE_CONFIG_DIR  = ${env.CLAUDE_CONFIG_DIR}`);
   console.log(
     `[dev]   AICLIENT_MANAGED_CREDENTIALS = ${env[MANAGED_CREDENTIALS_KEY]} (dev-only override; '1'=managed, '0'=force local)`
   );
@@ -295,8 +236,7 @@ console.log(
 // On Linux, --no-sandbox is needed when unprivileged user namespaces are disabled.
 // Also forward our own CLI args to the app (`pnpm dev -- --open-path=<repo>`):
 // electron-vite passes everything after `--` to Electron, and main/index.ts
-// consumes --open-path to register a repository — the only way to do that on a
-// machine where the legacy Add Repository UI is unreachable.
+// consumes --open-path to register a repository.
 const ownArgs = process.argv.slice(2);
 const allowLocalCredentials = ownArgs.includes('--allow-local-credentials');
 const electronArgs = ['electron-vite', 'dev'];

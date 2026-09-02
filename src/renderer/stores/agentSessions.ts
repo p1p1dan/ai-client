@@ -4,7 +4,6 @@ import { normalizePath, pathsEqual } from '@/App/storage';
 import type { TerminalSession as Session } from '@/components/chat/terminalSession';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
-import { useAgentStatusStore } from './agentStatus';
 
 // Global storage key for all sessions across all repos
 export const SESSIONS_STORAGE_KEY = 'aiclient-agent-sessions';
@@ -186,11 +185,6 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
       set((state) => {
         const removedSession = state.sessions.find((s) => s.id === id);
         console.log('[AgentSessions] Removing session:', removedSession?.id);
-
-        if (removedSession) {
-          const { clearStatus } = useAgentStatusStore.getState();
-          clearStatus(removedSession.id);
-        }
 
         const newSessions = state.sessions.filter((s) => s.id !== id);
         let newActiveIds = state.activeIds;

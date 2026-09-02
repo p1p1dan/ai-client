@@ -129,11 +129,11 @@ describe('managedCredentialsStartup (D60)', () => {
 
     it('writes nothing at all — no claude-home, no .claude.json', async () => {
       process.env.AICLIENT_MANAGED_CREDENTIALS = '0';
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-        await import('../managedCredentialsStartup');
+      const { activateManagedCredentials, regenerateFromVault } = await import(
+        '../managedCredentialsStartup'
+      );
 
       activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
       await regenerateFromVault();
 
       expect(existsSync(claudeHomeDir())).toBe(false);
@@ -176,11 +176,8 @@ describe('managedCredentialsStartup (D60)', () => {
 
     it('never creates a managed claude-home directory', async () => {
       process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded } = await import(
-        '../managedCredentialsStartup'
-      );
+      const { activateManagedCredentials } = await import('../managedCredentialsStartup');
       activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
 
       expect(existsSync(claudeHomeDir())).toBe(false);
     });
@@ -191,32 +188,14 @@ describe('managedCredentialsStartup (D60)', () => {
       const userClaudeMd = join(homeDir, '.claude', 'CLAUDE.md');
       writeFileSync(userClaudeMd, '# my global instructions', 'utf-8');
 
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded } = await import(
-        '../managedCredentialsStartup'
-      );
+      const { activateManagedCredentials } = await import('../managedCredentialsStartup');
       activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
 
       expect(readFileSync(userClaudeMd, 'utf-8')).toBe('# my global instructions');
       expect(existsSync(join(claudeHomeDir(), 'CLAUDE.md'))).toBe(false);
     });
 
-    it("marks onboarding complete in the user's .claude.json", async () => {
-      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded } = await import(
-        '../managedCredentialsStartup'
-      );
-      activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
-
-      const doc = JSON.parse(readFileSync(userClaudeJsonPath(), 'utf-8')) as Record<
-        string,
-        unknown
-      >;
-      expect(doc.hasCompletedOnboarding).toBe(true);
-    });
-
-    it('MERGES into an existing .claude.json — every key the user already had survives, and theirs wins', async () => {
+    it('leaves an existing .claude.json byte-equivalent', async () => {
       process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
       writeFileSync(
         userClaudeJsonPath(),
@@ -228,21 +207,18 @@ describe('managedCredentialsStartup (D60)', () => {
         'utf-8'
       );
 
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded } = await import(
-        '../managedCredentialsStartup'
-      );
+      const { activateManagedCredentials } = await import('../managedCredentialsStartup');
       activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
 
       const doc = JSON.parse(readFileSync(userClaudeJsonPath(), 'utf-8')) as Record<
         string,
         unknown
       >;
-      expect(doc.mcpServers).toEqual({ mine: { command: 'my-server' } });
-      expect(doc.projects).toEqual({ '/repo/a': { hasTrustDialogAccepted: true } });
-      // Their explicit `false` wins over our default `true`: this file is
-      // theirs, and we only fill in what is missing.
-      expect(doc.hasCompletedOnboarding).toBe(false);
+      expect(doc).toEqual({
+        hasCompletedOnboarding: false,
+        mcpServers: { mine: { command: 'my-server' } },
+        projects: { '/repo/a': { hasTrustDialogAccepted: true } },
+      });
     });
   });
 
@@ -264,10 +240,10 @@ describe('managedCredentialsStartup (D60)', () => {
         receivedAt: new Date().toISOString(),
       });
 
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-        await import('../managedCredentialsStartup');
+      const { activateManagedCredentials, regenerateFromVault } = await import(
+        '../managedCredentialsStartup'
+      );
       activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
       await regenerateFromVault();
 
       expect(existsSync(join(claudeHomeDir(), 'settings.json'))).toBe(false);
@@ -319,10 +295,10 @@ describe('managedCredentialsStartup (D60)', () => {
     }
 
     async function runPhaseThree(): Promise<void> {
-      const { activateManagedCredentials, ensureUserClaudeJsonOnboarded, regenerateFromVault } =
-        await import('../managedCredentialsStartup');
+      const { activateManagedCredentials, regenerateFromVault } = await import(
+        '../managedCredentialsStartup'
+      );
       activateManagedCredentials();
-      await ensureUserClaudeJsonOnboarded();
       await regenerateFromVault();
     }
 

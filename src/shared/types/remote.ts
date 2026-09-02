@@ -41,6 +41,7 @@ export interface ConnectionProfile {
   name: string;
   sshTarget: string;
   runtimeInstallDir?: string;
+  /** @deprecated Read only while migrating pre-Pi remote profiles. */
   helperInstallDir?: string;
   createdAt: number;
   updatedAt: number;
@@ -53,7 +54,6 @@ export interface RemoteConnectionStatus {
   phaseLabel?: string;
   runtimeVersion?: string;
   serverVersion?: string;
-  helperVersion?: string;
   platform?: RemotePlatform;
   arch?: RemoteArchitecture;
   ptySupported?: boolean;
@@ -88,8 +88,6 @@ export interface RemoteRuntimeStatus {
   error?: string;
   lastCheckedAt?: number;
 }
-
-export type RemoteHelperStatus = RemoteRuntimeStatus;
 
 export interface ConnectionTestResult {
   success: boolean;

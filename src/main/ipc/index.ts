@@ -161,8 +161,6 @@ export function cleanupAllResourcesSync(): void {
   // Kill any in-flight execInPty commands first (sync)
   cleanupExecInPtysSync();
 
-  // Kill Hapi/Cloudflared processes (sync)
-
   // Kill tmux aiclient server (sync)
   cleanupTmuxSync();
 

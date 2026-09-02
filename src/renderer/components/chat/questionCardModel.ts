@@ -396,7 +396,7 @@ export function buildPermissionOptionRows(decisions: readonly PermissionDecision
  */
 export function derivePermissionOmittedNote(count: number | undefined): string | null {
   if (count === undefined || count <= 0) return null;
-  return `codex 还提供了 ${count} 个本版本未支持的选项，未显示`;
+  return `运行时还提供了 ${count} 个本版本未支持的选项，未显示`;
 }
 
 /** The verb a settled card shows: the decision when we have one, else the boolean. */
@@ -431,7 +431,7 @@ export const PERMISSION_DIFF_CLAMPED_MARK = 'diff clamped';
  * frame — so the card says what it does not know instead of rendering an empty
  * box (and instead of auto-denying a whole class of approval).
  */
-export const PERMISSION_NO_COMMAND_NOTE = 'codex 未报告命令内容';
+export const PERMISSION_NO_COMMAND_NOTE = '运行时未报告命令内容';
 
 const PERMISSION_CHANGE_BADGES: Readonly<Record<PermissionFileChange['change'], string>> = {
   add: 'A',

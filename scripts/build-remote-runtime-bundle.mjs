@@ -78,7 +78,7 @@ async function main() {
       /MANAGED_REMOTE_NODE_VERSION = '([^']+)'/
     ),
     readConstant(
-      'src/main/services/remote/RemoteHelperSource.ts',
+      'src/main/services/remote/RemoteServerSource.ts',
       /REMOTE_SERVER_VERSION = '([^']+)'/
     ),
   ]);

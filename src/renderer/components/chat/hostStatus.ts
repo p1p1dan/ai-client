@@ -1,4 +1,3 @@
-import { isAgentWireName } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 
 /**
@@ -35,26 +34,9 @@ export interface HostStatus {
   /**
    * Host capability flags. Unknown → undefined.
    * - `thinking`: T-04 thinking render gate.
-   * - `agents`: S3 slice 6 (A6) — the HostAgentRegistry's wire form
-   *   (`capabilities.agents`), filtered to known `AgentWireName`s so an
-   *   unrecognized slug (older renderer, newer Host) never reaches a
-   *   consumer. Today's only consumer is test assertions; a stage-3 agent
-   *   picker is the eventual UI reader.
-   * - `permissionPolicy`: D48 S3 (N1) — this Host reports a
-   *   `SessionPermissionPolicy` on the CODEX axis and accepts a
-   *   `permissionPreference` on create/resume. It says nothing about the Claude
-   *   axis, which S3 left byte-unchanged on the legacy `permissionMode` (§5.2),
-   *   so this bit must never be read as "a Claude policy is coming".
-   *   `undefined` = a Host build that predates the write side, and the Context
-   *   surface then keeps its `permissionMode`-only behaviour instead of showing
-   *   a blank row.
    */
-  capabilities?: { thinking?: boolean; agents?: unknown[]; permissionPolicy?: boolean };
+  capabilities?: { thinking?: boolean };
   lastFatalError?: string | null;
-}
-
-function filterLegacyAgentNames(value: unknown): unknown[] | undefined {
-  return Array.isArray(value) ? value.filter(isAgentWireName) : undefined;
 }
 
 export const initialHostStatus: HostStatus = {
@@ -90,23 +72,11 @@ export function reduceHostStatus(prev: HostStatus, event: RuntimeEvent): HostSta
         capRaw && typeof capRaw === 'object'
           ? (capRaw as { thinking?: unknown }).thinking
           : undefined;
-      const agentsRaw =
-        capRaw && typeof capRaw === 'object' ? (capRaw as { agents?: unknown }).agents : undefined;
-      const permissionPolicyRaw =
-        capRaw && typeof capRaw === 'object'
-          ? (capRaw as { permissionPolicy?: unknown }).permissionPolicy
-          : undefined;
       // Preserve undefined when the flag is absent (T-04 default-on rendering).
       const capabilities =
         capRaw && typeof capRaw === 'object'
           ? {
               thinking: typeof thinkingRaw === 'boolean' ? thinkingRaw : undefined,
-              agents: filterLegacyAgentNames(agentsRaw),
-              // D48 S3 (N1): rides BOTH channels — see `primeHostStatus`, where
-              // the same key is copied, and the `settings` history recorded in
-              // its header for what happens when only one of the two is wired.
-              permissionPolicy:
-                typeof permissionPolicyRaw === 'boolean' ? permissionPolicyRaw : undefined,
             }
           : prev.capabilities;
       return {
@@ -155,7 +125,7 @@ export interface HostStatusPrimeSnapshot {
    * Optional/nullable exactly like `settings`
    * above — an old Main build's snapshot simply omits the key.
    */
-  capabilities?: { thinking?: boolean; agents?: unknown; permissionPolicy?: unknown } | null;
+  capabilities?: { thinking?: boolean } | null;
 }
 
 /**
@@ -204,16 +174,6 @@ export function primeHostStatus(
     capabilities: primedCapabilities
       ? {
           thinking: primedCapabilities.thinking,
-          agents: filterLegacyAgentNames(primedCapabilities.agents),
-          // D48 S3 (N1), the second of the two channels. A consumer mounting on
-          // a cold start learns everything from THIS call, so a key added to
-          // `reduceHostStatus` alone reads as `undefined` here until the next
-          // live `host.ready` — the exact slice-6 `agents` mistake, which was
-          // itself the exact `settings` mistake above it.
-          permissionPolicy:
-            typeof primedCapabilities.permissionPolicy === 'boolean'
-              ? primedCapabilities.permissionPolicy
-              : undefined,
         }
       : prev.capabilities,
   };

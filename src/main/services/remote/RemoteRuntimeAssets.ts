@@ -7,7 +7,7 @@ import { APP_STATE_DIR } from '@shared/defaultPaths';
 import type { RemotePlatform } from '@shared/types';
 import { app } from 'electron';
 import pkg from '../../../../package.json';
-import { REMOTE_SERVER_VERSION } from './RemoteHelperSource';
+import { REMOTE_SERVER_VERSION } from './RemoteServerSource';
 
 export type RemoteRuntimeArch = 'x64' | 'arm64';
 export type RemoteRuntimeArchiveKind = 'tar.gz';
@@ -238,7 +238,7 @@ function createMissingDevelopmentLinuxRuntimeError(args: {
   const lines = [
     'Linux remote runtime bundle is not available in development mode.',
     `asset: ${args.asset.archiveName}`,
-    `helperVersion: ${REMOTE_SERVER_VERSION}`,
+    `serverVersion: ${REMOTE_SERVER_VERSION}`,
     'local search paths:',
     ...args.bundleCandidates.map((candidate) => `- ${candidate}`),
   ];

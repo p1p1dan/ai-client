@@ -44,8 +44,6 @@ files:
   - "!node_modules/shiki/dist/themes/**"
   - "!node_modules/@shikijs/langs/**"
   - "!node_modules/@shikijs/themes/**"
-  # Cloudflared: ~38MB pre-downloaded binary (we download at runtime to userData/bin)
-  - "!node_modules/cloudflared/bin/**"
   # Mermaid and its heavy dependencies (~60MB total) - loaded from CDN at runtime
   - "!node_modules/mermaid/**"
   - "!node_modules/@mermaid-js/**"
@@ -139,8 +137,6 @@ extraResources:
     filter:
       - "package.json"
       - "lib/**/*"
-  - from: node_modules/cloudflared
-    to: node_modules/cloudflared
     filter:
       - "package.json"
       - "lib/**/*"

@@ -301,7 +301,7 @@ export class WorkerManager {
 
   getStatus(): {
     state: WorkerManagerState;
-    capabilities: { history: true; thinking: true; permissionPolicy: true };
+    capabilities: { history: true; thinking: true };
     capacity: number;
     slots: number;
     active: number;
@@ -311,7 +311,7 @@ export class WorkerManager {
     const entries = [...this.entriesBySession.values()];
     return {
       state: this.state,
-      capabilities: { history: true, thinking: true, permissionPolicy: true },
+      capabilities: { history: true, thinking: true },
       capacity: this.capacity,
       slots: entries.length,
       active: entries.filter((entry) => entry.activeRequestId !== null).length,

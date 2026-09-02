@@ -4,8 +4,6 @@
  * See docs/plans/2026-07-24-c06-session-history-protocol-draft.md
  */
 
-import type { AgentWireName } from './agentWire';
-
 /**
  * One digested history block. Ids are stable across re-reads (derived from
  * JSONL uuids) so repeated resume hydration is idempotent.
@@ -162,28 +160,4 @@ export interface SessionHistoryPage {
   totalCount: number;
   /** True when an older page exists before this page. */
   hasMore: boolean;
-}
-
-/** Summary row retained only for T34 migration-reader compatibility. */
-export interface HistorySessionSummary {
-  /**
-   * The agent's own resume handle, opaque to us: a Claude Code JSONL basename,
-   * a Codex threadId, whatever the next reader uses. Only interpretable
-   * together with `agent` — never dispatch on the shape of this string.
-   */
-  runtimeIdentity: string;
-  workspacePath: string;
-  /**
-   * S2 (d): which agent this row belongs to, and therefore which reader can
-   * resume it. Absent = Claude Code.
-   */
-  agent?: AgentWireName;
-  /** From an `ai-title` control line when present (CLI sessions carry it). */
-  title: string | null;
-  /** First user message preview (system tags stripped, ≤80 chars) or `/command` label. */
-  firstMessage: string | null;
-  createdAt: number | null;
-  lastMessageAt: number | null;
-  /** From the first assistant line's message.model (system:init is absent in real data). */
-  model: string | null;
 }

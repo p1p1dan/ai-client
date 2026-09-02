@@ -26,11 +26,15 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { buildAppStateRoot, buildLegacyAppStateRoot } from '@shared/appStateLayout';
 import type { VaultPayload, VaultReadResult, VaultSaveResult } from './CredentialVault';
-import type { ClaudeCredentials } from './claudeHome';
 import { writeManagedFile } from './managedFileWriter';
 
 const ADOPTION_MARKER_FILE_NAME = '.adopted-v1';
 const DEFAULT_ONBOARDING_SERVICE_URL = 'https://onboarding-jyw.pipidan.qzz.io';
+
+interface LegacyAnthropicCredentials {
+  baseUrl: string;
+  authToken: string;
+}
 
 // ---------------------------------------------------------------------------
 // §1.2 — legacy reader (decoupled from `OnboardingService.checkRegistration()`,
@@ -107,7 +111,7 @@ export function readLegacyOnboardingState(userDataDir: string): LegacyOnboarding
  * judgment: no `env` key / `env:{}` / an empty-string value on either field
  * all count as missing.
  */
-function readClaudeCredentials(): ClaudeCredentials | null {
+function readLegacyAnthropicCredentials(): LegacyAnthropicCredentials | null {
   const settingsPath = join(homedir(), '.claude', 'settings.json');
   if (!existsSync(settingsPath)) {
     return null;
@@ -351,12 +355,12 @@ async function performAdoption(
     return { kind: 'skipped', reason: 'legacy_not_registered' };
   }
 
-  const claudeCredentials = readClaudeCredentials();
-  if (!claudeCredentials) {
+  const legacyAnthropicCredentials = readLegacyAnthropicCredentials();
+  if (!legacyAnthropicCredentials) {
     return { kind: 'skipped', reason: 'claude_credentials_missing', legacyEmail: legacy.email };
   }
 
-  const guardResult = adoptionGatewayGuard(claudeCredentials.baseUrl, legacy.serverUrl);
+  const guardResult = adoptionGatewayGuard(legacyAnthropicCredentials.baseUrl, legacy.serverUrl);
   if (guardResult !== 'match') {
     return {
       kind: 'skipped',
@@ -367,15 +371,18 @@ async function performAdoption(
   }
 
   // Corroboration-only diagnostic — never affects the decision below.
-  logAuthJsonCorroboration(claudeCredentials.authToken);
+  logAuthJsonCorroboration(legacyAnthropicCredentials.authToken);
 
-  const cchBaseUrl = deriveCchBaseUrl(claudeCredentials.baseUrl);
+  const cchBaseUrl = deriveCchBaseUrl(legacyAnthropicCredentials.baseUrl);
   const payload: VaultPayload = {
     identity: { email: legacy.email ?? '', userId: null },
     cchBaseUrl,
-    claude: { baseUrl: claudeCredentials.baseUrl, authToken: claudeCredentials.authToken },
-    codex: { baseUrl: `${cchBaseUrl}/v1`, apiKey: claudeCredentials.authToken },
-    pi: { baseUrl: `${cchBaseUrl}/v1`, apiKey: claudeCredentials.authToken },
+    claude: {
+      baseUrl: legacyAnthropicCredentials.baseUrl,
+      authToken: legacyAnthropicCredentials.authToken,
+    },
+    codex: { baseUrl: `${cchBaseUrl}/v1`, apiKey: legacyAnthropicCredentials.authToken },
+    pi: { baseUrl: `${cchBaseUrl}/v1`, apiKey: legacyAnthropicCredentials.authToken },
     receivedAt: now().toISOString(),
   };
 

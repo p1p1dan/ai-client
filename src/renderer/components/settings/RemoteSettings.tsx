@@ -172,7 +172,6 @@ export function RemoteSettings() {
       name: form.name.trim(),
       sshTarget: form.sshTarget.trim(),
       runtimeInstallDir: form.runtimeInstallDir.trim() || undefined,
-      helperInstallDir: form.runtimeInstallDir.trim() || undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -204,7 +203,6 @@ export function RemoteSettings() {
         name: form.name.trim(),
         sshTarget: form.sshTarget.trim(),
         runtimeInstallDir: form.runtimeInstallDir.trim() || undefined,
-        helperInstallDir: form.runtimeInstallDir.trim() || undefined,
       });
       upsertRemoteProfile(savedProfile);
       setSelectedProfileId(savedProfile.id);

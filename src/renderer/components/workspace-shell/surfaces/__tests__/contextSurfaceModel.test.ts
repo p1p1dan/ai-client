@@ -1,8 +1,4 @@
-import type {
-  SessionPermissionMode,
-  SessionRetryInfo,
-  SessionRuntimeStatus,
-} from '@shared/types/runtimeEvents';
+import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@/stores/chatSessions';
 import {
@@ -29,7 +25,6 @@ function baseInput(overrides: Partial<ContextGroupsInput> = {}): ContextGroupsIn
       configuredModel: null,
       actualModel: null,
       effortSelection: undefined,
-      permissionMode: undefined,
       host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
     },
     session: null,
@@ -60,7 +55,6 @@ describe('deriveContextGroups', () => {
           configuredModel: 'sonnet',
           actualModel: null,
           effortSelection: null,
-          permissionMode: null,
           host: { state: 'ready', pid: 123, driver: 'agent-sdk', version: '2.1.0' },
         },
         session: {
@@ -136,7 +130,6 @@ describe('deriveContextGroups', () => {
             configuredModel: 'sonnet',
             actualModel: null,
             effortSelection: undefined,
-            permissionMode: undefined,
             host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
           },
         })
@@ -153,7 +146,6 @@ describe('deriveContextGroups', () => {
             configuredModel: 'sonnet',
             actualModel: 'sonnet',
             effortSelection: undefined,
-            permissionMode: undefined,
             host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
           },
         })
@@ -171,7 +163,6 @@ describe('deriveContextGroups', () => {
             configuredModel: 'sonnet',
             actualModel: 'claude-opus-4-8',
             effortSelection: undefined,
-            permissionMode: undefined,
             host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
           },
         })
@@ -202,7 +193,6 @@ describe('deriveContextGroups', () => {
             configuredModel: 'claude-opus-4-8',
             actualModel: null,
             effortSelection: undefined,
-            permissionMode: undefined,
             host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
           },
         })
@@ -231,7 +221,6 @@ describe('deriveContextGroups', () => {
             configuredModel: 'sonnet',
             actualModel: null,
             effortSelection: null,
-            permissionMode: undefined,
             host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
           },
         })
@@ -251,7 +240,6 @@ describe('deriveContextGroups', () => {
             configuredModel: 'sonnet',
             actualModel: null,
             effortSelection: 'xhigh',
-            permissionMode: undefined,
             host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
           },
         })
@@ -265,63 +253,6 @@ describe('deriveContextGroups', () => {
     });
   });
 
-  describe('Runtime group — permission policy (R6:禁止写死 default)', () => {
-    it('omits the row entirely when there is no session (undefined)', () => {
-      const groups = deriveContextGroups(baseInput());
-      const runtime = groups.find((g) => g.id === 'runtime');
-      expect(runtime?.rows.some((r) => r.id === 'permission-policy')).toBe(false);
-    });
-
-    it('shows the honest "not reported" string for a session whose Host never reported one (null)', () => {
-      const groups = deriveContextGroups(
-        baseInput({
-          runtime: {
-            configuredModel: 'sonnet',
-            actualModel: null,
-            effortSelection: undefined,
-            permissionMode: null,
-            host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
-          },
-        })
-      );
-      const runtime = groups.find((g) => g.id === 'runtime');
-      expect(runtime?.rows).toContainEqual({
-        id: 'permission-policy',
-        label: 'Permission policy',
-        value: 'Permission policy not reported',
-      });
-    });
-
-    it('maps every known SessionPermissionMode to a distinct, non-default label', () => {
-      const cases: Array<[SessionPermissionMode, string]> = [
-        ['default', 'Default'],
-        ['acceptEdits', 'Accept edits'],
-        ['dontAsk', "Don't ask"],
-        ['bypassPermissions', 'Bypass permissions'],
-        ['plan', 'Plan'],
-      ];
-      for (const [mode, label] of cases) {
-        const groups = deriveContextGroups(
-          baseInput({
-            runtime: {
-              configuredModel: 'sonnet',
-              actualModel: null,
-              effortSelection: undefined,
-              permissionMode: mode,
-              host: { state: 'stopped', pid: undefined, driver: undefined, version: undefined },
-            },
-          })
-        );
-        const runtime = groups.find((g) => g.id === 'runtime');
-        expect(runtime?.rows).toContainEqual({
-          id: 'permission-policy',
-          label: 'Permission policy',
-          value: label,
-        });
-      }
-    });
-  });
-
   describe('Runtime group — Host rows', () => {
     it('shows pid/driver/version only when known', () => {
       const groups = deriveContextGroups(
@@ -330,7 +261,6 @@ describe('deriveContextGroups', () => {
             configuredModel: null,
             actualModel: null,
             effortSelection: undefined,
-            permissionMode: undefined,
             host: { state: 'ready', pid: 4242, driver: 'agent-sdk', version: '2.1.0' },
           },
         })
@@ -351,7 +281,6 @@ describe('deriveContextGroups', () => {
             configuredModel: null,
             actualModel: null,
             effortSelection: undefined,
-            permissionMode: undefined,
             host: {
               state: 'ready',
               pid: undefined,
@@ -386,7 +315,6 @@ describe('deriveContextGroups', () => {
               configuredModel: null,
               actualModel: null,
               effortSelection: undefined,
-              permissionMode: undefined,
               host: {
                 state: 'ready',
                 pid: undefined,
@@ -419,7 +347,6 @@ describe('deriveContextGroups', () => {
             configuredModel: null,
             actualModel: null,
             effortSelection: undefined,
-            permissionMode: undefined,
             host: {
               state: 'ready',
               pid: undefined,
@@ -448,7 +375,6 @@ describe('deriveContextGroups', () => {
             configuredModel: null,
             actualModel: null,
             effortSelection: undefined,
-            permissionMode: undefined,
             host: {
               state: 'ready',
               pid: 4242,
@@ -712,84 +638,13 @@ describe('reduceSessionRuntimeFacts', () => {
     expect(initialSessionRuntimeFacts).toEqual({});
   });
 
-  it('folds permissionMode from a session.created event', () => {
-    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'session.created',
-      sessionId: 's1',
-      payload: { permissionMode: 'acceptEdits' },
-    });
-    expect(next).toEqual({ s1: { permissionMode: 'acceptEdits' } });
-  });
-
-  it('folds permissionMode from a session.resumed event', () => {
-    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'session.resumed',
-      sessionId: 's1',
-      payload: { permissionMode: 'plan', runtimeIdentity: 'rt-1' },
-    });
-    expect(next).toEqual({ s1: { permissionMode: 'plan' } });
-  });
-
-  it('ignores every other event type', () => {
-    const prev = { s1: { permissionMode: 'default' as const } };
-    const next = reduceSessionRuntimeFacts(prev, {
-      type: 'session.status',
-      sessionId: 's1',
-      payload: { permissionMode: 'bypassPermissions' },
-    });
-    expect(next).toBe(prev);
-  });
-
-  it('never overwrites a known value when a later event omits permissionMode', () => {
-    const prev = { s1: { permissionMode: 'dontAsk' as const } };
-    const next = reduceSessionRuntimeFacts(prev, {
-      type: 'session.resumed',
-      sessionId: 's1',
-      payload: { runtimeIdentity: 'rt-2' },
-    });
-    expect(next).toBe(prev);
-    expect(next.s1.permissionMode).toBe('dontAsk');
-  });
-
-  it('rejects an invalid/unknown permissionMode string instead of storing garbage', () => {
-    const next = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'session.created',
-      sessionId: 's1',
-      payload: { permissionMode: 'yolo' },
-    });
-    expect(next).toEqual({});
-  });
-
-  it('isolates sessions — folding session A never touches session B', () => {
-    const prev = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'session.created',
-      sessionId: 'a',
-      payload: { permissionMode: 'default' },
-    });
-    const next = reduceSessionRuntimeFacts(prev, {
-      type: 'session.created',
-      sessionId: 'b',
-      payload: { permissionMode: 'bypassPermissions' },
-    });
-    expect(next).toEqual({
-      a: { permissionMode: 'default' },
-      b: { permissionMode: 'bypassPermissions' },
-    });
-  });
-
-  it('is a no-op (returns the same reference) when an event carries no sessionId', () => {
-    const prev = initialSessionRuntimeFacts;
-    const next = reduceSessionRuntimeFacts(prev, {
-      type: 'session.created',
-      payload: { permissionMode: 'default' },
-    });
-    expect(next).toBe(prev);
+  it('ignores unrelated events', () => {
+    const prev = {};
+    expect(
+      reduceSessionRuntimeFacts(prev, { type: 'session.created', sessionId: 's1', payload: {} })
+    ).toBe(prev);
   });
 });
-
-// ---------------------------------------------------------------------------
-// T-35: session.stderr folding + Host stderr group
-// ---------------------------------------------------------------------------
 
 describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
   const line = (n: number) => ({
@@ -822,19 +677,6 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
     expect(stderr?.total).toBe(STDERR_CONTEXT_KEEP_LINES + 5);
   });
 
-  it('coexists with permissionMode on the same session entry', () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'session.created',
-      sessionId: 's1',
-      payload: { permissionMode: 'default' },
-    });
-    state = reduceSessionRuntimeFacts(state, line(1));
-    expect(state.s1).toEqual({
-      permissionMode: 'default',
-      stderr: { lines: ['stderr line 1'], total: 1 },
-    });
-  });
-
   it('drops an empty or non-string line whole — a blank row is noise pretending to be a fact', () => {
     const prev = initialSessionRuntimeFacts;
     for (const bad of ['', 42, null, undefined]) {
@@ -849,11 +691,7 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
   });
 
   it(`caps stderr carriers at ${STDERR_SESSIONS_MAX} sessions, stripping only the oldest carrier's stderr (F6)`, () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'session.created',
-      sessionId: 'carrier-0',
-      payload: { permissionMode: 'default' },
-    });
+    let state = initialSessionRuntimeFacts;
     for (let n = 0; n < STDERR_SESSIONS_MAX + 2; n += 1) {
       state = reduceSessionRuntimeFacts(state, {
         type: 'session.stderr',
@@ -863,26 +701,16 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
     }
     const carriers = Object.keys(state).filter((id) => state[id].stderr);
     expect(carriers).toHaveLength(STDERR_SESSIONS_MAX);
-    // The two oldest carriers were evicted…
-    expect(state['carrier-0']?.stderr).toBeUndefined();
-    // …but eviction strips ONLY stderr: carrier-0's permissionMode survives,
-    // while carrier-1 (stderr was its only fact) is removed outright.
-    expect(state['carrier-0']?.permissionMode).toBe('default');
+    // The two oldest carriers were evicted completely.
+    expect(state['carrier-0']).toBeUndefined();
     expect(state['carrier-1']).toBeUndefined();
     const newest = state[`carrier-${STDERR_SESSIONS_MAX + 1}`];
     expect(newest?.stderr?.lines).toEqual([`line ${STDERR_SESSIONS_MAX + 1}`]);
   });
 
   it('evicts by FIRST-STDERR order, not session-creation order (F6 round 2)', () => {
-    // Entries created s1..s13 — but stderr arrives in REVERSE (s13 first).
+    // stderr arrives in reverse order (s13 first).
     let state = initialSessionRuntimeFacts;
-    for (let n = 1; n <= STDERR_SESSIONS_MAX + 1; n += 1) {
-      state = reduceSessionRuntimeFacts(state, {
-        type: 'session.created',
-        sessionId: `s${n}`,
-        payload: { permissionMode: 'default' },
-      });
-    }
     for (let n = STDERR_SESSIONS_MAX + 1; n >= 1; n -= 1) {
       state = reduceSessionRuntimeFacts(state, {
         type: 'session.stderr',
@@ -892,8 +720,7 @@ describe('reduceSessionRuntimeFacts — session.stderr (T-35)', () => {
     }
     // The oldest CARRIER is the first to have received stderr — the
     // highest-numbered session, despite being created in ascending order.
-    expect(state[`s${STDERR_SESSIONS_MAX + 1}`].stderr).toBeUndefined();
-    expect(state[`s${STDERR_SESSIONS_MAX + 1}`].permissionMode).toBe('default');
+    expect(state[`s${STDERR_SESSIONS_MAX + 1}`]).toBeUndefined();
     for (let n = 1; n <= STDERR_SESSIONS_MAX; n += 1) {
       expect(state[`s${n}`].stderr?.lines, `s${n}`).toEqual([`line ${n}`]);
     }
@@ -1047,16 +874,6 @@ describe('reduceSessionRuntimeFacts — turnTokensDisplay (D33)', () => {
       payload: { messageId: 'a1' },
     });
     expect(twiceCleared).toBe(state);
-  });
-
-  it('coexists with permissionMode/stderr on the same session entry', () => {
-    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, {
-      type: 'session.created',
-      sessionId: 's1',
-      payload: { permissionMode: 'default' },
-    });
-    state = reduceSessionRuntimeFacts(state, interimEvent(850));
-    expect(state.s1).toEqual({ permissionMode: 'default', turnTokensDisplay: 850 });
   });
 
   it('isolates sessions — clearing session A never touches session B', () => {

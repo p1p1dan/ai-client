@@ -13,7 +13,6 @@ import {
   type RemoteConnectionDiagnostics,
   type RemoteConnectionPhase,
   type RemoteConnectionStatus,
-  type RemoteHelperStatus,
   type RemoteHostFingerprint,
   type RemotePlatform,
   type RemoteRuntimeStatus,
@@ -26,7 +25,6 @@ import { getEnvForCommand } from '../../utils/shell';
 import { getAppStateRoot } from '../appStatePaths';
 import { readSharedSessionState, readSharedSettings } from '../SharedSessionState';
 import { RemoteAuthBroker } from './RemoteAuthBroker';
-import { getRemoteServerSource, REMOTE_SERVER_VERSION } from './RemoteHelperSource';
 import { parseHostVerificationPrompt } from './RemoteHostVerification';
 import { createRemoteError, getRemoteErrorDetail, translateRemote } from './RemoteI18n';
 import {
@@ -36,6 +34,7 @@ import {
   MANAGED_REMOTE_RUNTIME_DIR,
   type RemoteRuntimeAsset,
 } from './RemoteRuntimeAssets';
+import { getRemoteServerSource, REMOTE_SERVER_VERSION } from './RemoteServerSource';
 
 interface StoredConnectionProfile extends ConnectionProfile {
   platformHint?: 'linux' | 'darwin' | 'win32';
@@ -246,8 +245,7 @@ function sanitizeConnectionProfile(profile: StoredConnectionProfile): Connection
     id: profile.id,
     name: profile.name,
     sshTarget: profile.sshTarget,
-    runtimeInstallDir: profile.runtimeInstallDir,
-    helperInstallDir: profile.helperInstallDir,
+    runtimeInstallDir: profile.runtimeInstallDir ?? profile.helperInstallDir,
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   };
@@ -696,7 +694,6 @@ export class RemoteConnectionManager {
       sshTarget,
       runtimeInstallDir:
         input.runtimeInstallDir?.trim() || input.helperInstallDir?.trim() || undefined,
-      helperInstallDir: input.helperInstallDir?.trim() || undefined,
       createdAt: existing?.createdAt ?? input.createdAt ?? now(),
       updatedAt: now(),
     };
@@ -852,10 +849,6 @@ export class RemoteConnectionManager {
     }
   }
 
-  async getHelperStatus(profileOrId: string | ConnectionProfile): Promise<RemoteHelperStatus> {
-    return this.getRuntimeStatus(profileOrId);
-  }
-
   async installRuntime(profileOrId: string | ConnectionProfile): Promise<RemoteRuntimeStatus> {
     const profile = await this.resolveProfile(profileOrId);
     await this.disconnect(profile.id).catch(() => {});
@@ -869,12 +862,6 @@ export class RemoteConnectionManager {
     );
     this.cacheRuntimeVerification(profile.id, paths.installDir, verification);
     return this.getRuntimeStatus(profile);
-  }
-
-  async installHelperManually(
-    profileOrId: string | ConnectionProfile
-  ): Promise<RemoteHelperStatus> {
-    return this.installRuntime(profileOrId);
   }
 
   async updateRuntime(profileOrId: string | ConnectionProfile): Promise<RemoteRuntimeStatus> {
@@ -893,10 +880,6 @@ export class RemoteConnectionManager {
     return this.getRuntimeStatus(profile);
   }
 
-  async updateHelper(profileOrId: string | ConnectionProfile): Promise<RemoteHelperStatus> {
-    return this.updateRuntime(profileOrId);
-  }
-
   async deleteRuntime(profileOrId: string | ConnectionProfile): Promise<RemoteRuntimeStatus> {
     const profile = await this.resolveProfile(profileOrId);
     await this.disconnect(profile.id).catch(() => {});
@@ -906,10 +889,6 @@ export class RemoteConnectionManager {
     await this.stopRemoteDaemon(profile, runtime, paths).catch(() => {});
     await this.deleteInstalledRuntimeVersions(profile, runtime, paths);
     return this.getRuntimeStatus(profile);
-  }
-
-  async deleteHelper(profileOrId: string | ConnectionProfile): Promise<RemoteHelperStatus> {
-    return this.deleteRuntime(profileOrId);
   }
 
   async connect(
@@ -1252,7 +1231,6 @@ export class RemoteConnectionManager {
       nextRetryAt: undefined,
       runtimeVersion: MANAGED_REMOTE_NODE_VERSION,
       serverVersion: REMOTE_SERVER_VERSION,
-      helperVersion: REMOTE_SERVER_VERSION,
     }));
 
     const runtime = await this.measureDiagnosticStep(profile.id, 'resolve-runtime', () =>
@@ -1817,7 +1795,6 @@ export class RemoteConnectionManager {
       arch: runtime.arch,
       runtimeVersion: cachedVerification?.result?.nodeVersion ?? `v${MANAGED_REMOTE_NODE_VERSION}`,
       serverVersion: REMOTE_SERVER_VERSION,
-      helperVersion: REMOTE_SERVER_VERSION,
       verificationState: cachedVerification?.result
         ? 'verified'
         : cachedVerification?.error
@@ -1860,7 +1837,6 @@ export class RemoteConnectionManager {
           currentVerification?.result?.nodeVersion ||
           `v${MANAGED_REMOTE_NODE_VERSION}`,
         serverVersion: handshake.serverVersion?.trim() || REMOTE_SERVER_VERSION,
-        helperVersion: REMOTE_SERVER_VERSION,
         ptySupported:
           handshake.ptySupported ??
           currentVerification?.result?.ptySupported ??
@@ -1957,7 +1933,6 @@ export class RemoteConnectionManager {
         phaseLabel: phaseLabelFor('starting-server'),
         runtimeVersion: MANAGED_REMOTE_NODE_VERSION,
         serverVersion: REMOTE_SERVER_VERSION,
-        helperVersion: REMOTE_SERVER_VERSION,
         platform: runtime.platform,
         arch: runtime.arch,
         lastCheckedAt: now(),

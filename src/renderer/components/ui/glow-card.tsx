@@ -37,9 +37,9 @@ interface GlowCardProps {
  *
  * States:
  * - idle: No glow effect
- * - running: Animated green flowing glow (Claude is actively working)
- * - waiting_input: Animated amber pulsing glow (Claude waiting for user input)
- * - completed: Subtle blue static glow (Claude finished working)
+ * - running: Animated green flowing glow (the agent is actively working)
+ * - waiting_input: Animated amber pulsing glow (the agent is waiting for user input)
+ * - completed: Subtle blue static glow (the agent finished working)
  */
 export const GlowCard = forwardRef<HTMLDivElement, GlowCardProps>(
   (
@@ -150,7 +150,7 @@ export function GlowIndicator({
       }}
       title={
         state === 'running'
-          ? 'Claude is working'
+          ? 'Pi is working'
           : state === 'waiting_input'
             ? 'Waiting for user input'
             : 'Task completed'
@@ -190,7 +190,7 @@ export function GlowBorder({
 
 /**
  * Glow effect for "running" state - animated green flowing glow
- * Used when Claude is actively working
+ * Used when the agent is actively working
  */
 function RunningGlow() {
   return (
@@ -247,7 +247,7 @@ function RunningGlow() {
 
 /**
  * Glow effect for "waiting_input" state - animated amber pulsing glow
- * Used when Claude is waiting for user input
+ * Used while Pi is waiting for user input
  */
 function WaitingInputGlow() {
   return (
@@ -304,7 +304,7 @@ function WaitingInputGlow() {
 
 /**
  * Glow effect for "completed" state - blue pulsing glow
- * Used when Claude has finished working
+ * Used after Pi has finished working
  */
 function CompletedGlow() {
   return (

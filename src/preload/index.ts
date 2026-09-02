@@ -54,7 +54,6 @@ import type {
   RemoteAuthResponse,
   RemoteConnectionStatus,
   RemoteConnectionStatusEvent,
-  RemoteHelperStatus,
   RemoteRuntimeStatus,
   RepositoryRuntimeContext,
   RuntimeEvent,
@@ -625,21 +624,13 @@ const electronAPI = {
     ): Promise<FileEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.REMOTE_DIRECTORY_LIST, profileOrId, remotePath),
     getRuntimeStatus: (profileOrId: string | ConnectionProfile): Promise<RemoteRuntimeStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_STATUS, profileOrId),
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_RUNTIME_STATUS, profileOrId),
     installRuntime: (profileOrId: string | ConnectionProfile): Promise<RemoteRuntimeStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_INSTALL, profileOrId),
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_RUNTIME_INSTALL, profileOrId),
     updateRuntime: (profileOrId: string | ConnectionProfile): Promise<RemoteRuntimeStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_UPDATE, profileOrId),
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_RUNTIME_UPDATE, profileOrId),
     deleteRuntime: (profileOrId: string | ConnectionProfile): Promise<RemoteRuntimeStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_DELETE, profileOrId),
-    getHelperStatus: (profileOrId: string | ConnectionProfile): Promise<RemoteHelperStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_STATUS, profileOrId),
-    installHelper: (profileOrId: string | ConnectionProfile): Promise<RemoteHelperStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_INSTALL, profileOrId),
-    updateHelper: (profileOrId: string | ConnectionProfile): Promise<RemoteHelperStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_UPDATE, profileOrId),
-    deleteHelper: (profileOrId: string | ConnectionProfile): Promise<RemoteHelperStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_HELPER_DELETE, profileOrId),
+      ipcRenderer.invoke(IPC_CHANNELS.REMOTE_RUNTIME_DELETE, profileOrId),
     browseRoots: (profileOrId: string | ConnectionProfile): Promise<string[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.REMOTE_BROWSE_ROOTS, profileOrId),
     onAuthPrompt: (callback: (prompt: RemoteAuthPrompt) => void): (() => void) => {
@@ -878,55 +869,6 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.NOTIFICATION_CLICK, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.NOTIFICATION_CLICK, handler);
     },
-    onAskUserQuestion: (
-      callback: (data: { sessionId: string; toolInput: unknown; cwd?: string }) => void
-    ): (() => void) => {
-      const handler = (_: unknown, data: { sessionId: string; toolInput: unknown; cwd?: string }) =>
-        callback(data);
-      ipcRenderer.on(IPC_CHANNELS.AGENT_ASK_USER_QUESTION_NOTIFICATION, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.AGENT_ASK_USER_QUESTION_NOTIFICATION, handler);
-    },
-    onPreToolUse: (
-      callback: (data: { sessionId: string; toolName: string; cwd?: string }) => void
-    ): (() => void) => {
-      const handler = (_: unknown, data: { sessionId: string; toolName: string; cwd?: string }) =>
-        callback(data);
-      ipcRenderer.on(IPC_CHANNELS.AGENT_PRE_TOOL_USE_NOTIFICATION, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.AGENT_PRE_TOOL_USE_NOTIFICATION, handler);
-    },
-    onAgentStatusUpdate: (
-      callback: (data: {
-        sessionId: string;
-        model?: { id: string; display_name: string };
-        contextWindow?: {
-          total_input_tokens: number;
-          total_output_tokens: number;
-          context_window_size: number;
-          current_usage?: {
-            input_tokens: number;
-            output_tokens: number;
-            cache_creation_input_tokens: number;
-            cache_read_input_tokens: number;
-          };
-        };
-        cost?: {
-          total_cost_usd: number;
-          total_duration_ms: number;
-          total_api_duration_ms?: number;
-          total_lines_added: number;
-          total_lines_removed: number;
-        };
-        workspace?: {
-          current_dir: string;
-          project_dir: string;
-        };
-        version?: string;
-      }) => void
-    ): (() => void) => {
-      const handler = (_: unknown, data: Parameters<typeof callback>[0]) => callback(data);
-      ipcRenderer.on(IPC_CHANNELS.AGENT_STATUS_UPDATE, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.AGENT_STATUS_UPDATE, handler);
-    },
   },
 
   // Updater
@@ -976,12 +918,7 @@ const electronAPI = {
       >,
   },
 
-  // Auth (D47 S2a) — managed-credentials mode probe (S1 spec §1 "不做" is
-  // about renderer/preload importing AuthStateService directly; invoking a
-  // registered IPC channel by string constant is not that).
   auth: {
-    managedMode: (): Promise<{ managed: boolean; claudeHomeDir: string | null }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.AUTH_MANAGED_MODE),
     // D47 S5 — single-path auth gate (rev.2 §1.2/§1.3).
     //
     // `initialArgv` is a raw passthrough of this process's argv, mirroring
@@ -991,12 +928,7 @@ const electronAPI = {
     // `skipAuthGate` flag out of it (see Root.tsx's own comment on why the
     // rest of the payload isn't used for a guessed-at gate decision).
     initialArgv: process.argv,
-    // Return shape mirrors `ResolveGateDecisionInput`'s renderer-relevant
-    // fields (@shared/authGate) plus `legacyRegistered` — the flag-off
-    // `checkRegistration()`+`checkCredentialsHealth()` fold-in the IPC
-    // handler (`src/main/ipc/auth.ts`, S5a) computes so OnboardingService's
-    // method bodies stay untouched (S5 spec §1.2). No dedicated shared type
-    // exists for this yet; inlined here rather than guessing an export name.
+    // Return shape mirrors the renderer-relevant gate decision fields.
     getGateSnapshot: (): Promise<{
       /** A2 — has the user already come through the welcome screen this run. */
       entered: boolean;
@@ -1080,7 +1012,7 @@ const electronAPI = {
       active: number;
       restarting: number;
       errors: number;
-      capabilities: { history: true; thinking: true; permissionPolicy: true };
+      capabilities: { history: true; thinking: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_ENSURE_HOST),
     getHostStatus: (): Promise<{
       state: string;
@@ -1089,7 +1021,7 @@ const electronAPI = {
       active: number;
       restarting: number;
       errors: number;
-      capabilities: { history: true; thinking: true; permissionPolicy: true };
+      capabilities: { history: true; thinking: true };
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HOST_STATUS),
     createSession: (payload: {
       sessionId: string;

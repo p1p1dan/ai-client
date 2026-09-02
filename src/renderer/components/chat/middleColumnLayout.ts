@@ -843,7 +843,7 @@ export function composerPlaceholder(input: {
     return 'Choose a working directory to start…';
   }
   if (input.canSend) {
-    return input.mode === 'session' ? 'Send follow-up…' : 'Message Claude via Agent Host…';
+    return input.mode === 'session' ? 'Send follow-up…' : 'Message Pi…';
   }
   return 'Cannot send right now…';
 }

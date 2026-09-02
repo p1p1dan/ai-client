@@ -13,8 +13,6 @@ export type RuntimeEventType =
   | 'session.created'
   | 'session.resumed'
   | 'session.updated'
-  | 'session.permissionUpdated'
-  | 'session.settingsEcho'
   | 'session.history'
   | 'session.status'
   | 'session.stderr'
@@ -88,9 +86,7 @@ export interface HostReadyEvent extends RuntimeEventBase {
      * Host capability flags — Main degrades gracefully when absent (old Host).
      *
      * Doctrine (S2 C6): every key here describes what THIS HOST BUILD can do
-     * (process-level), never what one agent supports. Per-agent differences go
-     * through the `agents` list plus the per-session facts on `session.created`
-     * — do not grow a `Partial<Record<AgentWireName, …>>` here.
+     * (process-level), never provider-specific behavior.
      */
     capabilities?: {
       history?: boolean;
@@ -102,18 +98,6 @@ export interface HostReadyEvent extends RuntimeEventBase {
        * supported", not "no subagent ran".
        */
       subagentActivity?: boolean;
-      /**
-       * S2: agents this Host build can actually run. Absent = an old Host,
-       * which only knows Claude Code. The renderer disables (not hides) the
-       * agents missing from this list.
-       */
-      agents?: AgentWireName[];
-      /**
-       * S2: this Host normalizes per-agent permission facts into
-       * `SessionPermissionPolicy`. Absent = old Host, UI keeps the old
-       * `permissionMode`-only behaviour.
-       */
-      permissionPolicy?: boolean;
     };
   };
 }
@@ -545,279 +529,16 @@ export interface QuestionResolvedEvent extends RuntimeEventBase {
   };
 }
 
-/**
- * T-14 (Codex precedent T-20, optional-field addition, no protocol version
- * bump): the CLI permission mode this Host session actually runs with.
- * Mirrors the Agent SDK's own `PermissionMode` union — `claudeRuntime.ts`'s
- * `CHAT_PERMISSION_MODE` constant is the DEFAULT that feeds both the SDK
- * query() options and this payload, so the renderer can never report a mode
- * the Host did not actually send to the SDK.
- *
- * D48 S3: the vocabulary became a `const` array because the request side now
- * has to VALIDATE an untrusted value against it (`isSessionPermissionMode`
- * lives in the renderer, the Host needs its own reader). The union is derived
- * from the array rather than written twice — a second copy is how the wire and
- * the validator end up disagreeing about `dontAsk`. Still frozen at five
- * values: SDK 0.3.218's own `PermissionMode` is these exact five
- * [实测 sdk.d.ts:1720, 06-probes P2(b)].
- */
-export const SESSION_PERMISSION_MODES = [
-  'default',
-  'acceptEdits',
-  'dontAsk',
-  'bypassPermissions',
-  'plan',
-] as const;
-
-export type SessionPermissionMode = (typeof SESSION_PERMISSION_MODES)[number];
-
-/**
- * Codex `approval_policy` (measured, S1 §1.5): `untrusted` = only trusted
- * commands run unattended and escalation is forbidden; `on-request` = the
- * model decides when to ask; `never` = never asks, failures go back to the
- * model. The object-shaped `granular` variant exists on the wire but is not
- * modelled this round.
- */
-export const CODEX_APPROVAL_POLICIES = ['untrusted', 'on-request', 'never'] as const;
-
-export type CodexApprovalPolicy = (typeof CODEX_APPROVAL_POLICIES)[number];
-
-/** Codex `sandbox_mode` (measured). Network is a separate dimension, below. */
-export const CODEX_SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'] as const;
-
-export type CodexSandboxMode = (typeof CODEX_SANDBOX_MODES)[number];
-
-/**
- * S2 (c, C4): the permission posture a session actually runs with, per agent.
- *
- * A discriminated union rather than one widened enum, because the two agents
- * are not the same shape: Claude has a single mode, Codex is four orthogonal
- * dimensions of which three are modelled here. `SessionPermissionMode` above
- * stays FROZEN in Claude's own vocabulary — an old renderer reading a Codex
- * session gets `false` out of `isSessionPermissionMode` and keeps its previous
- * state, which is the correct degradation rather than a wrong reading.
- *
- * The discriminant is `agent`, valued with `AgentWireName`'s literals. Codex's
- * posture is always sent explicitly by the Host and is never inherited from
- * `~/.codex/config.toml` — a local config saying `danger-full-access` would
- * otherwise silently switch every approval off.
- */
-export type SessionPermissionPolicy =
-  | { agent: 'claude-code'; permissionMode: SessionPermissionMode }
-  | {
-      agent: 'codex';
-      approvalPolicy: CodexApprovalPolicy;
-      sandboxMode: CodexSandboxMode;
-      /**
-       * Sub-dimension of the sandbox, not of the approval policy — and OPTIONAL
-       * since the S3 terminal check.
-       *
-       * It is the one dimension this Host never asks for: `thread/start` takes
-       * `sandbox` as a string, and `networkAccess` comes back only inside the
-       * expanded sandbox object of the RESULT. So the only honest values are
-       * "the runtime said on", "the runtime said off" and "the runtime has not
-       * said" — the last of which is this key being absent. It was a required
-       * `boolean` for exactly as long as the Host had a single hard-coded
-       * sandbox tier to believe a default for; once S3 made the tier
-       * user-selectable (`danger-full-access` has no sandbox at all, therefore
-       * no network limit), a constant `false` would have reported the opposite
-       * of the truth on the most dangerous tier. Absent renders as "not
-       * reported", never as "off".
-       */
-      networkAccess?: boolean;
-    };
-
-/**
- * D48 S3 §5.4 — the REQUEST half of the pair. Preference is what the UI can
- * ASK for; `SessionPermissionPolicy` above is what the Host reports it actually
- * ran with. Two types, never one, for two reasons that both bite:
- *
- *  1. `networkAccess` is a FACT and not a request field — it appears only in
- *     codex's `thread/start` RESULT, as the server's default for the sandbox
- *     tier we asked for (`codexRuntime.ts` CODEX_PERMISSION_DEFAULT header,
- *     [实测]). The Codex arm below therefore has NO such key, so no UI built on
- *     this type can claim to control it (§5.7-C8 negative control), and
- *     `isSessionPermissionPreference` REFUSES a payload that carries one rather
- *     than dropping it quietly — pretending to have applied a posture nobody
- *     applied is the failure this pair exists to prevent.
- *  2. Merging them would let a renderer echo be read as a request (and vice
- *     versa) on a wire where both travel on the same command family.
- *
- * The dangerous tiers (`bypassPermissions`, `danger-full-access`) ARE part of
- * the vocabulary — the §8.0-Q3 decision gives them a control with a warning and
- * a second confirmation. What they must never be is a DEFAULT or a fallback: see
- * `isDangerousPermissionPreference` and the enumeration in
- * `chatAgentDefaults.ts` (§5.7-C13).
- */
-export type SessionPermissionPreference =
-  | { agent: 'claude-code'; permissionMode: SessionPermissionMode }
-  | {
-      agent: 'codex';
-      approvalPolicy: CodexApprovalPolicy;
-      sandboxMode: CodexSandboxMode;
-    };
-
-/** The Claude arm of the request union — the shape `query()` options need. */
-export type ClaudePermissionPreference = Extract<
-  SessionPermissionPreference,
-  { agent: 'claude-code' }
->;
-
-/** The Codex arm — approval + sandbox, and provably no `networkAccess`. */
-export type CodexPermissionPreference = Extract<SessionPermissionPreference, { agent: 'codex' }>;
-
-function permissionPreferenceRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  return value as Record<string, unknown>;
-}
-
-/**
- * Protocol-boundary guards: `permissionPreference` arrives as untrusted JSON
- * (renderer → Main → Host over NDJSON, and off app settings on disk), and the
- * value decides what a session may do without asking.
- *
- * ## Why the caller passes its own agent name
- *
- * This module cannot spell the chat-binding literal in value position
- * (`agentWireStatic.test.ts` Rule 2: it has exactly one home) and cannot VALUE
- * import the constant either — the Host loads this file under Node's
- * `--experimental-strip-types`, which only resolves specifiers carrying an
- * explicit `.ts`, while the root tsconfig rejects that suffix for `src/shared`
- * [实测: ERR_MODULE_NOT_FOUND on an extensionless value import]. Every caller
- * already holds the constant it means (`CLAUDE_CODE_AGENT` / `CODEX_AGENT`), so
- * the name travels IN rather than being re-homed here — and the discriminant is
- * still checked, which is what a shape-only guard could not do.
- *
- * ## What each guard refuses
- *
- * The arm's own keys must be present and valid AND the other arm's keys must be
- * absent: `{agent:'codex', permissionMode:'plan'}` is a real renderer bug shape
- * (JSON has no discriminant enforcement) and half-reading it would apply a tier
- * nobody asked for. Unknown EXTRA keys are otherwise tolerated — protocol
- * additivity, a newer renderer must not be refused by an older Host — with one
- * exception: a Codex preference carrying `networkAccess` is refused outright,
- * because that dimension is a runtime-reported FACT and accepting the claim
- * would let the caller believe something was configured that nothing configured
- * (§5.5 last bullet).
- *
- * The `as` casts are the honest spelling: the agent name is supplied by the
- * caller from the deferred DTO vocabulary, so the discriminated union narrowing
- * is stated rather than inferred.
- */
-export function claudePermissionPreference(
-  value: unknown,
-  claudeAgent: SessionPermissionPreference['agent']
-): ClaudePermissionPreference | undefined {
-  const raw = permissionPreferenceRecord(value);
-  if (!raw || raw.agent !== claudeAgent) return undefined;
-  if ('approvalPolicy' in raw || 'sandboxMode' in raw) return undefined;
-  return (SESSION_PERMISSION_MODES as readonly unknown[]).includes(raw.permissionMode)
-    ? (value as ClaudePermissionPreference)
-    : undefined;
-}
-
-export function codexPermissionPreference(
-  value: unknown,
-  codexAgent: SessionPermissionPreference['agent']
-): CodexPermissionPreference | undefined {
-  const raw = permissionPreferenceRecord(value);
-  if (!raw || raw.agent !== codexAgent) return undefined;
-  if ('permissionMode' in raw || 'networkAccess' in raw) return undefined;
-  return (CODEX_APPROVAL_POLICIES as readonly unknown[]).includes(raw.approvalPolicy) &&
-    (CODEX_SANDBOX_MODES as readonly unknown[]).includes(raw.sandboxMode)
-    ? (value as CodexPermissionPreference)
-    : undefined;
-}
-
-/** Both agent names, for the callers that validate a preference of either arm. */
-export interface PermissionPreferenceAgents {
-  claudeCode: SessionPermissionPreference['agent'];
-  codex: SessionPermissionPreference['agent'];
-}
-
-/**
- * Untrusted value → a preference of EITHER arm, or `undefined`.
- *
- * For the boundary that does not yet know which agent it is looking at (the
- * Host's command dispatch, the settings sanitizer). Whether the preference is
- * addressed to the RIGHT agent is a separate question those callers ask after
- * this one — refusing a mismatch is their job, and both of them do it.
- */
-export function readSessionPermissionPreference(
-  value: unknown,
-  agents: PermissionPreferenceAgents
-): SessionPermissionPreference | undefined {
-  return (
-    claudePermissionPreference(value, agents.claudeCode) ??
-    codexPermissionPreference(value, agents.codex)
-  );
-}
-
-/**
- * The two tiers the §8.0-Q3 decision calls dangerous: Claude's SDK bypass and
- * codex's full-access sandbox. Both are selectable (with a warning and a second
- * confirmation); NEITHER may ever be produced by a default, a fallback, a
- * degradation arm or a not-yet-hydrated placeholder (§5.7-C13/C16).
- *
- * One predicate, so the settings layer, the confirmation gate and the
- * never-a-default assertions all read the same table.
- */
-export const DANGEROUS_PERMISSION_MODE: SessionPermissionMode = 'bypassPermissions';
-export const DANGEROUS_CODEX_SANDBOX_MODE: CodexSandboxMode = 'danger-full-access';
-
-export function isDangerousPermissionPreference(
-  value: SessionPermissionPreference | undefined
-): boolean {
-  if (!value) return false;
-  // Narrowed by KEY, like the arm extractors above: the exported agent
-  // constants are typed as the wide `AgentWireName` and do not narrow a
-  // discriminated union.
-  return 'permissionMode' in value
-    ? value.permissionMode === DANGEROUS_PERMISSION_MODE
-    : value.sandboxMode === DANGEROUS_CODEX_SANDBOX_MODE;
-}
-
-/**
- * D48 S4 / R18 — must this mid-session change be refused for want of a second
- * confirmation?
- *
- * ONE predicate for TWO walls. Main refuses first (so a dangerous posture is
- * unreachable from a renderer path that skipped the dialog) and the Host refuses
- * again (so the runtime is safe to drive from anywhere), and the thing that must
- * not happen is the two walls disagreeing about what counts as confirmation —
- * one of them accepting the string `"true"` off a JSON payload while the other
- * does not is a wall with a door in it.
- *
- * `!== true` rather than a falsiness test, deliberately: `confirmed` arrives as
- * untrusted JSON, and every value that is not the boolean `true` — `"true"`,
- * `1`, `{}` — means the caller did not state what this asks. Expanding privilege
- * is the one decision that gets no benefit of the doubt.
- */
-export function permissionChangeNeedsConfirmation(
-  preference: SessionPermissionPreference | undefined,
-  confirmed: unknown
-): boolean {
-  return isDangerousPermissionPreference(preference) && confirmed !== true;
-}
-
 export interface SessionCreatedEvent extends RuntimeEventBase {
   type: 'session.created' | 'session.resumed';
   sessionId: string;
   payload?: {
     runtimeIdentity?: string;
-    permissionMode?: SessionPermissionMode;
     /**
-     * S2 (b): which runtime this session is bound to, echoed by the runtime
-     * that hard-codes its own identity. Absent = an old Host, hence Claude
-     * Code. The reducer keeps the session's existing binding when absent.
+     * Pi runtime binding echoed by the worker. Persisted consumers reject
+     * absent or unknown bindings rather than guessing.
      */
     agent?: AgentWireName;
-    /**
-     * S2 (c): the posture the Host really handed the agent — the same constant
-     * that fed `thread/start`, so the surface can never report a policy that
-     * was not actually sent. Absent = fall back to the `permissionMode` row.
-     */
-    permissionPolicy?: SessionPermissionPolicy;
   };
 }
 
@@ -829,91 +550,6 @@ export interface SessionUpdatedEvent extends RuntimeEventBase {
   type: 'session.updated';
   sessionId: string;
   payload: { runtimeIdentity: string };
-}
-
-/**
- * D48 S4 — when a posture the caller ASKED for starts to apply.
- *
- * The two axes are not the same axis and the copy must not pretend they are
- * (§6.3): codex's `thread/settings/update` is zero-turn and takes effect on the
- * thread that is already open, while Claude's `permissionMode` is a `query()`
- * option and every send opens a new `query()` — so the change lands on the NEXT
- * turn and nothing about the in-flight one moves [实测 06-probes P1/P2/P3].
- * The Host says which rather than letting the renderer infer it from the agent
- * name, because the renderer would then own a protocol fact it cannot verify.
- */
-export type PermissionUpdateEffective = 'immediately' | 'next_turn';
-
-/**
- * D48 S4 §6 — the ACK half of a mid-session posture change: this Host accepted
- * this preference for this session.
- *
- * Deliberately a REQUEST echo (`SessionPermissionPreference`) and not a fact
- * (`SessionPermissionPolicy`), which is the same split S3 drew and the same
- * reason: on the Codex axis "the update call returned" is not "the thread runs
- * under it" — the response body is empty [实测 06-probes P3: `null`/`{}`], and
- * the only echo of what the thread ACTUALLY runs is the
- * `thread/settings/updated` notification, which arrives on its own as a
- * `session.settingsEcho` below. Anything that renders a posture as a fact must
- * read that one; this event is what a control converges on and what a failed
- * update never produces (D7/D9/D10).
- *
- * Correlated by `requestId`, because Main waits for exactly this event (or a
- * correlated `host.error`) to decide whether the session snapshot may be
- * rewritten. A change that was refused must leave the snapshot byte-identical.
- */
-export interface SessionPermissionUpdatedEvent extends RuntimeEventBase {
-  type: 'session.permissionUpdated';
-  sessionId: string;
-  payload: {
-    /** The accepted request, re-stated by the runtime that accepted it. */
-    preference: SessionPermissionPreference;
-    effective: PermissionUpdateEffective;
-  };
-}
-
-/**
- * D48 S4 §6.2-6 — the posture a runtime says a session is running under, stated
- * outside the create/resume handshake.
- *
- * ## Both axes produce it, for the same reason and from different frames
- *
- * A mid-session tier change has to become visible without the session being
- * created or resumed again, and neither runtime restates its posture on its own:
- *
- *  - **Codex** broadcasts `thread/settings/updated`, a FULL snapshot of the
- *    thread [实测 06-probes P3], and this is one mapping of it. It is also the
- *    only echo there is — `turn/start`'s response, `turn/started`,
- *    `turn/completed` and `thread/read` all carry no settings at all
- *    [实测 06-probes §0.4].
- *  - **Claude** has no protocol frame to carry one, so the Host emits this at
- *    the moment it hands `permissionMode` to `query()` — the one instant on that
- *    axis at which the tier stops being a request and becomes what the SDK is
- *    running. Its `session.created` / `session.resumed` payloads carry the same
- *    value, but they fire ONCE per Host session (`sendPreamble` sends directly
- *    on an already-bound session), so within one app run they cannot report a
- *    change that happened after the session was opened.
- *
- * Neither arm is synthesized: each one restates something the runtime has
- * already been given or has already reported, never something a caller asked for.
- * The ACK for a request is `session.permissionUpdated` above; this is the fact.
- *
- * The field is optional and only present when there was something to say: this
- * event says what the runtime said, and a key it did not carry is silence rather
- * than a value.
- *
- * 遗留 §8.2-L12 (the thread's current MODEL, which after a sticky override is no
- * longer the one `thread/start` was given) is NOT carried here yet: it has no
- * reader in the renderer, and shipping a payload field ahead of its consumer is
- * the producer-side half of the empty-shell shape. It lands with the reader.
- */
-export interface SessionSettingsEchoEvent extends RuntimeEventBase {
-  type: 'session.settingsEcho';
-  sessionId: string;
-  payload: {
-    /** The posture the session reports it is running under, right now. */
-    permissionPolicy?: SessionPermissionPolicy;
-  };
 }
 
 /**
@@ -929,9 +565,8 @@ export interface SessionHistoryEvent extends RuntimeEventBase {
     runtimeIdentity: string;
     workspacePath: string;
     /**
-     * S2 (d): which reader produced these messages. Absent = Claude Code, the
-     * only reader that existed before. Pairs with `runtimeIdentity`, which is
-     * opaque and only interpretable together with the agent that issued it.
+     * Pi history-reader binding. Pairs with `runtimeIdentity`, which remains
+     * opaque outside the worker runtime.
      */
     agent?: AgentWireName;
     /** Initial/refresh replaces the hydrated prefix; older prepends one page. */
@@ -1496,8 +1131,6 @@ export type RuntimeEvent =
   | SessionStderrEvent
   | SessionCreatedEvent
   | SessionUpdatedEvent
-  | SessionPermissionUpdatedEvent
-  | SessionSettingsEchoEvent
   | SessionHistoryEvent
   | MessageStartedEvent
   | MessageDeltaEvent

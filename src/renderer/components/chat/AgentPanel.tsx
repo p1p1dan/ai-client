@@ -27,7 +27,6 @@ import { AgentSessionTabs } from './AgentSessionTabs';
 import { AgentTerminal } from './AgentTerminal';
 import { EnhancedInputContainer } from './EnhancedInputContainer';
 import { QuickTerminalModal } from './QuickTerminalModal';
-import { StatusLine } from './StatusLine';
 import type { TerminalSession as Session } from './terminalSession';
 import type { AgentGroupState, AgentGroup as AgentGroupType } from './types';
 import { createInitialGroupState } from './types';
@@ -55,7 +54,7 @@ const NewSessionButton = memo(function NewSessionButton({
 });
 
 /**
- * Measures the combined height of the bottom bar (EnhancedInput + StatusLine)
+ * Measures the height of the enhanced-input bottom bar
  * and reports it so the terminal container can leave enough space.
  */
 const GroupBottomBar = memo(function GroupBottomBar({
@@ -104,7 +103,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     xtermKeybindings,
     autoCreateSessionOnActivate,
     autoCreateSessionOnTempActivate,
-    claudeCodeIntegration,
+    terminalInput,
     terminalTheme,
   } = useSettingsStore();
   // 添加 ?? true 回退，兼容老用户可能没有 enabled 字段的情况
@@ -146,7 +145,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     if (bgImageEnabled) return 'transparent';
     return getXtermTheme(terminalTheme)?.background ?? defaultDarkTheme.background;
   }, [terminalTheme, bgImageEnabled]);
-  const statusLineEnabled = claudeCodeIntegration.statusLineEnabled;
   const { setAgentCount, registerAgentCloseHandler } = useWorktreeActivityStore();
 
   const [hasRunningProcess, setHasRunningProcess] = useState(false);
@@ -175,18 +173,12 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   // Global session IDs to keep terminals mounted across group moves
   const [globalSessionIds, setGlobalSessionIds] = useState<Set<string>>(new Set());
 
-  // Track StatusLine height per group to avoid cross-column races.
-  // When split panels render multiple StatusLines, a newly mounted/empty column can report 0,
-  // which would incorrectly collapse the global height and cause EnhancedInput to cover StatusLine.
-  const [statusLineHeightsByGroupId, setStatusLineHeightsByGroupId] = useState<
+  // Track bottom-bar height per group to avoid cross-column races.
+  // When split panels render multiple bars, a newly mounted/empty column can report 0
+  // and must not collapse the global terminal offset.
+  const [bottomBarHeightsByGroupId, setBottomBarHeightsByGroupId] = useState<
     Record<string, number>
   >({});
-
-  useEffect(() => {
-    if (!statusLineEnabled) {
-      setStatusLineHeightsByGroupId({});
-    }
-  }, [statusLineEnabled]);
 
   // Use zustand store for sessions and group states - state persists even when component unmounts
   const allSessions = useAgentSessionsStore((state) => state.sessions);
@@ -980,13 +972,13 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isActive, handleToggleQuickTerminal]);
 
-  const maxStatusLineHeight = useMemo(() => {
+  const maxBottomBarHeight = useMemo(() => {
     let max = 0;
-    for (const h of Object.values(statusLineHeightsByGroupId)) {
+    for (const h of Object.values(bottomBarHeightsByGroupId)) {
       if (h > max) max = h;
     }
     return max;
-  }, [statusLineHeightsByGroupId]);
+  }, [bottomBarHeightsByGroupId]);
 
   if (!cwd) return null;
 
@@ -1072,10 +1064,10 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       {/* All terminals - rendered in a SINGLE container with stable sessionId keys */}
       {/* This container is NOT inside any worktree-specific wrapper, ensuring stable mounting */}
       {/* All sessions across ALL repos are rendered here to keep them mounted */}
-      {/* bottom is dynamically set based on StatusLine height */}
+      {/* bottom is dynamically set from the enhanced-input bar height */}
       <div
         className="absolute top-11 left-2 right-2 z-0"
-        style={{ bottom: maxStatusLineHeight + 8 }}
+        style={{ bottom: maxBottomBarHeight + 8 }}
       >
         {Array.from(globalSessionIds).map((sessionId) => {
           const session = allSessions.find((s) => s.id === sessionId);
@@ -1207,10 +1199,10 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                 sessions={currentWorktreeSessions}
                 onGroupClick={() => handleGroupClick(group.id)}
               />
-              {/* Bottom bar: Enhanced Input + Status Line, height measured for terminal offset */}
-              <GroupBottomBar groupId={group.id} onHeightChange={setStatusLineHeightsByGroupId}>
+              {/* Enhanced-input bar; height is measured for terminal offset */}
+              <GroupBottomBar groupId={group.id} onHeightChange={setBottomBarHeightsByGroupId}>
                 {isActiveGroup &&
-                  claudeCodeIntegration.enhancedInputEnabled &&
+                  terminalInput.enhancedInputEnabled &&
                   group.activeSessionId != null && (
                     <EnhancedInputContainer
                       sessionId={group.activeSessionId}
@@ -1220,7 +1212,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                       isActive={isActive}
                     />
                   )}
-                {statusLineEnabled && <StatusLine sessionId={group.activeSessionId} />}
               </GroupBottomBar>
             </div>
           );

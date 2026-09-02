@@ -501,7 +501,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
   // Listen for external file changes and update open tabs
   useEffect(() => {
     // Debounce timers keyed by file path to prevent concurrent reloads of the same file.
-    // Needed because Claude CLI atomic writes (tmp + rename) can fire multiple rapid events.
+    // Atomic writes (tmp + rename) can fire multiple rapid events.
     const reloadTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     const scheduleReload = (tab: EditorTab) => {
@@ -554,7 +554,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
 
     const unsubscribe = window.electronAPI.file.onChange(async (event) => {
       // Skip delete events; handle both 'update' and 'create'.
-      // Claude CLI uses atomic writes (write to .tmp + rename), which @parcel/watcher
+      // Agent tools may use atomic writes (write to .tmp + rename), which @parcel/watcher
       // reports as 'create' for the destination file rather than 'update'.
       if (event.type === 'delete') return;
 

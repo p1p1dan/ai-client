@@ -548,7 +548,7 @@ export function useXterm({
 
       if (event.type === 'keydown' && modKey && !event.altKey) {
         // Paste: DO NOT intercept - let browser/agent handle it naturally
-        // This allows Claude Code and other agents to receive image paste events
+        // This allows Pi TUI to receive image paste events
         if (event.key === 'v' || event.key === 'V') {
           return false; // Let event bubble up
         }

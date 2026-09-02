@@ -91,7 +91,6 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   'components/chat/HitListPopover.tsx',
   'components/chat/HostStatusBanner.tsx',
   'components/chat/MessageTimeline.tsx',
-  'components/chat/StatusLine.tsx',
   'components/chat/TargetBranchSelect.tsx',
   'components/chat/ToolRows.tsx',
   'components/chat/toolCard.ts',

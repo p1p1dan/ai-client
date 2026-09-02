@@ -11,9 +11,9 @@ const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
  *
  * ## Why it moved, and why it is a notice rather than a gate
  *
- * Git used to be checked inside onboarding's `cli-check` step, next to probes
- * for `claude` and `codex`. Those two were retired because both ship inside
- * this app, so asking the machine about them decided nothing. Git is the
+ * Git used to be checked inside onboarding's removed multi-CLI prerequisite
+ * step. Pi ships inside this app, so probing external agent CLIs decides
+ * nothing. Git is the
  * opposite case: this product is a worktree manager, so git is a REAL
  * dependency and the check has to survive — it just cannot live in a step that
  * is itself being deleted (A2 replaces the four-step onboarding with a
