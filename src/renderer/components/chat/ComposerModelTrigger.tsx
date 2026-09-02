@@ -4,7 +4,6 @@ import {
   agentDefaultModel,
   withAgentPreference,
 } from '@shared/models/chatAgentDefaults';
-import type { AgentWireName } from '@shared/types/agentWire';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -89,12 +88,6 @@ import { useSessionModel } from './useSessionModel';
 
 interface ComposerModelTriggerProps {
   sessionId: string;
-  /**
-   * The runtime this session runs on — `sessionAgent(session)`, the SAME value
-   * the agent picker shows. Single source of truth: a trigger resolving its own
-   * agent could offer a catalog for a runtime the session is not bound to.
-   */
-  agent: AgentWireName;
   /** Host-reported default model id from `host.ready.settings.model`, if seen. */
   hostDefaultModel?: string | null;
   /** Gates the catalog request — nothing is fetched before the Host is up. */
@@ -218,7 +211,6 @@ function ModelMenuSection({
 
 export function ComposerModelTrigger({
   sessionId,
-  agent,
   hostDefaultModel,
   hostState,
   mode,
@@ -235,19 +227,16 @@ export function ComposerModelTrigger({
 
   const [model, setModel] = useState<string>(() =>
     resolveModelSelection({
-      agent,
-      storedModel: getSessionModel(sessionId, agent),
-      agentDefaultModel: agentDefaultModel(chatAgentDefaults, agent),
+      storedModel: getSessionModel(sessionId),
+      agentDefaultModel: agentDefaultModel(chatAgentDefaults),
       catalog: catalogOptions,
       hostDefaultModel,
     })
   );
   const [effort, setEffort] = useState<string>(
     () =>
-      resolveEffortSelection(
-        getSessionEffort(sessionId, agent),
-        agentDefaultEffort(chatAgentDefaults, agent)
-      ) ?? EFFORT_DEFAULT_ID
+      resolveEffortSelection(getSessionEffort(sessionId), agentDefaultEffort(chatAgentDefaults)) ??
+      EFFORT_DEFAULT_ID
   );
   const [modelQuery, setModelQuery] = useState('');
 
@@ -255,7 +244,7 @@ export function ComposerModelTrigger({
   // is NEVER remounted per session — `ChatWorkspace` renders one `ChatComposer`
   // with no `key` — so without this ref a session switch is indistinguishable
   // from a re-render, and §4.3-6's two triggers collapse into one.
-  const resolvedPairRef = useRef<string>(`${sessionId}\0${agent}`);
+  const resolvedPairRef = useRef<string>(sessionId);
 
   // §4.3-6: the session, the agent, or the catalog moved. A pair change
   // re-resolves from that pair's own storage unconditionally (anything else
@@ -266,42 +255,31 @@ export function ComposerModelTrigger({
   // HAS landed may only overwrite a value nobody chose. Every one of those
   // branches is `reconcileModelSelection`'s, not this effect's.
   useEffect(() => {
-    const pair = `${sessionId}\0${agent}`;
+    const pair = sessionId;
     const pairChanged = resolvedPairRef.current !== pair;
     resolvedPairRef.current = pair;
     setModel((current) =>
       reconcileModelSelection({
         current,
         pairChanged,
-        agent,
-        storedModel: getSessionModel(sessionId, agent),
-        agentDefaultModel: agentDefaultModel(chatAgentDefaults, agent),
+        storedModel: getSessionModel(sessionId),
+        agentDefaultModel: agentDefaultModel(chatAgentDefaults),
         catalog: catalogOptions,
         catalogLoaded: loaded,
         hostDefaultModel,
       })
     );
-  }, [
-    sessionId,
-    agent,
-    catalogOptions,
-    loaded,
-    hostDefaultModel,
-    chatAgentDefaults,
-    getSessionModel,
-  ]);
+  }, [sessionId, catalogOptions, loaded, hostDefaultModel, chatAgentDefaults, getSessionModel]);
 
   // Session or agent switched: re-read this pair's own effort. T25 applies the
   // selected model's capability in the reconciliation effect below once its
   // catalog metadata is known.
   useEffect(() => {
     setEffort(
-      resolveEffortSelection(
-        getSessionEffort(sessionId, agent),
-        agentDefaultEffort(chatAgentDefaults, agent)
-      ) ?? EFFORT_DEFAULT_ID
+      resolveEffortSelection(getSessionEffort(sessionId), agentDefaultEffort(chatAgentDefaults)) ??
+        EFFORT_DEFAULT_ID
     );
-  }, [sessionId, agent, chatAgentDefaults, getSessionEffort]);
+  }, [sessionId, chatAgentDefaults, getSessionEffort]);
 
   const options = modelOptionsFor(catalogOptions);
   const selectedCatalogModel = catalogOptions.find((option) => option.id === model);
@@ -315,10 +293,9 @@ export function ComposerModelTrigger({
     // keeps the next draft from resurrecting the illegal value. The Context
     // mirror and create/send/resume wire read those same two stores.
     setEffort(reconciled);
-    setSessionEffort(sessionId, agent, reconciled);
-    setChatAgentDefaults(withAgentPreference(chatAgentDefaults, agent, { effort: reconciled }));
+    setSessionEffort(sessionId, reconciled);
+    setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { effort: reconciled }));
   }, [
-    agent,
     chatAgentDefaults,
     effort,
     selectedCatalogModel,
@@ -331,7 +308,7 @@ export function ComposerModelTrigger({
   // The label the prepended row carries, and the label the TRIGGER carries, are
   // deliberately the same string: a trigger reading `gpt-5.5` next to a menu row
   // reading `gpt-5.5 · unverified` would read as two different selections.
-  const unknownLabel = isAutomatic || inCatalog ? undefined : unverifiedModelLabel(agent, model);
+  const unknownLabel = isAutomatic || inCatalog ? undefined : unverifiedModelLabel(model);
   const modelLabel = isAutomatic
     ? AUTOMATIC_MODEL_LABEL
     : (options.find((option) => option.id === model)?.label ?? unknownLabel ?? model);
@@ -353,21 +330,21 @@ export function ComposerModelTrigger({
       // template. The effort sentinel is stored, because there `Default` and
       // "never chosen" genuinely differ once a template exists.
       if (itemId === AUTOMATIC_MODEL_ID) {
-        clearSessionModel(sessionId, agent);
+        clearSessionModel(sessionId);
       } else {
-        setSessionModel(sessionId, agent, itemId);
+        setSessionModel(sessionId, itemId);
       }
       const nextModel = catalogOptions.find((option) => option.id === itemId);
       const nextEffort = reconcileEffortForModel(effort, nextModel);
       if (nextEffort !== effort) {
         setEffort(nextEffort);
-        setSessionEffort(sessionId, agent, nextEffort);
+        setSessionEffort(sessionId, nextEffort);
       }
       // §4.3: an explicit pick also becomes this agent's template, so the next
       // new draft on the same agent starts where the user left off. T25 updates
       // model and any forced effort fallback in ONE template write.
       setChatAgentDefaults(
-        withAgentPreference(chatAgentDefaults, agent, {
+        withAgentPreference(chatAgentDefaults, {
           model: itemId === AUTOMATIC_MODEL_ID ? undefined : itemId,
           ...(nextEffort !== effort ? { effort: nextEffort } : {}),
         })
@@ -375,8 +352,8 @@ export function ComposerModelTrigger({
       return;
     }
     setEffort(itemId);
-    setSessionEffort(sessionId, agent, itemId);
-    setChatAgentDefaults(withAgentPreference(chatAgentDefaults, agent, { effort: itemId }));
+    setSessionEffort(sessionId, itemId);
+    setChatAgentDefaults(withAgentPreference(chatAgentDefaults, { effort: itemId }));
   };
 
   // §4.6 防线 ① 连带口径: the two axes do NOT share this sentence. A Codex pick
@@ -384,7 +361,7 @@ export function ComposerModelTrigger({
   // 06-probes P1], so per-turn wording would be a false statement about what
   // the control just did — while on Claude every turn restates its options
   // [实测 06-probes P2] and per-turn is the literal truth.
-  const scopeHint = modelScopeHint(agent);
+  const scopeHint = modelScopeHint();
   // The trigger shows the effort as a bare value ("High") with no category
   // word, so the accessible name has to supply the category that sighted users
   // read off the menu's own group headings.

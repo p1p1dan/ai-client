@@ -1,5 +1,5 @@
-import { sessionAgent } from '@shared/types/agentWire';
-import type { RuntimeEvent } from '@shared/types/runtimeEvents';
+import { PI_AGENT, sessionAgent } from '@shared/types/agentWire';
+import type { SessionCreatedEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { describe, expect, it } from 'vitest';
 import {
@@ -8,7 +8,6 @@ import {
   type ChatSessionsState,
   type ChatWorkspace,
 } from '@/stores/chatSessions';
-import { shouldResumeSession } from '../resumeIntent';
 import { mergeSessionIndex } from '../sessionIndexMerge';
 
 /**
@@ -28,6 +27,7 @@ function entry(sessionId: string, opts: Partial<SessionIndexEntry> = {}): Sessio
     title: sessionId,
     updatedAt: 1000,
     archived: false,
+    agent: PI_AGENT,
     ...opts,
   };
 }
@@ -49,20 +49,17 @@ const workspaces: ChatWorkspace[] = [
 ];
 
 describe('mergeSessionIndex materializes the agent binding', () => {
-  it('reads a row written before the field existed as Claude Code', () => {
-    // Every row on disk today is in this state. The default lives in
-    // `resolveAgentWireName`, not here, and not on the Main side either: the
-    // index map is written back whole on every flush, so defaulting at load
-    // would stamp the field onto legacy rows the first time anything else
-    // changed.
-    const { sessions } = mergeSessionIndex([], [entry('s1')], { workspaces });
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0].agent).toBe('claude-code');
+  it('hides a row written before the field existed', () => {
+    const { sessions, orphaned } = mergeSessionIndex([], [entry('s1', { agent: undefined })], {
+      workspaces,
+    });
+    expect(sessions).toEqual([]);
+    expect(orphaned).toEqual([]);
   });
 
-  it('passes a known slug through untouched', () => {
-    const { sessions } = mergeSessionIndex([], [entry('s1', { agent: 'codex' })], { workspaces });
-    expect(sessions[0].agent).toBe('codex');
+  it('passes the Pi slug through untouched', () => {
+    const { sessions } = mergeSessionIndex([], [entry('s1', { agent: PI_AGENT })], { workspaces });
+    expect(sessions[0].agent).toBe(PI_AGENT);
   });
 
   it('hides a row whose slug this build cannot read, without touching a live row', () => {
@@ -92,9 +89,9 @@ describe('mergeSessionIndex materializes the agent binding', () => {
   it('lets a live binding win over the persisted one', () => {
     // The live value came from this run's `session.created` echo, i.e. from the
     // runtime that is actually running. A stale index row must not downgrade it.
-    const live = [session('s1', { agent: 'codex' })];
+    const live = [session('s1', { agent: PI_AGENT })];
     const { sessions } = mergeSessionIndex(live, [entry('s1')], { workspaces });
-    expect(sessions[0].agent).toBe('codex');
+    expect(sessions[0].agent).toBe(PI_AGENT);
   });
 
   it('materializes on the orphan path too', () => {
@@ -104,7 +101,7 @@ describe('mergeSessionIndex materializes the agent binding', () => {
       workspaces,
     });
     expect(orphaned).toHaveLength(1);
-    expect(orphaned[0].agent).toBe('claude-code');
+    expect(orphaned[0].agent).toBe(PI_AGENT);
   });
 
   it('leaves a live-only row unmaterialized — the documented limit of the invariant', () => {
@@ -122,36 +119,30 @@ describe('mergeSessionIndex materializes the agent binding', () => {
     // Same object, not a copy — the safety net does not rewrite live rows.
     expect(sessions[0]).toBe(live);
     // …and the one reader every consumer is required to use still answers.
-    expect(sessionAgent(sessions[0])).toBe('claude-code');
+    expect(sessionAgent(sessions[0])).toBe(PI_AGENT);
   });
 });
 
 describe('T32 — legacy index bindings never re-enter live execution', () => {
-  it('keeps a Codex row visible for migration while refusing runtime resume', () => {
-    const { sessions } = mergeSessionIndex(
-      [],
-      [entry('s1', { agent: 'codex', runtimeIdentity: 'legacy-thread' })],
-      { workspaces }
-    );
-    expect(sessions[0]).toMatchObject({ agent: 'codex', runtimeIdentity: 'legacy-thread' });
-    expect(shouldResumeSession(sessions[0], workspaces[0])).toEqual({
-      shouldResume: false,
-      reason: 'unsupported-agent:codex',
+  it('rejects an explicit Codex persisted row before it becomes a ChatSession', () => {
+    const legacyEntry = entry('s1', {
+      agent: 'codex',
+      runtimeIdentity: 'legacy-thread',
     });
+    const { sessions, orphaned } = mergeSessionIndex([], [legacyEntry], { workspaces });
+
+    expect(sessions).toEqual([]);
+    expect(orphaned).toEqual([]);
   });
 
-  it('treats a pre-agent-field row as legacy Claude data and refuses runtime resume', () => {
-    const { sessions } = mergeSessionIndex([], [entry('s1', { runtimeIdentity: 'claude-uuid' })], {
-      workspaces,
-    });
-    expect(sessions[0]).toMatchObject({
-      agent: 'claude-code',
-      runtimeIdentity: 'claude-uuid',
-    });
-    expect(shouldResumeSession(sessions[0], workspaces[0])).toEqual({
-      shouldResume: false,
-      reason: 'unsupported-agent:claude-code',
-    });
+  it('rejects a pre-agent-field row instead of treating it as Pi', () => {
+    const { sessions, orphaned } = mergeSessionIndex(
+      [],
+      [entry('s1', { agent: undefined, runtimeIdentity: 'legacy-session' })],
+      { workspaces }
+    );
+    expect(sessions).toEqual([]);
+    expect(orphaned).toEqual([]);
   });
 });
 
@@ -160,30 +151,27 @@ describe('the runtime echo reaches the live row', () => {
     return { sessions, hostBoundSessionIds: [] } as unknown as ChatSessionsState;
   }
 
-  function created(payload: RuntimeEvent['payload']): RuntimeEvent {
+  function created(payload: NonNullable<SessionCreatedEvent['payload']>): SessionCreatedEvent {
     return {
       type: 'session.created',
       seq: 1,
       sessionId: 's1',
       timestamp: 0,
       payload,
-    } as RuntimeEvent;
+    };
   }
 
-  it('takes the agent the runtime reported', () => {
-    const patch = applyRuntimeEvent(state([session('s1')]), created({ agent: 'codex' }));
-    expect(patch.sessions?.[0].agent).toBe('codex');
+  it('takes the Pi agent the runtime reported', () => {
+    const patch = applyRuntimeEvent(state([session('s1')]), created({ agent: PI_AGENT }));
+    expect(patch.sessions?.[0].agent).toBe(PI_AGENT);
   });
 
   it('keeps the existing binding when an older Host sends none', () => {
-    // An old Host omits the key entirely. Substituting a default HERE would be
-    // a second materialization point, and it would also overwrite a row that
-    // already knew better.
     const patch = applyRuntimeEvent(
-      state([session('s1', { agent: 'codex' })]),
+      state([session('s1', { agent: PI_AGENT })]),
       created({ runtimeIdentity: 'rt-1' })
     );
-    expect(patch.sessions?.[0].agent).toBe('codex');
+    expect(patch.sessions?.[0].agent).toBe(PI_AGENT);
     expect(patch.sessions?.[0].runtimeIdentity).toBe('rt-1');
   });
 });

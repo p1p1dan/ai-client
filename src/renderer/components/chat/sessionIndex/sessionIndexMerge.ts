@@ -93,14 +93,14 @@ export function mergeSessionIndex(
       seenIds.add(entry.sessionId);
       continue;
     }
-    // S2 (b): the single materialization point. `null` means the slug was
-    // written by a NEWER build (the user downgraded) and this one cannot say
-    // which runtime it names — so the row is skipped, and deliberately without
-    // `seenIds`: a live session of the same id keeps its own sentence through
-    // the tail loop below instead of being clobbered by an entry we cannot
-    // read. The entry itself stays on disk, so upgrading brings the row back.
+    // A persisted runtime outside this build's Pi-only vocabulary is hidden.
+    // Explicit Claude/Codex rows must not survive through the live-only tail
+    // pass, where they could otherwise be treated as a fresh Pi session.
     const agent = resolveAgentWireName(entry.agent);
     if (!agent) {
+      if (entry.agent === 'claude-code' || entry.agent === 'codex') {
+        seenIds.add(entry.sessionId);
+      }
       continue;
     }
     const existing = byId.get(entry.sessionId);

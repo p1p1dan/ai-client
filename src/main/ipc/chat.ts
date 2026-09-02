@@ -5,7 +5,7 @@
 
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
-import { PI_AGENT } from '@shared/types/agentWire';
+import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
 import type { ExtensionUiResponse, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
@@ -80,6 +80,13 @@ function ensureEventBridge(): void {
   workerManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
 }
 
+async function assertPiCompatibleIndexRow(sessionId: string): Promise<void> {
+  const row = await sessionIndexService.get(sessionId);
+  if (row && resolveAgentWireName(row.agent) !== PI_AGENT) {
+    throw new Error(`pi_session_agent_mismatch: Session ${sessionId} is not indexed as Pi`);
+  }
+}
+
 async function requireIndexedPiSession(
   sessionId: string
 ): Promise<SessionIndexEntry & { runtimeIdentity: string }> {
@@ -87,7 +94,7 @@ async function requireIndexedPiSession(
   if (!row?.runtimeIdentity) {
     throw new Error(`pi_session_not_found: No indexed Pi session file for ${sessionId}`);
   }
-  if (row.agent !== PI_AGENT) {
+  if (resolveAgentWireName(row.agent) !== PI_AGENT) {
     throw new Error(`pi_session_agent_mismatch: Session ${sessionId} is not indexed as Pi`);
   }
   return row as SessionIndexEntry & { runtimeIdentity: string };
@@ -122,6 +129,7 @@ export function registerChatHandlers(): void {
       // (SessionManager.create's own kind==='agent' check is the sibling
       // enforcement point for the PTY-agent path).
       assertAgentSpawnAllowed();
+      await assertPiCompatibleIndexRow(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       await sessionIndexService.recordCreated({
         sessionId: payload.sessionId,
@@ -162,6 +170,7 @@ export function registerChatHandlers(): void {
       }
     ): Promise<boolean> => {
       try {
+        await assertPiCompatibleIndexRow(payload.sessionId);
         await sessionIndexService.recordCreated({ ...payload, agent: PI_AGENT });
         return true;
       } catch (error) {
@@ -190,7 +199,7 @@ export function registerChatHandlers(): void {
           `pi_session_not_found: No indexed Pi session file for ${payload.sessionId}`
         );
       }
-      if (row.agent !== PI_AGENT) {
+      if (resolveAgentWireName(row.agent) !== PI_AGENT) {
         throw new Error(
           `pi_session_agent_mismatch: Session ${payload.sessionId} is not indexed as a Pi session`
         );

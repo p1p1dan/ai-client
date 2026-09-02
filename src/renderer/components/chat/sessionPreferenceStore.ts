@@ -1,4 +1,3 @@
-import type { AgentWireName } from '@shared/types/agentWire';
 import { isEffortSelection } from './efforts';
 
 export const SESSION_MODEL_STORAGE_KEY = 'aiclient:chat:session-models';
@@ -50,32 +49,28 @@ function removeEntry(storageKey: string, sessionId: string): void {
   saveMap(storageKey, map);
 }
 
-export function readSessionModel(sessionId: string, _agent?: AgentWireName): string | null {
+export function readSessionModel(sessionId: string): string | null {
   return readEntry(SESSION_MODEL_STORAGE_KEY, sessionId);
 }
 
-export function writeSessionModel(sessionId: string, _agent: AgentWireName, modelId: string): void {
+export function writeSessionModel(sessionId: string, modelId: string): void {
   if (!modelId.trim()) return;
   writeEntry(SESSION_MODEL_STORAGE_KEY, sessionId, modelId.trim());
 }
 
-export function removeSessionModel(sessionId: string, _agent?: AgentWireName): void {
+export function removeSessionModel(sessionId: string): void {
   removeEntry(SESSION_MODEL_STORAGE_KEY, sessionId);
 }
 
-export function readSessionEffort(sessionId: string, _agent?: AgentWireName): string | null {
+export function readSessionEffort(sessionId: string): string | null {
   return readEntry(SESSION_EFFORT_STORAGE_KEY, sessionId);
 }
 
-export function writeSessionEffort(
-  sessionId: string,
-  _agent: AgentWireName,
-  selection: string
-): void {
+export function writeSessionEffort(sessionId: string, selection: string): void {
   if (!isEffortSelection(selection)) return;
   writeEntry(SESSION_EFFORT_STORAGE_KEY, sessionId, selection);
 }
 
-export function removeSessionEffort(sessionId: string, _agent?: AgentWireName): void {
+export function removeSessionEffort(sessionId: string): void {
   removeEntry(SESSION_EFFORT_STORAGE_KEY, sessionId);
 }

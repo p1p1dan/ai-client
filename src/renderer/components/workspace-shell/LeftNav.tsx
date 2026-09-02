@@ -825,15 +825,6 @@ function SessionRow({
               failed
             </Badge>
           )}
-          {/* S2 (b/C14): agent before branch — which runtime answers is the more
-          load-bearing fact, and the chip budget for this row is two. Same
-          Badge shape as the branch chip so the pair reads as one rank.
-          shrink-0 with no max-w: the label comes from AGENT_DISPLAY_NAMES, a
-          closed two-value vocabulary, so it has a known ceiling and truncating
-          it would only ever produce a worse rendering of a fact that fits. */}
-          <Badge variant="outline" size="sm" className="shrink-0" title={row.agentChip.label}>
-            {row.agentChip.label}
-          </Badge>
           {row.chip && (
             // The branch chip is the row's sole yielder. It is the only trailing
             // item whose text is unbounded user data, and it is the only one that

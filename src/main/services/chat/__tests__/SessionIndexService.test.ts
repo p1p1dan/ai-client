@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PI_AGENT } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -420,11 +421,10 @@ describe('SessionIndexService', () => {
     });
 
     /**
-     * The regression this whole slice hangs on. A brand-new Claude session's
-     * `session.created` carries NO runtimeIdentity — the SDK issues one on the
-     * first turn — so the old `if (!runtimeIdentity) return` threw the event
-     * away wholesale. With `agent` now riding on it, that guard would discard
-     * the only report of which runtime owns the row, silently and forever.
+     * The regression this slice hangs on. A brand-new Pi session's
+     * `session.created` may carry no runtimeIdentity yet, so the old
+     * `if (!runtimeIdentity) return` threw the event away wholesale. With
+     * `agent` riding on it, that guard would discard the runtime binding.
      */
     it('writes and flushes a session.created that has an agent but no runtimeIdentity', async () => {
       const { SessionIndexService } = await import('../SessionIndexService');
@@ -436,12 +436,12 @@ describe('SessionIndexService', () => {
         seq: 1,
         sessionId: 's1',
         timestamp: Date.now(),
-        payload: { agent: 'claude-code' },
+        payload: { agent: PI_AGENT },
       });
 
       await vi.waitFor(() => {
         const persisted = readIndexFile();
-        expect(persisted[0]?.agent).toBe('claude-code');
+        expect(persisted[0]?.agent).toBe(PI_AGENT);
       });
       expect(readIndexFile()[0]?.runtimeIdentity).toBeUndefined();
     });
@@ -508,12 +508,12 @@ describe('SessionIndexService', () => {
         seq: 2,
         sessionId: 's1',
         timestamp: BOUND_AT,
-        payload: { agent: 'claude-code' },
+        payload: { agent: PI_AGENT },
       });
       await drainHandler();
 
       const [afterBound] = await service.list();
-      expect(afterBound.agent).toBe('claude-code');
+      expect(afterBound.agent).toBe(PI_AGENT);
       expect(afterBound.updatedAt).toBe(BOUND_AT);
       // Polled, not drained: this one really does write, and the write is fs
       // I/O rather than a microtask. Waiting for it here also keeps the flush

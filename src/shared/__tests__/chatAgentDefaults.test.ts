@@ -4,7 +4,6 @@ import {
   sanitizeChatAgentDefaults,
   withAgentPreference,
 } from '@shared/models/chatAgentDefaults';
-import { PI_AGENT } from '@shared/types/agentWire';
 import { describe, expect, it } from 'vitest';
 
 describe('Pi-only chat defaults', () => {
@@ -28,11 +27,11 @@ describe('Pi-only chat defaults', () => {
   });
 
   it('updates and clears model/effort without a per-agent map', () => {
-    const first = withAgentPreference({}, PI_AGENT, { model: 'glm/glm-5', effort: 'high' });
+    const first = withAgentPreference({}, { model: 'glm/glm-5', effort: 'high' });
     expect(first).toEqual({ model: 'glm/glm-5', effort: 'high' });
-    const cleared = withAgentPreference(first, PI_AGENT, { model: undefined });
+    const cleared = withAgentPreference(first, { model: undefined });
     expect(cleared).toEqual({ effort: 'high' });
-    expect(agentDefaultModel(cleared, PI_AGENT)).toBeUndefined();
-    expect(agentDefaultEffort(cleared, PI_AGENT)).toBe('high');
+    expect(agentDefaultModel(cleared)).toBeUndefined();
+    expect(agentDefaultEffort(cleared)).toBe('high');
   });
 });

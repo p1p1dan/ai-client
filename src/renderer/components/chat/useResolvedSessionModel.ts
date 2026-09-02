@@ -1,7 +1,5 @@
 import { agentDefaultModel } from '@shared/models/chatAgentDefaults';
-import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
 import { useCallback } from 'react';
-import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useSettingsStore } from '@/stores/settings';
 import { resolveResumeModel } from './models';
 import { readSessionModel } from './sessionPreferenceStore';
@@ -22,19 +20,9 @@ import { readSessionModel } from './sessionPreferenceStore';
  * render, so subscribing here would add re-renders without adding freshness.
  * The pure resolution itself stays in `models.ts`, truth-tabled next door.
  */
-export function useResolvedSessionModel(): (
-  sessionId: string,
-  agentOverride?: AgentWireName
-) => string | undefined {
-  return useCallback((sessionId: string, agentOverride?: AgentWireName) => {
-    const session = useChatSessionsStore.getState().sessions.find((item) => item.id === sessionId);
-    const agent = agentOverride ?? sessionAgent(session ?? {});
+export function useResolvedSessionModel(): (sessionId: string) => string | undefined {
+  return useCallback((sessionId: string) => {
     const defaults = useSettingsStore.getState().chatAgentDefaults;
-    return resolveResumeModel(
-      readSessionModel,
-      sessionId,
-      agent,
-      agentDefaultModel(defaults, agent)
-    );
+    return resolveResumeModel(readSessionModel, sessionId, agentDefaultModel(defaults));
   }, []);
 }

@@ -1,5 +1,4 @@
 import type { AgentModelOption } from '@shared/types/agentCatalog';
-import { PI_AGENT } from '@shared/types/agentWire';
 import { describe, expect, it } from 'vitest';
 import {
   AUTOMATIC_MODEL_ID,
@@ -40,7 +39,7 @@ describe('T25 Pi model grouping', () => {
         { id: AUTOMATIC_MODEL_ID, label: AUTOMATIC_MODEL_LABEL },
         {
           id: 'missing/model',
-          label: unverifiedModelLabel(PI_AGENT, 'missing/model'),
+          label: unverifiedModelLabel('missing/model'),
           verified: false,
         },
       ]).direct.map((item) => item.id)
@@ -50,20 +49,17 @@ describe('T25 Pi model grouping', () => {
 
 describe('Pi model selection', () => {
   it('uses Automatic when nothing is selected and omits it on the wire', () => {
-    expect(resolveModelSelection({ agent: PI_AGENT, storedModel: null, catalog: CATALOG })).toBe(
-      AUTOMATIC_MODEL_ID
-    );
+    expect(resolveModelSelection({ storedModel: null, catalog: CATALOG })).toBe(AUTOMATIC_MODEL_ID);
     expect(toWireModel(AUTOMATIC_MODEL_ID)).toBeUndefined();
     expect(toWireModel(' glm/glm-5 ')).toBe('glm/glm-5');
   });
 
   it('keeps stored Pi ids even when the refreshed catalog omits them', () => {
-    expect(
-      resolveModelSelection({ agent: PI_AGENT, storedModel: 'missing/model', catalog: CATALOG })
-    ).toBe('missing/model');
+    expect(resolveModelSelection({ storedModel: 'missing/model', catalog: CATALOG })).toBe(
+      'missing/model'
+    );
     expect(
       reconcileModelSelection({
-        agent: PI_AGENT,
         storedModel: 'missing/model',
         catalog: CATALOG,
         catalogLoaded: true,
@@ -76,7 +72,6 @@ describe('Pi model selection', () => {
   it('re-resolves when the session changes and keeps current while catalog is loading', () => {
     expect(
       reconcileModelSelection({
-        agent: PI_AGENT,
         storedModel: 'dan/model',
         catalog: CATALOG,
         catalogLoaded: true,
@@ -86,7 +81,6 @@ describe('Pi model selection', () => {
     ).toBe('dan/model');
     expect(
       reconcileModelSelection({
-        agent: PI_AGENT,
         storedModel: null,
         catalog: [],
         catalogLoaded: false,
@@ -97,8 +91,10 @@ describe('Pi model selection', () => {
   });
 
   it('resolves the same stored/default value for send and resume', () => {
-    const get = () => 'glm/glm-5';
-    expect(resolveResumeModel(get, 's1', PI_AGENT)).toBe('glm/glm-5');
-    expect(modelScopeHint(PI_AGENT)).toMatch(/next turn/);
+    const getStored = () => 'glm/glm-5';
+    const getEmpty = () => null;
+    expect(resolveResumeModel(getStored, 's1', 'dan/model')).toBe('glm/glm-5');
+    expect(resolveResumeModel(getEmpty, 's1', 'dan/model')).toBe('dan/model');
+    expect(modelScopeHint()).toMatch(/next turn/);
   });
 });

@@ -13,7 +13,6 @@
  * React/electronAPI so it runs under the repo's node-env vitest.
  */
 
-import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import type {
   CodexApprovalPolicy,
   CodexSandboxMode,
@@ -564,15 +563,17 @@ function isSessionPermissionMode(value: unknown): value is SessionPermissionMode
 function isSessionPermissionPolicy(value: unknown): value is SessionPermissionPolicy {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const raw = value as Record<string, unknown>;
-  if (raw.agent === CLAUDE_CODE_AGENT) {
+  if ('permissionMode' in raw) {
     return (
+      typeof raw.agent === 'string' &&
       isSessionPermissionMode(raw.permissionMode) &&
       !('approvalPolicy' in raw) &&
       !('sandboxMode' in raw)
     );
   }
-  if (raw.agent === CODEX_AGENT) {
+  if ('approvalPolicy' in raw || 'sandboxMode' in raw) {
     return (
+      typeof raw.agent === 'string' &&
       typeof raw.approvalPolicy === 'string' &&
       VALID_CODEX_APPROVALS.has(raw.approvalPolicy) &&
       typeof raw.sandboxMode === 'string' &&

@@ -1,3 +1,4 @@
+import { PI_AGENT } from '@shared/types/agentWire';
 import type {
   RuntimeEvent,
   SessionHistoryEvent,
@@ -524,34 +525,28 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
   });
 
   /**
-   * G3 (S3 slice 5a). The Codex degradation, from the wire event the Host
-   * really emits to what the timeline shows. Driven through the reducer for the
-   * same reason as CTR-01/02: hand-written `historyErrors` literals would stay
-   * green if the encoding drifted, while every real Codex resume degraded to
-   * `unknown` — i.e. an ERROR banner with a Retry button, which is the opposite
-   * of what this code means.
+   * G3 (S3 slice 5a). The unsupported-history degradation, from the wire event
+   * the Host emits to what the timeline shows. Driven through the reducer for
+   * the same reason as CTR-01/02: hand-written `historyErrors` literals would
+   * stay green if the encoding drifted.
    */
-  describe('history_unsupported (S3 slice 5a: the Codex degradation)', () => {
-    // Shortened stand-in for the Host's own wording. The exact bytes are pinned
-    // Host-side (`codexRuntime.test.ts`, CODEX_HISTORY_UNSUPPORTED_MESSAGE);
-    // what this file owns is that the CODE survives the store's encoding.
-    const HOST_MESSAGE = 'This build has no Codex history reader.';
+  describe('history_unsupported degradation', () => {
+    const HOST_MESSAGE = 'This build cannot read this session history.';
 
-    function codexRow(): ChatSession {
+    function piRow(): ChatSession {
       return {
         id: SESSION_ID,
         projectId: 'project-demo',
         workspaceId: 'ws-main',
-        title: 'Codex session',
+        title: 'Pi session',
         status: 'idle',
         updatedAt: 42,
-        agent: 'codex',
-        runtimeIdentity: 'thr-cold-0007',
+        agent: PI_AGENT,
+        runtimeIdentity: '/sessions/cold-0007.jsonl',
       };
     }
 
-    /** Field for field what `CodexRuntime.resumeSession` emits with no reader. */
-    function codexHistoryEvent(): RuntimeEvent {
+    function piHistoryEvent(): RuntimeEvent {
       return {
         type: 'session.history',
         seq: 2,
@@ -559,9 +554,9 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
         requestId: 'req-resume',
         timestamp: 1234,
         payload: {
-          runtimeIdentity: 'thr-cold-0007',
+          runtimeIdentity: '/sessions/cold-0007.jsonl',
           workspacePath: '/work/repo',
-          agent: 'codex',
+          agent: PI_AGENT,
           messages: [],
           truncated: false,
           omittedCount: 0,
@@ -573,11 +568,11 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
     function ingest(): { patch: Partial<ChatSessionsState>; stored: string | undefined } {
       const state = {
         ...baseState(),
-        sessions: [codexRow()],
+        sessions: [piRow()],
         activeSessionId: SESSION_ID,
         hostBoundSessionIds: [SESSION_ID],
       } as ChatSessionsState;
-      const patch = applyRuntimeEvent(state, codexHistoryEvent());
+      const patch = applyRuntimeEvent(state, piHistoryEvent());
       return { patch, stored: selectHistoryError(patch.historyErrors ?? {}, SESSION_ID) };
     }
 
@@ -627,6 +622,7 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
       // are absent, i.e. unchanged: a history error must not un-bind the
       // session, which is what would actually disable the composer.
       expect(Object.keys(patch).sort()).toEqual([
+        'historyBranchRevisions',
         'historyErrors',
         'historyPagination',
         'messages',

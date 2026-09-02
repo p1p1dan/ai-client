@@ -700,13 +700,13 @@ function permissionPreferenceRecord(value: unknown): Record<string, unknown> | u
  * would let the caller believe something was configured that nothing configured
  * (§5.5 last bullet).
  *
- * The `as` casts are the honest spelling: `agent` is compared against a value
- * typed as the WIDE `AgentWireName`, which cannot narrow a discriminated union,
- * so the narrowing is stated rather than inferred.
+ * The `as` casts are the honest spelling: the agent name is supplied by the
+ * caller from the deferred DTO vocabulary, so the discriminated union narrowing
+ * is stated rather than inferred.
  */
 export function claudePermissionPreference(
   value: unknown,
-  claudeAgent: AgentWireName
+  claudeAgent: SessionPermissionPreference['agent']
 ): ClaudePermissionPreference | undefined {
   const raw = permissionPreferenceRecord(value);
   if (!raw || raw.agent !== claudeAgent) return undefined;
@@ -718,7 +718,7 @@ export function claudePermissionPreference(
 
 export function codexPermissionPreference(
   value: unknown,
-  codexAgent: AgentWireName
+  codexAgent: SessionPermissionPreference['agent']
 ): CodexPermissionPreference | undefined {
   const raw = permissionPreferenceRecord(value);
   if (!raw || raw.agent !== codexAgent) return undefined;
@@ -731,8 +731,8 @@ export function codexPermissionPreference(
 
 /** Both agent names, for the callers that validate a preference of either arm. */
 export interface PermissionPreferenceAgents {
-  claudeCode: AgentWireName;
-  codex: AgentWireName;
+  claudeCode: SessionPermissionPreference['agent'];
+  codex: SessionPermissionPreference['agent'];
 }
 
 /**

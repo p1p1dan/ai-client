@@ -1,5 +1,3 @@
-import type { AgentWireName } from '../types/agentWire';
-
 /** Pi-only defaults for new chat sessions. */
 export interface ChatAgentPreference {
   model?: string;
@@ -42,24 +40,17 @@ export function sanitizeChatAgentDefaults(value: unknown): ChatAgentDefaults {
   };
 }
 
-export function agentDefaultModel(
-  defaults: ChatAgentDefaults | undefined,
-  _agent?: AgentWireName
-): string | undefined {
+export function agentDefaultModel(defaults: ChatAgentDefaults | undefined): string | undefined {
   return defaults?.model;
 }
 
-export function agentDefaultEffort(
-  defaults: ChatAgentDefaults | undefined,
-  _agent?: AgentWireName
-): string | undefined {
+export function agentDefaultEffort(defaults: ChatAgentDefaults | undefined): string | undefined {
   return defaults?.effort;
 }
 
 /** Immutable Pi-default update; undefined clears a field. */
 export function withAgentPreference(
   defaults: ChatAgentDefaults | undefined,
-  _agent: AgentWireName,
   patch: ChatAgentPreference
 ): ChatAgentDefaults {
   const next: ChatAgentDefaults = { ...(defaults ?? {}) };

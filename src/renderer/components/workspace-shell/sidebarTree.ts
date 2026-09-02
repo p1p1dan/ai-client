@@ -11,7 +11,6 @@
  * `addRepositoryEntry.ts` / `hostStatus.ts`.
  */
 
-import { AGENT_DISPLAY_NAMES, sessionAgent } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isUsableWorkspace } from './addRepositoryEntry';
@@ -24,9 +23,9 @@ export const RECENT_DEFAULT_LIMIT = 7;
 export interface SidebarChip {
   /**
    * 'branch' renders the actual git branch; 'kind' renders the workspace kind
-   * (temp/remote); 'agent' renders which runtime the session is bound to.
+   * (temp/remote).
    */
-  variant: 'branch' | 'kind' | 'agent';
+  variant: 'branch' | 'kind';
   label: string;
 }
 
@@ -36,13 +35,6 @@ export interface SidebarSessionRow {
   title: string;
   /** null when the branch is unknown (detached HEAD / list still loading) — never guess. */
   chip: SidebarChip | null;
-  /**
-   * S2 (b/C14): which agent runs this session. NOT nullable — every session
-   * resolves to a binding, and Claude rows carry the chip too. Hiding it for
-   * Claude would encode "no chip means Claude", which stops being true the
-   * moment a third agent lands and is unreadable even before that.
-   */
-  agentChip: SidebarChip;
   updatedAt: number;
   /** Drives the 6px `--status-running` dot (A07 `.sb-row .live`). */
   busy: boolean;
@@ -96,16 +88,6 @@ export function chipForWorkspace(workspace: ChatWorkspace | undefined): SidebarC
   return workspace.branch ? { variant: 'branch', label: workspace.branch } : null;
 }
 
-/**
- * Agent chip for a session row (S2 b, C14). Always returns one — the row is
- * bound to exactly one runtime and says so. The label is the product name, not
- * the wire value: `AGENT_DISPLAY_NAMES` exists so the persisted slug can never
- * leak into the UI and become something users learn to read.
- */
-export function agentChipForSession(session: ChatSession): SidebarChip {
-  return { variant: 'agent', label: AGENT_DISPLAY_NAMES[sessionAgent(session)] };
-}
-
 function normalizeQuery(query: string | undefined): string {
   return query?.trim().toLowerCase() ?? '';
 }
@@ -120,7 +102,6 @@ function toRow(session: ChatSession, workspace: ChatWorkspace | undefined): Side
     workspaceId: session.workspaceId,
     title: session.title,
     chip: chipForWorkspace(workspace),
-    agentChip: agentChipForSession(session),
     updatedAt: session.updatedAt,
     busy: isBusySessionStatus(session.status),
     failed: session.status === 'failed',

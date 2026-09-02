@@ -1,4 +1,3 @@
-import { CLAUDE_CODE_AGENT, CODEX_AGENT } from '@shared/types/agentWire';
 import {
   CODEX_APPROVAL_POLICIES,
   CODEX_SANDBOX_MODES,
@@ -13,6 +12,9 @@ import {
   type SessionPermissionPreference,
 } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
+
+const CLAUDE_CODE_AGENT = 'claude-code' as const;
+const CODEX_AGENT = 'codex' as const;
 
 /**
  * D48 S3 §5.4 — the REQUEST half of the permission pair, at the protocol

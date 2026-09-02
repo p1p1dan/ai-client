@@ -1,3 +1,4 @@
+import { PI_AGENT } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
@@ -49,6 +50,7 @@ function entry(sessionId: string): SessionIndexEntry {
     title: sessionId,
     updatedAt: 2000,
     archived: false,
+    agent: PI_AGENT,
   };
 }
 
@@ -158,35 +160,25 @@ describe('archiveSessionIndexEntry — unindexed session (D2 gap A)', () => {
     expect(api.registerSession).toHaveBeenCalledWith({
       sessionId: 'fresh',
       workspacePath: '/repo',
-      // S2 (b): the binding rides along. This row never started a Host, so
-      // this call is the index's only chance to learn it.
-      agent: 'claude-code',
     });
+    expect(Object.keys(api.registerSession.mock.calls[0][0])).not.toContain('agent');
     expect(api.archiveSession).toHaveBeenCalledTimes(2);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  /**
-   * S2 (b) regression. The self-heal register is the ONE index write that can
-   * happen before any Host event exists to report the agent. When it omitted
-   * the binding, archiving a never-sent Codex session wrote a row with no
-   * `agent`, and the next `mergeSessionIndex` materialized that absence as
-   * Claude Code — turning a for-life binding into a silent rewrite that no
-   * later event could undo.
-   */
-  it('carries a NON-default binding through the self-heal register (a never-sent Codex session)', async () => {
+  it('omits the redundant live Pi binding from the self-heal register', async () => {
     const api = stubChatApi({
       archiveSession: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true),
     });
-    seedStore([session('fresh-codex', { agent: 'codex' })]);
+    seedStore([session('fresh-pi', { agent: PI_AGENT })]);
 
-    await expect(archiveSessionIndexEntry('fresh-codex', true, refresh)).resolves.toBe(true);
+    await expect(archiveSessionIndexEntry('fresh-pi', true, refresh)).resolves.toBe(true);
 
     expect(api.registerSession).toHaveBeenCalledWith({
-      sessionId: 'fresh-codex',
+      sessionId: 'fresh-pi',
       workspacePath: '/repo',
-      agent: 'codex',
     });
+    expect(Object.keys(api.registerSession.mock.calls[0][0])).not.toContain('agent');
   });
 
   it('falls back to a renderer-only removal when the retry also fails', async () => {
@@ -468,16 +460,16 @@ describe('applySessionIndexRefresh — the refresh body, now reachable (A6)', ()
 });
 
 describe('registerSessionIndexEntry', () => {
-  it('forwards sessionId + workspacePath + the live binding, and returns the Main-side result', async () => {
+  it('forwards sessionId + workspacePath and lets Main stamp the Pi binding', async () => {
     const api = stubChatApi({ registerSession: vi.fn().mockResolvedValue(true) });
-    seedStore([session('s1', { agent: 'codex' })]);
+    seedStore([session('s1', { agent: PI_AGENT })]);
 
     await expect(registerSessionIndexEntry('s1', '/repo')).resolves.toBe(true);
     expect(api.registerSession).toHaveBeenCalledWith({
       sessionId: 's1',
       workspacePath: '/repo',
-      agent: 'codex',
     });
+    expect(Object.keys(api.registerSession.mock.calls[0][0])).not.toContain('agent');
   });
 
   it('omits `agent` entirely (never sends undefined) when the row is gone from the store', async () => {

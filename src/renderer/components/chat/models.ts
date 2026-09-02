@@ -43,7 +43,6 @@
  */
 
 import type { AgentModelOption } from '@shared/types/agentCatalog';
-import type { AgentWireName } from '@shared/types/agentWire';
 
 export interface ChatModel {
   id: string;
@@ -71,13 +70,13 @@ export const AUTOMATIC_MODEL_ID = 'automatic';
 
 export const AUTOMATIC_MODEL_LABEL = 'Automatic';
 
-export function unverifiedModelLabel(_agent: AgentWireName, modelId: string): string {
+export function unverifiedModelLabel(modelId: string): string {
   return `${modelId} · unverified`;
 }
 
 export const PI_MODEL_SCOPE_HINT = 'applies to the next turn';
 
-export function modelScopeHint(_agent?: AgentWireName): string {
+export function modelScopeHint(): string {
   return PI_MODEL_SCOPE_HINT;
 }
 
@@ -163,7 +162,7 @@ function catalogHas(catalog: readonly AgentModelOption[], modelId: string): bool
  * as in Main because a `sonnet` reaching a Codex draft should be corrected where
  * the user can see it, not surfaced as an IPC rejection at send time.
  */
-function usableFor(_agent: AgentWireName, candidate: string | null | undefined): string | null {
+function usableFor(candidate: string | null | undefined): string | null {
   if (typeof candidate !== 'string') return null;
   const trimmed = candidate.trim();
   if (trimmed.length === 0 || trimmed === AUTOMATIC_MODEL_ID) return null;
@@ -171,10 +170,9 @@ function usableFor(_agent: AgentWireName, candidate: string | null | undefined):
 }
 
 export interface ModelSelectionInput {
-  agent: AgentWireName;
-  /** This (session, agent) pair's own stored choice — the highest priority (§4.3). */
+  /** This session's own stored choice — the highest priority. */
   storedModel: string | null | undefined;
-  /** `ChatAgentDefaults.byAgent[agent].model` — "what a new draft on this agent restores". */
+  /** Pi's default template for new sessions. */
   agentDefaultModel?: string | null;
   /** Already family-filtered by Main. Empty is legal and means "no catalog". */
   catalog: readonly AgentModelOption[];
@@ -198,13 +196,13 @@ export interface ModelSelectionInput {
  * throws away the one fact available.
  */
 export function resolveModelSelection(input: ModelSelectionInput): string {
-  const { agent, catalog } = input;
-  const stored = usableFor(agent, input.storedModel);
+  const { catalog } = input;
+  const stored = usableFor(input.storedModel);
   if (stored) return stored;
-  const agentDefault = usableFor(agent, input.agentDefaultModel);
+  const agentDefault = usableFor(input.agentDefaultModel);
   if (agentDefault) return agentDefault;
   if (catalog.length === 0) {
-    const hostDefault = usableFor(agent, input.hostDefaultModel);
+    const hostDefault = usableFor(input.hostDefaultModel);
     if (hostDefault) return hostDefault;
   }
   return AUTOMATIC_MODEL_ID;
@@ -265,15 +263,15 @@ export interface ModelReconcileInput extends ModelSelectionInput {
  * silent swap: nobody chose it, this build inferred it.
  */
 export function reconcileModelSelection(input: ModelReconcileInput): string {
-  const { agent, catalog, catalogLoaded, current, pairChanged } = input;
+  const { catalog, catalogLoaded, current, pairChanged } = input;
   if (pairChanged) return resolveModelSelection(input);
-  if (current !== AUTOMATIC_MODEL_ID && usableFor(agent, current) === null) {
+  if (current !== AUTOMATIC_MODEL_ID && usableFor(current) === null) {
     return resolveModelSelection(input);
   }
   if (!catalogLoaded) return current;
   if (current === AUTOMATIC_MODEL_ID) return current;
   if (catalogHas(catalog, current)) return current;
-  const stored = usableFor(agent, input.storedModel);
+  const stored = usableFor(input.storedModel);
   if (stored && stored === current) return current;
   return resolveModelSelection(input);
 }
@@ -294,14 +292,12 @@ export function reconcileModelSelection(input: ModelReconcileInput): string {
  * be resolving against the wrong storage bucket.
  */
 export function resolveResumeModel(
-  getSessionModel: (sessionId: string, agent: AgentWireName) => string | null,
+  getSessionModel: (sessionId: string) => string | null,
   sessionId: string,
-  agent: AgentWireName,
   agentDefaultModel?: string | null
 ): string | undefined {
   const selection = resolveModelSelection({
-    agent,
-    storedModel: getSessionModel(sessionId, agent),
+    storedModel: getSessionModel(sessionId),
     agentDefaultModel,
     // Resume/send call sites hold no catalog — and must not need one. The
     // catalog only ever decides LABELS and the Host-default rung, both of which

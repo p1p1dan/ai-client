@@ -1,5 +1,4 @@
 import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
-import { PI_AGENT } from '@shared/types/agentWire';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { FileSearchResult } from '@shared/types/search';
 import {
@@ -527,7 +526,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const canSend = Boolean(activeSessionId && cwd && !disabled && !canStop);
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
-  const composerAgent = PI_AGENT;
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
   // R11 (round-2 iteration-2 review): the same Host-reported default the
   // resume paths (LeftNav/MessageTimeline) already resolve through — so the
@@ -1004,7 +1002,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return 'skipped';
     }
     if (inFlightRef.current) return 'skipped';
-    const turnAgent = PI_AGENT;
     inFlightRef.current = true;
     inFlightSessionIdRef.current = activeSessionId;
     // F6: this attempt's cancellation token — handleStop bumps the shared
@@ -1023,16 +1020,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const model = resolveResumeModel(
       getSessionModel,
       sessionId,
-      turnAgent,
-      agentDefaultModel(chatAgentDefaults, turnAgent)
+      agentDefaultModel(chatAgentDefaults)
     );
     // T-20: undefined when the user left it on "Default", so the key is dropped
     // from the payload entirely and the model default applies (≠ pinning high).
     const effort = toWireEffort(
-      resolveEffortSelection(
-        getSessionEffort(sessionId, turnAgent),
-        agentDefaultEffort(chatAgentDefaults, turnAgent)
-      )
+      resolveEffortSelection(getSessionEffort(sessionId), agentDefaultEffort(chatAgentDefaults))
     );
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
@@ -2557,7 +2550,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const modelEffortControls = activeSessionId ? (
     <ComposerModelTrigger
       sessionId={activeSessionId}
-      agent={composerAgent}
       hostState={hostStatus.state}
       mode={mode}
       disabled={disabled || busy || sending}

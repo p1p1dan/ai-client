@@ -6,7 +6,7 @@
  * "chat must not import workspace-shell" boundary.
  */
 
-import { PI_AGENT } from '@shared/types/agentWire';
+import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { pathsEqual } from '@/App/storage';
 import {
@@ -74,7 +74,7 @@ export function materializeIndexedPiChatSession(
     hostBound?: boolean;
   }
 ): boolean {
-  if (!entry.runtimeIdentity || entry.agent !== PI_AGENT) return false;
+  if (!entry.runtimeIdentity || resolveAgentWireName(entry.agent) !== PI_AGENT) return false;
   let state = useChatSessionsStore.getState();
   let workspace = state.workspaces.find((item) => pathsEqual(item.path, entry.workspacePath));
   if (!workspace && options?.createWorkspaceIfMissing) {

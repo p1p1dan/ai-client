@@ -7,7 +7,6 @@
  * only renders, never decides.
  */
 import { agentDefaultEffort } from '@shared/models/chatAgentDefaults';
-import { sessionAgent } from '@shared/types/agentWire';
 import { Copy } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { resolveEffortSelection } from '@/components/chat/efforts';
@@ -163,8 +162,8 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
   const effortSelection =
     activeSessionId && session
       ? resolveEffortSelection(
-          getSessionEffort(activeSessionId, sessionAgent(session)),
-          agentDefaultEffort(chatAgentDefaults, sessionAgent(session))
+          getSessionEffort(activeSessionId),
+          agentDefaultEffort(chatAgentDefaults)
         )
       : undefined;
 

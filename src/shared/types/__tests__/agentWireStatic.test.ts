@@ -646,21 +646,12 @@ describe('the default agent literal has exactly one home', () => {
     TREE_SCAN_TIMEOUT_MS
   );
 
-  it(
-    'no `claude-code` outside agentWire.ts and the AIProvider axis',
-    () => {
-      const offenders = listSources().flatMap((file) => scanLegacyLiterals(file, read(file)));
+  it('the live agent wire module defines no explicit legacy slugs', () => {
+    const source = stripComments(read(AGENT_WIRE_MODULE), AGENT_WIRE_MODULE);
 
-      expect(
-        offenders,
-        'The chat-session binding literal belongs in shared/types/agentWire.ts. ' +
-          'If this is the AIProvider axis instead, say so on the node — a ' +
-          '`provider` key, an `AIProvider` annotation, a switch on a provider — ' +
-          'not by mentioning the type somewhere else in the file.'
-      ).toEqual([]);
-    },
-    TREE_SCAN_TIMEOUT_MS
-  );
+    expect(source).not.toContain("'claude-code'");
+    expect(source).not.toContain("'codex'");
+  });
 
   it(
     'the scans are looking at the tree they claim to',
@@ -893,7 +884,7 @@ describe('pinned wire facts', () => {
     // and reordering changes nothing except the day someone assumes an index.
     // Appending is the only legal edit, and it belongs with the reader that
     // can actually run the new agent.
-    expect(AGENT_WIRE_NAMES).toEqual(['claude-code', 'codex', 'pi']);
+    expect(AGENT_WIRE_NAMES).toEqual(['pi']);
     expect(Object.keys(AGENT_DISPLAY_NAMES).sort()).toEqual([...AGENT_WIRE_NAMES].sort());
   });
 
@@ -970,16 +961,16 @@ describe('pinned wire facts', () => {
     expect(service).toContain('const parsed = JSON.parse(content) as SessionIndexEntry[];');
     expect(service).toContain('for (const entry of parsed) {');
     expect(service).toContain('const entries = [...this.entries.values()];');
-    expect(service).toContain('await writeJsonAtomically(path, entries);');
+    expect(service).toContain('await this.writeAtomically(path, entries);');
     expect(service).not.toContain('schemaVersion');
   });
 });
 
-describe('resolveAgentWireName is the single fallback point', () => {
-  it('treats a missing value as the legacy agent', () => {
-    expect(resolveAgentWireName(undefined)).toBe('claude-code');
-    expect(resolveAgentWireName(null)).toBe('claude-code');
-    expect(resolveAgentWireName('')).toBe('claude-code');
+describe('resolveAgentWireName validates persisted bindings', () => {
+  it('refuses a missing value instead of treating legacy rows as Pi', () => {
+    expect(resolveAgentWireName(undefined)).toBeNull();
+    expect(resolveAgentWireName(null)).toBeNull();
+    expect(resolveAgentWireName('')).toBeNull();
   });
 
   it('passes known slugs through', () => {
@@ -989,18 +980,18 @@ describe('resolveAgentWireName is the single fallback point', () => {
     }
   });
 
-  it('refuses to guess at an unknown slug', () => {
-    // Written by a NEWER build (the user downgraded). Guessing would run the
-    // session against the wrong runtime; `null` means "hide the row", and the
-    // entry stays on disk so upgrading brings it back.
+  it('refuses explicit legacy and unknown slugs', () => {
+    // Unknown values stay on disk but are hidden from this Pi-only build.
+    expect(resolveAgentWireName('claude-code')).toBeNull();
+    expect(resolveAgentWireName('codex')).toBeNull();
     expect(resolveAgentWireName('gemini')).toBeNull();
     expect(resolveAgentWireName('claude')).toBeNull();
     expect(isAgentWireName('claude')).toBe(false);
     expect(isAgentWireName(undefined)).toBe(false);
   });
 
-  it('sessionAgent reads a materialized binding without inventing a second default', () => {
-    expect(sessionAgent({ agent: 'codex' })).toBe('codex');
-    expect(sessionAgent({})).toBe('claude-code');
+  it('sessionAgent reads a Pi binding and defaults a missing binding to Pi', () => {
+    expect(sessionAgent({ agent: 'pi' })).toBe('pi');
+    expect(sessionAgent({})).toBe('pi');
   });
 });

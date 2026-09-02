@@ -1,3 +1,4 @@
+import { PI_AGENT } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
@@ -83,15 +84,19 @@ describe('shouldResumeSession (T-03)', () => {
     });
   });
 
-  it('refuses legacy non-Pi identities instead of reviving a deleted execution route', () => {
+  it('resumes an explicitly Pi-bound persisted identity', () => {
     const result = shouldResumeSession(
-      session({ runtimeIdentity: 'legacy-thread', agent: 'codex' }),
+      session({ runtimeIdentity: '/sessions/pi.jsonl', agent: PI_AGENT }),
       workspace()
     );
 
     expect(result).toEqual({
-      shouldResume: false,
-      reason: 'unsupported-agent:codex',
+      shouldResume: true,
+      args: {
+        sessionId: 's1',
+        runtimeIdentity: '/sessions/pi.jsonl',
+        workspacePath: '/repo',
+      },
     });
   });
 

@@ -1,4 +1,3 @@
-import { type AgentWireName, sessionAgent } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { useCallback, useEffect, useState } from 'react';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
@@ -132,12 +131,9 @@ export async function renameSessionIndexEntry(
  * `chat.createSession` on first send stays as the fallback (`recordCreated`
  * upserts, so both orders converge on one entry).
  *
- * S2 (b): this is the ONE write path that reaches the index BEFORE the Host
- * ever runs, so the binding has to travel with it. Without it, archiving a
- * never-sent session writes a row with no `agent`, and the next
- * `mergeSessionIndex` materializes that row as Claude Code — silently
- * rewriting a binding that is supposed to be fixed for the session's life.
- * Read here rather than taken as an argument so no future caller can omit it.
+ * Pi-only registration always lets Main stamp the row as Pi. A missing live row
+ * sends no runtime guess, and Main rejects an existing explicit legacy binding
+ * before writing.
  */
 export async function registerSessionIndexEntry(
   sessionId: string,
@@ -153,15 +149,7 @@ export async function registerSessionIndexEntry(
     return false;
   }
   try {
-    const agent = agentForSession(sessionId);
-    return await chat.registerSession({
-      sessionId,
-      workspacePath,
-      // Omitted, never sent as `undefined`: `recordCreated` reads
-      // `input.agent ?? existing?.agent`, so leaving the key out preserves
-      // whatever the row already has instead of proposing a value.
-      ...(agent ? { agent } : {}),
-    });
+    return await chat.registerSession({ sessionId, workspacePath });
   } catch {
     return false;
   }
@@ -181,19 +169,6 @@ export {
   resetDismissedSessionRows,
   undismissSession,
 } from './dismissedSessions';
-
-/**
- * The agent a LIVE row is bound to, for the index writes that happen before
- * any Host event could report it.
- *
- * `undefined` when the row is gone from the store: the caller then omits the
- * key entirely, and `recordCreated` keeps the persisted value. Guessing here
- * would be the very overwrite this function exists to prevent.
- */
-function agentForSession(sessionId: string): AgentWireName | undefined {
-  const session = useChatSessionsStore.getState().sessions.find((item) => item.id === sessionId);
-  return session ? sessionAgent(session) : undefined;
-}
 
 function workspacePathForSession(sessionId: string): string | null {
   const state = useChatSessionsStore.getState();
