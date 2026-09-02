@@ -43,7 +43,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase H / T37 release gates | T37-a stale test sweep `6aaa1eea`（全量 3884 tests 全绿） | T37-b resource/longevity，随后 packaged/GUI 与真账号矩阵 |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase H / T37 release gates | T37-b 资源/长稳门禁（真 Electron 探针 + dispose 竞态修复，全量 3895 tests 全绿） | T37-c packaged/GUI 与真账号矩阵 |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -80,6 +80,7 @@ T28 replacement baseline
 - [T34 Claude legacy import closure](./plans/pi-backend-migration/evidence/2026-09-01-t34-legacy-import.md)
 - [T35 Pi-only absence closure](./plans/pi-backend-migration/evidence/2026-09-02-t35-absence-audit.md)
 - [T36 Pi TUI closure](./plans/pi-backend-migration/evidence/2026-09-02-t36-pi-tui.md)
+- [T37-b resource and longevity gate](./plans/pi-backend-migration/evidence/2026-09-02-t37b-resource-longevity.md)
 - [Pre-Pi-only Pi plan snapshot](./plans/pi-backend-migration/history/2026-08-31-pre-pi-only-realignment/)
 - [Pre-Pi-only baseline snapshot](./history/2026-08-31-pre-pi-only-baseline/)
 - [Pre-Pi-only root registry](./history/2026-08-31-pre-pi-only-registry.md)

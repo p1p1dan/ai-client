@@ -114,6 +114,16 @@ function recordOf(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
 }
 
+/** The dispose ACK lost its race with the worker's own clean exit. */
+function isLostDisposeAck(error: unknown, exit: WorkerTransportExit | undefined): boolean {
+  return (
+    error instanceof WorkerSlotError &&
+    error.code === 'WORKER_EXITED' &&
+    exit?.code === 0 &&
+    exit.signal === null
+  );
+}
+
 /**
  * Owns one utility process generation and its pending RPC lifecycle.
  *
@@ -373,8 +383,14 @@ export class WorkerSlot {
       }
     }
 
-    await this.finalizeDisposed();
-    if (disposeError) throw disposeError;
+    const exit = await this.finalizeDisposed();
+    // A worker that exits while its dispose ACK is still in flight did exactly
+    // what dispose asked for: `worker.ts` posts the ACK and exits on the next
+    // tick, so the message can lose the race with process exit. A confirmed
+    // clean exit is the stronger proof, so it closes disposal instead of
+    // failing a close/eviction that actually succeeded. Any other exit, a
+    // rejected ACK, or an ACK timeout still surfaces.
+    if (disposeError && !isLostDisposeAck(disposeError, exit)) throw disposeError;
   }
 
   private sendRequest<TResult, TPayload>(
@@ -575,8 +591,9 @@ export class WorkerSlot {
     });
   }
 
-  private async finalizeDisposed(): Promise<void> {
-    if (this.currentState === 'disposed') return;
+  /** Resolves with the confirmed process exit once the slot is disposed. */
+  private async finalizeDisposed(): Promise<WorkerTransportExit | undefined> {
+    if (this.currentState === 'disposed') return this.lastExit?.exit;
     this.rejectPending(
       new WorkerSlotError('WORKER_SLOT_DISPOSED', `Worker slot ${this.slotKey} is disposed`)
     );
@@ -587,8 +604,9 @@ export class WorkerSlot {
     this.detachCurrentTransport();
     this.killCurrentTransport();
 
+    let exit: WorkerTransportExit;
     try {
-      await exitPromise;
+      exit = await exitPromise;
     } catch (error) {
       this.currentState = 'dispose-failed';
       throw error;
@@ -600,6 +618,7 @@ export class WorkerSlot {
       slotKey: this.slotKey,
       generation: this.currentGeneration,
     });
+    return exit;
   }
 
   private waitForTransportExit(

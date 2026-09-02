@@ -348,6 +348,24 @@ describe('WorkerSlot lifecycle', () => {
     expect(transport.kill).toHaveBeenCalledTimes(1);
   });
 
+  // T37-b: `worker.ts` posts the dispose ACK and exits on the next tick, so the
+  // message can lose the race with process exit. Rejecting there failed real
+  // closes and evictions that had already succeeded.
+  it('completes disposal when a clean exit outruns the dispose ACK', async () => {
+    const lifecycle: WorkerSlotLifecycleEvent[] = [];
+    const { slot, transport } = createSlot(new FakeWorkerTransport(), {
+      onLifecycle: (event) => lifecycle.push(event),
+    });
+
+    const disposing = slot.dispose('slot-dispose');
+    transport.emitExit({ code: 0, signal: null });
+
+    await expect(disposing).resolves.toBeUndefined();
+    expect(slot.state).toBe('disposed');
+    expect(slot.pendingRequestCount).toBe(0);
+    expect(lifecycle).toEqual([{ type: 'disposed', slotKey: 'slot-a', generation: 1 }]);
+  });
+
   it('forces local cleanup and rejects when dispose ACK times out', async () => {
     vi.useFakeTimers();
     const { slot, transport } = createSlot();

@@ -154,7 +154,9 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
 
 - **T37-a Automated — Done**：全量 254 files / 3884 tests 全绿，typecheck、Biome、diff check 通过；
   原 20 条 pre-existing 失败已溯源关闭，见 [stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)。
-- **T37-b Resource/longevity**：bounded pool、idle reclaim、reopen、memory、orphan process/PTY。
+- **T37-b Resource/longevity — Done**：真 Electron 探针跑通有界池/保护位、后台空闲回收、淘汰后重开、
+  20 轮 churn 内存持平（+2.3 MiB）、worker 与 Pi TUI PTY 零孤儿、长挂起后复用不重开；
+  并修掉 dispose 应答输给进程退出导致"关闭成功却报错"的缺陷。见 [T37-b evidence](./evidence/2026-09-02-t37b-resource-longevity.md)。
 - **T37-c GUI/packaged smoke**：multi-session、permissions、queue、history、import、TUI、crash recovery。
 - **T37-d Release**：license notices、migration docs、release notes、内部运行后扩大范围。
 
