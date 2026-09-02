@@ -96,12 +96,12 @@ describe('freshly created session — sidebar row lifecycle', () => {
 
     await expect(archiveSessionIndexEntry(sessionId as string, true, refresh)).resolves.toBe(true);
 
-    // S2 (b): the on-demand register carries the live row's binding — this is
-    // the only index write a never-sent session ever gets.
+    // S2 (b): the on-demand register is the only index write a never-sent
+    // session ever gets. Chat is Pi-only, so Main supplies the binding —
+    // the renderer sends identity and location, nothing more.
     expect(api.registerSession).toHaveBeenCalledWith({
       sessionId,
       workspacePath: '/repo',
-      agent: 'claude-code',
     });
     expect(api.archiveSession).toHaveBeenCalledTimes(2);
     expect(rowIds()).toEqual({ folder: [], recent: [] });

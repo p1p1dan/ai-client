@@ -53,9 +53,12 @@ describe('SessionManager', () => {
     const createSpy = vi.spyOn(manager.localPtyManager, 'create').mockImplementation(() => 's1');
     const destroySpy = vi.spyOn(manager.localPtyManager, 'destroy').mockImplementation(() => {});
 
+    // T36 moved agent PTYs to the Pi TUI controller and `create` now rejects
+    // `kind: 'agent'` outright (pinned by `t35FinalAbsence.test.ts`). This case
+    // is about persistOnDisconnect, so it uses the same kind as its sibling.
     const created = await manager.create(1, {
       cwd: 'C:/repo',
-      kind: 'agent',
+      kind: 'terminal',
       persistOnDisconnect: true,
     });
 

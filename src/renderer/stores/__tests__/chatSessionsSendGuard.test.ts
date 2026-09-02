@@ -97,15 +97,21 @@ describe('sendMessage — unchanged happy path', () => {
     await send();
 
     expect(api.ensureHost).toHaveBeenCalledTimes(1);
-    // S2 slice 1: the binding is stated on every create, never left for the
-    // Host to assume. An unset row resolves to the legacy agent via
-    // `sessionAgent`, so this seeded (Claude) session sends 'claude-code'.
+    // Chat is Pi-only, so the renderer no longer names a runtime: Main stamps
+    // `agent: PI_AGENT` in `chat:createSession` itself. Asserting the exact
+    // payload keeps a re-introduced renderer-side binding visible here.
     expect(api.createSession).toHaveBeenCalledWith({
       sessionId: 's1',
       workspacePath: '/repo',
-      agent: 'claude-code',
     });
-    expect(api.send).toHaveBeenCalledWith({ sessionId: 's1', text: 'hello' });
+    // Every send carries a fresh `attemptId` so the runtime's echo can be
+    // matched back to this attempt — nondeterministic by design, so only its
+    // presence and prefix are pinned.
+    expect(api.send).toHaveBeenCalledWith({
+      sessionId: 's1',
+      text: 'hello',
+      attemptId: expect.stringMatching(/^send-attempt-/),
+    });
     expect(api.closeSession).not.toHaveBeenCalled();
     expect(useChatSessionsStore.getState().hostBoundSessionIds).toEqual(['s1']);
   });

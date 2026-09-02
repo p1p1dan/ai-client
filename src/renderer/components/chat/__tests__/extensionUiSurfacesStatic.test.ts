@@ -18,7 +18,11 @@ describe('T09 Extension UI surfaces', () => {
 
   it('mounts status plus both widget placements around the composer', () => {
     expect(workspace).toContain('<ExtensionUiStatusChips sessionId={activeSessionId} />');
-    expect(workspace).toContain('<ExtensionUiUnsupportedNotice sessionId={activeSessionId} />');
+    // T36 gave the notice its TUI escape hatch — the handoff is the point of
+    // the notice, so the prop is pinned rather than dropped from the match.
+    expect(workspace).toContain(
+      '<ExtensionUiUnsupportedNotice sessionId={activeSessionId} onOpenTui={openTui} />'
+    );
     expect(workspace).toContain(
       '<ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />'
     );

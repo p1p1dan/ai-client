@@ -29,7 +29,9 @@ describe('Pi-only model wiring', () => {
   it('has no Composer agent or legacy permission control', () => {
     expect(composer).not.toContain('ComposerAgentPicker');
     expect(composer).not.toContain('ComposerPermissionTrigger');
-    expect(composer).toContain('const composerAgent = PI_AGENT');
+    // The narrowing went past pinning the agent to a Pi constant: the Composer
+    // carries no runtime variable at all now. Pin the absence, not the constant.
+    expect(composer).not.toContain('composerAgent');
   });
 
   it('loads the single Pi catalog through the Pi-only preload method', () => {

@@ -30,11 +30,17 @@ import { fallbackSessionTitle } from './sessionTitle';
  *   disconnected only when explicitly requested (resume flow will flip it).
  * - Archived entries are filtered out of the live list entirely (they live
  *   only in the persisted index and can be un-archived later).
- * - S2 (b): this is the ONE place a missing `agent` becomes a binding. The
- *   disk side stays exactly as written — normalizing on load instead would put
- *   the default into Main's in-memory map, and `flush()` writes the whole map,
- *   so the next unrelated rename would stamp `agent` onto every legacy row: a
- *   compatible read turned into an irreversible write migration.
+ * - S2 (b): this is the ONE place a persisted `agent` is read into a live row.
+ *   Only an explicit `pi` slug survives; a missing binding predates the field
+ *   (it meant Claude back then) and an unknown one was written by a newer
+ *   build, so both are hidden rather than guessed into Pi execution. Main
+ *   agrees — `assertPiCompatibleIndexRow` refuses to start the same rows — so
+ *   showing them would only offer the user a chat that cannot run. The disk
+ *   side stays exactly as written: normalizing on load would put a default
+ *   into Main's in-memory map, and `flush()` writes the whole map, so the next
+ *   unrelated rename would stamp `agent` onto every legacy row — a compatible
+ *   read turned into an irreversible write migration. Coverage lives in
+ *   `agentBindingMerge.test.ts`.
  */
 
 /**

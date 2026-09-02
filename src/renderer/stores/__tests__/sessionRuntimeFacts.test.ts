@@ -15,13 +15,16 @@ describe('useSessionRuntimeFactsStore', () => {
   let unsubSpy: ReturnType<typeof vi.fn>;
   let onRuntimeEventSpy: ReturnType<typeof vi.fn>;
 
-  function permissionModeEvent(sessionId: string, permissionMode: string): RuntimeEvent {
+  // `permissionMode` was a Claude/Codex-era fact and left the reducer with the
+  // Pi-only narrowing. `session.stderr` is the fact this store still folds, and
+  // these cases only need SOME folded event to exercise the subscription shell.
+  function stderrEvent(sessionId: string, line: string): RuntimeEvent {
     return {
-      type: 'session.created',
+      type: 'session.stderr',
       seq: 1,
       sessionId,
       timestamp: 1,
-      payload: { permissionMode },
+      payload: { line },
     } as unknown as RuntimeEvent;
   }
 
@@ -67,10 +70,10 @@ describe('useSessionRuntimeFactsStore', () => {
   it('folds an incoming event into factsBySession', () => {
     const unsubscribe = useSessionRuntimeFactsStore.getState().init();
     expect(captured).not.toBeNull();
-    captured?.(permissionModeEvent('s1', 'acceptEdits'));
+    captured?.(stderrEvent('s1', 'boom'));
 
     expect(useSessionRuntimeFactsStore.getState().factsBySession).toEqual({
-      s1: { permissionMode: 'acceptEdits' },
+      s1: { stderr: { lines: ['boom'], total: 1 } },
     });
     unsubscribe();
   });
@@ -170,7 +173,7 @@ describe('useSessionRuntimeFactsStore', () => {
     const listener = vi.fn();
     const unsubscribeListener = useSessionRuntimeFactsStore.subscribe(listener);
 
-    captured?.(permissionModeEvent('s1', 'acceptEdits'));
+    captured?.(stderrEvent('s1', 'boom'));
 
     expect(listener).toHaveBeenCalledTimes(1);
 

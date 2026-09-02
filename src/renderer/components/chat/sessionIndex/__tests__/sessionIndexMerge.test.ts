@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { mergeSessionIndex, recentSessionIdsFromIndex } from '../sessionIndexMerge';
 
+// Both index writers (`chat:createSession` and `chat:registerSession`) stamp
+// `agent: 'pi'`, so every row this build persists carries the binding. A row
+// without one predates the field and is deliberately hidden — see the
+// dedicated describe block at the bottom of this file.
 function entry(sessionId: string, opts: Partial<SessionIndexEntry> = {}): SessionIndexEntry {
   return {
     sessionId,
@@ -10,6 +14,7 @@ function entry(sessionId: string, opts: Partial<SessionIndexEntry> = {}): Sessio
     title: sessionId,
     updatedAt: 1000,
     archived: false,
+    agent: 'pi',
     ...opts,
   };
 }

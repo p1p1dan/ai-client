@@ -32,7 +32,8 @@ describe('T25 grouped model picker wiring', () => {
 
   it('updates session and template together when a model invalidates the old effort', () => {
     expect(trigger).toContain('const nextEffort = reconcileEffortForModel(effort, nextModel);');
-    expect(trigger).toContain('setSessionEffort(sessionId, agent, nextEffort);');
+    // Pi-only: the effort store is no longer keyed by agent.
+    expect(trigger).toContain('setSessionEffort(sessionId, nextEffort);');
     expect(trigger).toContain('...(nextEffort !== effort ? { effort: nextEffort } : {})');
   });
 });
