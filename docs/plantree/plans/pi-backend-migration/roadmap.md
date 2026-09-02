@@ -13,7 +13,7 @@
 | Cycle 1/2 behavior reattachment | **Done** | T31-a/b/c/d + legacy execution deletion；见2026-09-01 evidence |
 | Pi-native history/resume | **Done** | T32 exact-file open、branch timeline、pagination、incomplete recovery与race closure |
 | Pi-native tree/rewind/fork | **Done** | T33 bounded tree、confirmed rewind、leaf restart与independent fork |
-| Legacy import/removal/TUI | **In Progress** | T34 Claude import Done；下一目标T35 absence audit，T36可并行 |
+| Legacy import/removal/TUI | **In Progress** | T34 Done；T35 active runtime/one-shot cleanup Done，最终CLI absence由T36承接 |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
 ## T00–T27：已落资产与替换影响
@@ -124,14 +124,16 @@
 
 ## Phase F — Remove legacy execution paths
 
-### T35 — Pi-only absence audit — **Planned**
+### T35 — Pi-only absence audit — **In Progress**
 
-D16 将实际删除前移到 T29–T34 各替代切片；T35 不再承担一次性大批量 cleanup。
+D16 将实际删除前移到 T29–T34 各替代切片；本轮进一步删除 active product integration 与 one-shot legacy executors。T35 的最终CLI absence出口依赖 T36，不能在 PTY 替代前伪称完成。
 
-- **T35-a**：静态扫描残留 Claude/Codex conversation execution imports、backend discriminants、multi-runtime dispatch 和 compatibility alias。
-- **T35-b**：扫描残留 SDK/CLI dependencies、build entry、artifact、IPC/preload method、dead tests/fixtures/scripts。
-- **T35-c**：扫描 agent picker、runtime icon/wording、rollback settings 和旧 create/send/resume product branches。
-- **T35-d**：证明保留项仅为隔离后的 migration readers、Pi-only behavior、通用基础设施、evidence/license；Codex ASR 不以 fixture 伪装成产品实现。
+- **T35-a — Done**：conversation contracts、backend discriminants、multi-runtime dispatch 与 compatibility alias 已清理。
+- **T35-b — Partial**：Claude product IPC/preload/service/dependency/transition artifact 与 one-shot executor 已清理；terminal CLI detector/installer/remote helper packaging 由 T36 接管。
+- **T35-c — Partial**：chat/product runtime picker 与 one-shot provider UI 已清理；AgentTerminal/CLI picker 属 T36 active scope。
+- **T35-d — Done**：保留的 Claude/Codex history asset 仅为隔离 migration reader、fixture/evidence；Codex ASR 仍未以 fixture 冒充产品能力。
+
+**当前证据**：[T35 absence audit](./evidence/2026-09-02-t35-absence-audit.md)。
 
 **验收**：活动代码和产物只有 Pi execution；import reader 无执行能力；无 legacy SDK dependency、死菜单、死 contract 或 transition artifact。
 

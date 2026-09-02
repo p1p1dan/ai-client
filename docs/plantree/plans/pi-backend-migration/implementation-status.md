@@ -1,12 +1,12 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Phase F / T35 Pi-only absence audit。
+**Current Phase**：Phase F/G / T35 final CLI absence + T36 pix-based Pi TUI。
 
-**Next Target**：[T35](./roadmap.md#t35--pi-only-absence-audit--planned) 对活动源码、IPC/preload、dependencies、artifacts、tests/fixtures与产品文案做最终Claude/Codex execution absence审计。
+**Next Target**：[T36](./roadmap.md#t36--pi-tui-pty-and-cli-packaging--planned) 替换 AgentTerminal/CLI picker/detector/installer/remote helper 中的多CLI执行面，落 bundled absolute Pi CLI path、PTY lifecycle 与GUI/TUI single-writer；完成后回收T35最终absence gate。
 
-**Last Landed**：2026-09-01 T34 Claude-only legacy import closure：source-neutral schema、read-only full-stream adapter、display-only legacy tool/custom、private manifest、immutable snapshot dedupe/single-flight、worker-only Pi v3 staging/native validation/atomic publish、crash reconciliation、batch report/explicit open与旧Resume Claude authority删除；见 [evidence](./evidence/2026-09-01-t34-legacy-import.md)。
+**Last Landed**：2026-09-02 T35 active runtime/one-shot cleanup：删除Claude provider/config/completion/IDE MCP产品集成；one-shot commit/branch/review/todo迁到sessionless Pi utility worker；见 [evidence](./evidence/2026-09-02-t35-absence-audit.md)。
 
-**Last Verified**：2026-09-01 — T34 focused 18 files / 181 tests；两套typecheck、33-file scoped Biome、diff/static scans；92.9 MiB worker-only build；真实Electron Claude fixture→import→exact-file open→Pi continue→dispose，source immutable且2个utility worker PID均退出。未运行full Vitest或整套production build。
+**Last Verified**：2026-09-02 — 两套typecheck；focused 61 tests + protected/import static 10 tests；scoped Biome、diff/static scans。未重复worker-only build，未运行full Vitest或整套production build。
 
 ## Current architecture decision
 
@@ -19,15 +19,15 @@
 
 ## Last landed summary
 
-T34 completed read-only Claude migration without restoring Claude execution. Imported history is copied into validated native Pi v3 sessions; raw source paths remain private, legacy tool/custom payload is display-only and excluded from LLM context, and exact-file continuation is verified.
+T35 已完成 conversation/runtime contract、Claude product integration 与 one-shot executor 清理。one-shot 现在由 sessionless Pi utility worker 执行，不写 session/index。最终CLI absence仍被 T36 的 AgentTerminal/CLI packaging 替代所阻塞，因此T35保持In Progress而非虚假Done。
 
 ## Active TODO
 
-1. **T35-a**：扫描并删除残留 Claude/Codex conversation execution imports、backend discriminants、multi-runtime dispatch和compatibility alias。
-2. **T35-b**：扫描SDK/CLI dependencies、build entry/artifact、IPC/preload method、dead tests/fixtures/scripts。
-3. **T35-c**：扫描agent picker、runtime icon/wording、rollback settings和旧create/send/resume product branches。
-4. **T35-d**：证明保留项仅为隔离后的migration readers、Pi-only behavior、通用基础设施、evidence/license。
-5. **并行环境欠项**：真账号queue GUI复点；高资源主机packaged preview/PDF/Monaco/local-file smoke（T37前关闭）。
+1. **T36-a**：确认 Pi CLI production dependency/resource layout 与 packaged absolute executable path。
+2. **T36-b**：按 pix 适配 PTY controller、generation/stale output、resize/input/exit。
+3. **T36-c**：落 GUI/TUI single-writer、切换、crash/return-to-GUI reopen。
+4. **T35 final**：T36替换后删除旧CLI picker/detector/installer/remote helper多runtime surface并重跑absence gate。
+5. **T37环境欠项**：真账号queue GUI复点；高资源主机packaged preview/PDF/Monaco/local-file smoke。
 
 ## Blocked By / risks
 
@@ -37,7 +37,7 @@ T34 completed read-only Claude migration without restoring Claude execution. Imp
 
 ## Handoff
 
-1. 先读 [T28 map](./topics/t28-replacement-map.md)、[D16](./decisions/016-delete-obsolete-paths-with-replacement.md) 与 [T34 evidence](./evidence/2026-09-01-t34-legacy-import.md)。
-2. T35是absence audit，不是新的大批量replacement bucket；每个发现必须按T28分类。
-3. 保护 `src/main/services/legacyImport/`、`src/agent-host/codexHistoryReader.ts`、`codexItemMapper.ts`、import fixtures/evidence，但静态证明它们无execution能力。
-4. T35完成后与T36共同进入T37 release candidate gates。
+1. 先读 [T35 evidence](./evidence/2026-09-02-t35-absence-audit.md)、[T28 map](./topics/t28-replacement-map.md)、[D16](./decisions/016-delete-obsolete-paths-with-replacement.md) 与 pix reference rules。
+2. T35已经证明active chat和one-shot为Pi-only；不要回退Claude/Codex product IPC或executor。
+3. 保护 `src/main/services/legacyImport/`、`src/agent-host/codexHistoryReader.ts`、`codexItemMapper.ts`、import fixtures/evidence。
+4. T36替换 terminal/CLI surface 后立即回跑T35 final absence，再进入T37。

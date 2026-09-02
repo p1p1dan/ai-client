@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase F / T35 Pi-only absence audit。
+> **当前阶段**：Phase F/G / T35 final CLI absence + T36 pix-based Pi TUI。
 
 ## 目标
 
@@ -96,4 +96,4 @@ Pi 统一承载多 provider、多模型和不同推理后端。Claude/Codex 不�
 
 ## 当前出口
 
-T28–T34 均已完成；T34 closure 见 [evidence](./evidence/2026-09-01-t34-legacy-import.md)。当前下一目标为 T35 Pi-only absence audit；T36继续服从T28保护边界，不恢复旧host。
+T28–T34 均已完成；T35 已删除 active conversation/product/one-shot legacy execution，见 [evidence](./evidence/2026-09-02-t35-absence-audit.md)。AgentTerminal/CLI packaging 的最终 absence 依赖 T36；当前下一目标为 T36 pix-based Pi TUI，完成后回收 T35 final gate，再进入 T37。
