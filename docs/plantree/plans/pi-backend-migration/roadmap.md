@@ -152,7 +152,8 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
 
 ### T37 — Pi-only release gates — **In Progress**
 
-- **T37-a Automated**：WorkerManager/slot/history/tree/import/TUI tests、两套 typecheck、Biome、diff check。
+- **T37-a Automated — Done**：全量 254 files / 3884 tests 全绿，typecheck、Biome、diff check 通过；
+  原 20 条 pre-existing 失败已溯源关闭，见 [stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)。
 - **T37-b Resource/longevity**：bounded pool、idle reclaim、reopen、memory、orphan process/PTY。
 - **T37-c GUI/packaged smoke**：multi-session、permissions、queue、history、import、TUI、crash recovery。
 - **T37-d Release**：license notices、migration docs、release notes、内部运行后扩大范围。
