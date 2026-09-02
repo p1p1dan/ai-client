@@ -1,4 +1,3 @@
-import type { SessionCreateCommand } from '@shared/types/agentHost';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveSendCwd } from '@/components/chat/composerTarget';
 import { decideSendPreamble } from '@/components/chat/sendPreamble';
@@ -10,6 +9,11 @@ import {
   retargetChatSession,
 } from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
+
+type ChatSessionCreatePayload = {
+  sessionId: string;
+  workspacePath: string;
+};
 
 function makeWorkspace(overrides: Partial<ChatWorkspace> = {}): ChatWorkspace {
   return {
@@ -321,7 +325,7 @@ describe('target change flow (流程断言 · 验收②)', () => {
       workspaces: state.workspaces,
     });
 
-    const payload: SessionCreateCommand['payload'] = {
+    const payload: ChatSessionCreatePayload = {
       sessionId: 's1',
       workspacePath: cwd ?? '',
     };

@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AGENT_HOST_PROTOCOL_VERSION } from '@shared/types/agentHost';
 import {
   AGENT_DISPLAY_NAMES,
   AGENT_WIRE_NAMES,
@@ -886,13 +885,6 @@ describe('pinned wire facts', () => {
     // can actually run the new agent.
     expect(AGENT_WIRE_NAMES).toEqual(['pi']);
     expect(Object.keys(AGENT_DISPLAY_NAMES).sort()).toEqual([...AGENT_WIRE_NAMES].sort());
-  });
-
-  it('AGENT_HOST_PROTOCOL_VERSION stays 1', () => {
-    // Multi-agent support is optional fields and new error-code values only.
-    // Bumping on one side of the protocol while the other stays put turns
-    // `protocol_mismatch` from a real signal into noise.
-    expect(AGENT_HOST_PROTOCOL_VERSION).toBe(1);
   });
 
   it('[W-1] SessionStatusEvent.payload optional keys stay exactly {retry, liveness}', () => {

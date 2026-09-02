@@ -7,8 +7,8 @@
  * version, archive names, URLs and SHA-256 values that Main has no use for.
  * Main does not import that file: it is an untyped `.mjs` outside `src/`, and
  * the repo's convention for build↔Main shared constants is to state the fact
- * on each side and pin them together with an assertion — the same arrangement
- * used for `AICLIENT_NODE_EXEC_PATH` and `COMETIX_PIN`.
+ * on each side and keep them aligned with an assertion — the same arrangement
+ * used for `AICLIENT_NODE_EXEC_PATH`.
  *
  * `scripts/__tests__/node-runtime-pin.test.mjs` asserts this table and the
  * build-side table agree key-for-key and name-for-name, so the two cannot

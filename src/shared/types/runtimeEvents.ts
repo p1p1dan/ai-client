@@ -157,8 +157,8 @@ export interface SessionRetryInfo {
  * F2 (2026-08-18 watchdog redesign): one Host watchdog window elapsed and the
  * watchdog DECLINED to abort. Status stays 'running' — the turn is alive.
  *
- * Optional-field addition; AGENT_HOST_PROTOCOL_VERSION stays 1 (same
- * precedent as SessionRetryInfo above). GUARD FOR LATER READERS: if you are
+ * Optional-field addition, following the same compatibility precedent as
+ * SessionRetryInfo above. GUARD FOR LATER READERS: if you are
  * ever tempted to promote this to its own RuntimeEventType, you must FIRST
  * prove that the old renderer reducer is a no-op on unknown event types —
  * until that proof exists, an optional field on an already-consumed event is
