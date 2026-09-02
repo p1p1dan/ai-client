@@ -77,15 +77,12 @@ import { buildAppMenu } from './services/MenuBuilder';
 import {
   getSharedStatePaths,
   isLegacySettingsMigrated,
-  isLegacyTodoMigrated,
   markLegacySettingsMigrated,
-  markLegacyTodoMigrated,
   readSharedSessionState,
   readSharedSettings,
   writeSharedSessionState,
   writeSharedSettings,
 } from './services/SharedSessionState';
-import * as todoService from './services/todo/TodoService';
 import { webInspectorServer } from './services/webInspector';
 import log, { initLogger } from './utils/logger';
 import { openLocalWindow } from './windows/WindowManager';
@@ -375,32 +372,6 @@ function migrateLegacySettingsIfNeeded(): void {
   }
 }
 
-async function migrateLegacyTodoIfNeeded(): Promise<void> {
-  if (isLegacyTodoMigrated()) {
-    return;
-  }
-
-  const legacyTodoPath = join(app.getPath('userData'), 'todo.db');
-  if (!existsSync(legacyTodoPath)) {
-    markLegacyTodoMigrated();
-    return;
-  }
-
-  try {
-    await todoService.initialize();
-    const boards = await todoService.exportAllTasks();
-    const currentSession = readSharedSessionState();
-    writeSharedSessionState({
-      ...currentSession,
-      updatedAt: Date.now(),
-      todos: boards,
-    });
-    markLegacyTodoMigrated();
-  } catch (error) {
-    console.warn('[migration] Failed to migrate legacy todo.db:', error);
-  }
-}
-
 async function init(): Promise<void> {
   // Initialize logger from settings
   const settings = readSettings();
@@ -452,7 +423,6 @@ app
     const sharedPaths = getSharedStatePaths();
     log.info('Shared state paths', sharedPaths);
     migrateLegacySettingsIfNeeded();
-    await migrateLegacyTodoIfNeeded();
 
     // Register protocol to handle local file:// URLs for markdown images
     protocol.handle('local-file', async (request) => {

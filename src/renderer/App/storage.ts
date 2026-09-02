@@ -29,7 +29,6 @@ export const STORAGE_KEYS = {
   REPOSITORY_GROUPS: 'aiclient-repository-groups',
   ACTIVE_GROUP: 'aiclient-active-group',
   GROUP_COLLAPSED_STATE: 'aiclient-group-collapsed-state',
-  TODO_BOARDS: 'aiclient-todo-boards',
   FILE_TREE_EXPANDED_PREFIX: 'aiclient-file-tree-expanded',
   SC_REPO_LIST_EXPANDED: 'aiclient-sc-repo-list-expanded',
   SC_CHANGES_EXPANDED: 'aiclient-sc-changes-expanded',

@@ -271,7 +271,7 @@ function assertSameSource(before: SourceSnapshot, after: SourceSnapshot): void {
     before.ino !== after.ino
   ) {
     throw new ClaudeImportSourceError(
-      'Claude session changed while it was being imported; retry the import'
+      'Claude session changed while it was being imported; retry the import step'
     );
   }
 }
@@ -644,7 +644,7 @@ export class ClaudeSourceAdapter {
         current.mtimeMs !== expected.mtimeMs
       ) {
         throw new ClaudeImportSourceError(
-          'Claude session changed before publish; retry the import'
+          'Claude session changed before publish; retry the import step'
         );
       }
     } catch (error) {

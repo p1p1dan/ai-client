@@ -273,16 +273,6 @@ export const IPC_CHANNELS = {
   SEARCH_FILES: 'search:files',
   SEARCH_CONTENT: 'search:content',
 
-  // Todo
-  TODO_GET_TASKS: 'todo:getTasks',
-  TODO_ADD_TASK: 'todo:addTask',
-  TODO_UPDATE_TASK: 'todo:updateTask',
-  TODO_DELETE_TASK: 'todo:deleteTask',
-  TODO_MOVE_TASK: 'todo:moveTask',
-  TODO_REORDER_TASKS: 'todo:reorderTasks',
-  TODO_MIGRATE: 'todo:migrate',
-  TODO_AI_POLISH: 'todo:aiPolish',
-
   // Usage
   USAGE_GET_STATS: 'usage:getStats',
 

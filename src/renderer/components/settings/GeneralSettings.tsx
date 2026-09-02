@@ -138,8 +138,6 @@ export function GeneralSettings() {
     setOpenInMenuFilterEnabled,
     copyOnSelection,
     setCopyOnSelection,
-    todoEnabled,
-    setTodoEnabled,
     temporaryWorkspaceEnabled,
     setTemporaryWorkspaceEnabled,
     defaultTemporaryPath,
@@ -590,15 +588,6 @@ export function GeneralSettings() {
             {t('Show floating terminal button for quick access')}
           </p>
           <Switch checked={quickTerminal.enabled} onCheckedChange={setQuickTerminalEnabled} />
-        </div>
-      </div>
-
-      {/* Todo Kanban */}
-      <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-        <span className="text-sm font-medium">{t('Todo')}</span>
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">{t('Enable Todo kanban board tab')}</p>
-          <Switch checked={todoEnabled} onCheckedChange={setTodoEnabled} />
         </div>
       </div>
 

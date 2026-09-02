@@ -4,7 +4,6 @@ import {
   FileCode,
   FolderOpen,
   GitBranch,
-  KanbanSquare,
   Loader2,
   MessageSquare,
   PanelLeft,
@@ -26,7 +25,6 @@ import type { SettingsCategory } from '@/components/settings/constants';
 import { SourceControlPanel } from '@/components/source-control';
 import { CodeReviewModal } from '@/components/source-control/CodeReviewModal';
 import { DiffReviewModal } from '@/components/source-control/DiffReviewModal';
-import { TodoPanel } from '@/components/todo';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -108,7 +106,6 @@ export function MainContent({
   const settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
   const setSettingsDisplayMode = useSettingsStore((s) => s.setSettingsDisplayMode);
   const fileTreeDisplayMode = useSettingsStore((s) => s.fileTreeDisplayMode);
-  const todoEnabled = useSettingsStore((s) => s.todoEnabled);
 
   // Diff Review Modal state
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
@@ -157,14 +154,11 @@ export function MainContent({
     file: { icon: FileCode, label: t('File') },
     terminal: { icon: Terminal, label: t('Terminal') },
     'source-control': { icon: GitBranch, label: t('Version Control') },
-    todo: { icon: KanbanSquare, label: t('Todo') },
   };
 
   // Generate tabs array based on tabOrder (filter out 'settings' tab and disabled features)
   const tabs = tabOrder
-    .filter(
-      (id): id is Exclude<TabId, 'settings'> => id !== 'settings' && (id !== 'todo' || todoEnabled)
-    )
+    .filter((id): id is Exclude<TabId, 'settings'> => id !== 'settings')
     .filter((id) => id !== 'source-control' || isGitRepo)
     .map(
       (id) =>
@@ -616,23 +610,6 @@ export function MainContent({
               worktreeCollapsed={worktreeCollapsed}
               emptyTitle={sourceControlEmptyTitle}
               emptyDescription={sourceControlEmptyDescription}
-            />
-          </div>
-        )}
-        {/* Todo tab */}
-        {todoEnabled && (
-          <div
-            className={cn(
-              'absolute inset-0',
-              innerBg,
-              activeTab === 'todo' ? 'z-10' : 'invisible pointer-events-none z-0'
-            )}
-          >
-            <TodoPanel
-              repoPath={effectiveRepoPath ?? undefined}
-              worktreePath={effectiveWorktreePath ?? undefined}
-              isActive={activeTab === 'todo'}
-              onSwitchToAgent={() => onTabChange('chat')}
             />
           </div>
         )}

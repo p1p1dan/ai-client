@@ -371,7 +371,7 @@ export class LegacyImportService {
       if (remainingFiles > 0) cleanupErrors.push('import target file remains discoverable');
       const cleanupMessage = cleanupErrors.length
         ? `Import cleanup pending: ${cleanupErrors.join('; ')}`
-        : 'Recovered and cleaned an interrupted legacy import';
+        : 'Recovered and cleaned an interrupted legacy import run';
       await this.manifest.fail(record.dedupeKey, cleanupMessage, cleanupErrors.length > 0);
       if (cleanupErrors.length) throw new Error(cleanupMessage);
     }

@@ -20,12 +20,10 @@ import {
   defaultCodeReviewPromptZh,
   defaultCommitPromptEn,
   defaultCommitPromptZh,
-  defaultTodoPolishPromptEn,
-  defaultTodoPolishPromptZh,
   useSettingsStore,
 } from '@/stores/settings';
 
-type FeatureKey = 'commitMessageGenerator' | 'codeReview' | 'branchNameGenerator' | 'todoPolish';
+type FeatureKey = 'commitMessageGenerator' | 'codeReview' | 'branchNameGenerator';
 
 type FeatureSettings = CommonAISettings & {
   enabled: boolean;
@@ -128,11 +126,6 @@ export function AISettings() {
       title: t('Branch Name Generator'),
       description: t('Generate branch names with AI'),
     },
-    {
-      key: 'todoPolish',
-      title: t('Todo AI Polish'),
-      description: t('Turn rough requirements into actionable tasks'),
-    },
   ];
   const defaults = {
     commitMessageGenerator: {
@@ -142,9 +135,6 @@ export function AISettings() {
       prompt: locale === 'zh' ? defaultCodeReviewPromptZh : defaultCodeReviewPromptEn,
     },
     branchNameGenerator: { prompt: defaultBranchNameGeneratorSettings.prompt },
-    todoPolish: {
-      prompt: locale === 'zh' ? defaultTodoPolishPromptZh : defaultTodoPolishPromptEn,
-    },
   };
   const setFeature = (key: FeatureKey, patch: Partial<FeatureSettings>) => {
     switch (key) {
@@ -156,9 +146,6 @@ export function AISettings() {
         break;
       case 'branchNameGenerator':
         settings.setBranchNameGenerator(patch);
-        break;
-      case 'todoPolish':
-        settings.setTodoPolish(patch);
         break;
     }
   };

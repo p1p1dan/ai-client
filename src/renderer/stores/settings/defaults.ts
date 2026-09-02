@@ -17,7 +17,6 @@ import type {
   SearchKeybindings,
   SourceControlKeybindings,
   TerminalInputSettings,
-  TodoPolishSettings,
   WorkspaceKeybindings,
   XtermKeybindings,
 } from './types';
@@ -159,38 +158,6 @@ export const defaultBranchNameGeneratorSettings: BranchNameGeneratorSettings = {
     '你是 Git 分支命名助手（不可用工具）。输入含 desc 可含 date/branch_style。任务：从 desc 判定 type、提取 ticket、生成 slug，按模板渲染分支名。只输出一行分支名，无解释无标点。\n\n约束：仅允许 a-z0-9-/.；全小写；词用 -；禁空格/中文/下划线/其他符号。渲染后：-// 连续压缩为 1；去掉首尾 - / .；空变量不产生多余分隔符。\n\nticket：识别 ABC-123/#456/issue 789 等 → 小写，去 #；若存在则置于 slug 最前（形成 ticket-slug）。\n\nslug：取核心关键词 3–8 词，过滤泛词（如：一下/相关/进行/支持/增加/优化/问题/功能/页面/接口/调整/更新/修改等）；必要时将中文概念转换为常见英文词（如 login/order/pay），无法转换则丢弃。\n\ntype 枚举：feat fix hotfix perf refactor docs test chore ci build 判定优先级：hotfix(紧急/回滚/prod) > perf(性能) > fix(bug/修复) > feat(新增) > refactor(结构不变) > docs > test > ci > build > chore(兜底)。\n\ndate: 格式为 yyyyMMdd\n\n输出格式：{type}-{date}-{slug}\n\ndate: {current_date}\ntime: {current_time}\ndesc：{description}',
 };
 
-// Default todo AI polish prompts
-export const defaultTodoPolishPromptZh = `你是一个任务管理助手。将以下原始需求文本转换为结构化的待办任务。
-
-输出一个包含以下两个字段的 JSON 对象：
-- "title": 简洁的、以行动为导向的标题（最多 60 个字符）
-- "description": 清晰、详细的描述，对 AI Agent 友好。包含上下文、验收标准以及输入中的技术细节。确保 AI 编程助手可以直接理解并执行该任务。
-
-重要：只输出 JSON 对象，不要解释，不要使用 markdown 代码块。
-
-原始需求：
-{text}`;
-
-export const defaultTodoPolishPromptEn = `You are a task management assistant. Convert the following raw requirement text into a structured todo task.
-
-Output a JSON object with exactly two fields:
-- "title": A concise, action-oriented title (max 60 characters)
-- "description": A clear, detailed description that is AI-agent-friendly. Include context, acceptance criteria, and any technical details from the input. Write it so an AI coding agent can understand and execute the task directly.
-
-Important: Output ONLY the JSON object, no explanation, no markdown fences.
-
-Raw requirement:
-{text}`;
-
-// Default todo polish settings
-export const defaultTodoPolishSettings: TodoPolishSettings = {
-  enabled: true,
-  model: '',
-  effort: 'low',
-  timeout: 60,
-  prompt: defaultTodoPolishPromptZh,
-};
-
 // Default code review settings
 export const defaultCodeReviewSettings: CodeReviewSettings = {
   enabled: true,
@@ -293,9 +260,6 @@ export const defaultWorkspaceKeybindings: WorkspaceKeybindings = {
   toggleRepository: { key: 'r', meta: true, shift: true },
   switchActiveWorktree: { key: 'CapsLock', ctrl: true },
 };
-
-// Default todo settings
-export const defaultTodoEnabled = true;
 
 // Default quick terminal settings
 export const defaultQuickTerminalSettings: QuickTerminalSettings = {

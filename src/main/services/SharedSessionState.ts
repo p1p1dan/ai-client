@@ -1,13 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SessionStorageDocument, SessionTodoTask } from '@shared/types';
+import type { SessionStorageDocument } from '@shared/types';
 import { getAppStateRoot } from './appStatePaths';
 
 const STORAGE_VERSION = 2;
 const SETTINGS_FILENAME = 'settings.json';
 const SESSION_FILENAME = 'session-state.json';
 const SETTINGS_MIGRATION_MARKER = '.local-settings-migrated';
-const TODO_MIGRATION_MARKER = '.local-todo-migrated';
 const LOCAL_STORAGE_MIGRATION_MARKER = '.local-localstorage-migrated';
 
 let cachedSettings: Record<string, unknown> | null = null;
@@ -53,24 +52,14 @@ function atomicWriteJson(targetPath: string, data: unknown): void {
 }
 
 function defaultSessionStorageDocument(
-  input?: Partial<
-    Pick<SessionStorageDocument, 'updatedAt' | 'settingsData' | 'localStorage' | 'todos'>
-  >
+  input?: Partial<Pick<SessionStorageDocument, 'updatedAt' | 'settingsData' | 'localStorage'>>
 ): SessionStorageDocument {
   return {
     version: STORAGE_VERSION,
     updatedAt: input?.updatedAt ?? now(),
     settingsData: input?.settingsData ?? {},
     localStorage: input?.localStorage ?? {},
-    todos: input?.todos ?? {},
   };
-}
-
-function normalizeTodoMap(value: unknown): Record<string, SessionTodoTask[]> {
-  if (!value || typeof value !== 'object') {
-    return {};
-  }
-  return value as Record<string, SessionTodoTask[]>;
 }
 
 function normalizeSettings(value: unknown): Record<string, unknown> {
@@ -117,7 +106,6 @@ export function readSharedSessionState(): SessionStorageDocument {
             parsed.localStorage && typeof parsed.localStorage === 'object'
               ? (parsed.localStorage as Record<string, string>)
               : {},
-          todos: normalizeTodoMap(parsed.todos),
         })
       : defaultSessionStorageDocument();
 
@@ -152,15 +140,6 @@ export function writeSharedLocalStorageSnapshot(snapshot: Record<string, string>
   }));
 }
 
-export function readSharedTodoTasks(repoPath: string): SessionTodoTask[] {
-  return [...(readSharedSessionState().todos[repoPath] ?? [])].sort((a, b) => {
-    if (a.status !== b.status) {
-      return a.status.localeCompare(b.status);
-    }
-    return a.order - b.order;
-  });
-}
-
 export function writeSharedSettingsToSession(data: Record<string, unknown>): void {
   updateSharedSessionState((current) => ({
     ...current,
@@ -178,7 +157,6 @@ export function getSharedStatePaths(): {
   settingsPath: string;
   sessionPath: string;
   settingsMarkerPath: string;
-  todoMarkerPath: string;
   localStorageMarkerPath: string;
 } {
   return {
@@ -186,7 +164,6 @@ export function getSharedStatePaths(): {
     settingsPath: getSettingsPath(),
     sessionPath: getSessionPath(),
     settingsMarkerPath: getMigrationMarkerPath(SETTINGS_MIGRATION_MARKER),
-    todoMarkerPath: getMigrationMarkerPath(TODO_MIGRATION_MARKER),
     localStorageMarkerPath: getMigrationMarkerPath(LOCAL_STORAGE_MIGRATION_MARKER),
   };
 }
@@ -198,15 +175,6 @@ export function isLegacySettingsMigrated(): boolean {
 export function markLegacySettingsMigrated(): void {
   ensureDir(getSharedRoot());
   writeFileSync(getMigrationMarkerPath(SETTINGS_MIGRATION_MARKER), String(now()), 'utf-8');
-}
-
-export function isLegacyTodoMigrated(): boolean {
-  return existsSync(getMigrationMarkerPath(TODO_MIGRATION_MARKER));
-}
-
-export function markLegacyTodoMigrated(): void {
-  ensureDir(getSharedRoot());
-  writeFileSync(getMigrationMarkerPath(TODO_MIGRATION_MARKER), String(now()), 'utf-8');
 }
 
 export function isLegacyLocalStorageMigrated(): boolean {

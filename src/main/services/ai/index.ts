@@ -11,8 +11,3 @@ export {
   generateCommitMessage,
 } from './commit-message';
 export { stripCodeFence } from './providers';
-export {
-  polishTodoTask,
-  type TodoPolishOptions,
-  type TodoPolishResult,
-} from './todo-polish';

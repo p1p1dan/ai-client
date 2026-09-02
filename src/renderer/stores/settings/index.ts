@@ -28,8 +28,6 @@ import {
   defaultSearchKeybindings,
   defaultSourceControlKeybindings,
   defaultTerminalInputSettings,
-  defaultTodoEnabled,
-  defaultTodoPolishSettings,
   defaultWorkspaceKeybindings,
   defaultXtermKeybindings,
   getDefaultLocale,
@@ -178,7 +176,6 @@ export function getInitialState() {
     commitMessageGenerator: defaultCommitMessageGeneratorSettings,
     codeReview: defaultCodeReviewSettings,
     branchNameGenerator: defaultBranchNameGeneratorSettings,
-    todoPolish: defaultTodoPolishSettings,
 
     // App Settings
     autoUpdateEnabled: true,
@@ -194,7 +191,6 @@ export function getInitialState() {
     gitClone: defaultGitCloneSettings,
 
     // Beta features
-    todoEnabled: defaultTodoEnabled,
     glowEffectEnabled: false,
     // T-16: on by default (`DEFAULT_USE_OPENCHAMBER_SHELL`). Until T-16 the
     // value was irrelevant — Root.tsx force-wrote `true` on every launch — so
@@ -355,11 +351,6 @@ export const useSettingsStore = create<SettingsState>()(
           branchNameGenerator: { ...state.branchNameGenerator, ...settings },
         })),
 
-      setTodoPolish: (settings) =>
-        set((state) => ({
-          todoPolish: { ...state.todoPolish, ...settings },
-        })),
-
       // App Setters
       setAutoUpdateEnabled: (autoUpdateEnabled) => {
         set({ autoUpdateEnabled });
@@ -444,7 +435,6 @@ export const useSettingsStore = create<SettingsState>()(
         })),
 
       // Beta Feature Setters
-      setTodoEnabled: (todoEnabled) => set({ todoEnabled }),
       setGlowEffectEnabled: (glowEffectEnabled) => set({ glowEffectEnabled }),
       setUseOpenChamberShell: (useOpenChamberShell) => {
         // Mirror first: the persisted write is async, and this value decides

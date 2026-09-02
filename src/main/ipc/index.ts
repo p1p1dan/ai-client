@@ -41,7 +41,6 @@ import { registerSettingsHandlers } from './settings';
 import { registerShellHandlers } from './shell';
 import { registerTempWorkspaceHandlers } from './tempWorkspace';
 import { cleanupTmuxSync, registerTmuxHandlers } from './tmux';
-import { cleanupTodo, cleanupTodoSync, registerTodoHandlers } from './todo';
 import { registerUpdaterHandlers } from './updater';
 import { registerUsageHandlers } from './usage';
 import { registerWebInspectorHandlers } from './webInspector';
@@ -73,7 +72,6 @@ export function registerIpcHandlers(): void {
   registerWebInspectorHandlers();
   registerTempWorkspaceHandlers();
   registerTmuxHandlers();
-  registerTodoHandlers();
   registerOnboardingHandlers();
   registerPiModelHandlers();
   registerPiPermissionHandlers();
@@ -147,7 +145,6 @@ export async function cleanupAllResources(): Promise<void> {
   clearAllGitServices();
   clearAllWorktreeServices();
   await remoteConnectionManager.cleanup();
-  await cleanupTodo();
 }
 
 /**
@@ -181,9 +178,6 @@ export function cleanupAllResourcesSync(): void {
   clearAllWorktreeServices();
 
   void remoteConnectionManager.cleanup();
-
-  // Close Todo database (sync — just nulls the reference, no async callback)
-  cleanupTodoSync();
 
   // Embedded Pi TUI PTYs are independent from generic shell sessions.
   disposeAllPiTuiControllersSync();

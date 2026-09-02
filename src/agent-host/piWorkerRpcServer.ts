@@ -303,7 +303,7 @@ export class PiWorkerRpcServer {
     if (this.runtime || this.bootstrapPayload) {
       throw new PiWorkerSessionError(
         'WORKER_IMPORT_SLOT_CONFLICT',
-        'A bootstrapped AgentSession worker cannot also perform an import'
+        'A bootstrapped AgentSession worker cannot also perform an import job'
       );
     }
     if (!this.importWriter) {

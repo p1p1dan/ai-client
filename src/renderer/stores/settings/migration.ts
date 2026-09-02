@@ -46,7 +46,6 @@ const LEGACY_AI_FEATURE_KEYS = [
   'commitMessageGenerator',
   'codeReview',
   'branchNameGenerator',
-  'todoPolish',
 ] as const;
 
 export function sanitizeLegacyAiSettings(
@@ -236,10 +235,6 @@ export function migrateSettings(
     branchNameGenerator: {
       ...currentState.branchNameGenerator,
       ...sanitizedPersisted.branchNameGenerator,
-    },
-    todoPolish: {
-      ...currentState.todoPolish,
-      ...sanitizedPersisted.todoPolish,
     },
     remoteSettings: {
       ...currentState.remoteSettings,

@@ -61,7 +61,7 @@ function requireAppendable(manager: PiSessionManager): AppendableSessionManager 
   if (!appendable.appendMessage || !appendable.appendCustomEntry || !appendable.appendSessionInfo) {
     throw new PiWorkerSessionError(
       'WORKER_IMPORT_UNAVAILABLE',
-      'Pi SessionManager does not expose the public append APIs required for import'
+      'Pi SessionManager does not expose the public append APIs an import requires'
     );
   }
   return appendable;

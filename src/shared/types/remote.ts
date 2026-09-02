@@ -161,21 +161,9 @@ export interface LocalShellSnapshot {
   localStorage: Record<string, string>;
 }
 
-export interface SessionTodoTask {
-  id: string;
-  title: string;
-  description: string;
-  priority: string;
-  status: string;
-  order: number;
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface SessionStorageDocument {
   version: 2;
   updatedAt: number;
   settingsData: Record<string, unknown>;
   localStorage: Record<string, string>;
-  todos: Record<string, SessionTodoTask[]>;
 }

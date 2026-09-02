@@ -156,13 +156,6 @@ export interface CommitMessageGeneratorSettings extends CommonAISettings {
   prompt: string; // Custom prompt template
 }
 
-// Todo AI polish settings
-export interface TodoPolishSettings extends CommonAISettings {
-  enabled: boolean;
-  timeout: number; // in seconds
-  prompt: string; // Custom prompt template (with {text} placeholder)
-}
-
 // Branch name generator settings
 export interface BranchNameGeneratorSettings extends CommonAISettings {
   enabled: boolean;
@@ -269,7 +262,6 @@ export interface SettingsState {
   commitMessageGenerator: CommitMessageGeneratorSettings;
   codeReview: CodeReviewSettings;
   branchNameGenerator: BranchNameGeneratorSettings;
-  todoPolish: TodoPolishSettings;
 
   // App Settings
   autoUpdateEnabled: boolean;
@@ -283,7 +275,6 @@ export interface SettingsState {
   gitClone: GitCloneSettings;
 
   // Beta features
-  todoEnabled: boolean; // Enable Todo kanban board (Beta)
   glowEffectEnabled: boolean; // Enable glow animation effect for AI output states (Beta)
   useOpenChamberShell: boolean; // Enable OpenChamber-style workspace shell (Beta)
   temporaryWorkspaceEnabled: boolean; // Enable Temp Session (Beta)
@@ -383,7 +374,6 @@ export interface SettingsState {
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;
   setCodeReview: (settings: Partial<CodeReviewSettings>) => void;
   setBranchNameGenerator: (settings: Partial<BranchNameGeneratorSettings>) => void;
-  setTodoPolish: (settings: Partial<TodoPolishSettings>) => void;
 
   // Setters - App
   setAutoUpdateEnabled: (enabled: boolean) => void;
@@ -405,7 +395,6 @@ export interface SettingsState {
   ) => void;
 
   // Setters - Beta features
-  setTodoEnabled: (enabled: boolean) => void;
   setGlowEffectEnabled: (enabled: boolean) => void;
   setUseOpenChamberShell: (enabled: boolean) => void;
   setTemporaryWorkspaceEnabled: (enabled: boolean) => void;
