@@ -13,8 +13,8 @@
 | Cycle 1/2 behavior reattachment | **Done** | T31-a/b/c/d + legacy execution deletion；见2026-09-01 evidence |
 | Pi-native history/resume | **Done** | T32 exact-file open、branch timeline、pagination、incomplete recovery与race closure |
 | Pi-native tree/rewind/fork | **Done** | T33 bounded tree、confirmed rewind、leaf restart与independent fork |
-| Legacy import/removal/TUI | **In Progress** | T34/T36 Done；T35 active runtime、one-shot与CLI product surface已清理，正在关闭最终absence gate |
-| Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
+| Legacy import/removal/TUI | **Done** | T34/T35/T36 全部关闭；migration-only reader与Pi TUI边界有静态证据 |
+| Release candidate | **In Progress** | T37 自动、资源、packaged 与真机矩阵 |
 
 ## T00–T27：已落资产与替换影响
 
@@ -124,16 +124,16 @@
 
 ## Phase F — Remove legacy execution paths
 
-### T35 — Pi-only absence audit — **In Progress**
+### T35 — Pi-only absence audit — **Done**
 
-D16 将实际删除前移到 T29–T34 各替代切片；本轮进一步删除 active product integration 与 one-shot legacy executors。T35 的最终CLI absence出口依赖 T36，不能在 PTY 替代前伪称完成。
+D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead contracts、legacy permission posture、Claude product/auth facade、remote helper aliases、旧 bootstrap/scripts/tests 与活动产品文案。
 
 - **T35-a — Done**：conversation contracts、backend discriminants、multi-runtime dispatch 与 compatibility alias 已清理。
 - **T35-b — Done**：Claude product IPC/preload/service/dependency/transition artifact、one-shot executor、terminal CLI detector/installer/remote helper execution surface 已清理。
 - **T35-c — Done**：chat/product runtime picker、one-shot provider UI、AgentTerminal multi-CLI picker与legacy agent settings已清理；产品终端仅启动Pi TUI。
 - **T35-d — Done**：保留的 Claude/Codex history asset 仅为隔离 migration reader、fixture/evidence；Codex ASR 仍未以 fixture 冒充产品能力。
 
-**当前证据**：[T35 absence audit](./evidence/2026-09-02-t35-absence-audit.md)。
+**验收证据**：[T35 absence audit](./evidence/2026-09-02-t35-absence-audit.md) · 最终实现 `8aafd450`。
 
 **验收**：活动代码和产物只有 Pi execution；import reader 无执行能力；无 legacy SDK dependency、死菜单、死 contract 或 transition artifact。
 
@@ -150,7 +150,7 @@ D16 将实际删除前移到 T29–T34 各替代切片；本轮进一步删除 a
 
 ## Phase H — Release candidate
 
-### T37 — Pi-only release gates — **Planned**
+### T37 — Pi-only release gates — **In Progress**
 
 - **T37-a Automated**：WorkerManager/slot/history/tree/import/TUI tests、两套 typecheck、Biome、diff check。
 - **T37-b Resource/longevity**：bounded pool、idle reclaim、reopen、memory、orphan process/PTY。

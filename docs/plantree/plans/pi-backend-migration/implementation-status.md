@@ -1,43 +1,42 @@
 # Implementation Status — Pi-only Application Convergence
 
-**Current Phase**：Phase F/H / T35 final absence audit → T37 release gates。
+**Current Phase**：Phase H / T37 Pi-only release gates。
 
-**Next Target**：关闭 [T35](./roadmap.md#t35--pi-only-absence-audit--in-progress) 最终 dead-contract/static absence gate；随后进入 T37 automated/resource/packaged/real-account release matrix。
+**Next Target**：执行 [T37-a](./roadmap.md#t37--pi-only-release-gates--in-progress) automated matrix，然后进入 resource/longevity、packaged/GUI 与真账号验证。
 
-**Last Landed**：2026-09-02 T36 Pi TUI implementation（待本批提交）：Main-owned bounded PTY controller、bundled absolute Pi CLI/Node、fresh-session GUI/TUI exclusivity、presentation mode、T17 action/T18 persistence、legacy multi-CLI product surface deletion；见 [evidence](./evidence/2026-09-02-t36-pi-tui.md)。
+**Last Landed**：2026-09-02 T35 final absence closure `8aafd450`：删除 legacy permission/runtime/auth/product/dead-test residue，remote helper ABI 收敛为 runtime/server，静态保护 migration-only reader；见 [T35 evidence](./evidence/2026-09-02-t35-absence-audit.md)。
 
-**Last Verified**：2026-09-02 — 两套typecheck；focused TUI/runtime-pin/auto-execute/absence/static tests；scoped Biome与diff check；worker-only build 92.9 MiB；bundled Pi CLI `0.84.3` version与真实node-pty help smoke。完整packaged Electron/GUI smoke未在本低资源主机运行。
+**Last Verified**：2026-09-02 — 两套 typecheck；19 files / 551 focused serial tests；scoped/staged Biome；diff check；production source/dependency absence scan。T36 的 worker-only artifact、Pi CLI `0.84.3` 与 node-pty help smoke继续有效；完整 packaged Electron/GUI smoke未在本低资源主机运行。
 
 ## Current architecture decision
 
-- [D14](./decisions/014-pi-only-product-and-conversation-import.md)：Claude/Codex execution runtime 删除；历史只通过只读、原子、可去重 import 保留。
+- [D14](./decisions/014-pi-only-product-and-conversation-import.md)：Claude/Codex execution runtime 已删除；历史只通过只读、原子、可去重 import 保留。
 - [D15](./decisions/015-main-owned-worker-manager.md)：Main 持有 bounded WorkerManager；每 WorkerSlot 一个 utilityProcess/Pi AgentSession；无额外 singleton supervisor。
 - [D16](./decisions/016-delete-obsolete-paths-with-replacement.md)：替代即删除；不保留 compatibility facade。
 - [D17](./decisions/017-worker-pool-policy.md)：identity/remap、2/3/4 capacity、protected eviction、same-session bounded restart policy。
-- [D18](./decisions/018-t34-claude-import-semantics.md)：Claude-only首版、线性独立root、display-only unmapped、不可变snapshot与批量报告UI。
-- T36采用 pix `da01b3e12d2e` 的 adapted PTY lifecycle，但拒绝第二supervisor、全局CLI安装和GUI/TUI同JSONL双写。
+- [D18](./decisions/018-t34-claude-import-semantics.md)：Claude-only 首版 import、线性独立 root、display-only unmapped、不可变 snapshot 与批量报告 UI。
+- T36 使用同 workspace/config 的 fresh Pi TUI session；GUI/TUI 不同写同一 JSONL。
 
 ## Last landed summary
 
-T36 已完成：产品终端只启动随包 Pi CLI；TUI使用同workspace/config的新session，不触碰GUI durable session file；window/controller lifecycle、stale output、suspend/replay/capacity、mode persistence、unsupported-method action与task auto-execution均已接通。旧 agent picker/detector/installer/onboarding、Hapi/Happy/Cloudflared和remote Claude plugin产品入口已删除。
+T28–T36 已完成。活动 chat、one-shot、TUI、onboarding、settings、IPC/preload、remote runtime 与打包路径均为 Pi-only。保留的 Claude/Codex 名称仅限 migration/import、legacy credential/profile 单向读取、历史显示 provenance、Pi provider metadata 与 obsolete-payload build denylist。
 
 ## Active TODO
 
-1. **T35 final**：清理或证明剩余 legacy-named dead contracts，重跑完整Pi-only absence scan。
-2. **T37-a**：扩展 automated gate，按低资源约束分批运行。
-3. **T37-b**：resource/longevity、PTY orphan、reopen与bounded eviction复验。
-4. **T37-c**：真账号queue GUI复点；高资源主机packaged preview/PDF/Monaco/local-file/TUI smoke。
-5. **T37-d**：license/release notes/rollout evidence。
+1. **T37-a Automated**：按低资源约束分批跑 WorkerManager/slot/history/tree/import/TUI 与 renderer regression，复核两套 typecheck/Biome/diff。
+2. **T37-b Resource/longevity**：bounded pool、idle reclaim、reopen、memory、worker/PTY orphan 与长期 suspend/eviction。
+3. **T37-c GUI/packaged**：真账号 queue GUI 复点；高资源主机 packaged preview/PDF/Monaco/local-file/TUI smoke。
+4. **T37-d Release**：license notices、migration/release notes、rollout/rollback evidence。
 
 ## Blocked By / risks
 
-- protected legacy import reader/fixture/evidence不可因Claude/Codex命名被机械删除。
-- 当前主机禁止full Vitest和整套production build；packaged artifact与真实GUI交互必须在T37高资源/目标平台环境完成。
-- macOS/Windows/Linux runtime pins已静态和单元验证，但各平台打包产物仍需T37实际解包/启动证明。
+- 当前主机禁止 full Vitest 和整套 production build；必须分批验证，完整 packaged artifact 与真实 GUI 交互需高资源/目标平台环境。
+- macOS/Windows/Linux runtime pins 已静态和单元验证，但各平台产物仍需实际解包/启动证明。
+- protected legacy import reader/fixture/evidence 不得因名称扫描被机械删除。
 
 ## Handoff
 
-1. 先读 [T36 evidence](./evidence/2026-09-02-t36-pi-tui.md)、[T35 evidence](./evidence/2026-09-02-t35-absence-audit.md) 与 [T28 map](./topics/t28-replacement-map.md)。
-2. 不得恢复multi-agent picker、CLI detector/installer、Hapi/Happy/Cloudflared或remote Claude plugin product routes。
-3. 保护 `src/main/services/legacyImport/`、`src/agent-host/codexHistoryReader.ts`、`codexItemMapper.ts`、import fixtures/evidence。
-4. T35 final只处理真实dead contract/transition artifact；T36 product implementation已完成，packaged/GUI环境证据归T37。
+1. 先读 [T35 evidence](./evidence/2026-09-02-t35-absence-audit.md)、[T36 evidence](./evidence/2026-09-02-t36-pi-tui.md) 与 [T28 map](./topics/t28-replacement-map.md)。
+2. 不得恢复 multi-agent picker、CLI detector/installer、Hapi/Happy/Cloudflared、remote Claude plugin、permission posture 或 managed-mode facade。
+3. 保护 `src/main/services/legacyImport/`、`src/agent-host/codexHistoryReader.ts`、`codexItemMapper.ts` 与 import fixtures/evidence。
+4. 下一批只做 T37 release evidence；若发现 functional regression，按最小切片修复并回写对应 gate evidence。

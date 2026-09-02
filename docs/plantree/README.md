@@ -43,7 +43,7 @@ Renderer → Preload → Electron Main WorkerManager
 
 | Plan | Lifecycle | Current phase | Last landed | Next target |
 |---|---|---|---|---|
-| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase F / T35 Pi-only absence audit | T34 Claude legacy import closure | T35 final absence audit |
+| [Pi-only application convergence](./plans/pi-backend-migration/README.md) | **In Progress** | Phase H / T37 release gates | T35 final absence closure `8aafd450` | T37 automated/resource/packaged/real-account matrix |
 | [Entry and environment](./plans/entry-and-environment/README.md) | Maintenance | 主体完成；只剩 Pi-only 可复用错误面/GUI 复验 | two-entry welcome、spawn gate、git notice、settings ownership | 并入 T37 或另立小维护任务 |
 | [Unified credentials/app state](./plans/unified-credentials/README.md) | Completed foundation | No active work | `~/.pilab/<profile>`、vault、credential mode、Pi arm | Pi config/import/removal 由 active plan 接管 |
 | [OpenChamber product baseline](./plans/openchamber-chat-refactor/README.md) | Completed baseline | No active work | shell/timeline/Composer/files/git/terminal 产品资产 | runtime-neutral assets 由 T31/T36 适配 |
@@ -65,7 +65,7 @@ T28 replacement baseline
 → T37 release candidate
 ```
 
-当前下一目标是 **T35 Pi-only absence audit**。T34 已完成Claude-only只读导入、原子发布、dedupe/provenance、批量报告与Pi continuation闭环；Codex等待真实本地格式证据，不恢复legacy execution runtime。
+当前下一目标是 **T37 Pi-only release gates**。T34/T35/T36 已完成 legacy import、final absence 与 Pi TUI/packaging 收敛；Codex import仍等待真实本地格式证据，不恢复legacy execution runtime。
 
 ## Stable evidence and history
 
@@ -78,6 +78,8 @@ T28 replacement baseline
 - [T32 history and real resume closure](./plans/pi-backend-migration/evidence/2026-09-01-t32-history-real-resume.md)
 - [T33 tree, rewind and fork closure](./plans/pi-backend-migration/evidence/2026-09-01-t33-tree-rewind-fork.md)
 - [T34 Claude legacy import closure](./plans/pi-backend-migration/evidence/2026-09-01-t34-legacy-import.md)
+- [T35 Pi-only absence closure](./plans/pi-backend-migration/evidence/2026-09-02-t35-absence-audit.md)
+- [T36 Pi TUI closure](./plans/pi-backend-migration/evidence/2026-09-02-t36-pi-tui.md)
 - [Pre-Pi-only Pi plan snapshot](./plans/pi-backend-migration/history/2026-08-31-pre-pi-only-realignment/)
 - [Pre-Pi-only baseline snapshot](./history/2026-08-31-pre-pi-only-baseline/)
 - [Pre-Pi-only root registry](./history/2026-08-31-pre-pi-only-registry.md)
