@@ -9,14 +9,19 @@ import type {
   WorkerReconcileImportedSessionPayload,
   WorkerReconcileImportedSessionResult,
 } from './legacyImport';
-import { isWorkerImportConversationPayload } from './legacyImport';
 import type { ExtensionUiResponse, RuntimeEvent } from './runtimeEvents';
+// Explicit `.ts`: in dev the Pi worker loads this file as SOURCE under Node's
+// --experimental-strip-types (PiWorkerProcess.resolvePiWorkerEntryPath), and
+// Node's ESM resolver has no extension search. Type-only imports above are
+// erased before that matters; a VALUE import without the suffix is what made
+// every dev-mode session die with ERR_MODULE_NOT_FOUND. Keep any future value
+// import from this file suffixed too.
 import {
   PI_SESSION_TREE_BACKEND_LIMIT,
   type PiLeafCheckpoint,
   type SessionHistoryPage,
   type SessionTreeSnapshot,
-} from './sessionHistory';
+} from './sessionHistory.ts';
 
 /**
  * Main ↔ utility worker RPC protocol.
@@ -713,8 +718,6 @@ export function isWorkerDiscardImportedSessionResult(
 ): value is WorkerDiscardImportedSessionResult {
   return isRecord(value) && typeof value.discarded === 'boolean';
 }
-
-export { isWorkerImportConversationPayload };
 
 export function isWorkerDiscardForkPayload(value: unknown): value is WorkerDiscardForkPayload {
   return (

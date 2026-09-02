@@ -8,6 +8,7 @@ import type {
   WorkerReconcileImportedSessionPayload,
   WorkerReconcileImportedSessionResult,
 } from '../shared/types/legacyImport.ts';
+import { isWorkerImportConversationPayload } from '../shared/types/legacyImport.ts';
 import type { RuntimeEvent, RuntimeEventDraft } from '../shared/types/runtimeEvents.ts';
 import {
   isWorkerBootstrapPayload,
@@ -16,7 +17,6 @@ import {
   isWorkerExtensionUiResponsePayload,
   isWorkerForkPayload,
   isWorkerHistoryPayload,
-  isWorkerImportConversationPayload,
   isWorkerInspectImportedSessionPayload,
   isWorkerReconcileImportedSessionPayload,
   isWorkerRewindPayload,

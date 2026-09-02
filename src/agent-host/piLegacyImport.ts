@@ -176,8 +176,14 @@ function validatedHistory(
 
 export class PiLegacyImportWriter {
   private publishedFile: string | null = null;
+  // Declared and assigned, not a constructor parameter property: dev runs this
+  // worker under Node's strip-only type removal, which rejects parameter
+  // properties outright (they need emit, not erasure).
+  private readonly loadSdk: () => Promise<unknown>;
 
-  constructor(private readonly loadSdk: () => Promise<unknown>) {}
+  constructor(loadSdk: () => Promise<unknown>) {
+    this.loadSdk = loadSdk;
+  }
 
   async create(input: WorkerImportConversationPayload): Promise<WorkerImportConversationResult> {
     if (this.publishedFile) {

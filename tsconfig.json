@@ -3,6 +3,11 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // src/shared modules that the Pi worker loads as SOURCE (dev runs the
+    // worker under --experimental-strip-types) must spell out `.ts` on value
+    // imports, because Node's ESM resolver does no extension search. Bundling
+    // is unaffected: esbuild/vite resolve the suffix directly.
+    "allowImportingTsExtensions": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
