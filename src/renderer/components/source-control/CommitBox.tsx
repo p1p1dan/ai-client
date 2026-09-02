@@ -48,11 +48,8 @@ export function CommitBox({
       const result = await window.electronAPI.git.generateCommitMessage(rootPath, {
         maxDiffLines: commitMessageGenerator.maxDiffLines,
         timeout: commitMessageGenerator.timeout,
-        provider: commitMessageGenerator.provider,
         model: commitMessageGenerator.model,
-        reasoningEffort: commitMessageGenerator.reasoningEffort,
-        bare: commitMessageGenerator.bare,
-        claudeEffort: commitMessageGenerator.claudeEffort,
+        effort: commitMessageGenerator.effort,
         prompt: commitMessageGenerator.prompt,
       });
 

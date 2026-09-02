@@ -19,6 +19,11 @@ import {
   isWorkerStopResult,
   isWorkerTreePayload,
   isWorkerTreeResult,
+  isWorkerUtilityCancelPayload,
+  isWorkerUtilityDeltaEvent,
+  isWorkerUtilityStartPayload,
+  isWorkerUtilityStartResult,
+  isWorkerUtilityTerminalEvent,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../workerRpc';
 
@@ -250,6 +255,61 @@ describe('worker RPC boundary guards', () => {
       isWorkerExtensionUiResponsePayload({
         logicalSessionId: 'logical-1',
         response: { runtimeId: 'runtime-1', uiRequestId: 'ui-1', ok: false },
+      })
+    ).toBe(true);
+  });
+
+  it('validates sessionless utility requests and terminal events', () => {
+    expect(
+      isWorkerUtilityStartPayload({
+        operationId: 'utility-1',
+        cwd: '/repo',
+        prompt: 'Summarize this diff',
+        model: 'pilab/company-model',
+        effort: 'high',
+        timeoutMs: 60_000,
+      })
+    ).toBe(true);
+    expect(
+      isWorkerUtilityStartPayload({
+        operationId: 'utility-1',
+        cwd: '/repo',
+        prompt: '   ',
+        timeoutMs: 60_000,
+      })
+    ).toBe(false);
+    expect(
+      isWorkerUtilityStartPayload({
+        operationId: 'utility-1',
+        cwd: '/repo',
+        prompt: 'x',
+        timeoutMs: 600_001,
+      })
+    ).toBe(false);
+    expect(isWorkerUtilityStartResult({ accepted: true, operationId: 'utility-1' })).toBe(true);
+    expect(isWorkerUtilityCancelPayload({ operationId: 'utility-1', reason: 'timeout' })).toBe(
+      true
+    );
+    expect(isWorkerUtilityCancelPayload({ operationId: 'utility-1', reason: 'later' })).toBe(false);
+    expect(
+      isWorkerUtilityDeltaEvent({
+        ...base,
+        kind: 'event',
+        type: 'utility.delta',
+        payload: { operationId: 'utility-1', delta: 'hello' },
+      })
+    ).toBe(true);
+    expect(
+      isWorkerUtilityTerminalEvent({
+        ...base,
+        kind: 'event',
+        type: 'utility.terminal',
+        payload: {
+          operationId: 'utility-1',
+          state: 'completed',
+          text: 'hello',
+          model: 'pilab/company-model',
+        },
       })
     ).toBe(true);
   });

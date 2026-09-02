@@ -107,11 +107,8 @@ export function TaskDialog({ open, onOpenChange, task, defaultStatus, repoPath }
       const result = await window.electronAPI.todo.aiPolish({
         text: rawText,
         timeout: todoPolish.timeout,
-        provider: todoPolish.provider,
         model: todoPolish.model,
-        reasoningEffort: todoPolish.reasoningEffort,
-        bare: todoPolish.bare,
-        claudeEffort: todoPolish.claudeEffort,
+        effort: todoPolish.effort,
         prompt: todoPolish.prompt,
       });
 

@@ -9,14 +9,10 @@ import {
   type GitStatus,
   IPC_CHANNELS,
 } from '@shared/types';
-import type { ClaudeEffort } from '@shared/types/ai';
 import { ipcMain } from 'electron';
 import {
-  type AIProvider,
   generateBranchName,
   generateCommitMessage,
-  type ModelId,
-  type ReasoningEffort,
   startCodeReview as startCodeReviewService,
   stopCodeReview as stopCodeReviewService,
 } from '../services/ai';
@@ -422,11 +418,8 @@ export function registerGitHandlers(): void {
       options: {
         maxDiffLines: number;
         timeout: number;
-        provider: string;
-        model: string;
-        reasoningEffort?: string;
-        bare?: boolean;
-        claudeEffort?: string;
+        model?: string;
+        effort?: string;
         prompt?: string;
       }
     ): Promise<{ success: boolean; message?: string; error?: string }> => {
@@ -438,11 +431,10 @@ export function registerGitHandlers(): void {
         workdir: resolved.path,
         maxDiffLines: options.maxDiffLines,
         timeout: options.timeout,
-        provider: (options.provider ?? 'claude-code') as AIProvider,
-        model: options.model as ModelId,
-        reasoningEffort: options.reasoningEffort as ReasoningEffort | undefined,
-        bare: options.bare,
-        claudeEffort: options.claudeEffort as ClaudeEffort | undefined,
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort
+          ? { effort: options.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+          : {}),
         prompt: options.prompt,
       });
     }
@@ -455,17 +447,13 @@ export function registerGitHandlers(): void {
       event,
       workdir: string,
       options: {
-        provider: string;
-        model: string;
-        reasoningEffort?: string;
-        bare?: boolean;
-        claudeEffort?: string;
+        model?: string;
+        effort?: string;
         language?: string;
         reviewId: string;
-        sessionId?: string; // Support sessionId for "Continue Conversation"
-        prompt?: string; // Custom prompt template
+        prompt?: string;
       }
-    ): Promise<{ success: boolean; error?: string; sessionId?: string }> => {
+    ): Promise<{ success: boolean; error?: string }> => {
       if (isRemoteWorkdir(workdir)) {
         assertRemoteUnsupported('codeReview');
       }
@@ -474,15 +462,13 @@ export function registerGitHandlers(): void {
 
       startCodeReviewService({
         workdir: resolved.path,
-        provider: (options.provider ?? 'claude-code') as AIProvider,
-        model: options.model as ModelId,
-        reasoningEffort: options.reasoningEffort as ReasoningEffort | undefined,
-        bare: options.bare,
-        claudeEffort: options.claudeEffort as ClaudeEffort | undefined,
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort
+          ? { effort: options.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+          : {}),
         language: options.language ?? '中文',
         reviewId: options.reviewId,
-        sessionId: options.sessionId, // Pass sessionId for session preservation
-        prompt: options.prompt, // Pass custom prompt template
+        prompt: options.prompt,
         onChunk: (chunk) => {
           if (!sender.isDestroyed()) {
             sender.send(IPC_CHANNELS.GIT_CODE_REVIEW_DATA, {
@@ -512,7 +498,7 @@ export function registerGitHandlers(): void {
         },
       });
 
-      return { success: true, sessionId: options.sessionId };
+      return { success: true };
     }
   );
 
@@ -579,11 +565,8 @@ export function registerGitHandlers(): void {
       workdir: string,
       options: {
         prompt: string;
-        provider: string;
-        model: string;
-        reasoningEffort?: string;
-        bare?: boolean;
-        claudeEffort?: string;
+        model?: string;
+        effort?: string;
       }
     ): Promise<{ success: boolean; branchName?: string; error?: string }> => {
       if (isRemoteWorkdir(workdir)) {
@@ -593,11 +576,10 @@ export function registerGitHandlers(): void {
       return generateBranchName({
         workdir: resolved.path,
         prompt: options.prompt,
-        provider: (options.provider ?? 'claude-code') as AIProvider,
-        model: options.model as ModelId,
-        reasoningEffort: options.reasoningEffort as ReasoningEffort | undefined,
-        bare: options.bare,
-        claudeEffort: options.claudeEffort as ClaudeEffort | undefined,
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort
+          ? { effort: options.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+          : {}),
       });
     }
   );

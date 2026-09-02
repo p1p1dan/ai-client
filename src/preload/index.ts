@@ -194,11 +194,8 @@ const electronAPI = {
       options: {
         maxDiffLines: number;
         timeout: number;
-        provider: string;
-        model: string;
-        reasoningEffort?: string;
-        bare?: boolean;
-        claudeEffort?: string;
+        model?: string;
+        effort?: string;
         prompt?: string;
       }
     ): Promise<{ success: boolean; message?: string; error?: string }> =>
@@ -207,28 +204,21 @@ const electronAPI = {
       workdir: string,
       options: {
         prompt: string;
-        provider: string;
-        model: string;
-        reasoningEffort?: string;
-        bare?: boolean;
-        claudeEffort?: string;
+        model?: string;
+        effort?: string;
       }
     ): Promise<{ success: boolean; branchName?: string; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_GENERATE_BRANCH_NAME, workdir, options),
     startCodeReview: (
       workdir: string,
       options: {
-        provider: string;
-        model: string;
-        reasoningEffort?: string;
-        bare?: boolean;
-        claudeEffort?: string;
+        model?: string;
+        effort?: string;
         reviewId: string;
         language?: string;
-        sessionId?: string; // Restore this parameter for "Continue Conversation"
-        prompt?: string; // Custom prompt template
+        prompt?: string;
       }
-    ): Promise<{ success: boolean; error?: string; sessionId?: string }> =>
+    ): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_CODE_REVIEW_START, workdir, options),
     stopCodeReview: (reviewId: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_CODE_REVIEW_STOP, reviewId),
@@ -759,11 +749,8 @@ const electronAPI = {
     aiPolish: (options: {
       text: string;
       timeout: number;
-      provider: string;
-      model: string;
-      reasoningEffort?: string;
-      bare?: boolean;
-      claudeEffort?: string;
+      model?: string;
+      effort?: string;
       prompt?: string;
     }): Promise<{ success: boolean; title?: string; description?: string; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.TODO_AI_POLISH, options),

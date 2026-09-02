@@ -10,8 +10,7 @@ export {
   type CommitMessageResult,
   generateCommitMessage,
 } from './commit-message';
-export type { AIProvider, ModelId, ReasoningEffort } from './providers';
-export { clearVersionCache } from './providers';
+export { stripCodeFence } from './providers';
 export {
   polishTodoTask,
   type TodoPolishOptions,

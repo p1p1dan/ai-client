@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
+import { useCodeReviewStore } from '@/stores/codeReview';
 import { useSettingsStore } from '@/stores/settings';
 import { useSourceControlStore } from '@/stores/sourceControl';
 import { ChangesTree } from './ChangesTree';
@@ -162,9 +162,9 @@ export function ChangesList({
   const { viewMode, setViewMode } = useSourceControlStore();
   const codeReviewEnabled = useSettingsStore((s) => s.codeReview.enabled);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const isMinimized = useCodeReviewContinueStore((s) => s.isMinimized);
-  const reviewRepoPath = useCodeReviewContinueStore((s) => s.review.repoPath);
-  const reviewStatus = useCodeReviewContinueStore((s) => s.review.status);
+  const isMinimized = useCodeReviewStore((s) => s.isMinimized);
+  const reviewRepoPath = useCodeReviewStore((s) => s.review.repoPath);
+  const reviewStatus = useCodeReviewStore((s) => s.review.status);
   const isMinimizedForThisRepo = isMinimized && reviewRepoPath === repoPath;
   const isMinimizedInProgress =
     isMinimizedForThisRepo && (reviewStatus === 'streaming' || reviewStatus === 'initializing');

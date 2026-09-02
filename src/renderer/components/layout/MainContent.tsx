@@ -40,7 +40,7 @@ import { useI18n } from '@/i18n';
 import { springFast } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
-import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
+import { useCodeReviewStore } from '@/stores/codeReview';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
 import { TerminalPanel } from '../terminal';
@@ -115,9 +115,9 @@ export function MainContent({
   // AI Code Review Modal state
   const [isAIReviewModalOpen, setIsAIReviewModalOpen] = useState(false);
   const codeReviewEnabled = useSettingsStore((s) => s.codeReview.enabled);
-  const isCodeReviewMinimized = useCodeReviewContinueStore((s) => s.isMinimized);
-  const codeReviewRepoPath = useCodeReviewContinueStore((s) => s.review.repoPath);
-  const codeReviewStatus = useCodeReviewContinueStore((s) => s.review.status);
+  const isCodeReviewMinimized = useCodeReviewStore((s) => s.isMinimized);
+  const codeReviewRepoPath = useCodeReviewStore((s) => s.review.repoPath);
+  const codeReviewStatus = useCodeReviewStore((s) => s.review.status);
   const isAIReviewMinimizedForThisRepo = isCodeReviewMinimized && codeReviewRepoPath === repoPath;
   const isAIReviewMinimizedInProgress =
     isAIReviewMinimizedForThisRepo &&

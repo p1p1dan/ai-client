@@ -220,6 +220,61 @@ export interface WorkerExtensionUiResponseResult {
 }
 
 export type WorkerSendRequest = WorkerRpcRequest<'worker.send', WorkerSendPayload>;
+
+/**
+ * Stateless, one-shot completion request. It never creates a Pi SessionManager,
+ * session JSONL, or logical chat-session identity.
+ */
+export interface WorkerUtilityStartPayload {
+  operationId: string;
+  cwd: string;
+  prompt: string;
+  model?: string;
+  effort?: SessionEffortLevel;
+  timeoutMs: number;
+}
+
+export interface WorkerUtilityStartResult {
+  accepted: true;
+  operationId: string;
+}
+
+export interface WorkerUtilityCancelPayload {
+  operationId: string;
+  reason: 'user' | 'timeout' | 'dispose';
+}
+
+export interface WorkerUtilityCancelResult {
+  cancelled: boolean;
+}
+
+export interface WorkerUtilityDeltaPayload {
+  operationId: string;
+  delta: string;
+}
+
+export interface WorkerUtilityTerminalPayload {
+  operationId: string;
+  state: 'completed' | 'cancelled' | 'failed';
+  text: string;
+  model?: string;
+  error?: string;
+}
+
+export type WorkerUtilityStartRequest = WorkerRpcRequest<
+  'utility.start',
+  WorkerUtilityStartPayload
+>;
+export type WorkerUtilityCancelRequest = WorkerRpcRequest<
+  'utility.cancel',
+  WorkerUtilityCancelPayload
+>;
+export type WorkerUtilityDeltaEvent = WorkerRpcEvent<'utility.delta', WorkerUtilityDeltaPayload>;
+export type WorkerUtilityTerminalEvent = WorkerRpcEvent<
+  'utility.terminal',
+  WorkerUtilityTerminalPayload
+>;
+
 export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHistoryPayload>;
 export type WorkerTreeRequest = WorkerRpcRequest<'worker.tree', WorkerTreePayload>;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
@@ -388,6 +443,75 @@ export function isWorkerSendResult(value: unknown): value is WorkerSendResult {
     value.accepted === true &&
     typeof value.requestId === 'string' &&
     value.requestId.trim().length > 0
+  );
+}
+
+export function isWorkerUtilityStartPayload(value: unknown): value is WorkerUtilityStartPayload {
+  if (!isRecord(value)) return false;
+  if (
+    !nonEmptyString(value.operationId) ||
+    !nonEmptyString(value.cwd) ||
+    !nonEmptyString(value.prompt) ||
+    !Number.isSafeInteger(value.timeoutMs) ||
+    Number(value.timeoutMs) < 1 ||
+    Number(value.timeoutMs) > 10 * 60_000
+  ) {
+    return false;
+  }
+  if (value.model !== undefined && !nonEmptyString(value.model)) return false;
+  return value.effort === undefined || isWorkerEffort(value.effort);
+}
+
+export function isWorkerUtilityStartResult(value: unknown): value is WorkerUtilityStartResult {
+  return isRecord(value) && value.accepted === true && nonEmptyString(value.operationId);
+}
+
+export function isWorkerUtilityCancelPayload(value: unknown): value is WorkerUtilityCancelPayload {
+  return (
+    isRecord(value) &&
+    nonEmptyString(value.operationId) &&
+    (value.reason === 'user' || value.reason === 'timeout' || value.reason === 'dispose')
+  );
+}
+
+export function isWorkerUtilityCancelResult(value: unknown): value is WorkerUtilityCancelResult {
+  return isRecord(value) && typeof value.cancelled === 'boolean';
+}
+
+export function isWorkerUtilityDeltaPayload(value: unknown): value is WorkerUtilityDeltaPayload {
+  return isRecord(value) && nonEmptyString(value.operationId) && typeof value.delta === 'string';
+}
+
+export function isWorkerUtilityTerminalPayload(
+  value: unknown
+): value is WorkerUtilityTerminalPayload {
+  if (
+    !isRecord(value) ||
+    !nonEmptyString(value.operationId) ||
+    (value.state !== 'completed' && value.state !== 'cancelled' && value.state !== 'failed') ||
+    typeof value.text !== 'string'
+  ) {
+    return false;
+  }
+  return (
+    (value.model === undefined || nonEmptyString(value.model)) &&
+    (value.error === undefined || typeof value.error === 'string')
+  );
+}
+
+export function isWorkerUtilityDeltaEvent(value: unknown): value is WorkerUtilityDeltaEvent {
+  return (
+    isWorkerRpcEvent(value) &&
+    value.type === 'utility.delta' &&
+    isWorkerUtilityDeltaPayload(value.payload)
+  );
+}
+
+export function isWorkerUtilityTerminalEvent(value: unknown): value is WorkerUtilityTerminalEvent {
+  return (
+    isWorkerRpcEvent(value) &&
+    value.type === 'utility.terminal' &&
+    isWorkerUtilityTerminalPayload(value.payload)
   );
 }
 

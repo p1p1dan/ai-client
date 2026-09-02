@@ -349,11 +349,8 @@ export function CreateWorktreeDialog({
         .replaceAll('{current_time}', currentTime);
       const result = await window.electronAPI.git.generateBranchName(workdir, {
         prompt,
-        provider: branchNameGenerator.provider,
         model: branchNameGenerator.model,
-        reasoningEffort: branchNameGenerator.reasoningEffort,
-        bare: branchNameGenerator.bare,
-        claudeEffort: branchNameGenerator.claudeEffort,
+        effort: branchNameGenerator.effort,
       });
 
       if (result.success && result.branchName) {

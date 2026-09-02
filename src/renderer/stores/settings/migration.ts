@@ -43,6 +43,33 @@ function sanitizeString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+const LEGACY_AI_FEATURE_KEYS = [
+  'commitMessageGenerator',
+  'codeReview',
+  'branchNameGenerator',
+  'todoPolish',
+] as const;
+
+export function sanitizeLegacyAiSettings(
+  persisted: Partial<SettingsState>
+): Partial<SettingsState> {
+  const next = { ...(persisted as Record<string, unknown>) };
+  for (const key of LEGACY_AI_FEATURE_KEYS) {
+    const raw = next[key];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const value = { ...(raw as Record<string, unknown>) };
+    delete value.provider;
+    delete value.reasoningEffort;
+    delete value.bare;
+    delete value.claudeEffort;
+    // Bare legacy model ids have no stable Pi identity. Only retain explicit
+    // provider/model references already written by a Pi-aware build.
+    if (typeof value.model !== 'string' || !value.model.includes('/')) delete value.model;
+    next[key] = value;
+  }
+  return next as Partial<SettingsState>;
+}
+
 /**
  * Migrate persisted state to current state format
  * Handles version upgrades, field sanitization, and legacy data migration
@@ -155,9 +182,11 @@ export function migrateSettings(
     })
   );
 
+  const sanitizedPersisted = sanitizeLegacyAiSettings(persisted);
+
   return {
     ...currentState,
-    ...persisted,
+    ...sanitizedPersisted,
     // Override with migrated/sanitized values
     ...(migratedTheme && { theme: migratedTheme }),
     ...(terminalRenderer && { terminalRenderer }),
@@ -205,19 +234,19 @@ export function migrateSettings(
     claudeCodeIntegration: migratedClaudeCodeIntegration,
     commitMessageGenerator: {
       ...currentState.commitMessageGenerator,
-      ...persisted.commitMessageGenerator,
+      ...sanitizedPersisted.commitMessageGenerator,
     },
     codeReview: {
       ...currentState.codeReview,
-      ...persisted.codeReview,
+      ...sanitizedPersisted.codeReview,
     },
     branchNameGenerator: {
       ...currentState.branchNameGenerator,
-      ...persisted.branchNameGenerator,
+      ...sanitizedPersisted.branchNameGenerator,
     },
     todoPolish: {
       ...currentState.todoPolish,
-      ...persisted.todoPolish,
+      ...sanitizedPersisted.todoPolish,
     },
     hapiSettings: {
       ...currentState.hapiSettings,
@@ -355,12 +384,25 @@ export async function cleanupLegacyFields(): Promise<void> {
 
     if (aiclientSettings?.state) {
       const legacyFields = ['terminalKeybindings', 'agentKeybindings', 'terminalPaneKeybindings'];
-      const hasLegacy = legacyFields.some((f) => f in aiclientSettings.state!);
+      let changed = legacyFields.some((field) => field in aiclientSettings.state!);
 
-      if (hasLegacy) {
-        for (const field of legacyFields) {
-          delete aiclientSettings.state[field];
+      for (const field of legacyFields) {
+        delete aiclientSettings.state[field];
+      }
+
+      const sanitized = sanitizeLegacyAiSettings(
+        aiclientSettings.state as Partial<SettingsState>
+      ) as Record<string, unknown>;
+      for (const key of LEGACY_AI_FEATURE_KEYS) {
+        const before = aiclientSettings.state[key];
+        const after = sanitized[key];
+        if (JSON.stringify(before) !== JSON.stringify(after)) {
+          aiclientSettings.state[key] = after;
+          changed = true;
         }
+      }
+
+      if (changed) {
         await window.electronAPI.settings.write(settingsData);
       }
     }

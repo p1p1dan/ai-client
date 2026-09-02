@@ -545,7 +545,7 @@ export interface SettingsState {
 }
 
 // Re-export types from @shared/types
-export type { AIProvider, ClaudeEffort, CommonAISettings, ReasoningEffort } from '@shared/types';
+export type { CommonAISettings } from '@shared/types';
 
 // Builtin agent IDs
 export const BUILTIN_AGENT_IDS: BuiltinAgentId[] = [

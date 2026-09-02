@@ -5,8 +5,8 @@ import {
   CodeReviewBusyError,
   startCodeReview,
   stopCodeReview,
-  useCodeReviewContinueStore,
-} from '@/stores/codeReviewContinue';
+  useCodeReviewStore,
+} from '@/stores/codeReview';
 import { useSettingsStore } from '@/stores/settings';
 
 interface UseCodeReviewOptions {
@@ -25,19 +25,16 @@ interface UseCodeReviewReturn {
 export function useCodeReview({ repoPath }: UseCodeReviewOptions): UseCodeReviewReturn {
   const { t } = useI18n();
   const codeReviewSettings = useSettingsStore((s) => s.codeReview);
-  const review = useCodeReviewContinueStore((s) => s.review);
-  const resetReview = useCodeReviewContinueStore((s) => s.resetReview);
+  const review = useCodeReviewStore((s) => s.review);
+  const resetReview = useCodeReviewStore((s) => s.resetReview);
 
   const startReview = useCallback(async () => {
     if (!repoPath) return;
 
     try {
       await startCodeReview(repoPath, {
-        provider: codeReviewSettings.provider,
         model: codeReviewSettings.model,
-        reasoningEffort: codeReviewSettings.reasoningEffort,
-        bare: codeReviewSettings.bare,
-        claudeEffort: codeReviewSettings.claudeEffort,
+        effort: codeReviewSettings.effort,
         language: codeReviewSettings.language ?? '中文',
         prompt: codeReviewSettings.prompt,
       });
@@ -57,11 +54,8 @@ export function useCodeReview({ repoPath }: UseCodeReviewOptions): UseCodeReview
     }
   }, [
     repoPath,
-    codeReviewSettings.provider,
     codeReviewSettings.model,
-    codeReviewSettings.reasoningEffort,
-    codeReviewSettings.bare,
-    codeReviewSettings.claudeEffort,
+    codeReviewSettings.effort,
     codeReviewSettings.language,
     codeReviewSettings.prompt,
     t,

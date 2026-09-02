@@ -3,8 +3,13 @@ import {
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerBootstrapResult,
   type WorkerRpcRequest,
+  type WorkerUtilityStartPayload,
 } from '../../shared/types/workerRpc.ts';
-import { PiWorkerRpcServer, type PiWorkerRuntime } from '../piWorkerRpcServer.ts';
+import {
+  type PiUtilityRuntime,
+  PiWorkerRpcServer,
+  type PiWorkerRuntime,
+} from '../piWorkerRpcServer.ts';
 import type { PiWorkerSessionOptions } from '../piWorkerSession.ts';
 
 function request(
@@ -211,6 +216,64 @@ describe('PiWorkerRpcServer', () => {
     await vi.waitFor(() => expect(messages).toHaveLength(2));
     expect(respondExtensionUi).toHaveBeenCalledTimes(1);
     expect(messages[1]).toMatchObject({ result: { handled: true } });
+  });
+
+  it('routes one-shot utility start and cancellation without constructing a session runtime', async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    const utility: PiUtilityRuntime = {
+      start: vi.fn(async (input: WorkerUtilityStartPayload) => ({
+        accepted: true as const,
+        operationId: input.operationId,
+      })),
+      cancel: vi.fn(async () => ({ cancelled: true })),
+      dispose: vi.fn(async () => undefined),
+    };
+    const createRuntime = vi.fn((_options: PiWorkerSessionOptions) => runtime());
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime,
+      createUtilityRuntime: () => utility,
+    });
+
+    server.receive(
+      request('utility-start', 'utility.start', {
+        operationId: 'utility-1',
+        cwd: '/repo',
+        prompt: 'summarize',
+        timeoutMs: 60_000,
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]).toMatchObject({
+      requestId: 'utility-start',
+      ok: true,
+      result: { accepted: true, operationId: 'utility-1' },
+    });
+    expect(createRuntime).not.toHaveBeenCalled();
+
+    server.receive(
+      request('utility-cancel', 'utility.cancel', {
+        operationId: 'utility-1',
+        reason: 'user',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(utility.cancel).toHaveBeenCalledTimes(1);
+
+    server.receive(
+      request('session-conflict', 'worker.bootstrap', {
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    expect(messages[2]).toMatchObject({
+      requestId: 'session-conflict',
+      ok: false,
+      error: { code: 'WORKER_UTILITY_SLOT_CONFLICT' },
+    });
   });
 
   it('returns correlated errors for stale, malformed, unknown, and pre-bootstrap send', async () => {

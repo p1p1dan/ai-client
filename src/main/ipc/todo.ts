@@ -1,7 +1,5 @@
 import { IPC_CHANNELS } from '@shared/types';
-import type { ClaudeEffort } from '@shared/types/ai';
 import { ipcMain } from 'electron';
-import type { AIProvider, ModelId, ReasoningEffort } from '../services/ai';
 import { polishTodoTask } from '../services/ai';
 import { localSessionManager } from '../services/LocalSessionManager';
 import * as todoService from '../services/todo/TodoService';
@@ -84,22 +82,18 @@ export function registerTodoHandlers(): void {
       options: {
         text: string;
         timeout: number;
-        provider: string;
-        model: string;
-        reasoningEffort?: string;
-        bare?: boolean;
-        claudeEffort?: string;
+        model?: string;
+        effort?: string;
         prompt?: string;
       }
     ): Promise<{ success: boolean; title?: string; description?: string; error?: string }> => {
       return polishTodoTask({
         text: options.text,
         timeout: options.timeout,
-        provider: (options.provider ?? 'claude-code') as AIProvider,
-        model: options.model as ModelId,
-        reasoningEffort: options.reasoningEffort as ReasoningEffort | undefined,
-        bare: options.bare,
-        claudeEffort: options.claudeEffort as ClaudeEffort | undefined,
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort
+          ? { effort: options.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+          : {}),
         prompt: options.prompt,
       });
     }

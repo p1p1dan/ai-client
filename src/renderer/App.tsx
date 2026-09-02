@@ -24,7 +24,6 @@ import {
 import {
   useAppLifecycle,
   useBackgroundImage,
-  useCodeReviewContinue,
   useFileDragDrop,
   useGroupSync,
   useMenuActions,
@@ -699,7 +698,6 @@ export default function App() {
   // effect would close over the pre-hydration `repositories === []`, and
   // `saveRepositories([...[], newRepo])` would wipe out existing repos.
   useOpenPathListener(hydrated, repositories, saveRepositories, setSelectedRepoState);
-  useCodeReviewContinue(activeWorktree, handleTabChange);
   useWorktreeSync(worktrees, activeWorktree, worktreesFetching, setActiveWorktree, selectedRepo);
 
   const handleReorderWorktrees = useCallback(

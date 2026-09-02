@@ -4,11 +4,9 @@ import {
   Copy,
   Expand,
   Loader2,
-  MessageSquare,
   Minimize2,
   Play,
   RefreshCw,
-  Send,
   Shrink,
   Sparkles,
   Square,
@@ -43,10 +41,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toastManager } from '@/components/ui/toast';
 import { useCodeReview } from '@/hooks/useCodeReview';
 import { useI18n } from '@/i18n';
-import { useActiveSessionId } from '@/stores/agentSessions';
-import { stopCodeReview, useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
+import { stopCodeReview, useCodeReviewStore } from '@/stores/codeReview';
 import { useSettingsStore } from '@/stores/settings';
-import { useTerminalWriteStore } from '@/stores/terminalWrite';
 
 const markdownComponents: Components = {
   pre: ({ children }) => <>{children}</>,
@@ -138,29 +134,22 @@ interface CodeReviewModalProps {
 }
 
 export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModalProps) {
-  const sessionId = useActiveSessionId(repoPath);
   const { t } = useI18n();
   const { content, status, error, startReview, reset } = useCodeReview({ repoPath });
   const codeReviewSettings = useSettingsStore((s) => s.codeReview);
   const [isMaximized, setIsMaximized] = useState(true);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
-  const reviewRepoPath = useCodeReviewContinueStore((s) => s.review.repoPath);
-  const reviewSessionId = useCodeReviewContinueStore((s) => s.review.sessionId); // For continue conversation
-  const minimize = useCodeReviewContinueStore((s) => s.minimize);
-  const isMinimized = useCodeReviewContinueStore((s) => s.isMinimized);
-  const requestContinue = useCodeReviewContinueStore((s) => s.requestContinue);
-  const requestChatTabSwitch = useCodeReviewContinueStore((s) => s.requestChatTabSwitch);
-  const write = useTerminalWriteStore((s) => s.write);
-  const focus = useTerminalWriteStore((s) => s.focus);
-  const hasWriter = useTerminalWriteStore((s) => (sessionId ? s.writers.has(sessionId) : false));
+  const reviewRepoPath = useCodeReviewStore((s) => s.review.repoPath);
+  const minimize = useCodeReviewStore((s) => s.minimize);
+  const isMinimized = useCodeReviewStore((s) => s.isMinimized);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
 
   useEffect(() => {
     if (open && isMinimized) {
-      useCodeReviewContinueStore.getState().restore();
+      useCodeReviewStore.getState().restore();
     }
   }, [open, isMinimized]);
 
@@ -259,40 +248,6 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
     [status, isCurrentRepo, handleMinimize, onOpenChange]
   );
 
-  const handleContinueConversation = useCallback(() => {
-    if (reviewRepoPath !== repoPath) return;
-    if (reviewSessionId) {
-      requestContinue(reviewSessionId, codeReviewSettings.provider ?? undefined);
-      onOpenChange(false);
-    }
-  }, [
-    reviewRepoPath,
-    repoPath,
-    reviewSessionId,
-    codeReviewSettings.provider,
-    requestContinue,
-    onOpenChange,
-  ]);
-
-  const handleSendToCurrentSession = useCallback(() => {
-    if (reviewRepoPath !== repoPath) return;
-    if (!sessionId || !hasWriter || !content) return;
-    write(sessionId, `${content}\r`);
-    focus(sessionId);
-    requestChatTabSwitch();
-    handleMinimize();
-  }, [
-    reviewRepoPath,
-    repoPath,
-    sessionId,
-    hasWriter,
-    content,
-    write,
-    focus,
-    requestChatTabSwitch,
-    handleMinimize,
-  ]);
-
   const StatusIcon = () => {
     switch (displayStatus) {
       case 'initializing':
@@ -347,7 +302,7 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
               <span>
                 {t('Code Review')}
                 <span className="text-muted-foreground font-normal">
-                  ({codeReviewSettings.provider}/{codeReviewSettings.model})
+                  ({codeReviewSettings.model})
                 </span>
               </span>
             </DialogTitle>
@@ -429,21 +384,6 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
               <Button variant="outline" onClick={handleMinimize}>
                 <Minimize2 className="h-4 w-4 mr-2" />
                 {t('Minimize')}
-              </Button>
-            )}
-            {(codeReviewSettings.provider === 'claude-code' ||
-              codeReviewSettings.provider === 'cursor-cli') &&
-              displayStatus === 'complete' &&
-              displayContent && (
-                <Button variant="outline" onClick={handleContinueConversation}>
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  {t('Continue Conversation')}
-                </Button>
-              )}
-            {isCurrentRepo && displayContent && sessionId && (
-              <Button variant="outline" onClick={handleSendToCurrentSession} disabled={!hasWriter}>
-                <Send className="h-4 w-4 mr-2" />
-                {t('Send to Current Session')}
               </Button>
             )}
             {(displayStatus === 'streaming' || displayStatus === 'initializing') && (

@@ -1,7 +1,8 @@
-import type { CommonAICLIOptions } from '@shared/types/ai';
-import { parseCLIOutput, spawnCLI, stripCodeFence } from './providers';
+import type { CommonAICompletionOptions } from '@shared/types/ai';
+import { piUtilityService } from '../agent-host/PiUtilityService';
+import { stripCodeFence } from './providers';
 
-export interface TodoPolishOptions extends CommonAICLIOptions {
+export interface TodoPolishOptions extends CommonAICompletionOptions {
   text: string; // Raw requirement text to polish
   timeout: number; // in seconds
   prompt?: string; // Custom prompt template (with {text} placeholder)
@@ -43,16 +44,7 @@ function parsePolishOutput(raw: string): { title: string; description: string } 
 }
 
 export async function polishTodoTask(options: TodoPolishOptions): Promise<TodoPolishResult> {
-  const {
-    text,
-    timeout,
-    provider,
-    model,
-    reasoningEffort,
-    bare,
-    claudeEffort,
-    prompt: customPrompt,
-  } = options;
+  const { text, timeout, model, effort, prompt: customPrompt } = options;
 
   const defaultPrompt = `You are a task management assistant. Convert the following raw requirement text into a structured todo task.
 
@@ -68,69 +60,19 @@ Raw requirement:
   const promptTemplate = customPrompt || defaultPrompt;
   const prompt = promptTemplate.replace(/\{text\}/g, () => text);
 
-  return new Promise((resolve) => {
-    const timeoutMs = timeout * 1000;
-
-    const { proc, kill } = spawnCLI({
-      provider,
-      model,
-      prompt,
+  try {
+    const completion = await piUtilityService.complete({
       cwd: process.cwd(),
-      reasoningEffort,
-      bare,
-      claudeEffort,
-      outputFormat: 'json',
+      prompt,
+      ...(model ? { model } : {}),
+      ...(effort ? { effort } : {}),
+      timeoutMs: timeout * 1000,
     });
-
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    const timer = setTimeout(() => {
-      settled = true;
-      kill();
-      resolve({ success: false, error: 'timeout' });
-    }, timeoutMs);
-
-    proc.stdout?.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr?.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (settled) return;
-      settled = true;
-
-      if (code !== 0) {
-        console.error(`[todo-polish] Exit code: ${code}, stderr: ${stderr}`);
-        resolve({ success: false, error: stderr || `Exit code: ${code}` });
-        return;
-      }
-
-      const result = parseCLIOutput(provider, stdout);
-
-      if (result.success && result.text) {
-        const parsed = parsePolishOutput(result.text);
-        if (parsed) {
-          resolve({ success: true, title: parsed.title, description: parsed.description });
-        } else {
-          resolve({ success: false, error: 'Failed to parse AI output as JSON' });
-        }
-      } else {
-        resolve({ success: false, error: result.error || 'Unknown error' });
-      }
-    });
-
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      if (settled) return;
-      settled = true;
-      console.error(`[todo-polish] Process error:`, err);
-      resolve({ success: false, error: err.message });
-    });
-  });
+    const parsed = parsePolishOutput(completion.text);
+    return parsed
+      ? { success: true, title: parsed.title, description: parsed.description }
+      : { success: false, error: 'Failed to parse AI output as JSON' };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }

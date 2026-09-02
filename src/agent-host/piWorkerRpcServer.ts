@@ -24,6 +24,8 @@ import {
   isWorkerSendPayload,
   isWorkerStopPayload,
   isWorkerTreePayload,
+  isWorkerUtilityCancelPayload,
+  isWorkerUtilityStartPayload,
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
@@ -48,9 +50,14 @@ import {
   type WorkerStopResult,
   type WorkerTreePayload,
   type WorkerTreeResult,
+  type WorkerUtilityCancelPayload,
+  type WorkerUtilityCancelResult,
+  type WorkerUtilityStartPayload,
+  type WorkerUtilityStartResult,
 } from '../shared/types/workerRpc.ts';
 import { PermissionGateUnavailableError } from './piAgentSessionBootstrap.ts';
 import { PiLegacyImportWriter } from './piLegacyImport.ts';
+import { PiUtilityRunner } from './piUtilityRunner.ts';
 import {
   PiWorkerSession,
   PiWorkerSessionError,
@@ -74,11 +81,18 @@ export interface PiWorkerRuntime {
   dispose(): Promise<void>;
 }
 
+export interface PiUtilityRuntime {
+  start(input: WorkerUtilityStartPayload): Promise<WorkerUtilityStartResult>;
+  cancel(input: WorkerUtilityCancelPayload): Promise<WorkerUtilityCancelResult>;
+  dispose(): Promise<void>;
+}
+
 export interface PiWorkerRpcServerOptions {
   port: PiWorkerMessagePort;
   generation: number;
   projectTrusted: boolean;
   createRuntime?: (options: PiWorkerSessionOptions) => PiWorkerRuntime;
+  createUtilityRuntime?: () => PiUtilityRuntime;
   loadSdk?: () => Promise<unknown>;
   log?: (...args: unknown[]) => void;
   onDisposed?: () => void;
@@ -156,6 +170,7 @@ export class PiWorkerRpcServer {
   private chain = Promise.resolve();
   private bootstrapPayload: WorkerBootstrapPayload | null = null;
   private runtime: PiWorkerRuntime | null = null;
+  private utilityRuntime: PiUtilityRuntime | null = null;
   private importWriter: PiLegacyImportWriter | null = null;
   private disposed = false;
   private eventSequence = 0;
@@ -228,6 +243,12 @@ export class PiWorkerRpcServer {
         case 'worker.send':
           await this.handleSend(request);
           break;
+        case 'utility.start':
+          await this.handleUtilityStart(request);
+          break;
+        case 'utility.cancel':
+          await this.handleUtilityCancel(request);
+          break;
         case 'worker.history':
           await this.handleHistory(request);
           break;
@@ -272,6 +293,12 @@ export class PiWorkerRpcServer {
         retryable: false,
       });
       return;
+    }
+    if (this.utilityRuntime) {
+      throw new PiWorkerSessionError(
+        'WORKER_UTILITY_SLOT_CONFLICT',
+        'A one-shot utility worker cannot import a durable Pi session'
+      );
     }
     if (this.runtime || this.bootstrapPayload) {
       throw new PiWorkerSessionError(
@@ -360,6 +387,12 @@ export class PiWorkerRpcServer {
       });
       return;
     }
+    if (this.utilityRuntime) {
+      throw new PiWorkerSessionError(
+        'WORKER_UTILITY_SLOT_CONFLICT',
+        'A one-shot utility worker cannot bootstrap a durable Pi AgentSession'
+      );
+    }
     if (this.bootstrapPayload && !sameBootstrap(this.bootstrapPayload, request.payload)) {
       this.respondError(request, {
         code: 'WORKER_ALREADY_BOOTSTRAPPED',
@@ -402,6 +435,50 @@ export class PiWorkerRpcServer {
     // out of band so the serialized RPC chain remains available to worker.stop.
     const result = await this.runtime.startSend(request.payload);
     this.respondSuccess(request, result);
+  }
+
+  private async handleUtilityStart(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerUtilityStartPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'utility.start requires an operation id, cwd, prompt, and valid timeout',
+        retryable: false,
+      });
+      return;
+    }
+    if (this.runtime || this.bootstrapPayload || this.importWriter) {
+      throw new PiWorkerSessionError(
+        'WORKER_UTILITY_SLOT_CONFLICT',
+        'A session or import worker cannot run a one-shot utility operation'
+      );
+    }
+    if (!this.utilityRuntime) {
+      this.utilityRuntime =
+        this.options.createUtilityRuntime?.() ??
+        new PiUtilityRunner({
+          projectTrusted: this.options.projectTrusted,
+          emitDelta: (payload) => this.emitUtilityEvent('utility.delta', payload),
+          emitTerminal: (payload) => this.emitUtilityEvent('utility.terminal', payload),
+          log: this.log,
+        });
+    }
+    this.respondSuccess(request, await this.utilityRuntime.start(request.payload));
+  }
+
+  private async handleUtilityCancel(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerUtilityCancelPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'utility.cancel requires an operation id and valid reason',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.utilityRuntime) {
+      this.respondSuccess(request, { cancelled: false } satisfies WorkerUtilityCancelResult);
+      return;
+    }
+    this.respondSuccess(request, await this.utilityRuntime.cancel(request.payload));
   }
 
   private async handleHistory(request: WorkerRpcRequest): Promise<void> {
@@ -544,12 +621,26 @@ export class PiWorkerRpcServer {
     if (!this.disposed) {
       this.disposed = true;
       await this.runtime?.dispose();
+      await this.utilityRuntime?.dispose();
       this.runtime = null;
+      this.utilityRuntime = null;
       this.importWriter = null;
     }
     const result: WorkerDisposeResult = { disposed: true };
     this.respondSuccess(request, result);
     this.options.onDisposed?.();
+  }
+
+  private emitUtilityEvent(type: 'utility.delta' | 'utility.terminal', payload: unknown): void {
+    if (this.disposed) return;
+    const event: WorkerRpcEvent = {
+      protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+      kind: 'event',
+      generation: this.options.generation,
+      type,
+      payload,
+    };
+    this.options.port.postMessage(event);
   }
 
   private emitRuntimeEvent(event: RuntimeEventDraft): void {

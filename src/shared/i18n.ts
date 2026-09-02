@@ -982,7 +982,6 @@ export const zhTranslations: Record<string, string> = {
   'Review in progress. Are you sure you want to restart?': '审查进行中，确定要重新开始吗？',
   'Confirm Restart': '确认重新开始',
   Restart: '重新开始',
-  'Send to Current Session': '发送到当前会话',
   Restore: '还原',
   Maximize: '最大化',
   'Branch Name Generator': '分支名称生成器',

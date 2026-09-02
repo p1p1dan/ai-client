@@ -1,4 +1,9 @@
-import { useEffect, useState } from 'react';
+import type { AgentModelOption } from '@shared/types/agentCatalog';
+import type { SessionEffortLevel } from '@shared/types/agentHost';
+import type { CommonAISettings } from '@shared/types/ai';
+import { useEffect } from 'react';
+import { effortsForModel, reconcileEffortForModel } from '@/components/chat/efforts';
+import { usePiModelCatalog } from '@/components/chat/usePiModelCatalog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -10,7 +15,6 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
 import {
-  type AIProvider,
   defaultBranchNameGeneratorSettings,
   defaultCodeReviewPromptEn,
   defaultCodeReviewPromptZh,
@@ -18,226 +22,145 @@ import {
   defaultCommitPromptZh,
   defaultTodoPolishPromptEn,
   defaultTodoPolishPromptZh,
-  type ReasoningEffort,
   useSettingsStore,
-  validateCodeReviewPrompt,
 } from '@/stores/settings';
 
-// Provider options
-const PROVIDERS: { value: AIProvider; label: string }[] = [
-  { value: 'claude-code', label: 'Claude Code' },
-  { value: 'codex-cli', label: 'Codex CLI' },
-  { value: 'cursor-cli', label: 'Cursor CLI' },
-  { value: 'gemini-cli', label: 'Gemini CLI' },
-];
+type FeatureKey = 'commitMessageGenerator' | 'codeReview' | 'branchNameGenerator' | 'todoPolish';
 
-// Model options per provider
-const MODELS_BY_PROVIDER: Record<AIProvider, { value: string; label: string }[]> = {
-  'claude-code': [
-    { value: 'haiku', label: 'Haiku' },
-    { value: 'sonnet', label: 'Sonnet' },
-    { value: 'opus', label: 'Opus' },
-  ],
-  'codex-cli': [
-    { value: 'gpt-5.2', label: 'GPT-5.2' },
-    { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' },
-  ],
-  'cursor-cli': [
-    { value: 'auto', label: 'Auto' },
-    { value: 'composer-1', label: 'Composer 1' },
-    { value: 'gpt-5.2', label: 'GPT-5.2' },
-    { value: 'sonnet-4.5', label: 'Sonnet 4.5' },
-    { value: 'opus-4.6', label: 'Opus 4.6' },
-  ],
-  'gemini-cli': [
-    { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview' },
-    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' },
-  ],
+type FeatureSettings = CommonAISettings & {
+  enabled: boolean;
+  timeout?: number;
+  maxDiffLines?: number;
+  language?: string;
+  prompt: string;
 };
 
-// Reasoning effort options for Codex CLI
-const REASONING_EFFORTS: { value: string; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'minimal', label: 'Minimal' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'xHigh' },
-];
+const AUTOMATIC = '__automatic__';
 
-// Get default model for provider
-function getDefaultModel(provider: AIProvider): string {
-  const models = MODELS_BY_PROVIDER[provider];
-  return models[0]?.value ?? 'haiku';
-}
-
-// Sentinel for the "Custom model" menu item. Must not collide with any real
-// provider model id — the leading underscores make that effectively impossible.
-const CUSTOM_MODEL_OPTION = '__custom__';
-
-// Provider model selector: Select dropdown of presets + a "Custom model" option
-// that reveals a text input. Presets are hints, not a whitelist — model IDs
-// evolve faster than this file, so any string is accepted as a final value.
-// Typing is buffered in local state; the global settings store is written only
-// on preset pick, Enter, or blur — not on every keystroke. Empty custom input
-// falls back to the provider default rather than persisting "".
-function ModelSelector({
-  provider,
+function ModelField({
   value,
   onChange,
-  ariaLabel,
+  models,
 }: {
-  provider: AIProvider;
   value: string;
-  onChange: (model: string) => void;
-  ariaLabel?: string;
+  onChange: (value: string) => void;
+  models: readonly AgentModelOption[];
 }) {
-  const { t } = useI18n();
-  const presets = MODELS_BY_PROVIDER[provider] ?? [];
-  const valueMatchesPreset = presets.some((m) => m.value === value);
+  const selected = value && models.some((model) => model.id === value) ? value : AUTOMATIC;
+  return (
+    <Select
+      value={selected}
+      onValueChange={(next) => next && onChange(next === AUTOMATIC ? '' : next)}
+    >
+      <SelectTrigger className="w-64">
+        <SelectValue>
+          {models.find((model) => model.id === selected)?.label ?? 'Automatic'}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectItem value={AUTOMATIC}>Automatic</SelectItem>
+        {models.map((model) => (
+          <SelectItem key={model.id} value={model.id}>
+            {model.label}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+}
 
-  const [customMode, setCustomMode] = useState(!valueMatchesPreset);
-  const [draft, setDraft] = useState(value);
+function EffortField({
+  value,
+  model,
+  onChange,
+}: {
+  value: SessionEffortLevel | undefined;
+  model: AgentModelOption | undefined;
+  onChange: (value: SessionEffortLevel | undefined) => void;
+}) {
+  const options = effortsForModel(model);
+  const reconciled = reconcileEffortForModel(value, model);
 
-  // Re-sync to the committed value when it changes externally (e.g. provider switch).
-  // `presets` is derived from `provider`, so depending on it is sufficient.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: presets derived from provider
   useEffect(() => {
-    setDraft(value);
-    setCustomMode(!presets.some((m) => m.value === value));
-  }, [value, provider]);
-
-  const commit = (next: string) => {
-    const trimmed = next.trim();
-    const finalValue = trimmed.length > 0 ? trimmed : getDefaultModel(provider);
-    setDraft(finalValue);
-    if (finalValue !== value) {
-      onChange(finalValue);
-    }
-    // Committed value is a preset → collapse the custom input back to the dropdown.
-    if (presets.some((m) => m.value === finalValue)) {
-      setCustomMode(false);
-    }
-  };
-
-  const selectValue = customMode ? CUSTOM_MODEL_OPTION : value;
-  const selectLabel = customMode
-    ? t('Custom model')
-    : (presets.find((m) => m.value === value)?.label ?? value);
-
-  const handleSelectChange = (next: string | null) => {
-    if (!next) return;
-    if (next === CUSTOM_MODEL_OPTION) {
-      setCustomMode(true);
-      // Keep the current value as the starting draft so users can tweak it.
-      setDraft(value);
-      return;
-    }
-    setCustomMode(false);
-    if (next !== value) {
-      onChange(next);
-    }
-  };
+    if (value && reconciled === 'default') onChange(undefined);
+  }, [onChange, reconciled, value]);
 
   return (
-    <div className="space-y-1.5">
-      <Select value={selectValue} onValueChange={handleSelectChange}>
-        <SelectTrigger aria-label={ariaLabel} className="w-40">
-          <SelectValue>{selectLabel}</SelectValue>
-        </SelectTrigger>
-        <SelectPopup>
-          {presets.map((m) => (
-            <SelectItem key={m.value} value={m.value}>
-              {m.label}
-            </SelectItem>
-          ))}
-          <SelectItem value={CUSTOM_MODEL_OPTION}>{t('Custom model')}</SelectItem>
-        </SelectPopup>
-      </Select>
-      {customMode && (
-        <Input
-          aria-label={ariaLabel}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => commit(draft)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              e.currentTarget.blur();
-            } else if (e.key === 'Escape') {
-              setDraft(value);
-              e.currentTarget.blur();
-            }
-          }}
-          placeholder={t('Enter model id (e.g. gpt-5.4)')}
-          className="w-56"
-        />
-      )}
-    </div>
+    <Select
+      value={reconciled}
+      onValueChange={(next) =>
+        next && onChange(next === 'default' ? undefined : (next as SessionEffortLevel))
+      }
+    >
+      <SelectTrigger className="w-40">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectItem value="default">Automatic</SelectItem>
+        {options.map((effort) => (
+          <SelectItem key={effort.id} value={effort.id}>
+            {effort.label}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
   );
 }
 
 export function AISettings() {
   const { t, locale } = useI18n();
-  const {
-    commitMessageGenerator,
-    setCommitMessageGenerator,
-    codeReview,
-    setCodeReview,
-    branchNameGenerator,
-    setBranchNameGenerator,
-    todoPolish,
-    setTodoPolish,
-  } = useSettingsStore();
-
-  // Validation state for code review prompt
-  const [promptValidation, setPromptValidation] = useState<{
-    valid: boolean;
-    errors: string[];
-    warnings: string[];
-  } | null>(null);
-
-  // Validate code review prompt when it changes (with debounce)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (codeReview.prompt) {
-        const result = validateCodeReviewPrompt(codeReview.prompt);
-        setPromptValidation(result);
-      } else {
-        setPromptValidation(null);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [codeReview.prompt]);
-
-  // Handle provider change with model reset
-  const handleCommitProviderChange = (provider: AIProvider) => {
-    setCommitMessageGenerator({
-      provider,
-      model: getDefaultModel(provider),
-    });
+  const { catalog } = usePiModelCatalog('ready');
+  const models = catalog?.models ?? [];
+  const settings = useSettingsStore();
+  const features: Array<{ key: FeatureKey; title: string; description: string }> = [
+    {
+      key: 'commitMessageGenerator',
+      title: t('Commit Message Generator'),
+      description: t('Auto-generate commit messages using AI'),
+    },
+    {
+      key: 'codeReview',
+      title: t('Code Review'),
+      description: t('Review changes with AI assistance'),
+    },
+    {
+      key: 'branchNameGenerator',
+      title: t('Branch Name Generator'),
+      description: t('Generate branch names with AI'),
+    },
+    {
+      key: 'todoPolish',
+      title: t('Todo AI Polish'),
+      description: t('Turn rough requirements into actionable tasks'),
+    },
+  ];
+  const defaults = {
+    commitMessageGenerator: {
+      prompt: locale === 'zh' ? defaultCommitPromptZh : defaultCommitPromptEn,
+    },
+    codeReview: {
+      prompt: locale === 'zh' ? defaultCodeReviewPromptZh : defaultCodeReviewPromptEn,
+    },
+    branchNameGenerator: { prompt: defaultBranchNameGeneratorSettings.prompt },
+    todoPolish: {
+      prompt: locale === 'zh' ? defaultTodoPolishPromptZh : defaultTodoPolishPromptEn,
+    },
   };
-
-  const handleCodeReviewProviderChange = (provider: AIProvider) => {
-    setCodeReview({
-      provider,
-      model: getDefaultModel(provider),
-    });
-  };
-
-  const handleBranchProviderChange = (provider: AIProvider) => {
-    setBranchNameGenerator({
-      provider,
-      model: getDefaultModel(provider),
-    });
-  };
-
-  const handleTodoPolishProviderChange = (provider: AIProvider) => {
-    setTodoPolish({
-      provider,
-      model: getDefaultModel(provider),
-    });
+  const setFeature = (key: FeatureKey, patch: Partial<FeatureSettings>) => {
+    switch (key) {
+      case 'commitMessageGenerator':
+        settings.setCommitMessageGenerator(patch);
+        break;
+      case 'codeReview':
+        settings.setCodeReview(patch);
+        break;
+      case 'branchNameGenerator':
+        settings.setBranchNameGenerator(patch);
+        break;
+      case 'todoPolish':
+        settings.setTodoPolish(patch);
+        break;
+    }
   };
 
   return (
@@ -248,679 +171,86 @@ export function AISettings() {
           {t('Configure AI-powered features for code generation and review')}
         </p>
       </div>
-
-      {/* Commit Message Generator Section */}
-      <div className="border-t pt-6">
-        <div>
-          <h4 className="text-base font-medium">{t('Commit Message Generator')}</h4>
-          <p className="text-sm text-muted-foreground">
-            {t('Auto-generate commit messages using AI')}
-          </p>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-sm font-medium">{t('Enable Generator')}</span>
-            <p className="text-xs text-muted-foreground">
-              {t('Generate commit messages with AI assistance')}
-            </p>
-          </div>
-          <Switch
-            checked={commitMessageGenerator.enabled}
-            onCheckedChange={(checked) => setCommitMessageGenerator({ enabled: checked })}
-          />
-        </div>
-
-        {commitMessageGenerator.enabled && (
-          <div className="mt-4 space-y-4 border-t pt-4">
-            {/* Provider */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Provider')}</span>
-              <div className="space-y-1.5">
-                <Select
-                  value={commitMessageGenerator.provider ?? 'claude-code'}
-                  onValueChange={(v) => handleCommitProviderChange(v as AIProvider)}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {PROVIDERS.find((p) => p.value === commitMessageGenerator.provider)?.label ??
-                        'Claude Code'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {PROVIDERS.map((p) => (
-                      <SelectItem key={p.value} value={p.value}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t('AI provider to use')}</p>
-              </div>
+      {features.map(({ key, title, description }) => {
+        const feature = settings[key] as FeatureSettings;
+        const selectedModel = models.find((model) => model.id === feature.model);
+        return (
+          <section key={key} className="space-y-4 border-t pt-6">
+            <div>
+              <h4 className="text-base font-medium">{title}</h4>
+              <p className="text-sm text-muted-foreground">{description}</p>
             </div>
-
-            {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
-              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
-              <div className="space-y-1.5">
-                <ModelSelector
-                  provider={commitMessageGenerator.provider ?? 'claude-code'}
-                  value={commitMessageGenerator.model}
-                  onChange={(v) => setCommitMessageGenerator({ model: v })}
-                  ariaLabel={t('Model for generating commit messages')}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('Model for generating commit messages')}
-                </p>
-              </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">{t('Enable Generator')}</span>
+              <Switch
+                checked={feature.enabled}
+                onCheckedChange={(enabled) => setFeature(key, { enabled })}
+              />
             </div>
-
-            {/* Reasoning Level - Only for Codex CLI */}
-            {commitMessageGenerator.provider === 'codex-cli' && (
-              <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                <span className="text-sm font-medium">{t('Reasoning Level')}</span>
-                <div className="space-y-1.5">
-                  <Select
-                    value={commitMessageGenerator.reasoningEffort ?? 'medium'}
-                    onValueChange={(v) =>
-                      v && setCommitMessageGenerator({ reasoningEffort: v as ReasoningEffort })
-                    }
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue>
-                        {REASONING_EFFORTS.find(
-                          (r) => r.value === (commitMessageGenerator.reasoningEffort ?? 'medium')
-                        )?.label ?? 'Medium'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {REASONING_EFFORTS.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {t('Reasoning depth for Codex CLI')}
-                  </p>
+            {feature.enabled && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+                  <span className="text-sm font-medium">{t('Model')}</span>
+                  <ModelField
+                    value={feature.model ?? ''}
+                    onChange={(model) => setFeature(key, { model, effort: undefined })}
+                    models={models}
+                  />
                 </div>
-              </div>
-            )}
-
-            {/* Max Diff Lines */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Max Diff Lines')}</span>
-              <div className="space-y-1.5">
-                <Input
-                  type="number"
-                  value={commitMessageGenerator.maxDiffLines}
-                  onChange={(e) =>
-                    setCommitMessageGenerator({ maxDiffLines: Number(e.target.value) || 1000 })
-                  }
-                  min={100}
-                  max={10000}
-                  className="w-32"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('Maximum number of diff lines to include')}
-                </p>
-              </div>
-            </div>
-
-            {/* Timeout */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Timeout')}</span>
-              <div className="space-y-1.5">
-                <Select
-                  value={String(commitMessageGenerator.timeout)}
-                  onValueChange={(v) => setCommitMessageGenerator({ timeout: Number(v) })}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue>{commitMessageGenerator.timeout}s</SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {[30, 60, 120, 180].map((sec) => (
-                      <SelectItem key={sec} value={String(sec)}>
-                        {sec}s
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t('Timeout in seconds')}</p>
-              </div>
-            </div>
-
-            {/* Commit Prompt */}
-            <div className="space-y-1.5">
-              <span className="text-sm font-medium">{t('Commit Prompt')}</span>
-              <div className="space-y-1.5">
-                <textarea
-                  value={commitMessageGenerator.prompt}
-                  onChange={(e) => setCommitMessageGenerator({ prompt: e.target.value })}
-                  maxLength={4000}
-                  className="w-full h-40 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder={t(
-                    'Enter a prompt template for generating commit messages.\nAvailable variables:\n• {recent_commits} - Recent commit messages\n• {staged_stat} - Staged changes statistics\n• {staged_diff} - Staged changes diff'
-                  )}
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {t('Customize the AI prompt for generating commit messages')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          t(
-                            'This will restore the default AI prompt for generating commit messages. Your custom prompt will be lost.'
-                          )
-                        )
-                      ) {
-                        setCommitMessageGenerator({
-                          prompt: locale === 'zh' ? defaultCommitPromptZh : defaultCommitPromptEn,
-                        });
+                <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+                  <span className="text-sm font-medium">{t('Effort')}</span>
+                  <EffortField
+                    value={feature.effort}
+                    model={selectedModel}
+                    onChange={(effort) => setFeature(key, { effort })}
+                  />
+                </div>
+                {'maxDiffLines' in feature && (
+                  <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+                    <span className="text-sm font-medium">{t('Max Diff Lines')}</span>
+                    <Input
+                      type="number"
+                      className="w-32"
+                      value={feature.maxDiffLines}
+                      onChange={(event) =>
+                        setFeature(key, { maxDiffLines: Number(event.target.value) || 1000 })
                       }
-                    }}
-                    className="text-xs text-muted-foreground hover:text-primary underline"
-                  >
-                    {t('Restore default prompt')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Code Review Section */}
-      <div className="border-t pt-6">
-        <div>
-          <h4 className="text-base font-medium">{t('Code Review')}</h4>
-          <p className="text-sm text-muted-foreground">
-            {t('AI-powered code review for staged changes')}
-          </p>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-sm font-medium">{t('Enable Code Review')}</span>
-            <p className="text-xs text-muted-foreground">
-              {t('Show code review button in source control')}
-            </p>
-          </div>
-          <Switch
-            checked={codeReview.enabled}
-            onCheckedChange={(checked) => setCodeReview({ enabled: checked })}
-          />
-        </div>
-
-        {codeReview.enabled && (
-          <div className="mt-4 space-y-4 border-t pt-4">
-            {/* Provider */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Provider')}</span>
-              <div className="space-y-1.5">
-                <Select
-                  value={codeReview.provider ?? 'claude-code'}
-                  onValueChange={(v) => handleCodeReviewProviderChange(v as AIProvider)}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {PROVIDERS.find((p) => p.value === codeReview.provider)?.label ??
-                        'Claude Code'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {PROVIDERS.map((p) => (
-                      <SelectItem key={p.value} value={p.value}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t('AI provider to use')}</p>
-                {codeReview.provider === 'codex-cli' && (
-                  <p className="text-xs text-amber-500">
-                    {t('Codex does not support streaming output')}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
-              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
-              <div className="space-y-1.5">
-                <ModelSelector
-                  provider={codeReview.provider ?? 'claude-code'}
-                  value={codeReview.model}
-                  onChange={(v) => setCodeReview({ model: v })}
-                  ariaLabel={t('Model for code review')}
-                />
-                <p className="text-xs text-muted-foreground">{t('Model for code review')}</p>
-              </div>
-            </div>
-
-            {/* Reasoning Level - Only for Codex CLI */}
-            {codeReview.provider === 'codex-cli' && (
-              <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                <span className="text-sm font-medium">{t('Reasoning Level')}</span>
-                <div className="space-y-1.5">
-                  <Select
-                    value={codeReview.reasoningEffort ?? 'medium'}
-                    onValueChange={(v) =>
-                      v && setCodeReview({ reasoningEffort: v as ReasoningEffort })
-                    }
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue>
-                        {REASONING_EFFORTS.find(
-                          (r) => r.value === (codeReview.reasoningEffort ?? 'medium')
-                        )?.label ?? 'Medium'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {REASONING_EFFORTS.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {t('Reasoning depth for Codex CLI')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Language */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Language')}</span>
-              <div className="space-y-1.5">
-                <Input
-                  value={codeReview.language ?? '中文'}
-                  onChange={(e) => setCodeReview({ language: e.target.value })}
-                  placeholder="中文"
-                  className="w-32"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('Language for code review output')}
-                </p>
-              </div>
-            </div>
-
-            {/* Code Review Prompt */}
-            <div className="space-y-1.5">
-              <span className="text-sm font-medium">{t('Code Review Prompt')}</span>
-              <div className="space-y-1.5">
-                <textarea
-                  value={codeReview.prompt ?? ''}
-                  onChange={(e) => setCodeReview({ prompt: e.target.value })}
-                  maxLength={8000}
-                  className="w-full h-40 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder={t(
-                    'Enter a prompt template for code review.\nAvailable variables:\n• {language} - Review output language\n• {git_diff} - Git diff of changes\n• {git_log} - Commit history'
-                  )}
-                />
-
-                {/* Character counter */}
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    {codeReview.prompt.length ?? ''}/8000 {t('characters')}
-                  </span>
-                </div>
-
-                {/* Validation messages */}
-                {promptValidation && !promptValidation.valid && (
-                  <div className="text-xs text-destructive space-y-0.5">
-                    {promptValidation.errors.map((error) => (
-                      <div key={error}>⚠️ {error}</div>
-                    ))}
+                    />
                   </div>
                 )}
-                {promptValidation && promptValidation.warnings.length > 0 && (
-                  <div className="text-xs text-amber-500 space-y-0.5">
-                    {promptValidation.warnings.map((warning) => (
-                      <div key={warning}>⚠️ {warning}</div>
-                    ))}
+                {'timeout' in feature && (
+                  <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+                    <span className="text-sm font-medium">{t('Timeout')}</span>
+                    <Input
+                      type="number"
+                      className="w-32"
+                      value={feature.timeout}
+                      onChange={(event) =>
+                        setFeature(key, { timeout: Number(event.target.value) || 60 })
+                      }
+                    />
                   </div>
                 )}
-
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {t('Customize the AI prompt for code review')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const confirmMessage = t(
-                        'This will restore the default AI prompt for code review. Your custom prompt will be lost.'
-                      );
-                      if (window.confirm(confirmMessage)) {
-                        setCodeReview({
-                          prompt:
-                            locale === 'zh' ? defaultCodeReviewPromptZh : defaultCodeReviewPromptEn,
-                        });
-                      }
-                    }}
-                    className="text-xs text-muted-foreground hover:text-primary underline"
-                  >
-                    {t('Restore default prompt')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Branch Name Generator Section */}
-      <div className="border-t pt-6">
-        <div>
-          <h4 className="text-base font-medium">{t('Branch Name Generator')}</h4>
-          <p className="text-sm text-muted-foreground">
-            {t('Auto-generate branch names using AI')}
-          </p>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-sm font-medium">{t('Enable Generator')}</span>
-            <p className="text-xs text-muted-foreground">
-              {t('Generate branch names with AI assistance')}
-            </p>
-          </div>
-          <Switch
-            checked={branchNameGenerator.enabled}
-            onCheckedChange={(checked) => setBranchNameGenerator({ enabled: checked })}
-          />
-        </div>
-
-        {branchNameGenerator.enabled && (
-          <div className="mt-4 space-y-4 border-t pt-4">
-            {/* Provider */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Provider')}</span>
-              <div className="space-y-1.5">
-                <Select
-                  value={branchNameGenerator.provider ?? 'claude-code'}
-                  onValueChange={(v) => handleBranchProviderChange(v as AIProvider)}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {PROVIDERS.find((p) => p.value === branchNameGenerator.provider)?.label ??
-                        'Claude Code'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {PROVIDERS.map((p) => (
-                      <SelectItem key={p.value} value={p.value}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t('AI provider to use')}</p>
-              </div>
-            </div>
-
-            {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
-              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
-              <div className="space-y-1.5">
-                <ModelSelector
-                  provider={branchNameGenerator.provider ?? 'claude-code'}
-                  value={branchNameGenerator.model}
-                  onChange={(v) => setBranchNameGenerator({ model: v })}
-                  ariaLabel={t('Model for generating branch names')}
+                {'language' in feature && (
+                  <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+                    <span className="text-sm font-medium">{t('Language')}</span>
+                    <Input
+                      className="w-40"
+                      value={feature.language}
+                      onChange={(event) => setFeature(key, { language: event.target.value })}
+                    />
+                  </div>
+                )}
+                <textarea
+                  className="min-h-28 w-full rounded-md border bg-transparent p-2 text-sm"
+                  value={feature.prompt || defaults[key].prompt}
+                  onChange={(event) => setFeature(key, { prompt: event.target.value })}
                 />
-                <p className="text-xs text-muted-foreground">
-                  {t('Model for generating branch names')}
-                </p>
-              </div>
-            </div>
-
-            {/* Reasoning Level - Only for Codex CLI */}
-            {branchNameGenerator.provider === 'codex-cli' && (
-              <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                <span className="text-sm font-medium">{t('Reasoning Level')}</span>
-                <div className="space-y-1.5">
-                  <Select
-                    value={branchNameGenerator.reasoningEffort ?? 'medium'}
-                    onValueChange={(v) =>
-                      v && setBranchNameGenerator({ reasoningEffort: v as ReasoningEffort })
-                    }
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue>
-                        {REASONING_EFFORTS.find(
-                          (r) => r.value === (branchNameGenerator.reasoningEffort ?? 'medium')
-                        )?.label ?? 'Medium'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {REASONING_EFFORTS.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {t('Reasoning depth for Codex CLI')}
-                  </p>
-                </div>
               </div>
             )}
-
-            <div className="space-y-1.5">
-              <span className="text-sm font-medium">{t('Prompt')}</span>
-              <div className="space-y-1.5">
-                <textarea
-                  value={branchNameGenerator.prompt}
-                  onChange={(e) => setBranchNameGenerator({ prompt: e.target.value })}
-                  className="w-full h-40 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder={t(
-                    'Enter a prompt template, and the AI will generate branch names according to your rules.\nAvailable variables:\n• {description} - Feature description\n• {current_date} - Current date\n• {current_time} - Current time'
-                  )}
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {t('Customize the AI prompt for generating branch names')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          t(
-                            'This will restore the default AI prompt for generating branch names. Your custom prompt will be lost.'
-                          )
-                        )
-                      ) {
-                        setBranchNameGenerator({
-                          prompt: defaultBranchNameGeneratorSettings.prompt,
-                        });
-                      }
-                    }}
-                    className="text-xs text-muted-foreground hover:text-primary underline"
-                  >
-                    {t('Restore default prompt')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Todo AI Polish Section */}
-      <div className="border-t pt-6">
-        <div>
-          <h4 className="text-base font-medium">{t('Todo AI Polish')}</h4>
-          <p className="text-sm text-muted-foreground">
-            {t('Use AI to generate a title and description from raw requirement text')}
-          </p>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-sm font-medium">{t('Enable AI Polish')}</span>
-            <p className="text-xs text-muted-foreground">
-              {t('Show AI polish button when creating or editing tasks')}
-            </p>
-          </div>
-          <Switch
-            checked={todoPolish.enabled}
-            onCheckedChange={(checked) => setTodoPolish({ enabled: checked })}
-          />
-        </div>
-
-        {todoPolish.enabled && (
-          <div className="mt-4 space-y-4 border-t pt-4">
-            {/* Provider */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Provider')}</span>
-              <div className="space-y-1.5">
-                <Select
-                  value={todoPolish.provider ?? 'claude-code'}
-                  onValueChange={(v) => handleTodoPolishProviderChange(v as AIProvider)}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue>
-                      {PROVIDERS.find((p) => p.value === todoPolish.provider)?.label ??
-                        'Claude Code'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {PROVIDERS.map((p) => (
-                      <SelectItem key={p.value} value={p.value}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t('AI provider to use')}</p>
-              </div>
-            </div>
-
-            {/* Model */}
-            <div className="grid grid-cols-[140px_1fr] items-start gap-4">
-              <span className="mt-2 text-sm font-medium">{t('Model')}</span>
-              <div className="space-y-1.5">
-                <ModelSelector
-                  provider={todoPolish.provider ?? 'claude-code'}
-                  value={todoPolish.model}
-                  onChange={(v) => setTodoPolish({ model: v })}
-                  ariaLabel={t('Model for polishing task content')}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('Model for polishing task content')}
-                </p>
-              </div>
-            </div>
-
-            {/* Reasoning Level - Only for Codex CLI */}
-            {todoPolish.provider === 'codex-cli' && (
-              <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-                <span className="text-sm font-medium">{t('Reasoning Level')}</span>
-                <div className="space-y-1.5">
-                  <Select
-                    value={todoPolish.reasoningEffort ?? 'medium'}
-                    onValueChange={(v) =>
-                      v && setTodoPolish({ reasoningEffort: v as ReasoningEffort })
-                    }
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue>
-                        {REASONING_EFFORTS.find(
-                          (r) => r.value === (todoPolish.reasoningEffort ?? 'medium')
-                        )?.label ?? 'Medium'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {REASONING_EFFORTS.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {t('Reasoning depth for Codex CLI')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Timeout */}
-            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
-              <span className="text-sm font-medium">{t('Timeout')}</span>
-              <div className="space-y-1.5">
-                <Select
-                  value={String(todoPolish.timeout)}
-                  onValueChange={(v) => setTodoPolish({ timeout: Number(v) })}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue>{todoPolish.timeout}s</SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {[30, 60, 120, 180].map((sec) => (
-                      <SelectItem key={sec} value={String(sec)}>
-                        {sec}s
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t('Timeout in seconds')}</p>
-              </div>
-            </div>
-
-            {/* Prompt */}
-            <div className="space-y-1.5">
-              <span className="text-sm font-medium">{t('Prompt')}</span>
-              <div className="space-y-1.5">
-                <textarea
-                  value={todoPolish.prompt}
-                  onChange={(e) => setTodoPolish({ prompt: e.target.value })}
-                  className="w-full h-40 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder={t(
-                    'Enter a prompt template.\nAvailable variables:\n• {text} - Raw requirement text'
-                  )}
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {t('Customize the AI prompt for polishing tasks')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          t(
-                            'This will restore the default AI prompt for todo polish. Your custom prompt will be lost.'
-                          )
-                        )
-                      ) {
-                        setTodoPolish({
-                          prompt:
-                            locale === 'zh' ? defaultTodoPolishPromptZh : defaultTodoPolishPromptEn,
-                        });
-                      }
-                    }}
-                    className="text-xs text-muted-foreground hover:text-primary underline"
-                  >
-                    {t('Restore default prompt')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

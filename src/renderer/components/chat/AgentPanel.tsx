@@ -1,4 +1,4 @@
-import type { AIProvider } from '@shared/types';
+// One-shot reviews are intentionally not continuable: they have no durable Pi identity.
 import { Plus, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEMP_REPO_ID } from '@/App/constants';
@@ -19,7 +19,6 @@ import { matchesKeybinding } from '@/lib/keybinding';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { initAgentStatusListener } from '@/stores/agentStatus';
-import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
 import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
@@ -460,86 +459,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       setAgentCount(cwd, count);
     }
   }, [allSessions, cwd, setAgentCount]);
-
-  // Listen for code review continue conversation request
-  const pendingContinueSessionId = useCodeReviewContinueStore(
-    (s) => s.continueConversation.sessionId
-  );
-  const pendingContinueProvider = useCodeReviewContinueStore(
-    (s) => s.continueConversation.provider
-  );
-  const clearContinueRequest = useCodeReviewContinueStore((s) => s.clearContinueRequest);
-
-  // Map AI provider (code review) to agent id for "Continue Conversation"
-  const continueAgentId = useMemo(() => {
-    const map: Record<AIProvider, string> = {
-      'claude-code': 'claude',
-      'codex-cli': 'codex',
-      'cursor-cli': 'cursor',
-      'gemini-cli': 'gemini',
-    };
-    return pendingContinueProvider != null ? (map[pendingContinueProvider] ?? 'claude') : 'claude';
-  }, [pendingContinueProvider]);
-
-  useEffect(() => {
-    if (pendingContinueSessionId && cwd) {
-      const info = AGENT_INFO[continueAgentId] ?? { name: 'Claude', command: 'claude' };
-      const newSession: Session = {
-        id: crypto.randomUUID(), // Generate new session ID
-        sessionId: pendingContinueSessionId, // Use code review's sessionId for --resume
-        name: 'Code Review',
-        agentId: continueAgentId,
-        agentCommand: info.command,
-        repoPath,
-        cwd,
-        initialized: true, // Mark as initialized to use --resume
-        environment: 'native',
-      };
-
-      addSession(newSession);
-
-      updateCurrentGroupState((state) => {
-        const groupId = state.activeGroupId || state.groups[0]?.id;
-        if (!groupId) {
-          const newGroup: AgentGroupType = {
-            id: crypto.randomUUID(),
-            sessionIds: [newSession.id],
-            activeSessionId: newSession.id,
-          };
-          return {
-            groups: [newGroup],
-            activeGroupId: newGroup.id,
-            flexPercents: [100],
-          };
-        }
-
-        return {
-          ...state,
-          groups: state.groups.map((g) =>
-            g.id === groupId
-              ? {
-                  ...g,
-                  sessionIds: [...g.sessionIds, newSession.id],
-                  activeSessionId: newSession.id,
-                }
-              : g
-          ),
-        };
-      });
-
-      setActiveId(cwd, newSession.id);
-      clearContinueRequest();
-    }
-  }, [
-    pendingContinueSessionId,
-    continueAgentId,
-    cwd,
-    repoPath,
-    addSession,
-    updateCurrentGroupState,
-    setActiveId,
-    clearContinueRequest,
-  ]);
 
   // Register close handler for external close requests
   useEffect(() => {

@@ -1,9 +1,10 @@
 import { execSync } from 'node:child_process';
-import type { CommonAICLIOptions } from '@shared/types/ai';
+import type { CommonAICompletionOptions } from '@shared/types/ai';
+import { piUtilityService } from '../agent-host/PiUtilityService';
 import { isWslGitRepository, spawnGit } from '../git/runtime';
-import { parseCLIOutput, spawnCLI, stripCodeFence } from './providers';
+import { stripCodeFence } from './providers';
 
-export interface CommitMessageOptions extends CommonAICLIOptions {
+export interface CommitMessageOptions extends CommonAICompletionOptions {
   workdir: string;
   maxDiffLines: number;
   timeout: number;
@@ -68,17 +69,7 @@ function runGit(args: string[], cwd: string): Promise<string> {
 export async function generateCommitMessage(
   options: CommitMessageOptions
 ): Promise<CommitMessageResult> {
-  const {
-    workdir,
-    maxDiffLines,
-    timeout,
-    provider,
-    model,
-    reasoningEffort,
-    bare,
-    claudeEffort,
-    prompt: customPrompt,
-  } = options;
+  const { workdir, maxDiffLines, timeout, model, effort, prompt: customPrompt } = options;
 
   const [recentCommits, stagedStat, stagedDiff] = await Promise.all([
     runGit(['--no-pager', 'log', '-5', '--format=%s'], workdir),
@@ -113,58 +104,16 @@ ${stagedStat || '(no stats)'}
 变更详情：
 ${truncatedDiff}`;
 
-  return new Promise((resolve) => {
-    const timeoutMs = timeout * 1000;
-
-    const { proc, kill } = spawnCLI({
-      provider,
-      model,
-      prompt,
+  try {
+    const completion = await piUtilityService.complete({
       cwd: workdir,
-      reasoningEffort,
-      bare,
-      claudeEffort,
-      outputFormat: 'json',
+      prompt,
+      ...(model ? { model } : {}),
+      ...(effort ? { effort } : {}),
+      timeoutMs: timeout * 1000,
     });
-
-    let stdout = '';
-    let stderr = '';
-
-    const timer = setTimeout(() => {
-      kill();
-      resolve({ success: false, error: 'timeout' });
-    }, timeoutMs);
-
-    proc.stdout?.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr?.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-
-      if (code !== 0) {
-        console.error(`[commit-msg] Exit code: ${code}, stderr: ${stderr}`);
-        resolve({ success: false, error: stderr || `Exit code: ${code}` });
-        return;
-      }
-
-      const result = parseCLIOutput(provider, stdout);
-
-      if (result.success && result.text) {
-        resolve({ success: true, message: stripCodeFence(result.text) });
-      } else {
-        resolve({ success: false, error: result.error || 'Unknown error' });
-      }
-    });
-
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      console.error(`[commit-msg] Process error:`, err);
-      resolve({ success: false, error: err.message });
-    });
-  });
+    return { success: true, message: stripCodeFence(completion.text) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
