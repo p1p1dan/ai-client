@@ -68,6 +68,11 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const activeWorkspacePath = activeWorkspace?.path?.trim() ?? '';
   const repoName = deriveRepoName(activeWorkspacePath);
+  // Q17/D19: the TUI takes over this chat's own JSONL once a runtime is bound.
+  // An unbound chat has no conversation to hand over, so it starts fresh.
+  const tuiHeaderLabel = activeSession?.runtimeIdentity
+    ? 'Pi TUI continues this chat'
+    : 'Pi TUI starts a new session';
   const hasWorkingDirectory = workspaces.some((workspace) => workspace.path.trim().length > 0);
   const presentationMode = useSettingsStore((state) => state.presentationMode);
   const setPresentationMode = useSettingsStore((state) => state.setPresentationMode);
@@ -227,7 +232,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
       {activeWorkspacePath && (
         <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
           <span className="truncate text-meta text-muted-foreground">
-            {presentationMode === 'tui' ? 'Pi TUI starts a new session' : repoName}
+            {presentationMode === 'tui' ? tuiHeaderLabel : repoName}
           </span>
           <div className="flex h-7 items-center rounded border bg-muted p-0.5" role="group">
             <button
