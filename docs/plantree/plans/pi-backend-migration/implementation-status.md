@@ -4,9 +4,9 @@
 
 **Next Target**：T37-a 已关闭；下一步 [T37-b](./roadmap.md#t37--pi-only-release-gates--in-progress) resource/longevity，然后 packaged/GUI 与真账号验证。
 
-**Last Landed**：2026-09-02 T37-a stale test sweep：关闭全部 20 条 pre-existing 失败（溯源为 `c954b3e1`/`8aafd450`/T36 三次收敛留下的陈旧断言，零生产缺陷），见 [T37-a stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)。前一批为 T37 post-T36 review fixes `ddfbbb4a`：修复阻断打包的 `electron-builder.yml` 重复键、自动执行队列只结算首个任务、登出漏掉 Pi TUI 与 utility worker、挂起终端回放丢失、旧版会话跨升级复活；远程 Agent 终端改为显式失败，见 [T37 review-fix evidence](./evidence/2026-09-02-t37-post-t36-review-fixes.md)。
+**Last Landed**：2026-09-02 Q17 落地（D19：TUI 接管 GUI 会话文件）与 Todo 看板整体移除；同批修复了一个既有的 `pnpm build` 阻断故障（electron-vite `esm-shim` 把以 `import` 结尾的字符串误读为 import 语句）。前一批为 T37-a stale test sweep：关闭全部 20 条 pre-existing 失败（溯源为 `c954b3e1`/`8aafd450`/T36 三次收敛留下的陈旧断言，零生产缺陷），见 [T37-a stale test sweep](./evidence/2026-09-02-t37a-stale-test-sweep.md)。前一批为 T37 post-T36 review fixes `ddfbbb4a`：修复阻断打包的 `electron-builder.yml` 重复键、自动执行队列只结算首个任务、登出漏掉 Pi TUI 与 utility worker、挂起终端回放丢失、旧版会话跨升级复活；远程 Agent 终端改为显式失败，见 [T37 review-fix evidence](./evidence/2026-09-02-t37-post-t36-review-fixes.md)。
 
-**Last Verified**：2026-09-02 — 全量 `vitest run` **254 files / 3884 tests 全部通过，0 失败**；`pnpm typecheck` pass；Scoped Biome 与 diff check pass。累计新增 6 条回归测试（登出 ②b/③ 顺序、utility invalidate、队列 tracker）。T36 的 worker-only artifact、Pi CLI `0.84.3` 与 node-pty help smoke 继续有效；完整 packaged Electron/GUI smoke 未在本低资源主机运行。
+**Last Verified**：2026-09-02 — 全量 `vitest run` **255 files / 3894 tests 全部通过，0 失败**；`pnpm typecheck` pass；Scoped Biome 与 diff check pass；**`pnpm build` 现已可完整跑通**（此前在 main 上即失败，非资源原因）。T36 的 worker-only artifact、Pi CLI `0.84.3` 与 node-pty help smoke 继续有效；packaged electron-builder 产物与真实 GUI 交互仍需高资源/目标平台环境。
 
 ## Current architecture decision
 
@@ -30,7 +30,7 @@ T28–T36 已完成。活动 chat、one-shot、TUI、onboarding、settings、IPC
 
 ## Blocked By / risks
 
-- 当前主机禁止 full Vitest 和整套 production build；必须分批验证，完整 packaged artifact 与真实 GUI 交互需高资源/目标平台环境。
+- 完整 packaged artifact 与真实 GUI 交互需高资源/目标平台环境（`pnpm build` 本机可跑，electron-builder 打包未验证）。
 - macOS/Windows/Linux runtime pins 已静态和单元验证，但各平台产物仍需实际解包/启动证明。
 - protected legacy import reader/fixture/evidence 不得因名称扫描被机械删除。
 
