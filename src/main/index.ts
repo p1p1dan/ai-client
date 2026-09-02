@@ -42,12 +42,7 @@ if (process.platform === 'darwin') {
   }
 }
 
-import {
-  autoStartHapi,
-  cleanupAllResources,
-  cleanupAllResourcesSync,
-  registerIpcHandlers,
-} from './ipc';
+import { cleanupAllResources, cleanupAllResourcesSync, registerIpcHandlers } from './ipc';
 import { cleanupTempFiles } from './ipc/files';
 import { readSettings } from './ipc/settings';
 import { registerWindowHandlers } from './ipc/window';
@@ -781,9 +776,6 @@ app
     });
 
     await init();
-
-    // Auto-start Hapi server if enabled in settings
-    await autoStartHapi();
 
     setCurrentLocale(readStoredLanguage());
 

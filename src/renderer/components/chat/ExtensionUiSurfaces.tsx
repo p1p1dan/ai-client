@@ -1,6 +1,7 @@
 import { Info, MonitorUp, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { addToast } from '@/components/ui/toast';
 import { useWindowFocus } from '@/hooks/useWindowFocus';
@@ -129,7 +130,13 @@ export function ExtensionUiNotificationEffects() {
   return null;
 }
 
-export function ExtensionUiUnsupportedNotice({ sessionId }: { sessionId: string | null }) {
+export function ExtensionUiUnsupportedNotice({
+  sessionId,
+  onOpenTui,
+}: {
+  sessionId: string | null;
+  onOpenTui?: () => void;
+}) {
   const { t } = useI18n();
   const unsupported = useExtensionUiDisplayStore((state) => state.unsupported);
   const entries = useMemo(
@@ -156,14 +163,22 @@ export function ExtensionUiUnsupportedNotice({ sessionId }: { sessionId: string 
               })}
             </p>
           </div>
-          {entries.some((entry) => entry.count > 1) ? (
-            <Badge variant="info" size="sm" className="tabular-nums">
-              <Info className="size-3" />
-              {entries.reduce((total, entry) => total + entry.count, 0)}
-            </Badge>
-          ) : (
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-info" />
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {onOpenTui && (
+              <Button size="xs" variant="outline" onClick={onOpenTui}>
+                <MonitorUp className="size-3.5" />
+                {t('Open TUI')}
+              </Button>
+            )}
+            {entries.some((entry) => entry.count > 1) ? (
+              <Badge variant="info" size="sm" className="tabular-nums">
+                <Info className="size-3" />
+                {entries.reduce((total, entry) => total + entry.count, 0)}
+              </Badge>
+            ) : (
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-info" />
+            )}
+          </div>
         </div>
       </ReadingColumn>
     </div>

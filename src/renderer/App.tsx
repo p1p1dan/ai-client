@@ -31,7 +31,6 @@ import {
   useOpenPathListener,
   usePanelState,
   useRepositoryState,
-  useSettingsEvents,
   useSettingsState,
   useTempWorkspaceSync,
   useTerminalNavigation,
@@ -202,7 +201,6 @@ export default function App() {
     settingsDialogOpen,
     settingsDisplayMode,
     forceSettingsModal,
-    setSettingsCategory,
     setSettingsDialogOpen,
     openSettings,
     toggleSettings,
@@ -493,8 +491,6 @@ export default function App() {
     },
     [activeTab, activeWorktree, exitHomeView, setActiveTab, setPreviousTab, setWorktreeTabMap]
   );
-
-  useSettingsEvents(openSettings, setSettingsCategory);
 
   // Keyboard shortcuts
   useAppKeyboardShortcuts({
@@ -810,9 +806,8 @@ export default function App() {
   );
 
   const handleLaunchAgent = useCallback(
-    (repoPath: string, agentId: string) => {
-      const { customAgents, agentSettings } = useSettingsStore.getState();
-      const session = createSession(repoPath, repoPath, agentId, customAgents, agentSettings);
+    (repoPath: string, _agentId: string) => {
+      const session = createSession(repoPath, repoPath);
 
       const store = useAgentSessionsStore.getState();
       store.addSession(session);

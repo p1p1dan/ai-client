@@ -56,7 +56,6 @@ const SRC_DIR = path.resolve(__dirname, '../../..');
 
 const AGENT_WIRE_MODULE = path.join(SRC_DIR, 'shared/types/agentWire.ts');
 const RUNTIME_EVENTS_MODULE = path.join(SRC_DIR, 'shared/types/runtimeEvents.ts');
-const CLI_TYPES_MODULE = path.join(SRC_DIR, 'shared/types/cli.ts');
 const AI_TYPES_MODULE = path.join(SRC_DIR, 'shared/types/ai.ts');
 const SESSION_INDEX_SERVICE = path.join(SRC_DIR, 'main/services/chat/SessionIndexService.ts');
 
@@ -66,13 +65,13 @@ const LEGACY_LITERAL = 'claude-code';
 /** The three tables, and the module that defines each. */
 type Axis = 'AgentWireName' | 'BuiltinAgentId' | 'AIProvider';
 
-const AXIS_MODULE: Record<Axis, string> = {
+const AXIS_MODULE = {
   AgentWireName: AGENT_WIRE_MODULE,
-  BuiltinAgentId: CLI_TYPES_MODULE,
   AIProvider: AI_TYPES_MODULE,
-};
+} as const satisfies Partial<Record<Axis, string>>;
 
-const AXES = Object.keys(AXIS_MODULE) as Axis[];
+type DefinedAxis = keyof typeof AXIS_MODULE;
+const AXES = Object.keys(AXIS_MODULE) as DefinedAxis[];
 
 /**
  * Every .ts/.tsx this repo owns — renderer, main, preload and agent-host, tests
@@ -850,28 +849,24 @@ describe('the three agent tables stay disconnected', () => {
     const PROBE = path.join(SRC_DIR, 'shared/__probe__.ts');
     const source = [
       "import type { AIProvider as Provider } from '@shared/types/ai';", // 1
-      "import type { BuiltinAgentId } from '@shared/types/cli';", // 2
-      "import { CLAUDE_CODE_AGENT, sessionAgent } from '@shared/types/agentWire';", // 3
-      'const aliasCast = session.agent as Provider;', // 4  offender
-      'const angleCast = <Provider>session.agent;', // 5  offender
-      'const satisfied = sessionAgent(session) satisfies Provider;', // 6  offender
-      'const importedValue = CLAUDE_CODE_AGENT as BuiltinAgentId;', // 7  offender
-      'const viaLocal = wire as Provider;', // 8  offender
-      'const narrowing = settings.provider as Provider;', // 9
-      'const unknownSource = fromUser as Provider;', // 10
-      'const constAssertion = [1, 2] as const;', // 11
-      'const editing = editingBuiltinAgent as BuiltinAgentId;', // 12
+      "import { CLAUDE_CODE_AGENT, sessionAgent } from '@shared/types/agentWire';", // 2
+      'const aliasCast = session.agent as Provider;', // 3  offender
+      'const angleCast = <Provider>session.agent;', // 4  offender
+      'const satisfied = sessionAgent(session) satisfies Provider;', // 5  offender
+      'const viaLocal = wire as Provider;', // 6  offender
+      'const narrowing = settings.provider as Provider;', // 7
+      'const unknownSource = fromUser as Provider;', // 8
+      'const constAssertion = [1, 2] as const;', // 9
     ].join('\n');
-    // `wire` gets its axis from the annotation below, which is why line 8 is an
+    // `wire` gets its axis from the annotation below, which is why line 6 is an
     // offender: the source axis is read off the expression, not off the file.
     const withDeclaration = `${source}\nconst wire: AgentWireName = CLAUDE_CODE_AGENT;`;
 
     expect(scanAxisCasts(PROBE, withDeclaration)).toEqual([
+      'shared/__probe__.ts:3 AgentWireName → AIProvider',
       'shared/__probe__.ts:4 AgentWireName → AIProvider',
       'shared/__probe__.ts:5 AgentWireName → AIProvider',
       'shared/__probe__.ts:6 AgentWireName → AIProvider',
-      'shared/__probe__.ts:7 AgentWireName → BuiltinAgentId',
-      'shared/__probe__.ts:8 AgentWireName → AIProvider',
     ]);
   });
 });

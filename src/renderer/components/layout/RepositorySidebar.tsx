@@ -137,10 +137,6 @@ export function RepositorySidebar({
   const { t, tNode } = useI18n();
   const _settingsDisplayMode = useSettingsStore((s) => s.settingsDisplayMode);
   const hideGroups = useSettingsStore((s) => s.hideGroups);
-  const agentSettings = useSettingsStore((s) => s.agentSettings);
-  const customAgents = useSettingsStore((s) => s.customAgents);
-  const agentDetectionStatus = useSettingsStore((s) => s.agentDetectionStatus);
-  const hapiSettings = useSettingsStore((s) => s.hapiSettings);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -158,17 +154,7 @@ export function RepositorySidebar({
     getStoredGroupCollapsedState()
   );
 
-  const repositoryMenuModel = useMemo(
-    () =>
-      buildRepositoryContextMenuModel({
-        t,
-        agentSettings,
-        customAgents,
-        agentDetectionStatus,
-        hapiEnabled: hapiSettings.enabled,
-      }),
-    [agentDetectionStatus, agentSettings, customAgents, hapiSettings.enabled, t]
-  );
+  const repositoryMenuModel = useMemo(() => buildRepositoryContextMenuModel({ t }), [t]);
 
   useLayoutEffect(() => {
     if (!menuOpen || !menuRef.current) return;

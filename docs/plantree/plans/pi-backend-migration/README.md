@@ -4,7 +4,7 @@
 >
 > **分支**：`feat/pi-primary-backend`
 >
-> **当前阶段**：Phase F/G / T35 final CLI absence + T36 pix-based Pi TUI。
+> **当前阶段**：Phase F/H / T36 landed，T35 final absence audit → T37 release gates。
 
 ## 目标
 

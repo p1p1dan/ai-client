@@ -1,13 +1,6 @@
 import type { Locale } from '@shared/i18n';
 import type { ChatAgentDefaults } from '@shared/models/chatAgentDefaults';
-import type {
-  BuiltinAgentId,
-  ConnectionProfile,
-  CustomAgent,
-  GitHostMapping,
-  ProxySettings,
-  ShellConfig,
-} from '@shared/types';
+import type { ConnectionProfile, GitHostMapping, ProxySettings, ShellConfig } from '@shared/types';
 import type { CommonAISettings } from '@shared/types/ai';
 
 // Theme types
@@ -20,6 +13,7 @@ export type FileTreeDisplayMode = 'legacy' | 'current';
 export type RepositoryListDisplayMode = 'tabs' | 'list';
 
 export type SettingsDisplayMode = 'tab' | 'draggable-modal';
+export type PresentationMode = 'gui' | 'tui';
 
 // Terminal types
 export type FontWeight =
@@ -108,26 +102,6 @@ export interface XtermKeybindings {
 export type TerminalKeybindings = XtermKeybindings;
 export type AgentKeybindings = XtermKeybindings;
 export type TerminalPaneKeybindings = XtermKeybindings;
-
-// Agent types
-export interface AgentConfig {
-  enabled: boolean;
-  isDefault: boolean;
-  /** Custom absolute path to the agent CLI (overrides default command lookup) */
-  customPath?: string;
-  /** Additional arguments to pass to the agent CLI */
-  customArgs?: string;
-}
-
-export type AgentSettings = Record<string, AgentConfig>;
-
-export interface AgentDetectionInfo {
-  installed: boolean;
-  version?: string;
-  detectedAt: number; // timestamp
-}
-
-export type AgentDetectionStatus = Record<string, AgentDetectionInfo>;
 
 // Editor settings
 export interface EditorSettings {
@@ -233,27 +207,6 @@ export interface PromptValidationResult {
   warnings: string[];
 }
 
-// Hapi remote sharing settings
-export type TunnelMode = 'quick' | 'auth';
-
-export interface HapiSettings {
-  enabled: boolean;
-  webappPort: number;
-  cliApiToken: string;
-  telegramBotToken: string;
-  webappUrl: string;
-  allowedChatIds: string;
-  // Cloudflared settings
-  cfEnabled: boolean;
-  tunnelMode: TunnelMode;
-  tunnelToken: string;
-  useHttp2: boolean;
-  // Hapi runner settings
-  runnerEnabled: boolean;
-  // Happy settings
-  happyEnabled: boolean;
-}
-
 // Quick Terminal settings
 export interface QuickTerminalSettings {
   enabled: boolean;
@@ -315,10 +268,7 @@ export interface SettingsState {
   // Editor Settings
   editorSettings: EditorSettings;
 
-  // Agent Settings
-  agentSettings: AgentSettings;
-  agentDetectionStatus: AgentDetectionStatus;
-  customAgents: CustomAgent[];
+  // Terminal session settings
   shellConfig: ShellConfig;
   agentNotificationEnabled: boolean;
   agentNotificationDelay: number; // in seconds
@@ -347,7 +297,6 @@ export interface SettingsState {
 
   // App Settings
   autoUpdateEnabled: boolean;
-  hapiSettings: HapiSettings;
   remoteSettings: RemoteSettings;
   defaultWorktreePath: string; // Default path for creating worktrees
   proxySettings: ProxySettings;
@@ -383,6 +332,7 @@ export interface SettingsState {
   // Settings display mode
   settingsDisplayMode: SettingsDisplayMode;
   settingsModalPosition: { x: number; y: number } | null;
+  presentationMode: PresentationMode;
 
   // Terminal theme favorites
   favoriteTerminalThemes: string[];
@@ -414,6 +364,7 @@ export interface SettingsState {
   setLanguage: (language: Locale) => void;
   setFontSize: (size: number) => void;
   setFontFamily: (family: string) => void;
+  setPresentationMode: (mode: PresentationMode) => void;
 
   // Setters - Terminal
   setTerminalFontSize: (size: number) => void;
@@ -438,18 +389,6 @@ export interface SettingsState {
   // Setters - Editor
   setEditorSettings: (settings: Partial<EditorSettings>) => void;
 
-  // Setters - Agent
-  setAgentEnabled: (agentId: string, enabled: boolean) => void;
-  setAgentDefault: (agentId: string) => void;
-  setAgentCustomConfig: (
-    agentId: string,
-    config: { customPath?: string; customArgs?: string }
-  ) => void;
-  setAgentDetectionStatus: (agentId: string, info: AgentDetectionInfo) => void;
-  clearAgentDetectionStatus: (agentId: string) => void;
-  addCustomAgent: (agent: CustomAgent) => void;
-  updateCustomAgent: (id: string, updates: Partial<CustomAgent>) => void;
-  removeCustomAgent: (id: string) => void;
   setShellConfig: (config: ShellConfig) => void;
   setAgentNotificationEnabled: (enabled: boolean) => void;
   setAgentNotificationDelay: (delay: number) => void;
@@ -472,7 +411,6 @@ export interface SettingsState {
 
   // Setters - App
   setAutoUpdateEnabled: (enabled: boolean) => void;
-  setHapiSettings: (settings: Partial<HapiSettings>) => void;
   setRemoteProfiles: (profiles: ConnectionProfile[]) => void;
   upsertRemoteProfile: (profile: ConnectionProfile) => void;
   removeRemoteProfile: (profileId: string) => void;
@@ -546,14 +484,3 @@ export interface SettingsState {
 
 // Re-export types from @shared/types
 export type { CommonAISettings } from '@shared/types';
-
-// Builtin agent IDs
-export const BUILTIN_AGENT_IDS: BuiltinAgentId[] = [
-  'claude',
-  'codex',
-  'droid',
-  'gemini',
-  'auggie',
-  'cursor',
-  'opencode',
-];

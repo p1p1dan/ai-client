@@ -13,8 +13,6 @@ import type {
   UpdatePermissionPolicyRequest,
 } from '@shared/piPermissionPolicy';
 import type {
-  AgentCliInfo,
-  AgentMetadata,
   AppCloseRequestPayload,
   AttachmentReadOptions,
   AttachmentReadResult,
@@ -26,7 +24,6 @@ import type {
   ConnectionTestResult,
   ContentSearchParams,
   ContentSearchResult,
-  CustomAgent,
   DetectedApp,
   FileChange,
   FileChangeEvent,
@@ -89,7 +86,6 @@ import type {
   WorktreeRemoveOptions,
 } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/types';
-import type { AgentStopNotificationData } from '@shared/types/agent';
 import type { AgentModelCatalog, ListPiModelsRequest } from '@shared/types/agentCatalog';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { ExtensionUiResponse } from '@shared/types/runtimeEvents';
@@ -467,6 +463,44 @@ const electronAPI = {
     },
   },
 
+  // Embedded Pi TUI
+  piTui: {
+    open: (
+      request: import('@shared/types').PiTuiOpenRequest
+    ): Promise<import('@shared/types').PiTuiOpenResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_OPEN, request),
+    write: (terminalId: string, data: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_WRITE, terminalId, data),
+    resize: (terminalId: string, cols: number, rows: number): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_RESIZE, terminalId, cols, rows),
+    suspend: (terminalId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_SUSPEND, terminalId),
+    dispose: (terminalId?: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_DISPOSE, terminalId),
+    status: (): Promise<import('@shared/types').PiTuiStatus> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_STATUS),
+    onData: (callback: (event: import('@shared/types').PiTuiDataEvent) => void): (() => void) => {
+      const handler = (_: unknown, event: import('@shared/types').PiTuiDataEvent) =>
+        callback(event);
+      ipcRenderer.on(IPC_CHANNELS.PI_TUI_DATA, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_DATA, handler);
+    },
+    onExit: (callback: (event: import('@shared/types').PiTuiExitEvent) => void): (() => void) => {
+      const handler = (_: unknown, event: import('@shared/types').PiTuiExitEvent) =>
+        callback(event);
+      ipcRenderer.on(IPC_CHANNELS.PI_TUI_EXIT, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_EXIT, handler);
+    },
+    onState: (
+      callback: (event: import('@shared/types').PiTuiStatusEvent) => void
+    ): (() => void) => {
+      const handler = (_: unknown, event: import('@shared/types').PiTuiStatusEvent) =>
+        callback(event);
+      ipcRenderer.on(IPC_CHANNELS.PI_TUI_STATE, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_STATE, handler);
+    },
+  },
+
   session: {
     create: (options?: SessionCreateOptions): Promise<SessionOpenResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_CREATE, options),
@@ -498,11 +532,6 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.SESSION_STATE, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.SESSION_STATE, handler);
     },
-  },
-
-  // Agent
-  agent: {
-    list: (): Promise<AgentMetadata[]> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_LIST),
   },
 
   // App
@@ -674,16 +703,8 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.APP_RECENT_PROJECTS),
   },
 
-  // CLI Detector
+  // CLI Installer
   cli: {
-    detectOne: (
-      repoPath: string | undefined,
-      agentId: string,
-      customAgent?: CustomAgent,
-      customPath?: string
-    ): Promise<AgentCliInfo> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLI_DETECT_ONE, repoPath, agentId, customAgent, customPath),
-    // CLI Installer
     getInstallStatus: (): Promise<{ installed: boolean; path: string | null; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CLI_INSTALL_STATUS),
     install: (): Promise<{ installed: boolean; path: string | null; error?: string }> =>
@@ -773,25 +794,10 @@ const electronAPI = {
       request: import('@shared/types').OnboardingVerifyRequest
     ): Promise<import('@shared/types').OnboardingRegisterClientResponse> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_VERIFY_AND_REGISTER, request),
-    detectCli: (): Promise<import('@shared/types').OnboardingCliStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_DETECT_CLI),
     checkPrerequisites: (): Promise<import('@shared/types').OnboardingPrerequisiteStatus> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CHECK_PREREQUISITES),
-    installAgents: (
-      agents: import('@shared/types').InstallAgentId[]
-    ): Promise<import('@shared/types').InstallResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_INSTALL_AGENTS, agents),
     installGit: (): Promise<import('@shared/types').OnboardingInstallGitResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_INSTALL_GIT),
-    cancelInstall: (): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_CANCEL_INSTALL),
-    onInstallProgress: (
-      callback: (progress: import('@shared/types').InstallProgress) => void
-    ): (() => void) => {
-      const handler = (_: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
-      ipcRenderer.on(IPC_CHANNELS.ONBOARDING_INSTALL_PROGRESS, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.ONBOARDING_INSTALL_PROGRESS, handler);
-    },
     logout: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.ONBOARDING_LOGOUT),
   },
 
@@ -871,11 +877,6 @@ const electronAPI = {
       const handler = (_: unknown, sessionId: string) => callback(sessionId);
       ipcRenderer.on(IPC_CHANNELS.NOTIFICATION_CLICK, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.NOTIFICATION_CLICK, handler);
-    },
-    onAgentStop: (callback: (data: AgentStopNotificationData) => void): (() => void) => {
-      const handler = (_: unknown, data: AgentStopNotificationData) => callback(data);
-      ipcRenderer.on(IPC_CHANNELS.AGENT_STOP_NOTIFICATION, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.AGENT_STOP_NOTIFICATION, handler);
     },
     onAskUserQuestion: (
       callback: (data: { sessionId: string; toolInput: unknown; cwd?: string }) => void
@@ -1033,158 +1034,6 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SEARCH_FILES, params),
     content: (params: ContentSearchParams): Promise<ContentSearchResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.SEARCH_CONTENT, params),
-  },
-
-  // Hapi Remote Sharing
-  hapi: {
-    checkGlobal: (
-      repoPath: string | undefined,
-      forceRefresh?: boolean
-    ): Promise<{ installed: boolean; version?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.HAPI_CHECK_GLOBAL, repoPath, forceRefresh),
-    start: (config: {
-      webappPort: number;
-      cliApiToken: string;
-      telegramBotToken: string;
-      webappUrl: string;
-      allowedChatIds: string;
-      runnerEnabled?: boolean;
-    }): Promise<{
-      running: boolean;
-      ready?: boolean;
-      pid?: number;
-      port?: number;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.HAPI_START, config),
-    stop: (): Promise<{ running: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.HAPI_STOP),
-    restart: (config: {
-      webappPort: number;
-      cliApiToken: string;
-      telegramBotToken: string;
-      webappUrl: string;
-      allowedChatIds: string;
-      runnerEnabled?: boolean;
-    }): Promise<{
-      running: boolean;
-      ready?: boolean;
-      pid?: number;
-      port?: number;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.HAPI_RESTART, config),
-    getStatus: (): Promise<{
-      running: boolean;
-      ready?: boolean;
-      pid?: number;
-      port?: number;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.HAPI_GET_STATUS),
-    onStatusChanged: (
-      callback: (status: {
-        running: boolean;
-        ready?: boolean;
-        pid?: number;
-        port?: number;
-        error?: string;
-      }) => void
-    ): (() => void) => {
-      const handler = (
-        _: unknown,
-        status: { running: boolean; ready?: boolean; pid?: number; port?: number; error?: string }
-      ) => callback(status);
-      ipcRenderer.on(IPC_CHANNELS.HAPI_STATUS_CHANGED, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.HAPI_STATUS_CHANGED, handler);
-    },
-  },
-
-  // Hapi Runner
-  hapiRunner: {
-    start: (): Promise<{
-      running: boolean;
-      pid?: number;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.HAPI_RUNNER_START),
-    stop: (): Promise<{
-      running: boolean;
-      pid?: number;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.HAPI_RUNNER_STOP),
-    getStatus: (): Promise<{
-      running: boolean;
-      pid?: number;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.HAPI_RUNNER_GET_STATUS),
-    onStatusChanged: (
-      callback: (status: { running: boolean; pid?: number; error?: string }) => void
-    ): (() => void) => {
-      const handler = (_: unknown, status: { running: boolean; pid?: number; error?: string }) =>
-        callback(status);
-      ipcRenderer.on(IPC_CHANNELS.HAPI_RUNNER_STATUS_CHANGED, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.HAPI_RUNNER_STATUS_CHANGED, handler);
-    },
-  },
-
-  // Happy
-  happy: {
-    checkGlobal: (
-      repoPath: string | undefined,
-      forceRefresh?: boolean
-    ): Promise<{ installed: boolean; version?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.HAPPY_CHECK_GLOBAL, repoPath, forceRefresh),
-  },
-
-  // Cloudflared Tunnel
-  cloudflared: {
-    check: (): Promise<{ installed: boolean; version?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLOUDFLARED_CHECK),
-    install: (): Promise<{ installed: boolean; version?: string; error?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CLOUDFLARED_INSTALL),
-    start: (config: {
-      mode: 'quick' | 'auth';
-      port: number;
-      token?: string;
-    }): Promise<{
-      installed: boolean;
-      version?: string;
-      running: boolean;
-      url?: string;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.CLOUDFLARED_START, config),
-    stop: (): Promise<{
-      installed: boolean;
-      version?: string;
-      running: boolean;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.CLOUDFLARED_STOP),
-    getStatus: (): Promise<{
-      installed: boolean;
-      version?: string;
-      running: boolean;
-      url?: string;
-      error?: string;
-    }> => ipcRenderer.invoke(IPC_CHANNELS.CLOUDFLARED_GET_STATUS),
-    onStatusChanged: (
-      callback: (status: {
-        installed: boolean;
-        version?: string;
-        running: boolean;
-        url?: string;
-        error?: string;
-      }) => void
-    ): (() => void) => {
-      const handler = (
-        _: unknown,
-        status: {
-          installed: boolean;
-          version?: string;
-          running: boolean;
-          url?: string;
-          error?: string;
-        }
-      ) => callback(status);
-      ipcRenderer.on(IPC_CHANNELS.CLOUDFLARED_STATUS_CHANGED, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.CLOUDFLARED_STATUS_CHANGED, handler);
-    },
   },
 
   // Web Inspector

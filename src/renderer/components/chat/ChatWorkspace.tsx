@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Monitor, Play, Terminal } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { addToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { useExtensionUiStore } from '@/stores/extensionUi';
@@ -6,7 +9,9 @@ import { useExtensionUiDisplayStore } from '@/stores/extensionUiDisplay';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
+import { useSettingsStore } from '@/stores/settings';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
+import { AgentTerminal } from './AgentTerminal';
 import { ChatComposer } from './ChatComposer';
 import { ChatWelcomeCard } from './ChatWelcomeCard';
 import { ExtensionUiDialog, ExtensionUiInlineDock } from './ExtensionUiDialog';
@@ -61,8 +66,41 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
   const thinkingEnabled = isThinkingCapable(hostStatus.capabilities);
   // T-05: repo name tail for Grep/Glob rows ("… in ai-client").
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
-  const repoName = deriveRepoName(activeWorkspace?.path);
+  const activeWorkspacePath = activeWorkspace?.path?.trim() ?? '';
+  const repoName = deriveRepoName(activeWorkspacePath);
   const hasWorkingDirectory = workspaces.some((workspace) => workspace.path.trim().length > 0);
+  const presentationMode = useSettingsStore((state) => state.presentationMode);
+  const setPresentationMode = useSettingsStore((state) => state.setPresentationMode);
+  const [tuiTerminalId, setTuiTerminalId] = useState<string | null>(null);
+  const previousWorkspacePathRef = useRef(activeWorkspacePath);
+
+  const openTui = useCallback(() => {
+    if (!activeWorkspacePath) return;
+    setPresentationMode('tui');
+    setTuiTerminalId((current) => current ?? `pi-tui-${crypto.randomUUID()}`);
+  }, [activeWorkspacePath, setPresentationMode]);
+
+  const openGui = useCallback(() => {
+    if (tuiTerminalId) void window.electronAPI.piTui.dispose(tuiTerminalId).catch(() => {});
+    setTuiTerminalId(null);
+    setPresentationMode('gui');
+  }, [setPresentationMode, tuiTerminalId]);
+
+  useEffect(() => {
+    if (!tuiTerminalId) return;
+    return () => {
+      void window.electronAPI.piTui.dispose(tuiTerminalId).catch(() => {});
+    };
+  }, [tuiTerminalId]);
+
+  useEffect(() => {
+    if (previousWorkspacePathRef.current === activeWorkspacePath) return;
+    previousWorkspacePathRef.current = activeWorkspacePath;
+    setTuiTerminalId((current) => {
+      if (current) void window.electronAPI.piTui.dispose(current).catch(() => {});
+      return null;
+    });
+  }, [activeWorkspacePath]);
 
   // T-28: sticky latch of sessions that have started a send this app run —
   // deriveMiddleColumnMode needs this to dock the composer the instant Enter
@@ -186,42 +224,100 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
 
   return (
     <section className={cn('flex min-h-0 flex-col', className)}>
-      <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
-      {renderedMode === 'session' && (
-        <MessageTimeline
-          sessionId={activeSessionId}
-          status={activeSession?.status ?? 'idle'}
-          thinkingEnabled={thinkingEnabled}
-          repoName={repoName}
-          jumpToBottomRequest={sendJumpRequest}
-        />
+      {activeWorkspacePath && (
+        <div className="flex h-9 shrink-0 items-center justify-between border-b px-3">
+          <span className="truncate text-meta text-muted-foreground">
+            {presentationMode === 'tui' ? 'Pi TUI starts a new session' : repoName}
+          </span>
+          <div className="flex h-7 items-center rounded border bg-muted p-0.5" role="group">
+            <button
+              type="button"
+              className={cn(
+                'flex h-6 items-center gap-1 px-2 text-meta',
+                presentationMode === 'gui' && 'bg-background text-foreground shadow-sm'
+              )}
+              onClick={openGui}
+              aria-pressed={presentationMode === 'gui'}
+            >
+              <Monitor className="size-3.5" />
+              GUI
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'flex h-6 items-center gap-1 px-2 text-meta',
+                presentationMode === 'tui' && 'bg-background text-foreground shadow-sm'
+              )}
+              onClick={openTui}
+              aria-pressed={presentationMode === 'tui'}
+            >
+              <Terminal className="size-3.5" />
+              TUI
+            </button>
+          </div>
+        </div>
       )}
-      <ExtensionUiStatusChips sessionId={activeSessionId} />
-      <ExtensionUiUnsupportedNotice sessionId={activeSessionId} />
-      <ExtensionUiInlineDock sessionId={activeSessionId} />
-      <ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />
-      <div className={middleColumnHostClass(renderedMode)}>
-        {hasWorkingDirectory ? (
-          <ChatComposer
-            mode={renderedMode}
-            disabled={!activeSessionId}
-            onAddRepository={onAddRepository}
-            onSendStart={markSendAttempt}
-          />
+
+      {presentationMode === 'tui' && activeWorkspacePath ? (
+        tuiTerminalId ? (
+          <div className="min-h-0 flex-1">
+            <AgentTerminal
+              id={tuiTerminalId}
+              cwd={activeWorkspacePath}
+              isActive
+              onExit={() => {
+                setTuiTerminalId(null);
+                setPresentationMode('gui');
+                addToast({
+                  type: 'warning',
+                  title: 'Pi TUI closed',
+                  description: 'Returned to the GUI session.',
+                });
+              }}
+            />
+          </div>
         ) : (
-          // T12-e′: the empty repository surface owns the welcome card. It
-          // cannot live inside ChatComposer because this state deliberately
-          // does not mount an input or send button at all.
-          <ReadingColumn>
-            <ChatWelcomeCard onAddRepository={onAddRepository} />
-          </ReadingColumn>
-        )}
-      </div>
-      <ExtensionUiWidgets sessionId={activeSessionId} placement="belowEditor" />
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <Button size="sm" onClick={openTui}>
+              <Play className="size-4" />
+              Start Pi TUI
+            </Button>
+          </div>
+        )
+      ) : (
+        <>
+          <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
+          {renderedMode === 'session' && (
+            <MessageTimeline
+              sessionId={activeSessionId}
+              status={activeSession?.status ?? 'idle'}
+              thinkingEnabled={thinkingEnabled}
+              repoName={repoName}
+              jumpToBottomRequest={sendJumpRequest}
+            />
+          )}
+          <ExtensionUiStatusChips sessionId={activeSessionId} />
+          <ExtensionUiUnsupportedNotice sessionId={activeSessionId} onOpenTui={openTui} />
+          <ExtensionUiInlineDock sessionId={activeSessionId} />
+          <ExtensionUiWidgets sessionId={activeSessionId} placement="aboveEditor" />
+          <div className={middleColumnHostClass(renderedMode)}>
+            {hasWorkingDirectory ? (
+              <ChatComposer
+                mode={renderedMode}
+                disabled={!activeSessionId}
+                onAddRepository={onAddRepository}
+                onSendStart={markSendAttempt}
+              />
+            ) : (
+              <ReadingColumn>
+                <ChatWelcomeCard onAddRepository={onAddRepository} />
+              </ReadingColumn>
+            )}
+          </div>
+          <ExtensionUiWidgets sessionId={activeSessionId} placement="belowEditor" />
+        </>
+      )}
       <ExtensionUiNotificationEffects />
-      {/* A truly session-less bind request has no conversation surface yet.
-       * Only that exceptional shape may use the global fallback; every normal
-       * request is rendered by ExtensionUiInlineDock in its owning session. */}
       <ExtensionUiDialog />
     </section>
   );

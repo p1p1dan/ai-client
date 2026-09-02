@@ -13,7 +13,7 @@
 | Cycle 1/2 behavior reattachment | **Done** | T31-a/b/c/d + legacy execution deletion；见2026-09-01 evidence |
 | Pi-native history/resume | **Done** | T32 exact-file open、branch timeline、pagination、incomplete recovery与race closure |
 | Pi-native tree/rewind/fork | **Done** | T33 bounded tree、confirmed rewind、leaf restart与independent fork |
-| Legacy import/removal/TUI | **In Progress** | T34 Done；T35 active runtime/one-shot cleanup Done，最终CLI absence由T36承接 |
+| Legacy import/removal/TUI | **In Progress** | T34/T36 Done；T35 active runtime、one-shot与CLI product surface已清理，正在关闭最终absence gate |
 | Release candidate | Planned | 自动、资源、packaged 与真机矩阵 |
 
 ## T00–T27：已落资产与替换影响
@@ -37,8 +37,8 @@
 | T14 | in-memory queue/pending release | Done with env recheck | **Retain/Adapt**：busy/stop/session retirement 接 slot |
 | T15 | workspace preview/safety | Done with packaged recheck | **Retain**；高资源 packaged smoke 留 T37 |
 | T16 | 旧 singleton-host GUI↔TUI 方案 | Planned only | **Superseded**：由 T36 pix-based TUI 取代 |
-| T17 | TUI-only hint 第一切片 | Done | **Retain/Adapt**；真实动作归 T36 |
-| T18 | 展示模式持久化旧方案 | Planned only | **Adapt**：纳入 T36，禁止历史 session 自动 spawn |
+| T17 | TUI-only hint 第一切片 | Done | **Adapted in T36**：unsupported-method notice与workspace action打开统一Pi TUI |
+| T18 | 展示模式持久化旧方案 | Done | **Adapted in T36**：持久化`gui | tui`，不自动spawn历史session |
 | T19–T23 | Pi model/auth/managed agentDir/TUI config | Done | **Retain/Adapt**：环境注入移到 WorkerSlot/TUI launch |
 | T24 | pending send/authoritative echo | Done | **Retain/Adapt**：attempt/echo 绑定 slot runtime |
 | T25 | model tags/search/group/effort | Done | **Retain** |
@@ -129,8 +129,8 @@
 D16 将实际删除前移到 T29–T34 各替代切片；本轮进一步删除 active product integration 与 one-shot legacy executors。T35 的最终CLI absence出口依赖 T36，不能在 PTY 替代前伪称完成。
 
 - **T35-a — Done**：conversation contracts、backend discriminants、multi-runtime dispatch 与 compatibility alias 已清理。
-- **T35-b — Partial**：Claude product IPC/preload/service/dependency/transition artifact 与 one-shot executor 已清理；terminal CLI detector/installer/remote helper packaging 由 T36 接管。
-- **T35-c — Partial**：chat/product runtime picker 与 one-shot provider UI 已清理；AgentTerminal/CLI picker 属 T36 active scope。
+- **T35-b — Done**：Claude product IPC/preload/service/dependency/transition artifact、one-shot executor、terminal CLI detector/installer/remote helper execution surface 已清理。
+- **T35-c — Done**：chat/product runtime picker、one-shot provider UI、AgentTerminal multi-CLI picker与legacy agent settings已清理；产品终端仅启动Pi TUI。
 - **T35-d — Done**：保留的 Claude/Codex history asset 仅为隔离 migration reader、fixture/evidence；Codex ASR 仍未以 fixture 冒充产品能力。
 
 **当前证据**：[T35 absence audit](./evidence/2026-09-02-t35-absence-audit.md)。
@@ -139,14 +139,14 @@ D16 将实际删除前移到 T29–T34 各替代切片；本轮进一步删除 a
 
 ## Phase G — pix-based Pi TUI
 
-### T36 — Pi TUI, PTY and CLI packaging — **Planned**
+### T36 — Pi TUI, PTY and CLI packaging — **Done**
 
-- **T36-a**：Pi CLI/production dependencies 放入 Resources，可由随包运行时解析。
-- **T36-b**：参考 pix `PiTuiPtyController`、session identity、generation/stale output、resize/input/exit。
-- **T36-c**：GUI/TUI 单写 authority、mode switch、crash/return-to-GUI reopen。
-- **T36-d**：复用本仓 xterm/AgentTerminal；接 T17 action 与 T18 默认模式。
+- **T36-a — Done**：Pi CLI/production dependencies进入worker Resources；四个平台使用固定版本随包Node与absolute path。
+- **T36-b — Done**：Main-owned `PiTuiPtyController`覆盖generation/stale output、resize/input/exit、serialized lifecycle、bounded suspend与LRU eviction。
+- **T36-c — Done**：TUI总是创建同workspace/config的新session，不复用GUI JSONL；mode switch、window cleanup、crash/exit回GUI已接通。
+- **T36-d — Done**：复用xterm/AgentTerminal，接通T17 action、T18持久化mode与Pi TUI auto-execute completion。
 
-**验收**：不依赖系统 PATH；GUI/TUI 不双写；打包态启动、退出、崩溃和旧输出过滤通过。
+**验收证据**：[T36 evidence](./evidence/2026-09-02-t36-pi-tui.md)。两套typecheck、focused tests、scoped Biome、worker-only build、bundled CLI version与真实node-pty help smoke通过；完整packaged Electron smoke归T37。
 
 ## Phase H — Release candidate
 

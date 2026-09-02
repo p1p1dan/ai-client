@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TabId } from '@/App/constants';
-import type { Session } from '@/components/chat/SessionBar';
+import type { TerminalSession as Session } from '@/components/chat/terminalSession';
 import { Dialog, DialogPopup } from '@/components/ui/dialog';
 import { toastManager } from '@/components/ui/toast';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';

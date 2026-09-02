@@ -18,19 +18,17 @@ import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { cn } from '@/lib/utils';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
-import { initAgentStatusListener } from '@/stores/agentStatus';
-import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
+import { useSettingsStore } from '@/stores/settings';
 import { useTerminalStore } from '@/stores/terminal';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
-import { AGENT_INFO, createSession } from '@/utils/agentSession';
+import { createSession } from '@/utils/agentSession';
 import { AgentGroup } from './AgentGroup';
-import { AgentPickerMenu } from './AgentPickerMenu';
 import { AgentSessionTabs } from './AgentSessionTabs';
 import { AgentTerminal } from './AgentTerminal';
 import { EnhancedInputContainer } from './EnhancedInputContainer';
 import { QuickTerminalModal } from './QuickTerminalModal';
-import type { Session } from './SessionBar';
 import { StatusLine } from './StatusLine';
+import type { TerminalSession as Session } from './terminalSession';
 import type { AgentGroupState, AgentGroup as AgentGroupType } from './types';
 import { createInitialGroupState } from './types';
 
@@ -41,88 +39,18 @@ interface AgentPanelProps {
   onSwitchWorktree?: (worktreePath: string) => void;
 }
 
-/**
- * Whether the session uses Cursor CLI. Session name from terminal title / first line
- * is only applied for Cursor to avoid affecting other agents (Claude Code, etc.).
- */
-function isCursorAgent(agentId: string): boolean {
-  const baseId = agentId.replace(/-(hapi|happy)$/, '');
-  return baseId === 'cursor';
-}
-
-/**
- * Default display name for a session (before any title from CLI or first input).
- *
- * Session name priority (highest → lowest):
- *   1. User manual rename (via context menu) — sets `name`, clears `terminalTitle`
- *   2. Terminal title from OSC escape sequence (`terminalTitle`) — updates `name` when still default (Cursor only)
- *   3. First user input line (`onActivatedWithFirstLine`) — sets `name` only when still default & no terminalTitle (Cursor only)
- *   4. Default agent display name (this function) — e.g. "Claude", "Claude (Hapi)"
- *
- * Display in SessionBar: `session.terminalTitle || session.name`
- */
-function getDefaultSessionName(agentId: string): string {
-  const isHapi = agentId.endsWith('-hapi');
-  const isHappy = agentId.endsWith('-happy');
-  const baseId = isHapi
-    ? agentId.slice(0, -'-hapi'.length)
-    : isHappy
-      ? agentId.slice(0, -'-happy'.length)
-      : agentId;
-  const baseName = AGENT_INFO[baseId]?.name ?? 'Agent';
-  return isHapi ? `${baseName} (Hapi)` : isHappy ? `${baseName} (Happy)` : baseName;
-}
-
-function getDefaultAgentId(
-  agentSettings: Record<string, { enabled: boolean; isDefault: boolean }>
-): string {
-  // Find the default agent
-  for (const [id, config] of Object.entries(agentSettings)) {
-    if (config.isDefault && config.enabled) {
-      return id;
-    }
-  }
-  // Fallback to first enabled builtin agent
-  for (const id of BUILTIN_AGENT_IDS) {
-    if (agentSettings[id]?.enabled) {
-      return id;
-    }
-  }
-  // Ultimate fallback
-  return 'claude';
-}
-
 /** Empty-state "New Session" button with agent picker on hover. */
 const NewSessionButton = memo(function NewSessionButton({
   onNewSession,
-  onNewSessionWithAgent,
 }: {
   onNewSession: () => void;
-  onNewSessionWithAgent: (agentId: string, agentCommand: string) => void;
 }) {
   const { t } = useI18n();
-  const [showMenu, setShowMenu] = useState(false);
   return (
-    <div
-      className="relative inline-block"
-      onMouseEnter={() => setShowMenu(true)}
-      onMouseLeave={() => setShowMenu(false)}
-    >
-      <Button variant="outline" size="sm" onClick={onNewSession}>
-        <Plus className="mr-2 h-4 w-4" />
-        {t('New Session')}
-      </Button>
-      <AgentPickerMenu
-        show={showMenu}
-        onClose={() => setShowMenu(false)}
-        onSelectAgent={(agentId, agentCommand) => {
-          onNewSessionWithAgent(agentId, agentCommand);
-          setShowMenu(false);
-        }}
-        position="bottom"
-        align="left"
-      />
-    </div>
+    <Button variant="outline" size="sm" onClick={onNewSession}>
+      <Plus className="mr-2 h-4 w-4" />
+      {t('New Session')}
+    </Button>
   );
 });
 
@@ -173,8 +101,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null); // 容器引用
   const {
-    agentSettings,
-    customAgents,
     xtermKeybindings,
     autoCreateSessionOnActivate,
     autoCreateSessionOnTempActivate,
@@ -221,7 +147,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     return getXtermTheme(terminalTheme)?.background ?? defaultDarkTheme.background;
   }, [terminalTheme, bgImageEnabled]);
   const statusLineEnabled = claudeCodeIntegration.statusLineEnabled;
-  const defaultAgentId = useMemo(() => getDefaultAgentId(agentSettings), [agentSettings]);
   const { setAgentCount, registerAgentCloseHandler } = useWorktreeActivityStore();
 
   const [hasRunningProcess, setHasRunningProcess] = useState(false);
@@ -409,16 +334,19 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   }, [allSessions, repoPath, cwd]);
 
   const killBackendSession = useCallback((session?: Session) => {
-    if (!session?.backendSessionId) {
-      return;
-    }
+    if (!session) return;
 
-    window.electronAPI.session.kill(session.backendSessionId).catch((error) => {
-      console.error(
-        `[AgentPanel] Failed to kill backend session ${session.backendSessionId}`,
-        error
-      );
+    void window.electronAPI.piTui.dispose(session.id).catch((error) => {
+      console.error(`[AgentPanel] Failed to dispose Pi TUI ${session.id}`, error);
     });
+    if (session.backendSessionId) {
+      void window.electronAPI.session.kill(session.backendSessionId).catch((error) => {
+        console.error(
+          `[AgentPanel] Failed to kill backend session ${session.backendSessionId}`,
+          error
+        );
+      });
+    }
   }, []);
 
   // Sync activeIds from store to group state when changed externally (e.g., from RunningProjectsPopover)
@@ -494,19 +422,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   // Handle new session in active group
   const handleNewSession = useCallback(
     (targetGroupId?: string) => {
-      const newSession = createSession(repoPath, cwd, defaultAgentId, customAgents, agentSettings);
+      const newSession = createSession(repoPath, cwd);
       addSession(newSession);
-
-      // Auto open enhanced input for new Claude session if enabled
-      const baseAgentId = defaultAgentId.replace(/-hapi$/, '').replace(/-happy$/, '');
-      const autoPopupMode = claudeCodeIntegration.enhancedInputAutoPopup;
-      if (
-        baseAgentId === 'claude' &&
-        claudeCodeIntegration.enhancedInputEnabled &&
-        (autoPopupMode === 'always' || autoPopupMode === 'hideWhileRunning')
-      ) {
-        setEnhancedInputOpen(newSession.id, true);
-      }
 
       // Add session to group
       updateCurrentGroupState((state) => {
@@ -539,78 +456,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         };
       });
     },
-    [
-      repoPath,
-      cwd,
-      defaultAgentId,
-      customAgents,
-      agentSettings,
-      addSession,
-      updateCurrentGroupState,
-      claudeCodeIntegration.enhancedInputEnabled,
-      claudeCodeIntegration.enhancedInputAutoPopup,
-      setEnhancedInputOpen,
-    ]
-  );
-
-  const handleNewSessionWithAgent = useCallback(
-    (targetGroupId: string, agentId: string, _agentCommand: string) => {
-      const newSession = createSession(repoPath, cwd, agentId, customAgents, agentSettings);
-      addSession(newSession);
-
-      // Auto open enhanced input for new Claude session if enabled
-      const baseAgentId = agentId.replace(/-hapi$/, '').replace(/-happy$/, '');
-      const autoPopupMode = claudeCodeIntegration.enhancedInputAutoPopup;
-      if (
-        baseAgentId === 'claude' &&
-        claudeCodeIntegration.enhancedInputEnabled &&
-        (autoPopupMode === 'always' || autoPopupMode === 'hideWhileRunning')
-      ) {
-        setEnhancedInputOpen(newSession.id, true);
-      }
-
-      // Add session to group
-      updateCurrentGroupState((state) => {
-        const groupId = targetGroupId || state.activeGroupId || state.groups[0]?.id;
-        if (!groupId) {
-          // No groups exist - create first group with this session
-          const newGroup: AgentGroupType = {
-            id: crypto.randomUUID(),
-            sessionIds: [newSession.id],
-            activeSessionId: newSession.id,
-          };
-          return {
-            groups: [newGroup],
-            activeGroupId: newGroup.id,
-            flexPercents: [100],
-          };
-        }
-
-        return {
-          ...state,
-          groups: state.groups.map((g) =>
-            g.id === groupId
-              ? {
-                  ...g,
-                  sessionIds: [...g.sessionIds, newSession.id],
-                  activeSessionId: newSession.id,
-                }
-              : g
-          ),
-        };
-      });
-    },
-    [
-      repoPath,
-      cwd,
-      customAgents,
-      agentSettings,
-      addSession,
-      updateCurrentGroupState,
-      claudeCodeIntegration.enhancedInputEnabled,
-      claudeCodeIntegration.enhancedInputAutoPopup,
-      setEnhancedInputOpen,
-    ]
+    [repoPath, cwd, addSession, updateCurrentGroupState]
   );
 
   const removeSessionFromUi = useCallback(
@@ -708,10 +554,8 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     [cwd, setActiveId, updateCurrentGroupState]
   );
 
-  // Notification payload may carry either UI session id or Claude sessionId.
   const findSessionByNotificationId = useCallback(
-    (incomingSessionId: string) =>
-      allSessions.find((s) => s.id === incomingSessionId || s.sessionId === incomingSessionId),
+    (incomingSessionId: string) => allSessions.find((s) => s.id === incomingSessionId),
     [allSessions]
   );
 
@@ -733,105 +577,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   const enhancedInputSenderRef = useRef<
     Map<string, (content: string, imagePaths: string[]) => void>
   >(new Map());
-
-  // 监听 Claude stop hook 通知，精确更新 output state 并发送完成通知
-  const setOutputState = useAgentSessionsStore((s) => s.setOutputState);
-  const getActivityState = useWorktreeActivityStore((s) => s.getActivityState);
-  useEffect(() => {
-    const unsubscribe = window.electronAPI.notification.onAgentStop(({ sessionId }) => {
-      const session = findSessionByNotificationId(sessionId);
-      if (session) {
-        // Check if user is currently viewing this session
-        const activeGroup = groups.find((g) => g.id === activeGroupId);
-        const isViewingSession =
-          activeGroup?.activeSessionId === session.id && pathsEqual(session.cwd, cwd) && isActive;
-
-        // Update output state to idle (will become 'unread' if user is not viewing)
-        setOutputState(session.id, 'idle', isViewingSession);
-
-        // Check if enhanced input is enabled and should auto popup
-        // Auto popup requires:
-        // 1. enhancedInputEnabled
-        // 2. enhancedInputAutoPopup is 'always' or 'hideWhileRunning'
-        // 3. stopHookEnabled (for Claude Code)
-        // 4. NOT in 'waiting_input' state (AskUserQuestion or Permission Prompt active)
-        const autoPopupMode = claudeCodeIntegration.enhancedInputAutoPopup;
-        const activityState = getActivityState(session.cwd);
-        const shouldAutoPopup =
-          session.agentId === 'claude' &&
-          claudeCodeIntegration.enhancedInputEnabled &&
-          (autoPopupMode === 'always' || autoPopupMode === 'hideWhileRunning') &&
-          claudeCodeIntegration.stopHookEnabled &&
-          activityState !== 'waiting_input';
-
-        // Auto popup enhanced input if enabled
-        // Now we set the open state in store - it persists per session
-        if (shouldAutoPopup) {
-          setEnhancedInputOpen(sessionId, true);
-        }
-
-        // Send system notification
-        const projectName = session.cwd.split('/').pop() || 'Unknown';
-        const agentName = AGENT_INFO[session.agentId]?.name || session.agentCommand;
-        // Use terminal title as body, fall back to project name
-        const notificationBody = session.terminalTitle || projectName;
-        window.electronAPI.notification.show({
-          title: t('{{command}} completed', { command: agentName }),
-          body: notificationBody,
-          sessionId: session.id,
-        });
-      }
-    });
-    return unsubscribe;
-  }, [
-    findSessionByNotificationId,
-    t,
-    groups,
-    activeGroupId,
-    cwd,
-    isActive,
-    setOutputState,
-    getActivityState,
-    claudeCodeIntegration,
-    setEnhancedInputOpen,
-  ]);
-
-  // Note: EnhancedInput open state is now stored per-session in the store
-  // No need to auto-collapse on session switch - each session keeps its own state
-
-  // 监听 Claude AskUserQuestion 通知
-  useEffect(() => {
-    const unsubscribe = window.electronAPI.notification.onAskUserQuestion(
-      ({ sessionId, toolInput }) => {
-        const session = findSessionByNotificationId(sessionId);
-        if (session) {
-          const agentName = AGENT_INFO[session.agentId]?.name || session.agentCommand;
-
-          // Extract first question text if available
-          let questionPreview = '需要回答问题';
-          if (toolInput && typeof toolInput === 'object' && 'questions' in toolInput) {
-            const questions = (toolInput as { questions: Array<{ question: string }> }).questions;
-            if (questions?.[0]?.question) {
-              questionPreview = questions[0].question;
-            }
-          }
-
-          window.electronAPI.notification.show({
-            title: `${agentName} 等待输入`,
-            body: questionPreview,
-            sessionId: session.id,
-          });
-        }
-      }
-    );
-    return unsubscribe;
-  }, [findSessionByNotificationId]);
-
-  // 监听 Claude status line 更新
-  useEffect(() => {
-    const unsubscribe = initAgentStatusListener();
-    return unsubscribe;
-  }, []);
 
   const handleNextSession = useCallback(() => {
     const activeGroup = groups.find((g) => g.id === activeGroupId);
@@ -884,17 +629,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       updateSession(id, { activated: true });
     },
     [updateSession]
-  );
-
-  const handleActivatedWithFirstLine = useCallback(
-    (id: string, line: string) => {
-      const session = allSessions.find((s) => s.id === id);
-      if (!session || !line.trim() || !isCursorAgent(session.agentId)) return;
-      const defaultName = getDefaultSessionName(session.agentId);
-      if (session.name !== defaultName || session.terminalTitle) return;
-      updateSession(id, { name: line.trim() });
-    },
-    [allSessions, updateSession]
   );
 
   // Handle group click
@@ -957,13 +691,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         }
 
         // Source group has only 1 session, create a new session in new group
-        const newSession = createSession(
-          repoPath,
-          cwd,
-          defaultAgentId,
-          customAgents,
-          agentSettings
-        );
+        const newSession = createSession(repoPath, cwd);
         addSession(newSession);
 
         const newGroup: AgentGroupType = {
@@ -986,15 +714,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         };
       });
     },
-    [
-      cwd,
-      repoPath,
-      defaultAgentId,
-      customAgents,
-      agentSettings,
-      addSession,
-      updateCurrentGroupState,
-    ]
+    [cwd, repoPath, addSession, updateCurrentGroupState]
   );
 
   // Handle merge - move active session from current group to previous group
@@ -1329,12 +1049,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
               <EmptyTitle>{t('No agent sessions')}</EmptyTitle>
               <EmptyDescription>{t('Create a session to start using AI Agent')}</EmptyDescription>
             </EmptyHeader>
-            <NewSessionButton
-              onNewSession={() => handleNewSession()}
-              onNewSessionWithAgent={(agentId, agentCommand) =>
-                handleNewSessionWithAgent('', agentId, agentCommand)
-              }
-            />
+            <NewSessionButton onNewSession={() => handleNewSession()} />
           </Empty>
         </div>
       )}
@@ -1417,37 +1132,13 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
               <AgentTerminal
                 id={session.id}
                 cwd={session.cwd}
-                sessionId={session.sessionId || session.id}
-                backendSessionId={session.backendSessionId}
-                agentId={session.agentId}
-                agentCommand={session.agentCommand || 'claude'}
-                claudeConfigDir={session.claudeConfigDir}
-                customPath={session.customPath}
-                customArgs={session.customArgs}
-                environment={session.environment || 'native'}
-                initialized={session.initialized}
-                activated={session.activated}
-                isActive={isTerminalActive}
-                hasPendingCommand={!!session.pendingCommand}
                 initialPrompt={session.pendingCommand}
+                isActive={isTerminalActive}
                 onInitialized={() => handleInitialized(sessionId)}
                 onActivated={() => handleActivated(sessionId)}
-                onActivatedWithFirstLine={(line) => handleActivatedWithFirstLine(sessionId, line)}
                 onExit={() => handleSessionExit(sessionId, groupId || undefined)}
                 onTerminalTitleChange={(title) => {
-                  if (session.userRenamed) return;
-                  const syncName =
-                    title &&
-                    isCursorAgent(session.agentId) &&
-                    session.name === getDefaultSessionName(session.agentId);
-                  updateSession(sessionId, {
-                    terminalTitle: title,
-                    ...(syncName ? { name: title } : {}),
-                  });
-                }}
-                onBackendSessionIdChange={(backendSessionId) => {
-                  if (session.backendSessionId === backendSessionId) return;
-                  updateSession(sessionId, { backendSessionId });
+                  if (!session.userRenamed) updateSession(sessionId, { terminalTitle: title });
                 }}
                 onSplit={() => groupId && handleSplit(groupId)}
                 canMerge={info ? info.groupIndex > 0 : false}
@@ -1502,10 +1193,6 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
                   onNewSession={() => {
                     handleGroupClick(group.id);
                     handleNewSession(group.id);
-                  }}
-                  onNewSessionWithAgent={(agentId, agentCommand) => {
-                    handleGroupClick(group.id);
-                    handleNewSessionWithAgent(group.id, agentId, agentCommand);
                   }}
                   showQuickTerminal
                   quickTerminalOpen={quickTerminalOpen}

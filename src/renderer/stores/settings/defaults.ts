@@ -1,8 +1,6 @@
 import { normalizeLocale } from '@shared/i18n';
 import type { ProxySettings } from '@shared/types';
 import type {
-  AgentDetectionStatus,
-  AgentSettings,
   BranchNameGeneratorSettings,
   ClaudeCodeIntegrationSettings,
   CodeReviewSettings,
@@ -12,7 +10,6 @@ import type {
   FileTreeDisplayMode,
   GitCloneSettings,
   GlobalKeybindings,
-  HapiSettings,
   LayoutMode,
   MainTabKeybindings,
   QuickTerminalSettings,
@@ -228,25 +225,6 @@ export const defaultCodeReviewSettings: CodeReviewSettings = {
   prompt: defaultCodeReviewPromptZh,
 };
 
-// Default Hapi settings
-export const defaultHapiSettings: HapiSettings = {
-  enabled: false,
-  webappPort: 3006,
-  cliApiToken: '',
-  telegramBotToken: '',
-  webappUrl: '',
-  allowedChatIds: '',
-  // Cloudflared defaults
-  cfEnabled: false,
-  tunnelMode: 'quick',
-  tunnelToken: '',
-  useHttp2: true,
-  // Hapi runner defaults
-  runnerEnabled: false,
-  // Happy defaults
-  happyEnabled: false,
-};
-
 export const defaultRemoteSettings: RemoteSettings = {
   profiles: [],
 };
@@ -340,20 +318,6 @@ export const defaultWorkspaceKeybindings: WorkspaceKeybindings = {
   toggleRepository: { key: 'r', meta: true, shift: true },
   switchActiveWorktree: { key: 'CapsLock', ctrl: true },
 };
-
-// Default agent settings
-export const defaultAgentSettings: AgentSettings = {
-  claude: { enabled: true, isDefault: true },
-  codex: { enabled: false, isDefault: false },
-  droid: { enabled: false, isDefault: false },
-  gemini: { enabled: false, isDefault: false },
-  auggie: { enabled: false, isDefault: false },
-  cursor: { enabled: false, isDefault: false },
-  opencode: { enabled: false, isDefault: false },
-};
-
-// No default detection status - all agents need to be detected
-export const defaultAgentDetectionStatus: AgentDetectionStatus = {};
 
 // Default todo settings
 export const defaultTodoEnabled = true;

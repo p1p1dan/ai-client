@@ -1,7 +1,6 @@
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
-import type { CustomAgent } from '@shared/types';
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -12,7 +11,6 @@ import {
 } from '@/lib/ghosttyTheme';
 import { updateRendererLogging } from '@/utils/logging';
 import {
-  defaultAgentSettings,
   defaultBranchNameGeneratorSettings,
   defaultClaudeCodeIntegrationSettings,
   defaultCodeReviewSettings,
@@ -22,7 +20,6 @@ import {
   defaultFileTreeDisplayMode,
   defaultGitCloneSettings,
   defaultGlobalKeybindings,
-  defaultHapiSettings,
   defaultLayoutMode,
   defaultMainTabKeybindings,
   defaultProxySettings,
@@ -39,6 +36,7 @@ import {
   getDefaultShellConfig,
 } from './defaults';
 import { cleanupLegacyFields, migrateSettings } from './migration';
+import { readPresentationMode, writePresentationMode } from './presentationModeMirror';
 import { readShellPreference, writeShellPreference } from './shellPreferenceMirror';
 import { electronStorage } from './storage';
 import type {
@@ -164,10 +162,7 @@ export function getInitialState() {
     // Editor Settings
     editorSettings: defaultEditorSettings,
 
-    // Agent Settings
-    agentSettings: defaultAgentSettings,
-    agentDetectionStatus: {},
-    customAgents: [] as CustomAgent[],
+    // Terminal session settings
     shellConfig: getDefaultShellConfig(),
     agentNotificationEnabled: true,
     agentNotificationDelay: 5,
@@ -187,7 +182,6 @@ export function getInitialState() {
 
     // App Settings
     autoUpdateEnabled: true,
-    hapiSettings: defaultHapiSettings,
     remoteSettings: defaultRemoteSettings,
     defaultWorktreePath: '',
     proxySettings: defaultProxySettings,
@@ -232,6 +226,7 @@ export function getInitialState() {
     // Settings display mode
     settingsDisplayMode: 'tab' as const,
     settingsModalPosition: null,
+    presentationMode: readPresentationMode(),
 
     // Terminal theme favorites
     favoriteTerminalThemes: [] as string[],
@@ -289,6 +284,10 @@ export const useSettingsStore = create<SettingsState>()(
 
       setFontSize: (fontSize) => set({ fontSize }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
+      setPresentationMode: (presentationMode) => {
+        writePresentationMode(presentationMode);
+        set({ presentationMode });
+      },
 
       // Terminal Setters - xterm picks these up through its own store subscription
       setTerminalFontSize: (terminalFontSize) => set({ terminalFontSize }),
@@ -325,94 +324,7 @@ export const useSettingsStore = create<SettingsState>()(
           editorSettings: { ...state.editorSettings, ...settings },
         })),
 
-      // Agent Setters
-      setAgentEnabled: (agentId, enabled) => {
-        const current = get().agentSettings;
-        set({
-          agentSettings: {
-            ...current,
-            [agentId]: { ...current[agentId], enabled },
-          },
-        });
-      },
-
-      setAgentDefault: (agentId) => {
-        const current = get().agentSettings;
-        const updated = { ...current };
-        for (const id of Object.keys(updated)) {
-          updated[id] = { ...updated[id], isDefault: id === agentId };
-        }
-        set({ agentSettings: updated });
-      },
-
-      setAgentCustomConfig: (agentId, config) => {
-        const current = get().agentSettings;
-        set({
-          agentSettings: {
-            ...current,
-            [agentId]: {
-              ...current[agentId],
-              customPath: config.customPath || undefined,
-              customArgs: config.customArgs || undefined,
-            },
-          },
-        });
-      },
-
-      setAgentDetectionStatus: (agentId, info) => {
-        const current = get().agentDetectionStatus;
-        set({
-          agentDetectionStatus: {
-            ...current,
-            [agentId]: info,
-          },
-        });
-      },
-
-      clearAgentDetectionStatus: (agentId) => {
-        const current = get().agentDetectionStatus;
-        const updated = { ...current };
-        delete updated[agentId];
-        set({ agentDetectionStatus: updated });
-      },
-
-      addCustomAgent: (agent) => {
-        const { customAgents, agentSettings } = get();
-        set({
-          customAgents: [...customAgents, agent],
-          agentSettings: {
-            ...agentSettings,
-            [agent.id]: { enabled: true, isDefault: false },
-          },
-        });
-      },
-
-      updateCustomAgent: (id, updates) => {
-        const { customAgents } = get();
-        set({
-          customAgents: customAgents.map((a) => (a.id === id ? { ...a, ...updates } : a)),
-        });
-      },
-
-      removeCustomAgent: (id) => {
-        const { customAgents, agentSettings } = get();
-        const wasDefault = agentSettings[id]?.isDefault;
-        const newAgentSettings = { ...agentSettings };
-        delete newAgentSettings[id];
-
-        if (wasDefault) {
-          const firstEnabled = Object.entries(newAgentSettings).find(([, cfg]) => cfg.enabled);
-          if (firstEnabled) {
-            newAgentSettings[firstEnabled[0]] = { ...firstEnabled[1], isDefault: true };
-          }
-        }
-
-        set({
-          customAgents: customAgents.filter((a) => a.id !== id),
-          agentSettings: newAgentSettings,
-        });
-      },
-
+      // Terminal session setters
       setShellConfig: (shellConfig) => set({ shellConfig }),
       setAgentNotificationEnabled: (agentNotificationEnabled) => set({ agentNotificationEnabled }),
       setAgentNotificationDelay: (agentNotificationDelay) => set({ agentNotificationDelay }),
@@ -453,11 +365,6 @@ export const useSettingsStore = create<SettingsState>()(
         set({ autoUpdateEnabled });
         window.electronAPI.updater.setAutoUpdateEnabled(autoUpdateEnabled);
       },
-
-      setHapiSettings: (settings) =>
-        set((state) => ({
-          hapiSettings: { ...state.hapiSettings, ...settings },
-        })),
 
       setRemoteProfiles: (profiles) =>
         set((state) => ({
@@ -718,6 +625,7 @@ export const useSettingsStore = create<SettingsState>()(
         // mirror at the hydrated value so an out-of-band edit (or a cleared
         // localStorage) converges after one launch instead of fighting it.
         writeShellPreference(effectiveState.useOpenChamberShell);
+        writePresentationMode(effectiveState.presentationMode);
 
         // Sync renderer logging configuration after settings are loaded
         updateRendererLogging(effectiveState.loggingEnabled, effectiveState.logLevel);

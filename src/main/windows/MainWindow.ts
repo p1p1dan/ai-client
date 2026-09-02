@@ -14,11 +14,13 @@ import {
   WINDOW_BACKGROUND_LIGHT,
 } from '@shared/windowTheme';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+import { disposePiTuiWindow } from '../ipc/piTui';
 import { getAuthStateService } from '../services/auth';
 import { hasEnteredApp } from '../services/auth/appEntry';
 import { piRuntimeChecker } from '../services/cli/PiRuntimeChecker';
 import { getCurrentLocale } from '../services/i18n';
 import { sessionManager } from '../services/session/SessionManager';
+
 import { autoUpdaterService } from '../services/updater/AutoUpdater';
 
 /**
@@ -513,6 +515,7 @@ export function createMainWindow(options: CreateMainWindowOptions = {}): Browser
   }
 
   win.on('closed', () => {
+    disposePiTuiWindow(win.id);
     void sessionManager.detachWindowSessions(win.id);
   });
 

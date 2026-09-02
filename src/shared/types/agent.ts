@@ -41,11 +41,3 @@ export interface AgentSession {
 
 /** Task completion marker used in auto-execute mode */
 export const TASK_COMPLETION_MARKER = '[AICLIENT_TASK_COMPLETE]';
-
-/** Data sent with agent stop notification */
-export interface AgentStopNotificationData {
-  sessionId: string;
-  cwd?: string;
-  /** Task completion status from session log analysis */
-  taskCompletionStatus?: 'completed' | 'unknown';
-}

@@ -34,6 +34,22 @@ export const NODE_RUNTIME_PINS = {
     outName: 'node.exe',
     urls: runtimeUrls(`node-v${NODE_RUNTIME_VERSION}-win-x64.zip`),
   },
+  'darwin-arm64': {
+    platformKey: 'darwin-arm64',
+    archiveName: `node-v${NODE_RUNTIME_VERSION}-darwin-arm64.tar.gz`,
+    sha256: 'e1a97e14c99c803e96c7339403282ea05a499c32f8d83defe9ef5ec66f979ed1',
+    binaryRel: 'bin/node',
+    outName: 'node',
+    urls: runtimeUrls(`node-v${NODE_RUNTIME_VERSION}-darwin-arm64.tar.gz`),
+  },
+  'darwin-x64': {
+    platformKey: 'darwin-x64',
+    archiveName: `node-v${NODE_RUNTIME_VERSION}-darwin-x64.tar.gz`,
+    sha256: 'dfd0dbd3e721503434df7b7205e719f61b3a3a31b2bcf9729b8b91fea240f080',
+    binaryRel: 'bin/node',
+    outName: 'node',
+    urls: runtimeUrls(`node-v${NODE_RUNTIME_VERSION}-darwin-x64.tar.gz`),
+  },
   'linux-x64': {
     platformKey: 'linux-x64',
     // .tar.gz rather than .tar.xz: mirrors the in-repo precedent in
@@ -49,7 +65,7 @@ export const NODE_RUNTIME_PINS = {
 
 /**
  * `'win32','x64'` -> the win32-x64 pin. Returns `undefined` for a platform we
- * do not bundle a runtime for (mac today) — callers must treat that as "skip",
+ * do not bundle a runtime for — callers must treat that as "skip",
  * never as an error: `dist:prereq` runs this on every platform including the
  * mac build scripts (packaging spec §5.3).
  */

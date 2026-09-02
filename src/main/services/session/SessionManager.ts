@@ -1,4 +1,3 @@
-import { resolve as resolvePath } from 'node:path';
 import {
   IPC_CHANNELS,
   type SessionAttachOptions,
@@ -12,11 +11,6 @@ import {
   type SessionStateEvent,
 } from '@shared/types';
 import { BrowserWindow, type WebContents } from 'electron';
-import { getCredentialVault } from '../auth';
-import { ensureWorkspaceTrusted, getEffectiveClaudeJsonPath } from '../auth/claudeHome';
-import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
-import { assertAgentSpawnAllowed } from '../auth/spawnGate';
-import { resolveManagedPiPtyEnv } from '../piModelConfig';
 import { remoteConnectionManager } from '../remote/RemoteConnectionManager';
 import { isRemoteVirtualPath, parseRemoteVirtualPath } from '../remote/RemotePath';
 import { PtyManager } from '../terminal/PtyManager';
@@ -31,90 +25,6 @@ interface ManagedSessionRecord extends SessionDescriptor {
 }
 
 const MAX_SESSION_REPLAY_CHARS = 65_536;
-
-/**
- * S0' (D60) — why there is no Codex twin of `withManagedClaudeEnv` below.
- *
- * There used to be one. A local terminal PTY got `CODEX_HOME` pointed at the
- * app-owned `<userData>/codex-home` plus `AICLIENT_CODEX_API_KEY`, so a user
- * typing `codex` in our terminal reached the company gateway. Both halves were
- * needed together: the key only authenticated because the `config.toml` in that
- * directory named it via `env_key`.
- *
- * D60 removed the directory, and the pair cannot be split. The key alone means
- * nothing to a user's own `~/.codex` (their provider names some other variable,
- * or none), and there is no environment variable that can point codex at a
- * different `base_url` — the provider table only exists in config.
- *
- * So a terminal `codex` now runs on the user's own configuration. That is the
- * correct default under D60 and it is also a BEHAVIOUR CHANGE for anyone who
- * relied on the terminal inheriting the gateway; registered as an open question
- * on the `unified-credentials` plan rather than papered over here.
- *
- * The asymmetry with Claude is not an oversight: `ANTHROPIC_BASE_URL` /
- * `ANTHROPIC_AUTH_TOKEN` are names the Claude CLI reads directly, so the Claude
- * credential needs no file and no directory. Codex has no equivalent pair.
- */
-
-/**
- * S0' (D60) — the Claude credential for a local terminal PTY.
- *
- * A user who types `claude` in our terminal is running the real CLI, which
- * authenticates from `ANTHROPIC_*` env or from their own settings.json. Before
- * D60 they got ours by inheriting the redirected `CLAUDE_CONFIG_DIR` — which
- * also handed them our stripped-down home instead of their own commands,
- * skills and CLAUDE.md. Now they get the credential and keep their home.
- *
- * Unlike the Codex twin above these keys are `ANTHROPIC_*`, the names the CLI
- * actually reads; there is no indirection to point at a private name here.
- * They are spread LAST so Main's values win over a renderer-supplied
- * same-named key, matching the Codex "合并向" rule.
- *
- * `null` (flag off) returns the SAME `options` reference — not even a shallow
- * copy, so a user's own shell `ANTHROPIC_AUTH_TOKEN` stays exactly as they
- * set it ("this slice didn't touch that key" ≠ "the key doesn't exist").
- * Both halves must be present for the same reason `claudeSettings.ts` requires
- * both: a base URL paired with someone else's token is a cross-account
- * request.
- */
-function withManagedClaudeEnv(options: SessionCreateOptions): SessionCreateOptions {
-  if (!resolveManagedCredentialsEnabled()) {
-    return options;
-  }
-  const vaultResult = getCredentialVault().read();
-  if (vaultResult.status !== 'ok') {
-    return options;
-  }
-  // Optional-chained, not destructured: `payload.claude` is absent in older
-  // vault documents (and in any fixture written before the arm existed), and
-  // a missing arm must degrade to "no managed credential" exactly like an
-  // empty one — never throw inside a session create.
-  const baseUrl = vaultResult.doc.payload.claude?.baseUrl;
-  const authToken = vaultResult.doc.payload.claude?.authToken;
-  if (!baseUrl || !authToken) {
-    return options;
-  }
-  return {
-    ...options,
-    env: {
-      ...options.env,
-      ANTHROPIC_BASE_URL: baseUrl,
-      ANTHROPIC_AUTH_TOKEN: authToken,
-    },
-  };
-}
-
-/** Q8: agent PTYs inherit the managed Pi directory, whose auth.json carries the company key. */
-function withManagedPiEnv(options: SessionCreateOptions): SessionCreateOptions {
-  if (options.kind !== 'agent' || !resolveManagedCredentialsEnabled()) return options;
-  return {
-    ...options,
-    env: {
-      ...options.env,
-      ...resolveManagedPiPtyEnv(),
-    },
-  };
-}
 
 function getWindowId(target: BrowserWindow | WebContents | number): number {
   if (typeof target === 'number') {
@@ -157,32 +67,14 @@ export class SessionManager {
     target: BrowserWindow | WebContents | number,
     options: SessionCreateOptions = {}
   ): Promise<SessionOpenResult> {
-    // D47 S5 §3 — agent-session-only spawn gate: only the `kind === 'agent'`
-    // arm (the PTY-based AgentTerminal path — `useXterm`'s `kind:'agent'`)
-    // is gated; plain terminal sessions must keep working even while
-    // credentials are invalid (git, shells, etc. don't depend on the
-    // managed key). `attach` (below) is a separate method, never gated —
-    // reconnecting to an already-running session touches no credentials.
     if (options.kind === 'agent') {
-      assertAgentSpawnAllowed();
+      throw new Error('Agent PTYs must use the dedicated Pi TUI API');
     }
     const windowId = getWindowId(target);
     if (options.cwd && isRemoteVirtualPath(options.cwd)) {
       return this.createRemote(windowId, options);
     }
-    // D47 S2a trust call matrix entry ③ — the common local-session throat
-    // for both the legacy Terminal IPC and the newer generic Session IPC.
-    // Remote paths never reach here (already routed to createRemote above,
-    // I8 no-op).
-    await this.ensureWorkspaceTrustedForLocalCreate(options.cwd);
     return this.createLocal(windowId, options);
-  }
-
-  private async ensureWorkspaceTrustedForLocalCreate(cwd: string | undefined): Promise<void> {
-    if (!resolveManagedCredentialsEnabled()) return;
-    if (!cwd) return;
-    // D60: the user's own `.claude.json`, merged — see the chat.ts twin.
-    await ensureWorkspaceTrusted(getEffectiveClaudeJsonPath(), resolvePath(cwd));
   }
 
   async attach(
@@ -483,11 +375,7 @@ export class SessionManager {
 
     try {
       this.localPtyManager.create(
-        // A no-op (the SAME object reference, not even a shallow copy) when the
-        // managed-credentials flag is off. The Codex injector that used to be
-        // composed here retired with S0'/D60 — see the note above
-        // `withManagedClaudeEnv` for why it has no replacement.
-        withManagedPiEnv(withManagedClaudeEnv(options)),
+        options,
         (data) => this.handleLocalData(sessionId, data),
         (exitCode, signal) => {
           this.handleLocalExit(sessionId, exitCode, signal);

@@ -54,6 +54,10 @@ export function sanitizeLegacyAiSettings(
   persisted: Partial<SettingsState>
 ): Partial<SettingsState> {
   const next = { ...(persisted as Record<string, unknown>) };
+  delete next.agentSettings;
+  delete next.agentDetectionStatus;
+  delete next.customAgents;
+  delete next.hapiSettings;
   for (const key of LEGACY_AI_FEATURE_KEYS) {
     const raw = next[key];
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
@@ -171,17 +175,6 @@ export function migrateSettings(
   // Migrate Claude Code integration settings
   const migratedClaudeCodeIntegration = migrateClaudeCodeIntegration(persisted, currentState);
 
-  // Filter agent detection status to only include enabled agents
-  const migratedAgentDetectionStatus = Object.fromEntries(
-    Object.entries({
-      ...currentState.agentDetectionStatus,
-      ...persisted.agentDetectionStatus,
-    }).filter(([agentId]) => {
-      const agentConfig = persisted.agentSettings?.[agentId] ?? currentState.agentSettings[agentId];
-      return agentConfig?.enabled;
-    })
-  );
-
   const sanitizedPersisted = sanitizeLegacyAiSettings(persisted);
 
   return {
@@ -190,6 +183,7 @@ export function migrateSettings(
     // Override with migrated/sanitized values
     ...(migratedTheme && { theme: migratedTheme }),
     ...(terminalRenderer && { terminalRenderer }),
+    presentationMode: persisted.presentationMode === 'tui' ? 'tui' : 'gui',
     xtermKeybindings: migratedXtermKeybindings,
     mainTabKeybindings: {
       ...currentState.mainTabKeybindings,
@@ -248,10 +242,6 @@ export function migrateSettings(
       ...currentState.todoPolish,
       ...sanitizedPersisted.todoPolish,
     },
-    hapiSettings: {
-      ...currentState.hapiSettings,
-      ...persisted.hapiSettings,
-    },
     remoteSettings: {
       ...currentState.remoteSettings,
       ...persisted.remoteSettings,
@@ -263,7 +253,6 @@ export function migrateSettings(
       ...currentState.proxySettings,
       ...persisted.proxySettings,
     },
-    agentDetectionStatus: migratedAgentDetectionStatus,
     quickTerminal: {
       ...currentState.quickTerminal,
       ...persisted.quickTerminal,

@@ -93,7 +93,7 @@ export function TaskCard({
   }, [showAgentMenu]);
 
   const handleLaunchWithAgent = useCallback(
-    (agent: ResolvedAgent) => {
+    (_agent: ResolvedAgent) => {
       if (!worktreePath) return;
 
       const id = crypto.randomUUID();
@@ -113,18 +113,13 @@ export function TaskCard({
 
         const newSession = {
           id,
-          sessionId: id,
           name: `Task: ${task.title}`,
-          agentId: agent.agentId,
-          agentCommand: agent.command,
-          customPath: agent.customPath,
-          customArgs: agent.customArgs,
+          agentId: 'pi' as const,
           initialized: false,
           repoPath,
           cwd: worktreePath,
-          environment: agent.environment,
           displayOrder: maxOrder + 1,
-          // Store command to send after agent is ready
+          // Store command to send after Pi TUI is ready.
           pendingCommand: taskContext,
         };
 

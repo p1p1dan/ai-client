@@ -7,7 +7,6 @@ export { useMergeState } from './useMergeState';
 export { useOpenPathListener } from './useOpenPathListener';
 export { usePanelState } from './usePanelState';
 export { useRepositoryState } from './useRepositoryState';
-export { useSettingsEvents } from './useSettingsEvents';
 export { useSettingsState } from './useSettingsState';
 export { useTempWorkspaceSync } from './useTempWorkspaceSync';
 export { useTerminalNavigation } from './useTerminalNavigation';

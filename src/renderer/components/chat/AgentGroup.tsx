@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
-import type { Session } from './SessionBar';
+import type { TerminalSession as Session } from './terminalSession';
 import type { AgentGroup as AgentGroupType } from './types';
 
 interface AgentGroupProps {

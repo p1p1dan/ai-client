@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { normalizePath, pathsEqual } from '@/App/storage';
-import type { Session } from '@/components/chat/SessionBar';
+import type { TerminalSession as Session } from '@/components/chat/terminalSession';
 import type { AgentGroupState } from '@/components/chat/types';
 import { createInitialGroupState } from '@/components/chat/types';
 import { useAgentStatusStore } from './agentStatus';
@@ -37,11 +37,6 @@ export interface AggregatedOutputState {
   total: number;
   outputting: number;
   unread: number;
-}
-
-// Check if an agent command supports session persistence
-function isResumableAgent(agentCommand: string): boolean {
-  return agentCommand?.startsWith('claude') ?? false;
 }
 
 // Group states indexed by normalized worktree path
@@ -98,12 +93,10 @@ function loadFromStorage(): { sessions: Session[]; activeIds: Record<string, str
       if (data.sessions?.length > 0) {
         // Migrate old sessions that don't have repoPath (backwards compatibility),
         // and drop stale transient fields written by older versions.
-        const migratedSessions = data.sessions.map(
-          ({ backendSessionId: _b, pendingCommand: _p, ...s }: Session) => ({
-            ...s,
-            repoPath: s.repoPath || s.cwd,
-          })
-        );
+        const migratedSessions = data.sessions.map((s: Session) => ({
+          ...s,
+          repoPath: s.repoPath || s.cwd,
+        }));
         return { sessions: migratedSessions, activeIds: data.activeIds || {} };
       }
     }
@@ -111,28 +104,9 @@ function loadFromStorage(): { sessions: Session[]; activeIds: Record<string, str
   return { sessions: [], activeIds: {} };
 }
 
-function saveToStorage(sessions: Session[], activeIds: Record<string, string | null>): void {
-  // Only persist sessions that are:
-  // 1. Using agents that support resumption (e.g., claude)
-  // 2. Activated (user has pressed Enter at least once)
-  // Strip transient runtime fields (backendSessionId, pendingCommand) — these are
-  // process-scoped and become stale after restart, causing session:attach to fail
-  // with "Session not found: pty-N".
-  const persistableSessions = sessions
-    .filter((s) => isResumableAgent(s.agentCommand) && s.activated)
-    .map(
-      ({ backendSessionId: _backendSessionId, pendingCommand: _pendingCommand, ...rest }) => rest
-    );
-  const persistableIds = new Set(persistableSessions.map((s) => s.id));
-  // Only keep activeIds that reference persistable sessions
-  const persistableActiveIds: Record<string, string | null> = {};
-  for (const [cwd, id] of Object.entries(activeIds)) {
-    persistableActiveIds[cwd] = id && persistableIds.has(id) ? id : null;
-  }
-  localStorage.setItem(
-    SESSIONS_STORAGE_KEY,
-    JSON.stringify({ sessions: persistableSessions, activeIds: persistableActiveIds })
-  );
+function saveToStorage(_sessions: Session[], _activeIds: Record<string, string | null>): void {
+  // Pi TUI sessions are process-scoped; never persist fake CLI resumability.
+  localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify({ sessions: [], activeIds: {} }));
 }
 
 const initialState = loadFromStorage();
@@ -186,7 +160,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
 
     addSession: (session) =>
       set((state) => {
-        console.log('[AgentSessions] Creating session:', session.sessionId, 'at', session.cwd);
+        console.log('[AgentSessions] Creating session:', session.id, 'at', session.cwd);
 
         // Calculate displayOrder: max order in same worktree + 1
         const worktreeSessions = state.sessions.filter(
@@ -211,14 +185,11 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
     removeSession: (id) =>
       set((state) => {
         const removedSession = state.sessions.find((s) => s.id === id);
-        console.log('[AgentSessions] Removing session:', removedSession?.sessionId);
+        console.log('[AgentSessions] Removing session:', removedSession?.id);
 
         if (removedSession) {
           const { clearStatus } = useAgentStatusStore.getState();
           clearStatus(removedSession.id);
-          if (removedSession.sessionId && removedSession.sessionId !== removedSession.id) {
-            clearStatus(removedSession.sessionId);
-          }
         }
 
         const newSessions = state.sessions.filter((s) => s.id !== id);

@@ -62,24 +62,6 @@ export interface OnboardingPrerequisiteStatus {
   wingetAvailable: boolean;
 }
 
-export type InstallAgentId = 'claude' | 'codex';
-
-export type InstallStepId = 'git' | 'node' | 'claude' | 'codex';
-
-export type InstallStepStatus = 'pending' | 'installing' | 'done' | 'skipped' | 'error';
-
-export interface InstallProgress {
-  step: InstallStepId;
-  status: InstallStepStatus;
-  message?: string;
-}
-
-export interface InstallResult {
-  success: boolean;
-  cancelled?: boolean;
-  errors: string[];
-}
-
 /**
  * A3 (D65) — outcome of the git-only install offered by the missing-git notice.
  * A result object, not a throw: the caller is a non-blocking notice.
@@ -87,13 +69,6 @@ export interface InstallResult {
 export interface OnboardingInstallGitResult {
   ok: boolean;
   error?: string;
-}
-
-export interface OnboardingCliStatus extends OnboardingPrerequisiteStatus {
-  claudeInstalled: boolean;
-  claudeVersion?: string;
-  codexInstalled: boolean;
-  codexVersion?: string;
 }
 
 /**

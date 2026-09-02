@@ -1,7 +1,7 @@
 import { stopAllCodeReviews } from '../services/ai';
+import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { webInspectorServer } from '../services/webInspector';
 import { cleanupExecInPtys, cleanupExecInPtysSync } from '../utils/shell';
-import { registerAgentHandlers } from './agent';
 import { registerAgentCatalogHandlers } from './agentCatalog';
 import { registerAppHandlers } from './app';
 import { registerAuthHandlers } from './auth';
@@ -17,19 +17,18 @@ import {
 } from './files';
 import { registerFolderHandlers } from './folder';
 import { clearAllGitServices, registerGitHandlers } from './git';
-import { autoStartHapi, cleanupHapi, cleanupHapiSync, registerHapiHandlers } from './hapi';
 import { registerLegacyImportHandlers } from './legacyImport';
-import { registerPiRuntimeHandlers } from './piRuntime';
-import { cleanupWorkerManager, cleanupWorkerManagerSync } from './workerManager';
-
-export { autoStartHapi };
-
-import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { registerLogHandlers } from './log';
 import { registerNotificationHandlers } from './notification';
 import { registerOnboardingHandlers } from './onboarding';
 import { registerPiModelHandlers } from './piModels';
 import { registerPiPermissionHandlers } from './piPermissions';
+import { registerPiRuntimeHandlers } from './piRuntime';
+import {
+  disposeAllPiTuiControllers,
+  disposeAllPiTuiControllersSync,
+  registerPiTuiHandlers,
+} from './piTui';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
 import {
@@ -46,6 +45,7 @@ import { cleanupTodo, cleanupTodoSync, registerTodoHandlers } from './todo';
 import { registerUpdaterHandlers } from './updater';
 import { registerUsageHandlers } from './usage';
 import { registerWebInspectorHandlers } from './webInspector';
+import { cleanupWorkerManager, cleanupWorkerManagerSync } from './workerManager';
 import { clearAllWorktreeServices, registerWorktreeHandlers } from './worktree';
 
 export function registerIpcHandlers(): void {
@@ -56,7 +56,6 @@ export function registerIpcHandlers(): void {
   registerFileHandlers();
   registerSessionHandlers();
   registerSessionStorageHandlers();
-  registerAgentHandlers();
   registerChatHandlers();
   registerAgentCatalogHandlers();
   registerDialogHandlers();
@@ -69,7 +68,6 @@ export function registerIpcHandlers(): void {
   registerRemoteHandlers();
   registerUpdaterHandlers();
   registerSearchHandlers();
-  registerHapiHandlers();
   registerLegacyImportHandlers();
   registerPiRuntimeHandlers();
   registerWebInspectorHandlers();
@@ -80,6 +78,7 @@ export function registerIpcHandlers(): void {
   registerPiModelHandlers();
   registerPiPermissionHandlers();
   registerUsageHandlers();
+  registerPiTuiHandlers();
 }
 
 export async function cleanupAllResources(): Promise<void> {
@@ -113,8 +112,6 @@ export async function cleanupAllResources(): Promise<void> {
     Promise.allSettled([
       // node-pty PTYs used by short-lived commands (exec-in-pty pool)
       safeRun(() => cleanupExecInPtys(4000), 'execInPty'),
-      // Hapi server + runner + cloudflared
-      safeRun(() => cleanupHapi(4000), 'hapi'),
       // Interactive terminal PTY sessions
       safeRun(async () => {
         try {
@@ -127,6 +124,8 @@ export async function cleanupAllResources(): Promise<void> {
       }, 'terminals'),
       // File system watchers
       safeRun(() => stopAllFileWatchers(), 'fileWatchers'),
+      // Embedded Pi TUI PTYs are independent from generic shell sessions.
+      safeRun(() => disposeAllPiTuiControllers(), 'piTui'),
       // Main-owned Pi WorkerManager. Pool disposal is parallel, so every slot
       // receives the same global deadline and app quit leaves no utility process.
       safeRun(() => cleanupWorkerManager(), 'workerManager'),
@@ -163,7 +162,6 @@ export function cleanupAllResourcesSync(): void {
   cleanupExecInPtysSync();
 
   // Kill Hapi/Cloudflared processes (sync)
-  cleanupHapiSync();
 
   // Kill tmux aiclient server (sync)
   cleanupTmuxSync();
@@ -188,6 +186,9 @@ export function cleanupAllResourcesSync(): void {
 
   // Close Todo database (sync — just nulls the reference, no async callback)
   cleanupTodoSync();
+
+  // Embedded Pi TUI PTYs are independent from generic shell sessions.
+  disposeAllPiTuiControllersSync();
 
   // Kill every Pi worker synchronously.
   cleanupWorkerManagerSync();

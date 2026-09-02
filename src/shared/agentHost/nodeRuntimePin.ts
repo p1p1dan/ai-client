@@ -16,13 +16,15 @@
  */
 export const BUNDLED_NODE_RUNTIME_BINARIES: Readonly<Record<string, string>> = {
   'win32-x64': 'node.exe',
+  'darwin-arm64': 'node',
+  'darwin-x64': 'node',
   'linux-x64': 'node',
 };
 
 /**
  * Binary name of the bundled runtime for a platform, or `undefined` when we do
- * not bundle one (mac today) — callers must fall back to machine Node
- * discovery rather than handing the resolver a path that cannot exist.
+ * not bundle one — callers must fall back to machine Node discovery rather
+ * than handing the resolver a path that cannot exist.
  */
 export function bundledNodeRuntimeBinaryFor(platform: string, arch: string): string | undefined {
   return BUNDLED_NODE_RUNTIME_BINARIES[`${platform}-${arch}`];

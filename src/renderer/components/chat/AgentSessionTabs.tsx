@@ -1,10 +1,8 @@
 import { Plus, Terminal, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { useSettingsStore } from '@/stores/settings';
-import { AgentPickerMenu } from './AgentPickerMenu';
-import type { Session } from './SessionBar';
+import type { TerminalSession as Session } from './terminalSession';
 import type { AgentGroup as AgentGroupType } from './types';
 
 interface AgentSessionTabsProps {
@@ -14,7 +12,6 @@ interface AgentSessionTabsProps {
   onSelectSession: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => void;
   onNewSession: () => void;
-  onNewSessionWithAgent?: (agentId: string, agentCommand: string) => void;
   showQuickTerminal?: boolean;
   quickTerminalOpen?: boolean;
   quickTerminalHasProcess?: boolean;
@@ -28,16 +25,12 @@ export function AgentSessionTabs({
   onSelectSession,
   onCloseSession,
   onNewSession,
-  onNewSessionWithAgent,
   showQuickTerminal = false,
   quickTerminalOpen,
   quickTerminalHasProcess,
   onToggleQuickTerminal,
 }: AgentSessionTabsProps) {
   const { t } = useI18n();
-  const bgImageEnabled = useSettingsStore((s) => s.backgroundImageEnabled);
-  const [showAgentMenu, setShowAgentMenu] = useState(false);
-
   const groupSessions = useMemo(() => {
     const sessionMap = new Map(sessions.map((s) => [s.id, s]));
     return group.sessionIds.map((id) => sessionMap.get(id)).filter((s): s is Session => !!s);
@@ -63,7 +56,7 @@ export function AgentSessionTabs({
     <div
       className={cn(
         'flex h-9 items-center border-b border-border',
-        !bgImageEnabled && (isGroupActive ? 'bg-background' : 'bg-muted')
+        isGroupActive ? 'bg-background' : 'bg-muted'
       )}
     >
       <div className="flex flex-1 min-w-0 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -83,11 +76,8 @@ export function AgentSessionTabs({
               className={cn(
                 'group relative flex h-9 min-w-[120px] max-w-[180px] items-center gap-2 border-r border-border px-3 text-sm transition-colors',
                 isActive
-                  ? cn(!bgImageEnabled && 'bg-background', 'text-foreground')
-                  : cn(
-                      !bgImageEnabled && 'bg-muted hover:bg-muted/80',
-                      'text-muted-foreground hover:text-foreground'
-                    )
+                  ? cn('bg-background', 'text-foreground')
+                  : cn('bg-muted hover:bg-muted/80', 'text-muted-foreground hover:text-foreground')
               )}
               aria-current={isActive ? 'page' : undefined}
             >
@@ -134,36 +124,18 @@ export function AgentSessionTabs({
             )}
           </button>
         )}
-        <div
-          className="relative"
-          onMouseEnter={onNewSessionWithAgent ? () => setShowAgentMenu(true) : undefined}
-          onMouseLeave={onNewSessionWithAgent ? () => setShowAgentMenu(false) : undefined}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNewSession();
+          }}
+          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          title={t('New Session')}
+          aria-label={t('New Session')}
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNewSession();
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            title={t('New Session')}
-            aria-label={t('New Session')}
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          {onNewSessionWithAgent && (
-            <AgentPickerMenu
-              show={showAgentMenu}
-              onClose={() => setShowAgentMenu(false)}
-              onSelectAgent={(agentId, agentCommand) => {
-                onNewSessionWithAgent?.(agentId, agentCommand);
-                setShowAgentMenu(false);
-              }}
-              position="bottom"
-              align="right"
-            />
-          )}
-        </div>
+          <Plus className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

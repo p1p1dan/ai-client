@@ -23,7 +23,12 @@ import {
 
 describe('bundled Node runtime table (C9)', () => {
   it('lists exactly the platforms this build ships a runtime for', () => {
-    expect(Object.keys(BUNDLED_NODE_RUNTIME_BINARIES).sort()).toEqual(['linux-x64', 'win32-x64']);
+    expect(Object.keys(BUNDLED_NODE_RUNTIME_BINARIES).sort()).toEqual([
+      'darwin-arm64',
+      'darwin-x64',
+      'linux-x64',
+      'win32-x64',
+    ]);
   });
 
   it('agrees key-for-key with the build-side pin table', () => {
@@ -44,8 +49,8 @@ describe('bundled Node runtime table (C9)', () => {
   it('resolves per platform and returns undefined for unbundled ones', () => {
     expect(bundledNodeRuntimeBinaryFor('win32', 'x64')).toBe('node.exe');
     expect(bundledNodeRuntimeBinaryFor('linux', 'x64')).toBe('node');
-    expect(bundledNodeRuntimeBinaryFor('darwin', 'arm64')).toBeUndefined();
-    expect(bundledNodeRuntimeBinaryFor('darwin', 'x64')).toBeUndefined();
+    expect(bundledNodeRuntimeBinaryFor('darwin', 'arm64')).toBe('node');
+    expect(bundledNodeRuntimeBinaryFor('darwin', 'x64')).toBe('node');
     expect(bundledNodeRuntimeBinaryFor('linux', 'arm64')).toBeUndefined();
   });
 });
@@ -73,6 +78,7 @@ describe('Node runtime pins', () => {
   it('C1: nodeRuntimePinFor truth table', () => {
     expect(nodeRuntimePinFor('win32', 'x64').platformKey).toBe('win32-x64');
     expect(nodeRuntimePinFor('linux', 'x64').platformKey).toBe('linux-x64');
-    expect(nodeRuntimePinFor('darwin', 'arm64')).toBeUndefined();
+    expect(nodeRuntimePinFor('darwin', 'arm64').platformKey).toBe('darwin-arm64');
+    expect(nodeRuntimePinFor('darwin', 'x64').platformKey).toBe('darwin-x64');
   });
 });

@@ -26,6 +26,7 @@ const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 const SESSION_NAME_MAX_LENGTH = 36;
 
 export interface UseXtermOptions {
+  piTuiTerminalId?: string;
   backendSessionId?: string;
   cwd?: string;
   command?: {
@@ -55,6 +56,7 @@ export interface UseXtermOptions {
 export interface UseXtermResult {
   containerRef: React.RefObject<HTMLDivElement | null>;
   isLoading: boolean;
+  startupError: string | null;
   runtimeState: SessionRuntimeState;
   settings: ReturnType<typeof useTerminalSettings>;
   /** Write data to pty */
@@ -116,6 +118,7 @@ function useTerminalSettings() {
 }
 
 export function useXterm({
+  piTuiTerminalId,
   backendSessionId,
   cwd,
   command,
@@ -177,6 +180,7 @@ export function useXterm({
   const hasBeenActivatedRef = useRef(false);
   const hasReceivedDataRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [startupError, setStartupError] = useState<string | null>(null);
   const [runtimeState, setRuntimeState] = useState<SessionRuntimeState>('live');
   const runtimeStateRef = useRef<SessionRuntimeState>('live');
   runtimeStateRef.current = runtimeState;
@@ -197,11 +201,17 @@ export function useXterm({
   const writeBufferRef = useRef('');
   const isFlushPendingRef = useRef(false);
 
-  const write = useCallback((data: string) => {
-    if (ptyIdRef.current && runtimeStateRef.current === 'live') {
-      window.electronAPI.session.write(ptyIdRef.current, data);
-    }
-  }, []);
+  const write = useCallback(
+    (data: string) => {
+      if (!ptyIdRef.current || runtimeStateRef.current !== 'live') return;
+      if (piTuiTerminalId) {
+        void window.electronAPI.piTui.write(piTuiTerminalId, data);
+      } else {
+        void window.electronAPI.session.write(ptyIdRef.current, data);
+      }
+    },
+    [piTuiTerminalId]
+  );
 
   const fit = useCallback(() => {
     if (
@@ -211,12 +221,20 @@ export function useXterm({
       runtimeStateRef.current === 'live'
     ) {
       fitAddonRef.current.fit();
-      window.electronAPI.session.resize(ptyIdRef.current, {
-        cols: terminalRef.current.cols,
-        rows: terminalRef.current.rows,
-      });
+      if (piTuiTerminalId) {
+        void window.electronAPI.piTui.resize(
+          piTuiTerminalId,
+          terminalRef.current.cols,
+          terminalRef.current.rows
+        );
+      } else {
+        window.electronAPI.session.resize(ptyIdRef.current, {
+          cols: terminalRef.current.cols,
+          rows: terminalRef.current.rows,
+        });
+      }
     }
-  }, []);
+  }, [piTuiTerminalId]);
 
   const findNext = useCallback(
     (
@@ -303,6 +321,7 @@ export function useXterm({
     if (!containerRef.current || terminalRef.current) return;
 
     setIsLoading(true);
+    setStartupError(null);
 
     const terminal = new Terminal({
       cursorBlink: true,
@@ -606,53 +625,78 @@ export function useXterm({
       const createRequestId = ++createRequestIdRef.current;
       // Handle data from pty with debounced buffering for smooth rendering
       // 30ms delay merges fragmented TUI packets (clear + write)
-      const cleanup = window.electronAPI.session.onData((event) => {
-        if (event.sessionId === ptyIdRef.current) {
-          // Buffer data
-          writeBufferRef.current += event.data;
-
-          if (!isFlushPendingRef.current) {
-            isFlushPendingRef.current = true;
-            setTimeout(() => {
-              if (writeBufferRef.current.length > 0) {
-                const bufferedData = writeBufferRef.current;
-                terminal.write(bufferedData);
-                // Call onData after write to avoid React re-render storm
-                onDataRef.current?.(bufferedData);
-                writeBufferRef.current = '';
-              }
-              isFlushPendingRef.current = false;
-            }, 30);
-          }
-        }
-      });
+      const cleanup = piTuiTerminalId
+        ? window.electronAPI.piTui.onData((event) => {
+            if (event.terminalId !== ptyIdRef.current) return;
+            writeBufferRef.current += event.data;
+            if (!isFlushPendingRef.current) {
+              isFlushPendingRef.current = true;
+              setTimeout(() => {
+                if (writeBufferRef.current.length > 0) {
+                  const bufferedData = writeBufferRef.current;
+                  terminal.write(bufferedData);
+                  onDataRef.current?.(bufferedData);
+                  writeBufferRef.current = '';
+                }
+                isFlushPendingRef.current = false;
+              }, 30);
+            }
+          })
+        : window.electronAPI.session.onData((event) => {
+            if (event.sessionId !== ptyIdRef.current) return;
+            writeBufferRef.current += event.data;
+            if (!isFlushPendingRef.current) {
+              isFlushPendingRef.current = true;
+              setTimeout(() => {
+                if (writeBufferRef.current.length > 0) {
+                  const bufferedData = writeBufferRef.current;
+                  terminal.write(bufferedData);
+                  onDataRef.current?.(bufferedData);
+                  writeBufferRef.current = '';
+                }
+                isFlushPendingRef.current = false;
+              }, 30);
+            }
+          });
       cleanupRef.current = cleanup;
 
       // Handle exit - delay to ensure pending data events are received
       // then flush remaining buffer before calling onExit
-      const exitCleanup = window.electronAPI.session.onExit((event) => {
-        if (event.sessionId === ptyIdRef.current) {
-          setRuntimeState('dead');
-          // Wait for any pending data events to arrive (IPC race condition)
-          setTimeout(() => {
-            // Flush any remaining buffered data
-            if (writeBufferRef.current.length > 0) {
-              const bufferedData = writeBufferRef.current;
-              terminal.write(bufferedData);
-              onDataRef.current?.(bufferedData);
-              writeBufferRef.current = '';
-            }
-            onExitRef.current?.();
-          }, 30);
-        }
-      });
+      const exitCleanup = piTuiTerminalId
+        ? window.electronAPI.piTui.onExit((event) => {
+            if (event.terminalId !== ptyIdRef.current) return;
+            setRuntimeState('dead');
+            setTimeout(() => {
+              if (writeBufferRef.current.length > 0) {
+                terminal.write(writeBufferRef.current);
+                onDataRef.current?.(writeBufferRef.current);
+                writeBufferRef.current = '';
+              }
+              onExitRef.current?.();
+            }, 30);
+          })
+        : window.electronAPI.session.onExit((event) => {
+            if (event.sessionId !== ptyIdRef.current) return;
+            setRuntimeState('dead');
+            setTimeout(() => {
+              if (writeBufferRef.current.length > 0) {
+                terminal.write(writeBufferRef.current);
+                onDataRef.current?.(writeBufferRef.current);
+                writeBufferRef.current = '';
+              }
+              onExitRef.current?.();
+            }, 30);
+          });
       exitCleanupRef.current = exitCleanup;
 
-      const stateCleanup = window.electronAPI.session.onState((event) => {
-        if (event.sessionId === ptyIdRef.current) {
-          setRuntimeState(event.state);
-        }
-      });
+      const stateCleanup = piTuiTerminalId
+        ? window.electronAPI.piTui.onState((event) => {
+            if (event.terminalId === ptyIdRef.current)
+              setRuntimeState(event.state === 'dead' ? 'dead' : 'live');
+          })
+        : window.electronAPI.session.onState((event) => {
+            if (event.sessionId === ptyIdRef.current) setRuntimeState(event.state);
+          });
       stateCleanupRef.current = stateCleanup;
 
       const createOptions = {
@@ -691,32 +735,44 @@ export function useXterm({
         return await attachToSession(createdSessionId);
       };
 
-      let session = null;
+      let session: { sessionId: string } | null = null;
       let replay: string | undefined;
-      if (backendSessionId) {
-        try {
-          setCurrentSessionId(backendSessionId);
-          const result = await attachToSession(backendSessionId);
-          session = result.session;
-          replay = result.replay;
-        } catch (error) {
-          console.warn('[xterm] Failed to attach existing session, creating a new one:', error);
-          ptyIdRef.current = null;
+      if (piTuiTerminalId) {
+        const opened = await window.electronAPI.piTui.open({
+          terminalId: piTuiTerminalId,
+          cwd: createOptions.cwd,
+          cols: terminal.cols,
+          rows: terminal.rows,
+          initialPrompt: initialCommand,
+        });
+        setCurrentSessionId(opened.terminalId);
+      } else {
+        if (backendSessionId) {
+          try {
+            setCurrentSessionId(backendSessionId);
+            const result = await attachToSession(backendSessionId);
+            session = result.session;
+            replay = result.replay;
+          } catch (error) {
+            console.warn('[xterm] Failed to attach existing session, creating a new one:', error);
+            ptyIdRef.current = null;
+          }
+        }
+        if (!session) {
+          const attached = await createAndAttachSession();
+          session = attached.session;
+          replay = attached.replay;
         }
       }
 
-      if (!session) {
-        const attached = await createAndAttachSession();
-        session = attached.session;
-        replay = attached.replay;
-      }
-
       if (isUnmountedRef.current || createRequestId !== createRequestIdRef.current) {
-        await window.electronAPI.session.kill(session.sessionId).catch(() => {});
+        if (piTuiTerminalId)
+          await window.electronAPI.piTui.dispose(piTuiTerminalId).catch(() => {});
+        else if (session) await window.electronAPI.session.kill(session.sessionId).catch(() => {});
         return;
       }
 
-      ptyIdRef.current = session.sessionId;
+      if (!piTuiTerminalId && session) ptyIdRef.current = session.sessionId;
       setIsLoading(false);
 
       if (replay) {
@@ -726,9 +782,9 @@ export function useXterm({
 
       // Handle input
       terminal.onData((data) => {
-        if (ptyIdRef.current && runtimeStateRef.current === 'live') {
-          window.electronAPI.session.write(ptyIdRef.current, data);
-        }
+        if (!ptyIdRef.current || runtimeStateRef.current !== 'live') return;
+        if (piTuiTerminalId) void window.electronAPI.piTui.write(piTuiTerminalId, data);
+        else void window.electronAPI.session.write(ptyIdRef.current, data);
       });
 
       // Focus is handled by the isActive effect after loading ends.
@@ -744,10 +800,12 @@ export function useXterm({
         return;
       }
       setIsLoading(false);
+      setStartupError(error instanceof Error ? error.message : String(error));
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
   }, [
+    piTuiTerminalId,
     backendSessionId,
     cwd,
     command,
@@ -794,7 +852,11 @@ export function useXterm({
       exitCleanupRef.current?.();
       stateCleanupRef.current?.();
       if (ptyIdRef.current) {
-        window.electronAPI.session.detach(ptyIdRef.current).catch(() => {});
+        if (piTuiTerminalId) {
+          void window.electronAPI.piTui.suspend(piTuiTerminalId).catch(() => {});
+        } else {
+          void window.electronAPI.session.detach(ptyIdRef.current).catch(() => {});
+        }
         ptyIdRef.current = null;
       }
       // Remove copy-on-selection listener before disposing terminal
@@ -814,9 +876,7 @@ export function useXterm({
       terminalRef.current = null;
       stateCleanupRef.current = null;
     };
-  }, []);
-
-  // Update settings dynamically
+  }, [piTuiTerminalId]);
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.options.theme = settings.theme;
@@ -835,10 +895,18 @@ export function useXterm({
     const handleResize = () => {
       if (fitAddonRef.current && terminalRef.current && ptyIdRef.current) {
         fitAddonRef.current.fit();
-        window.electronAPI.session.resize(ptyIdRef.current, {
-          cols: terminalRef.current.cols,
-          rows: terminalRef.current.rows,
-        });
+        if (piTuiTerminalId) {
+          void window.electronAPI.piTui.resize(
+            piTuiTerminalId,
+            terminalRef.current.cols,
+            terminalRef.current.rows
+          );
+        } else {
+          window.electronAPI.session.resize(ptyIdRef.current, {
+            cols: terminalRef.current.cols,
+            rows: terminalRef.current.rows,
+          });
+        }
         // Clear WebGL texture atlas on resize to prevent glitches
         const addon = rendererAddonRef.current;
         if (addon && 'clearTextureAtlas' in addon) {
@@ -880,7 +948,27 @@ export function useXterm({
       observer.disconnect();
       intersectionObserver.disconnect();
     };
-  }, []);
+  }, [piTuiTerminalId]);
+
+  // Keep inactive embedded Pi terminals parked. Re-opening the same terminalId
+  // promotes the existing PTY and replays its bounded suspended output.
+  useEffect(() => {
+    if (!piTuiTerminalId || isLoading || !ptyIdRef.current) return;
+    if (!isActive) {
+      void window.electronAPI.piTui.suspend(piTuiTerminalId).catch(() => {});
+      return;
+    }
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    void window.electronAPI.piTui
+      .open({
+        terminalId: piTuiTerminalId,
+        cwd: cwd || window.electronAPI.env.HOME,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      })
+      .catch(() => {});
+  }, [cwd, isActive, isLoading, piTuiTerminalId]);
 
   // Fit and focus when becoming active (only after loading completes)
   useEffect(() => {
@@ -971,6 +1059,7 @@ export function useXterm({
   return {
     containerRef,
     isLoading,
+    startupError,
     runtimeState,
     settings,
     write,

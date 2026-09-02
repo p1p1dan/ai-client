@@ -1,37 +1,10 @@
-import type { AgentStopNotificationData } from '@shared/types/agent';
-import { TASK_COMPLETION_MARKER } from '@shared/types/agent';
 import { useCallback, useEffect, useRef } from 'react';
 import type { ResolvedAgent } from '@/components/todo/useEnabledAgents';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { INITIAL_AUTO_EXECUTE, useTodoStore } from '@/stores/todo';
+import { buildAutoExecutePrompt, hasCompletedAutoExecuteOutput } from './autoExecuteMarker';
 
-/**
- * Find the UI session ID matching a Claude CLI session ID.
- * Claude CLI session ID (from hooks) differs from our UI session ID (crypto.randomUUID).
- */
-function findUISessionId(cliSessionId: string): string | undefined {
-  const session = useAgentSessionsStore
-    .getState()
-    .sessions.find((s) => s.sessionId === cliSessionId || s.id === cliSessionId);
-  return session?.id;
-}
-
-/**
- * Build prompt with auto-execute rules
- */
-export function buildAutoExecutePrompt(title: string, description?: string): string {
-  return `
-${title}
-
-${description || ''}
-
----
-[AUTO-EXECUTE RULES - MUST FOLLOW]
-1. When task is complete, output the following marker on a separate line at the end of your response: ${TASK_COMPLETION_MARKER}
-2. Do NOT call AskUserQuestion tool. Do NOT ask user to choose options. Directly select and execute the best approach.
-3. Solve problems autonomously. Do NOT interrupt the workflow to wait for user input.
-`.trim();
-}
+export { buildAutoExecutePrompt } from './autoExecuteMarker';
 
 /**
  * Hook to manage auto-execute task completion detection
@@ -79,25 +52,17 @@ export function useAutoExecuteTask(
       // Build prompt with auto-execute rules
       const taskContext = buildAutoExecutePrompt(task.title, task.description);
 
-      // Use default agent or first available
-      const agent = enabledAgents.find((a) => a.isDefault) ?? enabledAgents[0];
-
       const sessionId = crypto.randomUUID();
 
       // Create session via store action (handles displayOrder, activeIds, enhancedInputStates)
       useAgentSessionsStore.getState().addSession({
         id: sessionId,
-        sessionId,
         name: `Task: ${task.title}`,
         userRenamed: true,
-        agentId: agent.agentId,
-        agentCommand: agent.command,
-        customPath: agent.customPath,
-        customArgs: agent.customArgs,
+        agentId: 'pi',
         initialized: false,
         repoPath,
         cwd: worktreePath,
-        environment: agent.environment,
         pendingCommand: taskContext,
       });
 
@@ -126,16 +91,14 @@ export function useAutoExecuteTask(
 
   // Handle task completion based on stop notification
   const handleAgentStop = useCallback(
-    (data: AgentStopNotificationData) => {
+    (data: { sessionId: string; taskCompletionStatus: 'completed' | 'unknown' }) => {
       // Read latest state to avoid stale closure
       const currentAutoExecute =
         useTodoStore.getState().autoExecute[repoPath] ?? INITIAL_AUTO_EXECUTE;
 
       if (!worktreePath || !currentAutoExecute.running) return;
 
-      // Match CLI session ID to our UI session ID
-      const uiSessionId = findUISessionId(data.sessionId);
-      if (uiSessionId !== currentAutoExecute.currentSessionId) return;
+      if (data.sessionId !== currentAutoExecute.currentSessionId) return;
 
       const currentTaskId = currentAutoExecute.currentTaskId;
       if (!currentTaskId) return;
@@ -203,15 +166,40 @@ export function useAutoExecuteTask(
     [repoPath]
   );
 
-  // Listen for agent stop events - only subscribe when running
+  // Pi TUI remains interactive after a response, so task completion is not a
+  // process-exit signal. Detect the explicit auto-execute marker in its stream;
+  // an exit before the marker is treated as an incomplete task.
   useEffect(() => {
     if (!autoExecute?.running) return;
-
-    const unsubscribe = window.electronAPI.notification.onAgentStop((data) =>
-      handleAgentStopRef.current(data)
-    );
-    return unsubscribe;
-  }, [autoExecute?.running]);
+    let output = '';
+    let settled = false;
+    const unsubscribeData = window.electronAPI.piTui.onData((event) => {
+      const current = useTodoStore.getState().autoExecute[repoPath] ?? INITIAL_AUTO_EXECUTE;
+      if (settled || event.terminalId !== current.currentSessionId) return;
+      output = `${output}${event.data}`.slice(-1_048_576);
+      // The TUI renders the submitted task prompt once, including the marker
+      // instruction. Completion is the second exact marker emitted by Pi.
+      if (!hasCompletedAutoExecuteOutput(output)) return;
+      settled = true;
+      handleAgentStopRef.current({
+        sessionId: event.terminalId,
+        taskCompletionStatus: 'completed',
+      });
+    });
+    const unsubscribeExit = window.electronAPI.piTui.onExit((event) => {
+      const current = useTodoStore.getState().autoExecute[repoPath] ?? INITIAL_AUTO_EXECUTE;
+      if (settled || event.terminalId !== current.currentSessionId) return;
+      settled = true;
+      handleAgentStopRef.current({
+        sessionId: event.terminalId,
+        taskCompletionStatus: 'unknown',
+      });
+    });
+    return () => {
+      unsubscribeData();
+      unsubscribeExit();
+    };
+  }, [autoExecute?.running, repoPath]);
 
   return {
     autoExecute,

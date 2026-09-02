@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type {
-  OnboardingCliStatus,
   OnboardingCredentialsHealth,
   OnboardingSendCodeResponse,
   OnboardingState,
@@ -13,8 +12,6 @@ import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled, setCredentialMode } from '../auth/credentialMode';
 import { redactLogArgs } from '../auth/redact';
-import { AgentInstaller } from '../cli/AgentInstaller';
-import { cliDetector } from '../cli/CliDetector';
 import type { OnboardingRegisterResponse } from './types';
 
 const ALLOWED_EMAIL_SUFFIXES = ['@jcdz.cc', '@wuhanjingce.com'] as const;
@@ -625,26 +622,6 @@ class OnboardingService {
       console.warn('[OnboardingService] credentials health degraded:', reason);
     }
     return { claudeEnvOk, codexAuthOk, reason };
-  }
-
-  /**
-   * Check CLI installation status for Claude and Codex.
-   */
-  async detectCli(): Promise<OnboardingCliStatus> {
-    const installer = new AgentInstaller();
-    const [prerequisites, claude, codex] = await Promise.all([
-      installer.checkPrerequisites(),
-      cliDetector.detectOne('claude'),
-      cliDetector.detectOne('codex'),
-    ]);
-
-    return {
-      ...prerequisites,
-      claudeInstalled: claude.installed,
-      claudeVersion: claude.version,
-      codexInstalled: codex.installed,
-      codexVersion: codex.version,
-    };
   }
 }
 

@@ -289,96 +289,20 @@ useWorktreeActivityStore.subscribe(
   }
 );
 
-/**
- * Initialize agent activity state listener
- * Listens for agent stop, ask user question, and user prompt submit notifications
- * Call this once on app startup
- */
+/** Initialize Pi TUI activity from its dedicated terminal lifecycle. */
 export function initAgentActivityListener(): () => void {
-  // Listen for user prompt submit notification -> set 'running'
-  const unsubPreToolUse = window.electronAPI.notification.onPreToolUse(
-    (data: { sessionId: string; toolName: string; cwd?: string }) => {
-      // Try to get cwd from data, or fallback to finding it from session
-      let cwd = data.cwd;
-      if (!cwd) {
-        // Fallback: find session by sessionId to get cwd
-        const session = useAgentSessionsStore
-          .getState()
-          .sessions.find((s) => s.sessionId === data.sessionId || s.id === data.sessionId);
-        if (session?.cwd) {
-          cwd = session.cwd;
-          console.log(
-            `[WorktreeActivity] PreToolUse hook found cwd from session: ${cwd.split('/').slice(-2).join('/')}`
-          );
-        } else {
-          console.warn(
-            `[WorktreeActivity] UserPromptSubmit hook missing cwd: session ${data.sessionId.slice(0, 8)}`
-          );
-          return;
-        }
-      }
-
-      useWorktreeActivityStore.getState().setActivityState(cwd, 'running');
-    }
-  );
-
-  // Listen for agent stop notification -> set 'completed'
-  const unsubStop = window.electronAPI.notification.onAgentStop(
-    (data: { sessionId: string; cwd?: string }) => {
-      // Try to get cwd from data, or fallback to finding it from session
-      let cwd = data.cwd;
-      if (!cwd) {
-        // Fallback: find session by sessionId to get cwd
-        const session = useAgentSessionsStore
-          .getState()
-          .sessions.find((s) => s.sessionId === data.sessionId || s.id === data.sessionId);
-        if (session?.cwd) {
-          cwd = session.cwd;
-          console.log(
-            `[WorktreeActivity] Stop hook found cwd from session: ${cwd.split('/').slice(-2).join('/')}`
-          );
-        } else {
-          console.warn(
-            `[WorktreeActivity] Stop hook missing cwd: session ${data.sessionId.slice(0, 8)}`
-          );
-          return;
-        }
-      }
-
-      useWorktreeActivityStore.getState().setActivityState(cwd, 'completed');
-    }
-  );
-
-  // Listen for ask user question notification -> set 'waiting_input'
-  const unsubAsk = window.electronAPI.notification.onAskUserQuestion(
-    (data: { sessionId: string; cwd?: string }) => {
-      // Try to get cwd from data, or fallback to finding it from session
-      let cwd = data.cwd;
-      if (!cwd) {
-        // Fallback: find session by sessionId to get cwd
-        const session = useAgentSessionsStore
-          .getState()
-          .sessions.find((s) => s.sessionId === data.sessionId || s.id === data.sessionId);
-        if (session?.cwd) {
-          cwd = session.cwd;
-          console.log(
-            `[WorktreeActivity] AskUserQuestion hook found cwd from session: ${cwd.split('/').slice(-2).join('/')}`
-          );
-        } else {
-          console.warn(
-            `[WorktreeActivity] AskUserQuestion hook missing cwd: session ${data.sessionId.slice(0, 8)}`
-          );
-          return;
-        }
-      }
-
-      useWorktreeActivityStore.getState().setActivityState(cwd, 'waiting_input');
-    }
-  );
-
+  const setForSession = (sessionId: string, state: AgentActivityState) => {
+    const cwd = useAgentSessionsStore.getState().sessions.find((s) => s.id === sessionId)?.cwd;
+    if (cwd) useWorktreeActivityStore.getState().setActivityState(cwd, state);
+  };
+  const unsubscribeData = window.electronAPI.piTui.onData((event) => {
+    setForSession(event.terminalId, 'running');
+  });
+  const unsubscribeExit = window.electronAPI.piTui.onExit((event) => {
+    setForSession(event.terminalId, 'completed');
+  });
   return () => {
-    unsubPreToolUse();
-    unsubStop();
-    unsubAsk();
+    unsubscribeData();
+    unsubscribeExit();
   };
 }

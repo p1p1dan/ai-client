@@ -1,12 +1,10 @@
 import {
-  Bot,
   FileCode,
   Globe,
   Keyboard,
   Palette,
   Server,
   Settings,
-  Share2,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -14,13 +12,11 @@ import {
 import * as React from 'react';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { AgentSettings } from './AgentSettings';
 import { AISettings } from './AISettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import type { SettingsCategory } from './constants';
 import { EditorSettings } from './EditorSettings';
 import { GeneralSettings } from './GeneralSettings';
-import { HapiSettings } from './HapiSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
 import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
@@ -57,11 +53,9 @@ export function SettingsContent({
     { id: 'appearance', icon: Palette, label: t('Appearance') },
     { id: 'editor', icon: FileCode, label: t('Editor') },
     { id: 'keybindings', icon: Keyboard, label: t('Keybindings') },
-    { id: 'agent', icon: Bot, label: t('Agent') },
     { id: 'ai', icon: Sparkles, label: t('AI') },
     { id: 'piModels', icon: SlidersHorizontal, label: 'Pi Models' },
     { id: 'piPermissions', icon: ShieldCheck, label: t('Permissions') },
-    { id: 'hapi', icon: Share2, label: t('Remote Sharing') },
     { id: 'remote', icon: Server, label: t('Remote Connection') },
     { id: 'webInspector', icon: Globe, label: t('Web Inspector') },
   ];
@@ -94,11 +88,9 @@ export function SettingsContent({
         {activeCategory === 'appearance' && <AppearanceSettings />}
         {activeCategory === 'editor' && <EditorSettings />}
         {activeCategory === 'keybindings' && <KeybindingsSettings />}
-        {activeCategory === 'agent' && <AgentSettings repoPath={repoPath} />}
         {activeCategory === 'ai' && <AISettings />}
         {activeCategory === 'piModels' && <PiModelManagementSettings />}
         {activeCategory === 'piPermissions' && <PermissionPolicySettings repoPath={repoPath} />}
-        {activeCategory === 'hapi' && <HapiSettings repoPath={repoPath} />}
         {activeCategory === 'remote' && <RemoteSettings />}
         {activeCategory === 'webInspector' && <WebInspectorSettings />}
       </div>

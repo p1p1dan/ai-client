@@ -132,9 +132,17 @@ export const IPC_CHANNELS = {
   SESSION_EXIT: 'session:exit',
   SESSION_STATE: 'session:state',
 
-  // Agent
-  AGENT_LIST: 'agent:list',
-  AGENT_STOP_NOTIFICATION: 'agent:stop:notification',
+  // Pi embedded TUI
+  PI_TUI_OPEN: 'piTui:open',
+  PI_TUI_WRITE: 'piTui:write',
+  PI_TUI_RESIZE: 'piTui:resize',
+  PI_TUI_SUSPEND: 'piTui:suspend',
+  PI_TUI_DISPOSE: 'piTui:dispose',
+  PI_TUI_STATUS: 'piTui:status',
+  PI_TUI_DATA: 'piTui:data',
+  PI_TUI_EXIT: 'piTui:exit',
+  PI_TUI_STATE: 'piTui:state',
+
   AGENT_ASK_USER_QUESTION_NOTIFICATION: 'agent:askUserQuestion:notification',
   AGENT_PRE_TOOL_USE_NOTIFICATION: 'agent:preToolUse:notification',
   AGENT_STATUS_UPDATE: 'agent:status:update',
@@ -209,7 +217,6 @@ export const IPC_CHANNELS = {
 
   // CLI Detector
   CLI_DETECT: 'cli:detect',
-  CLI_DETECT_ONE: 'cli:detectOne',
 
   // Tmux
   TMUX_CHECK: 'tmux:check',
@@ -276,29 +283,6 @@ export const IPC_CHANNELS = {
   SEARCH_FILES: 'search:files',
   SEARCH_CONTENT: 'search:content',
 
-  // Hapi Remote Sharing
-  HAPI_CHECK_GLOBAL: 'hapi:checkGlobal',
-  HAPPY_CHECK_GLOBAL: 'happy:checkGlobal',
-  HAPI_START: 'hapi:start',
-  HAPI_STOP: 'hapi:stop',
-  HAPI_RESTART: 'hapi:restart',
-  HAPI_GET_STATUS: 'hapi:getStatus',
-  HAPI_STATUS_CHANGED: 'hapi:statusChanged',
-
-  // Hapi Runner
-  HAPI_RUNNER_START: 'hapiRunner:start',
-  HAPI_RUNNER_STOP: 'hapiRunner:stop',
-  HAPI_RUNNER_GET_STATUS: 'hapiRunner:getStatus',
-  HAPI_RUNNER_STATUS_CHANGED: 'hapiRunner:statusChanged',
-
-  // Cloudflared Tunnel
-  CLOUDFLARED_CHECK: 'cloudflared:check',
-  CLOUDFLARED_INSTALL: 'cloudflared:install',
-  CLOUDFLARED_START: 'cloudflared:start',
-  CLOUDFLARED_STOP: 'cloudflared:stop',
-  CLOUDFLARED_GET_STATUS: 'cloudflared:getStatus',
-  CLOUDFLARED_STATUS_CHANGED: 'cloudflared:statusChanged',
-
   // Todo
   TODO_GET_TASKS: 'todo:getTasks',
   TODO_ADD_TASK: 'todo:addTask',
@@ -316,12 +300,8 @@ export const IPC_CHANNELS = {
   ONBOARDING_CHECK: 'onboarding:check',
   ONBOARDING_SEND_CODE: 'onboarding:sendCode',
   ONBOARDING_VERIFY_AND_REGISTER: 'onboarding:verifyAndRegister',
-  ONBOARDING_DETECT_CLI: 'onboarding:detectCli',
   ONBOARDING_CHECK_PREREQUISITES: 'onboarding:checkPrerequisites',
-  ONBOARDING_INSTALL_AGENTS: 'onboarding:installAgents',
   ONBOARDING_INSTALL_GIT: 'onboarding:installGit',
-  ONBOARDING_INSTALL_PROGRESS: 'onboarding:installProgress',
-  ONBOARDING_CANCEL_INSTALL: 'onboarding:cancelInstall',
   ONBOARDING_LOGOUT: 'onboarding:logout',
 
   // OpenChamber Chat / Agent Host Runtime

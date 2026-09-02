@@ -108,7 +108,7 @@ vi.mock('../../services/onboarding/OnboardingService', () => ({
   },
 }));
 
-vi.mock('../../services/cli/AgentInstaller', () => ({ AgentInstaller: vi.fn() }));
+vi.mock('../../services/cli/GitInstaller', () => ({ GitInstaller: vi.fn() }));
 vi.mock('../onboardingHandlers', () => ({ createVerifyAndRegisterHandler: vi.fn() }));
 
 beforeEach(() => {

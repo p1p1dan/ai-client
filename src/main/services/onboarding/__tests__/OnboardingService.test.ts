@@ -7,7 +7,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 const fetchMock = vi.fn();
 /** Stands in for `<userData>`'s basename — S2's profile segment. */
 const MOCK_USER_DATA_NAME = 'jyw-ai-client-test';
-const checkPrerequisitesMock = vi.fn();
 
 vi.mock('electron', () => ({
   net: {
@@ -25,18 +24,6 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn(),
   },
-}));
-
-vi.mock('../../cli/CliDetector', () => ({
-  cliDetector: {
-    detectOne: vi.fn(),
-  },
-}));
-
-vi.mock('../../cli/AgentInstaller', () => ({
-  AgentInstaller: vi.fn().mockImplementation(() => ({
-    checkPrerequisites: checkPrerequisitesMock,
-  })),
 }));
 
 /**
@@ -73,7 +60,6 @@ describe('OnboardingService', () => {
     process.env.HOME = tempHome;
     process.env.USERPROFILE = tempHome;
     fetchMock.mockReset();
-    checkPrerequisitesMock.mockReset();
     vi.stubGlobal('__ONBOARDING_SERVICE_URL__', 'https://onboarding-test.example.com');
   });
 
@@ -357,50 +343,6 @@ describe('OnboardingService', () => {
     expect(result.error).toMatch(/incomplete|credentials/i);
     expect(onboardingService.checkRegistration().registered).toBe(false);
     expect(readFileSync(claudeSettingsPath, 'utf-8')).toBe(originalClaudeSettings);
-  });
-
-  it('detectCli merges prerequisite status with CLI detection results', async () => {
-    checkPrerequisitesMock.mockResolvedValue({
-      gitInstalled: true,
-      gitVersion: 'git version 2.43.0.windows.1',
-      nodeInstalled: false,
-      nodeVersion: 'v16.20.0',
-      wingetAvailable: true,
-    });
-
-    const { cliDetector } = await import('../../cli/CliDetector');
-    vi.mocked(cliDetector.detectOne)
-      .mockResolvedValueOnce({
-        id: 'claude',
-        name: 'Claude',
-        command: 'claude',
-        installed: true,
-        version: '1.0.0',
-        isBuiltin: true,
-        environment: 'native',
-      })
-      .mockResolvedValueOnce({
-        id: 'codex',
-        name: 'Codex',
-        command: 'codex',
-        installed: false,
-        isBuiltin: true,
-      });
-
-    const { onboardingService } = await import('../OnboardingService');
-    const status = await onboardingService.detectCli();
-
-    expect(status).toEqual({
-      gitInstalled: true,
-      gitVersion: 'git version 2.43.0.windows.1',
-      nodeInstalled: false,
-      nodeVersion: 'v16.20.0',
-      wingetAvailable: true,
-      claudeInstalled: true,
-      claudeVersion: '1.0.0',
-      codexInstalled: false,
-      codexVersion: undefined,
-    });
   });
 });
 

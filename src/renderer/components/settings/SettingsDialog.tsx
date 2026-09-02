@@ -1,12 +1,10 @@
 import {
-  Bot,
   FileCode,
   Globe,
   Keyboard,
   Palette,
   Server,
   Settings,
-  Share2,
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
@@ -16,13 +14,11 @@ import { Dialog, DialogPopup, DialogTitle, DialogTrigger } from '@/components/ui
 import { useKeybindingInterceptor } from '@/hooks/useKeybindingInterceptor';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { AgentSettings } from './AgentSettings';
 import { AISettings } from './AISettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import type { SettingsCategory } from './constants';
 import { EditorSettings } from './EditorSettings';
 import { GeneralSettings } from './GeneralSettings';
-import { HapiSettings } from './HapiSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
 import { RemoteSettings } from './RemoteSettings';
@@ -60,10 +56,8 @@ export function SettingsDialog({
     { id: 'appearance', icon: Palette, label: t('Appearance') },
     { id: 'editor', icon: FileCode, label: t('Editor') },
     { id: 'keybindings', icon: Keyboard, label: t('Keybindings') },
-    { id: 'agent', icon: Bot, label: t('Agent') },
     { id: 'ai', icon: Sparkles, label: t('AI') },
     { id: 'piModels', icon: SlidersHorizontal, label: 'Pi Models' },
-    { id: 'hapi', icon: Share2, label: t('Remote Sharing') },
     { id: 'remote', icon: Server, label: t('Remote Connection') },
     { id: 'webInspector', icon: Globe, label: t('Web Inspector') },
   ];
@@ -134,10 +128,8 @@ export function SettingsDialog({
             {activeCategory === 'appearance' && <AppearanceSettings />}
             {activeCategory === 'editor' && <EditorSettings />}
             {activeCategory === 'keybindings' && <KeybindingsSettings />}
-            {activeCategory === 'agent' && <AgentSettings />}
             {activeCategory === 'ai' && <AISettings />}
             {activeCategory === 'piModels' && <PiModelManagementSettings />}
-            {activeCategory === 'hapi' && <HapiSettings />}
             {activeCategory === 'remote' && <RemoteSettings />}
             {activeCategory === 'webInspector' && <WebInspectorSettings />}
           </div>
