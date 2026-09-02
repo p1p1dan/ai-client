@@ -205,7 +205,11 @@ export function useXterm({
     (data: string) => {
       if (!ptyIdRef.current || runtimeStateRef.current !== 'live') return;
       if (piTuiTerminalId) {
-        void window.electronAPI.piTui.write(piTuiTerminalId, data);
+        // The id is bound before `open` resolves (see initTerminal), so a write
+        // racing startup can legitimately land before the PTY exists.
+        void window.electronAPI.piTui.write(piTuiTerminalId, data).catch((error: unknown) => {
+          console.warn('[xterm] Pi TUI write failed:', error);
+        });
       } else {
         void window.electronAPI.session.write(ptyIdRef.current, data);
       }
@@ -738,6 +742,12 @@ export function useXterm({
       let session: { sessionId: string } | null = null;
       let replay: string | undefined;
       if (piTuiTerminalId) {
+        // Bind the id before opening: re-opening a suspended PTY replays its
+        // buffered output from inside the open call, so those data events can
+        // reach this listener before the invoke promise resolves. Without the
+        // early bind they fail the `event.terminalId !== ptyIdRef.current`
+        // check and a re-mounted terminal comes back blank.
+        ptyIdRef.current = piTuiTerminalId;
         const opened = await window.electronAPI.piTui.open({
           terminalId: piTuiTerminalId,
           cwd: createOptions.cwd,

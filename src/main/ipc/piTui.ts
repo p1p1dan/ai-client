@@ -1,6 +1,7 @@
 import { IPC_CHANNELS, type PiTuiOpenRequest } from '@shared/types';
 import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
+import { isRemoteVirtualPath } from '../services/remote/RemotePath';
 import {
   createNodePtySpawn,
   PiTuiPtyController,
@@ -83,6 +84,11 @@ function assertOwner(sender: WebContents, controller: PiTuiPtyController): void 
 export function registerPiTuiHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.PI_TUI_OPEN, async (event, request: PiTuiOpenRequest) => {
     assertAgentSpawnAllowed();
+    // A remote virtual path is not a local directory; node-pty would fail with
+    // an opaque spawn error instead of naming the actual limitation.
+    if (isRemoteVirtualPath(request?.cwd ?? '')) {
+      throw new Error('Pi TUI is not available for remote repositories');
+    }
     const controller = await controllerFor(event.sender);
     assertOwner(event.sender, controller);
     return controller.open(request);

@@ -137,9 +137,6 @@ extraResources:
     filter:
       - "package.json"
       - "lib/**/*"
-    filter:
-      - "package.json"
-      - "lib/**/*"
   # The worker-only Pi artifact is copied by scripts/afterPack.mjs instead of
   # extraResources because electron-builder drops its node_modules tree there.
   # It remains plain files so utilityProcess can resolve the Pi SDK and bundled

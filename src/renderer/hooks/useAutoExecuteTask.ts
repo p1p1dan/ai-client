@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { ResolvedAgent } from '@/components/todo/useEnabledAgents';
 import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { INITIAL_AUTO_EXECUTE, useTodoStore } from '@/stores/todo';
-import { buildAutoExecutePrompt, hasCompletedAutoExecuteOutput } from './autoExecuteMarker';
+import { buildAutoExecutePrompt, createAutoExecuteCompletionTracker } from './autoExecuteMarker';
 
 export { buildAutoExecutePrompt } from './autoExecuteMarker';
 
@@ -171,16 +171,16 @@ export function useAutoExecuteTask(
   // an exit before the marker is treated as an incomplete task.
   useEffect(() => {
     if (!autoExecute?.running) return;
-    let output = '';
-    let settled = false;
+    // The queue advances from inside these listeners and leaves `running` true,
+    // so the effect is never re-created between tasks. The tracker keys its
+    // buffer and settled flag on the running task's session for that reason.
+    const tracker = createAutoExecuteCompletionTracker();
     const unsubscribeData = window.electronAPI.piTui.onData((event) => {
       const current = useTodoStore.getState().autoExecute[repoPath] ?? INITIAL_AUTO_EXECUTE;
-      if (settled || event.terminalId !== current.currentSessionId) return;
-      output = `${output}${event.data}`.slice(-1_048_576);
+      if (!current.currentSessionId || event.terminalId !== current.currentSessionId) return;
       // The TUI renders the submitted task prompt once, including the marker
       // instruction. Completion is the second exact marker emitted by Pi.
-      if (!hasCompletedAutoExecuteOutput(output)) return;
-      settled = true;
+      if (!tracker.data(current.currentSessionId, event.data)) return;
       handleAgentStopRef.current({
         sessionId: event.terminalId,
         taskCompletionStatus: 'completed',
@@ -188,8 +188,8 @@ export function useAutoExecuteTask(
     });
     const unsubscribeExit = window.electronAPI.piTui.onExit((event) => {
       const current = useTodoStore.getState().autoExecute[repoPath] ?? INITIAL_AUTO_EXECUTE;
-      if (settled || event.terminalId !== current.currentSessionId) return;
-      settled = true;
+      if (!current.currentSessionId || event.terminalId !== current.currentSessionId) return;
+      if (!tracker.exit(current.currentSessionId)) return;
       handleAgentStopRef.current({
         sessionId: event.terminalId,
         taskCompletionStatus: 'unknown',

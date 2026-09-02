@@ -84,21 +84,19 @@ interface AgentSessionsState {
   getAggregatedGlobal: () => AggregatedOutputState;
 }
 
+/**
+ * Upgrade migration: nothing persisted is restorable any more.
+ *
+ * Sessions are process-scoped (see `saveToStorage`), so a stored tab always
+ * points at a PTY that died with the previous run. Older builds persisted
+ * Claude / Codex / custom-agent tabs, and restoring those on the first launch
+ * after an upgrade would auto-start Pi processes under their old names and
+ * worktrees. Clear the key on load rather than waiting for a store write to
+ * overwrite it, which may not happen for the whole session.
+ */
 function loadFromStorage(): { sessions: Session[]; activeIds: Record<string, string | null> } {
   try {
-    const saved = localStorage.getItem(SESSIONS_STORAGE_KEY);
-    if (saved) {
-      const data = JSON.parse(saved);
-      if (data.sessions?.length > 0) {
-        // Migrate old sessions that don't have repoPath (backwards compatibility),
-        // and drop stale transient fields written by older versions.
-        const migratedSessions = data.sessions.map((s: Session) => ({
-          ...s,
-          repoPath: s.repoPath || s.cwd,
-        }));
-        return { sessions: migratedSessions, activeIds: data.activeIds || {} };
-      }
-    }
+    localStorage.removeItem(SESSIONS_STORAGE_KEY);
   } catch {}
   return { sessions: [], activeIds: {} };
 }

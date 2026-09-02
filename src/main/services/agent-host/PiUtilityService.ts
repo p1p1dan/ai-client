@@ -207,6 +207,23 @@ export class PiUtilityService {
     return this.cancelRecord(record, 'user');
   }
 
+  /**
+   * Credential-change teardown (logout), mirroring `WorkerManager.invalidateAll()`:
+   * cancel every in-flight operation and drop the workers running them WITHOUT
+   * marking the service disposed, so utility completions work again after the
+   * next sign-in. Logout must call this before the vault is cleared — a running
+   * one-shot otherwise keeps issuing requests with credentials the user revoked.
+   */
+  async invalidateAll(): Promise<void> {
+    await Promise.allSettled(
+      [...this.operations.values()].map((record) => this.cancelRecord(record, 'dispose'))
+    );
+    const slots = [...this.ownedSlots];
+    this.ownedSlots.clear();
+    this.operations.clear();
+    await Promise.allSettled(slots.map((slot) => slot.dispose('slot-dispose')));
+  }
+
   async disposeAll(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;

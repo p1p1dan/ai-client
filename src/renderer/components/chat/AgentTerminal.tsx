@@ -1,4 +1,5 @@
 import { AUTH_OPEN_ONBOARDING_EVENT } from '@shared/authGate';
+import { isRemoteVirtualPath } from '@shared/utils/remotePath';
 import { ArrowDown } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -56,6 +57,10 @@ export function AgentTerminal({
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
   const activatedRef = useRef(false);
   const { register, unregister } = useTerminalWriteStore();
+  // Pi TUI is a local node-pty launch of the bundled CLI, so a remote virtual
+  // cwd has no local directory to spawn in. Keep the terminal dormant and
+  // explain why instead of failing on an unusable spawn path.
+  const isRemoteWorkspace = isRemoteVirtualPath(cwd);
   const {
     containerRef,
     isLoading,
@@ -72,8 +77,8 @@ export function AgentTerminal({
   } = useXterm({
     piTuiTerminalId: id,
     cwd,
-    initialCommand: initialPrompt,
-    isActive,
+    initialCommand: isRemoteWorkspace ? undefined : initialPrompt,
+    isActive: isActive && !isRemoteWorkspace,
     kind: 'agent',
     onInit: onInitialized,
     onExit,
@@ -160,7 +165,15 @@ export function AgentTerminal({
           <ArrowDown className="h-4 w-4" />
         </button>
       )}
-      {isLoading && (
+      {isRemoteWorkspace && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-background/90 text-sm">
+          <strong>{t('Pi terminal is unavailable for remote repositories')}</strong>
+          <span className="text-muted-foreground">
+            {t('Open a local repository or worktree to start a Pi terminal.')}
+          </span>
+        </div>
+      )}
+      {isLoading && !isRemoteWorkspace && (
         <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
           {t('Loading Pi...')}
         </div>

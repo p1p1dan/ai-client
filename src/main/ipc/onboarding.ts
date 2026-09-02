@@ -55,7 +55,11 @@ async function clearServerAuthCookie(serverUrl: string): Promise<void> {
  *     teardown starts (a `create`/`resume` call racing logout must see the
  *     gate already shut, not a stale `authenticated` snapshot).
  *  ② `terminateAllSessions()` — kill remote sessions, then await local PTYs.
- *  ③ `await workerManager.invalidateAll()` — flag-gated (matches the pre-S5
+ *     Followed by ②b `disposeAllPiTuiControllers()`: agent PTYs moved out of
+ *     `SessionManager` into their own controller map in T36, so ② no longer
+ *     reaches them and they need their own (equally ungated) teardown.
+ *  ③ `await workerManager.invalidateAll()` + `piUtilityService.invalidateAll()`
+ *     — both flag-gated (matches the pre-S5
  *     "logout with managed credentials off never touches the runtime" contract,
  *     `OnboardingServiceManagedHome.test.ts`'s own assertion). MOVED OUT of
  *     `regenerateManagedHomesForLogout`'s tail (I9: "shutdown 从 regenerate
@@ -93,6 +97,17 @@ export async function performLogoutSequence(): Promise<boolean> {
     console.warn('[onboarding:logout] Failed to terminate sessions:', error);
   }
 
+  // ②b — Pi TUI PTYs live in their own controller map, not in SessionManager,
+  // so ② does not reach them. Kill them here, still before the vault is
+  // cleared: a TUI left running would keep accepting input on a process
+  // launched with the credentials this logout is about to revoke.
+  try {
+    const { disposeAllPiTuiControllers } = await import('./piTui');
+    await disposeAllPiTuiControllers();
+  } catch (error) {
+    console.warn('[onboarding:logout] Failed to dispose Pi TUI controllers:', error);
+  }
+
   // ③ — flag-gated; strictly before ④/⑤ (I9 restructure).
   if (resolveManagedCredentialsEnabled()) {
     try {
@@ -100,6 +115,15 @@ export async function performLogoutSequence(): Promise<boolean> {
       await workerManager.invalidateAll();
     } catch (error) {
       console.warn('[onboarding:logout] Failed to invalidate Pi workers:', error);
+    }
+    // One-shot utility workers are a separate supervisor from WorkerManager and
+    // were previously only torn down at app shutdown, so an in-flight code
+    // review / commit message kept its loaded credentials past logout.
+    try {
+      const { piUtilityService } = await import('../services/agent-host/PiUtilityService');
+      await piUtilityService.invalidateAll();
+    } catch (error) {
+      console.warn('[onboarding:logout] Failed to invalidate Pi utility workers:', error);
     }
   }
 

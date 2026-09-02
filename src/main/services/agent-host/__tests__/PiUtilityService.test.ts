@@ -157,6 +157,47 @@ describe('PiUtilityService', () => {
     await acknowledgeDispose(transport);
   });
 
+  it('invalidateAll cancels in-flight work at logout and stays usable afterwards', async () => {
+    const { service, transports } = harness();
+    const completion = service.complete({
+      operationId: 'review-3',
+      cwd: '/repo',
+      prompt: 'review',
+      timeoutMs: 60_000,
+    });
+    await vi.waitFor(() => expect(transports).toHaveLength(1));
+    const transport = transports[0];
+    await acknowledgeStart(transport);
+
+    const invalidating = service.invalidateAll();
+    await vi.waitFor(() => expect(transport.requests.at(-1)?.type).toBe('utility.cancel'));
+    transport.respond(transport.requests.at(-1)!, { cancelled: true });
+    await expect(completion).rejects.toMatchObject({ code: 'PI_UTILITY_CANCELLED' });
+    await acknowledgeDispose(transport);
+    await invalidating;
+    expect(service.activeCount).toBe(0);
+
+    // Unlike disposeAll, this is a credential-change teardown: the same service
+    // must serve the next sign-in rather than reject every later completion.
+    const next = service.complete({
+      operationId: 'review-4',
+      cwd: '/repo',
+      prompt: 'review again',
+      timeoutMs: 60_000,
+    });
+    await vi.waitFor(() => expect(transports).toHaveLength(2));
+    await acknowledgeStart(transports[1]);
+    // Second slot, second generation — an event tagged with the default
+    // generation 1 would be filtered out as stale.
+    transports[1].event(
+      'utility.terminal',
+      { operationId: 'review-4', state: 'completed', text: 'done' },
+      2
+    );
+    await expect(next).resolves.toEqual({ text: 'done' });
+    await acknowledgeDispose(transports[1]);
+  });
+
   it('enforces its explicit process bound', async () => {
     const { service, transports } = harness(1);
     const first = service.complete({

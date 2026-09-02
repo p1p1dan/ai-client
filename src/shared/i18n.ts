@@ -411,6 +411,10 @@ export const zhTranslations: Record<string, string> = {
   // Shared by the two terminals' scrollback buttons and the chat timeline's
   // bottom anchor (T12-d) — one wording for one gesture, in both places.
   'Scroll to bottom': '滚动到底部',
+  // Pi runs as a local PTY, so a remote workspace has no directory to spawn in.
+  'Pi terminal is unavailable for remote repositories': 'Pi 终端不支持远程仓库',
+  'Open a local repository or worktree to start a Pi terminal.':
+    '请打开本地仓库或 worktree 后再启动 Pi 终端。',
   'New chat': '新建对话',
   // D1 (round-5): header "New" button title, dynamic target discoverability.
   'New session in {{folder}}': '在 {{folder}} 中新建会话',

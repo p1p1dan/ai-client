@@ -64,6 +64,15 @@ const logoutMock = vi.fn(() => {
 const cookiesRemoveMock = vi.fn(async () => {
   events.push('clearServerAuthCookie');
 });
+// ②b / ③ additions. These record order only — the cross-`await` barrier they
+// sit inside is already pinned by their deferred-backed neighbours, so keeping
+// them non-blocking avoids every existing test having to release one more gate.
+const disposeAllPiTuiControllersMock = vi.fn(async () => {
+  events.push('piTui.disposeAllControllers');
+});
+const utilityInvalidateAllMock = vi.fn(async () => {
+  events.push('piUtility.invalidateAll');
+});
 
 vi.mock('electron', () => ({
   // D64/S3 — the mode resolver falls through to the settings file when the
@@ -89,6 +98,14 @@ vi.mock('../../services/session/SessionManager', () => ({
 
 vi.mock('../../services/agent-host/WorkerManager', () => ({
   workerManager: { invalidateAll: shutdownMock },
+}));
+
+vi.mock('../piTui', () => ({
+  disposeAllPiTuiControllers: disposeAllPiTuiControllersMock,
+}));
+
+vi.mock('../../services/agent-host/PiUtilityService', () => ({
+  piUtilityService: { invalidateAll: utilityInvalidateAllMock },
 }));
 
 vi.mock('../../services/auth', () => ({
@@ -129,6 +146,8 @@ beforeEach(() => {
     checkRegistrationMock,
     logoutMock,
     cookiesRemoveMock,
+    disposeAllPiTuiControllersMock,
+    utilityInvalidateAllMock,
   ]) {
     mock.mockClear();
   }
@@ -221,6 +240,45 @@ describe('performLogoutSequence — I9 checkpoint order (D47 S5 §3)', () => {
     expect(events.indexOf('onboardingService.logout')).toBeLessThan(refreshIdx);
     // Last event overall — nothing runs after the broadcast.
     expect(events[events.length - 1]).toBe('refresh');
+  });
+
+  it('②b kills the Pi TUI PTYs — after the local PTYs, and before the credential stores are touched', async () => {
+    const { performLogoutSequence } = await import('../onboarding');
+
+    const sequencePromise = performLogoutSequence();
+    await flushUntil(() => events.includes('destroyAllLocalAndWait:start'));
+    // Agent PTYs live outside SessionManager, so ② cannot have reached them.
+    expect(events).not.toContain('piTui.disposeAllControllers');
+
+    destroyAllLocalDeferred.resolve();
+    shutdownDeferred.resolve();
+    vaultClearDeferred.resolve();
+    regenerateDeferred.resolve();
+    await sequencePromise;
+
+    const disposeIdx = events.indexOf('piTui.disposeAllControllers');
+    expect(disposeIdx).toBeGreaterThan(events.indexOf('destroyAllLocalAndWait:end'));
+    expect(disposeIdx).toBeLessThan(events.indexOf('agentHost.shutdown:start'));
+    expect(disposeIdx).toBeLessThan(events.indexOf('vault.clear:start'));
+  });
+
+  it('③ invalidates the one-shot utility workers too, before ④ vault.clear', async () => {
+    const { performLogoutSequence } = await import('../onboarding');
+
+    const sequencePromise = performLogoutSequence();
+    destroyAllLocalDeferred.resolve();
+    await flushUntil(() => events.includes('agentHost.shutdown:start'));
+    // Still gated behind the same await barrier as the session workers.
+    expect(events).not.toContain('piUtility.invalidateAll');
+
+    shutdownDeferred.resolve();
+    vaultClearDeferred.resolve();
+    regenerateDeferred.resolve();
+    await sequencePromise;
+
+    const utilityIdx = events.indexOf('piUtility.invalidateAll');
+    expect(utilityIdx).toBeGreaterThan(events.indexOf('agentHost.shutdown:end'));
+    expect(utilityIdx).toBeLessThan(events.indexOf('vault.clear:start'));
   });
 
   it('clearServerAuthCookie uses the serverUrl captured BEFORE onboardingService.logout() (which would otherwise have wiped it)', async () => {
