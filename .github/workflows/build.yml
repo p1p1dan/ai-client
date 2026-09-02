@@ -484,8 +484,11 @@ jobs:
             return match[1];
           }
 
+          // Moved out of the deleted RemoteHelperSource.ts in 8aafd450; same
+          // constant, same regex. dev.js and build-remote-runtime-bundle.mjs
+          // read it from here too.
           const serverVersion = readConstant(
-            'src/main/services/remote/RemoteHelperSource.ts',
+            'src/main/services/remote/RemoteServerSource.ts',
             /REMOTE_SERVER_VERSION = '([^']+)'/
           );
           const nodeVersion = readConstant(

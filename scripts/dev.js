@@ -41,8 +41,13 @@ function ensureLocalLinuxRuntimeBundle() {
     return;
   }
 
+  // RemoteHelperSource.ts was deleted in 8aafd450 (T35 legacy-runtime cleanup)
+  // and this constant moved to RemoteServerSource.ts. This reader was not
+  // updated with it, which threw ENOENT before Electron ever started — `pnpm
+  // dev` was dead on Linux until T37-c. Keep in sync with
+  // build-remote-runtime-bundle.mjs, which reads the same constant.
   const serverVersion = readConstant(
-    'src/main/services/remote/RemoteHelperSource.ts',
+    'src/main/services/remote/RemoteServerSource.ts',
     /REMOTE_SERVER_VERSION = '([^']+)'/
   );
   const nodeVersion = readConstant(
