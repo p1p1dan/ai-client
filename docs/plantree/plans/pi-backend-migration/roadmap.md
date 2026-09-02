@@ -157,8 +157,13 @@ D16 将实际删除前移到 T29–T36 各替代切片；最终审计关闭 dead
 - **T37-b Resource/longevity — Done**：真 Electron 探针跑通有界池/保护位、后台空闲回收、淘汰后重开、
   20 轮 churn 内存持平（+2.3 MiB）、worker 与 Pi TUI PTY 零孤儿、长挂起后复用不重开；
   并修掉 dispose 应答输给进程退出导致"关闭成功却报错"的缺陷。见 [T37-b evidence](./evidence/2026-09-02-t37b-resource-longevity.md)。
-- **T37-c GUI/packaged smoke**：multi-session、permissions、queue、history、import、TUI、crash recovery。
-- **T37-d Release**：license notices、migration docs、release notes、内部运行后扩大范围。
+- **T37-c GUI/真账号点验 — Done**：CDP 探针在真 cx2/maxapi 账号上跑通 multi-session、queue/Stop、
+  history、Claude import、GUI↔TUI 交接、权限审批四选项、模型切换与三种崩溃恢复（杀 worker / 杀 TUI PTY /
+  强杀 app 重启），11 步全过并留截图。期间修掉三个真缺陷：`pnpm dev` 读已删除文件而完全无法启动、
+  dev 模式 worker 因 strip-only 语法与缺扩展名导入启动即死、worker stderr 被丢弃导致崩溃无从诊断。
+  packaged 安装包按决定交 CI。见 [T37-c evidence](./evidence/2026-09-02-t37c-gui-packaged.md)。
+- **T37-d Release**：license notices、migration docs、release notes、内部运行后扩大范围；
+  另接手 T37-c 报出的 `WORKER_SESSION_FILE_NOT_FOUND` 会话变砖缺陷、CI packaged 触发与 macOS 产物欠项。
 
 ## Dependencies
 

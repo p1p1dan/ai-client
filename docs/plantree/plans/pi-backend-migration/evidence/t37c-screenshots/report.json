@@ -1,0 +1,354 @@
+{
+  "startedAt": "2026-09-02T16:53:59.282Z",
+  "host": {
+    "platform": "linux",
+    "node": "v22.23.2"
+  },
+  "openPath": "/home/ai/code/ai-client",
+  "agentDir": "(from dev.env)",
+  "steps": [
+    {
+      "name": "entry",
+      "covers": "startup entry screen → local credential route",
+      "status": "pass",
+      "ms": 6789,
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/01-welcome.png",
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/02-shell.png"
+      ]
+    },
+    {
+      "name": "models",
+      "covers": "real provider catalog reaches the renderer",
+      "status": "pass",
+      "ms": 3,
+      "catalog": {
+        "source": "local",
+        "error": null,
+        "models": [
+          {
+            "id": "cx2/gpt-5.6-sol",
+            "tags": []
+          },
+          {
+            "id": "cx2/gpt-5.6-terra",
+            "tags": []
+          },
+          {
+            "id": "cx2/gpt-5.6-luna",
+            "tags": []
+          },
+          {
+            "id": "maxapi/grok-4.6",
+            "tags": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "workspace",
+      "covers": "repository registered from --open-path",
+      "status": "pass",
+      "ms": 90,
+      "state": {
+        "workspaces": [
+          {
+            "id": "ws:main:/home/ai/code/ai-client",
+            "name": "Main",
+            "path": "/home/ai/code/ai-client"
+          }
+        ],
+        "sessions": 54,
+        "activeSessionId": "session-live-1788368049743-4ig78so"
+      },
+      "restoredMode": "gui",
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/03-workspace.png"
+      ]
+    },
+    {
+      "name": "multiSession",
+      "covers": "three sessions, real turns, queue release on revisit, no cross-session bleed",
+      "status": "pass",
+      "ms": 30951,
+      "sessions": [
+        {
+          "sessionId": "session-1788368051228-ffe62vl",
+          "reply": "T37C-S1",
+          "status": "idle",
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-13-278Z_01a0630a-e41e-741e-97de-2c0c10551b20.jsonl"
+        },
+        {
+          "sessionId": "session-1788368051228-ce1ft0x",
+          "reply": "T37C-S2",
+          "status": "idle",
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-23-325Z_01a0630b-0b5d-7aee-80f5-26c9c947e520.jsonl"
+        },
+        {
+          "sessionId": "session-1788368051228-tau09co",
+          "reply": "T37C-S3",
+          "status": "idle",
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-34-809Z_01a0630b-3839-70ba-98d1-7b50790dc9f3.jsonl"
+        }
+      ],
+      "clicks": [
+        {
+          "sessionId": "session-1788368051228-ffe62vl",
+          "button": "Send message"
+        },
+        {
+          "sessionId": "session-1788368051228-ce1ft0x",
+          "button": "Queue message"
+        },
+        {
+          "sessionId": "session-1788368051228-tau09co",
+          "button": "Queue message"
+        }
+      ],
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/04-multi-session.png"
+      ]
+    },
+    {
+      "name": "queue",
+      "covers": "queue three during a live turn, reorder, remove, then Stop",
+      "status": "pass",
+      "ms": 1804,
+      "sessionId": "session-1788368051228-tau09co",
+      "queue": {
+        "before": [
+          {
+            "id": "queued-mtkc6jps-3",
+            "text": "queued one"
+          },
+          {
+            "id": "queued-mtkc6k1u-4",
+            "text": "queued two"
+          },
+          {
+            "id": "queued-mtkc6kdd-5",
+            "text": "queued three"
+          }
+        ],
+        "afterMove": [
+          {
+            "id": "queued-mtkc6k1u-4",
+            "text": "queued two"
+          },
+          {
+            "id": "queued-mtkc6jps-3",
+            "text": "queued one"
+          },
+          {
+            "id": "queued-mtkc6kdd-5",
+            "text": "queued three"
+          }
+        ],
+        "afterRemove": [
+          {
+            "id": "queued-mtkc6k1u-4",
+            "text": "queued two"
+          },
+          {
+            "id": "queued-mtkc6jps-3",
+            "text": "queued one"
+          }
+        ]
+      },
+      "drained": 0,
+      "stopped": true,
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/05-queue.png"
+      ]
+    },
+    {
+      "name": "history",
+      "covers": "switch away and back, transcript survives, pagination state present",
+      "status": "pass",
+      "ms": 3924,
+      "sessionId": "session-1788368051228-ce1ft0x",
+      "before": "T37C-S2",
+      "after": "T37C-S2",
+      "historyError": null,
+      "pagination": null,
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/06-history.png"
+      ]
+    },
+    {
+      "name": "import",
+      "covers": "scan Claude history, import one conversation, verify the report",
+      "status": "pass",
+      "ms": 1635,
+      "projectCount": 1,
+      "sessionCount": 25,
+      "picked": "3eb2e2bf-b78f-4c4c-bc7b-84e3c6622402",
+      "results": [
+        {
+          "status": "imported",
+          "error": null,
+          "sessionId": "session-import-08175b24-93c1-4ff3-90e1-7aa58aa39c65",
+          "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-49-319Z_import-d7c6acdf-aa24-4f6c-9354-6ed5892b4ae6.jsonl"
+        }
+      ],
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/07-import.png"
+      ]
+    },
+    {
+      "name": "tui",
+      "covers": "GUI→TUI hands over this chat's own JSONL, and back",
+      "status": "pass",
+      "ms": 4328,
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-23-325Z_01a0630b-0b5d-7aee-80f5-26c9c947e520.jsonl",
+      "header": "Pi TUI continues this chat",
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/08-tui.png",
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/09-back-to-gui.png"
+      ]
+    },
+    {
+      "name": "crashWorker",
+      "covers": "kill a session worker: failure surfaces, next send self-heals",
+      "status": "pass",
+      "ms": 76400,
+      "sessionId": "session-1788368093872-wx1coh4",
+      "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl",
+      "killedPid": 144108,
+      "workersBefore": [143899, 144000, 144022],
+      "workersAfter": [144000, 144022, 144130],
+      "statusAfterCrash": "idle",
+      "errorAfterCrash": null,
+      "recovered": {
+        "sessionId": "session-1788368093872-wx1coh4",
+        "reply": "T37C-AFTER-CRASH",
+        "status": "idle",
+        "runtimeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl"
+      },
+      "recoveryAttempts": 2,
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/10-crash-worker.png"
+      ]
+    },
+    {
+      "name": "crashTui",
+      "covers": "kill the Pi CLI inside the TUI: the app falls back to GUI",
+      "status": "pass",
+      "ms": 830,
+      "killedPid": 144160,
+      "sawNotice": true,
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/11-crash-tui.png"
+      ]
+    },
+    {
+      "name": "hardKillRestart",
+      "covers": "SIGKILL the whole app: no orphans, sessions and history survive",
+      "status": "pass",
+      "ms": 15872,
+      "killedPids": {
+        "main": 143675,
+        "workers": [144000, 144022, 144130],
+        "ptys": []
+      },
+      "before": {
+        "sessionCount": 58,
+        "probeSessionId": "session-1788368093872-wx1coh4",
+        "probeReply": "T37C-AFTER-CRASH",
+        "probeIdentity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl"
+      },
+      "after": {
+        "sessionCount": 59,
+        "found": true,
+        "identity": "/home/ai/.pilab/t37c-agent/sessions/--home-ai-code-ai-client--/2026-09-02T16-54-55-949Z_01a0630b-8acd-7449-969d-577e25a8afcf.jsonl",
+        "status": "idle"
+      },
+      "screenshots": [
+        "docs/plantree/plans/pi-backend-migration/evidence/t37c-screenshots/12-after-restart.png"
+      ]
+    }
+  ],
+  "finishedAt": "2026-09-02T16:56:26.972Z",
+  "rendererProblems": [
+    {
+      "kind": "console.error",
+      "text": "12:54:04.747 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:54:04.747 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:54:09.742 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:54:09.758 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:54:09.903 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:54:10.007 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:54:10.130 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:54:10.256 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:55:02.820 › [pi-worker:session-1788368093872-wx1coh4:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:55:02.820 › [pi-worker:session-1788368093872-wx1coh4:g1] crashed: Worker exited (code=9 signal=null); last 1 stderr line(s):\n[pi-worker] permission plugin: bundled"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:55:03.087 › Error occurred in handler for 'chat:send': WorkerManagerError: No ready Pi WorkerSlot exists for session-1788368093872-wx1coh4\n    at WorkerManager.requireReadySession (file:///home/ai/code/ai-client/out/main/index.js:20893:13)\n    at WorkerManager.send (file:///home/ai/code/ai-client/out/main/index.js:20538:24)\n    at file:///home/ai/code/ai-client/out/main/index.js:21549:45\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:55:03.087 › Error occurred in handler for 'chat:send': WorkerManagerError: No ready Pi WorkerSlot exists for session-1788368093872-wx1coh4\n    at WorkerManager.requireReadySession (file:///home/ai/code/ai-client/out/main/index.js:20893:13)\n    at WorkerManager.send (file:///home/ai/code/ai-client/out/main/index.js:20538:24)\n    at file:///home/ai/code/ai-client/out/main/index.js:21549:45\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:19.965 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:19.965 › [window] Showing main window via did-finish-load fallback"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:25.386 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:25.398 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:25.496 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:25.583 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:25.677 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "12:56:25.778 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}
