@@ -1,17 +1,29 @@
 # Roadmap — pix/pi-app UI 对齐改造
 
 > 本文件是本计划任务 ID、状态与顺序的唯一权威。
-> 全部任务按 [D01](./decisions/001-style-depth-and-sequencing.md) 排在 Pi-only 计划的 T37 收口之后；
-> 目前**没有任何任务在执行**，所有条目都是待细化的想法登记。
+> [D01](./decisions/001-style-depth-and-sequencing.md) 决定二的排期闸门**已解除**：Pi-only 计划 T37 于 2026-09-03 收口
+> （manual CI run `33714362901` 全绿），本计划可以开工。
+> 切片划分、批次顺序、逐片验收标准与门禁见 [execution-plan](./topics/execution-plan.md)；本文件只维护任务身份与状态。
 
 ## 状态摘要
 
 | 分组 | 数量 | 说明 |
 |---|---|---|
-| Done | 1 | U00：实况核查 |
+| Done | 4 | U00：实况核查；**U01：样式地基**（[evidence](./evidence/2026-09-03-u01-style-baseline.md)）；**U09：Composer 形态**（[evidence](./evidence/2026-09-03-u09-composer-form.md)）；**U12：会话权限档**（2026-09-03） |
 | In Progress | 0 | — |
-| Next（待 T37 收口后细化开工） | 9 | U01–U09 |
+| Ready（已切片，可开工） | 4 | U02、U03、U04、U05 |
+| Ready（部分） | 2 | U06-a、U08-2 可开工 |
+| Scope 待细化 | 1 | U07（建议在 U06-a 后定范围） |
+| Moved out | 1 | U06-b → Pi 计划 T38（[D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md) 决定二） |
+| Dropped | 1 | U08-3 请求优先级（[Q12](./open-questions.md) 拍板不做） |
 | Deferred | 2 | U10–U11 |
+
+**执行顺序**（批次，详见 execution-plan）：
+`U01 → U09 → U12 → U02+U03-a → U05+U03-b → U08-2 → U06-a+U07 → U04`。批次 5、7 可与 3/4 交错，但都不得与 U01 并行。
+U12 紧跟 U09：底栏顺序对齐要给权限 chip 留出左侧位置，先排位再插控件，同一块 JSX 只改一次。
+
+**未决：无。** Q01–Q12 全部关闭（Q08/Q10 见 [D03](./decisions/003-sidebar-density-and-runtime-field-ownership.md)；
+Q09 由取证关闭；Q11 布局尺寸维持现值；Q12 请求优先级不做）。
 
 ## Done
 
@@ -21,71 +33,101 @@
 
 **关键结论**：复制按钮、模型二级菜单、Context 面板、思考强度控件**都已存在**；真缺口是 Run 面板、请求优先级、思考强度词汇对不上 Pi、必须绑定目录才能开聊、TUI 不收右栏、左栏无插件/资源入口、无双栏/三栏模式开关。
 
-## Next
+### U01 — 样式层密度与字体对齐 — **Done**（2026-09-03）
 
-所有条目**尚未细化到可执行**，需在后续会话里逐条确定范围与验收标准。顺序是建议值，不是承诺。
+- **U01-a Done**：`--text-markdown` 15→14、`--text-code` 13→12、radius sm/md/lg 8/12/16→6/10/12、
+  `body` 补 14px/1.45。`--text-meta`、`--radius-xs`、`html` 的 16px rem 基准与 markdown 的
+  `leading-relaxed` 均刻意不动。
+- **U01-b Done**：亮暗两套 surface 只改 OKLCH 的 L 分量，色相彩度不动。暗色 canvas→panel 从 0.0216 L
+  拉到 0.0639 L（1.05:1 → 1.18:1），panel→hover 取 pix 自己的 0.043 L。秩序不变，对比度实测留档。
+- **U01-c 三项全部未改（已收尾）**：Composer 内距按 D03 先例保持 8px；侧栏宽 / 右面板宽 / 阅读栏宽
+  属布局尺寸、不在 D01 授权内，[Q11](./open-questions.md) 已由用户拍板**维持现值**。
+- **U01-d Done**：`docs/design-system.md` 的圆角表、字号表、阅读栏推导三处同步。
 
-### U01 — 样式层密度与字体对齐
+**证据**：[U01 style baseline](./evidence/2026-09-03-u01-style-baseline.md)（含对比度实测数字、门禁结果与 GUI 点验）。
+**GUI 点验 Pass**：用户在真实窗口肉眼确认，事先标注的 hover 可分辨度代价未构成问题。**本任务无欠项。**
 
-把字号档、行高、间距档、圆角档向 pix 靠拢；**不动语义 token 名与主题机制**（D01 决定一）。落地后同步更新 `docs/design-system.md` 的 Token 分档。
+### U09 — Composer 形态 — **Done**（2026-09-03）
 
-**取证已回**（[evidence-u01](./topics/evidence-u01-numeric-scale.md)）：
-- **可搬（不含色彩）**：markdown 15→14、code 13→12、body 行高 1.45；radius sm 8→6 / md 12→10 / lg 16→12；间距/行高 sidebar row 28→32、composer pad 12/14/4。
-- **⚠️ 灰阶不可照搬**：pix 灰阶是**无彩度 hex**，AiClient Flexoki 是**暖色 OKLCH**。照搬会抹平色相。只做 **L 阶关系重映射**（canvas < sidebar < panel < hover），**不换 hex**。原 roadmap「中性灰阶向 pix 靠拢」措辞**修正**为此。
+- **U09-1 Done**：空会话摘列改为与输入卡接合的顶盖（`mx-3` 内缩、`rounded-t-md`、`bg-muted`、
+  `h-7` 容器），卡片有顶盖时顶角降到 `rounded-t-xs`。无 targetable workspace 时卡片类串**逐字节不变**。
+- **U09-2 Done**：底栏顺序落成导出数据（`COMPOSER_BAR_LEADING` / `COMPOSER_BAR_TRAILING`），
+  两个分支 map 渲染。`modelEffort` 与发送键移入尾部锚定组。
+  `permission` / `usage` 两槽留空且渲染 `null`，分别归 U12 与 T38。
+- **组件形态对照表**（原 U09 主体）已于 2026-09-03 产出并逐条拍板，见
+  [evidence-u09](./topics/evidence-u09-component-forms.md)：6 件里 5 件判定「不搬」。
 
-### U02 — 双栏 / 三栏布局模式开关
+**证据**：[U09 Composer 形态](./evidence/2026-09-03-u09-composer-form.md)（含门禁数字与一次变异验证）。
+**欠项**：GUI 点验未做，建议与 U12 合并做一次（非取证型验收，不阻塞）。
+
+> 用户诉求原话（本计划的根本判据，不随 U09 收尾而失效）：整体布局、内容展示、
+> 聊天输入框及小控件、输出内容展示形式，总体感受是「**功能齐全，同时保证利落简约**」。
+
+### U12 — 会话级权限档 chip — **Done**（2026-09-03）
+
+Composer 底栏左侧的权限控件，四档（只读/务实/放手/完全放开）、作用于**当前对话**。
+
+- 共享类型 `SessionPermissionTier`（4 档 + 守卫函数）
+- 内联扩展 `sessionTierAuthorizer`：纯判定函数 `verdictForTier` + `permissions:ready` 注册
+- `authorizerChain` 配置加入 `aiclient-session-tier` 链环
+- IPC 转发 `chat:setPermissionTier` → Worker RPC `worker.setPermissionTier`
+- 渲染器 `ComposerPermissionTrigger`：鬼影芯片 + 四选 RadioItem + 危险档确认对话框
+- 测试：verdict 判定覆盖 4×7（含 release-blocker `path`/`external_directory`）、RPC 正反例、bar slot 静态扫描
+
+**两条硬边界实测通过**：① delegation envelope 将 `path`/`external_directory` 上的 `allow` 降级为 `defer`；
+② "完全放开"文案明确声明保留密钥防线与跨目录确认。commit `c17c2e9f`。
+
+**欠项**：GUI 点验未做，建议与 U09 合并做一次（非取证型验收，不阻塞）。
+
+## Ready
+
+条目已在 [execution-plan](./topics/execution-plan.md) 里切成可执行片并配了验收标准。下方只保留任务身份、范围边界与拍板出处；
+**不要**在本文件复制验收标准或改动落点。
+
+### U02 — 双栏 / 三栏布局模式开关 — 切片 U02-a/b
 
 现状只有「关闭右面板」，没有布局模式概念（[audit §2.7](./topics/current-state-audit.md)）。需要新增持久化的模式字段（`PersistedShellLayout` + 其清洗函数同步）。
 
 **双栏语义已拍板**（[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定一）：双栏 = 只承担 AI 对话与 AI 开发，Files / Git / Terminal 等**刻意不提供**，需用时切回三栏。因此双栏下**不**为这些 surface 另设承载方案（解决 [Q05](./open-questions.md)）。右栏仍承载 `context`。
 
-### U03 — TUI 模式收起右侧栏
+### U03 — TUI 模式收起右侧栏 — 切片 U03-a（收右栏）/ U03-b（解除目录强绑定，依赖 U05）
 
 目标形态：左栏 + 右侧整块 TUI，无第三栏。现状只换中栏（`ChatWorkspace.tsx:266`）。
 
 **双栏语义已拍板**（[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定一）：TUI 属双栏的专用子模式，右侧不再有其他 surface。与 U02 的模式状态机耦合，宜合并设计。
 
-### U04 — 左栏插件 / 资源入口 — **已拍板：只保留插件，资源不要**
+### U04 — 左栏插件 / 资源入口 — 单切片 — **已拍板：只保留插件，资源不要**
 
 对照 pix 的 `nav-packages`（带 MCP 就绪数徽标）与 `nav-resources`（带计数徽标）。
 
 **拍板**（用户 2026-09-03）：pix 的「插件」是包管理（本地已装插件，可禁用/更新/移除），「资源」是文件清单（index.js / extension.js / agent.md）——**不是重叠，是两个视角**，但资源页目前没用。本轮左栏只加「插件」入口（含 MCP 就绪徽标），**资源入口不做**。证据见 [evidence §Q03](./topics/evidence-q02-q03.md)。
 
-### U05 — 免绑定工作目录直接开聊
+### U05 — 免绑定工作目录直接开聊 — 切片 U05-a/b/c/d
 
 新增不绑定项目即可发送的路径，并保留引导提示：开发场景仍优先绑定工作目录。
 
 **cwd 与信任态已拍板**（[D02](./decisions/002-layout-cwd-and-evidence-scope.md) 决定二）：cwd 落隔离临时目录，默认**不信任**、逐次授权、写路径默认拒绝；UI 上需区别于工作态会话（解决 [Q01](./open-questions.md)）。
 
-### U06 — Run 面板
+### U06 — Run 面板 — 切片 U06-a（Ready）/ U06-b（已移交 Pi 计划 T38）
 
 新增 `run` surface，参照 pi-app 的 `features/run/run-panel.tsx` + `context-donut.tsx`：运行态状态机、模型、思考档、回合耗时、上下文占用环形图。
 
 **边界已取证**（[evidence-q04](./topics/evidence-q04-runtime-fields.md)）：状态机/模型/选中 effort/耗时/工具**名称**渲染层可拼（现有 `RuntimeEvent` + store）；**占用 % + usage 行**需 Pi runtime 补 `usage.updated`（schema 已有、worker 不发）且目录剥离 `contextWindow`——**归 Pi-only 计划**。因此 U06 分两半：先做渲染层能拼的，占用 donut/usage 行留待 Pi runtime 补字段后做（或作为 Pi 计划 task）。
 
-### U07 — Context 面板内容增强
+### U07 — Context 面板内容增强 — Scope 待细化（建议在 U06-a 后定）
 
 `context` surface 已存在，本项是对照 pi-app 的 `features/context/context-panel.tsx` 做内容层增强（分角色分段、token 估算、逐段展开、手动刷新）。范围待定：不是重建面板。
 
-### U08 — 模型选择器对齐
+### U08 — 模型选择器对齐 — U08-1（无需改动）/ U08-2（Ready）/ U08-3（Blocked，见 [Q09](./open-questions.md)）
 
 三件事，宜拆成独立切片：
 
 1. 确认二级菜单的分组键（现按 `tags[0]`）。**拍板为保留现状**（用户 2026-09-03：保留使用管理站主页分组标签）——`tags[0]` 本就是管理站主分组标签，不改分组键。
-2. 思考强度词汇改为 Pi 的 `ThinkingLevel`（补 `off` / `minimal`），并按当前模型过滤可用档位。**迁移规则已取证**（[evidence-q06](./topics/evidence-q06-migration.md)）：复制 pix 的「纯 mapper + read 时映射」模式；`EffortLevel` 与 `ThinkingLevel` 重叠值（low/medium/high/xhigh/max）保留原样，只教 store 认识 `off`/`minimal`；未知/垃圾值 → `default` 哨兵（不是 `off`）；**不静默重写**已存偏好。
-3. 新增请求优先级（`flex` / `default` / `priority`），只对支持的模型暴露，与思考强度作为两根正交轴呈现。
-
-### U09 — 组件形态对照表
-
-对 Composer 输入框、其上的小控件、以及输出内容的渲染形式，逐件与 pix 做形态对照，产出「搬 / 不搬 / 改造后搬」的清单。**先出对照表，再逐条拍板**——D01 只授权了样式 token 层，没有授权组件形态照搬。
-
-**对照表已产出**（[evidence-u09](./topics/evidence-u09-component-forms.md)）：6 件组件逐项判定。**核心结论：大部分不搬**——我们已有的 Codex 简约形态大多正确。其余（助手输出、用户气泡、右栏、侧栏）均为「不搬」——跳过 pix 的卡 chrome 图标、KaTeX、常显页脚、32px 侧栏行等。
-
-**Composer 已拍板**（用户 2026-09-03，在对照表基础上加一条）：
-1. 空会话顶部接合摘列（project/branch 作为卡片顶盖）——改造后搬。
-2. **底部工具条布局对齐 pix**（`Composer.tsx:1618-1770` 顺序已核）：左侧「＋附件 · 权限管理」，右侧「上下文占用 · 模型 · 思考 · 发送」。控件仍用我们的 24px ghost chip 与 token，只对齐**位置与顺序**。信任态从底部摘列移入权限 chip；上下文占用 chip 依赖 Q04 的 `usage.updated`，在 runtime 补字段前先隐藏或占位；请求优先级（U08-3）不占底栏，放进模型菜单二级。可视化见 `docs/design/a10-pix-ui-alignment-prototype.html`。
-
-用户诉求原话：整体布局、内容展示、聊天输入框及小控件、输出内容展示形式，总体感受是「功能齐全，同时保证利落简约」。
+2. 思考强度词汇改为 Pi 的 `ThinkingLevel`（补 `off` / `minimal`），并按当前模型过滤可用档位。**范围已收窄**（2026-09-03 复核，见 [execution-plan §一](./topics/execution-plan.md)）：按模型过滤与 config 层七档**已经存在**，真缺口只有 `SESSION_EFFORT_LEVELS` 与 `CHAT_EFFORTS` 两个五档常量。**迁移规则已取证**（[evidence-q06](./topics/evidence-q06-migration.md)）：复制 pix 的「纯 mapper + read 时映射」模式；`EffortLevel` 与 `ThinkingLevel` 重叠值（low/medium/high/xhigh/max）保留原样，只教 store 认识 `off`/`minimal`；未知/垃圾值 → `default` 哨兵（不是 `off`）；**不静默重写**已存偏好。
+3. ~~新增请求优先级（`flex` / `default` / `priority`）~~ — **Dropped**（[Q12](./open-questions.md) 用户拍板不做）。
+   取证（[evidence-q09](./topics/evidence-q09-service-tier.md)）证实透传通道存在但挂在「模型静态默认值」层
+   而非「每次请求」层；补那一层的代价、以及该参数只对 OpenAI 系生效的适用面，都撑不起这个次要控件。
+   重开时优先走路径 A。
 
 ## Deferred
 
@@ -100,13 +142,18 @@ pix 有。同上，非最高优先级。本仓已有 fork 能力（Pi 计划 T33
 ## 依赖
 
 ```text
-Pi 计划 T37 收口
-  → U01 样式层
-  → U02 布局模式 ─┬→ U03 TUI 收右栏
-                  └→ U04 左栏入口
-  → U05 免绑定开聊（cwd/信任态已拍 [D02]，切片时细化实现）
-  → U06 Run 面板（需 Q04 取证）
-  → U07 Context 增强
-  → U08 模型选择器（三个子切片可独立；U08-1/Q02、U08-2/Q06 取正中）
-  → U09 组件形态对照（产出对照表后再派生任务）
+Pi 计划 T37 收口 ✅ 2026-09-03
+  → U01 样式地基 ✅ 2026-09-03（U01-a/b/d 落地；U01-c 三项转 Q11）
+      ├→ U09-1 空态摘列 → U09-2 底栏顺序 → U12 权限档 chip（占底栏左侧位）
+      └→ U02-a 模式字段 → U02-b 双栏收敛 → U03-a TUI 收右栏
+                                              → U05-a/b/c/d 免绑定开聊 → U03-b TUI 解绑
+  → U08-2 思考档七档（无前置，可交错）
+  → U06-a Run 面板渲染层（需 U02 的模式语义确定挂载位）→ U07 Context 增强
+  → U04 左栏插件入口（无前置，可交错）
+
+跨计划：
+  U06-b 占用 donut/usage 行 ← Pi 计划 T38-a/b（D03 决定二已移交）
+
+已放弃：
+  U08-3 请求优先级          ← Q12 拍板不做
 ```
